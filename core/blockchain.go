@@ -2280,22 +2280,18 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	}
 
 	// Add ticket balances of this block and remove the parent block data
-	bc.tickets[block.Hash()] = res.Tickets
-	if _, ok := bc.ticketBlocks[block.Number()]; !ok {
-		bc.ticketBlocks[block.Number()] = make([]common.Hash, 0)
-	}
-	bc.ticketBlocks[block.Number()] = append(bc.ticketBlocks[block.Number()], block.Hash())
-
-	if _, ok := bc.tickets[block.ParentHash()]; ok {
+	if parent, ok := bc.tickets[block.ParentHash()]; ok {
 		delete(bc.tickets, block.ParentHash())
-		if hashes := bc.ticketBlocks[block.Number().Sub(block.Number(), big.NewInt(1))]; len(hashes) != 0 {
-			for i, hash := range hashes {
-				if hash.Cmp(block.ParentHash()) == 0 {
-					hashes[i] = hashes[len(hashes)-1]
-					hashes = hashes[:len(hashes)-1]
-				}
+		bc.tickets[block.Hash()] = parent
+		for addr, value := range res.Tickets {
+			if value == 0 {
+				delete(bc.tickets[block.Hash()], addr)
 			}
+			bc.tickets[block.Hash()][addr] = value
 		}
+	} else {
+		res, _ := bc.GetTicketBalance(block.Header())
+		bc.tickets[block.Hash()] = res
 	}
 
 	// Report the collected witness statistics

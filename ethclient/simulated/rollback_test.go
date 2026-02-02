@@ -100,11 +100,12 @@ func allocateTickets(t *testing.T, key *ecdsa.PrivateKey, sim *Backend, nonce ui
 	chainid, _ := client.ChainID(ctx)
 	signer := types.LatestSignerForChainID(chainid)
 
-	selector := crypto.Keccak256([]byte("requestTickets(address,uint16)"))[:4]
+	selector := crypto.Keccak256([]byte("RequestTickets(address,uint16,uint256)"))[:4]
 	uint16Type, _ := abi.NewType("uint16", "", nil)
 	addressType, _ := abi.NewType("address", "", nil)
-	args := abi.Arguments{{Type: addressType}, {Type: uint16Type}}
-	data, _ := args.Pack(addr, amount)
+	uint256Type, _ := abi.NewType("uint256", "", nil)
+	args := abi.Arguments{{Type: addressType}, {Type: uint16Type}, {Type: uint256Type}}
+	data, _ := args.Pack(addr, amount, big.NewInt(1))
 	data = append(selector, data...)
 
 	// Get current head
@@ -118,6 +119,7 @@ func allocateTickets(t *testing.T, key *ecdsa.PrivateKey, sim *Backend, nonce ui
 		GasFeeCap: new(big.Int).Add(head.BaseFee, big.NewInt(params.GWei)),
 		GasTipCap: big.NewInt(params.GWei),
 		Data:      data,
+		Value:     big.NewInt(int64(amount)),
 	}
 	tx := types.MustSignNewTx(key, signer, txdata)
 

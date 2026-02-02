@@ -169,8 +169,8 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 		if err := core.ProcessConsolidationQueue(&requests, work.evm); err != nil {
 			return &newPayloadResult{err: err}
 		}
+		core.ProcessTickets(work.usedAddress, work.usedAmount, work.evm)
 	}
-	core.ProcessTickets(work.usedAddress, work.usedAmount, work.evm)
 
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)

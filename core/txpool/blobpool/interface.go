@@ -42,5 +42,5 @@ type BlockChain interface {
 	// StateAt returns a state database for a given root hash (generally the head).
 	StateAt(root common.Hash) (*state.StateDB, error)
 
-	GetTicketBalance(hash common.Hash, statedb *state.StateDB) map[common.Address]uint16
+	GetTicketBalance(header *types.Header) (map[common.Address]uint16, error)
 }

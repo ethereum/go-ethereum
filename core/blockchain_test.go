@@ -4211,11 +4211,12 @@ func TestBlobTickets(t *testing.T) {
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 4, func(i int, bg *BlockGen) {
 		switch i {
 		case 0: // create ticket request
-			selector := crypto.Keccak256([]byte("requestTickets(address,uint16)"))[:4]
+			selector := crypto.Keccak256([]byte("RequestTickets(address,uint16,uint256)"))[:4]
 			uint16Type, _ := abi.NewType("uint16", "", nil)
 			addressType, _ := abi.NewType("address", "", nil)
-			args := abi.Arguments{{Type: addressType}, {Type: uint16Type}}
-			data, _ := args.Pack(addr1, ticketAmount)
+			uint256Type, _ := abi.NewType("uint256", "", nil)
+			args := abi.Arguments{{Type: addressType}, {Type: uint16Type}, {Type: uint256Type}}
+			data, _ := args.Pack(addr1, ticketAmount, big.NewInt(1))
 
 			data = append(selector, data...)
 
@@ -4227,6 +4228,7 @@ func TestBlobTickets(t *testing.T) {
 				GasFeeCap: big.NewInt(875000000),
 				GasTipCap: big.NewInt(1),
 				Data:      data,
+				Value:     big.NewInt(int64(ticketAmount)),
 			}
 			tx := types.MustSignNewTx(key1, signer, txdata)
 
@@ -4297,15 +4299,13 @@ func TestBlobTickets(t *testing.T) {
 	}
 
 	// previous block ticket balance
-	state, _ := chain.StateAt(blocks[0].Root())
-	balance = chain.GetTicketBalance(blocks[0].Hash(), state)
+	balance, _ = chain.GetTicketBalance(blocks[0].Header())
 	amount = balance[addr1]
 	if amount != ticketAmount {
 		t.Fatalf("wrong ticket amount: expected %d, got %d", ticketAmount, amount)
 	}
 
-	state, _ = chain.StateAt(blocks[1].Root())
-	balance = chain.GetTicketBalance(blocks[1].Hash(), state)
+	balance, _ = chain.GetTicketBalance(blocks[1].Header())
 	amount = balance[addr1]
 	if amount != ticketAmount-1 {
 		t.Fatalf("wrong ticket amount: expected %d, got %d", ticketAmount-1, amount)

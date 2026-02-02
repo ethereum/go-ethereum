@@ -419,7 +419,10 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	p.head.Store(head)
 	p.state = state
 
-	p.tickets = p.chain.GetTicketBalance(head.Hash(), state)
+	p.tickets, err = p.chain.GetTicketBalance(head)
+	if err != nil {
+		return err
+	}
 
 	// Create new slotter for pre-Osaka blob configuration.
 	slotter := newSlotter(params.BlobTxMaxBlobs)
@@ -862,8 +865,11 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	p.head.Store(newHead)
 	p.state = statedb
 
-	p.tickets = p.chain.GetTicketBalance(newHead.Hash(), p.state)
-
+	p.tickets, err = p.chain.GetTicketBalance(newHead)
+	if err != nil {
+		log.Error("Failed to get ticket balances", "err", err)
+		return
+	}
 	// Run the reorg between the old and new head and figure out which accounts
 	// need to be rechecked and which transactions need to be readded
 	if reinject, inclusions := p.reorg(oldHead, newHead); reinject != nil {

@@ -1916,11 +1916,12 @@ func newGetBlobEnv(t testing.TB, version byte) (*node.Node, *ConsensusAPI) {
 			{addr3, key3},
 		}
 		for _, signer := range signers {
-			selector := crypto.Keccak256([]byte("requestTickets(address,uint16)"))[:4]
+			selector := crypto.Keccak256([]byte("RequestTickets(address,uint16,uint256)"))[:4]
 			uint16Type, _ := abi.NewType("uint16", "", nil)
 			addressType, _ := abi.NewType("address", "", nil)
-			args := abi.Arguments{{Type: addressType}, {Type: uint16Type}}
-			data, _ := args.Pack(signer.addr, uint16(2))
+			uint256Type, _ := abi.NewType("uint256", "", nil)
+			args := abi.Arguments{{Type: addressType}, {Type: uint16Type}, {Type: uint256Type}}
+			data, _ := args.Pack(signer.addr, uint16(2), big.NewInt(1))
 			data = append(selector, data...)
 
 			txdata := &types.DynamicFeeTx{
@@ -1931,12 +1932,12 @@ func newGetBlobEnv(t testing.TB, version byte) (*node.Node, *ConsensusAPI) {
 				GasFeeCap: big.NewInt(params.InitialBaseFee * 2),
 				GasTipCap: big.NewInt(params.GWei),
 				Data:      data,
+				Value:     big.NewInt(2),
 			}
 			tx := types.MustSignNewTx(signer.key, types.LatestSigner(&config), txdata)
 			b.AddTx(tx)
 		}
 	})
-
 	n, ethServ := startEthService(t, gspec, ticketBlocks)
 
 	// fill blob txs into the pool

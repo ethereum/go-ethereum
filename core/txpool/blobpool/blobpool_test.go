@@ -186,8 +186,8 @@ func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
 	return bc.statedb, nil
 }
 
-func (bc *testBlockChain) GetTicketBalance(common.Hash, *state.StateDB) map[common.Address]uint16 {
-	return bc.tickets
+func (bc *testBlockChain) GetTicketBalance(*types.Header) (map[common.Address]uint16, error) {
+	return bc.tickets, nil
 }
 
 // reserver is a utility struct to sanity check that accounts are

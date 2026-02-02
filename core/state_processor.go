@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -384,9 +385,17 @@ func ProcessTickets(usedAddress []common.Address, usedAmount []uint16, evm *vm.E
 	}
 	evm.SetTxContext(NewEVMTxContext(msg))
 
-	res, _, _ := evm.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560)
+	res, _, err := evm.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560)
 
 	evm.StateDB.Finalise(true)
+	if err != nil {
+		log.Error("system call failed to execute", "error", err)
+		return nil
+	}
+
+	if len(res) == 0 {
+		return make(map[common.Address]uint16)
+	}
 
 	arguments := abi.Arguments{
 		{Type: addressType},

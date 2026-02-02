@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
@@ -74,8 +73,8 @@ type testChain struct {
 	*core.BlockChain
 }
 
-func (c *testChain) GetTicketBalance(hash common.Hash, statedb *state.StateDB) map[common.Address]uint16 {
-	return map[common.Address]uint16{testAddr: 1000}
+func (c *testChain) GetTicketBalance(header *types.Header) (map[common.Address]uint16, error) {
+	return map[common.Address]uint16{testAddr: 1000}, nil
 }
 
 // newTestBackendWithGenerator creates a chain with a number of explicitly defined blocks and

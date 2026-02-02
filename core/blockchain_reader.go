@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
@@ -29,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -354,33 +354,43 @@ func (bc *BlockChain) GetCanonicalTransaction(hash common.Hash) (*rawdb.LegacyTx
 	return lookup, tx
 }
 
-func (bc *BlockChain) GetTicketBalance(hash common.Hash, statedb *state.StateDB) map[common.Address]uint16 {
-	if bc.tickets[hash] != nil {
-		return bc.tickets[hash]
+func (bc *BlockChain) GetTicketBalance(header *types.Header) (map[common.Address]uint16, error) {
+	if bc.tickets[header.Hash()] != nil {
+		return bc.tickets[header.Hash()], nil
+	}
+
+	ctx := NewEVMBlockContext(header, bc.HeaderChain(), nil)
+	statedb, err := bc.StateAt(header.Root)
+	if err != nil {
+		return nil, err
+	}
+
+	evm := vm.NewEVM(ctx, statedb, bc.chainConfig, bc.cfg.VmConfig)
+	cc := contractCaller{addr: params.BlobTicketAllocationAddress, evm: evm}
+	caller, err := NewTicketAllocatorCaller(params.BlobTicketAllocationAddress, cc)
+	if err != nil {
+		return nil, err
+	}
+
+	senders, balances, err := caller.GetBalance(&bind.CallOpts{BlockNumber: header.Number})
+	if err != nil {
+		// when the contract is not deployed, return empty map
+		if errors.Is(err, bind.ErrNoCode) {
+			result := make(map[common.Address]uint16)
+			bc.tickets[header.Hash()] = result
+			return result, nil
+		}
+		return nil, err
 	}
 
 	result := make(map[common.Address]uint16)
 
-	senders := statedb.GetState(params.BlobTicketAllocationAddress, common.BigToHash(params.BlobTicketSenderSlot)).Big().Int64()
-	base := crypto.Keccak256Hash(common.LeftPadBytes(params.BlobTicketSenderSlot.Bytes(), 32)).Big()
-
-	for i := range senders {
-		key := common.BigToHash(base.Add(base, big.NewInt(i)))
-		sender := common.BytesToAddress(statedb.GetState(params.BlobTicketAllocationAddress, key).Bytes())
-
-		key = crypto.Keccak256Hash(
-			append(
-				common.LeftPadBytes(sender.Bytes(), 32),
-				common.LeftPadBytes(params.BlobTicketBalanceSlot.Bytes(), 32)...,
-			),
-		)
-
-		balance := statedb.GetState(params.BlobTicketAllocationAddress, key).Big().Uint64()
-
-		result[sender] = uint16(balance)
+	for i, sender := range senders {
+		result[sender] = uint16(balances[i])
 	}
+	bc.tickets[header.Hash()] = result
 
-	return result
+	return result, nil
 }
 
 // TxIndexDone returns true if the transaction indexer has finished indexing.
