@@ -27,10 +27,10 @@ const (
 	ProofNone ProofVariant = iota
 )
 
-// Proof is the interface for all block proof types in the  package.
+// Proof is the interface for all block proof types in the package.
 // It's a stub for later integration into Era.
 type Proof interface {
 	EncodeRLP(w io.Writer) error
-	DecodeRlP(s *rlp.Stream) error
+	DecodeRLP(s *rlp.Stream) error
 	Variant() ProofVariant
 }

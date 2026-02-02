@@ -114,7 +114,7 @@ type Era interface {
 	Accumulator() (common.Hash, error)
 }
 
-// ReadDir reads all the era1 files in a directory for a given network.
+// ReadDir reads all the era files in a directory for a given network.
 // Format: <network>-<epoch>-<hexroot>.erae or <network>-<epoch>-<hexroot>.era1
 func ReadDir(dir, network string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
@@ -137,7 +137,7 @@ func ReadDir(dir, network string) ([]string, error) {
 		}
 		parts := strings.Split(entry.Name(), "-")
 		if len(parts) != 3 || parts[0] != network {
-			// Invalid era1 filename, skip.
+			// Invalid era filename, skip.
 			continue
 		}
 		if epoch, err := strconv.ParseUint(parts[1], 10, 64); err != nil {

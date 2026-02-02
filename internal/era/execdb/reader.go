@@ -251,6 +251,7 @@ func (e *Era) headerOff(num uint64) (int64, error)  { return e.indexOffset(num, 
 func (e *Era) bodyOff(num uint64) (int64, error)    { return e.indexOffset(num, body) }
 func (e *Era) receiptOff(num uint64) (int64, error) { return e.indexOffset(num, receipts) }
 func (e *Era) tdOff(num uint64) (int64, error)      { return e.indexOffset(num, td) }
+func (e *Era) proofOff(num uint64) (int64, error)   { return e.indexOffset(num, proof) }
 
 // indexOffset calculates offset to a certain component for a block number within a file.
 func (e *Era) indexOffset(n uint64, component componentType) (int64, error) {
@@ -286,7 +287,7 @@ type metadata struct {
 // componentType represents the integer form of a specific type that can be present in the era file.
 type componentType int
 
-// TypeCompressedHeader, TypeCompressedBody, TypeCompressedReceipts, TypeTotalDifficulty, and TypeProof are the different types of components that can be present in the era file.
+// header, body, receipts, td, and proof are the different types of components that can be present in the era file.
 const (
 	header componentType = iota
 	body
