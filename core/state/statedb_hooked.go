@@ -309,14 +309,17 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 
 		// If an initcode invokes selfdestruct, do not emit a code change.
 		prevCodeHash := s.inner.GetCodeHash(addr)
-		if prevCodeHash == types.EmptyCodeHash {
-			continue
+		if prevCodeHash != types.EmptyCodeHash {
+			// Otherwise, trace the change.
+			if s.hooks.OnCodeChangeV2 != nil {
+				s.hooks.OnCodeChangeV2(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
+			} else if s.hooks.OnCodeChange != nil {
+				s.hooks.OnCodeChange(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil)
+			}
 		}
-		// Otherwise, trace the change.
-		if s.hooks.OnCodeChangeV2 != nil {
-			s.hooks.OnCodeChangeV2(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
-		} else if s.hooks.OnCodeChange != nil {
-			s.hooks.OnCodeChange(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil)
+
+		if s.hooks.OnSelfDestructChange != nil {
+			s.hooks.OnSelfDestructChange(addr)
 		}
 	}
 
