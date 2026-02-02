@@ -83,9 +83,6 @@ func NewEVMTxContext(msg *Message) vm.TxContext {
 		GasPrice:   uint256.MustFromBig(msg.GasPrice),
 		BlobHashes: msg.BlobHashes,
 	}
-	if msg.BlobGasFeeCap != nil {
-		ctx.BlobFeeCap = uint256.MustFromBig(msg.BlobGasFeeCap)
-	}
 	return ctx
 }
 

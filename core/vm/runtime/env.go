@@ -27,7 +27,6 @@ func NewEnv(cfg *Config) *vm.EVM {
 		Origin:     cfg.Origin,
 		GasPrice:   uint256.MustFromBig(cfg.GasPrice),
 		BlobHashes: cfg.BlobHashes,
-		BlobFeeCap: uint256.MustFromBig(cfg.BlobFeeCap),
 	}
 	blockContext := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
