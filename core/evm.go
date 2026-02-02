@@ -145,7 +145,7 @@ func CanTransfer(db vm.StateDB, addr common.Address, amount *uint256.Int) bool {
 func Transfer(db vm.StateDB, sender, recipient common.Address, amount *uint256.Int, blockNumber *big.Int, rules *params.Rules) {
 	db.SubBalance(sender, amount, tracing.BalanceChangeTransfer)
 	db.AddBalance(recipient, amount, tracing.BalanceChangeTransfer)
-	if rules.IsAmsterdam && !amount.IsZero() {
+	if rules.IsAmsterdam && !amount.IsZero() && sender != recipient {
 		db.AddLog(types.EthTransferLog(blockNumber, sender, recipient, amount))
 	}
 }
