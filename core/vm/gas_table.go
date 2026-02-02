@@ -461,9 +461,7 @@ func gasCallCodeStateless(evm *EVM, contract *Contract, stack *Stack, mem *Memor
 		transfersValue = !stack.Back(2).IsZero()
 	)
 	if transfersValue {
-		if evm.readOnly {
-			return 0, ErrWriteProtection
-		} else if !evm.chainRules.IsEIP4762 {
+		if !evm.chainRules.IsEIP4762 {
 			gas += params.CallValueTransferGas
 		}
 	}
