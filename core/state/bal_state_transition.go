@@ -107,7 +107,7 @@ func (s *BALStateTransition) Error() error {
 }
 
 func (s *BALStateTransition) setError(err error) {
-	if s.err != nil {
+	if s.err == nil {
 		s.err = err
 	}
 }
@@ -390,7 +390,6 @@ func (s *BALStateTransition) loadOriginStorages() {
 				val, err := s.reader.Storage(addr, common.Hash(storageKey))
 				if err != nil {
 					s.setError(err)
-					return
 				}
 				originStoragesCh <- &originStorage{
 					addr,
@@ -418,7 +417,7 @@ func (s *BALStateTransition) loadOriginStorages() {
 
 // IntermediateRoot applies block state mutations and computes the updated state
 // trie root.
-func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
+func (s *BALStateTransition) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	if s.rootHash != (common.Hash{}) {
 		return s.rootHash
 	}
@@ -502,9 +501,7 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 					}
 				}
 
-				hashStart := time.Now()
 				tr.Hash()
-				s.metrics.StateHash = time.Since(hashStart)
 			}
 		}()
 	}
@@ -548,11 +545,22 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 					return common.Hash{}
 				}
 			}
-			if err := s.stateTrie.UpdateAccount(mutatedAddr, acct, len(code)); err != nil {
-				s.setError(err)
-				return common.Hash{}
+			// Delete empty accounts when deleteEmptyObjects is set, matching
+			// the behavior of StateDB.Finalise which deletes accounts where
+			// nonce == 0, balance == 0, and codeHash == emptyCodeHash.
+			if deleteEmptyObjects && acct.Nonce == 0 && acct.Balance.IsZero() && common.BytesToHash(acct.CodeHash) == types.EmptyCodeHash {
+				if err := s.stateTrie.DeleteAccount(mutatedAddr); err != nil {
+					s.setError(err)
+					return common.Hash{}
+				}
+				s.deletions[mutatedAddr] = struct{}{}
+			} else {
+				if err := s.stateTrie.UpdateAccount(mutatedAddr, acct, len(code)); err != nil {
+					s.setError(err)
+					return common.Hash{}
+				}
+				s.postStates[mutatedAddr] = acct
 			}
-			s.postStates[mutatedAddr] = acct
 		}
 	}
 

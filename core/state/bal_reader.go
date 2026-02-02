@@ -3,13 +3,15 @@ package state
 import (
 	"context"
 	"fmt"
+	"slices"
+	"sync"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
-	"sync"
 )
 
 // TODO: probably unnecessary to cache the resolved state object here as it will already be in the db cache?
@@ -137,13 +139,17 @@ func NewBALReader(block *types.Block, reader Reader) *BALReader {
 	return r
 }
 
-// ModifiedAccounts returns a list of all accounts with mutations in the access list
+// ModifiedAccounts returns a deterministically-ordered list of all accounts
+// with mutations in the access list.
 func (r *BALReader) ModifiedAccounts() (res []common.Address) {
 	for addr, access := range r.accesses {
 		if len(access.NonceChanges) != 0 || len(access.CodeChanges) != 0 || len(access.StorageChanges) != 0 || len(access.BalanceChanges) != 0 {
 			res = append(res, addr)
 		}
 	}
+	slices.SortFunc(res, func(a, b common.Address) int {
+		return a.Cmp(b)
+	})
 	return res
 }
 
