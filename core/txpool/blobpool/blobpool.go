@@ -104,6 +104,16 @@ const (
 	// maxGappedTxs is the maximum number of gapped transactions kept overall.
 	// This is a safety limit to avoid DoS vectors.
 	maxGapped = 128
+
+	// notifyThreshold is the eviction priority threshold above which a transaction
+	// is considered close enough to being includable to be announced to peers.
+	// Setting this to zero will disable announcements for anyting not immediately
+	// includable. Setting it to -1 allows transactions that are close to being
+	// includable, maybe already in the next block if fees go down, to be announced.
+
+	// Note, this threshold is in the abstract eviction priority space, so its
+	// meaning depends on the current basefee/blobfee and the transaction's fees.
+	announceThreshold = -1
 )
 
 // blobTxMeta is the minimal subset of types.BlobTx necessary to validate and
@@ -114,6 +124,8 @@ type blobTxMeta struct {
 	hash    common.Hash   // Transaction hash to maintain the lookup table
 	vhashes []common.Hash // Blob versioned hashes to maintain the lookup table
 	version byte          // Blob transaction version to determine proof type
+
+	announced bool // Whether the tx has been announced to listeners
 
 	id          uint64 // Storage ID in the pool's persistent store
 	storageSize uint32 // Byte size in the pool's persistent store
@@ -209,6 +221,14 @@ func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transac
 //     per account as to prevent propagating too much data before cancelling it
 //     via a normal transaction. It should nonetheless be high enough to support
 //     resurrecting reorged transactions. Perhaps 4-16.
+//
+//   - It is not the role of the blobpool to serve as a storage for limit orders
+//     below market: blob transactions with fee caps way below base fee or blob fee.
+//     Therefore, the propagation of blob transactions that are far from being
+//     includable is suppressed. The pool will only announce blob transactions that
+//     are close to being includable (based on the current fees and the transaction's
+//     fee caps), and will delay the announcement of blob transactions that are far
+//     from being includable until base fee and/or blob fee is reduced.
 //
 //   - Local txs are meaningless. Mining pools historically used local transactions
 //     for payouts or for backdoor deals. With 1559 in place, the basefee usually
@@ -894,6 +914,37 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	}
 	p.evict.reinit(basefee, blobfee, false)
 
+	// Announce transactions that became announcable due to fee changes
+	var announcable []*types.Transaction
+	for addr, txs := range p.index {
+		for i, meta := range txs {
+			if !meta.announced && (i == 0 || txs[i-1].announced) && p.isAnnouncable(meta) {
+				// Load the full transaction and strip the sidecar before announcing
+				// TODO: this is a bit ugly, as we have everything needed in meta already
+				data, err := p.store.Get(meta.id)
+				// Technically, we are supposed to set announced only if Get is successful.
+				// However, Get failing here indicates a more serious issue (data loss),
+				// so we set announced anyway to avoid repeated attempts.
+				meta.announced = true
+				if err != nil {
+					log.Error("Blobs missing for announcable transaction", "from", addr, "nonce", meta.nonce, "id", meta.id, "err", err)
+					continue
+				}
+				var tx types.Transaction
+				if err = rlp.DecodeBytes(data, &tx); err != nil {
+					log.Error("Blobs corrupted for announcable transaction", "from", addr, "nonce", meta.nonce, "id", meta.id, "err", err)
+					continue
+				}
+				announcable = append(announcable, tx.WithoutBlobTxSidecar())
+				log.Trace("Blob transaction now announcable", "from", addr, "nonce", meta.nonce, "id", meta.id, "hash", tx.Hash())
+			}
+		}
+	}
+	if len(announcable) > 0 {
+		p.discoverFeed.Send(core.NewTxsEvent{Txs: announcable})
+	}
+
+	// Update the basefee and blobfee metrics
 	basefeeGauge.Update(int64(basefee.Uint64()))
 	blobfeeGauge.Update(int64(blobfee.Uint64()))
 	p.updateStorageMetrics()
@@ -1679,9 +1730,15 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 
 	addValidMeter.Mark(1)
 
-	// Notify all listeners of the new arrival
-	p.discoverFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
-	p.insertFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
+	// Transaction was addded successfully, but we only announce if it is (close to being)
+	// includable and the previous one was already announced.
+	if p.isAnnouncable(meta) && (meta.nonce == next || (len(txs) > 1 && txs[offset-1].announced)) {
+		meta.announced = true
+		p.discoverFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
+		p.insertFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
+	} else {
+		log.Trace("Blob transaction not announcable yet", "hash", tx.Hash(), "nonce", tx.Nonce())
+	}
 
 	//check the gapped queue for this account and try to promote
 	if gtxs, ok := p.gapped[from]; checkGapped && ok && len(gtxs) > 0 {
@@ -2003,6 +2060,15 @@ func (p *BlobPool) evictGapped() {
 			p.gapped[from] = keep
 		}
 	}
+}
+
+// isAnnouncable checks whether a transaction is announcable based on its
+// fee parameters and announceThreshold.
+func (p *BlobPool) isAnnouncable(meta *blobTxMeta) bool {
+	if evictionPriority(p.evict.basefeeJumps, meta.basefeeJumps, p.evict.blobfeeJumps, meta.blobfeeJumps) >= announceThreshold {
+		return true
+	}
+	return false
 }
 
 // Stats retrieves the current pool stats, namely the number of pending and the
