@@ -14,15 +14,18 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package config
+package tracesetup
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/url"
 	"time"
 
 	"github.com/ethereum/go-ethereum/internal/version"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -32,22 +35,42 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 )
 
-// TelemetryProvider wraps a TracerProvider and exposes the Shutdown method.
-type TelemetryProvider struct {
-	tracerProvider *sdktrace.TracerProvider
+// Service wraps the provider to implement node.Lifecycle.
+type Service struct {
+	provider *sdktrace.TracerProvider
 }
 
-// Shutdown shuts down the TracerProvider.
-func (t *TelemetryProvider) Shutdown(ctx context.Context) error {
-	return t.tracerProvider.Shutdown(ctx)
+// Start implements node.Lifecycle.
+func (t *Service) Start() error {
+	return nil // provider is already started during setup
 }
 
-// Setup initializes telemetry with the given parameters.
-func Setup(ctx context.Context, endpoint string, sampleRatio float64) (*TelemetryProvider, error) {
+// Stop implements node.Lifecycle.
+func (t *Service) Stop() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := t.provider.Shutdown(ctx); err != nil {
+		log.Error("Failed to stop OpenTelemetry service", "err", err)
+		return err
+	}
+	log.Debug("OpenTelemetry stopped")
+	return nil
+}
+
+// StartTelemetry initializes telemetry with the given parameters.
+func StartTelemetry(ctx context.Context, cfg node.OpenTelemetryConfig, stack *node.Node) error {
+	if !cfg.Enabled {
+		return nil
+	}
+
+	if cfg.SampleRatio < 0 || cfg.SampleRatio > 1 {
+		return fmt.Errorf("invalid sample ratio: %f", cfg.SampleRatio)
+	}
+
 	// Create exporter based on endpoint URL
-	u, err := url.Parse(endpoint)
+	u, err := url.Parse(cfg.Endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("invalid rpc tracing endpoint URL: %w", err)
+		return fmt.Errorf("invalid rpc tracing endpoint URL: %w", err)
 	}
 	var exporter sdktrace.SpanExporter
 	switch u.Scheme {
@@ -61,18 +84,23 @@ func Setup(ctx context.Context, endpoint string, sampleRatio float64) (*Telemetr
 		if u.Path != "" && u.Path != "/" {
 			opts = append(opts, otlptracehttp.WithURLPath(u.Path))
 		}
+		if cfg.AuthUser != "" {
+			opts = append(opts, otlptracehttp.WithHeaders(map[string]string{
+				"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(cfg.AuthUser+":"+cfg.AuthPassword)),
+			}))
+		}
 		exporter, err = otlptracehttp.New(ctx, opts...)
 	default:
-		return nil, fmt.Errorf("unsupported telemetry url scheme: %s", u.Scheme)
+		return fmt.Errorf("unsupported telemetry url scheme: %s", u.Scheme)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to create telemetry exporter: %w", err)
+		return fmt.Errorf("failed to create telemetry exporter: %w", err)
 	}
 
 	// Define sampler such that if no parent span is available,
 	// then sampleRatio of traces are sampled; otherwise, inherit
 	// the parent's sampling decision.
-	sampler := sdktrace.ParentBased(sdktrace.TraceIDRatioBased(sampleRatio))
+	sampler := sdktrace.ParentBased(sdktrace.TraceIDRatioBased(cfg.SampleRatio))
 
 	// Define batch span processor options
 	batchOpts := []sdktrace.BatchSpanProcessorOption{
@@ -87,11 +115,14 @@ func Setup(ctx context.Context, endpoint string, sampleRatio float64) (*Telemetr
 	}
 
 	// Define resource with service and client information
-	res := resource.NewWithAttributes(
-		semconv.SchemaURL,
+	var attr = []attribute.KeyValue{
 		semconv.ServiceName("geth"),
 		attribute.String("client.name", version.ClientName("geth")),
-	)
+	}
+	if cfg.InstanceID != "" {
+		attr = append(attr, semconv.ServiceInstanceID(cfg.InstanceID))
+	}
+	res := resource.NewWithAttributes(semconv.SchemaURL, attr...)
 
 	// Configure TracerProvider and set it as the global tracer provider
 	tp := sdktrace.NewTracerProvider(
@@ -107,6 +138,8 @@ func Setup(ctx context.Context, endpoint string, sampleRatio float64) (*Telemetr
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
-
-	return &TelemetryProvider{tracerProvider: tp}, nil
+	service := &Service{provider: tp}
+	stack.RegisterLifecycle(service)
+	log.Info("OpenTelemetry tracing enabled", "endpoint", cfg.Endpoint)
+	return nil
 }

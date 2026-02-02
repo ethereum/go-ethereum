@@ -1056,6 +1056,24 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Category: flags.APICategory,
 	}
 
+	RPCTelemetryUserFlag = &cli.StringFlag{
+		Name:     "rpc.telemetry.username",
+		Usage:    "HTTP Basic Auth username for OpenTelemetry",
+		Category: flags.APICategory,
+	}
+
+	RPCTelemetryPasswordFlag = &cli.StringFlag{
+		Name:     "rpc.telemetry.password",
+		Usage:    "HTTP Basic Auth password for OpenTelemetry",
+		Category: flags.APICategory,
+	}
+
+	RPCTelemetryInstanceIDFlag = &cli.StringFlag{
+		Name:     "rpc.telemetry.instance-id",
+		Usage:    "OpenTelemetry instance ID",
+		Category: flags.APICategory,
+	}
+
 	RPCTelemetrySampleRatioFlag = &cli.Float64Flag{
 		Name:     "rpc.telemetry.sample-ratio",
 		Usage:    "Defines the sampling ratio for RPC telemetry (0.0 to 1.0)",
@@ -1452,6 +1470,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	setNodeUserIdent(ctx, cfg)
 	SetDataDir(ctx, cfg)
 	setSmartCard(ctx, cfg)
+	setOpenTelemetry(ctx, cfg)
 
 	if ctx.IsSet(JWTSecretFlag.Name) {
 		cfg.JWTSecret = ctx.String(JWTSecretFlag.Name)
@@ -1517,6 +1536,33 @@ func setSmartCard(ctx *cli.Context, cfg *node.Config) {
 	}
 	// Smartcard daemon path exists and is a socket, enable it
 	cfg.SmartCardDaemonPath = path
+}
+
+func setOpenTelemetry(ctx *cli.Context, cfg *node.Config) {
+	tcfg := &cfg.OpenTelemetry
+	if ctx.IsSet(RPCTelemetryFlag.Name) {
+		tcfg.Enabled = ctx.Bool(RPCTelemetryFlag.Name)
+	}
+
+	if ctx.IsSet(RPCTelemetryEndpointFlag.Name) {
+		tcfg.Endpoint = ctx.String(RPCTelemetryEndpointFlag.Name)
+	}
+	if ctx.IsSet(RPCTelemetryUserFlag.Name) {
+		tcfg.AuthUser = ctx.String(RPCTelemetryUserFlag.Name)
+	}
+	if ctx.IsSet(RPCTelemetryPasswordFlag.Name) {
+		tcfg.AuthPassword = ctx.String(RPCTelemetryPasswordFlag.Name)
+	}
+	if ctx.IsSet(RPCTelemetrySampleRatioFlag.Name) {
+		tcfg.SampleRatio = ctx.Float64(RPCTelemetrySampleRatioFlag.Name)
+	}
+	if ctx.IsSet(RPCTelemetryInstanceIDFlag.Name) {
+		tcfg.InstanceID = ctx.String(RPCTelemetryInstanceIDFlag.Name)
+	}
+
+	if tcfg.Endpoint != "" && !tcfg.Enabled {
+		log.Warn(fmt.Sprintf("OpenTelemetry endpoint configured but telemetry is not enabled, use --%s to enable.", RPCTelemetryFlag.Name))
+	}
 }
 
 func SetDataDir(ctx *cli.Context, cfg *node.Config) {

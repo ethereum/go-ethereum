@@ -198,6 +198,9 @@ var (
 		utils.RPCGlobalRangeLimitFlag,
 		utils.RPCTelemetryFlag,
 		utils.RPCTelemetryEndpointFlag,
+		utils.RPCTelemetryUserFlag,
+		utils.RPCTelemetryPasswordFlag,
+		utils.RPCTelemetryInstanceIDFlag,
 		utils.RPCTelemetrySampleRatioFlag,
 	}
 

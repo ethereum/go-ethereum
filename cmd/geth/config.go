@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/ethereum/go-ethereum/internal/telemetry/tracesetup"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -239,18 +240,15 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		cfg.Eth.OverrideVerkle = &v
 	}
 
-	// Start metrics export if enabled
+	// Start metrics export if enabled.
 	utils.SetupMetrics(&cfg.Metrics)
 
-	// Setup telemetry if enabled
-	telemetryService, err := utils.SetupTelemetry(ctx)
-	if err != nil {
-		utils.Fatalf("failed to setup telemetry: %v", err)
-	}
-	if telemetryService != nil {
-		utils.RegisterTelemetryService(telemetryService, stack)
+	// Setup OpenTelemetry reporting if enabled.
+	if err := tracesetup.StartTelemetry(ctx.Context, cfg.Node.OpenTelemetry, stack); err != nil {
+		utils.Fatalf("failed to setup OpenTelemetry: %v", err)
 	}
 
+	// Add Ethereum service.
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
 
 	// Create gauge with geth system and build information
