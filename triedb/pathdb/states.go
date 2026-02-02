@@ -342,7 +342,10 @@ func (s *stateSet) encode(w io.Writer) error {
 		AddrHashes []common.Hash
 		Accounts   [][]byte
 	}
-	var enc accounts
+	enc := accounts{
+		AddrHashes: make([]common.Hash, 0, len(s.accountData)),
+		Accounts:   make([][]byte, 0, len(s.accountData)),
+	}
 	for addrHash, blob := range s.accountData {
 		enc.AddrHashes = append(enc.AddrHashes, addrHash)
 		enc.Accounts = append(enc.Accounts, blob)
@@ -505,7 +508,10 @@ func (s *StateSetWithOrigin) encode(w io.Writer) error {
 		Addresses []common.Address
 		Accounts  [][]byte
 	}
-	var accounts Accounts
+	accounts := Accounts{
+		Addresses: make([]common.Address, 0, len(s.accountOrigin)),
+		Accounts:  make([][]byte, 0, len(s.accountOrigin)),
+	}
 	for address, blob := range s.accountOrigin {
 		accounts.Addresses = append(accounts.Addresses, address)
 		accounts.Accounts = append(accounts.Accounts, blob)
