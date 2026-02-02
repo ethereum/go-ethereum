@@ -2189,26 +2189,10 @@ func (bpr *blockProcessingResult) Stats() *ExecuteStats {
 // ProcessBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
 func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool) (result *blockProcessingResult, blockEndErr error) {
-	var constructBALForTesting bool
 	enableBALFork := bc.chainConfig.IsAmsterdam(block.Number(), block.Time())
-	if enableBALFork || !bc.chainConfig.IsCancun(block.Number(), block.Time()) {
-		// disable testmode construction of BALs if we are not in the range [cancun, amsterdam)
-		constructBALForTesting = false
-	}
 	// TODO: need to check that the block is also postcancun if it contained an access list?
 	// this should be checked during decoding (?)
 	blockHasAccessList := block.AccessList() != nil
-	// only construct and embed BALs in the block if:
-	// * it has been enabled for testing purposes (preAmsterdam/postCancun blocks with experimental.bal)
-	// * we are after Amsterdam and the block was provided with bal omitted
-	//   (importing any historical block not near the chain head)
-	constructBAL := constructBALForTesting || (enableBALFork && !blockHasAccessList)
-	// do not verify the integrity of the BAL hash wrt the headerreported value
-	// for any nonAmsterdam blocks:  if the block being imported has been created
-	// via experimental.bal, the block access list hash is unset in the header
-	// to keep the block hash unchanged (allow for importing historical blocks
-	// with BALs for testing purposes).
-	verifyBALHeader := enableBALFork
 
 	// optimized execution path for blocks which contain BALs
 	if blockHasAccessList {
@@ -2357,15 +2341,7 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	}
 	vtime = time.Since(vstart)
 
-	if constructBAL {
-		if verifyBALHeader && *block.Header().BlockAccessListHash != balTracer.AccessList().ToEncodingObj().Hash() {
-			err := fmt.Errorf("block access list hash mismatch (reported=%x, computed=%x)", *block.Header().BlockAccessListHash, balTracer.AccessList().ToEncodingObj().Hash())
-			bc.reportBadBlock(block, res, err)
-			return nil, err
-
-		}
-		block = block.WithAccessList(balTracer.AccessList().ToEncodingObj())
-	} else if enableBALFork {
+	if enableBALFork {
 
 		computedAccessList := balTracer.AccessList().ToEncodingObj()
 		computedAccessListHash := computedAccessList.Hash()

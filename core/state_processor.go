@@ -109,6 +109,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
+
+		/*
+			enc, _ := json.MarshalIndent(receipt, "", "    ")
+			fmt.Printf("receipt json %s\n", string(enc))
+			encRLP, _ := rlp.EncodeToBytes(receipt)
+			fmt.Printf("receipt rlp %x\n", encRLP)
+		*/
 	}
 
 	// Read requests if Prague is enabled.
