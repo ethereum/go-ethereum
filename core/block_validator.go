@@ -122,6 +122,8 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 			} else if err := block.AccessList().Validate(len(block.Transactions())); err != nil {
 				return fmt.Errorf("invalid block access list: %v", err)
 			}
+		} else {
+			//panic("TODO: implement local access list construction path if importing a block without an access list")
 		}
 	} else {
 		// if experimental.bal is not enabled, block headers cannot have access list hash and bodies cannot have access lists.

@@ -61,6 +61,10 @@ func (p *prestateResolver) stop() {
 	p.cancel()
 }
 
+func (p *prestateResolver) storage(addr common.Address, key common.Hash) common.Hash {
+	return common.Hash{}
+}
+
 // account returns the state account for the given address, blocking if it is
 // still being resolved from disk.
 func (p *prestateResolver) account(addr common.Address) *types.StateAccount {
