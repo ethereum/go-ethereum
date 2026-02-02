@@ -246,12 +246,11 @@ func (e *Era) loadIndex() error {
 	return nil
 }
 
-// headerOff, bodyOff, receiptOff, tdOff, and proofOff return the offsets of the respective components for a given block number.
+// headerOff, bodyOff, receiptOff, and tdOff return the offsets of the respective components for a given block number.
 func (e *Era) headerOff(num uint64) (int64, error)  { return e.indexOffset(num, header) }
 func (e *Era) bodyOff(num uint64) (int64, error)    { return e.indexOffset(num, body) }
 func (e *Era) receiptOff(num uint64) (int64, error) { return e.indexOffset(num, receipts) }
 func (e *Era) tdOff(num uint64) (int64, error)      { return e.indexOffset(num, td) }
-func (e *Era) proofOff(num uint64) (int64, error)   { return e.indexOffset(num, proof) }
 
 // indexOffset calculates offset to a certain component for a block number within a file.
 func (e *Era) indexOffset(n uint64, component componentType) (int64, error) {
