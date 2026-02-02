@@ -16,7 +16,10 @@
 
 package partial
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+)
 
 // ContractFilter determines which contracts' storage to sync and retain.
 // This interface allows flexible filtering strategies for partial statefulness.
@@ -32,21 +35,34 @@ type ContractFilter interface {
 	// IsTracked returns true if this contract's storage is being tracked.
 	// Used by RPC handlers to determine if storage queries can be answered.
 	IsTracked(address common.Address) bool
+
+	// ShouldSyncStorageByHash returns true if storage should be synced for the
+	// contract with the given account hash. Used by snap sync which operates on hashes.
+	ShouldSyncStorageByHash(accountHash common.Hash) bool
+
+	// ShouldSyncCodeByHash returns true if bytecode should be synced for the
+	// contract with the given account hash. Used by snap sync which operates on hashes.
+	ShouldSyncCodeByHash(accountHash common.Hash) bool
 }
 
 // ConfiguredFilter implements ContractFilter based on a configured list of addresses.
 // This is the primary implementation used in production.
 type ConfiguredFilter struct {
-	contracts map[common.Address]struct{}
+	contracts      map[common.Address]struct{}
+	contractHashes map[common.Hash]struct{} // Pre-computed keccak256(address) for snap sync
 }
 
 // NewConfiguredFilter creates a new filter from a list of contract addresses.
+// It pre-computes keccak256 hashes for efficient filtering during snap sync.
 func NewConfiguredFilter(addresses []common.Address) *ConfiguredFilter {
 	m := make(map[common.Address]struct{}, len(addresses))
+	h := make(map[common.Hash]struct{}, len(addresses))
 	for _, addr := range addresses {
 		m[addr] = struct{}{}
+		// Snap sync uses keccak256(address) as account hash
+		h[crypto.Keccak256Hash(addr.Bytes())] = struct{}{}
 	}
-	return &ConfiguredFilter{contracts: m}
+	return &ConfiguredFilter{contracts: m, contractHashes: h}
 }
 
 // ShouldSyncStorage returns true if the contract is in the configured list.
@@ -64,6 +80,20 @@ func (f *ConfiguredFilter) ShouldSyncCode(addr common.Address) bool {
 // IsTracked returns true if the contract is in the configured list.
 func (f *ConfiguredFilter) IsTracked(addr common.Address) bool {
 	_, ok := f.contracts[addr]
+	return ok
+}
+
+// ShouldSyncStorageByHash returns true if the contract hash is in the configured list.
+// Used by snap sync which operates on account hashes rather than addresses.
+func (f *ConfiguredFilter) ShouldSyncStorageByHash(accountHash common.Hash) bool {
+	_, ok := f.contractHashes[accountHash]
+	return ok
+}
+
+// ShouldSyncCodeByHash returns true if the contract hash is in the configured list.
+// Used by snap sync which operates on account hashes rather than addresses.
+func (f *ConfiguredFilter) ShouldSyncCodeByHash(accountHash common.Hash) bool {
+	_, ok := f.contractHashes[accountHash]
 	return ok
 }
 
@@ -92,5 +122,15 @@ func (f *AllowAllFilter) ShouldSyncCode(addr common.Address) bool {
 
 // IsTracked always returns true for full node behavior.
 func (f *AllowAllFilter) IsTracked(addr common.Address) bool {
+	return true
+}
+
+// ShouldSyncStorageByHash always returns true for full node behavior.
+func (f *AllowAllFilter) ShouldSyncStorageByHash(accountHash common.Hash) bool {
+	return true
+}
+
+// ShouldSyncCodeByHash always returns true for full node behavior.
+func (f *AllowAllFilter) ShouldSyncCodeByHash(accountHash common.Hash) bool {
 	return true
 }
