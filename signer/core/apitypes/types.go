@@ -259,7 +259,6 @@ func (args *SendTxArgs) validateTxSidecar() error {
 	if args.Commitments == nil {
 		// Generate commitment and proof.
 		commitments := make([]kzg4844.Commitment, n)
-		proofs := make([]kzg4844.Proof, 0, n)
 		for i, b := range args.Blobs {
 			c, err := kzg4844.BlobToCommitment(&b)
 			if err != nil {
@@ -267,7 +266,9 @@ func (args *SendTxArgs) validateTxSidecar() error {
 			}
 			commitments[i] = c
 		}
-		if args.BlobVersion == 1 {
+		var proofs []kzg4844.Proof
+		if args.BlobVersion == types.BlobSidecarVersion1 {
+			proofs = make([]kzg4844.Proof, 0, n*kzg4844.CellProofsPerBlob)
 			for i, b := range args.Blobs {
 				p, err := kzg4844.ComputeCellProofs(&b)
 				if err != nil {
@@ -276,6 +277,7 @@ func (args *SendTxArgs) validateTxSidecar() error {
 				proofs = append(proofs, p...)
 			}
 		} else {
+			proofs = make([]kzg4844.Proof, 0, n)
 			for i, b := range args.Blobs {
 				p, err := kzg4844.ComputeBlobProof(&b, commitments[i])
 				if err != nil {

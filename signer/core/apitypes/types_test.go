@@ -20,7 +20,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
-	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -308,7 +307,7 @@ func TestValidateTxSidecar(t *testing.T) {
 			name: "blobs with v1 version flag - should generate cell proofs",
 			args: SendTxArgs{
 				Blobs:       []kzg4844.Blob{blob1},
-				BlobVersion: 1,
+				BlobVersion: types.BlobSidecarVersion1,
 			},
 			wantErr: false,
 		},
@@ -366,6 +365,17 @@ func TestValidateTxSidecar(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "invalid proof",
+			args: SendTxArgs{
+				BlobVersion: types.BlobSidecarVersion1,
+				Blobs:       []kzg4844.Blob{blob1},
+				Commitments: []kzg4844.Commitment{commitment1},
+				Proofs:      []kzg4844.Proof{proof1, proof2}, // wrong proof
+				BlobHashes:  []common.Hash{hash1},
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -390,7 +400,6 @@ func TestValidateTxSidecar(t *testing.T) {
 						t.Errorf("validateTxSidecar() should have generated commitments")
 					}
 					if args.Proofs == nil || (len(args.Proofs) != len(args.Blobs) && len(args.Proofs) != len(args.Blobs)*kzg4844.CellProofsPerBlob) {
-						fmt.Println("proofs", args.Proofs)
 						t.Errorf("validateTxSidecar() should have generated proofs")
 					}
 					if args.BlobHashes == nil || len(args.BlobHashes) != len(args.Blobs) {
