@@ -396,6 +396,9 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
 			ProcessParentBlockHash(b.header.ParentHash, evm)
 		}
+		if config.IsVerkle(b.header.Number, b.header.Time) {
+			InitializeBinaryTransitionRegistry(statedb)
+		}
 
 		// Execute any user modifications to the block
 		if gen != nil {

@@ -26,12 +26,10 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 )
@@ -254,9 +252,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 	if eth.blockchain.Config().IsVerkle(block.Number(), block.Time()) {
-		statedb.SetCode(params.BinaryTransitionRegistryAddress, []byte{1, 2, 3}, tracing.CodeChangeUnspecified)
-		statedb.SetNonce(params.BinaryTransitionRegistryAddress, 1, tracing.NonceChangeUnspecified)
-		statedb.SetState(params.BinaryTransitionRegistryAddress, common.Hash{}, common.Hash{1})
+		core.InitializeBinaryTransitionRegistry(statedb)
 	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, context, statedb, release, nil

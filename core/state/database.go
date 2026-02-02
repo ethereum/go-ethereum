@@ -211,25 +211,24 @@ func LoadTransitionState(reader StateReader, root common.Hash) *overlay.Transiti
 
 	endedBytes, err := reader.Storage(params.BinaryTransitionRegistryAddress, transitionEndedKey)
 	if err != nil {
-		// Registry exists but can't read ended flag - treat as still in transition
-		endedBytes = common.Hash{}
+		return nil
 	}
 	ended := endedBytes != (common.Hash{})
 
 	currentAccountBytes, err := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressAddressKey)
 	if err != nil {
-		panic(fmt.Errorf("error reading conversion account pointer: %w", err))
+		return nil
 	}
 	currentAccount := common.BytesToAddress(currentAccountBytes[12:])
 
 	currentSlotHash, err := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressSlotKey)
 	if err != nil {
-		panic(fmt.Errorf("error reading conversion slot pointer: %w", err))
+		return nil
 	}
 
 	storageProcessedBytes, err := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressStorageProcessed)
 	if err != nil {
-		panic(fmt.Errorf("error reading conversion storage processing completion status: %w", err))
+		return nil
 	}
 	storageProcessed := storageProcessedBytes[0] == 1
 
@@ -308,7 +307,8 @@ func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (ReaderWithSta
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	reader, err := db.StateReader(root)
+	reader, err := db.triedb.StateReader(root)
+	flatReader := newFlatReader(reader)
 	if err != nil {
 		tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 		if err != nil {
@@ -317,12 +317,12 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 		return tr, nil
 	}
 
-	if isTransitionActive(reader) || db.triedb.IsVerkle() {
+	if isTransitionActive(flatReader) || db.triedb.IsVerkle() {
 		bt, err := bintrie.NewBinaryTrie(root, db.triedb)
 		if err != nil {
 			return nil, fmt.Errorf("could not open the overlay tree: %w", err)
 		}
-		ts := LoadTransitionState(reader, root)
+		ts := LoadTransitionState(flatReader, root)
 		if !ts.InTransition() {
 			// Transition complete, use BinaryTrie only
 			return bt, nil

@@ -94,9 +94,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 	if config.IsVerkle(header.Number, header.Time) {
-		statedb.SetCode(params.BinaryTransitionRegistryAddress, []byte{1, 2, 3}, tracing.CodeChangeUnspecified)
-		statedb.SetNonce(params.BinaryTransitionRegistryAddress, 1, tracing.NonceChangeUnspecified)
-		statedb.SetState(params.BinaryTransitionRegistryAddress, common.Hash{}, common.Hash{1})
+		InitializeBinaryTransitionRegistry(statedb)
 	}
 
 	// Iterate over and process the individual transactions
