@@ -271,7 +271,7 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 	gp.SetGas(block.GasLimit())
 	db.SetTxContext(tx.Hash(), txIdx)
 	var gasUsed uint64
-	receipt, err := ApplyTransactionWithEVM(msg, gp, db, block.Number(), block.Hash(), context.Time, tx, &gasUsed, evm)
+	receipt, err := ApplyTransactionWithEVM(msg, gp, db, block.Number(), block.Hash(), context.Time, tx, &gasUsed, new(uint64), evm)
 	if err != nil {
 		err := fmt.Errorf("could not apply tx %d [%v]: %w", txIdx, tx.Hash().Hex(), err)
 		return &txExecResult{err: err}

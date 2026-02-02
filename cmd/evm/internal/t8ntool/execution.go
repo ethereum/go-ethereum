@@ -154,6 +154,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		rejectedTxs []*rejectedTx
 		includedTxs types.Transactions
 		gasUsed     = uint64(0)
+		gasCharged  = uint64(0)
 		blobGasUsed = uint64(0)
 		receipts    = make(types.Receipts, 0)
 	)
@@ -260,7 +261,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			snapshot = statedb.Snapshot()
 			prevGas  = gaspool.Gas()
 		)
-		receipt, err := core.ApplyTransactionWithEVM(msg, gaspool, statedb, vmContext.BlockNumber, blockHash, pre.Env.Timestamp, tx, &gasUsed, evm)
+		receipt, err := core.ApplyTransactionWithEVM(msg, gaspool, statedb, vmContext.BlockNumber, blockHash, pre.Env.Timestamp, tx, &gasUsed, &gasCharged, evm)
 		if err != nil {
 			statedb.RevertToSnapshot(snapshot)
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From, "error", err)
@@ -349,7 +350,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		Receipts:    receipts,
 		Rejected:    rejectedTxs,
 		Difficulty:  (*math.HexOrDecimal256)(vmContext.Difficulty),
-		GasUsed:     (math.HexOrDecimal64)(gasUsed),
+		GasUsed:     (math.HexOrDecimal64)(gasCharged),
 		BaseFee:     (*math.HexOrDecimal256)(vmContext.BaseFee),
 	}
 	if pre.Env.Withdrawals != nil {

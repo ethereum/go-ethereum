@@ -33,7 +33,7 @@ import (
 // ExecutionResult includes all output after executing given evm
 // message no matter the execution itself is successful or not.
 type ExecutionResult struct {
-	UsedGas    uint64 // Total used gas, not including the refunded gas
+	UsedGas    uint64 // Total used gas, including the refunded gas
 	MaxUsedGas uint64 // Maximum gas consumed during execution, excluding gas refunds.
 	Err        error  // Any error encountered during the execution(listed in core/vm/errors.go)
 	ReturnData []byte // Returned data from evm(function result or data supplied with revert opcode)
@@ -570,7 +570,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 
 	return &ExecutionResult{
-		UsedGas:    peakGasUsed,
+		UsedGas:    st.gasUsed(),
 		MaxUsedGas: peakGasUsed,
 		Err:        vmerr,
 		ReturnData: ret,
