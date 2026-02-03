@@ -26,8 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/rlp"
-
-	_ "github.com/usbarmory/tamago/board/qemu/sifive_u"
 )
 
 // Payload represents the input data for stateless execution containing
