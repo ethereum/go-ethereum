@@ -173,6 +173,36 @@ func (e *invalidBlockTimestampError) ErrorCode() int { return errCodeBlockTimest
 
 type blockGasLimitReachedError struct{ message string }
 
+// Partial state error codes per EIP-7928 / partial statefulness spec
+const (
+	errCodeStorageNotTracked = -32001
+	errCodeCodeNotTracked    = -32002
+)
+
+// StorageNotTrackedError is returned when querying storage for a contract
+// that is not tracked in partial statefulness mode.
+type StorageNotTrackedError struct {
+	Address common.Address
+}
+
+func (e *StorageNotTrackedError) Error() string {
+	return fmt.Sprintf("storage not tracked for contract %s", e.Address.Hex())
+}
+
+func (e *StorageNotTrackedError) ErrorCode() int { return errCodeStorageNotTracked }
+
+// CodeNotTrackedError is returned when querying bytecode for a contract
+// that is not tracked in partial statefulness mode.
+type CodeNotTrackedError struct {
+	Address common.Address
+}
+
+func (e *CodeNotTrackedError) Error() string {
+	return fmt.Sprintf("code not tracked for contract %s", e.Address.Hex())
+}
+
+func (e *CodeNotTrackedError) ErrorCode() int { return errCodeCodeNotTracked }
+
 func (e *blockGasLimitReachedError) Error() string  { return e.message }
 func (e *blockGasLimitReachedError) ErrorCode() int { return errCodeBlockGasLimitReached }
 
