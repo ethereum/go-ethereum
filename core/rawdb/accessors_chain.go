@@ -693,15 +693,12 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 
 	block := types.NewBlockWithHeader(header).WithBody(*body)
 
-	// TODO: only read the access list if the bal hash is set in the header.
-	// I do it here regardless in order to support --experimental.bal which
-	// doesn't expect bal hash to be set in header in order to be compatible
-	// with importing mainnet blocks augmented with BALs
-	accessList := ReadAccessList(db, hash, number)
-	if accessList != nil {
-		block = block.WithAccessList(accessList)
+	if header.BlockAccessListHash != nil {
+		accessList := ReadAccessList(db, hash, number)
+		if accessList != nil {
+			block = block.WithAccessList(accessList)
+		}
 	}
-
 	return block
 }
 
@@ -709,6 +706,9 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 	WriteBody(db, block.Hash(), block.NumberU64(), block.Body())
 	WriteHeader(db, block.Header())
+	if block.AccessList() != nil {
+		WriteAccessList(db, block.Hash(), block.NumberU64(), block.AccessList())
+	}
 }
 
 // WriteAncientBlocks writes entire block data into ancient store and returns the total written size.
