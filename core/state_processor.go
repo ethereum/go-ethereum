@@ -62,7 +62,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	var (
 		config      = p.chainConfig()
 		receipts    types.Receipts
-		usedGas     = new(uint64)
+		chargedGas  = new(uint64)
+		usedGas     = uint64(0)
 		header      = block.Header()
 		blockHash   = block.Hash()
 		blockNumber = block.Number()
@@ -103,10 +104,11 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		}
 		statedb.SetTxContext(tx.Hash(), i)
 
-		receipt, err := ApplyTransactionWithEVM(msg, gp, statedb, blockNumber, blockHash, context.Time, tx, usedGas, evm)
+		receipt, err := ApplyTransactionWithEVM(msg, gp, statedb, blockNumber, blockHash, context.Time, tx, chargedGas, evm)
 		if err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
+		usedGas += receipt.GasUsed
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 
@@ -147,7 +149,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		Receipts: receipts,
 		Requests: requests,
 		Logs:     allLogs,
-		GasUsed:  *usedGas,
+		GasUsed:  usedGas,
 	}, nil
 }
 
@@ -208,7 +210,11 @@ func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 		receipt.Status = types.ReceiptStatusSuccessful
 	}
 	receipt.TxHash = tx.Hash()
-	receipt.GasUsed = result.UsedGas
+	if evm.ChainConfig().IsAmsterdam(blockNumber, blockTime) {
+		receipt.GasUsed = result.MaxUsedGas
+	} else {
+		receipt.GasUsed = result.UsedGas
+	}
 
 	if tx.Type() == types.BlobTxType {
 		receipt.BlobGasUsed = uint64(len(tx.BlobHashes()) * params.BlobTxBlobGasPerBlob)
