@@ -242,8 +242,8 @@ func (args *SendTxArgs) validateTxSidecar() error {
 	if args.Proofs != nil {
 		if len(args.Proofs) == n {
 			// v1 transaction
-			for i, b := range args.Blobs {
-				if err := kzg4844.VerifyBlobProof(&b, args.Commitments[i], args.Proofs[i]); err != nil {
+			for i := range args.Blobs {
+				if err := kzg4844.VerifyBlobProof(&args.Blobs[i], args.Commitments[i], args.Proofs[i]); err != nil {
 					return fmt.Errorf("failed to verify blob proof: %v", err)
 				}
 			}
@@ -259,8 +259,8 @@ func (args *SendTxArgs) validateTxSidecar() error {
 	if args.Commitments == nil {
 		// Generate commitment and proof.
 		commitments := make([]kzg4844.Commitment, n)
-		for i, b := range args.Blobs {
-			c, err := kzg4844.BlobToCommitment(&b)
+		for i := range args.Blobs {
+			c, err := kzg4844.BlobToCommitment(&args.Blobs[i])
 			if err != nil {
 				return fmt.Errorf("blobs[%d]: error computing commitment: %v", i, err)
 			}
@@ -269,8 +269,8 @@ func (args *SendTxArgs) validateTxSidecar() error {
 		var proofs []kzg4844.Proof
 		if args.BlobVersion == types.BlobSidecarVersion1 {
 			proofs = make([]kzg4844.Proof, 0, n*kzg4844.CellProofsPerBlob)
-			for i, b := range args.Blobs {
-				p, err := kzg4844.ComputeCellProofs(&b)
+			for i := range args.Blobs {
+				p, err := kzg4844.ComputeCellProofs(&args.Blobs[i])
 				if err != nil {
 					return fmt.Errorf("blobs[%d]: error computing cell proof: %v", i, err)
 				}
@@ -278,8 +278,8 @@ func (args *SendTxArgs) validateTxSidecar() error {
 			}
 		} else {
 			proofs = make([]kzg4844.Proof, 0, n)
-			for i, b := range args.Blobs {
-				p, err := kzg4844.ComputeBlobProof(&b, commitments[i])
+			for i := range args.Blobs {
+				p, err := kzg4844.ComputeBlobProof(&args.Blobs[i], commitments[i])
 				if err != nil {
 					return fmt.Errorf("blobs[%d]: error computing proof: %v", i, err)
 				}
