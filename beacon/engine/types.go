@@ -363,12 +363,8 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		Withdrawals:     block.Withdrawals(),
 		BlobGasUsed:     block.BlobGasUsed(),
 		ExcessBlobGas:   block.ExcessBlobGas(),
-<<<<<<< HEAD
-=======
 		BlockAccessList: block.AccessList(),
->>>>>>> 959ade7689 (a bunch of changes.  mostly bal persistence and removing bal from block body object.  wip...)
 		SlotNumber:      block.SlotNumber(),
-		BlockAccessList: block.Body().AccessList,
 	}
 
 	// Add blobs.
