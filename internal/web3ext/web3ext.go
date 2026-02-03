@@ -613,12 +613,12 @@ web3._extend({
 		}),
 		new web3._extend.Method({
 			name: 'getBlockAccessListByBlockNumber',
-			call: 'eth_blockAccessListByBlockNumber',
+			call: 'eth_getBlockAccessListByBlockNumber',
 			params: 1,
 		}),
 		new web3._extend.Method({
 			name: 'getBlockAccessListByBlockHash',
-			call: 'eth_blockAccessListByBlockHash',
+			call: 'eth_getBlockAccessListByBlockHash',
 			params: 1,
 		}),
 	],

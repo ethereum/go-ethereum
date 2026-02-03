@@ -1342,15 +1342,15 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	}
 }
 
-// BlockAccessListByBlockNumber returns a block access list for the given block number
+// GetBlockAccessListByBlockNumber returns a block access list for the given block number
 // or nil if one does not exist.
-func (api *BlockChainAPI) BlockAccessListByBlockNumber(number rpc.BlockNumber) (interface{}, error) {
+func (api *BlockChainAPI) GetBlockAccessListByBlockNumber(number rpc.BlockNumber) (interface{}, error) {
 	return api.b.BlockAccessListByNumberOrHash(rpc.BlockNumberOrHash{BlockNumber: &number})
 }
 
-// BlockAccessListByBlockHash returns a block access list for the given block hash
+// GetBlockAccessListByBlockHash returns a block access list for the given block hash
 // or nil if one does not exist.
-func (api *BlockChainAPI) BlockAccessListByBlockHash(hash common.Hash) (interface{}, error) {
+func (api *BlockChainAPI) GetBlockAccessListByBlockHash(hash common.Hash) (interface{}, error) {
 	return api.b.BlockAccessListByNumberOrHash(rpc.BlockNumberOrHash{BlockHash: &hash})
 }
 
