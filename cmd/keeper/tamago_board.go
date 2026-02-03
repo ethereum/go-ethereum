@@ -20,5 +20,5 @@
 package main
 
 import (
-	_ "github.com/usbarmory/tamago/board/qemu/sifive_u"
+	_ "github.com/ethereum/go-ethereum/cmd/keeper/zisk"
 )
