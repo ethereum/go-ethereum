@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
+	"go.uber.org/goleak"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -53,6 +54,8 @@ func TestGeneration(t *testing.T) {
 }
 
 func testGeneration(t *testing.T, scheme string) {
+	defer goleak.VerifyNone(t)
+
 	// We can't use statedb to make a test trie (circular dependency), so make
 	// a fake one manually. We're going with a small account trie of 3 accounts,
 	// two of which also has the same 3-slot storage trie attached.
@@ -80,9 +83,7 @@ func testGeneration(t *testing.T, scheme string) {
 	checkSnapRoot(t, snap, root)
 
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
+	snap.stopGeneration()
 }
 
 // Tests that snapshot generation with existent flat state.
