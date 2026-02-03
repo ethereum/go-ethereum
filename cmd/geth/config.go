@@ -244,7 +244,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	utils.SetupMetrics(&cfg.Metrics)
 
 	// Setup OpenTelemetry reporting if enabled.
-	if err := tracesetup.StartTelemetry(ctx.Context, cfg.Node.OpenTelemetry, stack); err != nil {
+	if err := tracesetup.SetupTelemetry(cfg.Node.OpenTelemetry, stack); err != nil {
 		utils.Fatalf("failed to setup OpenTelemetry: %v", err)
 	}
 

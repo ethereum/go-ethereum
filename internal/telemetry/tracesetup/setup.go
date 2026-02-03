@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -35,19 +36,30 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 )
 
+const startStopTimeout = 10 * time.Second
+
 // Service wraps the provider to implement node.Lifecycle.
 type Service struct {
+	endpoint string
+	exporter *otlptrace.Exporter
 	provider *sdktrace.TracerProvider
 }
 
 // Start implements node.Lifecycle.
 func (t *Service) Start() error {
-	return nil // provider is already started during setup
+	ctx, cancel := context.WithTimeout(context.Background(), startStopTimeout)
+	defer cancel()
+	if err := t.exporter.Start(ctx); err != nil {
+		log.Info("OpenTelemetry exporter didn't start", "endpoint", t.endpoint, "err", err)
+		return err
+	}
+	log.Info("OpenTelemetry trace export enabled", "endpoint", t.endpoint)
+	return nil
 }
 
 // Stop implements node.Lifecycle.
 func (t *Service) Stop() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), startStopTimeout)
 	defer cancel()
 	if err := t.provider.Shutdown(ctx); err != nil {
 		log.Error("Failed to stop OpenTelemetry service", "err", err)
@@ -57,22 +69,20 @@ func (t *Service) Stop() error {
 	return nil
 }
 
-// StartTelemetry initializes telemetry with the given parameters.
-func StartTelemetry(ctx context.Context, cfg node.OpenTelemetryConfig, stack *node.Node) error {
+// SetupTelemetry initializes telemetry with the given parameters.
+func SetupTelemetry(cfg node.OpenTelemetryConfig, stack *node.Node) error {
 	if !cfg.Enabled {
 		return nil
 	}
-
 	if cfg.SampleRatio < 0 || cfg.SampleRatio > 1 {
 		return fmt.Errorf("invalid sample ratio: %f", cfg.SampleRatio)
 	}
-
 	// Create exporter based on endpoint URL
 	u, err := url.Parse(cfg.Endpoint)
 	if err != nil {
 		return fmt.Errorf("invalid rpc tracing endpoint URL: %w", err)
 	}
-	var exporter sdktrace.SpanExporter
+	var exporter *otlptrace.Exporter
 	switch u.Scheme {
 	case "http", "https":
 		opts := []otlptracehttp.Option{
@@ -89,12 +99,9 @@ func StartTelemetry(ctx context.Context, cfg node.OpenTelemetryConfig, stack *no
 				"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(cfg.AuthUser+":"+cfg.AuthPassword)),
 			}))
 		}
-		exporter, err = otlptracehttp.New(ctx, opts...)
+		exporter = otlptracehttp.NewUnstarted(opts...)
 	default:
 		return fmt.Errorf("unsupported telemetry url scheme: %s", u.Scheme)
-	}
-	if err != nil {
-		return fmt.Errorf("failed to create telemetry exporter: %w", err)
 	}
 
 	// Define sampler such that if no parent span is available,
@@ -138,8 +145,7 @@ func StartTelemetry(ctx context.Context, cfg node.OpenTelemetryConfig, stack *no
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
-	service := &Service{provider: tp}
+	service := &Service{endpoint: cfg.Endpoint, exporter: exporter, provider: tp}
 	stack.RegisterLifecycle(service)
-	log.Info("OpenTelemetry tracing enabled", "endpoint", cfg.Endpoint)
 	return nil
 }
