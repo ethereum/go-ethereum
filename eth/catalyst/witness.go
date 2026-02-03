@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -88,9 +87,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV3(update engine.Forkchoice
 
 // NewPayloadWithWitnessV1 is analogous to NewPayloadV1, only it also generates
 // and returns a stateless witness after running the payload.
-func (api *ConsensusAPI) NewPayloadWithWitnessV1(ctx context.Context, params engine.ExecutableData) (result engine.PayloadStatusV1, err error) {
-	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadWithWitnessV1", executableDataAttrs(params)...)
-	defer spanEnd(err)
+func (api *ConsensusAPI) NewPayloadWithWitnessV1(ctx context.Context, params engine.ExecutableData) (engine.PayloadStatusV1, error) {
 	if params.Withdrawals != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("withdrawals not supported in V1"))
 	}
@@ -99,9 +96,7 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV1(ctx context.Context, params eng
 
 // NewPayloadWithWitnessV2 is analogous to NewPayloadV2, only it also generates
 // and returns a stateless witness after running the payload.
-func (api *ConsensusAPI) NewPayloadWithWitnessV2(ctx context.Context, params engine.ExecutableData) (result engine.PayloadStatusV1, err error) {
-	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadWithWitnessV2", executableDataAttrs(params)...)
-	defer spanEnd(err)
+func (api *ConsensusAPI) NewPayloadWithWitnessV2(ctx context.Context, params engine.ExecutableData) (engine.PayloadStatusV1, error) {
 	var (
 		cancun   = api.config().IsCancun(api.config().LondonBlock, params.Timestamp)
 		shanghai = api.config().IsShanghai(api.config().LondonBlock, params.Timestamp)
@@ -123,9 +118,7 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV2(ctx context.Context, params eng
 
 // NewPayloadWithWitnessV3 is analogous to NewPayloadV3, only it also generates
 // and returns a stateless witness after running the payload.
-func (api *ConsensusAPI) NewPayloadWithWitnessV3(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (result engine.PayloadStatusV1, err error) {
-	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadWithWitnessV3", executableDataAttrs(params)...)
-	defer spanEnd(err)
+func (api *ConsensusAPI) NewPayloadWithWitnessV3(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (engine.PayloadStatusV1, error) {
 	switch {
 	case params.Withdrawals == nil:
 		return invalidStatus, paramsErr("nil withdrawals post-shanghai")
@@ -145,9 +138,7 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV3(ctx context.Context, params eng
 
 // NewPayloadWithWitnessV4 is analogous to NewPayloadV4, only it also generates
 // and returns a stateless witness after running the payload.
-func (api *ConsensusAPI) NewPayloadWithWitnessV4(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes) (result engine.PayloadStatusV1, err error) {
-	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadWithWitnessV4", executableDataAttrs(params)...)
-	defer spanEnd(err)
+func (api *ConsensusAPI) NewPayloadWithWitnessV4(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes) (engine.PayloadStatusV1, error) {
 	switch {
 	case params.Withdrawals == nil:
 		return invalidStatus, paramsErr("nil withdrawals post-shanghai")
@@ -165,7 +156,7 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV4(ctx context.Context, params eng
 		return invalidStatus, unsupportedForkErr("newPayloadV4 must only be called for prague/osaka payloads")
 	}
 	requests := convertRequests(executionRequests)
-	if err = validateRequests(requests); err != nil {
+	if err := validateRequests(requests); err != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(err)
 	}
 	return api.newPayload(ctx, params, versionedHashes, beaconRoot, requests, true)

@@ -115,22 +115,9 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
-	// Read requests if Prague is enabled.
-	var requests [][]byte
-	if config.IsPrague(block.Number(), block.Time()) {
-		requests = [][]byte{}
-		// EIP-6110
-		if err := ParseDepositLogs(&requests, allLogs, config); err != nil {
-			return nil, fmt.Errorf("failed to parse deposit logs: %w", err)
-		}
-		// EIP-7002
-		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
-			return nil, fmt.Errorf("failed to process withdrawal queue: %w", err)
-		}
-		// EIP-7251
-		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
-			return nil, fmt.Errorf("failed to process consolidation queue: %w", err)
-		}
+	requests, err := postExecution(ctx, config, block, allLogs, evm)
+	if err != nil {
+		return nil, err
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
@@ -142,6 +129,32 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		Logs:     allLogs,
 		GasUsed:  *usedGas,
 	}, nil
+}
+
+// postExecution processes the post-execution system calls if Prague is enabled.
+func postExecution(ctx context.Context, config *params.ChainConfig, block *types.Block, allLogs []*types.Log, evm *vm.EVM) (requests [][]byte, err error) {
+	_, _, spanEnd := telemetry.StartSpan(ctx, "core.postExecution")
+	defer spanEnd(err)
+	// Read requests if Prague is enabled.
+	if config.IsPrague(block.Number(), block.Time()) {
+		requests = [][]byte{}
+		// EIP-6110
+		if err = ParseDepositLogs(&requests, allLogs, config); err != nil {
+			err = fmt.Errorf("failed to parse deposit logs: %w", err)
+			return
+		}
+		// EIP-7002
+		if err = ProcessWithdrawalQueue(&requests, evm); err != nil {
+			err = fmt.Errorf("failed to process withdrawal queue: %w", err)
+			return
+		}
+		// EIP-7251
+		if err = ProcessConsolidationQueue(&requests, evm); err != nil {
+			err = fmt.Errorf("failed to process consolidation queue: %w", err)
+			return
+		}
+	}
+	return
 }
 
 // ApplyTransactionWithEVM attempts to apply a transaction to the given state database

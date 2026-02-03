@@ -626,19 +626,8 @@ func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) ([]*engine.Blob
 // Helper for NewPayload* methods.
 var invalidStatus = engine.PayloadStatusV1{Status: engine.INVALID}
 
-// executableDataAttrs returns telemetry attributes for an ExecutableData payload.
-func executableDataAttrs(params engine.ExecutableData) []telemetry.Attribute {
-	return []telemetry.Attribute{
-		telemetry.Int64Attribute("block.number", int64(params.Number)),
-		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
-		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
-	}
-}
-
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV1(ctx context.Context, params engine.ExecutableData) (result engine.PayloadStatusV1, err error) {
-	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadV1", executableDataAttrs(params)...)
-	defer spanEnd(err)
+func (api *ConsensusAPI) NewPayloadV1(ctx context.Context, params engine.ExecutableData) (engine.PayloadStatusV1, error) {
 	if params.Withdrawals != nil {
 		return invalidStatus, paramsErr("withdrawals not supported in V1")
 	}
@@ -646,9 +635,7 @@ func (api *ConsensusAPI) NewPayloadV1(ctx context.Context, params engine.Executa
 }
 
 // NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV2(ctx context.Context, params engine.ExecutableData) (result engine.PayloadStatusV1, err error) {
-	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadV2", executableDataAttrs(params)...)
-	defer spanEnd(err)
+func (api *ConsensusAPI) NewPayloadV2(ctx context.Context, params engine.ExecutableData) (engine.PayloadStatusV1, error) {
 	var (
 		cancun   = api.config().IsCancun(api.config().LondonBlock, params.Timestamp)
 		shanghai = api.config().IsShanghai(api.config().LondonBlock, params.Timestamp)
@@ -669,9 +656,7 @@ func (api *ConsensusAPI) NewPayloadV2(ctx context.Context, params engine.Executa
 }
 
 // NewPayloadV3 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV3(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (result engine.PayloadStatusV1, err error) {
-	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadV3", executableDataAttrs(params)...)
-	defer spanEnd(err)
+func (api *ConsensusAPI) NewPayloadV3(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (engine.PayloadStatusV1, error) {
 	switch {
 	case params.Withdrawals == nil:
 		return invalidStatus, paramsErr("nil withdrawals post-shanghai")
@@ -690,9 +675,7 @@ func (api *ConsensusAPI) NewPayloadV3(ctx context.Context, params engine.Executa
 }
 
 // NewPayloadV4 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV4(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes) (result engine.PayloadStatusV1, err error) {
-	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadV4", executableDataAttrs(params)...)
-	defer spanEnd(err)
+func (api *ConsensusAPI) NewPayloadV4(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes) (engine.PayloadStatusV1, error) {
 	switch {
 	case params.Withdrawals == nil:
 		return invalidStatus, paramsErr("nil withdrawals post-shanghai")
@@ -710,13 +693,13 @@ func (api *ConsensusAPI) NewPayloadV4(ctx context.Context, params engine.Executa
 		return invalidStatus, unsupportedForkErr("newPayloadV4 must only be called for prague/osaka payloads")
 	}
 	requests := convertRequests(executionRequests)
-	if err = validateRequests(requests); err != nil {
+	if err := validateRequests(requests); err != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(err)
 	}
 	return api.newPayload(ctx, params, versionedHashes, beaconRoot, requests, false)
 }
 
-func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, witness bool) (engine.PayloadStatusV1, error) {
+func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, witness bool) (result engine.PayloadStatusV1, err error) {
 	// The locking here is, strictly, not required. Without these locks, this can happen:
 	//
 	// 1. NewPayload( execdata-N ) is invoked from the CL. It goes all the way down to
@@ -730,14 +713,18 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 	//    sequentially.
 	// Hence, we use a lock here, to be sure that the previous call has finished before we
 	// check whether we already have the block locally.
+	var attrs = []telemetry.Attribute{
+		telemetry.Int64Attribute("block.number", int64(params.Number)),
+		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
+		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
+	}
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayload", attrs...)
+	defer spanEnd(err)
 	api.newPayloadLock.Lock()
 	defer api.newPayloadLock.Unlock()
 
 	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
-	attrs := executableDataAttrs(params)
-	_, _, spanEnd := telemetry.StartSpan(ctx, "engine.ExecutableDataToBlock", attrs...)
 	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot, requests)
-	spanEnd(err)
 	if err != nil {
 		bgu := "nil"
 		if params.BlobGasUsed != nil {
@@ -810,11 +797,9 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 		return engine.PayloadStatusV1{Status: engine.ACCEPTED}, nil
 	}
 	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number())
-	sctx, _, spanEnd := telemetry.StartSpan(ctx, "api.eth.Blockchain().InsertBlockWithoutSetHead", attrs...)
 	start := time.Now()
-	proofs, err := api.eth.BlockChain().InsertBlockWithoutSetHead(sctx, block, witness)
+	proofs, err := api.eth.BlockChain().InsertBlockWithoutSetHead(ctx, block, witness)
 	processingTime := time.Since(start)
-	spanEnd(err)
 	if err != nil {
 		log.Warn("NewPayload: inserting block failed", "error", err)
 

@@ -2651,14 +2651,16 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 // The key difference between the InsertChain is it won't do the canonical chain
 // updating. It relies on the additional SetCanonical call to finalize the entire
 // procedure.
-func (bc *BlockChain) InsertBlockWithoutSetHead(ctx context.Context, block *types.Block, makeWitness bool) (*stateless.Witness, error) {
+func (bc *BlockChain) InsertBlockWithoutSetHead(ctx context.Context, block *types.Block, makeWitness bool) (witness *stateless.Witness, err error) {
+	_, _, spanEnd := telemetry.StartSpan(ctx, "core.blockchain.InsertBlockWithoutSetHead")
+	defer spanEnd(err)
 	if !bc.chainmu.TryLock() {
 		return nil, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
 
-	witness, _, err := bc.insertChain(ctx, types.Blocks{block}, false, makeWitness)
-	return witness, err
+	witness, _, err = bc.insertChain(ctx, types.Blocks{block}, false, makeWitness)
+	return
 }
 
 // SetCanonical rewinds the chain to set the new head block as the specified
