@@ -50,6 +50,7 @@ const (
 	DynamicFeeTxType = 0x02
 	BlobTxType       = 0x03
 	SetCodeTxType    = 0x04
+	AbstractTxType   = 0x06 // skip 0x05 since it magic for set code tx
 )
 
 // Transaction is an Ethereum transaction.
@@ -533,6 +534,30 @@ func (tx *Transaction) SetCodeAuthorities() []common.Address {
 		}
 	}
 	return auths
+}
+
+func (tx *Transaction) SenderAuthorization() *AbstractAuthorization {
+	abstracttx, ok := tx.inner.(*AbstractTx)
+	if !ok {
+		return nil
+	}
+	return abstracttx.Sender.copy()
+}
+
+func (tx *Transaction) DeployerAuthorization() *AbstractAuthorization {
+	abstracttx, ok := tx.inner.(*AbstractTx)
+	if !ok {
+		return nil
+	}
+	return abstracttx.Deployer.copy()
+}
+
+func (tx *Transaction) PaymasterAuthorization() *PaymasterAuthorization {
+	abstracttx, ok := tx.inner.(*AbstractTx)
+	if !ok {
+		return nil
+	}
+	return abstracttx.Paymaster.copy()
 }
 
 // SetTime sets the decoding time of a transaction. This is used by tests to set

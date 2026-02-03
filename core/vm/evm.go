@@ -18,6 +18,7 @@ package vm
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"sync/atomic"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm/roles"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -77,6 +79,30 @@ type TxContext struct {
 	BlobHashes   []common.Hash       // Provides information for BLOBHASH
 	BlobFeeCap   *big.Int            // Is used to zero the blobbasefee if NoBaseFee is set
 	AccessEvents *state.AccessEvents // Capture all state accesses for this tx
+
+	// EIP-7701: Transaction parameters for TXPARAM* opcodes
+	TxType uint8  // 0x00: transaction type
+	Nonce  uint64 // 0x01: transaction nonce
+	// Origin is sender (0x02)
+
+	// AA authorization structs (nil for non-AA txs)
+	Sender    *types.AbstractAuthorization  // 0x03: Data, 0x0D: Gas
+	Deployer  *types.AbstractAuthorization  // 0x04: Target, 0x05: Data
+	Paymaster *types.PaymasterAuthorization // 0x06: Target, 0x07: Data, 0x0E: Gas, 0x10: PostOpGas
+
+	SenderExecutionData  []byte   // 0x08: execution calldata
+	SenderExecutionGas   uint64   // 0x0F: execution gas limit
+	MaxPriorityFeePerGas *big.Int // 0x0B: max priority fee per gas
+	MaxFeePerGas         *big.Int // 0x0C: max fee per gas
+
+	// Hashes (computed when creating TxContext)
+	AccessListHash        common.Hash  // 0x11: hash of access list
+	AuthorizationListHash common.Hash  // 0x12: hash of authorization list
+	TxHashForSignature    *common.Hash // 0xff: hash for signature (nil for AA txs)
+
+	// Mutable execution state (set during AA tx processing)
+	ExecutionStatus  uint64 // 0xf1: execution result status
+	ExecutionGasUsed uint64 // 0xf2: gas used during execution
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -130,6 +156,8 @@ type EVM struct {
 
 	readOnly   bool   // Whether to throw on stateful modifications
 	returnData []byte // Last CALL's return data for subsequent reuse
+
+	accepted roles.Role // Last CALL's accepted role, if any
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
@@ -317,6 +345,86 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	return ret, gas, err
 }
 
+// TODO: should this function take the data input?
+func (evm *EVM) CallWithRole(addr common.Address, gas uint64, role roles.Role) (leftOverGas uint64, err error) {
+	// Capture the tracer start/end events in debug mode
+	var ret []byte
+	if evm.Config.Tracer != nil {
+		evm.captureBegin(evm.depth, CALL, params.AAEntryPoint, addr, nil, gas, common.Big0)
+		defer func(startGas uint64) {
+			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
+		}(gas)
+	}
+	// Fail if we're trying to execute above the call depth limit
+	if evm.depth > int(params.CallCreateDepth) {
+		return 0, ErrDepth
+	}
+	snapshot := evm.StateDB.Snapshot()
+	p, isPrecompile := evm.precompile(addr)
+
+	if !evm.StateDB.Exist(addr) {
+		if !isPrecompile && evm.chainRules.IsEIP4762 {
+			// Add proof of absence to witness
+			// At this point, the read costs have already been charged, either because this
+			// is a direct tx call, in which case it's covered by the intrinsic gas, or because
+			// of a CALL instruction, in which case BASIC_DATA has been added to the access
+			// list in write mode. If there is enough gas paying for the addition of the code
+			// hash leaf to the access list, then account creation will proceed unimpaired.
+			// Thus, only pay for the creation of the code hash leaf here.
+			wgas := evm.AccessEvents.CodeHashGas(addr, true, gas, false)
+			if gas < wgas {
+				evm.StateDB.RevertToSnapshot(snapshot)
+				return gas, ErrOutOfGas
+			}
+			gas -= wgas
+		}
+
+		if !isPrecompile && evm.chainRules.IsEIP158 {
+			// Calling a non-existing account, don't do anything.
+			return 0, nil
+		}
+		evm.StateDB.CreateAccount(addr)
+	}
+
+	if isPrecompile {
+		ret, gas, err = RunPrecompiledContract(p, nil, gas, evm.Config.Tracer)
+	} else {
+		// Initialise a new contract and set the code that is to be used by the EVM.
+		code := evm.resolveCode(addr)
+		if len(code) == 0 {
+			ret, err = nil, nil // gas is unchanged
+		} else {
+			// The contract is a scoped environment for this execution context only.
+			contract := NewContract(params.AAEntryPoint, addr, common.U2560, gas, evm.jumpDests)
+			contract.IsSystemCall = false
+			contract.Role = role
+			contract.SetCallCode(evm.resolveCodeHash(addr), code)
+			ret, err = evm.Run(contract, nil, false)
+			gas = contract.Gas
+		}
+	}
+	// When an error was returned by the EVM or when setting the creation code
+	// above we revert to the snapshot and consume any gas remaining. Additionally,
+	// when we're in homestead this also counts for code storage gas errors.
+	if err != nil {
+		evm.StateDB.RevertToSnapshot(snapshot)
+		if err != ErrExecutionReverted {
+			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
+				evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
+			}
+
+			gas = 0
+		}
+		// TODO: consider clearing up unused snapshots:
+		//} else {
+		//	evm.StateDB.DiscardSnapshot(snapshot)
+	}
+	if evm.accepted != role {
+		return gas, fmt.Errorf("role %s not accepted, got %s", role, evm.accepted)
+	}
+	return gas, nil
+}
+
 // CallCode executes the contract associated with the addr with the given input
 // as parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
@@ -373,7 +481,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 //
 // DelegateCall differs from CallCode in the sense that it executes the given address'
 // code with the caller as context and the caller is set to the caller of the caller.
-func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address, addr common.Address, input []byte, gas uint64, value *uint256.Int, role roles.Role) (ret []byte, leftOverGas uint64, err error) {
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
 		// DELEGATECALL inherits value from parent call
@@ -397,6 +505,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 		// Note: The value refers to the original value from the parent call.
 		contract := NewContract(originCaller, caller, value, gas, evm.jumpDests)
 		contract.SetCallCode(evm.resolveCodeHash(addr), evm.resolveCode(addr))
+		contract.Role = role
 		ret, err = evm.Run(contract, input, false)
 		gas = contract.Gas
 	}

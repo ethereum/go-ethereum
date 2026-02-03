@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/vm/roles"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -40,6 +41,7 @@ var activators = map[int]func(*JumpTable){
 	1344: enable1344,
 	1153: enable1153,
 	4762: enable4762,
+	7701: enable7701,
 	7702: enable7702,
 	7939: enable7939,
 	8024: enable8024,
@@ -578,4 +580,281 @@ func enable7702(jt *JumpTable) {
 	jt[CALLCODE].dynamicGas = gasCallCodeEIP7702
 	jt[STATICCALL].dynamicGas = gasStaticCallEIP7702
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7702
+}
+
+// opCurrentRole pushes the current execution role to the stack.
+func opCurrentRole(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	role := uint256.NewInt(uint64(scope.Contract.Role))
+	scope.Stack.push(role)
+	return nil, nil
+}
+
+// opAcceptRole accepts the provided role from the stack.
+func opAcceptRole(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	// TODO: should this return data also? What will consume it?
+	role := scope.Stack.pop()
+	evm.accepted = roles.Role(role.Uint64())
+	return nil, errStopToken
+}
+
+type paramLoader func(*EVM, uint64) []byte
+
+// uint64ToBytes32 converts a uint64 to a 32-byte big-endian slice.
+func uint64ToBytes32(v uint64) []byte {
+	return common.LeftPadBytes(new(uint256.Int).SetUint64(v).Bytes(), 32)
+}
+
+func loadType(evm *EVM, id uint64) []byte {
+	return uint64ToBytes32(uint64(evm.TxContext.TxType))
+}
+
+func loadNonce(evm *EVM, id uint64) []byte {
+	return uint64ToBytes32(evm.TxContext.Nonce)
+}
+
+func loadSender(evm *EVM, id uint64) []byte {
+	return common.LeftPadBytes(evm.TxContext.Origin.Bytes(), 32)
+}
+
+func loadSenderValidationData(evm *EVM, id uint64) []byte {
+	if evm.TxContext.Sender == nil {
+		return nil
+	}
+	return evm.TxContext.Sender.Data
+}
+
+func loadDeployer(evm *EVM, id uint64) []byte {
+	// 0 or 32 bytes: return nil when not set
+	if evm.TxContext.Deployer == nil {
+		return nil
+	}
+	return common.LeftPadBytes(evm.TxContext.Deployer.Target.Bytes(), 32)
+}
+
+func loadDeployerData(evm *EVM, id uint64) []byte {
+	// dynamic, default empty array
+	if evm.TxContext.Deployer == nil {
+		return nil
+	}
+	return evm.TxContext.Deployer.Data
+}
+
+func loadPaymaster(evm *EVM, id uint64) []byte {
+	// 0 or 32 bytes: return nil when not set
+	if evm.TxContext.Paymaster == nil {
+		return nil
+	}
+	return common.LeftPadBytes(evm.TxContext.Paymaster.Target.Bytes(), 32)
+}
+
+func loadPaymasterData(evm *EVM, id uint64) []byte {
+	// dynamic, default empty array
+	if evm.TxContext.Paymaster == nil {
+		return nil
+	}
+	return evm.TxContext.Paymaster.Data
+}
+
+func loadSenderExecutionData(evm *EVM, id uint64) []byte {
+	return evm.TxContext.SenderExecutionData
+}
+
+func loadMaxPriorityFeePerGas(evm *EVM, id uint64) []byte {
+	if evm.TxContext.MaxPriorityFeePerGas == nil {
+		return make([]byte, 32)
+	}
+	return common.LeftPadBytes(evm.TxContext.MaxPriorityFeePerGas.Bytes(), 32)
+}
+
+func loadMaxFeePerGas(evm *EVM, id uint64) []byte {
+	if evm.TxContext.MaxFeePerGas == nil {
+		return make([]byte, 32)
+	}
+	return common.LeftPadBytes(evm.TxContext.MaxFeePerGas.Bytes(), 32)
+}
+
+func loadSenderValidationGas(evm *EVM, id uint64) []byte {
+	if evm.TxContext.Sender == nil {
+		return uint64ToBytes32(0)
+	}
+	return uint64ToBytes32(evm.TxContext.Sender.Gas)
+}
+
+func loadPaymasterValidationGas(evm *EVM, id uint64) []byte {
+	// 32 bytes, default 0
+	if evm.TxContext.Paymaster == nil {
+		return uint64ToBytes32(0)
+	}
+	return uint64ToBytes32(evm.TxContext.Paymaster.Gas)
+}
+
+func loadSenderExecutionGas(evm *EVM, id uint64) []byte {
+	return uint64ToBytes32(evm.TxContext.SenderExecutionGas)
+}
+
+func loadPaymasterPostOpGas(evm *EVM, id uint64) []byte {
+	// 32 bytes, default 0
+	if evm.TxContext.Paymaster == nil {
+		return uint64ToBytes32(0)
+	}
+	return uint64ToBytes32(evm.TxContext.Paymaster.PostOpGas)
+}
+
+func loadAccessListHash(evm *EVM, id uint64) []byte {
+	return evm.TxContext.AccessListHash[:]
+}
+
+func loadAuthorizationListHash(evm *EVM, id uint64) []byte {
+	return evm.TxContext.AuthorizationListHash[:]
+}
+
+func loadExecutionStatus(evm *EVM, id uint64) []byte {
+	return uint64ToBytes32(evm.TxContext.ExecutionStatus)
+}
+
+func loadExecutionGasUsed(evm *EVM, id uint64) []byte {
+	return uint64ToBytes32(evm.TxContext.ExecutionGasUsed)
+}
+
+func loadTxHashForSignature(evm *EVM, id uint64) []byte {
+	if evm.TxContext.TxHashForSignature == nil {
+		return nil
+	}
+	return evm.TxContext.TxHashForSignature[:]
+}
+
+// idToParam is a map of identifier to transaction parameter loader.
+var idToParam = map[uint64]paramLoader{
+	0x00: loadType,
+	0x01: loadNonce,
+	0x02: loadSender,
+	0x03: loadSenderValidationData,
+	0x04: loadDeployer,
+	0x05: loadDeployerData,
+	0x06: loadPaymaster,
+	0x07: loadPaymasterData,
+	0x08: loadSenderExecutionData,
+	0x0B: loadMaxPriorityFeePerGas,
+	0x0C: loadMaxFeePerGas,
+	0x0D: loadSenderValidationGas,
+	0x0E: loadPaymasterValidationGas,
+	0x0F: loadSenderExecutionGas,
+	0x10: loadPaymasterPostOpGas,
+	0x11: loadAccessListHash,
+	0x12: loadAuthorizationListHash,
+	0xf1: loadExecutionStatus,
+	0xf2: loadExecutionGasUsed,
+	0xff: loadTxHashForSignature,
+}
+
+// opTxParamLoad will load the 32-byte word of a transaction parameter at the
+// specified index.
+func opTxParamLoad(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		stack = scope.Stack
+		idx   = stack.pop()
+		id    = stack.pop()
+		get   paramLoader
+		ok    bool
+	)
+	id64, overflow := id.Uint64WithOverflow()
+	if get, ok = idToParam[id64]; !ok || overflow {
+		return nil, ErrTxParamIdInvalid
+	}
+
+	param := get(evm, id.Uint64())
+	value := new(uint256.Int)
+	idx64, overflow := idx.Uint64WithOverflow()
+	if !overflow {
+		value.SetBytes(getData(param, idx64, 32))
+	}
+	stack.push(value)
+	return nil, nil
+}
+
+// opTxParamSize loads the specified transaction parameter then computes its
+// size and pushes the result to the stack.
+func opTxParamSize(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		stack = scope.Stack
+		id    = stack.peek()
+		get   paramLoader
+		ok    bool
+	)
+	id64, overflow := id.Uint64WithOverflow()
+	if get, ok = idToParam[id64]; !ok || overflow {
+		return nil, ErrTxParamIdInvalid
+	}
+
+	param := get(evm, id.Uint64())
+	stack.push(id.SetUint64(uint64(len(param))))
+
+	return nil, nil
+}
+
+// opTxParamCopy copies the specified transaction parameter into memory.
+func opTxParamCopy(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		stack      = scope.Stack
+		memOffset  = scope.Stack.pop()
+		dataOffset = scope.Stack.pop()
+		length     = scope.Stack.pop()
+		id         = stack.pop()
+		get        paramLoader
+		ok         bool
+	)
+
+	id64, overflow := id.Uint64WithOverflow()
+	if get, ok = idToParam[id64]; !ok || overflow {
+		return nil, ErrTxParamIdInvalid
+	}
+	param := get(evm, id.Uint64())
+
+	dataOffset64, overflow := dataOffset.Uint64WithOverflow()
+	if overflow {
+		dataOffset64 = math.MaxUint64
+	}
+
+	// These values are checked for overflow during gas cost calculation
+	memOffset64 := memOffset.Uint64()
+	length64 := length.Uint64()
+	scope.Memory.Set(memOffset64, length64, getData(param, dataOffset64, length64))
+	return nil, nil
+}
+
+// enable7701 enables the EIP-7701 changes to support native account
+// abstraction.
+func enable7701(jt *JumpTable) {
+	jt[CURRENTROLE] = &operation{
+		execute:     opCurrentRole,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+	jt[ACCEPTROLE] = &operation{
+		execute:     opAcceptRole,
+		constantGas: GasQuickStep,
+		minStack:    minStack(1, 0),
+		maxStack:    maxStack(1, 0),
+	}
+	jt[TXPARAMLOAD] = &operation{
+		execute:     opTxParamLoad,
+		constantGas: GasFastestStep,
+		minStack:    minStack(2, 1),
+		maxStack:    maxStack(2, 1),
+	}
+	jt[TXPARAMSIZE] = &operation{
+		execute:     opTxParamSize,
+		constantGas: GasQuickStep,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
+	jt[TXPARAMCOPY] = &operation{
+		execute:     opTxParamCopy,
+		constantGas: GasFastestStep,
+		dynamicGas:  gasCallDataCopy,
+		minStack:    minStack(4, 0),
+		maxStack:    maxStack(4, 0),
+		memorySize:  memoryCallDataCopy,
+	}
 }
