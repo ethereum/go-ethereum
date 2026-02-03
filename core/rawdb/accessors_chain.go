@@ -467,15 +467,16 @@ func WriteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64, body *t
 	WriteBodyRLP(db, hash, number, data)
 }
 
-func ReadAccessList(db ethdb.Reader, hash common.Hash, number uint64) (al *bal.BlockAccessList) {
+func ReadAccessList(db ethdb.Reader, hash common.Hash, number uint64) *bal.BlockAccessList {
+	var al bal.BlockAccessList
 	data := ReadAccessListRLP(db, hash, number)
 	if data != nil {
-		err := rlp.DecodeBytes(data, al)
+		err := rlp.DecodeBytes(data, &al)
 		if err != nil {
 			log.Crit("failed to RLP decode access list", "err", err)
 		}
 	}
-	return al
+	return &al
 }
 
 func WriteAccessList(db ethdb.KeyValueWriter, hash common.Hash, number uint64, al *bal.BlockAccessList) {
