@@ -112,7 +112,7 @@ var (
 			GOOS:   "tamago",
 			GOARCH: "riscv64",
 			Tags:   "tamago",
-			Env:    map[string]string{"CGO_ENABLED": "0"},
+			Env:    map[string]string{"CGO_ENABLED": "0", "GO_EXTLINK_ENABLED": "0"},
 		},
 		{
 			Name:   "wasm-js",
