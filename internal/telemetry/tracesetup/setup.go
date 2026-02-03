@@ -50,7 +50,7 @@ func (t *Service) Start() error {
 	ctx, cancel := context.WithTimeout(context.Background(), startStopTimeout)
 	defer cancel()
 	if err := t.exporter.Start(ctx); err != nil {
-		log.Info("OpenTelemetry exporter didn't start", "endpoint", t.endpoint, "err", err)
+		log.Error("OpenTelemetry exporter didn't start", "endpoint", t.endpoint, "err", err)
 		return err
 	}
 	log.Info("OpenTelemetry trace export enabled", "endpoint", t.endpoint)
