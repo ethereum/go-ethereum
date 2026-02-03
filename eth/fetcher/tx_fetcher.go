@@ -437,23 +437,12 @@ func (f *TxFetcher) loop() {
 		oldHead *types.Header
 	)
 
-	//Subscribe to chain events to know when transactions are added to chain
+	// Subscribe to chain events to know when transactions are added to chain
 	var headEventCh chan core.ChainEvent
-	var subErr <-chan error
 	if f.chain != nil {
 		headEventCh = make(chan core.ChainEvent, 10)
 		sub := f.chain.SubscribeChainEvent(headEventCh)
-		subErr = sub.Err()
-		defer func() {
-			sub.Unsubscribe()
-			for {
-				select {
-				case <-headEventCh: // drain channel
-				default:
-					return
-				}
-			}
-		}()
+		defer sub.Unsubscribe()
 	}
 
 	for {
@@ -894,9 +883,6 @@ func (f *TxFetcher) loop() {
 			for _, tx := range ev.Transactions {
 				f.txOnChainCache.Add(tx.Hash(), struct{}{})
 			}
-
-		case <-subErr:
-			return
 
 		case <-f.quit:
 			return
