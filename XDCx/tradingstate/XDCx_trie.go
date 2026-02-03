@@ -186,8 +186,37 @@ func (t *XDCXTrie) Copy() *XDCXTrie {
 // NodeIterator returns an iterator that returns nodes of the underlying trie. Iteration
 // starts at the key after the given start key.
 func (t *XDCXTrie) NodeIterator(start []byte) trie.NodeIterator {
-	return t.trie.NodeIterator(start)
+	trieIt, err := t.trie.NodeIterator(start)
+	if err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		return errNodeIterator{err: err}
+	}
+	return trieIt
 }
+
+// errNodeIterator is a safe, non-nil iterator that reports an error and yields no nodes.
+// It prevents nil dereferences when callers don't check for a nil iterator.
+type errNodeIterator struct {
+	err error
+}
+
+func (it errNodeIterator) Next(bool) bool { return false }
+func (it errNodeIterator) Error() error   { return it.err }
+func (it errNodeIterator) Hash() common.Hash {
+	return common.Hash{}
+}
+func (it errNodeIterator) Parent() common.Hash {
+	return common.Hash{}
+}
+func (it errNodeIterator) Path() []byte     { return nil }
+func (it errNodeIterator) NodeBlob() []byte { return nil }
+func (it errNodeIterator) Leaf() bool       { return false }
+func (it errNodeIterator) LeafKey() []byte  { return nil }
+func (it errNodeIterator) LeafBlob() []byte { return nil }
+func (it errNodeIterator) LeafProof() [][]byte {
+	return nil
+}
+func (it errNodeIterator) AddResolver(trie.NodeResolver) {}
 
 // hashKey returns the hash of key as an ephemeral buffer.
 // The caller must not hold onto the return value because it will become

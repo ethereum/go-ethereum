@@ -133,11 +133,11 @@ func (db *Database) InsertPreimage(secKeyCache map[string][]byte) {
 
 // Reader returns a reader for accessing all trie nodes with provided state root.
 // Nil is returned in case the state is not available.
-func (db *Database) Reader(blockRoot common.Hash) Reader {
+func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
 	if hdb, ok := db.backend.(*hashdb.Database); ok {
 		return hdb.Reader(blockRoot)
 	}
-	return nil
+	return nil, errors.New("no support hashdb.Database")
 }
 
 // Update performs a state transition by committing dirty nodes contained in the

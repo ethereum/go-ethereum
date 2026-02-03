@@ -63,7 +63,7 @@ func makeProvers(trie *Trie) []func(key []byte) *memorydb.Database {
 	// Create a leaf iterator based Merkle prover
 	provers = append(provers, func(key []byte) *memorydb.Database {
 		proof := memorydb.New()
-		if it := NewIterator(trie.NodeIterator(key)); it.Next() && bytes.Equal(key, it.Key) {
+		if it := NewIterator(trie.MustNodeIterator(key)); it.Next() && bytes.Equal(key, it.Key) {
 			for _, p := range it.Prove() {
 				proof.Put(crypto.Keccak256(p), p)
 			}

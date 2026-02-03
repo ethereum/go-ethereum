@@ -45,8 +45,14 @@ type revision struct {
 // StateDB structs within the ethereum protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
 // nested states. It's the general query interface to retrieve:
+//
 // * Contracts
 // * Accounts
+//
+// Once the state is committed, tries cached in stateDB (including account
+// trie, storage tries) will no longer be functional. A new state instance
+// must be created with new root and updated database for accessing post-
+// commit states.
 type StateDB struct {
 	db   Database
 	trie Trie
@@ -678,7 +684,11 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 	if err != nil {
 		return err
 	}
-	it := trie.NewIterator(tr.NodeIterator(nil))
+	trieIt, err := tr.NodeIterator(nil)
+	if err != nil {
+		return err
+	}
+	it := trie.NewIterator(trieIt)
 
 	for it.Next() {
 		key := common.BytesToHash(s.trie.GetKey(it.Key))

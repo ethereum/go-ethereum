@@ -18,6 +18,7 @@ package hashdb
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -621,8 +622,12 @@ func (db *Database) Scheme() string {
 }
 
 // Reader retrieves a node reader belonging to the given state root.
-func (db *Database) Reader(root common.Hash) *reader {
-	return &reader{db: db}
+// An error will be returned if the requested state is not available.
+func (db *Database) Reader(root common.Hash) (*reader, error) {
+	if _, err := db.Node(root); err != nil {
+		return nil, fmt.Errorf("state %#x is not available, %v", root, err)
+	}
+	return &reader{db: db}, nil
 }
 
 // reader is a state reader of Database which implements the Reader interface.
