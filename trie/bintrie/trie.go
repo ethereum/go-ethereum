@@ -424,5 +424,5 @@ func (t *BinaryTrie) PrefetchStorage(addr common.Address, keys [][]byte) error {
 
 // Witness returns a set containing all trie nodes that have been accessed.
 func (t *BinaryTrie) Witness() map[string][]byte {
-	panic("not implemented")
+	return t.tracer.Values()
 }

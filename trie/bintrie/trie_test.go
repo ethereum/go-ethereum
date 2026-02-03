@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -193,5 +194,31 @@ func TestMerkleizeMultipleEntries(t *testing.T) {
 	expected := common.HexToHash("9317155862f7a3867660ddd0966ff799a3d16aa4df1e70a7516eaa4a675191b5")
 	if got != expected {
 		t.Fatalf("invalid root, expected=%x, got = %x", expected, got)
+	}
+}
+
+func TestBinaryTrieWitness(t *testing.T) {
+	tracer := trie.NewPrevalueTracer()
+
+	tr := &BinaryTrie{
+		root:   NewBinaryNode(),
+		tracer: tracer,
+	}
+	if w := tr.Witness(); len(w) != 0 {
+		t.Fatal("expected empty witness for fresh trie")
+	}
+
+	tracer.Put([]byte("path1"), []byte("blob1"))
+	tracer.Put([]byte("path2"), []byte("blob2"))
+
+	witness := tr.Witness()
+	if len(witness) != 2 {
+		t.Fatalf("expected 2 witness entries, got %d", len(witness))
+	}
+	if !bytes.Equal(witness[string([]byte("path1"))], []byte("blob1")) {
+		t.Fatal("unexpected witness value for path1")
+	}
+	if !bytes.Equal(witness[string([]byte("path2"))], []byte("blob2")) {
+		t.Fatal("unexpected witness value for path2")
 	}
 }
