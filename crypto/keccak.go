@@ -22,8 +22,15 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"golang.org/x/crypto/sha3"
 )
+
+const Keccak256AddressHashCache = 10240
+
+var getKeccak256AddressHashCache = sync.OnceValue(func() *lru.Cache[common.Address, common.Hash] {
+	return lru.NewCache[common.Address, common.Hash](Keccak256AddressHashCache)
+})
 
 // NewKeccakState creates a new KeccakState
 func NewKeccakState() KeccakState {
@@ -59,5 +66,15 @@ func Keccak256Hash(data ...[]byte) (h common.Hash) {
 	}
 	d.Read(h[:])
 	hasherPool.Put(d)
+	return h
+}
+
+func Keccak256AddressHash(address common.Address) (h common.Hash) {
+	cache := getKeccak256AddressHashCache()
+	if hash, ok := cache.Get(address); ok {
+		return hash
+	}
+	h = Keccak256Hash(address.Bytes())
+	cache.Add(address, h)
 	return h
 }
