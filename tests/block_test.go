@@ -126,7 +126,7 @@ func TestBlockchain(t *testing.T) {
 	bt.skipLoad(`.*\.meta/.*`)
 
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
-		execBlockTest(t, bt, test)
+		execBlockTest(t, bt, test, false)
 	})
 	// There is also a LegacyTests folder, containing blockchain tests generated
 	// prior to Istanbul. However, they are all derived from GeneralStateTests,
@@ -144,7 +144,7 @@ func testExecutionSpecBlocktests(t *testing.T, testDir string) {
 	bt.skipLoad(".*prague/eip7002_el_triggerable_withdrawals/test_system_contract_deployment.json")
 
 	bt.walk(t, testDir, func(t *testing.T, name string, test *BlockTest) {
-		execBlockTest(t, bt, test)
+		execBlockTest(t, bt, test, false)
 	})
 }
 

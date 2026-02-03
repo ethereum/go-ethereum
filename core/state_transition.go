@@ -576,7 +576,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 
 	return &ExecutionResult{
-		UsedGas:    peakGasUsed,
+		UsedGas:    st.gasUsed(),
 		MaxUsedGas: peakGasUsed,
 		Err:        vmerr,
 		ReturnData: ret,
