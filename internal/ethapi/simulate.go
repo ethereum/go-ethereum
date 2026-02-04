@@ -300,7 +300,12 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		} else {
 			root = sim.state.IntermediateRoot(sim.chainConfig.IsEIP158(blockContext.BlockNumber)).Bytes()
 		}
-		gasUsed += result.UsedGas
+		// EIP-7778: block gas accounting excludes refunds.
+		if sim.chainConfig.IsAmsterdam(blockContext.BlockNumber, blockContext.Time) {
+			gasUsed += result.MaxUsedGas
+		} else {
+			gasUsed += result.UsedGas
+		}
 		receipts[i] = core.MakeReceipt(evm, result, sim.state, blockContext.BlockNumber, common.Hash{}, blockContext.Time, tx, gasUsed, root)
 		blobGasUsed += receipts[i].BlobGasUsed
 		logs := tracer.Logs()

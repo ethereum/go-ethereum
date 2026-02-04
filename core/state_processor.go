@@ -189,7 +189,13 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 	} else {
 		root = statedb.IntermediateRoot(evm.ChainConfig().IsEIP158(blockNumber)).Bytes()
 	}
-	*usedGas += result.UsedGas
+	// EIP-7778: block gas accounting excludes refunds. Use MaxUsedGas
+	// (pre-refund gas) for Amsterdam, preserving post-refund for earlier forks.
+	if evm.ChainConfig().IsAmsterdam(blockNumber, blockTime) {
+		*usedGas += result.MaxUsedGas
+	} else {
+		*usedGas += result.UsedGas
+	}
 
 	// Merge the tx-local access event into the "block-local" one, in order to collect
 	// all values, so that the witness can be built.
