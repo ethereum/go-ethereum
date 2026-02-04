@@ -281,46 +281,47 @@ func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transac
 //     solve after every block.
 //
 //   - The first observation is that comparing 1559 base fees or 4844 blob fees
-//     needs to happen in the context of their dynamism. Since these fees jump
-//     up or down in ~1.125 multipliers (at max) across blocks, comparing fees
-//     in two transactions should be based on log1.125(fee) to eliminate noise.
+//     needs to happen in the context of their dynamism. Since base fees are
+//     adjusted continuously and fluctuate, and we want to optimize for effective
+//     miner fees, it is better to disregard small base fee cap differences.
+//     Instead of considering the exact fee cap values, we should group
+//     transactions into buckets based on fee cap values, allowing us to use
+//     the miner tip meaningfully as a splitter inside a bucket.
 //
-//   - The second observation is that the basefee and blobfee move independently,
-//     so there's no way to split mixed txs on their own (A has higher base fee,
-//     B has higher blob fee). Rather than look at the absolute fees, the useful
-//     metric is the max time it can take to exceed the transaction's fee caps.
+//     To create these buckets, rather than looking at the absolute fee
+//     differences, the useful metric is the max time it can take to exceed the
+//     transaction's fee caps. Base fee changes are multiplicative, so we use a
+//     logarithmic scale. Fees jumps up or down in ~1.125 multipliers at max
+//     across blocks, so we use log1.125(fee) and rounding to eliminate noise.
 //     Specifically, we're interested in the number of jumps needed to go from
 //     the current fee to the transaction's cap:
 //
-//     jumps = log1.125(txfee) - log1.125(basefee)
+//     jumps = floor(log1.125(txfee) - log1.125(basefee))
+
+//   - The second observation is that when ranking executable blob txs, it
+//     does not make sense to grant a later eviction priority to txs with high
+//     fee caps since it could enable pool wars. As such, any positive priority
+//     will be grouped together.
 //
-//   - The third observation is that the base fee tends to hover around rather
-//     than swing wildly. The number of jumps needed from the current fee starts
-//     to get less relevant the higher it is. To remove the noise here too, the
-//     pool will use log(jumps) as the delta for comparing transactions.
+//     priority = min(jumps, 0)
+
+//   - The third observation is that the basefee and blobfee move independently,
+//     so there's no way to split mixed txs on their own (A has higher base fee,
+//     B has higher blob fee).
 //
-//     delta = sign(jumps) * log(abs(jumps))
-//
-//   - To establish a total order, we need to reduce the dimensionality of the
+//     To establish a total order, we need to reduce the dimensionality of the
 //     two base fees (log jumps) to a single value. The interesting aspect from
 //     the pool's perspective is how fast will a tx get executable (fees going
 //     down, crossing the smaller negative jump counter) or non-executable (fees
 //     going up, crossing the smaller positive jump counter). As such, the pool
 //     cares only about the min of the two delta values for eviction priority.
 //
-//     priority = min(deltaBasefee, deltaBlobfee)
+//     priority = min(deltaBasefee, deltaBlobfee, 0)
 //
 //   - The above very aggressive dimensionality and noise reduction should result
 //     in transaction being grouped into a small number of buckets, the further
 //     the fees the larger the buckets. This is good because it allows us to use
 //     the miner tip meaningfully as a splitter.
-//
-//   - For the scenario where the pool does not contain non-executable blob txs
-//     anymore, it does not make sense to grant a later eviction priority to txs
-//     with high fee caps since it could enable pool wars. As such, any positive
-//     priority will be grouped together.
-//
-//     priority = min(deltaBasefee, deltaBlobfee, 0)
 //
 // Optimisation tradeoffs:
 //

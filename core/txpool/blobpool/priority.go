@@ -43,11 +43,8 @@ func evictionPriority(basefeeJumps float64, txBasefeeJumps, blobfeeJumps, txBlob
 // described in the BlobPool docs for a single fee component.
 func evictionPriority1D(basefeeJumps float64, txfeeJumps float64) int {
 	jumps := txfeeJumps - basefeeJumps
-	if int(jumps) == 0 {
-		return 0 // can't log2 0
-	}
-	if jumps < 0 {
-		return -intLog2(uint(-math.Floor(jumps)))
+	if jumps <= 0 {
+		return int(math.Floor(jumps))
 	}
 	return intLog2(uint(math.Ceil(jumps)))
 }
