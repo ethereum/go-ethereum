@@ -239,7 +239,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		return nil, nil, nil, err
 	}
 	var (
-		gasUsed, blobGasUsed uint64
+		gasUsed, blockGasUsed, blobGasUsed uint64
 		txes                 = make([]*types.Transaction, len(block.Calls))
 		callResults          = make([]simCallResult, len(block.Calls))
 		receipts             = make([]*types.Receipt, len(block.Calls))
@@ -275,7 +275,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, err
 		}
-		if err := sim.sanitizeCall(&call, sim.state, header, blockContext, &gasUsed); err != nil {
+		if err := sim.sanitizeCall(&call, sim.state, header, blockContext, &blockGasUsed); err != nil {
 			return nil, nil, nil, err
 		}
 		var (
@@ -300,11 +300,12 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		} else {
 			root = sim.state.IntermediateRoot(sim.chainConfig.IsEIP158(blockContext.BlockNumber)).Bytes()
 		}
+		gasUsed += result.UsedGas
 		// EIP-7778: block gas accounting excludes refunds.
 		if sim.chainConfig.IsAmsterdam(blockContext.BlockNumber, blockContext.Time) {
-			gasUsed += result.MaxUsedGas
+			blockGasUsed += result.MaxUsedGas
 		} else {
-			gasUsed += result.UsedGas
+			blockGasUsed += result.UsedGas
 		}
 		receipts[i] = core.MakeReceipt(evm, result, sim.state, blockContext.BlockNumber, common.Hash{}, blockContext.Time, tx, gasUsed, root)
 		blobGasUsed += receipts[i].BlobGasUsed
@@ -325,7 +326,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		}
 		callResults[i] = callRes
 	}
-	header.GasUsed = gasUsed
+	header.GasUsed = blockGasUsed
 	if sim.chainConfig.IsCancun(header.Number, header.Time) {
 		header.BlobGasUsed = &blobGasUsed
 	}

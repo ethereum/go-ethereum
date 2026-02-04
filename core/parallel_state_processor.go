@@ -45,7 +45,7 @@ func NewParallelStateProcessor(chain *HeaderChain, vmConfig *vm.Config) Parallel
 // performs post-tx state transition (system contracts and withdrawals)
 // and calculates the ProcessResult, returning it to be sent on resCh
 // by resultHandler
-func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateReads *bal.StateAccesses, tExecStart time.Time, postTxState *state.StateDB, receipts types.Receipts) *ProcessResultWithMetrics {
+func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateReads *bal.StateAccesses, tExecStart time.Time, postTxState *state.StateDB, receipts types.Receipts, blockGasUsed uint64) *ProcessResultWithMetrics {
 	tExec := time.Since(tExecStart)
 	var requests [][]byte
 	tPostprocessStart := time.Now()
@@ -147,7 +147,7 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 			Receipts: receipts,
 			Requests: requests,
 			Logs:     allLogs,
-			GasUsed:  cumulativeGasUsed,
+			GasUsed:  blockGasUsed,
 		},
 		PostProcessTime: tPostprocess,
 		ExecTime:        tExec,
@@ -155,9 +155,10 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 }
 
 type txExecResult struct {
-	idx     int // transaction index
-	receipt *types.Receipt
-	err     error // non-EVM error which would render the block invalid
+	idx          int // transaction index
+	receipt      *types.Receipt
+	blockGasUsed uint64 // pre-refund gas for block-level accounting (EIP-7778)
+	err          error  // non-EVM error which would render the block invalid
 
 	stateReads bal.StateAccesses
 }
@@ -168,6 +169,7 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxStateRea
 	// 1. if the block has transactions, receive the execution results from all of them and return an error on resCh if any txs err'd
 	// 2. once all txs are executed, compute the post-tx state transition and produce the ProcessResult sending it on resCh (or an error if the post-tx state didn't match what is reported in the BAL)
 	var receipts []*types.Receipt
+	var blockGasUsed uint64
 	gp := new(GasPool)
 	gp.SetGas(block.GasLimit())
 	var execErr error
@@ -184,10 +186,12 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxStateRea
 					if res.err != nil {
 						execErr = res.err
 					} else {
-						if err := gp.SubGas(res.receipt.GasUsed); err != nil {
+						// EIP-7778: use pre-refund gas for block-level gas pool checks
+						if err := gp.SubGas(res.blockGasUsed); err != nil {
 							execErr = err
 						} else {
 							receipts = append(receipts, res.receipt)
+							blockGasUsed += res.blockGasUsed
 							allReads.Merge(res.stateReads)
 						}
 					}
@@ -205,7 +209,7 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxStateRea
 		}
 	}
 
-	execResults := p.prepareExecResult(block, &allReads, tExecStart, postTxState, receipts)
+	execResults := p.prepareExecResult(block, &allReads, tExecStart, postTxState, receipts, blockGasUsed)
 	rootCalcRes := <-stateRootCalcResCh
 
 	if execResults.ProcessResult.Error != nil {
@@ -271,7 +275,7 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 	gp.SetGas(block.GasLimit())
 	db.SetTxContext(tx.Hash(), txIdx)
 	var gasUsed uint64
-	receipt, err := ApplyTransactionWithEVM(msg, gp, db, block.Number(), block.Hash(), context.Time, tx, &gasUsed, evm)
+	receipt, txBlockGas, err := ApplyTransactionWithEVM(msg, gp, db, block.Number(), block.Hash(), context.Time, tx, &gasUsed, evm)
 	if err != nil {
 		err := fmt.Errorf("could not apply tx %d [%v]: %w", txIdx, tx.Hash().Hex(), err)
 		return &txExecResult{err: err}
@@ -283,9 +287,10 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 	}
 
 	return &txExecResult{
-		idx:        txIdx,
-		receipt:    receipt,
-		stateReads: accesses,
+		idx:          txIdx,
+		receipt:      receipt,
+		blockGasUsed: txBlockGas,
+		stateReads:   accesses,
 	}
 }
 
