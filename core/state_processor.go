@@ -108,16 +108,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		if err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
-		usedGas += receipt.GasUsed
+		usedGas += receipt.BlockGasUsed
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
-
-		/*
-			enc, _ := json.MarshalIndent(receipt, "", "    ")
-			fmt.Printf("receipt json %s\n", string(enc))
-			encRLP, _ := rlp.EncodeToBytes(receipt)
-			fmt.Printf("receipt rlp %x\n", encRLP)
-		*/
 	}
 
 	// Read requests if Prague is enabled.
@@ -210,10 +203,11 @@ func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 		receipt.Status = types.ReceiptStatusSuccessful
 	}
 	receipt.TxHash = tx.Hash()
+	receipt.GasUsed = result.UsedGas
 	if evm.ChainConfig().IsAmsterdam(blockNumber, blockTime) {
-		receipt.GasUsed = result.MaxUsedGas
+		receipt.BlockGasUsed = result.MaxUsedGas
 	} else {
-		receipt.GasUsed = result.UsedGas
+		receipt.BlockGasUsed = result.UsedGas
 	}
 
 	if tx.Type() == types.BlobTxType {

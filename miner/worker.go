@@ -66,7 +66,9 @@ type environment struct {
 	coinbase common.Address
 	evm      *vm.EVM
 
-	header   *types.Header
+	header       *types.Header
+	blockGasUsed uint64 // block gas used incl refunds
+
 	txs      []*types.Transaction
 	receipts []*types.Receipt
 	sidecars []*types.BlobTxSidecar
@@ -382,11 +384,12 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Gas()
 	)
-	receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx, &env.header.GasUsed)
+	receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx, &env.blockGasUsed)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.SetGas(gp)
 	}
+	env.header.GasUsed += receipt.BlockGasUsed
 	return receipt, err
 }
 

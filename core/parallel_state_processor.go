@@ -76,12 +76,16 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 		return cmp.Compare(a.TransactionIndex, b.TransactionIndex)
 	})
 
-	var cumulativeGasUsed uint64
+	var (
+		cumulativeGasUsed      uint64
+		cumulativeBlockGasUsed uint64
+	)
 	var allLogs []*types.Log
 	for _, receipt := range receipts {
 		receipt.CumulativeGasUsed = cumulativeGasUsed + receipt.GasUsed
 		cumulativeGasUsed += receipt.GasUsed
-		if receipt.CumulativeGasUsed > header.GasLimit {
+		cumulativeBlockGasUsed += receipt.BlockGasUsed
+		if cumulativeBlockGasUsed > header.GasLimit {
 			return &ProcessResultWithMetrics{
 				ProcessResult: &ProcessResult{Error: fmt.Errorf("gas limit exceeded")},
 			}
@@ -184,7 +188,7 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxStateRea
 					if res.err != nil {
 						execErr = res.err
 					} else {
-						if err := gp.SubGas(res.receipt.GasUsed); err != nil {
+						if err := gp.SubGas(res.receipt.BlockGasUsed); err != nil {
 							execErr = err
 						} else {
 							receipts = append(receipts, res.receipt)
