@@ -281,8 +281,9 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
-	// Perform the value transfer in non-syscall mode. This is essential for zero-value
-	// transfers to ensure the clearing mechanism is applied.
+	// Perform the value transfer only in non-syscall mode.
+	// Calling this is required even for zero-value transfers,
+	// to ensure the state clearing mechanism is applied.
 	if !syscall {
 		evm.Context.Transfer(evm.StateDB, caller, addr, value)
 	}
