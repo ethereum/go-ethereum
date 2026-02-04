@@ -1074,6 +1074,12 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Category: flags.APICategory,
 	}
 
+	RPCTelemetryTagsFlag = &cli.StringFlag{
+		Name:     "rpc.telemetry.tags",
+		Usage:    "Comma-separated tags (key/values) added as attributes to the OpenTelemetry resource struct",
+		Category: flags.APICategory,
+	}
+
 	RPCTelemetrySampleRatioFlag = &cli.Float64Flag{
 		Name:     "rpc.telemetry.sample-ratio",
 		Usage:    "Defines the sampling ratio for RPC telemetry (0.0 to 1.0)",
@@ -1543,7 +1549,6 @@ func setOpenTelemetry(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(RPCTelemetryFlag.Name) {
 		tcfg.Enabled = ctx.Bool(RPCTelemetryFlag.Name)
 	}
-
 	if ctx.IsSet(RPCTelemetryEndpointFlag.Name) {
 		tcfg.Endpoint = ctx.String(RPCTelemetryEndpointFlag.Name)
 	}
@@ -1553,10 +1558,13 @@ func setOpenTelemetry(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(RPCTelemetryPasswordFlag.Name) {
 		tcfg.AuthPassword = ctx.String(RPCTelemetryPasswordFlag.Name)
 	}
-	tcfg.SampleRatio = ctx.Float64(RPCTelemetrySampleRatioFlag.Name)
 	if ctx.IsSet(RPCTelemetryInstanceIDFlag.Name) {
 		tcfg.InstanceID = ctx.String(RPCTelemetryInstanceIDFlag.Name)
 	}
+	if ctx.IsSet(RPCTelemetryTagsFlag.Name) {
+		tcfg.Tags = ctx.String(RPCTelemetryTagsFlag.Name)
+	}
+	tcfg.SampleRatio = ctx.Float64(RPCTelemetrySampleRatioFlag.Name)
 
 	if tcfg.Endpoint != "" && !tcfg.Enabled {
 		log.Warn(fmt.Sprintf("OpenTelemetry endpoint configured but telemetry is not enabled, use --%s to enable.", RPCTelemetryFlag.Name))

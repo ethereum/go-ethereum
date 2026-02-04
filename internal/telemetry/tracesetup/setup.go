@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -121,13 +122,23 @@ func SetupTelemetry(cfg node.OpenTelemetryConfig, stack *node.Node) error {
 		sdktrace.WithBatchTimeout(time.Duration(sdktrace.DefaultScheduleDelay) * time.Millisecond),
 	}
 
-	// Define resource with service and client information
+	// Define resource attributes
 	var attr = []attribute.KeyValue{
 		semconv.ServiceName("geth"),
 		attribute.String("client.name", version.ClientName("geth")),
 	}
+	// Add instance ID if provided
 	if cfg.InstanceID != "" {
 		attr = append(attr, semconv.ServiceInstanceID(cfg.InstanceID))
+	}
+	// Add custom tags if provided
+	if cfg.Tags != "" {
+		for tag := range strings.SplitSeq(cfg.Tags, ",") {
+			key, value, ok := strings.Cut(tag, "=")
+			if ok {
+				attr = append(attr, attribute.String(key, value))
+			}
+		}
 	}
 	res := resource.NewWithAttributes(semconv.SchemaURL, attr...)
 

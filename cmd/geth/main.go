@@ -201,6 +201,7 @@ var (
 		utils.RPCTelemetryUserFlag,
 		utils.RPCTelemetryPasswordFlag,
 		utils.RPCTelemetryInstanceIDFlag,
+		utils.RPCTelemetryTagsFlag,
 		utils.RPCTelemetrySampleRatioFlag,
 	}
 

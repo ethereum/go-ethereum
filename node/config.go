@@ -221,6 +221,7 @@ type Config struct {
 type OpenTelemetryConfig struct {
 	Enabled bool `toml:",omitempty"`
 
+	Tags       string `toml:",omitempty"`
 	InstanceID string `toml:",omitempty"`
 
 	// Exporter endpoint.
