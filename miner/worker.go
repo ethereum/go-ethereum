@@ -66,11 +66,12 @@ type environment struct {
 	coinbase common.Address
 	evm      *vm.EVM
 
-	header   *types.Header
-	txs      []*types.Transaction
-	receipts []*types.Receipt
-	sidecars []*types.BlobTxSidecar
-	blobs    int
+	header         *types.Header
+	txs            []*types.Transaction
+	receipts       []*types.Receipt
+	sidecars       []*types.BlobTxSidecar
+	blobs          int
+	receiptGasUsed uint64 // cumulative post-refund gas for receipt CumulativeGasUsed
 
 	witness  *stateless.Witness
 	alTracer *core.BlockAccessListTracer
@@ -382,10 +383,14 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Gas()
 	)
-	receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx, &env.header.GasUsed)
+	receipt, blockGasUsed, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx, &env.receiptGasUsed)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.SetGas(gp)
+	} else {
+		// EIP-7778: block header uses pre-refund gas (blockGasUsed),
+		// while receipts use post-refund gas (accumulated in receiptGasUsed).
+		env.header.GasUsed += blockGasUsed
 	}
 	return receipt, err
 }
