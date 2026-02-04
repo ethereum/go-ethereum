@@ -416,6 +416,14 @@ func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	return state.New(root, bc.statedb)
 }
 
+func (bc *BlockChain) SetForkBoundary(root common.Hash) {
+	bc.statedb.SetForkBoundary(root)
+}
+
+func (bc *BlockChain) ClearForkBoundary() {
+	bc.statedb.ClearForkBoundary()
+}
+
 // HistoricState returns a historic state specified by the given root.
 // Live states are not available and won't be served, please use `State`
 // or `StateAt` instead.

@@ -2081,6 +2081,14 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	)
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
+	if bc.chainConfig.IsVerkle(block.Number(), block.Time()) {
+		parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+		if parent != nil && !bc.chainConfig.IsVerkle(parent.Number, parent.Time) {
+			bc.SetForkBoundary(parentRoot)
+			defer bc.ClearForkBoundary()
+		}
+	}
+
 	if bc.cfg.NoPrefetch {
 		statedb, err = state.New(parentRoot, bc.statedb)
 		if err != nil {

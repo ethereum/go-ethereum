@@ -18,6 +18,7 @@ package state
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -158,6 +159,8 @@ type CachingDB struct {
 
 	// Transition-specific fields
 	TransitionStatePerRoot *lru.Cache[common.Hash, *overlay.TransitionState]
+
+	forkBoundaryRoot atomic.Value // stores common.Hash; non-zero means fork boundary active for this root
 }
 
 // NewDatabase creates a state database with the provided data sources.
@@ -176,6 +179,23 @@ func NewDatabase(triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
 // db by using an ephemeral memory db with default config for testing.
 func NewDatabaseForTesting() *CachingDB {
 	return NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
+}
+
+func (db *CachingDB) SetForkBoundary(root common.Hash) {
+	db.forkBoundaryRoot.Store(root)
+}
+
+func (db *CachingDB) ClearForkBoundary() {
+	db.forkBoundaryRoot.Store(common.Hash{})
+}
+
+func (db *CachingDB) isForkBoundary(root common.Hash) bool {
+	v := db.forkBoundaryRoot.Load()
+	if v == nil {
+		return false
+	}
+	stored, ok := v.(common.Hash)
+	return ok && stored != (common.Hash{}) && stored == root
 }
 
 var (
@@ -269,6 +289,9 @@ func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 			}
 		}
 	}
+	if ts == nil && db.isForkBoundary(stateRoot) {
+		ts = &overlay.TransitionState{Started: true, BaseRoot: stateRoot}
+	}
 	// Configure the trie reader, which is expected to be available as the
 	// gatekeeper unless the state is corrupted.
 	tr, err := newTrieReader(stateRoot, db.triedb, ts)
@@ -307,6 +330,9 @@ func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (ReaderWithSta
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
+	if db.isForkBoundary(root) {
+		return db.openForkBoundaryTrie(root)
+	}
 	reader, err := db.triedb.StateReader(root)
 	if err != nil {
 		tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
@@ -324,11 +350,10 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 			return nil, fmt.Errorf("could not open the overlay tree: %w", err)
 		}
 		if !ts.InTransition() {
-			// Transition complete, use BinaryTrie only
 			return bt, nil
 		}
 
-		base, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
+		base, err := trie.NewStateTrie(trie.StateTrieID(ts.BaseRoot), db.triedb)
 		if err != nil {
 			return nil, fmt.Errorf("could not create base trie in OpenTrie: %w", err)
 		}
@@ -339,6 +364,18 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 		return nil, err
 	}
 	return tr, nil
+}
+
+func (db *CachingDB) openForkBoundaryTrie(root common.Hash) (Trie, error) {
+	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, db.triedb)
+	if err != nil {
+		return nil, fmt.Errorf("could not open empty binary trie at fork boundary: %w", err)
+	}
+	base, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
+	if err != nil {
+		return nil, fmt.Errorf("could not open base MPT at fork boundary: %w", err)
+	}
+	return transitiontrie.NewTransitionTrie(base, bt, false), nil
 }
 
 // OpenStorageTrie opens the storage trie of an account.

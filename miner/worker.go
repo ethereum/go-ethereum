@@ -252,6 +252,11 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 		header.ExcessBlobGas = &excessBlobGas
 		header.ParentBeaconRoot = genParams.beaconRoot
 	}
+	if miner.chainConfig.IsVerkle(header.Number, header.Time) &&
+		!miner.chainConfig.IsVerkle(parent.Number, parent.Time) {
+		miner.chain.SetForkBoundary(parent.Root)
+		defer miner.chain.ClearForkBoundary()
+	}
 	// Could potentially happen if starting to mine in an odd state.
 	// Note genParams.coinbase can be different with header.Coinbase
 	// since clique algorithm can modify the coinbase field in header.
