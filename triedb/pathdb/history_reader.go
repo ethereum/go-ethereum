@@ -388,6 +388,8 @@ func (r *trienodeReader) readOptimized(state stateIdent, it HistoryIndexIterator
 	if err := it.Error(); err != nil {
 		return nil, err
 	}
+	elements = make([][][]byte, 0, seq)
+	indices = make([][]int, 0, seq)
 	for i := 0; i < seq; i++ {
 		isComplete, fullBlob, err := decodeNodeFull(queue.data[i])
 		if err != nil {
