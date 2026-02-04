@@ -308,7 +308,6 @@ func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (ReaderWithSta
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	reader, err := db.triedb.StateReader(root)
-	flatReader := newFlatReader(reader)
 	if err != nil {
 		tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 		if err != nil {
@@ -316,13 +315,14 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 		}
 		return tr, nil
 	}
+	flatReader := newFlatReader(reader)
 
+	ts := LoadTransitionState(flatReader, root)
 	if isTransitionActive(flatReader) || db.triedb.IsVerkle() {
 		bt, err := bintrie.NewBinaryTrie(root, db.triedb)
 		if err != nil {
 			return nil, fmt.Errorf("could not open the overlay tree: %w", err)
 		}
-		ts := LoadTransitionState(flatReader, root)
 		if !ts.InTransition() {
 			// Transition complete, use BinaryTrie only
 			return bt, nil
