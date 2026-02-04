@@ -35,7 +35,7 @@ func TestForkBoundaryOpenTrie(t *testing.T) {
 	}
 
 	sdb.SetForkBoundary(root)
-	defer sdb.ClearForkBoundary()
+	defer sdb.ClearForkBoundary(root)
 
 	tr, err := sdb.OpenTrie(root)
 	if err != nil {
@@ -80,7 +80,7 @@ func TestForkBoundaryStateReader(t *testing.T) {
 	}
 
 	sdb.SetForkBoundary(root)
-	defer sdb.ClearForkBoundary()
+	defer sdb.ClearForkBoundary(root)
 
 	reader, err := sdb.StateReader(root)
 	if err != nil {
@@ -121,7 +121,7 @@ func TestForkBoundaryWrite(t *testing.T) {
 	}
 
 	sdb.SetForkBoundary(root)
-	defer sdb.ClearForkBoundary()
+	defer sdb.ClearForkBoundary(root)
 
 	tr, err := sdb.OpenTrie(root)
 	if err != nil {
@@ -213,7 +213,7 @@ func TestForkBoundaryWrongRoot(t *testing.T) {
 
 	otherRoot := common.HexToHash("0xdeadbeef")
 	sdb.SetForkBoundary(otherRoot)
-	defer sdb.ClearForkBoundary()
+	defer sdb.ClearForkBoundary(otherRoot)
 
 	tr, err := sdb.OpenTrie(root)
 	if err != nil {

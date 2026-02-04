@@ -18,7 +18,7 @@ package state
 
 import (
 	"fmt"
-	"sync/atomic"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -160,7 +160,7 @@ type CachingDB struct {
 	// Transition-specific fields
 	TransitionStatePerRoot *lru.Cache[common.Hash, *overlay.TransitionState]
 
-	forkBoundaryRoot atomic.Value // stores common.Hash; non-zero means fork boundary active for this root
+	forkBoundaryRoots sync.Map // map[common.Hash]struct{}; set of roots at fork boundary
 }
 
 // NewDatabase creates a state database with the provided data sources.
@@ -182,20 +182,16 @@ func NewDatabaseForTesting() *CachingDB {
 }
 
 func (db *CachingDB) SetForkBoundary(root common.Hash) {
-	db.forkBoundaryRoot.Store(root)
+	db.forkBoundaryRoots.Store(root, struct{}{})
 }
 
-func (db *CachingDB) ClearForkBoundary() {
-	db.forkBoundaryRoot.Store(common.Hash{})
+func (db *CachingDB) ClearForkBoundary(root common.Hash) {
+	db.forkBoundaryRoots.Delete(root)
 }
 
 func (db *CachingDB) isForkBoundary(root common.Hash) bool {
-	v := db.forkBoundaryRoot.Load()
-	if v == nil {
-		return false
-	}
-	stored, ok := v.(common.Hash)
-	return ok && stored != (common.Hash{}) && stored == root
+	_, ok := db.forkBoundaryRoots.Load(root)
+	return ok
 }
 
 var (

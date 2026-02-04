@@ -420,8 +420,8 @@ func (bc *BlockChain) SetForkBoundary(root common.Hash) {
 	bc.statedb.SetForkBoundary(root)
 }
 
-func (bc *BlockChain) ClearForkBoundary() {
-	bc.statedb.ClearForkBoundary()
+func (bc *BlockChain) ClearForkBoundary(root common.Hash) {
+	bc.statedb.ClearForkBoundary(root)
 }
 
 // HistoricState returns a historic state specified by the given root.

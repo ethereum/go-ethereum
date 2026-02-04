@@ -2085,7 +2085,7 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		if parent != nil && !bc.chainConfig.IsVerkle(parent.Number, parent.Time) {
 			bc.SetForkBoundary(parentRoot)
-			defer bc.ClearForkBoundary()
+			defer bc.ClearForkBoundary(parentRoot)
 		}
 	}
 

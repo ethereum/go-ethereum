@@ -144,17 +144,20 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		return h
 	}
 	var (
-		isEIP4762   = chainConfig.IsVerkle(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
-		statedb     = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isEIP4762)
-		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp)
-		gaspool     = new(core.GasPool)
-		blockHash   = common.Hash{0x13, 0x37}
-		rejectedTxs []*rejectedTx
-		includedTxs types.Transactions
-		gasUsed     = uint64(0)
-		blobGasUsed = uint64(0)
-		receipts    = make(types.Receipts, 0)
+		isEIP4762      = chainConfig.IsVerkle(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+		parentIsVerkle = pre.Env.Number > 0 && chainConfig.IsVerkle(big.NewInt(int64(pre.Env.Number-1)), pre.Env.ParentTimestamp)
+		isForkBoundary = isEIP4762 && !parentIsVerkle
+		statedb        *state.StateDB
+		signer         = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp)
+		gaspool        = new(core.GasPool)
+		blockHash      = common.Hash{0x13, 0x37}
+		rejectedTxs    []*rejectedTx
+		includedTxs    types.Transactions
+		gasUsed        = uint64(0)
+		blobGasUsed    = uint64(0)
+		receipts       = make(types.Receipts, 0)
 	)
+	statedb = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isEIP4762 && !isForkBoundary, isForkBoundary)
 	gaspool.AddGas(pre.Env.GasLimit)
 	vmContext := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
@@ -221,6 +224,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			prevHash   = pre.Env.BlockHashes[math.HexOrDecimal64(prevNumber)]
 		)
 		core.ProcessParentBlockHash(prevHash, evm)
+	}
+	if isEIP4762 {
+		core.InitializeBinaryTransitionRegistry(statedb)
 	}
 	for i := 0; txIt.Next(); i++ {
 		tx, err := txIt.Tx()
@@ -377,7 +383,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	return statedb, execRs, body, nil
 }
 
-func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool) *state.StateDB {
+func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool, forkBoundary bool) *state.StateDB {
 	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true, IsVerkle: isBintrie})
 	sdb := state.NewDatabase(tdb, nil)
 
@@ -405,6 +411,9 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool
 	// If bintrie mode started, check if conversion happened
 	if isBintrie {
 		return statedb
+	}
+	if forkBoundary {
+		sdb.SetForkBoundary(root)
 	}
 	// For MPT mode, reopen the state with the committed root
 	statedb, err = state.New(root, sdb)
