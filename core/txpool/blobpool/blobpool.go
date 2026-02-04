@@ -491,6 +491,20 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	}
 	p.evict = newPriceHeap(basefee, blobfee, p.index)
 
+	// Guess what was announced. This is needed because we don't want to
+	// participate in the diffusion of transactions where inclusion is blocked by
+	// a low base fee transaction. Since we don't persist that info, the best
+	// we can do is to assume that anything that could have been announced
+	// at current prices, actually was.
+	for addr := range p.index {
+		for _, tx := range p.index[addr] {
+			tx.announced = p.isAnnouncable(tx)
+			if !tx.announced {
+				break
+			}
+		}
+	}
+
 	// Pool initialized, attach the blob limbo to it to track blobs included
 	// recently but not yet finalized
 	p.limbo, err = newLimbo(p.chain.Config(), limbodir)
@@ -538,6 +552,7 @@ func (p *BlobPool) Close() error {
 
 // parseTransaction is a callback method on pool creation that gets called for
 // each transaction on disk to create the in-memory metadata index.
+// Announced state is not initialized here, it needs to be iniitalized seprately.
 func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 	tx := new(types.Transaction)
 	if err := rlp.DecodeBytes(blob, tx); err != nil {
