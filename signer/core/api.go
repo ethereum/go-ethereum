@@ -400,7 +400,7 @@ func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
 	if result.Accounts == nil {
 		return nil, ErrRequestDenied
 	}
-	addresses := make([]common.Address, 0)
+	addresses := make([]common.Address, 0, len(result.Accounts))
 	for _, acc := range result.Accounts {
 		addresses = append(addresses, acc.Address)
 	}
