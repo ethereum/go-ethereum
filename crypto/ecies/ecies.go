@@ -221,6 +221,9 @@ func symDecrypt(params *ECIESParams, key, ct []byte) (m []byte, err error) {
 	if err != nil {
 		return
 	}
+	if len(ct) < params.BlockSize {
+		return nil, ErrInvalidMessage
+	}
 
 	ctr := cipher.NewCTR(c, ct[:params.BlockSize])
 
