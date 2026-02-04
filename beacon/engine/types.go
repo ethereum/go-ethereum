@@ -403,8 +403,9 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 
 // ExecutionPayloadBody is used in the response to GetPayloadBodiesByHash and GetPayloadBodiesByRange
 type ExecutionPayloadBody struct {
-	TransactionData []hexutil.Bytes     `json:"transactions"`
-	Withdrawals     []*types.Withdrawal `json:"withdrawals"`
+	TransactionData []hexutil.Bytes      `json:"transactions"`
+	Withdrawals     []*types.Withdrawal  `json:"withdrawals"`
+	AccessList      *bal.BlockAccessList `json:"blockAccessList"`
 }
 
 // Client identifiers to support ClientVersionV1.
