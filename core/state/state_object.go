@@ -306,7 +306,10 @@ func (s *stateObject) commitTrie() (*trienode.NodeSet, error) {
 	}
 	// Track the amount of time wasted on committing the storage trie
 	defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
-	root, nodes := tr.Commit(false)
+	root, nodes, err := tr.Commit(false)
+	if err != nil {
+		return nil, err
+	}
 	s.data.Root = root
 	return nodes, nil
 }
