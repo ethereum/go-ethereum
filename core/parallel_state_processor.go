@@ -3,15 +3,16 @@ package core
 import (
 	"cmp"
 	"fmt"
+	"runtime"
+	"slices"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"golang.org/x/sync/errgroup"
-	"runtime"
-	"slices"
-	"time"
 )
 
 // ProcessResultWithMetrics wraps ProcessResult with some metrics that are
@@ -270,8 +271,7 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 	gp := new(GasPool)
 	gp.SetGas(block.GasLimit())
 	db.SetTxContext(tx.Hash(), txIdx)
-	var gasUsed uint64
-	receipt, err := ApplyTransactionWithEVM(msg, gp, db, block.Number(), block.Hash(), context.Time, tx, &gasUsed, evm)
+	receipt, _, err := ApplyTransactionWithEVM(msg, gp, db, block.Number(), block.Hash(), context.Time, tx, 0, evm)
 	if err != nil {
 		err := fmt.Errorf("could not apply tx %d [%v]: %w", txIdx, tx.Hash().Hex(), err)
 		return &txExecResult{err: err}

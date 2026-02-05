@@ -74,7 +74,7 @@ type Genesis struct {
 	ExcessBlobGas       *uint64      `json:"excessBlobGas"`                 // EIP-4844
 	BlobGasUsed         *uint64      `json:"blobGasUsed"`                   // EIP-4844
 	BlockAccessListHash *common.Hash `json:"blockAccessListHash,omitempty"` // EIP-7928
-	SlotNumber    *uint64     `json:"slotNumber"`    // EIP-7843
+	SlotNumber          *uint64      `json:"slotNumber"`                    // EIP-7843
 }
 
 // copy copies the genesis.
@@ -124,11 +124,8 @@ func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 	genesis.BaseFee = genesisHeader.BaseFee
 	genesis.ExcessBlobGas = genesisHeader.ExcessBlobGas
 	genesis.BlobGasUsed = genesisHeader.BlobGasUsed
-<<<<<<< HEAD
 	genesis.BlockAccessListHash = genesisHeader.BlockAccessListHash
-=======
 	genesis.SlotNumber = genesisHeader.SlotNumber
->>>>>>> 06c09385b5 (core/vm: implement eip-7843)
 
 	return &genesis, nil
 }
