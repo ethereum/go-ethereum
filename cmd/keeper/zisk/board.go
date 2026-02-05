@@ -16,7 +16,7 @@
 
 //go:build tamago && riscv64
 
-package zkvm
+package zisk
 
 import (
 	"unsafe"
@@ -24,8 +24,14 @@ import (
 
 const (
 	// ZisK I/O addresses
-	INPUT_ADDR  = 0xa0000000
-	OUTPUT_ADDR = 0xa0010000
+	INPUT_ADDR     = 0x90000000
+	QEMU_EXIT_ADDR = 0x100000
+	QEMU_EXIT_CODE = 0x5555
+	OUTPUT_ADDR    = 0xa001_0000
+	UART_ADDR      = 0xa000_0200
+	ARCH_ID_ZISK   = 0xFFFEEEE // TEMPORARY  // TODO register one
+	MAX_INPUT      = 0x2000
+	MAX_OUTPUT     = 0x1_0000
 )
 
 var outputCount uint32 = 0

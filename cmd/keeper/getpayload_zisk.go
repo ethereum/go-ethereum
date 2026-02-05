@@ -1,4 +1,4 @@
-// Copyright 2025 The go-ethereum Authors
+// Copyright 2026 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,14 +14,19 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !example && !ziren && !wasm && !zisk
-// +build !example,!ziren,!wasm,!zisk
+//go:build zisk
 
 package main
 
-// getInput is a stub implementation for when no platform-specific build tags are set.
-// This allows golangci-lint to typecheck the code without errors.
-// The actual implementations are provided in platform-specific files.
+import (
+	"unsafe"
+
+	"github.com/ethereum/go-ethereum/cmd/keeper/zisk"
+)
+
 func getInput() []byte {
-	panic("stub")
+	inputPtr := unsafe.Pointer(uintptr(zisk.INPUT_ADDR + 8))
+	inputSize := *(*uint64)(inputPtr)
+	inputDataPtr := unsafe.Pointer(uintptr(zisk.INPUT_ADDR + 16))
+	return unsafe.Slice((*byte)(inputDataPtr), int(inputSize))
 }

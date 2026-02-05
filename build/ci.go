@@ -108,10 +108,10 @@ var (
 			Env:  map[string]string{"GOMIPS": "softfloat", "CGO_ENABLED": "0"},
 		},
 		{
-			Name:   "tamago",
+			Name:   "zisk",
 			GOOS:   "tamago",
 			GOARCH: "riscv64",
-			Tags:   "tamago",
+			Tags:   "tamago,zisk",
 			Env:    map[string]string{"CGO_ENABLED": "0", "GO_EXTLINK_ENABLED": "0"},
 		},
 		{
