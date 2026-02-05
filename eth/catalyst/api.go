@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -857,6 +858,37 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	if api.eth.Downloader().ConfigSyncMode() == ethconfig.SnapSync {
 		return api.delayPayloadImport(block), nil
 	}
+
+	// Partial state mode: Use BAL-based processing instead of full execution.
+	// Partial state nodes don't need full parent state - they apply BAL diffs directly.
+	if api.eth.BlockChain().SupportsPartialState() && params.BlockAccessList != nil {
+		log.Trace("Processing block with BAL (partial state mode)", "hash", block.Hash(), "number", block.Number())
+		start := time.Now()
+		if err := api.eth.BlockChain().ProcessBlockWithBAL(block, params.BlockAccessList); err != nil {
+			log.Warn("ProcessBlockWithBAL failed", "error", err)
+			api.invalidLock.Lock()
+			api.invalidBlocksHits[block.Hash()] = 1
+			api.invalidTipsets[block.Hash()] = block.Header()
+			api.invalidLock.Unlock()
+			return api.invalid(err, parent.Header()), nil
+		}
+		processingTime := time.Since(start)
+
+		// Store BAL in history for potential reorg handling
+		if history := api.eth.BlockChain().PartialState().History(); history != nil {
+			history.Store(block.NumberU64(), params.BlockAccessList)
+		}
+
+		hash := block.Hash()
+		api.eth.BlockChain().SendNewPayloadEvent(core.NewPayloadEvent{
+			Hash:           hash,
+			Number:         block.NumberU64(),
+			ProcessingTime: processingTime,
+		})
+		return engine.PayloadStatusV1{Status: engine.VALID, LatestValidHash: &hash}, nil
+	}
+
+	// Full node mode: Require parent state and execute transactions
 	if !api.eth.BlockChain().HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		api.remoteBlocks.put(block.Hash(), block.Header())
 		log.Warn("State not available, ignoring new payload")

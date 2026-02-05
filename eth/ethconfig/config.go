@@ -219,6 +219,13 @@ type Config struct {
 	PartialState PartialStateConfig
 }
 
+// DefaultChainRetention is the default number of recent blocks for which
+// bodies and receipts are retained in partial state mode. Older blocks only
+// keep their headers. 1024 blocks (~3.4 hours at 12s/block) is sufficient
+// for reorg handling and recent receipt lookups. Configurable via
+// --partial-state.chain-retention.
+const DefaultChainRetention = 1024
+
 // PartialStateConfig configures partial statefulness mode.
 // When enabled, the node stores all accounts but only storage for configured contracts.
 // State updates are applied via Block Access Lists (BALs) per EIP-7928.
@@ -234,15 +241,23 @@ type PartialStateConfig struct {
 
 	// BALRetention is the number of blocks to keep BAL history for reorg handling
 	BALRetention uint64
+
+	// ChainRetention is the number of recent blocks to retain bodies and
+	// receipts for. Older blocks only keep their headers. During sync, bodies
+	// and receipts outside this window are never downloaded. After sync, the
+	// freezer enforces a rolling window, deleting aged-out data. Set to 0 to
+	// keep all chain history.
+	ChainRetention uint64
 }
 
 // DefaultPartialStateConfig returns the default partial state configuration.
 func DefaultPartialStateConfig() PartialStateConfig {
 	return PartialStateConfig{
-		Enabled:       false,
-		Contracts:     nil,
-		ContractsFile: "",
-		BALRetention:  256,
+		Enabled:        false,
+		Contracts:      nil,
+		ContractsFile:  "",
+		BALRetention:   256,
+		ChainRetention: DefaultChainRetention,
 	}
 }
 

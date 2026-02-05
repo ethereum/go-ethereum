@@ -329,6 +329,12 @@ var (
 		Value:    ethconfig.Defaults.PartialState.BALRetention,
 		Category: flags.StateCategory,
 	}
+	PartialStateChainRetentionFlag = &cli.Uint64Flag{
+		Name:     "partial-state.chain-retention",
+		Usage:    "Number of recent blocks to retain bodies and receipts for (0 = keep all)",
+		Value:    ethconfig.DefaultChainRetention,
+		Category: flags.StateCategory,
+	}
 	TransactionHistoryFlag = &cli.Uint64Flag{
 		Name:     "history.transactions",
 		Usage:    "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)",
@@ -1781,6 +1787,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(PartialStateBALRetentionFlag.Name) {
 		cfg.PartialState.BALRetention = ctx.Uint64(PartialStateBALRetentionFlag.Name)
+	}
+	if ctx.IsSet(PartialStateChainRetentionFlag.Name) {
+		cfg.PartialState.ChainRetention = ctx.Uint64(PartialStateChainRetentionFlag.Name)
 	}
 	// Parse transaction history flag, if user is still using legacy config
 	// file with 'TxLookupLimit' configured, copy the value to 'TransactionHistory'.

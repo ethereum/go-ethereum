@@ -252,6 +252,11 @@ type BlockChainConfig struct {
 	// PartialStateBALRetention is the number of blocks to retain BAL history for.
 	// Default is 256 if not specified.
 	PartialStateBALRetention uint64
+
+	// PartialStateChainRetention is the number of recent blocks to retain
+	// bodies and receipts for. Older blocks only keep their headers. 0 means
+	// keep all chain history. Only applies when PartialStateEnabled is true.
+	PartialStateChainRetention uint64
 }
 
 // DefaultConfig returns the default config.
@@ -468,6 +473,14 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		log.Info("Partial state mode enabled",
 			"contracts", len(cfg.PartialStateContracts),
 			"balRetention", balRetention)
+
+		// Set chain retention on the freezer so it enforces a rolling window
+		// of bodies/receipts, keeping only the most recent N blocks.
+		if cfg.PartialStateChainRetention > 0 {
+			if setter, ok := db.(interface{ SetChainRetention(uint64) }); ok {
+				setter.SetChainRetention(cfg.PartialStateChainRetention)
+			}
+		}
 	}
 
 	bc.validator = NewBlockValidator(chainConfig, bc)
@@ -876,6 +889,12 @@ func (bc *BlockChain) loadLastState() error {
 
 // initializeHistoryPruning sets bc.historyPrunePoint.
 func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
+	// Partial state mode manages its own chain retention via the freezer.
+	// The freezer tail may be at any position (HEAD - chainRetention),
+	// which won't match any known predefined prune point — that's expected.
+	if bc.cfg.PartialStateEnabled && bc.cfg.PartialStateChainRetention > 0 {
+		return nil
+	}
 	freezerTail, _ := bc.db.Tail()
 
 	switch bc.cfg.ChainHistoryMode {

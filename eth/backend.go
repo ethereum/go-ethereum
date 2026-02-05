@@ -278,6 +278,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	options.Overrides = &overrides
 	options.BALExecutionMode = config.BALExecutionMode
 
+	// Wire partial state configuration into the blockchain
+	if config.PartialState.Enabled {
+		options.PartialStateEnabled = true
+		options.PartialStateContracts = config.PartialState.Contracts
+		options.PartialStateBALRetention = config.PartialState.BALRetention
+		options.PartialStateChainRetention = config.PartialState.ChainRetention
+	}
+
 	eth.blockchain, err = core.NewBlockChain(chainDb, config.Genesis, eth.engine, options)
 	if err != nil {
 		return nil, err
@@ -350,6 +358,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		EventMux:       eth.eventMux,
 		RequiredBlocks: config.RequiredBlocks,
 		PartialFilter:  partialFilter,
+		ChainRetention: config.PartialState.ChainRetention,
 	}); err != nil {
 		return nil, err
 	}
