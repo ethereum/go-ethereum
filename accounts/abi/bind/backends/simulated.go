@@ -830,11 +830,11 @@ func (b *SimulatedBackend) FilterLogs(ctx context.Context, query ethereum.Filter
 		filter = b.filterSystem.NewBlockFilter(*query.BlockHash, query.Addresses, query.Topics)
 	} else {
 		// Initialize unset filter boundaried to run from genesis to chain head
-		from := int64(0)
+		from := rpc.EarliestBlockNumber.Int64()
 		if query.FromBlock != nil {
 			from = query.FromBlock.Int64()
 		}
-		to := int64(-1)
+		to := rpc.LatestBlockNumber.Int64()
 		if query.ToBlock != nil {
 			to = query.ToBlock.Int64()
 		}
