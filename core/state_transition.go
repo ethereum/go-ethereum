@@ -19,6 +19,9 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"math"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -26,8 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
-	"math"
-	"math/big"
 )
 
 // ExecutionResult includes all output after executing given evm
@@ -576,7 +577,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 
 	return &ExecutionResult{
-		UsedGas:    peakGasUsed,
+		UsedGas:    st.gasUsed(),
 		MaxUsedGas: peakGasUsed,
 		Err:        vmerr,
 		ReturnData: ret,
