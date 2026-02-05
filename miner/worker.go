@@ -19,11 +19,12 @@ package miner
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"math/big"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
@@ -58,13 +59,14 @@ func (miner *Miner) maxBlobsPerBlock(time uint64) int {
 // environment is the worker's current environment and holds all
 // information of the sealing block generation.
 type environment struct {
-	signer   types.Signer
-	state    *state.StateDB // apply state changes here
-	tcount   int            // tx count in cycle
-	size     uint64         // size of the block we are building
-	gasPool  *core.GasPool  // available gas used to pack transactions
-	coinbase common.Address
-	evm      *vm.EVM
+	signer        types.Signer
+	state         *state.StateDB // apply state changes here
+	tcount        int            // tx count in cycle
+	size          uint64         // size of the block we are building
+	gasPool       *core.GasPool  // available gas used to pack transactions
+	coinbase      common.Address
+	evm           *vm.EVM
+	cumulativeGas uint64
 
 	header   *types.Header
 	txs      []*types.Transaction
@@ -382,12 +384,13 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Gas()
 	)
-	receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx)
+	receipt, cumulativeGas, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx, env.cumulativeGas)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.SetGas(gp)
 		return nil, err
 	}
+	env.cumulativeGas = cumulativeGas
 	env.header.GasUsed += receipt.GasUsed
 	return receipt, nil
 }
