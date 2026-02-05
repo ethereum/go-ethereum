@@ -164,7 +164,7 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 
 // flushAlloc is very similar with hash, but the main difference is all the
 // generated states will be persisted into the given database.
-func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database) (common.Hash, error) {
+func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database, tracer *tracing.Hooks) (common.Hash, error) {
 	emptyRoot := types.EmptyRootHash
 	if triedb.IsVerkle() {
 		emptyRoot = types.EmptyVerkleHash
@@ -185,12 +185,28 @@ func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database) (common.Hash, e
 			statedb.SetState(addr, key, value)
 		}
 	}
-	root, err := statedb.Commit(0, false, false)
-	if err != nil {
-		return common.Hash{}, err
+
+	var root common.Hash
+	if tracer != nil && tracer.OnStateUpdate != nil {
+		r, update, err := statedb.CommitWithUpdate(0, false, false)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		trUpdate, err := update.ToTracingUpdate()
+		if err != nil {
+			return common.Hash{}, err
+		}
+		tracer.OnStateUpdate(trUpdate)
+		root = r
+	} else {
+		root, err = statedb.Commit(0, false, false)
+		if err != nil {
+			return common.Hash{}, err
+		}
 	}
+
 	// Commit newly generated states into disk if it's not empty.
-	if root != types.EmptyRootHash {
+	if root != emptyRoot {
 		if err := triedb.Commit(root, true); err != nil {
 			return common.Hash{}, err
 		}
@@ -296,10 +312,10 @@ func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 // specify a fork block below the local head block). In case of a conflict, the
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
 func SetupGenesisBlock(db ethdb.Database, triedb *triedb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
-	return SetupGenesisBlockWithOverride(db, triedb, genesis, nil)
+	return SetupGenesisBlockWithOverride(db, triedb, genesis, nil, nil)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, genesis *Genesis, overrides *ChainOverrides) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
+func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, genesis *Genesis, overrides *ChainOverrides, tracer *tracing.Hooks) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
 	// Copy the genesis, so we can operate on a copy.
 	genesis = genesis.copy()
 	// Sanitize the supplied genesis, ensuring it has the associated chain
@@ -320,7 +336,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 			return nil, common.Hash{}, nil, err
 		}
 
-		block, err := genesis.Commit(db, triedb)
+		block, err := genesis.Commit(db, triedb, tracer)
 		if err != nil {
 			return nil, common.Hash{}, nil, err
 		}
@@ -348,7 +364,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 		if hash := genesis.ToBlock().Hash(); hash != ghash {
 			return nil, common.Hash{}, nil, &GenesisMismatchError{ghash, hash}
 		}
-		block, err := genesis.Commit(db, triedb)
+		block, err := genesis.Commit(db, triedb, tracer)
 		if err != nil {
 			return nil, common.Hash{}, nil, err
 		}
@@ -537,7 +553,7 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
-func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Block, error) {
+func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database, tracer *tracing.Hooks) (*types.Block, error) {
 	if g.Number != 0 {
 		return nil, errors.New("can't commit genesis block with number > 0")
 	}
@@ -552,7 +568,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 		return nil, errors.New("can't start clique chain without signers")
 	}
 	// flush the data to disk and compute the state root
-	root, err := flushAlloc(&g.Alloc, triedb)
+	root, err := flushAlloc(&g.Alloc, triedb, tracer)
 	if err != nil {
 		return nil, err
 	}
@@ -578,7 +594,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 // MustCommit writes the genesis block and state to db, panicking on error.
 // The block is committed as the canonical head block.
 func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.Block {
-	block, err := g.Commit(db, triedb)
+	block, err := g.Commit(db, triedb, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -669,23 +685,24 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 		BaseFee:    big.NewInt(params.InitialBaseFee),
 		Difficulty: big.NewInt(0),
 		Alloc: map[common.Address]types.Account{
-			common.BytesToAddress([]byte{0x01}): {Balance: big.NewInt(1)}, // ECRecover
-			common.BytesToAddress([]byte{0x02}): {Balance: big.NewInt(1)}, // SHA256
-			common.BytesToAddress([]byte{0x03}): {Balance: big.NewInt(1)}, // RIPEMD
-			common.BytesToAddress([]byte{0x04}): {Balance: big.NewInt(1)}, // Identity
-			common.BytesToAddress([]byte{0x05}): {Balance: big.NewInt(1)}, // ModExp
-			common.BytesToAddress([]byte{0x06}): {Balance: big.NewInt(1)}, // ECAdd
-			common.BytesToAddress([]byte{0x07}): {Balance: big.NewInt(1)}, // ECScalarMul
-			common.BytesToAddress([]byte{0x08}): {Balance: big.NewInt(1)}, // ECPairing
-			common.BytesToAddress([]byte{0x09}): {Balance: big.NewInt(1)}, // BLAKE2b
-			common.BytesToAddress([]byte{0x0a}): {Balance: big.NewInt(1)}, // KZGPointEval
-			common.BytesToAddress([]byte{0x0b}): {Balance: big.NewInt(1)}, // BLSG1Add
-			common.BytesToAddress([]byte{0x0c}): {Balance: big.NewInt(1)}, // BLSG1MultiExp
-			common.BytesToAddress([]byte{0x0d}): {Balance: big.NewInt(1)}, // BLSG2Add
-			common.BytesToAddress([]byte{0x0e}): {Balance: big.NewInt(1)}, // BLSG2MultiExp
-			common.BytesToAddress([]byte{0x0f}): {Balance: big.NewInt(1)}, // BLSG1Pairing
-			common.BytesToAddress([]byte{0x10}): {Balance: big.NewInt(1)}, // BLSG1MapG1
-			common.BytesToAddress([]byte{0x11}): {Balance: big.NewInt(1)}, // BLSG2MapG2
+			common.BytesToAddress([]byte{0x01}):    {Balance: big.NewInt(1)}, // ECRecover
+			common.BytesToAddress([]byte{0x02}):    {Balance: big.NewInt(1)}, // SHA256
+			common.BytesToAddress([]byte{0x03}):    {Balance: big.NewInt(1)}, // RIPEMD
+			common.BytesToAddress([]byte{0x04}):    {Balance: big.NewInt(1)}, // Identity
+			common.BytesToAddress([]byte{0x05}):    {Balance: big.NewInt(1)}, // ModExp
+			common.BytesToAddress([]byte{0x06}):    {Balance: big.NewInt(1)}, // ECAdd
+			common.BytesToAddress([]byte{0x07}):    {Balance: big.NewInt(1)}, // ECScalarMul
+			common.BytesToAddress([]byte{0x08}):    {Balance: big.NewInt(1)}, // ECPairing
+			common.BytesToAddress([]byte{0x09}):    {Balance: big.NewInt(1)}, // BLAKE2b
+			common.BytesToAddress([]byte{0x0a}):    {Balance: big.NewInt(1)}, // KZGPointEval
+			common.BytesToAddress([]byte{0x0b}):    {Balance: big.NewInt(1)}, // BLSG1Add
+			common.BytesToAddress([]byte{0x0c}):    {Balance: big.NewInt(1)}, // BLSG1MultiExp
+			common.BytesToAddress([]byte{0x0d}):    {Balance: big.NewInt(1)}, // BLSG2Add
+			common.BytesToAddress([]byte{0x0e}):    {Balance: big.NewInt(1)}, // BLSG2MultiExp
+			common.BytesToAddress([]byte{0x0f}):    {Balance: big.NewInt(1)}, // BLSG1Pairing
+			common.BytesToAddress([]byte{0x10}):    {Balance: big.NewInt(1)}, // BLSG1MapG1
+			common.BytesToAddress([]byte{0x11}):    {Balance: big.NewInt(1)}, // BLSG2MapG2
+			common.BytesToAddress([]byte{0x1, 00}): {Balance: big.NewInt(1)}, // P256Verify
 			// Pre-deploy system contracts
 			params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
 			params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},

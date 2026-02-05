@@ -66,7 +66,7 @@ type prestateTracer struct {
 	pre         stateMap
 	post        stateMap
 	to          common.Address
-	config      prestateTracerConfig
+	config      PrestateTracerConfig
 	chainConfig *params.ChainConfig
 	interrupt   atomic.Bool // Atomic flag to signal execution interruption
 	reason      error       // Textual reason for the interruption
@@ -74,7 +74,7 @@ type prestateTracer struct {
 	deleted     map[common.Address]bool
 }
 
-type prestateTracerConfig struct {
+type PrestateTracerConfig struct {
 	DiffMode       bool `json:"diffMode"`       // If true, this tracer will return state modifications
 	DisableCode    bool `json:"disableCode"`    // If true, this tracer will not return the contract code
 	DisableStorage bool `json:"disableStorage"` // If true, this tracer will not return the contract storage
@@ -82,7 +82,7 @@ type prestateTracerConfig struct {
 }
 
 func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
-	var config prestateTracerConfig
+	var config PrestateTracerConfig
 	if err := json.Unmarshal(cfg, &config); err != nil {
 		return nil, err
 	}
@@ -131,7 +131,15 @@ func (t *prestateTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scop
 		addr := common.Address(stackData[stackLen-1].Bytes20())
 		t.lookupAccount(addr)
 		if op == vm.SELFDESTRUCT {
-			t.deleted[caller] = true
+			if t.chainConfig.IsCancun(t.env.BlockNumber, t.env.Time) {
+				// EIP-6780: only delete if created in same transaction
+				if t.created[caller] {
+					t.deleted[caller] = true
+				}
+			} else {
+				// Pre-EIP-6780: always delete
+				t.deleted[caller] = true
+			}
 		}
 	case stackLen >= 5 && (op == vm.DELEGATECALL || op == vm.CALL || op == vm.STATICCALL || op == vm.CALLCODE):
 		addr := common.Address(stackData[stackLen-2].Bytes20())

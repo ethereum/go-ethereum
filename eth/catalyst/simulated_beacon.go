@@ -214,7 +214,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		return nil
 	}
 
-	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true)
+	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -280,9 +280,8 @@ func (c *SimulatedBeacon) loop() {
 		case <-timer.C:
 			if err := c.sealBlock(c.withdrawals.pop(10), uint64(time.Now().Unix())); err != nil {
 				log.Warn("Error performing sealing work", "err", err)
-			} else {
-				timer.Reset(time.Second * time.Duration(c.period))
 			}
+			timer.Reset(time.Second * time.Duration(c.period))
 		}
 	}
 }

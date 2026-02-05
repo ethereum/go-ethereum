@@ -64,7 +64,7 @@ function compile_fuzzer() {
   go get github.com/holiman/gofuzz-shim/testing
 
 	if [[ $SANITIZER == *coverage* ]]; then
-		coverbuild $path $function $fuzzer $coverpkg
+		coverbuild $path $function $fuzzer
 	else
 	  gofuzz-shim --func $function --package $package -f $file -o $fuzzer.a
 		$CXX $CXXFLAGS $LIB_FUZZING_ENGINE $fuzzer.a -o $OUT/$fuzzer

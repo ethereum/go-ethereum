@@ -96,6 +96,7 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 			utils.CacheNoPrefetchFlag,
 			utils.CachePreimagesFlag,
 			utils.NoCompactionFlag,
+			utils.LogSlowBlockFlag,
 			utils.MetricsEnabledFlag,
 			utils.MetricsEnabledExpensiveFlag,
 			utils.MetricsHTTPFlag,
@@ -119,6 +120,8 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 			utils.LogNoHistoryFlag,
 			utils.LogExportCheckpointsFlag,
 			utils.StateHistoryFlag,
+			utils.TrienodeHistoryFlag,
+			utils.TrienodeHistoryFullValueCheckpointFlag,
 		}, utils.DatabaseFlags, debug.Flags),
 		Before: func(ctx *cli.Context) error {
 			flags.MigrateGlobalFlags(ctx)
@@ -295,7 +298,7 @@ func initGenesis(ctx *cli.Context) error {
 	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
 	defer triedb.Close()
 
-	_, hash, compatErr, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
+	_, hash, compatErr, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides, nil)
 	if err != nil {
 		utils.Fatalf("Failed to write genesis block: %v", err)
 	}

@@ -122,6 +122,27 @@ jobs:
         LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
         AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
 
+  keeper:
+    name: Keeper Build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.24
+        cache: false
+
+    - name: Install cross toolchain
+      run: |
+        apt-get update
+        apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib
+
+    - name: Build (amd64)
+      run: |
+        go run build/ci.go keeper -dlgo
+
   windows:
     name: Windows Build
     runs-on: "win-11"

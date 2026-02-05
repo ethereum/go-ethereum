@@ -66,6 +66,7 @@ var (
 		utils.OverrideBPO1,
 		utils.OverrideBPO2,
 		utils.OverrideVerkle,
+		utils.OverrideGenesisFlag,
 		utils.EnablePersonal, // deprecated
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
@@ -93,6 +94,8 @@ var (
 		utils.LogNoHistoryFlag,
 		utils.LogExportCheckpointsFlag,
 		utils.StateHistoryFlag,
+		utils.TrienodeHistoryFlag,
+		utils.TrienodeHistoryFullValueCheckpointFlag,
 		utils.LightKDFFlag,
 		utils.EthRequiredBlocksFlag,
 		utils.LegacyWhitelistFlag, // deprecated
@@ -117,6 +120,7 @@ var (
 		utils.MinerGasPriceFlag,
 		utils.MinerEtherbaseFlag, // deprecated
 		utils.MinerExtraDataFlag,
+		utils.MinerMaxBlobsFlag,
 		utils.MinerRecommitIntervalFlag,
 		utils.MinerPendingFeeRecipientFlag,
 		utils.MinerNewPayloadTimeoutFlag, // deprecated
@@ -155,6 +159,7 @@ var (
 		utils.BeaconGenesisTimeFlag,
 		utils.BeaconCheckpointFlag,
 		utils.BeaconCheckpointFileFlag,
+		utils.LogSlowBlockFlag,
 	}, utils.NetworkFlags, utils.DatabaseFlags)
 
 	rpcFlags = []cli.Flag{
@@ -190,6 +195,7 @@ var (
 		utils.BatchResponseMaxSize,
 		utils.RPCTxSyncDefaultTimeoutFlag,
 		utils.RPCTxSyncMaxTimeoutFlag,
+		utils.RPCGlobalRangeLimitFlag,
 	}
 
 	metricsFlags = []cli.Flag{
@@ -238,7 +244,6 @@ func init() {
 		javascriptCommand,
 		// See misccmd.go:
 		versionCommand,
-		versionCheckCommand,
 		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
@@ -248,8 +253,6 @@ func init() {
 		utils.ShowDeprecated,
 		// See snapshot.go
 		snapshotCommand,
-		// See verkle.go
-		verkleCommand,
 	}
 	if logTestCommand != nil {
 		app.Commands = append(app.Commands, logTestCommand)
