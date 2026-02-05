@@ -390,7 +390,7 @@ func (f *Filter) rangeLogs(ctx context.Context, firstBlock, lastBlock uint64) ([
 	}
 
 	if firstBlock > lastBlock {
-		return nil, nil
+		return nil, errInvalidBlockRange
 	}
 	mb := f.sys.backend.NewMatcherBackend()
 	defer mb.Close()
