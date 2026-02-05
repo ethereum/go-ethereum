@@ -4065,3 +4065,49 @@ func TestSendRawTransactionSync_Timeout(t *testing.T) {
 		t.Fatalf("expected ErrorData=%s, got %v", want, got)
 	}
 }
+
+func TestBatchGetStorageAt(t *testing.T) {
+	t.Parallel()
+
+	addr := common.HexToAddress("0xdeadbeef")
+	key1 := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
+	key2 := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000002")
+	val1 := common.HexToHash("0x11")
+	val2 := common.HexToHash("0x22")
+
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			addr: {
+				Balance: big.NewInt(1000),
+				Storage: map[common.Hash]common.Hash{
+					key1: val1,
+					key2: val2,
+				},
+			},
+		},
+	}
+
+	backend := newTestBackend(t, 1, genesis, ethash.NewFaker(), nil)
+	api := NewBlockChainAPI(backend)
+	keys := []string{
+		key1.Hex(),
+		key2.Hex(),
+	}
+	bn := rpc.LatestBlockNumber
+	blockNr := rpc.BlockNumberOrHash{BlockNumber: &bn}
+	results, err := api.BatchGetStorageAt(context.Background(), addr, keys, blockNr)
+	if err != nil {
+		t.Fatalf("BatchGetStorageAt failed: %v", err)
+	}
+
+	if len(results) != 2 {
+		t.Fatalf("Expected 2 results, got %d", len(results))
+	}
+	if !bytes.Equal(results[0], val1.Bytes()) {
+		t.Errorf("Slot 1 mismatch: have %x, want %x", results[0], val1.Bytes())
+	}
+	if !bytes.Equal(results[1], val2.Bytes()) {
+		t.Errorf("Slot 2 mismatch: have %x, want %x", results[1], val2.Bytes())
+	}
+}
