@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -629,7 +630,7 @@ func (api *ConsensusAPI) NewPayloadV1(params engine.ExecutableData) (engine.Payl
 	if params.Withdrawals != nil {
 		return invalidStatus, paramsErr("withdrawals not supported in V1")
 	}
-	return api.newPayload(params, nil, nil, nil, false)
+	return api.newPayload(params, nil, nil, nil, false, nil)
 }
 
 // NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
@@ -650,7 +651,7 @@ func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.Payl
 	case params.BlobGasUsed != nil:
 		return invalidStatus, paramsErr("non-nil blobGasUsed pre-cancun")
 	}
-	return api.newPayload(params, nil, nil, nil, false)
+	return api.newPayload(params, nil, nil, nil, false, nil)
 }
 
 // NewPayloadV3 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
@@ -669,7 +670,7 @@ func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData, versionedHas
 	case !api.checkFork(params.Timestamp, forks.Cancun):
 		return invalidStatus, unsupportedForkErr("newPayloadV3 must only be called for cancun payloads")
 	}
-	return api.newPayload(params, versionedHashes, beaconRoot, nil, false)
+	return api.newPayload(params, versionedHashes, beaconRoot, nil, false, nil)
 }
 
 // NewPayloadV4 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
@@ -694,10 +695,51 @@ func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHas
 	if err := validateRequests(requests); err != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(err)
 	}
-	return api.newPayload(params, versionedHashes, beaconRoot, requests, false)
+	return api.newPayload(params, versionedHashes, beaconRoot, requests, false, nil)
 }
 
-func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, witness bool) (engine.PayloadStatusV1, error) {
+// NewPayloadV5 creates an Eth1 block with Block Access List (BAL) support for
+// partial state nodes per EIP-7928. The BAL contains state diffs needed to
+// compute the new state root without re-executing transactions.
+//
+// Note: This is an experimental extension not yet in official Engine API specs.
+// It extends NewPayloadV4 with an optional blockAccessList parameter for nodes
+// running in partial state mode (--partial-state flag).
+func (api *ConsensusAPI) NewPayloadV5(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes, blockAccessList hexutil.Bytes) (engine.PayloadStatusV1, error) {
+	switch {
+	case params.Withdrawals == nil:
+		return invalidStatus, paramsErr("nil withdrawals post-shanghai")
+	case params.ExcessBlobGas == nil:
+		return invalidStatus, paramsErr("nil excessBlobGas post-cancun")
+	case params.BlobGasUsed == nil:
+		return invalidStatus, paramsErr("nil blobGasUsed post-cancun")
+	case versionedHashes == nil:
+		return invalidStatus, paramsErr("nil versionedHashes post-cancun")
+	case beaconRoot == nil:
+		return invalidStatus, paramsErr("nil beaconRoot post-cancun")
+	case executionRequests == nil:
+		return invalidStatus, paramsErr("nil executionRequests post-prague")
+	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5):
+		return invalidStatus, unsupportedForkErr("newPayloadV5 must only be called for prague/osaka payloads")
+	}
+	requests := convertRequests(executionRequests)
+	if err := validateRequests(requests); err != nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(err)
+	}
+
+	// Decode BAL if provided
+	var accessList *bal.BlockAccessList
+	if len(blockAccessList) > 0 {
+		accessList = new(bal.BlockAccessList)
+		if err := rlp.DecodeBytes(blockAccessList, accessList); err != nil {
+			return invalidStatus, paramsErr("invalid blockAccessList encoding: " + err.Error())
+		}
+	}
+
+	return api.newPayload(params, versionedHashes, beaconRoot, requests, false, accessList)
+}
+
+func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, witness bool, accessList *bal.BlockAccessList) (engine.PayloadStatusV1, error) {
 	// The locking here is, strictly, not required. Without these locks, this can happen:
 	//
 	// 1. NewPayload( execdata-N ) is invoked from the CL. It goes all the way down to
@@ -782,6 +824,37 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	if api.eth.Downloader().ConfigSyncMode() == ethconfig.SnapSync {
 		return api.delayPayloadImport(block), nil
 	}
+
+	// Partial state mode: Use BAL-based processing instead of full execution.
+	// Partial state nodes don't need full parent state - they apply BAL diffs directly.
+	if api.eth.BlockChain().SupportsPartialState() && accessList != nil {
+		log.Trace("Processing block with BAL (partial state mode)", "hash", block.Hash(), "number", block.Number())
+		start := time.Now()
+		if err := api.eth.BlockChain().ProcessBlockWithBAL(block, accessList); err != nil {
+			log.Warn("ProcessBlockWithBAL failed", "error", err)
+			api.invalidLock.Lock()
+			api.invalidBlocksHits[block.Hash()] = 1
+			api.invalidTipsets[block.Hash()] = block.Header()
+			api.invalidLock.Unlock()
+			return api.invalid(err, parent.Header()), nil
+		}
+		processingTime := time.Since(start)
+
+		// Store BAL in history for potential reorg handling
+		if history := api.eth.BlockChain().PartialState().History(); history != nil {
+			history.Store(block.NumberU64(), accessList)
+		}
+
+		hash := block.Hash()
+		api.eth.BlockChain().SendNewPayloadEvent(core.NewPayloadEvent{
+			Hash:           hash,
+			Number:         block.NumberU64(),
+			ProcessingTime: processingTime,
+		})
+		return engine.PayloadStatusV1{Status: engine.VALID, LatestValidHash: &hash}, nil
+	}
+
+	// Full node mode: Require parent state and execute transactions
 	if !api.eth.BlockChain().HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		api.remoteBlocks.put(block.Hash(), block.Header())
 		log.Warn("State not available, ignoring new payload")

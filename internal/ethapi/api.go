@@ -781,6 +781,13 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if state == nil || err != nil {
 		return nil, err
 	}
+
+	// Set partial state filter if enabled - this causes GetState/GetCode to
+	// return an error (via state.Error()) when accessing untracked contracts
+	if b.PartialStateEnabled() {
+		state.SetPartialStateFilter(b.IsContractTracked)
+	}
+
 	return doCall(ctx, b, args, state, header, overrides, blockOverrides, timeout, globalGasCap)
 }
 
@@ -854,6 +861,13 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if state == nil || err != nil {
 		return 0, err
 	}
+
+	// Set partial state filter if enabled - this causes GetState/GetCode to
+	// return an error (via state.Error()) when accessing untracked contracts
+	if b.PartialStateEnabled() {
+		state.SetPartialStateFilter(b.IsContractTracked)
+	}
+
 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
 	if blockOverrides != nil {
 		if err := blockOverrides.Apply(&blockCtx); err != nil {

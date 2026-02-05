@@ -479,6 +479,9 @@ type Syncer struct {
 	storageSynced  uint64             // Number of storage slots downloaded
 	storageBytes   common.StorageSize // Number of storage trie bytes persisted to disk
 
+	storageSkipped  uint64 // Number of accounts whose storage was skipped (partial sync)
+	bytecodeSkipped uint64 // Number of bytecodes skipped (partial sync)
+
 	extProgress *SyncProgress // progress that can be exposed to external caller.
 
 	// Request tracking during healing phase
@@ -633,6 +636,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 			return !isStorageSkipped(s.db, accountHash)
 		}
 		scheduler = state.NewPartialStateSync(root, s.db, s.onHealState, s.scheme, shouldSyncStorage, shouldSyncCode)
+		log.Info("Starting partial state snap sync", "root", root)
 	} else {
 		scheduler = state.NewStateSync(root, s.db, s.onHealState, s.scheme)
 	}
@@ -876,6 +880,7 @@ func (s *Syncer) loadSyncStatus() {
 	s.accountSynced, s.accountBytes = 0, 0
 	s.bytecodeSynced, s.bytecodeBytes = 0, 0
 	s.storageSynced, s.storageBytes = 0, 0
+	s.storageSkipped, s.bytecodeSkipped = 0, 0
 	s.trienodeHealSynced, s.trienodeHealBytes = 0, 0
 	s.bytecodeHealSynced, s.bytecodeHealBytes = 0, 0
 
@@ -1959,6 +1964,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 				} else {
 					// Skip bytecode for non-tracked contracts
 					bytecodeSkippedMeter.Mark(1)
+					s.bytecodeSkipped++
 				}
 			}
 		}
@@ -1971,6 +1977,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 				markStorageSkipped(s.db, accountHash, account.Root)
 				res.task.stateCompleted[accountHash] = struct{}{}
 				storageSkippedMeter.Mark(1)
+				s.storageSkipped++
 				continue
 			}
 
@@ -3201,8 +3208,16 @@ func (s *Syncer) reportSyncProgress(force bool) {
 		storage  = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.storageSynced), s.storageBytes.TerminalString())
 		bytecode = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.bytecodeSynced), s.bytecodeBytes.TerminalString())
 	)
-	log.Info("Syncing: state download in progress", "synced", progress, "state", synced,
-		"accounts", accounts, "slots", storage, "codes", bytecode, "eta", common.PrettyDuration(estTime-elapsed))
+	if s.isPartialSync() {
+		log.Info("Syncing: partial state download in progress", "synced", progress, "state", synced,
+			"accounts", accounts,
+			"slots", storage, "slotsSkipped", s.storageSkipped,
+			"codes", bytecode, "codesSkipped", s.bytecodeSkipped,
+			"eta", common.PrettyDuration(estTime-elapsed))
+	} else {
+		log.Info("Syncing: state download in progress", "synced", progress, "state", synced,
+			"accounts", accounts, "slots", storage, "codes", bytecode, "eta", common.PrettyDuration(estTime-elapsed))
+	}
 }
 
 // reportHealProgress calculates various status reports and provides it to the user.
