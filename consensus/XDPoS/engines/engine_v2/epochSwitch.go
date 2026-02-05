@@ -36,7 +36,7 @@ func (x *XDPoS_v2) getEpochSwitchInfo(chain consensus.ChainReader, header *types
 	}
 	if isEpochSwitch {
 		log.Debug("[getEpochSwitchInfo] header is epoch switch", "hash", hash.Hex(), "number", h.Number.Uint64())
-		if h.Number.Uint64() == 0 {
+		if h.Number.Sign() == 0 {
 			log.Warn("[getEpochSwitchInfo] block 0, init epoch differently")
 			// handle genesis block differently as follows
 			masternodes := common.ExtractAddressFromBytes(h.Extra[32 : len(h.Extra)-65])

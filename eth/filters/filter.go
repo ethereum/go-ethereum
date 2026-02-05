@@ -363,10 +363,10 @@ func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []comm
 	var ret []*types.Log
 Logs:
 	for _, log := range logs {
-		if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > log.BlockNumber {
+		if fromBlock != nil && fromBlock.Sign() >= 0 && fromBlock.Uint64() > log.BlockNumber {
 			continue
 		}
-		if toBlock != nil && toBlock.Int64() >= 0 && toBlock.Uint64() < log.BlockNumber {
+		if toBlock != nil && toBlock.Sign() >= 0 && toBlock.Uint64() < log.BlockNumber {
 			continue
 		}
 

@@ -763,7 +763,7 @@ func (api *BlockChainAPI) GetBlockFinalityByNumber(ctx context.Context, blockNum
 // GetMasternodes returns masternodes set at the starting block of epoch of the given block
 func (api *BlockChainAPI) GetMasternodes(ctx context.Context, b *types.Block) ([]common.Address, error) {
 	var masternodes []common.Address
-	if b.Number().Int64() >= 0 {
+	if b.Number().Sign() >= 0 {
 		curBlockNumber := b.Number().Uint64()
 		prevBlockNumber := curBlockNumber + (common.MergeSignRange - (curBlockNumber % common.MergeSignRange))
 		latestBlockNumber := api.b.CurrentBlock().Number.Uint64()
@@ -1499,7 +1499,7 @@ func (api *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, i
 
 // findNearestSignedBlock finds the nearest checkpoint from input block
 func (api *BlockChainAPI) findNearestSignedBlock(ctx context.Context, b *types.Block) *types.Block {
-	if b.Number().Int64() <= 0 {
+	if b.Number().Sign() <= 0 {
 		return nil
 	}
 

@@ -390,7 +390,7 @@ func (x *XDPoS_v1) GetCurrentEpochSwitchBlock(blockNumber *big.Int) (uint64, uin
 func (x *XDPoS_v1) GetPeriod() uint64 { return x.config.Period }
 
 func (x *XDPoS_v1) whoIsCreator(snap *SnapshotV1, header *types.Header) (common.Address, error) {
-	if header.Number.Uint64() == 0 {
+	if header.Number.Sign() == 0 {
 		return common.Address{}, errors.New("don't take block 0")
 	}
 	m, err := ecrecover(header, snap.sigcache)
@@ -446,7 +446,7 @@ func (x *XDPoS_v1) yourTurn(chain consensus.ChainReader, parent *types.Header, s
 	pre := common.Address{}
 	// masternode[0] has chance to create block 1
 	preIndex := -1
-	if parent.Number.Uint64() != 0 {
+	if parent.Number.Sign() != 0 {
 		pre, err = x.whoIsCreator(snap, parent)
 		if err != nil {
 			return 0, 0, 0, false, err

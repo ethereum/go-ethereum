@@ -22,7 +22,7 @@ func TestGFp2Invert(t *testing.T) {
 	inv.Invert(a, pool)
 
 	b := newGFp2(pool).Mul(inv, a, pool)
-	if b.x.Int64() != 0 || b.y.Int64() != 1 {
+	if b.x.Sign() != 0 || b.y.Cmp(big.NewInt(1)) != 0 {
 		t.Fatalf("bad result for a^-1*a: %s %s", b.x, b.y)
 	}
 
@@ -36,11 +36,11 @@ func TestGFp2Invert(t *testing.T) {
 }
 
 func isZero(n *big.Int) bool {
-	return new(big.Int).Mod(n, P).Int64() == 0
+	return new(big.Int).Mod(n, P).Sign() == 0
 }
 
 func isOne(n *big.Int) bool {
-	return new(big.Int).Mod(n, P).Int64() == 1
+	return new(big.Int).Mod(n, P).Cmp(big.NewInt(1)) == 0
 }
 
 func TestGFp6Invert(t *testing.T) {
