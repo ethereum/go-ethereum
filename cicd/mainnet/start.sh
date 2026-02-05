@@ -61,22 +61,41 @@ fi
 
 sync_mode=full
 if test -z "$SYNC_MODE"; then
-    echo "SYNC_MODE not set, default to full" #full or fast
+    echo "SYNC_MODE not set, default to $sync_mode" #full or fast
 else
     echo "SYNC_MODE found, set to $SYNC_MODE"
     sync_mode=$SYNC_MODE
 fi
 
-gc_mode=archive
+gc_mode=full
 if test -z "$GC_MODE"; then
-    echo "GC_MODE not set, default to archive" #full or archive
+    echo "GC_MODE not set, default to $gc_mode" #full or archive
 else
     echo "GC_MODE found, set to $GC_MODE"
     gc_mode=$GC_MODE
 fi
 
+ethstats_address=stats.xinfin.network:3000
+if test -z "$STATS_ADDRESS"
+then
+  echo "STATS_ADDRESS not set, default to $ethstats_address"
+else
+  echo "STATS_ADDRESS found, set to $STATS_ADDRESS"
+  ethstats_address=$STATS_ADDRESS
+fi
+
+ethstats_secret=xinfin_xdpos_hybrid_network_stats
+if test -z "$STATS_SECRET"
+then
+  echo "STATS_SECRET not set, default to $ethstats_secret"
+else
+  echo "STATS_SECRET found, set to $STATS_SECRET"
+  ethstats_secret=$STATS_SECRET
+fi
+
+netstats="${NODE_NAME}-${wallet}:$ethstats_secret@$ethstats_address"
+
 INSTANCE_IP=$(curl https://checkip.amazonaws.com)
-netstats="${NODE_NAME}-${wallet}-${INSTANCE_IP}:xinfin_xdpos_hybrid_network_stats@stats.xinfin.network:3000"
 
 echo "Running a node with wallet: ${wallet} at IP: ${INSTANCE_IP}"
 echo "Starting nodes with $bootnodes ..."

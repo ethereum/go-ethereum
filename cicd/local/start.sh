@@ -73,7 +73,7 @@ fi
 sync_mode=full
 if test -z "$SYNC_MODE"
 then
-  echo "SYNC_MODE not set, default to full" #full or fast
+  echo "SYNC_MODE not set, default to $sync_mode" #full or fast
 else
   echo "SYNC_MODE found, set to $SYNC_MODE"
   sync_mode=$SYNC_MODE
@@ -82,14 +82,33 @@ fi
 gc_mode=archive
 if test -z "$GC_MODE"
 then
-  echo "GC_MODE not set, default to archive" #full or archive
+  echo "GC_MODE not set, default to $gc_mode" #full or archive
 else
   echo "GC_MODE found, set to $GC_MODE"
   gc_mode=$GC_MODE
 fi
 
+ethstats_address=localhost:2000
+if test -z "$STATS_ADDRESS"
+then
+  echo "STATS_ADDRESS not set, default to $ethstats_address"
+else
+  echo "STATS_ADDRESS found, set to $STATS_ADDRESS"
+  ethstats_address=$STATS_ADDRESS
+fi
 
-echo "Running a node with wallet: ${wallet} at IP: ${instance_ip}"
+ethstats_secret=xinfin_xdpos_hybrid_local_stats
+if test -z "$STATS_SECRET"
+then
+  echo "STATS_SECRET not set, default to $ethstats_secret"
+else
+  echo "STATS_SECRET found, set to $STATS_SECRET"
+  ethstats_secret=$STATS_SECRET
+fi
+
+netstats="${NODE_NAME}-${wallet}:$ethstats_secret@$ethstats_address"
+
+echo "Running a node with wallet: ${wallet}"
 echo "Starting nodes with $bootnodes ..."
 
 # Note: --gcmode=archive means node will store all historical data. This will lead to high memory usage. But sync mode require archive to sync
@@ -97,6 +116,7 @@ echo "Starting nodes with $bootnodes ..."
 
 XDC \
 --gcmode ${gc_mode} --syncmode ${sync_mode} \
+--ethstats ${netstats} \
 --nat extip:${instance_ip} \
 --bootnodes ${bootnodes} \
 --datadir /work/xdcchain \

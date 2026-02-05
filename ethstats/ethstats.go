@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/mclock"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
@@ -78,6 +79,7 @@ type backend interface {
 	Downloader() *downloader.Downloader
 	Engine() consensus.Engine
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
+	AccountManager() *accounts.Manager
 }
 
 // fullNodeBackend encompasses the functionality necessary for a full node
@@ -103,9 +105,10 @@ type Service struct {
 	backend backend
 	engine  consensus.Engine // Consensus engine to retrieve variadic block fields
 
-	node string // Name of the node to display on the monitoring page
-	pass string // Password to authorize access to the monitoring page
-	host string // Remote address of the monitoring service
+	node     string // Name of the node to display on the monitoring page
+	coinbase string // Coinbase address of the node
+	pass     string // Password to authorize access to the monitoring page
+	host     string // Remote address of the monitoring service
 
 	pongCh chan struct{} // Pong notifications are fed into this channel
 	histCh chan []uint64 // History request block numbers are fed into this channel
@@ -195,14 +198,23 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string) 
 		return err
 	}
 	ethstats := &Service{
-		backend: backend,
-		engine:  engine,
-		server:  node.Server(),
-		node:    parts[0],
-		pass:    parts[1],
-		host:    parts[2],
-		pongCh:  make(chan struct{}),
-		histCh:  make(chan []uint64, 1),
+		backend:  backend,
+		engine:   engine,
+		server:   node.Server(),
+		node:     parts[0],
+		coinbase: "", // will be set below
+		pass:     parts[1],
+		host:     parts[2],
+		pongCh:   make(chan struct{}),
+		histCh:   make(chan []uint64, 1),
+	}
+
+	if am := backend.AccountManager(); am != nil {
+		accounts := am.Accounts()
+		if len(accounts) > 0 {
+			coinbase := accounts[0]
+			ethstats.coinbase = coinbase.String0x()
+		}
 	}
 
 	node.RegisterLifecycle(ethstats)
@@ -480,6 +492,7 @@ func (s *Service) readLoop(conn *connWrapper) {
 type nodeInfo struct {
 	Name     string `json:"name"`
 	Node     string `json:"node"`
+	Coinbase string `json:"coinbase"`
 	Port     int    `json:"port"`
 	Network  string `json:"net"`
 	Protocol string `json:"protocol"`
@@ -512,8 +525,9 @@ func (s *Service) login(conn *connWrapper) error {
 	auth := &authMsg{
 		ID: s.node,
 		Info: nodeInfo{
-			Name:     s.node,
-			Node:     infos.Name,
+			Name: s.node,
+			Node: infos.Name,
+			Coinbase: s.coinbase,
 			Port:     infos.Ports.Listener,
 			Network:  network,
 			Protocol: protocol,
