@@ -77,12 +77,22 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 		return cmp.Compare(a.TransactionIndex, b.TransactionIndex)
 	})
 
-	var cumulativeGasUsed uint64
+	var (
+		// cumulativeGasUsed tracks post-refund gas for receipt.CumulativeGasUsed
+		cumulativeGasUsed uint64
+		// blockGasUsed tracks pre-refund gas (receipt.GasUsed = MaxUsedGas for Amsterdam)
+		// for block header and gas limit validation per EIP-7778
+		blockGasUsed uint64
+	)
 	var allLogs []*types.Log
 	for _, receipt := range receipts {
-		receipt.CumulativeGasUsed = cumulativeGasUsed + receipt.GasUsed
-		cumulativeGasUsed += receipt.GasUsed
-		if receipt.CumulativeGasUsed > header.GasLimit {
+		// receipt.CumulativeGasUsed holds this tx's post-refund gas (result.UsedGas)
+		// since execTx called ApplyTransactionWithEVM with cumulativeGas=0
+		cumulativeGasUsed += receipt.CumulativeGasUsed
+		receipt.CumulativeGasUsed = cumulativeGasUsed
+		// receipt.GasUsed is pre-refund (MaxUsedGas for Amsterdam) for block accounting
+		blockGasUsed += receipt.GasUsed
+		if blockGasUsed > header.GasLimit {
 			return &ProcessResultWithMetrics{
 				ProcessResult: &ProcessResult{Error: fmt.Errorf("gas limit exceeded")},
 			}
@@ -148,7 +158,7 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 			Receipts: receipts,
 			Requests: requests,
 			Logs:     allLogs,
-			GasUsed:  cumulativeGasUsed,
+			GasUsed:  blockGasUsed,
 		},
 		PostProcessTime: tPostprocess,
 		ExecTime:        tExec,
