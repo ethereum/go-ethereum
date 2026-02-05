@@ -309,11 +309,7 @@ func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (ReaderWithSta
 func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	reader, err := db.triedb.StateReader(root)
 	if err != nil {
-		tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
-		if err != nil {
-			return nil, err
-		}
-		return tr, nil
+		return nil, err
 	}
 	flatReader := newFlatReader(reader)
 
@@ -328,17 +324,14 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 			return bt, nil
 		}
 
-		base, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
+		base, err := trie.NewStateTrie(trie.StateTrieID(ts.BaseRoot), db.triedb)
 		if err != nil {
 			return nil, fmt.Errorf("could not create base trie in OpenTrie: %w", err)
 		}
 		return transitiontrie.NewTransitionTrie(base, bt, false), nil
 	}
-	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
-	if err != nil {
-		return nil, err
-	}
-	return tr, nil
+
+	return trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 }
 
 // OpenStorageTrie opens the storage trie of an account.
