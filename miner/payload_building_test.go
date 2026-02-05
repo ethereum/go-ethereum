@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"context"
 	"math/big"
 	"reflect"
 	"testing"
@@ -156,7 +157,7 @@ func TestBuildPayload(t *testing.T) {
 		Random:       common.Hash{},
 		FeeRecipient: recipient,
 	}
-	payload, err := w.buildPayload(args, false)
+	payload, err := w.buildPayload(context.Background(), args, false)
 	if err != nil {
 		t.Fatalf("Failed to build payload %v", err)
 	}

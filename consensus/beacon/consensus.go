@@ -17,6 +17,7 @@
 package beacon
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -29,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
@@ -343,9 +345,19 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and
 // assembling the block.
-func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt) (*types.Block, error) {
+func (beacon *Beacon) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt) (result *types.Block, err error) {
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "consensus.beacon.FinalizeAndAssemble",
+		telemetry.Int64Attribute("block.number", int64(header.Number.Uint64())),
+		telemetry.Int64Attribute("txs.count", int64(len(body.Transactions))),
+		telemetry.Int64Attribute("withdrawals.count", int64(len(body.Withdrawals))),
+	)
+	defer spanEnd(err)
+
 	if !beacon.IsPoSHeader(header) {
-		return beacon.ethone.FinalizeAndAssemble(chain, header, state, body, receipts)
+		_, _, delegateEnd := telemetry.StartSpan(ctx, "consensus.beacon.delegateFinalizeAndAssemble")
+		block, delegateErr := beacon.ethone.FinalizeAndAssemble(ctx, chain, header, state, body, receipts)
+		delegateEnd(delegateErr)
+		return block, delegateErr
 	}
 	shanghai := chain.Config().IsShanghai(header.Number, header.Time)
 	if shanghai {
@@ -355,17 +367,25 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 		}
 	} else {
 		if len(body.Withdrawals) > 0 {
-			return nil, errors.New("withdrawals set before Shanghai activation")
+			err = errors.New("withdrawals set before Shanghai activation")
+			return nil, err
 		}
 	}
 	// Finalize and assemble the block.
+	_, _, finalizeEnd := telemetry.StartSpan(ctx, "consensus.beacon.Finalize")
 	beacon.Finalize(chain, header, state, body)
+	finalizeEnd(nil)
 
 	// Assign the final state root to header.
+	_, _, rootEnd := telemetry.StartSpan(ctx, "consensus.beacon.IntermediateRoot")
 	header.Root = state.IntermediateRoot(true)
+	rootEnd(nil)
 
 	// Assemble the final block.
-	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)), nil
+	_, _, blockEnd := telemetry.StartSpan(ctx, "consensus.beacon.NewBlock")
+	block := types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
+	blockEnd(nil)
+	return block, nil
 }
 
 // Seal generates a new sealing request for the given input block and pushes
