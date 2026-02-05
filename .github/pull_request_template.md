@@ -30,7 +30,7 @@ _Put an `✅` in the boxes that apply_
 _Put an `✅` in the boxes once you have confirmed below actions (or provide reasons on not doing so) that_
 
 - [ ] This PR has sufficient test coverage (unit/integration test) OR I have provided reason in the PR description for not having test coverage
-- [ ] Tested in private network from genesis block.
+- [ ] Tested on a private network from the genesis block and monitored the chain operating correctly for multiple epochs.
 - [ ] Provide an end-to-end test plan in the PR description on how to manually test it on the devnet/testnet.
 - [ ] Tested the backwards compatibility.
 - [ ] Tested with XDC nodes running this version co-exist with those running the previous version.
