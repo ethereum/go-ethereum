@@ -905,11 +905,9 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *discover.Node) e
 			return DiscNonWhitelistedPeer
 		}
 	}
-	if len(srv.BlackPeers) > 0 {
-		if _, ok := srv.BlackPeers[c.id]; ok {
-			clog.Debug("Reject blacklisted peer")
-			return DiscBlacklistedPeer
-		}
+	if _, ok := srv.BlackPeers[c.id]; ok {
+		clog.Debug("Reject blacklisted peer")
+		return DiscBlacklistedPeer
 	}
 	// For dialed connections, check that the remote public key matches.
 	if dialDest != nil && c.id != dialDest.ID {

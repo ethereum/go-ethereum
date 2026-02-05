@@ -72,10 +72,8 @@ func (api *adminAPI) AddPeer(url string) (bool, error) {
 		}
 	}
 	// reject the node which is in peer blacklist
-	if len(server.BlackPeers) > 0 {
-		if _, ok := server.BlackPeers[node.ID]; ok {
-			return false, fmt.Errorf("peer is in blacklist: %v, ID: %s", url, node.ID)
-		}
+	if _, ok := server.BlackPeers[node.ID]; ok {
+		return false, fmt.Errorf("peer is in blacklist: %v, ID: %s", url, node.ID)
 	}
 	server.AddPeer(node)
 	return true, nil
@@ -115,10 +113,8 @@ func (api *adminAPI) AddTrustedPeer(url string) (bool, error) {
 		}
 	}
 	// reject the node which is in peer blacklist
-	if len(server.BlackPeers) > 0 {
-		if _, ok := server.BlackPeers[node.ID]; ok {
-			return false, fmt.Errorf("trusted peer is in blacklist: %v, ID: %s", url, node.ID)
-		}
+	if _, ok := server.BlackPeers[node.ID]; ok {
+		return false, fmt.Errorf("trusted peer is in blacklist: %v, ID: %s", url, node.ID)
 	}
 	server.AddTrustedPeer(node)
 	return true, nil
