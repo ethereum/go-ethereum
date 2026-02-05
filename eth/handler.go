@@ -111,6 +111,7 @@ type handlerConfig struct {
 	EventMux       *event.TypeMux         // Legacy event mux, deprecate for `feed`
 	RequiredBlocks map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
 	PartialFilter  partial.ContractFilter // Filter for partial statefulness mode (nil = full node)
+	ChainRetention uint64                // Bodies/receipts retention window for partial state (0 = keep all)
 }
 
 type handler struct {
@@ -165,7 +166,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		handlerStartCh: make(chan struct{}),
 	}
 	// Construct the downloader (long sync)
-	h.downloader = downloader.New(config.Database, config.Sync, h.eventMux, h.chain, h.removePeer, h.enableSyncedFeatures, config.PartialFilter)
+	h.downloader = downloader.New(config.Database, config.Sync, h.eventMux, h.chain, h.removePeer, h.enableSyncedFeatures, config.PartialFilter, config.ChainRetention)
 
 	// If snap sync is requested but snapshots are disabled, fail loudly
 	if h.downloader.ConfigSyncMode() == ethconfig.SnapSync && (config.Chain.Snapshots() == nil && config.Chain.TrieDB().Scheme() == rawdb.HashScheme) {

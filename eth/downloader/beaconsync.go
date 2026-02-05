@@ -271,6 +271,11 @@ func (d *Downloader) fetchHeaders(from uint64) error {
 	// Verify the header at configured chain cutoff, ensuring it's matched with
 	// the configured hash. Skip the check if the configured cutoff is even higher
 	// than the sync target, which is definitely not a common case.
+	//
+	// The hash validation is only performed when chainCutoffHash is non-zero.
+	// Static cutoffs (e.g. --history.chain postmerge) set a well-known hash;
+	// dynamic cutoffs (e.g. chain retention = HEAD-N) clear the hash to zero
+	// because the cutoff block changes every sync cycle and has no predetermined hash.
 	if d.chainCutoffNumber != 0 && d.chainCutoffNumber >= from && d.chainCutoffNumber <= head.Number.Uint64() {
 		h := d.skeleton.Header(d.chainCutoffNumber)
 		if h == nil {
@@ -284,7 +289,7 @@ func (d *Downloader) fetchHeaders(from uint64) error {
 		if h == nil {
 			return fmt.Errorf("header at chain cutoff is not available, cutoff: %d", d.chainCutoffNumber)
 		}
-		if h.Hash() != d.chainCutoffHash {
+		if d.chainCutoffHash != (common.Hash{}) && h.Hash() != d.chainCutoffHash {
 			return fmt.Errorf("header at chain cutoff mismatched, want: %v, got: %v", d.chainCutoffHash, h.Hash())
 		}
 	}

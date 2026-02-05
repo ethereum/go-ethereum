@@ -27,6 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// ErrDeepReorg is returned when a chain reorganization exceeds the BAL retention depth.
+// When this error is returned, the partial state node needs to resync state from full peers.
+var ErrDeepReorg = errors.New("reorg depth exceeds BAL retention")
+
 // ProcessBlockWithBAL processes a block using BAL instead of execution.
 // This is the entry point for partial state block processing.
 //
@@ -137,6 +141,19 @@ func (bc *BlockChain) HandlePartialReorg(
 	currentHead := bc.CurrentBlock()
 	reorgDepth := currentHead.Number.Uint64() - commonAncestor.Number().Uint64()
 
+	// Check if reorg exceeds BAL retention depth
+	// If so, we need to resync state from full peers because we don't have the BALs
+	if history := bc.partialState.History(); history != nil {
+		retention := history.Retention()
+		if retention > 0 && reorgDepth > retention {
+			log.Warn("Reorg exceeds BAL retention depth, partial resync required",
+				"reorgDepth", reorgDepth,
+				"retention", retention,
+				"ancestor", commonAncestor.Number())
+			return ErrDeepReorg
+		}
+	}
+
 	// Step 1: Revert state to common ancestor
 	// Simply set state root to ancestor's root (we have all account trie data)
 	bc.partialState.SetRoot(commonAncestor.Root())
@@ -178,5 +195,32 @@ func (bc *BlockChain) HandlePartialReorg(
 	return nil
 }
 
-// Note: Deep reorgs beyond block pruning depth require resync from peers.
-// This is handled by the downloader, not here.
+// TriggerPartialResync initiates a state resync when a reorg exceeds BAL retention.
+// This is called when HandlePartialReorg returns ErrDeepReorg.
+//
+// The resync fetches state from full peers using snap sync, downloading:
+// - Full account trie (all balances, nonces, code hashes)
+// - Storage only for tracked contracts (per ContractFilter configuration)
+//
+// This is similar to initial partial state sync, but starting from the reorg ancestor
+// rather than genesis.
+func (bc *BlockChain) TriggerPartialResync(ancestor *types.Header) error {
+	if bc.partialState == nil {
+		return errors.New("partial state not enabled")
+	}
+
+	log.Info("Triggering partial state resync due to deep reorg",
+		"ancestor", ancestor.Number,
+		"root", ancestor.Root.Hex())
+
+	// TODO(partial-state): Implement resync coordination with downloader.
+	// This requires extending eth/downloader to support targeted state sync.
+	// For now, return an error indicating manual intervention may be needed.
+	//
+	// The implementation should:
+	// 1. Pause normal block processing
+	// 2. Use snap sync to fetch state at ancestor.Root
+	// 3. Apply ContractFilter to only store tracked contract storage
+	// 4. Resume normal operation once state is available
+	return errors.New("partial state resync not yet implemented - manual intervention required")
+}
