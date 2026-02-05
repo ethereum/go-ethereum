@@ -267,8 +267,7 @@ func opCaller(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opCallValue(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	v, _ := uint256.FromBig(scope.Contract.value)
-	scope.Stack.push(v)
+	scope.Stack.push(scope.Contract.value)
 	return nil, nil
 }
 
@@ -678,12 +677,7 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 	scope.Contract.UseGas(gas, evm.Config.Tracer, tracing.GasChangeCallContractCreation)
 
-	// TODO(daniel): use uint256.Int instead of converting with toBig()
-	var bigVal = big0
-	if !value.IsZero() {
-		bigVal = value.ToBig()
-	}
-	res, addr, returnGas, suberr := evm.Create(scope.Contract, input, gas, bigVal)
+	res, addr, returnGas, suberr := evm.Create(scope.Contract, input, gas, &value)
 	// Push item on the stack based on the returned error. If the ruleset is
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
@@ -723,13 +717,8 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Contract.UseGas(gas, evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
 	// reuse size int for stackvalue
 	stackvalue := size
-	// TODO(daniel): use uint256.Int instead of converting with toBig()
-	bigEndowment := big0
-	if !endowment.IsZero() {
-		bigEndowment = endowment.ToBig()
-	}
 	res, addr, returnGas, suberr := evm.Create2(scope.Contract, input, gas,
-		bigEndowment, &salt)
+		&endowment, &salt)
 	// Push item on the stack based on the returned error.
 	if suberr != nil {
 		stackvalue.Clear()
@@ -763,15 +752,10 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if evm.readOnly && !value.IsZero() {
 		return nil, ErrWriteProtection
 	}
-	var bigVal = big0
-	// TODO(daniel): use uint256.Int instead of converting with toBig()
-	// By using big0 here, we save an alloc for the most common case (non-ether-transferring contract calls),
-	// but it would make more sense to extend the usage of uint256.Int
 	if !value.IsZero() {
 		gas += params.CallStipend
-		bigVal = value.ToBig()
 	}
-	ret, returnGas, err := evm.Call(scope.Contract, toAddr, args, gas, bigVal)
+	ret, returnGas, err := evm.Call(scope.Contract, toAddr, args, gas, &value)
 
 	if err != nil {
 		temp.Clear()
@@ -801,14 +785,11 @@ func opCallCode(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
-	// TODO(daniel): use uint256.Int instead of converting with toBig()
-	var bigVal = big0
 	if !value.IsZero() {
 		gas += params.CallStipend
-		bigVal = value.ToBig()
 	}
 
-	ret, returnGas, err := evm.CallCode(scope.Contract, toAddr, args, gas, bigVal)
+	ret, returnGas, err := evm.CallCode(scope.Contract, toAddr, args, gas, &value)
 	if err != nil {
 		temp.Clear()
 	} else {

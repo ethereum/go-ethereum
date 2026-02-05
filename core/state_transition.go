@@ -404,7 +404,7 @@ func (st *StateTransition) TransitionDb(owner common.Address) (*ExecutionResult,
 	if overflow {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From.Hex())
 	}
-	if !value.IsZero() && !st.evm.Context.CanTransfer(st.state, msg.From, value.ToBig()) {
+	if !value.IsZero() && !st.evm.Context.CanTransfer(st.state, msg.From, value) {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From.Hex())
 	}
 
@@ -423,7 +423,7 @@ func (st *StateTransition) TransitionDb(owner common.Address) (*ExecutionResult,
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
 	if contractCreation {
-		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, msg.Value)
+		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, value)
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1)
@@ -446,7 +446,7 @@ func (st *StateTransition) TransitionDb(owner common.Address) (*ExecutionResult,
 		}
 
 		// Execute the transaction's call.
-		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, msg.Value)
+		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, value)
 	}
 
 	if !rules.IsEIP1559 {

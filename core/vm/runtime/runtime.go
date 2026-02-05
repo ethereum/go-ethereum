@@ -27,6 +27,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/holiman/uint256"
 )
 
 // Config is a basic type specifying certain configuration flags for running
@@ -136,7 +137,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		common.BytesToAddress([]byte("contract")),
 		input,
 		cfg.GasLimit,
-		cfg.Value,
+		uint256.MustFromBig(cfg.Value),
 	)
 	return ret, cfg.State, err
 }
@@ -170,7 +171,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		sender,
 		input,
 		cfg.GasLimit,
-		cfg.Value,
+		uint256.MustFromBig(cfg.Value),
 	)
 	return code, address, leftOverGas, err
 }
@@ -203,7 +204,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 		address,
 		input,
 		cfg.GasLimit,
-		cfg.Value,
+		uint256.MustFromBig(cfg.Value),
 	)
 	return ret, leftOverGas, err
 }

@@ -33,6 +33,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/holiman/uint256"
 )
 
 // VMTest checks EVM execution without block or transaction context.
@@ -120,19 +121,19 @@ func (t *VMTest) Run(vmconfig vm.Config) error {
 func (t *VMTest) exec(statedb *state.StateDB, vmconfig vm.Config) ([]byte, uint64, error) {
 	evm := t.newEVM(statedb, vmconfig)
 	e := t.json.Exec
-	return evm.Call(vm.AccountRef(e.Caller), e.Address, e.Data, e.GasLimit, e.Value)
+	return evm.Call(vm.AccountRef(e.Caller), e.Address, e.Data, e.GasLimit, uint256.MustFromBig(e.Value))
 }
 
 func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
 	initialCall := true
-	canTransfer := func(db vm.StateDB, address common.Address, amount *big.Int) bool {
+	canTransfer := func(db vm.StateDB, address common.Address, amount *uint256.Int) bool {
 		if initialCall {
 			initialCall = false
 			return true
 		}
 		return core.CanTransfer(db, address, amount)
 	}
-	transfer := func(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {}
+	transfer := func(db vm.StateDB, sender, recipient common.Address, amount *uint256.Int) {}
 	txContext := vm.TxContext{
 		Origin:   t.json.Exec.Origin,
 		GasPrice: t.json.Exec.GasPrice,

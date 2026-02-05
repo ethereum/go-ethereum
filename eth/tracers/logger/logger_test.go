@@ -26,6 +26,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/holiman/uint256"
 )
 
 type dummyContractRef struct {
@@ -58,7 +59,7 @@ func TestStoreCapture(t *testing.T) {
 	var (
 		logger   = NewStructLogger(nil)
 		evm      = vm.NewEVM(vm.BlockContext{}, vm.TxContext{}, &dummyStatedb{}, nil, params.TestChainConfig, vm.Config{Tracer: logger.Hooks()})
-		contract = vm.NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 100000)
+		contract = vm.NewContract(&dummyContractRef{}, &dummyContractRef{}, new(uint256.Int), 100000)
 	)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x0, byte(vm.SSTORE)}
 	var index common.Hash

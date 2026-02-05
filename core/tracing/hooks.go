@@ -32,7 +32,7 @@ type OpContext interface {
 	StackData() []uint256.Int
 	Caller() common.Address
 	Address() common.Address
-	CallValue() *big.Int
+	CallValue() *uint256.Int
 	CallInput() []byte
 }
 
