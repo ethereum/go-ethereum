@@ -299,6 +299,9 @@ const (
 	GasChangeCallStorageColdAccess GasChangeReason = 13
 	// GasChangeCallFailedExecution is the burning of the remaining gas when the execution failed without a revert.
 	GasChangeCallFailedExecution GasChangeReason = 14
+	// GasChangeTxDataFloor is the amount of extra gas the transaction has to pay to reach the minimum gas requirement for the
+	// transaction data. This change will always be a negative change.
+	GasChangeTxDataFloor GasChangeReason = 19
 
 	// GasChangeIgnored is a special value that can be used to indicate that the gas change should be ignored as
 	// it will be "manually" tracked by a direct emit of the gas change event.

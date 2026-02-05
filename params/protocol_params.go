@@ -65,6 +65,8 @@ const (
 	SuicideRefundGas uint64 = 24000 // Refunded following a suicide operation.
 	MemoryGas        uint64 = 3     // Times the address of the (highest referenced byte in memory + 1). NOTE: referencing happens on read, write and in instructions such as RETURN and CALL.
 
+	TxTokenPerNonZeroByte     uint64 = 4     // Token cost per non-zero byte as specified by EIP-7623.
+	TxCostFloorPerToken       uint64 = 10    // Cost floor per byte of data as specified by EIP-7623.
 	TxAccessListAddressGas    uint64 = 2400  // Per address specified in EIP 2930 access list
 	TxAccessListStorageKeyGas uint64 = 1900  // Per storage key specified in EIP 2930 access list
 	TxAuthTupleGas            uint64 = 12500 // Per auth tuple code specified in EIP-7702
