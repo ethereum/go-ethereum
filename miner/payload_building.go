@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"math/big"
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -206,7 +208,10 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 }
 
 // buildPayload builds the payload according to the provided parameters.
-func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload, error) {
+func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, witness bool) (result *Payload, err error) {
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "miner.buildPayload")
+	defer spanEnd(err)
+
 	// Build the initial version with no transaction included. It should be fast
 	// enough to run. The empty payload can at least make sure there is something
 	// to deliver for not missing slot.
@@ -230,6 +235,9 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 	// Spin up a routine for updating the payload in background. This strategy
 	// can maximum the revenue for including transactions with highest fee.
 	go func() {
+		bCtx, bSpan, bSpanEnd := telemetry.StartSpan(ctx, "miner.background")
+		defer bSpanEnd(nil)
+
 		// Setup the timer for re-building the payload. The initial clock is kept
 		// for triggering process immediately.
 		timer := time.NewTimer(0)
@@ -254,7 +262,9 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 		for {
 			select {
 			case <-timer.C:
+				_, _, iterSpanEnd := telemetry.StartSpan(bCtx, "miner.generateWork")
 				start := time.Now()
+
 				r := miner.generateWork(fullParams, witness)
 				if r.err == nil {
 					payload.update(r, time.Since(start))
@@ -262,10 +272,13 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 					log.Info("Error while generating work", "id", payload.id, "err", r.err)
 				}
 				timer.Reset(miner.config.Recommit)
+				iterSpanEnd(r.err)
 			case <-payload.stop:
+				bSpan.SetAttributes(telemetry.StringAttribute("exit.reason", "delivery"))
 				log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
 				return
 			case <-endTimer.C:
+				bSpan.SetAttributes(telemetry.StringAttribute("exit.reason", "timeout"))
 				log.Info("Stopping work on payload", "id", payload.id, "reason", "timeout")
 				return
 			}

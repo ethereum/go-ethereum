@@ -18,6 +18,7 @@
 package miner
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"sync"
@@ -135,8 +136,8 @@ func (miner *Miner) SetGasTip(tip *big.Int) error {
 }
 
 // BuildPayload builds the payload according to the provided parameters.
-func (miner *Miner) BuildPayload(args *BuildPayloadArgs, witness bool) (*Payload, error) {
-	return miner.buildPayload(args, witness)
+func (miner *Miner) BuildPayload(ctx context.Context, args *BuildPayloadArgs, witness bool) (*Payload, error) {
+	return miner.buildPayload(ctx, args, witness)
 }
 
 // getPending retrieves the pending block based on the current head block.
