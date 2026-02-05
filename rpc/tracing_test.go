@@ -23,6 +23,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -138,6 +139,49 @@ func TestTracingHTTP(t *testing.T) {
 	}
 	if !rpcSpan.Parent.IsRemote() {
 		t.Error("expected parent span context to be marked as remote")
+	}
+}
+
+// TestTracingErrorRecording verifies that errors are recorded on spans.
+func TestTracingHTTPErrorRecording(t *testing.T) {
+	t.Parallel()
+	server, tracer, exporter := newTracingServer(t)
+	httpsrv := httptest.NewServer(server)
+	t.Cleanup(httpsrv.Close)
+	client, err := DialHTTP(httpsrv.URL)
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	t.Cleanup(client.Close)
+
+	// Call a method that returns an error.
+	var result any
+	err = client.Call(&result, "test_returnError")
+	if err == nil {
+		t.Fatal("expected error from test_returnError")
+	}
+
+	// Flush and verify spans recorded the error.
+	if err := tracer.ForceFlush(context.Background()); err != nil {
+		t.Fatalf("failed to flush: %v", err)
+	}
+	spans := exporter.GetSpans()
+
+	// Only the server span and runMethod span should have error status.
+	if len(spans) == 0 {
+		t.Fatal("no spans were emitted")
+	}
+	for _, span := range spans {
+		switch span.Name {
+		case "rpc.runMethod":
+			if span.Status.Code != codes.Error {
+				t.Errorf("expected %s span status Error, got %v", span.Name, span.Status.Code)
+			}
+		default:
+			if span.Status.Code == codes.Error {
+				t.Errorf("unexpected error status on span %s", span.Name)
+			}
+		}
 	}
 }
 
