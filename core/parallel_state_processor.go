@@ -100,6 +100,12 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 		allLogs = append(allLogs, result.receipt.Logs...)
 		allReceipts = append(allReceipts, result.receipt)
 	}
+	// Block gas limit is enforced against usedGas (pre-refund after Amsterdam, post-refund before).
+	if usedGas > header.GasLimit {
+		return &ProcessResultWithMetrics{
+			ProcessResult: &ProcessResult{Error: fmt.Errorf("gas limit exceeded")},
+		}
+	}
 
 	// Read requests if Prague is enabled.
 	if p.chainConfig().IsPrague(block.Number(), block.Time()) {

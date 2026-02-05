@@ -126,7 +126,7 @@ func TestBlockchain(t *testing.T) {
 	bt.skipLoad(`.*\.meta/.*`)
 
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
-		execBlockTest(t, bt, test)
+		execBlockTest(t, bt, test, false)
 	})
 	// There is also a LegacyTests folder, containing blockchain tests generated
 	// prior to Istanbul. However, they are all derived from GeneralStateTests,
@@ -144,7 +144,7 @@ func testExecutionSpecBlocktests(t *testing.T, testDir string) {
 	bt.skipLoad(".*prague/eip7002_el_triggerable_withdrawals/test_system_contract_deployment.json")
 
 	bt.walk(t, testDir, func(t *testing.T, name string, test *BlockTest) {
-		execBlockTest(t, bt, test)
+		execBlockTest(t, bt, test, true)
 	})
 }
 
@@ -157,6 +157,8 @@ func TestExecutionSpecBlocktests(t *testing.T) {
 func TestExecutionSpecBlocktestsBAL(t *testing.T) {
 	testExecutionSpecBlocktests(t, executionSpecBALBlockchainTestDir)
 }
+
+var failures = 0
 
 func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest, buildAndVerifyBAL bool) {
 	// Define all the different flag combinations we should run the tests with,
@@ -175,6 +177,10 @@ func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest, buildAndVerif
 	for _, snapshot := range snapshotConf {
 		for _, dbscheme := range dbschemeConf {
 			if err := bt.checkFailure(t, test.Run(snapshot, dbscheme, true, buildAndVerifyBAL, nil, nil)); err != nil {
+				failures++
+				if failures > 10 {
+					panic("adsf")
+				}
 				t.Errorf("test with config {snapshotter:%v, scheme:%v} failed: %v", snapshot, dbscheme, err)
 				return
 			}
