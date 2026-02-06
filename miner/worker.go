@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -32,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -115,7 +117,22 @@ type generateParams struct {
 }
 
 // generateWork generates a sealing block based on the given parameters.
-func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPayloadResult {
+func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, witness bool) (result *newPayloadResult) {
+	_, span, spanEnd := telemetry.StartSpan(ctx, "miner.generateWork")
+	defer func() {
+		if result != nil && result.err == nil {
+			span.SetAttributes(
+				telemetry.Int64Attribute("txs.count", int64(len(result.block.Transactions()))),
+				telemetry.Int64Attribute("gas.used", int64(result.block.GasUsed())),
+				telemetry.StringAttribute("fees", result.fees.String()),
+			)
+		}
+		if result != nil {
+			spanEnd(result.err)
+		} else {
+			spanEnd(nil)
+		}
+	}()
 	work, err := miner.prepareWork(genParam, witness)
 	if err != nil {
 		return &newPayloadResult{err: err}

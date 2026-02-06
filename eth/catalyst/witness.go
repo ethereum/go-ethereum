@@ -17,6 +17,7 @@
 package catalyst
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"time"
@@ -34,7 +35,7 @@ import (
 
 // ForkchoiceUpdatedWithWitnessV1 is analogous to ForkchoiceUpdatedV1, only it
 // generates an execution witness too if block building was requested.
-func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV1(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV1(ctx context.Context, update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
 	if payloadAttributes != nil {
 		switch {
 		case payloadAttributes.Withdrawals != nil || payloadAttributes.BeaconRoot != nil:
@@ -43,12 +44,12 @@ func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV1(update engine.Forkchoice
 			return engine.STATUS_INVALID, paramsErr("fcuV1 called post-shanghai")
 		}
 	}
-	return api.forkchoiceUpdated(update, payloadAttributes, engine.PayloadV1, true)
+	return api.forkchoiceUpdated(ctx, update, payloadAttributes, engine.PayloadV1, true)
 }
 
 // ForkchoiceUpdatedWithWitnessV2 is analogous to ForkchoiceUpdatedV2, only it
 // generates an execution witness too if block building was requested.
-func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV2(update engine.ForkchoiceStateV1, params *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV2(ctx context.Context, update engine.ForkchoiceStateV1, params *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
 	if params != nil {
 		switch {
 		case params.BeaconRoot != nil:
@@ -61,12 +62,12 @@ func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV2(update engine.Forkchoice
 			return engine.STATUS_INVALID, unsupportedForkErr("fcuV2 must only be called with paris or shanghai payloads")
 		}
 	}
-	return api.forkchoiceUpdated(update, params, engine.PayloadV2, true)
+	return api.forkchoiceUpdated(ctx, update, params, engine.PayloadV2, true)
 }
 
 // ForkchoiceUpdatedWithWitnessV3 is analogous to ForkchoiceUpdatedV3, only it
 // generates an execution witness too if block building was requested.
-func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV3(update engine.ForkchoiceStateV1, params *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV3(ctx context.Context, update engine.ForkchoiceStateV1, params *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
 	if params != nil {
 		switch {
 		case params.Withdrawals == nil:
@@ -81,7 +82,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV3(update engine.Forkchoice
 	// hash, even if params are wrong. To do this we need to split up
 	// forkchoiceUpdate into a function that only updates the head and then a
 	// function that kicks off block construction.
-	return api.forkchoiceUpdated(update, params, engine.PayloadV3, true)
+	return api.forkchoiceUpdated(ctx, update, params, engine.PayloadV3, true)
 }
 
 // NewPayloadWithWitnessV1 is analogous to NewPayloadV1, only it also generates
