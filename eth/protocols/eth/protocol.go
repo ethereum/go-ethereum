@@ -30,7 +30,6 @@ import (
 
 // Constants to match up protocol versions and messages
 const (
-	ETH68 = 68
 	ETH69 = 69
 )
 
@@ -40,11 +39,11 @@ const ProtocolName = "eth"
 
 // ProtocolVersions are the supported versions of the `eth` protocol (first
 // is primary).
-var ProtocolVersions = []uint{ETH69, ETH68}
+var ProtocolVersions = []uint{ETH69}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH68: 17, ETH69: 18}
+var protocolLengths = map[uint]uint64{ETH69: 18}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
@@ -84,18 +83,8 @@ type Packet interface {
 	Kind() byte   // Kind returns the message type.
 }
 
-// StatusPacket is the network packet for the status message.
-type StatusPacket68 struct {
-	ProtocolVersion uint32
-	NetworkID       uint64
-	TD              *big.Int
-	Head            common.Hash
-	Genesis         common.Hash
-	ForkID          forkid.ID
-}
-
-// StatusPacket69 is the network packet for the status message.
-type StatusPacket69 struct {
+// StatusPacket is the network packet for the status message on eth/69 and newer.
+type StatusPacket struct {
 	ProtocolVersion uint32
 	NetworkID       uint64
 	Genesis         common.Hash
@@ -265,21 +254,13 @@ type GetReceiptsPacket struct {
 }
 
 // ReceiptsResponse is the network packet for block receipts distribution.
-type ReceiptsResponse []types.Receipts
-
-// ReceiptsList is a type constraint for block receceipt list types.
-type ReceiptsList interface {
-	*ReceiptList68 | *ReceiptList69
-	setBuffers(*receiptListBuffers)
-	EncodeForStorage() rlp.RawValue
-	types.DerivableList
-}
+type ReceiptsResponse []*ReceiptList
 
 // ReceiptsPacket is the network packet for block receipts distribution with
 // request ID wrapping.
-type ReceiptsPacket[L ReceiptsList] struct {
+type ReceiptsPacket struct {
 	RequestId uint64
-	List      []L
+	ReceiptsResponse
 }
 
 // ReceiptsRLPResponse is used for receipts, when we already have it encoded
@@ -334,11 +315,8 @@ type BlockRangeUpdatePacket struct {
 	LatestBlockHash common.Hash
 }
 
-func (*StatusPacket68) Name() string { return "Status" }
-func (*StatusPacket68) Kind() byte   { return StatusMsg }
-
-func (*StatusPacket69) Name() string { return "Status" }
-func (*StatusPacket69) Kind() byte   { return StatusMsg }
+func (*StatusPacket) Name() string { return "Status" }
+func (*StatusPacket) Kind() byte   { return StatusMsg }
 
 func (*NewBlockHashesPacket) Name() string { return "NewBlockHashes" }
 func (*NewBlockHashesPacket) Kind() byte   { return NewBlockHashesMsg }
