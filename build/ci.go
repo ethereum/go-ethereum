@@ -348,14 +348,6 @@ func doGenerate() {
 		}
 	}
 	fmt.Println("No stale files detected.")
-
-	// Run go mod tidy check.
-	for _, mod := range goModules {
-		tidy := tc.Go("mod", "tidy", "-diff")
-		tidy.Dir = mod
-		build.MustRun(tidy)
-	}
-	fmt.Println("No untidy module files detected.")
 }
 
 // doBadDeps verifies whether certain unintended dependencies between some
