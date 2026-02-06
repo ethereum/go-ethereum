@@ -188,6 +188,18 @@ func (r *StandardRegistry) GetAll() map[string]map[string]interface{} {
 			values["5m.rate"] = t.Rate5()
 			values["15m.rate"] = t.Rate15()
 			values["mean.rate"] = t.RateMean()
+		case *ResettingTimer:
+			t := metric.Snapshot()
+			ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
+			values["count"] = t.Count()
+			values["min"] = t.Min()
+			values["max"] = t.Max()
+			values["mean"] = t.Mean()
+			values["median"] = ps[0]
+			values["75%"] = ps[1]
+			values["95%"] = ps[2]
+			values["99%"] = ps[3]
+			values["99.9%"] = ps[4]
 		}
 		data[name] = values
 	})
