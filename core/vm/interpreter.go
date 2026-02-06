@@ -80,6 +80,11 @@ func (ctx *ScopeContext) CallInput() []byte {
 	return ctx.Contract.Input
 }
 
+// ContractCode returns the code of the contract being executed.
+func (ctx *ScopeContext) ContractCode() []byte {
+	return ctx.Contract.Code
+}
+
 // Run loops and evaluates the contract's code with the given input data and returns
 // the return byte-slice and an error if one occurred.
 //

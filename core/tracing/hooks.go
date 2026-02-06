@@ -34,6 +34,7 @@ type OpContext interface {
 	Address() common.Address
 	CallValue() *uint256.Int
 	CallInput() []byte
+	ContractCode() []byte
 }
 
 // StateDB gives tracers access to the whole state.
