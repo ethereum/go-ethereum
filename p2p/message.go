@@ -272,15 +272,15 @@ func newMsgEventer(rw MsgReadWriter, feed *event.Feed, peerID discover.NodeID, p
 
 // ReadMsg reads a message from the underlying MsgReadWriter and emits a
 // "message received" event
-func (e *msgEventer) ReadMsg() (Msg, error) {
-	msg, err := e.MsgReadWriter.ReadMsg()
+func (ev *msgEventer) ReadMsg() (Msg, error) {
+	msg, err := ev.MsgReadWriter.ReadMsg()
 	if err != nil {
 		return msg, err
 	}
-	e.feed.Send(&PeerEvent{
+	ev.feed.Send(&PeerEvent{
 		Type:     PeerEventTypeMsgRecv,
-		Peer:     e.peerID,
-		Protocol: e.Protocol,
+		Peer:     ev.peerID,
+		Protocol: ev.Protocol,
 		MsgCode:  &msg.Code,
 		MsgSize:  &msg.Size,
 	})
@@ -289,15 +289,15 @@ func (e *msgEventer) ReadMsg() (Msg, error) {
 
 // WriteMsg writes a message to the underlying MsgReadWriter and emits a
 // "message sent" event
-func (e *msgEventer) WriteMsg(msg Msg) error {
-	err := e.MsgReadWriter.WriteMsg(msg)
+func (ev *msgEventer) WriteMsg(msg Msg) error {
+	err := ev.MsgReadWriter.WriteMsg(msg)
 	if err != nil {
 		return err
 	}
-	e.feed.Send(&PeerEvent{
+	ev.feed.Send(&PeerEvent{
 		Type:     PeerEventTypeMsgSend,
-		Peer:     e.peerID,
-		Protocol: e.Protocol,
+		Peer:     ev.peerID,
+		Protocol: ev.Protocol,
 		MsgCode:  &msg.Code,
 		MsgSize:  &msg.Size,
 	})
@@ -306,8 +306,8 @@ func (e *msgEventer) WriteMsg(msg Msg) error {
 
 // Close closes the underlying MsgReadWriter if it implements the io.Closer
 // interface
-func (e *msgEventer) Close() error {
-	if v, ok := e.MsgReadWriter.(io.Closer); ok {
+func (ev *msgEventer) Close() error {
+	if v, ok := ev.MsgReadWriter.(io.Closer); ok {
 		return v.Close()
 	}
 	return nil
