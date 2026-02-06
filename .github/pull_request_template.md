@@ -1,21 +1,27 @@
 # Proposed changes
-Describe the big picture of your changes here to communicate to the maintainers why we should accept this pull request.
+
+<!-- Describe the big picture of your changes here to communicate to the maintainers why we should accept this pull request. -->
 
 ## Types of changes
 
 What types of changes does your code introduce to XDC network?
 _Put an `✅` in the boxes that apply_
 
-- [ ] Bugfix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] Documentation Update (if none of the other choices apply)
-- [ ] Regular KTLO or any of the maintaince work. e.g code style
-- [ ] CICD Improvement
+- [ ] build: Changes that affect the build system or external dependencies
+- [ ] ci: Changes to CI configuration files and scripts
+- [ ] chore: Changes that don't change source code or tests
+- [ ] docs: Documentation only changes
+- [ ] feat: A new feature
+- [ ] fix: A bug fix
+- [ ] perf: A code change that improves performance
+- [ ] refactor: A code change that neither fixes a bug nor adds a feature
+- [ ] revert: Revert something
+- [ ] style: Changes that do not affect the meaning of the code
+- [ ] test: Adding missing tests or correcting existing tests
 
 ## Impacted Components
-Which part of the codebase this PR will touch base on,
 
+Which parts of the codebase do this PR touch?
 _Put an `✅` in the boxes that apply_
 
 - [ ] Consensus
@@ -27,6 +33,7 @@ _Put an `✅` in the boxes that apply_
 - [ ] Not sure (Please specify below)
 
 ## Checklist
+
 _Put an `✅` in the boxes once you have confirmed below actions (or provide reasons on not doing so) that_
 
 - [ ] This PR has sufficient test coverage (unit/integration test) OR I have provided reason in the PR description for not having test coverage
