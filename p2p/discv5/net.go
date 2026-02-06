@@ -818,11 +818,9 @@ type nodeEvent uint
 //go:generate go run golang.org/x/tools/cmd/stringer -type=nodeEvent
 
 const (
-	invalidEvent nodeEvent = iota // zero is reserved
-
 	// Packet type events.
 	// These correspond to packet types in the UDP protocol.
-	pingPacket
+	pingPacket = iota + 1
 	pongPacket
 	findnodePacket
 	neighborsPacket
