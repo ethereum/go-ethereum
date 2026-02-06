@@ -70,6 +70,8 @@ Remove blockchain and state databases`,
 		ArgsUsage: "",
 		Subcommands: []*cli.Command{
 			dbInspectCmd,
+			dbInspectTrieCmd,
+			dbInspectContractCmd,
 			dbStatCmd,
 			dbCompactCmd,
 			dbGetCmd,
@@ -91,6 +93,22 @@ Remove blockchain and state databases`,
 		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Usage:       "Inspect the storage size for each type of data in the database",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
+	}
+	dbInspectTrieCmd = &cli.Command{
+		Action:      inspectTrieDepth,
+		Name:        "inspect-trie",
+		Usage:       "Inspect the depth of the trie",
+		ArgsUsage:   "<start> <end>",
+		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
+		Description: "This command inspects the depth of the trie",
+	}
+	dbInspectContractCmd = &cli.Command{
+		Action:      inspectContract,
+		Name:        "inspect-contract",
+		Usage:       "Inspect the on-disk footprint of a contract",
+		ArgsUsage:   "<address>",
+		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
+		Description: "This command inspects the snapshot account, snapshot storage slots, and storage trie nodes for a given contract address.",
 	}
 	dbCheckStateContentCmd = &cli.Command{
 		Action:    checkStateContent,
@@ -329,6 +347,31 @@ func inspect(ctx *cli.Context) error {
 	defer db.Close()
 
 	return rawdb.InspectDatabase(db, prefix, start)
+}
+
+func inspectTrieDepth(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
+
+	return rawdb.InspectTrieDepth(db)
+}
+
+func inspectContract(ctx *cli.Context) error {
+	if ctx.NArg() != 1 {
+		return fmt.Errorf("required argument: <address>")
+	}
+	address := common.HexToAddress(ctx.Args().Get(0))
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
+
+	return rawdb.InspectContract(db, address)
 }
 
 func checkStateContent(ctx *cli.Context) error {
