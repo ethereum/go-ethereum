@@ -345,13 +345,6 @@ func GetOrRegister(name string, i func() interface{}) interface{} {
 	return DefaultRegistry.GetOrRegister(name, i)
 }
 
-func getOrRegister[T any](name string, ctor func() T, r Registry) T {
-	if r == nil {
-		r = DefaultRegistry
-	}
-	return r.GetOrRegister(name, func() any { return ctor() }).(T)
-}
-
 // Register the given metric under the given name.  Returns a ErrDuplicateMetric
 // if a metric by the given name is already registered.
 func Register(name string, i interface{}) error {
