@@ -176,7 +176,7 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 	default:
 		evm.table = &frontierInstructionSet
 	}
-	var extraEips []int
+	extraEips := make([]int, 0, len(evm.Config.ExtraEips))
 	if len(evm.Config.ExtraEips) > 0 {
 		// Deep-copy jumptable to prevent modification of opcodes in other tables
 		evm.table = copyJumpTable(evm.table)
