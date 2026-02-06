@@ -49,7 +49,7 @@ import (
 // current binary as a child process.
 //
 // An init hook is used so that the child process executes the node services
-// (rather than whataver the main() function would normally do), see the
+// (rather than whatever the main() function would normally do), see the
 // execP2PNode function for more information.
 type ExecAdapter struct {
 	// BaseDir is the directory under which the data directories for each

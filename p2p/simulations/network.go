@@ -457,7 +457,7 @@ func (net *Network) getConn(oneID, otherID discover.NodeID) *Conn {
 	return net.Conns[i]
 }
 
-// InitConn(one, other) retrieves the connectiton model for the connection between
+// InitConn(one, other) retrieves the connection model for the connection between
 // peers one and other, or creates a new one if it does not exist
 // the order of nodes does not matter, i.e., Conn(i,j) == Conn(j, i)
 // it checks if the connection is already up, and if the nodes are running
