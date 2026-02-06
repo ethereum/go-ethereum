@@ -2,7 +2,7 @@
 
 ## Compatibility
 
-- mainnet: v0.8.23
+- mainnet: v0.8.28
 - testnet: v0.8.28
 - devnet: v0.8.28
 
