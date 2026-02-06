@@ -82,14 +82,11 @@ func hexPathNodeID(path string) uint16 {
 		offset = uint16(0)
 		pow    = uint16(1)
 		value  = uint16(0)
-		bytes  = []byte(path)
 	)
-	for i := 0; i < len(bytes); i++ {
+	for i := 0; i < len(path); i++ {
 		offset += pow
 		pow *= 16
-	}
-	for i := 0; i < len(bytes); i++ {
-		value = value*16 + uint16(bytes[i])
+	value = value*16 + uint16(path[i])
 	}
 	return offset + value
 }
