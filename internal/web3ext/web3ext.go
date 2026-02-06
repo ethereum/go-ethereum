@@ -416,6 +416,11 @@ web3._extend({
 			params: 5,
 		}),
 		new web3._extend.Method({
+			name: 'batchGetStorageAt',
+			call: 'debug_batchGetStorageAt',
+			params: 3,
+		}),
+		new web3._extend.Method({
 			name: 'getModifiedAccountsByNumber',
 			call: 'debug_getModifiedAccountsByNumber',
 			params: 2,

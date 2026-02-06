@@ -589,6 +589,25 @@ func (api *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Addre
 	return res[:], state.Error()
 }
 
+// GetStorageAtBatch returns multiple storage slots for the keys from the state at the given address,
+// block number.
+func (api *BlockChainAPI) BatchGetStorageAt(ctx context.Context, address common.Address, hexKeys []string, blockNrOrHash rpc.BlockNumberOrHash) ([]hexutil.Bytes, error) {
+	state, _, err := api.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	results := make([]hexutil.Bytes, len(hexKeys))
+	for i, hexKey := range hexKeys {
+		key, _, err := decodeStorageKey(hexKey)
+		if err != nil {
+			return nil, &invalidParamsError{fmt.Sprintf("index %d: %v: %q", i, err, hexKey)}
+		}
+		res := state.GetState(address, key)
+		results[i] = res[:]
+	}
+	return results, state.Error()
+}
+
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
 func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
 	var (
