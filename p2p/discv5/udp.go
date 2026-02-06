@@ -27,6 +27,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/XinFinOrg/XDPoSChain/p2p/nat"
 	"github.com/XinFinOrg/XDPoSChain/p2p/netutil"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
@@ -315,18 +316,20 @@ func (t *udp) sendTopicNodes(remote *Node, queryHash common.Hash, nodes []*Node)
 }
 
 func (t *udp) sendPacket(toid NodeID, toaddr *net.UDPAddr, ptype byte, req interface{}) (hash []byte, err error) {
-	//fmt.Println("sendPacket", nodeEvent(ptype), toaddr.String(), toid.String())
 	packet, hash, err := encodePacket(t.priv, ptype, req)
 	if err != nil {
-		//fmt.Println(err)
 		return hash, err
 	}
 	log.Trace(fmt.Sprintf(">>> %v to %x@%v", nodeEvent(ptype), toid[:8], toaddr))
-	if _, err = t.conn.WriteToUDP(packet, toaddr); err != nil {
+	if nbytes, err := t.conn.WriteToUDP(packet, toaddr); err != nil {
 		log.Trace(fmt.Sprint("UDP send failed:", err))
+		return hash, err
+	} else {
+		if metrics.Enabled() {
+			egressTrafficMeter.Mark(int64(nbytes))
+		}
 	}
-	//fmt.Println(err)
-	return hash, err
+	return hash, nil
 }
 
 // zeroed padding space for encodePacket.
@@ -370,6 +373,9 @@ func (t *udp) readLoop() {
 			// Shut down the loop for permament errors.
 			log.Debug(fmt.Sprintf("Read error: %v", err))
 			return
+		}
+		if metrics.Enabled() {
+			ingressTrafficMeter.Mark(int64(nbytes))
 		}
 		t.handlePacket(from, buf[:nbytes])
 	}
