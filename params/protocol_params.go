@@ -18,11 +18,6 @@ package params
 
 import "math/big"
 
-var (
-	TargetGasLimit  uint64 = XDCGenesisGasLimit // The artificial target
-	V2TestsGasLimit uint64 = 1200000000         // The gas limit used in the v2 consensus tests
-)
-
 const (
 	GasLimitBoundDivisor uint64 = 1024               // The bound divisor of the gas limit, used in update calculations.
 	MinGasLimit          uint64 = 5000               // Minimum the gas limit may ever be.
@@ -97,16 +92,7 @@ const (
 	// up to half the consumed gas could be refunded. Redefined as 1/5th in EIP-3529
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
-)
 
-var (
-	DifficultyBoundDivisor = big.NewInt(2048)   // The bound divisor of the difficulty, used in the update calculations.
-	GenesisDifficulty      = big.NewInt(131072) // Difficulty of the Genesis block.
-	MinimumDifficulty      = big.NewInt(131072) // The minimum that the difficulty may ever be.
-	DurationLimit          = big.NewInt(13)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-)
-
-const (
 	NetSstoreNoopGas  uint64 = 200   // Once per SSTORE operation if the value doesn't change.
 	NetSstoreInitGas  uint64 = 20000 // Once per SSTORE operation from clean zero.
 	NetSstoreCleanGas uint64 = 5000  // Once per SSTORE operation from clean non-zero.
@@ -174,4 +160,13 @@ const (
 	Bn256PairingBaseGasIstanbul      uint64 = 45000  // Base price for an elliptic curve pairing check
 	Bn256PairingPerPointGasByzantium uint64 = 80000  // Byzantium per-point price for an elliptic curve pairing check
 	Bn256PairingPerPointGasIstanbul  uint64 = 34000  // Per-point price for an elliptic curve pairing check
+)
+
+var (
+	DifficultyBoundDivisor = big.NewInt(2048)   // The bound divisor of the difficulty, used in the update calculations.
+	GenesisDifficulty      = big.NewInt(131072) // Difficulty of the Genesis block.
+	MinimumDifficulty      = big.NewInt(131072) // The minimum that the difficulty may ever be.
+	DurationLimit          = big.NewInt(13)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+
+	TargetGasLimit uint64 = XDCGenesisGasLimit // The artificial target
 )

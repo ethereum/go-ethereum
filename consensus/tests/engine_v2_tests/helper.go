@@ -37,6 +37,8 @@ type signersList map[string]bool
 
 const GAP = int(450)
 
+const testGasLimit uint64 = 1200000000 // The gas limit used in the v2 consensus tests
+
 var (
 	acc1Key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 	acc2Key, _  = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
@@ -872,7 +874,7 @@ func createBlockFromHeader(bc *core.BlockChain, customHeader *types.Header, txs 
 		Coinbase:    customHeader.Coinbase,
 		Difficulty:  difficulty,
 		Number:      customHeader.Number,
-		GasLimit:    params.V2TestsGasLimit,
+		GasLimit:    testGasLimit,
 		Time:        uint64(time.Now().Unix() - 1000000 + int64(customHeader.Number.Uint64()*10)),
 		Extra:       customHeader.Extra,
 		Validator:   customHeader.Validator,
