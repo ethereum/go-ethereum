@@ -320,10 +320,10 @@ func (x *XDPoS_v2) GetBlockByEpochNumber(chain consensus.ChainReader, targetEpoc
 		return epochSwitchInfo.EpochSwitchBlockInfo, nil
 	}
 	if targetEpochNum > epochNum {
-		return nil, errors.New("input epoch number > current epoch number")
+		return nil, fmt.Errorf("input epoch number > current epoch number, targetEpochNum:%d, epochNum:%d", targetEpochNum, epochNum)
 	}
 	if targetEpochNum < x.config.V2.SwitchEpoch {
-		return nil, errors.New("input epoch number < v2 begin epoch number")
+		return nil, fmt.Errorf("input epoch number < v2 begin epoch number, targetEpochNum:%d, x.config.V2.SwitchEpoch:%d", targetEpochNum, x.config.V2.SwitchEpoch)
 	}
 	// the block's round should be in [estRound,estRound+Epoch-1]
 	estRound := types.Round((targetEpochNum - x.config.V2.SwitchEpoch) * x.config.Epoch)
