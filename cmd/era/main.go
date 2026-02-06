@@ -30,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/era"
+	"github.com/ethereum/go-ethereum/internal/era/execdb"
+	"github.com/ethereum/go-ethereum/internal/era/onedb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/params"
@@ -53,7 +55,7 @@ var (
 	eraSizeFlag = &cli.IntFlag{
 		Name:  "size",
 		Usage: "number of blocks per era",
-		Value: era.MaxEra1Size,
+		Value: era.MaxSize,
 	}
 	txsFlag = &cli.BoolFlag{
 		Name:  "txs",
@@ -131,7 +133,7 @@ func block(ctx *cli.Context) error {
 	return nil
 }
 
-// info prints some high-level information about the era1 file.
+// info prints some high-level information about the era file.
 func info(ctx *cli.Context) error {
 	epoch, err := strconv.ParseUint(ctx.Args().First(), 10, 64)
 	if err != nil {
@@ -142,33 +144,34 @@ func info(ctx *cli.Context) error {
 		return err
 	}
 	defer e.Close()
-	acc, err := e.Accumulator()
-	if err != nil {
-		return fmt.Errorf("error reading accumulator: %w", err)
+	var (
+		accHex string
+		tdStr  string
+	)
+	if acc, err := e.Accumulator(); err == nil {
+		accHex = acc.Hex()
 	}
-	td, err := e.InitialTD()
-	if err != nil {
-		return fmt.Errorf("error reading total difficulty: %w", err)
+	if td, err := e.InitialTD(); err == nil {
+		tdStr = td.String()
 	}
 	info := struct {
-		Accumulator     common.Hash `json:"accumulator"`
-		TotalDifficulty *big.Int    `json:"totalDifficulty"`
-		StartBlock      uint64      `json:"startBlock"`
-		Count           uint64      `json:"count"`
+		Accumulator     string `json:"accumulator,omitempty"`
+		TotalDifficulty string `json:"totalDifficulty,omitempty"`
+		StartBlock      uint64 `json:"startBlock"`
+		Count           uint64 `json:"count"`
 	}{
-		acc, td, e.Start(), e.Count(),
+		accHex, tdStr, e.Start(), e.Count(),
 	}
 	b, _ := json.MarshalIndent(info, "", "  ")
 	fmt.Println(string(b))
 	return nil
 }
 
-// open opens an era1 file at a certain epoch.
-func open(ctx *cli.Context, epoch uint64) (*era.Era, error) {
-	var (
-		dir     = ctx.String(dirFlag.Name)
-		network = ctx.String(networkFlag.Name)
-	)
+// open opens an era file at a certain epoch.
+func open(ctx *cli.Context, epoch uint64) (era.Era, error) {
+	dir := ctx.String(dirFlag.Name)
+	network := ctx.String(networkFlag.Name)
+
 	entries, err := era.ReadDir(dir, network)
 	if err != nil {
 		return nil, fmt.Errorf("error reading era dir: %w", err)
@@ -176,7 +179,28 @@ func open(ctx *cli.Context, epoch uint64) (*era.Era, error) {
 	if epoch >= uint64(len(entries)) {
 		return nil, fmt.Errorf("epoch out-of-bounds: last %d, want %d", len(entries)-1, epoch)
 	}
-	return era.Open(filepath.Join(dir, entries[epoch]))
+	path := filepath.Join(dir, entries[epoch])
+	return openByPath(path)
+}
+
+// openByPath tries to open a single file as either eraE or era1 based on extension,
+// falling back to the other reader if needed.
+func openByPath(path string) (era.Era, error) {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".erae":
+		if e, err := execdb.Open(path); err != nil {
+			return nil, err
+		} else {
+			return e, nil
+		}
+	case ".era1":
+		if e, err := onedb.Open(path); err != nil {
+			return nil, err
+		} else {
+			return e, nil
+		}
+	}
+	return nil, fmt.Errorf("unsupported or unreadable era file: %s", path)
 }
 
 // verify checks each era1 file in a directory to ensure it is well-formed and
@@ -203,18 +227,58 @@ func verify(ctx *cli.Context) error {
 		return fmt.Errorf("error reading %s: %w", dir, err)
 	}
 
-	if len(entries) != len(roots) {
-		return errors.New("number of era1 files should match the number of accumulator hashes")
+	// Build the verification list respecting the rule:
+	// era1: must have accumulator, always verify
+	// erae: verify only if accumulator exists (pre-merge)
+
+	// Build list of files to verify.
+	verify := make([]string, 0, len(entries))
+
+	for _, name := range entries {
+		path := filepath.Join(dir, name)
+		ext := strings.ToLower(filepath.Ext(name))
+
+		switch ext {
+		case ".era1":
+			e, err := onedb.Open(path)
+			if err != nil {
+				return fmt.Errorf("error opening era1 file %s: %w", name, err)
+			}
+			_, accErr := e.Accumulator()
+			e.Close()
+			if accErr != nil {
+				return fmt.Errorf("era1 file %s missing accumulator: %w", name, accErr)
+			}
+			verify = append(verify, path)
+
+		case ".erae":
+			e, err := execdb.Open(path)
+			if err != nil {
+				return fmt.Errorf("error opening erae file %s: %w", name, err)
+			}
+			_, accErr := e.Accumulator()
+			e.Close()
+			if accErr == nil {
+				verify = append(verify, path) // pre-merge only
+			}
+		default:
+			return fmt.Errorf("unsupported era file: %s", name)
+		}
+	}
+
+	if len(verify) != len(roots) {
+		return fmt.Errorf("mismatch between eras to verify (%d) and provided roots (%d)", len(verify), len(roots))
 	}
 
 	// Verify each epoch matches the expected root.
 	for i, want := range roots {
 		// Wrap in function so defers don't stack.
 		err := func() error {
-			name := entries[i]
-			e, err := era.Open(filepath.Join(dir, name))
+			path := verify[i]
+			name := filepath.Base(path)
+			e, err := openByPath(path)
 			if err != nil {
-				return fmt.Errorf("error opening era1 file %s: %w", name, err)
+				return fmt.Errorf("error opening era file %s: %w", name, err)
 			}
 			defer e.Close()
 			// Read accumulator and check against expected.
@@ -243,7 +307,7 @@ func verify(ctx *cli.Context) error {
 }
 
 // checkAccumulator verifies the accumulator matches the data in the Era.
-func checkAccumulator(e *era.Era) error {
+func checkAccumulator(e era.Era) error {
 	var (
 		err    error
 		want   common.Hash
@@ -257,7 +321,7 @@ func checkAccumulator(e *era.Era) error {
 	if td, err = e.InitialTD(); err != nil {
 		return fmt.Errorf("error reading total difficulty: %w", err)
 	}
-	it, err := era.NewIterator(e)
+	it, err := e.Iterator()
 	if err != nil {
 		return fmt.Errorf("error making era iterator: %w", err)
 	}
@@ -290,9 +354,13 @@ func checkAccumulator(e *era.Era) error {
 		if rr != block.ReceiptHash() {
 			return fmt.Errorf("receipt root in block %d mismatch: want %s, got %s", block.NumberU64(), block.ReceiptHash(), rr)
 		}
-		hashes = append(hashes, block.Hash())
-		td.Add(td, block.Difficulty())
-		tds = append(tds, new(big.Int).Set(td))
+		// Only include pre-merge blocks in accumulator calculation.
+		// Post-merge blocks have difficulty == 0.
+		if block.Difficulty().Sign() > 0 {
+			hashes = append(hashes, block.Hash())
+			td.Add(td, block.Difficulty())
+			tds = append(tds, new(big.Int).Set(td))
+		}
 	}
 	if it.Error() != nil {
 		return fmt.Errorf("error reading block %d: %w", it.Number(), it.Error())
