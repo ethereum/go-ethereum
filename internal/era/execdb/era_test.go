@@ -100,7 +100,7 @@ func TestEraE(t *testing.T) {
 				blk := blockData{
 					header:     mustEncode(&types.Header{Number: big.NewInt(int64(num)), Difficulty: big.NewInt(1)}),
 					body:       mustEncode(&types.Body{Transactions: []*types.Transaction{types.NewTransaction(0, common.Address{byte(i)}, nil, 0, nil, nil)}}),
-					receipts:   mustEncode([]types.ReceiptForStorage{{CumulativeGasUsed: uint64(i)}}),
+					receipts:   mustEncode([]types.SlimReceipt{{CumulativeGasUsed: uint64(i)}}),
 					hash:       common.Hash{byte(i)},
 					td:         big.NewInt(int64(i + 1)),
 					difficulty: big.NewInt(1),
@@ -118,7 +118,7 @@ func TestEraE(t *testing.T) {
 				blk := blockData{
 					header:     mustEncode(&types.Header{Number: big.NewInt(int64(num)), Difficulty: big.NewInt(0)}),
 					body:       mustEncode(&types.Body{}),
-					receipts:   mustEncode([]types.ReceiptForStorage{}),
+					receipts:   mustEncode([]types.SlimReceipt{}),
 					hash:       common.Hash{byte(idx)},
 					difficulty: big.NewInt(0),
 				}
@@ -306,7 +306,7 @@ func TestInitialTD(t *testing.T) {
 	// First block: difficulty=5, TD=10, so initial TD = 10-5 = 5.
 	header := mustEncode(&types.Header{Number: big.NewInt(0), Difficulty: big.NewInt(5)})
 	body := mustEncode(&types.Body{})
-	receipts := mustEncode([]types.ReceiptForStorage{})
+	receipts := mustEncode([]types.SlimReceipt{})
 
 	if err := builder.AddRLP(header, body, receipts, 0, common.Hash{0}, big.NewInt(10), big.NewInt(5)); err != nil {
 		t.Fatalf("error adding block: %v", err)

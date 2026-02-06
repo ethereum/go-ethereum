@@ -88,19 +88,16 @@ func (it *Iterator) Receipts() (types.Receipts, error) {
 	if it.inner.Receipts == nil {
 		return nil, errors.New("receipts must be non‑nil")
 	}
-	var rs []*types.ReceiptForStorage
+	var rs []*types.SlimReceipt
 	if err := rlp.Decode(it.inner.Receipts, &rs); err != nil {
 		return nil, err
 	}
-
 	if len(rs) != len(block.Transactions()) {
 		return nil, errors.New("number of txs does not match receipts")
 	}
-
 	receipts := make([]*types.Receipt, len(rs))
 	for i, receipt := range rs {
 		receipts[i] = (*types.Receipt)(receipt)
-		receipts[i].Type = block.Transactions()[i].Type()
 		receipts[i].Bloom = types.CreateBloom(receipts[i])
 	}
 	return receipts, nil

@@ -107,9 +107,9 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) 
 		return fmt.Errorf("encode body: %w", err)
 	}
 
-	rs := make([]*types.ReceiptForStorage, len(receipts))
+	rs := make([]*types.SlimReceipt, len(receipts))
 	for i, receipt := range receipts {
-		rs[i] = (*types.ReceiptForStorage)(receipt)
+		rs[i] = (*types.SlimReceipt)(receipt)
 	}
 	er, err := rlp.EncodeToBytes(rs)
 	if err != nil {
