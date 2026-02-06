@@ -272,7 +272,7 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 	if err != nil {
 		panic(err)
 	}
-	blocks, receipts := GenerateChain(genesis.Config, genesis.ToBlock(nil), engine, db, n, gen)
+	blocks, receipts := GenerateChain(genesis.Config, genesis.ToBlock(), engine, db, n, gen)
 	return db, blocks, receipts
 }
 

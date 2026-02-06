@@ -38,7 +38,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	}
 	db := rawdb.NewMemoryDatabase()
 	genesis := gspec.MustCommit(db)
-	prefix, _ := GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, int(forkBlock.Int64()-1), func(i int, gen *BlockGen) {})
+	prefix, _ := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, int(forkBlock.Int64()-1), func(i int, gen *BlockGen) {})
 
 	// Create the concurrent, conflicting two nodes
 	proDb := rawdb.NewMemoryDatabase()

@@ -56,11 +56,19 @@ func BenchmarkFilters(b *testing.B) {
 		addr2   = common.BytesToAddress([]byte("jeff"))
 		addr3   = common.BytesToAddress([]byte("ethereum"))
 		addr4   = common.BytesToAddress([]byte("random addresses please"))
+
+		gspec = core.Genesis{
+			Alloc:   types.GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
+			BaseFee: big.NewInt(params.InitialBaseFee),
+			Config:  params.TestChainConfig,
+		}
+		genesis = gspec.ToBlock()
 	)
 	defer db.Close()
 
-	genesis := core.GenesisBlockForTesting(db, addr1, big.NewInt(1000000))
-	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 100010, func(i int, gen *core.BlockGen) {
+	gspec.MustCommit(db)
+
+	chain, receipts := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, 100010, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 2403:
 			receipt := makeReceipt(addr1)
@@ -162,16 +170,17 @@ func TestFilters(t *testing.T) {
 			},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
+		genesis = gspec.ToBlock()
 	)
+	defer db.Close()
+
+	gspec.MustCommit(db)
 
 	contractABI, err := abi.JSON(strings.NewReader(abiStr))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Hack: GenerateChainWithGenesis creates a new db.
-	// Commit the genesis manually and use GenerateChain.
-	genesis := gspec.MustCommit(db)
 	chain, _ := core.GenerateChain(&config, genesis, ethash.NewFaker(), db, 1000, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 1:
@@ -357,9 +366,9 @@ func TestRangeLimit(t *testing.T) {
 	defer db.Close()
 
 	gspec := &core.Genesis{
-		Config:  params.TestChainConfig,
 		Alloc:   types.GenesisAlloc{},
 		BaseFee: big.NewInt(params.InitialBaseFee),
+		Config:  params.TestChainConfig,
 	}
 	genesis := gspec.MustCommit(db)
 	chain, _ := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})

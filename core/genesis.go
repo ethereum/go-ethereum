@@ -99,6 +99,63 @@ func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc types.Gene
 	return nil, nil
 }
 
+// hashAlloc computes the state root according to the genesis specification.
+func hashAlloc(ga *types.GenesisAlloc) (common.Hash, error) {
+	// Create an ephemeral in-memory database for computing hash,
+	// all the derived states will be discarded to not pollute disk.
+	db := state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), nil)
+	statedb, err := state.New(types.EmptyRootHash, db)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	for addr, account := range *ga {
+		if account.Balance != nil {
+			statedb.AddBalance(addr, account.Balance, tracing.BalanceIncreaseGenesisBalance)
+		}
+		statedb.SetCode(addr, account.Code)
+		statedb.SetNonce(addr, account.Nonce)
+		for key, value := range account.Storage {
+			statedb.SetState(addr, key, value)
+		}
+	}
+	return statedb.Commit(0, false)
+}
+
+// flushAlloc is very similar to hashAlloc, but the main difference is
+// all the generated states will be persisted into the given database.
+// Also, the genesis state specification will be flushed as well.
+func flushAlloc(ga *types.GenesisAlloc, db ethdb.Database, blockhash common.Hash) error {
+	statedb, err := state.New(types.EmptyRootHash, state.NewDatabase(db))
+	if err != nil {
+		return err
+	}
+	for addr, account := range *ga {
+		if account.Balance != nil {
+			statedb.AddBalance(addr, account.Balance, tracing.BalanceIncreaseGenesisBalance)
+		}
+		statedb.SetCode(addr, account.Code)
+		statedb.SetNonce(addr, account.Nonce)
+		for key, value := range account.Storage {
+			statedb.SetState(addr, key, value)
+		}
+	}
+	root, err := statedb.Commit(0, false)
+	if err != nil {
+		return err
+	}
+	err = statedb.Database().TrieDB().Commit(root, true)
+	if err != nil {
+		return err
+	}
+	// Marshal the genesis state specification and persist.
+	blob, err := json.Marshal(ga)
+	if err != nil {
+		return err
+	}
+	rawdb.WriteGenesisStateSpec(db, blockhash, blob)
+	return nil
+}
+
 // field type overrides for gencodec
 type genesisSpecMarshaling struct {
 	Nonce      math.HexOrDecimal64
@@ -181,7 +238,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 
 	// Check whether the genesis block is already written.
 	if genesis != nil {
-		hash := genesis.ToBlock(nil).Hash()
+		hash := genesis.ToBlock().Hash()
 		if hash != stored {
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
@@ -248,22 +305,12 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	}
 }
 
-// ToBlock creates the genesis block and writes state of a genesis specification
-// to the given database (or discards it if nil).
-func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
-	if db == nil {
-		db = rawdb.NewMemoryDatabase()
+// ToBlock returns the genesis block according to genesis specification.
+func (g *Genesis) ToBlock() *types.Block {
+	root, err := hashAlloc(&g.Alloc)
+	if err != nil {
+		panic(err)
 	}
-	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(db))
-	for addr, account := range g.Alloc {
-		statedb.AddBalance(addr, account.Balance, tracing.BalanceIncreaseGenesisBalance)
-		statedb.SetCode(addr, account.Code)
-		statedb.SetNonce(addr, account.Nonce)
-		for key, value := range account.Storage {
-			statedb.SetState(addr, key, value)
-		}
-	}
-	root := statedb.IntermediateRoot(false)
 	head := &types.Header{
 		Number:     new(big.Int).SetUint64(g.Number),
 		Nonce:      types.EncodeNonce(g.Nonce),
@@ -284,7 +331,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if g.Difficulty == nil {
 		head.Difficulty = params.GenesisDifficulty
 	}
-
 	// Notice: Eip1559Block affects the block hash, we must set:
 	//   1. g.Config.Eip1559Block
 	//   2. or common.Eip1559Block
@@ -295,30 +341,29 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 		}
 	}
-
-	statedb.Commit(0, false)
-	statedb.Database().TrieDB().Commit(root, true)
-
 	return types.NewBlock(head, nil, nil, trie.NewStackTrie(nil))
 }
 
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
 func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
-	if g.Number != 0 {
+	block := g.ToBlock()
+	if block.Number().Sign() != 0 {
 		return nil, errors.New("can't commit genesis block with number > 0")
 	}
 	config := g.Config
-	// if config == nil {
-	// 	config = params.AllEthashProtocolChanges
-	// }
 	if config == nil {
 		return nil, errors.New("invalid genesis without chain config")
 	}
 	if config.XDPoS != nil && len(g.ExtraData) < 32+crypto.SignatureLength {
 		return nil, errors.New("can't start XDPoS chain without signers")
 	}
-	block := g.ToBlock(db)
+	// All the checks have passed, flushAlloc the states derived from the genesis
+	// specification as well as the specification itself into the provided
+	// database.
+	if err := flushAlloc(&g.Alloc, db, block.Hash()); err != nil {
+		return nil, err
+	}
 	batch := db.NewBatch()
 	rawdb.WriteTd(batch, block.Hash(), block.NumberU64(), g.Difficulty)
 	rawdb.WriteBlock(batch, block)
@@ -339,16 +384,6 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 		panic(err)
 	}
 	return block
-}
-
-// GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.
-func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
-	g := Genesis{
-		Config:  params.TestChainConfig,
-		Alloc:   types.GenesisAlloc{addr: {Balance: balance}},
-		BaseFee: big.NewInt(params.InitialBaseFee),
-	}
-	return g.MustCommit(db)
 }
 
 // DefaultGenesisBlock returns the XDC mainnet genesis block.

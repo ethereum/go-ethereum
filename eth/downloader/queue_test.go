@@ -29,15 +29,9 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
 	"github.com/XinFinOrg/XDPoSChain/core"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
-)
-
-var (
-	testdb  = rawdb.NewMemoryDatabase()
-	genesis = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000))
 )
 
 // makeChain creates a chain of n blocks starting at and including parent.
@@ -45,7 +39,7 @@ var (
 // contains a transaction and every 5th an uncle to allow testing correct block
 // reassembly.
 func makeChain(n int, seed byte, parent *types.Block, empty bool) ([]*types.Block, []types.Receipts) {
-	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testdb, n, func(i int, block *core.BlockGen) {
+	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 		// Add one tx to every secondblock
 		if !empty && i%2 == 0 {
@@ -71,10 +65,10 @@ var emptyChain *chainData
 func init() {
 	// Create a chain of blocks to import
 	targetBlocks := 128
-	blocks, _ := makeChain(targetBlocks, 0, genesis, false)
+	blocks, _ := makeChain(targetBlocks, 0, testGenesis, false)
 	chain = &chainData{blocks, 0}
 
-	blocks, _ = makeChain(targetBlocks, 0, genesis, true)
+	blocks, _ = makeChain(targetBlocks, 0, testGenesis, true)
 	emptyChain = &chainData{blocks, 0}
 }
 
@@ -235,7 +229,7 @@ func TestEmptyBlocks(t *testing.T) {
 // some more advanced scenarios
 func XTestDelivery(t *testing.T) {
 	// the outside network, holding blocks
-	blo, rec := makeChain(128, 0, genesis, false)
+	blo, rec := makeChain(128, 0, testGenesis, false)
 	world := newNetwork()
 	world.receipts = rec
 	world.chain = blo

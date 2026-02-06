@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
@@ -35,18 +36,33 @@ var (
 	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
 	testDB      = rawdb.NewMemoryDatabase()
-	testGenesis = core.GenesisBlockForTesting(testDB, testAddress, big.NewInt(1000000000000000000))
+
+	testGspec = core.Genesis{
+		Alloc:   types.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000000)}},
+		BaseFee: big.NewInt(params.InitialBaseFee),
+		Config:  params.TestChainConfig,
+	}
+	testGenesis = testGspec.MustCommit(testDB)
 )
 
 // The common prefix of all test chains:
-var testChainBase = newTestChain(blockCacheMaxItems+200, testGenesis)
+var testChainBase *testChain
 
 // Different forks on top of the base chain:
 var testChainForkLightA, testChainForkLightB, testChainForkHeavy *testChain
 
 func init() {
+	// Reduce some of the parameters to make the tester faster
+	blockCacheMaxItems = 1024
+	fsHeaderSafetyNet = 256
+	fsHeaderContCheck = 500 * time.Millisecond
+
+	testChainBase = newTestChain(blockCacheMaxItems+200, testGenesis)
+
 	var forkLen = int(MaxForkAncestry + 50)
 	var wg sync.WaitGroup
+
+	// Generate the test chains to seed the peers with
 	wg.Go(func() { testChainForkLightA = testChainBase.makeFork(forkLen, false, 1) })
 	wg.Go(func() { testChainForkLightB = testChainBase.makeFork(forkLen, false, 2) })
 	wg.Go(func() { testChainForkHeavy = testChainBase.makeFork(forkLen, true, 3) })

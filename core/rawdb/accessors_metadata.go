@@ -19,6 +19,7 @@ package rawdb
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
@@ -62,7 +63,8 @@ func ReadChainConfig(db ethdb.KeyValueReader, hash common.Hash) (*params.ChainCo
 
 	var config params.ChainConfig
 	if err := json.Unmarshal(jsonChainConfig, &config); err != nil {
-		return nil, err
+		log.Error("Invalid chain config JSON", "hash", hash, "err", err)
+		return nil, fmt.Errorf("invalid chain config JSON for hash %s: %w", hash.Hex(), err)
 	}
 
 	return &config, nil
@@ -87,4 +89,11 @@ func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.Cha
 func ReadGenesisStateSpec(db ethdb.KeyValueReader, blockhash common.Hash) []byte {
 	data, _ := db.Get(genesisStateSpecKey(blockhash))
 	return data
+}
+
+// WriteGenesisStateSpec writes the genesis state specification into the disk.
+func WriteGenesisStateSpec(db ethdb.KeyValueWriter, blockhash common.Hash, data []byte) {
+	if err := db.Put(genesisStateSpecKey(blockhash), data); err != nil {
+		log.Crit("Failed to store genesis state", "err", err)
+	}
 }

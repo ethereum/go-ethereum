@@ -189,11 +189,12 @@ func TestBlockSubscription(t *testing.T) {
 		db           = rawdb.NewMemoryDatabase()
 		backend, sys = newTestFilterSystem(t, db, Config{})
 		api          = NewFilterAPI(sys, false)
-		genesis      = (&core.Genesis{
-			Config:  params.TestChainConfig,
+		gspec        = &core.Genesis{
 			BaseFee: big.NewInt(params.InitialBaseFee),
-		}).MustCommit(db)
-		chain, _    = core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})
+			Config:  params.TestChainConfig,
+		}
+		genesis     = gspec.MustCommit(db)
+		chain, _    = core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})
 		chainEvents = []core.ChainEvent{}
 	)
 
@@ -793,10 +794,11 @@ func TestLightFilterLogs(t *testing.T) {
 
 		key, _  = crypto.GenerateKey()
 		addr    = crypto.PubkeyToAddress(key.PublicKey)
-		genesis = &core.Genesis{Config: params.TestChainConfig,
+		genesis = &core.Genesis{
 			Alloc: types.GenesisAlloc{
 				addr: {Balance: big.NewInt(params.Ether)},
 			},
+			Config: params.TestChainConfig,
 		}
 		receipts = []*types.Receipt{{
 			Logs: []*types.Log{allLogs[0]},

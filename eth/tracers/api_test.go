@@ -846,13 +846,12 @@ func TestTraceCallBlockSigners(t *testing.T) {
 
 	// Initialize test accounts
 	accounts := newAccounts(1)
-	config := *params.TestChainConfig
 	genesis := &core.Genesis{
-		Config: &config,
 		Alloc: types.GenesisAlloc{
 			accounts[0].addr:          {Balance: big.NewInt(params.Ether)},
 			common.BlockSignersBinary: {Balance: big.NewInt(0)}, // System contract
 		},
+		Config: params.TestChainConfig,
 	}
 	backend := newTestBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
 		// Just create an empty block
@@ -913,13 +912,12 @@ func TestTraceCallBlockSignersNonceValidation(t *testing.T) {
 
 	// Initialize test accounts
 	accounts := newAccounts(1)
-	config := *params.TestChainConfig
 	genesis := &core.Genesis{
-		Config: &config,
 		Alloc: types.GenesisAlloc{
 			accounts[0].addr:          {Balance: big.NewInt(params.Ether), Nonce: 5}, // Account has nonce 5
 			common.BlockSignersBinary: {Balance: big.NewInt(0)},                      // System contract
 		},
+		Config: params.TestChainConfig,
 	}
 	backend := newTestBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
 		// Just create an empty block
