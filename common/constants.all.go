@@ -65,6 +65,7 @@ type constant struct {
 	eip1559Block           *big.Int
 	cancunBlock            *big.Int
 	pragueBlock            *big.Int
+	osakaBlock             *big.Int
 	dynamicGasLimitBlock   *big.Int
 
 	trc21IssuerSMC         Address
@@ -101,6 +102,7 @@ var (
 	Eip1559Block           = MainnetConstant.eip1559Block
 	CancunBlock            = MainnetConstant.cancunBlock
 	PragueBlock            = MainnetConstant.pragueBlock
+	OsakaBlock             = MainnetConstant.osakaBlock
 	DynamicGasLimitBlock   = MainnetConstant.dynamicGasLimitBlock
 	TIPUpgradeReward       = MainnetConstant.tipUpgradeReward
 	TipUpgradePenalty      = MainnetConstant.tipUpgradePenalty
@@ -165,6 +167,7 @@ func CopyConstants(chainID uint64) {
 	Eip1559Block = c.eip1559Block
 	CancunBlock = c.cancunBlock
 	PragueBlock = c.pragueBlock
+	OsakaBlock = c.osakaBlock
 	DynamicGasLimitBlock = c.dynamicGasLimitBlock
 	TIPUpgradeReward = c.tipUpgradeReward
 	TipUpgradePenalty = c.tipUpgradePenalty

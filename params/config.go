@@ -263,7 +263,7 @@ var (
 		Ethash:              new(EthashConfig),
 	}
 
-	// TestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
+	// TestnetChainConfig contains the chain parameters to run a node on the Apothem testnet.
 	TestnetChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(51),
 		HomesteadBlock:      big.NewInt(1),
@@ -290,7 +290,7 @@ var (
 		},
 	}
 
-	// DevnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
+	// DevnetChainConfig contains the chain parameters to run a node on the devnet.
 	DevnetChainConfig = &ChainConfig{
 		ChainID:        big.NewInt(551),
 		HomesteadBlock: big.NewInt(0),
@@ -334,6 +334,7 @@ var (
 		Eip1559Block:        nil,
 		CancunBlock:         nil,
 		PragueBlock:         nil,
+		OsakaBlock:          nil,
 		Ethash:              new(EthashConfig),
 		Clique:              nil,
 		XDPoS:               nil,
@@ -353,7 +354,16 @@ var (
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
-		ConstantinopleBlock: nil,
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		ShanghaiBlock:       big.NewInt(0),
+		Eip1559Block:        big.NewInt(0),
+		CancunBlock:         big.NewInt(0),
+		PragueBlock:         big.NewInt(0),
+		OsakaBlock:          big.NewInt(0),
 		Ethash:              nil,
 		Clique:              nil,
 		XDPoS:               &XDPoSConfig{Period: 0, Epoch: 900},
@@ -376,9 +386,10 @@ var (
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
 		ShanghaiBlock:       big.NewInt(0),
-		Eip1559Block:        nil,
+		Eip1559Block:        big.NewInt(0),
 		CancunBlock:         nil,
 		PragueBlock:         nil,
+		OsakaBlock:          nil,
 		Ethash:              nil,
 		Clique:              &CliqueConfig{Period: 0, Epoch: 900},
 		XDPoS:               nil,
@@ -432,6 +443,7 @@ var (
 		Eip1559Block:        nil,
 		CancunBlock:         nil,
 		PragueBlock:         nil,
+		OsakaBlock:          nil,
 		Ethash:              new(EthashConfig),
 		Clique:              nil,
 		XDPoS:               nil,
@@ -457,6 +469,7 @@ var (
 		Eip1559Block:        big.NewInt(0),
 		CancunBlock:         big.NewInt(0),
 		PragueBlock:         big.NewInt(0),
+		OsakaBlock:          big.NewInt(0),
 		Ethash:              new(EthashConfig),
 		Clique:              nil,
 		XDPoS:               nil,
@@ -494,6 +507,7 @@ type ChainConfig struct {
 	Eip1559Block    *big.Int `json:"eip1559Block,omitempty"`
 	CancunBlock     *big.Int `json:"cancunBlock,omitempty"`
 	PragueBlock     *big.Int `json:"pragueBlock,omitempty"`
+	OsakaBlock      *big.Int `json:"osakaBlock,omitempty"`
 
 	DynamicGasLimitBlock *big.Int `json:"dynamicGasLimitBlock,omitempty"` // Dynamic gas limit adjustment algorithm activation block (nil = no fork)
 
@@ -912,6 +926,10 @@ func (c *ChainConfig) Description() string {
 	if c.PragueBlock != nil {
 		pragueBlock = c.PragueBlock
 	}
+	osakaBlock := common.OsakaBlock
+	if c.OsakaBlock != nil {
+		osakaBlock = c.OsakaBlock
+	}
 	dynamicGasLimitBlock := common.DynamicGasLimitBlock
 	if c.DynamicGasLimitBlock != nil {
 		dynamicGasLimitBlock = c.DynamicGasLimitBlock
@@ -948,6 +966,7 @@ func (c *ChainConfig) Description() string {
 	banner += fmt.Sprintf("  - Eip1559:                     %-8v\n", eip1559Block)
 	banner += fmt.Sprintf("  - Cancun:                      %-8v\n", cancunBlock)
 	banner += fmt.Sprintf("  - Prague:                      %-8v\n", pragueBlock)
+	banner += fmt.Sprintf("  - Osaka:                       %-8v\n", osakaBlock)
 	banner += fmt.Sprintf("  - DynamicGasLimitBlock:        %-8v\n", dynamicGasLimitBlock)
 	banner += fmt.Sprintf("  - TIPUpgradeReward:            %-8v\n", common.TIPUpgradeReward)
 	banner += fmt.Sprintf("  - TipUpgradePenalty:           %-8v\n", common.TipUpgradePenalty)
@@ -1032,6 +1051,11 @@ func (c *ChainConfig) IsCancun(num *big.Int) bool {
 // IsPrague returns whether num is either equal to the Prague fork block or greater.
 func (c *ChainConfig) IsPrague(num *big.Int) bool {
 	return isForked(common.PragueBlock, num) || isForked(c.PragueBlock, num)
+}
+
+// IsOsaka returns whether num is either equal to the Osaka fork block or greater.
+func (c *ChainConfig) IsOsaka(num *big.Int) bool {
+	return isForked(common.OsakaBlock, num) || isForked(c.OsakaBlock, num)
 }
 
 // IsDynamicGasLimitBlock returns whether num is either equal to the DynamicGasLimitBlock fork block or greater.
@@ -1189,6 +1213,9 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if isForkIncompatible(c.PragueBlock, newcfg.PragueBlock, head) {
 		return newCompatError("Prague fork block", c.PragueBlock, newcfg.PragueBlock)
 	}
+	if isForkIncompatible(c.OsakaBlock, newcfg.OsakaBlock, head) {
+		return newCompatError("Osaka fork block", c.OsakaBlock, newcfg.OsakaBlock)
+	}
 	if !XDPoSConfigEqual(c.XDPoS, newcfg.XDPoS) {
 		storedblock := big.NewInt(1)
 		if c.XDPoS != nil && c.XDPoS.V2 != nil && c.XDPoS.V2.SwitchBlock != nil {
@@ -1281,6 +1308,7 @@ type Rules struct {
 	IsEIP1559        bool
 	IsCancun         bool
 	IsPrague         bool
+	IsOsaka          bool
 }
 
 func (c *ChainConfig) Rules(num *big.Int) Rules {
@@ -1306,5 +1334,6 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsEIP1559:        c.IsEIP1559(num),
 		IsCancun:         c.IsCancun(num),
 		IsPrague:         c.IsPrague(num),
+		IsOsaka:          c.IsOsaka(num),
 	}
 }

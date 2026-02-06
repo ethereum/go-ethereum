@@ -30,6 +30,7 @@ var TestnetConstant = constant{
 	eip1559Block:           big.NewInt(71550000), // Target 14th Feb 2025
 	cancunBlock:            big.NewInt(71551800),
 	pragueBlock:            big.NewInt(math.MaxInt64),
+	osakaBlock:             big.NewInt(math.MaxInt64),
 	dynamicGasLimitBlock:   big.NewInt(math.MaxInt64),
 	tipUpgradeReward:       big.NewInt(math.MaxInt64),
 	tipUpgradePenalty:      big.NewInt(math.MaxInt64),

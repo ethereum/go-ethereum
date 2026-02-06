@@ -30,6 +30,7 @@ var MainnetConstant = constant{
 	eip1559Block:           big.NewInt(98800200), // Target 28th Jan 2026
 	cancunBlock:            big.NewInt(98802000), // Target 28th Jan 2026
 	pragueBlock:            big.NewInt(math.MaxInt64),
+	osakaBlock:             big.NewInt(math.MaxInt64),
 	dynamicGasLimitBlock:   big.NewInt(math.MaxInt64),
 	tipUpgradeReward:       big.NewInt(math.MaxInt64),
 	tipUpgradePenalty:      big.NewInt(math.MaxInt64),

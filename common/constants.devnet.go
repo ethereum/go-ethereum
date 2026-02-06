@@ -30,6 +30,7 @@ var DevnetConstant = constant{
 	eip1559Block:           big.NewInt(32400),
 	cancunBlock:            big.NewInt(43200),
 	pragueBlock:            big.NewInt(math.MaxInt64),
+	osakaBlock:             big.NewInt(math.MaxInt64),
 	dynamicGasLimitBlock:   big.NewInt(math.MaxInt64),
 	tipUpgradeReward:       big.NewInt(math.MaxInt64),
 	tipUpgradePenalty:      big.NewInt(math.MaxInt64),
