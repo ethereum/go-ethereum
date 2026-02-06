@@ -19,6 +19,7 @@ package rpc
 import (
 	"context"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"go.opentelemetry.io/otel"
@@ -196,8 +197,8 @@ func TestTracingBatchHTTP(t *testing.T) {
 }
 
 // TestTracingSubscribeUnsubscribe verifies that subscribe and unsubscribe calls
-// do not emit any spans.
-// Note: This works because client.newClientConn() passes nil as the tracer provider.
+// do not emit RPC server spans (like "jsonrpc.service/method").
+// Note: handleSubscribe does not create the main RPC span, only internal encoding spans.
 func TestTracingSubscribeUnsubscribe(t *testing.T) {
 	t.Parallel()
 	server, tracer, exporter := newTracingServer(t)
@@ -213,12 +214,16 @@ func TestTracingSubscribeUnsubscribe(t *testing.T) {
 	// Unsubscribe.
 	sub.Unsubscribe()
 
-	// Flush and check that no spans were emitted.
+	// Flush and check that no RPC server spans were emitted.
+	// Internal spans like "rpc.encodeJSONResponse" are allowed.
 	if err := tracer.ForceFlush(context.Background()); err != nil {
 		t.Fatalf("failed to flush: %v", err)
 	}
 	spans := exporter.GetSpans()
-	if len(spans) != 0 {
-		t.Errorf("expected no spans for subscribe/unsubscribe, got %d", len(spans))
+	for _, span := range spans {
+		// RPC server spans have names like "jsonrpc.service/method"
+		if strings.HasPrefix(span.Name, "jsonrpc.") {
+			t.Errorf("unexpected RPC server span for subscribe/unsubscribe: %s", span.Name)
+		}
 	}
 }

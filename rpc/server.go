@@ -126,6 +126,7 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 		idgen:              s.idgen,
 		batchItemLimit:     s.batchItemLimit,
 		batchResponseLimit: s.batchResponseLimit,
+		tracerProvider:     s.tracerProvider,
 	}
 	c := initClient(codec, &s.services, cfg)
 	<-codec.closed()
