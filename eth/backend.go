@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/partial"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
@@ -276,6 +277,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	options.Overrides = &overrides
 
+	// Wire partial state configuration into the blockchain
+	if config.PartialState.Enabled {
+		options.PartialStateEnabled = true
+		options.PartialStateContracts = config.PartialState.Contracts
+		options.PartialStateBALRetention = config.PartialState.BALRetention
+		options.PartialStateChainRetention = config.PartialState.ChainRetention
+	}
+
 	eth.blockchain, err = core.NewBlockChain(chainDb, config.Genesis, eth.engine, options)
 	if err != nil {
 		return nil, err
@@ -329,6 +338,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := options.TrieCleanLimit + options.TrieDirtyLimit + options.SnapshotLimit
+
+	// Create partial state filter if enabled
+	var partialFilter partial.ContractFilter
+	if config.PartialState.Enabled {
+		partialFilter = partial.NewConfiguredFilter(config.PartialState.Contracts)
+		log.Info("Partial statefulness enabled", "contracts", len(config.PartialState.Contracts))
+	}
+
 	if eth.handler, err = newHandler(&handlerConfig{
 		NodeID:         eth.p2pServer.Self().ID(),
 		Database:       chainDb,
@@ -339,6 +356,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		BloomCache:     uint64(cacheLimit),
 		EventMux:       eth.eventMux,
 		RequiredBlocks: config.RequiredBlocks,
+		PartialFilter:  partialFilter,
+		ChainRetention: config.PartialState.ChainRetention,
 	}); err != nil {
 		return nil, err
 	}

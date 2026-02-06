@@ -18,7 +18,10 @@
 package ethconfig
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -77,6 +80,7 @@ var Defaults = Config{
 	TxSyncMaxTimeout:        1 * time.Minute,
 	SlowBlockThreshold:      -1, // Disabled by default; set via --debug.logslowblock flag
 	RangeLimit:              0,
+	PartialState:            DefaultPartialStateConfig(),
 }
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
@@ -209,6 +213,133 @@ type Config struct {
 
 	// RangeLimit restricts the maximum range (end - start) for range queries.
 	RangeLimit uint64 `toml:",omitempty"`
+
+	// PartialState configures partial statefulness mode for reduced storage.
+	PartialState PartialStateConfig
+}
+
+// DefaultChainRetention is the default number of recent blocks for which
+// bodies and receipts are retained in partial state mode. Older blocks only
+// keep their headers. 1024 blocks (~3.4 hours at 12s/block) is sufficient
+// for reorg handling and recent receipt lookups. Configurable via
+// --partial-state.chain-retention.
+const DefaultChainRetention = 1024
+
+// PartialStateConfig configures partial statefulness mode.
+// When enabled, the node stores all accounts but only storage for configured contracts.
+// State updates are applied via Block Access Lists (BALs) per EIP-7928.
+type PartialStateConfig struct {
+	// Enabled activates partial statefulness mode
+	Enabled bool
+
+	// Contracts is the list of contracts to track storage for
+	Contracts []common.Address
+
+	// ContractsFile is the path to a JSON file containing contract addresses
+	ContractsFile string `toml:",omitempty"`
+
+	// BALRetention is the number of blocks to keep BAL history for reorg handling
+	BALRetention uint64
+
+	// ChainRetention is the number of recent blocks to retain bodies and
+	// receipts for. Older blocks only keep their headers. During sync, bodies
+	// and receipts outside this window are never downloaded. After sync, the
+	// freezer enforces a rolling window, deleting aged-out data. Set to 0 to
+	// keep all chain history.
+	ChainRetention uint64
+}
+
+// DefaultPartialStateConfig returns the default partial state configuration.
+func DefaultPartialStateConfig() PartialStateConfig {
+	return PartialStateConfig{
+		Enabled:        false,
+		Contracts:      nil,
+		ContractsFile:  "",
+		BALRetention:   256,
+		ChainRetention: DefaultChainRetention,
+	}
+}
+
+// LoadPartialStateContracts loads contract addresses from a JSON file
+// and merges them with any directly configured addresses.
+func (c *PartialStateConfig) LoadPartialStateContracts() error {
+	if c.ContractsFile == "" {
+		return nil
+	}
+	return c.loadContractsFromFile(c.ContractsFile)
+}
+
+// loadContractsFromFile reads contract addresses from a JSON file.
+// File format:
+//
+//	{
+//	  "version": 1,
+//	  "contracts": [
+//	    {"address": "0x...", "name": "WETH", "comment": "Wrapped Ether"},
+//	    {"address": "0x...", "name": "USDC"}
+//	  ]
+//	}
+func (c *PartialStateConfig) loadContractsFromFile(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read contracts file: %w", err)
+	}
+
+	var file struct {
+		Version   int `json:"version"`
+		Contracts []struct {
+			Address string `json:"address"`
+			Name    string `json:"name,omitempty"`
+			Comment string `json:"comment,omitempty"`
+		} `json:"contracts"`
+	}
+
+	if err := json.Unmarshal(data, &file); err != nil {
+		return fmt.Errorf("failed to parse contracts file: %w", err)
+	}
+
+	// Validate version
+	if file.Version != 1 {
+		return fmt.Errorf("unsupported contracts file version: %d", file.Version)
+	}
+
+	// Merge contracts from file with directly configured ones
+	seen := make(map[common.Address]struct{})
+	for _, addr := range c.Contracts {
+		seen[addr] = struct{}{}
+	}
+
+	for _, contract := range file.Contracts {
+		addr := common.HexToAddress(contract.Address)
+		if addr == (common.Address{}) {
+			return fmt.Errorf("invalid contract address in file: %s", contract.Address)
+		}
+		if _, exists := seen[addr]; !exists {
+			c.Contracts = append(c.Contracts, addr)
+			seen[addr] = struct{}{}
+		}
+	}
+
+	return nil
+}
+
+// Validate checks the configuration for errors.
+func (c *PartialStateConfig) Validate() error {
+	if !c.Enabled {
+		return nil // Nothing to validate if disabled
+	}
+
+	// Load contracts from file if specified
+	if err := c.LoadPartialStateContracts(); err != nil {
+		return err
+	}
+
+	// Validate BAL retention
+	if c.BALRetention < 64 {
+		return fmt.Errorf("BAL retention must be at least 64 blocks (for BLOCKHASH support), got %d", c.BALRetention)
+	}
+
+	return nil
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.

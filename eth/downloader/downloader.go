@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/partial"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -128,6 +129,7 @@ type Downloader struct {
 	// chain segment is aimed for synchronization.
 	chainCutoffNumber uint64
 	chainCutoffHash   common.Hash
+	chainRetention    uint64 // Bodies/receipts retention window in blocks from HEAD (0 = keep all)
 
 	// Channels
 	headerProcCh chan *headerTask // Channel to feed the header processor new tasks
@@ -229,7 +231,7 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(stateDb ethdb.Database, mode ethconfig.SyncMode, mux *event.TypeMux, chain BlockChain, dropPeer peerDropFn, success func()) *Downloader {
+func New(stateDb ethdb.Database, mode ethconfig.SyncMode, mux *event.TypeMux, chain BlockChain, dropPeer peerDropFn, success func(), partialFilter partial.ContractFilter, chainRetention uint64) *Downloader {
 	cutoffNumber, cutoffHash := chain.HistoryPruningCutoff()
 	dl := &Downloader{
 		stateDB:           stateDb,
@@ -240,10 +242,11 @@ func New(stateDb ethdb.Database, mode ethconfig.SyncMode, mux *event.TypeMux, ch
 		blockchain:        chain,
 		chainCutoffNumber: cutoffNumber,
 		chainCutoffHash:   cutoffHash,
+		chainRetention:    chainRetention,
 		dropPeer:          dropPeer,
 		headerProcCh:      make(chan *headerTask, 1),
 		quitCh:            make(chan struct{}),
-		SnapSyncer:        snap.NewSyncer(stateDb, chain.TrieDB().Scheme()),
+		SnapSyncer:        snap.NewSyncer(stateDb, chain.TrieDB().Scheme(), partialFilter),
 		stateSyncStart:    make(chan *stateSync),
 		syncStartBlock:    chain.CurrentSnapBlock().Number.Uint64(),
 	}
@@ -547,6 +550,28 @@ func (d *Downloader) syncToHead() (err error) {
 		if d.chainCutoffNumber != 0 && d.chainCutoffNumber > d.ancientLimit {
 			d.ancientLimit = d.chainCutoffNumber
 			log.Info("Extend the ancient range with configured cutoff", "cutoff", d.chainCutoffNumber)
+		}
+		// For partial state mode with chain retention, dynamically restrict
+		// bodies/receipts to only recent blocks. This raises chainCutoffNumber
+		// so that older blocks are routed through InsertHeadersBeforeCutoff
+		// (headers only, no bodies/receipts downloaded from peers).
+		//
+		// Note: chainCutoffHash is cleared to zero because the dynamic cutoff
+		// changes every sync cycle (it's HEAD-N, not a fixed well-known block).
+		// The hash validation in fetchHeaders() is skipped when the hash is
+		// zero, which is safe here — the hash check exists for static cutoffs
+		// like --history.chain postmerge where the cutoff block is predetermined.
+		if d.chainRetention > 0 && height > d.chainRetention {
+			dynamicCutoff := height - d.chainRetention
+			if dynamicCutoff > d.chainCutoffNumber {
+				d.chainCutoffNumber = dynamicCutoff
+				d.chainCutoffHash = common.Hash{} // Dynamic cutoff has no pre-known hash
+				log.Info("Partial state: restricting chain history to recent blocks",
+					"cutoff", dynamicCutoff, "retention", d.chainRetention, "head", height)
+			}
+			if d.chainCutoffNumber > d.ancientLimit {
+				d.ancientLimit = d.chainCutoffNumber
+			}
 		}
 		frozen, _ := d.stateDB.Ancients() // Ignore the error here since light client can also hit here.
 

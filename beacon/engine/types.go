@@ -90,6 +90,12 @@ type ExecutableData struct {
 	Withdrawals   []*types.Withdrawal `json:"withdrawals"`
 	BlobGasUsed   *uint64             `json:"blobGasUsed"`
 	ExcessBlobGas *uint64             `json:"excessBlobGas"`
+
+	// BlockAccessList is the RLP-encoded Block Access List (BAL) for partial
+	// state nodes per EIP-7928. Contains state diffs needed to compute new
+	// state root without re-executing transactions. Optional field only used
+	// when delivering payloads to partial state nodes via engine_newPayloadV5.
+	BlockAccessList []byte `json:"blockAccessList,omitempty"`
 }
 
 // JSON type overrides for executableData.
@@ -102,8 +108,9 @@ type executableDataMarshaling struct {
 	ExtraData     hexutil.Bytes
 	LogsBloom     hexutil.Bytes
 	Transactions  []hexutil.Bytes
-	BlobGasUsed   *hexutil.Uint64
-	ExcessBlobGas *hexutil.Uint64
+	BlobGasUsed     *hexutil.Uint64
+	ExcessBlobGas   *hexutil.Uint64
+	BlockAccessList hexutil.Bytes
 }
 
 // StatelessPayloadStatusV1 is the result of a stateless payload execution.

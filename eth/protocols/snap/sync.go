@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/partial"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -445,6 +446,11 @@ type Syncer struct {
 	db     ethdb.KeyValueStore // Database to store the trie nodes into (and dedup)
 	scheme string              // Node scheme used in node database
 
+	// Partial state filter (nil = sync everything, i.e., full node)
+	// When set, only accounts in the filter have their storage/bytecode synced.
+	// ALL accounts are always synced - only storage and bytecode are filtered.
+	filter partial.ContractFilter
+
 	root    common.Hash    // Current state trie root being synced
 	tasks   []*accountTask // Current account task set being synced
 	snapped bool           // Flag to signal that snap phase is done
@@ -472,6 +478,9 @@ type Syncer struct {
 	bytecodeBytes  common.StorageSize // Number of bytecode bytes downloaded
 	storageSynced  uint64             // Number of storage slots downloaded
 	storageBytes   common.StorageSize // Number of storage trie bytes persisted to disk
+
+	storageSkipped  uint64 // Number of accounts whose storage was skipped (partial sync)
+	bytecodeSkipped uint64 // Number of bytecodes skipped (partial sync)
 
 	extProgress *SyncProgress // progress that can be exposed to external caller.
 
@@ -512,11 +521,14 @@ type Syncer struct {
 }
 
 // NewSyncer creates a new snapshot syncer to download the Ethereum state over the
-// snap protocol.
-func NewSyncer(db ethdb.KeyValueStore, scheme string) *Syncer {
+// snap protocol. The optional filter parameter enables partial statefulness mode
+// where only configured contracts have their storage and bytecode synced.
+// Pass nil for full node behavior (sync everything).
+func NewSyncer(db ethdb.KeyValueStore, scheme string, filter partial.ContractFilter) *Syncer {
 	return &Syncer{
 		db:     db,
 		scheme: scheme,
+		filter: filter,
 
 		peers:    make(map[string]SyncPeer),
 		peerJoin: new(event.Feed),
@@ -609,8 +621,28 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 	// any peers and initialize the syncer if it was not yet run
 	s.lock.Lock()
 	s.root = root
+
+	// Create the state sync scheduler. For partial sync, use the filtered version
+	// that skips storage/code healing for non-tracked contracts.
+	var scheduler *trie.Sync
+	if s.isPartialSync() {
+		// Create filter callbacks that check skip markers in the database
+		shouldSyncStorage := func(accountHash common.Hash) bool {
+			return !isStorageSkipped(s.db, accountHash)
+		}
+		shouldSyncCode := func(accountHash common.Hash) bool {
+			// For now, use the same logic as storage (skip if storage is skipped)
+			// This could be refined to have separate skip markers for code
+			return !isStorageSkipped(s.db, accountHash)
+		}
+		scheduler = state.NewPartialStateSync(root, s.db, s.onHealState, s.scheme, shouldSyncStorage, shouldSyncCode)
+		log.Info("Starting partial state snap sync", "root", root)
+	} else {
+		scheduler = state.NewStateSync(root, s.db, s.onHealState, s.scheme)
+	}
+
 	s.healer = &healTask{
-		scheduler: state.NewStateSync(root, s.db, s.onHealState, s.scheme),
+		scheduler: scheduler,
 		trieTasks: make(map[string]common.Hash),
 		codeTasks: make(map[common.Hash]struct{}),
 	}
@@ -848,6 +880,7 @@ func (s *Syncer) loadSyncStatus() {
 	s.accountSynced, s.accountBytes = 0, 0
 	s.bytecodeSynced, s.bytecodeBytes = 0, 0
 	s.storageSynced, s.storageBytes = 0, 0
+	s.storageSkipped, s.bytecodeSkipped = 0, 0
 	s.trienodeHealSynced, s.trienodeHealBytes = 0, 0
 	s.bytecodeHealSynced, s.bytecodeHealBytes = 0, 0
 
@@ -1918,28 +1951,48 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 
 	res.task.pend = 0
 	for i, account := range res.accounts {
+		accountHash := res.hashes[i]
+
 		// Check if the account is a contract with an unknown code
 		if !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
 			if !rawdb.HasCodeWithPrefix(s.db, common.BytesToHash(account.CodeHash)) {
-				res.task.codeTasks[common.BytesToHash(account.CodeHash)] = struct{}{}
-				res.task.needCode[i] = true
-				res.task.pend++
+				// Partial sync: check if we should sync this contract's bytecode
+				if s.shouldSyncCode(accountHash) {
+					res.task.codeTasks[common.BytesToHash(account.CodeHash)] = struct{}{}
+					res.task.needCode[i] = true
+					res.task.pend++
+				} else {
+					// Skip bytecode for non-tracked contracts
+					bytecodeSkippedMeter.Mark(1)
+					s.bytecodeSkipped++
+				}
 			}
 		}
 		// Check if the account is a contract with an unknown storage trie
 		if account.Root != types.EmptyRootHash {
+			// Partial sync: check if we should sync this contract's storage
+			if !s.shouldSyncStorage(accountHash) {
+				// Skip storage for non-tracked contracts
+				// Mark as skipped so healing phase knows not to try healing this storage
+				markStorageSkipped(s.db, accountHash, account.Root)
+				res.task.stateCompleted[accountHash] = struct{}{}
+				storageSkippedMeter.Mark(1)
+				s.storageSkipped++
+				continue
+			}
+
 			// If the storage was already retrieved in the last cycle, there's no need
 			// to resync it again, regardless of whether the storage root is consistent
 			// or not.
-			if _, exist := res.task.stateCompleted[res.hashes[i]]; exist {
+			if _, exist := res.task.stateCompleted[accountHash]; exist {
 				// The leftover storage tasks are not expected, unless system is
 				// very wrong.
-				if _, ok := res.task.SubTasks[res.hashes[i]]; ok {
-					panic(fmt.Errorf("unexpected leftover storage tasks, owner: %x", res.hashes[i]))
+				if _, ok := res.task.SubTasks[accountHash]; ok {
+					panic(fmt.Errorf("unexpected leftover storage tasks, owner: %x", accountHash))
 				}
 				// Mark the healing tag if storage root node is inconsistent, or
 				// it's non-existent due to storage chunking.
-				if !rawdb.HasTrieNode(s.db, res.hashes[i], nil, account.Root, s.scheme) {
+				if !rawdb.HasTrieNode(s.db, accountHash, nil, account.Root, s.scheme) {
 					res.task.needHeal[i] = true
 				}
 			} else {
@@ -1947,20 +2000,20 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 				// don't restart it from scratch. This happens if a sync cycle
 				// is interrupted and resumed later. However, *do* update the
 				// previous root hash.
-				if subtasks, ok := res.task.SubTasks[res.hashes[i]]; ok {
-					log.Debug("Resuming large storage retrieval", "account", res.hashes[i], "root", account.Root)
+				if subtasks, ok := res.task.SubTasks[accountHash]; ok {
+					log.Debug("Resuming large storage retrieval", "account", accountHash, "root", account.Root)
 					for _, subtask := range subtasks {
 						subtask.root = account.Root
 					}
 					res.task.needHeal[i] = true
-					resumed[res.hashes[i]] = struct{}{}
+					resumed[accountHash] = struct{}{}
 					largeStorageResumedGauge.Inc(1)
 				} else {
 					// It's possible that in the hash scheme, the storage, along
 					// with the trie nodes of the given root, is already present
 					// in the database. Schedule the storage task anyway to simplify
 					// the logic here.
-					res.task.stateTasks[res.hashes[i]] = account.Root
+					res.task.stateTasks[accountHash] = account.Root
 				}
 				res.task.needState[i] = true
 				res.task.pend++
@@ -3070,6 +3123,7 @@ func (s *Syncer) onHealByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) e
 // Note it's not concurrent safe, please handle the concurrent issue outside.
 func (s *Syncer) onHealState(paths [][]byte, value []byte) error {
 	if len(paths) == 1 {
+		// Account trie leaf - ALWAYS process (never skip accounts)
 		var account types.StateAccount
 		if err := rlp.DecodeBytes(value, &account); err != nil {
 			return nil // Returning the error here would drop the remote peer
@@ -3080,7 +3134,16 @@ func (s *Syncer) onHealState(paths [][]byte, value []byte) error {
 		s.accountHealedBytes += common.StorageSize(1 + common.HashLength + len(blob))
 	}
 	if len(paths) == 2 {
-		rawdb.WriteStorageSnapshot(s.stateWriter, common.BytesToHash(paths[0]), common.BytesToHash(paths[1]), value)
+		// Storage trie leaf
+		accountHash := common.BytesToHash(paths[0])
+
+		// Partial sync: skip storage healing for non-tracked contracts
+		// (accounts themselves are always synced/healed)
+		if isStorageSkipped(s.db, accountHash) {
+			return nil // Don't heal storage we intentionally skipped
+		}
+
+		rawdb.WriteStorageSnapshot(s.stateWriter, accountHash, common.BytesToHash(paths[1]), value)
 		s.storageHealed += 1
 		s.storageHealedBytes += common.StorageSize(1 + 2*common.HashLength + len(value))
 	}
@@ -3145,8 +3208,16 @@ func (s *Syncer) reportSyncProgress(force bool) {
 		storage  = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.storageSynced), s.storageBytes.TerminalString())
 		bytecode = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.bytecodeSynced), s.bytecodeBytes.TerminalString())
 	)
-	log.Info("Syncing: state download in progress", "synced", progress, "state", synced,
-		"accounts", accounts, "slots", storage, "codes", bytecode, "eta", common.PrettyDuration(estTime-elapsed))
+	if s.isPartialSync() {
+		log.Info("Syncing: partial state download in progress", "synced", progress, "state", synced,
+			"accounts", accounts,
+			"slots", storage, "slotsSkipped", s.storageSkipped,
+			"codes", bytecode, "codesSkipped", s.bytecodeSkipped,
+			"eta", common.PrettyDuration(estTime-elapsed))
+	} else {
+		log.Info("Syncing: state download in progress", "synced", progress, "state", synced,
+			"accounts", accounts, "slots", storage, "codes", bytecode, "eta", common.PrettyDuration(estTime-elapsed))
+	}
 }
 
 // reportHealProgress calculates various status reports and provides it to the user.

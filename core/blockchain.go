@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/partial"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -217,6 +218,23 @@ type BlockChainConfig struct {
 	// detailed statistics will be logged. Negative value means disabled (default),
 	// zero logs all blocks, positive value filters blocks by execution time.
 	SlowBlockThreshold time.Duration
+
+	// PartialStateEnabled enables partial statefulness mode where only configured
+	// contracts have their storage synced and tracked.
+	PartialStateEnabled bool
+
+	// PartialStateContracts is the list of contracts to track storage for
+	// when partial state mode is enabled.
+	PartialStateContracts []common.Address
+
+	// PartialStateBALRetention is the number of blocks to retain BAL history for.
+	// Default is 256 if not specified.
+	PartialStateBALRetention uint64
+
+	// PartialStateChainRetention is the number of recent blocks to retain
+	// bodies and receipts for. Older blocks only keep their headers. 0 means
+	// keep all chain history. Only applies when PartialStateEnabled is true.
+	PartialStateChainRetention uint64
 }
 
 // DefaultConfig returns the default config.
@@ -321,6 +339,7 @@ type BlockChain struct {
 	flushInterval atomic.Int64                     // Time interval (processing time) after which to flush a state
 	triedb        *triedb.Database                 // The database handler for maintaining trie nodes.
 	statedb       *state.CachingDB                 // State database to reuse between imports (contains state cache)
+	partialState  *partial.PartialState            // Partial state manager (nil if full node)
 	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
 
 	hc               *HeaderChain
@@ -419,6 +438,28 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 	bc.flushInterval.Store(int64(cfg.TrieTimeLimit))
 	bc.statedb = state.NewDatabase(bc.triedb, nil)
+
+	// Initialize partial state manager if enabled
+	if cfg.PartialStateEnabled {
+		balRetention := cfg.PartialStateBALRetention
+		if balRetention == 0 {
+			balRetention = 256 // Default retention
+		}
+		filter := partial.NewConfiguredFilter(cfg.PartialStateContracts)
+		bc.partialState = partial.NewPartialState(db, bc.triedb, filter, balRetention)
+		log.Info("Partial state mode enabled",
+			"contracts", len(cfg.PartialStateContracts),
+			"balRetention", balRetention)
+
+		// Set chain retention on the freezer so it enforces a rolling window
+		// of bodies/receipts, keeping only the most recent N blocks.
+		if cfg.PartialStateChainRetention > 0 {
+			if setter, ok := db.(interface{ SetChainRetention(uint64) }); ok {
+				setter.SetChainRetention(cfg.PartialStateChainRetention)
+			}
+		}
+	}
+
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(bc.hc)
@@ -714,6 +755,12 @@ func (bc *BlockChain) loadLastState() error {
 
 // initializeHistoryPruning sets bc.historyPrunePoint.
 func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
+	// Partial state mode manages its own chain retention via the freezer.
+	// The freezer tail may be at any position (HEAD - chainRetention),
+	// which won't match any known predefined prune point — that's expected.
+	if bc.cfg.PartialStateEnabled && bc.cfg.PartialStateChainRetention > 0 {
+		return nil
+	}
 	freezerTail, _ := bc.db.Tail()
 
 	switch bc.cfg.ChainHistoryMode {

@@ -49,9 +49,22 @@ type chainFreezer struct {
 	// Optional Era database used as a backup for the pruned chain.
 	eradb *eradb.Store
 
+	// chainRetention is the number of recent blocks to retain bodies and
+	// receipts for. When set (> 0), the freezer enforces a rolling window:
+	// after each batch of blocks is frozen, bodies/receipts older than
+	// (frozen - chainRetention) are pruned via TruncateTail.
+	chainRetention uint64
+
 	quit    chan struct{}
 	wg      sync.WaitGroup
 	trigger chan chan struct{} // Manual blocking freeze trigger, test determinism
+}
+
+// SetChainRetention configures the rolling window for bodies/receipts retention.
+// When set to a non-zero value, the freezer will prune bodies and receipts
+// (prunable tables) older than (frozen - retention) blocks after each freeze cycle.
+func (f *chainFreezer) SetChainRetention(blocks uint64) {
+	f.chainRetention = blocks
 }
 
 // newChainFreezer initializes the freezer for ancient chain segment.
@@ -294,6 +307,26 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			context = append(context, []interface{}{"hash", ancients[n-1]}...)
 		}
 		log.Debug("Deep froze chain segment", context...)
+
+		// Enforce chain retention: after freezing new blocks, advance the tail
+		// to maintain exactly chainRetention blocks of bodies/receipts. This is
+		// a continuous "in for one, out for one" flow — for every batch frozen,
+		// the oldest bodies/receipts beyond the retention window are deleted.
+		// Headers (non-prunable) are always kept.
+		if f.chainRetention > 0 {
+			frozen, _ = f.Ancients()
+			if frozen > f.chainRetention {
+				newTail := frozen - f.chainRetention
+				oldTail, _ := f.Tail()
+				if newTail > oldTail {
+					if _, err := f.TruncateTail(newTail); err != nil {
+						log.Error("Failed to enforce chain retention", "err", err)
+					} else {
+						log.Debug("Chain retention enforced", "tail", newTail, "retention", f.chainRetention)
+					}
+				}
+			}
+		}
 
 		// Avoid database thrashing with tiny writes
 		if frozen-first < freezerBatchLimit {
