@@ -408,9 +408,9 @@ var (
 		Category: flags.APICategory,
 	}
 	RPCGlobalLogQueryLimit = &cli.IntFlag{
-		Name:  "rpc-logquerylimit",
-		Usage: "Maximum number of alternative addresses or topics allowed per search position in eth_getLogs filter criteria (0 = no cap)",
-		Value: ethconfig.Defaults.LogQueryLimit,
+		Name:     "rpc-logquerylimit",
+		Usage:    "Maximum number of alternative addresses or topics allowed per search position in eth_getLogs filter criteria (0 = no cap)",
+		Value:    ethconfig.Defaults.LogQueryLimit,
 		Category: flags.APICategory,
 	}
 	RPCGlobalRangeLimitFlag = &cli.Uint64Flag{
