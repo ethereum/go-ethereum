@@ -2096,6 +2096,11 @@ func (p *BlobPool) Clear() {
 	p.index = make(map[common.Address][]*blobTxMeta)
 	p.spent = make(map[common.Address]*uint256.Int)
 
+	// Reset counters and the gapped buffer
+	p.stored = 0
+	p.gapped = make(map[common.Address][]*types.Transaction)
+	p.gappedSource = make(map[common.Hash]common.Address)
+
 	var (
 		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), p.head.Load()))
 		blobfee = uint256.NewInt(params.BlobTxMinBlobGasprice)
