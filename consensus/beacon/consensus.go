@@ -272,6 +272,14 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 			return err
 		}
 	}
+
+	amsterdam := chain.Config().IsAmsterdam(header.Number, header.Time)
+	if amsterdam && header.SlotNumber == nil {
+		return errors.New("header is missing slotNumber")
+	}
+	if !amsterdam && header.SlotNumber != nil {
+		return fmt.Errorf("invalid slotNumber: have %d, expected nil", *header.SlotNumber)
+	}
 	return nil
 }
 
