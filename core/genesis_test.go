@@ -17,6 +17,8 @@
 package core
 
 import (
+	"errors"
+	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -106,6 +108,53 @@ func TestSetupGenesis(t *testing.T) {
 			wantConfig: params.TestnetChainConfig,
 		},
 		{
+			name: "stored canonical hash without header",
+			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
+				missingHash := common.HexToHash("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+				rawdb.WriteCanonicalHash(db, missingHash, 0)
+				return SetupGenesisBlock(db, nil)
+			},
+			wantErr:    fmt.Errorf("missing genesis header for hash: %s", common.HexToHash("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").Hex()),
+			wantHash:   common.HexToHash("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+			wantConfig: params.AllEthashProtocolChanges,
+		},
+		{
+			name: "genesis header present but state missing",
+			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
+				block := DefaultGenesisBlock().ToBlock(nil)
+				rawdb.WriteCanonicalHash(db, block.Hash(), 0)
+				rawdb.WriteHeader(db, block.Header())
+				return SetupGenesisBlock(db, nil)
+			},
+			wantHash:   params.MainnetGenesisHash,
+			wantConfig: params.XDCMainnetChainConfig,
+		},
+		{
+			name: "genesis block without chain config",
+			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
+				block := DefaultGenesisBlock().ToBlock(db)
+				rawdb.WriteBlock(db, block)
+				rawdb.WriteCanonicalHash(db, block.Hash(), 0)
+				return SetupGenesisBlock(db, nil)
+			},
+			wantHash:   params.MainnetGenesisHash,
+			wantConfig: params.XDCMainnetChainConfig,
+		},
+		{
+			name: "missing block number for head header hash",
+			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
+				block := DefaultGenesisBlock().ToBlock(db)
+				rawdb.WriteBlock(db, block)
+				rawdb.WriteCanonicalHash(db, block.Hash(), 0)
+				rawdb.WriteChainConfig(db, block.Hash(), params.XDCMainnetChainConfig)
+				rawdb.WriteHeadHeaderHash(db, common.HexToHash("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"))
+				return SetupGenesisBlock(db, nil)
+			},
+			wantErr:    errors.New("missing block number for head header hash"),
+			wantHash:   params.MainnetGenesisHash,
+			wantConfig: params.XDCMainnetChainConfig,
+		},
+		{
 			name: "compatible config in DB",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				oldcustomg.MustCommit(db)
@@ -145,7 +194,7 @@ func TestSetupGenesis(t *testing.T) {
 		db := rawdb.NewMemoryDatabase()
 		config, hash, err := test.fn(db)
 		// Check the return values.
-		if !reflect.DeepEqual(err, test.wantErr) {
+		if (err == nil) != (test.wantErr == nil) || (err != nil && test.wantErr != nil && !errors.Is(err, test.wantErr) && err.Error() != test.wantErr.Error()) {
 			spew := spew.ConfigState{DisablePointerAddresses: true, DisableCapacities: true}
 			t.Errorf("%s: returned error %#v, want %#v", test.name, spew.NewFormatter(err), spew.NewFormatter(test.wantErr))
 		}
