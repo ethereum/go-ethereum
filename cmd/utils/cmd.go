@@ -497,11 +497,6 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last uint64, newBuild
 			if err != nil {
 				return err
 			}
-			final := filepath.Join(dir, filename(network, idx, id))
-			if err := os.Rename(tmpPath, final); err != nil {
-				return err
-			}
-
 			if _, err := f.Seek(0, io.SeekStart); err != nil {
 				return err
 			}
@@ -511,7 +506,11 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last uint64, newBuild
 				return err
 			}
 			checksums = append(checksums, common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex())
-			return nil
+
+			// Close before rename. It's required on Windows.
+			f.Close()
+			final := filepath.Join(dir, filename(network, idx, id))
+			return os.Rename(tmpPath, final)
 		}(); err != nil {
 			return err
 		}
