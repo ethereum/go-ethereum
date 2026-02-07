@@ -1149,6 +1149,8 @@ func TestEIP8024_Execution(t *testing.T) {
 					_, err = opJumpdest(&pc, evm, scope)
 				case ISZERO:
 					_, err = opIszero(&pc, evm, scope)
+				case PUSH0:
+					_, err = opPush0(&pc, evm, scope)
 				case DUPN:
 					_, err = opDupN(&pc, evm, scope)
 				case SWAPN:
