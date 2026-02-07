@@ -73,8 +73,9 @@ type rawWallet struct {
 // Example call
 // {"jsonrpc":"2.0","method":"clef_listWallets","params":[], "id":5}
 func (api *UIServerAPI) ListWallets() []rawWallet {
-	wallets := make([]rawWallet, 0) // return [] instead of nil if empty
-	for _, wallet := range api.am.Wallets() {
+	allWallets := api.am.Wallets()
+	wallets := make([]rawWallet, 0, len(allWallets)) // return [] instead of nil if empty
+	for _, wallet := range allWallets {
 		status, failure := wallet.Status()
 
 		raw := rawWallet{
