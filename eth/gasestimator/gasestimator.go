@@ -262,11 +262,9 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	// context for the lifetime of this method call.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-
-	go func() {
-		<-ctx.Done()
-		evm.Cancel()
-	}()
+	
+	context.AfterFunc(ctx, evm.Cancel)
+	
 	// Execute the call, returning a wrapped error or the result
 	result, err := core.ApplyMessage(evm, call, new(core.GasPool).AddGas(math.MaxUint64))
 	if vmerr := dirtyState.Error(); vmerr != nil {
