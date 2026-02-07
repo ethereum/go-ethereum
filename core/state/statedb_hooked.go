@@ -59,22 +59,37 @@ func (s *hookedStateDB) IsNewContract(addr common.Address) bool {
 }
 
 func (s *hookedStateDB) GetBalance(addr common.Address) *uint256.Int {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.GetBalance(addr)
 }
 
 func (s *hookedStateDB) GetNonce(addr common.Address) uint64 {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.GetNonce(addr)
 }
 
 func (s *hookedStateDB) GetCodeHash(addr common.Address) common.Hash {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.GetCodeHash(addr)
 }
 
 func (s *hookedStateDB) GetCode(addr common.Address) []byte {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.GetCode(addr)
 }
 
 func (s *hookedStateDB) GetCodeSize(addr common.Address) int {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.GetCodeSize(addr)
 }
 
@@ -91,14 +106,23 @@ func (s *hookedStateDB) GetRefund() uint64 {
 }
 
 func (s *hookedStateDB) GetStateAndCommittedState(addr common.Address, hash common.Hash) (common.Hash, common.Hash) {
+	if s.hooks.OnStorageRead != nil {
+		s.hooks.OnStorageRead(addr, hash)
+	}
 	return s.inner.GetStateAndCommittedState(addr, hash)
 }
 
 func (s *hookedStateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
+	if s.hooks.OnStorageRead != nil {
+		s.hooks.OnStorageRead(addr, hash)
+	}
 	return s.inner.GetState(addr, hash)
 }
 
 func (s *hookedStateDB) GetStorageRoot(addr common.Address) common.Hash {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.GetStorageRoot(addr)
 }
 
@@ -111,14 +135,23 @@ func (s *hookedStateDB) SetTransientState(addr common.Address, key, value common
 }
 
 func (s *hookedStateDB) HasSelfDestructed(addr common.Address) bool {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.HasSelfDestructed(addr)
 }
 
 func (s *hookedStateDB) Exist(addr common.Address) bool {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.Exist(addr)
 }
 
 func (s *hookedStateDB) Empty(addr common.Address) bool {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.Empty(addr)
 }
 
