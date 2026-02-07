@@ -318,17 +318,22 @@ func newTrieReader(root common.Hash, db *triedb.Database, ts *overlay.Transition
 		tr  Trie
 		err error
 	)
-	if !db.IsVerkle() {
+	if !db.IsVerkle() && (ts == nil || !ts.InTransition()) {
 		tr, err = trie.NewStateTrie(trie.StateTrieID(root), db)
 	} else {
-		// When IsVerkle() is true, create a BinaryTrie wrapped in TransitionTrie
-		binTrie, binErr := bintrie.NewBinaryTrie(root, db)
+		var binTrie *bintrie.BinaryTrie
+		var binErr error
+		if ts.BaseRoot == (common.Hash{}) {
+			binTrie, binErr = bintrie.NewBinaryTrie(common.Hash{}, db)
+		} else {
+			binTrie, binErr = bintrie.NewBinaryTrie(root, db)
+		}
 		if binErr != nil {
 			return nil, binErr
 		}
 
 		// Based on the transition status, determine if the overlay
-		// tree needs to be created, or if a single, target tree is
+		// tree needs to be created, or if a single target tree is
 		// to be picked.
 		if ts.InTransition() {
 			mpt, err := trie.NewStateTrie(trie.StateTrieID(ts.BaseRoot), db)
