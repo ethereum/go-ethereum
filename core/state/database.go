@@ -18,6 +18,7 @@ package state
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -27,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/transitiontrie"
@@ -157,6 +159,8 @@ type CachingDB struct {
 
 	// Transition-specific fields
 	TransitionStatePerRoot *lru.Cache[common.Hash, *overlay.TransitionState]
+
+	forkBoundaryRoots sync.Map // map[common.Hash]struct{}; set of roots at fork boundary
 }
 
 // NewDatabase creates a state database with the provided data sources.
@@ -177,6 +181,82 @@ func NewDatabaseForTesting() *CachingDB {
 	return NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
 }
 
+func (db *CachingDB) SetForkBoundary(root common.Hash) {
+	db.forkBoundaryRoots.Store(root, struct{}{})
+}
+
+func (db *CachingDB) ClearForkBoundary(root common.Hash) {
+	db.forkBoundaryRoots.Delete(root)
+}
+
+func (db *CachingDB) isForkBoundary(root common.Hash) bool {
+	_, ok := db.forkBoundaryRoots.Load(root)
+	return ok
+}
+
+var (
+	transitionStartedKey               = common.Hash{}  // slot 0: non-zero if transition started
+	conversionProgressAddressKey       = common.Hash{1} // slot 1: current account pointer
+	conversionProgressSlotKey          = common.Hash{2} // slot 2: current slot pointer
+	conversionProgressStorageProcessed = common.Hash{3} // slot 3: storage processed flag
+	transitionEndedKey                 = common.Hash{4} // slot 4: non-zero if transition ended
+)
+
+// isTransitionActive checks if the binary tree transition has been activated
+func isTransitionActive(reader StateReader) bool {
+	val, err := reader.Storage(params.BinaryTransitionRegistryAddress, transitionStartedKey)
+	if err != nil {
+		return false
+	}
+	return val != (common.Hash{})
+}
+
+// LoadTransitionState retrieves the Verkle transition state associated with
+// the given state root hash from the database.
+func LoadTransitionState(reader StateReader, root common.Hash) *overlay.TransitionState {
+	startedBytes, err := reader.Storage(params.BinaryTransitionRegistryAddress, transitionStartedKey)
+	if err != nil {
+		return nil
+	}
+	started := startedBytes != (common.Hash{})
+
+	// If not started, return nil to indicate no active transition
+	if !started {
+		return nil
+	}
+
+	endedBytes, err := reader.Storage(params.BinaryTransitionRegistryAddress, transitionEndedKey)
+	if err != nil {
+		return nil
+	}
+	ended := endedBytes != (common.Hash{})
+
+	currentAccountBytes, err := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressAddressKey)
+	if err != nil {
+		return nil
+	}
+	currentAccount := common.BytesToAddress(currentAccountBytes[12:])
+
+	currentSlotHash, err := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressSlotKey)
+	if err != nil {
+		return nil
+	}
+
+	storageProcessedBytes, err := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressStorageProcessed)
+	if err != nil {
+		return nil
+	}
+	storageProcessed := storageProcessedBytes[0] == 1
+
+	return &overlay.TransitionState{
+		Started:               started,
+		Ended:                 ended,
+		CurrentAccountAddress: &currentAccount,
+		CurrentSlotHash:       currentSlotHash,
+		StorageProcessed:      storageProcessed,
+	}
+}
+
 // StateReader returns a state reader associated with the specified state root.
 func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 	var readers []StateReader
@@ -190,6 +270,7 @@ func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 			readers = append(readers, newFlatReader(snap))
 		}
 	}
+	var ts *overlay.TransitionState
 	// Configure the state reader using the path database in path mode.
 	// This reader offers improved performance but is optional and only
 	// partially useful if the snapshot data in path database is not
@@ -197,12 +278,19 @@ func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 	if db.TrieDB().Scheme() == rawdb.PathScheme {
 		reader, err := db.triedb.StateReader(stateRoot)
 		if err == nil {
-			readers = append(readers, newFlatReader(reader))
+			flatReader := newFlatReader(reader)
+			readers = append(readers, flatReader)
+			if isTransitionActive(flatReader) || db.triedb.IsVerkle() {
+				ts = LoadTransitionState(flatReader, stateRoot)
+			}
 		}
+	}
+	if ts == nil && db.isForkBoundary(stateRoot) {
+		ts = &overlay.TransitionState{Started: true, BaseRoot: stateRoot}
 	}
 	// Configure the trie reader, which is expected to be available as the
 	// gatekeeper unless the state is corrupted.
-	tr, err := newTrieReader(stateRoot, db.triedb)
+	tr, err := newTrieReader(stateRoot, db.triedb, ts)
 	if err != nil {
 		return nil, err
 	}
@@ -238,16 +326,34 @@ func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (ReaderWithSta
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	if db.triedb.IsVerkle() {
-		ts := overlay.LoadTransitionState(db.TrieDB().Disk(), root, db.triedb.IsVerkle())
-		if ts.InTransition() {
-			panic("state tree transition isn't supported yet")
+	if db.isForkBoundary(root) {
+		return db.openForkBoundaryTrie(root)
+	}
+	reader, err := db.triedb.StateReader(root)
+	if err != nil {
+		tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
+		if err != nil {
+			return nil, err
 		}
-		if ts.Transitioned() {
-			// Use BinaryTrie instead of VerkleTrie when IsVerkle is set
-			// (IsVerkle actually means Binary Trie mode in this codebase)
-			return bintrie.NewBinaryTrie(root, db.triedb)
+		return tr, nil
+	}
+	flatReader := newFlatReader(reader)
+
+	ts := LoadTransitionState(flatReader, root)
+	if isTransitionActive(flatReader) || db.triedb.IsVerkle() {
+		bt, err := bintrie.NewBinaryTrie(root, db.triedb)
+		if err != nil {
+			return nil, fmt.Errorf("could not open the overlay tree: %w", err)
 		}
+		if !ts.InTransition() {
+			return bt, nil
+		}
+
+		base, err := trie.NewStateTrie(trie.StateTrieID(ts.BaseRoot), db.triedb)
+		if err != nil {
+			return nil, fmt.Errorf("could not create base trie in OpenTrie: %w", err)
+		}
+		return transitiontrie.NewTransitionTrie(base, bt, false), nil
 	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {
@@ -256,9 +362,21 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	return tr, nil
 }
 
+func (db *CachingDB) openForkBoundaryTrie(root common.Hash) (Trie, error) {
+	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, db.triedb)
+	if err != nil {
+		return nil, fmt.Errorf("could not open empty binary trie at fork boundary: %w", err)
+	}
+	base, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
+	if err != nil {
+		return nil, fmt.Errorf("could not open base MPT at fork boundary: %w", err)
+	}
+	return transitiontrie.NewTransitionTrie(base, bt, false), nil
+}
+
 // OpenStorageTrie opens the storage trie of an account.
 func (db *CachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
-	if db.triedb.IsVerkle() {
+	if self != nil && self.IsVerkle() {
 		return self, nil
 	}
 	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)
