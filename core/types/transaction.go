@@ -317,11 +317,17 @@ func (tx *Transaction) To() *common.Address {
 
 // Cost returns (gas * gasPrice) + (blobGas * blobGasPrice) + value.
 func (tx *Transaction) Cost() *big.Int {
-	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
-	if tx.Type() == BlobTxType {
-		total.Add(total, new(big.Int).Mul(tx.BlobGasFeeCap(), new(big.Int).SetUint64(tx.BlobGas())))
+	// Avoid allocating copies via tx.GasPrice()/tx.Value(); use inner values directly.
+	total := new(big.Int).SetUint64(tx.inner.gas())
+	total.Mul(total, tx.inner.gasPrice())
+	if blobtx, ok := tx.inner.(*BlobTx); ok {
+		tmp := new(big.Int).SetUint64(blobtx.blobGas())
+		// BlobFeeCap is uint256.Int; ToBig allocates, but blob txs are rarer and
+		// this still removes several other allocations compared to the old code.
+		tmp.Mul(tmp, blobtx.BlobFeeCap.ToBig())
+		total.Add(total, tmp)
 	}
-	total.Add(total, tx.Value())
+	total.Add(total, tx.inner.value())
 	return total
 }
 
