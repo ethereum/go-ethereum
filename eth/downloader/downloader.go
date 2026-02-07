@@ -130,6 +130,7 @@ type Downloader struct {
 	chainCutoffNumber uint64
 	chainCutoffHash   common.Hash
 	chainRetention    uint64 // Bodies/receipts retention window in blocks from HEAD (0 = keep all)
+	partialFilter     partial.ContractFilter // If set, partial state mode is active (skip storage for untracked contracts)
 
 	// Channels
 	headerProcCh chan *headerTask // Channel to feed the header processor new tasks
@@ -148,6 +149,16 @@ type Downloader struct {
 	cancelCh   chan struct{}  // Channel to cancel mid-flight syncs
 	cancelLock sync.RWMutex   // Lock to protect the cancel channel and peer in delivers
 	cancelWg   sync.WaitGroup // Make sure all fetcher goroutines have exited.
+
+	// partialHeadSyncing is set during the second state sync (pivot→HEAD)
+	// for partial state nodes. When true, beaconBackfiller.suspend() should
+	// not call Cancel(), allowing the sync to complete naturally.
+	partialHeadSyncing atomic.Bool
+
+	// partialSyncComplete is set after the initial partial sync completes
+	// successfully (after AdvancePartialHead succeeds). When true, new sync
+	// cycles should be skipped - new blocks come via Engine API with BAL.
+	partialSyncComplete atomic.Bool
 
 	quitCh   chan struct{} // Quit channel to signal termination
 	quitLock sync.Mutex    // Lock to prevent double closes
@@ -228,6 +239,11 @@ type BlockChain interface {
 	// HistoryPruningCutoff returns the configured history pruning point.
 	// Block bodies along with the receipts will be skipped for synchronization.
 	HistoryPruningCutoff() (uint64, common.Hash)
+
+	// AdvancePartialHead updates currentBlock to the given block hash without
+	// re-executing blocks. Used by partial state mode after receipt-importing
+	// post-pivot blocks and re-syncing state at the new root.
+	AdvancePartialHead(common.Hash) error
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
@@ -243,6 +259,7 @@ func New(stateDb ethdb.Database, mode ethconfig.SyncMode, mux *event.TypeMux, ch
 		chainCutoffNumber: cutoffNumber,
 		chainCutoffHash:   cutoffHash,
 		chainRetention:    chainRetention,
+		partialFilter:     partialFilter,
 		dropPeer:          dropPeer,
 		headerProcCh:      make(chan *headerTask, 1),
 		quitCh:            make(chan struct{}),
@@ -618,7 +635,12 @@ func (d *Downloader) syncToHead() (err error) {
 	}
 	if mode == ethconfig.SnapSync {
 		d.pivotLock.Lock()
-		d.pivotHeader = pivot
+		if d.partialFilter != nil && d.pivotHeader != nil {
+			log.Debug("Partial state: reusing existing pivot across sync restart",
+				"pivot", d.pivotHeader.Number.Uint64(), "new_would_be", pivot.Number.Uint64())
+		} else {
+			d.pivotHeader = pivot
+		}
 		d.pivotLock.Unlock()
 
 		fetchers = append(fetchers, func() error { return d.processSnapSyncContent() })
@@ -950,6 +972,45 @@ func (d *Downloader) processSnapSyncContent() error {
 		if len(results) == 0 {
 			// If pivot sync is done, stop
 			if d.committed.Load() {
+				// Partial state: bridge the gap from pivot state to HEAD state.
+				// After receipt-importing afterP blocks, the state trie exists at
+				// the pivot root but NOT at HEAD's root. Future BAL-based block
+				// processing needs the parent state at HEAD's root, so we run a
+				// second state sync to download it (no execution involved).
+				if d.partialFilter != nil {
+					snapHead := d.blockchain.CurrentSnapBlock()
+					currentHead := d.blockchain.CurrentBlock()
+
+					if snapHead.Hash() != currentHead.Hash() {
+						log.Info("Partial state: syncing state to HEAD",
+							"pivot", currentHead.Number, "head", snapHead.Number)
+
+						// Set flag to prevent beaconBackfiller.suspend() from
+						// cancelling us during this critical second state sync.
+						d.partialHeadSyncing.Store(true)
+
+						sync.Cancel()
+						sync = d.syncState(snapHead.Root)
+						go closeOnErr(sync)
+
+						err := sync.Wait()
+						d.partialHeadSyncing.Store(false)
+
+						if err != nil {
+							// TODO: Consider explicit retry logic or state cleanup here.
+							// Currently relies on self-healing: next sync cycle detects
+							// snapHead != currentHead and retries second state sync.
+							log.Error("Partial state second sync failed, will retry", "pivot", currentHead.Number, "head", snapHead.Number, "err", err)
+							return err
+						}
+						if err := d.blockchain.AdvancePartialHead(snapHead.Hash()); err != nil {
+							return err
+						}
+						// Mark partial sync as complete - new blocks via Engine API only
+						d.partialSyncComplete.Store(true)
+						log.Info("Partial state initial sync complete")
+					}
+				}
 				d.reportSnapSyncProgress(true)
 				return sync.Cancel()
 			}
@@ -1014,9 +1075,22 @@ func (d *Downloader) processSnapSyncContent() error {
 				continue
 			}
 		}
-		// Fast sync done, pivot commit done, full import
-		if err := d.importBlockResults(afterP); err != nil {
-			return err
+		// Fast sync done, pivot commit done, import remaining blocks.
+		if d.partialFilter != nil {
+			// Partial state mode ONLY: import afterP with receipts (no execution).
+			// Untracked contracts have empty storage tries, so full execution
+			// would fail. State will be brought to HEAD via a second state sync
+			// at the processSnapSyncContent exit path.
+			if len(afterP) > 0 {
+				if err := d.commitSnapSyncData(afterP, sync); err != nil {
+					return err
+				}
+			}
+		} else {
+			// Normal (full node) mode: execute afterP blocks to advance state.
+			if err := d.importBlockResults(afterP); err != nil {
+				return err
+			}
 		}
 	}
 }
