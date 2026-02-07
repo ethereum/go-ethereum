@@ -76,33 +76,15 @@ func safeANDBytes(dst, a, b []byte) int {
 
 // ORBytes ors the bytes in a and b. The destination is assumed to have enough
 // space. Returns the number of bytes or'd.
+//
+// dst and x or y may overlap exactly or not at all,
+// otherwise ORBytes may panic.
 func ORBytes(dst, a, b []byte) int {
-	if supportsUnaligned {
-		return fastORBytes(dst, a, b)
+	n := min(len(a), len(b))
+	if inexactOverlap(dst[:n], a[:n]) || inexactOverlap(dst[:n], b[:n]) {
+		panic("ORBytes: invalid overlap")
 	}
-	return safeORBytes(dst, a, b)
-}
-
-// fastORBytes ors in bulk. It only works on architectures that support
-// unaligned read/writes.
-func fastORBytes(dst, a, b []byte) int {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
-	w := n / wordSize
-	if w > 0 {
-		dw := *(*[]uintptr)(unsafe.Pointer(&dst))
-		aw := *(*[]uintptr)(unsafe.Pointer(&a))
-		bw := *(*[]uintptr)(unsafe.Pointer(&b))
-		for i := 0; i < w; i++ {
-			dw[i] = aw[i] | bw[i]
-		}
-	}
-	for i := n - n%wordSize; i < n; i++ {
-		dst[i] = a[i] | b[i]
-	}
-	return n
+	return orBytes(dst, a, b)
 }
 
 // safeORBytes ors one by one. It works on all architectures, independent if
@@ -156,4 +138,27 @@ func safeTestBytes(p []byte) bool {
 		}
 	}
 	return false
+}
+
+// anyOverlap reports whether x and y share memory at any (not necessarily
+// corresponding) index. The memory beyond the slice length is ignored.
+// from: https://github.com/golang/go/blob/4a3cef2036097d323b6cc0bbe90fc4d8c7588660/src/crypto/internal/fips140/alias/alias.go#L13-L17
+func anyOverlap(x, y []byte) bool {
+	return len(x) > 0 && len(y) > 0 &&
+		uintptr(unsafe.Pointer(&x[0])) <= uintptr(unsafe.Pointer(&y[len(y)-1])) &&
+		uintptr(unsafe.Pointer(&y[0])) <= uintptr(unsafe.Pointer(&x[len(x)-1]))
+}
+
+// inexactOverlap reports whether x and y share memory at any non-corresponding
+// index. The memory beyond the slice length is ignored. Note that x and y can
+// have different lengths and still not have any inexact overlap.
+//
+// inexactOverlap can be used to implement the requirements of the crypto/cipher
+// AEAD, Block, BlockMode and Stream interfaces.
+// from: https://github.com/golang/go/blob/4a3cef2036097d323b6cc0bbe90fc4d8c7588660/src/crypto/internal/fips140/alias/alias.go#L25-L30
+func inexactOverlap(x, y []byte) bool {
+	if len(x) == 0 || len(y) == 0 || &x[0] == &y[0] {
+		return false
+	}
+	return anyOverlap(x, y)
 }
