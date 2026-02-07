@@ -1079,6 +1079,11 @@ func TestEIP8024_Execution(t *testing.T) {
 			codeHex: "600456e65b",
 			wantErr: nil,
 		},
+		{
+			name:    "UNDERFLOW_DUPN",
+			codeHex: "6000808080808080808080808080808080e600",
+			wantErr: &ErrStackUnderflow{},
+		},
 		// Additional test cases
 		{
 			name:    "INVALID_DUPN_LOW",
