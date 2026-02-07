@@ -168,9 +168,14 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	// Construct the downloader (long sync)
 	h.downloader = downloader.New(config.Database, config.Sync, h.eventMux, h.chain, h.removePeer, h.enableSyncedFeatures, config.PartialFilter, config.ChainRetention)
 
-	// If snap sync is requested but snapshots are disabled, fail loudly
+	// If snap sync is requested but snapshots are disabled, fail loudly.
+	// Partial state nodes are an exception: they disable snapshots intentionally
+	// (account data is read directly from the trie, BAL processing never uses snapshots).
 	if h.downloader.ConfigSyncMode() == ethconfig.SnapSync && (config.Chain.Snapshots() == nil && config.Chain.TrieDB().Scheme() == rawdb.HashScheme) {
-		return nil, errors.New("snap sync not supported with snapshots disabled")
+		if !config.Chain.SupportsPartialState() {
+			return nil, errors.New("snap sync not supported with snapshots disabled")
+		}
+		log.Info("Snap sync with snapshots disabled (partial state mode)")
 	}
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)
