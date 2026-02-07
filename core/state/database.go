@@ -299,6 +299,8 @@ func mustCopyTrie(t Trie) Trie {
 	switch t := t.(type) {
 	case *trie.StateTrie:
 		return t.Copy()
+	case *bintrie.BinaryTrie:
+		return t.Copy()
 	case *transitiontrie.TransitionTrie:
 		return t.Copy()
 	default:

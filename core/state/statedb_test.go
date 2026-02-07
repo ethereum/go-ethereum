@@ -717,6 +717,31 @@ func TestCopyOfCopy(t *testing.T) {
 	}
 }
 
+// TestCopyWithBinaryTrie tests that Copy works correctly when the underlying
+// trie is a BinaryTrie (verkle mode). This is a regression test to ensure
+// mustCopyTrie handles *bintrie.BinaryTrie.
+func TestCopyWithBinaryTrie(t *testing.T) {
+	disk := rawdb.NewMemoryDatabase()
+	db := triedb.NewDatabase(disk, triedb.VerkleDefaults)
+	sdb := NewDatabase(db, nil)
+
+	state, err := New(types.EmptyRootHash, sdb)
+	if err != nil {
+		t.Fatalf("failed to initialize state: %v", err)
+	}
+	addr := common.HexToAddress("0x01")
+	state.SetBalance(addr, uint256.NewInt(42), tracing.BalanceChangeUnspecified)
+
+	// IntermediateRoot sets s.trie to *bintrie.BinaryTrie in verkle mode
+	state.IntermediateRoot(true)
+
+	// Copy must not panic with BinaryTrie
+	cpy := state.Copy()
+	if got := cpy.GetBalance(addr); got.Cmp(uint256.NewInt(42)) != 0 {
+		t.Fatalf("balance mismatch: have %v, want 42", got)
+	}
+}
+
 // Tests a regression where committing a copy lost some internal meta information,
 // leading to corrupted subsequent copies.
 //
