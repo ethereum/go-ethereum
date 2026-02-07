@@ -31,5 +31,5 @@ func InitializeBinaryTransitionRegistry(statedb *state.StateDB) {
 	}
 	statedb.SetCode(params.BinaryTransitionRegistryAddress, []byte{1, 2, 3}, tracing.CodeChangeUnspecified)
 	statedb.SetNonce(params.BinaryTransitionRegistryAddress, 1, tracing.NonceChangeUnspecified)
-	statedb.SetState(params.BinaryTransitionRegistryAddress, common.Hash{}, common.Hash{1})
+	statedb.SetState(params.BinaryTransitionRegistryAddress, common.Hash{}, common.Hash{1}) // slot 0: started
 }

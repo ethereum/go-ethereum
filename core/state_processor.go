@@ -87,14 +87,27 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	context = NewEVMBlockContext(header, p.chain, nil)
 	evm := vm.NewEVM(context, tracingStateDB, config, cfg)
 
+	if config.IsVerkle(header.Number, header.Time) {
+		// Bootstrap part deux: initialize the base root in the registry,
+		// as this is the first UBT block (which is the _second_ block of
+		// the transition, after the bootstrapping block that initializes
+		// the registry).
+		parentHeader := p.chain.GetHeaderByHash(block.ParentHash())
+		// Confusingly, the first IsVerkle block isn't "verkle"
+		if config.IsVerkle(parentHeader.Number, parentHeader.Time) {
+			// Store the parent's state root as the MPT base root for the
+			// binary trie transition. Only written once (first verkle block),
+			// before InitializeBinaryTransitionRegistry sets slot 0.
+			if statedb.GetState(params.BinaryTransitionRegistryAddress, common.Hash{5}) == (common.Hash{}) {
+				statedb.SetState(params.BinaryTransitionRegistryAddress, common.Hash{5}, parentHeader.Root)
+			}
+		}
+	}
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
 	if config.IsPrague(block.Number(), block.Time()) || config.IsVerkle(block.Number(), block.Time()) {
 		ProcessParentBlockHash(block.ParentHash(), evm)
-	}
-	if config.IsVerkle(header.Number, header.Time) {
-		InitializeBinaryTransitionRegistry(statedb)
 	}
 
 	// Iterate over and process the individual transactions
@@ -127,6 +140,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		// EIP-7251
 		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
 			return nil, fmt.Errorf("failed to process consolidation queue: %w", err)
+		}
+	}
+	if config.IsVerkle(header.Number, header.Time) {
+		// Bootstrap part one: initialize the registry to mark the transition as started,
+		// which has to be done at the end of the _previous_ block, so that the information
+		// can bee made available inside the tree.
+		parentHeader := p.chain.GetHeaderByHash(block.ParentHash())
+		if !config.IsVerkle(parentHeader.Number, parentHeader.Time) {
+			InitializeBinaryTransitionRegistry(statedb)
 		}
 	}
 

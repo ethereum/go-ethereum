@@ -167,6 +167,15 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 			return &newPayloadResult{err: err}
 		}
 	}
+	if miner.chainConfig.IsVerkle(work.header.Number, work.header.Time) {
+		// Bootstrap part one: initialize the registry to mark the transition as started,
+		// which has to be done at the end of the _previous_ block, so that the information
+		// can bee made available inside the tree.
+		parentHeader := miner.chain.GetHeaderByHash(work.header.ParentHash) // XXX parent could be added to the environment in prepareWork to avoid this lookup
+		if !miner.chainConfig.IsVerkle(parentHeader.Number, parentHeader.Time) {
+			core.InitializeBinaryTransitionRegistry(work.state)
+		}
+	}
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
 		work.header.RequestsHash = &reqHash
@@ -260,14 +269,22 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
 	}
+	if miner.chainConfig.IsVerkle(header.Number, header.Time) {
+		// Bootstrap part deux: initialize the base root in the registry,
+		// as this is the first UBT block (which is the _second_ block of
+		// the transition, after the bootstrapping block that initializes
+		// the registry).
+		if miner.chainConfig.IsVerkle(parent.Number, parent.Time) {
+			if env.state.GetState(params.BinaryTransitionRegistryAddress, common.Hash{5}) == (common.Hash{}) {
+				env.state.SetState(params.BinaryTransitionRegistryAddress, common.Hash{5}, parent.Root)
+			}
+		}
+	}
 	if header.ParentBeaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, env.evm)
 	}
 	if miner.chainConfig.IsPrague(header.Number, header.Time) {
 		core.ProcessParentBlockHash(header.ParentHash, env.evm)
-	}
-	if miner.chainConfig.IsVerkle(header.Number, header.Time) {
-		core.InitializeBinaryTransitionRegistry(env.state)
 	}
 	return env, nil
 }

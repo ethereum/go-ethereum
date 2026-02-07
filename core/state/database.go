@@ -184,6 +184,7 @@ var (
 	conversionProgressSlotKey          = common.Hash{2} // slot 2: current slot pointer
 	conversionProgressStorageProcessed = common.Hash{3} // slot 3: storage processed flag
 	transitionEndedKey                 = common.Hash{4} // slot 4: non-zero if transition ended
+	baseRootKey                        = common.Hash{5} // slot 5: MPT base root at transition start
 )
 
 // isTransitionActive checks if the binary tree transition has been activated
@@ -232,12 +233,18 @@ func LoadTransitionState(reader StateReader, root common.Hash) *overlay.Transiti
 	}
 	storageProcessed := storageProcessedBytes[0] == 1
 
+	baseRoot, err := reader.Storage(params.BinaryTransitionRegistryAddress, baseRootKey)
+	if err != nil {
+		return nil
+	}
+
 	return &overlay.TransitionState{
 		Started:               started,
 		Ended:                 ended,
 		CurrentAccountAddress: &currentAccount,
 		CurrentSlotHash:       currentSlotHash,
 		StorageProcessed:      storageProcessed,
+		BaseRoot:              baseRoot,
 	}
 }
 
@@ -307,30 +314,45 @@ func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (ReaderWithSta
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	reader, err := db.triedb.StateReader(root)
-	if err != nil {
-		return nil, err
-	}
-	flatReader := newFlatReader(reader)
-
-	ts := LoadTransitionState(flatReader, root)
-	if isTransitionActive(flatReader) || db.triedb.IsVerkle() {
-		bt, err := bintrie.NewBinaryTrie(root, db.triedb)
+	// Only attempt transition-aware trie opening in path scheme, since
+	// hashdb does not implement StateReader.
+	if db.TrieDB().Scheme() == rawdb.PathScheme {
+		reader, err := db.triedb.StateReader(root)
 		if err != nil {
-			return nil, fmt.Errorf("could not open the overlay tree: %w", err)
+			return nil, err
 		}
-		if !ts.InTransition() {
-			// Transition complete, use BinaryTrie only
-			return bt, nil
-		}
+		flatReader := newFlatReader(reader)
 
-		base, err := trie.NewStateTrie(trie.StateTrieID(ts.BaseRoot), db.triedb)
-		if err != nil {
-			return nil, fmt.Errorf("could not create base trie in OpenTrie: %w", err)
+		ts := LoadTransitionState(flatReader, root)
+		if isTransitionActive(flatReader) || db.triedb.IsVerkle() {
+			fmt.Printf("Opening transition-aware trie for root %s with transition state: %+v\n", root, ts)
+
+			// special case of the tree bootsrap: the root will be that of the MPT, so in that
+			// case, open an empty binary tree.
+			var bt *bintrie.BinaryTrie
+			if ts.BaseRoot == (common.Hash{}) {
+				bt, err = bintrie.NewBinaryTrie(common.Hash{}, db.triedb)
+				if err != nil {
+					return nil, fmt.Errorf("could not bootstrap the overlay tree: %w", err)
+				}
+			} else {
+				bt, err = bintrie.NewBinaryTrie(root, db.triedb)
+				if err != nil {
+					return nil, fmt.Errorf("could not open the overlay tree: %w", err)
+				}
+			}
+			if !ts.InTransition() {
+				// Transition complete, use BinaryTrie only
+				return bt, nil
+			}
+
+			base, err := trie.NewStateTrie(trie.StateTrieID(ts.BaseRoot), db.triedb)
+			if err != nil {
+				return nil, fmt.Errorf("could not create base trie in OpenTrie: %w", err)
+			}
+			return transitiontrie.NewTransitionTrie(base, bt, false), nil
 		}
-		return transitiontrie.NewTransitionTrie(base, bt, false), nil
 	}
-
 	return trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 }
 
