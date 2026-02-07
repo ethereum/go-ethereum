@@ -19,9 +19,7 @@ package log
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
-	"maps"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -42,18 +40,19 @@ type GlogHandler struct {
 	level    atomic.Int32 // Current log level, atomically accessible
 	override atomic.Bool  // Flag whether overrides are used, atomically accessible
 
-	patterns  []pattern              // Current list of patterns to override with
-	siteCache map[uintptr]slog.Level // Cache of callsite pattern evaluations
-	location  string                 // file:line location where to do a stackdump at
-	lock      sync.RWMutex           // Lock protecting the override pattern list
+	patterns []pattern                // Current list of patterns to override with
+	cachePtr atomic.Pointer[sync.Map] // Pointer to cache of callsite pattern evaluations, maps uintptr -> slog.Level
+	location string                   // file:line location where to do a stackdump at
+	lock     sync.Mutex               // Lock protecting the override pattern list
 }
 
 // NewGlogHandler creates a new log handler with filtering functionality similar
 // to Google's glog logger. The returned handler implements Handler.
 func NewGlogHandler(h slog.Handler) *GlogHandler {
-	return &GlogHandler{
-		origin: h,
-	}
+	g := &GlogHandler{origin: h}
+	m := new(sync.Map)
+	g.cachePtr.Store(m)
+	return g
 }
 
 // pattern contains a filter for the Vmodule option, holding a verbosity level
@@ -67,6 +66,7 @@ type pattern struct {
 // and source files can be raised using Vmodule.
 func (h *GlogHandler) Verbosity(level slog.Level) {
 	h.level.Store(int32(level))
+	h.cachePtr.Store(new(sync.Map)) // atomic swap of cache instead of Clear
 }
 
 // Vmodule sets the glog verbosity pattern.
@@ -130,10 +130,9 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 	}
 	// Swap out the vmodule pattern for the new filter system
 	h.lock.Lock()
-	defer h.lock.Unlock()
-
 	h.patterns = filter
-	h.siteCache = make(map[uintptr]slog.Level)
+	h.lock.Unlock()
+	h.cachePtr.Store(new(sync.Map)) // atomic swap of cache instead of Clear
 	h.override.Store(len(filter) != 0)
 
 	return nil
@@ -149,22 +148,20 @@ func (h *GlogHandler) Enabled(ctx context.Context, lvl slog.Level) bool {
 // WithAttrs implements slog.Handler, returning a new Handler whose attributes
 // consist of both the receiver's attributes and the arguments.
 func (h *GlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	h.lock.RLock()
-	siteCache := maps.Clone(h.siteCache)
-	h.lock.RUnlock()
-
 	patterns := []pattern{}
+	h.lock.Lock()
 	patterns = append(patterns, h.patterns...)
+	h.lock.Unlock()
 
 	res := GlogHandler{
-		origin:    h.origin.WithAttrs(attrs),
-		patterns:  patterns,
-		siteCache: siteCache,
-		location:  h.location,
+		origin:   h.origin.WithAttrs(attrs),
+		patterns: patterns,
+		location: h.location,
 	}
 
 	res.level.Store(h.level.Load())
 	res.override.Store(h.override.Load())
+	res.cachePtr.Store(h.cachePtr.Load())
 	return &res
 }
 
@@ -178,37 +175,64 @@ func (h *GlogHandler) WithGroup(name string) slog.Handler {
 
 // Handle implements slog.Handler, filtering a log record through the global,
 // local and backtrace filters, finally emitting it if either allow it through.
-func (h *GlogHandler) Handle(_ context.Context, r slog.Record) error {
-	// If the global log level allows, fast track logging
-	if slog.Level(h.level.Load()) <= r.Level {
-		return h.origin.Handle(context.Background(), r)
+func (h *GlogHandler) Handle(ctx context.Context, r slog.Record) error {
+	// Get current cache
+	cache := h.cachePtr.Load()
+
+	// Fast path: cache hit
+	if lvl, ok := cache.Load(r.PC); ok {
+		if lvl.(slog.Level) <= r.Level {
+			return h.origin.Handle(ctx, r)
+		}
+		return nil
 	}
 
-	// Check callsite cache for previously calculated log levels
-	h.lock.RLock()
-	lvl, ok := h.siteCache[r.PC]
-	h.lock.RUnlock()
+	// Resolve the callsite file once.
+	fs := runtime.CallersFrames([]uintptr{r.PC})
+	frame, _ := fs.Next()
+	file := frame.File
 
-	// If we didn't cache the callsite yet, calculate it
+	// Snapshot the current pattern slice under lock.
+	h.lock.Lock()
+	curPatterns := h.patterns
+	h.lock.Unlock()
+
+	// Match without holding the lock.
+	var (
+		lvl slog.Level
+		ok  bool
+	)
+	for _, rule := range curPatterns {
+		if rule.pattern.MatchString("+" + file) {
+			lvl, ok = rule.level, true
+			// Not breaking allows the last match to win.
+		}
+	}
 	if !ok {
-		h.lock.Lock()
-
-		fs := runtime.CallersFrames([]uintptr{r.PC})
-		frame, _ := fs.Next()
-
-		for _, rule := range h.patterns {
-			if rule.pattern.MatchString(fmt.Sprintf("+%s", frame.File)) {
-				h.siteCache[r.PC], lvl, ok = rule.level, rule.level, true
-			}
-		}
-		// If no rule matched, remember to drop log the next time
-		if !ok {
-			h.siteCache[r.PC] = 0
-		}
-		h.lock.Unlock()
+		// No rule matched: use the current global/default level.
+		lvl = slog.Level(h.level.Load())
 	}
+
+	// Check if we should cache this result
+	h.lock.Lock()
+	shouldCache := false
+	switch {
+	case len(curPatterns) == 0 && len(h.patterns) == 0:
+		// Cache the default/global level to avoid re-evaluating the callsite each time.
+		shouldCache = true
+	case len(h.patterns) > 0 && len(curPatterns) > 0:
+		// Only cache the result if the vmodule patterns have not changed since we
+		// snapshotted them. This avoids inserting stale entries if Vmodule() updates
+		// the pattern list concurrently with Handle().
+		shouldCache = (&h.patterns[0] == &curPatterns[0])
+	}
+	if shouldCache {
+		cache.Store(r.PC, lvl)
+	}
+	h.lock.Unlock()
+
 	if lvl <= r.Level {
-		return h.origin.Handle(context.Background(), r)
+		return h.origin.Handle(ctx, r)
 	}
 	return nil
 }
