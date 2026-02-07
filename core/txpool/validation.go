@@ -292,8 +292,14 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 		// overflow the number of permitted transactions from a single account
 		// (i.e. max cancellable via out-of-bound transaction).
 		if opts.UsedAndLeftSlots != nil {
-			if used, left := opts.UsedAndLeftSlots(from); left <= 0 {
-				return fmt.Errorf("%w: pooled %d txs", ErrAccountLimitExceeded, used)
+			if tx.Type() == types.BlobTxType {
+				if used, left := opts.UsedAndLeftSlots(from); left < len(tx.BlobHashes()) {
+					return fmt.Errorf("%w: pooled %d blobs", ErrAccountLimitExceeded, used)
+				}
+			} else {
+				if used, left := opts.UsedAndLeftSlots(from); left <= 0 {
+					return fmt.Errorf("%w: pooled %d txs", ErrAccountLimitExceeded, used)
+				}
 			}
 		}
 	}

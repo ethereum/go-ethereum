@@ -19,6 +19,7 @@ package core
 import (
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -57,4 +58,5 @@ type ProcessResult struct {
 	Requests [][]byte
 	Logs     []*types.Log
 	GasUsed  uint64
+	Tickets  map[common.Address]uint16
 }

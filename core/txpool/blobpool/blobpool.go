@@ -75,14 +75,6 @@ const (
 	// Note: if you increase this, validation will fail on txMaxSize.
 	maxBlobsPerTx = params.BlobTxMaxBlobs
 
-	// maxTxsPerAccount is the maximum number of blob transactions admitted from
-	// a single account. The limit is enforced to minimize the DoS potential of
-	// a private tx cancelling publicly propagated blobs.
-	//
-	// Note, transactions resurrected by a reorg are also subject to this limit,
-	// so pushing it down too aggressively might make resurrections non-functional.
-	maxTxsPerAccount = 16
-
 	// pendingTransactionStore is the subfolder containing the currently queued
 	// blob transactions.
 	pendingTransactionStore = "queue"
@@ -358,6 +350,8 @@ type BlobPool struct {
 	discoverFeed event.Feed // Event feed to send out new tx events on pool discovery (reorg excluded)
 	insertFeed   event.Feed // Event feed to send out new tx events on pool inclusion (reorg included)
 
+	tickets map[common.Address]uint16
+
 	lock sync.RWMutex // Mutex protecting the pool during reorg handling
 }
 
@@ -378,6 +372,7 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 		spent:          make(map[common.Address]*uint256.Int),
 		gapped:         make(map[common.Address][]*types.Transaction),
 		gappedSource:   make(map[common.Hash]common.Address),
+		tickets:        make(map[common.Address]uint16),
 	}
 }
 
@@ -423,6 +418,11 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	}
 	p.head.Store(head)
 	p.state = state
+
+	p.tickets, err = p.chain.GetTicketBalance(head)
+	if err != nil {
+		return err
+	}
 
 	// Create new slotter for pre-Osaka blob configuration.
 	slotter := newSlotter(params.BlobTxMaxBlobs)
@@ -563,7 +563,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 }
 
 // recheck verifies the pool's content for a specific account and drops anything
-// that does not fit anymore (dangling or filled nonce, overdraft).
+// that does not fit anymore (dangling or filled nonce, overdraft, ticketless).
 func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint64) {
 	// Sort the transactions belonging to the account so reinjects can be simpler
 	txs := p.index[addr]
@@ -769,16 +769,19 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			}
 		}
 	}
-	// Sanity check that no account can have more queued transactions than the
-	// DoS protection threshold.
-	if len(txs) > maxTxsPerAccount {
-		// Evict the highest nonce transactions until the pending set falls under
-		// the account's transaction cap
+
+	// If the number of txs is bigger than the sender's ticket balance,
+	// drop overflown amount from the sender
+	var blobs int
+	for _, tx := range txs {
+		blobs += len(tx.vhashes)
+	}
+	if ticket, ok := p.tickets[addr]; ok && blobs > int(ticket) {
 		var (
 			ids    []uint64
 			nonces []uint64
 		)
-		for len(txs) > maxTxsPerAccount {
+		for blobs > int(ticket) {
 			last := txs[len(txs)-1]
 			txs[len(txs)-1] = nil
 			txs = txs[:len(txs)-1]
@@ -789,10 +792,12 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			p.spent[addr] = new(uint256.Int).Sub(p.spent[addr], last.costCap)
 			p.stored -= uint64(last.storageSize)
 			p.lookup.untrack(last)
+
+			blobs -= len(last.vhashes)
 		}
 		p.index[addr] = txs
 
-		log.Warn("Dropping overcapped blob transactions", "from", addr, "kept", len(txs), "drop", nonces, "ids", ids)
+		log.Trace("Dropping ticketless blob transactions", "from", addr, "dropped", len(ids), "left", len(txs))
 		dropOvercappedMeter.Mark(int64(len(ids)))
 
 		for _, id := range ids {
@@ -860,6 +865,11 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	p.head.Store(newHead)
 	p.state = statedb
 
+	p.tickets, err = p.chain.GetTicketBalance(newHead)
+	if err != nil {
+		log.Error("Failed to get ticket balances", "err", err)
+		return
+	}
 	// Run the reorg between the old and new head and figure out which accounts
 	// need to be rechecked and which transactions need to be readded
 	if reinject, inclusions := p.reorg(oldHead, newHead); reinject != nil {
@@ -913,6 +923,10 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 	oldNum := oldHead.Number.Uint64()
 	newNum := newHead.Number.Uint64()
 
+	// todo: This can happen by chain rewind (e.g. setHead)
+	// todo: Why don't we clear the txpool in here, given that
+	// todo: most txs could be gapped ?
+	// todo: Where those txs is being rechecked ?
 	if depth := uint64(math.Abs(float64(oldNum) - float64(newNum))); depth > 64 {
 		return nil, nil
 	}
@@ -1222,11 +1236,15 @@ func (p *BlobPool) validateTx(tx *types.Transaction) error {
 			return p.state.GetNonce(addr) + uint64(len(p.index[addr]))
 		},
 		UsedAndLeftSlots: func(addr common.Address) (int, int) {
-			have := len(p.index[addr])
-			if have >= maxTxsPerAccount {
+			have := 0
+			for _, meta := range p.index[addr] {
+				have += len(meta.vhashes)
+			}
+
+			if have >= int(p.tickets[addr]) {
 				return have, 0
 			}
-			return have, maxTxsPerAccount - have
+			return have, int(p.tickets[addr]) - have
 		},
 		ExistingExpenditure: func(addr common.Address) *big.Int {
 			if spent := p.spent[addr]; spent != nil {
@@ -1970,7 +1988,9 @@ func (p *BlobPool) gappedAllowance(addr common.Address) int {
 	nonce := p.state.GetNonce(addr)
 	allowance := int(math.Log10(float64(nonce + 1)))
 	// Cap the allowance to the remaining pool space
-	return min(allowance, maxTxsPerAccount-len(p.index[addr])) - len(p.gapped[addr])
+	// We consider the ticket balance here, where one ticket is treated as a tx with a single blob.
+	// The reason is that we cannot know how many tickets filling txs will use.
+	return min(allowance, int(p.tickets[addr])-len(p.index[addr])) - len(p.gapped[addr])
 }
 
 // evictGapped removes the old transactions from the gapped reorder buffer.
