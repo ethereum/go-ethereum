@@ -169,6 +169,17 @@ func (ec *Client) CallContractWithBlockOverrides(ctx context.Context, msg ethere
 	return hex, err
 }
 
+// BlockReceipts returns the receipts of a given block number or hash.
+// This wrapper preserves geth-specific flags such as requireCanonical.
+func (ec *Client) BlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]*types.Receipt, error) {
+	var r []*types.Receipt
+	err := ec.c.CallContext(ctx, &r, "eth_getBlockReceipts", blockNrOrHash)
+	if err == nil && r == nil {
+		return nil, ethereum.NotFound
+	}
+	return r, err
+}
+
 // GCStats retrieves the current garbage collection stats from a geth node.
 func (ec *Client) GCStats(ctx context.Context) (*debug.GCStats, error) {
 	var result debug.GCStats
