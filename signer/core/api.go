@@ -497,19 +497,21 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 		modified = true
 		log.Info("Value changed by UI", "was", v0, "is", v1)
 	}
-	if d0, d1 := original.Transaction.Data, new.Transaction.Data; d0 != d1 {
-		d0s := ""
-		d1s := ""
-		if d0 != nil {
-			d0s = hexutil.Encode(*d0)
-		}
-		if d1 != nil {
-			d1s = hexutil.Encode(*d1)
-		}
-		if d1s != d0s {
-			modified = true
-			log.Info("Data changed by UI", "was", d0s, "is", d1s)
-		}
+	// Compare effective calldata (prefer Input over Data)
+	var oldData, newData []byte
+	if original.Transaction.Input != nil {
+		oldData = *original.Transaction.Input
+	} else if original.Transaction.Data != nil {
+		oldData = *original.Transaction.Data
+	}
+	if new.Transaction.Input != nil {
+		newData = *new.Transaction.Input
+	} else if new.Transaction.Data != nil {
+		newData = *new.Transaction.Data
+	}
+	if !bytes.Equal(oldData, newData) {
+		modified = true
+		log.Info("Data changed by UI", "was", hexutil.Encode(oldData), "is", hexutil.Encode(newData))
 	}
 	if n0, n1 := original.Transaction.Nonce, new.Transaction.Nonce; n0 != n1 {
 		modified = true
