@@ -196,7 +196,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			snap.Tally = make(map[common.Address]Tally)
 		}
 		// Delete the oldest signer from the recent list to allow it signing again
-		if limit := uint64(len(snap.Signers)/2 + 1); number >= limit {
+		if limit := uint64((len(snap.Signers) + 1) / 2); number >= limit {
 			delete(snap.Recents, number-limit)
 		}
 		// Resolve the authorization key and check against signers
@@ -251,7 +251,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 				delete(snap.Signers, header.Coinbase)
 
 				// Signer list shrunk, delete any leftover recent caches
-				if limit := uint64(len(snap.Signers)/2 + 1); number >= limit {
+				if limit := uint64((len(snap.Signers) + 1) / 2); number >= limit {
 					delete(snap.Recents, number-limit)
 				}
 				// Discard any previous votes the deauthorized signer cast
