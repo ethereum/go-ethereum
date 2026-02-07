@@ -741,10 +741,7 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 func applyMessageWithEVM(ctx context.Context, evm *vm.EVM, msg *core.Message, timeout time.Duration, gp *core.GasPool) (*core.ExecutionResult, error) {
 	// Wait for the context to be done and cancel the evm. Even if the
 	// EVM has finished, cancelling may be done (repeatedly)
-	go func() {
-		<-ctx.Done()
-		evm.Cancel()
-	}()
+	context.AfterFunc(ctx, evm.Cancel)
 
 	// Execute the message.
 	result, err := core.ApplyMessage(evm, msg, gp)
