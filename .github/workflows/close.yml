@@ -1,0 +1,23 @@
+name: Check author contributor status
+
+on:
+  pull_request_target:
+    types: [opened, reopened]
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+    - uses: actions/checkout@v4
+    - name: Checkout collaborator list repository
+      uses: actions/checkout@v4
+      with:
+        repository: lightclient/geth-collaborators
+        path: geth-collaborators
+    - uses: lightclient/close-pull-request@allowlist
+      with:
+        allowlist: geth-collaborators/COLLABORATORS
+        comment: "To combat excessive pull requests, the go-ethereum team now requires contributors to [register](https://pad.ethereum.org/form/#/3/form/view/8cfd7dbf415489a41cfefb7f4901d549/) as a collaborator. Please see the [policy](https://github.com/lightclient/geth-collaborators) for more information. Thank you for understanding, we look forward to reviewing your contribution!"
