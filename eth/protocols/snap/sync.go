@@ -626,14 +626,13 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 	// that skips storage/code healing for non-tracked contracts.
 	var scheduler *trie.Sync
 	if s.isPartialSync() {
-		// Create filter callbacks that check skip markers in the database
+		// Create filter callbacks that use the filter directly (not DB markers).
+		// This avoids stale marker issues across sync cycles.
 		shouldSyncStorage := func(accountHash common.Hash) bool {
-			return !isStorageSkipped(s.db, accountHash)
+			return s.shouldSyncStorage(accountHash)
 		}
 		shouldSyncCode := func(accountHash common.Hash) bool {
-			// For now, use the same logic as storage (skip if storage is skipped)
-			// This could be refined to have separate skip markers for code
-			return !isStorageSkipped(s.db, accountHash)
+			return s.shouldSyncCode(accountHash)
 		}
 		scheduler = state.NewPartialStateSync(root, s.db, s.onHealState, s.scheme, shouldSyncStorage, shouldSyncCode)
 		log.Info("Starting partial state snap sync", "root", root)
@@ -1043,6 +1042,7 @@ func (s *Syncer) cleanStorageTasks() {
 			// If this was the last pending task, forward the account task
 			if task.pend == 0 {
 				s.forwardAccountTask(task)
+				break // task.res is now nil, remaining SubTasks handled next cycle
 			}
 		}
 	}
@@ -1068,6 +1068,7 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 		idlers.caps = append(idlers.caps, s.rates.Capacity(id, AccountRangeMsg, targetTTL))
 	}
 	if len(idlers.ids) == 0 {
+		log.Debug("No idle peers for account sync", "registered", len(s.peers), "idlers", len(s.accountIdlers), "stateless", len(s.statelessPeers), "tasks", len(s.tasks), "accountReqs", len(s.accountReqs))
 		return
 	}
 	sort.Sort(sort.Reverse(idlers))
@@ -1972,9 +1973,8 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 		if account.Root != types.EmptyRootHash {
 			// Partial sync: check if we should sync this contract's storage
 			if !s.shouldSyncStorage(accountHash) {
-				// Skip storage for non-tracked contracts
-				// Mark as skipped so healing phase knows not to try healing this storage
-				markStorageSkipped(s.db, accountHash, account.Root)
+				// Skip storage for non-tracked contracts. The healing phase uses
+				// the same filter check, so no DB markers needed.
 				res.task.stateCompleted[accountHash] = struct{}{}
 				storageSkippedMeter.Mark(1)
 				s.storageSkipped++
@@ -2284,8 +2284,9 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 		// outdated during the sync, but it can be fixed later during the
 		// snapshot generation.
 		for j := 0; j < len(res.hashes[i]); j++ {
-			rawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j])
-
+			if !s.isPartialSync() {
+				rawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j])
+			}
 			// If we're storing large contracts, generate the trie nodes
 			// on the fly to not trash the gluing points
 			if i == len(res.hashes)-1 && res.subTask != nil {
@@ -2488,7 +2489,9 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 			break
 		}
 		slim := types.SlimAccountRLP(*res.accounts[i])
-		rawdb.WriteAccountSnapshot(batch, hash, slim)
+		if !s.isPartialSync() {
+			rawdb.WriteAccountSnapshot(batch, hash, slim)
+		}
 
 		if !task.needHeal[i] {
 			// If the storage task is complete, drop it into the stack trie
@@ -3129,7 +3132,9 @@ func (s *Syncer) onHealState(paths [][]byte, value []byte) error {
 			return nil // Returning the error here would drop the remote peer
 		}
 		blob := types.SlimAccountRLP(account)
-		rawdb.WriteAccountSnapshot(s.stateWriter, common.BytesToHash(paths[0]), blob)
+		if !s.isPartialSync() {
+			rawdb.WriteAccountSnapshot(s.stateWriter, common.BytesToHash(paths[0]), blob)
+		}
 		s.accountHealed += 1
 		s.accountHealedBytes += common.StorageSize(1 + common.HashLength + len(blob))
 	}
@@ -3139,11 +3144,13 @@ func (s *Syncer) onHealState(paths [][]byte, value []byte) error {
 
 		// Partial sync: skip storage healing for non-tracked contracts
 		// (accounts themselves are always synced/healed)
-		if isStorageSkipped(s.db, accountHash) {
-			return nil // Don't heal storage we intentionally skipped
+		if !s.shouldSyncStorage(accountHash) {
+			return nil // Don't heal storage for non-tracked contracts
 		}
 
-		rawdb.WriteStorageSnapshot(s.stateWriter, accountHash, common.BytesToHash(paths[1]), value)
+		if !s.isPartialSync() {
+			rawdb.WriteStorageSnapshot(s.stateWriter, accountHash, common.BytesToHash(paths[1]), value)
+		}
 		s.storageHealed += 1
 		s.storageHealedBytes += common.StorageSize(1 + 2*common.HashLength + len(value))
 	}
@@ -3208,15 +3215,21 @@ func (s *Syncer) reportSyncProgress(force bool) {
 		storage  = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.storageSynced), s.storageBytes.TerminalString())
 		bytecode = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.bytecodeSynced), s.bytecodeBytes.TerminalString())
 	)
+	// Guard against negative ETA (can happen when sync restarts with persisted
+	// progress, making the estimated total smaller than elapsed time).
+	eta := estTime - elapsed
+	if eta < 0 {
+		eta = 0
+	}
 	if s.isPartialSync() {
 		log.Info("Syncing: partial state download in progress", "synced", progress, "state", synced,
 			"accounts", accounts,
 			"slots", storage, "slotsSkipped", s.storageSkipped,
 			"codes", bytecode, "codesSkipped", s.bytecodeSkipped,
-			"eta", common.PrettyDuration(estTime-elapsed))
+			"eta", common.PrettyDuration(eta))
 	} else {
 		log.Info("Syncing: state download in progress", "synced", progress, "state", synced,
-			"accounts", accounts, "slots", storage, "codes", bytecode, "eta", common.PrettyDuration(estTime-elapsed))
+			"accounts", accounts, "slots", storage, "codes", bytecode, "eta", common.PrettyDuration(eta))
 	}
 }
 

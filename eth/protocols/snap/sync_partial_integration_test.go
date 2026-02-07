@@ -172,16 +172,17 @@ func testPartialSyncAllAccounts(t *testing.T, scheme string) {
 	}
 }
 
-// TestPartialSyncSkipMarkers verifies that skip markers are correctly written
-// for accounts whose storage was intentionally skipped.
-func TestPartialSyncSkipMarkers(t *testing.T) {
+// TestPartialSyncFilterBehavior verifies that the filter correctly identifies
+// tracked vs untracked accounts and that storage is only synced for tracked ones.
+// Note: Skip markers are no longer used - the filter is checked directly during healing.
+func TestPartialSyncFilterBehavior(t *testing.T) {
 	t.Parallel()
 
-	testPartialSyncSkipMarkers(t, rawdb.HashScheme)
-	testPartialSyncSkipMarkers(t, rawdb.PathScheme)
+	testPartialSyncFilterBehavior(t, rawdb.HashScheme)
+	testPartialSyncFilterBehavior(t, rawdb.PathScheme)
 }
 
-func testPartialSyncSkipMarkers(t *testing.T, scheme string) {
+func testPartialSyncFilterBehavior(t *testing.T, scheme string) {
 	var (
 		once   sync.Once
 		cancel = make(chan struct{})
@@ -219,25 +220,35 @@ func testPartialSyncSkipMarkers(t *testing.T, scheme string) {
 	}
 	close(done)
 
-	// Count skip markers
-	skippedCount := 0
+	// Verify filter correctly identifies tracked vs untracked accounts
+	trackedSet := make(map[common.Hash]struct{})
+	for _, h := range trackedHashes {
+		trackedSet[h] = struct{}{}
+	}
+
 	trackedCount := 0
+	untrackedCount := 0
 	for _, elem := range elems {
 		accountHash := common.BytesToHash(elem.k)
-		if isStorageSkipped(stateDb, accountHash) {
-			skippedCount++
-		} else {
+		if syncer.shouldSyncStorage(accountHash) {
 			trackedCount++
+			if _, ok := trackedSet[accountHash]; !ok {
+				t.Errorf("Filter says sync storage for %s but it's not in tracked set", accountHash.Hex()[:10])
+			}
+		} else {
+			untrackedCount++
+			if _, ok := trackedSet[accountHash]; ok {
+				t.Errorf("Filter says skip storage for %s but it's in tracked set", accountHash.Hex()[:10])
+			}
 		}
 	}
 
-	// We tracked 3, so 7 should have skip markers
-	expectedSkipped := numAccounts - len(trackedHashes)
-	if skippedCount != expectedSkipped {
-		t.Errorf("Expected %d skip markers, got %d", expectedSkipped, skippedCount)
-	}
 	if trackedCount != len(trackedHashes) {
-		t.Errorf("Expected %d tracked (no skip marker), got %d", len(trackedHashes), trackedCount)
+		t.Errorf("Expected filter to identify %d tracked, got %d", len(trackedHashes), trackedCount)
+	}
+	expectedUntracked := numAccounts - len(trackedHashes)
+	if untrackedCount != expectedUntracked {
+		t.Errorf("Expected filter to identify %d untracked, got %d", expectedUntracked, untrackedCount)
 	}
 }
 
@@ -697,11 +708,8 @@ func verifyPartialSync(t *testing.T, scheme string, db ethdb.KeyValueStore, root
 					}
 				}
 			} else {
-				// Untracked should have skip marker
-				if !isStorageSkipped(db, accountHash) {
-					t.Errorf("Untracked account %s should have skip marker", accountHash.Hex()[:10])
-				}
-				// And should not have storage
+				// Untracked should not have storage (skip markers are no longer used,
+				// the filter is checked directly during healing)
 				if err == nil {
 					storeIt := trie.NewIterator(storageTrie.MustNodeIterator(nil))
 					slots := 0
