@@ -87,6 +87,10 @@ var errChainGapped = errors.New("chain gapped")
 // of the current sync cycle is forked with the one advertised by consensus client.
 var errChainForked = errors.New("chain forked")
 
+// ErrBeaconSyncerReorging is returned if the sync is reorging, but
+// we keep accumulating sync requests.
+var ErrBeaconSyncerReorging = errors.New("beacon syncer reorging")
+
 func init() {
 	// Tuning parameters is nice, but the scratch space must be assignable in
 	// full to peers. It's a useless cornercase to support a dangling half-group.
@@ -441,7 +445,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			case <-done:
 				return
 			case event := <-s.headEvents:
-				event.errc <- errors.New("beacon syncer reorging")
+				event.errc <- ErrBeaconSyncerReorging
 			}
 		}
 	}()
