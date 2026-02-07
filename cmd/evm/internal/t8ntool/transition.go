@@ -428,7 +428,7 @@ func BinKeys(ctx *cli.Context) error {
 	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.VerkleDefaults)
 	defer db.Close()
 
-	bt, err := genBinTrieFromAlloc(alloc, db)
+	bt, err := genBinTrieFromAlloc(alloc, db, db.BinTrieGroupDepth())
 	if err != nil {
 		return fmt.Errorf("error generating bt: %w", err)
 	}
@@ -472,7 +472,7 @@ func BinTrieRoot(ctx *cli.Context) error {
 	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.VerkleDefaults)
 	defer db.Close()
 
-	bt, err := genBinTrieFromAlloc(alloc, db)
+	bt, err := genBinTrieFromAlloc(alloc, db, db.BinTrieGroupDepth())
 	if err != nil {
 		return fmt.Errorf("error generating bt: %w", err)
 	}
@@ -482,8 +482,8 @@ func BinTrieRoot(ctx *cli.Context) error {
 }
 
 // TODO(@CPerezz): Should this go to `bintrie` module?
-func genBinTrieFromAlloc(alloc core.GenesisAlloc, db database.NodeDatabase) (*bintrie.BinaryTrie, error) {
-	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, db)
+func genBinTrieFromAlloc(alloc core.GenesisAlloc, db database.NodeDatabase, groupDepth int) (*bintrie.BinaryTrie, error) {
+	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, db, groupDepth)
 	if err != nil {
 		return nil, err
 	}

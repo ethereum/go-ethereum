@@ -95,7 +95,7 @@ func TestInternalNodeGetWithResolver(t *testing.T) {
 				Values: values[:],
 				depth:  1,
 			}
-			return SerializeNode(stemNode), nil
+			return SerializeNode(stemNode, MaxGroupDepth), nil
 		}
 		return nil, errors.New("node not found")
 	}
@@ -379,7 +379,7 @@ func TestInternalNodeCollectNodes(t *testing.T) {
 		collectedNodes = append(collectedNodes, n)
 	}
 
-	err := node.CollectNodes([]byte{1}, flushFn)
+	err := node.CollectNodes([]byte{1}, flushFn, MaxGroupDepth)
 	if err != nil {
 		t.Fatalf("Failed to collect nodes: %v", err)
 	}

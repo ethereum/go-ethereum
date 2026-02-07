@@ -186,7 +186,7 @@ func TestEmptyCollectNodes(t *testing.T) {
 		collected = append(collected, n)
 	}
 
-	err := node.CollectNodes([]byte{0, 1, 0}, flushFn)
+	err := node.CollectNodes([]byte{0, 1, 0}, flushFn, MaxGroupDepth)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
