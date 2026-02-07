@@ -112,6 +112,9 @@ type generateParams struct {
 	withdrawals types.Withdrawals // List of withdrawals to include in block (shanghai field)
 	beaconRoot  *common.Hash      // The beacon root (cancun field).
 	noTxs       bool              // Flag whether an empty block without any transaction is expected
+
+	extraData    []byte
+	transactions []*types.Transaction
 }
 
 // generateWork generates a sealing block based on the given parameters.
@@ -132,15 +135,28 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 	work.size += uint64(genParam.withdrawals.Size())
 
 	if !genParam.noTxs {
-		interrupt := new(atomic.Int32)
-		timer := time.AfterFunc(miner.config.Recommit, func() {
-			interrupt.Store(commitInterruptTimeout)
-		})
-		defer timer.Stop()
+		if len(genParam.transactions) == 0 {
+			interrupt := new(atomic.Int32)
+			timer := time.AfterFunc(miner.config.Recommit, func() {
+				interrupt.Store(commitInterruptTimeout)
+			})
+			defer timer.Stop()
 
-		err := miner.fillTransactions(interrupt, work)
-		if errors.Is(err, errBlockInterruptedByTimeout) {
-			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(miner.config.Recommit))
+			err := miner.fillTransactions(interrupt, work)
+			if errors.Is(err, errBlockInterruptedByTimeout) {
+				log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(miner.config.Recommit))
+			}
+		} else {
+			// if we have transactions available, we build a block only from them.
+			// this is only used during testing when we want to force a certain
+			// ordering of transactions.
+			if work.gasPool == nil {
+				work.gasPool = new(core.GasPool).AddGas(work.header.GasLimit)
+			}
+			for _, tx := range genParam.transactions {
+				work.state.SetTxContext(tx.Hash(), work.tcount)
+				miner.commitTransaction(work, tx)
+			}
 		}
 	}
 	body := types.Body{Transactions: work.txs, Withdrawals: genParam.withdrawals}
@@ -223,6 +239,9 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	// Set the extra field.
 	if len(miner.config.ExtraData) != 0 {
 		header.Extra = miner.config.ExtraData
+	}
+	if len(genParams.extraData) != 0 {
+		header.Extra = genParams.extraData
 	}
 	// Set the randomness field from the beacon chain if it's available.
 	if genParams.random != (common.Hash{}) {
