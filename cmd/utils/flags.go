@@ -1791,6 +1791,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(PartialStateChainRetentionFlag.Name) {
 		cfg.PartialState.ChainRetention = ctx.Uint64(PartialStateChainRetentionFlag.Name)
 	}
+	// Partial state nodes don't need snapshots — account data is read
+	// directly from the trie (which is small enough for fast lookups),
+	// and BAL-based block processing never uses snapshots.
+	if cfg.PartialState.Enabled {
+		cfg.SnapshotCache = 0
+	}
 	// Parse transaction history flag, if user is still using legacy config
 	// file with 'TxLookupLimit' configured, copy the value to 'TransactionHistory'.
 	if cfg.TransactionHistory == ethconfig.Defaults.TransactionHistory && cfg.TxLookupLimit != ethconfig.Defaults.TxLookupLimit {
@@ -1846,8 +1852,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.RangeLimit = ctx.Uint64(RPCGlobalRangeLimitFlag.Name)
 	}
 	if !ctx.Bool(SnapshotFlag.Name) || cfg.SnapshotCache == 0 {
-		// If snap-sync is requested, this flag is also required
-		if cfg.SyncMode == ethconfig.SnapSync {
+		// If snap-sync is requested, this flag is also required (unless
+		// partial state mode is active, which disables snapshots entirely).
+		if cfg.SyncMode == ethconfig.SnapSync && !cfg.PartialState.Enabled {
 			if !ctx.Bool(SnapshotFlag.Name) {
 				log.Warn("Snap sync requested, enabling --snapshot")
 			}
