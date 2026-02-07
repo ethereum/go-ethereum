@@ -93,6 +93,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if config.IsPrague(block.Number(), block.Time()) || config.IsVerkle(block.Number(), block.Time()) {
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
+	if config.IsEIP8032(block.Number(), block.Time()) {
+		ProcessEIP8032Transition(evm)
+	}
 
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
@@ -268,6 +271,20 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
 	if evm.StateDB.AccessEvents() != nil {
 		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
 	}
+	evm.StateDB.Finalise(true)
+}
+
+// ProcessEIP8032Transition processes the EIP-8032 storage counting transition.
+func ProcessEIP8032Transition(evm *vm.EVM) {
+	if tracer := evm.Config.Tracer; tracer != nil {
+		onSystemCallStart(tracer, evm.GetVMContext())
+		if tracer.OnSystemCallEnd != nil {
+			defer tracer.OnSystemCallEnd()
+		}
+	}
+	// Process up to the configured number of storage slots per block
+	evm.StateDB.ProcessEIP8032Transition(params.EIP8032TransitionMaxStepsPerBlock)
+
 	evm.StateDB.Finalise(true)
 }
 

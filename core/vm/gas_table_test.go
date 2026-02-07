@@ -180,3 +180,37 @@ func TestCreateGas(t *testing.T) {
 		}
 	}
 }
+
+func TestStorageCounting(t *testing.T) {
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+
+	addr := common.HexToAddress("0x1234")
+	statedb.CreateAccount(addr)
+
+	key1 := common.HexToHash("0x01")
+	key2 := common.HexToHash("0x02")
+	value := common.HexToHash("0x1234")
+
+	count := statedb.GetStorageCount(addr)
+	if count != 0 {
+		t.Errorf("initial storage count should be 0, got %d", count)
+	}
+
+	statedb.SetState(addr, key1, value)
+	count = statedb.GetStorageCount(addr)
+	if count != 1 {
+		t.Errorf("storage count after first set should be 1, got %d", count)
+	}
+
+	statedb.SetState(addr, key2, value)
+	count = statedb.GetStorageCount(addr)
+	if count != 2 {
+		t.Errorf("storage count after second set should be 2, got %d", count)
+	}
+
+	statedb.SetState(addr, key1, common.Hash{})
+	count = statedb.GetStorageCount(addr)
+	if count != 1 {
+		t.Errorf("storage count after deletion should be 1, got %d", count)
+	}
+}
