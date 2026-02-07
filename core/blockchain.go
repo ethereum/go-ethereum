@@ -1374,6 +1374,37 @@ func (bc *BlockChain) SnapSyncComplete(hash common.Hash) error {
 	return nil
 }
 
+// AdvancePartialHead updates currentBlock to the given block hash without
+// re-executing blocks. It is used by partial state mode after receipt-importing
+// post-pivot blocks and re-syncing state at the new root.
+//
+// Unlike SnapSyncComplete, this does NOT rebuild snapshots (already done
+// during the initial pivot commit), but DOES re-enable the trie DB for the
+// new root (required for path-based trie to recognize the synced state).
+func (bc *BlockChain) AdvancePartialHead(hash common.Hash) error {
+	block := bc.GetBlockByHash(hash)
+	if block == nil {
+		return fmt.Errorf("non existent block [%x..]", hash[:4])
+	}
+	root := block.Root()
+
+	// Enable the trie database for the new root (required for path-based trie)
+	if bc.triedb.Scheme() == rawdb.PathScheme {
+		if err := bc.triedb.Enable(root); err != nil {
+			return err
+		}
+	}
+
+	if !bc.HasState(root) {
+		return fmt.Errorf("non existent state [%x..]", root[:4])
+	}
+	bc.currentBlock.Store(block.Header())
+	headBlockGauge.Update(int64(block.NumberU64()))
+
+	log.Info("Advanced partial state head", "number", block.Number(), "hash", hash)
+	return nil
+}
+
 // Reset purges the entire blockchain, restoring it to its genesis state.
 func (bc *BlockChain) Reset() error {
 	return bc.ResetWithGenesisBlock(bc.genesisBlock)

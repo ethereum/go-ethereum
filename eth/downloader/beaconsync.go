@@ -72,6 +72,20 @@ func (b *beaconBackfiller) suspend() *types.Header {
 	// read this channel multiple times, it gets closed on startup.
 	<-started
 
+	// For partial state nodes during snap sync, don't cancel the sync on every
+	// beacon head update. The state sync needs uninterrupted time to complete,
+	// otherwise the constant cancel/restart cycle prevents progress.
+	// We skip cancellation when:
+	// 1. We're in partial state mode (partialFilter is set)
+	// 2. We're in snap sync mode OR the second state sync (pivot→HEAD) is running
+	// 3. State sync is actively running (synchronising is true)
+	if b.downloader.partialFilter != nil &&
+		(b.downloader.getMode() == ethconfig.SnapSync || b.downloader.partialHeadSyncing.Load()) &&
+		b.downloader.synchronising.Load() {
+		log.Debug("Backfiller suspend: partial state snap sync in progress, skipping cancel")
+		return b.downloader.blockchain.CurrentSnapBlock()
+	}
+
 	// Now that we're sure the downloader successfully started up, we can cancel
 	// it safely without running the risk of data races.
 	b.downloader.Cancel()
@@ -83,6 +97,15 @@ func (b *beaconBackfiller) suspend() *types.Header {
 
 // resume starts the downloader threads for backfilling state and chain data.
 func (b *beaconBackfiller) resume() {
+	// For partial state nodes, don't start new sync cycles after the initial
+	// snap sync completes. The partialSyncComplete flag is set after
+	// AdvancePartialHead succeeds, indicating new blocks should come via
+	// Engine API with BAL instead of sync.
+	if b.downloader.partialFilter != nil && b.downloader.partialSyncComplete.Load() {
+		log.Debug("Backfiller resume: partial state sync complete, skipping new cycle")
+		return
+	}
+
 	b.lock.Lock()
 	if b.filling {
 		// If a previous filling cycle is still running, just ignore this start
@@ -306,32 +329,40 @@ func (d *Downloader) fetchHeaders(from uint64) error {
 		d.pivotLock.Lock()
 		if d.pivotHeader != nil {
 			if head.Number.Uint64() > d.pivotHeader.Number.Uint64()+2*uint64(fsMinFullBlocks)-8 {
-				// Retrieve the next pivot header, either from skeleton chain
-				// or the filled chain
-				number := head.Number.Uint64() - uint64(fsMinFullBlocks)
+				// For partial state nodes, don't move the pivot. The state sync
+				// needs uninterrupted time to complete with a stable root. The
+				// second sync (pivot→HEAD) will handle the state gap afterward.
+				if d.partialFilter != nil {
+					log.Debug("Partial state: suppressing pivot move in fetchHeaders",
+						"current", d.pivotHeader.Number, "head", head.Number)
+				} else {
+					// Retrieve the next pivot header, either from skeleton chain
+					// or the filled chain
+					number := head.Number.Uint64() - uint64(fsMinFullBlocks)
 
-				log.Warn("Pivot seemingly stale, moving", "old", d.pivotHeader.Number, "new", number)
-				if d.pivotHeader = d.skeleton.Header(number); d.pivotHeader == nil {
-					if number < tail.Number.Uint64() {
-						dist := tail.Number.Uint64() - number
-						if len(localHeaders) >= int(dist) {
-							d.pivotHeader = localHeaders[dist-1]
-							log.Warn("Retrieved pivot header from local", "number", d.pivotHeader.Number, "hash", d.pivotHeader.Hash(), "latest", head.Number, "oldest", tail.Number)
+					log.Warn("Pivot seemingly stale, moving", "old", d.pivotHeader.Number, "new", number)
+					if d.pivotHeader = d.skeleton.Header(number); d.pivotHeader == nil {
+						if number < tail.Number.Uint64() {
+							dist := tail.Number.Uint64() - number
+							if len(localHeaders) >= int(dist) {
+								d.pivotHeader = localHeaders[dist-1]
+								log.Warn("Retrieved pivot header from local", "number", d.pivotHeader.Number, "hash", d.pivotHeader.Hash(), "latest", head.Number, "oldest", tail.Number)
+							}
 						}
 					}
+					// Print an error log and return directly in case the pivot header
+					// is still not found. It means the skeleton chain is not linked
+					// correctly with local chain.
+					if d.pivotHeader == nil {
+						log.Error("Pivot header is not found", "number", number)
+						d.pivotLock.Unlock()
+						return errNoPivotHeader
+					}
+					// Write out the pivot into the database so a rollback beyond
+					// it will reenable snap sync and update the state root that
+					// the state syncer will be downloading
+					rawdb.WriteLastPivotNumber(d.stateDB, d.pivotHeader.Number.Uint64())
 				}
-				// Print an error log and return directly in case the pivot header
-				// is still not found. It means the skeleton chain is not linked
-				// correctly with local chain.
-				if d.pivotHeader == nil {
-					log.Error("Pivot header is not found", "number", number)
-					d.pivotLock.Unlock()
-					return errNoPivotHeader
-				}
-				// Write out the pivot into the database so a rollback beyond
-				// it will reenable snap sync and update the state root that
-				// the state syncer will be downloading
-				rawdb.WriteLastPivotNumber(d.stateDB, d.pivotHeader.Number.Uint64())
 			}
 		}
 		d.pivotLock.Unlock()
