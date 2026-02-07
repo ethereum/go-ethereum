@@ -343,6 +343,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// Create partial state filter if enabled
 	var partialFilter partial.ContractFilter
 	if config.PartialState.Enabled {
+		if err := config.PartialState.LoadPartialStateContracts(); err != nil {
+			return nil, fmt.Errorf("failed to load partial state contracts: %w", err)
+		}
 		partialFilter = partial.NewConfiguredFilter(config.PartialState.Contracts)
 		log.Info("Partial statefulness enabled", "contracts", len(config.PartialState.Contracts))
 	}
