@@ -375,7 +375,7 @@ func (dl *diffLayer) flatten() snapshot {
 	if !ok {
 		return dl
 	}
-	// Parent is a diff, flatten it first (note, apart from weird corned cases,
+	// Parent is a diff, flatten it first (note, apart from weird corner cases,
 	// flatten will realistically only ever merge 1 layer, so there's no need to
 	// be smarter about grouping flattens together).
 	parent = parent.flatten().(*diffLayer)
