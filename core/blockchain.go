@@ -322,7 +322,8 @@ func (cfg *BlockChainConfig) triedbConfig(isVerkle bool) *triedb.Config {
 			FullValueCheckpoint: cfg.NodeFullValueCheckpoint,
 
 			// Testing configurations
-			NoAsyncFlush: cfg.TrieNoAsyncFlush,
+			NoAsyncFlush:    cfg.TrieNoAsyncFlush,
+			SnapshotNoBuild: cfg.SnapshotNoBuild,
 		}
 	}
 	return config

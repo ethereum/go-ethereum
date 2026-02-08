@@ -284,6 +284,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		options.PartialStateContracts = config.PartialState.Contracts
 		options.PartialStateBALRetention = config.PartialState.BALRetention
 		options.PartialStateChainRetention = config.PartialState.ChainRetention
+		options.SnapshotNoBuild = true
 	}
 
 	eth.blockchain, err = core.NewBlockChain(chainDb, config.Genesis, eth.engine, options)
