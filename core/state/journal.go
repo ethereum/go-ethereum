@@ -137,9 +137,9 @@ func (j *journal) length() int {
 
 // copy returns a deep-copied journal.
 func (j *journal) copy() *journal {
-	entries := make([]journalEntry, 0, j.length())
+	entries := make([]journalEntry, j.length())
 	for i := 0; i < j.length(); i++ {
-		entries = append(entries, j.entries[i].copy())
+		entries[i] = j.entries[i].copy()
 	}
 	return &journal{
 		entries:        entries,
