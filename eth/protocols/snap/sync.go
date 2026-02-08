@@ -1753,9 +1753,13 @@ func (s *Syncer) revertAccountRequest(req *accountRequest) {
 	}
 	close(req.stale)
 
-	// Remove the request from the tracked set
+	// Remove the request from the tracked set and restore the peer to the
+	// idle pool so it can be reassigned work (skip if peer already left).
 	s.lock.Lock()
 	delete(s.accountReqs, req.id)
+	if _, ok := s.peers[req.peer]; ok {
+		s.accountIdlers[req.peer] = struct{}{}
+	}
 	s.lock.Unlock()
 
 	// If there's a timeout timer still running, abort it and mark the account
@@ -1794,9 +1798,13 @@ func (s *Syncer) revertBytecodeRequest(req *bytecodeRequest) {
 	}
 	close(req.stale)
 
-	// Remove the request from the tracked set
+	// Remove the request from the tracked set and restore the peer to the
+	// idle pool so it can be reassigned work (skip if peer already left).
 	s.lock.Lock()
 	delete(s.bytecodeReqs, req.id)
+	if _, ok := s.peers[req.peer]; ok {
+		s.bytecodeIdlers[req.peer] = struct{}{}
+	}
 	s.lock.Unlock()
 
 	// If there's a timeout timer still running, abort it and mark the code
@@ -1835,9 +1843,13 @@ func (s *Syncer) revertStorageRequest(req *storageRequest) {
 	}
 	close(req.stale)
 
-	// Remove the request from the tracked set
+	// Remove the request from the tracked set and restore the peer to the
+	// idle pool so it can be reassigned work (skip if peer already left).
 	s.lock.Lock()
 	delete(s.storageReqs, req.id)
+	if _, ok := s.peers[req.peer]; ok {
+		s.storageIdlers[req.peer] = struct{}{}
+	}
 	s.lock.Unlock()
 
 	// If there's a timeout timer still running, abort it and mark the storage
@@ -1880,9 +1892,13 @@ func (s *Syncer) revertTrienodeHealRequest(req *trienodeHealRequest) {
 	}
 	close(req.stale)
 
-	// Remove the request from the tracked set
+	// Remove the request from the tracked set and restore the peer to the
+	// idle pool so it can be reassigned work (skip if peer already left).
 	s.lock.Lock()
 	delete(s.trienodeHealReqs, req.id)
+	if _, ok := s.peers[req.peer]; ok {
+		s.trienodeHealIdlers[req.peer] = struct{}{}
+	}
 	s.lock.Unlock()
 
 	// If there's a timeout timer still running, abort it and mark the trie node
@@ -1921,9 +1937,13 @@ func (s *Syncer) revertBytecodeHealRequest(req *bytecodeHealRequest) {
 	}
 	close(req.stale)
 
-	// Remove the request from the tracked set
+	// Remove the request from the tracked set and restore the peer to the
+	// idle pool so it can be reassigned work (skip if peer already left).
 	s.lock.Lock()
 	delete(s.bytecodeHealReqs, req.id)
+	if _, ok := s.peers[req.peer]; ok {
+		s.bytecodeHealIdlers[req.peer] = struct{}{}
+	}
 	s.lock.Unlock()
 
 	// If there's a timeout timer still running, abort it and mark the code
