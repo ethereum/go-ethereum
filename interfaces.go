@@ -141,10 +141,23 @@ type SyncProgress struct {
 
 	// "historical state indexing" fields
 	StateIndexRemaining uint64 // Number of states remain unindexed
+
+	// SyncedWithCL indicates whether the node has received at least one successful
+	// consensus layer update (ForkchoiceUpdated with a known block). On startup,
+	// this is false until the CL sends the first valid update.
+	SyncedWithCL bool
 }
 
 // Done returns the indicator if the initial sync is finished or not.
+// A node is considered synced only when:
+// 1. It has received at least one successful CL update (SyncedWithCL is true)
+// 2. CurrentBlock >= HighestBlock
+// 3. Transaction and state indexing are complete
 func (prog SyncProgress) Done() bool {
+	// Node must have received at least one CL update to be considered synced
+	if !prog.SyncedWithCL {
+		return false
+	}
 	if prog.CurrentBlock < prog.HighestBlock {
 		return false
 	}

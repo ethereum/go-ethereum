@@ -418,6 +418,9 @@ func (b *EthAPIBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress 
 	if err == nil {
 		prog.StateIndexRemaining = remain
 	}
+	// SyncedWithCL is true when the node has received at least one successful
+	// ForkchoiceUpdated from the consensus layer with a known block.
+	prog.SyncedWithCL = b.eth.Synced()
 	return prog
 }
 
