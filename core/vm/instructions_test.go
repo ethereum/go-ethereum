@@ -1014,10 +1014,11 @@ func TestEIP8024_Execution(t *testing.T) {
 	evm := NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
 
 	tests := []struct {
-		name     string
-		codeHex  string
-		wantErr  error
-		wantVals []uint64
+		name       string
+		codeHex    string
+		wantErr    error
+		wantOpcode OpCode
+		wantVals   []uint64
 	}{
 		{
 			name:    "DUPN",
@@ -1070,9 +1071,10 @@ func TestEIP8024_Execution(t *testing.T) {
 			},
 		},
 		{
-			name:    "INVALID_SWAPN_LOW",
-			codeHex: "e75b",
-			wantErr: &ErrInvalidOpCode{},
+			name:       "INVALID_SWAPN_LOW",
+			codeHex:    "e75b",
+			wantErr:    &ErrInvalidOpCode{},
+			wantOpcode: SWAPN,
 		},
 		{
 			name:    "JUMP over INVALID_DUPN",
@@ -1080,50 +1082,59 @@ func TestEIP8024_Execution(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name:    "UNDERFLOW_DUPN",
-			codeHex: "6000808080808080808080808080808080e600",
-			wantErr: &ErrStackUnderflow{},
+			name:       "UNDERFLOW_DUPN_1",
+			codeHex:    "6000808080808080808080808080808080e600",
+			wantErr:    &ErrStackUnderflow{},
+			wantOpcode: DUPN,
 		},
 		// Additional test cases
 		{
-			name:    "INVALID_DUPN_LOW",
-			codeHex: "e65b",
-			wantErr: &ErrInvalidOpCode{},
+			name:       "INVALID_DUPN_LOW",
+			codeHex:    "e65b",
+			wantErr:    &ErrInvalidOpCode{},
+			wantOpcode: DUPN,
 		},
 		{
-			name:    "INVALID_EXCHANGE_LOW",
-			codeHex: "e850",
-			wantErr: &ErrInvalidOpCode{},
+			name:       "INVALID_EXCHANGE_LOW",
+			codeHex:    "e850",
+			wantErr:    &ErrInvalidOpCode{},
+			wantOpcode: EXCHANGE,
 		},
 		{
-			name:    "INVALID_DUPN_HIGH",
-			codeHex: "e67f",
-			wantErr: &ErrInvalidOpCode{},
+			name:       "INVALID_DUPN_HIGH",
+			codeHex:    "e67f",
+			wantErr:    &ErrInvalidOpCode{},
+			wantOpcode: DUPN,
 		},
 		{
-			name:    "INVALID_SWAPN_HIGH",
-			codeHex: "e77f",
-			wantErr: &ErrInvalidOpCode{},
+			name:       "INVALID_SWAPN_HIGH",
+			codeHex:    "e77f",
+			wantErr:    &ErrInvalidOpCode{},
+			wantOpcode: SWAPN,
 		},
 		{
-			name:    "INVALID_EXCHANGE_HIGH",
-			codeHex: "e87f",
-			wantErr: &ErrInvalidOpCode{},
+			name:       "INVALID_EXCHANGE_HIGH",
+			codeHex:    "e87f",
+			wantErr:    &ErrInvalidOpCode{},
+			wantOpcode: EXCHANGE,
 		},
 		{
-			name:    "UNDERFLOW_DUPN",
-			codeHex: "5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5fe600", // (n=17, need 17 items, have 16)
-			wantErr: &ErrStackUnderflow{},
+			name:       "UNDERFLOW_DUPN_2",
+			codeHex:    "5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5fe600", // (n=17, need 17 items, have 16)
+			wantErr:    &ErrStackUnderflow{},
+			wantOpcode: DUPN,
 		},
 		{
-			name:    "UNDERFLOW_SWAPN",
-			codeHex: "5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5fe700", // (n=17, need 18 items, have 17)
-			wantErr: &ErrStackUnderflow{},
+			name:       "UNDERFLOW_SWAPN",
+			codeHex:    "5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5fe700", // (n=17, need 18 items, have 17)
+			wantErr:    &ErrStackUnderflow{},
+			wantOpcode: SWAPN,
 		},
 		{
-			name:    "UNDERFLOW_EXCHANGE",
-			codeHex: "60016002e801", // (n,m)=(1,2), need 3 items, have 2
-			wantErr: &ErrStackUnderflow{},
+			name:       "UNDERFLOW_EXCHANGE",
+			codeHex:    "60016002e801", // (n,m)=(1,2), need 3 items, have 2
+			wantErr:    &ErrStackUnderflow{},
+			wantOpcode: EXCHANGE,
 		},
 		{
 			name:     "PC_INCREMENT",
@@ -1139,6 +1150,7 @@ func TestEIP8024_Execution(t *testing.T) {
 			pc := uint64(0)
 			scope := &ScopeContext{Stack: stack, Contract: &Contract{Code: code}}
 			var err error
+			var errOp OpCode
 			for pc < uint64(len(code)) && err == nil {
 				op := code[pc]
 				switch OpCode(op) {
@@ -1166,12 +1178,21 @@ func TestEIP8024_Execution(t *testing.T) {
 				default:
 					t.Fatalf("unexpected opcode %s at pc=%d", OpCode(op), pc)
 				}
+				if err != nil {
+					errOp = OpCode(op)
+				}
 				pc++
 			}
 			if tc.wantErr != nil {
+				// Fail because we wanted an error, but didn't get one.
 				if err == nil {
 					t.Fatalf("expected error, got nil")
 				}
+				// Fail if the wrong opcode threw an error.
+				if errOp != tc.wantOpcode {
+					t.Fatalf("expected error from opcode %s, got %s", tc.wantOpcode, errOp)
+				}
+				// Fail if we don't get the error we expect.
 				switch tc.wantErr.(type) {
 				case *ErrInvalidOpCode:
 					var want *ErrInvalidOpCode
