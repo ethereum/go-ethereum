@@ -91,7 +91,11 @@ type txPool interface {
 	// SubscribeTransactions subscribes to new transaction events. The subscriber
 	// can decide whether to receive notifications only for newly seen transactions
 	// or also for reorged out ones.
-	SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription
+	// TODO: comment
+	SubscribeTransactions(ch chan<- core.NewTxsEvent) event.Subscription
+
+	// TODO: comment
+	SubscribePropagationHashes(ch chan<- core.NewTxHashesEvent) event.Subscription
 
 	// FilterType returns whether the given tx type is supported by the txPool.
 	FilterType(kind byte) bool
@@ -127,7 +131,7 @@ type handler struct {
 	txBroadcastKey [16]byte
 
 	eventMux   *event.TypeMux
-	txsCh      chan core.NewTxsEvent
+	txsCh      chan core.NewTxHashesEvent
 	txsSub     event.Subscription
 	blockRange *blockRangeState
 
@@ -416,8 +420,8 @@ func (h *handler) Start(maxPeers int) {
 
 	// broadcast and announce transactions (only new ones, not resurrected ones)
 	h.wg.Add(1)
-	h.txsCh = make(chan core.NewTxsEvent, txChanSize)
-	h.txsSub = h.txpool.SubscribeTransactions(h.txsCh, false)
+	h.txsCh = make(chan core.NewTxHashesEvent, txChanSize)
+	h.txsSub = h.txpool.SubscribePropagationHashes(h.txsCh)
 	go h.txBroadcastLoop()
 
 	// broadcast block range
@@ -457,7 +461,7 @@ func (h *handler) Stop() {
 // - To a square root of all peers for non-blob transactions
 // - And, separately, as announcements to all peers which are not known to
 // already have the given transaction.
-func (h *handler) BroadcastTransactions(txs types.Transactions) {
+func (h *handler) BroadcastTransactions(txs []common.Hash) {
 	var (
 		blobTxs  int // Number of blob transactions to announce only
 		largeTxs int // Number of large transactions to announce only
@@ -468,35 +472,34 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		txset = make(map[*ethPeer][]common.Hash) // Set peer->hash to transfer directly
 		annos = make(map[*ethPeer][]common.Hash) // Set peer->hash to announce
 
-		signer = types.LatestSigner(h.chain.Config())
 		choice = newBroadcastChoice(h.nodeID, h.txBroadcastKey)
 		peers  = h.peers.all()
 	)
 
 	for _, tx := range txs {
 		var directSet map[*ethPeer]struct{}
+		meta := h.txpool.GetMetadata(tx)
 		switch {
-		case tx.Type() == types.BlobTxType:
+		case meta.Type == types.BlobTxType:
 			blobTxs++
-		case tx.Size() > txMaxBroadcastSize:
+		case meta.Size > txMaxBroadcastSize:
 			largeTxs++
 		default:
 			// Get transaction sender address. Here we can ignore any error
 			// since we're just interested in any value.
-			txSender, _ := types.Sender(signer, tx)
-			directSet = choice.choosePeers(peers, txSender)
+			directSet = choice.choosePeers(peers, meta.Sender)
 		}
 
 		for _, peer := range peers {
-			if peer.KnownTransaction(tx.Hash()) {
+			if peer.KnownTransaction(tx) {
 				continue
 			}
 			if _, ok := directSet[peer]; ok {
 				// Send direct.
-				txset[peer] = append(txset[peer], tx.Hash())
+				txset[peer] = append(txset[peer], tx)
 			} else {
 				// Send announcement.
-				annos[peer] = append(annos[peer], tx.Hash())
+				annos[peer] = append(annos[peer], tx)
 			}
 		}
 	}
@@ -519,7 +522,7 @@ func (h *handler) txBroadcastLoop() {
 	for {
 		select {
 		case event := <-h.txsCh:
-			h.BroadcastTransactions(event.Txs)
+			h.BroadcastTransactions(event.Hashes)
 		case <-h.txsSub.Err():
 			return
 		}

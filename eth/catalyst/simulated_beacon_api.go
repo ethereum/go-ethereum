@@ -48,7 +48,7 @@ func (a *simulatedBeaconAPI) loop() {
 	var (
 		newTxs    = make(chan core.NewTxsEvent)
 		newWxs    = make(chan newWithdrawalsEvent)
-		newTxsSub = a.sim.eth.TxPool().SubscribeTransactions(newTxs, true)
+		newTxsSub = a.sim.eth.TxPool().SubscribeTransactions(newTxs)
 		newWxsSub = a.sim.withdrawals.subscribe(newWxs)
 		doCommit  = make(chan struct{}, 1)
 	)
