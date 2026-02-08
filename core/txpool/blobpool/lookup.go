@@ -87,7 +87,6 @@ func (l *lookup) senderOfTx(txhash common.Hash) (common.Address, bool) {
 		return common.Address{}, false
 	}
 	return meta.sender, true
-
 }
 
 // track inserts a new set of mappings from blob versioned hashes to transaction
