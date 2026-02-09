@@ -69,7 +69,7 @@ func (bc *BlockChain) ProcessBlockWithBAL(
 	// pre-attested by the Consensus Layer. See function documentation above.
 
 	// 1. Validate BAL structure
-	if err := accessList.Validate(); err != nil {
+	if err := accessList.Validate(len(block.Transactions())); err != nil {
 		return fmt.Errorf("invalid BAL structure: %w", err)
 	}
 
@@ -107,7 +107,7 @@ func (bc *BlockChain) ProcessBlockWithBAL(
 		"number", block.NumberU64(),
 		"hash", block.Hash().Hex(),
 		"root", newRoot.Hex(),
-		"accounts", len(accessList.Accesses))
+		"accounts", len(*accessList))
 
 	return nil
 }

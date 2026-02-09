@@ -149,9 +149,8 @@ func TestProcessBlockWithBAL_InvalidBAL(t *testing.T) {
 
 	// Create invalid BAL (nil Accesses slice would be valid, but we need to test validation)
 	// For now, test with a valid but empty BAL to ensure the flow works
-	accessList := &bal.BlockAccessList{
-		Accesses: []bal.AccountAccess{},
-	}
+	emptyBAL := bal.BlockAccessList{}
+	accessList := &emptyBAL
 
 	// This should fail because computed root won't match header root after applying empty BAL
 	// The actual root computation depends on the parent state
@@ -182,8 +181,10 @@ func TestProcessBlockWithBAL_StateRootMismatch(t *testing.T) {
 	block := types.NewBlock(header, nil, nil, nil)
 
 	// Create BAL that changes state
-	cbal := bal.NewConstructionBlockAccessList()
-	cbal.BalanceChange(0, addr, uint256.NewInt(5000))
+	cbal := make(bal.ConstructionBlockAccessList)
+	cbal[addr] = &bal.ConstructionAccountAccesses{
+		BalanceChanges: map[uint16]*uint256.Int{0: uint256.NewInt(5000)},
+	}
 	accessList := constructionToBlockAccessListCore(t, &cbal)
 
 	err := bc.ProcessBlockWithBAL(block, accessList)
