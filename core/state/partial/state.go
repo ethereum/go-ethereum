@@ -100,13 +100,13 @@ func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, accessList
 	}
 
 	// Collect all account states with origin tracking
-	accounts := make([]*accountState, 0, len(accessList.Accesses))
+	accounts := make([]*accountState, 0, len(*accessList))
 
 	// Collect all trie nodes for batched update
 	allNodes := trienode.NewMergedNodeSet()
 
 	// Phase 1: Process each account's changes from BAL
-	for _, access := range accessList.Accesses {
+	for _, access := range *accessList {
 		addr := common.BytesToAddress(access.Address[:])
 
 		// Get current account state with origin tracking
@@ -151,7 +151,7 @@ func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, accessList
 		// Apply balance changes (use final value from last tx)
 		if len(access.BalanceChanges) > 0 {
 			lastChange := access.BalanceChanges[len(access.BalanceChanges)-1]
-			account.Balance = new(uint256.Int).SetBytes(lastChange.Balance[:])
+			account.Balance = new(uint256.Int).Set(lastChange.Balance)
 			state.modified = true
 		}
 
@@ -163,8 +163,8 @@ func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, accessList
 		}
 
 		// Apply code changes
-		if len(access.Code) > 0 {
-			lastCode := access.Code[len(access.Code)-1]
+		if len(access.CodeChanges) > 0 {
+			lastCode := access.CodeChanges[len(access.CodeChanges)-1]
 			codeHash := crypto.Keccak256Hash(lastCode.Code)
 			account.CodeHash = codeHash.Bytes()
 			state.modified = true
@@ -177,7 +177,7 @@ func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, accessList
 
 		// Apply storage changes (only for tracked contracts)
 		// CRITICAL: Commit storage trie HERE, before account trie
-		if len(access.StorageWrites) > 0 && s.filter.IsTracked(addr) {
+		if len(access.StorageChanges) > 0 && s.filter.IsTracked(addr) {
 			newStorageRoot, storageNodes, err := s.applyStorageChanges(
 				addr, parentRoot, account.Root, &access)
 			if err != nil {
@@ -276,21 +276,22 @@ func (s *PartialState) buildStateSet(accounts []*accountState, accessList *bal.B
 // addStorageToStateSet finds storage writes for the given address and adds them to the StateSet.
 func (s *PartialState) addStorageToStateSet(stateSet *triedb.StateSet, addr common.Address, addrHash common.Hash, accessList *bal.BlockAccessList) {
 	// Find this account's storage writes in BAL
-	for _, access := range accessList.Accesses {
-		accessAddr := common.BytesToAddress(access.Address[:])
+	for _, access := range *accessList {
+		accessAddr := access.Address
 		if accessAddr != addr {
 			continue
 		}
-		if len(access.StorageWrites) == 0 {
+		if len(access.StorageChanges) == 0 {
 			break
 		}
 
 		storageMap := make(map[common.Hash][]byte)
-		for _, slotWrite := range access.StorageWrites {
-			slotHash := crypto.Keccak256Hash(slotWrite.Slot[:])
+		for _, slotWrite := range access.StorageChanges {
+			slotKey := slotWrite.Slot.ToHash()
+			slotHash := crypto.Keccak256Hash(slotKey[:])
 			if len(slotWrite.Accesses) > 0 {
 				lastWrite := slotWrite.Accesses[len(slotWrite.Accesses)-1]
-				value := common.BytesToHash(lastWrite.ValueAfter[:])
+				value := lastWrite.ValueAfter.ToHash()
 				if value == (common.Hash{}) {
 					storageMap[slotHash] = nil // nil = deletion
 				} else {
@@ -332,15 +333,15 @@ func (s *PartialState) applyStorageChanges(
 	}
 
 	// Apply each storage write (use final value)
-	for _, slotWrite := range access.StorageWrites {
-		slot := common.BytesToHash(slotWrite.Slot[:])
+	for _, slotWrite := range access.StorageChanges {
+		slot := slotWrite.Slot.ToHash()
 
 		// Get final value (last write wins)
 		if len(slotWrite.Accesses) == 0 {
 			continue
 		}
 		lastWrite := slotWrite.Accesses[len(slotWrite.Accesses)-1]
-		value := common.BytesToHash(lastWrite.ValueAfter[:])
+		value := lastWrite.ValueAfter.ToHash()
 
 		if value == (common.Hash{}) {
 			// Delete slot

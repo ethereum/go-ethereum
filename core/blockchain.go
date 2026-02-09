@@ -1822,10 +1822,10 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	return 0, nil
 }
 
-// writeBlockWithoutState writes only the block and its metadata to the database,
+// WriteBlockWithoutState writes only the block and its metadata to the database,
 // but does not write any state. This is used to construct competing side forks
 // up to the point where they exceed the canonical total difficulty.
-func (bc *BlockChain) writeBlockWithoutState(block *types.Block) (err error) {
+func (bc *BlockChain) WriteBlockWithoutState(block *types.Block) (err error) {
 	if bc.insertStopped() {
 		return errInsertionInterrupted
 	}
@@ -2603,7 +2603,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator, ma
 		}
 		if !bc.HasBlock(block.Hash(), block.NumberU64()) {
 			start := time.Now()
-			if err := bc.writeBlockWithoutState(block); err != nil {
+			if err := bc.WriteBlockWithoutState(block); err != nil {
 				return nil, it.index, err
 			}
 			log.Debug("Injected sidechain block", "number", block.Number(), "hash", block.Hash(),
@@ -2961,6 +2961,11 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 
 	// Re-execute the reorged chain in case the head state is missing.
 	if !bc.HasState(head.Root()) {
+		// Partial state nodes can't re-execute blocks — they only apply BAL diffs.
+		// If state is missing here, it's an error in the partial state pipeline.
+		if bc.partialState != nil {
+			return common.Hash{}, fmt.Errorf("partial state: missing state for block %d root %x", head.NumberU64(), head.Root())
+		}
 		if latestValidHash, err := bc.recoverAncestors(head, false); err != nil {
 			return latestValidHash, err
 		}

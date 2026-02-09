@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -873,6 +872,12 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 			return api.invalid(err, parent.Header()), nil
 		}
 		processingTime := time.Since(start)
+
+		// Write block to DB so ForkchoiceUpdated can find it via GetBlockByHash.
+		// This writes header + body + BAL without requiring receipts or full state.
+		if err := api.eth.BlockChain().WriteBlockWithoutState(block); err != nil {
+			return api.invalid(err, parent.Header()), nil
+		}
 
 		// Store BAL in history for potential reorg handling
 		if history := api.eth.BlockChain().PartialState().History(); history != nil {

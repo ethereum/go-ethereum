@@ -32,13 +32,67 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// constructionToBlockAccessList converts ConstructionBlockAccessList to BlockAccessList
-// via RLP encoding/decoding.
-func constructionToBlockAccessList(t *testing.T, cbal *bal.ConstructionBlockAccessList) *bal.BlockAccessList {
+// testBALBuilder is a test helper for constructing BlockAccessLists.
+// It wraps ConstructionBlockAccessList and provides convenience methods
+// matching the test patterns (BalanceChange, NonceChange, StorageWrite, CodeChange).
+type testBALBuilder struct {
+	accesses bal.ConstructionBlockAccessList
+}
+
+func newTestBALBuilder() *testBALBuilder {
+	return &testBALBuilder{
+		accesses: make(bal.ConstructionBlockAccessList),
+	}
+}
+
+func (b *testBALBuilder) ensureAccount(addr common.Address) *bal.ConstructionAccountAccesses {
+	if _, ok := b.accesses[addr]; !ok {
+		b.accesses[addr] = &bal.ConstructionAccountAccesses{}
+	}
+	return b.accesses[addr]
+}
+
+func (b *testBALBuilder) BalanceChange(txIdx uint16, addr common.Address, balance *uint256.Int) {
+	acc := b.ensureAccount(addr)
+	if acc.BalanceChanges == nil {
+		acc.BalanceChanges = make(map[uint16]*uint256.Int)
+	}
+	acc.BalanceChanges[txIdx] = balance
+}
+
+func (b *testBALBuilder) NonceChange(addr common.Address, txIdx uint16, nonce uint64) {
+	acc := b.ensureAccount(addr)
+	if acc.NonceChanges == nil {
+		acc.NonceChanges = make(map[uint16]uint64)
+	}
+	acc.NonceChanges[txIdx] = nonce
+}
+
+func (b *testBALBuilder) StorageWrite(txIdx uint16, addr common.Address, slot, value common.Hash) {
+	acc := b.ensureAccount(addr)
+	if acc.StorageWrites == nil {
+		acc.StorageWrites = make(map[common.Hash]map[uint16]common.Hash)
+	}
+	if _, ok := acc.StorageWrites[slot]; !ok {
+		acc.StorageWrites[slot] = make(map[uint16]common.Hash)
+	}
+	acc.StorageWrites[slot][txIdx] = value
+}
+
+func (b *testBALBuilder) CodeChange(addr common.Address, txIdx uint16, code []byte) {
+	acc := b.ensureAccount(addr)
+	if acc.CodeChanges == nil {
+		acc.CodeChanges = make(map[uint16]bal.CodeChange)
+	}
+	acc.CodeChanges[txIdx] = bal.CodeChange{TxIdx: txIdx, Code: code}
+}
+
+// Build converts the construction BAL to the encoding format via RLP round-trip.
+func (b *testBALBuilder) Build(t *testing.T) *bal.BlockAccessList {
 	t.Helper()
 
 	var buf bytes.Buffer
-	if err := cbal.EncodeRLP(&buf); err != nil {
+	if err := b.accesses.EncodeRLP(&buf); err != nil {
 		t.Fatalf("failed to encode BAL: %v", err)
 	}
 
@@ -100,9 +154,8 @@ func TestApplyBALAndComputeRoot_EmptyBAL(t *testing.T) {
 	ps, _, emptyRoot := setupTestPartialState(t, nil)
 
 	// Apply empty BAL
-	accessList := &bal.BlockAccessList{
-		Accesses: []bal.AccountAccess{},
-	}
+	emptyBAL := bal.BlockAccessList{}
+	accessList := &emptyBAL
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(emptyRoot, accessList)
 	if err != nil {
@@ -131,10 +184,10 @@ func TestApplyBALAndComputeRoot_BalanceChange(t *testing.T) {
 
 	// Create BAL with balance change using ConstructionBlockAccessList
 	newBalance := uint256.NewInt(2000)
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.BalanceChange(0, addr, newBalance)
 
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
 	if err != nil {
@@ -174,10 +227,10 @@ func TestApplyBALAndComputeRoot_NonceChange(t *testing.T) {
 	parentRoot := setupTestStateWithAccount(t, trieDB, addr, initialAccount)
 
 	// Create BAL with nonce change
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.NonceChange(addr, 0, 6)
 
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
 	if err != nil {
@@ -215,10 +268,10 @@ func TestApplyBALAndComputeRoot_StorageChange(t *testing.T) {
 	slot := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
 	value := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000042")
 
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.StorageWrite(0, addr, slot, value)
 
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
 	if err != nil {
@@ -274,11 +327,11 @@ func TestApplyBALAndComputeRoot_UntrackedContractStorageIgnored(t *testing.T) {
 	slot := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
 	value := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000042")
 
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.StorageWrite(0, trackedAddr, slot, value)
 	cbal.StorageWrite(0, untrackedAddr, slot, value)
 
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
 	if err != nil {
@@ -306,11 +359,11 @@ func TestApplyBALAndComputeRoot_NewAccount(t *testing.T) {
 	// Create BAL that creates a new account
 	balance := uint256.NewInt(1000)
 
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.BalanceChange(0, addr, balance)
 	cbal.NonceChange(addr, 0, 1)
 
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(emptyRoot, accessList)
 	if err != nil {
@@ -354,10 +407,10 @@ func TestApplyBALAndComputeRoot_CodeChange(t *testing.T) {
 	code := []byte{0x60, 0x60, 0x60, 0x40, 0x52} // Some bytecode
 	codeHash := crypto.Keccak256Hash(code)
 
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.CodeChange(addr, 0, code)
 
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
 	if err != nil {
@@ -396,7 +449,7 @@ func TestApplyBALAndComputeRoot_MultipleTransactions(t *testing.T) {
 	balance2 := uint256.NewInt(2000)
 	balance3 := uint256.NewInt(1500) // Final balance
 
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.BalanceChange(0, addr, balance1)
 	cbal.BalanceChange(1, addr, balance2)
 	cbal.BalanceChange(2, addr, balance3) // Final
@@ -404,7 +457,7 @@ func TestApplyBALAndComputeRoot_MultipleTransactions(t *testing.T) {
 	cbal.NonceChange(addr, 1, 2)
 	cbal.NonceChange(addr, 2, 3) // Final
 
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
 	if err != nil {
@@ -469,10 +522,10 @@ func TestApplyBALAndComputeRoot_StorageDeletion(t *testing.T) {
 	trieDB.Commit(parentRoot, false)
 
 	// Create BAL that deletes the storage slot (write zero value)
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.StorageWrite(0, addr, slot, common.Hash{}) // Zero value = delete
 
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
 	if err != nil {
@@ -507,12 +560,12 @@ func TestApplyBALAndComputeRoot_MultipleStorageWritesSameSlot(t *testing.T) {
 	value2 := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000002")
 	value3 := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000003") // Final
 
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.StorageWrite(0, addr, slot, value1)
 	cbal.StorageWrite(1, addr, slot, value2)
 	cbal.StorageWrite(2, addr, slot, value3) // Final value
 
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
 	if err != nil {
@@ -555,10 +608,10 @@ func TestApplyBALAndComputeRoot_AccountDeletion_EIP161(t *testing.T) {
 	parentRoot := setupTestStateWithAccount(t, trieDB, addr, initialAccount)
 
 	// Create BAL that empties the account
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.BalanceChange(0, addr, uint256.NewInt(0)) // Zero balance
 
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
 	if err != nil {
@@ -584,10 +637,10 @@ func TestApplyBALAndComputeRoot_NeverExistedEmptyAccount(t *testing.T) {
 
 	// Create BAL that "touches" an account but leaves it empty
 	// This simulates an account that receives 0 balance and sends 0 balance
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.BalanceChange(0, addr, uint256.NewInt(0)) // Zero balance on never-existed account
 
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(emptyRoot, accessList)
 	if err != nil {
@@ -641,11 +694,11 @@ func TestApplyBALAndComputeRoot_CodeChangeUntracked(t *testing.T) {
 	code := []byte{0x60, 0x60, 0x60, 0x40, 0x52}
 	codeHash := crypto.Keccak256Hash(code)
 
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.CodeChange(trackedAddr, 0, code)
 	cbal.CodeChange(untrackedAddr, 0, code)
 
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
 	if err != nil {
@@ -701,13 +754,13 @@ func TestApplyBALAndComputeRoot_MixedChanges(t *testing.T) {
 	slot := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
 	value := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000042")
 
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.BalanceChange(0, addr, newBalance)
 	cbal.NonceChange(addr, 0, newNonce)
 	cbal.CodeChange(addr, 0, code)
 	cbal.StorageWrite(0, addr, slot, value)
 
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
 	if err != nil {
@@ -752,9 +805,9 @@ func TestApplyBALAndComputeRoot_ErrorInvalidParentRoot(t *testing.T) {
 	// Use a non-existent root
 	invalidRoot := common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
 
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.BalanceChange(0, addr, uint256.NewInt(1000))
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	_, err := ps.ApplyBALAndComputeRoot(invalidRoot, accessList)
 	if err == nil {
@@ -871,9 +924,9 @@ func TestBuildStateSet_AccountModification(t *testing.T) {
 	parentRoot := setupTestStateWithAccount(t, trieDB, addr, initialAccount)
 
 	// Apply balance change
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.BalanceChange(0, addr, uint256.NewInt(2000))
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
 	if err != nil {
@@ -916,9 +969,9 @@ func TestBuildStateSet_StorageRLPEncoding(t *testing.T) {
 	slot := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
 	value := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000042")
 
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.StorageWrite(0, addr, slot, value)
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
 	if err != nil {
@@ -961,10 +1014,10 @@ func TestBuildStateSet_OriginTracking(t *testing.T) {
 	parentRoot := setupTestStateWithAccount(t, trieDB, addr, initialAccount)
 
 	// Modify the account
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 	cbal.BalanceChange(0, addr, uint256.NewInt(6000))
 	cbal.NonceChange(addr, 0, 11)
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
 	if err != nil {
@@ -1023,7 +1076,7 @@ func TestApplyBALAndComputeRoot_MultipleAccountTypes(t *testing.T) {
 	}
 
 	// Create BAL with different changes for each account
-	cbal := bal.NewConstructionBlockAccessList()
+	cbal := newTestBALBuilder()
 
 	// addr1: balance change
 	cbal.BalanceChange(0, addr1, uint256.NewInt(2000))
@@ -1037,7 +1090,7 @@ func TestApplyBALAndComputeRoot_MultipleAccountTypes(t *testing.T) {
 	cbal.BalanceChange(0, addr3, uint256.NewInt(3000))
 	cbal.NonceChange(addr3, 0, 1)
 
-	accessList := constructionToBlockAccessList(t, &cbal)
+	accessList := cbal.Build(t)
 
 	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
 	if err != nil {

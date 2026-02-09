@@ -285,6 +285,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		options.PartialStateBALRetention = config.PartialState.BALRetention
 		options.PartialStateChainRetention = config.PartialState.ChainRetention
 		options.SnapshotNoBuild = true
+		config.LogNoHistory = true // Partial state nodes have no receipts — disable log indexing
 	}
 
 	eth.blockchain, err = core.NewBlockChain(chainDb, config.Genesis, eth.engine, options)
