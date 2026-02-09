@@ -39,9 +39,6 @@ type BALStateTransition struct {
 	tries     sync.Map //map[common.Address]Trie
 	deletions map[common.Address]struct{}
 
-	originStorages   map[common.Address]map[common.Hash]common.Hash
-	originStoragesWG sync.WaitGroup
-
 	accountDeleted int64
 	accountUpdated int64
 	storageDeleted atomic.Int64
@@ -85,20 +82,18 @@ func NewBALStateTransition(accessList *BALReader, db Database, parentRoot common
 	}
 
 	return &BALStateTransition{
-		accessList:       accessList,
-		db:               db,
-		reader:           reader,
-		stateTrie:        stateTrie,
-		parentRoot:       parentRoot,
-		rootHash:         common.Hash{},
-		diffs:            make(map[common.Address]*bal.AccountMutations),
-		prestates:        sync.Map{},
-		postStates:       make(map[common.Address]*types.StateAccount),
-		tries:            sync.Map{},
-		deletions:        make(map[common.Address]struct{}),
-		originStorages:   make(map[common.Address]map[common.Hash]common.Hash),
-		originStoragesWG: sync.WaitGroup{},
-		stateUpdate:      nil,
+		accessList:  accessList,
+		db:          db,
+		reader:      reader,
+		stateTrie:   stateTrie,
+		parentRoot:  parentRoot,
+		rootHash:    common.Hash{},
+		diffs:       make(map[common.Address]*bal.AccountMutations),
+		prestates:   sync.Map{},
+		postStates:  make(map[common.Address]*types.StateAccount),
+		tries:       sync.Map{},
+		deletions:   make(map[common.Address]struct{}),
+		stateUpdate: nil,
 	}, nil
 }
 
@@ -204,10 +199,10 @@ func (s *BALStateTransition) commitAccount(addr common.Address) (*accountUpdate,
 
 	for key, value := range s.diffs[addr].StorageWrites {
 		hash := crypto.Keccak256Hash(key[:])
-		op.storages[hash] = encode(common.Hash(value))
-		origin := encode(s.originStorages[addr][common.Hash(key)])
+		op.storages[hash] = encode(value)
+		origin := encode(*s.accessList.Storage(addr, key))
 		op.storagesOriginByHash[hash] = origin
-		op.storagesOriginByKey[common.Hash(key)] = origin
+		op.storagesOriginByKey[key] = origin
 	}
 	tr, _ := s.tries.Load(addr)
 	root, nodes := tr.(Trie).Commit(false)
@@ -305,8 +300,6 @@ func (s *BALStateTransition) CommitWithUpdate(block uint64, deleteEmptyObjects b
 		return nil
 	})
 
-	s.originStoragesWG.Wait()
-
 	// Schedule each of the storage tries that need to be updated, so they can
 	// run concurrently to one another.
 	//
@@ -368,54 +361,6 @@ func (s *BALStateTransition) Commit(block uint64, deleteEmptyObjects bool, noSto
 	return root, err
 }
 
-func (s *BALStateTransition) loadOriginStorages() {
-	lastIdx := len(s.accessList.block.Transactions()) + 1
-
-	type originStorage struct {
-		address common.Address
-		key     common.Hash
-		value   common.Hash
-	}
-
-	originStoragesCh := make(chan *originStorage)
-	var pendingStorageCount int
-
-	for _, addr := range s.accessList.ModifiedAccounts() {
-		diff := s.accessList.readAccountDiff(addr, lastIdx)
-		pendingStorageCount += len(diff.StorageWrites)
-		s.originStorages[addr] = make(map[common.Hash]common.Hash)
-		for key := range diff.StorageWrites {
-			storageKey := key
-			go func() {
-				val, err := s.reader.Storage(addr, common.Hash(storageKey))
-				if err != nil {
-					s.setError(err)
-					return
-				}
-				originStoragesCh <- &originStorage{
-					addr,
-					common.Hash(storageKey),
-					val,
-				}
-			}()
-		}
-	}
-
-	if pendingStorageCount == 0 {
-		return
-	}
-	for {
-		select {
-		case acctStorage := <-originStoragesCh:
-			s.originStorages[acctStorage.address][acctStorage.key] = acctStorage.value
-			pendingStorageCount--
-			if pendingStorageCount == 0 {
-				return
-			}
-		}
-	}
-}
-
 // IntermediateRoot applies block state mutations and computes the updated state
 // trie root.
 func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
@@ -425,7 +370,6 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 
 	// State root calculation proceeds as follows:
 
-	// 1 (a): load the prestate state accounts for addresses which were modified in the block
 	// 1 (b): load the origin storage values for all slots which were modified during the block (this is needed for computing the stateUpdate)
 	// 1 (c): update each mutated account, producing the post-block state object by applying the state mutations to the prestate (retrieved in 1a).
 	// 1 (d): prefetch the intermediate trie nodes of the mutated state set from the account trie.
@@ -436,14 +380,6 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 
 	start := time.Now()
 	lastIdx := len(s.accessList.block.Transactions()) + 1
-
-	//1 (b): load the origin storage values for all slots which were modified during the block
-	s.originStoragesWG.Add(1)
-	go func() {
-		defer s.originStoragesWG.Done()
-		s.loadOriginStorages()
-		s.metrics.OriginStorageLoadTime = time.Since(start)
-	}()
 
 	var wg sync.WaitGroup
 

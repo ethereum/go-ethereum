@@ -23,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
-	"log/slog"
 	"maps"
 	"slices"
 )
@@ -40,18 +39,14 @@ type idxAccessListBuilder struct {
 	// and terminating a frame merges the accesses/modifications into the
 	// intermediate access list of the calling frame.
 	accessesStack []map[common.Address]*constructionAccountAccess
-
-	// context logger for instrumenting debug logging
-	logger *slog.Logger
 }
 
-func newAccessListBuilder(logger *slog.Logger) *idxAccessListBuilder {
+func newAccessListBuilder() *idxAccessListBuilder {
 	return &idxAccessListBuilder{
 		make(map[common.Address]*accountIdxPrestate),
 		[]map[common.Address]*constructionAccountAccess{
 			make(map[common.Address]*constructionAccountAccess),
 		},
-		logger,
 	}
 }
 
@@ -239,7 +234,7 @@ func (a *idxAccessListBuilder) finalise() (*StateDiff, StateAccesses) {
 }
 
 func (c *AccessListBuilder) EnterTx(txHash common.Hash) {
-	c.idxBuilder = newAccessListBuilder(slog.New(slog.DiscardHandler))
+	c.idxBuilder = newAccessListBuilder()
 }
 
 // FinaliseIdxChanges records all pending state mutations/accesses in the
@@ -247,7 +242,7 @@ func (c *AccessListBuilder) EnterTx(txHash common.Hash) {
 // then emptied.
 func (c *AccessListBuilder) FinaliseIdxChanges(idx uint16) {
 	pendingDiff, pendingAccesses := c.idxBuilder.finalise()
-	c.idxBuilder = newAccessListBuilder(slog.New(slog.DiscardHandler))
+	c.idxBuilder = newAccessListBuilder()
 
 	for addr, pendingAcctDiff := range pendingDiff.Mutations {
 		finalizedAcctChanges, ok := c.FinalizedAccesses[addr]
@@ -382,6 +377,28 @@ type ConstructionAccountAccesses struct {
 	CodeChanges map[uint16]CodeChange
 }
 
+func (c *ConstructionAccountAccesses) Copy() (res ConstructionAccountAccesses) {
+	if c.StorageWrites != nil {
+		res.StorageWrites = make(map[common.Hash]map[uint16]common.Hash)
+		for slot, writes := range c.StorageWrites {
+			res.StorageWrites[slot] = maps.Clone(writes)
+		}
+	}
+	if c.StorageReads != nil {
+		res.StorageReads = maps.Clone(c.StorageReads)
+	}
+	if c.BalanceChanges != nil {
+		res.BalanceChanges = maps.Clone(c.BalanceChanges)
+	}
+	if c.NonceChanges != nil {
+		res.NonceChanges = maps.Clone(c.NonceChanges)
+	}
+	if c.CodeChanges != nil {
+		res.CodeChanges = maps.Clone(c.CodeChanges)
+	}
+	return res
+}
+
 // constructionAccountAccess contains fields for an account which were modified
 // during execution of the current access list index.
 // It also accumulates a set of storage slots which were accessed but not
@@ -491,6 +508,15 @@ func (c *constructionAccountAccess) NonceChange(cur uint64) {
 
 type ConstructionBlockAccessList map[common.Address]*ConstructionAccountAccesses
 
+func (c ConstructionBlockAccessList) Copy() ConstructionBlockAccessList {
+	res := make(ConstructionBlockAccessList)
+	for addr, accountAccess := range c {
+		aaCopy := accountAccess.Copy()
+		res[addr] = &aaCopy
+	}
+	return res
+}
+
 // AccessListBuilder is used to build an EIP-7928 block access list
 type AccessListBuilder struct {
 	FinalizedAccesses ConstructionBlockAccessList
@@ -499,18 +525,46 @@ type AccessListBuilder struct {
 
 	lastFinalizedMutations *StateDiff
 	lastFinalizedAccesses  StateAccesses
-	logger                 *slog.Logger
+
+	checkpointAccessList ConstructionBlockAccessList
+	checkpointMutations  *StateDiff
+	checkpointAccesses   StateAccesses
+}
+
+func (e *AccessListBuilder) Checkpoint() {
+	e.checkpointAccessList = e.FinalizedAccesses.Copy()
+	if e.lastFinalizedMutations != nil {
+		e.checkpointMutations = &StateDiff{
+			make(map[common.Address]*AccountMutations),
+		}
+		for addr, mut := range e.lastFinalizedMutations.Mutations {
+			e.checkpointMutations.Mutations[addr] = mut.Copy()
+		}
+	}
+	if e.lastFinalizedAccesses != nil {
+		e.checkpointAccesses = make(StateAccesses)
+		for addr, accesses := range e.lastFinalizedAccesses {
+			e.checkpointAccesses[addr] = maps.Clone(accesses)
+		}
+	}
+}
+
+func (e *AccessListBuilder) ResetToCheckpoint() {
+	e.FinalizedAccesses = e.checkpointAccessList
+	e.lastFinalizedAccesses = e.checkpointAccesses
+	e.lastFinalizedMutations = e.checkpointMutations
 }
 
 // NewAccessListBuilder instantiates an empty access list.
 func NewAccessListBuilder() *AccessListBuilder {
-	logger := slog.New(slog.DiscardHandler)
 	return &AccessListBuilder{
 		make(map[common.Address]*ConstructionAccountAccesses),
-		newAccessListBuilder(logger),
+		newAccessListBuilder(),
 		nil,
 		nil,
-		logger,
+		nil,
+		nil,
+		nil,
 	}
 }
 

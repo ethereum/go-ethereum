@@ -208,6 +208,8 @@ type Config struct {
 
 	// RangeLimit restricts the maximum range (end - start) for range queries.
 	RangeLimit uint64 `toml:",omitempty"`
+
+	BALExecutionMode int
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.

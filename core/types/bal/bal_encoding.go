@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"io"
 	"maps"
 	"slices"
@@ -67,6 +68,15 @@ func (e *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 	}
 	dec.ListEnd()
 	return nil
+}
+
+func (e *BlockAccessList) EncodedSize() int {
+	b, err := rlp.EncodeToBytes(e)
+	if err != nil {
+		// TODO: proper to crit here?
+		log.Crit("failed to rlp encode access list", "err", err)
+	}
+	return len(b)
 }
 
 func (e *BlockAccessList) JSONString() string {

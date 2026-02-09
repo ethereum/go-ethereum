@@ -335,14 +335,28 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	}, nil
 }
 
-func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction) error {
+var (
+	errAccessListOversized = errors.New("access list oversized")
+)
+
+func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction) (err error) {
 	if tx.Type() == types.BlobTxType {
 		return miner.commitBlobTransaction(env, tx)
 	}
+	if env.alTracer != nil {
+		env.alTracer.Checkpoint()
+		defer func() {
+			if err != nil {
+				env.alTracer.ResetToCheckpoint()
+			}
+		}()
+	}
+
 	receipt, err := miner.applyTransaction(env, tx)
 	if err != nil {
 		return err
 	}
+
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
 	env.size += tx.Size()
@@ -350,7 +364,7 @@ func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction) e
 	return nil
 }
 
-func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transaction) error {
+func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transaction) (err error) {
 	sc := tx.BlobTxSidecar()
 	if sc == nil {
 		panic("blob transaction without blobs in miner")
@@ -362,6 +376,14 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 	maxBlobs := miner.maxBlobsPerBlock(env.header.Time)
 	if env.blobs+len(sc.Blobs) > maxBlobs {
 		return errors.New("max data blobs reached")
+	}
+	if env.alTracer != nil {
+		env.alTracer.Checkpoint()
+		defer func() {
+			if err != nil {
+				env.alTracer.ResetToCheckpoint()
+			}
+		}()
 	}
 	receipt, err := miner.applyTransaction(env, tx)
 	if err != nil {
@@ -384,11 +406,18 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Gas()
 	)
+
 	receipt, cumulativeGas, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx, env.cumulativeGas)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.SetGas(gp)
 		return nil, err
+	}
+	isOversizedAccessList := env.alTracer != nil && env.size+tx.Size()+uint64(env.alTracer.AccessList().ToEncodingObj().EncodedSize()) >= params.MaxBlockSize-maxBlockSizeBufferZone
+	if isOversizedAccessList {
+		env.state.RevertToSnapshot(snap)
+		env.gasPool.SetGas(gp)
+		return nil, errAccessListOversized
 	}
 	env.cumulativeGas = cumulativeGas
 	env.header.GasUsed += receipt.GasUsed
@@ -403,6 +432,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
 	}
+loop:
 	for {
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {
@@ -501,7 +531,12 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			txs.Shift()
-
+		case errors.Is(err, errAccessListOversized):
+			// Transaction can't be applied because it would cause the block to be oversized due to the
+			// contribution of the state accesses/modifications it makes.
+			// terminate the payload construction as it's not guaranteed we will be able to find a transaction
+			// that can fit in a short amount of time.
+			break loop
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from
 			// the same sender because of `nonce-too-high` clause.

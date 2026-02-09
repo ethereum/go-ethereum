@@ -60,6 +60,9 @@ type ExecuteStats struct {
 	// Cache hit rates
 	StateReadCacheStats     state.ReaderStats
 	StatePrefetchCacheStats state.ReaderStats
+
+	// Stats specific to BAL state update
+	balTransitionStats *state.BALStateTransitionMetrics
 }
 
 // reportMetrics uploads execution statistics to the metrics system.
@@ -97,6 +100,56 @@ func (s *ExecuteStats) reportMetrics() {
 	accountCacheMissPrefetchMeter.Mark(s.StatePrefetchCacheStats.AccountCacheMiss)
 	storageCacheHitPrefetchMeter.Mark(s.StatePrefetchCacheStats.StorageCacheHit)
 	storageCacheMissPrefetchMeter.Mark(s.StatePrefetchCacheStats.StorageCacheMiss)
+
+	accountCacheHitMeter.Mark(s.StateReadCacheStats.AccountCacheHit)
+	accountCacheMissMeter.Mark(s.StateReadCacheStats.AccountCacheMiss)
+	storageCacheHitMeter.Mark(s.StateReadCacheStats.StorageCacheHit)
+	storageCacheMissMeter.Mark(s.StateReadCacheStats.StorageCacheMiss)
+}
+
+func (s *ExecuteStats) reportBALMetrics() {
+	/*
+		if s.AccountLoaded != 0 {
+			accountReadTimer.Update(s.AccountReads)
+			accountReadSingleTimer.Update(s.AccountReads / time.Duration(s.AccountLoaded))
+		}
+		if s.StorageLoaded != 0 {
+			storageReadTimer.Update(s.StorageReads)
+			storageReadSingleTimer.Update(s.StorageReads / time.Duration(s.StorageLoaded))
+		}
+		if s.CodeLoaded != 0 {
+			codeReadTimer.Update(s.CodeReads)
+			codeReadSingleTimer.Update(s.CodeReads / time.Duration(s.CodeLoaded))
+			codeReadBytesTimer.Update(time.Duration(s.CodeLoadBytes))
+		}
+		// TODO: implement these ^
+	*/
+	//accountUpdateTimer.Update(s.AccountUpdates) // Account updates are complete(in validation)
+	//storageUpdateTimer.Update(s.StorageUpdates) // Storage updates are complete(in validation)
+	//accountHashTimer.Update(s.AccountHashes)    // Account hashes are complete(in validation)
+
+	accountCommitTimer.Update(s.AccountCommits) // Account commits are complete, we can mark them
+	storageCommitTimer.Update(s.StorageCommits) // Storage commits are complete, we can mark them
+
+	stateTriePrefetchTimer.Update(s.balTransitionStats.StatePrefetch)
+	accountTriesUpdateTimer.Update(s.balTransitionStats.AccountUpdate)
+	stateTrieUpdateTimer.Update(s.balTransitionStats.StateUpdate)
+	stateTrieHashTimer.Update(s.balTransitionStats.StateHash)
+	stateRootComputeTimer.Update(s.balTransitionStats.AccountUpdate + s.balTransitionStats.StateUpdate + s.balTransitionStats.StateHash)
+
+	//blockExecutionTimer.Update(s.Execution)                 // The time spent on EVM processing
+	// ^basically impossible to get this metric with parallel execution
+
+	//blockValidationTimer.Update(s.Validation)               // The time spent on block validation
+	//blockCrossValidationTimer.Update(s.CrossValidation)     // The time spent on stateless cross validation
+
+	snapshotCommitTimer.Update(s.SnapshotCommit)            // Snapshot commits are complete, we can mark them
+	triedbCommitTimer.Update(s.TrieDBCommit)                // Trie database commits are complete, we can mark them
+	blockWriteTimer.Update(s.BlockWrite)                    // The time spent on block write
+	blockInsertTimer.Update(s.TotalTime)                    // The total time spent on block execution
+	chainMgaspsMeter.Update(time.Duration(s.MgasPerSecond)) // TODO(rjl493456442) generalize the ResettingTimer
+
+	// Cache hit rates
 
 	accountCacheHitMeter.Mark(s.StateReadCacheStats.AccountCacheHit)
 	accountCacheMissMeter.Mark(s.StateReadCacheStats.AccountCacheMiss)

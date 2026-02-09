@@ -178,9 +178,11 @@ func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest, buildAndVerif
 		for _, dbscheme := range dbschemeConf {
 			if err := bt.checkFailure(t, test.Run(snapshot, dbscheme, true, buildAndVerifyBAL, nil, nil)); err != nil {
 				failures++
-				if failures > 10 {
-					panic("adsf")
-				}
+				/*
+					if failures > 10 {
+						panic("adsf")
+					}
+				*/
 				t.Errorf("test with config {snapshotter:%v, scheme:%v} failed: %v", snapshot, dbscheme, err)
 				return
 			}

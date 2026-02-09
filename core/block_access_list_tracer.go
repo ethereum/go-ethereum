@@ -79,6 +79,14 @@ func (a *BlockAccessListTracer) OnSystemCallEnd() {
 	}
 }
 
+func (a *BlockAccessListTracer) Checkpoint() {
+	a.builder.Checkpoint()
+}
+
+func (a *BlockAccessListTracer) ResetToCheckpoint() {
+	a.builder.ResetToCheckpoint()
+}
+
 func (a *BlockAccessListTracer) TxStartHook(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	a.builder.EnterTx(tx.Hash())
 }

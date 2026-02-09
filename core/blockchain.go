@@ -176,6 +176,12 @@ const (
 	BlockChainVersion uint64 = 9
 )
 
+const (
+	BALExecutionModeFull       = 0
+	BALExecutionModeNoBatchIO  = iota
+	BALExecutionModeSequential = iota
+)
+
 // BlockChainConfig contains the configuration of the BlockChain object.
 type BlockChainConfig struct {
 	// Trie database related options
@@ -231,6 +237,8 @@ type BlockChainConfig struct {
 	// SlowBlockThreshold is the block execution time threshold beyond which
 	// detailed statistics will be logged.
 	SlowBlockThreshold time.Duration
+
+	BALExecutionMode int
 }
 
 // DefaultConfig returns the default config.
@@ -591,12 +599,13 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 		procTime  time.Duration
 	)
 
-	reader, err := bc.statedb.Reader(parentRoot)
+	_, reader, err := bc.statedb.ReadersWithCacheStats(parentRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	stateReader := state.NewBALReader(block, reader)
+	useAsyncReads := bc.cfg.BALExecutionMode != BALExecutionModeNoBatchIO
+	stateReader := state.NewBALReader(block, reader, useAsyncReads)
 	stateTransition, err := state.NewBALStateTransition(stateReader, bc.statedb, parentRoot)
 	if err != nil {
 		return nil, err
@@ -631,7 +640,7 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 	}
 
 	procTime = time.Since(startTime)
-
+	writeStart := time.Now()
 	// Write the block to the chain and get the status.
 	var (
 		//wstart = time.Now()
@@ -646,41 +655,52 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 	if err != nil {
 		return nil, err
 	}
+	writeTime := time.Since(writeStart)
+	var stats ExecuteStats
+
+	/*
+		// TODO: implement the gathering of this data
+			stats.AccountReads = statedb.AccountReads     // Account reads are complete(in processing)
+			stats.StorageReads = statedb.StorageReads     // Storage reads are complete(in processing)
+			stats.AccountUpdates = statedb.AccountUpdates // Account updates are complete(in validation)
+			stats.StorageUpdates = statedb.StorageUpdates // Storage updates are complete(in validation)
+			stats.AccountHashes = statedb.AccountHashes   // Account hashes are complete(in validation)
+			stats.CodeReads = statedb.CodeReads
+
+			stats.AccountLoaded = statedb.AccountLoaded
+			stats.AccountUpdated = statedb.AccountUpdated
+			stats.AccountDeleted = statedb.AccountDeleted
+			stats.StorageLoaded = statedb.StorageLoaded
+			stats.StorageUpdated = int(statedb.StorageUpdated.Load())
+			stats.StorageDeleted = int(statedb.StorageDeleted.Load())
+			stats.CodeLoaded = statedb.CodeLoaded
+			stats.CodeLoadBytes = statedb.CodeLoadBytes
+
+		stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // The time spent on EVM processing
+		stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation
+	*/
 
 	// Update the metrics touched during block commit
-	accountCommitTimer.Update(stateTransition.Metrics().AccountCommits)   // Account commits are complete, we can mark them
-	storageCommitTimer.Update(stateTransition.Metrics().StorageCommits)   // Storage commits are complete, we can mark them
-	snapshotCommitTimer.Update(stateTransition.Metrics().SnapshotCommits) // Snapshot commits are complete, we can mark them
-	triedbCommitTimer.Update(stateTransition.Metrics().TrieDBCommits)     // Trie database commits are complete, we can mark them
+	stats.AccountCommits = stateTransition.Metrics().AccountCommits
+	stats.StorageCommits = stateTransition.Metrics().StorageCommits
+	stats.SnapshotCommit = stateTransition.Metrics().SnapshotCommits
+	stats.TrieDBCommit = stateTransition.Metrics().TrieDBCommits
 
-	//  blockWriteTimer.Update(time.Since(wstart +  max(stateTransition.Metrics().AccountCommits, stateTransition.Metrics().StorageCommits) /* concurrent */  statedb.SnapshotCommits  + statedb.TrieDBCommits))
+	stats.StateReadCacheStats = reader.GetStats()
+
 	elapsed := time.Since(startTime) + 1 // prevent zero division
-	blockInsertTimer.Update(elapsed)
+	stats.TotalTime = elapsed
+	stats.MgasPerSecond = float64(res.ProcessResult.GasUsed) * 1000 / float64(elapsed)
+	stats.BlockWrite = writeTime
 
-	// TODO(rjl493456442) generalize the ResettingTimer
-	mgasps := float64(res.ProcessResult.GasUsed) * 1000 / float64(elapsed)
-	chainMgaspsMeter.Update(time.Duration(mgasps))
-
-	blockPreprocessingTimer.Update(res.PreProcessTime)
-	txExecutionTimer.Update(res.ExecTime)
-
-	// update the metrics from the block state root update
-	stateTriePrefetchTimer.Update(res.StateTransitionMetrics.StatePrefetch)
-	accountTriesUpdateTimer.Update(res.StateTransitionMetrics.AccountUpdate)
-	stateTrieUpdateTimer.Update(res.StateTransitionMetrics.StateUpdate)
-	stateTrieHashTimer.Update(res.StateTransitionMetrics.StateHash)
-	stateRootComputeTimer.Update(res.StateTransitionMetrics.AccountUpdate + res.StateTransitionMetrics.StateUpdate + res.StateTransitionMetrics.StateHash)
-
-	originStorageLoadTimer.Update(res.StateTransitionMetrics.OriginStorageLoadTime)
-	stateCommitTimer.Update(res.StateTransitionMetrics.TotalCommitTime)
-	blockPostprocessingTimer.Update(res.PostProcessTime)
+	stats.balTransitionStats = res.StateTransitionMetrics
 
 	return &blockProcessingResult{
 		usedGas:  res.ProcessResult.GasUsed,
 		procTime: procTime,
 		status:   status,
 		witness:  nil,
-		stats:    &ExecuteStats{}, // TODO: actually implement this in the future
+		stats:    &stats,
 	}, nil
 }
 
@@ -2103,11 +2123,17 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		// The traced section of block import.
 		start := time.Now()
 
+		blockHasAccessList := block.AccessList() != nil
+
 		res, err := bc.ProcessBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1)
 		if err != nil {
 			return nil, it.index, err
 		}
-		res.stats.reportMetrics()
+		if blockHasAccessList && bc.cfg.BALExecutionMode != BALExecutionModeSequential {
+			res.stats.reportBALMetrics()
+		} else {
+			res.stats.reportMetrics()
+		}
 
 		// Log slow block only if a single block is inserted (usually after the
 		// initial sync) to not overwhelm the users.
@@ -2195,7 +2221,7 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	blockHasAccessList := block.AccessList() != nil
 
 	// optimized execution path for blocks which contain BALs
-	if blockHasAccessList {
+	if blockHasAccessList && bc.cfg.BALExecutionMode != BALExecutionModeSequential {
 		return bc.processBlockWithAccessList(parentRoot, block, setHead)
 	}
 

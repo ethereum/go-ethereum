@@ -1042,6 +1042,25 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	// block access list flags
+
+	BlockAccessListExecutionModeFlag = &cli.StringFlag{
+		Name: "bal.executionmode",
+		Usage: `
+block access list execution type.  possible inputs are:
+- sequential: no performance acceleration
+- full: parallel transaction execution, state root calculation, async warming of access list reads
+- nobatchio: same as 'full', but without async warming of access list reads`,
+		Value:    BalExecutionModeFull,
+		Category: flags.MiscCategory,
+	}
+)
+
+const (
+	BalExecutionModeFull       = "full"
+	BalExecutionModeNoBatchIO  = "nobatchio"
+	BalExecutionModeSequential = "sequential"
 )
 
 var (

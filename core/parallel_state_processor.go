@@ -248,16 +248,12 @@ type stateRootCalculationResult struct {
 // calcAndVerifyRoot performs the post-state root hash calculation, verifying
 // it against what is reported by the block and returning a result on resCh.
 func (p *ParallelStateProcessor) calcAndVerifyRoot(preState *state.StateDB, block *types.Block, stateTransition *state.BALStateTransition, resCh chan stateRootCalculationResult) {
-	// calculate and apply the block state modifications
-	//root, prestateLoadTime, rootCalcTime := preState.BlockAccessList().StateRoot(preState)
 	root := stateTransition.IntermediateRoot(false)
 
 	res := stateRootCalculationResult{
-		// TODO: I think we can remove the root from this struct
 		metrics: stateTransition.Metrics(),
 	}
 
-	// TODO: validate state root in block validator?
 	if root != block.Root() {
 		res.err = fmt.Errorf("state root mismatch. local: %x. remote: %x", root, block.Root())
 	}
@@ -328,7 +324,6 @@ func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *st
 
 	balTracer, hooks := NewBlockAccessListTracer()
 	tracingStateDB := state.NewHookedState(statedb, hooks)
-	// TODO: figure out exactly why we need to set the hooks on the TracingStateDB and the vm.Config
 	cfg.Tracer = hooks
 
 	context = NewEVMBlockContext(header, p.chain, nil)

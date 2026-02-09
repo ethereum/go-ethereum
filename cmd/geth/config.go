@@ -239,6 +239,20 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		cfg.Eth.OverrideVerkle = &v
 	}
 
+	if ctx.IsSet(utils.BlockAccessListExecutionModeFlag.Name) {
+		val := ctx.String(utils.BlockAccessListExecutionModeFlag.Name)
+		switch val {
+		case utils.BalExecutionModeFull:
+			cfg.Eth.BALExecutionMode = 0
+		case utils.BalExecutionModeNoBatchIO:
+			cfg.Eth.BALExecutionMode = 1
+		case utils.BalExecutionModeSequential:
+			cfg.Eth.BALExecutionMode = 2
+		default:
+			utils.Fatalf("invalid option for --bal.executionmode: %s.  acceptable values are full|nobatchio|sequential", val)
+		}
+	}
+
 	// Start metrics export if enabled
 	utils.SetupMetrics(&cfg.Metrics)
 

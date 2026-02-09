@@ -9,6 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
+	"golang.org/x/sync/errgroup"
+	"maps"
 	"sync"
 )
 
@@ -22,38 +24,75 @@ import (
 type prestateResolver struct {
 	inProgress map[common.Address]chan struct{}
 	resolved   sync.Map
-	ctx        context.Context
-	cancel     func()
+
+	inProgressStorage map[common.Address]map[common.Hash]chan struct{}
+	resolvedStorage   map[common.Address]*sync.Map
+
+	ctx    context.Context
+	cancel func()
 }
 
 // schedule begins the retrieval of a set of state accounts running on
 // a background goroutine.
-func (p *prestateResolver) schedule(r Reader, addrs []common.Address) {
+func (p *prestateResolver) schedule(r Reader, accounts []common.Address, storage map[common.Address][]common.Hash) {
 	p.inProgress = make(map[common.Address]chan struct{})
+	p.inProgressStorage = make(map[common.Address]map[common.Hash]chan struct{})
+	p.resolvedStorage = make(map[common.Address]*sync.Map)
 	p.ctx, p.cancel = context.WithCancel(context.Background())
 
-	for _, addr := range addrs {
+	var workers errgroup.Group
+	for _, addr := range accounts {
 		p.inProgress[addr] = make(chan struct{})
 	}
 
-	// TODO: probably we can retrieve these on a single go-routine
-	// the transaction execution will also load them
-	for _, addr := range addrs {
+	for addr, slots := range storage {
+		p.inProgressStorage[addr] = make(map[common.Hash]chan struct{})
+		for _, slot := range slots {
+			p.inProgressStorage[addr][slot] = make(chan struct{})
+		}
+		p.resolvedStorage[addr] = &sync.Map{}
+	}
+
+	for _, addr := range accounts {
 		resolveAddr := addr
-		go func() {
+		workers.Go(func() error {
 			select {
 			case <-p.ctx.Done():
-				return
+				return nil
 			default:
 			}
 
 			acct, err := r.Account(resolveAddr)
 			if err != nil {
-				// TODO: what do here?
+				return err
 			}
 			p.resolved.Store(resolveAddr, acct)
 			close(p.inProgress[resolveAddr])
-		}()
+			return nil
+		})
+	}
+	for addr, slots := range storage {
+		resolveAddr := addr
+		for _, s := range slots {
+			slot := s
+			workers.Go(func() error {
+				select {
+				case <-p.ctx.Done():
+					return nil
+				default:
+				}
+
+				value, err := r.Storage(resolveAddr, slot)
+				if err != nil {
+					// TODO: need to surface this error somehow so that execution can quit.
+					// right now, it's silently consumed because we don't block using workers.Wait() anywhere...
+					return err
+				}
+				p.resolvedStorage[resolveAddr].Store(slot, value)
+				close(p.inProgressStorage[resolveAddr][slot])
+				return nil
+			})
+		}
 	}
 }
 
@@ -61,8 +100,29 @@ func (p *prestateResolver) stop() {
 	p.cancel()
 }
 
-func (p *prestateResolver) storage(addr common.Address, key common.Hash) common.Hash {
-	return common.Hash{}
+func (p *prestateResolver) storage(addr common.Address, key common.Hash) *common.Hash {
+	// check that the slot was actually scheduled
+	storages, ok := p.inProgressStorage[addr]
+	if !ok {
+		return nil
+	}
+	_, ok = storages[key]
+	if !ok {
+		return nil
+	}
+
+	// block if the value of the slot is still being fetched
+	select {
+	case <-p.inProgressStorage[addr][key]:
+	}
+	res, exist := p.resolvedStorage[addr].Load(key)
+	if !exist {
+		// storage was scheduled, attempted to retrieve, but not set.
+		// TODO: this is an error case that should be explicitly dealt with (the underlying reader failed to retrieve the storage slot)
+		return nil
+	}
+	hashRes := res.(common.Hash)
+	return &hashRes
 }
 
 // account returns the state account for the given address, blocking if it is
@@ -128,13 +188,36 @@ type BALReader struct {
 }
 
 // NewBALReader constructs a new reader from an access list. db is expected to have been instantiated with a reader.
-func NewBALReader(block *types.Block, reader Reader) *BALReader {
+func NewBALReader(block *types.Block, reader Reader, useAsyncReads bool) *BALReader {
 	r := &BALReader{accesses: make(map[common.Address]*bal.AccountAccess), block: block}
+	finalIdx := len(block.Transactions()) + 1
 	for _, acctDiff := range *block.AccessList() {
 		r.accesses[acctDiff.Address] = &acctDiff
 	}
-	r.prestateReader.schedule(reader, r.ModifiedAccounts())
+	modifiedAccounts := r.ModifiedAccounts()
+	storage := make(map[common.Address][]common.Hash)
+	for _, addr := range modifiedAccounts {
+		diff := r.readAccountDiff(addr, finalIdx)
+		var scheduledStorageKeys []common.Hash
+		if len(diff.StorageWrites) > 0 {
+			writtenKeys := maps.Keys(diff.StorageWrites)
+			for key := range writtenKeys {
+				scheduledStorageKeys = append(scheduledStorageKeys, key)
+			}
+		}
+		if useAsyncReads {
+			scheduledStorageKeys = append(scheduledStorageKeys, r.accountStorageReads(addr)...)
+		}
+		if len(scheduledStorageKeys) > 0 {
+			storage[addr] = scheduledStorageKeys
+		}
+	}
+	r.prestateReader.schedule(reader, r.ModifiedAccounts(), storage)
 	return r
+}
+
+func (r *BALReader) Storage(addr common.Address, key common.Hash) *common.Hash {
+	return r.prestateReader.storage(addr, key)
 }
 
 // ModifiedAccounts returns a list of all accounts with mutations in the access list
@@ -305,6 +388,19 @@ func (r *BALReader) readAccount(db *StateDB, addr common.Address, idx int) *stat
 	diff := r.readAccountDiff(addr, idx)
 	prestate := r.prestateReader.account(addr)
 	return r.initObjFromDiff(db, addr, prestate, diff)
+}
+
+func (r *BALReader) accountStorageReads(addr common.Address) []common.Hash {
+	diff, exist := r.accesses[addr]
+	if !exist {
+		return []common.Hash{}
+	}
+
+	var reads []common.Hash
+	for _, key := range diff.StorageReads {
+		reads = append(reads, key.ToHash())
+	}
+	return reads
 }
 
 // readAccountDiff returns the accumulated state changes of an account up
