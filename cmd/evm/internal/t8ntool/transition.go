@@ -191,10 +191,27 @@ func Transition(ctx *cli.Context) error {
 			})
 		}
 	}
+	// Configure opcode counter
+	var counter *opcodeCounter
+	if ctx.IsSet(OpcodeCountFlag.Name) && ctx.String(OpcodeCountFlag.Name) != "" {
+		counter = newOpcodeCounter()
+		if vmConfig.Tracer != nil {
+			vmConfig.Tracer = composeHooks(vmConfig.Tracer, counter.hooks())
+		} else {
+			vmConfig.Tracer = counter.hooks()
+		}
+	}
 	// Run the test and aggregate the result
 	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name))
 	if err != nil {
 		return err
+	}
+	// Write opcode counts if enabled
+	if counter != nil {
+		fname := ctx.String(OpcodeCountFlag.Name)
+		if err := saveFile(baseDir, fname, counter.results()); err != nil {
+			return err
+		}
 	}
 	// Dump the execution result
 	var (

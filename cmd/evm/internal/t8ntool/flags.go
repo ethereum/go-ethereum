@@ -162,6 +162,11 @@ var (
 			strings.Join(vm.ActivateableEips(), ", ")),
 		Value: "GrayGlacier",
 	}
+	OpcodeCountFlag = &cli.StringFlag{
+		Name:  "opcode.count",
+		Usage: "If set, opcode execution counts will be written to this file (relative to output.basedir).",
+		Value: "",
+	}
 	VerbosityFlag = &cli.IntFlag{
 		Name:  "verbosity",
 		Usage: "sets the verbosity level",
