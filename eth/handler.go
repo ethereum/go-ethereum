@@ -477,29 +477,30 @@ func (h *handler) BroadcastTransactions(txs []common.Hash) {
 	)
 
 	for _, tx := range txs {
-		var directSet map[*ethPeer]struct{}
-		meta := h.txpool.GetMetadata(tx)
-		switch {
-		case meta.Type == types.BlobTxType:
-			blobTxs++
-		case meta.Size > txMaxBroadcastSize:
-			largeTxs++
-		default:
-			// Get transaction sender address. Here we can ignore any error
-			// since we're just interested in any value.
-			directSet = choice.choosePeers(peers, meta.Sender)
-		}
-
-		for _, peer := range peers {
-			if peer.KnownTransaction(tx) {
-				continue
+		if meta := h.txpool.GetMetadata(tx); meta != nil {
+			var directSet map[*ethPeer]struct{}
+			switch {
+			case meta.Type == types.BlobTxType:
+				blobTxs++
+			case meta.Size > txMaxBroadcastSize:
+				largeTxs++
+			default:
+				// Get transaction sender address. Here we can ignore any error
+				// since we're just interested in any value.
+				directSet = choice.choosePeers(peers, meta.Sender)
 			}
-			if _, ok := directSet[peer]; ok {
-				// Send direct.
-				txset[peer] = append(txset[peer], tx)
-			} else {
-				// Send announcement.
-				annos[peer] = append(annos[peer], tx)
+
+			for _, peer := range peers {
+				if peer.KnownTransaction(tx) {
+					continue
+				}
+				if _, ok := directSet[peer]; ok {
+					// Send direct.
+					txset[peer] = append(txset[peer], tx)
+				} else {
+					// Send announcement.
+					annos[peer] = append(annos[peer], tx)
+				}
 			}
 		}
 	}
