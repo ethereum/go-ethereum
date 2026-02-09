@@ -265,6 +265,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			gaspool.SetGas(prevGas)
 			continue
 		}
+		if receipt.Logs == nil {
+			receipt.Logs = []*types.Log{}
+		}
 		includedTxs = append(includedTxs, tx)
 		if hashError != nil {
 			return nil, nil, nil, NewError(ErrorMissingBlockhash, hashError)
