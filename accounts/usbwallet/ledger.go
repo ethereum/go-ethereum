@@ -354,6 +354,20 @@ func (w *ledgerDriver) ledgerSign(derivationPath []uint32, tx *types.Transaction
 			if txrlp, err = rlp.EncodeToBytes([]interface{}{tx.Nonce(), tx.GasPrice(), tx.Gas(), tx.To(), tx.Value(), tx.Data(), chainID, big.NewInt(0), big.NewInt(0)}); err != nil {
 				return common.Address{}, nil, err
 			}
+		} else if tx.Type() == types.BlobTxType {
+			if txrlp, err = rlp.EncodeToBytes([]interface{}{chainID, tx.Nonce(), tx.GasTipCap(), tx.GasFeeCap(), tx.Gas(), tx.To(), tx.Value(), tx.Data(), tx.AccessList(), tx.BlobGasFeeCap(), tx.BlobHashes()}); err != nil {
+				return common.Address{}, nil, err
+			}
+			// append type to transaction
+			txrlp = append([]byte{tx.Type()}, txrlp...)
+		} else if tx.Type() == types.SetCodeTxType {
+			if txrlp, err = rlp.EncodeToBytes([]interface{}{chainID, tx.Nonce(), tx.GasTipCap(), tx.GasFeeCap(), tx.Gas(), tx.To(), tx.Value(), tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations()}); err != nil {
+				return common.Address{}, nil, err
+			}
+			// append type to transaction
+			txrlp = append([]byte{tx.Type()}, txrlp...)
+		} else {
+			return common.Address{}, nil, fmt.Errorf("unsupported transaction type: %d", tx.Type())
 		}
 	}
 	payload := append(path, txrlp...)
