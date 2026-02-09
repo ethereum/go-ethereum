@@ -83,7 +83,16 @@ func (m *Memory) Resize(size uint64) {
 		if uint64(cap(m.store)) >= size {
 			m.store = m.store[:size]
 		} else {
-			m.store = append(m.store, make([]byte, size-uint64(len(m.store)))...)
+			newCap := uint64(cap(m.store))
+			if newCap == 0 {
+				newCap = 1
+			}
+			for newCap < size {
+				newCap *= 2
+			}
+			newStore := make([]byte, size, newCap)
+			copy(newStore, m.store)
+			m.store = newStore
 		}
 	}
 }
