@@ -69,6 +69,12 @@ func MemoryPtr(m []byte, offset, size int64) []byte {
 		return nil
 	}
 
+	if offset < 0 || size < 0 {
+		return nil
+	}
+	if offset+size > int64(len(m)) {
+		return nil
+	}
 	if len(m) > int(offset) {
 		return m[offset : offset+size]
 	}
