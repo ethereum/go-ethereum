@@ -1517,8 +1517,6 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 	if err := p.validateTx(tx); err != nil {
 		log.Trace("Transaction validation failed", "hash", tx.Hash(), "err", err)
 		switch {
-		case errors.Is(err, txpool.ErrUnderpriced):
-			addUnderpricedMeter.Mark(1)
 		case errors.Is(err, txpool.ErrTxGasPriceTooLow):
 			addUnderpricedMeter.Mark(1)
 		case errors.Is(err, core.ErrNonceTooLow):
@@ -1674,6 +1672,13 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 	for p.stored > p.config.Datacap {
 		p.drop()
 	}
+	// If the transaction being added is dropped from above, return underpriced error
+	if p.lookup.exists(tx.Hash()) {
+		log.Trace("Dropping underpriced transaction", "hash", tx.Hash(), "err", err)
+		addUnderpricedMeter.Mark(1)
+		return txpool.ErrUnderpriced
+	}
+
 	p.updateStorageMetrics()
 
 	addValidMeter.Mark(1)
