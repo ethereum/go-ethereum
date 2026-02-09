@@ -1673,7 +1673,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 		p.drop()
 	}
 	// If the transaction being added is dropped from above, return underpriced error
-	if p.lookup.exists(tx.Hash()) {
+	if !p.lookup.exists(tx.Hash()) {
 		log.Trace("Dropping underpriced transaction", "hash", tx.Hash(), "err", err)
 		addUnderpricedMeter.Mark(1)
 		return txpool.ErrUnderpriced
