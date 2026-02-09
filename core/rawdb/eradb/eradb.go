@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/internal/era"
+	"github.com/ethereum/go-ethereum/internal/era/onedb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -51,7 +52,7 @@ type Store struct {
 type fileCacheEntry struct {
 	refcount int           // reference count. This is protected by Store.mu!
 	opened   chan struct{} // signals opening of file has completed
-	file     *era.Era      // the file
+	file     *onedb.Era    // the file
 	err      error         // error from opening the file
 }
 
@@ -102,7 +103,7 @@ func (db *Store) Close() {
 
 // GetRawBody returns the raw body for a given block number.
 func (db *Store) GetRawBody(number uint64) ([]byte, error) {
-	epoch := number / uint64(era.MaxEra1Size)
+	epoch := number / uint64(era.MaxSize)
 	entry := db.getEraByEpoch(epoch)
 	if entry.err != nil {
 		if errors.Is(entry.err, fs.ErrNotExist) {
@@ -117,7 +118,7 @@ func (db *Store) GetRawBody(number uint64) ([]byte, error) {
 
 // GetRawReceipts returns the raw receipts for a given block number.
 func (db *Store) GetRawReceipts(number uint64) ([]byte, error) {
-	epoch := number / uint64(era.MaxEra1Size)
+	epoch := number / uint64(era.MaxSize)
 	entry := db.getEraByEpoch(epoch)
 	if entry.err != nil {
 		if errors.Is(entry.err, fs.ErrNotExist) {
@@ -249,7 +250,7 @@ func (db *Store) getCacheEntry(epoch uint64) (stat fileCacheStatus, entry *fileC
 }
 
 // fileOpened is called after an era file has been successfully opened.
-func (db *Store) fileOpened(epoch uint64, entry *fileCacheEntry, file *era.Era) {
+func (db *Store) fileOpened(epoch uint64, entry *fileCacheEntry, file *onedb.Era) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -282,7 +283,7 @@ func (db *Store) fileFailedToOpen(epoch uint64, entry *fileCacheEntry, err error
 	entry.err = err
 }
 
-func (db *Store) openEraFile(epoch uint64) (*era.Era, error) {
+func (db *Store) openEraFile(epoch uint64) (*onedb.Era, error) {
 	// File name scheme is <network>-<epoch>-<root>.
 	glob := fmt.Sprintf("*-%05d-*.era1", epoch)
 	matches, err := filepath.Glob(filepath.Join(db.datadir, glob))
@@ -297,17 +298,17 @@ func (db *Store) openEraFile(epoch uint64) (*era.Era, error) {
 	}
 	filename := matches[0]
 
-	e, err := era.Open(filename)
+	e, err := onedb.Open(filename)
 	if err != nil {
 		return nil, err
 	}
 	// Sanity-check start block.
-	if e.Start()%uint64(era.MaxEra1Size) != 0 {
+	if e.Start()%uint64(era.MaxSize) != 0 {
 		e.Close()
-		return nil, fmt.Errorf("pre-merge era1 file has invalid boundary. %d %% %d != 0", e.Start(), era.MaxEra1Size)
+		return nil, fmt.Errorf("pre-merge era1 file has invalid boundary. %d %% %d != 0", e.Start(), era.MaxSize)
 	}
 	log.Debug("Opened era1 file", "epoch", epoch)
-	return e, nil
+	return e.(*onedb.Era), nil
 }
 
 // doneWithFile signals that the caller has finished using a file.
