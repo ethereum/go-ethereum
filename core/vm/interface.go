@@ -108,16 +108,3 @@ type StateDB interface {
 
 	IncrementMintedRecordNonce()
 }
-
-// CallContext provides a basic interface for the EVM calling conventions. The EVM
-// depends on this context being implemented for doing subcalls and initialising new EVM contracts.
-type CallContext interface {
-	// Call calls another contract.
-	Call(env *EVM, me ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error)
-	// CallCode takes another contracts code and execute within our own context
-	CallCode(env *EVM, me ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error)
-	// DelegateCall is same as CallCode except sender and value is propagated from parent to child scope
-	DelegateCall(env *EVM, me ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error)
-	// Create creates a new contract
-	Create(env *EVM, me ContractRef, data []byte, gas, value *big.Int) ([]byte, common.Address, error)
-}

@@ -393,7 +393,6 @@ func (st *StateTransition) TransitionDb(owner common.Address) (*ExecutionResult,
 
 	var (
 		msg              = st.msg
-		sender           = vm.AccountRef(st.from())
 		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber)
 		contractCreation = msg.To == nil
 		floorDataGas     uint64
@@ -446,7 +445,7 @@ func (st *StateTransition) TransitionDb(owner common.Address) (*ExecutionResult,
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
 	if contractCreation {
-		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, value)
+		ret, _, st.gasRemaining, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1)
@@ -469,7 +468,7 @@ func (st *StateTransition) TransitionDb(owner common.Address) (*ExecutionResult,
 		}
 
 		// Execute the transaction's call.
-		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, value)
+		ret, st.gasRemaining, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
 	}
 
 	// Compute refund counter, capped to a refund quotient.
