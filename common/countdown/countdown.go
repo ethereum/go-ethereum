@@ -64,14 +64,15 @@ func (t *CountdownTimer) Reset(i interface{}, currentRound, highestRound types.R
 
 // A long running process that
 func (t *CountdownTimer) startTimer(i interface{}, currentRound, highestRound types.Round) {
-	// Make sure we mark Initilised to false when we quit the countdown
-	defer t.setInitilised(false)
 	timer := time.NewTimer(t.durationHelper.GetTimeoutDuration(currentRound, highestRound))
 	// We start with a inf loop
 	for {
 		select {
 		case q := <-t.quitc:
 			log.Debug("Quit countdown timer")
+			// Set initilised to false before signaling completion
+			// This ensures the state is updated before StopTimer() returns
+			t.setInitilised(false)
 			close(q)
 			return
 		case <-timer.C:
