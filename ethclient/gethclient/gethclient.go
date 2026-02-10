@@ -19,11 +19,13 @@ package gethclient
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 	"runtime"
 	"runtime/debug"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -268,46 +270,122 @@ func (ec *Client) TraceChain(ctx context.Context, start, end rpc.BlockNumber, co
 	return ec.c.EthSubscribe(ctx, make(chan *BlockTraceResult), "debug_traceChain", start, end, config)
 }
 
-// CallTracerResult contains the results of a call tracer.
-type CallTracerResult struct {
-	Type    string             `json:"type"`
-	From    common.Address     `json:"from"`
-	To      common.Address     `json:"to"`
-	Value   *hexutil.Big       `json:"value"`
-	Gas     hexutil.Uint64     `json:"gas"`
-	GasUsed hexutil.Uint64     `json:"gasUsed"`
-	Input   hexutil.Bytes      `json:"input"`
-	Output  hexutil.Bytes      `json:"output"`
-	Error   string             `json:"error,omitempty"`
-	Calls   []CallTracerResult `json:"calls,omitempty"`
+// CallTracerConfig configures the call tracer for
+// TraceTransactionWithCallTracer and TraceCallWithCallTracer.
+type CallTracerConfig struct {
+	// OnlyTopCall, when true, limits tracing to the main (top-level) call only.
+	OnlyTopCall bool
+	// WithLog, when true, includes log emissions in the trace output.
+	WithLog bool
+	// Timeout is the maximum duration the tracer may run.
+	// Zero means the server default (5s).
+	Timeout time.Duration
 }
 
-// TraceCallWithCallTracer traces a call with the call tracer, which provides
-// detailed information about nested calls.
-func (ec *Client) TraceCallWithCallTracer(ctx context.Context, msg ethereum.CallMsg, blockNrOrHash rpc.BlockNumberOrHash) (*CallTracerResult, error) {
-	callTracer := "callTracer"
-	config := &tracers.TraceCallConfig{
-		TraceConfig: tracers.TraceConfig{
-			Tracer: &callTracer,
-		},
-	}
+//go:generate go run github.com/fjl/gencodec -type CallLog -field-override callLogMarshaling -out gen_calllog_json.go
 
-	var result CallTracerResult
-	err := ec.c.CallContext(ctx, &result, "debug_traceCall", toCallArg(msg), blockNrOrHash, config)
-	return &result, err
+// CallLog represents a log emitted during a traced call.
+type CallLog struct {
+	Address  common.Address `json:"address"`
+	Topics   []common.Hash  `json:"topics"`
+	Data     []byte         `json:"data"`
+	Index    uint           `json:"index"`
+	Position uint           `json:"position"`
 }
 
-// TraceTransactionWithCallTracer traces a transaction with the call tracer,
-// which provides detailed information about nested calls.
-func (ec *Client) TraceTransactionWithCallTracer(ctx context.Context, txHash common.Hash) (*CallTracerResult, error) {
-	callTracer := "callTracer"
-	config := &tracers.TraceConfig{
-		Tracer: &callTracer,
-	}
+type callLogMarshaling struct {
+	Data     hexutil.Bytes
+	Index    hexutil.Uint
+	Position hexutil.Uint
+}
 
-	var result CallTracerResult
-	err := ec.c.CallContext(ctx, &result, "debug_traceTransaction", txHash, config)
-	return &result, err
+//go:generate go run github.com/fjl/gencodec -type CallFrame -field-override callFrameMarshaling -out gen_callframe_json.go
+
+// CallFrame contains the result of a call tracer run.
+type CallFrame struct {
+	Type         string          `json:"type"`
+	From         common.Address  `json:"from"`
+	Gas          uint64          `json:"gas"`
+	GasUsed      uint64          `json:"gasUsed"`
+	To           *common.Address `json:"to,omitempty"`
+	Input        []byte          `json:"input"`
+	Output       []byte          `json:"output,omitempty"`
+	Error        string          `json:"error,omitempty"`
+	RevertReason string          `json:"revertReason,omitempty"`
+	Calls        []CallFrame     `json:"calls,omitempty"`
+	Logs         []CallLog       `json:"logs,omitempty"`
+	Value        *big.Int        `json:"value,omitempty"`
+}
+
+type callFrameMarshaling struct {
+	Gas     hexutil.Uint64
+	GasUsed hexutil.Uint64
+	Input   hexutil.Bytes
+	Output  hexutil.Bytes
+	Value   *hexutil.Big
+}
+
+// TraceTransactionWithCallTracer traces a transaction with the call tracer
+// and returns a typed CallFrame. If config is nil, defaults are used.
+func (ec *Client) TraceTransactionWithCallTracer(ctx context.Context, txHash common.Hash, config *CallTracerConfig) (*CallFrame, error) {
+	var result CallFrame
+	err := ec.c.CallContext(ctx, &result, "debug_traceTransaction", txHash, callTracerConfig(config))
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// TraceCallWithCallTracer executes a call with the call tracer and returns
+// a typed CallFrame. blockNrOrHash selects the block context for the call.
+// overrides specifies state overrides (nil for none), blockOverrides specifies
+// block header overrides (nil for none), and config configures the tracer
+// (nil for defaults).
+func (ec *Client) TraceCallWithCallTracer(ctx context.Context, msg ethereum.CallMsg, blockNrOrHash rpc.BlockNumberOrHash, overrides map[common.Address]OverrideAccount, blockOverrides *BlockOverrides, config *CallTracerConfig) (*CallFrame, error) {
+	var result CallFrame
+	err := ec.c.CallContext(ctx, &result, "debug_traceCall", toCallArg(msg), blockNrOrHash, callTraceCallConfig(config, overrides, blockOverrides))
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// callTracerConfig converts a CallTracerConfig to the wire-format TraceConfig.
+func callTracerConfig(config *CallTracerConfig) *tracers.TraceConfig {
+	tracer := "callTracer"
+	tc := &tracers.TraceConfig{Tracer: &tracer}
+	if config != nil {
+		if config.OnlyTopCall || config.WithLog {
+			cfg, _ := json.Marshal(struct {
+				OnlyTopCall bool `json:"onlyTopCall"`
+				WithLog     bool `json:"withLog"`
+			}{config.OnlyTopCall, config.WithLog})
+			tc.TracerConfig = cfg
+		}
+		if config.Timeout != 0 {
+			s := config.Timeout.String()
+			tc.Timeout = &s
+		}
+	}
+	return tc
+}
+
+// callTraceCallConfig builds the wire-format TraceCallConfig for debug_traceCall,
+// bundling tracer settings with optional state and block overrides.
+func callTraceCallConfig(config *CallTracerConfig, overrides map[common.Address]OverrideAccount, blockOverrides *BlockOverrides) interface{} {
+	tc := callTracerConfig(config)
+	// debug_traceCall expects a single config object that includes both
+	// tracer settings and any state/block overrides.
+	type traceCallConfig struct {
+		*tracers.TraceConfig
+		StateOverrides map[common.Address]OverrideAccount `json:"stateOverrides,omitempty"`
+		BlockOverrides *BlockOverrides                    `json:"blockOverrides,omitempty"`
+	}
+	return &traceCallConfig{
+		TraceConfig:    tc,
+		StateOverrides: overrides,
+		BlockOverrides: blockOverrides,
+	}
 }
 
 func toBlockNumArg(number *big.Int) string {
