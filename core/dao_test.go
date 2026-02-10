@@ -32,29 +32,39 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	forkBlock := big.NewInt(32)
 
 	// Generate a common prefix for both pro-forkers and non-forkers
+	db := rawdb.NewMemoryDatabase()
 	gspec := &Genesis{
 		BaseFee: big.NewInt(params.InitialBaseFee),
 		Config:  params.TestChainConfig,
 	}
-	db := rawdb.NewMemoryDatabase()
 	genesis := gspec.MustCommit(db)
 	prefix, _ := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, int(forkBlock.Int64()-1), func(i int, gen *BlockGen) {})
 
 	// Create the concurrent, conflicting two nodes
 	proDb := rawdb.NewMemoryDatabase()
-	gspec.MustCommit(proDb)
 	proConf := *params.TestChainConfig
 	proConf.DAOForkBlock = forkBlock
 	proConf.DAOForkSupport = true
-	proBc, _ := NewBlockChain(proDb, nil, &proConf, ethash.NewFaker(), vm.Config{})
+	progspec := &Genesis{
+		BaseFee: big.NewInt(params.InitialBaseFee),
+		Config:  &proConf,
+	}
+	gspec.MustCommit(proDb)
+
+	proBc, _ := NewBlockChain(proDb, nil, progspec, ethash.NewFaker(), vm.Config{})
 	defer proBc.Stop()
 
 	conDb := rawdb.NewMemoryDatabase()
-	gspec.MustCommit(conDb)
 	conConf := *params.TestChainConfig
 	conConf.DAOForkBlock = forkBlock
 	conConf.DAOForkSupport = false
-	conBc, _ := NewBlockChain(conDb, nil, &conConf, ethash.NewFaker(), vm.Config{})
+	congspec := &Genesis{
+		BaseFee: big.NewInt(params.InitialBaseFee),
+		Config:  &conConf,
+	}
+	gspec.MustCommit(conDb)
+
+	conBc, _ := NewBlockChain(conDb, nil, congspec, ethash.NewFaker(), vm.Config{})
 	defer conBc.Stop()
 
 	if _, err := proBc.InsertChain(prefix); err != nil {
@@ -67,8 +77,8 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	for i := int64(0); i < params.DAOForkExtraRange.Int64(); i++ {
 		// Create a pro-fork block, and try to feed into the no-fork chain
 		db = rawdb.NewMemoryDatabase()
-		gspec.MustCommit(db)
-		bc, _ := NewBlockChain(db, nil, &conConf, ethash.NewFaker(), vm.Config{})
+		congspec.MustCommit(db)
+		bc, _ := NewBlockChain(db, nil, congspec, ethash.NewFaker(), vm.Config{})
 
 		blocks := conBc.GetBlocksFromHash(conBc.CurrentBlock().Hash(), int(conBc.CurrentBlock().Number.Uint64()))
 		for j := 0; j < len(blocks)/2; j++ {
@@ -92,8 +102,8 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		}
 		// Create a no-fork block, and try to feed into the pro-fork chain
 		db = rawdb.NewMemoryDatabase()
-		gspec.MustCommit(db)
-		bc, _ = NewBlockChain(db, nil, &proConf, ethash.NewFaker(), vm.Config{})
+		progspec.MustCommit(db)
+		bc, _ = NewBlockChain(db, nil, progspec, ethash.NewFaker(), vm.Config{})
 
 		blocks = proBc.GetBlocksFromHash(proBc.CurrentBlock().Hash(), int(proBc.CurrentBlock().Number.Uint64()))
 		for j := 0; j < len(blocks)/2; j++ {
@@ -118,8 +128,8 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	}
 	// Verify that contra-forkers accept pro-fork extra-datas after forking finishes
 	db = rawdb.NewMemoryDatabase()
-	gspec.MustCommit(db)
-	bc, _ := NewBlockChain(db, nil, &conConf, ethash.NewFaker(), vm.Config{})
+	congspec.MustCommit(db)
+	bc, _ := NewBlockChain(db, nil, congspec, ethash.NewFaker(), vm.Config{})
 	defer bc.Stop()
 
 	blocks := conBc.GetBlocksFromHash(conBc.CurrentBlock().Hash(), int(conBc.CurrentBlock().Number.Uint64()))
@@ -138,8 +148,8 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	}
 	// Verify that pro-forkers accept contra-fork extra-datas after forking finishes
 	db = rawdb.NewMemoryDatabase()
-	gspec.MustCommit(db)
-	bc, _ = NewBlockChain(db, nil, &proConf, ethash.NewFaker(), vm.Config{})
+	progspec.MustCommit(db)
+	bc, _ = NewBlockChain(db, nil, progspec, ethash.NewFaker(), vm.Config{})
 	defer bc.Stop()
 
 	blocks = proBc.GetBlocksFromHash(proBc.CurrentBlock().Hash(), int(proBc.CurrentBlock().Number.Uint64()))

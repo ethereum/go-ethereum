@@ -128,8 +128,12 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 	}
 	config, err := rawdb.ReadChainConfig(db, genesisHash)
 	if err != nil {
-		t.Errorf("test %d: failed to retrieve chain config: %v", test, err)
-		return // we want to return here, the other checks can't make it past this point (nil panic).
+		t.Errorf("test %d: failed to read chain config: %v", test, err)
+		return
+	}
+	if config == nil {
+		t.Errorf("test %d: failed to retrieve chain config", test)
+		return
 	}
 	// Validate the DAO hard-fork block number against the expected value
 	if config.DAOForkBlock == nil {

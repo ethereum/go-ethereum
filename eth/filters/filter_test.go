@@ -246,7 +246,7 @@ func TestFilters(t *testing.T) {
 		}
 	})
 
-	bc, err := core.NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{})
+	bc, err := core.NewBlockChain(db, nil, gspec, ethash.NewFaker(), vm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -372,7 +372,7 @@ func TestRangeLimit(t *testing.T) {
 	}
 	genesis := gspec.MustCommit(db)
 	chain, _ := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})
-	bc, err := core.NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{})
+	bc, err := core.NewBlockChain(db, nil, gspec, ethash.NewFaker(), vm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}

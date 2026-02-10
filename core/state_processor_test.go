@@ -123,7 +123,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			}
 			genesis        = gspec.MustCommit(db)
-			blockchain, _  = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{})
+			blockchain, _  = NewBlockChain(db, nil, gspec, ethash.NewFaker(), vm.Config{})
 			tooBigInitCode = [params.MaxInitCodeSize + 1]byte{}
 		)
 
@@ -284,7 +284,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			}
 			genesis       = gspec.MustCommit(db)
-			blockchain, _ = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{})
+			blockchain, _ = NewBlockChain(db, nil, gspec, ethash.NewFaker(), vm.Config{})
 		)
 		defer blockchain.Stop()
 		for i, tt := range []struct {
@@ -415,7 +415,7 @@ func TestApplyTransactionWithEVMTracer(t *testing.T) {
 				},
 			}
 			genesis := gspec.MustCommit(db)
-			blockchain, _ := NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{})
+			blockchain, _ := NewBlockChain(db, nil, gspec, ethash.NewFaker(), vm.Config{})
 			defer blockchain.Stop()
 
 			// Create state database

@@ -469,15 +469,19 @@ func testDAOChallenge(t *testing.T, localForked, remoteForked bool, timeout bool
 	}
 	// Create a DAO aware protocol manager
 	var (
-		evmux         = new(event.TypeMux)
-		pow           = ethash.NewFaker()
-		db            = rawdb.NewMemoryDatabase()
-		config        = &params.ChainConfig{DAOForkBlock: big.NewInt(1), DAOForkSupport: localForked}
-		gspec         = &core.Genesis{Config: config}
+		evmux = new(event.TypeMux)
+		pow   = ethash.NewFaker()
+		db    = rawdb.NewMemoryDatabase()
+		gspec = &core.Genesis{
+			Config: &params.ChainConfig{
+				DAOForkBlock:   big.NewInt(1),
+				DAOForkSupport: localForked,
+			},
+		}
 		genesis       = gspec.MustCommit(db)
-		blockchain, _ = core.NewBlockChain(db, nil, config, pow, vm.Config{})
+		blockchain, _ = core.NewBlockChain(db, nil, gspec, pow, vm.Config{})
 	)
-	pm, err := NewProtocolManager(config, downloader.FullSync, ethconfig.Defaults.NetworkId, evmux, new(testTxPool), pow, blockchain, db)
+	pm, err := NewProtocolManager(gspec.Config, downloader.FullSync, ethconfig.Defaults.NetworkId, evmux, new(testTxPool), pow, blockchain, db)
 	if err != nil {
 		t.Fatalf("failed to start test protocol manager: %v", err)
 	}
@@ -489,7 +493,7 @@ func testDAOChallenge(t *testing.T, localForked, remoteForked bool, timeout bool
 	defer peer.close()
 
 	challenge := &getBlockHeadersData{
-		Origin:  hashOrNumber{Number: config.DAOForkBlock.Uint64()},
+		Origin:  hashOrNumber{Number: gspec.Config.DAOForkBlock.Uint64()},
 		Amount:  1,
 		Skip:    0,
 		Reverse: false,
