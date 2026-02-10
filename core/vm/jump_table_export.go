@@ -17,8 +17,6 @@
 package vm
 
 import (
-	"errors"
-
 	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
@@ -27,7 +25,7 @@ import (
 func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
 	switch {
 	case rules.IsOsaka:
-		return newPragueInstructionSet(), errors.New("osaka-fork not defined yet")
+		return newOsakaInstructionSet(), nil
 	case rules.IsPrague:
 		return newPragueInstructionSet(), nil
 	case rules.IsCancun:

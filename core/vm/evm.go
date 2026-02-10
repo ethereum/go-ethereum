@@ -149,6 +149,8 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, tradingStat
 	evm.precompiles = activePrecompiledContracts(evm.chainRules)
 
 	switch {
+	case evm.chainRules.IsOsaka:
+		evm.table = &osakaInstructionSet
 	case evm.chainRules.IsPrague:
 		evm.table = &pragueInstructionSet
 	case evm.chainRules.IsCancun:
