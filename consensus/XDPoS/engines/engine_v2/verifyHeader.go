@@ -65,7 +65,7 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	if err != nil && parent.Number.Sign() != 0 { // skip genesis block
 		return err
 	}
-	
+
 	// Ensure gas used is less than or equal to gas limit
 	if header.GasUsed > header.GasLimit {
 		return fmt.Errorf("gas used exceeded gaslimit, gas used: %d, gas limit: %d", header.GasUsed, header.GasLimit)

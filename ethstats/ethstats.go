@@ -525,8 +525,8 @@ func (s *Service) login(conn *connWrapper) error {
 	auth := &authMsg{
 		ID: s.node,
 		Info: nodeInfo{
-			Name: s.node,
-			Node: infos.Name,
+			Name:     s.node,
+			Node:     infos.Name,
 			Coinbase: s.coinbase,
 			Port:     infos.Ports.Listener,
 			Network:  network,

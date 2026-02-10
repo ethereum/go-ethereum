@@ -121,7 +121,7 @@ func TestSetupGenesis(t *testing.T) {
 		{
 			name: "genesis header present but state missing",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				block := DefaultGenesisBlock().ToBlock(nil)
+				block := DefaultGenesisBlock().ToBlock()
 				rawdb.WriteCanonicalHash(db, block.Hash(), 0)
 				rawdb.WriteHeader(db, block.Header())
 				return SetupGenesisBlock(db, nil)
@@ -132,7 +132,7 @@ func TestSetupGenesis(t *testing.T) {
 		{
 			name: "genesis block without chain config",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				block := DefaultGenesisBlock().ToBlock(db)
+				block := DefaultGenesisBlock().ToBlock()
 				rawdb.WriteBlock(db, block)
 				rawdb.WriteCanonicalHash(db, block.Hash(), 0)
 				return SetupGenesisBlock(db, nil)
@@ -143,10 +143,7 @@ func TestSetupGenesis(t *testing.T) {
 		{
 			name: "missing block number for head header hash",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				block := DefaultGenesisBlock().ToBlock(db)
-				rawdb.WriteBlock(db, block)
-				rawdb.WriteCanonicalHash(db, block.Hash(), 0)
-				rawdb.WriteChainConfig(db, block.Hash(), params.XDCMainnetChainConfig)
+				DefaultGenesisBlock().MustCommit(db)
 				rawdb.WriteHeadHeaderHash(db, common.HexToHash("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"))
 				return SetupGenesisBlock(db, nil)
 			},
