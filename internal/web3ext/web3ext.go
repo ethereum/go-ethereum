@@ -415,11 +415,6 @@ web3._extend({
 			call: 'debug_storageRangeAt',
 			params: 5,
 		}),
-        new web3._extend.Method({
-            name: 'batchGetStorage',
-            call: 'debug_batchGetStorage',
-            params: 2,
-        }),
 		new web3._extend.Method({
 			name: 'getModifiedAccountsByNumber',
 			call: 'debug_getModifiedAccountsByNumber',
@@ -571,6 +566,12 @@ web3._extend({
 			call: 'eth_getProof',
 			params: 3,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null, web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getStorageValues',
+			call: 'eth_getStorageValues',
+			params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 		new web3._extend.Method({
 			name: 'createAccessList',
