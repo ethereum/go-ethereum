@@ -23,6 +23,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/arena"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -174,22 +175,27 @@ type Message struct {
 
 // TransactionToMessage converts a transaction into a Message.
 func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
-	msg := &Message{
-		Nonce:                 tx.Nonce(),
-		GasLimit:              tx.Gas(),
-		GasPrice:              tx.GasPrice(),
-		GasFeeCap:             tx.GasFeeCap(),
-		GasTipCap:             tx.GasTipCap(),
-		To:                    tx.To(),
-		Value:                 tx.Value(),
-		Data:                  tx.Data(),
-		AccessList:            tx.AccessList(),
-		SetCodeAuthorizations: tx.SetCodeAuthorizations(),
-		SkipNonceChecks:       false,
-		SkipTransactionChecks: false,
-		BlobHashes:            tx.BlobHashes(),
-		BlobGasFeeCap:         tx.BlobGasFeeCap(),
-	}
+	return TransactionToMessageWithAlloc(tx, s, baseFee, arena.DefaultHeap)
+}
+
+// TransactionToMessageWithAlloc converts a transaction into a Message, using
+// the provided allocator for the Message struct and its transient big.Int fields.
+func TransactionToMessageWithAlloc(tx *types.Transaction, s types.Signer, baseFee *big.Int, alloc arena.Allocator) (*Message, error) {
+	msg := new(Message)
+	msg.Nonce = tx.Nonce()
+	msg.GasLimit = tx.Gas()
+	msg.GasPrice = tx.GasPrice()
+	msg.GasFeeCap = tx.GasFeeCap()
+	msg.GasTipCap = tx.GasTipCap()
+
+	msg.To = tx.To()
+	msg.Value = tx.Value()
+	msg.Data = tx.Data()
+	msg.AccessList = tx.AccessList()
+	msg.SetCodeAuthorizations = tx.SetCodeAuthorizations()
+	msg.BlobHashes = tx.BlobHashes()
+	msg.BlobGasFeeCap = tx.BlobGasFeeCap()
+
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
 		msg.GasPrice = msg.GasPrice.Add(msg.GasTipCap, baseFee)
@@ -210,7 +216,8 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
 func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, error) {
-	evm.SetTxContext(NewEVMTxContext(msg))
+	alloc := evm.Config.GetAllocator()
+	evm.SetTxContext(NewEVMTxContextWithAlloc(msg, alloc))
 	return newStateTransition(evm, msg, gp).execute()
 }
 
@@ -243,16 +250,19 @@ type stateTransition struct {
 	initialGas   uint64
 	state        vm.StateDB
 	evm          *vm.EVM
+	alloc        arena.Allocator
 }
 
 // newStateTransition initialises and returns a new state transition object.
 func newStateTransition(evm *vm.EVM, msg *Message, gp *GasPool) *stateTransition {
-	return &stateTransition{
-		gp:    gp,
-		evm:   evm,
-		msg:   msg,
-		state: evm.StateDB,
-	}
+	alloc := evm.Config.GetAllocator()
+	st := new(stateTransition)
+	st.gp = gp
+	st.evm = evm
+	st.msg = msg
+	st.state = evm.StateDB
+	st.alloc = alloc
+	return st
 }
 
 // to returns the recipient of the message.
@@ -264,6 +274,8 @@ func (st *stateTransition) to() common.Address {
 }
 
 func (st *stateTransition) buyGas() error {
+	// Compute mgval = gasLimit * gasPrice (the gas cost to deduct from sender).
+	// Use big.Int for balanceCheck to detect >256-bit overflow correctly.
 	mgval := new(big.Int).SetUint64(st.msg.GasLimit)
 	mgval.Mul(mgval, st.msg.GasPrice)
 	balanceCheck := new(big.Int).Set(mgval)
@@ -544,11 +556,11 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 	st.returnGas()
 
-	effectiveTip := msg.GasPrice
+	effectiveTipU256, _ := uint256.FromBig(msg.GasPrice)
 	if rules.IsLondon {
-		effectiveTip = new(big.Int).Sub(msg.GasPrice, st.evm.Context.BaseFee)
+		baseFee, _ := uint256.FromBig(st.evm.Context.BaseFee)
+		effectiveTipU256 = new(uint256.Int).Sub(effectiveTipU256, baseFee)
 	}
-	effectiveTipU256, _ := uint256.FromBig(effectiveTip)
 
 	if st.evm.Config.NoBaseFee && msg.GasFeeCap.Sign() == 0 && msg.GasTipCap.Sign() == 0 {
 		// Skip fee payment when NoBaseFee is set and the fee fields
@@ -565,12 +577,12 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 	}
 
-	return &ExecutionResult{
-		UsedGas:    st.gasUsed(),
-		MaxUsedGas: peakGasUsed,
-		Err:        vmerr,
-		ReturnData: ret,
-	}, nil
+	result := new(ExecutionResult)
+	result.UsedGas = st.gasUsed()
+	result.MaxUsedGas = peakGasUsed
+	result.Err = vmerr
+	result.ReturnData = ret
+	return result, nil
 }
 
 // validateAuthorization validates an EIP-7702 authorization against the state.
