@@ -207,7 +207,7 @@ func (api *adminAPI) StartHTTP(host *string, port *int, cors *string, apis *stri
 	}
 	if vhosts != nil {
 		config.Vhosts = nil
-		for vhost := range strings.SplitSeq(*host, ",") {
+		for vhost := range strings.SplitSeq(*vhosts, ",") {
 			config.Vhosts = append(config.Vhosts, strings.TrimSpace(vhost))
 		}
 	}
