@@ -102,15 +102,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, tra
 
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
-		// check black-list txs after hf
-		if block.Number().Uint64() >= common.BlackListHFNumber {
-			// check if sender is in black list
-			if common.IsInBlacklist(tx.From()) {
-				return nil, nil, 0, fmt.Errorf("block contains transaction with sender in black-list: %v", tx.From().Hex())
+		// check denylist txs after hf
+		if block.Number().Uint64() >= common.DenylistHFNumber {
+			// check if sender is in denylist
+			if common.IsInDenylist(tx.From()) {
+				return nil, nil, 0, fmt.Errorf("block contains transaction with sender in denylist: %v", tx.From().Hex())
 			}
-			// check if receiver is in black list
-			if common.IsInBlacklist(tx.To()) {
-				return nil, nil, 0, fmt.Errorf("block contains transaction with receiver in black-list: %v", tx.To().Hex())
+			// check if receiver is in denylist
+			if common.IsInDenylist(tx.To()) {
+				return nil, nil, 0, fmt.Errorf("block contains transaction with receiver in denylist: %v", tx.To().Hex())
 			}
 		}
 		// validate minFee slot for XDCZ
@@ -206,15 +206,15 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 	// Iterate over and process the individual transactions
 	receipts = make([]*types.Receipt, block.Transactions().Len())
 	for i, tx := range block.Transactions() {
-		// check black-list txs after hf
-		if block.Number().Uint64() >= common.BlackListHFNumber {
-			// check if sender is in black list
-			if common.IsInBlacklist(tx.From()) {
-				return nil, nil, 0, fmt.Errorf("block contains transaction with sender in black-list: %v", tx.From().Hex())
+		// check denylist txs after hf
+		if block.Number().Uint64() >= common.DenylistHFNumber {
+			// check if sender is in denylist
+			if common.IsInDenylist(tx.From()) {
+				return nil, nil, 0, fmt.Errorf("block contains transaction with sender in denylist: %v", tx.From().Hex())
 			}
-			// check if receiver is in black list
-			if common.IsInBlacklist(tx.To()) {
-				return nil, nil, 0, fmt.Errorf("block contains transaction with receiver in black-list: %v", tx.To().Hex())
+			// check if receiver is in denylist
+			if common.IsInDenylist(tx.To()) {
+				return nil, nil, 0, fmt.Errorf("block contains transaction with receiver in denylist: %v", tx.To().Hex())
 			}
 		}
 		// validate minFee slot for XDCZ
@@ -306,7 +306,7 @@ func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPo
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, tracingStateDB)
 
-	// Bypass blacklist address
+	// Bypass denylist address
 	maxBlockNumber := new(big.Int).SetInt64(9147459)
 	if blockNumber.Cmp(maxBlockNumber) <= 0 {
 		addrMap := make(map[string]string)
@@ -448,7 +448,7 @@ func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPo
 			}
 		}
 	}
-	// End Bypass blacklist address
+	// End Bypass denylist address
 
 	// Apply the transaction to the current state (included in the env)
 	result, err := ApplyMessage(evm, msg, gp, coinbaseOwner)

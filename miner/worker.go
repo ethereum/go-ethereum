@@ -978,16 +978,16 @@ func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Addr
 	// first priority for special Txs
 	for _, tx := range specialTxs {
 		to := tx.To()
-		if w.header.Number.Uint64() >= common.BlackListHFNumber {
+		if w.header.Number.Uint64() >= common.DenylistHFNumber {
 			from := tx.From()
-			// check if sender is in black list
-			if common.IsInBlacklist(from) {
-				log.Debug("Skipping transaction with sender in black-list", "sender", from.Hex())
+			// check if sender is in denylist
+			if common.IsInDenylist(from) {
+				log.Debug("Skipping transaction with sender in denylist", "sender", from.Hex())
 				continue
 			}
-			// check if receiver is in black list
-			if common.IsInBlacklist(to) {
-				log.Debug("Skipping transaction with receiver in black-list", "receiver", to.Hex())
+			// check if receiver is in denylist
+			if common.IsInDenylist(to) {
+				log.Debug("Skipping transaction with receiver in denylist", "receiver", to.Hex())
 				continue
 			}
 		}
@@ -1091,17 +1091,17 @@ func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Addr
 		}
 		tx := warped.Tx
 		to := tx.To()
-		if w.header.Number.Uint64() >= common.BlackListHFNumber {
+		if w.header.Number.Uint64() >= common.DenylistHFNumber {
 			from := tx.From()
-			// check if sender is in black list
-			if common.IsInBlacklist(from) {
-				log.Debug("Skipping transaction with sender in black-list", "sender", from.Hex())
+			// check if sender is in denylist
+			if common.IsInDenylist(from) {
+				log.Debug("Skipping transaction with sender in denylist", "sender", from.Hex())
 				txs.Pop()
 				continue
 			}
-			// check if receiver is in black list
-			if common.IsInBlacklist(to) {
-				log.Debug("Skipping transaction with receiver in black-list", "receiver", to.Hex())
+			// check if receiver is in denylist
+			if common.IsInDenylist(to) {
+				log.Debug("Skipping transaction with receiver in denylist", "receiver", to.Hex())
 				txs.Shift()
 				continue
 			}

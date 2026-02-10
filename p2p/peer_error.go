@@ -72,8 +72,8 @@ const (
 	DiscSelf
 	DiscReadTimeout
 	DiscPairPeerStop
-	DiscNonWhitelistedPeer
-	DiscBlacklistedPeer
+	DiscNonAllowlistedPeer
+	DiscDenylistedPeer
 	DiscSubprotocolError = DiscReason(0x10)
 )
 
@@ -91,8 +91,8 @@ var discReasonToString = [...]string{
 	DiscSelf:                "connected to self",
 	DiscReadTimeout:         "read timeout",
 	DiscPairPeerStop:        "pair peer connection stop",
-	DiscNonWhitelistedPeer:  "disconnect non-whitelisted peer",
-	DiscBlacklistedPeer:     "disconnect blacklisted peer",
+	DiscNonAllowlistedPeer:  "disconnect non-allowlisted peer",
+	DiscDenylistedPeer:      "disconnect denylisted peer",
 	DiscSubprotocolError:    "subprotocol error",
 }
 

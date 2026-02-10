@@ -6,9 +6,9 @@ import (
 )
 
 var MainnetConstant = constant{
-	chainID:           50,
-	blackListHFNumber: 38383838,
-	maxMasternodesV2:  108,
+	chainID:          50,
+	denylistHFNumber: 38383838,
+	maxMasternodesV2: 108,
 
 	tip2019Block:           big.NewInt(1),
 	tipSigning:             big.NewInt(3000000),
@@ -48,7 +48,7 @@ var MainnetConstant = constant{
 		28270800: {},
 	},
 
-	blacklist: map[Address]struct{}{
+	denylist: map[Address]struct{}{
 		HexToAddress("0x5248bfb72fd4f234e062d3e9bb76f08643004fcd"): {},
 		HexToAddress("0x5ac26105b35ea8935be382863a70281ec7a985e9"): {},
 		HexToAddress("0x09c4f991a41e7ca0645d7dfbfee160b55e562ea4"): {},

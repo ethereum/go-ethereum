@@ -950,7 +950,7 @@ func (c *ChainConfig) Description() string {
 	banner += fmt.Sprintf("  - TIPSigning:                  %-8v\n", common.TIPSigning)
 	banner += fmt.Sprintf("  - TIPRandomize:                %-8v\n", common.TIPRandomize)
 	banner += fmt.Sprintf("  - TIPIncreaseMasternodes:      %-8v\n", common.TIPIncreaseMasternodes)
-	banner += fmt.Sprintf("  - BlackListHFNumber:           %-8v\n", common.BlackListHFNumber)
+	banner += fmt.Sprintf("  - DenylistHFNumber:            %-8v\n", common.DenylistHFNumber)
 	banner += fmt.Sprintf("  - TIPNoHalvingMNReward:        %-8v\n", common.TIPNoHalvingMNReward)
 	banner += fmt.Sprintf("  - TIPXDCX:                     %-8v\n", common.TIPXDCX)
 	banner += fmt.Sprintf("  - TIPXDCXLending:              %-8v\n", common.TIPXDCXLending)

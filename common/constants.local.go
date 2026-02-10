@@ -6,9 +6,9 @@ import (
 )
 
 var localConstant = constant{
-	chainID:           5151,
-	maxMasternodesV2:  108,
-	blackListHFNumber: 0,
+	chainID:          5151,
+	maxMasternodesV2: 108,
+	denylistHFNumber: 0,
 
 	tip2019Block:           big.NewInt(0),
 	tipSigning:             big.NewInt(0),
@@ -43,5 +43,5 @@ var localConstant = constant{
 
 	ignoreSignerCheckBlockArray: map[uint64]struct{}{},
 
-	blacklist: map[Address]struct{}{},
+	denylist: map[Address]struct{}{},
 }

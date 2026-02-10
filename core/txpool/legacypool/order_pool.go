@@ -524,9 +524,9 @@ func (pool *OrderPool) validateOrder(tx *types.OrderTransaction) error {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *OrderPool) validateTx(tx *types.OrderTransaction, local bool) error {
-	// check if sender is in black list
-	if common.IsInBlacklist(tx.From()) {
-		return fmt.Errorf("reject transaction with sender in black-list: %v", tx.From().Hex())
+	// check if sender is in denylist
+	if common.IsInDenylist(tx.From()) {
+		return fmt.Errorf("reject transaction with sender in denylist: %v", tx.From().Hex())
 	}
 	// Heuristic limit, reject transactions over 32KB to prevent DOS attacks
 	if tx.Size() > 32*1024 {
@@ -559,7 +559,7 @@ func (pool *OrderPool) validateTx(tx *types.OrderTransaction, local bool) error 
 // so outer code doesn't uselessly call promote.
 //
 // If a newly added transaction is marked as local, its sending account will be
-// whitelisted, preventing any associated transaction from being dropped out of
+// allowlisted, preventing any associated transaction from being dropped out of
 // the pool due to pricing constraints.
 func (pool *OrderPool) add(tx *types.OrderTransaction, local bool) (bool, error) {
 	// If the transaction is already known, discard it

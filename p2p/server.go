@@ -89,10 +89,11 @@ type Config struct {
 	// Name sets the node name of this server.
 	Name string `toml:"-"`
 
-	// Whitelist for peers
-	WhitePeers map[discover.NodeID]struct{}
-	// Blacklist for peers.
-	BlackPeers map[discover.NodeID]struct{}
+	// Allowlist for peers
+	AllowPeers map[discover.NodeID]struct{}
+
+	// Denylist for peers.
+	DenyPeers map[discover.NodeID]struct{}
 
 	// BootstrapNodes are used to establish connectivity
 	// with the rest of the network.
@@ -323,8 +324,8 @@ func (srv *Server) RemovePeer(node *discover.Node) {
 	}
 }
 
-// AddTrustedPeer adds the given node to a reserved whitelist which allows the
-// node to always connect, even if the slot are full.
+// AddTrustedPeer adds the given node to a reserved allowlist which allows the
+// node to always connect, even if the slots are full.
 func (srv *Server) AddTrustedPeer(node *discover.Node) {
 	select {
 	case srv.addtrusted <- node:
@@ -847,7 +848,7 @@ func (srv *Server) listenLoop() {
 		// Reject connections that do not match NetRestrict.
 		if srv.NetRestrict != nil {
 			if tcp, ok := fd.RemoteAddr().(*net.TCPAddr); ok && !srv.NetRestrict.Contains(tcp.IP) {
-				srv.log.Debug("Rejected conn (not whitelisted in NetRestrict)", "addr", fd.RemoteAddr())
+				srv.log.Debug("Rejected conn (not allowlisted in NetRestrict)", "addr", fd.RemoteAddr())
 				fd.Close()
 				slots <- struct{}{}
 				continue
@@ -899,15 +900,15 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *discover.Node) e
 		return err
 	}
 	clog := srv.log.New("id", c.id.String(), "addr", c.fd.RemoteAddr(), "conn", c.flags)
-	if len(srv.WhitePeers) > 0 {
-		if _, ok := srv.WhitePeers[c.id]; !ok {
-			clog.Debug("Reject non-whitelisted peer")
-			return DiscNonWhitelistedPeer
+	if len(srv.AllowPeers) > 0 {
+		if _, ok := srv.AllowPeers[c.id]; !ok {
+			clog.Debug("Reject non-allowlisted peer")
+			return DiscNonAllowlistedPeer
 		}
 	}
-	if _, ok := srv.BlackPeers[c.id]; ok {
+	if _, ok := srv.DenyPeers[c.id]; ok {
 		clog.Debug("Reject blacklisted peer")
-		return DiscBlacklistedPeer
+		return DiscDenylistedPeer
 	}
 	// For dialed connections, check that the remote public key matches.
 	if dialDest != nil && c.id != dialDest.ID {

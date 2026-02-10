@@ -243,15 +243,15 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 		}
 	}
 
-	// Ensure sender and receiver are not in black list
-	if number == nil || number.Cmp(new(big.Int).SetUint64(common.BlackListHFNumber)) >= 0 {
-		// check if sender is in black list
-		if common.IsInBlacklist(tx.From()) {
-			return fmt.Errorf("reject transaction with sender in black-list: %v", tx.From().Hex())
+	// Ensure sender and receiver are not in denylist
+	if number == nil || number.Cmp(new(big.Int).SetUint64(common.DenylistHFNumber)) >= 0 {
+		// check if sender is in denylist
+		if common.IsInDenylist(tx.From()) {
+			return fmt.Errorf("reject transaction with sender in denylist: %v", tx.From().Hex())
 		}
-		// check if receiver is in black list
-		if common.IsInBlacklist(to) {
-			return fmt.Errorf("reject transaction with receiver in black-list: %v", to.Hex())
+		// check if receiver is in denylist
+		if common.IsInDenylist(to) {
+			return fmt.Errorf("reject transaction with receiver in denylist: %v", to.Hex())
 		}
 	}
 

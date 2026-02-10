@@ -629,15 +629,15 @@ var (
 		Value:    30303,
 		Category: flags.NetworkingCategory,
 	}
-	PeersWhitelistFlag = &cli.StringFlag{
-		Name:     "peers-whitelist",
-		Usage:    "Comma separated NodeID or enode URLs for peer whitelist (only connect to them)",
+	PeersAllowlistFlag = &cli.StringFlag{
+		Name:     "peers-allowlist",
+		Usage:    "Comma separated NodeID or enode URLs for peer allowlist (only connect to them)",
 		Value:    "",
 		Category: flags.NetworkingCategory,
 	}
-	PeersBlacklistFlag = &cli.StringFlag{
-		Name:     "peers-blacklist",
-		Usage:    "Comma separated NodeID or enode URLs for peer blacklist (will not connect to them)",
+	PeersDenylistFlag = &cli.StringFlag{
+		Name:     "peers-denylist",
+		Usage:    "Comma separated NodeID or enode URLs for peer denylist (will not connect to them)",
 		Value:    "",
 		Category: flags.NetworkingCategory,
 	}
@@ -918,66 +918,66 @@ func setNodeUserIdent(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
-func setWhiteBlackListPeers(ctx *cli.Context, cfg *p2p.Config) {
-	flags.CheckExclusive(ctx, PeersWhitelistFlag, PeersBlacklistFlag)
+func setAllowlistAndDenylistForPeers(ctx *cli.Context, cfg *p2p.Config) {
+	flags.CheckExclusive(ctx, PeersAllowlistFlag, PeersDenylistFlag)
 
-	// setup whitelist for peers
-	if ctx.IsSet(PeersWhitelistFlag.Name) {
-		urls := SplitAndTrim(ctx.String(PeersWhitelistFlag.Name))
-		cfg.WhitePeers = make(map[discover.NodeID]struct{}, len(urls))
+	// setup allowlist for peers
+	if ctx.IsSet(PeersAllowlistFlag.Name) {
+		urls := SplitAndTrim(ctx.String(PeersAllowlistFlag.Name))
+		cfg.AllowPeers = make(map[discover.NodeID]struct{}, len(urls))
 		for _, url := range urls {
 			if url != "" {
 				node1, err1 := discover.HexID(url)
 				if err1 == nil {
-					cfg.WhitePeers[node1] = struct{}{}
-					log.Info("Add peer to whitelist", "id", node1)
+					cfg.AllowPeers[node1] = struct{}{}
+					log.Info("Add peer to allowlist", "id", node1)
 					continue
 				}
 				node2, err2 := discover.ParseNode(url)
 				if err2 == nil {
-					cfg.WhitePeers[node2.ID] = struct{}{}
-					log.Info("Add peer to whitelist", "enode", url, "id", node2.ID)
+					cfg.AllowPeers[node2.ID] = struct{}{}
+					log.Info("Add peer to allowlist", "enode", url, "id", node2.ID)
 					continue
 				}
-				log.Crit("Invalid peer id for whitelist", "url", url, "err1", err1, "err2", err2)
+				log.Crit("Invalid peer id for allowlist", "url", url, "err1", err1, "err2", err2)
 			}
 		}
 	}
 
-	// setup blacklist for peers
-	if ctx.IsSet(PeersBlacklistFlag.Name) {
-		urls := SplitAndTrim(ctx.String(PeersBlacklistFlag.Name))
-		cfg.BlackPeers = make(map[discover.NodeID]struct{}, len(urls))
+	// setup denylist for peers
+	if ctx.IsSet(PeersDenylistFlag.Name) {
+		urls := SplitAndTrim(ctx.String(PeersDenylistFlag.Name))
+		cfg.DenyPeers = make(map[discover.NodeID]struct{}, len(urls))
 		for _, url := range urls {
 			if url != "" {
 				node1, err1 := discover.HexID(url)
 				if err1 == nil {
-					cfg.BlackPeers[node1] = struct{}{}
-					log.Info("Add peer to blacklist", "id", node1)
+					cfg.DenyPeers[node1] = struct{}{}
+					log.Info("Add peer to denylist", "id", node1)
 					continue
 				}
 				node2, err2 := discover.ParseNode(url)
 				if err2 == nil {
-					cfg.BlackPeers[node2.ID] = struct{}{}
-					log.Info("Add peer to blacklist", "enode", url, "id", node2.ID)
+					cfg.DenyPeers[node2.ID] = struct{}{}
+					log.Info("Add peer to denylist", "enode", url, "id", node2.ID)
 					continue
 				}
-				log.Crit("Invalid peer id for blacklist", "url", url, "err1", err1, "err2", err2)
+				log.Crit("Invalid peer id for denylist", "url", url, "err1", err1, "err2", err2)
 			}
 		}
 	}
 }
 
-// removeBlackPeers removes bootstrap nodes which is in peers blacklist
-func removeBlackPeers(cfg *p2p.Config) {
-	if len(cfg.BlackPeers) == 0 {
+// removeDenylistedPeers removes bootstrap nodes which is in peers denylist
+func removeDenylistedPeers(cfg *p2p.Config) {
+	if len(cfg.DenyPeers) == 0 {
 		return
 	}
 
 	filteredNodes := make([]*discover.Node, 0, len(cfg.BootstrapNodes))
 	for _, node := range cfg.BootstrapNodes {
-		if _, ok := cfg.BlackPeers[node.ID]; ok {
-			log.Info("Remove black peer", "enode", node, "id", node.ID)
+		if _, ok := cfg.DenyPeers[node.ID]; ok {
+			log.Info("Remove denylisted peer", "enode", node, "id", node.ID)
 			continue
 		}
 		filteredNodes = append(filteredNodes, node)
@@ -1280,8 +1280,8 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	setNAT(ctx, cfg)
 	setListenAddress(ctx, cfg)
 	setBootstrapNodes(ctx, cfg)
-	setWhiteBlackListPeers(ctx, cfg)
-	removeBlackPeers(cfg)
+	setAllowlistAndDenylistForPeers(ctx, cfg)
+	removeDenylistedPeers(cfg)
 	// setBootstrapNodesV5(ctx, cfg)
 
 	if ctx.IsSet(MaxPeersFlag.Name) {

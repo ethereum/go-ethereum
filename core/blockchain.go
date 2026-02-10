@@ -1581,8 +1581,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		}
 		// If the header is a banned one, straight out abort
 		if BadHashes[block.Hash()] {
-			bc.reportBlock(block, nil, ErrBlacklistedHash)
-			return it.index, events, coalescedLogs, ErrBlacklistedHash
+			bc.reportBlock(block, nil, ErrDenylistedHash)
+			return it.index, events, coalescedLogs, ErrDenylistedHash
 		}
 		// Retrieve the parent block and it's state to execute on top
 		start := time.Now()
@@ -1942,12 +1942,12 @@ func (bc *BlockChain) getResultBlock(block *types.Block, verifiedM2 bool) (*Resu
 	// If the chain is terminating, stop processing blocks
 	if bc.insertStopped() {
 		log.Debug("Premature abort during blocks processing")
-		return nil, ErrBlacklistedHash
+		return nil, errInsertionInterrupted
 	}
 	// If the header is a banned one, straight out abort
 	if BadHashes[block.Hash()] {
-		bc.reportBlock(block, nil, ErrBlacklistedHash)
-		return nil, ErrBlacklistedHash
+		bc.reportBlock(block, nil, ErrDenylistedHash)
+		return nil, ErrDenylistedHash
 	}
 	// Wait for the block's verification to complete
 	bstart := time.Now()
