@@ -224,6 +224,7 @@ loop:
 			reason = discReasonForError(err)
 			break loop
 		case err = <-p.disc:
+			reason = discReasonForError(err)
 			break loop
 		}
 	}
