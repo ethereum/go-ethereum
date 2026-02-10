@@ -20,7 +20,6 @@ package gethclient
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
 	"runtime"
@@ -210,64 +209,26 @@ func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- co
 	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
 }
 
-// TxTraceResult is the result of a single transaction trace.
-type TxTraceResult struct {
-	TxHash common.Hash `json:"txHash"`           // Transaction hash
-	Result interface{} `json:"result,omitempty"` // Trace results produced by the tracer
-	Error  string      `json:"error,omitempty"`  // Trace failure produced by the tracer
-}
-
-// BlockTraceResult represents the results of tracing a single block.
-type BlockTraceResult struct {
-	Block  hexutil.Uint64   `json:"block"`  // Block number corresponding to this trace
-	Hash   common.Hash      `json:"hash"`   // Block hash corresponding to this trace
-	Traces []*TxTraceResult `json:"traces"` // Trace results produced by the task
-}
-
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
-func (ec *Client) TraceTransaction(ctx context.Context, txHash common.Hash, config *tracers.TraceConfig) (interface{}, error) {
-	var result interface{}
-	err := ec.c.CallContext(ctx, &result, "debug_traceTransaction", txHash, config)
-	return result, err
-}
-
-// TraceCall lets you trace a given eth_call. It collects the structured logs
-// created during the execution of EVM if the given transaction was added on
-// top of the provided block and returns them as a JSON object.
-func (ec *Client) TraceCall(ctx context.Context, msg ethereum.CallMsg, blockNrOrHash rpc.BlockNumberOrHash, config *tracers.TraceCallConfig) (interface{}, error) {
-	var result interface{}
-	err := ec.c.CallContext(ctx, &result, "debug_traceCall", toCallArg(msg), blockNrOrHash, config)
-	return result, err
+func (ec *Client) TraceTransaction(ctx context.Context, hash common.Hash, config *tracers.TraceConfig) (any, error) {
+	var result any
+	err := ec.c.CallContext(ctx, &result, "debug_traceTransaction", hash, config)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // TraceBlock returns the structured logs created during the execution of EVM
-// for a specific block. This can be by block number, hash, or the latest/pending block.
-func (ec *Client) TraceBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, config *tracers.TraceConfig) ([]*TxTraceResult, error) {
-	var result []*TxTraceResult
-
-	// Determine the method to call based on the type of blockNrOrHash
-	var method string
-	var arg interface{}
-
-	if hash, ok := blockNrOrHash.Hash(); ok {
-		method = "debug_traceBlockByHash"
-		arg = hash
-	} else if number, ok := blockNrOrHash.Number(); ok {
-		method = "debug_traceBlockByNumber"
-		arg = number
-	} else {
-		return nil, errors.New("invalid arguments; neither block nor hash specified")
+// and returns them as a JSON object.
+func (ec *Client) TraceBlock(ctx context.Context, hash common.Hash, config *tracers.TraceConfig) (any, error) {
+	var result any
+	err := ec.c.CallContext(ctx, &result, "debug_traceBlockByHash", hash, config)
+	if err != nil {
+		return nil, err
 	}
-
-	err := ec.c.CallContext(ctx, &result, method, arg, config)
-	return result, err
-}
-
-// TraceChain returns the structured logs created during the execution of EVM between
-// two blocks (inclusive) and returns them as an array of JSON objects.
-func (ec *Client) TraceChain(ctx context.Context, start, end rpc.BlockNumber, config *tracers.TraceConfig) (*rpc.ClientSubscription, error) {
-	return ec.c.EthSubscribe(ctx, make(chan *BlockTraceResult), "debug_traceChain", start, end, config)
+	return result, nil
 }
 
 // CallTracerConfig configures the call tracer for
