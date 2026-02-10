@@ -429,7 +429,7 @@ func TestSingleSideRangeProof(t *testing.T) {
 			if err := trie.Prove(common.Hash{}.Bytes(), proof); err != nil {
 				t.Fatalf("Failed to prove the first node %v", err)
 			}
-			if err := trie.Prove(entries[pos].k, proof); err != nil {
+		if err := trie.Prove(entries[pos].k, proof); err != nil {
 			t.Fatalf("Failed to prove the first node %v", err)
 		}
 		k := make([][]byte, 0, pos+1)
@@ -633,7 +633,7 @@ func TestHasRightElement(t *testing.T) {
 				t.Fatalf("Failed to prove the first node %v", err)
 			}
 		}
-		if err := trie.Prove(entries[c.end-1].k, proof); err != nil {
+	if err := trie.Prove(entries[c.end-1].k, proof); err != nil {
 		t.Fatalf("Failed to prove the first node %v", err)
 	}
 	k := make([][]byte, 0, end-start)
