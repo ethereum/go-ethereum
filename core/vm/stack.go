@@ -19,6 +19,7 @@ package vm
 import (
 	"sync"
 
+	"github.com/ethereum/go-ethereum/core/arena"
 	"github.com/holiman/uint256"
 )
 
@@ -32,14 +33,32 @@ var stackPool = sync.Pool{
 // expected to be changed and modified. stack does not take care of adding newly
 // initialized objects.
 type Stack struct {
-	data []uint256.Int
+	data       []uint256.Int
+	arenaAlloc bool // true if allocated from a BumpAllocator (skip pool return)
 }
 
 func newstack() *Stack {
 	return stackPool.Get().(*Stack)
 }
 
+// newstackWithAlloc returns a new Stack, allocating from the provided arena.
+// When using a BumpAllocator, the Stack struct is arena-allocated and the
+// backing data slice comes from the arena. When using a HeapAllocator, it
+// falls back to the pool.
+func newstackWithAlloc(alloc arena.Allocator) *Stack {
+	if _, ok := alloc.(*arena.BumpAllocator); ok {
+		s := new(Stack)
+		s.data = arena.MakeSlice[uint256.Int](alloc, 0, 1024)
+		s.arenaAlloc = true
+		return s
+	}
+	return newstack()
+}
+
 func returnStack(s *Stack) {
+	if s.arenaAlloc {
+		return // arena-allocated: freed on arena.Reset()
+	}
 	s.data = s.data[:0]
 	stackPool.Put(s)
 }

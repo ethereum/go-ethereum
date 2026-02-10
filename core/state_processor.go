@@ -23,12 +23,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/core/arena"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/telemetry"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -69,7 +71,14 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		blockNumber = block.Number()
 		allLogs     []*types.Log
 		gp          = new(GasPool).AddGas(block.GasLimit())
+		alloc       = cfg.GetAllocator()
 	)
+	defer func() {
+		if ba, ok := alloc.(*arena.BumpAllocator); ok {
+			log.Info("Arena usage after block", "used", common.StorageSize(ba.Used()), "peak", common.StorageSize(ba.Peak()), "slabs", ba.SlabCount(), "total", common.StorageSize(ba.TotalCapacity()))
+		}
+		alloc.Reset()
+	}()
 
 	var tracingStateDB = vm.StateDB(statedb)
 	if hooks := cfg.Tracer; hooks != nil {
@@ -86,7 +95,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	)
 
 	// Apply pre-execution system calls.
-	context = NewEVMBlockContext(header, p.chain, nil)
+	context = NewEVMBlockContextWithAlloc(header, p.chain, nil, alloc)
 	evm := vm.NewEVM(context, tracingStateDB, config, cfg)
 
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
@@ -98,7 +107,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
-		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
+		msg, err := TransactionToMessageWithAlloc(tx, signer, header.BaseFee, alloc)
 		if err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}

@@ -18,6 +18,7 @@ package vm
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/arena"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/holiman/uint256"
 )
@@ -48,17 +49,23 @@ type Contract struct {
 
 // NewContract returns a new contract environment for the execution of EVM.
 func NewContract(caller common.Address, address common.Address, value *uint256.Int, gas uint64, jumpDests JumpDestCache) *Contract {
+	return NewContractWithAlloc(caller, address, value, gas, jumpDests, arena.DefaultHeap)
+}
+
+// NewContractWithAlloc returns a new contract environment, allocating the
+// Contract struct from the provided allocator.
+func NewContractWithAlloc(caller common.Address, address common.Address, value *uint256.Int, gas uint64, jumpDests JumpDestCache, alloc arena.Allocator) *Contract {
 	// Initialize the jump analysis cache if it's nil, mostly for tests
 	if jumpDests == nil {
 		jumpDests = newMapJumpDests()
 	}
-	return &Contract{
-		caller:    caller,
-		address:   address,
-		jumpDests: jumpDests,
-		Gas:       gas,
-		value:     value,
-	}
+	c := new(Contract)
+	c.caller = caller
+	c.address = address
+	c.jumpDests = jumpDests
+	c.Gas = gas
+	c.value = value
+	return c
 }
 
 func (c *Contract) validJumpdest(dest *uint256.Int) bool {
