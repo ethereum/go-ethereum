@@ -253,6 +253,8 @@ func init() {
 		utils.ShowDeprecated,
 		// See snapshot.go
 		snapshotCommand,
+		// See bintrie_convert.go
+		bintrieCommand,
 	}
 	if logTestCommand != nil {
 		app.Commands = append(app.Commands, logTestCommand)
