@@ -79,7 +79,7 @@ func (dl *diffLayer) parentLayer() layer {
 
 // node implements the layer interface, retrieving the trie node blob with the
 // provided node information. No error will be returned if the node is not found.
-func (dl *diffLayer) node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, *nodeLoc, error) {
+func (dl *diffLayer) node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, nodeLoc, error) {
 	// Hold the lock, ensure the parent won't be changed during the
 	// state accessing.
 	dl.lock.RLock()
@@ -91,7 +91,7 @@ func (dl *diffLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		dirtyNodeHitMeter.Mark(1)
 		dirtyNodeHitDepthHist.Update(int64(depth))
 		dirtyNodeReadMeter.Mark(int64(len(n.Blob)))
-		return n.Blob, n.Hash, &nodeLoc{loc: locDiffLayer, depth: depth}, nil
+		return n.Blob, n.Hash, nodeLoc{loc: locDiffLayer, depth: depth}, nil
 	}
 	// Trie node unknown to this layer, resolve from parent
 	return dl.parent.node(owner, path, depth+1)
