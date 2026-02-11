@@ -1276,7 +1276,7 @@ func TestDeleteStorage(t *testing.T) {
 		disk     = rawdb.NewMemoryDatabase()
 		tdb      = triedb.NewDatabase(disk, nil)
 		snaps, _ = snapshot.New(snapshot.Config{CacheSize: 10}, disk, tdb, types.EmptyRootHash)
-		db       = NewDatabase(tdb, snaps)
+		db       = NewDatabase(tdb, nil).WithSnapshot(snaps)
 		state, _ = New(types.EmptyRootHash, db)
 		addr     = common.HexToAddress("0x1")
 	)
@@ -1290,7 +1290,7 @@ func TestDeleteStorage(t *testing.T) {
 	}
 	root, _ := state.Commit(0, true, false)
 	// Init phase done, create two states, one with snap and one without
-	fastState, _ := New(root, NewDatabase(tdb, snaps))
+	fastState, _ := New(root, NewDatabase(tdb, nil).WithSnapshot(snaps))
 	slowState, _ := New(root, NewDatabase(tdb, nil))
 
 	obj := fastState.getOrNewStateObject(addr)
