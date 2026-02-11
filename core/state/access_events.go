@@ -314,9 +314,6 @@ func (ae *AccessEvents) CodeChunksRangeGas(contractAddr common.Address, startPC,
 func (ae *AccessEvents) BasicDataGas(addr common.Address, isWrite bool, availableGas uint64, chargeWarmCosts bool) uint64 {
 	_, expected := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, bintrie.BasicDataLeafKey, isWrite, availableGas)
 	if expected == 0 && chargeWarmCosts {
-		if availableGas < params.WarmStorageReadCostEIP2929 {
-			return availableGas
-		}
 		expected = params.WarmStorageReadCostEIP2929
 	}
 	return expected
@@ -330,9 +327,6 @@ func (ae *AccessEvents) BasicDataGas(addr common.Address, isWrite bool, availabl
 func (ae *AccessEvents) CodeHashGas(addr common.Address, isWrite bool, availableGas uint64, chargeWarmCosts bool) uint64 {
 	_, expected := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, bintrie.CodeHashLeafKey, isWrite, availableGas)
 	if expected == 0 && chargeWarmCosts {
-		if availableGas < params.WarmStorageReadCostEIP2929 {
-			return availableGas
-		}
 		expected = params.WarmStorageReadCostEIP2929
 	}
 	return expected
