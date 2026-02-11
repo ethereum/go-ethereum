@@ -112,6 +112,31 @@ func TestContractCreateInitGas(t *testing.T) {
 	}
 }
 
+// TestWarmCostOOG checks that BasicDataGas and CodeHashGas return the full
+// warm cost even when the available gas is insufficient. This is a regression
+// test: previously these functions returned availableGas instead of the warm
+// cost, which prevented the EVM interpreter from detecting out-of-gas.
+func TestWarmCostOOG(t *testing.T) {
+	ae := NewAccessEvents()
+	insufficientGas := params.WarmStorageReadCostEIP2929 - 1
+
+	// Warm up the address
+	ae.BasicDataGas(testAddr, false, math.MaxUint64, false)
+	ae.CodeHashGas(testAddr, false, math.MaxUint64, false)
+
+	// BasicDataGas must return the full warm cost, not the available gas
+	gas := ae.BasicDataGas(testAddr, false, insufficientGas, true)
+	if gas != params.WarmStorageReadCostEIP2929 {
+		t.Fatalf("BasicDataGas: got %d, want %d", gas, params.WarmStorageReadCostEIP2929)
+	}
+
+	// CodeHashGas must return the full warm cost, not the available gas
+	gas = ae.CodeHashGas(testAddr, false, insufficientGas, true)
+	if gas != params.WarmStorageReadCostEIP2929 {
+		t.Fatalf("CodeHashGas: got %d, want %d", gas, params.WarmStorageReadCostEIP2929)
+	}
+}
+
 // TestMessageCallGas checks that the gas cost of message calls is correctly
 // calculated.
 func TestMessageCallGas(t *testing.T) {
