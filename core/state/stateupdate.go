@@ -211,9 +211,9 @@ func (sc *stateUpdate) deriveCodeFields(reader ContractCodeReader) error {
 	cache := make(map[common.Hash]bool)
 	for addr, code := range sc.codes {
 		if code.originHash != types.EmptyCodeHash {
-			blob, err := reader.Code(addr, code.originHash)
-			if err != nil {
-				return err
+			blob := reader.Code(addr, code.originHash)
+			if len(blob) == 0 {
+				return fmt.Errorf("original code of %x is empty", addr)
 			}
 			code.originBlob = blob
 		}
