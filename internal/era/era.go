@@ -37,8 +37,8 @@ var (
 	TypeCompressedReceipts     uint16 = 0x05
 	TypeTotalDifficulty        uint16 = 0x06
 	TypeAccumulator            uint16 = 0x07
-	TypeCompressedSlimReceipts uint16 = 0x08 // uses eth/69 encoding
-	TypeProof                  uint16 = 0x09
+	TypeCompressedSlimReceipts uint16 = 0x0a // uses eth/69 encoding
+	TypeProof                  uint16 = 0x0b
 	TypeBlockIndex             uint16 = 0x3266
 	TypeComponentIndex         uint16 = 0x3267
 
