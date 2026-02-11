@@ -122,7 +122,12 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, options)
 	if _, corrupted := err.(*lerrors.ErrCorrupted); corrupted {
+		logger.Error("Database corrupted, attempting recovery", "error", err)
 		db, err = leveldb.RecoverFile(file, nil)
+		if err != nil {
+			return nil, fmt.Errorf("database recovery failed: %w", err)
+		}
+		logger.Warn("Database recovery succeeded")
 	}
 	if err != nil {
 		return nil, err
