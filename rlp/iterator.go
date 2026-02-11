@@ -25,20 +25,20 @@ type Iterator struct {
 }
 
 // NewListIterator creates an iterator for the (list) represented by data.
-func NewListIterator(data RawValue) (*Iterator, error) {
+func NewListIterator(data RawValue) (Iterator, error) {
 	k, t, c, err := readKind(data)
 	if err != nil {
-		return nil, err
+		return Iterator{}, err
 	}
 	if k != List {
-		return nil, ErrExpectedList
+		return Iterator{}, ErrExpectedList
 	}
-	it := &Iterator{data: data[t : t+c], offset: int(t)}
+	it := newIterator(data[t:t+c], int(t))
 	return it, nil
 }
 
-func newIterator(data []byte) *Iterator {
-	return &Iterator{data: data}
+func newIterator(data []byte, initialOffset int) Iterator {
+	return Iterator{data: data, offset: initialOffset}
 }
 
 // Next forwards the iterator one step.

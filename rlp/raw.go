@@ -122,8 +122,8 @@ func (r *RawList[T]) Empty() bool {
 // ContentIterator returns an iterator over the content of the list.
 // Note the offsets returned by iterator.Offset are relative to the
 // Content bytes of the list.
-func (r *RawList[T]) ContentIterator() *Iterator {
-	return newIterator(r.Content())
+func (r *RawList[T]) ContentIterator() Iterator {
+	return newIterator(r.Content(), 0)
 }
 
 // Append adds an item to the end of the list.
