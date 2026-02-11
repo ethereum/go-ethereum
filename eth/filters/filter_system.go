@@ -115,7 +115,11 @@ func (sys *FilterSystem) cachedLogElem(ctx context.Context, blockHash common.Has
 	}
 	// Database logs are un-derived.
 	// Fill in whatever we can (txHash is inaccessible at this point).
-	flattened := make([]*types.Log, 0)
+	totalLogs := 0
+	for _, txLogs := range logs {
+		totalLogs += len(txLogs)
+	}
+	flattened := make([]*types.Log, 0, totalLogs)
 	var logIdx uint
 	for i, txLogs := range logs {
 		for _, log := range txLogs {
