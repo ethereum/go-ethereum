@@ -741,7 +741,7 @@ func checkVersion(disk ethdb.KeyValueStore, typ historyType) {
 	if err == nil {
 		version = fmt.Sprintf("%d", m.Version)
 	}
-	log.Info("Cleaned up obsolete history index", "type", typ, "version", version, "want", version)
+	log.Info("Cleaned up obsolete history index", "type", typ, "version", version, "want", ver)
 }
 
 // newHistoryIndexer constructs the history indexer and launches the background
