@@ -1373,3 +1373,350 @@ func TestStandardTraceBlockToFile(t *testing.T) {
 		}
 	}
 }
+
+func TestTraceBadBlock(t *testing.T) {
+	t.Parallel()
+
+	var (
+		accounts        = newAccounts(2)
+		storageContract = common.HexToAddress("0x00000000000000000000000000000000deadbeef")
+		signer          = types.HomesteadSigner{}
+		txHashs         = make([]common.Hash, 0, 2)
+		genesis         = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+				storageContract: {
+					Nonce:   1,
+					Balance: big.NewInt(0),
+					Code: []byte{
+						byte(vm.PUSH1), 0x2a, // push 42
+						byte(vm.PUSH1), 0x00, // push slot 0
+						byte(vm.SSTORE), // sstore(0, 42)
+						byte(vm.STOP),
+					},
+				},
+			},
+		}
+	)
+	backend := newTestBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
+		// tx 0: plain transfer
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    0,
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, accounts[0].key)
+		b.AddTx(tx)
+		txHashs = append(txHashs, tx.Hash())
+
+		// tx 1: call storage contract (executes PUSH1, PUSH1, SSTORE, STOP)
+		tx, _ = types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    1,
+			To:       &storageContract,
+			Value:    big.NewInt(0),
+			Gas:      50000,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, accounts[0].key)
+		b.AddTx(tx)
+		txHashs = append(txHashs, tx.Hash())
+	})
+	defer backend.teardown()
+
+	// Write the block as a bad block so parent state is available
+	block := backend.chain.GetBlockByNumber(1)
+	rawdb.WriteBadBlock(backend.chaindb, block)
+
+	api := NewAPI(backend)
+	result, err := api.TraceBadBlock(context.Background(), block.Hash(), nil)
+	if err != nil {
+		t.Fatalf("want no error, have %v", err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("expected 2 tx traces, got %d", len(result))
+	}
+
+	// First tx: plain transfer
+	have, _ := json.Marshal(result)
+	var traces []struct {
+		TxHash common.Hash `json:"txHash"`
+		Result struct {
+			Gas        uint64            `json:"gas"`
+			Failed     bool              `json:"failed"`
+			StructLogs []json.RawMessage `json:"structLogs"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(have, &traces); err != nil {
+		t.Fatalf("failed to unmarshal traces: %v", err)
+	}
+	if traces[0].TxHash != txHashs[0] {
+		t.Errorf("tx 0: hash mismatch, have %v, want %v", traces[0].TxHash, txHashs[0])
+	}
+	if traces[0].Result.Gas != params.TxGas {
+		t.Errorf("tx 0: gas mismatch, have %d, want %d", traces[0].Result.Gas, params.TxGas)
+	}
+	if len(traces[0].Result.StructLogs) != 0 {
+		t.Errorf("tx 0: expected empty structLogs for plain transfer, got %d entries", len(traces[0].Result.StructLogs))
+	}
+
+	// Second tx: contract call
+	if traces[1].TxHash != txHashs[1] {
+		t.Errorf("tx 1: hash mismatch, have %v, want %v", traces[1].TxHash, txHashs[1])
+	}
+	if traces[1].Result.Failed {
+		t.Error("tx 1: expected success, got failed")
+	}
+	// Contract has 4 opcodes: PUSH1, PUSH1, SSTORE, STOP
+	if len(traces[1].Result.StructLogs) != 4 {
+		t.Errorf("tx 1: expected 4 structLog entries for contract call, got %d", len(traces[1].Result.StructLogs))
+	}
+
+	// Non-existent bad block
+	_, err = api.TraceBadBlock(context.Background(), common.Hash{42}, nil)
+	if err == nil {
+		t.Fatal("want error for non-existent bad block, have none")
+	}
+	wantErr := fmt.Sprintf("bad block %#x not found", common.Hash{42})
+	if err.Error() != wantErr {
+		t.Errorf("error mismatch, want '%s', have '%v'", wantErr, err)
+	}
+}
+
+func TestIntermediateRoots(t *testing.T) {
+	t.Parallel()
+
+	// Initialize test accounts and a contract that writes to storage.
+	var (
+		accounts        = newAccounts(2)
+		storageContract = common.HexToAddress("0x00000000000000000000000000000000deadbeef")
+		signer          = types.HomesteadSigner{}
+		genesis         = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+				// Contract: SSTORE(CALLVALUE, CALLVALUE)
+				storageContract: {
+					Nonce:   1,
+					Balance: big.NewInt(0),
+					Code: []byte{
+						byte(vm.CALLVALUE),
+						byte(vm.CALLVALUE),
+						byte(vm.SSTORE),
+						byte(vm.STOP),
+					},
+				},
+			},
+		}
+	)
+	backend := newTestBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
+		// tx 0: plain transfer
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    0,
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, accounts[0].key)
+		b.AddTx(tx)
+
+		// tx 1: sstore(1, 1)
+		tx, _ = types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    1,
+			To:       &storageContract,
+			Value:    big.NewInt(1),
+			Gas:      50000,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, accounts[0].key)
+		b.AddTx(tx)
+
+		// tx 2: sstore(2, 2)
+		tx, _ = types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    2,
+			To:       &storageContract,
+			Value:    big.NewInt(2),
+			Gas:      50000,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, accounts[0].key)
+		b.AddTx(tx)
+	})
+	defer backend.teardown()
+
+	api := NewAPI(backend)
+	block := backend.chain.GetBlockByNumber(1)
+
+	// Should return one root per tx
+	roots, err := api.IntermediateRoots(context.Background(), block.Hash(), nil)
+	if err != nil {
+		t.Fatalf("want no error, have %v", err)
+	}
+	if len(roots) != 3 {
+		t.Fatalf("root count mismatch, have %d, want 3", len(roots))
+	}
+	for i, root := range roots {
+		if root == (common.Hash{}) {
+			t.Errorf("root[%d] should not be zero", i)
+		}
+	}
+	if roots[0] == roots[1] {
+		t.Error("root[0] and root[1] should differ (transfer vs sstore)")
+	}
+	if roots[1] == roots[2] {
+		t.Error("root[1] and root[2] should differ (sstore to different slots)")
+	}
+
+	// Intermediate roots of a bad block
+	rawdb.WriteBadBlock(backend.chaindb, block)
+	badRoots, err := api.IntermediateRoots(context.Background(), block.Hash(), nil)
+	if err != nil {
+		t.Fatalf("want no error for bad block fallback, have %v", err)
+	}
+	if !reflect.DeepEqual(roots, badRoots) {
+		t.Errorf("bad block roots mismatch, have %v, want %v", badRoots, roots)
+	}
+
+	// Genesis block: should return error
+	genesisBlock := backend.chain.GetBlockByNumber(0)
+	_, err = api.IntermediateRoots(context.Background(), genesisBlock.Hash(), nil)
+	if err == nil || err.Error() != "genesis is not traceable" {
+		t.Fatalf("want 'genesis is not traceable' error, have %v", err)
+	}
+
+	// Non-existent block: should return error
+	_, err = api.IntermediateRoots(context.Background(), common.Hash{42}, nil)
+	if err == nil {
+		t.Fatal("want error for non-existent block, have none")
+	}
+	wantErr := fmt.Sprintf("block %#x not found", common.Hash{42})
+	if err.Error() != wantErr {
+		t.Errorf("error mismatch, want '%s', have '%v'", wantErr, err)
+	}
+}
+
+func TestStandardTraceBadBlockToFile(t *testing.T) {
+	var (
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address = crypto.PubkeyToAddress(key.PublicKey)
+		funds   = big.NewInt(1000000000000000)
+
+		aa     = common.HexToAddress("0x7217d81b76bdd8707601e959454e3d776aee5f43")
+		aaCode = []byte{byte(vm.PUSH1), 0x00, byte(vm.POP)}
+
+		bb     = common.HexToAddress("0x7217d81b76bdd8707601e959454e3d776aee5f44")
+		bbCode = []byte{byte(vm.PUSH2), 0x00, 0x01, byte(vm.POP)}
+	)
+
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			address: {Balance: funds},
+			aa: {
+				Code:    aaCode,
+				Nonce:   1,
+				Balance: big.NewInt(0),
+			},
+			bb: {
+				Code:    bbCode,
+				Nonce:   1,
+				Balance: big.NewInt(0),
+			},
+		},
+	}
+	txHashs := make([]common.Hash, 0, 2)
+	backend := newTestBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
+		b.SetCoinbase(common.Address{1})
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    0,
+			To:       &aa,
+			Value:    big.NewInt(0),
+			Gas:      50000,
+			GasPrice: b.BaseFee(),
+			Data:     nil,
+		}), types.HomesteadSigner{}, key)
+		b.AddTx(tx)
+		txHashs = append(txHashs, tx.Hash())
+
+		tx, _ = types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    1,
+			To:       &bb,
+			Value:    big.NewInt(1),
+			Gas:      100000,
+			GasPrice: b.BaseFee(),
+			Data:     nil,
+		}), types.HomesteadSigner{}, key)
+		b.AddTx(tx)
+		txHashs = append(txHashs, tx.Hash())
+	})
+	defer backend.teardown()
+
+	// Write the block as a bad block
+	block := backend.chain.GetBlockByNumber(1)
+	rawdb.WriteBadBlock(backend.chaindb, block)
+
+	var testSuite = []struct {
+		config *StdTraceConfig
+		want   []string
+	}{
+		{
+			// All txs traced
+			config: nil,
+			want: []string{
+				`{"pc":0,"op":96,"gas":"0x7148","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PUSH1"}
+{"pc":2,"op":80,"gas":"0x7145","gasCost":"0x2","memSize":0,"stack":["0x0"],"depth":1,"refund":0,"opName":"POP"}
+{"pc":3,"op":0,"gas":"0x7143","gasCost":"0x0","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"STOP"}
+{"output":"","gasUsed":"0x5"}
+`,
+				`{"pc":0,"op":97,"gas":"0x13498","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PUSH2"}
+{"pc":3,"op":80,"gas":"0x13495","gasCost":"0x2","memSize":0,"stack":["0x1"],"depth":1,"refund":0,"opName":"POP"}
+{"pc":4,"op":0,"gas":"0x13493","gasCost":"0x0","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"STOP"}
+{"output":"","gasUsed":"0x5"}
+`,
+			},
+		},
+		{
+			// Specific tx traced
+			config: &StdTraceConfig{TxHash: txHashs[1]},
+			want: []string{
+				`{"pc":0,"op":97,"gas":"0x13498","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PUSH2"}
+{"pc":3,"op":80,"gas":"0x13495","gasCost":"0x2","memSize":0,"stack":["0x1"],"depth":1,"refund":0,"opName":"POP"}
+{"pc":4,"op":0,"gas":"0x13493","gasCost":"0x0","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"STOP"}
+{"output":"","gasUsed":"0x5"}
+`,
+			},
+		},
+	}
+
+	api := NewAPI(backend)
+	for i, tc := range testSuite {
+		txTraces, err := api.StandardTraceBadBlockToFile(context.Background(), block.Hash(), tc.config)
+		if err != nil {
+			t.Fatalf("test %d: unexpected error %v", i, err)
+		}
+		if len(txTraces) != len(tc.want) {
+			t.Fatalf("test %d: file count mismatch, have %d, want %d", i, len(txTraces), len(tc.want))
+		}
+		for j, traceFileName := range txTraces {
+			defer os.Remove(traceFileName)
+			traceReceived, err := os.ReadFile(traceFileName)
+			if err != nil {
+				t.Fatalf("test %d: could not read trace file: %v", i, err)
+			}
+			if tc.want[j] != string(traceReceived) {
+				t.Fatalf("test %d, trace %d: result mismatch\nhave:\n%s\nwant:\n%s", i, j, string(traceReceived), tc.want[j])
+			}
+		}
+	}
+
+	// Non-existent bad block
+	_, err := api.StandardTraceBadBlockToFile(context.Background(), common.Hash{42}, nil)
+	if err == nil {
+		t.Fatal("want error for non-existent bad block, have none")
+	}
+}
