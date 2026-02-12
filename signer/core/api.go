@@ -194,9 +194,6 @@ func MetadataFromContext(ctx context.Context) Metadata {
 	m := Metadata{"NA", "NA", "NA", "", ""} // batman
 
 	if info.Transport != "" {
-		if info.Transport == "http" {
-			m.Scheme = info.HTTP.Version
-		}
 		m.Scheme = info.Transport
 	}
 	if info.RemoteAddr != "" {
