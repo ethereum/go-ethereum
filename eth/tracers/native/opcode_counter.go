@@ -38,7 +38,9 @@ func (c *OpcodeCounter) Hooks() *tracing.Hooks {
 func (c *OpcodeCounter) Results() map[string]uint64 {
 	out := make(map[string]uint64, len(c.counts))
 	for op, count := range c.counts {
-		out[vm.OpCode(op).String()] = count
+		if count != 0 {
+			out[vm.OpCode(op).String()] = count
+		}
 	}
 	return out
 }
