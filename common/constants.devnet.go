@@ -29,7 +29,7 @@ var DevnetConstant = constant{
 	tipXDCXReceiverDisable: big.NewInt(0),
 	eip1559Block:           big.NewInt(32400),
 	cancunBlock:            big.NewInt(43200),
-	pragueBlock:            big.NewInt(math.MaxInt64),
+	pragueBlock:            big.NewInt(3000600),
 	osakaBlock:             big.NewInt(math.MaxInt64),
 	dynamicGasLimitBlock:   big.NewInt(math.MaxInt64),
 	tipUpgradeReward:       big.NewInt(math.MaxInt64),
