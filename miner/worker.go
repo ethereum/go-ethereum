@@ -113,9 +113,9 @@ type generateParams struct {
 	beaconRoot  *common.Hash      // The beacon root (cancun field).
 	noTxs       bool              // Flag whether an empty block without any transaction is expected
 
-	forceOverrides      bool // Flag whether we should overwrite extraData and transactions
-	overrideExtraData    []byte
-	overrideTxs []*types.Transaction
+	forceOverrides    bool // Flag whether we should overwrite extraData and transactions
+	overrideExtraData []byte
+	overrideTxs       []*types.Transaction
 }
 
 // generateWork generates a sealing block based on the given parameters.
