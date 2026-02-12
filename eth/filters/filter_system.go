@@ -508,7 +508,7 @@ func (es *EventSystem) lightFilterNewHead(newHeader *types.Header, callBack func
 
 // filter logs of a single header in light client mode
 func (es *EventSystem) lightFilterLogs(header *types.Header, addresses []common.Address, topics [][]common.Hash, remove bool) []*types.Log {
-	if !bloomFilter(header.Bloom, addresses, topics) {
+	if !bloomFilter(maybeOverrideBloom(header, es.backend), addresses, topics) {
 		return nil
 	}
 	// Get the logs of the block

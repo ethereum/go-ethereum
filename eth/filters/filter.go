@@ -290,7 +290,7 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64, logChan chan *ty
 
 // blockLogs returns the logs matching the filter criteria within a single block.
 func (f *Filter) blockLogs(ctx context.Context, header *types.Header) ([]*types.Log, error) {
-	if bloomFilter(header.Bloom, f.addresses, f.topics) {
+	if bloomFilter(maybeOverrideBloom(header, f.sys.backend), f.addresses, f.topics) {
 		return f.checkMatches(ctx, header)
 	}
 	return nil, nil
@@ -337,7 +337,7 @@ func (f *Filter) pendingLogs() []*types.Log {
 	if block == nil || receipts == nil {
 		return nil
 	}
-	if bloomFilter(block.Bloom(), f.addresses, f.topics) {
+	if bloomFilter(maybeOverrideBloom(block.Header(), f.sys.backend), f.addresses, f.topics) {
 		var unfiltered []*types.Log
 		for _, r := range receipts {
 			unfiltered = append(unfiltered, r.Logs...)
