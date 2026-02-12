@@ -93,18 +93,18 @@ func (p *Params) deriveFields() {
 
 // addressValue returns the log value hash of a log emitting address.
 func addressValue(address common.Address) common.Hash {
-	var result common.Hash
-	hasher := sha256.New()
-	hasher.Write(address[:])
-	hasher.Sum(result[:0])
-	return result
+	return sha256Value(address[:])
 }
 
 // topicValue returns the log value hash of a log topic.
 func topicValue(topic common.Hash) common.Hash {
+	return sha256Value(topic[:])
+}
+
+func sha256Value(value []byte) common.Hash {
 	var result common.Hash
 	hasher := sha256.New()
-	hasher.Write(topic[:])
+	hasher.Write(value)
 	hasher.Sum(result[:0])
 	return result
 }
