@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/ethereum/go-ethereum/eth/tracers/native"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests"
@@ -192,13 +193,17 @@ func Transition(ctx *cli.Context) error {
 		}
 	}
 	// Configure opcode counter
-	var counter *opcodeCounter
+	var counter *native.OpcodeCounter
 	if ctx.IsSet(OpcodeCountFlag.Name) && ctx.String(OpcodeCountFlag.Name) != "" {
-		counter = newOpcodeCounter()
+		counter = native.NewOpcodeCounter()
 		if vmConfig.Tracer != nil {
-			vmConfig.Tracer = composeHooks(vmConfig.Tracer, counter.hooks())
+			// If we have an existing tracer, multiplex with the opcode tracer
+			tExisting := tracers.Tracer{Hooks: vmConfig.Tracer}
+			tCounter := tracers.Tracer{Hooks: counter.Hooks()}
+			muxTracer, _ := native.NewMuxTracer([]string{"existing", "opcode"}, []*tracers.Tracer{&tExisting, &tCounter})
+			vmConfig.Tracer = muxTracer.Hooks
 		} else {
-			vmConfig.Tracer = counter.hooks()
+			vmConfig.Tracer = counter.Hooks()
 		}
 	}
 	// Run the test and aggregate the result
@@ -209,7 +214,7 @@ func Transition(ctx *cli.Context) error {
 	// Write opcode counts if enabled
 	if counter != nil {
 		fname := ctx.String(OpcodeCountFlag.Name)
-		if err := saveFile(baseDir, fname, counter.results()); err != nil {
+		if err := saveFile(baseDir, fname, counter.Results()); err != nil {
 			return err
 		}
 	}

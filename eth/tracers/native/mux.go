@@ -28,7 +28,7 @@ import (
 )
 
 func init() {
-	tracers.DefaultDirectory.Register("muxTracer", newMuxTracer, false)
+	tracers.DefaultDirectory.Register("muxTracer", newMuxTracerFromConfig, false)
 }
 
 // muxTracer is a go implementation of the Tracer interface which
@@ -38,8 +38,8 @@ type muxTracer struct {
 	tracers []*tracers.Tracer
 }
 
-// newMuxTracer returns a new mux tracer.
-func newMuxTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
+// newMuxTracerFromConfig returns a new mux tracer.
+func newMuxTracerFromConfig(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
 	var config map[string]json.RawMessage
 	if err := json.Unmarshal(cfg, &config); err != nil {
 		return nil, err
@@ -54,7 +54,10 @@ func newMuxTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params
 		objects = append(objects, t)
 		names = append(names, k)
 	}
+	return NewMuxTracer(names, objects)
+}
 
+func NewMuxTracer(names []string, objects []*tracers.Tracer) (*tracers.Tracer, error) {
 	t := &muxTracer{names: names, tracers: objects}
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
