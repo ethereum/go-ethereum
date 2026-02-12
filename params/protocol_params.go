@@ -16,7 +16,11 @@
 
 package params
 
-import "math/big"
+import (
+	"math/big"
+
+	"github.com/XinFinOrg/XDPoSChain/common"
+)
 
 const (
 	GasLimitBoundDivisor uint64 = 1024               // The bound divisor of the gas limit, used in update calculations.
@@ -160,6 +164,8 @@ const (
 	Bn256PairingBaseGasIstanbul      uint64 = 45000  // Base price for an elliptic curve pairing check
 	Bn256PairingPerPointGasByzantium uint64 = 80000  // Byzantium per-point price for an elliptic curve pairing check
 	Bn256PairingPerPointGasIstanbul  uint64 = 34000  // Per-point price for an elliptic curve pairing check
+
+	HistoryServeWindow = 8191 // Number of blocks to serve historical block hashes for, EIP-2935.
 )
 
 var (
@@ -169,4 +175,14 @@ var (
 	DurationLimit          = big.NewInt(13)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 
 	TargetGasLimit uint64 = XDCGenesisGasLimit // The artificial target
+)
+
+// System contracts.
+var (
+	// SystemAddress is where the system-transaction is sent from as per EIP-2935
+	SystemAddress = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
+
+	// EIP-2935 - Serve historical block hashes from state
+	HistoryStorageAddress = common.HexToAddress("0x0000F90827F1C53a10cb7A02335B175320002935")
+	HistoryStorageCode    = common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe14604657602036036042575f35600143038111604257611fff81430311604257611fff9006545f5260205ff35b5f5ffd5b5f35611fff60014303065500")
 )

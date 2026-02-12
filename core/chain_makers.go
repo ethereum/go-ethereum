@@ -193,7 +193,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	if b.header.Time <= b.parent.Header().Time {
 		panic("block time out of range")
 	}
-	chainReader := &fakeChainReader{config: b.config}
+	chainReader := &fakeChainReader{config: b.config, engine: b.engine}
 	b.header.Difficulty = b.engine.CalcDifficulty(chainReader, b.header.Time, b.parent.Header())
 }
 
@@ -214,7 +214,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		config = params.TestChainConfig
 	}
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
-	chainReader := &fakeChainReader{config: config}
+	chainReader := &fakeChainReader{config: config, engine: engine}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, parent: parent, chain: blocks, statedb: statedb, config: config, engine: engine}
 		b.header = makeHeader(chainReader, parent, statedb, b.engine)
@@ -231,10 +231,19 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
 			misc.ApplyDAOHardFork(statedb)
 		}
-		// Execute any user modifications to the block and finalize it
+
+		if config.IsPrague(b.header.Number) {
+			// EIP-2935
+			blockContext := NewEVMBlockContext(b.header, chainReader, &b.header.Coinbase)
+			evm := vm.NewEVM(blockContext, vm.TxContext{}, statedb, nil, config, vm.Config{})
+			ProcessParentBlockHash(b.header.ParentHash, evm, statedb)
+		}
+
+		// Execute any user modifications to the block
 		if gen != nil {
 			gen(i, b)
 		}
+
 		if b.engine != nil {
 			// Finalize and seal the block
 			block, _ := b.engine.Finalize(chainReader, b.header, statedb, statedb.Copy(), b.txs, b.uncles, b.receipts)
@@ -323,6 +332,7 @@ func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethd
 
 type fakeChainReader struct {
 	config *params.ChainConfig
+	engine consensus.Engine
 }
 
 // Config returns the chain configuration.
@@ -330,6 +340,7 @@ func (cr *fakeChainReader) Config() *params.ChainConfig {
 	return cr.config
 }
 
+func (cr *fakeChainReader) Engine() consensus.Engine                                { return cr.engine }
 func (cr *fakeChainReader) CurrentHeader() *types.Header                            { return nil }
 func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header           { return nil }
 func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header          { return nil }

@@ -379,6 +379,12 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				failed = err
 				break
 			}
+			// Insert parent hash in history contract.
+			if api.backend.ChainConfig().IsPrague(next.Number()) {
+				context := core.NewEVMBlockContext(next.Header(), api.chainContext(ctx), nil)
+				vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, nil, api.backend.ChainConfig(), vm.Config{})
+				core.ProcessParentBlockHash(next.ParentHash(), vmenv, statedb)
+			}
 			// Clean out any pending release functions of trace state. Note this
 			// step must be done after constructing tracing state, because the
 			// tracing state of block next depends on the parent state and construction
@@ -513,6 +519,9 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		vmctx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
 	)
+	if chainConfig.IsPrague(block.Number()) {
+		core.ProcessParentBlockHash(block.ParentHash(), vm.NewEVM(vmctx, vm.TxContext{}, statedb, nil, chainConfig, vm.Config{}), statedb)
+	}
 	feeCapacity := statedb.GetTRC21FeeCapacityFromState()
 	for i, tx := range block.Transactions() {
 		if err := ctx.Err(); err != nil {
@@ -593,6 +602,10 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number())
 		results   = make([]*txTraceResult, len(txs))
 	)
+	if api.backend.ChainConfig().IsPrague(block.Number()) {
+		vmenv := vm.NewEVM(blockCtx, vm.TxContext{}, statedb, nil, api.backend.ChainConfig(), vm.Config{})
+		core.ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
+	}
 	feeCapacity := statedb.GetTRC21FeeCapacityFromState()
 	for i, tx := range txs {
 		var balance *big.Int

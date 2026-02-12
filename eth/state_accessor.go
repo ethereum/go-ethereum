@@ -206,6 +206,12 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, err
 	}
+	// If prague hardfork, insert parent block hash in the state as per EIP-2935.
+	if eth.blockchain.Config().IsPrague(block.Number()) {
+		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
+		vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, nil, eth.blockchain.Config(), vm.Config{})
+		core.ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
+	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, vm.BlockContext{}, statedb, release, nil
 	}

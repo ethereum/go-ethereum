@@ -787,6 +787,11 @@ func (w *worker) commitNewWork() {
 	if common.TIPSigning.Cmp(header.Number) == 0 {
 		work.state.DeleteAddress(common.BlockSignersBinary)
 	}
+	if w.config.IsPrague(header.Number) {
+		context := core.NewEVMBlockContext(header, w.chain, nil)
+		vmenv := vm.NewEVM(context, vm.TxContext{}, w.current.state, nil, w.config, vm.Config{})
+		core.ProcessParentBlockHash(header.ParentHash, vmenv, w.current.state)
+	}
 	// won't grasp txs at checkpoint
 	var (
 		txs                                                                  *transactionsByPriceAndNonce

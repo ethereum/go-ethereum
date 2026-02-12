@@ -18,6 +18,7 @@ package core
 
 import (
 	"crypto/ecdsa"
+	"encoding/binary"
 	"math"
 	"math/big"
 	"testing"
@@ -26,10 +27,12 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/tracing"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/ethdb/memorydb"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/trie"
 	"github.com/holiman/uint256"
@@ -318,7 +321,7 @@ func GenerateBadBlock(t *testing.T, parent *types.Block, engine consensus.Engine
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
-		Difficulty: engine.CalcDifficulty(&fakeChainReader{config}, parent.Time()+10, &types.Header{
+		Difficulty: engine.CalcDifficulty(&fakeChainReader{config: config, engine: engine}, parent.Time()+10, &types.Header{
 			Number:     parent.Number(),
 			Time:       parent.Time(),
 			Difficulty: parent.Difficulty(),
@@ -488,4 +491,147 @@ func TestApplyTransactionWithEVMTracer(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProcessParentBlockHash(t *testing.T) {
+	var (
+		chainConfig = params.MergedTestChainConfig
+		hashA       = common.Hash{0x01}
+		hashB       = common.Hash{0x02}
+		header      = &types.Header{ParentHash: hashA, Number: big.NewInt(2), Difficulty: big.NewInt(0)}
+		parent      = &types.Header{ParentHash: hashB, Number: big.NewInt(1), Difficulty: big.NewInt(0)}
+		coinbase    = common.Address{}
+	)
+	test := func(statedb *state.StateDB) {
+		statedb.SetNonce(params.HistoryStorageAddress, 1)
+		statedb.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode)
+		statedb.IntermediateRoot(true)
+
+		vmContext := NewEVMBlockContext(header, nil, &coinbase)
+		evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, nil, chainConfig, vm.Config{})
+		ProcessParentBlockHash(header.ParentHash, evm, statedb)
+
+		vmContext = NewEVMBlockContext(parent, nil, &coinbase)
+		evm = vm.NewEVM(vmContext, vm.TxContext{}, statedb, nil, chainConfig, vm.Config{})
+		ProcessParentBlockHash(parent.ParentHash, evm, statedb)
+
+		// make sure that the state is correct
+		if have := getParentBlockHash(statedb, 1); have != hashA {
+			t.Errorf("want parent hash %v, have %v", hashA, have)
+		}
+		if have := getParentBlockHash(statedb, 0); have != hashB {
+			t.Errorf("want parent hash %v, have %v", hashB, have)
+		}
+	}
+	t.Run("MPT", func(t *testing.T) {
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())))
+		test(statedb)
+	})
+}
+
+func TestProcessParentBlockHashPragueGuard(t *testing.T) {
+	config := *params.MergedTestChainConfig
+	config.PragueBlock = big.NewInt(10)
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())))
+	blockNumber := big.NewInt(5)
+	random := common.Hash{}
+	blockContext := vm.BlockContext{
+		CanTransfer: CanTransfer,
+		Transfer:    Transfer,
+		GetHash:     func(uint64) common.Hash { return common.Hash{} },
+		Coinbase:    common.Address{},
+		BlockNumber: blockNumber,
+		Time:        0,
+		Difficulty:  big.NewInt(0),
+		GasLimit:    0,
+		BaseFee:     nil,
+		Random:      &random,
+	}
+	evmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, nil, &config, vm.Config{})
+	ProcessParentBlockHash(common.Hash{0x01}, evmenv, statedb)
+
+	if code := statedb.GetCode(params.HistoryStorageAddress); len(code) != 0 {
+		t.Fatalf("unexpected history contract code predeploy: %x", code)
+	}
+	if have := getParentBlockHash(statedb, 0); have != (common.Hash{}) {
+		t.Fatalf("expected empty history slot, have %v", have)
+	}
+}
+
+func TestProcessParentBlockHashBackfillMissingHistory(t *testing.T) {
+	config := *params.MergedTestChainConfig
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())))
+	blockNumber := big.NewInt(int64(params.HistoryServeWindow + 1))
+	available := map[uint64]common.Hash{
+		1:   {0x11},
+		100: {0x22},
+	}
+
+	random := common.Hash{}
+	blockContext := vm.BlockContext{
+		CanTransfer: CanTransfer,
+		Transfer:    Transfer,
+		GetHash: func(n uint64) common.Hash {
+			if hash, ok := available[n]; ok {
+				return hash
+			}
+			return common.Hash{}
+		},
+		Coinbase:    common.Address{},
+		BlockNumber: blockNumber,
+		Time:        0,
+		Difficulty:  big.NewInt(0),
+		GasLimit:    0,
+		BaseFee:     nil,
+		Random:      &random,
+	}
+	evmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, nil, &config, vm.Config{})
+	ProcessParentBlockHash(common.Hash{0x01}, evmenv, statedb)
+
+	if have := getParentBlockHash(statedb, 1); have != available[1] {
+		t.Fatalf("expected hash at slot 1, have %v", have)
+	}
+	if have := getParentBlockHash(statedb, 100); have != available[100] {
+		t.Fatalf("expected hash at slot 100, have %v", have)
+	}
+	if have := getParentBlockHash(statedb, 2); have != (common.Hash{}) {
+		t.Fatalf("expected empty history slot, have %v", have)
+	}
+}
+
+func TestProcessParentBlockHashCodeMismatchPanics(t *testing.T) {
+	config := *params.MergedTestChainConfig
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())))
+	statedb.SetCode(params.HistoryStorageAddress, []byte{0x01})
+
+	blockNumber := big.NewInt(1)
+	random := common.Hash{}
+	blockContext := vm.BlockContext{
+		CanTransfer: CanTransfer,
+		Transfer:    Transfer,
+		GetHash:     func(uint64) common.Hash { return common.Hash{} },
+		Coinbase:    common.Address{},
+		BlockNumber: blockNumber,
+		Time:        0,
+		Difficulty:  big.NewInt(0),
+		GasLimit:    0,
+		BaseFee:     nil,
+		Random:      &random,
+	}
+	evmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, nil, &config, vm.Config{})
+
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic on history storage code mismatch")
+		}
+	}()
+	ProcessParentBlockHash(common.Hash{0x01}, evmenv, statedb)
+}
+
+func getParentBlockHash(statedb *state.StateDB, number uint64) common.Hash {
+	ringIndex := number % params.HistoryServeWindow
+	var key common.Hash
+	binary.BigEndian.PutUint64(key[24:], ringIndex)
+	return statedb.GetState(params.HistoryStorageAddress, key)
 }
