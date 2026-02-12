@@ -195,7 +195,7 @@ func Transition(ctx *cli.Context) error {
 	// Configure opcode counter
 	var counter *native.OpcodeCounter
 	if ctx.IsSet(OpcodeCountFlag.Name) && ctx.String(OpcodeCountFlag.Name) != "" {
-		counter = native.NewOpcodeCounter()
+		counter = new(native.OpcodeCounter)
 		if vmConfig.Tracer != nil {
 			// If we have an existing tracer, multiplex with the opcode tracer
 			tExisting := tracers.Tracer{Hooks: vmConfig.Tracer}

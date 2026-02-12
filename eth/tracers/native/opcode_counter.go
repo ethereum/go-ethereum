@@ -23,19 +23,13 @@ import (
 
 // OpcodeCounter is a simple tracer that counts how many times each opcode is executed.
 type OpcodeCounter struct {
-	counts map[vm.OpCode]uint64
-}
-
-func NewOpcodeCounter() *OpcodeCounter {
-	return &OpcodeCounter{
-		counts: make(map[vm.OpCode]uint64),
-	}
+	counts [256]uint64
 }
 
 func (c *OpcodeCounter) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
 		OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
-			c.counts[vm.OpCode(op)]++
+			c.counts[op]++
 		},
 	}
 }
@@ -44,7 +38,7 @@ func (c *OpcodeCounter) Hooks() *tracing.Hooks {
 func (c *OpcodeCounter) Results() map[string]uint64 {
 	out := make(map[string]uint64, len(c.counts))
 	for op, count := range c.counts {
-		out[op.String()] = count
+		out[vm.OpCode(op).String()] = count
 	}
 	return out
 }
