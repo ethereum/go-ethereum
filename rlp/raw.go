@@ -45,7 +45,7 @@ type RawList[T any] struct {
 	// returns something valid either way.
 	enc []byte
 
-	// len holds the number of items in the list.
+	// length holds the number of items in the list.
 	length int
 }
 
