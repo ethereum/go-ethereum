@@ -45,7 +45,7 @@ type layer interface {
 	// Note:
 	// - the returned node is not a copy, please don't modify it.
 	// - no error will be returned if the requested node is not found in database.
-	node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, *nodeLoc, error)
+	node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, nodeLoc, error)
 
 	// account directly retrieves the account RLP associated with a particular
 	// hash in the slim data format. An error will be returned if the read

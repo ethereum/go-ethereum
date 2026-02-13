@@ -225,7 +225,7 @@ func decodeRef(buf []byte) (node, []byte, error) {
 	case kind == rlp.List:
 		// 'embedded' node reference. The encoding must be smaller
 		// than a hash in order to be valid.
-		if size := len(buf) - len(rest); size > hashLen {
+		if size := len(buf) - len(rest); size >= hashLen {
 			err := fmt.Errorf("oversized embedded node (size is %d bytes, want size < %d)", size, hashLen)
 			return nil, buf, err
 		}

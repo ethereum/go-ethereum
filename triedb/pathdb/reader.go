@@ -47,7 +47,7 @@ type nodeLoc struct {
 }
 
 // string returns the string representation of node location.
-func (loc *nodeLoc) string() string {
+func (loc nodeLoc) string() string {
 	return fmt.Sprintf("loc: %s, depth: %d", loc.loc, loc.depth)
 }
 

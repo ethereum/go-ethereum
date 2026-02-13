@@ -25,9 +25,9 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/crypto/sha3"
 )
 
 func getBlock(transactions int, uncles int, dataSize int) *types.Block {
@@ -147,7 +147,7 @@ func BenchmarkHashing(b *testing.B) {
 		blockRlp, _ = rlp.EncodeToBytes(block)
 	}
 	var got common.Hash
-	var hasher = sha3.NewLegacyKeccak256()
+	var hasher = keccak.NewLegacyKeccak256()
 	b.Run("iteratorhashing", func(b *testing.B) {
 		for b.Loop() {
 			var hash common.Hash

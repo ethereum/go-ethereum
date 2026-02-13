@@ -1086,6 +1086,11 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    1.0,
 		Category: flags.APICategory,
 	}
+	// Era flags are a group of flags related to the era archive format.
+	EraFormatFlag = &cli.StringFlag{
+		Name:  "era.format",
+		Usage: "Archive format: 'era1' or 'erae'",
+	}
 )
 
 var (

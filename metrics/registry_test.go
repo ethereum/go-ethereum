@@ -14,6 +14,31 @@ func BenchmarkRegistry(b *testing.B) {
 	}
 }
 
+func BenchmarkRegistryGetOrRegister(b *testing.B) {
+	sample := func() Sample { return nil }
+	tests := []struct {
+		name string
+		ctor func() any
+	}{
+		{name: "counter", ctor: func() any { return GetOrRegisterCounter("counter", DefaultRegistry) }},
+		{name: "gauge", ctor: func() any { return GetOrRegisterGauge("gauge", DefaultRegistry) }},
+		{name: "gaugefloat64", ctor: func() any { return GetOrRegisterGaugeFloat64("gaugefloat64", DefaultRegistry) }},
+		{name: "histogram", ctor: func() any { return GetOrRegisterHistogram("histogram", DefaultRegistry, sample()) }},
+		{name: "meter", ctor: func() any { return GetOrRegisterMeter("meter", DefaultRegistry) }},
+		{name: "timer", ctor: func() any { return GetOrRegisterTimer("timer", DefaultRegistry) }},
+		{name: "gaugeinfo", ctor: func() any { return GetOrRegisterGaugeInfo("gaugeinfo", DefaultRegistry) }},
+		{name: "resettingtimer", ctor: func() any { return GetOrRegisterResettingTimer("resettingtimer", DefaultRegistry) }},
+		{name: "runtimehistogramlazy", ctor: func() any { return GetOrRegisterHistogramLazy("runtimehistogramlazy", DefaultRegistry, sample) }},
+	}
+	for _, test := range tests {
+		b.Run(test.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				test.ctor()
+			}
+		})
+	}
+}
+
 func BenchmarkRegistryGetOrRegisterParallel_8(b *testing.B) {
 	benchmarkRegistryGetOrRegisterParallel(b, 8)
 }
@@ -268,7 +293,7 @@ func TestPrefixedChildRegistryGet(t *testing.T) {
 }
 
 func TestChildPrefixedRegistryRegister(t *testing.T) {
-	r := NewPrefixedChildRegistry(DefaultRegistry, "prefix.")
+	r := NewPrefixedChildRegistry(NewRegistry(), "prefix.")
 	err := r.Register("foo", NewCounter())
 	c := NewCounter()
 	Register("bar", c)
