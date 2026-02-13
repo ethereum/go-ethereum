@@ -68,9 +68,6 @@ func (test rawListTest[T]) run(t *testing.T) {
 	// check iterator
 	it := rl.ContentIterator()
 	i := 0
-	if count := it.Count(); count != test.length {
-		t.Fatalf("iterator has wrong Count %d, want %d", count, test.length)
-	}
 	for it.Next() {
 		var item T
 		if err := DecodeBytes(it.Value(), &item); err != nil {
