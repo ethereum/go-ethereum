@@ -457,7 +457,7 @@ func newDerivableRawList[T any](list *rlp.RawList[T], write func([]byte, *bytes.
 		panic("list data too big for derivableRawList")
 	}
 	it := list.ContentIterator()
-	dl.offsets = make([]uint32, it.Count())
+	dl.offsets = make([]uint32, list.Len())
 	for i := 0; it.Next(); i++ {
 		dl.offsets[i] = uint32(it.Offset())
 	}
