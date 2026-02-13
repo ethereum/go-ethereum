@@ -123,11 +123,6 @@ func (r *RawList[T]) Size() uint64 {
 	return ListSize(uint64(len(r.Content())))
 }
 
-// Empty returns true if the list contains no items.
-func (r *RawList[T]) Empty() bool {
-	return len(r.Content()) == 0
-}
-
 // ContentIterator returns an iterator over the content of the list.
 // Note the offsets returned by iterator.Offset are relative to the
 // Content bytes of the list.

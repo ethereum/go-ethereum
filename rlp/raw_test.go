@@ -154,9 +154,6 @@ func TestRawListEmpty(t *testing.T) {
 	if !bytes.Equal(b, unhex("C0")) {
 		t.Fatalf("empty RawList has wrong encoding %x", b)
 	}
-	if !rl.Empty() {
-		t.Fatal("list should be Empty")
-	}
 	if rl.Len() != 0 {
 		t.Fatalf("empty list has Len %d", rl.Len())
 	}
