@@ -229,7 +229,6 @@ func TestRawListAppend(t *testing.T) {
 func TestRawListAppendRaw(t *testing.T) {
 	var rl RawList[uint64]
 
-	// Valid single-value appends.
 	if err := rl.AppendRaw(unhex("01")); err != nil {
 		t.Fatal("AppendRaw(01) failed:", err)
 	}
@@ -240,22 +239,15 @@ func TestRawListAppendRaw(t *testing.T) {
 		t.Fatalf("wrong Len %d after valid appends", rl.Len())
 	}
 
-	// Empty input.
 	if err := rl.AppendRaw(nil); err == nil {
 		t.Fatal("AppendRaw(nil) should fail")
 	}
-
-	// Trailing bytes: two values concatenated.
 	if err := rl.AppendRaw(unhex("0102")); err == nil {
 		t.Fatal("AppendRaw(0102) should fail due to trailing bytes")
 	}
-
-	// Truncated value: tag claims more data than present.
 	if err := rl.AppendRaw(unhex("8201")); err == nil {
 		t.Fatal("AppendRaw(8201) should fail due to truncated value")
 	}
-
-	// Len should be unchanged after failed appends.
 	if rl.Len() != 2 {
 		t.Fatalf("wrong Len %d after invalid appends, want 2", rl.Len())
 	}
