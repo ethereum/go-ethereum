@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -45,13 +46,16 @@ type Record struct {
 	Value []byte
 }
 
+// ArchiveDataDir is the data directory where the archive file is stored.
+var ArchiveDataDir string
+
 // ArchivedNodeResolver takes a buffer containing the archive data
 // held by an expiring node (an offset and a size) and returns a
 // list of records, which is a list of serialized leaf nodes. The
 // caller knows the context (MPT, binary trie) and is responsible
 // for decoding the nodes.
 func ArchivedNodeResolver(offset, size uint64) ([]*Record, error) {
-	file, err := os.Open("nodearchive")
+	file, err := os.Open(filepath.Join(ArchiveDataDir, "geth", "nodearchive"))
 	if err != nil {
 		return nil, fmt.Errorf("error opening archive file: %w", err)
 	}
