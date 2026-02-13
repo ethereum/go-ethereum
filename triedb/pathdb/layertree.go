@@ -31,6 +31,7 @@ import (
 // of the referenced layer by themselves.
 type layerTree struct {
 	base   *diskLayer
+	head   common.Hash // Root hash of the topmost layer (diff or disk)
 	layers map[common.Hash]layer
 
 	// descendants is a two-dimensional map where the keys represent
@@ -59,6 +60,7 @@ func (tree *layerTree) init(head layer) {
 	defer tree.lock.Unlock()
 
 	current := head
+	tree.head = head.rootHash()
 	tree.layers = make(map[common.Hash]layer)
 	tree.descendants = make(map[common.Hash]map[common.Hash]struct{})
 
@@ -74,6 +76,18 @@ func (tree *layerTree) init(head layer) {
 	}
 	tree.base = current.(*diskLayer) // panic if it's not a disk layer
 	tree.lookup = newLookup(head, tree.isDescendant)
+}
+
+// diffHead returns the root hash of the topmost diff layer. If there are no
+// diff layers, returns the disk layer root and false.
+func (tree *layerTree) diffHead() (common.Hash, bool) {
+	tree.lock.RLock()
+	defer tree.lock.RUnlock()
+
+	if _, ok := tree.layers[tree.head].(*diffLayer); ok {
+		return tree.head, true
+	}
+	return tree.base.rootHash(), false
 }
 
 // get retrieves a layer belonging to the given state root.
