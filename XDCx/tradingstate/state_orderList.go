@@ -90,9 +90,9 @@ func (s *stateOrderList) setError(err error) {
 func (s *stateOrderList) getTrie(db Database) Trie {
 	if s.trie == nil {
 		var err error
-		s.trie, err = db.OpenStorageTrie(s.price, s.data.Root)
+		s.trie, err = db.OpenStorageTrie(s.price, common.Address{}, s.data.Root)
 		if err != nil {
-			s.trie, _ = db.OpenStorageTrie(s.price, types.EmptyRootHash)
+			s.trie, _ = db.OpenStorageTrie(s.price, common.Address{}, types.EmptyRootHash)
 			s.setError(fmt.Errorf("can't create storage trie: %v", err))
 		}
 	}

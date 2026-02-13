@@ -77,9 +77,9 @@ func (lt *liquidationTimeState) setError(err error) {
 func (lt *liquidationTimeState) getTrie(db Database) Trie {
 	if lt.trie == nil {
 		var err error
-		lt.trie, err = db.OpenStorageTrie(lt.lendingBook, lt.data.Root)
+		lt.trie, err = db.OpenStorageTrie(lt.lendingBook, common.Address{}, lt.data.Root)
 		if err != nil {
-			lt.trie, _ = db.OpenStorageTrie(lt.time, types.EmptyRootHash)
+			lt.trie, _ = db.OpenStorageTrie(lt.lendingBook, common.Address{}, types.EmptyRootHash)
 			lt.setError(fmt.Errorf("can't create storage trie: %v", err))
 		}
 	}

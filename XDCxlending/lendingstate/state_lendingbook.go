@@ -127,9 +127,9 @@ func (s *lendingExchangeState) setError(err error) {
 func (s *lendingExchangeState) getLendingItemTrie(db Database) Trie {
 	if s.lendingItemTrie == nil {
 		var err error
-		s.lendingItemTrie, err = db.OpenStorageTrie(s.lendingBook, s.data.LendingItemRoot)
+		s.lendingItemTrie, err = db.OpenStorageTrie(s.lendingBook, common.Address{}, s.data.LendingItemRoot)
 		if err != nil {
-			s.lendingItemTrie, _ = db.OpenStorageTrie(s.lendingBook, types.EmptyRootHash)
+			s.lendingItemTrie, _ = db.OpenStorageTrie(s.lendingBook, common.Address{}, types.EmptyRootHash)
 			s.setError(fmt.Errorf("can't create Lendings trie: %v", err))
 		}
 	}
@@ -139,9 +139,9 @@ func (s *lendingExchangeState) getLendingItemTrie(db Database) Trie {
 func (s *lendingExchangeState) getLendingTradeTrie(db Database) Trie {
 	if s.lendingTradeTrie == nil {
 		var err error
-		s.lendingTradeTrie, err = db.OpenStorageTrie(s.lendingBook, s.data.LendingTradeRoot)
+		s.lendingTradeTrie, err = db.OpenStorageTrie(s.lendingBook, common.Address{}, s.data.LendingTradeRoot)
 		if err != nil {
-			s.lendingTradeTrie, _ = db.OpenStorageTrie(s.lendingBook, types.EmptyRootHash)
+			s.lendingTradeTrie, _ = db.OpenStorageTrie(s.lendingBook, common.Address{}, types.EmptyRootHash)
 			s.setError(fmt.Errorf("can't create Lendings trie: %v", err))
 		}
 	}
@@ -151,9 +151,9 @@ func (s *lendingExchangeState) getLendingTradeTrie(db Database) Trie {
 func (s *lendingExchangeState) getInvestingTrie(db Database) Trie {
 	if s.investingTrie == nil {
 		var err error
-		s.investingTrie, err = db.OpenStorageTrie(s.lendingBook, s.data.InvestingRoot)
+		s.investingTrie, err = db.OpenStorageTrie(s.lendingBook, common.Address{}, s.data.InvestingRoot)
 		if err != nil {
-			s.investingTrie, _ = db.OpenStorageTrie(s.lendingBook, types.EmptyRootHash)
+			s.investingTrie, _ = db.OpenStorageTrie(s.lendingBook, common.Address{}, types.EmptyRootHash)
 			s.setError(fmt.Errorf("can't create Lendings trie: %v", err))
 		}
 	}
@@ -163,9 +163,9 @@ func (s *lendingExchangeState) getInvestingTrie(db Database) Trie {
 func (s *lendingExchangeState) getBorrowingTrie(db Database) Trie {
 	if s.borrowingTrie == nil {
 		var err error
-		s.borrowingTrie, err = db.OpenStorageTrie(s.lendingBook, s.data.BorrowingRoot)
+		s.borrowingTrie, err = db.OpenStorageTrie(s.lendingBook, common.Address{}, s.data.BorrowingRoot)
 		if err != nil {
-			s.borrowingTrie, _ = db.OpenStorageTrie(s.lendingBook, types.EmptyRootHash)
+			s.borrowingTrie, _ = db.OpenStorageTrie(s.lendingBook, common.Address{}, types.EmptyRootHash)
 			s.setError(fmt.Errorf("can't create bids trie: %v", err))
 		}
 	}
@@ -175,9 +175,9 @@ func (s *lendingExchangeState) getBorrowingTrie(db Database) Trie {
 func (s *lendingExchangeState) getLiquidationTimeTrie(db Database) Trie {
 	if s.liquidationTimeTrie == nil {
 		var err error
-		s.liquidationTimeTrie, err = db.OpenStorageTrie(s.lendingBook, s.data.LiquidationTimeRoot)
+		s.liquidationTimeTrie, err = db.OpenStorageTrie(s.lendingBook, common.Address{}, s.data.LiquidationTimeRoot)
 		if err != nil {
-			s.liquidationTimeTrie, _ = db.OpenStorageTrie(s.lendingBook, types.EmptyRootHash)
+			s.liquidationTimeTrie, _ = db.OpenStorageTrie(s.lendingBook, common.Address{}, types.EmptyRootHash)
 			s.setError(fmt.Errorf("can't create bids trie: %v", err))
 		}
 	}

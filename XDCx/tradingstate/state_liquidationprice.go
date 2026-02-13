@@ -102,9 +102,9 @@ func (s *liquidationPriceState) createLendingBook(db Database, lendingBook commo
 func (s *liquidationPriceState) getTrie(db Database) Trie {
 	if s.trie == nil {
 		var err error
-		s.trie, err = db.OpenStorageTrie(s.liquidationPrice, s.data.Root)
+		s.trie, err = db.OpenStorageTrie(s.liquidationPrice, common.Address{}, s.data.Root)
 		if err != nil {
-			s.trie, _ = db.OpenStorageTrie(s.liquidationPrice, types.EmptyRootHash)
+			s.trie, _ = db.OpenStorageTrie(s.liquidationPrice, common.Address{}, types.EmptyRootHash)
 			s.setError(fmt.Errorf("can't create storage trie: %v", err))
 		}
 	}

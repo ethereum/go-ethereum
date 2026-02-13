@@ -182,10 +182,15 @@ func (db *Database) Scheme() string {
 // It is meant to be called when closing the blockchain object, so that all
 // resources held can be released correctly.
 func (db *Database) Close() error {
+	db.WritePreimages()
+	return db.backend.Close()
+}
+
+// WritePreimages flushes all accumulated preimages to disk forcibly.
+func (db *Database) WritePreimages() {
 	if db.preimages != nil {
 		db.preimages.commit(true)
 	}
-	return db.backend.Close()
 }
 
 // Cap iteratively flushes old but still referenced trie nodes until the total

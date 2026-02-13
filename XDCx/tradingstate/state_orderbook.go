@@ -134,9 +134,9 @@ func (te *tradingExchanges) setError(err error) {
 func (te *tradingExchanges) getAsksTrie(db Database) Trie {
 	if te.asksTrie == nil {
 		var err error
-		te.asksTrie, err = db.OpenStorageTrie(te.orderBookHash, te.data.AskRoot)
+		te.asksTrie, err = db.OpenStorageTrie(te.orderBookHash, common.Address{}, te.data.AskRoot)
 		if err != nil {
-			te.asksTrie, _ = db.OpenStorageTrie(te.orderBookHash, types.EmptyRootHash)
+			te.asksTrie, _ = db.OpenStorageTrie(te.orderBookHash, common.Address{}, types.EmptyRootHash)
 			te.setError(fmt.Errorf("can't create asks trie: %v", err))
 		}
 	}
@@ -146,9 +146,9 @@ func (te *tradingExchanges) getAsksTrie(db Database) Trie {
 func (te *tradingExchanges) getOrdersTrie(db Database) Trie {
 	if te.ordersTrie == nil {
 		var err error
-		te.ordersTrie, err = db.OpenStorageTrie(te.orderBookHash, te.data.OrderRoot)
+		te.ordersTrie, err = db.OpenStorageTrie(te.orderBookHash, common.Address{}, te.data.OrderRoot)
 		if err != nil {
-			te.ordersTrie, _ = db.OpenStorageTrie(te.orderBookHash, types.EmptyRootHash)
+			te.ordersTrie, _ = db.OpenStorageTrie(te.orderBookHash, common.Address{}, types.EmptyRootHash)
 			te.setError(fmt.Errorf("can't create asks trie: %v", err))
 		}
 	}
@@ -264,9 +264,9 @@ func (te *tradingExchanges) CommitAsksTrie(db Database) error {
 func (te *tradingExchanges) getBidsTrie(db Database) Trie {
 	if te.bidsTrie == nil {
 		var err error
-		te.bidsTrie, err = db.OpenStorageTrie(te.orderBookHash, te.data.BidRoot)
+		te.bidsTrie, err = db.OpenStorageTrie(te.orderBookHash, common.Address{}, te.data.BidRoot)
 		if err != nil {
-			te.bidsTrie, _ = db.OpenStorageTrie(te.orderBookHash, types.EmptyRootHash)
+			te.bidsTrie, _ = db.OpenStorageTrie(te.orderBookHash, common.Address{}, types.EmptyRootHash)
 			te.setError(fmt.Errorf("can't create bids trie: %v", err))
 		}
 	}
@@ -635,9 +635,9 @@ func (te *tradingExchanges) createStateLiquidationPrice(db Database, liquidation
 func (te *tradingExchanges) getLiquidationPriceTrie(db Database) Trie {
 	if te.liquidationPriceTrie == nil {
 		var err error
-		te.liquidationPriceTrie, err = db.OpenStorageTrie(te.orderBookHash, te.data.LiquidationPriceRoot)
+		te.liquidationPriceTrie, err = db.OpenStorageTrie(te.orderBookHash, common.Address{}, te.data.LiquidationPriceRoot)
 		if err != nil {
-			te.liquidationPriceTrie, _ = db.OpenStorageTrie(te.orderBookHash, types.EmptyRootHash)
+			te.liquidationPriceTrie, _ = db.OpenStorageTrie(te.orderBookHash, common.Address{}, types.EmptyRootHash)
 			te.setError(fmt.Errorf("can't create liquidation liquidationPrice trie: %v", err))
 		}
 	}

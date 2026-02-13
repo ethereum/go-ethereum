@@ -78,9 +78,9 @@ func (il *itemListState) setError(err error) {
 func (il *itemListState) getTrie(db Database) Trie {
 	if il.trie == nil {
 		var err error
-		il.trie, err = db.OpenStorageTrie(il.key, il.data.Root)
+		il.trie, err = db.OpenStorageTrie(il.key, common.Address{}, il.data.Root)
 		if err != nil {
-			il.trie, _ = db.OpenStorageTrie(il.key, types.EmptyRootHash)
+			il.trie, _ = db.OpenStorageTrie(il.key, common.Address{}, types.EmptyRootHash)
 			il.setError(fmt.Errorf("can't create storage trie: %v", err))
 		}
 	}

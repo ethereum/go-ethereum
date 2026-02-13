@@ -323,7 +323,7 @@ func (s *StateDB) GetAccountInfo(addr common.Address) *AccountInfo {
 	if stateObject.code != nil {
 		result.CodeSize = len(stateObject.code)
 	} else {
-		size, err := s.db.ContractCodeSize(stateObject.addrHash, common.BytesToHash(stateObject.CodeHash()))
+		size, err := s.db.ContractCodeSize(stateObject.address, common.BytesToHash(stateObject.CodeHash()))
 		if err != nil {
 			s.setError(err)
 		}

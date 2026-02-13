@@ -16,7 +16,7 @@ func TestXDCxTrieTest(t *testing.T) {
 	t.SkipNow()
 	db := rawdb.NewMemoryDatabase()
 	stateCache := NewDatabase(db)
-	trie, _ := stateCache.OpenStorageTrie(EmptyHash, types.EmptyRootHash)
+	trie, _ := stateCache.OpenStorageTrie(EmptyHash, common.Address{}, types.EmptyRootHash)
 	max := 1000000
 	for i := 1; i < max; i++ {
 		k := common.BigToHash(big.NewInt(int64(i))).Bytes()
