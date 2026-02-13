@@ -78,6 +78,12 @@ type GetAccountRangePacket struct {
 	Bytes  uint64      // Soft limit at which to stop returning data
 }
 
+type accountRangeInput struct {
+	ID       uint64                    // ID of the request this is a response for
+	Accounts rlp.RawList[*AccountData] // List of consecutive accounts from the trie
+	Proof    rlp.RawList[[]byte]       // List of trie nodes proving the account range
+}
+
 // AccountRangePacket represents an account query response.
 type AccountRangePacket struct {
 	ID       uint64         // ID of the request this is a response for
@@ -123,6 +129,12 @@ type GetStorageRangesPacket struct {
 	Bytes    uint64        // Soft limit at which to stop returning data
 }
 
+type storageRangesInput struct {
+	ID    uint64                      // ID of the request this is a response for
+	Slots rlp.RawList[[]*StorageData] // Lists of consecutive storage slots for the requested accounts
+	Proof rlp.RawList[[]byte]         // Merkle proofs for the *last* slot range, if it's incomplete
+}
+
 // StorageRangesPacket represents a storage slot query response.
 type StorageRangesPacket struct {
 	ID    uint64           // ID of the request this is a response for
@@ -161,6 +173,11 @@ type GetByteCodesPacket struct {
 	Bytes  uint64        // Soft limit at which to stop returning data
 }
 
+type byteCodesInput struct {
+	ID    uint64              // ID of the request this is a response for
+	Codes rlp.RawList[[]byte] // Requested contract bytecodes
+}
+
 // ByteCodesPacket represents a contract bytecode query response.
 type ByteCodesPacket struct {
 	ID    uint64   // ID of the request this is a response for
@@ -169,10 +186,10 @@ type ByteCodesPacket struct {
 
 // GetTrieNodesPacket represents a state trie node query.
 type GetTrieNodesPacket struct {
-	ID    uint64            // Request ID to match up responses with
-	Root  common.Hash       // Root hash of the account trie to serve
-	Paths []TrieNodePathSet // Trie node hashes to retrieve the nodes for
-	Bytes uint64            // Soft limit at which to stop returning data
+	ID    uint64                       // Request ID to match up responses with
+	Root  common.Hash                  // Root hash of the account trie to serve
+	Paths rlp.RawList[TrieNodePathSet] // Trie node hashes to retrieve the nodes for
+	Bytes uint64                       // Soft limit at which to stop returning data
 }
 
 // TrieNodePathSet is a list of trie node paths to retrieve. A naive way to
@@ -186,6 +203,11 @@ type GetTrieNodesPacket struct {
 // account node and a storage node in the same request as it cannot happen
 // that a slot is accessed before the account path is fully expanded.
 type TrieNodePathSet [][]byte
+
+type trieNodesInput struct {
+	ID    uint64              // ID of the request this is a response for
+	Nodes rlp.RawList[[]byte] // Requested state trie nodes
+}
 
 // TrieNodesPacket represents a state trie node query response.
 type TrieNodesPacket struct {
