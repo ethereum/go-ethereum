@@ -285,7 +285,7 @@ func CountValues(b []byte) (int, error) {
 	for ; len(b) > 0; i++ {
 		_, tagsize, size, err := readKind(b)
 		if err != nil {
-			return 0, err
+			return i + 1, err
 		}
 		b = b[tagsize+size:]
 	}
