@@ -453,7 +453,7 @@ func newDerivableRawList[T any](list *rlp.RawList[T], write func([]byte, *bytes.
 	}
 	// Assert to ensure 32-bit offsets are valid. This can never trigger
 	// unless a block body component or p2p receipt list is larger than 4GB.
-	if len(dl.data) > math.MaxUint32 {
+	if uint(len(dl.data)) > math.MaxUint32 {
 		panic("list data too big for derivableRawList")
 	}
 	it := list.ContentIterator()
