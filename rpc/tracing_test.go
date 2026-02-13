@@ -167,7 +167,7 @@ func TestTracingHTTPErrorRecording(t *testing.T) {
 	}
 	spans := exporter.GetSpans()
 
-	// Only the server span and runMethod span should have error status.
+	// Only the runMethod span should have error status.
 	if len(spans) == 0 {
 		t.Fatal("no spans were emitted")
 	}
