@@ -424,7 +424,7 @@ func hashBodyParts(items []BlockBody) BlockBodyHashes {
 		txsList := newDerivableRawList(&body.Transactions, writeTxForHash)
 		h.TransactionRoots[i] = types.DeriveSha(txsList, hasher)
 		// uncles
-		if body.Uncles.Empty() {
+		if body.Uncles.Len() == 0 {
 			h.UncleHashes[i] = types.EmptyUncleHash
 		} else {
 			h.UncleHashes[i] = crypto.Keccak256Hash(body.Uncles.Bytes())
