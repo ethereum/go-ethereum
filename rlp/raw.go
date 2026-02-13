@@ -145,6 +145,14 @@ func (r *RawList[T]) Append(item T) error {
 	return nil
 }
 
+// AppendRaw adds an encoded item to the list.
+func (r *RawList[T]) AppendRaw(b []byte) {
+	if r.enc == nil {
+		r.enc = make([]byte, 9)
+	}
+	r.enc = append(r.enc, b...)
+}
+
 // StringSize returns the encoded size of a string.
 func StringSize(s string) uint64 {
 	switch n := len(s); n {
