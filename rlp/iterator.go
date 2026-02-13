@@ -64,15 +64,6 @@ func (it *Iterator) Next() bool {
 	return true
 }
 
-// Count returns the remaining number of items.
-// Note this is O(n) and the result may be incorrect if the list data is invalid.
-// The returned count is always an upper bound on the remaining items
-// that will be visited by the iterator.
-func (it *Iterator) Count() int {
-	count, _ := CountValues(it.data)
-	return count
-}
-
 // Value returns the current value.
 func (it *Iterator) Value() []byte {
 	return it.next

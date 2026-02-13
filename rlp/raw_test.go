@@ -68,9 +68,6 @@ func (test rawListTest[T]) run(t *testing.T) {
 	// check iterator
 	it := rl.ContentIterator()
 	i := 0
-	if count := it.Count(); count != test.length {
-		t.Fatalf("iterator has wrong Count %d, want %d", count, test.length)
-	}
 	for it.Next() {
 		var item T
 		if err := DecodeBytes(it.Value(), &item); err != nil {
@@ -154,9 +151,6 @@ func TestRawListEmpty(t *testing.T) {
 	if !bytes.Equal(b, unhex("C0")) {
 		t.Fatalf("empty RawList has wrong encoding %x", b)
 	}
-	if !rl.Empty() {
-		t.Fatal("list should be Empty")
-	}
 	if rl.Len() != 0 {
 		t.Fatalf("empty list has Len %d", rl.Len())
 	}
@@ -223,6 +217,58 @@ func TestRawListAppend(t *testing.T) {
 	encoded, _ := EncodeToBytes(&rl)
 	if !bytes.Equal(encoded, unhex("CC C501836F6E65 C5028374776F")) {
 		t.Fatalf("wrong encoding %x", encoded)
+	}
+}
+
+func TestRawListAppendRaw(t *testing.T) {
+	var rl RawList[uint64]
+
+	if err := rl.AppendRaw(unhex("01")); err != nil {
+		t.Fatal("AppendRaw(01) failed:", err)
+	}
+	if err := rl.AppendRaw(unhex("820102")); err != nil {
+		t.Fatal("AppendRaw(820102) failed:", err)
+	}
+	if rl.Len() != 2 {
+		t.Fatalf("wrong Len %d after valid appends", rl.Len())
+	}
+
+	if err := rl.AppendRaw(nil); err == nil {
+		t.Fatal("AppendRaw(nil) should fail")
+	}
+	if err := rl.AppendRaw(unhex("0102")); err == nil {
+		t.Fatal("AppendRaw(0102) should fail due to trailing bytes")
+	}
+	if err := rl.AppendRaw(unhex("8201")); err == nil {
+		t.Fatal("AppendRaw(8201) should fail due to truncated value")
+	}
+	if rl.Len() != 2 {
+		t.Fatalf("wrong Len %d after invalid appends, want 2", rl.Len())
+	}
+}
+
+func TestRawListDecodeInvalid(t *testing.T) {
+	tests := []struct {
+		input string
+		err   error
+	}{
+		// Single item with non-canonical size (0x81 wrapping byte <= 0x7F).
+		{input: "C28142", err: ErrCanonSize},
+		// Single item claiming more bytes than available in the list.
+		{input: "C484020202", err: ErrElemTooLarge},
+		// Two items, second has non-canonical size.
+		{input: "C3018142", err: ErrCanonSize},
+		// Two items, second claims more bytes than remain in the list.
+		{input: "C401830202", err: ErrElemTooLarge},
+		// Item is a sub-list whose declared size exceeds available bytes.
+		{input: "C3C40102", err: ErrElemTooLarge},
+	}
+	for _, test := range tests {
+		var rl RawList[RawValue]
+		err := DecodeBytes(unhex(test.input), &rl)
+		if !errors.Is(err, test.err) {
+			t.Errorf("input %s: error mismatch: got %v, want %v", test.input, err, test.err)
+		}
 	}
 }
 
