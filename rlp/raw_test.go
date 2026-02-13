@@ -226,6 +226,66 @@ func TestRawListAppend(t *testing.T) {
 	}
 }
 
+func TestRawListAppendRaw(t *testing.T) {
+	var rl RawList[uint64]
+
+	// Valid single-value appends.
+	if err := rl.AppendRaw(unhex("01")); err != nil {
+		t.Fatal("AppendRaw(01) failed:", err)
+	}
+	if err := rl.AppendRaw(unhex("820102")); err != nil {
+		t.Fatal("AppendRaw(820102) failed:", err)
+	}
+	if rl.Len() != 2 {
+		t.Fatalf("wrong Len %d after valid appends", rl.Len())
+	}
+
+	// Empty input.
+	if err := rl.AppendRaw(nil); err == nil {
+		t.Fatal("AppendRaw(nil) should fail")
+	}
+
+	// Trailing bytes: two values concatenated.
+	if err := rl.AppendRaw(unhex("0102")); err == nil {
+		t.Fatal("AppendRaw(0102) should fail due to trailing bytes")
+	}
+
+	// Truncated value: tag claims more data than present.
+	if err := rl.AppendRaw(unhex("8201")); err == nil {
+		t.Fatal("AppendRaw(8201) should fail due to truncated value")
+	}
+
+	// Len should be unchanged after failed appends.
+	if rl.Len() != 2 {
+		t.Fatalf("wrong Len %d after invalid appends, want 2", rl.Len())
+	}
+}
+
+func TestRawListDecodeInvalid(t *testing.T) {
+	tests := []struct {
+		input string
+		err   error
+	}{
+		// Single item with non-canonical size (0x81 wrapping byte <= 0x7F).
+		{input: "C28142", err: ErrCanonSize},
+		// Single item claiming more bytes than available in the list.
+		{input: "C484020202", err: ErrElemTooLarge},
+		// Two items, second has non-canonical size.
+		{input: "C3018142", err: ErrCanonSize},
+		// Two items, second claims more bytes than remain in the list.
+		{input: "C401830202", err: ErrElemTooLarge},
+		// Item is a sub-list whose declared size exceeds available bytes.
+		{input: "C3C40102", err: ErrElemTooLarge},
+	}
+	for _, test := range tests {
+		var rl RawList[RawValue]
+		err := DecodeBytes(unhex(test.input), &rl)
+		if !errors.Is(err, test.err) {
+			t.Errorf("input %s: error mismatch: got %v, want %v", test.input, err, test.err)
+		}
+	}
+}
+
 func TestCountValues(t *testing.T) {
 	tests := []struct {
 		input string // note: spaces in input are stripped by unhex

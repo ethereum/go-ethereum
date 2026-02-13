@@ -44,6 +44,9 @@ type RawList[T any] struct {
 	// The implementation code mostly works with the Content method because it
 	// returns something valid either way.
 	enc []byte
+
+	// len holds the number of items in the list.
+	length int
 }
 
 // Content returns the RLP-encoded data of the list.
@@ -87,7 +90,14 @@ func (r *RawList[T]) DecodeRLP(s *Stream) error {
 	if err := s.readFull(enc[9:]); err != nil {
 		return err
 	}
-	*r = RawList[T]{enc: enc}
+	n, err := CountValues(enc[9:])
+	if err != nil {
+		if err == ErrValueTooLarge {
+			return ErrElemTooLarge
+		}
+		return err
+	}
+	*r = RawList[T]{enc: enc, length: n}
 	return nil
 }
 
@@ -105,8 +115,7 @@ func (r *RawList[T]) Items() ([]T, error) {
 
 // Len returns the number of items in the list.
 func (r *RawList[T]) Len() int {
-	len, _ := CountValues(r.Content())
-	return len
+	return r.length
 }
 
 // Size returns the encoded size of the list.
@@ -142,15 +151,26 @@ func (r *RawList[T]) Append(item T) error {
 	end := prevEnd + eb.size()
 	r.enc = slices.Grow(r.enc, eb.size())[:end]
 	eb.copyTo(r.enc[prevEnd:end])
+	r.length++
 	return nil
 }
 
 // AppendRaw adds an encoded item to the list.
-func (r *RawList[T]) AppendRaw(b []byte) {
+// The given byte slice must contain exactly one RLP value.
+func (r *RawList[T]) AppendRaw(b []byte) error {
+	_, tagsize, contentsize, err := readKind(b)
+	if err != nil {
+		return err
+	}
+	if tagsize+contentsize != uint64(len(b)) {
+		return fmt.Errorf("rlp: input has trailing bytes in AppendRaw")
+	}
 	if r.enc == nil {
 		r.enc = make([]byte, 9)
 	}
 	r.enc = append(r.enc, b...)
+	r.length++
+	return nil
 }
 
 // StringSize returns the encoded size of a string.
