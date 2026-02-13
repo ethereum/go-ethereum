@@ -218,8 +218,16 @@ func truncateFromHead(store ethdb.AncientStore, typ historyType, nhead uint64) (
 		return 0, err
 	}
 	// Ensure that the truncation target falls within the valid range.
-	if ohead < nhead || nhead < otail {
+	if nhead < otail {
 		return 0, fmt.Errorf("%w, %s, tail: %d, head: %d, target: %d", errHeadTruncationOutOfRange, typ, otail, ohead, nhead)
+	}
+	// If the target is ahead of the current head, there's nothing to truncate.
+	// This can happen after unclean shutdowns where the state history was not
+	// fully written.
+	if ohead < nhead {
+		log.Warn("State history shorter than target, nothing to truncate",
+			"type", typ.String(), "head", ohead, "target", nhead)
+		return 0, nil
 	}
 	// Short circuit if nothing to truncate.
 	if ohead == nhead {

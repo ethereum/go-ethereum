@@ -19,6 +19,7 @@ package trie
 import (
 	"encoding/binary"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -39,6 +40,7 @@ type subtreeInfo struct {
 	height    int               // Height of subtree (from leaves)
 	leaves    []*archive.Record // All leaf records (relative path + encoded node)
 	nodePaths [][]byte          // Paths of all nodes to delete
+	rootHash  common.Hash       // Hash of the original subtree root (for verification)
 }
 
 // Archiver handles the archival process of trie nodes.
@@ -79,7 +81,7 @@ func NewArchiver(db ethdb.Database, triedb database.NodeDatabase,
 }
 
 // ProcessState archives subtrees from the given state root.
-// It processes the account trie first, then all storage tries.
+// It processes storage tries first, then the account trie.
 func (a *Archiver) ProcessState(root common.Hash) error {
 	a.stateRoot = root
 
@@ -141,7 +143,12 @@ func (a *Archiver) processTrie(owner common.Hash, t *Trie) error {
 	subtrees := a.findHeight3Subtrees(t.root, nil, owner)
 	log.Info("Found subtrees to archive", "owner", owner, "count", len(subtrees))
 
-	for _, info := range subtrees {
+	lastLog := time.Now()
+	for i, info := range subtrees {
+		if time.Since(lastLog) > 30*time.Second {
+			log.Info("Archiving subtrees", "owner", owner, "progress", fmt.Sprintf("%d/%d", i, len(subtrees)), "archived", a.subtreesArchived)
+			lastLog = time.Now()
+		}
 		if err := a.archiveSubtree(info); err != nil {
 			log.Warn("Failed to archive subtree", "path", common.Bytes2Hex(info.path), "err", err)
 			continue
@@ -159,54 +166,86 @@ func (a *Archiver) processTrie(owner common.Hash, t *Trie) error {
 // findHeight3Subtrees recursively finds all subtrees with height == 3.
 // Height is measured from leaves: leaves=0, their parents=1, etc.
 func (a *Archiver) findHeight3Subtrees(n node, path []byte, owner common.Hash) []*subtreeInfo {
-	info := a.computeSubtreeInfo(n, path, owner)
+	info, err := a.computeSubtreeInfo(n, path, owner)
+	if err != nil {
+		// computeSubtreeInfo failed (e.g. unresolvable hashNode within the
+		// subtree). We cannot archive this node as-is, but deeper children
+		// may still form valid height-3 subtrees. Recurse into them.
+		log.Debug("computeSubtreeInfo failed, trying children", "path", common.Bytes2Hex(path), "err", err)
+		return a.findSubtreesInChildren(n, path, owner)
+	}
 	if info == nil {
 		return nil
 	}
 
 	// If this subtree has height 3, it's a candidate for archival
 	if info.height == 3 {
+		// Capture the original subtree root hash for verification.
+		// The hash is available from the node that was passed in:
+		// - hashNode: the hash IS the node
+		// - fullNode/shortNode: loaded from DB, flags.hash is set
+		switch nn := n.(type) {
+		case hashNode:
+			info.rootHash = common.BytesToHash(nn)
+		case *fullNode:
+			if nn.flags.hash != nil {
+				info.rootHash = common.BytesToHash(nn.flags.hash)
+			}
+		case *shortNode:
+			if nn.flags.hash != nil {
+				info.rootHash = common.BytesToHash(nn.flags.hash)
+			}
+		}
 		return []*subtreeInfo{info}
 	}
 
 	// If height > 3, recurse into children to find height-3 subtrees
 	if info.height > 3 {
-		var results []*subtreeInfo
-		switch n := n.(type) {
-		case *fullNode:
-			for i, child := range n.Children[:16] {
-				if child != nil {
-					childPath := append(append([]byte{}, path...), byte(i))
-					results = append(results, a.findHeight3Subtrees(child, childPath, owner)...)
-				}
-			}
-		case *shortNode:
-			childPath := append(append([]byte{}, path...), n.Key...)
-			results = append(results, a.findHeight3Subtrees(n.Val, childPath, owner)...)
-		case hashNode:
-			// Resolve and recurse
-			resolved, err := a.resolveNode(n, path, owner)
-			if err == nil {
-				results = append(results, a.findHeight3Subtrees(resolved, path, owner)...)
-			}
-		}
-		return results
+		return a.findSubtreesInChildren(n, path, owner)
 	}
 
 	// Height < 3: no archivable subtrees here
 	return nil
 }
 
+// findSubtreesInChildren recurses into the children of a node to find
+// height-3 subtrees. Used both by the normal height > 3 path and as a
+// fallback when computeSubtreeInfo fails for a node.
+func (a *Archiver) findSubtreesInChildren(n node, path []byte, owner common.Hash) []*subtreeInfo {
+	var results []*subtreeInfo
+	switch n := n.(type) {
+	case *fullNode:
+		for i, child := range n.Children[:16] {
+			if child != nil {
+				childPath := append(append([]byte{}, path...), byte(i))
+				results = append(results, a.findHeight3Subtrees(child, childPath, owner)...)
+			}
+		}
+	case *shortNode:
+		childPath := append(append([]byte{}, path...), n.Key...)
+		results = append(results, a.findHeight3Subtrees(n.Val, childPath, owner)...)
+	case hashNode:
+		// Resolve and recurse
+		resolved, err := a.resolveNode(n, path, owner)
+		if err == nil {
+			results = append(results, a.findHeight3Subtrees(resolved, path, owner)...)
+		}
+	}
+	return results
+}
+
 // computeSubtreeInfo computes height and collects leaves for a subtree.
-// Returns nil if the node is nil or an error occurs during resolution.
-func (a *Archiver) computeSubtreeInfo(n node, path []byte, owner common.Hash) *subtreeInfo {
+// Returns (nil, nil) if the node is nil, already expired, or has no leaves.
+// Returns (nil, error) if any constituent node could not be resolved — the
+// caller MUST NOT archive a subtree when an error is returned, as the leaf
+// set would be incomplete.
+func (a *Archiver) computeSubtreeInfo(n node, path []byte, owner common.Hash) (*subtreeInfo, error) {
 	switch n := n.(type) {
 	case nil:
-		return nil
+		return nil, nil
 
 	case valueNode:
 		// Leaf: height 0
-		// Encode the leaf as a shortNode for archive storage
 		return &subtreeInfo{
 			path:   copyBytes(path),
 			owner:  owner,
@@ -216,13 +255,16 @@ func (a *Archiver) computeSubtreeInfo(n node, path []byte, owner common.Hash) *s
 				Value: []byte(n),
 			}},
 			nodePaths: [][]byte{copyBytes(path)},
-		}
+		}, nil
 
 	case *shortNode:
 		childPath := append(append([]byte{}, path...), n.Key...)
-		childInfo := a.computeSubtreeInfo(n.Val, childPath, owner)
+		childInfo, err := a.computeSubtreeInfo(n.Val, childPath, owner)
+		if err != nil {
+			return nil, fmt.Errorf("shortNode key=%x: %w", n.Key, err)
+		}
 		if childInfo == nil {
-			return nil
+			return nil, nil
 		}
 
 		// Adjust relative paths in leaves to include this node's key
@@ -236,7 +278,7 @@ func (a *Archiver) computeSubtreeInfo(n node, path []byte, owner common.Hash) *s
 			height:    childInfo.height + 1,
 			leaves:    childInfo.leaves,
 			nodePaths: append([][]byte{copyBytes(path)}, childInfo.nodePaths...),
-		}
+		}, nil
 
 	case *fullNode:
 		var (
@@ -247,7 +289,10 @@ func (a *Archiver) computeSubtreeInfo(n node, path []byte, owner common.Hash) *s
 		for i, child := range n.Children[:16] {
 			if child != nil {
 				childPath := append(append([]byte{}, path...), byte(i))
-				childInfo := a.computeSubtreeInfo(child, childPath, owner)
+				childInfo, err := a.computeSubtreeInfo(child, childPath, owner)
+				if err != nil {
+					return nil, fmt.Errorf("fullNode child[%x]: %w", i, err)
+				}
 				if childInfo != nil {
 					if childInfo.height+1 > maxHeight {
 						maxHeight = childInfo.height + 1
@@ -263,7 +308,7 @@ func (a *Archiver) computeSubtreeInfo(n node, path []byte, owner common.Hash) *s
 		}
 
 		if len(allLeaves) == 0 {
-			return nil
+			return nil, nil
 		}
 
 		return &subtreeInfo{
@@ -272,21 +317,20 @@ func (a *Archiver) computeSubtreeInfo(n node, path []byte, owner common.Hash) *s
 			height:    maxHeight,
 			leaves:    allLeaves,
 			nodePaths: allPaths,
-		}
+		}, nil
 
 	case hashNode:
 		resolved, err := a.resolveNode(n, path, owner)
 		if err != nil {
-			log.Debug("Failed to resolve hashNode", "path", common.Bytes2Hex(path), "err", err)
-			return nil
+			return nil, fmt.Errorf("failed to resolve hashNode at path %s: %w", common.Bytes2Hex(path), err)
 		}
 		return a.computeSubtreeInfo(resolved, path, owner)
 
 	case *expiredNode:
 		// Already archived, skip
-		return nil
+		return nil, nil
 	}
-	return nil
+	return nil, nil
 }
 
 // archiveSubtree writes leaves to archive and replaces subtree with expiredNode.
@@ -312,7 +356,25 @@ func (a *Archiver) archiveSubtree(info *subtreeInfo) error {
 		return fmt.Errorf("failed to sync archive: %w", err)
 	}
 
-	// 3. Batch database operations
+	// 3. Verify archive round-trip: reconstruct trie from records and
+	// check that the hash matches the original subtree root. This
+	// catches any data corruption before we delete the original nodes.
+	if info.rootHash != (common.Hash{}) {
+		reconstructed, err := archiveRecordsToNode(info.leaves)
+		if err != nil {
+			return fmt.Errorf("archive verification failed: cannot reconstruct trie from records: %w", err)
+		}
+		h := newHasher(false)
+		gotHash := common.BytesToHash(h.hash(reconstructed, true))
+		returnHasherToPool(h)
+		if gotHash != info.rootHash {
+			return fmt.Errorf("archive verification failed: hash mismatch at path %s owner %s: got %s want %s (leaves=%d offset=%d size=%d)",
+				common.Bytes2Hex(info.path), info.owner, gotHash, info.rootHash,
+				len(info.leaves), offset, size)
+		}
+	}
+
+	// 4. Batch database operations
 	batch := a.db.NewBatch()
 
 	// Delete all nodes in subtree (except the root which we'll overwrite)

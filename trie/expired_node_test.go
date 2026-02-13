@@ -19,11 +19,44 @@ package trie
 import (
 	"bytes"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/archive"
 )
+
+// setupTestArchive creates a temporary archive directory with an archive file
+// containing the given records, and configures archive.ArchiveDataDir to point
+// to it. It returns the offset and size of the written data, and a cleanup function.
+func setupTestArchive(t *testing.T, records []*archive.Record) (offset, size uint64, cleanup func()) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	gethDir := filepath.Join(tmpDir, "geth")
+	if err := os.MkdirAll(gethDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	writer, err := archive.NewArchiveWriter(filepath.Join(gethDir, "nodearchive"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	offset, size, err = writer.WriteSubtree(records)
+	if err != nil {
+		writer.Close()
+		t.Fatal(err)
+	}
+	writer.Close()
+
+	oldDir := archive.ArchiveDataDir
+	archive.ArchiveDataDir = tmpDir
+
+	return offset, size, func() {
+		archive.ArchiveDataDir = oldDir
+	}
+}
 
 func TestExpiredNodeEncodeDecode(t *testing.T) {
 	testCases := []struct {
@@ -120,34 +153,36 @@ func TestExpiredNodeInvalidLength(t *testing.T) {
 	}
 }
 
-func TestExpiredNodeNoResolver(t *testing.T) {
+func TestExpiredNodeNoArchiveFile(t *testing.T) {
+	// When no archive file exists, Get should return an error
+	tmpDir := t.TempDir()
+	gethDir := filepath.Join(tmpDir, "geth")
+	if err := os.MkdirAll(gethDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	oldDir := archive.ArchiveDataDir
+	archive.ArchiveDataDir = tmpDir
+	defer func() { archive.ArchiveDataDir = oldDir }()
+
 	tr := NewEmpty(nil)
-	tr.root = &expiredNode{offset: 100}
+	tr.root = &expiredNode{offset: 100, size: 50}
 
 	_, err := tr.Get([]byte("key"))
-	if !errors.Is(err, archive.ErrNoResolver) {
-		t.Errorf("expected archive.ErrNoResolver, got %v", err)
+	if err == nil {
+		t.Error("expected error when archive file doesn't exist")
 	}
 }
 
 func TestExpiredNodeWithResolver(t *testing.T) {
+	records := []*archive.Record{
+		{Path: []byte{0x01, 0x02, 16}, Value: []byte("testvalue")},
+	}
+	offset, size, cleanup := setupTestArchive(t, records)
+	defer cleanup()
+
 	tr := NewEmpty(nil)
-
-	leafNode := &shortNode{
-		Key: hexToCompact(keybytesToHex([]byte{0x12})),
-		Val: valueNode([]byte("testvalue")),
-	}
-	encodedLeaf := nodeToBytes(leafNode)
-
-	resolver := func(offset, size uint64) ([]*archive.Record, error) {
-		if offset == 100 {
-			return []*archive.Record{{Value: encodedLeaf}}, nil
-		}
-		return nil, errors.New("unknown offset")
-	}
-
-	tr.SetArchiveResolver(resolver)
-	tr.root = &expiredNode{offset: 100, size: uint64(len(encodedLeaf)), archiveResolver: resolver}
+	tr.root = &expiredNode{offset: offset, size: size}
 
 	val, err := tr.Get([]byte{0x12})
 	if err != nil {
@@ -159,14 +194,10 @@ func TestExpiredNodeWithResolver(t *testing.T) {
 }
 
 func TestExpiredNodeCopy(t *testing.T) {
-	resolver := func(offset, size uint64) ([]*archive.Record, error) {
-		return nil, nil
-	}
-
 	original := &expiredNode{
 		offset:          12345,
 		size:            6789,
-		archiveResolver: resolver,
+		archiveResolver: archive.ArchivedNodeResolver,
 	}
 
 	copied := copyNode(original)
@@ -201,18 +232,9 @@ func TestArchiveRecordsToNodeEmpty(t *testing.T) {
 }
 
 func TestArchiveRecordsToNodeMultiple(t *testing.T) {
-	leaf1 := &shortNode{
-		Key: hexToCompact(keybytesToHex([]byte{0x10})),
-		Val: valueNode([]byte("value1")),
-	}
-	leaf2 := &shortNode{
-		Key: hexToCompact(keybytesToHex([]byte{0x20})),
-		Val: valueNode([]byte("value2")),
-	}
-
 	records := []*archive.Record{
-		{Path: []byte{0x01}, Value: nodeToBytes(leaf1)},
-		{Path: []byte{0x02}, Value: nodeToBytes(leaf2)},
+		{Path: []byte{0x01, 16}, Value: []byte("value1")},
+		{Path: []byte{0x02, 16}, Value: []byte("value2")},
 	}
 
 	node, err := archiveRecordsToNode(records)
@@ -234,27 +256,17 @@ func TestArchiveRecordsToNodeMultiple(t *testing.T) {
 }
 
 func TestExpiredNodeGetMultipleRecords(t *testing.T) {
-	leaf1 := &shortNode{
-		Key: hexToCompact([]byte{0x02, 0x03, 0x04, 16}),
-		Val: valueNode([]byte("value1")),
+	records := []*archive.Record{
+		{Path: []byte{0x01, 0x02, 16}, Value: []byte("value1")},
+		{Path: []byte{0x04, 0x05, 16}, Value: []byte("value2")},
 	}
-	leaf2 := &shortNode{
-		Key: hexToCompact([]byte{0x05, 0x06, 0x07, 16}),
-		Val: valueNode([]byte("value2")),
-	}
-
-	resolver := func(offset, size uint64) ([]*archive.Record, error) {
-		return []*archive.Record{
-			{Path: []byte{0x01}, Value: nodeToBytes(leaf1)},
-			{Path: []byte{0x04}, Value: nodeToBytes(leaf2)},
-		}, nil
-	}
+	offset, size, cleanup := setupTestArchive(t, records)
+	defer cleanup()
 
 	tr := NewEmpty(nil)
-	tr.SetArchiveResolver(resolver)
-	tr.root = &expiredNode{offset: 100, size: 200, archiveResolver: resolver}
+	tr.root = &expiredNode{offset: offset, size: size}
 
-	val, err := tr.Get([]byte{0x12, 0x34})
+	val, err := tr.Get([]byte{0x12})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -263,10 +275,9 @@ func TestExpiredNodeGetMultipleRecords(t *testing.T) {
 	}
 
 	tr2 := NewEmpty(nil)
-	tr2.SetArchiveResolver(resolver)
-	tr2.root = &expiredNode{offset: 100, size: 200, archiveResolver: resolver}
+	tr2.root = &expiredNode{offset: offset, size: size}
 
-	val2, err := tr2.Get([]byte{0x45, 0x67})
+	val2, err := tr2.Get([]byte{0x45})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -276,20 +287,14 @@ func TestExpiredNodeGetMultipleRecords(t *testing.T) {
 }
 
 func TestExpiredNodeGetKeyNotFound(t *testing.T) {
-	leaf := &shortNode{
-		Key: hexToCompact(keybytesToHex([]byte{0x12})),
-		Val: valueNode([]byte("value1")),
+	records := []*archive.Record{
+		{Path: []byte{0x01, 0x02, 16}, Value: []byte("value1")},
 	}
-
-	resolver := func(offset, size uint64) ([]*archive.Record, error) {
-		return []*archive.Record{
-			{Path: []byte{0x01}, Value: nodeToBytes(leaf)},
-		}, nil
-	}
+	offset, size, cleanup := setupTestArchive(t, records)
+	defer cleanup()
 
 	tr := NewEmpty(nil)
-	tr.SetArchiveResolver(resolver)
-	tr.root = &expiredNode{offset: 100, size: 200, archiveResolver: resolver}
+	tr.root = &expiredNode{offset: offset, size: size}
 
 	val, err := tr.Get([]byte{0xff, 0xff})
 	if err != nil {
@@ -301,20 +306,14 @@ func TestExpiredNodeGetKeyNotFound(t *testing.T) {
 }
 
 func TestExpiredNodeGetPathMismatch(t *testing.T) {
-	leaf := &shortNode{
-		Key: hexToCompact(keybytesToHex([]byte{0x12})),
-		Val: valueNode([]byte("testvalue")),
+	records := []*archive.Record{
+		{Path: []byte{0x01, 0x02, 16}, Value: []byte("testvalue")},
 	}
-
-	resolver := func(offset, size uint64) ([]*archive.Record, error) {
-		return []*archive.Record{
-			{Path: []byte{0x01}, Value: nodeToBytes(leaf)},
-		}, nil
-	}
+	offset, size, cleanup := setupTestArchive(t, records)
+	defer cleanup()
 
 	tr := NewEmpty(nil)
-	tr.SetArchiveResolver(resolver)
-	tr.root = &expiredNode{offset: 100, size: 200, archiveResolver: resolver}
+	tr.root = &expiredNode{offset: offset, size: size}
 
 	val, err := tr.Get([]byte{0x19})
 	if err != nil {
@@ -326,20 +325,14 @@ func TestExpiredNodeGetPathMismatch(t *testing.T) {
 }
 
 func TestExpiredNodeInsert(t *testing.T) {
-	leaf := &shortNode{
-		Key: hexToCompact(keybytesToHex([]byte{0x12})),
-		Val: valueNode([]byte("existing")),
+	records := []*archive.Record{
+		{Path: []byte{0x01, 0x02, 16}, Value: []byte("existing")},
 	}
-
-	resolver := func(offset, size uint64) ([]*archive.Record, error) {
-		return []*archive.Record{
-			{Path: []byte{}, Value: nodeToBytes(leaf)},
-		}, nil
-	}
+	offset, size, cleanup := setupTestArchive(t, records)
+	defer cleanup()
 
 	tr := NewEmpty(nil)
-	tr.SetArchiveResolver(resolver)
-	tr.root = &expiredNode{offset: 100, size: 200, archiveResolver: resolver}
+	tr.root = &expiredNode{offset: offset, size: size}
 
 	err := tr.Update([]byte{0x45}, []byte("newvalue"))
 	if err != nil {
@@ -356,20 +349,14 @@ func TestExpiredNodeInsert(t *testing.T) {
 }
 
 func TestExpiredNodeUpdate(t *testing.T) {
-	leaf := &shortNode{
-		Key: hexToCompact(keybytesToHex([]byte{0x12})),
-		Val: valueNode([]byte("oldvalue")),
+	records := []*archive.Record{
+		{Path: []byte{0x01, 0x02, 16}, Value: []byte("oldvalue")},
 	}
-
-	resolver := func(offset, size uint64) ([]*archive.Record, error) {
-		return []*archive.Record{
-			{Path: []byte{}, Value: nodeToBytes(leaf)},
-		}, nil
-	}
+	offset, size, cleanup := setupTestArchive(t, records)
+	defer cleanup()
 
 	tr := NewEmpty(nil)
-	tr.SetArchiveResolver(resolver)
-	tr.root = &expiredNode{offset: 100, size: 200, archiveResolver: resolver}
+	tr.root = &expiredNode{offset: offset, size: size}
 
 	err := tr.Update([]byte{0x12}, []byte("newvalue"))
 	if err != nil {
@@ -386,28 +373,15 @@ func TestExpiredNodeUpdate(t *testing.T) {
 }
 
 func TestExpiredNodeDelete(t *testing.T) {
-	leaf1 := &shortNode{
-		Key: hexToCompact([]byte{0x02, 16}),
-		Val: valueNode([]byte("value1")),
+	records := []*archive.Record{
+		{Path: []byte{0x01, 0x02, 16}, Value: []byte("value1")},
+		{Path: []byte{0x04, 0x05, 16}, Value: []byte("value2")},
 	}
-	leaf2 := &shortNode{
-		Key: hexToCompact([]byte{0x05, 16}),
-		Val: valueNode([]byte("value2")),
-	}
-
-	branch := &fullNode{}
-	branch.Children[0x01] = leaf1
-	branch.Children[0x04] = leaf2
-
-	resolver := func(offset, size uint64) ([]*archive.Record, error) {
-		return []*archive.Record{
-			{Path: []byte{}, Value: nodeToBytes(branch)},
-		}, nil
-	}
+	offset, size, cleanup := setupTestArchive(t, records)
+	defer cleanup()
 
 	tr := NewEmpty(nil)
-	tr.SetArchiveResolver(resolver)
-	tr.root = &expiredNode{offset: 100, size: 200, archiveResolver: resolver}
+	tr.root = &expiredNode{offset: offset, size: size}
 
 	err := tr.Delete([]byte{0x12})
 	if err != nil {
@@ -432,22 +406,14 @@ func TestExpiredNodeDelete(t *testing.T) {
 }
 
 func TestTrieCopyPreservesArchiveResolver(t *testing.T) {
-	leaf := &shortNode{
-		Key: hexToCompact(keybytesToHex([]byte{0x12})),
-		Val: valueNode([]byte("testvalue")),
+	records := []*archive.Record{
+		{Path: []byte{0x01, 0x02, 16}, Value: []byte("testvalue")},
 	}
-
-	resolverCalled := false
-	resolver := func(offset, size uint64) ([]*archive.Record, error) {
-		resolverCalled = true
-		return []*archive.Record{
-			{Path: []byte{}, Value: nodeToBytes(leaf)},
-		}, nil
-	}
+	offset, size, cleanup := setupTestArchive(t, records)
+	defer cleanup()
 
 	tr := NewEmpty(nil)
-	tr.SetArchiveResolver(resolver)
-	tr.root = &expiredNode{offset: 100, size: 200, archiveResolver: resolver}
+	tr.root = &expiredNode{offset: offset, size: size}
 
 	trCopy := tr.Copy()
 
@@ -455,36 +421,180 @@ func TestTrieCopyPreservesArchiveResolver(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !resolverCalled {
-		t.Error("resolver was not called on copied trie")
-	}
 	if string(val) != "testvalue" {
 		t.Errorf("value mismatch: got %q, want %q", val, "testvalue")
 	}
 }
 
-func TestExpiredNodeGetNode(t *testing.T) {
-	leaf := &shortNode{
-		Key: hexToCompact(keybytesToHex([]byte{0x12})),
-		Val: valueNode([]byte("testvalue")),
+func TestWalkWithExpiredNodes(t *testing.T) {
+	records := []*archive.Record{
+		{Path: []byte{0x01, 0x02, 16}, Value: []byte("value1")},
+		{Path: []byte{0x04, 0x05, 16}, Value: []byte("value2")},
+		{Path: []byte{0x07, 0x08, 16}, Value: []byte("value3")},
 	}
-
-	resolverCalled := false
-	resolver := func(offset, size uint64) ([]*archive.Record, error) {
-		resolverCalled = true
-		return []*archive.Record{
-			{Path: []byte{}, Value: nodeToBytes(leaf)},
-		}, nil
-	}
+	offset, size, cleanup := setupTestArchive(t, records)
+	defer cleanup()
 
 	tr := NewEmpty(nil)
-	tr.SetArchiveResolver(resolver)
-	tr.root = &expiredNode{offset: 100, size: 200, archiveResolver: resolver}
+	tr.root = &expiredNode{offset: offset, size: size}
+
+	var leaves []string
+	stats, err := tr.Walk(func(path []byte, value []byte) error {
+		leaves = append(leaves, string(value))
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Walk failed: %v", err)
+	}
+	if stats.Leaves != 3 {
+		t.Errorf("expected 3 leaves, got %d", stats.Leaves)
+	}
+	if stats.ExpiredResolved != 1 {
+		t.Errorf("expected 1 expired resolved, got %d", stats.ExpiredResolved)
+	}
+	// Verify all values were visited
+	expected := map[string]bool{"value1": true, "value2": true, "value3": true}
+	for _, leaf := range leaves {
+		if !expected[leaf] {
+			t.Errorf("unexpected leaf value: %q", leaf)
+		}
+		delete(expected, leaf)
+	}
+	if len(expected) > 0 {
+		t.Errorf("missing leaves: %v", expected)
+	}
+}
+
+func TestWalkEmptyTrie(t *testing.T) {
+	tr := NewEmpty(nil)
+	stats, err := tr.Walk(func(path []byte, value []byte) error {
+		t.Error("callback should not be called for empty trie")
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Walk failed: %v", err)
+	}
+	if stats.Leaves != 0 || stats.ExpiredResolved != 0 {
+		t.Errorf("expected zero stats for empty trie, got leaves=%d expired=%d", stats.Leaves, stats.ExpiredResolved)
+	}
+}
+
+func TestWalkCallbackError(t *testing.T) {
+	records := []*archive.Record{
+		{Path: []byte{0x01, 0x02, 16}, Value: []byte("value1")},
+	}
+	offset, size, cleanup := setupTestArchive(t, records)
+	defer cleanup()
+
+	tr := NewEmpty(nil)
+	tr.root = &expiredNode{offset: offset, size: size}
+
+	testErr := errors.New("test error")
+	_, err := tr.Walk(func(path []byte, value []byte) error {
+		return testErr
+	})
+	if !errors.Is(err, testErr) {
+		t.Fatalf("expected test error, got %v", err)
+	}
+}
+
+// TestExpiredNodeResolvedSubtreeDirty verifies that when an expired node is
+// resolved and a sibling leaf is modified, the commit captures ALL resolved
+// nodes (not just the modified path). Without this fix, resolved-but-unmodified
+// nodes would be lost: not in the diff layer (clean) and not in the raw DB
+// (deleted by archiver).
+func TestExpiredNodeResolvedSubtreeDirty(t *testing.T) {
+	// Use large values (>32 bytes) so leaf nodes are NOT embedded in
+	// their parent. This matches production storage tries where
+	// intermediate nodes are large enough to be stored independently.
+	bigVal1 := bytes.Repeat([]byte("A"), 40)
+	bigVal2 := bytes.Repeat([]byte("B"), 40)
+
+	// Create an archive with records under different branches.
+	records := []*archive.Record{
+		{Path: []byte{0x01, 0x02, 16}, Value: bigVal1},
+		{Path: []byte{0x04, 0x05, 16}, Value: bigVal2},
+	}
+	offset, size, cleanup := setupTestArchive(t, records)
+	defer cleanup()
+
+	tr := NewEmpty(nil)
+	tr.root = &expiredNode{offset: offset, size: size}
+
+	// Insert a value that goes through one branch of the resolved subtree.
+	// This modifies path [1, ...] but leaves path [4, ...] unmodified.
+	if err := tr.Update([]byte{0x12}, bytes.Repeat([]byte("C"), 40)); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	// Commit the trie. The NodeSet should be non-nil because we modified data.
+	_, nodes := tr.Commit(false)
+	if nodes == nil {
+		t.Fatal("expected non-nil NodeSet after modifying expired subtree")
+	}
+
+	// The resolved-but-unmodified sibling (path [4, 5]) should also be
+	// captured in the NodeSet, because markSubtreeDirty ensures all resolved
+	// nodes are dirty. Count the nodes to verify.
+	nodeCount := len(nodes.Nodes)
+	// We expect at least 3 nodes: the root, the modified branch, and the
+	// sibling branch. The exact count depends on trie structure.
+	if nodeCount < 3 {
+		t.Errorf("expected at least 3 nodes in NodeSet (root + modified + sibling), got %d", nodeCount)
+	}
+}
+
+// TestMarkSubtreeDirty verifies that markSubtreeDirty correctly sets the dirty
+// flag on all nodes in a subtree while preserving cached hashes.
+func TestMarkSubtreeDirty(t *testing.T) {
+	// Build a small trie structure
+	leaf1 := &shortNode{Key: []byte{1, 16}, Val: valueNode("v1")}
+	leaf2 := &shortNode{Key: []byte{2, 16}, Val: valueNode("v2")}
+	branch := &fullNode{}
+	branch.Children[1] = leaf1
+	branch.Children[2] = leaf2
+
+	// Set hash but not dirty (as if loaded from DB)
+	branch.flags = nodeFlag{hash: hashNode("testhash"), dirty: false}
+	leaf1.flags = nodeFlag{hash: hashNode("hash1"), dirty: false}
+	leaf2.flags = nodeFlag{hash: hashNode("hash2"), dirty: false}
+
+	markSubtreeDirty(branch)
+
+	// All nodes should be dirty
+	if !branch.flags.dirty {
+		t.Error("branch should be dirty")
+	}
+	if !leaf1.flags.dirty {
+		t.Error("leaf1 should be dirty")
+	}
+	if !leaf2.flags.dirty {
+		t.Error("leaf2 should be dirty")
+	}
+
+	// Hashes should be preserved
+	if !bytes.Equal(branch.flags.hash, hashNode("testhash")) {
+		t.Error("branch hash should be preserved")
+	}
+	if !bytes.Equal(leaf1.flags.hash, hashNode("hash1")) {
+		t.Error("leaf1 hash should be preserved")
+	}
+	if !bytes.Equal(leaf2.flags.hash, hashNode("hash2")) {
+		t.Error("leaf2 hash should be preserved")
+	}
+}
+
+func TestExpiredNodeGetNode(t *testing.T) {
+	records := []*archive.Record{
+		{Path: []byte{0x01, 0x02, 16}, Value: []byte("testvalue")},
+	}
+	offset, size, cleanup := setupTestArchive(t, records)
+	defer cleanup()
+
+	tr := NewEmpty(nil)
+	tr.root = &expiredNode{offset: offset, size: size}
 
 	_, _, err := tr.GetNode(hexToCompact([]byte{0x01, 0x02}))
-	if !resolverCalled {
-		t.Error("resolver was not called during GetNode")
-	}
 	if err != nil && err.Error() != "non-consensus node" {
 		t.Fatalf("unexpected error: %v", err)
 	}

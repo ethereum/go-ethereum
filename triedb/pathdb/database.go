@@ -345,6 +345,30 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 	return db.tree.cap(root, maxDiffLayers)
 }
 
+// DiffHead returns the root hash of the topmost diff layer. If there are no
+// diff layers (only the disk layer), it returns the disk layer root and false.
+func (db *Database) DiffHead() (common.Hash, bool) {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
+	return db.tree.diffHead()
+}
+
+// DisableStateHistory closes and disables the state history freezer. This is
+// used by the archiver to bypass state history writes during diff layer flushing,
+// since the archiver only needs trie nodes committed to disk and state history
+// may have gaps from unclean shutdowns that prevent sequential appends.
+func (db *Database) DisableStateHistory() {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	if db.stateFreezer != nil {
+		db.stateFreezer.Close()
+		db.stateFreezer = nil
+		log.Info("Disabled state history freezer")
+	}
+}
+
 // Commit traverses downwards the layer tree from a specified layer with the
 // provided state root and all the layers below are flattened downwards. It
 // can be used alone and mostly for test purposes.

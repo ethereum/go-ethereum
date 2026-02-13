@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/archive"
 )
@@ -165,7 +166,8 @@ func decodeNodeUnsafe(hash, buf []byte) (node, error) {
 		}
 		offset := binary.BigEndian.Uint64(buf[1:])
 		size := binary.BigEndian.Uint64(buf[1+archive.OffsetSize:])
-		return &expiredNode{offset: offset, size: size, archiveResolver: archive.ArchivedNodeResolver}, nil
+		log.Debug("Decoded expired node", "offset", offset, "size", size, "hash", common.BytesToHash(hash))
+		return &expiredNode{offset: offset, size: size, cachedHash: hashNode(hash), archiveResolver: archive.ArchivedNodeResolver}, nil
 	}
 	elems, _, err := rlp.SplitList(buf)
 	if err != nil {
