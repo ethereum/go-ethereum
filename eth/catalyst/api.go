@@ -719,7 +719,7 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
 	}
 	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayload", attrs...)
-	defer spanEnd(err)
+	defer spanEnd(&err)
 	api.newPayloadLock.Lock()
 	defer api.newPayloadLock.Unlock()
 

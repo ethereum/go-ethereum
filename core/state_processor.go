@@ -108,7 +108,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 			telemetry.Int64Attribute("tx.index", int64(i)),
 		)
 		receipt, err := ApplyTransactionWithEVM(msg, gp, statedb, blockNumber, blockHash, context.Time, tx, usedGas, evm)
-		spanEnd(err)
+		spanEnd(&err)
 		if err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
@@ -134,7 +134,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 // postExecution processes the post-execution system calls if Prague is enabled.
 func postExecution(ctx context.Context, config *params.ChainConfig, block *types.Block, allLogs []*types.Log, evm *vm.EVM) (requests [][]byte, err error) {
 	_, _, spanEnd := telemetry.StartSpan(ctx, "core.postExecution")
-	defer spanEnd(err)
+	defer spanEnd(&err)
 	// Read requests if Prague is enabled.
 	if config.IsPrague(block.Number(), block.Time()) {
 		requests = [][]byte{}
