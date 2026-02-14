@@ -196,6 +196,13 @@ var (
 		utils.RPCTxSyncDefaultTimeoutFlag,
 		utils.RPCTxSyncMaxTimeoutFlag,
 		utils.RPCGlobalRangeLimitFlag,
+		utils.RPCTelemetryFlag,
+		utils.RPCTelemetryEndpointFlag,
+		utils.RPCTelemetryUserFlag,
+		utils.RPCTelemetryPasswordFlag,
+		utils.RPCTelemetryInstanceIDFlag,
+		utils.RPCTelemetryTagsFlag,
+		utils.RPCTelemetrySampleRatioFlag,
 	}
 
 	metricsFlags = []cli.Flag{
