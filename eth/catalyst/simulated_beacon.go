@@ -212,7 +212,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		Random:                random,
 		BeaconRoot:            &common.Hash{},
 	}, version, false)
-	fcSpanEnd(err)
+	fcSpanEnd(&err)
 	if err != nil {
 		return err
 	}
@@ -234,7 +234,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		Method:  "getPayloadV" + fmt.Sprintf("%d", version),
 	})
 	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true, nil, nil)
-	gpSpanEnd(err)
+	gpSpanEnd(&err)
 	if err != nil {
 		return err
 	}
@@ -283,7 +283,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		Method:  "newPayloadV" + fmt.Sprintf("%d", version),
 	})
 	_, err = c.engineAPI.newPayload(*payload, blobHashes, beaconRoot, requests, false)
-	npSpanEnd(err)
+	npSpanEnd(&err)
 	if err != nil {
 		return err
 	}
@@ -297,7 +297,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		Method:  "forkchoiceUpdatedV" + fmt.Sprintf("%d", version),
 	})
 	_, err = c.engineAPI.forkchoiceUpdated(fcuCtx, c.curForkchoiceState, nil, version, false)
-	fcuSpanEnd(err)
+	fcuSpanEnd(&err)
 	if err != nil {
 		return err
 	}

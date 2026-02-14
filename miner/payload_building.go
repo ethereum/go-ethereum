@@ -210,6 +210,24 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	return envelope
 }
 
+func (miner *Miner) runBuildIteration(ctx context.Context, iteration int, payload *Payload, params *generateParams, witness bool) {
+	ctx, span, spanEnd := telemetry.StartSpan(ctx, "miner.buildIteration",
+		telemetry.Int64Attribute("iteration", int64(iteration)),
+	)
+	var err error
+	defer spanEnd(&err)
+
+	start := time.Now()
+	r := miner.generateWork(ctx, params, witness)
+	err = r.err
+	if err == nil {
+		accepted := payload.update(r, time.Since(start))
+		span.SetAttributes(telemetry.BoolAttribute("update.accepted", accepted))
+	} else {
+		log.Info("Error while generating work", "id", payload.id, "err", err)
+	}
+}
+
 // buildPayload builds the payload according to the provided parameters.
 func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, witness bool) (result *Payload, err error) {
 	payloadID := args.Id()
@@ -218,7 +236,7 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 		telemetry.StringAttribute("parent.hash", args.Parent.String()),
 		telemetry.Int64Attribute("timestamp", int64(args.Timestamp)),
 	)
-	defer spanEnd(err)
+	defer spanEnd(&err)
 
 	// Build the initial version with no transaction included. It should be fast
 	// enough to run. The empty payload can at least make sure there is something
@@ -272,23 +290,11 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 			beaconRoot:  args.BeaconRoot,
 			noTxs:       false,
 		}
-
 		for {
 			select {
 			case <-timer.C:
 				iteration++
-				iterCtx, iterSpan, iterSpanEnd := telemetry.StartSpan(bCtx, "miner.buildIteration",
-					telemetry.Int64Attribute("iteration", int64(iteration)),
-				)
-				start := time.Now()
-				r := miner.generateWork(iterCtx, fullParams, witness)
-				if r.err == nil {
-					accepted := payload.update(r, time.Since(start))
-					iterSpan.SetAttributes(telemetry.BoolAttribute("update.accepted", accepted))
-				} else {
-					log.Info("Error while generating work", "id", payload.id, "err", r.err)
-				}
-				iterSpanEnd(r.err)
+				miner.runBuildIteration(bCtx, iteration, payload, fullParams, witness)
 				timer.Reset(miner.config.Recommit)
 			case <-payload.stop:
 				payload.lock.Lock()

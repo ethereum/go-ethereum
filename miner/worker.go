@@ -128,7 +128,7 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 			)
 		}
 		if result != nil {
-			spanEnd(result.err)
+			spanEnd(&result.err)
 		} else {
 			spanEnd(nil)
 		}
@@ -191,7 +191,7 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 
 	ctx, _, finalizeSpanEnd := telemetry.StartSpan(ctx, "miner.FinalizeAndAssemble")
 	block, err := miner.engine.FinalizeAndAssemble(ctx, miner.chain, work.header, work.state, &body, work.receipts)
-	finalizeSpanEnd(err)
+	finalizeSpanEnd(&err)
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
@@ -211,7 +211,7 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 // the pending transactions are not filled yet, only the empty task returned.
 func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, witness bool) (result *environment, err error) {
 	_, _, spanEnd := telemetry.StartSpan(ctx, "miner.prepareWork")
-	defer spanEnd(err)
+	defer spanEnd(&err)
 	miner.confMu.RLock()
 	defer miner.confMu.RUnlock()
 
@@ -318,7 +318,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 
 func (miner *Miner) commitTransaction(ctx context.Context, env *environment, tx *types.Transaction) (err error) {
 	_, _, spanEnd := telemetry.StartSpan(ctx, "miner.commitTransaction")
-	defer spanEnd(err)
+	defer spanEnd(&err)
 	if tx.Type() == types.BlobTxType {
 		return miner.commitBlobTransaction(env, tx)
 	}
@@ -499,7 +499,7 @@ func (miner *Miner) commitTransactions(ctx context.Context, env *environment, pl
 // be customized with the plugin in the future.
 func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int32, env *environment) (err error) {
 	ctx, span, spanEnd := telemetry.StartSpan(ctx, "miner.fillTransactions")
-	defer spanEnd(err)
+	defer spanEnd(&err)
 	miner.confMu.RLock()
 	tip := miner.config.GasPrice
 	prio := miner.prio

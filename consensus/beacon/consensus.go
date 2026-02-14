@@ -351,12 +351,10 @@ func (beacon *Beacon) FinalizeAndAssemble(ctx context.Context, chain consensus.C
 		telemetry.Int64Attribute("txs.count", int64(len(body.Transactions))),
 		telemetry.Int64Attribute("withdrawals.count", int64(len(body.Withdrawals))),
 	)
-	defer spanEnd(err)
+	defer spanEnd(&err)
 
 	if !beacon.IsPoSHeader(header) {
-		_, _, delegateEnd := telemetry.StartSpan(ctx, "consensus.beacon.delegateFinalizeAndAssemble")
 		block, delegateErr := beacon.ethone.FinalizeAndAssemble(ctx, chain, header, state, body, receipts)
-		delegateEnd(delegateErr)
 		return block, delegateErr
 	}
 	shanghai := chain.Config().IsShanghai(header.Number, header.Time)
@@ -372,19 +370,19 @@ func (beacon *Beacon) FinalizeAndAssemble(ctx context.Context, chain consensus.C
 		}
 	}
 	// Finalize and assemble the block.
-	_, _, finalizeEnd := telemetry.StartSpan(ctx, "consensus.beacon.Finalize")
+	_, _, finalizeSpanEnd := telemetry.StartSpan(ctx, "consensus.beacon.Finalize")
 	beacon.Finalize(chain, header, state, body)
-	finalizeEnd(nil)
+	finalizeSpanEnd(nil)
 
 	// Assign the final state root to header.
-	_, _, rootEnd := telemetry.StartSpan(ctx, "consensus.beacon.IntermediateRoot")
+	_, _, rootSpanEnd := telemetry.StartSpan(ctx, "consensus.beacon.IntermediateRoot")
 	header.Root = state.IntermediateRoot(true)
-	rootEnd(nil)
+	rootSpanEnd(nil)
 
 	// Assemble the final block.
-	_, _, blockEnd := telemetry.StartSpan(ctx, "consensus.beacon.NewBlock")
+	_, _, blockSpanEnd := telemetry.StartSpan(ctx, "consensus.beacon.NewBlock")
 	block := types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
-	blockEnd(nil)
+	blockSpanEnd(nil)
 	return block, nil
 }
 
