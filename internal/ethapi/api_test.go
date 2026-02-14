@@ -1015,7 +1015,7 @@ func TestCall(t *testing.T) {
 					Balance: big.NewInt(params.Ether),
 					Nonce:   1,
 					Storage: map[common.Hash]common.Hash{
-						common.Hash{}: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001"),
+						{}: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001"),
 					},
 				},
 			},
@@ -3796,7 +3796,7 @@ func TestCreateAccessListWithStateOverrides(t *testing.T) {
 				Balance: (*hexutil.Big)(big.NewInt(1000000000000000000)),
 				Nonce:   &nonce,
 				State: map[common.Hash]common.Hash{
-					common.Hash{}: common.HexToHash("0x000000000000000000000000000000000000000000000000000000000000002a"),
+					{}: common.HexToHash("0x000000000000000000000000000000000000000000000000000000000000002a"),
 				},
 			},
 		}
