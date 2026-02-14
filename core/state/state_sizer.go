@@ -346,7 +346,7 @@ func (t *SizeTracker) run() {
 
 			// Evict the stale statistics
 			heap.Push(&h, stats[u.root])
-			for len(h) > 0 && u.blockNumber-h[0].BlockNumber > statEvictThreshold {
+			for len(h) > 0 && u.blockNumber > h[0].BlockNumber && u.blockNumber-h[0].BlockNumber > statEvictThreshold {
 				delete(stats, h[0].StateRoot)
 				heap.Pop(&h)
 			}
