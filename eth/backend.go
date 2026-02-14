@@ -222,17 +222,19 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	var (
 		options = &core.BlockChainConfig{
-			TrieCleanLimit:   config.TrieCleanCache,
-			NoPrefetch:       config.NoPrefetch,
-			TrieDirtyLimit:   config.TrieDirtyCache,
-			ArchiveMode:      config.NoPruning,
-			TrieTimeLimit:    config.TrieTimeout,
-			SnapshotLimit:    config.SnapshotCache,
-			Preimages:        config.Preimages,
-			StateHistory:     config.StateHistory,
-			StateScheme:      scheme,
-			ChainHistoryMode: config.HistoryMode,
-			TxLookupLimit:    int64(min(config.TransactionHistory, math.MaxInt64)),
+			TrieCleanLimit:          config.TrieCleanCache,
+			NoPrefetch:              config.NoPrefetch,
+			TrieDirtyLimit:          config.TrieDirtyCache,
+			ArchiveMode:             config.NoPruning,
+			TrieTimeLimit:           config.TrieTimeout,
+			SnapshotLimit:           config.SnapshotCache,
+			Preimages:               config.Preimages,
+			StateHistory:            config.StateHistory,
+			TrienodeHistory:         config.TrienodeHistory,
+			NodeFullValueCheckpoint: config.NodeFullValueCheckpoint,
+			StateScheme:             scheme,
+			ChainHistoryMode:        config.HistoryMode,
+			TxLookupLimit:           int64(min(config.TransactionHistory, math.MaxInt64)),
 			VmConfig: vm.Config{
 				EnablePreimageRecording: config.EnablePreimageRecording,
 				EnableWitnessStats:      config.EnableWitnessStats,
@@ -493,6 +495,9 @@ func (s *Ethereum) updateFilterMapsHeads() {
 		if head == nil || newHead.Hash() != head.Hash() {
 			head = newHead
 			chainView := s.newChainView(head)
+			if chainView == nil {
+				return
+			}
 			historyCutoff, _ := s.blockchain.HistoryPruningCutoff()
 			var finalBlock uint64
 			if fb := s.blockchain.CurrentFinalBlock(); fb != nil {

@@ -48,11 +48,11 @@ func (s Storage) Copy() Storage {
 // - Account values as well as storages can be accessed and modified through the object.
 // - Finally, call commit to return the changes of storage trie and update account data.
 type stateObject struct {
-	db       *StateDB
-	address  common.Address      // address of ethereum account
-	addrHash common.Hash         // hash of ethereum address of the account
-	origin   *types.StateAccount // Account original data without any change applied, nil means it was not existent
-	data     types.StateAccount  // Account data with all mutations applied in the scope of block
+	db          *StateDB
+	address     common.Address      // address of ethereum account
+	addressHash *common.Hash        // hash of ethereum address of the account
+	origin      *types.StateAccount // Account original data without any change applied, nil means it was not existent
+	data        types.StateAccount  // Account data with all mutations applied in the scope of block
 
 	// Write caches.
 	trie Trie   // storage trie, which becomes non-nil on first access
@@ -102,7 +102,6 @@ func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *s
 	return &stateObject{
 		db:                 db,
 		address:            address,
-		addrHash:           crypto.Keccak256Hash(address[:]),
 		origin:             origin,
 		data:               *acct,
 		originStorage:      make(Storage),
@@ -110,6 +109,14 @@ func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *s
 		pendingStorage:     make(Storage),
 		uncommittedStorage: make(Storage),
 	}
+}
+
+func (s *stateObject) addrHash() common.Hash {
+	if s.addressHash == nil {
+		h := crypto.Keccak256Hash(s.address[:])
+		s.addressHash = &h
+	}
+	return *s.addressHash
 }
 
 func (s *stateObject) markSelfdestructed() {
@@ -151,7 +158,7 @@ func (s *stateObject) getPrefetchedTrie() Trie {
 		return nil
 	}
 	// Attempt to retrieve the trie from the prefetcher
-	return s.db.prefetcher.trie(s.addrHash, s.data.Root)
+	return s.db.prefetcher.trie(s.addrHash(), s.data.Root)
 }
 
 // GetState retrieves a value associated with the given storage key.
@@ -203,7 +210,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 
 	// Schedule the resolved storage slots for prefetching if it's enabled.
 	if s.db.prefetcher != nil && s.data.Root != types.EmptyRootHash {
-		if err = s.db.prefetcher.prefetch(s.addrHash, s.origin.Root, s.address, nil, []common.Hash{key}, true); err != nil {
+		if err = s.db.prefetcher.prefetch(s.addrHash(), s.origin.Root, s.address, nil, []common.Hash{key}, true); err != nil {
 			log.Error("Failed to prefetch storage slot", "addr", s.address, "key", key, "err", err)
 		}
 	}
@@ -264,7 +271,7 @@ func (s *stateObject) finalise() {
 		s.pendingStorage[key] = value
 	}
 	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
-		if err := s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, nil, slotsToPrefetch, false); err != nil {
+		if err := s.db.prefetcher.prefetch(s.addrHash(), s.data.Root, s.address, nil, slotsToPrefetch, false); err != nil {
 			log.Error("Failed to prefetch slots", "addr", s.address, "slots", len(slotsToPrefetch), "err", err)
 		}
 	}
@@ -359,7 +366,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		s.db.StorageDeleted.Add(1)
 	}
 	if s.db.prefetcher != nil {
-		s.db.prefetcher.used(s.addrHash, s.data.Root, nil, used)
+		s.db.prefetcher.used(s.addrHash(), s.data.Root, nil, used)
 	}
 	s.uncommittedStorage = make(Storage) // empties the commit markers
 	return tr, nil
@@ -491,7 +498,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	obj := &stateObject{
 		db:                 db,
 		address:            s.address,
-		addrHash:           s.addrHash,
+		addressHash:        nil,
 		origin:             s.origin,
 		data:               s.data,
 		code:               s.code,
@@ -541,6 +548,7 @@ func (s *stateObject) Code() []byte {
 	defer func(start time.Time) {
 		s.db.CodeLoaded += 1
 		s.db.CodeReads += time.Since(start)
+		s.db.CodeLoadBytes += len(s.code)
 	}(time.Now())
 
 	code, err := s.db.reader.Code(s.address, common.BytesToHash(s.CodeHash()))

@@ -300,10 +300,14 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		// debt will be less than 1GB, but with more frequent compactions scheduled.
 		L0CompactionThreshold: 2,
 	}
+	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
+	// for more details.
+	opt.Experimental.ReadSamplingMultiplier = -1
+
 	// These two settings define the conditions under which compaction concurrency
 	// is increased. Specifically, one additional compaction job will be enabled when:
 	// - there is one more overlapping sub-level0;
-	// - there is an additional 512 MB of compaction debt;
+	// - there is an additional 256 MB of compaction debt;
 	//
 	// The maximum concurrency is still capped by MaxConcurrentCompactions, but with
 	// these settings compactions can scale up more readily.

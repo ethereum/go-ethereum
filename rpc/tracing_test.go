@@ -21,7 +21,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
@@ -60,15 +63,32 @@ func newTracingServer(t *testing.T) (*Server, *sdktrace.TracerProvider, *tracete
 
 // TestTracingHTTP verifies that RPC spans are emitted when processing HTTP requests.
 func TestTracingHTTP(t *testing.T) {
-	t.Parallel()
+	// Not parallel: this test modifies the global otel TextMapPropagator.
+
+	// Set up a propagator to extract W3C Trace Context headers.
+	originalPropagator := otel.GetTextMapPropagator()
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	t.Cleanup(func() { otel.SetTextMapPropagator(originalPropagator) })
+
 	server, tracer, exporter := newTracingServer(t)
 	httpsrv := httptest.NewServer(server)
 	t.Cleanup(httpsrv.Close)
+
+	// Define the expected trace and span IDs for context propagation.
+	const (
+		traceID      = "4bf92f3577b34da6a3ce929d0e0e4736"
+		parentSpanID = "00f067aa0ba902b7"
+		traceparent  = "00-" + traceID + "-" + parentSpanID + "-01"
+	)
+
 	client, err := DialHTTP(httpsrv.URL)
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
 	t.Cleanup(client.Close)
+
+	// Set trace context headers.
+	client.SetHeader("traceparent", traceparent)
 
 	// Make a successful RPC call.
 	var result echoResult
@@ -92,8 +112,10 @@ func TestTracingHTTP(t *testing.T) {
 		}
 	}
 	if rpcSpan == nil {
-		t.Fatalf("jsonrpc.test/echo span not found.")
+		t.Fatalf("jsonrpc.test/echo span not found")
 	}
+
+	// Verify span attributes.
 	attrs := attributeMap(rpcSpan.Attributes)
 	if attrs["rpc.system"] != "jsonrpc" {
 		t.Errorf("expected rpc.system=jsonrpc, got %v", attrs["rpc.system"])
@@ -106,6 +128,60 @@ func TestTracingHTTP(t *testing.T) {
 	}
 	if _, ok := attrs["rpc.jsonrpc.request_id"]; !ok {
 		t.Errorf("expected rpc.jsonrpc.request_id attribute to be set")
+	}
+
+	// Verify the span's parent matches the traceparent header values.
+	if got := rpcSpan.Parent.TraceID().String(); got != traceID {
+		t.Errorf("parent trace ID mismatch: got %s, want %s", got, traceID)
+	}
+	if got := rpcSpan.Parent.SpanID().String(); got != parentSpanID {
+		t.Errorf("parent span ID mismatch: got %s, want %s", got, parentSpanID)
+	}
+	if !rpcSpan.Parent.IsRemote() {
+		t.Error("expected parent span context to be marked as remote")
+	}
+}
+
+// TestTracingErrorRecording verifies that errors are recorded on spans.
+func TestTracingHTTPErrorRecording(t *testing.T) {
+	t.Parallel()
+	server, tracer, exporter := newTracingServer(t)
+	httpsrv := httptest.NewServer(server)
+	t.Cleanup(httpsrv.Close)
+	client, err := DialHTTP(httpsrv.URL)
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	t.Cleanup(client.Close)
+
+	// Call a method that returns an error.
+	var result any
+	err = client.Call(&result, "test_returnError")
+	if err == nil {
+		t.Fatal("expected error from test_returnError")
+	}
+
+	// Flush and verify spans recorded the error.
+	if err := tracer.ForceFlush(context.Background()); err != nil {
+		t.Fatalf("failed to flush: %v", err)
+	}
+	spans := exporter.GetSpans()
+
+	// Only the runMethod span should have error status.
+	if len(spans) == 0 {
+		t.Fatal("no spans were emitted")
+	}
+	for _, span := range spans {
+		switch span.Name {
+		case "rpc.runMethod":
+			if span.Status.Code != codes.Error {
+				t.Errorf("expected %s span status Error, got %v", span.Name, span.Status.Code)
+			}
+		default:
+			if span.Status.Code == codes.Error {
+				t.Errorf("unexpected error status on span %s", span.Name)
+			}
+		}
 	}
 }
 

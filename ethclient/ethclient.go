@@ -729,9 +729,11 @@ func (ec *Client) SendRawTransactionSync(
 	rawTx []byte,
 	timeout *time.Duration,
 ) (*types.Receipt, error) {
-	var ms *hexutil.Uint64
+	var ms *uint64
 	if timeout != nil {
-		if d := hexutil.Uint64(timeout.Milliseconds()); d > 0 {
+		msInt := timeout.Milliseconds()
+		if msInt > 0 {
+			d := uint64(msInt)
 			ms = &d
 		}
 	}

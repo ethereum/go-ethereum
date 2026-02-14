@@ -118,8 +118,8 @@ func (sc *BlobTxSidecar) ToV1() error {
 	}
 	if sc.Version == BlobSidecarVersion0 {
 		proofs := make([]kzg4844.Proof, 0, len(sc.Blobs)*kzg4844.CellProofsPerBlob)
-		for _, blob := range sc.Blobs {
-			cellProofs, err := kzg4844.ComputeCellProofs(&blob)
+		for i := range sc.Blobs {
+			cellProofs, err := kzg4844.ComputeCellProofs(&sc.Blobs[i])
 			if err != nil {
 				return err
 			}

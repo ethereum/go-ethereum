@@ -170,12 +170,13 @@ func (s *stateSet) accountList() []common.Hash {
 	if list != nil {
 		return list
 	}
-	// No old sorted account list exists, generate a new one. It's possible that
-	// multiple threads waiting for the write lock may regenerate the list
-	// multiple times, which is acceptable.
 	s.listLock.Lock()
 	defer s.listLock.Unlock()
 
+	// Double check after acquiring the write lock
+	if list = s.accountListSorted; list != nil {
+		return list
+	}
 	list = slices.SortedFunc(maps.Keys(s.accountData), common.Hash.Cmp)
 	s.accountListSorted = list
 	return list
@@ -200,12 +201,13 @@ func (s *stateSet) storageList(accountHash common.Hash) []common.Hash {
 	}
 	s.listLock.RUnlock()
 
-	// No old sorted account list exists, generate a new one. It's possible that
-	// multiple threads waiting for the write lock may regenerate the list
-	// multiple times, which is acceptable.
 	s.listLock.Lock()
 	defer s.listLock.Unlock()
 
+	// Double check after acquiring the write lock
+	if list := s.storageListSorted[accountHash]; list != nil {
+		return list
+	}
 	list := slices.SortedFunc(maps.Keys(s.storageData[accountHash]), common.Hash.Cmp)
 	s.storageListSorted[accountHash] = list
 	return list
@@ -340,7 +342,10 @@ func (s *stateSet) encode(w io.Writer) error {
 		AddrHashes []common.Hash
 		Accounts   [][]byte
 	}
-	var enc accounts
+	enc := accounts{
+		AddrHashes: make([]common.Hash, 0, len(s.accountData)),
+		Accounts:   make([][]byte, 0, len(s.accountData)),
+	}
 	for addrHash, blob := range s.accountData {
 		enc.AddrHashes = append(enc.AddrHashes, addrHash)
 		enc.Accounts = append(enc.Accounts, blob)
@@ -503,7 +508,10 @@ func (s *StateSetWithOrigin) encode(w io.Writer) error {
 		Addresses []common.Address
 		Accounts  [][]byte
 	}
-	var accounts Accounts
+	accounts := Accounts{
+		Addresses: make([]common.Address, 0, len(s.accountOrigin)),
+		Accounts:  make([][]byte, 0, len(s.accountOrigin)),
+	}
 	for address, blob := range s.accountOrigin {
 		accounts.Addresses = append(accounts.Addresses, address)
 		accounts.Accounts = append(accounts.Accounts, blob)

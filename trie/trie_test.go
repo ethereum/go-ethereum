@@ -35,12 +35,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
-	"golang.org/x/crypto/sha3"
 )
 
 func init() {
@@ -968,7 +968,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 		prng := rand.New(rand.NewSource(int64(count)))
 		// This spongeDb is used to check the sequence of disk-db-writes
 		s := &spongeDb{
-			sponge: sha3.NewLegacyKeccak256(),
+			sponge: keccak.NewLegacyKeccak256(),
 			id:     "a",
 			values: make(map[string]string),
 		}
@@ -977,7 +977,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 
 		// Another sponge is used for the stacktrie commits
 		stackTrieSponge := &spongeDb{
-			sponge: sha3.NewLegacyKeccak256(),
+			sponge: keccak.NewLegacyKeccak256(),
 			id:     "b",
 			values: make(map[string]string),
 		}
@@ -1040,7 +1040,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 // not fit into 32 bytes, rlp-encoded. However, it's still the correct thing to do.
 func TestCommitSequenceSmallRoot(t *testing.T) {
 	s := &spongeDb{
-		sponge: sha3.NewLegacyKeccak256(),
+		sponge: keccak.NewLegacyKeccak256(),
 		id:     "a",
 		values: make(map[string]string),
 	}
@@ -1049,7 +1049,7 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 
 	// Another sponge is used for the stacktrie commits
 	stackTrieSponge := &spongeDb{
-		sponge: sha3.NewLegacyKeccak256(),
+		sponge: keccak.NewLegacyKeccak256(),
 		id:     "b",
 		values: make(map[string]string),
 	}
