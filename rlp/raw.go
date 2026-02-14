@@ -44,6 +44,9 @@ type RawList[T any] struct {
 	// The implementation code mostly works with the Content method because it
 	// returns something valid either way.
 	enc []byte
+
+	// length holds the number of items in the list.
+	length int
 }
 
 // Content returns the RLP-encoded data of the list.
@@ -87,7 +90,14 @@ func (r *RawList[T]) DecodeRLP(s *Stream) error {
 	if err := s.readFull(enc[9:]); err != nil {
 		return err
 	}
-	*r = RawList[T]{enc: enc}
+	n, err := CountValues(enc[9:])
+	if err != nil {
+		if err == ErrValueTooLarge {
+			return ErrElemTooLarge
+		}
+		return err
+	}
+	*r = RawList[T]{enc: enc, length: n}
 	return nil
 }
 
@@ -105,8 +115,7 @@ func (r *RawList[T]) Items() ([]T, error) {
 
 // Len returns the number of items in the list.
 func (r *RawList[T]) Len() int {
-	len, _ := CountValues(r.Content())
-	return len
+	return r.length
 }
 
 // Size returns the encoded size of the list.
@@ -114,16 +123,11 @@ func (r *RawList[T]) Size() uint64 {
 	return ListSize(uint64(len(r.Content())))
 }
 
-// Empty returns true if the list contains no items.
-func (r *RawList[T]) Empty() bool {
-	return len(r.Content()) == 0
-}
-
 // ContentIterator returns an iterator over the content of the list.
 // Note the offsets returned by iterator.Offset are relative to the
 // Content bytes of the list.
-func (r *RawList[T]) ContentIterator() *Iterator {
-	return newIterator(r.Content())
+func (r *RawList[T]) ContentIterator() Iterator {
+	return newIterator(r.Content(), 0)
 }
 
 // Append adds an item to the end of the list.
@@ -142,6 +146,25 @@ func (r *RawList[T]) Append(item T) error {
 	end := prevEnd + eb.size()
 	r.enc = slices.Grow(r.enc, eb.size())[:end]
 	eb.copyTo(r.enc[prevEnd:end])
+	r.length++
+	return nil
+}
+
+// AppendRaw adds an encoded item to the list.
+// The given byte slice must contain exactly one RLP value.
+func (r *RawList[T]) AppendRaw(b []byte) error {
+	_, tagsize, contentsize, err := readKind(b)
+	if err != nil {
+		return err
+	}
+	if tagsize+contentsize != uint64(len(b)) {
+		return fmt.Errorf("rlp: input has trailing bytes in AppendRaw")
+	}
+	if r.enc == nil {
+		r.enc = make([]byte, 9)
+	}
+	r.enc = append(r.enc, b...)
+	r.length++
 	return nil
 }
 
@@ -262,7 +285,7 @@ func CountValues(b []byte) (int, error) {
 	for ; len(b) > 0; i++ {
 		_, tagsize, size, err := readKind(b)
 		if err != nil {
-			return 0, err
+			return i + 1, err
 		}
 		b = b[tagsize+size:]
 	}

@@ -25,20 +25,20 @@ type Iterator struct {
 }
 
 // NewListIterator creates an iterator for the (list) represented by data.
-func NewListIterator(data RawValue) (*Iterator, error) {
+func NewListIterator(data RawValue) (Iterator, error) {
 	k, t, c, err := readKind(data)
 	if err != nil {
-		return nil, err
+		return Iterator{}, err
 	}
 	if k != List {
-		return nil, ErrExpectedList
+		return Iterator{}, ErrExpectedList
 	}
-	it := &Iterator{data: data[t : t+c], offset: int(t)}
+	it := newIterator(data[t:t+c], int(t))
 	return it, nil
 }
 
-func newIterator(data []byte) *Iterator {
-	return &Iterator{data: data}
+func newIterator(data []byte, initialOffset int) Iterator {
+	return Iterator{data: data, offset: initialOffset}
 }
 
 // Next forwards the iterator one step.
@@ -64,6 +64,11 @@ func (it *Iterator) Next() bool {
 	return true
 }
 
+// Value returns the current value.
+func (it *Iterator) Value() []byte {
+	return it.next
+}
+
 // Count returns the remaining number of items.
 // Note this is O(n) and the result may be incorrect if the list data is invalid.
 // The returned count is always an upper bound on the remaining items
@@ -71,11 +76,6 @@ func (it *Iterator) Next() bool {
 func (it *Iterator) Count() int {
 	count, _ := CountValues(it.data)
 	return count
-}
-
-// Value returns the current value.
-func (it *Iterator) Value() []byte {
-	return it.next
 }
 
 // Offset returns the offset of the current value into the list data.
