@@ -46,16 +46,16 @@ func BoolAttribute(key string, val bool) Attribute {
 }
 
 // StartSpan creates a SpanKind=INTERNAL span.
-func StartSpan(ctx context.Context, spanName string, attributes ...Attribute) (context.Context, trace.Span, func(error)) {
+func StartSpan(ctx context.Context, spanName string, attributes ...Attribute) (context.Context, trace.Span, func(*error)) {
 	return StartSpanWithTracer(ctx, otel.Tracer(""), spanName, attributes...)
 }
 
 // StartSpanWithTracer requires a tracer to be passed in and creates a SpanKind=INTERNAL span.
-func StartSpanWithTracer(ctx context.Context, tracer trace.Tracer, name string, attributes ...Attribute) (context.Context, trace.Span, func(error)) {
+func StartSpanWithTracer(ctx context.Context, tracer trace.Tracer, name string, attributes ...Attribute) (context.Context, trace.Span, func(*error)) {
 	// Don't create a span if there's no parent span in the context.
 	parent := trace.SpanFromContext(ctx)
 	if !parent.SpanContext().IsValid() {
-		return ctx, parent, func(error) {}
+		return ctx, parent, func(*error) {}
 	}
 	return startSpan(ctx, tracer, trace.SpanKindInternal, name, attributes...)
 }
@@ -72,7 +72,7 @@ type RPCInfo struct {
 // The span name is formatted as $rpcSystem.$rpcService/$rpcMethod
 // (e.g. "jsonrpc.engine/newPayloadV4") which follows the Open Telemetry
 // semantic convensions: https://opentelemetry.io/docs/specs/semconv/rpc/rpc-spans/#span-name.
-func StartServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, others ...Attribute) (context.Context, func(error)) {
+func StartServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, others ...Attribute) (context.Context, func(*error)) {
 	var (
 		name       = fmt.Sprintf("%s.%s/%s", rpc.System, rpc.Service, rpc.Method)
 		attributes = append([]Attribute{
@@ -89,7 +89,7 @@ func StartServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, othe
 }
 
 // startSpan creates a span with the given kind.
-func startSpan(ctx context.Context, tracer trace.Tracer, kind trace.SpanKind, spanName string, attributes ...Attribute) (context.Context, trace.Span, func(error)) {
+func startSpan(ctx context.Context, tracer trace.Tracer, kind trace.SpanKind, spanName string, attributes ...Attribute) (context.Context, trace.Span, func(*error)) {
 	ctx, span := tracer.Start(ctx, spanName, trace.WithSpanKind(kind))
 	if len(attributes) > 0 {
 		span.SetAttributes(attributes...)
@@ -98,11 +98,11 @@ func startSpan(ctx context.Context, tracer trace.Tracer, kind trace.SpanKind, sp
 }
 
 // endSpan ends the span and handles error recording.
-func endSpan(span trace.Span) func(error) {
-	return func(err error) {
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
+func endSpan(span trace.Span) func(*error) {
+	return func(err *error) {
+		if err != nil && *err != nil {
+			span.RecordError(*err)
+			span.SetStatus(codes.Error, (*err).Error())
 		}
 		span.End()
 	}

@@ -1042,6 +1042,55 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	// RPC Telemetry
+	RPCTelemetryFlag = &cli.BoolFlag{
+		Name:     "rpc.telemetry",
+		Usage:    "Enable RPC telemetry",
+		Category: flags.APICategory,
+	}
+
+	RPCTelemetryEndpointFlag = &cli.StringFlag{
+		Name:     "rpc.telemetry.endpoint",
+		Usage:    "Defines where RPC telemetry is sent (e.g., http://localhost:4318)",
+		Category: flags.APICategory,
+	}
+
+	RPCTelemetryUserFlag = &cli.StringFlag{
+		Name:     "rpc.telemetry.username",
+		Usage:    "HTTP Basic Auth username for OpenTelemetry",
+		Category: flags.APICategory,
+	}
+
+	RPCTelemetryPasswordFlag = &cli.StringFlag{
+		Name:     "rpc.telemetry.password",
+		Usage:    "HTTP Basic Auth password for OpenTelemetry",
+		Category: flags.APICategory,
+	}
+
+	RPCTelemetryInstanceIDFlag = &cli.StringFlag{
+		Name:     "rpc.telemetry.instance-id",
+		Usage:    "OpenTelemetry instance ID",
+		Category: flags.APICategory,
+	}
+
+	RPCTelemetryTagsFlag = &cli.StringFlag{
+		Name:     "rpc.telemetry.tags",
+		Usage:    "Comma-separated tags (key/values) added as attributes to the OpenTelemetry resource struct",
+		Category: flags.APICategory,
+	}
+
+	RPCTelemetrySampleRatioFlag = &cli.Float64Flag{
+		Name:     "rpc.telemetry.sample-ratio",
+		Usage:    "Defines the sampling ratio for RPC telemetry (0.0 to 1.0)",
+		Value:    1.0,
+		Category: flags.APICategory,
+	}
+	// Era flags are a group of flags related to the era archive format.
+	EraFormatFlag = &cli.StringFlag{
+		Name:  "era.format",
+		Usage: "Archive format: 'era1' or 'erae'",
+	}
 )
 
 var (
@@ -1432,6 +1481,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	setNodeUserIdent(ctx, cfg)
 	SetDataDir(ctx, cfg)
 	setSmartCard(ctx, cfg)
+	setOpenTelemetry(ctx, cfg)
 
 	if ctx.IsSet(JWTSecretFlag.Name) {
 		cfg.JWTSecret = ctx.String(JWTSecretFlag.Name)
@@ -1497,6 +1547,33 @@ func setSmartCard(ctx *cli.Context, cfg *node.Config) {
 	}
 	// Smartcard daemon path exists and is a socket, enable it
 	cfg.SmartCardDaemonPath = path
+}
+
+func setOpenTelemetry(ctx *cli.Context, cfg *node.Config) {
+	tcfg := &cfg.OpenTelemetry
+	if ctx.IsSet(RPCTelemetryFlag.Name) {
+		tcfg.Enabled = ctx.Bool(RPCTelemetryFlag.Name)
+	}
+	if ctx.IsSet(RPCTelemetryEndpointFlag.Name) {
+		tcfg.Endpoint = ctx.String(RPCTelemetryEndpointFlag.Name)
+	}
+	if ctx.IsSet(RPCTelemetryUserFlag.Name) {
+		tcfg.AuthUser = ctx.String(RPCTelemetryUserFlag.Name)
+	}
+	if ctx.IsSet(RPCTelemetryPasswordFlag.Name) {
+		tcfg.AuthPassword = ctx.String(RPCTelemetryPasswordFlag.Name)
+	}
+	if ctx.IsSet(RPCTelemetryInstanceIDFlag.Name) {
+		tcfg.InstanceID = ctx.String(RPCTelemetryInstanceIDFlag.Name)
+	}
+	if ctx.IsSet(RPCTelemetryTagsFlag.Name) {
+		tcfg.Tags = ctx.String(RPCTelemetryTagsFlag.Name)
+	}
+	tcfg.SampleRatio = ctx.Float64(RPCTelemetrySampleRatioFlag.Name)
+
+	if tcfg.Endpoint != "" && !tcfg.Enabled {
+		log.Warn(fmt.Sprintf("OpenTelemetry endpoint configured but telemetry is not enabled, use --%s to enable.", RPCTelemetryFlag.Name))
+	}
 }
 
 func SetDataDir(ctx *cli.Context, cfg *node.Config) {
