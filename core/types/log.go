@@ -85,14 +85,14 @@ func EthTransferLog(blockNumber *big.Int, from, to common.Address, amount *uint2
 	}
 }
 
-// EthSelfDestructLog creates and ETH self-destruct burn log according to EIP-7708.
+// EthBurnLog creates an ETH burn log according to EIP-7708.
 // Specification: https://eips.ethereum.org/EIPS/eip-7708
-func EthSelfDestructLog(blockNumber *big.Int, from common.Address, amount *uint256.Int) *Log {
+func EthBurnLog(blockNumber *big.Int, from common.Address, amount *uint256.Int) *Log {
 	amount32 := amount.Bytes32()
 	return &Log{
 		Address: params.SystemAddress,
 		Topics: []common.Hash{
-			params.EthSelfDestructLogEvent,
+			params.EthBurnLogEvent,
 			common.BytesToHash(from.Bytes()),
 		},
 		Data: amount32[:],
