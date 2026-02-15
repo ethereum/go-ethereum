@@ -34,7 +34,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 
@@ -386,10 +385,11 @@ func ensureInt(x interface{}) (int, error) {
 	case int:
 		return v, nil
 	case float64:
-		if math.IsNaN(v) || math.IsInf(v, 0) || v != math.Trunc(v) || v < 0 || v > math.MaxInt32 {
+		n := int(v)
+		if v != float64(n) || n < 0 {
 			return 0, fmt.Errorf("invalid KDF parameter: %v", v)
 		}
-		return int(v), nil
+		return n, nil
 	default:
 		return 0, fmt.Errorf("invalid KDF parameter: expected number, got %T", x)
 	}
