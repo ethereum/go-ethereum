@@ -63,6 +63,18 @@ var receiptsTests = []struct {
 		input: []types.ReceiptForStorage{{CumulativeGasUsed: 555, Status: 1, Logs: receiptsTestLogs2}},
 		txs:   []*types.Transaction{types.NewTx(&types.AccessListTx{})},
 	},
+	{
+		input: []types.ReceiptForStorage{
+			{CumulativeGasUsed: 111, PostState: common.HexToHash("0x1111").Bytes(), Logs: receiptsTestLogs1},
+			{CumulativeGasUsed: 222, Status: 0, Logs: receiptsTestLogs2},
+			{CumulativeGasUsed: 333, Status: 1, Logs: nil},
+		},
+		txs: []*types.Transaction{
+			types.NewTx(&types.LegacyTx{}),
+			types.NewTx(&types.AccessListTx{}),
+			types.NewTx(&types.DynamicFeeTx{}),
+		},
+	},
 }
 
 func init() {
@@ -103,7 +115,10 @@ func TestReceiptList69(t *testing.T) {
 		if err := rlp.DecodeBytes(network, &rl); err != nil {
 			t.Fatalf("test[%d]: can't decode network receipts: %v", i, err)
 		}
-		rlStorageEnc := rl.EncodeForStorage()
+		rlStorageEnc, err := rl.EncodeForStorage()
+		if err != nil {
+			t.Fatalf("test[%d]: error from EncodeForStorage: %v", i, err)
+		}
 		if !bytes.Equal(rlStorageEnc, canonDB) {
 			t.Fatalf("test[%d]: re-encoded receipts not equal\nhave: %x\nwant: %x", i, rlStorageEnc, canonDB)
 		}
@@ -113,7 +128,7 @@ func TestReceiptList69(t *testing.T) {
 		}
 
 		// compute root hash from ReceiptList69 and compare.
-		responseHash := types.DeriveSha(&rl, trie.NewStackTrie(nil))
+		responseHash := types.DeriveSha(rl.Derivable(), trie.NewStackTrie(nil))
 		if responseHash != test.root {
 			t.Fatalf("test[%d]: wrong root hash from ReceiptList69\nhave: %v\nwant: %v", i, responseHash, test.root)
 		}
@@ -140,7 +155,10 @@ func TestReceiptList68(t *testing.T) {
 		if err := rlp.DecodeBytes(network, &rl); err != nil {
 			t.Fatalf("test[%d]: can't decode network receipts: %v", i, err)
 		}
-		rlStorageEnc := rl.EncodeForStorage()
+		rlStorageEnc, err := rl.EncodeForStorage()
+		if err != nil {
+			t.Fatalf("test[%d]: error from EncodeForStorage: %v", i, err)
+		}
 		if !bytes.Equal(rlStorageEnc, canonDB) {
 			t.Fatalf("test[%d]: re-encoded receipts not equal\nhave: %x\nwant: %x", i, rlStorageEnc, canonDB)
 		}
@@ -150,7 +168,7 @@ func TestReceiptList68(t *testing.T) {
 		}
 
 		// compute root hash from ReceiptList68 and compare.
-		responseHash := types.DeriveSha(&rl, trie.NewStackTrie(nil))
+		responseHash := types.DeriveSha(rl.Derivable(), trie.NewStackTrie(nil))
 		if responseHash != test.root {
 			t.Fatalf("test[%d]: wrong root hash from ReceiptList68\nhave: %v\nwant: %v", i, responseHash, test.root)
 		}
