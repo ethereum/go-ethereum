@@ -201,7 +201,10 @@ func (p *Peer) dispatcher() {
 			reqOp.fail <- err
 
 			if err == nil {
-				pending[req.id] = req
+				// do not overwrite if it is re-request
+				if _, ok := pending[req.id]; !ok {
+					pending[req.id] = req
+				}
 			}
 
 		case cancelOp := <-p.reqCancel:
@@ -214,6 +217,13 @@ func (p *Peer) dispatcher() {
 			}
 			// Stop tracking the request
 			delete(pending, cancelOp.id)
+
+			// Not sure if the request is about the receipt, but remove it anyway.
+			// TODO(rjl493456442, bosul): investigate whether we can avoid leaking peer fields here.
+			p.receiptBufferLock.Lock()
+			delete(p.receiptBuffer, cancelOp.id)
+			p.receiptBufferLock.Unlock()
+
 			cancelOp.fail <- nil
 
 		case resOp := <-p.resDispatch:
