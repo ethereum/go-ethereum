@@ -392,10 +392,13 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 	if err := r.Decode(&dec); err != nil {
 		return fmt.Errorf("load diff accounts: %v", err)
 	}
+	if len(dec.AddrHashes) != len(dec.Accounts) {
+		return fmt.Errorf("load diff accounts: mismatched addr/account lengths: %d != %d", len(dec.AddrHashes), len(dec.Accounts))
+	}
 	for i := range dec.AddrHashes {
 		accountSet[dec.AddrHashes[i]] = empty2nil(dec.Accounts[i])
 	}
-	s.accountData = accountSet
+	s	.accountData = accountSet
 
 	// Decode storages
 	type storage struct {
@@ -411,6 +414,9 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 		return fmt.Errorf("load diff storage: %v", err)
 	}
 	for _, entry := range storages {
+		if len(entry.Keys) != len(entry.Vals) {
+			return fmt.Errorf("load diff storage: mismatched key/value lengths for %x: %d != %d", entry.AddrHash, len(entry.Keys), len(entry.Vals))
+		}
 		storageSet[entry.AddrHash] = make(map[common.Hash][]byte, len(entry.Keys))
 		for i := range entry.Keys {
 			storageSet[entry.AddrHash][entry.Keys[i]] = empty2nil(entry.Vals[i])
@@ -558,6 +564,9 @@ func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
 	if err := r.Decode(&accounts); err != nil {
 		return fmt.Errorf("load diff account origin set: %v", err)
 	}
+	if len(accounts.Addresses) != len(accounts.Accounts) {
+		return fmt.Errorf("load diff account origin set: mismatched address/account lengths: %d != %d", len(accounts.Addresses), len(accounts.Accounts))
+	}
 	for i := range accounts.Accounts {
 		accountSet[accounts.Addresses[i]] = empty2nil(accounts.Accounts[i])
 	}
@@ -577,7 +586,10 @@ func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
 		return fmt.Errorf("load diff storage origin: %v", err)
 	}
 	for _, storage := range storages {
-		storageSet[storage.Address] = make(map[common.Hash][]byte)
+		if len(storage.Keys) != len(storage.Vals) {
+			return fmt.Errorf("load diff storage origin: mismatched key/value lengths for %x: %d != %d", storage.Address, len(storage.Keys), len(storage.Vals))
+		}
+		storageSet[storage.Address] = make(map[common.Hash][]byte, len(storage.Keys))
 		for i := range storage.Keys {
 			storageSet[storage.Address][storage.Keys[i]] = empty2nil(storage.Vals[i])
 		}
