@@ -176,14 +176,14 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 		return nil, cumulativeGas, err
 	}
 	if evm.ChainConfig().IsAmsterdam(blockNumber, blockTime) {
-		// Emit Selfdesctruct logs where accounts with non-empty balances have been deleted
+		// Emit burn logs where accounts with non-empty balances have been deleted
 		removedWithBalance := statedb.GetRemovedAccountsWithBalance()
 		if removedWithBalance != nil {
 			sort.Slice(removedWithBalance, func(i, j int) bool {
 				return removedWithBalance[i].Address.Cmp(removedWithBalance[j].Address) < 0
 			})
 			for _, sd := range removedWithBalance {
-				statedb.AddLog(types.EthSelfDestructLog(blockNumber, sd.Address, sd.Balance))
+				statedb.AddLog(types.EthBurnLog(blockNumber, sd.Address, sd.Balance))
 			}
 		}
 	}
