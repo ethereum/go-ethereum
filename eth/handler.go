@@ -136,6 +136,10 @@ type handler struct {
 
 	requiredBlocks map[uint64]common.Hash
 
+	// One-off snap query support for partial state storage root resolution.
+	// Maps request ID → response channel for intercepting AccountRange responses.
+	pendingSnapQueries sync.Map // map[uint64]chan *snap.AccountRangePacket
+
 	// channels for fetcher, syncer, txsyncLoop
 	quitSync chan struct{}
 

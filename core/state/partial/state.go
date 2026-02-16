@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -33,16 +34,32 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// StorageRootResolver fetches new storage roots for untracked accounts from peers.
+// Parameters: stateRoot (block's expected root), addrs (untracked addresses with
+// storage changes), oldRoots (their current storage roots — used to detect stale
+// peer responses). Returns: map of address → new storage root for resolved addresses.
+type StorageRootResolver func(stateRoot common.Hash, addrs []common.Address, oldRoots map[common.Address]common.Hash) (map[common.Address]common.Hash, error)
+
 // PartialState manages state for partial stateful nodes.
 // It applies BAL diffs to update state without re-executing transactions.
 type PartialState struct {
-	db      ethdb.Database
-	trieDB  *triedb.Database
-	filter  ContractFilter
-	history *BALHistory
+	db       ethdb.Database
+	trieDB   *triedb.Database
+	filter   ContractFilter
+	history  *BALHistory
+	resolver StorageRootResolver // optional, for resolving untracked storage roots
 
-	// Current state root
+	// Current state root (the actual computed root, may differ from header root)
 	stateRoot common.Hash
+
+	// Last block successfully processed via BAL
+	lastProcessedNum uint64
+}
+
+// SetResolver sets the storage root resolver used to fetch updated storage roots
+// for untracked contracts from snap-capable peers.
+func (s *PartialState) SetResolver(r StorageRootResolver) {
+	s.resolver = r
 }
 
 // NewPartialState creates a new partial state manager.
@@ -75,6 +92,16 @@ func (s *PartialState) History() *BALHistory {
 	return s.history
 }
 
+// LastProcessedBlock returns the number of the last block processed via BAL.
+func (s *PartialState) LastProcessedBlock() uint64 {
+	return s.lastProcessedNum
+}
+
+// SetLastProcessedBlock records the last block successfully processed via BAL.
+func (s *PartialState) SetLastProcessedBlock(num uint64) {
+	s.lastProcessedNum = num
+}
+
 // accountState tracks an account being processed with origin info for PathDB StateSet.
 type accountState struct {
 	account     *types.StateAccount
@@ -88,11 +115,17 @@ type accountState struct {
 // ApplyBALAndComputeRoot applies BAL diffs and returns the new state root.
 // This is the core method for partial state block processing.
 //
+// The expectedRoot parameter is the block header's declared state root. It is used
+// in two ways: (1) to query peers for untracked contracts' storage roots, and
+// (2) as a fallback PathDB layer label if peer resolution fails. Pass common.Hash{}
+// to skip resolution and fallback (used in tests).
+//
 // Commit ordering (critical for correct state root):
 // Phase 1: For each account, apply storage changes and commit storage trie
+// Phase 1.5: Resolve storage roots for untracked contracts with storage changes
 // Phase 2: Update account Root fields with committed storage roots
 // Phase 3: Commit account trie to get final state root
-func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, accessList *bal.BlockAccessList) (common.Hash, error) {
+func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, expectedRoot common.Hash, accessList *bal.BlockAccessList) (common.Hash, error) {
 	// Open state trie at parent root
 	tr, err := trie.NewStateTrie(trie.StateTrieID(parentRoot), s.trieDB)
 	if err != nil {
@@ -198,6 +231,43 @@ func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, accessList
 		accounts = append(accounts, state)
 	}
 
+	// Phase 1.5: Resolve storage roots for untracked contracts with storage changes.
+	// These contracts had storage modifications in the BAL but we skipped applying them
+	// (no local storage trie). We need their new storage roots to compute the correct
+	// state root. Query snap peers, or fall back to using expectedRoot as the layer label.
+	var untrackedAddrs []common.Address
+	oldRoots := make(map[common.Address]common.Hash)
+	for _, access := range *accessList {
+		addr := common.BytesToAddress(access.Address[:])
+		if !s.filter.IsTracked(addr) && len(access.StorageChanges) > 0 {
+			untrackedAddrs = append(untrackedAddrs, addr)
+			// Look up the current storage root from the account we already loaded
+			for _, state := range accounts {
+				if state.addr == addr {
+					oldRoots[addr] = state.storageRoot
+					break
+				}
+			}
+		}
+	}
+
+	var resolved map[common.Address]common.Hash
+	if len(untrackedAddrs) > 0 && s.resolver != nil {
+		var err error
+		resolved, err = s.resolver(expectedRoot, untrackedAddrs, oldRoots)
+		if err != nil {
+			log.Warn("Storage root resolution failed", "unresolved", len(untrackedAddrs), "err", err)
+		} else {
+			// Apply resolved storage roots
+			for _, state := range accounts {
+				if newRoot, ok := resolved[state.addr]; ok {
+					state.storageRoot = newRoot
+					state.modified = true
+				}
+			}
+		}
+	}
+
 	// Phase 2: Update account Root fields and write to account trie
 	for _, state := range accounts {
 		// Update storage root (may have changed in Phase 1)
@@ -234,6 +304,26 @@ func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, accessList
 
 	// Build StateSet for PathDB compatibility
 	stateSet := s.buildStateSet(accounts, accessList)
+
+	// Always use the actual computed root for the PathDB layer. Even if untracked
+	// contracts have stale storage roots (making the computed root differ from the
+	// header), subsequent blocks must chain off the real trie structure.
+	// ProcessBlockWithBAL uses partialState.Root() (not header root) as parentRoot.
+	if len(untrackedAddrs) > 0 {
+		unresolvedCount := len(untrackedAddrs)
+		if resolved != nil {
+			for _, addr := range untrackedAddrs {
+				if _, ok := resolved[addr]; ok {
+					unresolvedCount--
+				}
+			}
+		}
+		if unresolvedCount > 0 {
+			log.Debug("Unresolved untracked storage roots",
+				"unresolved", unresolvedCount, "total", len(untrackedAddrs),
+				"expectedRoot", expectedRoot, "computedRoot", root)
+		}
+	}
 
 	// Write all trie nodes and state to database
 	if err := s.trieDB.Update(root, parentRoot, 0, allNodes, stateSet); err != nil {

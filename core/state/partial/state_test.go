@@ -157,7 +157,7 @@ func TestApplyBALAndComputeRoot_EmptyBAL(t *testing.T) {
 	emptyBAL := bal.BlockAccessList{}
 	accessList := &emptyBAL
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(emptyRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(emptyRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply empty BAL: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestApplyBALAndComputeRoot_BalanceChange(t *testing.T) {
 
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestApplyBALAndComputeRoot_NonceChange(t *testing.T) {
 
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
@@ -273,7 +273,7 @@ func TestApplyBALAndComputeRoot_StorageChange(t *testing.T) {
 
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
@@ -333,7 +333,7 @@ func TestApplyBALAndComputeRoot_UntrackedContractStorageIgnored(t *testing.T) {
 
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
@@ -365,7 +365,7 @@ func TestApplyBALAndComputeRoot_NewAccount(t *testing.T) {
 
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(emptyRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(emptyRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
@@ -412,7 +412,7 @@ func TestApplyBALAndComputeRoot_CodeChange(t *testing.T) {
 
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
@@ -459,7 +459,7 @@ func TestApplyBALAndComputeRoot_MultipleTransactions(t *testing.T) {
 
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
@@ -527,7 +527,7 @@ func TestApplyBALAndComputeRoot_StorageDeletion(t *testing.T) {
 
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
@@ -567,7 +567,7 @@ func TestApplyBALAndComputeRoot_MultipleStorageWritesSameSlot(t *testing.T) {
 
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
@@ -613,7 +613,7 @@ func TestApplyBALAndComputeRoot_AccountDeletion_EIP161(t *testing.T) {
 
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
@@ -642,7 +642,7 @@ func TestApplyBALAndComputeRoot_NeverExistedEmptyAccount(t *testing.T) {
 
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(emptyRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(emptyRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
@@ -700,7 +700,7 @@ func TestApplyBALAndComputeRoot_CodeChangeUntracked(t *testing.T) {
 
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
@@ -762,7 +762,7 @@ func TestApplyBALAndComputeRoot_MixedChanges(t *testing.T) {
 
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
@@ -809,7 +809,7 @@ func TestApplyBALAndComputeRoot_ErrorInvalidParentRoot(t *testing.T) {
 	cbal.BalanceChange(0, addr, uint256.NewInt(1000))
 	accessList := cbal.Build(t)
 
-	_, err := ps.ApplyBALAndComputeRoot(invalidRoot, accessList)
+	_, err := ps.ApplyBALAndComputeRoot(invalidRoot, common.Hash{}, accessList)
 	if err == nil {
 		t.Fatal("expected error for invalid parent root, got nil")
 	}
@@ -928,7 +928,7 @@ func TestBuildStateSet_AccountModification(t *testing.T) {
 	cbal.BalanceChange(0, addr, uint256.NewInt(2000))
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
@@ -973,7 +973,7 @@ func TestBuildStateSet_StorageRLPEncoding(t *testing.T) {
 	cbal.StorageWrite(0, addr, slot, value)
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
@@ -1019,7 +1019,7 @@ func TestBuildStateSet_OriginTracking(t *testing.T) {
 	cbal.NonceChange(addr, 0, 11)
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
@@ -1092,7 +1092,7 @@ func TestApplyBALAndComputeRoot_MultipleAccountTypes(t *testing.T) {
 
 	accessList := cbal.Build(t)
 
-	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, accessList)
+	newRoot, err := ps.ApplyBALAndComputeRoot(parentRoot, common.Hash{}, accessList)
 	if err != nil {
 		t.Fatalf("failed to apply BAL: %v", err)
 	}
