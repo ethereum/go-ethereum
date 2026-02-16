@@ -98,10 +98,6 @@ Clients can then call `myapp_myMethod` via HTTP, WebSocket or IPC. Subscriptions
 
 See the [JSON-RPC docs](/docs/interacting-with-geth/rpc) for the full RPC system documentation.
 
-### EVM and precompiles
-
-Custom precompiled contracts can be implemented via the [`PrecompiledContract`](https://pkg.go.dev/github.com/ethereum/go-ethereum/core/vm#PrecompiledContract) interface — just `RequiredGas()` and `Run()`. The `core/vm/runtime` package also lets you execute EVM bytecode directly without a full node, useful for tooling and testing.
-
 ### Simulated blockchain
 
 The [`ethclient/simulated`](https://pkg.go.dev/github.com/ethereum/go-ethereum/ethclient/simulated) package provides a full in-memory Ethereum blockchain for testing. It supports the entire `ethclient` API and lets you mine blocks on demand — no networking, no disk, no consensus client needed.
@@ -129,7 +125,6 @@ The transaction pool is configurable with settings for price limits, account slo
 | [`ethclient/simulated`](https://pkg.go.dev/github.com/ethereum/go-ethereum/ethclient/simulated) | In-memory simulated blockchain for testing |
 | [`rpc`](https://pkg.go.dev/github.com/ethereum/go-ethereum/rpc) | JSON-RPC server and client framework |
 | [`accounts/abi/bind`](https://pkg.go.dev/github.com/ethereum/go-ethereum/accounts/abi/bind) | Contract binding generation and interaction |
-| [`core/vm`](https://pkg.go.dev/github.com/ethereum/go-ethereum/core/vm) | EVM implementation, precompiles, runtime |
 | [`p2p`](https://pkg.go.dev/github.com/ethereum/go-ethereum/p2p) | Peer-to-peer networking (devp2p) |
 | [`core/txpool`](https://pkg.go.dev/github.com/ethereum/go-ethereum/core/txpool) | Transaction pool |
 
