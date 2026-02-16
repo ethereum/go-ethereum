@@ -705,7 +705,7 @@ func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHas
 		return invalidStatus, paramsErr("nil executionRequests post-prague")
 	case api.checkFork(params.Timestamp, forks.Amsterdam):
 		return invalidStatus, unsupportedForkErr("newPayloadV4 must not be called for amsterdam payloads, use newPayloadV5")
-	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5):
+	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5, forks.Amsterdam): // TODO: remove Amsterdam once it is activated
 		return invalidStatus, unsupportedForkErr("newPayloadV4 must only be called for prague/osaka payloads")
 	}
 	requests := convertRequests(executionRequests)
