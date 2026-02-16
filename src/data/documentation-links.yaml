@@ -90,6 +90,8 @@
   items:
     - id: Introduction
       to: /docs/developers
+    - id: Geth as a Library
+      to: /docs/developers/geth-as-a-library
     - id: Dapp developers
       items:
         - id: Dev mode
