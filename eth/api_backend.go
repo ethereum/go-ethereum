@@ -215,6 +215,33 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
+// GetTransactionBySenderAndNonce returns the hash of a transaction for the given sender and nonce.
+// It checks the pool, then enforces a nonce check against the current state, and finally checks the historical TxSenderNonce index.
+func (b *EthAPIBackend) GetTransactionBySenderAndNonce(ctx context.Context, sender common.Address, nonce uint64) (*common.Hash, error) {
+
+	if pool := b.eth.TxPool(); pool != nil {
+		if tx := pool.GetTxBySenderAndNonce(sender, nonce); tx != nil {
+			hash := tx.Hash()
+			return &hash, nil
+		}
+	}
+
+	state, _, err := b.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+	if err != nil {
+		return nil, err
+	}
+	currentNonce := state.GetNonce(sender)
+
+	// If the requested nonce is greater than or equal to the current nonce,
+	// and we already confirmed it's NOT in the pool, then the transaction
+	// definitely does not exist.
+	if nonce >= currentNonce {
+		return nil, nil
+	}
+	hash := rawdb.ReadTxSenderNonceEntry(b.eth.ChainDb(), sender, nonce)
+	return hash, nil
+}
+
 func (b *EthAPIBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
 	return b.eth.miner.Pending()
 }

@@ -1449,6 +1449,15 @@ func (api *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common
 	return newRPCTransaction(tx, blockHash, blockNumber, header.Time, index, header.BaseFee, api.b.ChainConfig()), nil
 }
 
+// GetTransactionBySenderAndNonce returns the hash of a transaction for the given sender and nonce.
+func (s *TransactionAPI) GetTransactionBySenderAndNonce(ctx context.Context, sender common.Address, nonce uint64) (*common.Hash, error) {
+	hash, err := s.b.GetTransactionBySenderAndNonce(ctx, sender, nonce)
+	if err != nil {
+		return nil, err
+	}
+	return hash, nil
+}
+
 // GetRawTransactionByHash returns the bytes of the transaction for the given hash.
 func (api *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
 	// Retrieve a finalized transaction, or a pooled otherwise
