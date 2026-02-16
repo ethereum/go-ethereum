@@ -57,6 +57,12 @@ func newMuxTracerFromConfig(ctx *tracers.Context, cfg json.RawMessage, chainConf
 	return NewMuxTracer(names, objects)
 }
 
+// NewMuxTracer creates a multiplexing tracer that fans out tracing hooks to
+// multiple child tracers. Each hook invocation is forwarded to all children,
+// in the order they are provided.
+//
+// The names parameter associates a label with each tracer, used as keys in
+// the aggregated JSON result returned by GetResult.
 func NewMuxTracer(names []string, objects []*tracers.Tracer) (*tracers.Tracer, error) {
 	t := &muxTracer{names: names, tracers: objects}
 	return &tracers.Tracer{
