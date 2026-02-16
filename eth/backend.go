@@ -368,6 +368,12 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, err
 	}
 
+	// Wire storage root resolver for partial state nodes.
+	// This lets BAL processing query peers for untracked contracts' storage roots.
+	if eth.blockchain.SupportsPartialState() {
+		eth.blockchain.PartialState().SetResolver(eth.ResolveStorageRoots)
+	}
+
 	eth.dropper = newDropper(eth.p2pServer.MaxDialedConns(), eth.p2pServer.MaxInboundConns())
 
 	eth.miner = miner.New(eth, config.Miner, eth.engine)
@@ -455,11 +461,17 @@ func (s *Ethereum) Synced() bool                       { return s.handler.synced
 func (s *Ethereum) SetSynced()                         { s.handler.enableSyncedFeatures() }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
 
+// ResolveStorageRoots queries snap-capable peers for updated storage roots of
+// untracked contracts. Used by partial state nodes during BAL processing.
+func (s *Ethereum) ResolveStorageRoots(stateRoot common.Hash, addrs []common.Address, oldRoots map[common.Address]common.Hash) (map[common.Address]common.Hash, error) {
+	return s.handler.ResolveStorageRoots(stateRoot, addrs, oldRoots)
+}
+
 // Protocols returns all the currently configured
 // network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
 	protos := eth.MakeProtocols((*ethHandler)(s.handler), s.networkID, s.discmix)
-	if s.config.SnapshotCache > 0 {
+	if s.config.SnapshotCache > 0 || s.config.PartialState.Enabled {
 		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler))...)
 	}
 	return protos

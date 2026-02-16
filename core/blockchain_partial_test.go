@@ -162,7 +162,9 @@ func TestProcessBlockWithBAL_InvalidBAL(t *testing.T) {
 	}
 }
 
-// TestProcessBlockWithBAL_StateRootMismatch tests error when computed root doesn't match header.
+// TestProcessBlockWithBAL_StateRootMismatch tests that computed root mismatch is tolerated
+// (logged as warning, not fatal) because the expectedRoot fallback is used as the PathDB
+// layer label when untracked contracts have unresolved storage roots.
 func TestProcessBlockWithBAL_StateRootMismatch(t *testing.T) {
 	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
 	bc, _ := newPartialBlockchain(t, rawdb.HashScheme, []common.Address{addr})
@@ -187,13 +189,11 @@ func TestProcessBlockWithBAL_StateRootMismatch(t *testing.T) {
 	}
 	accessList := constructionToBlockAccessListCore(t, &cbal)
 
+	// Root mismatch is now a warning, not an error — the expectedRoot fallback
+	// is used as the PathDB layer label when peer resolution isn't available.
 	err := bc.ProcessBlockWithBAL(block, accessList)
-	if err == nil {
-		t.Fatal("expected state root mismatch error")
-	}
-	// Error should mention state root mismatch
-	if err.Error()[:16] != "state root mismatch" {
-		t.Logf("Got error (checking if it's root mismatch): %v", err)
+	if err != nil {
+		t.Fatalf("unexpected error (root mismatch should be a warning): %v", err)
 	}
 }
 

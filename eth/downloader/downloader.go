@@ -131,6 +131,7 @@ type Downloader struct {
 	chainCutoffHash   common.Hash
 	chainRetention    uint64 // Bodies/receipts retention window in blocks from HEAD (0 = keep all)
 	partialFilter     partial.ContractFilter // If set, partial state mode is active (skip storage for untracked contracts)
+	lastPivotAdvance  time.Time              // Rate-limits pivot advances in partial state mode
 
 	// Channels
 	headerProcCh chan *headerTask // Channel to feed the header processor new tasks
@@ -636,8 +637,17 @@ func (d *Downloader) syncToHead() (err error) {
 	if mode == ethconfig.SnapSync {
 		d.pivotLock.Lock()
 		if d.partialFilter != nil && d.pivotHeader != nil {
-			log.Debug("Partial state: reusing existing pivot across sync restart",
-				"pivot", d.pivotHeader.Number.Uint64(), "new_would_be", pivot.Number.Uint64())
+			// Reuse existing pivot only if it's recent enough; if the new pivot
+			// is much ahead (beyond staleness window), the old one is too stale
+			// for peers to serve — use the fresh one instead.
+			if pivot.Number.Uint64() < d.pivotHeader.Number.Uint64()+2*uint64(fsMinFullBlocks) {
+				log.Debug("Partial state: reusing recent pivot across sync restart",
+					"pivot", d.pivotHeader.Number.Uint64(), "new_would_be", pivot.Number.Uint64())
+			} else {
+				log.Info("Partial state: existing pivot too stale, using fresh pivot",
+					"old", d.pivotHeader.Number.Uint64(), "new", pivot.Number.Uint64())
+				d.pivotHeader = pivot
+			}
 		} else {
 			d.pivotHeader = pivot
 		}
@@ -982,6 +992,30 @@ func (d *Downloader) processSnapSyncContent() error {
 					currentHead := d.blockchain.CurrentBlock()
 
 					if snapHead.Hash() != currentHead.Hash() {
+						// Guard against starting the second state sync too early.
+						// When the CL syncs from genesis, the first forkchoice arrives
+						// at a very low block number. The initial snap sync completes
+						// trivially but the second state sync would request state at
+						// an old root that no peer serves.
+						//
+						// Two checks:
+						// 1. If the skeleton head is far ahead of snap head, abort.
+						// 2. If the snap head block is too old (>5 min), peers won't
+						//    serve its state. Abort so the backfiller restarts with a
+						//    better target once the CL catches up.
+						if skHead, _, _, err := d.skeleton.Bounds(); err == nil {
+							if skHead.Number.Uint64() > snapHead.Number.Uint64()+2*uint64(fsMinFullBlocks) {
+								log.Info("Partial state: snap head too far behind network, restarting sync",
+									"snapHead", snapHead.Number, "networkHead", skHead.Number)
+								return errCanceled
+							}
+						}
+						snapHeadBlock := d.blockchain.GetHeaderByHash(snapHead.Hash())
+						if snapHeadBlock != nil && time.Since(time.Unix(int64(snapHeadBlock.Time), 0)) > 5*time.Minute {
+							log.Info("Partial state: snap head too old, peers won't serve state. Restarting sync",
+								"snapHead", snapHead.Number, "age", common.PrettyAge(time.Unix(int64(snapHeadBlock.Time), 0)))
+							return errCanceled
+						}
 						log.Info("Partial state: syncing state to HEAD",
 							"pivot", currentHead.Number, "head", snapHead.Number)
 
@@ -997,9 +1031,6 @@ func (d *Downloader) processSnapSyncContent() error {
 						d.partialHeadSyncing.Store(false)
 
 						if err != nil {
-							// TODO: Consider explicit retry logic or state cleanup here.
-							// Currently relies on self-healing: next sync cycle detects
-							// snapHead != currentHead and retries second state sync.
 							log.Error("Partial state second sync failed, will retry", "pivot", currentHead.Number, "head", snapHead.Number, "err", err)
 							return err
 						}
@@ -1056,12 +1087,26 @@ func (d *Downloader) processSnapSyncContent() error {
 			// need to be taken into account, otherwise we're detecting the pivot move
 			// late and will drop peers due to unavailable state!!!
 			if height := latest.Number.Uint64(); height >= pivot.Number.Uint64()+2*uint64(fsMinFullBlocks)-uint64(reorgProtHeaderDelay) {
-				// For partial state nodes, don't move the pivot. The state sync
-				// needs a stable root to make progress. The second sync handles
-				// the gap from pivot to HEAD after the initial sync completes.
+				// For partial state nodes, rate-limit pivot advances (max once per 2 min)
+				// to avoid the restart loop bug, while still recovering from stale pivots.
 				if d.partialFilter != nil {
-					log.Debug("Partial state: suppressing pivot move in processSnapSyncContent",
-						"pivot", pivot.Number.Uint64(), "latest", height)
+					if !d.lastPivotAdvance.IsZero() && time.Since(d.lastPivotAdvance) < 2*time.Minute {
+						log.Debug("Partial state: suppressing pivot move (cooldown active)",
+							"pivot", pivot.Number.Uint64(), "latest", height,
+							"cooldownLeft", 2*time.Minute-time.Since(d.lastPivotAdvance))
+					} else {
+						log.Info("Partial state: advancing stale pivot",
+							"old", pivot.Number.Uint64(),
+							"new", height-uint64(fsMinFullBlocks)+uint64(reorgProtHeaderDelay))
+						pivot = results[len(results)-1-fsMinFullBlocks+reorgProtHeaderDelay].Header
+
+						d.pivotLock.Lock()
+						d.pivotHeader = pivot
+						d.pivotLock.Unlock()
+
+						rawdb.WriteLastPivotNumber(d.stateDB, pivot.Number.Uint64())
+						d.lastPivotAdvance = time.Now()
+					}
 				} else {
 					log.Warn("Pivot became stale, moving", "old", pivot.Number.Uint64(), "new", height-uint64(fsMinFullBlocks)+uint64(reorgProtHeaderDelay))
 					pivot = results[len(results)-1-fsMinFullBlocks+reorgProtHeaderDelay].Header // must exist as lower old pivot is uncommitted

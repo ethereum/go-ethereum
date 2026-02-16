@@ -329,12 +329,33 @@ func (d *Downloader) fetchHeaders(from uint64) error {
 		d.pivotLock.Lock()
 		if d.pivotHeader != nil {
 			if head.Number.Uint64() > d.pivotHeader.Number.Uint64()+2*uint64(fsMinFullBlocks)-8 {
-				// For partial state nodes, don't move the pivot. The state sync
-				// needs uninterrupted time to complete with a stable root. The
-				// second sync (pivot→HEAD) will handle the state gap afterward.
+				// For partial state nodes, rate-limit pivot advances (max once per 2 min)
+				// to avoid the restart loop bug, while still recovering from stale pivots.
 				if d.partialFilter != nil {
-					log.Debug("Partial state: suppressing pivot move in fetchHeaders",
-						"current", d.pivotHeader.Number, "head", head.Number)
+					if !d.lastPivotAdvance.IsZero() && time.Since(d.lastPivotAdvance) < 2*time.Minute {
+						log.Debug("Partial state: suppressing pivot move in fetchHeaders (cooldown active)",
+							"current", d.pivotHeader.Number, "head", head.Number,
+							"cooldownLeft", 2*time.Minute-time.Since(d.lastPivotAdvance))
+					} else {
+						number := head.Number.Uint64() - uint64(fsMinFullBlocks)
+						log.Info("Partial state: advancing stale pivot in fetchHeaders",
+							"old", d.pivotHeader.Number, "new", number)
+						if d.pivotHeader = d.skeleton.Header(number); d.pivotHeader == nil {
+							if number < tail.Number.Uint64() {
+								dist := tail.Number.Uint64() - number
+								if len(localHeaders) >= int(dist) {
+									d.pivotHeader = localHeaders[dist-1]
+								}
+							}
+						}
+						if d.pivotHeader == nil {
+							log.Error("Pivot header is not found", "number", number)
+							d.pivotLock.Unlock()
+							return errNoPivotHeader
+						}
+						rawdb.WriteLastPivotNumber(d.stateDB, d.pivotHeader.Number.Uint64())
+						d.lastPivotAdvance = time.Now()
+					}
 				} else {
 					// Retrieve the next pivot header, either from skeleton chain
 					// or the filled chain

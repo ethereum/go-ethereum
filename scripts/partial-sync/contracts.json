@@ -2,14 +2,14 @@
   "version": 1,
   "contracts": [
     {
-      "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-      "name": "WETH9",
-      "comment": "Wrapped Ether"
+      "address": "0x4a6004968ca52190ebdae72cf468996975654365",
+      "name": "DevnetContractA",
+      "comment": "Active test contract on bal-devnet-2 (~100 calls/block)"
     },
     {
-      "address": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
-      "name": "DAI",
-      "comment": "Dai Stablecoin"
+      "address": "0x88ad5d87eb9ff85f041a69e57e6badb0ad1351e2",
+      "name": "DevnetContractB",
+      "comment": "Active test contract on bal-devnet-2 (~90 calls/block)"
     }
   ]
 }

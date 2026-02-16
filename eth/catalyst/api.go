@@ -290,6 +290,29 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		}
 		return engine.STATUS_SYNCING, nil
 	}
+	// In partial state mode during snap sync, the block may have been persisted
+	// (by WriteBlockWithoutState in newPayload) but we have no state for it yet.
+	// If we try to SetCanonical, it will fail because HasState returns false and
+	// partial state can't recoverAncestors. Instead, treat it like an unknown
+	// block and trigger BeaconSync so the skeleton can start the sync cycle.
+	//
+	// After sync, the computed root may differ from the header root (unresolved
+	// untracked storage roots), so we also check partialState's tracked root.
+	partialRoot := common.Hash{}
+	if api.eth.BlockChain().SupportsPartialState() {
+		partialRoot = api.eth.BlockChain().PartialState().Root()
+	}
+	if api.eth.BlockChain().SupportsPartialState() &&
+		!api.eth.BlockChain().HasState(block.Root()) &&
+		(partialRoot == common.Hash{} || !api.eth.BlockChain().HasState(partialRoot)) {
+		log.Info("Forkchoice: block known but stateless (partial state sync in progress), triggering BeaconSync",
+			"number", block.NumberU64(), "hash", update.HeadBlockHash, "root", block.Root())
+		finalized := api.remoteBlocks.get(update.FinalizedBlockHash)
+		if err := api.eth.Downloader().BeaconSync(block.Header(), finalized); err != nil {
+			return engine.STATUS_SYNCING, err
+		}
+		return engine.STATUS_SYNCING, nil
+	}
 	// Block is known locally, just sanity check that the beacon client does not
 	// attempt to push us back to before the merge.
 	if block.Difficulty().BitLen() > 0 && block.NumberU64() > 0 {
@@ -844,6 +867,20 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	// update after legit payload executions.
 	parent := api.eth.BlockChain().GetBlock(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
+		log.Debug("NewPayload: parent not found, delaying",
+			"number", block.NumberU64(), "parentHash", block.ParentHash(),
+			"partial", api.eth.BlockChain().SupportsPartialState())
+		// In partial state mode, persist the block body and BAL even when
+		// delaying. This ensures the block is findable as a parent for
+		// future blocks, and the BAL is available for post-sync catch-up.
+		if api.eth.BlockChain().SupportsPartialState() {
+			if err := api.eth.BlockChain().WriteBlockWithoutState(block); err != nil {
+				log.Warn("NewPayload: failed to persist block for partial state catch-up", "number", block.NumberU64(), "err", err)
+			}
+			if params.BlockAccessList != nil {
+				rawdb.WriteAccessList(api.eth.ChainDb(), block.Hash(), block.NumberU64(), params.BlockAccessList)
+			}
+		}
 		return api.delayPayloadImport(block), nil
 	}
 	if block.Time() <= parent.Time() {
@@ -854,13 +891,36 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	// tries to make it import a block. That should be denied as pushing something
 	// into the database directly will conflict with the assumptions of snap sync
 	// that it has an empty db that it can fill itself.
-	if api.eth.Downloader().ConfigSyncMode() == ethconfig.SnapSync {
+	syncMode := api.eth.Downloader().ConfigSyncMode()
+	if syncMode == ethconfig.SnapSync {
+		log.Debug("NewPayload: snap sync active, delaying",
+			"number", block.NumberU64(), "syncMode", syncMode,
+			"partial", api.eth.BlockChain().SupportsPartialState())
+		// Same as above: persist block + BAL for partial state catch-up.
+		if api.eth.BlockChain().SupportsPartialState() {
+			if err := api.eth.BlockChain().WriteBlockWithoutState(block); err != nil {
+				log.Warn("NewPayload: failed to persist block for partial state catch-up", "number", block.NumberU64(), "err", err)
+			}
+			if params.BlockAccessList != nil {
+				rawdb.WriteAccessList(api.eth.ChainDb(), block.Hash(), block.NumberU64(), params.BlockAccessList)
+			}
+		}
 		return api.delayPayloadImport(block), nil
 	}
 
 	// Partial state mode: Use BAL-based processing instead of full execution.
 	// Partial state nodes don't need full parent state - they apply BAL diffs directly.
 	if api.eth.BlockChain().SupportsPartialState() && params.BlockAccessList != nil {
+		log.Info("NewPayload: entering BAL processing path",
+			"number", block.NumberU64(), "hash", block.Hash(),
+			"parent", parent.NumberU64(), "hasBAL", params.BlockAccessList != nil)
+		// Before processing this block, catch up any unprocessed ancestor
+		// blocks that accumulated during the second state sync phase. Their
+		// bodies and BALs were persisted to the database when delayed.
+		if err := api.processPartialStateGap(block); err != nil {
+			log.Warn("Failed to process partial state gap", "block", block.NumberU64(), "error", err)
+			return api.delayPayloadImport(block), nil
+		}
 		log.Trace("Processing block with BAL (partial state mode)", "hash", block.Hash(), "number", block.Number())
 		start := time.Now()
 		if err := api.eth.BlockChain().ProcessBlockWithBAL(block, params.BlockAccessList); err != nil {
@@ -969,6 +1029,60 @@ func (api *ConsensusAPI) delayPayloadImport(block *types.Block) engine.PayloadSt
 		log.Warn("Ignoring payload while snap syncing", "number", block.NumberU64(), "hash", block.Hash(), "reason", err)
 	}
 	return engine.PayloadStatusV1{Status: engine.SYNCING}
+}
+
+// processPartialStateGap processes any unprocessed ancestor blocks that
+// accumulated during the second state sync phase. When new blocks arrive
+// during the sync, their bodies and BALs are persisted to the database but
+// execution is deferred. After the sync completes, the first post-sync block
+// may have parents that exist in the DB but lack computed state. This function
+// walks back from the target block to find the nearest ancestor with state,
+// then processes the gap blocks forward using their persisted BAL data.
+func (api *ConsensusAPI) processPartialStateGap(target *types.Block) error {
+	bc := api.eth.BlockChain()
+
+	// Walk back from target's parent to find unprocessed blocks
+	var gap []*types.Block
+	current := target
+	for {
+		parentHash := current.ParentHash()
+		parentNum := current.NumberU64() - 1
+
+		parent := bc.GetBlock(parentHash, parentNum)
+		if parent == nil {
+			break // Parent not in DB — can't process further back
+		}
+		// Check if this ancestor has state. Use HasState for the sync boundary
+		// (header root matches real state), and also check lastProcessedBlock
+		// for blocks processed via BAL (computed root may differ from header root).
+		if bc.HasState(parent.Root()) || parent.NumberU64() <= bc.PartialState().LastProcessedBlock() {
+			break // Found an ancestor with state — this is our starting point
+		}
+		gap = append([]*types.Block{parent}, gap...)
+		current = parent
+	}
+	if len(gap) == 0 {
+		return nil // No gap to fill
+	}
+
+	log.Info("Processing partial state gap blocks",
+		"count", len(gap), "from", gap[0].NumberU64(), "to", gap[len(gap)-1].NumberU64())
+
+	for _, b := range gap {
+		bal := rawdb.ReadAccessList(api.eth.ChainDb(), b.Hash(), b.NumberU64())
+		if bal == nil || len(*bal) == 0 {
+			return fmt.Errorf("BAL not found for gap block %d (%s)", b.NumberU64(), b.Hash().Hex())
+		}
+		if err := bc.ProcessBlockWithBAL(b, bal); err != nil {
+			return fmt.Errorf("failed to process gap block %d: %w", b.NumberU64(), err)
+		}
+		// Store in BAL history for reorg handling
+		if history := bc.PartialState().History(); history != nil {
+			history.Store(b.NumberU64(), bal)
+		}
+		log.Info("Processed partial state gap block", "number", b.NumberU64(), "hash", b.Hash())
+	}
+	return nil
 }
 
 // setInvalidAncestor is a callback for the downloader to notify us if a bad block

@@ -1399,6 +1399,30 @@ func (bc *BlockChain) AdvancePartialHead(hash common.Hash) error {
 	if !bc.HasState(root) {
 		return fmt.Errorf("non existent state [%x..]", root[:4])
 	}
+	// Write canonical hashes for all blocks between the old head and the new head.
+	// During snap sync, InsertReceiptChain skips blocks that already have bodies
+	// (HasBlock returns true), so canonical hashes aren't written for post-pivot
+	// blocks. We backfill them here by walking from the new head back to the
+	// current canonical head.
+	batch := bc.db.NewBatch()
+	currentHead := bc.CurrentBlock()
+	for num := block.NumberU64(); num > currentHead.Number.Uint64(); num-- {
+		h := bc.GetHeaderByNumber(num)
+		if h == nil {
+			break
+		}
+		rawdb.WriteCanonicalHash(batch, h.Hash(), num)
+	}
+	rawdb.WriteHeadBlockHash(batch, block.Hash())
+	rawdb.WriteHeadHeaderHash(batch, block.Hash())
+	rawdb.WriteHeadFastBlockHash(batch, block.Hash())
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to persist partial state head markers", "err", err)
+	}
+	// Update all in-memory markers
+	bc.hc.SetCurrentHeader(block.Header())
+	bc.currentSnapBlock.Store(block.Header())
+	headFastBlockGauge.Update(int64(block.NumberU64()))
 	bc.currentBlock.Store(block.Header())
 	headBlockGauge.Update(int64(block.NumberU64()))
 
@@ -2962,14 +2986,22 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 	// Re-execute the reorged chain in case the head state is missing.
 	if !bc.HasState(head.Root()) {
 		// Partial state nodes can't re-execute blocks — they only apply BAL diffs.
-		// If state is missing here, it's an error in the partial state pipeline.
+		// The computed root may differ from the header root when untracked contracts
+		// have unresolved storage roots. Check the partial state's tracked root too.
 		if bc.partialState != nil {
-			return common.Hash{}, fmt.Errorf("partial state: missing state for block %d root %x", head.NumberU64(), head.Root())
+			partialRoot := bc.partialState.Root()
+			if partialRoot == (common.Hash{}) || !bc.HasState(partialRoot) {
+				return common.Hash{}, fmt.Errorf("partial state: missing state for block %d root %x", head.NumberU64(), head.Root())
+			}
+			log.Debug("SetCanonical: using partial state root (differs from header)",
+				"block", head.NumberU64(), "headerRoot", head.Root(),
+				"partialRoot", partialRoot)
+		} else {
+			if latestValidHash, err := bc.recoverAncestors(head, false); err != nil {
+				return latestValidHash, err
+			}
+			log.Info("Recovered head state", "number", head.Number(), "hash", head.Hash())
 		}
-		if latestValidHash, err := bc.recoverAncestors(head, false); err != nil {
-			return latestValidHash, err
-		}
-		log.Info("Recovered head state", "number", head.Number(), "hash", head.Hash())
 	}
 	// Run the reorg if necessary and set the given block as new head.
 	start := time.Now()
@@ -3160,6 +3192,14 @@ func (bc *BlockChain) InsertHeadersBeforeCutoff(headers []*types.Header) (int, e
 			return 0, err
 		}
 		log.Info("Wrote genesis to ancient store")
+	} else if first > frozen && frozen > 0 {
+		// Gap between the ancient store boundary and the incoming headers.
+		// This can happen when the sync restarts with a higher chain cutoff
+		// (cutoff = HEAD - retention) causing intermediate headers to be
+		// skipped. The headers are still valid in the active database; just
+		// skip the ancient-store write for this batch.
+		log.Debug("Skipping ancient header write due to gap", "first", first, "ancient", frozen)
+		return len(headers), nil
 	} else if frozen != first {
 		return 0, fmt.Errorf("headers are gapped with the ancient store, first: %d, ancient: %d", first, frozen)
 	}

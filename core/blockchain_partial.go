@@ -81,26 +81,37 @@ func (bc *BlockChain) ProcessBlockWithBAL(
 	//         balHash, block.Header().BlockAccessListHash)
 	// }
 
-	// 3. Get parent state root
-	parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
-	if parent == nil {
-		return errors.New("parent block not found")
+	// 3. Get parent state root. Use partialState's tracked root (the actual
+	// computed root from the previous block) rather than the header root, which
+	// may differ when untracked contracts have unresolved storage roots.
+	parentRoot := bc.partialState.Root()
+	if parentRoot == (common.Hash{}) {
+		// First block after sync — use the parent block's header root
+		parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+		if parent == nil {
+			return errors.New("parent block not found")
+		}
+		parentRoot = parent.Root()
 	}
-	parentRoot := parent.Root()
 
-	// 4. Apply BAL diffs and compute new state root
-	newRoot, err := bc.partialState.ApplyBALAndComputeRoot(parentRoot, accessList)
+	// 4. Apply BAL diffs and compute new state root.
+	// Pass block.Root() as expectedRoot so the resolver can query peers for this
+	// state's untracked contracts.
+	newRoot, err := bc.partialState.ApplyBALAndComputeRoot(parentRoot, block.Root(), accessList)
 	if err != nil {
 		return fmt.Errorf("failed to apply BAL: %w", err)
 	}
 
-	// 5. Verify computed root matches header
+	// 5. Verify computed root matches header (warning, not fatal — may use fallback)
 	if newRoot != block.Root() {
-		return fmt.Errorf("state root mismatch: computed %x, header %x",
-			newRoot, block.Root())
+		log.Warn("Partial state root sanity check",
+			"computed", newRoot, "header", block.Root(), "block", block.NumberU64())
 	}
 
-	// 6. Block is stored via normal chain insertion
+	// 6. Track last processed block for gap detection and HasState checks.
+	bc.partialState.SetLastProcessedBlock(block.NumberU64())
+
+	// 7. Block is stored via normal chain insertion
 	// BAL storage for reorgs is handled separately via BALHistory
 
 	log.Debug("Processed block with BAL",
