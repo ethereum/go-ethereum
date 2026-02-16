@@ -289,7 +289,7 @@ func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *
 }
 
 // TransactionHashBySenderAndNonce returns the transaction hash for the given sender and nonce.
-func (ec *Client) TransactionHashBySenderAndNonce(ctx context.Context, sender common.Address, nonce uint64) (*common.Hash, error) {
+func (ec *Client) TransactionHashBySenderAndNonce(ctx context.Context, sender common.Address, nonce hexutil.Uint64) (*common.Hash, error) {
 	var hash *common.Hash
 	err := ec.c.CallContext(ctx, &hash, "eth_getTransactionBySenderAndNonce", sender, nonce)
 	if err != nil {

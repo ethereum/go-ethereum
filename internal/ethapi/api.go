@@ -1450,8 +1450,8 @@ func (api *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common
 }
 
 // GetTransactionBySenderAndNonce returns the hash of a transaction for the given sender and nonce.
-func (s *TransactionAPI) GetTransactionBySenderAndNonce(ctx context.Context, sender common.Address, nonce uint64) (*common.Hash, error) {
-	hash, err := s.b.GetTransactionBySenderAndNonce(ctx, sender, nonce)
+func (s *TransactionAPI) GetTransactionBySenderAndNonce(ctx context.Context, sender common.Address, nonce hexutil.Uint64) (*common.Hash, error) {
+	hash, err := s.b.GetTransactionBySenderAndNonce(ctx, sender, uint64(nonce))
 	if err != nil {
 		return nil, err
 	}
