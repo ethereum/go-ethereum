@@ -4073,3 +4073,40 @@ func TestSendRawTransactionSync_Timeout(t *testing.T) {
 		t.Fatalf("expected ErrorData=%s, got %v", want, got)
 	}
 }
+
+func TestGetTransactionBySenderAndNonce(t *testing.T) {
+	t.Parallel()
+
+	key, _ := crypto.HexToECDSA("b71c73a37e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	nonce := uint64(0)
+	tx := types.NewTransaction(nonce, common.Address{0xaa}, big.NewInt(1000), 21000, big.NewInt(1000000000), nil)
+	signedTx, _ := types.SignTx(tx, types.HomesteadSigner{}, key)
+
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: core.GenesisAlloc{
+			addr: {Balance: big.NewInt(1000000000000000000)},
+		},
+	}
+
+	backend := newTestBackend(t, 1, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
+		if i == 0 {
+			b.AddTx(signedTx)
+		}
+	})
+
+	api := NewTransactionAPI(backend, new(AddrLocker))
+	ctx := context.Background()
+
+	result, err := api.GetTransactionBySenderAndNonce(ctx, addr, nonce)
+	if err != nil {
+		t.Fatalf("GetTransactionBySenderAndNonce failed: %v", err)
+	}
+	if result == nil {
+		t.Fatalf("Expected transaction, got nil")
+	}
+	if *result != signedTx.Hash() {
+		t.Errorf("Hash mismatch: have %x, want %x", *result, signedTx.Hash())
+	}
+}

@@ -66,7 +66,6 @@ type Backend interface {
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 	BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error)
-	GetTransactionBySenderAndNonce(ctx context.Context, sender common.Address, nonce uint64) (*common.Hash, error)
 	StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error)
 	StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error)
 	Pending() (*types.Block, types.Receipts, *state.StateDB)
@@ -87,6 +86,7 @@ type Backend interface {
 	TxPoolContent() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction)
 	TxPoolContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction)
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
+	GetTransactionBySenderAndNonce(ctx context.Context, sender common.Address, nonce uint64) (*common.Hash, error)
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
