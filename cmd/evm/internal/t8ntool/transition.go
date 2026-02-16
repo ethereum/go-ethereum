@@ -168,14 +168,15 @@ func Transition(ctx *cli.Context) error {
 	}
 
 	// Configure tracer
+	var tracer *tracers.Tracer
 	if ctx.IsSet(TraceTracerFlag.Name) { // Custom tracing
 		config := json.RawMessage(ctx.String(TraceTracerConfigFlag.Name))
-		tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name),
+		innerTracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name),
 			nil, config, chainConfig)
 		if err != nil {
 			return NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %v", err))
 		}
-		vmConfig.Tracer = newResultWriter(baseDir, tracer)
+		tracer = newResultWriter(baseDir, innerTracer)
 	} else if ctx.Bool(TraceFlag.Name) { // JSON opcode tracing
 		logConfig := &logger.Config{
 			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
@@ -183,28 +184,28 @@ func Transition(ctx *cli.Context) error {
 			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
 		}
 		if ctx.Bool(TraceEnableCallFramesFlag.Name) {
-			vmConfig.Tracer = newFileWriter(baseDir, func(out io.Writer) *tracing.Hooks {
+			tracer = newFileWriter(baseDir, func(out io.Writer) *tracing.Hooks {
 				return logger.NewJSONLoggerWithCallFrames(logConfig, out)
 			})
 		} else {
-			vmConfig.Tracer = newFileWriter(baseDir, func(out io.Writer) *tracing.Hooks {
+			tracer = newFileWriter(baseDir, func(out io.Writer) *tracing.Hooks {
 				return logger.NewJSONLogger(logConfig, out)
 			})
 		}
 	}
 	// Configure opcode counter
-	var counter *native.OpcodeCounter
+	var opcodeTracer *tracers.Tracer
 	if ctx.IsSet(OpcodeCountFlag.Name) && ctx.String(OpcodeCountFlag.Name) != "" {
-		counter = new(native.OpcodeCounter)
-		if vmConfig.Tracer != nil {
+		opcodeTracer = native.NewOpcodeCounter()
+		if tracer != nil {
 			// If we have an existing tracer, multiplex with the opcode tracer
-			tExisting := tracers.Tracer{Hooks: vmConfig.Tracer}
-			tCounter := tracers.Tracer{Hooks: counter.Hooks()}
-			muxTracer, _ := native.NewMuxTracer([]string{"existing", "opcode"}, []*tracers.Tracer{&tExisting, &tCounter})
-			vmConfig.Tracer = muxTracer.Hooks
+			mux, _ := native.NewMuxTracer([]string{"trace", "opcode"}, []*tracers.Tracer{tracer, opcodeTracer})
+			vmConfig.Tracer = mux.Hooks
 		} else {
-			vmConfig.Tracer = counter.Hooks()
+			vmConfig.Tracer = opcodeTracer.Hooks
 		}
+	} else if tracer != nil {
+		vmConfig.Tracer = tracer.Hooks
 	}
 	// Run the test and aggregate the result
 	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name))
@@ -212,9 +213,13 @@ func Transition(ctx *cli.Context) error {
 		return err
 	}
 	// Write opcode counts if enabled
-	if counter != nil {
+	if opcodeTracer != nil {
 		fname := ctx.String(OpcodeCountFlag.Name)
-		if err := saveFile(baseDir, fname, counter.Results()); err != nil {
+		result, err := opcodeTracer.GetResult()
+		if err != nil {
+			return NewError(ErrorJson, fmt.Errorf("failed getting opcode counts: %v", err))
+		}
+		if err := saveFile(baseDir, fname, result); err != nil {
 			return err
 		}
 	}
