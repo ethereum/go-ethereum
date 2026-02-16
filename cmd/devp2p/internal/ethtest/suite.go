@@ -447,7 +447,7 @@ func (s *Suite) TestGetReceipts(t *utesting.T) {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 	// Wait for response.
-	resp := new(eth.ReceiptsPacket[*eth.ReceiptList69])
+	resp := new(eth.ReceiptsPacket)
 	if err := conn.ReadMsg(ethProto, eth.ReceiptsMsg, &resp); err != nil {
 		t.Fatalf("error reading block bodies msg: %v", err)
 	}
