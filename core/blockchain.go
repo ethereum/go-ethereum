@@ -352,6 +352,9 @@ type BlockChain struct {
 	txLookupLock  sync.RWMutex
 	txLookupCache *lru.Cache[common.Hash, txLookup]
 
+	ticketBlocks map[*big.Int][]common.Hash                // `ticketBlocks` is block hashes mapped by its number, whose ticket information is cached.
+	tickets      map[common.Hash]map[common.Address]uint16 // `tickets` is a cache of ticket balances processed for each leaf block.
+
 	stopping      atomic.Bool // false if chain is running, true when stopped
 	procInterrupt atomic.Bool // interrupt signaler for block processing
 
@@ -409,6 +412,8 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		receiptsCache:      lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
 		blockCache:         lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
 		txLookupCache:      lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
+		ticketBlocks:       make(map[*big.Int][]common.Hash),
+		tickets:            make(map[common.Hash]map[common.Address]uint16),
 		engine:             engine,
 		logger:             cfg.VmConfig.Tracer,
 		slowBlockThreshold: cfg.SlowBlockThreshold,
@@ -803,9 +808,23 @@ func (bc *BlockChain) SetFinalized(header *types.Header) {
 	if header != nil {
 		rawdb.WriteFinalizedBlockHash(bc.db, header.Hash())
 		headFinalizedBlockGauge.Update(int64(header.Number.Uint64()))
+
+		// remove ticket balances whose block number is smaller than
+		// finalized block
+		for n, hashes := range bc.ticketBlocks {
+			if n.Cmp(header.Number) < 0 {
+				for _, hash := range hashes {
+					delete(bc.tickets, hash)
+				}
+				delete(bc.ticketBlocks, n)
+			}
+		}
 	} else {
 		rawdb.WriteFinalizedBlockHash(bc.db, common.Hash{})
 		headFinalizedBlockGauge.Update(0)
+
+		bc.ticketBlocks = make(map[*big.Int][]common.Hash)
+		bc.tickets = make(map[common.Hash]map[common.Address]uint16)
 	}
 }
 
@@ -1113,6 +1132,8 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	bc.receiptsCache.Purge()
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
+	bc.tickets = make(map[common.Hash]map[common.Address]uint16)
+	bc.ticketBlocks = make(map[*big.Int][]common.Hash)
 
 	// Clear safe block, finalized block if needed
 	headBlock := bc.CurrentBlock()
@@ -2250,6 +2271,22 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	if err != nil {
 		return nil, err
 	}
+
+	// Add ticket balances of this block and remove the parent block data
+	if parent, ok := bc.tickets[block.ParentHash()]; ok {
+		delete(bc.tickets, block.ParentHash())
+		bc.tickets[block.Hash()] = parent
+		for addr, value := range res.Tickets {
+			if value == 0 {
+				delete(bc.tickets[block.Hash()], addr)
+			}
+			bc.tickets[block.Hash()][addr] = value
+		}
+	} else {
+		res, _ := bc.GetTicketBalance(block.Header())
+		bc.tickets[block.Hash()] = res
+	}
+
 	// Report the collected witness statistics
 	if witnessStats != nil {
 		witnessStats.ReportMetrics(block.NumberU64())

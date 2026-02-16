@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
@@ -351,6 +352,45 @@ func (bc *BlockChain) GetCanonicalTransaction(hash common.Hash) (*rawdb.LegacyTx
 		transaction: tx,
 	})
 	return lookup, tx
+}
+
+func (bc *BlockChain) GetTicketBalance(header *types.Header) (map[common.Address]uint16, error) {
+	if bc.tickets[header.Hash()] != nil {
+		return bc.tickets[header.Hash()], nil
+	}
+
+	ctx := NewEVMBlockContext(header, bc.HeaderChain(), nil)
+	statedb, err := bc.StateAt(header.Root)
+	if err != nil {
+		return nil, err
+	}
+
+	evm := vm.NewEVM(ctx, statedb, bc.chainConfig, bc.cfg.VmConfig)
+	cc := contractCaller{addr: params.BlobTicketAllocationAddress, evm: evm}
+	caller, err := NewTicketAllocatorCaller(params.BlobTicketAllocationAddress, cc)
+	if err != nil {
+		return nil, err
+	}
+
+	senders, balances, err := caller.GetBalance(&bind.CallOpts{BlockNumber: header.Number})
+	if err != nil {
+		// when the contract is not deployed, return empty map
+		if errors.Is(err, bind.ErrNoCode) {
+			result := make(map[common.Address]uint16)
+			bc.tickets[header.Hash()] = result
+			return result, nil
+		}
+		return nil, err
+	}
+
+	result := make(map[common.Address]uint16)
+
+	for i, sender := range senders {
+		result[sender] = uint16(balances[i])
+	}
+	bc.tickets[header.Hash()] = result
+
+	return result, nil
 }
 
 // TxIndexDone returns true if the transaction indexer has finished indexing.

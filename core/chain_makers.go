@@ -408,6 +408,22 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			b.header.RequestsHash = &reqHash
 		}
 
+		if config.IsPrague(b.header.Number, b.header.Time) {
+			usedAddress := make([]common.Address, 0)
+			usedAmount := make([]uint16, 0)
+			signer := b.Signer()
+			for i, tx := range b.txs {
+				if tx.Type() == types.BlobTxType && b.receipts[i].Status == types.ReceiptStatusSuccessful {
+					from, _ := types.Sender(signer, tx)
+					usedAddress = append(usedAddress, from)
+					usedAmount = append(usedAmount, uint16(len(tx.BlobHashes())))
+				}
+			}
+			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
+			evm := vm.NewEVM(blockContext, statedb, b.cm.config, vm.Config{})
+			ProcessTickets(usedAddress, usedAmount, evm)
+		}
+
 		body := types.Body{Transactions: b.txs, Uncles: b.uncles, Withdrawals: b.withdrawals}
 		block, err := b.engine.FinalizeAndAssemble(cm, b.header, statedb, &body, b.receipts)
 		if err != nil {
