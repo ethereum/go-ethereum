@@ -274,7 +274,7 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 	return payload, nil
 }
 
-func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*types.Transaction, extraData []byte) (*engine.ExecutionPayloadEnvelope, error) {
+func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*types.Transaction, empty bool, extraData []byte) (*engine.ExecutionPayloadEnvelope, error) {
 	fullParams := &generateParams{
 		timestamp:         args.Timestamp,
 		forceTime:         true,
@@ -283,7 +283,7 @@ func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*
 		random:            args.Random,
 		withdrawals:       args.Withdrawals,
 		beaconRoot:        args.BeaconRoot,
-		noTxs:             false,
+		noTxs:             !empty,
 		forceOverrides:    true,
 		overrideExtraData: extraData,
 		overrideTxs:       transactions,

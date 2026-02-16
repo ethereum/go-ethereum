@@ -136,7 +136,9 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 	work.size += uint64(genParam.withdrawals.Size())
 
 	if !genParam.noTxs {
-		if genParam.forceOverrides {
+		// If forceOverrides is true and overrideTxs is not empty, commit the override transactions
+		// otherwise, fill the block with the current transactions from the txpool
+		if genParam.forceOverrides && len(genParam.overrideTxs) > 0 {
 			if work.gasPool == nil {
 				work.gasPool = new(core.GasPool).AddGas(work.header.GasLimit)
 			}
