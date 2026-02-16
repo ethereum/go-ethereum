@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
@@ -40,13 +41,17 @@ func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes en
 	// If the transactions is nil, build a block with the current transactions from the txpool
 	// If the transactions is not nil and not empty, build a block with the transactions
 	buildEmpty := transactions != nil && len(*transactions) == 0
-	dec := make([][]byte, 0, len(*transactions))
-	for _, tx := range *transactions {
-		dec = append(dec, tx)
-	}
-	txs, err := engine.DecodeTransactions(dec)
-	if err != nil {
-		return nil, err
+	var txs []*types.Transaction
+	if transactions != nil {
+		dec := make([][]byte, 0, len(*transactions))
+		for _, tx := range *transactions {
+			dec = append(dec, tx)
+		}
+		var err error
+		txs, err = engine.DecodeTransactions(dec)
+		if err != nil {
+			return nil, err
+		}
 	}
 	extra := make([]byte, 0)
 	if extraData != nil {
