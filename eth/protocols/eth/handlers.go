@@ -19,7 +19,6 @@ package eth
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 
@@ -247,29 +246,20 @@ func ServiceGetBlockBodiesQuery(chain *core.BlockChain, query GetBlockBodiesRequ
 	return bodies
 }
 
-func handleGetReceipts68(backend Backend, msg Decoder, peer *Peer) error {
+func handleGetReceipts(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the block receipts retrieval message
 	var query GetReceiptsPacket
 	if err := msg.Decode(&query); err != nil {
 		return err
 	}
-	response := ServiceGetReceiptsQuery68(backend.Chain(), query.GetReceiptsRequest)
+	response := ServiceGetReceiptsQuery(backend.Chain(), query.GetReceiptsRequest)
 	return peer.ReplyReceiptsRLP(query.RequestId, response)
 }
 
-func handleGetReceipts69(backend Backend, msg Decoder, peer *Peer) error {
-	// Decode the block receipts retrieval message
-	var query GetReceiptsPacket
-	if err := msg.Decode(&query); err != nil {
-		return err
-	}
-	response := serviceGetReceiptsQuery69(backend.Chain(), query.GetReceiptsRequest)
-	return peer.ReplyReceiptsRLP(query.RequestId, response)
-}
-
-// ServiceGetReceiptsQuery68 assembles the response to a receipt query. It is
-// exposed to allow external packages to test protocol behavior.
-func ServiceGetReceiptsQuery68(chain *core.BlockChain, query GetReceiptsRequest) []rlp.RawValue {
+// ServiceGetReceiptsQuery assembles the response to a receipt query.
+// It does not send the bloom filters for the receipts. It is exposed
+// to allow external packages to test protocol behavior.
+func ServiceGetReceiptsQuery(chain *core.BlockChain, query GetReceiptsRequest) []rlp.RawValue {
 	// Gather state data until the fetch or network limits is reached
 	var (
 		bytes    int
@@ -292,7 +282,7 @@ func ServiceGetReceiptsQuery68(chain *core.BlockChain, query GetReceiptsRequest)
 				continue
 			}
 			var err error
-			results, err = blockReceiptsToNetwork68(results, body)
+			results, err = encodeTypes(results, body)
 			if err != nil {
 				log.Error("Error in block receipts conversion", "hash", hash, "err", err)
 				continue
@@ -302,51 +292,6 @@ func ServiceGetReceiptsQuery68(chain *core.BlockChain, query GetReceiptsRequest)
 		bytes += len(results)
 	}
 	return receipts
-}
-
-// serviceGetReceiptsQuery69 assembles the response to a receipt query.
-// It does not send the bloom filters for the receipts
-func serviceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest) []rlp.RawValue {
-	// Gather state data until the fetch or network limits is reached
-	var (
-		bytes    int
-		receipts []rlp.RawValue
-	)
-	for lookups, hash := range query {
-		if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe ||
-			lookups >= 2*maxReceiptsServe {
-			break
-		}
-		// Retrieve the requested block's receipts
-		results := chain.GetReceiptsRLP(hash)
-		if results == nil {
-			if header := chain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
-				continue
-			}
-		} else {
-			body := chain.GetBodyRLP(hash)
-			if body == nil {
-				continue
-			}
-			var err error
-			results, err = blockReceiptsToNetwork69(results, body)
-			if err != nil {
-				log.Error("Error in block receipts conversion", "hash", hash, "err", err)
-				continue
-			}
-		}
-		receipts = append(receipts, results)
-		bytes += len(results)
-	}
-	return receipts
-}
-
-func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {
-	return errors.New("block announcements disallowed") // We dropped support for non-merge networks
-}
-
-func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
-	return errors.New("block broadcasts disallowed") // We dropped support for non-merge networks
 }
 
 func handleBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
@@ -490,9 +435,9 @@ func writeTxForHash(tx []byte, buf *bytes.Buffer) {
 	}
 }
 
-func handleReceipts[L ReceiptsList](backend Backend, msg Decoder, peer *Peer) error {
+func handleReceipts(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of receipts arrived to one of our previous requests
-	res := new(ReceiptsPacket[L])
+	res := new(ReceiptsPacket)
 	if err := msg.Decode(res); err != nil {
 		return err
 	}
@@ -521,6 +466,7 @@ func handleReceipts[L ReceiptsList](backend Backend, msg Decoder, peer *Peer) er
 		}
 		return hashes
 	}
+
 	var enc ReceiptsRLPResponse
 	for i := range receiptLists {
 		encReceipts, err := receiptLists[i].EncodeForStorage()
