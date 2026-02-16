@@ -4099,7 +4099,7 @@ func TestGetTransactionBySenderAndNonce(t *testing.T) {
 	api := NewTransactionAPI(backend, new(AddrLocker))
 	ctx := context.Background()
 
-	result, err := api.GetTransactionBySenderAndNonce(ctx, addr, nonce)
+	result, err := api.GetTransactionBySenderAndNonce(ctx, addr, hexutil.Uint64(nonce))
 	if err != nil {
 		t.Fatalf("GetTransactionBySenderAndNonce failed: %v", err)
 	}
