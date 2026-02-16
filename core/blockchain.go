@@ -1281,6 +1281,11 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	rawdb.WriteHeadFastBlockHash(batch, block.Hash())
 	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
 	rawdb.WriteTxLookupEntriesByBlock(batch, block)
+
+	signer := types.MakeSigner(bc.chainConfig, block.Number(), block.Time())
+	// Write sender+nonce index
+	rawdb.WriteTxSenderNonceEntryByBlock(batch, block, signer)
+
 	rawdb.WriteHeadBlockHash(batch, block.Hash())
 
 	// Flush the whole batch into the disk, exit the node if failed
