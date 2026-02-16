@@ -709,6 +709,14 @@ func (b testBackend) HistoryPruningCutoff() uint64 {
 	return bn
 }
 
+// GetTransactionHashBySenderAndNonce implements the Backend interface for testing.
+func (b *testBackend) GetTransactionBySenderAndNonce(ctx context.Context, sender common.Address, nonce uint64) (*common.Hash, error) {
+	// Todo(shadow): to implement for txn pending in mempool after implementing other pending
+	// mempool functionality like  GetPoolTransactions
+	hash := rawdb.ReadTxSenderNonceEntry(b.db, sender, nonce)
+	return hash, nil
+}
+
 func TestEstimateGas(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
