@@ -745,6 +745,28 @@ func (s *StateDB) GetRefund() uint64 {
 	return s.refund
 }
 
+type RemovedAccountWithBalance struct {
+	Address common.Address
+	Balance *uint256.Int
+}
+
+// GetRemovedAccountsWithBalance returns a list of accounts scheduled for
+// removal which still have positive balance. The purpose of this function is
+// to handle a corner case of EIP-7708 where a self-destructed account might
+// still receive funds between sending/burning its previous balance and actual
+// removal. In this case the burning of these remaining balances still need to
+// be logged.
+// Specification EIP-7708: https://eips.ethereum.org/EIPS/eip-7708
+func (s *StateDB) GetRemovedAccountsWithBalance() (list []RemovedAccountWithBalance) {
+	for addr := range s.journal.dirties {
+		if obj, exist := s.stateObjects[addr]; exist &&
+			obj.selfDestructed && !obj.Balance().IsZero() {
+			list = append(list, RemovedAccountWithBalance{Address: obj.address, Balance: obj.Balance()})
+		}
+	}
+	return list
+}
+
 // Finalise finalises the state by removing the destructed objects and clears
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
