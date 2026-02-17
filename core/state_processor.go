@@ -135,26 +135,25 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 func postExecution(ctx context.Context, config *params.ChainConfig, block *types.Block, allLogs []*types.Log, evm *vm.EVM) (requests [][]byte, err error) {
 	_, _, spanEnd := telemetry.StartSpan(ctx, "core.postExecution")
 	defer spanEnd(&err)
+	
 	// Read requests if Prague is enabled.
 	if config.IsPrague(block.Number(), block.Time()) {
-		requests = [][]byte{}
+		var requests [][]byte
 		// EIP-6110
-		if err = ParseDepositLogs(&requests, allLogs, config); err != nil {
-			err = fmt.Errorf("failed to parse deposit logs: %w", err)
-			return
+		if err := ParseDepositLogs(&requests, allLogs, config); err != nil {
+			return nil, fmt.Errorf("failed to parse deposit logs: %w", err)
 		}
 		// EIP-7002
-		if err = ProcessWithdrawalQueue(&requests, evm); err != nil {
-			err = fmt.Errorf("failed to process withdrawal queue: %w", err)
-			return
+		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
+			return nil, fmt.Errorf("failed to process withdrawal queue: %w", err)
 		}
 		// EIP-7251
-		if err = ProcessConsolidationQueue(&requests, evm); err != nil {
-			err = fmt.Errorf("failed to process consolidation queue: %w", err)
-			return
+		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
+			return nil, fmt.Errorf("failed to process consolidation queue: %w", err)
 		}
 	}
-	return
+	
+	return requests, nil
 }
 
 // ApplyTransactionWithEVM attempts to apply a transaction to the given state database
