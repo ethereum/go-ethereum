@@ -138,18 +138,18 @@ func postExecution(ctx context.Context, config *params.ChainConfig, block *types
 
 	// Read requests if Prague is enabled.
 	if config.IsPrague(block.Number(), block.Time()) {
-		requests := [][]byte{}
+		requests = [][]byte{}
 		// EIP-6110
 		if err := ParseDepositLogs(&requests, allLogs, config); err != nil {
-			return nil, fmt.Errorf("failed to parse deposit logs: %w", err)
+			return requests, fmt.Errorf("failed to parse deposit logs: %w", err)
 		}
 		// EIP-7002
 		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
-			return nil, fmt.Errorf("failed to process withdrawal queue: %w", err)
+			return requests, fmt.Errorf("failed to process withdrawal queue: %w", err)
 		}
 		// EIP-7251
 		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
-			return nil, fmt.Errorf("failed to process consolidation queue: %w", err)
+			return requests, fmt.Errorf("failed to process consolidation queue: %w", err)
 		}
 	}
 
