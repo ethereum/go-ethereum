@@ -52,6 +52,11 @@ func StartSpan(ctx context.Context, spanName string, attributes ...Attribute) (c
 
 // StartSpanWithTracer requires a tracer to be passed in and creates a SpanKind=INTERNAL span.
 func StartSpanWithTracer(ctx context.Context, tracer trace.Tracer, name string, attributes ...Attribute) (context.Context, trace.Span, func(*error)) {
+	// Don't create a span if there's no parent span in the context.
+	parent := trace.SpanFromContext(ctx)
+	if !parent.SpanContext().IsValid() {
+		return ctx, parent, func(*error) {}
+	}
 	return startSpan(ctx, tracer, trace.SpanKindInternal, name, attributes...)
 }
 

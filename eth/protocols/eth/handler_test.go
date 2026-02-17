@@ -23,9 +23,11 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -42,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
 )
 
@@ -360,8 +363,8 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 			GetBlockHeadersRequest: tt.query,
 		})
 		if err := p2p.ExpectMsg(peer.app, BlockHeadersMsg, &BlockHeadersPacket{
-			RequestId:           123,
-			BlockHeadersRequest: headers,
+			RequestId: 123,
+			List:      encodeRL(headers),
 		}); err != nil {
 			t.Errorf("test %d: headers mismatch: %v", i, err)
 		}
@@ -374,7 +377,7 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 					RequestId:              456,
 					GetBlockHeadersRequest: tt.query,
 				})
-				expected := &BlockHeadersPacket{RequestId: 456, BlockHeadersRequest: headers}
+				expected := &BlockHeadersPacket{RequestId: 456, List: encodeRL(headers)}
 				if err := p2p.ExpectMsg(peer.app, BlockHeadersMsg, expected); err != nil {
 					t.Errorf("test %d by hash: headers mismatch: %v", i, err)
 				}
@@ -437,7 +440,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 		// Collect the hashes to request, and the response to expect
 		var (
 			hashes []common.Hash
-			bodies []*BlockBody
+			bodies []BlockBody
 			seen   = make(map[int64]bool)
 		)
 		for j := 0; j < tt.random; j++ {
@@ -449,7 +452,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 					block := backend.chain.GetBlockByNumber(uint64(num))
 					hashes = append(hashes, block.Hash())
 					if len(bodies) < tt.expected {
-						bodies = append(bodies, &BlockBody{Transactions: block.Transactions(), Uncles: block.Uncles(), Withdrawals: block.Withdrawals()})
+						bodies = append(bodies, encodeBody(block))
 					}
 					break
 				}
@@ -459,7 +462,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 			hashes = append(hashes, hash)
 			if tt.available[j] && len(bodies) < tt.expected {
 				block := backend.chain.GetBlockByHash(hash)
-				bodies = append(bodies, &BlockBody{Transactions: block.Transactions(), Uncles: block.Uncles(), Withdrawals: block.Withdrawals()})
+				bodies = append(bodies, encodeBody(block))
 			}
 		}
 
@@ -469,11 +472,66 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 			GetBlockBodiesRequest: hashes,
 		})
 		if err := p2p.ExpectMsg(peer.app, BlockBodiesMsg, &BlockBodiesPacket{
-			RequestId:           123,
-			BlockBodiesResponse: bodies,
+			RequestId: 123,
+			List:      encodeRL(bodies),
 		}); err != nil {
 			t.Fatalf("test %d: bodies mismatch: %v", i, err)
 		}
+	}
+}
+
+func encodeBody(b *types.Block) BlockBody {
+	body := BlockBody{
+		Transactions: encodeRL([]*types.Transaction(b.Transactions())),
+		Uncles:       encodeRL(b.Uncles()),
+	}
+	if b.Withdrawals() != nil {
+		wd := encodeRL([]*types.Withdrawal(b.Withdrawals()))
+		body.Withdrawals = &wd
+	}
+	return body
+}
+
+func TestHashBody(t *testing.T) {
+	key, _ := crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+	signer := types.NewCancunSigner(big.NewInt(1))
+
+	// create block 1
+	header := &types.Header{Number: big.NewInt(11)}
+	txs := []*types.Transaction{
+		types.MustSignNewTx(key, signer, &types.DynamicFeeTx{
+			ChainID: big.NewInt(1),
+			Nonce:   1,
+			Data:    []byte("testing"),
+		}),
+		types.MustSignNewTx(key, signer, &types.LegacyTx{
+			Nonce: 2,
+			Data:  []byte("testing"),
+		}),
+	}
+	uncles := []*types.Header{{Number: big.NewInt(10)}}
+	body1 := &types.Body{Transactions: txs, Uncles: uncles}
+	block1 := types.NewBlock(header, body1, nil, trie.NewStackTrie(nil))
+
+	// create block 2 (has withdrawals)
+	header2 := &types.Header{Number: big.NewInt(12)}
+	body2 := &types.Body{
+		Withdrawals: []*types.Withdrawal{{Index: 10}, {Index: 11}},
+	}
+	block2 := types.NewBlock(header2, body2, nil, trie.NewStackTrie(nil))
+
+	expectedHashes := BlockBodyHashes{
+		TransactionRoots: []common.Hash{block1.TxHash(), block2.TxHash()},
+		WithdrawalRoots:  []common.Hash{common.Hash{}, *block2.Header().WithdrawalsHash},
+		UncleHashes:      []common.Hash{block1.UncleHash(), block2.UncleHash()},
+	}
+
+	// compute hash like protocol handler does
+	protocolBodies := []BlockBody{encodeBody(block1), encodeBody(block2)}
+	hashes := hashBodyParts(protocolBodies)
+	if !reflect.DeepEqual(hashes, expectedHashes) {
+		t.Errorf("wrong hashes: %s", spew.Sdump(hashes))
+		t.Logf("expected: %s", spew.Sdump(expectedHashes))
 	}
 }
 
@@ -528,13 +586,13 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 	// Collect the hashes to request, and the response to expect
 	var (
 		hashes   []common.Hash
-		receipts []*ReceiptList68
+		receipts rlp.RawList[*ReceiptList68]
 	)
 	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
 		block := backend.chain.GetBlockByNumber(i)
 		hashes = append(hashes, block.Hash())
 		trs := backend.chain.GetReceiptsByHash(block.Hash())
-		receipts = append(receipts, NewReceiptList68(trs))
+		receipts.Append(NewReceiptList68(trs))
 	}
 
 	// Send the hash request and verify the response
@@ -688,10 +746,18 @@ func testGetPooledTransaction(t *testing.T, blobTx bool) {
 		RequestId:                    123,
 		GetPooledTransactionsRequest: []common.Hash{tx.Hash()},
 	})
-	if err := p2p.ExpectMsg(peer.app, PooledTransactionsMsg, PooledTransactionsPacket{
-		RequestId:                  123,
-		PooledTransactionsResponse: []*types.Transaction{tx},
+	if err := p2p.ExpectMsg(peer.app, PooledTransactionsMsg, &PooledTransactionsPacket{
+		RequestId: 123,
+		List:      encodeRL([]*types.Transaction{tx}),
 	}); err != nil {
 		t.Errorf("pooled transaction mismatch: %v", err)
 	}
+}
+
+func encodeRL[T any](slice []T) rlp.RawList[T] {
+	rl, err := rlp.EncodeToRawList(slice)
+	if err != nil {
+		panic(err)
+	}
+	return rl
 }
