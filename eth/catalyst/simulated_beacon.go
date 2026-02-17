@@ -17,6 +17,7 @@
 package catalyst
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
@@ -32,11 +33,13 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/rpc"
+	"go.opentelemetry.io/otel"
 )
 
 const devEpochLength = 32
@@ -191,6 +194,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	}
 
 	version := payloadVersion(c.eth.BlockChain().Config(), timestamp)
+	tracer := otel.Tracer("")
 
 	var random [32]byte
 	rand.Read(random[:])
@@ -255,8 +259,16 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		requests = envelope.Requests
 	}
 
+	// Create a server span for newPayload, simulating the consensus client
+	// sending the execution payload for validation.
+	npCtx, npSpanEnd := telemetry.StartServerSpan(context.Background(), tracer, telemetry.RPCInfo{
+		System:  "jsonrpc",
+		Service: "engine",
+		Method:  "newPayloadV" + fmt.Sprintf("%d", version),
+	})
 	// Mark the payload as canon
-	_, err = c.engineAPI.newPayload(*payload, blobHashes, beaconRoot, requests, false)
+	_, err = c.engineAPI.newPayload(npCtx, *payload, blobHashes, beaconRoot, requests, false)
+	npSpanEnd(&err)
 	if err != nil {
 		return err
 	}

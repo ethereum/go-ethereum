@@ -18,6 +18,7 @@
 package catalyst
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -35,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
@@ -625,15 +627,15 @@ func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) ([]*engine.Blob
 var invalidStatus = engine.PayloadStatusV1{Status: engine.INVALID}
 
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV1(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
+func (api *ConsensusAPI) NewPayloadV1(ctx context.Context, params engine.ExecutableData) (engine.PayloadStatusV1, error) {
 	if params.Withdrawals != nil {
 		return invalidStatus, paramsErr("withdrawals not supported in V1")
 	}
-	return api.newPayload(params, nil, nil, nil, false)
+	return api.newPayload(ctx, params, nil, nil, nil, false)
 }
 
 // NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
+func (api *ConsensusAPI) NewPayloadV2(ctx context.Context, params engine.ExecutableData) (engine.PayloadStatusV1, error) {
 	var (
 		cancun   = api.config().IsCancun(api.config().LondonBlock, params.Timestamp)
 		shanghai = api.config().IsShanghai(api.config().LondonBlock, params.Timestamp)
@@ -650,11 +652,11 @@ func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.Payl
 	case params.BlobGasUsed != nil:
 		return invalidStatus, paramsErr("non-nil blobGasUsed pre-cancun")
 	}
-	return api.newPayload(params, nil, nil, nil, false)
+	return api.newPayload(ctx, params, nil, nil, nil, false)
 }
 
 // NewPayloadV3 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (engine.PayloadStatusV1, error) {
+func (api *ConsensusAPI) NewPayloadV3(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (engine.PayloadStatusV1, error) {
 	switch {
 	case params.Withdrawals == nil:
 		return invalidStatus, paramsErr("nil withdrawals post-shanghai")
@@ -669,11 +671,11 @@ func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData, versionedHas
 	case !api.checkFork(params.Timestamp, forks.Cancun):
 		return invalidStatus, unsupportedForkErr("newPayloadV3 must only be called for cancun payloads")
 	}
-	return api.newPayload(params, versionedHashes, beaconRoot, nil, false)
+	return api.newPayload(ctx, params, versionedHashes, beaconRoot, nil, false)
 }
 
 // NewPayloadV4 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes) (engine.PayloadStatusV1, error) {
+func (api *ConsensusAPI) NewPayloadV4(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes) (engine.PayloadStatusV1, error) {
 	switch {
 	case params.Withdrawals == nil:
 		return invalidStatus, paramsErr("nil withdrawals post-shanghai")
@@ -694,10 +696,10 @@ func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHas
 	if err := validateRequests(requests); err != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(err)
 	}
-	return api.newPayload(params, versionedHashes, beaconRoot, requests, false)
+	return api.newPayload(ctx, params, versionedHashes, beaconRoot, requests, false)
 }
 
-func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, witness bool) (engine.PayloadStatusV1, error) {
+func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, witness bool) (result engine.PayloadStatusV1, err error) {
 	// The locking here is, strictly, not required. Without these locks, this can happen:
 	//
 	// 1. NewPayload( execdata-N ) is invoked from the CL. It goes all the way down to
@@ -711,6 +713,13 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	//    sequentially.
 	// Hence, we use a lock here, to be sure that the previous call has finished before we
 	// check whether we already have the block locally.
+	var attrs = []telemetry.Attribute{
+		telemetry.Int64Attribute("block.number", int64(params.Number)),
+		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
+		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
+	}
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayload", attrs...)
+	defer spanEnd(&err)
 	api.newPayloadLock.Lock()
 	defer api.newPayloadLock.Unlock()
 
@@ -789,7 +798,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	}
 	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number())
 	start := time.Now()
-	proofs, err := api.eth.BlockChain().InsertBlockWithoutSetHead(block, witness)
+	proofs, err := api.eth.BlockChain().InsertBlockWithoutSetHead(ctx, block, witness)
 	processingTime := time.Since(start)
 	if err != nil {
 		log.Warn("NewPayload: inserting block failed", "error", err)
