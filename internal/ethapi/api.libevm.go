@@ -28,3 +28,8 @@ import (
 func NewRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, blockTime uint64, index uint64, baseFee *big.Int, config *params.ChainConfig) *RPCTransaction {
 	return newRPCTransaction(tx, blockHash, blockNumber, blockTime, index, baseFee, config)
 }
+
+// MarshalReceipt exports the [marshalReceipt] function.
+func MarshalReceipt(r *types.Receipt, blockHash common.Hash, blockNumber uint64, signer types.Signer, tx *types.Transaction, txIndex int) map[string]any {
+	return marshalReceipt(r, blockHash, blockNumber, signer, tx, txIndex)
+}
