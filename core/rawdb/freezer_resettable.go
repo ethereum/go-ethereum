@@ -170,8 +170,8 @@ func (f *resettableFreezer) ReadAncients(fn func(ethdb.AncientReaderOp) error) (
 
 // ModifyAncients runs the given write operation.
 func (f *resettableFreezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (writeSize int64, err error) {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
+	f.lock.Lock()
+	defer f.lock.Unlock()
 
 	return f.freezer.ModifyAncients(fn)
 }
@@ -179,8 +179,8 @@ func (f *resettableFreezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) 
 // TruncateHead discards any recent data above the provided threshold number.
 // It returns the previous head number.
 func (f *resettableFreezer) TruncateHead(items uint64) (uint64, error) {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
+	f.lock.Lock()
+	defer f.lock.Unlock()
 
 	return f.freezer.TruncateHead(items)
 }
@@ -188,8 +188,8 @@ func (f *resettableFreezer) TruncateHead(items uint64) (uint64, error) {
 // TruncateTail discards any recent data below the provided threshold number.
 // It returns the previous value
 func (f *resettableFreezer) TruncateTail(tail uint64) (uint64, error) {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
+	f.lock.Lock()
+	defer f.lock.Unlock()
 
 	return f.freezer.TruncateTail(tail)
 }
