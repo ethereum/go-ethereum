@@ -586,6 +586,12 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	}
 	defer release()
 
+	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+	if api.backend.ChainConfig().IsPrague(block.Number()) {
+		vmenv := vm.NewEVM(blockCtx, vm.TxContext{}, statedb, nil, api.backend.ChainConfig(), vm.Config{})
+		core.ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
+	}
+
 	// JS tracers have high overhead. In this case run a parallel
 	// process that generates states in one thread and traces txes
 	// in separate worker threads.
@@ -598,14 +604,9 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	var (
 		txs       = block.Transactions()
 		blockHash = block.Hash()
-		blockCtx  = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number())
 		results   = make([]*txTraceResult, len(txs))
 	)
-	if api.backend.ChainConfig().IsPrague(block.Number()) {
-		vmenv := vm.NewEVM(blockCtx, vm.TxContext{}, statedb, nil, api.backend.ChainConfig(), vm.Config{})
-		core.ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
-	}
 	feeCapacity := statedb.GetTRC21FeeCapacityFromState()
 	for i, tx := range txs {
 		var balance *big.Int
