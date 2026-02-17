@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"math/big"
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -97,14 +99,15 @@ func newPayload(empty *types.Block, emptyRequests [][]byte, witness *stateless.W
 	return payload
 }
 
-// update updates the full-block with latest built version.
-func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) {
+// update updates the full-block with latest built version. It returns true if
+// the update was accepted (i.e. the new block has higher fees than the previous).
+func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) (result bool) {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
 	select {
 	case <-payload.stop:
-		return // reject stale update
+		return false // reject stale update
 	default:
 	}
 	// Ensure the newly provided full block has a higher transaction fee.
@@ -129,8 +132,10 @@ func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) {
 			"root", r.block.Root(),
 			"elapsed", common.PrettyDuration(elapsed),
 		)
+		result = true
 	}
 	payload.cond.Broadcast() // fire signal for notifying full block
+	return
 }
 
 // Resolve returns the latest built payload and also terminates the background
@@ -205,8 +210,34 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	return envelope
 }
 
+func (miner *Miner) runBuildIteration(ctx context.Context, iteration int, payload *Payload, params *generateParams, witness bool) {
+	ctx, span, spanEnd := telemetry.StartSpan(ctx, "miner.buildIteration",
+		telemetry.Int64Attribute("iteration", int64(iteration)),
+	)
+	var err error
+	defer spanEnd(&err)
+
+	start := time.Now()
+	r := miner.generateWork(ctx, params, witness)
+	err = r.err
+	if err == nil {
+		accepted := payload.update(r, time.Since(start))
+		span.SetAttributes(telemetry.BoolAttribute("update.accepted", accepted))
+	} else {
+		log.Info("Error while generating work", "id", payload.id, "err", err)
+	}
+}
+
 // buildPayload builds the payload according to the provided parameters.
-func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload, error) {
+func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, witness bool) (result *Payload, err error) {
+	payloadID := args.Id()
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "miner.buildPayload",
+		telemetry.StringAttribute("payload.id", payloadID.String()),
+		telemetry.StringAttribute("parent.hash", args.Parent.String()),
+		telemetry.Int64Attribute("timestamp", int64(args.Timestamp)),
+	)
+	defer spanEnd(&err)
+
 	// Build the initial version with no transaction included. It should be fast
 	// enough to run. The empty payload can at least make sure there is something
 	// to deliver for not missing slot.
@@ -220,16 +251,25 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 		beaconRoot:  args.BeaconRoot,
 		noTxs:       true,
 	}
-	empty := miner.generateWork(emptyParams, witness)
+	empty := miner.generateWork(ctx, emptyParams, witness)
 	if empty.err != nil {
 		return nil, empty.err
 	}
 	// Construct a payload object for return.
-	payload := newPayload(empty.block, empty.requests, empty.witness, args.Id())
+	payload := newPayload(empty.block, empty.requests, empty.witness, payloadID)
 
 	// Spin up a routine for updating the payload in background. This strategy
 	// can maximum the revenue for including transactions with highest fee.
 	go func() {
+		var iteration int
+		bCtx, bSpan, bSpanEnd := telemetry.StartSpan(ctx, "miner.background",
+			telemetry.Int64Attribute("block.number", int64(empty.block.NumberU64())),
+		)
+		defer func() {
+			bSpan.SetAttributes(telemetry.Int64Attribute("iterations.total", int64(iteration)))
+			bSpanEnd(nil)
+		}()
+
 		// Setup the timer for re-building the payload. The initial clock is kept
 		// for triggering process immediately.
 		timer := time.NewTimer(0)
@@ -250,22 +290,24 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 			beaconRoot:  args.BeaconRoot,
 			noTxs:       false,
 		}
-
 		for {
 			select {
 			case <-timer.C:
-				start := time.Now()
-				r := miner.generateWork(fullParams, witness)
-				if r.err == nil {
-					payload.update(r, time.Since(start))
-				} else {
-					log.Info("Error while generating work", "id", payload.id, "err", r.err)
-				}
+				iteration++
+				miner.runBuildIteration(bCtx, iteration, payload, fullParams, witness)
 				timer.Reset(miner.config.Recommit)
 			case <-payload.stop:
+				payload.lock.Lock()
+				emptyDelivered := payload.full == nil
+				payload.lock.Unlock()
+				bSpan.SetAttributes(
+					telemetry.StringAttribute("exit.reason", "delivery"),
+					telemetry.BoolAttribute("empty.delivered", emptyDelivered),
+				)
 				log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
 				return
 			case <-endTimer.C:
+				bSpan.SetAttributes(telemetry.StringAttribute("exit.reason", "timeout"))
 				log.Info("Stopping work on payload", "id", payload.id, "reason", "timeout")
 				return
 			}

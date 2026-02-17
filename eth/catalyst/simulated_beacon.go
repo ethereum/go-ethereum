@@ -17,6 +17,7 @@
 package catalyst
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
@@ -32,11 +33,13 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/rpc"
+	"go.opentelemetry.io/otel"
 )
 
 const devEpochLength = 32
@@ -121,7 +124,7 @@ func NewSimulatedBeacon(period uint64, feeRecipient common.Address, eth *eth.Eth
 	// if genesis block, send forkchoiceUpdated to trigger transition to PoS
 	if block.Number.Sign() == 0 {
 		version := payloadVersion(eth.BlockChain().Config(), block.Time)
-		if _, err := engineAPI.forkchoiceUpdated(current, nil, version, false); err != nil {
+		if _, err := engineAPI.forkchoiceUpdated(context.Background(), current, nil, version, false); err != nil {
 			return nil, err
 		}
 	}
@@ -191,16 +194,25 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	}
 
 	version := payloadVersion(c.eth.BlockChain().Config(), timestamp)
+	tracer := otel.Tracer("")
 
+	// Create a server span for forkchoiceUpdated with payload attributes,
+	// simulating an incoming engine API request from a real consensus client.
 	var random [32]byte
 	rand.Read(random[:])
-	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, &engine.PayloadAttributes{
+	fcCtx, fcSpanEnd := telemetry.StartServerSpan(context.Background(), tracer, telemetry.RPCInfo{
+		System:  "jsonrpc",
+		Service: "engine",
+		Method:  "forkchoiceUpdatedV" + fmt.Sprintf("%d", version),
+	})
+	fcResponse, err := c.engineAPI.forkchoiceUpdated(fcCtx, c.curForkchoiceState, &engine.PayloadAttributes{
 		Timestamp:             timestamp,
 		SuggestedFeeRecipient: feeRecipient,
 		Withdrawals:           withdrawals,
 		Random:                random,
 		BeaconRoot:            &common.Hash{},
 	}, version, false)
+	fcSpanEnd(&err)
 	if err != nil {
 		return err
 	}
@@ -214,7 +226,15 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		return nil
 	}
 
+	// Create a server span for getPayload, simulating the consensus client
+	// coming back to retrieve the built payload.
+	_, gpSpanEnd := telemetry.StartServerSpan(context.Background(), tracer, telemetry.RPCInfo{
+		System:  "jsonrpc",
+		Service: "engine",
+		Method:  "getPayloadV" + fmt.Sprintf("%d", version),
+	})
 	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true, nil, nil)
+	gpSpanEnd(&err)
 	if err != nil {
 		return err
 	}
@@ -255,15 +275,30 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		requests = envelope.Requests
 	}
 
-	// Mark the payload as canon
+	// Create a server span for newPayload, simulating the consensus client
+	// sending the execution payload for validation.
+	_, npSpanEnd := telemetry.StartServerSpan(context.Background(), tracer, telemetry.RPCInfo{
+		System:  "jsonrpc",
+		Service: "engine",
+		Method:  "newPayloadV" + fmt.Sprintf("%d", version),
+	})
 	_, err = c.engineAPI.newPayload(*payload, blobHashes, beaconRoot, requests, false)
+	npSpanEnd(&err)
 	if err != nil {
 		return err
 	}
 	c.setCurrentState(payload.BlockHash, finalizedHash)
 
-	// Mark the block containing the payload as canonical
-	if _, err = c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, nil, version, false); err != nil {
+	// Create a server span for the final forkchoiceUpdated (no payload attributes),
+	// which sets the new block as the canonical chain head.
+	fcuCtx, fcuSpanEnd := telemetry.StartServerSpan(context.Background(), tracer, telemetry.RPCInfo{
+		System:  "jsonrpc",
+		Service: "engine",
+		Method:  "forkchoiceUpdatedV" + fmt.Sprintf("%d", version),
+	})
+	_, err = c.engineAPI.forkchoiceUpdated(fcuCtx, c.curForkchoiceState, nil, version, false)
+	fcuSpanEnd(&err)
+	if err != nil {
 		return err
 	}
 	c.lastBlockTime = payload.Timestamp
