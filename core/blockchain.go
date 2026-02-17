@@ -210,6 +210,9 @@ type BlockChainConfig struct {
 	// If the value is -1, indexing is disabled.
 	TxLookupLimit int64
 
+	// Enable sender+nonce transaction indexing
+	TxIndexSender bool
+
 	// StateSizeTracking indicates whether the state size tracking is enabled.
 	StateSizeTracking bool
 
@@ -1282,9 +1285,10 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
 	rawdb.WriteTxLookupEntriesByBlock(batch, block)
 
-	signer := types.MakeSigner(bc.chainConfig, block.Number(), block.Time())
-	// Write sender+nonce index
-	rawdb.WriteTxSenderNonceEntryByBlock(batch, block, signer)
+	if bc.cfg.TxIndexSender {
+		signer := types.MakeSigner(bc.chainConfig, block.Number(), block.Time())
+		rawdb.WriteTxSenderNonceEntryByBlock(batch, block, signer)
+	}
 
 	rawdb.WriteHeadBlockHash(batch, block.Hash())
 

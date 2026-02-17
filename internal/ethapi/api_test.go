@@ -465,6 +465,7 @@ func fakeBlockHash(txh common.Hash) common.Hash {
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.Engine, generator func(i int, b *core.BlockGen)) *testBackend {
 	options := core.DefaultConfig().WithArchive(true)
 	options.TxLookupLimit = 0 // index all txs
+	options.TxIndexSender = true
 
 	accman, acc := newTestAccountManager(t)
 	gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
