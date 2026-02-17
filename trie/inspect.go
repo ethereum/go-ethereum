@@ -24,7 +24,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -41,7 +40,7 @@ type inspector struct {
 	root   common.Hash
 
 	config *InspectConfig
-	stats  map[common.Hash]*triestat
+	stats  map[common.Hash]*LevelStats
 	m      sync.Mutex // protects stats
 
 	sem *semaphore.Weighted
@@ -72,10 +71,10 @@ func Inspect(triedb database.NodeDatabase, root common.Hash, config *InspectConf
 		triedb: triedb,
 		root:   root,
 		config: config,
-		stats:  make(map[common.Hash]*triestat),
+		stats:  make(map[common.Hash]*LevelStats),
 		sem:    semaphore.NewWeighted(int64(128)),
 	}
-	in.stats[root] = &triestat{}
+	in.stats[root] = NewLevelStats()
 
 	in.inspect(trie, trie.root, 0, []byte{}, in.stats[root])
 	in.wg.Wait()
@@ -91,7 +90,7 @@ func Inspect(triedb database.NodeDatabase, root common.Hash, config *InspectConf
 
 // inspect is called recursively down the trie. At each level it records the
 // node type encountered.
-func (in *inspector) inspect(trie *Trie, n node, height uint32, path []byte, stat *triestat) {
+func (in *inspector) inspect(trie *Trie, n node, height uint32, path []byte, stat *LevelStats) {
 	if n == nil {
 		return
 	}
@@ -152,7 +151,7 @@ func (in *inspector) inspect(trie *Trie, n node, height uint32, path []byte, sta
 				log.Error("Failed to open account storage trie", "node", n, "error", err, "height", height, "path", common.Bytes2Hex(path))
 				break
 			}
-			stat := &triestat{}
+			stat := NewLevelStats()
 
 			in.m.Lock()
 			in.stats[owner] = stat
@@ -181,7 +180,7 @@ func (in *inspector) displayResult() {
 
 	if !in.config.NoStorage {
 		// Sort stats by max node depth.
-		keys, stats := sortedTriestat(in.stats).sort()
+		keys, stats := sortedLevelStats(in.stats).sort()
 
 		fmt.Println("Results for top storage tries")
 		for i := range keys[0:min(in.config.TopN, len(keys))] {
@@ -204,7 +203,7 @@ func (in *inspector) writeJSON() error {
 	}
 	if !in.config.NoStorage {
 		// Sort stats by max node depth.
-		keys, stats := sortedTriestat(in.stats).sort()
+		keys, stats := sortedLevelStats(in.stats).sort()
 		for i := range keys[0:min(in.config.TopN, len(keys))] {
 			storageTrie := newJsonStat(stats[i], fmt.Sprintf("%x", keys[i]))
 			if err := enc.Encode(storageTrie); err != nil {
@@ -215,36 +214,14 @@ func (in *inspector) writeJSON() error {
 	return nil
 }
 
-// triestat tracks the type and count of trie nodes at each level in the trie.
-//
-// Note: theoretically it is possible to have up to 64 trie level. Since it is
-// unlikely to encounter such a large trie, the stats are capped at 16 levels to
-// avoid substantial unneeded allocation.
-type triestat struct {
-	level [16]stat
-}
+// sortedLevelStats implements sort().
+type sortedLevelStats map[common.Hash]*LevelStats
 
-// maxDepth iterates each level and finds the deepest level with at least one
-// trie node.
-func (s *triestat) maxDepth() int {
-	depth := 0
-	for i := range s.level {
-		if s.level[i].short.Load() != 0 || s.level[i].full.Load() != 0 || s.level[i].value.Load() != 0 {
-			depth = i
-		}
-	}
-	return depth
-}
-
-// sortedTriestat implements sort().
-type sortedTriestat map[common.Hash]*triestat
-
-// sort returns the keys and triestats in decending order of the maximum trie
-// node depth.
-func (s sortedTriestat) sort() ([]common.Hash, []*triestat) {
+// sort returns the keys and stats in descending order of maximum trie node depth.
+func (s sortedLevelStats) sort() ([]common.Hash, []*LevelStats) {
 	var (
 		keys  = make([]common.Hash, 0, len(s))
-		stats = make([]*triestat, 0, len(s))
+		stats = make([]*LevelStats, 0, len(s))
 	)
 	for k := range s {
 		keys = append(keys, k)
@@ -256,50 +233,8 @@ func (s sortedTriestat) sort() ([]common.Hash, []*triestat) {
 	return keys, stats
 }
 
-// add increases the node count by one for the specified node type and depth.
-func (s *triestat) add(n node, d uint32) {
-	switch (n).(type) {
-	case *shortNode:
-		s.level[d].short.Add(1)
-	case *fullNode:
-		s.level[d].full.Add(1)
-	case valueNode:
-		s.level[d].value.Add(1)
-	default:
-		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
-	}
-}
-
-// stat is a specific level's count of each node type.
-type stat struct {
-	short atomic.Uint64
-	full  atomic.Uint64
-	value atomic.Uint64
-}
-
-// empty is a helper that returns whether there are any trie nodes at the level.
-func (s *stat) empty() bool {
-	if s.full.Load() == 0 && s.short.Load() == 0 && s.value.Load() == 0 {
-		return true
-	}
-	return false
-}
-
-// load is a helper that loads each node type's value.
-func (s *stat) load() (uint64, uint64, uint64) {
-	return s.short.Load(), s.full.Load(), s.value.Load()
-}
-
-// add is a helper that adds two level's stats together.
-func (s *stat) add(other *stat) *stat {
-	s.short.Add(other.short.Load())
-	s.full.Add(other.full.Load())
-	s.value.Add(other.value.Load())
-	return s
-}
-
 // display will print a table displaying the trie's node statistics.
-func (s *triestat) display(title string) {
+func (s *LevelStats) display(title string) {
 	// Shorten title if too long.
 	if len(title) > 32 {
 		title = title[0:8] + "..." + title[len(title)-8:]
@@ -338,7 +273,7 @@ type jsonStat struct {
 	Summary jsonLevel
 }
 
-func newJsonStat(s *triestat, name string) *jsonStat {
+func newJsonStat(s *LevelStats, name string) *jsonStat {
 	ret := jsonStat{Name: name, Summary: jsonLevel{}}
 	for i := 0; i < len(s.level); i++ {
 		// only count non-empty levels
