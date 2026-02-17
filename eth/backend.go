@@ -349,7 +349,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			return nil, fmt.Errorf("failed to load partial state contracts: %w", err)
 		}
 		partialFilter = partial.NewConfiguredFilter(config.PartialState.Contracts)
-		log.Info("Partial statefulness enabled", "contracts", len(config.PartialState.Contracts))
+		log.Info("Partial state mode enabled",
+			"contracts", len(config.PartialState.Contracts),
+			"balRetention", config.PartialState.BALRetention,
+			"chainRetention", config.PartialState.ChainRetention)
 	}
 
 	if eth.handler, err = newHandler(&handlerConfig{

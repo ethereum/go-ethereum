@@ -307,33 +307,33 @@ var (
 		Value:    uint(ethconfig.Defaults.NodeFullValueCheckpoint),
 		Category: flags.StateCategory,
 	}
-	// Partial statefulness flags
+	// Partial state flags (EIP-7928 BAL-based partial statefulness)
 	PartialStateFlag = &cli.BoolFlag{
 		Name:     "partial-state",
-		Usage:    "Enable partial statefulness mode (reduced storage, requires BAL support)",
-		Category: flags.StateCategory,
+		Usage:    "Enable partial state mode: sync all accounts but only storage for tracked contracts (requires EIP-7928 BAL)",
+		Category: flags.PartialStateCategory,
 	}
 	PartialStateContractsFlag = &cli.StringSliceFlag{
 		Name:     "partial-state.contracts",
-		Usage:    "Contracts to track storage for in partial state mode (comma-separated addresses)",
-		Category: flags.StateCategory,
+		Usage:    "Contract addresses to track full storage for (comma-separated hex, e.g. 0xC02a...,0xA0b8...)",
+		Category: flags.PartialStateCategory,
 	}
 	PartialStateContractsFileFlag = &cli.StringFlag{
 		Name:     "partial-state.contracts-file",
-		Usage:    "JSON file containing contracts to track in partial state mode",
-		Category: flags.StateCategory,
+		Usage:    `Path to JSON file listing contracts to track (format: {"version":1,"contracts":[{"address":"0x..."}]})`,
+		Category: flags.PartialStateCategory,
 	}
 	PartialStateBALRetentionFlag = &cli.Uint64Flag{
 		Name:     "partial-state.bal-retention",
-		Usage:    "Number of blocks to retain BAL history for reorg handling",
+		Usage:    "Number of blocks to retain BAL history for reorg handling (minimum 256 for BLOCKHASH)",
 		Value:    ethconfig.Defaults.PartialState.BALRetention,
-		Category: flags.StateCategory,
+		Category: flags.PartialStateCategory,
 	}
 	PartialStateChainRetentionFlag = &cli.Uint64Flag{
 		Name:     "partial-state.chain-retention",
-		Usage:    "Number of recent blocks to retain bodies and receipts for (0 = keep all)",
+		Usage:    "Number of recent blocks to retain bodies and receipts for (default = ~3.4 hours, 0 = keep all)",
 		Value:    ethconfig.DefaultChainRetention,
-		Category: flags.StateCategory,
+		Category: flags.PartialStateCategory,
 	}
 	TransactionHistoryFlag = &cli.Uint64Flag{
 		Name:     "history.transactions",

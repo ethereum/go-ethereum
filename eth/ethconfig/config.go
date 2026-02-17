@@ -226,27 +226,39 @@ type Config struct {
 // --partial-state.chain-retention.
 const DefaultChainRetention = 1024
 
-// PartialStateConfig configures partial statefulness mode.
-// When enabled, the node stores all accounts but only storage for configured contracts.
-// State updates are applied via Block Access Lists (BALs) per EIP-7928.
+// PartialStateConfig configures partial statefulness mode (EIP-7928).
+//
+// When enabled, the node maintains the full account trie (all accounts, balances,
+// nonces, code hashes) but only stores storage for explicitly tracked contracts.
+// Blocks are processed using Block Access Lists (BALs) instead of re-executing
+// transactions, dramatically reducing both storage requirements and CPU usage.
+//
+// Requires a network that supports EIP-7928 BAL propagation via the Engine API.
 type PartialStateConfig struct {
-	// Enabled activates partial statefulness mode
+	// Enabled activates partial state mode. When true, snap sync downloads
+	// all accounts but skips storage and bytecode for untracked contracts.
 	Enabled bool
 
-	// Contracts is the list of contracts to track storage for
+	// Contracts is the list of contract addresses to track full storage for.
+	// Storage for contracts not in this list is skipped during sync, so
+	// eth_getStorageAt returns zero values and eth_call may produce incorrect
+	// results when touching untracked contracts.
 	Contracts []common.Address
 
 	// ContractsFile is the path to a JSON file containing contract addresses
+	// to track. Merged with Contracts above. See loadContractsFromFile for format.
 	ContractsFile string `toml:",omitempty"`
 
-	// BALRetention is the number of blocks to keep BAL history for reorg handling
+	// BALRetention is the number of blocks to keep BAL history for. Must
+	// be at least 256 (BLOCKHASH opcode requires 256 blocks of history).
+	// Increase beyond 256 to support deeper reorg windows. Default 256.
 	BALRetention uint64
 
 	// ChainRetention is the number of recent blocks to retain bodies and
 	// receipts for. Older blocks only keep their headers. During sync, bodies
 	// and receipts outside this window are never downloaded. After sync, the
 	// freezer enforces a rolling window, deleting aged-out data. Set to 0 to
-	// keep all chain history.
+	// keep all chain history. Default 1024 (~3.4 hours at 12s/block).
 	ChainRetention uint64
 }
 
@@ -336,8 +348,8 @@ func (c *PartialStateConfig) Validate() error {
 	}
 
 	// Validate BAL retention
-	if c.BALRetention < 64 {
-		return fmt.Errorf("BAL retention must be at least 64 blocks (for BLOCKHASH support), got %d", c.BALRetention)
+	if c.BALRetention < 256 {
+		return fmt.Errorf("BAL retention must be at least 256 blocks (for BLOCKHASH opcode support), got %d", c.BALRetention)
 	}
 
 	return nil
