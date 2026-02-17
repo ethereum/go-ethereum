@@ -138,7 +138,7 @@ func postExecution(ctx context.Context, config *params.ChainConfig, block *types
 
 	// Read requests if Prague is enabled.
 	if config.IsPrague(block.Number(), block.Time()) {
-		var requests [][]byte
+		requests := [][]byte{}
 		// EIP-6110
 		if err := ParseDepositLogs(&requests, allLogs, config); err != nil {
 			return nil, fmt.Errorf("failed to parse deposit logs: %w", err)
