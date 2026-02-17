@@ -341,7 +341,7 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 		stack.RegisterLifecycle(lifecycle)
 	}
 
-	// Register a service that fails to shot down cleanly
+	// Register a service that fails to shut down cleanly
 	failure := errors.New("fail")
 	failer := &InstrumentedService{stop: failure}
 	stack.RegisterLifecycle(failer)
