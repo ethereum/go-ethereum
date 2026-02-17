@@ -55,6 +55,19 @@ var (
 		Name:  "remove.chain",
 		Usage: "If set, selects the state data for removal",
 	}
+	inspectTrieTopFlag = &cli.IntFlag{
+		Name:  "top",
+		Usage: "Print the top N results per ranking category",
+		Value: 10,
+	}
+	inspectTrieDumpPathFlag = &cli.StringFlag{
+		Name:  "dump-path",
+		Usage: "Path for the trie statistics dump file",
+	}
+	inspectTrieSummarizeFlag = &cli.StringFlag{
+		Name:  "summarize",
+		Usage: "Summarize an existing trie dump file (skip trie traversal)",
+	}
 
 	removedbCommand = &cli.Command{
 		Action:    removeDB,
@@ -99,8 +112,14 @@ Remove blockchain and state databases`,
 		Action:    inspectTrie,
 		Name:      "inspect-trie",
 		ArgsUsage: "<blocknum>",
-		Flags:     slices.Concat([]cli.Flag{utils.ExcludeStorageFlag, utils.TopFlag, utils.OutputFileFlag}, utils.NetworkFlags, utils.DatabaseFlags),
-		Usage:     "Print detailed trie information about the structure of account trie and storage tries.",
+		Flags: slices.Concat([]cli.Flag{
+			utils.ExcludeStorageFlag,
+			inspectTrieTopFlag,
+			utils.OutputFileFlag,
+			inspectTrieDumpPathFlag,
+			inspectTrieSummarizeFlag,
+		}, utils.NetworkFlags, utils.DatabaseFlags),
+		Usage: "Print detailed trie information about the structure of account trie and storage tries.",
 		Description: `This commands iterates the entrie trie-backed state. If the 'blocknum' is not specified, 
 the latest block number will be used by default.`,
 	}
@@ -398,9 +417,28 @@ func checkStateContent(ctx *cli.Context) error {
 }
 
 func inspectTrie(ctx *cli.Context) error {
+	topN := ctx.Int(inspectTrieTopFlag.Name)
+	if topN <= 0 {
+		return fmt.Errorf("invalid --%s value %d (must be > 0)", inspectTrieTopFlag.Name, topN)
+	}
+	config := &trie.InspectConfig{
+		NoStorage: ctx.Bool(utils.ExcludeStorageFlag.Name),
+		TopN:      topN,
+		Path:      ctx.String(utils.OutputFileFlag.Name),
+	}
+
+	if summarizePath := ctx.String(inspectTrieSummarizeFlag.Name); summarizePath != "" {
+		if ctx.NArg() > 0 {
+			return fmt.Errorf("block number argument is not supported with --%s", inspectTrieSummarizeFlag.Name)
+		}
+		config.DumpPath = summarizePath
+		log.Info("Summarizing trie dump", "path", summarizePath, "top", topN)
+		return trie.Summarize(summarizePath, config)
+	}
 	if ctx.NArg() > 1 {
 		return fmt.Errorf("excessive number of arguments: %v", ctx.Command.ArgsUsage)
 	}
+
 	stack, _ := makeConfigNode(ctx)
 	db := utils.MakeChainDatabase(ctx, stack, false)
 	defer stack.Close()
@@ -413,8 +451,8 @@ func inspectTrie(ctx *cli.Context) error {
 	)
 	switch {
 	case ctx.NArg() == 0 || ctx.Args().Get(0) == "latest":
-		hash := rawdb.ReadHeadHeaderHash(db)
-		n, ok := rawdb.ReadHeaderNumber(db, hash)
+		head := rawdb.ReadHeadHeaderHash(db)
+		n, ok := rawdb.ReadHeaderNumber(db, head)
 		if !ok {
 			return fmt.Errorf("could not load head block hash")
 		}
@@ -430,7 +468,6 @@ func inspectTrie(ctx *cli.Context) error {
 		}
 	}
 
-	// Load head block number based on canonical hash, if applicable.
 	if number != math.MaxUint64 {
 		hash = rawdb.ReadCanonicalHash(db, number)
 		if hash == (common.Hash{}) {
@@ -439,24 +476,20 @@ func inspectTrie(ctx *cli.Context) error {
 		blockHeader := rawdb.ReadHeader(db, hash, number)
 		trieRoot = blockHeader.Root
 	}
-	if (trieRoot == common.Hash{}) {
+	if trieRoot == (common.Hash{}) {
 		log.Error("Empty root hash")
+	}
+
+	config.DumpPath = ctx.String(inspectTrieDumpPathFlag.Name)
+	if config.DumpPath == "" {
+		config.DumpPath = stack.ResolvePath("trie-dump.bin")
 	}
 
 	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, true, false)
 	defer triedb.Close()
 
-	log.Info("Inspecting trie", "root", trieRoot, "block", number)
-	config := &trie.InspectConfig{
-		NoStorage: ctx.Bool(utils.ExcludeStorageFlag.Name),
-		TopN:      ctx.Int(utils.TopFlag.Name),
-		Path:      ctx.String(utils.OutputFileFlag.Name),
-	}
-	err := trie.Inspect(triedb, trieRoot, config)
-	if err != nil {
-		return err
-	}
-	return nil
+	log.Info("Inspecting trie", "root", trieRoot, "block", number, "dump", config.DumpPath, "top", topN)
+	return trie.Inspect(triedb, trieRoot, config)
 }
 
 func showDBStats(db ethdb.KeyValueStater) {

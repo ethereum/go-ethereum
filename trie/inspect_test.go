@@ -18,6 +18,7 @@ package trie
 
 import (
 	"math/rand"
+	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -46,8 +47,20 @@ func TestInspect(t *testing.T) {
 	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 	db.Commit(root)
 
-	if err := Inspect(db, root, &InspectConfig{TopN: 1}); err != nil {
+	tempDir := t.TempDir()
+	dumpPath := filepath.Join(tempDir, "trie-dump.bin")
+	if err := Inspect(db, root, &InspectConfig{
+		TopN:     1,
+		DumpPath: dumpPath,
+		Path:     filepath.Join(tempDir, "trie-summary.json"),
+	}); err != nil {
 		t.Fatalf("inspect failed: %v", err)
+	}
+	if err := Summarize(dumpPath, &InspectConfig{
+		TopN: 1,
+		Path: filepath.Join(tempDir, "trie-summary-reanalysis.json"),
+	}); err != nil {
+		t.Fatalf("summarize failed: %v", err)
 	}
 }
 
