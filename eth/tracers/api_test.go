@@ -38,6 +38,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/tracing"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
@@ -189,6 +190,112 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 		statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
 	}
 	return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
+}
+
+type stateTracer struct {
+	Balance map[common.Address]*hexutil.Big
+	Nonce   map[common.Address]hexutil.Uint64
+	Storage map[common.Address]map[common.Hash]common.Hash
+}
+
+func newStateTracer(ctx *Context, cfg json.RawMessage, chainCfg *params.ChainConfig) (*Tracer, error) {
+	t := &stateTracer{
+		Balance: make(map[common.Address]*hexutil.Big),
+		Nonce:   make(map[common.Address]hexutil.Uint64),
+		Storage: make(map[common.Address]map[common.Hash]common.Hash),
+	}
+	return &Tracer{
+		GetResult: func() (json.RawMessage, error) {
+			return json.Marshal(t)
+		},
+		Hooks: &tracing.Hooks{
+			OnBalanceChange: func(addr common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
+				t.Balance[addr] = (*hexutil.Big)(new)
+			},
+			OnNonceChange: func(addr common.Address, prev, new uint64) {
+				t.Nonce[addr] = hexutil.Uint64(new)
+			},
+			OnStorageChange: func(addr common.Address, slot common.Hash, prev, new common.Hash) {
+				if t.Storage[addr] == nil {
+					t.Storage[addr] = make(map[common.Hash]common.Hash)
+				}
+				t.Storage[addr][slot] = new
+			},
+		},
+	}, nil
+}
+
+func TestStateHooks(t *testing.T) {
+	t.Parallel()
+
+	// Initialize test accounts
+	var (
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		from    = crypto.PubkeyToAddress(key.PublicKey)
+		to      = common.HexToAddress("0x00000000000000000000000000000000deadbeef")
+		config  = *params.TestChainConfig
+		genesis = &core.Genesis{
+			Config: &config,
+			Alloc: types.GenesisAlloc{
+				from: {Balance: big.NewInt(params.Ether)},
+				to: {
+					Code: []byte{
+						byte(vm.PUSH1), 0x2a, // stack: [42]
+						byte(vm.PUSH1), 0x0, // stack: [0, 42]
+						byte(vm.SSTORE), // stack: []
+						byte(vm.STOP),
+					},
+				},
+			},
+		}
+		genBlocks = 2
+		signer    = types.HomesteadSigner{}
+		nonce     = uint64(0)
+	)
+	config.Eip1559Block = big.NewInt(0)
+	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+		// Transfer from account[0] to account[1]
+		//    value: 1000 wei
+		//    fee:   0 wei
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    nonce,
+			To:       &to,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, key)
+		b.AddTx(tx)
+		nonce++
+	})
+	defer backend.teardown()
+	DefaultDirectory.Register("stateTracer", newStateTracer, false)
+	api := NewAPI(backend)
+	tracer := "stateTracer"
+	res, err := api.TraceCall(context.Background(), ethapi.TransactionArgs{From: &from, To: &to, Value: (*hexutil.Big)(big.NewInt(1000))}, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber), &TraceCallConfig{TraceConfig: TraceConfig{Tracer: &tracer}})
+	if err != nil {
+		t.Fatalf("failed to trace call: %v", err)
+	}
+	payload, ok := res.(json.RawMessage)
+	if !ok {
+		t.Fatalf("unexpected trace result type %T", res)
+	}
+	var got stateTracer
+	if err := json.Unmarshal(payload, &got); err != nil {
+		t.Fatalf("failed to unmarshal trace result: %v", err)
+	}
+	if got.Balance[to] == nil || (*big.Int)(got.Balance[to]).Cmp(big.NewInt(1000)) != 0 {
+		t.Fatalf("unexpected receiver balance: %v", got.Balance[to])
+	}
+	if senderBal := got.Balance[from]; senderBal == nil || (*big.Int)(senderBal).Sign() <= 0 || (*big.Int)(senderBal).Cmp(big.NewInt(params.Ether)) >= 0 {
+		t.Fatalf("unexpected sender balance: %v", senderBal)
+	}
+	if got.Nonce[from] != hexutil.Uint64(3) {
+		t.Fatalf("unexpected sender nonce: %v", got.Nonce[from])
+	}
+	if got.Storage[to][common.Hash{}] != common.HexToHash("0x2a") {
+		t.Fatalf("unexpected storage value: %v", got.Storage[to][common.Hash{}])
+	}
 }
 
 func TestTraceCall(t *testing.T) {
