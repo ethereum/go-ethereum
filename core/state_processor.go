@@ -135,7 +135,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 func postExecution(ctx context.Context, config *params.ChainConfig, block *types.Block, allLogs []*types.Log, evm *vm.EVM) (requests [][]byte, err error) {
 	_, _, spanEnd := telemetry.StartSpan(ctx, "core.postExecution")
 	defer spanEnd(&err)
-	
+
 	// Read requests if Prague is enabled.
 	if config.IsPrague(block.Number(), block.Time()) {
 		var requests [][]byte
@@ -152,7 +152,7 @@ func postExecution(ctx context.Context, config *params.ChainConfig, block *types
 			return nil, fmt.Errorf("failed to process consolidation queue: %w", err)
 		}
 	}
-	
+
 	return requests, nil
 }
 
