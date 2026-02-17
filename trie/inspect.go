@@ -19,6 +19,7 @@ package trie
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"container/heap"
 	"encoding/binary"
 	"encoding/json"
@@ -464,64 +465,30 @@ func (t *topStorage) Sorted() []*storageSnapshot {
 }
 
 func compareStorageByDepth(a, b *storageSnapshot) int {
-	if cmp := compareInt(a.MaxDepth, b.MaxDepth); cmp != 0 {
-		return cmp
-	}
-	if cmp := compareUint64(a.TotalNodes, b.TotalNodes); cmp != 0 {
-		return cmp
-	}
-	if cmp := compareUint64(a.Summary.Value, b.Summary.Value); cmp != 0 {
-		return cmp
-	}
-	return bytes.Compare(a.Owner[:], b.Owner[:])
+	return cmp.Or(
+		cmp.Compare(a.MaxDepth, b.MaxDepth),
+		cmp.Compare(a.TotalNodes, b.TotalNodes),
+		cmp.Compare(a.Summary.Value, b.Summary.Value),
+		bytes.Compare(a.Owner[:], b.Owner[:]),
+	)
 }
 
 func compareStorageByTotal(a, b *storageSnapshot) int {
-	if cmp := compareUint64(a.TotalNodes, b.TotalNodes); cmp != 0 {
-		return cmp
-	}
-	if cmp := compareInt(a.MaxDepth, b.MaxDepth); cmp != 0 {
-		return cmp
-	}
-	if cmp := compareUint64(a.Summary.Value, b.Summary.Value); cmp != 0 {
-		return cmp
-	}
-	return bytes.Compare(a.Owner[:], b.Owner[:])
+	return cmp.Or(
+		cmp.Compare(a.TotalNodes, b.TotalNodes),
+		cmp.Compare(a.MaxDepth, b.MaxDepth),
+		cmp.Compare(a.Summary.Value, b.Summary.Value),
+		bytes.Compare(a.Owner[:], b.Owner[:]),
+	)
 }
 
 func compareStorageByValue(a, b *storageSnapshot) int {
-	if cmp := compareUint64(a.Summary.Value, b.Summary.Value); cmp != 0 {
-		return cmp
-	}
-	if cmp := compareInt(a.MaxDepth, b.MaxDepth); cmp != 0 {
-		return cmp
-	}
-	if cmp := compareUint64(a.TotalNodes, b.TotalNodes); cmp != 0 {
-		return cmp
-	}
-	return bytes.Compare(a.Owner[:], b.Owner[:])
-}
-
-func compareInt(a, b int) int {
-	switch {
-	case a > b:
-		return 1
-	case a < b:
-		return -1
-	default:
-		return 0
-	}
-}
-
-func compareUint64(a, b uint64) int {
-	switch {
-	case a > b:
-		return 1
-	case a < b:
-		return -1
-	default:
-		return 0
-	}
+	return cmp.Or(
+		cmp.Compare(a.Summary.Value, b.Summary.Value),
+		cmp.Compare(a.MaxDepth, b.MaxDepth),
+		cmp.Compare(a.TotalNodes, b.TotalNodes),
+		bytes.Compare(a.Owner[:], b.Owner[:]),
+	)
 }
 
 type inspectSummary struct {
