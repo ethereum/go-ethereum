@@ -263,24 +263,19 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash, sink chan *eth.Response) (*eth.Request, error) {
 	blobs := eth.ServiceGetReceiptsQuery(dlp.chain, hashes)
 
-	receipts := make([]*eth.ReceiptList, len(blobs))
+	receipts := make([]types.Receipts, len(blobs))
 	for i, blob := range blobs {
 		rlp.DecodeBytes(blob, &receipts[i])
 	}
 	hasher := trie.NewStackTrie(nil)
 	hashes = make([]common.Hash, len(receipts))
 	for i, receipt := range receipts {
-		hashes[i] = types.DeriveSha(receipt.Derivable(), hasher)
+		hashes[i] = types.DeriveSha(receipt, hasher)
 	}
 	req := &eth.Request{
 		Peer: dlp.id,
 	}
-	var resp eth.ReceiptsRLPResponse
-	for i := range receipts {
-		rs, _ := receipts[i].EncodeForStorage()
-		resp = append(resp, rs)
-	}
-
+	resp := eth.ReceiptsRLPResponse(types.EncodeBlockReceiptLists(receipts))
 	res := &eth.Response{
 		Req:  req,
 		Res:  &resp,
