@@ -20,11 +20,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/holiman/uint256"
 )
 
 // Tests that snap sync is disabled after a successful sync cycle.
@@ -94,5 +98,27 @@ func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 				return
 			}
 		}
+	}
+}
+
+// TestBlobTransactionSync tests that blob transactions are returned by PendingFilter.
+func TestBlobTransactionSync(t *testing.T) {
+	t.Parallel()
+
+	full := newTestHandler(ethconfig.SnapSync)
+	defer full.close()
+
+	blobHash := common.Hash{0x01}
+	tx := types.NewTx(&types.BlobTx{
+		To:         testAddr,
+		BlobHashes: []common.Hash{blobHash},
+		BlobFeeCap: uint256.MustFromBig(common.Big1),
+		Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion0, nil, nil, nil),
+	})
+	full.txpool.Add([]*types.Transaction{tx}, true)
+
+	pending := full.txpool.Pending(txpool.PendingFilter{})
+	if len(pending) == 0 {
+		t.Fatal("expected pending transactions, got none")
 	}
 }
