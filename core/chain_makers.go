@@ -87,7 +87,9 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 	}
 	feeCapacity := b.statedb.GetTRC21FeeCapacityFromState()
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
-	receipt, gas, tokenFeeUsed, err := ApplyTransaction(b.config, feeCapacity, bc, &b.header.Coinbase, b.gasPool, b.statedb, nil, b.header, tx, &b.header.GasUsed, vmConfig)
+	blockContext := NewEVMBlockContext(b.header, bc, &b.header.Coinbase)
+	evm := vm.NewEVM(blockContext, b.statedb, nil, b.config, vmConfig)
+	receipt, gas, tokenFeeUsed, err := ApplyTransaction(b.config, feeCapacity, evm, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed)
 	if err != nil {
 		panic(err)
 	}
@@ -235,7 +237,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if config.IsPrague(b.header.Number) {
 			// EIP-2935
 			blockContext := NewEVMBlockContext(b.header, chainReader, &b.header.Coinbase)
-			evm := vm.NewEVM(blockContext, vm.TxContext{}, statedb, nil, config, vm.Config{})
+			evm := vm.NewEVM(blockContext, statedb, nil, config, vm.Config{})
 			ProcessParentBlockHash(b.header.ParentHash, evm, statedb)
 		}
 

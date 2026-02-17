@@ -142,7 +142,8 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), logState, nil, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+			evm := vm.NewEVM(context, logState, nil, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+			evm.SetTxContext(core.NewEVMTxContext(msg))
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()), common.Address{})
 			if err != nil {
@@ -228,13 +229,17 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	state := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc)
 
 	b.ReportAllocs()
+
+	evm := vm.NewEVM(context, state, nil, test.Genesis.Config, vm.Config{})
+	evm.SetTxContext(txContext)
+
 	for b.Loop() {
+		snap := state.Snapshot()
 		tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), nil, test.Genesis.Config)
 		if err != nil {
 			b.Fatalf("failed to create call tracer: %v", err)
 		}
-		evm := vm.NewEVM(context, txContext, state, nil, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
-		snap := state.Snapshot()
+		evm.Config.Tracer = tracer.Hooks
 		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if _, err = st.TransitionDb(common.Address{}); err != nil {
 			b.Fatalf("failed to execute transaction: %v", err)
@@ -379,7 +384,8 @@ func TestInternals(t *testing.T) {
 				Origin:   origin,
 				GasPrice: tx.GasPrice(),
 			}
-			evm := vm.NewEVM(context, txContext, logState, nil, config, vm.Config{Tracer: tc.tracer.Hooks})
+			evm := vm.NewEVM(context, logState, nil, config, vm.Config{Tracer: tc.tracer.Hooks})
+			evm.SetTxContext(txContext)
 			msg, err := core.TransactionToMessage(tx, signer, nil, nil, big.NewInt(0))
 			if err != nil {
 				t.Fatalf("test %v: failed to create message: %v", tc.name, err)
@@ -459,7 +465,8 @@ func testContractTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
-			evm := vm.NewEVM(context, txContext, state, nil, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+			evm := vm.NewEVM(context, state, nil, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+			evm.SetTxContext(txContext)
 			msg, err := core.TransactionToMessage(tx, signer, nil, nil, nil)
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)

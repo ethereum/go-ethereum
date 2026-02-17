@@ -174,18 +174,19 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 	}
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(b.chainConfig, block.Number())
+	context := core.NewEVMBlockContext(block.Header(), b.chain, nil)
+	evm := vm.NewEVM(context, statedb, nil, b.chainConfig, vm.Config{})
 	for idx, tx := range block.Transactions() {
-		msg, _ := core.TransactionToMessage(tx, signer, nil, block.Number(), block.BaseFee())
-		txContext := core.NewEVMTxContext(msg)
-		context := core.NewEVMBlockContext(block.Header(), b.chain, nil)
 		if idx == txIndex {
 			return tx, context, statedb, release, nil
 		}
-		vmenv := vm.NewEVM(context, txContext, statedb, nil, b.chainConfig, vm.Config{})
-		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), common.Address{}); err != nil {
+		msg, _ := core.TransactionToMessage(tx, signer, nil, block.Number(), block.BaseFee())
+		txContext := core.NewEVMTxContext(msg)
+		evm.SetTxContext(txContext)
+		if _, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()), common.Address{}); err != nil {
 			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
-		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
+		statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
 	}
 	return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }

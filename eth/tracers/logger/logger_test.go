@@ -42,7 +42,7 @@ func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) co
 func TestStoreCapture(t *testing.T) {
 	var (
 		logger   = NewStructLogger(nil)
-		evm      = vm.NewEVM(vm.BlockContext{}, vm.TxContext{}, &dummyStatedb{}, nil, params.TestChainConfig, vm.Config{Tracer: logger.Hooks()})
+		evm      = vm.NewEVM(vm.BlockContext{}, &dummyStatedb{}, nil, params.TestChainConfig, vm.Config{Tracer: logger.Hooks()})
 		contract = vm.NewContract(common.Address{}, common.Address{}, new(uint256.Int), 100000, nil)
 	)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x0, byte(vm.SSTORE)}

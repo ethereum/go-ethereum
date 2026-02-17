@@ -132,12 +132,13 @@ type EVM struct {
 	returnData []byte // Last CALL's return data for subsequent reuse
 }
 
-// NewEVM returns a new EVM. The returned EVM is not thread safe and should
-// only ever be used *once*.
-func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, tradingStateDB *tradingstate.TradingStateDB, chainConfig *params.ChainConfig, config Config) *EVM {
+// NewEVM constructs an EVM instance with the supplied block context, state
+// database and several configs. It is meant to be used throughout the entire
+// state transition of a block, with the transaction context switched as
+// needed by calling evm.SetTxContext.
+func NewEVM(blockCtx BlockContext, statedb StateDB, tradingStateDB *tradingstate.TradingStateDB, chainConfig *params.ChainConfig, config Config) *EVM {
 	evm := &EVM{
 		Context:        blockCtx,
-		TxContext:      txCtx,
 		StateDB:        statedb,
 		tradingStateDB: tradingStateDB,
 		Config:         config,
@@ -198,6 +199,11 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, tradingStat
 	return evm
 }
 
+// SetTracer sets the tracer for following state transition.
+func (evm *EVM) SetTracer(tracer *tracing.Hooks) {
+	evm.Config.Tracer = tracer
+}
+
 // SetPrecompiles sets the precompiled contracts for the EVM.
 // This method is only used through RPC calls.
 // It is not thread-safe.
@@ -205,11 +211,10 @@ func (evm *EVM) SetPrecompiles(precompiles PrecompiledContracts) {
 	evm.precompiles = precompiles
 }
 
-// Reset resets the EVM with a new transaction context.Reset
+// SetTxContext updates the EVM with a new transaction context.
 // This is not threadsafe and should only be done very cautiously.
-func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
+func (evm *EVM) SetTxContext(txCtx TxContext) {
 	evm.TxContext = txCtx
-	evm.StateDB = statedb
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and

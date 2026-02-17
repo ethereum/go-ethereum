@@ -110,9 +110,10 @@ func CallContractWithState(call ethereum.CallMsg, chain consensus.ChainContext, 
 	// about the transaction and calling mechanisms.
 	txContext := NewEVMTxContext(msg)
 	evmContext := NewEVMBlockContext(chain.CurrentHeader(), chain, nil)
-	vmenv := vm.NewEVM(evmContext, txContext, statedb, nil, chain.Config(), vm.Config{})
+	evm := vm.NewEVM(evmContext, statedb, nil, chain.Config(), vm.Config{})
+	evm.SetTxContext(txContext)
 	gaspool := new(GasPool).AddGas(1000000)
-	result, err := NewStateTransition(vmenv, msg, gaspool).TransitionDb(common.Address{})
+	result, err := NewStateTransition(evm, msg, gaspool).TransitionDb(common.Address{})
 	if err != nil {
 		return nil, err
 	}

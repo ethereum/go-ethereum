@@ -467,7 +467,7 @@ func TestApplyTransactionWithEVMTracer(t *testing.T) {
 			blockHash := genesis.Hash()
 
 			vmContext := NewEVMBlockContext(blockchain.CurrentBlock(), blockchain, nil)
-			evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, nil, blockchain.Config(), vmConfig)
+			evm := vm.NewEVM(vmContext, statedb, nil, blockchain.Config(), vmConfig)
 
 			// Apply transaction
 			var usedGas uint64
@@ -493,6 +493,81 @@ func TestApplyTransactionWithEVMTracer(t *testing.T) {
 	}
 }
 
+func TestApplyTransactionWithEVMStateChangeHooks(t *testing.T) {
+	var (
+		config = &params.ChainConfig{
+			ChainID:             big.NewInt(1),
+			HomesteadBlock:      big.NewInt(0),
+			EIP150Block:         big.NewInt(0),
+			EIP155Block:         big.NewInt(0),
+			EIP158Block:         big.NewInt(0),
+			ByzantiumBlock:      big.NewInt(0),
+			ConstantinopleBlock: big.NewInt(0),
+			PetersburgBlock:     big.NewInt(0),
+			IstanbulBlock:       big.NewInt(0),
+			BerlinBlock:         big.NewInt(0),
+			LondonBlock:         big.NewInt(0),
+			Eip1559Block:        big.NewInt(0),
+			Ethash:              new(params.EthashConfig),
+		}
+		signer      = types.LatestSigner(config)
+		testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		sender      = crypto.PubkeyToAddress(testKey.PublicKey)
+		recipient   = common.HexToAddress("0x1234567890123456789012345678901234567890")
+		hookInvoked bool
+	)
+
+	db := rawdb.NewMemoryDatabase()
+	gspec := &Genesis{
+		Config: config,
+		Alloc: types.GenesisAlloc{
+			sender: {
+				Balance: big.NewInt(1000000000000000000),
+				Nonce:   0,
+			},
+		},
+	}
+	genesis := gspec.MustCommit(db)
+	blockchain, _ := NewBlockChain(db, nil, gspec, ethash.NewFaker(), vm.Config{})
+	defer blockchain.Stop()
+
+	statedb, err := blockchain.State()
+	if err != nil {
+		t.Fatalf("Failed to get state: %v", err)
+	}
+
+	tx := types.NewTransaction(0, recipient, big.NewInt(1), 21000, big.NewInt(20000000000), nil)
+	signedTx, err := types.SignTx(tx, signer, testKey)
+	if err != nil {
+		t.Fatalf("Failed to sign tx: %v", err)
+	}
+
+	hooks := &tracing.Hooks{
+		OnBalanceChange: func(addr common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
+			hookInvoked = true
+		},
+	}
+	hookedState := state.NewHookedState(statedb, hooks)
+
+	vmContext := NewEVMBlockContext(blockchain.CurrentBlock(), blockchain, nil)
+	evmenv := vm.NewEVM(vmContext, hookedState, nil, blockchain.Config(), vm.Config{Tracer: hooks})
+
+	msg, err := TransactionToMessage(signedTx, signer, nil, big.NewInt(1), nil)
+	if err != nil {
+		t.Fatalf("Failed to build message: %v", err)
+	}
+
+	gasPool := new(GasPool).AddGas(1000000)
+	var usedGas uint64
+	_, _, _, err = ApplyTransactionWithEVM(msg, config, gasPool, statedb, big.NewInt(1), genesis.Hash(), signedTx, &usedGas, evmenv, nil, common.Address{})
+	if err != nil {
+		t.Fatalf("ApplyTransactionWithEVM failed: %v", err)
+	}
+	if !hookInvoked {
+		t.Fatal("expected OnBalanceChange to be invoked, but it was not")
+	}
+}
+
 func TestProcessParentBlockHash(t *testing.T) {
 	var (
 		chainConfig = params.MergedTestChainConfig
@@ -508,11 +583,11 @@ func TestProcessParentBlockHash(t *testing.T) {
 		statedb.IntermediateRoot(true)
 
 		vmContext := NewEVMBlockContext(header, nil, &coinbase)
-		evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, nil, chainConfig, vm.Config{})
+		evm := vm.NewEVM(vmContext, statedb, nil, chainConfig, vm.Config{})
 		ProcessParentBlockHash(header.ParentHash, evm, statedb)
 
 		vmContext = NewEVMBlockContext(parent, nil, &coinbase)
-		evm = vm.NewEVM(vmContext, vm.TxContext{}, statedb, nil, chainConfig, vm.Config{})
+		evm = vm.NewEVM(vmContext, statedb, nil, chainConfig, vm.Config{})
 		ProcessParentBlockHash(parent.ParentHash, evm, statedb)
 
 		// make sure that the state is correct
@@ -548,8 +623,8 @@ func TestProcessParentBlockHashPragueGuard(t *testing.T) {
 		BaseFee:     nil,
 		Random:      &random,
 	}
-	evmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, nil, &config, vm.Config{})
-	ProcessParentBlockHash(common.Hash{0x01}, evmenv, statedb)
+	evm := vm.NewEVM(blockContext, statedb, nil, &config, vm.Config{})
+	ProcessParentBlockHash(common.Hash{0x01}, evm, statedb)
 
 	if code := statedb.GetCode(params.HistoryStorageAddress); len(code) != 0 {
 		t.Fatalf("unexpected history contract code predeploy: %x", code)
@@ -586,8 +661,8 @@ func TestProcessParentBlockHashBackfillMissingHistory(t *testing.T) {
 		BaseFee:     nil,
 		Random:      &random,
 	}
-	evmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, nil, &config, vm.Config{})
-	ProcessParentBlockHash(common.Hash{0x01}, evmenv, statedb)
+	evm := vm.NewEVM(blockContext, statedb, nil, &config, vm.Config{})
+	ProcessParentBlockHash(common.Hash{0x01}, evm, statedb)
 
 	if have := getParentBlockHash(statedb, 1); have != available[1] {
 		t.Fatalf("expected hash at slot 1, have %v", have)
@@ -619,14 +694,14 @@ func TestProcessParentBlockHashCodeMismatchPanics(t *testing.T) {
 		BaseFee:     nil,
 		Random:      &random,
 	}
-	evmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, nil, &config, vm.Config{})
+	evm := vm.NewEVM(blockContext, statedb, nil, &config, vm.Config{})
 
 	defer func() {
 		if recover() == nil {
 			t.Fatal("expected panic on history storage code mismatch")
 		}
 	}()
-	ProcessParentBlockHash(common.Hash{0x01}, evmenv, statedb)
+	ProcessParentBlockHash(common.Hash{0x01}, evm, statedb)
 }
 
 func getParentBlockHash(statedb *state.StateDB, number uint64) common.Hash {

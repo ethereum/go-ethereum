@@ -206,11 +206,11 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, err
 	}
+	context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
+	evm := vm.NewEVM(context, statedb, nil, eth.blockchain.Config(), vm.Config{})
 	// If prague hardfork, insert parent block hash in the state as per EIP-2935.
 	if eth.blockchain.Config().IsPrague(block.Number()) {
-		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
-		vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, nil, eth.blockchain.Config(), vm.Config{})
-		core.ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
+		core.ProcessParentBlockHash(block.ParentHash(), evm, statedb)
 	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, vm.BlockContext{}, statedb, release, nil
@@ -219,6 +219,9 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	signer := types.MakeSigner(eth.blockchain.Config(), block.Number())
 	feeCapacity := statedb.GetTRC21FeeCapacityFromState()
 	for idx, tx := range block.Transactions() {
+		if idx == txIndex {
+			return tx, context, statedb, release, nil
+		}
 		var balance *big.Int
 		if tx.To() != nil {
 			if value, ok := feeCapacity[*tx.To()]; ok {
@@ -228,19 +231,16 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := core.TransactionToMessage(tx, signer, balance, block.Number(), block.BaseFee())
 		txContext := core.NewEVMTxContext(msg)
-		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
-		if idx == txIndex {
-			return tx, context, statedb, release, nil
-		}
+		evm.SetTxContext(txContext)
+
 		// Not yet the searched for transaction, execute on top of the current state
-		vmenv := vm.NewEVM(context, txContext, statedb, nil, eth.blockchain.Config(), vm.Config{})
 		statedb.SetTxContext(tx.Hash(), idx)
-		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), common.Address{}); err != nil {
+		if _, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()), common.Address{}); err != nil {
 			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
+		statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
 	}
 	return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }

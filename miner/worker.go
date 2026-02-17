@@ -86,14 +86,15 @@ type Agent interface {
 type Work struct {
 	config *params.ChainConfig
 	signer types.Signer
+	state  *state.StateDB // apply state changes here
+	tcount int            // tx count in cycle
+	evm    *vm.EVM
 
-	state        *state.StateDB // apply state changes here
 	parentState  *state.StateDB
 	tradingState *tradingstate.TradingStateDB
 	lendingState *lendingstate.LendingStateDB
 	ancestors    mapset.Set[common.Hash] // ancestor set (used for checking uncle parent validity)
 	family       mapset.Set[common.Hash] // family set (used for checking uncle invalidity)
-	tcount       int                     // tx count in cycle
 
 	Block *types.Block // the new block
 
@@ -636,6 +637,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 		ancestors:    mapset.NewSet[common.Hash](),
 		family:       mapset.NewSet[common.Hash](),
 		header:       header,
+		evm:          vm.NewEVM(core.NewEVMBlockContext(header, w.chain, &header.Coinbase), state, XDCxState, w.config, vm.Config{}),
 		uncles:       make(map[common.Hash]*types.Header),
 		createdAt:    time.Now(),
 	}
@@ -788,9 +790,7 @@ func (w *worker) commitNewWork() {
 		work.state.DeleteAddress(common.BlockSignersBinary)
 	}
 	if w.config.IsPrague(header.Number) {
-		context := core.NewEVMBlockContext(header, w.chain, nil)
-		vmenv := vm.NewEVM(context, vm.TxContext{}, w.current.state, nil, w.config, vm.Config{})
-		core.ProcessParentBlockHash(header.ParentHash, vmenv, w.current.state)
+		core.ProcessParentBlockHash(header.ParentHash, work.evm, work.state)
 	}
 	// won't grasp txs at checkpoint
 	var (
@@ -1049,7 +1049,7 @@ func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Addr
 			log.Trace("Skipping account with special transaction invalid nonce", "sender", from, "nonce", nonce, "tx nonce ", tx.Nonce(), "to", to)
 			continue
 		}
-		logs, tokenFeeUsed, gas, err := w.commitTransaction(balanceFee, tx, bc, coinbase, gp)
+		logs, tokenFeeUsed, gas, err := w.commitTransaction(balanceFee, tx, gp)
 		switch {
 		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
@@ -1159,7 +1159,7 @@ func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Addr
 			txs.Pop()
 			continue
 		}
-		logs, tokenFeeUsed, gas, err := w.commitTransaction(balanceFee, tx, bc, coinbase, gp)
+		logs, tokenFeeUsed, gas, err := w.commitTransaction(balanceFee, tx, gp)
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -1222,10 +1222,10 @@ func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Addr
 	}
 }
 
-func (w *Work) commitTransaction(balanceFee map[common.Address]*big.Int, tx *types.Transaction, bc *core.BlockChain, coinbase common.Address, gp *core.GasPool) ([]*types.Log, bool, uint64, error) {
+func (w *Work) commitTransaction(balanceFee map[common.Address]*big.Int, tx *types.Transaction, gp *core.GasPool) ([]*types.Log, bool, uint64, error) {
 	snap := w.state.Snapshot()
 
-	receipt, gas, tokenFeeUsed, err := core.ApplyTransaction(w.config, balanceFee, bc, &coinbase, gp, w.state, w.tradingState, w.header, tx, &w.header.GasUsed, vm.Config{})
+	receipt, gas, tokenFeeUsed, err := core.ApplyTransaction(w.config, balanceFee, w.evm, gp, w.state, w.header, tx, &w.header.GasUsed)
 	if err != nil {
 		w.state.RevertToSnapshot(snap)
 		return nil, false, 0, err

@@ -148,7 +148,9 @@ func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
 		GasLimit:    t.json.Env.GasLimit,
 		Difficulty:  t.json.Env.Difficulty,
 	}
-	return vm.NewEVM(context, txContext, statedb, nil, params.MainnetChainConfig, vmconfig)
+	evm := vm.NewEVM(context, statedb, nil, params.MainnetChainConfig, vmconfig)
+	evm.SetTxContext(txContext)
+	return evm
 }
 
 func vmTestBlockHash(n uint64) common.Hash {

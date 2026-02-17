@@ -1274,7 +1274,8 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	if msg.GasPrice.Sign() == 0 {
 		blockContext.BaseFee = new(big.Int)
 	}
-	evm, vmError, err := b.GetEVM(ctx, msg, state, XDCxState, header, vmConfig, blockContext)
+	state.SetBalance(msg.From, math.MaxBig256, tracing.BalanceChangeUnspecified)
+	evm, vmError, err := b.GetEVM(ctx, state, XDCxState, header, vmConfig, blockContext)
 	if err != nil {
 		return nil, err
 	}
@@ -1284,7 +1285,7 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
-
+	evm.SetTxContext(core.NewEVMTxContext(msg))
 	res, err := applyMessageWithEVM(ctx, evm, msg, timeout, gp)
 	// If an internal state error occurred, let that have precedence. Otherwise,
 	// a "trie root missing" type of error will masquerade as e.g. "insufficient gas"
@@ -1888,16 +1889,18 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		// Apply the transaction with the access list tracer
 		tracer := logger.NewAccessListTracer(accessList, args.from(), to, precompiles)
 		config := vm.Config{Tracer: tracer.Hooks(), NoBaseFee: true}
-		vmenv, _, err := b.GetEVM(ctx, msg, statedb, XDCxState, header, &config, nil)
+		statedb.SetBalance(msg.From, math.MaxBig256, tracing.BalanceChangeUnspecified)
+		evm, _, err := b.GetEVM(ctx, statedb, XDCxState, header, &config, nil)
 		if err != nil {
 			return nil, 0, nil, err
 		}
 		// Lower the basefee to 0 to avoid breaking EVM
 		// invariants (basefee < feecap).
 		if msg.GasPrice.Sign() == 0 {
-			vmenv.Context.BaseFee = new(big.Int)
+			evm.Context.BaseFee = new(big.Int)
 		}
-		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit), common.Address{})
+		evm.SetTxContext(core.NewEVMTxContext(msg))
+		res, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit), common.Address{})
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction(types.LegacyTxType).Hash(), err)
 		}

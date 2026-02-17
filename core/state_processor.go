@@ -97,13 +97,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, tra
 	totalFeeUsed := big.NewInt(0)
 
 	// Apply pre-execution system calls.
-	blockContext := NewEVMBlockContext(header, p.bc, nil)
-	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, tracingStateDB, tradingState, p.config, cfg)
+	context := NewEVMBlockContext(header, p.bc, nil)
+	evm := vm.NewEVM(context, tracingStateDB, tradingState, p.config, cfg)
 	signer := types.MakeSigner(p.config, blockNumber)
 	coinbaseOwner := getCoinbaseOwner(p.bc, statedb, header, nil)
 
 	if p.config.IsPrague(block.Number()) {
-		ProcessParentBlockHash(block.ParentHash(), vmenv, tracingStateDB)
+		ProcessParentBlockHash(block.ParentHash(), evm, tracingStateDB)
 	}
 
 	// Iterate over and process the individual transactions
@@ -146,7 +146,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, tra
 		}
 		statedb.SetTxContext(tx.Hash(), i)
 
-		receipt, gas, tokenFeeUsed, err := ApplyTransactionWithEVM(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, balanceFee, coinbaseOwner)
+		receipt, gas, tokenFeeUsed, err := ApplyTransactionWithEVM(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, evm, balanceFee, coinbaseOwner)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
@@ -204,13 +204,13 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 	}
 
 	// Apply pre-execution system calls.
-	blockContext := NewEVMBlockContext(header, p.bc, nil)
-	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, tracingStateDB, tradingState, p.config, cfg)
+	context := NewEVMBlockContext(header, p.bc, nil)
+	evm := vm.NewEVM(context, tracingStateDB, tradingState, p.config, cfg)
 	signer := types.MakeSigner(p.config, blockNumber)
 	coinbaseOwner := getCoinbaseOwner(p.bc, statedb, header, nil)
 
 	if p.config.IsPrague(block.Number()) {
-		ProcessParentBlockHash(block.ParentHash(), vmenv, tracingStateDB)
+		ProcessParentBlockHash(block.ParentHash(), evm, tracingStateDB)
 	}
 
 	// Iterate over and process the individual transactions
@@ -253,7 +253,7 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 		}
 		statedb.SetTxContext(tx.Hash(), i)
 
-		receipt, gas, tokenFeeUsed, err := ApplyTransactionWithEVM(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, balanceFee, coinbaseOwner)
+		receipt, gas, tokenFeeUsed, err := ApplyTransactionWithEVM(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, evm, balanceFee, coinbaseOwner)
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -280,11 +280,7 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 // and uses the input parameters for its environment similar to ApplyTransaction. However,
 // this method takes an already created EVM instance as input.
 func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, balanceFee *big.Int, coinbaseOwner common.Address) (receipt *types.Receipt, gasUsed uint64, tokenFeeUsed bool, err error) {
-	// Initialize tracer at the beginning to ensure all transaction types
-	// (including non-EVM special transactions) are properly traced.
-	var tracingStateDB = vm.StateDB(statedb)
 	if hooks := evm.Config.Tracer; hooks != nil {
-		tracingStateDB = state.NewHookedState(statedb, hooks)
 		if hooks.OnTxStart != nil {
 			hooks.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
@@ -314,7 +310,7 @@ func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPo
 
 	// Create a new context to be used in the EVM environment
 	txContext := NewEVMTxContext(msg)
-	evm.Reset(txContext, tracingStateDB)
+	evm.SetTxContext(txContext)
 
 	// Bypass denylist address
 	maxBlockNumber := new(big.Int).SetInt64(9147459)
@@ -469,7 +465,7 @@ func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPo
 	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(blockNumber) {
-		tracingStateDB.Finalise(true)
+		evm.StateDB.Finalise(true)
 	} else {
 		root = statedb.IntermediateRoot(config.IsEIP158(blockNumber)).Bytes()
 	}
@@ -524,7 +520,7 @@ func getCoinbaseOwner(bc *BlockChain, statedb *state.StateDB, header *types.Head
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*big.Int, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, XDCxState *tradingstate.TradingStateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, uint64, bool, error) {
+func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*big.Int, evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64) (*types.Receipt, uint64, bool, error) {
 	var balanceFee *big.Int
 	if tx.To() != nil {
 		if value, ok := tokensFee[*tx.To()]; ok {
@@ -532,16 +528,13 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 		}
 	}
 
-	// Create a new context to be used in the EVM environment
-	blockContext := NewEVMBlockContext(header, bc, author)
-	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, XDCxState, config, cfg)
 	signer := types.MakeSigner(config, header.Number)
 	msg, err := TransactionToMessage(tx, signer, balanceFee, header.Number, header.BaseFee)
 	if err != nil {
 		return nil, 0, false, err
 	}
-	coinbaseOwner := getCoinbaseOwner(bc, statedb, header, author)
-	return ApplyTransactionWithEVM(msg, config, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv, balanceFee, coinbaseOwner)
+	coinbaseOwner := statedb.GetOwner(evm.Context.Coinbase)
+	return ApplyTransactionWithEVM(msg, config, gp, statedb, header.Number, header.Hash(), tx, usedGas, evm, balanceFee, coinbaseOwner)
 }
 
 func ApplySignTransaction(msg *Message, config *params.ChainConfig, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *types.Receipt, gasUsed uint64, tokenFeeUsed bool, err error) {
@@ -726,7 +719,7 @@ func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb vm.Stat
 		To:        &params.HistoryStorageAddress,
 		Data:      prevHash.Bytes(),
 	}
-	vmenv.Reset(NewEVMTxContext(msg), statedb)
+	vmenv.SetTxContext(NewEVMTxContext(msg))
 	statedb.AddAddressToAccessList(params.HistoryStorageAddress)
 	_, _, err := vmenv.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560)
 	if err != nil {
