@@ -435,6 +435,16 @@ func writeTxForHash(tx []byte, buf *bytes.Buffer) {
 	}
 }
 
+// writeReceiptForHash returns a write function that encode receipts for hash derivation.
+func writeReceiptForHash(bloomBuf *[6]byte) func([]byte, *bytes.Buffer) {
+	return func(data []byte, outbuf *bytes.Buffer) {
+		var r Receipt
+		if rlp.DecodeBytes(data, &r) == nil {
+			r.encodeForHash(bloomBuf, outbuf)
+		}
+	}
+}
+
 func handleReceipts(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of receipts arrived to one of our previous requests
 	res := new(ReceiptsPacket)
@@ -447,22 +457,19 @@ func handleReceipts(backend Backend, msg Decoder, peer *Peer) error {
 		return fmt.Errorf("Receipts: %w", err)
 	}
 
-	// Assign temporary hashing buffer to each list item, the same buffer is shared
-	// between all receipt list instances.
 	receiptLists, err := res.List.Items()
 	if err != nil {
 		return fmt.Errorf("Receipts: %w", err)
 	}
-	buffers := new(receiptListBuffers)
-	for i := range receiptLists {
-		receiptLists[i].setBuffers(buffers)
-	}
 
+	var bloomBuf [6]byte
+	writeReceipt := writeReceiptForHash(&bloomBuf)
 	metadata := func() interface{} {
 		hasher := trie.NewStackTrie(nil)
 		hashes := make([]common.Hash, len(receiptLists))
 		for i := range receiptLists {
-			hashes[i] = types.DeriveSha(receiptLists[i].Derivable(), hasher)
+			receipts := newDerivableRawList(&receiptLists[i].items, writeReceipt)
+			hashes[i] = types.DeriveSha(receipts, hasher)
 		}
 		return hashes
 	}

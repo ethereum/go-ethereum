@@ -47,18 +47,17 @@ func newReceipt(tr *types.Receipt) Receipt {
 }
 
 // encodeForHash encodes a receipt for the block receiptsRoot derivation.
-func (r *Receipt) encodeForHash(buf *receiptListBuffers, out *bytes.Buffer) {
+func (r *Receipt) encodeForHash(bloomBuf *[6]byte, out *bytes.Buffer) {
 	// For typed receipts, add the tx type.
 	if r.TxType != 0 {
 		out.WriteByte(r.TxType)
 	}
 	// Encode list = [postStateOrStatus, gasUsed, bloom, logs].
-	w := &buf.enc
-	w.Reset(out)
+	w := rlp.NewEncoderBuffer(out)
 	l := w.List()
 	w.WriteBytes(r.PostStateOrStatus)
 	w.WriteUint64(r.GasUsed)
-	bloom := r.bloom(&buf.bloom)
+	bloom := r.bloom(bloomBuf)
 	w.WriteBytes(bloom[:])
 	w.Write(r.Logs)
 	w.ListEnd(l)
@@ -91,26 +90,19 @@ func (r *Receipt) bloom(buffer *[6]byte) types.Bloom {
 	return b
 }
 
-type receiptListBuffers struct {
-	enc   rlp.EncoderBuffer
-	bloom [6]byte
+// ReceiptList is the block receipt list as downloaded by eth/69.
+type ReceiptList struct {
+	items rlp.RawList[Receipt]
 }
 
-func initBuffers(buf **receiptListBuffers) {
-	if *buf == nil {
-		*buf = new(receiptListBuffers)
-	}
-}
-
-// encodeForStorage encodes a list of receipts for the database.
+// EncodeForStorage encodes a list of receipts for the database.
 // It only strips the first element (TxType) from each receipt's
 // raw RLP without the actual decoding and re-encoding.
-func (buf *receiptListBuffers) encodeForStorage(rs rlp.RawList[Receipt]) (rlp.RawValue, error) {
+func (rl *ReceiptList) EncodeForStorage() (rlp.RawValue, error) {
 	var out bytes.Buffer
-	w := &buf.enc
-	w.Reset(&out)
+	w := rlp.NewEncoderBuffer(&out)
 	outer := w.List()
-	it := rs.ContentIterator()
+	it := rl.items.ContentIterator()
 	for it.Next() {
 		content, _, err := rlp.SplitList(it.Value())
 		if err != nil {
@@ -132,13 +124,6 @@ func (buf *receiptListBuffers) encodeForStorage(rs rlp.RawList[Receipt]) (rlp.Ra
 	return out.Bytes(), nil
 }
 
-// ReceiptList is the block receipt list as downloaded by eth/69.
-// This implements types.DerivableList for validation purposes.
-type ReceiptList struct {
-	buf   *receiptListBuffers
-	items rlp.RawList[Receipt]
-}
-
 // NewReceiptList creates a receipt list.
 // This is slow, and exists for testing purposes.
 func NewReceiptList(trs []*types.Receipt) *ReceiptList {
@@ -149,28 +134,6 @@ func NewReceiptList(trs []*types.Receipt) *ReceiptList {
 		rl.items.AppendRaw(encoded)
 	}
 	return rl
-}
-
-// setBuffers assigns buffers to the receipt list
-func (rl *ReceiptList) setBuffers(buf *receiptListBuffers) {
-	rl.buf = buf
-}
-
-// EncodeForStorage encodes the receipts for storage into the database.
-func (rl *ReceiptList) EncodeForStorage() (rlp.RawValue, error) {
-	initBuffers(&rl.buf)
-	return rl.buf.encodeForStorage(rl.items)
-}
-
-// Derivable turns the receipts into a list that can derive the root hash.
-func (rl *ReceiptList) Derivable() types.DerivableList {
-	initBuffers(&rl.buf)
-	return newDerivableRawList(&rl.items, func(data []byte, outbuf *bytes.Buffer) {
-		var r Receipt
-		if rlp.DecodeBytes(data, &r) == nil {
-			r.encodeForHash(rl.buf, outbuf)
-		}
-	})
 }
 
 // DecodeRLP decodes a list receipts from the network format.

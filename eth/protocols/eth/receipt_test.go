@@ -128,7 +128,10 @@ func TestReceiptList(t *testing.T) {
 		}
 
 		// compute root hash from ReceiptList and compare.
-		responseHash := types.DeriveSha(rl.Derivable(), trie.NewStackTrie(nil))
+		var bloomBuf [6]byte
+		writeReceipt := writeReceiptForHash(&bloomBuf)
+		receipts := newDerivableRawList(&rl.items, writeReceipt)
+		responseHash := types.DeriveSha(receipts, trie.NewStackTrie(nil))
 		if responseHash != test.root {
 			t.Fatalf("test[%d]: wrong root hash from ReceiptList\nhave: %v\nwant: %v", i, responseHash, test.root)
 		}
