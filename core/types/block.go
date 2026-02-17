@@ -337,6 +337,10 @@ func CopyHeader(h *Header) *Header {
 		cpy.SlotNumber = new(uint64)
 		*cpy.SlotNumber = *h.SlotNumber
 	}
+	if h.BlockAccessListHash != nil {
+		cpy.BlockAccessListHash = new(common.Hash)
+		*cpy.BlockAccessListHash = *h.BlockAccessListHash
+	}
 	return &cpy
 }
 
