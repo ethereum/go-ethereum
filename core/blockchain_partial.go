@@ -37,8 +37,8 @@ var ErrDeepReorg = errors.New("reorg depth exceeds BAL retention")
 // # Trust Model - Why We Don't Re-Verify Consensus Attestations
 //
 // Post-Merge (PoS) Architecture Trust Boundary:
-//   - Consensus Layer (CL): Responsible for block proposal, attestations (2/3+ sync committee
-//     threshold), finality proofs, proposer signatures, and all consensus rules
+//   - Consensus Layer (CL): Responsible for block proposal, validator attestations,
+//     finality (Casper FFG), proposer signatures, and all consensus rules
 //   - Execution Layer (EL): Responsible for transaction execution, state computation, receipts
 //
 // Blocks received via Engine API (engine_newPayloadV5) have ALREADY been attested by the CL
@@ -81,31 +81,32 @@ func (bc *BlockChain) ProcessBlockWithBAL(
 	//         balHash, block.Header().BlockAccessListHash)
 	// }
 
-	// 3. Get parent state root. Use partialState's tracked root (the actual
-	// computed root from the previous block) rather than the header root, which
-	// may differ when untracked contracts have unresolved storage roots.
-	parentRoot := bc.partialState.Root()
-	if parentRoot == (common.Hash{}) {
-		// First block after sync — use the parent block's header root
-		parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
-		if parent == nil {
-			return errors.New("parent block not found")
-		}
-		parentRoot = parent.Root()
+	// 3. Get parent state root from parent block header.
+	parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return errors.New("parent block not found")
 	}
+	parentRoot := parent.Root()
 
 	// 4. Apply BAL diffs and compute new state root.
 	// Pass block.Root() as expectedRoot so the resolver can query peers for this
 	// state's untracked contracts.
-	newRoot, err := bc.partialState.ApplyBALAndComputeRoot(parentRoot, block.Root(), accessList)
+	newRoot, unresolved, err := bc.partialState.ApplyBALAndComputeRoot(parentRoot, block.Root(), accessList)
 	if err != nil {
 		return fmt.Errorf("failed to apply BAL: %w", err)
 	}
 
-	// 5. Verify computed root matches header (warning, not fatal — may use fallback)
+	// 5. Verify computed root matches header.
+	// If all storage roots were resolved, a mismatch indicates a real bug.
+	// If some were unresolved, a mismatch is expected (stale storage roots).
 	if newRoot != block.Root() {
-		log.Warn("Partial state root sanity check",
-			"computed", newRoot, "header", block.Root(), "block", block.NumberU64())
+		if unresolved == 0 {
+			return fmt.Errorf("state root mismatch (all storage resolved): computed %x, header %x, block %d",
+				newRoot, block.Root(), block.NumberU64())
+		}
+		log.Warn("Partial state root mismatch (unresolved storage roots)",
+			"computed", newRoot, "header", block.Root(), "block", block.NumberU64(),
+			"unresolved", unresolved)
 	}
 
 	// 6. Track last processed block for gap detection and HasState checks.
@@ -165,11 +166,7 @@ func (bc *BlockChain) HandlePartialReorg(
 		}
 	}
 
-	// Step 1: Revert state to common ancestor
-	// Simply set state root to ancestor's root (we have all account trie data)
-	bc.partialState.SetRoot(commonAncestor.Root())
-
-	log.Debug("Reverted partial state to ancestor",
+	log.Debug("Starting partial state reorg from ancestor",
 		"ancestor", commonAncestor.Number(),
 		"ancestorRoot", commonAncestor.Root().Hex(),
 		"reorgDepth", reorgDepth)
@@ -233,5 +230,5 @@ func (bc *BlockChain) TriggerPartialResync(ancestor *types.Header) error {
 	// 2. Use snap sync to fetch state at ancestor.Root
 	// 3. Apply ContractFilter to only store tracked contract storage
 	// 4. Resume normal operation once state is available
-	return errors.New("partial state resync not yet implemented - manual intervention required")
+	return errors.New("partial state resync not yet implemented: restart node to re-sync from scratch, or increase --partial-state.bal-retention to handle deeper reorgs")
 }

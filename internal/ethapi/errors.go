@@ -173,7 +173,7 @@ func (e *invalidBlockTimestampError) ErrorCode() int { return errCodeBlockTimest
 
 type blockGasLimitReachedError struct{ message string }
 
-// Partial state error codes per EIP-7928 / partial statefulness spec
+// Partial state error codes for untracked contract queries
 const (
 	errCodeStorageNotTracked = -32001
 	errCodeCodeNotTracked    = -32002

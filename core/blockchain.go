@@ -1402,16 +1402,21 @@ func (bc *BlockChain) AdvancePartialHead(hash common.Hash) error {
 	// Write canonical hashes for all blocks between the old head and the new head.
 	// During snap sync, InsertReceiptChain skips blocks that already have bodies
 	// (HasBlock returns true), so canonical hashes aren't written for post-pivot
-	// blocks. We backfill them here by walking from the new head back to the
-	// current canonical head.
+	// blocks. We backfill them here by walking backward from the new block via
+	// ParentHash() — this avoids relying on GetHeaderByNumber which itself
+	// depends on canonical hash mappings that don't exist yet.
 	batch := bc.db.NewBatch()
 	currentHead := bc.CurrentBlock()
-	for num := block.NumberU64(); num > currentHead.Number.Uint64(); num-- {
-		h := bc.GetHeaderByNumber(num)
-		if h == nil {
+	current := block.Header()
+	for current.Number.Uint64() > currentHead.Number.Uint64() {
+		rawdb.WriteCanonicalHash(batch, current.Hash(), current.Number.Uint64())
+		parent := bc.GetHeader(current.ParentHash, current.Number.Uint64()-1)
+		if parent == nil {
+			log.Warn("Missing parent during canonical hash backfill",
+				"number", current.Number.Uint64()-1, "target", block.NumberU64())
 			break
 		}
-		rawdb.WriteCanonicalHash(batch, h.Hash(), num)
+		current = parent
 	}
 	rawdb.WriteHeadBlockHash(batch, block.Hash())
 	rawdb.WriteHeadHeaderHash(batch, block.Hash())
@@ -1847,8 +1852,8 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 }
 
 // WriteBlockWithoutState writes only the block and its metadata to the database,
-// but does not write any state. This is used to construct competing side forks
-// up to the point where they exceed the canonical total difficulty.
+// but does not write any state. Used by the Engine API to persist blocks before
+// state is available (e.g., during partial state sync or when the parent is unknown).
 func (bc *BlockChain) WriteBlockWithoutState(block *types.Block) (err error) {
 	if bc.insertStopped() {
 		return errInsertionInterrupted
@@ -2985,23 +2990,14 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 
 	// Re-execute the reorged chain in case the head state is missing.
 	if !bc.HasState(head.Root()) {
-		// Partial state nodes can't re-execute blocks — they only apply BAL diffs.
-		// The computed root may differ from the header root when untracked contracts
-		// have unresolved storage roots. Check the partial state's tracked root too.
 		if bc.partialState != nil {
-			partialRoot := bc.partialState.Root()
-			if partialRoot == (common.Hash{}) || !bc.HasState(partialRoot) {
-				return common.Hash{}, fmt.Errorf("partial state: missing state for block %d root %x", head.NumberU64(), head.Root())
-			}
-			log.Debug("SetCanonical: using partial state root (differs from header)",
-				"block", head.NumberU64(), "headerRoot", head.Root(),
-				"partialRoot", partialRoot)
-		} else {
-			if latestValidHash, err := bc.recoverAncestors(head, false); err != nil {
-				return latestValidHash, err
-			}
-			log.Info("Recovered head state", "number", head.Number(), "hash", head.Hash())
+			return common.Hash{}, fmt.Errorf("partial state: missing state for block %d root %x",
+				head.NumberU64(), head.Root())
 		}
+		if latestValidHash, err := bc.recoverAncestors(head, false); err != nil {
+			return latestValidHash, err
+		}
+		log.Info("Recovered head state", "number", head.Number(), "hash", head.Hash())
 	}
 	// Run the reorg if necessary and set the given block as new head.
 	start := time.Now()

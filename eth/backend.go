@@ -278,8 +278,13 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	options.Overrides = &overrides
 	options.BALExecutionMode = config.BALExecutionMode
 
-	// Wire partial state configuration into the blockchain
+	// Wire partial state configuration into the blockchain.
+	// Load contracts from file FIRST, before wiring into blockchain, so both
+	// blockchain and downloader see the same contract list.
 	if config.PartialState.Enabled {
+		if err := config.PartialState.LoadPartialStateContracts(); err != nil {
+			return nil, fmt.Errorf("failed to load partial state contracts: %w", err)
+		}
 		options.PartialStateEnabled = true
 		options.PartialStateContracts = config.PartialState.Contracts
 		options.PartialStateBALRetention = config.PartialState.BALRetention
@@ -342,12 +347,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := options.TrieCleanLimit + options.TrieDirtyLimit + options.SnapshotLimit
 
-	// Create partial state filter if enabled
+	// Create partial state filter if enabled (contracts already loaded above)
 	var partialFilter partial.ContractFilter
 	if config.PartialState.Enabled {
-		if err := config.PartialState.LoadPartialStateContracts(); err != nil {
-			return nil, fmt.Errorf("failed to load partial state contracts: %w", err)
-		}
 		partialFilter = partial.NewConfiguredFilter(config.PartialState.Contracts)
 		log.Info("Partial state mode enabled",
 			"contracts", len(config.PartialState.Contracts),

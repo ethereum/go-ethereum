@@ -49,11 +49,7 @@ type PartialState struct {
 	history  *BALHistory
 	resolver StorageRootResolver // optional, for resolving untracked storage roots
 
-	// Current state root (the actual computed root, may differ from header root)
-	stateRoot common.Hash
-
-	// Last block successfully processed via BAL
-	lastProcessedNum uint64
+	lastProcessedNum uint64 // last block successfully processed via BAL
 }
 
 // SetResolver sets the storage root resolver used to fetch updated storage roots
@@ -75,16 +71,6 @@ func NewPartialState(db ethdb.Database, trieDB *triedb.Database, filter Contract
 // Filter returns the contract filter used by this partial state.
 func (s *PartialState) Filter() ContractFilter {
 	return s.filter
-}
-
-// SetRoot sets the current state root.
-func (s *PartialState) SetRoot(root common.Hash) {
-	s.stateRoot = root
-}
-
-// Root returns the current state root.
-func (s *PartialState) Root() common.Hash {
-	return s.stateRoot
 }
 
 // History returns the BAL history manager.
@@ -125,11 +111,11 @@ type accountState struct {
 // Phase 1.5: Resolve storage roots for untracked contracts with storage changes
 // Phase 2: Update account Root fields with committed storage roots
 // Phase 3: Commit account trie to get final state root
-func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, expectedRoot common.Hash, accessList *bal.BlockAccessList) (common.Hash, error) {
+func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, expectedRoot common.Hash, accessList *bal.BlockAccessList) (common.Hash, int, error) {
 	// Open state trie at parent root
 	tr, err := trie.NewStateTrie(trie.StateTrieID(parentRoot), s.trieDB)
 	if err != nil {
-		return common.Hash{}, fmt.Errorf("failed to open state trie: %w", err)
+		return common.Hash{}, 0, fmt.Errorf("failed to open state trie: %w", err)
 	}
 
 	// Collect all account states with origin tracking
@@ -145,7 +131,7 @@ func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, expectedRo
 		// Get current account state with origin tracking
 		data, err := tr.GetAccount(addr)
 		if err != nil {
-			return common.Hash{}, fmt.Errorf("failed to get account %s: %w", addr.Hex(), err)
+			return common.Hash{}, 0, fmt.Errorf("failed to get account %s: %w", addr.Hex(), err)
 		}
 
 		existed := data != nil
@@ -214,7 +200,7 @@ func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, expectedRo
 			newStorageRoot, storageNodes, err := s.applyStorageChanges(
 				addr, parentRoot, account.Root, &access)
 			if err != nil {
-				return common.Hash{}, fmt.Errorf("failed to apply storage for %s: %w",
+				return common.Hash{}, 0, fmt.Errorf("failed to apply storage for %s: %w",
 					addr.Hex(), err)
 			}
 			state.storageRoot = newStorageRoot
@@ -223,7 +209,7 @@ func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, expectedRo
 			// Merge storage nodes
 			if storageNodes != nil {
 				if err := allNodes.Merge(storageNodes); err != nil {
-					return common.Hash{}, err
+					return common.Hash{}, 0, err
 				}
 			}
 		}
@@ -278,7 +264,7 @@ func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, expectedRo
 			// Only delete if it existed before (don't delete never-existed accounts)
 			if state.existed {
 				if err := tr.DeleteAccount(state.addr); err != nil {
-					return common.Hash{}, fmt.Errorf("failed to delete account %s: %w",
+					return common.Hash{}, 0, fmt.Errorf("failed to delete account %s: %w",
 						state.addr.Hex(), err)
 				}
 			}
@@ -287,7 +273,7 @@ func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, expectedRo
 		}
 
 		if err := tr.UpdateAccount(state.addr, state.account, 0); err != nil {
-			return common.Hash{}, fmt.Errorf("failed to update account %s: %w",
+			return common.Hash{}, 0, fmt.Errorf("failed to update account %s: %w",
 				state.addr.Hex(), err)
 		}
 	}
@@ -298,19 +284,19 @@ func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, expectedRo
 	// Merge account nodes
 	if accountNodes != nil {
 		if err := allNodes.Merge(accountNodes); err != nil {
-			return common.Hash{}, err
+			return common.Hash{}, 0, err
 		}
 	}
 
 	// Build StateSet for PathDB compatibility
 	stateSet := s.buildStateSet(accounts, accessList)
 
-	// Always use the actual computed root for the PathDB layer. Even if untracked
-	// contracts have stale storage roots (making the computed root differ from the
-	// header), subsequent blocks must chain off the real trie structure.
-	// ProcessBlockWithBAL uses partialState.Root() (not header root) as parentRoot.
+	// Compute unresolved count for caller to decide root mismatch severity.
+	// The computed root should match the header root since we maintain the full
+	// account trie and resolve storage roots for untracked contracts.
+	unresolvedCount := 0
 	if len(untrackedAddrs) > 0 {
-		unresolvedCount := len(untrackedAddrs)
+		unresolvedCount = len(untrackedAddrs)
 		if resolved != nil {
 			for _, addr := range untrackedAddrs {
 				if _, ok := resolved[addr]; ok {
@@ -327,11 +313,10 @@ func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, expectedRo
 
 	// Write all trie nodes and state to database
 	if err := s.trieDB.Update(root, parentRoot, 0, allNodes, stateSet); err != nil {
-		return common.Hash{}, fmt.Errorf("failed to update trie db: %w", err)
+		return common.Hash{}, 0, fmt.Errorf("failed to update trie db: %w", err)
 	}
 
-	s.stateRoot = root
-	return root, nil
+	return root, unresolvedCount, nil
 }
 
 // buildStateSet constructs StateSet for trieDB.Update() (required for PathDB).
@@ -386,7 +371,10 @@ func (s *PartialState) addStorageToStateSet(stateSet *triedb.StateSet, addr comm
 					storageMap[slotHash] = nil // nil = deletion
 				} else {
 					// Prefix-zero-trimmed RLP encoding
-					blob, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
+					blob, err := rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
+				if err != nil {
+					panic(fmt.Sprintf("failed to RLP-encode storage value: %v", err))
+				}
 					storageMap[slotHash] = blob
 				}
 			}

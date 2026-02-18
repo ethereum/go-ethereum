@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // BALHistory manages storage and retrieval of Block Access Lists for reorg handling.
@@ -45,7 +46,11 @@ func (h *BALHistory) Store(blockNum uint64, accessList *bal.BlockAccessList) {
 // Get retrieves the BAL for a specific block number.
 // Returns nil, false if not found.
 func (h *BALHistory) Get(blockNum uint64) (*bal.BlockAccessList, bool) {
-	accessList := rawdb.ReadBALHistory(h.db, blockNum)
+	accessList, err := rawdb.ReadBALHistory(h.db, blockNum)
+	if err != nil {
+		log.Error("Corrupted BAL history entry", "block", blockNum, "err", err)
+		return nil, false
+	}
 	return accessList, accessList != nil
 }
 

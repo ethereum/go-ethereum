@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -35,18 +36,21 @@ func balHistoryKey(blockNum uint64) []byte {
 }
 
 // ReadBALHistory retrieves the Block Access List for a specific block number.
-// Returns nil if the BAL is not found or cannot be decoded.
-func ReadBALHistory(db ethdb.KeyValueReader, blockNum uint64) *bal.BlockAccessList {
+// Returns (nil, nil) if the BAL is not found.
+// Returns (nil, error) if the BAL exists but is corrupted.
+func ReadBALHistory(db ethdb.KeyValueReader, blockNum uint64) (*bal.BlockAccessList, error) {
 	data, err := db.Get(balHistoryKey(blockNum))
-	if err != nil || len(data) == 0 {
-		return nil
+	if err != nil {
+		return nil, nil // Not found (leveldb returns error for missing keys)
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 	var accessList bal.BlockAccessList
 	if err := rlp.DecodeBytes(data, &accessList); err != nil {
-		log.Warn("Failed to decode BAL history", "block", blockNum, "err", err)
-		return nil
+		return nil, fmt.Errorf("corrupted BAL at block %d: %w", blockNum, err)
 	}
-	return &accessList
+	return &accessList, nil
 }
 
 // WriteBALHistory stores a Block Access List for a specific block number.
@@ -70,32 +74,18 @@ func DeleteBALHistory(db ethdb.KeyValueWriter, blockNum uint64) {
 // PruneBALHistory removes all BALs before the specified block number.
 // This uses range iteration for safe, interruptible pruning.
 func PruneBALHistory(db ethdb.Database, beforeBlock uint64) error {
-	// Create iterator for BAL history range
-	start := balHistoryKey(0)
-	end := balHistoryKey(beforeBlock)
-
-	// Use batch deletion for efficiency
 	batch := db.NewBatch()
-	it := db.NewIterator(balHistoryPrefix, start)
+	it := db.NewIterator(balHistoryPrefix, nil) // nil = start from beginning of prefix
 	defer it.Release()
 
 	deleted := 0
 	for it.Next() {
 		key := it.Key()
-		// Stop if we've passed the end key
+		// Extract block number and stop if we've passed the target
 		if len(key) >= len(balHistoryPrefix)+8 {
 			blockNum := binary.BigEndian.Uint64(key[len(balHistoryPrefix):])
 			if blockNum >= beforeBlock {
 				break
-			}
-		}
-		// Check if key is within our prefix
-		if len(key) < len(balHistoryPrefix) {
-			continue
-		}
-		for i := range balHistoryPrefix {
-			if key[i] != balHistoryPrefix[i] {
-				goto done
 			}
 		}
 		batch.Delete(key)
@@ -109,7 +99,6 @@ func PruneBALHistory(db ethdb.Database, beforeBlock uint64) error {
 			batch.Reset()
 		}
 	}
-done:
 	// Write remaining items
 	if batch.ValueSize() > 0 {
 		if err := batch.Write(); err != nil {
@@ -119,7 +108,6 @@ done:
 	if deleted > 0 {
 		log.Debug("Pruned BAL history", "deleted", deleted, "beforeBlock", beforeBlock)
 	}
-	_ = end // silence unused variable warning (used for documentation)
 	return it.Error()
 }
 

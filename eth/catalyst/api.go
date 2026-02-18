@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -295,16 +296,8 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	// If we try to SetCanonical, it will fail because HasState returns false and
 	// partial state can't recoverAncestors. Instead, treat it like an unknown
 	// block and trigger BeaconSync so the skeleton can start the sync cycle.
-	//
-	// After sync, the computed root may differ from the header root (unresolved
-	// untracked storage roots), so we also check partialState's tracked root.
-	partialRoot := common.Hash{}
-	if api.eth.BlockChain().SupportsPartialState() {
-		partialRoot = api.eth.BlockChain().PartialState().Root()
-	}
 	if api.eth.BlockChain().SupportsPartialState() &&
-		!api.eth.BlockChain().HasState(block.Root()) &&
-		(partialRoot == common.Hash{} || !api.eth.BlockChain().HasState(partialRoot)) {
+		!api.eth.BlockChain().HasState(block.Root()) {
 		log.Info("Forkchoice: block known but stateless (partial state sync in progress), triggering BeaconSync",
 			"number", block.NumberU64(), "hash", update.HeadBlockHash, "root", block.Root())
 		finalized := api.remoteBlocks.get(update.FinalizedBlockHash)
@@ -876,6 +869,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		if api.eth.BlockChain().SupportsPartialState() {
 			if err := api.eth.BlockChain().WriteBlockWithoutState(block); err != nil {
 				log.Warn("NewPayload: failed to persist block for partial state catch-up", "number", block.NumberU64(), "err", err)
+				return engine.PayloadStatusV1{Status: engine.SYNCING}, nil
 			}
 			if params.BlockAccessList != nil {
 				rawdb.WriteAccessList(api.eth.ChainDb(), block.Hash(), block.NumberU64(), params.BlockAccessList)
@@ -900,6 +894,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		if api.eth.BlockChain().SupportsPartialState() {
 			if err := api.eth.BlockChain().WriteBlockWithoutState(block); err != nil {
 				log.Warn("NewPayload: failed to persist block for partial state catch-up", "number", block.NumberU64(), "err", err)
+				return engine.PayloadStatusV1{Status: engine.SYNCING}, nil
 			}
 			if params.BlockAccessList != nil {
 				rawdb.WriteAccessList(api.eth.ChainDb(), block.Hash(), block.NumberU64(), params.BlockAccessList)
@@ -913,12 +908,13 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	if api.eth.BlockChain().SupportsPartialState() && params.BlockAccessList != nil {
 		log.Info("NewPayload: entering BAL processing path",
 			"number", block.NumberU64(), "hash", block.Hash(),
-			"parent", parent.NumberU64(), "hasBAL", params.BlockAccessList != nil)
+			"parent", parent.NumberU64())
 		// Before processing this block, catch up any unprocessed ancestor
 		// blocks that accumulated during the second state sync phase. Their
 		// bodies and BALs were persisted to the database when delayed.
 		if err := api.processPartialStateGap(block); err != nil {
-			log.Warn("Failed to process partial state gap", "block", block.NumberU64(), "error", err)
+			log.Error("Failed to process partial state gap, delaying block",
+				"block", block.NumberU64(), "error", err)
 			return api.delayPayloadImport(block), nil
 		}
 		log.Trace("Processing block with BAL (partial state mode)", "hash", block.Hash(), "number", block.Number())
@@ -933,8 +929,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		}
 		processingTime := time.Since(start)
 
-		// Write block to DB so ForkchoiceUpdated can find it via GetBlockByHash.
-		// This writes header + body + BAL without requiring receipts or full state.
+		// Write block (header + body) to DB so ForkchoiceUpdated can find it via GetBlockByHash.
 		if err := api.eth.BlockChain().WriteBlockWithoutState(block); err != nil {
 			return api.invalid(err, parent.Header()), nil
 		}
@@ -1045,6 +1040,9 @@ func (api *ConsensusAPI) processPartialStateGap(target *types.Block) error {
 	var gap []*types.Block
 	current := target
 	for {
+		if current.NumberU64() == 0 {
+			break
+		}
 		parentHash := current.ParentHash()
 		parentNum := current.NumberU64() - 1
 
@@ -1058,9 +1056,10 @@ func (api *ConsensusAPI) processPartialStateGap(target *types.Block) error {
 		if bc.HasState(parent.Root()) || parent.NumberU64() <= bc.PartialState().LastProcessedBlock() {
 			break // Found an ancestor with state — this is our starting point
 		}
-		gap = append([]*types.Block{parent}, gap...)
+		gap = append(gap, parent)
 		current = parent
 	}
+	slices.Reverse(gap)
 	if len(gap) == 0 {
 		return nil // No gap to fill
 	}
