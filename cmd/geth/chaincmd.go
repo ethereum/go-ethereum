@@ -173,6 +173,19 @@ The export-history command will export blocks and their corresponding receipts
 into Era archives. Eras are typically packaged in steps of 8192 blocks.
 `,
 	}
+	importEraIndexCommand = &cli.Command{
+		Action:    importEraIndex,
+		Name:      "import-era-index",
+		Usage:     "Import transaction index from era archive files",
+		ArgsUsage: "<era-dir>",
+		Flags:     slices.Concat(utils.DatabaseFlags, utils.NetworkFlags, []cli.Flag{utils.EraFormatFlag}),
+		Description: `
+The import-era-index command indexes transactions from era files to enable
+transaction lookups by hash
+for pruned block ranges. Era files must be present in the specified directory.
+The command is idempotent and can be re-run to index newly added era files.
+`,
+	}
 	importPreimagesCommand = &cli.Command{
 		Action:    importPreimages,
 		Name:      "import-preimages",
@@ -587,6 +600,80 @@ func exportHistory(ctx *cli.Context) error {
 
 	fmt.Printf("Export done in %v\n", time.Since(start))
 	return nil
+}
+
+func importEraIndex(ctx *cli.Context) error {
+	if ctx.Args().Len() != 1 {
+		utils.Fatalf("usage: %s", ctx.Command.ArgsUsage)
+	}
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, false)
+	defer db.Close()
+
+	var (
+		start   = time.Now()
+		dir     = ctx.Args().Get(0)
+		network string
+	)
+
+	// Determine network.
+	if utils.IsNetworkPreset(ctx) {
+		switch {
+		case ctx.Bool(utils.MainnetFlag.Name):
+			network = "mainnet"
+		case ctx.Bool(utils.SepoliaFlag.Name):
+			network = "sepolia"
+		case ctx.Bool(utils.HoleskyFlag.Name):
+			network = "holesky"
+		case ctx.Bool(utils.HoodiFlag.Name):
+			network = "hoodi"
+		}
+	} else {
+		// No network flag set, try to determine network based on files
+		// present in directory.
+		var networks []string
+		for _, n := range params.NetworkNames {
+			entries, err := era.ReadDir(dir, n)
+			if err != nil {
+				return fmt.Errorf("error reading %s: %w", dir, err)
+			}
+			if len(entries) > 0 {
+				networks = append(networks, n)
+			}
+		}
+		if len(networks) == 0 {
+			return fmt.Errorf("no era files found in %s", dir)
+		}
+		if len(networks) > 1 {
+			return errors.New("multiple networks found, use a network flag to specify network")
+		}
+		network = networks[0]
+	}
+
+	// Determine era format.
+	var (
+		format = ctx.String(utils.EraFormatFlag.Name)
+		from   func(era.ReadAtSeekCloser) (era.Era, error)
+	)
+	switch format {
+	case "era1", "era":
+		from = onedb.From
+	case "erae":
+		from = execdb.From
+	default:
+		return fmt.Errorf("unknown --era.format %q (expected 'era1' or 'erae')", format)
+	}
+
+	if err := utils.ImportEraIndex(db, dir, network, from); err != nil {
+		return err
+	}
+
+	fmt.Printf("Era indexing done in %v\n", time.Since(start))
+	return nil
+
 }
 
 // importPreimages imports preimage data from the specified file.
