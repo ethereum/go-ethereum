@@ -56,6 +56,9 @@ type StateReader interface {
 
 	AddressInAccessList(addr common.Address) bool
 	SlotInAccessList(addr common.Address, slot common.Hash) (addressOk bool, slotOk bool)
+
+	TxHash() common.Hash
+	TxIndex() int
 }
 
 // AddressContext carries addresses available to contexts such as calls and
