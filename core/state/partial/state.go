@@ -287,6 +287,11 @@ func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, expectedRo
 			continue
 		}
 
+		// Only write accounts that were actually modified to the trie.
+		// Upstream BALStateTransition only processes ModifiedAccounts().
+		if !state.modified {
+			continue
+		}
 		if err := tr.UpdateAccount(state.addr, state.account, 0); err != nil {
 			return common.Hash{}, 0, fmt.Errorf("failed to update account %s: %w",
 				state.addr.Hex(), err)
