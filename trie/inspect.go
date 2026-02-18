@@ -328,9 +328,11 @@ func Summarize(dumpPath string, config *InspectConfig) error {
 		}
 		summary.StorageCount++
 		summary.DepthHistogram[snapshot.MaxDepth]++
-		summary.StorageTotals.Short += snapshot.Summary.Short
-		summary.StorageTotals.Full += snapshot.Summary.Full
-		summary.StorageTotals.Value += snapshot.Summary.Value
+		for i := 0; i < trieStatLevels; i++ {
+			summary.StorageLevels[i].Short += record.Levels[i].Short
+			summary.StorageLevels[i].Full += record.Levels[i].Full
+			summary.StorageLevels[i].Value += record.Levels[i].Value
+		}
 
 		depthTop.TryInsert(snapshot)
 		totalTop.TryInsert(snapshot)
@@ -338,6 +340,11 @@ func Summarize(dumpPath string, config *InspectConfig) error {
 	}
 	if summary.Account == nil {
 		return fmt.Errorf("dump file %s does not contain the account trie sentinel record", dumpPath)
+	}
+	for i := 0; i < trieStatLevels; i++ {
+		summary.StorageTotals.Short += summary.StorageLevels[i].Short
+		summary.StorageTotals.Full += summary.StorageLevels[i].Full
+		summary.StorageTotals.Value += summary.StorageLevels[i].Value
 	}
 	summary.TopByDepth = depthTop.Sorted()
 	summary.TopByTotalNodes = totalTop.Sorted()
@@ -522,6 +529,7 @@ type inspectSummary struct {
 	Account         *storageStats
 	StorageCount    uint64
 	StorageTotals   jsonLevel
+	StorageLevels   [trieStatLevels]jsonLevel
 	DepthHistogram  [trieStatLevels]uint64
 	TopByDepth      []*storageStats
 	TopByTotalNodes []*storageStats
@@ -529,6 +537,7 @@ type inspectSummary struct {
 }
 
 func (s *inspectSummary) display() {
+	s.displayCombinedDepthTable()
 	s.Account.toLevelStats().display("Accounts trie")
 	fmt.Println("Storage trie aggregate summary")
 	fmt.Printf("Total storage tries: %d\n", s.StorageCount)
@@ -553,6 +562,30 @@ func (s *inspectSummary) display() {
 	s.displayTop("Top storage tries by value (slot) count", s.TopByValueNodes)
 }
 
+func (s *inspectSummary) displayCombinedDepthTable() {
+	accountTotal := s.Account.Summary.Short + s.Account.Summary.Full + s.Account.Summary.Value
+	storageTotal := s.StorageTotals.Short + s.StorageTotals.Full + s.StorageTotals.Value
+
+	fmt.Println("Trie Depth Distribution")
+	fmt.Printf("Account Trie: %d nodes\n", accountTotal)
+	fmt.Printf("Storage Tries: %d nodes across %d tries\n", storageTotal, s.StorageCount)
+
+	b := new(strings.Builder)
+	table := tablewriter.NewWriter(b)
+	table.SetHeader([]string{"Depth", "Account Nodes", "Storage Nodes"})
+	for i := 0; i < trieStatLevels; i++ {
+		accountNodes := s.Account.Levels[i].Short + s.Account.Levels[i].Full + s.Account.Levels[i].Value
+		storageNodes := s.StorageLevels[i].Short + s.StorageLevels[i].Full + s.StorageLevels[i].Value
+		if accountNodes == 0 && storageNodes == 0 {
+			continue
+		}
+		table.AppendBulk([][]string{{fmt.Sprint(i), fmt.Sprint(accountNodes), fmt.Sprint(storageNodes)}})
+	}
+	table.Render()
+	fmt.Print(b.String())
+	fmt.Println()
+}
+
 func (s *inspectSummary) displayTop(title string, list []*storageStats) {
 	fmt.Println(title)
 	if len(list) == 0 {
@@ -575,6 +608,7 @@ func (s *inspectSummary) MarshalJSON() ([]byte, error) {
 	type jsonStorageSummary struct {
 		TotalStorageTries uint64                 `json:"TotalStorageTries"`
 		Totals            jsonLevel              `json:"Totals"`
+		Levels            []jsonLevel            `json:"Levels"`
 		DepthHistogram    [trieStatLevels]uint64 `json:"DepthHistogram"`
 	}
 	type jsonInspectSummary struct {
@@ -593,6 +627,7 @@ func (s *inspectSummary) MarshalJSON() ([]byte, error) {
 		StorageSummary: jsonStorageSummary{
 			TotalStorageTries: s.StorageCount,
 			Totals:            s.StorageTotals,
+			Levels:            trimLevels(s.StorageLevels),
 			DepthHistogram:    s.DepthHistogram,
 		},
 		TopByDepth:      s.TopByDepth,

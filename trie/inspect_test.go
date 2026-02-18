@@ -17,8 +17,11 @@
 package trie
 
 import (
+	"encoding/json"
 	"math/rand"
+	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -56,11 +59,92 @@ func TestInspect(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("inspect failed: %v", err)
 	}
+	reanalysisPath := filepath.Join(tempDir, "trie-summary-reanalysis.json")
 	if err := Summarize(dumpPath, &InspectConfig{
 		TopN: 1,
-		Path: filepath.Join(tempDir, "trie-summary-reanalysis.json"),
+		Path: reanalysisPath,
 	}); err != nil {
 		t.Fatalf("summarize failed: %v", err)
+	}
+
+	inspectSummaryPath := filepath.Join(tempDir, "trie-summary.json")
+	inspectOut := loadInspectJSON(t, inspectSummaryPath)
+	reanalysisOut := loadInspectJSON(t, reanalysisPath)
+
+	if len(inspectOut.StorageSummary.Levels) == 0 {
+		t.Fatal("expected StorageSummary.Levels to be populated")
+	}
+	if !reflect.DeepEqual(inspectOut.AccountTrie, reanalysisOut.AccountTrie) {
+		t.Fatal("account trie summary mismatch between inspect and summarize")
+	}
+	if !reflect.DeepEqual(inspectOut.StorageSummary, reanalysisOut.StorageSummary) {
+		t.Fatal("storage summary mismatch between inspect and summarize")
+	}
+
+	assertStorageTotalsMatchLevels(t, inspectOut)
+	assertStorageTotalsMatchLevels(t, reanalysisOut)
+	assertAccountTotalsMatchLevels(t, inspectOut.AccountTrie)
+	assertAccountTotalsMatchLevels(t, reanalysisOut.AccountTrie)
+
+	var histogramTotal uint64
+	for _, count := range inspectOut.StorageSummary.DepthHistogram {
+		histogramTotal += count
+	}
+	if histogramTotal != inspectOut.StorageSummary.TotalStorageTries {
+		t.Fatalf("depth histogram total %d does not match total storage tries %d", histogramTotal, inspectOut.StorageSummary.TotalStorageTries)
+	}
+}
+
+type inspectJSONOutput struct {
+	// Reuse storageStats for AccountTrie JSON to avoid introducing a parallel
+	// account summary test type. AccountTrie JSON includes Levels+Summary,
+	// which map directly; other storageStats fields remain zero-values.
+	AccountTrie storageStats `json:"AccountTrie"`
+
+	StorageSummary struct {
+		TotalStorageTries uint64                 `json:"TotalStorageTries"`
+		Totals            jsonLevel              `json:"Totals"`
+		Levels            []jsonLevel            `json:"Levels"`
+		DepthHistogram    [trieStatLevels]uint64 `json:"DepthHistogram"`
+	} `json:"StorageSummary"`
+}
+
+func loadInspectJSON(t *testing.T, path string) inspectJSONOutput {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", path, err)
+	}
+	var out inspectJSONOutput
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("failed to decode %s: %v", path, err)
+	}
+	return out
+}
+
+func assertStorageTotalsMatchLevels(t *testing.T, out inspectJSONOutput) {
+	t.Helper()
+	var fromLevels jsonLevel
+	for _, level := range out.StorageSummary.Levels {
+		fromLevels.Short += level.Short
+		fromLevels.Full += level.Full
+		fromLevels.Value += level.Value
+	}
+	if fromLevels.Short != out.StorageSummary.Totals.Short || fromLevels.Full != out.StorageSummary.Totals.Full || fromLevels.Value != out.StorageSummary.Totals.Value {
+		t.Fatalf("storage totals mismatch: levels=%+v totals=%+v", fromLevels, out.StorageSummary.Totals)
+	}
+}
+
+func assertAccountTotalsMatchLevels(t *testing.T, account storageStats) {
+	t.Helper()
+	var fromLevels jsonLevel
+	for _, level := range account.Levels {
+		fromLevels.Short += level.Short
+		fromLevels.Full += level.Full
+		fromLevels.Value += level.Value
+	}
+	if fromLevels.Short != account.Summary.Short || fromLevels.Full != account.Summary.Full || fromLevels.Value != account.Summary.Value {
+		t.Fatalf("account totals mismatch: levels=%+v totals=%+v", fromLevels, account.Summary)
 	}
 }
 
