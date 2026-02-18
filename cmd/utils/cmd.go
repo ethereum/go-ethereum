@@ -364,18 +364,35 @@ func ImportEraIndex(db ethdb.Database, dir string, network string, from func(f e
 		log.Info("Resuming era indexing", "lastEpoch", *tail, "nextEpoch", startEpoch)
 	}
 
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(interrupt)
+
 	var (
 		start       = time.Now()
 		reported    = time.Now()
 		batch       = db.NewBatch()
 		totalBlocks uint64
 		totalTxs    uint64
+		interrupted = false
 	)
 
 	// Index each era file.
 	for epoch, entry := range entries {
 		if uint64(epoch) < startEpoch {
 			continue
+		}
+
+		select {
+		case <-interrupt:
+			log.Warn("Interrupted, flushing and shutting down gracefully...")
+			interrupted = true
+			break
+		default:
+		}
+
+		if interrupted {
+			break
 		}
 
 		err := func() error {
@@ -401,6 +418,14 @@ func ImportEraIndex(db ethdb.Database, dir string, network string, from func(f e
 
 			// Iterate over all blocks in this epoch.
 			for it.Next() {
+				select {
+				case <-interrupt:
+					log.Warn("Interrupted during epoch processing, flushing current progress...")
+					interrupted = true
+					return nil
+				default:
+				}
+
 				if it.Error() != nil {
 					return fmt.Errorf("error iterating era file: %w", it.Error())
 				}
@@ -441,15 +466,22 @@ func ImportEraIndex(db ethdb.Database, dir string, network string, from func(f e
 				batch.Reset()
 			}
 
-			// Mark this epoch as fully indexed.
-			rawdb.WriteEraIndexTail(db, uint64(epoch))
+			// Only mark epoch as complete if we weren't interrupted mid-epoch
+			if !interrupted {
+				// Mark this epoch as fully indexed.
+				rawdb.WriteEraIndexTail(batch, uint64(epoch))
+				if err := batch.Write(); err != nil {
+					return fmt.Errorf("error writing tail marker: %w", err)
+				}
+				batch.Reset()
 
-			totalTxs += epochTxs
+				totalTxs += epochTxs
 
-			if time.Since(reported) >= 8*time.Second {
-				log.Info("Indexing era files", "epoch", epoch, "blocks", epochBlocks, "txs", epochTxs,
-					"totalBlocks", totalBlocks, "totalTxs", totalTxs, "elapsed", common.PrettyDuration(time.Since(start)))
-				reported = time.Now()
+				if time.Since(reported) >= 8*time.Second {
+					log.Info("Indexing era files", "epoch", epoch, "blocks", epochBlocks, "txs", epochTxs,
+						"totalBlocks", totalBlocks, "totalTxs", totalTxs, "elapsed", common.PrettyDuration(time.Since(start)))
+					reported = time.Now()
+				}
 			}
 
 			return nil
@@ -457,12 +489,19 @@ func ImportEraIndex(db ethdb.Database, dir string, network string, from func(f e
 		if err != nil {
 			return err
 		}
+
+		if interrupted {
+			break
+		}
 	}
 
-	log.Info("Era indexing complete", "totalBlocks", totalBlocks, "totalTxs", totalTxs, "elapsed", common.PrettyDuration(time.Since(start)))
+	if interrupted {
+		log.Info("Era indexing interrupted", "totalBlocks", totalBlocks, "totalTxs", totalTxs, "elapsed", common.PrettyDuration(time.Since(start)))
+	} else {
+		log.Info("Era indexing complete", "totalBlocks", totalBlocks, "totalTxs", totalTxs, "elapsed", common.PrettyDuration(time.Since(start)))
+	}
 	return nil
 }
-
 func missingBlocks(chain *core.BlockChain, blocks []*types.Block) []*types.Block {
 	head := chain.CurrentBlock()
 	for i, block := range blocks {
