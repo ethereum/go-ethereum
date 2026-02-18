@@ -94,6 +94,11 @@ func (bc *BlockChain) ProcessBlockWithBAL(
 		parentRoot = parent.Root()
 	}
 
+	log.Debug("ProcessBlockWithBAL: parent root details",
+		"block", block.NumberU64(), "parentRoot", parentRoot,
+		"hasState", bc.HasState(parentRoot), "headerRoot", block.Root(),
+		"trackedRoot", bc.partialState.Root())
+
 	// 4. Apply BAL diffs and compute new state root.
 	// Pass block.Root() as expectedRoot so the resolver can query peers for this
 	// state's untracked contracts.
