@@ -536,6 +536,32 @@ func TestVerifyVoteMsg(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestVoteMsgMissingSnapshot(t *testing.T) {
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 915, params.TestXDPoSMockChainConfig, nil)
+	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
+
+	blockInfo := &types.BlockInfo{
+		Hash:   currentBlock.Hash(),
+		Round:  types.Round(14),
+		Number: big.NewInt(915),
+	}
+	voteForSign := &types.VoteForSign{
+		ProposedBlockInfo: blockInfo,
+		GapNumber:         450,
+	}
+
+	signHash, _ := signFn(accounts.Account{Address: signer}, types.VoteSigHash(voteForSign).Bytes())
+	voteMsg := &types.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         signHash,
+		GapNumber:         1350, // missing 1350 snapshot
+	}
+	engineV2.SetNewRoundFaker(blockchain, types.Round(14), false)
+	verified, err := engineV2.VerifyVoteMessage(blockchain, voteMsg)
+	assert.False(t, verified)
+	assert.NotNil(t, err)
+}
+
 func TestVoteMessageHandlerWrongGapNumber(t *testing.T) {
 	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2

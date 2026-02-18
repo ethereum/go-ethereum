@@ -22,29 +22,22 @@ func (x *XDPoS_v2) VerifyVoteMessage(chain consensus.ChainReader, vote *types.Vo
 		return false, nil
 	}
 
-	// If we don't yet have the referenced header locally, defer verification.
-	// Votes may arrive before the block header itself; avoid logging an error
-	// for that normal timing condition and let the vote be retried later.
-	if chain.GetHeaderByHash(vote.ProposedBlockInfo.Hash) == nil {
-		log.Debug("[VerifyVoteMessage] referenced header not present yet, defer verification", "blockNum", vote.ProposedBlockInfo.Number, "blockHash", vote.ProposedBlockInfo.Hash)
-		return false, nil
-	}
-
-	epochInfo, err := x.getEpochSwitchInfo(chain, nil, vote.ProposedBlockInfo.Hash)
+	snap, err := x.getSnapshot(chain, vote.GapNumber, true)
 	if err != nil {
-		log.Error("[VerifyVoteMessage] Fail to get epochInfo when verifying vote message!", "blockNum", vote.ProposedBlockInfo.Number, "blockHash", vote.ProposedBlockInfo.Hash, "voteHash", vote.Hash(), "voteGapNumber", vote.GapNumber, "err", err)
+		log.Error("[VerifyVoteMessage] fail to get snapshot for a vote message", "blockNum", vote.ProposedBlockInfo.Number, "blockHash", vote.ProposedBlockInfo.Hash, "voteHash", vote.Hash(), "err", err)
 		return false, err
 	}
 
 	verified, signer, err := x.verifyMsgSignature(types.VoteSigHash(&types.VoteForSign{
 		ProposedBlockInfo: vote.ProposedBlockInfo,
 		GapNumber:         vote.GapNumber,
-	}), vote.Signature, epochInfo.Masternodes)
+	}), vote.Signature, snap.NextEpochCandidates)
+
 	if err != nil {
-		for i, mn := range epochInfo.Masternodes {
+		for i, mn := range snap.NextEpochCandidates {
 			log.Warn("[VerifyVoteMessage] Master node list item", "index", i, "Master node", mn.Hex())
 		}
-		log.Warn("[VerifyVoteMessage] Error while verifying vote message", "votedBlockNum", vote.ProposedBlockInfo.Number.Uint64(), "votedBlockHash", vote.ProposedBlockInfo.Hash.Hex(), "voteHash", vote.Hash(), "error", err.Error())
+		log.Warn("[VerifyVoteMessage] Error while verifying vote message", "votedBlockNum", vote.ProposedBlockInfo.Number.Uint64(), "votedBlockHash", vote.ProposedBlockInfo.Hash.Hex(), "voteHash", vote.Hash(), "err", err)
 		return false, err
 	}
 	vote.SetSigner(signer)
@@ -198,7 +191,7 @@ func (x *XDPoS_v2) verifyVotes(chain consensus.ChainReader, votes map[common.Has
 			})
 			verified, masterNode, err := x.verifyMsgSignature(signedVote, v.Signature, masternodes)
 			if err != nil {
-				log.Warn("[verifyVotes] error while verifying vote signature", "error", err.Error())
+				log.Warn("[verifyVotes] error while verifying vote signature", "err", err)
 				return
 			}
 

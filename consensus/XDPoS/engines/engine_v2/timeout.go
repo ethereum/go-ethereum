@@ -129,7 +129,7 @@ func (x *XDPoS_v2) getTCEpochInfo(chain consensus.ChainReader, timeoutRound type
 		Number: epochSwitchInfo.EpochSwitchBlockInfo.Number,
 	}
 	log.Info("[getTCEpochInfo] Init epochInfo", "number", epochBlockInfo.Number, "round", epochRound, "tcRound", timeoutRound, "tcEpoch", tempTCEpoch)
-	for epochBlockInfo.Round > timeoutRound {
+	for epochBlockInfo.Round > timeoutRound && tempTCEpoch > 0 {
 		tempTCEpoch--
 		epochBlockInfo, err = x.GetBlockByEpochNumber(chain, tempTCEpoch)
 		if err != nil {
