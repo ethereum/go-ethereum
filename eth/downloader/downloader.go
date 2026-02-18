@@ -988,58 +988,47 @@ func (d *Downloader) processSnapSyncContent() error {
 				// processing needs the parent state at HEAD's root, so we run a
 				// second state sync to download it (no execution involved).
 				if d.partialFilter != nil {
-					snapHead := d.blockchain.CurrentSnapBlock()
+					// Determine the second sync target from the skeleton head
+					// (the CL beacon chain tip). This is more reliable than
+					// CurrentSnapBlock(), which may equal CurrentBlock() if no
+					// afterP blocks were processed before the queue drained —
+					// a race that depends on download timing.
 					currentHead := d.blockchain.CurrentBlock()
+					skHead, _, _, skErr := d.skeleton.Bounds()
 
-					if snapHead.Hash() != currentHead.Hash() {
-						// Guard against starting the second state sync too early.
-						// When the CL syncs from genesis, the first forkchoice arrives
-						// at a very low block number. The initial snap sync completes
-						// trivially but the second state sync would request state at
-						// an old root that no peer serves.
-						//
-						// Two checks:
-						// 1. If the skeleton head is far ahead of snap head, abort.
-						// 2. If the snap head block is too old (>5 min), peers won't
-						//    serve its state. Abort so the backfiller restarts with a
-						//    better target once the CL catches up.
-						if skHead, _, _, err := d.skeleton.Bounds(); err == nil {
-							if skHead.Number.Uint64() > snapHead.Number.Uint64()+2*uint64(fsMinFullBlocks) {
-								log.Info("Partial state: snap head too far behind network, restarting sync",
-									"snapHead", snapHead.Number, "networkHead", skHead.Number)
-								return errCanceled
+					if skErr == nil && skHead.Number.Uint64() > currentHead.Number.Uint64() {
+						// Use the skeleton head as the sync target. It always
+						// has a header; we need the full block for AdvancePartialHead.
+						target := d.blockchain.GetBlockByHash(skHead.Hash())
+						if target == nil {
+							// Skeleton head not fully downloaded yet — use
+							// CurrentSnapBlock (highest receipt-imported block).
+							snapHead := d.blockchain.CurrentSnapBlock()
+							target = d.blockchain.GetBlockByHash(snapHead.Hash())
+						}
+						if target != nil && target.Hash() != currentHead.Hash() {
+							log.Info("Partial state: syncing state to HEAD",
+								"pivot", currentHead.Number, "head", target.Number())
+
+							d.partialHeadSyncing.Store(true)
+
+							sync.Cancel()
+							sync = d.syncState(target.Root())
+							go closeOnErr(sync)
+
+							err := sync.Wait()
+							d.partialHeadSyncing.Store(false)
+
+							if err != nil {
+								log.Error("Partial state second sync failed, will retry", "pivot", currentHead.Number, "head", target.Number(), "err", err)
+								return err
 							}
+							if err := d.blockchain.AdvancePartialHead(target.Hash()); err != nil {
+								return err
+							}
+							d.partialSyncComplete.Store(true)
+							log.Info("Partial state initial sync complete")
 						}
-						snapHeadBlock := d.blockchain.GetHeaderByHash(snapHead.Hash())
-						if snapHeadBlock != nil && time.Since(time.Unix(int64(snapHeadBlock.Time), 0)) > 5*time.Minute {
-							log.Info("Partial state: snap head too old, peers won't serve state. Restarting sync",
-								"snapHead", snapHead.Number, "age", common.PrettyAge(time.Unix(int64(snapHeadBlock.Time), 0)))
-							return errCanceled
-						}
-						log.Info("Partial state: syncing state to HEAD",
-							"pivot", currentHead.Number, "head", snapHead.Number)
-
-						// Set flag to prevent beaconBackfiller.suspend() from
-						// cancelling us during this critical second state sync.
-						d.partialHeadSyncing.Store(true)
-
-						sync.Cancel()
-						sync = d.syncState(snapHead.Root)
-						go closeOnErr(sync)
-
-						err := sync.Wait()
-						d.partialHeadSyncing.Store(false)
-
-						if err != nil {
-							log.Error("Partial state second sync failed, will retry", "pivot", currentHead.Number, "head", snapHead.Number, "err", err)
-							return err
-						}
-						if err := d.blockchain.AdvancePartialHead(snapHead.Hash()); err != nil {
-							return err
-						}
-						// Mark partial sync as complete - new blocks via Engine API only
-						d.partialSyncComplete.Store(true)
-						log.Info("Partial state initial sync complete")
 					}
 				}
 				d.reportSnapSyncProgress(true)
