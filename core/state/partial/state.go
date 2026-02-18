@@ -444,8 +444,10 @@ func (s *PartialState) applyStorageChanges(
 				return common.Hash{}, nil, err
 			}
 		} else {
-			// Update slot
-			if err := storageTrie.UpdateStorage(addr, slot.Bytes(), value.Bytes()); err != nil {
+			// Update slot — trim leading zeros to match how the EVM stores
+			// values (as big integers). UpdateStorage RLP-encodes the value,
+			// so [0,0,...,5] vs [5] produce different trie nodes.
+			if err := storageTrie.UpdateStorage(addr, slot.Bytes(), common.TrimLeftZeroes(value.Bytes())); err != nil {
 				return common.Hash{}, nil, err
 			}
 		}
