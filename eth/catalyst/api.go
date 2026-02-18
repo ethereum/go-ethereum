@@ -296,8 +296,16 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	// If we try to SetCanonical, it will fail because HasState returns false and
 	// partial state can't recoverAncestors. Instead, treat it like an unknown
 	// block and trigger BeaconSync so the skeleton can start the sync cycle.
+	//
+	// After sync, the computed root may differ from the header root (unresolved
+	// untracked storage roots), so we also check partialState's tracked root.
+	partialRoot := common.Hash{}
+	if api.eth.BlockChain().SupportsPartialState() {
+		partialRoot = api.eth.BlockChain().PartialState().Root()
+	}
 	if api.eth.BlockChain().SupportsPartialState() &&
-		!api.eth.BlockChain().HasState(block.Root()) {
+		!api.eth.BlockChain().HasState(block.Root()) &&
+		(partialRoot == common.Hash{} || !api.eth.BlockChain().HasState(partialRoot)) {
 		log.Info("Forkchoice: block known but stateless (partial state sync in progress), triggering BeaconSync",
 			"number", block.NumberU64(), "hash", update.HeadBlockHash, "root", block.Root())
 		finalized := api.remoteBlocks.get(update.FinalizedBlockHash)

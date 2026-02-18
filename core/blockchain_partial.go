@@ -81,12 +81,18 @@ func (bc *BlockChain) ProcessBlockWithBAL(
 	//         balHash, block.Header().BlockAccessListHash)
 	// }
 
-	// 3. Get parent state root from parent block header.
-	parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
-	if parent == nil {
-		return errors.New("parent block not found")
+	// 3. Get parent state root. Use partialState's tracked root (the actual
+	// computed root from the previous block) rather than the header root, which
+	// may differ when untracked contracts have unresolved storage roots.
+	parentRoot := bc.partialState.Root()
+	if parentRoot == (common.Hash{}) {
+		// First block after sync — use the parent block's header root
+		parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+		if parent == nil {
+			return errors.New("parent block not found")
+		}
+		parentRoot = parent.Root()
 	}
-	parentRoot := parent.Root()
 
 	// 4. Apply BAL diffs and compute new state root.
 	// Pass block.Root() as expectedRoot so the resolver can query peers for this
@@ -166,7 +172,10 @@ func (bc *BlockChain) HandlePartialReorg(
 		}
 	}
 
-	log.Debug("Starting partial state reorg from ancestor",
+	// Step 1: Revert state to common ancestor
+	bc.partialState.SetRoot(commonAncestor.Root())
+
+	log.Debug("Reverted partial state to ancestor",
 		"ancestor", commonAncestor.Number(),
 		"ancestorRoot", commonAncestor.Root().Hex(),
 		"reorgDepth", reorgDepth)

@@ -270,10 +270,15 @@ func TestHandlePartialReorg_EmptyNewBlocks(t *testing.T) {
 		return &bal.BlockAccessList{}, nil
 	}
 
-	// Empty reorg should succeed
+	// Empty reorg should succeed (sets root to ancestor)
 	err := bc.HandlePartialReorg(genesisBlock, newBlocks, getBAL)
 	if err != nil {
 		t.Fatalf("empty reorg should succeed: %v", err)
+	}
+
+	// Verify state root is set to genesis root
+	if bc.PartialState().Root() != genesisBlock.Root() {
+		t.Errorf("expected root to be genesis root after empty reorg")
 	}
 }
 

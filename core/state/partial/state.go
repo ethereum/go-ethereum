@@ -19,6 +19,7 @@ package partial
 import (
 	"bytes"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -49,7 +50,8 @@ type PartialState struct {
 	history  *BALHistory
 	resolver StorageRootResolver // optional, for resolving untracked storage roots
 
-	lastProcessedNum uint64 // last block successfully processed via BAL
+	stateRoot        atomic.Pointer[common.Hash] // computed root (may differ from header root)
+	lastProcessedNum uint64                      // last block successfully processed via BAL
 }
 
 // SetResolver sets the storage root resolver used to fetch updated storage roots
@@ -71,6 +73,19 @@ func NewPartialState(db ethdb.Database, trieDB *triedb.Database, filter Contract
 // Filter returns the contract filter used by this partial state.
 func (s *PartialState) Filter() ContractFilter {
 	return s.filter
+}
+
+// SetRoot atomically sets the current computed state root.
+func (s *PartialState) SetRoot(root common.Hash) {
+	s.stateRoot.Store(&root)
+}
+
+// Root atomically returns the current computed state root.
+func (s *PartialState) Root() common.Hash {
+	if p := s.stateRoot.Load(); p != nil {
+		return *p
+	}
+	return common.Hash{}
 }
 
 // History returns the BAL history manager.
@@ -292,8 +307,9 @@ func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, expectedRo
 	stateSet := s.buildStateSet(accounts, accessList)
 
 	// Compute unresolved count for caller to decide root mismatch severity.
-	// The computed root should match the header root since we maintain the full
-	// account trie and resolve storage roots for untracked contracts.
+	// The computed root may differ from the header root when untracked contracts
+	// have unresolved storage roots. Subsequent blocks must chain off the
+	// computed root (via partialState.Root()), not the header root.
 	unresolvedCount := 0
 	if len(untrackedAddrs) > 0 {
 		unresolvedCount = len(untrackedAddrs)
@@ -316,6 +332,7 @@ func (s *PartialState) ApplyBALAndComputeRoot(parentRoot common.Hash, expectedRo
 		return common.Hash{}, 0, fmt.Errorf("failed to update trie db: %w", err)
 	}
 
+	s.stateRoot.Store(&root)
 	return root, unresolvedCount, nil
 }
 

@@ -2990,14 +2990,23 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 
 	// Re-execute the reorged chain in case the head state is missing.
 	if !bc.HasState(head.Root()) {
+		// Partial state nodes can't re-execute blocks — they only apply BAL diffs.
+		// The computed root may differ from the header root when untracked contracts
+		// have unresolved storage roots. Check the partial state's tracked root too.
 		if bc.partialState != nil {
-			return common.Hash{}, fmt.Errorf("partial state: missing state for block %d root %x",
-				head.NumberU64(), head.Root())
+			partialRoot := bc.partialState.Root()
+			if partialRoot == (common.Hash{}) || !bc.HasState(partialRoot) {
+				return common.Hash{}, fmt.Errorf("partial state: missing state for block %d root %x", head.NumberU64(), head.Root())
+			}
+			log.Debug("SetCanonical: using partial state root (differs from header)",
+				"block", head.NumberU64(), "headerRoot", head.Root(),
+				"partialRoot", partialRoot)
+		} else {
+			if latestValidHash, err := bc.recoverAncestors(head, false); err != nil {
+				return latestValidHash, err
+			}
+			log.Info("Recovered head state", "number", head.Number(), "hash", head.Hash())
 		}
-		if latestValidHash, err := bc.recoverAncestors(head, false); err != nil {
-			return latestValidHash, err
-		}
-		log.Info("Recovered head state", "number", head.Number(), "hash", head.Hash())
 	}
 	// Run the reorg if necessary and set the given block as new head.
 	start := time.Now()
