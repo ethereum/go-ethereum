@@ -181,8 +181,7 @@ into Era archives. Eras are typically packaged in steps of 8192 blocks.
 		Flags:     slices.Concat(utils.DatabaseFlags, utils.NetworkFlags, []cli.Flag{utils.EraFormatFlag}),
 		Description: `
 The import-era-index command indexes transactions from era files to enable
-transaction lookups by hash
-for pruned block ranges. Era files must be present in the specified directory.
+transaction lookups by hash for pruned block ranges. Era files must be present in the specified directory.
 The command is idempotent and can be re-run to index newly added era files.
 `,
 	}
@@ -673,7 +672,6 @@ func importEraIndex(ctx *cli.Context) error {
 
 	fmt.Printf("Era indexing done in %v\n", time.Since(start))
 	return nil
-
 }
 
 // importPreimages imports preimage data from the specified file.
