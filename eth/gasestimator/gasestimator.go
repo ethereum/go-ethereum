@@ -81,10 +81,10 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 
 	// Normalize the max fee per gas the call is willing to spend.
 	var feeCap *big.Int
-	if call.GasFeeCap != nil {
-		feeCap = call.GasFeeCap
-	} else if call.GasPrice != nil {
-		feeCap = call.GasPrice
+	if !call.GasFeeCap.IsZero() {
+		feeCap = call.GasFeeCap.ToBig()
+	} else if !call.GasPrice.IsZero() {
+		feeCap = call.GasPrice.ToBig()
 	} else {
 		feeCap = common.Big0
 	}
@@ -93,17 +93,18 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 		balance := opts.State.GetBalance(call.From).ToBig()
 
 		available := balance
-		if call.Value != nil {
-			if call.Value.Cmp(available) >= 0 {
+		if !call.Value.IsZero() {
+			valueBig := call.Value.ToBig()
+			if valueBig.Cmp(available) >= 0 {
 				return 0, nil, core.ErrInsufficientFundsForTransfer
 			}
-			available.Sub(available, call.Value)
+			available.Sub(available, valueBig)
 		}
 		if opts.Config.IsCancun(opts.Header.Number, opts.Header.Time) && len(call.BlobHashes) > 0 {
 			blobGasPerBlob := new(big.Int).SetInt64(params.BlobTxBlobGasPerBlob)
 			blobBalanceUsage := new(big.Int).SetInt64(int64(len(call.BlobHashes)))
 			blobBalanceUsage.Mul(blobBalanceUsage, blobGasPerBlob)
-			blobBalanceUsage.Mul(blobBalanceUsage, call.BlobGasFeeCap)
+			blobBalanceUsage.Mul(blobBalanceUsage, call.BlobGasFeeCap.ToBig())
 			if blobBalanceUsage.Cmp(available) >= 0 {
 				return 0, nil, core.ErrInsufficientFunds
 			}
@@ -113,9 +114,9 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 
 		// If the allowance is larger than maximum uint64, skip checking
 		if allowance.IsUint64() && hi > allowance.Uint64() {
-			transfer := call.Value
-			if transfer == nil {
-				transfer = new(big.Int)
+			transfer := new(big.Int)
+			if !call.Value.IsZero() {
+				transfer = call.Value.ToBig()
 			}
 			log.Debug("Gas estimation capped by limited funds", "original", hi, "balance", balance,
 				"sent", transfer, "maxFeePerGas", feeCap, "fundable", allowance)
@@ -252,7 +253,7 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	if call.GasPrice.Sign() == 0 {
 		evmContext.BaseFee = new(big.Int)
 	}
-	if call.BlobGasFeeCap != nil && call.BlobGasFeeCap.BitLen() == 0 {
+	if call.BlobGasFeeCap.IsZero() {
 		evmContext.BlobBaseFee = new(big.Int)
 	}
 	evm := vm.NewEVM(evmContext, dirtyState, opts.Config, vm.Config{NoBaseFee: true})

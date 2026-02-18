@@ -101,7 +101,7 @@ func NewEVMTxContext(msg *Message) vm.TxContext {
 func NewEVMTxContextWithAlloc(msg *Message, alloc arena.Allocator) vm.TxContext {
 	ctx := vm.TxContext{
 		Origin:     msg.From,
-		GasPrice:   uint256.MustFromBig(msg.GasPrice),
+		GasPrice:   new(uint256.Int).Set(&msg.GasPrice),
 		BlobHashes: msg.BlobHashes,
 	}
 	return ctx

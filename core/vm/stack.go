@@ -47,7 +47,7 @@ func newstack() *Stack {
 // falls back to the pool.
 func newstackWithAlloc(alloc arena.Allocator) *Stack {
 	if _, ok := alloc.(*arena.BumpAllocator); ok {
-		s := new(Stack)
+		s := arena.New[Stack](alloc)
 		s.data = arena.MakeSlice[uint256.Int](alloc, 0, 1024)
 		s.arenaAlloc = true
 		return s
