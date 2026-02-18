@@ -98,6 +98,9 @@ func (h *handler) ResolveStorageRoots(
 			log.Warn("Failed to resolve storage root", "addr", addr, "attempts", storageRootMaxRetries)
 		}
 	}
+	if len(resolved) < len(addrs) {
+		return resolved, fmt.Errorf("resolved %d/%d storage roots", len(resolved), len(addrs))
+	}
 	return resolved, nil
 }
 

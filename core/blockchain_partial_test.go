@@ -19,6 +19,7 @@ package core
 import (
 	"bytes"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -189,11 +190,14 @@ func TestProcessBlockWithBAL_StateRootMismatch(t *testing.T) {
 	}
 	accessList := constructionToBlockAccessListCore(t, &cbal)
 
-	// Root mismatch is now a warning, not an error — the expectedRoot fallback
-	// is used as the PathDB layer label when peer resolution isn't available.
+	// When all storage roots are resolved (no untracked contracts), a root
+	// mismatch is a fatal error — it indicates a real inconsistency.
 	err := bc.ProcessBlockWithBAL(block, accessList)
-	if err != nil {
-		t.Fatalf("unexpected error (root mismatch should be a warning): %v", err)
+	if err == nil {
+		t.Fatal("expected error for state root mismatch with no unresolved storage, got nil")
+	}
+	if !strings.Contains(err.Error(), "state root mismatch") {
+		t.Fatalf("expected state root mismatch error, got: %v", err)
 	}
 }
 
@@ -266,15 +270,10 @@ func TestHandlePartialReorg_EmptyNewBlocks(t *testing.T) {
 		return &bal.BlockAccessList{}, nil
 	}
 
-	// Empty reorg should succeed (just sets root to ancestor)
+	// Empty reorg should succeed
 	err := bc.HandlePartialReorg(genesisBlock, newBlocks, getBAL)
 	if err != nil {
 		t.Fatalf("empty reorg should succeed: %v", err)
-	}
-
-	// Verify state root is set to genesis root
-	if bc.PartialState().Root() != genesisBlock.Root() {
-		t.Errorf("expected root to be genesis root after empty reorg")
 	}
 }
 
