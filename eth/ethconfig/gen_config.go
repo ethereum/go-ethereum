@@ -55,6 +55,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		EnablePreimageRecording bool
 		EnableWitnessStats      bool
 		StatelessSelfValidation bool
+		EnableArenaAlloc        bool
 		EnableStateSizeTracking bool
 		VMTrace                 string
 		VMTraceJsonConfig       string
@@ -108,6 +109,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.EnableWitnessStats = c.EnableWitnessStats
 	enc.StatelessSelfValidation = c.StatelessSelfValidation
+	enc.EnableArenaAlloc = c.EnableArenaAlloc
 	enc.EnableStateSizeTracking = c.EnableStateSizeTracking
 	enc.VMTrace = c.VMTrace
 	enc.VMTraceJsonConfig = c.VMTraceJsonConfig
@@ -165,6 +167,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		EnablePreimageRecording *bool
 		EnableWitnessStats      *bool
 		StatelessSelfValidation *bool
+		EnableArenaAlloc        *bool
 		EnableStateSizeTracking *bool
 		VMTrace                 *string
 		VMTraceJsonConfig       *string
@@ -296,6 +299,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.StatelessSelfValidation != nil {
 		c.StatelessSelfValidation = *dec.StatelessSelfValidation
+	}
+	if dec.EnableArenaAlloc != nil {
+		c.EnableArenaAlloc = *dec.EnableArenaAlloc
 	}
 	if dec.EnableStateSizeTracking != nil {
 		c.EnableStateSizeTracking = *dec.EnableStateSizeTracking
