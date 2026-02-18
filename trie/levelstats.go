@@ -36,9 +36,9 @@ func NewLevelStats() *LevelStats {
 	return &LevelStats{}
 }
 
-// maxDepth iterates each level and finds the deepest level with at least one
+// MaxDepth iterates each level and finds the deepest level with at least one
 // trie node.
-func (s *LevelStats) maxDepth() int {
+func (s *LevelStats) MaxDepth() int {
 	depth := 0
 	for i := range s.level {
 		if s.level[i].short.Load() != 0 || s.level[i].full.Load() != 0 || s.level[i].value.Load() != 0 {
@@ -46,11 +46,6 @@ func (s *LevelStats) maxDepth() int {
 		}
 	}
 	return depth
-}
-
-// MaxDepth returns the deepest level with at least one trie node.
-func (s *LevelStats) MaxDepth() int {
-	return s.maxDepth()
 }
 
 // add increases the node count by one for the specified node type and depth.

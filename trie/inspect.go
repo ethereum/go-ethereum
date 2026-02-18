@@ -300,9 +300,9 @@ func Summarize(dumpPath string, config *InspectConfig) error {
 		}
 	}
 
-	depthTop := newStorageTopN(config.TopN, compareStorageByDepth)
-	totalTop := newStorageTopN(config.TopN, compareStorageByTotal)
-	valueTop := newStorageTopN(config.TopN, compareStorageByValue)
+	depthTop := newStorageStatsTopN(config.TopN, compareStorageStatsByDepth)
+	totalTop := newStorageStatsTopN(config.TopN, compareStorageStatsByTotal)
+	valueTop := newStorageStatsTopN(config.TopN, compareStorageStatsByValue)
 
 	summary := &inspectSummary{}
 	reader := bufio.NewReaderSize(file, 1<<20)
@@ -321,7 +321,7 @@ func Summarize(dumpPath string, config *InspectConfig) error {
 		}
 
 		record := decodeDumpRecord(buf[:])
-		snapshot := newStorageSnapshot(record.Owner, record.Levels)
+		snapshot := newStorageStats(record.Owner, record.Levels)
 		if record.Owner == (common.Hash{}) {
 			summary.Account = snapshot
 			continue
@@ -372,7 +372,7 @@ func decodeDumpRecord(raw []byte) dumpRecord {
 	return record
 }
 
-type storageSnapshot struct {
+type storageStats struct {
 	Owner      common.Hash
 	Levels     [trieStatLevels]jsonLevel
 	Summary    jsonLevel
@@ -380,8 +380,8 @@ type storageSnapshot struct {
 	TotalNodes uint64
 }
 
-func newStorageSnapshot(owner common.Hash, levels [trieStatLevels]jsonLevel) *storageSnapshot {
-	snapshot := &storageSnapshot{Owner: owner, Levels: levels}
+func newStorageStats(owner common.Hash, levels [trieStatLevels]jsonLevel) *storageStats {
+	snapshot := &storageStats{Owner: owner, Levels: levels}
 	for i := 0; i < trieStatLevels; i++ {
 		level := levels[i]
 		if level.Short != 0 || level.Full != 0 || level.Value != 0 {
@@ -395,7 +395,34 @@ func newStorageSnapshot(owner common.Hash, levels [trieStatLevels]jsonLevel) *st
 	return snapshot
 }
 
-func (s *storageSnapshot) toLevelStats() *LevelStats {
+func trimLevels(levels [trieStatLevels]jsonLevel) []jsonLevel {
+	n := len(levels)
+	for n > 0 && levels[n-1] == (jsonLevel{}) {
+		n--
+	}
+	return levels[:n]
+}
+
+func (s *storageStats) MarshalJSON() ([]byte, error) {
+	type jsonStorageSnapshot struct {
+		Owner      common.Hash `json:"Owner"`
+		MaxDepth   int         `json:"MaxDepth"`
+		TotalNodes uint64      `json:"TotalNodes"`
+		ValueNodes uint64      `json:"ValueNodes"`
+		Levels     []jsonLevel `json:"Levels"`
+		Summary    jsonLevel   `json:"Summary"`
+	}
+	return json.Marshal(jsonStorageSnapshot{
+		Owner:      s.Owner,
+		MaxDepth:   s.MaxDepth,
+		TotalNodes: s.TotalNodes,
+		ValueNodes: s.Summary.Value,
+		Levels:     trimLevels(s.Levels),
+		Summary:    s.Summary,
+	})
+}
+
+func (s *storageStats) toLevelStats() *LevelStats {
 	stats := NewLevelStats()
 	for i := 0; i < trieStatLevels; i++ {
 		stats.level[i].short.Store(s.Levels[i].Short)
@@ -405,45 +432,45 @@ func (s *storageSnapshot) toLevelStats() *LevelStats {
 	return stats
 }
 
-type storageCompare func(a, b *storageSnapshot) int
+type storageStatsCompare func(a, b *storageStats) int
 
-type topStorage struct {
+type storageStatsTopN struct {
 	limit int
-	cmp   storageCompare
-	heap  storageHeap
+	cmp   storageStatsCompare
+	heap  storageStatsHeap
 }
 
-type storageHeap struct {
-	items []*storageSnapshot
-	cmp   storageCompare
+type storageStatsHeap struct {
+	items []*storageStats
+	cmp   storageStatsCompare
 }
 
-func (h storageHeap) Len() int { return len(h.items) }
+func (h storageStatsHeap) Len() int { return len(h.items) }
 
-func (h storageHeap) Less(i, j int) bool {
+func (h storageStatsHeap) Less(i, j int) bool {
 	// Keep the weakest entry at the root (min-heap semantics).
 	return h.cmp(h.items[i], h.items[j]) < 0
 }
 
-func (h storageHeap) Swap(i, j int) { h.items[i], h.items[j] = h.items[j], h.items[i] }
+func (h storageStatsHeap) Swap(i, j int) { h.items[i], h.items[j] = h.items[j], h.items[i] }
 
-func (h *storageHeap) Push(x any) {
-	h.items = append(h.items, x.(*storageSnapshot))
+func (h *storageStatsHeap) Push(x any) {
+	h.items = append(h.items, x.(*storageStats))
 }
 
-func (h *storageHeap) Pop() any {
+func (h *storageStatsHeap) Pop() any {
 	item := h.items[len(h.items)-1]
 	h.items = h.items[:len(h.items)-1]
 	return item
 }
 
-func newStorageTopN(limit int, cmp storageCompare) *topStorage {
-	h := storageHeap{cmp: cmp}
+func newStorageStatsTopN(limit int, cmp storageStatsCompare) *storageStatsTopN {
+	h := storageStatsHeap{cmp: cmp}
 	heap.Init(&h)
-	return &topStorage{limit: limit, cmp: cmp, heap: h}
+	return &storageStatsTopN{limit: limit, cmp: cmp, heap: h}
 }
 
-func (t *topStorage) TryInsert(item *storageSnapshot) {
+func (t *storageStatsTopN) TryInsert(item *storageStats) {
 	if t.limit <= 0 {
 		return
 	}
@@ -458,13 +485,13 @@ func (t *topStorage) TryInsert(item *storageSnapshot) {
 	heap.Push(&t.heap, item)
 }
 
-func (t *topStorage) Sorted() []*storageSnapshot {
-	out := append([]*storageSnapshot(nil), t.heap.items...)
+func (t *storageStatsTopN) Sorted() []*storageStats {
+	out := append([]*storageStats(nil), t.heap.items...)
 	sort.Slice(out, func(i, j int) bool { return t.cmp(out[i], out[j]) > 0 })
 	return out
 }
 
-func compareStorageByDepth(a, b *storageSnapshot) int {
+func compareStorageStatsByDepth(a, b *storageStats) int {
 	return cmp.Or(
 		cmp.Compare(a.MaxDepth, b.MaxDepth),
 		cmp.Compare(a.TotalNodes, b.TotalNodes),
@@ -473,7 +500,7 @@ func compareStorageByDepth(a, b *storageSnapshot) int {
 	)
 }
 
-func compareStorageByTotal(a, b *storageSnapshot) int {
+func compareStorageStatsByTotal(a, b *storageStats) int {
 	return cmp.Or(
 		cmp.Compare(a.TotalNodes, b.TotalNodes),
 		cmp.Compare(a.MaxDepth, b.MaxDepth),
@@ -482,7 +509,7 @@ func compareStorageByTotal(a, b *storageSnapshot) int {
 	)
 }
 
-func compareStorageByValue(a, b *storageSnapshot) int {
+func compareStorageStatsByValue(a, b *storageStats) int {
 	return cmp.Or(
 		cmp.Compare(a.Summary.Value, b.Summary.Value),
 		cmp.Compare(a.MaxDepth, b.MaxDepth),
@@ -492,13 +519,13 @@ func compareStorageByValue(a, b *storageSnapshot) int {
 }
 
 type inspectSummary struct {
-	Account         *storageSnapshot
+	Account         *storageStats
 	StorageCount    uint64
 	StorageTotals   jsonLevel
 	DepthHistogram  [trieStatLevels]uint64
-	TopByDepth      []*storageSnapshot
-	TopByTotalNodes []*storageSnapshot
-	TopByValueNodes []*storageSnapshot
+	TopByDepth      []*storageStats
+	TopByTotalNodes []*storageStats
+	TopByValueNodes []*storageStats
 }
 
 func (s *inspectSummary) display() {
@@ -526,7 +553,7 @@ func (s *inspectSummary) display() {
 	s.displayTop("Top storage tries by value (slot) count", s.TopByValueNodes)
 }
 
-func (s *inspectSummary) displayTop(title string, list []*storageSnapshot) {
+func (s *inspectSummary) displayTop(title string, list []*storageStats) {
 	fmt.Println(title)
 	if len(list) == 0 {
 		fmt.Println("No storage tries found")
@@ -539,6 +566,41 @@ func (s *inspectSummary) displayTop(title string, list []*storageSnapshot) {
 	}
 }
 
+func (s *inspectSummary) MarshalJSON() ([]byte, error) {
+	type jsonAccountTrie struct {
+		Name    string      `json:"Name"`
+		Levels  []jsonLevel `json:"Levels"`
+		Summary jsonLevel   `json:"Summary"`
+	}
+	type jsonStorageSummary struct {
+		TotalStorageTries uint64                 `json:"TotalStorageTries"`
+		Totals            jsonLevel              `json:"Totals"`
+		DepthHistogram    [trieStatLevels]uint64 `json:"DepthHistogram"`
+	}
+	type jsonInspectSummary struct {
+		AccountTrie     jsonAccountTrie    `json:"AccountTrie"`
+		StorageSummary  jsonStorageSummary `json:"StorageSummary"`
+		TopByDepth      []*storageStats    `json:"TopByDepth"`
+		TopByTotalNodes []*storageStats    `json:"TopByTotalNodes"`
+		TopByValueNodes []*storageStats    `json:"TopByValueNodes"`
+	}
+	return json.Marshal(jsonInspectSummary{
+		AccountTrie: jsonAccountTrie{
+			Name:    "account trie",
+			Levels:  trimLevels(s.Account.Levels),
+			Summary: s.Account.Summary,
+		},
+		StorageSummary: jsonStorageSummary{
+			TotalStorageTries: s.StorageCount,
+			Totals:            s.StorageTotals,
+			DepthHistogram:    s.DepthHistogram,
+		},
+		TopByDepth:      s.TopByDepth,
+		TopByTotalNodes: s.TopByTotalNodes,
+		TopByValueNodes: s.TopByValueNodes,
+	})
+}
+
 func (s *inspectSummary) writeJSON(path string) error {
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 	if err != nil {
@@ -548,61 +610,7 @@ func (s *inspectSummary) writeJSON(path string) error {
 
 	enc := json.NewEncoder(file)
 	enc.SetIndent("", "  ")
-	return enc.Encode(s.toJSON())
-}
-
-func (s *inspectSummary) toJSON() *jsonSummary {
-	jsonSummary := &jsonSummary{
-		AccountTrie: newJsonStat(s.Account.toLevelStats(), "account trie"),
-		StorageSummary: jsonStorageSummary{
-			TotalStorageTries: s.StorageCount,
-			Totals:            s.StorageTotals,
-			DepthHistogram:    s.DepthHistogram,
-		},
-		TopByDepth:      snapshotsToJSON(s.TopByDepth),
-		TopByTotalNodes: snapshotsToJSON(s.TopByTotalNodes),
-		TopByValueNodes: snapshotsToJSON(s.TopByValueNodes),
-	}
-	return jsonSummary
-}
-
-type jsonSummary struct {
-	AccountTrie     *jsonStat
-	StorageSummary  jsonStorageSummary
-	TopByDepth      []jsonStorageStat
-	TopByTotalNodes []jsonStorageStat
-	TopByValueNodes []jsonStorageStat
-}
-
-type jsonStorageSummary struct {
-	TotalStorageTries uint64
-	Totals            jsonLevel
-	DepthHistogram    [trieStatLevels]uint64
-}
-
-type jsonStorageStat struct {
-	Owner      string
-	MaxDepth   int
-	TotalNodes uint64
-	ValueNodes uint64
-	Levels     []jsonLevel
-	Summary    jsonLevel
-}
-
-func snapshotsToJSON(list []*storageSnapshot) []jsonStorageStat {
-	out := make([]jsonStorageStat, 0, len(list))
-	for _, item := range list {
-		stat := newJsonStat(item.toLevelStats(), item.Owner.Hex())
-		out = append(out, jsonStorageStat{
-			Owner:      item.Owner.Hex(),
-			MaxDepth:   item.MaxDepth,
-			TotalNodes: item.TotalNodes,
-			ValueNodes: item.Summary.Value,
-			Levels:     stat.Levels,
-			Summary:    stat.Summary,
-		})
-	}
-	return out
+	return enc.Encode(s)
 }
 
 // display will print a table displaying the trie's node statistics.
@@ -629,7 +637,7 @@ func (s *LevelStats) display(title string) {
 	table.SetFooter([]string{"Total", "", fmt.Sprint(short), fmt.Sprint(full), fmt.Sprint(value)})
 	table.Render()
 	fmt.Print(b.String())
-	fmt.Println("Max depth", s.maxDepth())
+	fmt.Println("Max depth", s.MaxDepth())
 	fmt.Println()
 }
 
@@ -637,29 +645,4 @@ type jsonLevel struct {
 	Short uint64
 	Full  uint64
 	Value uint64
-}
-
-type jsonStat struct {
-	Name    string
-	Levels  []jsonLevel
-	Summary jsonLevel
-}
-
-func newJsonStat(s *LevelStats, name string) *jsonStat {
-	ret := jsonStat{Name: name, Summary: jsonLevel{}}
-	for i := 0; i < len(s.level); i++ {
-		if s.level[i].empty() {
-			continue
-		}
-		level := jsonLevel{
-			Short: s.level[i].short.Load(),
-			Full:  s.level[i].full.Load(),
-			Value: s.level[i].value.Load(),
-		}
-		ret.Summary.Full += level.Full
-		ret.Summary.Short += level.Short
-		ret.Summary.Value += level.Value
-		ret.Levels = append(ret.Levels, level)
-	}
-	return &ret
 }
