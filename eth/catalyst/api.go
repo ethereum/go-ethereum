@@ -291,28 +291,30 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		}
 		return engine.STATUS_SYNCING, nil
 	}
-	// In partial state mode during snap sync, the block may have been persisted
-	// (by WriteBlockWithoutState in newPayload) but we have no state for it yet.
-	// If we try to SetCanonical, it will fail because HasState returns false and
-	// partial state can't recoverAncestors. Instead, treat it like an unknown
-	// block and trigger BeaconSync so the skeleton can start the sync cycle.
-	//
-	// After sync, the computed root may differ from the header root (unresolved
-	// untracked storage roots), so we also check partialState's tracked root.
-	partialRoot := common.Hash{}
-	if api.eth.BlockChain().SupportsPartialState() {
-		partialRoot = api.eth.BlockChain().PartialState().Root()
-	}
+	// In partial state mode, a block may exist in DB (from WriteBlockWithoutState
+	// in newPayload) but have no state yet. During active snap sync, this is
+	// expected — the downloader is already syncing state. Just return SYNCING
+	// without triggering a restart. After snap sync completes, if we still see
+	// a stateless block, trigger BeaconSync to re-sync for it.
 	if api.eth.BlockChain().SupportsPartialState() &&
-		!api.eth.BlockChain().HasState(block.Root()) &&
-		(partialRoot == common.Hash{} || !api.eth.BlockChain().HasState(partialRoot)) {
-		log.Info("Forkchoice: block known but stateless (partial state sync in progress), triggering BeaconSync",
-			"number", block.NumberU64(), "hash", update.HeadBlockHash, "root", block.Root())
-		finalized := api.remoteBlocks.get(update.FinalizedBlockHash)
-		if err := api.eth.Downloader().BeaconSync(block.Header(), finalized); err != nil {
-			return engine.STATUS_SYNCING, err
+		!api.eth.BlockChain().HasState(block.Root()) {
+		partialRoot := api.eth.BlockChain().PartialState().Root()
+		if partialRoot == (common.Hash{}) || !api.eth.BlockChain().HasState(partialRoot) {
+			if api.eth.Downloader().ConfigSyncMode() == ethconfig.SnapSync {
+				// Snap sync active — downloader is already working. Don't restart.
+				log.Debug("Forkchoice: stateless block during snap sync, not restarting",
+					"number", block.NumberU64(), "hash", update.HeadBlockHash)
+				return engine.STATUS_SYNCING, nil
+			}
+			// Snap sync done but block has no state — trigger BeaconSync.
+			log.Info("Forkchoice: block known but stateless, triggering BeaconSync",
+				"number", block.NumberU64(), "hash", update.HeadBlockHash, "root", block.Root())
+			finalized := api.remoteBlocks.get(update.FinalizedBlockHash)
+			if err := api.eth.Downloader().BeaconSync(block.Header(), finalized); err != nil {
+				return engine.STATUS_SYNCING, err
+			}
+			return engine.STATUS_SYNCING, nil
 		}
-		return engine.STATUS_SYNCING, nil
 	}
 	// Block is known locally, just sanity check that the beacon client does not
 	// attempt to push us back to before the merge.
