@@ -133,9 +133,9 @@ type largeDataError struct {
 	Data string
 }
 
-func (e largeDataError) Error() string     { return "largeDataError" }
-func (e largeDataError) ErrorCode() int    { return 555 }
-func (e largeDataError) ErrorData() interface{} { return e.Data }
+func (l largeDataError) Error() string          { return "largeDataError" }
+func (l largeDataError) ErrorCode() int         { return 555 }
+func (l largeDataError) ErrorData() interface{} { return l.Data }
 
 func (s *testService) ReturnLargeDataError(n int) error {
 	return largeDataError{Data: strings.Repeat("x", n)}
