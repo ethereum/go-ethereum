@@ -63,6 +63,11 @@ func (s *LevelStats) add(n node, depth uint32) {
 	}
 }
 
+// addSize increases the raw byte-size tally at the specified depth.
+func (s *LevelStats) addSize(depth uint32, size uint64) {
+	s.level[depth].size.Add(size)
+}
+
 // AddLeaf records a leaf depth. Witness collection reuses the value-node bucket
 // for leaf accounting. It panics if the depth is outside [0, 15].
 func (s *LevelStats) AddLeaf(depth int) {
@@ -83,19 +88,20 @@ type stat struct {
 	short atomic.Uint64
 	full  atomic.Uint64
 	value atomic.Uint64
+	size  atomic.Uint64
 }
 
 // empty is a helper that returns whether there are any trie nodes at the level.
 func (s *stat) empty() bool {
-	if s.full.Load() == 0 && s.short.Load() == 0 && s.value.Load() == 0 {
+	if s.full.Load() == 0 && s.short.Load() == 0 && s.value.Load() == 0 && s.size.Load() == 0 {
 		return true
 	}
 	return false
 }
 
 // load is a helper that loads each node type's value.
-func (s *stat) load() (uint64, uint64, uint64) {
-	return s.short.Load(), s.full.Load(), s.value.Load()
+func (s *stat) load() (uint64, uint64, uint64, uint64) {
+	return s.short.Load(), s.full.Load(), s.value.Load(), s.size.Load()
 }
 
 // add is a helper that adds two level's stats together.
@@ -103,5 +109,6 @@ func (s *stat) add(other *stat) *stat {
 	s.short.Add(other.short.Load())
 	s.full.Add(other.full.Load())
 	s.value.Add(other.value.Load())
+	s.size.Add(other.size.Load())
 	return s
 }

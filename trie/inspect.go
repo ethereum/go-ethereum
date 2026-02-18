@@ -42,7 +42,7 @@ import (
 )
 
 const (
-	inspectDumpRecordSize = 32 + trieStatLevels*3*4
+	inspectDumpRecordSize = 32 + trieStatLevels*(3*4+8)
 	inspectDefaultTopN    = 10
 	inspectParallelism    = int64(16)
 )
@@ -101,6 +101,7 @@ func Inspect(triedb database.NodeDatabase, root common.Hash, config *InspectConf
 		dumpFile:    dumpFile,
 	}
 
+	in.recordRootSize(trie, root, in.accountStat)
 	in.inspect(trie, trie.root, 0, []byte{}, in.accountStat)
 	in.wg.Wait()
 
@@ -126,6 +127,22 @@ func normalizeInspectConfig(config *InspectConfig) *InspectConfig {
 		config.DumpPath = "trie-dump.bin"
 	}
 	return config
+}
+
+func (in *inspector) recordRootSize(trie *Trie, root common.Hash, stat *LevelStats) {
+	if root == (common.Hash{}) || root == types.EmptyRootHash {
+		return
+	}
+	blob := trie.prevalueTracer.Get(nil)
+	if len(blob) == 0 {
+		resolved, err := trie.reader.Node(nil, root)
+		if err != nil {
+			log.Error("Failed to read trie root for size accounting", "trie", trie.Hash(), "root", root, "err", err)
+			return
+		}
+		blob = resolved
+	}
+	stat.addSize(0, uint64(len(blob)))
 }
 
 func (in *inspector) closeDump() error {
@@ -190,6 +207,8 @@ func (in *inspector) writeDumpRecord(owner common.Hash, s *LevelStats) {
 		off += 4
 		binary.LittleEndian.PutUint32(buf[off:], uint32(s.level[i].value.Load()))
 		off += 4
+		binary.LittleEndian.PutUint64(buf[off:], s.level[i].size.Load())
+		off += 8
 	}
 	in.dumpMu.Lock()
 	_, err := in.dumpBuf.Write(buf[:])
@@ -230,11 +249,13 @@ func (in *inspector) inspect(trie *Trie, n node, height uint32, path []byte, sta
 			in.inspect(trie, childNode, height+1, childPath, stat)
 		}
 	case hashNode:
-		resolved, err := trie.resolveWithoutTrack(n, path)
+		blob, err := trie.reader.Node(path, common.BytesToHash(n))
 		if err != nil {
 			log.Error("Failed to resolve HashNode", "err", err, "trie", trie.Hash(), "height", height+1, "path", path)
 			return
 		}
+		stat.addSize(height, uint64(len(blob)))
+		resolved := mustDecodeNode(n, blob)
 		in.inspect(trie, resolved, height, path, stat)
 
 		// Return early here so this level isn't recorded twice.
@@ -262,6 +283,7 @@ func (in *inspector) inspect(trie *Trie, n node, height uint32, path []byte, sta
 			}
 			storageStat := NewLevelStats()
 			run := func() {
+				in.recordRootSize(storage, account.Root, storageStat)
 				in.inspect(storage, storage.root, 0, []byte{}, storageStat)
 				in.writeDumpRecord(owner, storageStat)
 			}
@@ -332,6 +354,7 @@ func Summarize(dumpPath string, config *InspectConfig) error {
 			summary.StorageLevels[i].Short += record.Levels[i].Short
 			summary.StorageLevels[i].Full += record.Levels[i].Full
 			summary.StorageLevels[i].Value += record.Levels[i].Value
+			summary.StorageLevels[i].Size += record.Levels[i].Size
 		}
 
 		depthTop.TryInsert(snapshot)
@@ -345,6 +368,7 @@ func Summarize(dumpPath string, config *InspectConfig) error {
 		summary.StorageTotals.Short += summary.StorageLevels[i].Short
 		summary.StorageTotals.Full += summary.StorageLevels[i].Full
 		summary.StorageTotals.Value += summary.StorageLevels[i].Value
+		summary.StorageTotals.Size += summary.StorageLevels[i].Size
 	}
 	summary.TopByDepth = depthTop.Sorted()
 	summary.TopByTotalNodes = totalTop.Sorted()
@@ -373,8 +397,9 @@ func decodeDumpRecord(raw []byte) dumpRecord {
 			Short: uint64(binary.LittleEndian.Uint32(raw[off:])),
 			Full:  uint64(binary.LittleEndian.Uint32(raw[off+4:])),
 			Value: uint64(binary.LittleEndian.Uint32(raw[off+8:])),
+			Size:  binary.LittleEndian.Uint64(raw[off+12:]),
 		}
-		off += 12
+		off += 20
 	}
 	return record
 }
@@ -385,6 +410,7 @@ type storageStats struct {
 	Summary    jsonLevel
 	MaxDepth   int
 	TotalNodes uint64
+	TotalSize  uint64
 }
 
 func newStorageStats(owner common.Hash, levels [trieStatLevels]jsonLevel) *storageStats {
@@ -397,8 +423,10 @@ func newStorageStats(owner common.Hash, levels [trieStatLevels]jsonLevel) *stora
 		snapshot.Summary.Short += level.Short
 		snapshot.Summary.Full += level.Full
 		snapshot.Summary.Value += level.Value
+		snapshot.Summary.Size += level.Size
 	}
 	snapshot.TotalNodes = snapshot.Summary.Short + snapshot.Summary.Full + snapshot.Summary.Value
+	snapshot.TotalSize = snapshot.Summary.Size
 	return snapshot
 }
 
@@ -415,6 +443,7 @@ func (s *storageStats) MarshalJSON() ([]byte, error) {
 		Owner      common.Hash `json:"Owner"`
 		MaxDepth   int         `json:"MaxDepth"`
 		TotalNodes uint64      `json:"TotalNodes"`
+		TotalSize  uint64      `json:"TotalSize"`
 		ValueNodes uint64      `json:"ValueNodes"`
 		Levels     []jsonLevel `json:"Levels"`
 		Summary    jsonLevel   `json:"Summary"`
@@ -423,6 +452,7 @@ func (s *storageStats) MarshalJSON() ([]byte, error) {
 		Owner:      s.Owner,
 		MaxDepth:   s.MaxDepth,
 		TotalNodes: s.TotalNodes,
+		TotalSize:  s.TotalSize,
 		ValueNodes: s.Summary.Value,
 		Levels:     trimLevels(s.Levels),
 		Summary:    s.Summary,
@@ -435,6 +465,7 @@ func (s *storageStats) toLevelStats() *LevelStats {
 		stats.level[i].short.Store(s.Levels[i].Short)
 		stats.level[i].full.Store(s.Levels[i].Full)
 		stats.level[i].value.Store(s.Levels[i].Value)
+		stats.level[i].size.Store(s.Levels[i].Size)
 	}
 	return stats
 }
@@ -543,6 +574,7 @@ func (s *inspectSummary) display() {
 	fmt.Printf("Total storage tries: %d\n", s.StorageCount)
 	totalNodes := s.StorageTotals.Short + s.StorageTotals.Full + s.StorageTotals.Value
 	fmt.Printf("Total nodes: %d\n", totalNodes)
+	fmt.Printf("Total size: %s\n", common.StorageSize(s.StorageTotals.Size))
 	fmt.Printf("  Short nodes: %d\n", s.StorageTotals.Short)
 	fmt.Printf("  Full nodes:  %d\n", s.StorageTotals.Full)
 	fmt.Printf("  Value nodes: %d\n", s.StorageTotals.Value)
@@ -565,21 +597,31 @@ func (s *inspectSummary) display() {
 func (s *inspectSummary) displayCombinedDepthTable() {
 	accountTotal := s.Account.Summary.Short + s.Account.Summary.Full + s.Account.Summary.Value
 	storageTotal := s.StorageTotals.Short + s.StorageTotals.Full + s.StorageTotals.Value
+	accountTotalSize := s.Account.Summary.Size
+	storageTotalSize := s.StorageTotals.Size
 
 	fmt.Println("Trie Depth Distribution")
-	fmt.Printf("Account Trie: %d nodes\n", accountTotal)
-	fmt.Printf("Storage Tries: %d nodes across %d tries\n", storageTotal, s.StorageCount)
+	fmt.Printf("Account Trie: %d nodes (%s)\n", accountTotal, common.StorageSize(accountTotalSize))
+	fmt.Printf("Storage Tries: %d nodes (%s) across %d tries\n", storageTotal, common.StorageSize(storageTotalSize), s.StorageCount)
 
 	b := new(strings.Builder)
 	table := tablewriter.NewWriter(b)
-	table.SetHeader([]string{"Depth", "Account Nodes", "Storage Nodes"})
+	table.SetHeader([]string{"Depth", "Account Nodes", "Account Size", "Storage Nodes", "Storage Size"})
 	for i := 0; i < trieStatLevels; i++ {
 		accountNodes := s.Account.Levels[i].Short + s.Account.Levels[i].Full + s.Account.Levels[i].Value
+		accountSize := s.Account.Levels[i].Size
 		storageNodes := s.StorageLevels[i].Short + s.StorageLevels[i].Full + s.StorageLevels[i].Value
+		storageSize := s.StorageLevels[i].Size
 		if accountNodes == 0 && storageNodes == 0 {
 			continue
 		}
-		table.AppendBulk([][]string{{fmt.Sprint(i), fmt.Sprint(accountNodes), fmt.Sprint(storageNodes)}})
+		table.AppendBulk([][]string{{
+			fmt.Sprint(i),
+			fmt.Sprint(accountNodes),
+			common.StorageSize(accountSize).String(),
+			fmt.Sprint(storageNodes),
+			common.StorageSize(storageSize).String(),
+		}})
 	}
 	table.Render()
 	fmt.Print(b.String())
@@ -664,11 +706,11 @@ func (s *LevelStats) display(title string) {
 		if s.level[i].empty() {
 			continue
 		}
-		short, full, value := s.level[i].load()
+		short, full, value, _ := s.level[i].load()
 		table.AppendBulk([][]string{{"-", fmt.Sprint(i), fmt.Sprint(short), fmt.Sprint(full), fmt.Sprint(value)}})
 		stat.add(&s.level[i])
 	}
-	short, full, value := stat.load()
+	short, full, value, _ := stat.load()
 	table.SetFooter([]string{"Total", "", fmt.Sprint(short), fmt.Sprint(full), fmt.Sprint(value)})
 	table.Render()
 	fmt.Print(b.String())
@@ -680,4 +722,5 @@ type jsonLevel struct {
 	Short uint64
 	Full  uint64
 	Value uint64
+	Size  uint64
 }

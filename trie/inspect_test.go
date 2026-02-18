@@ -74,6 +74,12 @@ func TestInspect(t *testing.T) {
 	if len(inspectOut.StorageSummary.Levels) == 0 {
 		t.Fatal("expected StorageSummary.Levels to be populated")
 	}
+	if inspectOut.AccountTrie.Summary.Size == 0 {
+		t.Fatal("expected account trie size summary to be populated")
+	}
+	if inspectOut.StorageSummary.Totals.Size == 0 {
+		t.Fatal("expected storage trie size summary to be populated")
+	}
 	if !reflect.DeepEqual(inspectOut.AccountTrie, reanalysisOut.AccountTrie) {
 		t.Fatal("account trie summary mismatch between inspect and summarize")
 	}
@@ -129,8 +135,9 @@ func assertStorageTotalsMatchLevels(t *testing.T, out inspectJSONOutput) {
 		fromLevels.Short += level.Short
 		fromLevels.Full += level.Full
 		fromLevels.Value += level.Value
+		fromLevels.Size += level.Size
 	}
-	if fromLevels.Short != out.StorageSummary.Totals.Short || fromLevels.Full != out.StorageSummary.Totals.Full || fromLevels.Value != out.StorageSummary.Totals.Value {
+	if fromLevels.Short != out.StorageSummary.Totals.Short || fromLevels.Full != out.StorageSummary.Totals.Full || fromLevels.Value != out.StorageSummary.Totals.Value || fromLevels.Size != out.StorageSummary.Totals.Size {
 		t.Fatalf("storage totals mismatch: levels=%+v totals=%+v", fromLevels, out.StorageSummary.Totals)
 	}
 }
@@ -142,8 +149,9 @@ func assertAccountTotalsMatchLevels(t *testing.T, account storageStats) {
 		fromLevels.Short += level.Short
 		fromLevels.Full += level.Full
 		fromLevels.Value += level.Value
+		fromLevels.Size += level.Size
 	}
-	if fromLevels.Short != account.Summary.Short || fromLevels.Full != account.Summary.Full || fromLevels.Value != account.Summary.Value {
+	if fromLevels.Short != account.Summary.Short || fromLevels.Full != account.Summary.Full || fromLevels.Value != account.Summary.Value || fromLevels.Size != account.Summary.Size {
 		t.Fatalf("account totals mismatch: levels=%+v totals=%+v", fromLevels, account.Summary)
 	}
 }
