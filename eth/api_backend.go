@@ -218,7 +218,6 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 // GetTransactionBySenderAndNonce returns the hash of a transaction for the given sender and nonce.
 // It checks the pool, then enforces a nonce check against the current state, and finally checks the historical TxSenderNonce index.
 func (b *EthAPIBackend) GetTransactionBySenderAndNonce(ctx context.Context, sender common.Address, nonce uint64) (*common.Hash, error) {
-
 	if pool := b.eth.TxPool(); pool != nil {
 		if tx := pool.GetTxBySenderAndNonce(sender, nonce); tx != nil {
 			hash := tx.Hash()

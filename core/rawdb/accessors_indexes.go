@@ -149,7 +149,6 @@ func WriteTxSenderNonceEntryByBlock(db ethdb.KeyValueWriter, block *types.Block,
 			WriteTxSenderNonceEntry(db, sender, tx.Nonce(), tx.Hash())
 		}
 	}
-
 }
 
 // ReadTxSenderNonceIndex retrieves the hash for a specific sender and nonce.
