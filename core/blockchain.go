@@ -1431,6 +1431,13 @@ func (bc *BlockChain) AdvancePartialHead(hash common.Hash) error {
 	bc.currentBlock.Store(block.Header())
 	headBlockGauge.Update(int64(block.NumberU64()))
 
+	// Set the partial state root so ProcessBlockWithBAL chains from the correct root.
+	// After the second snap sync, the trie root matches the block's header root.
+	if bc.partialState != nil {
+		bc.partialState.SetRoot(root)
+		bc.partialState.SetLastProcessedBlock(block.NumberU64())
+	}
+
 	log.Info("Advanced partial state head", "number", block.Number(), "hash", hash)
 	return nil
 }
