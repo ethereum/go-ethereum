@@ -232,9 +232,6 @@ func readPasswordFromFile(path string) (string, bool) {
 		utils.Fatalf("Failed to read password file: %v", err)
 	}
 	lines := strings.Split(string(text), "\n")
-	if len(lines) == 0 {
-		return "", false
-	}
 	// Sanitise DOS line endings.
 	return strings.TrimRight(lines[0], "\r"), true
 }
