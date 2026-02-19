@@ -694,19 +694,6 @@ func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
 	return decodeNodeUnsafe(n, blob)
 }
 
-// resolveWithoutTrack loads node from the underlying store with the given node hash
-// and path prefix.
-func (t *Trie) resolveWithoutTrack(n node, prefix []byte) (node, error) {
-	if n, ok := n.(hashNode); ok {
-		blob, err := t.reader.Node(prefix, common.BytesToHash(n))
-		if err != nil {
-			return nil, err
-		}
-		return mustDecodeNode(n, blob), nil
-	}
-	return n, nil
-}
-
 // deletedNodes returns a list of node paths, referring the nodes being deleted
 // from the trie. It's possible a few deleted nodes were embedded in their parent
 // before, the deletions can be no effect by deleting nothing, filter them out.
