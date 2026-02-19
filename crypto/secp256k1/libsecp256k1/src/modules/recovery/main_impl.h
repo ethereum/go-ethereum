@@ -120,7 +120,7 @@ static int secp256k1_ecdsa_sig_recover(const secp256k1_scalar *sigr, const secp2
     return !secp256k1_gej_is_infinity(&qj);
 }
 
-int secp256k1_ecdsa_sign_recoverable(const secp256k1_context* ctx, secp256k1_ecdsa_recoverable_signature *signature, const unsigned char *msghash32, const unsigned char *seckey, secp256k1_nonce_function noncefp, const void* noncedata) {
+int secp256k1_ecdsa_sign_recoverable(const secp256k1_context* ctx, secp256k1_ecdsa_recoverable_signature *signature, const unsigned char *msghash32, const unsigned char *seckey, secp256k1_nonce_function noncefp, const void* noncedata, const unsigned int initialcount) {
     secp256k1_scalar r, s;
     int ret, recid;
     VERIFY_CHECK(ctx != NULL);
@@ -129,7 +129,7 @@ int secp256k1_ecdsa_sign_recoverable(const secp256k1_context* ctx, secp256k1_ecd
     ARG_CHECK(signature != NULL);
     ARG_CHECK(seckey != NULL);
 
-    ret = secp256k1_ecdsa_sign_inner(ctx, &r, &s, &recid, msghash32, seckey, noncefp, noncedata);
+    ret = secp256k1_ecdsa_sign_inner(ctx, &r, &s, &recid, msghash32, seckey, noncefp, noncedata, initialcount);
     secp256k1_ecdsa_recoverable_signature_save(signature, &r, &s, recid);
     return ret;
 }
