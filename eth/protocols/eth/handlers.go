@@ -440,7 +440,7 @@ func writeReceiptForHash(bloomBuf *[6]byte) func([]byte, *bytes.Buffer) {
 	return func(data []byte, outbuf *bytes.Buffer) {
 		var r Receipt
 		if rlp.DecodeBytes(data, &r) == nil {
-			r.encodeForHash(bloomBuf, outbuf)
+			r.EncodeForHash(bloomBuf, outbuf)
 		}
 	}
 }

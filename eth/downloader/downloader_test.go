@@ -17,6 +17,7 @@
 package downloader
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"sync"
@@ -39,6 +40,16 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
+
+type receiptHashList struct {
+	items    []eth.Receipt
+	bloomBuf [6]byte
+}
+
+func (l *receiptHashList) Len() int { return len(l.items) }
+func (l *receiptHashList) EncodeIndex(i int, buf *bytes.Buffer) {
+	l.items[i].EncodeForHash(&l.bloomBuf, buf)
+}
 
 // downloadTester is a test simulator for mocking out local block chain.
 type downloadTester struct {
@@ -264,13 +275,15 @@ func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash, sink chan *
 	blobs := eth.ServiceGetReceiptsQuery(dlp.chain, hashes)
 
 	receipts := make([]types.Receipts, len(blobs))
+
+	hashes = make([]common.Hash, len(blobs))
+	hasher := trie.NewStackTrie(nil)
 	for i, blob := range blobs {
 		rlp.DecodeBytes(blob, &receipts[i])
-	}
-	hasher := trie.NewStackTrie(nil)
-	hashes = make([]common.Hash, len(receipts))
-	for i, receipt := range receipts {
-		hashes[i] = types.DeriveSha(receipt, hasher)
+
+		var items []eth.Receipt
+		rlp.DecodeBytes(blob, &items)
+		hashes[i] = types.DeriveSha(&receiptHashList{items: items}, hasher)
 	}
 	req := &eth.Request{
 		Peer: dlp.id,
