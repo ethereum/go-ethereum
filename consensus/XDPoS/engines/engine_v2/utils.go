@@ -1,9 +1,11 @@
 package engine_v2
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
+	"runtime"
 
 	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/common"
@@ -14,6 +16,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"golang.org/x/crypto/sha3"
+	"golang.org/x/sync/errgroup"
 )
 
 func sigHash(header *types.Header) (hash common.Hash) {
@@ -76,22 +79,6 @@ func decodeMasternodesFromHeaderExtra(checkpointHeader *types.Header) []common.A
 	return masternodes
 }
 
-func UniqueSignatures(signatureSlice []types.Signature) ([]types.Signature, []types.Signature) {
-	keys := make(map[string]bool)
-	list := []types.Signature{}
-	duplicates := []types.Signature{}
-	for _, signature := range signatureSlice {
-		hexOfSig := common.Bytes2Hex(signature)
-		if _, value := keys[hexOfSig]; !value {
-			keys[hexOfSig] = true
-			list = append(list, signature)
-		} else {
-			duplicates = append(duplicates, signature)
-		}
-	}
-	return list, duplicates
-}
-
 func (x *XDPoS_v2) signSignature(signingHash common.Hash) (types.Signature, error) {
 	// Don't hold the signFn for the whole signing operation
 	x.signLock.RLock()
@@ -106,6 +93,53 @@ func (x *XDPoS_v2) signSignature(signingHash common.Hash) (types.Signature, erro
 		return nil, fmt.Errorf("error %v while signing hash", err)
 	}
 	return signedHash, nil
+}
+
+func (x *XDPoS_v2) countValidSignatures(messageHash common.Hash, signatures []types.Signature, candidates []common.Address) (int, error) {
+	signatureList := make([]types.Signature, len(signatures))
+	pubkeys := make([]common.Address, len(signatures))
+
+	eg, ctx := errgroup.WithContext(context.Background())
+	eg.SetLimit(runtime.NumCPU())
+	for i, signature := range signatures {
+		eg.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				verified, signerAddress, err := x.verifyMsgSignature(messageHash, signature, candidates)
+				if err != nil {
+					log.Error("[verifySignatures] Error while verifying QC message signatures", "error", err)
+					return err
+				}
+				if !verified {
+					return fmt.Errorf("signature verification failed, signer is not part of masternode list. Signature: %v, SignedMessage: %v, SignerAddress: %v, Masternodes: %v", signature, messageHash.Hex(), signerAddress, candidates)
+				}
+				signatureList[i] = signature
+				pubkeys[i] = signerAddress
+
+				return nil
+			}
+		})
+	}
+	err := eg.Wait()
+	if err != nil {
+		return 0, err
+	}
+
+	// check uniqueness
+	keys := make(map[common.Address]struct{}, len(signatureList))
+	for i := range signatureList {
+		pubkeyHex := pubkeys[i]
+		if _, ok := keys[pubkeyHex]; !ok {
+			keys[pubkeyHex] = struct{}{}
+		} else {
+			log.Warn("[verifySignatures] duplicate signing found", "pubkey", pubkeyHex, "signedMessage", messageHash.Hex(), "signature", signatureList[i])
+			return 0, fmt.Errorf("duplicate signing found, pubkey: %v, message: %v, signature: %v", pubkeyHex, messageHash.Hex(), common.Bytes2Hex(signatureList[i]))
+		}
+	}
+
+	return len(keys), nil
 }
 
 func (x *XDPoS_v2) verifyMsgSignature(signedHashToBeVerified common.Hash, signature types.Signature, masternodes []common.Address) (bool, common.Address, error) {
@@ -126,7 +160,7 @@ func (x *XDPoS_v2) verifyMsgSignature(signedHashToBeVerified common.Hash, signat
 		}
 	}
 
-	log.Warn("[verifyMsgSignature] signer is not part of masternode list", "signer", signerAddress, "masternodes", masternodes)
+	log.Warn("[verifyMsgSignature] signer is not part of masternode list", "signer", signerAddress, "masternodes", masternodes, "signature", common.Bytes2Hex(signature), "signedMessage", signedHashToBeVerified.Hex())
 	return false, signerAddress, nil
 }
 

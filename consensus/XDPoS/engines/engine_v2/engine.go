@@ -1,14 +1,12 @@
 package engine_v2
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -28,7 +26,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/trie"
-	"golang.org/x/sync/errgroup"
 )
 
 type XDPoS_v2 struct {
@@ -754,53 +751,27 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 		return errors.New("fail to verify QC due to failure in getting epoch switch info")
 	}
 
-	signatures, duplicates := UniqueSignatures(quorumCert.Signatures)
-	if len(duplicates) != 0 {
-		for _, d := range duplicates {
-			log.Warn("[verifyQC] duplicated signature in QC", "duplicate", common.Bytes2Hex(d))
-		}
+	signedVoteObj := types.VoteSigHash(&types.VoteForSign{
+		ProposedBlockInfo: quorumCert.ProposedBlockInfo,
+		GapNumber:         quorumCert.GapNumber,
+	})
+	start := time.Now()
+	numValidSignatures, err := x.countValidSignatures(signedVoteObj, quorumCert.Signatures, epochInfo.Masternodes)
+	elapsed := time.Since(start)
+	log.Debug("[verifyQC] time verify message signatures of qc", "elapsed", elapsed)
+	if err != nil {
+		log.Error("[verifyQC] Error while verifying QC message signatures", "Error", err)
+		return err
 	}
 
 	qcRound := quorumCert.ProposedBlockInfo.Round
 	certThreshold := x.config.V2.Config(uint64(qcRound)).CertThreshold
-	if (qcRound > 0) && (signatures == nil || float64(len(signatures)) < float64(epochInfo.MasternodesLen)*certThreshold) {
+	if (qcRound > 0) && (float64(numValidSignatures) < float64(epochInfo.MasternodesLen)*certThreshold) {
 		//First V2 Block QC, QC Signatures is initial nil
-		log.Warn("[verifyHeader] Invalid QC Signature is nil or less then config", "QCNumber", quorumCert.ProposedBlockInfo.Number, "LenSignatures", len(signatures), "CertThreshold", float64(epochInfo.MasternodesLen)*certThreshold)
+		log.Warn("[verifyHeader] Invalid QC Signature is nil or less then config", "QCNumber", quorumCert.ProposedBlockInfo.Number, "numValidSignatures", numValidSignatures, "CertThreshold", float64(epochInfo.MasternodesLen)*certThreshold)
 		return utils.ErrInvalidQCSignatures
 	}
-	start := time.Now()
 
-	eg, ctx := errgroup.WithContext(context.Background())
-	eg.SetLimit(runtime.NumCPU())
-	for _, sig := range signatures {
-		eg.Go(func() error {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-				verified, _, err := x.verifyMsgSignature(types.VoteSigHash(&types.VoteForSign{
-					ProposedBlockInfo: quorumCert.ProposedBlockInfo,
-					GapNumber:         quorumCert.GapNumber,
-				}), sig, epochInfo.Masternodes)
-				if err != nil {
-					log.Error("[verifyQC] Error while verfying QC message signatures", "Error", err)
-					return errors.New("error while verfying QC message signatures")
-				}
-				if !verified {
-					log.Warn("[verifyQC] Signature not verified doing QC verification", "QC", quorumCert)
-					return errors.New("fail to verify QC due to signature mis-match")
-				}
-				return nil
-			}
-		})
-	}
-	err = eg.Wait()
-
-	elapsed := time.Since(start)
-	log.Debug("[verifyQC] time verify message signatures of qc", "elapsed", elapsed)
-	if err != nil {
-		return err
-	}
 	epochSwitchNumber := epochInfo.EpochSwitchBlockInfo.Number.Uint64()
 	gapNumber := epochSwitchNumber - epochSwitchNumber%x.config.Epoch
 	if gapNumber > x.config.Gap {

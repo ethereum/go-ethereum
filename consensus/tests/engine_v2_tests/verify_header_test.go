@@ -394,7 +394,8 @@ func TestShouldFailIfNotEnoughQCSignatures(t *testing.T) {
 	headerWithDuplicatedSignatures.Extra = extraInBytes
 	// Happy path
 	err = adaptor.VerifyHeader(blockchain, headerWithDuplicatedSignatures, true)
-	assert.Equal(t, utils.ErrInvalidQCSignatures, err)
+	assert.ErrorContains(t, err, "duplicate signing found")
+
 }
 
 func TestShouldVerifyHeaders(t *testing.T) {
