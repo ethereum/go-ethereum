@@ -46,7 +46,7 @@ func TestBuildBlockV1(t *testing.T) {
 	currentNonce, _ := ethservice.APIBackend.GetPoolNonce(context.Background(), testAddr)
 	tx, _ := types.SignTx(types.NewTransaction(currentNonce, testAddr, big.NewInt(1), params.TxGas, big.NewInt(params.InitialBaseFee*2), nil), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 
-	api := &TestingAPI{eth: ethservice}
+	api := &testingAPI{eth: ethservice}
 
 	t.Run("buildOnCurrentHead", func(t *testing.T) {
 		envelope, err := api.BuildBlockV1(parent.Hash(), attrs, nil, nil)

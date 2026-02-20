@@ -28,22 +28,22 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// TestingAPI implements the testing_ namespace.
+// testingAPI implements the testing_ namespace.
 // It's an engine-API adjacent namespace for testing purposes.
-type TestingAPI struct {
+type testingAPI struct {
 	eth *eth.Ethereum
 }
 
 func newTestingAPI(backend *eth.Ethereum) rpc.API {
 	return rpc.API{
 		Namespace:     "testing",
-		Service:       &TestingAPI{backend},
+		Service:       &testingAPI{backend},
 		Version:       "1.0",
 		Authenticated: false,
 	}
 }
 
-func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes engine.PayloadAttributes, transactions *[]hexutil.Bytes, extraData *hexutil.Bytes) (*engine.ExecutionPayloadEnvelope, error) {
+func (api *testingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes engine.PayloadAttributes, transactions *[]hexutil.Bytes, extraData *hexutil.Bytes) (*engine.ExecutionPayloadEnvelope, error) {
 	if api.eth.BlockChain().CurrentBlock().Hash() != parentHash {
 		return nil, errors.New("parentHash is not current head")
 	}
