@@ -1,6 +1,7 @@
 package engine_v2_tests
 
 import (
+	"math/big"
 	"strconv"
 	"strings"
 	"testing"
@@ -367,4 +368,64 @@ func TestTimeoutPoolKeyGoodHygiene(t *testing.T) {
 			assert.Fail(t, "Did not clean up the timeout pool")
 		}
 	}
+}
+
+func TestGetTCEpochInfo(t *testing.T) {
+	// First epoch, round 1, switch block 901
+	// Second epoch, round 901, block 1800
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 1805, params.TestXDPoSMockChainConfig, nil)
+	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
+
+	// Test invalid round zero
+	epochInfo, err := engineV2.GetTCEpochInfoFaker(blockchain, types.Round(0))
+	assert.NotNil(t, err)
+	assert.Nil(t, epochInfo)
+
+	// Test first round
+	epochInfo, err = engineV2.GetTCEpochInfoFaker(blockchain, types.Round(1))
+	assert.Nil(t, err)
+	assert.NotNil(t, epochInfo)
+	assert.Equal(t, big.NewInt(901), epochInfo.EpochSwitchBlockInfo.Number)
+	assert.Equal(t, types.Round(1), epochInfo.EpochSwitchBlockInfo.Round)
+	assert.True(t, len(epochInfo.Masternodes) > 0, "should have masternodes")
+
+	// Test one round before epochSwitch
+	epochInfo, err = engineV2.GetTCEpochInfoFaker(blockchain, types.Round(899))
+	assert.Nil(t, err)
+	assert.NotNil(t, epochInfo)
+	assert.Equal(t, big.NewInt(901), epochInfo.EpochSwitchBlockInfo.Number)
+	assert.Equal(t, types.Round(1), epochInfo.EpochSwitchBlockInfo.Round)
+	assert.True(t, len(epochInfo.Masternodes) > 0, "should have masternodes")
+
+	// Test round exactly on epochSwitch
+	epochInfo, err = engineV2.GetTCEpochInfoFaker(blockchain, types.Round(900))
+	assert.Nil(t, err)
+	assert.NotNil(t, epochInfo)
+	assert.Equal(t, big.NewInt(1800), epochInfo.EpochSwitchBlockInfo.Number)
+	assert.Equal(t, types.Round(900), epochInfo.EpochSwitchBlockInfo.Round)
+	assert.True(t, len(epochInfo.Masternodes) > 0, "should have masternodes")
+
+	// Test round in second epoch
+	epochInfo, err = engineV2.GetTCEpochInfoFaker(blockchain, types.Round(903))
+	assert.Nil(t, err)
+	assert.NotNil(t, epochInfo)
+	assert.Equal(t, big.NewInt(1800), epochInfo.EpochSwitchBlockInfo.Number)
+	assert.Equal(t, types.Round(900), epochInfo.EpochSwitchBlockInfo.Round)
+	assert.True(t, len(epochInfo.Masternodes) > 0, "should have masternodes")
+
+	// Test after few timeout rounds
+	epochInfo, err = engineV2.GetTCEpochInfoFaker(blockchain, types.Round(920))
+	assert.Nil(t, err)
+	assert.NotNil(t, epochInfo)
+	assert.Equal(t, big.NewInt(1800), epochInfo.EpochSwitchBlockInfo.Number)
+	assert.Equal(t, types.Round(900), epochInfo.EpochSwitchBlockInfo.Round)
+	assert.True(t, len(epochInfo.Masternodes) > 0, "should have masternodes")
+
+	// Test far away round
+	epochInfo, err = engineV2.GetTCEpochInfoFaker(blockchain, types.Round(10000))
+	assert.Nil(t, err)
+	assert.NotNil(t, epochInfo)
+	assert.Equal(t, big.NewInt(1800), epochInfo.EpochSwitchBlockInfo.Number)
+	assert.Equal(t, types.Round(900), epochInfo.EpochSwitchBlockInfo.Round)
+	assert.True(t, len(epochInfo.Masternodes) > 0, "should have masternodes")
 }
