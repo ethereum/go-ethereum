@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !example && !ziren && !wasm
-// +build !example,!ziren,!wasm
+//go:build !example && !ziren && !wasm && !zisk
+// +build !example,!ziren,!wasm,!zisk
 
 package main
 

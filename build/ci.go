@@ -108,6 +108,13 @@ var (
 			Env:  map[string]string{"GOMIPS": "softfloat", "CGO_ENABLED": "0"},
 		},
 		{
+			Name:   "zisk",
+			GOOS:   "tamago",
+			GOARCH: "riscv64",
+			Tags:   "tamago,zisk",
+			Env:    map[string]string{"CGO_ENABLED": "0", "GO_EXTLINK_ENABLED": "0"},
+		},
+		{
 			Name:   "wasm-js",
 			GOOS:   "js",
 			GOARCH: "wasm",
@@ -281,15 +288,36 @@ func doInstallKeeper(cmdline []string) {
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
 
-	// Configure the toolchain.
+	var (
+		csdb       *download.ChecksumDB
+		tamagoRoot string
+	)
 	tc := build.GoToolchain{}
 	if *dlgo {
-		csdb := download.MustLoadChecksums("build/checksums.txt")
-		tc.Root = build.DownloadGo(csdb)
+		csdb = download.MustLoadChecksums("build/checksums.txt")
 	}
 
 	for _, target := range keeperTargets {
 		log.Printf("Building keeper-%s", target.Name)
+
+		// Configure the toolchain.
+		if target.Name == "tamago" {
+			if runtime.GOOS != "linux" {
+				log.Printf("Skipping keeper-%s (tamago builds are only supported on linux hosts)", target.Name)
+				continue
+			}
+			if !*dlgo {
+				log.Printf("Skipping keeper-%s (tamago build requires -dlgo)", target.Name)
+				continue
+			}
+
+			if tamagoRoot == "" {
+				tamagoRoot = downloadTamago(csdb)
+			}
+			tc.Root = tamagoRoot
+		} else if *dlgo {
+			tc.Root = build.DownloadGo(csdb)
+		}
 
 		// Configure the build.
 		tc.GOARCH = target.GOARCH
@@ -445,6 +473,42 @@ func downloadSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string
 		log.Fatal(err)
 	}
 	return filepath.Join(cachedir, base)
+}
+
+// downloadTamago downloads the tamago-go toolchain and returns its GOROOT.
+func downloadTamago(csdb *download.ChecksumDB) string {
+	version, err := csdb.FindVersion("tamago")
+	if err != nil {
+		log.Fatal(err)
+	}
+	if runtime.GOOS != "linux" {
+		log.Printf("Skipping tamago toolchain download (unsupported host os: %s)", runtime.GOOS)
+		return ""
+	}
+	arch := runtime.GOARCH
+	if arch == "arm" {
+		arch = "armv7l"
+	}
+	file := fmt.Sprintf("tamago-go%s.%s-%s.tar.gz", version, runtime.GOOS, arch)
+
+	ucache, err := os.UserCacheDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+	dst := filepath.Join(ucache, file)
+	if err := csdb.DownloadFileFromKnownURL(dst); err != nil {
+		log.Fatal(err)
+	}
+
+	toolRoot := filepath.Join(ucache, fmt.Sprintf("geth-tamago-go-%s-%s-%s", version, runtime.GOOS, arch))
+	if err := build.ExtractArchive(dst, toolRoot); err != nil {
+		log.Fatal(err)
+	}
+	goroot, err := filepath.Abs(filepath.Join(toolRoot, "go"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	return goroot
 }
 
 // doCheckGenerate ensures that re-generating generated files does not cause
