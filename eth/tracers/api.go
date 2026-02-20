@@ -383,7 +383,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			if api.backend.ChainConfig().IsPrague(next.Number()) {
 				context := core.NewEVMBlockContext(next.Header(), api.chainContext(ctx), nil)
 				evm := vm.NewEVM(context, statedb, nil, api.backend.ChainConfig(), vm.Config{})
-				core.ProcessParentBlockHash(next.ParentHash(), evm, statedb)
+				core.ProcessParentBlockHash(next.ParentHash(), evm)
 			}
 			// Clean out any pending release functions of trace state. Note this
 			// step must be done after constructing tracing state, because the
@@ -521,7 +521,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	)
 	evm := vm.NewEVM(vmctx, statedb, nil, chainConfig, vm.Config{})
 	if chainConfig.IsPrague(block.Number()) {
-		core.ProcessParentBlockHash(block.ParentHash(), evm, statedb)
+		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 	feeCapacity := statedb.GetTRC21FeeCapacityFromState()
 	for i, tx := range block.Transactions() {
@@ -590,7 +590,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 	evm := vm.NewEVM(blockCtx, statedb, nil, api.backend.ChainConfig(), vm.Config{})
 	if api.backend.ChainConfig().IsPrague(block.Number()) {
-		core.ProcessParentBlockHash(block.ParentHash(), evm, statedb)
+		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
 	// JS tracers have high overhead. In this case run a parallel
@@ -695,7 +695,7 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 	evm := vm.NewEVM(blockCtx, statedb, nil, api.backend.ChainConfig(), vm.Config{})
 	if api.backend.ChainConfig().IsPrague(block.Number()) {
-		core.ProcessParentBlockHash(block.ParentHash(), evm, statedb)
+		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
 txloop:
@@ -930,7 +930,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 
 	// Call SetTxContext to clear out the statedb access list
 	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
-	_, _, _, err = core.ApplyTransactionWithEVM(message, api.backend.ChainConfig(), new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, evm, balance, common.Address{})
+	_, _, _, err = core.ApplyTransactionWithEVM(message, new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, evm, balance, common.Address{})
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}

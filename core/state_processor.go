@@ -103,7 +103,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, tra
 	coinbaseOwner := getCoinbaseOwner(p.bc, statedb, header, nil)
 
 	if p.config.IsPrague(block.Number()) {
-		ProcessParentBlockHash(block.ParentHash(), evm, tracingStateDB)
+		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
 	// Iterate over and process the individual transactions
@@ -146,7 +146,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, tra
 		}
 		statedb.SetTxContext(tx.Hash(), i)
 
-		receipt, gas, tokenFeeUsed, err := ApplyTransactionWithEVM(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, evm, balanceFee, coinbaseOwner)
+		receipt, gas, tokenFeeUsed, err := ApplyTransactionWithEVM(msg, gp, statedb, blockNumber, blockHash, tx, usedGas, evm, balanceFee, coinbaseOwner)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
@@ -210,7 +210,7 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 	coinbaseOwner := getCoinbaseOwner(p.bc, statedb, header, nil)
 
 	if p.config.IsPrague(block.Number()) {
-		ProcessParentBlockHash(block.ParentHash(), evm, tracingStateDB)
+		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
 	// Iterate over and process the individual transactions
@@ -253,7 +253,7 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 		}
 		statedb.SetTxContext(tx.Hash(), i)
 
-		receipt, gas, tokenFeeUsed, err := ApplyTransactionWithEVM(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, evm, balanceFee, coinbaseOwner)
+		receipt, gas, tokenFeeUsed, err := ApplyTransactionWithEVM(msg, gp, statedb, blockNumber, blockHash, tx, usedGas, evm, balanceFee, coinbaseOwner)
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -279,7 +279,7 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 // ApplyTransactionWithEVM attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment similar to ApplyTransaction. However,
 // this method takes an already created EVM instance as input.
-func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, balanceFee *big.Int, coinbaseOwner common.Address) (receipt *types.Receipt, gasUsed uint64, tokenFeeUsed bool, err error) {
+func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, balanceFee *big.Int, coinbaseOwner common.Address) (receipt *types.Receipt, gasUsed uint64, tokenFeeUsed bool, err error) {
 	if hooks := evm.Config.Tracer; hooks != nil {
 		if hooks.OnTxStart != nil {
 			hooks.OnTxStart(evm.GetVMContext(), tx, msg.From)
@@ -290,6 +290,7 @@ func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPo
 	}
 
 	to := tx.To()
+	config := evm.ChainConfig()
 	if to != nil {
 		if *to == common.BlockSignersBinary && config.IsTIPSigning(blockNumber) {
 			return ApplySignTransaction(msg, config, statedb, blockNumber, blockHash, tx, usedGas, evm)
@@ -520,7 +521,7 @@ func getCoinbaseOwner(bc *BlockChain, statedb *state.StateDB, header *types.Head
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*big.Int, evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64) (*types.Receipt, uint64, bool, error) {
+func ApplyTransaction(tokensFee map[common.Address]*big.Int, evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64) (*types.Receipt, uint64, bool, error) {
 	var balanceFee *big.Int
 	if tx.To() != nil {
 		if value, ok := tokensFee[*tx.To()]; ok {
@@ -528,13 +529,13 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 		}
 	}
 
-	signer := types.MakeSigner(config, header.Number)
+	signer := types.MakeSigner(evm.ChainConfig(), header.Number)
 	msg, err := TransactionToMessage(tx, signer, balanceFee, header.Number, header.BaseFee)
 	if err != nil {
 		return nil, 0, false, err
 	}
 	coinbaseOwner := statedb.GetOwner(evm.Context.Coinbase)
-	return ApplyTransactionWithEVM(msg, config, gp, statedb, header.Number, header.Hash(), tx, usedGas, evm, balanceFee, coinbaseOwner)
+	return ApplyTransactionWithEVM(msg, gp, statedb, header.Number, header.Hash(), tx, usedGas, evm, balanceFee, coinbaseOwner)
 }
 
 func ApplySignTransaction(msg *Message, config *params.ChainConfig, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *types.Receipt, gasUsed uint64, tokenFeeUsed bool, err error) {
@@ -645,9 +646,9 @@ func InitSignerInTransactions(config *params.ChainConfig, header *types.Header, 
 
 // ProcessParentBlockHash writes the parent hash to the EIP-2935 history contract
 // and enforces the expected code, with a one-time Prague backfill if missing.
-func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb vm.StateDB) {
+func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
 	// Verify history contract code matches the expected bytecode
-	code := statedb.GetCode(params.HistoryStorageAddress)
+	code := evm.StateDB.GetCode(params.HistoryStorageAddress)
 	if len(code) > 0 && !bytes.Equal(code, params.HistoryStorageCode) {
 		log.Error("History storage code mismatch",
 			"have", crypto.Keccak256Hash(code),
@@ -656,11 +657,11 @@ func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb vm.Stat
 		panic("history storage code mismatch")
 	}
 
-	blockNumber := vmenv.Context.BlockNumber
-	if blockNumber == nil || !vmenv.ChainConfig().IsPrague(blockNumber) {
+	blockNumber := evm.Context.BlockNumber
+	if blockNumber == nil || !evm.ChainConfig().IsPrague(blockNumber) {
 		return
 	}
-	forkBlock := vmenv.ChainConfig().PragueBlock
+	forkBlock := evm.ChainConfig().PragueBlock
 	if forkBlock == nil {
 		forkBlock = common.PragueBlock
 	}
@@ -670,13 +671,13 @@ func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb vm.Stat
 
 	// Only deploy and backfill if the contract is missing at/after Prague activation.
 	if len(code) == 0 {
-		if !statedb.Exist(params.HistoryStorageAddress) {
-			statedb.CreateAccount(params.HistoryStorageAddress)
+		if !evm.StateDB.Exist(params.HistoryStorageAddress) {
+			evm.StateDB.CreateAccount(params.HistoryStorageAddress)
 		}
-		if statedb.GetNonce(params.HistoryStorageAddress) == 0 {
-			statedb.SetNonce(params.HistoryStorageAddress, 1)
+		if evm.StateDB.GetNonce(params.HistoryStorageAddress) == 0 {
+			evm.StateDB.SetNonce(params.HistoryStorageAddress, 1)
 		}
-		statedb.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode)
+		evm.StateDB.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode)
 
 		if blockNumber.Sign() > 0 {
 			end := blockNumber.Uint64() - 1
@@ -691,17 +692,17 @@ func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb vm.Stat
 				}
 			}
 			for n := start; n <= end; n++ {
-				hash := vmenv.Context.GetHash(n)
+				hash := evm.Context.GetHash(n)
 				if hash == (common.Hash{}) {
 					log.Debug("History backfill missing hash", "number", n)
 					continue
 				}
-				statedb.SetState(params.HistoryStorageAddress, historyStorageKey(n), hash)
+				evm.StateDB.SetState(params.HistoryStorageAddress, historyStorageKey(n), hash)
 			}
 		}
 	}
 
-	if tracer := vmenv.Config.Tracer; tracer != nil {
+	if tracer := evm.Config.Tracer; tracer != nil {
 		if tracer.OnSystemCallStart != nil {
 			tracer.OnSystemCallStart()
 		}
@@ -719,13 +720,13 @@ func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb vm.Stat
 		To:        &params.HistoryStorageAddress,
 		Data:      prevHash.Bytes(),
 	}
-	vmenv.SetTxContext(NewEVMTxContext(msg))
-	statedb.AddAddressToAccessList(params.HistoryStorageAddress)
-	_, _, err := vmenv.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560)
+	evm.SetTxContext(NewEVMTxContext(msg))
+	evm.StateDB.AddAddressToAccessList(params.HistoryStorageAddress)
+	_, _, err := evm.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560)
 	if err != nil {
 		panic(err)
 	}
-	statedb.Finalise(true)
+	evm.StateDB.Finalise(true)
 }
 
 func historyStorageKey(number uint64) common.Hash {

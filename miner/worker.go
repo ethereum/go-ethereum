@@ -790,7 +790,7 @@ func (w *worker) commitNewWork() {
 		work.state.DeleteAddress(common.BlockSignersBinary)
 	}
 	if w.config.IsPrague(header.Number) {
-		core.ProcessParentBlockHash(header.ParentHash, work.evm, work.state)
+		core.ProcessParentBlockHash(header.ParentHash, work.evm)
 	}
 	// won't grasp txs at checkpoint
 	var (
@@ -1225,7 +1225,7 @@ func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Addr
 func (w *Work) commitTransaction(balanceFee map[common.Address]*big.Int, tx *types.Transaction, gp *core.GasPool) ([]*types.Log, bool, uint64, error) {
 	snap := w.state.Snapshot()
 
-	receipt, gas, tokenFeeUsed, err := core.ApplyTransaction(w.config, balanceFee, w.evm, gp, w.state, w.header, tx, &w.header.GasUsed)
+	receipt, gas, tokenFeeUsed, err := core.ApplyTransaction(balanceFee, w.evm, gp, w.state, w.header, tx, &w.header.GasUsed)
 	if err != nil {
 		w.state.RevertToSnapshot(snap)
 		return nil, false, 0, err

@@ -903,7 +903,7 @@ func createBlockFromHeader(bc *core.BlockChain, customHeader *types.Header, txs 
 			statedb.SetTxContext(tx.Hash(), i)
 			blockContext := core.NewEVMBlockContext(&header, bc, &header.Coinbase)
 			evm := vm.NewEVM(blockContext, statedb, nil, bc.Config(), vm.Config{})
-			receipt, _, _, err := core.ApplyTransaction(bc.Config(), nil, evm, gp, statedb, &header, tx, gasUsed)
+			receipt, _, _, err := core.ApplyTransaction(nil, evm, gp, statedb, &header, tx, gasUsed)
 			if err != nil {
 				return nil, fmt.Errorf("%v when applying transaction", err)
 			}

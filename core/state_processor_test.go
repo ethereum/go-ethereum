@@ -471,7 +471,7 @@ func TestApplyTransactionWithEVMTracer(t *testing.T) {
 
 			// Apply transaction
 			var usedGas uint64
-			_, _, _, err = ApplyTransactionWithEVM(msg, config, gasPool, statedb, blockNumber, blockHash, signedTx, &usedGas, evm, big.NewInt(0), common.Address{})
+			_, _, _, err = ApplyTransactionWithEVM(msg, gasPool, statedb, blockNumber, blockHash, signedTx, &usedGas, evm, big.NewInt(0), common.Address{})
 			// NOTE: Some special transactions (like BlockSignersBinary or XDCXAddrBinary)
 			// may fail in test environment due to missing configuration or state, but
 			// the tracer should still be called at the beginning of ApplyTransactionWithEVM.
@@ -559,7 +559,7 @@ func TestApplyTransactionWithEVMStateChangeHooks(t *testing.T) {
 
 	gasPool := new(GasPool).AddGas(1000000)
 	var usedGas uint64
-	_, _, _, err = ApplyTransactionWithEVM(msg, config, gasPool, statedb, big.NewInt(1), genesis.Hash(), signedTx, &usedGas, evmenv, nil, common.Address{})
+	_, _, _, err = ApplyTransactionWithEVM(msg, gasPool, statedb, big.NewInt(1), genesis.Hash(), signedTx, &usedGas, evmenv, nil, common.Address{})
 	if err != nil {
 		t.Fatalf("ApplyTransactionWithEVM failed: %v", err)
 	}
@@ -584,11 +584,11 @@ func TestProcessParentBlockHash(t *testing.T) {
 
 		vmContext := NewEVMBlockContext(header, nil, &coinbase)
 		evm := vm.NewEVM(vmContext, statedb, nil, chainConfig, vm.Config{})
-		ProcessParentBlockHash(header.ParentHash, evm, statedb)
+		ProcessParentBlockHash(header.ParentHash, evm)
 
 		vmContext = NewEVMBlockContext(parent, nil, &coinbase)
 		evm = vm.NewEVM(vmContext, statedb, nil, chainConfig, vm.Config{})
-		ProcessParentBlockHash(parent.ParentHash, evm, statedb)
+		ProcessParentBlockHash(parent.ParentHash, evm)
 
 		// make sure that the state is correct
 		if have := getParentBlockHash(statedb, 1); have != hashA {
@@ -624,7 +624,7 @@ func TestProcessParentBlockHashPragueGuard(t *testing.T) {
 		Random:      &random,
 	}
 	evm := vm.NewEVM(blockContext, statedb, nil, &config, vm.Config{})
-	ProcessParentBlockHash(common.Hash{0x01}, evm, statedb)
+	ProcessParentBlockHash(common.Hash{0x01}, evm)
 
 	if code := statedb.GetCode(params.HistoryStorageAddress); len(code) != 0 {
 		t.Fatalf("unexpected history contract code predeploy: %x", code)
@@ -662,7 +662,7 @@ func TestProcessParentBlockHashBackfillMissingHistory(t *testing.T) {
 		Random:      &random,
 	}
 	evm := vm.NewEVM(blockContext, statedb, nil, &config, vm.Config{})
-	ProcessParentBlockHash(common.Hash{0x01}, evm, statedb)
+	ProcessParentBlockHash(common.Hash{0x01}, evm)
 
 	if have := getParentBlockHash(statedb, 1); have != available[1] {
 		t.Fatalf("expected hash at slot 1, have %v", have)
@@ -701,7 +701,7 @@ func TestProcessParentBlockHashCodeMismatchPanics(t *testing.T) {
 			t.Fatal("expected panic on history storage code mismatch")
 		}
 	}()
-	ProcessParentBlockHash(common.Hash{0x01}, evm, statedb)
+	ProcessParentBlockHash(common.Hash{0x01}, evm)
 }
 
 func getParentBlockHash(statedb *state.StateDB, number uint64) common.Hash {
