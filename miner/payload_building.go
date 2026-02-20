@@ -274,6 +274,8 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 	return payload, nil
 }
 
+// BuildTestingPayload is for testing_buildBlockV*. It creates a block with the exact content given
+// by the parameters instead of using the locally available transactions.
 func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*types.Transaction, empty bool, extraData []byte) (*engine.ExecutionPayloadEnvelope, error) {
 	fullParams := &generateParams{
 		timestamp:         args.Timestamp,
