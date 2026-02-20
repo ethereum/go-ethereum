@@ -519,3 +519,21 @@ func (b *EthAPIBackend) BlockAccessListByNumberOrHash(number rpc.BlockNumberOrHa
 	}
 	return block.AccessList().StringableRepresentation(), nil
 }
+
+// PartialStateEnabled returns true if partial state mode is active.
+func (b *EthAPIBackend) PartialStateEnabled() bool {
+	return b.eth.config.PartialState.Enabled
+}
+
+// IsContractTracked returns true if the contract's storage is tracked.
+// For full nodes (partial state disabled), this always returns true.
+func (b *EthAPIBackend) IsContractTracked(addr common.Address) bool {
+	if !b.eth.config.PartialState.Enabled {
+		return true // Full node tracks everything
+	}
+	ps := b.eth.blockchain.PartialState()
+	if ps == nil {
+		return true // Shouldn't happen if config says enabled, but be safe
+	}
+	return ps.Filter().IsTracked(addr)
+}

@@ -363,6 +363,11 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 		keyLengths   = make([]int, len(storageKeys))
 		storageProof = make([]StorageResult, len(storageKeys))
 	)
+	// In partial state mode, storage proofs are only available for tracked contracts.
+	// Account proofs work for ALL accounts since we have the full account trie.
+	if len(storageKeys) > 0 && api.b.PartialStateEnabled() && !api.b.IsContractTracked(address) {
+		return nil, &StorageNotTrackedError{Address: address}
+	}
 	// Deserialize all keys. This prevents state access on invalid input.
 	for i, hexKey := range storageKeys {
 		var err error
@@ -565,6 +570,12 @@ func (api *BlockChainAPI) GetUncleCountByBlockHash(ctx context.Context, blockHas
 
 // GetCode returns the code stored at the given address in the state for the given block number.
 func (api *BlockChainAPI) GetCode(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+	// Check if code is available for this contract in partial state mode
+	// Note: Account code hash is available for all accounts, but actual bytecode
+	// is only stored for tracked contracts in partial state mode.
+	if api.b.PartialStateEnabled() && !api.b.IsContractTracked(address) {
+		return nil, &CodeNotTrackedError{Address: address}
+	}
 	state, _, err := api.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -577,6 +588,10 @@ func (api *BlockChainAPI) GetCode(ctx context.Context, address common.Address, b
 // block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
 // numbers are also allowed.
 func (api *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address, hexKey string, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+	// Check if storage is available for this contract in partial state mode
+	if api.b.PartialStateEnabled() && !api.b.IsContractTracked(address) {
+		return nil, &StorageNotTrackedError{Address: address}
+	}
 	state, _, err := api.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -766,6 +781,13 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if state == nil || err != nil {
 		return nil, err
 	}
+
+	// Set partial state filter if enabled - this causes GetState/GetCode to
+	// return an error (via state.Error()) when accessing untracked contracts
+	if b.PartialStateEnabled() {
+		state.SetPartialStateFilter(b.IsContractTracked)
+	}
+
 	return doCall(ctx, b, args, state, header, overrides, blockOverrides, timeout, globalGasCap)
 }
 
@@ -839,6 +861,13 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if state == nil || err != nil {
 		return 0, err
 	}
+
+	// Set partial state filter if enabled - this causes GetState/GetCode to
+	// return an error (via state.Error()) when accessing untracked contracts
+	if b.PartialStateEnabled() {
+		state.SetPartialStateFilter(b.IsContractTracked)
+	}
+
 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
 	if blockOverrides != nil {
 		if err := blockOverrides.Apply(&blockCtx); err != nil {

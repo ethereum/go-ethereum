@@ -307,6 +307,34 @@ var (
 		Value:    uint(ethconfig.Defaults.NodeFullValueCheckpoint),
 		Category: flags.StateCategory,
 	}
+	// Partial state flags (EIP-7928 BAL-based partial statefulness)
+	PartialStateFlag = &cli.BoolFlag{
+		Name:     "partial-state",
+		Usage:    "Enable partial state mode: sync all accounts but only storage for tracked contracts (requires EIP-7928 BAL)",
+		Category: flags.PartialStateCategory,
+	}
+	PartialStateContractsFlag = &cli.StringSliceFlag{
+		Name:     "partial-state.contracts",
+		Usage:    "Contract addresses to track full storage for (comma-separated hex, e.g. 0xC02a...,0xA0b8...)",
+		Category: flags.PartialStateCategory,
+	}
+	PartialStateContractsFileFlag = &cli.StringFlag{
+		Name:     "partial-state.contracts-file",
+		Usage:    `Path to JSON file listing contracts to track (format: {"version":1,"contracts":[{"address":"0x..."}]})`,
+		Category: flags.PartialStateCategory,
+	}
+	PartialStateBALRetentionFlag = &cli.Uint64Flag{
+		Name:     "partial-state.bal-retention",
+		Usage:    "Number of blocks to retain BAL history for reorg handling (minimum 256 for BLOCKHASH)",
+		Value:    ethconfig.Defaults.PartialState.BALRetention,
+		Category: flags.PartialStateCategory,
+	}
+	PartialStateChainRetentionFlag = &cli.Uint64Flag{
+		Name:     "partial-state.chain-retention",
+		Usage:    "Number of recent blocks to retain bodies and receipts for (default = ~3.4 hours, 0 = keep all)",
+		Value:    ethconfig.DefaultChainRetention,
+		Category: flags.PartialStateCategory,
+	}
 	TransactionHistoryFlag = &cli.Uint64Flag{
 		Name:     "history.transactions",
 		Usage:    "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)",
@@ -1745,6 +1773,30 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(StateSchemeFlag.Name) {
 		cfg.StateScheme = ctx.String(StateSchemeFlag.Name)
 	}
+	// Partial state configuration
+	if ctx.IsSet(PartialStateFlag.Name) {
+		cfg.PartialState.Enabled = ctx.Bool(PartialStateFlag.Name)
+	}
+	if ctx.IsSet(PartialStateContractsFlag.Name) {
+		for _, addr := range ctx.StringSlice(PartialStateContractsFlag.Name) {
+			cfg.PartialState.Contracts = append(cfg.PartialState.Contracts, common.HexToAddress(addr))
+		}
+	}
+	if ctx.IsSet(PartialStateContractsFileFlag.Name) {
+		cfg.PartialState.ContractsFile = ctx.String(PartialStateContractsFileFlag.Name)
+	}
+	if ctx.IsSet(PartialStateBALRetentionFlag.Name) {
+		cfg.PartialState.BALRetention = ctx.Uint64(PartialStateBALRetentionFlag.Name)
+	}
+	if ctx.IsSet(PartialStateChainRetentionFlag.Name) {
+		cfg.PartialState.ChainRetention = ctx.Uint64(PartialStateChainRetentionFlag.Name)
+	}
+	// Partial state nodes don't need snapshots — account data is read
+	// directly from the trie (which is small enough for fast lookups),
+	// and BAL-based block processing never uses snapshots.
+	if cfg.PartialState.Enabled {
+		cfg.SnapshotCache = 0
+	}
 	// Parse transaction history flag, if user is still using legacy config
 	// file with 'TxLookupLimit' configured, copy the value to 'TransactionHistory'.
 	if cfg.TransactionHistory == ethconfig.Defaults.TransactionHistory && cfg.TxLookupLimit != ethconfig.Defaults.TxLookupLimit {
@@ -1800,8 +1852,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.RangeLimit = ctx.Uint64(RPCGlobalRangeLimitFlag.Name)
 	}
 	if !ctx.Bool(SnapshotFlag.Name) || cfg.SnapshotCache == 0 {
-		// If snap-sync is requested, this flag is also required
-		if cfg.SyncMode == ethconfig.SnapSync {
+		// If snap-sync is requested, this flag is also required (unless
+		// partial state mode is active, which disables snapshots entirely).
+		if cfg.SyncMode == ethconfig.SnapSync && !cfg.PartialState.Enabled {
 			if !ctx.Bool(SnapshotFlag.Name) {
 				log.Warn("Snap sync requested, enabling --snapshot")
 			}

@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/partial"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
@@ -277,6 +278,21 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	options.Overrides = &overrides
 	options.BALExecutionMode = config.BALExecutionMode
 
+	// Wire partial state configuration into the blockchain.
+	// Load contracts from file FIRST, before wiring into blockchain, so both
+	// blockchain and downloader see the same contract list.
+	if config.PartialState.Enabled {
+		if err := config.PartialState.LoadPartialStateContracts(); err != nil {
+			return nil, fmt.Errorf("failed to load partial state contracts: %w", err)
+		}
+		options.PartialStateEnabled = true
+		options.PartialStateContracts = config.PartialState.Contracts
+		options.PartialStateBALRetention = config.PartialState.BALRetention
+		options.PartialStateChainRetention = config.PartialState.ChainRetention
+		options.SnapshotNoBuild = true
+		config.LogNoHistory = true // Partial state nodes have no receipts — disable log indexing
+	}
+
 	eth.blockchain, err = core.NewBlockChain(chainDb, config.Genesis, eth.engine, options)
 	if err != nil {
 		return nil, err
@@ -330,6 +346,17 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := options.TrieCleanLimit + options.TrieDirtyLimit + options.SnapshotLimit
+
+	// Create partial state filter if enabled (contracts already loaded above)
+	var partialFilter partial.ContractFilter
+	if config.PartialState.Enabled {
+		partialFilter = partial.NewConfiguredFilter(config.PartialState.Contracts)
+		log.Info("Partial state mode enabled",
+			"contracts", len(config.PartialState.Contracts),
+			"balRetention", config.PartialState.BALRetention,
+			"chainRetention", config.PartialState.ChainRetention)
+	}
+
 	if eth.handler, err = newHandler(&handlerConfig{
 		NodeID:         eth.p2pServer.Self().ID(),
 		Database:       chainDb,
@@ -340,8 +367,16 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		BloomCache:     uint64(cacheLimit),
 		EventMux:       eth.eventMux,
 		RequiredBlocks: config.RequiredBlocks,
+		PartialFilter:  partialFilter,
+		ChainRetention: config.PartialState.ChainRetention,
 	}); err != nil {
 		return nil, err
+	}
+
+	// Wire storage root resolver for partial state nodes.
+	// This lets BAL processing query peers for untracked contracts' storage roots.
+	if eth.blockchain.SupportsPartialState() {
+		eth.blockchain.PartialState().SetResolver(eth.ResolveStorageRoots)
 	}
 
 	eth.dropper = newDropper(eth.p2pServer.MaxDialedConns(), eth.p2pServer.MaxInboundConns())
@@ -431,11 +466,17 @@ func (s *Ethereum) Synced() bool                       { return s.handler.synced
 func (s *Ethereum) SetSynced()                         { s.handler.enableSyncedFeatures() }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
 
+// ResolveStorageRoots queries snap-capable peers for updated storage roots of
+// untracked contracts. Used by partial state nodes during BAL processing.
+func (s *Ethereum) ResolveStorageRoots(stateRoot common.Hash, addrs []common.Address, oldRoots map[common.Address]common.Hash) (map[common.Address]common.Hash, error) {
+	return s.handler.ResolveStorageRoots(stateRoot, addrs, oldRoots)
+}
+
 // Protocols returns all the currently configured
 // network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
 	protos := eth.MakeProtocols((*ethHandler)(s.handler), s.networkID, s.discmix)
-	if s.config.SnapshotCache > 0 {
+	if s.config.SnapshotCache > 0 || s.config.PartialState.Enabled {
 		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler))...)
 	}
 	return protos

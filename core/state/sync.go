@@ -26,6 +26,15 @@ import (
 
 // NewStateSync creates a new state trie download scheduler.
 func NewStateSync(root common.Hash, database ethdb.KeyValueReader, onLeaf func(keys [][]byte, leaf []byte) error, scheme string) *trie.Sync {
+	return NewPartialStateSync(root, database, onLeaf, scheme, nil, nil)
+}
+
+// NewPartialStateSync creates a state trie download scheduler with optional filtering.
+// The shouldSyncStorage callback, if non-nil, is called with the account hash to determine
+// whether to sync storage for that account. This enables partial statefulness where only
+// selected contracts have their storage synced.
+// The shouldSyncCode callback, if non-nil, is called to determine whether to sync bytecode.
+func NewPartialStateSync(root common.Hash, database ethdb.KeyValueReader, onLeaf func(keys [][]byte, leaf []byte) error, scheme string, shouldSyncStorage func(accountHash common.Hash) bool, shouldSyncCode func(accountHash common.Hash) bool) *trie.Sync {
 	// Register the storage slot callback if the external callback is specified.
 	var onSlot func(keys [][]byte, path []byte, leaf []byte, parent common.Hash, parentPath []byte) error
 	if onLeaf != nil {
@@ -46,8 +55,19 @@ func NewStateSync(root common.Hash, database ethdb.KeyValueReader, onLeaf func(k
 		if err := rlp.DecodeBytes(leaf, &obj); err != nil {
 			return err
 		}
-		syncer.AddSubTrie(obj.Root, path, parent, parentPath, onSlot)
-		syncer.AddCodeEntry(common.BytesToHash(obj.CodeHash), path, parent, parentPath)
+		// Extract account hash from the path (first key in keys slice)
+		var accountHash common.Hash
+		if len(keys) > 0 {
+			accountHash = common.BytesToHash(keys[0])
+		}
+		// Only add storage subtrie if filter allows it (or no filter is set)
+		if shouldSyncStorage == nil || shouldSyncStorage(accountHash) {
+			syncer.AddSubTrie(obj.Root, path, parent, parentPath, onSlot)
+		}
+		// Only add code entry if filter allows it (or no filter is set)
+		if shouldSyncCode == nil || shouldSyncCode(accountHash) {
+			syncer.AddCodeEntry(common.BytesToHash(obj.CodeHash), path, parent, parentPath)
+		}
 		return nil
 	}
 	syncer = trie.NewSync(root, database, onAccount, scheme)

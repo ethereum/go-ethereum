@@ -96,6 +96,11 @@ var (
 		utils.StateHistoryFlag,
 		utils.TrienodeHistoryFlag,
 		utils.TrienodeHistoryFullValueCheckpointFlag,
+		utils.PartialStateFlag,
+		utils.PartialStateContractsFlag,
+		utils.PartialStateContractsFileFlag,
+		utils.PartialStateBALRetentionFlag,
+		utils.PartialStateChainRetentionFlag,
 		utils.LightKDFFlag,
 		utils.EthRequiredBlocksFlag,
 		utils.LegacyWhitelistFlag, // deprecated
