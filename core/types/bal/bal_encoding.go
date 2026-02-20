@@ -246,10 +246,21 @@ type encodingSlotWrites struct {
 // validate returns an instance of the encoding-representation slot writes in
 // working representation.
 func (e *encodingSlotWrites) validate(blockTxCount int) error {
+	if e.Slot == nil {
+		return errors.New("nil slot key")
+	}
 	if !slices.IsSortedFunc(e.Accesses, func(a, b encodingStorageWrite) int {
 		return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
 	}) {
 		return errors.New("storage write tx indices not in order")
+	}
+	for i, access := range e.Accesses {
+		if access.ValueAfter == nil {
+			return errors.New("nil storage write post")
+		}
+		if i > 0 && e.Accesses[i-1].TxIdx == access.TxIdx {
+			return errors.New("duplicate storage write index")
+		}
 	}
 	// TODO: add test that covers there are actually storage modifications here
 	// if there aren't, it should be a bad block
@@ -328,6 +339,16 @@ func (e *AccountAccess) validate(blockTxCount int) error {
 	if len(e.BalanceChanges) > 0 && int(e.BalanceChanges[len(e.BalanceChanges)-1].TxIdx) > blockTxCount+2 {
 		return errors.New("highest balance change index beyond what is allowed")
 	}
+	// check that the balance values are set and there are no duplicate index entries
+	for i, balanceChange := range e.BalanceChanges {
+		if balanceChange.Balance == nil {
+			return errors.New("nil balance change value")
+		}
+		if i > 0 && e.BalanceChanges[i-1].TxIdx == balanceChange.TxIdx {
+			return errors.New("duplicate index for balance change")
+		}
+	}
+
 	// Check the nonce changes are sorted in order
 	// and that none of them report an index above what is allowed
 	if !slices.IsSortedFunc(e.NonceChanges, func(a, b encodingAccountNonce) int {
@@ -335,8 +356,13 @@ func (e *AccountAccess) validate(blockTxCount int) error {
 	}) {
 		return errors.New("nonce changes not in ascending order by tx index")
 	}
-	if len(e.CodeChanges) > 0 && int(e.NonceChanges[len(e.NonceChanges)-1].TxIdx) >= blockTxCount+2 {
+	if len(e.NonceChanges) > 0 && int(e.NonceChanges[len(e.NonceChanges)-1].TxIdx) >= blockTxCount+2 {
 		return errors.New("highest nonce change index beyond what is allowed")
+	}
+	for i, nonceChange := range e.NonceChanges {
+		if i > 0 && nonceChange.TxIdx == e.NonceChanges[i-1].TxIdx {
+			return errors.New("duplicate index reported in nonce changes")
+		}
 	}
 
 	// TODO: contact testing team to add a test case which has the code changes out of order,
@@ -348,6 +374,11 @@ func (e *AccountAccess) validate(blockTxCount int) error {
 	}
 	if len(e.CodeChanges) > 0 && int(e.CodeChanges[len(e.CodeChanges)-1].TxIdx) >= blockTxCount+2 {
 		return errors.New("highest code change index beyond what is allowed")
+	}
+	for i, codeChange := range e.CodeChanges {
+		if i > 0 && codeChange.TxIdx == e.CodeChanges[i-1].TxIdx {
+			return errors.New("duplicate index reported in code changes")
+		}
 	}
 
 	// validate that code changes could plausibly be correct (none exceed
