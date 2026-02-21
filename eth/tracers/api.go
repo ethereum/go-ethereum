@@ -994,7 +994,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	if msg.GasPrice.Sign() == 0 {
 		blockContext.BaseFee = new(big.Int)
 	}
-	if msg.BlobGasFeeCap != nil && msg.BlobGasFeeCap.BitLen() == 0 {
+	if !msg.BlobGasFeeCap.IsZero() && msg.BlobGasFeeCap.BitLen() == 0 {
 		blockContext.BlobBaseFee = new(big.Int)
 	}
 	if config != nil {
