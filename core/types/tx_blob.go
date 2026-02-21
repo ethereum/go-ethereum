@@ -127,8 +127,9 @@ func (sc *BlobTxSidecar) ToV1() error {
 		}
 		sc.Version = BlobSidecarVersion1
 		sc.Proofs = proofs
+		return nil
 	}
-	return nil
+	return fmt.Errorf("unsupported blob sidecar version %d", sc.Version)
 }
 
 // encodedSize computes the RLP size of the sidecar elements. This does NOT return the
