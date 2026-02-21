@@ -263,7 +263,7 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	if header.ParentBeaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, env.evm)
 	}
-	if miner.chainConfig.IsPrague(header.Number, header.Time) {
+	if miner.chainConfig.IsPrague(header.Number, header.Time) || miner.chainConfig.IsVerkle(header.Number, header.Time) {
 		core.ProcessParentBlockHash(header.ParentHash, env.evm)
 	}
 	return env, nil
