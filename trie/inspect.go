@@ -56,7 +56,6 @@ type inspector struct {
 	accountStat *LevelStats
 
 	sem *semaphore.Weighted
-	wg  sync.WaitGroup
 
 	// Pass 1: dump file writer.
 	dumpMu   sync.Mutex
@@ -103,7 +102,9 @@ func Inspect(triedb database.NodeDatabase, root common.Hash, config *InspectConf
 
 	in.recordRootSize(trie, root, in.accountStat)
 	in.inspect(trie, trie.root, 0, []byte{}, in.accountStat)
-	in.wg.Wait()
+
+	// inspect is synchronous: it waits for all spawned goroutines in its
+	// subtree before returning, so no additional wait is needed here.
 
 	// Persist account trie stats as the sentinel record.
 	in.writeDumpRecord(common.Hash{}, in.accountStat)
@@ -179,14 +180,18 @@ func (in *inspector) hasError() bool {
 	return in.getError() != nil
 }
 
-func (in *inspector) spawn(fn func()) bool {
+// trySpawn attempts to run fn in a new goroutine, bounded by the semaphore.
+// If a slot is available the goroutine is started and tracked via wg; the
+// caller must call wg.Wait() before reading any state written by fn.
+// Returns false (and does not start a goroutine) when no slot is available.
+func (in *inspector) trySpawn(wg *sync.WaitGroup, fn func()) bool {
 	if !in.sem.TryAcquire(1) {
 		return false
 	}
-	in.wg.Add(1)
+	wg.Add(1)
 	go func() {
 		defer in.sem.Release(1)
-		defer in.wg.Done()
+		defer wg.Done()
 		fn()
 	}()
 	return true
@@ -218,12 +223,19 @@ func (in *inspector) writeDumpRecord(owner common.Hash, s *LevelStats) {
 	}
 }
 
-// inspect is called recursively down the trie. At each level it records the
-// node type encountered.
+// inspect walks the trie rooted at n and records node statistics into stat.
+// It may spawn goroutines for subtrees, but always waits for them before
+// returning — the caller sees a fully-populated stat when inspect returns.
 func (in *inspector) inspect(trie *Trie, n node, height uint32, path []byte, stat *LevelStats) {
 	if n == nil {
 		return
 	}
+
+	// wg tracks goroutines spawned by this call so we can wait for them
+	// before returning. This guarantees stat is complete when we return,
+	// which is critical for storage tries that write their dump record
+	// immediately after inspect returns.
+	var wg sync.WaitGroup
 
 	// Four types of nodes can be encountered:
 	// - short: extend path with key, inspect single value.
@@ -241,7 +253,7 @@ func (in *inspector) inspect(trie *Trie, n node, height uint32, path []byte, sta
 			}
 			childPath := slices.Concat(path, []byte{byte(idx)})
 			childNode := child
-			if in.spawn(func() {
+			if in.trySpawn(&wg, func() {
 				in.inspect(trie, childNode, height+1, childPath, stat)
 			}) {
 				continue
@@ -287,7 +299,7 @@ func (in *inspector) inspect(trie *Trie, n node, height uint32, path []byte, sta
 				in.inspect(storage, storage.root, 0, []byte{}, storageStat)
 				in.writeDumpRecord(owner, storageStat)
 			}
-			if in.spawn(run) {
+			if in.trySpawn(&wg, run) {
 				break
 			}
 			run()
@@ -295,6 +307,11 @@ func (in *inspector) inspect(trie *Trie, n node, height uint32, path []byte, sta
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
 	}
+
+	// Wait for all goroutines spawned at this level before recording
+	// the current node. This ensures the entire subtree is counted
+	// before this call returns.
+	wg.Wait()
 
 	// Record stats for current height.
 	stat.add(n, height)
