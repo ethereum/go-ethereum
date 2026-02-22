@@ -109,7 +109,9 @@ func setDefaults(cfg *Config) {
 	if cfg.BlobBaseFee == nil {
 		cfg.BlobBaseFee = big.NewInt(params.BlobTxMinBlobGasprice)
 	}
-	cfg.Random = &(common.Hash{})
+	if cfg.Random == nil {
+		cfg.Random = new(common.Hash)
+	}
 }
 
 // Execute executes the code using the input as call data during the execution.
