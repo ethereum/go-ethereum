@@ -237,7 +237,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			resp := h.handleCallMsg(cp, msg)
 			callBuffer.pushResponse(resp)
 			if resp != nil && h.batchResponseMaxSize != 0 {
-				responseBytes += len(resp.Result)
+				responseBytes += resp.encodedSize()
 				if responseBytes > h.batchResponseMaxSize {
 					err := &internalServerError{errcodeResponseTooLarge, errMsgResponseTooLarge}
 					callBuffer.respondWithError(cp.ctx, h.conn, err)
@@ -673,6 +673,12 @@ func (buf *limitedBuffer) Write(data []byte) (int, error) {
 }
 
 func formatErrorData(v any) string {
+	if raw, ok := v.(json.RawMessage); ok {
+		if len(raw) <= 1024 {
+			return string(raw)
+		}
+		return string(raw[:1024]) + "... (truncated)"
+	}
 	buf := limitedBuffer{limit: 1024}
 	err := json.NewEncoder(&buf).Encode(v)
 	switch {

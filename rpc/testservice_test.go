@@ -128,6 +128,19 @@ func (s *testService) ReturnError() error {
 	return testError{}
 }
 
+// largeDataError is used by tests to trigger error responses with large error data.
+type largeDataError struct {
+	Data string
+}
+
+func (l largeDataError) Error() string          { return "largeDataError" }
+func (l largeDataError) ErrorCode() int         { return 555 }
+func (l largeDataError) ErrorData() interface{} { return l.Data }
+
+func (s *testService) ReturnLargeDataError(n int) error {
+	return largeDataError{Data: strings.Repeat("x", n)}
+}
+
 func (s *testService) MarshalError() *MarshalErrObj {
 	return &MarshalErrObj{}
 }

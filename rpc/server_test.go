@@ -53,9 +53,9 @@ func TestServerRegisterName(t *testing.T) {
 		t.Fatalf("Expected service %s to be registered", svcName)
 	}
 
-	wantCallbacks := 14
+	wantCallbacks := 15 // testService methods including ReturnLargeDataError
 	if len(svc.callbacks) != wantCallbacks {
-		t.Errorf("Expected %d callbacks for service 'service', got %d", wantCallbacks, len(svc.callbacks))
+		t.Errorf("Expected %d callbacks for service %q, got %d", wantCallbacks, svcName, len(svc.callbacks))
 	}
 }
 
@@ -173,7 +173,9 @@ func TestServerBatchResponseSizeLimit(t *testing.T) {
 
 	server := newTestServer()
 	defer server.Stop()
-	server.SetBatchLimits(100, 60)
+	// Limit counts full response size (success: jsonrpc+id+result). Each echo response ~65 bytes.
+	// Use limit so two responses exceed it (break when responseBytes > limit).
+	server.SetBatchLimits(100, 129)
 	var (
 		batch  []BatchElem
 		client = DialInProc(server)
@@ -205,6 +207,45 @@ func TestServerBatchResponseSizeLimit(t *testing.T) {
 		if re.ErrorCode() != wantedCode {
 			t.Errorf("batch elem %d wrong error code, have %d want %d", i, re.ErrorCode(), wantedCode)
 		}
+	}
+}
+
+// TestServerBatchResponseSizeLimitCountsErrorResponses verifies that error responses
+// (including large error.data) count toward the batch response size limit, and that
+// -32003 (response too large) is returned for subsequent items once the limit is exceeded.
+func TestServerBatchResponseSizeLimitCountsErrorResponses(t *testing.T) {
+	t.Parallel()
+
+	server := newTestServer()
+	defer server.Stop()
+	// Each error response from test_returnLargeDataError(60) is ~150 bytes (error envelope + 60-char data).
+	// Set limit so that one error response fits but two exceed it.
+	server.SetBatchLimits(100, 160)
+
+	client := DialInProc(server)
+	batch := []BatchElem{
+		{Method: "test_returnLargeDataError", Args: []any{60}, Result: new(any)},
+		{Method: "test_returnLargeDataError", Args: []any{60}, Result: new(any)},
+		{Method: "test_returnLargeDataError", Args: []any{60}, Result: new(any)},
+	}
+	if err := client.BatchCall(batch); err != nil {
+		t.Fatal("batch call error:", err)
+	}
+
+	// First batch element(s) get the method error (largeDataError); rest get -32003 (response too large).
+	var gotResponseTooLarge int
+	for i := range batch {
+		e := batch[i].Error
+		if e == nil {
+			t.Fatalf("batch elem %d: expected error (method returns error), got nil", i)
+		}
+		if re, ok := e.(Error); ok && re.ErrorCode() == errcodeResponseTooLarge {
+			gotResponseTooLarge++
+		}
+	}
+	// We expect at least one -32003 (response too large) because error responses count toward the limit.
+	if gotResponseTooLarge < 1 {
+		t.Errorf("expected at least one batch elem with -32003 (response too large), got %d; error responses should count toward batch size limit", gotResponseTooLarge)
 	}
 }
 
