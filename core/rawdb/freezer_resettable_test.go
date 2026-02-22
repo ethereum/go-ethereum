@@ -19,6 +19,7 @@ package rawdb
 import (
 	"bytes"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -103,5 +104,52 @@ func TestFreezerCleanup(t *testing.T) {
 
 	if _, err := os.Lstat(tmpName(datadir)); !os.IsNotExist(err) {
 		t.Fatal("Failed to cleanup leftover directory")
+	}
+}
+
+func TestResettableFreezerWriteReadConcurrency(t *testing.T) {
+	f, _ := newResettableFreezer(t.TempDir(), "", false, 2048, freezerTestTableDef)
+	defer f.Close()
+
+	for i := uint64(0); i < 50; i++ {
+		f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+			return op.AppendRaw("test", i, bytes.Repeat([]byte{byte(i)}, 100))
+		})
+	}
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, 2)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := uint64(0); i < 100; i++ {
+			_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+				return op.AppendRaw("test", 50+i, bytes.Repeat([]byte{byte(i)}, 100))
+			})
+			if err != nil {
+				errCh <- err
+				return
+			}
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := uint64(0); i < 1000; i++ {
+			f.Ancient("test", i%50)
+			f.Ancients()
+			f.Tail()
+		}
+	}()
+
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("Concurrent write/read operation failed: %v", err)
+		}
 	}
 }
