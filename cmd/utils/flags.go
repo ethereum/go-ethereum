@@ -218,6 +218,16 @@ var (
 		Usage: "Max number of elements (0 = no limit)",
 		Value: 0,
 	}
+	TopFlag = &cli.IntFlag{
+		Name:  "top",
+		Usage: "Print the top N results",
+		Value: 5,
+	}
+	OutputFileFlag = &cli.StringFlag{
+		Name:  "output",
+		Usage: "Writes the result in json to the output",
+		Value: "",
+	}
 
 	SnapshotFlag = &cli.BoolFlag{
 		Name:     "snapshot",
