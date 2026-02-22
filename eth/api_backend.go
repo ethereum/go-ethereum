@@ -405,7 +405,7 @@ func (b *EthAPIBackend) TxPool() *txpool.TxPool {
 }
 
 func (b *EthAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	return b.eth.txPool.SubscribeTransactions(ch, true)
+	return b.eth.txPool.SubscribeTransactions(ch)
 }
 
 func (b *EthAPIBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress {

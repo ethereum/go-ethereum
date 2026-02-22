@@ -133,12 +133,14 @@ type blobTxMeta struct {
 	evictionExecTip      *uint256.Int // Worst gas tip across all previous nonces
 	evictionExecFeeJumps float64      // Worst base fee (converted to fee jumps) across all previous nonces
 	evictionBlobFeeJumps float64      // Worse blob fee (converted to fee jumps) across all previous nonces
+
+	sender common.Address // Sender of the transaction
 }
 
 // newBlobTxMeta retrieves the indexed metadata fields from a blob transaction
 // and assembles a helper struct to track in memory.
 // Requires the transaction to have a sidecar (or that we introduce a special version tag for no-sidecar).
-func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transaction) *blobTxMeta {
+func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transaction, sender common.Address) *blobTxMeta {
 	if tx.BlobTxSidecar() == nil {
 		// This should never happen, as the pool only admits blob transactions with a sidecar
 		panic("missing blob tx sidecar")
@@ -157,6 +159,7 @@ func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transac
 		blobFeeCap:  uint256.MustFromBig(tx.BlobGasFeeCap()),
 		execGas:     tx.Gas(),
 		blobGas:     tx.BlobGas(),
+		sender:      sender,
 	}
 	meta.basefeeJumps = dynamicFeeJumps(meta.execFeeCap)
 	meta.blobfeeJumps = dynamicFeeJumps(meta.blobFeeCap)
@@ -531,8 +534,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 		return errors.New("missing blob sidecar")
 	}
 
-	meta := newBlobTxMeta(id, tx.Size(), size, tx)
-	if p.lookup.exists(meta.hash) {
+	if p.lookup.exists(tx.Hash()) {
 		// This path is only possible after a crash, where deleted items are not
 		// removed via the normal shutdown-startup procedure and thus may get
 		// partially resurrected.
@@ -547,6 +549,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 		log.Error("Failed to recover blob tx sender", "id", id, "hash", tx.Hash(), "err", err)
 		return err
 	}
+	meta := newBlobTxMeta(id, tx.Size(), size, tx, sender)
 	if _, ok := p.index[sender]; !ok {
 		if err := p.reserver.Hold(sender); err != nil {
 			return err
@@ -1070,8 +1073,13 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 		return err
 	}
 
+	sender, err := types.Sender(p.signer, tx)
+	if err != nil {
+		return err
+	}
+
 	// Update the indices and metrics
-	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), tx)
+	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), tx, sender)
 	if _, ok := p.index[addr]; !ok {
 		if err := p.reserver.Hold(addr); err != nil {
 			log.Warn("Failed to reserve account for blob pool", "tx", tx.Hash(), "from", addr, "err", err)
@@ -1360,9 +1368,15 @@ func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 	if !ok {
 		return nil
 	}
+
+	sender, ok := p.lookup.senderOfTx(hash)
+	if !ok {
+		return nil
+	}
 	return &txpool.TxMetadata{
-		Type: types.BlobTxType,
-		Size: size,
+		Type:   types.BlobTxType,
+		Size:   size,
+		Sender: sender,
 	}
 }
 
@@ -1582,7 +1596,13 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 	if err != nil {
 		return err
 	}
-	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), tx)
+
+	sender, err := types.Sender(p.signer, tx)
+	if err != nil {
+		return err
+	}
+
+	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), tx, sender)
 
 	var (
 		next   = p.state.GetNonce(from)
@@ -1679,7 +1699,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 	addValidMeter.Mark(1)
 
 	// Notify all listeners of the new arrival
-	p.discoverFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
+	p.discoverFeed.Send(core.NewTxHashesEventFromTxs([]*types.Transaction{tx.WithoutBlobTxSidecar()}))
 	p.insertFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
 
 	//check the gapped queue for this account and try to promote
@@ -1939,12 +1959,13 @@ func (p *BlobPool) updateLimboMetrics() {
 
 // SubscribeTransactions registers a subscription for new transaction events,
 // supporting feeding only newly seen or also resurrected transactions.
-func (p *BlobPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
-	if reorgs {
-		return p.insertFeed.Subscribe(ch)
-	} else {
-		return p.discoverFeed.Subscribe(ch)
-	}
+func (p *BlobPool) SubscribeTransactions(ch chan<- core.NewTxsEvent) event.Subscription {
+	return p.insertFeed.Subscribe(ch)
+}
+
+// TODO: comment
+func (p *BlobPool) SubscribePropagationHashes(ch chan<- core.NewTxHashesEvent) event.Subscription {
+	return p.discoverFeed.Subscribe(ch)
 }
 
 // Nonce returns the next nonce of an account, with all transactions executable

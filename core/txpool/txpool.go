@@ -371,10 +371,18 @@ func (p *TxPool) Pending(filter PendingFilter) map[common.Address][]*LazyTransac
 
 // SubscribeTransactions registers a subscription for new transaction events,
 // supporting feeding only newly seen or also resurrected transactions.
-func (p *TxPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
+func (p *TxPool) SubscribeTransactions(ch chan<- core.NewTxsEvent) event.Subscription {
 	subs := make([]event.Subscription, len(p.subpools))
 	for i, subpool := range p.subpools {
-		subs[i] = subpool.SubscribeTransactions(ch, reorgs)
+		subs[i] = subpool.SubscribeTransactions(ch)
+	}
+	return p.subs.Track(event.JoinSubscriptions(subs...))
+}
+
+func (p *TxPool) SubscribePropagationHashes(ch chan<- core.NewTxHashesEvent) event.Subscription {
+	subs := make([]event.Subscription, len(p.subpools))
+	for i, subpool := range p.subpools {
+		subs[i] = subpool.SubscribePropagationHashes(ch)
 	}
 	return p.subs.Track(event.JoinSubscriptions(subs...))
 }

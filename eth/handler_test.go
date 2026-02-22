@@ -56,8 +56,9 @@ var (
 type testTxPool struct {
 	pool map[common.Hash]*types.Transaction // Hash map of collected transactions
 
-	txFeed event.Feed   // Notification feed to allow waiting for inclusion
-	lock   sync.RWMutex // Protects the transaction pool
+	txFeed   event.Feed // Notification feed to allow waiting for inclusion
+	hashFeed event.Feed
+	lock     sync.RWMutex // Protects the transaction pool
 }
 
 // newTestTxPool creates a mock transaction pool.
@@ -124,6 +125,7 @@ func (p *testTxPool) Add(txs []*types.Transaction, sync bool) []error {
 		p.pool[tx.Hash()] = tx
 	}
 	p.txFeed.Send(core.NewTxsEvent{Txs: txs})
+	p.hashFeed.Send(core.NewTxHashesEventFromTxs(txs))
 	return make([]error, len(txs))
 }
 
@@ -159,8 +161,12 @@ func (p *testTxPool) Pending(filter txpool.PendingFilter) map[common.Address][]*
 
 // SubscribeTransactions should return an event subscription of NewTxsEvent and
 // send events to the given channel.
-func (p *testTxPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
+func (p *testTxPool) SubscribeTransactions(ch chan<- core.NewTxsEvent) event.Subscription {
 	return p.txFeed.Subscribe(ch)
+}
+
+func (p *testTxPool) SubscribePropagationHashes(ch chan<- core.NewTxHashesEvent) event.Subscription {
+	return p.hashFeed.Subscribe(ch)
 }
 
 // FilterType should check whether the pool supports the given type of transactions.

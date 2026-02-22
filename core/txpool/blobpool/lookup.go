@@ -21,8 +21,9 @@ import (
 )
 
 type txMetadata struct {
-	id   uint64 // the billy id of transction
-	size uint64 // the RLP encoded size of transaction (blobs are included)
+	id     uint64 // the billy id of transction
+	size   uint64 // the RLP encoded size of transaction (blobs are included)
+	sender common.Address
 }
 
 // lookup maps blob versioned hashes to transaction hashes that include them,
@@ -79,6 +80,15 @@ func (l *lookup) sizeOfTx(txhash common.Hash) (uint64, bool) {
 	return meta.size, true
 }
 
+// senderOfTx returns sender of transaction
+func (l *lookup) senderOfTx(txhash common.Hash) (common.Address, bool) {
+	meta, ok := l.txIndex[txhash]
+	if !ok {
+		return common.Address{}, false
+	}
+	return meta.sender, true
+}
+
 // track inserts a new set of mappings from blob versioned hashes to transaction
 // hashes; and from transaction hashes to datastore storage item ids.
 func (l *lookup) track(tx *blobTxMeta) {
@@ -91,8 +101,9 @@ func (l *lookup) track(tx *blobTxMeta) {
 	}
 	// Map the transaction hash to the datastore id and RLP-encoded transaction size
 	l.txIndex[tx.hash] = &txMetadata{
-		id:   tx.id,
-		size: tx.size,
+		id:     tx.id,
+		size:   tx.size,
+		sender: tx.sender,
 	}
 }
 

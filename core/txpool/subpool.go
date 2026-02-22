@@ -86,8 +86,11 @@ type PendingFilter struct {
 
 // TxMetadata denotes the metadata of a transaction.
 type TxMetadata struct {
-	Type uint8  // The type of the transaction
-	Size uint64 // The length of the 'rlp encoding' of a transaction
+	Type   uint8          // The type of the transaction
+	Size   uint64         // The length of the 'rlp encoding' of a transaction
+	Sender common.Address // The sender of the transaction.
+	//TODO: This is only for the broadcast decision. can we use something else for this ?
+	//TODO: Legacypool would have to resolve this every time GetMetadata() is called.
 }
 
 // SubPool represents a specialized transaction pool that lives on its own (e.g.
@@ -157,9 +160,13 @@ type SubPool interface {
 	Pending(filter PendingFilter) map[common.Address][]*LazyTransaction
 
 	// SubscribeTransactions subscribes to new transaction events. The subscriber
-	// can decide whether to receive notifications only for newly seen transactions
-	// or also for reorged out ones.
-	SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription
+	// would receive only newly seen transactions.
+	SubscribeTransactions(ch chan<- core.NewTxsEvent) event.Subscription
+
+	// SubscribePropagationHashes subscribes to transaction hashes events, especially
+	// the ones to be propagated. This includes newly seen transactions and reorged
+	// transactions.
+	SubscribePropagationHashes(ch chan<- core.NewTxHashesEvent) event.Subscription
 
 	// Nonce returns the next nonce of an account, with all transactions executable
 	// by the pool already applied on top.
