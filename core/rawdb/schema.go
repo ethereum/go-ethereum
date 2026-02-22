@@ -186,17 +186,30 @@ func encodeBlockNumber(number uint64) []byte {
 
 // headerKeyPrefix = headerPrefix + num (uint64 big endian)
 func headerKeyPrefix(number uint64) []byte {
-	return append(headerPrefix, encodeBlockNumber(number)...)
+	buf := make([]byte, len(headerPrefix)+8)
+	copy(buf, headerPrefix)
+	binary.BigEndian.PutUint64(buf[len(headerPrefix):], number)
+	return buf
 }
 
 // headerKey = headerPrefix + num (uint64 big endian) + hash
 func headerKey(number uint64, hash common.Hash) []byte {
-	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+	buf := make([]byte, len(headerPrefix)+8+common.HashLength)
+	n := copy(buf, headerPrefix)
+	binary.BigEndian.PutUint64(buf[n:], number)
+	n += 8
+	copy(buf[n:], hash.Bytes())
+	return buf
 }
 
 // headerHashKey = headerPrefix + num (uint64 big endian) + headerHashSuffix
 func headerHashKey(number uint64) []byte {
-	return append(append(headerPrefix, encodeBlockNumber(number)...), headerHashSuffix...)
+	buf := make([]byte, len(headerPrefix)+8+len(headerHashSuffix))
+	n := copy(buf, headerPrefix)
+	binary.BigEndian.PutUint64(buf[n:], number)
+	n += 8
+	copy(buf[n:], headerHashSuffix)
+	return buf
 }
 
 // headerNumberKey = headerNumberPrefix + hash
@@ -206,12 +219,22 @@ func headerNumberKey(hash common.Hash) []byte {
 
 // blockBodyKey = blockBodyPrefix + num (uint64 big endian) + hash
 func blockBodyKey(number uint64, hash common.Hash) []byte {
-	return append(append(blockBodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+	buf := make([]byte, len(blockBodyPrefix)+8+common.HashLength)
+	n := copy(buf, blockBodyPrefix)
+	binary.BigEndian.PutUint64(buf[n:], number)
+	n += 8
+	copy(buf[n:], hash.Bytes())
+	return buf
 }
 
 // blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
 func blockReceiptsKey(number uint64, hash common.Hash) []byte {
-	return append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+	buf := make([]byte, len(blockReceiptsPrefix)+8+common.HashLength)
+	n := copy(buf, blockReceiptsPrefix)
+	binary.BigEndian.PutUint64(buf[n:], number)
+	n += 8
+	copy(buf[n:], hash.Bytes())
+	return buf
 }
 
 // txLookupKey = txLookupPrefix + hash
@@ -240,7 +263,10 @@ func storageSnapshotsKey(accountHash common.Hash) []byte {
 
 // skeletonHeaderKey = skeletonHeaderPrefix + num (uint64 big endian)
 func skeletonHeaderKey(number uint64) []byte {
-	return append(skeletonHeaderPrefix, encodeBlockNumber(number)...)
+	buf := make([]byte, len(skeletonHeaderPrefix)+8)
+	copy(buf, skeletonHeaderPrefix)
+	binary.BigEndian.PutUint64(buf[len(skeletonHeaderPrefix):], number)
+	return buf
 }
 
 // preimageKey = PreimagePrefix + hash
