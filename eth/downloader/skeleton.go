@@ -872,8 +872,14 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 
 		case headers[0].Number.Uint64() != req.head:
 			// Header batch anchored at non-requested number
-			peer.log.Debug("Invalid header response head", "have", headers[0].Number, "want", req.head)
-			res.Done <- errors.New("invalid header batch anchor")
+			if peerHeader := headers[0].Number.Uint64(); peerHeader > req.head {
+				peer.log.Debug("Invalid header response head", "have", peerHeader, "want", req.head)
+				res.Done <- errors.New("invalid header batch anchor")
+			} else {
+				peer.log.Debug("Peer behind requested head, rescheduling", "have", peerHeader, "want", req.head)
+				// Do not penalize the peer if it is behind our requested head
+				res.Done <- nil
+			}
 			s.scheduleRevertRequest(req)
 
 		case req.head >= requestHeaders && len(headers) != requestHeaders:
