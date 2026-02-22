@@ -466,21 +466,6 @@ func (d *Database) NewBatchWithSize(size int) ethdb.Batch {
 	}
 }
 
-// upperBound returns the upper bound for the given prefix
-func upperBound(prefix []byte) (limit []byte) {
-	for i := len(prefix) - 1; i >= 0; i-- {
-		c := prefix[i]
-		if c == 0xff {
-			continue
-		}
-		limit = make([]byte, i+1)
-		copy(limit, prefix)
-		limit[i] = c + 1
-		break
-	}
-	return limit
-}
-
 // Stat returns the internal metrics of Pebble in a text format. It's a developer
 // method to read everything there is to read, independent of Pebble version.
 func (d *Database) Stat() (string, error) {
@@ -747,7 +732,7 @@ type pebbleIterator struct {
 func (d *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	iter, _ := d.db.NewIter(&pebble.IterOptions{
 		LowerBound: append(prefix, start...),
-		UpperBound: upperBound(prefix),
+		UpperBound: common.UpperBound(prefix),
 	})
 	iter.First()
 	return &pebbleIterator{iter: iter, moved: true, released: false}
