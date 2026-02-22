@@ -57,3 +57,7 @@ cmd/geth/geth
 cmd/rlpdump/rlpdump
 cmd/workload/workload
 cmd/keeper/keeper
+
+geth
+cmd/keeper/keeper-zisk
+keeper-zisk.elf

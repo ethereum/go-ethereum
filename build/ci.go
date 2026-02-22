@@ -123,6 +123,34 @@ var (
 			Name: "example",
 			Tags: "example",
 		},
+		{
+			Name: "example-evmone",
+			Tags: "example,evmone",
+		},
+		{
+			Name:   "ziren-evmone",
+			GOOS:   "linux",
+			GOARCH: "mipsle",
+			CC:     "mipsel-linux-gnu-gcc",
+			Tags:   "ziren,evmone",
+			Env:    map[string]string{"GOMIPS": "softfloat", "CGO_ENABLED": "1"},
+		},
+		{
+			// WASM targets cannot use CGO, so evmone falls back to Go interpreter.
+			// The evmone tag is included for uniformity with other evmone targets.
+			Name:   "wasm-js-evmone",
+			GOOS:   "js",
+			GOARCH: "wasm",
+			Tags:   "example,evmone",
+		},
+		{
+			// WASM targets cannot use CGO, so evmone falls back to Go interpreter.
+			// The evmone tag is included for uniformity with other evmone targets.
+			Name:   "wasm-wasi-evmone",
+			GOOS:   "wasip1",
+			GOARCH: "wasm",
+			Tags:   "example,evmone",
+		},
 	}
 
 	// A debian package is created for all executables listed here.
@@ -286,6 +314,28 @@ func doInstallKeeper(cmdline []string) {
 	if *dlgo {
 		csdb := download.MustLoadChecksums("build/checksums.txt")
 		tc.Root = build.DownloadGo(csdb)
+	}
+
+	// Pre-build evmone static libraries for targets that need them.
+	builtEvmone := make(map[string]bool)
+	for _, target := range keeperTargets {
+		if !strings.Contains(target.Tags, "evmone") {
+			continue
+		}
+		// Skip targets where CGO is disabled or unavailable.
+		if target.GOARCH == "wasm" || target.Env["CGO_ENABLED"] == "0" {
+			continue
+		}
+		evmoneTarget := "native"
+		if target.GOARCH != "" {
+			evmoneTarget = target.GOARCH
+		}
+		if builtEvmone[evmoneTarget] {
+			continue
+		}
+		log.Printf("Building evmone library for %s", evmoneTarget)
+		build.MustRun(exec.Command("./evmone/build.sh", evmoneTarget))
+		builtEvmone[evmoneTarget] = true
 	}
 
 	for _, target := range keeperTargets {

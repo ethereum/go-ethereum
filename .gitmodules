@@ -6,3 +6,6 @@
 	path = tests/evm-benchmarks
 	url = https://github.com/ipsilon/evm-benchmarks
 	shallow = true
+[submodule "evmone"]
+	path = evmone
+	url = https://github.com/ethereum/evmone
