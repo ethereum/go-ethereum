@@ -61,7 +61,8 @@ func DecodeTxLookupEntry(data []byte, db ethdb.Reader) *uint64 {
 func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
 	data, _ := db.Get(txLookupKey(hash))
 	if len(data) == 0 {
-		return nil
+		// Fallback: check era-derived index
+		return ReadEraTxLookupEntry(db, hash)
 	}
 	return DecodeTxLookupEntry(data, db)
 }
@@ -131,6 +132,44 @@ func DeleteAllTxLookupEntries(db ethdb.KeyValueStore, condition func(common.Hash
 			log.Crit("Failed to delete transaction lookup entries", "err", err)
 		}
 		batch.Reset()
+	}
+}
+
+// ReadEraTxLookupEntry retrieves the positional metadata associated with a transaction
+// hash from the era1-derived index.
+func ReadEraTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
+	data, _ := db.Get(eraTxLookupKey(hash))
+	if len(data) == 0 {
+		return nil
+	}
+	return DecodeTxLookupEntry(data, db)
+}
+
+// WriteEraTxLookupEntries stores positional metadata for transactions from era1 files,
+// enabling hash based transaction and receipt lookups for pruned history.
+func WriteEraTxLookupEntries(db ethdb.KeyValueWriter, number uint64, hashes []common.Hash) {
+	numberBytes := new(big.Int).SetUint64(number).Bytes()
+	for _, hash := range hashes {
+		if err := db.Put(eraTxLookupKey(hash), numberBytes); err != nil {
+			log.Crit("Failed to store era1 transaction lookup entry", "err", err)
+		}
+	}
+}
+
+// ReadEraIndexTail retrieves the last fully indexed era1 epoch.
+func ReadEraIndexTail(db ethdb.Reader) *uint64 {
+	data, _ := db.Get(eraIndexTailKey)
+	if len(data) == 0 {
+		return nil
+	}
+	epoch := binary.BigEndian.Uint64(data)
+	return &epoch
+}
+
+// WriteEraIndexTail stores the last fully indexed era1 epoch.
+func WriteEraIndexTail(db ethdb.KeyValueWriter, epoch uint64) {
+	if err := db.Put(eraIndexTailKey, encodeBlockNumber(epoch)); err != nil {
+		log.Crit("Failed to store era1 index tail", "err", err)
 	}
 }
 
