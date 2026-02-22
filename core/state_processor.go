@@ -89,6 +89,22 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	context = NewEVMBlockContext(header, p.chain, nil)
 	evm := vm.NewEVM(context, tracingStateDB, config, cfg)
 
+	if config.IsVerkle(header.Number, header.Time) {
+		// Bootstrap part deux: initialize the base root in the registry,
+		// as this is the first UBT block (which is the _second_ block of
+		// the transition, after the bootstrapping block that initializes
+		// the registry).
+		parentHeader := p.chain.GetHeaderByHash(block.ParentHash())
+		// Confusingly, the first IsVerkle block isn't "verkle"
+		if config.IsVerkle(parentHeader.Number, parentHeader.Time) {
+			// Store the parent's state root as the MPT base root for the
+			// binary trie transition. Only written once (first verkle block),
+			// before InitializeBinaryTransitionRegistry sets slot 0.
+			if statedb.GetState(params.BinaryTransitionRegistryAddress, common.Hash{5}) == (common.Hash{}) {
+				statedb.SetState(params.BinaryTransitionRegistryAddress, common.Hash{5}, parentHeader.Root)
+			}
+		}
+	}
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
@@ -118,6 +134,15 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	requests, err := postExecution(ctx, config, block, allLogs, evm)
 	if err != nil {
 		return nil, err
+	}
+	if config.IsVerkle(header.Number, header.Time) {
+		// Bootstrap part one: initialize the registry to mark the transition as started,
+		// which has to be done at the end of the _previous_ block, so that the information
+		// can bee made available inside the tree.
+		parentHeader := p.chain.GetHeaderByHash(block.ParentHash())
+		if !config.IsVerkle(parentHeader.Number, parentHeader.Time) {
+			InitializeBinaryTransitionRegistry(statedb)
+		}
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
