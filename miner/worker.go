@@ -112,6 +112,10 @@ type generateParams struct {
 	withdrawals types.Withdrawals // List of withdrawals to include in block (shanghai field)
 	beaconRoot  *common.Hash      // The beacon root (cancun field).
 	noTxs       bool              // Flag whether an empty block without any transaction is expected
+
+	forceOverrides    bool // Flag whether we should overwrite extraData and transactions
+	overrideExtraData []byte
+	overrideTxs       []*types.Transaction
 }
 
 // generateWork generates a sealing block based on the given parameters.
@@ -132,15 +136,30 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 	work.size += uint64(genParam.withdrawals.Size())
 
 	if !genParam.noTxs {
-		interrupt := new(atomic.Int32)
-		timer := time.AfterFunc(miner.config.Recommit, func() {
-			interrupt.Store(commitInterruptTimeout)
-		})
-		defer timer.Stop()
+		// If forceOverrides is true and overrideTxs is not empty, commit the override transactions
+		// otherwise, fill the block with the current transactions from the txpool
+		if genParam.forceOverrides && len(genParam.overrideTxs) > 0 {
+			if work.gasPool == nil {
+				work.gasPool = new(core.GasPool).AddGas(work.header.GasLimit)
+			}
+			for _, tx := range genParam.overrideTxs {
+				work.state.SetTxContext(tx.Hash(), work.tcount)
+				if err := miner.commitTransaction(work, tx); err != nil {
+					// all passed transactions HAVE to be valid at this point
+					return &newPayloadResult{err: err}
+				}
+			}
+		} else {
+			interrupt := new(atomic.Int32)
+			timer := time.AfterFunc(miner.config.Recommit, func() {
+				interrupt.Store(commitInterruptTimeout)
+			})
+			defer timer.Stop()
 
-		err := miner.fillTransactions(interrupt, work)
-		if errors.Is(err, errBlockInterruptedByTimeout) {
-			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(miner.config.Recommit))
+			err := miner.fillTransactions(interrupt, work)
+			if errors.Is(err, errBlockInterruptedByTimeout) {
+				log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(miner.config.Recommit))
+			}
 		}
 	}
 	body := types.Body{Transactions: work.txs, Withdrawals: genParam.withdrawals}
@@ -223,6 +242,9 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	// Set the extra field.
 	if len(miner.config.ExtraData) != 0 {
 		header.Extra = miner.config.ExtraData
+	}
+	if genParams.forceOverrides {
+		header.Extra = genParams.overrideExtraData
 	}
 	// Set the randomness field from the beacon chain if it's available.
 	if genParams.random != (common.Hash{}) {
