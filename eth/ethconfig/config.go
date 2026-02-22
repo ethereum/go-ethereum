@@ -56,6 +56,7 @@ var Defaults = Config{
 	TxLookupLimit:           2350000,
 	TransactionHistory:      2350000,
 	LogHistory:              2350000,
+	TxIndexSender:           false,
 	StateHistory:            pathdb.Defaults.StateHistory,
 	TrienodeHistory:         pathdb.Defaults.TrienodeHistory,
 	NodeFullValueCheckpoint: pathdb.Defaults.FullValueCheckpoint,
@@ -107,6 +108,7 @@ type Config struct {
 	// Deprecated: use 'TransactionHistory' instead.
 	TxLookupLimit uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
 
+	TxIndexSender        bool   `toml:",omitempty"` // Enables transaction indexing by sender and nonce (increases disk usage).
 	TransactionHistory   uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
 	LogHistory           uint64 `toml:",omitempty"` // The maximum number of blocks from head where a log search index is maintained.
 	LogNoHistory         bool   `toml:",omitempty"` // No log search index is maintained.
