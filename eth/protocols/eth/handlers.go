@@ -19,7 +19,6 @@ package eth
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 
@@ -247,29 +246,20 @@ func ServiceGetBlockBodiesQuery(chain *core.BlockChain, query GetBlockBodiesRequ
 	return bodies
 }
 
-func handleGetReceipts68(backend Backend, msg Decoder, peer *Peer) error {
+func handleGetReceipts(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the block receipts retrieval message
 	var query GetReceiptsPacket
 	if err := msg.Decode(&query); err != nil {
 		return err
 	}
-	response := ServiceGetReceiptsQuery68(backend.Chain(), query.GetReceiptsRequest)
+	response := ServiceGetReceiptsQuery(backend.Chain(), query.GetReceiptsRequest)
 	return peer.ReplyReceiptsRLP(query.RequestId, response)
 }
 
-func handleGetReceipts69(backend Backend, msg Decoder, peer *Peer) error {
-	// Decode the block receipts retrieval message
-	var query GetReceiptsPacket
-	if err := msg.Decode(&query); err != nil {
-		return err
-	}
-	response := serviceGetReceiptsQuery69(backend.Chain(), query.GetReceiptsRequest)
-	return peer.ReplyReceiptsRLP(query.RequestId, response)
-}
-
-// ServiceGetReceiptsQuery68 assembles the response to a receipt query. It is
-// exposed to allow external packages to test protocol behavior.
-func ServiceGetReceiptsQuery68(chain *core.BlockChain, query GetReceiptsRequest) []rlp.RawValue {
+// ServiceGetReceiptsQuery assembles the response to a receipt query.
+// It does not send the bloom filters for the receipts. It is exposed
+// to allow external packages to test protocol behavior.
+func ServiceGetReceiptsQuery(chain *core.BlockChain, query GetReceiptsRequest) []rlp.RawValue {
 	// Gather state data until the fetch or network limits is reached
 	var (
 		bytes    int
@@ -292,7 +282,7 @@ func ServiceGetReceiptsQuery68(chain *core.BlockChain, query GetReceiptsRequest)
 				continue
 			}
 			var err error
-			results, err = blockReceiptsToNetwork68(results, body)
+			results, err = encodeTypes(results, body)
 			if err != nil {
 				log.Error("Error in block receipts conversion", "hash", hash, "err", err)
 				continue
@@ -302,51 +292,6 @@ func ServiceGetReceiptsQuery68(chain *core.BlockChain, query GetReceiptsRequest)
 		bytes += len(results)
 	}
 	return receipts
-}
-
-// serviceGetReceiptsQuery69 assembles the response to a receipt query.
-// It does not send the bloom filters for the receipts
-func serviceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest) []rlp.RawValue {
-	// Gather state data until the fetch or network limits is reached
-	var (
-		bytes    int
-		receipts []rlp.RawValue
-	)
-	for lookups, hash := range query {
-		if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe ||
-			lookups >= 2*maxReceiptsServe {
-			break
-		}
-		// Retrieve the requested block's receipts
-		results := chain.GetReceiptsRLP(hash)
-		if results == nil {
-			if header := chain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
-				continue
-			}
-		} else {
-			body := chain.GetBodyRLP(hash)
-			if body == nil {
-				continue
-			}
-			var err error
-			results, err = blockReceiptsToNetwork69(results, body)
-			if err != nil {
-				log.Error("Error in block receipts conversion", "hash", hash, "err", err)
-				continue
-			}
-		}
-		receipts = append(receipts, results)
-		bytes += len(results)
-	}
-	return receipts
-}
-
-func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {
-	return errors.New("block announcements disallowed") // We dropped support for non-merge networks
-}
-
-func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
-	return errors.New("block broadcasts disallowed") // We dropped support for non-merge networks
 }
 
 func handleBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
@@ -490,9 +435,19 @@ func writeTxForHash(tx []byte, buf *bytes.Buffer) {
 	}
 }
 
-func handleReceipts[L ReceiptsList](backend Backend, msg Decoder, peer *Peer) error {
+// writeReceiptForHash returns a write function that encode receipts for hash derivation.
+func writeReceiptForHash(bloomBuf *[6]byte) func([]byte, *bytes.Buffer) {
+	return func(data []byte, outbuf *bytes.Buffer) {
+		var r Receipt
+		if rlp.DecodeBytes(data, &r) == nil {
+			r.EncodeForHash(bloomBuf, outbuf)
+		}
+	}
+}
+
+func handleReceipts(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of receipts arrived to one of our previous requests
-	res := new(ReceiptsPacket[L])
+	res := new(ReceiptsPacket)
 	if err := msg.Decode(res); err != nil {
 		return err
 	}
@@ -502,25 +457,23 @@ func handleReceipts[L ReceiptsList](backend Backend, msg Decoder, peer *Peer) er
 		return fmt.Errorf("Receipts: %w", err)
 	}
 
-	// Assign temporary hashing buffer to each list item, the same buffer is shared
-	// between all receipt list instances.
 	receiptLists, err := res.List.Items()
 	if err != nil {
 		return fmt.Errorf("Receipts: %w", err)
 	}
-	buffers := new(receiptListBuffers)
-	for i := range receiptLists {
-		receiptLists[i].setBuffers(buffers)
-	}
 
+	var bloomBuf [6]byte
+	writeReceipt := writeReceiptForHash(&bloomBuf)
 	metadata := func() interface{} {
 		hasher := trie.NewStackTrie(nil)
 		hashes := make([]common.Hash, len(receiptLists))
 		for i := range receiptLists {
-			hashes[i] = types.DeriveSha(receiptLists[i].Derivable(), hasher)
+			receipts := newDerivableRawList(&receiptLists[i].items, writeReceipt)
+			hashes[i] = types.DeriveSha(receipts, hasher)
 		}
 		return hashes
 	}
+
 	var enc ReceiptsRLPResponse
 	for i := range receiptLists {
 		encReceipts, err := receiptLists[i].EncodeForStorage()
