@@ -225,6 +225,12 @@ var (
 		Value:    true,
 		Category: flags.EthCategory,
 	}
+	TxSenderIndexFlag = &cli.BoolFlag{
+		Name:     "tx.index-sender",
+		Usage:    "Enable transaction indexing by sender and nonce",
+		Category: flags.EthCategory,
+		Value:    ethconfig.Defaults.TxIndexSender,
+	}
 	LightKDFFlag = &cli.BoolFlag{
 		Name:     "lightkdf",
 		Usage:    "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
@@ -1802,6 +1808,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(StateSchemeFlag.Name) {
 		cfg.StateScheme = ctx.String(StateSchemeFlag.Name)
+	}
+	if ctx.IsSet(TxSenderIndexFlag.Name) {
+		cfg.TxIndexSender = ctx.Bool(TxSenderIndexFlag.Name)
 	}
 	// Parse transaction history flag, if user is still using legacy config
 	// file with 'TxLookupLimit' configured, copy the value to 'TransactionHistory'.

@@ -465,6 +465,7 @@ func fakeBlockHash(txh common.Hash) common.Hash {
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.Engine, generator func(i int, b *core.BlockGen)) *testBackend {
 	options := core.DefaultConfig().WithArchive(true)
 	options.TxLookupLimit = 0 // index all txs
+	options.TxIndexSender = true
 
 	accman, acc := newTestAccountManager(t)
 	gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
@@ -707,6 +708,14 @@ func (b testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 func (b testBackend) HistoryPruningCutoff() uint64 {
 	bn, _ := b.chain.HistoryPruningCutoff()
 	return bn
+}
+
+// GetTransactionHashBySenderAndNonce implements the Backend interface for testing.
+func (b *testBackend) GetTransactionBySenderAndNonce(ctx context.Context, sender common.Address, nonce uint64) (*common.Hash, error) {
+	// Todo(shadow): to implement for txn pending in mempool after implementing other pending
+	// mempool functionality like  GetPoolTransactions
+	hash := rawdb.ReadTxSenderNonceEntry(b.db, sender, nonce)
+	return hash, nil
 }
 
 func TestEstimateGas(t *testing.T) {
@@ -4063,5 +4072,42 @@ func TestSendRawTransactionSync_Timeout(t *testing.T) {
 	}
 	if got, want := de.ErrorData(), tx.Hash().Hex(); got != want {
 		t.Fatalf("expected ErrorData=%s, got %v", want, got)
+	}
+}
+
+func TestGetTransactionBySenderAndNonce(t *testing.T) {
+	t.Parallel()
+
+	key, _ := crypto.HexToECDSA("b71c73a37e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	nonce := uint64(0)
+	tx := types.NewTransaction(nonce, common.Address{0xaa}, big.NewInt(1000), 21000, big.NewInt(1000000000), nil)
+	signedTx, _ := types.SignTx(tx, types.HomesteadSigner{}, key)
+
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: core.GenesisAlloc{
+			addr: {Balance: big.NewInt(1000000000000000000)},
+		},
+	}
+
+	backend := newTestBackend(t, 1, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
+		if i == 0 {
+			b.AddTx(signedTx)
+		}
+	})
+
+	api := NewTransactionAPI(backend, new(AddrLocker))
+	ctx := context.Background()
+
+	result, err := api.GetTransactionBySenderAndNonce(ctx, addr, hexutil.Uint64(nonce))
+	if err != nil {
+		t.Fatalf("GetTransactionBySenderAndNonce failed: %v", err)
+	}
+	if result == nil {
+		t.Fatalf("Expected transaction, got nil")
+	}
+	if *result != signedTx.Hash() {
+		t.Errorf("Hash mismatch: have %x, want %x", *result, signedTx.Hash())
 	}
 }

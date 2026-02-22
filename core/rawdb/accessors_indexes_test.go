@@ -297,3 +297,61 @@ func TestExtractReceiptFields(t *testing.T) {
 		}
 	}
 }
+
+func TestSenderNonceIndex(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	addr1 := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	addr2 := common.HexToAddress("0x2222222222222222222222222222222222222222")
+
+	txHash1 := common.HexToHash("0xaaaa") // Sender: addr1, Nonce: 1
+	txHash2 := common.HexToHash("0xbbbb") // Sender: addr1, Nonce: 2
+	txHash3 := common.HexToHash("0xcccc") // Sender: addr2, Nonce: 1
+
+	// Initially index is empty
+	if hash := ReadTxSenderNonceEntry(db, addr1, 1); hash != nil {
+		t.Fatalf("index should be empty, got %x", hash)
+	}
+
+	WriteTxSenderNonceEntry(db, addr1, 1, txHash1)
+	WriteTxSenderNonceEntry(db, addr1, 2, txHash2)
+	WriteTxSenderNonceEntry(db, addr2, 1, txHash3)
+
+	// Verify indices
+	tests := []struct {
+		name   string
+		sender common.Address
+		nonce  uint64
+		expect *common.Hash
+	}{
+		{"addr1-nonce1", addr1, 1, &txHash1},
+		{"addr1-nonce2", addr1, 2, &txHash2},
+		{"addr2-nonce1", addr2, 1, &txHash3},
+		{"addr2-nonce2 (missing)", addr2, 2, nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ReadTxSenderNonceEntry(db, tc.sender, tc.nonce)
+			if tc.expect == nil {
+				if got != nil {
+					t.Errorf("expected nil, got %x", got)
+				}
+			} else {
+				if got == nil {
+					t.Errorf("expected %x, got nil", *tc.expect)
+				} else if *got != *tc.expect {
+					t.Errorf("expected %x, got %x", *tc.expect, *got)
+				}
+			}
+		})
+	}
+
+	// Verify Overwrite
+	newHash := common.HexToHash("0xdddd")
+	WriteTxSenderNonceEntry(db, addr1, 1, newHash)
+
+	if got := ReadTxSenderNonceEntry(db, addr1, 1); *got != newHash {
+		t.Fatalf("failed to overwrite index: expected %x, got %x", newHash, got)
+	}
+}

@@ -1366,6 +1366,25 @@ func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 	}
 }
 
+// GetTxBySenderAndNonce returns a transaction of a sender and its corresponding nonce.
+func (p *BlobPool) GetTxBySenderAndNonce(sender common.Address, nonce uint64) *types.Transaction {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	txs, ok := p.index[sender]
+	if !ok {
+		return nil
+	}
+	next := p.state.GetNonce(sender)
+	offset := int(nonce - next)
+
+	if offset < 0 || offset >= len(txs) {
+		return nil
+	}
+
+	return p.Get(txs[offset].hash)
+}
+
 // GetBlobs returns a number of blobs and proofs for the given versioned hashes.
 // Blobpool must place responses in the order given in the request, using null
 // for any missing blobs.

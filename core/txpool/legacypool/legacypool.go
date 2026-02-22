@@ -1035,6 +1035,25 @@ func (pool *LegacyPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 	}
 }
 
+// GetTxBySenderAndNonce returns a transaction of a sender and it's corresponding nonce.
+func (pool *LegacyPool) GetTxBySenderAndNonce(sender common.Address, nonce uint64) *types.Transaction {
+	// Check if the transaction is in the pending pool
+	if txList := pool.pending[sender]; txList != nil {
+		if tx := txList.txs.items[nonce]; tx != nil {
+			return tx
+		}
+	}
+
+	// Check if the transaction is in the queue pool
+	if txList, ok := pool.queue.get(sender); ok {
+		if tx := txList.txs.items[nonce]; tx != nil {
+			return tx
+		}
+	}
+
+	return nil
+}
+
 // Has returns an indicator whether txpool has a transaction cached with the
 // given hash.
 func (pool *LegacyPool) Has(hash common.Hash) bool {
