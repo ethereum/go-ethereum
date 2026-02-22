@@ -17,6 +17,8 @@
 package rawdb
 
 import (
+	"errors"
+
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
@@ -270,6 +272,16 @@ func (r *tableReplayer) Put(key []byte, value []byte) error {
 func (r *tableReplayer) Delete(key []byte) error {
 	trimmed := key[len(r.prefix):]
 	return r.w.Delete(trimmed)
+}
+
+// DeleteRange implements the interface KeyValueRangeDeleter.
+func (r *tableReplayer) DeleteRange(start, end []byte) error {
+	trimmedStart := start[len(r.prefix):]
+	trimmedEnd := end[len(r.prefix):]
+	if rangeDeleter, ok := r.w.(ethdb.KeyValueRangeDeleter); ok {
+		return rangeDeleter.DeleteRange(trimmedStart, trimmedEnd)
+	}
+	return errors.New("ethdb.KeyValueWriter does not implement DeleteRange")
 }
 
 // Replay replays the batch contents.
