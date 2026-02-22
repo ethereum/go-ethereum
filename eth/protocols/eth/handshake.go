@@ -191,7 +191,13 @@ func markError(p *Peer, err error) {
 		return
 	}
 	m := meters.get(p.Inbound())
-	switch errors.Unwrap(err) {
+
+	base := errors.Unwrap(err)
+	if base == nil {
+		base = err
+	}
+
+	switch base {
 	case errNetworkIDMismatch:
 		m.networkIDMismatch.Mark(1)
 	case errProtocolVersionMismatch:
