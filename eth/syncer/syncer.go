@@ -117,7 +117,12 @@ func (s *Syncer) run() {
 						logged = true
 						log.Info("Waiting for peers to retrieve sync target", "hash", req.hash)
 					}
-					time.Sleep(time.Second * time.Duration(retries+1))
+					select {
+					case <-time.After(time.Second * time.Duration(retries+1)):
+					case <-s.closed:
+						req.errc <- errors.New("syncer closed")
+						return
+					}
 					retries++
 					continue
 				}
