@@ -55,13 +55,13 @@ var (
 		Usage:    "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
 		Value:    "",
 		Hidden:   true,
-		Category: flags.LoggingCategory,
+		Category: flags.DeprecatedCategory,
 	}
 	logjsonFlag = &cli.BoolFlag{
 		Name:     "log.json",
 		Usage:    "Format logs with JSON",
 		Hidden:   true,
-		Category: flags.LoggingCategory,
+		Category: flags.DeprecatedCategory,
 	}
 	logFormatFlag = &cli.StringFlag{
 		Name:     "log.format",
@@ -162,6 +162,11 @@ var Flags = []cli.Flag{
 	blockprofilerateFlag,
 	cpuprofileFlag,
 	traceFlag,
+	pyroscopeFlag,
+	pyroscopeServerFlag,
+	pyroscopeAuthUsernameFlag,
+	pyroscopeAuthPasswordFlag,
+	pyroscopeTagsFlag,
 }
 
 var (
@@ -298,6 +303,14 @@ func Setup(ctx *cli.Context) error {
 		// It cannot be imported because it will cause a cyclical dependency.
 		StartPProf(address, !ctx.IsSet("metrics.addr"))
 	}
+
+	// Pyroscope profiling
+	if ctx.Bool(pyroscopeFlag.Name) {
+		if err := startPyroscope(ctx); err != nil {
+			return err
+		}
+	}
+
 	if len(logFile) > 0 || rotation {
 		log.Info("Logging configured", context...)
 	}
@@ -321,6 +334,7 @@ func StartPProf(address string, withMetrics bool) {
 // Exit stops all running profiles, flushing their output to the
 // respective file.
 func Exit() {
+	stopPyroscope()
 	Handler.StopCPUProfile()
 	Handler.StopGoTrace()
 	if logOutputFile != nil {

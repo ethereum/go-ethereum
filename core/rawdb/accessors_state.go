@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"encoding/binary"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -118,13 +119,6 @@ func WriteStateID(db ethdb.KeyValueWriter, root common.Hash, id uint64) {
 	}
 }
 
-// DeleteStateID deletes the specified state lookup from the database.
-func DeleteStateID(db ethdb.KeyValueWriter, root common.Hash) {
-	if err := db.Delete(stateIDKey(root)); err != nil {
-		log.Crit("Failed to delete state ID", "err", err)
-	}
-}
-
 // ReadPersistentStateID retrieves the id of the persistent state from the database.
 func ReadPersistentStateID(db ethdb.KeyValueReader) uint64 {
 	data, _ := db.Get(persistentStateIDKey)
@@ -156,14 +150,6 @@ func WriteTrieJournal(db ethdb.KeyValueWriter, journal []byte) {
 	}
 }
 
-// DeleteTrieJournal deletes the serialized in-memory trie nodes of layers saved at
-// the last shutdown.
-func DeleteTrieJournal(db ethdb.KeyValueWriter) {
-	if err := db.Delete(trieJournalKey); err != nil {
-		log.Crit("Failed to remove tries journal", "err", err)
-	}
-}
-
 // ReadStateHistoryMeta retrieves the metadata corresponding to the specified
 // state history. Compute the position of state history in freezer by minus
 // one since the id of first state history starts from one(zero for initial
@@ -184,9 +170,11 @@ func ReadStateHistoryMetaList(db ethdb.AncientReaderOp, start uint64, count uint
 	return db.AncientRange(stateHistoryMeta, start-1, count, 0)
 }
 
-// ReadStateAccountIndex retrieves the state root corresponding to the specified
-// state history. Compute the position of state history in freezer by minus one
-// since the id of first state history starts from one(zero for initial state).
+// ReadStateAccountIndex retrieves the account index blob for the specified
+// state history. The index contains fixed-size entries with offsets and lengths
+// into the concatenated account data table. Compute the position of state
+// history in freezer by minus one since the id of first state history starts
+// from one (zero for initial state).
 func ReadStateAccountIndex(db ethdb.AncientReaderOp, id uint64) []byte {
 	blob, err := db.Ancient(stateHistoryAccountIndex, id-1)
 	if err != nil {
@@ -195,37 +183,30 @@ func ReadStateAccountIndex(db ethdb.AncientReaderOp, id uint64) []byte {
 	return blob
 }
 
-// ReadStateStorageIndex retrieves the state root corresponding to the specified
-// state history. Compute the position of state history in freezer by minus one
-// since the id of first state history starts from one(zero for initial state).
-func ReadStateStorageIndex(db ethdb.AncientReaderOp, id uint64) []byte {
-	blob, err := db.Ancient(stateHistoryStorageIndex, id-1)
-	if err != nil {
-		return nil
-	}
-	return blob
+// ReadStateStorageIndex retrieves the storage index blob for the specified
+// state history. The index contains fixed-size entries that locate storage slot
+// data in the concatenated storage data table. Compute the position of state
+// history in freezer by minus one since the id of first state history starts
+// from one (zero for initial state).
+func ReadStateStorageIndex(db ethdb.AncientReaderOp, id uint64, offset, length int) ([]byte, error) {
+	return db.AncientBytes(stateHistoryStorageIndex, id-1, uint64(offset), uint64(length))
 }
 
-// ReadStateAccountHistory retrieves the state root corresponding to the specified
-// state history. Compute the position of state history in freezer by minus one
-// since the id of first state history starts from one(zero for initial state).
-func ReadStateAccountHistory(db ethdb.AncientReaderOp, id uint64) []byte {
-	blob, err := db.Ancient(stateHistoryAccountData, id-1)
-	if err != nil {
-		return nil
-	}
-	return blob
+// ReadStateAccountHistory retrieves the concatenated account data blob for the
+// specified state history. Offsets and lengths are resolved via the account
+// index. Compute the position of state history in freezer by minus one since
+// the id of first state history starts from one (zero for initial state).
+func ReadStateAccountHistory(db ethdb.AncientReaderOp, id uint64, offset, length int) ([]byte, error) {
+	return db.AncientBytes(stateHistoryAccountData, id-1, uint64(offset), uint64(length))
 }
 
-// ReadStateStorageHistory retrieves the state root corresponding to the specified
-// state history. Compute the position of state history in freezer by minus one
-// since the id of first state history starts from one(zero for initial state).
-func ReadStateStorageHistory(db ethdb.AncientReaderOp, id uint64) []byte {
-	blob, err := db.Ancient(stateHistoryStorageData, id-1)
-	if err != nil {
-		return nil
-	}
-	return blob
+// ReadStateStorageHistory retrieves the concatenated storage slot data blob for
+// the specified state history. Locations are resolved via the account and
+// storage indexes. Compute the position of state history in freezer by minus
+// one since the id of first state history starts from one (zero for initial
+// state).
+func ReadStateStorageHistory(db ethdb.AncientReaderOp, id uint64, offset, length int) ([]byte, error) {
+	return db.AncientBytes(stateHistoryStorageData, id-1, uint64(offset), uint64(length))
 }
 
 // ReadStateHistory retrieves the state history from database with provided id.
@@ -255,16 +236,127 @@ func ReadStateHistory(db ethdb.AncientReaderOp, id uint64) ([]byte, []byte, []by
 	return meta, accountIndex, storageIndex, accountData, storageData, nil
 }
 
+// ReadStateHistoryList retrieves a list of state histories from database with
+// specific range. Compute the position of state history in freezer by minus one
+// since the id of first state history starts from one(zero for initial state).
+func ReadStateHistoryList(db ethdb.AncientReaderOp, start uint64, count uint64) ([][]byte, [][]byte, [][]byte, [][]byte, [][]byte, error) {
+	metaList, err := db.AncientRange(stateHistoryMeta, start-1, count, 0)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	aIndexList, err := db.AncientRange(stateHistoryAccountIndex, start-1, count, 0)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	sIndexList, err := db.AncientRange(stateHistoryStorageIndex, start-1, count, 0)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	aDataList, err := db.AncientRange(stateHistoryAccountData, start-1, count, 0)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	sDataList, err := db.AncientRange(stateHistoryStorageData, start-1, count, 0)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	if len(metaList) != len(aIndexList) || len(metaList) != len(sIndexList) || len(metaList) != len(aDataList) || len(metaList) != len(sDataList) {
+		return nil, nil, nil, nil, nil, errors.New("state history is corrupted")
+	}
+	return metaList, aIndexList, sIndexList, aDataList, sDataList, nil
+}
+
 // WriteStateHistory writes the provided state history to database. Compute the
 // position of state history in freezer by minus one since the id of first state
 // history starts from one(zero for initial state).
-func WriteStateHistory(db ethdb.AncientWriter, id uint64, meta []byte, accountIndex []byte, storageIndex []byte, accounts []byte, storages []byte) {
-	db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
-		op.AppendRaw(stateHistoryMeta, id-1, meta)
-		op.AppendRaw(stateHistoryAccountIndex, id-1, accountIndex)
-		op.AppendRaw(stateHistoryStorageIndex, id-1, storageIndex)
-		op.AppendRaw(stateHistoryAccountData, id-1, accounts)
-		op.AppendRaw(stateHistoryStorageData, id-1, storages)
-		return nil
+func WriteStateHistory(db ethdb.AncientWriter, id uint64, meta []byte, accountIndex []byte, storageIndex []byte, accounts []byte, storages []byte) error {
+	_, err := db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		if err := op.AppendRaw(stateHistoryMeta, id-1, meta); err != nil {
+			return err
+		}
+		if err := op.AppendRaw(stateHistoryAccountIndex, id-1, accountIndex); err != nil {
+			return err
+		}
+		if err := op.AppendRaw(stateHistoryStorageIndex, id-1, storageIndex); err != nil {
+			return err
+		}
+		if err := op.AppendRaw(stateHistoryAccountData, id-1, accounts); err != nil {
+			return err
+		}
+		return op.AppendRaw(stateHistoryStorageData, id-1, storages)
 	})
+	return err
+}
+
+// ReadTrienodeHistory retrieves the trienode history corresponding to the specified id.
+// Compute the position of trienode history in freezer by minus one since the id of first
+// trienode history starts from one(zero for initial state).
+func ReadTrienodeHistory(db ethdb.AncientReaderOp, id uint64) ([]byte, []byte, []byte, error) {
+	header, err := db.Ancient(trienodeHistoryHeaderTable, id-1)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	keySection, err := db.Ancient(trienodeHistoryKeySectionTable, id-1)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	valueSection, err := db.Ancient(trienodeHistoryValueSectionTable, id-1)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return header, keySection, valueSection, nil
+}
+
+// ReadTrienodeHistoryHeader retrieves the header section of trienode history.
+func ReadTrienodeHistoryHeader(db ethdb.AncientReaderOp, id uint64) ([]byte, error) {
+	return db.Ancient(trienodeHistoryHeaderTable, id-1)
+}
+
+// ReadTrienodeHistoryKeySection retrieves the key section of trienode history.
+func ReadTrienodeHistoryKeySection(db ethdb.AncientReaderOp, id uint64, offset uint64, length uint64) ([]byte, error) {
+	return db.AncientBytes(trienodeHistoryKeySectionTable, id-1, offset, length)
+}
+
+// ReadTrienodeHistoryValueSection retrieves the value section of trienode history.
+func ReadTrienodeHistoryValueSection(db ethdb.AncientReaderOp, id uint64, offset uint64, length uint64) ([]byte, error) {
+	return db.AncientBytes(trienodeHistoryValueSectionTable, id-1, offset, length)
+}
+
+// ReadTrienodeHistoryList retrieves the a list of trienode history corresponding
+// to the specified range.
+// Compute the position of trienode history in freezer by minus one since the id
+// of first trienode history starts from one(zero for initial state).
+func ReadTrienodeHistoryList(db ethdb.AncientReaderOp, start uint64, count uint64) ([][]byte, [][]byte, [][]byte, error) {
+	header, err := db.AncientRange(trienodeHistoryHeaderTable, start-1, count, 0)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	keySection, err := db.AncientRange(trienodeHistoryKeySectionTable, start-1, count, 0)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	valueSection, err := db.AncientRange(trienodeHistoryValueSectionTable, start-1, count, 0)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if len(header) != len(keySection) || len(header) != len(valueSection) {
+		return nil, nil, nil, errors.New("trienode history is corrupted")
+	}
+	return header, keySection, valueSection, nil
+}
+
+// WriteTrienodeHistory writes the provided trienode history to database.
+// Compute the position of trienode history in freezer by minus one since
+// the id of first state history starts from one(zero for initial state).
+func WriteTrienodeHistory(db ethdb.AncientWriter, id uint64, header []byte, keySection []byte, valueSection []byte) error {
+	_, err := db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		if err := op.AppendRaw(trienodeHistoryHeaderTable, id-1, header); err != nil {
+			return err
+		}
+		if err := op.AppendRaw(trienodeHistoryKeySectionTable, id-1, keySection); err != nil {
+			return err
+		}
+		return op.AppendRaw(trienodeHistoryValueSectionTable, id-1, valueSection)
+	})
+	return err
 }

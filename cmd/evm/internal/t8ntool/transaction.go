@@ -115,9 +115,6 @@ func Transaction(ctx *cli.Context) error {
 	}
 	var results []result
 	for it.Next() {
-		if err := it.Err(); err != nil {
-			return NewError(ErrorIO, err)
-		}
 		var tx types.Transaction
 		err := rlp.DecodeBytes(it.Value(), &tx)
 		if err != nil {
@@ -183,8 +180,15 @@ func Transaction(ctx *cli.Context) error {
 		if chainConfig.IsShanghai(new(big.Int), 0) && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
 			r.Error = errors.New("max initcode size exceeded")
 		}
+		if chainConfig.IsOsaka(new(big.Int), 0) && tx.Gas() > params.MaxTxGas {
+			r.Error = errors.New("gas limit exceeds maximum")
+		}
 		results = append(results, r)
 	}
+	if err := it.Err(); err != nil {
+		return NewError(ErrorIO, err)
+	}
+
 	out, err := json.MarshalIndent(results, "", "  ")
 	fmt.Println(string(out))
 	return err

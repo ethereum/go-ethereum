@@ -78,13 +78,18 @@ func fuzz(input []byte) int {
 	rand := rand.New(rand.NewSource(0x3a29)) // Same used in package tests!!!
 
 	f := fetcher.NewTxFetcherForTests(
-		func(common.Hash) bool { return false },
+		func(common.Hash, byte) error { return nil },
 		func(txs []*types.Transaction) []error {
 			return make([]error, len(txs))
 		},
 		func(string, []common.Hash) error { return nil },
 		nil,
-		clock, rand,
+		clock,
+		func() time.Time {
+			nanoTime := int64(clock.Now())
+			return time.Unix(nanoTime/1000000000, nanoTime%1000000000)
+		},
+		rand,
 	)
 	f.Start()
 	defer f.Stop()

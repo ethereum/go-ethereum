@@ -30,19 +30,21 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
 // makeChain creates a chain of n blocks starting at and including parent.
-// the returned hash chain is ordered head->parent. In addition, every 3rd block
-// contains a transaction and every 5th an uncle to allow testing correct block
-// reassembly.
+// The returned hash chain is ordered head->parent.
+// If empty is false, every second block (i%2==0) contains one transaction.
+// No uncles are added.
 func makeChain(n int, seed byte, parent *types.Block, empty bool) ([]*types.Block, []types.Receipts) {
 	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
-		// Add one tx to every secondblock
+		// Add one tx to every second block
 		if !empty && i%2 == 0 {
 			signer := types.MakeSigner(params.TestChainConfig, block.Number(), block.Timestamp())
 			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
@@ -323,26 +325,31 @@ func XTestDelivery(t *testing.T) {
 					emptyList []*types.Header
 					txset     [][]*types.Transaction
 					uncleset  [][]*types.Header
+					bodies    []eth.BlockBody
 				)
 				numToSkip := rand.Intn(len(f.Headers))
 				for _, hdr := range f.Headers[0 : len(f.Headers)-numToSkip] {
-					txset = append(txset, world.getTransactions(hdr.Number.Uint64()))
+					txs := world.getTransactions(hdr.Number.Uint64())
+					txset = append(txset, txs)
 					uncleset = append(uncleset, emptyList)
+					txsList, _ := rlp.EncodeToRawList(txs)
+					bodies = append(bodies, eth.BlockBody{Transactions: txsList})
 				}
-				var (
-					txsHashes   = make([]common.Hash, len(txset))
-					uncleHashes = make([]common.Hash, len(uncleset))
-				)
+				hashes := eth.BlockBodyHashes{
+					TransactionRoots: make([]common.Hash, len(txset)),
+					UncleHashes:      make([]common.Hash, len(uncleset)),
+					WithdrawalRoots:  make([]common.Hash, len(txset)),
+				}
 				hasher := trie.NewStackTrie(nil)
 				for i, txs := range txset {
-					txsHashes[i] = types.DeriveSha(types.Transactions(txs), hasher)
+					hashes.TransactionRoots[i] = types.DeriveSha(types.Transactions(txs), hasher)
 				}
 				for i, uncles := range uncleset {
-					uncleHashes[i] = types.CalcUncleHash(uncles)
+					hashes.UncleHashes[i] = types.CalcUncleHash(uncles)
 				}
+
 				time.Sleep(100 * time.Millisecond)
-				_, err := q.DeliverBodies(peer.id, txset, txsHashes, uncleset, uncleHashes, nil, nil)
-				if err != nil {
+				if _, err := q.DeliverBodies(peer.id, hashes, bodies); err != nil {
 					fmt.Printf("delivered %d bodies %v\n", len(txset), err)
 				}
 			} else {
@@ -351,6 +358,7 @@ func XTestDelivery(t *testing.T) {
 			}
 		}
 	}()
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		// reserve receiptfetch
@@ -358,16 +366,16 @@ func XTestDelivery(t *testing.T) {
 		for {
 			f, _, _ := q.ReserveReceipts(peer, rand.Intn(50))
 			if f != nil {
-				var rcs [][]*types.Receipt
+				var rcs []types.Receipts
 				for _, hdr := range f.Headers {
 					rcs = append(rcs, world.getReceipts(hdr.Number.Uint64()))
 				}
 				hasher := trie.NewStackTrie(nil)
 				hashes := make([]common.Hash, len(rcs))
 				for i, receipt := range rcs {
-					hashes[i] = types.DeriveSha(types.Receipts(receipt), hasher)
+					hashes[i] = types.DeriveSha(receipt, hasher)
 				}
-				_, err := q.DeliverReceipts(peer.id, rcs, hashes)
+				_, err := q.DeliverReceipts(peer.id, types.EncodeBlockReceiptLists(rcs), hashes)
 				if err != nil {
 					fmt.Printf("delivered %d receipts %v\n", len(rcs), err)
 				}

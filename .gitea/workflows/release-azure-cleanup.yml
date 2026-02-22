@@ -1,0 +1,27 @@
+on:
+  workflow_dispatch:
+
+  ### Note we cannot use cron-triggered builds right now, Gitea seems to have
+  ### a few bugs in that area. So this workflow is scheduled using an external
+  ### triggering mechanism and workflow_dispatch.
+  #
+  # schedule:
+  #   - cron: '0 15 * * *'
+
+jobs:
+  azure-cleanup:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.24
+        cache: false
+
+    - name: Run cleanup script
+      run: |
+        go run build/ci.go purge -store gethstore/builds -days 14
+      env:
+        AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}

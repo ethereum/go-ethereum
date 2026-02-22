@@ -17,10 +17,12 @@
 package catalyst
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -31,11 +33,13 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/rpc"
+	"go.opentelemetry.io/otel"
 )
 
 const devEpochLength = 32
@@ -99,7 +103,7 @@ type SimulatedBeacon struct {
 
 func payloadVersion(config *params.ChainConfig, time uint64) engine.PayloadVersion {
 	switch config.LatestFork(time) {
-	case forks.Prague, forks.Cancun:
+	case forks.BPO5, forks.BPO4, forks.BPO3, forks.BPO2, forks.BPO1, forks.Osaka, forks.Prague, forks.Cancun:
 		return engine.PayloadV3
 	case forks.Paris, forks.Shanghai:
 		return engine.PayloadV2
@@ -124,9 +128,13 @@ func NewSimulatedBeacon(period uint64, feeRecipient common.Address, eth *eth.Eth
 			return nil, err
 		}
 	}
+
+	// cap the dev mode period to a reasonable maximum value to avoid
+	// overflowing the time.Duration (int64) that it will occupy
+	const maxPeriod = uint64(math.MaxInt64 / time.Second)
 	return &SimulatedBeacon{
 		eth:                eth,
-		period:             period,
+		period:             min(period, maxPeriod),
 		shutdownCh:         make(chan struct{}),
 		engineAPI:          engineAPI,
 		lastBlockTime:      block.Time,
@@ -186,6 +194,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	}
 
 	version := payloadVersion(c.eth.BlockChain().Config(), timestamp)
+	tracer := otel.Tracer("")
 
 	var random [32]byte
 	rand.Read(random[:])
@@ -203,7 +212,13 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		return errors.New("chain rewind prevented invocation of payload creation")
 	}
 
-	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true)
+	// If the payload was already known, we can skip the rest of the process.
+	// This edge case is possible due to a race condition between seal and debug.setHead.
+	if fcResponse.PayloadStatus.Status == engine.VALID && fcResponse.PayloadID == nil {
+		return nil
+	}
+
+	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -244,8 +259,16 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		requests = envelope.Requests
 	}
 
+	// Create a server span for newPayload, simulating the consensus client
+	// sending the execution payload for validation.
+	npCtx, npSpanEnd := telemetry.StartServerSpan(context.Background(), tracer, telemetry.RPCInfo{
+		System:  "jsonrpc",
+		Service: "engine",
+		Method:  "newPayloadV" + fmt.Sprintf("%d", version),
+	})
 	// Mark the payload as canon
-	_, err = c.engineAPI.newPayload(*payload, blobHashes, beaconRoot, requests, false)
+	_, err = c.engineAPI.newPayload(npCtx, *payload, blobHashes, beaconRoot, requests, false)
+	npSpanEnd(&err)
 	if err != nil {
 		return err
 	}
@@ -269,9 +292,8 @@ func (c *SimulatedBeacon) loop() {
 		case <-timer.C:
 			if err := c.sealBlock(c.withdrawals.pop(10), uint64(time.Now().Unix())); err != nil {
 				log.Warn("Error performing sealing work", "err", err)
-			} else {
-				timer.Reset(time.Second * time.Duration(c.period))
 			}
+			timer.Reset(time.Second * time.Duration(c.period))
 		}
 	}
 }

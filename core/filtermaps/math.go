@@ -19,28 +19,46 @@ package filtermaps
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"fmt"
 	"hash/fnv"
 	"math"
-	"sort"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 )
 
 // Params defines the basic parameters of the log index structure.
 type Params struct {
-	logMapHeight       uint // log2(mapHeight)
-	logMapWidth        uint // log2(mapWidth)
-	logMapsPerEpoch    uint // log2(mapsPerEpoch)
-	logValuesPerMap    uint // log2(logValuesPerMap)
-	baseRowLengthRatio uint // baseRowLength / average row length
-	logLayerDiff       uint // maxRowLength log2 growth per layer
-	// derived fields
-	mapHeight     uint32 // filter map height (number of rows)
-	mapsPerEpoch  uint32 // number of maps in an epoch
+	logMapHeight    uint // The number of bits required to represent the map height
+	logMapWidth     uint // The number of bits required to represent the map width
+	logMapsPerEpoch uint // The number of bits required to represent the number of maps per epoch
+	logValuesPerMap uint // The number of bits required to represent the number of log values per map
+
+	// baseRowLengthRatio represents the ratio of base row length
+	// to the average row length.
+	baseRowLengthRatio uint
+
+	// logLayerDiff defines the logarithmic growth factor (base 2) of
+	// the maximum row length per layer. It indicates how much the maximum
+	// row length increases as the layer depth increases.
+	//
+	// Specifically:
+	// - the row length in base layer (layer == 0) is baseRowLength
+	// - the row length in layer x is baseRowLength << (logLayerDiff * x)
+	logLayerDiff uint
+
+	// These fields can be derived with the information above
+	mapHeight     uint32 // The number of rows in the filter map
+	mapsPerEpoch  uint32 // The number of maps in an epoch
+	valuesPerMap  uint64 // The number of log values marked on each filter map
 	baseRowLength uint32 // maximum number of log values per row on layer 0
-	valuesPerMap  uint64 // number of log values marked on each filter map
-	// not affecting consensus
-	baseRowGroupLength uint32 // length of base row groups in local database
+
+	// baseRowGroupSize defines the number of base row entries grouped together
+	// as a single database entry in the local database to optimize storage
+	// and retrieval efficiency.
+	//
+	// This value can be configured based on the specific implementation.
+	baseRowGroupSize uint32
 }
 
 // DefaultParams is the set of parameters used on mainnet.
@@ -49,7 +67,7 @@ var DefaultParams = Params{
 	logMapWidth:        24,
 	logMapsPerEpoch:    10,
 	logValuesPerMap:    16,
-	baseRowGroupLength: 32,
+	baseRowGroupSize:   32,
 	baseRowLengthRatio: 8,
 	logLayerDiff:       4,
 }
@@ -60,7 +78,7 @@ var RangeTestParams = Params{
 	logMapWidth:        24,
 	logMapsPerEpoch:    0,
 	logValuesPerMap:    0,
-	baseRowGroupLength: 32,
+	baseRowGroupSize:   32,
 	baseRowLengthRatio: 16, // baseRowLength >= 1
 	logLayerDiff:       4,
 }
@@ -89,6 +107,44 @@ func topicValue(topic common.Hash) common.Hash {
 	hasher.Write(topic[:])
 	hasher.Sum(result[:0])
 	return result
+}
+
+// sanitize derives any missing fields and validates the parameter values.
+func (p *Params) sanitize() error {
+	p.deriveFields()
+	if p.logMapWidth%8 != 0 {
+		return fmt.Errorf("invalid configuration: logMapWidth (%d) must be a multiple of 8", p.logMapWidth)
+	}
+	if p.baseRowGroupSize == 0 || (p.baseRowGroupSize&(p.baseRowGroupSize-1)) != 0 {
+		return fmt.Errorf("invalid configuration: baseRowGroupSize (%d) must be a power of 2", p.baseRowGroupSize)
+	}
+	return nil
+}
+
+// mapGroupIndex returns the start index of the base row group that contains the
+// given map index. Assumes baseRowGroupSize is a power of 2.
+func (p *Params) mapGroupIndex(index uint32) uint32 {
+	return index & ^(p.baseRowGroupSize - 1)
+}
+
+// mapGroupOffset returns the offset of the given map index within its base row group.
+func (p *Params) mapGroupOffset(index uint32) uint32 {
+	return index & (p.baseRowGroupSize - 1)
+}
+
+// mapEpoch returns the epoch number that the given map index belongs to.
+func (p *Params) mapEpoch(index uint32) uint32 {
+	return index >> p.logMapsPerEpoch
+}
+
+// firstEpochMap returns the index of the first map in the specified epoch.
+func (p *Params) firstEpochMap(epoch uint32) uint32 {
+	return epoch << p.logMapsPerEpoch
+}
+
+// lastEpochMap returns the index of the last map in the specified epoch.
+func (p *Params) lastEpochMap(epoch uint32) uint32 {
+	return (epoch+1)<<p.logMapsPerEpoch - 1
 }
 
 // rowIndex returns the row index in which the given log value should be marked
@@ -125,17 +181,20 @@ func (p *Params) columnIndex(lvIndex uint64, logValue *common.Hash) uint32 {
 	return uint32(lvIndex%p.valuesPerMap)<<hashBits + (uint32(hash>>(64-hashBits)) ^ uint32(hash)>>(32-hashBits))
 }
 
-// maxRowLength returns the maximum length filter rows are populated up to
-// when using the given mapping layer. A log value can be marked on the map
-// according to a given mapping layer if the row mapping on that layer points
-// to a row that has not yet reached the maxRowLength belonging to that layer.
+// maxRowLength returns the maximum length filter rows are populated up to when
+// using the given mapping layer.
+//
+// A log value can be marked on the map according to a given mapping layer if
+// the row mapping on that layer points to a row that has not yet reached the
+// maxRowLength belonging to that layer.
+//
 // This means that a row that is considered full on a given layer may still be
 // extended further on a higher order layer.
+//
 // Each value is marked on the lowest order layer possible, assuming that marks
-// are added in ascending log value index order.
-// When searching for a log value one should consider all layers and process
-// corresponding rows up until the first one where the row mapped to the given
-// layer is not full.
+// are added in ascending log value index order. When searching for a log value
+// one should consider all layers and process corresponding rows up until the
+// first one where the row mapped to the given layer is not full.
 func (p *Params) maxRowLength(layerIndex uint32) uint32 {
 	logLayerDiff := uint(layerIndex) * p.logLayerDiff
 	if logLayerDiff > p.logMapsPerEpoch {
@@ -186,7 +245,7 @@ func (p *Params) potentialMatches(rows []FilterRow, mapIndex uint32, logValue co
 			panic("potentialMatches: insufficient list of row alternatives")
 		}
 	}
-	sort.Sort(results)
+	slices.Sort(results)
 	// remove duplicates
 	j := 0
 	for i, match := range results {
@@ -201,12 +260,7 @@ func (p *Params) potentialMatches(rows []FilterRow, mapIndex uint32, logValue co
 // potentialMatches is a strictly monotonically increasing list of log value
 // indices in the range of a filter map that are potential matches for certain
 // filter criteria.
-// potentialMatches implements sort.Interface.
 // Note that nil is used as a wildcard and therefore means that all log value
 // indices in the filter map range are potential matches. If there are no
 // potential matches in the given map's range then an empty slice should be used.
 type potentialMatches []uint64
-
-func (p potentialMatches) Len() int           { return len(p) }
-func (p potentialMatches) Less(i, j int) bool { return p[i] < p[j] }
-func (p potentialMatches) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }

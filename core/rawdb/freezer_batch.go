@@ -25,9 +25,16 @@ import (
 	"github.com/golang/snappy"
 )
 
-// This is the maximum amount of data that will be buffered in memory
-// for a single freezer table batch.
-const freezerBatchBufferLimit = 2 * 1024 * 1024
+const (
+	// This is the maximum amount of data that will be buffered in memory
+	// for a single freezer table batch.
+	freezerBatchBufferLimit = 2 * 1024 * 1024
+
+	// freezerTableFlushThreshold defines the threshold for triggering a freezer
+	// table sync operation. If the number of accumulated uncommitted items exceeds
+	// this value, a sync will be scheduled.
+	freezerTableFlushThreshold = 512
+)
 
 // freezerBatch is a write operation of multiple items on a freezer.
 type freezerBatch struct {
@@ -44,12 +51,18 @@ func newFreezerBatch(f *Freezer) *freezerBatch {
 
 // Append adds an RLP-encoded item of the given kind.
 func (batch *freezerBatch) Append(kind string, num uint64, item interface{}) error {
-	return batch.tables[kind].Append(num, item)
+	if table := batch.tables[kind]; table != nil {
+		return table.Append(num, item)
+	}
+	return errUnknownTable
 }
 
 // AppendRaw adds an item of the given kind.
 func (batch *freezerBatch) AppendRaw(kind string, num uint64, item []byte) error {
-	return batch.tables[kind].AppendRaw(num, item)
+	if table := batch.tables[kind]; table != nil {
+		return table.AppendRaw(num, item)
+	}
+	return errUnknownTable
 }
 
 // reset initializes the batch.
@@ -201,6 +214,7 @@ func (batch *freezerTableBatch) commit() error {
 
 	// Update headBytes of table.
 	batch.t.headBytes += dataSize
+	items := batch.curItem - batch.t.items.Load()
 	batch.t.items.Store(batch.curItem)
 
 	// Update metrics.
@@ -208,7 +222,9 @@ func (batch *freezerTableBatch) commit() error {
 	batch.t.writeMeter.Mark(dataSize + indexSize)
 
 	// Periodically sync the table, todo (rjl493456442) make it configurable?
-	if time.Since(batch.t.lastSync) > 30*time.Second {
+	batch.t.uncommitted += items
+	if batch.t.uncommitted > freezerTableFlushThreshold && time.Since(batch.t.lastSync) > 30*time.Second {
+		batch.t.uncommitted = 0
 		batch.t.lastSync = time.Now()
 		return batch.t.Sync()
 	}

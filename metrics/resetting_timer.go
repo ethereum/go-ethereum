@@ -8,10 +8,10 @@ import (
 // GetOrRegisterResettingTimer returns an existing ResettingTimer or constructs and registers a
 // new ResettingTimer.
 func GetOrRegisterResettingTimer(name string, r Registry) *ResettingTimer {
-	if nil == r {
+	if r == nil {
 		r = DefaultRegistry
 	}
-	return r.GetOrRegister(name, NewResettingTimer).(*ResettingTimer)
+	return r.GetOrRegister(name, func() any { return NewResettingTimer() }).(*ResettingTimer)
 }
 
 // NewRegisteredResettingTimer constructs and registers a new ResettingTimer.

@@ -15,7 +15,7 @@ func GetOrRegisterMeter(name string, r Registry) *Meter {
 	if r == nil {
 		r = DefaultRegistry
 	}
-	return r.GetOrRegister(name, NewMeter).(*Meter)
+	return r.GetOrRegister(name, func() any { return NewMeter() }).(*Meter)
 }
 
 // NewMeter constructs a new Meter and launches a goroutine.

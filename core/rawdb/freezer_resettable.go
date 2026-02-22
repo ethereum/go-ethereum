@@ -105,15 +105,6 @@ func (f *resettableFreezer) Close() error {
 	return f.freezer.Close()
 }
 
-// HasAncient returns an indicator whether the specified ancient data exists
-// in the freezer
-func (f *resettableFreezer) HasAncient(kind string, number uint64) (bool, error) {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-
-	return f.freezer.HasAncient(kind, number)
-}
-
 // Ancient retrieves an ancient binary blob from the append-only immutable files.
 func (f *resettableFreezer) Ancient(kind string, number uint64) ([]byte, error) {
 	f.lock.RLock()
@@ -133,6 +124,15 @@ func (f *resettableFreezer) AncientRange(kind string, start, count, maxBytes uin
 	defer f.lock.RUnlock()
 
 	return f.freezer.AncientRange(kind, start, count, maxBytes)
+}
+
+// AncientBytes retrieves the value segment of the element specified by the id
+// and value offsets.
+func (f *resettableFreezer) AncientBytes(kind string, id, offset, length uint64) ([]byte, error) {
+	f.lock.RLock()
+	defer f.lock.RUnlock()
+
+	return f.freezer.AncientBytes(kind, id, offset, length)
 }
 
 // Ancients returns the length of the frozen items.
@@ -194,12 +194,12 @@ func (f *resettableFreezer) TruncateTail(tail uint64) (uint64, error) {
 	return f.freezer.TruncateTail(tail)
 }
 
-// Sync flushes all data tables to disk.
-func (f *resettableFreezer) Sync() error {
+// SyncAncient flushes all data tables to disk.
+func (f *resettableFreezer) SyncAncient() error {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
-	return f.freezer.Sync()
+	return f.freezer.SyncAncient()
 }
 
 // AncientDatadir returns the path of the ancient store.
@@ -221,12 +221,11 @@ func cleanup(path string) error {
 	if err != nil {
 		return err
 	}
+	defer dir.Close()
+
 	names, err := dir.Readdirnames(0)
 	if err != nil {
 		return err
-	}
-	if cerr := dir.Close(); cerr != nil {
-		return cerr
 	}
 	for _, name := range names {
 		if name == filepath.Base(path)+tmpSuffix {

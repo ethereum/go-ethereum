@@ -17,7 +17,7 @@
 package tracing
 
 import (
-	"fmt"
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -39,14 +39,17 @@ type entry interface {
 // WrapWithJournal wraps the given tracer with a journaling layer.
 func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	if hooks == nil {
-		return nil, fmt.Errorf("wrapping nil tracer")
+		return nil, errors.New("wrapping nil tracer")
 	}
 	// No state change to journal, return the wrapped hooks as is
-	if hooks.OnBalanceChange == nil && hooks.OnNonceChange == nil && hooks.OnNonceChangeV2 == nil && hooks.OnCodeChange == nil && hooks.OnStorageChange == nil {
+	if hooks.OnBalanceChange == nil && hooks.OnNonceChange == nil && hooks.OnNonceChangeV2 == nil && hooks.OnCodeChange == nil && hooks.OnCodeChangeV2 == nil && hooks.OnStorageChange == nil {
 		return hooks, nil
 	}
 	if hooks.OnNonceChange != nil && hooks.OnNonceChangeV2 != nil {
-		return nil, fmt.Errorf("cannot have both OnNonceChange and OnNonceChangeV2")
+		return nil, errors.New("cannot have both OnNonceChange and OnNonceChangeV2")
+	}
+	if hooks.OnCodeChange != nil && hooks.OnCodeChangeV2 != nil {
+		return nil, errors.New("cannot have both OnCodeChange and OnCodeChangeV2")
 	}
 
 	// Create a new Hooks instance and copy all hooks
@@ -71,6 +74,9 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	}
 	if hooks.OnCodeChange != nil {
 		wrapped.OnCodeChange = j.OnCodeChange
+	}
+	if hooks.OnCodeChangeV2 != nil {
+		wrapped.OnCodeChangeV2 = j.OnCodeChangeV2
 	}
 	if hooks.OnStorageChange != nil {
 		wrapped.OnStorageChange = j.OnStorageChange
@@ -174,6 +180,19 @@ func (j *journal) OnCodeChange(addr common.Address, prevCodeHash common.Hash, pr
 	}
 }
 
+func (j *journal) OnCodeChangeV2(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte, reason CodeChangeReason) {
+	j.entries = append(j.entries, codeChange{
+		addr:         addr,
+		prevCodeHash: prevCodeHash,
+		prevCode:     prevCode,
+		newCodeHash:  codeHash,
+		newCode:      code,
+	})
+	if j.hooks.OnCodeChangeV2 != nil {
+		j.hooks.OnCodeChangeV2(addr, prevCodeHash, prevCode, codeHash, code, reason)
+	}
+}
+
 func (j *journal) OnStorageChange(addr common.Address, slot common.Hash, prev, new common.Hash) {
 	j.entries = append(j.entries, storageChange{addr: addr, slot: slot, prev: prev, new: new})
 	if j.hooks.OnStorageChange != nil {
@@ -225,7 +244,9 @@ func (n nonceChange) revert(hooks *Hooks) {
 }
 
 func (c codeChange) revert(hooks *Hooks) {
-	if hooks.OnCodeChange != nil {
+	if hooks.OnCodeChangeV2 != nil {
+		hooks.OnCodeChangeV2(c.addr, c.newCodeHash, c.newCode, c.prevCodeHash, c.prevCode, CodeChangeRevert)
+	} else if hooks.OnCodeChange != nil {
 		hooks.OnCodeChange(c.addr, c.newCodeHash, c.newCode, c.prevCodeHash, c.prevCode)
 	}
 }

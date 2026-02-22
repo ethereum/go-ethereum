@@ -50,12 +50,6 @@ func (t *table) Get(key []byte) ([]byte, error) {
 	return t.db.Get(append([]byte(t.prefix), key...))
 }
 
-// HasAncient is a noop passthrough that just forwards the request to the underlying
-// database.
-func (t *table) HasAncient(kind string, number uint64) (bool, error) {
-	return t.db.HasAncient(kind, number)
-}
-
 // Ancient is a noop passthrough that just forwards the request to the underlying
 // database.
 func (t *table) Ancient(kind string, number uint64) ([]byte, error) {
@@ -66,6 +60,12 @@ func (t *table) Ancient(kind string, number uint64) ([]byte, error) {
 // database.
 func (t *table) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
 	return t.db.AncientRange(kind, start, count, maxBytes)
+}
+
+// AncientBytes is a noop passthrough that just forwards the request to the underlying
+// database.
+func (t *table) AncientBytes(kind string, id, offset, length uint64) ([]byte, error) {
+	return t.db.AncientBytes(kind, id, offset, length)
 }
 
 // Ancients is a noop passthrough that just forwards the request to the underlying
@@ -107,10 +107,10 @@ func (t *table) TruncateTail(items uint64) (uint64, error) {
 	return t.db.TruncateTail(items)
 }
 
-// Sync is a noop passthrough that just forwards the request to the underlying
+// SyncAncient is a noop passthrough that just forwards the request to the underlying
 // database.
-func (t *table) Sync() error {
-	return t.db.Sync()
+func (t *table) SyncAncient() error {
+	return t.db.SyncAncient()
 }
 
 // AncientDatadir returns the ancient datadir of the underlying database.
@@ -132,6 +132,11 @@ func (t *table) Delete(key []byte) error {
 // DeleteRange deletes all of the keys (and values) in the range [start,end)
 // (inclusive on start, exclusive on end).
 func (t *table) DeleteRange(start, end []byte) error {
+	// The nilness will be lost by adding the prefix, explicitly converting it
+	// to a special flag representing the end of key range.
+	if end == nil {
+		end = ethdb.MaximumKey
+	}
 	return t.db.DeleteRange(append([]byte(t.prefix), start...), append([]byte(t.prefix), end...))
 }
 
@@ -188,6 +193,12 @@ func (t *table) Compact(start []byte, limit []byte) error {
 	return t.db.Compact(start, limit)
 }
 
+// SyncKeyValue ensures that all pending writes are flushed to disk,
+// guaranteeing data durability up to the point.
+func (t *table) SyncKeyValue() error {
+	return t.db.SyncKeyValue()
+}
+
 // NewBatch creates a write-only database that buffers changes to its host db
 // until a final write is called, each operation prefixing all keys with the
 // pre-configured string.
@@ -215,6 +226,16 @@ func (b *tableBatch) Put(key, value []byte) error {
 // Delete inserts a key removal into the batch for later committing.
 func (b *tableBatch) Delete(key []byte) error {
 	return b.batch.Delete(append([]byte(b.prefix), key...))
+}
+
+// DeleteRange removes all keys in the range [start, end) from the batch for later committing.
+func (b *tableBatch) DeleteRange(start, end []byte) error {
+	// The nilness will be lost by adding the prefix, explicitly converting it
+	// to a special flag representing the end of key range.
+	if end == nil {
+		end = ethdb.MaximumKey
+	}
+	return b.batch.DeleteRange(append([]byte(b.prefix), start...), append([]byte(b.prefix), end...))
 }
 
 // ValueSize retrieves the amount of data queued up for writing.

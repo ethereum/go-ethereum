@@ -28,6 +28,7 @@ package bind
 
 import (
 	"errors"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -238,6 +239,30 @@ func DefaultDeployer(opts *TransactOpts, backend ContractBackend) DeployFn {
 		if err != nil {
 			return common.Address{}, nil, err
 		}
+		return addr, tx, nil
+	}
+}
+
+// DeployerWithNonceAssignment is basically identical to DefaultDeployer,
+// but it additionally tracks the nonce to enable automatic assignment.
+//
+// This is especially useful when deploying multiple contracts
+// from the same address — whether they are independent contracts
+// or part of a dependency chain that must be deployed in order.
+func DeployerWithNonceAssignment(opts *TransactOpts, backend ContractBackend) DeployFn {
+	var pendingNonce int64
+	if opts.Nonce != nil {
+		pendingNonce = opts.Nonce.Int64()
+	}
+	return func(input []byte, deployer []byte) (common.Address, *types.Transaction, error) {
+		if pendingNonce != 0 {
+			opts.Nonce = big.NewInt(pendingNonce)
+		}
+		addr, tx, err := DeployContract(opts, deployer, backend, input)
+		if err != nil {
+			return common.Address{}, nil, err
+		}
+		pendingNonce = int64(tx.Nonce() + 1)
 		return addr, tx, nil
 	}
 }

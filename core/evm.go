@@ -25,21 +25,16 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
 // ChainContext supports retrieving headers and consensus parameters from the
 // current blockchain to be used during transaction processing.
 type ChainContext interface {
+	consensus.ChainHeaderReader
+
 	// Engine retrieves the chain's consensus engine.
 	Engine() consensus.Engine
-
-	// GetHeader returns the header corresponding to the hash/number argument pair.
-	GetHeader(common.Hash, uint64) *types.Header
-
-	// Config returns the chain's configuration.
-	Config() *params.ChainConfig
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
@@ -85,11 +80,8 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 func NewEVMTxContext(msg *Message) vm.TxContext {
 	ctx := vm.TxContext{
 		Origin:     msg.From,
-		GasPrice:   new(big.Int).Set(msg.GasPrice),
+		GasPrice:   uint256.MustFromBig(msg.GasPrice),
 		BlobHashes: msg.BlobHashes,
-	}
-	if msg.BlobGasFeeCap != nil {
-		ctx.BlobFeeCap = new(big.Int).Set(msg.BlobGasFeeCap)
 	}
 	return ctx
 }

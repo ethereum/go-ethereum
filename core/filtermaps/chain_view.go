@@ -17,6 +17,8 @@
 package filtermaps
 
 import (
+	"sync"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -27,6 +29,7 @@ type blockchain interface {
 	GetHeader(hash common.Hash, number uint64) *types.Header
 	GetCanonicalHash(number uint64) common.Hash
 	GetReceiptsByHash(hash common.Hash) types.Receipts
+	GetRawReceipts(hash common.Hash, number uint64) types.Receipts
 }
 
 // ChainView represents an immutable view of a chain with a block id and a set
@@ -39,6 +42,7 @@ type blockchain interface {
 // of the underlying blockchain, it should only possess the block headers
 // and receipts up until the expected chain view head.
 type ChainView struct {
+	lock       sync.Mutex
 	chain      blockchain
 	headNumber uint64
 	hashes     []common.Hash // block hashes starting backwards from headNumber until first canonical hash
@@ -51,51 +55,83 @@ func NewChainView(chain blockchain, number uint64, hash common.Hash) *ChainView 
 		headNumber: number,
 		hashes:     []common.Hash{hash},
 	}
-	cv.extendNonCanonical()
+	if !cv.extendNonCanonical() {
+		return nil
+	}
 	return cv
 }
 
-// getBlockHash returns the block hash belonging to the given block number.
+// HeadNumber returns the head block number of the chain view.
+func (cv *ChainView) HeadNumber() uint64 {
+	return cv.headNumber
+}
+
+// BlockHash returns the block hash belonging to the given block number.
 // Note that the hash of the head block is not returned because ChainView might
 // represent a view where the head block is currently being created.
-func (cv *ChainView) getBlockHash(number uint64) common.Hash {
-	if number >= cv.headNumber {
+func (cv *ChainView) BlockHash(number uint64) common.Hash {
+	cv.lock.Lock()
+	defer cv.lock.Unlock()
+
+	if number > cv.headNumber {
 		panic("invalid block number")
 	}
 	return cv.blockHash(number)
 }
 
-// getBlockId returns the unique block id belonging to the given block number.
+// BlockId returns the unique block id belonging to the given block number.
 // Note that it is currently equal to the block hash. In the future it might
 // be a different id for future blocks if the log index root becomes part of
 // consensus and therefore rendering the index with the new head will happen
 // before the hash of that new head is available.
-func (cv *ChainView) getBlockId(number uint64) common.Hash {
+func (cv *ChainView) BlockId(number uint64) common.Hash {
+	cv.lock.Lock()
+	defer cv.lock.Unlock()
+
 	if number > cv.headNumber {
 		panic("invalid block number")
 	}
 	return cv.blockHash(number)
 }
 
-// getReceipts returns the set of receipts belonging to the block at the given
+// Header returns the block header at the given block number.
+func (cv *ChainView) Header(number uint64) *types.Header {
+	return cv.chain.GetHeader(cv.BlockHash(number), number)
+}
+
+// Receipts returns the set of receipts belonging to the block at the given
 // block number.
-func (cv *ChainView) getReceipts(number uint64) types.Receipts {
-	if number > cv.headNumber {
-		panic("invalid block number")
-	}
-	blockHash := cv.blockHash(number)
+func (cv *ChainView) Receipts(number uint64) types.Receipts {
+	blockHash := cv.BlockHash(number)
 	if blockHash == (common.Hash{}) {
 		log.Error("Chain view: block hash unavailable", "number", number, "head", cv.headNumber)
+		return nil
 	}
 	return cv.chain.GetReceiptsByHash(blockHash)
 }
 
-// limitedView returns a new chain view that is a truncated version of the parent view.
-func (cv *ChainView) limitedView(newHead uint64) *ChainView {
-	if newHead >= cv.headNumber {
-		return cv
+// RawReceipts returns the set of receipts belonging to the block at the given
+// block number. Does not derive the fields of the receipts, should only be
+// used during creation of the filter maps, please use cv.Receipts during querying.
+func (cv *ChainView) RawReceipts(number uint64) types.Receipts {
+	blockHash := cv.BlockHash(number)
+	if blockHash == (common.Hash{}) {
+		log.Error("Chain view: block hash unavailable", "number", number, "head", cv.headNumber)
+		return nil
 	}
-	return NewChainView(cv.chain, newHead, cv.blockHash(newHead))
+	return cv.chain.GetRawReceipts(blockHash, number)
+}
+
+// SharedRange returns the block range shared by two chain views.
+func (cv *ChainView) SharedRange(cv2 *ChainView) common.Range[uint64] {
+	if cv == nil || cv2 == nil {
+		return common.Range[uint64]{}
+	}
+	sharedLen := min(cv.headNumber, cv2.headNumber) + 1
+	for sharedLen > 0 && cv.BlockId(sharedLen-1) != cv2.BlockId(sharedLen-1) {
+		sharedLen--
+	}
+	return common.NewRange(0, sharedLen)
 }
 
 // equalViews returns true if the two chain views are equivalent.
@@ -103,7 +139,7 @@ func equalViews(cv1, cv2 *ChainView) bool {
 	if cv1 == nil || cv2 == nil {
 		return false
 	}
-	return cv1.headNumber == cv2.headNumber && cv1.getBlockId(cv1.headNumber) == cv2.getBlockId(cv2.headNumber)
+	return cv1.headNumber == cv2.headNumber && cv1.BlockId(cv1.headNumber) == cv2.BlockId(cv2.headNumber)
 }
 
 // matchViews returns true if the two chain views are equivalent up until the
@@ -116,10 +152,13 @@ func matchViews(cv1, cv2 *ChainView, number uint64) bool {
 	if cv1.headNumber < number || cv2.headNumber < number {
 		return false
 	}
+	var h1, h2 common.Hash
 	if number == cv1.headNumber || number == cv2.headNumber {
-		return cv1.getBlockId(number) == cv2.getBlockId(number)
+		h1, h2 = cv1.BlockId(number), cv2.BlockId(number)
+	} else {
+		h1, h2 = cv1.BlockHash(number), cv2.BlockHash(number)
 	}
-	return cv1.getBlockHash(number) == cv2.getBlockHash(number)
+	return h1 == h2 && h1 != common.Hash{}
 }
 
 // extendNonCanonical checks whether the previously known reverse list of head
@@ -138,7 +177,10 @@ func (cv *ChainView) extendNonCanonical() bool {
 		}
 		header := cv.chain.GetHeader(hash, number)
 		if header == nil {
-			log.Error("Header not found", "number", number, "hash", hash)
+			// Header not found - this can happen after debug_setHead operations
+			// where blocks have been deleted. Return false to indicate the chain view
+			// is no longer valid rather than logging repeated errors.
+			log.Debug("Header not found during chain view extension", "number", number, "hash", hash)
 			return false
 		}
 		cv.hashes = append(cv.hashes, header.ParentHash)

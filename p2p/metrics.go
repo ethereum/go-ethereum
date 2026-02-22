@@ -49,7 +49,11 @@ var (
 	serveSuccessMeter   = metrics.NewRegisteredMeter("p2p/serves/success", nil)
 	dialMeter           = metrics.NewRegisteredMeter("p2p/dials", nil)
 	dialSuccessMeter    = metrics.NewRegisteredMeter("p2p/dials/success", nil)
-	dialConnectionError = metrics.NewRegisteredMeter("p2p/dials/error/connection", nil)
+	dialConnectionError = metrics.NewRegisteredMeter("p2p/dials/error/connection", nil) // dial timeout; no route to host; connection refused; network is unreachable
+
+	// count peers that stayed connected for at least 1 min
+	serve1MinSuccessMeter = metrics.NewRegisteredMeter("p2p/serves/success/1min", nil)
+	dial1MinSuccessMeter  = metrics.NewRegisteredMeter("p2p/dials/success/1min", nil)
 
 	// handshake error meters
 	dialTooManyPeers        = metrics.NewRegisteredMeter("p2p/dials/error/saturated", nil)
@@ -57,34 +61,83 @@ var (
 	dialSelf                = metrics.NewRegisteredMeter("p2p/dials/error/self", nil)
 	dialUselessPeer         = metrics.NewRegisteredMeter("p2p/dials/error/useless", nil)
 	dialUnexpectedIdentity  = metrics.NewRegisteredMeter("p2p/dials/error/id/unexpected", nil)
-	dialEncHandshakeError   = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/enc", nil)
-	dialProtoHandshakeError = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/proto", nil)
+	dialEncHandshakeError   = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/enc", nil)   // EOF; connection reset during handshake; message too big; i/o timeout
+	dialProtoHandshakeError = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/proto", nil) // EOF
+
+	// capture the rest of errors that are not handled by the above meters
+	dialOtherError = metrics.NewRegisteredMeter("p2p/dials/error/other", nil)
+
+	// handshake error meters for inbound connections
+	serveTooManyPeers        = metrics.NewRegisteredMeter("p2p/serves/error/saturated", nil)
+	serveAlreadyConnected    = metrics.NewRegisteredMeter("p2p/serves/error/known", nil)
+	serveSelf                = metrics.NewRegisteredMeter("p2p/serves/error/self", nil)
+	serveUselessPeer         = metrics.NewRegisteredMeter("p2p/serves/error/useless", nil)
+	serveUnexpectedIdentity  = metrics.NewRegisteredMeter("p2p/serves/error/id/unexpected", nil)
+	serveEncHandshakeError   = metrics.NewRegisteredMeter("p2p/serves/error/rlpx/enc", nil) //EOF; connection reset during handshake; (message too big?)
+	serveProtoHandshakeError = metrics.NewRegisteredMeter("p2p/serves/error/rlpx/proto", nil)
+
+	// capture the rest of errors that are not handled by the above meters
+	serveOtherError = metrics.NewRegisteredMeter("p2p/serves/error/other", nil)
 )
 
-// markDialError matches errors that occur while setting up a dial connection
-// to the corresponding meter.
+// markDialError matches errors that occur while setting up a dial connection to the
+// corresponding meter. We don't maintain meters for evert possible error, just for
+// the most interesting ones.
 func markDialError(err error) {
 	if !metrics.Enabled() {
 		return
 	}
-	if err2 := errors.Unwrap(err); err2 != nil {
-		err = err2
-	}
-	switch err {
-	case DiscTooManyPeers:
+
+	var reason DiscReason
+	var handshakeErr *protoHandshakeError
+	d := errors.As(err, &reason)
+	switch {
+	case d && reason == DiscTooManyPeers:
 		dialTooManyPeers.Mark(1)
-	case DiscAlreadyConnected:
+	case d && reason == DiscAlreadyConnected:
 		dialAlreadyConnected.Mark(1)
-	case DiscSelf:
+	case d && reason == DiscSelf:
 		dialSelf.Mark(1)
-	case DiscUselessPeer:
+	case d && reason == DiscUselessPeer:
 		dialUselessPeer.Mark(1)
-	case DiscUnexpectedIdentity:
+	case d && reason == DiscUnexpectedIdentity:
 		dialUnexpectedIdentity.Mark(1)
-	case errEncHandshakeError:
-		dialEncHandshakeError.Mark(1)
-	case errProtoHandshakeError:
+	case errors.As(err, &handshakeErr):
 		dialProtoHandshakeError.Mark(1)
+	case errors.Is(err, errEncHandshakeError):
+		dialEncHandshakeError.Mark(1)
+	default:
+		dialOtherError.Mark(1)
+	}
+}
+
+// markServeError matches errors that occur while serving an inbound connection
+// to the corresponding meter.
+func markServeError(err error) {
+	if !metrics.Enabled() {
+		return
+	}
+
+	var reason DiscReason
+	var handshakeErr *protoHandshakeError
+	d := errors.As(err, &reason)
+	switch {
+	case d && reason == DiscTooManyPeers:
+		serveTooManyPeers.Mark(1)
+	case d && reason == DiscAlreadyConnected:
+		serveAlreadyConnected.Mark(1)
+	case d && reason == DiscSelf:
+		serveSelf.Mark(1)
+	case d && reason == DiscUselessPeer:
+		serveUselessPeer.Mark(1)
+	case d && reason == DiscUnexpectedIdentity:
+		serveUnexpectedIdentity.Mark(1)
+	case errors.As(err, &handshakeErr):
+		serveProtoHandshakeError.Mark(1)
+	case errors.Is(err, errEncHandshakeError):
+		serveEncHandshakeError.Mark(1)
+	default:
+		serveOtherError.Mark(1)
 	}
 }
 

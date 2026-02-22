@@ -91,15 +91,14 @@ type diffAccountIterator struct {
 }
 
 // newDiffAccountIterator creates an account iterator over the given state set.
-func newDiffAccountIterator(seek common.Hash, states *stateSet, fn loadAccount) AccountIterator {
+func newDiffAccountIterator(seek common.Hash, accountList []common.Hash, fn loadAccount) AccountIterator {
 	// Seek out the requested starting account
-	hashes := states.accountList()
-	index := sort.Search(len(hashes), func(i int) bool {
-		return bytes.Compare(seek[:], hashes[i][:]) <= 0
+	index := sort.Search(len(accountList), func(i int) bool {
+		return bytes.Compare(seek[:], accountList[i][:]) <= 0
 	})
 	// Assemble and returned the already seeked iterator
 	return &diffAccountIterator{
-		keys:   hashes[index:],
+		keys:   accountList[index:],
 		loadFn: fn,
 	}
 }
@@ -236,15 +235,14 @@ type diffStorageIterator struct {
 }
 
 // newDiffStorageIterator creates a storage iterator over a single diff layer.
-func newDiffStorageIterator(account common.Hash, seek common.Hash, states *stateSet, fn loadStorage) StorageIterator {
-	hashes := states.storageList(account)
-	index := sort.Search(len(hashes), func(i int) bool {
-		return bytes.Compare(seek[:], hashes[i][:]) <= 0
+func newDiffStorageIterator(account common.Hash, seek common.Hash, storageList []common.Hash, fn loadStorage) StorageIterator {
+	index := sort.Search(len(storageList), func(i int) bool {
+		return bytes.Compare(seek[:], storageList[i][:]) <= 0
 	})
 	// Assemble and returned the already seeked iterator
 	return &diffStorageIterator{
 		account: account,
-		keys:    hashes[index:],
+		keys:    storageList[index:],
 		loadFn:  fn,
 	}
 }
@@ -311,7 +309,7 @@ type diskStorageIterator struct {
 	it      ethdb.Iterator
 }
 
-// StorageIterator creates a storage iterator over the persistent state.
+// newDiskStorageIterator creates a storage iterator over the persistent state.
 func newDiskStorageIterator(db ethdb.KeyValueStore, account common.Hash, seek common.Hash) StorageIterator {
 	pos := common.TrimRightZeroes(seek[:])
 	return &diskStorageIterator{

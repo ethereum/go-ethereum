@@ -4,6 +4,27 @@ All notable changes to the tracing interface will be documented in this file.
 
 ## [Unreleased]
 
+### Deprecated methods
+
+- `OnCodeChange(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte)`: This hook is deprecated in favor of `OnCodeChangeV2` which includes a reason parameter ([#32525](https://github.com/ethereum/go-ethereum/pull/32525)).
+
+### New methods
+
+- `OnCodeChangeV2(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte, reason CodeChangeReason)`: This hook is called when a code change occurs. It is a successor to `OnCodeChange` with an additional reason parameter ([#32525](https://github.com/ethereum/go-ethereum/pull/32525)).
+
+### New types
+
+- `CodeChangeReason` is a new type used to provide a reason for code changes. It includes various reasons such as contract creation, genesis initialization, EIP-7702 authorization, self-destruct, and revert operations ([#32525](https://github.com/ethereum/go-ethereum/pull/32525)).
+
+## [v1.15.4](https://github.com/ethereum/go-ethereum/releases/tag/v1.15.4)
+
+### Modified types
+
+- `GasChangeReason` has been extended with auto-generated String() methods for better debugging and logging ([#31234](https://github.com/ethereum/go-ethereum/pull/31234)).
+- `NonceChangeReason` has been extended with auto-generated String() methods for better debugging and logging ([#31234](https://github.com/ethereum/go-ethereum/pull/31234)).
+
+## [v1.15.0](https://github.com/ethereum/go-ethereum/releases/tag/v1.15.0)
+
 The tracing interface has been extended with backwards-compatible changes to support more use-cases and simplify tracer code. The most notable change is a state journaling library which emits reverse events when a call is reverted.
 
 ### Deprecated methods
@@ -23,8 +44,13 @@ The tracing interface has been extended with backwards-compatible changes to sup
 
 ### Modified types
 
-- `VMContext.StateDB` has been extended with `GetCodeHash(addr common.Address) common.Hash` method used to retrieve the code hash an account.
+- `VMContext.StateDB` has been extended with the following method:
+  - `GetCodeHash(addr common.Address) common.Hash` method used to retrieve the code hash of an account.
+- `BlockEvent` has been modified:
+  - The `TD` (Total Difficulty) field has been removed ([#30744](https://github.com/ethereum/go-ethereum/pull/30744)).
 - `BalanceChangeReason` has been extended with the `BalanceChangeRevert` reason. More on that below.
+- `GasChangeReason` has been extended with the following reason:
+  - `GasChangeTxDataFloor` is the amount of extra gas the transaction has to pay to reach the minimum gas requirement for the transaction data. This change will always be a negative change.
 
 ### State journaling
 
@@ -49,6 +75,26 @@ The state changes that are covered by the journaling library are:
 - `OnCodeChange`
 - `OnStorageChange`
 
+## [v1.14.12](https://github.com/ethereum/go-ethereum/releases/tag/v1.14.12)
+
+This release contains a change in behavior for `OnCodeChange` hook and an extension to the StateDB interface.
+
+### Modified types
+
+- `VMContext.StateDB` has been extended with the following method:
+  - `GetTransientState(addr common.Address, slot common.Hash) common.Hash` method used to access contract transient storage ([#30531](https://github.com/ethereum/go-ethereum/pull/30531)).
+
+### `OnCodeChange` change
+
+The `OnCodeChange` hook is now called when the code of a contract is removed due to a selfdestruct. Previously, no code change was emitted on such occasions.
+
+## [v1.14.10](https://github.com/ethereum/go-ethereum/releases/tag/v1.14.10)
+
+### Modified types
+
+- `OpContext` has been extended with the following method:
+  - `ContractCode() []byte` provides access to the contract bytecode within the OpContext interface ([#30466](https://github.com/ethereum/go-ethereum/pull/30466)).
+
 ## [v1.14.9](https://github.com/ethereum/go-ethereum/releases/tag/v1.14.9)
 
 ### Modified types
@@ -56,13 +102,6 @@ The state changes that are covered by the journaling library are:
 - `GasChangeReason` has been extended with the following reasons which will be enabled only post-Verkle. There shouldn't be any gas changes with those reasons prior to the fork.
   - `GasChangeWitnessContractCollisionCheck` flags the event of adding to the witness when checking for contract address collision.
 
-## [v1.14.12]
-
-This release contains a change in behavior for `OnCodeChange` hook.
-
-### `OnCodeChange` change
-
-The `OnCodeChange` hook is now called when the code of a contract is removed due to a selfdestruct. Previously, no code change was emitted on such occasions.
 
 ## [v1.14.4]
 
@@ -148,7 +187,12 @@ The hooks `CaptureStart` and `CaptureEnd` have been removed. These hooks signale
 - `CaptureState` -> `OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error)`. `op` is of type `byte` which can be cast to `vm.OpCode` when necessary. A `*vm.ScopeContext` is not passed anymore. It is replaced by `tracing.OpContext` which offers access to the memory, stack and current contract.
 - `CaptureFault` -> `OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error)`. Similar to above.
 
-[unreleased]: https://github.com/ethereum/go-ethereum/compare/v1.14.8...master
-[v1.14.0]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.0
-[v1.14.3]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.3
+[unreleased]: https://github.com/ethereum/go-ethereum/compare/v1.16.3...master
+[v1.15.4]: https://github.com/ethereum/go-ethereum/releases/tag/v1.15.4
+[v1.15.0]: https://github.com/ethereum/go-ethereum/releases/tag/v1.15.0
+[v1.14.12]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.12
+[v1.14.10]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.10
+[v1.14.9]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.9
 [v1.14.4]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.4
+[v1.14.3]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.3
+[v1.14.0]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.0

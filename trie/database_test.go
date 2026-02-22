@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
-// testReader implements database.Reader interface, providing function to
+// testReader implements database.NodeReader interface, providing function to
 // access trie nodes.
 type testReader struct {
 	db     ethdb.Database
@@ -33,7 +33,7 @@ type testReader struct {
 	nodes  []*trienode.MergedNodeSet // sorted from new to old
 }
 
-// Node implements database.Reader interface, retrieving trie node with
+// Node implements database.NodeReader interface, retrieving trie node with
 // all available cached layers.
 func (r *testReader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
 	// Check the node presence with the cached layer, from latest to oldest.
@@ -54,7 +54,7 @@ func (r *testReader) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 	return rawdb.ReadTrieNode(r.db, owner, path, hash, r.scheme), nil
 }
 
-// testDb implements database.Database interface, using for testing purpose.
+// testDb implements database.NodeDatabase interface, using for testing purpose.
 type testDb struct {
 	disk    ethdb.Database
 	root    common.Hash
@@ -84,6 +84,10 @@ func (db *testDb) Preimage(hash common.Hash) []byte {
 
 func (db *testDb) InsertPreimage(preimages map[common.Hash][]byte) {
 	rawdb.WritePreimages(db.disk, preimages)
+}
+
+func (db *testDb) PreimageEnabled() bool {
+	return true
 }
 
 func (db *testDb) Scheme() string { return db.scheme }

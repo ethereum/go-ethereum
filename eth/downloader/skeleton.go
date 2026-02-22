@@ -64,6 +64,12 @@ var errSyncMerged = errors.New("sync merged")
 // should abort and restart with the new state.
 var errSyncReorged = errors.New("sync reorged")
 
+// errSyncTrimmed is an internal helper error to signal that the local chain
+// has been trimmed (e.g, via debug_setHead explicitly) and the skeleton chain
+// is no longer linked with the local chain. In this case, the skeleton sync
+// should be re-scheduled again.
+var errSyncTrimmed = errors.New("sync trimmed")
+
 // errTerminated is returned if the sync mechanism was terminated for this run of
 // the process. This is usually the case when Geth is shutting down and some events
 // might still be propagating.
@@ -201,6 +207,7 @@ type backfiller interface {
 type skeleton struct {
 	db     ethdb.Database // Database backing the skeleton
 	filler backfiller     // Chain syncer suspended/resumed by head events
+	chain  chainReader    // Underlying block chain
 
 	peers *peerSet                   // Set of peers we can sync from
 	idles map[string]*peerConnection // Set of idle peers in the current sync cycle
@@ -225,12 +232,19 @@ type skeleton struct {
 	syncStarting func() // callback triggered after a sync cycle is inited but before started
 }
 
+// chainReader wraps the method to retrieve the head of the local chain.
+type chainReader interface {
+	// CurrentSnapBlock retrieves the head snap block from the local chain.
+	CurrentSnapBlock() *types.Header
+}
+
 // newSkeleton creates a new sync skeleton that tracks a potentially dangling
 // header chain until it's linked into an existing set of blocks.
-func newSkeleton(db ethdb.Database, peers *peerSet, drop peerDropFn, filler backfiller) *skeleton {
+func newSkeleton(db ethdb.Database, peers *peerSet, drop peerDropFn, filler backfiller, chain chainReader) *skeleton {
 	sk := &skeleton{
 		db:         db,
 		filler:     filler,
+		chain:      chain,
 		peers:      peers,
 		drop:       drop,
 		requests:   make(map[uint64]*headerRequest),
@@ -275,7 +289,7 @@ func (s *skeleton) startup() {
 			for {
 				// If the sync cycle terminated or was terminated, propagate up when
 				// higher layers request termination. There's no fancy explicit error
-				// signalling as the sync loop should never terminate (TM).
+				// signaling as the sync loop should never terminate (TM).
 				newhead, err := s.sync(head)
 				switch {
 				case err == errSyncLinked:
@@ -295,6 +309,11 @@ func (s *skeleton) startup() {
 					// way that requires resyncing it. Restart sync with the new
 					// head to force a cleanup.
 					head = newhead
+
+				case err == errSyncTrimmed:
+					// The skeleton chain is not linked with the local chain anymore,
+					// restart the sync.
+					head = nil
 
 				case err == errTerminated:
 					// Sync was requested to be terminated from within, stop and
@@ -343,6 +362,29 @@ func (s *skeleton) Sync(head *types.Header, final *types.Header, force bool) err
 	}
 }
 
+// linked returns the flag indicating whether the skeleton has been linked with
+// the local chain.
+func (s *skeleton) linked(number uint64, hash common.Hash) bool {
+	linked := rawdb.HasHeader(s.db, hash, number) &&
+		rawdb.HasBody(s.db, hash, number) &&
+		rawdb.HasReceipts(s.db, hash, number)
+
+	// Ensure the skeleton chain links to the local chain below the chain head.
+	// This accounts for edge cases where leftover chain segments above the head
+	// may still link to the skeleton chain. In such cases, synchronization is
+	// likely to fail due to potentially missing segments in the middle.
+	//
+	// You can try to produce the edge case by these steps:
+	// - sync the chain
+	// - debug.setHead(`0x1`)
+	// - kill the geth process (the chain segment will be left with chain head rewound)
+	// - restart
+	if s.chain.CurrentSnapBlock() != nil {
+		linked = linked && s.chain.CurrentSnapBlock().Number.Uint64() >= number
+	}
+	return linked
+}
+
 // sync is the internal version of Sync that executes a single sync cycle, either
 // until some termination condition is reached, or until the current cycle merges
 // with a previously aborted run.
@@ -367,10 +409,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 
 	// If the sync is already done, resume the backfiller. When the loop stops,
 	// terminate the backfiller too.
-	linked := len(s.progress.Subchains) == 1 &&
-		rawdb.HasHeader(s.db, s.progress.Subchains[0].Next, s.scratchHead) &&
-		rawdb.HasBody(s.db, s.progress.Subchains[0].Next, s.scratchHead) &&
-		rawdb.HasReceipts(s.db, s.progress.Subchains[0].Next, s.scratchHead)
+	linked := len(s.progress.Subchains) == 1 && s.linked(s.scratchHead, s.progress.Subchains[0].Next)
 	if linked {
 		s.filler.resume()
 	}
@@ -384,7 +423,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			defer close(done)
 			filled := s.filler.suspend()
 			if filled == nil {
-				log.Error("Latest filled block is not available")
+				log.Warn("Latest filled block is not available")
 				return
 			}
 			// If something was filled, try to delete stale sync helpers. If
@@ -486,7 +525,17 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			// is still running, it will pick it up. If it already terminated,
 			// a new cycle needs to be spun up.
 			if linked {
-				s.filler.resume()
+				if len(s.progress.Subchains) == 1 && s.linked(s.scratchHead, s.progress.Subchains[0].Next) {
+					// The skeleton chain has been extended and is still linked with the local
+					// chain, try to re-schedule the backfiller if it's already terminated.
+					s.filler.resume()
+				} else {
+					// The skeleton chain is no longer linked to the local chain for some reason
+					// (e.g. debug_setHead was used to trim the local chain). Re-schedule the
+					// skeleton sync to fill the chain gap.
+					log.Warn("Local chain has been trimmed", "tailnumber", s.scratchHead, "tailhash", s.progress.Subchains[0].Next)
+					return nil, errSyncTrimmed
+				}
 			}
 
 		case req := <-requestFails:
@@ -649,9 +698,19 @@ func (s *skeleton) processNewHead(head *types.Header, final *types.Header) error
 		// Not a noop / double head announce, abort with a reorg
 		return fmt.Errorf("%w, tail: %d, head: %d, newHead: %d", errChainReorged, lastchain.Tail, lastchain.Head, number)
 	}
+	// Terminate the sync if the chain head is gapped
 	if lastchain.Head+1 < number {
 		return fmt.Errorf("%w, head: %d, newHead: %d", errChainGapped, lastchain.Head, number)
 	}
+	// Ignore the duplicated beacon header announcement
+	if lastchain.Head == number {
+		local := rawdb.ReadSkeletonHeader(s.db, number)
+		if local != nil && local.Hash() == head.Hash() {
+			log.Debug("Ignored the identical beacon header", "number", number, "hash", local.Hash())
+			return nil
+		}
+	}
+	// Terminate the sync if the chain head is forked
 	if parent := rawdb.ReadSkeletonHeader(s.db, number-1); parent.Hash() != head.ParentHash {
 		return fmt.Errorf("%w, ancestor: %d, hash: %s, want: %s", errChainForked, number-1, parent.Hash(), head.ParentHash)
 	}
@@ -669,6 +728,7 @@ func (s *skeleton) processNewHead(head *types.Header, final *types.Header) error
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write skeleton sync status", "err", err)
 	}
+	log.Debug("Extended beacon header chain", "number", head.Number, "hash", head.Hash())
 	return nil
 }
 
@@ -909,6 +969,45 @@ func (s *skeleton) revertRequest(req *headerRequest) {
 	s.scratchOwners[(s.scratchHead-req.head)/requestHeaders] = ""
 }
 
+// mergeSubchains is invoked once certain beacon headers have been persisted locally
+// and the subchains should be merged in case there are some overlaps between. An
+// indicator will be returned if the last subchain is merged with previous subchain.
+func (s *skeleton) mergeSubchains() bool {
+	// If the subchain extended into the next subchain, we need to handle
+	// the overlap. Since there could be many overlaps, do this in a loop.
+	var merged bool
+	for len(s.progress.Subchains) > 1 && s.progress.Subchains[1].Head >= s.progress.Subchains[0].Tail {
+		// Extract some stats from the second subchain
+		head := s.progress.Subchains[1].Head
+		tail := s.progress.Subchains[1].Tail
+		next := s.progress.Subchains[1].Next
+
+		// Since we just overwrote part of the next subchain, we need to trim
+		// its head independent of matching or mismatching content
+		if s.progress.Subchains[1].Tail >= s.progress.Subchains[0].Tail {
+			// Fully overwritten, get rid of the subchain as a whole
+			log.Debug("Previous subchain fully overwritten", "head", head, "tail", tail, "next", next)
+			s.progress.Subchains = append(s.progress.Subchains[:1], s.progress.Subchains[2:]...)
+			continue
+		} else {
+			// Partially overwritten, trim the head to the overwritten size
+			log.Debug("Previous subchain partially overwritten", "head", head, "tail", tail, "next", next)
+			s.progress.Subchains[1].Head = s.progress.Subchains[0].Tail - 1
+		}
+		// If the old subchain is an extension of the new one, merge the two
+		// and let the skeleton syncer restart (to clean internal state)
+		if rawdb.ReadSkeletonHeader(s.db, s.progress.Subchains[1].Head).Hash() == s.progress.Subchains[0].Next {
+			log.Debug("Previous subchain merged", "head", head, "tail", tail, "next", next)
+			s.progress.Subchains[0].Tail = s.progress.Subchains[1].Tail
+			s.progress.Subchains[0].Next = s.progress.Subchains[1].Next
+
+			s.progress.Subchains = append(s.progress.Subchains[:1], s.progress.Subchains[2:]...)
+			merged = true
+		}
+	}
+	return merged
+}
+
 func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged bool) {
 	res.peer.log.Trace("Processing header response", "head", res.headers[0].Number, "hash", res.headers[0].Hash(), "count", len(res.headers))
 
@@ -982,10 +1081,9 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 				// processing is done, so it's just one more "needless" check.
 				//
 				// The weird cascading checks are done to minimize the database reads.
-				linked = rawdb.HasHeader(s.db, header.ParentHash, header.Number.Uint64()-1) &&
-					rawdb.HasBody(s.db, header.ParentHash, header.Number.Uint64()-1) &&
-					rawdb.HasReceipts(s.db, header.ParentHash, header.Number.Uint64()-1)
+				linked = s.linked(header.Number.Uint64()-1, header.ParentHash)
 				if linked {
+					log.Debug("Primary subchain linked", "number", header.Number.Uint64()-1, "hash", header.ParentHash)
 					break
 				}
 			}
@@ -999,6 +1097,9 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 		// If the beacon chain was linked to the local chain, completely swap out
 		// all internal progress and abort header synchronization.
 		if linked {
+			// Merge all overlapped subchains beforehand
+			s.mergeSubchains()
+
 			// Linking into the local chain should also mean that there are no
 			// leftover subchains, but in the case of importing the blocks via
 			// the engine API, we will not push the subchains forward. This will
@@ -1056,41 +1157,10 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 
 		s.scratchHead -= uint64(consumed)
 
-		// If the subchain extended into the next subchain, we need to handle
-		// the overlap. Since there could be many overlaps (come on), do this
-		// in a loop.
-		for len(s.progress.Subchains) > 1 && s.progress.Subchains[1].Head >= s.progress.Subchains[0].Tail {
-			// Extract some stats from the second subchain
-			head := s.progress.Subchains[1].Head
-			tail := s.progress.Subchains[1].Tail
-			next := s.progress.Subchains[1].Next
-
-			// Since we just overwrote part of the next subchain, we need to trim
-			// its head independent of matching or mismatching content
-			if s.progress.Subchains[1].Tail >= s.progress.Subchains[0].Tail {
-				// Fully overwritten, get rid of the subchain as a whole
-				log.Debug("Previous subchain fully overwritten", "head", head, "tail", tail, "next", next)
-				s.progress.Subchains = append(s.progress.Subchains[:1], s.progress.Subchains[2:]...)
-				continue
-			} else {
-				// Partially overwritten, trim the head to the overwritten size
-				log.Debug("Previous subchain partially overwritten", "head", head, "tail", tail, "next", next)
-				s.progress.Subchains[1].Head = s.progress.Subchains[0].Tail - 1
-			}
-			// If the old subchain is an extension of the new one, merge the two
-			// and let the skeleton syncer restart (to clean internal state)
-			if rawdb.ReadSkeletonHeader(s.db, s.progress.Subchains[1].Head).Hash() == s.progress.Subchains[0].Next {
-				log.Debug("Previous subchain merged", "head", head, "tail", tail, "next", next)
-				s.progress.Subchains[0].Tail = s.progress.Subchains[1].Tail
-				s.progress.Subchains[0].Next = s.progress.Subchains[1].Next
-
-				s.progress.Subchains = append(s.progress.Subchains[:1], s.progress.Subchains[2:]...)
-				merged = true
-			}
-		}
 		// If subchains were merged, all further available headers in the scratch
 		// space are invalid since we skipped ahead. Stop processing the scratch
 		// space to avoid dropping peers thinking they delivered invalid data.
+		merged = s.mergeSubchains()
 		if merged {
 			break
 		}
@@ -1121,15 +1191,17 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 // due to the downloader backfilling past the tracked tail.
 func (s *skeleton) cleanStales(filled *types.Header) error {
 	number := filled.Number.Uint64()
-	log.Trace("Cleaning stale beacon headers", "filled", number, "hash", filled.Hash())
+	log.Debug("Cleaning stale beacon headers", "filled", number, "hash", filled.Hash())
 
-	// If the filled header is below the linked subchain, something's corrupted
-	// internally. Report and error and refuse to do anything.
+	// If the filled header is below the subchain, it means the skeleton is not
+	// linked with local chain yet, don't bother to do cleanup.
 	if number+1 < s.progress.Subchains[0].Tail {
-		return fmt.Errorf("filled header below beacon header tail: %d < %d", number, s.progress.Subchains[0].Tail)
+		log.Debug("filled header below beacon header tail", "filled", number, "tail", s.progress.Subchains[0].Tail)
+		return nil
 	}
 	// If nothing in subchain is filled, don't bother to do cleanup.
 	if number+1 == s.progress.Subchains[0].Tail {
+		log.Debug("Skeleton chain not yet consumed", "filled", number, "hash", filled.Hash(), "tail", s.progress.Subchains[0].Tail)
 		return nil
 	}
 	// If the latest fill was on a different subchain, it means the backfiller
@@ -1150,6 +1222,9 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 	if number < s.progress.Subchains[0].Head {
 		// The skeleton chain is partially consumed, set the new tail as filled+1.
 		tail := rawdb.ReadSkeletonHeader(s.db, number+1)
+		if tail == nil {
+			return fmt.Errorf("filled header is missing: %d", number+1)
+		}
 		if tail.ParentHash != filled.Hash() {
 			return fmt.Errorf("filled header is discontinuous with subchain: %d %s, please file an issue", number, filled.Hash())
 		}
@@ -1203,6 +1278,7 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write beacon trim data", "err", err)
 	}
+	log.Debug("Cleaned stale beacon headers", "start", start, "end", end)
 	return nil
 }
 

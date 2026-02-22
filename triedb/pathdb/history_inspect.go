@@ -50,18 +50,18 @@ func sanitizeRange(start, end uint64, freezer ethdb.AncientReader) (uint64, uint
 	if err != nil {
 		return 0, 0, err
 	}
-	last := head - 1
+	last := head
 	if end != 0 && end < last {
 		last = end
 	}
 	// Make sure the range is valid
-	if first >= last {
+	if first > last {
 		return 0, 0, fmt.Errorf("range is invalid, first: %d, last: %d", first, last)
 	}
 	return first, last, nil
 }
 
-func inspectHistory(freezer ethdb.AncientReader, start, end uint64, onHistory func(*history, *HistoryStats)) (*HistoryStats, error) {
+func inspectHistory(freezer ethdb.AncientReader, start, end uint64, onHistory func(*stateHistory, *HistoryStats)) (*HistoryStats, error) {
 	var (
 		stats  = &HistoryStats{}
 		init   = time.Now()
@@ -74,7 +74,7 @@ func inspectHistory(freezer ethdb.AncientReader, start, end uint64, onHistory fu
 	for id := start; id <= end; id += 1 {
 		// The entire history object is decoded, although it's unnecessary for
 		// account inspection. TODO(rjl493456442) optimization is worthwhile.
-		h, err := readHistory(freezer, id)
+		h, err := readStateHistory(freezer, id)
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +98,7 @@ func inspectHistory(freezer ethdb.AncientReader, start, end uint64, onHistory fu
 
 // accountHistory inspects the account history within the range.
 func accountHistory(freezer ethdb.AncientReader, address common.Address, start, end uint64) (*HistoryStats, error) {
-	return inspectHistory(freezer, start, end, func(h *history, stats *HistoryStats) {
+	return inspectHistory(freezer, start, end, func(h *stateHistory, stats *HistoryStats) {
 		blob, exists := h.accounts[address]
 		if !exists {
 			return
@@ -111,7 +111,7 @@ func accountHistory(freezer ethdb.AncientReader, address common.Address, start, 
 // storageHistory inspects the storage history within the range.
 func storageHistory(freezer ethdb.AncientReader, address common.Address, slot common.Hash, start uint64, end uint64) (*HistoryStats, error) {
 	slotHash := crypto.Keccak256Hash(slot.Bytes())
-	return inspectHistory(freezer, start, end, func(h *history, stats *HistoryStats) {
+	return inspectHistory(freezer, start, end, func(h *stateHistory, stats *HistoryStats) {
 		slots, exists := h.storages[address]
 		if !exists {
 			return
@@ -143,13 +143,13 @@ func historyRange(freezer ethdb.AncientReader) (uint64, uint64, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	last := head - 1
+	last := head
 
-	fh, err := readHistory(freezer, first)
+	fh, err := readStateHistory(freezer, first)
 	if err != nil {
 		return 0, 0, err
 	}
-	lh, err := readHistory(freezer, last)
+	lh, err := readStateHistory(freezer, last)
 	if err != nil {
 		return 0, 0, err
 	}

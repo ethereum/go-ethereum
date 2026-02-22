@@ -412,19 +412,19 @@ type SyncPeer interface {
 
 	// RequestAccountRange fetches a batch of accounts rooted in a specific account
 	// trie, starting with the origin.
-	RequestAccountRange(id uint64, root, origin, limit common.Hash, bytes uint64) error
+	RequestAccountRange(id uint64, root, origin, limit common.Hash, bytes int) error
 
 	// RequestStorageRanges fetches a batch of storage slots belonging to one or
 	// more accounts. If slots from only one account is requested, an origin marker
 	// may also be used to retrieve from there.
-	RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, bytes uint64) error
+	RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, bytes int) error
 
 	// RequestByteCodes fetches a batch of bytecodes by hash.
-	RequestByteCodes(id uint64, hashes []common.Hash, bytes uint64) error
+	RequestByteCodes(id uint64, hashes []common.Hash, bytes int) error
 
 	// RequestTrieNodes fetches a batch of account or storage trie nodes rooted in
 	// a specific state trie.
-	RequestTrieNodes(id uint64, root common.Hash, paths []TrieNodePathSet, bytes uint64) error
+	RequestTrieNodes(id uint64, root common.Hash, count int, paths []TrieNodePathSet, bytes int) error
 
 	// Log retrieves the peer's own contextual logger.
 	Log() log.Logger
@@ -502,8 +502,10 @@ type Syncer struct {
 	storageHealed      uint64             // Number of storage slots downloaded during the healing stage
 	storageHealedBytes common.StorageSize // Number of raw storage bytes persisted to disk during the healing stage
 
-	startTime time.Time // Time instance when snapshot sync started
-	logTime   time.Time // Time instance when status was last reported
+	startTime     time.Time // Time instance when snapshot sync started
+	healStartTime time.Time // Time instance when the state healing started
+	syncTimeOnce  sync.Once // Ensure that the state sync time is uploaded only once
+	logTime       time.Time // Time instance when status was last reported
 
 	pend sync.WaitGroup // Tracks network request goroutines for graceful shutdown
 	lock sync.RWMutex   // Protects fields that can change outside of sync (peers, reqs, root)
@@ -615,7 +617,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 	s.statelessPeers = make(map[string]struct{})
 	s.lock.Unlock()
 
-	if s.startTime == (time.Time{}) {
+	if s.startTime.IsZero() {
 		s.startTime = time.Now()
 	}
 	// Retrieve the previous sync status from LevelDB and abort if already synced
@@ -685,6 +687,14 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		s.cleanStorageTasks()
 		s.cleanAccountTasks()
 		if len(s.tasks) == 0 && s.healer.scheduler.Pending() == 0 {
+			// State healing phase completed, record the elapsed time in metrics.
+			// Note: healing may be rerun in subsequent cycles to fill gaps between
+			// pivot states (e.g., if chain sync takes longer).
+			if !s.healStartTime.IsZero() {
+				stateHealTimeGauge.Inc(int64(time.Since(s.healStartTime)))
+				log.Info("State healing phase is completed", "elapsed", common.PrettyDuration(time.Since(s.healStartTime)))
+				s.healStartTime = time.Time{}
+			}
 			return nil
 		}
 		// Assign all the data retrieval tasks to any free peers
@@ -693,7 +703,17 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		s.assignStorageTasks(storageResps, storageReqFails, cancel)
 
 		if len(s.tasks) == 0 {
-			// Sync phase done, run heal phase
+			// State sync phase completed, record the elapsed time in metrics.
+			// Note: the initial state sync runs only once, regardless of whether
+			// a new cycle is started later. Any state differences in subsequent
+			// cycles will be handled by the state healer.
+			s.syncTimeOnce.Do(func() {
+				stateSyncTimeGauge.Update(int64(time.Since(s.startTime)))
+				log.Info("State sync phase is completed", "elapsed", common.PrettyDuration(time.Since(s.startTime)))
+			})
+			if s.healStartTime.IsZero() {
+				s.healStartTime = time.Now()
+			}
 			s.assignTrienodeHealTasks(trienodeHealResps, trienodeHealReqFails, cancel)
 			s.assignBytecodeHealTasks(bytecodeHealResps, bytecodeHealReqFails, cancel)
 		}
@@ -1082,7 +1102,7 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 			if cap < minRequestSize { // Don't bother with peers below a bare minimum performance
 				cap = minRequestSize
 			}
-			if err := peer.RequestAccountRange(reqid, root, req.origin, req.limit, uint64(cap)); err != nil {
+			if err := peer.RequestAccountRange(reqid, root, req.origin, req.limit, cap); err != nil {
 				peer.Log().Debug("Failed to request account range", "err", err)
 				s.scheduleRevertAccountRequest(req)
 			}
@@ -1339,7 +1359,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 			if subtask != nil {
 				origin, limit = req.origin[:], req.limit[:]
 			}
-			if err := peer.RequestStorageRanges(reqid, root, accounts, origin, limit, uint64(cap)); err != nil {
+			if err := peer.RequestStorageRanges(reqid, root, accounts, origin, limit, cap); err != nil {
 				log.Debug("Failed to request storage", "err", err)
 				s.scheduleRevertStorageRequest(req)
 			}
@@ -1472,7 +1492,7 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 			defer s.pend.Done()
 
 			// Attempt to send the remote request and revert if it fails
-			if err := peer.RequestTrieNodes(reqid, root, pathsets, maxRequestSize); err != nil {
+			if err := peer.RequestTrieNodes(reqid, root, len(paths), pathsets, maxRequestSize); err != nil {
 				log.Debug("Failed to request trienode healers", "err", err)
 				s.scheduleRevertTrienodeHealRequest(req)
 			}
@@ -1987,9 +2007,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 func (s *Syncer) processBytecodeResponse(res *bytecodeResponse) {
 	batch := s.db.NewBatch()
 
-	var (
-		codes uint64
-	)
+	var codes uint64
 	for i, hash := range res.hashes {
 		code := res.codes[i]
 
@@ -3112,6 +3130,10 @@ func (s *Syncer) reportSyncProgress(force bool) {
 	// Don't report anything until we have a meaningful progress
 	if estBytes < 1.0 {
 		return
+	}
+	// Cap the estimated state size using the synced size to avoid negative values
+	if estBytes < float64(synced) {
+		estBytes = float64(synced)
 	}
 	elapsed := time.Since(s.startTime)
 	estTime := elapsed / time.Duration(synced) * time.Duration(estBytes)

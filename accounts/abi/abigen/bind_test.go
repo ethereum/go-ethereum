@@ -485,13 +485,13 @@ var bindTests = []struct {
 			contract Defaulter {
 				address public caller;
 
-				function() {
+				fallback() external payable {
 					caller = msg.sender;
 				}
 			}
 		`,
-		[]string{`6060604052606a8060106000396000f360606040523615601d5760e060020a6000350463fc9c8d3981146040575b605e6000805473ffffffffffffffffffffffffffffffffffffffff191633179055565b606060005473ffffffffffffffffffffffffffffffffffffffff1681565b005b6060908152602090f3`},
-		[]string{`[{"constant":true,"inputs":[],"name":"caller","outputs":[{"name":"","type":"address"}],"type":"function"}]`},
+		[]string{`608060405234801561000f575f80fd5b5061013d8061001d5f395ff3fe608060405260043610610021575f3560e01c8063fc9c8d391461006257610022565b5b335f806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055005b34801561006d575f80fd5b5061007661008c565b60405161008391906100ee565b60405180910390f35b5f8054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f6100d8826100af565b9050919050565b6100e8816100ce565b82525050565b5f6020820190506101015f8301846100df565b9291505056fea26469706673582212201e9273ecfb1f534644c77f09a25c21baaba81cf1c444ebc071e12a225a23c72964736f6c63430008140033`},
+		[]string{`[{"stateMutability":"payable","type":"fallback"},{"inputs":[],"name":"caller","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}]`},
 		`
 			"math/big"
 
@@ -939,6 +939,7 @@ var bindTests = []struct {
 					if _, err := eventer.RaiseSimpleEvent(auth, common.Address{byte(j)}, [32]byte{byte(j)}, true, big.NewInt(int64(10*i+j))); err != nil {
 						t.Fatalf("block %d, event %d: raise failed: %v", i, j, err)
 					}
+					time.Sleep(time.Millisecond * 200)
 				}
 				sim.Commit()
 			}
@@ -1495,7 +1496,7 @@ var bindTests = []struct {
 			if n != 3 {
 				t.Fatalf("Invalid bar0 event")
 			}
-		case <-time.NewTimer(3 * time.Second).C:
+		case <-time.NewTimer(10 * time.Second).C:
 			t.Fatalf("Wait bar0 event timeout")
 		}
 
@@ -1506,7 +1507,7 @@ var bindTests = []struct {
 			if n != 1 {
 				t.Fatalf("Invalid bar event")
 			}
-		case <-time.NewTimer(3 * time.Second).C:
+		case <-time.NewTimer(10 * time.Second).C:
 			t.Fatalf("Wait bar event timeout")
 		}
 		close(stopCh)

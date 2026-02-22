@@ -20,7 +20,7 @@ package forks
 type Fork int
 
 const (
-	Frontier = iota
+	Frontier Fork = iota
 	FrontierThawing
 	Homestead
 	DAO
@@ -40,4 +40,48 @@ const (
 	Cancun
 	Prague
 	Osaka
+	BPO1
+	BPO2
+	BPO3
+	BPO4
+	BPO5
+	Amsterdam
 )
+
+// String implements fmt.Stringer.
+func (f Fork) String() string {
+	s, ok := forkToString[f]
+	if !ok {
+		return "Unknown fork"
+	}
+	return s
+}
+
+var forkToString = map[Fork]string{
+	Frontier:         "Frontier",
+	FrontierThawing:  "Frontier Thawing",
+	Homestead:        "Homestead",
+	DAO:              "DAO",
+	TangerineWhistle: "Tangerine Whistle",
+	SpuriousDragon:   "Spurious Dragon",
+	Byzantium:        "Byzantium",
+	Constantinople:   "Constantinople",
+	Petersburg:       "Petersburg",
+	Istanbul:         "Istanbul",
+	MuirGlacier:      "Muir Glacier",
+	Berlin:           "Berlin",
+	London:           "London",
+	ArrowGlacier:     "Arrow Glacier",
+	GrayGlacier:      "Gray Glacier",
+	Paris:            "Paris",
+	Shanghai:         "Shanghai",
+	Cancun:           "Cancun",
+	Prague:           "Prague",
+	Osaka:            "Osaka",
+	BPO1:             "BPO1",
+	BPO2:             "BPO2",
+	BPO3:             "BPO3",
+	BPO4:             "BPO4",
+	BPO5:             "BPO5",
+	Amsterdam:        "Amsterdam",
+}

@@ -22,7 +22,7 @@ import "regexp"
 // within its filename by the execution spec test (EEST).
 type testMetadata struct {
 	fork       string
-	module     string // which python module gnerated the test, e.g. eip7702
+	module     string // which python module generated the test, e.g. eip7702
 	file       string // exact file the test came from, e.g. test_gas.py
 	function   string // func that created the test, e.g. test_valid_mcopy_operations
 	parameters string // the name of the parameters which were used to fill the test, e.g. zero_inputs

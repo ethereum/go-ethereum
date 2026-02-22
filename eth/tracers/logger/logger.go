@@ -94,8 +94,8 @@ func (s *StructLog) ErrorString() string {
 	return ""
 }
 
-// WriteTo writes the human-readable log data into the supplied writer.
-func (s *StructLog) WriteTo(writer io.Writer) {
+// Write writes the human-readable log data into the supplied writer.
+func (s *StructLog) Write(writer io.Writer) {
 	fmt.Fprintf(writer, "%-16spc=%08d gas=%v cost=%v", s.Op, s.Pc, s.Gas, s.GasCost)
 	if s.Err != nil {
 		fmt.Fprintf(writer, " ERROR: %v", s.Err)
@@ -179,8 +179,12 @@ func (s *StructLog) toLegacyJSON() json.RawMessage {
 	}
 	if len(s.Memory) > 0 {
 		memory := make([]string, 0, (len(s.Memory)+31)/32)
-		for i := 0; i+32 <= len(s.Memory); i += 32 {
-			memory = append(memory, fmt.Sprintf("%x", s.Memory[i:i+32]))
+		for i := 0; i < len(s.Memory); i += 32 {
+			end := i + 32
+			if end > len(s.Memory) {
+				end = len(s.Memory)
+			}
+			memory = append(memory, fmt.Sprintf("%x", s.Memory[i:end]))
 		}
 		msg.Memory = &memory
 	}
@@ -320,7 +324,7 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 		l.logs = append(l.logs, entry)
 		return
 	}
-	log.WriteTo(l.writer)
+	log.Write(l.writer)
 }
 
 // OnExit is called a call frame finishes processing.
@@ -401,7 +405,7 @@ func (l *StructLogger) Output() []byte { return l.output }
 // @deprecated
 func WriteTrace(writer io.Writer, logs []StructLog) {
 	for _, log := range logs {
-		log.WriteTo(writer)
+		log.Write(writer)
 	}
 }
 

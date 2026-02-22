@@ -388,6 +388,10 @@ func (sf *subfetcher) loop() {
 			sf.tasks = nil
 			sf.lock.Unlock()
 
+			var (
+				addresses []common.Address
+				slots     [][]byte
+			)
 			for _, task := range tasks {
 				if task.addr != nil {
 					key := *task.addr
@@ -400,6 +404,7 @@ func (sf *subfetcher) loop() {
 							sf.dupsCross++
 							continue
 						}
+						sf.seenReadAddr[key] = struct{}{}
 					} else {
 						if _, ok := sf.seenReadAddr[key]; ok {
 							sf.dupsCross++
@@ -409,7 +414,9 @@ func (sf *subfetcher) loop() {
 							sf.dupsWrite++
 							continue
 						}
+						sf.seenWriteAddr[key] = struct{}{}
 					}
+					addresses = append(addresses, *task.addr)
 				} else {
 					key := *task.slot
 					if task.read {
@@ -421,6 +428,7 @@ func (sf *subfetcher) loop() {
 							sf.dupsCross++
 							continue
 						}
+						sf.seenReadSlot[key] = struct{}{}
 					} else {
 						if _, ok := sf.seenReadSlot[key]; ok {
 							sf.dupsCross++
@@ -430,25 +438,19 @@ func (sf *subfetcher) loop() {
 							sf.dupsWrite++
 							continue
 						}
+						sf.seenWriteSlot[key] = struct{}{}
 					}
+					slots = append(slots, key.Bytes())
 				}
-				if task.addr != nil {
-					sf.trie.GetAccount(*task.addr)
-				} else {
-					sf.trie.GetStorage(sf.addr, (*task.slot)[:])
+			}
+			if len(addresses) != 0 {
+				if err := sf.trie.PrefetchAccount(addresses); err != nil {
+					log.Error("Failed to prefetch accounts", "err", err)
 				}
-				if task.read {
-					if task.addr != nil {
-						sf.seenReadAddr[*task.addr] = struct{}{}
-					} else {
-						sf.seenReadSlot[*task.slot] = struct{}{}
-					}
-				} else {
-					if task.addr != nil {
-						sf.seenWriteAddr[*task.addr] = struct{}{}
-					} else {
-						sf.seenWriteSlot[*task.slot] = struct{}{}
-					}
+			}
+			if len(slots) != 0 {
+				if err := sf.trie.PrefetchStorage(sf.addr, slots); err != nil {
+					log.Error("Failed to prefetch storage", "err", err)
 				}
 			}
 

@@ -150,6 +150,11 @@ func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller
 	}
 }
 
+// Address returns the deployment address of the contract.
+func (c *BoundContract) Address() common.Address {
+	return c.address
+}
+
 // Call invokes the (constant) contract method with params as input values and
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
@@ -272,8 +277,10 @@ func (c *BoundContract) RawCreationTransact(opts *TransactOpts, calldata []byte)
 // Transfer initiates a plain transaction to move funds to the contract, calling
 // its default method if one is available.
 func (c *BoundContract) Transfer(opts *TransactOpts) (*types.Transaction, error) {
-	// todo(rjl493456442) check the payable fallback or receive is defined
-	// or not, reject invalid transaction at the first place
+	// Check if payable fallback or receive is defined
+	if !c.abi.HasReceive() && !(c.abi.HasFallback() && c.abi.Fallback.IsPayable()) {
+		return nil, fmt.Errorf("contract does not have a payable fallback or receive function")
+	}
 	return c.transact(opts, &c.address, nil)
 }
 

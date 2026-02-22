@@ -19,6 +19,7 @@ package native
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"sync/atomic"
 
@@ -43,11 +44,12 @@ func init() {
 type stateMap = map[common.Address]*account
 
 type account struct {
-	Balance *big.Int                    `json:"balance,omitempty"`
-	Code    []byte                      `json:"code,omitempty"`
-	Nonce   uint64                      `json:"nonce,omitempty"`
-	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
-	empty   bool
+	Balance  *big.Int                    `json:"balance,omitempty"`
+	Code     []byte                      `json:"code,omitempty"`
+	CodeHash *common.Hash                `json:"codeHash,omitempty"`
+	Nonce    uint64                      `json:"nonce,omitempty"`
+	Storage  map[common.Hash]common.Hash `json:"storage,omitempty"`
+	empty    bool
 }
 
 func (a *account) exists() bool {
@@ -60,34 +62,42 @@ type accountMarshaling struct {
 }
 
 type prestateTracer struct {
-	env       *tracing.VMContext
-	pre       stateMap
-	post      stateMap
-	to        common.Address
-	config    prestateTracerConfig
-	interrupt atomic.Bool // Atomic flag to signal execution interruption
-	reason    error       // Textual reason for the interruption
-	created   map[common.Address]bool
-	deleted   map[common.Address]bool
+	env         *tracing.VMContext
+	pre         stateMap
+	post        stateMap
+	to          common.Address
+	config      PrestateTracerConfig
+	chainConfig *params.ChainConfig
+	interrupt   atomic.Bool // Atomic flag to signal execution interruption
+	reason      error       // Textual reason for the interruption
+	created     map[common.Address]bool
+	deleted     map[common.Address]bool
 }
 
-type prestateTracerConfig struct {
+type PrestateTracerConfig struct {
 	DiffMode       bool `json:"diffMode"`       // If true, this tracer will return state modifications
 	DisableCode    bool `json:"disableCode"`    // If true, this tracer will not return the contract code
 	DisableStorage bool `json:"disableStorage"` // If true, this tracer will not return the contract storage
+	IncludeEmpty   bool `json:"includeEmpty"`   // If true, this tracer will return empty state objects
 }
 
 func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
-	var config prestateTracerConfig
+	var config PrestateTracerConfig
 	if err := json.Unmarshal(cfg, &config); err != nil {
 		return nil, err
 	}
+	// Diff mode has special semantics around account creating and deletion which
+	// requires it to include empty accounts and storage.
+	if config.DiffMode && config.IncludeEmpty {
+		return nil, errors.New("cannot use diffMode with includeEmpty")
+	}
 	t := &prestateTracer{
-		pre:     stateMap{},
-		post:    stateMap{},
-		config:  config,
-		created: make(map[common.Address]bool),
-		deleted: make(map[common.Address]bool),
+		pre:         stateMap{},
+		post:        stateMap{},
+		config:      config,
+		chainConfig: chainConfig,
+		created:     make(map[common.Address]bool),
+		deleted:     make(map[common.Address]bool),
 	}
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
@@ -121,11 +131,26 @@ func (t *prestateTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scop
 		addr := common.Address(stackData[stackLen-1].Bytes20())
 		t.lookupAccount(addr)
 		if op == vm.SELFDESTRUCT {
-			t.deleted[caller] = true
+			if t.chainConfig.IsCancun(t.env.BlockNumber, t.env.Time) {
+				// EIP-6780: only delete if created in same transaction
+				if t.created[caller] {
+					t.deleted[caller] = true
+				}
+			} else {
+				// Pre-EIP-6780: always delete
+				t.deleted[caller] = true
+			}
 		}
 	case stackLen >= 5 && (op == vm.DELEGATECALL || op == vm.CALL || op == vm.STATICCALL || op == vm.CALLCODE):
 		addr := common.Address(stackData[stackLen-2].Bytes20())
 		t.lookupAccount(addr)
+		// Lookup the delegation target
+		if t.chainConfig.IsPrague(t.env.BlockNumber, t.env.Time) {
+			code := t.env.StateDB.GetCode(addr)
+			if target, ok := types.ParseDelegation(code); ok {
+				t.lookupAccount(target)
+			}
+		}
 	case op == vm.CREATE:
 		nonce := t.env.StateDB.GetNonce(caller)
 		addr := crypto.CreateAddress(caller, nonce)
@@ -154,6 +179,13 @@ func (t *prestateTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction
 		t.created[t.to] = true
 	} else {
 		t.to = *tx.To()
+		// Lookup the delegation target
+		if t.chainConfig.IsPrague(t.env.BlockNumber, t.env.Time) {
+			code := t.env.StateDB.GetCode(t.to)
+			if target, ok := types.ParseDelegation(code); ok {
+				t.lookupAccount(target)
+			}
+		}
 	}
 
 	t.lookupAccount(from)
@@ -177,11 +209,14 @@ func (t *prestateTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	if t.config.DiffMode {
 		t.processDiffState()
 	}
-	// the new created contracts' prestate were empty, so delete them
-	for a := range t.created {
-		// the created contract maybe exists in statedb before the creating tx
-		if s := t.pre[a]; s != nil && s.empty {
-			delete(t.pre, a)
+	// Remove accounts that were empty prior to execution. Unless
+	// user requested to include empty accounts.
+	if t.config.IncludeEmpty {
+		return
+	}
+	for addr, s := range t.pre {
+		if s.empty {
+			delete(t.pre, addr)
 		}
 	}
 }
@@ -221,6 +256,7 @@ func (t *prestateTracer) processDiffState() {
 		postAccount := &account{Storage: make(map[common.Hash]common.Hash)}
 		newBalance := t.env.StateDB.GetBalance(addr).ToBig()
 		newNonce := t.env.StateDB.GetNonce(addr)
+		newCodeHash := t.env.StateDB.GetCodeHash(addr)
 
 		if newBalance.Cmp(t.pre[addr].Balance) != 0 {
 			modified = true
@@ -229,6 +265,19 @@ func (t *prestateTracer) processDiffState() {
 		if newNonce != t.pre[addr].Nonce {
 			modified = true
 			postAccount.Nonce = newNonce
+		}
+		prevCodeHash := common.Hash{}
+		if t.pre[addr].CodeHash != nil {
+			prevCodeHash = *t.pre[addr].CodeHash
+		}
+		// Empty code hashes are excluded from the prestate. Normalize
+		// the empty code hash to a zero hash to make it comparable.
+		if newCodeHash == types.EmptyCodeHash {
+			newCodeHash = common.Hash{}
+		}
+		if newCodeHash != prevCodeHash {
+			modified = true
+			postAccount.CodeHash = &newCodeHash
 		}
 		if !t.config.DisableCode {
 			newCode := t.env.StateDB.GetCode(addr)
@@ -278,6 +327,11 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 		Balance: t.env.StateDB.GetBalance(addr).ToBig(),
 		Nonce:   t.env.StateDB.GetNonce(addr),
 		Code:    t.env.StateDB.GetCode(addr),
+	}
+	codeHash := t.env.StateDB.GetCodeHash(addr)
+	// If the code is empty, we don't need to store it in the prestate.
+	if codeHash != (common.Hash{}) && codeHash != types.EmptyCodeHash {
+		acc.CodeHash = &codeHash
 	}
 	if !acc.exists() {
 		acc.empty = true

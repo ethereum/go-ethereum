@@ -129,6 +129,24 @@ func (db *Database) StateReader(blockRoot common.Hash) (database.StateReader, er
 	return db.backend.StateReader(blockRoot)
 }
 
+// HistoricStateReader constructs a reader for accessing the requested historic state.
+func (db *Database) HistoricStateReader(root common.Hash) (*pathdb.HistoricalStateReader, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.HistoricReader(root)
+}
+
+// HistoricNodeReader constructs a reader for accessing the historical trie node.
+func (db *Database) HistoricNodeReader(root common.Hash) (*pathdb.HistoricalNodeReader, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.HistoricNodeReader(root)
+}
+
 // Update performs a state transition by committing dirty nodes contained in the
 // given set in order to update state from the specified parent to the specified
 // root. The held pre-images accumulated up to this point will be flushed in case
@@ -211,6 +229,11 @@ func (db *Database) InsertPreimage(preimages map[common.Hash][]byte) {
 		return
 	}
 	db.preimages.insertPreimage(preimages)
+}
+
+// PreimageEnabled returns the indicator if the pre-image store is enabled.
+func (db *Database) PreimageEnabled() bool {
+	return db.preimages != nil
 }
 
 // Cap iteratively flushes old but still referenced trie nodes until the total
@@ -312,6 +335,46 @@ func (db *Database) Journal(root common.Hash) error {
 	return pdb.Journal(root)
 }
 
+// VerifyState traverses the flat states specified by the given state root and
+// ensures they are matched with each other.
+func (db *Database) VerifyState(root common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.VerifyState(root)
+}
+
+// AccountIterator creates a new account iterator for the specified root hash and
+// seeks to a starting account hash.
+func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (pathdb.AccountIterator, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.AccountIterator(root, seek)
+}
+
+// StorageIterator creates a new storage iterator for the specified root hash and
+// account. The iterator will be move to the specific start position.
+func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (pathdb.StorageIterator, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.StorageIterator(root, account, seek)
+}
+
+// IndexProgress returns the indexing progress made so far. It provides the
+// number of states that remain unindexed.
+func (db *Database) IndexProgress() (uint64, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return 0, errors.New("not supported")
+	}
+	return pdb.IndexProgress()
+}
+
 // IsVerkle returns the indicator if the database is holding a verkle tree.
 func (db *Database) IsVerkle() bool {
 	return db.config.IsVerkle
@@ -320,4 +383,13 @@ func (db *Database) IsVerkle() bool {
 // Disk returns the underlying disk database.
 func (db *Database) Disk() ethdb.Database {
 	return db.disk
+}
+
+// SnapshotCompleted returns the indicator if the snapshot is completed.
+func (db *Database) SnapshotCompleted() bool {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return false
+	}
+	return pdb.SnapshotCompleted()
 }

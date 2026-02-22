@@ -64,7 +64,7 @@ function compile_fuzzer() {
   go get github.com/holiman/gofuzz-shim/testing
 
 	if [[ $SANITIZER == *coverage* ]]; then
-		coverbuild $path $function $fuzzer $coverpkg
+		coverbuild $path $function $fuzzer
 	else
 	  gofuzz-shim --func $function --package $package -f $file -o $fuzzer.a
 		$CXX $CXXFLAGS $LIB_FUZZING_ENGINE $fuzzer.a -o $OUT/$fuzzer
@@ -150,6 +150,14 @@ compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bn256 \
 
 compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bn256 \
   FuzzPair fuzzBn256Pair \
+  $repo/tests/fuzzers/bn256/bn256_test.go
+
+compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bn256 \
+  FuzzUnmarshalG1 fuzzBn256UnmarshalG1 \
+  $repo/tests/fuzzers/bn256/bn256_test.go
+
+compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bn256 \
+  FuzzUnmarshalG2 fuzzBn256UnmarshalG2 \
   $repo/tests/fuzzers/bn256/bn256_test.go
 
 compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/txfetcher \

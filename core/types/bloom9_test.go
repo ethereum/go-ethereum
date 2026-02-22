@@ -78,7 +78,7 @@ func TestBloomExtensively(t *testing.T) {
 
 func BenchmarkBloom9(b *testing.B) {
 	test := []byte("testestestest")
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		Bloom9(test)
 	}
 }
@@ -86,7 +86,7 @@ func BenchmarkBloom9(b *testing.B) {
 func BenchmarkBloom9Lookup(b *testing.B) {
 	toTest := []byte("testtest")
 	bloom := new(Bloom)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		bloom.Test(toTest)
 	}
 }
@@ -128,7 +128,7 @@ func BenchmarkCreateBloom(b *testing.B) {
 	}
 	b.Run("small-createbloom", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			for _, receipt := range rSmall {
 				receipt.Bloom = CreateBloom(receipt)
 			}
@@ -144,7 +144,7 @@ func BenchmarkCreateBloom(b *testing.B) {
 	})
 	b.Run("large-createbloom", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			for _, receipt := range rLarge {
 				receipt.Bloom = CreateBloom(receipt)
 			}
@@ -163,13 +163,11 @@ func BenchmarkCreateBloom(b *testing.B) {
 			receipt.Bloom = CreateBloom(receipt)
 		}
 		b.ReportAllocs()
-		b.ResetTimer()
 
 		var bl Bloom
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			bl = MergeBloom(rSmall)
 		}
-		b.StopTimer()
 
 		var exp = common.HexToHash("c384c56ece49458a427c67b90fefe979ebf7104795be65dc398b280f24104949")
 		got := crypto.Keccak256Hash(bl.Bytes())
@@ -182,13 +180,11 @@ func BenchmarkCreateBloom(b *testing.B) {
 			receipt.Bloom = CreateBloom(receipt)
 		}
 		b.ReportAllocs()
-		b.ResetTimer()
 
 		var bl Bloom
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			bl = MergeBloom(rLarge)
 		}
-		b.StopTimer()
 
 		var exp = common.HexToHash("c384c56ece49458a427c67b90fefe979ebf7104795be65dc398b280f24104949")
 		got := crypto.Keccak256Hash(bl.Bytes())

@@ -76,8 +76,9 @@ type Freezer struct {
 // NewFreezer creates a freezer instance for maintaining immutable ordered
 // data according to the given parameters.
 //
-// The 'tables' argument defines the data tables. If the value of a map
-// entry is true, snappy compression is disabled for the table.
+// The 'tables' argument defines the freezer tables and their configuration.
+// Each value is a freezerTableConfig specifying whether snappy compression is
+// disabled (noSnappy) and whether the table is prunable (prunable).
 func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]freezerTableConfig) (*Freezer, error) {
 	// Create the initial freezer object
 	var (
@@ -172,24 +173,12 @@ func (f *Freezer) Close() error {
 			errs = append(errs, err)
 		}
 	})
-	if errs != nil {
-		return fmt.Errorf("%v", errs)
-	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // AncientDatadir returns the path of the ancient store.
 func (f *Freezer) AncientDatadir() (string, error) {
 	return f.datadir, nil
-}
-
-// HasAncient returns an indicator whether the specified ancient data exists
-// in the freezer.
-func (f *Freezer) HasAncient(kind string, number uint64) (bool, error) {
-	if table := f.tables[kind]; table != nil {
-		return table.has(number), nil
-	}
-	return false, nil
 }
 
 // Ancient retrieves an ancient binary blob from the append-only immutable files.
@@ -209,6 +198,15 @@ func (f *Freezer) Ancient(kind string, number uint64) ([]byte, error) {
 func (f *Freezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
 	if table := f.tables[kind]; table != nil {
 		return table.RetrieveItems(start, count, maxBytes)
+	}
+	return nil, errUnknownTable
+}
+
+// AncientBytes retrieves the value segment of the element specified by the id
+// and value offsets.
+func (f *Freezer) AncientBytes(kind string, id, offset, length uint64) ([]byte, error) {
+	if table := f.tables[kind]; table != nil {
+		return table.RetrieveBytes(id, offset, length)
 	}
 	return nil, errUnknownTable
 }
@@ -325,8 +323,8 @@ func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
 	return old, nil
 }
 
-// Sync flushes all data tables to disk.
-func (f *Freezer) Sync() error {
+// SyncAncient flushes all data tables to disk.
+func (f *Freezer) SyncAncient() error {
 	var errs []error
 	for _, table := range f.tables {
 		if err := table.Sync(); err != nil {

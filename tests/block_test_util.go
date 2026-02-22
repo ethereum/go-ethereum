@@ -116,27 +116,29 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
 	}
+
 	// import pre accounts & construct test genesis block & state root
+	// Commit genesis state
 	var (
+		gspec = t.genesis(config)
 		db    = rawdb.NewMemoryDatabase()
 		tconf = &triedb.Config{
 			Preimages: true,
+			IsVerkle:  gspec.Config.VerkleTime != nil && *gspec.Config.VerkleTime <= gspec.Timestamp,
 		}
 	)
-	if scheme == rawdb.PathScheme {
+	if scheme == rawdb.PathScheme || tconf.IsVerkle {
 		tconf.PathDB = pathdb.Defaults
 	} else {
 		tconf.HashDB = hashdb.Defaults
 	}
-	// Commit genesis state
-	gspec := t.genesis(config)
 
 	// if ttd is not specified, set an arbitrary huge value
 	if gspec.Config.TerminalTotalDifficulty == nil {
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(stdmath.MaxInt64)
 	}
 	triedb := triedb.NewDatabase(db, tconf)
-	gblock, err := gspec.Commit(db, triedb)
+	gblock, err := gspec.Commit(db, triedb, nil)
 	if err != nil {
 		return err
 	}
@@ -151,15 +153,21 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	// Wrap the original engine within the beacon-engine
 	engine := beacon.New(ethash.NewFaker())
 
-	cache := &core.CacheConfig{TrieCleanLimit: 0, StateScheme: scheme, Preimages: true}
-	if snapshotter {
-		cache.SnapshotLimit = 1
-		cache.SnapshotWait = true
+	options := &core.BlockChainConfig{
+		TrieCleanLimit: 0,
+		StateScheme:    scheme,
+		Preimages:      true,
+		TxLookupLimit:  -1, // disable tx indexing
+		VmConfig: vm.Config{
+			Tracer:                  tracer,
+			StatelessSelfValidation: witness,
+		},
 	}
-	chain, err := core.NewBlockChain(db, cache, gspec, nil, engine, vm.Config{
-		Tracer:                  tracer,
-		StatelessSelfValidation: witness,
-	}, nil)
+	if snapshotter {
+		options.SnapshotLimit = 1
+		options.SnapshotWait = true
+	}
+	chain, err := core.NewBlockChain(db, gspec, engine, options)
 	if err != nil {
 		return err
 	}
@@ -187,11 +195,18 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	}
 	// Cross-check the snapshot-to-hash against the trie hash
 	if snapshotter {
-		if err := chain.Snapshots().Verify(chain.CurrentBlock().Root); err != nil {
-			return err
+		if chain.Snapshots() != nil {
+			if err := chain.Snapshots().Verify(chain.CurrentBlock().Root); err != nil {
+				return err
+			}
 		}
 	}
 	return t.validateImportedHeaders(chain, validBlocks)
+}
+
+// Network returns the network/fork name for this test.
+func (t *BlockTest) Network() string {
+	return t.json.Network
 }
 
 func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
@@ -214,7 +229,7 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 }
 
 /*
-See https://github.com/ethereum/tests/wiki/Blockchain-Tests-II
+See https://ethereum-tests.readthedocs.io/en/latest/blockchain-ref.html
 
 	Whether a block is valid or not is a bit subtle, it's defined by presence of
 	blockHeader, transactions and uncleHeaders fields. If they are missing, the block is
@@ -251,7 +266,7 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 		}
 		if b.BlockHeader == nil {
 			if data, err := json.MarshalIndent(cb.Header(), "", "  "); err == nil {
-				fmt.Fprintf(os.Stderr, "block (index %d) insertion should have failed due to: %v:\n%v\n",
+				fmt.Fprintf(os.Stdout, "block (index %d) insertion should have failed due to: %v:\n%v\n",
 					bi, b.ExpectException, string(data))
 			}
 			return nil, fmt.Errorf("block (index %d) insertion should have failed due to: %v",

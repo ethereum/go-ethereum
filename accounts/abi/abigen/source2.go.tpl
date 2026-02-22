@@ -90,7 +90,8 @@ var (
 
 	{{range .Calls}}
 		// Pack{{.Normalized.Name}} is the Go binding used to pack the parameters required for calling
-		// the contract method with ID 0x{{printf "%x" .Original.ID}}.
+		// the contract method with ID 0x{{printf "%x" .Original.ID}}.  This method will panic if any
+		// invalid/nil inputs are passed.
 		//
 		// Solidity: {{.Original.String}}
 		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Pack{{.Normalized.Name}}({{range .Normalized.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) []byte {
@@ -99,6 +100,15 @@ var (
 				panic(err)
 			}
 			return enc
+		}
+
+		// TryPack{{.Normalized.Name}} is the Go binding used to pack the parameters required for calling
+		// the contract method with ID 0x{{printf "%x" .Original.ID}}.  This method will return an error
+		// if any inputs are invalid/nil.
+		//
+		// Solidity: {{.Original.String}}
+		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) TryPack{{.Normalized.Name}}({{range .Normalized.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) ([]byte, error) {
+			return {{ decapitalise $contract.Type}}.abi.Pack("{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
 		}
 
 		{{/* Unpack method is needed only when there are return args */}}
@@ -133,8 +143,7 @@ var (
 					outstruct.{{capitalise .Name}} = *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}})
 				{{- end }}
 				{{- end }}
-				return *outstruct, err
-				{{else}}
+				return *outstruct, nil{{else}}
 				if err != nil {
 					return {{range $i, $_ := .Normalized.Outputs}}{{if ispointertype .Type}}new({{underlyingbindtype .Type }}), {{else}}*new({{bindtype .Type $structs}}), {{end}}{{end}} err
 				}
@@ -145,8 +154,8 @@ var (
 				out{{$i}} := *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}})
 				{{- end }}
 				{{- end}}
-				return {{range $i, $t := .Normalized.Outputs}}out{{$i}}, {{end}} err
-                {{- end}}
+				return {{range $i, $t := .Normalized.Outputs}}out{{$i}}, {{end}} nil
+				{{- end}}
 			}
 		{{end}}
 	{{end}}
@@ -174,7 +183,7 @@ var (
 		// Solidity: {{.Original.String}}
 		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Event(log *types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
 			event := "{{.Original.Name}}"
-			if log.Topics[0] != {{ decapitalise $contract.Type}}.abi.Events[event].ID {
+			if len(log.Topics) == 0 || log.Topics[0] != {{ decapitalise $contract.Type}}.abi.Events[event].ID {
 				return nil, errors.New("event signature mismatch")
 			}
 			out := new({{$contract.Type}}{{.Normalized.Name}})

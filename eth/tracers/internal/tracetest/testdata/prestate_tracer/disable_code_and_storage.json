@@ -65,14 +65,12 @@
     },
     "0x3b873a919aa0512d5a0f09e6dcceaa4a6727fafe": {
       "balance": "0x4d87094125a369d9bd5",
-      "nonce": 1
+      "nonce": 1,
+      "codeHash": "0xec0ba40983fafc34be1bda1b3a3c6eabdd60fa4ce6eab345be1e51bda01d0d4f"
     },
     "0xb436ba50d378d4bbc8660d312a13df6af6e89dfb": {
       "balance": "0x1780d77678137ac1b775",
       "nonce": 29072
-    },
-    "0x1585936b53834b021f68cc13eeefdec2efc8e724": {
-      "balance": "0x0"
     }
   }
 }

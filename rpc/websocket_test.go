@@ -121,56 +121,49 @@ func TestWebsocketLargeRead(t *testing.T) {
 		srv     = newTestServer()
 		httpsrv = httptest.NewServer(srv.WebsocketHandler([]string{"*"}))
 		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
+		buffer  = 64
 	)
 	defer srv.Stop()
 	defer httpsrv.Close()
 
-	testLimit := func(limit *int64) {
-		opts := []ClientOption{}
-		expLimit := int64(wsDefaultReadLimit)
-		if limit != nil && *limit >= 0 {
-			opts = append(opts, WithWebsocketMessageSizeLimit(*limit))
-			if *limit > 0 {
-				expLimit = *limit // 0 means infinite
+	for _, tt := range []struct {
+		size  int
+		limit int
+		err   bool
+	}{
+		{200, 200, false},                       // Small, successful request and limit
+		{2048, 1024, true},                      // Normal, failed request
+		{wsDefaultReadLimit + buffer, 0, false}, // Large, successful request, infinite limit
+	} {
+		func() {
+			if tt.limit != 0 {
+				// Some buffer is added to the limit to account for JSON encoding. It's
+				// skipped when the limit is zero since the intention is for the limit
+				// to be infinite.
+				tt.limit += buffer
 			}
-		}
-		client, err := DialOptions(context.Background(), wsURL, opts...)
-		if err != nil {
-			t.Fatalf("can't dial: %v", err)
-		}
-		defer client.Close()
-		// Remove some bytes for json encoding overhead.
-		underLimit := int(expLimit - 128)
-		overLimit := expLimit + 1
-		if expLimit == wsDefaultReadLimit {
-			// No point trying the full 32MB in tests. Just sanity-check that
-			// it's not obviously limited.
-			underLimit = 1024
-			overLimit = -1
-		}
-		var res string
-		// Check under limit
-		if err = client.Call(&res, "test_repeat", "A", underLimit); err != nil {
-			t.Fatalf("unexpected error with limit %d: %v", expLimit, err)
-		}
-		if len(res) != underLimit || strings.Count(res, "A") != underLimit {
-			t.Fatal("incorrect data")
-		}
-		// Check over limit
-		if overLimit > 0 {
-			err = client.Call(&res, "test_repeat", "A", expLimit+1)
-			if err == nil || err != websocket.ErrReadLimit {
-				t.Fatalf("wrong error with limit %d: %v expecting %v", expLimit, err, websocket.ErrReadLimit)
+			opts := []ClientOption{WithWebsocketMessageSizeLimit(int64(tt.limit))}
+			client, err := DialOptions(context.Background(), wsURL, opts...)
+			if err != nil {
+				t.Fatalf("failed to dial test server: %v", err)
 			}
-		}
-	}
-	ptr := func(v int64) *int64 { return &v }
+			defer client.Close()
 
-	testLimit(ptr(-1)) // Should be ignored (use default)
-	testLimit(ptr(0))  // Should be ignored (use default)
-	testLimit(nil)     // Should be ignored (use default)
-	testLimit(ptr(200))
-	testLimit(ptr(wsDefaultReadLimit * 2))
+			var res string
+			err = client.Call(&res, "test_repeat", "A", tt.size)
+			if tt.err && err == nil {
+				t.Fatalf("expected error, got none")
+			}
+			if !tt.err {
+				if err != nil {
+					t.Fatalf("unexpected error with limit %d: %v", tt.limit, err)
+				}
+				if strings.Count(res, "A") != tt.size {
+					t.Fatal("incorrect data")
+				}
+			}
+		}()
+	}
 }
 
 func TestWebsocketPeerInfo(t *testing.T) {
@@ -389,5 +382,79 @@ func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-
 			conn.Close()
 			return
 		}
+	}
+}
+
+func TestWebsocketMethodNameLengthLimit(t *testing.T) {
+	t.Parallel()
+
+	var (
+		srv     = newTestServer()
+		httpsrv = httptest.NewServer(srv.WebsocketHandler([]string{"*"}))
+		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
+	)
+	defer srv.Stop()
+	defer httpsrv.Close()
+
+	client, err := DialWebsocket(context.Background(), wsURL, "")
+	if err != nil {
+		t.Fatalf("can't dial: %v", err)
+	}
+	defer client.Close()
+
+	// Test cases
+	tests := []struct {
+		name           string
+		method         string
+		params         []interface{}
+		expectedError  string
+		isSubscription bool
+	}{
+		{
+			name:           "valid method name",
+			method:         "test_echo",
+			params:         []interface{}{"test", 1},
+			expectedError:  "",
+			isSubscription: false,
+		},
+		{
+			name:           "method name too long",
+			method:         "test_" + string(make([]byte, maxMethodNameLength+1)),
+			params:         []interface{}{"test", 1},
+			expectedError:  "method name too long",
+			isSubscription: false,
+		},
+		{
+			name:           "valid subscription",
+			method:         "nftest_subscribe",
+			params:         []interface{}{"someSubscription", 1, 2},
+			expectedError:  "",
+			isSubscription: true,
+		},
+		{
+			name:           "subscription name too long",
+			method:         string(make([]byte, maxMethodNameLength+1)) + "_subscribe",
+			params:         []interface{}{"newHeads"},
+			expectedError:  "subscription name too long",
+			isSubscription: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var result interface{}
+			err := client.Call(&result, tt.method, tt.params...)
+			if tt.expectedError == "" {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Error("expected error, got nil")
+				} else if !strings.Contains(err.Error(), tt.expectedError) {
+					t.Errorf("expected error containing %q, got %q", tt.expectedError, err.Error())
+				}
+			}
+		})
 	}
 }

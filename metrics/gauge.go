@@ -14,7 +14,7 @@ func GetOrRegisterGauge(name string, r Registry) *Gauge {
 	if r == nil {
 		r = DefaultRegistry
 	}
-	return r.GetOrRegister(name, NewGauge).(*Gauge)
+	return r.GetOrRegister(name, func() any { return NewGauge() }).(*Gauge)
 }
 
 // NewGauge constructs a new Gauge.

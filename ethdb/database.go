@@ -18,8 +18,21 @@
 package ethdb
 
 import (
+	"bytes"
 	"errors"
 	"io"
+)
+
+var (
+	// MaximumKey is a special marker representing the largest possible key
+	// in the database.
+	//
+	// All prefixed database entries will be smaller than this marker.
+	// For trie nodes in hash mode, we use a 32-byte slice filled with 0xFF
+	// because there may be shared prefixes starting with multiple 0xFF bytes.
+	// Using 32 bytes ensures that only a hash collision could potentially
+	// match or exceed it.
+	MaximumKey = bytes.Repeat([]byte{0xff}, 32)
 )
 
 // KeyValueReader wraps the Has and Get method of a backing data store.
@@ -46,6 +59,11 @@ var ErrTooManyKeys = errors.New("too many keys in deleted range")
 type KeyValueRangeDeleter interface {
 	// DeleteRange deletes all of the keys (and values) in the range [start,end)
 	// (inclusive on start, exclusive on end).
+	//
+	// A nil start is treated as a key before all keys in the data store; a nil
+	// end is treated as a key after all keys in the data store. If both is nil
+	// then the entire data store will be purged.
+	//
 	// Some implementations of DeleteRange may return ErrTooManyKeys after
 	// partially deleting entries in the given range.
 	DeleteRange(start, end []byte) error
@@ -55,6 +73,13 @@ type KeyValueRangeDeleter interface {
 type KeyValueStater interface {
 	// Stat returns the statistic data of the database.
 	Stat() (string, error)
+}
+
+// KeyValueSyncer wraps the SyncKeyValue method of a backing data store.
+type KeyValueSyncer interface {
+	// SyncKeyValue ensures that all pending writes are flushed to disk,
+	// guaranteeing data durability up to the point.
+	SyncKeyValue() error
 }
 
 // Compacter wraps the Compact method of a backing data store.
@@ -75,6 +100,7 @@ type KeyValueStore interface {
 	KeyValueReader
 	KeyValueWriter
 	KeyValueStater
+	KeyValueSyncer
 	KeyValueRangeDeleter
 	Batcher
 	Iteratee
@@ -84,10 +110,6 @@ type KeyValueStore interface {
 
 // AncientReaderOp contains the methods required to read from immutable ancient data.
 type AncientReaderOp interface {
-	// HasAncient returns an indicator whether the specified data exists in the
-	// ancient store.
-	HasAncient(kind string, number uint64) (bool, error)
-
 	// Ancient retrieves an ancient binary blob from the append-only immutable files.
 	Ancient(kind string, number uint64) ([]byte, error)
 
@@ -98,6 +120,10 @@ type AncientReaderOp interface {
 	//     but will otherwise return as many items as fit into maxByteSize.
 	//   - if maxBytes is not specified, 'count' items will be returned if they are present
 	AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error)
+
+	// AncientBytes retrieves the value segment of the element specified by the id
+	// and value offsets.
+	AncientBytes(kind string, id, offset, length uint64) ([]byte, error)
 
 	// Ancients returns the ancient item numbers in the ancient store.
 	Ancients() (uint64, error)
@@ -126,6 +152,9 @@ type AncientWriter interface {
 	// The integer return value is the total size of the written data.
 	ModifyAncients(func(AncientWriteOp) error) (int64, error)
 
+	// SyncAncient flushes all in-memory ancient store data to disk.
+	SyncAncient() error
+
 	// TruncateHead discards all but the first n ancient data from the ancient store.
 	// After the truncation, the latest item can be accessed it item_n-1(start from 0).
 	TruncateHead(n uint64) (uint64, error)
@@ -138,9 +167,6 @@ type AncientWriter interface {
 	//
 	// Note that data marked as non-prunable will still be retained and remain accessible.
 	TruncateTail(n uint64) (uint64, error)
-
-	// Sync flushes all in-memory ancient store data to disk.
-	Sync() error
 }
 
 // AncientWriteOp is given to the function argument of ModifyAncients.

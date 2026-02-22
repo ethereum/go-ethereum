@@ -34,10 +34,8 @@ import (
 // directed by the skeleton sync's head/tail events.
 type beaconBackfiller struct {
 	downloader *Downloader   // Downloader to direct via this callback implementation
-	syncMode   SyncMode      // Sync mode to use for backfilling the skeleton chains
 	success    func()        // Callback to run on successful sync cycle completion
 	filling    bool          // Flag whether the downloader is backfilling or not
-	filled     *types.Header // Last header filled by the last terminated sync loop
 	started    chan struct{} // Notification channel whether the downloader inited
 	lock       sync.Mutex    // Mutex protecting the sync lock
 }
@@ -57,12 +55,15 @@ func (b *beaconBackfiller) suspend() *types.Header {
 	// If no filling is running, don't waste cycles
 	b.lock.Lock()
 	filling := b.filling
-	filled := b.filled
 	started := b.started
 	b.lock.Unlock()
 
 	if !filling {
-		return filled // Return the filled header on the previous sync completion
+		// Sync cycle was inactive, retrieve and return the latest snap block
+		// as the filled header.
+		log.Debug("Backfiller was inactive")
+
+		return b.downloader.blockchain.CurrentSnapBlock()
 	}
 	// A previous filling should be running, though it may happen that it hasn't
 	// yet started (being done on a new goroutine). Many concurrent beacon head
@@ -74,9 +75,9 @@ func (b *beaconBackfiller) suspend() *types.Header {
 	// Now that we're sure the downloader successfully started up, we can cancel
 	// it safely without running the risk of data races.
 	b.downloader.Cancel()
+	log.Debug("Backfiller has been suspended")
 
 	// Sync cycle was just terminated, retrieve and return the last filled header.
-	// Can't use `filled` as that contains a stale value from before cancellation.
 	return b.downloader.blockchain.CurrentSnapBlock()
 }
 
@@ -87,12 +88,11 @@ func (b *beaconBackfiller) resume() {
 		// If a previous filling cycle is still running, just ignore this start
 		// request. // TODO(karalabe): We should make this channel driven
 		b.lock.Unlock()
+		log.Debug("Backfiller is running")
 		return
 	}
 	b.filling = true
-	b.filled = nil
 	b.started = make(chan struct{})
-	mode := b.syncMode
 	b.lock.Unlock()
 
 	// Start the backfilling on its own thread since the downloader does not have
@@ -102,42 +102,22 @@ func (b *beaconBackfiller) resume() {
 		defer func() {
 			b.lock.Lock()
 			b.filling = false
-			b.filled = b.downloader.blockchain.CurrentSnapBlock()
 			b.lock.Unlock()
 		}()
 		// If the downloader fails, report an error as in beacon chain mode there
 		// should be no errors as long as the chain we're syncing to is valid.
-		if err := b.downloader.synchronise(mode, b.started); err != nil {
+		if err := b.downloader.synchronise(b.started); err != nil {
 			log.Error("Beacon backfilling failed", "err", err)
 			return
 		}
 		// Synchronization succeeded. Since this happens async, notify the outer
-		// context to disable snap syncing and enable transaction propagation.
+		// context to enable transaction propagation.
 		if b.success != nil {
 			b.success()
 		}
+		log.Debug("Backfilling completed")
 	}()
-}
-
-// setMode updates the sync mode from the current one to the requested one. If
-// there's an active sync in progress, it will be cancelled and restarted.
-func (b *beaconBackfiller) setMode(mode SyncMode) {
-	// Update the old sync mode and track if it was changed
-	b.lock.Lock()
-	oldMode := b.syncMode
-	updated := oldMode != mode
-	filling := b.filling
-	b.syncMode = mode
-	b.lock.Unlock()
-
-	// If the sync mode was changed mid-sync, restart. This should never ever
-	// really happen, we just handle it to detect programming errors.
-	if !updated || !filling {
-		return
-	}
-	log.Error("Downloader sync mode changed mid-run", "old", oldMode.String(), "new", mode.String())
-	b.suspend()
-	b.resume()
+	log.Debug("Backfilling started")
 }
 
 // SetBadBlockCallback sets the callback to run when a bad block is hit by the
@@ -153,8 +133,8 @@ func (d *Downloader) SetBadBlockCallback(onBadBlock badBlockFn) {
 //
 // Internally backfilling and state sync is done the same way, but the header
 // retrieval and scheduling is replaced.
-func (d *Downloader) BeaconSync(mode SyncMode, head *types.Header, final *types.Header) error {
-	return d.beaconSync(mode, head, final, true)
+func (d *Downloader) BeaconSync(head *types.Header, final *types.Header) error {
+	return d.beaconSync(head, final, true)
 }
 
 // BeaconExtend is an optimistic version of BeaconSync, where an attempt is made
@@ -163,8 +143,8 @@ func (d *Downloader) BeaconSync(mode SyncMode, head *types.Header, final *types.
 //
 // This is useful if a beacon client is feeding us large chunks of payloads to run,
 // but is not setting the head after each.
-func (d *Downloader) BeaconExtend(mode SyncMode, head *types.Header) error {
-	return d.beaconSync(mode, head, nil, false)
+func (d *Downloader) BeaconExtend(head *types.Header) error {
+	return d.beaconSync(head, nil, false)
 }
 
 // beaconSync is the post-merge version of the chain synchronization, where the
@@ -173,20 +153,9 @@ func (d *Downloader) BeaconExtend(mode SyncMode, head *types.Header) error {
 //
 // Internally backfilling and state sync is done the same way, but the header
 // retrieval and scheduling is replaced.
-func (d *Downloader) beaconSync(mode SyncMode, head *types.Header, final *types.Header, force bool) error {
-	// When the downloader starts a sync cycle, it needs to be aware of the sync
-	// mode to use (full, snap). To keep the skeleton chain oblivious, inject the
-	// mode into the backfiller directly.
-	//
-	// Super crazy dangerous type cast. Should be fine (TM), we're only using a
-	// different backfiller implementation for skeleton tests.
-	d.skeleton.filler.(*beaconBackfiller).setMode(mode)
-
+func (d *Downloader) beaconSync(head *types.Header, final *types.Header, force bool) error {
 	// Signal the skeleton sync to switch to a new head, however it wants
-	if err := d.skeleton.Sync(head, final, force); err != nil {
-		return err
-	}
-	return nil
+	return d.skeleton.Sync(head, final, force)
 }
 
 // findBeaconAncestor tries to locate the common ancestor link of the local chain
@@ -217,6 +186,8 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 		log.Error("Failed to retrieve beacon bounds", "err", err)
 		return 0, err
 	}
+	log.Debug("Searching beacon ancestor", "local", number, "beaconhead", beaconHead.Number, "beacontail", beaconTail.Number)
+
 	var linked bool
 	switch d.getMode() {
 	case ethconfig.FullSync:
@@ -250,6 +221,9 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 		check := (start + end) / 2
 
 		h := d.skeleton.Header(check)
+		if h == nil {
+			return 0, fmt.Errorf("filled skeleton header is missing: %d", check)
+		}
 		n := h.Number.Uint64()
 
 		var known bool
@@ -267,14 +241,14 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 		}
 		start = check
 	}
+	log.Debug("Found beacon ancestor", "number", start)
 	return start, nil
 }
 
 // fetchHeaders feeds skeleton headers to the downloader queue for scheduling
 // until sync errors or is finished.
 func (d *Downloader) fetchHeaders(from uint64) error {
-	var head *types.Header
-	_, tail, _, err := d.skeleton.Bounds()
+	head, tail, _, err := d.skeleton.Bounds()
 	if err != nil {
 		return err
 	}
@@ -293,6 +267,27 @@ func (d *Downloader) fetchHeaders(from uint64) error {
 	}
 	fsHeaderContCheckTimer := time.NewTimer(fsHeaderContCheck)
 	defer fsHeaderContCheckTimer.Stop()
+
+	// Verify the header at configured chain cutoff, ensuring it's matched with
+	// the configured hash. Skip the check if the configured cutoff is even higher
+	// than the sync target, which is definitely not a common case.
+	if d.chainCutoffNumber != 0 && d.chainCutoffNumber >= from && d.chainCutoffNumber <= head.Number.Uint64() {
+		h := d.skeleton.Header(d.chainCutoffNumber)
+		if h == nil {
+			if d.chainCutoffNumber < tail.Number.Uint64() {
+				dist := tail.Number.Uint64() - d.chainCutoffNumber
+				if len(localHeaders) >= int(dist) {
+					h = localHeaders[dist-1]
+				}
+			}
+		}
+		if h == nil {
+			return fmt.Errorf("header at chain cutoff is not available, cutoff: %d", d.chainCutoffNumber)
+		}
+		if h.Hash() != d.chainCutoffHash {
+			return fmt.Errorf("header at chain cutoff mismatched, want: %v, got: %v", d.chainCutoffHash, h.Hash())
+		}
+	}
 
 	for {
 		// Some beacon headers might have appeared since the last cycle, make

@@ -24,11 +24,13 @@ import (
 	"math/big"
 	"runtime"
 	"runtime/debug"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -104,7 +106,10 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 
 	var res accountResult
 	err := ec.c.CallContext(ctx, &res, "eth_getProof", account, keys, toBlockNumArg(blockNumber))
-	// Turn hexutils back to normal datatypes
+	if err != nil {
+		return nil, err
+	}
+	// Turn hexutils back to normal data types
 	storageResults := make([]StorageResult, 0, len(res.StorageProof))
 	for _, st := range res.StorageProof {
 		storageResults = append(storageResults, StorageResult{
@@ -122,7 +127,7 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 		StorageHash:  res.StorageHash,
 		StorageProof: storageResults,
 	}
-	return &result, err
+	return &result, nil
 }
 
 // CallContract executes a message call transaction, which is directly executed in the VM
@@ -204,6 +209,146 @@ func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- co
 	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
 }
 
+// TraceTransaction returns the structured logs created during the execution of EVM
+// and returns them as a JSON object.
+func (ec *Client) TraceTransaction(ctx context.Context, hash common.Hash, config *tracers.TraceConfig) (any, error) {
+	var result any
+	err := ec.c.CallContext(ctx, &result, "debug_traceTransaction", hash, config)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// TraceBlock returns the structured logs created during the execution of EVM
+// and returns them as a JSON object.
+func (ec *Client) TraceBlock(ctx context.Context, hash common.Hash, config *tracers.TraceConfig) (any, error) {
+	var result any
+	err := ec.c.CallContext(ctx, &result, "debug_traceBlockByHash", hash, config)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// CallTracerConfig configures the call tracer for
+// TraceTransactionWithCallTracer and TraceCallWithCallTracer.
+type CallTracerConfig struct {
+	// OnlyTopCall, when true, limits tracing to the main (top-level) call only.
+	OnlyTopCall bool
+	// WithLog, when true, includes log emissions in the trace output.
+	WithLog bool
+	// Timeout is the maximum duration the tracer may run.
+	// Zero means the server default (5s).
+	Timeout time.Duration
+}
+
+//go:generate go run github.com/fjl/gencodec -type CallLog -field-override callLogMarshaling -out gen_calllog_json.go
+
+// CallLog represents a log emitted during a traced call.
+type CallLog struct {
+	Address  common.Address `json:"address"`
+	Topics   []common.Hash  `json:"topics"`
+	Data     []byte         `json:"data"`
+	Index    uint           `json:"index"`
+	Position uint           `json:"position"`
+}
+
+type callLogMarshaling struct {
+	Data     hexutil.Bytes
+	Index    hexutil.Uint
+	Position hexutil.Uint
+}
+
+//go:generate go run github.com/fjl/gencodec -type CallFrame -field-override callFrameMarshaling -out gen_callframe_json.go
+
+// CallFrame contains the result of a call tracer run.
+type CallFrame struct {
+	Type         string          `json:"type"`
+	From         common.Address  `json:"from"`
+	Gas          uint64          `json:"gas"`
+	GasUsed      uint64          `json:"gasUsed"`
+	To           *common.Address `json:"to,omitempty"`
+	Input        []byte          `json:"input"`
+	Output       []byte          `json:"output,omitempty"`
+	Error        string          `json:"error,omitempty"`
+	RevertReason string          `json:"revertReason,omitempty"`
+	Calls        []CallFrame     `json:"calls,omitempty"`
+	Logs         []CallLog       `json:"logs,omitempty"`
+	Value        *big.Int        `json:"value,omitempty"`
+}
+
+type callFrameMarshaling struct {
+	Gas     hexutil.Uint64
+	GasUsed hexutil.Uint64
+	Input   hexutil.Bytes
+	Output  hexutil.Bytes
+	Value   *hexutil.Big
+}
+
+// TraceTransactionWithCallTracer traces a transaction with the call tracer
+// and returns a typed CallFrame. If config is nil, defaults are used.
+func (ec *Client) TraceTransactionWithCallTracer(ctx context.Context, txHash common.Hash, config *CallTracerConfig) (*CallFrame, error) {
+	var result CallFrame
+	err := ec.c.CallContext(ctx, &result, "debug_traceTransaction", txHash, callTracerConfig(config))
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// TraceCallWithCallTracer executes a call with the call tracer and returns
+// a typed CallFrame. blockNrOrHash selects the block context for the call.
+// overrides specifies state overrides (nil for none), blockOverrides specifies
+// block header overrides (nil for none), and config configures the tracer
+// (nil for defaults).
+func (ec *Client) TraceCallWithCallTracer(ctx context.Context, msg ethereum.CallMsg, blockNrOrHash rpc.BlockNumberOrHash, overrides map[common.Address]OverrideAccount, blockOverrides *BlockOverrides, config *CallTracerConfig) (*CallFrame, error) {
+	var result CallFrame
+	err := ec.c.CallContext(ctx, &result, "debug_traceCall", toCallArg(msg), blockNrOrHash, callTraceCallConfig(config, overrides, blockOverrides))
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// callTracerConfig converts a CallTracerConfig to the wire-format TraceConfig.
+func callTracerConfig(config *CallTracerConfig) *tracers.TraceConfig {
+	tracer := "callTracer"
+	tc := &tracers.TraceConfig{Tracer: &tracer}
+	if config != nil {
+		if config.OnlyTopCall || config.WithLog {
+			cfg, _ := json.Marshal(struct {
+				OnlyTopCall bool `json:"onlyTopCall"`
+				WithLog     bool `json:"withLog"`
+			}{config.OnlyTopCall, config.WithLog})
+			tc.TracerConfig = cfg
+		}
+		if config.Timeout != 0 {
+			s := config.Timeout.String()
+			tc.Timeout = &s
+		}
+	}
+	return tc
+}
+
+// callTraceCallConfig builds the wire-format TraceCallConfig for debug_traceCall,
+// bundling tracer settings with optional state and block overrides.
+func callTraceCallConfig(config *CallTracerConfig, overrides map[common.Address]OverrideAccount, blockOverrides *BlockOverrides) interface{} {
+	tc := callTracerConfig(config)
+	// debug_traceCall expects a single config object that includes both
+	// tracer settings and any state/block overrides.
+	type traceCallConfig struct {
+		*tracers.TraceConfig
+		StateOverrides map[common.Address]OverrideAccount `json:"stateOverrides,omitempty"`
+		BlockOverrides *BlockOverrides                    `json:"blockOverrides,omitempty"`
+	}
+	return &traceCallConfig{
+		TraceConfig:    tc,
+		StateOverrides: overrides,
+		BlockOverrides: blockOverrides,
+	}
+}
+
 func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"
@@ -251,100 +396,14 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 	if msg.BlobHashes != nil {
 		arg["blobVersionedHashes"] = msg.BlobHashes
 	}
+	if msg.AuthorizationList != nil {
+		arg["authorizationList"] = msg.AuthorizationList
+	}
 	return arg
 }
 
-// OverrideAccount specifies the state of an account to be overridden.
-type OverrideAccount struct {
-	// Nonce sets nonce of the account. Note: the nonce override will only
-	// be applied when it is set to a non-zero value.
-	Nonce uint64
+// OverrideAccount is an alias for ethereum.OverrideAccount.
+type OverrideAccount = ethereum.OverrideAccount
 
-	// Code sets the contract code. The override will be applied
-	// when the code is non-nil, i.e. setting empty code is possible
-	// using an empty slice.
-	Code []byte
-
-	// Balance sets the account balance.
-	Balance *big.Int
-
-	// State sets the complete storage. The override will be applied
-	// when the given map is non-nil. Using an empty map wipes the
-	// entire contract storage during the call.
-	State map[common.Hash]common.Hash
-
-	// StateDiff allows overriding individual storage slots.
-	StateDiff map[common.Hash]common.Hash
-}
-
-func (a OverrideAccount) MarshalJSON() ([]byte, error) {
-	type acc struct {
-		Nonce     hexutil.Uint64              `json:"nonce,omitempty"`
-		Code      string                      `json:"code,omitempty"`
-		Balance   *hexutil.Big                `json:"balance,omitempty"`
-		State     interface{}                 `json:"state,omitempty"`
-		StateDiff map[common.Hash]common.Hash `json:"stateDiff,omitempty"`
-	}
-
-	output := acc{
-		Nonce:     hexutil.Uint64(a.Nonce),
-		Balance:   (*hexutil.Big)(a.Balance),
-		StateDiff: a.StateDiff,
-	}
-	if a.Code != nil {
-		output.Code = hexutil.Encode(a.Code)
-	}
-	if a.State != nil {
-		output.State = a.State
-	}
-	return json.Marshal(output)
-}
-
-// BlockOverrides specifies the  set of header fields to override.
-type BlockOverrides struct {
-	// Number overrides the block number.
-	Number *big.Int
-	// Difficulty overrides the block difficulty.
-	Difficulty *big.Int
-	// Time overrides the block timestamp. Time is applied only when
-	// it is non-zero.
-	Time uint64
-	// GasLimit overrides the block gas limit. GasLimit is applied only when
-	// it is non-zero.
-	GasLimit uint64
-	// Coinbase overrides the block coinbase. Coinbase is applied only when
-	// it is different from the zero address.
-	Coinbase common.Address
-	// Random overrides the block extra data which feeds into the RANDOM opcode.
-	// Random is applied only when it is a non-zero hash.
-	Random common.Hash
-	// BaseFee overrides the block base fee.
-	BaseFee *big.Int
-}
-
-func (o BlockOverrides) MarshalJSON() ([]byte, error) {
-	type override struct {
-		Number     *hexutil.Big    `json:"number,omitempty"`
-		Difficulty *hexutil.Big    `json:"difficulty,omitempty"`
-		Time       hexutil.Uint64  `json:"time,omitempty"`
-		GasLimit   hexutil.Uint64  `json:"gasLimit,omitempty"`
-		Coinbase   *common.Address `json:"feeRecipient,omitempty"`
-		Random     *common.Hash    `json:"prevRandao,omitempty"`
-		BaseFee    *hexutil.Big    `json:"baseFeePerGas,omitempty"`
-	}
-
-	output := override{
-		Number:     (*hexutil.Big)(o.Number),
-		Difficulty: (*hexutil.Big)(o.Difficulty),
-		Time:       hexutil.Uint64(o.Time),
-		GasLimit:   hexutil.Uint64(o.GasLimit),
-		BaseFee:    (*hexutil.Big)(o.BaseFee),
-	}
-	if o.Coinbase != (common.Address{}) {
-		output.Coinbase = &o.Coinbase
-	}
-	if o.Random != (common.Hash{}) {
-		output.Random = &o.Random
-	}
-	return json.Marshal(output)
-}
+// BlockOverrides is an alias for ethereum.BlockOverrides.
+type BlockOverrides = ethereum.BlockOverrides

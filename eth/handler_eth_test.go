@@ -25,10 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/event"
@@ -62,11 +60,19 @@ func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return nil
 
 	case *eth.TransactionsPacket:
-		h.txBroadcasts.Send(([]*types.Transaction)(*packet))
+		txs, err := packet.Items()
+		if err != nil {
+			return err
+		}
+		h.txBroadcasts.Send(txs)
 		return nil
 
-	case *eth.PooledTransactionsResponse:
-		h.txBroadcasts.Send(([]*types.Transaction)(*packet))
+	case *eth.PooledTransactionsPacket:
+		txs, err := packet.List.Items()
+		if err != nil {
+			return err
+		}
+		h.txBroadcasts.Send(txs)
 		return nil
 
 	default:
@@ -98,8 +104,8 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 		gspecNoFork  = &core.Genesis{Config: configNoFork}
 		gspecProFork = &core.Genesis{Config: configProFork}
 
-		chainNoFork, _  = core.NewBlockChain(dbNoFork, nil, gspecNoFork, nil, engine, vm.Config{}, nil)
-		chainProFork, _ = core.NewBlockChain(dbProFork, nil, gspecProFork, nil, engine, vm.Config{}, nil)
+		chainNoFork, _  = core.NewBlockChain(dbNoFork, gspecNoFork, engine, nil)
+		chainProFork, _ = core.NewBlockChain(dbProFork, gspecProFork, engine, nil)
 
 		_, blocksNoFork, _  = core.GenerateChainWithGenesis(gspecNoFork, engine, 2, nil)
 		_, blocksProFork, _ = core.GenerateChainWithGenesis(gspecProFork, engine, 2, nil)
@@ -234,7 +240,7 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 	t.Parallel()
 
 	// Create a message handler, configure it to accept transactions and watch them
-	handler := newTestHandler()
+	handler := newTestHandler(ethconfig.FullSync)
 	defer handler.close()
 
 	handler.handler.synced.Store(true) // mark synced to accept transactions
@@ -257,11 +263,7 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 		return eth.Handle((*ethHandler)(handler.handler), peer)
 	})
 	// Run the handshake locally to avoid spinning up a source handler
-	var (
-		genesis = handler.chain.Genesis()
-		head    = handler.chain.CurrentBlock()
-	)
-	if err := src.Handshake(1, head.Hash(), genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
+	if err := src.Handshake(1, handler.chain, eth.BlockRangeUpdatePacket{}); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
 	// Send the transaction to the sink and verify that it's added to the tx pool
@@ -290,7 +292,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	t.Parallel()
 
 	// Create a message handler and fill the pool with big transactions
-	handler := newTestHandler()
+	handler := newTestHandler(ethconfig.FullSync)
 	defer handler.close()
 
 	insert := make([]*types.Transaction, 100)
@@ -316,11 +318,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 		return eth.Handle((*ethHandler)(handler.handler), peer)
 	})
 	// Run the handshake locally to avoid spinning up a source handler
-	var (
-		genesis = handler.chain.Genesis()
-		head    = handler.chain.CurrentBlock()
-	)
-	if err := sink.Handshake(1, head.Hash(), genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
+	if err := sink.Handshake(1, handler.chain, eth.BlockRangeUpdatePacket{}); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
 	// After the handshake completes, the source handler should stream the sink
@@ -375,13 +373,12 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	// Create a source handler to send transactions from and a number of sinks
 	// to receive them. We need multiple sinks since a one-to-one peering would
 	// broadcast all transactions without announcement.
-	source := newTestHandler()
-	source.handler.snapSync.Store(false) // Avoid requiring snap, otherwise some will be dropped below
+	source := newTestHandler(ethconfig.FullSync)
 	defer source.close()
 
 	sinks := make([]*testHandler, 10)
 	for i := 0; i < len(sinks); i++ {
-		sinks[i] = newTestHandler()
+		sinks[i] = newTestHandler(ethconfig.FullSync)
 		defer sinks[i].close()
 
 		sinks[i].handler.synced.Store(true) // mark synced to accept transactions

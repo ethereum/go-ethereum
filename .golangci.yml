@@ -1,31 +1,25 @@
 # This file configures github.com/golangci/golangci-lint.
-
+version: '2'
 run:
-  timeout: 20m
   tests: true
-
 linters:
-  disable-all: true
+  default: none
   enable:
-    - goimports
-    - gosimple
-    - govet
-    - ineffassign
-    - misspell
-    - unconvert
-    - typecheck
-    - unused
-    - staticcheck
     - bidichk
-    - durationcheck
     - copyloopvar
-    - whitespace
-    - revive # only certain checks enabled
     - durationcheck
     - gocheckcompilerdirectives
-    - reassign
+    - govet
+    - ineffassign
     - mirror
+    - misspell
+    - reassign
+    - revive # only certain checks enabled
+    - staticcheck
+    - unconvert
+    - unused
     - usetesting
+    - whitespace
     ### linters we tried and will not be using:
     ###
     # - structcheck # lots of false positives
@@ -36,44 +30,67 @@ linters:
     # - exhaustive # silly check
     # - makezero # false positives
     # - nilerr # several intentional
-
-linters-settings:
-  gofmt:
-    simplify: true
-  revive:
-    enable-all-rules: false
-    # here we enable specific useful rules
-    # see https://golangci-lint.run/usage/linters/#revive for supported rules
+  settings:
+    staticcheck:
+      checks:
+        # disable Quickfixes
+        - -QF1*
+    revive:
+      enable-all-rules: false
+      # here we enable specific useful rules
+      # see https://golangci-lint.run/usage/linters/#revive for supported rules
+      rules:
+        - name: receiver-naming
+          severity: warning
+          disabled: false
+          exclude:
+            - ''
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: receiver-naming
-        severity: warning
-        disabled: false
-        exclude: [""]
-
-issues:
-  # default is true. Enables skipping of directories:
-  #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
-  exclude-dirs-use-default: true
-  exclude-files:
-    - core/genesis_alloc.go
-  exclude-rules:
-    - path: crypto/bn256/cloudflare/optate.go
-      linters:
-        - deadcode
-        - staticcheck
-    - path: crypto/bn256/
-      linters:
-        - revive
-    - path: cmd/utils/flags.go
-      text: "SA1019: cfg.TxLookupLimit is deprecated: use 'TransactionHistory' instead."
-    - path: cmd/utils/flags.go
-      text: "SA1019: ethconfig.Defaults.TxLookupLimit is deprecated: use 'TransactionHistory' instead."
-    - path: internal/build/pgp.go
-      text: 'SA1019: "golang.org/x/crypto/openpgp" is deprecated: this package is unmaintained except for security fixes.'
-    - path: core/vm/contracts.go
-      text: 'SA1019: "golang.org/x/crypto/ripemd160" is deprecated: RIPEMD-160 is a legacy hash and should not be used for new applications.'
-  exclude:
-    - 'SA1019: event.TypeMux is deprecated: use Feed'
-    - 'SA1019: strings.Title is deprecated'
-    - 'SA1019: strings.Title has been deprecated since Go 1.18 and an alternative has been available since Go 1.0: The rule Title uses for word boundaries does not handle Unicode punctuation properly. Use golang.org/x/text/cases instead.'
-    - 'SA1029: should not use built-in type string as key for value'
+      - linters:
+          - deadcode
+          - staticcheck
+        path: crypto/bn256/cloudflare/optate.go
+      - linters:
+          - revive
+        path: crypto/bn256/
+      - path: cmd/utils/flags.go
+        text: "SA1019: cfg.TxLookupLimit is deprecated: use 'TransactionHistory' instead."
+      - path: cmd/utils/flags.go
+        text: "SA1019: ethconfig.Defaults.TxLookupLimit is deprecated: use 'TransactionHistory' instead."
+      - path: internal/build/pgp.go
+        text: 'SA1019: "golang.org/x/crypto/openpgp" is deprecated: this package is unmaintained except for security fixes.'
+      - path: core/vm/contracts.go
+        text: 'SA1019: "golang.org/x/crypto/ripemd160" is deprecated: RIPEMD-160 is a legacy hash and should not be used for new applications.'
+      - path: (.+)\.go$
+        text: 'SA1019: event.TypeMux is deprecated: use Feed'
+      - path: (.+)\.go$
+        text: 'SA1019: strings.Title is deprecated'
+      - path: (.+)\.go$
+        text: 'SA1019: strings.Title has been deprecated since Go 1.18 and an alternative has been available since Go 1.0: The rule Title uses for word boundaries does not handle Unicode punctuation properly. Use golang.org/x/text/cases instead.'
+      - path: (.+)\.go$
+        text: 'SA1029: should not use built-in type string as key for value'
+    paths:
+      - core/genesis_alloc.go
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+  exclusions:
+    generated: lax
+    paths:
+      - core/genesis_alloc.go
+      - third_party$
+      - builtin$
+      - examples$

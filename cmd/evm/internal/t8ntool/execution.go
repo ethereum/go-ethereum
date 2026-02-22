@@ -18,6 +18,7 @@ package t8ntool
 
 import (
 	"fmt"
+	stdmath "math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -32,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -40,12 +41,12 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
-	"golang.org/x/crypto/sha3"
 )
 
 type Prestate struct {
-	Env stEnv              `json:"env"`
-	Pre types.GenesisAlloc `json:"pre"`
+	Env        stEnv                         `json:"env"`
+	Pre        types.GenesisAlloc            `json:"pre"`
+	TreeLeaves map[common.Hash]hexutil.Bytes `json:"vkt,omitempty"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type ExecutionResult -field-override executionResultMarshaling -out gen_execresult.go
@@ -143,7 +144,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		return h
 	}
 	var (
-		statedb     = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre)
+		isEIP4762   = chainConfig.IsVerkle(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+		statedb     = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isEIP4762)
 		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp)
 		gaspool     = new(core.GasPool)
 		blockHash   = common.Hash{0x13, 0x37}
@@ -152,7 +154,6 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		gasUsed     = uint64(0)
 		blobGasUsed = uint64(0)
 		receipts    = make(types.Receipts, 0)
-		txIndex     = 0
 	)
 	gaspool.AddGas(pre.Env.GasLimit)
 	vmContext := vm.BlockContext{
@@ -193,6 +194,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 				Time:          pre.Env.ParentTimestamp,
 				ExcessBlobGas: pre.Env.ParentExcessBlobGas,
 				BlobGasUsed:   pre.Env.ParentBlobGasUsed,
+				BaseFee:       pre.Env.ParentBaseFee,
 			}
 			header := &types.Header{
 				Time:          pre.Env.Timestamp,
@@ -250,75 +252,32 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 				continue
 			}
 		}
-		statedb.SetTxContext(tx.Hash(), txIndex)
+		statedb.SetTxContext(tx.Hash(), len(receipts))
 		var (
 			snapshot = statedb.Snapshot()
 			prevGas  = gaspool.Gas()
 		)
-		if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
-			evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
-		}
-		// (ret []byte, usedGas uint64, failed bool, err error)
-		msgResult, err := core.ApplyMessage(evm, msg, gaspool)
+		receipt, err := core.ApplyTransactionWithEVM(msg, gaspool, statedb, vmContext.BlockNumber, blockHash, pre.Env.Timestamp, tx, &gasUsed, evm)
 		if err != nil {
 			statedb.RevertToSnapshot(snapshot)
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From, "error", err)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			gaspool.SetGas(prevGas)
-			if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxEnd != nil {
-				evm.Config.Tracer.OnTxEnd(nil, err)
-			}
 			continue
+		}
+		if receipt.Logs == nil {
+			receipt.Logs = []*types.Log{}
 		}
 		includedTxs = append(includedTxs, tx)
 		if hashError != nil {
 			return nil, nil, nil, NewError(ErrorMissingBlockhash, hashError)
 		}
 		blobGasUsed += txBlobGas
-		gasUsed += msgResult.UsedGas
-
-		// Receipt:
-		{
-			var root []byte
-			if chainConfig.IsByzantium(vmContext.BlockNumber) {
-				statedb.Finalise(true)
-			} else {
-				root = statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber)).Bytes()
-			}
-
-			// Create a new receipt for the transaction, storing the intermediate root and
-			// gas used by the tx.
-			receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: gasUsed}
-			if msgResult.Failed() {
-				receipt.Status = types.ReceiptStatusFailed
-			} else {
-				receipt.Status = types.ReceiptStatusSuccessful
-			}
-			receipt.TxHash = tx.Hash()
-			receipt.GasUsed = msgResult.UsedGas
-
-			// If the transaction created a contract, store the creation address in the receipt.
-			if msg.To == nil {
-				receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
-			}
-
-			// Set the receipt logs and create the bloom filter.
-			receipt.Logs = statedb.GetLogs(tx.Hash(), vmContext.BlockNumber.Uint64(), blockHash)
-			receipt.Bloom = types.CreateBloom(receipt)
-
-			// These three are non-consensus fields:
-			//receipt.BlockHash
-			//receipt.BlockNumber
-			receipt.TransactionIndex = uint(txIndex)
-			receipts = append(receipts, receipt)
-			if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxEnd != nil {
-				evm.Config.Tracer.OnTxEnd(receipt, nil)
-			}
-		}
-
-		txIndex++
+		receipts = append(receipts, receipt)
 	}
+
 	statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))
+
 	// Add mining reward? (-1 means rewards are disabled)
 	if miningReward >= 0 {
 		// Add mining reward. The mining reward may be `0`, which only makes a difference in the cases
@@ -348,6 +307,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		// Amount is in gwei, turn into wei
 		amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
 		statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
+
+		if isEIP4762 {
+			statedb.AccessEvents().AddAccount(w.Address, true, stdmath.MaxUint64)
+		}
 	}
 
 	// Gather the execution-layer triggered requests.
@@ -363,9 +326,13 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not parse requests logs: %v", err))
 		}
 		// EIP-7002
-		core.ProcessWithdrawalQueue(&requests, evm)
+		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
+			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not process withdrawal requests: %v", err))
+		}
 		// EIP-7251
-		core.ProcessConsolidationQueue(&requests, evm)
+		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
+			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not process consolidation requests: %v", err))
+		}
 	}
 
 	// Commit block
@@ -404,8 +371,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		execRs.Requests = requests
 	}
 
-	// Re-create statedb instance with new root upon the updated database
-	// for accessing latest states.
+	// Re-create statedb instance with new root for MPT mode
 	statedb, err = state.New(root, statedb.Database())
 	if err != nil {
 		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not reopen state: %v", err))
@@ -414,12 +380,20 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	return statedb, execRs, body, nil
 }
 
-func MakePreState(db ethdb.Database, accounts types.GenesisAlloc) *state.StateDB {
-	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
+func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool) *state.StateDB {
+	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true, IsVerkle: isBintrie})
 	sdb := state.NewDatabase(tdb, nil)
-	statedb, _ := state.New(types.EmptyRootHash, sdb)
+
+	root := types.EmptyRootHash
+	if isBintrie {
+		root = types.EmptyBinaryHash
+	}
+	statedb, err := state.New(root, sdb)
+	if err != nil {
+		panic(fmt.Errorf("failed to create initial statedb: %v", err))
+	}
 	for addr, a := range accounts {
-		statedb.SetCode(addr, a.Code)
+		statedb.SetCode(addr, a.Code, tracing.CodeChangeUnspecified)
 		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeGenesis)
 		statedb.SetBalance(addr, uint256.MustFromBig(a.Balance), tracing.BalanceIncreaseGenesisBalance)
 		for k, v := range a.Storage {
@@ -427,13 +401,24 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc) *state.StateDB
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, _ := statedb.Commit(0, false, false)
-	statedb, _ = state.New(root, sdb)
+	root, err = statedb.Commit(0, false, false)
+	if err != nil {
+		panic(fmt.Errorf("failed to commit initial state: %v", err))
+	}
+	// If bintrie mode started, check if conversion happened
+	if isBintrie {
+		return statedb
+	}
+	// For MPT mode, reopen the state with the committed root
+	statedb, err = state.New(root, sdb)
+	if err != nil {
+		panic(fmt.Errorf("failed to reopen state after commit: %v", err))
+	}
 	return statedb
 }
 
-func rlpHash(x interface{}) (h common.Hash) {
-	hw := sha3.NewLegacyKeccak256()
+func rlpHash(x any) (h common.Hash) {
+	hw := keccak.NewLegacyKeccak256()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])
 	return h

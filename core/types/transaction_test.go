@@ -29,7 +29,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 )
 
 // The values in those tests are from the Transaction Tests
@@ -589,7 +591,146 @@ func BenchmarkHash(b *testing.B) {
 		GasTipCap: big.NewInt(500),
 		GasFeeCap: big.NewInt(500),
 	})
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		signer.Hash(tx)
 	}
+}
+
+func BenchmarkEffectiveGasTip(b *testing.B) {
+	signer := LatestSigner(params.TestChainConfig)
+	key, _ := crypto.GenerateKey()
+	txdata := &DynamicFeeTx{
+		ChainID:   big.NewInt(1),
+		Nonce:     0,
+		GasTipCap: big.NewInt(2000000000),
+		GasFeeCap: big.NewInt(3000000000),
+		Gas:       21000,
+		To:        &common.Address{},
+		Value:     big.NewInt(0),
+		Data:      nil,
+	}
+	tx, _ := SignNewTx(key, signer, txdata)
+	baseFee := uint256.NewInt(1000000000) // 1 gwei
+
+	b.Run("Original", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			_, err := tx.EffectiveGasTip(baseFee.ToBig())
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("IntoMethod", func(b *testing.B) {
+		b.ReportAllocs()
+		dst := new(uint256.Int)
+		for b.Loop() {
+			err := tx.calcEffectiveGasTip(dst, baseFee)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+func TestEffectiveGasTipInto(t *testing.T) {
+	testCases := []struct {
+		tipCap  int64
+		feeCap  int64
+		baseFee *int64
+	}{
+		{tipCap: 1, feeCap: 100, baseFee: intPtr(50)},
+		{tipCap: 10, feeCap: 100, baseFee: intPtr(50)},
+		{tipCap: 50, feeCap: 100, baseFee: intPtr(50)},
+		{tipCap: 100, feeCap: 100, baseFee: intPtr(50)},
+		{tipCap: 1, feeCap: 50, baseFee: intPtr(50)},
+		{tipCap: 1, feeCap: 20, baseFee: intPtr(50)}, // Base fee higher than fee cap
+		{tipCap: 50, feeCap: 100, baseFee: intPtr(0)},
+		{tipCap: 50, feeCap: 100, baseFee: nil}, // nil base fee
+	}
+
+	// original, non-allocation golfed version
+	orig := func(tx *Transaction, baseFee *big.Int) (*big.Int, error) {
+		if baseFee == nil {
+			return tx.GasTipCap(), nil
+		}
+		var err error
+		gasFeeCap := tx.GasFeeCap()
+		if gasFeeCap.Cmp(baseFee) < 0 {
+			err = ErrGasFeeCapTooLow
+		}
+		gasFeeCap = gasFeeCap.Sub(gasFeeCap, baseFee)
+		gasTipCap := tx.GasTipCap()
+		if gasTipCap.Cmp(gasFeeCap) < 0 {
+			return gasTipCap, err
+		}
+		return gasFeeCap, err
+	}
+
+	for i, tc := range testCases {
+		tx := NewTx(&DynamicFeeTx{
+			ChainID:   big.NewInt(1),
+			Nonce:     0,
+			GasTipCap: big.NewInt(tc.tipCap),
+			GasFeeCap: big.NewInt(tc.feeCap),
+			Gas:       21000,
+			To:        &common.Address{},
+			Value:     big.NewInt(0),
+			Data:      nil,
+		})
+
+		var baseFee *big.Int
+		var baseFee2 *uint256.Int
+		if tc.baseFee != nil {
+			baseFee = big.NewInt(*tc.baseFee)
+			baseFee2 = uint256.NewInt(uint64(*tc.baseFee))
+		}
+
+		// Get result from original method
+		orig, origErr := orig(tx, baseFee)
+
+		// Get result from new method
+		dst := new(uint256.Int)
+		newErr := tx.calcEffectiveGasTip(dst, baseFee2)
+
+		// Compare results
+		if (origErr != nil) != (newErr != nil) {
+			t.Fatalf("case %d: error mismatch: orig %v, new %v", i, origErr, newErr)
+		}
+
+		if origErr == nil && orig.Cmp(dst.ToBig()) != 0 {
+			t.Fatalf("case %d: result mismatch: orig %v, new %v", i, orig, dst)
+		}
+	}
+}
+
+// Helper function to create integer pointer
+func intPtr(i int64) *int64 {
+	return &i
+}
+
+func BenchmarkEffectiveGasTipCmp(b *testing.B) {
+	signer := LatestSigner(params.TestChainConfig)
+	key, _ := crypto.GenerateKey()
+	txdata := &DynamicFeeTx{
+		ChainID:   big.NewInt(1),
+		Nonce:     0,
+		GasTipCap: big.NewInt(2000000000),
+		GasFeeCap: big.NewInt(3000000000),
+		Gas:       21000,
+		To:        &common.Address{},
+		Value:     big.NewInt(0),
+		Data:      nil,
+	}
+	tx, _ := SignNewTx(key, signer, txdata)
+	other, _ := SignNewTx(key, signer, txdata)
+	baseFee := uint256.NewInt(1000000000) // 1 gwei
+
+	b.Run("Original", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			tx.EffectiveGasTipCmp(other, baseFee)
+		}
+	})
 }
