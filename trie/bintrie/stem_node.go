@@ -134,8 +134,8 @@ func (bt *StemNode) Hash() common.Hash {
 }
 
 // CollectNodes collects all child nodes at a given path, and flushes it
-// into the provided node collector.
-func (bt *StemNode) CollectNodes(path []byte, flush NodeFlushFn) error {
+// into the provided node collector. groupDepth is ignored for StemNodes.
+func (bt *StemNode) CollectNodes(path []byte, flush NodeFlushFn, groupDepth int) error {
 	flush(path, bt)
 	return nil
 }
