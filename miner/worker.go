@@ -92,14 +92,15 @@ const maxBlockSizeBufferZone = 1_000_000
 
 // newPayloadResult is the result of payload generation.
 type newPayloadResult struct {
-	err      error
-	block    *types.Block
-	fees     *big.Int               // total block fees
-	sidecars []*types.BlobTxSidecar // collected blobs of blob transactions
-	stateDB  *state.StateDB         // StateDB after executing the transactions
-	receipts []*types.Receipt       // Receipts collected during construction
-	requests [][]byte               // Consensus layer requests collected during block construction
-	witness  *stateless.Witness     // Witness is an optional stateless proof
+	err         error
+	block       *types.Block
+	fees        *big.Int               // total block fees
+	sidecars    []*types.BlobTxSidecar // collected blobs of blob transactions
+	stateDB     *state.StateDB         // StateDB after executing the transactions
+	receipts    []*types.Receipt       // Receipts collected during construction
+	requests    [][]byte               // Consensus layer requests collected during block construction
+	witness     *stateless.Witness     // Witness is an optional stateless proof
+	interrupted bool                   // true if fillTransactions was interrupted before finishing
 }
 
 // generateParams wraps various settings for generating sealing task.
@@ -131,6 +132,7 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 	// Also add size of withdrawals to work block size.
 	work.size += uint64(genParam.withdrawals.Size())
 
+	var interrupted bool
 	if !genParam.noTxs {
 		interrupt := new(atomic.Int32)
 		timer := time.AfterFunc(miner.config.Recommit, func() {
@@ -141,6 +143,7 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 		err := miner.fillTransactions(interrupt, work)
 		if errors.Is(err, errBlockInterruptedByTimeout) {
 			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(miner.config.Recommit))
+			interrupted = true
 		}
 	}
 	body := types.Body{Transactions: work.txs, Withdrawals: genParam.withdrawals}
@@ -177,13 +180,14 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 		return &newPayloadResult{err: err}
 	}
 	return &newPayloadResult{
-		block:    block,
-		fees:     totalFees(block, work.receipts),
-		sidecars: work.sidecars,
-		stateDB:  work.state,
-		receipts: work.receipts,
-		requests: requests,
-		witness:  work.witness,
+		block:       block,
+		fees:        totalFees(block, work.receipts),
+		sidecars:    work.sidecars,
+		stateDB:     work.state,
+		receipts:    work.receipts,
+		requests:    requests,
+		witness:     work.witness,
+		interrupted: interrupted,
 	}
 }
 

@@ -254,6 +254,13 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 		for {
 			select {
 			case <-timer.C:
+				// Select is random, so we need to check if the payload has been stopped
+				select {
+				case <-payload.stop:
+					log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
+					return
+				default:
+				}
 				start := time.Now()
 				r := miner.generateWork(fullParams, witness)
 				if r.err == nil {
@@ -261,7 +268,12 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 				} else {
 					log.Info("Error while generating work", "id", payload.id, "err", r.err)
 				}
-				timer.Reset(miner.config.Recommit)
+				if r.interrupted {
+					// Retry immediately bc there are more txs to include.
+					timer.Reset(0)
+				} else {
+					timer.Reset(miner.config.Recommit)
+				}
 			case <-payload.stop:
 				log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
 				return
