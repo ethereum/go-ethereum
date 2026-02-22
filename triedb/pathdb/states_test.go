@@ -373,6 +373,9 @@ func testStateWithOriginEncode(t *testing.T, rawStorageKey bool) {
 	if s.rawStorageKey != dec.rawStorageKey {
 		t.Fatal("Unexpected rawStorageKey flag")
 	}
+	if s.size != dec.size {
+		t.Fatalf("Unexpected size, want: %d, got: %d", s.size, dec.size)
+	}
 }
 
 func TestStateSizeTracking(t *testing.T) {

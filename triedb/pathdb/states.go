@@ -476,25 +476,14 @@ func NewStateSetWithOrigin(accounts map[common.Hash][]byte, storages map[common.
 	if storageOrigin == nil {
 		storageOrigin = make(map[common.Address]map[common.Hash][]byte)
 	}
-	// Count the memory size occupied by the set. Note that each slot key here
-	// uses 2*common.HashLength to keep consistent with the calculation method
-	// of stateSet.
-	var size int
-	for _, data := range accountOrigin {
-		size += common.HashLength + len(data)
-	}
-	for _, slots := range storageOrigin {
-		for _, data := range slots {
-			size += 2*common.HashLength + len(data)
-		}
-	}
 	set := newStates(accounts, storages, rawStorageKey)
-	return &StateSetWithOrigin{
+	result := &StateSetWithOrigin{
 		stateSet:      set,
 		accountOrigin: accountOrigin,
 		storageOrigin: storageOrigin,
-		size:          set.size + uint64(size),
 	}
+	result.computeSize()
+	return result
 }
 
 // encode serializes the content of state set into the provided writer.
@@ -583,7 +572,24 @@ func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
 		}
 	}
 	s.storageOrigin = storageSet
+	s.computeSize()
 	return nil
+}
+
+// computeSize recalculates the memory footprint for the current state/origin data.
+func (s *StateSetWithOrigin) computeSize() {
+	// Each account contributes one hash key and the encoded account blob.
+	size := int(s.stateSet.size)
+	for _, data := range s.accountOrigin {
+		size += common.HashLength + len(data)
+	}
+	// Storage origin entries are keyed by account+slot hash, matching stateSet accounting.
+	for _, slots := range s.storageOrigin {
+		for _, data := range slots {
+			size += 2*common.HashLength + len(data)
+		}
+	}
+	s.size = uint64(size)
 }
 
 func empty2nil(b []byte) []byte {
