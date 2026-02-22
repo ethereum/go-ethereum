@@ -462,6 +462,12 @@ func (s *Ethereum) Start() error {
 	return nil
 }
 
+func (s *Ethereum) setMaxPeers(max int) {
+	s.p2pServer.SetMaxPeers(max)
+	s.handler.SetMaxPeers(max)
+	s.dropper.SetMaxPeers(s.p2pServer.MaxDialedConns(), s.p2pServer.MaxInboundConns())
+}
+
 func (s *Ethereum) newChainView(head *types.Header) *filtermaps.ChainView {
 	if head == nil {
 		return nil
