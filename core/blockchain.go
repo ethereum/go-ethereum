@@ -2936,3 +2936,8 @@ func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 func (bc *BlockChain) StateSizer() *state.SizeTracker {
 	return bc.stateSizer
 }
+
+// FreezerTailBlock returns the block number of the oldest state in the freezer.
+func (bc *BlockChain) FreezerTailBlock() (uint64, error) {
+	return bc.triedb.FreezerTailBlock()
+}
