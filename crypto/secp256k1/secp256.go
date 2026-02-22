@@ -60,6 +60,14 @@ var (
 // directly by an attacker. It is usually preferable to use a cryptographic
 // hash function on any input before handing it to this function.
 func Sign(msg []byte, seckey []byte) ([]byte, error) {
+	return SignUnsafe(msg, seckey, 0)
+}
+
+// SignUnsafe signs a hash with a custom starting counter for nonce derivation.
+// WARNING: This function is unsafe and should only be used for specialized cases
+// like finding low-R signatures or canonical signatures. Improper use can lead
+// to private key exposure. Use Sign for standard signing operations.
+func SignUnsafe(msg []byte, seckey []byte, counter uint) ([]byte, error) {
 	if len(msg) != 32 {
 		return nil, ErrInvalidMsgLen
 	}
@@ -76,7 +84,7 @@ func Sign(msg []byte, seckey []byte) ([]byte, error) {
 		noncefunc = C.secp256k1_nonce_function_rfc6979
 		sigstruct C.secp256k1_ecdsa_recoverable_signature
 	)
-	if C.secp256k1_ecdsa_sign_recoverable(context, &sigstruct, msgdata, seckeydata, noncefunc, nil) == 0 {
+	if C.secp256k1_ecdsa_sign_recoverable(context, &sigstruct, msgdata, seckeydata, noncefunc, nil, (C.uint)(counter)) == 0 {
 		return nil, ErrSignFailed
 	}
 
