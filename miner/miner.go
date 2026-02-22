@@ -40,6 +40,11 @@ type Backend interface {
 	TxPool() *txpool.TxPool
 }
 
+// TxPool wraps all methods required for mining from the txPool.
+type TxPool interface {
+	Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction
+}
+
 // Config is the configuration parameters of mining.
 type Config struct {
 	Etherbase           common.Address `toml:"-"`          // Deprecated
@@ -70,7 +75,7 @@ type Miner struct {
 	config      *Config
 	chainConfig *params.ChainConfig
 	engine      consensus.Engine
-	txpool      *txpool.TxPool
+	txpool      TxPool
 	prio        []common.Address // A list of senders to prioritize
 	chain       *core.BlockChain
 	pending     *pending
