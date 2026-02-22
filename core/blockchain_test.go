@@ -4558,3 +4558,38 @@ func TestSetHeadBeyondRootFinalizedBug(t *testing.T) {
 			currentFinal.Number.Uint64())
 	}
 }
+
+// TestSetHeadTxLookupCleanup tests that rewinding the chain correctly cleans up
+// transaction lookup entries (indices)
+func TestSetHeadTxLookupCleanup(t *testing.T) {
+	// Create a clean blockchain with 100 blocks
+	_, _, blockchain, err := newCanonical(ethash.NewFaker(), 100, true, rawdb.PathScheme)
+	if err != nil {
+		t.Fatalf("failed to create pristine chain: %v", err)
+	}
+	defer blockchain.Stop()
+
+	// The default newCanonical blocks are empty (no txs).
+	// Manually overwrite Block 100's body to include a transaction.
+	headBlock := blockchain.CurrentBlock()
+	tx := types.NewTransaction(0, common.Address{0x01}, big.NewInt(0), 0, big.NewInt(0), nil)
+	txHash := tx.Hash()
+	body := &types.Body{Transactions: []*types.Transaction{tx}}
+
+	rawdb.WriteBody(blockchain.db, headBlock.Hash(), headBlock.Number.Uint64(), body)
+	txHashes := []common.Hash{txHash}
+	rawdb.WriteTxLookupEntries(blockchain.db, headBlock.Number.Uint64(), txHashes)
+
+	if entry := rawdb.ReadTxLookupEntry(blockchain.db, txHash); entry == nil {
+		t.Fatalf("Setup failed: TxLookup entry was not written to DB")
+	}
+
+	targetBlock := blockchain.GetBlockByNumber(50)
+	if _, err := blockchain.setHeadBeyondRoot(50, 0, targetBlock.Root(), false); err != nil {
+		t.Fatalf("Failed to rewind: %v", err)
+	}
+
+	if entry := rawdb.ReadTxLookupEntry(blockchain.db, txHash); entry != nil {
+		t.Errorf("FAIL: TxLookup entry still exists after rewind! Tx is still pointing to block %d", *entry)
+	}
+}
