@@ -47,18 +47,30 @@ func makeReceipt(addr common.Address) *types.Receipt {
 }
 
 func BenchmarkFiltersIndexed(b *testing.B) {
-	benchmarkFilters(b, 0, false)
+	benchmarkFilters(b, 0, false, 0, 4)
 }
 
 func BenchmarkFiltersHalfIndexed(b *testing.B) {
-	benchmarkFilters(b, 50000, false)
+	benchmarkFilters(b, 50000, false, 0, 4)
 }
 
 func BenchmarkFiltersUnindexed(b *testing.B) {
-	benchmarkFilters(b, 0, true)
+	benchmarkFilters(b, 0, true, 0, 4)
 }
 
-func benchmarkFilters(b *testing.B, history uint64, noHistory bool) {
+func BenchmarkFiltersIndexedLimit1(b *testing.B) {
+	benchmarkFilters(b, 0, false, 1, 1)
+}
+
+func BenchmarkFiltersHalfIndexedLimit1(b *testing.B) {
+	benchmarkFilters(b, 50000, false, 1, 1)
+}
+
+func BenchmarkFiltersUnindexedLimit1(b *testing.B) {
+	benchmarkFilters(b, 0, true, 1, 1)
+}
+
+func benchmarkFilters(b *testing.B, history uint64, noHistory bool, limit uint64, expected int) {
 	var (
 		db           = rawdb.NewMemoryDatabase()
 		backend, sys = newTestFilterSystem(db, Config{})
@@ -109,12 +121,18 @@ func benchmarkFilters(b *testing.B, history uint64, noHistory bool) {
 	backend.startFilterMaps(history, noHistory, filtermaps.DefaultParams)
 	defer backend.stopFilterMaps()
 
-	filter := sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{addr1, addr2, addr3, addr4}, nil, 0)
+	var filter *Filter
+	if limit > 0 {
+		filter = sys.NewRangeFilterWithLimit(0, int64(rpc.LatestBlockNumber), []common.Address{addr1, addr2, addr3, addr4}, nil, 0, limit)
+	} else {
+		filter = sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{addr1, addr2, addr3, addr4}, nil, 0)
+	}
+	ctx := context.Background()
 	for b.Loop() {
 		filter.begin = 0
-		logs, _ := filter.Logs(context.Background())
-		if len(logs) != 4 {
-			b.Fatal("expected 4 logs, got", len(logs))
+		logs, _ := filter.Logs(ctx)
+		if len(logs) != expected {
+			b.Fatal("expected", expected, "logs, got", len(logs))
 		}
 	}
 }
