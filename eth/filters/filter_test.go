@@ -131,6 +131,88 @@ func TestFiltersUnindexed(t *testing.T) {
 	testFilters(t, 0, true)
 }
 
+func TestFiltersIndexedWithLimit(t *testing.T) {
+	testFiltersWithLimit(t, 0, false)
+}
+
+func TestFiltersHalfIndexedWithLimit(t *testing.T) {
+	testFiltersWithLimit(t, 500, false)
+}
+
+func TestFiltersUnindexedWithLimit(t *testing.T) {
+	testFiltersWithLimit(t, 0, true)
+}
+
+func testFiltersWithLimit(t *testing.T, history uint64, noHistory bool) {
+	const (
+		totalBlocks        = 1000
+		queryLimit  uint64 = 2
+	)
+
+	var (
+		db           = rawdb.NewMemoryDatabase()
+		backend, sys = newTestFilterSystem(db, Config{})
+		target       = common.BytesToAddress([]byte("target"))
+		other        = common.BytesToAddress([]byte("other"))
+		gspec        = &core.Genesis{
+			BaseFee: big.NewInt(params.InitialBaseFee),
+			Config:  params.TestChainConfig,
+		}
+	)
+	defer db.Close()
+
+	_, err := gspec.Commit(db, triedb.NewDatabase(db, nil), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addReceiptLog := func(gen *core.BlockGen, nonce uint64, addr common.Address) {
+		gen.AddUncheckedReceipt(makeReceipt(addr))
+		gen.AddUncheckedTx(types.NewTransaction(nonce, common.HexToAddress("0x999"), big.NewInt(1), 21000, gen.BaseFee(), nil))
+	}
+	chain, receipts := core.GenerateChain(gspec.Config, gspec.ToBlock(), ethash.NewFaker(), db, totalBlocks, func(i int, gen *core.BlockGen) {
+		switch i {
+		case 2, 5, 900:
+			addReceiptLog(gen, 999, target)
+		case 990:
+			addReceiptLog(gen, 1000, other)
+		}
+	})
+	for i, block := range chain {
+		rawdb.WriteBlock(db, block)
+		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+		rawdb.WriteHeadBlockHash(db, block.Hash())
+		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
+	}
+	backend.startFilterMaps(history, noHistory, filtermaps.DefaultParams)
+	defer backend.stopFilterMaps()
+
+	allFilter := sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{target}, nil, 0)
+	allLogs, err := allFilter.Logs(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(allLogs) != 3 {
+		t.Fatalf("expected 3 total logs, got %d", len(allLogs))
+	}
+
+	limitedFilter := sys.NewRangeFilterWithLimit(0, int64(rpc.LatestBlockNumber), []common.Address{target}, nil, 0, queryLimit)
+	limitedLogs, err := limitedFilter.Logs(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(limitedLogs) != int(queryLimit) {
+		t.Fatalf("expected %d logs with limit, got %d", queryLimit, len(limitedLogs))
+	}
+	if limitedLogs[0].BlockNumber != 3 || limitedLogs[1].BlockNumber != 6 {
+		t.Fatalf("unexpected limited block numbers: got [%d %d], want [3 6]", limitedLogs[0].BlockNumber, limitedLogs[1].BlockNumber)
+	}
+	for i, log := range limitedLogs {
+		if log.Address != target {
+			t.Fatalf("unexpected address in limited log #%d: got %x, want %x", i, log.Address, target)
+		}
+	}
+}
+
 func testFilters(t *testing.T, history uint64, noHistory bool) {
 	var (
 		db           = rawdb.NewMemoryDatabase()
