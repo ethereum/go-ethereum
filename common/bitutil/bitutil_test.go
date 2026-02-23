@@ -11,6 +11,45 @@ import (
 	"testing"
 )
 
+// Tests that bitwise XOR works for various alignments.
+func TestXOR(t *testing.T) {
+	for alignP := 0; alignP < 2; alignP++ {
+		for alignQ := 0; alignQ < 2; alignQ++ {
+			for alignD := 0; alignD < 2; alignD++ {
+				p := make([]byte, 1023)[alignP:]
+				q := make([]byte, 1023)[alignQ:]
+
+				for i := 0; i < len(p); i++ {
+					p[i] = byte(i)
+				}
+				for i := 0; i < len(q); i++ {
+					q[i] = byte(len(q) - i)
+				}
+				d1 := make([]byte, 1023+alignD)[alignD:]
+				d2 := make([]byte, 1023+alignD)[alignD:]
+
+				XORBytes(d1, p, q)
+				naiveXOR(d2, p, q)
+				if !bytes.Equal(d1, d2) {
+					t.Error("not equal", d1, d2)
+				}
+			}
+		}
+	}
+}
+
+// naiveXOR xors bytes one by one.
+func naiveXOR(dst, a, b []byte) int {
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+	for i := 0; i < n; i++ {
+		dst[i] = a[i] ^ b[i]
+	}
+	return n
+}
+
 // Tests that bitwise AND works for various alignments.
 func TestAND(t *testing.T) {
 	for alignP := 0; alignP < 2; alignP++ {
@@ -82,6 +121,32 @@ func TestTest(t *testing.T) {
 		if TestBytes(q) != safeTestBytes(q) {
 			t.Error("not equal")
 		}
+	}
+}
+
+// Benchmarks the potentially optimized XOR performance.
+func BenchmarkFastXOR1KB(b *testing.B) { benchmarkFastXOR(b, 1024) }
+func BenchmarkFastXOR2KB(b *testing.B) { benchmarkFastXOR(b, 2048) }
+func BenchmarkFastXOR4KB(b *testing.B) { benchmarkFastXOR(b, 4096) }
+
+func benchmarkFastXOR(b *testing.B, size int) {
+	p, q := make([]byte, size), make([]byte, size)
+
+	for i := 0; i < b.N; i++ {
+		XORBytes(p, p, q)
+	}
+}
+
+// Benchmarks the baseline XOR performance.
+func BenchmarkBaseXOR1KB(b *testing.B) { benchmarkBaseXOR(b, 1024) }
+func BenchmarkBaseXOR2KB(b *testing.B) { benchmarkBaseXOR(b, 2048) }
+func BenchmarkBaseXOR4KB(b *testing.B) { benchmarkBaseXOR(b, 4096) }
+
+func benchmarkBaseXOR(b *testing.B, size int) {
+	p, q := make([]byte, size), make([]byte, size)
+
+	for i := 0; i < b.N; i++ {
+		naiveXOR(p, p, q)
 	}
 }
 

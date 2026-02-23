@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 )
 
 type bytesBacked interface {
@@ -141,7 +141,7 @@ func Bloom9(data []byte) []byte {
 
 // bloomValues returns the bytes (index-value pairs) to set for the given data
 func bloomValues(data []byte, hashbuf *[6]byte) (uint, byte, uint, byte, uint, byte) {
-	sha := hasherPool.Get().(crypto.KeccakState)
+	sha := hasherPool.Get().(keccak.KeccakState)
 	sha.Reset()
 	sha.Write(data)
 	sha.Read(hashbuf[:])

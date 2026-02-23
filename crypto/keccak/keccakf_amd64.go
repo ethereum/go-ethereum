@@ -1,13 +1,19 @@
-// Copyright 2015 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-//go:build amd64 && !purego && gc
+//go:build amd64 && !purego
 
 package keccak
 
-// This function is implemented in keccakf_amd64.s.
+import "unsafe"
 
 //go:noescape
+func keccakF1600(a *[200]byte)
 
-func keccakF1600(a *[25]uint64)
+// Sum256 computes the Keccak-256 hash of data. Zero heap allocations.
+func Sum256(data []byte) [32]byte { return sum256Sponge(data) }
+
+// Hasher is a streaming Keccak-256 hasher. Designed for stack allocation.
+type Hasher struct{ sponge }
+
+func xorAndPermute(state *[200]byte, buf *byte) {
+	xorIn(state, unsafe.Slice(buf, rate))
+	keccakF1600(state)
+}
