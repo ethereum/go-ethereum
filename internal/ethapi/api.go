@@ -1446,6 +1446,10 @@ func (api *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common
 	if err != nil {
 		return nil, err
 	}
+	if header == nil {
+		// header was pruned at this point
+		return nil, nil
+	}
 	return newRPCTransaction(tx, blockHash, blockNumber, header.Time, index, header.BaseFee, api.b.ChainConfig()), nil
 }
 
