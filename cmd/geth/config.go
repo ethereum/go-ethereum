@@ -377,6 +377,9 @@ func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
 	if ctx.IsSet(utils.MetricsInfluxDBTagsFlag.Name) {
 		cfg.Metrics.InfluxDBTags = ctx.String(utils.MetricsInfluxDBTagsFlag.Name)
 	}
+	if ctx.IsSet(utils.MetricsInfluxDBIntervalFlag.Name) {
+		cfg.Metrics.InfluxDBInterval = ctx.Duration(utils.MetricsInfluxDBIntervalFlag.Name)
+	}
 	if ctx.IsSet(utils.MetricsEnableInfluxDBV2Flag.Name) {
 		cfg.Metrics.EnableInfluxDBV2 = ctx.Bool(utils.MetricsEnableInfluxDBV2Flag.Name)
 	}
