@@ -1018,7 +1018,7 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 
 	MetricsInfluxDBIntervalFlag = &cli.DurationFlag{
 		Name:     "metrics.influxdb.interval",
-		Usage:    "Interval in seconds between metrics reports to InfluxDB",
+		Usage:    "Interval between metrics reports to InfluxDB (with time unit, e.g. 10s)",
 		Value:    metrics.DefaultConfig.InfluxDBInterval,
 		Category: flags.MetricsCategory,
 	}
