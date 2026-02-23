@@ -186,6 +186,9 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
+	if sim.chainConfig.IsPrague(header.Number) {
+		core.ProcessParentBlockHash(header.ParentHash, evm)
+	}
 	for i, call := range block.Calls {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
