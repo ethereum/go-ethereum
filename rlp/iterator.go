@@ -16,44 +16,74 @@
 
 package rlp
 
-type listIterator struct {
-	data []byte
-	next []byte
-	err  error
+// Iterator is an iterator over the elements of an encoded container.
+type Iterator struct {
+	data   []byte
+	next   []byte
+	offset int
+	err    error
 }
 
-// NewListIterator creates an iterator for the (list) represented by data
-func NewListIterator(data RawValue) (*listIterator, error) {
+// NewListIterator creates an iterator for the (list) represented by data.
+func NewListIterator(data RawValue) (Iterator, error) {
 	k, t, c, err := readKind(data)
 	if err != nil {
-		return nil, err
+		return Iterator{}, err
 	}
 	if k != List {
-		return nil, ErrExpectedList
+		return Iterator{}, ErrExpectedList
 	}
-	it := &listIterator{
-		data: data[t : t+c],
-	}
+	it := newIterator(data[t:t+c], int(t))
 	return it, nil
 }
 
-// Next forwards the iterator one step, returns true if it was not at end yet
-func (it *listIterator) Next() bool {
+func newIterator(data []byte, initialOffset int) Iterator {
+	return Iterator{data: data, offset: initialOffset}
+}
+
+// Next forwards the iterator one step.
+// Returns true if there is a next item or an error occurred on this step (check Err()).
+// On parse error, the iterator is marked finished and subsequent calls return false.
+func (it *Iterator) Next() bool {
 	if len(it.data) == 0 {
 		return false
 	}
 	_, t, c, err := readKind(it.data)
-	it.next = it.data[:t+c]
-	it.data = it.data[t+c:]
-	it.err = err
+	if err != nil {
+		it.next = nil
+		it.err = err
+		// Mark iteration as finished to avoid potential infinite loops on subsequent Next calls.
+		it.data = nil
+		return true
+	}
+	length := t + c
+	it.next = it.data[:length]
+	it.data = it.data[length:]
+	it.offset += int(length)
+	it.err = nil
 	return true
 }
 
-// Value returns the current value
-func (it *listIterator) Value() []byte {
+// Value returns the current value.
+func (it *Iterator) Value() []byte {
 	return it.next
 }
 
-func (it *listIterator) Err() error {
+// Count returns the remaining number of items.
+// Note this is O(n) and the result may be incorrect if the list data is invalid.
+// The returned count is always an upper bound on the remaining items
+// that will be visited by the iterator.
+func (it *Iterator) Count() int {
+	count, _ := CountValues(it.data)
+	return count
+}
+
+// Offset returns the offset of the current value into the list data.
+func (it *Iterator) Offset() int {
+	return it.offset - len(it.next)
+}
+
+// Err returns the error that caused Next to return false, if any.
+func (it *Iterator) Err() error {
 	return it.err
 }

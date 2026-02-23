@@ -22,11 +22,13 @@ import (
 	"math/rand"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/tracker"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -54,9 +56,10 @@ type receiptRequest struct {
 
 // Peer is a collection of relevant information we have about a `eth` peer.
 type Peer struct {
+	*p2p.Peer // The embedded P2P package peer
+
 	id string // Unique ID for the peer, cached
 
-	*p2p.Peer                   // The embedded P2P package peer
 	rw        p2p.MsgReadWriter // Input/output streams for snap
 	version   uint              // Protocol version negotiated
 	lastRange atomic.Pointer[BlockRangeUpdatePacket]
@@ -66,6 +69,7 @@ type Peer struct {
 	txBroadcast chan []common.Hash // Channel used to queue transaction propagation requests
 	txAnnounce  chan []common.Hash // Channel used to queue transaction announcement requests
 
+	tracker     *tracker.Tracker
 	reqDispatch chan *request  // Dispatch channel to send requests and track then until fulfillment
 	reqCancel   chan *cancel   // Dispatch channel to cancel pending requests and untrack them
 	resDispatch chan *response // Dispatch channel to fulfil pending requests and untrack them
@@ -79,6 +83,8 @@ type Peer struct {
 // NewPeer creates a wrapper for a network connection and negotiated  protocol
 // version.
 func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Peer {
+	cap := p2p.Cap{Name: ProtocolName, Version: version}
+	id := p.ID().String()
 	peer := &Peer{
 		id:            p.ID().String(),
 		Peer:          p,
@@ -87,6 +93,7 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 		knownTxs:      newKnownCache(maxKnownTxs),
 		txBroadcast:   make(chan []common.Hash),
 		txAnnounce:    make(chan []common.Hash),
+		tracker:       tracker.New(cap, id, 5*time.Minute),
 		reqDispatch:   make(chan *request),
 		reqCancel:     make(chan *cancel),
 		resDispatch:   make(chan *response),
@@ -130,9 +137,9 @@ func (p *Peer) KnownTransaction(hash common.Hash) bool {
 	return p.knownTxs.Contains(hash)
 }
 
-// markTransaction marks a transaction as known for the peer, ensuring that it
+// MarkTransaction marks a transaction as known for the peer, ensuring that it
 // will never be propagated to this particular peer.
-func (p *Peer) markTransaction(hash common.Hash) {
+func (p *Peer) MarkTransaction(hash common.Hash) {
 	// If we reached the memory allowance, drop a previously known transaction hash
 	p.knownTxs.Add(hash)
 }
@@ -246,10 +253,11 @@ func (p *Peer) RequestOneHeader(hash common.Hash, sink chan *Response) (*Request
 	id := rand.Uint64()
 
 	req := &Request{
-		id:   id,
-		sink: sink,
-		code: GetBlockHeadersMsg,
-		want: BlockHeadersMsg,
+		id:       id,
+		sink:     sink,
+		code:     GetBlockHeadersMsg,
+		want:     BlockHeadersMsg,
+		numItems: 1,
 		data: &GetBlockHeadersPacket{
 			RequestId: id,
 			GetBlockHeadersRequest: &GetBlockHeadersRequest{
@@ -273,10 +281,11 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, re
 	id := rand.Uint64()
 
 	req := &Request{
-		id:   id,
-		sink: sink,
-		code: GetBlockHeadersMsg,
-		want: BlockHeadersMsg,
+		id:       id,
+		sink:     sink,
+		code:     GetBlockHeadersMsg,
+		want:     BlockHeadersMsg,
+		numItems: amount,
 		data: &GetBlockHeadersPacket{
 			RequestId: id,
 			GetBlockHeadersRequest: &GetBlockHeadersRequest{
@@ -300,10 +309,11 @@ func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, rever
 	id := rand.Uint64()
 
 	req := &Request{
-		id:   id,
-		sink: sink,
-		code: GetBlockHeadersMsg,
-		want: BlockHeadersMsg,
+		id:       id,
+		sink:     sink,
+		code:     GetBlockHeadersMsg,
+		want:     BlockHeadersMsg,
+		numItems: amount,
 		data: &GetBlockHeadersPacket{
 			RequestId: id,
 			GetBlockHeadersRequest: &GetBlockHeadersRequest{
@@ -327,10 +337,11 @@ func (p *Peer) RequestBodies(hashes []common.Hash, sink chan *Response) (*Reques
 	id := rand.Uint64()
 
 	req := &Request{
-		id:   id,
-		sink: sink,
-		code: GetBlockBodiesMsg,
-		want: BlockBodiesMsg,
+		id:       id,
+		sink:     sink,
+		code:     GetBlockBodiesMsg,
+		want:     BlockBodiesMsg,
+		numItems: len(hashes),
 		data: &GetBlockBodiesPacket{
 			RequestId:             id,
 			GetBlockBodiesRequest: hashes,
@@ -350,10 +361,11 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Requ
 	var req *Request
 	if p.version > ETH69 {
 		req = &Request{
-			id:   id,
-			sink: sink,
-			code: GetReceiptsMsg,
-			want: ReceiptsMsg,
+			id:       id,
+			sink:     sink,
+			code:     GetReceiptsMsg,
+			want:     ReceiptsMsg,
+			numItems: len(hashes),
 			data: &GetReceiptsPacket70{
 				RequestId:              id,
 				FirstBlockReceiptIndex: 0,
@@ -367,10 +379,11 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Requ
 		p.receiptBufferLock.Unlock()
 	} else {
 		req = &Request{
-			id:   id,
-			sink: sink,
-			code: GetReceiptsMsg,
-			want: ReceiptsMsg,
+			id:       id,
+			sink:     sink,
+			code:     GetReceiptsMsg,
+			want:     ReceiptsMsg,
+			numItems: len(hashes),
 			data: &GetReceiptsPacket69{
 				RequestId:          id,
 				GetReceiptsRequest: hashes,
@@ -392,7 +405,9 @@ func (p *Peer) requestPartialReceipts(id uint64) error {
 		return fmt.Errorf("no partial receipt retreival in progress with id %d", id)
 	}
 	lastBlock := len(p.receiptBuffer[id].list) - 1
-	lastReceipt := len(p.receiptBuffer[id].list[lastBlock].items)
+	lastReceipt := p.receiptBuffer[id].list[lastBlock].items.Len()
+
+	hashes := p.receiptBuffer[id].request[lastBlock:]
 
 	req := &Request{
 		id:   id,
@@ -402,19 +417,19 @@ func (p *Peer) requestPartialReceipts(id uint64) error {
 		data: &GetReceiptsPacket70{
 			RequestId:              id,
 			FirstBlockReceiptIndex: uint64(lastReceipt),
-			GetReceiptsRequest:     p.receiptBuffer[id].request[lastBlock:],
+			GetReceiptsRequest:     hashes,
 		},
+		numItems: len(hashes),
 	}
 	return p.dispatchRequest(req)
 }
 
-// bufferReceiptsPacket validates a receipt packet and buffer the incomplete packet.
+// bufferReceipts validates a receipt packet and buffer the incomplete packet.
 // If the request is completed, it appends previously collected receipts.
-func (p *Peer) bufferReceiptsPacket(packet *ReceiptsPacket70, backend Backend) error {
+func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList69, lastBlockIncomplete bool, backend Backend) error {
 	p.receiptBufferLock.Lock()
 	defer p.receiptBufferLock.Unlock()
 
-	requestId := packet.RequestId
 	buffer := p.receiptBuffer[requestId]
 
 	// Do not assign buffer to the response not requested
@@ -424,17 +439,17 @@ func (p *Peer) bufferReceiptsPacket(packet *ReceiptsPacket70, backend Backend) e
 	// If the response is empty, the peer likely does not have the requested receipts.
 	// Forward the empty response to the internal handler regardless. However, note
 	// that an empty response marked as incomplete is considered invalid.
-	if len(packet.List) == 0 {
+	if len(receiptLists) == 0 {
 		delete(p.receiptBuffer, requestId)
 
-		if packet.LastBlockIncomplete {
+		if lastBlockIncomplete {
 			return errors.New("invalid empty receipt response with incomplete flag")
 		}
 		return nil
 	}
 	// Buffer the last block when the response is incomplete.
-	if packet.LastBlockIncomplete {
-		lastBlock := len(packet.List) - 1
+	if lastBlockIncomplete {
+		lastBlock := len(receiptLists) - 1
 		if len(buffer.list) > 0 {
 			lastBlock += len(buffer.list) - 1
 		}
@@ -442,7 +457,7 @@ func (p *Peer) bufferReceiptsPacket(packet *ReceiptsPacket70, backend Backend) e
 		if header == nil {
 			return fmt.Errorf("unknown block #%d for receipt retrieval", lastBlock)
 		}
-		logSize, err := p.validateLastBlockReceipt(packet.List, requestId, header)
+		logSize, err := p.validateLastBlockReceipt(receiptLists, requestId, header)
 		if err != nil {
 			return err
 		}
@@ -450,29 +465,38 @@ func (p *Peer) bufferReceiptsPacket(packet *ReceiptsPacket70, backend Backend) e
 		if len(buffer.list) > 0 {
 			// If the buffer is already allocated, it means that the previous response
 			// was incomplete Append the first block receipts.
-			buffer.list[len(buffer.list)-1].Append(packet.List[0])
-			buffer.list = append(buffer.list, packet.List[1:]...)
+			buffer.list[len(buffer.list)-1].Append(receiptLists[0])
+			buffer.list = append(buffer.list, receiptLists[1:]...)
 			buffer.lastLogSize = logSize
 		} else {
-			buffer.list = packet.List
+			buffer.list = receiptLists
 			buffer.lastLogSize = logSize
 		}
 		return nil
 	}
-	// If the request is complete, append the previously collected receipts to the
-	// packet and discard the buffered receipts. Also clear the cached buffer used
-	// for storing partial responses.
-	delete(p.receiptBuffer, requestId)
-
-	// Short circuit if there is nothing cached previously
+	// Short circuit if there is nothing cached previously.
 	if len(buffer.list) == 0 {
+		delete(p.receiptBuffer, requestId)
 		return nil
 	}
-	// Aggregate the cached result into the packet
-	buffer.list[len(buffer.list)-1].Append(packet.List[0])
-	packet.List = packet.List[1:]
-	packet.List = append(buffer.list, packet.List...)
+	// Aggregate the cached result into the packet.
+	buffer.list[len(buffer.list)-1].Append(receiptLists[0])
+	buffer.list = append(buffer.list, receiptLists[1:]...)
 	return nil
+}
+
+// flushReceipts retrieves the merged receipt lists from the buffer
+// and removes the buffer entry. Returns nil if no buffered data exists.
+func (p *Peer) flushReceipts(requestId uint64) []*ReceiptList69 {
+	p.receiptBufferLock.Lock()
+	defer p.receiptBufferLock.Unlock()
+
+	buffer, ok := p.receiptBuffer[requestId]
+	if !ok {
+		return nil
+	}
+	delete(p.receiptBuffer, requestId)
+	return buffer.list
 }
 
 // validateLastBlockReceipt validates receipts and return log size of last block receipt.
@@ -491,16 +515,21 @@ func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList69, id uint64
 	var previousLog uint64
 	var log uint64
 	if buffer, ok := p.receiptBuffer[id]; ok && len(buffer.list) > 0 && len(receiptLists) == 1 {
-		previousTxs = len(buffer.list[len(buffer.list)-1].items)
+		previousTxs = buffer.list[len(buffer.list)-1].items.Len()
 		previousLog = buffer.lastLogSize
 	}
 
 	// Verify that the total number of transactions delivered is under the limit.
-	if uint64(previousTxs+len(lastReceipts.items)) > header.GasUsed/21_000 {
+	if uint64(previousTxs+lastReceipts.items.Len()) > header.GasUsed/21_000 {
 		// should be dropped, don't clear the buffer
 		return 0, fmt.Errorf("total number of tx exceeded limit")
 	}
-	for _, rc := range lastReceipts.items {
+	// todo: avoid calling Items() here
+	receipts, err := lastReceipts.items.Items()
+	if err != nil {
+		return 0, fmt.Errorf("invalid receipts: %v", err)
+	}
+	for _, rc := range receipts {
 		log += uint64(len(rc.Logs))
 	}
 	// Verify that the overall downloaded receipt size does not exceed the block gas limit.
@@ -512,10 +541,18 @@ func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList69, id uint64
 
 // RequestTxs fetches a batch of transactions from a remote node.
 func (p *Peer) RequestTxs(hashes []common.Hash) error {
-	p.Log().Debug("Fetching batch of transactions", "count", len(hashes))
+	p.Log().Trace("Fetching batch of transactions", "count", len(hashes))
 	id := rand.Uint64()
 
-	requestTracker.Track(p.id, p.version, GetPooledTransactionsMsg, PooledTransactionsMsg, id)
+	err := p.tracker.Track(tracker.Request{
+		ID:       id,
+		ReqCode:  GetPooledTransactionsMsg,
+		RespCode: PooledTransactionsMsg,
+		Size:     len(hashes),
+	})
+	if err != nil {
+		return err
+	}
 	return p2p.Send(p.rw, GetPooledTransactionsMsg, &GetPooledTransactionsPacket{
 		RequestId:                    id,
 		GetPooledTransactionsRequest: hashes,

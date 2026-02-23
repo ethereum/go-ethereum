@@ -19,6 +19,7 @@ package filters
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"slices"
@@ -44,15 +45,17 @@ type Filter struct {
 	begin, end int64        // Range interval if filtering multiple blocks
 
 	rangeLogsTestHook chan rangeLogsTestEvent
+	rangeLimit        uint64
 }
 
 // NewRangeFilter creates a new filter which uses a bloom filter on blocks to
 // figure out whether a particular block is interesting or not.
-func (sys *FilterSystem) NewRangeFilter(begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
+func (sys *FilterSystem) NewRangeFilter(begin, end int64, addresses []common.Address, topics [][]common.Hash, rangeLimit uint64) *Filter {
 	// Create a generic filter and convert it into a range filter
 	filter := newFilter(sys, addresses, topics)
 	filter.begin = begin
 	filter.end = end
+	filter.rangeLimit = rangeLimit
 
 	return filter
 }
@@ -143,6 +146,9 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	if err != nil {
 		return nil, err
 	}
+	if f.rangeLimit != 0 && (end-begin) > f.rangeLimit {
+		return nil, fmt.Errorf("exceed maximum block range: %d", f.rangeLimit)
+	}
 	return f.rangeLogs(ctx, begin, end)
 }
 
@@ -221,8 +227,11 @@ func (s *searchSession) updateChainView() error {
 	if lastBlock == math.MaxUint64 {
 		lastBlock = head
 	}
-	if firstBlock > lastBlock || lastBlock > head {
+	if firstBlock > lastBlock {
 		return errInvalidBlockRange
+	}
+	if lastBlock > head {
+		return errBlockRangeIntoFuture
 	}
 	s.searchRange = common.NewRange(firstBlock, lastBlock+1-firstBlock)
 
@@ -491,7 +500,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 
 // filterLogs creates a slice of logs matching the given criteria.
 func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
-	var check = func(log *types.Log) bool {
+	check := func(log *types.Log) bool {
 		if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > log.BlockNumber {
 			return false
 		}
@@ -563,7 +572,7 @@ type ReceiptWithTx struct {
 // In addition to returning receipts, it also returns the corresponding transactions.
 // This is because receipts only contain low-level data, while user-facing data
 // may require additional information from the Transaction.
-func filterReceipts(txHashes map[common.Hash]bool, ev core.ChainEvent) []*ReceiptWithTx {
+func filterReceipts(txHashes map[common.Hash]struct{}, ev core.ChainEvent) []*ReceiptWithTx {
 	var ret []*ReceiptWithTx
 
 	receipts := ev.Receipts
@@ -585,7 +594,7 @@ func filterReceipts(txHashes map[common.Hash]bool, ev core.ChainEvent) []*Receip
 		}
 	} else {
 		for i, receipt := range receipts {
-			if txHashes[receipt.TxHash] {
+			if _, ok := txHashes[receipt.TxHash]; ok {
 				ret = append(ret, &ReceiptWithTx{
 					Receipt:     receipt,
 					Transaction: txs[i],

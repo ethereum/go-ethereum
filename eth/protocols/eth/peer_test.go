@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/tracker"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -165,21 +166,28 @@ func TestPartialReceipt(t *testing.T) {
 	delivery := &ReceiptsPacket70{
 		RequestId:           req.id,
 		LastBlockIncomplete: true,
-		List: []*ReceiptList69{
+		List: encodeRL([]*ReceiptList69{
 			{
-				items: receipts,
+				items: encodeRL(receipts),
 			},
 			{
-				items: receipts,
+				items: encodeRL(receipts),
 			},
-		},
+		}),
 	}
-	if err := peer.bufferReceiptsPacket(delivery, backend); err != nil {
-		t.Fatalf("first ReconstructReceiptsPacket failed: %v", err)
+
+	tresp := tracker.Response{ID: delivery.RequestId, MsgCode: ReceiptsMsg, Size: delivery.List.Len()}
+	if err := peer.tracker.Fulfil(tresp); err != nil {
+		t.Fatalf("Tracker failed: %v", err)
+	}
+
+	receiptList, _ := delivery.List.Items()
+	if err := peer.bufferReceipts(delivery.RequestId, receiptList, delivery.LastBlockIncomplete, backend); err != nil {
+		t.Fatalf("first bufferReceipts failed: %v", err)
 	}
 
 	if err := peer.requestPartialReceipts(req.id); err != nil {
-		t.Fatalf("RequestPartialReceipts failed: %v", err)
+		t.Fatalf("requestPartialReceipts failed: %v", err)
 	}
 
 	var rereq *GetReceiptsPacket70
@@ -193,25 +201,30 @@ func TestPartialReceipt(t *testing.T) {
 	if !ok {
 		t.Fatalf("receiptBuffer should buffer incomplete receipts")
 	}
-	if rereq.FirstBlockReceiptIndex != uint64(len(buffer.list[len(buffer.list)-1].items)) {
-		t.Fatalf("unexpected FirstBlockReceiptIndex, got %d want %d", rereq.FirstBlockReceiptIndex, len(buffer.list[len(buffer.list)-1].items))
+	if rereq.FirstBlockReceiptIndex != uint64(buffer.list[len(buffer.list)-1].items.Len()) {
+		t.Fatalf("unexpected FirstBlockReceiptIndex, got %d want %d", rereq.FirstBlockReceiptIndex, buffer.list[len(buffer.list)-1].items.Len())
 	}
 
 	delivery = &ReceiptsPacket70{
 		RequestId:           req.id,
 		LastBlockIncomplete: true,
-		List: []*ReceiptList69{
+		List: encodeRL([]*ReceiptList69{
 			{
-				items: receipts,
+				items: encodeRL(receipts),
 			},
-		},
+		}),
 	}
-	if err := peer.bufferReceiptsPacket(delivery, backend); err != nil {
-		t.Fatalf("first ReconstructReceiptsPacket failed: %v", err)
+	tresp = tracker.Response{ID: delivery.RequestId, MsgCode: ReceiptsMsg, Size: delivery.List.Len()}
+	if err := peer.tracker.Fulfil(tresp); err != nil {
+		t.Fatalf("Tracker failed: %v", err)
+	}
+	receiptLists, _ := delivery.List.Items()
+	if err := peer.bufferReceipts(delivery.RequestId, receiptLists, delivery.LastBlockIncomplete, backend); err != nil {
+		t.Fatalf("second bufferReceipts failed: %v", err)
 	}
 
 	if err := peer.requestPartialReceipts(req.id); err != nil {
-		t.Fatalf("RequestPartialReceipts failed: %v", err)
+		t.Fatalf("requestPartialReceipts failed: %v", err)
 	}
 
 	select {
@@ -224,8 +237,8 @@ func TestPartialReceipt(t *testing.T) {
 	if !ok {
 		t.Fatalf("receiptBuffer should buffer incomplete receipts")
 	}
-	if rereq.FirstBlockReceiptIndex != uint64(len(buffer.list[len(buffer.list)-1].items)) {
-		t.Fatalf("unexpected FirstBlockReceiptIndex, got %d want %d", rereq.FirstBlockReceiptIndex, len(buffer.list[len(buffer.list)-1].items))
+	if rereq.FirstBlockReceiptIndex != uint64(buffer.list[len(buffer.list)-1].items.Len()) {
+		t.Fatalf("unexpected FirstBlockReceiptIndex, got %d want %d", rereq.FirstBlockReceiptIndex, buffer.list[len(buffer.list)-1].items.Len())
 	}
 	if len(rereq.GetReceiptsRequest) != 3 {
 		t.Fatalf("wrong partial request range, got %d want %d", len(rereq.GetReceiptsRequest), 3)
@@ -234,32 +247,42 @@ func TestPartialReceipt(t *testing.T) {
 	delivery = &ReceiptsPacket70{
 		RequestId:           rereq.RequestId,
 		LastBlockIncomplete: false,
-		List: []*ReceiptList69{
+		List: encodeRL([]*ReceiptList69{
 			{
-				items: receipts,
+				items: encodeRL(receipts),
 			},
 			{
-				items: receipts,
+				items: encodeRL(receipts),
 			},
 			{
-				items: receipts,
+				items: encodeRL(receipts),
 			},
-		},
+		}),
 	}
-	if err := peer.bufferReceiptsPacket(delivery, backend); err != nil {
-		t.Fatalf("second ReconstructReceiptsPacket failed: %v", err)
+
+	tresp = tracker.Response{ID: delivery.RequestId, MsgCode: ReceiptsMsg, Size: delivery.List.Len()}
+	if err := peer.tracker.Fulfil(tresp); err != nil {
+		t.Fatalf("Tracker failed: %v", err)
+	}
+	receiptList, _ = delivery.List.Items()
+	if err := peer.bufferReceipts(delivery.RequestId, receiptList, delivery.LastBlockIncomplete, backend); err != nil {
+		t.Fatalf("third bufferReceipts failed: %v", err)
+	}
+	merged := peer.flushReceipts(rereq.RequestId)
+	if merged == nil {
+		t.Fatalf("flushReceipts should return merged receipt lists")
 	}
 	if _, ok := peer.receiptBuffer[rereq.RequestId]; ok {
-		t.Fatalf("receiptBuffer should be cleared after delivery")
+		t.Fatalf("receiptBuffer should be cleared after flush")
 	}
-	for i, list := range delivery.List {
+	for i, list := range merged {
 		if i == 1 {
-			if len(list.items) != len(logReceipts) {
-				t.Fatalf("wrong response buffering, got %d want %d", len(list.items), len(logReceipts))
+			if list.items.Len() != len(logReceipts) {
+				t.Fatalf("wrong response buffering, got %d want %d", list.items.Len(), len(logReceipts))
 			}
 		} else {
-			if len(list.items) != len(receipts) {
-				t.Fatalf("wrong response buffering, got %d want %d", len(list.items), len(receipts))
+			if list.items.Len() != len(receipts) {
+				t.Fatalf("wrong response buffering, got %d want %d", list.items.Len(), len(receipts))
 			}
 		}
 	}
@@ -310,20 +333,21 @@ func TestPartialReceiptFailure(t *testing.T) {
 	delivery := &ReceiptsPacket70{
 		RequestId:           66,
 		LastBlockIncomplete: true,
-		List: []*ReceiptList69{
+		List: encodeRL([]*ReceiptList69{
 			{
-				items: []Receipt{
+				items: encodeRL([]Receipt{
 					{GasUsed: 21_000, Logs: rlp.RawValue(make([]byte, 1))},
-				},
+				}),
 			},
 			{
-				items: []Receipt{
+				items: encodeRL([]Receipt{
 					{GasUsed: 21_000, Logs: rlp.RawValue(make([]byte, 2))},
-				},
+				}),
 			},
-		},
+		}),
 	}
-	err := peer.bufferReceiptsPacket(delivery, backend)
+	receiptList, _ := delivery.List.Items()
+	err := peer.bufferReceipts(delivery.RequestId, receiptList, delivery.LastBlockIncomplete, backend)
 	if err == nil {
 		t.Fatal("Unknown response should be dropped")
 	}
@@ -349,19 +373,19 @@ func TestPartialReceiptFailure(t *testing.T) {
 	}
 
 	maxTxCount := backend.chain.GetBlockByNumber(1).GasUsed() / 21_000
+	excessiveReceipts := []Receipt{{Logs: rlp.RawValue(make([]byte, 1))}}
+	for range maxTxCount {
+		excessiveReceipts = append(excessiveReceipts, Receipt{Logs: rlp.RawValue(make([]byte, 1))})
+	}
 	delivery = &ReceiptsPacket70{
 		RequestId:           req.id,
 		LastBlockIncomplete: true,
-		List: []*ReceiptList69{{
-			items: []Receipt{
-				{Logs: rlp.RawValue(make([]byte, 1))},
-			},
-		}},
+		List: encodeRL([]*ReceiptList69{{
+			items: encodeRL(excessiveReceipts),
+		}}),
 	}
-	for range maxTxCount {
-		delivery.List[0].items = append(delivery.List[0].items, Receipt{Logs: rlp.RawValue(make([]byte, 1))})
-	}
-	err = peer.bufferReceiptsPacket(delivery, backend)
+	receiptList, _ = delivery.List.Items()
+	err = peer.bufferReceipts(delivery.RequestId, receiptList, delivery.LastBlockIncomplete, backend)
 	if err == nil {
 		t.Fatal("Response with the excessive number of receipts should fail the validation")
 	}
@@ -380,13 +404,14 @@ func TestPartialReceiptFailure(t *testing.T) {
 	delivery = &ReceiptsPacket70{
 		RequestId:           req.id,
 		LastBlockIncomplete: true,
-		List: []*ReceiptList69{{
-			items: []Receipt{
+		List: encodeRL([]*ReceiptList69{{
+			items: encodeRL([]Receipt{
 				{Logs: rlp.RawValue(make([]byte, maxReceiptSize+1))},
-			},
-		}},
+			}),
+		}}),
 	}
-	err = peer.bufferReceiptsPacket(delivery, backend)
+	receiptList, _ = delivery.List.Items()
+	err = peer.bufferReceipts(delivery.RequestId, receiptList, delivery.LastBlockIncomplete, backend)
 	if err == nil {
 		t.Fatal("Response with the large log size should fail the validation")
 	}

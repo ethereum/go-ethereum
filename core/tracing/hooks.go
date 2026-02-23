@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 )
 
@@ -73,6 +74,56 @@ type BlockEvent struct {
 	Block     *types.Block
 	Finalized *types.Header
 	Safe      *types.Header
+}
+
+// StateUpdate represents the state mutations resulting from block execution.
+// It provides access to account changes, storage changes, and contract code
+// deployments with both previous and new values.
+type StateUpdate struct {
+	OriginRoot  common.Hash // State root before the update
+	Root        common.Hash // State root after the update
+	BlockNumber uint64
+
+	// AccountChanges contains all account state changes keyed by address.
+	AccountChanges map[common.Address]*AccountChange
+
+	// StorageChanges contains all storage slot changes keyed by address and storage slot key.
+	StorageChanges map[common.Address]map[common.Hash]*StorageChange
+
+	// CodeChanges contains all contract code changes keyed by address.
+	CodeChanges map[common.Address]*CodeChange
+
+	// TrieChanges contains trie node mutations keyed by address hash and trie node path.
+	TrieChanges map[common.Hash]map[string]*TrieNodeChange
+}
+
+// AccountChange represents a change to an account's state.
+type AccountChange struct {
+	Prev *types.StateAccount // nil if account was created
+	New  *types.StateAccount // nil if account was deleted
+}
+
+// StorageChange represents a change to a storage slot.
+type StorageChange struct {
+	Prev common.Hash // previous value (zero if slot was created)
+	New  common.Hash // new value (zero if slot was deleted)
+}
+
+type ContractCode struct {
+	Hash   common.Hash
+	Code   []byte
+	Exists bool // true if the code was existent
+}
+
+// CodeChange represents a change in contract code of an account.
+type CodeChange struct {
+	Prev *ContractCode // nil if no code existed before
+	New  *ContractCode
+}
+
+type TrieNodeChange struct {
+	Prev *trienode.Node
+	New  *trienode.Node
 }
 
 type (
@@ -161,6 +212,11 @@ type (
 	// beacon block root.
 	OnSystemCallEndHook = func()
 
+	// StateUpdateHook is called after state is committed for a block.
+	// It provides access to the complete state mutations including account changes,
+	// storage changes, trie node mutations, and contract code deployments.
+	StateUpdateHook = func(update *StateUpdate)
+
 	/*
 		- State events -
 	*/
@@ -209,6 +265,7 @@ type Hooks struct {
 	OnSystemCallStart   OnSystemCallStartHook
 	OnSystemCallStartV2 OnSystemCallStartHookV2
 	OnSystemCallEnd     OnSystemCallEndHook
+	OnStateUpdate       StateUpdateHook
 	// State events
 	OnBalanceChange BalanceChangeHook
 	OnNonceChange   NonceChangeHook
@@ -375,6 +432,9 @@ const (
 	// NonceChangeRevert is emitted when the nonce is reverted back to a previous value due to call failure.
 	// It is only emitted when the tracer has opted in to use the journaling wrapper (WrapWithJournal).
 	NonceChangeRevert NonceChangeReason = 6
+
+	// NonceChangeSelfdestruct is emitted when the nonce is reset to zero due to a self-destruct
+	NonceChangeSelfdestruct NonceChangeReason = 7
 )
 
 // CodeChangeReason is used to indicate the reason for a code change.

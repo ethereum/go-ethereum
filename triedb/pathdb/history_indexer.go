@@ -34,17 +34,13 @@ import (
 
 const (
 	// The batch size for reading state histories
-	historyReadBatch = 1000
+	historyReadBatch  = 1000
+	historyIndexBatch = 8 * 1024 * 1024 // The number of state history indexes for constructing or deleting as batch
 
 	stateHistoryIndexV0         = uint8(0)               // initial version of state index structure
 	stateHistoryIndexVersion    = stateHistoryIndexV0    // the current state index version
 	trienodeHistoryIndexV0      = uint8(0)               // initial version of trienode index structure
 	trienodeHistoryIndexVersion = trienodeHistoryIndexV0 // the current trienode index version
-
-	// estimations for calculating the batch size for atomic database commit
-	estimatedStateHistoryIndexSize    = 3  // The average size of each state history index entry is approximately 2–3 bytes
-	estimatedTrienodeHistoryIndexSize = 3  // The average size of each trienode history index entry is approximately 2-3 bytes
-	estimatedIndexBatchSizeFactor     = 32 // The factor counts for the write amplification for each entry
 )
 
 // indexVersion returns the latest index version for the given history type.
@@ -125,18 +121,20 @@ func deleteIndexMetadata(db ethdb.KeyValueWriter, typ historyType) {
 // batchIndexer is responsible for performing batch indexing or unindexing
 // of historical data (e.g., state or trie node changes) atomically.
 type batchIndexer struct {
-	index   map[stateIdent][]uint64 // List of history IDs for tracked state entry
-	pending int                     // Number of entries processed in the current batch.
-	delete  bool                    // Operation mode: true for unindex, false for index.
-	lastID  uint64                  // ID of the most recently processed history.
-	typ     historyType             // Type of history being processed (e.g., state or trienode).
-	db      ethdb.KeyValueStore     // Key-value database used to store or delete index data.
+	index   map[stateIdent][]uint64   // List of history IDs for tracked state entry
+	ext     map[stateIdent][][]uint16 // List of extension for each state element
+	pending int                       // Number of entries processed in the current batch.
+	delete  bool                      // Operation mode: true for unindex, false for index.
+	lastID  uint64                    // ID of the most recently processed history.
+	typ     historyType               // Type of history being processed (e.g., state or trienode).
+	db      ethdb.KeyValueStore       // Key-value database used to store or delete index data.
 }
 
 // newBatchIndexer constructs the batch indexer with the supplied mode.
 func newBatchIndexer(db ethdb.KeyValueStore, delete bool, typ historyType) *batchIndexer {
 	return &batchIndexer{
 		index:  make(map[stateIdent][]uint64),
+		ext:    make(map[stateIdent][][]uint16),
 		delete: delete,
 		typ:    typ,
 		db:     db,
@@ -146,29 +144,15 @@ func newBatchIndexer(db ethdb.KeyValueStore, delete bool, typ historyType) *batc
 // process traverses the state entries within the provided history and tracks the mutation
 // records for them.
 func (b *batchIndexer) process(h history, id uint64) error {
-	for ident := range h.forEach() {
-		b.index[ident] = append(b.index[ident], id)
+	for elem := range h.forEach() {
+		key := elem.key()
+		b.index[key] = append(b.index[key], id)
+		b.ext[key] = append(b.ext[key], elem.ext())
 		b.pending++
 	}
 	b.lastID = id
 
 	return b.finish(false)
-}
-
-// makeBatch constructs a database batch based on the number of pending entries.
-// The batch size is roughly estimated to minimize repeated resizing rounds,
-// as accurately predicting the exact size is technically challenging.
-func (b *batchIndexer) makeBatch() ethdb.Batch {
-	var size int
-	switch b.typ {
-	case typeStateHistory:
-		size = estimatedStateHistoryIndexSize
-	case typeTrienodeHistory:
-		size = estimatedTrienodeHistoryIndexSize
-	default:
-		panic(fmt.Sprintf("unknown history type %d", b.typ))
-	}
-	return b.db.NewBatchWithSize(size * estimatedIndexBatchSizeFactor * b.pending)
 }
 
 // finish writes the accumulated state indexes into the disk if either the
@@ -181,30 +165,52 @@ func (b *batchIndexer) finish(force bool) error {
 		return nil
 	}
 	var (
-		batch   = b.makeBatch()
-		batchMu sync.RWMutex
-		start   = time.Now()
-		eg      errgroup.Group
+		start = time.Now()
+		eg    errgroup.Group
+
+		batch     = b.db.NewBatchWithSize(ethdb.IdealBatchSize)
+		batchSize int
+		batchMu   sync.RWMutex
+
+		writeBatch = func(fn func(batch ethdb.Batch)) error {
+			batchMu.Lock()
+			defer batchMu.Unlock()
+
+			fn(batch)
+			if batch.ValueSize() >= ethdb.IdealBatchSize {
+				batchSize += batch.ValueSize()
+				if err := batch.Write(); err != nil {
+					return err
+				}
+				batch.Reset()
+			}
+			return nil
+		}
 	)
 	eg.SetLimit(runtime.NumCPU())
 
+	var indexed uint64
+	if metadata := loadIndexMetadata(b.db, b.typ); metadata != nil {
+		indexed = metadata.Last
+	}
 	for ident, list := range b.index {
+		ext := b.ext[ident]
 		eg.Go(func() error {
 			if !b.delete {
-				iw, err := newIndexWriter(b.db, ident)
+				iw, err := newIndexWriter(b.db, ident, indexed, ident.bloomSize())
 				if err != nil {
 					return err
 				}
-				for _, n := range list {
-					if err := iw.append(n); err != nil {
+				for i, n := range list {
+					if err := iw.append(n, ext[i]); err != nil {
 						return err
 					}
 				}
-				batchMu.Lock()
-				iw.finish(batch)
-				batchMu.Unlock()
+				return writeBatch(func(batch ethdb.Batch) {
+					iw.finish(batch)
+				})
 			} else {
-				id, err := newIndexDeleter(b.db, ident)
+				id, err := newIndexDeleter(b.db, ident, indexed, ident.bloomSize())
 				if err != nil {
 					return err
 				}
@@ -213,11 +219,10 @@ func (b *batchIndexer) finish(force bool) error {
 						return err
 					}
 				}
-				batchMu.Lock()
-				id.finish(batch)
-				batchMu.Unlock()
+				return writeBatch(func(batch ethdb.Batch) {
+					id.finish(batch)
+				})
 			}
-			return nil
 		})
 	}
 	if err := eg.Wait(); err != nil {
@@ -233,12 +238,16 @@ func (b *batchIndexer) finish(force bool) error {
 			storeIndexMetadata(batch, b.typ, b.lastID-1)
 		}
 	}
+	batchSize += batch.ValueSize()
+
 	if err := batch.Write(); err != nil {
 		return err
 	}
-	log.Debug("Committed batch indexer", "type", b.typ, "entries", len(b.index), "records", b.pending, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("Committed batch indexer", "type", b.typ, "entries", len(b.index), "records", b.pending, "size", common.StorageSize(batchSize), "elapsed", common.PrettyDuration(time.Since(start)))
+
 	b.pending = 0
-	b.index = make(map[stateIdent][]uint64)
+	clear(b.index)
+	clear(b.ext)
 	return nil
 }
 

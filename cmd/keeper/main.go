@@ -17,6 +17,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -52,7 +53,7 @@ func main() {
 	}
 	vmConfig := vm.Config{}
 
-	crossStateRoot, crossReceiptRoot, err := core.ExecuteStateless(chainConfig, vmConfig, payload.Block, payload.Witness)
+	crossStateRoot, crossReceiptRoot, err := core.ExecuteStateless(context.Background(), chainConfig, vmConfig, payload.Block, payload.Witness)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "stateless self-validation failed: %v\n", err)
 		os.Exit(10)

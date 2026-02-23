@@ -251,27 +251,23 @@ func TestStemNodeGetValuesAtStem(t *testing.T) {
 	}
 
 	// Check that all values match
-	for i := 0; i < 256; i++ {
+	for i := range 256 {
 		if !bytes.Equal(retrievedValues[i], values[i]) {
 			t.Errorf("Value mismatch at index %d", i)
 		}
 	}
 
-	// GetValuesAtStem with different stem also returns the same values
-	// (implementation ignores the stem parameter)
+	// GetValuesAtStem with different stem should return nil
 	differentStem := make([]byte, 31)
 	differentStem[0] = 0xFF
 
-	retrievedValues2, err := node.GetValuesAtStem(differentStem, nil)
+	shouldBeNil, err := node.GetValuesAtStem(differentStem, nil)
 	if err != nil {
 		t.Fatalf("Failed to get values with different stem: %v", err)
 	}
 
-	// Should still return the same values (stem is ignored)
-	for i := 0; i < 256; i++ {
-		if !bytes.Equal(retrievedValues2[i], values[i]) {
-			t.Errorf("Value mismatch at index %d with different stem", i)
-		}
+	if shouldBeNil != nil {
+		t.Error("Expected nil for different stem, got non-nil")
 	}
 }
 

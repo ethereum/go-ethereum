@@ -47,7 +47,7 @@ type nodeLoc struct {
 }
 
 // string returns the string representation of node location.
-func (loc *nodeLoc) string() string {
+func (loc nodeLoc) string() string {
 	return fmt.Sprintf("loc: %s, depth: %d", loc.loc, loc.depth)
 }
 
@@ -200,7 +200,7 @@ func (db *Database) StateReader(root common.Hash) (database.StateReader, error) 
 // historical state.
 type HistoricalStateReader struct {
 	db     *Database
-	reader *historyReader
+	reader *stateHistoryReader
 	id     uint64
 }
 
@@ -234,7 +234,7 @@ func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, er
 	return &HistoricalStateReader{
 		id:     *id,
 		db:     db,
-		reader: newHistoryReader(db.diskdb, db.stateFreezer),
+		reader: newStateHistoryReader(db.diskdb, db.stateFreezer),
 	}, nil
 }
 
@@ -317,4 +317,91 @@ func (r *HistoricalStateReader) Storage(address common.Address, key common.Hash)
 		return nil, err
 	}
 	return r.reader.read(newStorageIdentQuery(address, addrHash, key, keyHash), r.id, dl.stateID(), latest)
+}
+
+// HistoricalNodeReader is a wrapper over history reader, providing access to
+// historical trie node data.
+type HistoricalNodeReader struct {
+	db     *Database
+	reader *trienodeReader
+	id     uint64
+}
+
+// HistoricNodeReader constructs a reader for accessing the requested historic state.
+func (db *Database) HistoricNodeReader(root common.Hash) (*HistoricalNodeReader, error) {
+	// Bail out if the state history hasn't been fully indexed
+	if db.trienodeIndexer == nil || db.trienodeFreezer == nil {
+		return nil, fmt.Errorf("historical state %x is not available", root)
+	}
+	if !db.trienodeIndexer.inited() {
+		return nil, errors.New("trienode histories haven't been fully indexed yet")
+	}
+	// - States at the current disk layer or above are directly accessible
+	//   via `db.NodeReader`.
+	//
+	// - States older than the current disk layer (including the disk layer
+	//   itself) are available via `db.HistoricalNodeReader`.
+	id := rawdb.ReadStateID(db.diskdb, root)
+	if id == nil {
+		return nil, fmt.Errorf("state %#x is not available", root)
+	}
+	// Ensure the requested trienode history is canonical, states on side chain
+	// are not accessible.
+	meta, err := readTrienodeMetadata(db.trienodeFreezer, *id+1)
+	if err != nil {
+		return nil, err // e.g., the referred trienode history has been pruned
+	}
+	if meta.parent != root {
+		return nil, fmt.Errorf("state %#x is not canonincal", root)
+	}
+	return &HistoricalNodeReader{
+		id:     *id,
+		db:     db,
+		reader: newTrienodeReader(db.diskdb, db.trienodeFreezer, int(db.config.FullValueCheckpoint)),
+	}, nil
+}
+
+// Node directly retrieves the trie node data associated with a particular path,
+// within a particular account. An error will be returned if the read operation
+// exits abnormally. Specifically, if the layer is already stale.
+//
+// Note:
+// - the returned trie node data is not a copy, please don't modify it.
+// - an error will be returned if the requested trie node is not found in database.
+func (r *HistoricalNodeReader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
+	defer func(start time.Time) {
+		historicalTrienodeReadTimer.UpdateSince(start)
+	}(time.Now())
+
+	// TODO(rjl493456442): Theoretically, the obtained disk layer could become stale
+	// within a very short time window.
+	//
+	// While reading the account data while holding `db.tree.lock` can resolve
+	// this issue, but it will introduce a heavy contention over the lock.
+	//
+	// Let's optimistically assume the situation is very unlikely to happen,
+	// and try to define a low granularity lock if the current approach doesn't
+	// work later.
+	dl := r.db.tree.bottom()
+	latest, h, _, err := dl.node(owner, path, 0)
+	if err != nil {
+		return nil, err
+	}
+	if h == hash {
+		return latest, nil
+	}
+	blob, err := r.reader.read(newTrienodeIdent(owner, string(path)), r.id, dl.stateID(), latest)
+	if err != nil {
+		return nil, err
+	}
+	// Error out if the local one is inconsistent with the target.
+	if crypto.Keccak256Hash(blob) != hash {
+		blobHex := "nil"
+		if len(blob) > 0 {
+			blobHex = hexutil.Encode(blob)
+		}
+		log.Error("Unexpected historical trie node", "owner", owner.Hex(), "path", path, "blob", blobHex)
+		return nil, fmt.Errorf("unexpected historical trie node: (%x %v), blob: %s", owner, path, blobHex)
+	}
+	return blob, nil
 }

@@ -23,15 +23,14 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
-	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/crypto/sha3"
 )
 
 // Tests block header storage and retrieval operations.
@@ -53,10 +52,7 @@ func TestHeaderStorage(t *testing.T) {
 	if entry := ReadHeaderRLP(db, header.Hash(), header.Number.Uint64()); entry == nil {
 		t.Fatalf("Stored header RLP not found")
 	} else {
-		hasher := sha3.NewLegacyKeccak256()
-		hasher.Write(entry)
-
-		if hash := common.BytesToHash(hasher.Sum(nil)); hash != header.Hash() {
+		if hash := crypto.Keccak256Hash(entry); hash != header.Hash() {
 			t.Fatalf("Retrieved RLP header mismatch: have %v, want %v", entry, header)
 		}
 	}
@@ -73,8 +69,7 @@ func TestBodyStorage(t *testing.T) {
 
 	// Create a test body to move around the database and make sure it's really new
 	body := &types.Body{Uncles: []*types.Header{{Extra: []byte("test header")}}}
-
-	hasher := sha3.NewLegacyKeccak256()
+	hasher := keccak.NewLegacyKeccak256()
 	rlp.Encode(hasher, body)
 	hash := common.BytesToHash(hasher.Sum(nil))
 
@@ -91,10 +86,7 @@ func TestBodyStorage(t *testing.T) {
 	if entry := ReadBodyRLP(db, hash, 0); entry == nil {
 		t.Fatalf("Stored body RLP not found")
 	} else {
-		hasher := sha3.NewLegacyKeccak256()
-		hasher.Write(entry)
-
-		if calc := common.BytesToHash(hasher.Sum(nil)); calc != hash {
+		if calc := crypto.Keccak256Hash(entry); calc != hash {
 			t.Fatalf("Retrieved RLP body mismatch: have %v, want %v", entry, body)
 		}
 	}
@@ -248,13 +240,6 @@ func TestBadBlockStorage(t *testing.T) {
 		if badBlocks[i].NumberU64() < badBlocks[i+1].NumberU64() {
 			t.Fatalf("The bad blocks are not sorted #[%d](%d) < #[%d](%d)", i, badBlocks[i].NumberU64(), i+1, badBlocks[i+1].NumberU64())
 		}
-	}
-
-	// Delete all bad blocks
-	DeleteBadBlocks(db)
-	badBlocks = ReadAllBadBlocks(db)
-	if len(badBlocks) != 0 {
-		t.Fatalf("Failed to delete bad blocks")
 	}
 }
 
@@ -516,37 +501,6 @@ func TestWriteAncientHeaderChain(t *testing.T) {
 	}
 }
 
-func TestCanonicalHashIteration(t *testing.T) {
-	var cases = []struct {
-		from, to uint64
-		limit    int
-		expect   []uint64
-	}{
-		{1, 8, 0, nil},
-		{1, 8, 1, []uint64{1}},
-		{1, 8, 10, []uint64{1, 2, 3, 4, 5, 6, 7}},
-		{1, 9, 10, []uint64{1, 2, 3, 4, 5, 6, 7, 8}},
-		{2, 9, 10, []uint64{2, 3, 4, 5, 6, 7, 8}},
-		{9, 10, 10, nil},
-	}
-	// Test empty db iteration
-	db := NewMemoryDatabase()
-	numbers, _ := ReadAllCanonicalHashes(db, 0, 10, 10)
-	if len(numbers) != 0 {
-		t.Fatalf("No entry should be returned to iterate an empty db")
-	}
-	// Fill database with testing data.
-	for i := uint64(1); i <= 8; i++ {
-		WriteCanonicalHash(db, common.Hash{}, i)
-	}
-	for i, c := range cases {
-		numbers, _ := ReadAllCanonicalHashes(db, c.from, c.to, c.limit)
-		if !reflect.DeepEqual(numbers, c.expect) {
-			t.Fatalf("Case %d failed, want %v, got %v", i, c.expect, numbers)
-		}
-	}
-}
-
 func TestHashesInRange(t *testing.T) {
 	mkHeader := func(number, seq int) *types.Header {
 		h := types.Header{
@@ -564,18 +518,6 @@ func TestHashesInRange(t *testing.T) {
 			WriteHeader(db, mkHeader(i, ii))
 			total++
 		}
-	}
-	if have, want := len(ReadAllHashesInRange(db, 10, 10)), 10; have != want {
-		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
-	}
-	if have, want := len(ReadAllHashesInRange(db, 10, 9)), 0; have != want {
-		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
-	}
-	if have, want := len(ReadAllHashesInRange(db, 0, 100)), total; have != want {
-		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
-	}
-	if have, want := len(ReadAllHashesInRange(db, 9, 10)), 9+10; have != want {
-		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
 	}
 	if have, want := len(ReadAllHashes(db, 10)), 10; have != want {
 		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)

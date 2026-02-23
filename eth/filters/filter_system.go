@@ -44,6 +44,7 @@ type Config struct {
 	LogCacheSize  int           // maximum number of cached blocks (default: 32)
 	Timeout       time.Duration // how long filters stay active (default: 5min)
 	LogQueryLimit int           // maximum number of addresses allowed in filter criteria (default: 1000)
+	RangeLimit    uint64        // maximum block range allowed in filter criteria (default: 0)
 }
 
 func (cfg Config) withDefaults() Config {
@@ -185,9 +186,9 @@ type subscription struct {
 	txs       chan []*types.Transaction
 	headers   chan *types.Header
 	receipts  chan []*ReceiptWithTx
-	txHashes  map[common.Hash]bool // contains transaction hashes for transactionReceipts subscription filtering
-	installed chan struct{}        // closed when the filter is installed
-	err       chan error           // closed when the filter is uninstalled
+	txHashes  map[common.Hash]struct{} // contains transaction hashes for transactionReceipts subscription filtering
+	installed chan struct{}            // closed when the filter is installed
+	err       chan error               // closed when the filter is uninstalled
 }
 
 // EventSystem creates subscriptions, processes events and broadcasts them to the
@@ -403,9 +404,9 @@ func (es *EventSystem) SubscribePendingTxs(txs chan []*types.Transaction) *Subsc
 // transactions when they are included in blocks. If txHashes is provided, only receipts
 // for those specific transaction hashes will be delivered.
 func (es *EventSystem) SubscribeTransactionReceipts(txHashes []common.Hash, receipts chan []*ReceiptWithTx) *Subscription {
-	hashSet := make(map[common.Hash]bool)
+	hashSet := make(map[common.Hash]struct{}, len(txHashes))
 	for _, h := range txHashes {
-		hashSet[h] = true
+		hashSet[h] = struct{}{}
 	}
 	sub := &subscription{
 		id:        rpc.NewID(),
