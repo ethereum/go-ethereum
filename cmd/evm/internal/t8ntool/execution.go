@@ -418,7 +418,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool
 }
 
 func rlpHash(x any) (h common.Hash) {
-	hw := keccak.NewLegacyKeccak256()
+	hw := keccak.NewFastKeccak()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])
 	return h

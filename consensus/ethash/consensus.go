@@ -527,7 +527,7 @@ func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 
 // SealHash returns the hash of a block prior to it being sealed.
 func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
-	hasher := keccak.NewLegacyKeccak256()
+	hasher := keccak.NewFastKeccak()
 
 	enc := []interface{}{
 		header.ParentHash,

@@ -147,7 +147,7 @@ func BenchmarkHashing(b *testing.B) {
 		blockRlp, _ = rlp.EncodeToBytes(block)
 	}
 	var got common.Hash
-	var hasher = keccak.NewLegacyKeccak256()
+	var hasher = keccak.NewFastKeccak()
 	b.Run("iteratorhashing", func(b *testing.B) {
 		for b.Loop() {
 			var hash common.Hash

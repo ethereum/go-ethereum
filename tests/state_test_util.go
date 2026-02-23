@@ -496,7 +496,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 }
 
 func rlpHash(x interface{}) (h common.Hash) {
-	hw := keccak.NewLegacyKeccak256()
+	hw := keccak.NewFastKeccak()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])
 	return h
