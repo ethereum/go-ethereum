@@ -106,6 +106,27 @@ func Inspect(triedb database.NodeDatabase, root common.Hash, config *InspectConf
 		dumpFile:    dumpFile,
 	}
 
+	// Start progress reporter
+	start := time.Now()
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(8 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				accountNodes := in.accountStat.TotalNodes()
+				storageRecords := atomic.LoadUint64(&in.storageRecordsWritten)
+				log.Info("Inspecting trie",
+					"accountNodes", accountNodes,
+					"storageRecords", storageRecords,
+					"elapsed", common.PrettyDuration(time.Since(start)))
+			case <-done:
+				return
+			}
+		}
+	}()
+
 	in.recordRootSize(trie, root, in.accountStat)
 	in.inspect(trie, trie.root, 0, []byte{}, in.accountStat)
 
@@ -117,6 +138,10 @@ func Inspect(triedb database.NodeDatabase, root common.Hash, config *InspectConf
 	if err := in.closeDump(); err != nil {
 		in.setError(err)
 	}
+	
+	// Stop progress reporter
+	close(done)
+	
 	if err := in.getError(); err != nil {
 		return err
 	}
