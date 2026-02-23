@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -153,6 +154,59 @@ func assertAccountTotalsMatchLevels(t *testing.T, account storageStats) {
 	}
 	if fromLevels.Short != account.Summary.Short || fromLevels.Full != account.Summary.Full || fromLevels.Value != account.Summary.Value || fromLevels.Size != account.Summary.Size {
 		t.Fatalf("account totals mismatch: levels=%+v totals=%+v", fromLevels, account.Summary)
+	}
+}
+
+// TestInspectContract tests the InspectContract function on a single account
+// with storage and snapshot data.
+func TestInspectContract(t *testing.T) {
+	diskdb := rawdb.NewMemoryDatabase()
+	db := newTestDatabase(diskdb, rawdb.HashScheme)
+
+	// Create a contract address and its storage trie.
+	address := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
+	accountHash := crypto.Keccak256Hash(address.Bytes())
+
+	// Build a storage trie with some entries.
+	storageTrie := NewEmpty(db)
+	storageSlots := make(map[common.Hash][]byte)
+	for i := 0; i < 10; i++ {
+		k := crypto.Keccak256Hash([]byte{byte(i)})
+		v := []byte{byte(i + 1)}
+		storageTrie.MustUpdate(k.Bytes(), v)
+		storageSlots[k] = v
+	}
+	storageRoot, storageNodes := storageTrie.Commit(true)
+	db.Update(storageRoot, types.EmptyRootHash, trienode.NewWithNodeSet(storageNodes))
+	db.Commit(storageRoot)
+
+	// Build the account trie with the contract account.
+	account := types.StateAccount{
+		Nonce:    1,
+		Balance:  uint256.NewInt(1000),
+		Root:     storageRoot,
+		CodeHash: crypto.Keccak256(nil),
+	}
+	accountRLP, err := rlp.EncodeToBytes(&account)
+	if err != nil {
+		t.Fatalf("failed to encode account: %v", err)
+	}
+
+	accountTrie := NewEmpty(db)
+	accountTrie.MustUpdate(crypto.Keccak256(address.Bytes()), accountRLP)
+	stateRoot, accountNodes := accountTrie.Commit(true)
+	db.Update(stateRoot, types.EmptyRootHash, trienode.NewWithNodeSet(accountNodes))
+	db.Commit(stateRoot)
+
+	// Write snapshot data for the account and its storage slots.
+	rawdb.WriteAccountSnapshot(diskdb, accountHash, accountRLP)
+	for k, v := range storageSlots {
+		rawdb.WriteStorageSnapshot(diskdb, accountHash, k, v)
+	}
+
+	// InspectContract should succeed without error.
+	if err := InspectContract(db, diskdb, stateRoot, address); err != nil {
+		t.Fatalf("InspectContract failed: %v", err)
 	}
 }
 

@@ -31,13 +31,19 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/tablewriter"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb/database"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -115,6 +121,157 @@ func Inspect(triedb database.NodeDatabase, root common.Hash, config *InspectConf
 		return err
 	}
 	return Summarize(config.DumpPath, config)
+}
+
+// InspectContract inspects the on-disk footprint of a single contract.
+// It reports snapshot storage (slot count + size) and storage trie node
+// statistics (node type breakdown and per-depth distribution).
+func InspectContract(triedb database.NodeDatabase, db ethdb.Database, stateRoot common.Hash, address common.Address) error {
+	// Resolve account from the state trie.
+	accountHash := crypto.Keccak256Hash(address.Bytes())
+	accountTrie, err := New(TrieID(stateRoot), triedb)
+	if err != nil {
+		return fmt.Errorf("failed to open account trie: %w", err)
+	}
+	accountRLP, err := accountTrie.Get(crypto.Keccak256(address.Bytes()))
+	if err != nil {
+		return fmt.Errorf("failed to read account: %w", err)
+	}
+	if accountRLP == nil {
+		return fmt.Errorf("account not found: %s", address)
+	}
+	var account types.StateAccount
+	if err := rlp.DecodeBytes(accountRLP, &account); err != nil {
+		return fmt.Errorf("failed to decode account: %w", err)
+	}
+	if account.Root == (common.Hash{}) || account.Root == types.EmptyRootHash {
+		return fmt.Errorf("account %s has no storage", address)
+	}
+
+	// Look up account snapshot.
+	accountData := rawdb.ReadAccountSnapshot(db, accountHash)
+
+	// Run trie walk + snap iteration in parallel.
+	var (
+		snapSlots atomic.Uint64
+		snapSize  atomic.Uint64
+		g         errgroup.Group
+		start     = time.Now()
+	)
+
+	// Goroutine 1: Snapshot storage iteration.
+	g.Go(func() error {
+		prefix := append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...)
+		it := db.NewIterator(prefix, nil)
+		defer it.Release()
+
+		for it.Next() {
+			if !bytes.HasPrefix(it.Key(), prefix) {
+				break
+			}
+			snapSlots.Add(1)
+			snapSize.Add(uint64(len(it.Key()) + len(it.Value())))
+		}
+		return it.Error()
+	})
+
+	// Goroutine 2: Storage trie walk using the existing inspector.
+	var storageStat *LevelStats
+	g.Go(func() error {
+		owner := accountHash
+		storage, err := New(StorageTrieID(stateRoot, owner, account.Root), triedb)
+		if err != nil {
+			return fmt.Errorf("failed to open storage trie: %w", err)
+		}
+		storageStat = NewLevelStats()
+
+		in := &inspector{
+			triedb:      triedb,
+			root:        stateRoot,
+			config:      &InspectConfig{NoStorage: true},
+			accountStat: NewLevelStats(), // unused, but needed by inspector
+			sem:         semaphore.NewWeighted(inspectParallelism),
+			dumpBuf:     bufio.NewWriter(io.Discard),
+		}
+
+		in.recordRootSize(storage, account.Root, storageStat)
+		in.inspect(storage, storage.root, 0, []byte{}, storageStat)
+
+		if err := in.getError(); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	// Progress reporter.
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(8 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				log.Info("Inspecting contract",
+					"snapSlots", snapSlots.Load(),
+					"elapsed", common.PrettyDuration(time.Since(start)))
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	if err := g.Wait(); err != nil {
+		close(done)
+		return err
+	}
+	close(done)
+
+	// Display results.
+	fmt.Printf("\n=== Contract Inspection: %s ===\n", address)
+	fmt.Printf("Account hash: %s\n\n", accountHash)
+
+	if len(accountData) == 0 {
+		fmt.Println("Account snapshot: not found")
+	} else {
+		fmt.Printf("Account snapshot: %s\n", common.StorageSize(len(accountData)))
+	}
+
+	fmt.Printf("Snapshot storage: %d slots (%s)\n",
+		snapSlots.Load(), common.StorageSize(snapSize.Load()))
+
+	// Compute trie totals from LevelStats.
+	var trieTotal, trieSize uint64
+	for i := 0; i < trieStatLevels; i++ {
+		short, full, value, size := storageStat.level[i].load()
+		trieTotal += short + full + value
+		trieSize += size
+	}
+	fmt.Printf("Storage trie:     %d nodes (%s)\n", trieTotal, common.StorageSize(trieSize))
+
+	// Depth distribution table with node type columns.
+	fmt.Println("\nStorage Trie Depth Distribution:")
+	b := new(strings.Builder)
+	table := tablewriter.NewWriter(b)
+	table.SetHeader([]string{"Depth", "Short", "Full", "Value", "Nodes", "Size"})
+	for i := 0; i < trieStatLevels; i++ {
+		short, full, value, size := storageStat.level[i].load()
+		total := short + full + value
+		if total == 0 && size == 0 {
+			continue
+		}
+		table.AppendBulk([][]string{{
+			fmt.Sprint(i),
+			fmt.Sprint(short),
+			fmt.Sprint(full),
+			fmt.Sprint(value),
+			fmt.Sprint(total),
+			common.StorageSize(size).String(),
+		}})
+	}
+	table.Render()
+	fmt.Print(b.String())
+
+	return nil
 }
 
 func normalizeInspectConfig(config *InspectConfig) *InspectConfig {

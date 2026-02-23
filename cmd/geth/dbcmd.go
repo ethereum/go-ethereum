@@ -68,6 +68,10 @@ var (
 		Name:  "summarize",
 		Usage: "Summarize an existing trie dump file (skip trie traversal)",
 	}
+	inspectTrieContractFlag = &cli.StringFlag{
+		Name:  "contract",
+		Usage: "Inspect only the storage of the given contract address (skips full account trie walk)",
+	}
 
 	removedbCommand = &cli.Command{
 		Action:    removeDB,
@@ -118,6 +122,7 @@ Remove blockchain and state databases`,
 			utils.OutputFileFlag,
 			inspectTrieDumpPathFlag,
 			inspectTrieSummarizeFlag,
+			inspectTrieContractFlag,
 		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Usage: "Print detailed trie information about the structure of account trie and storage tries.",
 		Description: `This commands iterates the entrie trie-backed state. If the 'blocknum' is not specified, 
@@ -487,6 +492,12 @@ func inspectTrie(ctx *cli.Context) error {
 
 	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, true, false)
 	defer triedb.Close()
+
+	if contractAddr := ctx.String(inspectTrieContractFlag.Name); contractAddr != "" {
+		address := common.HexToAddress(contractAddr)
+		log.Info("Inspecting contract", "address", address, "root", trieRoot, "block", number)
+		return trie.InspectContract(triedb, db, trieRoot, address)
+	}
 
 	log.Info("Inspecting trie", "root", trieRoot, "block", number, "dump", config.DumpPath, "top", topN)
 	return trie.Inspect(triedb, trieRoot, config)
