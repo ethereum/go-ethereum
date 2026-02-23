@@ -969,7 +969,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 		prng := rand.New(rand.NewSource(int64(count)))
 		// This spongeDb is used to check the sequence of disk-db-writes
 		s := &spongeDb{
-			sponge: keccak.NewLegacyKeccak256(),
+			sponge: keccak.NewFastKeccak(),
 			id:     "a",
 			values: make(map[string]string),
 		}
@@ -978,7 +978,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 
 		// Another sponge is used for the stacktrie commits
 		stackTrieSponge := &spongeDb{
-			sponge: keccak.NewLegacyKeccak256(),
+			sponge: keccak.NewFastKeccak(),
 			id:     "b",
 			values: make(map[string]string),
 		}
@@ -1041,7 +1041,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 // not fit into 32 bytes, rlp-encoded. However, it's still the correct thing to do.
 func TestCommitSequenceSmallRoot(t *testing.T) {
 	s := &spongeDb{
-		sponge: keccak.NewLegacyKeccak256(),
+		sponge: keccak.NewFastKeccak(),
 		id:     "a",
 		values: make(map[string]string),
 	}
@@ -1050,7 +1050,7 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 
 	// Another sponge is used for the stacktrie commits
 	stackTrieSponge := &spongeDb{
-		sponge: keccak.NewLegacyKeccak256(),
+		sponge: keccak.NewFastKeccak(),
 		id:     "b",
 		values: make(map[string]string),
 	}
