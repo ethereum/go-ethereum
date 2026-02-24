@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -83,24 +84,26 @@ type filter struct {
 // FilterAPI offers support to create and manage filters. This will allow external clients to retrieve various
 // information related to the Ethereum protocol such as blocks, transactions and logs.
 type FilterAPI struct {
-	sys           *FilterSystem
-	events        *EventSystem
-	filtersMu     sync.Mutex
-	filters       map[rpc.ID]*filter
-	timeout       time.Duration
-	logQueryLimit int
-	rangeLimit    uint64
+	sys             *FilterSystem
+	events          *EventSystem
+	filtersMu       sync.Mutex
+	filters         map[rpc.ID]*filter
+	timeout         time.Duration
+	logQueryLimit   int
+	rangeLimit      uint64
+	maxPendingItems int // max buffered items per polling filter; oldest are dropped when exceeded
 }
 
 // NewFilterAPI returns a new FilterAPI instance.
 func NewFilterAPI(system *FilterSystem) *FilterAPI {
 	api := &FilterAPI{
-		sys:           system,
-		events:        NewEventSystem(system),
-		filters:       make(map[rpc.ID]*filter),
-		timeout:       system.cfg.Timeout,
-		logQueryLimit: system.cfg.LogQueryLimit,
-		rangeLimit:    system.cfg.RangeLimit,
+		sys:             system,
+		events:          NewEventSystem(system),
+		filters:         make(map[rpc.ID]*filter),
+		timeout:         system.cfg.Timeout,
+		logQueryLimit:   system.cfg.LogQueryLimit,
+		rangeLimit:      system.cfg.RangeLimit,
+		maxPendingItems: system.cfg.MaxPendingItems,
 	}
 	go api.timeoutLoop(system.cfg.Timeout)
 
@@ -164,6 +167,13 @@ func (api *FilterAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
 				api.filtersMu.Lock()
 				if f, found := api.filters[pendingTxSub.ID]; found {
 					f.txs = append(f.txs, pTx...)
+					// Cap the queue: drop oldest items when the limit is exceeded
+					// to prevent unbounded memory growth if the client polls infrequently.
+					if max := api.maxPendingItems; max > 0 && len(f.txs) > max {
+						log.Debug("Pending tx filter queue overflow, dropping oldest items",
+							"id", pendingTxSub.ID, "dropped", len(f.txs)-max)
+						f.txs = f.txs[len(f.txs)-max:]
+					}
 				}
 				api.filtersMu.Unlock()
 			case <-pendingTxSub.Err():
@@ -239,6 +249,12 @@ func (api *FilterAPI) NewBlockFilter() rpc.ID {
 				api.filtersMu.Lock()
 				if f, found := api.filters[headerSub.ID]; found {
 					f.hashes = append(f.hashes, h.Hash())
+					// Cap the queue: drop oldest block hashes when the limit is exceeded.
+					if max := api.maxPendingItems; max > 0 && len(f.hashes) > max {
+						log.Debug("Block filter queue overflow, dropping oldest items",
+							"id", headerSub.ID, "dropped", len(f.hashes)-max)
+						f.hashes = f.hashes[len(f.hashes)-max:]
+					}
 				}
 				api.filtersMu.Unlock()
 			case <-headerSub.Err():
@@ -425,6 +441,13 @@ func (api *FilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 				api.filtersMu.Lock()
 				if f, found := api.filters[logsSub.ID]; found {
 					f.logs = append(f.logs, l...)
+					// Cap the queue: drop oldest logs when the limit is exceeded
+					// to prevent unbounded memory growth if the client polls infrequently.
+					if max := api.maxPendingItems; max > 0 && len(f.logs) > max {
+						log.Debug("Log filter queue overflow, dropping oldest items",
+							"id", logsSub.ID, "dropped", len(f.logs)-max)
+						f.logs = f.logs[len(f.logs)-max:]
+					}
 				}
 				api.filtersMu.Unlock()
 			case <-logsSub.Err():

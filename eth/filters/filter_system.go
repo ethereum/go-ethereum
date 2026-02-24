@@ -41,10 +41,13 @@ import (
 
 // Config represents the configuration of the filter system.
 type Config struct {
-	LogCacheSize  int           // maximum number of cached blocks (default: 32)
-	Timeout       time.Duration // how long filters stay active (default: 5min)
-	LogQueryLimit int           // maximum number of addresses allowed in filter criteria (default: 1000)
-	RangeLimit    uint64        // maximum block range allowed in filter criteria (default: 0)
+	LogCacheSize    int           // maximum number of cached blocks (default: 32)
+	Timeout         time.Duration // how long filters stay active (default: 5min)
+	LogQueryLimit   int           // maximum number of addresses allowed in filter criteria (default: 1000)
+	RangeLimit      uint64        // maximum block range allowed in filter criteria (default: 0)
+	MaxPendingItems int           // maximum number of items buffered in a polling filter queue (default: 10000)
+	// When the limit is reached, the oldest items are dropped to make room for new ones.
+	// This prevents unbounded memory growth when clients poll eth_getFilterChanges infrequently.
 }
 
 func (cfg Config) withDefaults() Config {
@@ -53,6 +56,9 @@ func (cfg Config) withDefaults() Config {
 	}
 	if cfg.LogCacheSize == 0 {
 		cfg.LogCacheSize = 32
+	}
+	if cfg.MaxPendingItems == 0 {
+		cfg.MaxPendingItems = 10000
 	}
 	return cfg
 }
