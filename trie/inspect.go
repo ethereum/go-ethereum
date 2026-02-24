@@ -64,9 +64,9 @@ type inspector struct {
 	sem *semaphore.Weighted
 
 	// Pass 1: dump file writer.
-	dumpMu   sync.Mutex
-	dumpBuf  *bufio.Writer
-	dumpFile *os.File
+	dumpMu                sync.Mutex
+	dumpBuf               *bufio.Writer
+	dumpFile              *os.File
 	storageRecordsWritten atomic.Uint64
 
 	errMu sync.Mutex
@@ -139,10 +139,10 @@ func Inspect(triedb database.NodeDatabase, root common.Hash, config *InspectConf
 	if err := in.closeDump(); err != nil {
 		in.setError(err)
 	}
-	
+
 	// Stop progress reporter
 	close(done)
-	
+
 	if err := in.getError(); err != nil {
 		return err
 	}
@@ -403,7 +403,7 @@ func (in *inspector) writeDumpRecord(owner common.Hash, s *LevelStats) {
 	if err != nil {
 		in.setError(fmt.Errorf("failed writing trie dump record: %w", err))
 	}
-	
+
 	// Increment counter for storage tries only (not for account trie)
 	if owner != (common.Hash{}) {
 		in.storageRecordsWritten.Add(1)
