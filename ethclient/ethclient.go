@@ -498,7 +498,11 @@ func (ec *Client) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuer
 
 func toFilterArg(q ethereum.FilterQuery) (interface{}, error) {
 	arg := map[string]interface{}{}
-	if q.Addresses != nil {
+	// Only include "address" when there are actual address filters.
+	// An empty slice is treated the same as nil (no filter), and omitting
+	// the field avoids sending "address":[] to nodes that reject empty arrays
+	// (e.g. Hedera, some non-Geth implementations).
+	if len(q.Addresses) > 0 {
 		arg["address"] = q.Addresses
 	}
 	if q.Topics != nil {
