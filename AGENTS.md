@@ -71,7 +71,7 @@ Examples:
 - `cmd/geth, internal/ethapi: refactor transaction args`
 - `trie/archiver: streaming subtree archival to fix OOM`
 
-Use the top-level package paths, comma-separated if multiple areas are affected. The description should be a short, lowercase summary of the change.
+Use the top-level package paths, comma-separated if multiple areas are affected. Only mention the directories with functional changes, interface changes that trickle all over the codebase should not generate an exhaustive list. The description should be a short, lowercase summary of the change.
 
 ## Summary
 
