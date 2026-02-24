@@ -56,6 +56,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/remotedb"
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/graphql"
+	"github.com/ethereum/go-ethereum/health"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
@@ -755,6 +756,11 @@ var (
 		Name:     "http.rpcprefix",
 		Usage:    "HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
 		Value:    "",
+		Category: flags.APICategory,
+	}
+	HTTPHealthEnabledFlag = &cli.BoolFlag{
+		Name:     "http.health",
+		Usage:    "Enable the HTTP healthcheck API at path '/health'.",
 		Category: flags.APICategory,
 	}
 	GraphQLEnabledFlag = &cli.BoolFlag{
@@ -2200,6 +2206,14 @@ func RegisterGraphQLService(stack *node.Node, backend ethapi.Backend, filterSyst
 	err := graphql.New(stack, backend, filterSystem, cfg.GraphQLCors, cfg.GraphQLVirtualHosts)
 	if err != nil {
 		Fatalf("Failed to register the GraphQL service: %v", err)
+	}
+}
+
+// RegisterHealthService adds the Health API to the node.
+func RegisterHealthService(stack *node.Node, cfg *node.Config) {
+	err := health.New(stack, cfg.HTTPCors, cfg.HTTPVirtualHosts)
+	if err != nil {
+		Fatalf("Failed to register the health service: %v", err)
 	}
 }
 
