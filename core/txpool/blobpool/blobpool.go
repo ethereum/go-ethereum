@@ -1596,7 +1596,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 	// This is to prevent constant replacement when the pool is full.
 	if p.stored+meta.size > p.config.Datacap {
 		if p.evict.Underpriced(meta) {
-			log.Warn("Dropping underpriced blob transaction", "tx", tx.Hash(), "feecap", tx.GasFeeCap(), "tipcap", tx.GasTipCap(), "blobfeecap", tx.BlobGasFeeCap())
+			log.Trace("Dropping underpriced blob transaction", "tx", tx.Hash(), "feecap", tx.GasFeeCap(), "tipcap", tx.GasTipCap(), "blobfeecap", tx.BlobGasFeeCap())
 			return txpool.ErrUnderpriced
 		}
 	}
@@ -1730,7 +1730,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 	// We've already checked for this with approximate size, but do a final
 	// check in case it was dropped with the exact size.
 	if !p.lookup.exists(tx.Hash()) {
-		log.Warn("Added blob transaction was dropped immediately, indicating underpricing", "hash", tx.Hash())
+		log.Trace("Added blob transaction was dropped immediately, indicating underpricing", "hash", tx.Hash())
 		addUnderpricedMeter.Mark(1)
 		return txpool.ErrUnderpriced
 	}
