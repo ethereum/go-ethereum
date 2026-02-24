@@ -1578,13 +1578,13 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 	meta.evictionBlobFeeJumps = meta.blobfeeJumps
 	if meta.nonce > next && len(p.index[from]) >= offset {
 		prev := p.index[from][int(meta.nonce-next-1)]
-		if meta.evictionExecTip.Cmp(meta.execTipCap) < 0 {
+		if meta.evictionExecTip.Cmp(prev.evictionExecTip) > 0 {
 			meta.evictionExecTip = prev.evictionExecTip
 		}
-		if meta.evictionExecFeeJumps < meta.basefeeJumps {
+		if meta.evictionExecFeeJumps > prev.evictionExecFeeJumps {
 			meta.evictionExecFeeJumps = prev.evictionExecFeeJumps
 		}
-		if meta.evictionBlobFeeJumps < meta.blobfeeJumps {
+		if meta.evictionBlobFeeJumps > prev.evictionBlobFeeJumps {
 			meta.evictionBlobFeeJumps = prev.evictionBlobFeeJumps
 		}
 	}
