@@ -56,7 +56,7 @@ func TestHashing(t *testing.T) {
 	}
 	var want, got string
 	var old = func() {
-		hasher := keccak.NewFastKeccak()
+		hasher := keccak.NewLegacyKeccak256()
 		for i := 0; i < len(bytecodes); i++ {
 			hasher.Reset()
 			hasher.Write(bytecodes[i])
@@ -89,7 +89,7 @@ func BenchmarkHashing(b *testing.B) {
 		bytecodes[i] = buf
 	}
 	var old = func() {
-		hasher := keccak.NewFastKeccak()
+		hasher := keccak.NewLegacyKeccak256()
 		for i := 0; i < len(bytecodes); i++ {
 			hasher.Reset()
 			hasher.Write(bytecodes[i])

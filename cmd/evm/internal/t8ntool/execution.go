@@ -545,7 +545,7 @@ func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie bool) 
 }
 
 func rlpHash(x any) (h common.Hash) {
-	hw := keccak.NewFastKeccak()
+	hw := keccak.NewLegacyKeccak256()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])
 	return h

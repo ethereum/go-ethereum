@@ -39,7 +39,7 @@ type testHasher struct {
 
 // NewHasher returns a new testHasher instance.
 func NewHasher() *testHasher {
-	return &testHasher{hasher: keccak.NewFastKeccak()}
+	return &testHasher{hasher: keccak.NewLegacyKeccak256()}
 }
 
 // Reset resets the hash state.
