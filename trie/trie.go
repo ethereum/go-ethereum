@@ -26,6 +26,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/trie/trienode"
+	"github.com/XinFinOrg/XDPoSChain/trie/triestate"
 )
 
 // Trie is a Merkle Patricia Trie. Use New to create a trie that sits on
@@ -82,11 +83,11 @@ func (t *Trie) InsertPreimage(secKeyCache map[string][]byte) {
 }
 
 // NOTE: UpdateDb is only used by XDCx and XDCxlending
-func (t *Trie) UpdateDb(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet) error {
+func (t *Trie) UpdateDb(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	if t.db == nil {
 		return errors.New("database is nil in trie")
 	}
-	return t.db.Update(root, parent, block, nodes)
+	return t.db.Update(root, parent, block, nodes, states)
 }
 
 // Copy returns a copy of Trie.

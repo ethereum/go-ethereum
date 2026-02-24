@@ -170,7 +170,7 @@ func (t *XDCXTrie) Commit(onleaf trie.LeafCallback) (common.Hash, error) {
 		return common.Hash{}, err
 	}
 	if nodes != nil {
-		if err := t.trie.UpdateDb(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes)); err != nil {
+		if err := t.trie.UpdateDb(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil); err != nil {
 			return common.Hash{}, err
 		}
 	}

@@ -499,7 +499,7 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 }
 
 func TestTouchDelete(t *testing.T) {
-	s := newStateTest()
+	s := newStateEnv()
 	s.state.GetOrNewStateObject(common.Address{})
 	root, _ := s.state.Commit(0, false)
 	s.state.Reset(root)

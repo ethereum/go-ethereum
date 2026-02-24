@@ -24,12 +24,16 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/trie/triedb/hashdb"
 	"github.com/XinFinOrg/XDPoSChain/trie/trienode"
+	"github.com/XinFinOrg/XDPoSChain/trie/triestate"
 )
 
 // Config defines all necessary options for database.
 type Config struct {
 	Cache     int  // Memory allowance (MB) to use for caching trie nodes in memory
 	Preimages bool // Flag whether the preimage of trie key is recorded
+
+	// Testing hooks
+	OnCommit func(states *triestate.Set) // Hook invoked when commit is performed
 }
 
 // backend defines the methods needed to access/update trie nodes in different
@@ -136,7 +140,10 @@ func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
 // given set in order to update state from the specified parent to the specified
 // root. The held pre-images accumulated up to this point will be flushed in case
 // the size exceeds the threshold.
-func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet) error {
+func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
+	if db.config != nil && db.config.OnCommit != nil {
+		db.config.OnCommit(states)
+	}
 	if db.preimages != nil {
 		db.preimages.commit(false)
 	}

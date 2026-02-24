@@ -55,22 +55,23 @@ func (s Storage) Copy() Storage {
 // stateObject represents an Ethereum account which is being modified.
 //
 // The usage pattern is as follows:
-// First you need to obtain a state object.
-// Account values can be accessed and modified through the object.
-// Finally, call commitTrie to write the modified storage trie into a database.
+// - First you need to obtain a state object.
+// - Account values as well as storages can be accessed and modified through the object.
+// - Finally, call commit to return the changes of storage trie and update account data.
 type stateObject struct {
 	db       *StateDB
-	address  common.Address     // address of ethereum account
-	addrHash common.Hash        // hash of ethereum address of the account
-	data     types.StateAccount // Account data with all mutations applied in the scope of block
+	address  common.Address      // address of ethereum account
+	addrHash common.Hash         // hash of ethereum address of the account
+	origin   *types.StateAccount // Account original data without any change applied, nil means it was not existent
+	data     types.StateAccount  // Account data with all mutations applied in the scope of block
 
 	// Write caches.
 	trie Trie // storage trie, which becomes non-nil on first access
 	code Code // contract bytecode, which gets set when code is loaded
 
-	originStorage  Storage // Storage cache of original entries to dedup rewrites, reset for every transaction
+	originStorage  Storage // Storage cache of original entries to dedup rewrites
 	pendingStorage Storage // Storage entries that need to be flushed to disk, at the end of an entire block
-	dirtyStorage   Storage // Storage entries that need to be flushed to disk
+	dirtyStorage   Storage // Storage entries that have been modified in the current transaction execution, reset for every transaction
 
 	// Cache flags.
 	dirtyCode bool // true if the code was updated
@@ -94,21 +95,17 @@ func (s *stateObject) empty() bool {
 }
 
 // newObject creates a state object.
-func newObject(db *StateDB, address common.Address, data types.StateAccount) *stateObject {
-	if data.Balance == nil {
-		data.Balance = new(big.Int)
-	}
-	if data.CodeHash == nil {
-		data.CodeHash = types.EmptyCodeHash.Bytes()
-	}
-	if data.Root == (common.Hash{}) {
-		data.Root = types.EmptyRootHash
+func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *stateObject {
+	origin := acct
+	if acct == nil {
+		acct = types.NewEmptyStateAccount()
 	}
 	return &stateObject{
 		db:             db,
 		address:        address,
 		addrHash:       crypto.Keccak256Hash(address[:]),
-		data:           data,
+		origin:         origin,
+		data:           *acct,
 		originStorage:  make(Storage),
 		pendingStorage: make(Storage),
 		dirtyStorage:   make(Storage),
@@ -241,6 +238,12 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	}
 	// Track the amount of time wasted on updating the storage trie
 	defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
+	// The snapshot storage map for the object
+	var (
+		storage map[common.Hash][]byte
+		origin  map[common.Hash][]byte
+		hasher  = s.db.hasher
+	)
 	tr, err := s.getTrie()
 	if err != nil {
 		s.db.setError(err)
@@ -252,8 +255,11 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		if value == s.originStorage[key] {
 			continue
 		}
+		prev := s.originStorage[key]
 		s.originStorage[key] = value
 
+		// rlp-encoded value to be used by the snapshot
+		var snapshotVal []byte
 		if (value == common.Hash{}) {
 			if err := tr.DeleteStorage(s.address, key[:]); err != nil {
 				s.db.setError(err)
@@ -263,11 +269,39 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		} else {
 			trimmedVal := common.TrimLeftZeroes(value[:])
 			// Encoding []byte cannot fail, ok to ignore the error.
+			snapshotVal, _ = rlp.EncodeToBytes(trimmedVal)
 			if err := tr.UpdateStorage(s.address, key[:], trimmedVal); err != nil {
 				s.db.setError(err)
 				return nil, err
 			}
 			s.db.StorageUpdated += 1
+		}
+		// Cache the mutated storage slots until commit
+		if storage == nil {
+			if storage = s.db.storages[s.addrHash]; storage == nil {
+				storage = make(map[common.Hash][]byte)
+				s.db.storages[s.addrHash] = storage
+			}
+		}
+		khash := crypto.HashData(hasher, key[:])
+		storage[khash] = snapshotVal // snapshotVal will be nil if it's deleted
+
+		// Cache the original value of mutated storage slots
+		if origin == nil {
+			if origin = s.db.storagesOrigin[s.addrHash]; origin == nil {
+				origin = make(map[common.Hash][]byte)
+				s.db.storagesOrigin[s.addrHash] = origin
+			}
+		}
+		// Track the original value of slot only if it's mutated first time
+		if _, ok := origin[khash]; !ok {
+			if prev == (common.Hash{}) {
+				origin[khash] = nil // nil if it was not present previously
+			} else {
+				// Encoding []byte cannot fail, ok to ignore the error.
+				b, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(prev[:]))
+				origin[khash] = b
+			}
 		}
 	}
 	if len(s.pendingStorage) > 0 {
@@ -292,16 +326,15 @@ func (s *stateObject) updateRoot() {
 	s.data.Root = tr.Hash()
 }
 
-// commitTrie the storage trie of the object to dwb.
-// This updates the trie root.
-func (s *stateObject) commitTrie() (*trienode.NodeSet, error) {
-	// If nothing changed, don't bother with hashing anything
+// commit returns the changes made in storage trie and updates the account data.
+func (s *stateObject) commit() (*trienode.NodeSet, error) {
 	tr, err := s.updateTrie()
 	if err != nil {
 		return nil, err
 	}
 	// If nothing changed, don't bother with hashing anything
 	if tr == nil {
+		s.origin = s.data.Copy()
 		return nil, nil
 	}
 	// Track the amount of time wasted on committing the storage trie
@@ -311,6 +344,9 @@ func (s *stateObject) commitTrie() (*trienode.NodeSet, error) {
 		return nil, err
 	}
 	s.data.Root = root
+
+	// Update original account data after commit
+	s.origin = s.data.Copy()
 	return nodes, nil
 }
 
@@ -345,18 +381,24 @@ func (s *stateObject) setBalance(amount *big.Int) {
 }
 
 func (s *stateObject) deepCopy(db *StateDB) *stateObject {
-	stateObject := newObject(db, s.address, s.data)
-	if s.trie != nil {
-		stateObject.trie = db.db.CopyTrie(s.trie)
+	obj := &stateObject{
+		db:       db,
+		address:  s.address,
+		addrHash: s.addrHash,
+		origin:   s.origin,
+		data:     s.data,
 	}
-	stateObject.code = s.code
-	stateObject.dirtyStorage = s.dirtyStorage.Copy()
-	stateObject.originStorage = s.originStorage.Copy()
-	stateObject.pendingStorage = s.pendingStorage.Copy()
-	stateObject.selfDestructed = s.selfDestructed
-	stateObject.dirtyCode = s.dirtyCode
-	stateObject.deleted = s.deleted
-	return stateObject
+	if s.trie != nil {
+		obj.trie = db.db.CopyTrie(s.trie)
+	}
+	obj.code = s.code
+	obj.dirtyStorage = s.dirtyStorage.Copy()
+	obj.originStorage = s.originStorage.Copy()
+	obj.pendingStorage = s.pendingStorage.Copy()
+	obj.selfDestructed = s.selfDestructed
+	obj.dirtyCode = s.dirtyCode
+	obj.deleted = s.deleted
+	return obj
 }
 
 //
