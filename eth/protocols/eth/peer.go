@@ -50,6 +50,7 @@ const (
 // receiptRequest tracks the state of an in-flight receipt retrieval operation.
 type receiptRequest struct {
 	request     []common.Hash    // block hashes corresponding to the requested receipts
+	gasUsed     []uint64         // block gas used corresponding to the requested receipts
 	list        []*ReceiptList69 // list of partially collected receipts
 	lastLogSize uint64           // log size of last receipt list
 }
@@ -354,7 +355,7 @@ func (p *Peer) RequestBodies(hashes []common.Hash, sink chan *Response) (*Reques
 }
 
 // RequestReceipts fetches a batch of transaction receipts from a remote node.
-func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Request, error) {
+func (p *Peer) RequestReceipts(hashes []common.Hash, gasUsed []uint64, sink chan *Response) (*Request, error) {
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
 	id := rand.Uint64()
 
@@ -375,6 +376,7 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Requ
 		p.receiptBufferLock.Lock()
 		p.receiptBuffer[id] = &receiptRequest{
 			request: hashes,
+			gasUsed: gasUsed,
 		}
 		p.receiptBufferLock.Unlock()
 	} else {
@@ -453,11 +455,8 @@ func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList69, l
 		if len(buffer.list) > 0 {
 			lastBlock += len(buffer.list) - 1
 		}
-		header := backend.Chain().GetHeaderByHash(buffer.request[lastBlock])
-		if header == nil {
-			return fmt.Errorf("unknown block #%d for receipt retrieval", lastBlock)
-		}
-		logSize, err := p.validateLastBlockReceipt(receiptLists, requestId, header)
+		gasUsed := buffer.gasUsed[lastBlock]
+		logSize, err := p.validateLastBlockReceipt(receiptLists, requestId, gasUsed)
 		if err != nil {
 			return err
 		}
@@ -501,9 +500,11 @@ func (p *Peer) flushReceipts(requestId uint64) []*ReceiptList69 {
 
 // validateLastBlockReceipt validates receipts and return log size of last block receipt.
 // This function is called only when the `lastBlockincomplete == true`.
-// Note that the last receipt response (which completes receiptLists of a pending block) is not verified here.
-// Those response doesn't need hueristics below since they can be verified by its trie root.
-func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList69, id uint64, header *types.Header) (uint64, error) {
+//
+// Note that the last receipt response (which completes receiptLists of a pending block)
+// is not verified here. Those response doesn't need hueristics below since they can be
+// verified by its trie root.
+func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList69, id uint64, gasUsed uint64) (uint64, error) {
 	lastReceipts := receiptLists[len(receiptLists)-1]
 
 	// If the receipt is in the middle of retrieval, use the buffered data.
@@ -520,7 +521,7 @@ func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList69, id uint64
 	}
 
 	// Verify that the total number of transactions delivered is under the limit.
-	if uint64(previousTxs+lastReceipts.items.Len()) > header.GasUsed/21_000 {
+	if uint64(previousTxs+lastReceipts.items.Len()) > gasUsed/21_000 {
 		// should be dropped, don't clear the buffer
 		return 0, fmt.Errorf("total number of tx exceeded limit")
 	}
@@ -533,7 +534,7 @@ func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList69, id uint64
 		log += uint64(len(rc.Logs))
 	}
 	// Verify that the overall downloaded receipt size does not exceed the block gas limit.
-	if previousLog+log > header.GasUsed/params.LogDataGas {
+	if previousLog+log > gasUsed/params.LogDataGas {
 		return 0, fmt.Errorf("total download receipt size exceeded the limit")
 	}
 	return previousLog + log, nil

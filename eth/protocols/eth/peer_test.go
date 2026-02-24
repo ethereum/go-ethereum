@@ -143,9 +143,15 @@ func TestPartialReceipt(t *testing.T) {
 		backend.chain.GetBlockByNumber(3).Hash(),
 		backend.chain.GetBlockByNumber(4).Hash(),
 	}
+	gasUsed := []uint64{
+		backend.chain.GetBlockByNumber(1).GasUsed(),
+		backend.chain.GetBlockByNumber(2).GasUsed(),
+		backend.chain.GetBlockByNumber(3).GasUsed(),
+		backend.chain.GetBlockByNumber(4).GasUsed(),
+	}
 
 	sink := make(chan *Response, 1)
-	req, err := peer.RequestReceipts(hashes, sink)
+	req, err := peer.RequestReceipts(hashes, gasUsed, sink)
 	if err != nil {
 		t.Fatalf("RequestReceipts failed: %v", err)
 	}
@@ -359,10 +365,16 @@ func TestPartialReceiptFailure(t *testing.T) {
 		backend.chain.GetBlockByNumber(3).Hash(),
 		backend.chain.GetBlockByNumber(4).Hash(),
 	}
+	gasUsed := []uint64{
+		backend.chain.GetBlockByNumber(1).GasUsed(),
+		backend.chain.GetBlockByNumber(2).GasUsed(),
+		backend.chain.GetBlockByNumber(3).GasUsed(),
+		backend.chain.GetBlockByNumber(4).GasUsed(),
+	}
 
 	// Case 1 ) The number of receipts exceeds maximum tx count
 	sink := make(chan *Response, 1)
-	req, err := peer.RequestReceipts(hashes, sink)
+	req, err := peer.RequestReceipts(hashes, gasUsed, sink)
 	if err != nil {
 		t.Fatalf("RequestReceipts failed: %v", err)
 	}
@@ -391,7 +403,7 @@ func TestPartialReceiptFailure(t *testing.T) {
 	}
 
 	// Case 2 ) Total receipt size exceeds the block gas limit
-	req, err = peer.RequestReceipts(hashes, sink)
+	req, err = peer.RequestReceipts(hashes, gasUsed, sink)
 	if err != nil {
 		t.Fatalf("RequestReceipts failed: %v", err)
 	}
