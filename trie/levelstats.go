@@ -48,6 +48,15 @@ func (s *LevelStats) MaxDepth() int {
 	return depth
 }
 
+// TotalNodes returns the total number of nodes across all levels and types.
+func (s *LevelStats) TotalNodes() uint64 {
+	var total uint64
+	for i := range s.level {
+		total += s.level[i].short.Load() + s.level[i].full.Load() + s.level[i].value.Load()
+	}
+	return total
+}
+
 // add increases the node count by one for the specified node type and depth.
 func (s *LevelStats) add(n node, depth uint32) {
 	d := int(depth)

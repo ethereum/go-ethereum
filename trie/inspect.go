@@ -67,6 +67,7 @@ type inspector struct {
 	dumpMu   sync.Mutex
 	dumpBuf  *bufio.Writer
 	dumpFile *os.File
+	storageRecordsWritten atomic.Uint64
 
 	errMu sync.Mutex
 	err   error
@@ -116,7 +117,7 @@ func Inspect(triedb database.NodeDatabase, root common.Hash, config *InspectConf
 			select {
 			case <-ticker.C:
 				accountNodes := in.accountStat.TotalNodes()
-				storageRecords := atomic.LoadUint64(&in.storageRecordsWritten)
+				storageRecords := in.storageRecordsWritten.Load()
 				log.Info("Inspecting trie",
 					"accountNodes", accountNodes,
 					"storageRecords", storageRecords,
@@ -201,15 +202,13 @@ func InspectContract(triedb database.NodeDatabase, db ethdb.Database, stateRoot 
 	})
 
 	// Goroutine 2: Storage trie walk using the existing inspector.
-	var storageStat *LevelStats
+	storageStat := NewLevelStats()
 	g.Go(func() error {
 		owner := accountHash
 		storage, err := New(StorageTrieID(stateRoot, owner, account.Root), triedb)
 		if err != nil {
 			return fmt.Errorf("failed to open storage trie: %w", err)
 		}
-		storageStat = NewLevelStats()
-
 		in := &inspector{
 			triedb:      triedb,
 			root:        stateRoot,
@@ -238,6 +237,7 @@ func InspectContract(triedb database.NodeDatabase, db ethdb.Database, stateRoot 
 			case <-ticker.C:
 				log.Info("Inspecting contract",
 					"snapSlots", snapSlots.Load(),
+					"trieNodes", storageStat.TotalNodes(),
 					"elapsed", common.PrettyDuration(time.Since(start)))
 			case <-done:
 				return
@@ -402,6 +402,11 @@ func (in *inspector) writeDumpRecord(owner common.Hash, s *LevelStats) {
 	in.dumpMu.Unlock()
 	if err != nil {
 		in.setError(fmt.Errorf("failed writing trie dump record: %w", err))
+	}
+	
+	// Increment counter for storage tries only (not for account trie)
+	if owner != (common.Hash{}) {
+		in.storageRecordsWritten.Add(1)
 	}
 }
 
