@@ -66,6 +66,25 @@ type SetCodeTx struct {
 	S *uint256.Int
 }
 
+// authCache is an internal helper type used in the Transaction object to cache
+// authorizations.
+type authCache []*common.Address
+
+// DeriveAuthorities returns a list of recovered authorization signers. The
+// length is always equal to the number of authorizations. Any authorities that
+// fail to recover are set as nil in the list.
+func DeriveAuthorities(authList []SetCodeAuthorization) []*common.Address {
+	auths := make([]*common.Address, 0, len(authList))
+	for _, auth := range authList {
+		if addr, err := auth.Authority(); err == nil {
+			auths = append(auths, &addr)
+		} else {
+			auths = append(auths, nil)
+		}
+	}
+	return auths
+}
+
 //go:generate go run github.com/fjl/gencodec -type SetCodeAuthorization -field-override authorizationMarshaling -out gen_authorization.go
 
 // SetCodeAuthorization is an authorization from an account to deploy code at its address.

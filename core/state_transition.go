@@ -143,19 +143,34 @@ func toWordSize(size uint64) uint64 {
 // A Message contains the data derived from a single transaction that is relevant to state
 // processing.
 type Message struct {
-	To                    *common.Address
-	From                  common.Address
-	Nonce                 uint64
-	Value                 *big.Int
-	GasLimit              uint64
-	GasPrice              *big.Int
-	GasFeeCap             *big.Int
-	GasTipCap             *big.Int
-	Data                  []byte
-	AccessList            types.AccessList
-	BlobGasFeeCap         *big.Int
-	BlobHashes            []common.Hash
+	To            *common.Address
+	From          common.Address
+	Nonce         uint64
+	Value         *big.Int
+	GasLimit      uint64
+	GasPrice      *big.Int
+	GasFeeCap     *big.Int
+	GasTipCap     *big.Int
+	Data          []byte
+	AccessList    types.AccessList
+	BlobGasFeeCap *big.Int
+	BlobHashes    []common.Hash
+
+	// When SetCodeAuthorizations is not nil, it represents the full set of
+	// auths included in the actual transaction.
+	//
+	// To avoid recovering the authority addresses during the state transition,
+	// they are precomputed or retrieved from the Transaction cache and placed
+	// into Authorities below. The authority for any given index will match the
+	// corresponding authorization in SetCodeAuthorizations. Nil is used when the
+	// authorization is invalid to maintain indexes between the two lists.
 	SetCodeAuthorizations []types.SetCodeAuthorization
+
+	// Authorities is the list of recovered authority addresses for the
+	// authorization list. Nil is used to represent an invalid authorization. The
+	// indexes between SetCodeAuthorizations and Authorities match so that the
+	// each authority matches the corresponding authorization.
+	Authorities []*common.Address // Recovered authority addresses
 
 	// When SkipNonceChecks is true, the message nonce is not checked against the
 	// account nonce in state.
@@ -185,6 +200,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		Data:                  tx.Data(),
 		AccessList:            tx.AccessList(),
 		SetCodeAuthorizations: tx.SetCodeAuthorizations(),
+		Authorities:           tx.SetCodeAuthorities(),
 		SkipNonceChecks:       false,
 		SkipTransactionChecks: false,
 		BlobHashes:            tx.BlobHashes(),
@@ -504,9 +520,17 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 		// Apply EIP-7702 authorizations.
 		if msg.SetCodeAuthorizations != nil {
-			for _, auth := range msg.SetCodeAuthorizations {
-				// Note errors are ignored, we simply skip invalid authorizations here.
-				st.applyAuthorization(&auth)
+			if len(msg.SetCodeAuthorizations) != len(msg.Authorities) {
+				// This is an invariant of Message that cannot be invalidated.
+				panic("Length of authorizations does match authorities")
+			}
+			for i, auth := range msg.SetCodeAuthorizations {
+				addr := msg.Authorities[i]
+				if addr == nil {
+					// Skip invalid authorizations.
+					continue
+				}
+				st.applyAuthorization(&auth, *addr)
 			}
 		}
 
@@ -574,20 +598,16 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 }
 
 // validateAuthorization validates an EIP-7702 authorization against the state.
-func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorization) (authority common.Address, err error) {
+func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorization, authority common.Address) error {
 	// Verify chain ID is null or equal to current chain ID.
 	if !auth.ChainID.IsZero() && auth.ChainID.CmpBig(st.evm.ChainConfig().ChainID) != 0 {
-		return authority, ErrAuthorizationWrongChainID
+		return ErrAuthorizationWrongChainID
 	}
 	// Limit nonce to 2^64-1 per EIP-2681.
 	if auth.Nonce+1 < auth.Nonce {
-		return authority, ErrAuthorizationNonceOverflow
+		return ErrAuthorizationNonceOverflow
 	}
-	// Validate signature values and recover authority.
-	authority, err = auth.Authority()
-	if err != nil {
-		return authority, fmt.Errorf("%w: %v", ErrAuthorizationInvalidSignature, err)
-	}
+
 	// Check the authority account
 	//  1) doesn't have code or has exisiting delegation
 	//  2) matches the auth's nonce
@@ -596,17 +616,17 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 	st.state.AddAddressToAccessList(authority)
 	code := st.state.GetCode(authority)
 	if _, ok := types.ParseDelegation(code); len(code) != 0 && !ok {
-		return authority, ErrAuthorizationDestinationHasCode
+		return ErrAuthorizationDestinationHasCode
 	}
 	if have := st.state.GetNonce(authority); have != auth.Nonce {
-		return authority, ErrAuthorizationNonceMismatch
+		return ErrAuthorizationNonceMismatch
 	}
-	return authority, nil
+	return nil
 }
 
 // applyAuthorization applies an EIP-7702 code delegation to the state.
-func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization) error {
-	authority, err := st.validateAuthorization(auth)
+func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization, authority common.Address) error {
+	err := st.validateAuthorization(auth, authority)
 	if err != nil {
 		return err
 	}
