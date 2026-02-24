@@ -196,7 +196,7 @@ func TextHash(data []byte) []byte {
 // This gives context to the signed message and prevents signing of transactions.
 func TextAndHash(data []byte) ([]byte, string) {
 	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
-	hasher := keccak.NewFastKeccak()
+	hasher := keccak.NewLegacyKeccak256()
 	hasher.Write([]byte(msg))
 	return hasher.Sum(nil), msg
 }

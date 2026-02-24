@@ -486,10 +486,10 @@ func (h *handshakeState) secrets(auth, authResp []byte) (Secrets, error) {
 	}
 
 	// setup sha3 instances for the MACs
-	mac1 := keccak.NewFastKeccak()
+	mac1 := keccak.NewLegacyKeccak256()
 	mac1.Write(xor(s.MAC, h.respNonce))
 	mac1.Write(auth)
-	mac2 := keccak.NewFastKeccak()
+	mac2 := keccak.NewLegacyKeccak256()
 	mac2.Write(xor(s.MAC, h.initNonce))
 	mac2.Write(authResp)
 	if h.initiator {

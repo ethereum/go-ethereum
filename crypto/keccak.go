@@ -36,7 +36,7 @@ func ReturnToPool(h keccak.KeccakState) { hasherPool.Put(h) }
 
 var hasherPool = sync.Pool{
 	New: func() any {
-		return keccak.NewFastKeccak()
+		return keccak.NewLegacyKeccak256()
 	},
 }
 
