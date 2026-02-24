@@ -19,7 +19,6 @@ package state
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -34,7 +33,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/tracing"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
-	"github.com/XinFinOrg/XDPoSChain/trie"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
@@ -208,6 +206,80 @@ func TestCopy(t *testing.T) {
 	}
 }
 
+// TestCopyWithDirtyJournal tests if Copy can correctly create an equal copied
+// stateDB with dirty journal present.
+func TestCopyWithDirtyJournal(t *testing.T) {
+	db := NewDatabase(rawdb.NewMemoryDatabase())
+	orig, _ := New(types.EmptyRootHash, db)
+
+	// Fill up the initial states
+	for i := byte(0); i < 255; i++ {
+		obj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		obj.AddBalance(big.NewInt(int64(i)))
+		obj.data.Root = common.HexToHash("0xdeadbeef")
+		orig.updateStateObject(obj)
+	}
+	root, _ := orig.Commit(0, true)
+	orig, _ = New(root, db)
+
+	// modify all in memory without finalizing
+	for i := byte(0); i < 255; i++ {
+		obj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		amount := big.NewInt(int64(i))
+		obj.SetBalance(new(big.Int).Sub(obj.Balance(), amount))
+
+		orig.updateStateObject(obj)
+	}
+	cpy := orig.Copy()
+
+	orig.Finalise(true)
+	for i := byte(0); i < 255; i++ {
+		root := orig.GetStorageRoot(common.BytesToAddress([]byte{i}))
+		if root != (common.Hash{}) {
+			t.Errorf("Unexpected storage root %x", root)
+		}
+	}
+	cpy.Finalise(true)
+	for i := byte(0); i < 255; i++ {
+		root := cpy.GetStorageRoot(common.BytesToAddress([]byte{i}))
+		if root != (common.Hash{}) {
+			t.Errorf("Unexpected storage root %x", root)
+		}
+	}
+	if cpy.IntermediateRoot(true) != orig.IntermediateRoot(true) {
+		t.Error("State is not equal after copy")
+	}
+}
+
+// TestCopyObjectState creates an original state, S1, and makes a copy S2.
+// It then proceeds to make changes to S1. Those changes are _not_ supposed
+// to affect S2. This test checks that the copy properly deep-copies the objectstate
+func TestCopyObjectState(t *testing.T) {
+	db := NewDatabase(rawdb.NewMemoryDatabase())
+	orig, _ := New(types.EmptyRootHash, db)
+
+	// Fill up the initial states
+	for i := byte(0); i < 5; i++ {
+		obj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		obj.AddBalance(big.NewInt(int64(i)))
+		obj.data.Root = common.HexToHash("0xdeadbeef")
+		orig.updateStateObject(obj)
+	}
+	orig.Finalise(true)
+	cpy := orig.Copy()
+	for _, op := range cpy.mutations {
+		if have, want := op.applied, false; have != want {
+			t.Fatalf("Error in test itself, the 'done' flag should not be set before Commit, have %v want %v", have, want)
+		}
+	}
+	orig.Commit(0, true)
+	for _, op := range cpy.mutations {
+		if have, want := op.applied, false; have != want {
+			t.Fatalf("Error: original state affected copy, have %v want %v", have, want)
+		}
+	}
+}
+
 func TestSnapshotRandom(t *testing.T) {
 	config := &quick.Config{MaxCount: 1000}
 	err := quick.Check((*snapshotTest).run, config)
@@ -291,7 +363,9 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		{
 			name: "CreateAccount",
 			fn: func(a testAction, s *StateDB) {
-				s.CreateAccount(addr)
+				if !s.Exist(addr) {
+					s.CreateAccount(addr)
+				}
 			},
 		},
 		{
@@ -339,6 +413,15 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			args: make([]int64, 1),
 		},
 		{
+			name: "AddPreimage",
+			fn: func(a testAction, s *StateDB) {
+				preimage := []byte{1}
+				hash := common.BytesToHash(preimage)
+				s.AddPreimage(hash, preimage)
+			},
+			args: make([]int64, 1),
+		},
+		{
 			name: "AddAddressToAccessList",
 			fn: func(a testAction, s *StateDB) {
 				s.AddAddressToAccessList(addr)
@@ -362,18 +445,9 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			},
 			args: make([]int64, 2),
 		},
-		{
-			name: "AddPreimage",
-			fn: func(a testAction, s *StateDB) {
-				preimage := []byte{1}
-				hash := common.BytesToHash(preimage)
-				s.AddPreimage(hash, preimage)
-			},
-			args: make([]int64, 1),
-		},
 	}
 	action := actions[r.Intn(len(actions))]
-	nameargs := make([]string, 0, 1+len(action.args))
+	var nameargs []string
 	if !action.noAddr {
 		nameargs = append(nameargs, addr.Hex())
 	}
@@ -513,51 +587,6 @@ func TestTouchDelete(t *testing.T) {
 	s.state.RevertToSnapshot(snapshot)
 	if len(s.state.journal.dirties) != 0 {
 		t.Fatal("expected no dirty state object")
-	}
-}
-
-// TestCommitCopy tests the copy from a committed state is not functional.
-func TestCommitCopy(t *testing.T) {
-	state, _ := New(types.EmptyRootHash, NewDatabase(rawdb.NewMemoryDatabase()))
-
-	// Create an account and check if the retrieved balance is correct
-	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
-	skey := common.HexToHash("aaa")
-	sval := common.HexToHash("bbb")
-
-	state.SetBalance(addr, big.NewInt(42), tracing.BalanceChangeUnspecified) // Change the account trie
-	state.SetCode(addr, []byte("hello"))                                     // Change an external metadata
-	state.SetState(addr, skey, sval)                                         // Change the storage trie
-
-	if balance := state.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
-		t.Fatalf("initial balance mismatch: have %v, want %v", balance, 42)
-	}
-	if code := state.GetCode(addr); !bytes.Equal(code, []byte("hello")) {
-		t.Fatalf("initial code mismatch: have %x, want %x", code, []byte("hello"))
-	}
-	if val := state.GetState(addr, skey); val != sval {
-		t.Fatalf("initial non-committed storage slot mismatch: have %x, want %x", val, sval)
-	}
-	if val := state.GetCommittedState(addr, skey); val != (common.Hash{}) {
-		t.Fatalf("initial committed storage slot mismatch: have %x, want %x", val, common.Hash{})
-	}
-	// Copy the committed state database, the copied one is not functional.
-	state.Commit(0, true)
-	copied := state.Copy()
-	if balance := copied.GetBalance(addr); balance.Cmp(big.NewInt(0)) != 0 {
-		t.Fatalf("unexpected balance: have %v", balance)
-	}
-	if code := copied.GetCode(addr); code != nil {
-		t.Fatalf("unexpected code: have %x", code)
-	}
-	if val := copied.GetState(addr, skey); val != (common.Hash{}) {
-		t.Fatalf("unexpected storage slot: have %x", val)
-	}
-	if val := copied.GetCommittedState(addr, skey); val != (common.Hash{}) {
-		t.Fatalf("unexpected storage slot: have %x", val)
-	}
-	if !errors.Is(copied.Error(), trie.ErrCommitted) {
-		t.Fatalf("unexpected state error, %v", copied.Error())
 	}
 }
 
@@ -962,6 +991,62 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 	}
 	if val := copyThree.GetCommittedState(addr, skey); val != (common.Hash{}) {
 		t.Fatalf("third copy committed storage slot mismatch: have %x, want %x", val, sval)
+	}
+}
+
+// TestCommitCopy tests the copy from a committed state is not fully functional.
+func TestCommitCopy(t *testing.T) {
+	db := NewDatabase(rawdb.NewMemoryDatabase())
+	state, _ := New(types.EmptyRootHash, db)
+
+	// Create an account and check if the retrieved balance is correct
+	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
+	skey1, skey2 := common.HexToHash("a1"), common.HexToHash("a2")
+	sval1, sval2 := common.HexToHash("b1"), common.HexToHash("b2")
+
+	state.SetBalance(addr, big.NewInt(42), tracing.BalanceChangeUnspecified) // Change the account trie
+	state.SetCode(addr, []byte("hello"))                                     // Change an external metadata
+	state.SetState(addr, skey1, sval1)                                       // Change the storage trie
+
+	if balance := state.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
+		t.Fatalf("initial balance mismatch: have %v, want %v", balance, 42)
+	}
+	if code := state.GetCode(addr); !bytes.Equal(code, []byte("hello")) {
+		t.Fatalf("initial code mismatch: have %x, want %x", code, []byte("hello"))
+	}
+	if val := state.GetState(addr, skey1); val != sval1 {
+		t.Fatalf("initial non-committed storage slot mismatch: have %x, want %x", val, sval1)
+	}
+	if val := state.GetCommittedState(addr, skey1); val != (common.Hash{}) {
+		t.Fatalf("initial committed storage slot mismatch: have %x, want %x", val, common.Hash{})
+	}
+	root, _ := state.Commit(0, true)
+
+	state, _ = New(root, db)
+	state.SetState(addr, skey2, sval2)
+	state.Commit(0, true)
+
+	// Copy the committed state database, the copied one is not fully functional.
+	copied := state.Copy()
+	if balance := copied.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
+		t.Fatalf("unexpected balance: have %v", balance)
+	}
+	if code := copied.GetCode(addr); !bytes.Equal(code, []byte("hello")) {
+		t.Fatalf("unexpected code: have %x", code)
+	}
+	// Miss slots because of non-functional trie after commit
+	if val := copied.GetState(addr, skey1); val != (common.Hash{}) {
+		t.Fatalf("unexpected storage slot: have %x", val)
+	}
+	if val := copied.GetCommittedState(addr, skey1); val != (common.Hash{}) {
+		t.Fatalf("unexpected storage slot: have %x", val)
+	}
+	// Slots cached in the stateDB, available after commit
+	if val := copied.GetState(addr, skey2); val != sval2 {
+		t.Fatalf("unexpected storage slot: have %x", val)
+	}
+	if val := copied.GetCommittedState(addr, skey2); val != sval2 {
+		t.Fatalf("unexpected storage slot: have %x, want %x", val, sval2)
 	}
 }
 

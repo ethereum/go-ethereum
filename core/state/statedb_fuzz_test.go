@@ -47,10 +47,11 @@ import (
 // A list of states are created by applying actions. The state changes between
 // each state instance are tracked and be verified.
 type stateTest struct {
-	addrs   []common.Address // all account addresses
-	actions [][]testAction   // modifications to the state, grouped by block
-	chunk   int              // The number of actions per chunk
-	err     error            // failure details are reported through this field
+	addrs     []common.Address // all account addresses
+	actions   [][]testAction   // modifications to the state, grouped by block
+	chunk     int              // The number of actions per chunk
+	byzantium bool             // Whether to use Byzantium finalization rules
+	err       error            // failure details are reported through this field
 }
 
 // newStateTestAction creates a random action that changes state.
@@ -93,7 +94,9 @@ func newStateTestAction(addr common.Address, r *rand.Rand, index int) testAction
 		{
 			name: "CreateAccount",
 			fn: func(a testAction, s *StateDB) {
-				s.CreateAccount(addr)
+				if !s.Exist(addr) {
+					s.CreateAccount(addr)
+				}
 			},
 		},
 		{
@@ -114,9 +117,9 @@ func newStateTestAction(addr common.Address, r *rand.Rand, index int) testAction
 	}
 	for i := range action.args {
 		if nonRandom {
-			action.args[i] = rand.Int63n(10000) + 1 // set balance to non-zero
+			action.args[i] = r.Int63n(10000) + 1 // set balance to non-zero
 		} else {
-			action.args[i] = rand.Int63n(10000)
+			action.args[i] = r.Int63n(10000)
 		}
 		names = append(names, fmt.Sprint(action.args[i]))
 	}
@@ -131,7 +134,7 @@ func (*stateTest) Generate(r *rand.Rand, size int) reflect.Value {
 	for i := range addrs {
 		addrs[i][0] = byte(i)
 	}
-	actions := make([][]testAction, rand.Intn(5)+1)
+	actions := make([][]testAction, r.Intn(5)+1)
 
 	for i := 0; i < len(actions); i++ {
 		actions[i] = make([]testAction, size)
@@ -150,9 +153,10 @@ func (*stateTest) Generate(r *rand.Rand, size int) reflect.Value {
 		chunk = 1
 	}
 	return reflect.ValueOf(&stateTest{
-		addrs:   addrs,
-		actions: actions,
-		chunk:   chunk,
+		addrs:     addrs,
+		actions:   actions,
+		chunk:     chunk,
+		byzantium: r.Intn(2) == 0,
 	})
 }
 
@@ -182,7 +186,7 @@ func (test *stateTest) run() bool {
 		disk      = rawdb.NewMemoryDatabase()
 		tdb       = trie.NewDatabaseWithConfig(disk, &trie.Config{OnCommit: onCommit})
 		sdb       = NewDatabaseWithNodeDB(disk, tdb)
-		byzantium = rand.Intn(2) == 0
+		byzantium = test.byzantium
 	)
 	for i, actions := range test.actions {
 		root := types.EmptyRootHash
