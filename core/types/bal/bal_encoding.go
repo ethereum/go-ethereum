@@ -119,6 +119,13 @@ func (e *encodingSlotWrites) validate() error {
 	return errors.New("storage write tx indices not in order")
 }
 
+// encodingCodeChange contains the runtime bytecode deployed at an address
+// and the transaction index where the deployment took place.
+type encodingCodeChange struct {
+	TxIndex uint16 `ssz-size:"2"`
+	Code    []byte `ssz-max:"300000"` // TODO(rjl493456442) shall we put the limit here? The limit will be increased gradually
+}
+
 // AccountAccess is the encoding format of ConstructionAccountAccess.
 type AccountAccess struct {
 	Address        [20]byte                `ssz-size:"20"`    // 20-byte Ethereum address
@@ -126,7 +133,7 @@ type AccountAccess struct {
 	StorageReads   [][32]byte              `ssz-max:"300000"` // Read-only storage keys
 	BalanceChanges []encodingBalanceChange `ssz-max:"300000"` // Balance changes ([tx_index -> post_balance])
 	NonceChanges   []encodingAccountNonce  `ssz-max:"300000"` // Nonce changes ([tx_index -> new_nonce])
-	Code           []CodeChange            `ssz-max:"1"`      // Code changes ([tx_index -> new_code])
+	CodeChanges    []encodingCodeChange    `ssz-max:"300000"` // Code changes ([tx_index -> new_code])
 }
 
 // validate converts the account accesses out of encoding format.
@@ -166,9 +173,16 @@ func (e *AccountAccess) validate() error {
 		return errors.New("nonce changes not in ascending order by tx index")
 	}
 
-	// Convert code change
-	if len(e.Code) == 1 {
-		if len(e.Code[0].Code) > params.MaxCodeSize {
+	// Check the code changes are sorted in order
+	if !slices.IsSortedFunc(e.CodeChanges, func(a, b encodingCodeChange) int {
+		return cmp.Compare[uint16](a.TxIndex, b.TxIndex)
+	}) {
+		return errors.New("code changes not in ascending order by tx index")
+	}
+	for _, change := range e.CodeChanges {
+		// TODO(rjl493456442): This check should be fork-aware, since the limit may
+		// differ across forks.
+		if len(change.Code) > params.MaxCodeSize {
 			return errors.New("code change contained oversized code")
 		}
 	}
@@ -182,6 +196,8 @@ func (e *AccountAccess) Copy() AccountAccess {
 		StorageReads:   slices.Clone(e.StorageReads),
 		BalanceChanges: slices.Clone(e.BalanceChanges),
 		NonceChanges:   slices.Clone(e.NonceChanges),
+		StorageWrites:  make([]encodingSlotWrites, 0, len(e.StorageWrites)),
+		CodeChanges:    make([]encodingCodeChange, 0, len(e.CodeChanges)),
 	}
 	for _, storageWrite := range e.StorageWrites {
 		res.StorageWrites = append(res.StorageWrites, encodingSlotWrites{
@@ -189,13 +205,11 @@ func (e *AccountAccess) Copy() AccountAccess {
 			Accesses: slices.Clone(storageWrite.Accesses),
 		})
 	}
-	if len(e.Code) == 1 {
-		res.Code = []CodeChange{
-			{
-				e.Code[0].TxIndex,
-				bytes.Clone(e.Code[0].Code),
-			},
-		}
+	for _, codeChange := range e.CodeChanges {
+		res.CodeChanges = append(res.CodeChanges, encodingCodeChange{
+			TxIndex: codeChange.TxIndex,
+			Code:    bytes.Clone(codeChange.Code),
+		})
 	}
 	return res
 }
@@ -212,11 +226,11 @@ var _ rlp.Encoder = &ConstructionBlockAccessList{}
 func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAccess {
 	res := AccountAccess{
 		Address:        addr,
-		StorageWrites:  make([]encodingSlotWrites, 0),
-		StorageReads:   make([][32]byte, 0),
-		BalanceChanges: make([]encodingBalanceChange, 0),
-		NonceChanges:   make([]encodingAccountNonce, 0),
-		Code:           nil,
+		StorageWrites:  make([]encodingSlotWrites, 0, len(a.StorageWrites)),
+		StorageReads:   make([][32]byte, 0, len(a.StorageReads)),
+		BalanceChanges: make([]encodingBalanceChange, 0, len(a.BalanceChanges)),
+		NonceChanges:   make([]encodingAccountNonce, 0, len(a.NonceChanges)),
+		CodeChanges:    make([]encodingCodeChange, 0, len(a.CodeChange)),
 	}
 
 	// Convert write slots
@@ -268,13 +282,13 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 	}
 
 	// Convert code change
-	if a.CodeChange != nil {
-		res.Code = []CodeChange{
-			{
-				a.CodeChange.TxIndex,
-				bytes.Clone(a.CodeChange.Code),
-			},
-		}
+	codeIndices := slices.Collect(maps.Keys(a.CodeChange))
+	slices.SortFunc(codeIndices, cmp.Compare[uint16])
+	for _, idx := range codeIndices {
+		res.CodeChanges = append(res.CodeChanges, encodingCodeChange{
+			TxIndex: idx,
+			Code:    a.CodeChange[idx],
+		})
 	}
 	return res
 }
@@ -327,9 +341,9 @@ func (e *BlockAccessList) PrettyPrint() string {
 			printWithIndent(2, fmt.Sprintf("%d: %d", change.TxIdx, change.Nonce))
 		}
 
-		if len(accountDiff.Code) > 0 {
-			printWithIndent(1, "code:")
-			printWithIndent(2, fmt.Sprintf("%d: %x", accountDiff.Code[0].TxIndex, accountDiff.Code[0].Code))
+		printWithIndent(1, "code changes:")
+		for _, change := range accountDiff.CodeChanges {
+			printWithIndent(2, fmt.Sprintf("%d: %x", change.TxIndex, change.Code))
 		}
 	}
 	return res.String()
