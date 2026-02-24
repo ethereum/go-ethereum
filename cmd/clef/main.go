@@ -748,7 +748,7 @@ func signer(c *cli.Context) error {
 
 		// start http server
 		httpEndpoint := net.JoinHostPort(c.String(utils.HTTPListenAddrFlag.Name), fmt.Sprintf("%d", port))
-		httpServer, addr, err := node.StartHTTPEndpoint(httpEndpoint, rpc.DefaultHTTPTimeouts, handler)
+		httpServer, addr, err := node.StartHTTPEndpoint(httpEndpoint, c.String(utils.HTTPListenProtocolFlag.Name), rpc.DefaultHTTPTimeouts, handler)
 		if err != nil {
 			utils.Fatalf("Could not start RPC api: %v", err)
 		}

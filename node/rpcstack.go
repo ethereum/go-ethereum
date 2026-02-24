@@ -86,6 +86,7 @@ type httpServer struct {
 
 	// These are set by setListenAddr.
 	endpoint string
+	proto    string
 	host     string
 	port     int
 
@@ -103,16 +104,21 @@ func newHTTPServer(log log.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
 
 // setListenAddr configures the listening address of the server.
 // The address can only be set while the server isn't running.
-func (h *httpServer) setListenAddr(host string, port int) error {
+func (h *httpServer) setListenAddr(proto string, host string, port int) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if h.listener != nil && (host != h.host || port != h.port) {
+	if h.listener != nil && (host != h.host || port != h.port || proto != h.proto) {
 		return fmt.Errorf("HTTP server already running on %s", h.endpoint)
 	}
 
+	h.proto, h.host, h.port = proto, host, port
 	h.host, h.port = host, port
-	h.endpoint = net.JoinHostPort(host, fmt.Sprintf("%d", port))
+	if h.proto != "unix" {
+		h.endpoint = net.JoinHostPort(host, fmt.Sprintf("%d", port))
+	} else {
+		h.endpoint = host
+	}
 	return nil
 }
 
@@ -150,7 +156,7 @@ func (h *httpServer) start() error {
 	}
 
 	// Start the server.
-	listener, err := net.Listen("tcp", h.endpoint)
+	listener, err := net.Listen(h.proto, h.endpoint)
 	if err != nil {
 		// If the server fails to start, we need to clear out the RPC and WS
 		// configuration so they can be configured another time.
@@ -291,7 +297,7 @@ func (h *httpServer) doStop() {
 	h.log.Info("HTTP server stopped", "endpoint", h.listener.Addr())
 
 	// Clear out everything to allow re-configuring it later.
-	h.host, h.port, h.endpoint = "", 0, ""
+	h.proto, h.host, h.port, h.endpoint = "", "", 0, ""
 	h.server, h.listener = nil, nil
 }
 

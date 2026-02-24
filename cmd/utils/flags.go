@@ -27,6 +27,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	godebug "runtime/debug"
 	"strconv"
@@ -727,6 +728,12 @@ var (
 		Value:    node.DefaultHTTPHost,
 		Category: flags.APICategory,
 	}
+	HTTPListenProtocolFlag = &cli.StringFlag{
+		Name:     "http.proto",
+		Usage:    "HTTP-RPC server listening protocol (tcp,unix)",
+		Value:    node.DefaultHTTPProtocol,
+		Category: flags.APICategory,
+	}
 	HTTPPortFlag = &cli.IntFlag{
 		Name:     "http.port",
 		Usage:    "HTTP-RPC server listening port",
@@ -1287,11 +1294,21 @@ func SplitAndTrim(input string) (ret []string) {
 func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	if ctx.Bool(HTTPEnabledFlag.Name) {
 		if cfg.HTTPHost == "" {
-			cfg.HTTPHost = "127.0.0.1"
+			if HTTPListenProtocolFlag.Name == "unix" {
+				cfg.HTTPHost = path.Join(os.TempDir(), "geth.http.sock")
+			} else {
+				cfg.HTTPHost = "127.0.0.1"
+			}
 		}
 		if ctx.IsSet(HTTPListenAddrFlag.Name) {
 			cfg.HTTPHost = ctx.String(HTTPListenAddrFlag.Name)
 		}
+	}
+
+	if ctx.IsSet(HTTPListenProtocolFlag.Name) {
+		cfg.HTTPProto = ctx.String(HTTPListenProtocolFlag.Name)
+	} else {
+		cfg.HTTPProto = "tcp"
 	}
 
 	if ctx.IsSet(HTTPPortFlag.Name) {
