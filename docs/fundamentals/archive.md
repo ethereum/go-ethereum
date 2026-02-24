@@ -24,12 +24,12 @@ Geth v1.16.0 introduces a new approach to archive nodes using path-based state s
 
 ### Key Advantages
 
-- **Low disk usage**: archive node on Ethereum mainnet with full history requires around 2TB
+- **Low disk usage**: an archive node on Ethereum mainnet with full flat state history requires around 2 TB of storage. If it stores full flat states alongside the historical trie data, the requirement increases to approximately 6.5 TB.
 - **Configurable retention**: users can set how many historical states to keep
 - **Faster boostrap**: synchronizing a path-based archive node takes around 2 weeks
 - **HDD support**: the state histories can be placed even on the HDD, which is more friendly to home operators
 
-Notably, in this archive mode, the merkle proofs (via `eth_getProof`) for historical blocks is not supported yet, as it requires the additional historical trie nodes to be stored. Support is planned for a future release.
+Notably, in archive mode on v1.16.x, historical Merkle proofs via `eth_getProof` are not supported, as this requires storing historical trie nodes. Starting from v1.17.x, `eth_getProof` for historical blocks is supported if `history.trienode = N` is configured, which enables retention of the required historical trie nodes.
 
 ### How to Run a Path-Based archive node
 
@@ -49,6 +49,12 @@ geth \
 `--datadir.ancient` can be set if you want to place the state history on a cheaper device (e.g., HDD).
 
 `--history.state=N` can be set if you only want to retain a limited number of recent states. Older state data will be pruned automatically. Note: Once pruned, historical state cannot be recovered, so choose this value carefully.
+
+**Historical Trie Node Retention**
+
+`--history.trienode=N` controls whether historical trie nodes are retained. By default, `--history.trienode=-1`, which disables retention of historical trie data.
+
+If you want to support historical Merkle proofs (e.g., via `eth_getProof` for historical blocks), you must explicitly set `--history.trienode=N` to retain trie node history. Without this flag, historical flat states are available, but historical trie data (and therefore historical proofs) are not.
 
 Notably, `--gcmode archive` does not need to be enabled during the initial full sync. In fact, enabling it from the start may slow down synchronization. For better efficiency, we recommend completing the full sync first, and then enabling `--gcmode archive` afterward for historical state indexing.
 
