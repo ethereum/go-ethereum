@@ -1734,6 +1734,48 @@ func TestAdd(t *testing.T) {
 				},
 			},
 		},
+		// Transactions above the Datacap should be rejected, use eviction values
+		{
+			seeds: map[string]seed{
+				"alice": {
+					balance: 2000000,
+					//nonce:   1,
+					txs: []*types.BlobTx{
+						makeUnsignedTxWithTestBlob(0, 2, 2, 2, 0),
+						makeUnsignedTxWithTestBlob(1, 2, 2, 2, 1),
+					},
+				},
+				"bob": {
+					balance: 1000000,
+					//nonce:   1,
+					txs: []*types.BlobTx{
+						makeUnsignedTxWithTestBlob(0, 3, 3, 3, 2),
+					},
+				},
+			},
+			datacap: 3 * (txAvgSize + blobSize + uint64(txBlobOverhead)), // only allow 2 blobs
+			adds: []addtx{
+				{ // Beyond capacity, but kicking out one from Alice should make it fit
+					from: "bob",
+					tx:   makeUnsignedTxWithTestBlob(1, 3, 3, 3, 3),
+				},
+				{ // We've just kicked our nonce 1, so this is nonce too high
+					from: "alice",
+					tx:   makeUnsignedTxWithTestBlob(2, 1, 2, 2, 4),
+					err:  core.ErrNonceTooHigh,
+				},
+				{ // This should not succeed, fees are low
+					from: "alice",
+					tx:   makeUnsignedTxWithTestBlob(1, 1, 1, 1, 4),
+					err:  txpool.ErrUnderpriced,
+				},
+				{ // This should also not succeed, because of rolling fee calculation
+					from: "alice",
+					tx:   makeUnsignedTxWithTestBlob(1, 1, 1, 1, 4),
+					err:  txpool.ErrUnderpriced,
+				},
+			},
+		},
 	}
 	for i, tt := range tests {
 		// Create a temporary folder for the persistent backend
