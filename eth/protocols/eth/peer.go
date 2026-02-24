@@ -458,6 +458,7 @@ func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList69, l
 		gasUsed := buffer.gasUsed[lastBlock]
 		logSize, err := p.validateLastBlockReceipt(receiptLists, requestId, gasUsed)
 		if err != nil {
+			delete(p.receiptBuffer, requestId)
 			return err
 		}
 		// Update the buffered data and trim the packet to exclude the incomplete block.
