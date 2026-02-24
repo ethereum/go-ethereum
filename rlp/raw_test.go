@@ -247,6 +247,55 @@ func TestRawListAppendRaw(t *testing.T) {
 	}
 }
 
+func TestRawListAppendList(t *testing.T) {
+	var rl1 RawList[uint64]
+	if err := rl1.Append(uint64(1)); err != nil {
+		t.Fatal("append 1 failed:", err)
+	}
+	if err := rl1.Append(uint64(2)); err != nil {
+		t.Fatal("append 2 failed:", err)
+	}
+
+	var rl2 RawList[uint64]
+	if err := rl2.Append(uint64(3)); err != nil {
+		t.Fatal("append 3 failed:", err)
+	}
+	if err := rl2.Append(uint64(4)); err != nil {
+		t.Fatal("append 4 failed:", err)
+	}
+
+	rl1.AppendList(&rl2)
+
+	if rl1.Len() != 4 {
+		t.Fatalf("wrong Len %d, want 4", rl1.Len())
+	}
+	if rl1.Size() != 5 {
+		t.Fatalf("wrong Size %d, want 5", rl1.Size())
+	}
+
+	items, err := rl1.Items()
+	if err != nil {
+		t.Fatal("Items failed:", err)
+	}
+	if !reflect.DeepEqual(items, []uint64{1, 2, 3, 4}) {
+		t.Fatalf("wrong items: %v", items)
+	}
+
+	var empty RawList[uint64]
+	prevLen := rl1.Len()
+	rl1.AppendList(&empty)
+
+	if rl1.Len() != prevLen {
+		t.Fatalf("appending empty list changed Len: got %d, want %d", rl1.Len(), prevLen)
+	}
+
+	empty.AppendList(&rl1)
+
+	if empty.Len() != 4 {
+		t.Fatalf("wrong Len %d, want 4", empty.Len())
+	}
+}
+
 func TestRawListDecodeInvalid(t *testing.T) {
 	tests := []struct {
 		input string
