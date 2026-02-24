@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/holiman/uint256"
 )
 
@@ -178,5 +179,27 @@ func testSendTx(t *testing.T, withLocal bool) {
 		if !errors.Is(err, txpool.ErrInflightTxLimitReached) {
 			t.Fatalf("Unexpected error, want: %v, got: %v", txpool.ErrInflightTxLimitReached, err)
 		}
+	}
+}
+
+func TestAdminCapabilities(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	engine := beacon.New(ethash.NewFaker())
+	chain, _ := core.NewBlockChain(db, gspec, engine, nil)
+
+	eth := &Ethereum{
+		blockchain: chain,
+		config:     &ethconfig.Config{},
+	}
+	api := NewAdminAPI(eth)
+	caps := api.Capabilities()
+
+	// Default HistoryMode is KeepAll → "all"
+	if caps.ChainHistory != "all" {
+		t.Errorf("chainHistory: want %q, got %q", "all", caps.ChainHistory)
+	}
+	// A fresh chain without pruning starts at block 0.
+	if uint64(caps.OldestBlock) != 0 {
+		t.Errorf("oldestBlock: want 0, got %d", caps.OldestBlock)
 	}
 }
