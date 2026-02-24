@@ -179,7 +179,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	addTxs := func(txs []*types.Transaction) []error {
 		return h.txpool.Add(txs, false)
 	}
-
 	validateMeta := func(tx common.Hash, kind byte) error {
 		if h.txpool.Has(tx) {
 			return txpool.ErrAlreadyKnown
@@ -189,8 +188,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return nil
 	}
-
-	h.txFetcher = fetcher.NewTxFetcher(validateMeta, addTxs, fetchTx, h.removePeer)
+	h.txFetcher = fetcher.NewTxFetcher(h.chain, validateMeta, addTxs, fetchTx, h.removePeer)
 	return h, nil
 }
 
