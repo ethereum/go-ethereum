@@ -16,7 +16,7 @@
 
 // Naive stub implementation for tablewriter
 
-package rawdb
+package tablewriter
 
 import (
 	"errors"
@@ -37,7 +37,7 @@ type Table struct {
 	rows    [][]string
 }
 
-func NewTableWriter(w io.Writer) *Table {
+func NewWriter(w io.Writer) *Table {
 	return &Table{out: w}
 }
 
@@ -58,12 +58,12 @@ func (t *Table) SetFooter(footer []string) {
 	t.footer = footer
 }
 
-// AppendBulk sets all data rows for the table at once, replacing any existing rows.
+// AppendBulk appends one or more data rows to the table.
 //
 // Each row must have the same number of columns as the headers, or validation
 // will fail during Render().
 func (t *Table) AppendBulk(rows [][]string) {
-	t.rows = rows
+	t.rows = append(t.rows, rows...)
 }
 
 // Render outputs the complete table to the configured writer. The table is rendered
