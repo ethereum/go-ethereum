@@ -18,7 +18,6 @@ package blobpool
 
 import (
 	"math"
-	"math/bits"
 
 	"github.com/holiman/uint256"
 )
@@ -46,7 +45,10 @@ func evictionPriority1D(basefeeJumps float64, txfeeJumps float64) int {
 	if jumps <= 0 {
 		return int(math.Floor(jumps))
 	}
-	return intLog2(uint(math.Ceil(jumps)))
+	// We only use the negative part for ordering. The positive part is only used
+	// for threshold comparision (with a negative threshold), so the value is almost
+	// irrelevant, as long as it's positive.
+	return int((math.Ceil(jumps)))
 }
 
 // dynamicFeeJumps calculates the log1.125(fee), namely the number of fee jumps
@@ -64,21 +66,5 @@ func dynamicFeeJumps(fee *uint256.Int) float64 {
 	return math.Log(fee.Float64()) / log1_125
 }
 
-// intLog2 is a helper to calculate the integral part of a log2 of an unsigned
-// integer. It is a very specific calculation that's not particularly useful in
-// general, but it's what we need here (it's fast).
-func intLog2(n uint) int {
-	switch {
-	case n == 0:
-		panic("log2(0) is undefined")
-
-	case n < 2048:
-		return bits.UintSize - bits.LeadingZeros(n) - 1
-
-	default:
-		// The input is log1.125(uint256) = log2(uint256) / log2(1.125). At the
-		// most extreme, log2(uint256) will be a bit below 257, and the constant
-		// log2(1.125) ~= 0.17. The larges input thus is ~257 / ~0.17 ~= ~1511.
-		panic("dynamic fee jump diffs cannot reach this")
 	}
 }
