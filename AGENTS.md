@@ -1,8 +1,6 @@
-# AGENTS.md — Guidelines for AI-Assisted Contributions
+# AGENTS
 
-This document provides instructions for AI agents (and their operators) before committing code and creating pull requests on this repository.
-
-## General Guidelines
+## Guidelines
 
 - **Keep changes minimal and focused.** Only modify code directly related to the task at hand. Do not refactor unrelated code, rename existing variables or functions for style, or bundle unrelated fixes into the same commit or PR.
 - **Do not add, remove, or update dependencies** unless the task explicitly requires it.
@@ -98,14 +96,3 @@ Examples:
 - `trie/archiver: streaming subtree archival to fix OOM`
 
 Use the top-level package paths, comma-separated if multiple areas are affected. Only mention the directories with functional changes, interface changes that trickle all over the codebase should not generate an exhaustive list. The description should be a short, lowercase summary of the change.
-
-## Summary
-
-Before creating a PR, confirm:
-
-- [ ] `gofmt` and `goimports` applied to all modified files
-- [ ] `make all` succeeds
-- [ ] `go run ./build/ci.go test` passes
-- [ ] `go run ./build/ci.go lint` passes
-- [ ] `go run ./build/ci.go check_generate` passes
-- [ ] `go run ./build/ci.go check_baddeps` passes
