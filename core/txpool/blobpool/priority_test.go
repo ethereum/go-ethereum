@@ -30,12 +30,12 @@ func TestPriorityCalculation(t *testing.T) {
 		txfee   uint64
 		result  int
 	}{
-		{basefee: 7, txfee: 10, result: 2},                           // 3.02 jumps, 4 ceil, 2 log2
-		{basefee: 17_200_000_000, txfee: 17_200_000_000, result: 0},  // 0 jumps, special case 0 log2
-		{basefee: 9_853_941_692, txfee: 11_085_092_510, result: 0},   // 0.99 jumps, 1 ceil, 0 log2
+		{basefee: 7, txfee: 10, result: 4},                           // 3.02 jumps, 4 ceil
+		{basefee: 17_200_000_000, txfee: 17_200_000_000, result: 0},  // 0 jumps, special case 0
+		{basefee: 9_853_941_692, txfee: 11_085_092_510, result: 1},   // 0.99 jumps, 1 ceil
 		{basefee: 11_544_106_391, txfee: 10_356_781_100, result: -1}, // -0.92 jumps, -1 floor
 		{basefee: 17_200_000_000, txfee: 7, result: -184},            // -183.57 jumps, -184 floor
-		{basefee: 7, txfee: 17_200_000_000, result: 7},               // 183.57 jumps, 184 ceil, 7 log2
+		{basefee: 7, txfee: 17_200_000_000, result: 184},             // 183.57 jumps, 184 ceil
 	}
 	for i, tt := range tests {
 		var (
@@ -69,7 +69,7 @@ func BenchmarkPriorityCalculation(b *testing.B) {
 	blobfee := uint256.NewInt(123_456_789_000) // Completely random, no idea what this will be
 
 	basefeeJumps := dynamicFeeJumps(basefee)
-	blobfeeJumps := dynamicFeeJumps(blobfee)
+	blobfeeJumps := dynamicBlobFeeJumps(blobfee)
 
 	// The transaction's fee cap and blob fee cap are constant across the life
 	// of the transaction, so we can pre-calculate and cache them.
@@ -77,7 +77,7 @@ func BenchmarkPriorityCalculation(b *testing.B) {
 	txBlobfeeJumps := make([]float64, b.N)
 	for i := 0; i < b.N; i++ {
 		txBasefeeJumps[i] = dynamicFeeJumps(uint256.NewInt(rnd.Uint64()))
-		txBlobfeeJumps[i] = dynamicFeeJumps(uint256.NewInt(rnd.Uint64()))
+		txBlobfeeJumps[i] = dynamicBlobFeeJumps(uint256.NewInt(rnd.Uint64()))
 	}
 	b.ResetTimer()
 	b.ReportAllocs()

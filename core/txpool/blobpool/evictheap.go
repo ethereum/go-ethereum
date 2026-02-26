@@ -67,7 +67,7 @@ func newPriceHeap(basefee *uint256.Int, blobfee *uint256.Int, index map[common.A
 func (h *evictHeap) reinit(basefee *uint256.Int, blobfee *uint256.Int, force bool) {
 	// If the update is mostly the same as the old, don't sort pointlessly
 	basefeeJumps := dynamicFeeJumps(basefee)
-	blobfeeJumps := dynamicFeeJumps(blobfee)
+	blobfeeJumps := dynamicBlobFeeJumps(blobfee)
 
 	if !force && math.Abs(h.basefeeJumps-basefeeJumps) < 0.01 && math.Abs(h.blobfeeJumps-blobfeeJumps) < 0.01 { // TODO(karalabe): 0.01 enough, maybe should be smaller? Maybe this optimization is moot?
 		return

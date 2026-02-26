@@ -171,7 +171,7 @@ func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transac
 		blobGas:     tx.BlobGas(),
 	}
 	meta.basefeeJumps = dynamicFeeJumps(meta.execFeeCap)
-	meta.blobfeeJumps = dynamicFeeJumps(meta.blobFeeCap)
+	meta.blobfeeJumps = dynamicBlobFeeJumps(meta.blobFeeCap)
 
 	return meta
 }
@@ -317,14 +317,20 @@ func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transac
 //     the current fee to the transaction's cap:
 //
 //     jumps = floor(log1.125(txfee) - log1.125(basefee))
-
+//
+//     For blob fees, EIP-7892 changed the ratio of target to max blobs, and
+//     with that also the maximum blob fee decrease in a slot from 1.125 to
+//     approx 1.17. therefore, we use:
+//
+//     blobfeeJumps = floor(log1.17(txBlobfee) - log1.17(blobfee))
+//
 //   - The second observation is that when ranking executable blob txs, it
 //     does not make sense to grant a later eviction priority to txs with high
 //     fee caps since it could enable pool wars. As such, any positive priority
 //     will be grouped together.
 //
 //     priority = min(jumps, 0)
-
+//
 //   - The third observation is that the basefee and blobfee move independently,
 //     so there's no way to split mixed txs on their own (A has higher base fee,
 //     B has higher blob fee).

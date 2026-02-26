@@ -25,6 +25,13 @@ import (
 // log1_125 is used in the eviction priority calculation.
 var log1_125 = math.Log(1.125)
 
+// log1_17 is used in the eviction priority calculation for blob fees.
+// EIP-7892 (BPO) changed the ratio of target to max blobs, and with that
+// also the maximum blob fee decrease in a slot from 1.125 to approx 1.17 .
+// Since we want priorities to approximate time, we should change our log
+// calculation for blob fees.
+var log1_17 = log1_125 * 4 / 3
+
 // evictionPriority calculates the eviction priority based on the algorithm
 // described in the BlobPool docs for both fee components.
 //
@@ -66,5 +73,9 @@ func dynamicFeeJumps(fee *uint256.Int) float64 {
 	return math.Log(fee.Float64()) / log1_125
 }
 
+func dynamicBlobFeeJumps(fee *uint256.Int) float64 {
+	if fee.IsZero() {
+		return 0 // can't log2 zero, should never happen outside tests, but don't choke
 	}
+	return math.Log(fee.Float64()) / log1_17
 }
