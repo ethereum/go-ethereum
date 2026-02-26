@@ -164,18 +164,21 @@ func (api *FilterAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
 		for {
 			select {
 			case pTx := <-pendingTxs:
+				var drop bool
 				api.filtersMu.Lock()
 				if f, found := api.filters[pendingTxSub.ID]; found {
 					f.txs = append(f.txs, pTx...)
-					// Cap the queue: drop oldest items when the limit is exceeded
+					// Cap the queue: uninstall filter when the limit is exceeded
 					// to prevent unbounded memory growth if the client polls infrequently.
 					if max := api.maxPendingItems; max > 0 && len(f.txs) > max {
-						log.Debug("Pending tx filter queue overflow, dropping oldest items",
-							"id", pendingTxSub.ID, "dropped", len(f.txs)-max)
-						f.txs = f.txs[len(f.txs)-max:]
+						drop = true
 					}
 				}
 				api.filtersMu.Unlock()
+				if drop {
+					log.Debug("Pending tx filter queue overflow, uninstalling filter", "id", pendingTxSub.ID)
+					api.UninstallFilter(pendingTxSub.ID)
+				}
 			case <-pendingTxSub.Err():
 				api.filtersMu.Lock()
 				delete(api.filters, pendingTxSub.ID)
@@ -246,17 +249,20 @@ func (api *FilterAPI) NewBlockFilter() rpc.ID {
 		for {
 			select {
 			case h := <-headers:
+				var drop bool
 				api.filtersMu.Lock()
 				if f, found := api.filters[headerSub.ID]; found {
 					f.hashes = append(f.hashes, h.Hash())
-					// Cap the queue: drop oldest block hashes when the limit is exceeded.
+					// Cap the queue: uninstall filter when the limit is exceeded.
 					if max := api.maxPendingItems; max > 0 && len(f.hashes) > max {
-						log.Debug("Block filter queue overflow, dropping oldest items",
-							"id", headerSub.ID, "dropped", len(f.hashes)-max)
-						f.hashes = f.hashes[len(f.hashes)-max:]
+						drop = true
 					}
 				}
 				api.filtersMu.Unlock()
+				if drop {
+					log.Debug("Block filter queue overflow, uninstalling filter", "id", headerSub.ID)
+					api.UninstallFilter(headerSub.ID)
+				}
 			case <-headerSub.Err():
 				api.filtersMu.Lock()
 				delete(api.filters, headerSub.ID)
@@ -438,18 +444,21 @@ func (api *FilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 		for {
 			select {
 			case l := <-logs:
+				var drop bool
 				api.filtersMu.Lock()
 				if f, found := api.filters[logsSub.ID]; found {
 					f.logs = append(f.logs, l...)
-					// Cap the queue: drop oldest logs when the limit is exceeded
+					// Cap the queue: uninstall filter when the limit is exceeded
 					// to prevent unbounded memory growth if the client polls infrequently.
 					if max := api.maxPendingItems; max > 0 && len(f.logs) > max {
-						log.Debug("Log filter queue overflow, dropping oldest items",
-							"id", logsSub.ID, "dropped", len(f.logs)-max)
-						f.logs = f.logs[len(f.logs)-max:]
+						drop = true
 					}
 				}
 				api.filtersMu.Unlock()
+				if drop {
+					log.Debug("Log filter queue overflow, uninstalling filter", "id", logsSub.ID)
+					api.UninstallFilter(logsSub.ID)
+				}
 			case <-logsSub.Err():
 				api.filtersMu.Lock()
 				delete(api.filters, logsSub.ID)
