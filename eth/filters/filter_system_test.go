@@ -924,7 +924,7 @@ func TestTransactionReceiptsSubscription(t *testing.T) {
 }
 
 // TestPendingTxFilterQueueCap verifies that the pending transaction polling filter
-// drops the oldest transactions when the queue exceeds MaxPendingItems, preventing
+// uninstalls the filter when the queue exceeds MaxPendingItems, preventing
 // unbounded memory growth when the client polls infrequently.
 func TestPendingTxFilterQueueCap(t *testing.T) {
 	t.Parallel()
@@ -953,33 +953,27 @@ func TestPendingTxFilterQueueCap(t *testing.T) {
 	backend.txFeed.Send(core.NewTxsEvent{Txs: batch1})
 	backend.txFeed.Send(core.NewTxsEvent{Txs: batch2})
 
-	// Poll until we get some results or timeout
-	var collected []common.Hash
+	// Poll until we get an error or timeout
 	timeout := time.Now().Add(2 * time.Second)
+	var gotErr error
 	for time.Now().Before(timeout) {
-		results, err := api.GetFilterChanges(fid)
+		_, err := api.GetFilterChanges(fid)
 		if err != nil {
-			t.Fatalf("GetFilterChanges error: %v", err)
-		}
-		collected = append(collected, results.([]common.Hash)...)
-		if len(collected) > 0 {
+			gotErr = err
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	// The filter must have held at most maxItems transactions at any point.
-	// Since we drain in one poll, collected length should be <= maxItems.
-	if len(collected) > maxItems {
-		t.Errorf("expected at most %d items in capped filter queue, got %d", maxItems, len(collected))
-	}
-	if len(collected) == 0 {
-		t.Error("expected at least some transactions to be received")
+	if gotErr == nil {
+		t.Error("expected filter to be uninstalled and return an error, but got none")
+	} else if !errors.Is(gotErr, errFilterNotFound) {
+		t.Errorf("expected errFilterNotFound, got %v", gotErr)
 	}
 }
 
-// TestBlockFilterQueueCap verifies that the block polling filter drops the oldest
-// block hashes when the queue exceeds MaxPendingItems.
+// TestBlockFilterQueueCap verifies that the block polling filter
+// uninstalls the filter when the queue exceeds MaxPendingItems.
 func TestBlockFilterQueueCap(t *testing.T) {
 	t.Parallel()
 
@@ -1004,31 +998,27 @@ func TestBlockFilterQueueCap(t *testing.T) {
 		backend.chainFeed.Send(core.ChainEvent{Header: blk.Header()})
 	}
 
-	// Poll until we get some results or timeout
-	var collected []common.Hash
+	// Poll until we get an error or timeout
 	timeout := time.Now().Add(2 * time.Second)
+	var gotErr error
 	for time.Now().Before(timeout) {
-		results, err := api.GetFilterChanges(fid)
+		_, err := api.GetFilterChanges(fid)
 		if err != nil {
-			t.Fatalf("GetFilterChanges error: %v", err)
-		}
-		collected = append(collected, results.([]common.Hash)...)
-		if len(collected) > 0 {
+			gotErr = err
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	if len(collected) > maxItems {
-		t.Errorf("expected at most %d block hashes in capped filter queue, got %d", maxItems, len(collected))
-	}
-	if len(collected) == 0 {
-		t.Error("expected at least some block hashes to be received")
+	if gotErr == nil {
+		t.Error("expected filter to be uninstalled and return an error, but got none")
+	} else if !errors.Is(gotErr, errFilterNotFound) {
+		t.Errorf("expected errFilterNotFound, got %v", gotErr)
 	}
 }
 
-// TestLogFilterQueueCap verifies that the log polling filter drops the oldest logs
-// when the queue exceeds MaxPendingItems.
+// TestLogFilterQueueCap verifies that the log polling filter
+// uninstalls the filter when the queue exceeds MaxPendingItems.
 func TestLogFilterQueueCap(t *testing.T) {
 	t.Parallel()
 
@@ -1061,32 +1051,21 @@ func TestLogFilterQueueCap(t *testing.T) {
 	time.Sleep(50 * time.Millisecond) // give subscription time to install
 	backend.logsFeed.Send(allLogs)
 
-	// Poll until we get some results or timeout
-	var collected []*types.Log
+	// Poll until we get an error or timeout
 	timeout := time.Now().Add(2 * time.Second)
+	var gotErr error
 	for time.Now().Before(timeout) {
-		results, err := api.GetFilterChanges(fid)
+		_, err := api.GetFilterChanges(fid)
 		if err != nil {
-			t.Fatalf("GetFilterChanges error: %v", err)
-		}
-		collected = append(collected, results.([]*types.Log)...)
-		if len(collected) > 0 {
+			gotErr = err
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	if len(collected) > maxItems {
-		t.Errorf("expected at most %d logs in capped filter queue, got %d", maxItems, len(collected))
-	}
-	if len(collected) == 0 {
-		t.Error("expected at least some logs to be received")
-	}
-	// The logs we receive must be the NEWEST (highest BlockNumber),
-	// because we drop the oldest.
-	for _, l := range collected {
-		if l.BlockNumber <= uint64(len(allLogs)-maxItems) {
-			t.Errorf("received dropped log with BlockNumber %d (expected only blocks > %d)", l.BlockNumber, len(allLogs)-maxItems)
-		}
+	if gotErr == nil {
+		t.Error("expected filter to be uninstalled and return an error, but got none")
+	} else if !errors.Is(gotErr, errFilterNotFound) {
+		t.Errorf("expected errFilterNotFound, got %v", gotErr)
 	}
 }
