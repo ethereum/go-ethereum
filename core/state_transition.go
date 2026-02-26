@@ -68,11 +68,17 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
+// costPerStateByte needs to be set post-Amsterdam.
+func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation bool, rules params.Rules, costPerStateByte uint64) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
-	if isContractCreation && isHomestead {
-		gas = params.TxGasContractCreation
+	if isContractCreation && rules.IsHomestead {
+		if rules.IsAmsterdam {
+			// TODO fix EIP-8037
+			gas = params.AccountCreationSize * costPerStateByte
+		} else {
+			gas = params.TxGasContractCreation
+		}
 	} else {
 		gas = params.TxGas
 	}
@@ -85,7 +91,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 
 		// Make sure we don't exceed uint64 for all data combinations
 		nonZeroGas := params.TxDataNonZeroGasFrontier
-		if isEIP2028 {
+		if rules.IsIstanbul {
 			nonZeroGas = params.TxDataNonZeroGasEIP2028
 		}
 		if (math.MaxUint64-gas)/nonZeroGas < nz {
@@ -98,7 +104,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 		}
 		gas += z * params.TxDataZeroGas
 
-		if isContractCreation && isEIP3860 {
+		if isContractCreation && rules.IsShanghai {
 			lenWords := toWordSize(dataLen)
 			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
 				return 0, ErrGasUintOverflow
@@ -111,7 +117,11 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
 	}
 	if authList != nil {
-		gas += uint64(len(authList)) * params.CallNewAccountGas
+		if rules.IsAmsterdam {
+			gas += uint64(len(authList)) * costPerStateByte
+		} else {
+			gas += uint64(len(authList)) * params.CallNewAccountGas
+		}
 	}
 	return gas, nil
 }
@@ -443,7 +453,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	)
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
+	gas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules, st.evm.Context.CostPerGasByte)
 	if err != nil {
 		return nil, err
 	}
@@ -506,7 +516,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		if msg.SetCodeAuthorizations != nil {
 			for _, auth := range msg.SetCodeAuthorizations {
 				// Note errors are ignored, we simply skip invalid authorizations here.
-				st.applyAuthorization(&auth)
+				st.applyAuthorization(rules, &auth)
 			}
 		}
 
@@ -605,7 +615,7 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 }
 
 // applyAuthorization applies an EIP-7702 code delegation to the state.
-func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization) error {
+func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization) error {
 	authority, err := st.validateAuthorization(auth)
 	if err != nil {
 		return err
@@ -614,7 +624,13 @@ func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization) 
 	// If the account already exists in state, refund the new account cost
 	// charged in the intrinsic calculation.
 	if st.state.Exist(authority) {
-		st.state.AddRefund(params.CallNewAccountGas - params.TxAuthTupleGas)
+		if rules.IsAmsterdam {
+			newAccountCost := params.AccountCreationSize * st.evm.Context.CostPerGasByte
+			perAuthBasCost := params.AuthorizationCreationSize * st.evm.Context.CostPerGasByte
+			st.state.AddRefund(newAccountCost - perAuthBasCost)
+		} else {
+			st.state.AddRefund(params.CallNewAccountGas - params.TxAuthTupleGas)
+		}
 	}
 
 	// Update nonce and account code.
