@@ -66,6 +66,7 @@ type conn struct {
 	codec     *v5wire.Codec
 	idCounter uint32
 	lastFrom  string
+	lastLocal net.IP
 }
 
 type logger interface {
@@ -201,6 +202,13 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 
 // write sends a packet on the given connection.
 func (tc *conn) write(c net.PacketConn, p v5wire.Packet, challenge *v5wire.Whoareyou) v5wire.Nonce {
+	lip := laddr(c).IP
+	if tc.lastLocal != nil && !tc.lastLocal.Equal(lip) && challenge == nil {
+		// New local endpoint: drop old sessions to avoid reusing them across IPs.
+		tc.codec = v5wire.NewCodec(tc.localNode, tc.localKey, mclock.System{}, nil)
+	}
+	tc.lastLocal = slices.Clone(lip)
+
 	addr := tc.remoteAddr.String()
 	if challenge != nil && tc.lastFrom != "" {
 		addr = tc.lastFrom
