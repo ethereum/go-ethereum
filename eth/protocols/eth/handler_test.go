@@ -591,10 +591,8 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
 		block := backend.chain.GetBlockByNumber(i)
 		hashes = append(hashes, block.Hash())
-		receiptsRLP := backend.chain.GetReceiptsRLP(block.Hash())
-		bodyRLP := backend.chain.GetBodyRLP(block.Hash())
-		tr, _ := blockReceiptsToNetwork(receiptsRLP, bodyRLP)
-		receipts.AppendRaw(tr)
+		br := backend.chain.GetReceiptsByHash(block.Hash())
+		receipts.Append(NewReceiptList(br))
 	}
 
 	// Send the hash request and verify the response
