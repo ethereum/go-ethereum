@@ -140,6 +140,28 @@ type ReceiptList struct {
 	items rlp.RawList[Receipt]
 }
 
+// NewReceiptList creates a receipt list.
+// This is slow, and exists for testing purposes.
+func NewReceiptList(trs []*types.Receipt) *ReceiptList {
+	rl := new(ReceiptList)
+	for _, tr := range trs {
+		r := newReceipt(tr)
+		encoded, _ := rlp.EncodeToBytes(&r)
+		rl.items.AppendRaw(encoded)
+	}
+	return rl
+}
+
+// DecodeRLP decodes a list receipts from the network format.
+func (rl *ReceiptList) DecodeRLP(s *rlp.Stream) error {
+	return rl.items.DecodeRLP(s)
+}
+
+// EncodeRLP encodes the list into the network format of eth/69.
+func (rl *ReceiptList) EncodeRLP(w io.Writer) error {
+	return rl.items.EncodeRLP(w)
+}
+
 // EncodeForStorage encodes a list of receipts for the database.
 // It only strips the first element (TxType) from each receipt's
 // raw RLP without the actual decoding and re-encoding.
@@ -167,28 +189,6 @@ func (rl *ReceiptList) EncodeForStorage() (rlp.RawValue, error) {
 	w.ListEnd(outer)
 	w.Flush()
 	return out.Bytes(), nil
-}
-
-// NewReceiptList creates a receipt list.
-// This is slow, and exists for testing purposes.
-func NewReceiptList(trs []*types.Receipt) *ReceiptList {
-	rl := new(ReceiptList)
-	for _, tr := range trs {
-		r := newReceipt(tr)
-		encoded, _ := rlp.EncodeToBytes(&r)
-		rl.items.AppendRaw(encoded)
-	}
-	return rl
-}
-
-// DecodeRLP decodes a list receipts from the network format.
-func (rl *ReceiptList) DecodeRLP(s *rlp.Stream) error {
-	return rl.items.DecodeRLP(s)
-}
-
-// EncodeRLP encodes the list into the network format of eth/69.
-func (rl *ReceiptList) EncodeRLP(w io.Writer) error {
-	return rl.items.EncodeRLP(w)
 }
 
 // Derivable returns a DerivableList, which can be used to decode
