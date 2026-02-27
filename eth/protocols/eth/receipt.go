@@ -146,6 +146,22 @@ func (rl *ReceiptList) EncodeRLP(w io.Writer) error {
 	return rl.items.EncodeRLP(w)
 }
 
+func (rl *ReceiptList) Derivable() types.DerivableList {
+	var bloomBuf [6]byte
+	write := writeReceiptForHash(&bloomBuf)
+	return newDerivableRawList(&rl.items, write)
+}
+
+// writeReceiptForHash returns a write function that encodes receipts for hash derivation.
+func writeReceiptForHash(bloomBuf *[6]byte) func([]byte, *bytes.Buffer) {
+	return func(data []byte, outbuf *bytes.Buffer) {
+		var r Receipt
+		if rlp.DecodeBytes(data, &r) == nil {
+			r.EncodeForHash(bloomBuf, outbuf)
+		}
+	}
+}
+
 // encodeTypes takes a slice of rlp-encoded receipts, and transactions,
 // and applies the type-encoding on the receipts (for non-legacy receipts).
 // e.g. for non-legacy receipts: receipt-data -> {tx-type || receipt-data}

@@ -435,16 +435,6 @@ func writeTxForHash(tx []byte, buf *bytes.Buffer) {
 	}
 }
 
-// writeReceiptForHash returns a write function that encode receipts for hash derivation.
-func writeReceiptForHash(bloomBuf *[6]byte) func([]byte, *bytes.Buffer) {
-	return func(data []byte, outbuf *bytes.Buffer) {
-		var r Receipt
-		if rlp.DecodeBytes(data, &r) == nil {
-			r.EncodeForHash(bloomBuf, outbuf)
-		}
-	}
-}
-
 func handleReceipts(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of receipts arrived to one of our previous requests
 	res := new(ReceiptsPacket)
@@ -462,14 +452,11 @@ func handleReceipts(backend Backend, msg Decoder, peer *Peer) error {
 		return fmt.Errorf("Receipts: %w", err)
 	}
 
-	var bloomBuf [6]byte
-	writeReceipt := writeReceiptForHash(&bloomBuf)
 	metadata := func() interface{} {
 		hasher := trie.NewStackTrie(nil)
 		hashes := make([]common.Hash, len(receiptLists))
 		for i := range receiptLists {
-			receipts := newDerivableRawList(&receiptLists[i].items, writeReceipt)
-			hashes[i] = types.DeriveSha(receipts, hasher)
+			hashes[i] = types.DeriveSha(receiptLists[i].Derivable(), hasher)
 		}
 		return hashes
 	}
