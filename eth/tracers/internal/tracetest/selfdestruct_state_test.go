@@ -620,7 +620,7 @@ func TestSelfdestructStateTracer(t *testing.T) {
 			}
 			context := core.NewEVMBlockContext(block.Header(), blockchain, nil)
 			evm := vm.NewEVM(context, hookedState, tt.genesis.Config, vm.Config{Tracer: tracer.Hooks()})
-			_, _, err = core.ApplyTransactionWithEVM(msg, new(core.GasPool).AddGas(tx.Gas()), statedb, block.Number(), block.Hash(), block.Time(), tx, uint64(0), evm)
+			_, err = core.ApplyTransactionWithEVM(msg, core.NewGasPool(msg.GasLimit), statedb, block.Number(), block.Hash(), block.Time(), tx, evm)
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}

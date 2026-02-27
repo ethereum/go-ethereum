@@ -56,14 +56,13 @@ func (miner *Miner) maxBlobsPerBlock(time uint64) int {
 // environment is the worker's current environment and holds all
 // information of the sealing block generation.
 type environment struct {
-	signer        types.Signer
-	state         *state.StateDB // apply state changes here
-	tcount        int            // tx count in cycle
-	size          uint64         // size of the block we are building
-	gasPool       *core.GasPool  // available gas used to pack transactions
-	coinbase      common.Address
-	evm           *vm.EVM
-	cumulativeGas uint64
+	signer   types.Signer
+	state    *state.StateDB // apply state changes here
+	tcount   int            // tx count in cycle
+	size     uint64         // size of the block we are building
+	gasPool  *core.GasPool  // available gas used to pack transactions
+	coinbase common.Address
+	evm      *vm.EVM
 
 	header   *types.Header
 	txs      []*types.Transaction
@@ -320,6 +319,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 		state:    state,
 		size:     uint64(header.Size()),
 		coinbase: coinbase,
+		gasPool:  core.NewGasPool(header.GasLimit),
 		header:   header,
 		witness:  state.Witness(),
 		evm:      vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{}),
@@ -373,27 +373,20 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*types.Receipt, error) {
 	var (
 		snap = env.state.Snapshot()
-		gp   = env.gasPool.Gas()
+		gp   = env.gasPool.Snapshot()
 	)
-	receipt, cumulativeGas, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx, env.cumulativeGas)
+	receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
-		env.gasPool.SetGas(gp)
+		env.gasPool.Set(gp)
 		return nil, err
 	}
-	env.cumulativeGas = cumulativeGas
-	env.header.GasUsed += receipt.GasUsed
+	env.header.GasUsed = env.gasPool.Used()
 	return receipt, nil
 }
 
 func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
-	var (
-		isCancun = miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
-		gasLimit = env.header.GasLimit
-	)
-	if env.gasPool == nil {
-		env.gasPool = new(core.GasPool).AddGas(gasLimit)
-	}
+	isCancun := miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
 	for {
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {

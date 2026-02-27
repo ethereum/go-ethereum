@@ -38,12 +38,11 @@ import (
 // BlockGen creates blocks for testing.
 // See GenerateChain for a detailed explanation.
 type BlockGen struct {
-	i             int
-	cumulativeGas uint64
-	cm            *chainMaker
-	parent        *types.Block
-	header        *types.Header
-	statedb       *state.StateDB
+	i       int
+	cm      *chainMaker
+	parent  *types.Block
+	header  *types.Header
+	statedb *state.StateDB
 
 	gasPool     *GasPool
 	txs         []*types.Transaction
@@ -64,7 +63,7 @@ func (b *BlockGen) SetCoinbase(addr common.Address) {
 		panic("coinbase can only be set once")
 	}
 	b.header.Coinbase = addr
-	b.gasPool = new(GasPool).AddGas(b.header.GasLimit)
+	b.gasPool = NewGasPool(b.header.GasLimit)
 }
 
 // SetExtra sets the extra data field of the generated block.
@@ -120,11 +119,12 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 		err          error
 	)
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
-	receipt, b.cumulativeGas, err = ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx, b.cumulativeGas)
+	receipt, err = ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx)
 	if err != nil {
 		panic(err)
 	}
-	b.header.GasUsed += receipt.GasUsed
+	b.header.GasUsed = b.gasPool.Used()
+
 	// Merge the tx-local access event into the "block-local" one, in order to collect
 	// all values, so that the witness can be built.
 	if b.statedb.Database().TrieDB().IsVerkle() {
