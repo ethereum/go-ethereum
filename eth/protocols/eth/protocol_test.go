@@ -121,7 +121,6 @@ func TestMessages(t *testing.T) {
 		txRlps       []rlp.RawValue
 		hashes       []common.Hash
 		receipts     []*types.Receipt
-		receiptsRlp  rlp.RawValue
 
 		err error
 	)
@@ -190,11 +189,6 @@ func TestMessages(t *testing.T) {
 		}
 		miniDeriveFields(receipts[0], 0)
 		miniDeriveFields(receipts[1], 1)
-		rlpData, err := rlp.EncodeToBytes(receipts)
-		if err != nil {
-			t.Fatal(err)
-		}
-		receiptsRlp = rlpData
 	}
 
 	for i, tc := range []struct {
