@@ -230,12 +230,6 @@ type ReceiptsPacket struct {
 // ReceiptsRLPResponse is used for receipts, when we already have it encoded
 type ReceiptsRLPResponse []rlp.RawValue
 
-// ReceiptsRLPPacket is ReceiptsRLPResponse with request ID wrapping.
-type ReceiptsRLPPacket struct {
-	RequestId uint64
-	ReceiptsRLPResponse
-}
-
 // NewPooledTransactionHashesPacket represents a transaction announcement packet on eth/68 and newer.
 type NewPooledTransactionHashesPacket struct {
 	Types  []byte

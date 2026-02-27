@@ -259,14 +259,14 @@ func handleGetReceipts(backend Backend, msg Decoder, peer *Peer) error {
 // ServiceGetReceiptsQuery assembles the response to a receipt query.
 // It does not send the bloom filters for the receipts. It is exposed
 // to allow external packages to test protocol behavior.
-func ServiceGetReceiptsQuery(chain *core.BlockChain, query GetReceiptsRequest) []rlp.RawValue {
+func ServiceGetReceiptsQuery(chain *core.BlockChain, query GetReceiptsRequest) rlp.RawList[*ReceiptList] {
 	// Gather state data until the fetch or network limits is reached
 	var (
 		bytes    int
-		receipts []rlp.RawValue
+		receipts rlp.RawList[*ReceiptList]
 	)
 	for lookups, hash := range query {
-		if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe ||
+		if bytes >= softResponseLimit || receipts.Len() >= maxReceiptsServe ||
 			lookups >= 2*maxReceiptsServe {
 			break
 		}
@@ -288,7 +288,7 @@ func ServiceGetReceiptsQuery(chain *core.BlockChain, query GetReceiptsRequest) [
 				continue
 			}
 		}
-		receipts = append(receipts, results)
+		receipts.AppendRaw(results)
 		bytes += len(results)
 	}
 	return receipts
