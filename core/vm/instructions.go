@@ -946,17 +946,32 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	return nil, errStopToken
 }
 
+// decodeSingle decodes the immediate operand of a backward-compatible DUPN or SWAPN instruction (EIP-8024)
 func decodeSingle(x byte) int {
+	// Depths 1-16 are already covered by the legacy opcodes. The forbidden byte range [91, 127] removes
+	// 37 values from the 256 possible immediates, leaving 219 usable values, so this encoding covers depths
+	// 17 through 235. The immediate is encoded as (x + 111) % 256, where 111 is chosen so that these values
+	// avoid the forbidden range. Decoding is simply the modular inverse (i.e. 111+145=256).
 	return (int(x) + 145) % 256
 }
 
+// decodePair decodes the immediate operand of a backward-compatible EXCHANGE
+// instruction (EIP-8024) into stack indices (n, m) where 1 <= n < m
+// and n + m <= 30. There are 210 such valid pairs, encoded into a single byte
+// that avoids the forbidden range [91, 127].
 func decodePair(x byte) (int, int) {
-	var k int
-	k = int(x ^ 143)
+	// XOR with 143 remaps the forbidden bytes [91, 127] to an unused corner
+	// of the 16x16 grid below.
+	k := int(x ^ 143)
+	// Split into row q and column r of a 16x16 grid. The 210 valid pairs
+	// occupy two triangles within this grid.
 	q, r := k/16, k%16
+	// Upper triangle (q < r): pairs where m <= 16, encoded directly as
+	// (q+1, r+1).
 	if q < r {
 		return q + 1, r + 1
 	}
+	// Lower triangle: pairs where m > 16, recovered as (r+1, 29-q).
 	return r + 1, 29 - q
 }
 
