@@ -9,5 +9,5 @@ import (
 
 type Test struct {
     A eth1.MinerAPI
-    B eth2.GetReceiptsPacket
+    B eth2.GetReceiptsPacket69
 }

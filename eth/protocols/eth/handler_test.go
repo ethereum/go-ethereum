@@ -596,13 +596,110 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 	}
 
 	// Send the hash request and verify the response
-	p2p.Send(peer.app, GetReceiptsMsg, &GetReceiptsPacket{
+	p2p.Send(peer.app, GetReceiptsMsg, &GetReceiptsPacket69{
 		RequestId:          123,
 		GetReceiptsRequest: hashes,
 	})
 	if err := p2p.ExpectMsg(peer.app, ReceiptsMsg, &ReceiptsPacket[*ReceiptList68]{
 		RequestId: 123,
 		List:      receipts,
+	}); err != nil {
+		t.Errorf("receipts mismatch: %v", err)
+	}
+}
+
+func TestGetBlockPartialReceipts(t *testing.T) { testGetBlockPartialReceipts(t, ETH70) }
+
+func testGetBlockPartialReceipts(t *testing.T, protocol int) {
+	// First, generate the chain and overwrite the receipts.
+	generator := func(_ int, block *core.BlockGen) {
+		for j := 0; j < 5; j++ {
+			tx, err := types.SignTx(
+				types.NewTransaction(block.TxNonce(testAddr), testAddr, big.NewInt(1000), params.TxGas, block.BaseFee(), nil),
+				types.LatestSignerForChainID(params.TestChainConfig.ChainID),
+				testKey,
+			)
+			if err != nil {
+				t.Fatalf("failed to sign tx: %v", err)
+			}
+			block.AddTx(tx)
+		}
+	}
+	backend := newTestBackendWithGenerator(4, true, false, generator)
+	defer backend.close()
+
+	blockCutoff := 2
+	receiptCutoff := 4
+
+	// Replace the receipts in the database with larger receipts.
+	targetBlock := backend.chain.GetBlockByNumber(uint64(blockCutoff))
+	receipts := backend.chain.GetReceiptsByHash(targetBlock.Hash())
+	receiptSize := params.MaxTxGas / params.LogDataGas // ~2MiB per receipt
+	for i := range receipts {
+		payload := make([]byte, receiptSize)
+		for j := range payload {
+			payload[j] = byte(i + j)
+		}
+		receipts[i].Logs = []*types.Log{
+			{
+				Address: common.BytesToAddress([]byte{byte(i + 1)}),
+				Data:    payload,
+			},
+		}
+	}
+
+	rawdb.WriteReceipts(backend.db, targetBlock.Hash(), targetBlock.NumberU64(), receipts)
+
+	peer, _ := newTestPeer("peer", uint(protocol), backend)
+	defer peer.close()
+
+	var (
+		hashes         []common.Hash
+		partialReceipt []*ReceiptList69
+	)
+	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
+		block := backend.chain.GetBlockByNumber(i)
+		hashes = append(hashes, block.Hash())
+	}
+	for i := 0; i <= blockCutoff; i++ {
+		block := backend.chain.GetBlockByNumber(uint64(i))
+		trs := backend.chain.GetReceiptsByHash(block.Hash())
+		limit := len(trs)
+		if i == blockCutoff {
+			limit = receiptCutoff
+		}
+		partialReceipt = append(partialReceipt, NewReceiptList69(trs[:limit]))
+	}
+
+	rawPartialReceipt, _ := rlp.EncodeToRawList(partialReceipt)
+
+	p2p.Send(peer.app, GetReceiptsMsg, &GetReceiptsPacket70{
+		RequestId:              123,
+		FirstBlockReceiptIndex: 0,
+		GetReceiptsRequest:     hashes,
+	})
+	if err := p2p.ExpectMsg(peer.app, ReceiptsMsg, &ReceiptsPacket70{
+		RequestId:           123,
+		LastBlockIncomplete: true,
+		List:                rawPartialReceipt,
+	}); err != nil {
+		t.Errorf("receipts mismatch: %v", err)
+	}
+
+	// Simulate the continued request
+	partialReceipt = []*ReceiptList69{NewReceiptList69(receipts[receiptCutoff:])}
+	rawPartialReceipt, _ = rlp.EncodeToRawList(partialReceipt)
+
+	p2p.Send(peer.app, GetReceiptsMsg, &GetReceiptsPacket70{
+		RequestId:              123,
+		FirstBlockReceiptIndex: uint64(receiptCutoff),
+		GetReceiptsRequest:     []common.Hash{hashes[blockCutoff]},
+	})
+
+	if err := p2p.ExpectMsg(peer.app, ReceiptsMsg, &ReceiptsPacket70{
+		RequestId:           123,
+		LastBlockIncomplete: false,
+		List:                rawPartialReceipt,
 	}); err != nil {
 		t.Errorf("receipts mismatch: %v", err)
 	}
@@ -670,10 +767,10 @@ func setup() (*testBackend, *testPeer) {
 }
 
 func FuzzEthProtocolHandlers(f *testing.F) {
-	handlers := eth69
+	handlers := eth70
 	backend, peer := setup()
 	f.Fuzz(func(t *testing.T, code byte, msg []byte) {
-		handler := handlers[uint64(code)%protocolLengths[ETH69]]
+		handler := handlers[uint64(code)%protocolLengths[ETH70]]
 		if handler == nil {
 			return
 		}
