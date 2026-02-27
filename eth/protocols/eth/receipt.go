@@ -90,6 +90,51 @@ func (r *Receipt) bloom(buffer *[6]byte) types.Bloom {
 	return b
 }
 
+// decode assigns the fields of r by decoding the network format.
+func (r *Receipt) decode(input []byte) error {
+	input, _, err := rlp.SplitList(input)
+	if err != nil {
+		return fmt.Errorf("inner list: %v", err)
+	}
+
+	// txType
+	var txType uint64
+	txType, input, err = rlp.SplitUint64(input)
+	if err != nil {
+		return fmt.Errorf("invalid txType: %w", err)
+	}
+	if txType > 0x7f {
+		return fmt.Errorf("invalid txType: too large")
+	}
+	r.TxType = byte(txType)
+
+	// status
+	r.PostStateOrStatus, input, err = rlp.SplitString(input)
+	if err != nil {
+		return fmt.Errorf("invalid postStateOrStatus: %w", err)
+	}
+	if len(r.PostStateOrStatus) > 1 && len(r.PostStateOrStatus) != 32 {
+		return fmt.Errorf("invalid postStateOrStatus length %d", len(r.PostStateOrStatus))
+	}
+
+	// gas
+	r.GasUsed, input, err = rlp.SplitUint64(input)
+	if err != nil {
+		return fmt.Errorf("invalid gasUsed: %w", err)
+	}
+
+	// logs
+	_, rest, err := rlp.SplitList(input)
+	if err != nil {
+		return fmt.Errorf("invalid logs: %w", err)
+	}
+	if len(rest) != 0 {
+		return fmt.Errorf("junk at end of receipt")
+	}
+	r.Logs = input
+	return nil
+}
+
 // ReceiptList is the block receipt list as downloaded by eth/69.
 type ReceiptList struct {
 	items rlp.RawList[Receipt]
@@ -146,6 +191,7 @@ func (rl *ReceiptList) EncodeRLP(w io.Writer) error {
 	return rl.items.EncodeRLP(w)
 }
 
+// Derivable returns a DerivableList, which can be used to decode
 func (rl *ReceiptList) Derivable() types.DerivableList {
 	var bloomBuf [6]byte
 	write := writeReceiptForHash(&bloomBuf)
@@ -156,7 +202,7 @@ func (rl *ReceiptList) Derivable() types.DerivableList {
 func writeReceiptForHash(bloomBuf *[6]byte) func([]byte, *bytes.Buffer) {
 	return func(data []byte, outbuf *bytes.Buffer) {
 		var r Receipt
-		if rlp.DecodeBytes(data, &r) == nil {
+		if r.decode(data) == nil {
 			r.encodeForHash(bloomBuf, outbuf)
 		}
 	}
