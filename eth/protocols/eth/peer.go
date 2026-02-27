@@ -403,8 +403,9 @@ func (p *Peer) requestPartialReceipts(id uint64) error {
 	p.receiptBufferLock.RLock()
 	defer p.receiptBufferLock.RUnlock()
 
+	// Do not re-request for the stale request
 	if _, ok := p.receiptBuffer[id]; !ok {
-		return fmt.Errorf("no partial receipt retreival in progress with id %d", id)
+		return nil
 	}
 	lastBlock := len(p.receiptBuffer[id].list) - 1
 	lastReceipt := p.receiptBuffer[id].list[lastBlock].items.Len()
@@ -434,9 +435,9 @@ func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList69, l
 
 	buffer := p.receiptBuffer[requestId]
 
-	// Do not assign buffer to the response not requested
+	// Short circuit for the canceled response
 	if buffer == nil {
-		return fmt.Errorf("no partial receipt retreival in progress with id %d", requestId)
+		return nil
 	}
 	// If the response is empty, the peer likely does not have the requested receipts.
 	// Forward the empty response to the internal handler regardless. However, note
