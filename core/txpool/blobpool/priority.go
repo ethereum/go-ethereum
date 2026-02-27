@@ -53,7 +53,7 @@ func evictionPriority1D(basefeeJumps float64, txfeeJumps float64) int {
 		return int(math.Floor(jumps))
 	}
 	// We only use the negative part for ordering. The positive part is only used
-	// for threshold comparision (with a negative threshold), so the value is almost
+	// for threshold comparison (with a negative threshold), so the value is almost
 	// irrelevant, as long as it's positive.
 	return int((math.Ceil(jumps)))
 }
