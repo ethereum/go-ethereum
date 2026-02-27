@@ -46,8 +46,8 @@ func newReceipt(tr *types.Receipt) Receipt {
 	return r
 }
 
-// EncodeForHash encodes a receipt for the block receiptsRoot derivation.
-func (r *Receipt) EncodeForHash(bloomBuf *[6]byte, out *bytes.Buffer) {
+// encodeForHash encodes a receipt for the block receiptsRoot derivation.
+func (r *Receipt) encodeForHash(bloomBuf *[6]byte, out *bytes.Buffer) {
 	// For typed receipts, add the tx type.
 	if r.TxType != 0 {
 		out.WriteByte(r.TxType)
@@ -157,7 +157,7 @@ func writeReceiptForHash(bloomBuf *[6]byte) func([]byte, *bytes.Buffer) {
 	return func(data []byte, outbuf *bytes.Buffer) {
 		var r Receipt
 		if rlp.DecodeBytes(data, &r) == nil {
-			r.EncodeForHash(bloomBuf, outbuf)
+			r.encodeForHash(bloomBuf, outbuf)
 		}
 	}
 }
