@@ -282,7 +282,7 @@ func ServiceGetReceiptsQuery(chain *core.BlockChain, query GetReceiptsRequest) r
 				continue
 			}
 			var err error
-			results, err = encodeTypes(results, body)
+			results, err = blockReceiptsToNetwork(results, body)
 			if err != nil {
 				log.Error("Error in block receipts conversion", "hash", hash, "err", err)
 				continue

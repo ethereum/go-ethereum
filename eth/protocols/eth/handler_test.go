@@ -593,7 +593,7 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 		hashes = append(hashes, block.Hash())
 		receiptsRLP := backend.chain.GetReceiptsRLP(block.Hash())
 		bodyRLP := backend.chain.GetBodyRLP(block.Hash())
-		tr, _ := encodeTypes(receiptsRLP, bodyRLP)
+		tr, _ := blockReceiptsToNetwork(receiptsRLP, bodyRLP)
 		receipts.AppendRaw(tr)
 	}
 

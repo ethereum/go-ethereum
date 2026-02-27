@@ -162,10 +162,9 @@ func writeReceiptForHash(bloomBuf *[6]byte) func([]byte, *bytes.Buffer) {
 	}
 }
 
-// encodeTypes takes a slice of rlp-encoded receipts, and transactions,
-// and applies the type-encoding on the receipts (for non-legacy receipts).
-// e.g. for non-legacy receipts: receipt-data -> {tx-type || receipt-data}
-func encodeTypes(blockReceipts, blockBody rlp.RawValue) ([]byte, error) {
+// blockReceiptsToNetwork takes a slice of rlp-encoded receipts, and transactions,
+// and re-encodes them for the network protocol.
+func blockReceiptsToNetwork(blockReceipts, blockBody rlp.RawValue) ([]byte, error) {
 	txTypesIter, err := txTypesInBody(blockBody)
 	if err != nil {
 		return nil, fmt.Errorf("invalid block body: %v", err)

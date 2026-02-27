@@ -105,7 +105,7 @@ func TestReceiptList(t *testing.T) {
 		canonBody, _ := rlp.EncodeToBytes(blockBody)
 
 		// convert from storage encoding to network encoding
-		network, err := encodeTypes(canonDB, canonBody)
+		network, err := blockReceiptsToNetwork(canonDB, canonBody)
 		if err != nil {
 			t.Fatalf("test[%d]: encodeTypes error: %v", i, err)
 		}
