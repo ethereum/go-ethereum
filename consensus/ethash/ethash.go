@@ -23,8 +23,8 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/crypto/keccak"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
-	"golang.org/x/crypto/sha3"
 )
 
 // Ethash is a consensus engine based on proot-of-work implementing the ethash
@@ -101,7 +101,7 @@ func seedHash(block uint64) []byte {
 	if block < epochLength {
 		return seed
 	}
-	keccak256 := makeHasher(sha3.NewLegacyKeccak256())
+	keccak256 := makeHasher(keccak.NewLegacyKeccak256())
 	for i := 0; i < int(block/epochLength); i++ {
 		keccak256(seed, seed)
 	}

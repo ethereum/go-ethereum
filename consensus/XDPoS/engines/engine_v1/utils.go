@@ -7,9 +7,9 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/crypto/keccak"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
-	"golang.org/x/crypto/sha3"
 )
 
 // Get masternodes address from checkpoint Header.
@@ -61,7 +61,7 @@ func getM1M2(masternodes []common.Address, validators []int64, currentHeader *ty
 }
 
 func sigHash(header *types.Header) (hash common.Hash) {
-	hasher := sha3.NewLegacyKeccak256()
+	hasher := keccak.NewLegacyKeccak256()
 
 	enc := []interface{}{
 		header.ParentHash,

@@ -20,8 +20,8 @@ import (
 	"sync"
 
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/crypto/keccak"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
-	"golang.org/x/crypto/sha3"
 )
 
 // hasher is a type used for the trie Hash operation. A hasher has some
@@ -38,7 +38,7 @@ var hasherPool = sync.Pool{
 	New: func() any {
 		return &hasher{
 			tmp:    make([]byte, 0, 550), // cap is as large as a full fullNode.
-			sha:    sha3.NewLegacyKeccak256().(crypto.KeccakState),
+			sha:    keccak.NewLegacyKeccak256().(crypto.KeccakState),
 			encbuf: rlp.NewEncoderBuffer(nil),
 		}
 	},

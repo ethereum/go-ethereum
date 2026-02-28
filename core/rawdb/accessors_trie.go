@@ -22,9 +22,9 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/crypto/keccak"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
-	"golang.org/x/crypto/sha3"
 )
 
 // HashScheme is the legacy hash-based state scheme with which trie nodes are
@@ -50,7 +50,7 @@ const PathScheme = "pathScheme"
 type nodeHasher struct{ sha crypto.KeccakState }
 
 var hasherPool = sync.Pool{
-	New: func() interface{} { return &nodeHasher{sha: sha3.NewLegacyKeccak256().(crypto.KeccakState)} },
+	New: func() interface{} { return &nodeHasher{sha: keccak.NewLegacyKeccak256().(crypto.KeccakState)} },
 }
 
 func newNodeHasher() *nodeHasher       { return hasherPool.Get().(*nodeHasher) }

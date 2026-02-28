@@ -24,7 +24,7 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"golang.org/x/crypto/sha3"
+	"github.com/XinFinOrg/XDPoSChain/crypto/keccak"
 )
 
 // OrderSigner interface for order transaction
@@ -108,7 +108,7 @@ func (ordersign OrderTxSigner) SignatureValues(tx *OrderTransaction, sig []byte)
 
 // OrderCreateHash hash of new order
 func (ordersign OrderTxSigner) OrderCreateHash(tx *OrderTransaction) common.Hash {
-	sha := sha3.NewLegacyKeccak256()
+	sha := keccak.NewLegacyKeccak256()
 	sha.Write(tx.ExchangeAddress().Bytes())
 	sha.Write(tx.UserAddress().Bytes())
 	sha.Write(tx.BaseToken().Bytes())
@@ -128,7 +128,7 @@ func (ordersign OrderTxSigner) OrderCreateHash(tx *OrderTransaction) common.Hash
 
 // OrderCancelHash hash of cancelled order
 func (ordersign OrderTxSigner) OrderCancelHash(tx *OrderTransaction) common.Hash {
-	sha := sha3.NewLegacyKeccak256()
+	sha := keccak.NewLegacyKeccak256()
 	sha.Write(tx.OrderHash().Bytes())
 	sha.Write(common.BigToHash(big.NewInt(int64(tx.Nonce()))).Bytes())
 	sha.Write(tx.UserAddress().Bytes())

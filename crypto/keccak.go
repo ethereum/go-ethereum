@@ -22,17 +22,17 @@ import (
 	"sync"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"golang.org/x/crypto/sha3"
+	"github.com/XinFinOrg/XDPoSChain/crypto/keccak"
 )
 
 // NewKeccakState creates a new KeccakState
 func NewKeccakState() KeccakState {
-	return sha3.NewLegacyKeccak256().(KeccakState)
+	return keccak.NewLegacyKeccak256().(KeccakState)
 }
 
 var hasherPool = sync.Pool{
 	New: func() any {
-		return sha3.NewLegacyKeccak256().(KeccakState)
+		return keccak.NewLegacyKeccak256().(KeccakState)
 	},
 }
 

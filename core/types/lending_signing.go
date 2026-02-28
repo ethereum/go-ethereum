@@ -23,8 +23,8 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/crypto/keccak"
 	"github.com/XinFinOrg/XDPoSChain/log"
-	"golang.org/x/crypto/sha3"
 )
 
 // LendingSigner interface for lending signer transaction
@@ -112,7 +112,7 @@ func (lendingsign LendingTxSigner) LendingCreateHash(tx *LendingTransaction) com
 		"collateral", tx.CollateralToken().Hex(), "lending", tx.LendingToken().Hex(), "quantity", tx.Quantity(), "term", tx.Term(),
 		"interest", tx.Interest(), "side", tx.Side, "status", tx.Status(), "type", tx.Type(), "nonce", tx.Nonce())
 	borrowing := tx.Side() == LendingSideBorrow
-	sha := sha3.NewLegacyKeccak256()
+	sha := keccak.NewLegacyKeccak256()
 	sha.Write(tx.RelayerAddress().Bytes())
 	sha.Write(tx.UserAddress().Bytes())
 	if borrowing {
@@ -140,7 +140,7 @@ func (lendingsign LendingTxSigner) LendingCreateHash(tx *LendingTransaction) com
 
 // LendingCancelHash hash of cancelled lending transaction
 func (lendingsign LendingTxSigner) LendingCancelHash(tx *LendingTransaction) common.Hash {
-	sha := sha3.NewLegacyKeccak256()
+	sha := keccak.NewLegacyKeccak256()
 	sha.Write(common.BigToHash(big.NewInt(int64(tx.Nonce()))).Bytes())
 	sha.Write([]byte(tx.Status()))
 	sha.Write(tx.RelayerAddress().Bytes())
@@ -153,7 +153,7 @@ func (lendingsign LendingTxSigner) LendingCancelHash(tx *LendingTransaction) com
 
 // LendingRepayHash hash of cancelled lending transaction
 func (lendingsign LendingTxSigner) LendingRepayHash(tx *LendingTransaction) common.Hash {
-	sha := sha3.NewLegacyKeccak256()
+	sha := keccak.NewLegacyKeccak256()
 	sha.Write(common.BigToHash(big.NewInt(int64(tx.Nonce()))).Bytes())
 	sha.Write([]byte(tx.Status()))
 	sha.Write(tx.RelayerAddress().Bytes())
@@ -167,7 +167,7 @@ func (lendingsign LendingTxSigner) LendingRepayHash(tx *LendingTransaction) comm
 
 // LendingTopUpHash hash of cancelled lending transaction
 func (lendingsign LendingTxSigner) LendingTopUpHash(tx *LendingTransaction) common.Hash {
-	sha := sha3.NewLegacyKeccak256()
+	sha := keccak.NewLegacyKeccak256()
 	sha.Write(common.BigToHash(big.NewInt(int64(tx.Nonce()))).Bytes())
 	sha.Write([]byte(tx.Status()))
 	sha.Write(tx.RelayerAddress().Bytes())

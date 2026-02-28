@@ -8,8 +8,8 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/crypto/keccak"
 	"github.com/globalsign/mgo/bson"
-	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -183,7 +183,7 @@ func (t *LendingTrade) SetBSON(raw bson.Raw) error {
 }
 
 func (t *LendingTrade) ComputeHash() common.Hash {
-	sha := sha3.NewLegacyKeccak256()
+	sha := keccak.NewLegacyKeccak256()
 	sha.Write(t.InvestingOrderHash.Bytes())
 	sha.Write(t.BorrowingOrderHash.Bytes())
 	return common.BytesToHash(sha.Sum(nil))

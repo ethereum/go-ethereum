@@ -12,8 +12,8 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/crypto/keccak"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
-	"golang.org/x/crypto/sha3"
 )
 
 func TestLendingItem_VerifyLendingSide(t *testing.T) {
@@ -567,7 +567,7 @@ func sendOrder(nonce uint64) {
 }
 
 func computeHash(l *LendingOrderMsg) common.Hash {
-	sha := sha3.NewLegacyKeccak256()
+	sha := keccak.NewLegacyKeccak256()
 	if l.Status == LendingStatusCancelled {
 		sha.Write(l.Hash.Bytes())
 		sha.Write(common.BigToHash(big.NewInt(int64(l.AccountNonce))).Bytes())

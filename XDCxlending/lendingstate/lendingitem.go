@@ -10,8 +10,8 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/crypto/keccak"
 	"github.com/globalsign/mgo/bson"
-	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -308,7 +308,7 @@ func (l *LendingItem) VerifyLendingStatus() error {
 }
 
 func (l *LendingItem) ComputeHash() common.Hash {
-	sha := sha3.NewLegacyKeccak256()
+	sha := keccak.NewLegacyKeccak256()
 	if l.Status == LendingStatusNew {
 		sha.Write(l.Relayer.Bytes())
 		sha.Write(l.UserAddress.Bytes())
