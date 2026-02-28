@@ -19,10 +19,212 @@ package rlp
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
+	"reflect"
 	"testing"
 	"testing/quick"
 )
+
+type rawListTest[T any] struct {
+	input   string
+	content string
+	items   []T
+	length  int
+}
+
+func (test rawListTest[T]) name() string {
+	return fmt.Sprintf("%T-%d", *new(T), test.length)
+}
+
+func (test rawListTest[T]) run(t *testing.T) {
+	// check decoding and properties
+	input := unhex(test.input)
+	inputSize := len(input)
+	var rl RawList[T]
+	if err := DecodeBytes(input, &rl); err != nil {
+		t.Fatal("decode failed:", err)
+	}
+	if l := rl.Len(); l != test.length {
+		t.Fatalf("wrong Len %d, want %d", l, test.length)
+	}
+	if sz := rl.Size(); sz != uint64(inputSize) {
+		t.Fatalf("wrong Size %d, want %d", sz, inputSize)
+	}
+	items, err := rl.Items()
+	if err != nil {
+		t.Fatal("Items failed:", err)
+	}
+	if !reflect.DeepEqual(items, test.items) {
+		t.Fatal("wrong items:", items)
+	}
+	if !bytes.Equal(rl.Content(), unhex(test.content)) {
+		t.Fatalf("wrong Content %x, want %s", rl.Content(), test.content)
+	}
+	if !bytes.Equal(rl.Bytes(), unhex(test.input)) {
+		t.Fatalf("wrong Bytes %x, want %s", rl.Bytes(), test.input)
+	}
+
+	// check iterator
+	it := rl.ContentIterator()
+	i := 0
+	if count := it.Count(); count != test.length {
+		t.Fatalf("iterator has wrong Count %d, want %d", count, test.length)
+	}
+	for it.Next() {
+		var item T
+		if err := DecodeBytes(it.Value(), &item); err != nil {
+			t.Fatalf("item %d decode error: %v", i, err)
+		}
+		if !reflect.DeepEqual(item, items[i]) {
+			t.Fatalf("iterator has wrong item %v at %d", item, i)
+		}
+		i++
+	}
+	if i != test.length {
+		t.Fatalf("iterator produced %d values, want %d", i, test.length)
+	}
+	if it.Err() != nil {
+		t.Fatalf("iterator error: %v", it.Err())
+	}
+
+	// check encoding round trip
+	output, err := EncodeToBytes(&rl)
+	if err != nil {
+		t.Fatal("encode error:", err)
+	}
+	if !bytes.Equal(output, unhex(test.input)) {
+		t.Fatalf("encoding does not round trip: %x", output)
+	}
+
+	// check EncodeToRawList on items produces same bytes
+	encRL, err := EncodeToRawList(test.items)
+	if err != nil {
+		t.Fatal("EncodeToRawList error:", err)
+	}
+	encRLOutput, err := EncodeToBytes(&encRL)
+	if err != nil {
+		t.Fatal("EncodeToBytes of encoded list failed:", err)
+	}
+	if !bytes.Equal(encRLOutput, output) {
+		t.Fatalf("wrong encoding of EncodeToRawList result: %x", encRLOutput)
+	}
+}
+
+func TestRawList(t *testing.T) {
+	tests := []interface {
+		name() string
+		run(t *testing.T)
+	}{
+		rawListTest[uint64]{
+			input:   "C0",
+			content: "",
+			items:   []uint64{},
+			length:  0,
+		},
+		rawListTest[uint64]{
+			input:   "C3010203",
+			content: "010203",
+			items:   []uint64{1, 2, 3},
+			length:  3,
+		},
+		rawListTest[simplestruct]{
+			input:   "C6C20102C20304",
+			content: "C20102C20304",
+			items:   []simplestruct{{1, "\x02"}, {3, "\x04"}},
+			length:  2,
+		},
+		rawListTest[string]{
+			input:   "F83C836161618362626283636363836464648365656583666666836767678368686883696969836A6A6A836B6B6B836C6C6C836D6D6D836E6E6E836F6F6F",
+			content: "836161618362626283636363836464648365656583666666836767678368686883696969836A6A6A836B6B6B836C6C6C836D6D6D836E6E6E836F6F6F",
+			items:   []string{"aaa", "bbb", "ccc", "ddd", "eee", "fff", "ggg", "hhh", "iii", "jjj", "kkk", "lll", "mmm", "nnn", "ooo"},
+			length:  15,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name(), test.run)
+	}
+}
+
+func TestRawListEmpty(t *testing.T) {
+	// zero value list
+	var rl RawList[uint64]
+	b, _ := EncodeToBytes(&rl)
+	if !bytes.Equal(b, unhex("C0")) {
+		t.Fatalf("empty RawList has wrong encoding %x", b)
+	}
+	if !rl.Empty() {
+		t.Fatal("list should be Empty")
+	}
+	if rl.Len() != 0 {
+		t.Fatalf("empty list has Len %d", rl.Len())
+	}
+	if rl.Size() != 1 {
+		t.Fatalf("empty list has Size %d", rl.Size())
+	}
+	if len(rl.Content()) > 0 {
+		t.Fatalf("empty list has non-empty Content")
+	}
+	if !bytes.Equal(rl.Bytes(), []byte{0xC0}) {
+		t.Fatalf("empty list has wrong encoding")
+	}
+
+	// nil pointer
+	var nilptr *RawList[uint64]
+	b, _ = EncodeToBytes(nilptr)
+	if !bytes.Equal(b, unhex("C0")) {
+		t.Fatalf("nil pointer to RawList has wrong encoding %x", b)
+	}
+}
+
+// This checks that *RawList works in an 'optional' context.
+func TestRawListOptional(t *testing.T) {
+	type foo struct {
+		L *RawList[uint64] `rlp:"optional"`
+	}
+	// nil pointer encoding
+	var empty foo
+	b, _ := EncodeToBytes(empty)
+	if !bytes.Equal(b, unhex("C0")) {
+		t.Fatalf("nil pointer to RawList has wrong encoding %x", b)
+	}
+	// decoding
+	var dec foo
+	if err := DecodeBytes(unhex("C0"), &dec); err != nil {
+		t.Fatal(err)
+	}
+	if dec.L != nil {
+		t.Fatal("rawlist was decoded as non-nil")
+	}
+}
+
+func TestRawListAppend(t *testing.T) {
+	var rl RawList[simplestruct]
+
+	v1 := simplestruct{1, "one"}
+	v2 := simplestruct{2, "two"}
+	if err := rl.Append(v1); err != nil {
+		t.Fatal("append 1 failed:", err)
+	}
+	if err := rl.Append(v2); err != nil {
+		t.Fatal("append 2 failed:", err)
+	}
+
+	if rl.Len() != 2 {
+		t.Fatalf("wrong Len %d", rl.Len())
+	}
+	if rl.Size() != 13 {
+		t.Fatalf("wrong Size %d", rl.Size())
+	}
+	if !bytes.Equal(rl.Content(), unhex("C501836F6E65 C5028374776F")) {
+		t.Fatalf("wrong Content %x", rl.Content())
+	}
+	encoded, _ := EncodeToBytes(&rl)
+	if !bytes.Equal(encoded, unhex("CC C501836F6E65 C5028374776F")) {
+		t.Fatalf("wrong encoding %x", encoded)
+	}
+}
 
 func TestCountValues(t *testing.T) {
 	tests := []struct {
