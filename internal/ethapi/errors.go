@@ -85,7 +85,6 @@ const (
 	errCodeClientLimitExceeded     = -38026
 	errCodeInternalError           = -32603
 	errCodeInvalidParams           = -32602
-	errCodeReverted                = -32000
 	errCodeVMError                 = -32015
 )
 
