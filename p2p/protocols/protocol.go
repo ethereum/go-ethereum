@@ -32,7 +32,9 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"time"
 
+	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
 )
 
@@ -216,6 +218,8 @@ func (p *Peer) Drop(err error) {
 // this low level call will be wrapped by libraries providing routed or broadcast sends
 // but often just used to forward and push messages to directly connected peers
 func (p *Peer) Send(msg interface{}) error {
+	defer metrics.GetOrRegisterResettingTimer("peer.send_t", nil).UpdateSince(time.Now())
+	metrics.GetOrRegisterCounter("peer.send", nil).Inc(1)
 	code, found := p.spec.GetCode(msg)
 	if !found {
 		return errorf(ErrInvalidMsgType, "%v", code)

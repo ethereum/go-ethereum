@@ -22,7 +22,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
+	"strconv"
 
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/node"
@@ -98,6 +100,8 @@ type NodeConfig struct {
 	// function to sanction or prevent suggesting a peer
 	Reachable func(id discover.NodeID) bool
 
+	Port uint16
+
 	// LogFile is the log file name of the p2p node at runtime.
 	//
 	// The default value is empty so that the default log writer
@@ -113,23 +117,27 @@ type NodeConfig struct {
 // nodeConfigJSON is used to encode and decode NodeConfig as JSON by encoding
 // all fields as strings
 type nodeConfigJSON struct {
-	ID           string   `json:"id"`
-	PrivateKey   string   `json:"private_key"`
-	Name         string   `json:"name"`
-	Services     []string `json:"services"`
-	LogFile      string   `json:"logfile"`
-	LogVerbosity int      `json:"log_verbosity"`
+	ID              string   `json:"id"`
+	PrivateKey      string   `json:"private_key"`
+	Name            string   `json:"name"`
+	Services        []string `json:"services"`
+	EnableMsgEvents bool     `json:"enable_msg_events"`
+	Port            uint16   `json:"port"`
+	LogFile         string   `json:"logfile"`
+	LogVerbosity    int      `json:"log_verbosity"`
 }
 
 // MarshalJSON implements the json.Marshaler interface by encoding the config
 // fields as strings
 func (n *NodeConfig) MarshalJSON() ([]byte, error) {
 	confJSON := nodeConfigJSON{
-		ID:           n.ID.String(),
-		Name:         n.Name,
-		Services:     n.Lifecycles,
-		LogFile:      n.LogFile,
-		LogVerbosity: int(n.LogVerbosity),
+		ID:              n.ID.String(),
+		Name:            n.Name,
+		Services:        n.Lifecycles,
+		Port:            n.Port,
+		EnableMsgEvents: n.EnableMsgEvents,
+		LogFile:         n.LogFile,
+		LogVerbosity:    int(n.LogVerbosity),
 	}
 	if n.PrivateKey != nil {
 		confJSON.PrivateKey = hex.EncodeToString(crypto.FromECDSA(n.PrivateKey))
@@ -167,6 +175,8 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 
 	n.Name = confJSON.Name
 	n.Lifecycles = confJSON.Services
+	n.Port = confJSON.Port
+	n.EnableMsgEvents = confJSON.EnableMsgEvents
 	n.LogFile = confJSON.LogFile
 	n.LogVerbosity = slog.Level(confJSON.LogVerbosity)
 
@@ -180,13 +190,36 @@ func RandomNodeConfig() *NodeConfig {
 	if err != nil {
 		panic("unable to generate key")
 	}
-	var id discover.NodeID
-	pubkey := crypto.FromECDSAPub(&key.PublicKey)
-	copy(id[:], pubkey[1:])
-	return &NodeConfig{
-		ID:         id,
-		PrivateKey: key,
+
+	id := discover.PubkeyID(&key.PublicKey)
+	port, err := assignTCPPort()
+	if err != nil {
+		panic("unable to assign tcp port")
 	}
+	return &NodeConfig{
+		ID:              id,
+		Name:            fmt.Sprintf("node_%s", id.String()),
+		PrivateKey:      key,
+		Port:            port,
+		EnableMsgEvents: true,
+	}
+}
+
+func assignTCPPort() (uint16, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+	l.Close()
+	_, port, err := net.SplitHostPort(l.Addr().String())
+	if err != nil {
+		return 0, err
+	}
+	p, err := strconv.ParseInt(port, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return uint16(p), nil
 }
 
 // ServiceContext is a collection of options and methods which can be utilised
