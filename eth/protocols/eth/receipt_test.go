@@ -107,7 +107,7 @@ func TestReceiptList(t *testing.T) {
 		// convert from storage encoding to network encoding
 		network, err := blockReceiptsToNetwork(canonDB, canonBody)
 		if err != nil {
-			t.Fatalf("test[%d]: encodeTypes error: %v", i, err)
+			t.Fatalf("test[%d]: blockReceiptsToNetwork error: %v", i, err)
 		}
 
 		// parse as Receipts response list from network encoding
