@@ -104,6 +104,16 @@ const (
 	// maxGappedTxs is the maximum number of gapped transactions kept overall.
 	// This is a safety limit to avoid DoS vectors.
 	maxGapped = 128
+
+	// notifyThreshold is the eviction priority threshold above which a transaction
+	// is considered close enough to being includable to be announced to peers.
+	// Setting this to zero will disable announcements for anyting not immediately
+	// includable. Setting it to -1 allows transactions that are close to being
+	// includable, maybe already in the next block if fees go down, to be announced.
+
+	// Note, this threshold is in the abstract eviction priority space, so its
+	// meaning depends on the current basefee/blobfee and the transaction's fees.
+	announceThreshold = -1
 )
 
 // blobTxMeta is the minimal subset of types.BlobTx necessary to validate and
@@ -114,6 +124,8 @@ type blobTxMeta struct {
 	hash    common.Hash   // Transaction hash to maintain the lookup table
 	vhashes []common.Hash // Blob versioned hashes to maintain the lookup table
 	version byte          // Blob transaction version to determine proof type
+
+	announced bool // Whether the tx has been announced to listeners
 
 	id          uint64 // Storage ID in the pool's persistent store
 	storageSize uint32 // Byte size in the pool's persistent store
@@ -159,7 +171,7 @@ func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transac
 		blobGas:     tx.BlobGas(),
 	}
 	meta.basefeeJumps = dynamicFeeJumps(meta.execFeeCap)
-	meta.blobfeeJumps = dynamicFeeJumps(meta.blobFeeCap)
+	meta.blobfeeJumps = dynamicBlobFeeJumps(meta.blobFeeCap)
 
 	return meta
 }
@@ -209,6 +221,14 @@ func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transac
 //     per account as to prevent propagating too much data before cancelling it
 //     via a normal transaction. It should nonetheless be high enough to support
 //     resurrecting reorged transactions. Perhaps 4-16.
+//
+//   - It is not the role of the blobpool to serve as a storage for limit orders
+//     below market: blob transactions with fee caps way below base fee or blob fee.
+//     Therefore, the propagation of blob transactions that are far from being
+//     includable is suppressed. The pool will only announce blob transactions that
+//     are close to being includable (based on the current fees and the transaction's
+//     fee caps), and will delay the announcement of blob transactions that are far
+//     from being includable until base fee and/or blob fee is reduced.
 //
 //   - Local txs are meaningless. Mining pools historically used local transactions
 //     for payouts or for backdoor deals. With 1559 in place, the basefee usually
@@ -281,46 +301,53 @@ func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transac
 //     solve after every block.
 //
 //   - The first observation is that comparing 1559 base fees or 4844 blob fees
-//     needs to happen in the context of their dynamism. Since these fees jump
-//     up or down in ~1.125 multipliers (at max) across blocks, comparing fees
-//     in two transactions should be based on log1.125(fee) to eliminate noise.
+//     needs to happen in the context of their dynamism. Since base fees are
+//     adjusted continuously and fluctuate, and we want to optimize for effective
+//     miner fees, it is better to disregard small base fee cap differences.
+//     Instead of considering the exact fee cap values, we should group
+//     transactions into buckets based on fee cap values, allowing us to use
+//     the miner tip meaningfully as a splitter inside a bucket.
 //
-//   - The second observation is that the basefee and blobfee move independently,
-//     so there's no way to split mixed txs on their own (A has higher base fee,
-//     B has higher blob fee). Rather than look at the absolute fees, the useful
-//     metric is the max time it can take to exceed the transaction's fee caps.
+//     To create these buckets, rather than looking at the absolute fee
+//     differences, the useful metric is the max time it can take to exceed the
+//     transaction's fee caps. Base fee changes are multiplicative, so we use a
+//     logarithmic scale. Fees jumps up or down in ~1.125 multipliers at max
+//     across blocks, so we use log1.125(fee) and rounding to eliminate noise.
 //     Specifically, we're interested in the number of jumps needed to go from
 //     the current fee to the transaction's cap:
 //
-//     jumps = log1.125(txfee) - log1.125(basefee)
+//     jumps = floor(log1.125(txfee) - log1.125(basefee))
 //
-//   - The third observation is that the base fee tends to hover around rather
-//     than swing wildly. The number of jumps needed from the current fee starts
-//     to get less relevant the higher it is. To remove the noise here too, the
-//     pool will use log(jumps) as the delta for comparing transactions.
+//     For blob fees, EIP-7892 changed the ratio of target to max blobs, and
+//     with that also the maximum blob fee decrease in a slot from 1.125 to
+//     approx 1.17. therefore, we use:
 //
-//     delta = sign(jumps) * log(abs(jumps))
+//     blobfeeJumps = floor(log1.17(txBlobfee) - log1.17(blobfee))
 //
-//   - To establish a total order, we need to reduce the dimensionality of the
+//   - The second observation is that when ranking executable blob txs, it
+//     does not make sense to grant a later eviction priority to txs with high
+//     fee caps since it could enable pool wars. As such, any positive priority
+//     will be grouped together.
+//
+//     priority = min(jumps, 0)
+//
+//   - The third observation is that the basefee and blobfee move independently,
+//     so there's no way to split mixed txs on their own (A has higher base fee,
+//     B has higher blob fee).
+//
+//     To establish a total order, we need to reduce the dimensionality of the
 //     two base fees (log jumps) to a single value. The interesting aspect from
 //     the pool's perspective is how fast will a tx get executable (fees going
 //     down, crossing the smaller negative jump counter) or non-executable (fees
 //     going up, crossing the smaller positive jump counter). As such, the pool
 //     cares only about the min of the two delta values for eviction priority.
 //
-//     priority = min(deltaBasefee, deltaBlobfee)
+//     priority = min(deltaBasefee, deltaBlobfee, 0)
 //
 //   - The above very aggressive dimensionality and noise reduction should result
 //     in transaction being grouped into a small number of buckets, the further
 //     the fees the larger the buckets. This is good because it allows us to use
 //     the miner tip meaningfully as a splitter.
-//
-//   - For the scenario where the pool does not contain non-executable blob txs
-//     anymore, it does not make sense to grant a later eviction priority to txs
-//     with high fee caps since it could enable pool wars. As such, any positive
-//     priority will be grouped together.
-//
-//     priority = min(deltaBasefee, deltaBlobfee, 0)
 //
 // Optimisation tradeoffs:
 //
@@ -470,6 +497,20 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	}
 	p.evict = newPriceHeap(basefee, blobfee, p.index)
 
+	// Guess what was announced. This is needed because we don't want to
+	// participate in the diffusion of transactions where inclusion is blocked by
+	// a low base fee transaction. Since we don't persist that info, the best
+	// we can do is to assume that anything that could have been announced
+	// at current prices, actually was.
+	for addr := range p.index {
+		for _, tx := range p.index[addr] {
+			tx.announced = p.isAnnouncable(tx)
+			if !tx.announced {
+				break
+			}
+		}
+	}
+
 	// Pool initialized, attach the blob limbo to it to track blobs included
 	// recently but not yet finalized
 	p.limbo, err = newLimbo(p.chain.Config(), limbodir)
@@ -517,6 +558,7 @@ func (p *BlobPool) Close() error {
 
 // parseTransaction is a callback method on pool creation that gets called for
 // each transaction on disk to create the in-memory metadata index.
+// Announced state is not initialized here, it needs to be iniitalized seprately.
 func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 	tx := new(types.Transaction)
 	if err := rlp.DecodeBytes(blob, tx); err != nil {
@@ -893,6 +935,37 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	}
 	p.evict.reinit(basefee, blobfee, false)
 
+	// Announce transactions that became announcable due to fee changes
+	var announcable []*types.Transaction
+	for addr, txs := range p.index {
+		for i, meta := range txs {
+			if !meta.announced && (i == 0 || txs[i-1].announced) && p.isAnnouncable(meta) {
+				// Load the full transaction and strip the sidecar before announcing
+				// TODO: this is a bit ugly, as we have everything needed in meta already
+				data, err := p.store.Get(meta.id)
+				// Technically, we are supposed to set announced only if Get is successful.
+				// However, Get failing here indicates a more serious issue (data loss),
+				// so we set announced anyway to avoid repeated attempts.
+				meta.announced = true
+				if err != nil {
+					log.Error("Blobs missing for announcable transaction", "from", addr, "nonce", meta.nonce, "id", meta.id, "err", err)
+					continue
+				}
+				var tx types.Transaction
+				if err = rlp.DecodeBytes(data, &tx); err != nil {
+					log.Error("Blobs corrupted for announcable transaction", "from", addr, "nonce", meta.nonce, "id", meta.id, "err", err)
+					continue
+				}
+				announcable = append(announcable, tx.WithoutBlobTxSidecar())
+				log.Trace("Blob transaction now announcable", "from", addr, "nonce", meta.nonce, "id", meta.id, "hash", tx.Hash())
+			}
+		}
+	}
+	if len(announcable) > 0 {
+		p.discoverFeed.Send(core.NewTxsEvent{Txs: announcable})
+	}
+
+	// Update the basefee and blobfee metrics
 	basefeeGauge.Update(int64(basefee.Uint64()))
 	blobfeeGauge.Update(int64(blobfee.Uint64()))
 	p.updateStorageMetrics()
@@ -1673,9 +1746,15 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 
 	addValidMeter.Mark(1)
 
-	// Notify all listeners of the new arrival
-	p.discoverFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
-	p.insertFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
+	// Transaction was addded successfully, but we only announce if it is (close to being)
+	// includable and the previous one was already announced.
+	if p.isAnnouncable(meta) && (meta.nonce == next || (len(txs) > 1 && txs[offset-1].announced)) {
+		meta.announced = true
+		p.discoverFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
+		p.insertFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
+	} else {
+		log.Trace("Blob transaction not announcable yet", "hash", tx.Hash(), "nonce", tx.Nonce())
+	}
 
 	//check the gapped queue for this account and try to promote
 	if gtxs, ok := p.gapped[from]; checkGapped && ok && len(gtxs) > 0 {
@@ -1997,6 +2076,15 @@ func (p *BlobPool) evictGapped() {
 			p.gapped[from] = keep
 		}
 	}
+}
+
+// isAnnouncable checks whether a transaction is announcable based on its
+// fee parameters and announceThreshold.
+func (p *BlobPool) isAnnouncable(meta *blobTxMeta) bool {
+	if evictionPriority(p.evict.basefeeJumps, meta.basefeeJumps, p.evict.blobfeeJumps, meta.blobfeeJumps) >= announceThreshold {
+		return true
+	}
+	return false
 }
 
 // Stats retrieves the current pool stats, namely the number of pending and the
