@@ -8,8 +8,10 @@ import (
 )
 
 func getOrRegisterRuntimeHistogram(name string, scale float64, r Registry) *runtimeHistogram {
-	constructor := func() Histogram { return newRuntimeHistogram(scale) }
-	return getOrRegister(name, constructor, r).(*runtimeHistogram)
+	if r == nil {
+		r = DefaultRegistry
+	}
+	return r.GetOrRegister(name, func() any { return newRuntimeHistogram(scale) }).(*runtimeHistogram)
 }
 
 // runtimeHistogram wraps a runtime/metrics histogram.
