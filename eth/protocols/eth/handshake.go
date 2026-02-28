@@ -36,62 +36,6 @@ const (
 // Handshake executes the eth protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
 func (p *Peer) Handshake(networkID uint64, chain forkid.Blockchain, rangeMsg BlockRangeUpdatePacket) error {
-	switch p.version {
-	case ETH69:
-		return p.handshake69(networkID, chain, rangeMsg)
-	case ETH68:
-		return p.handshake68(networkID, chain)
-	default:
-		return errors.New("unsupported protocol version")
-	}
-}
-
-func (p *Peer) handshake68(networkID uint64, chain forkid.Blockchain) error {
-	var (
-		genesis    = chain.Genesis()
-		latest     = chain.CurrentHeader()
-		forkID     = forkid.NewID(chain.Config(), genesis, latest.Number.Uint64(), latest.Time)
-		forkFilter = forkid.NewFilter(chain)
-	)
-	errc := make(chan error, 2)
-	go func() {
-		pkt := &StatusPacket68{
-			ProtocolVersion: uint32(p.version),
-			NetworkID:       networkID,
-			Head:            latest.Hash(),
-			Genesis:         genesis.Hash(),
-			ForkID:          forkID,
-		}
-		errc <- p2p.Send(p.rw, StatusMsg, pkt)
-	}()
-	var status StatusPacket68 // safe to read after two values have been received from errc
-	go func() {
-		errc <- p.readStatus68(networkID, &status, genesis.Hash(), forkFilter)
-	}()
-
-	return waitForHandshake(errc, p)
-}
-
-func (p *Peer) readStatus68(networkID uint64, status *StatusPacket68, genesis common.Hash, forkFilter forkid.Filter) error {
-	if err := p.readStatusMsg(status); err != nil {
-		return err
-	}
-	if status.NetworkID != networkID {
-		return fmt.Errorf("%w: %d (!= %d)", errNetworkIDMismatch, status.NetworkID, networkID)
-	}
-	if uint(status.ProtocolVersion) != p.version {
-		return fmt.Errorf("%w: %d (!= %d)", errProtocolVersionMismatch, status.ProtocolVersion, p.version)
-	}
-	if status.Genesis != genesis {
-		return fmt.Errorf("%w: %x (!= %x)", errGenesisMismatch, status.Genesis, genesis)
-	}
-	if err := forkFilter(status.ForkID); err != nil {
-		return fmt.Errorf("%w: %v", errForkIDRejected, err)
-	}
-	return nil
-}
-
-func (p *Peer) handshake69(networkID uint64, chain forkid.Blockchain, rangeMsg BlockRangeUpdatePacket) error {
 	var (
 		genesis    = chain.Genesis()
 		latest     = chain.CurrentHeader()
@@ -101,7 +45,7 @@ func (p *Peer) handshake69(networkID uint64, chain forkid.Blockchain, rangeMsg B
 
 	errc := make(chan error, 2)
 	go func() {
-		pkt := &StatusPacket69{
+		pkt := &StatusPacket{
 			ProtocolVersion: uint32(p.version),
 			NetworkID:       networkID,
 			Genesis:         genesis.Hash(),
@@ -112,15 +56,15 @@ func (p *Peer) handshake69(networkID uint64, chain forkid.Blockchain, rangeMsg B
 		}
 		errc <- p2p.Send(p.rw, StatusMsg, pkt)
 	}()
-	var status StatusPacket69 // safe to read after two values have been received from errc
+	var status StatusPacket // safe to read after two values have been received from errc
 	go func() {
-		errc <- p.readStatus69(networkID, &status, genesis.Hash(), forkFilter)
+		errc <- p.readStatus(networkID, &status, genesis.Hash(), forkFilter)
 	}()
 
 	return waitForHandshake(errc, p)
 }
 
-func (p *Peer) readStatus69(networkID uint64, status *StatusPacket69, genesis common.Hash, forkFilter forkid.Filter) error {
+func (p *Peer) readStatus(networkID uint64, status *StatusPacket, genesis common.Hash, forkFilter forkid.Filter) error {
 	if err := p.readStatusMsg(status); err != nil {
 		return err
 	}
