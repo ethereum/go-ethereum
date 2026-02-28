@@ -703,9 +703,7 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
 	}
 
 	if tracer := evm.Config.Tracer; tracer != nil {
-		if tracer.OnSystemCallStart != nil {
-			tracer.OnSystemCallStart()
-		}
+		onSystemCallStart(tracer, evm.GetVMContext())
 		if tracer.OnSystemCallEnd != nil {
 			defer tracer.OnSystemCallEnd()
 		}
@@ -734,4 +732,12 @@ func historyStorageKey(number uint64) common.Hash {
 	var key common.Hash
 	binary.BigEndian.PutUint64(key[24:], ringIndex)
 	return key
+}
+
+func onSystemCallStart(tracer *tracing.Hooks, ctx *tracing.VMContext) {
+	if tracer.OnSystemCallStartV2 != nil {
+		tracer.OnSystemCallStartV2(ctx)
+	} else if tracer.OnSystemCallStart != nil {
+		tracer.OnSystemCallStart()
+	}
 }
