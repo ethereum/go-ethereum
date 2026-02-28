@@ -143,6 +143,8 @@ func (r *StandardRegistry) GetAll() map[string]map[string]interface{} {
 			values["value"] = metric.Snapshot().Value()
 		case *GaugeFloat64:
 			values["value"] = metric.Snapshot().Value()
+		case *GaugeInfo:
+			values["value"] = metric.Snapshot().Value()
 		case *Healthcheck:
 			values["error"] = nil
 			metric.Check()
