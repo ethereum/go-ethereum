@@ -146,7 +146,7 @@ func TestRewardBalance(t *testing.T) {
 		logCaps[i] = &logCap{accounts[randIndex].From.String(), randCap}
 	}
 
-	foundationAddr := common.FoudationAddrBinary
+	foundationAddr := common.FoundationAddrBinary
 	totalReward := new(big.Int).SetInt64(15 * 1000)
 	rewards, err := GetRewardBalancesRate(foundationAddr, acc3Addr, totalReward, baseValidator)
 	if err != nil {
@@ -179,7 +179,7 @@ func TestRewardBalance(t *testing.T) {
 	}
 }
 
-func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common.Address, totalReward *big.Int, validator *contractValidator.XDCValidator) (map[common.Address]*big.Int, error) {
+func GetRewardBalancesRate(foundationWalletAddr common.Address, masterAddr common.Address, totalReward *big.Int, validator *contractValidator.XDCValidator) (map[common.Address]*big.Int, error) {
 	owner := GetCandidatesOwnerBySigner(validator, masterAddr)
 	balances := make(map[common.Address]*big.Int)
 	rewardMaster := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(common.RewardMasterPercent))
@@ -226,9 +226,9 @@ func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common
 		}
 	}
 
-	foudationReward := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(common.RewardFoundationPercent))
-	foudationReward = new(big.Int).Div(foudationReward, new(big.Int).SetInt64(100))
-	balances[foudationWalletAddr] = foudationReward
+	foundationReward := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(common.RewardFoundationPercent))
+	foundationReward = new(big.Int).Div(foundationReward, new(big.Int).SetInt64(100))
+	balances[foundationWalletAddr] = foundationReward
 
 	jsonHolders, err := json.Marshal(balances)
 	if err != nil {

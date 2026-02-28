@@ -59,7 +59,7 @@ func TestHookRewardV2(t *testing.T) {
 		a, _ := big.NewInt(0).SetString("225000000000000000000", 10)
 		assert.Zero(t, a.Cmp(r[owner]))
 		b, _ := big.NewInt(0).SetString("25000000000000000000", 10)
-		assert.Zero(t, b.Cmp(r[config.XDPoS.FoudationWalletAddr]))
+		assert.Zero(t, b.Cmp(r[config.XDPoS.FoundationWalletAddr]))
 	}
 	header2685 := blockchain.GetHeaderByNumber(config.XDPoS.Epoch*2 + 885)
 	header2716 := blockchain.GetHeaderByNumber(config.XDPoS.Epoch*3 + 16)
@@ -81,7 +81,7 @@ func TestHookRewardV2(t *testing.T) {
 		a, _ := big.NewInt(0).SetString("225000000000000000000", 10)
 		assert.Zero(t, a.Cmp(r[owner]))
 		b, _ := big.NewInt(0).SetString("25000000000000000000", 10)
-		assert.Zero(t, b.Cmp(r[config.XDPoS.FoudationWalletAddr]))
+		assert.Zero(t, b.Cmp(r[config.XDPoS.FoundationWalletAddr]))
 	}
 	// if no signing tx, then reward will be 0
 	header4499 := blockchain.GetHeaderByNumber(config.XDPoS.Epoch*5 - 1)
@@ -151,14 +151,14 @@ func TestHookRewardV2SplitReward(t *testing.T) {
 			a, _ := big.NewInt(0).SetString("149999999999999999999", 10)
 			assert.Zero(t, a.Cmp(r[owner]))
 			b, _ := big.NewInt(0).SetString("16666666666666666666", 10)
-			assert.Zero(t, b.Cmp(r[config.XDPoS.FoudationWalletAddr]))
+			assert.Zero(t, b.Cmp(r[config.XDPoS.FoundationWalletAddr]))
 		case signer:
 			r := x.(map[common.Address]*big.Int)
 			owner := parentState.GetCandidateOwner(addr)
 			a, _ := big.NewInt(0).SetString("74999999999999999999", 10)
 			assert.Zero(t, a.Cmp(r[owner]))
 			b, _ := big.NewInt(0).SetString("8333333333333333333", 10)
-			assert.Zero(t, b.Cmp(r[config.XDPoS.FoudationWalletAddr]))
+			assert.Zero(t, b.Cmp(r[config.XDPoS.FoundationWalletAddr]))
 		default:
 			assert.Fail(t, "wrong reward")
 		}
@@ -234,14 +234,14 @@ func TestHookRewardAfterUpgrade(t *testing.T) {
 			a, _ := big.NewInt(0).SetString("450000000000000000000", 10)
 			assert.Zero(t, a.Cmp(r[owner]), "real reward is", r[owner])
 			b, _ := big.NewInt(0).SetString("50000000000000000000", 10)
-			assert.Zero(t, b.Cmp(r[config.XDPoS.FoudationWalletAddr]), "real reward is", r[config.XDPoS.FoudationWalletAddr])
+			assert.Zero(t, b.Cmp(r[config.XDPoS.FoundationWalletAddr]), "real reward is", r[config.XDPoS.FoundationWalletAddr])
 		case signer:
 			r := x.(map[common.Address]*big.Int)
 			owner := parentState.GetCandidateOwner(addr)
 			a, _ := big.NewInt(0).SetString("450000000000000000000", 10)
 			assert.Zero(t, a.Cmp(r[owner]), "real reward is", r[owner])
 			b, _ := big.NewInt(0).SetString("50000000000000000000", 10)
-			assert.Zero(t, b.Cmp(r[config.XDPoS.FoudationWalletAddr]), "real reward is", r[config.XDPoS.FoudationWalletAddr])
+			assert.Zero(t, b.Cmp(r[config.XDPoS.FoundationWalletAddr]), "real reward is", r[config.XDPoS.FoundationWalletAddr])
 		default:
 			assert.Fail(t, "wrong reward")
 		}
@@ -274,14 +274,14 @@ func TestHookRewardAfterUpgrade(t *testing.T) {
 			a, _ := big.NewInt(0).SetString("360000000000000000000", 10)
 			assert.Zero(t, a.Cmp(r[owner]), "real reward is", r[owner])
 			b, _ := big.NewInt(0).SetString("40000000000000000000", 10)
-			assert.Zero(t, b.Cmp(r[config.XDPoS.FoudationWalletAddr]), "real reward is", r[config.XDPoS.FoudationWalletAddr])
+			assert.Zero(t, b.Cmp(r[config.XDPoS.FoundationWalletAddr]), "real reward is", r[config.XDPoS.FoundationWalletAddr])
 		case protector2Addr:
 			r := x.(map[common.Address]*big.Int)
 			owner := parentState.GetCandidateOwner(addr)
 			a, _ := big.NewInt(0).SetString("360000000000000000000", 10)
 			assert.Zero(t, a.Cmp(r[owner]), "real reward is", r[owner])
 			b, _ := big.NewInt(0).SetString("40000000000000000000", 10)
-			assert.Zero(t, b.Cmp(r[config.XDPoS.FoudationWalletAddr]), "real reward is", r[config.XDPoS.FoudationWalletAddr])
+			assert.Zero(t, b.Cmp(r[config.XDPoS.FoundationWalletAddr]), "real reward is", r[config.XDPoS.FoundationWalletAddr])
 		default:
 			assert.Fail(t, "wrong reward")
 		}
@@ -296,7 +296,7 @@ func TestHookRewardAfterUpgrade(t *testing.T) {
 		a, _ := big.NewInt(0).SetString("270112500000000000000", 10) // this value tests the float64 reward
 		assert.Zero(t, a.Cmp(r[owner]), "real reward is", r[owner])
 		b, _ := big.NewInt(0).SetString("30012500000000000000", 10) // this value tests the float64 reward
-		assert.Zero(t, b.Cmp(r[config.XDPoS.FoudationWalletAddr]), "real reward is", r[config.XDPoS.FoudationWalletAddr])
+		assert.Zero(t, b.Cmp(r[config.XDPoS.FoundationWalletAddr]), "real reward is", r[config.XDPoS.FoundationWalletAddr])
 	}
 	epochNum := uint64(3)
 	totalMinted := statedb.GetPostMinted(epochNum).Big()

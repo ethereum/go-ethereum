@@ -52,7 +52,7 @@ var (
 	BlockSignersBinary                     = HexToAddress("0x0000000000000000000000000000000000000089")
 	MasternodeVotingSMCBinary              = HexToAddress("0x0000000000000000000000000000000000000088")
 	RandomizeSMCBinary                     = HexToAddress("0x0000000000000000000000000000000000000090")
-	FoudationAddrBinary                    = HexToAddress("0x0000000000000000000000000000000000000068")
+	FoundationAddrBinary                   = HexToAddress("0x0000000000000000000000000000000000000068")
 	TeamAddrBinary                         = HexToAddress("0x0000000000000000000000000000000000000099")
 	XDCXAddrBinary                         = HexToAddress("0x0000000000000000000000000000000000000091")
 	TradingStateAddrBinary                 = HexToAddress("0x0000000000000000000000000000000000000092")

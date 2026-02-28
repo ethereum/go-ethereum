@@ -13,7 +13,7 @@
       "reward": 250,
       "rewardCheckpoint": 30,
       "gap": 10,
-      "foudationWalletAddr": "0x0000000000000000000000000000000000000068"
+      "foundationWalletAddr": "0x0000000000000000000000000000000000000068"
     }
   },
   "nonce": "0x0",

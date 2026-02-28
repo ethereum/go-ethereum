@@ -75,7 +75,7 @@ func NewGenesisInput() *GenesisInput {
 		CertThreshold:           0.667,
 		StakingThreshold:        10_000_000, // 10M
 		RewardYield:             10,
-		FoundationWalletAddress: common.FoudationAddrBinary,
+		FoundationWalletAddress: common.FoundationAddrBinary,
 	}
 }
 
@@ -324,9 +324,9 @@ func (w *wizard) makeGenesis() {
 		fmt.Println()
 		fmt.Println("What is foundation wallet address (collect 10% of all rewards)? (default = xdc0000000000000000000000000000000000000068)")
 		if input != nil {
-			genesis.Config.XDPoS.FoudationWalletAddr = input.FoundationWalletAddress
+			genesis.Config.XDPoS.FoundationWalletAddr = input.FoundationWalletAddress
 		} else {
-			genesis.Config.XDPoS.FoudationWalletAddr = w.readDefaultAddress(common.FoudationAddrBinary)
+			genesis.Config.XDPoS.FoundationWalletAddr = w.readDefaultAddress(common.FoundationAddrBinary)
 		}
 
 		// Validator Smart Contract Code
@@ -370,7 +370,7 @@ func (w *wizard) makeGenesis() {
 		}
 
 		fmt.Println()
-		fmt.Println("Which accounts are allowed to confirm in Foudation MultiSignWallet?")
+		fmt.Println("Which accounts are allowed to confirm in Foundation MultiSignWallet?")
 		var owners []common.Address
 		if input != nil {
 			owners = append(owners, input.MasternodesOwner)
@@ -387,7 +387,7 @@ func (w *wizard) makeGenesis() {
 		}
 
 		fmt.Println()
-		fmt.Println("How many require for confirm tx in Foudation MultiSignWallet? (default = 1)")
+		fmt.Println("How many require for confirm tx in Foundation MultiSignWallet? (default = 1)")
 		var required uint64
 		if input != nil {
 			required = 1
@@ -407,7 +407,7 @@ func (w *wizard) makeGenesis() {
 		fBalance := big.NewInt(0) // 16m
 		fBalance.Add(fBalance, big.NewInt(16*1000*1000))
 		fBalance.Mul(fBalance, big.NewInt(1000000000000000000))
-		genesis.Alloc[common.FoudationAddrBinary] = types.Account{
+		genesis.Alloc[common.FoundationAddrBinary] = types.Account{
 			Balance: fBalance,
 			Code:    code,
 			Storage: storage,

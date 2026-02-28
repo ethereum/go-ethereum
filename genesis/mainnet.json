@@ -13,7 +13,7 @@
       "reward": 5000,
       "rewardCheckpoint": 900,
       "gap": 450,
-      "foudationWalletAddr": "xdc92a289fe95a85c53b8d0d113cbaef0c1ec98ac65"
+      "foundationWalletAddr": "xdc92a289fe95a85c53b8d0d113cbaef0c1ec98ac65"
     }
   },
   "nonce": "0x0",

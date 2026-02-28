@@ -268,7 +268,7 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 	// Hook calculates reward for masternodes
 	adaptor.EngineV2.HookReward = func(chain consensus.ChainReader, stateBlock vm.StateDB, parentState *state.StateDB, header *types.Header) (map[string]interface{}, error) {
 		number := header.Number.Uint64()
-		foundationWalletAddr := chain.Config().XDPoS.FoudationWalletAddr
+		foundationWalletAddr := chain.Config().XDPoS.FoundationWalletAddr
 		if foundationWalletAddr == (common.Address{}) {
 			log.Error("Foundation Wallet Address is empty", "error", foundationWalletAddr)
 			return nil, errors.New("foundation wallet address is empty")

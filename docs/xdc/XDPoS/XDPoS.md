@@ -535,7 +535,7 @@ Response:
       "reward": 5000,
       "rewardCheckpoint": 900,
       "gap": 450,
-      "foudationWalletAddr": "0x92a289fe95a85c53b8d0d113cbaef0c1ec98ac65",
+      "foundationWalletAddr": "0x92a289fe95a85c53b8d0d113cbaef0c1ec98ac65",
       "SkipV1Validation": false,
       "v2": {
         "switchBlock": 80370000,

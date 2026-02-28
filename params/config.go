@@ -234,12 +234,12 @@ var (
 		EIP158Block:    big.NewInt(3),
 		ByzantiumBlock: big.NewInt(4),
 		XDPoS: &XDPoSConfig{
-			Period:              2,
-			Epoch:               900,
-			Reward:              5000,
-			RewardCheckpoint:    900,
-			Gap:                 450,
-			FoudationWalletAddr: common.HexToAddress("xdc92a289fe95a85c53b8d0d113cbaef0c1ec98ac65"),
+			Period:               2,
+			Epoch:                900,
+			Reward:               5000,
+			RewardCheckpoint:     900,
+			Gap:                  450,
+			FoundationWalletAddr: common.HexToAddress("xdc92a289fe95a85c53b8d0d113cbaef0c1ec98ac65"),
 			V2: &V2{
 				SwitchEpoch:   common.MainnetConstant.TIPV2SwitchBlock.Uint64() / 900,
 				SwitchBlock:   common.MainnetConstant.TIPV2SwitchBlock,
@@ -275,12 +275,12 @@ var (
 		ByzantiumBlock:      big.NewInt(4),
 		ConstantinopleBlock: nil,
 		XDPoS: &XDPoSConfig{
-			Period:              2,
-			Epoch:               900,
-			Reward:              5000,
-			RewardCheckpoint:    900,
-			Gap:                 450,
-			FoudationWalletAddr: common.HexToAddress("xdc746249c61f5832c5eed53172776b460491bdcd5c"),
+			Period:               2,
+			Epoch:                900,
+			Reward:               5000,
+			RewardCheckpoint:     900,
+			Gap:                  450,
+			FoundationWalletAddr: common.HexToAddress("xdc746249c61f5832c5eed53172776b460491bdcd5c"),
 			V2: &V2{
 				SwitchEpoch:   common.TestnetConstant.TIPV2SwitchBlock.Uint64() / 900,
 				SwitchBlock:   common.TestnetConstant.TIPV2SwitchBlock,
@@ -299,12 +299,12 @@ var (
 		EIP158Block:    big.NewInt(0),
 		ByzantiumBlock: big.NewInt(0),
 		XDPoS: &XDPoSConfig{
-			Period:              2,
-			Epoch:               900,
-			Reward:              10,
-			RewardCheckpoint:    900,
-			Gap:                 450,
-			FoudationWalletAddr: common.HexToAddress("0xde5b54e8e7b585153add32f472e8d545e5d42a82"),
+			Period:               2,
+			Epoch:                900,
+			Reward:               10,
+			RewardCheckpoint:     900,
+			Gap:                  450,
+			FoundationWalletAddr: common.HexToAddress("0xde5b54e8e7b585153add32f472e8d545e5d42a82"),
 			V2: &V2{
 				SwitchEpoch:   common.DevnetConstant.TIPV2SwitchBlock.Uint64() / 900,
 				SwitchBlock:   common.DevnetConstant.TIPV2SwitchBlock,
@@ -409,11 +409,11 @@ var (
 		Ethash:              new(EthashConfig),
 		Clique:              nil,
 		XDPoS: &XDPoSConfig{
-			Epoch:               900,
-			Gap:                 450,
-			SkipV1Validation:    true,
-			FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068"),
-			Reward:              250,
+			Epoch:                900,
+			Gap:                  450,
+			SkipV1Validation:     true,
+			FoundationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068"),
+			Reward:               250,
 			V2: &V2{
 				SwitchEpoch:   1,
 				SwitchBlock:   big.NewInt(900),
@@ -538,14 +538,14 @@ func (c *CliqueConfig) String() string {
 
 // XDPoSConfig is the consensus engine configs for delegated-proof-of-stake based sealing.
 type XDPoSConfig struct {
-	Period              uint64         `json:"period"`              // Number of seconds between blocks to enforce
-	Epoch               uint64         `json:"epoch"`               // Epoch length to reset votes and checkpoint
-	Reward              uint64         `json:"reward"`              // Block reward - unit Ether
-	RewardCheckpoint    uint64         `json:"rewardCheckpoint"`    // Checkpoint block for calculate rewards.
-	Gap                 uint64         `json:"gap"`                 // Gap time preparing for the next epoch
-	FoudationWalletAddr common.Address `json:"foudationWalletAddr"` // Foundation Address Wallet
-	SkipV1Validation    bool           //Skip Block Validation for testing purpose, V1 consensus only
-	V2                  *V2            `json:"v2"`
+	Period               uint64         `json:"period"`               // Number of seconds between blocks to enforce
+	Epoch                uint64         `json:"epoch"`                // Epoch length to reset votes and checkpoint
+	Reward               uint64         `json:"reward"`               // Block reward - unit Ether
+	RewardCheckpoint     uint64         `json:"rewardCheckpoint"`     // Checkpoint block for calculate rewards.
+	Gap                  uint64         `json:"gap"`                  // Gap time preparing for the next epoch
+	FoundationWalletAddr common.Address `json:"foundationWalletAddr"` // Foundation Address Wallet
+	SkipV1Validation     bool           //Skip Block Validation for testing purpose, V1 consensus only
+	V2                   *V2            `json:"v2"`
 }
 
 type V2 struct {
@@ -612,8 +612,8 @@ func XDPoSConfigEqual(a, b *XDPoSConfig) bool {
 		log.Warn("[XDPoSConfigEqual] Gap mismatch", "a.Gap", a.Gap, "b.Gap", b.Gap)
 		return false
 	}
-	if a.FoudationWalletAddr != b.FoudationWalletAddr {
-		log.Warn("[XDPoSConfigEqual] FoudationWalletAddr mismatch", "a.FoudationWalletAddr", a.FoudationWalletAddr.Hex(), "b.FoudationWalletAddr", b.FoudationWalletAddr.Hex())
+	if a.FoundationWalletAddr != b.FoundationWalletAddr {
+		log.Warn("[XDPoSConfigEqual] FoundationWalletAddr mismatch", "a.FoundationWalletAddr", a.FoundationWalletAddr.Hex(), "b.FoundationWalletAddr", b.FoundationWalletAddr.Hex())
 		return false
 	}
 	if a.SkipV1Validation != b.SkipV1Validation {
@@ -674,7 +674,7 @@ func (c *XDPoSConfig) String() string {
 		return "XDPoSConfig: <nil>"
 	}
 
-	return fmt.Sprintf("XDPoSConfig{Period: %v, Epoch: %v, Reward: %v, RewardCheckpoint: %v, Gap: %v, FoudationWalletAddr: %v, SkipV1Validation: %v, V2: %s}", c.Period, c.Epoch, c.Reward, c.RewardCheckpoint, c.Gap, c.FoudationWalletAddr.String0x(), c.SkipV1Validation, c.V2.String())
+	return fmt.Sprintf("XDPoSConfig{Period: %v, Epoch: %v, Reward: %v, RewardCheckpoint: %v, Gap: %v, FoundationWalletAddr: %v, SkipV1Validation: %v, V2: %s}", c.Period, c.Epoch, c.Reward, c.RewardCheckpoint, c.Gap, c.FoundationWalletAddr.String0x(), c.SkipV1Validation, c.V2.String())
 }
 
 // Description returns a human-readable description of XDPoSConfig
@@ -691,7 +691,7 @@ func (c *XDPoSConfig) Description(indent int) string {
 	banner += fmt.Sprintf("%s- Reward: %v\n", prefix, c.Reward)
 	banner += fmt.Sprintf("%s- RewardCheckpoint: %v\n", prefix, c.RewardCheckpoint)
 	banner += fmt.Sprintf("%s- Gap: %v\n", prefix, c.Gap)
-	banner += fmt.Sprintf("%s- FoudationWalletAddr: %v\n", prefix, c.FoudationWalletAddr.Hex())
+	banner += fmt.Sprintf("%s- FoundationWalletAddr: %v\n", prefix, c.FoundationWalletAddr.Hex())
 	banner += fmt.Sprintf("%s- SkipV1Validation: %v\n", prefix, c.SkipV1Validation)
 	banner += fmt.Sprintf("%s- %s", prefix, c.V2.Description(indent+2))
 	return banner

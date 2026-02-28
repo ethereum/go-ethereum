@@ -478,7 +478,7 @@ func (b *EthAPIBackend) GetVotersRewards(masternodeAddr common.Address) map[comm
 	header := chain.CurrentBlock()
 	number := header.Number.Uint64()
 	engine := b.Engine().(*XDPoS.XDPoS)
-	foundationWalletAddr := chain.Config().XDPoS.FoudationWalletAddr
+	foundationWalletAddr := chain.Config().XDPoS.FoundationWalletAddr
 
 	// calculate for 2 epochs ago
 	currentCheckpointNumber, _, err := engine.GetCurrentEpochSwitchBlock(chain, header.Number)
