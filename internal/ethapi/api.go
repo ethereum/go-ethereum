@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -59,6 +60,8 @@ const maxGetStorageSlots = 1024
 
 var errBlobTxNotSupported = errors.New("signing blob transactions not supported")
 var errSubClosed = errors.New("chain subscription closed")
+
+var rpcGasUsedEthCall = metrics.NewRegisteredHistogram("rpc/gas_used/eth_call", nil, metrics.NewExpDecaySample(1028, 0.015))
 
 // EthereumAPI provides an API to access Ethereum related information.
 type EthereumAPI struct {
@@ -823,6 +826,7 @@ func (api *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockN
 	if err != nil {
 		return nil, err
 	}
+	rpcGasUsedEthCall.Update(int64(result.UsedGas))
 	if errors.Is(result.Err, vm.ErrExecutionReverted) {
 		return nil, newRevertError(result.Revert())
 	}
