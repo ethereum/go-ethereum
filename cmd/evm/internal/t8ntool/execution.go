@@ -1,58 +1,78 @@
 // Copyright 2020 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// This file is part of go-ethereum.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
+// GNU General Public License for more details.
 //
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 package t8ntool
 
 import (
 	"fmt"
+	stdmath "math"
 	"math/big"
-	"os"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"golang.org/x/crypto/sha3"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/holiman/uint256"
 )
 
 type Prestate struct {
-	Env stEnv             `json:"env"`
-	Pre core.GenesisAlloc `json:"pre"`
+	Env        stEnv                         `json:"env"`
+	Pre        types.GenesisAlloc            `json:"pre"`
+	TreeLeaves map[common.Hash]hexutil.Bytes `json:"vkt,omitempty"`
 }
+
+//go:generate go run github.com/fjl/gencodec -type ExecutionResult -field-override executionResultMarshaling -out gen_execresult.go
 
 // ExecutionResult contains the execution status after running a state test, any
 // error that might have occurred and a dump of the final state if requested.
 type ExecutionResult struct {
-	StateRoot   common.Hash    `json:"stateRoot"`
-	TxRoot      common.Hash    `json:"txRoot"`
-	ReceiptRoot common.Hash    `json:"receiptRoot"`
-	LogsHash    common.Hash    `json:"logsHash"`
-	Bloom       types.Bloom    `json:"logsBloom"        gencodec:"required"`
-	Receipts    types.Receipts `json:"receipts"`
-	Rejected    []int          `json:"rejected,omitempty"`
+	StateRoot            common.Hash           `json:"stateRoot"`
+	TxRoot               common.Hash           `json:"txRoot"`
+	ReceiptRoot          common.Hash           `json:"receiptsRoot"`
+	LogsHash             common.Hash           `json:"logsHash"`
+	Bloom                types.Bloom           `json:"logsBloom"        gencodec:"required"`
+	Receipts             types.Receipts        `json:"receipts"`
+	Rejected             []*rejectedTx         `json:"rejected,omitempty"`
+	Difficulty           *math.HexOrDecimal256 `json:"currentDifficulty" gencodec:"required"`
+	GasUsed              math.HexOrDecimal64   `json:"gasUsed"`
+	BaseFee              *math.HexOrDecimal256 `json:"currentBaseFee,omitempty"`
+	WithdrawalsRoot      *common.Hash          `json:"withdrawalsRoot,omitempty"`
+	CurrentExcessBlobGas *math.HexOrDecimal64  `json:"currentExcessBlobGas,omitempty"`
+	CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
+	RequestsHash         *common.Hash          `json:"requestsHash,omitempty"`
+	Requests             [][]byte              `json:"requests"`
+}
+
+type executionResultMarshaling struct {
+	Requests []hexutil.Bytes `json:"requests"`
 }
 
 type ommer struct {
@@ -60,30 +80,57 @@ type ommer struct {
 	Address common.Address `json:"address"`
 }
 
-//go:generate gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
+//go:generate go run github.com/fjl/gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
 type stEnv struct {
-	Coinbase    common.Address                      `json:"currentCoinbase"   gencodec:"required"`
-	Difficulty  *big.Int                            `json:"currentDifficulty" gencodec:"required"`
-	GasLimit    uint64                              `json:"currentGasLimit"   gencodec:"required"`
-	Number      uint64                              `json:"currentNumber"     gencodec:"required"`
-	Timestamp   uint64                              `json:"currentTimestamp"  gencodec:"required"`
-	BlockHashes map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
-	Ommers      []ommer                             `json:"ommers,omitempty"`
+	Coinbase              common.Address                      `json:"currentCoinbase"   gencodec:"required"`
+	Difficulty            *big.Int                            `json:"currentDifficulty"`
+	Random                *big.Int                            `json:"currentRandom"`
+	ParentDifficulty      *big.Int                            `json:"parentDifficulty"`
+	ParentBaseFee         *big.Int                            `json:"parentBaseFee,omitempty"`
+	ParentGasUsed         uint64                              `json:"parentGasUsed,omitempty"`
+	ParentGasLimit        uint64                              `json:"parentGasLimit,omitempty"`
+	GasLimit              uint64                              `json:"currentGasLimit"   gencodec:"required"`
+	Number                uint64                              `json:"currentNumber"     gencodec:"required"`
+	Timestamp             uint64                              `json:"currentTimestamp"  gencodec:"required"`
+	ParentTimestamp       uint64                              `json:"parentTimestamp,omitempty"`
+	BlockHashes           map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
+	Ommers                []ommer                             `json:"ommers,omitempty"`
+	Withdrawals           []*types.Withdrawal                 `json:"withdrawals,omitempty"`
+	BaseFee               *big.Int                            `json:"currentBaseFee,omitempty"`
+	ParentUncleHash       common.Hash                         `json:"parentUncleHash"`
+	ExcessBlobGas         *uint64                             `json:"currentExcessBlobGas,omitempty"`
+	ParentExcessBlobGas   *uint64                             `json:"parentExcessBlobGas,omitempty"`
+	ParentBlobGasUsed     *uint64                             `json:"parentBlobGasUsed,omitempty"`
+	ParentBeaconBlockRoot *common.Hash                        `json:"parentBeaconBlockRoot"`
+	SlotNumber            *uint64                             `json:"slotNumber"`
 }
 
 type stEnvMarshaling struct {
-	Coinbase   common.UnprefixedAddress
-	Difficulty *math.HexOrDecimal256
-	GasLimit   math.HexOrDecimal64
-	Number     math.HexOrDecimal64
-	Timestamp  math.HexOrDecimal64
+	Coinbase            common.UnprefixedAddress
+	Difficulty          *math.HexOrDecimal256
+	Random              *math.HexOrDecimal256
+	ParentDifficulty    *math.HexOrDecimal256
+	ParentBaseFee       *math.HexOrDecimal256
+	ParentGasUsed       math.HexOrDecimal64
+	ParentGasLimit      math.HexOrDecimal64
+	GasLimit            math.HexOrDecimal64
+	Number              math.HexOrDecimal64
+	Timestamp           math.HexOrDecimal64
+	ParentTimestamp     math.HexOrDecimal64
+	BaseFee             *math.HexOrDecimal256
+	ExcessBlobGas       *math.HexOrDecimal64
+	ParentExcessBlobGas *math.HexOrDecimal64
+	ParentBlobGasUsed   *math.HexOrDecimal64
+	SlotNumber          *math.HexOrDecimal64
+}
+
+type rejectedTx struct {
+	Index int    `json:"index"`
+	Err   string `json:"error"`
 }
 
 // Apply applies a set of transactions to a pre-state
-func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
-	txs types.Transactions, miningReward int64,
-	getTracerFn func(txIndex int, txHash common.Hash) (tracer vm.Tracer, err error)) (*state.StateDB, *ExecutionResult, error) {
-
+func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, txIt txIterator, miningReward int64) (*state.StateDB, *ExecutionResult, []byte, error) {
 	// Capture errors for BLOCKHASH operation, if we haven't been supplied the
 	// required blockhashes
 	var hashError error
@@ -99,15 +146,16 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		return h
 	}
 	var (
-		statedb     = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre)
-		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number))
+		isEIP4762   = chainConfig.IsVerkle(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+		statedb     = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isEIP4762)
+		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp)
 		gaspool     = new(core.GasPool)
 		blockHash   = common.Hash{0x13, 0x37}
-		rejectedTxs []int
+		rejectedTxs []*rejectedTx
 		includedTxs types.Transactions
 		gasUsed     = uint64(0)
+		blobGasUsed = uint64(0)
 		receipts    = make(types.Receipts, 0)
-		txIndex     = 0
 	)
 	gaspool.AddGas(pre.Env.GasLimit)
 	vmContext := vm.BlockContext{
@@ -115,10 +163,49 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		Transfer:    core.Transfer,
 		Coinbase:    pre.Env.Coinbase,
 		BlockNumber: new(big.Int).SetUint64(pre.Env.Number),
-		Time:        new(big.Int).SetUint64(pre.Env.Timestamp),
+		Time:        pre.Env.Timestamp,
 		Difficulty:  pre.Env.Difficulty,
 		GasLimit:    pre.Env.GasLimit,
 		GetHash:     getHash,
+	}
+	// If currentBaseFee is defined, add it to the vmContext.
+	if pre.Env.BaseFee != nil {
+		vmContext.BaseFee = new(big.Int).Set(pre.Env.BaseFee)
+	}
+	// If random is defined, add it to the vmContext.
+	if pre.Env.Random != nil {
+		rnd := common.BigToHash(pre.Env.Random)
+		vmContext.Random = &rnd
+	}
+	// Calculate the BlobBaseFee
+	var excessBlobGas uint64
+	if pre.Env.ExcessBlobGas != nil {
+		excessBlobGas = *pre.Env.ExcessBlobGas
+		header := &types.Header{
+			Time:          pre.Env.Timestamp,
+			ExcessBlobGas: pre.Env.ExcessBlobGas,
+		}
+		vmContext.BlobBaseFee = eip4844.CalcBlobFee(chainConfig, header)
+	} else {
+		// If it is not explicitly defined, but we have the parent values, we try
+		// to calculate it ourselves.
+		parentExcessBlobGas := pre.Env.ParentExcessBlobGas
+		parentBlobGasUsed := pre.Env.ParentBlobGasUsed
+		if parentExcessBlobGas != nil && parentBlobGasUsed != nil {
+			parent := &types.Header{
+				Time:          pre.Env.ParentTimestamp,
+				ExcessBlobGas: pre.Env.ParentExcessBlobGas,
+				BlobGasUsed:   pre.Env.ParentBlobGasUsed,
+				BaseFee:       pre.Env.ParentBaseFee,
+				SlotNumber:    pre.Env.SlotNumber,
+			}
+			header := &types.Header{
+				Time:          pre.Env.Timestamp,
+				ExcessBlobGas: &excessBlobGas,
+			}
+			excessBlobGas = eip4844.CalcExcessBlobGas(chainConfig, parent, header.Time)
+			vmContext.BlobBaseFee = eip4844.CalcBlobFee(chainConfig, header)
+		}
 	}
 	// If DAO is supported/enabled, we need to handle it here. In geth 'proper', it's
 	// done in StateProcessor.Process(block, ...), right before transactions are applied.
@@ -127,138 +214,235 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		chainConfig.DAOForkBlock.Cmp(new(big.Int).SetUint64(pre.Env.Number)) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
-
-	for i, tx := range txs {
-		msg, err := tx.AsMessage(signer)
+	evm := vm.NewEVM(vmContext, statedb, chainConfig, vmConfig)
+	if beaconRoot := pre.Env.ParentBeaconBlockRoot; beaconRoot != nil {
+		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
+	}
+	if pre.Env.BlockHashes != nil && chainConfig.IsPrague(new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp) {
+		var (
+			prevNumber = pre.Env.Number - 1
+			prevHash   = pre.Env.BlockHashes[math.HexOrDecimal64(prevNumber)]
+		)
+		core.ProcessParentBlockHash(prevHash, evm)
+	}
+	for i := 0; txIt.Next(); i++ {
+		tx, err := txIt.Tx()
 		if err != nil {
-			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "error", err)
-			rejectedTxs = append(rejectedTxs, i)
+			log.Warn("rejected tx", "index", i, "error", err)
+			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			continue
 		}
-		tracer, err := getTracerFn(txIndex, tx.Hash())
+		if tx.Type() == types.BlobTxType && vmContext.BlobBaseFee == nil {
+			errMsg := "blob tx used but field env.ExcessBlobGas missing"
+			log.Warn("rejected tx", "index", i, "hash", tx.Hash(), "error", errMsg)
+			rejectedTxs = append(rejectedTxs, &rejectedTx{i, errMsg})
+			continue
+		}
+		msg, err := core.TransactionToMessage(tx, signer, pre.Env.BaseFee)
 		if err != nil {
-			return nil, nil, err
+			log.Warn("rejected tx", "index", i, "hash", tx.Hash(), "error", err)
+			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
+			continue
 		}
-		vmConfig.Tracer = tracer
-		vmConfig.Debug = (tracer != nil)
-		statedb.Prepare(tx.Hash(), blockHash, txIndex)
-		txContext := core.NewEVMTxContext(msg)
-
-		evm := vm.NewEVM(vmContext, txContext, statedb, chainConfig, vmConfig)
-		if chainConfig.IsYoloV2(vmContext.BlockNumber) {
-			statedb.AddAddressToAccessList(msg.From())
-			if dst := msg.To(); dst != nil {
-				statedb.AddAddressToAccessList(*dst)
-				// If it's a create-tx, the destination will be added inside evm.create
-			}
-			for _, addr := range evm.ActivePrecompiles() {
-				statedb.AddAddressToAccessList(addr)
+		txBlobGas := uint64(0)
+		if tx.Type() == types.BlobTxType {
+			txBlobGas = uint64(params.BlobTxBlobGasPerBlob * len(tx.BlobHashes()))
+			max := eip4844.MaxBlobGasPerBlock(chainConfig, pre.Env.Timestamp)
+			if used := blobGasUsed + txBlobGas; used > max {
+				err := fmt.Errorf("blob gas (%d) would exceed maximum allowance %d", used, max)
+				log.Warn("rejected tx", "index", i, "err", err)
+				rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
+				continue
 			}
 		}
-		snapshot := statedb.Snapshot()
-		// (ret []byte, usedGas uint64, failed bool, err error)
-		msgResult, err := core.ApplyMessage(evm, msg, gaspool)
+		statedb.SetTxContext(tx.Hash(), len(receipts))
+		var (
+			snapshot = statedb.Snapshot()
+			prevGas  = gaspool.Gas()
+		)
+		receipt, err := core.ApplyTransactionWithEVM(msg, gaspool, statedb, vmContext.BlockNumber, blockHash, pre.Env.Timestamp, tx, &gasUsed, evm)
 		if err != nil {
 			statedb.RevertToSnapshot(snapshot)
-			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From(), "error", err)
-			rejectedTxs = append(rejectedTxs, i)
+			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From, "error", err)
+			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
+			gaspool.SetGas(prevGas)
 			continue
+		}
+		if receipt.Logs == nil {
+			receipt.Logs = []*types.Log{}
 		}
 		includedTxs = append(includedTxs, tx)
 		if hashError != nil {
-			return nil, nil, NewError(ErrorMissingBlockhash, hashError)
+			return nil, nil, nil, NewError(ErrorMissingBlockhash, hashError)
 		}
-		gasUsed += msgResult.UsedGas
-		// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
-		{
-			var root []byte
-			if chainConfig.IsByzantium(vmContext.BlockNumber) {
-				statedb.Finalise(true)
-			} else {
-				root = statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber)).Bytes()
-			}
-
-			receipt := types.NewReceipt(root, msgResult.Failed(), gasUsed)
-			receipt.TxHash = tx.Hash()
-			receipt.GasUsed = msgResult.UsedGas
-			// if the transaction created a contract, store the creation address in the receipt.
-			if msg.To() == nil {
-				receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
-			}
-			// Set the receipt logs and create a bloom for filtering
-			receipt.Logs = statedb.GetLogs(tx.Hash())
-			receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
-			// These three are non-consensus fields
-			//receipt.BlockHash
-			//receipt.BlockNumber =
-			receipt.TransactionIndex = uint(txIndex)
-			receipts = append(receipts, receipt)
-		}
-		txIndex++
+		blobGasUsed += txBlobGas
+		receipts = append(receipts, receipt)
 	}
+
 	statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))
-	// Add mining reward?
-	if miningReward > 0 {
+
+	// Add mining reward? (-1 means rewards are disabled)
+	if miningReward >= 0 {
 		// Add mining reward. The mining reward may be `0`, which only makes a difference in the cases
 		// where
-		// - the coinbase suicided, or
+		// - the coinbase self-destructed, or
 		// - there are only 'bad' transactions, which aren't executed. In those cases,
 		//   the coinbase gets no txfee, so isn't created, and thus needs to be touched
 		var (
 			blockReward = big.NewInt(miningReward)
 			minerReward = new(big.Int).Set(blockReward)
-			perOmmer    = new(big.Int).Div(blockReward, big.NewInt(32))
+			perOmmer    = new(big.Int).Rsh(blockReward, 5)
 		)
 		for _, ommer := range pre.Env.Ommers {
 			// Add 1/32th for each ommer included
 			minerReward.Add(minerReward, perOmmer)
 			// Add (8-delta)/8
 			reward := big.NewInt(8)
-			reward.Sub(reward, big.NewInt(0).SetUint64(ommer.Delta))
+			reward.Sub(reward, new(big.Int).SetUint64(ommer.Delta))
 			reward.Mul(reward, blockReward)
-			reward.Div(reward, big.NewInt(8))
-			statedb.AddBalance(ommer.Address, reward)
+			reward.Rsh(reward, 3)
+			statedb.AddBalance(ommer.Address, uint256.MustFromBig(reward), tracing.BalanceIncreaseRewardMineUncle)
 		}
-		statedb.AddBalance(pre.Env.Coinbase, minerReward)
+		statedb.AddBalance(pre.Env.Coinbase, uint256.MustFromBig(minerReward), tracing.BalanceIncreaseRewardMineBlock)
 	}
+	// Apply withdrawals
+	for _, w := range pre.Env.Withdrawals {
+		// Amount is in gwei, turn into wei
+		amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
+		statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
+
+		if isEIP4762 {
+			statedb.AccessEvents().AddAccount(w.Address, true, stdmath.MaxUint64)
+		}
+	}
+
+	// Gather the execution-layer triggered requests.
+	var requests [][]byte
+	if chainConfig.IsPrague(vmContext.BlockNumber, vmContext.Time) {
+		requests = [][]byte{}
+		// EIP-6110
+		var allLogs []*types.Log
+		for _, receipt := range receipts {
+			allLogs = append(allLogs, receipt.Logs...)
+		}
+		if err := core.ParseDepositLogs(&requests, allLogs, chainConfig); err != nil {
+			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not parse requests logs: %v", err))
+		}
+		// EIP-7002
+		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
+			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not process withdrawal requests: %v", err))
+		}
+		// EIP-7251
+		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
+			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not process consolidation requests: %v", err))
+		}
+	}
+
 	// Commit block
-	root, err := statedb.Commit(chainConfig.IsEIP158(vmContext.BlockNumber))
+	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber), chainConfig.IsCancun(vmContext.BlockNumber, vmContext.Time))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Could not commit state: %v", err)
-		return nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
+		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
 	}
 	execRs := &ExecutionResult{
 		StateRoot:   root,
-		TxRoot:      types.DeriveSha(includedTxs, new(trie.Trie)),
-		ReceiptRoot: types.DeriveSha(receipts, new(trie.Trie)),
-		Bloom:       types.CreateBloom(receipts),
+		TxRoot:      types.DeriveSha(includedTxs, trie.NewStackTrie(nil)),
+		ReceiptRoot: types.DeriveSha(receipts, trie.NewStackTrie(nil)),
+		Bloom:       types.MergeBloom(receipts),
 		LogsHash:    rlpHash(statedb.Logs()),
 		Receipts:    receipts,
 		Rejected:    rejectedTxs,
+		Difficulty:  (*math.HexOrDecimal256)(vmContext.Difficulty),
+		GasUsed:     (math.HexOrDecimal64)(gasUsed),
+		BaseFee:     (*math.HexOrDecimal256)(vmContext.BaseFee),
 	}
-	return statedb, execRs, nil
+	if pre.Env.Withdrawals != nil {
+		h := types.DeriveSha(types.Withdrawals(pre.Env.Withdrawals), trie.NewStackTrie(nil))
+		execRs.WithdrawalsRoot = &h
+	}
+	if vmContext.BlobBaseFee != nil {
+		execRs.CurrentExcessBlobGas = (*math.HexOrDecimal64)(&excessBlobGas)
+		execRs.CurrentBlobGasUsed = (*math.HexOrDecimal64)(&blobGasUsed)
+	}
+	if requests != nil {
+		// Set requestsHash on block.
+		h := types.CalcRequestsHash(requests)
+		execRs.RequestsHash = &h
+		for i := range requests {
+			// remove prefix
+			requests[i] = requests[i][1:]
+		}
+		execRs.Requests = requests
+	}
+
+	// Re-create statedb instance with new root for MPT mode
+	statedb, err = state.New(root, statedb.Database())
+	if err != nil {
+		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not reopen state: %v", err))
+	}
+	body, _ := rlp.EncodeToBytes(includedTxs)
+	return statedb, execRs, body, nil
 }
 
-func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB {
-	sdb := state.NewDatabase(db)
-	statedb, _ := state.New(common.Hash{}, sdb, nil)
+func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool) *state.StateDB {
+	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true, IsVerkle: isBintrie})
+	sdb := state.NewDatabase(tdb, nil)
+
+	root := types.EmptyRootHash
+	if isBintrie {
+		root = types.EmptyBinaryHash
+	}
+	statedb, err := state.New(root, sdb)
+	if err != nil {
+		panic(fmt.Errorf("failed to create initial statedb: %v", err))
+	}
 	for addr, a := range accounts {
-		statedb.SetCode(addr, a.Code)
-		statedb.SetNonce(addr, a.Nonce)
-		statedb.SetBalance(addr, a.Balance)
+		statedb.SetCode(addr, a.Code, tracing.CodeChangeUnspecified)
+		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeGenesis)
+		statedb.SetBalance(addr, uint256.MustFromBig(a.Balance), tracing.BalanceIncreaseGenesisBalance)
 		for k, v := range a.Storage {
 			statedb.SetState(addr, k, v)
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, _ := statedb.Commit(false)
-	statedb, _ = state.New(root, sdb, nil)
+	root, err = statedb.Commit(0, false, false)
+	if err != nil {
+		panic(fmt.Errorf("failed to commit initial state: %v", err))
+	}
+	// If bintrie mode started, check if conversion happened
+	if isBintrie {
+		return statedb
+	}
+	// For MPT mode, reopen the state with the committed root
+	statedb, err = state.New(root, sdb)
+	if err != nil {
+		panic(fmt.Errorf("failed to reopen state after commit: %v", err))
+	}
 	return statedb
 }
 
-func rlpHash(x interface{}) (h common.Hash) {
-	hw := sha3.NewLegacyKeccak256()
+func rlpHash(x any) (h common.Hash) {
+	hw := keccak.NewLegacyKeccak256()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])
 	return h
+}
+
+// calcDifficulty is based on ethash.CalcDifficulty. This method is used in case
+// the caller does not provide an explicit difficulty, but instead provides only
+// parent timestamp + difficulty.
+// Note: this method only works for ethash engine.
+func calcDifficulty(config *params.ChainConfig, number, currentTime, parentTime uint64,
+	parentDifficulty *big.Int, parentUncleHash common.Hash) *big.Int {
+	uncleHash := parentUncleHash
+	if uncleHash == (common.Hash{}) {
+		uncleHash = types.EmptyUncleHash
+	}
+	parent := &types.Header{
+		ParentHash: common.Hash{},
+		UncleHash:  uncleHash,
+		Difficulty: parentDifficulty,
+		Number:     new(big.Int).SetUint64(number - 1),
+		Time:       parentTime,
+	}
+	return ethash.CalcDifficulty(config, currentTime, parent)
 }

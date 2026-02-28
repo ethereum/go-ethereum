@@ -24,6 +24,8 @@ import (
 	"math/rand"
 	"net"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -224,6 +226,14 @@ func TestServerRemovePeerDisconnect(t *testing.T) {
 	srv2.Start()
 	defer srv2.Stop()
 
+	s := strings.Split(srv2.ListenAddr, ":")
+	if len(s) != 2 {
+		t.Fatal("invalid ListenAddr")
+	}
+	if port, err := strconv.Atoi(s[1]); err == nil {
+		srv2.localnode.Set(enr.TCP(uint16(port)))
+	}
+
 	if !syncAddPeer(srv1, srv2.Self()) {
 		t.Fatal("peer not connected")
 	}
@@ -387,10 +397,10 @@ func TestServerSetupConn(t *testing.T) {
 			wantCloseErr: errServerStopped,
 		},
 		{
-			tt:           &setupTransport{pubkey: clientpub, encHandshakeErr: errors.New("read error")},
+			tt:           &setupTransport{pubkey: clientpub, encHandshakeErr: errEncHandshakeError},
 			flags:        inboundConn,
 			wantCalls:    "doEncHandshake,close,",
-			wantCloseErr: errors.New("read error"),
+			wantCloseErr: errEncHandshakeError,
 		},
 		{
 			tt:           &setupTransport{pubkey: clientpub, phs: protoHandshake{ID: randomID().Bytes()}},
@@ -400,11 +410,11 @@ func TestServerSetupConn(t *testing.T) {
 			wantCloseErr: DiscUnexpectedIdentity,
 		},
 		{
-			tt:           &setupTransport{pubkey: clientpub, protoHandshakeErr: errors.New("foo")},
+			tt:           &setupTransport{pubkey: clientpub, protoHandshakeErr: DiscTooManyPeers},
 			dialDest:     enode.NewV4(clientpub, nil, 0, 0),
 			flags:        dynDialedConn,
 			wantCalls:    "doEncHandshake,doProtoHandshake,close,",
-			wantCloseErr: errors.New("foo"),
+			wantCloseErr: DiscTooManyPeers,
 		},
 		{
 			tt:           &setupTransport{pubkey: srvpub, phs: protoHandshake{ID: crypto.FromECDSAPub(srvpub)[1:]}},
@@ -443,7 +453,7 @@ func TestServerSetupConn(t *testing.T) {
 			}
 			p1, _ := net.Pipe()
 			srv.SetupConn(p1, test.flags, test.dialDest)
-			if !reflect.DeepEqual(test.tt.closeErr, test.wantCloseErr) {
+			if !errors.Is(test.tt.closeErr, test.wantCloseErr) {
 				t.Errorf("test %d: close error mismatch: got %q, want %q", i, test.tt.closeErr, test.wantCloseErr)
 			}
 			if test.tt.calls != test.wantCalls {
@@ -567,6 +577,33 @@ func TestServerInboundThrottle(t *testing.T) {
 	case <-time.After(timeout):
 		t.Error("connection not closed within timeout")
 	}
+}
+
+func TestServerDiscoveryV5FailureRollsBackV4(t *testing.T) {
+	badBootstrap := enode.NewV4(&newkey().PublicKey, net.ParseIP("127.0.0.1"), 30303, 0) // invalid V5 of a V4 node
+	srv := &Server{
+		Config: Config{
+			PrivateKey:       newkey(),
+			ListenAddr:       "",
+			DiscAddr:         "127.0.0.1:0",
+			MaxPeers:         5,
+			DiscoveryV4:      true,
+			DiscoveryV5:      true,
+			BootstrapNodesV5: []*enode.Node{badBootstrap},
+			Logger:           testlog.Logger(t, log.LvlTrace),
+		},
+	}
+	err := srv.Start()
+	if err == nil {
+		t.Fatal("expected discovery v5 startup failure")
+	}
+	if !strings.Contains(err.Error(), "bad bootstrap node") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if srv.DiscoveryV4() != nil {
+		t.Fatal("discovery v4 not cleaned after failure")
+	}
+	srv.Stop()
 }
 
 func listenFakeAddr(network, laddr string, remoteAddr net.Addr) (net.Listener, error) {

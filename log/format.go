@@ -2,70 +2,26 @@ package log
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
+	"log/slog"
+	"math/big"
 	"reflect"
 	"strconv"
-	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 	"unicode/utf8"
+
+	"github.com/holiman/uint256"
 )
 
 const (
 	timeFormat        = "2006-01-02T15:04:05-0700"
-	termTimeFormat    = "01-02|15:04:05.000"
 	floatFormat       = 'f'
 	termMsgJust       = 40
 	termCtxMaxPadding = 40
 )
 
-// locationTrims are trimmed for display to avoid unwieldy log lines.
-var locationTrims = []string{
-	"github.com/ethereum/go-ethereum/",
-}
-
-// PrintOrigins sets or unsets log location (file:line) printing for terminal
-// format output.
-func PrintOrigins(print bool) {
-	if print {
-		atomic.StoreUint32(&locationEnabled, 1)
-	} else {
-		atomic.StoreUint32(&locationEnabled, 0)
-	}
-}
-
-// locationEnabled is an atomic flag controlling whether the terminal formatter
-// should append the log locations too when printing entries.
-var locationEnabled uint32
-
-// locationLength is the maxmimum path length encountered, which all logs are
-// padded to to aid in alignment.
-var locationLength uint32
-
-// fieldPadding is a global map with maximum field value lengths seen until now
-// to allow padding log contexts in a bit smarter way.
-var fieldPadding = make(map[string]int)
-
-// fieldPaddingLock is a global mutex protecting the field padding map.
-var fieldPaddingLock sync.RWMutex
-
-type Format interface {
-	Format(r *Record) []byte
-}
-
-// FormatFunc returns a new Format object which uses
-// the given function to perform record formatting.
-func FormatFunc(f func(*Record) []byte) Format {
-	return formatFunc(f)
-}
-
-type formatFunc func(*Record) []byte
-
-func (f formatFunc) Format(r *Record) []byte {
-	return f(r)
-}
+// 40 spaces
+var spaces = []byte("                                        ")
 
 // TerminalStringer is an analogous interface to the stdlib stringer, allowing
 // own types to have custom shortened serialization formats when printed to the
@@ -74,297 +30,286 @@ type TerminalStringer interface {
 	TerminalString() string
 }
 
-// TerminalFormat formats log records optimized for human readability on
-// a terminal with color-coded level output and terser human friendly timestamp.
-// This format should only be used for interactive programs or while developing.
-//
-//     [LEVEL] [TIME] MESSAGE key=value key=value ...
-//
-// Example:
-//
-//     [DBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
-//
-func TerminalFormat(usecolor bool) Format {
-	return FormatFunc(func(r *Record) []byte {
-		var color = 0
-		if usecolor {
-			switch r.Lvl {
-			case LvlCrit:
-				color = 35
-			case LvlError:
-				color = 31
-			case LvlWarn:
-				color = 33
-			case LvlInfo:
-				color = 32
-			case LvlDebug:
-				color = 36
-			case LvlTrace:
-				color = 34
-			}
-		}
-
-		b := &bytes.Buffer{}
-		lvl := r.Lvl.AlignedString()
-		if atomic.LoadUint32(&locationEnabled) != 0 {
-			// Log origin printing was requested, format the location path and line number
-			location := fmt.Sprintf("%+v", r.Call)
-			for _, prefix := range locationTrims {
-				location = strings.TrimPrefix(location, prefix)
-			}
-			// Maintain the maximum location length for fancyer alignment
-			align := int(atomic.LoadUint32(&locationLength))
-			if align < len(location) {
-				align = len(location)
-				atomic.StoreUint32(&locationLength, uint32(align))
-			}
-			padding := strings.Repeat(" ", align-len(location))
-
-			// Assemble and print the log heading
-			if color > 0 {
-				fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s|%s]%s %s ", color, lvl, r.Time.Format(termTimeFormat), location, padding, r.Msg)
-			} else {
-				fmt.Fprintf(b, "%s[%s|%s]%s %s ", lvl, r.Time.Format(termTimeFormat), location, padding, r.Msg)
-			}
-		} else {
-			if color > 0 {
-				fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s] %s ", color, lvl, r.Time.Format(termTimeFormat), r.Msg)
-			} else {
-				fmt.Fprintf(b, "%s[%s] %s ", lvl, r.Time.Format(termTimeFormat), r.Msg)
-			}
-		}
-		// try to justify the log output for short messages
-		length := utf8.RuneCountInString(r.Msg)
-		if len(r.Ctx) > 0 && length < termMsgJust {
-			b.Write(bytes.Repeat([]byte{' '}, termMsgJust-length))
-		}
-		// print the keys logfmt style
-		logfmt(b, r.Ctx, color, true)
-		return b.Bytes()
-	})
-}
-
-// LogfmtFormat prints records in logfmt format, an easy machine-parseable but human-readable
-// format for key/value pairs.
-//
-// For more details see: http://godoc.org/github.com/kr/logfmt
-//
-func LogfmtFormat() Format {
-	return FormatFunc(func(r *Record) []byte {
-		common := []interface{}{r.KeyNames.Time, r.Time, r.KeyNames.Lvl, r.Lvl, r.KeyNames.Msg, r.Msg}
-		buf := &bytes.Buffer{}
-		logfmt(buf, append(common, r.Ctx...), 0, false)
-		return buf.Bytes()
-	})
-}
-
-func logfmt(buf *bytes.Buffer, ctx []interface{}, color int, term bool) {
-	for i := 0; i < len(ctx); i += 2 {
-		if i != 0 {
-			buf.WriteByte(' ')
-		}
-
-		k, ok := ctx[i].(string)
-		v := formatLogfmtValue(ctx[i+1], term)
-		if !ok {
-			k, v = errorKey, formatLogfmtValue(k, term)
-		}
-
-		// XXX: we should probably check that all of your key bytes aren't invalid
-		fieldPaddingLock.RLock()
-		padding := fieldPadding[k]
-		fieldPaddingLock.RUnlock()
-
-		length := utf8.RuneCountInString(v)
-		if padding < length && length <= termCtxMaxPadding {
-			padding = length
-
-			fieldPaddingLock.Lock()
-			fieldPadding[k] = padding
-			fieldPaddingLock.Unlock()
-		}
-		if color > 0 {
-			fmt.Fprintf(buf, "\x1b[%dm%s\x1b[0m=", color, k)
-		} else {
-			buf.WriteString(k)
-			buf.WriteByte('=')
-		}
-		buf.WriteString(v)
-		if i < len(ctx)-2 && padding > length {
-			buf.Write(bytes.Repeat([]byte{' '}, padding-length))
+func (h *TerminalHandler) format(buf []byte, r slog.Record, usecolor bool) []byte {
+	msg := escapeMessage(r.Message)
+	var color = ""
+	if usecolor {
+		switch r.Level {
+		case LevelCrit:
+			color = "\x1b[35m"
+		case slog.LevelError:
+			color = "\x1b[31m"
+		case slog.LevelWarn:
+			color = "\x1b[33m"
+		case slog.LevelInfo:
+			color = "\x1b[32m"
+		case slog.LevelDebug:
+			color = "\x1b[36m"
+		case LevelTrace:
+			color = "\x1b[34m"
 		}
 	}
+	if buf == nil {
+		buf = make([]byte, 0, 30+termMsgJust)
+	}
+	b := bytes.NewBuffer(buf)
+
+	if color != "" { // Start color
+		b.WriteString(color)
+		b.WriteString(LevelAlignedString(r.Level))
+		b.WriteString("\x1b[0m")
+	} else {
+		b.WriteString(LevelAlignedString(r.Level))
+	}
+	b.WriteString("[")
+	writeTimeTermFormat(b, r.Time)
+	b.WriteString("] ")
+	b.WriteString(msg)
+
+	// try to justify the log output for short messages
+	//length := utf8.RuneCountInString(msg)
+	length := len(msg)
+	if (r.NumAttrs()+len(h.attrs)) > 0 && length < termMsgJust {
+		b.Write(spaces[:termMsgJust-length])
+	}
+	// print the attributes
+	h.formatAttributes(b, r, color)
+
+	return b.Bytes()
+}
+
+func (h *TerminalHandler) formatAttributes(buf *bytes.Buffer, r slog.Record, color string) {
+	writeAttr := func(attr slog.Attr, last bool) {
+		buf.WriteByte(' ')
+
+		if color != "" {
+			buf.WriteString(color)
+			buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
+			buf.WriteString("\x1b[0m=")
+		} else {
+			buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
+			buf.WriteByte('=')
+		}
+		val := FormatSlogValue(attr.Value, buf.AvailableBuffer())
+
+		padding := h.fieldPadding[attr.Key]
+
+		length := utf8.RuneCount(val)
+		if padding < length && length <= termCtxMaxPadding {
+			padding = length
+			h.fieldPadding[attr.Key] = padding
+		}
+		buf.Write(val)
+		if !last && padding > length {
+			buf.Write(spaces[:padding-length])
+		}
+	}
+	var n = 0
+	var nAttrs = len(h.attrs) + r.NumAttrs()
+	for _, attr := range h.attrs {
+		writeAttr(attr, n == nAttrs-1)
+		n++
+	}
+	r.Attrs(func(attr slog.Attr) bool {
+		writeAttr(attr, n == nAttrs-1)
+		n++
+		return true
+	})
 	buf.WriteByte('\n')
 }
 
-// JSONFormat formats log records as JSON objects separated by newlines.
-// It is the equivalent of JSONFormatEx(false, true).
-func JSONFormat() Format {
-	return JSONFormatEx(false, true)
-}
-
-// JSONFormatOrderedEx formats log records as JSON arrays. If pretty is true,
-// records will be pretty-printed. If lineSeparated is true, records
-// will be logged with a new line between each record.
-func JSONFormatOrderedEx(pretty, lineSeparated bool) Format {
-	jsonMarshal := json.Marshal
-	if pretty {
-		jsonMarshal = func(v interface{}) ([]byte, error) {
-			return json.MarshalIndent(v, "", "    ")
-		}
-	}
-	return FormatFunc(func(r *Record) []byte {
-		props := make(map[string]interface{})
-
-		props[r.KeyNames.Time] = r.Time
-		props[r.KeyNames.Lvl] = r.Lvl.String()
-		props[r.KeyNames.Msg] = r.Msg
-
-		ctx := make([]string, len(r.Ctx))
-		for i := 0; i < len(r.Ctx); i += 2 {
-			k, ok := r.Ctx[i].(string)
-			if !ok {
-				props[errorKey] = fmt.Sprintf("%+v is not a string key,", r.Ctx[i])
-			}
-			ctx[i] = k
-			ctx[i+1] = formatLogfmtValue(r.Ctx[i+1], true)
-		}
-		props[r.KeyNames.Ctx] = ctx
-
-		b, err := jsonMarshal(props)
-		if err != nil {
-			b, _ = jsonMarshal(map[string]string{
-				errorKey: err.Error(),
-			})
-			return b
-		}
-		if lineSeparated {
-			b = append(b, '\n')
-		}
-		return b
-	})
-}
-
-// JSONFormatEx formats log records as JSON objects. If pretty is true,
-// records will be pretty-printed. If lineSeparated is true, records
-// will be logged with a new line between each record.
-func JSONFormatEx(pretty, lineSeparated bool) Format {
-	jsonMarshal := json.Marshal
-	if pretty {
-		jsonMarshal = func(v interface{}) ([]byte, error) {
-			return json.MarshalIndent(v, "", "    ")
-		}
-	}
-
-	return FormatFunc(func(r *Record) []byte {
-		props := make(map[string]interface{})
-
-		props[r.KeyNames.Time] = r.Time
-		props[r.KeyNames.Lvl] = r.Lvl.String()
-		props[r.KeyNames.Msg] = r.Msg
-
-		for i := 0; i < len(r.Ctx); i += 2 {
-			k, ok := r.Ctx[i].(string)
-			if !ok {
-				props[errorKey] = fmt.Sprintf("%+v is not a string key", r.Ctx[i])
-			}
-			props[k] = formatJSONValue(r.Ctx[i+1])
-		}
-
-		b, err := jsonMarshal(props)
-		if err != nil {
-			b, _ = jsonMarshal(map[string]string{
-				errorKey: err.Error(),
-			})
-			return b
-		}
-
-		if lineSeparated {
-			b = append(b, '\n')
-		}
-
-		return b
-	})
-}
-
-func formatShared(value interface{}) (result interface{}) {
+// FormatSlogValue formats a slog.Value for serialization to terminal.
+func FormatSlogValue(v slog.Value, tmp []byte) (result []byte) {
+	var value any
 	defer func() {
 		if err := recover(); err != nil {
 			if v := reflect.ValueOf(value); v.Kind() == reflect.Ptr && v.IsNil() {
-				result = "nil"
+				result = []byte("<nil>")
 			} else {
 				panic(err)
 			}
 		}
 	}()
 
-	switch v := value.(type) {
-	case time.Time:
-		return v.Format(timeFormat)
-
-	case error:
-		return v.Error()
-
-	case fmt.Stringer:
-		return v.String()
-
-	default:
-		return v
-	}
-}
-
-func formatJSONValue(value interface{}) interface{} {
-	value = formatShared(value)
-	switch value.(type) {
-	case int, int8, int16, int32, int64, float32, float64, uint, uint8, uint16, uint32, uint64, string:
-		return value
-	default:
-		return fmt.Sprintf("%+v", value)
-	}
-}
-
-// formatValue formats a value for serialization
-func formatLogfmtValue(value interface{}, term bool) string {
-	if value == nil {
-		return "nil"
-	}
-
-	if t, ok := value.(time.Time); ok {
+	switch v.Kind() {
+	case slog.KindString:
+		return appendEscapeString(tmp, v.String())
+	case slog.KindInt64: // All int-types (int8, int16 etc) wind up here
+		return appendInt64(tmp, v.Int64())
+	case slog.KindUint64: // All uint-types (uint8, uint16 etc) wind up here
+		return appendUint64(tmp, v.Uint64(), false)
+	case slog.KindFloat64:
+		return strconv.AppendFloat(tmp, v.Float64(), floatFormat, 3, 64)
+	case slog.KindBool:
+		return strconv.AppendBool(tmp, v.Bool())
+	case slog.KindDuration:
+		value = v.Duration()
+	case slog.KindTime:
 		// Performance optimization: No need for escaping since the provided
 		// timeFormat doesn't have any escape characters, and escaping is
 		// expensive.
-		return t.Format(timeFormat)
-	}
-	if term {
-		if s, ok := value.(TerminalStringer); ok {
-			// Custom terminal stringer provided, use that
-			return escapeString(s.TerminalString())
-		}
-	}
-	value = formatShared(value)
-	switch v := value.(type) {
-	case bool:
-		return strconv.FormatBool(v)
-	case float32:
-		return strconv.FormatFloat(float64(v), floatFormat, 3, 64)
-	case float64:
-		return strconv.FormatFloat(v, floatFormat, 3, 64)
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		return fmt.Sprintf("%d", value)
-	case string:
-		return escapeString(v)
+		return v.Time().AppendFormat(tmp, timeFormat)
 	default:
-		return escapeString(fmt.Sprintf("%+v", value))
+		value = v.Any()
 	}
+	if value == nil {
+		return []byte("<nil>")
+	}
+	switch v := value.(type) {
+	case *big.Int: // Need to be before fmt.Stringer-clause
+		return appendBigInt(tmp, v)
+	case *uint256.Int: // Need to be before fmt.Stringer-clause
+		return appendU256(tmp, v)
+	case error:
+		return appendEscapeString(tmp, v.Error())
+	case TerminalStringer:
+		return appendEscapeString(tmp, v.TerminalString())
+	case fmt.Stringer:
+		return appendEscapeString(tmp, v.String())
+	}
+
+	// We can use the 'tmp' as a scratch-buffer, to first format the
+	// value, and in a second step do escaping.
+	internal := fmt.Appendf(tmp, "%+v", value)
+	return appendEscapeString(tmp, string(internal))
 }
 
-// escapeString checks if the provided string needs escaping/quoting, and
-// calls strconv.Quote if needed
-func escapeString(s string) string {
+// appendInt64 formats n with thousand separators and writes into buffer dst.
+func appendInt64(dst []byte, n int64) []byte {
+	if n < 0 {
+		return appendUint64(dst, uint64(-n), true)
+	}
+	return appendUint64(dst, uint64(n), false)
+}
+
+// appendUint64 formats n with thousand separators and writes into buffer dst.
+func appendUint64(dst []byte, n uint64, neg bool) []byte {
+	// Small numbers are fine as is
+	if n < 100000 {
+		if neg {
+			return strconv.AppendInt(dst, -int64(n), 10)
+		} else {
+			return strconv.AppendInt(dst, int64(n), 10)
+		}
+	}
+	// Large numbers should be split
+	const maxLength = 26
+
+	var (
+		out   = make([]byte, maxLength)
+		i     = maxLength - 1
+		comma = 0
+	)
+	for ; n > 0; i-- {
+		if comma == 3 {
+			comma = 0
+			out[i] = ','
+		} else {
+			comma++
+			out[i] = '0' + byte(n%10)
+			n /= 10
+		}
+	}
+	if neg {
+		out[i] = '-'
+		i--
+	}
+	return append(dst, out[i+1:]...)
+}
+
+// FormatLogfmtUint64 formats n with thousand separators.
+func FormatLogfmtUint64(n uint64) string {
+	return string(appendUint64(nil, n, false))
+}
+
+// appendBigInt formats n with thousand separators and writes to dst.
+func appendBigInt(dst []byte, n *big.Int) []byte {
+	if n.IsUint64() {
+		return appendUint64(dst, n.Uint64(), false)
+	}
+	if n.IsInt64() {
+		return appendInt64(dst, n.Int64())
+	}
+
+	var (
+		text  = n.String()
+		buf   = make([]byte, len(text)+len(text)/3)
+		comma = 0
+		i     = len(buf) - 1
+	)
+	for j := len(text) - 1; j >= 0; j, i = j-1, i-1 {
+		c := text[j]
+
+		switch {
+		case c == '-':
+			buf[i] = c
+		case comma == 3:
+			buf[i] = ','
+			i--
+			comma = 0
+			fallthrough
+		default:
+			buf[i] = c
+			comma++
+		}
+	}
+	return append(dst, buf[i+1:]...)
+}
+
+// appendU256 formats n with thousand separators.
+func appendU256(dst []byte, n *uint256.Int) []byte {
+	if n.IsUint64() {
+		return appendUint64(dst, n.Uint64(), false)
+	}
+	res := []byte(n.PrettyDec(','))
+	return append(dst, res...)
+}
+
+// appendEscapeString writes the string s to the given writer, with
+// escaping/quoting if needed.
+func appendEscapeString(dst []byte, s string) []byte {
+	needsQuoting := false
+	needsEscaping := false
+	for _, r := range s {
+		// If it contains spaces or equal-sign, we need to quote it.
+		if r == ' ' || r == '=' {
+			needsQuoting = true
+			continue
+		}
+		// We need to escape it, if it contains
+		// - character " (0x22) and lower (except space)
+		// - characters above ~ (0x7E), plus equal-sign
+		if r <= '"' || r > '~' {
+			needsEscaping = true
+			break
+		}
+	}
+	if needsEscaping {
+		return strconv.AppendQuote(dst, s)
+	}
+	// No escaping needed, but we might have to place within quote-marks, in case
+	// it contained a space
+	if needsQuoting {
+		dst = append(dst, '"')
+		dst = append(dst, []byte(s)...)
+		return append(dst, '"')
+	}
+	return append(dst, []byte(s)...)
+}
+
+// escapeMessage checks if the provided string needs escaping/quoting, similarly
+// to escapeString. The difference is that this method is more lenient: it allows
+// for spaces and linebreaks to occur without needing quoting.
+func escapeMessage(s string) string {
 	needsQuoting := false
 	for _, r := range s {
-		// We quote everything below " (0x34) and above~ (0x7E), plus equal-sign
-		if r <= '"' || r > '~' || r == '=' {
+		// Allow CR/LF/TAB. This is to make multi-line messages work.
+		if r == '\r' || r == '\n' || r == '\t' {
+			continue
+		}
+		// We quote everything below <space> (0x20) and above~ (0x7E),
+		// plus equal-sign
+		if r < ' ' || r > '~' || r == '=' {
 			needsQuoting = true
 			break
 		}
@@ -373,4 +318,46 @@ func escapeString(s string) string {
 		return s
 	}
 	return strconv.Quote(s)
+}
+
+// writeTimeTermFormat writes on the format "01-02|15:04:05.000"
+func writeTimeTermFormat(buf *bytes.Buffer, t time.Time) {
+	_, month, day := t.Date()
+	writePosIntWidth(buf, int(month), 2)
+	buf.WriteByte('-')
+	writePosIntWidth(buf, day, 2)
+	buf.WriteByte('|')
+	hour, min, sec := t.Clock()
+	writePosIntWidth(buf, hour, 2)
+	buf.WriteByte(':')
+	writePosIntWidth(buf, min, 2)
+	buf.WriteByte(':')
+	writePosIntWidth(buf, sec, 2)
+	ns := t.Nanosecond()
+	buf.WriteByte('.')
+	writePosIntWidth(buf, ns/1e6, 3)
+}
+
+// writePosIntWidth writes non-negative integer i to the buffer, padded on the left
+// by zeroes to the given width. Use a width of 0 to omit padding.
+// Adapted from pkg.go.dev/log/slog/internal/buffer
+func writePosIntWidth(b *bytes.Buffer, i, width int) {
+	// Cheap integer to fixed-width decimal ASCII.
+	// Copied from log/log.go.
+	if i < 0 {
+		panic("negative int")
+	}
+	// Assemble decimal in reverse order.
+	var bb [20]byte
+	bp := len(bb) - 1
+	for i >= 10 || width > 1 {
+		width--
+		q := i / 10
+		bb[bp] = byte('0' + i - q*10)
+		bp--
+		i = q
+	}
+	// i < 10
+	bb[bp] = byte('0' + i)
+	b.Write(bb[bp:])
 }

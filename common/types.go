@@ -26,10 +26,11 @@ import (
 	"math/big"
 	"math/rand"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"golang.org/x/crypto/sha3"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 )
 
 // Lengths of hashes and addresses in bytes.
@@ -41,8 +42,14 @@ const (
 )
 
 var (
-	hashT    = reflect.TypeOf(Hash{})
-	addressT = reflect.TypeOf(Address{})
+	hashT    = reflect.TypeFor[Hash]()
+	addressT = reflect.TypeFor[Address]()
+
+	// MaxAddress represents the maximum possible address value.
+	MaxAddress = HexToAddress("0xffffffffffffffffffffffffffffffffffffffff")
+
+	// MaxHash represents the maximum possible hash value.
+	MaxHash = HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
@@ -64,6 +71,20 @@ func BigToHash(b *big.Int) Hash { return BytesToHash(b.Bytes()) }
 // If b is larger than len(h), b will be cropped from the left.
 func HexToHash(s string) Hash { return BytesToHash(FromHex(s)) }
 
+// IsHexHash verifies whether a string can represent a valid hex-encoded
+// Ethereum hash or not.
+func IsHexHash(s string) bool {
+	if has0xPrefix(s) {
+		s = s[2:]
+	}
+	return len(s) == 2*HashLength && isHex(s)
+}
+
+// Cmp compares two hashes.
+func (h Hash) Cmp(other Hash) int {
+	return bytes.Compare(h[:], other[:])
+}
+
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash) Bytes() []byte { return h[:] }
 
@@ -76,7 +97,7 @@ func (h Hash) Hex() string { return hexutil.Encode(h[:]) }
 // TerminalString implements log.TerminalStringer, formatting a string for console
 // output during logging.
 func (h Hash) TerminalString() string {
-	return fmt.Sprintf("%x…%x", h[:3], h[29:])
+	return fmt.Sprintf("%x..%x", h[:3], h[29:])
 }
 
 // String implements the stringer interface and is used also by the logger when
@@ -86,7 +107,7 @@ func (h Hash) String() string {
 }
 
 // Format implements fmt.Formatter.
-// Hash supports the %v, %s, %v, %x, %X and %d format verbs.
+// Hash supports the %v, %s, %q, %x, %X and %d format verbs.
 func (h Hash) Format(s fmt.State, c rune) {
 	hexb := make([]byte, 2+len(h)*2)
 	copy(hexb, "0x")
@@ -225,11 +246,16 @@ func IsHexAddress(s string) bool {
 	return len(s) == 2*AddressLength && isHex(s)
 }
 
+// Cmp compares two addresses.
+func (a Address) Cmp(other Address) int {
+	return bytes.Compare(a[:], other[:])
+}
+
 // Bytes gets the string representation of the underlying address.
 func (a Address) Bytes() []byte { return a[:] }
 
-// Hash converts an address to a hash by left-padding it with zeros.
-func (a Address) Hash() Hash { return BytesToHash(a[:]) }
+// Big converts an address to a big integer.
+func (a Address) Big() *big.Int { return new(big.Int).SetBytes(a[:]) }
 
 // Hex returns an EIP55-compliant hex string representation of the address.
 func (a Address) Hex() string {
@@ -245,7 +271,7 @@ func (a *Address) checksumHex() []byte {
 	buf := a.hex()
 
 	// compute checksum
-	sha := sha3.NewLegacyKeccak256()
+	sha := keccak.NewLegacyKeccak256()
 	sha.Write(buf[2:])
 	hash := sha.Sum(nil)
 	for i := 2; i < len(buf); i++ {
@@ -270,7 +296,7 @@ func (a Address) hex() []byte {
 }
 
 // Format implements fmt.Formatter.
-// Address supports the %v, %s, %v, %x, %X and %d format verbs.
+// Address supports the %v, %s, %q, %x, %X and %d format verbs.
 func (a Address) Format(s fmt.State, c rune) {
 	switch c {
 	case 'v', 's':
@@ -397,7 +423,7 @@ func (ma *MixedcaseAddress) UnmarshalJSON(input []byte) error {
 }
 
 // MarshalJSON marshals the original value
-func (ma *MixedcaseAddress) MarshalJSON() ([]byte, error) {
+func (ma MixedcaseAddress) MarshalJSON() ([]byte, error) {
 	if strings.HasPrefix(ma.original, "0x") || strings.HasPrefix(ma.original, "0X") {
 		return json.Marshal(fmt.Sprintf("0x%s", ma.original[2:]))
 	}
@@ -425,4 +451,47 @@ func (ma *MixedcaseAddress) ValidChecksum() bool {
 // Original returns the mixed-case input string
 func (ma *MixedcaseAddress) Original() string {
 	return ma.original
+}
+
+// AddressEIP55 is an alias of Address with a customized json marshaller
+type AddressEIP55 Address
+
+// String returns the hex representation of the address in the manner of EIP55.
+func (addr AddressEIP55) String() string {
+	return Address(addr).Hex()
+}
+
+// MarshalJSON marshals the address in the manner of EIP55.
+func (addr AddressEIP55) MarshalJSON() ([]byte, error) {
+	return json.Marshal(addr.String())
+}
+
+type Decimal uint64
+
+func isString(input []byte) bool {
+	return len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"'
+}
+
+// UnmarshalJSON parses a hash in hex syntax.
+func (d *Decimal) UnmarshalJSON(input []byte) error {
+	if !isString(input) {
+		return &json.UnmarshalTypeError{Value: "non-string", Type: reflect.TypeFor[uint64]()}
+	}
+	if i, err := strconv.ParseUint(string(input[1:len(input)-1]), 10, 64); err == nil {
+		*d = Decimal(i)
+		return nil
+	} else {
+		return err
+	}
+}
+
+type PrettyBytes []byte
+
+// TerminalString implements log.TerminalStringer, formatting a string for console
+// output during logging.
+func (b PrettyBytes) TerminalString() string {
+	if len(b) < 7 {
+		return fmt.Sprintf("%x", b)
+	}
+	return fmt.Sprintf("%#x...%x (%dB)", b[:3], b[len(b)-3:], len(b))
 }

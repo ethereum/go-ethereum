@@ -25,7 +25,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 )
@@ -46,7 +46,7 @@ func parsePrivateKey(key string) (k ed25519.PrivateKey, header []byte, keyNum []
 	if string(keydata[:2]) != "Ed" {
 		return nil, nil, nil, errInvalidKeyHeader
 	}
-	return ed25519.PrivateKey(keydata[40:]), keydata[:2], keydata[32:40], nil
+	return keydata[40:], keydata[:2], keydata[32:40], nil
 }
 
 // SignFile creates a signature of the input file.
@@ -68,7 +68,7 @@ func SignFile(input string, output string, key string, untrustedComment string, 
 		trustedComment = fmt.Sprintf("timestamp:%d", time.Now().Unix())
 	}
 
-	filedata, err := ioutil.ReadFile(input)
+	filedata, err := os.ReadFile(input)
 	if err != nil {
 		return err
 	}
@@ -96,5 +96,5 @@ func SignFile(input string, output string, key string, untrustedComment string, 
 	fmt.Fprintln(out, base64.StdEncoding.EncodeToString(dataSig))
 	fmt.Fprintln(out, "trusted comment:", trustedComment)
 	fmt.Fprintln(out, base64.StdEncoding.EncodeToString(commentSig))
-	return ioutil.WriteFile(output, out.Bytes(), 0644)
+	return os.WriteFile(output, out.Bytes(), 0644)
 }

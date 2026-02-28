@@ -22,7 +22,10 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"math/bits"
 	"testing"
+
+	"github.com/holiman/uint256"
 )
 
 func checkError(t *testing.T, input string, got, want error) bool {
@@ -176,6 +179,64 @@ func TestUnmarshalBig(t *testing.T) {
 	}
 }
 
+var unmarshalU256Tests = []unmarshalTest{
+	// invalid encoding
+	{input: "", wantErr: errJSONEOF},
+	{input: "null", wantErr: errNonString(u256T)},
+	{input: "10", wantErr: errNonString(u256T)},
+	{input: `"0"`, wantErr: wrapTypeError(ErrMissingPrefix, u256T)},
+	{input: `"0x"`, wantErr: wrapTypeError(ErrEmptyNumber, u256T)},
+	{input: `"0x01"`, wantErr: wrapTypeError(ErrLeadingZero, u256T)},
+	{input: `"0xx"`, wantErr: wrapTypeError(ErrSyntax, u256T)},
+	{input: `"0x1zz01"`, wantErr: wrapTypeError(ErrSyntax, u256T)},
+	{
+		input:   `"0x10000000000000000000000000000000000000000000000000000000000000000"`,
+		wantErr: wrapTypeError(ErrBig256Range, u256T),
+	},
+
+	// valid encoding
+	{input: `""`, want: big.NewInt(0)},
+	{input: `"0x0"`, want: big.NewInt(0)},
+	{input: `"0x2"`, want: big.NewInt(0x2)},
+	{input: `"0x2F2"`, want: big.NewInt(0x2f2)},
+	{input: `"0X2F2"`, want: big.NewInt(0x2f2)},
+	{input: `"0x1122aaff"`, want: big.NewInt(0x1122aaff)},
+	{input: `"0xbBb"`, want: big.NewInt(0xbbb)},
+	{input: `"0xfffffffff"`, want: big.NewInt(0xfffffffff)},
+	{
+		input: `"0x112233445566778899aabbccddeeff"`,
+		want:  referenceBig("112233445566778899aabbccddeeff"),
+	},
+	{
+		input: `"0xffffffffffffffffffffffffffffffffffff"`,
+		want:  referenceBig("ffffffffffffffffffffffffffffffffffff"),
+	},
+	{
+		input: `"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"`,
+		want:  referenceBig("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+	},
+}
+
+func TestUnmarshalU256(t *testing.T) {
+	for _, test := range unmarshalU256Tests {
+		var v U256
+		err := json.Unmarshal([]byte(test.input), &v)
+		if !checkError(t, test.input, err, test.wantErr) {
+			continue
+		}
+		if test.want == nil {
+			continue
+		}
+		want := new(uint256.Int)
+		want.SetFromBig(test.want.(*big.Int))
+		have := (*uint256.Int)(&v)
+		if want.Cmp(have) != 0 {
+			t.Errorf("input %s: value mismatch: have %x, want %x", test.input, have, want)
+			continue
+		}
+	}
+}
+
 func BenchmarkUnmarshalBig(b *testing.B) {
 	input := []byte(`"0x123456789abcdef123456789abcdef"`)
 	for i := 0; i < b.N; i++ {
@@ -324,7 +385,7 @@ func TestUnmarshalUint(t *testing.T) {
 	for _, test := range unmarshalUintTests {
 		var v Uint
 		err := json.Unmarshal([]byte(test.input), &v)
-		if uintBits == 32 && test.wantErr32bit != nil {
+		if bits.UintSize == 32 && test.wantErr32bit != nil {
 			checkError(t, test.input, err, test.wantErr32bit)
 			continue
 		}
@@ -346,7 +407,6 @@ func TestUnmarshalFixedUnprefixedText(t *testing.T) {
 	}{
 		{input: "0x2", wantErr: ErrOddLength},
 		{input: "2", wantErr: ErrOddLength},
-		{input: "4444", wantErr: errors.New("hex string has length 4, want 8 for x")},
 		{input: "4444", wantErr: errors.New("hex string has length 4, want 8 for x")},
 		// check that output is not modified for partially correct input
 		{input: "444444gg", wantErr: ErrSyntax, want: []byte{0, 0, 0, 0}},

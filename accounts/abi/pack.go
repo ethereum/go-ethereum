@@ -37,7 +37,16 @@ func packBytesSlice(bytes []byte, l int) []byte {
 // t.
 func packElement(t Type, reflectValue reflect.Value) ([]byte, error) {
 	switch t.T {
-	case IntTy, UintTy:
+	case UintTy:
+		// make sure to not pack a negative value into a uint type.
+		if reflectValue.Kind() == reflect.Ptr {
+			val := new(big.Int).Set(reflectValue.Interface().(*big.Int))
+			if val.Sign() == -1 {
+				return nil, errInvalidSign
+			}
+		}
+		return packNum(reflectValue), nil
+	case IntTy:
 		return packNum(reflectValue), nil
 	case StringTy:
 		return packBytesSlice([]byte(reflectValue.String()), reflectValue.Len()), nil
@@ -57,7 +66,7 @@ func packElement(t Type, reflectValue reflect.Value) ([]byte, error) {
 			reflectValue = mustArrayToByteSlice(reflectValue)
 		}
 		if reflectValue.Type() != reflect.TypeOf([]byte{}) {
-			return []byte{}, errors.New("Bytes type is neither slice nor array")
+			return []byte{}, errors.New("bytes type is neither slice nor array")
 		}
 		return packBytesSlice(reflectValue.Bytes(), reflectValue.Len()), nil
 	case FixedBytesTy, FunctionTy:
@@ -66,7 +75,7 @@ func packElement(t Type, reflectValue reflect.Value) ([]byte, error) {
 		}
 		return common.RightPadBytes(reflectValue.Bytes(), 32), nil
 	default:
-		return []byte{}, fmt.Errorf("Could not pack element, unknown type: %v", t.T)
+		return []byte{}, fmt.Errorf("could not pack element, unknown type: %v", t.T)
 	}
 }
 

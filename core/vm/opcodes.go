@@ -24,107 +24,111 @@ import (
 type OpCode byte
 
 // IsPush specifies if an opcode is a PUSH opcode.
+// @deprecated: this method is often used in order to know if there are immediates.
+// Please use `vm.Immediates` instead.
 func (op OpCode) IsPush() bool {
-	switch op {
-	case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
-		return true
-	}
-	return false
-}
-
-// IsStaticJump specifies if an opcode is JUMP.
-func (op OpCode) IsStaticJump() bool {
-	return op == JUMP
+	return PUSH0 <= op && op <= PUSH32
 }
 
 // 0x0 range - arithmetic ops.
 const (
-	STOP OpCode = iota
-	ADD
-	MUL
-	SUB
-	DIV
-	SDIV
-	MOD
-	SMOD
-	ADDMOD
-	MULMOD
-	EXP
-	SIGNEXTEND
+	STOP       OpCode = 0x0
+	ADD        OpCode = 0x1
+	MUL        OpCode = 0x2
+	SUB        OpCode = 0x3
+	DIV        OpCode = 0x4
+	SDIV       OpCode = 0x5
+	MOD        OpCode = 0x6
+	SMOD       OpCode = 0x7
+	ADDMOD     OpCode = 0x8
+	MULMOD     OpCode = 0x9
+	EXP        OpCode = 0xa
+	SIGNEXTEND OpCode = 0xb
 )
 
 // 0x10 range - comparison ops.
 const (
-	LT OpCode = iota + 0x10
-	GT
-	SLT
-	SGT
-	EQ
-	ISZERO
-	AND
-	OR
-	XOR
-	NOT
-	BYTE
-	SHL
-	SHR
-	SAR
+	LT     OpCode = 0x10
+	GT     OpCode = 0x11
+	SLT    OpCode = 0x12
+	SGT    OpCode = 0x13
+	EQ     OpCode = 0x14
+	ISZERO OpCode = 0x15
+	AND    OpCode = 0x16
+	OR     OpCode = 0x17
+	XOR    OpCode = 0x18
+	NOT    OpCode = 0x19
+	BYTE   OpCode = 0x1a
+	SHL    OpCode = 0x1b
+	SHR    OpCode = 0x1c
+	SAR    OpCode = 0x1d
+	CLZ    OpCode = 0x1e
+)
 
-	SHA3 OpCode = 0x20
+// 0x20 range - crypto.
+const (
+	KECCAK256 OpCode = 0x20
 )
 
 // 0x30 range - closure state.
 const (
-	ADDRESS OpCode = 0x30 + iota
-	BALANCE
-	ORIGIN
-	CALLER
-	CALLVALUE
-	CALLDATALOAD
-	CALLDATASIZE
-	CALLDATACOPY
-	CODESIZE
-	CODECOPY
-	GASPRICE
-	EXTCODESIZE
-	EXTCODECOPY
-	RETURNDATASIZE
-	RETURNDATACOPY
-	EXTCODEHASH
+	ADDRESS        OpCode = 0x30
+	BALANCE        OpCode = 0x31
+	ORIGIN         OpCode = 0x32
+	CALLER         OpCode = 0x33
+	CALLVALUE      OpCode = 0x34
+	CALLDATALOAD   OpCode = 0x35
+	CALLDATASIZE   OpCode = 0x36
+	CALLDATACOPY   OpCode = 0x37
+	CODESIZE       OpCode = 0x38
+	CODECOPY       OpCode = 0x39
+	GASPRICE       OpCode = 0x3a
+	EXTCODESIZE    OpCode = 0x3b
+	EXTCODECOPY    OpCode = 0x3c
+	RETURNDATASIZE OpCode = 0x3d
+	RETURNDATACOPY OpCode = 0x3e
+	EXTCODEHASH    OpCode = 0x3f
 )
 
 // 0x40 range - block operations.
 const (
-	BLOCKHASH OpCode = 0x40 + iota
-	COINBASE
-	TIMESTAMP
-	NUMBER
-	DIFFICULTY
-	GASLIMIT
+	BLOCKHASH   OpCode = 0x40
+	COINBASE    OpCode = 0x41
+	TIMESTAMP   OpCode = 0x42
+	NUMBER      OpCode = 0x43
+	DIFFICULTY  OpCode = 0x44
+	RANDOM      OpCode = 0x44 // Same as DIFFICULTY
+	PREVRANDAO  OpCode = 0x44 // Same as DIFFICULTY
+	GASLIMIT    OpCode = 0x45
 	CHAINID     OpCode = 0x46
 	SELFBALANCE OpCode = 0x47
+	BASEFEE     OpCode = 0x48
+	BLOBHASH    OpCode = 0x49
+	BLOBBASEFEE OpCode = 0x4a
+	SLOTNUM     OpCode = 0x4b
 )
 
 // 0x50 range - 'storage' and execution.
 const (
-	POP       OpCode = 0x50
-	MLOAD     OpCode = 0x51
-	MSTORE    OpCode = 0x52
-	MSTORE8   OpCode = 0x53
-	SLOAD     OpCode = 0x54
-	SSTORE    OpCode = 0x55
-	JUMP      OpCode = 0x56
-	JUMPI     OpCode = 0x57
-	PC        OpCode = 0x58
-	MSIZE     OpCode = 0x59
-	GAS       OpCode = 0x5a
-	JUMPDEST  OpCode = 0x5b
-	BEGINSUB  OpCode = 0x5c
-	RETURNSUB OpCode = 0x5d
-	JUMPSUB   OpCode = 0x5e
+	POP      OpCode = 0x50
+	MLOAD    OpCode = 0x51
+	MSTORE   OpCode = 0x52
+	MSTORE8  OpCode = 0x53
+	SLOAD    OpCode = 0x54
+	SSTORE   OpCode = 0x55
+	JUMP     OpCode = 0x56
+	JUMPI    OpCode = 0x57
+	PC       OpCode = 0x58
+	MSIZE    OpCode = 0x59
+	GAS      OpCode = 0x5a
+	JUMPDEST OpCode = 0x5b
+	TLOAD    OpCode = 0x5c
+	TSTORE   OpCode = 0x5d
+	MCOPY    OpCode = 0x5e
+	PUSH0    OpCode = 0x5f
 )
 
-// 0x60 range.
+// 0x60 range - pushes.
 const (
 	PUSH1 OpCode = 0x60 + iota
 	PUSH2
@@ -158,7 +162,11 @@ const (
 	PUSH30
 	PUSH31
 	PUSH32
-	DUP1
+)
+
+// 0x80 range - dups.
+const (
+	DUP1 OpCode = 0x80 + iota
 	DUP2
 	DUP3
 	DUP4
@@ -174,7 +182,11 @@ const (
 	DUP14
 	DUP15
 	DUP16
-	SWAP1
+)
+
+// 0x90 range - swaps.
+const (
+	SWAP1 OpCode = 0x90 + iota
 	SWAP2
 	SWAP3
 	SWAP4
@@ -201,28 +213,50 @@ const (
 	LOG4
 )
 
-// unofficial opcodes used for parsing.
+// 0xd0 range - eof operations.
 const (
-	PUSH OpCode = 0xb0 + iota
-	DUP
-	SWAP
+	DATALOAD  OpCode = 0xd0
+	DATALOADN OpCode = 0xd1
+	DATASIZE  OpCode = 0xd2
+	DATACOPY  OpCode = 0xd3
+)
+
+// 0xe0 range - eof operations.
+const (
+	RJUMP          OpCode = 0xe0
+	RJUMPI         OpCode = 0xe1
+	RJUMPV         OpCode = 0xe2
+	CALLF          OpCode = 0xe3
+	RETF           OpCode = 0xe4
+	JUMPF          OpCode = 0xe5
+	DUPN           OpCode = 0xe6
+	SWAPN          OpCode = 0xe7
+	EXCHANGE       OpCode = 0xe8
+	EOFCREATE      OpCode = 0xec
+	RETURNCONTRACT OpCode = 0xee
 )
 
 // 0xf0 range - closures.
 const (
-	CREATE OpCode = 0xf0 + iota
-	CALL
-	CALLCODE
-	RETURN
-	DELEGATECALL
-	CREATE2
-	STATICCALL   OpCode = 0xfa
-	REVERT       OpCode = 0xfd
-	SELFDESTRUCT OpCode = 0xff
+	CREATE       OpCode = 0xf0
+	CALL         OpCode = 0xf1
+	CALLCODE     OpCode = 0xf2
+	RETURN       OpCode = 0xf3
+	DELEGATECALL OpCode = 0xf4
+	CREATE2      OpCode = 0xf5
+
+	RETURNDATALOAD  OpCode = 0xf7
+	EXTCALL         OpCode = 0xf8
+	EXTDELEGATECALL OpCode = 0xf9
+
+	STATICCALL    OpCode = 0xfa
+	EXTSTATICCALL OpCode = 0xfb
+	REVERT        OpCode = 0xfd
+	INVALID       OpCode = 0xfe
+	SELFDESTRUCT  OpCode = 0xff
 )
 
-// Since the opcodes aren't all in order we can't use a regular slice.
-var opCodeToString = map[OpCode]string{
+var opCodeToString = [256]string{
 	// 0x0 range - arithmetic ops.
 	STOP:       "STOP",
 	ADD:        "ADD",
@@ -250,11 +284,12 @@ var opCodeToString = map[OpCode]string{
 	SHL:    "SHL",
 	SHR:    "SHR",
 	SAR:    "SAR",
+	CLZ:    "CLZ",
 	ADDMOD: "ADDMOD",
 	MULMOD: "MULMOD",
 
 	// 0x20 range - crypto.
-	SHA3: "SHA3",
+	KECCAK256: "KECCAK256",
 
 	// 0x30 range - closure state.
 	ADDRESS:        "ADDRESS",
@@ -279,15 +314,17 @@ var opCodeToString = map[OpCode]string{
 	COINBASE:    "COINBASE",
 	TIMESTAMP:   "TIMESTAMP",
 	NUMBER:      "NUMBER",
-	DIFFICULTY:  "DIFFICULTY",
+	DIFFICULTY:  "DIFFICULTY", // TODO (MariusVanDerWijden) rename to PREVRANDAO post merge
 	GASLIMIT:    "GASLIMIT",
 	CHAINID:     "CHAINID",
 	SELFBALANCE: "SELFBALANCE",
+	BASEFEE:     "BASEFEE",
+	BLOBHASH:    "BLOBHASH",
+	BLOBBASEFEE: "BLOBBASEFEE",
+	SLOTNUM:     "SLOTNUM",
 
 	// 0x50 range - 'storage' and execution.
-	POP: "POP",
-	//DUP:     "DUP",
-	//SWAP:    "SWAP",
+	POP:      "POP",
 	MLOAD:    "MLOAD",
 	MSTORE:   "MSTORE",
 	MSTORE8:  "MSTORE8",
@@ -299,12 +336,12 @@ var opCodeToString = map[OpCode]string{
 	MSIZE:    "MSIZE",
 	GAS:      "GAS",
 	JUMPDEST: "JUMPDEST",
+	TLOAD:    "TLOAD",
+	TSTORE:   "TSTORE",
+	MCOPY:    "MCOPY",
+	PUSH0:    "PUSH0",
 
-	BEGINSUB:  "BEGINSUB",
-	JUMPSUB:   "JUMPSUB",
-	RETURNSUB: "RETURNSUB",
-
-	// 0x60 range - push.
+	// 0x60 range - pushes.
 	PUSH1:  "PUSH1",
 	PUSH2:  "PUSH2",
 	PUSH3:  "PUSH3",
@@ -338,6 +375,7 @@ var opCodeToString = map[OpCode]string{
 	PUSH31: "PUSH31",
 	PUSH32: "PUSH32",
 
+	// 0x80 - dups.
 	DUP1:  "DUP1",
 	DUP2:  "DUP2",
 	DUP3:  "DUP3",
@@ -355,6 +393,7 @@ var opCodeToString = map[OpCode]string{
 	DUP15: "DUP15",
 	DUP16: "DUP16",
 
+	// 0x90 - swaps.
 	SWAP1:  "SWAP1",
 	SWAP2:  "SWAP2",
 	SWAP3:  "SWAP3",
@@ -371,182 +410,230 @@ var opCodeToString = map[OpCode]string{
 	SWAP14: "SWAP14",
 	SWAP15: "SWAP15",
 	SWAP16: "SWAP16",
-	LOG0:   "LOG0",
-	LOG1:   "LOG1",
-	LOG2:   "LOG2",
-	LOG3:   "LOG3",
-	LOG4:   "LOG4",
 
-	// 0xf0 range.
+	// 0xa0 range - logging ops.
+	LOG0: "LOG0",
+	LOG1: "LOG1",
+	LOG2: "LOG2",
+	LOG3: "LOG3",
+	LOG4: "LOG4",
+
+	// 0xd range - eof ops.
+	DATALOAD:  "DATALOAD",
+	DATALOADN: "DATALOADN",
+	DATASIZE:  "DATASIZE",
+	DATACOPY:  "DATACOPY",
+
+	// 0xe0 range.
+	RJUMP:          "RJUMP",
+	RJUMPI:         "RJUMPI",
+	RJUMPV:         "RJUMPV",
+	CALLF:          "CALLF",
+	RETF:           "RETF",
+	JUMPF:          "JUMPF",
+	DUPN:           "DUPN",
+	SWAPN:          "SWAPN",
+	EXCHANGE:       "EXCHANGE",
+	EOFCREATE:      "EOFCREATE",
+	RETURNCONTRACT: "RETURNCONTRACT",
+
+	// 0xf0 range - closures.
 	CREATE:       "CREATE",
 	CALL:         "CALL",
 	RETURN:       "RETURN",
 	CALLCODE:     "CALLCODE",
 	DELEGATECALL: "DELEGATECALL",
 	CREATE2:      "CREATE2",
-	STATICCALL:   "STATICCALL",
-	REVERT:       "REVERT",
-	SELFDESTRUCT: "SELFDESTRUCT",
 
-	PUSH: "PUSH",
-	DUP:  "DUP",
-	SWAP: "SWAP",
+	RETURNDATALOAD:  "RETURNDATALOAD",
+	EXTCALL:         "EXTCALL",
+	EXTDELEGATECALL: "EXTDELEGATECALL",
+
+	STATICCALL:    "STATICCALL",
+	EXTSTATICCALL: "EXTSTATICCALL",
+	REVERT:        "REVERT",
+	INVALID:       "INVALID",
+	SELFDESTRUCT:  "SELFDESTRUCT",
 }
 
 func (op OpCode) String() string {
-	str := opCodeToString[op]
-	if len(str) == 0 {
-		return fmt.Sprintf("opcode 0x%x not defined", int(op))
+	if s := opCodeToString[op]; s != "" {
+		return s
 	}
-
-	return str
+	return fmt.Sprintf("opcode %#x not defined", int(op))
 }
 
 var stringToOp = map[string]OpCode{
-	"STOP":           STOP,
-	"ADD":            ADD,
-	"MUL":            MUL,
-	"SUB":            SUB,
-	"DIV":            DIV,
-	"SDIV":           SDIV,
-	"MOD":            MOD,
-	"SMOD":           SMOD,
-	"EXP":            EXP,
-	"NOT":            NOT,
-	"LT":             LT,
-	"GT":             GT,
-	"SLT":            SLT,
-	"SGT":            SGT,
-	"EQ":             EQ,
-	"ISZERO":         ISZERO,
-	"SIGNEXTEND":     SIGNEXTEND,
-	"AND":            AND,
-	"OR":             OR,
-	"XOR":            XOR,
-	"BYTE":           BYTE,
-	"SHL":            SHL,
-	"SHR":            SHR,
-	"SAR":            SAR,
-	"ADDMOD":         ADDMOD,
-	"MULMOD":         MULMOD,
-	"SHA3":           SHA3,
-	"ADDRESS":        ADDRESS,
-	"BALANCE":        BALANCE,
-	"ORIGIN":         ORIGIN,
-	"CALLER":         CALLER,
-	"CALLVALUE":      CALLVALUE,
-	"CALLDATALOAD":   CALLDATALOAD,
-	"CALLDATASIZE":   CALLDATASIZE,
-	"CALLDATACOPY":   CALLDATACOPY,
-	"CHAINID":        CHAINID,
-	"DELEGATECALL":   DELEGATECALL,
-	"STATICCALL":     STATICCALL,
-	"CODESIZE":       CODESIZE,
-	"CODECOPY":       CODECOPY,
-	"GASPRICE":       GASPRICE,
-	"EXTCODESIZE":    EXTCODESIZE,
-	"EXTCODECOPY":    EXTCODECOPY,
-	"RETURNDATASIZE": RETURNDATASIZE,
-	"RETURNDATACOPY": RETURNDATACOPY,
-	"EXTCODEHASH":    EXTCODEHASH,
-	"BLOCKHASH":      BLOCKHASH,
-	"COINBASE":       COINBASE,
-	"TIMESTAMP":      TIMESTAMP,
-	"NUMBER":         NUMBER,
-	"DIFFICULTY":     DIFFICULTY,
-	"GASLIMIT":       GASLIMIT,
-	"SELFBALANCE":    SELFBALANCE,
-	"POP":            POP,
-	"MLOAD":          MLOAD,
-	"MSTORE":         MSTORE,
-	"MSTORE8":        MSTORE8,
-	"SLOAD":          SLOAD,
-	"SSTORE":         SSTORE,
-	"JUMP":           JUMP,
-	"JUMPI":          JUMPI,
-	"PC":             PC,
-	"MSIZE":          MSIZE,
-	"GAS":            GAS,
-	"JUMPDEST":       JUMPDEST,
-	"BEGINSUB":       BEGINSUB,
-	"RETURNSUB":      RETURNSUB,
-	"JUMPSUB":        JUMPSUB,
-	"PUSH1":          PUSH1,
-	"PUSH2":          PUSH2,
-	"PUSH3":          PUSH3,
-	"PUSH4":          PUSH4,
-	"PUSH5":          PUSH5,
-	"PUSH6":          PUSH6,
-	"PUSH7":          PUSH7,
-	"PUSH8":          PUSH8,
-	"PUSH9":          PUSH9,
-	"PUSH10":         PUSH10,
-	"PUSH11":         PUSH11,
-	"PUSH12":         PUSH12,
-	"PUSH13":         PUSH13,
-	"PUSH14":         PUSH14,
-	"PUSH15":         PUSH15,
-	"PUSH16":         PUSH16,
-	"PUSH17":         PUSH17,
-	"PUSH18":         PUSH18,
-	"PUSH19":         PUSH19,
-	"PUSH20":         PUSH20,
-	"PUSH21":         PUSH21,
-	"PUSH22":         PUSH22,
-	"PUSH23":         PUSH23,
-	"PUSH24":         PUSH24,
-	"PUSH25":         PUSH25,
-	"PUSH26":         PUSH26,
-	"PUSH27":         PUSH27,
-	"PUSH28":         PUSH28,
-	"PUSH29":         PUSH29,
-	"PUSH30":         PUSH30,
-	"PUSH31":         PUSH31,
-	"PUSH32":         PUSH32,
-	"DUP1":           DUP1,
-	"DUP2":           DUP2,
-	"DUP3":           DUP3,
-	"DUP4":           DUP4,
-	"DUP5":           DUP5,
-	"DUP6":           DUP6,
-	"DUP7":           DUP7,
-	"DUP8":           DUP8,
-	"DUP9":           DUP9,
-	"DUP10":          DUP10,
-	"DUP11":          DUP11,
-	"DUP12":          DUP12,
-	"DUP13":          DUP13,
-	"DUP14":          DUP14,
-	"DUP15":          DUP15,
-	"DUP16":          DUP16,
-	"SWAP1":          SWAP1,
-	"SWAP2":          SWAP2,
-	"SWAP3":          SWAP3,
-	"SWAP4":          SWAP4,
-	"SWAP5":          SWAP5,
-	"SWAP6":          SWAP6,
-	"SWAP7":          SWAP7,
-	"SWAP8":          SWAP8,
-	"SWAP9":          SWAP9,
-	"SWAP10":         SWAP10,
-	"SWAP11":         SWAP11,
-	"SWAP12":         SWAP12,
-	"SWAP13":         SWAP13,
-	"SWAP14":         SWAP14,
-	"SWAP15":         SWAP15,
-	"SWAP16":         SWAP16,
-	"LOG0":           LOG0,
-	"LOG1":           LOG1,
-	"LOG2":           LOG2,
-	"LOG3":           LOG3,
-	"LOG4":           LOG4,
-	"CREATE":         CREATE,
-	"CREATE2":        CREATE2,
-	"CALL":           CALL,
-	"RETURN":         RETURN,
-	"CALLCODE":       CALLCODE,
-	"REVERT":         REVERT,
-	"SELFDESTRUCT":   SELFDESTRUCT,
+	"STOP":            STOP,
+	"ADD":             ADD,
+	"MUL":             MUL,
+	"SUB":             SUB,
+	"DIV":             DIV,
+	"SDIV":            SDIV,
+	"MOD":             MOD,
+	"SMOD":            SMOD,
+	"EXP":             EXP,
+	"NOT":             NOT,
+	"LT":              LT,
+	"GT":              GT,
+	"SLT":             SLT,
+	"SGT":             SGT,
+	"EQ":              EQ,
+	"ISZERO":          ISZERO,
+	"SIGNEXTEND":      SIGNEXTEND,
+	"AND":             AND,
+	"OR":              OR,
+	"XOR":             XOR,
+	"BYTE":            BYTE,
+	"SHL":             SHL,
+	"SHR":             SHR,
+	"SAR":             SAR,
+	"CLZ":             CLZ,
+	"ADDMOD":          ADDMOD,
+	"MULMOD":          MULMOD,
+	"KECCAK256":       KECCAK256,
+	"ADDRESS":         ADDRESS,
+	"BALANCE":         BALANCE,
+	"ORIGIN":          ORIGIN,
+	"CALLER":          CALLER,
+	"CALLVALUE":       CALLVALUE,
+	"CALLDATALOAD":    CALLDATALOAD,
+	"CALLDATASIZE":    CALLDATASIZE,
+	"CALLDATACOPY":    CALLDATACOPY,
+	"CHAINID":         CHAINID,
+	"BASEFEE":         BASEFEE,
+	"BLOBHASH":        BLOBHASH,
+	"BLOBBASEFEE":     BLOBBASEFEE,
+	"SLOTNUM":         SLOTNUM,
+	"DELEGATECALL":    DELEGATECALL,
+	"STATICCALL":      STATICCALL,
+	"CODESIZE":        CODESIZE,
+	"CODECOPY":        CODECOPY,
+	"GASPRICE":        GASPRICE,
+	"EXTCODESIZE":     EXTCODESIZE,
+	"EXTCODECOPY":     EXTCODECOPY,
+	"RETURNDATASIZE":  RETURNDATASIZE,
+	"RETURNDATACOPY":  RETURNDATACOPY,
+	"EXTCODEHASH":     EXTCODEHASH,
+	"BLOCKHASH":       BLOCKHASH,
+	"COINBASE":        COINBASE,
+	"TIMESTAMP":       TIMESTAMP,
+	"NUMBER":          NUMBER,
+	"DIFFICULTY":      DIFFICULTY,
+	"GASLIMIT":        GASLIMIT,
+	"SELFBALANCE":     SELFBALANCE,
+	"POP":             POP,
+	"MLOAD":           MLOAD,
+	"MSTORE":          MSTORE,
+	"MSTORE8":         MSTORE8,
+	"SLOAD":           SLOAD,
+	"SSTORE":          SSTORE,
+	"JUMP":            JUMP,
+	"JUMPI":           JUMPI,
+	"PC":              PC,
+	"MSIZE":           MSIZE,
+	"GAS":             GAS,
+	"JUMPDEST":        JUMPDEST,
+	"TLOAD":           TLOAD,
+	"TSTORE":          TSTORE,
+	"MCOPY":           MCOPY,
+	"PUSH0":           PUSH0,
+	"PUSH1":           PUSH1,
+	"PUSH2":           PUSH2,
+	"PUSH3":           PUSH3,
+	"PUSH4":           PUSH4,
+	"PUSH5":           PUSH5,
+	"PUSH6":           PUSH6,
+	"PUSH7":           PUSH7,
+	"PUSH8":           PUSH8,
+	"PUSH9":           PUSH9,
+	"PUSH10":          PUSH10,
+	"PUSH11":          PUSH11,
+	"PUSH12":          PUSH12,
+	"PUSH13":          PUSH13,
+	"PUSH14":          PUSH14,
+	"PUSH15":          PUSH15,
+	"PUSH16":          PUSH16,
+	"PUSH17":          PUSH17,
+	"PUSH18":          PUSH18,
+	"PUSH19":          PUSH19,
+	"PUSH20":          PUSH20,
+	"PUSH21":          PUSH21,
+	"PUSH22":          PUSH22,
+	"PUSH23":          PUSH23,
+	"PUSH24":          PUSH24,
+	"PUSH25":          PUSH25,
+	"PUSH26":          PUSH26,
+	"PUSH27":          PUSH27,
+	"PUSH28":          PUSH28,
+	"PUSH29":          PUSH29,
+	"PUSH30":          PUSH30,
+	"PUSH31":          PUSH31,
+	"PUSH32":          PUSH32,
+	"DUP1":            DUP1,
+	"DUP2":            DUP2,
+	"DUP3":            DUP3,
+	"DUP4":            DUP4,
+	"DUP5":            DUP5,
+	"DUP6":            DUP6,
+	"DUP7":            DUP7,
+	"DUP8":            DUP8,
+	"DUP9":            DUP9,
+	"DUP10":           DUP10,
+	"DUP11":           DUP11,
+	"DUP12":           DUP12,
+	"DUP13":           DUP13,
+	"DUP14":           DUP14,
+	"DUP15":           DUP15,
+	"DUP16":           DUP16,
+	"SWAP1":           SWAP1,
+	"SWAP2":           SWAP2,
+	"SWAP3":           SWAP3,
+	"SWAP4":           SWAP4,
+	"SWAP5":           SWAP5,
+	"SWAP6":           SWAP6,
+	"SWAP7":           SWAP7,
+	"SWAP8":           SWAP8,
+	"SWAP9":           SWAP9,
+	"SWAP10":          SWAP10,
+	"SWAP11":          SWAP11,
+	"SWAP12":          SWAP12,
+	"SWAP13":          SWAP13,
+	"SWAP14":          SWAP14,
+	"SWAP15":          SWAP15,
+	"SWAP16":          SWAP16,
+	"LOG0":            LOG0,
+	"LOG1":            LOG1,
+	"LOG2":            LOG2,
+	"LOG3":            LOG3,
+	"LOG4":            LOG4,
+	"DATALOAD":        DATALOAD,
+	"DATALOADN":       DATALOADN,
+	"DATASIZE":        DATASIZE,
+	"DATACOPY":        DATACOPY,
+	"RJUMP":           RJUMP,
+	"RJUMPI":          RJUMPI,
+	"RJUMPV":          RJUMPV,
+	"CALLF":           CALLF,
+	"RETF":            RETF,
+	"JUMPF":           JUMPF,
+	"DUPN":            DUPN,
+	"SWAPN":           SWAPN,
+	"EXCHANGE":        EXCHANGE,
+	"EOFCREATE":       EOFCREATE,
+	"RETURNCONTRACT":  RETURNCONTRACT,
+	"CREATE":          CREATE,
+	"CREATE2":         CREATE2,
+	"RETURNDATALOAD":  RETURNDATALOAD,
+	"EXTCALL":         EXTCALL,
+	"EXTDELEGATECALL": EXTDELEGATECALL,
+	"EXTSTATICCALL":   EXTSTATICCALL,
+	"CALL":            CALL,
+	"RETURN":          RETURN,
+	"CALLCODE":        CALLCODE,
+	"REVERT":          REVERT,
+	"INVALID":         INVALID,
+	"SELFDESTRUCT":    SELFDESTRUCT,
 }
 
 // StringToOp finds the opcode whose name is stored in `str`.

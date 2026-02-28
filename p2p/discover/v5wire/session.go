@@ -22,10 +22,10 @@ import (
 	"encoding/binary"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/hashicorp/golang-lru/simplelru"
 )
 
 const handshakeTimeout = time.Second
@@ -33,7 +33,7 @@ const handshakeTimeout = time.Second
 // The SessionCache keeps negotiated encryption keys and
 // state for in-progress handshakes in the Discovery v5 wire protocol.
 type SessionCache struct {
-	sessions   *simplelru.LRU
+	sessions   lru.BasicLRU[sessionID, *session]
 	handshakes map[sessionID]*Whoareyou
 	clock      mclock.Clock
 
@@ -54,20 +54,17 @@ type session struct {
 	writeKey     []byte
 	readKey      []byte
 	nonceCounter uint32
+	node         *enode.Node
 }
 
 // keysFlipped returns a copy of s with the read and write keys flipped.
 func (s *session) keysFlipped() *session {
-	return &session{s.readKey, s.writeKey, s.nonceCounter}
+	return &session{s.readKey, s.writeKey, s.nonceCounter, s.node}
 }
 
 func NewSessionCache(maxItems int, clock mclock.Clock) *SessionCache {
-	cache, err := simplelru.NewLRU(maxItems, nil)
-	if err != nil {
-		panic("can't create session cache")
-	}
 	return &SessionCache{
-		sessions:        cache,
+		sessions:        lru.NewBasicLRU[sessionID, *session](maxItems),
 		handshakes:      make(map[sessionID]*Whoareyou),
 		clock:           clock,
 		nonceGen:        generateNonce,
@@ -95,11 +92,8 @@ func (sc *SessionCache) nextNonce(s *session) (Nonce, error) {
 
 // session returns the current session for the given node, if any.
 func (sc *SessionCache) session(id enode.ID, addr string) *session {
-	item, ok := sc.sessions.Get(sessionID{id, addr})
-	if !ok {
-		return nil
-	}
-	return item.(*session)
+	item, _ := sc.sessions.Get(sessionID{id, addr})
+	return item
 }
 
 // readKey returns the current read key for the given node.
@@ -110,8 +104,19 @@ func (sc *SessionCache) readKey(id enode.ID, addr string) []byte {
 	return nil
 }
 
+func (sc *SessionCache) readNode(id enode.ID, addr string) *enode.Node {
+	if s := sc.session(id, addr); s != nil {
+		return s.node
+	}
+	return nil
+}
+
 // storeNewSession stores new encryption keys in the cache.
-func (sc *SessionCache) storeNewSession(id enode.ID, addr string, s *session) {
+func (sc *SessionCache) storeNewSession(id enode.ID, addr string, s *session, n *enode.Node) {
+	if n == nil {
+		panic("nil node in storeNewSession")
+	}
+	s.node = n
 	sc.sessions.Add(sessionID{id, addr}, s)
 }
 

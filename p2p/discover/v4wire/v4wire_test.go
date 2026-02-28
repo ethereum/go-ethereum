@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -40,7 +39,6 @@ var testPackets = []struct {
 			From:       Endpoint{net.ParseIP("127.0.0.1").To4(), 3322, 5544},
 			To:         Endpoint{net.ParseIP("::1"), 2222, 3333},
 			Expiration: 1136239445,
-			Rest:       []rlp.RawValue{},
 		},
 	},
 	{
@@ -50,26 +48,8 @@ var testPackets = []struct {
 			From:       Endpoint{net.ParseIP("127.0.0.1").To4(), 3322, 5544},
 			To:         Endpoint{net.ParseIP("::1"), 2222, 3333},
 			Expiration: 1136239445,
-			Rest:       []rlp.RawValue{{0x01}, {0x02}},
-		},
-	},
-	{
-		input: "577be4349c4dd26768081f58de4c6f375a7a22f3f7adda654d1428637412c3d7fe917cadc56d4e5e7ffae1dbe3efffb9849feb71b262de37977e7c7a44e677295680e9e38ab26bee2fcbae207fba3ff3d74069a50b902a82c9903ed37cc993c50001f83e82022bd79020010db83c4d001500000000abcdef12820cfa8215a8d79020010db885a308d313198a2e037073488208ae82823a8443b9a355c5010203040531b9019afde696e582a78fa8d95ea13ce3297d4afb8ba6433e4154caa5ac6431af1b80ba76023fa4090c408f6b4bc3701562c031041d4702971d102c9ab7fa5eed4cd6bab8f7af956f7d565ee1917084a95398b6a21eac920fe3dd1345ec0a7ef39367ee69ddf092cbfe5b93e5e568ebc491983c09c76d922dc3",
-		wantPacket: &Ping{
-			Version:    555,
-			From:       Endpoint{net.ParseIP("2001:db8:3c4d:15::abcd:ef12"), 3322, 5544},
-			To:         Endpoint{net.ParseIP("2001:db8:85a3:8d3:1319:8a2e:370:7348"), 2222, 33338},
-			Expiration: 1136239445,
-			Rest:       []rlp.RawValue{{0xC5, 0x01, 0x02, 0x03, 0x04, 0x05}},
-		},
-	},
-	{
-		input: "09b2428d83348d27cdf7064ad9024f526cebc19e4958f0fdad87c15eb598dd61d08423e0bf66b2069869e1724125f820d851c136684082774f870e614d95a2855d000f05d1648b2d5945470bc187c2d2216fbe870f43ed0909009882e176a46b0102f846d79020010db885a308d313198a2e037073488208ae82823aa0fbc914b16819237dcd8801d7e53f69e9719adecb3cc0e790c57e91ca4461c9548443b9a355c6010203c2040506a0c969a58f6f9095004c0177a6b47f451530cab38966a25cca5cb58f055542124e",
-		wantPacket: &Pong{
-			To:         Endpoint{net.ParseIP("2001:db8:85a3:8d3:1319:8a2e:370:7348"), 2222, 33338},
-			ReplyTok:   common.Hex2Bytes("fbc914b16819237dcd8801d7e53f69e9719adecb3cc0e790c57e91ca4461c954"),
-			Expiration: 1136239445,
-			Rest:       []rlp.RawValue{{0xC6, 0x01, 0x02, 0x03, 0xC2, 0x04, 0x05}, {0x06}},
+			ENRSeq:     1,
+			Rest:       []rlp.RawValue{{0x02}},
 		},
 	},
 	{

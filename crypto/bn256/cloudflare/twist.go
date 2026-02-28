@@ -43,7 +43,7 @@ func (c *twistPoint) Set(a *twistPoint) {
 	c.t.Set(&a.t)
 }
 
-// IsOnCurve returns true iff c is on the curve.
+// IsOnCurve returns true iff c is on the curve and is in the correct subgroup.
 func (c *twistPoint) IsOnCurve() bool {
 	c.MakeAffine()
 	if c.IsInfinity() {
@@ -57,6 +57,8 @@ func (c *twistPoint) IsOnCurve() bool {
 	if *y2 != *x3 {
 		return false
 	}
+	// Subgroup check: multiply the point by the group order and
+	// verify that it becomes the point at infinity.
 	cneg := &twistPoint{}
 	cneg.Mul(c, Order)
 	return cneg.z.IsZero()
@@ -150,15 +152,15 @@ func (c *twistPoint) Double(a *twistPoint) {
 	t.Add(d, d)
 	c.x.Sub(f, t)
 
+	c.z.Mul(&a.y, &a.z)
+	c.z.Add(&c.z, &c.z)
+
 	t.Add(C, C)
 	t2.Add(t, t)
 	t.Add(t2, t2)
 	c.y.Sub(d, &c.x)
 	t2.Mul(e, &c.y)
 	c.y.Sub(t2, t)
-
-	t.Mul(&a.y, &a.z)
-	c.z.Add(t, t)
 }
 
 func (c *twistPoint) Mul(a *twistPoint, scalar *big.Int) {

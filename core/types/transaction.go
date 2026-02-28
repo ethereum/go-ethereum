@@ -17,232 +17,579 @@
 package types
 
 import (
-	"container/heap"
+	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 )
-
-//go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
 
 var (
-	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
+	ErrInvalidSig           = errors.New("invalid transaction v, r, s values")
+	ErrUnexpectedProtection = errors.New("transaction type does not supported EIP-155 protected signatures")
+	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
+	ErrGasFeeCapTooLow      = errors.New("fee cap less than base fee")
+	ErrUint256Overflow      = errors.New("bigint overflow, too large for uint256")
+	errShortTypedTx         = errors.New("typed transaction too short")
+	errInvalidYParity       = errors.New("'yParity' field must be 0 or 1")
+	errVYParityMismatch     = errors.New("'v' and 'yParity' fields do not match")
+	errVYParityMissing      = errors.New("missing 'yParity' or 'v' field in transaction")
 )
 
+// Transaction types.
+const (
+	LegacyTxType     = 0x00
+	AccessListTxType = 0x01
+	DynamicFeeTxType = 0x02
+	BlobTxType       = 0x03
+	SetCodeTxType    = 0x04
+)
+
+// Transaction is an Ethereum transaction.
 type Transaction struct {
-	data txdata    // Consensus contents of a transaction
-	time time.Time // Time first seen locally (spam avoidance)
+	inner TxData    // Consensus contents of a transaction
+	time  time.Time // Time first seen locally (spam avoidance)
 
 	// caches
-	hash atomic.Value
-	size atomic.Value
-	from atomic.Value
+	hash atomic.Pointer[common.Hash]
+	size atomic.Uint64
+	from atomic.Pointer[sigCache]
 }
 
-type txdata struct {
-	AccountNonce uint64          `json:"nonce"    gencodec:"required"`
-	Price        *big.Int        `json:"gasPrice" gencodec:"required"`
-	GasLimit     uint64          `json:"gas"      gencodec:"required"`
-	Recipient    *common.Address `json:"to"       rlp:"nil"` // nil means contract creation
-	Amount       *big.Int        `json:"value"    gencodec:"required"`
-	Payload      []byte          `json:"input"    gencodec:"required"`
-
-	// Signature values
-	V *big.Int `json:"v" gencodec:"required"`
-	R *big.Int `json:"r" gencodec:"required"`
-	S *big.Int `json:"s" gencodec:"required"`
-
-	// This is only used when marshaling to JSON.
-	Hash *common.Hash `json:"hash" rlp:"-"`
+// NewTx creates a new transaction.
+func NewTx(inner TxData) *Transaction {
+	tx := new(Transaction)
+	tx.setDecoded(inner.copy(), 0)
+	return tx
 }
 
-type txdataMarshaling struct {
-	AccountNonce hexutil.Uint64
-	Price        *hexutil.Big
-	GasLimit     hexutil.Uint64
-	Amount       *hexutil.Big
-	Payload      hexutil.Bytes
-	V            *hexutil.Big
-	R            *hexutil.Big
-	S            *hexutil.Big
+// TxData is the underlying data of a transaction.
+//
+// This is implemented by DynamicFeeTx, LegacyTx and AccessListTx.
+type TxData interface {
+	txType() byte // returns the type ID
+	copy() TxData // creates a deep copy and initializes all fields
+
+	chainID() *big.Int
+	accessList() AccessList
+	data() []byte
+	gas() uint64
+	gasPrice() *big.Int
+	gasTipCap() *big.Int
+	gasFeeCap() *big.Int
+	value() *big.Int
+	nonce() uint64
+	to() *common.Address
+
+	rawSignatureValues() (v, r, s *big.Int)
+	setSignatureValues(chainID, v, r, s *big.Int)
+
+	// effectiveGasPrice computes the gas price paid by the transaction, given
+	// the inclusion block baseFee.
+	//
+	// Unlike other TxData methods, the returned *big.Int should be an independent
+	// copy of the computed value, i.e. callers are allowed to mutate the result.
+	// Method implementations can use 'dst' to store the result.
+	effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int
+
+	encode(*bytes.Buffer) error
+	decode([]byte) error
+
+	// sigHash returns the hash of the transaction that is ought to be signed
+	sigHash(*big.Int) common.Hash
 }
 
-func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return newTransaction(nonce, &to, amount, gasLimit, gasPrice, data)
-}
-
-func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return newTransaction(nonce, nil, amount, gasLimit, gasPrice, data)
-}
-
-func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	if len(data) > 0 {
-		data = common.CopyBytes(data)
+// EncodeRLP implements rlp.Encoder
+func (tx *Transaction) EncodeRLP(w io.Writer) error {
+	if tx.Type() == LegacyTxType {
+		return rlp.Encode(w, tx.inner)
 	}
-	d := txdata{
-		AccountNonce: nonce,
-		Recipient:    to,
-		Payload:      data,
-		Amount:       new(big.Int),
-		GasLimit:     gasLimit,
-		Price:        new(big.Int),
-		V:            new(big.Int),
-		R:            new(big.Int),
-		S:            new(big.Int),
+	// It's an EIP-2718 typed TX envelope.
+	buf := encodeBufferPool.Get().(*bytes.Buffer)
+	defer encodeBufferPool.Put(buf)
+	buf.Reset()
+	if err := tx.encodeTyped(buf); err != nil {
+		return err
 	}
-	if amount != nil {
-		d.Amount.Set(amount)
+	return rlp.Encode(w, buf.Bytes())
+}
+
+// encodeTyped writes the canonical encoding of a typed transaction to w.
+func (tx *Transaction) encodeTyped(w *bytes.Buffer) error {
+	w.WriteByte(tx.Type())
+	return tx.inner.encode(w)
+}
+
+// MarshalBinary returns the canonical encoding of the transaction.
+// For legacy transactions, it returns the RLP encoding. For EIP-2718 typed
+// transactions, it returns the type and payload.
+func (tx *Transaction) MarshalBinary() ([]byte, error) {
+	if tx.Type() == LegacyTxType {
+		return rlp.EncodeToBytes(tx.inner)
 	}
-	if gasPrice != nil {
-		d.Price.Set(gasPrice)
-	}
-	return &Transaction{
-		data: d,
-		time: time.Now(),
+	var buf bytes.Buffer
+	err := tx.encodeTyped(&buf)
+	return buf.Bytes(), err
+}
+
+// DecodeRLP implements rlp.Decoder
+func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
+	kind, size, err := s.Kind()
+	switch {
+	case err != nil:
+		return err
+	case kind == rlp.List:
+		// It's a legacy transaction.
+		var inner LegacyTx
+		err := s.Decode(&inner)
+		if err == nil {
+			tx.setDecoded(&inner, rlp.ListSize(size))
+		}
+		return err
+	case kind == rlp.Byte:
+		return errShortTypedTx
+	default:
+		// It's an EIP-2718 typed TX envelope.
+		// First read the tx payload bytes into a temporary buffer.
+		b, buf, err := getPooledBuffer(size)
+		if err != nil {
+			return err
+		}
+		defer encodeBufferPool.Put(buf)
+		if err := s.ReadBytes(b); err != nil {
+			return err
+		}
+		// Now decode the inner transaction.
+		inner, err := tx.decodeTyped(b)
+		if err == nil {
+			tx.setDecoded(inner, size)
+		}
+		return err
 	}
 }
 
-// ChainId returns which chain id this transaction was signed for (if at all)
-func (tx *Transaction) ChainId() *big.Int {
-	return deriveChainId(tx.data.V)
+// UnmarshalBinary decodes the canonical encoding of transactions.
+// It supports legacy RLP transactions and EIP-2718 typed transactions.
+func (tx *Transaction) UnmarshalBinary(b []byte) error {
+	if len(b) > 0 && b[0] > 0x7f {
+		// It's a legacy transaction.
+		var data LegacyTx
+		err := rlp.DecodeBytes(b, &data)
+		if err != nil {
+			return err
+		}
+		tx.setDecoded(&data, uint64(len(b)))
+		return nil
+	}
+	// It's an EIP-2718 typed transaction envelope.
+	inner, err := tx.decodeTyped(b)
+	if err != nil {
+		return err
+	}
+	tx.setDecoded(inner, uint64(len(b)))
+	return nil
 }
 
-// Protected returns whether the transaction is protected from replay protection.
-func (tx *Transaction) Protected() bool {
-	return isProtectedV(tx.data.V)
+// decodeTyped decodes a typed transaction from the canonical format.
+func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
+	if len(b) <= 1 {
+		return nil, errShortTypedTx
+	}
+	var inner TxData
+	switch b[0] {
+	case AccessListTxType:
+		inner = new(AccessListTx)
+	case DynamicFeeTxType:
+		inner = new(DynamicFeeTx)
+	case BlobTxType:
+		inner = new(BlobTx)
+	case SetCodeTxType:
+		inner = new(SetCodeTx)
+	default:
+		return nil, ErrTxTypeNotSupported
+	}
+	err := inner.decode(b[1:])
+	return inner, err
+}
+
+// setDecoded sets the inner transaction and size after decoding.
+func (tx *Transaction) setDecoded(inner TxData, size uint64) {
+	tx.inner = inner
+	tx.time = time.Now()
+	if size > 0 {
+		tx.size.Store(size)
+	}
+}
+
+func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int, maybeProtected bool) error {
+	if isProtectedV(v) && !maybeProtected {
+		return ErrUnexpectedProtection
+	}
+
+	var plainV byte
+	if isProtectedV(v) {
+		chainID := deriveChainId(v).Uint64()
+		plainV = byte(v.Uint64() - 35 - 2*chainID)
+	} else if maybeProtected {
+		// Only EIP-155 signatures can be optionally protected. Since
+		// we determined this v value is not protected, it must be a
+		// raw 27 or 28.
+		plainV = byte(v.Uint64() - 27)
+	} else {
+		// If the signature is not optionally protected, we assume it
+		// must already be equal to the recovery id.
+		plainV = byte(v.Uint64())
+	}
+	if !crypto.ValidateSignatureValues(plainV, r, s, false) {
+		return ErrInvalidSig
+	}
+
+	return nil
 }
 
 func isProtectedV(V *big.Int) bool {
 	if V.BitLen() <= 8 {
 		v := V.Uint64()
-		return v != 27 && v != 28
+		return v != 27 && v != 28 && v != 1 && v != 0
 	}
 	// anything not 27 or 28 is considered protected
 	return true
 }
 
-// EncodeRLP implements rlp.Encoder
-func (tx *Transaction) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, &tx.data)
+// Protected says whether the transaction is replay-protected.
+func (tx *Transaction) Protected() bool {
+	switch tx := tx.inner.(type) {
+	case *LegacyTx:
+		return tx.V != nil && isProtectedV(tx.V)
+	default:
+		return true
+	}
 }
 
-// DecodeRLP implements rlp.Decoder
-func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
-	_, size, _ := s.Kind()
-	err := s.Decode(&tx.data)
-	if err == nil {
-		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
-		tx.time = time.Now()
+// Type returns the transaction type.
+func (tx *Transaction) Type() uint8 {
+	return tx.inner.txType()
+}
+
+// ChainId returns the EIP155 chain ID of the transaction. The return value will always be
+// non-nil. For legacy transactions which are not replay-protected, the return value is
+// zero.
+func (tx *Transaction) ChainId() *big.Int {
+	return tx.inner.chainID()
+}
+
+// Data returns the input data of the transaction.
+func (tx *Transaction) Data() []byte { return tx.inner.data() }
+
+// AccessList returns the access list of the transaction.
+func (tx *Transaction) AccessList() AccessList { return tx.inner.accessList() }
+
+// Gas returns the gas limit of the transaction.
+func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
+
+// GasPrice returns the gas price of the transaction.
+func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
+
+// GasTipCap returns the gasTipCap per gas of the transaction.
+func (tx *Transaction) GasTipCap() *big.Int { return new(big.Int).Set(tx.inner.gasTipCap()) }
+
+// GasFeeCap returns the fee cap per gas of the transaction.
+func (tx *Transaction) GasFeeCap() *big.Int { return new(big.Int).Set(tx.inner.gasFeeCap()) }
+
+// Value returns the ether amount of the transaction.
+func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
+
+// Nonce returns the sender account nonce of the transaction.
+func (tx *Transaction) Nonce() uint64 { return tx.inner.nonce() }
+
+// To returns the recipient address of the transaction.
+// For contract-creation transactions, To returns nil.
+func (tx *Transaction) To() *common.Address {
+	return copyAddressPtr(tx.inner.to())
+}
+
+// Cost returns (gas * gasPrice) + (blobGas * blobGasPrice) + value.
+func (tx *Transaction) Cost() *big.Int {
+	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
+	if tx.Type() == BlobTxType {
+		total.Add(total, new(big.Int).Mul(tx.BlobGasFeeCap(), new(big.Int).SetUint64(tx.BlobGas())))
+	}
+	total.Add(total, tx.Value())
+	return total
+}
+
+// RawSignatureValues returns the V, R, S signature values of the transaction.
+// The return values should not be modified by the caller.
+// The return values may be nil or zero, if the transaction is unsigned.
+func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
+	return tx.inner.rawSignatureValues()
+}
+
+// GasFeeCapCmp compares the fee cap of two transactions.
+func (tx *Transaction) GasFeeCapCmp(other *Transaction) int {
+	return tx.inner.gasFeeCap().Cmp(other.inner.gasFeeCap())
+}
+
+// GasFeeCapIntCmp compares the fee cap of the transaction against the given fee cap.
+func (tx *Transaction) GasFeeCapIntCmp(other *big.Int) int {
+	return tx.inner.gasFeeCap().Cmp(other)
+}
+
+// GasTipCapCmp compares the gasTipCap of two transactions.
+func (tx *Transaction) GasTipCapCmp(other *Transaction) int {
+	return tx.inner.gasTipCap().Cmp(other.inner.gasTipCap())
+}
+
+// GasTipCapIntCmp compares the gasTipCap of the transaction against the given gasTipCap.
+func (tx *Transaction) GasTipCapIntCmp(other *big.Int) int {
+	return tx.inner.gasTipCap().Cmp(other)
+}
+
+// EffectiveGasTip returns the effective miner gasTipCap for the given base fee.
+// Note: if the effective gasTipCap would be negative, this method
+// returns ErrGasFeeCapTooLow, and value is undefined.
+func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
+	dst := new(uint256.Int)
+	base := new(uint256.Int)
+	if baseFee != nil {
+		if base.SetFromBig(baseFee) {
+			return nil, ErrUint256Overflow
+		}
+	}
+	err := tx.calcEffectiveGasTip(dst, base)
+	return dst.ToBig(), err
+}
+
+// calcEffectiveGasTip calculates the effective gas tip of the transaction and
+// saves the result to dst.
+func (tx *Transaction) calcEffectiveGasTip(dst *uint256.Int, baseFee *uint256.Int) error {
+	if baseFee == nil {
+		if dst.SetFromBig(tx.inner.gasTipCap()) {
+			return ErrUint256Overflow
+		}
+		return nil
+	}
+
+	var err error
+	if dst.SetFromBig(tx.inner.gasFeeCap()) {
+		return ErrUint256Overflow
+	}
+	if dst.Cmp(baseFee) < 0 {
+		err = ErrGasFeeCapTooLow
+	}
+
+	dst.Sub(dst, baseFee)
+	gasTipCap := new(uint256.Int)
+	if gasTipCap.SetFromBig(tx.inner.gasTipCap()) {
+		return ErrUint256Overflow
+	}
+	if gasTipCap.Cmp(dst) < 0 {
+		dst.Set(gasTipCap)
 	}
 	return err
 }
 
-// MarshalJSON encodes the web3 RPC transaction format.
-func (tx *Transaction) MarshalJSON() ([]byte, error) {
-	hash := tx.Hash()
-	data := tx.data
-	data.Hash = &hash
-	return data.MarshalJSON()
+func (tx *Transaction) EffectiveGasTipCmp(other *Transaction, baseFee *uint256.Int) int {
+	if baseFee == nil {
+		return tx.GasTipCapCmp(other)
+	}
+	// Use more efficient internal method.
+	txTip, otherTip := new(uint256.Int), new(uint256.Int)
+	tx.calcEffectiveGasTip(txTip, baseFee)
+	other.calcEffectiveGasTip(otherTip, baseFee)
+	return txTip.Cmp(otherTip)
 }
 
-// UnmarshalJSON decodes the web3 RPC transaction format.
-func (tx *Transaction) UnmarshalJSON(input []byte) error {
-	var dec txdata
-	if err := dec.UnmarshalJSON(input); err != nil {
-		return err
+// EffectiveGasTipIntCmp compares the effective gasTipCap of a transaction to the given gasTipCap.
+func (tx *Transaction) EffectiveGasTipIntCmp(other *uint256.Int, baseFee *uint256.Int) int {
+	if baseFee == nil {
+		return tx.GasTipCapIntCmp(other.ToBig())
 	}
-	withSignature := dec.V.Sign() != 0 || dec.R.Sign() != 0 || dec.S.Sign() != 0
-	if withSignature {
-		var V byte
-		if isProtectedV(dec.V) {
-			chainID := deriveChainId(dec.V).Uint64()
-			V = byte(dec.V.Uint64() - 35 - 2*chainID)
-		} else {
-			V = byte(dec.V.Uint64() - 27)
-		}
-		if !crypto.ValidateSignatureValues(V, dec.R, dec.S, false) {
-			return ErrInvalidSig
-		}
+	txTip := new(uint256.Int)
+	tx.calcEffectiveGasTip(txTip, baseFee)
+	return txTip.Cmp(other)
+}
+
+// BlobGas returns the blob gas limit of the transaction for blob transactions, 0 otherwise.
+func (tx *Transaction) BlobGas() uint64 {
+	if blobtx, ok := tx.inner.(*BlobTx); ok {
+		return blobtx.blobGas()
 	}
-	*tx = Transaction{
-		data: dec,
-		time: time.Now(),
+	return 0
+}
+
+// BlobGasFeeCap returns the blob gas fee cap per blob gas of the transaction for blob transactions, nil otherwise.
+func (tx *Transaction) BlobGasFeeCap() *big.Int {
+	if blobtx, ok := tx.inner.(*BlobTx); ok {
+		return blobtx.BlobFeeCap.ToBig()
 	}
 	return nil
 }
 
-func (tx *Transaction) Data() []byte       { return common.CopyBytes(tx.data.Payload) }
-func (tx *Transaction) Gas() uint64        { return tx.data.GasLimit }
-func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.data.Price) }
-func (tx *Transaction) GasPriceCmp(other *Transaction) int {
-	return tx.data.Price.Cmp(other.data.Price)
+// BlobHashes returns the hashes of the blob commitments for blob transactions, nil otherwise.
+func (tx *Transaction) BlobHashes() []common.Hash {
+	if blobtx, ok := tx.inner.(*BlobTx); ok {
+		return blobtx.BlobHashes
+	}
+	return nil
 }
-func (tx *Transaction) GasPriceIntCmp(other *big.Int) int {
-	return tx.data.Price.Cmp(other)
-}
-func (tx *Transaction) Value() *big.Int  { return new(big.Int).Set(tx.data.Amount) }
-func (tx *Transaction) Nonce() uint64    { return tx.data.AccountNonce }
-func (tx *Transaction) CheckNonce() bool { return true }
 
-// To returns the recipient address of the transaction.
-// It returns nil if the transaction is a contract creation.
-func (tx *Transaction) To() *common.Address {
-	if tx.data.Recipient == nil {
+// BlobTxSidecar returns the sidecar of a blob transaction, nil otherwise.
+func (tx *Transaction) BlobTxSidecar() *BlobTxSidecar {
+	if blobtx, ok := tx.inner.(*BlobTx); ok {
+		return blobtx.Sidecar
+	}
+	return nil
+}
+
+// BlobGasFeeCapCmp compares the blob fee cap of two transactions.
+func (tx *Transaction) BlobGasFeeCapCmp(other *Transaction) int {
+	return tx.BlobGasFeeCap().Cmp(other.BlobGasFeeCap())
+}
+
+// BlobGasFeeCapIntCmp compares the blob fee cap of the transaction against the given blob fee cap.
+func (tx *Transaction) BlobGasFeeCapIntCmp(other *big.Int) int {
+	return tx.BlobGasFeeCap().Cmp(other)
+}
+
+// WithoutBlobTxSidecar returns a copy of tx with the blob sidecar removed.
+func (tx *Transaction) WithoutBlobTxSidecar() *Transaction {
+	blobtx, ok := tx.inner.(*BlobTx)
+	if !ok || blobtx.Sidecar == nil {
+		return tx
+	}
+	cpy := &Transaction{
+		inner: blobtx.withoutSidecar(),
+		time:  tx.time,
+	}
+	if size := tx.size.Load(); size != 0 {
+		// The tx had a sidecar before, so we need to subtract it from the size.
+		scSize := rlp.ListSize(blobtx.Sidecar.encodedSize())
+		cpy.size.Store(size - scSize)
+	}
+	if h := tx.hash.Load(); h != nil {
+		cpy.hash.Store(h)
+	}
+	if f := tx.from.Load(); f != nil {
+		cpy.from.Store(f)
+	}
+	return cpy
+}
+
+// WithBlobTxSidecar returns a copy of tx with the blob sidecar added.
+func (tx *Transaction) WithBlobTxSidecar(sideCar *BlobTxSidecar) *Transaction {
+	blobtx, ok := tx.inner.(*BlobTx)
+	if !ok {
+		return tx
+	}
+	cpy := &Transaction{
+		inner: blobtx.withSidecar(sideCar),
+		time:  tx.time,
+	}
+	// Note: tx.size cache not carried over because the sidecar is included in size!
+	if h := tx.hash.Load(); h != nil {
+		cpy.hash.Store(h)
+	}
+	if f := tx.from.Load(); f != nil {
+		cpy.from.Store(f)
+	}
+	return cpy
+}
+
+// SetCodeAuthorizations returns the authorizations list of the transaction.
+func (tx *Transaction) SetCodeAuthorizations() []SetCodeAuthorization {
+	setcodetx, ok := tx.inner.(*SetCodeTx)
+	if !ok {
 		return nil
 	}
-	to := *tx.data.Recipient
-	return &to
+	return setcodetx.AuthList
 }
 
-// Hash hashes the RLP encoding of tx.
-// It uniquely identifies the transaction.
+// SetCodeAuthorities returns a list of unique authorities from the
+// authorization list.
+func (tx *Transaction) SetCodeAuthorities() []common.Address {
+	setcodetx, ok := tx.inner.(*SetCodeTx)
+	if !ok {
+		return nil
+	}
+	var (
+		marks = make(map[common.Address]bool)
+		auths = make([]common.Address, 0, len(setcodetx.AuthList))
+	)
+	for _, auth := range setcodetx.AuthList {
+		if addr, err := auth.Authority(); err == nil {
+			if marks[addr] {
+				continue
+			}
+			marks[addr] = true
+			auths = append(auths, addr)
+		}
+	}
+	return auths
+}
+
+// SetTime sets the decoding time of a transaction. This is used by tests to set
+// arbitrary times and by persistent transaction pools when loading old txs from
+// disk.
+func (tx *Transaction) SetTime(t time.Time) {
+	tx.time = t
+}
+
+// Time returns the time when the transaction was first seen on the network. It
+// is a heuristic to prefer mining older txs vs new all other things equal.
+func (tx *Transaction) Time() time.Time {
+	return tx.time
+}
+
+// Hash returns the transaction hash.
 func (tx *Transaction) Hash() common.Hash {
 	if hash := tx.hash.Load(); hash != nil {
-		return hash.(common.Hash)
+		return *hash
 	}
-	v := rlpHash(tx)
-	tx.hash.Store(v)
-	return v
+
+	var h common.Hash
+	if tx.Type() == LegacyTxType {
+		h = rlpHash(tx.inner)
+	} else {
+		h = prefixedRlpHash(tx.Type(), tx.inner)
+	}
+	tx.hash.Store(&h)
+	return h
 }
 
-// Size returns the true RLP encoded storage size of the transaction, either by
-// encoding and returning it, or returning a previously cached value.
-func (tx *Transaction) Size() common.StorageSize {
-	if size := tx.size.Load(); size != nil {
-		return size.(common.StorageSize)
+// Size returns the true encoded storage size of the transaction, either by encoding
+// and returning it, or returning a previously cached value.
+func (tx *Transaction) Size() uint64 {
+	if size := tx.size.Load(); size > 0 {
+		return size
 	}
+
+	// Cache miss, encode and cache.
+	// Note we rely on the assumption that all tx.inner values are RLP-encoded!
 	c := writeCounter(0)
-	rlp.Encode(&c, &tx.data)
-	tx.size.Store(common.StorageSize(c))
-	return common.StorageSize(c)
-}
+	rlp.Encode(&c, &tx.inner)
+	size := uint64(c)
 
-// AsMessage returns the transaction as a core.Message.
-//
-// AsMessage requires a signer to derive the sender.
-//
-// XXX Rename message to something less arbitrary?
-func (tx *Transaction) AsMessage(s Signer) (Message, error) {
-	msg := Message{
-		nonce:      tx.data.AccountNonce,
-		gasLimit:   tx.data.GasLimit,
-		gasPrice:   new(big.Int).Set(tx.data.Price),
-		to:         tx.data.Recipient,
-		amount:     tx.data.Amount,
-		data:       tx.data.Payload,
-		checkNonce: true,
+	// For blob transactions, add the size of the blob content and the outer list of the
+	// tx + sidecar encoding.
+	if sc := tx.BlobTxSidecar(); sc != nil {
+		size += rlp.ListSize(sc.encodedSize())
 	}
 
-	var err error
-	msg.from, err = Sender(s, tx)
-	return msg, err
+	// For typed transactions, the encoding also includes the leading type byte.
+	if tx.Type() != LegacyTxType {
+		size += 1
+	}
+
+	tx.size.Store(size)
+	return size
 }
 
 // WithSignature returns a new transaction with the given signature.
@@ -252,47 +599,37 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	if err != nil {
 		return nil, err
 	}
-	cpy := &Transaction{
-		data: tx.data,
-		time: tx.time,
+	if r == nil || s == nil || v == nil {
+		return nil, fmt.Errorf("%w: r: %s, s: %s, v: %s", ErrInvalidSig, r, s, v)
 	}
-	cpy.data.R, cpy.data.S, cpy.data.V = r, s, v
-	return cpy, nil
+	cpy := tx.inner.copy()
+	cpy.setSignatureValues(signer.ChainID(), v, r, s)
+	return &Transaction{inner: cpy, time: tx.time}, nil
 }
 
-// Cost returns amount + gasprice * gaslimit.
-func (tx *Transaction) Cost() *big.Int {
-	total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
-	total.Add(total, tx.data.Amount)
-	return total
-}
-
-// RawSignatureValues returns the V, R, S signature values of the transaction.
-// The return values should not be modified by the caller.
-func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
-	return tx.data.V, tx.data.R, tx.data.S
-}
-
-// Transactions is a Transaction slice type for basic sorting.
+// Transactions implements DerivableList for transactions.
 type Transactions []*Transaction
 
 // Len returns the length of s.
 func (s Transactions) Len() int { return len(s) }
 
-// Swap swaps the i'th and the j'th element in s.
-func (s Transactions) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-
-// GetRlp implements Rlpable and returns the i'th element of s in rlp.
-func (s Transactions) GetRlp(i int) []byte {
-	enc, _ := rlp.EncodeToBytes(s[i])
-	return enc
+// EncodeIndex encodes the i'th transaction to w. Note that this does not check for errors
+// because we assume that *Transaction will only ever contain valid txs that were either
+// constructed by decoding or via public API in this package.
+func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
+	tx := s[i]
+	if tx.Type() == LegacyTxType {
+		rlp.Encode(w, tx.inner)
+	} else {
+		tx.encodeTyped(w)
+	}
 }
 
-// TxDifference returns a new set which is the difference between a and b.
+// TxDifference returns a new set of transactions that are present in a but not in b.
 func TxDifference(a, b Transactions) Transactions {
 	keep := make(Transactions, 0, len(a))
 
-	remove := make(map[common.Hash]struct{})
+	remove := make(map[common.Hash]struct{}, b.Len())
 	for _, tx := range b {
 		remove[tx.Hash()] = struct{}{}
 	}
@@ -306,137 +643,38 @@ func TxDifference(a, b Transactions) Transactions {
 	return keep
 }
 
+// HashDifference returns a new set of hashes that are present in a but not in b.
+func HashDifference(a, b []common.Hash) []common.Hash {
+	keep := make([]common.Hash, 0, len(a))
+
+	remove := make(map[common.Hash]struct{}, len(b))
+	for _, hash := range b {
+		remove[hash] = struct{}{}
+	}
+
+	for _, hash := range a {
+		if _, ok := remove[hash]; !ok {
+			keep = append(keep, hash)
+		}
+	}
+
+	return keep
+}
+
 // TxByNonce implements the sort interface to allow sorting a list of transactions
 // by their nonces. This is usually only useful for sorting transactions from a
 // single account, otherwise a nonce comparison doesn't make much sense.
 type TxByNonce Transactions
 
 func (s TxByNonce) Len() int           { return len(s) }
-func (s TxByNonce) Less(i, j int) bool { return s[i].data.AccountNonce < s[j].data.AccountNonce }
+func (s TxByNonce) Less(i, j int) bool { return s[i].Nonce() < s[j].Nonce() }
 func (s TxByNonce) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
-// TxByPriceAndTime implements both the sort and the heap interface, making it useful
-// for all at once sorting as well as individually adding and removing elements.
-type TxByPriceAndTime Transactions
-
-func (s TxByPriceAndTime) Len() int { return len(s) }
-func (s TxByPriceAndTime) Less(i, j int) bool {
-	// If the prices are equal, use the time the transaction was first seen for
-	// deterministic sorting
-	cmp := s[i].data.Price.Cmp(s[j].data.Price)
-	if cmp == 0 {
-		return s[i].time.Before(s[j].time)
-	}
-	return cmp > 0
-}
-func (s TxByPriceAndTime) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-
-func (s *TxByPriceAndTime) Push(x interface{}) {
-	*s = append(*s, x.(*Transaction))
-}
-
-func (s *TxByPriceAndTime) Pop() interface{} {
-	old := *s
-	n := len(old)
-	x := old[n-1]
-	*s = old[0 : n-1]
-	return x
-}
-
-// TransactionsByPriceAndNonce represents a set of transactions that can return
-// transactions in a profit-maximizing sorted order, while supporting removing
-// entire batches of transactions for non-executable accounts.
-type TransactionsByPriceAndNonce struct {
-	txs    map[common.Address]Transactions // Per account nonce-sorted list of transactions
-	heads  TxByPriceAndTime                // Next transaction for each unique account (price heap)
-	signer Signer                          // Signer for the set of transactions
-}
-
-// NewTransactionsByPriceAndNonce creates a transaction set that can retrieve
-// price sorted transactions in a nonce-honouring way.
-//
-// Note, the input map is reowned so the caller should not interact any more with
-// if after providing it to the constructor.
-func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transactions) *TransactionsByPriceAndNonce {
-	// Initialize a price and received time based heap with the head transactions
-	heads := make(TxByPriceAndTime, 0, len(txs))
-	for from, accTxs := range txs {
-		heads = append(heads, accTxs[0])
-		// Ensure the sender address is from the signer
-		acc, _ := Sender(signer, accTxs[0])
-		txs[acc] = accTxs[1:]
-		if from != acc {
-			delete(txs, from)
-		}
-	}
-	heap.Init(&heads)
-
-	// Assemble and return the transaction set
-	return &TransactionsByPriceAndNonce{
-		txs:    txs,
-		heads:  heads,
-		signer: signer,
-	}
-}
-
-// Peek returns the next transaction by price.
-func (t *TransactionsByPriceAndNonce) Peek() *Transaction {
-	if len(t.heads) == 0 {
+// copyAddressPtr copies an address.
+func copyAddressPtr(a *common.Address) *common.Address {
+	if a == nil {
 		return nil
 	}
-	return t.heads[0]
+	cpy := *a
+	return &cpy
 }
-
-// Shift replaces the current best head with the next one from the same account.
-func (t *TransactionsByPriceAndNonce) Shift() {
-	acc, _ := Sender(t.signer, t.heads[0])
-	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {
-		t.heads[0], t.txs[acc] = txs[0], txs[1:]
-		heap.Fix(&t.heads, 0)
-	} else {
-		heap.Pop(&t.heads)
-	}
-}
-
-// Pop removes the best transaction, *not* replacing it with the next one from
-// the same account. This should be used when a transaction cannot be executed
-// and hence all subsequent ones should be discarded from the same account.
-func (t *TransactionsByPriceAndNonce) Pop() {
-	heap.Pop(&t.heads)
-}
-
-// Message is a fully derived transaction and implements core.Message
-//
-// NOTE: In a future PR this will be removed.
-type Message struct {
-	to         *common.Address
-	from       common.Address
-	nonce      uint64
-	amount     *big.Int
-	gasLimit   uint64
-	gasPrice   *big.Int
-	data       []byte
-	checkNonce bool
-}
-
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool) Message {
-	return Message{
-		from:       from,
-		to:         to,
-		nonce:      nonce,
-		amount:     amount,
-		gasLimit:   gasLimit,
-		gasPrice:   gasPrice,
-		data:       data,
-		checkNonce: checkNonce,
-	}
-}
-
-func (m Message) From() common.Address { return m.from }
-func (m Message) To() *common.Address  { return m.to }
-func (m Message) GasPrice() *big.Int   { return m.gasPrice }
-func (m Message) Value() *big.Int      { return m.amount }
-func (m Message) Gas() uint64          { return m.gasLimit }
-func (m Message) Nonce() uint64        { return m.nonce }
-func (m Message) Data() []byte         { return m.data }
-func (m Message) CheckNonce() bool     { return m.checkNonce }

@@ -29,7 +29,7 @@ import (
 )
 
 // BUG(agl): this implementation is not constant time.
-// TODO(agl): keep GF(p²) elements in Mongomery form.
+// TODO(agl): keep GF(p²) elements in Montgomery form.
 
 // G1 is an abstract cyclic group. The zero value is suitable for use as the
 // output of an operation, but cannot be used as an input.
@@ -128,7 +128,7 @@ func (e *G1) Marshal() []byte {
 func (e *G1) Unmarshal(m []byte) ([]byte, error) {
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
-	if len(m) != 2*numBytes {
+	if len(m) < 2*numBytes {
 		return nil, errors.New("bn256: not enough data")
 	}
 	// Unmarshal the points and check their caps
@@ -166,7 +166,7 @@ type G2 struct {
 	p *twistPoint
 }
 
-// RandomG1 returns x and g₂ˣ where x is a random, non-zero number read from r.
+// RandomG2 returns x and g₂ˣ where x is a random, non-zero number read from r.
 func RandomG2(r io.Reader) (*big.Int, *G2, error) {
 	var k *big.Int
 	var err error
@@ -253,7 +253,7 @@ func (n *G2) Marshal() []byte {
 func (e *G2) Unmarshal(m []byte) ([]byte, error) {
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
-	if len(m) != 4*numBytes {
+	if len(m) < 4*numBytes {
 		return nil, errors.New("bn256: not enough data")
 	}
 	// Unmarshal the points and check their caps

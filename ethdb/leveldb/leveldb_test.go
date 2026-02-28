@@ -38,3 +38,15 @@ func TestLevelDB(t *testing.T) {
 		})
 	})
 }
+
+func BenchmarkLevelDB(b *testing.B) {
+	dbtest.BenchDatabaseSuite(b, func() ethdb.KeyValueStore {
+		db, err := leveldb.Open(storage.NewMemStorage(), nil)
+		if err != nil {
+			b.Fatal(err)
+		}
+		return &Database{
+			db: db,
+		}
+	})
+}

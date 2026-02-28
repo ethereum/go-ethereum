@@ -24,17 +24,20 @@ import (
 	"strings"
 )
 
-// ConvertType converts an interface of a runtime type into a interface of the
-// given type
-// e.g. turn
-// var fields []reflect.StructField
-// fields = append(fields, reflect.StructField{
-// 		Name: "X",
-//		Type: reflect.TypeOf(new(big.Int)),
-//		Tag:  reflect.StructTag("json:\"" + "x" + "\""),
-// }
-// into
-// type TupleT struct { X *big.Int }
+// ConvertType converts an interface of a runtime type into an interface of the
+// given type, e.g. turn this code:
+//
+//	var fields []reflect.StructField
+//
+//	fields = append(fields, reflect.StructField{
+//			Name: "X",
+//			Type: reflect.TypeOf(new(big.Int)),
+//			Tag:  reflect.StructTag("json:\"" + "x" + "\""),
+//	})
+//
+// into:
+//
+//	type TupleT struct { X *big.Int }
 func ConvertType(in interface{}, proto interface{}) interface{} {
 	protoType := reflect.TypeOf(proto)
 	if reflect.TypeOf(in).ConvertibleTo(protoType) {
@@ -50,7 +53,7 @@ func ConvertType(in interface{}, proto interface{}) interface{} {
 // indirect recursively dereferences the value until it either gets the value
 // or finds a big.Int
 func indirect(v reflect.Value) reflect.Value {
-	if v.Kind() == reflect.Ptr && v.Elem().Type() != reflect.TypeOf(big.Int{}) {
+	if v.Kind() == reflect.Ptr && v.Elem().Type() != reflect.TypeFor[big.Int]() {
 		return indirect(v.Elem())
 	}
 	return v
@@ -62,32 +65,32 @@ func reflectIntType(unsigned bool, size int) reflect.Type {
 	if unsigned {
 		switch size {
 		case 8:
-			return reflect.TypeOf(uint8(0))
+			return reflect.TypeFor[uint8]()
 		case 16:
-			return reflect.TypeOf(uint16(0))
+			return reflect.TypeFor[uint16]()
 		case 32:
-			return reflect.TypeOf(uint32(0))
+			return reflect.TypeFor[uint32]()
 		case 64:
-			return reflect.TypeOf(uint64(0))
+			return reflect.TypeFor[uint64]()
 		}
 	}
 	switch size {
 	case 8:
-		return reflect.TypeOf(int8(0))
+		return reflect.TypeFor[int8]()
 	case 16:
-		return reflect.TypeOf(int16(0))
+		return reflect.TypeFor[int16]()
 	case 32:
-		return reflect.TypeOf(int32(0))
+		return reflect.TypeFor[int32]()
 	case 64:
-		return reflect.TypeOf(int64(0))
+		return reflect.TypeFor[int64]()
 	}
-	return reflect.TypeOf(&big.Int{})
+	return reflect.TypeFor[*big.Int]()
 }
 
 // mustArrayToByteSlice creates a new byte slice with the exact same size as value
 // and copies the bytes in value to the new slice.
 func mustArrayToByteSlice(value reflect.Value) reflect.Value {
-	slice := reflect.MakeSlice(reflect.TypeOf([]byte{}), value.Len(), value.Len())
+	slice := reflect.ValueOf(make([]byte, value.Len()))
 	reflect.Copy(slice, value)
 	return slice
 }
@@ -99,9 +102,9 @@ func mustArrayToByteSlice(value reflect.Value) reflect.Value {
 func set(dst, src reflect.Value) error {
 	dstType, srcType := dst.Type(), src.Type()
 	switch {
-	case dstType.Kind() == reflect.Interface && dst.Elem().IsValid():
+	case dstType.Kind() == reflect.Interface && dst.Elem().IsValid() && (dst.Elem().Type().Kind() == reflect.Ptr || dst.Elem().CanSet()):
 		return set(dst.Elem(), src)
-	case dstType.Kind() == reflect.Ptr && dstType.Elem() != reflect.TypeOf(big.Int{}):
+	case dstType.Kind() == reflect.Ptr && dstType.Elem() != reflect.TypeFor[big.Int]():
 		return set(dst.Elem(), src)
 	case srcType.AssignableTo(dstType) && dst.CanSet():
 		dst.Set(src)
@@ -123,22 +126,15 @@ func set(dst, src reflect.Value) error {
 func setSlice(dst, src reflect.Value) error {
 	slice := reflect.MakeSlice(dst.Type(), src.Len(), src.Len())
 	for i := 0; i < src.Len(); i++ {
-		if src.Index(i).Kind() == reflect.Struct {
-			if err := set(slice.Index(i), src.Index(i)); err != nil {
-				return err
-			}
-		} else {
-			// e.g. [][32]uint8 to []common.Hash
-			if err := set(slice.Index(i), src.Index(i)); err != nil {
-				return err
-			}
+		if err := set(slice.Index(i), src.Index(i)); err != nil {
+			return err
 		}
 	}
 	if dst.CanSet() {
 		dst.Set(slice)
 		return nil
 	}
-	return errors.New("Cannot set slice, destination not settable")
+	return errors.New("cannot set slice, destination not settable")
 }
 
 func setArray(dst, src reflect.Value) error {
@@ -159,7 +155,7 @@ func setArray(dst, src reflect.Value) error {
 		dst.Set(array)
 		return nil
 	}
-	return errors.New("Cannot set array, destination not settable")
+	return errors.New("cannot set array, destination not settable")
 }
 
 func setStruct(dst, src reflect.Value) error {
@@ -167,7 +163,7 @@ func setStruct(dst, src reflect.Value) error {
 		srcField := src.Field(i)
 		dstField := dst.Field(i)
 		if !dstField.IsValid() || !srcField.IsValid() {
-			return fmt.Errorf("Could not find src field: %v value: %v in destination", srcField.Type().Name(), srcField)
+			return fmt.Errorf("could not find src field: %v value: %v in destination", srcField.Type().Name(), srcField)
 		}
 		if err := set(dstField, srcField); err != nil {
 			return err
@@ -177,11 +173,13 @@ func setStruct(dst, src reflect.Value) error {
 }
 
 // mapArgNamesToStructFields maps a slice of argument names to struct fields.
-// first round: for each Exportable field that contains a `abi:""` tag
-//   and this field name exists in the given argument name list, pair them together.
-// second round: for each argument name that has not been already linked,
-//   find what variable is expected to be mapped into, if it exists and has not been
-//   used, pair them.
+//
+// first round: for each Exportable field that contains a `abi:""` tag and this field name
+// exists in the given argument name list, pair them together.
+//
+// second round: for each argument name that has not been already linked, find what
+// variable is expected to be mapped into, if it exists and has not been used, pair them.
+//
 // Note this function assumes the given value is a struct value.
 func mapArgNamesToStructFields(argNames []string, value reflect.Value) (map[string]string, error) {
 	typ := value.Type()
@@ -227,11 +225,10 @@ func mapArgNamesToStructFields(argNames []string, value reflect.Value) (map[stri
 
 	// second round ~~~
 	for _, argName := range argNames {
-
 		structFieldName := ToCamelCase(argName)
 
 		if structFieldName == "" {
-			return nil, fmt.Errorf("abi: purely underscored output cannot unpack to struct")
+			return nil, errors.New("abi: purely underscored output cannot unpack to struct")
 		}
 
 		// this abi has already been paired, skip it... unless there exists another, yet unassigned

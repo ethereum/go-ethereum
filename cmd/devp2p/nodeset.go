@@ -18,11 +18,11 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -66,29 +66,55 @@ func writeNodesJSON(file string, nodes nodeSet) {
 		os.Stdout.Write(nodesJSON)
 		return
 	}
-	if err := ioutil.WriteFile(file, nodesJSON, 0644); err != nil {
+	if err := os.WriteFile(file, nodesJSON, 0644); err != nil {
 		exit(err)
 	}
 }
 
+// nodes returns the node records contained in the set.
 func (ns nodeSet) nodes() []*enode.Node {
 	result := make([]*enode.Node, 0, len(ns))
 	for _, n := range ns {
 		result = append(result, n.N)
 	}
 	// Sort by ID.
-	sort.Slice(result, func(i, j int) bool {
-		return bytes.Compare(result[i].ID().Bytes(), result[j].ID().Bytes()) < 0
+	slices.SortFunc(result, func(a, b *enode.Node) int {
+		return bytes.Compare(a.ID().Bytes(), b.ID().Bytes())
 	})
 	return result
 }
 
+// add ensures the given nodes are present in the set.
 func (ns nodeSet) add(nodes ...*enode.Node) {
 	for _, n := range nodes {
-		ns[n.ID()] = nodeJSON{Seq: n.Seq(), N: n}
+		v := ns[n.ID()]
+		v.N = n
+		v.Seq = n.Seq()
+		ns[n.ID()] = v
 	}
 }
 
+// topN returns the top n nodes by score as a new set.
+func (ns nodeSet) topN(n int) nodeSet {
+	if n >= len(ns) {
+		return ns
+	}
+
+	byscore := make([]nodeJSON, 0, len(ns))
+	for _, v := range ns {
+		byscore = append(byscore, v)
+	}
+	slices.SortFunc(byscore, func(a, b nodeJSON) int {
+		return cmp.Compare(b.Score, a.Score)
+	})
+	result := make(nodeSet, n)
+	for _, v := range byscore[:n] {
+		result[v.N.ID()] = v
+	}
+	return result
+}
+
+// verify performs integrity checks on the node set.
 func (ns nodeSet) verify() error {
 	for id, n := range ns {
 		if n.N.ID() != id {

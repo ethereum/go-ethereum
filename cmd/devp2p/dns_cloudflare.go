@@ -17,22 +17,24 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/cloudflare/cloudflare-go"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
-	cloudflareTokenFlag = cli.StringFlag{
-		Name:   "token",
-		Usage:  "CloudFlare API token",
-		EnvVar: "CLOUDFLARE_API_TOKEN",
+	cloudflareTokenFlag = &cli.StringFlag{
+		Name:    "token",
+		Usage:   "CloudFlare API token",
+		EnvVars: []string{"CLOUDFLARE_API_TOKEN"},
 	}
-	cloudflareZoneIDFlag = cli.StringFlag{
+	cloudflareZoneIDFlag = &cli.StringFlag{
 		Name:  "zoneid",
 		Usage: "CloudFlare Zone ID (optional)",
 	}
@@ -47,7 +49,7 @@ type cloudflareClient struct {
 func newCloudflareClient(ctx *cli.Context) *cloudflareClient {
 	token := ctx.String(cloudflareTokenFlag.Name)
 	if token == "" {
-		exit(fmt.Errorf("need cloudflare API token to proceed"))
+		exit(errors.New("need cloudflare API token to proceed"))
 	}
 	api, err := cloudflare.NewWithAPIToken(token)
 	if err != nil {
@@ -79,14 +81,15 @@ func (c *cloudflareClient) checkZone(name string) error {
 		c.zoneID = id
 	}
 	log.Info(fmt.Sprintf("Checking Permissions on zone %s", c.zoneID))
-	zone, err := c.ZoneDetails(c.zoneID)
+	zone, err := c.ZoneDetails(context.Background(), c.zoneID)
 	if err != nil {
 		return err
 	}
 	if !strings.HasSuffix(name, "."+zone.Name) {
 		return fmt.Errorf("CloudFlare zone name %q does not match name %q to be deployed", zone.Name, name)
 	}
-	needPerms := map[string]bool{"#zone:edit": false, "#zone:read": false}
+	// Necessary permissions for Cloudlare management - Zone:Read, DNS:Read, Zone:Edit, DNS:Edit
+	needPerms := map[string]bool{"#zone:edit": false, "#zone:read": false, "#dns_records:read": false, "#dns_records:edit": false}
 	for _, perm := range zone.Permissions {
 		if _, ok := needPerms[perm]; ok {
 			needPerms[perm] = true
@@ -112,7 +115,7 @@ func (c *cloudflareClient) uploadRecords(name string, records map[string]string)
 	records = lrecords
 
 	log.Info(fmt.Sprintf("Retrieving existing TXT records on %s", name))
-	entries, err := c.DNSRecords(c.zoneID, cloudflare.DNSRecord{Type: "TXT"})
+	entries, _, err := c.ListDNSRecords(context.Background(), cloudflare.ZoneIdentifier(c.zoneID), cloudflare.ListDNSRecordsParams{Type: "TXT"})
 	if err != nil {
 		return err
 	}
@@ -125,39 +128,62 @@ func (c *cloudflareClient) uploadRecords(name string, records map[string]string)
 	}
 
 	// Iterate over the new records and inject anything missing.
+	log.Info("Updating DNS entries")
+	created := 0
+	updated := 0
+	skipped := 0
 	for path, val := range records {
 		old, exists := existing[path]
 		if !exists {
 			// Entry is unknown, push a new one to Cloudflare.
-			log.Info(fmt.Sprintf("Creating %s = %q", path, val))
+			log.Debug(fmt.Sprintf("Creating %s = %q", path, val))
+			created++
 			ttl := rootTTL
 			if path != name {
-				ttl = treeNodeTTL // Max TTL permitted by Cloudflare
+				ttl = treeNodeTTLCloudflare // Max TTL permitted by Cloudflare
 			}
-			_, err = c.CreateDNSRecord(c.zoneID, cloudflare.DNSRecord{Type: "TXT", Name: path, Content: val, TTL: ttl})
+			record := cloudflare.CreateDNSRecordParams{Type: "TXT", Name: path, Content: val, TTL: ttl}
+			_, err = c.CreateDNSRecord(context.Background(), cloudflare.ZoneIdentifier(c.zoneID), record)
 		} else if old.Content != val {
 			// Entry already exists, only change its content.
 			log.Info(fmt.Sprintf("Updating %s from %q to %q", path, old.Content, val))
-			old.Content = val
-			err = c.UpdateDNSRecord(c.zoneID, old.ID, old)
+			updated++
+
+			record := cloudflare.UpdateDNSRecordParams{
+				Type:     old.Type,
+				Name:     old.Name,
+				Content:  val,
+				Data:     old.Data,
+				ID:       old.ID,
+				Priority: old.Priority,
+				TTL:      old.TTL,
+				Proxied:  old.Proxied,
+				Tags:     old.Tags,
+			}
+			_, err = c.UpdateDNSRecord(context.Background(), cloudflare.ZoneIdentifier(c.zoneID), record)
 		} else {
-			log.Info(fmt.Sprintf("Skipping %s = %q", path, val))
+			skipped++
+			log.Debug(fmt.Sprintf("Skipping %s = %q", path, val))
 		}
 		if err != nil {
 			return fmt.Errorf("failed to publish %s: %v", path, err)
 		}
 	}
-
+	log.Info("Updated DNS entries", "new", created, "updated", updated, "untouched", skipped)
 	// Iterate over the old records and delete anything stale.
+	deleted := 0
+	log.Info("Deleting stale DNS entries")
 	for path, entry := range existing {
 		if _, ok := records[path]; ok {
 			continue
 		}
 		// Stale entry, nuke it.
-		log.Info(fmt.Sprintf("Deleting %s = %q", path, entry.Content))
-		if err := c.DeleteDNSRecord(c.zoneID, entry.ID); err != nil {
+		log.Debug(fmt.Sprintf("Deleting %s = %q", path, entry.Content))
+		deleted++
+		if err := c.DeleteDNSRecord(context.Background(), cloudflare.ZoneIdentifier(c.zoneID), entry.ID); err != nil {
 			return fmt.Errorf("failed to delete %s: %v", path, err)
 		}
 	}
+	log.Info("Deleted stale DNS entries", "count", deleted)
 	return nil
 }

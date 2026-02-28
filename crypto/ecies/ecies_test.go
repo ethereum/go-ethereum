@@ -35,7 +35,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
+	"errors"
 	"math/big"
 	"testing"
 
@@ -62,7 +62,7 @@ func TestKDF(t *testing.T) {
 	}
 }
 
-var ErrBadSharedKeys = fmt.Errorf("ecies: shared keys don't match")
+var ErrBadSharedKeys = errors.New("ecies: shared keys don't match")
 
 // cmpParams compares a set of ECIES parameters. We assume, as per the
 // docs, that AES is the only supported symmetric encryption algorithm.
@@ -164,7 +164,7 @@ func TestTooBigSharedKey(t *testing.T) {
 
 // Benchmark the generation of P256 keys.
 func BenchmarkGenerateKeyP256(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if _, err := GenerateKey(rand.Reader, elliptic.P256(), nil); err != nil {
 			b.Fatal(err)
 		}
@@ -177,8 +177,7 @@ func BenchmarkGenSharedKeyP256(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := prv.GenerateShared(&prv.PublicKey, 16, 16)
 		if err != nil {
 			b.Fatal(err)
@@ -192,8 +191,7 @@ func BenchmarkGenSharedKeyS256(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := prv.GenerateShared(&prv.PublicKey, 16, 16)
 		if err != nil {
 			b.Fatal(err)
@@ -279,7 +277,7 @@ var testCases = []testCase{
 	{
 		Curve:    elliptic.P384(),
 		Name:     "P384",
-		Expected: ECIES_AES256_SHA384,
+		Expected: ECIES_AES192_SHA384,
 	},
 	{
 		Curve:    elliptic.P521(),
@@ -334,7 +332,6 @@ func testParamSelection(t *testing.T, c testCase) {
 	if err == nil {
 		t.Fatalf("ecies: encryption should not have succeeded (%s)\n", c.Name)
 	}
-
 }
 
 // Ensure that the basic public key validation in the decryption operation

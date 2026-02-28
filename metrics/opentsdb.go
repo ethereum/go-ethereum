@@ -3,6 +3,7 @@ package metrics
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -57,24 +58,22 @@ func getShortHostname() string {
 	return shortHostName
 }
 
-func openTSDB(c *OpenTSDBConfig) error {
-	shortHostname := getShortHostname()
-	now := time.Now().Unix()
+// writeRegistry writes the registry-metrics on the opentsb format.
+func (c *OpenTSDBConfig) writeRegistry(w io.Writer, now int64, shortHostname string) {
 	du := float64(c.DurationUnit)
-	conn, err := net.DialTCP("tcp", nil, c.Addr)
-	if nil != err {
-		return err
-	}
-	defer conn.Close()
-	w := bufio.NewWriter(conn)
+
 	c.Registry.Each(func(name string, i interface{}) {
 		switch metric := i.(type) {
-		case Counter:
-			fmt.Fprintf(w, "put %s.%s.count %d %d host=%s\n", c.Prefix, name, now, metric.Count(), shortHostname)
-		case Gauge:
-			fmt.Fprintf(w, "put %s.%s.value %d %d host=%s\n", c.Prefix, name, now, metric.Value(), shortHostname)
-		case GaugeFloat64:
-			fmt.Fprintf(w, "put %s.%s.value %d %f host=%s\n", c.Prefix, name, now, metric.Value(), shortHostname)
+		case *Counter:
+			fmt.Fprintf(w, "put %s.%s.count %d %d host=%s\n", c.Prefix, name, now, metric.Snapshot().Count(), shortHostname)
+		case *CounterFloat64:
+			fmt.Fprintf(w, "put %s.%s.count %d %f host=%s\n", c.Prefix, name, now, metric.Snapshot().Count(), shortHostname)
+		case *Gauge:
+			fmt.Fprintf(w, "put %s.%s.value %d %d host=%s\n", c.Prefix, name, now, metric.Snapshot().Value(), shortHostname)
+		case *GaugeFloat64:
+			fmt.Fprintf(w, "put %s.%s.value %d %f host=%s\n", c.Prefix, name, now, metric.Snapshot().Value(), shortHostname)
+		case *GaugeInfo:
+			fmt.Fprintf(w, "put %s.%s.value %d %s host=%s\n", c.Prefix, name, now, metric.Snapshot().Value().String(), shortHostname)
 		case Histogram:
 			h := metric.Snapshot()
 			ps := h.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
@@ -88,14 +87,14 @@ func openTSDB(c *OpenTSDBConfig) error {
 			fmt.Fprintf(w, "put %s.%s.95-percentile %d %.2f host=%s\n", c.Prefix, name, now, ps[2], shortHostname)
 			fmt.Fprintf(w, "put %s.%s.99-percentile %d %.2f host=%s\n", c.Prefix, name, now, ps[3], shortHostname)
 			fmt.Fprintf(w, "put %s.%s.999-percentile %d %.2f host=%s\n", c.Prefix, name, now, ps[4], shortHostname)
-		case Meter:
+		case *Meter:
 			m := metric.Snapshot()
 			fmt.Fprintf(w, "put %s.%s.count %d %d host=%s\n", c.Prefix, name, now, m.Count(), shortHostname)
 			fmt.Fprintf(w, "put %s.%s.one-minute %d %.2f host=%s\n", c.Prefix, name, now, m.Rate1(), shortHostname)
 			fmt.Fprintf(w, "put %s.%s.five-minute %d %.2f host=%s\n", c.Prefix, name, now, m.Rate5(), shortHostname)
 			fmt.Fprintf(w, "put %s.%s.fifteen-minute %d %.2f host=%s\n", c.Prefix, name, now, m.Rate15(), shortHostname)
 			fmt.Fprintf(w, "put %s.%s.mean %d %.2f host=%s\n", c.Prefix, name, now, m.RateMean(), shortHostname)
-		case Timer:
+		case *Timer:
 			t := metric.Snapshot()
 			ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
 			fmt.Fprintf(w, "put %s.%s.count %d %d host=%s\n", c.Prefix, name, now, t.Count(), shortHostname)
@@ -113,7 +112,17 @@ func openTSDB(c *OpenTSDBConfig) error {
 			fmt.Fprintf(w, "put %s.%s.fifteen-minute %d %.2f host=%s\n", c.Prefix, name, now, t.Rate15(), shortHostname)
 			fmt.Fprintf(w, "put %s.%s.mean-rate %d %.2f host=%s\n", c.Prefix, name, now, t.RateMean(), shortHostname)
 		}
-		w.Flush()
 	})
+}
+
+func openTSDB(c *OpenTSDBConfig) error {
+	conn, err := net.DialTCP("tcp", nil, c.Addr)
+	if nil != err {
+		return err
+	}
+	defer conn.Close()
+	w := bufio.NewWriter(conn)
+	c.writeRegistry(w, time.Now().Unix(), getShortHostname())
+	w.Flush()
 	return nil
 }

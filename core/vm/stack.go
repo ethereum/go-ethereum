@@ -17,7 +17,6 @@
 package vm
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/holiman/uint256"
@@ -31,7 +30,7 @@ var stackPool = sync.Pool{
 
 // Stack is an object for basic stack operations. Items popped to the stack are
 // expected to be changed and modified. stack does not take care of adding newly
-// initialised objects.
+// initialized objects.
 type Stack struct {
 	data []uint256.Int
 }
@@ -54,10 +53,6 @@ func (st *Stack) push(d *uint256.Int) {
 	// NOTE push limit (1024) is checked in baseCheck
 	st.data = append(st.data, *d)
 }
-func (st *Stack) pushN(ds ...uint256.Int) {
-	// FIXME: Is there a way to pass args by pointers.
-	st.data = append(st.data, ds...)
-}
 
 func (st *Stack) pop() (ret uint256.Int) {
 	ret = st.data[len(st.data)-1]
@@ -69,8 +64,53 @@ func (st *Stack) len() int {
 	return len(st.data)
 }
 
-func (st *Stack) swap(n int) {
-	st.data[st.len()-n], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-n]
+func (st *Stack) swap1() {
+	st.data[st.len()-2], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-2]
+}
+func (st *Stack) swap2() {
+	st.data[st.len()-3], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-3]
+}
+func (st *Stack) swap3() {
+	st.data[st.len()-4], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-4]
+}
+func (st *Stack) swap4() {
+	st.data[st.len()-5], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-5]
+}
+func (st *Stack) swap5() {
+	st.data[st.len()-6], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-6]
+}
+func (st *Stack) swap6() {
+	st.data[st.len()-7], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-7]
+}
+func (st *Stack) swap7() {
+	st.data[st.len()-8], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-8]
+}
+func (st *Stack) swap8() {
+	st.data[st.len()-9], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-9]
+}
+func (st *Stack) swap9() {
+	st.data[st.len()-10], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-10]
+}
+func (st *Stack) swap10() {
+	st.data[st.len()-11], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-11]
+}
+func (st *Stack) swap11() {
+	st.data[st.len()-12], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-12]
+}
+func (st *Stack) swap12() {
+	st.data[st.len()-13], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-13]
+}
+func (st *Stack) swap13() {
+	st.data[st.len()-14], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-14]
+}
+func (st *Stack) swap14() {
+	st.data[st.len()-15], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-15]
+}
+func (st *Stack) swap15() {
+	st.data[st.len()-16], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-16]
+}
+func (st *Stack) swap16() {
+	st.data[st.len()-17], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-17]
 }
 
 func (st *Stack) dup(n int) {
@@ -84,48 +124,4 @@ func (st *Stack) peek() *uint256.Int {
 // Back returns the n'th item in stack
 func (st *Stack) Back(n int) *uint256.Int {
 	return &st.data[st.len()-n-1]
-}
-
-// Print dumps the content of the stack
-func (st *Stack) Print() {
-	fmt.Println("### stack ###")
-	if len(st.data) > 0 {
-		for i, val := range st.data {
-			fmt.Printf("%-3d  %v\n", i, val)
-		}
-	} else {
-		fmt.Println("-- empty --")
-	}
-	fmt.Println("#############")
-}
-
-var rStackPool = sync.Pool{
-	New: func() interface{} {
-		return &ReturnStack{data: make([]uint32, 0, 10)}
-	},
-}
-
-// ReturnStack is an object for basic return stack operations.
-type ReturnStack struct {
-	data []uint32
-}
-
-func newReturnStack() *ReturnStack {
-	return rStackPool.Get().(*ReturnStack)
-}
-
-func returnRStack(rs *ReturnStack) {
-	rs.data = rs.data[:0]
-	rStackPool.Put(rs)
-}
-
-func (st *ReturnStack) push(d uint32) {
-	st.data = append(st.data, d)
-}
-
-// A uint32 is sufficient as for code below 4.2G
-func (st *ReturnStack) pop() (ret uint32) {
-	ret = st.data[len(st.data)-1]
-	st.data = st.data[:len(st.data)-1]
-	return
 }

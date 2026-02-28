@@ -20,21 +20,25 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/signer/core"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 )
 
 // ValidateTransaction does a number of checks on the supplied transaction, and
 // returns either a list of warnings, or an error (indicating that the transaction
 // should be immediately rejected).
-func (db *Database) ValidateTransaction(selector *string, tx *core.SendTxArgs) (*core.ValidationMessages, error) {
-	messages := new(core.ValidationMessages)
+func (db *Database) ValidateTransaction(selector *string, tx *apitypes.SendTxArgs) (*apitypes.ValidationMessages, error) {
+	messages := new(apitypes.ValidationMessages)
 
 	// Prevent accidental erroneous usage of both 'input' and 'data' (show stopper)
 	if tx.Data != nil && tx.Input != nil && !bytes.Equal(*tx.Data, *tx.Input) {
 		return nil, errors.New(`ambiguous request: both "data" and "input" are set and are not identical`)
+	}
+	// ToTransaction validates, among other things, that blob hashes match with blobs, and also
+	// populates the hashes if they were previously unset.
+	if _, err := tx.ToTransaction(); err != nil {
+		return nil, err
 	}
 	// Place data on 'data', and nil 'input'
 	var data []byte
@@ -52,7 +56,7 @@ func (db *Database) ValidateTransaction(selector *string, tx *core.SendTxArgs) (
 		// e.g. https://github.com/ethereum/go-ethereum/issues/16106.
 		if len(data) == 0 {
 			// Prevent sending ether into black hole (show stopper)
-			if tx.Value.ToInt().Cmp(big.NewInt(0)) > 0 {
+			if tx.Value.ToInt().Sign() > 0 {
 				return nil, errors.New("transaction will create a contract with value but empty code")
 			}
 			// No value submitted at least, critically Warn, but don't blow up
@@ -73,6 +77,16 @@ func (db *Database) ValidateTransaction(selector *string, tx *core.SendTxArgs) (
 	if bytes.Equal(tx.To.Address().Bytes(), common.Address{}.Bytes()) {
 		messages.Crit("Transaction recipient is the zero address")
 	}
+	switch {
+	case tx.GasPrice == nil && tx.MaxFeePerGas == nil:
+		messages.Crit("Neither 'gasPrice' nor 'maxFeePerGas' specified.")
+	case tx.GasPrice == nil && tx.MaxPriorityFeePerGas == nil:
+		messages.Crit("Neither 'gasPrice' nor 'maxPriorityFeePerGas' specified.")
+	case tx.GasPrice != nil && tx.MaxFeePerGas != nil:
+		messages.Crit("Both 'gasPrice' and 'maxFeePerGas' specified.")
+	case tx.GasPrice != nil && tx.MaxPriorityFeePerGas != nil:
+		messages.Crit("Both 'gasPrice' and 'maxPriorityFeePerGas' specified.")
+	}
 	// Semantic fields validated, try to make heads or tails of the call data
 	db.ValidateCallData(selector, data, messages)
 	return messages, nil
@@ -80,7 +94,7 @@ func (db *Database) ValidateTransaction(selector *string, tx *core.SendTxArgs) (
 
 // ValidateCallData checks if the ABI call-data + method selector (if given) can
 // be parsed and seems to match.
-func (db *Database) ValidateCallData(selector *string, data []byte, messages *core.ValidationMessages) {
+func (db *Database) ValidateCallData(selector *string, data []byte, messages *apitypes.ValidationMessages) {
 	// If the data is empty, we have a plain value transfer, nothing more to do
 	if len(data) == 0 {
 		return

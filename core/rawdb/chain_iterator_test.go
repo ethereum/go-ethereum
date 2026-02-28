@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 func TestChainIterator(t *testing.T) {
@@ -33,14 +34,34 @@ func TestChainIterator(t *testing.T) {
 
 	var block *types.Block
 	var txs []*types.Transaction
-	for i := uint64(0); i <= 10; i++ {
-		if i == 0 {
-			block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, nil, nil, nil, newHasher()) // Empty genesis block
+	to := common.BytesToAddress([]byte{0x11})
+	block = types.NewBlock(&types.Header{Number: big.NewInt(int64(0))}, nil, nil, newTestHasher()) // Empty genesis block
+	WriteBlock(chainDb, block)
+	WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
+	for i := uint64(1); i <= 10; i++ {
+		var tx *types.Transaction
+		if i%2 == 0 {
+			tx = types.NewTx(&types.LegacyTx{
+				Nonce:    i,
+				GasPrice: big.NewInt(11111),
+				Gas:      1111,
+				To:       &to,
+				Value:    big.NewInt(111),
+				Data:     []byte{0x11, 0x11, 0x11},
+			})
 		} else {
-			tx := types.NewTransaction(i, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
-			txs = append(txs, tx)
-			block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newHasher())
+			tx = types.NewTx(&types.AccessListTx{
+				ChainID:  big.NewInt(1337),
+				Nonce:    i,
+				GasPrice: big.NewInt(11111),
+				Gas:      1111,
+				To:       &to,
+				Value:    big.NewInt(111),
+				Data:     []byte{0x11, 0x11, 0x11},
+			})
 		}
+		txs = append(txs, tx)
+		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, &types.Body{Transactions: types.Transactions{tx}}, nil, newTestHasher())
 		WriteBlock(chainDb, block)
 		WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 	}
@@ -66,7 +87,7 @@ func TestChainIterator(t *testing.T) {
 				numbers = append(numbers, int(h.number))
 				if len(h.hashes) > 0 {
 					if got, exp := h.hashes[0], txs[h.number-1].Hash(); got != exp {
-						t.Fatalf("hash wrong, got %x exp %x", got, exp)
+						t.Fatalf("block %d: hash wrong, got %x exp %x", h.number, got, exp)
 					}
 				}
 			}
@@ -82,23 +103,56 @@ func TestChainIterator(t *testing.T) {
 	}
 }
 
+func initDatabaseWithTransactions(db ethdb.Database) ([]*types.Block, []*types.Transaction) {
+	var blocks []*types.Block
+	var txs []*types.Transaction
+	to := common.BytesToAddress([]byte{0x11})
+
+	// Write empty genesis block
+	block := types.NewBlock(&types.Header{Number: big.NewInt(int64(0))}, nil, nil, newTestHasher())
+	WriteBlock(db, block)
+	WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+	blocks = append(blocks, block)
+
+	// Create transactions.
+	for i := uint64(1); i <= 10; i++ {
+		var tx *types.Transaction
+		if i%2 == 0 {
+			tx = types.NewTx(&types.LegacyTx{
+				Nonce:    i,
+				GasPrice: big.NewInt(11111),
+				Gas:      1111,
+				To:       &to,
+				Value:    big.NewInt(111),
+				Data:     []byte{0x11, 0x11, 0x11},
+			})
+		} else {
+			tx = types.NewTx(&types.AccessListTx{
+				ChainID:  big.NewInt(1337),
+				Nonce:    i,
+				GasPrice: big.NewInt(11111),
+				Gas:      1111,
+				To:       &to,
+				Value:    big.NewInt(111),
+				Data:     []byte{0x11, 0x11, 0x11},
+			})
+		}
+		txs = append(txs, tx)
+		block := types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, &types.Body{Transactions: types.Transactions{tx}}, nil, newTestHasher())
+		WriteBlock(db, block)
+		WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+		blocks = append(blocks, block)
+	}
+
+	return blocks, txs
+}
+
 func TestIndexTransactions(t *testing.T) {
 	// Construct test chain db
-	chainDb := NewMemoryDatabase()
+	chainDB := NewMemoryDatabase()
 
-	var block *types.Block
-	var txs []*types.Transaction
-	for i := uint64(0); i <= 10; i++ {
-		if i == 0 {
-			block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, nil, nil, nil, newHasher()) // Empty genesis block
-		} else {
-			tx := types.NewTransaction(i, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
-			txs = append(txs, tx)
-			block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newHasher())
-		}
-		WriteBlock(chainDb, block)
-		WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
-	}
+	_, txs := initDatabaseWithTransactions(chainDB)
+
 	// verify checks whether the tx indices in the range [from, to)
 	// is expected.
 	verify := func(from, to int, exist bool, tail uint64) {
@@ -106,37 +160,37 @@ func TestIndexTransactions(t *testing.T) {
 			if i == 0 {
 				continue
 			}
-			number := ReadTxLookupEntry(chainDb, txs[i-1].Hash())
+			number := ReadTxLookupEntry(chainDB, txs[i-1].Hash())
 			if exist && number == nil {
-				t.Fatalf("Transaction indice missing")
+				t.Fatalf("Transaction index %d missing", i)
 			}
 			if !exist && number != nil {
-				t.Fatalf("Transaction indice is not deleted")
+				t.Fatalf("Transaction index %d is not deleted", i)
 			}
 		}
-		number := ReadTxIndexTail(chainDb)
+		number := ReadTxIndexTail(chainDB)
 		if number == nil || *number != tail {
 			t.Fatalf("Transaction tail mismatch")
 		}
 	}
-	IndexTransactions(chainDb, 5, 11, nil)
+	IndexTransactions(chainDB, 5, 11, nil, false)
 	verify(5, 11, true, 5)
 	verify(0, 5, false, 5)
 
-	IndexTransactions(chainDb, 0, 5, nil)
+	IndexTransactions(chainDB, 0, 5, nil, false)
 	verify(0, 11, true, 0)
 
-	UnindexTransactions(chainDb, 0, 5, nil)
+	UnindexTransactions(chainDB, 0, 5, nil, false)
 	verify(5, 11, true, 5)
 	verify(0, 5, false, 5)
 
-	UnindexTransactions(chainDb, 5, 11, nil)
+	UnindexTransactions(chainDB, 5, 11, nil, false)
 	verify(0, 11, false, 11)
 
 	// Testing corner cases
 	signal := make(chan struct{})
 	var once sync.Once
-	indexTransactionsForTesting(chainDb, 5, 11, signal, func(n uint64) bool {
+	indexTransactionsForTesting(chainDB, 5, 11, signal, func(n uint64) bool {
 		if n <= 8 {
 			once.Do(func() {
 				close(signal)
@@ -147,11 +201,11 @@ func TestIndexTransactions(t *testing.T) {
 	})
 	verify(9, 11, true, 9)
 	verify(0, 9, false, 9)
-	IndexTransactions(chainDb, 0, 9, nil)
+	IndexTransactions(chainDB, 0, 9, nil, false)
 
 	signal = make(chan struct{})
 	var once2 sync.Once
-	unindexTransactionsForTesting(chainDb, 0, 11, signal, func(n uint64) bool {
+	unindexTransactionsForTesting(chainDB, 0, 11, signal, func(n uint64) bool {
 		if n >= 8 {
 			once2.Do(func() {
 				close(signal)
@@ -162,4 +216,68 @@ func TestIndexTransactions(t *testing.T) {
 	})
 	verify(8, 11, true, 8)
 	verify(0, 8, false, 8)
+}
+
+func TestUnindexTransactionsMissingBody(t *testing.T) {
+	// Construct test chain db
+	chainDB := NewMemoryDatabase()
+	blocks, _ := initDatabaseWithTransactions(chainDB)
+
+	// Index the entire chain.
+	lastBlock := blocks[len(blocks)-1].NumberU64()
+	IndexTransactions(chainDB, 0, lastBlock+1, nil, false)
+
+	// Prove that block 2 body exists in the database.
+	if raw := ReadCanonicalBodyRLP(chainDB, 2, nil); len(raw) == 0 {
+		t.Fatalf("Block 2 body does not exist in the database.")
+	}
+
+	// Delete body for block 2. This simulates a corrupted database.
+	key := blockBodyKey(2, blocks[2].Hash())
+	if err := chainDB.Delete(key); err != nil {
+		t.Fatalf("Failed to delete block body %v", err)
+	}
+
+	// Unindex blocks [0, 3)
+	UnindexTransactions(chainDB, 0, 3, nil, false)
+
+	// Verify that tx index tail is updated to 3.
+	tail := ReadTxIndexTail(chainDB)
+	if tail == nil || *tail != 3 {
+		t.Fatalf("The tx index tail is wrong: got %v want %d", *tail, 3)
+	}
+}
+
+func TestPruneTransactionIndex(t *testing.T) {
+	chainDB := NewMemoryDatabase()
+	blocks, _ := initDatabaseWithTransactions(chainDB)
+	lastBlock := blocks[len(blocks)-1].NumberU64()
+	pruneBlock := lastBlock - 3
+
+	IndexTransactions(chainDB, 0, lastBlock+1, nil, false)
+
+	// Check all transactions are in index.
+	for _, block := range blocks {
+		for _, tx := range block.Transactions() {
+			num := ReadTxLookupEntry(chainDB, tx.Hash())
+			if num == nil || *num != block.NumberU64() {
+				t.Fatalf("wrong TxLookup entry: %x -> %v", tx.Hash(), num)
+			}
+		}
+	}
+
+	PruneTransactionIndex(chainDB, pruneBlock)
+
+	// Check transactions from old blocks not included.
+	for _, block := range blocks {
+		for _, tx := range block.Transactions() {
+			num := ReadTxLookupEntry(chainDB, tx.Hash())
+			if block.NumberU64() < pruneBlock && num != nil {
+				t.Fatalf("TxLookup entry not removed: %x -> %v", tx.Hash(), num)
+			}
+			if block.NumberU64() >= pruneBlock && (num == nil || *num != block.NumberU64()) {
+				t.Fatalf("wrong TxLookup entry after pruning: %x -> %v", tx.Hash(), num)
+			}
+		}
+	}
 }

@@ -16,7 +16,7 @@
 
 package vm
 
-func memorySha3(stack *Stack) (uint64, bool) {
+func memoryKeccak256(stack *Stack) (uint64, bool) {
 	return calcMemSize64(stack.Back(0), stack.Back(1))
 }
 
@@ -48,6 +48,14 @@ func memoryMStore(stack *Stack) (uint64, bool) {
 	return calcMemSize64WithUint(stack.Back(0), 32)
 }
 
+func memoryMcopy(stack *Stack) (uint64, bool) {
+	mStart := stack.Back(0) // stack[0]: dest
+	if stack.Back(1).Gt(mStart) {
+		mStart = stack.Back(1) // stack[1]: source
+	}
+	return calcMemSize64(mStart, stack.Back(2)) // stack[2]: length
+}
+
 func memoryCreate(stack *Stack) (uint64, bool) {
 	return calcMemSize64(stack.Back(1), stack.Back(2))
 }
@@ -70,6 +78,7 @@ func memoryCall(stack *Stack) (uint64, bool) {
 	}
 	return y, false
 }
+
 func memoryDelegateCall(stack *Stack) (uint64, bool) {
 	x, overflow := calcMemSize64(stack.Back(4), stack.Back(5))
 	if overflow {

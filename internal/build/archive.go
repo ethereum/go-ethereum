@@ -20,11 +20,13 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type Archive interface {
@@ -89,7 +91,7 @@ func WriteArchive(name string, files []string) (err error) {
 	}()
 	archive, basename := NewArchive(archfd)
 	if archive == nil {
-		return fmt.Errorf("unknown archive extension")
+		return errors.New("unknown archive extension")
 	}
 	fmt.Println(name)
 	if err := archive.Directory(basename); err != nil {
@@ -159,6 +161,7 @@ func (a *TarballArchive) Directory(name string) error {
 		Name:     a.dir,
 		Mode:     0755,
 		Typeflag: tar.TypeDir,
+		ModTime:  time.Now(),
 	})
 }
 
@@ -269,17 +272,22 @@ func extractFile(arpath string, armode os.FileMode, data io.Reader, dest string)
 		return fmt.Errorf("path %q escapes archive destination", target)
 	}
 
-	// Ensure the destination directory exists.
+	// Remove the preivously-extracted file if it exists
+	if err := os.RemoveAll(target); err != nil {
+		return err
+	}
+
+	// Recreate the destination directory
 	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 		return err
 	}
 
 	// Copy file data.
-	file, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, armode)
+	file, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY, armode)
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(file, data); err != nil {
+	if _, err = io.Copy(file, data); err != nil {
 		file.Close()
 		os.Remove(target)
 		return err

@@ -18,7 +18,6 @@ package enode
 
 import (
 	"crypto/ecdsa"
-	"errors"
 	"net"
 	"reflect"
 	"strings"
@@ -27,15 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 )
-
-func init() {
-	lookupIPFunc = func(name string) ([]net.IP, error) {
-		if name == "node.example.org" {
-			return []net.IP{{33, 44, 55, 66}}, nil
-		}
-		return nil, errors.New("no such host")
-	}
-}
 
 var parseNodeTests = []struct {
 	input      string
@@ -71,10 +61,6 @@ var parseNodeTests = []struct {
 	},
 	// Complete node URLs with IP address and ports
 	{
-		input:     "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@invalid.:3",
-		wantError: `no such host`,
-	},
-	{
 		input:     "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:foo",
 		wantError: `invalid port`,
 	},
@@ -90,6 +76,15 @@ var parseNodeTests = []struct {
 			52150,
 			52150,
 		),
+	},
+	{
+		input: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@valid.:3",
+		wantResult: NewV4(
+			hexPubkey("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			nil,
+			3,
+			3,
+		).WithHostname("valid."),
 	},
 	{
 		input: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@[::]:52150",

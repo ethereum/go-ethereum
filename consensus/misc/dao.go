@@ -21,8 +21,9 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -40,10 +41,11 @@ var (
 // ensure it conforms to DAO hard-fork rules.
 //
 // DAO hard-fork extension to the header validity:
-//   a) if the node is no-fork, do not accept blocks in the [fork, fork+10) range
-//      with the fork specific extra-data set
-//   b) if the node is pro-fork, require blocks in the specific range to have the
-//      unique extra-data set.
+//
+//   - if the node is no-fork, do not accept blocks in the [fork, fork+10) range
+//     with the fork specific extra-data set.
+//   - if the node is pro-fork, require blocks in the specific range to have the
+//     unique extra-data set.
 func VerifyDAOHeaderExtraData(config *params.ChainConfig, header *types.Header) error {
 	// Short circuit validation if the node doesn't care about the DAO fork
 	if config.DAOForkBlock == nil {
@@ -71,7 +73,7 @@ func VerifyDAOHeaderExtraData(config *params.ChainConfig, header *types.Header) 
 // ApplyDAOHardFork modifies the state database according to the DAO hard-fork
 // rules, transferring all balances of a set of DAO accounts to a single refund
 // contract.
-func ApplyDAOHardFork(statedb *state.StateDB) {
+func ApplyDAOHardFork(statedb vm.StateDB) {
 	// Retrieve the contract to refund balances into
 	if !statedb.Exist(params.DAORefundContract) {
 		statedb.CreateAccount(params.DAORefundContract)
@@ -79,7 +81,8 @@ func ApplyDAOHardFork(statedb *state.StateDB) {
 
 	// Move every DAO account and extra-balance account funds into the refund contract
 	for _, addr := range params.DAODrainList() {
-		statedb.AddBalance(params.DAORefundContract, statedb.GetBalance(addr))
-		statedb.SetBalance(addr, new(big.Int))
+		balance := statedb.GetBalance(addr)
+		statedb.AddBalance(params.DAORefundContract, balance, tracing.BalanceIncreaseDaoContract)
+		statedb.SubBalance(addr, balance, tracing.BalanceDecreaseDaoAccount)
 	}
 }

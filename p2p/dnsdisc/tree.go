@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -21,16 +21,17 @@ import (
 	"crypto/ecdsa"
 	"encoding/base32"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/crypto/sha3"
 )
 
 // Tree is a merkle tree of node records.
@@ -113,10 +114,41 @@ func (t *Tree) Nodes() []*enode.Node {
 	return nodes
 }
 
+/*
+We want to keep the UDP size below 512 bytes. The UDP size is roughly:
+UDP length = 8 + UDP payload length ( 229 )
+UPD Payload length:
+  - dns.id 2
+  - dns.flags 2
+  - dns.count.queries 2
+  - dns.count.answers 2
+  - dns.count.auth_rr 2
+  - dns.count.add_rr 2
+  - queries (query-size + 6)
+  - answers :
+  - dns.resp.name 2
+  - dns.resp.type 2
+  - dns.resp.class 2
+  - dns.resp.ttl 4
+  - dns.resp.len 2
+  - dns.txt.length 1
+  - dns.txt resp_data_size
+
+So the total size is roughly a fixed overhead of `39`, and the size of the query (domain
+name) and response. The query size is, for example,
+FVY6INQ6LZ33WLCHO3BPR3FH6Y.snap.mainnet.ethdisco.net (52)
+
+We also have some static data in the response, such as `enrtree-branch:`, and potentially
+splitting the response up with `" "`, leaving us with a size of roughly `400` that we need
+to stay below.
+
+The number `370` is used to have some margin for extra overhead (for example, the dns
+query may be larger - more subdomains).
+*/
 const (
-	hashAbbrev    = 16
-	maxChildren   = 300 / hashAbbrev * (13 / 8)
-	minHashLength = 12
+	hashAbbrevSize = 1 + 16*13/8          // Size of an encoded hash (plus comma)
+	maxChildren    = 370 / hashAbbrevSize // 13 children
+	minHashLength  = 12
 )
 
 // MakeTree creates a tree containing the given nodes and links.
@@ -183,8 +215,8 @@ func (t *Tree) build(entries []entry) entry {
 }
 
 func sortByID(nodes []*enode.Node) []*enode.Node {
-	sort.Slice(nodes, func(i, j int) bool {
-		return bytes.Compare(nodes[i].ID().Bytes(), nodes[j].ID().Bytes()) < 0
+	slices.SortFunc(nodes, func(a, b *enode.Node) int {
+		return bytes.Compare(a.ID().Bytes(), b.ID().Bytes())
 	})
 	return nodes
 }
@@ -230,7 +262,7 @@ const (
 )
 
 func subdomain(e entry) string {
-	h := sha3.NewLegacyKeccak256()
+	h := keccak.NewLegacyKeccak256()
 	io.WriteString(h, e.String())
 	return b32format.EncodeToString(h.Sum(nil)[:16])
 }
@@ -240,7 +272,7 @@ func (e *rootEntry) String() string {
 }
 
 func (e *rootEntry) sigHash() []byte {
-	h := sha3.NewLegacyKeccak256()
+	h := keccak.NewLegacyKeccak256()
 	fmt.Fprintf(h, rootPrefix+" e=%s l=%s seq=%d", e.eroot, e.lroot, e.seq)
 	return h.Sum(nil)
 }
@@ -310,14 +342,14 @@ func parseLinkEntry(e string) (entry, error) {
 
 func parseLink(e string) (*linkEntry, error) {
 	if !strings.HasPrefix(e, linkPrefix) {
-		return nil, fmt.Errorf("wrong/missing scheme 'enrtree' in URL")
+		return nil, errors.New("wrong/missing scheme 'enrtree' in URL")
 	}
 	e = e[len(linkPrefix):]
-	pos := strings.IndexByte(e, '@')
-	if pos == -1 {
+
+	keystring, domain, found := strings.Cut(e, "@")
+	if !found {
 		return nil, entryError{"link", errNoPubkey}
 	}
-	keystring, domain := e[:pos], e[pos+1:]
 	keybytes, err := b32format.DecodeString(keystring)
 	if err != nil {
 		return nil, entryError{"link", errBadPubkey}

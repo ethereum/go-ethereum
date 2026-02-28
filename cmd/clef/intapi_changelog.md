@@ -94,7 +94,7 @@ type Account struct {
 >  Notifications are not confirmable by definition, since they do not have a Response object to be returned. As such, the Client would not be aware of any errors (like e.g. "Invalid params","Internal error"
 ### 3.1.0
 
-* Add `ContentType` `string` to `SignDataRequest` to accommodate the latest EIP-191 and EIP-712 implementations.
+* Add `ContentType` `string` to `SignDataRequest` to accommodate the latest [EIP-191](https://eips.ethereum.org/EIPS/eip-191) and [EIP-712](https://eips.ethereum.org/EIPS/eip-712) implementations.
 
 ### 3.0.0
 

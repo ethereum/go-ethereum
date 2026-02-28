@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//+build !windows
+//go:build !windows
+// +build !windows
 
 package netutil
 

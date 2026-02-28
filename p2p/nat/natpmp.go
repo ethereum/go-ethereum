@@ -17,6 +17,7 @@
 package nat
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -25,7 +26,7 @@ import (
 	natpmp "github.com/jackpal/go-nat-pmp"
 )
 
-// natPMPClient adapts the NAT-PMP protocol implementation so it conforms to
+// pmp adapts the NAT-PMP protocol implementation so it conforms to
 // the common interface.
 type pmp struct {
 	gw net.IP
@@ -44,14 +45,24 @@ func (n *pmp) ExternalIP() (net.IP, error) {
 	return response.ExternalIPAddress[:], nil
 }
 
-func (n *pmp) AddMapping(protocol string, extport, intport int, name string, lifetime time.Duration) error {
+func (n *pmp) AddMapping(protocol string, extport, intport int, name string, lifetime time.Duration) (uint16, error) {
 	if lifetime <= 0 {
-		return fmt.Errorf("lifetime must not be <= 0")
+		return 0, errors.New("lifetime must not be <= 0")
+	}
+	if extport == 0 {
+		extport = intport
 	}
 	// Note order of port arguments is switched between our
 	// AddMapping and the client's AddPortMapping.
-	_, err := n.c.AddPortMapping(strings.ToLower(protocol), intport, extport, int(lifetime/time.Second))
-	return err
+	res, err := n.c.AddPortMapping(strings.ToLower(protocol), intport, extport, int(lifetime/time.Second))
+	if err != nil {
+		return 0, err
+	}
+
+	// NAT-PMP maps an alternative available port number if the requested port
+	// is already mapped to another address and returns success. Handling of
+	// alternate port numbers is done by the caller.
+	return res.MappedExternalPort, nil
 }
 
 func (n *pmp) DeleteMapping(protocol string, extport, intport int) (err error) {
@@ -60,6 +71,10 @@ func (n *pmp) DeleteMapping(protocol string, extport, intport int) (err error) {
 	// time of zero.
 	_, err = n.c.AddPortMapping(strings.ToLower(protocol), intport, 0, 0)
 	return err
+}
+
+func (n *pmp) MarshalText() ([]byte, error) {
+	return fmt.Appendf(nil, "natpmp:%v", n.gw), nil
 }
 
 func discoverPMP() Interface {
@@ -95,13 +110,6 @@ func discoverPMP() Interface {
 	return nil
 }
 
-var (
-	// LAN IP ranges
-	_, lan10, _  = net.ParseCIDR("10.0.0.0/8")
-	_, lan176, _ = net.ParseCIDR("172.16.0.0/12")
-	_, lan192, _ = net.ParseCIDR("192.168.0.0/16")
-)
-
 // TODO: improve this. We currently assume that (on most networks)
 // the router is X.X.X.1 in a local LAN range.
 func potentialGateways() (gws []net.IP) {
@@ -116,7 +124,7 @@ func potentialGateways() (gws []net.IP) {
 		}
 		for _, addr := range ifaddrs {
 			if x, ok := addr.(*net.IPNet); ok {
-				if lan10.Contains(x.IP) || lan176.Contains(x.IP) || lan192.Contains(x.IP) {
+				if x.IP.IsPrivate() {
 					ip := x.IP.Mask(x.Mask).To4()
 					if ip != nil {
 						ip[3] = ip[3] | 0x01

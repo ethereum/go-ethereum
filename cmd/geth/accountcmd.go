@@ -17,37 +17,37 @@
 package main
 
 import (
+	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
-	walletCommand = cli.Command{
+	walletCommand = &cli.Command{
 		Name:      "wallet",
 		Usage:     "Manage Ethereum presale wallets",
 		ArgsUsage: "",
-		Category:  "ACCOUNT COMMANDS",
 		Description: `
     geth wallet import /path/to/my/presale.wallet
 
 will prompt for your password and imports your ether presale account.
 It can be used non-interactively with the --password option taking a
 passwordfile as argument containing the wallet password in plaintext.`,
-		Subcommands: []cli.Command{
+		Subcommands: []*cli.Command{
 			{
 
 				Name:      "import",
 				Usage:     "Import Ethereum presale wallet",
 				ArgsUsage: "<keyFile>",
-				Action:    utils.MigrateFlags(importWallet),
-				Category:  "ACCOUNT COMMANDS",
+				Action:    importWallet,
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.KeyStoreDirFlag,
@@ -64,10 +64,9 @@ passwordfile as argument containing the wallet password in plaintext.`,
 		},
 	}
 
-	accountCommand = cli.Command{
-		Name:     "account",
-		Usage:    "Manage accounts",
-		Category: "ACCOUNT COMMANDS",
+	accountCommand = &cli.Command{
+		Name:  "account",
+		Usage: "Manage accounts",
 		Description: `
 
 Manage accounts, list all existing accounts, import a private key into a new
@@ -88,11 +87,11 @@ It is safe to transfer the entire directory or the individual keys therein
 between ethereum nodes by simply copying.
 
 Make sure you backup your keys regularly.`,
-		Subcommands: []cli.Command{
+		Subcommands: []*cli.Command{
 			{
 				Name:   "list",
 				Usage:  "Print summary of existing accounts",
-				Action: utils.MigrateFlags(accountList),
+				Action: accountList,
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.KeyStoreDirFlag,
@@ -103,7 +102,7 @@ Print a short summary of all accounts`,
 			{
 				Name:   "new",
 				Usage:  "Create a new account",
-				Action: utils.MigrateFlags(accountCreate),
+				Action: accountCreate,
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.KeyStoreDirFlag,
@@ -128,7 +127,7 @@ password to file or expose in any other way.
 			{
 				Name:      "update",
 				Usage:     "Update an existing account",
-				Action:    utils.MigrateFlags(accountUpdate),
+				Action:    accountUpdate,
 				ArgsUsage: "<address>",
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
@@ -157,7 +156,7 @@ changing your password is only possible interactively.
 			{
 				Name:   "import",
 				Usage:  "Import a private key into a new account",
-				Action: utils.MigrateFlags(accountImport),
+				Action: accountImport,
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.KeyStoreDirFlag,
@@ -191,91 +190,76 @@ nodes.
 	}
 )
 
+// makeAccountManager creates an account manager with backends
+func makeAccountManager(ctx *cli.Context) *accounts.Manager {
+	cfg := loadBaseConfig(ctx)
+	am := accounts.NewManager(nil)
+	keydir, isEphemeral, err := cfg.Node.GetKeyStoreDir()
+	if err != nil {
+		utils.Fatalf("Failed to get the keystore directory: %v", err)
+	}
+	if isEphemeral {
+		utils.Fatalf("Can't use ephemeral directory as keystore path")
+	}
+
+	if err := setAccountManagerBackends(&cfg.Node, am, keydir); err != nil {
+		utils.Fatalf("Failed to set account manager backends: %v", err)
+	}
+	return am
+}
+
 func accountList(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx)
+	am := makeAccountManager(ctx)
 	var index int
-	for _, wallet := range stack.AccountManager().Wallets() {
+	for _, wallet := range am.Wallets() {
 		for _, account := range wallet.Accounts() {
 			fmt.Printf("Account #%d: {%x} %s\n", index, account.Address, &account.URL)
 			index++
 		}
 	}
+
 	return nil
 }
 
-// tries unlocking the specified account a few times.
-func unlockAccount(ks *keystore.KeyStore, address string, i int, passwords []string) (accounts.Account, string) {
-	account, err := utils.MakeAddress(ks, address)
+// readPasswordFromFile reads the first line of the given file, trims line endings,
+// and returns the password and whether the reading was successful.
+func readPasswordFromFile(path string) (string, bool) {
+	if path == "" {
+		return "", false
+	}
+	text, err := os.ReadFile(path)
 	if err != nil {
-		utils.Fatalf("Could not list accounts: %v", err)
+		utils.Fatalf("Failed to read password file: %v", err)
 	}
-	for trials := 0; trials < 3; trials++ {
-		prompt := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", address, trials+1, 3)
-		password := utils.GetPassPhraseWithList(prompt, false, i, passwords)
-		err = ks.Unlock(account, password)
-		if err == nil {
-			log.Info("Unlocked account", "address", account.Address.Hex())
-			return account, password
-		}
-		if err, ok := err.(*keystore.AmbiguousAddrError); ok {
-			log.Info("Unlocked account", "address", account.Address.Hex())
-			return ambiguousAddrRecovery(ks, err, password), password
-		}
-		if err != keystore.ErrDecrypt {
-			// No need to prompt again if the error is not decryption-related.
-			break
-		}
+	lines := strings.Split(string(text), "\n")
+	if len(lines) == 0 {
+		return "", false
 	}
-	// All trials expended to unlock account, bail out
-	utils.Fatalf("Failed to unlock account %s (%v)", address, err)
-
-	return accounts.Account{}, ""
-}
-
-func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrError, auth string) accounts.Account {
-	fmt.Printf("Multiple key files exist for address %x:\n", err.Addr)
-	for _, a := range err.Matches {
-		fmt.Println("  ", a.URL)
-	}
-	fmt.Println("Testing your password against all of them...")
-	var match *accounts.Account
-	for _, a := range err.Matches {
-		if err := ks.Unlock(a, auth); err == nil {
-			match = &a
-			break
-		}
-	}
-	if match == nil {
-		utils.Fatalf("None of the listed files could be unlocked.")
-	}
-	fmt.Printf("Your password unlocked %s\n", match.URL)
-	fmt.Println("In order to avoid this warning, you need to remove the following duplicate key files:")
-	for _, a := range err.Matches {
-		if a != *match {
-			fmt.Println("  ", a.URL)
-		}
-	}
-	return *match
+	// Sanitise DOS line endings.
+	return strings.TrimRight(lines[0], "\r"), true
 }
 
 // accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) error {
-	cfg := gethConfig{Node: defaultNodeConfig()}
-	// Load config file.
-	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
-		if err := loadConfig(file, &cfg); err != nil {
-			utils.Fatalf("%v", err)
-		}
-	}
-	utils.SetNodeConfig(ctx, &cfg.Node)
-	scryptN, scryptP, keydir, err := cfg.Node.AccountConfig()
-
+	cfg := loadBaseConfig(ctx)
+	keydir, isEphemeral, err := cfg.Node.GetKeyStoreDir()
 	if err != nil {
-		utils.Fatalf("Failed to read configuration: %v", err)
+		utils.Fatalf("Failed to get the keystore directory: %v", err)
+	}
+	if isEphemeral {
+		utils.Fatalf("Can't use ephemeral directory as keystore path")
+	}
+	scryptN := keystore.StandardScryptN
+	scryptP := keystore.StandardScryptP
+	if cfg.Node.UseLightweightKDF {
+		scryptN = keystore.LightScryptN
+		scryptP = keystore.LightScryptP
 	}
 
-	password := utils.GetPassPhraseWithList("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
-
+	password, ok := readPasswordFromFile(ctx.Path(utils.PasswordFileFlag.Name))
+	if !ok {
+		password = utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true)
+	}
 	account, err := keystore.StoreKey(keydir, password, scryptN, scryptP)
 
 	if err != nil {
@@ -294,37 +278,60 @@ func accountCreate(ctx *cli.Context) error {
 // accountUpdate transitions an account from a previous format to the current
 // one, also providing the possibility to change the pass-phrase.
 func accountUpdate(ctx *cli.Context) error {
-	if len(ctx.Args()) == 0 {
+	if ctx.Args().Len() == 0 {
 		utils.Fatalf("No accounts specified to update")
 	}
-	stack, _ := makeConfigNode(ctx)
-	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	am := makeAccountManager(ctx)
+	backends := am.Backends(keystore.KeyStoreType)
+	if len(backends) == 0 {
+		utils.Fatalf("Keystore is not available")
+	}
+	ks := backends[0].(*keystore.KeyStore)
 
-	for _, addr := range ctx.Args() {
-		account, oldPassword := unlockAccount(ks, addr, 0, nil)
-		newPassword := utils.GetPassPhraseWithList("Please give a new password. Do not forget this password.", true, 0, nil)
-		if err := ks.Update(account, oldPassword, newPassword); err != nil {
-			utils.Fatalf("Could not update the account: %v", err)
+	for _, addr := range ctx.Args().Slice() {
+		if !common.IsHexAddress(addr) {
+			return errors.New("address must be specified in hexadecimal form")
+		}
+		account := accounts.Account{Address: common.HexToAddress(addr)}
+		newPassword := utils.GetPassPhrase("Please give a NEW password. Do not forget this password.", true)
+		updateFn := func(attempt int) error {
+			prompt := fmt.Sprintf("Please provide the OLD password for account %s | Attempt %d/%d", addr, attempt+1, 3)
+			password := utils.GetPassPhrase(prompt, false)
+			return ks.Update(account, password, newPassword)
+		}
+		// let user attempt unlock thrice.
+		err := updateFn(0)
+		for attempts := 1; attempts < 3 && errors.Is(err, keystore.ErrDecrypt); attempts++ {
+			err = updateFn(attempts)
+		}
+		if err != nil {
+			return fmt.Errorf("could not update account: %w", err)
 		}
 	}
 	return nil
 }
 
 func importWallet(ctx *cli.Context) error {
-	keyfile := ctx.Args().First()
-	if len(keyfile) == 0 {
-		utils.Fatalf("keyfile must be given as argument")
+	if ctx.Args().Len() != 1 {
+		utils.Fatalf("keyfile must be given as the only argument")
 	}
-	keyJSON, err := ioutil.ReadFile(keyfile)
+	keyfile := ctx.Args().First()
+	keyJSON, err := os.ReadFile(keyfile)
 	if err != nil {
 		utils.Fatalf("Could not read wallet file: %v", err)
 	}
 
-	stack, _ := makeConfigNode(ctx)
-	passphrase := utils.GetPassPhraseWithList("", false, 0, utils.MakePasswordList(ctx))
-
-	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-	acct, err := ks.ImportPreSaleKey(keyJSON, passphrase)
+	am := makeAccountManager(ctx)
+	backends := am.Backends(keystore.KeyStoreType)
+	if len(backends) == 0 {
+		utils.Fatalf("Keystore is not available")
+	}
+	password, ok := readPasswordFromFile(ctx.Path(utils.PasswordFileFlag.Name))
+	if !ok {
+		password = utils.GetPassPhrase("", false)
+	}
+	ks := backends[0].(*keystore.KeyStore)
+	acct, err := ks.ImportPreSaleKey(keyJSON, password)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
@@ -333,19 +340,25 @@ func importWallet(ctx *cli.Context) error {
 }
 
 func accountImport(ctx *cli.Context) error {
-	keyfile := ctx.Args().First()
-	if len(keyfile) == 0 {
-		utils.Fatalf("keyfile must be given as argument")
+	if ctx.Args().Len() != 1 {
+		utils.Fatalf("keyfile must be given as the only argument")
 	}
+	keyfile := ctx.Args().First()
 	key, err := crypto.LoadECDSA(keyfile)
 	if err != nil {
 		utils.Fatalf("Failed to load the private key: %v", err)
 	}
-	stack, _ := makeConfigNode(ctx)
-	passphrase := utils.GetPassPhraseWithList("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
-
-	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-	acct, err := ks.ImportECDSA(key, passphrase)
+	am := makeAccountManager(ctx)
+	backends := am.Backends(keystore.KeyStoreType)
+	if len(backends) == 0 {
+		utils.Fatalf("Keystore is not available")
+	}
+	ks := backends[0].(*keystore.KeyStore)
+	password, ok := readPasswordFromFile(ctx.Path(utils.PasswordFileFlag.Name))
+	if !ok {
+		password = utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true)
+	}
+	acct, err := ks.ImportECDSA(key, password)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}

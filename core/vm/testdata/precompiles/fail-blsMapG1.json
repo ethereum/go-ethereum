@@ -5,18 +5,23 @@
     "Name": "bls_mapg1_empty_input"
   },
   {
-    "Input": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "Input": "00000000000000000000000000000000156c8a6a2c184569d69a76be144b5cdc5141d2d2ca4fe341f011e25e3969c55ad9e9b9ce2eb833c81a908e5fa4ac5f",
     "ExpectedError": "invalid input length",
     "Name": "bls_mapg1_short_input"
   },
   {
-    "Input": "00000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "Input": "0000000000000000000000000000000000156c8a6a2c184569d69a76be144b5cdc5141d2d2ca4fe341f011e25e3969c55ad9e9b9ce2eb833c81a908e5fa4ac5f03",
+    "ExpectedError": "invalid input length",
+    "Name": "bls_mapg1_large_input"
+  },
+  {
+    "Input": "1000000000000000000000000000000000156c8a6a2c184569d69a76be144b5cdc5141d2d2ca4fe341f011e25e3969c55ad9e9b9ce2eb833c81a908e5fa4ac5f",
     "ExpectedError": "invalid field element top bytes",
     "Name": "bls_mapg1_top_bytes"
   },
   {
-    "Input": "000000000000000000000000000000001a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaac",
-    "ExpectedError": "must be less than modulus",
-    "Name": "bls_mapg1_invalid_fq_element"
+    "Input": "000000000000000000000000000000002f6d9c5465982c0421b61e74579709b3b5b91e57bdd4f6015742b4ff301abb7ef895b9cce00c33c7d48f8e5fa4ac09ae",
+    "ExpectedError": "invalid fp.Element encoding",
+    "Name": "bls_invalid_fq_element"
   }
 ]

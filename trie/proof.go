@@ -22,10 +22,9 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Prove constructs a merkle proof for key. The result contains all encoded nodes
@@ -35,33 +34,50 @@ import (
 // If the trie does not contain a value for key, the returned proof contains all
 // nodes of the longest existing prefix of the key (at least the root node), ending
 // with the node that proves the absence of the key.
-func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
+func (t *Trie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
+	// Short circuit if the trie is already committed and not usable.
+	if t.committed {
+		return ErrCommitted
+	}
 	// Collect all nodes on the path to key.
+	var (
+		prefix []byte
+		nodes  []node
+		tn     = t.root
+	)
 	key = keybytesToHex(key)
-	var nodes []node
-	tn := t.root
 	for len(key) > 0 && tn != nil {
 		switch n := tn.(type) {
 		case *shortNode:
-			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
+			if !bytes.HasPrefix(key, n.Key) {
 				// The trie doesn't contain the key.
 				tn = nil
 			} else {
 				tn = n.Val
+				prefix = append(prefix, n.Key...)
 				key = key[len(n.Key):]
 			}
 			nodes = append(nodes, n)
 		case *fullNode:
 			tn = n.Children[key[0]]
+			prefix = append(prefix, key[0])
 			key = key[1:]
 			nodes = append(nodes, n)
 		case hashNode:
-			var err error
-			tn, err = t.resolveHash(n, nil)
+			// Retrieve the specified node from the underlying node reader.
+			// trie.resolveAndTrack is not used since in that function the
+			// loaded blob will be tracked, while it's not required here since
+			// all loaded nodes won't be linked to trie at all and track nodes
+			// may lead to out-of-memory issue.
+			blob, err := t.reader.Node(prefix, common.BytesToHash(n))
 			if err != nil {
-				log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+				log.Error("Unhandled trie error in Trie.Prove", "err", err)
 				return err
 			}
+			// The raw-blob format nodes are loaded either from the
+			// clean cache or the database, they are all in their own
+			// copy and safe to use unsafe decoder.
+			tn = mustDecodeNodeUnsafe(n, blob)
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
@@ -70,20 +86,9 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) e
 	defer returnHasherToPool(hasher)
 
 	for i, n := range nodes {
-		if fromLevel > 0 {
-			fromLevel--
-			continue
-		}
-		var hn node
-		n, hn = hasher.proofHash(n)
-		if hash, ok := hn.(hashNode); ok || i == 0 {
-			// If the node's database encoding is a hash (or is the
-			// root node), it becomes a proof element.
-			enc, _ := rlp.EncodeToBytes(n)
-			if !ok {
-				hash = hasher.hashData(enc)
-			}
-			proofDb.Put(hash, enc)
+		enc := hasher.proofHash(n)
+		if len(enc) >= 32 || i == 0 {
+			proofDb.Put(crypto.Keccak256(enc), enc)
 		}
 	}
 	return nil
@@ -96,8 +101,8 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) e
 // If the trie does not contain a value for key, the returned proof contains all
 // nodes of the longest existing prefix of the key (at least the root node), ending
 // with the node that proves the absence of the key.
-func (t *SecureTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
-	return t.trie.Prove(key, fromLevel, proofDb)
+func (t *StateTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
+	return t.trie.Prove(key, proofDb)
 }
 
 // VerifyProof checks merkle proofs. The given proof must contain the value for
@@ -216,7 +221,7 @@ func proofToPath(rootHash common.Hash, root node, key []byte, proofDb ethdb.KeyV
 //
 // Note we have the assumption here the given boundary keys are different
 // and right is larger than left.
-func unsetInternal(n node, left []byte, right []byte) error {
+func unsetInternal(n node, left []byte, right []byte) (bool, error) {
 	left, right = keybytesToHex(left), keybytesToHex(right)
 
 	// Step down to the fork point. There are two scenarios can happen:
@@ -278,45 +283,55 @@ findFork:
 		// - left proof points to the shortnode, but right proof is greater
 		// - right proof points to the shortnode, but left proof is less
 		if shortForkLeft == -1 && shortForkRight == -1 {
-			return errors.New("empty range")
+			return false, errors.New("empty range")
 		}
 		if shortForkLeft == 1 && shortForkRight == 1 {
-			return errors.New("empty range")
+			return false, errors.New("empty range")
 		}
 		if shortForkLeft != 0 && shortForkRight != 0 {
+			// The fork point is root node, unset the entire trie
+			if parent == nil {
+				return true, nil
+			}
 			parent.(*fullNode).Children[left[pos-1]] = nil
-			return nil
+			return false, nil
 		}
 		// Only one proof points to non-existent key.
 		if shortForkRight != 0 {
-			// Unset left proof's path
 			if _, ok := rn.Val.(valueNode); ok {
+				// The fork point is root node, unset the entire trie
+				if parent == nil {
+					return true, nil
+				}
 				parent.(*fullNode).Children[left[pos-1]] = nil
-				return nil
+				return false, nil
 			}
-			return unset(rn, rn.Val, left[pos:], len(rn.Key), false)
+			return false, unset(rn, rn.Val, left[pos:], len(rn.Key), false)
 		}
 		if shortForkLeft != 0 {
-			// Unset right proof's path.
 			if _, ok := rn.Val.(valueNode); ok {
+				// The fork point is root node, unset the entire trie
+				if parent == nil {
+					return true, nil
+				}
 				parent.(*fullNode).Children[right[pos-1]] = nil
-				return nil
+				return false, nil
 			}
-			return unset(rn, rn.Val, right[pos:], len(rn.Key), true)
+			return false, unset(rn, rn.Val, right[pos:], len(rn.Key), true)
 		}
-		return nil
+		return false, nil
 	case *fullNode:
 		// unset all internal nodes in the forkpoint
 		for i := left[pos] + 1; i < right[pos]; i++ {
 			rn.Children[i] = nil
 		}
 		if err := unset(rn, rn.Children[left[pos]], left[pos:], 1, false); err != nil {
-			return err
+			return false, err
 		}
 		if err := unset(rn, rn.Children[right[pos]], right[pos:], 1, true); err != nil {
-			return err
+			return false, err
 		}
-		return nil
+		return false, nil
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
 	}
@@ -325,9 +340,9 @@ findFork:
 // unset removes all internal node references either the left most or right most.
 // It can meet these scenarios:
 //
-// - The given path is existent in the trie, unset the associated nodes with the
-//   specific direction
-// - The given path is non-existent in the trie
+//   - The given path is existent in the trie, unset the associated nodes with the
+//     specific direction
+//   - The given path is non-existent in the trie
 //   - the fork point is a fullnode, the corresponding child pointed by path
 //     is nil, return
 //   - the fork point is a shortnode, the shortnode is included in the range,
@@ -350,32 +365,34 @@ func unset(parent node, child node, key []byte, pos int, removeLeft bool) error 
 		}
 		return unset(cld, cld.Children[key[pos]], key, pos+1, removeLeft)
 	case *shortNode:
-		if len(key[pos:]) < len(cld.Key) || !bytes.Equal(cld.Key, key[pos:pos+len(cld.Key)]) {
-			// Find the fork point, it's an non-existent branch.
+		if !bytes.HasPrefix(key[pos:], cld.Key) {
+			// Find the fork point, it's a non-existent branch.
 			if removeLeft {
 				if bytes.Compare(cld.Key, key[pos:]) < 0 {
 					// The key of fork shortnode is less than the path
-					// (it belongs to the range), unset the entrie
+					// (it belongs to the range), unset the entire
 					// branch. The parent must be a fullnode.
 					fn := parent.(*fullNode)
 					fn.Children[key[pos-1]] = nil
-				} else {
-					// The key of fork shortnode is greater than the
-					// path(it doesn't belong to the range), keep
-					// it with the cached hash available.
 				}
+				//else {
+				// The key of fork shortnode is greater than the
+				// path(it doesn't belong to the range), keep
+				// it with the cached hash available.
+				//}
 			} else {
 				if bytes.Compare(cld.Key, key[pos:]) > 0 {
 					// The key of fork shortnode is greater than the
-					// path(it belongs to the range), unset the entrie
+					// path(it belongs to the range), unset the entries
 					// branch. The parent must be a fullnode.
 					fn := parent.(*fullNode)
 					fn.Children[key[pos-1]] = nil
-				} else {
-					// The key of fork shortnode is less than the
-					// path(it doesn't belong to the range), keep
-					// it with the cached hash available.
 				}
+				//else {
+				// The key of fork shortnode is less than the
+				// path(it doesn't belong to the range), keep
+				// it with the cached hash available.
+				//}
 			}
 			return nil
 		}
@@ -396,7 +413,7 @@ func unset(parent node, child node, key []byte, pos int, removeLeft bool) error 
 }
 
 // hasRightElement returns the indicator whether there exists more elements
-// in the right side of the given path. The given path can point to an existent
+// on the right side of the given path. The given path can point to an existent
 // key or a non-existent one. This function has the assumption that the whole
 // path should already be resolved.
 func hasRightElement(node node, key []byte) bool {
@@ -411,7 +428,7 @@ func hasRightElement(node node, key []byte) bool {
 			}
 			node, pos = rn.Children[key[pos]], pos+1
 		case *shortNode:
-			if len(key)-pos < len(rn.Key) || !bytes.Equal(rn.Key, key[pos:pos+len(rn.Key)]) {
+			if !bytes.HasPrefix(key[pos:], rn.Key) {
 				return bytes.Compare(rn.Key, key[pos:]) > 0
 			}
 			node, pos = rn.Val, pos+len(rn.Key)
@@ -426,7 +443,7 @@ func hasRightElement(node node, key []byte) bool {
 
 // VerifyRangeProof checks whether the given leaf nodes and edge proof
 // can prove the given trie leaves range is matched with the specific root.
-// Besides, the range should be consecutive(no gap inside) and monotonic
+// Besides, the range should be consecutive (no gap inside) and monotonic
 // increasing.
 //
 // Note the given proof actually contains two edge proofs. Both of them can
@@ -437,113 +454,142 @@ func hasRightElement(node node, key []byte) bool {
 //
 // The firstKey is paired with firstProof, not necessarily the same as keys[0]
 // (unless firstProof is an existent proof). Similarly, lastKey and lastProof
-// are paired.
+// are paired. The firstKey should be less than or equal to all keys in the list.
 //
 // Expect the normal case, this function can also be used to verify the following
 // range proofs:
 //
-// - All elements proof. In this case the proof can be nil, but the range should
-//   be all the leaves in the trie.
+//   - All elements proof. In this case the proof can be nil, but the range should
+//     be all the leaves in the trie.
 //
-// - One element proof. In this case no matter the edge proof is a non-existent
-//   proof or not, we can always verify the correctness of the proof.
+//   - One element proof. In this case no matter the edge proof is a non-existent
+//     proof or not, we can always verify the correctness of the proof.
 //
-// - Zero element proof. In this case a single non-existent proof is enough to prove.
-//   Besides, if there are still some other leaves available on the right side, then
-//   an error will be returned.
+//   - Zero element proof. In this case a single non-existent proof is enough to prove.
+//     Besides, if there are still some other leaves available on the right side, then
+//     an error will be returned.
 //
 // Except returning the error to indicate the proof is valid or not, the function will
 // also return a flag to indicate whether there exists more accounts/slots in the trie.
-func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, keys [][]byte, values [][]byte, proof ethdb.KeyValueReader) (error, bool) {
+//
+// Note: This method does not verify that the proof is of minimal form. If the input
+// proofs are 'bloated' with neighbour leaves or random data, aside from the 'useful'
+// data, then the proof will still be accepted.
+func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, values [][]byte, proof ethdb.KeyValueReader) (bool, error) {
 	if len(keys) != len(values) {
-		return fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values)), false
+		return false, fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values))
 	}
-	// Ensure the received batch is monotonic increasing.
-	for i := 0; i < len(keys)-1; i++ {
-		if bytes.Compare(keys[i], keys[i+1]) >= 0 {
-			return errors.New("range is not monotonically increasing"), false
+	// Ensure the received batch is
+	// - monotonically increasing,
+	// - not expanding down prefix-paths
+	// - and contains no deletions
+	for i := 0; i < len(keys); i++ {
+		if i < len(keys)-1 {
+			if bytes.Compare(keys[i], keys[i+1]) >= 0 {
+				return false, errors.New("range is not monotonically increasing")
+			}
+			if bytes.HasPrefix(keys[i+1], keys[i]) {
+				return false, errors.New("range contains path prefixes")
+			}
+		}
+		if len(values[i]) == 0 {
+			return false, errors.New("range contains deletion")
 		}
 	}
 	// Special case, there is no edge proof at all. The given range is expected
 	// to be the whole leaf-set in the trie.
 	if proof == nil {
-		emptytrie, err := New(common.Hash{}, NewDatabase(memorydb.New()))
-		if err != nil {
-			return err, false
-		}
+		tr := NewStackTrie(nil)
 		for index, key := range keys {
-			emptytrie.TryUpdate(key, values[index])
+			tr.Update(key, values[index])
 		}
-		if emptytrie.Hash() != rootHash {
-			return fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, emptytrie.Hash()), false
+		if have, want := tr.Hash(), rootHash; have != want {
+			return false, fmt.Errorf("invalid proof, want hash %x, got %x", want, have)
 		}
-		return nil, false // no more element.
+		return false, nil // No more elements
 	}
 	// Special case, there is a provided edge proof but zero key/value
 	// pairs, ensure there are no more accounts / slots in the trie.
 	if len(keys) == 0 {
 		root, val, err := proofToPath(rootHash, nil, firstKey, proof, true)
 		if err != nil {
-			return err, false
+			return false, err
 		}
 		if val != nil || hasRightElement(root, firstKey) {
-			return errors.New("more entries available"), false
+			return false, errors.New("more entries available")
 		}
-		return nil, false
+		return false, nil
+	}
+	// Short circuit if the key of first element is greater than firstKey.
+	// A nil firstKey slice is equivalent to an empty slice.
+	if bytes.Compare(firstKey, keys[0]) > 0 {
+		return false, errors.New("unexpected key-value pairs preceding the requested range")
 	}
 	// Special case, there is only one element and two edge keys are same.
 	// In this case, we can't construct two edge paths. So handle it here.
+	var lastKey = keys[len(keys)-1]
 	if len(keys) == 1 && bytes.Equal(firstKey, lastKey) {
 		root, val, err := proofToPath(rootHash, nil, firstKey, proof, false)
 		if err != nil {
-			return err, false
+			return false, err
 		}
 		if !bytes.Equal(firstKey, keys[0]) {
-			return errors.New("correct proof but invalid key"), false
+			return false, errors.New("correct proof but invalid key")
 		}
 		if !bytes.Equal(val, values[0]) {
-			return errors.New("correct proof but invalid data"), false
+			return false, errors.New("correct proof but invalid data")
 		}
-		return nil, hasRightElement(root, firstKey)
+		return hasRightElement(root, firstKey), nil
 	}
 	// Ok, in all other cases, we require two edge paths available.
 	// First check the validity of edge keys.
 	if bytes.Compare(firstKey, lastKey) >= 0 {
-		return errors.New("invalid edge keys"), false
+		return false, errors.New("invalid edge keys")
 	}
 	// todo(rjl493456442) different length edge keys should be supported
 	if len(firstKey) != len(lastKey) {
-		return errors.New("inconsistent edge keys"), false
+		return false, errors.New("inconsistent edge keys")
 	}
 	// Convert the edge proofs to edge trie paths. Then we can
 	// have the same tree architecture with the original one.
 	// For the first edge proof, non-existent proof is allowed.
 	root, _, err := proofToPath(rootHash, nil, firstKey, proof, true)
 	if err != nil {
-		return err, false
+		return false, err
 	}
 	// Pass the root node here, the second path will be merged
 	// with the first one. For the last edge proof, non-existent
 	// proof is also allowed.
 	root, _, err = proofToPath(rootHash, root, lastKey, proof, true)
 	if err != nil {
-		return err, false
+		return false, err
 	}
 	// Remove all internal references. All the removed parts should
 	// be re-filled(or re-constructed) by the given leaves range.
-	if err := unsetInternal(root, firstKey, lastKey); err != nil {
-		return err, false
+	empty, err := unsetInternal(root, firstKey, lastKey)
+	if err != nil {
+		return false, err
 	}
-	// Rebuild the trie with the leave stream, the shape of trie
+	// Rebuild the trie with the leaf stream, the shape of trie
 	// should be same with the original one.
-	newtrie := &Trie{root: root, db: NewDatabase(memorydb.New())}
+	tr := &Trie{
+		root:           root,
+		reader:         newEmptyReader(),
+		opTracer:       newOpTracer(),
+		prevalueTracer: NewPrevalueTracer(),
+	}
+	if empty {
+		tr.root = nil
+	}
 	for index, key := range keys {
-		newtrie.TryUpdate(key, values[index])
+		if err := tr.Update(key, values[index]); err != nil {
+			return false, err
+		}
 	}
-	if newtrie.Hash() != rootHash {
-		return fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, newtrie.Hash()), false
+	if tr.Hash() != rootHash {
+		return false, fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, tr.Hash())
 	}
-	return nil, hasRightElement(root, keys[len(keys)-1])
+	return hasRightElement(tr.root, keys[len(keys)-1]), nil
 }
 
 // get returns the child of the given node. Return nil if the
@@ -555,7 +601,7 @@ func get(tn node, key []byte, skipResolved bool) ([]byte, node) {
 	for {
 		switch n := tn.(type) {
 		case *shortNode:
-			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
+			if !bytes.HasPrefix(key, n.Key) {
 				return nil, nil
 			}
 			tn = n.Val

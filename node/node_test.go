@@ -20,11 +20,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
-	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -88,11 +87,7 @@ func TestNodeStartMultipleTimes(t *testing.T) {
 // Tests that if the data dir is already in use, an appropriate error is returned.
 func TestNodeUsedDataDir(t *testing.T) {
 	// Create a temporary folder to use as the data directory
-	dir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("failed to create temporary data directory: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Create a new node based on the data directory
 	original, err := New(&Config{DataDir: dir})
@@ -122,7 +117,7 @@ func TestLifecycleRegistry_Successful(t *testing.T) {
 	noop := NewNoop()
 	stack.RegisterLifecycle(noop)
 
-	if !containsLifecycle(stack.lifecycles, noop) {
+	if !slices.Contains(stack.lifecycles, Lifecycle(noop)) {
 		t.Fatalf("lifecycle was not properly registered on the node, %v", err)
 	}
 }
@@ -158,7 +153,7 @@ func TestNodeCloseClosesDB(t *testing.T) {
 	stack, _ := New(testNodeConfig())
 	defer stack.Close()
 
-	db, err := stack.OpenDatabase("mydb", 0, 0, "")
+	db, err := stack.OpenDatabase("mydb", 0, 0, "", false)
 	if err != nil {
 		t.Fatal("can't open DB:", err)
 	}
@@ -181,7 +176,7 @@ func TestNodeOpenDatabaseFromLifecycleStart(t *testing.T) {
 	var err error
 	stack.RegisterLifecycle(&InstrumentedService{
 		startHook: func() {
-			db, err = stack.OpenDatabase("mydb", 0, 0, "")
+			db, err = stack.OpenDatabase("mydb", 0, 0, "", false)
 			if err != nil {
 				t.Fatal("can't open DB:", err)
 			}
@@ -202,7 +197,7 @@ func TestNodeOpenDatabaseFromLifecycleStop(t *testing.T) {
 
 	stack.RegisterLifecycle(&InstrumentedService{
 		stopHook: func() {
-			db, err := stack.OpenDatabase("mydb", 0, 0, "")
+			db, err := stack.OpenDatabase("mydb", 0, 0, "", false)
 			if err != nil {
 				t.Fatal("can't open DB:", err)
 			}
@@ -390,10 +385,10 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 }
 
 // Tests whether a handler can be successfully mounted on the canonical HTTP server
-// on the given path
+// on the given prefix
 func TestRegisterHandler_Successful(t *testing.T) {
 	node := createNode(t, 7878, 7979)
-
+	defer node.Close()
 	// create and mount handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("success"))
@@ -419,21 +414,6 @@ func TestRegisterHandler_Successful(t *testing.T) {
 		t.Fatalf("could not read response: %v", err)
 	}
 	assert.Equal(t, "success", string(buf))
-}
-
-// Tests that the given handler will not be successfully mounted since no HTTP server
-// is enabled for RPC
-func TestRegisterHandler_Unsuccessful(t *testing.T) {
-	node, err := New(&DefaultConfig)
-	if err != nil {
-		t.Fatalf("could not create new node: %v", err)
-	}
-
-	// create and mount handler
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("success"))
-	})
-	node.RegisterHandler("test", "/test", handler)
 }
 
 // Tests whether websocket requests can be handled on the same port as a regular http server.
@@ -483,15 +463,119 @@ func TestWebsocketHTTPOnSeparatePort_WSRequest(t *testing.T) {
 	if !checkRPC(node.HTTPEndpoint()) {
 		t.Fatalf("http request failed")
 	}
+}
 
+type rpcPrefixTest struct {
+	httpPrefix, wsPrefix string
+	// These lists paths on which JSON-RPC should be served / not served.
+	wantHTTP   []string
+	wantNoHTTP []string
+	wantWS     []string
+	wantNoWS   []string
+}
+
+func TestNodeRPCPrefix(t *testing.T) {
+	t.Parallel()
+
+	tests := []rpcPrefixTest{
+		// both off
+		{
+			httpPrefix: "", wsPrefix: "",
+			wantHTTP:   []string{"/", "/?p=1"},
+			wantNoHTTP: []string{"/test", "/test?p=1"},
+			wantWS:     []string{"/", "/?p=1"},
+			wantNoWS:   []string{"/test", "/test?p=1"},
+		},
+		// only http prefix
+		{
+			httpPrefix: "/testprefix", wsPrefix: "",
+			wantHTTP:   []string{"/testprefix", "/testprefix?p=1", "/testprefix/x", "/testprefix/x?p=1"},
+			wantNoHTTP: []string{"/", "/?p=1", "/test", "/test?p=1"},
+			wantWS:     []string{"/", "/?p=1"},
+			wantNoWS:   []string{"/testprefix", "/testprefix?p=1", "/test", "/test?p=1"},
+		},
+		// only ws prefix
+		{
+			httpPrefix: "", wsPrefix: "/testprefix",
+			wantHTTP:   []string{"/", "/?p=1"},
+			wantNoHTTP: []string{"/testprefix", "/testprefix?p=1", "/test", "/test?p=1"},
+			wantWS:     []string{"/testprefix", "/testprefix?p=1", "/testprefix/x", "/testprefix/x?p=1"},
+			wantNoWS:   []string{"/", "/?p=1", "/test", "/test?p=1"},
+		},
+		// both set
+		{
+			httpPrefix: "/testprefix", wsPrefix: "/testprefix",
+			wantHTTP:   []string{"/testprefix", "/testprefix?p=1", "/testprefix/x", "/testprefix/x?p=1"},
+			wantNoHTTP: []string{"/", "/?p=1", "/test", "/test?p=1"},
+			wantWS:     []string{"/testprefix", "/testprefix?p=1", "/testprefix/x", "/testprefix/x?p=1"},
+			wantNoWS:   []string{"/", "/?p=1", "/test", "/test?p=1"},
+		},
+	}
+
+	for _, test := range tests {
+		name := fmt.Sprintf("http=%s ws=%s", test.httpPrefix, test.wsPrefix)
+		t.Run(name, func(t *testing.T) {
+			cfg := &Config{
+				HTTPHost:       "127.0.0.1",
+				HTTPPathPrefix: test.httpPrefix,
+				WSHost:         "127.0.0.1",
+				WSPathPrefix:   test.wsPrefix,
+			}
+			node, err := New(cfg)
+			if err != nil {
+				t.Fatal("can't create node:", err)
+			}
+			defer node.Close()
+			if err := node.Start(); err != nil {
+				t.Fatal("can't start node:", err)
+			}
+			test.check(t, node)
+		})
+	}
+}
+
+func (test rpcPrefixTest) check(t *testing.T, node *Node) {
+	t.Helper()
+	httpBase := "http://" + node.http.listenAddr()
+	wsBase := "ws://" + node.http.listenAddr()
+
+	if node.WSEndpoint() != wsBase+test.wsPrefix {
+		t.Errorf("Error: node has wrong WSEndpoint %q", node.WSEndpoint())
+	}
+
+	for _, path := range test.wantHTTP {
+		resp := rpcRequest(t, httpBase+path, testMethod)
+		if resp.StatusCode != 200 {
+			t.Errorf("Error: %s: bad status code %d, want 200", path, resp.StatusCode)
+		}
+	}
+	for _, path := range test.wantNoHTTP {
+		resp := rpcRequest(t, httpBase+path, testMethod)
+		if resp.StatusCode != 404 {
+			t.Errorf("Error: %s: bad status code %d, want 404", path, resp.StatusCode)
+		}
+	}
+	for _, path := range test.wantWS {
+		err := wsRequest(t, wsBase+path)
+		if err != nil {
+			t.Errorf("Error: %s: WebSocket connection failed: %v", path, err)
+		}
+	}
+	for _, path := range test.wantNoWS {
+		err := wsRequest(t, wsBase+path)
+		if err == nil {
+			t.Errorf("Error: %s: WebSocket connection succeeded for path in wantNoWS", path)
+		}
+	}
 }
 
 func createNode(t *testing.T, httpPort, wsPort int) *Node {
 	conf := &Config{
-		HTTPHost: "127.0.0.1",
-		HTTPPort: httpPort,
-		WSHost:   "127.0.0.1",
-		WSPort:   wsPort,
+		HTTPHost:     "127.0.0.1",
+		HTTPPort:     httpPort,
+		WSHost:       "127.0.0.1",
+		WSPort:       wsPort,
+		HTTPTimeouts: rpc.DefaultHTTPTimeouts,
 	}
 	node, err := New(conf)
 	if err != nil {
@@ -515,8 +599,8 @@ func doHTTPRequest(t *testing.T, req *http.Request) *http.Response {
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("could not issue a GET request to the given endpoint: %v", err)
-
 	}
+	t.Cleanup(func() { resp.Body.Close() })
 	return resp
 }
 

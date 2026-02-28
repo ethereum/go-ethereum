@@ -64,7 +64,7 @@ func (u URL) String() string {
 func (u URL) TerminalString() string {
 	url := u.String()
 	if len(url) > 32 {
-		return url[:31] + "…"
+		return url[:31] + ".."
 	}
 	return url
 }
@@ -92,10 +92,9 @@ func (u *URL) UnmarshalJSON(input []byte) error {
 
 // Cmp compares x and y and returns:
 //
-//   -1 if x <  y
-//    0 if x == y
-//   +1 if x >  y
-//
+//	-1 if x <  y
+//	 0 if x == y
+//	+1 if x >  y
 func (u URL) Cmp(url URL) int {
 	if u.Scheme == url.Scheme {
 		return strings.Compare(u.Path, url.Path)

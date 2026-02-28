@@ -22,35 +22,60 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
 const (
-	DefaultHTTPHost    = "localhost" // Default host interface for the HTTP RPC server
-	DefaultHTTPPort    = 8545        // Default TCP port for the HTTP RPC server
-	DefaultWSHost      = "localhost" // Default host interface for the websocket RPC server
-	DefaultWSPort      = 8546        // Default TCP port for the websocket RPC server
-	DefaultGraphQLHost = "localhost" // Default host interface for the GraphQL server
-	DefaultGraphQLPort = 8547        // Default TCP port for the GraphQL server
+	DefaultHTTPHost = "localhost" // Default host interface for the HTTP RPC server
+	DefaultHTTPPort = 8545        // Default TCP port for the HTTP RPC server
+	DefaultWSHost   = "localhost" // Default host interface for the websocket RPC server
+	DefaultWSPort   = 8546        // Default TCP port for the websocket RPC server
+	DefaultAuthHost = "localhost" // Default host interface for the authenticated apis
+	DefaultAuthPort = 8551        // Default port for the authenticated apis
+)
+
+const (
+	// Engine API batch limits: these are not configurable by users, and should cover the
+	// needs of all CLs.
+	engineAPIBatchItemLimit         = 2000
+	engineAPIBatchResponseSizeLimit = 250 * 1000 * 1000
+	engineAPIBodyLimit              = 128 * 1024 * 1024
+)
+
+var (
+	DefaultAuthCors    = []string{"localhost"} // Default cors domain for the authenticated apis
+	DefaultAuthVhosts  = []string{"localhost"} // Default virtual hosts for the authenticated apis
+	DefaultAuthOrigins = []string{"localhost"} // Default origins for the authenticated apis
+	DefaultAuthPrefix  = ""                    // Default prefix for the authenticated apis
+	DefaultAuthModules = []string{"eth", "engine"}
 )
 
 // DefaultConfig contains reasonable default settings.
 var DefaultConfig = Config{
-	DataDir:             DefaultDataDir(),
-	HTTPPort:            DefaultHTTPPort,
-	HTTPModules:         []string{"net", "web3"},
-	HTTPVirtualHosts:    []string{"localhost"},
-	HTTPTimeouts:        rpc.DefaultHTTPTimeouts,
-	WSPort:              DefaultWSPort,
-	WSModules:           []string{"net", "web3"},
-	GraphQLVirtualHosts: []string{"localhost"},
+	DataDir:              DefaultDataDir(),
+	HTTPPort:             DefaultHTTPPort,
+	AuthAddr:             DefaultAuthHost,
+	AuthPort:             DefaultAuthPort,
+	AuthVirtualHosts:     DefaultAuthVhosts,
+	HTTPModules:          []string{"net", "web3"},
+	HTTPVirtualHosts:     []string{"localhost"},
+	HTTPTimeouts:         rpc.DefaultHTTPTimeouts,
+	WSPort:               DefaultWSPort,
+	WSModules:            []string{"net", "web3"},
+	BatchRequestLimit:    1000,
+	BatchResponseMaxSize: 25 * 1000 * 1000,
+	GraphQLVirtualHosts:  []string{"localhost"},
 	P2P: p2p.Config{
-		ListenAddr: ":30303",
-		MaxPeers:   50,
-		NAT:        nat.Any(),
+		ListenAddr:  ":30303",
+		MaxPeers:    50,
+		NAT:         nat.Any(),
+		DiscoveryV4: true,
+		DiscoveryV5: true,
 	},
+	DBEngine: "", // Use whatever exists, will default to Pebble if non-existent and supported
 }
 
 // DefaultDataDir is the default data directory to use for the databases and other
@@ -68,7 +93,7 @@ func DefaultDataDir() string {
 			// is non-empty, use it, otherwise DTRT and check %LOCALAPPDATA%.
 			fallback := filepath.Join(home, "AppData", "Roaming", "Ethereum")
 			appdata := windowsAppData()
-			if appdata == "" || isNonEmptyDir(fallback) {
+			if appdata == "" || common.IsNonEmptyDir(fallback) {
 				return fallback
 			}
 			return filepath.Join(appdata, "Ethereum")
@@ -89,16 +114,6 @@ func windowsAppData() string {
 		panic("environment variable LocalAppData is undefined")
 	}
 	return v
-}
-
-func isNonEmptyDir(dir string) bool {
-	f, err := os.Open(dir)
-	if err != nil {
-		return false
-	}
-	names, _ := f.Readdir(1)
-	f.Close()
-	return len(names) > 0
 }
 
 func homeDir() string {

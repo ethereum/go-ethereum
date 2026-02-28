@@ -23,6 +23,7 @@ import (
 )
 
 func Test_SplitTagsFlag(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		args string
@@ -56,6 +57,7 @@ func Test_SplitTagsFlag(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			if got := SplitTagsFlag(tt.args); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("splitTagsFlag() = %v, want %v", got, tt.want)
 			}

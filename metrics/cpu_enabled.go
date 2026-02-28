@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build !ios
+//go:build !ios && !js && !wasip1 && !tinygo
+// +build !ios,!js,!wasip1,!tinygo
 
 package metrics
 
@@ -37,7 +38,7 @@ func ReadCPUStats(stats *CPUStats) {
 	}
 	// requesting all cpu times will always return an array with only one time stats entry
 	timeStat := timeStats[0]
-	stats.GlobalTime = int64((timeStat.User + timeStat.Nice + timeStat.System) * cpu.ClocksPerSec)
-	stats.GlobalWait = int64((timeStat.Iowait) * cpu.ClocksPerSec)
+	stats.GlobalTime = timeStat.User + timeStat.Nice + timeStat.System
+	stats.GlobalWait = timeStat.Iowait
 	stats.LocalTime = getProcessCPUTime()
 }

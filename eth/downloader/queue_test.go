@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -18,8 +18,10 @@ package downloader
 
 import (
 	"fmt"
+	"log/slog"
 	"math/big"
 	"math/rand"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -27,28 +29,25 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-)
-
-var (
-	testdb  = rawdb.NewMemoryDatabase()
-	genesis = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000))
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // makeChain creates a chain of n blocks starting at and including parent.
-// the returned hash chain is ordered head->parent. In addition, every 3rd block
-// contains a transaction and every 5th an uncle to allow testing correct block
-// reassembly.
+// The returned hash chain is ordered head->parent.
+// If empty is false, every second block (i%2==0) contains one transaction.
+// No uncles are added.
 func makeChain(n int, seed byte, parent *types.Block, empty bool) ([]*types.Block, []types.Receipts) {
-	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testdb, n, func(i int, block *core.BlockGen) {
+	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
-		// Add one tx to every secondblock
+		// Add one tx to every second block
 		if !empty && i%2 == 0 {
-			signer := types.MakeSigner(params.TestChainConfig, block.Number())
-			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, nil, nil), signer, testKey)
+			signer := types.MakeSigner(params.TestChainConfig, block.Number(), block.Timestamp())
+			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
 			if err != nil {
 				panic(err)
 			}
@@ -69,10 +68,10 @@ var emptyChain *chainData
 func init() {
 	// Create a chain of blocks to import
 	targetBlocks := 128
-	blocks, _ := makeChain(targetBlocks, 0, genesis, false)
+	blocks, _ := makeChain(targetBlocks, 0, testGenesis, false)
 	chain = &chainData{blocks, 0}
 
-	blocks, _ = makeChain(targetBlocks, 0, genesis, true)
+	blocks, _ = makeChain(targetBlocks, 0, testGenesis, true)
 	emptyChain = &chainData{blocks, 0}
 }
 
@@ -97,21 +96,29 @@ func dummyPeer(id string) *peerConnection {
 }
 
 func TestBasics(t *testing.T) {
+	numOfBlocks := len(emptyChain.blocks)
+	numOfReceipts := len(emptyChain.blocks) / 2
+
 	q := newQueue(10, 10)
 	if !q.Idle() {
 		t.Errorf("new queue should be idle")
 	}
-	q.Prepare(1, FastSync)
+	q.Prepare(1, SnapSync)
 	if res := q.Results(false); len(res) != 0 {
 		t.Fatal("new queue should have 0 results")
 	}
 
 	// Schedule a batch of headers
-	q.Schedule(chain.headers(), 1)
+	headers := chain.headers()
+	hashes := make([]common.Hash, len(headers))
+	for i, header := range headers {
+		hashes[i] = header.Hash()
+	}
+	q.Schedule(headers, hashes, 1)
 	if q.Idle() {
 		t.Errorf("queue should not be idle")
 	}
-	if got, exp := q.PendingBlocks(), chain.Len(); got != exp {
+	if got, exp := q.PendingBodies(), chain.Len(); got != exp {
 		t.Errorf("wrong pending block count, got %d, exp %d", got, exp)
 	}
 	// Only non-empty receipts get added to task-queue
@@ -135,21 +142,31 @@ func TestBasics(t *testing.T) {
 			t.Fatalf("expected header %d, got %d", exp, got)
 		}
 	}
+	if exp, got := q.blockTaskQueue.Size(), numOfBlocks-10; exp != got {
+		t.Errorf("expected block task queue to be %d, got %d", exp, got)
+	}
+	if exp, got := q.receiptTaskQueue.Size(), numOfReceipts; exp != got {
+		t.Errorf("expected receipt task queue to be %d, got %d", exp, got)
+	}
 	{
 		peer := dummyPeer("peer-2")
 		fetchReq, _, throttle := q.ReserveBodies(peer, 50)
 
 		// The second peer should hit throttling
 		if !throttle {
-			t.Fatalf("should not throttle")
+			t.Fatalf("should throttle")
 		}
 		// And not get any fetches at all, since it was throttled to begin with
 		if fetchReq != nil {
 			t.Fatalf("should have no fetches, got %d", len(fetchReq.Headers))
 		}
 	}
-	//fmt.Printf("blockTaskQueue len: %d\n", q.blockTaskQueue.Size())
-	//fmt.Printf("receiptTaskQueue len: %d\n", q.receiptTaskQueue.Size())
+	if exp, got := q.blockTaskQueue.Size(), numOfBlocks-10; exp != got {
+		t.Errorf("expected block task queue to be %d, got %d", exp, got)
+	}
+	if exp, got := q.receiptTaskQueue.Size(), numOfReceipts; exp != got {
+		t.Errorf("expected receipt task queue to be %d, got %d", exp, got)
+	}
 	{
 		// The receipt delivering peer should not be affected
 		// by the throttling of body deliveries
@@ -166,23 +183,36 @@ func TestBasics(t *testing.T) {
 		if got, exp := fetchReq.Headers[0].Number.Uint64(), uint64(1); got != exp {
 			t.Fatalf("expected header %d, got %d", exp, got)
 		}
-
 	}
-	//fmt.Printf("blockTaskQueue len: %d\n", q.blockTaskQueue.Size())
-	//fmt.Printf("receiptTaskQueue len: %d\n", q.receiptTaskQueue.Size())
-	//fmt.Printf("processable: %d\n", q.resultCache.countCompleted())
+	if exp, got := q.blockTaskQueue.Size(), numOfBlocks-10; exp != got {
+		t.Errorf("expected block task queue to be %d, got %d", exp, got)
+	}
+	if exp, got := q.receiptTaskQueue.Size(), numOfReceipts-5; exp != got {
+		t.Errorf("expected receipt task queue to be %d, got %d", exp, got)
+	}
+	if got, exp := q.resultCache.countCompleted(), 0; got != exp {
+		t.Errorf("wrong processable count, got %d, exp %d", got, exp)
+	}
 }
 
 func TestEmptyBlocks(t *testing.T) {
+	numOfBlocks := len(emptyChain.blocks)
+
 	q := newQueue(10, 10)
 
-	q.Prepare(1, FastSync)
+	q.Prepare(1, SnapSync)
+
 	// Schedule a batch of headers
-	q.Schedule(emptyChain.headers(), 1)
+	headers := emptyChain.headers()
+	hashes := make([]common.Hash, len(headers))
+	for i, header := range headers {
+		hashes[i] = header.Hash()
+	}
+	q.Schedule(headers, hashes, 1)
 	if q.Idle() {
 		t.Errorf("queue should not be idle")
 	}
-	if got, exp := q.PendingBlocks(), len(emptyChain.blocks); got != exp {
+	if got, exp := q.PendingBodies(), len(emptyChain.blocks); got != exp {
 		t.Errorf("wrong pending block count, got %d, exp %d", got, exp)
 	}
 	if got, exp := q.PendingReceipts(), 0; got != exp {
@@ -206,23 +236,27 @@ func TestEmptyBlocks(t *testing.T) {
 		if fetchReq != nil {
 			t.Fatal("there should be no body fetch tasks remaining")
 		}
-
 	}
-	if q.blockTaskQueue.Size() != len(emptyChain.blocks)-10 {
-		t.Errorf("expected block task queue to be 0, got %d", q.blockTaskQueue.Size())
+	if q.blockTaskQueue.Size() != numOfBlocks-10 {
+		t.Errorf("expected block task queue to be %d, got %d", numOfBlocks-10, q.blockTaskQueue.Size())
 	}
 	if q.receiptTaskQueue.Size() != 0 {
-		t.Errorf("expected receipt task queue to be 0, got %d", q.receiptTaskQueue.Size())
+		t.Errorf("expected receipt task queue to be %d, got %d", 0, q.receiptTaskQueue.Size())
 	}
-	//fmt.Printf("receiptTaskQueue len: %d\n", q.receiptTaskQueue.Size())
 	{
 		peer := dummyPeer("peer-3")
 		fetchReq, _, _ := q.ReserveReceipts(peer, 50)
 
 		// there should be nothing to fetch, blocks are empty
 		if fetchReq != nil {
-			t.Fatal("there should be no body fetch tasks remaining")
+			t.Fatal("there should be no receipt fetch tasks remaining")
 		}
+	}
+	if q.blockTaskQueue.Size() != numOfBlocks-10 {
+		t.Errorf("expected block task queue to be %d, got %d", numOfBlocks-10, q.blockTaskQueue.Size())
+	}
+	if q.receiptTaskQueue.Size() != 0 {
+		t.Errorf("expected receipt task queue to be %d, got %d", 0, q.receiptTaskQueue.Size())
 	}
 	if got, exp := q.resultCache.countCompleted(), 10; got != exp {
 		t.Errorf("wrong processable count, got %d, exp %d", got, exp)
@@ -235,18 +269,17 @@ func TestEmptyBlocks(t *testing.T) {
 // some more advanced scenarios
 func XTestDelivery(t *testing.T) {
 	// the outside network, holding blocks
-	blo, rec := makeChain(128, 0, genesis, false)
+	blo, rec := makeChain(128, 0, testGenesis, false)
 	world := newNetwork()
 	world.receipts = rec
 	world.chain = blo
 	world.progress(10)
 	if false {
-		log.Root().SetHandler(log.StdoutHandler)
-
+		log.SetDefault(log.NewLogger(slog.NewTextHandler(os.Stdout, nil)))
 	}
 	q := newQueue(10, 10)
 	var wg sync.WaitGroup
-	q.Prepare(1, FastSync)
+	q.Prepare(1, SnapSync)
 	wg.Add(1)
 	go func() {
 		// deliver headers
@@ -254,11 +287,15 @@ func XTestDelivery(t *testing.T) {
 		c := 1
 		for {
 			//fmt.Printf("getting headers from %d\n", c)
-			hdrs := world.headers(c)
-			l := len(hdrs)
+			headers := world.headers(c)
+			hashes := make([]common.Hash, len(headers))
+			for i, header := range headers {
+				hashes[i] = header.Hash()
+			}
+			l := len(headers)
 			//fmt.Printf("scheduling %d headers, first %d last %d\n",
-			//	l, hdrs[0].Number.Uint64(), hdrs[len(hdrs)-1].Number.Uint64())
-			q.Schedule(hdrs, uint64(c))
+			//	l, headers[0].Number.Uint64(), headers[len(headers)-1].Number.Uint64())
+			q.Schedule(headers, hashes, uint64(c))
 			c += l
 		}
 	}()
@@ -273,7 +310,6 @@ func XTestDelivery(t *testing.T) {
 			fmt.Printf("got %d results, %d tot\n", len(res), tot)
 			// Now we can forget about these
 			world.forget(res[len(res)-1].Header.Number.Uint64())
-
 		}
 	}()
 	wg.Add(1)
@@ -285,18 +321,36 @@ func XTestDelivery(t *testing.T) {
 			peer := dummyPeer(fmt.Sprintf("peer-%d", i))
 			f, _, _ := q.ReserveBodies(peer, rand.Intn(30))
 			if f != nil {
-				var emptyList []*types.Header
-				var txs [][]*types.Transaction
-				var uncles [][]*types.Header
+				var (
+					emptyList []*types.Header
+					txset     [][]*types.Transaction
+					uncleset  [][]*types.Header
+					bodies    []eth.BlockBody
+				)
 				numToSkip := rand.Intn(len(f.Headers))
 				for _, hdr := range f.Headers[0 : len(f.Headers)-numToSkip] {
-					txs = append(txs, world.getTransactions(hdr.Number.Uint64()))
-					uncles = append(uncles, emptyList)
+					txs := world.getTransactions(hdr.Number.Uint64())
+					txset = append(txset, txs)
+					uncleset = append(uncleset, emptyList)
+					txsList, _ := rlp.EncodeToRawList(txs)
+					bodies = append(bodies, eth.BlockBody{Transactions: txsList})
 				}
+				hashes := eth.BlockBodyHashes{
+					TransactionRoots: make([]common.Hash, len(txset)),
+					UncleHashes:      make([]common.Hash, len(uncleset)),
+					WithdrawalRoots:  make([]common.Hash, len(txset)),
+				}
+				hasher := trie.NewStackTrie(nil)
+				for i, txs := range txset {
+					hashes.TransactionRoots[i] = types.DeriveSha(types.Transactions(txs), hasher)
+				}
+				for i, uncles := range uncleset {
+					hashes.UncleHashes[i] = types.CalcUncleHash(uncles)
+				}
+
 				time.Sleep(100 * time.Millisecond)
-				_, err := q.DeliverBodies(peer.id, txs, uncles)
-				if err != nil {
-					fmt.Printf("delivered %d bodies %v\n", len(txs), err)
+				if _, err := q.DeliverBodies(peer.id, hashes, bodies); err != nil {
+					fmt.Printf("delivered %d bodies %v\n", len(txset), err)
 				}
 			} else {
 				i++
@@ -304,6 +358,7 @@ func XTestDelivery(t *testing.T) {
 			}
 		}
 	}()
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		// reserve receiptfetch
@@ -311,11 +366,16 @@ func XTestDelivery(t *testing.T) {
 		for {
 			f, _, _ := q.ReserveReceipts(peer, rand.Intn(50))
 			if f != nil {
-				var rcs [][]*types.Receipt
+				var rcs []types.Receipts
 				for _, hdr := range f.Headers {
 					rcs = append(rcs, world.getReceipts(hdr.Number.Uint64()))
 				}
-				_, err := q.DeliverReceipts(peer.id, rcs)
+				hasher := trie.NewStackTrie(nil)
+				hashes := make([]common.Hash, len(rcs))
+				for i, receipt := range rcs {
+					hashes[i] = types.DeriveSha(receipt, hasher)
+				}
+				_, err := q.DeliverReceipts(peer.id, types.EncodeBlockReceiptLists(rcs), hashes)
 				if err != nil {
 					fmt.Printf("delivered %d receipts %v\n", len(rcs), err)
 				}
@@ -336,7 +396,6 @@ func XTestDelivery(t *testing.T) {
 		}
 		for i := 0; i < 50; i++ {
 			time.Sleep(2990 * time.Millisecond)
-
 		}
 	}()
 	wg.Add(1)
@@ -387,10 +446,8 @@ func (n *network) forget(blocknum uint64) {
 	n.chain = n.chain[index:]
 	n.receipts = n.receipts[index:]
 	n.offset = int(blocknum)
-
 }
 func (n *network) progress(numBlocks int) {
-
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	//fmt.Printf("progressing...\n")
@@ -398,7 +455,6 @@ func (n *network) progress(numBlocks int) {
 	n.chain = append(n.chain, newBlocks...)
 	n.receipts = append(n.receipts, newR...)
 	n.cond.Broadcast()
-
 }
 
 func (n *network) headers(from int) []*types.Header {

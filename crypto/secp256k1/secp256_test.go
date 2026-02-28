@@ -2,12 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be found in
 // the LICENSE file.
 
+//go:build !gofuzz && cgo
+// +build !gofuzz,cgo
+
 package secp256k1
 
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/hex"
 	"io"
@@ -21,7 +23,7 @@ func generateKeyPair() (pubkey, privkey []byte) {
 	if err != nil {
 		panic(err)
 	}
-	pubkey = elliptic.Marshal(S256(), key.X, key.Y)
+	pubkey = S256().Marshal(key.X, key.Y)
 
 	privkey = make([]byte, 32)
 	blob := key.D.Bytes()
@@ -46,7 +48,7 @@ func randSig() []byte {
 }
 
 // tests for malleability
-// highest bit of signature ECDSA s value must be 0, in the 33th byte
+// the highest bit of signature ECDSA s value must be 0, in the 33th byte
 func compactSigCheck(t *testing.T, sig []byte) {
 	var b = int(sig[32])
 	if b < 0 {
@@ -219,9 +221,7 @@ func TestRecoverSanity(t *testing.T) {
 func BenchmarkSign(b *testing.B) {
 	_, seckey := generateKeyPair()
 	msg := csprngEntropy(32)
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		Sign(msg, seckey)
 	}
 }
@@ -230,9 +230,7 @@ func BenchmarkRecover(b *testing.B) {
 	msg := csprngEntropy(32)
 	_, seckey := generateKeyPair()
 	sig, _ := Sign(msg, seckey)
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		RecoverPubkey(msg, sig)
 	}
 }

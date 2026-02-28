@@ -19,6 +19,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"testing"
 	"time"
 
@@ -26,8 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 func verifyUnbrokenCanonchain(hc *HeaderChain) error {
@@ -37,10 +38,6 @@ func verifyUnbrokenCanonchain(hc *HeaderChain) error {
 		if exp := h.Hash(); canonHash != exp {
 			return fmt.Errorf("Canon hash chain broken, block %d got %x, expected %x",
 				h.Number, canonHash[:8], exp[:8])
-		}
-		// Verify that we have the TD
-		if td := rawdb.ReadTd(hc.chainDb, canonHash, h.Number.Uint64()); td == nil {
-			return fmt.Errorf("Canon TD missing at block %d", h.Number)
 		}
 		if h.Number.Uint64() == 0 {
 			break
@@ -69,19 +66,18 @@ func testInsert(t *testing.T, hc *HeaderChain, chain []*types.Header, wantStatus
 // This test checks status reporting of InsertHeaderChain.
 func TestHeaderInsertion(t *testing.T) {
 	var (
-		db      = rawdb.NewMemoryDatabase()
-		genesis = new(Genesis).MustCommit(db)
+		db    = rawdb.NewMemoryDatabase()
+		gspec = &Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Config: params.AllEthashProtocolChanges}
 	)
-
-	hc, err := NewHeaderChain(db, params.AllEthashProtocolChanges, ethash.NewFaker(), func() bool { return false })
+	gspec.Commit(db, triedb.NewDatabase(db, nil), nil)
+	hc, err := NewHeaderChain(db, gspec.Config, ethash.NewFaker(), func() bool { return false })
 	if err != nil {
 		t.Fatal(err)
 	}
 	// chain A: G->A1->A2...A128
-	chainA := makeHeaderChain(genesis.Header(), 128, ethash.NewFaker(), db, 10)
-	// chain B: G->A1->B2...B128
-	chainB := makeHeaderChain(chainA[0], 128, ethash.NewFaker(), db, 10)
-	log.Root().SetHandler(log.StdoutHandler)
+	genDb, chainA := makeHeaderChainWithGenesis(gspec, 128, ethash.NewFaker(), 10)
+	// chain B: G->A1->B1...B128
+	chainB := makeHeaderChain(gspec.Config, chainA[0], 128, ethash.NewFaker(), genDb, 10)
 
 	// Inserting 64 headers on an empty chain, expecting
 	// 1 callbacks, 1 canon-status, 0 sidestatus,
@@ -95,16 +91,16 @@ func TestHeaderInsertion(t *testing.T) {
 	// 1 callbacks, 1 canon, 0 side
 	testInsert(t, hc, chainA[32:96], CanonStatTy, nil)
 
-	// Inserting side blocks, but not overtaking the canon chain
-	testInsert(t, hc, chainB[0:32], SideStatTy, nil)
+	// Inserting headers from chain B, overtaking the canon chain blindly
+	testInsert(t, hc, chainB[0:32], CanonStatTy, nil)
 
-	// Inserting more side blocks, but we don't have the parent
+	// Inserting more headers on chain B, but we don't have the parent
 	testInsert(t, hc, chainB[34:36], NonStatTy, consensus.ErrUnknownAncestor)
 
-	// Inserting more sideblocks, overtaking the canon chain
+	// Inserting more headers on chain B, extend the canon chain
 	testInsert(t, hc, chainB[32:97], CanonStatTy, nil)
 
-	// Inserting more A-headers, taking back the canonicality
+	// Inserting more headers on chain A, taking back the canonicality
 	testInsert(t, hc, chainA[90:100], CanonStatTy, nil)
 
 	// And B becomes canon again

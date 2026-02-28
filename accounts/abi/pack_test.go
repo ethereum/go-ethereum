@@ -32,8 +32,10 @@ import (
 
 // TestPack tests the general pack/unpack tests in packing_test.go
 func TestPack(t *testing.T) {
+	t.Parallel()
 	for i, test := range packUnpackTests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			t.Parallel()
 			encb, err := hex.DecodeString(test.packed)
 			if err != nil {
 				t.Fatalf("invalid hex %s: %v", test.packed, err)
@@ -57,6 +59,7 @@ func TestPack(t *testing.T) {
 }
 
 func TestMethodPack(t *testing.T) {
+	t.Parallel()
 	abi, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Fatal(err)
@@ -174,9 +177,15 @@ func TestMethodPack(t *testing.T) {
 	if !bytes.Equal(packed, sig) {
 		t.Errorf("expected %x got %x", sig, packed)
 	}
+
+	// test that we can't pack a negative value for a parameter that is specified as a uint
+	if _, err := abi.Pack("send", big.NewInt(-1)); err == nil {
+		t.Fatal("expected error when trying to pack negative big.Int into uint256 value")
+	}
 }
 
 func TestPackNumber(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		value  reflect.Value
 		packed []byte

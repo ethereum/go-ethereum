@@ -24,8 +24,8 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/event"
-	"golang.org/x/crypto/sha3"
 )
 
 // Account represents an Ethereum account located at a specific location defined
@@ -46,7 +46,7 @@ const (
 // accounts (derived from the same seed).
 type Wallet interface {
 	// URL retrieves the canonical path under which this wallet is reachable. It is
-	// user by upper layers to define a sorting order over all wallets from multiple
+	// used by upper layers to define a sorting order over all wallets from multiple
 	// backends.
 	URL() URL
 
@@ -89,7 +89,7 @@ type Wallet interface {
 	// accounts.
 	//
 	// Note, self derivation will increment the last component of the specified path
-	// opposed to decending into a child path to allow discovering accounts starting
+	// opposed to descending into a child path to allow discovering accounts starting
 	// from non zero components.
 	//
 	// Some hardware wallets switched derivation paths through their evolution, so
@@ -105,7 +105,7 @@ type Wallet interface {
 	// or optionally with the aid of any location metadata from the embedded URL field.
 	//
 	// If the wallet requires additional authentication to sign the request (e.g.
-	// a password to decrypt the account, or a PIN code o verify the transaction),
+	// a password to decrypt the account, or a PIN code to verify the transaction),
 	// an AuthNeededError instance will be returned, containing infos for the user
 	// about which fields or actions are needed. The user may retry by providing
 	// the needed details via SignDataWithPassphrase, or by other means (e.g. unlock
@@ -113,7 +113,7 @@ type Wallet interface {
 	SignData(account Account, mimeType string, data []byte) ([]byte, error)
 
 	// SignDataWithPassphrase is identical to SignData, but also takes a password
-	// NOTE: there's an chance that an erroneous call might mistake the two strings, and
+	// NOTE: there's a chance that an erroneous call might mistake the two strings, and
 	// supply password in the mimetype field, or vice versa. Thus, an implementation
 	// should never echo the mimetype or return the mimetype in the error-response
 	SignDataWithPassphrase(account Account, passphrase, mimeType string, data []byte) ([]byte, error)
@@ -124,13 +124,13 @@ type Wallet interface {
 	// or optionally with the aid of any location metadata from the embedded URL field.
 	//
 	// If the wallet requires additional authentication to sign the request (e.g.
-	// a password to decrypt the account, or a PIN code o verify the transaction),
+	// a password to decrypt the account, or a PIN code to verify the transaction),
 	// an AuthNeededError instance will be returned, containing infos for the user
 	// about which fields or actions are needed. The user may retry by providing
-	// the needed details via SignHashWithPassphrase, or by other means (e.g. unlock
+	// the needed details via SignTextWithPassphrase, or by other means (e.g. unlock
 	// the account in a keystore).
 	//
-	// This method should return the signature in 'canonical' format, with v 0 or 1
+	// This method should return the signature in 'canonical' format, with v 0 or 1.
 	SignText(account Account, text []byte) ([]byte, error)
 
 	// SignTextWithPassphrase is identical to Signtext, but also takes a password
@@ -176,8 +176,9 @@ type Backend interface {
 // TextHash is a helper function that calculates a hash for the given message that can be
 // safely used to calculate a signature from.
 //
-// The hash is calulcated as
-//   keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
+// The hash is calculated as
+//
+//	keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
 //
 // This gives context to the signed message and prevents signing of transactions.
 func TextHash(data []byte) []byte {
@@ -188,13 +189,14 @@ func TextHash(data []byte) []byte {
 // TextAndHash is a helper function that calculates a hash for the given message that can be
 // safely used to calculate a signature from.
 //
-// The hash is calulcated as
-//   keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
+// The hash is calculated as
+//
+//	keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
 //
 // This gives context to the signed message and prevents signing of transactions.
 func TextAndHash(data []byte) ([]byte, string) {
-	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), string(data))
-	hasher := sha3.NewLegacyKeccak256()
+	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
+	hasher := keccak.NewLegacyKeccak256()
 	hasher.Write([]byte(msg))
 	return hasher.Sum(nil), msg
 }
@@ -212,7 +214,9 @@ const (
 	// of starting any background processes such as automatic key derivation.
 	WalletOpened
 
-	// WalletDropped
+	// WalletDropped is fired when a wallet is removed or disconnected, either via USB
+	// or due to a filesystem event in the keystore. This event indicates that the wallet
+	// is no longer available for operations.
 	WalletDropped
 )
 

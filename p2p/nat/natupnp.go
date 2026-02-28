@@ -19,11 +19,14 @@ package nat
 import (
 	"errors"
 	"fmt"
+	"math"
+	"math/rand"
 	"net"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/huin/goupnp"
 	"github.com/huin/goupnp/dcps/internetgateway1"
 	"github.com/huin/goupnp/dcps/internetgateway2"
@@ -32,6 +35,8 @@ import (
 const (
 	soapRequestTimeout = 3 * time.Second
 	rateLimit          = 200 * time.Millisecond
+	retryCount         = 3 // number of retries after a failed AddPortMapping
+	randomCount        = 3 // number of random ports to try
 )
 
 type upnp struct {
@@ -40,6 +45,7 @@ type upnp struct {
 	client      upnpClient
 	mu          sync.Mutex
 	lastReqTime time.Time
+	rand        *rand.Rand
 }
 
 type upnpClient interface {
@@ -76,18 +82,62 @@ func (n *upnp) ExternalIP() (addr net.IP, err error) {
 	return ip, nil
 }
 
-func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, lifetime time.Duration) error {
+func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, lifetime time.Duration) (uint16, error) {
 	ip, err := n.internalAddress()
 	if err != nil {
-		return nil
+		return 0, err
 	}
 	protocol = strings.ToUpper(protocol)
 	lifetimeS := uint32(lifetime / time.Second)
-	n.DeleteMapping(protocol, extport, intport)
 
-	return n.withRateLimit(func() error {
-		return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
-	})
+	if extport == 0 {
+		extport = intport
+	}
+
+	// Try to add port mapping, preferring the specified external port.
+	return n.addAnyPortMapping(protocol, extport, intport, ip, desc, lifetimeS)
+}
+
+// addAnyPortMapping tries to add a port mapping with the specified external port.
+// If the external port is already in use, it will try to assign another port.
+func (n *upnp) addAnyPortMapping(protocol string, extport, intport int, ip net.IP, desc string, lifetimeS uint32) (uint16, error) {
+	if client, ok := n.client.(*internetgateway2.WANIPConnection2); ok {
+		return n.portWithRateLimit(func() (uint16, error) {
+			return client.AddAnyPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
+		})
+	}
+	// For IGDv1 and v1 services we should first try to add with extport.
+	var lastErr error
+	for i := 0; i < retryCount+1; i++ {
+		lastErr = n.withRateLimit(func() error {
+			return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
+		})
+		if lastErr == nil {
+			return uint16(extport), nil
+		}
+		log.Debug("Failed to add port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", lastErr)
+	}
+
+	// If above fails, we retry with a random port.
+	// We retry several times because of possible port conflicts.
+	for i := 0; i < randomCount; i++ {
+		extport = n.randomPort()
+		lastErr = n.withRateLimit(func() error {
+			return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
+		})
+		if lastErr == nil {
+			return uint16(extport), nil
+		}
+		log.Debug("Failed to add random port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", lastErr)
+	}
+	return 0, lastErr
+}
+
+func (n *upnp) randomPort() int {
+	if n.rand == nil {
+		n.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+	return n.rand.Intn(math.MaxUint16-10000) + 10000
 }
 
 func (n *upnp) internalAddress() (net.IP, error) {
@@ -121,6 +171,17 @@ func (n *upnp) DeleteMapping(protocol string, extport, intport int) error {
 
 func (n *upnp) String() string {
 	return "UPNP " + n.service
+}
+
+func (n *upnp) portWithRateLimit(pfn func() (uint16, error)) (uint16, error) {
+	var port uint16
+	var err error
+	fn := func() error {
+		port, err = pfn()
+		return err
+	}
+	n.withRateLimit(fn)
+	return port, err
 }
 
 func (n *upnp) withRateLimit(fn func() error) error {
@@ -170,8 +231,8 @@ func discoverUPnP() Interface {
 	return nil
 }
 
-// finds devices matching the given target and calls matcher for all
-// advertised services of each device. The first non-nil service found
+// discover finds devices matching the given target and calls matcher for
+// all advertised services of each device. The first non-nil service found
 // is sent into out. If no service matched, nil is sent.
 func discover(out chan<- *upnp, target string, matcher func(goupnp.ServiceClient) *upnp) {
 	devs, err := goupnp.DiscoverDevices(target)

@@ -17,8 +17,9 @@
 package vm
 
 import (
+	"math"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/holiman/uint256"
 )
 
@@ -63,6 +64,18 @@ func getData(data []byte, start uint64, size uint64) []byte {
 	return common.RightPadBytes(data[start:end], int(size))
 }
 
+func getDataAndAdjustedBounds(data []byte, start uint64, size uint64) (codeCopyPadded []byte, actualStart uint64, sizeNonPadded uint64) {
+	length := uint64(len(data))
+	if start > length {
+		start = length
+	}
+	end := start + size
+	if end > length {
+		end = length
+	}
+	return common.RightPadBytes(data[start:end], int(size)), start, end - start
+}
+
 // toWordSize returns the ceiled word size required for memory expansion.
 func toWordSize(size uint64) uint64 {
 	if size > math.MaxUint64-31 {
@@ -70,13 +83,4 @@ func toWordSize(size uint64) uint64 {
 	}
 
 	return (size + 31) / 32
-}
-
-func allZero(b []byte) bool {
-	for _, byte := range b {
-		if byte != 0 {
-			return false
-		}
-	}
-	return true
 }

@@ -19,185 +19,300 @@ package debug
 import (
 	"fmt"
 	"io"
+	"log/slog"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"path/filepath"
 	"runtime"
 
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/exp"
-	"github.com/fjl/memsize/memsizeui"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-var Memsize memsizeui.Handler
-
 var (
-	verbosityFlag = cli.IntFlag{
-		Name:  "verbosity",
-		Usage: "Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
-		Value: 3,
+	verbosityFlag = &cli.IntFlag{
+		Name:     "verbosity",
+		Usage:    "Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
+		Value:    3,
+		Category: flags.LoggingCategory,
 	}
-	vmoduleFlag = cli.StringFlag{
-		Name:  "vmodule",
-		Usage: "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
-		Value: "",
+	logVmoduleFlag = &cli.StringFlag{
+		Name:     "log.vmodule",
+		Usage:    "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
+		Value:    "",
+		Category: flags.LoggingCategory,
 	}
-	backtraceAtFlag = cli.StringFlag{
-		Name:  "backtrace",
-		Usage: "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
-		Value: "",
+	vmoduleFlag = &cli.StringFlag{
+		Name:     "vmodule",
+		Usage:    "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
+		Value:    "",
+		Hidden:   true,
+		Category: flags.DeprecatedCategory,
 	}
-	debugFlag = cli.BoolFlag{
-		Name:  "debug",
-		Usage: "Prepends log messages with call-site location (file and line number)",
+	logjsonFlag = &cli.BoolFlag{
+		Name:     "log.json",
+		Usage:    "Format logs with JSON",
+		Hidden:   true,
+		Category: flags.DeprecatedCategory,
 	}
-	pprofFlag = cli.BoolFlag{
-		Name:  "pprof",
-		Usage: "Enable the pprof HTTP server",
+	logFormatFlag = &cli.StringFlag{
+		Name:     "log.format",
+		Usage:    "Log format to use (json|logfmt|terminal)",
+		Category: flags.LoggingCategory,
 	}
-	pprofPortFlag = cli.IntFlag{
-		Name:  "pprof.port",
-		Usage: "pprof HTTP server listening port",
-		Value: 6060,
+	logFileFlag = &cli.StringFlag{
+		Name:     "log.file",
+		Usage:    "Write logs to a file",
+		Category: flags.LoggingCategory,
 	}
-	pprofAddrFlag = cli.StringFlag{
-		Name:  "pprof.addr",
-		Usage: "pprof HTTP server listening interface",
-		Value: "127.0.0.1",
+	logRotateFlag = &cli.BoolFlag{
+		Name:     "log.rotate",
+		Usage:    "Enables log file rotation",
+		Category: flags.LoggingCategory,
 	}
-	memprofilerateFlag = cli.IntFlag{
-		Name:  "pprof.memprofilerate",
-		Usage: "Turn on memory profiling with the given rate",
-		Value: runtime.MemProfileRate,
+	logMaxSizeMBsFlag = &cli.IntFlag{
+		Name:     "log.maxsize",
+		Usage:    "Maximum size in MBs of a single log file",
+		Value:    100,
+		Category: flags.LoggingCategory,
 	}
-	blockprofilerateFlag = cli.IntFlag{
-		Name:  "pprof.blockprofilerate",
-		Usage: "Turn on block profiling with the given rate",
+	logMaxBackupsFlag = &cli.IntFlag{
+		Name:     "log.maxbackups",
+		Usage:    "Maximum number of log files to retain",
+		Value:    10,
+		Category: flags.LoggingCategory,
 	}
-	cpuprofileFlag = cli.StringFlag{
-		Name:  "pprof.cpuprofile",
-		Usage: "Write CPU profile to the given file",
+	logMaxAgeFlag = &cli.IntFlag{
+		Name:     "log.maxage",
+		Usage:    "Maximum number of days to retain a log file",
+		Value:    30,
+		Category: flags.LoggingCategory,
 	}
-	traceFlag = cli.StringFlag{
-		Name:  "trace",
-		Usage: "Write execution trace to the given file",
+	logCompressFlag = &cli.BoolFlag{
+		Name:     "log.compress",
+		Usage:    "Compress the log files",
+		Value:    false,
+		Category: flags.LoggingCategory,
 	}
-	// (Deprecated April 2020)
-	legacyPprofPortFlag = cli.IntFlag{
-		Name:  "pprofport",
-		Usage: "pprof HTTP server listening port (deprecated, use --pprof.port)",
-		Value: 6060,
+	pprofFlag = &cli.BoolFlag{
+		Name:     "pprof",
+		Usage:    "Enable the pprof HTTP server",
+		Category: flags.LoggingCategory,
 	}
-	legacyPprofAddrFlag = cli.StringFlag{
-		Name:  "pprofaddr",
-		Usage: "pprof HTTP server listening interface (deprecated, use --pprof.addr)",
-		Value: "127.0.0.1",
+	pprofPortFlag = &cli.IntFlag{
+		Name:     "pprof.port",
+		Usage:    "pprof HTTP server listening port",
+		Value:    6060,
+		Category: flags.LoggingCategory,
 	}
-	legacyMemprofilerateFlag = cli.IntFlag{
-		Name:  "memprofilerate",
-		Usage: "Turn on memory profiling with the given rate (deprecated, use --pprof.memprofilerate)",
-		Value: runtime.MemProfileRate,
+	pprofAddrFlag = &cli.StringFlag{
+		Name:     "pprof.addr",
+		Usage:    "pprof HTTP server listening interface",
+		Value:    "127.0.0.1",
+		Category: flags.LoggingCategory,
 	}
-	legacyBlockprofilerateFlag = cli.IntFlag{
-		Name:  "blockprofilerate",
-		Usage: "Turn on block profiling with the given rate (deprecated, use --pprof.blockprofilerate)",
+	memprofilerateFlag = &cli.IntFlag{
+		Name:     "pprof.memprofilerate",
+		Usage:    "Turn on memory profiling with the given rate",
+		Value:    runtime.MemProfileRate,
+		Category: flags.LoggingCategory,
 	}
-	legacyCpuprofileFlag = cli.StringFlag{
-		Name:  "cpuprofile",
-		Usage: "Write CPU profile to the given file (deprecated, use --pprof.cpuprofile)",
+	blockprofilerateFlag = &cli.IntFlag{
+		Name:     "pprof.blockprofilerate",
+		Usage:    "Turn on block profiling with the given rate",
+		Category: flags.LoggingCategory,
+	}
+	cpuprofileFlag = &cli.StringFlag{
+		Name:     "pprof.cpuprofile",
+		Usage:    "Write CPU profile to the given file",
+		Category: flags.LoggingCategory,
+	}
+	traceFlag = &cli.StringFlag{
+		Name:     "go-execution-trace",
+		Usage:    "Write Go execution trace to the given file",
+		Category: flags.LoggingCategory,
 	}
 )
 
 // Flags holds all command-line flags required for debugging.
 var Flags = []cli.Flag{
-	verbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag,
-	pprofFlag, pprofAddrFlag, pprofPortFlag, memprofilerateFlag,
-	blockprofilerateFlag, cpuprofileFlag, traceFlag,
-}
-
-var DeprecatedFlags = []cli.Flag{
-	legacyPprofPortFlag, legacyPprofAddrFlag, legacyMemprofilerateFlag,
-	legacyBlockprofilerateFlag, legacyCpuprofileFlag,
+	verbosityFlag,
+	logVmoduleFlag,
+	vmoduleFlag,
+	logjsonFlag,
+	logFormatFlag,
+	logFileFlag,
+	logRotateFlag,
+	logMaxSizeMBsFlag,
+	logMaxBackupsFlag,
+	logMaxAgeFlag,
+	logCompressFlag,
+	pprofFlag,
+	pprofAddrFlag,
+	pprofPortFlag,
+	memprofilerateFlag,
+	blockprofilerateFlag,
+	cpuprofileFlag,
+	traceFlag,
+	pyroscopeFlag,
+	pyroscopeServerFlag,
+	pyroscopeAuthUsernameFlag,
+	pyroscopeAuthPasswordFlag,
+	pyroscopeTagsFlag,
 }
 
 var (
-	ostream log.Handler
-	glogger *log.GlogHandler
+	glogger       *log.GlogHandler
+	logOutputFile io.WriteCloser
 )
 
 func init() {
-	usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
-	output := io.Writer(os.Stderr)
-	if usecolor {
-		output = colorable.NewColorableStderr()
-	}
-	ostream = log.StreamHandler(output, log.TerminalFormat(usecolor))
-	glogger = log.NewGlogHandler(ostream)
+	glogger = log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
 }
 
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
 func Setup(ctx *cli.Context) error {
+	var (
+		handler        slog.Handler
+		terminalOutput = io.Writer(os.Stderr)
+		output         io.Writer
+		logFmtFlag     = ctx.String(logFormatFlag.Name)
+	)
+	var (
+		logFile  = ctx.String(logFileFlag.Name)
+		rotation = ctx.Bool(logRotateFlag.Name)
+	)
+	if len(logFile) > 0 {
+		if err := validateLogLocation(filepath.Dir(logFile)); err != nil {
+			return fmt.Errorf("failed to initiatilize file logger: %v", err)
+		}
+	}
+	context := []interface{}{"rotate", rotation}
+	if len(logFmtFlag) > 0 {
+		context = append(context, "format", logFmtFlag)
+	} else {
+		context = append(context, "format", "terminal")
+	}
+	if rotation {
+		// Lumberjack uses <processname>-lumberjack.log in is.TempDir() if empty.
+		// so typically /tmp/geth-lumberjack.log on linux
+		if len(logFile) > 0 {
+			context = append(context, "location", logFile)
+		} else {
+			context = append(context, "location", filepath.Join(os.TempDir(), "geth-lumberjack.log"))
+		}
+		logOutputFile = &lumberjack.Logger{
+			Filename:   logFile,
+			MaxSize:    ctx.Int(logMaxSizeMBsFlag.Name),
+			MaxBackups: ctx.Int(logMaxBackupsFlag.Name),
+			MaxAge:     ctx.Int(logMaxAgeFlag.Name),
+			Compress:   ctx.Bool(logCompressFlag.Name),
+		}
+		output = io.MultiWriter(terminalOutput, logOutputFile)
+	} else if logFile != "" {
+		var err error
+		if logOutputFile, err = os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err != nil {
+			return err
+		}
+		output = io.MultiWriter(logOutputFile, terminalOutput)
+		context = append(context, "location", logFile)
+	} else {
+		output = terminalOutput
+	}
+
+	switch {
+	case ctx.Bool(logjsonFlag.Name):
+		// Retain backwards compatibility with `--log.json` flag if `--log.format` not set
+		defer log.Warn("The flag '--log.json' is deprecated, please use '--log.format=json' instead")
+		handler = log.JSONHandler(output)
+	case logFmtFlag == "json":
+		handler = log.JSONHandler(output)
+	case logFmtFlag == "logfmt":
+		handler = log.LogfmtHandler(output)
+	case logFmtFlag == "", logFmtFlag == "terminal":
+		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+		if useColor {
+			terminalOutput = colorable.NewColorableStderr()
+			if logOutputFile != nil {
+				output = io.MultiWriter(logOutputFile, terminalOutput)
+			} else {
+				output = terminalOutput
+			}
+		}
+		handler = log.NewTerminalHandler(output, useColor)
+	default:
+		// Unknown log format specified
+		return fmt.Errorf("unknown log format: %v", ctx.String(logFormatFlag.Name))
+	}
+
+	glogger = log.NewGlogHandler(handler)
+
 	// logging
-	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
-	glogger.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))
-	glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
-	glogger.BacktraceAt(ctx.GlobalString(backtraceAtFlag.Name))
-	log.Root().SetHandler(glogger)
+	verbosity := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
+	glogger.Verbosity(verbosity)
+	vmodule := ctx.String(logVmoduleFlag.Name)
+	if vmodule == "" {
+		// Retain backwards compatibility with `--vmodule` flag if `--log.vmodule` not set
+		vmodule = ctx.String(vmoduleFlag.Name)
+		if vmodule != "" {
+			defer log.Warn("The flag '--vmodule' is deprecated, please use '--log.vmodule' instead")
+		}
+	}
+	glogger.Vmodule(vmodule)
+
+	log.SetDefault(log.NewLogger(glogger))
 
 	// profiling, tracing
-	if ctx.GlobalIsSet(legacyMemprofilerateFlag.Name) {
-		runtime.MemProfileRate = ctx.GlobalInt(legacyMemprofilerateFlag.Name)
-		log.Warn("The flag --memprofilerate is deprecated and will be removed in the future, please use --pprof.memprofilerate")
+	runtime.MemProfileRate = memprofilerateFlag.Value
+	if ctx.IsSet(memprofilerateFlag.Name) {
+		runtime.MemProfileRate = ctx.Int(memprofilerateFlag.Name)
 	}
-	runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)
 
-	if ctx.GlobalIsSet(legacyBlockprofilerateFlag.Name) {
-		Handler.SetBlockProfileRate(ctx.GlobalInt(legacyBlockprofilerateFlag.Name))
-		log.Warn("The flag --blockprofilerate is deprecated and will be removed in the future, please use --pprof.blockprofilerate")
-	}
-	Handler.SetBlockProfileRate(ctx.GlobalInt(blockprofilerateFlag.Name))
+	blockProfileRate := ctx.Int(blockprofilerateFlag.Name)
+	Handler.SetBlockProfileRate(blockProfileRate)
 
-	if traceFile := ctx.GlobalString(traceFlag.Name); traceFile != "" {
+	if traceFile := ctx.String(traceFlag.Name); traceFile != "" {
 		if err := Handler.StartGoTrace(traceFile); err != nil {
 			return err
 		}
 	}
 
-	if cpuFile := ctx.GlobalString(cpuprofileFlag.Name); cpuFile != "" {
-		if err := Handler.StartCPUProfile(cpuFile); err != nil {
-			return err
-		}
-	}
-	if cpuFile := ctx.GlobalString(legacyCpuprofileFlag.Name); cpuFile != "" {
-		log.Warn("The flag --cpuprofile is deprecated and will be removed in the future, please use --pprof.cpuprofile")
+	if cpuFile := ctx.String(cpuprofileFlag.Name); cpuFile != "" {
 		if err := Handler.StartCPUProfile(cpuFile); err != nil {
 			return err
 		}
 	}
 
 	// pprof server
-	if ctx.GlobalBool(pprofFlag.Name) {
-		listenHost := ctx.GlobalString(pprofAddrFlag.Name)
-		if ctx.GlobalIsSet(legacyPprofAddrFlag.Name) && !ctx.GlobalIsSet(pprofAddrFlag.Name) {
-			listenHost = ctx.GlobalString(legacyPprofAddrFlag.Name)
-			log.Warn("The flag --pprofaddr is deprecated and will be removed in the future, please use --pprof.addr")
-		}
+	if ctx.Bool(pprofFlag.Name) {
+		listenHost := ctx.String(pprofAddrFlag.Name)
 
-		port := ctx.GlobalInt(pprofPortFlag.Name)
-		if ctx.GlobalIsSet(legacyPprofPortFlag.Name) && !ctx.GlobalIsSet(pprofPortFlag.Name) {
-			port = ctx.GlobalInt(legacyPprofPortFlag.Name)
-			log.Warn("The flag --pprofport is deprecated and will be removed in the future, please use --pprof.port")
-		}
+		port := ctx.Int(pprofPortFlag.Name)
 
-		address := fmt.Sprintf("%s:%d", listenHost, port)
+		address := net.JoinHostPort(listenHost, fmt.Sprintf("%d", port))
 		// This context value ("metrics.addr") represents the utils.MetricsHTTPFlag.Name.
 		// It cannot be imported because it will cause a cyclical dependency.
-		StartPProf(address, !ctx.GlobalIsSet("metrics.addr"))
+		StartPProf(address, !ctx.IsSet("metrics.addr"))
+	}
+
+	// Pyroscope profiling
+	if ctx.Bool(pyroscopeFlag.Name) {
+		if err := startPyroscope(ctx); err != nil {
+			return err
+		}
+	}
+
+	if len(logFile) > 0 || rotation {
+		log.Info("Logging configured", context...)
 	}
 	return nil
 }
@@ -208,7 +323,6 @@ func StartPProf(address string, withMetrics bool) {
 	if withMetrics {
 		exp.Exp(metrics.DefaultRegistry)
 	}
-	http.Handle("/memsize/", http.StripPrefix("/memsize", &Memsize))
 	log.Info("Starting pprof server", "addr", fmt.Sprintf("http://%s/debug/pprof", address))
 	go func() {
 		if err := http.ListenAndServe(address, nil); err != nil {
@@ -220,6 +334,24 @@ func StartPProf(address string, withMetrics bool) {
 // Exit stops all running profiles, flushing their output to the
 // respective file.
 func Exit() {
+	stopPyroscope()
 	Handler.StopCPUProfile()
 	Handler.StopGoTrace()
+	if logOutputFile != nil {
+		logOutputFile.Close()
+	}
+}
+
+func validateLogLocation(path string) error {
+	if err := os.MkdirAll(path, os.ModePerm); err != nil {
+		return fmt.Errorf("error creating the directory: %w", err)
+	}
+	// Check if the path is writable by trying to create a temporary file
+	tmp := filepath.Join(path, "tmp")
+	if f, err := os.Create(tmp); err != nil {
+		return err
+	} else {
+		f.Close()
+	}
+	return os.Remove(tmp)
 }

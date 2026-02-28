@@ -19,6 +19,7 @@ package core
 import "testing"
 
 func TestPasswordValidation(t *testing.T) {
+	t.Parallel()
 	testcases := []struct {
 		pw         string
 		shouldFail bool
@@ -38,7 +39,6 @@ func TestPasswordValidation(t *testing.T) {
 		if err == nil && test.shouldFail {
 			t.Errorf("password '%v' should fail validation", test.pw)
 		} else if err != nil && !test.shouldFail {
-
 			t.Errorf("password '%v' shound not fail validation, but did: %v", test.pw, err)
 		}
 	}

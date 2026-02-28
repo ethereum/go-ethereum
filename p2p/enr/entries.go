@@ -17,9 +17,11 @@
 package enr
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -60,7 +62,7 @@ type TCP uint16
 
 func (v TCP) ENRKey() string { return "tcp" }
 
-// UDP is the "udp" key, which holds the IPv6-specific UDP port of the node.
+// TCP6 is the "tcp6" key, which holds the IPv6-specific tcp6 port of the node.
 type TCP6 uint16
 
 func (v TCP6) ENRKey() string { return "tcp6" }
@@ -70,10 +72,20 @@ type UDP uint16
 
 func (v UDP) ENRKey() string { return "udp" }
 
-// UDP is the "udp" key, which holds the IPv6-specific UDP port of the node.
+// UDP6 is the "udp6" key, which holds the IPv6-specific UDP port of the node.
 type UDP6 uint16
 
 func (v UDP6) ENRKey() string { return "udp6" }
+
+// QUIC is the "quic" key, which holds the QUIC port of the node.
+type QUIC uint16
+
+func (v QUIC) ENRKey() string { return "quic" }
+
+// QUIC6 is the "quic6" key, which holds the IPv6-specific quic6 port of the node.
+type QUIC6 uint16
+
+func (v QUIC6) ENRKey() string { return "quic6" }
 
 // ID is the "id" key, which holds the name of the identity scheme.
 type ID string
@@ -166,6 +178,60 @@ func (v *IPv6) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
+// IPv4Addr is the "ip" key, which holds the IP address of the node.
+type IPv4Addr netip.Addr
+
+func (v IPv4Addr) ENRKey() string { return "ip" }
+
+// EncodeRLP implements rlp.Encoder.
+func (v IPv4Addr) EncodeRLP(w io.Writer) error {
+	addr := netip.Addr(v)
+	if !addr.Is4() {
+		return errors.New("address is not IPv4")
+	}
+	enc := rlp.NewEncoderBuffer(w)
+	bytes := addr.As4()
+	enc.WriteBytes(bytes[:])
+	return enc.Flush()
+}
+
+// DecodeRLP implements rlp.Decoder.
+func (v *IPv4Addr) DecodeRLP(s *rlp.Stream) error {
+	var bytes [4]byte
+	if err := s.ReadBytes(bytes[:]); err != nil {
+		return err
+	}
+	*v = IPv4Addr(netip.AddrFrom4(bytes))
+	return nil
+}
+
+// IPv6Addr is the "ip6" key, which holds the IP address of the node.
+type IPv6Addr netip.Addr
+
+func (v IPv6Addr) ENRKey() string { return "ip6" }
+
+// EncodeRLP implements rlp.Encoder.
+func (v IPv6Addr) EncodeRLP(w io.Writer) error {
+	addr := netip.Addr(v)
+	if !addr.Is6() {
+		return errors.New("address is not IPv6")
+	}
+	enc := rlp.NewEncoderBuffer(w)
+	bytes := addr.As16()
+	enc.WriteBytes(bytes[:])
+	return enc.Flush()
+}
+
+// DecodeRLP implements rlp.Decoder.
+func (v *IPv6Addr) DecodeRLP(s *rlp.Stream) error {
+	var bytes [16]byte
+	if err := s.ReadBytes(bytes[:]); err != nil {
+		return err
+	}
+	*v = IPv6Addr(netip.AddrFrom16(bytes))
+	return nil
+}
+
 // KeyError is an error related to a key.
 type KeyError struct {
 	Key string
@@ -180,9 +246,16 @@ func (err *KeyError) Error() string {
 	return fmt.Sprintf("ENR key %q: %v", err.Key, err.Err)
 }
 
+func (err *KeyError) Unwrap() error {
+	return err.Err
+}
+
 // IsNotFound reports whether the given error means that a key/value pair is
 // missing from a record.
 func IsNotFound(err error) bool {
-	kerr, ok := err.(*KeyError)
-	return ok && kerr.Err == errNotFound
+	var ke *KeyError
+	if errors.As(err, &ke) {
+		return ke.Err == errNotFound
+	}
+	return false
 }

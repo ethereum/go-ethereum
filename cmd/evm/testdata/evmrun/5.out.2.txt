@@ -1,0 +1,16 @@
+Pre-execution info:
+  - from: `0x000000000000000000000000000073656E646572`
+  - to: `0x0000000000000000000000007265636569766572`
+  - data: ``
+  - gas: `10000000000`
+  - value: `0` wei
+
+|  Pc   |      Op     | Cost |   Refund  |   Stack   |
+|-------|-------------|------|-----------|-----------|
+|    0  |      PUSH1  |    3 |         0 |        [] |
+|    2  |       STOP  |    0 |         0 |    [0x40] |
+
+Post-execution info:
+  - output: ``
+  - consumed gas: `3`
+  - error: `<nil>`

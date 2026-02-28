@@ -17,69 +17,48 @@
 package vm
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/holiman/uint256"
 )
-
-// ContractRef is a reference to the contract's backing object
-type ContractRef interface {
-	Address() common.Address
-}
-
-// AccountRef implements ContractRef.
-//
-// Account references are used during EVM initialisation and
-// it's primary use is to fetch addresses. Removing this object
-// proves difficult because of the cached jump destinations which
-// are fetched from the parent contract (i.e. the caller), which
-// is a ContractRef.
-type AccountRef common.Address
-
-// Address casts AccountRef to a Address
-func (ar AccountRef) Address() common.Address { return (common.Address)(ar) }
 
 // Contract represents an ethereum contract in the state database. It contains
 // the contract code, calling arguments. Contract implements ContractRef
 type Contract struct {
-	// CallerAddress is the result of the caller which initialised this
-	// contract. However when the "call method" is delegated this value
-	// needs to be initialised to that of the caller's caller.
-	CallerAddress common.Address
-	caller        ContractRef
-	self          ContractRef
+	// caller is the result of the caller which initialised this
+	// contract. However, when the "call method" is delegated this
+	// value needs to be initialised to that of the caller's caller.
+	caller  common.Address
+	address common.Address
 
-	jumpdests map[common.Hash]bitvec // Aggregated result of JUMPDEST analysis.
-	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
+	jumpDests JumpDestCache // Aggregated result of JUMPDEST analysis.
+	analysis  BitVec        // Locally cached result of JUMPDEST analysis
 
 	Code     []byte
 	CodeHash common.Hash
-	CodeAddr *common.Address
 	Input    []byte
 
+	// is the execution frame represented by this object a contract deployment
+	IsDeployment bool
+	IsSystemCall bool
+
 	Gas   uint64
-	value *big.Int
+	value *uint256.Int
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
-func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64) *Contract {
-	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object}
-
-	if parent, ok := caller.(*Contract); ok {
-		// Reuse JUMPDEST analysis from parent context if available.
-		c.jumpdests = parent.jumpdests
-	} else {
-		c.jumpdests = make(map[common.Hash]bitvec)
+func NewContract(caller common.Address, address common.Address, value *uint256.Int, gas uint64, jumpDests JumpDestCache) *Contract {
+	// Initialize the jump analysis cache if it's nil, mostly for tests
+	if jumpDests == nil {
+		jumpDests = newMapJumpDests()
 	}
-
-	// Gas should be a pointer so it can safely be reduced through the run
-	// This pointer will be off the state transition
-	c.Gas = gas
-	// ensures a value is set
-	c.value = value
-
-	return c
+	return &Contract{
+		caller:    caller,
+		address:   address,
+		jumpDests: jumpDests,
+		Gas:       gas,
+		value:     value,
+	}
 }
 
 func (c *Contract) validJumpdest(dest *uint256.Int) bool {
@@ -91,19 +70,6 @@ func (c *Contract) validJumpdest(dest *uint256.Int) bool {
 	}
 	// Only JUMPDESTs allowed for destinations
 	if OpCode(c.Code[udest]) != JUMPDEST {
-		return false
-	}
-	return c.isCode(udest)
-}
-
-func (c *Contract) validJumpSubdest(udest uint64) bool {
-	// PC cannot go beyond len(code) and certainly can't be bigger than 63 bits.
-	// Don't bother checking for BEGINSUB in that case.
-	if int64(udest) < 0 || udest >= uint64(len(c.Code)) {
-		return false
-	}
-	// Only BEGINSUBs allowed for destinations
-	if OpCode(c.Code[udest]) != BEGINSUB {
 		return false
 	}
 	return c.isCode(udest)
@@ -121,12 +87,12 @@ func (c *Contract) isCode(udest uint64) bool {
 	// contracts ( not temporary initcode), we store the analysis in a map
 	if c.CodeHash != (common.Hash{}) {
 		// Does parent context have the analysis?
-		analysis, exist := c.jumpdests[c.CodeHash]
+		analysis, exist := c.jumpDests.Load(c.CodeHash)
 		if !exist {
 			// Do the analysis and save in parent context
 			// We do not need to store it in c.analysis
 			analysis = codeBitmap(c.Code)
-			c.jumpdests[c.CodeHash] = analysis
+			c.jumpDests.Store(c.CodeHash, analysis)
 		}
 		// Also stash it in current contract for faster access
 		c.analysis = analysis
@@ -142,30 +108,13 @@ func (c *Contract) isCode(udest uint64) bool {
 	return c.analysis.codeSegment(udest)
 }
 
-// AsDelegate sets the contract to be a delegate call and returns the current
-// contract (for chaining calls)
-func (c *Contract) AsDelegate() *Contract {
-	// NOTE: caller must, at all times be a contract. It should never happen
-	// that caller is something other than a Contract.
-	parent := c.caller.(*Contract)
-	c.CallerAddress = parent.CallerAddress
-	c.value = parent.value
-
-	return c
-}
-
 // GetOp returns the n'th element in the contract's byte array
 func (c *Contract) GetOp(n uint64) OpCode {
-	return OpCode(c.GetByte(n))
-}
-
-// GetByte returns the n'th byte in the contract's byte array
-func (c *Contract) GetByte(n uint64) byte {
 	if n < uint64(len(c.Code)) {
-		return c.Code[n]
+		return OpCode(c.Code[n])
 	}
 
-	return 0
+	return STOP
 }
 
 // Caller returns the caller of the contract.
@@ -173,40 +122,44 @@ func (c *Contract) GetByte(n uint64) byte {
 // Caller will recursively call caller when the contract is a delegate
 // call, including that of caller's caller.
 func (c *Contract) Caller() common.Address {
-	return c.CallerAddress
+	return c.caller
 }
 
 // UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(gas uint64) (ok bool) {
+func (c *Contract) UseGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
 	if c.Gas < gas {
 		return false
+	}
+	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
+		logger.OnGasChange(c.Gas, c.Gas-gas, reason)
 	}
 	c.Gas -= gas
 	return true
 }
 
+// RefundGas refunds gas to the contract
+func (c *Contract) RefundGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) {
+	if gas == 0 {
+		return
+	}
+	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
+		logger.OnGasChange(c.Gas, c.Gas+gas, reason)
+	}
+	c.Gas += gas
+}
+
 // Address returns the contracts address
 func (c *Contract) Address() common.Address {
-	return c.self.Address()
+	return c.address
 }
 
 // Value returns the contract's value (sent to it from it's caller)
-func (c *Contract) Value() *big.Int {
+func (c *Contract) Value() *uint256.Int {
 	return c.value
 }
 
-// SetCallCode sets the code of the contract and address of the backing data
-// object
-func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, code []byte) {
+// SetCallCode sets the code of the contract,
+func (c *Contract) SetCallCode(hash common.Hash, code []byte) {
 	c.Code = code
 	c.CodeHash = hash
-	c.CodeAddr = addr
-}
-
-// SetCodeOptionalHash can be used to provide code, but it's optional to provide hash.
-// In case hash is not provided, the jumpdest analysis will not be saved to the parent context
-func (c *Contract) SetCodeOptionalHash(addr *common.Address, codeAndHash *codeAndHash) {
-	c.Code = codeAndHash.code
-	c.CodeHash = codeAndHash.hash
-	c.CodeAddr = addr
 }

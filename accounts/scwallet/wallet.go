@@ -73,6 +73,14 @@ var (
 	DerivationSignatureHash = sha256.Sum256(common.Hash{}.Bytes())
 )
 
+var (
+	// PinRegexp is the regular expression used to validate PIN codes.
+	pinRegexp = regexp.MustCompile(`^[0-9]{6,}$`)
+
+	// PukRegexp is the regular expression used to validate PUK codes.
+	pukRegexp = regexp.MustCompile(`^[0-9]{12,}$`)
+)
+
 // List of APDU command-related constants
 const (
 	claISO7816  = 0
@@ -99,8 +107,8 @@ const (
 	P1DeriveKeyFromCurrent = uint8(0x10)
 	statusP1WalletStatus   = uint8(0x00)
 	statusP1Path           = uint8(0x01)
-	signP1PrecomputedHash  = uint8(0x01)
-	signP2OnlyBlock        = uint8(0x81)
+	signP1PrecomputedHash  = uint8(0x00)
+	signP2OnlyBlock        = uint8(0x00)
 	exportP1Any            = uint8(0x00)
 	exportP2Pubkey         = uint8(0x01)
 )
@@ -167,7 +175,7 @@ func transmit(card *pcsc.Card, command *commandAPDU) (*responseAPDU, error) {
 	}
 
 	if response.Sw1 != sw1Ok {
-		return nil, fmt.Errorf("unexpected insecure response status Cla=0x%x, Ins=0x%x, Sw=0x%x%x", command.Cla, command.Ins, response.Sw1, response.Sw2)
+		return nil, fmt.Errorf("unexpected insecure response status Cla=%#x, Ins=%#x, Sw=%#x%x", command.Cla, command.Ins, response.Sw1, response.Sw2)
 	}
 
 	return response, nil
@@ -252,7 +260,7 @@ func (w *Wallet) release() error {
 // with the wallet.
 func (w *Wallet) pair(puk []byte) error {
 	if w.session.paired() {
-		return fmt.Errorf("wallet already paired")
+		return errors.New("wallet already paired")
 	}
 	pairing, err := w.session.pair(puk)
 	if err != nil {
@@ -380,7 +388,7 @@ func (w *Wallet) Open(passphrase string) error {
 	case passphrase == "":
 		return ErrPINUnblockNeeded
 	case status.PinRetryCount > 0:
-		if !regexp.MustCompile(`^[0-9]{6,}$`).MatchString(passphrase) {
+		if !pinRegexp.MatchString(passphrase) {
 			w.log.Error("PIN needs to be at least 6 digits")
 			return ErrPINNeeded
 		}
@@ -388,7 +396,7 @@ func (w *Wallet) Open(passphrase string) error {
 			return err
 		}
 	default:
-		if !regexp.MustCompile(`^[0-9]{12,}$`).MatchString(passphrase) {
+		if !pukRegexp.MatchString(passphrase) {
 			w.log.Error("PUK needs to be at least 12 digits")
 			return ErrPINUnblockNeeded
 		}
@@ -464,6 +472,11 @@ func (w *Wallet) selfDerive() {
 			continue
 		}
 		pairing := w.Hub.pairing(w)
+		if pairing == nil {
+			w.lock.Unlock()
+			reqc <- struct{}{}
+			continue
+		}
 
 		// Device lock obtained, derive the next batch of accounts
 		var (
@@ -623,13 +636,13 @@ func (w *Wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 	}
 
 	if pin {
-		pairing := w.Hub.pairing(w)
-		pairing.Accounts[account.Address] = path
-		if err := w.Hub.setPairing(w, pairing); err != nil {
-			return accounts.Account{}, err
+		if pairing := w.Hub.pairing(w); pairing != nil {
+			pairing.Accounts[account.Address] = path
+			if err := w.Hub.setPairing(w, pairing); err != nil {
+				return accounts.Account{}, err
+			}
 		}
 	}
-
 	return account, nil
 }
 
@@ -638,7 +651,7 @@ func (w *Wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 // accounts.
 //
 // Note, self derivation will increment the last component of the specified path
-// opposed to decending into a child path to allow discovering accounts starting
+// opposed to descending into a child path to allow discovering accounts starting
 // from non zero components.
 //
 // Some hardware wallets switched derivation paths through their evolution, so
@@ -699,7 +712,7 @@ func (w *Wallet) signHash(account accounts.Account, hash []byte) ([]byte, error)
 // the needed details via SignTxWithPassphrase, or by other means (e.g. unlock
 // the account in a keystore).
 func (w *Wallet) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
-	signer := types.NewEIP155Signer(chainID)
+	signer := types.LatestSignerForChainID(chainID)
 	hash := signer.Hash(tx)
 	sig, err := w.signHash(account, hash[:])
 	if err != nil {
@@ -766,26 +779,26 @@ func (w *Wallet) SignTxWithPassphrase(account accounts.Account, passphrase strin
 // It first checks for the address in the list of pinned accounts, and if it is
 // not found, attempts to parse the derivation path from the account's URL.
 func (w *Wallet) findAccountPath(account accounts.Account) (accounts.DerivationPath, error) {
-	pairing := w.Hub.pairing(w)
-	if path, ok := pairing.Accounts[account.Address]; ok {
-		return path, nil
+	if pairing := w.Hub.pairing(w); pairing != nil {
+		if path, ok := pairing.Accounts[account.Address]; ok {
+			return path, nil
+		}
 	}
-
 	// Look for the path in the URL
 	if account.URL.Scheme != w.Hub.scheme {
 		return nil, fmt.Errorf("scheme %s does not match wallet scheme %s", account.URL.Scheme, w.Hub.scheme)
 	}
 
-	parts := strings.SplitN(account.URL.Path, "/", 2)
-	if len(parts) != 2 {
+	url, path, found := strings.Cut(account.URL.Path, "/")
+	if !found {
 		return nil, fmt.Errorf("invalid URL format: %s", account.URL)
 	}
 
-	if parts[0] != fmt.Sprintf("%x", w.PublicKey[1:3]) {
+	if url != fmt.Sprintf("%x", w.PublicKey[1:3]) {
 		return nil, fmt.Errorf("URL %s is not for this wallet", account.URL)
 	}
 
-	return accounts.ParseDerivationPath(parts[1])
+	return accounts.ParseDerivationPath(path)
 }
 
 // Session represents a secured communication session with the wallet.
@@ -813,7 +826,7 @@ func (s *Session) pair(secret []byte) (smartcardPairing, error) {
 // unpair deletes an existing pairing.
 func (s *Session) unpair() error {
 	if !s.verified {
-		return fmt.Errorf("unpair requires that the PIN be verified")
+		return errors.New("unpair requires that the PIN be verified")
 	}
 	return s.Channel.Unpair()
 }
@@ -879,6 +892,7 @@ func (s *Session) walletStatus() (*walletStatus, error) {
 }
 
 // derivationPath fetches the wallet's current derivation path from the card.
+//
 //lint:ignore U1000 needs to be added to the console interface
 func (s *Session) derivationPath() (accounts.DerivationPath, error) {
 	response, err := s.Channel.transmitEncrypted(claSCWallet, insStatus, statusP1Path, 0, nil)
@@ -906,7 +920,7 @@ func (s *Session) initialize(seed []byte) error {
 		return err
 	}
 	if status == "Online" {
-		return fmt.Errorf("card is already initialized, cowardly refusing to proceed")
+		return errors.New("card is already initialized, cowardly refusing to proceed")
 	}
 
 	s.Wallet.lock.Lock()
@@ -994,6 +1008,7 @@ func (s *Session) derive(path accounts.DerivationPath) (accounts.Account, error)
 }
 
 // keyExport contains information on an exported keypair.
+//
 //lint:ignore U1000 needs to be added to the console interface
 type keyExport struct {
 	PublicKey  []byte `asn1:"tag:0"`
@@ -1001,6 +1016,7 @@ type keyExport struct {
 }
 
 // publicKey returns the public key for the current derivation path.
+//
 //lint:ignore U1000 needs to be added to the console interface
 func (s *Session) publicKey() ([]byte, error) {
 	response, err := s.Channel.transmitEncrypted(claSCWallet, insExportKey, exportP1Any, exportP2Pubkey, nil)

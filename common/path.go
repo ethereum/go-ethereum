@@ -17,27 +17,16 @@
 package common
 
 import (
-	"fmt"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 )
-
-// MakeName creates a node name that follows the ethereum convention
-// for such names. It adds the operation system name and Go runtime version
-// the name.
-func MakeName(name, version string) string {
-	return fmt.Sprintf("%s/v%s/%s/%s", name, version, runtime.GOOS, runtime.Version())
-}
 
 // FileExist checks if a file exists at filePath.
 func FileExist(filePath string) bool {
 	_, err := os.Stat(filePath)
-	if err != nil && os.IsNotExist(err) {
-		return false
-	}
-
-	return true
+	return !errors.Is(err, fs.ErrNotExist)
 }
 
 // AbsolutePath returns datadir + filename, or filename if it is absolute.
@@ -46,4 +35,15 @@ func AbsolutePath(datadir string, filename string) string {
 		return filename
 	}
 	return filepath.Join(datadir, filename)
+}
+
+// IsNonEmptyDir checks if a directory exists and is non-empty.
+func IsNonEmptyDir(dir string) bool {
+	f, err := os.Open(dir)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	names, _ := f.Readdirnames(1)
+	return len(names) > 0
 }

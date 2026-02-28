@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/signer/core"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/ethereum/go-ethereum/signer/storage"
 )
 
@@ -43,7 +44,7 @@ Three things can happen:
 3. Anything else; other return values [*], method not implemented or exception occurred during processing. This means
 that the operation will continue to manual processing, via the regular UI method chosen by the user.
 
-[*] Note: Future version of the ruleset may use more complex json-based returnvalues, making it possible to not
+[*] Note: Future version of the ruleset may use more complex json-based return values, making it possible to not
 only respond Approve/Reject/Manual, but also modify responses. For example, choose to list only one, but not all
 accounts in a list-request. The points above will continue to hold for non-json based responses ("Approve"/"Reject").
 
@@ -123,6 +124,7 @@ func initRuleEngine(js string) (*rulesetUI, error) {
 }
 
 func TestListRequest(t *testing.T) {
+	t.Parallel()
 	accs := make([]accounts.Account, 5)
 
 	for i := range accs {
@@ -151,7 +153,7 @@ func TestListRequest(t *testing.T) {
 }
 
 func TestSignTxRequest(t *testing.T) {
-
+	t.Parallel()
 	js := `
 	function ApproveTx(r){
 		console.log("transaction.from", r.transaction.from);
@@ -180,7 +182,7 @@ func TestSignTxRequest(t *testing.T) {
 	}
 	t.Logf("to %v", to.Address().String())
 	resp, err := r.ApproveTx(&core.SignTxRequest{
-		Transaction: core.SendTxArgs{
+		Transaction: apitypes.SendTxArgs{
 			From: *from,
 			To:   to},
 		Callinfo: nil,
@@ -242,9 +244,9 @@ func (d *dummyUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 func (d *dummyUI) OnSignerStartup(info core.StartupInfo) {
 }
 
-//TestForwarding tests that the rule-engine correctly dispatches requests to the next caller
+// TestForwarding tests that the rule-engine correctly dispatches requests to the next caller
 func TestForwarding(t *testing.T) {
-
+	t.Parallel()
 	js := ""
 	ui := &dummyUI{make([]string, 0)}
 	jsBackend := storage.NewEphemeralStorage()
@@ -267,14 +269,12 @@ func TestForwarding(t *testing.T) {
 
 	expCalls := 6
 	if len(ui.calls) != expCalls {
-
 		t.Errorf("Expected %d forwarded calls, got %d: %s", expCalls, len(ui.calls), strings.Join(ui.calls, ","))
-
 	}
-
 }
 
 func TestMissingFunc(t *testing.T) {
+	t.Parallel()
 	r, err := initRuleEngine(JS)
 	if err != nil {
 		t.Errorf("Couldn't create evaluator %v", err)
@@ -295,10 +295,9 @@ func TestMissingFunc(t *testing.T) {
 		t.Errorf("Expected missing method to cause non-approval")
 	}
 	t.Logf("Err %v", err)
-
 }
 func TestStorage(t *testing.T) {
-
+	t.Parallel()
 	js := `
 	function testStorage(){
 		storage.put("mykey", "myvalue")
@@ -347,7 +346,6 @@ func TestStorage(t *testing.T) {
 		t.Errorf("Unexpected data, expected '%v', got '%v'", exp, retval)
 	}
 	t.Logf("Err %v", err)
-
 }
 
 const ExampleTxWindow = `
@@ -432,23 +430,23 @@ func dummyTx(value hexutil.Big) *core.SignTxRequest {
 	gasPrice := hexutil.Big(*big.NewInt(2000000))
 
 	return &core.SignTxRequest{
-		Transaction: core.SendTxArgs{
+		Transaction: apitypes.SendTxArgs{
 			From:     *from,
 			To:       to,
 			Value:    value,
 			Nonce:    n,
-			GasPrice: gasPrice,
+			GasPrice: &gasPrice,
 			Gas:      gas,
 		},
-		Callinfo: []core.ValidationInfo{
-			{Typ: "Warning", Message: "All your base are bellong to us"},
+		Callinfo: []apitypes.ValidationInfo{
+			{Typ: "Warning", Message: "All your base are belong to us"},
 		},
 		Meta: core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
 	}
 }
 
 func dummyTxWithV(value uint64) *core.SignTxRequest {
-	v := big.NewInt(0).SetUint64(value)
+	v := new(big.Int).SetUint64(value)
 	h := hexutil.Big(*v)
 	return dummyTx(h)
 }
@@ -462,13 +460,14 @@ func dummySigned(value *big.Int) *types.Transaction {
 }
 
 func TestLimitWindow(t *testing.T) {
+	t.Parallel()
 	r, err := initRuleEngine(ExampleTxWindow)
 	if err != nil {
 		t.Errorf("Couldn't create evaluator %v", err)
 		return
 	}
 	// 0.3 ether: 429D069189E0000 wei
-	v := big.NewInt(0).SetBytes(common.Hex2Bytes("0429D069189E0000"))
+	v := new(big.Int).SetBytes(common.Hex2Bytes("0429D069189E0000"))
 	h := hexutil.Big(*v)
 	// The first three should succeed
 	for i := 0; i < 3; i++ {
@@ -543,11 +542,11 @@ func (d *dontCallMe) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	d.t.Fatalf("Did not expect next-handler to be called")
 }
 
-//TestContextIsCleared tests that the rule-engine does not retain variables over several requests.
+// TestContextIsCleared tests that the rule-engine does not retain variables over several requests.
 // if it does, that would be bad since developers may rely on that to store data,
 // instead of using the disk-based data storage
 func TestContextIsCleared(t *testing.T) {
-
+	t.Parallel()
 	js := `
 	function ApproveTx(){
 		if (typeof foobar == 'undefined') {
@@ -579,7 +578,7 @@ func TestContextIsCleared(t *testing.T) {
 }
 
 func TestSignData(t *testing.T) {
-
+	t.Parallel()
 	js := `function ApproveListing(){
     return "Approve"
 }
@@ -604,7 +603,7 @@ function ApproveSignData(r){
 
 	t.Logf("address %v %v\n", addr.String(), addr.Original())
 
-	nvt := []*core.NameValueType{
+	nvt := []*apitypes.NameValueType{
 		{
 			Name:  "message",
 			Typ:   "text/plain",

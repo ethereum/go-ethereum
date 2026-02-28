@@ -18,8 +18,11 @@ package nat
 
 import (
 	"net"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // This test checks that autodisc doesn't hang and returns
@@ -59,5 +62,25 @@ func TestAutoDiscRace(t *testing.T) {
 				t.Errorf("result %d: got IP %v, want %v", i, rval.ip, wantIP)
 			}
 		}
+	}
+}
+
+// stun should work well
+func TestParseStun(t *testing.T) {
+	testcases := []struct {
+		natStr string
+		want   *stun
+	}{
+		{"stun", &stun{serverList: strings.Split(stunDefaultServers, "\n")}},
+		{"stun:1.2.3.4:1234", &stun{serverList: []string{"1.2.3.4:1234"}}},
+	}
+
+	for _, tc := range testcases {
+		nat, err := Parse(tc.natStr)
+		if err != nil {
+			t.Errorf("should no err, but get %v", err)
+		}
+		stun := nat.(*stun)
+		assert.Equal(t, stun.serverList, tc.want.serverList)
 	}
 }

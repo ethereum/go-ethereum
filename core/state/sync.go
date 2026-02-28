@@ -17,26 +17,39 @@
 package state
 
 import (
-	"bytes"
-
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// NewStateSync create a new state trie download scheduler.
-func NewStateSync(root common.Hash, database ethdb.KeyValueReader, bloom *trie.SyncBloom) *trie.Sync {
+// NewStateSync creates a new state trie download scheduler.
+func NewStateSync(root common.Hash, database ethdb.KeyValueReader, onLeaf func(keys [][]byte, leaf []byte) error, scheme string) *trie.Sync {
+	// Register the storage slot callback if the external callback is specified.
+	var onSlot func(keys [][]byte, path []byte, leaf []byte, parent common.Hash, parentPath []byte) error
+	if onLeaf != nil {
+		onSlot = func(keys [][]byte, path []byte, leaf []byte, parent common.Hash, parentPath []byte) error {
+			return onLeaf(keys, leaf)
+		}
+	}
+	// Register the account callback to connect the state trie and the storage
+	// trie belongs to the contract.
 	var syncer *trie.Sync
-	callback := func(path []byte, leaf []byte, parent common.Hash) error {
-		var obj Account
-		if err := rlp.Decode(bytes.NewReader(leaf), &obj); err != nil {
+	onAccount := func(keys [][]byte, path []byte, leaf []byte, parent common.Hash, parentPath []byte) error {
+		if onLeaf != nil {
+			if err := onLeaf(keys, leaf); err != nil {
+				return err
+			}
+		}
+		var obj types.StateAccount
+		if err := rlp.DecodeBytes(leaf, &obj); err != nil {
 			return err
 		}
-		syncer.AddSubTrie(obj.Root, path, parent, nil)
-		syncer.AddCodeEntry(common.BytesToHash(obj.CodeHash), path, parent)
+		syncer.AddSubTrie(obj.Root, path, parent, parentPath, onSlot)
+		syncer.AddCodeEntry(common.BytesToHash(obj.CodeHash), path, parent, parentPath)
 		return nil
 	}
-	syncer = trie.NewSync(root, database, callback, bloom)
+	syncer = trie.NewSync(root, database, onAccount, scheme)
 	return syncer
 }

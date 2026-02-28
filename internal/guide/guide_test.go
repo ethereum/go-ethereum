@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // This file contains the code snippets from the developer's guide embedded into
-// Go tests. This ensures that any code published in out guides will not break
+// Go tests. This ensures that any code published in our guides will not break
 // accidentally via some code update. If some API changes nonetheless that needs
 // modifying this file, please port any modification over into the developer's
 // guide wiki pages too!
@@ -23,28 +23,25 @@
 package guide
 
 import (
-	"io/ioutil"
 	"math/big"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // Tests that the account management snippets work correctly.
 func TestAccountManagement(t *testing.T) {
-	// Create a temporary folder to work with
-	workdir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("Failed to create temporary work dir: %v", err)
-	}
-	defer os.RemoveAll(workdir)
+	t.Parallel()
 
-	// Create an encrypted keystore with standard crypto parameters
-	ks := keystore.NewKeyStore(filepath.Join(workdir, "keystore"), keystore.StandardScryptN, keystore.StandardScryptP)
+	// Create a temporary folder to work with
+	workdir := t.TempDir()
+
+	// Create an encrypted keystore (using light scrypt parameters)
+	ks := keystore.NewKeyStore(filepath.Join(workdir, "keystore"), keystore.LightScryptN, keystore.LightScryptP)
 
 	// Create a new account with the specified encryption passphrase
 	newAcc, err := ks.NewAccount("Creation password")
@@ -75,7 +72,8 @@ func TestAccountManagement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create signer account: %v", err)
 	}
-	tx, chain := new(types.Transaction), big.NewInt(1)
+	tx := types.NewTransaction(0, common.Address{}, big.NewInt(0), 0, big.NewInt(0), nil)
+	chain := big.NewInt(1)
 
 	// Sign a transaction with a single authorization
 	if _, err := ks.SignTxWithPassphrase(signer, "Signer password", tx, chain); err != nil {

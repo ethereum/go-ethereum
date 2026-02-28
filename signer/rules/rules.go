@@ -18,20 +18,17 @@ package rules
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/dop251/goja"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/internal/jsre/deps"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/signer/core"
-	"github.com/ethereum/go-ethereum/signer/rules/deps"
 	"github.com/ethereum/go-ethereum/signer/storage"
-)
-
-var (
-	BigNumber_JS = deps.MustAsset("bignumber.js")
 )
 
 // consoleOutput is an override for the console.log and console.error methods to
@@ -63,6 +60,7 @@ func NewRuleEvaluator(next core.UIClientAPI, jsbackend storage.Storage) (*rulese
 	return c, nil
 }
 func (r *rulesetUI) RegisterUIServer(api *core.UIServerAPI) {
+	r.next.RegisterUIServer(api)
 	// TODO, make it possible to query from js
 }
 
@@ -71,7 +69,6 @@ func (r *rulesetUI) Init(javascriptRules string) error {
 	return nil
 }
 func (r *rulesetUI) execute(jsfunc string, jsarg interface{}) (goja.Value, error) {
-
 	// Instantiate a fresh vm engine every time
 	vm := goja.New()
 
@@ -99,7 +96,7 @@ func (r *rulesetUI) execute(jsfunc string, jsarg interface{}) (goja.Value, error
 	vm.Set("storage", storageObj)
 
 	// Load bootstrap libraries
-	script, err := goja.Compile("bignumber.js", string(BigNumber_JS), true)
+	script, err := goja.Compile("bignumber.js", deps.BigNumberJS, true)
 	if err != nil {
 		log.Warn("Failed loading libraries", "err", err)
 		return goja.Undefined(), err
@@ -150,7 +147,7 @@ func (r *rulesetUI) checkApproval(jsfunc string, jsarg []byte, err error) (bool,
 		log.Info("Op rejected")
 		return false, nil
 	}
-	return false, fmt.Errorf("unknown response")
+	return false, errors.New("unknown response")
 }
 
 func (r *rulesetUI) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {

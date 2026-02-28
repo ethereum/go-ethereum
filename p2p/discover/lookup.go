@@ -18,6 +18,7 @@ package discover
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -26,18 +27,19 @@ import (
 // lookup performs a network search for nodes close to the given target. It approaches the
 // target by querying nodes that are closer to it on each iteration. The given target does
 // not need to be an actual node identifier.
+// lookup on an empty table will return immediately with no nodes.
 type lookup struct {
 	tab         *Table
-	queryfunc   func(*node) ([]*node, error)
-	replyCh     chan []*node
+	queryfunc   queryFunc
+	replyCh     chan []*enode.Node
 	cancelCh    <-chan struct{}
 	asked, seen map[enode.ID]bool
 	result      nodesByDistance
-	replyBuffer []*node
+	replyBuffer []*enode.Node
 	queries     int
 }
 
-type queryFunc func(*node) ([]*node, error)
+type queryFunc func(*enode.Node) ([]*enode.Node, error)
 
 func newLookup(ctx context.Context, tab *Table, target enode.ID, q queryFunc) *lookup {
 	it := &lookup{
@@ -46,13 +48,17 @@ func newLookup(ctx context.Context, tab *Table, target enode.ID, q queryFunc) *l
 		asked:     make(map[enode.ID]bool),
 		seen:      make(map[enode.ID]bool),
 		result:    nodesByDistance{target: target},
-		replyCh:   make(chan []*node, alpha),
+		replyCh:   make(chan []*enode.Node, alpha),
 		cancelCh:  ctx.Done(),
-		queries:   -1,
 	}
 	// Don't query further if we hit ourself.
 	// Unlikely to happen often in practice.
 	it.asked[tab.self().ID()] = true
+	it.seen[tab.self().ID()] = true
+
+	// Initialize the lookup with nodes from table.
+	closest := it.tab.findnodeByID(it.result.target, bucketSize, false)
+	it.addNodes(closest.entries)
 	return it
 }
 
@@ -60,7 +66,11 @@ func newLookup(ctx context.Context, tab *Table, target enode.ID, q queryFunc) *l
 func (it *lookup) run() []*enode.Node {
 	for it.advance() {
 	}
-	return unwrapNodes(it.result.entries)
+	return it.result.entries
+}
+
+func (it *lookup) empty() bool {
+	return len(it.replyBuffer) == 0
 }
 
 // advance advances the lookup until any new nodes have been found.
@@ -69,16 +79,9 @@ func (it *lookup) advance() bool {
 	for it.startQueries() {
 		select {
 		case nodes := <-it.replyCh:
-			it.replyBuffer = it.replyBuffer[:0]
-			for _, n := range nodes {
-				if n != nil && !it.seen[n.ID()] {
-					it.seen[n.ID()] = true
-					it.result.push(n, bucketSize)
-					it.replyBuffer = append(it.replyBuffer, n)
-				}
-			}
 			it.queries--
-			if len(it.replyBuffer) > 0 {
+			it.addNodes(nodes)
+			if !it.empty() {
 				return true
 			}
 		case <-it.cancelCh:
@@ -86,6 +89,17 @@ func (it *lookup) advance() bool {
 		}
 	}
 	return false
+}
+
+func (it *lookup) addNodes(nodes []*enode.Node) {
+	it.replyBuffer = it.replyBuffer[:0]
+	for _, n := range nodes {
+		if n != nil && !it.seen[n.ID()] {
+			it.seen[n.ID()] = true
+			it.result.push(n, bucketSize)
+			it.replyBuffer = append(it.replyBuffer, n)
+		}
+	}
 }
 
 func (it *lookup) shutdown() {
@@ -102,20 +116,6 @@ func (it *lookup) startQueries() bool {
 		return false
 	}
 
-	// The first query returns nodes from the local table.
-	if it.queries == -1 {
-		closest := it.tab.findnodeByID(it.result.target, bucketSize, false)
-		// Avoid finishing the lookup too quickly if table is empty. It'd be better to wait
-		// for the table to fill in this case, but there is no good mechanism for that
-		// yet.
-		if len(closest.entries) == 0 {
-			it.slowdown()
-		}
-		it.queries = 1
-		it.replyCh <- closest.entries
-		return true
-	}
-
 	// Ask the closest nodes that we haven't asked yet.
 	for i := 0; i < len(it.result.entries) && it.queries < alpha; i++ {
 		n := it.result.entries[i]
@@ -129,54 +129,31 @@ func (it *lookup) startQueries() bool {
 	return it.queries > 0
 }
 
-func (it *lookup) slowdown() {
-	sleep := time.NewTimer(1 * time.Second)
-	defer sleep.Stop()
-	select {
-	case <-sleep.C:
-	case <-it.tab.closeReq:
-	}
-}
-
-func (it *lookup) query(n *node, reply chan<- []*node) {
-	fails := it.tab.db.FindFails(n.ID(), n.IP())
+func (it *lookup) query(n *enode.Node, reply chan<- []*enode.Node) {
 	r, err := it.queryfunc(n)
-	if err == errClosed {
-		// Avoid recording failures on shutdown.
-		reply <- nil
-		return
-	} else if len(r) == 0 {
-		fails++
-		it.tab.db.UpdateFindFails(n.ID(), n.IP(), fails)
-		// Remove the node from the local table if it fails to return anything useful too
-		// many times, but only if there are enough other nodes in the bucket.
-		dropped := false
-		if fails >= maxFindnodeFailures && it.tab.bucketLen(n.ID()) >= bucketSize/2 {
-			dropped = true
-			it.tab.delete(n)
+	if !errors.Is(err, errClosed) { // avoid recording failures on shutdown.
+		success := len(r) > 0
+		it.tab.trackRequest(n, success, r)
+		if err != nil {
+			it.tab.log.Trace("FINDNODE failed", "id", n.ID(), "err", err)
 		}
-		it.tab.log.Trace("FINDNODE failed", "id", n.ID(), "failcount", fails, "dropped", dropped, "err", err)
-	} else if fails > 0 {
-		// Reset failure counter because it counts _consecutive_ failures.
-		it.tab.db.UpdateFindFails(n.ID(), n.IP(), 0)
-	}
-
-	// Grab as many nodes as possible. Some of them might not be alive anymore, but we'll
-	// just remove those again during revalidation.
-	for _, n := range r {
-		it.tab.addSeenNode(n)
 	}
 	reply <- r
 }
 
 // lookupIterator performs lookup operations and iterates over all seen nodes.
 // When a lookup finishes, a new one is created through nextLookup.
+// LookupIterator waits for table initialization and triggers a table refresh
+// when necessary.
+
 type lookupIterator struct {
-	buffer     []*node
-	nextLookup lookupFunc
-	ctx        context.Context
-	cancel     func()
-	lookup     *lookup
+	buffer        []*enode.Node
+	nextLookup    lookupFunc
+	ctx           context.Context
+	cancel        func()
+	lookup        *lookup
+	tabRefreshing <-chan struct{}
+	lastLookup    time.Time
 }
 
 type lookupFunc func(ctx context.Context) *lookup
@@ -191,7 +168,7 @@ func (it *lookupIterator) Node() *enode.Node {
 	if len(it.buffer) == 0 {
 		return nil
 	}
-	return unwrapNode(it.buffer[0])
+	return it.buffer[0]
 }
 
 // Next moves to the next node.
@@ -200,6 +177,7 @@ func (it *lookupIterator) Next() bool {
 	if len(it.buffer) > 0 {
 		it.buffer = it.buffer[1:]
 	}
+
 	// Advance the lookup to refill the buffer.
 	for len(it.buffer) == 0 {
 		if it.ctx.Err() != nil {
@@ -208,16 +186,76 @@ func (it *lookupIterator) Next() bool {
 			return false
 		}
 		if it.lookup == nil {
+			// Ensure enough time has passed between lookup creations.
+			it.slowdown()
+
 			it.lookup = it.nextLookup(it.ctx)
+			if it.lookup.empty() {
+				// If the lookup is empty right after creation, it means the local table
+				// is in a degraded state, and we need to wait for it to fill again.
+				it.lookupFailed(it.lookup.tab, 1*time.Minute)
+				it.lookup = nil
+				continue
+			}
+			// Yield the initial nodes from the iterator before advancing the lookup.
+			it.buffer = it.lookup.replyBuffer
 			continue
 		}
-		if !it.lookup.advance() {
-			it.lookup = nil
-			continue
-		}
+
+		newNodes := it.lookup.advance()
 		it.buffer = it.lookup.replyBuffer
+		if !newNodes {
+			it.lookup = nil
+		}
 	}
 	return true
+}
+
+// lookupFailed handles failed lookup attempts. This can be called when the table has
+// exited, or when it runs out of nodes.
+func (it *lookupIterator) lookupFailed(tab *Table, timeout time.Duration) {
+	tout, cancel := context.WithTimeout(it.ctx, timeout)
+	defer cancel()
+
+	// Wait for Table initialization to complete, in case it is still in progress.
+	select {
+	case <-tab.initDone:
+	case <-tout.Done():
+		return
+	}
+
+	// Wait for ongoing refresh operation, or trigger one.
+	if it.tabRefreshing == nil {
+		it.tabRefreshing = tab.refresh()
+	}
+	select {
+	case <-it.tabRefreshing:
+		it.tabRefreshing = nil
+	case <-tout.Done():
+		return
+	}
+
+	// Wait for the table to fill.
+	tab.waitForNodes(tout, 1)
+}
+
+// slowdown applies a delay between creating lookups. This exists to prevent hot-spinning
+// in some test environments where lookups don't yield any results.
+func (it *lookupIterator) slowdown() {
+	const minInterval = 1 * time.Second
+
+	now := time.Now()
+	diff := now.Sub(it.lastLookup)
+	it.lastLookup = now
+	if diff > minInterval {
+		return
+	}
+	wait := time.NewTimer(diff)
+	defer wait.Stop()
+	select {
+	case <-wait.C:
+	case <-it.ctx.Done():
+	}
 }
 
 // Close ends the iterator.

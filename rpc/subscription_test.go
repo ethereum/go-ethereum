@@ -17,15 +17,24 @@
 package rpc
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"math/big"
 	"net"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 func TestNewID(t *testing.T) {
+	t.Parallel()
+
 	hexchars := "0123456789ABCDEFabcdef"
 	for i := 0; i < 100; i++ {
 		id := string(NewID())
@@ -47,8 +56,10 @@ func TestNewID(t *testing.T) {
 }
 
 func TestSubscriptions(t *testing.T) {
+	t.Parallel()
+
 	var (
-		namespaces        = []string{"eth", "shh", "bzz"}
+		namespaces        = []string{"eth"}
 		service           = &notificationTestService{}
 		subCount          = len(namespaces)
 		notificationCount = 3
@@ -79,7 +90,7 @@ func TestSubscriptions(t *testing.T) {
 		request := map[string]interface{}{
 			"id":      i,
 			"method":  fmt.Sprintf("%s_subscribe", namespace),
-			"version": "2.0",
+			"jsonrpc": "2.0",
 			"params":  []interface{}{"someSubscription", notificationCount, i},
 		}
 		if err := out.Encode(&request); err != nil {
@@ -125,6 +136,8 @@ func TestSubscriptions(t *testing.T) {
 
 // This test checks that unsubscribing works.
 func TestServerUnsubscribe(t *testing.T) {
+	t.Parallel()
+
 	p1, p2 := net.Pipe()
 	defer p2.Close()
 
@@ -216,5 +229,56 @@ func readAndValidateMessage(in *json.Decoder) (*subConfirmation, *subscriptionRe
 		}
 	default:
 		return nil, nil, fmt.Errorf("unrecognized message: %v", msg)
+	}
+}
+
+type mockConn struct {
+	enc *json.Encoder
+}
+
+// writeJSON writes a message to the connection.
+func (c *mockConn) writeJSON(ctx context.Context, msg interface{}, isError bool) error {
+	return c.enc.Encode(msg)
+}
+
+// closed returns a channel which is closed when the connection is closed.
+func (c *mockConn) closed() <-chan interface{} { return nil }
+
+// remoteAddr returns the peer address of the connection.
+func (c *mockConn) remoteAddr() string { return "" }
+
+// BenchmarkNotify benchmarks the performance of notifying a subscription.
+func BenchmarkNotify(b *testing.B) {
+	id := ID("test")
+	notifier := &Notifier{
+		h:         &handler{conn: &mockConn{json.NewEncoder(io.Discard)}},
+		sub:       &Subscription{ID: id},
+		activated: true,
+	}
+	msg := &types.Header{
+		ParentHash: common.HexToHash("0x01"),
+		Number:     big.NewInt(100),
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		notifier.Notify(id, msg)
+	}
+}
+
+func TestNotify(t *testing.T) {
+	t.Parallel()
+
+	out := new(bytes.Buffer)
+	id := ID("test")
+	notifier := &Notifier{
+		h:         &handler{conn: &mockConn{json.NewEncoder(out)}},
+		sub:       &Subscription{ID: id},
+		activated: true,
+	}
+	notifier.Notify(id, "hello")
+	have := strings.TrimSpace(out.String())
+	want := `{"jsonrpc":"2.0","method":"_subscription","params":{"subscription":"test","result":"hello"}}`
+	if have != want {
+		t.Errorf("have:\n%v\nwant:\n%v\n", have, want)
 	}
 }

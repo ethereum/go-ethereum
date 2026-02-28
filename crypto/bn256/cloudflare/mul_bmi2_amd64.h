@@ -29,7 +29,7 @@
 	ADCQ $0, R14 \
 	\
 	MOVQ a2, DX \
-	MOVQ $0, R15 \
+	MOVQ $0, CX \
 	MULXQ 0+rb, AX, BX \
 	ADDQ AX, R10 \
 	ADCQ BX, R11 \
@@ -43,7 +43,7 @@
 	MULXQ 24+rb, AX, BX \
 	ADCQ AX, R13 \
 	ADCQ BX, R14 \
-	ADCQ $0, R15 \
+	ADCQ $0, CX \
 	\
 	MOVQ a3, DX \
 	MULXQ 0+rb, AX, BX \
@@ -52,13 +52,13 @@
 	MULXQ 16+rb, AX, BX \
 	ADCQ AX, R13 \
 	ADCQ BX, R14 \
-	ADCQ $0, R15 \
+	ADCQ $0, CX \
 	MULXQ 8+rb, AX, BX \
 	ADDQ AX, R12 \
 	ADCQ BX, R13 \
 	MULXQ 24+rb, AX, BX \
 	ADCQ AX, R14 \
-	ADCQ BX, R15
+	ADCQ BX, CX
 
 #define gfpReduceBMI2() \
 	\ // m = (T * N') mod R, store m in R8:R9:R10:R11
@@ -106,7 +106,7 @@
 	ADCQ 32(SP), R12 \
 	ADCQ 40(SP), R13 \
 	ADCQ 48(SP), R14 \
-	ADCQ 56(SP), R15 \
+	ADCQ 56(SP), CX \
 	ADCQ $0, AX \
 	\
-	gfpCarry(R12,R13,R14,R15,AX, R8,R9,R10,R11,BX)
+	gfpCarry(R12,R13,R14,CX,AX, R8,R9,R10,R11,BX)

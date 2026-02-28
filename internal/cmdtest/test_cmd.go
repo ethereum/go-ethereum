@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"regexp"
@@ -33,7 +32,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/docker/docker/pkg/reexec"
+	"github.com/ethereum/go-ethereum/internal/reexec"
 )
 
 func NewTestCmd(t *testing.T, data interface{}) *TestCmd {
@@ -56,13 +55,13 @@ type TestCmd struct {
 	Err error
 }
 
-var id int32
+var id atomic.Int32
 
 // Run exec's the current binary using name as argv[0] which will trigger the
 // reexec init function for that name (e.g. "geth-test" in cmd/geth/run_test.go)
 func (tt *TestCmd) Run(name string, args ...string) {
-	id := atomic.AddInt32(&id, 1)
-	tt.stderr = &testlogger{t: tt.T, name: fmt.Sprintf("%d", id)}
+	id.Add(1)
+	tt.stderr = &testlogger{t: tt.T, name: fmt.Sprintf("%d", id.Load())}
 	tt.cmd = &exec.Cmd{
 		Path:   reexec.Self(),
 		Args:   append([]string{name}, args...),
@@ -84,7 +83,7 @@ func (tt *TestCmd) Run(name string, args ...string) {
 // InputLine writes the given text to the child's stdin.
 // This method can also be called from an expect template, e.g.:
 //
-//     geth.expect(`Passphrase: {{.InputLine "password"}}`)
+//	geth.expect(`Passphrase: {{.InputLine "password"}}`)
 func (tt *TestCmd) InputLine(s string) string {
 	io.WriteString(tt.stdin, s+"\n")
 	return ""
@@ -116,6 +115,13 @@ func (tt *TestCmd) Expect(tplsource string) {
 		tt.Fatal(err)
 	}
 	tt.Logf("Matched stdout text:\n%s", want)
+}
+
+// Output reads all output from stdout, and returns the data.
+func (tt *TestCmd) Output() []byte {
+	var buf []byte
+	tt.withKillTimeout(func() { buf, _ = io.ReadAll(tt.stdout) })
+	return buf
 }
 
 func (tt *TestCmd) matchExactOutput(want []byte) error {
@@ -177,7 +183,7 @@ func (tt *TestCmd) ExpectRegexp(regex string) (*regexp.Regexp, []string) {
 func (tt *TestCmd) ExpectExit() {
 	var output []byte
 	tt.withKillTimeout(func() {
-		output, _ = ioutil.ReadAll(tt.stdout)
+		output, _ = io.ReadAll(tt.stdout)
 	})
 	tt.WaitExit()
 	if tt.Cleanup != nil {
@@ -231,7 +237,7 @@ func (tt *TestCmd) Kill() {
 }
 
 func (tt *TestCmd) withKillTimeout(fn func()) {
-	timeout := time.AfterFunc(5*time.Second, func() {
+	timeout := time.AfterFunc(2*time.Minute, func() {
 		tt.Log("killing the child process (timeout)")
 		tt.Kill()
 	})

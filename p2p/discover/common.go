@@ -18,7 +18,13 @@ package discover
 
 import (
 	"crypto/ecdsa"
+	crand "crypto/rand"
+	"encoding/binary"
+	"math/rand"
 	"net"
+	"net/netip"
+	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
@@ -29,8 +35,8 @@ import (
 
 // UDPConn is a network connection on which discovery can operate.
 type UDPConn interface {
-	ReadFromUDP(b []byte) (n int, addr *net.UDPAddr, err error)
-	WriteToUDP(b []byte, addr *net.UDPAddr) (n int, err error)
+	ReadFromUDPAddrPort(b []byte) (n int, addr netip.AddrPort, err error)
+	WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (n int, err error)
 	Close() error
 	LocalAddr() net.Addr
 }
@@ -40,16 +46,39 @@ type Config struct {
 	// These settings are required and configure the UDP listener:
 	PrivateKey *ecdsa.PrivateKey
 
-	// These settings are optional:
-	NetRestrict  *netutil.Netlist   // network whitelist
-	Bootnodes    []*enode.Node      // list of bootstrap nodes
-	Unhandled    chan<- ReadPacket  // unhandled packets are sent on this channel
+	// All remaining settings are optional.
+
+	// Packet handling configuration:
+	NetRestrict   *netutil.Netlist  // list of allowed IP networks
+	Unhandled     chan<- ReadPacket // unhandled packets are sent on this channel
+	V5RespTimeout time.Duration     // timeout for v5 queries
+
+	// Node table configuration:
+	Bootnodes               []*enode.Node // list of bootstrap nodes
+	PingInterval            time.Duration // speed of node liveness check
+	RefreshInterval         time.Duration // used in bucket refresh
+	NoFindnodeLivenessCheck bool          // turns off validation of table nodes in FINDNODE handler
+
+	// The options below are useful in very specific cases, like in unit tests.
+	V5ProtocolID *[6]byte
 	Log          log.Logger         // if set, log messages go here
 	ValidSchemes enr.IdentityScheme // allowed identity schemes
 	Clock        mclock.Clock
 }
 
 func (cfg Config) withDefaults() Config {
+	// Node table configuration:
+	if cfg.PingInterval == 0 {
+		cfg.PingInterval = 3 * time.Second
+	}
+	if cfg.RefreshInterval == 0 {
+		cfg.RefreshInterval = 30 * time.Minute
+	}
+	if cfg.V5RespTimeout == 0 {
+		cfg.V5RespTimeout = 700 * time.Millisecond
+	}
+
+	// Debug/test settings:
 	if cfg.Log == nil {
 		cfg.Log = log.Root()
 	}
@@ -71,12 +100,46 @@ func ListenUDP(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 // channel if configured.
 type ReadPacket struct {
 	Data []byte
-	Addr *net.UDPAddr
+	Addr netip.AddrPort
 }
 
-func min(x, y int) int {
-	if x > y {
-		return y
-	}
-	return x
+type randomSource interface {
+	Intn(int) int
+	Int63n(int64) int64
+	Shuffle(int, func(int, int))
+}
+
+// reseedingRandom is a random number generator that tracks when it was last re-seeded.
+type reseedingRandom struct {
+	mu  sync.Mutex
+	cur *rand.Rand
+}
+
+func (r *reseedingRandom) seed() {
+	var b [8]byte
+	crand.Read(b[:])
+	seed := binary.BigEndian.Uint64(b[:])
+	new := rand.New(rand.NewSource(int64(seed)))
+
+	r.mu.Lock()
+	r.cur = new
+	r.mu.Unlock()
+}
+
+func (r *reseedingRandom) Intn(n int) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cur.Intn(n)
+}
+
+func (r *reseedingRandom) Int63n(n int64) int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cur.Int63n(n)
+}
+
+func (r *reseedingRandom) Shuffle(n int, swap func(i, j int)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cur.Shuffle(n, swap)
 }

@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -19,12 +19,14 @@ package p2p
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
@@ -62,6 +64,10 @@ func (t *rlpxTransport) ReadMsg() (Msg, error) {
 	t.conn.SetReadDeadline(time.Now().Add(frameReadTimeout))
 	code, data, wireSize, err := t.conn.Read()
 	if err == nil {
+		// Protocol messages are dispatched to subprotocol handlers asynchronously,
+		// but package rlpx may reuse the returned 'data' buffer on the next call
+		// to Read. Copy the message data to avoid this being an issue.
+		data = common.CopyBytes(data)
 		msg = Msg{
 			ReceivedAt: time.Now(),
 			Code:       code,
@@ -92,7 +98,7 @@ func (t *rlpxTransport) WriteMsg(msg Msg) error {
 
 	// Set metrics.
 	msg.meterSize = size
-	if metrics.Enabled && msg.meterCap.Name != "" { // don't meter non-subprotocol messages
+	if metrics.Enabled() && msg.meterCap.Name != "" { // don't meter non-subprotocol messages
 		m := fmt.Sprintf("%s/%s/%d/%#02x", egressMeterName, msg.meterCap.Name, msg.meterCap.Version, msg.meterCode)
 		metrics.GetOrRegisterMeter(m, nil).Mark(int64(msg.meterSize))
 		metrics.GetOrRegisterMeter(m+"/packets", nil).Mark(1)
@@ -107,15 +113,14 @@ func (t *rlpxTransport) close(err error) {
 	// Tell the remote end why we're disconnecting if possible.
 	// We only bother doing this if the underlying connection supports
 	// setting a timeout tough.
-	if t.conn != nil {
-		if r, ok := err.(DiscReason); ok && r != DiscNetworkError {
-			deadline := time.Now().Add(discWriteTimeout)
-			if err := t.conn.SetWriteDeadline(deadline); err == nil {
-				// Connection supports write deadline.
-				t.wbuf.Reset()
-				rlp.Encode(&t.wbuf, []DiscReason{r})
-				t.conn.Write(discMsg, t.wbuf.Bytes())
-			}
+	if reason, ok := err.(DiscReason); ok && reason != DiscNetworkError {
+		// We do not use the WriteMsg func since we want a custom deadline
+		deadline := time.Now().Add(discWriteTimeout)
+		if err := t.conn.SetWriteDeadline(deadline); err == nil {
+			// Connection supports write deadline.
+			t.wbuf.Reset()
+			rlp.Encode(&t.wbuf, []any{reason})
+			t.conn.Write(discMsg, t.wbuf.Bytes())
 		}
 	}
 	t.conn.Close()
@@ -152,16 +157,13 @@ func readProtocolHandshake(rw MsgReader) (*protoHandshake, error) {
 		return nil, err
 	}
 	if msg.Size > baseProtocolMaxMsgSize {
-		return nil, fmt.Errorf("message too big")
+		return nil, errors.New("message too big")
 	}
 	if msg.Code == discMsg {
 		// Disconnect before protocol handshake is valid according to the
 		// spec and we send it ourself if the post-handshake checks fail.
-		// We can't return the reason directly, though, because it is echoed
-		// back otherwise. Wrap it in a string instead.
-		var reason [1]DiscReason
-		rlp.Decode(msg.Payload, &reason)
-		return nil, reason[0]
+		r := decodeDisconnectMessage(msg.Payload)
+		return nil, r
 	}
 	if msg.Code != handshakeMsg {
 		return nil, fmt.Errorf("expected handshake, got %x", msg.Code)

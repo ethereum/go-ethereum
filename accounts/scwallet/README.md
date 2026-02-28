@@ -8,7 +8,7 @@
 
 ## Preparing the smartcard
 
-  **WARNING: FOILLOWING THESE INSTRUCTIONS WILL DESTROY THE MASTER KEY ON YOUR CARD. ONLY PROCEED IF NO FUNDS ARE ASSOCIATED WITH THESE ACCOUNTS**
+  **WARNING: FOLLOWING THESE INSTRUCTIONS WILL DESTROY THE MASTER KEY ON YOUR CARD. ONLY PROCEED IF NO FUNDS ARE ASSOCIATED WITH THESE ACCOUNTS**
 
   You can use status' [keycard-cli](https://github.com/status-im/keycard-cli) and you should get _at least_ version 2.1.1 of their [smartcard application](https://github.com/status-im/status-keycard/releases/download/2.2.1/keycard_v2.2.1.cap)
 
@@ -31,12 +31,16 @@
   Write down the URL (`keycard://044def09` in this example). Then ask `geth` to open the wallet:
 
   ```
-  > personal.openWallet("keycard://044def09")
-  Please enter the pairing password:
+  > personal.openWallet("keycard://044def09", "pairing password")
   ```
 
-  Enter the pairing password that you have received during card initialization. Same with the PIN that you will subsequently be
-  asked for.
+  The pairing password has been generated during the card initialization process.
+  
+  The process needs to be repeated once more with the PIN:
+
+  ```
+  > personal.openWallet("keycard://044def09", "PIN number")
+  ```
   
   If everything goes well, you should see your new account when typing `personal` on the console:
 

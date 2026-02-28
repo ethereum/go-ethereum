@@ -27,7 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/pborman/uuid"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -37,7 +37,10 @@ func importPreSaleKey(keyStore keyStore, keyJSON []byte, password string) (accou
 	if err != nil {
 		return accounts.Account{}, nil, err
 	}
-	key.Id = uuid.NewRandom()
+	key.Id, err = uuid.NewRandom()
+	if err != nil {
+		return accounts.Account{}, nil, err
+	}
 	a := accounts.Account{
 		Address: key.Address,
 		URL: accounts.URL{
@@ -78,6 +81,9 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	*/
 	passBytes := []byte(password)
 	derivedKey := pbkdf2.Key(passBytes, passBytes, 2000, 16, sha256.New)
+	if len(cipherText)%aes.BlockSize != 0 {
+		return nil, errors.New("ciphertext must be a multiple of block size")
+	}
 	plainText, err := aesCBCDecrypt(derivedKey, cipherText, iv)
 	if err != nil {
 		return nil, err
@@ -86,7 +92,7 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	ecKey := crypto.ToECDSAUnsafe(ethPriv)
 
 	key = &Key{
-		Id:         nil,
+		Id:         uuid.UUID{},
 		Address:    crypto.PubkeyToAddress(ecKey.PublicKey),
 		PrivateKey: ecKey,
 	}

@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -65,7 +66,7 @@ type (
 	handshakeAuthData struct {
 		h struct {
 			SrcID      enode.ID
-			SigSize    byte // ignature data
+			SigSize    byte // signature data
 			PubkeySize byte // offset of
 		}
 		// Trailing variable-size data.
@@ -90,11 +91,17 @@ const (
 	minVersion      = 1
 	sizeofMaskingIV = 16
 
+	// The minimum size of any Discovery v5 packet is 63 bytes.
+	// Should reject packets smaller than minPacketSize.
+	minPacketSize = 63
+
+	maxPacketSize = 1280
+
 	minMessageSize      = 48 // this refers to data after static headers
 	randomPacketMsgSize = 20
 )
 
-var protocolID = [6]byte{'d', 'i', 's', 'c', 'v', '5'}
+var DefaultProtocolID = [6]byte{'d', 'i', 's', 'c', 'v', '5'}
 
 // Errors.
 var (
@@ -114,8 +121,16 @@ var (
 
 // Public errors.
 var (
+	// ErrInvalidReqID represents error when the ID is invalid.
 	ErrInvalidReqID = errors.New("request ID larger than 8 bytes")
 )
+
+// IsInvalidHeader reports whether 'err' is related to an invalid packet header. When it
+// returns false, it is pretty certain that the packet causing the error does not belong
+// to discv5.
+func IsInvalidHeader(err error) bool {
+	return err == errTooShort || err == errInvalidHeader || err == errMsgTooShort
+}
 
 // Packet sizes.
 var (
@@ -129,10 +144,11 @@ var (
 // Codec encodes and decodes Discovery v5 packets.
 // This type is not safe for concurrent use.
 type Codec struct {
-	sha256    hash.Hash
-	localnode *enode.LocalNode
-	privkey   *ecdsa.PrivateKey
-	sc        *SessionCache
+	sha256     hash.Hash
+	localnode  *enode.LocalNode
+	privkey    *ecdsa.PrivateKey
+	sc         *SessionCache
+	protocolID [6]byte
 
 	// encoder buffers
 	buf      bytes.Buffer // whole packet
@@ -141,16 +157,22 @@ type Codec struct {
 	msgctbuf []byte       // message data ciphertext
 
 	// decoder buffer
+	decbuf []byte
 	reader bytes.Reader
 }
 
 // NewCodec creates a wire codec.
-func NewCodec(ln *enode.LocalNode, key *ecdsa.PrivateKey, clock mclock.Clock) *Codec {
+func NewCodec(ln *enode.LocalNode, key *ecdsa.PrivateKey, clock mclock.Clock, protocolID *[6]byte) *Codec {
 	c := &Codec{
-		sha256:    sha256.New(),
-		localnode: ln,
-		privkey:   key,
-		sc:        NewSessionCache(1024, clock),
+		sha256:     sha256.New(),
+		localnode:  ln,
+		privkey:    key,
+		sc:         NewSessionCache(1024, clock),
+		protocolID: DefaultProtocolID,
+		decbuf:     make([]byte, maxPacketSize),
+	}
+	if protocolID != nil {
+		c.protocolID = *protocolID
 	}
 	return c
 }
@@ -168,6 +190,17 @@ func (c *Codec) Encode(id enode.ID, addr string, packet Packet, challenge *Whoar
 	)
 	switch {
 	case packet.Kind() == WhoareyouPacket:
+		w := packet.(*Whoareyou)
+		if len(w.ChallengeData) > 0 {
+			// This WHOAREYOU packet was encoded before, so it's a resend.
+			// The unmasked packet content is stored in w.ChallengeData.
+			// Just apply the masking again to finish encoding.
+			c.buf.Reset()
+			c.buf.Write(w.ChallengeData)
+			copy(head.IV[:], w.ChallengeData)
+			enc := applyMasking(id, head.IV, c.buf.Bytes())
+			return enc, w.Nonce, nil
+		}
 		head, err = c.encodeWhoareyou(id, packet.(*Whoareyou))
 	case challenge != nil:
 		// We have an unanswered challenge, send handshake.
@@ -196,32 +229,40 @@ func (c *Codec) Encode(id enode.ID, addr string, packet Packet, challenge *Whoar
 
 	// Store sent WHOAREYOU challenges.
 	if challenge, ok := packet.(*Whoareyou); ok {
-		challenge.ChallengeData = bytesCopy(&c.buf)
+		challenge.ChallengeData = slices.Clone(c.buf.Bytes())
+		enc, err := c.EncodeRaw(id, head, msgData)
+		if err != nil {
+			return nil, Nonce{}, err
+		}
 		c.sc.storeSentHandshake(id, addr, challenge)
-	} else if msgData == nil {
+		return enc, head.Nonce, err
+	}
+
+	if msgData == nil {
 		headerData := c.buf.Bytes()
 		msgData, err = c.encryptMessage(session, packet, &head, headerData)
 		if err != nil {
 			return nil, Nonce{}, err
 		}
 	}
-
 	enc, err := c.EncodeRaw(id, head, msgData)
 	return enc, head.Nonce, err
 }
 
 // EncodeRaw encodes a packet with the given header.
 func (c *Codec) EncodeRaw(id enode.ID, head Header, msgdata []byte) ([]byte, error) {
+	// header
 	c.writeHeaders(&head)
-
-	// Apply masking.
-	masked := c.buf.Bytes()[sizeofMaskingIV:]
-	mask := head.mask(id)
-	mask.XORKeyStream(masked[:], masked[:])
-
-	// Write message data.
+	applyMasking(id, head.IV, c.buf.Bytes())
+	// message data
 	c.buf.Write(msgdata)
 	return c.buf.Bytes(), nil
+}
+
+// CurrentChallenge returns the latest challenge sent to the given node.
+// This will return non-nil while a handshake is in progress.
+func (c *Codec) CurrentChallenge(id enode.ID, addr string) *Whoareyou {
+	return c.sc.getHandshake(id, addr)
 }
 
 func (c *Codec) writeHeaders(head *Header) {
@@ -250,7 +291,7 @@ func (c *Codec) makeHeader(toID enode.ID, flag byte, authsizeExtra int) Header {
 	}
 	return Header{
 		StaticHeader: StaticHeader{
-			ProtocolID: protocolID,
+			ProtocolID: c.protocolID,
 			Version:    version,
 			Flag:       flag,
 			AuthSize:   uint16(authsize),
@@ -286,7 +327,6 @@ func (c *Codec) encodeWhoareyou(toID enode.ID, packet *Whoareyou) (Header, error
 
 	// Create header.
 	head := c.makeHeader(toID, flagWhoareyou, 0)
-	head.AuthData = bytesCopy(&c.buf)
 	head.Nonce = packet.Nonce
 
 	// Encode auth data.
@@ -300,7 +340,7 @@ func (c *Codec) encodeWhoareyou(toID enode.ID, packet *Whoareyou) (Header, error
 	return head, nil
 }
 
-// encodeHandshakeMessage encodes the handshake message packet header.
+// encodeHandshakeHeader encodes the handshake message packet header.
 func (c *Codec) encodeHandshakeHeader(toID enode.ID, addr string, challenge *Whoareyou) (Header, *session, error) {
 	// Ensure calling code sets challenge.node.
 	if challenge.Node == nil {
@@ -320,7 +360,7 @@ func (c *Codec) encodeHandshakeHeader(toID enode.ID, addr string, challenge *Who
 	}
 
 	// TODO: this should happen when the first authenticated message is received
-	c.sc.storeNewSession(toID, addr, session)
+	c.sc.storeNewSession(toID, addr, session, challenge.Node)
 
 	// Encode the auth header.
 	var (
@@ -337,7 +377,7 @@ func (c *Codec) encodeHandshakeHeader(toID enode.ID, addr string, challenge *Who
 	return head, session, err
 }
 
-// encodeAuthHeader creates the auth header on a request packet following WHOAREYOU.
+// makeHandshakeAuth creates the auth header on a request packet following WHOAREYOU.
 func (c *Codec) makeHandshakeAuth(toID enode.ID, addr string, challenge *Whoareyou) (*handshakeAuthData, *session, error) {
 	auth := new(handshakeAuthData)
 	auth.h.SrcID = c.localnode.ID()
@@ -346,11 +386,11 @@ func (c *Codec) makeHandshakeAuth(toID enode.ID, addr string, challenge *Whoarey
 	// key is part of the ID nonce signature.
 	var remotePubkey = new(ecdsa.PublicKey)
 	if err := challenge.Node.Load((*enode.Secp256k1)(remotePubkey)); err != nil {
-		return nil, nil, fmt.Errorf("can't find secp256k1 key for recipient")
+		return nil, nil, errors.New("can't find secp256k1 key for recipient")
 	}
 	ephkey, err := c.sc.ephemeralKeyGen()
 	if err != nil {
-		return nil, nil, fmt.Errorf("can't generate ephemeral key")
+		return nil, nil, errors.New("can't generate ephemeral key")
 	}
 	ephpubkey := EncodePubkey(&ephkey.PublicKey)
 	auth.pubkey = ephpubkey[:]
@@ -374,12 +414,12 @@ func (c *Codec) makeHandshakeAuth(toID enode.ID, addr string, challenge *Whoarey
 	// Create session keys.
 	sec := deriveKeys(sha256.New, ephkey, remotePubkey, c.localnode.ID(), challenge.Node.ID(), cdata)
 	if sec == nil {
-		return nil, nil, fmt.Errorf("key derivation failed")
+		return nil, nil, errors.New("key derivation failed")
 	}
 	return auth, sec, err
 }
 
-// encodeMessage encodes an encrypted message packet.
+// encodeMessageHeader encodes an encrypted message packet.
 func (c *Codec) encodeMessageHeader(toID enode.ID, s *session) (Header, error) {
 	head := c.makeHeader(toID, flagMessage, 0)
 
@@ -391,7 +431,7 @@ func (c *Codec) encodeMessageHeader(toID enode.ID, s *session) (Header, error) {
 	auth := messageAuthData{SrcID: c.localnode.ID()}
 	c.buf.Reset()
 	binary.Write(&c.buf, binary.BigEndian, &auth)
-	head.AuthData = bytesCopy(&c.buf)
+	head.AuthData = slices.Clone(c.buf.Bytes())
 	head.Nonce = nonce
 	return head, err
 }
@@ -414,14 +454,17 @@ func (c *Codec) encryptMessage(s *session, p Packet, head *Header, headerData []
 }
 
 // Decode decodes a discovery packet.
-func (c *Codec) Decode(input []byte, addr string) (src enode.ID, n *enode.Node, p Packet, err error) {
-	// Unmask the static header.
-	if len(input) < sizeofStaticPacketData {
+func (c *Codec) Decode(inputData []byte, addr string) (src enode.ID, n *enode.Node, p Packet, err error) {
+	if len(inputData) < minPacketSize {
 		return enode.ID{}, nil, nil, errTooShort
 	}
+	// Copy the packet to a tmp buffer to avoid modifying it.
+	c.decbuf = append(c.decbuf[:0], inputData...)
+	input := c.decbuf
+	// Unmask the static header.
 	var head Header
 	copy(head.IV[:], input[:sizeofMaskingIV])
-	mask := head.mask(c.localnode.ID())
+	mask := createMask(c.localnode.ID(), head.IV)
 	staticHeader := input[sizeofMaskingIV:sizeofStaticPacketData]
 	mask.XORKeyStream(staticHeader, staticHeader)
 
@@ -429,7 +472,7 @@ func (c *Codec) Decode(input []byte, addr string) (src enode.ID, n *enode.Node, 
 	c.reader.Reset(staticHeader)
 	binary.Read(&c.reader, binary.BigEndian, &head.StaticHeader)
 	remainingInput := len(input) - sizeofStaticPacketData
-	if err := head.checkValid(remainingInput); err != nil {
+	if err := head.checkValid(remainingInput, c.protocolID); err != nil {
 		return enode.ID{}, nil, nil, err
 	}
 
@@ -492,7 +535,7 @@ func (c *Codec) decodeHandshakeMessage(fromAddr string, head *Header, headerData
 	}
 
 	// Handshake OK, drop the challenge and store the new session keys.
-	c.sc.storeNewSession(auth.h.SrcID, fromAddr, session)
+	c.sc.storeNewSession(auth.h.SrcID, fromAddr, session, node)
 	c.sc.deleteHandshake(auth.h.SrcID, fromAddr)
 	return node, msg, nil
 }
@@ -524,7 +567,7 @@ func (c *Codec) decodeHandshake(fromAddr string, head *Header) (n *enode.Node, a
 	if err != nil {
 		return nil, auth, nil, errInvalidAuthKey
 	}
-	// Derive sesssion keys.
+	// Derive session keys.
 	session := deriveKeys(sha256.New, c.privkey, ephkey, auth.h.SrcID, c.localnode.ID(), cdata)
 	session = session.keysFlipped()
 	return n, auth, session, nil
@@ -596,7 +639,7 @@ func (c *Codec) decodeMessage(fromAddr string, head *Header, headerData, msgData
 	// Try decrypting the message.
 	key := c.sc.readKey(auth.SrcID, fromAddr)
 	msg, err := c.decryptMessage(msgData, head.Nonce[:], headerData, key)
-	if err == errMessageDecrypt {
+	if errors.Is(err, errMessageDecrypt) {
 		// It didn't work. Start the handshake since this is an ordinary message packet.
 		return &Unknown{Nonce: head.Nonce}, nil
 	}
@@ -614,9 +657,13 @@ func (c *Codec) decryptMessage(input, nonce, headerData, readKey []byte) (Packet
 	return DecodeMessage(msgdata[0], msgdata[1:])
 }
 
+func (c *Codec) SessionNode(id enode.ID, addr string) *enode.Node {
+	return c.sc.readNode(id, addr)
+}
+
 // checkValid performs some basic validity checks on the header.
 // The packetLen here is the length remaining after the static header.
-func (h *StaticHeader) checkValid(packetLen int) error {
+func (h *StaticHeader) checkValid(packetLen int, protocolID [6]byte) error {
 	if h.ProtocolID != protocolID {
 		return errInvalidHeader
 	}
@@ -632,17 +679,18 @@ func (h *StaticHeader) checkValid(packetLen int) error {
 	return nil
 }
 
-// headerMask returns a cipher for 'masking' / 'unmasking' packet headers.
-func (h *Header) mask(destID enode.ID) cipher.Stream {
+// mask returns a cipher for 'masking' / 'unmasking' packet headers.
+func createMask(destID enode.ID, iv [16]byte) cipher.Stream {
 	block, err := aes.NewCipher(destID[:16])
 	if err != nil {
 		panic("can't create cipher")
 	}
-	return cipher.NewCTR(block, h.IV[:])
+	return cipher.NewCTR(block, iv[:])
 }
 
-func bytesCopy(r *bytes.Buffer) []byte {
-	b := make([]byte, r.Len())
-	copy(b, r.Bytes())
-	return b
+func applyMasking(destID enode.ID, iv [16]byte, packet []byte) []byte {
+	masked := packet[sizeofMaskingIV:]
+	mask := createMask(destID, iv)
+	mask.XORKeyStream(masked[:], masked[:])
+	return packet
 }

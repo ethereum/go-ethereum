@@ -19,12 +19,14 @@ package runtime
 import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/holiman/uint256"
 )
 
 func NewEnv(cfg *Config) *vm.EVM {
 	txContext := vm.TxContext{
-		Origin:   cfg.Origin,
-		GasPrice: cfg.GasPrice,
+		Origin:     cfg.Origin,
+		GasPrice:   uint256.MustFromBig(cfg.GasPrice),
+		BlobHashes: cfg.BlobHashes,
 	}
 	blockContext := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
@@ -35,7 +37,12 @@ func NewEnv(cfg *Config) *vm.EVM {
 		Time:        cfg.Time,
 		Difficulty:  cfg.Difficulty,
 		GasLimit:    cfg.GasLimit,
+		BaseFee:     cfg.BaseFee,
+		BlobBaseFee: cfg.BlobBaseFee,
+		Random:      cfg.Random,
 	}
 
-	return vm.NewEVM(blockContext, txContext, cfg.State, cfg.ChainConfig, cfg.EVMConfig)
+	evm := vm.NewEVM(blockContext, cfg.State, cfg.ChainConfig, cfg.EVMConfig)
+	evm.SetTxContext(txContext)
+	return evm
 }

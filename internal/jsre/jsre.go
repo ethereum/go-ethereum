@@ -20,10 +20,11 @@ package jsre
 import (
 	crand "crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/dop251/goja"
@@ -66,7 +67,19 @@ type evalReq struct {
 	done chan bool
 }
 
-// runtime must be stopped with Stop() after use and cannot be used after stopping
+// New creates and initializes a new JavaScript runtime environment (JSRE).
+// The runtime is configured with the provided assetPath for loading scripts and
+// an output writer for logging or printing results.
+//
+// The returned JSRE must be stopped by calling Stop() after use to release resources.
+// Attempting to use the JSRE after stopping it will result in undefined behavior.
+//
+// Parameters:
+//   - assetPath: The path to the directory containing script assets.
+//   - output: The writer used for logging or printing runtime output.
+//
+// Returns:
+//   - A pointer to the newly created JSRE instance.
 func New(assetPath string, output io.Writer) *JSRE {
 	re := &JSRE{
 		assetPath:     assetPath,
@@ -188,7 +201,7 @@ loop:
 			if !isFunc {
 				panic(re.vm.ToValue("js error: timer/timeout callback is not a function"))
 			}
-			call(goja.Null(), timer.call.Arguments...)
+			call(goja.Null(), timer.call.Arguments[2:]...)
 
 			_, inreg := registry[timer] // when clearInterval is called from within the callback don't reset it
 			if timer.interval && inreg {
@@ -220,26 +233,47 @@ loop:
 }
 
 // Do executes the given function on the JS event loop.
+// When the runtime is stopped, fn will not execute.
 func (re *JSRE) Do(fn func(*goja.Runtime)) {
 	done := make(chan bool)
 	req := &evalReq{fn, done}
-	re.evalQueue <- req
-	<-done
-}
-
-// stops the event loop before exit, optionally waits for all timers to expire
-func (re *JSRE) Stop(waitForCallbacks bool) {
 	select {
+	case re.evalQueue <- req:
+		<-done
 	case <-re.closed:
-	case re.stopEventLoop <- waitForCallbacks:
-		<-re.closed
 	}
 }
 
-// Exec(file) loads and runs the contents of a file
-// if a relative path is given, the jsre's assetPath is used
+// Stop terminates the event loop, optionally waiting for all timers to expire.
+func (re *JSRE) Stop(waitForCallbacks bool) {
+	timeout := time.NewTimer(10 * time.Millisecond)
+	defer timeout.Stop()
+
+	for {
+		select {
+		case <-re.closed:
+			return
+		case re.stopEventLoop <- waitForCallbacks:
+			<-re.closed
+			return
+		case <-timeout.C:
+			// JS is blocked, interrupt and try again.
+			re.vm.Interrupt(errors.New("JS runtime stopped"))
+		}
+	}
+}
+
+// Exec loads and executes the contents of a JavaScript file.
+// If a relative path is provided, the file is resolved relative to the JSRE's assetPath.
+// The file is read, compiled, and executed in the JSRE's runtime environment.
+//
+// Parameters:
+//   - file: The path to the JavaScript file to execute. Can be an absolute path or relative to assetPath.
+//
+// Returns:
+//   - error: An error if the file cannot be read, compiled, or executed.
 func (re *JSRE) Exec(file string) error {
-	code, err := ioutil.ReadFile(common.AbsolutePath(re.assetPath, file))
+	code, err := os.ReadFile(common.AbsolutePath(re.assetPath, file))
 	if err != nil {
 		return err
 	}
@@ -282,6 +316,19 @@ func (re *JSRE) Evaluate(code string, w io.Writer) {
 	})
 }
 
+// Interrupt stops the current JS evaluation.
+func (re *JSRE) Interrupt(v interface{}) {
+	done := make(chan bool)
+	noop := func(*goja.Runtime) {}
+
+	select {
+	case re.evalQueue <- &evalReq{noop, done}:
+		// event loop is not blocked.
+	default:
+		re.vm.Interrupt(v)
+	}
+}
+
 // Compile compiles and then runs a piece of JS code.
 func (re *JSRE) Compile(filename string, src string) (err error) {
 	re.Do(func(vm *goja.Runtime) { _, err = compileAndRun(vm, filename, src) })
@@ -292,13 +339,13 @@ func (re *JSRE) Compile(filename string, src string) (err error) {
 func (re *JSRE) loadScript(call Call) (goja.Value, error) {
 	file := call.Argument(0).ToString().String()
 	file = common.AbsolutePath(re.assetPath, file)
-	source, err := ioutil.ReadFile(file)
+	source, err := os.ReadFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("Could not read file %s: %v", file, err)
+		return nil, fmt.Errorf("could not read file %s: %v", file, err)
 	}
 	value, err := compileAndRun(re.vm, file, string(source))
 	if err != nil {
-		return nil, fmt.Errorf("Error while compiling or running script: %v", err)
+		return nil, fmt.Errorf("error while compiling or running script: %v", err)
 	}
 	return value, nil
 }

@@ -21,10 +21,12 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBytesConversion(t *testing.T) {
@@ -154,8 +156,32 @@ func BenchmarkAddressHex(b *testing.B) {
 	}
 }
 
-func TestMixedcaseAccount_Address(t *testing.T) {
+// Test checks if the customized json marshaller of MixedcaseAddress object
+// is invoked correctly. In golang the struct pointer will inherit the
+// non-pointer receiver methods, the reverse is not true. In the case of
+// MixedcaseAddress, it must define the MarshalJSON method in the object
+// but not the pointer level, so that this customized marshalled can be used
+// for both MixedcaseAddress object and pointer.
+func TestMixedcaseAddressMarshal(t *testing.T) {
+	var (
+		output string
+		input  = "0xae967917c465db8578ca9024c205720b1a3651A9"
+	)
+	addr, err := NewMixedcaseAddressFromString(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blob, err := json.Marshal(*addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	json.Unmarshal(blob, &output)
+	if output != input {
+		t.Fatal("Failed to marshal/unmarshal MixedcaseAddress object")
+	}
+}
 
+func TestMixedcaseAccount_Address(t *testing.T) {
 	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-55.md
 	// Note: 0X{checksum_addr} is not valid according to spec above
 
@@ -178,7 +204,7 @@ func TestMixedcaseAccount_Address(t *testing.T) {
 		}
 	}
 
-	//These should throw exceptions:
+	// These should throw exceptions:
 	var r2 []MixedcaseAddress
 	for _, r := range []string{
 		`["0x11111111111111111111122222222222233333"]`,     // Too short
@@ -192,9 +218,7 @@ func TestMixedcaseAccount_Address(t *testing.T) {
 		if err := json.Unmarshal([]byte(r), &r2); err == nil {
 			t.Errorf("Expected failure, input %v", r)
 		}
-
 	}
-
 }
 
 func TestHash_Scan(t *testing.T) {
@@ -535,5 +559,66 @@ func TestHash_Format(t *testing.T) {
 				t.Errorf("%s does not render as expected:\n got %s\nwant %s", tt.name, tt.out, tt.want)
 			}
 		})
+	}
+}
+
+func TestAddressEIP55(t *testing.T) {
+	addr := HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")
+	addrEIP55 := AddressEIP55(addr)
+
+	if addr.Hex() != addrEIP55.String() {
+		t.Fatal("AddressEIP55 should match original address hex")
+	}
+
+	blob, err := addrEIP55.MarshalJSON()
+	if err != nil {
+		t.Fatal("Failed to marshal AddressEIP55", err)
+	}
+	if strings.Trim(string(blob), "\"") != addr.Hex() {
+		t.Fatal("Address with checksum is expected")
+	}
+	var dec Address
+	if err := json.Unmarshal(blob, &dec); err != nil {
+		t.Fatal("Failed to unmarshal AddressEIP55", err)
+	}
+	if addr != dec {
+		t.Fatal("Unexpected address after unmarshal")
+	}
+}
+
+func BenchmarkPrettyDuration(b *testing.B) {
+	var x = PrettyDuration(time.Duration(int64(1203123912312)))
+	b.Logf("Pre %s", time.Duration(x).String())
+	var a string
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		a = x.String()
+	}
+	b.Logf("Post %s", a)
+}
+
+func TestDecimalUnmarshalJSON(t *testing.T) {
+	// These should error
+	for _, tc := range []string{``, `"`, `""`, `"-1"`} {
+		if err := new(Decimal).UnmarshalJSON([]byte(tc)); err == nil {
+			t.Errorf("input %s should cause error", tc)
+		}
+	}
+	// These should succeed
+	for _, tc := range []struct {
+		input string
+		want  uint64
+	}{
+		{`"0"`, 0},
+		{`"9223372036854775807"`, math.MaxInt64},
+		{`"18446744073709551615"`, math.MaxUint64},
+	} {
+		have := new(Decimal)
+		if err := have.UnmarshalJSON([]byte(tc.input)); err != nil {
+			t.Errorf("input %q triggered error: %v", tc.input, err)
+		}
+		if uint64(*have) != tc.want {
+			t.Errorf("input %q, have %d want %d", tc.input, *have, tc.want)
+		}
 	}
 }

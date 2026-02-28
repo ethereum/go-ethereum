@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/math"
@@ -50,6 +51,8 @@ type (
 		Version    uint
 		From, To   Endpoint
 		Expiration uint64
+		ENRSeq     uint64 `rlp:"optional"` // Sequence number of local record, added by EIP-868.
+
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
@@ -58,10 +61,12 @@ type (
 	Pong struct {
 		// This field should mirror the UDP envelope address
 		// of the ping packet, which provides a way to discover the
-		// the external address (after NAT).
+		// external address (after NAT).
 		To         Endpoint
 		ReplyTok   []byte // This contains the hash of the ping packet.
 		Expiration uint64 // Absolute timestamp at which the packet becomes invalid.
+		ENRSeq     uint64 `rlp:"optional"` // Sequence number of local record, added by EIP-868.
+
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
@@ -82,23 +87,23 @@ type (
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
-	// enrRequest queries for the remote node's record.
+	// ENRRequest queries for the remote node's record.
 	ENRRequest struct {
 		Expiration uint64
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
-	// enrResponse is the reply to enrRequest.
+	// ENRResponse is the reply to ENRRequest.
 	ENRResponse struct {
-		ReplyTok []byte // Hash of the enrRequest packet.
+		ReplyTok []byte // Hash of the ENRRequest packet.
 		Record   enr.Record
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
 )
 
-// This number is the maximum number of neighbor nodes in a Neigbors packet.
+// MaxNeighbors is the maximum number of neighbor nodes in a Neighbors packet.
 const MaxNeighbors = 12
 
 // This code computes the MaxNeighbors constant value.
@@ -146,29 +151,29 @@ type Endpoint struct {
 }
 
 // NewEndpoint creates an endpoint.
-func NewEndpoint(addr *net.UDPAddr, tcpPort uint16) Endpoint {
-	ip := net.IP{}
-	if ip4 := addr.IP.To4(); ip4 != nil {
-		ip = ip4
-	} else if ip6 := addr.IP.To16(); ip6 != nil {
-		ip = ip6
+func NewEndpoint(addr netip.AddrPort, tcpPort uint16) Endpoint {
+	var ip net.IP
+	if addr.Addr().Is4() || addr.Addr().Is4In6() {
+		ip4 := addr.Addr().As4()
+		ip = ip4[:]
+	} else {
+		ip = addr.Addr().AsSlice()
 	}
-	return Endpoint{IP: ip, UDP: uint16(addr.Port), TCP: tcpPort}
+	return Endpoint{IP: ip, UDP: addr.Port(), TCP: tcpPort}
 }
 
 type Packet interface {
-	// packet name and type for logging purposes.
+	// Name is the name of the package, for logging purposes.
 	Name() string
+	// Kind is the packet type, for logging purposes.
 	Kind() byte
 }
 
-func (req *Ping) Name() string   { return "PING/v4" }
-func (req *Ping) Kind() byte     { return PingPacket }
-func (req *Ping) ENRSeq() uint64 { return seqFromTail(req.Rest) }
+func (req *Ping) Name() string { return "PING/v4" }
+func (req *Ping) Kind() byte   { return PingPacket }
 
-func (req *Pong) Name() string   { return "PONG/v4" }
-func (req *Pong) Kind() byte     { return PongPacket }
-func (req *Pong) ENRSeq() uint64 { return seqFromTail(req.Rest) }
+func (req *Pong) Name() string { return "PONG/v4" }
+func (req *Pong) Kind() byte   { return PongPacket }
 
 func (req *Findnode) Name() string { return "FINDNODE/v4" }
 func (req *Findnode) Kind() byte   { return FindnodePacket }
@@ -185,15 +190,6 @@ func (req *ENRResponse) Kind() byte   { return ENRResponsePacket }
 // Expired checks whether the given UNIX time stamp is in the past.
 func Expired(ts uint64) bool {
 	return time.Unix(int64(ts), 0).Before(time.Now())
-}
-
-func seqFromTail(tail []rlp.RawValue) uint64 {
-	if len(tail) == 0 {
-		return 0
-	}
-	var seq uint64
-	rlp.DecodeBytes(tail[0], &seq)
-	return seq
 }
 
 // Encoder/decoder.
@@ -244,6 +240,8 @@ func Decode(input []byte) (Packet, Pubkey, []byte, error) {
 	default:
 		return nil, fromKey, hash, fmt.Errorf("unknown type: %d", ptype)
 	}
+	// Here we use NewStream to allow for additional data after the first
+	// RLP object (forward-compatibility).
 	s := rlp.NewStream(bytes.NewReader(sigdata[1:]), 0)
 	err = s.Decode(req)
 	return req, fromKey, hash, err

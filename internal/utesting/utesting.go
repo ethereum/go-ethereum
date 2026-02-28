@@ -25,7 +25,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"regexp"
 	"runtime"
 	"sync"
@@ -36,6 +35,7 @@ import (
 type Test struct {
 	Name string
 	Fn   func(*T)
+	Slow bool
 }
 
 // Result is the result of a test execution.
@@ -65,7 +65,7 @@ func MatchTests(tests []Test, expr string) []Test {
 // If the report writer is non-nil, a test report is written to it in real time.
 func RunTests(tests []Test, report io.Writer) []Result {
 	if report == nil {
-		report = ioutil.Discard
+		report = io.Discard
 	}
 	results := run(tests, newConsoleOutput(report))
 	fails := CountFailures(results)

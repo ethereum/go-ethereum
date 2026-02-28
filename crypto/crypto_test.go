@@ -19,8 +19,8 @@ package crypto
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"crypto/rand"
 	"encoding/hex"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"reflect"
@@ -42,6 +42,13 @@ func TestKeccak256Hash(t *testing.T) {
 	checkhash(t, "Sha3-256-array", func(in []byte) []byte { h := Keccak256Hash(in); return h[:] }, msg, exp)
 }
 
+func TestKeccak256Hasher(t *testing.T) {
+	msg := []byte("abc")
+	exp, _ := hex.DecodeString("4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45")
+	hasher := NewKeccakState()
+	checkhash(t, "Sha3-256-array", func(in []byte) []byte { h := HashData(hasher, in); return h[:] }, msg, exp)
+}
+
 func TestToECDSAErrors(t *testing.T) {
 	if _, err := HexToECDSA("0000000000000000000000000000000000000000000000000000000000000000"); err == nil {
 		t.Fatal("HexToECDSA should've returned error")
@@ -53,7 +60,7 @@ func TestToECDSAErrors(t *testing.T) {
 
 func BenchmarkSha3(b *testing.B) {
 	a := []byte("hello world")
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		Keccak256(a)
 	}
 }
@@ -175,7 +182,7 @@ func TestLoadECDSA(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		f, err := ioutil.TempFile("", "loadecdsa_test.*.txt")
+		f, err := os.CreateTemp(t.TempDir(), "loadecdsa_test.*.txt")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -196,7 +203,7 @@ func TestLoadECDSA(t *testing.T) {
 }
 
 func TestSaveECDSA(t *testing.T) {
-	f, err := ioutil.TempFile("", "saveecdsa_test.*.txt")
+	f, err := os.CreateTemp(t.TempDir(), "saveecdsa_test.*.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,4 +297,39 @@ func TestPythonIntegration(t *testing.T) {
 
 	t.Logf("msg: %x, privkey: %s sig: %x\n", msg0, kh, sig0)
 	t.Logf("msg: %x, privkey: %s sig: %x\n", msg1, kh, sig1)
+}
+
+// goos: darwin
+// goarch: arm64
+// pkg: github.com/ethereum/go-ethereum/crypto
+// cpu: Apple M1 Pro
+// BenchmarkKeccak256Hash
+// BenchmarkKeccak256Hash-8   	  931095	      1270 ns/op	      32 B/op	       1 allocs/op
+func BenchmarkKeccak256Hash(b *testing.B) {
+	var input [512]byte
+	rand.Read(input[:])
+
+	b.ReportAllocs()
+	for b.Loop() {
+		Keccak256Hash(input[:])
+	}
+}
+
+// goos: darwin
+// goarch: arm64
+// pkg: github.com/ethereum/go-ethereum/crypto
+// cpu: Apple M1 Pro
+// BenchmarkHashData
+// BenchmarkHashData-8   	  793386	      1278 ns/op	      32 B/op	       1 allocs/op
+func BenchmarkHashData(b *testing.B) {
+	var (
+		input  [512]byte
+		buffer = NewKeccakState()
+	)
+	rand.Read(input[:])
+
+	b.ReportAllocs()
+	for b.Loop() {
+		HashData(buffer, input[:])
+	}
 }

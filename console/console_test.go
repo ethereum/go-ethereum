@@ -20,17 +20,16 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/jsre"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
@@ -85,25 +84,19 @@ type tester struct {
 
 // newTester creates a test environment based on which the console can operate.
 // Please ensure you call Close() on the returned tester to avoid leaks.
-func newTester(t *testing.T, confOverride func(*eth.Config)) *tester {
+func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 	// Create a temporary storage for the node keys and initialize it
-	workspace, err := ioutil.TempDir("", "console-tester-")
-	if err != nil {
-		t.Fatalf("failed to create temporary keystore: %v", err)
-	}
+	workspace := t.TempDir()
 
 	// Create a networkless protocol stack and start an Ethereum service within
 	stack, err := node.New(&node.Config{DataDir: workspace, UseLightweightKDF: true, Name: testInstance})
 	if err != nil {
 		t.Fatalf("failed to create node: %v", err)
 	}
-	ethConf := &eth.Config{
-		Genesis: core.DeveloperGenesisBlock(15, common.Address{}),
+	ethConf := &ethconfig.Config{
+		Genesis: core.DeveloperGenesisBlock(11_500_000, nil),
 		Miner: miner.Config{
-			Etherbase: common.HexToAddress(testAddress),
-		},
-		Ethash: ethash.Config{
-			PowMode: ethash.ModeTest,
+			PendingFeeRecipient: common.HexToAddress(testAddress),
 		},
 	}
 	if confOverride != nil {
@@ -117,10 +110,11 @@ func newTester(t *testing.T, confOverride func(*eth.Config)) *tester {
 	if err = stack.Start(); err != nil {
 		t.Fatalf("failed to start test stack: %v", err)
 	}
-	client, err := stack.Attach()
-	if err != nil {
-		t.Fatalf("failed to attach to node: %v", err)
-	}
+	client := stack.Attach()
+	t.Cleanup(func() {
+		client.Close()
+	})
+
 	prompter := &hookedPrompter{scheduler: make(chan string)}
 	printer := new(bytes.Buffer)
 
@@ -158,8 +152,7 @@ func (env *tester) Close(t *testing.T) {
 }
 
 // Tests that the node lists the correct welcome message, notably that it contains
-// the instance name, coinbase account, block number, data directory and supported
-// console modules.
+// the instance name, block number, data directory and supported console modules.
 func TestWelcome(t *testing.T) {
 	tester := newTester(t, nil)
 	defer tester.Close(t)
@@ -173,14 +166,14 @@ func TestWelcome(t *testing.T) {
 	if want := fmt.Sprintf("instance: %s", testInstance); !strings.Contains(output, want) {
 		t.Fatalf("console output missing instance: have\n%s\nwant also %s", output, want)
 	}
-	if want := fmt.Sprintf("coinbase: %s", testAddress); !strings.Contains(output, want) {
-		t.Fatalf("console output missing coinbase: have\n%s\nwant also %s", output, want)
-	}
 	if want := "at block: 0"; !strings.Contains(output, want) {
 		t.Fatalf("console output missing sync status: have\n%s\nwant also %s", output, want)
 	}
 	if want := fmt.Sprintf("datadir: %s", tester.workspace); !strings.Contains(output, want) {
-		t.Fatalf("console output missing coinbase: have\n%s\nwant also %s", output, want)
+		t.Fatalf("console output missing datadir: have\n%s\nwant also %s", output, want)
+	}
+	if want := "modules: "; !strings.Contains(output, want) {
+		t.Fatalf("console output missing modules: have\n%s\nwant also %s", output, want)
 	}
 }
 
@@ -237,19 +230,6 @@ func TestPreload(t *testing.T) {
 	}
 }
 
-// Tests that JavaScript scripts can be executes from the configured asset path.
-func TestExecute(t *testing.T) {
-	tester := newTester(t, nil)
-	defer tester.Close(t)
-
-	tester.console.Execute("exec.js")
-
-	tester.console.Evaluate("execed")
-	if output := tester.output.String(); !strings.Contains(output, "some-executed-string") {
-		t.Fatalf("execed variable missing: have %s, want %s", output, "some-executed-string")
-	}
-}
-
 // Tests that the JavaScript objects returned by statement executions are properly
 // pretty printed instead of just displaying "[object]".
 func TestPrettyPrint(t *testing.T) {
@@ -288,7 +268,7 @@ func TestPrettyError(t *testing.T) {
 	defer tester.Close(t)
 	tester.console.Evaluate("throw 'hello'")
 
-	want := jsre.ErrorColor("hello") + "\n\tat <eval>:1:7(1)\n\n"
+	want := jsre.ErrorColor("hello") + "\n\tat <eval>:1:1(1)\n\n"
 	if output := tester.output.String(); output != want {
 		t.Fatalf("pretty error mismatch: have %s, want %s", output, want)
 	}

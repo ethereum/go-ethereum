@@ -19,14 +19,15 @@ package runtime
 import (
 	"math"
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // Config is a basic type specifying certain configuration flags for running
@@ -37,12 +38,17 @@ type Config struct {
 	Origin      common.Address
 	Coinbase    common.Address
 	BlockNumber *big.Int
-	Time        *big.Int
+	Time        uint64
 	GasLimit    uint64
 	GasPrice    *big.Int
 	Value       *big.Int
 	Debug       bool
 	EVMConfig   vm.Config
+	BaseFee     *big.Int
+	BlobBaseFee *big.Int
+	BlobHashes  []common.Hash
+	BlobFeeCap  *big.Int
+	Random      *common.Hash
 
 	State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash
@@ -51,29 +57,34 @@ type Config struct {
 // sets defaults on the config
 func setDefaults(cfg *Config) {
 	if cfg.ChainConfig == nil {
+		var (
+			shanghaiTime = uint64(0)
+			cancunTime   = uint64(0)
+		)
 		cfg.ChainConfig = &params.ChainConfig{
-			ChainID:             big.NewInt(1),
-			HomesteadBlock:      new(big.Int),
-			DAOForkBlock:        new(big.Int),
-			DAOForkSupport:      false,
-			EIP150Block:         new(big.Int),
-			EIP150Hash:          common.Hash{},
-			EIP155Block:         new(big.Int),
-			EIP158Block:         new(big.Int),
-			ByzantiumBlock:      new(big.Int),
-			ConstantinopleBlock: new(big.Int),
-			PetersburgBlock:     new(big.Int),
-			IstanbulBlock:       new(big.Int),
-			MuirGlacierBlock:    new(big.Int),
-			YoloV2Block:         nil,
-		}
+			ChainID:                 big.NewInt(1),
+			HomesteadBlock:          new(big.Int),
+			DAOForkBlock:            new(big.Int),
+			DAOForkSupport:          false,
+			EIP150Block:             new(big.Int),
+			EIP155Block:             new(big.Int),
+			EIP158Block:             new(big.Int),
+			ByzantiumBlock:          new(big.Int),
+			ConstantinopleBlock:     new(big.Int),
+			PetersburgBlock:         new(big.Int),
+			IstanbulBlock:           new(big.Int),
+			MuirGlacierBlock:        new(big.Int),
+			BerlinBlock:             new(big.Int),
+			LondonBlock:             new(big.Int),
+			ArrowGlacierBlock:       nil,
+			GrayGlacierBlock:        nil,
+			TerminalTotalDifficulty: big.NewInt(0),
+			MergeNetsplitBlock:      nil,
+			ShanghaiTime:            &shanghaiTime,
+			CancunTime:              &cancunTime}
 	}
-
 	if cfg.Difficulty == nil {
 		cfg.Difficulty = new(big.Int)
-	}
-	if cfg.Time == nil {
-		cfg.Time = big.NewInt(time.Now().Unix())
 	}
 	if cfg.GasLimit == 0 {
 		cfg.GasLimit = math.MaxUint64
@@ -92,6 +103,13 @@ func setDefaults(cfg *Config) {
 			return common.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
 		}
 	}
+	if cfg.BaseFee == nil {
+		cfg.BaseFee = big.NewInt(params.InitialBaseFee)
+	}
+	if cfg.BlobBaseFee == nil {
+		cfg.BlobBaseFee = big.NewInt(params.BlobTxMinBlobGasprice)
+	}
+	cfg.Random = &(common.Hash{})
 }
 
 // Execute executes the code using the input as call data during the execution.
@@ -106,32 +124,34 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	setDefaults(cfg)
 
 	if cfg.State == nil {
-		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	}
 	var (
 		address = common.BytesToAddress([]byte("contract"))
 		vmenv   = NewEnv(cfg)
-		sender  = vm.AccountRef(cfg.Origin)
+		rules   = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 	)
-	if cfg.ChainConfig.IsYoloV2(vmenv.Context.BlockNumber) {
-		cfg.State.AddAddressToAccessList(cfg.Origin)
-		cfg.State.AddAddressToAccessList(address)
-		for _, addr := range vmenv.ActivePrecompiles() {
-			cfg.State.AddAddressToAccessList(addr)
-		}
+	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
+		cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: &address, Data: input, Value: cfg.Value, Gas: cfg.GasLimit}), cfg.Origin)
 	}
+	// Execute the preparatory steps for state transition which includes:
+	// - prepare accessList(post-berlin)
+	// - reset transient storage(eip 1153)
+	cfg.State.Prepare(rules, cfg.Origin, cfg.Coinbase, &address, vm.ActivePrecompiles(rules), nil)
 	cfg.State.CreateAccount(address)
 	// set the receiver's (the executing contract) code for execution.
-	cfg.State.SetCode(address, code)
+	cfg.State.SetCode(address, code, tracing.CodeChangeUnspecified)
 	// Call the code with the given configuration.
-	ret, _, err := vmenv.Call(
-		sender,
+	ret, leftOverGas, err := vmenv.Call(
+		cfg.Origin,
 		common.BytesToAddress([]byte("contract")),
 		input,
 		cfg.GasLimit,
-		cfg.Value,
+		uint256.MustFromBig(cfg.Value),
 	)
-
+	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxEnd != nil {
+		cfg.EVMConfig.Tracer.OnTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - leftOverGas}, err)
+	}
 	return ret, cfg.State, err
 }
 
@@ -143,26 +163,29 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	setDefaults(cfg)
 
 	if cfg.State == nil {
-		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	}
 	var (
-		vmenv  = NewEnv(cfg)
-		sender = vm.AccountRef(cfg.Origin)
+		vmenv = NewEnv(cfg)
+		rules = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 	)
-	if cfg.ChainConfig.IsYoloV2(vmenv.Context.BlockNumber) {
-		cfg.State.AddAddressToAccessList(cfg.Origin)
-		for _, addr := range vmenv.ActivePrecompiles() {
-			cfg.State.AddAddressToAccessList(addr)
-		}
+	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
+		cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{Data: input, Value: cfg.Value, Gas: cfg.GasLimit}), cfg.Origin)
 	}
-
+	// Execute the preparatory steps for state transition which includes:
+	// - prepare accessList(post-berlin)
+	// - reset transient storage(eip 1153)
+	cfg.State.Prepare(rules, cfg.Origin, cfg.Coinbase, nil, vm.ActivePrecompiles(rules), nil)
 	// Call the code with the given configuration.
 	code, address, leftOverGas, err := vmenv.Create(
-		sender,
+		cfg.Origin,
 		input,
 		cfg.GasLimit,
-		cfg.Value,
+		uint256.MustFromBig(cfg.Value),
 	)
+	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxEnd != nil {
+		cfg.EVMConfig.Tracer.OnTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - leftOverGas}, err)
+	}
 	return code, address, leftOverGas, err
 }
 
@@ -174,25 +197,29 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, error) {
 	setDefaults(cfg)
 
-	vmenv := NewEnv(cfg)
-
-	sender := cfg.State.GetOrNewStateObject(cfg.Origin)
-	if cfg.ChainConfig.IsYoloV2(vmenv.Context.BlockNumber) {
-		cfg.State.AddAddressToAccessList(cfg.Origin)
-		cfg.State.AddAddressToAccessList(address)
-		for _, addr := range vmenv.ActivePrecompiles() {
-			cfg.State.AddAddressToAccessList(addr)
-		}
+	var (
+		vmenv   = NewEnv(cfg)
+		statedb = cfg.State
+		rules   = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
+	)
+	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
+		cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: &address, Data: input, Value: cfg.Value, Gas: cfg.GasLimit}), cfg.Origin)
 	}
+	// Execute the preparatory steps for state transition which includes:
+	// - prepare accessList(post-berlin)
+	// - reset transient storage(eip 1153)
+	statedb.Prepare(rules, cfg.Origin, cfg.Coinbase, &address, vm.ActivePrecompiles(rules), nil)
 
 	// Call the code with the given configuration.
 	ret, leftOverGas, err := vmenv.Call(
-		sender,
+		cfg.Origin,
 		address,
 		input,
 		cfg.GasLimit,
-		cfg.Value,
+		uint256.MustFromBig(cfg.Value),
 	)
-
+	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxEnd != nil {
+		cfg.EVMConfig.Tracer.OnTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - leftOverGas}, err)
+	}
 	return ret, leftOverGas, err
 }

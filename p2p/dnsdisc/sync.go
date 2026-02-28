@@ -25,9 +25,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-const (
-	rootRecheckFailCount = 5 // update root if this many leaf requests fail
-)
+// This is the number of consecutive leaf requests that may fail before
+// we consider re-resolving the tree root.
+const rootRecheckFailCount = 5
 
 // clientTree is a full tree being synced.
 type clientTree struct {
@@ -89,11 +89,20 @@ func (ct *clientTree) syncRandom(ctx context.Context) (n *enode.Node, err error)
 	ct.gcLinks()
 
 	// Sync next random entry in ENR tree. Once every node has been visited, we simply
-	// start over. This is fine because entries are cached.
+	// start over. This is fine because entries are cached internally by the client LRU
+	// also by DNS resolvers.
 	if ct.enrs.done() {
 		ct.enrs = newSubtreeSync(ct.c, ct.loc, ct.root.eroot, false)
 	}
 	return ct.syncNextRandomENR(ctx)
+}
+
+// canSyncRandom checks if any meaningful action can be performed by syncRandom.
+func (ct *clientTree) canSyncRandom() bool {
+	// Note: the check for non-zero leaf count is very important here.
+	// If we're done syncing all nodes, and no leaves were found, the tree
+	// is empty and we can't use it for sync.
+	return ct.rootUpdateDue() || !ct.links.done() || !ct.enrs.done() || ct.enrs.leaves != 0
 }
 
 // gcLinks removes outdated links from the global link cache. GC runs once
@@ -184,8 +193,12 @@ func (ct *clientTree) updateRoot(ctx context.Context) error {
 // rootUpdateDue returns true when a root update is needed.
 func (ct *clientTree) rootUpdateDue() bool {
 	tooManyFailures := ct.leafFailCount > rootRecheckFailCount
-	scheduledCheck := ct.c.clock.Now().Sub(ct.lastRootCheck) > ct.c.cfg.RecheckInterval
+	scheduledCheck := ct.c.clock.Now() >= ct.nextScheduledRootCheck()
 	return ct.root == nil || tooManyFailures || scheduledCheck
+}
+
+func (ct *clientTree) nextScheduledRootCheck() mclock.AbsTime {
+	return ct.lastRootCheck.Add(ct.c.cfg.RecheckInterval)
 }
 
 // slowdownRootUpdate applies a delay to root resolution if is tried
@@ -218,10 +231,11 @@ type subtreeSync struct {
 	root    string
 	missing []string // missing tree node hashes
 	link    bool     // true if this sync is for the link tree
+	leaves  int      // counter of synced leaves
 }
 
 func newSubtreeSync(c *Client, loc *linkEntry, root string, link bool) *subtreeSync {
-	return &subtreeSync{c, loc, root, []string{root}, link}
+	return &subtreeSync{c, loc, root, []string{root}, link, 0}
 }
 
 func (ts *subtreeSync) done() bool {
@@ -253,10 +267,12 @@ func (ts *subtreeSync) resolveNext(ctx context.Context, hash string) (entry, err
 		if ts.link {
 			return nil, errENRInLinkTree
 		}
+		ts.leaves++
 	case *linkEntry:
 		if !ts.link {
 			return nil, errLinkInENRTree
 		}
+		ts.leaves++
 	case *branchEntry:
 		ts.missing = append(ts.missing, e.children...)
 	}

@@ -23,6 +23,8 @@ import (
 )
 
 func TestCompleteKeywords(t *testing.T) {
+	t.Parallel()
+
 	re := New("", os.Stdout)
 	re.Run(`
 		function theClass() {
@@ -72,6 +74,7 @@ func TestCompleteKeywords(t *testing.T) {
 		{
 			input: "x.gazonk.",
 			want: []string{
+				"x.gazonk.__proto__",
 				"x.gazonk.constructor",
 				"x.gazonk.hasOwnProperty",
 				"x.gazonk.isPrototypeOf",
@@ -84,9 +87,13 @@ func TestCompleteKeywords(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		cs := re.CompleteKeywords(test.input)
-		if !reflect.DeepEqual(cs, test.want) {
-			t.Errorf("wrong completions for %q\ngot  %v\nwant %v", test.input, cs, test.want)
-		}
+		t.Run(test.input, func(t *testing.T) {
+			t.Parallel()
+
+			cs := re.CompleteKeywords(test.input)
+			if !reflect.DeepEqual(cs, test.want) {
+				t.Errorf("wrong completions for %q\ngot  %v\nwant %v", test.input, cs, test.want)
+			}
+		})
 	}
 }
