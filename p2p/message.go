@@ -1,43 +1,32 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package p2p
 
 import (
-	"bufio"
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"math/big"
-	"net"
-	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
-)
-
-// parameters for frameRW
-const (
-	// maximum time allowed for reading a message header.
-	// this is effectively the amount of time a connection can be idle.
-	frameReadTimeout = 1 * time.Minute
-
-	// maximum time allowed for reading the payload data of a message.
-	// this is shorter than (and distinct from) frameReadTimeout because
-	// the connection is not considered idle while a message is transferred.
-	// this also limits the payload size of messages to how much the connection
-	// can transfer within the timeout.
-	payloadReadTimeout = 5 * time.Second
-
-	// maximum amount of time allowed for writing a complete message.
-	msgWriteTimeout = 5 * time.Second
-
-	// messages smaller than this many bytes will be read at
-	// once before passing them to a protocol. this increases
-	// concurrency in the processing.
-	wholePayloadSize = 64 * 1024
 )
 
 // Msg defines the structure of a p2p message.
@@ -48,36 +37,24 @@ const (
 // structure, encode the payload into a byte array and create a
 // separate Msg with a bytes.Reader as Payload for each send.
 type Msg struct {
-	Code    uint64
-	Size    uint32 // size of the paylod
-	Payload io.Reader
+	Code       uint64
+	Size       uint32 // Size of the raw payload
+	Payload    io.Reader
+	ReceivedAt time.Time
+
+	meterCap  Cap    // Protocol name and version for egress metering
+	meterCode uint64 // Message within protocol for egress metering
+	meterSize uint32 // Compressed message size for ingress metering
 }
 
-// NewMsg creates an RLP-encoded message with the given code.
-func NewMsg(code uint64, params ...interface{}) Msg {
-	buf := new(bytes.Buffer)
-	for _, p := range params {
-		buf.Write(ethutil.Encode(p))
-	}
-	return Msg{Code: code, Size: uint32(buf.Len()), Payload: buf}
-}
-
-func encodePayload(params ...interface{}) []byte {
-	buf := new(bytes.Buffer)
-	for _, p := range params {
-		buf.Write(ethutil.Encode(p))
-	}
-	return buf.Bytes()
-}
-
-// Decode parse the RLP content of a message into
+// Decode parses the RLP content of a message into
 // the given value, which must be a pointer.
 //
 // For the decoding rules, please see package rlp.
 func (msg Msg) Decode(val interface{}) error {
-	s := rlp.NewListStream(msg.Payload, uint64(msg.Size))
+	s := rlp.NewStream(msg.Payload, uint64(msg.Size))
 	if err := s.Decode(val); err != nil {
-		return newPeerError(errInvalidMsg, "(code %#x) (size %d) %v", msg.Code, msg.Size, err)
+		return newPeerError(errInvalidMsg, "(code %x) (size %d) %v", msg.Code, msg.Size, err)
 	}
 	return nil
 }
@@ -88,8 +65,12 @@ func (msg Msg) String() string {
 
 // Discard reads any remaining payload data into a black hole.
 func (msg Msg) Discard() error {
-	_, err := io.Copy(ioutil.Discard, msg.Payload)
+	_, err := io.Copy(io.Discard, msg.Payload)
 	return err
+}
+
+func (msg Msg) Time() time.Time {
+	return msg.ReceivedAt
 }
 
 type MsgReader interface {
@@ -113,144 +94,27 @@ type MsgReadWriter interface {
 	MsgWriter
 }
 
-// EncodeMsg writes an RLP-encoded message with the given code and
-// data elements.
-func EncodeMsg(w MsgWriter, code uint64, data ...interface{}) error {
-	return w.WriteMsg(NewMsg(code, data...))
-}
-
-// frameRW is a MsgReadWriter that reads and writes devp2p message frames.
-// As required by the interface, ReadMsg and WriteMsg can be called from
-// multiple goroutines.
-type frameRW struct {
-	net.Conn // make Conn methods available. be careful.
-	bufconn  *bufio.ReadWriter
-
-	// this channel is used to 'lend' bufconn to a caller of ReadMsg
-	// until the message payload has been consumed. the channel
-	// receives a value when EOF is reached on the payload, unblocking
-	// a pending call to ReadMsg.
-	rsync chan struct{}
-
-	// this mutex guards writes to bufconn.
-	writeMu sync.Mutex
-}
-
-func newFrameRW(conn net.Conn, timeout time.Duration) *frameRW {
-	rsync := make(chan struct{}, 1)
-	rsync <- struct{}{}
-	return &frameRW{
-		Conn:    conn,
-		bufconn: bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
-		rsync:   rsync,
-	}
-}
-
-var magicToken = []byte{34, 64, 8, 145}
-
-func (rw *frameRW) WriteMsg(msg Msg) error {
-	rw.writeMu.Lock()
-	defer rw.writeMu.Unlock()
-	rw.SetWriteDeadline(time.Now().Add(msgWriteTimeout))
-	if err := writeMsg(rw.bufconn, msg); err != nil {
+// Send writes an RLP-encoded message with the given code.
+// data should encode as an RLP list.
+func Send(w MsgWriter, msgcode uint64, data interface{}) error {
+	size, r, err := rlp.EncodeToReader(data)
+	if err != nil {
 		return err
 	}
-	return rw.bufconn.Flush()
+	return w.WriteMsg(Msg{Code: msgcode, Size: uint32(size), Payload: r})
 }
 
-func writeMsg(w io.Writer, msg Msg) error {
-	// TODO: handle case when Size + len(code) + len(listhdr) overflows uint32
-	code := ethutil.Encode(uint32(msg.Code))
-	listhdr := makeListHeader(msg.Size + uint32(len(code)))
-	payloadLen := uint32(len(listhdr)) + uint32(len(code)) + msg.Size
-
-	start := make([]byte, 8)
-	copy(start, magicToken)
-	binary.BigEndian.PutUint32(start[4:], payloadLen)
-
-	for _, b := range [][]byte{start, listhdr, code} {
-		if _, err := w.Write(b); err != nil {
-			return err
-		}
-	}
-	_, err := io.CopyN(w, msg.Payload, int64(msg.Size))
-	return err
-}
-
-func makeListHeader(length uint32) []byte {
-	if length < 56 {
-		return []byte{byte(length + 0xc0)}
-	}
-	enc := big.NewInt(int64(length)).Bytes()
-	lenb := byte(len(enc)) + 0xf7
-	return append([]byte{lenb}, enc...)
-}
-
-func (rw *frameRW) ReadMsg() (msg Msg, err error) {
-	<-rw.rsync // wait until bufconn is ours
-
-	rw.SetReadDeadline(time.Now().Add(frameReadTimeout))
-
-	// read magic and payload size
-	start := make([]byte, 8)
-	if _, err = io.ReadFull(rw.bufconn, start); err != nil {
-		return msg, err
-	}
-	if !bytes.HasPrefix(start, magicToken) {
-		return msg, fmt.Errorf("bad magic token %x", start[:4], magicToken)
-	}
-	size := binary.BigEndian.Uint32(start[4:])
-
-	// decode start of RLP message to get the message code
-	posr := &postrack{rw.bufconn, 0}
-	s := rlp.NewStream(posr)
-	if _, err := s.List(); err != nil {
-		return msg, err
-	}
-	msg.Code, err = s.Uint()
-	if err != nil {
-		return msg, err
-	}
-	msg.Size = size - posr.p
-
-	rw.SetReadDeadline(time.Now().Add(payloadReadTimeout))
-
-	if msg.Size <= wholePayloadSize {
-		// msg is small, read all of it and move on to the next message.
-		pbuf := make([]byte, msg.Size)
-		if _, err := io.ReadFull(rw.bufconn, pbuf); err != nil {
-			return msg, err
-		}
-		rw.rsync <- struct{}{} // bufconn is available again
-		msg.Payload = bytes.NewReader(pbuf)
-	} else {
-		// lend bufconn to the caller until it has
-		// consumed the payload. eofSignal will send a value
-		// on rw.rsync when EOF is reached.
-		pr := &eofSignal{rw.bufconn, msg.Size, rw.rsync}
-		msg.Payload = pr
-	}
-	return msg, nil
-}
-
-// postrack wraps an rlp.ByteReader with a position counter.
-type postrack struct {
-	r rlp.ByteReader
-	p uint32
-}
-
-func (r *postrack) Read(buf []byte) (int, error) {
-	n, err := r.r.Read(buf)
-	r.p += uint32(n)
-	return n, err
-}
-
-func (r *postrack) ReadByte() (byte, error) {
-	b, err := r.r.ReadByte()
-	if err == nil {
-		r.p++
-	}
-	return b, err
+// SendItems writes an RLP with the given code and data elements.
+// For a call such as:
+//
+//    SendItems(w, code, e1, e2, e3)
+//
+// the message payload will be an RLP list containing the items:
+//
+//    [e1, e2, e3]
+//
+func SendItems(w MsgWriter, msgcode uint64, elems ...interface{}) error {
+	return Send(w, msgcode, elems)
 }
 
 // eofSignal wraps a reader with eof signaling. the eof channel is
@@ -312,7 +176,7 @@ type MsgPipeRW struct {
 	closed  *int32
 }
 
-// WriteMsg sends a messsage on the pipe.
+// WriteMsg sends a message on the pipe.
 // It blocks until the receiver has consumed the message payload.
 func (p *MsgPipeRW) WriteMsg(msg Msg) error {
 	if atomic.LoadInt32(p.closed) == 0 {
@@ -322,7 +186,10 @@ func (p *MsgPipeRW) WriteMsg(msg Msg) error {
 		case p.w <- msg:
 			if msg.Size > 0 {
 				// wait for payload read or discard
-				<-consumed
+				select {
+				case <-consumed:
+				case <-p.closing:
+				}
 			}
 			return nil
 		case <-p.closing:
@@ -344,8 +211,8 @@ func (p *MsgPipeRW) ReadMsg() (Msg, error) {
 }
 
 // Close unblocks any pending ReadMsg and WriteMsg calls on both ends
-// of the pipe. They will return ErrPipeClosed. Note that Close does
-// not interrupt any reads from a message payload.
+// of the pipe. They will return ErrPipeClosed. Close also
+// interrupts any reads from a message payload.
 func (p *MsgPipeRW) Close() error {
 	if atomic.AddInt32(p.closed, 1) != 1 {
 		// someone else is already closing
@@ -353,5 +220,108 @@ func (p *MsgPipeRW) Close() error {
 		return nil
 	}
 	close(p.closing)
+	return nil
+}
+
+// ExpectMsg reads a message from r and verifies that its
+// code and encoded RLP content match the provided values.
+// If content is nil, the payload is discarded and not verified.
+func ExpectMsg(r MsgReader, code uint64, content interface{}) error {
+	msg, err := r.ReadMsg()
+	if err != nil {
+		return err
+	}
+	if msg.Code != code {
+		return fmt.Errorf("message code mismatch: got %d, expected %d", msg.Code, code)
+	}
+	if content == nil {
+		return msg.Discard()
+	}
+	contentEnc, err := rlp.EncodeToBytes(content)
+	if err != nil {
+		panic("content encode error: " + err.Error())
+	}
+	if int(msg.Size) != len(contentEnc) {
+		return fmt.Errorf("message size mismatch: got %d, want %d", msg.Size, len(contentEnc))
+	}
+	actualContent, err := io.ReadAll(msg.Payload)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(actualContent, contentEnc) {
+		return fmt.Errorf("message payload mismatch:\ngot:  %x\nwant: %x", actualContent, contentEnc)
+	}
+	return nil
+}
+
+// msgEventer wraps a MsgReadWriter and sends events whenever a message is sent
+// or received
+type msgEventer struct {
+	MsgReadWriter
+
+	feed          *event.Feed
+	peerID        enode.ID
+	Protocol      string
+	localAddress  string
+	remoteAddress string
+}
+
+// newMsgEventer returns a msgEventer which sends message events to the given
+// feed
+func newMsgEventer(rw MsgReadWriter, feed *event.Feed, peerID enode.ID, proto, remote, local string) *msgEventer {
+	return &msgEventer{
+		MsgReadWriter: rw,
+		feed:          feed,
+		peerID:        peerID,
+		Protocol:      proto,
+		remoteAddress: remote,
+		localAddress:  local,
+	}
+}
+
+// ReadMsg reads a message from the underlying MsgReadWriter and emits a
+// "message received" event
+func (ev *msgEventer) ReadMsg() (Msg, error) {
+	msg, err := ev.MsgReadWriter.ReadMsg()
+	if err != nil {
+		return msg, err
+	}
+	ev.feed.Send(&PeerEvent{
+		Type:          PeerEventTypeMsgRecv,
+		Peer:          ev.peerID,
+		Protocol:      ev.Protocol,
+		MsgCode:       &msg.Code,
+		MsgSize:       &msg.Size,
+		LocalAddress:  ev.localAddress,
+		RemoteAddress: ev.remoteAddress,
+	})
+	return msg, nil
+}
+
+// WriteMsg writes a message to the underlying MsgReadWriter and emits a
+// "message sent" event
+func (ev *msgEventer) WriteMsg(msg Msg) error {
+	err := ev.MsgReadWriter.WriteMsg(msg)
+	if err != nil {
+		return err
+	}
+	ev.feed.Send(&PeerEvent{
+		Type:          PeerEventTypeMsgSend,
+		Peer:          ev.peerID,
+		Protocol:      ev.Protocol,
+		MsgCode:       &msg.Code,
+		MsgSize:       &msg.Size,
+		LocalAddress:  ev.localAddress,
+		RemoteAddress: ev.remoteAddress,
+	})
+	return nil
+}
+
+// Close closes the underlying MsgReadWriter if it implements the io.Closer
+// interface
+func (ev *msgEventer) Close() error {
+	if v, ok := ev.MsgReadWriter.(io.Closer); ok {
+		return v.Close()
+	}
 	return nil
 }
