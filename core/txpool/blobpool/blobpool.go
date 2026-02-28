@@ -135,28 +135,38 @@ type blobTxMeta struct {
 	evictionBlobFeeJumps float64      // Worse blob fee (converted to fee jumps) across all previous nonces
 }
 
+// newStoredBlobTxMeta retrieves the indexed metadata fields from a blob transaction,
+// adds storage specific fields (ID and size), and assembles a helper struct to track in memory.
+// Requires the transaction to have a sidecar (or that we introduce a special version tag for no-sidecar).
+func newStoredBlobTxMeta(tx *types.Transaction, id uint64, storageSize uint32) *blobTxMeta {
+	meta := newBlobTxMeta(tx)
+	meta.id = id
+	meta.storageSize = storageSize
+	return meta
+}
+
 // newBlobTxMeta retrieves the indexed metadata fields from a blob transaction
 // and assembles a helper struct to track in memory.
-// Requires the transaction to have a sidecar (or that we introduce a special version tag for no-sidecar).
-func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transaction) *blobTxMeta {
+// newBlobTxMeta leaves storage specific fields empty. Use newStoredBlobTxMeta
+// to also populate those.
+// Requires the transaction to have a sidecar.
+func newBlobTxMeta(tx *types.Transaction) *blobTxMeta {
 	if tx.BlobTxSidecar() == nil {
 		// This should never happen, as the pool only admits blob transactions with a sidecar
 		panic("missing blob tx sidecar")
 	}
 	meta := &blobTxMeta{
-		hash:        tx.Hash(),
-		vhashes:     tx.BlobHashes(),
-		version:     tx.BlobTxSidecar().Version,
-		id:          id,
-		storageSize: storageSize,
-		size:        size,
-		nonce:       tx.Nonce(),
-		costCap:     uint256.MustFromBig(tx.Cost()),
-		execTipCap:  uint256.MustFromBig(tx.GasTipCap()),
-		execFeeCap:  uint256.MustFromBig(tx.GasFeeCap()),
-		blobFeeCap:  uint256.MustFromBig(tx.BlobGasFeeCap()),
-		execGas:     tx.Gas(),
-		blobGas:     tx.BlobGas(),
+		hash:       tx.Hash(),
+		vhashes:    tx.BlobHashes(),
+		version:    tx.BlobTxSidecar().Version,
+		size:       tx.Size(),
+		nonce:      tx.Nonce(),
+		costCap:    uint256.MustFromBig(tx.Cost()),
+		execTipCap: uint256.MustFromBig(tx.GasTipCap()),
+		execFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
+		blobFeeCap: uint256.MustFromBig(tx.BlobGasFeeCap()),
+		execGas:    tx.Gas(),
+		blobGas:    tx.BlobGas(),
 	}
 	meta.basefeeJumps = dynamicFeeJumps(meta.execFeeCap)
 	meta.blobfeeJumps = dynamicFeeJumps(meta.blobFeeCap)
@@ -531,7 +541,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 		return errors.New("missing blob sidecar")
 	}
 
-	meta := newBlobTxMeta(id, tx.Size(), size, tx)
+	meta := newStoredBlobTxMeta(tx, id, size)
 	if p.lookup.exists(meta.hash) {
 		// This path is only possible after a crash, where deleted items are not
 		// removed via the normal shutdown-startup procedure and thus may get
@@ -1071,7 +1081,7 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	}
 
 	// Update the indices and metrics
-	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), tx)
+	meta := newStoredBlobTxMeta(tx, id, p.store.Size(id))
 	if _, ok := p.index[addr]; !ok {
 		if err := p.reserver.Hold(addr); err != nil {
 			log.Warn("Failed to reserve account for blob pool", "tx", tx.Hash(), "from", addr, "err", err)
@@ -1248,6 +1258,7 @@ func (p *BlobPool) validateTx(tx *types.Transaction) error {
 	if err := p.checkDelegationLimit(tx); err != nil {
 		return err
 	}
+
 	// If the transaction replaces an existing one, ensure that price bumps are
 	// adhered to.
 	var (
@@ -1546,9 +1557,47 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 		}
 		return err
 	}
+
+	// Create meta, in preparation of adding to the pool.
+	// Having the meta simplifies the check below for underpriced transactions.
+	meta := newBlobTxMeta(tx)
+
+	// Calculate the eviction parameters for the transaction
+	var (
+		from, _ = types.Sender(p.signer, tx) // already validated above
+		next    = p.state.GetNonce(from)
+		offset  = int(meta.nonce - next)
+	)
+	meta.evictionExecTip = meta.execTipCap
+	meta.evictionExecFeeJumps = meta.basefeeJumps
+	meta.evictionBlobFeeJumps = meta.blobfeeJumps
+	if meta.nonce > next && len(p.index[from]) >= offset {
+		prev := p.index[from][int(meta.nonce-next-1)]
+		if meta.evictionExecTip.Cmp(prev.evictionExecTip) > 0 {
+			meta.evictionExecTip = prev.evictionExecTip
+		}
+		if meta.evictionExecFeeJumps > prev.evictionExecFeeJumps {
+			meta.evictionExecFeeJumps = prev.evictionExecFeeJumps
+		}
+		if meta.evictionBlobFeeJumps > prev.evictionBlobFeeJumps {
+			meta.evictionBlobFeeJumps = prev.evictionBlobFeeJumps
+		}
+	}
+
+	// Check pool size limits before inserting the transaction
+	// If at limit, check whether it is underpriced.
+	// Note: we do not have the exact storage size yet, so we try to guess
+	// Note: equal priority to worse of pool is still considered underpriced.
+	// This is to prevent constant replacement when the pool is full.
+	if p.stored+meta.size > p.config.Datacap {
+		if p.evict.Underpriced(meta) {
+			log.Trace("Dropping underpriced blob transaction", "tx", tx.Hash(), "feecap", tx.GasFeeCap(), "tipcap", tx.GasTipCap(), "blobfeecap", tx.BlobGasFeeCap())
+			return txpool.ErrUnderpriced
+		}
+	}
+
 	// If the address is not yet known, request exclusivity to track the account
 	// only by this subpool until all transactions are evicted
-	from, _ := types.Sender(p.signer, tx) // already validated above
 	if _, ok := p.index[from]; !ok {
 		if err := p.reserver.Hold(from); err != nil {
 			addNonExclusiveMeter.Mark(1)
@@ -1577,14 +1626,15 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 	if err != nil {
 		return err
 	}
-	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), tx)
+	// Finalize the meta with storage information
+	meta.id = id
+	meta.storageSize = p.store.Size(id)
 
 	var (
-		next   = p.state.GetNonce(from)
-		offset = int(tx.Nonce() - next)
-		newacc = false
+		newacc                  = false
+		oldEvictionExecFeeJumps float64
+		oldEvictionBlobFeeJumps float64
 	)
-	var oldEvictionExecFeeJumps, oldEvictionBlobFeeJumps float64
 	if txs, ok := p.index[from]; ok {
 		oldEvictionExecFeeJumps = txs[len(txs)-1].evictionExecFeeJumps
 		oldEvictionBlobFeeJumps = txs[len(txs)-1].evictionBlobFeeJumps
@@ -1670,6 +1720,15 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 		p.drop()
 	}
 	p.updateStorageMetrics()
+
+	// If we've just dropped the added transaction, it was clearly underpriced.
+	// We've already checked for this with approximate size, but do a final
+	// check in case it was dropped with the exact size.
+	if !p.lookup.exists(tx.Hash()) {
+		log.Trace("Added blob transaction was dropped immediately, indicating underpricing", "hash", tx.Hash())
+		addUnderpricedMeter.Mark(1)
+		return txpool.ErrUnderpriced
+	}
 
 	addValidMeter.Mark(1)
 

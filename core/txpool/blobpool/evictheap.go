@@ -94,6 +94,12 @@ func (h *evictHeap) Less(i, j int) bool {
 	lastI := txsI[len(txsI)-1]
 	lastJ := txsJ[len(txsJ)-1]
 
+	return h.txPrioLt(lastI, lastJ)
+}
+
+// LessTx compares two blobTxMeta entries and returns whether the first has a lower
+// eviction priority than the second.
+func (h *evictHeap) txPrioLt(lastI, lastJ *blobTxMeta) bool {
 	prioI := evictionPriority(h.basefeeJumps, lastI.evictionExecFeeJumps, h.blobfeeJumps, lastI.evictionBlobFeeJumps)
 	if prioI > 0 {
 		prioI = 0
@@ -121,6 +127,20 @@ func (h *evictHeap) Swap(i, j int) {
 func (h *evictHeap) Push(x any) {
 	h.index[x.(common.Address)] = len(h.addrs)
 	h.addrs = append(h.addrs, x.(common.Address))
+}
+
+// Underpriced checks whether the given transaction is underpriced compared to the
+// cheapest transaction in the heap.
+// If a transaction has the same priority as the cheapest, it is still considered
+// underpriced.
+func (h *evictHeap) Underpriced(meta *blobTxMeta) bool {
+	if len(h.addrs) == 0 {
+		return false
+	}
+	cheapestTxs := h.metas[h.addrs[0]]
+	cheapestTx := cheapestTxs[len(cheapestTxs)-1]
+
+	return !h.txPrioLt(cheapestTx, meta)
 }
 
 // Pop implements heap.Interface, removing and returning the last element of the

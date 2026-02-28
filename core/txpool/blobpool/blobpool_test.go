@@ -1359,9 +1359,10 @@ func TestAdd(t *testing.T) {
 	}
 
 	tests := []struct {
-		seeds map[string]seed
-		adds  []addtx
-		block []addtx
+		seeds   map[string]seed
+		adds    []addtx
+		block   []addtx
+		datacap uint64
 	}{
 		// Transactions from new accounts should be accepted if their initial
 		// nonce matches the expected one from the statedb. Higher or lower must
@@ -1715,6 +1716,66 @@ func TestAdd(t *testing.T) {
 				},
 			},
 		},
+		// Transactions above the Datacap should be rejected
+		{
+			seeds: map[string]seed{
+				"alice": {balance: 10000000},
+			},
+			datacap: 1 * (txAvgSize + blobSize + uint64(txBlobOverhead)), // only allow 1 blob
+			adds: []addtx{
+				{ // Fits in capacity
+					from: "alice",
+					tx:   makeUnsignedTx(0, 1, 1, 1),
+				},
+				{ // Beyond capacity
+					from: "alice",
+					tx:   makeUnsignedTx(1, 1, 1, 1),
+					err:  txpool.ErrUnderpriced,
+				},
+			},
+		},
+		// Transactions above the Datacap should be rejected, use eviction values
+		{
+			seeds: map[string]seed{
+				"alice": {
+					balance: 2000000,
+					//nonce:   1,
+					txs: []*types.BlobTx{
+						makeUnsignedTxWithTestBlob(0, 2, 2, 2, 0),
+						makeUnsignedTxWithTestBlob(1, 2, 2, 2, 1),
+					},
+				},
+				"bob": {
+					balance: 1000000,
+					//nonce:   1,
+					txs: []*types.BlobTx{
+						makeUnsignedTxWithTestBlob(0, 3, 3, 3, 2),
+					},
+				},
+			},
+			datacap: 3 * (txAvgSize + blobSize + uint64(txBlobOverhead)), // only allow 2 blobs
+			adds: []addtx{
+				{ // Beyond capacity, but kicking out one from Alice should make it fit
+					from: "bob",
+					tx:   makeUnsignedTxWithTestBlob(1, 3, 3, 3, 3),
+				},
+				{ // We've just kicked our nonce 1, so this is nonce too high
+					from: "alice",
+					tx:   makeUnsignedTxWithTestBlob(2, 1, 2, 2, 4),
+					err:  core.ErrNonceTooHigh,
+				},
+				{ // This should not succeed, fees are low
+					from: "alice",
+					tx:   makeUnsignedTxWithTestBlob(1, 1, 1, 1, 4),
+					err:  txpool.ErrUnderpriced,
+				},
+				{ // This should also not succeed, because of rolling fee calculation
+					from: "alice",
+					tx:   makeUnsignedTxWithTestBlob(1, 1, 1, 1, 4),
+					err:  txpool.ErrUnderpriced,
+				},
+			},
+		},
 	}
 	for i, tt := range tests {
 		// Create a temporary folder for the persistent backend
@@ -1755,11 +1816,16 @@ func TestAdd(t *testing.T) {
 			blobfee: uint256.NewInt(105),
 			statedb: statedb,
 		}
-		pool := New(Config{Datadir: storage}, chain, nil)
+		pool := New(Config{Datadir: storage, Datacap: tt.datacap}, chain, nil)
 		if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 			t.Fatalf("test %d: failed to create blob pool: %v", i, err)
 		}
 		verifyPoolInternals(t, pool)
+
+		// subscibe to pool events to verify they are emitted correctly
+		txsCh := make(chan core.NewTxsEvent, 1)
+		txsSub := pool.SubscribeTransactions(txsCh, false)
+		defer txsSub.Unsubscribe()
 
 		// Add each transaction one by one, verifying the pool internals in between
 		for j, add := range tt.adds {
@@ -1791,6 +1857,33 @@ func TestAdd(t *testing.T) {
 			}
 			// Verify the pool internals after each addition
 			verifyPoolInternals(t, pool)
+			// verify that if the tx was added, an event was emitted
+			txStatus := pool.Status(signed.Hash())
+			select {
+			case ev := <-txsCh:
+				switch {
+				case add.err == nil && txStatus == txpool.TxStatusPending:
+					if len(ev.Txs) != 1 {
+						t.Errorf("test %d, tx %d: event txs length mismatch: have %d, want 1", i, j, len(ev.Txs))
+					}
+					if ev.Txs[0].Hash() != signed.Hash() {
+						t.Errorf("test %d, tx %d: event tx mismatch: have %v, want %v", i, j, ev.Txs[0].Hash(), signed.Hash())
+					}
+				case add.err == nil && txStatus == txpool.TxStatusQueued:
+					t.Errorf("test %d, tx %d: unexpected new tx event for queued tx", i, j)
+				case add.err != nil:
+					t.Errorf("test %d, tx %d: unexpected new tx event for failed tx", i, j)
+				default:
+					t.Errorf("test %d, tx %d: unexpected test result", i, j)
+				}
+			default:
+				switch {
+				case add.err == nil && txStatus == txpool.TxStatusPending:
+					t.Errorf("test %d, tx %d: expected new tx event, none received", i, j)
+				default:
+					// expected no event
+				}
+			}
 		}
 		verifyPoolInternals(t, pool)
 
