@@ -184,7 +184,7 @@ func (it *binaryNodeIterator) Path() []byte {
 
 // NodeBlob returns the serialized bytes of the current node.
 func (it *binaryNodeIterator) NodeBlob() []byte {
-	return SerializeNode(it.current)
+	return SerializeNode(it.current, it.trie.groupDepth)
 }
 
 // Leaf returns true iff the current node is a leaf node.

@@ -59,6 +59,7 @@ var Defaults = Config{
 	StateHistory:            pathdb.Defaults.StateHistory,
 	TrienodeHistory:         pathdb.Defaults.TrienodeHistory,
 	NodeFullValueCheckpoint: pathdb.Defaults.FullValueCheckpoint,
+	BinTrieGroupDepth:       8, // byte-aligned groups by default
 	DatabaseCache:           512,
 	TrieCleanCache:          154,
 	TrieDirtyCache:          256,
@@ -124,6 +125,11 @@ type Config struct {
 	// nodes on top. It can be 'hash', 'path', or none which means use the scheme
 	// consistent with persistent state.
 	StateScheme string `toml:",omitempty"`
+
+	// BinTrieGroupDepth is the number of levels per serialized group in binary trie.
+	// Valid values are 1-8, with 8 being the default (byte-aligned groups).
+	// Lower values create smaller groups with more nodes.
+	BinTrieGroupDepth int `toml:",omitempty"`
 
 	// RequiredBlocks is a set of block number -> hash mappings which must be in the
 	// canonical chain of all remote peers. Setting the option makes geth verify the
