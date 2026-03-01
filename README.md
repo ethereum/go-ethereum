@@ -218,7 +218,10 @@ There are three different solutions depending on your use case:
 Thank you for considering helping out with the source code! We welcome contributions
 from anyone on the internet, and are grateful for even the smallest of fixes!
 
-If you'd like to contribute to go-ethereum, please fork, fix, commit and send a pull request
+If you'd like to contribute to go-ethereum, please start by submitting the
+[request for collaborator status](https://pad.ethereum.org/form/#/3/form/view/8cfd7dbf415489a41cfefb7f4901d549/)
+form. This helps reduce spam PRs and allows us to thoroughly review
+contributions. After that fork, fix, commit and send a pull request
 for the maintainers to review and merge into the main code base. If you wish to submit
 more complex changes though, please check up with the core devs first on [our Discord Server](https://discord.gg/invite/nthXNEv)
 to ensure those changes are in line with the general philosophy of the project and/or get
