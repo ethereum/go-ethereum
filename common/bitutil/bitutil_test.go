@@ -104,6 +104,32 @@ func TestOR(t *testing.T) {
 	}
 }
 
+func TestORBytesInexactOverlap(t *testing.T) {
+	shouldPanic := func(f func()) (ok bool) {
+		defer func() {
+			if r := recover(); r != nil {
+				if r.(string) == "ORBytes: invalid overlap" {
+					ok = true
+				}
+			}
+		}()
+		f()
+		return
+	}
+	a := make([]byte, 5)
+	if ok := shouldPanic(func() {
+		ORBytes(a[1:4], a[0:3], make([]byte, 3))
+	}); !ok {
+		t.Error("expected panic on inexact overlap")
+	}
+
+	if ok := shouldPanic(func() {
+		ORBytes(a[1:4], make([]byte, 3), a[0:3])
+	}); !ok {
+		t.Error("expected panic on inexact overlap")
+	}
+}
+
 // Tests that bit testing works for various alignments.
 func TestTest(t *testing.T) {
 	for align := 0; align < 2; align++ {
