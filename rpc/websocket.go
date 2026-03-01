@@ -324,6 +324,16 @@ func newWebsocketCodec(conn *websocket.Conn, host string, req http.Header, readL
 }
 
 func (wc *websocketCodec) close() {
+	// Send a WebSocket Close frame before closing the underlying connection,
+	// so the server sees a clean 1000 (normal closure) instead of 1006 (abnormal).
+	wc.jsonCodec.encMu.Lock()
+	wc.conn.WriteControl(
+		websocket.CloseMessage,
+		websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
+		time.Now().Add(wsPingWriteTimeout),
+	)
+	wc.jsonCodec.encMu.Unlock()
+
 	wc.jsonCodec.close()
 	wc.wg.Wait()
 }
