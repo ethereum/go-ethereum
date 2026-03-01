@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -65,6 +66,8 @@ type conn struct {
 	log       logger
 	codec     *v5wire.Codec
 	idCounter uint32
+	lastFrom  string
+	lastLocal net.IP
 }
 
 type logger interface {
@@ -200,7 +203,18 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 
 // write sends a packet on the given connection.
 func (tc *conn) write(c net.PacketConn, p v5wire.Packet, challenge *v5wire.Whoareyou) v5wire.Nonce {
-	packet, nonce, err := tc.codec.Encode(tc.remote.ID(), tc.remoteAddr.String(), p, challenge)
+	lip := laddr(c).IP
+	if tc.lastLocal != nil && !tc.lastLocal.Equal(lip) && challenge == nil {
+		// New local endpoint: drop old sessions to avoid reusing them across IPs.
+		tc.codec = v5wire.NewCodec(tc.localNode, tc.localKey, mclock.System{}, nil)
+	}
+	tc.lastLocal = slices.Clone(lip)
+
+	addr := tc.remoteAddr.String()
+	if challenge != nil && tc.lastFrom != "" {
+		addr = tc.lastFrom
+	}
+	packet, nonce, err := tc.codec.Encode(tc.remote.ID(), addr, p, challenge)
 	if err != nil {
 		panic(fmt.Errorf("can't encode %v packet: %v", p.Name(), err))
 	}
@@ -222,6 +236,7 @@ func (tc *conn) read(c net.PacketConn) v5wire.Packet {
 	if err != nil {
 		return &readError{err}
 	}
+	tc.lastFrom = fromAddr.String()
 	_, _, p, err := tc.codec.Decode(buf[:n], fromAddr.String())
 	if err != nil {
 		return &readError{err}
