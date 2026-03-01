@@ -21,6 +21,7 @@ import (
 	"container/heap"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/big"
 	"os"
@@ -133,6 +134,67 @@ type blobTxMeta struct {
 	evictionExecTip      *uint256.Int // Worst gas tip across all previous nonces
 	evictionExecFeeJumps float64      // Worst base fee (converted to fee jumps) across all previous nonces
 	evictionBlobFeeJumps float64      // Worse blob fee (converted to fee jumps) across all previous nonces
+}
+
+type blobTxMetaMarshal struct {
+	Hash    common.Hash
+	Vhashes []common.Hash
+	Version byte
+
+	ID          uint64
+	StorageSize uint32
+	Size        uint64
+
+	Nonce      uint64
+	CostCap    *uint256.Int
+	ExecTipCap *uint256.Int
+	ExecFeeCap *uint256.Int
+	BlobFeeCap *uint256.Int
+	ExecGas    uint64
+	BlobGas    uint64
+}
+
+// EncodeRLP encodes the blobTxMeta into the given writer.
+func (b *blobTxMeta) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, &blobTxMetaMarshal{
+		Hash:        b.hash,
+		Vhashes:     b.vhashes,
+		Version:     b.version,
+		ID:          b.id,
+		StorageSize: b.storageSize,
+		Size:        b.size,
+		Nonce:       b.nonce,
+		CostCap:     b.costCap,
+		ExecTipCap:  b.execTipCap,
+		ExecFeeCap:  b.execFeeCap,
+		BlobFeeCap:  b.blobFeeCap,
+		ExecGas:     b.execGas,
+		BlobGas:     b.blobGas,
+	})
+}
+
+// DecodeRLP decodes the blobTxMeta from the given stream.
+func (b *blobTxMeta) DecodeRLP(s *rlp.Stream) error {
+	var meta blobTxMetaMarshal
+	if err := s.Decode(&meta); err != nil {
+		return err
+	}
+	b.hash = meta.Hash
+	b.vhashes = meta.Vhashes
+	b.version = meta.Version
+	b.id = meta.ID
+	b.storageSize = meta.StorageSize
+	b.size = meta.Size
+	b.nonce = meta.Nonce
+	b.costCap = meta.CostCap
+	b.execTipCap = meta.ExecTipCap
+	b.execFeeCap = meta.ExecFeeCap
+	b.blobFeeCap = meta.BlobFeeCap
+	b.execGas = meta.ExecGas
+	b.blobGas = meta.BlobGas
+	b.basefeeJumps = dynamicFeeJumps(meta.ExecFeeCap)
+	b.blobfeeJumps = dynamicFeeJumps(meta.BlobFeeCap)
+	return nil
 }
 
 // newBlobTxMeta retrieves the indexed metadata fields from a blob transaction
@@ -477,6 +539,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 		p.Close()
 		return err
 	}
+
 	// Set the configured gas tip, triggering a filtering of anything just loaded
 	basefeeGauge.Update(int64(basefee.Uint64()))
 	blobfeeGauge.Update(int64(blobfee.Uint64()))
@@ -595,7 +658,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 
 			// Included transactions blobs need to be moved to the limbo
 			if filled && inclusions != nil {
-				p.offload(addr, txs[i].nonce, txs[i].id, inclusions)
+				p.offload(addr, txs[i], inclusions)
 			}
 		}
 		delete(p.index, addr)
@@ -636,7 +699,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 
 			// Included transactions blobs need to be moved to the limbo
 			if inclusions != nil {
-				p.offload(addr, txs[0].nonce, txs[0].id, inclusions)
+				p.offload(addr, txs[0], inclusions)
 			}
 			txs = txs[1:]
 		}
@@ -815,23 +878,13 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 // any of it since there's no clear error case. Some errors may be due to coding
 // issues, others caused by signers mining MEV stuff or swapping transactions. In
 // all cases, the pool needs to continue operating.
-func (p *BlobPool) offload(addr common.Address, nonce uint64, id uint64, inclusions map[common.Hash]uint64) {
-	data, err := p.store.Get(id)
-	if err != nil {
-		log.Error("Blobs missing for included transaction", "from", addr, "nonce", nonce, "id", id, "err", err)
-		return
-	}
-	var tx types.Transaction
-	if err = rlp.DecodeBytes(data, &tx); err != nil {
-		log.Error("Blobs corrupted for included transaction", "from", addr, "nonce", nonce, "id", id, "err", err)
-		return
-	}
-	block, ok := inclusions[tx.Hash()]
+func (p *BlobPool) offload(addr common.Address, meta *blobTxMeta, inclusions map[common.Hash]uint64) {
+	block, ok := inclusions[meta.hash]
 	if !ok {
-		log.Warn("Blob transaction swapped out by signer", "from", addr, "nonce", nonce, "id", id)
+		log.Warn("Blob transaction swapped out by signer", "from", addr, "nonce", meta.nonce, "id", meta.id)
 		return
 	}
-	if err := p.limbo.push(&tx, block); err != nil {
+	if err := p.limbo.push(meta, block); err != nil {
 		log.Warn("Failed to offload blob tx into limbo", "err", err)
 		return
 	}
@@ -881,7 +934,12 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	}
 	// Flush out any blobs from limbo that are older than the latest finality
 	if p.chain.Config().IsCancun(newHead.Number, newHead.Time) {
-		p.limbo.finalize(p.chain.CurrentFinalBlock())
+		// Delete all limboed transactions up to the finalized block.
+		p.limbo.finalize(p.chain.CurrentFinalBlock(), func(id uint64, txHash common.Hash) {
+			if err := p.store.Delete(id); err != nil {
+				log.Error("Failed to delete blob transaction", "hash", txHash, "id", id, "err", err)
+			}
+		})
 	}
 	// Reset the price heap for the new set of basefee/blobfee pairs
 	var (
@@ -1035,46 +1093,14 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	// Retrieve the associated blob from the limbo. Without the blobs, we cannot
 	// add the transaction back into the pool as it is not mineable.
-	tx, err := p.limbo.pull(txhash)
+	meta, err := p.limbo.pull(txhash)
 	if err != nil {
 		log.Error("Blobs unavailable, dropping reorged tx", "err", err)
 		return err
 	}
-	// TODO: seems like an easy optimization here would be getting the serialized tx
-	// from limbo instead of re-serializing it here.
-
-	// Converts reorged-out legacy blob transactions to the new format to prevent
-	// them from becoming stuck in the pool until eviction.
-	//
-	// Performance note: Conversion takes ~140ms (Mac M1 Pro). Since a maximum of
-	// 9 legacy blob transactions are allowed in a block pre-Osaka, an adversary
-	// could theoretically halt a Geth node for ~1.2s by reorging per block. However,
-	// this attack is financially inefficient to execute.
-	head := p.head.Load()
-	if p.chain.Config().IsOsaka(head.Number, head.Time) && tx.BlobTxSidecar().Version == types.BlobSidecarVersion0 {
-		if err := tx.BlobTxSidecar().ToV1(); err != nil {
-			log.Error("Failed to convert the legacy sidecar", "err", err)
-			return err
-		}
-		log.Info("Legacy blob transaction is reorged", "hash", tx.Hash())
-	}
-	// Serialize the transaction back into the primary datastore.
-	blob, err := rlp.EncodeToBytes(tx)
-	if err != nil {
-		log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
-		return err
-	}
-	id, err := p.store.Put(blob)
-	if err != nil {
-		log.Error("Failed to write transaction into storage", "hash", tx.Hash(), "err", err)
-		return err
-	}
-
-	// Update the indices and metrics
-	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), tx)
 	if _, ok := p.index[addr]; !ok {
 		if err := p.reserver.Hold(addr); err != nil {
-			log.Warn("Failed to reserve account for blob pool", "tx", tx.Hash(), "from", addr, "err", err)
+			log.Warn("Failed to reserve account for blob pool", "tx", meta.hash, "from", addr, "err", err)
 			return err
 		}
 		p.index[addr] = []*blobTxMeta{meta}
