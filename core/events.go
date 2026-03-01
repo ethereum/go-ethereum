@@ -26,6 +26,16 @@ import (
 // NewTxsEvent is posted when a batch of transactions enter the transaction pool.
 type NewTxsEvent struct{ Txs []*types.Transaction }
 
+type NewTxHashesEvent struct{ Hashes []common.Hash }
+
+func NewTxHashesEventFromTxs(txs []*types.Transaction) NewTxHashesEvent {
+	hashes := make([]common.Hash, 0, len(txs))
+	for _, tx := range txs {
+		hashes = append(hashes, tx.Hash())
+	}
+	return NewTxHashesEvent{Hashes: hashes}
+}
+
 // RemovedLogsEvent is posted when a reorg happens
 type RemovedLogsEvent struct{ Logs []*types.Log }
 

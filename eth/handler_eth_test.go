@@ -240,8 +240,8 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 
 	handler.handler.synced.Store(true) // mark synced to accept transactions
 
-	txs := make(chan core.NewTxsEvent)
-	sub := handler.txpool.SubscribeTransactions(txs, false)
+	txs := make(chan core.NewTxHashesEvent)
+	sub := handler.txpool.SubscribePropagationHashes(txs)
 	defer sub.Unsubscribe()
 
 	// Create a source peer to send messages through and a sink handler to receive them
@@ -271,10 +271,10 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 	}
 	select {
 	case event := <-txs:
-		if len(event.Txs) != 1 {
-			t.Errorf("wrong number of added transactions: got %d, want 1", len(event.Txs))
-		} else if event.Txs[0].Hash() != tx.Hash() {
-			t.Errorf("added wrong tx hash: got %v, want %v", event.Txs[0].Hash(), tx.Hash())
+		if len(event.Hashes) != 1 {
+			t.Errorf("wrong number of added transactions: got %d, want 1", len(event.Hashes))
+		} else if event.Hashes[0] != tx.Hash() {
+			t.Errorf("added wrong tx hash: got %v, want %v", event.Hashes[0], tx.Hash())
 		}
 	case <-time.After(2 * time.Second):
 		t.Errorf("no NewTxsEvent received within 2 seconds")
@@ -397,7 +397,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	for i := 0; i < len(sinks); i++ {
 		txChs[i] = make(chan core.NewTxsEvent, 1024)
 
-		sub := sinks[i].txpool.SubscribeTransactions(txChs[i], false)
+		sub := sinks[i].txpool.SubscribeTransactions(txChs[i])
 		defer sub.Unsubscribe()
 	}
 	// Fill the source pool with transactions and wait for them at the sinks

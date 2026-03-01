@@ -232,6 +232,7 @@ type LegacyPool struct {
 	chain       BlockChain
 	gasTip      atomic.Pointer[uint256.Int]
 	txFeed      event.Feed
+	hashFeed    event.Feed
 	signer      types.Signer
 	mu          sync.RWMutex
 
@@ -400,14 +401,19 @@ func (pool *LegacyPool) Reset(oldHead, newHead *types.Header) {
 	<-wait
 }
 
+// TODO: comment
 // SubscribeTransactions registers a subscription for new transaction events,
 // supporting feeding only newly seen or also resurrected transactions.
-func (pool *LegacyPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
+func (pool *LegacyPool) SubscribeTransactions(ch chan<- core.NewTxsEvent) event.Subscription {
 	// The legacy pool has a very messed up internal shuffling, so it's kind of
 	// hard to separate newly discovered transaction from resurrected ones. This
 	// is because the new txs are added to the queue, resurrected ones too and
 	// reorgs run lazily, so separating the two would need a marker.
 	return pool.txFeed.Subscribe(ch)
+}
+
+func (pool *LegacyPool) SubscribePropagationHashes(ch chan<- core.NewTxHashesEvent) event.Subscription {
+	return pool.hashFeed.Subscribe(ch)
 }
 
 // SetGasTip updates the minimum gas tip required by the transaction pool for a
@@ -1029,9 +1035,11 @@ func (pool *LegacyPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 	if tx == nil {
 		return nil
 	}
+	sender, _ := types.Sender(pool.signer, tx)
 	return &txpool.TxMetadata{
-		Type: tx.Type(),
-		Size: tx.Size(),
+		Type:   tx.Type(),
+		Size:   tx.Size(),
+		Sender: sender,
 	}
 }
 
@@ -1294,6 +1302,7 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 			txs = append(txs, set.Flatten()...)
 		}
 		pool.txFeed.Send(core.NewTxsEvent{Txs: txs})
+		pool.hashFeed.Send(core.NewTxHashesEventFromTxs(txs))
 	}
 }
 
