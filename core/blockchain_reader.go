@@ -371,7 +371,7 @@ func (bc *BlockChain) TxIndexDone() bool {
 
 // HasState checks if state trie is fully present in the database or not.
 func (bc *BlockChain) HasState(hash common.Hash) bool {
-	_, err := bc.statedb.OpenTrie(hash)
+	_, err := bc.triedb.NodeReader(hash)
 	return err == nil
 }
 
@@ -403,7 +403,7 @@ func (bc *BlockChain) stateRecoverable(root common.Hash) bool {
 func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) []byte {
 	// TODO(rjl493456442) The associated account address is also required
 	// in Verkle scheme. Fix it once snap-sync is supported for Verkle.
-	return bc.statedb.ContractCodeWithPrefix(common.Address{}, hash)
+	return bc.codedb.Reader().CodeWithPrefix(common.Address{}, hash)
 }
 
 // State returns a new mutable state based on the current HEAD block.
@@ -413,14 +413,14 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 
 // StateAt returns a new mutable state based on a particular point in time.
 func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, bc.statedb)
+	return state.New(root, state.NewDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
 }
 
 // HistoricState returns a historic state specified by the given root.
 // Live states are not available and won't be served, please use `State`
 // or `StateAt` instead.
 func (bc *BlockChain) HistoricState(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, state.NewHistoricDatabase(bc.db, bc.triedb))
+	return state.New(root, state.NewHistoricDatabase(bc.triedb, bc.codedb))
 }
 
 // Config retrieves the chain's fork configuration.
@@ -442,11 +442,6 @@ func (bc *BlockChain) Validator() Validator {
 // Processor returns the current processor.
 func (bc *BlockChain) Processor() Processor {
 	return bc.processor
-}
-
-// StateCache returns the caching database underpinning the blockchain instance.
-func (bc *BlockChain) StateCache() state.Database {
-	return bc.statedb
 }
 
 // GasLimit returns the gas limit of the current HEAD block.
@@ -490,6 +485,11 @@ func (bc *BlockChain) HistoryPruningCutoff() (uint64, common.Hash) {
 // TrieDB retrieves the low level trie database used for data storage.
 func (bc *BlockChain) TrieDB() *triedb.Database {
 	return bc.triedb
+}
+
+// CodeDB retrieves the low level contract code database used for data storage.
+func (bc *BlockChain) CodeDB() *state.CodeDB {
+	return bc.codedb
 }
 
 // HeaderChain returns the underlying header chain.

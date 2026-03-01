@@ -157,7 +157,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			}
 			return err
 		}
-		statedb, err := state.New(blockchain.GetBlockByHash(block.ParentHash()).Root(), blockchain.statedb)
+		statedb, err := state.New(blockchain.GetBlockByHash(block.ParentHash()).Root(), state.NewDatabase(blockchain.triedb, blockchain.codedb))
 		if err != nil {
 			return err
 		}
