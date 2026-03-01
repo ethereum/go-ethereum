@@ -79,6 +79,8 @@ func (c *committer) commit(path []byte, n node, parallel bool) node {
 		return cn
 	case hashNode:
 		return cn
+	case *expiredNode:
+		return cn
 	default:
 		// nil, valuenode shouldn't be committed
 		panic(fmt.Sprintf("%T: invalid node: %v", n, n))

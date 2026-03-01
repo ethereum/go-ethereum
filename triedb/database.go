@@ -385,6 +385,28 @@ func (db *Database) Disk() ethdb.Database {
 	return db.disk
 }
 
+// DiffHead returns the root hash of the topmost diff layer in pathdb.
+// If there are no diff layers or the backend is not pathdb, it returns
+// the zero hash and false.
+func (db *Database) DiffHead() (common.Hash, bool) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return common.Hash{}, false
+	}
+	return pdb.DiffHead()
+}
+
+// DisableStateHistory closes and disables the state history freezer.
+// This is used by the archiver to bypass state history writes during
+// diff layer flushing when state history may have gaps.
+func (db *Database) DisableStateHistory() {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return
+	}
+	pdb.DisableStateHistory()
+}
+
 // SnapshotCompleted returns the indicator if the snapshot is completed.
 func (db *Database) SnapshotCompleted() bool {
 	pdb, ok := db.backend.(*pathdb.Database)
