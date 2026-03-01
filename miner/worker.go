@@ -140,9 +140,6 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 		// If forceOverrides is true and overrideTxs is not empty, commit the override transactions
 		// otherwise, fill the block with the current transactions from the txpool
 		if genParam.forceOverrides && len(genParam.overrideTxs) > 0 {
-			if work.gasPool == nil {
-				work.gasPool = new(core.GasPool).AddGas(work.header.GasLimit)
-			}
 			for _, tx := range genParam.overrideTxs {
 				work.state.SetTxContext(tx.Hash(), work.tcount)
 				if err := miner.commitTransaction(work, tx); err != nil {
@@ -319,6 +316,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 		state:    state,
 		size:     uint64(header.Size()),
 		coinbase: coinbase,
+		gasPool:  core.NewGasPool(header.GasLimit),
 		header:   header,
 		witness:  state.Witness(),
 		evm:      vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{}),
@@ -372,24 +370,20 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*types.Receipt, error) {
 	var (
 		snap = env.state.Snapshot()
-		gp   = env.gasPool.Gas()
+		gp   = env.gasPool.Snapshot()
 	)
-	receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx, &env.header.GasUsed)
+	receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
-		env.gasPool.SetGas(gp)
+		env.gasPool.Set(gp)
+		return nil, err
 	}
-	return receipt, err
+	env.header.GasUsed = env.gasPool.Used()
+	return receipt, nil
 }
 
 func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
-	var (
-		isCancun = miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
-		gasLimit = env.header.GasLimit
-	)
-	if env.gasPool == nil {
-		env.gasPool = new(core.GasPool).AddGas(gasLimit)
-	}
+	isCancun := miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
 	for {
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {

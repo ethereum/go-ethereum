@@ -21,39 +21,87 @@ import (
 	"math"
 )
 
-// GasPool tracks the amount of gas available during execution of the transactions
-// in a block. The zero value is a pool with zero gas available.
-type GasPool uint64
+// GasPool tracks the amount of gas available for transaction execution
+// within a block, along with the cumulative gas consumed.
+type GasPool struct {
+	remaining      uint64
+	initial        uint64
+	cumulativeUsed uint64
+}
 
-// AddGas makes gas available for execution.
-func (gp *GasPool) AddGas(amount uint64) *GasPool {
-	if uint64(*gp) > math.MaxUint64-amount {
-		panic("gas pool pushed above uint64")
+// NewGasPool initializes the gasPool with the given amount.
+func NewGasPool(amount uint64) *GasPool {
+	return &GasPool{
+		remaining: amount,
+		initial:   amount,
 	}
-	*(*uint64)(gp) += amount
-	return gp
 }
 
 // SubGas deducts the given amount from the pool if enough gas is
 // available and returns an error otherwise.
 func (gp *GasPool) SubGas(amount uint64) error {
-	if uint64(*gp) < amount {
+	if gp.remaining < amount {
 		return ErrGasLimitReached
 	}
-	*(*uint64)(gp) -= amount
+	gp.remaining -= amount
+	return nil
+}
+
+// ReturnGas adds the refunded gas back to the pool and updates
+// the cumulative gas usage accordingly.
+func (gp *GasPool) ReturnGas(returned uint64, gasUsed uint64) error {
+	if gp.remaining > math.MaxUint64-returned {
+		return fmt.Errorf("%w: remaining: %d, returned: %d", ErrGasLimitOverflow, gp.remaining, returned)
+	}
+	// The returned gas calculation differs across forks.
+	//
+	// - Pre-Amsterdam:
+	//   returned = purchased - remaining (refund included)
+	//
+	// - Post-Amsterdam:
+	//   returned = purchased - gasUsed (refund excluded)
+	gp.remaining += returned
+
+	// gasUsed = max(txGasUsed - gasRefund, calldataFloorGasCost)
+	// regardless of Amsterdam is activated or not.
+	gp.cumulativeUsed += gasUsed
 	return nil
 }
 
 // Gas returns the amount of gas remaining in the pool.
 func (gp *GasPool) Gas() uint64 {
-	return uint64(*gp)
+	return gp.remaining
 }
 
-// SetGas sets the amount of gas with the provided number.
-func (gp *GasPool) SetGas(gas uint64) {
-	*(*uint64)(gp) = gas
+// CumulativeUsed returns the amount of cumulative consumed gas (refunded included).
+func (gp *GasPool) CumulativeUsed() uint64 {
+	return gp.cumulativeUsed
+}
+
+// Used returns the amount of consumed gas.
+func (gp *GasPool) Used() uint64 {
+	if gp.initial < gp.remaining {
+		panic("gas used underflow")
+	}
+	return gp.initial - gp.remaining
+}
+
+// Snapshot returns the deep-copied object as the snapshot.
+func (gp *GasPool) Snapshot() *GasPool {
+	return &GasPool{
+		initial:        gp.initial,
+		remaining:      gp.remaining,
+		cumulativeUsed: gp.cumulativeUsed,
+	}
+}
+
+// Set sets the content of gasPool with the provided one.
+func (gp *GasPool) Set(other *GasPool) {
+	gp.initial = other.initial
+	gp.remaining = other.remaining
+	gp.cumulativeUsed = other.cumulativeUsed
 }
 
 func (gp *GasPool) String() string {
-	return fmt.Sprintf("%d", *gp)
+	return fmt.Sprintf("initial: %d, remaining: %d, cumulative used: %d", gp.initial, gp.remaining, gp.cumulativeUsed)
 }
