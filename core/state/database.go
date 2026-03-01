@@ -221,19 +221,33 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	return newReader(newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache), sr), nil
 }
 
-// ReadersWithCacheStats creates a pair of state readers that share the same
-// underlying state reader and internal state cache, while maintaining separate
-// statistics respectively.
-func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (ReaderWithStats, ReaderWithStats, error) {
+// ReadersWithCache creates a pair of state readers that share the same
+// underlying state reader and internal state cache, while maintaining
+// separate statistics respectively.
+func (db *CachingDB) ReadersWithCache(stateRoot common.Hash) (Reader, Reader, error) {
 	r, err := db.StateReader(stateRoot)
 	if err != nil {
 		return nil, nil, err
 	}
 	sr := newStateReaderWithCache(r)
-
-	ra := newReaderWithStats(sr, newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache))
-	rb := newReaderWithStats(sr, newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache))
+	ra := newReader(newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache), newStateReaderWithStats(sr))
+	rb := newReader(newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache), newStateReaderWithStats(sr))
 	return ra, rb, nil
+}
+
+// ReaderEIP7928 creates a state reader with the manner of Block-level accessList.
+func (db *CachingDB) ReaderEIP7928(stateRoot common.Hash, accessList map[common.Address][]common.Hash, threads int) (Reader, error) {
+	base, err := db.StateReader(stateRoot)
+	if err != nil {
+		return nil, err
+	}
+	// Construct the state reader with native cache and associated statistics
+	r := newStateReaderWithStats(newStateReaderWithCache(base))
+
+	// Construct the state reader with background prefetching
+	pr := newPrefetchStateReader(r, accessList, threads)
+
+	return newReader(newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache), pr), nil
 }
 
 // OpenTrie opens the main account trie at a specific root hash.

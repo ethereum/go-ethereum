@@ -2095,7 +2095,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		//
 		// Note: the main processor and prefetcher share the same reader with a local
 		// cache for mitigating the overhead of state access.
-		prefetch, process, err := bc.statedb.ReadersWithCacheStats(parentRoot)
+		prefetch, process, err := bc.statedb.ReadersWithCache(parentRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -2110,8 +2110,12 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		// Upload the statistics of reader at the end
 		defer func() {
 			if result != nil {
-				result.stats.StatePrefetchCacheStats = prefetch.GetStats()
-				result.stats.StateReadCacheStats = process.GetStats()
+				if stater, ok := prefetch.(state.ReaderStater); ok {
+					result.stats.StatePrefetchCacheStats = stater.GetStats()
+				}
+				if stater, ok := process.(state.ReaderStater); ok {
+					result.stats.StateReadCacheStats = stater.GetStats()
+				}
 			}
 		}()
 		go func(start time.Time, throwaway *state.StateDB, block *types.Block) {
