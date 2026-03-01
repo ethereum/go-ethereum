@@ -54,6 +54,22 @@ func TestToFilterArg(t *testing.T) {
 			nil,
 		},
 		{
+			// empty Addresses slice must be treated same as nil:
+			// the "address" field must be omitted so that non-Geth nodes
+			// (e.g. Hedera) do not reject the request with an error.
+			"with empty addresses slice",
+			ethereum.FilterQuery{
+				Addresses: []common.Address{},
+				FromBlock: big.NewInt(1),
+				ToBlock:   big.NewInt(2),
+			},
+			map[string]interface{}{
+				"fromBlock": "0x1",
+				"toBlock":   "0x2",
+			},
+			nil,
+		},
+		{
 			"without BlockHash",
 			ethereum.FilterQuery{
 				Addresses: addresses,
