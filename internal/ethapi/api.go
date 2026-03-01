@@ -823,6 +823,13 @@ func (api *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockN
 	if err != nil {
 		return nil, err
 	}
+
+	if result.UsedGas > gomath.MaxInt64 {
+		rpcEthCallGasUsedHist.Update(gomath.MaxInt64)
+	} else {
+		rpcEthCallGasUsedHist.Update(int64(result.UsedGas))
+	}
+
 	if errors.Is(result.Err, vm.ErrExecutionReverted) {
 		return nil, newRevertError(result.Revert())
 	}
