@@ -491,7 +491,7 @@ var (
 	CacheFlag = &cli.IntFlag{
 		Name:     "cache",
 		Usage:    "Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode)",
-		Value:    1024,
+		Value:    4096,
 		Category: flags.PerfCategory,
 	}
 	CacheDatabaseFlag = &cli.IntFlag{
