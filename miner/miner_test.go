@@ -21,9 +21,11 @@ import (
 	"math/big"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -35,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/holiman/uint256"
 )
 
 type mockBackend struct {
@@ -165,4 +168,117 @@ func createMiner(t *testing.T) *Miner {
 	backend := NewMockBackend(bc, txpool)
 	miner := New(backend, config, engine)
 	return miner
+}
+
+// MockTxPool satisfies the miner.TxPool interface
+type MockTxPool struct {
+	txs []*types.Transaction
+}
+
+func NewMockTxPool(txs []*types.Transaction) *MockTxPool {
+	return &MockTxPool{txs: txs}
+}
+
+// Pending returns our specific list of transactions grouped by sender
+func (m *MockTxPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
+	result := make(map[common.Address][]*txpool.LazyTransaction)
+	for _, tx := range m.txs {
+		lazyTx := &txpool.LazyTransaction{
+			Hash:      tx.Hash(),
+			Tx:        tx,
+			Time:      tx.Time(),
+			GasFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
+			GasTipCap: uint256.MustFromBig(tx.GasTipCap()),
+			Gas:       tx.Gas(),
+		}
+
+		signer := types.LatestSignerForChainID(tx.ChainId())
+		from, _ := types.Sender(signer, tx)
+
+		result[from] = append(result[from], lazyTx)
+	}
+	return result
+}
+
+func TestMinerBlockProduction(t *testing.T) {
+	var (
+		key, _  = crypto.HexToECDSA("b81c71a67e1177ad4e501695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr    = crypto.PubkeyToAddress(key.PublicKey)
+		chainDB = rawdb.NewMemoryDatabase()
+
+		gspec = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc: types.GenesisAlloc{
+				addr: {Balance: big.NewInt(1000000000000000000)},
+			},
+		}
+	)
+
+	blockchain, err := core.NewBlockChain(chainDB, gspec, ethash.NewFaker(), core.DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create blockchain: %v", err)
+	}
+	defer blockchain.Stop()
+
+	signer := types.LatestSigner(params.TestChainConfig)
+	txs := make([]*types.Transaction, 3)
+	for i := 0; i < 3; i++ {
+		tx, _ := types.SignTx(types.NewTransaction(
+			uint64(i),
+			common.HexToAddress("0xDeadBeef"),
+			big.NewInt(1000),
+			21000,
+			big.NewInt(1000000000),
+			nil,
+		), signer, key)
+		txs[i] = tx
+	}
+
+	// Setting up the mock Tx pool
+	mockPool := NewMockTxPool(txs)
+	backend := &testWorkerBackend{
+		chain: blockchain,
+	}
+	config := Config{
+		Etherbase: common.Address{0x1},
+		Recommit:  100 * time.Millisecond,
+		GasCeil:   gspec.GasLimit,
+	}
+	miner := New(backend, config, blockchain.Engine())
+	miner.txpool = mockPool
+
+	parent := blockchain.CurrentBlock()
+	args := &BuildPayloadArgs{
+		Parent:       parent.Hash(),
+		Timestamp:    uint64(time.Now().Unix()),
+		FeeRecipient: common.Address{0x1},
+		Random:       common.Hash{},
+		Withdrawals:  []*types.Withdrawal{},
+	}
+
+	payload, err := miner.BuildPayload(args, false)
+	if err != nil {
+		t.Fatalf("Failed to start build payload: %v", err)
+	}
+
+	envelope := payload.ResolveFull()
+	if envelope == nil {
+		t.Fatalf("ResolveFull returned nil")
+	}
+
+	block := payload.full
+
+	if block == nil {
+		t.Fatalf("Miner failed to produce a full block")
+	}
+
+	if len(block.Transactions()) != 3 {
+		t.Errorf("Expected 3 transactions, got %d", len(block.Transactions()))
+	}
+
+	for i, tx := range block.Transactions() {
+		if tx.Hash() != txs[i].Hash() {
+			t.Errorf("Transaction %d mismatch. Expected %x, got %x", i, txs[i].Hash(), tx.Hash())
+		}
+	}
 }
