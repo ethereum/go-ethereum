@@ -27,8 +27,9 @@ func TestTableDatabase(t *testing.T)            { testTableDatabase(t, "prefix")
 func TestEmptyPrefixTableDatabase(t *testing.T) { testTableDatabase(t, "") }
 
 type testReplayer struct {
-	puts [][]byte
-	dels [][]byte
+	puts      [][]byte
+	dels      [][]byte
+	delRanges [][2][]byte
 }
 
 func (r *testReplayer) Put(key []byte, value []byte) error {
@@ -38,6 +39,11 @@ func (r *testReplayer) Put(key []byte, value []byte) error {
 
 func (r *testReplayer) Delete(key []byte) error {
 	r.dels = append(r.dels, key)
+	return nil
+}
+
+func (r *testReplayer) DeleteRange(start, end []byte) error {
+	r.delRanges = append(r.delRanges, [2][]byte{start, end})
 	return nil
 }
 
@@ -125,6 +131,56 @@ func testTableDatabase(t *testing.T, prefix string) {
 	// Test iterators with prefix and start point
 	check(db.NewIterator([]byte{0xee}, nil), 0, 0)
 	check(db.NewIterator(nil, []byte{0x00}), 6, 0)
+
+	// Test batch replayer with DeleteRange
+	db2 := NewTable(NewMemoryDatabase(), prefix)
+	for _, entry := range entries {
+		db2.Put(entry.key, entry.value)
+	}
+	batch2 := db2.NewBatch()
+	batch2.Put([]byte{0x07, 0x08}, []byte{0x10, 0x11})
+	batch2.DeleteRange([]byte{0x01, 0x02}, []byte{0x05, 0x06})
+	batch2.Delete([]byte{0xff, 0xff, 0x03})
+
+	// Replay into another batch (tests tableReplayer.DeleteRange via batch-to-batch)
+	batch3 := db2.NewBatch()
+	if err := batch2.Replay(batch3); err != nil {
+		t.Fatalf("Failed to replay batch with DeleteRange: %v", err)
+	}
+	if err := batch3.Write(); err != nil {
+		t.Fatalf("Failed to write replayed batch: %v", err)
+	}
+	// Keys in range [0x01,0x02 .. 0x05,0x06) should be deleted
+	for _, key := range [][]byte{{0x01, 0x02}, {0x03, 0x04}} {
+		if _, err := db2.Get(key); err == nil {
+			t.Fatalf("Key %x should be deleted after replayed DeleteRange", key)
+		}
+	}
+	// Key 0x05,0x06 should still exist (exclusive end)
+	if _, err := db2.Get([]byte{0x05, 0x06}); err != nil {
+		t.Fatalf("Key 0x0506 should exist (exclusive end): %v", err)
+	}
+	// New key should exist
+	if _, err := db2.Get([]byte{0x07, 0x08}); err != nil {
+		t.Fatalf("Key 0x0708 should exist after replay: %v", err)
+	}
+	// Deleted single key should be gone
+	if _, err := db2.Get([]byte{0xff, 0xff, 0x03}); err == nil {
+		t.Fatal("Key 0xffff03 should be deleted after replay")
+	}
+
+	// Replay into a testReplayer to verify prefix stripping
+	r2 := &testReplayer{}
+	batch2.Replay(r2)
+	if len(r2.delRanges) != 1 {
+		t.Fatalf("Expected 1 DeleteRange in replay, got %d", len(r2.delRanges))
+	}
+	if !bytes.Equal(r2.delRanges[0][0], []byte{0x01, 0x02}) {
+		t.Fatalf("DeleteRange start mismatch: want=%x, got=%x", []byte{0x01, 0x02}, r2.delRanges[0][0])
+	}
+	if !bytes.Equal(r2.delRanges[0][1], []byte{0x05, 0x06}) {
+		t.Fatalf("DeleteRange end mismatch: want=%x, got=%x", []byte{0x05, 0x06}, r2.delRanges[0][1])
+	}
 
 	// Test range deletion
 	db.DeleteRange(nil, nil)
