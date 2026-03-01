@@ -24,6 +24,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -140,4 +141,42 @@ func (api *AdminAPI) ImportChain(file string) (bool, error) {
 		blocks = blocks[:0]
 	}
 	return true, nil
+}
+
+// NodeCapabilities describes the historical data availability of this node.
+// It is returned by the admin_capabilities RPC method so callers can determine
+// how far back they can query without running into pruned-history errors.
+type NodeCapabilities struct {
+	// ChainHistory is the configured chain-history retention mode ("all" or "postmerge").
+	ChainHistory string `json:"chainHistory"`
+
+	// OldestBlock is the first block number whose header, body and receipts are
+	// guaranteed to be available.  Equals 0 for archive / full-history nodes.
+	OldestBlock hexutil.Uint64 `json:"oldestBlock"`
+
+	// TxIndexWindow is the number of recent blocks covered by the transaction
+	// index (eth_getTransactionByHash etc.).  0 means the index is disabled;
+	// math.MaxUint64 means it covers all blocks back to genesis.
+	TxIndexWindow hexutil.Uint64 `json:"txIndexWindow"`
+
+	// LogIndexWindow is the number of recent blocks covered by the fast log
+	// index (eth_getLogs, eth_getFilterLogs).  0 means the index is disabled.
+	LogIndexWindow hexutil.Uint64 `json:"logIndexWindow"`
+}
+
+// Capabilities returns a description of the historical data that this node can
+// serve.  Use it to decide the oldest block you can pass to eth_getLogs,
+// eth_getTransactionByHash, etc. before expecting a "pruned history" error.
+func (api *AdminAPI) Capabilities() NodeCapabilities {
+	cfg := api.eth.config
+	bc := api.eth.BlockChain()
+
+	cutoff, _ := bc.HistoryPruningCutoff()
+
+	return NodeCapabilities{
+		ChainHistory:   cfg.HistoryMode.String(),
+		OldestBlock:    hexutil.Uint64(cutoff),
+		TxIndexWindow:  hexutil.Uint64(cfg.TransactionHistory),
+		LogIndexWindow: hexutil.Uint64(cfg.LogHistory),
+	}
 }
