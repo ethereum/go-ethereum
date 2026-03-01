@@ -179,7 +179,8 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *triedb.Database, root comm
 	// if the background generation is allowed
 	if !generator.Done && !noBuild {
 		base.genPending = make(chan struct{})
-		base.genAbort = make(chan chan *generatorStats)
+		base.cancel = make(chan struct{})
+		base.done = make(chan struct{})
 
 		var origin uint64
 		if len(generator.Marker) >= 8 {
@@ -199,16 +200,9 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *triedb.Database, root comm
 // Journal terminates any in-progress snapshot generation, also implicitly pushing
 // the progress into the database.
 func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
-	// If the snapshot is currently being generated, abort it
-	var stats *generatorStats
-	if dl.genAbort != nil {
-		abort := make(chan *generatorStats)
-		dl.genAbort <- abort
+	// If the snapshot is currently being generated, stop it
+	dl.stopGeneration()
 
-		if stats = <-abort; stats != nil {
-			stats.Log("Journalling in-progress snapshot", dl.root, dl.genMarker)
-		}
-	}
 	// Ensure the layer didn't get stale
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
@@ -216,8 +210,8 @@ func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	if dl.stale {
 		return common.Hash{}, ErrSnapshotStale
 	}
-	// Ensure the generator stats is written even if none was ran this cycle
-	journalProgress(dl.diskdb, dl.genMarker, stats)
+	// Ensure the generator marker is written even if none was ran this cycle
+	journalProgress(dl.diskdb, dl.genMarker, nil)
 
 	log.Debug("Journalled disk layer", "root", dl.root)
 	return dl.root, nil
