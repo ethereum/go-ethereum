@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
+	"github.com/ethereum/go-ethereum/core/arena"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -39,6 +40,12 @@ type ChainContext interface {
 
 // NewEVMBlockContext creates a new context for use in the EVM.
 func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
+	return NewEVMBlockContextWithAlloc(header, chain, author, arena.DefaultHeap)
+}
+
+// NewEVMBlockContextWithAlloc creates a new context for use in the EVM, using
+// the provided allocator for transient big.Int allocations.
+func NewEVMBlockContextWithAlloc(header *types.Header, chain ChainContext, author *common.Address, alloc arena.Allocator) vm.BlockContext {
 	var (
 		beneficiary common.Address
 		baseFee     *big.Int
@@ -65,15 +72,17 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.SlotNumber != nil {
 		slotNum = *header.SlotNumber
 	}
+	blockNumber := new(big.Int).Set(header.Number)
+	difficulty := new(big.Int).Set(header.Difficulty)
 
 	return vm.BlockContext{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
 		GetHash:     GetHashFn(header, chain),
 		Coinbase:    beneficiary,
-		BlockNumber: new(big.Int).Set(header.Number),
+		BlockNumber: blockNumber,
 		Time:        header.Time,
-		Difficulty:  new(big.Int).Set(header.Difficulty),
+		Difficulty:  difficulty,
 		BaseFee:     baseFee,
 		BlobBaseFee: blobBaseFee,
 		GasLimit:    header.GasLimit,
@@ -84,9 +93,15 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 
 // NewEVMTxContext creates a new transaction context for a single transaction.
 func NewEVMTxContext(msg *Message) vm.TxContext {
+	return NewEVMTxContextWithAlloc(msg, arena.DefaultHeap)
+}
+
+// NewEVMTxContextWithAlloc creates a new transaction context, using the
+// provided allocator for transient big.Int allocations.
+func NewEVMTxContextWithAlloc(msg *Message, alloc arena.Allocator) vm.TxContext {
 	ctx := vm.TxContext{
 		Origin:     msg.From,
-		GasPrice:   uint256.MustFromBig(msg.GasPrice),
+		GasPrice:   new(uint256.Int).Set(&msg.GasPrice),
 		BlobHashes: msg.BlobHashes,
 	}
 	return ctx
