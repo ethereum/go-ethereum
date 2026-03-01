@@ -414,6 +414,7 @@ web3._extend({
 			name: 'storageRangeAt',
 			call: 'debug_storageRangeAt',
 			params: 5,
+			inputFormatter: [null, null, null, null, null],
 		}),
 		new web3._extend.Method({
 			name: 'getModifiedAccountsByNumber',

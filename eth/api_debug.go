@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -211,7 +212,8 @@ type storageEntry struct {
 }
 
 // StorageRangeAt returns the storage at the given block height and transaction index.
-func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, txIndex int, contractAddress common.Address, keyStart hexutil.Bytes, maxResult int) (StorageRangeResult, error) {
+// If txIndex is nil, it returns the storage at the end of the given block.
+func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, txIndex *int, contractAddress common.Address, keyStart hexutil.Bytes, maxResult int) (StorageRangeResult, error) {
 	var block *types.Block
 
 	block, err := api.eth.APIBackend.BlockByNumberOrHash(ctx, blockNrOrHash)
@@ -221,7 +223,15 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 	if block == nil {
 		return StorageRangeResult{}, fmt.Errorf("block %v not found", blockNrOrHash)
 	}
-	_, _, statedb, release, err := api.eth.stateAtTransaction(ctx, block, txIndex, 0)
+	var (
+		statedb *state.StateDB
+		release tracers.StateReleaseFunc
+	)
+	if txIndex != nil {
+		_, _, statedb, release, err = api.eth.stateAtTransaction(ctx, block, *txIndex, 0)
+	} else {
+		statedb, release, err = api.eth.stateAtBlock(ctx, block, 0, nil, true, false)
+	}
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
