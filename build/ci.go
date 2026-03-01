@@ -47,6 +47,7 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -708,11 +709,78 @@ func doArchive(cmdline []string) {
 	if err := build.WriteArchive(alltools, allToolsArchiveFiles); err != nil {
 		log.Fatal(err)
 	}
+
+	// Compute IPFS CIDs for archives and generate manifest
+	var artifacts []ipfsArtifact
 	for _, archive := range []string{geth, alltools} {
+		cid, err := build.ComputeFileCID(archive)
+		if err != nil {
+			log.Printf("Warning: failed to compute CID for %s: %v", archive, err)
+		} else {
+			log.Printf("IPFS CID: %s -> %s", archive, cid.V1)
+			info, _ := os.Stat(archive)
+			artifacts = append(artifacts, ipfsArtifact{
+				Name:      archive,
+				Size:      info.Size(),
+				CID:       cid.V1,
+				Multihash: cid.Multihash,
+			})
+		}
 		if err := archiveUpload(archive, *upload, *signer, *signify); err != nil {
 			log.Fatal(err)
 		}
 	}
+
+	// Write and upload IPFS manifest
+	if len(artifacts) > 0 {
+		manifest := ipfsManifest{
+			Version:   version.Semantic,
+			Commit:    env.Commit,
+			Date:      time.Now().UTC().Format("2006-01-02"),
+			Artifacts: artifacts,
+		}
+		manifestFile := "ipfs-cids-" + basegeth + ".json"
+		if err := writeIPFSManifest(manifestFile, manifest); err != nil {
+			log.Printf("Warning: failed to write IPFS manifest: %v", err)
+		} else {
+			log.Printf("IPFS manifest: %s", manifestFile)
+			if *upload != "" {
+				auth := build.AzureBlobstoreConfig{
+					Account:   strings.Split(*upload, "/")[0],
+					Token:     os.Getenv("AZURE_BLOBSTORE_TOKEN"),
+					Container: strings.SplitN(*upload, "/", 2)[1],
+				}
+				if err := build.AzureBlobstoreUpload(manifestFile, filepath.Base(manifestFile), auth); err != nil {
+					log.Printf("Warning: failed to upload IPFS manifest: %v", err)
+				}
+			}
+		}
+	}
+}
+
+// ipfsArtifact represents a single release artifact with its IPFS CID.
+type ipfsArtifact struct {
+	Name      string `json:"name"`
+	Size      int64  `json:"size"`
+	CID       string `json:"cid"`        // CIDv1 (bafkrei...)
+	Multihash string `json:"multihash"`  // Base58 multihash (Qm...)
+}
+
+// ipfsManifest contains IPFS CIDs for all release artifacts.
+type ipfsManifest struct {
+	Version   string         `json:"version"`
+	Commit    string         `json:"commit"`
+	Date      string         `json:"date"`
+	Artifacts []ipfsArtifact `json:"artifacts"`
+}
+
+// writeIPFSManifest writes the IPFS manifest to a JSON file.
+func writeIPFSManifest(path string, manifest ipfsManifest) error {
+	data, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
 }
 
 func doKeeperArchive(cmdline []string) {
