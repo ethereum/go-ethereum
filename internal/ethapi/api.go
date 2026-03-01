@@ -1595,7 +1595,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		return common.Hash{}, errors.New("only replay-protected (EIP-155) transactions allowed over RPC")
 	}
 	if err := b.SendTx(ctx, tx); err != nil {
-		return common.Hash{}, err
+		return common.Hash{}, txValidationError(err)
 	}
 	// Print a log with full tx details for manual investigations and interventions
 	head := b.CurrentBlock()
