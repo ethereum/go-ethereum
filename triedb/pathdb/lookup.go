@@ -189,7 +189,7 @@ func (l *lookup) addLayer(diff *diffLayer) {
 		for accountHash := range diff.states.accountData {
 			list, exists := l.accounts[accountHash]
 			if !exists {
-				list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
+				list = getHashList()
 			}
 			list = append(list, state)
 			l.accounts[accountHash] = list
@@ -204,7 +204,7 @@ func (l *lookup) addLayer(diff *diffLayer) {
 				key := storageKey(accountHash, slotHash)
 				list, exists := l.storages[key]
 				if !exists {
-					list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
+					list = getHashList()
 				}
 				list = append(list, state)
 				l.storages[key] = list
@@ -229,7 +229,9 @@ func removeFromList(list []common.Hash, element common.Hash) (bool, []common.Has
 				// Mitigation: release the array if capacity exceeds threshold.
 				list = list[1:]
 				if cap(list) > 1024 {
-					list = append(make([]common.Hash, 0, len(list)), list...)
+					newList := append(make([]common.Hash, 0, len(list)), list...)
+					putHashList(list)
+					list = newList
 				}
 			}
 			return true, list
@@ -258,6 +260,7 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 			if len(list) != 0 {
 				l.accounts[accountHash] = list
 			} else {
+				putHashList(list)
 				delete(l.accounts, accountHash)
 			}
 		}
@@ -275,6 +278,7 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 				if len(list) != 0 {
 					l.storages[key] = list
 				} else {
+					putHashList(list)
 					delete(l.storages, key)
 				}
 			}
@@ -282,4 +286,25 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 		return nil
 	})
 	return eg.Wait()
+}
+
+// hashListPool is not allocation-free. Since a slice header is 24 bytes and
+// cannot be stored directly in an interface, interface boxing is involved,
+// which typically incurs a 24-byte allocation. This design strikes a balance
+// between allocation efficiency and code simplicity. Note that it is possible
+// to achieve zero allocations by wrapping the []common.Hash in a struct and
+// storing a pointer to that struct in the sync.Pool.
+var hashListPool = sync.Pool{
+	New: func() any {
+		return make([]common.Hash, 0, 16)
+	},
+}
+
+func getHashList() []common.Hash {
+	l := hashListPool.Get().([]common.Hash)
+	return l[:0]
+}
+
+func putHashList(l []common.Hash) {
+	hashListPool.Put(l)
 }
