@@ -68,6 +68,7 @@ func newJournal() *journal {
 // It is semantically similar to calling 'newJournal', but the underlying slices
 // can be reused.
 func (j *journal) reset() {
+	clear(j.entries)
 	j.entries = j.entries[:0]
 	j.validRevisions = j.validRevisions[:0]
 	clear(j.dirties)
