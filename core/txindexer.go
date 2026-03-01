@@ -204,7 +204,7 @@ func (indexer *txIndexer) repair(head uint64) {
 		indexer.tail.Store(&indexer.cutoff)
 		rawdb.WriteTxIndexTail(indexer.db, indexer.cutoff)
 		rawdb.DeleteAllTxLookupEntries(indexer.db, func(txhash common.Hash, blob []byte) bool {
-			n := rawdb.DecodeTxLookupEntry(blob, indexer.db)
+			n, _ := rawdb.DecodeTxLookupEntry(blob, indexer.db)
 			return n != nil && *n < indexer.cutoff
 		})
 		log.Warn("Purge transaction indexes below cutoff", "tail", *tail, "cutoff", indexer.cutoff)
