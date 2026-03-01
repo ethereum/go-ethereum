@@ -393,3 +393,12 @@ func (db *Database) SnapshotCompleted() bool {
 	}
 	return pdb.SnapshotCompleted()
 }
+
+// FrezzerTailBlock returns the block number of the oldest state in the freezer.
+func (db *Database) FreezerTailBlock() (uint64, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return 0, nil
+	}
+	return pdb.FreezerTailBlock()
+}
