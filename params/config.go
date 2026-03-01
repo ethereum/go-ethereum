@@ -346,7 +346,7 @@ var (
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
 	AllXDPoSProtocolChanges = &ChainConfig{
-		ChainID:             big.NewInt(89),
+		ChainID:             big.NewInt(1337),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      false,
@@ -366,7 +366,19 @@ var (
 		OsakaBlock:          big.NewInt(0),
 		Ethash:              nil,
 		Clique:              nil,
-		XDPoS:               &XDPoSConfig{Period: 0, Epoch: 900},
+		XDPoS: &XDPoSConfig{
+			Epoch:                900,
+			Gap:                  450,
+			SkipV1Validation:     true,
+			FoundationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068"),
+			Reward:               250,
+			V2: &V2{
+				SwitchEpoch:   1,
+				SwitchBlock:   big.NewInt(900),
+				CurrentConfig: UnitTestV2Configs[0],
+				AllConfigs:    UnitTestV2Configs,
+			},
+		},
 	}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
