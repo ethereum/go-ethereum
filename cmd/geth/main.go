@@ -237,6 +237,7 @@ func init() {
 		exportCommand,
 		importHistoryCommand,
 		exportHistoryCommand,
+		importEraIndexCommand,
 		importPreimagesCommand,
 		removedbCommand,
 		dumpCommand,
