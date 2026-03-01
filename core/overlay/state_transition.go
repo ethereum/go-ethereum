@@ -17,17 +17,21 @@
 package overlay
 
 import (
-	"bytes"
-	"encoding/gob"
-
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // TransitionState is a structure that holds the progress markers of the
 // translation process.
+// TODO gballet:
+// * see if I can get rid of the pointer now that this piece
+// has been rewritten.
+// * the conversion pointers should no longer be necessary,
+// remove them when it's been confirmed.
+// * we can't keep the preimage offset in the file, since
+// some clients might decide to record their preimages and
+// skip the use of the file altogether. Therefore, they can't
+// know what the offset it, unless they keep track of how many
+// bytes have been read since the start, which is a possibility.
 type TransitionState struct {
 	CurrentAccountAddress *common.Address // addresss of the last translated account
 	CurrentSlotHash       common.Hash     // hash of the last translated storage slot
@@ -67,40 +71,4 @@ func (ts *TransitionState) Copy() *TransitionState {
 		ret.CurrentAccountAddress = &addr
 	}
 	return ret
-}
-
-// LoadTransitionState retrieves the Verkle transition state associated with
-// the given state root hash from the database.
-func LoadTransitionState(db ethdb.KeyValueReader, root common.Hash, isVerkle bool) *TransitionState {
-	var ts *TransitionState
-
-	data, _ := rawdb.ReadVerkleTransitionState(db, root)
-
-	// if a state could be read from the db, attempt to decode it
-	if len(data) > 0 {
-		var (
-			newts TransitionState
-			buf   = bytes.NewBuffer(data[:])
-			dec   = gob.NewDecoder(buf)
-		)
-		// Decode transition state
-		err := dec.Decode(&newts)
-		if err != nil {
-			log.Error("failed to decode transition state", "err", err)
-			return nil
-		}
-		ts = &newts
-	}
-
-	// Fallback that should only happen before the transition
-	if ts == nil {
-		// Initialize the first transition state, with the "ended"
-		// field set to true if the database was created
-		// as a verkle database.
-		log.Debug("no transition state found, starting fresh", "verkle", isVerkle)
-
-		// Start with a fresh state
-		ts = &TransitionState{Ended: isVerkle}
-	}
-	return ts
 }

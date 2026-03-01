@@ -32,6 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
@@ -370,8 +372,17 @@ func (bc *BlockChain) TxIndexDone() bool {
 }
 
 // HasState checks if state trie is fully present in the database or not.
+// It avoids using OpenTrie which has transition-aware logic that may try
+// to open a binary tree before it exists. Instead, it directly attempts
+// to decode the root node as an MPT first, and if that fails, as a binary
+// trie.
 func (bc *BlockChain) HasState(hash common.Hash) bool {
-	_, err := bc.statedb.OpenTrie(hash)
+	// Try to open as a Merkle Patricia Trie first.
+	if _, err := trie.NewStateTrie(trie.StateTrieID(hash), bc.triedb); err == nil {
+		return true
+	}
+	// Fall back to trying as a binary trie.
+	_, err := bintrie.NewBinaryTrie(hash, bc.triedb)
 	return err == nil
 }
 
