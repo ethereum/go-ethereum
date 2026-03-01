@@ -480,8 +480,12 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 		if begin >= 0 && begin < int64(api.events.backend.HistoryPruningCutoff()) {
 			return nil, &history.PrunedHistoryError{}
 		}
-		// Construct the range filter
-		filter = api.sys.NewRangeFilter(begin, end, crit.Addresses, crit.Topics, api.rangeLimit)
+		// Construct the range filter, respecting optional result-count limit
+		if crit.Limit != nil && *crit.Limit > 0 {
+			filter = api.sys.NewRangeFilterWithLimit(begin, end, crit.Addresses, crit.Topics, api.rangeLimit, *crit.Limit)
+		} else {
+			filter = api.sys.NewRangeFilter(begin, end, crit.Addresses, crit.Topics, api.rangeLimit)
+		}
 	}
 
 	// Run the filter and return all the logs
@@ -489,7 +493,7 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 	if err != nil {
 		return nil, err
 	}
-	return returnLogs(logs), err
+	return returnLogs(logs), nil
 }
 
 // UninstallFilter removes the filter with the given filter id.
@@ -620,6 +624,7 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 		ToBlock   *rpc.BlockNumber `json:"toBlock"`
 		Addresses interface{}      `json:"address"`
 		Topics    []interface{}    `json:"topics"`
+		Limit     *hexutil.Uint64  `json:"limit"`
 	}
 
 	var raw input
@@ -716,6 +721,11 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 				return errInvalidTopic
 			}
 		}
+	}
+
+	if raw.Limit != nil {
+		limitVal := uint64(*raw.Limit)
+		args.Limit = &limitVal
 	}
 
 	return nil
