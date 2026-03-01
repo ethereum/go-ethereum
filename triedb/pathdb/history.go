@@ -419,17 +419,27 @@ func repairHistory(db ethdb.Database, isVerkle bool, readOnly bool, stateID uint
 	if stateID > head {
 		return nil, nil, fmt.Errorf("gap between state [#%d] and state history [#%d]", stateID, head)
 	}
+	// Track whether trienode history is newly enabled (empty freezer on an
+	// existing node). In that case, skip gap checks and truncation — history
+	// will begin accumulating from the current state forward.
+	trienodeNewlyEnabled := false
 	if trienodes != nil {
 		th, err := trienodes.Ancients()
 		if err != nil {
 			return nil, nil, err
 		}
-		if stateID > th {
-			return nil, nil, fmt.Errorf("gap between state [#%d] and trienode history [#%d]", stateID, th)
-		}
-		if th != head {
-			log.Info("Histories are not aligned with each other", "state", head, "trienode", th)
-			head = min(head, th)
+		if th == 0 && stateID > 0 {
+			// Trienode history is newly enabled on an existing node.
+			log.Info("Trienode history newly enabled, will start from current state", "state", stateID)
+			trienodeNewlyEnabled = true
+		} else {
+			if stateID > th {
+				return nil, nil, fmt.Errorf("gap between state [#%d] and trienode history [#%d]", stateID, th)
+			}
+			if th != head {
+				log.Info("Histories are not aligned with each other", "state", head, "trienode", th)
+				head = min(head, th)
+			}
 		}
 	}
 	head = min(head, stateID)
@@ -449,6 +459,11 @@ func repairHistory(db ethdb.Database, isVerkle bool, readOnly bool, stateID uint
 		}
 	}
 	truncate(states, typeStateHistory, head)
-	truncate(trienodes, typeTrienodeHistory, head)
+	// Only truncate trienode history if it already has data. A newly enabled
+	// (empty) trienode freezer would cause truncateFromHead to error because
+	// ohead(0) < nhead(stateID) falls outside the valid range.
+	if !trienodeNewlyEnabled {
+		truncate(trienodes, typeTrienodeHistory, head)
+	}
 	return states, trienodes, nil
 }
