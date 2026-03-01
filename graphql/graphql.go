@@ -929,7 +929,7 @@ func (b *Block) RawHeader(ctx context.Context) (hexutil.Bytes, error) {
 
 func (b *Block) Raw(ctx context.Context) (hexutil.Bytes, error) {
 	block, err := b.resolve(ctx)
-	if err != nil {
+	if err != nil || block == nil {
 		return hexutil.Bytes{}, err
 	}
 	return rlp.EncodeToBytes(block)
