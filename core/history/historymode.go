@@ -32,10 +32,13 @@ const (
 
 	// KeepPostMerge sets the history pruning point to the merge activation block.
 	KeepPostMerge
+
+	// KeepPostCancun sets the history pruning point to the Cancun (Dencun) activation block.
+	KeepPostCancun
 )
 
 func (m HistoryMode) IsValid() bool {
-	return m <= KeepPostMerge
+	return m <= KeepPostCancun
 }
 
 func (m HistoryMode) String() string {
@@ -44,6 +47,8 @@ func (m HistoryMode) String() string {
 		return "all"
 	case KeepPostMerge:
 		return "postmerge"
+	case KeepPostCancun:
+		return "postcancun"
 	default:
 		return fmt.Sprintf("invalid HistoryMode(%d)", m)
 	}
@@ -64,8 +69,10 @@ func (m *HistoryMode) UnmarshalText(text []byte) error {
 		*m = KeepAll
 	case "postmerge":
 		*m = KeepPostMerge
+	case "postcancun":
+		*m = KeepPostCancun
 	default:
-		return fmt.Errorf(`unknown sync mode %q, want "all" or "postmerge"`, text)
+		return fmt.Errorf(`unknown history mode %q, want "all", "postmerge", or "postcancun"`, text)
 	}
 	return nil
 }
@@ -75,10 +82,10 @@ type PrunePoint struct {
 	BlockHash   common.Hash
 }
 
-// PrunePoints the pre-defined history pruning cutoff blocks for known networks.
+// MergePrunePoints contains the pre-defined history pruning cutoff blocks for known networks.
 // They point to the first post-merge block. Any pruning should truncate *up to* but excluding
-// given block.
-var PrunePoints = map[common.Hash]*PrunePoint{
+// the given block.
+var MergePrunePoints = map[common.Hash]*PrunePoint{
 	// mainnet
 	params.MainnetGenesisHash: {
 		BlockNumber: 15537393,
@@ -89,6 +96,39 @@ var PrunePoints = map[common.Hash]*PrunePoint{
 		BlockNumber: 1450409,
 		BlockHash:   common.HexToHash("0x229f6b18ca1552f1d5146deceb5387333f40dc6275aebee3f2c5c4ece07d02db"),
 	},
+}
+
+// CancunPrunePoints contains the pre-defined history pruning cutoff blocks for the Cancun
+// (Dencun) upgrade. They point to the first post-Cancun block. Any pruning should truncate
+// *up to* but excluding the given block.
+var CancunPrunePoints = map[common.Hash]*PrunePoint{
+	// mainnet - first Cancun block (March 13, 2024)
+	params.MainnetGenesisHash: {
+		BlockNumber: 19426587,
+		BlockHash:   common.HexToHash("0xf8e2f40d98fe5862bc947c8c83d34799c50fb344d7445d020a8a946d891b62ee"),
+	},
+	// sepolia - first Cancun block (January 30, 2024)
+	params.SepoliaGenesisHash: {
+		BlockNumber: 5187023,
+		BlockHash:   common.HexToHash("0x8f9753667f95418f70db36279a269ed6523cea399ecc3f4cfa2f1689a3a4b130"),
+	},
+}
+
+// PrunePoints is an alias for MergePrunePoints for backward compatibility.
+// Deprecated: Use GetPrunePoint or MergePrunePoints directly.
+var PrunePoints = MergePrunePoints
+
+// GetPrunePoint returns the prune point for the given genesis hash and history mode.
+// Returns nil if no prune point is defined for the given combination.
+func GetPrunePoint(genesisHash common.Hash, mode HistoryMode) *PrunePoint {
+	switch mode {
+	case KeepPostMerge:
+		return MergePrunePoints[genesisHash]
+	case KeepPostCancun:
+		return CancunPrunePoints[genesisHash]
+	default:
+		return nil
+	}
 }
 
 // PrunedHistoryError is returned by APIs when the requested history is pruned.

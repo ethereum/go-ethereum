@@ -325,7 +325,7 @@ var (
 	}
 	ChainHistoryFlag = &cli.StringFlag{
 		Name:     "history.chain",
-		Usage:    `Blockchain history retention ("all" or "postmerge")`,
+		Usage:    `Blockchain history retention ("all", "postmerge", or "postcancun")`,
 		Value:    ethconfig.Defaults.HistoryMode.String(),
 		Category: flags.StateCategory,
 	}
