@@ -702,6 +702,19 @@ func hashish(x string) bool {
 	return err != nil
 }
 
+// dirSize returns the total size of all files in a directory tree.
+func dirSize(path string) int64 {
+	var size int64
+	filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		size += info.Size()
+		return nil
+	})
+	return size
+}
+
 func pruneHistory(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -737,13 +750,22 @@ func pruneHistory(ctx *cli.Context) error {
 		return fmt.Errorf("merge block hash mismatch: got %s, want %s", hash.Hex(), mergeBlockHash)
 	}
 
+	// Measure disk usage before pruning.
+	sizeBefore := dirSize(stack.ResolvePath("chaindata"))
+
 	log.Info("Starting history pruning", "head", currentHeader.Number, "tail", mergeBlock, "tailHash", mergeBlockHash)
 	start := time.Now()
 	rawdb.PruneTransactionIndex(chaindb, mergeBlock)
 	if _, err := chaindb.TruncateTail(mergeBlock); err != nil {
 		return fmt.Errorf("failed to truncate ancient data: %v", err)
 	}
-	log.Info("History pruning completed", "tail", mergeBlock, "elapsed", common.PrettyDuration(time.Since(start)))
+	// Measure disk usage after pruning and report the cleared space.
+	sizeAfter := dirSize(stack.ResolvePath("chaindata"))
+	cleared := common.StorageSize(0)
+	if sizeBefore > sizeAfter {
+		cleared = common.StorageSize(sizeBefore - sizeAfter)
+	}
+	log.Info("History pruning completed", "tail", mergeBlock, "cleared", cleared, "elapsed", common.PrettyDuration(time.Since(start)))
 
 	// TODO(s1na): what if there is a crash between the two prune operations?
 
