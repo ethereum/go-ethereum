@@ -81,7 +81,6 @@ linters:
       - third_party$
       - builtin$
       - examples$
-      - cmd/keeper/fetchpayload$
 formatters:
   enable:
     - goimports
@@ -95,4 +94,3 @@ formatters:
       - third_party$
       - builtin$
       - examples$
-      - cmd/keeper/fetchpayload$
