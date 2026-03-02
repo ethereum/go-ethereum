@@ -147,6 +147,13 @@ type Config struct {
 	// for the authenticated api. This is by default {'localhost'}.
 	AuthVirtualHosts []string `toml:",omitempty"`
 
+	// SszRestEnabled enables the SSZ-REST Engine API transport (EIP-8161).
+	SszRestEnabled bool `toml:",omitempty"`
+
+	// SszRestPort is the port for the SSZ-REST Engine API server.
+	// Defaults to 8552 if not specified.
+	SszRestPort int `toml:",omitempty"`
+
 	// WSHost is the host interface on which to start the websocket RPC server. If
 	// this field is empty, no websocket API endpoint will be started.
 	WSHost string

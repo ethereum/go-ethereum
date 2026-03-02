@@ -34,7 +34,8 @@ const (
 	DefaultWSHost   = "localhost" // Default host interface for the websocket RPC server
 	DefaultWSPort   = 8546        // Default TCP port for the websocket RPC server
 	DefaultAuthHost = "localhost" // Default host interface for the authenticated apis
-	DefaultAuthPort = 8551        // Default port for the authenticated apis
+	DefaultAuthPort    = 8551 // Default port for the authenticated apis
+	DefaultSszRestPort = 8552 // Default port for the SSZ-REST Engine API (EIP-8161)
 )
 
 const (

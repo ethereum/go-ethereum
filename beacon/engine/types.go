@@ -412,3 +412,15 @@ type ClientVersionV1 struct {
 func (v *ClientVersionV1) String() string {
 	return fmt.Sprintf("%s-%s-%s-%s", v.Code, v.Name, v.Version, v.Commit)
 }
+
+// CommunicationChannel represents a communication protocol supported by the EL (EIP-8160).
+type CommunicationChannel struct {
+	Protocol string `json:"protocol"`
+	URL      string `json:"url"`
+}
+
+// ExchangeCapabilitiesV2Response is the response to engine_exchangeCapabilitiesV2 (EIP-8160).
+type ExchangeCapabilitiesV2Response struct {
+	Capabilities       []string               `json:"capabilities"`
+	SupportedProtocols []CommunicationChannel `json:"supportedProtocols"`
+}

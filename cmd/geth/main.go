@@ -171,6 +171,8 @@ var (
 		utils.AuthPortFlag,
 		utils.AuthVirtualHostsFlag,
 		utils.JWTSecretFlag,
+		utils.AuthRpcSszRestFlag,
+		utils.AuthRpcSszRestPortFlag,
 		utils.HTTPVirtualHostsFlag,
 		utils.GraphQLEnabledFlag,
 		utils.GraphQLCORSDomainFlag,
