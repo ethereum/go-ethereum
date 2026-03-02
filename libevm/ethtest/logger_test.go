@@ -41,25 +41,46 @@ func (r *tbRecorder) Errorf(format string, a ...any) {
 }
 
 func TestTBLogHandler(t *testing.T) {
-	got := &tbRecorder{}
-	l := log.NewLogger(NewTBLogHandler(got, slog.LevelDebug))
+	tests := []struct {
+		name    string
+		level   slog.Level
+		wantLog []string
+		wantErr []string
+	}{
+		{
+			name:    "warn_level",
+			level:   slog.LevelWarn,
+			wantLog: []string{"Cockroach", "Hello"},
+			wantErr: []string{"Smoke", "Fire"},
+		},
+		{
+			name:    "error_level",
+			level:   slog.LevelError,
+			wantLog: []string{"Cockroach", "Hello", "Smoke"},
+			wantErr: []string{"Fire"},
+		},
+	}
 
-	l.Debug("Cockroach")            // Logf
-	l.Info("Hello", "who", "world") // Logf
-	l.Warn("Smoke")                 // Errorf
-	l.Error("Fire")                 // Errorf
-	// Crit will call os.Exit(1) so we don't test it.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := &tbRecorder{}
+			l := log.NewLogger(NewTBLogHandler(got, tt.level))
 
-	require.Len(t, got.logged, 2, "Logf() calls")
-	require.Len(t, got.errored, 2, "Errorf() calls")
+			l.Debug("Cockroach")
+			l.Info("Hello", "who", "world")
+			l.Warn("Smoke")
+			l.Error("Fire")
+			// Crit will call os.Exit(1) so we don't test it.
 
-	// Check simplest elements without being brittle about exact formatting
-	// See https://testing.googleblog.com/2015/01/testing-on-toilet-change-detector-tests.html.
-	assert.Contains(t, got.logged[0], "Cockroach")
-	assert.Contains(t, got.logged[1], "Hello")
-	assert.Contains(t, got.logged[1], "who")
-	assert.Contains(t, got.logged[1], "world")
+			require.Len(t, got.logged, len(tt.wantLog), "Logf() calls")
+			require.Len(t, got.errored, len(tt.wantErr), "Errorf() calls")
 
-	assert.Contains(t, got.errored[0], "Smoke")
-	assert.Contains(t, got.errored[1], "Fire")
+			for i, want := range tt.wantLog {
+				assert.Contains(t, got.logged[i], want, "Logf()[%d]", i)
+			}
+			for i, want := range tt.wantErr {
+				assert.Contains(t, got.errored[i], want, "Errorf()[%d]", i)
+			}
+		})
+	}
 }

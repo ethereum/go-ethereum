@@ -27,10 +27,10 @@ import (
 	"github.com/ava-labs/libevm/log"
 )
 
-// NewTBLogHandler constructs a [slog.Handler] that propagates logs to [testing.TB].
-// Logs at [log.LevelWarn] or above go to [testing.TB.Errorf], except
+// NewTBLogHandler constructs a [slog.Handler] that propagates all logs to
+// [testing.TB]. Logs at or above `level` go to [testing.TB.Errorf], except
 // [log.LevelCrit] which goes to [testing.TB.Fatalf]. All other logs go to
-// [testing.TB.Logf]. The level parameter controls which logs are enabled.
+// [testing.TB.Logf].
 //
 //nolint:thelper // The outputs include the logging site while the TB site is most useful if here
 func NewTBLogHandler(tb testing.TB, level slog.Level) slog.Handler {
@@ -46,8 +46,8 @@ type tbHandler struct {
 	attrs []slog.Attr
 }
 
-func (h *tbHandler) Enabled(_ context.Context, level slog.Level) bool {
-	return level >= min(h.level, slog.LevelWarn)
+func (h *tbHandler) Enabled(_ context.Context, _ slog.Level) bool {
+	return true
 }
 
 func (h *tbHandler) Handle(_ context.Context, rec slog.Record) error {
@@ -55,7 +55,7 @@ func (h *tbHandler) Handle(_ context.Context, rec slog.Record) error {
 	switch {
 	case rec.Level >= log.LevelCrit:
 		to = h.tb.Fatalf
-	case rec.Level >= log.LevelWarn:
+	case rec.Level >= h.level:
 		to = h.tb.Errorf
 	}
 
