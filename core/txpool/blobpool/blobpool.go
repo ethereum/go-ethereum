@@ -2086,10 +2086,7 @@ func (p *BlobPool) evictGapped() {
 // isAnnouncable checks whether a transaction is announcable based on its
 // fee parameters and announceThreshold.
 func (p *BlobPool) isAnnouncable(meta *blobTxMeta) bool {
-	if evictionPriority(p.evict.basefeeJumps, meta.basefeeJumps, p.evict.blobfeeJumps, meta.blobfeeJumps) >= announceThreshold {
-		return true
-	}
-	return false
+	return evictionPriority(p.evict.basefeeJumps, meta.basefeeJumps, p.evict.blobfeeJumps, meta.blobfeeJumps) >= announceThreshold
 }
 
 // Stats retrieves the current pool stats, namely the number of pending and the
