@@ -267,7 +267,7 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 				} else {
 					log.Info("Error while generating work", "id", payload.id, "err", r.err)
 				}
-				timer.Reset(miner.config.Recommit)
+				timer.Reset(max(0, miner.config.Recommit-time.Since(start)))
 			case <-payload.stop:
 				log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
 				return
