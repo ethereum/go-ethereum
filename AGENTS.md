@@ -66,6 +66,10 @@ go run ./build/ci.go check_baddeps
 
 Verifies that no forbidden dependencies have been introduced.
 
+## What to include in commits
+
+Do not commit binaries, whether they are produced by the main build or byproducts of investigations.
+
 ## Commit Message Format
 
 Commit messages must be prefixed with the package(s) they modify, followed by a short lowercase description:
