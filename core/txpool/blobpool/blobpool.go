@@ -1576,7 +1576,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 	meta.evictionExecTip = meta.execTipCap
 	meta.evictionExecFeeJumps = meta.basefeeJumps
 	meta.evictionBlobFeeJumps = meta.blobfeeJumps
-	if meta.nonce > next && len(p.index[from]) >= offset {
+	if meta.nonce > next { // transaction can't be gapped, we filter for that in validateTx
 		prev := p.index[from][int(meta.nonce-next-1)]
 		if meta.evictionExecTip.Cmp(prev.evictionExecTip) > 0 {
 			meta.evictionExecTip = prev.evictionExecTip
@@ -1672,20 +1672,13 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 		p.lookup.track(meta)
 		p.stored += uint64(meta.storageSize)
 	}
-	// Recompute the rolling eviction fields. In case of a replacement, this will
-	// recompute all subsequent fields. In case of an append, this will only do
-	// the fresh calculation.
+	// Recompute the rolling eviction fields for subsequent transactions
+	// (we've already calculated for the new/updated transaction above).
+	// In case of a replacement, this will recompute all subsequent fields.
+	// In case of an append, this will only do the fresh calculation.
 	txs := p.index[from]
 
-	for i := offset; i < len(txs); i++ {
-		// The first transaction will always use itself
-		if i == 0 {
-			txs[0].evictionExecTip = txs[0].execTipCap
-			txs[0].evictionExecFeeJumps = txs[0].basefeeJumps
-			txs[0].evictionBlobFeeJumps = txs[0].blobfeeJumps
-
-			continue
-		}
+	for i := offset + 1; i < len(txs); i++ {
 		// Subsequent transactions will use a rolling calculation
 		txs[i].evictionExecTip = txs[i-1].evictionExecTip
 		if txs[i].evictionExecTip.Cmp(txs[i].execTipCap) > 0 {
