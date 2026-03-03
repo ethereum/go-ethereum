@@ -957,8 +957,8 @@ func decodeSingle(x byte) int {
 
 // decodePair decodes the immediate operand of a backward-compatible EXCHANGE
 // instruction (EIP-8024) into stack indices (n, m) where 1 <= n < m
-// and n + m <= 30. There are 210 such valid pairs, encoded into a single byte
-// that avoids the forbidden range [91, 127].
+// and n + m <= 30. The forbidden byte range [82, 127] removes 46 values from
+// the 256 possible immediates, leaving exactly 210 usable bytes.
 func decodePair(x byte) (int, int) {
 	// XOR with 143 remaps the forbidden bytes [82, 127] to an unused corner
 	// of the 16x16 grid below.
