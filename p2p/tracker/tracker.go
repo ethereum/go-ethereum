@@ -138,6 +138,10 @@ func (t *Tracker) clean() {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
+	if t.expire == nil {
+		return
+	}
+
 	// Expire anything within a certain threshold (might be no items at all if
 	// we raced with the delivery)
 	for t.expire.Len() > 0 {
