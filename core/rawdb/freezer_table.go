@@ -822,10 +822,9 @@ func (t *freezerTable) truncateTail(items uint64) error {
 	shorten := indexEntrySize * int64(newDeleted-deleted)
 	if t.metadata.flushOffset <= shorten {
 		return fmt.Errorf("invalid index flush offset: %d, shorten: %d", t.metadata.flushOffset, shorten)
-	} else {
-		if err := t.metadata.setFlushOffset(t.metadata.flushOffset-shorten, true); err != nil {
-			return err
-		}
+	}
+	if err := t.metadata.setFlushOffset(t.metadata.flushOffset-shorten, true); err != nil {
+		return err
 	}
 	// Retrieve the new size and update the total size counter
 	newSize, err := t.sizeNolock()
@@ -1247,25 +1246,20 @@ func (t *freezerTable) doSync() error {
 	if t.index == nil || t.head == nil || t.metadata.file == nil {
 		return errClosed
 	}
-	var err error
-	trackError := func(e error) {
-		if e != nil && err == nil {
-			err = e
-		}
+	if err := t.index.Sync(); err != nil {
+		return err
 	}
-	trackError(t.index.Sync())
-	trackError(t.head.Sync())
-
+	if err := t.head.Sync(); err != nil {
+		return err
+	}
 	// A crash may occur before the offset is updated, leaving the offset
-	// points to a old position. If so, the extra items above the offset
+	// points to an old position. If so, the extra items above the offset
 	// will be truncated during the next run.
 	stat, err := t.index.Stat()
 	if err != nil {
 		return err
 	}
-	offset := stat.Size()
-	trackError(t.metadata.setFlushOffset(offset, true))
-	return err
+	return t.metadata.setFlushOffset(stat.Size(), true)
 }
 
 func (t *freezerTable) dumpIndexStdout(start, stop int64) {
