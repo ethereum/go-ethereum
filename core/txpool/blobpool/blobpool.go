@@ -1592,10 +1592,20 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 
 	// Check pool size limits before inserting the transaction
 	// If at limit, check whether it is underpriced.
-	// Note: we do not have the exact storage size yet, so we try to guess
-	// Note: equal priority to worse of pool is still considered underpriced.
-	// This is to prevent constant replacement when the pool is full.
-	if p.stored+meta.size > p.config.Datacap {
+	// Note: equal priority as the current worse of the pool is still considered
+	// underpriced. This is to prevent constant replacement when the pool is full.
+	storageSizeDiff, err := getSlotSize(p.slotter, uint32(meta.size))
+	if err != nil {
+		// This should nver happen, but better safe than sorry.
+		log.Warn("Dropping blob transaction due to size", "tx", tx.Hash(), "size", meta.size, "err", err)
+		return err
+	}
+	// is this a possible replacent? If so, we need to consider the storage size difference
+	// instead of the full size of the new transaction.
+	if offset < len(p.index[from]) {
+		storageSizeDiff -= p.index[from][offset].storageSize
+	}
+	if p.stored+uint64(storageSizeDiff) > p.config.Datacap {
 		if p.evict.Underpriced(meta) {
 			log.Trace("Dropping underpriced blob transaction", "tx", tx.Hash(), "feecap", tx.GasFeeCap(), "tipcap", tx.GasTipCap(), "blobfeecap", tx.BlobGasFeeCap())
 			return txpool.ErrUnderpriced
