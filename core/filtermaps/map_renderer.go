@@ -429,7 +429,9 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 		base := len(r.finishedMaps)
 		extra := 0
 		if newRange.maps.AfterLast() == r.finished.AfterLast() {
-			extra = int(oldRange.maps.AfterLast() - r.finished.AfterLast())
+			if oldRange.maps.AfterLast() > r.finished.AfterLast() {
+				extra = int(oldRange.maps.AfterLast() - r.finished.AfterLast())
+			}
 		}
 		capacity := base + extra
 
