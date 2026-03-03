@@ -260,6 +260,13 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 		for {
 			select {
 			case <-timer.C:
+				// Select is random, so we need to check if the payload has been stopped
+				select {
+				case <-payload.stop:
+					log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
+					return
+				default:
+				}
 				start := time.Now()
 				r := miner.generateWork(fullParams, witness)
 				if r.err == nil {
