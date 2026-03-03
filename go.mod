@@ -33,7 +33,6 @@ require (
 
 require (
 	github.com/Microsoft/go-winio v0.6.2
-	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20260124092617-829590d2c921
 	github.com/btcsuite/btcd/btcec/v2 v2.2.0
 	github.com/consensys/gnark-crypto v0.10.0
 	github.com/deckarep/golang-set/v2 v2.7.0
