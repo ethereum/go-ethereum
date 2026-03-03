@@ -960,7 +960,7 @@ func decodeSingle(x byte) int {
 // and n + m <= 30. There are 210 such valid pairs, encoded into a single byte
 // that avoids the forbidden range [91, 127].
 func decodePair(x byte) (int, int) {
-	// XOR with 143 remaps the forbidden bytes [91, 127] to an unused corner
+	// XOR with 143 remaps the forbidden bytes [82, 127] to an unused corner
 	// of the 16x16 grid below.
 	k := int(x ^ 143)
 	// Split into row q and column r of a 16x16 grid. The 210 valid pairs
