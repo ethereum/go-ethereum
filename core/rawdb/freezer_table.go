@@ -841,7 +841,7 @@ func (t *freezerTable) truncateTail(items uint64) error {
 func (t *freezerTable) resetTo(tail uint64) error {
 	// Sync the entire table before resetting, eliminating the potential
 	// data corruption.
-	err := t.Sync()
+	err := t.doSync()
 	if err != nil {
 		return err
 	}
@@ -870,8 +870,9 @@ func (t *freezerTable) resetTo(tail uint64) error {
 	}
 	t.headId = t.headId + 1
 	t.tailId = t.headId
+	t.headBytes = 0
 
-	t.head, err = t.openFile(t.headId, openFreezerFileForAppend)
+	t.head, err = t.openFile(t.headId, openFreezerFileTruncated)
 	if err != nil {
 		return err
 	}
