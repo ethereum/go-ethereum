@@ -306,13 +306,14 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	if err != nil {
 		return nil, err
 	}
+	var bundle *stateless.Witness
 	if witness {
-		bundle, err := stateless.NewWitness(header, miner.chain)
+		bundle, err = stateless.NewWitness(header, miner.chain)
 		if err != nil {
 			return nil, err
 		}
-		state.StartPrefetcher("miner", bundle, nil)
 	}
+	state.StartPrefetcher("miner", bundle, nil)
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
 		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),
