@@ -25,6 +25,7 @@ import (
 	"io"
 	"math/big"
 	"reflect"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -672,6 +673,7 @@ func (s *Stream) ReadBytes(b []byte) error {
 		return nil
 	case String:
 		if uint64(len(b)) != size {
+			debug.PrintStack()
 			return fmt.Errorf("input value has wrong size %d, want %d", size, len(b))
 		}
 		if err = s.readFull(b); err != nil {

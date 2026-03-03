@@ -18,6 +18,7 @@ package state
 
 import (
 	"bytes"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"math/big"
 	"sort"
 
@@ -59,22 +60,37 @@ func (s *hookedStateDB) IsNewContract(addr common.Address) bool {
 }
 
 func (s *hookedStateDB) GetBalance(addr common.Address) *uint256.Int {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.GetBalance(addr)
 }
 
 func (s *hookedStateDB) GetNonce(addr common.Address) uint64 {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.GetNonce(addr)
 }
 
 func (s *hookedStateDB) GetCodeHash(addr common.Address) common.Hash {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.GetCodeHash(addr)
 }
 
 func (s *hookedStateDB) GetCode(addr common.Address) []byte {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.GetCode(addr)
 }
 
 func (s *hookedStateDB) GetCodeSize(addr common.Address) int {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.GetCodeSize(addr)
 }
 
@@ -91,14 +107,23 @@ func (s *hookedStateDB) GetRefund() uint64 {
 }
 
 func (s *hookedStateDB) GetStateAndCommittedState(addr common.Address, hash common.Hash) (common.Hash, common.Hash) {
+	if s.hooks.OnStorageRead != nil {
+		s.hooks.OnStorageRead(addr, hash)
+	}
 	return s.inner.GetStateAndCommittedState(addr, hash)
 }
 
 func (s *hookedStateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
+	if s.hooks.OnStorageRead != nil {
+		s.hooks.OnStorageRead(addr, hash)
+	}
 	return s.inner.GetState(addr, hash)
 }
 
 func (s *hookedStateDB) GetStorageRoot(addr common.Address) common.Hash {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.GetStorageRoot(addr)
 }
 
@@ -111,14 +136,23 @@ func (s *hookedStateDB) SetTransientState(addr common.Address, key, value common
 }
 
 func (s *hookedStateDB) HasSelfDestructed(addr common.Address) bool {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.HasSelfDestructed(addr)
 }
 
 func (s *hookedStateDB) Exist(addr common.Address) bool {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.Exist(addr)
 }
 
 func (s *hookedStateDB) Empty(addr common.Address) bool {
+	if s.hooks.OnAccountRead != nil {
+		s.hooks.OnAccountRead(addr)
+	}
 	return s.inner.Empty(addr)
 }
 
@@ -221,6 +255,10 @@ func (s *hookedStateDB) SelfDestruct(address common.Address) {
 	s.inner.SelfDestruct(address)
 }
 
+func (s *hookedStateDB) ExistBeforeCurTx(addr common.Address) bool {
+	return s.inner.ExistBeforeCurTx(addr)
+}
+
 func (s *hookedStateDB) AddLog(log *types.Log) {
 	// The inner will modify the log (add fields), so invoke that first
 	s.inner.AddLog(log)
@@ -229,11 +267,10 @@ func (s *hookedStateDB) AddLog(log *types.Log) {
 	}
 }
 
-func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
+func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) bal.StateMutations {
 	if s.hooks.OnBalanceChange == nil && s.hooks.OnNonceChangeV2 == nil && s.hooks.OnNonceChange == nil && s.hooks.OnCodeChangeV2 == nil && s.hooks.OnCodeChange == nil {
 		// Short circuit if no relevant hooks are set.
-		s.inner.Finalise(deleteEmptyObjects)
-		return
+		return s.inner.Finalise(deleteEmptyObjects)
 	}
 
 	// Collect all self-destructed addresses first, then sort them to ensure
@@ -272,16 +309,23 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 
 		// If an initcode invokes selfdestruct, do not emit a code change.
 		prevCodeHash := s.inner.GetCodeHash(addr)
-		if prevCodeHash == types.EmptyCodeHash {
-			continue
+		if prevCodeHash != types.EmptyCodeHash {
+			// Otherwise, trace the change.
+			if s.hooks.OnCodeChangeV2 != nil {
+				s.hooks.OnCodeChangeV2(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
+			} else if s.hooks.OnCodeChange != nil {
+				s.hooks.OnCodeChange(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil)
+			}
 		}
-		// Otherwise, trace the change.
-		if s.hooks.OnCodeChangeV2 != nil {
-			s.hooks.OnCodeChangeV2(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
-		} else if s.hooks.OnCodeChange != nil {
-			s.hooks.OnCodeChange(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil)
+
+		if s.hooks.OnSelfDestructChange != nil {
+			s.hooks.OnSelfDestructChange(addr)
 		}
 	}
 
-	s.inner.Finalise(deleteEmptyObjects)
+	return s.inner.Finalise(deleteEmptyObjects)
+}
+
+func (s *hookedStateDB) TxIndex() int {
+	return s.inner.TxIndex()
 }

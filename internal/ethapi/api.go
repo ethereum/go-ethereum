@@ -1007,6 +1007,9 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 	if block.Withdrawals() != nil {
 		fields["withdrawals"] = block.Withdrawals()
 	}
+	if block.AccessList() != nil {
+		fields["accessList"] = block.AccessList()
+	}
 	return fields
 }
 
@@ -1376,6 +1379,18 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		}
 		prevTracer = tracer
 	}
+}
+
+// GetBlockAccessListByBlockNumber returns a block access list for the given block number
+// or nil if one does not exist.
+func (api *BlockChainAPI) GetBlockAccessListByBlockNumber(number rpc.BlockNumber) (interface{}, error) {
+	return api.b.BlockAccessListByNumberOrHash(rpc.BlockNumberOrHash{BlockNumber: &number})
+}
+
+// GetBlockAccessListByBlockHash returns a block access list for the given block hash
+// or nil if one does not exist.
+func (api *BlockChainAPI) GetBlockAccessListByBlockHash(hash common.Hash) (interface{}, error) {
+	return api.b.BlockAccessListByNumberOrHash(rpc.BlockNumberOrHash{BlockHash: &hash})
 }
 
 // TransactionAPI exposes methods for reading and creating transaction data.

@@ -272,6 +272,7 @@ func init() {
 		consoleFlags,
 		debug.Flags,
 		metricsFlags,
+		[]cli.Flag{utils.BlockAccessListExecutionModeFlag},
 	)
 	flags.AutoEnvVars(app.Flags, "GETH")
 

@@ -19,6 +19,7 @@ package beacon
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -280,6 +281,12 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if !amsterdam && header.SlotNumber != nil {
 		return fmt.Errorf("invalid slotNumber: have %d, expected nil", *header.SlotNumber)
 	}
+	if !amsterdam && header.BlockAccessListHash != nil {
+		return fmt.Errorf("invalid block access list hash: have %x, expected nil", header.BlockAccessListHash)
+	}
+	if amsterdam && header.BlockAccessListHash == nil {
+		return fmt.Errorf("header is missing block access list hash")
+	}
 	return nil
 }
 
@@ -334,26 +341,29 @@ func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.H
 }
 
 // Finalize implements consensus.Engine and processes withdrawals on top.
-func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) {
+func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) bal.StateMutations {
 	if !beacon.IsPoSHeader(header) {
-		beacon.ethone.Finalize(chain, header, state, body)
-		return
+		return beacon.ethone.Finalize(chain, header, state, body)
 	}
 	// Withdrawals processing.
 	for _, w := range body.Withdrawals {
+		// always read the target account regardless of withdrawal amt to include it in the BAL
+		state.GetBalance(w.Address)
+
 		// Convert amount from gwei to wei.
 		amount := new(uint256.Int).SetUint64(w.Amount)
 		amount = amount.Mul(amount, uint256.NewInt(params.GWei))
 		state.AddBalance(w.Address, amount, tracing.BalanceIncreaseWithdrawal)
 	}
+	return state.Finalise(true)
 	// No block reward which is issued by consensus layer instead.
 }
 
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and
 // assembling the block.
-func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt) (*types.Block, error) {
+func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, onFinalizeAccessList func(postMut bal.StateMutations) *bal.BlockAccessList) (*types.Block, error) {
 	if !beacon.IsPoSHeader(header) {
-		return beacon.ethone.FinalizeAndAssemble(chain, header, state, body, receipts)
+		return beacon.ethone.FinalizeAndAssemble(chain, header, state, body, receipts, nil)
 	}
 	shanghai := chain.Config().IsShanghai(header.Number, header.Time)
 	if shanghai {
@@ -366,14 +376,24 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 			return nil, errors.New("withdrawals set before Shanghai activation")
 		}
 	}
+
 	// Finalize and assemble the block.
-	beacon.Finalize(chain, header, state, body)
+	postMut := beacon.Finalize(chain, header, state, body)
 
 	// Assign the final state root to header.
 	header.Root = state.IntermediateRoot(true)
 
 	// Assemble the final block.
-	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)), nil
+	if onFinalizeAccessList != nil {
+		al := onFinalizeAccessList(postMut)
+		alHash := al.Hash()
+
+		header.BlockAccessListHash = &alHash
+		block := types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)).WithAccessList(al)
+		return block, nil
+	} else {
+		return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)), nil
+	}
 }
 
 // Seal generates a new sealing request for the given input block and pushes
