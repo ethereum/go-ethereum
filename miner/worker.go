@@ -78,6 +78,11 @@ func (env *environment) txFitsSize(tx *types.Transaction) bool {
 	return env.size+tx.Size() < params.MaxBlockSize-maxBlockSizeBufferZone
 }
 
+// discard terminates the background threads before discarding it.
+func (env *environment) discard() {
+	env.state.StopPrefetcher()
+}
+
 const (
 	commitInterruptNone int32 = iota
 	commitInterruptNewHead
@@ -125,6 +130,7 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
+	defer work.discard()
 
 	// Check withdrawals fit max block size.
 	// Due to the cap on withdrawal count, this can actually never happen, but we still need to
