@@ -56,27 +56,35 @@ func (l *fileWritingTracer) Write(p []byte) (n int, err error) {
 	return n, nil
 }
 
-// newFileWriter creates a set of hooks which wraps inner hooks (typically a logger),
+// newFileWriter creates a tracer which wraps inner hooks (typically a logger),
 // and writes the output to a file, one file per transaction.
-func newFileWriter(baseDir string, innerFn func(out io.Writer) *tracing.Hooks) *tracing.Hooks {
+func newFileWriter(baseDir string, innerFn func(out io.Writer) *tracing.Hooks) *tracers.Tracer {
 	t := &fileWritingTracer{
 		baseDir: baseDir,
 		suffix:  "jsonl",
 	}
 	t.inner = innerFn(t) // instantiate the inner tracer
-	return t.hooks()
+	return &tracers.Tracer{
+		Hooks:     t.hooks(),
+		GetResult: func() (json.RawMessage, error) { return json.RawMessage("{}"), nil },
+		Stop:      func(err error) {},
+	}
 }
 
-// newResultWriter creates a set of hooks wraps and invokes an underlying tracer,
+// newResultWriter creates a tracer that wraps and invokes an underlying tracer,
 // and writes the result (getResult-output) to file, one per transaction.
-func newResultWriter(baseDir string, tracer *tracers.Tracer) *tracing.Hooks {
+func newResultWriter(baseDir string, tracer *tracers.Tracer) *tracers.Tracer {
 	t := &fileWritingTracer{
 		baseDir:   baseDir,
 		getResult: tracer.GetResult,
 		inner:     tracer.Hooks,
 		suffix:    "json",
 	}
-	return t.hooks()
+	return &tracers.Tracer{
+		Hooks:     t.hooks(),
+		GetResult: func() (json.RawMessage, error) { return json.RawMessage("{}"), nil },
+		Stop:      func(err error) {},
+	}
 }
 
 // OnTxStart creates a new output-file specific for this transaction, and invokes

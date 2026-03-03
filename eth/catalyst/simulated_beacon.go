@@ -277,12 +277,14 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 
 	// Create a server span for newPayload, simulating the consensus client
 	// sending the execution payload for validation.
-	_, npSpanEnd := telemetry.StartServerSpan(context.Background(), tracer, telemetry.RPCInfo{
+	npCtx, npSpanEnd := telemetry.StartServerSpan(context.Background(), tracer, telemetry.RPCInfo{
 		System:  "jsonrpc",
 		Service: "engine",
 		Method:  "newPayloadV" + fmt.Sprintf("%d", version),
 	})
-	_, err = c.engineAPI.newPayload(*payload, blobHashes, beaconRoot, requests, false)
+
+  // Mark the payload as canon
+	_, err = c.engineAPI.newPayload(npCtx, *payload, blobHashes, beaconRoot, requests, false)
 	npSpanEnd(&err)
 	if err != nil {
 		return err
@@ -399,5 +401,6 @@ func RegisterSimulatedBeaconAPIs(stack *node.Node, sim *SimulatedBeacon) {
 			Service:   api,
 			Version:   "1.0",
 		},
+		newTestingAPI(sim.eth),
 	})
 }

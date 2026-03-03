@@ -10,6 +10,7 @@ beacon/merkle/                  @zsfelfoldi
 beacon/types/                   @zsfelfoldi @fjl
 beacon/params/                  @zsfelfoldi @fjl
 cmd/evm/                        @MariusVanDerWijden @lightclient
+cmd/keeper/                     @gballet
 core/state/                     @rjl493456442
 crypto/                         @gballet @jwasinger @fjl
 core/                           @rjl493456442

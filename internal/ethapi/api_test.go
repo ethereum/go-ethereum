@@ -4065,3 +4065,91 @@ func TestSendRawTransactionSync_Timeout(t *testing.T) {
 		t.Fatalf("expected ErrorData=%s, got %v", want, got)
 	}
 }
+
+func TestGetStorageValues(t *testing.T) {
+	t.Parallel()
+
+	var (
+		addr1 = common.HexToAddress("0x1111")
+		addr2 = common.HexToAddress("0x2222")
+		slot0 = common.Hash{}
+		slot1 = common.BigToHash(big.NewInt(1))
+		slot2 = common.BigToHash(big.NewInt(2))
+		val0  = common.BigToHash(big.NewInt(42))
+		val1  = common.BigToHash(big.NewInt(100))
+		val2  = common.BigToHash(big.NewInt(200))
+
+		genesis = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				addr1: {
+					Balance: big.NewInt(params.Ether),
+					Storage: map[common.Hash]common.Hash{
+						slot0: val0,
+						slot1: val1,
+					},
+				},
+				addr2: {
+					Balance: big.NewInt(params.Ether),
+					Storage: map[common.Hash]common.Hash{
+						slot2: val2,
+					},
+				},
+			},
+		}
+	)
+	api := NewBlockChainAPI(newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	}))
+	latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+
+	// Happy path: multiple addresses, multiple slots.
+	result, err := api.GetStorageValues(context.Background(), map[common.Address][]common.Hash{
+		addr1: {slot0, slot1},
+		addr2: {slot2},
+	}, latest)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("expected 2 addresses in result, got %d", len(result))
+	}
+	if got := common.BytesToHash(result[addr1][0]); got != val0 {
+		t.Errorf("addr1 slot0: want %x, got %x", val0, got)
+	}
+	if got := common.BytesToHash(result[addr1][1]); got != val1 {
+		t.Errorf("addr1 slot1: want %x, got %x", val1, got)
+	}
+	if got := common.BytesToHash(result[addr2][0]); got != val2 {
+		t.Errorf("addr2 slot2: want %x, got %x", val2, got)
+	}
+
+	// Missing slot returns zero.
+	result, err = api.GetStorageValues(context.Background(), map[common.Address][]common.Hash{
+		addr1: {common.HexToHash("0xff")},
+	}, latest)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := common.BytesToHash(result[addr1][0]); got != (common.Hash{}) {
+		t.Errorf("missing slot: want zero, got %x", got)
+	}
+
+	// Empty request returns error.
+	_, err = api.GetStorageValues(context.Background(), map[common.Address][]common.Hash{}, latest)
+	if err == nil {
+		t.Fatal("expected error for empty request")
+	}
+
+	// Exceeding slot limit returns error.
+	tooMany := make([]common.Hash, maxGetStorageSlots+1)
+	for i := range tooMany {
+		tooMany[i] = common.BigToHash(big.NewInt(int64(i)))
+	}
+	_, err = api.GetStorageValues(context.Background(), map[common.Address][]common.Hash{
+		addr1: tooMany,
+	}, latest)
+	if err == nil {
+		t.Fatal("expected error for exceeding slot limit")
+	}
+}

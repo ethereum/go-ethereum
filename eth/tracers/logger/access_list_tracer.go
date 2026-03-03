@@ -18,6 +18,7 @@ package logger
 
 import (
 	"maps"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -88,8 +89,10 @@ func (al accessList) accessList() types.AccessList {
 		for slot := range slots {
 			tuple.StorageKeys = append(tuple.StorageKeys, slot)
 		}
-		acl = append(acl, tuple)
+		keys := slices.SortedFunc(maps.Keys(slots), common.Hash.Cmp)
+		acl = append(acl, types.AccessTuple{Address: addr, StorageKeys: keys})
 	}
+	slices.SortFunc(acl, func(a, b types.AccessTuple) int { return a.Address.Cmp(b.Address) })
 	return acl
 }
 

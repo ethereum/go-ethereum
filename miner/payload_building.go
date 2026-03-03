@@ -45,6 +45,7 @@ type BuildPayloadArgs struct {
 	Random       common.Hash           // The provided randomness value
 	Withdrawals  types.Withdrawals     // The provided withdrawals
 	BeaconRoot   *common.Hash          // The provided beaconRoot (Cancun)
+	SlotNum      *uint64               // The provided slotNumber
 	Version      engine.PayloadVersion // Versioning byte for payload id calculation.
 }
 
@@ -58,6 +59,9 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 	rlp.Encode(hasher, args.Withdrawals)
 	if args.BeaconRoot != nil {
 		hasher.Write(args.BeaconRoot[:])
+	}
+	if args.SlotNum != nil {
+		binary.Write(hasher, binary.BigEndian, args.SlotNum)
 	}
 	var out engine.PayloadID
 	copy(out[:], hasher.Sum(nil)[:8])
@@ -210,14 +214,13 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	return envelope
 }
 
-func (miner *Miner) runBuildIteration(ctx context.Context, iteration int, payload *Payload, params *generateParams, witness bool) {
+func (miner *Miner) runBuildIteration(ctx context.Context, start time.Time, iteration int, payload *Payload, params *generateParams, witness bool) {
 	ctx, span, spanEnd := telemetry.StartSpan(ctx, "miner.buildIteration",
 		telemetry.Int64Attribute("iteration", int64(iteration)),
 	)
 	var err error
 	defer spanEnd(&err)
 
-	start := time.Now()
 	r := miner.generateWork(ctx, params, witness)
 	err = r.err
 	if err == nil {
@@ -249,6 +252,7 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 		random:      args.Random,
 		withdrawals: args.Withdrawals,
 		beaconRoot:  args.BeaconRoot,
+		slotNum:     args.SlotNum,
 		noTxs:       true,
 	}
 	empty := miner.generateWork(ctx, emptyParams, witness)
@@ -288,14 +292,16 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 			random:      args.Random,
 			withdrawals: args.Withdrawals,
 			beaconRoot:  args.BeaconRoot,
+			slotNum:     args.SlotNum,
 			noTxs:       false,
 		}
 		for {
 			select {
 			case <-timer.C:
+				start := time.Now()
 				iteration++
-				miner.runBuildIteration(bCtx, iteration, payload, fullParams, witness)
-				timer.Reset(miner.config.Recommit)
+				miner.runBuildIteration(bCtx, start, iteration, payload, fullParams, witness)
+				timer.Reset(max(0, miner.config.Recommit-time.Since(start)))
 			case <-payload.stop:
 				payload.lock.Lock()
 				emptyDelivered := payload.full == nil
@@ -314,4 +320,27 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 		}
 	}()
 	return payload, nil
+}
+
+// BuildTestingPayload is for testing_buildBlockV*. It creates a block with the exact content given
+// by the parameters instead of using the locally available transactions.
+func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*types.Transaction, empty bool, extraData []byte) (*engine.ExecutionPayloadEnvelope, error) {
+	fullParams := &generateParams{
+		timestamp:         args.Timestamp,
+		forceTime:         true,
+		parentHash:        args.Parent,
+		coinbase:          args.FeeRecipient,
+		random:            args.Random,
+		withdrawals:       args.Withdrawals,
+		beaconRoot:        args.BeaconRoot,
+		noTxs:             empty,
+		forceOverrides:    true,
+		overrideExtraData: extraData,
+		overrideTxs:       transactions,
+	}
+	res := miner.generateWork(context.Background(), fullParams, false)
+	if res.err != nil {
+		return nil, res.err
+	}
+	return engine.BlockToExecutableData(res.block, new(big.Int), res.sidecars, res.requests), nil
 }

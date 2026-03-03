@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2025 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,13 +14,24 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package snap
+package trie
 
-import (
-	"time"
+import "testing"
 
-	"github.com/ethereum/go-ethereum/p2p/tracker"
-)
+func TestLevelStatsAddLeafDepthBounds(t *testing.T) {
+	stats := NewLevelStats()
+	stats.AddLeaf(15)
 
-// requestTracker is a singleton tracker for request times.
-var requestTracker = tracker.New(ProtocolName, time.Minute)
+	if got := stats.LeafDepths()[15]; got != 1 {
+		t.Fatalf("leaf count at depth 15 = %d, want 1", got)
+	}
+}
+
+func TestLevelStatsAddLeafPanicsOnDepth16(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for depth >= 16")
+		}
+	}()
+	NewLevelStats().AddLeaf(16)
+}
