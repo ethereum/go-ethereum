@@ -84,6 +84,14 @@ func SetupTelemetry(cfg node.OpenTelemetryConfig, stack *node.Node) error {
 	if err != nil {
 		return fmt.Errorf("invalid rpc tracing endpoint URL: %w", err)
 	}
+	// Build auth headers once, shared across transports.
+	var authHeaders map[string]string
+	if cfg.AuthUser != "" {
+		authHeaders = map[string]string{
+			"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(cfg.AuthUser+":"+cfg.AuthPassword)),
+		}
+	}
+
 	var exporter *otlptrace.Exporter
 	switch u.Scheme {
 	case "http", "https":
@@ -96,23 +104,22 @@ func SetupTelemetry(cfg node.OpenTelemetryConfig, stack *node.Node) error {
 		if u.Path != "" && u.Path != "/" {
 			opts = append(opts, otlptracehttp.WithURLPath(u.Path))
 		}
-		if cfg.AuthUser != "" {
-			opts = append(opts, otlptracehttp.WithHeaders(map[string]string{
-				"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(cfg.AuthUser+":"+cfg.AuthPassword)),
-			}))
+		if authHeaders != nil {
+			opts = append(opts, otlptracehttp.WithHeaders(authHeaders))
 		}
 		exporter = otlptracehttp.NewUnstarted(opts...)
 	case "grpc", "grpcs":
+		if u.Path != "" && u.Path != "/" {
+			return fmt.Errorf("gRPC endpoints do not support URL paths: %s", u.Path)
+		}
 		opts := []otlptracegrpc.Option{
 			otlptracegrpc.WithEndpoint(u.Host),
 		}
 		if u.Scheme == "grpc" {
 			opts = append(opts, otlptracegrpc.WithInsecure())
 		}
-		if cfg.AuthUser != "" {
-			opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{
-				"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(cfg.AuthUser+":"+cfg.AuthPassword)),
-			}))
+		if authHeaders != nil {
+			opts = append(opts, otlptracegrpc.WithHeaders(authHeaders))
 		}
 		exporter = otlptracegrpc.NewUnstarted(opts...)
 	default:
