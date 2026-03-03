@@ -346,9 +346,10 @@ type BlobPool struct {
 	reserver       txpool.Reserver           // Address reserver to ensure exclusivity across subpools
 	hasPendingAuth func(common.Address) bool // Determine whether the specified address has a pending 7702-auth
 
-	store  billy.Database // Persistent data store for the tx metadata and blobs
-	stored uint64         // Useful data size of all transactions on disk
-	limbo  *limbo         // Persistent data store for the non-finalized blobs
+	store   billy.Database   // Persistent data store for the tx metadata and blobs
+	slotter billy.SlotSizeFn // Slotter function to determine the shelf sizes for the billy database
+	stored  uint64           // Useful data size of all transactions on disk
+	limbo   *limbo           // Persistent data store for the non-finalized blobs
 
 	gapped       map[common.Address][]*types.Transaction // Transactions that are currently gapped (nonce too high)
 	gappedSource map[common.Hash]common.Address          // Source of gapped transactions to allow rechecking on inclusion
@@ -435,10 +436,10 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	p.state = state
 
 	// Create new slotter for pre-Osaka blob configuration.
-	slotter := newSlotter(params.BlobTxMaxBlobs)
+	p.slotter = newSlotter(params.BlobTxMaxBlobs)
 
 	// See if we need to migrate the queue blob store after fusaka
-	slotter, err = tryMigrate(p.chain.Config(), slotter, queuedir)
+	p.slotter, err = tryMigrate(p.chain.Config(), p.slotter, queuedir)
 	if err != nil {
 		return err
 	}
@@ -449,7 +450,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 			fails = append(fails, id)
 		}
 	}
-	store, err := billy.Open(billy.Options{Path: queuedir, Repair: true}, slotter, index)
+	store, err := billy.Open(billy.Options{Path: queuedir, Repair: true}, p.slotter, index)
 	if err != nil {
 		return err
 	}

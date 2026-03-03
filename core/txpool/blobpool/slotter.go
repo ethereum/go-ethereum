@@ -17,9 +17,24 @@
 package blobpool
 
 import (
+	"errors"
+
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/billy"
 )
+
+// getSlotSize return the storage size for a given transaction size based on the current slotter.
+func getSlotSize(slotter billy.SlotSizeFn, size uint32) (uint32, error) {
+	for {
+		slotSize, done := slotter()
+		if size <= slotSize {
+			return slotSize, nil
+		}
+		if done {
+			return size, errors.New("size exceeds maximum slot size")
+		}
+	}
+}
 
 // tryMigrate checks if the billy needs to be migrated and migrates if needed.
 // Returns a slotter that can be used for the database.
