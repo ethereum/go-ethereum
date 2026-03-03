@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
@@ -503,7 +504,12 @@ func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumber) (*stateless.ExtWitness
 	if parent == nil {
 		return &stateless.ExtWitness{}, fmt.Errorf("block number %v found, but parent missing", bn)
 	}
-	result, err := bc.ProcessBlock(context.Background(), parent.Root, block, false, true)
+	config := core.ExecuteConfig{
+		WriteState:   false,
+		EnableTracer: false,
+		MakeWitness:  true,
+	}
+	result, err := bc.ProcessBlock(context.Background(), parent.Root, block, config)
 	if err != nil {
 		return nil, err
 	}
@@ -520,7 +526,12 @@ func (api *DebugAPI) ExecutionWitnessByHash(hash common.Hash) (*stateless.ExtWit
 	if parent == nil {
 		return &stateless.ExtWitness{}, fmt.Errorf("block number %x found, but parent missing", hash)
 	}
-	result, err := bc.ProcessBlock(context.Background(), parent.Root, block, false, true)
+	config := core.ExecuteConfig{
+		WriteState:   false,
+		EnableTracer: false,
+		MakeWitness:  true,
+	}
+	result, err := bc.ProcessBlock(context.Background(), parent.Root, block, config)
 	if err != nil {
 		return nil, err
 	}
