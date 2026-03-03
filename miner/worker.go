@@ -209,9 +209,7 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 		work.header.RequestsHash = &reqHash
 	}
 
-	ctx, _, finalizeSpanEnd := telemetry.StartSpan(ctx, "miner.FinalizeAndAssemble")
 	block, err := miner.engine.FinalizeAndAssemble(ctx, miner.chain, work.header, work.state, &body, work.receipts)
-	finalizeSpanEnd(&err)
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
