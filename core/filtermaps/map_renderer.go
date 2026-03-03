@@ -426,7 +426,12 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 	}
 	// add or update filter rows
 	for rowIndex := uint32(0); rowIndex < r.f.mapHeight; rowIndex++ {
-		capacity := len(r.finishedMaps)
+		base := len(r.finishedMaps)
+		extra := 0
+		if newRange.maps.AfterLast() == r.finished.AfterLast() {
+			extra = int(oldRange.maps.AfterLast() - r.finished.AfterLast())
+		}
+		capacity := base + extra
 
 		mapIndices := make([]uint32, 0, capacity)
 		rows := make([]FilterRow, 0, capacity)
