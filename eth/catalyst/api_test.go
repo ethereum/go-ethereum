@@ -1108,6 +1108,41 @@ func TestWithdrawals(t *testing.T) {
 	}
 }
 
+func TestGetPayloadV2AllowsPreShanghaiPayload(t *testing.T) {
+	genesis, blocks := generateMergeChain(10, true)
+	// Set shanghai time to be after the next payload timestamp.
+	time := blocks[len(blocks)-1].Time() + 10
+	genesis.Config.ShanghaiTime = &time
+
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+
+	api := newConsensusAPIWithoutHeartbeat(ethservice)
+	parent := ethservice.BlockChain().CurrentHeader()
+	blockParams := engine.PayloadAttributes{
+		Timestamp: parent.Time + 5,
+	}
+	fcState := engine.ForkchoiceStateV1{
+		HeadBlockHash: parent.Hash(),
+	}
+	resp, err := api.ForkchoiceUpdatedV2(fcState, &blockParams)
+	if err != nil {
+		t.Fatalf("error preparing payload, err=%v", err)
+	}
+	if resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("unexpected status (got: %s, want: %s)", resp.PayloadStatus.Status, engine.VALID)
+	}
+	if resp.PayloadID == nil {
+		t.Fatal("missing payload id")
+	}
+	if got, want := resp.PayloadID.Version(), engine.PayloadV2; got != want {
+		t.Fatalf("unexpected payload id version (got: %d, want: %d)", got, want)
+	}
+	if _, err := api.GetPayloadV2(*resp.PayloadID); err != nil {
+		t.Fatalf("GetPayloadV2 rejected pre-shanghai payload: %v", err)
+	}
+}
+
 func TestNilWithdrawals(t *testing.T) {
 	genesis, blocks := generateMergeChain(10, true)
 	// Set shanghai time to last block + 4 seconds (first post-merge block)
