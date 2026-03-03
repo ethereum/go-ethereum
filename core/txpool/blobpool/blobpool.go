@@ -1730,15 +1730,6 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 	}
 	p.updateStorageMetrics()
 
-	// If we've just dropped the added transaction, it was clearly underpriced.
-	// We've already checked for this with approximate size, but do a final
-	// check in case it was dropped with the exact size.
-	if !p.lookup.exists(tx.Hash()) {
-		log.Trace("Added blob transaction was dropped immediately, indicating underpricing", "hash", tx.Hash())
-		addUnderpricedMeter.Mark(1)
-		return txpool.ErrUnderpriced
-	}
-
 	addValidMeter.Mark(1)
 
 	// Notify all listeners of the new arrival
