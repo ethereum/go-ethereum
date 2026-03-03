@@ -397,6 +397,9 @@ func (f *MemoryFreezer) TruncateTail(tail uint64) (uint64, error) {
 		}
 	}
 	f.tail = tail
+	if f.items < tail {
+		f.items = tail
+	}
 	return old, nil
 }
 
