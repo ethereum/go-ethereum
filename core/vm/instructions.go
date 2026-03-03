@@ -947,6 +947,7 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 }
 
 // decodeSingle decodes the immediate operand of a backward-compatible DUPN or SWAPN instruction (EIP-8024)
+// https://eips.ethereum.org/EIPS/eip-8024
 func decodeSingle(x byte) int {
 	// Depths 1-16 are already covered by the legacy opcodes. The forbidden byte range [91, 127] removes
 	// 37 values from the 256 possible immediates, leaving 219 usable values, so this encoding covers depths
@@ -959,6 +960,7 @@ func decodeSingle(x byte) int {
 // instruction (EIP-8024) into stack indices (n, m) where 1 <= n < m
 // and n + m <= 30. The forbidden byte range [82, 127] removes 46 values from
 // the 256 possible immediates, leaving exactly 210 usable bytes.
+// https://eips.ethereum.org/EIPS/eip-8024
 func decodePair(x byte) (int, int) {
 	// XOR with 143 remaps the forbidden bytes [82, 127] to an unused corner
 	// of the 16x16 grid below.
