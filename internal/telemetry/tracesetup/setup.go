@@ -30,6 +30,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -101,6 +102,19 @@ func SetupTelemetry(cfg node.OpenTelemetryConfig, stack *node.Node) error {
 			}))
 		}
 		exporter = otlptracehttp.NewUnstarted(opts...)
+	case "grpc", "grpcs":
+		opts := []otlptracegrpc.Option{
+			otlptracegrpc.WithEndpoint(u.Host),
+		}
+		if u.Scheme == "grpc" {
+			opts = append(opts, otlptracegrpc.WithInsecure())
+		}
+		if cfg.AuthUser != "" {
+			opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{
+				"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(cfg.AuthUser+":"+cfg.AuthPassword)),
+			}))
+		}
+		exporter = otlptracegrpc.NewUnstarted(opts...)
 	default:
 		return fmt.Errorf("unsupported telemetry url scheme: %s", u.Scheme)
 	}
