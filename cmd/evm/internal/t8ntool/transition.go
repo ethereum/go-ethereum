@@ -541,7 +541,7 @@ func genBinTrieFromAlloc(alloc core.GenesisAlloc, db database.NodeDatabase) (*bi
 
 // BinaryCodeChunkKey computes the tree key of a code-chunk for a given address.
 func BinaryCodeChunkKey(ctx *cli.Context) error {
-	if ctx.Args().Len() == 0 || ctx.Args().Len() > 2 {
+	if ctx.Args().Len() != 2 {
 		return errors.New("invalid number of arguments: expecting an address and an code-chunk number")
 	}
 
