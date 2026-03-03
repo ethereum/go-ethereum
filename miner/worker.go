@@ -549,7 +549,7 @@ func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int3
 		filter.GasLimitCap = params.MaxTxGas
 	}
 	filter.BlobTxs = false
-	pendingPlainTxs := miner.txpool.Pending(filter)
+	pendingPlainTxs, plainTxCount := miner.txpool.Pending(filter)
 
 	filter.BlobTxs = true
 	if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
@@ -557,10 +557,10 @@ func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int3
 	} else {
 		filter.BlobVersion = types.BlobSidecarVersion0
 	}
-	pendingBlobTxs := miner.txpool.Pending(filter)
+	pendingBlobTxs, blobTxCount := miner.txpool.Pending(filter)
 	span.SetAttributes(
-		telemetry.Int64Attribute("pending.plain.count", int64(len(pendingPlainTxs))),
-		telemetry.Int64Attribute("pending.blob.count", int64(len(pendingBlobTxs))),
+		telemetry.Int64Attribute("pending.plain.count", int64(plainTxCount)),
+		telemetry.Int64Attribute("pending.blob.count", int64(blobTxCount)),
 	)
 
 	// Split the pending transactions into locals and remotes.

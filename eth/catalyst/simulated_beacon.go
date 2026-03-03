@@ -283,7 +283,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		Method:  "newPayloadV" + fmt.Sprintf("%d", version),
 	})
 
-  // Mark the payload as canon
+	// Mark the payload as canon
 	_, err = c.engineAPI.newPayload(npCtx, *payload, blobHashes, beaconRoot, requests, false)
 	npSpanEnd(&err)
 	if err != nil {
@@ -366,7 +366,7 @@ func (c *SimulatedBeacon) Rollback() {
 func (c *SimulatedBeacon) Fork(parentHash common.Hash) error {
 	// Ensure no pending transactions.
 	c.eth.TxPool().Sync()
-	if len(c.eth.TxPool().Pending(txpool.PendingFilter{})) != 0 {
+	if pending, _ := c.eth.TxPool().Pending(txpool.PendingFilter{}); len(pending) != 0 {
 		return errors.New("pending block dirty")
 	}
 
@@ -380,7 +380,7 @@ func (c *SimulatedBeacon) Fork(parentHash common.Hash) error {
 
 // AdjustTime creates a new block with an adjusted timestamp.
 func (c *SimulatedBeacon) AdjustTime(adjustment time.Duration) error {
-	if len(c.eth.TxPool().Pending(txpool.PendingFilter{})) != 0 {
+	if pending, _ := c.eth.TxPool().Pending(txpool.PendingFilter{}); len(pending) != 0 {
 		return errors.New("could not adjust time on non-empty block")
 	}
 	parent := c.eth.BlockChain().CurrentBlock()
