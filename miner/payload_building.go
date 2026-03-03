@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"math/big"
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -225,7 +227,7 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 		slotNum:     args.SlotNum,
 		noTxs:       true,
 	}
-	empty := miner.generateWork(emptyParams, witness)
+	empty := miner.generateWork(context.Background(), emptyParams, witness)
 	if empty.err != nil {
 		return nil, empty.err
 	}
@@ -261,11 +263,17 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 			select {
 			case <-timer.C:
 				start := time.Now()
-				r := miner.generateWork(fullParams, witness)
+				ctx, _, spanEnd := telemetry.StartRootSpan("miner.buildPayload",
+					telemetry.Int64Attribute("block.number", int64(args.Timestamp)),
+					telemetry.StringAttribute("payload.id", args.Id().String()),
+				)
+				r := miner.generateWork(ctx, fullParams, witness)
 				if r.err == nil {
 					payload.update(r, time.Since(start))
+					spanEnd(nil)
 				} else {
 					log.Info("Error while generating work", "id", payload.id, "err", r.err)
+					spanEnd(&r.err)
 				}
 				timer.Reset(max(0, miner.config.Recommit-time.Since(start)))
 			case <-payload.stop:
@@ -296,7 +304,7 @@ func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*
 		overrideExtraData: extraData,
 		overrideTxs:       transactions,
 	}
-	res := miner.generateWork(fullParams, false)
+	res := miner.generateWork(context.Background(), fullParams, false)
 	if res.err != nil {
 		return nil, res.err
 	}

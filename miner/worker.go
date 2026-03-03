@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -32,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -120,8 +122,8 @@ type generateParams struct {
 }
 
 // generateWork generates a sealing block based on the given parameters.
-func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPayloadResult {
-	work, err := miner.prepareWork(genParam, witness)
+func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, witness bool) *newPayloadResult {
+	work, err := miner.prepareWork(ctx, genParam, witness)
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
@@ -157,7 +159,7 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 			})
 			defer timer.Stop()
 
-			err := miner.fillTransactions(interrupt, work)
+			err := miner.fillTransactions(ctx, interrupt, work)
 			if errors.Is(err, errBlockInterruptedByTimeout) {
 				log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(miner.config.Recommit))
 			}
@@ -192,10 +194,16 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 		work.header.RequestsHash = &reqHash
 	}
 
+	var finalizeErr error
+	_, _, spanEnd := telemetry.StartSpan(ctx, "miner.finalizeAndAssemble")
 	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts)
 	if err != nil {
+		finalizeErr = err
+		spanEnd(&finalizeErr)
 		return &newPayloadResult{err: err}
 	}
+	spanEnd(&finalizeErr)
+
 	return &newPayloadResult{
 		block:    block,
 		fees:     totalFees(block, work.receipts),
@@ -210,7 +218,10 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 // prepareWork constructs the sealing task according to the given parameters,
 // either based on the last chain head or specified parent. In this function
 // the pending transactions are not filled yet, only the empty task returned.
-func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*environment, error) {
+func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, witness bool) (_ *environment, err error) {
+	_, _, spanEnd := telemetry.StartSpan(ctx, "miner.prepareWork")
+	defer spanEnd(&err)
+
 	miner.confMu.RLock()
 	defer miner.confMu.RUnlock()
 
@@ -502,7 +513,10 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
-func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) error {
+func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int32, env *environment) (err error) {
+	_, _, spanEnd := telemetry.StartSpan(ctx, "miner.fillTransactions")
+	defer spanEnd(&err)
+
 	miner.confMu.RLock()
 	tip := miner.config.GasPrice
 	prio := miner.prio

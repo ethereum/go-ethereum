@@ -18,6 +18,7 @@
 package miner
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"sync"
@@ -156,7 +157,7 @@ func (miner *Miner) getPending() *newPayloadResult {
 	if miner.chainConfig.IsShanghai(new(big.Int).Add(header.Number, big.NewInt(1)), timestamp) {
 		withdrawal = []*types.Withdrawal{}
 	}
-	ret := miner.generateWork(&generateParams{
+	ret := miner.generateWork(context.Background(), &generateParams{
 		timestamp:   timestamp,
 		forceTime:   false,
 		parentHash:  header.Hash(),

@@ -88,6 +88,13 @@ func StartServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, othe
 	return ctx, end
 }
 
+// StartRootSpan creates a SpanKind=INTERNAL root span that does not require
+// a parent span in the context. Use this for background operations that are
+// not triggered by an incoming RPC request.
+func StartRootSpan(spanName string, attributes ...Attribute) (context.Context, trace.Span, func(*error)) {
+	return startSpan(context.Background(), otel.Tracer(""), trace.SpanKindInternal, spanName, attributes...)
+}
+
 // startSpan creates a span with the given kind.
 func startSpan(ctx context.Context, tracer trace.Tracer, kind trace.SpanKind, spanName string, attributes ...Attribute) (context.Context, trace.Span, func(*error)) {
 	ctx, span := tracer.Start(ctx, spanName, trace.WithSpanKind(kind))
