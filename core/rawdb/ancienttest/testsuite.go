@@ -260,6 +260,24 @@ func basicWrite(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	if err != nil {
 		t.Fatalf("Failed to write ancient data %v", err)
 	}
+
+	// Write should work after truncating from tail but over the head
+	db.TruncateTail(200)
+	_, err = db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		offset := uint64(200)
+		for i := 0; i < 100; i++ {
+			if err := op.AppendRaw("a", offset+uint64(i), dataA[i]); err != nil {
+				return err
+			}
+			if err := op.AppendRaw("b", offset+uint64(i), dataB[i]); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Failed to write ancient data %v", err)
+	}
 }
 
 func nonMutable(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
