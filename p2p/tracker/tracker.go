@@ -139,7 +139,7 @@ func (t *Tracker) clean() {
 	defer t.lock.Unlock()
 
 	if t.expire == nil {
-		return
+		return // Tracker was stopped.
 	}
 
 	// Expire anything within a certain threshold (might be no items at all if
@@ -166,14 +166,15 @@ func (t *Tracker) clean() {
 	t.schedule()
 }
 
-// schedule starts a timer to trigger on the expiration of the first network
-// packet.
+// schedule starts a timer to trigger on the expiration of the first network packet.
 func (t *Tracker) schedule() {
 	if t.expire.Len() == 0 {
 		t.wake = nil
 		return
 	}
-	t.wake = time.AfterFunc(time.Until(t.pending[t.expire.Front().Value.(uint64)].time.Add(t.timeout)), t.clean)
+	nextID := t.expire.Front().Value.(uint64)
+	nextTime := t.pending[nextID].time
+	t.wake = time.AfterFunc(time.Until(nextTime.Add(t.timeout)), t.clean)
 }
 
 // Stop reclaims resources of the tracker.
