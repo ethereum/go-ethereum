@@ -1011,10 +1011,10 @@ func opSwapN(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		return nil, &ErrStackUnderflow{stackLen: scope.Stack.len(), required: n + 1}
 	}
 
-	// The (n+1)‘th stack item is swapped with the top of the stack.
-	indexTop := scope.Stack.len() - 1
-	indexN := scope.Stack.len() - 1 - n
-	scope.Stack.data[indexTop], scope.Stack.data[indexN] = scope.Stack.data[indexN], scope.Stack.data[indexTop]
+	// The (n+1)’th stack item is swapped with the top of the stack.
+	top := scope.Stack.peek()
+	nth := scope.Stack.Back(n)
+	*top, *nth = *nth, *top
 	*pc += 1
 	return nil, nil
 }
@@ -1043,10 +1043,10 @@ func opExchange(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		return nil, &ErrStackUnderflow{stackLen: scope.Stack.len(), required: need}
 	}
 
-	// The (n+1)‘th stack item is swapped with the (m+1)‘th stack item.
-	indexN := scope.Stack.len() - 1 - n
-	indexM := scope.Stack.len() - 1 - m
-	scope.Stack.data[indexN], scope.Stack.data[indexM] = scope.Stack.data[indexM], scope.Stack.data[indexN]
+	// The (n+1)’th stack item is swapped with the (m+1)’th stack item.
+	nth := scope.Stack.Back(n)
+	mth := scope.Stack.Back(m)
+	*nth, *mth = *mth, *nth
 	*pc += 1
 	return nil, nil
 }

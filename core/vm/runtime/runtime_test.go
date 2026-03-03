@@ -960,7 +960,7 @@ func TestManyLargeStacks(t *testing.T) {
 
 	main := common.HexToAddress("0xbb")
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-	statedb.SetCode(main, code)
+	statedb.SetCode(main, code, tracing.CodeChangeUnspecified)
 
 	//tracer := logger.NewJSONLogger(nil, os.Stdout)
 	var tracer *tracing.Hooks

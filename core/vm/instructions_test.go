@@ -1006,7 +1006,7 @@ func TestOpCLZ(t *testing.T) {
 	}
 	for _, tc := range tests {
 		// prepare a fresh stack and PC
-		stack := newstack()
+		stack := newStackForTesting()
 		pc := uint64(0)
 
 		// parse input
@@ -1164,7 +1164,7 @@ func TestEIP8024_Execution(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			code := common.FromHex(tc.codeHex)
-			stack := newstack()
+			stack := newStackForTesting()
 			pc := uint64(0)
 			scope := &ScopeContext{Stack: stack, Contract: &Contract{Code: code}}
 			var err error
@@ -1231,8 +1231,9 @@ func TestEIP8024_Execution(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			got := make([]uint64, 0, stack.len())
-			for i := stack.len() - 1; i >= 0; i-- {
-				got = append(got, stack.data[i].Uint64())
+			data := stack.Data()
+			for i := len(data) - 1; i >= 0; i-- {
+				got = append(got, data[i].Uint64())
 			}
 			if len(got) != len(tc.wantVals) {
 				t.Fatalf("stack len=%d; want %d", len(got), len(tc.wantVals))
