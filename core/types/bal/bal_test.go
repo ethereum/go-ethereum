@@ -36,55 +36,47 @@ func equalBALs(a *BlockAccessList, b *BlockAccessList) bool {
 	return true
 }
 
-func makeTestConstructionBAL() *AccessListBuilder {
-	return &AccessListBuilder{
-		FinalizedAccesses: map[common.Address]*ConstructionAccountAccesses{
-			common.BytesToAddress([]byte{0xff, 0xff}): {
-				StorageWrites: map[common.Hash]map[uint16]common.Hash{
-					common.BytesToHash([]byte{0x01}): {
-						1: common.BytesToHash([]byte{1, 2, 3, 4}),
-						2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
-					},
-					common.BytesToHash([]byte{0x10}): {
-						20: common.BytesToHash([]byte{1, 2, 3, 4}),
-					},
+func makeTestConstructionBAL() ConstructionBlockAccessList {
+	return map[common.Address]*ConstructionAccountAccesses{
+		common.BytesToAddress([]byte{0xff, 0xff}): {
+			StorageWrites: map[common.Hash]map[uint16]common.Hash{
+				common.BytesToHash([]byte{0x01}): {
+					1: common.BytesToHash([]byte{1, 2, 3, 4}),
+					2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
 				},
-				StorageReads: map[common.Hash]struct{}{
-					common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7}): {},
+				common.BytesToHash([]byte{0x10}): {
+					20: common.BytesToHash([]byte{1, 2, 3, 4}),
 				},
-				BalanceChanges: map[uint16]*uint256.Int{
-					1: uint256.NewInt(100),
-					2: uint256.NewInt(500),
-				},
-				NonceChanges: map[uint16]uint64{
-					1: 2,
-					2: 6,
-				},
-				CodeChanges: map[uint16]CodeChange{0: {
-					TxIdx: 0,
-					Code:  common.Hex2Bytes("deadbeef"),
-				}},
 			},
-			common.BytesToAddress([]byte{0xff, 0xff, 0xff}): {
-				StorageWrites: map[common.Hash]map[uint16]common.Hash{
-					common.BytesToHash([]byte{0x01}): {
-						2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
-						3: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}),
-					},
-					common.BytesToHash([]byte{0x10}): {
-						21: common.BytesToHash([]byte{1, 2, 3, 4, 5}),
-					},
+			StorageReads: map[common.Hash]struct{}{
+				common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7}): {},
+			},
+			BalanceChanges: map[uint16]*uint256.Int{
+				1: uint256.NewInt(100),
+				2: uint256.NewInt(500),
+			},
+			NonceChanges: map[uint16]uint64{
+				1: 2,
+				2: 6,
+			},
+			CodeChanges: map[uint16][]byte{0: common.Hex2Bytes("deadbeef")},
+		},
+		common.BytesToAddress([]byte{0xff, 0xff, 0xff}): {
+			StorageWrites: map[common.Hash]map[uint16]common.Hash{
+				common.BytesToHash([]byte{0x01}): {
+					2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
+					3: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}),
 				},
-				StorageReads: map[common.Hash]struct{}{
-					common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}): {},
-				},
-				BalanceChanges: map[uint16]*uint256.Int{
-					2: uint256.NewInt(100),
-					3: uint256.NewInt(500),
-				},
-				NonceChanges: map[uint16]uint64{
-					1: 2,
-				},
+			},
+			StorageReads: map[common.Hash]struct{}{
+				common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}): {},
+			},
+			BalanceChanges: map[uint16]*uint256.Int{
+				2: uint256.NewInt(100),
+				3: uint256.NewInt(500),
+			},
+			NonceChanges: map[uint16]uint64{
+				1: 2,
 			},
 		},
 	}
@@ -93,8 +85,7 @@ func makeTestConstructionBAL() *AccessListBuilder {
 // TestBALEncoding tests that a populated access list can be encoded/decoded correctly.
 func TestBALEncoding(t *testing.T) {
 	var buf bytes.Buffer
-	balBuilder := makeTestConstructionBAL()
-	bal := balBuilder.FinalizedAccesses
+	bal := makeTestConstructionBAL()
 	err := bal.EncodeRLP(&buf)
 	if err != nil {
 		t.Fatalf("encoding failed: %v\n", err)
@@ -184,10 +175,10 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 		StorageReads:   encodedStorageReads,
 		BalanceChanges: balances,
 		NonceChanges:   nonces,
-		CodeChanges: []CodeChange{
+		CodeChanges: []encodingCodeChange{
 			{
-				TxIdx: 100,
-				Code:  testrand.Bytes(256),
+				TxIndex: 100,
+				Code:    testrand.Bytes(256),
 			},
 		},
 	}
@@ -250,7 +241,7 @@ func TestBlockAccessListValidation(t *testing.T) {
 	}
 
 	// Validate the derived block access list
-	cBAL := makeTestConstructionBAL().FinalizedAccesses
+	cBAL := makeTestConstructionBAL()
 	listB := cBAL.ToEncodingObj()
 	if err := listB.Validate(testBALMaxIndex); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
