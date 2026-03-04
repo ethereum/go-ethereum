@@ -103,6 +103,8 @@ type SimulatedBeacon struct {
 
 func payloadVersion(config *params.ChainConfig, time uint64) engine.PayloadVersion {
 	switch config.LatestFork(time) {
+	case forks.Amsterdam:
+		return engine.PayloadV4
 	case forks.BPO5, forks.BPO4, forks.BPO3, forks.BPO2, forks.BPO1, forks.Osaka, forks.Prague, forks.Cancun:
 		return engine.PayloadV3
 	case forks.Paris, forks.Shanghai:
@@ -200,18 +202,23 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	// simulating an incoming engine API request from a real consensus client.
 	var random [32]byte
 	rand.Read(random[:])
-	fcCtx, fcSpanEnd := telemetry.StartServerSpan(context.Background(), tracer, telemetry.RPCInfo{
-		System:  "jsonrpc",
-		Service: "engine",
-		Method:  "forkchoiceUpdatedV" + fmt.Sprintf("%d", version),
-	})
-	fcResponse, err := c.engineAPI.forkchoiceUpdated(fcCtx, c.curForkchoiceState, &engine.PayloadAttributes{
+	attribute := &engine.PayloadAttributes{
 		Timestamp:             timestamp,
 		SuggestedFeeRecipient: feeRecipient,
 		Withdrawals:           withdrawals,
 		Random:                random,
 		BeaconRoot:            &common.Hash{},
-	}, version, false)
+	}
+	if c.eth.BlockChain().Config().LatestFork(timestamp) == forks.Amsterdam {
+		slotNumber := uint64(0)
+		attribute.SlotNumber = &slotNumber
+	}
+	fcCtx, fcSpanEnd := telemetry.StartServerSpan(context.Background(), tracer, telemetry.RPCInfo{
+		System:  "jsonrpc",
+		Service: "engine",
+		Method:  "forkchoiceUpdatedV" + fmt.Sprintf("%d", version),
+	})
+	fcResponse, err := c.engineAPI.forkchoiceUpdated(fcCtx, c.curForkchoiceState, attribute, version, false)
 	fcSpanEnd(&err)
 	if err != nil {
 		return err

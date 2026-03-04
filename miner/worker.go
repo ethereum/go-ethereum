@@ -80,6 +80,11 @@ func (env *environment) txFitsSize(tx *types.Transaction) bool {
 	return env.size+tx.Size() < params.MaxBlockSize-maxBlockSizeBufferZone
 }
 
+// discard terminates the background threads before discarding it.
+func (env *environment) discard() {
+	env.state.StopPrefetcher()
+}
+
 const (
 	commitInterruptNone int32 = iota
 	commitInterruptNewHead
@@ -142,6 +147,7 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
+	defer work.discard()
 
 	// Check withdrawals fit max block size.
 	// Due to the cap on withdrawal count, this can actually never happen, but we still need to
@@ -157,9 +163,6 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 		// If forceOverrides is true and overrideTxs is not empty, commit the override transactions
 		// otherwise, fill the block with the current transactions from the txpool
 		if genParam.forceOverrides && len(genParam.overrideTxs) > 0 {
-			if work.gasPool == nil {
-				work.gasPool = new(core.GasPool).AddGas(work.header.GasLimit)
-			}
 			for _, tx := range genParam.overrideTxs {
 				work.state.SetTxContext(tx.Hash(), work.tcount)
 				if err := miner.commitTransaction(ctx, work, tx); err != nil {
@@ -325,19 +328,21 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	if err != nil {
 		return nil, err
 	}
+	var bundle *stateless.Witness
 	if witness {
-		bundle, err := stateless.NewWitness(header, miner.chain)
+		bundle, err = stateless.NewWitness(header, miner.chain)
 		if err != nil {
 			return nil, err
 		}
-		state.StartPrefetcher("miner", bundle, nil)
 	}
+	state.StartPrefetcher("miner", bundle, nil)
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
 		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),
 		state:    state,
 		size:     uint64(header.Size()),
 		coinbase: coinbase,
+		gasPool:  core.NewGasPool(header.GasLimit),
 		header:   header,
 		witness:  state.Witness(),
 		evm:      vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{}),
@@ -393,26 +398,22 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*types.Receipt, error) {
 	var (
 		snap = env.state.Snapshot()
-		gp   = env.gasPool.Gas()
+		gp   = env.gasPool.Snapshot()
 	)
-	receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx, &env.header.GasUsed)
+	receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
-		env.gasPool.SetGas(gp)
+		env.gasPool.Set(gp)
+		return nil, err
 	}
-	return receipt, err
+	env.header.GasUsed = env.gasPool.Used()
+	return receipt, nil
 }
 
 func (miner *Miner) commitTransactions(ctx context.Context, env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
 	ctx, _, spanEnd := telemetry.StartSpan(ctx, "miner.commitTransactions")
 	defer spanEnd(nil)
-	var (
-		isCancun = miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
-		gasLimit = env.header.GasLimit
-	)
-	if env.gasPool == nil {
-		env.gasPool = new(core.GasPool).AddGas(gasLimit)
-	}
+	isCancun := miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
 	for {
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {

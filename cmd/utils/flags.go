@@ -491,7 +491,7 @@ var (
 	CacheFlag = &cli.IntFlag{
 		Name:     "cache",
 		Usage:    "Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode)",
-		Value:    1024,
+		Value:    4096,
 		Category: flags.PerfCategory,
 	}
 	CacheDatabaseFlag = &cli.IntFlag{
@@ -2475,8 +2475,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	}
 	vmcfg := vm.Config{
 		EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name),
-		EnableWitnessStats:      ctx.Bool(VMWitnessStatsFlag.Name),
-		StatelessSelfValidation: ctx.Bool(VMStatelessSelfValidationFlag.Name) || ctx.Bool(VMWitnessStatsFlag.Name),
 	}
 	if ctx.IsSet(VMTraceFlag.Name) {
 		if name := ctx.String(VMTraceFlag.Name); name != "" {
@@ -2489,6 +2487,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		}
 	}
 	options.VmConfig = vmcfg
+
+	options.StatelessSelfValidation = ctx.Bool(VMStatelessSelfValidationFlag.Name) || ctx.Bool(VMWitnessStatsFlag.Name)
+	options.EnableWitnessStats = ctx.Bool(VMWitnessStatsFlag.Name)
 
 	chain, err := core.NewBlockChain(chainDb, gspec, engine, options)
 	if err != nil {
