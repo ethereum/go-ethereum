@@ -47,11 +47,19 @@ var (
 )
 
 func GetBinaryTreeKey(addr common.Address, key []byte) []byte {
+	return getBinaryTreeKey(addr, key, false)
+}
+
+func getBinaryTreeKey(addr common.Address, key []byte, overflow bool) []byte {
 	hasher := sha256.New()
 	hasher.Write(zeroHash[:12])
 	hasher.Write(addr[:])
 	hasher.Write(key[:31])
-	hasher.Write([]byte{0})
+	if overflow {
+		hasher.Write([]byte{1})
+	} else {
+		hasher.Write([]byte{0})
+	}
 	k := hasher.Sum(nil)
 	k[31] = key[31]
 	return k
@@ -82,11 +90,12 @@ func GetBinaryTreeKeyStorageSlot(address common.Address, key []byte) []byte {
 	// note that the first 64 bytes of the main offset storage
 	// are unreachable, which is consistent with the spec and
 	// what verkle does.
-	k[0] = 1 // 1 << 248
-	copy(k[1:], key[:31])
+	copy(k[:31], key[:31])
+	overflow := k[0] == 255
+	k[0] += 1 // 1 << 248, handle overflow out of band
 	k[31] = key[31]
 
-	return GetBinaryTreeKey(address, k[:])
+	return getBinaryTreeKey(address, k[:], overflow)
 }
 
 func GetBinaryTreeKeyCodeChunk(address common.Address, chunknr *uint256.Int) []byte {
