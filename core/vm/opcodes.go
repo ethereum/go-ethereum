@@ -212,6 +212,18 @@ const (
 	LOG4
 )
 
+// 0xaa range - Frame Transaction opcodes.
+const (
+	APPROVE OpCode = 0xaa //Approve execution/payment in VERIFY frame.
+)
+
+// 0xb0 range - transaction parameter opcodes.
+const (
+	TXPARAMLOAD OpCode = 0xb0 // Load 32-byte word from tx parameter.
+	TXPARAMSIZE OpCode = 0xb1 // Get size of tx parameter.
+	TXPARAMCOPY OpCode = 0xb2 // Copy tx parameter data to memory.
+)
+
 // 0xd0 range - eof operations.
 const (
 	DATALOAD  OpCode = 0xd0
@@ -415,6 +427,14 @@ var opCodeToString = [256]string{
 	LOG2: "LOG2",
 	LOG3: "LOG3",
 	LOG4: "LOG4",
+
+	// 0xaa - opcodes.
+	APPROVE: "APPROVE",
+
+	// 0xb0 range - tx param opcodes.
+	TXPARAMLOAD: "TXPARAMLOAD",
+	TXPARAMSIZE: "TXPARAMSIZE",
+	TXPARAMCOPY: "TXPARAMCOPY",
 
 	// 0xd range - eof ops.
 	DATALOAD:  "DATALOAD",
@@ -631,6 +651,10 @@ var stringToOp = map[string]OpCode{
 	"REVERT":          REVERT,
 	"INVALID":         INVALID,
 	"SELFDESTRUCT":    SELFDESTRUCT,
+	"APPROVE":         APPROVE,
+	"TXPARAMLOAD":     TXPARAMLOAD,
+	"TXPARAMSIZE":     TXPARAMSIZE,
+	"TXPARAMCOPY":     TXPARAMCOPY,
 }
 
 // StringToOp finds the opcode whose name is stored in `str`.

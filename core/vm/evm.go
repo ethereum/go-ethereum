@@ -126,6 +126,36 @@ type EVM struct {
 
 	readOnly   bool   // Whether to throw on stateful modifications
 	returnData []byte // Last CALL's return data for subsequent reuse
+
+	// FrameTxContext holds frame transaction state, set during frame tx execution.
+	FrameTxCtx *FrameTxContext
+}
+
+type FrameTxContext struct {
+	Sender               common.Address
+	Frames               []FrameInfo
+	FrameStatuses        []uint8
+	SenderApproved       bool
+	PayerApproved        bool
+	Payer                common.Address
+	SigHash              common.Hash
+	CurrentFrame         int
+	Nonce                uint64
+	GasTipCap            *big.Int
+	GasFeeCap            *big.Int
+	TxFee                *big.Int
+	ApproveCalledInFrame bool
+
+	BlobFeeCap          *big.Int
+	BlobVersionedHashes []common.Hash
+}
+
+// FrameInfo holds the definition of a single frame within a FrameTx.
+type FrameInfo struct {
+	Mode     uint8
+	Target   common.Address
+	GasLimit uint64
+	Data     []byte
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
@@ -144,6 +174,8 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 	evm.precompiles = activePrecompiledContracts(evm.chainRules)
 
 	switch {
+	case evm.chainRules.IsBogota:
+		evm.table = &bogotaInstructionSet
 	case evm.chainRules.IsOsaka:
 		evm.table = &osakaInstructionSet
 	case evm.chainRules.IsVerkle:

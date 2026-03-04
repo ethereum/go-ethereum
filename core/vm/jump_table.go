@@ -63,6 +63,7 @@ var (
 	verkleInstructionSet           = newVerkleInstructionSet()
 	pragueInstructionSet           = newPragueInstructionSet()
 	osakaInstructionSet            = newOsakaInstructionSet()
+	bogotaInstructionSet           = newBogotaInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -89,6 +90,12 @@ func validate(jt JumpTable) JumpTable {
 func newVerkleInstructionSet() JumpTable {
 	instructionSet := newShanghaiInstructionSet()
 	enable4762(&instructionSet)
+	return validate(instructionSet)
+}
+
+func newBogotaInstructionSet() JumpTable {
+	instructionSet := newOsakaInstructionSet()
+	enable8141(&instructionSet) // EIP-7939 (CLZ opcode)
 	return validate(instructionSet)
 }
 

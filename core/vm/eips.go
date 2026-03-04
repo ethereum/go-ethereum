@@ -38,6 +38,7 @@ var activators = map[int]func(*JumpTable){
 	2200: enable2200,
 	1884: enable1884,
 	1344: enable1344,
+	8141: enable8141,
 	1153: enable1153,
 	4762: enable4762,
 	7702: enable7702,
@@ -578,4 +579,38 @@ func enable7702(jt *JumpTable) {
 	jt[CALLCODE].dynamicGas = gasCallCodeEIP7702
 	jt[STATICCALL].dynamicGas = gasStaticCallEIP7702
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7702
+}
+
+func enable8141(jt *JumpTable) {
+	jt[APPROVE] = &operation{
+		execute:     opApprove,
+		constantGas: 0,
+		dynamicGas:  gasApprove,
+		minStack:    minStack(3, 0),
+		maxStack:    maxStack(3, 0),
+		memorySize:  memoryApprove,
+	}
+
+	jt[TXPARAMLOAD] = &operation{
+		execute:     opTxParamLoad,
+		constantGas: GasFastestStep,
+		minStack:    minStack(3, 1),
+		maxStack:    maxStack(3, 1),
+	}
+
+	jt[TXPARAMSIZE] = &operation{
+		execute:     opTxParamSize,
+		constantGas: GasQuickStep,
+		minStack:    minStack(2, 1),
+		maxStack:    maxStack(2, 1),
+	}
+
+	jt[TXPARAMCOPY] = &operation{
+		execute:     opTxParamCopy,
+		constantGas: GasFastestStep,
+		dynamicGas:  gasTxParamCopy,
+		minStack:    minStack(5, 0),
+		maxStack:    maxStack(5, 0),
+		memorySize:  memoryTxParamCopy,
+	}
 }

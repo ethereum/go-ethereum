@@ -1144,3 +1144,344 @@ func makeDup(size int) executionFunc {
 		return nil, nil
 	}
 }
+
+// 8141
+
+func getTxParamData(evm *EVM, ftx *FrameTxContext, selector, frameIdx uint64) ([]byte, bool) {
+	switch selector {
+
+	case 0x00: // tx type = 6
+		val := new(uint256.Int).SetUint64(6)
+		b32 := val.Bytes32()
+		return b32[:], true
+
+	case 0x01: // nonce
+		val := new(uint256.Int).SetUint64(ftx.Nonce)
+		b32 := val.Bytes32()
+		return b32[:], true
+
+	case 0x02: // sender (left-padded to 32 bytes)
+		return common.LeftPadBytes(ftx.Sender.Bytes(), 32), true
+
+	case 0x03: // max_priority_fee_per_gas
+		val, _ := uint256.FromBig(ftx.GasTipCap)
+		b32 := val.Bytes32()
+		return b32[:], true
+
+	case 0x04: // max_fee_per_gas
+		val, _ := uint256.FromBig(ftx.GasFeeCap)
+		b32 := val.Bytes32()
+		return b32[:], true
+
+	case 0x05: // max_fee_per_blob_gas
+		if ftx.BlobFeeCap == nil {
+			b32 := new(uint256.Int).Bytes32()
+			return b32[:], true
+		}
+		val, _ := uint256.FromBig(ftx.BlobFeeCap)
+		b32 := val.Bytes32()
+		return b32[:], true
+
+	case 0x06: // max cost
+		val, _ := uint256.FromBig(ftx.TxFee)
+		b32 := val.Bytes32()
+		return b32[:], true
+
+	case 0x07: // len(blob_versioned_hashes)
+		count := uint64(len(ftx.BlobVersionedHashes))
+		val := new(uint256.Int).SetUint64(count)
+		b32 := val.Bytes32()
+		return b32[:], true
+
+	case 0x08: // compute_sig_hash(tx)
+		return ftx.SigHash[:], true
+
+	case 0x09: // len(frames)
+		val := new(uint256.Int).SetUint64(uint64(len(ftx.Frames)))
+		b32 := val.Bytes32()
+		return b32[:], true
+
+	case 0x10: // current frame index
+		if ftx.CurrentFrame < 0 {
+			return nil, false
+		}
+		val := new(uint256.Int).SetUint64(uint64(ftx.CurrentFrame))
+		b32 := val.Bytes32()
+		return b32[:], true
+
+	case 0x11: // frame[index].target
+		if int(frameIdx) >= len(ftx.Frames) {
+			return nil, false // TxParamOutOfBounds → exceptional halt
+		}
+		f := ftx.Frames[frameIdx]
+		if f.Target == (common.Address{}) {
+			// null target
+			return make([]byte, 32), true
+		}
+		return common.LeftPadBytes(f.Target.Bytes(), 32), true
+
+	case 0x12: // frame[index].data
+		// EELS:
+		//   if index >= len(tx.frames): raise TxParamOutOfBounds
+		//   if frame.mode == FRAME_MODE_VERIFY: return (b"", Uint(0))
+		//   data = bytes(frame.data)
+		//   return (data, Uint(len(data)))
+		if int(frameIdx) >= len(ftx.Frames) {
+			return nil, false // TxParamOutOfBounds
+		}
+		f := ftx.Frames[frameIdx]
+		if f.Mode == types.FrameModeVerify {
+			return []byte{}, true
+		}
+		return f.Data, true
+
+	case 0x13: // frame[index].gas_limit
+		if int(frameIdx) >= len(ftx.Frames) {
+			return nil, false
+		}
+		val := new(uint256.Int).SetUint64(ftx.Frames[frameIdx].GasLimit)
+		b32 := val.Bytes32()
+		return b32[:], true
+
+	case 0x14: // frame[index].mode
+		if int(frameIdx) >= len(ftx.Frames) {
+			return nil, false
+		}
+		val := new(uint256.Int).SetUint64(uint64(ftx.Frames[frameIdx].Mode))
+		b32 := val.Bytes32()
+		return b32[:], true
+
+	case 0x15: // frame[index].status
+		if int(frameIdx) >= len(ftx.Frames) {
+			return nil, false
+		}
+		if int(frameIdx) >= ftx.CurrentFrame {
+			return nil, false
+		}
+		if int(frameIdx) >= len(ftx.FrameStatuses) {
+			return nil, false
+		}
+		val := new(uint256.Int).SetUint64(uint64(ftx.FrameStatuses[frameIdx]))
+		b32 := val.Bytes32()
+		return b32[:], true
+
+	default:
+		return nil, false
+	}
+}
+
+// TXPARAMLOAD (0xB0)
+// Stack: [selector, index, offset] → [value]
+// Gas: GAS_VERY_LOW (3)
+
+func opTxParamLoad(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	ftx := evm.FrameTxCtx
+	if ftx == nil {
+		return nil, ErrExecutionReverted
+	}
+	selector := scope.Stack.pop()
+	index := scope.Stack.pop()
+	offset := scope.Stack.pop()
+	data, ok := getTxParamData(evm, ftx, selector.Uint64(), index.Uint64())
+	if !ok {
+		return nil, ErrExecutionReverted
+	}
+	var result [32]byte
+	offsetU64 := offset.Uint64()
+	if offsetU64 < uint64(len(data)) {
+		copy(result[:], data[offsetU64:])
+	}
+	scope.Stack.push(new(uint256.Int).SetBytes(result[:]))
+	return nil, nil
+}
+
+// TXPARAMSIZE (0xB1)
+// Stack: [selector, index] → [size]
+// Gas: GAS_BASE (2)
+
+func opTxParamSize(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	ftx := evm.FrameTxCtx
+	if ftx == nil {
+		return nil, ErrExecutionReverted
+	}
+	selector := scope.Stack.pop()
+	index := scope.Stack.pop()
+	data, ok := getTxParamData(evm, ftx, selector.Uint64(), index.Uint64())
+	if !ok {
+		return nil, ErrExecutionReverted
+	}
+
+	scope.Stack.push(new(uint256.Int).SetUint64(uint64(len(data))))
+	return nil, nil
+}
+
+// TXPARAMCOPY (0xB2)
+// Stack: [selector, index, dest_offset, src_offset, length] → []
+// Gas: GAS_VERY_LOW + GAS_VERY_LOW * words + memory_expansion
+
+func opTxParamCopy(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	selector := scope.Stack.pop()
+	index := scope.Stack.pop()
+	memOffset := scope.Stack.pop()
+	dataOffset := scope.Stack.pop()
+	length := scope.Stack.pop()
+	lengthU64 := length.Uint64()
+	if lengthU64 == 0 {
+		return nil, nil
+	}
+	ftx := evm.FrameTxCtx
+	if ftx == nil {
+		return nil, ErrExecutionReverted
+	}
+	data, ok := getTxParamData(evm, ftx, selector.Uint64(), index.Uint64())
+	if !ok {
+		return nil, ErrExecutionReverted
+	}
+	dataOffsetU64 := dataOffset.Uint64()
+	dataCopy := make([]byte, lengthU64)
+	if dataOffsetU64 < uint64(len(data)) {
+		end := dataOffsetU64 + lengthU64
+		if end > uint64(len(data)) {
+			end = uint64(len(data))
+		}
+		copy(dataCopy, data[dataOffsetU64:end])
+	}
+	scope.Memory.Set(memOffset.Uint64(), lengthU64, dataCopy)
+	return nil, nil
+}
+
+// APPROVE (0xAA)
+// Stack: [offset, length, scope] ->  [] (terminates frame)
+// Gas: GAS_ZERO + memory_expansion
+
+func opApprove(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	offset := scope.Stack.pop()
+	length := scope.Stack.pop()
+	scp := scope.Stack.pop()
+
+	// GAS already charged + memory already extended by gasApprove()
+	ftx := evm.FrameTxCtx
+	if ftx == nil {
+		return nil, ErrExecutionReverted
+	}
+
+	// EELS: tx_approval = _get_frame_tx_approval(evm)
+	s := scp.Uint64()
+	if s > 2 {
+		return nil, ErrExecutionReverted
+	}
+
+	if ftx.CurrentFrame < 0 || ftx.CurrentFrame >= len(ftx.Frames) {
+		return nil, ErrExecutionReverted
+	}
+	frame := ftx.Frames[ftx.CurrentFrame]
+
+	var frameTarget common.Address
+	if frame.Target == (common.Address{}) {
+		frameTarget = ftx.Sender
+	} else {
+		frameTarget = frame.Target
+	}
+
+	if scope.Contract.Caller() != frameTarget {
+		return nil, ErrExecutionReverted
+	}
+
+	switch s {
+
+	case 0x0:
+		if ftx.SenderApproved {
+			return nil, ErrExecutionReverted
+		}
+		if scope.Contract.Caller() != ftx.Sender {
+			return nil, ErrExecutionReverted
+		}
+		ftx.SenderApproved = true
+
+	case 0x1:
+		if ftx.PayerApproved {
+			return nil, ErrExecutionReverted
+		}
+		if !ftx.SenderApproved {
+			return nil, ErrExecutionReverted
+		}
+		balance := evm.StateDB.GetBalance(frameTarget).ToBig()
+		if balance.Cmp(ftx.TxFee) < 0 {
+			return nil, ErrExecutionReverted
+		}
+		fee, _ := uint256.FromBig(ftx.TxFee)
+		evm.StateDB.SubBalance(frameTarget, fee, tracing.BalanceDecreaseGasBuy)
+		evm.StateDB.SetNonce(ftx.Sender, evm.StateDB.GetNonce(ftx.Sender)+1, tracing.NonceChangeEoACall)
+		ftx.PayerApproved = true
+		ftx.Payer = frameTarget
+
+	case 0x2:
+		if ftx.SenderApproved || ftx.PayerApproved {
+			return nil, ErrExecutionReverted
+		}
+		if scope.Contract.Caller() != ftx.Sender {
+			return nil, ErrExecutionReverted
+		}
+		balance := evm.StateDB.GetBalance(frameTarget).ToBig()
+		if balance.Cmp(ftx.TxFee) < 0 {
+			return nil, ErrExecutionReverted
+		}
+		fee, _ := uint256.FromBig(ftx.TxFee)
+		evm.StateDB.SubBalance(frameTarget, fee, tracing.BalanceDecreaseGasBuy)
+		evm.StateDB.SetNonce(ftx.Sender, evm.StateDB.GetNonce(ftx.Sender)+1, tracing.NonceChangeEoACall)
+		ftx.SenderApproved = true
+		ftx.PayerApproved = true
+		ftx.Payer = frameTarget
+	}
+
+	ftx.ApproveCalledInFrame = true
+
+	// Mirror opReturn
+	ret := scope.Memory.GetCopy(offset.Uint64(), length.Uint64())
+	return ret, errStopToken
+}
+
+// Todo(jvn): All these Memory extension and Gas Estimation verify correctness across EELS
+
+// memoryApprove computes memory size for APPROVE dynamic gas.
+func memoryApprove(stack *Stack) (uint64, bool) {
+	// Stack at this point (before pops): [offset, length, scope]
+	return calcMemSize64(stack.Back(0), stack.Back(1))
+}
+
+// gasApprove computes dynamic gas for APPROVE (memory expansion only).
+// EELS: charge_gas(evm, GAS_ZERO + extend_memory.cost)
+func gasApprove(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return memoryGasCost(mem, memorySize)
+}
+
+// memoryTxParamCopy computes memory size for TXPARAMCOPY dynamic gas.
+func memoryTxParamCopy(stack *Stack) (uint64, bool) {
+	// destOffset is Back(2), length is Back(4)
+	return calcMemSize64(stack.Back(2), stack.Back(4))
+}
+
+// gasTxParamCopy computes dynamic gas for TXPARAMCOPY.
+func gasTxParamCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	length := stack.Back(4)
+	words, overflow := length.Uint64WithOverflow()
+	if overflow {
+		return 0, ErrGasUintOverflow
+	}
+	// words = ceil(length / 32)
+	wordSize := toWordSize(words)
+	copyGas := wordSize * params.CopyGas
+	// overflow check
+	if wordSize != 0 && copyGas/wordSize != params.CopyGas {
+		return 0, ErrGasUintOverflow
+	}
+	total := gas + copyGas
+	if total < gas {
+		return 0, ErrGasUintOverflow
+	}
+	return total, nil
+}
