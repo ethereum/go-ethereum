@@ -202,7 +202,7 @@ func newConstructionAccountAccesses() *ConstructionAccountAccesses {
 	}
 }
 
-// StateDiff contains state mutations occuring over one or more access list
+// StateDiff contains state mutations occurring over one or more access list
 // index.
 type StateDiff struct {
 	Mutations map[common.Address]*AccountMutations `json:"Mutations,omitempty"`

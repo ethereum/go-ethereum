@@ -1,6 +1,11 @@
 package state
 
 import (
+	"maps"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
@@ -9,10 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 	"golang.org/x/sync/errgroup"
-	"maps"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 // BALStateTransition is responsible for performing the state root update
