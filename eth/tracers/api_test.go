@@ -188,7 +188,7 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 			return tx, context, statedb, release, nil
 		}
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
-		if _, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
+		if _, err := core.ApplyMessage(evm, msg, nil); err != nil {
 			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))

@@ -17,6 +17,7 @@
 package ethapi
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -80,7 +81,10 @@ func TestSimulateSanitizeBlockOrder(t *testing.T) {
 			err:           "block timestamps must be in order: 72 <= 72",
 		},
 	} {
-		sim := &simulator{base: &types.Header{Number: big.NewInt(int64(tc.baseNumber)), Time: tc.baseTimestamp}}
+		sim := &simulator{
+			base:         &types.Header{Number: big.NewInt(int64(tc.baseNumber)), Time: tc.baseTimestamp},
+			gasRemaining: math.MaxUint64,
+		}
 		res, err := sim.sanitizeChain(tc.blocks)
 		if err != nil {
 			if err.Error() == tc.err {
