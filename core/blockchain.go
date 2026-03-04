@@ -219,6 +219,10 @@ type BlockChainConfig struct {
 	// detailed statistics will be logged. Negative value means disabled (default),
 	// zero logs all blocks, positive value filters blocks by execution time.
 	SlowBlockThreshold time.Duration
+
+	// Execution configs
+	StatelessSelfValidation bool // Generate execution witnesses and self-check against them (testing purpose)
+	EnableWitnessStats      bool // Whether trie access statistics collection is enabled
 }
 
 // DefaultConfig returns the default config.
@@ -1990,7 +1994,15 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 		}
 		// The traced section of block import.
 		start := time.Now()
-		res, err := bc.ProcessBlock(ctx, parent.Root, block, setHead, makeWitness && len(chain) == 1)
+		config := ExecuteConfig{
+			WriteState:              true,
+			WriteHead:               setHead,
+			EnableTracer:            true,
+			MakeWitness:             makeWitness && len(chain) == 1,
+			StatelessSelfValidation: bc.cfg.StatelessSelfValidation,
+			EnableWitnessStats:      bc.cfg.EnableWitnessStats,
+		}
+		res, err := bc.ProcessBlock(ctx, parent.Root, block, config)
 		if err != nil {
 			return nil, it.index, err
 		}
@@ -2073,9 +2085,36 @@ func (bpr *blockProcessingResult) Stats() *ExecuteStats {
 	return bpr.stats
 }
 
+// ExecuteConfig defines optional behaviors during execution.
+type ExecuteConfig struct {
+	// WriteState controls whether the computed state changes are persisted to
+	// the underlying storage. If false, execution is performed in-memory only.
+	WriteState bool
+
+	// WriteHead indicates whether the execution result should update the canonical
+	// chain head. It's only relevant with WriteState == True.
+	WriteHead bool
+
+	// EnableTracer enables execution tracing. This is typically used for debugging
+	// or analysis and may significantly impact performance.
+	EnableTracer bool
+
+	// MakeWitness indicates whether to generate execution witness data during
+	// execution. Enabling this may introduce additional memory and CPU overhead.
+	MakeWitness bool
+
+	// StatelessSelfValidation indicates whether the execution witnesses generation
+	// and self-validation (testing purpose) is enabled.
+	StatelessSelfValidation bool
+
+	// EnableWitnessStats indicates whether to enable collection of witness trie
+	// access statistics
+	EnableWitnessStats bool
+}
+
 // ProcessBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
-func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool) (result *blockProcessingResult, blockEndErr error) {
+func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, block *types.Block, config ExecuteConfig) (result *blockProcessingResult, blockEndErr error) {
 	var (
 		err       error
 		startTime = time.Now()
@@ -2138,12 +2177,12 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		// Generate witnesses either if we're self-testing, or if it's the
 		// only block being inserted. A bit crude, but witnesses are huge,
 		// so we refuse to make an entire chain of them.
-		if bc.cfg.VmConfig.StatelessSelfValidation || makeWitness {
+		if config.StatelessSelfValidation || config.MakeWitness {
 			witness, err = stateless.NewWitness(block.Header(), bc)
 			if err != nil {
 				return nil, err
 			}
-			if bc.cfg.VmConfig.EnableWitnessStats {
+			if config.EnableWitnessStats {
 				witnessStats = stateless.NewWitnessStats()
 			}
 		}
@@ -2151,17 +2190,20 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		defer statedb.StopPrefetcher()
 	}
 
-	if bc.logger != nil && bc.logger.OnBlockStart != nil {
-		bc.logger.OnBlockStart(tracing.BlockEvent{
-			Block:     block,
-			Finalized: bc.CurrentFinalBlock(),
-			Safe:      bc.CurrentSafeBlock(),
-		})
-	}
-	if bc.logger != nil && bc.logger.OnBlockEnd != nil {
-		defer func() {
-			bc.logger.OnBlockEnd(blockEndErr)
-		}()
+	// Instrument the blockchain tracing
+	if config.EnableTracer {
+		if bc.logger != nil && bc.logger.OnBlockStart != nil {
+			bc.logger.OnBlockStart(tracing.BlockEvent{
+				Block:     block,
+				Finalized: bc.CurrentFinalBlock(),
+				Safe:      bc.CurrentSafeBlock(),
+			})
+		}
+		if bc.logger != nil && bc.logger.OnBlockEnd != nil {
+			defer func() {
+				bc.logger.OnBlockEnd(blockEndErr)
+			}()
+		}
 	}
 
 	// Process block using the parent state as reference point
@@ -2191,7 +2233,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	// witness builder/runner, which would otherwise be impossible due to the
 	// various invalid chain states/behaviors being contained in those tests.
 	xvstart := time.Now()
-	if witness := statedb.Witness(); witness != nil && bc.cfg.VmConfig.StatelessSelfValidation {
+	if witness := statedb.Witness(); witness != nil && config.StatelessSelfValidation {
 		log.Warn("Running stateless self-validation", "block", block.Number(), "hash", block.Hash())
 
 		// Remove critical computed fields from the block to force true recalculation
@@ -2244,31 +2286,29 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	stats.CrossValidation = xvtime                                                                       // The time spent on stateless cross validation
 
 	// Write the block to the chain and get the status.
-	var (
-		wstart = time.Now()
-		status WriteStatus
-	)
-	if !setHead {
-		// Don't set the head, only insert the block
-		err = bc.writeBlockWithState(block, res.Receipts, statedb)
-	} else {
-		status, err = bc.writeBlockAndSetHead(block, res.Receipts, res.Logs, statedb, false)
-	}
-	if err != nil {
-		return nil, err
+	var status WriteStatus
+	if config.WriteState {
+		wstart := time.Now()
+		if !config.WriteHead {
+			// Don't set the head, only insert the block
+			err = bc.writeBlockWithState(block, res.Receipts, statedb)
+		} else {
+			status, err = bc.writeBlockAndSetHead(block, res.Receipts, res.Logs, statedb, false)
+		}
+		if err != nil {
+			return nil, err
+		}
+		// Update the metrics touched during block commit
+		stats.AccountCommits = statedb.AccountCommits  // Account commits are complete, we can mark them
+		stats.StorageCommits = statedb.StorageCommits  // Storage commits are complete, we can mark them
+		stats.SnapshotCommit = statedb.SnapshotCommits // Snapshot commits are complete, we can mark them
+		stats.TrieDBCommit = statedb.TrieDBCommits     // Trie database commits are complete, we can mark them
+		stats.BlockWrite = time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.SnapshotCommits - statedb.TrieDBCommits
 	}
 	// Report the collected witness statistics
 	if witnessStats != nil {
 		witnessStats.ReportMetrics(block.NumberU64())
 	}
-
-	// Update the metrics touched during block commit
-	stats.AccountCommits = statedb.AccountCommits  // Account commits are complete, we can mark them
-	stats.StorageCommits = statedb.StorageCommits  // Storage commits are complete, we can mark them
-	stats.SnapshotCommit = statedb.SnapshotCommits // Snapshot commits are complete, we can mark them
-	stats.TrieDBCommit = statedb.TrieDBCommits     // Trie database commits are complete, we can mark them
-	stats.BlockWrite = time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.SnapshotCommits - statedb.TrieDBCommits
-
 	elapsed := time.Since(startTime) + 1 // prevent zero division
 	stats.TotalTime = elapsed
 	stats.MgasPerSecond = float64(res.GasUsed) * 1000 / float64(elapsed)
