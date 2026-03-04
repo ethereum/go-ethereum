@@ -429,18 +429,14 @@ func repairHistory(db ethdb.Database, isVerkle bool, readOnly bool, stateID uint
 		if stateID <= thead {
 			truncTo = min(truncTo, thead)
 		} else {
-			ttail, err := trienodes.Tail()
-			if err != nil {
-				return nil, nil, err
-			}
-			_, err = trienodes.TruncateTail(stateID)
-			if err != nil {
-				return nil, nil, err
-			}
 			if thead == 0 {
+				_, err = trienodes.TruncateTail(stateID)
+				if err != nil {
+					return nil, nil, err
+				}
 				log.Warn("Initialized trienode history")
 			} else {
-				log.Warn("Purged stale trienode history", "from", ttail, "to", thead-1, "count", thead-ttail)
+				return nil, nil, fmt.Errorf("gap between state [#%d] and trienode history [#%d]", stateID, thead)
 			}
 		}
 	}
