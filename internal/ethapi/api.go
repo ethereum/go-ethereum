@@ -849,16 +849,12 @@ func (api *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrO
 	if state == nil || err != nil {
 		return nil, err
 	}
-	gasCap := api.b.RPCGasCap()
-	if gasCap == 0 {
-		gasCap = gomath.MaxUint64
-	}
 	sim := &simulator{
 		b:              api.b,
 		state:          state,
 		base:           base,
 		chainConfig:    api.b.ChainConfig(),
-		gasRemaining:   gasCap,
+		budget:         newGasBudget(api.b.RPCGasCap()),
 		traceTransfers: opts.TraceTransfers,
 		validate:       opts.Validation,
 		fullTx:         opts.ReturnFullTransactions,
