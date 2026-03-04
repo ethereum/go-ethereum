@@ -556,6 +556,12 @@ func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common
 	return s.transientStorage.Get(addr, key)
 }
 
+// ClearTransientStorage resets all transient storage.
+// todo(jvn): Impl it properly
+func (s *StateDB) ClearTransientStorage() {
+	s.transientStorage = newTransientStorage()
+}
+
 //
 // Setting, updating & deleting state object methods.
 //

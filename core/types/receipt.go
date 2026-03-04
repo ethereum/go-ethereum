@@ -67,11 +67,22 @@ type Receipt struct {
 	BlobGasUsed       uint64         `json:"blobGasUsed,omitempty"`
 	BlobGasPrice      *big.Int       `json:"blobGasPrice,omitempty"`
 
+	// EIP-8141
+	Payer         *common.Address `json:"payer,omitempty"`
+	FrameReceipts []*FrameReceipt `json:"frameReceipts,omitempty"`
+
 	// Inclusion information: These fields provide information about the inclusion of the
 	// transaction corresponding to this receipt.
 	BlockHash        common.Hash `json:"blockHash,omitempty"`
 	BlockNumber      *big.Int    `json:"blockNumber,omitempty"`
 	TransactionIndex uint        `json:"transactionIndex"`
+}
+
+// FrameReceipt is the per-frame receipt for frame transactions.
+type FrameReceipt struct {
+	Status  uint64 `json:"status"`
+	GasUsed uint64 `json:"gasUsed"`
+	Logs    []*Log `json:"logs"`
 }
 
 type receiptMarshaling struct {
@@ -205,7 +216,7 @@ func (r *Receipt) decodeTyped(b []byte) error {
 		return errShortTypedReceipt
 	}
 	switch b[0] {
-	case DynamicFeeTxType, AccessListTxType, BlobTxType, SetCodeTxType:
+	case DynamicFeeTxType, AccessListTxType, BlobTxType, SetCodeTxType, FrameTxType:
 		var data receiptRLP
 		err := rlp.DecodeBytes(b[1:], &data)
 		if err != nil {
@@ -368,7 +379,7 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	}
 	w.WriteByte(r.Type)
 	switch r.Type {
-	case AccessListTxType, DynamicFeeTxType, BlobTxType, SetCodeTxType:
+	case AccessListTxType, DynamicFeeTxType, BlobTxType, SetCodeTxType, FrameTxType:
 		rlp.Encode(w, data)
 	default:
 		// For unsupported types, write nothing. Since this is for

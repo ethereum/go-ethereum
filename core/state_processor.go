@@ -219,6 +219,29 @@ func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber = blockNumber
 	receipt.TransactionIndex = uint(statedb.TxIndex())
+
+	// EIP-8141: populate frame transaction receipt fields.
+	if tx.Type() == types.FrameTxType {
+		receipt.Payer = result.Payer
+		if result.FrameStatuses != nil {
+			receipt.FrameReceipts = make([]*types.FrameReceipt, len(result.FrameStatuses))
+			for i, status := range result.FrameStatuses {
+				var gasUsed uint64
+				if i < len(result.FrameGasUsed) {
+					gasUsed = result.FrameGasUsed[i]
+				}
+				var logs []*types.Log
+				if i < len(result.FrameLogSets) {
+					logs = result.FrameLogSets[i]
+				}
+				receipt.FrameReceipts[i] = &types.FrameReceipt{
+					Status:  uint64(status),
+					GasUsed: gasUsed,
+					Logs:    logs,
+				}
+			}
+		}
+	}
 	return receipt
 }
 

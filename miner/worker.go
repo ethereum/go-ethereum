@@ -296,6 +296,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 }
 
 func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction) error {
+	// Todo(jvn): Maybe add frame Txn handling here?
 	if tx.Type() == types.BlobTxType {
 		return miner.commitBlobTransaction(env, tx)
 	}

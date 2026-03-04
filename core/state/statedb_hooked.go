@@ -110,6 +110,10 @@ func (s *hookedStateDB) SetTransientState(addr common.Address, key, value common
 	s.inner.SetTransientState(addr, key, value)
 }
 
+func (s *hookedStateDB) ClearTransientStorage() {
+	s.inner.ClearTransientStorage()
+}
+
 func (s *hookedStateDB) HasSelfDestructed(addr common.Address) bool {
 	return s.inner.HasSelfDestructed(addr)
 }

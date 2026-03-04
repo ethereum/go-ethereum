@@ -41,6 +41,8 @@ type sigCache struct {
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint64) Signer {
 	var signer Signer
 	switch {
+	case config.IsBogota(blockNumber, blockTime):
+		signer = NewBogotaSigner(config.ChainID)
 	case config.IsPrague(blockNumber, blockTime):
 		signer = NewPragueSigner(config.ChainID)
 	case config.IsCancun(blockNumber, blockTime):
@@ -70,6 +72,8 @@ func LatestSigner(config *params.ChainConfig) Signer {
 	var signer Signer
 	if config.ChainID != nil {
 		switch {
+		case config.BogotaTime != nil:
+			signer = NewBogotaSigner(config.ChainID)
 		case config.PragueTime != nil:
 			signer = NewPragueSigner(config.ChainID)
 		case config.CancunTime != nil:
@@ -231,6 +235,9 @@ func newModernSigner(chainID *big.Int, fork forks.Fork) Signer {
 	if fork >= forks.Prague {
 		s.txtypes.set(SetCodeTxType)
 	}
+	if fork >= forks.Bogota {
+		s.txtypes.set(FrameTxType)
+	}
 	return s
 }
 
@@ -262,6 +269,13 @@ func (s *modernSigner) Sender(tx *Transaction) (common.Address, error) {
 	if tx.ChainId().Cmp(s.chainID) != 0 {
 		return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, tx.ChainId(), s.chainID)
 	}
+	// Frame transactions have an explicit sender.
+	if tt == FrameTxType {
+		if ftx, ok := tx.inner.(*FrameTx); ok {
+			return ftx.Sender, nil
+		}
+		return common.Address{}, ErrTxTypeNotSupported
+	}
 	// 'modern' txs are defined to use 0 and 1 as their recovery
 	// id, add 27 to become equivalent to unprotected Homestead signatures.
 	V, R, S := tx.RawSignatureValues()
@@ -271,6 +285,9 @@ func (s *modernSigner) Sender(tx *Transaction) (common.Address, error) {
 
 func (s *modernSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
 	tt := tx.Type()
+	if tt == FrameTxType {
+		return nil, nil, nil, nil
+	}
 	if !s.supportsType(tt) {
 		return nil, nil, nil, ErrTxTypeNotSupported
 	}
@@ -288,6 +305,18 @@ func (s *modernSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 	}
 	V = big.NewInt(int64(sig[64]))
 	return R, S, V, nil
+}
+
+// NewBogotaSigner returns a signer that accepts
+// - EIP-8141 frame transactions
+// - EIP-7702 set code transactions
+// - EIP-4844 blob transactions
+// - EIP-1559 dynamic fee transactions
+// - EIP-2930 access list transactions,
+// - EIP-155 replay protected transactions, and
+// - legacy Homestead transactions.
+func NewBogotaSigner(chainId *big.Int) Signer {
+	return newModernSigner(chainId, forks.Bogota)
 }
 
 // NewPragueSigner returns a signer that accepts

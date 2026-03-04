@@ -92,6 +92,9 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	if rules.IsOsaka && tx.Gas() > params.MaxTxGas {
 		return fmt.Errorf("%w (cap: %d, tx: %d)", core.ErrGasLimitTooHigh, params.MaxTxGas, tx.Gas())
 	}
+	if !rules.IsBogota && tx.Type() == types.FrameTxType {
+		return fmt.Errorf("%w: type %d rejected, pool not yet in Bogota", core.ErrTxTypeNotSupported, tx.Type())
+	}
 	// Transactions can't be negative. This may never happen using RLP decoded
 	// transactions but may occur for transactions created using the RPC.
 	if tx.Value().Sign() < 0 {
