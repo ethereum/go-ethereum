@@ -498,11 +498,11 @@ func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumberOrHash) (*stateless.ExtW
 	bc := api.eth.blockchain
 	block, err := api.eth.APIBackend.BlockByNumberOrHash(context.Background(), bn)
 	if err != nil {
-		return &stateless.ExtWitness{}, fmt.Errorf("block number %v not found", bn)
+		return &stateless.ExtWitness{}, fmt.Errorf("block %v not found", bn)
 	}
 	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
-		return &stateless.ExtWitness{}, fmt.Errorf("block number %v found, but parent missing", bn)
+		return &stateless.ExtWitness{}, fmt.Errorf("block %v found, but parent missing", bn)
 	}
 	config := core.ExecuteConfig{
 		WriteState:   false,
