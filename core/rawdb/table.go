@@ -253,6 +253,11 @@ func (b *tableBatch) Reset() {
 	b.batch.Reset()
 }
 
+// Close closes the batch and releases all associated resources.
+func (b *tableBatch) Close() {
+	b.batch.Close()
+}
+
 // tableReplayer is a wrapper around a batch replayer which truncates
 // the added prefix.
 type tableReplayer struct {

@@ -880,6 +880,7 @@ func (b *spongeBatch) ValueSize() int                      { return 100 }
 func (b *spongeBatch) Write() error                        { return nil }
 func (b *spongeBatch) Reset()                              {}
 func (b *spongeBatch) Replay(w ethdb.KeyValueWriter) error { return nil }
+func (b *spongeBatch) Close()                              {}
 
 // TestCommitSequence tests that the trie.Commit operation writes the elements
 // of the trie in the expected order.
