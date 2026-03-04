@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/stretchr/testify/require"
 )
 
@@ -154,4 +155,17 @@ func TestTimestampCompatError(t *testing.T) {
 
 	require.Equal(t, newTimestampCompatError(errWhat, newUint64(0), newUint64(1681338455)).Error(),
 		"mismatching Shanghai fork timestamp in database (have timestamp 0, want timestamp 1681338455, rewindto timestamp 0)")
+}
+
+func TestAmsterdamBlobConfigAndTimestamp(t *testing.T) {
+	amsterdamTime := uint64(100)
+	cfg := &ChainConfig{
+		LondonBlock:   big.NewInt(0),
+		AmsterdamTime: &amsterdamTime,
+		BlobScheduleConfig: &BlobScheduleConfig{
+			Amsterdam: DefaultPragueBlobConfig,
+		},
+	}
+	require.Equal(t, DefaultPragueBlobConfig, cfg.BlobConfig(forks.Amsterdam))
+	require.Equal(t, &amsterdamTime, cfg.Timestamp(forks.Amsterdam))
 }
