@@ -198,10 +198,9 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	version := payloadVersion(c.eth.BlockChain().Config(), timestamp)
 	tracer := otel.Tracer("")
 
-	// Create a server span for forkchoiceUpdated with payload attributes,
-	// simulating an incoming engine API request from a real consensus client.
 	var random [32]byte
 	rand.Read(random[:])
+
 	attribute := &engine.PayloadAttributes{
 		Timestamp:             timestamp,
 		SuggestedFeeRecipient: feeRecipient,
@@ -213,6 +212,9 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		slotNumber := uint64(0)
 		attribute.SlotNumber = &slotNumber
 	}
+
+	// Create a server span for forkchoiceUpdated with payload attributes,
+	// simulating an incoming engine API request from a real consensus client.
 	fcCtx, fcSpanEnd := telemetry.StartServerSpan(context.Background(), tracer, telemetry.RPCInfo{
 		System:  "jsonrpc",
 		Service: "engine",
