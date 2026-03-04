@@ -144,10 +144,7 @@ func (it *nodeIterator) step() error {
 	}
 	if !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
 		it.codeHash = common.BytesToHash(account.CodeHash)
-		it.code, err = it.state.reader.Code(address, common.BytesToHash(account.CodeHash))
-		if err != nil {
-			return fmt.Errorf("code %x: %v", account.CodeHash, err)
-		}
+		it.code = it.state.reader.Code(address, common.BytesToHash(account.CodeHash))
 		if len(it.code) == 0 {
 			return fmt.Errorf("code is not found: %x", account.CodeHash)
 		}
