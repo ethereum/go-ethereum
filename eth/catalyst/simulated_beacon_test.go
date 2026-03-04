@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -68,6 +69,25 @@ func startSimulatedBeaconEthService(t *testing.T, genesis *core.Genesis, period 
 
 	ethservice.SetSynced()
 	return n, ethservice, simBeacon
+}
+
+func TestPayloadVersionAmsterdam(t *testing.T) {
+	amsterdamTime := uint64(1)
+	cfg := &params.ChainConfig{
+		LondonBlock:   big.NewInt(0),
+		AmsterdamTime: &amsterdamTime,
+	}
+	if got := payloadVersion(cfg, amsterdamTime); got != engine.PayloadV4 {
+		t.Fatalf("unexpected payload version: have %v want %v", got, engine.PayloadV4)
+	}
+}
+
+func TestPayloadAttributesAmsterdamSlotNumber(t *testing.T) {
+	var random [32]byte
+	attrs := payloadAttributes(engine.PayloadV4, 1, common.Address{}, nil, random)
+	if attrs.SlotNumber == nil {
+		t.Fatal("missing slot number for payload v4")
+	}
 }
 
 // send 20 transactions, >10 withdrawals and ensure they are included in order

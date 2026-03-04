@@ -103,12 +103,29 @@ type SimulatedBeacon struct {
 
 func payloadVersion(config *params.ChainConfig, time uint64) engine.PayloadVersion {
 	switch config.LatestFork(time) {
+	case forks.Amsterdam:
+		return engine.PayloadV4
 	case forks.BPO5, forks.BPO4, forks.BPO3, forks.BPO2, forks.BPO1, forks.Osaka, forks.Prague, forks.Cancun:
 		return engine.PayloadV3
 	case forks.Paris, forks.Shanghai:
 		return engine.PayloadV2
 	}
 	panic("invalid fork, simulated beacon needs to be started post-merge")
+}
+
+func payloadAttributes(version engine.PayloadVersion, timestamp uint64, feeRecipient common.Address, withdrawals []*types.Withdrawal, random [32]byte) *engine.PayloadAttributes {
+	attributes := &engine.PayloadAttributes{
+		Timestamp:             timestamp,
+		SuggestedFeeRecipient: feeRecipient,
+		Withdrawals:           withdrawals,
+		Random:                random,
+		BeaconRoot:            &common.Hash{},
+	}
+	if version == engine.PayloadV4 {
+		slotNumber := uint64(0)
+		attributes.SlotNumber = &slotNumber
+	}
+	return attributes
 }
 
 // NewSimulatedBeacon constructs a new simulated beacon chain.
@@ -198,13 +215,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 
 	var random [32]byte
 	rand.Read(random[:])
-	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, &engine.PayloadAttributes{
-		Timestamp:             timestamp,
-		SuggestedFeeRecipient: feeRecipient,
-		Withdrawals:           withdrawals,
-		Random:                random,
-		BeaconRoot:            &common.Hash{},
-	}, version, false)
+	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, payloadAttributes(version, timestamp, feeRecipient, withdrawals, random), version, false)
 	if err != nil {
 		return err
 	}
