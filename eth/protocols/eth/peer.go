@@ -49,10 +49,10 @@ const (
 
 // receiptRequest tracks the state of an in-flight receipt retrieval operation.
 type receiptRequest struct {
-	request     []common.Hash    // block hashes corresponding to the requested receipts
-	gasUsed     []uint64         // block gas used corresponding to the requested receipts
-	list        []*ReceiptList69 // list of partially collected receipts
-	lastLogSize uint64           // log size of last receipt list
+	request     []common.Hash  // block hashes corresponding to the requested receipts
+	gasUsed     []uint64       // block gas used corresponding to the requested receipts
+	list        []*ReceiptList // list of partially collected receipts
+	lastLogSize uint64         // log size of last receipt list
 }
 
 // Peer is a collection of relevant information we have about a `eth` peer.
@@ -231,10 +231,10 @@ func (p *Peer) ReplyBlockBodiesRLP(id uint64, bodies []rlp.RawValue) error {
 }
 
 // ReplyReceiptsRLP69 is the response to GetReceipts.
-func (p *Peer) ReplyReceiptsRLP69(id uint64, receipts []rlp.RawValue) error {
-	return p2p.Send(p.rw, ReceiptsMsg, &ReceiptsRLPPacket69{
-		RequestId:           id,
-		ReceiptsRLPResponse: receipts,
+func (p *Peer) ReplyReceiptsRLP69(id uint64, receipts rlp.RawList[*ReceiptList]) error {
+	return p2p.Send(p.rw, ReceiptsMsg, &ReceiptsPacket69{
+		RequestId: id,
+		List:      receipts,
 	})
 }
 
@@ -429,7 +429,7 @@ func (p *Peer) requestPartialReceipts(id uint64) error {
 
 // bufferReceipts validates a receipt packet and buffer the incomplete packet.
 // If the request is completed, it appends previously collected receipts.
-func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList69, lastBlockIncomplete bool, backend Backend) error {
+func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList, lastBlockIncomplete bool, backend Backend) error {
 	p.receiptBufferLock.Lock()
 	defer p.receiptBufferLock.Unlock()
 
@@ -488,7 +488,7 @@ func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList69, l
 
 // flushReceipts retrieves the merged receipt lists from the buffer
 // and removes the buffer entry. Returns nil if no buffered data exists.
-func (p *Peer) flushReceipts(requestId uint64) []*ReceiptList69 {
+func (p *Peer) flushReceipts(requestId uint64) []*ReceiptList {
 	p.receiptBufferLock.Lock()
 	defer p.receiptBufferLock.Unlock()
 
@@ -506,7 +506,7 @@ func (p *Peer) flushReceipts(requestId uint64) []*ReceiptList69 {
 // Note that the last receipt response (which completes receiptLists of a pending block)
 // is not verified here. Those response doesn't need hueristics below since they can be
 // verified by its trie root.
-func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList69, id uint64, gasUsed uint64) (uint64, error) {
+func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList, id uint64, gasUsed uint64) (uint64, error) {
 	lastReceipts := receiptLists[len(receiptLists)-1]
 
 	// If the receipt is in the middle of retrieval, use the buffered data.

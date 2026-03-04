@@ -1,4 +1,4 @@
-// Copyright 2023 The go-ethereum Authors
+// Copyright 2025 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,31 +14,24 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package vm
+package trie
 
-import (
-	"testing"
+import "testing"
 
-	"github.com/ethereum/go-ethereum/common"
-)
+func TestLevelStatsAddLeafDepthBounds(t *testing.T) {
+	stats := NewLevelStats()
+	stats.AddLeaf(15)
 
-func FuzzPrecompiledContracts(f *testing.F) {
-	// Create list of addresses
-	var addrs []common.Address
-	for k := range allPrecompiles {
-		addrs = append(addrs, k)
+	if got := stats.LeafDepths()[15]; got != 1 {
+		t.Fatalf("leaf count at depth 15 = %d, want 1", got)
 	}
-	f.Fuzz(func(t *testing.T, addr uint8, input []byte) {
-		a := addrs[int(addr)%len(addrs)]
-		p := allPrecompiles[a]
-		gas := p.RequiredGas(input)
-		if gas > 10_000_000 {
-			return
+}
+
+func TestLevelStatsAddLeafPanicsOnDepth16(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for depth >= 16")
 		}
-		inWant := string(input)
-		RunPrecompiledContract(nil, p, a, input, gas, nil)
-		if inHave := string(input); inWant != inHave {
-			t.Errorf("Precompiled %v modified input data", a)
-		}
-	})
+	}()
+	NewLevelStats().AddLeaf(16)
 }

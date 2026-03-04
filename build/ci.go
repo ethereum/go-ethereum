@@ -168,8 +168,6 @@ var (
 		"focal",    // 20.04, EOL: 04/2030
 		"jammy",    // 22.04, EOL: 04/2032
 		"noble",    // 24.04, EOL: 04/2034
-		"oracular", // 24.10, EOL: 07/2025
-		"plucky",   // 25.04, EOL: 01/2026
 	}
 
 	// This is where the tests should be unpacked.

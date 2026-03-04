@@ -452,7 +452,7 @@ func (s *Suite) TestGetReceipts(t *utesting.T) {
 			t.Fatalf("could not write to connection: %v", err)
 		}
 		// Wait for response.
-		resp := new(eth.ReceiptsPacket[*eth.ReceiptList69])
+		resp := new(eth.ReceiptsPacket69)
 		if err := conn.ReadMsg(ethProto, eth.ReceiptsMsg, &resp); err != nil {
 			t.Fatalf("error reading block receipts msg: %v", err)
 		}
@@ -507,13 +507,13 @@ func (s *Suite) TestGetLargeReceipts(t *utesting.T) {
 
 	var blocks []common.Hash
 	var receiptHashes []common.Hash
-	var receipts []*eth.ReceiptList69
+	var receipts []*eth.ReceiptList
 
 	for i := uint64(start); i < end; i++ {
 		block := s.chain.GetBlock(int(i))
 		blocks = append(blocks, block.Hash())
 		receiptHashes = append(receiptHashes, block.Header().ReceiptHash)
-		receipts = append(receipts, &eth.ReceiptList69{})
+		receipts = append(receipts, &eth.ReceiptList{})
 	}
 
 	incomplete := false

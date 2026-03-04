@@ -172,7 +172,7 @@ func TestPartialReceipt(t *testing.T) {
 	delivery := &ReceiptsPacket70{
 		RequestId:           req.id,
 		LastBlockIncomplete: true,
-		List: encodeRL([]*ReceiptList69{
+		List: encodeRL([]*ReceiptList{
 			{
 				items: encodeRL(receipts),
 			},
@@ -214,7 +214,7 @@ func TestPartialReceipt(t *testing.T) {
 	delivery = &ReceiptsPacket70{
 		RequestId:           req.id,
 		LastBlockIncomplete: true,
-		List: encodeRL([]*ReceiptList69{
+		List: encodeRL([]*ReceiptList{
 			{
 				items: encodeRL(receipts),
 			},
@@ -253,7 +253,7 @@ func TestPartialReceipt(t *testing.T) {
 	delivery = &ReceiptsPacket70{
 		RequestId:           rereq.RequestId,
 		LastBlockIncomplete: false,
-		List: encodeRL([]*ReceiptList69{
+		List: encodeRL([]*ReceiptList{
 			{
 				items: encodeRL(receipts),
 			},
@@ -335,11 +335,11 @@ func TestPartialReceiptFailure(t *testing.T) {
 		}
 	}()
 
-	// If a peer delivers response which is never requested, it should fail the validation
+	// If a peer delivers response which is never requested, the tracker should reject it.
 	delivery := &ReceiptsPacket70{
 		RequestId:           66,
 		LastBlockIncomplete: true,
-		List: encodeRL([]*ReceiptList69{
+		List: encodeRL([]*ReceiptList{
 			{
 				items: encodeRL([]Receipt{
 					{GasUsed: 21_000, Logs: rlp.RawValue(make([]byte, 1))},
@@ -352,10 +352,9 @@ func TestPartialReceiptFailure(t *testing.T) {
 			},
 		}),
 	}
-	receiptList, _ := delivery.List.Items()
-	err := peer.bufferReceipts(delivery.RequestId, receiptList, delivery.LastBlockIncomplete, backend)
-	if err == nil {
-		t.Fatal("Unknown response should be dropped")
+	tresp := tracker.Response{ID: delivery.RequestId, MsgCode: ReceiptsMsg, Size: delivery.List.Len()}
+	if err := peer.tracker.Fulfil(tresp); err == nil {
+		t.Fatal("Unknown response should be rejected by tracker")
 	}
 
 	// If a peer deliverse excessive amount of receipts, it should also fail the validation
@@ -392,11 +391,15 @@ func TestPartialReceiptFailure(t *testing.T) {
 	delivery = &ReceiptsPacket70{
 		RequestId:           req.id,
 		LastBlockIncomplete: true,
-		List: encodeRL([]*ReceiptList69{{
+		List: encodeRL([]*ReceiptList{{
 			items: encodeRL(excessiveReceipts),
 		}}),
 	}
-	receiptList, _ = delivery.List.Items()
+	tresp = tracker.Response{ID: delivery.RequestId, MsgCode: ReceiptsMsg, Size: delivery.List.Len()}
+	if err = peer.tracker.Fulfil(tresp); err != nil {
+		t.Fatalf("tracker.Fulfil failed: %v", err)
+	}
+	receiptList, _ := delivery.List.Items()
 	err = peer.bufferReceipts(delivery.RequestId, receiptList, delivery.LastBlockIncomplete, backend)
 	if err == nil {
 		t.Fatal("Response with the excessive number of receipts should fail the validation")
@@ -416,11 +419,15 @@ func TestPartialReceiptFailure(t *testing.T) {
 	delivery = &ReceiptsPacket70{
 		RequestId:           req.id,
 		LastBlockIncomplete: true,
-		List: encodeRL([]*ReceiptList69{{
+		List: encodeRL([]*ReceiptList{{
 			items: encodeRL([]Receipt{
 				{Logs: rlp.RawValue(make([]byte, maxReceiptSize+1))},
 			}),
 		}}),
+	}
+	tresp = tracker.Response{ID: delivery.RequestId, MsgCode: ReceiptsMsg, Size: delivery.List.Len()}
+	if err = peer.tracker.Fulfil(tresp); err != nil {
+		t.Fatalf("tracker.Fulfil failed: %v", err)
 	}
 	receiptList, _ = delivery.List.Items()
 	err = peer.bufferReceipts(delivery.RequestId, receiptList, delivery.LastBlockIncomplete, backend)

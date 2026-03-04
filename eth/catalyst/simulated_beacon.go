@@ -376,5 +376,6 @@ func RegisterSimulatedBeaconAPIs(stack *node.Node, sim *SimulatedBeacon) {
 			Service:   api,
 			Version:   "1.0",
 		},
+		newTestingAPI(sim.eth),
 	})
 }

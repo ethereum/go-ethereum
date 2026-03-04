@@ -63,19 +63,20 @@ type (
 
 	// WHOAREYOU contains the handshake challenge.
 	Whoareyou struct {
-		ChallengeData []byte   // Encoded challenge
-		Nonce         Nonce    // Nonce of request packet
-		IDNonce       [16]byte // Identity proof data
-		RecordSeq     uint64   // ENR sequence number of recipient
+		Nonce     Nonce    // Nonce of request packet
+		IDNonce   [16]byte // Identity proof data
+		RecordSeq uint64   // ENR sequence number of recipient
 
 		// Node is the locally known node record of recipient.
 		// This must be set by the caller of Encode.
-		Node *enode.Node
+		Node *enode.Node `rlp:"-"`
+
+		// ChallengeData stores the unmasked encoding of the whole packet. This is the
+		// input data for verification. It is assigned by both Encode and Decode
+		// operations.
+		ChallengeData []byte `rlp:"-"`
 
 		sent mclock.AbsTime // for handshake GC.
-
-		// Encoded is packet raw data for sending out, but should not be include in the RLP encoding.
-		Encoded []byte `rlp:"-"`
 	}
 
 	// PING is sent during liveness checks.
