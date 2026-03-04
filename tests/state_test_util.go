@@ -302,7 +302,8 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		}
 	}
 
-	// Try to recover tx with current signer
+	// Try to recover tx with current signer.
+	// For frame transactions (EIP-8141), use TransactionToMessage
 	if len(post.TxBytes) != 0 {
 		var ttx types.Transaction
 		err := ttx.UnmarshalBinary(post.TxBytes)
@@ -311,6 +312,15 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		}
 		if _, err := types.Sender(types.LatestSigner(config), &ttx); err != nil {
 			return st, common.Hash{}, 0, err
+		}
+		// Frame transactions need the full tx context (frames, sig hash, etc.)
+		// which is only set by TransactionToMessage, not by the generic toMessage.
+		// This impl might change
+		if ttx.Type() == types.FrameTxType {
+			msg, err = core.TransactionToMessage(&ttx, types.LatestSigner(config), baseFee)
+			if err != nil {
+				return st, common.Hash{}, 0, err
+			}
 		}
 	}
 

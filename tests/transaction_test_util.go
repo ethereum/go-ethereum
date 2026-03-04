@@ -119,6 +119,8 @@ func (tt *TransactionTest) Run() error {
 		{"Shanghai", true},
 		{"Cancun", true},
 		{"Prague", true},
+		{"Amsterdam", true},
+		{"Bogota", true},
 	} {
 		expected := tt.Result[testcase.name]
 		if expected == nil {
