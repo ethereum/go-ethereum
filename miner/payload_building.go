@@ -260,6 +260,17 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 		for {
 			select {
 			case <-timer.C:
+				// When block building takes close to the full recommit interval,
+				// the timer fires near-instantly on the next iteration. If the
+				// payload was resolved during that build, both timer.C and
+				// payload.stop are ready and Go's select picks one at random.
+				// Check payload.stop first to avoid an unnecessary generateWork.
+				select {
+				case <-payload.stop:
+					log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
+					return
+				default:
+				}
 				start := time.Now()
 				r := miner.generateWork(fullParams, witness)
 				if r.err == nil {
