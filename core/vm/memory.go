@@ -19,6 +19,7 @@ package vm
 import (
 	"sync"
 
+	"github.com/ethereum/go-ethereum/core/arena"
 	"github.com/holiman/uint256"
 )
 
@@ -32,6 +33,7 @@ var memoryPool = sync.Pool{
 type Memory struct {
 	store       []byte
 	lastGasCost uint64
+	arenaAlloc  bool // true if allocated from a BumpAllocator (skip pool return)
 }
 
 // NewMemory returns a new memory model.
@@ -39,8 +41,23 @@ func NewMemory() *Memory {
 	return memoryPool.Get().(*Memory)
 }
 
+// NewMemoryWithAlloc returns a new Memory, allocating from the provided arena.
+// When using a BumpAllocator, the Memory struct is arena-allocated and the pool
+// is bypassed. When using a HeapAllocator, it falls back to the pool.
+func NewMemoryWithAlloc(alloc arena.Allocator) *Memory {
+	if _, ok := alloc.(*arena.BumpAllocator); ok {
+		m := new(Memory)
+		m.arenaAlloc = true
+		return m
+	}
+	return NewMemory()
+}
+
 // Free returns the memory to the pool.
 func (m *Memory) Free() {
+	if m.arenaAlloc {
+		return // arena-allocated: freed on arena.Reset()
+	}
 	// To reduce peak allocation, return only smaller memory instances to the pool.
 	const maxBufferSize = 16 << 10
 	if cap(m.store) <= maxBufferSize {

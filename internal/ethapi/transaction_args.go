@@ -477,18 +477,25 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck bool) *c
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
+	bigToU256 := func(b *big.Int) uint256.Int {
+		if b == nil {
+			return uint256.Int{}
+		}
+		v, _ := uint256.FromBig(b)
+		return *v
+	}
 	return &core.Message{
 		From:                  args.from(),
 		To:                    args.To,
-		Value:                 (*big.Int)(args.Value),
+		Value:                 bigToU256((*big.Int)(args.Value)),
 		Nonce:                 uint64(*args.Nonce),
 		GasLimit:              uint64(*args.Gas),
-		GasPrice:              gasPrice,
-		GasFeeCap:             gasFeeCap,
-		GasTipCap:             gasTipCap,
+		GasPrice:              bigToU256(gasPrice),
+		GasFeeCap:             bigToU256(gasFeeCap),
+		GasTipCap:             bigToU256(gasTipCap),
 		Data:                  args.data(),
 		AccessList:            accessList,
-		BlobGasFeeCap:         (*big.Int)(args.BlobFeeCap),
+		BlobGasFeeCap:         bigToU256((*big.Int)(args.BlobFeeCap)),
 		BlobHashes:            args.BlobHashes,
 		SetCodeAuthorizations: args.AuthorizationList,
 		SkipNonceChecks:       skipNonceCheck,

@@ -23,6 +23,7 @@ import (
 	"runtime/debug"
 
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/arena"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -51,7 +52,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "failed to get chain config: %v\n", err)
 		os.Exit(13)
 	}
-	vmConfig := vm.Config{}
+	vmConfig := vm.Config{
+		Allocator: arena.NewBumpAllocator(make([]byte, 32<<20)), // 32 MiB arena
+	}
 
 	crossStateRoot, crossReceiptRoot, err := core.ExecuteStateless(context.Background(), chainConfig, vmConfig, payload.Block, payload.Witness)
 	if err != nil {

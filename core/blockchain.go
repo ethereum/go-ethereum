@@ -2115,9 +2115,12 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 			}
 		}()
 		go func(start time.Time, throwaway *state.StateDB, block *types.Block) {
-			// Disable tracing for prefetcher executions.
+			// Disable tracing and arena allocator for prefetcher executions.
+			// The arena allocator is not thread-safe and must not be shared
+			// with the main processing goroutine.
 			vmCfg := bc.cfg.VmConfig
 			vmCfg.Tracer = nil
+			vmCfg.Allocator = nil
 			bc.prefetcher.Prefetch(block, throwaway, vmCfg, &interrupt)
 
 			blockPrefetchExecuteTimer.Update(time.Since(start))

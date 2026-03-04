@@ -477,19 +477,23 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 		}
 	}
 
+	var blobGasFeeCap uint256.Int
+	if tx.BlobGasFeeCap != nil {
+		blobGasFeeCap = *uint256.MustFromBig(tx.BlobGasFeeCap)
+	}
 	msg := &core.Message{
 		From:                  from,
 		To:                    to,
 		Nonce:                 tx.Nonce,
-		Value:                 value,
+		Value:                 *uint256.MustFromBig(value),
 		GasLimit:              gasLimit,
-		GasPrice:              gasPrice,
-		GasFeeCap:             tx.MaxFeePerGas,
-		GasTipCap:             tx.MaxPriorityFeePerGas,
+		GasPrice:              *uint256.MustFromBig(gasPrice),
+		GasFeeCap:             *uint256.MustFromBig(tx.MaxFeePerGas),
+		GasTipCap:             *uint256.MustFromBig(tx.MaxPriorityFeePerGas),
 		Data:                  data,
 		AccessList:            accessList,
 		BlobHashes:            tx.BlobVersionedHashes,
-		BlobGasFeeCap:         tx.BlobGasFeeCap,
+		BlobGasFeeCap:         blobGasFeeCap,
 		SetCodeAuthorizations: authList,
 	}
 	return msg, nil
