@@ -373,8 +373,7 @@ func (beacon *Beacon) FinalizeAndAssemble(ctx context.Context, chain consensus.C
 		}
 	} else {
 		if len(body.Withdrawals) > 0 {
-			err = errors.New("withdrawals set before Shanghai activation")
-			return nil, err
+			return nil, errors.New("withdrawals set before Shanghai activation")
 		}
 	}
 	// Finalize and assemble the block.
