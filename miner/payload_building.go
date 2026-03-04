@@ -305,6 +305,13 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 				// Check payload.stop first to avoid an unnecessary generateWork.
 				select {
 				case <-payload.stop:
+					payload.lock.Lock()
+					emptyDelivered := payload.full == nil
+					payload.lock.Unlock()
+					bSpan.SetAttributes(
+						telemetry.StringAttribute("exit.reason", "delivery"),
+						telemetry.BoolAttribute("empty.delivered", emptyDelivered),
+					)
 					log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
 					return
 				default:
