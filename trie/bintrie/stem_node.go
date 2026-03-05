@@ -83,6 +83,7 @@ func (bt *StemNode) Insert(key []byte, value []byte, _ NodeResolverFn, depth int
 		return bt, errors.New("invalid insertion: value length")
 	}
 	bt.Values[key[StemSize]] = value
+	bt.mustRecompute = true
 	return bt, nil
 }
 

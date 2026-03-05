@@ -62,7 +62,7 @@ func (bt *InternalNode) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([
 			if err != nil {
 				return nil, fmt.Errorf("GetValuesAtStem resolve error: %w", err)
 			}
-			node, err := DeserializeNode(data, bt.depth+1, common.Hash(hn))
+			node, err := DeserializeNodeWithHash(data, bt.depth+1, common.Hash(hn))
 			if err != nil {
 				return nil, fmt.Errorf("GetValuesAtStem node deserialization error: %w", err)
 			}
@@ -80,7 +80,7 @@ func (bt *InternalNode) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([
 		if err != nil {
 			return nil, fmt.Errorf("GetValuesAtStem resolve error: %w", err)
 		}
-		node, err := DeserializeNode(data, bt.depth+1, common.Hash(hn))
+		node, err := DeserializeNodeWithHash(data, bt.depth+1, common.Hash(hn))
 		if err != nil {
 			return nil, fmt.Errorf("GetValuesAtStem node deserialization error: %w", err)
 		}
@@ -160,7 +160,7 @@ func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolve
 			if err != nil {
 				return nil, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
 			}
-			node, err := DeserializeNode(data, bt.depth+1, common.Hash(hn))
+			node, err := DeserializeNodeWithHash(data, bt.depth+1, common.Hash(hn))
 			if err != nil {
 				return nil, fmt.Errorf("InsertValuesAtStem node deserialization error: %w", err)
 			}
@@ -185,7 +185,7 @@ func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolve
 		if err != nil {
 			return nil, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
 		}
-		node, err := DeserializeNode(data, bt.depth+1, common.Hash(hn))
+		node, err := DeserializeNodeWithHash(data, bt.depth+1, common.Hash(hn))
 		if err != nil {
 			return nil, fmt.Errorf("InsertValuesAtStem node deserialization error: %w", err)
 		}
