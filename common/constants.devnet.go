@@ -31,9 +31,9 @@ var DevnetConstant = constant{
 	cancunBlock:            big.NewInt(43200),
 	pragueBlock:            big.NewInt(3000600),
 	osakaBlock:             big.NewInt(math.MaxInt64),
-	dynamicGasLimitBlock:   big.NewInt(math.MaxInt64),
-	tipUpgradeReward:       big.NewInt(math.MaxInt64),
-	tipUpgradePenalty:      big.NewInt(math.MaxInt64),
+	dynamicGasLimitBlock:   big.NewInt(3420000),
+	tipUpgradeReward:       big.NewInt(3420000),
+	tipUpgradePenalty:      big.NewInt(3420000),
 	tipEpochHalving:        big.NewInt(math.MaxInt64),
 
 	trc21IssuerSMC:         HexToAddress("0x8c0faeb5C6bEd2129b8674F262Fd45c4e9468bee"),
