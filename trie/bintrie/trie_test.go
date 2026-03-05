@@ -267,6 +267,59 @@ func TestStorageRoundTrip(t *testing.T) {
 	}
 }
 
+// TestContractCodeRoundTrip verifies that UpdateContractCode stores the first
+// code chunk under the key returned by GetBinaryTreeKeyCodeChunk.
+func TestContractCodeRoundTrip(t *testing.T) {
+	tracer := trie.NewPrevalueTracer()
+	tr := &BinaryTrie{
+		root:   NewBinaryNode(),
+		tracer: tracer,
+	}
+	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
+
+	acc := &types.StateAccount{
+		Nonce:    1,
+		Balance:  uint256.NewInt(1000),
+		CodeHash: common.HexToHash("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").Bytes(),
+	}
+	if err := tr.UpdateAccount(addr, acc, 0); err != nil {
+		t.Fatalf("UpdateAccount error: %v", err)
+	}
+
+	code := common.FromHex("0x6001600055")
+	if err := tr.UpdateContractCode(addr, common.BytesToHash(acc.CodeHash), code); err != nil {
+		t.Fatalf("UpdateContractCode error: %v", err)
+	}
+
+	key := GetBinaryTreeKeyCodeChunk(addr, uint256.NewInt(0))
+	var (
+		got []byte
+		err error
+	)
+	switch root := tr.root.(type) {
+	case *InternalNode:
+		got, err = root.Get(key, tr.nodeResolver)
+		if err != nil {
+			t.Fatalf("Get error: %v", err)
+		}
+	case *StemNode:
+		values, err := root.GetValuesAtStem(key[:StemSize], nil)
+		if err != nil {
+			t.Fatalf("GetValuesAtStem error: %v", err)
+		}
+		if values == nil {
+			t.Fatal("expected stem values for code chunk key")
+		}
+		got = values[key[StemSize]]
+	default:
+		t.Fatalf("unexpected root type %T", tr.root)
+	}
+	want := ChunkifyCode(code)[:HashSize]
+	if !bytes.Equal(got, want) {
+		t.Fatalf("wrong chunk for chunk #0 key: got=%x want=%x", got, want)
+	}
+}
+
 func TestBinaryTrieWitness(t *testing.T) {
 	tracer := trie.NewPrevalueTracer()
 

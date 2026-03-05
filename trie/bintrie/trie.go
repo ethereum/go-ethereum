@@ -383,9 +383,9 @@ func (t *BinaryTrie) UpdateContractCode(addr common.Address, codeHash common.Has
 		groupOffset := (chunknr + 128) % StemNodeWidth
 		if groupOffset == 0 /* start of new group */ || chunknr == 0 /* first chunk in header group */ {
 			values = make([][]byte, StemNodeWidth)
-			var offset [HashSize]byte
-			binary.BigEndian.PutUint64(offset[24:], chunknr+128)
-			key = GetBinaryTreeKey(addr, offset[:])
+			var chunknrInt uint256.Int
+			chunknrInt.SetUint64(chunknr)
+			key = GetBinaryTreeKeyCodeChunk(addr, &chunknrInt)
 		}
 		values[groupOffset] = chunks[i : i+HashSize]
 
