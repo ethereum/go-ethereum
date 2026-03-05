@@ -11,6 +11,13 @@ type GasCosts struct {
 	// This is needed for EIP-8037 block gas accounting where the state gas
 	// dimension counts ALL state creation charges, not just reservoir consumption.
 	TotalStateGasCharged uint64
+
+	// RevertedStateGasSpill tracks state gas that was charged from regular gas
+	// (spilled) during execution of a call that subsequently reverted. When a
+	// call fails, its state changes are undone, but the regular gas was already
+	// consumed. Block gas accounting must exclude this amount from the regular
+	// gas dimension since it was for state operations that didn't persist.
+	RevertedStateGasSpill uint64
 }
 
 func (g GasCosts) Max() uint64 {
@@ -52,6 +59,28 @@ func (g *GasCosts) Add(b GasCosts) {
 	g.RegularGas += b.RegularGas
 	g.StateGas += b.StateGas
 	g.TotalStateGasCharged += b.TotalStateGasCharged
+	g.RevertedStateGasSpill += b.RevertedStateGasSpill
+}
+
+// RevertStateGas handles state gas accounting when a call reverts (EIP-8037).
+// It computes how much state gas was charged from regular gas (spill) during the
+// call, and either returns it for REVERT errors or tracks it for non-REVERT errors.
+func (g *GasCosts) RevertStateGas(savedTotalStateGas, savedStateGas uint64, isRevert bool) {
+	chargedDuringCall := g.TotalStateGasCharged - savedTotalStateGas
+	fromReservoir := savedStateGas - g.StateGas
+	spilledFromRegular := chargedDuringCall - fromReservoir
+
+	if isRevert {
+		// REVERT: return the spilled state gas to regular gas since the caller
+		// keeps unused gas and state operations were undone.
+		g.RegularGas += spilledFromRegular
+	} else {
+		// Non-REVERT: regular gas is zeroed, but block accounting must exclude
+		// the spill from the regular gas dimension.
+		g.RevertedStateGasSpill += spilledFromRegular
+	}
+	g.TotalStateGasCharged = savedTotalStateGas
+	g.StateGas = savedStateGas
 }
 
 func (g GasCosts) String() string {
