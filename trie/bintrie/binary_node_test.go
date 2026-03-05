@@ -48,7 +48,7 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 	}
 
 	// Deserialize the node
-	deserialized, err := DeserializeNode(serialized, 5)
+	deserialized, err := DeserializeNode(serialized, 5, common.Hash{})
 	if err != nil {
 		t.Fatalf("Failed to deserialize node: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 	}
 
 	// Deserialize the node
-	deserialized, err := DeserializeNode(serialized, 10)
+	deserialized, err := DeserializeNode(serialized, 10, common.Hash{})
 	if err != nil {
 		t.Fatalf("Failed to deserialize node: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 // TestDeserializeEmptyNode tests deserialization of empty node
 func TestDeserializeEmptyNode(t *testing.T) {
 	// Empty byte slice should deserialize to Empty node
-	deserialized, err := DeserializeNode([]byte{}, 0)
+	deserialized, err := DeserializeNode([]byte{}, 0, common.Hash{})
 	if err != nil {
 		t.Fatalf("Failed to deserialize empty node: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestDeserializeInvalidType(t *testing.T) {
 	// Create invalid serialized data with unknown type byte
 	invalidData := []byte{99, 0, 0, 0} // Type byte 99 is invalid
 
-	_, err := DeserializeNode(invalidData, 0)
+	_, err := DeserializeNode(invalidData, 0, common.Hash{})
 	if err == nil {
 		t.Fatal("Expected error for invalid type byte, got nil")
 	}
@@ -176,7 +176,7 @@ func TestDeserializeInvalidLength(t *testing.T) {
 	// InternalNode with type byte 1 but wrong length
 	invalidData := []byte{nodeTypeInternal, 0, 0} // Too short for internal node
 
-	_, err := DeserializeNode(invalidData, 0)
+	_, err := DeserializeNode(invalidData, 0, common.Hash{})
 	if err == nil {
 		t.Fatal("Expected error for invalid data length, got nil")
 	}

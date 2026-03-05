@@ -102,7 +102,7 @@ func binaryNodeHasher(blob []byte) (common.Hash, error) {
 	if len(blob) == 0 {
 		return types.EmptyVerkleHash, nil
 	}
-	n, err := bintrie.DeserializeNode(blob, 0)
+	n, err := bintrie.DeserializeNode(blob, 0, common.Hash{})
 	if err != nil {
 		return common.Hash{}, err
 	}

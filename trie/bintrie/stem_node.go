@@ -31,6 +31,9 @@ type StemNode struct {
 	Stem   []byte   // Stem path to get to StemNodeWidth values
 	Values [][]byte // All values, indexed by the last byte of the key.
 	depth  int      // Depth of the node
+
+	mustRecompute bool        // true if the hash needs to be recomputed
+	hash          common.Hash // cached hash when mustRecompute == false
 }
 
 // Get retrieves the value for the given key.
@@ -43,7 +46,7 @@ func (bt *StemNode) Insert(key []byte, value []byte, _ NodeResolverFn, depth int
 	if !bytes.Equal(bt.Stem, key[:StemSize]) {
 		bitStem := bt.Stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
 
-		n := &InternalNode{depth: bt.depth}
+		n := &InternalNode{depth: bt.depth, mustRecompute: true}
 		bt.depth++
 		var child, other *BinaryNode
 		if bitStem == 0 {
@@ -68,9 +71,10 @@ func (bt *StemNode) Insert(key []byte, value []byte, _ NodeResolverFn, depth int
 			var values [StemNodeWidth][]byte
 			values[key[StemSize]] = value
 			*other = &StemNode{
-				Stem:   slices.Clone(key[:StemSize]),
-				Values: values[:],
-				depth:  depth + 1,
+				Stem:          slices.Clone(key[:StemSize]),
+				Values:        values[:],
+				depth:         depth + 1,
+				mustRecompute: true,
 			}
 		}
 		return n, nil
@@ -89,9 +93,11 @@ func (bt *StemNode) Copy() BinaryNode {
 		values[i] = slices.Clone(v)
 	}
 	return &StemNode{
-		Stem:   slices.Clone(bt.Stem),
-		Values: values[:],
-		depth:  bt.depth,
+		Stem:          slices.Clone(bt.Stem),
+		Values:        values[:],
+		depth:         bt.depth,
+		hash:          bt.hash,
+		mustRecompute: bt.mustRecompute,
 	}
 }
 
@@ -102,6 +108,10 @@ func (bt *StemNode) GetHeight() int {
 
 // Hash returns the hash of the node.
 func (bt *StemNode) Hash() common.Hash {
+	if !bt.mustRecompute {
+		return bt.hash
+	}
+
 	var data [StemNodeWidth]common.Hash
 	for i, v := range bt.Values {
 		if v != nil {
@@ -130,7 +140,9 @@ func (bt *StemNode) Hash() common.Hash {
 	h.Write(bt.Stem)
 	h.Write([]byte{0})
 	h.Write(data[0][:])
-	return common.BytesToHash(h.Sum(nil))
+	bt.hash = common.BytesToHash(h.Sum(nil))
+	bt.mustRecompute = false
+	return bt.hash
 }
 
 // CollectNodes collects all child nodes at a given path, and flushes it
@@ -154,7 +166,7 @@ func (bt *StemNode) InsertValuesAtStem(key []byte, values [][]byte, _ NodeResolv
 	if !bytes.Equal(bt.Stem, key[:StemSize]) {
 		bitStem := bt.Stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
 
-		n := &InternalNode{depth: bt.depth}
+		n := &InternalNode{depth: bt.depth, mustRecompute: true}
 		bt.depth++
 		var child, other *BinaryNode
 		if bitStem == 0 {
@@ -177,9 +189,10 @@ func (bt *StemNode) InsertValuesAtStem(key []byte, values [][]byte, _ NodeResolv
 			*other = Empty{}
 		} else {
 			*other = &StemNode{
-				Stem:   slices.Clone(key[:StemSize]),
-				Values: values,
-				depth:  n.depth + 1,
+				Stem:          slices.Clone(key[:StemSize]),
+				Values:        values,
+				depth:         n.depth + 1,
+				mustRecompute: true,
 			}
 		}
 		return n, nil
@@ -189,6 +202,7 @@ func (bt *StemNode) InsertValuesAtStem(key []byte, values [][]byte, _ NodeResolv
 	for i, v := range values {
 		if v != nil {
 			bt.Values[i] = v
+			bt.mustRecompute = true
 		}
 	}
 	return bt, nil

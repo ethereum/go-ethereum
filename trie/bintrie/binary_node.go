@@ -91,7 +91,7 @@ func SerializeNode(node BinaryNode) []byte {
 var invalidSerializedLength = errors.New("invalid serialized node length")
 
 // DeserializeNode deserializes a binary trie node from a byte slice.
-func DeserializeNode(serialized []byte, depth int) (BinaryNode, error) {
+func DeserializeNode(serialized []byte, depth int, hn common.Hash) (BinaryNode, error) {
 	if len(serialized) == 0 {
 		return Empty{}, nil
 	}
@@ -105,6 +105,7 @@ func DeserializeNode(serialized []byte, depth int) (BinaryNode, error) {
 			depth: depth,
 			left:  HashedNode(common.BytesToHash(serialized[1:33])),
 			right: HashedNode(common.BytesToHash(serialized[33:65])),
+			hash:  hn,
 		}, nil
 	case nodeTypeStem:
 		if len(serialized) < 64 {
@@ -127,6 +128,7 @@ func DeserializeNode(serialized []byte, depth int) (BinaryNode, error) {
 			Stem:   serialized[NodeTypeBytes : NodeTypeBytes+StemSize],
 			Values: values[:],
 			depth:  depth,
+			hash:   hn,
 		}, nil
 	default:
 		return nil, errors.New("invalid node type")

@@ -64,7 +64,7 @@ func (h HashedNode) InsertValuesAtStem(stem []byte, values [][]byte, resolver No
 	}
 
 	// Step 3: Deserialize the resolved data into a concrete node
-	node, err := DeserializeNode(data, depth)
+	node, err := DeserializeNode(data, depth, common.Hash(h))
 	if err != nil {
 		return nil, fmt.Errorf("InsertValuesAtStem node deserialization error: %w", err)
 	}
