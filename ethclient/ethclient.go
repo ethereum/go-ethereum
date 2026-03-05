@@ -384,9 +384,9 @@ func (ec *Client) SyncProgress(ctx context.Context) (*ethereum.SyncProgress, err
 func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
 	sub, err := ec.c.EthSubscribe(ctx, ch, "newHeads")
 	if err != nil {
-		// Defensively prefer returning nil interface explicitly on error-path, instead
-		// of letting default golang behavior wrap it with non-nil interface that stores
-		// nil concrete type value.
+		if errors.Is(err, rpc.ErrNotificationsUnsupported) {
+			return ec.subscribeNewHeadPolling(ctx, ch)
+		}
 		return nil, err
 	}
 	return sub, nil
@@ -488,9 +488,9 @@ func (ec *Client) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuer
 	}
 	sub, err := ec.c.EthSubscribe(ctx, ch, "logs", arg)
 	if err != nil {
-		// Defensively prefer returning nil interface explicitly on error-path, instead
-		// of letting default golang behavior wrap it with non-nil interface that stores
-		// nil concrete type value.
+		if errors.Is(err, rpc.ErrNotificationsUnsupported) {
+			return ec.subscribeFilterLogsPolling(ctx, q, ch)
+		}
 		return nil, err
 	}
 	return sub, nil
