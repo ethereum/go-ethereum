@@ -135,7 +135,7 @@ func (s *initerState) update() {
 			newfhash := rawdb.ReadHeadFastBlockHash(s.disk)
 			newbhash := rawdb.ReadHeadBlockHash(s.disk)
 			newskeleton := rawdb.ReadSkeletonSyncStatus(s.disk)
-			hasProgress := newhhash.Cmp(hhash) != 0 || newfhash.Cmp(fhash) != 0 || newbhash.Cmp(bhash) != 0 || bytes.Equal(newskeleton, skeleton)
+			hasProgress := newhhash.Cmp(hhash) != 0 || newfhash.Cmp(fhash) != 0 || newbhash.Cmp(bhash) != 0 || !bytes.Equal(newskeleton, skeleton)
 
 			if !hasProgress && time.Since(lastProgress) > syncStalledTimeout {
 				s.set(stateStalled)
