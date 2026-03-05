@@ -95,28 +95,25 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStar
 	})
 
 	var (
-		// total gas used not applying refunds
-		blockGas = uint64(0)
-		// total gas used applying refunds
-		execGas = uint64(0)
+		// Per-dimension cumulative sums for 2D block gas (EIP-8037).
+		sumRegular        uint64
+		sumState          uint64
+		cumulativeReceipt uint64 // cumulative receipt gas (what users pay)
 	)
 
 	var allLogs []*types.Log
 	var allReceipts []*types.Receipt
 	for _, result := range results {
-		blockGas += result.blockGas
-		execGas += result.execGas
-		result.receipt.CumulativeGasUsed = blockGas
-		if blockGas > header.GasLimit {
-			return &ProcessResultWithMetrics{
-				ProcessResult: &ProcessResult{Error: fmt.Errorf("gas limit exceeded")},
-			}
-		}
+		sumRegular += result.txRegular
+		sumState += result.txState
+		cumulativeReceipt += result.execGas
+		result.receipt.CumulativeGasUsed = cumulativeReceipt
 		allLogs = append(allLogs, result.receipt.Logs...)
 		allReceipts = append(allReceipts, result.receipt)
 	}
-	// Block gas limit is enforced against usedGas (pre-refund after Amsterdam, post-refund before).
-	if blockGas > header.GasLimit {
+	// Block gas = max(sum_regular, sum_state) per EIP-8037.
+	blockGasUsed := max(sumRegular, sumState)
+	if blockGasUsed > header.GasLimit {
 		return &ProcessResultWithMetrics{
 			ProcessResult: &ProcessResult{Error: fmt.Errorf("gas limit exceeded")},
 		}
@@ -177,7 +174,7 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStar
 			Receipts: allReceipts,
 			Requests: requests,
 			Logs:     allLogs,
-			GasUsed:  execGas,
+			GasUsed:  blockGasUsed,
 		},
 		PostProcessTime: tPostprocess,
 		ExecTime:        tExec,
@@ -190,6 +187,10 @@ type txExecResult struct {
 	err      error // non-EVM error which would render the block invalid
 	blockGas uint64
 	execGas  uint64
+
+	// Per-tx dimensional gas for Amsterdam 2D gas accounting (EIP-8037).
+	txRegular uint64
+	txState   uint64
 
 	stateReads bal.StateAccesses
 }
@@ -292,7 +293,6 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 	gp := NewGasPool(block.GasLimit())
 	db.SetTxContext(tx.Hash(), balIdx-1)
 
-	var gasUsed uint64
 	mut, receipt, err := ApplyTransactionWithEVM(msg, gp, db, block.Number(), block.Hash(), context.Time, tx, evm)
 	if err != nil {
 		err := fmt.Errorf("could not apply tx %d [%v]: %w", balIdx, tx.Hash().Hex(), err)
@@ -305,11 +305,14 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 		return &txExecResult{err: err}
 	}
 
+	txRegular, txState := gp.AmsterdamDimensions()
 	return &txExecResult{
 		idx:        balIdx,
 		receipt:    receipt,
 		execGas:    receipt.GasUsed,
-		blockGas:   gasUsed,
+		blockGas:   gp.Used(),
+		txRegular:  txRegular,
+		txState:    txState,
 		stateReads: db.Reader().(state.StateReaderTracker).GetStateAccessList(),
 	}
 }

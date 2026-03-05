@@ -133,6 +133,12 @@ func (gp *GasPool) Set(other *GasPool) {
 	gp.cumulativeState = other.cumulativeState
 }
 
+// AmsterdamDimensions returns the per-dimension cumulative gas values
+// for 2D gas accounting (EIP-8037).
+func (gp *GasPool) AmsterdamDimensions() (regular, state uint64) {
+	return gp.cumulativeRegular, gp.cumulativeState
+}
+
 func (gp *GasPool) String() string {
 	return fmt.Sprintf("initial: %d, remaining: %d, cumulative used: %d", gp.initial, gp.remaining, gp.cumulativeUsed)
 }
