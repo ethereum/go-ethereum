@@ -159,6 +159,19 @@ func (e *AccountAccess) validate() error {
 		return errors.New("storage read slots not in lexicographic order")
 	}
 
+	// EIP-7928: a slot must not appear in both storage_changes and storage_reads.
+	if len(e.StorageWrites) > 0 && len(e.StorageReads) > 0 {
+		changeSlots := make(map[common.Hash]struct{}, len(e.StorageWrites))
+		for _, sc := range e.StorageWrites {
+			changeSlots[sc.Slot] = struct{}{}
+		}
+		for _, key := range e.StorageReads {
+			if _, exists := changeSlots[key]; exists {
+				return fmt.Errorf("storage key %s in both changes and reads", key)
+			}
+		}
+	}
+
 	// Check the balance changes are sorted in order
 	if !slices.IsSortedFunc(e.BalanceChanges, func(a, b encodingBalanceChange) int {
 		return cmp.Compare[uint16](a.TxIdx, b.TxIdx)

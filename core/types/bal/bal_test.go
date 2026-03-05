@@ -252,3 +252,26 @@ func TestBlockAccessListValidation(t *testing.T) {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 }
+
+func TestBlockAccessListSlotUniqueness(t *testing.T) {
+	var addr common.Address
+	addr[19] = 0x01
+	slot := common.HexToHash("0x01")
+
+	ac := AccountAccess{
+		Address: addr,
+		StorageWrites: []encodingSlotWrites{
+			{
+				Slot: slot,
+				Accesses: []encodingStorageWrite{
+					{TxIdx: 0, ValueAfter: [32]byte{1}},
+				},
+			},
+		},
+		StorageReads: [][32]byte{slot},
+	}
+	bal := BlockAccessList{[]AccountAccess{ac}}
+	if err := bal.Validate(); err == nil {
+		t.Fatal("expected error for slot in both changes and reads")
+	}
+}
