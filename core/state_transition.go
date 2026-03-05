@@ -731,7 +731,8 @@ func (st *stateTransition) returnGas() {
 
 // gasUsed returns the amount of gas used up by the state transition.
 func (st *stateTransition) gasUsed() uint64 {
-	return st.initialGas.RegularGas - st.gasRemaining.RegularGas
+	return (st.initialGas.RegularGas + st.initialGas.StateGas) -
+		(st.gasRemaining.RegularGas + st.gasRemaining.StateGas)
 }
 
 // blockGasUsed returns the per-transaction (regular, state) gas used for

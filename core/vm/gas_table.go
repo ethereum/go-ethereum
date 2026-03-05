@@ -521,8 +521,8 @@ func gasCreateEip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
 	words := (size + 31) / 32
 	stateGas := params.AccountCreationSize * evm.Context.CostPerGasByte * words
-	hashGas := params.Keccak256WordGas * words
-	return GasCosts{RegularGas: gas + hashGas, StateGas: stateGas}, nil
+	wordGas := params.InitCodeWordGas * words
+	return GasCosts{RegularGas: gas + wordGas, StateGas: stateGas}, nil
 }
 
 func gasCreate2Eip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
@@ -540,8 +540,8 @@ func gasCreate2Eip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
 	words := (size + 31) / 32
 	stateGas := params.AccountCreationSize * evm.Context.CostPerGasByte * words
-	hashGas := params.Keccak256WordGas * words
-	return GasCosts{RegularGas: gas + hashGas, StateGas: stateGas}, nil
+	wordGas := (params.InitCodeWordGas + params.Keccak256WordGas) * words
+	return GasCosts{RegularGas: gas + wordGas, StateGas: stateGas}, nil
 }
 
 func gasCall8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
