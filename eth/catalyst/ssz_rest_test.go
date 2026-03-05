@@ -139,4 +139,3 @@ func TestSszRestSuccessFormat(t *testing.T) {
 		t.Errorf("body mismatch")
 	}
 }
-

@@ -152,7 +152,6 @@ func (s *SszRestServer) registerRoutes(mux *http.ServeMux) {
 
 	// getClientVersion
 	mux.HandleFunc("POST /engine/v1/get_client_version", s.handleGetClientVersion)
-
 }
 
 // --- newPayload handlers ---

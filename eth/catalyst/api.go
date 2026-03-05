@@ -1098,7 +1098,7 @@ func (api *ConsensusAPI) checkFork(timestamp uint64, forks ...forks.Fork) bool {
 func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 	// Methods that should not be advertised via V1 capabilities
 	skip := map[string]bool{
-		"ExchangeCapabilities":             true,
+		"ExchangeCapabilities": true,
 	}
 	valueT := reflect.TypeOf(api)
 	caps := make([]string, 0, valueT.NumMethod())

@@ -412,4 +412,3 @@ type ClientVersionV1 struct {
 func (v *ClientVersionV1) String() string {
 	return fmt.Sprintf("%s-%s-%s-%s", v.Code, v.Name, v.Version, v.Commit)
 }
-
