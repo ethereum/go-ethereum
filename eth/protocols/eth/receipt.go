@@ -202,6 +202,11 @@ func (rl *ReceiptList) Derivable() types.DerivableList {
 	})
 }
 
+// Append appends all items from another ReceiptList to this list.
+func (rl *ReceiptList) Append(other *ReceiptList) {
+	rl.items.AppendList(&other.items)
+}
+
 // blockReceiptsToNetwork takes a slice of rlp-encoded receipts, and transactions,
 // and re-encodes them for the network protocol.
 func blockReceiptsToNetwork(blockReceipts, blockBody rlp.RawValue) ([]byte, error) {
