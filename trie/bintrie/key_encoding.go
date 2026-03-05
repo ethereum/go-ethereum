@@ -54,17 +54,17 @@ func getBinaryTreeKey(addr common.Address, offset []byte, overflow bool) []byte 
 	hasher := sha256.New()
 	hasher.Write(zeroHash[:12])
 	hasher.Write(addr[:])
+	var buf [32]byte
 	// key is big endian, hashed value is little endian
 	for i := range offset[:31] {
-		hasher.Write([]byte{offset[30-i]})
+		buf[i] = offset[30-i]
 	}
 	if overflow {
 		// Overflow detected when adding MAIN_STORAGE_OFFSET,
 		// reporting it in the shifter 32 byte value.
-		hasher.Write([]byte{1})
-	} else {
-		hasher.Write([]byte{0})
+		buf[31] = 1
 	}
+	hasher.Write(buf[:])
 	k := hasher.Sum(nil)
 	k[31] = offset[31]
 	return k
