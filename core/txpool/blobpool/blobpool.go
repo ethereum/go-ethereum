@@ -1564,56 +1564,10 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 		return err
 	}
 
-	// Create meta, in preparation of adding to the pool.
-	// Having the meta simplifies the check below for underpriced transactions.
-	meta := newBlobTxMeta(tx)
-
-	// Calculate the eviction parameters for the transaction
-	var (
-		from, _ = types.Sender(p.signer, tx) // already validated above
-		next    = p.state.GetNonce(from)
-		offset  = int(meta.nonce - next)
-	)
-	meta.evictionExecTip = meta.execTipCap
-	meta.evictionExecFeeJumps = meta.basefeeJumps
-	meta.evictionBlobFeeJumps = meta.blobfeeJumps
-	if meta.nonce > next { // transaction can't be gapped, we filter for that in validateTx
-		prev := p.index[from][int(meta.nonce-next-1)]
-		if meta.evictionExecTip.Cmp(prev.evictionExecTip) > 0 {
-			meta.evictionExecTip = prev.evictionExecTip
-		}
-		if meta.evictionExecFeeJumps > prev.evictionExecFeeJumps {
-			meta.evictionExecFeeJumps = prev.evictionExecFeeJumps
-		}
-		if meta.evictionBlobFeeJumps > prev.evictionBlobFeeJumps {
-			meta.evictionBlobFeeJumps = prev.evictionBlobFeeJumps
-		}
-	}
-
-	// Check pool size limits before inserting the transaction
-	// If at limit, check whether it is underpriced.
-	// Note: equal priority as the current worse of the pool is still considered
-	// underpriced. This is to prevent constant replacement when the pool is full.
-	storageSizeDiff, err := getSlotSize(p.slotter, uint32(meta.size))
-	if err != nil {
-		// This should nver happen, but better safe than sorry.
-		log.Warn("Dropping blob transaction due to size", "tx", tx.Hash(), "size", meta.size, "err", err)
-		return err
-	}
-	// is this a possible replacent? If so, we need to consider the storage size difference
-	// instead of the full size of the new transaction.
-	if offset < len(p.index[from]) {
-		storageSizeDiff -= p.index[from][offset].storageSize
-	}
-	if p.stored+uint64(storageSizeDiff) > p.config.Datacap {
-		if p.evict.Underpriced(meta) {
-			log.Trace("Dropping underpriced blob transaction", "tx", tx.Hash(), "feecap", tx.GasFeeCap(), "tipcap", tx.GasTipCap(), "blobfeecap", tx.BlobGasFeeCap())
-			return txpool.ErrUnderpriced
-		}
-	}
-
 	// If the address is not yet known, request exclusivity to track the account
+	// This is a cheap check, so we do it before all the other checks.
 	// only by this subpool until all transactions are evicted
+	from, _ := types.Sender(p.signer, tx) // already validated above
 	if _, ok := p.index[from]; !ok {
 		if err := p.reserver.Hold(from); err != nil {
 			addNonExclusiveMeter.Mark(1)
@@ -1631,13 +1585,63 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 			}
 		}()
 	}
-	// Transaction permitted into the pool from a nonce and cost perspective,
-	// insert it into the database and update the indices
+
+	// Create meta, in preparation of adding to the pool.
+	// Having the meta simplifies the check below for underpriced transactions.
+	// Note: the meta will be finalized with storage information after the transaction is stored
+	meta := newBlobTxMeta(tx)
+
+	// Calculate the eviction parameters for the transaction
+	var (
+		next   = p.state.GetNonce(from)
+		offset = int(meta.nonce - next)
+	)
+	meta.evictionExecTip = meta.execTipCap
+	meta.evictionExecFeeJumps = meta.basefeeJumps
+	meta.evictionBlobFeeJumps = meta.blobfeeJumps
+	if meta.nonce > next { // transaction can't be gapped, we filter for that in validateTx
+		prev := p.index[from][int(meta.nonce-next-1)]
+		if meta.evictionExecTip.Cmp(prev.evictionExecTip) > 0 {
+			meta.evictionExecTip = prev.evictionExecTip
+		}
+		if meta.evictionExecFeeJumps > prev.evictionExecFeeJumps {
+			meta.evictionExecFeeJumps = prev.evictionExecFeeJumps
+		}
+		if meta.evictionBlobFeeJumps > prev.evictionBlobFeeJumps {
+			meta.evictionBlobFeeJumps = prev.evictionBlobFeeJumps
+		}
+	}
+
+	// Check pool size limits before inserting the transaction. For this calculation
+	// we have to RLP encode the transaction to get the size.
+	// Note: equal priority as the current worse of the pool is still considered
+	// underpriced. This is to prevent constant replacement when the pool is full.
 	blob, err := rlp.EncodeToBytes(tx)
 	if err != nil {
+		// This should never happen, but better safe than sorry.
 		log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
 		return err
 	}
+	storageSizeDiff, err := getSlotSize(p.slotter, uint32(len(blob)))
+	if err != nil {
+		// This should also not happen at this stage
+		log.Warn("Dropping blob transaction due to size", "tx", tx.Hash(), "size", meta.size, "err", err)
+		return err
+	}
+	// is this a possible replacent? If so, we need to consider the storage size difference
+	// instead of the full size of the new transaction.
+	if offset < len(p.index[from]) {
+		storageSizeDiff -= p.index[from][offset].storageSize
+	}
+	if p.stored+uint64(storageSizeDiff) > p.config.Datacap {
+		if p.evict.Underpriced(meta) {
+			log.Trace("Dropping underpriced blob transaction", "tx", tx.Hash(), "feecap", tx.GasFeeCap(), "tipcap", tx.GasTipCap(), "blobfeecap", tx.BlobGasFeeCap())
+			return txpool.ErrUnderpriced
+		}
+	}
+
+	// Transaction permitted into the pool from a nonce and cost perspective,
+	// insert it into the database and update the indices
 	id, err := p.store.Put(blob)
 	if err != nil {
 		return err
