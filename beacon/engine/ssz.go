@@ -737,7 +737,6 @@ func EncodeExecutableDataSSZ(ep *ExecutableData, version int) []byte {
 			balOffset += len(withdrawalData)
 		}
 		binary.LittleEndian.PutUint32(buf[pos:pos+4], uint32(balOffset))
-		pos += 4
 	}
 
 	// Variable part
@@ -816,7 +815,6 @@ func DecodeExecutableDataSSZ(buf []byte, version int) (*ExecutableData, error) {
 		ep.SlotNumber = &slotNumber
 		pos += 8
 		balOffset = binary.LittleEndian.Uint32(buf[pos : pos+4])
-		pos += 4
 	}
 
 	// Decode variable-length fields

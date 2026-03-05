@@ -43,7 +43,7 @@ type testResponseWriter struct {
 	body    bytes.Buffer
 }
 
-func (w *testResponseWriter) Header() http.Header        { return w.headers }
+func (w *testResponseWriter) Header() http.Header         { return w.headers }
 func (w *testResponseWriter) Write(b []byte) (int, error) { return w.body.Write(b) }
 func (w *testResponseWriter) WriteHeader(code int)        { w.code = code }
 
