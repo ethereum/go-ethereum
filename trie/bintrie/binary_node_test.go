@@ -24,54 +24,96 @@ import (
 )
 
 // TestSerializeDeserializeInternalNode tests serialization and deserialization of InternalNode
+// with the grouped subtree format. A single InternalNode with HashedNode children serializes
+// as a depth-8 group where the children appear at their first leaf positions.
 func TestSerializeDeserializeInternalNode(t *testing.T) {
 	// Create an internal node with two hashed children
 	leftHash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 	rightHash := common.HexToHash("0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321")
 
 	node := &InternalNode{
-		depth: 5,
+		depth: 0, // Use depth 0 (byte-aligned) for this test
 		left:  HashedNode(leftHash),
 		right: HashedNode(rightHash),
 	}
 
-	// Serialize the node
-	serialized := SerializeNode(node)
+	// Serialize the node with default group depth of 8
+	serialized := SerializeNode(node, MaxGroupDepth)
 
-	// Check the serialized format
+	// Check the serialized format: type byte + group depth byte + 32 byte bitmap + N*32 byte hashes
 	if serialized[0] != nodeTypeInternal {
 		t.Errorf("Expected type byte to be %d, got %d", nodeTypeInternal, serialized[0])
 	}
 
-	if len(serialized) != 65 {
-		t.Errorf("Expected serialized length to be 65, got %d", len(serialized))
+	if serialized[1] != MaxGroupDepth {
+		t.Errorf("Expected group depth to be %d, got %d", MaxGroupDepth, serialized[1])
+	}
+
+	// Expected length: 1 (type) + 1 (group depth) + 32 (bitmap) + 2*32 (two hashes) = 98 bytes
+	bitmapSize := BitmapSizeForDepth(MaxGroupDepth)
+	expectedLen := NodeTypeBytes + 1 + bitmapSize + 2*HashSize
+	if len(serialized) != expectedLen {
+		t.Errorf("Expected serialized length to be %d, got %d", expectedLen, len(serialized))
+	}
+
+	// The left child (HashedNode) terminates at remainingDepth=7, so it's placed at position 0<<7 = 0
+	// The right child (HashedNode) terminates at remainingDepth=7, so it's placed at position 1<<7 = 128
+	bitmap := serialized[2 : 2+bitmapSize]
+	if bitmap[0]&0x80 == 0 { // bit 0 (MSB of byte 0)
+		t.Error("Expected bit 0 to be set in bitmap (left child)")
+	}
+	if bitmap[16]&0x80 == 0 { // bit 128 (MSB of byte 16)
+		t.Error("Expected bit 128 to be set in bitmap (right child)")
 	}
 
 	// Deserialize the node
-	deserialized, err := DeserializeNode(serialized, 5)
+	deserialized, err := DeserializeNode(serialized, 0)
 	if err != nil {
 		t.Fatalf("Failed to deserialize node: %v", err)
 	}
 
-	// Check that it's an internal node
+	// With grouped format, deserialization creates a tree of InternalNodes down to the hashes.
+	// The root should be an InternalNode, and we should be able to navigate down 8 levels
+	// to find the HashedNode children.
 	internalNode, ok := deserialized.(*InternalNode)
 	if !ok {
 		t.Fatalf("Expected InternalNode, got %T", deserialized)
 	}
 
 	// Check the depth
-	if internalNode.depth != 5 {
-		t.Errorf("Expected depth 5, got %d", internalNode.depth)
+	if internalNode.depth != 0 {
+		t.Errorf("Expected depth 0, got %d", internalNode.depth)
 	}
 
-	// Check the left and right hashes
-	if internalNode.left.Hash() != leftHash {
-		t.Errorf("Left hash mismatch: expected %x, got %x", leftHash, internalNode.left.Hash())
+	// Navigate to position 0 (8 left turns) to find the left hash
+	node0 := navigateToLeaf(internalNode, 0, 8)
+	if node0.Hash() != leftHash {
+		t.Errorf("Left hash mismatch: expected %x, got %x", leftHash, node0.Hash())
 	}
 
-	if internalNode.right.Hash() != rightHash {
-		t.Errorf("Right hash mismatch: expected %x, got %x", rightHash, internalNode.right.Hash())
+	// Navigate to position 128 (right, then 7 lefts) to find the right hash
+	node128 := navigateToLeaf(internalNode, 128, 8)
+	if node128.Hash() != rightHash {
+		t.Errorf("Right hash mismatch: expected %x, got %x", rightHash, node128.Hash())
 	}
+}
+
+// navigateToLeaf navigates to a specific position in the tree (used by grouped serialization tests)
+func navigateToLeaf(node BinaryNode, position, depth int) BinaryNode {
+	for d := 0; d < depth; d++ {
+		in, ok := node.(*InternalNode)
+		if !ok {
+			return node
+		}
+		// Check bit at position (depth-1-d) to determine left or right
+		bit := (position >> (depth - 1 - d)) & 1
+		if bit == 0 {
+			node = in.left
+		} else {
+			node = in.right
+		}
+	}
+	return node
 }
 
 // TestSerializeDeserializeStemNode tests serialization and deserialization of StemNode
@@ -94,8 +136,8 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 		depth:  10,
 	}
 
-	// Serialize the node
-	serialized := SerializeNode(node)
+	// Serialize the node (groupDepth doesn't affect StemNode serialization)
+	serialized := SerializeNode(node, MaxGroupDepth)
 
 	// Check the serialized format
 	if serialized[0] != nodeTypeStem {
@@ -173,8 +215,8 @@ func TestDeserializeInvalidType(t *testing.T) {
 
 // TestDeserializeInvalidLength tests deserialization with invalid data length
 func TestDeserializeInvalidLength(t *testing.T) {
-	// InternalNode with type byte 1 but wrong length
-	invalidData := []byte{nodeTypeInternal, 0, 0} // Too short for internal node
+	// InternalNode with valid type byte and group depth but too short for bitmap
+	invalidData := []byte{nodeTypeInternal, 8, 0, 0} // Too short for bitmap (needs 32 bytes)
 
 	_, err := DeserializeNode(invalidData, 0)
 	if err == nil {
