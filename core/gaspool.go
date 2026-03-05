@@ -87,11 +87,21 @@ func (gp *GasPool) ReturnGasAmsterdam(txGasLimit, txRegular, txState, receiptGas
 	gp.cumulativeUsed += receiptGasUsed
 	newUsed := max(gp.cumulativeRegular, gp.cumulativeState)
 	blockGasIncrement := newUsed - oldUsed
-	returned := txGasLimit - blockGasIncrement
-	if gp.remaining > math.MaxUint64-returned {
-		return fmt.Errorf("%w: remaining: %d, returned: %d", ErrGasLimitOverflow, gp.remaining, returned)
+	if blockGasIncrement > txGasLimit {
+		// State gas via reservoir model can push the dimensional cost above
+		// the tx gas limit. Consume the excess from the pool.
+		excess := blockGasIncrement - txGasLimit
+		if gp.remaining < excess {
+			return fmt.Errorf("%w: remaining: %d, excess: %d", ErrGasLimitReached, gp.remaining, excess)
+		}
+		gp.remaining -= excess
+	} else {
+		returned := txGasLimit - blockGasIncrement
+		if gp.remaining > math.MaxUint64-returned {
+			return fmt.Errorf("%w: remaining: %d, returned: %d", ErrGasLimitOverflow, gp.remaining, returned)
+		}
+		gp.remaining += returned
 	}
-	gp.remaining += returned
 	return nil
 }
 

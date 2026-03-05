@@ -28,13 +28,17 @@ func (g GasCosts) Sum() uint64 {
 	return g.RegularGas + g.StateGas
 }
 
-// Sub returns true if the operation would underflow
+// Underflow returns true if the operation would underflow.
+// When state gas exceeds the reservoir, the excess spills to regular gas.
+// The check accounts for regular gas already consumed by b.RegularGas.
 func (g GasCosts) Underflow(b GasCosts) bool {
 	if b.RegularGas > g.RegularGas {
 		return true
 	}
 	if b.StateGas > g.StateGas {
-		if b.StateGas > g.RegularGas {
+		spillover := b.StateGas - g.StateGas
+		remainingRegular := g.RegularGas - b.RegularGas
+		if spillover > remainingRegular {
 			return true
 		}
 	}

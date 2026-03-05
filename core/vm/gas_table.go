@@ -18,7 +18,6 @@ package vm
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -596,12 +595,13 @@ func gasCreateEip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	if overflow {
 		return GasCosts{}, ErrGasUintOverflow
 	}
-	if size > params.MaxInitCodeSize {
-		return GasCosts{}, fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
-	}
-	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
-	words := (size + 31) / 32
-	stateGas := params.AccountCreationSize * evm.Context.CostPerGasByte * words
+	// Cap word gas at MaxInitCodeSizeAmsterdam to avoid overflow.
+	// The actual init code size check happens in create() for graceful failure.
+	wordSize := min(size, params.MaxInitCodeSizeAmsterdam)
+	words := (wordSize + 31) / 32
+	// Account creation is a fixed state gas cost, not proportional to init code size.
+	// Code storage state gas is charged separately in initNewContract.
+	stateGas := params.AccountCreationSize * evm.Context.CostPerGasByte
 	// CREATE uses InitCodeWordGas (EIP-3860); Keccak256WordGas is only for CREATE2.
 	wordGas := params.InitCodeWordGas * words
 	return GasCosts{RegularGas: gas + wordGas, StateGas: stateGas}, nil
@@ -616,12 +616,13 @@ func gasCreate2Eip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	if overflow {
 		return GasCosts{}, ErrGasUintOverflow
 	}
-	if size > params.MaxInitCodeSize {
-		return GasCosts{}, fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
-	}
-	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
-	words := (size + 31) / 32
-	stateGas := params.AccountCreationSize * evm.Context.CostPerGasByte * words
+	// Cap word gas at MaxInitCodeSizeAmsterdam to avoid overflow.
+	// The actual init code size check happens in create() for graceful failure.
+	wordSize := min(size, params.MaxInitCodeSizeAmsterdam)
+	words := (wordSize + 31) / 32
+	// Account creation is a fixed state gas cost, not proportional to init code size.
+	// Code storage state gas is charged separately in initNewContract.
+	stateGas := params.AccountCreationSize * evm.Context.CostPerGasByte
 	// CREATE2 charges both InitCodeWordGas (EIP-3860) and Keccak256WordGas (for address hashing).
 	wordGas := (params.InitCodeWordGas + params.Keccak256WordGas) * words
 	return GasCosts{RegularGas: gas + wordGas, StateGas: stateGas}, nil

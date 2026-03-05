@@ -536,7 +536,6 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasCosts, value *
 	if err != nil {
 		return nil, common.Address{}, gas, err
 	}
-
 	// Charge the contract creation init gas in verkle mode
 	if evm.chainRules.IsEIP4762 {
 		statelessGas := evm.AccessEvents.ContractCreatePreCheckGas(address, gas.RegularGas)
@@ -620,7 +619,8 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasCosts, value *
 		// State gas charges must persist for block 2D gas accounting even
 		// though the state is reverted. Only zero regular gas as penalty.
 		isCodeValidation := evm.chainRules.IsAmsterdam &&
-			(errors.Is(err, ErrMaxCodeSizeExceeded) || errors.Is(err, ErrInvalidCode))
+			(errors.Is(err, ErrMaxCodeSizeExceeded) || errors.Is(err, ErrInvalidCode) ||
+				(err == ErrCodeStoreOutOfGas && contract.Gas.TotalStateGasCharged > savedTotalStateGas))
 		if !isRevert {
 			if isCodeValidation {
 				contract.Gas.RegularGas = 0
@@ -646,8 +646,13 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 		return ret, err
 	}
 
-	// Charge code storage gas BEFORE validation checks so that state gas is
-	// properly accounted for in block gas even if the code is invalid (EIP-7954).
+	// Check code validity once upfront.
+	codeErr := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret)))
+	if codeErr == nil && len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
+		codeErr = ErrInvalidCode
+	}
+
+	// Charge code storage gas.
 	if !evm.chainRules.IsEIP4762 {
 		createDataGas := GasCosts{RegularGas: uint64(len(ret)) * params.CreateDataGas}
 		if evm.chainRules.IsAmsterdam {
@@ -658,6 +663,13 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 			}
 		}
 		if !contract.UseGas(createDataGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
+			if evm.chainRules.IsAmsterdam && codeErr == nil {
+				// Valid code that merely ran out of gas: track state gas for
+				// block accounting (EIP-8037).
+				contract.Gas.TotalStateGasCharged += createDataGas.StateGas
+				contract.Gas.RegularGas = 0
+				contract.Gas.StateGas = 0
+			}
 			return ret, ErrCodeStoreOutOfGas
 		}
 	} else {
@@ -668,14 +680,8 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 		}
 	}
 
-	// Check whether the max code size has been exceeded, assign err if the case.
-	if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
-		return ret, err
-	}
-
-	// Reject code starting with 0xEF if EIP-3541 is enabled.
-	if len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
-		return ret, ErrInvalidCode
+	if codeErr != nil {
+		return ret, codeErr
 	}
 
 	if len(ret) > 0 {

@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"math"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -661,6 +662,15 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		gas.RegularGas -= gas.RegularGas / 64
 	}
 
+	// EIP-7954: check init code size after gas is charged (by the gas function)
+	// but before execution. This aborts the caller's execution, ensuring all
+	// regular gas is consumed while the state gas spill is tracked.
+	if evm.chainRules.IsAmsterdam {
+		if err := CheckMaxInitCodeSize(&evm.chainRules, uint64(len(input))); err != nil {
+			return nil, err
+		}
+	}
+
 	// reuse size int for stackvalue
 	stackvalue := size
 
@@ -684,6 +694,15 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	}
 	scope.Stack.push(&stackvalue)
 
+	// For inner CREATEs that fail code validation (EIP-7954 + EIP-8037):
+	// the state was reverted so no state growth occurred. Don't propagate
+	// the code storage state gas to the parent's block gas accounting.
+	// Restore the parent's state gas reservoir since it was not consumed.
+	if evm.chainRules.IsAmsterdam && (errors.Is(suberr, ErrMaxCodeSizeExceeded) || errors.Is(suberr, ErrInvalidCode)) {
+		returnGas.TotalStateGasCharged = 0
+		returnGas.RevertedStateGasSpill = 0
+		returnGas.StateGas = stateGas
+	}
 	scope.Contract.RefundGas(returnGas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	if suberr == ErrExecutionReverted {
@@ -708,6 +727,16 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 	// Apply EIP150
 	gas.RegularGas -= gas.RegularGas / 64
+
+	// EIP-7954: check init code size after gas is charged (by the gas function)
+	// but before execution. This aborts the caller's execution, ensuring all
+	// regular gas is consumed while the state gas spill is tracked.
+	if evm.chainRules.IsAmsterdam {
+		if err := CheckMaxInitCodeSize(&evm.chainRules, uint64(len(input))); err != nil {
+			return nil, err
+		}
+	}
+
 	// Pass caller's state gas (reservoir) to child and zero it out to avoid
 	// double-counting when the unused portion is refunded on return.
 	stateGas := scope.Contract.Gas.StateGas
@@ -724,6 +753,16 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		stackvalue.SetBytes(addr.Bytes())
 	}
 	scope.Stack.push(&stackvalue)
+
+	// For inner CREATEs that fail code validation (EIP-7954 + EIP-8037):
+	// the state was reverted so no state growth occurred. Don't propagate
+	// the code storage state gas to the parent's block gas accounting.
+	// Restore the parent's state gas reservoir since it was not consumed.
+	if evm.chainRules.IsAmsterdam && (errors.Is(suberr, ErrMaxCodeSizeExceeded) || errors.Is(suberr, ErrInvalidCode)) {
+		returnGas.TotalStateGasCharged = 0
+		returnGas.RevertedStateGasSpill = 0
+		returnGas.StateGas = stateGas
+	}
 	scope.Contract.RefundGas(returnGas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	if suberr == ErrExecutionReverted {
