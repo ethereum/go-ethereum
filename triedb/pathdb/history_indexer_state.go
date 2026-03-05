@@ -98,8 +98,8 @@ func (s *initerState) update() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
-	head := s.readLastBlock()
-	if head != nil && time.Since(time.Unix(int64(head.Time), 0)) > syncStateTimeWindow {
+	headBlock := s.readLastBlock()
+	if headBlock != nil && time.Since(time.Unix(int64(headBlock.Time), 0)) < syncStateTimeWindow {
 		s.set(stateSynced)
 		log.Info("Marked indexing initer as synced")
 	} else {
