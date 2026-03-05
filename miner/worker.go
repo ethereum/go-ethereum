@@ -223,6 +223,10 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 		}
 	}
 
+	// EIP-8037: set header.GasUsed before FinalizeAndAssemble so the block
+	// header reflects the correct 2D gas metric max(sum_regular, sum_state).
+	work.header.GasUsed = work.gasPool.Used()
+
 	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts, onBlockFinalization)
 	if err != nil {
 		return &newPayloadResult{err: err}
@@ -329,7 +333,9 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	if miner.chainConfig.IsPrague(header.Number, header.Time) {
 		mut.Merge(core.ProcessParentBlockHash(header.ParentHash, env.evm))
 	}
-	env.accessList.AccumulateMutations(mut, 0)
+	if env.accessList != nil {
+		env.accessList.AccumulateMutations(mut, 0)
+	}
 	return env, nil
 }
 

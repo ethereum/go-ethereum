@@ -76,12 +76,18 @@ func (gp *GasPool) ReturnGas(returned uint64, gasUsed uint64) error {
 // ReturnGasAmsterdam returns unused gas to the pool using two-dimensional
 // gas accounting (EIP-8037). receiptGasUsed is the per-tx gas the user pays
 // (tx.gas - gas_left - state_gas_reservoir), used for receipt cumulative tracking.
+//
+// The block gas increment for this tx is the change in max(sumR, sumS) after
+// adding the tx's per-dimension values, NOT max(txR, txS) per-tx. This avoids
+// overcounting when the dominant dimension switches between transactions.
 func (gp *GasPool) ReturnGasAmsterdam(txGasLimit, txRegular, txState, receiptGasUsed uint64) error {
-	txBlockGas := max(txRegular, txState)
+	oldUsed := max(gp.cumulativeRegular, gp.cumulativeState)
 	gp.cumulativeRegular += txRegular
 	gp.cumulativeState += txState
 	gp.cumulativeUsed += receiptGasUsed
-	returned := txGasLimit - txBlockGas
+	newUsed := max(gp.cumulativeRegular, gp.cumulativeState)
+	blockGasIncrement := newUsed - oldUsed
+	returned := txGasLimit - blockGasIncrement
 	if gp.remaining > math.MaxUint64-returned {
 		return fmt.Errorf("%w: remaining: %d, returned: %d", ErrGasLimitOverflow, gp.remaining, returned)
 	}
