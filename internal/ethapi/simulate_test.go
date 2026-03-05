@@ -17,7 +17,6 @@
 package ethapi
 
 import (
-	"math"
 	"math/big"
 	"testing"
 
@@ -82,8 +81,8 @@ func TestSimulateSanitizeBlockOrder(t *testing.T) {
 		},
 	} {
 		sim := &simulator{
-			base:         &types.Header{Number: big.NewInt(int64(tc.baseNumber)), Time: tc.baseTimestamp},
-			gasRemaining: math.MaxUint64,
+			base:   &types.Header{Number: big.NewInt(int64(tc.baseNumber)), Time: tc.baseTimestamp},
+			budget: newGasBudget(0),
 		}
 		res, err := sim.sanitizeChain(tc.blocks)
 		if err != nil {

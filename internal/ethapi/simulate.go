@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"time"
 
@@ -150,6 +151,39 @@ func (m *simChainHeadReader) GetHeaderByHash(hash common.Hash) *types.Header {
 	return header
 }
 
+// gasBudget tracks the remaining gas allowed across all simulated blocks.
+// It enforces the RPC-level gas cap to prevent DoS.
+type gasBudget struct {
+	remaining uint64
+}
+
+// newGasBudget creates a gas budget with the given cap.
+// A cap of 0 is treated as unlimited.
+func newGasBudget(cap uint64) *gasBudget {
+	if cap == 0 {
+		cap = math.MaxUint64
+	}
+	return &gasBudget{remaining: cap}
+}
+
+// cap returns the given gas value clamped to the remaining budget.
+func (b *gasBudget) cap(gas uint64) uint64 {
+	if gas > b.remaining {
+		return b.remaining
+	}
+	return gas
+}
+
+// consume deducts the given amount from the budget.
+// Returns an error if the amount exceeds the remaining budget.
+func (b *gasBudget) consume(amount uint64) error {
+	if amount > b.remaining {
+		return fmt.Errorf("RPC gas cap exhausted: need %d, remaining %d", amount, b.remaining)
+	}
+	b.remaining -= amount
+	return nil
+}
+
 // simulator is a stateful object that simulates a series of blocks.
 // it is not safe for concurrent use.
 type simulator struct {
@@ -157,7 +191,7 @@ type simulator struct {
 	state          *state.StateDB
 	base           *types.Header
 	chainConfig    *params.ChainConfig
-	gasRemaining   uint64
+	budget         *gasBudget
 	traceTransfers bool
 	validate       bool
 	fullTx         bool
@@ -318,10 +352,9 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 
 		// Make sure the gas cap is still enforced. It's only for
 		// internally protection.
-		if sim.gasRemaining < result.UsedGas {
-			return nil, nil, nil, fmt.Errorf("gas cap reached, required: %d, remaining: %d", result.UsedGas, sim.gasRemaining)
+		if err := sim.budget.consume(result.UsedGas); err != nil {
+			return nil, nil, nil, err
 		}
-		sim.gasRemaining -= result.UsedGas
 
 		logs := tracer.Logs()
 		callRes := simCallResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas), MaxUsedGas: hexutil.Uint64(result.MaxUsedGas)}
@@ -405,6 +438,10 @@ func (sim *simulator) sanitizeCall(call *TransactionArgs, state vm.StateDB, head
 	if remaining < uint64(*call.Gas) {
 		return &blockGasLimitReachedError{fmt.Sprintf("block gas limit reached: remaining: %d, required: %d", remaining, *call.Gas)}
 	}
+	// Clamp to the cross-block gas budget.
+	gas := sim.budget.cap(uint64(*call.Gas))
+	call.Gas = (*hexutil.Uint64)(&gas)
+
 	return call.CallDefaults(0, header.BaseFee, sim.chainConfig.ChainID)
 }
 
