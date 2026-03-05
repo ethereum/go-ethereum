@@ -541,7 +541,11 @@ func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList, id uint64, 
 				return 0, fmt.Errorf("invalid receipt structure: %v", err)
 			}
 		}
-		log += uint64(len(rest))
+		logsContent, _, err := rlp.SplitList(rest)
+		if err != nil {
+			return 0, fmt.Errorf("invalid receipt logs: %v", err)
+		}
+		log += uint64(len(logsContent))
 	}
 	// Verify that the overall downloaded receipt size does not exceed the block gas limit.
 	if previousLog+log > gasUsed/params.LogDataGas {
