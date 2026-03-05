@@ -52,12 +52,7 @@ import (
 func Register(stack *node.Node, backend *eth.Ethereum) error {
 	api := NewConsensusAPI(backend)
 
-	// Configure SSZ-REST fields from the node config
 	cfg := stack.Config()
-	api.authAddr = cfg.AuthAddr
-	api.authPort = cfg.AuthPort
-	api.sszRestEnabled = cfg.SszRestEnabled
-	api.sszRestPort = cfg.SszRestPort
 
 	stack.RegisterAPIs([]rpc.API{
 		newTestingAPI(backend),
@@ -145,11 +140,6 @@ type ConsensusAPI struct {
 	forkchoiceLock sync.Mutex // Lock for the forkChoiceUpdated method
 	newPayloadLock sync.Mutex // Lock for the NewPayload method
 
-	// SSZ-REST server config (EIP-8161)
-	sszRestEnabled bool
-	sszRestPort    int
-	authAddr       string
-	authPort       int
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
@@ -1109,8 +1099,6 @@ func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 	// Methods that should not be advertised via V1 capabilities
 	skip := map[string]bool{
 		"ExchangeCapabilities":             true,
-		"ExchangeCapabilitiesV2":           true,
-		"GetClientCommunicationChannelsV1": true,
 	}
 	valueT := reflect.TypeOf(api)
 	caps := make([]string, 0, valueT.NumMethod())
@@ -1140,37 +1128,6 @@ func (api *ConsensusAPI) GetClientVersionV1(info engine.ClientVersionV1) []engin
 			Commit:  hexutil.Encode(commit),
 		},
 	}
-}
-
-// ExchangeCapabilitiesV2 extends ExchangeCapabilities with supported protocols (EIP-8160).
-func (api *ConsensusAPI) ExchangeCapabilitiesV2(fromCl []string) engine.ExchangeCapabilitiesV2Response {
-	capabilities := api.ExchangeCapabilities(fromCl)
-	return engine.ExchangeCapabilitiesV2Response{
-		Capabilities:       capabilities,
-		SupportedProtocols: api.getSupportedProtocols(),
-	}
-}
-
-// GetClientCommunicationChannelsV1 returns the communication protocols supported by this EL (EIP-8160).
-func (api *ConsensusAPI) GetClientCommunicationChannelsV1() []engine.CommunicationChannel {
-	return api.getSupportedProtocols()
-}
-
-// getSupportedProtocols returns the list of communication protocols supported by this EL.
-func (api *ConsensusAPI) getSupportedProtocols() []engine.CommunicationChannel {
-	channels := []engine.CommunicationChannel{
-		{
-			Protocol: "json_rpc",
-			URL:      fmt.Sprintf("%s:%d", api.authAddr, api.authPort),
-		},
-	}
-	if api.sszRestEnabled && api.sszRestPort > 0 {
-		channels = append(channels, engine.CommunicationChannel{
-			Protocol: "ssz_rest",
-			URL:      fmt.Sprintf("http://%s:%d", api.authAddr, api.sszRestPort),
-		})
-	}
-	return channels
 }
 
 // GetPayloadBodiesByHashV1 implements engine_getPayloadBodiesByHashV1 which allows for retrieval of a list

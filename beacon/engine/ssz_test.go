@@ -180,29 +180,6 @@ func TestCapabilitiesSSZRoundTrip(t *testing.T) {
 	}
 }
 
-func TestCommunicationChannelsSSZRoundTrip(t *testing.T) {
-	channels := []CommunicationChannel{
-		{Protocol: "json_rpc", URL: "localhost:8551"},
-		{Protocol: "ssz_rest", URL: "http://localhost:8552"},
-	}
-	encoded := EncodeCommunicationChannelsSSZ(channels)
-	decoded, err := DecodeCommunicationChannelsSSZ(encoded)
-	if err != nil {
-		t.Fatalf("decode error: %v", err)
-	}
-	if len(decoded) != len(channels) {
-		t.Fatalf("length mismatch: got %d, want %d", len(decoded), len(channels))
-	}
-	for i, ch := range channels {
-		if decoded[i].Protocol != ch.Protocol {
-			t.Errorf("channel[%d].Protocol mismatch: got %s, want %s", i, decoded[i].Protocol, ch.Protocol)
-		}
-		if decoded[i].URL != ch.URL {
-			t.Errorf("channel[%d].URL mismatch: got %s, want %s", i, decoded[i].URL, ch.URL)
-		}
-	}
-}
-
 func TestClientVersionSSZRoundTrip(t *testing.T) {
 	cv := &ClientVersionV1{
 		Code:    "GE",
