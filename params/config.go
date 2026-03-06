@@ -18,6 +18,7 @@ package params
 
 import (
 	"cmp"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"math/big"
@@ -558,6 +559,40 @@ type XDPoSConfig struct {
 	FoundationWalletAddr common.Address `json:"foundationWalletAddr"` // Foundation Address Wallet
 	SkipV1Validation     bool           //Skip Block Validation for testing purpose, V1 consensus only
 	V2                   *V2            `json:"v2"`
+}
+
+// UnmarshalJSON supports both the current and legacy typo-ed JSON key for
+// foundation wallet address to keep old on-disk chain configs compatible.
+func (c *XDPoSConfig) UnmarshalJSON(data []byte) error {
+	type xdpJSON struct {
+		Period                    uint64         `json:"period"`
+		Epoch                     uint64         `json:"epoch"`
+		Reward                    uint64         `json:"reward"`
+		RewardCheckpoint          uint64         `json:"rewardCheckpoint"`
+		Gap                       uint64         `json:"gap"`
+		FoundationWalletAddr      common.Address `json:"foundationWalletAddr"`
+		LegacyFoudationWalletAddr common.Address `json:"foudationWalletAddr"`
+		SkipV1Validation          bool           `json:"SkipV1Validation"`
+		V2                        *V2            `json:"v2"`
+	}
+	var decoded xdpJSON
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+
+	c.Period = decoded.Period
+	c.Epoch = decoded.Epoch
+	c.Reward = decoded.Reward
+	c.RewardCheckpoint = decoded.RewardCheckpoint
+	c.Gap = decoded.Gap
+	c.FoundationWalletAddr = decoded.FoundationWalletAddr
+	if c.FoundationWalletAddr == (common.Address{}) && decoded.LegacyFoudationWalletAddr != (common.Address{}) {
+		c.FoundationWalletAddr = decoded.LegacyFoudationWalletAddr
+	}
+	c.SkipV1Validation = decoded.SkipV1Validation
+	c.V2 = decoded.V2
+
+	return nil
 }
 
 type V2 struct {

@@ -17,10 +17,12 @@
 package params
 
 import (
+	"encoding/json"
 	"math/big"
 	"reflect"
 	"testing"
 
+	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -149,4 +151,22 @@ func TestSwitchEpoch(t *testing.T) {
 	config = TestXDPoSMockChainConfig.XDPoS
 	epoch = config.Epoch
 	assert.Equal(t, config.V2.SwitchEpoch, config.V2.SwitchBlock.Uint64()/epoch)
+}
+
+func TestXDPoSConfigUnmarshalLegacyFoundationWalletAddr(t *testing.T) {
+	const raw = `{"period":2,"epoch":900,"reward":5000,"rewardCheckpoint":900,"gap":450,"foudationWalletAddr":"xdc746249c61f5832c5eed53172776b460491bdcd5c"}`
+
+	var cfg XDPoSConfig
+	err := json.Unmarshal([]byte(raw), &cfg)
+	assert.NoError(t, err)
+	assert.Equal(t, common.HexToAddress("xdc746249c61f5832c5eed53172776b460491bdcd5c"), cfg.FoundationWalletAddr)
+}
+
+func TestXDPoSConfigUnmarshalFoundationWalletAddrPrecedence(t *testing.T) {
+	const raw = `{"period":2,"epoch":900,"reward":5000,"rewardCheckpoint":900,"gap":450,"foudationWalletAddr":"xdc746249c61f5832c5eed53172776b460491bdcd5c","foundationWalletAddr":"xdc92a289fe95a85c53b8d0d113cbaef0c1ec98ac65"}`
+
+	var cfg XDPoSConfig
+	err := json.Unmarshal([]byte(raw), &cfg)
+	assert.NoError(t, err)
+	assert.Equal(t, common.HexToAddress("xdc92a289fe95a85c53b8d0d113cbaef0c1ec98ac65"), cfg.FoundationWalletAddr)
 }
