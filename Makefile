@@ -5,7 +5,7 @@
 .PHONY: XDC evm all test clean
 
 GOBIN = $(shell pwd)/build/bin
-GO ?= 1.25.1
+GO ?= latest
 GORUN = go run
 
 #? XDC: Build XDC.
