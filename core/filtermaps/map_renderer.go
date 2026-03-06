@@ -410,6 +410,7 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 			if err := batch.Write(); err != nil {
 				log.Crit("Error writing log index update batch", "error", err)
 			}
+			batch.Close()
 			// do not exit while in partially written state but do allow processing
 			// events and pausing while block processing is in progress
 			r.f.indexLock.Unlock()
@@ -509,6 +510,7 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 	if err := batch.Write(); err != nil {
 		log.Crit("Error writing log index update batch", "error", err)
 	}
+	batch.Close()
 	totalTime += time.Since(start)
 	mapWriteTimer.Update(totalTime)
 	return nil
