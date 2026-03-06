@@ -113,8 +113,23 @@ func (msg *jsonrpcMessage) errorResponse(err error) *jsonrpcMessage {
 	return resp
 }
 
+// JSONPremarshaled may be implemented by RPC return types that provide
+// pre-serialized JSON. This bypasses json.Marshal and its re-validation
+// pass. Implementors must ensure the returned bytes are valid JSON.
+type JSONPremarshaled interface {
+	PremarshaledJSON() ([]byte, error)
+}
+
 func (msg *jsonrpcMessage) response(result interface{}) *jsonrpcMessage {
-	enc, err := json.Marshal(result)
+	var (
+		enc []byte
+		err error
+	)
+	if pm, ok := result.(JSONPremarshaled); ok {
+		enc, err = pm.PremarshaledJSON()
+	} else {
+		enc, err = json.Marshal(result)
+	}
 	if err != nil {
 		return msg.errorResponse(&internalServerError{errcodeMarshalError, err.Error()})
 	}
