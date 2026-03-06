@@ -33,6 +33,35 @@ func TestLoggingWithVmodule(t *testing.T) {
 	}
 }
 
+func TestLoggingWithVmoduleDowngrade(t *testing.T) {
+	out := new(bytes.Buffer)
+	glog := NewGlogHandler(NewTerminalHandlerWithLevel(out, LevelTrace, false))
+	glog.Verbosity(LevelTrace) // Allow all logs globally
+	logger := NewLogger(glog)
+
+	// This should appear (global level allows it)
+	logger.Info("before vmodule downgrade, this should be logged")
+	if !bytes.Contains(out.Bytes(), []byte("before vmodule downgrade")) {
+		t.Fatal("expected 'before vmodule downgrade' to be logged")
+	}
+	out.Reset()
+
+	// Downgrade this file to only allow Warn and above
+	glog.Vmodule("logger_test.go=2")
+
+	// Info should now be filtered out
+	logger.Info("after vmodule downgrade, this should be filtered")
+	if bytes.Contains(out.Bytes(), []byte("after vmodule downgrade, this should be filtered")) {
+		t.Fatal("expected 'after vmodule downgrade, this should be filtered' to NOT be logged after vmodule downgrade")
+	}
+
+	// Warn should still appear
+	logger.Warn("after vmodule downgrade, this should be logged")
+	if !bytes.Contains(out.Bytes(), []byte("after vmodule downgrade, this should be logged")) {
+		t.Fatal("expected 'should appear' to be logged")
+	}
+}
+
 func TestTerminalHandlerWithAttrs(t *testing.T) {
 	out := new(bytes.Buffer)
 	glog := NewGlogHandler(NewTerminalHandlerWithLevel(out, LevelTrace, false).WithAttrs([]slog.Attr{slog.String("baz", "bat")}))
