@@ -29,7 +29,7 @@ import (
 // VerifyEip1559Header verifies some header attributes which were changed in EIP-1559,
 // - gas limit check
 // - basefee check
-func VerifyEip1559Header(config *params.ChainConfig, header *types.Header) error {
+func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Header) error {
 	if !config.IsEIP1559(header.Number) {
 		if header.BaseFee != nil {
 			return fmt.Errorf("invalid baseFee: have %s, want <nil>",
@@ -41,6 +41,10 @@ func VerifyEip1559Header(config *params.ChainConfig, header *types.Header) error
 	// Verify the header is not malformed
 	if header.BaseFee == nil {
 		return errors.New("header is missing baseFee")
+	}
+	// Verify the parent header is not malformed
+	if parent != nil && config.IsEIP1559(parent.Number) && parent.BaseFee == nil {
+		return errors.New("parent header is missing baseFee")
 	}
 
 	// Verify the baseFee is correct based on the current header.

@@ -202,7 +202,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainReader, header, parent *
 		return err
 	}
 	// Verify the header's EIP-1559 attributes.
-	if err := eip1559.VerifyEip1559Header(chain.Config(), header); err != nil {
+	if err := eip1559.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
 		return err
 	}
 
