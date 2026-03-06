@@ -481,13 +481,14 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 	if genesis.Config != nil && genesis.Config.IsVerkle(genesis.Config.ChainID, 0) {
 		triedbConfig = triedb.VerkleDefaults
 	}
-	triedb := triedb.NewDatabase(db, triedbConfig)
-	defer triedb.Close()
-	_, err := genesis.Commit(db, triedb, nil)
+	genesisTriedb := triedb.NewDatabase(db, triedbConfig)
+	block, err := genesis.Commit(db, genesisTriedb, nil)
 	if err != nil {
+		genesisTriedb.Close()
 		panic(err)
 	}
-	blocks, receipts := GenerateChain(genesis.Config, genesis.ToBlock(), engine, db, n, gen)
+	genesisTriedb.Close()
+	blocks, receipts := GenerateChain(genesis.Config, block, engine, db, n, gen)
 	return db, blocks, receipts
 }
 
