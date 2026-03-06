@@ -425,6 +425,70 @@ func EncodeBlockReceiptLists(receipts []Receipts) []rlp.RawValue {
 	return result
 }
 
+// ConvertConsensusReceiptsToStorage converts canonical receipt encoding
+// [post-state-or-status, gas-used, bloom, logs] into storage encoding
+// [post-state-or-status, gas-used, logs].
+func ConvertConsensusReceiptsToStorage(input []byte) (rlp.RawValue, error) {
+	var (
+		out bytes.Buffer
+		enc = rlp.NewEncoderBuffer(&out)
+	)
+	blockListIter, err := rlp.NewListIterator(input)
+	if err != nil {
+		return nil, fmt.Errorf("invalid block receipts list: %w", err)
+	}
+	outerList := enc.List()
+	for i := 0; blockListIter.Next(); i++ {
+		kind, content, _, err := rlp.Split(blockListIter.Value())
+		if err != nil {
+			return nil, fmt.Errorf("receipt %d invalid: %w", i, err)
+		}
+		var receiptData []byte
+		switch kind {
+		case rlp.Byte:
+			return nil, fmt.Errorf("receipt %d is single byte", i)
+		case rlp.String:
+			if len(content) == 0 {
+				return nil, fmt.Errorf("typed receipt %d has empty payload", i)
+			}
+			receiptData = content[1:] // strip tx type
+		case rlp.List:
+			receiptData = blockListIter.Value()
+		default:
+			return nil, fmt.Errorf("receipt %d has invalid RLP kind", i)
+		}
+		dataIter, err := rlp.NewListIterator(receiptData)
+		if err != nil {
+			return nil, fmt.Errorf("receipt %d has invalid data: %w", i, err)
+		}
+		innerList := enc.List()
+		fields := 0
+		for dataIter.Next() {
+			if fields == 2 {
+				fields++
+				continue // skip bloom
+			}
+			enc.Write(dataIter.Value())
+			fields++
+		}
+		enc.ListEnd(innerList)
+		if dataIter.Err() != nil {
+			return nil, fmt.Errorf("receipt %d iterator error: %w", i, dataIter.Err())
+		}
+		if fields != 4 {
+			return nil, fmt.Errorf("receipt %d has %d fields, want 4", i, fields)
+		}
+	}
+	enc.ListEnd(outerList)
+	if blockListIter.Err() != nil {
+		return nil, fmt.Errorf("block receipt list iterator error: %w", blockListIter.Err())
+	}
+	if err := enc.Flush(); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
+
 // SlimReceipt is a wrapper around a Receipt with RLP serialization that omits
 // the Bloom field and includes the tx type. Used for era files.
 type SlimReceipt Receipt
