@@ -59,7 +59,7 @@ const freezerTableSize = 2 * 1000 * 1000 * 1000
 // - The in-order data ensures that disk reads are always optimized.
 type Freezer struct {
 	datadir string
-	frozen  atomic.Uint64 // Number of items already frozen
+	head    atomic.Uint64 // Number of items stored (including items removed from tail)
 	tail    atomic.Uint64 // Number of the first stored item in the freezer
 
 	// This lock synchronizes writers and the truncate operation, as well as
@@ -97,12 +97,12 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 			return nil, errSymlinkDatadir
 		}
 	}
+	// Leveldb/Pebble uses LOCK as the filelock filename. To prevent the
+	// name collision, we use FLOCK as the lock name.
 	flockFile := filepath.Join(datadir, "FLOCK")
 	if err := os.MkdirAll(filepath.Dir(flockFile), 0755); err != nil {
 		return nil, err
 	}
-	// Leveldb uses LOCK as the filelock filename. To prevent the
-	// name collision, we use FLOCK as the lock name.
 	lock := flock.New(flockFile)
 	tryLock := lock.TryLock
 	if readonly {
@@ -213,7 +213,7 @@ func (f *Freezer) AncientBytes(kind string, id, offset, length uint64) ([]byte, 
 
 // Ancients returns the length of the frozen items.
 func (f *Freezer) Ancients() (uint64, error) {
-	return f.frozen.Load(), nil
+	return f.head.Load(), nil
 }
 
 // Tail returns the number of first stored item in the freezer.
@@ -252,7 +252,7 @@ func (f *Freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (writeSize
 	defer f.writeLock.Unlock()
 
 	// Roll back all tables to the starting position in case of error.
-	prevItem := f.frozen.Load()
+	prevItem := f.head.Load()
 	defer func() {
 		if err != nil {
 			// The write operation has failed. Go back to the previous item position.
@@ -273,7 +273,7 @@ func (f *Freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (writeSize
 	if err != nil {
 		return 0, err
 	}
-	f.frozen.Store(item)
+	f.head.Store(item)
 	return writeSize, nil
 }
 
@@ -286,7 +286,7 @@ func (f *Freezer) TruncateHead(items uint64) (uint64, error) {
 	f.writeLock.Lock()
 	defer f.writeLock.Unlock()
 
-	oitems := f.frozen.Load()
+	oitems := f.head.Load()
 	if oitems <= items {
 		return oitems, nil
 	}
@@ -295,7 +295,7 @@ func (f *Freezer) TruncateHead(items uint64) (uint64, error) {
 			return 0, err
 		}
 	}
-	f.frozen.Store(items)
+	f.head.Store(items)
 	return oitems, nil
 }
 
@@ -320,6 +320,11 @@ func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
 		}
 	}
 	f.tail.Store(tail)
+
+	// Update the head if the requested tail exceeds the current head
+	if f.head.Load() < tail {
+		f.head.Store(tail)
+	}
 	return old, nil
 }
 
@@ -379,7 +384,7 @@ func (f *Freezer) validate() error {
 		prunedTail = &tmp
 	}
 
-	f.frozen.Store(head)
+	f.head.Store(head)
 	f.tail.Store(*prunedTail)
 	return nil
 }
@@ -414,7 +419,7 @@ func (f *Freezer) repair() error {
 		}
 	}
 
-	f.frozen.Store(head)
+	f.head.Store(head)
 	f.tail.Store(prunedTail)
 	return nil
 }

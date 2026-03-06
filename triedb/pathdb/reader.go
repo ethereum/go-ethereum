@@ -349,7 +349,7 @@ func (db *Database) HistoricNodeReader(root common.Hash) (*HistoricalNodeReader,
 	// are not accessible.
 	meta, err := readTrienodeMetadata(db.trienodeFreezer, *id+1)
 	if err != nil {
-		return nil, err // e.g., the referred trienode history has been pruned
+		return nil, fmt.Errorf("state %#x is not available", root) // e.g., the referred trienode history has been pruned
 	}
 	if meta.parent != root {
 		return nil, fmt.Errorf("state %#x is not canonincal", root)
