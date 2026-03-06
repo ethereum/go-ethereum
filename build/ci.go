@@ -334,7 +334,7 @@ func doInstallKeeper(cmdline []string) {
 			continue
 		}
 		log.Printf("Building evmone library for %s", evmoneTarget)
-		build.MustRun(exec.Command("./evmone/build.sh", evmoneTarget))
+		build.MustRun(exec.Command("./build/evmone-build.sh", evmoneTarget))
 		builtEvmone[evmoneTarget] = true
 	}
 
