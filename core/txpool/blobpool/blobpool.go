@@ -1619,7 +1619,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 
 	// Check pool size limits before inserting the transaction. For this calculation
 	// we have to RLP encode the transaction to get the size.
-	// Note: equal priority as the current worse of the pool is still considered
+	// Note: equal priority as the current worst of the pool is still considered
 	// underpriced. This is to prevent constant replacement when the pool is full.
 	blob, err := rlp.EncodeToBytes(tx)
 	if err != nil {
@@ -1627,18 +1627,19 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 		log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
 		return err
 	}
-	storageSizeDiff, err := getSlotSize(p.newSlotter(), uint32(len(blob)))
+	newStorageSize, err := getSlotSize(p.newSlotter(), uint32(len(blob)))
 	if err != nil {
 		// This should also not happen at this stage
 		log.Warn("Dropping blob transaction due to size", "tx", tx.Hash(), "size", meta.size, "err", err)
 		return err
 	}
-	// is this a possible replacent? If so, we need to consider the storage size difference
-	// instead of the full size of the new transaction.
+	// Is this a possible replacement? If so, we need to consider the storage size
+	// difference instead of the full size of the new transaction.
+	storageSizeDiff := int64(newStorageSize)
 	if offset < len(p.index[from]) {
-		storageSizeDiff -= p.index[from][offset].storageSize
+		storageSizeDiff -= int64(p.index[from][offset].storageSize)
 	}
-	if p.stored+uint64(storageSizeDiff) > p.config.Datacap {
+	if storageSizeDiff > 0 && p.stored+uint64(storageSizeDiff) > p.config.Datacap {
 		if p.evict.Underpriced(meta) {
 			log.Trace("Dropping underpriced blob transaction", "tx", tx.Hash(), "feecap", tx.GasFeeCap(), "tipcap", tx.GasTipCap(), "blobfeecap", tx.BlobGasFeeCap())
 			return txpool.ErrUnderpriced
