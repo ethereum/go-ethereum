@@ -208,6 +208,48 @@ func TestServerBatchResponseSizeLimit(t *testing.T) {
 	}
 }
 
+func TestServerBatchResponseSizeLimitErrors(t *testing.T) {
+	t.Parallel()
+
+	server := newTestServer()
+	defer server.Stop()
+	// Set a response size limit that allows ~1 error response but not 2.
+	// The JSON-encoded error for testError is about 58 bytes:
+	//   {"code":444,"message":"testError","data":"testError data"}
+	server.SetBatchLimits(100, 100)
+	var (
+		batch  []BatchElem
+		client = DialInProc(server)
+	)
+	for i := 0; i < 5; i++ {
+		batch = append(batch, BatchElem{
+			Method: "test_returnError",
+			Result: new(string),
+		})
+	}
+	if err := client.BatchCall(batch); err != nil {
+		t.Fatal("error sending batch:", err)
+	}
+	// The first two calls should return the normal testError (code 444).
+	// After that, the cumulative error size exceeds the limit,
+	// so the remaining calls should return "response too large" (code -32003).
+	for i := range batch {
+		re, ok := batch[i].Error.(Error)
+		if !ok {
+			t.Fatalf("batch elem %d: expected Error type, got %v", i, batch[i].Error)
+		}
+		if i < 2 {
+			if re.ErrorCode() != 444 {
+				t.Fatalf("batch elem %d: expected error code 444, got %d", i, re.ErrorCode())
+			}
+		} else {
+			if re.ErrorCode() != errcodeResponseTooLarge {
+				t.Errorf("batch elem %d: expected error code %d, got %d", i, errcodeResponseTooLarge, re.ErrorCode())
+			}
+		}
+	}
+}
+
 func TestServerWebsocketReadLimit(t *testing.T) {
 	t.Parallel()
 
