@@ -200,8 +200,10 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 		}
 		postMut.Merge(mut)
 
-		work.accessList.AccumulateMutations(postMut, uint16(work.tcount)+1)
-		work.accessList.AccumulateReads(work.state.Reader().(state.StateReaderTracker).GetStateAccessList())
+		if work.accessList != nil {
+			work.accessList.AccumulateMutations(postMut, uint16(work.tcount)+1)
+			work.accessList.AccumulateReads(work.state.Reader().(state.StateReaderTracker).GetStateAccessList())
+		}
 	}
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
