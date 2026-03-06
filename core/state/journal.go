@@ -141,7 +141,8 @@ type (
 	storageChange struct {
 		account   common.Address
 		key       common.Hash
-		prevvalue *common.Hash
+		prevvalue common.Hash
+		origvalue common.Hash
 	}
 	codeChange struct {
 		account  common.Address
@@ -287,7 +288,7 @@ func (ch codeChange) copy() journalEntry {
 }
 
 func (ch storageChange) revert(s *StateDB) {
-	s.getStateObject(ch.account).setState(ch.key, ch.prevvalue)
+	s.getStateObject(ch.account).setState(ch.key, ch.prevvalue, ch.origvalue)
 }
 
 func (ch storageChange) dirtied() *common.Address {
@@ -295,15 +296,11 @@ func (ch storageChange) dirtied() *common.Address {
 }
 
 func (ch storageChange) copy() journalEntry {
-	var prevvalue *common.Hash
-	if ch.prevvalue != nil {
-		copied := *ch.prevvalue
-		prevvalue = &copied
-	}
 	return storageChange{
 		account:   ch.account,
 		key:       ch.key,
-		prevvalue: prevvalue,
+		prevvalue: ch.prevvalue,
+		origvalue: ch.origvalue,
 	}
 }
 
