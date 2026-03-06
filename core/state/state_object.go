@@ -224,7 +224,15 @@ func (s *stateObject) setState(key common.Hash, value *common.Hash) {
 // committed later. It is invoked at the end of every transaction.
 func (s *stateObject) finalise() {
 	for key, value := range s.dirtyStorage {
-		s.pendingStorage[key] = value
+		// If the slot is different from its original value, move it into the
+		// pending area to be committed at the end of the block.
+		if value != s.originStorage[key] {
+			s.pendingStorage[key] = value
+		} else {
+			// Otherwise, the slot was reverted to its original value, remove it
+			// from the pending area to avoid thrashing the data structure.
+			delete(s.pendingStorage, key)
+		}
 	}
 	if len(s.dirtyStorage) > 0 {
 		s.dirtyStorage = make(Storage)
