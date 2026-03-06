@@ -55,6 +55,7 @@ import (
 
 const (
 	defaultGasPrice = 50 * params.Shannon
+
 	// statuses of candidates
 	statusMasternode = "MASTERNODE"
 	statusSlashed    = "SLASHED"
@@ -65,6 +66,10 @@ const (
 	fieldSuccess     = "success"
 	fieldEpoch       = "epoch"
 )
+
+// maxGetStorageSlots is the maximum total number of storage slots that can
+// be requested in a single eth_getStorageValues call.
+const maxGetStorageSlots = 1024
 
 var errEmptyHeader = errors.New("empty header")
 
@@ -515,6 +520,41 @@ func (api *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Addre
 	}
 	res := state.GetState(address, common.HexToHash(key))
 	return res[:], state.Error()
+}
+
+// GetStorageValues returns multiple storage slot values for multiple accounts
+// at the given block.
+func (api *BlockChainAPI) GetStorageValues(ctx context.Context, requests map[common.Address][]common.Hash, blockNrOrHash rpc.BlockNumberOrHash) (map[common.Address][]hexutil.Bytes, error) {
+	// Count total slots requested.
+	var totalSlots int
+	for _, keys := range requests {
+		totalSlots += len(keys)
+		if totalSlots > maxGetStorageSlots {
+			return nil, &clientLimitExceededError{message: fmt.Sprintf("too many slots (max %d)", maxGetStorageSlots)}
+		}
+	}
+	if totalSlots == 0 {
+		return nil, &invalidParamsError{message: "empty request"}
+	}
+
+	state, _, err := api.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	result := make(map[common.Address][]hexutil.Bytes, len(requests))
+	for addr, keys := range requests {
+		vals := make([]hexutil.Bytes, len(keys))
+		for i, key := range keys {
+			v := state.GetState(addr, key)
+			vals[i] = v[:]
+		}
+		if err := state.Error(); err != nil {
+			return nil, err
+		}
+		result[addr] = vals
+	}
+	return result, nil
 }
 
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
