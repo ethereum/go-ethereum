@@ -300,6 +300,12 @@ func applyMetricConfig(ctx *cli.Context, cfg *XDCConfig) {
 	if ctx.IsSet(utils.MetricsInfluxDBTagsFlag.Name) {
 		cfg.Metrics.InfluxDBTags = ctx.String(utils.MetricsInfluxDBTagsFlag.Name)
 	}
+	if ctx.IsSet(utils.MetricsInfluxDBIntervalFlag.Name) {
+		cfg.Metrics.InfluxDBInterval = ctx.Duration(utils.MetricsInfluxDBIntervalFlag.Name)
+		if cfg.Metrics.InfluxDBInterval <= 0 {
+			utils.Fatalf("invalid metrics InfluxDB interval %v: must be greater than 0", cfg.Metrics.InfluxDBInterval)
+		}
+	}
 	if ctx.IsSet(utils.MetricsEnableInfluxDBV2Flag.Name) {
 		cfg.Metrics.EnableInfluxDBV2 = ctx.Bool(utils.MetricsEnableInfluxDBV2Flag.Name)
 	}
