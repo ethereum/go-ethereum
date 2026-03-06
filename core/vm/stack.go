@@ -42,6 +42,7 @@ var stackPool = sync.Pool{
 }
 
 func returnStack(arena *stackArena) {
+	arena.top = 0 // defensive, not strictly needed as s.inner.top = s.bottom in release()
 	stackPool.Put(arena)
 }
 
