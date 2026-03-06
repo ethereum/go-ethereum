@@ -346,10 +346,10 @@ type BlobPool struct {
 	reserver       txpool.Reserver           // Address reserver to ensure exclusivity across subpools
 	hasPendingAuth func(common.Address) bool // Determine whether the specified address has a pending 7702-auth
 
-	store      billy.Database         // Persistent data store for the tx metadata and blobs
-	newSlotter func() billy.SlotSizeFn // Factory to create fresh slotter instances for slot size lookups
-	stored     uint64                  // Useful data size of all transactions on disk
-	limbo      *limbo                  // Persistent data store for the non-finalized blobs
+	store   billy.Database // Persistent data store for the tx metadata and blobs
+	slotter slotSizer      // O(1) slot size calculator matching the active billy shelves
+	stored  uint64         // Useful data size of all transactions on disk
+	limbo   *limbo         // Persistent data store for the non-finalized blobs
 
 	gapped       map[common.Address][]*types.Transaction // Transactions that are currently gapped (nonce too high)
 	gappedSource map[common.Hash]common.Address          // Source of gapped transactions to allow rechecking on inclusion
@@ -437,16 +437,19 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 
 	// Create new slotter for pre-Osaka blob configuration.
 	slotter := newSlotter(params.BlobTxMaxBlobs)
-	p.newSlotter = func() billy.SlotSizeFn { return newSlotter(params.BlobTxMaxBlobs) }
 
 	// See if we need to migrate the queue blob store after fusaka
 	slotter, err = tryMigrate(p.chain.Config(), slotter, queuedir)
 	if err != nil {
 		return err
 	}
-	// Update the slotter factory if Osaka is active
+	// Build an O(1) slot size calculator from the active slotter configuration.
+	// We need a fresh slotter instance since tryMigrate may have consumed the
+	// previous one, and billy.Open below will consume this one.
 	if p.chain.Config().OsakaTime != nil {
-		p.newSlotter = func() billy.SlotSizeFn { return newSlotterEIP7594(params.BlobTxMaxBlobs) }
+		p.slotter = newSlotSizer(newSlotterEIP7594(params.BlobTxMaxBlobs))
+	} else {
+		p.slotter = newSlotSizer(newSlotter(params.BlobTxMaxBlobs))
 	}
 	// Index all transactions on disk and delete anything unprocessable
 	var fails []uint64
@@ -1593,7 +1596,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 
 	// Create meta, in preparation of adding to the pool.
 	// Having the meta simplifies the check below for underpriced transactions.
-	// Note: the meta will be finalized with storage information after the transaction is stored
+	// Note: the meta will be finalized with storage information after the transaction is stored.
 	meta := newBlobTxMeta(tx)
 
 	// Calculate the eviction parameters for the transaction
@@ -1627,9 +1630,9 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 		log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
 		return err
 	}
-	newStorageSize, err := getSlotSize(p.newSlotter(), uint32(len(blob)))
+	newStorageSize, err := p.slotter.getSlotSize(uint32(len(blob)))
 	if err != nil {
-		// This should also not happen at this stage
+		// This should never happen, but better safe than sorry.
 		log.Warn("Dropping blob transaction due to size", "tx", tx.Hash(), "size", meta.size, "err", err)
 		return err
 	}
