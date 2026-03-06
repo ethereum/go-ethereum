@@ -438,6 +438,8 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 		prevReader = env.state.Reader()
 		stateCopy = env.state.WithReader(state.NewReaderWithTracker(env.state.Reader()))
 		env.evm.StateDB = stateCopy
+	} else {
+		stateCopy = env.state
 	}
 
 	mutations, receipt, err := core.ApplyTransaction(env.evm, env.gasPool, stateCopy, env.header, tx)
