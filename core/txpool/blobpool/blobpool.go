@@ -346,10 +346,10 @@ type BlobPool struct {
 	reserver       txpool.Reserver           // Address reserver to ensure exclusivity across subpools
 	hasPendingAuth func(common.Address) bool // Determine whether the specified address has a pending 7702-auth
 
-	store   billy.Database   // Persistent data store for the tx metadata and blobs
-	slotter billy.SlotSizeFn // Slotter function to determine the shelf sizes for the billy database
-	stored  uint64           // Useful data size of all transactions on disk
-	limbo   *limbo           // Persistent data store for the non-finalized blobs
+	store      billy.Database         // Persistent data store for the tx metadata and blobs
+	newSlotter func() billy.SlotSizeFn // Factory to create fresh slotter instances for slot size lookups
+	stored     uint64                  // Useful data size of all transactions on disk
+	limbo      *limbo                  // Persistent data store for the non-finalized blobs
 
 	gapped       map[common.Address][]*types.Transaction // Transactions that are currently gapped (nonce too high)
 	gappedSource map[common.Hash]common.Address          // Source of gapped transactions to allow rechecking on inclusion
@@ -436,12 +436,17 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	p.state = state
 
 	// Create new slotter for pre-Osaka blob configuration.
-	p.slotter = newSlotter(params.BlobTxMaxBlobs)
+	slotter := newSlotter(params.BlobTxMaxBlobs)
+	p.newSlotter = func() billy.SlotSizeFn { return newSlotter(params.BlobTxMaxBlobs) }
 
 	// See if we need to migrate the queue blob store after fusaka
-	p.slotter, err = tryMigrate(p.chain.Config(), p.slotter, queuedir)
+	slotter, err = tryMigrate(p.chain.Config(), slotter, queuedir)
 	if err != nil {
 		return err
+	}
+	// Update the slotter factory if Osaka is active
+	if p.chain.Config().OsakaTime != nil {
+		p.newSlotter = func() billy.SlotSizeFn { return newSlotterEIP7594(params.BlobTxMaxBlobs) }
 	}
 	// Index all transactions on disk and delete anything unprocessable
 	var fails []uint64
@@ -450,7 +455,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 			fails = append(fails, id)
 		}
 	}
-	store, err := billy.Open(billy.Options{Path: queuedir, Repair: true}, p.slotter, index)
+	store, err := billy.Open(billy.Options{Path: queuedir, Repair: true}, slotter, index)
 	if err != nil {
 		return err
 	}
@@ -1622,7 +1627,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 		log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
 		return err
 	}
-	storageSizeDiff, err := getSlotSize(p.slotter, uint32(len(blob)))
+	storageSizeDiff, err := getSlotSize(p.newSlotter(), uint32(len(blob)))
 	if err != nil {
 		// This should also not happen at this stage
 		log.Warn("Dropping blob transaction due to size", "tx", tx.Hash(), "size", meta.size, "err", err)
