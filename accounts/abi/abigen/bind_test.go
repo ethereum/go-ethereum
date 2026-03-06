@@ -306,6 +306,7 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("Failed to deploy interactor contract: %v", err)
 			}
+			sim.Commit()
 			if _, err := interactor.Transact(auth, "Transact string"); err != nil {
 				t.Fatalf("Failed to transact with interactor contract: %v", err)
 			}
@@ -519,6 +520,7 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("Failed to deploy defaulter contract: %v", err)
 			}
+			sim.Commit()
 			if _, err := (&DefaulterRaw{defaulter}).Transfer(auth); err != nil {
 				t.Fatalf("Failed to invoke default method: %v", err)
 			}
@@ -1842,6 +1844,7 @@ var bindTests = []struct {
 		[]string{"0x6080604052348015600f57600080fd5b5060998061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063726c638214602d575b600080fd5b60336035565b005b60405163024876cd60e61b815260016004820152600260248201526003604482015260640160405180910390fdfea264697066735822122093f786a1bc60216540cd999fbb4a6109e0fef20abcff6e9107fb2817ca968f3c64736f6c63430008070033"},
 		[]string{`[{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError","type":"error"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError1","type":"error"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError2","type":"error"},{"inputs":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256","name":"b","type":"uint256"},{"internalType":"uint256","name":"c","type":"uint256"}],"name":"MyError3","type":"error"},{"inputs":[],"name":"Error","outputs":[],"stateMutability":"pure","type":"function"}]`},
 		`
+			"context"
 			"math/big"
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
@@ -1863,7 +1866,7 @@ var bindTests = []struct {
 				t.Fatal(err)
 			}
 			sim.Commit()
-			_, err = bind.WaitDeployed(nil, sim, tx)
+			_, err = bind.WaitDeployed(context.Background(), sim, tx)
 			if err != nil {
 				t.Error(err)
 			}
@@ -1894,6 +1897,7 @@ var bindTests = []struct {
 		bytecode: []string{`0x608060405234801561001057600080fd5b506040516101c43803806101c48339818101604052810190610032919061014a565b50610177565b6000604051905090565b600080fd5b600080fd5b6000601f19601f8301169050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052604160045260246000fd5b6100958261004c565b810181811067ffffffffffffffff821117156100b4576100b361005d565b5b80604052505050565b60006100c7610038565b90506100d3828261008c565b919050565b6000819050919050565b6100eb816100d8565b81146100f657600080fd5b50565b600081519050610108816100e2565b92915050565b60006020828403121561012457610123610047565b5b61012e60206100bd565b9050600061013e848285016100f9565b60008301525092915050565b6000602082840312156101605761015f610042565b5b600061016e8482850161010e565b91505092915050565b603f806101856000396000f3fe6080604052600080fdfea2646970667358221220cdffa667affecefac5561f65f4a4ba914204a8d4eb859d8cd426fb306e5c12a364736f6c634300080a0033`},
 		abi:      []string{`[{"inputs":[{"components":[{"internalType":"uint256","name":"field","type":"uint256"}],"internalType":"struct ConstructorWithStructParam.StructType","name":"st","type":"tuple"}],"stateMutability":"nonpayable","type":"constructor"}]`},
 		imports: `
+			"context"
 			"math/big"
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
@@ -1916,7 +1920,7 @@ var bindTests = []struct {
 			}
 			sim.Commit()
 
-			if _, err = bind.WaitDeployed(nil, sim, tx); err != nil {
+			if _, err = bind.WaitDeployed(context.Background(), sim, tx); err != nil {
 				t.Logf("Deployment tx: %+v", tx)
 				t.Errorf("bind.WaitDeployed(nil, %T, <deployment tx>) got err %v; want nil err", sim, err)
 			}
@@ -1983,6 +1987,7 @@ var bindTests = []struct {
 		bytecode: []string{"0x608060405234801561001057600080fd5b5060dc8061001f6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063527a119f14602d575b600080fd5b60436004803603810190603f9190605b565b6045565b005b50565b6000813590506055816092565b92915050565b600060208284031215606e57606d608d565b5b6000607a848285016048565b91505092915050565b6000819050919050565b600080fd5b6099816083565b811460a357600080fd5b5056fea2646970667358221220d4f4525e2615516394055d369fb17df41c359e5e962734f27fd683ea81fd9db164736f6c63430008070033"},
 		abi:      []string{`[{"inputs":[{"internalType":"uint256","name":"range","type":"uint256"}],"name":"functionWithKeywordParameter","outputs":[],"stateMutability":"pure","type":"function"}]`},
 		imports: `
+			"context"
 			"math/big"
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
@@ -2003,7 +2008,7 @@ var bindTests = []struct {
 			}
 			sim.Commit()
 
-			if _, err = bind.WaitDeployed(nil, sim, tx); err != nil {
+			if _, err = bind.WaitDeployed(context.Background(), sim, tx); err != nil {
 				t.Errorf("error deploying the contract: %v", err)
 			}
 		`,

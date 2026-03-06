@@ -28,6 +28,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/ethclient/simulated"
 	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
@@ -57,7 +58,7 @@ func TestWaitDeployed(t *testing.T) {
 	config := *params.TestXDPoSMockChainConfig
 	config.Eip1559Block = big.NewInt(0)
 	for name, test := range waitDeployedTests {
-		backend := backends.NewXDCSimulatedBackend(
+		backend := simulated.New(
 			types.GenesisAlloc{
 				crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(100000000000000000)},
 			},
@@ -67,7 +68,7 @@ func TestWaitDeployed(t *testing.T) {
 		defer backend.Close()
 
 		// Create the transaction
-		head, _ := backend.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+		head, _ := backend.Client().HeaderByNumber(context.Background(), nil) // Should be child's, good enough
 		gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 
 		tx := types.NewContractCreation(0, big.NewInt(0), test.gas, gasPrice, common.FromHex(test.code))
@@ -81,12 +82,12 @@ func TestWaitDeployed(t *testing.T) {
 			ctx     = context.Background()
 		)
 		go func() {
-			address, err = bind.WaitDeployed(ctx, backend, tx.Hash())
+			address, err = bind.WaitDeployed(ctx, backend.Client(), tx.Hash())
 			close(mined)
 		}()
 
 		// Send and mine the transaction.
-		if err := backend.SendTransaction(ctx, tx); err != nil {
+		if err := backend.Client().SendTransaction(ctx, tx); err != nil {
 			t.Errorf("test %q: failed to send transaction: %v", name, err)
 		}
 		backend.Commit()
@@ -116,7 +117,7 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 			10000000,
 			&config,
 		)
-		head, _     = backend.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+		head, _     = backend.Client().HeaderByNumber(context.Background(), nil) // Should be child's, good enough
 		gasPrice    = new(big.Int).Add(head.BaseFee, big.NewInt(1))
 		signer      = types.LatestSigner(&config)
 		code        = common.FromHex("6060604052600a8060106000396000f360606040526008565b00")
@@ -133,11 +134,11 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 		GasPrice: gasPrice,
 		Data:     code,
 	})
-	if err := backend.SendTransaction(ctx, tx); err != nil {
+	if err := backend.Client().SendTransaction(ctx, tx); err != nil {
 		t.Errorf("failed to send transaction: %q", err)
 	}
 	backend.Commit()
-	if _, err := bind.WaitDeployed(ctx, backend, tx.Hash()); err != bind.ErrNoAddressInReceipt {
+	if _, err := bind.WaitDeployed(ctx, backend.Client(), tx.Hash()); err != bind.ErrNoAddressInReceipt {
 		t.Errorf("error mismatch: want %q, got %q, ", bind.ErrNoAddressInReceipt, err)
 	}
 
@@ -154,13 +155,13 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		_, err := bind.WaitDeployed(ctx, backend, tx.Hash())
+		_, err := bind.WaitDeployed(ctx, backend.Client(), tx.Hash())
 		if !errors.Is(err, context.Canceled) {
 			t.Errorf("error mismatch: want %v, got %v", context.Canceled, err)
 		}
 	}()
 
-	if err := backend.SendTransaction(ctx, tx); err != nil {
+	if err := backend.Client().SendTransaction(ctx, tx); err != nil {
 		t.Errorf("failed to send transaction: %q", err)
 	}
 	cancel()
