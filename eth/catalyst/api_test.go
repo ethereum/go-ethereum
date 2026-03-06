@@ -1205,6 +1205,13 @@ func TestNilWithdrawals(t *testing.T) {
 			if err == nil {
 				t.Fatal("wanted error on fcuv2 with invalid withdrawals")
 			}
+			var engineErr *engine.EngineAPIError
+			if !errors.As(err, &engineErr) {
+				t.Fatalf("expected EngineAPIError, got %T", err)
+			}
+			if engineErr.ErrorCode() != -32602 {
+				t.Fatalf("wrong error code, have %d want %d", engineErr.ErrorCode(), -32602)
+			}
 			continue
 		}
 		if err != nil {

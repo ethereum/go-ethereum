@@ -180,11 +180,11 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV2(update engine.ForkchoiceStateV1, pa
 	if params != nil {
 		switch {
 		case params.BeaconRoot != nil:
-			return engine.STATUS_INVALID, attributesErr("unexpected beacon root")
+			return engine.STATUS_INVALID, paramsErr("unexpected beacon root")
 		case api.checkFork(params.Timestamp, forks.Paris) && params.Withdrawals != nil:
-			return engine.STATUS_INVALID, attributesErr("withdrawals before shanghai")
+			return engine.STATUS_INVALID, paramsErr("withdrawals before shanghai")
 		case api.checkFork(params.Timestamp, forks.Shanghai) && params.Withdrawals == nil:
-			return engine.STATUS_INVALID, attributesErr("missing withdrawals")
+			return engine.STATUS_INVALID, paramsErr("missing withdrawals")
 		case !api.checkFork(params.Timestamp, forks.Paris, forks.Shanghai):
 			return engine.STATUS_INVALID, unsupportedForkErr("fcuV2 must only be called with paris or shanghai payloads")
 		}
