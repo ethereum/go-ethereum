@@ -1592,13 +1592,14 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 		case errors.Is(err, core.ErrNonceTooLow):
 			addStaleMeter.Mark(1)
 		case errors.Is(err, core.ErrNonceTooHigh):
-			addGappedMeter.Mark(1)
 			// Store the tx in memory, and revalidate later
 			from, _ := types.Sender(p.signer, tx)
 			allowance := p.gappedAllowance(from)
 			if allowance >= 1 && len(p.gapped) < maxGapped {
 				p.gapped[from] = append(p.gapped[from], tx)
 				p.gappedSource[tx.Hash()] = from
+				addGappedMeter.Mark(1)
+				gappedGauge.Update(int64(len(p.gapped)))
 				log.Trace("added tx to gapped blob queue", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
 				return nil
 			} else {
@@ -1606,6 +1607,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 				// transactions by keeping the old and dropping this one.
 				// Thus replacing a gapped transaction with another gapped transaction
 				// is discouraged.
+				addGappedRejectMeter.Mark(1)
 				log.Trace("no gapped blob queue allowance", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
 			}
 		case errors.Is(err, core.ErrInsufficientFunds):
@@ -1782,6 +1784,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 
 			if tx.Nonce() < stateNonce {
 				// Stale, drop it. Eventually we could add to limbo here if hash matches.
+				gappedStaleMeter.Mark(1)
 				log.Trace("Gapped blob transaction became stale", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "state", stateNonce, "qlen", len(p.gapped[from]))
 				continue
 			}
@@ -1791,6 +1794,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 				// We do not recurse here, but continue to loop instead.
 				// We are under lock, so we can add the transaction directly.
 				if err := p.addLocked(tx, false); err == nil {
+					gappedPromotedMeter.Mark(1)
 					log.Trace("Gapped blob transaction added to pool", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
 				} else {
 					log.Trace("Gapped blob transaction not accepted", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "err", err)
@@ -1802,6 +1806,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 		} else {
 			p.gapped[from] = gtxs
 		}
+		gappedGauge.Update(int64(len(p.gapped)))
 	}
 	return nil
 }
@@ -2067,8 +2072,10 @@ func (p *BlobPool) evictGapped() {
 				keep = append(keep, gtx)
 			}
 		}
-		if len(keep) < len(txs) {
-			log.Trace("Evicting old gapped blob transactions", "count", len(txs)-len(keep), "from", from)
+		evicted := len(txs) - len(keep)
+		if evicted > 0 {
+			gappedEvictedMeter.Mark(int64(evicted))
+			log.Trace("Evicting old gapped blob transactions", "count", evicted, "from", from)
 		}
 		if len(keep) == 0 {
 			delete(p.gapped, from)
@@ -2076,6 +2083,7 @@ func (p *BlobPool) evictGapped() {
 			p.gapped[from] = keep
 		}
 	}
+	gappedGauge.Update(int64(len(p.gapped)))
 }
 
 // isAnnouncable checks whether a transaction is announcable based on its
