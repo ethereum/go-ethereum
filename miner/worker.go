@@ -248,6 +248,15 @@ func (w *worker) start() {
 	for agent := range w.agents {
 		agent.Start()
 	}
+
+	// Verify config and engine
+	var xdposEngine *XDPoS.XDPoS
+	if engine, ok := w.engine.(*XDPoS.XDPoS); ok {
+		xdposEngine = engine
+	}
+	if w.config != nil && w.config.XDPoS != nil && xdposEngine == nil {
+		log.Warn("XDPoS config enabled but consensus engine is not XDPoS")
+	}
 }
 
 func (w *worker) stop() {
@@ -287,8 +296,12 @@ func (w *worker) update() {
 
 	// timeout waiting for v1 initial value
 	minePeriod := 2
-	MinePeriodCh := w.engine.(*XDPoS.XDPoS).MinePeriodCh
-	NewRoundCh := w.engine.(*XDPoS.XDPoS).NewRoundCh
+	var minePeriodCh <-chan int
+	var newRoundCh <-chan types.Round
+	if xdposEngine, ok := w.engine.(*XDPoS.XDPoS); ok {
+		minePeriodCh = xdposEngine.MinePeriodCh
+		newRoundCh = xdposEngine.NewRoundCh
+	}
 
 	timeout := time.NewTimer(time.Duration(minePeriod) * time.Second)
 	defer timeout.Stop()
@@ -321,7 +334,7 @@ func (w *worker) update() {
 	for {
 		// A real event arrived, process interesting content
 		select {
-		case v := <-MinePeriodCh:
+		case v := <-minePeriodCh:
 			log.Info("[worker] update wait period", "period", v)
 			minePeriod = v
 			w.resetCh <- time.Duration(minePeriod) * time.Second
@@ -340,7 +353,7 @@ func (w *worker) update() {
 			w.resetCh <- resetTime
 
 		// Handle new round
-		case <-NewRoundCh:
+		case <-newRoundCh:
 			w.commitNewWork()
 			resetTime := getResetTime(w.chain, minePeriod)
 			w.resetCh <- resetTime
@@ -664,20 +677,27 @@ func (w *worker) checkPreCommitWithLock() (*types.Block, bool) {
 // checkPreCommit checks whether a new work commit is needed,
 // returns the parent block and shouldReturn.
 func (w *worker) checkPreCommit() (*types.Block, bool) {
-	c := w.engine.(*XDPoS.XDPoS)
+	var xdposEngine *XDPoS.XDPoS
+	if engine, ok := w.engine.(*XDPoS.XDPoS); ok {
+		xdposEngine = engine
+	}
 	var parent *types.Block
 	currentHeader := w.chain.CurrentBlock()
 	// Guard against nil header (early startup or uninitialised chain).
 	if currentHeader == nil {
 		return nil, true
 	}
-	if c != nil {
-		parent = c.FindParentBlockToAssign(w.chain, currentHeader)
+	if xdposEngine != nil {
+		parent = xdposEngine.FindParentBlockToAssign(w.chain, currentHeader)
 	} else {
 		parent = w.chain.GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64())
 	}
 	if parent == nil {
 		return nil, true
+	}
+	if w.config.XDPoS != nil && xdposEngine == nil {
+		log.Debug("XDPoS config enabled but consensus engine is not XDPoS")
+		return parent, true
 	}
 	if parent.Hash().Hex() == w.lastParentBlockCommit {
 		return parent, true
@@ -689,8 +709,8 @@ func (w *worker) checkPreCommit() (*types.Block, bool) {
 	// Only try to commit new work if we are mining
 	if atomic.LoadInt32(&w.mining) == 1 {
 		// check if we are right after parent's coinbase in the list
-		if w.config.XDPoS != nil {
-			ok, err := c.YourTurn(w.chain, parent.Header(), w.coinbase)
+		if w.config.XDPoS != nil && xdposEngine != nil {
+			ok, err := xdposEngine.YourTurn(w.chain, parent.Header(), w.coinbase)
 			if err != nil {
 				log.Warn("Failed when trying to commit new work", "err", err)
 				return parent, true
