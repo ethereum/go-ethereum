@@ -1219,6 +1219,11 @@ func TestNilWithdrawals(t *testing.T) {
 			Random:       test.blockParams.Random,
 			Version:      payloadVersion,
 		}).Id()
+		if !shanghai {
+			if _, err := api.GetPayloadV2(payloadID); err != nil {
+				t.Fatalf("GetPayloadV2 rejected pre-shanghai payload: %v", err)
+			}
+		}
 		execData, err := api.getPayload(payloadID, false, nil, nil)
 		if err != nil {
 			t.Fatalf("error getting payload, err=%v", err)

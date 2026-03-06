@@ -435,7 +435,7 @@ func (api *ConsensusAPI) GetPayloadV2(payloadID engine.PayloadID) (*engine.Execu
 		payloadID,
 		false,
 		[]engine.PayloadVersion{engine.PayloadV1, engine.PayloadV2},
-		[]forks.Fork{forks.Shanghai},
+		[]forks.Fork{forks.Paris, forks.Shanghai},
 	)
 }
 
