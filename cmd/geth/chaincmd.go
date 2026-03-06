@@ -215,7 +215,7 @@ helps reduce storage requirements for nodes that don't need full historical data
 
 The --history.chain flag is required to specify the pruning target:
   - postmerge:  Prune up to the merge block
-  - postcancun: Prune up to the Cancun (Dencun) upgrade block`,
+  - postprague: Prune up to the Prague (Pectra) upgrade block`,
 	}
 
 	downloadEraCommand = &cli.Command{
@@ -678,7 +678,7 @@ func hashish(x string) bool {
 func pruneHistory(ctx *cli.Context) error {
 	// Parse and validate the history mode flag.
 	if !ctx.IsSet(utils.ChainHistoryFlag.Name) {
-		return errors.New("--history.chain flag is required (use 'postmerge' or 'postcancun')")
+		return errors.New("--history.chain flag is required (use 'postmerge' or 'postprague')")
 	}
 	var mode history.HistoryMode
 	if err := mode.UnmarshalText([]byte(ctx.String(utils.ChainHistoryFlag.Name))); err != nil {

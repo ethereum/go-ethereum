@@ -33,12 +33,12 @@ const (
 	// KeepPostMerge sets the history pruning point to the merge activation block.
 	KeepPostMerge
 
-	// KeepPostCancun sets the history pruning point to the Cancun (Dencun) activation block.
-	KeepPostCancun
+	// KeepPostPrague sets the history pruning point to the Prague (Pectra) activation block.
+	KeepPostPrague
 )
 
 func (m HistoryMode) IsValid() bool {
-	return m <= KeepPostCancun
+	return m <= KeepPostPrague
 }
 
 func (m HistoryMode) String() string {
@@ -47,8 +47,8 @@ func (m HistoryMode) String() string {
 		return "all"
 	case KeepPostMerge:
 		return "postmerge"
-	case KeepPostCancun:
-		return "postcancun"
+	case KeepPostPrague:
+		return "postprague"
 	default:
 		return fmt.Sprintf("invalid HistoryMode(%d)", m)
 	}
@@ -69,10 +69,10 @@ func (m *HistoryMode) UnmarshalText(text []byte) error {
 		*m = KeepAll
 	case "postmerge":
 		*m = KeepPostMerge
-	case "postcancun":
-		*m = KeepPostCancun
+	case "postprague":
+		*m = KeepPostPrague
 	default:
-		return fmt.Errorf(`unknown history mode %q, want "all", "postmerge", or "postcancun"`, text)
+		return fmt.Errorf(`unknown history mode %q, want "all", "postmerge", or "postprague"`, text)
 	}
 	return nil
 }
@@ -98,19 +98,19 @@ var MergePrunePoints = map[common.Hash]*PrunePoint{
 	},
 }
 
-// CancunPrunePoints contains the pre-defined history pruning cutoff blocks for the Cancun
-// (Dencun) upgrade. They point to the first post-Cancun block. Any pruning should truncate
+// PraguePrunePoints contains the pre-defined history pruning cutoff blocks for the Prague
+// (Pectra) upgrade. They point to the first post-Prague block. Any pruning should truncate
 // *up to* but excluding the given block.
-var CancunPrunePoints = map[common.Hash]*PrunePoint{
-	// mainnet - first Cancun block (March 13, 2024)
+var PraguePrunePoints = map[common.Hash]*PrunePoint{
+	// mainnet - first Prague block (May 7, 2025)
 	params.MainnetGenesisHash: {
-		BlockNumber: 19426587,
-		BlockHash:   common.HexToHash("0xf8e2f40d98fe5862bc947c8c83d34799c50fb344d7445d020a8a946d891b62ee"),
+		BlockNumber: 22431084,
+		BlockHash:   common.HexToHash("0x50c8cab760b2948349c590461b166773c45d8f4858cccf5a43025ab2960152e8"),
 	},
-	// sepolia - first Cancun block (January 30, 2024)
+	// sepolia - first Prague block (March 5, 2025)
 	params.SepoliaGenesisHash: {
-		BlockNumber: 5187023,
-		BlockHash:   common.HexToHash("0x8f9753667f95418f70db36279a269ed6523cea399ecc3f4cfa2f1689a3a4b130"),
+		BlockNumber: 7836331,
+		BlockHash:   common.HexToHash("0xe6571beb68bf24dbd8a6ba354518996920c55a3f8d8fdca423e391b8ad071f22"),
 	},
 }
 
@@ -124,8 +124,8 @@ func GetPrunePoint(genesisHash common.Hash, mode HistoryMode) *PrunePoint {
 	switch mode {
 	case KeepPostMerge:
 		return MergePrunePoints[genesisHash]
-	case KeepPostCancun:
-		return CancunPrunePoints[genesisHash]
+	case KeepPostPrague:
+		return PraguePrunePoints[genesisHash]
 	default:
 		return nil
 	}

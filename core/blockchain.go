@@ -706,7 +706,7 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 		freezerTail, _ = bc.db.Tail()
 		genesisHash    = bc.genesisBlock.Hash()
 		mergePoint     = history.MergePrunePoints[genesisHash]
-		cancunPoint    = history.CancunPrunePoints[genesisHash]
+		praguePoint    = history.PraguePrunePoints[genesisHash]
 	)
 	switch bc.cfg.ChainHistoryMode {
 	case history.KeepAll:
@@ -719,8 +719,8 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 			bc.historyPrunePoint.Store(mergePoint)
 			return nil
 		}
-		if cancunPoint != nil && freezerTail == cancunPoint.BlockNumber {
-			bc.historyPrunePoint.Store(cancunPoint)
+		if praguePoint != nil && freezerTail == praguePoint.BlockNumber {
+			bc.historyPrunePoint.Store(praguePoint)
 			return nil
 		}
 		log.Error("Chain history database is pruned with unknown configuration", "tail", freezerTail)
@@ -735,11 +735,11 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 			log.Error("Run 'geth prune-history --history.chain postmerge' to prune pre-merge history.")
 			return errors.New("history pruning requested via configuration")
 		}
-		// Check if DB is pruned further than requested (to Cancun).
-		if cancunPoint != nil && freezerTail == cancunPoint.BlockNumber {
-			log.Error("Chain history database is pruned to Cancun block, but postmerge mode was requested.")
+		// Check if DB is pruned further than requested (to Prague).
+		if praguePoint != nil && freezerTail == praguePoint.BlockNumber {
+			log.Error("Chain history database is pruned to Prague block, but postmerge mode was requested.")
 			log.Error("History cannot be unpruned. To restore history, use 'geth import-history'.")
-			log.Error("If you intended to keep post-Cancun history, use '--history.chain postcancun' instead.")
+			log.Error("If you intended to keep post-Prague history, use '--history.chain postprague' instead.")
 			return errors.New("database pruned beyond requested history mode")
 		}
 		if freezerTail > 0 && freezerTail != mergePoint.BlockNumber {
@@ -748,32 +748,32 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 		bc.historyPrunePoint.Store(mergePoint)
 		return nil
 
-	case history.KeepPostCancun:
-		if cancunPoint == nil {
+	case history.KeepPostPrague:
+		if praguePoint == nil {
 			return errors.New("history pruning requested for unknown network")
 		}
-		// Check if already at the cancun prune point.
-		if freezerTail == cancunPoint.BlockNumber {
-			bc.historyPrunePoint.Store(cancunPoint)
+		// Check if already at the prague prune point.
+		if freezerTail == praguePoint.BlockNumber {
+			bc.historyPrunePoint.Store(praguePoint)
 			return nil
 		}
 		// Check if database needs pruning.
 		if latest != 0 {
 			if freezerTail == 0 {
 				log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned.", bc.cfg.ChainHistoryMode.String()))
-				log.Error("Run 'geth prune-history --history.chain postcancun' to prune pre-Cancun history.")
+				log.Error("Run 'geth prune-history --history.chain postprague' to prune pre-Prague history.")
 				return errors.New("history pruning requested via configuration")
 			}
 			if mergePoint != nil && freezerTail == mergePoint.BlockNumber {
 				log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is only pruned to merge block.", bc.cfg.ChainHistoryMode.String()))
-				log.Error("Run 'geth prune-history --history.chain postcancun' to prune pre-Cancun history.")
+				log.Error("Run 'geth prune-history --history.chain postprague' to prune pre-Prague history.")
 				return errors.New("history pruning requested via configuration")
 			}
 			log.Error("Chain history database is pruned to unknown block", "tail", freezerTail)
 			return errors.New("unexpected database tail")
 		}
-		// Fresh database (latest == 0), will sync from cancun point.
-		bc.historyPrunePoint.Store(cancunPoint)
+		// Fresh database (latest == 0), will sync from prague point.
+		bc.historyPrunePoint.Store(praguePoint)
 		return nil
 
 	default:
