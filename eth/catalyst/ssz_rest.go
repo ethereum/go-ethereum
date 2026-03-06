@@ -270,12 +270,14 @@ func (s *SszRestServer) handleForkchoiceUpdated(w http.ResponseWriter, r *http.R
 
 	if len(body) >= fixedSize {
 		attrOffset := binary.LittleEndian.Uint32(body[96:100])
-		if attrOffset <= uint32(len(body)) && attrOffset < uint32(len(body)) {
-			unionData := body[attrOffset:]
-			if len(unionData) > 0 {
-				selector := unionData[0]
-				if selector == 1 && len(unionData) > 1 {
-					pa, err := engine.DecodePayloadAttributesSSZ(unionData[1:], version)
+		if attrOffset <= uint32(len(body)) {
+			// List[PayloadAttributesV3SSZ, 1]: for variable-size containers,
+			// the list data starts with a 4-byte offset to the first element.
+			listData := body[attrOffset:]
+			if len(listData) > 4 {
+				elemOffset := binary.LittleEndian.Uint32(listData[0:4])
+				if elemOffset <= uint32(len(listData)) {
+					pa, err := engine.DecodePayloadAttributesSSZ(listData[elemOffset:], version)
 					if err != nil {
 						sszErrorResponse(w, http.StatusBadRequest, -32602, err.Error())
 						return

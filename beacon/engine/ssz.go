@@ -76,15 +76,11 @@ func SSZToEngineStatus(status uint8) string {
 const payloadStatusFixedSize = 9 // status(1) + hash_offset(4) + err_offset(4)
 
 // EncodePayloadStatusSSZ encodes a PayloadStatusV1 to SSZ bytes per EIP-8161.
+// Uses List[Hash32, 1] encoding: 0 bytes if nil, 32 bytes if present.
 func EncodePayloadStatusSSZ(ps *PayloadStatusV1) []byte {
-	// Build Union[None, Hash32] for latest_valid_hash
-	var hashUnion []byte
+	var hashData []byte
 	if ps.LatestValidHash != nil {
-		hashUnion = make([]byte, 33) // selector(1) + hash(32)
-		hashUnion[0] = 1
-		copy(hashUnion[1:33], ps.LatestValidHash[:])
-	} else {
-		hashUnion = []byte{0}
+		hashData = ps.LatestValidHash[:]
 	}
 
 	var errorBytes []byte
@@ -92,13 +88,13 @@ func EncodePayloadStatusSSZ(ps *PayloadStatusV1) []byte {
 		errorBytes = []byte(*ps.ValidationError)
 	}
 
-	buf := make([]byte, payloadStatusFixedSize+len(hashUnion)+len(errorBytes))
+	buf := make([]byte, payloadStatusFixedSize+len(hashData)+len(errorBytes))
 	buf[0] = EngineStatusToSSZ(ps.Status)
 	binary.LittleEndian.PutUint32(buf[1:5], uint32(payloadStatusFixedSize))
-	binary.LittleEndian.PutUint32(buf[5:9], uint32(payloadStatusFixedSize+len(hashUnion)))
+	binary.LittleEndian.PutUint32(buf[5:9], uint32(payloadStatusFixedSize+len(hashData)))
 
-	copy(buf[payloadStatusFixedSize:], hashUnion)
-	copy(buf[payloadStatusFixedSize+len(hashUnion):], errorBytes)
+	copy(buf[payloadStatusFixedSize:], hashData)
+	copy(buf[payloadStatusFixedSize+len(hashData):], errorBytes)
 	return buf
 }
 
@@ -119,16 +115,16 @@ func DecodePayloadStatusSSZ(buf []byte) (*PayloadStatusV1, error) {
 		return nil, fmt.Errorf("PayloadStatusSSZ: offsets out of bounds")
 	}
 
-	// Decode Union[None, Hash32]
-	unionData := buf[hashOffset:errOffset]
-	if len(unionData) > 0 {
-		if unionData[0] == 1 {
-			if len(unionData) < 33 {
-				return nil, fmt.Errorf("PayloadStatusSSZ: Union hash data too short")
-			}
-			hash := common.BytesToHash(unionData[1:33])
-			ps.LatestValidHash = &hash
-		}
+	// Decode List[Hash32, 1]: 0 bytes = nil, 32 bytes = hash present
+	hashData := buf[hashOffset:errOffset]
+	switch len(hashData) {
+	case 0:
+		ps.LatestValidHash = nil
+	case 32:
+		hash := common.BytesToHash(hashData)
+		ps.LatestValidHash = &hash
+	default:
+		return nil, fmt.Errorf("PayloadStatusSSZ: invalid hash list length %d (expected 0 or 32)", len(hashData))
 	}
 
 	// Decode validation_error
@@ -175,22 +171,18 @@ const forkchoiceUpdatedResponseFixedSize = 8
 func EncodeForkChoiceResponseSSZ(resp *ForkChoiceResponse) []byte {
 	psBytes := EncodePayloadStatusSSZ(&resp.PayloadStatus)
 
-	// Build Union[None, uint64] for payload ID
-	var pidUnion []byte
+	// Build List[Bytes8, 1] for payload ID: 0 bytes if nil, 8 bytes if present
+	var pidData []byte
 	if resp.PayloadID != nil {
-		pidUnion = make([]byte, 9) // selector(1) + 8 bytes
-		pidUnion[0] = 1
-		copy(pidUnion[1:9], resp.PayloadID[:])
-	} else {
-		pidUnion = []byte{0}
+		pidData = resp.PayloadID[:]
 	}
 
-	buf := make([]byte, forkchoiceUpdatedResponseFixedSize+len(psBytes)+len(pidUnion))
+	buf := make([]byte, forkchoiceUpdatedResponseFixedSize+len(psBytes)+len(pidData))
 	binary.LittleEndian.PutUint32(buf[0:4], uint32(forkchoiceUpdatedResponseFixedSize))
 	binary.LittleEndian.PutUint32(buf[4:8], uint32(forkchoiceUpdatedResponseFixedSize+len(psBytes)))
 
 	copy(buf[forkchoiceUpdatedResponseFixedSize:], psBytes)
-	copy(buf[forkchoiceUpdatedResponseFixedSize+len(psBytes):], pidUnion)
+	copy(buf[forkchoiceUpdatedResponseFixedSize+len(psBytes):], pidData)
 	return buf
 }
 
@@ -215,15 +207,17 @@ func DecodeForkChoiceResponseSSZ(buf []byte) (*ForkChoiceResponse, error) {
 	}
 	resp.PayloadStatus = *ps
 
-	// Decode Union[None, PayloadID]
+	// Decode List[Bytes8, 1]: 0 bytes = nil, 8 bytes = payload ID present
 	pidData := buf[pidOffset:]
-	if len(pidData) > 0 && pidData[0] == 1 {
-		if len(pidData) < 9 {
-			return nil, fmt.Errorf("ForkChoiceResponseSSZ: Union payload_id data too short")
-		}
+	switch len(pidData) {
+	case 0:
+		resp.PayloadID = nil
+	case 8:
 		var pid PayloadID
-		copy(pid[:], pidData[1:9])
+		copy(pid[:], pidData)
 		resp.PayloadID = &pid
+	default:
+		return nil, fmt.Errorf("ForkChoiceResponseSSZ: invalid payload_id list length %d (expected 0 or 8)", len(pidData))
 	}
 
 	return resp, nil
