@@ -206,12 +206,24 @@ func (s *TypeMuxSubscription) deliver(event *TypeMuxEvent) {
 	if s.created.After(event.Time) {
 		return
 	}
-	// Otherwise deliver the event
+	// Copy postC under lock, then release lock before blocking select
 	s.postMu.RLock()
-	defer s.postMu.RUnlock()
+	postC := s.postC
+	s.postMu.RUnlock()
 
-	select {
-	case s.postC <- event:
-	case <-s.closing:
+	if postC == nil {
+		return
 	}
+
+	// Use recover to safely handle case where channel was closed
+	// between copying postC and entering select
+	func() {
+		defer func() {
+			recover() // Ignore panic from send on closed channel
+		}()
+		select {
+		case postC <- event:
+		case <-s.closing:
+		}
+	}()
 }
