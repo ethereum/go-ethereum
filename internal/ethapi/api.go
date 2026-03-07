@@ -822,6 +822,7 @@ func (api *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockN
 	if err != nil {
 		return nil, err
 	}
+	ethCallGasUsedHist.Update(int64(result.UsedGas))
 	if errors.Is(result.Err, vm.ErrExecutionReverted) {
 		return nil, newRevertError(result.Revert())
 	}
