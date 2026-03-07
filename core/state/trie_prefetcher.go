@@ -34,18 +34,26 @@ var (
 	errTerminated = errors.New("fetcher is already terminated")
 )
 
+// trieIDKey is a composite key used to identify a unique trie. Using a struct
+// key instead of a string avoids heap allocations on every map lookup.
+type trieIDKey struct {
+	owner common.Hash
+	root  common.Hash
+}
+
 // triePrefetcher is an active prefetcher, which receives accounts or storage
 // items and does trie-loading of them. The goal is to get as much useful content
 // into the caches as possible.
 //
 // Note, the prefetcher's API is not thread safe.
 type triePrefetcher struct {
-	verkle   bool                   // Flag whether the prefetcher is in verkle mode
-	db       Database               // Database to fetch trie nodes through
-	root     common.Hash            // Root hash of the account trie for metrics
-	fetchers map[string]*subfetcher // Subfetchers for each trie
-	term     chan struct{}          // Channel to signal interruption
-	noreads  bool                   // Whether to ignore state-read-only prefetch requests
+	verkle    bool                      // Flag whether the prefetcher is in verkle mode
+	db        Database                  // Database to fetch trie nodes through
+	root      common.Hash               // Root hash of the account trie for metrics
+	verkleKey trieIDKey                 // Cached trie ID key for verkle mode (computed once)
+	fetchers  map[trieIDKey]*subfetcher // Subfetchers for each trie
+	term      chan struct{}             // Channel to signal interruption
+	noreads   bool                      // Whether to ignore state-read-only prefetch requests
 
 	deliveryMissMeter *metrics.Meter
 
@@ -67,12 +75,13 @@ type triePrefetcher struct {
 func newTriePrefetcher(db Database, root common.Hash, namespace string, noreads bool) *triePrefetcher {
 	prefix := triePrefetchMetricsPrefix + namespace
 	return &triePrefetcher{
-		verkle:   db.TrieDB().IsVerkle(),
-		db:       db,
-		root:     root,
-		fetchers: make(map[string]*subfetcher), // Active prefetchers use the fetchers map
-		term:     make(chan struct{}),
-		noreads:  noreads,
+		verkle:    db.TrieDB().IsVerkle(),
+		db:        db,
+		root:      root,
+		verkleKey: trieIDKey{root: root},
+		fetchers:  make(map[trieIDKey]*subfetcher), // Active prefetchers use the fetchers map
+		term:      make(chan struct{}),
+		noreads:   noreads,
 
 		deliveryMissMeter: metrics.GetOrRegisterMeter(prefix+"/deliverymiss", nil),
 
@@ -205,17 +214,14 @@ func (p *triePrefetcher) used(owner common.Hash, root common.Hash, usedAddr []co
 }
 
 // trieID returns an unique trie identifier consists the trie owner and root hash.
-func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
+func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) trieIDKey {
 	// The trie in verkle is only identified by state root
 	if p.verkle {
-		return p.root.Hex()
+		return p.verkleKey
 	}
 	// The trie in merkle is either identified by state root (account trie),
 	// or identified by the owner and trie root (storage trie)
-	trieID := make([]byte, common.HashLength*2)
-	copy(trieID, owner.Bytes())
-	copy(trieID[common.HashLength:], root.Bytes())
-	return string(trieID)
+	return trieIDKey{owner: owner, root: root}
 }
 
 // subfetcher is a trie fetcher goroutine responsible for pulling entries for a
@@ -230,8 +236,8 @@ type subfetcher struct {
 	addr  common.Address // Address of the account that the trie belongs to
 	trie  Trie           // Trie being populated with nodes
 
-	tasks []*subfetcherTask // Items queued up for retrieval
-	lock  sync.Mutex        // Lock protecting the task queue
+	tasks []subfetcherTask // Items queued up for retrieval
+	lock  sync.Mutex       // Lock protecting the task queue
 
 	wake chan struct{} // Wake channel if a new task is scheduled
 	stop chan struct{} // Channel to interrupt processing
@@ -250,12 +256,12 @@ type subfetcher struct {
 	usedSlot []common.Hash    // Tracks the storage used in the end
 }
 
-// subfetcherTask is a trie path to prefetch, tagged with whether it originates
-// from a read or a write request.
+// subfetcherTask is a batch of trie paths to prefetch, tagged with whether it
+// originates from a read or a write request.
 type subfetcherTask struct {
-	read bool
-	addr *common.Address
-	slot *common.Hash
+	read  bool
+	addrs []common.Address
+	slots []common.Hash
 }
 
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
@@ -289,12 +295,7 @@ func (sf *subfetcher) schedule(addrs []common.Address, slots []common.Hash, read
 	}
 	// Append the tasks to the current queue
 	sf.lock.Lock()
-	for _, addr := range addrs {
-		sf.tasks = append(sf.tasks, &subfetcherTask{read: read, addr: &addr})
-	}
-	for _, slot := range slots {
-		sf.tasks = append(sf.tasks, &subfetcherTask{read: read, slot: &slot})
-	}
+	sf.tasks = append(sf.tasks, subfetcherTask{read: read, addrs: addrs, slots: slots})
 	sf.lock.Unlock()
 
 	// Notify the background thread to execute scheduled tasks
@@ -392,55 +393,55 @@ func (sf *subfetcher) loop() {
 				addresses []common.Address
 				slots     [][]byte
 			)
-			for _, task := range tasks {
-				if task.addr != nil {
-					key := *task.addr
+			for i := range tasks {
+				task := &tasks[i]
+				for _, addr := range task.addrs {
 					if task.read {
-						if _, ok := sf.seenReadAddr[key]; ok {
+						if _, ok := sf.seenReadAddr[addr]; ok {
 							sf.dupsRead++
 							continue
 						}
-						if _, ok := sf.seenWriteAddr[key]; ok {
+						if _, ok := sf.seenWriteAddr[addr]; ok {
 							sf.dupsCross++
 							continue
 						}
-						sf.seenReadAddr[key] = struct{}{}
+						sf.seenReadAddr[addr] = struct{}{}
 					} else {
-						if _, ok := sf.seenReadAddr[key]; ok {
+						if _, ok := sf.seenReadAddr[addr]; ok {
 							sf.dupsCross++
 							continue
 						}
-						if _, ok := sf.seenWriteAddr[key]; ok {
+						if _, ok := sf.seenWriteAddr[addr]; ok {
 							sf.dupsWrite++
 							continue
 						}
-						sf.seenWriteAddr[key] = struct{}{}
+						sf.seenWriteAddr[addr] = struct{}{}
 					}
-					addresses = append(addresses, *task.addr)
-				} else {
-					key := *task.slot
+					addresses = append(addresses, addr)
+				}
+				for _, slot := range task.slots {
 					if task.read {
-						if _, ok := sf.seenReadSlot[key]; ok {
+						if _, ok := sf.seenReadSlot[slot]; ok {
 							sf.dupsRead++
 							continue
 						}
-						if _, ok := sf.seenWriteSlot[key]; ok {
+						if _, ok := sf.seenWriteSlot[slot]; ok {
 							sf.dupsCross++
 							continue
 						}
-						sf.seenReadSlot[key] = struct{}{}
+						sf.seenReadSlot[slot] = struct{}{}
 					} else {
-						if _, ok := sf.seenReadSlot[key]; ok {
+						if _, ok := sf.seenReadSlot[slot]; ok {
 							sf.dupsCross++
 							continue
 						}
-						if _, ok := sf.seenWriteSlot[key]; ok {
+						if _, ok := sf.seenWriteSlot[slot]; ok {
 							sf.dupsWrite++
 							continue
 						}
-						sf.seenWriteSlot[key] = struct{}{}
+						sf.seenWriteSlot[slot] = struct{}{}
 					}
-					slots = append(slots, key.Bytes())
+					slots = append(slots, slot.Bytes())
 				}
 			}
 			if len(addresses) != 0 {
