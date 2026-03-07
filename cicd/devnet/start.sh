@@ -95,6 +95,15 @@ else
   gc_mode=$GC_MODE
 fi
 
+miner_gaslimit=50000000
+if test -z "$MINER_GASLIMIT"
+then
+  echo "MINER_GASLIMIT not set, default to $miner_gaslimit"
+else
+  echo "MINER_GASLIMIT found, set to $MINER_GASLIMIT"
+  miner_gaslimit=$MINER_GASLIMIT
+fi
+
 netstats="${NODE_NAME}-${wallet}-${instance_ip}:xinfin_xdpos_hybrid_network_stats@devnetstats.hashlabs.apothem.network:1999"
 
 
@@ -113,7 +122,7 @@ XDC --ethstats ${netstats} \
 --http-port $rpc_port \
 --http-api db,eth,net,txpool,web3,XDPoS \
 --http-vhosts "*" --unlock "${wallet}" --password /work/.pwd --mine \
---miner-gasprice "1" --miner-gaslimit "50000000" --verbosity ${log_level} \
+--miner-gasprice "1" --miner-gaslimit "${miner_gaslimit}" --verbosity ${log_level} \
 --debugdatadir /work/xdcchain \
 --store-reward \
 --ws --ws-addr=0.0.0.0 --ws-port $ws_port \
