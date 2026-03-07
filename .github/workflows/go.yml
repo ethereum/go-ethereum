@@ -49,6 +49,12 @@ jobs:
           go-version: '1.25'
           cache: false
 
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get -yq --no-install-suggests --no-install-recommends install \
+            cmake g++ gcc-mipsel-linux-gnu g++-mipsel-linux-gnu
+
       - name: Build
         run: go run build/ci.go keeper
 
