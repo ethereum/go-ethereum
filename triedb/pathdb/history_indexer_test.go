@@ -27,7 +27,7 @@ import (
 // deadlock when the indexer is active. This specifically targets the case where
 // signal.result must be sent to unblock the caller.
 func TestHistoryIndexerShortenDeadlock(t *testing.T) {
-	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
 	db := rawdb.NewMemoryDatabase()
 	freezer, _ := rawdb.NewStateFreezer(t.TempDir(), false, false)
 	defer freezer.Close()
