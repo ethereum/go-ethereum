@@ -17,6 +17,7 @@
 package keystore
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -404,4 +405,94 @@ func forceCopyFile(dst, src string) error {
 		return err
 	}
 	return os.WriteFile(dst, data, 0644)
+}
+
+func BenchmarkAdd(b *testing.B) {
+	for _, preload := range []int{10, 100, 1000, 1_000_000} {
+		b.Run(fmt.Sprintf("preload=%d", preload), func(b *testing.B) {
+			benchmarkAdd(b, preload)
+		})
+	}
+}
+
+func benchmarkAdd(b *testing.B, preload int) {
+	dir := filepath.Join("testdata", "dir")
+	cache, _ := newAccountCache(dir)
+	cache.watcher.running = true // prevent unexpected reloads
+
+	for i := range preload {
+		acc := accounts.Account{
+			URL: accounts.URL{Scheme: KeyStoreScheme, Path: fmt.Sprintf("dir/preload%08x", i)},
+		}
+		binary.NativeEndian.PutUint64(acc.Address[0:], uint64(i))
+
+		cache.add(acc)
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := range b.N {
+		acc := accounts.Account{
+			URL: accounts.URL{Scheme: KeyStoreScheme, Path: fmt.Sprintf("dir/bench%08x", i)},
+		}
+		binary.NativeEndian.PutUint64(acc.Address[12:], uint64(i))
+
+		cache.add(acc)
+	}
+}
+
+func BenchmarkFind(b *testing.B) {
+	for _, preload := range []int{10, 100, 1000, 1_000_000} {
+		b.Run(fmt.Sprintf("preload=%d", preload), func(b *testing.B) {
+			benchmarkFind(b, preload)
+		})
+	}
+}
+
+func benchmarkFind(b *testing.B, preload int) {
+	dir := filepath.Join("testdata", "dir")
+	cache, _ := newAccountCache(dir)
+	cache.watcher.running = true // prevent unexpected reloads
+
+	for i := range preload {
+		acc := accounts.Account{
+			URL: accounts.URL{Scheme: KeyStoreScheme, Path: fmt.Sprintf("dir/account%08x", i)},
+		}
+		binary.NativeEndian.PutUint64(acc.Address[0:], uint64(i))
+
+		cache.add(acc)
+	}
+
+	b.Run("by address", func(b *testing.B) {
+		acc := accounts.Account{}
+		binary.NativeEndian.PutUint64(acc.Address[0:], uint64(preload/2))
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for range b.N {
+			cache.find(acc)
+		}
+	})
+
+	b.Run("by path", func(b *testing.B) {
+		acc := accounts.Account{
+			URL: accounts.URL{Scheme: KeyStoreScheme, Path: fmt.Sprintf("dir/account%08x", preload/2)},
+		}
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for range b.N {
+			cache.find(acc)
+		}
+	})
+
+	b.Run("ambiguous", func(b *testing.B) {
+		acc := accounts.Account{}
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for range b.N {
+			cache.find(acc)
+		}
+	})
 }
