@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"io"
 	"math/big"
 	"runtime"
@@ -103,6 +104,21 @@ var (
 	blockExecutionTimer       = metrics.NewRegisteredResettingTimer("chain/execution", nil)
 	blockWriteTimer           = metrics.NewRegisteredResettingTimer("chain/write", nil)
 
+	// BALspecific timers
+	blockPreprocessingTimer = metrics.NewRegisteredResettingTimer("chain/preprocess", nil)
+	txExecutionTimer        = metrics.NewRegisteredResettingTimer("chain/txexecution", nil)
+
+	stateTrieHashTimer      = metrics.NewRegisteredResettingTimer("chain/statetriehash", nil)
+	accountTriesUpdateTimer = metrics.NewRegisteredResettingTimer("chain/accounttriesupdate", nil)
+	stateTriePrefetchTimer  = metrics.NewRegisteredResettingTimer("chain/statetrieprefetch", nil)
+	stateTrieUpdateTimer    = metrics.NewRegisteredResettingTimer("chain/statetrieupdate", nil)
+	originStorageLoadTimer  = metrics.NewRegisteredResettingTimer("chain/originstorageload", nil)
+
+	stateRootComputeTimer = metrics.NewRegisteredResettingTimer("chain/staterootcompute", nil)
+	stateCommitTimer      = metrics.NewRegisteredResettingTimer("chain/statetriecommit", nil)
+
+	blockPostprocessingTimer = metrics.NewRegisteredResettingTimer("chain/postprocess", nil)
+
 	blockReorgMeter     = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
 	blockReorgAddMeter  = metrics.NewRegisteredMeter("chain/reorg/add", nil)
 	blockReorgDropMeter = metrics.NewRegisteredMeter("chain/reorg/drop", nil)
@@ -161,6 +177,12 @@ const (
 	//  * Total difficulty has been removed from both the key-value store and the ancient store.
 	//  * The metadata structure of freezer is changed by adding 'flushOffset'
 	BlockChainVersion uint64 = 9
+)
+
+const (
+	BALExecutionModeFull       = 0
+	BALExecutionModeNoBatchIO  = iota
+	BALExecutionModeSequential = iota
 )
 
 // BlockChainConfig contains the configuration of the BlockChain object.
@@ -223,6 +245,9 @@ type BlockChainConfig struct {
 	// Execution configs
 	StatelessSelfValidation bool // Generate execution witnesses and self-check against them (testing purpose)
 	EnableWitnessStats      bool // Whether trie access statistics collection is enabled
+
+	// TODO clean this config up to use defined constants...
+	BALExecutionMode int
 }
 
 // DefaultConfig returns the default config.
@@ -361,12 +386,13 @@ type BlockChain struct {
 	stopping      atomic.Bool // false if chain is running, true when stopped
 	procInterrupt atomic.Bool // interrupt signaler for block processing
 
-	engine     consensus.Engine
-	validator  Validator // Block and state validator interface
-	prefetcher Prefetcher
-	processor  Processor // Block transaction processor interface
-	logger     *tracing.Hooks
-	stateSizer *state.SizeTracker // State size tracking
+	engine            consensus.Engine
+	validator         Validator // Block and state validator interface
+	prefetcher        Prefetcher
+	processor         Processor // Block transaction processor interface
+	parallelProcessor ParallelStateProcessor
+	logger            *tracing.Hooks
+	stateSizer        *state.SizeTracker // State size tracking
 
 	lastForkReadyAlert time.Time     // Last time there was a fork readiness print out
 	slowBlockThreshold time.Duration // Block execution time threshold beyond which detailed statistics will be logged
@@ -428,6 +454,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(bc.hc)
+	bc.parallelProcessor = NewParallelStateProcessor(bc.hc, &cfg.VmConfig)
 
 	genesisHeader := bc.GetHeaderByNumber(0)
 	if genesisHeader == nil {
@@ -574,6 +601,114 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		}
 	}
 	return bc, nil
+}
+func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *types.Block, setHead bool) (procRes *blockProcessingResult, blockEndErr error) {
+	var (
+		startTime = time.Now()
+		procTime  time.Duration
+		statedb   *state.StateDB
+	)
+
+	useAsyncReads := bc.cfg.BALExecutionMode != BALExecutionModeNoBatchIO
+	al := block.AccessList() // TODO: make the return of this method not be a pointer
+	accessListReader := bal.NewAccessListReader(*al)
+	prefetchReader, err := bc.statedb.ReaderEIP7928(parentRoot, accessListReader.StorageKeys(useAsyncReads), runtime.NumCPU())
+	if err != nil {
+		return nil, err
+	}
+
+	stateTransition, err := state.NewBALStateTransition(block, prefetchReader, bc.statedb, parentRoot)
+	if err != nil {
+		return nil, err
+	}
+	statedb, err = state.NewWithReader(parentRoot, bc.statedb, prefetchReader)
+
+	if bc.logger != nil && bc.logger.OnBlockStart != nil {
+		bc.logger.OnBlockStart(tracing.BlockEvent{
+			Block:     block,
+			Finalized: bc.CurrentFinalBlock(),
+			Safe:      bc.CurrentSafeBlock(),
+		})
+	}
+	if bc.logger != nil && bc.logger.OnBlockEnd != nil {
+		defer func() {
+			bc.logger.OnBlockEnd(blockEndErr)
+		}()
+	}
+
+	res, err := bc.parallelProcessor.Process(block, stateTransition, statedb, bc.cfg.VmConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := bc.validator.ValidateState(block, stateTransition, res.ProcessResult, false); err != nil {
+		return nil, err
+	}
+
+	procTime = time.Since(startTime)
+	writeStart := time.Now()
+	// Write the block to the chain and get the status.
+	var (
+		//wstart = time.Now()
+		status WriteStatus
+	)
+	if !setHead {
+		// Don't set the head, only insert the block
+		err = bc.writeBlockWithState(block, res.ProcessResult.Receipts, stateTransition)
+	} else {
+		status, err = bc.writeBlockAndSetHead(block, res.ProcessResult.Receipts, res.ProcessResult.Logs, stateTransition, false)
+	}
+	if err != nil {
+		return nil, err
+	}
+	writeTime := time.Since(writeStart)
+	var stats ExecuteStats
+
+	/*
+		// TODO: implement the gathering of this data
+			stats.AccountReads = statedb.AccountReads     // Account reads are complete(in processing)
+			stats.StorageReads = statedb.StorageReads     // Storage reads are complete(in processing)
+			stats.AccountUpdates = statedb.AccountUpdates // Account updates are complete(in validation)
+			stats.StorageUpdates = statedb.StorageUpdates // Storage updates are complete(in validation)
+			stats.AccountHashes = statedb.AccountHashes   // Account hashes are complete(in validation)
+			stats.CodeReads = statedb.CodeReads
+
+			stats.AccountLoaded = statedb.AccountLoaded
+			stats.AccountUpdated = statedb.AccountUpdated
+			stats.AccountDeleted = statedb.AccountDeleted
+			stats.StorageLoaded = statedb.StorageLoaded
+			stats.StorageUpdated = int(statedb.StorageUpdated.Load())
+			stats.StorageDeleted = int(statedb.StorageDeleted.Load())
+			stats.CodeLoaded = statedb.CodeLoaded
+			stats.CodeLoadBytes = statedb.CodeLoadBytes
+
+		stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // The time spent on EVM processing
+		stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation
+	*/
+
+	// Update the metrics touched during block commit
+	stats.AccountCommits = stateTransition.Metrics().AccountCommits
+	stats.StorageCommits = stateTransition.Metrics().StorageCommits
+	stats.SnapshotCommit = stateTransition.Metrics().SnapshotCommits
+	stats.TrieDBCommit = stateTransition.Metrics().TrieDBCommits
+
+	// stats.StateReadCacheStats = whichReader.GetStats()
+	// ^ TODO fix this
+
+	elapsed := time.Since(startTime) + 1 // prevent zero division
+	stats.TotalTime = elapsed
+	stats.MgasPerSecond = float64(res.ProcessResult.GasUsed) * 1000 / float64(elapsed)
+	stats.BlockWrite = writeTime
+
+	stats.balTransitionStats = res.StateTransitionMetrics
+
+	return &blockProcessingResult{
+		usedGas:  res.ProcessResult.GasUsed,
+		procTime: procTime,
+		status:   status,
+		witness:  nil,
+		stats:    &stats,
+	}, nil
 }
 
 func (bc *BlockChain) setupSnapshot() {
@@ -1647,7 +1782,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 
 // writeBlockWithState writes block, metadata and corresponding state data to the
 // database.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, statedb *state.StateDB) error {
+func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, transition state.BlockStateTransition) error {
 	if !bc.HasHeader(block.ParentHash(), block.NumberU64()-1) {
 		return consensus.ErrUnknownAncestor
 	}
@@ -1663,7 +1798,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	rawdb.WriteBlock(batch, block)
 	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
-	rawdb.WritePreimages(batch, statedb.Preimages())
+	rawdb.WritePreimages(batch, transition.Preimages())
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
@@ -1678,7 +1813,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		hasStateSizer = bc.stateSizer != nil
 	)
 	if hasStateHook || hasStateSizer {
-		r, update, err := statedb.CommitWithUpdate(block.NumberU64(), isEIP158, isCancun)
+		r, update, err := transition.CommitWithUpdate(block.NumberU64(), isEIP158, isCancun)
 		if err != nil {
 			return err
 		}
@@ -1694,7 +1829,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		}
 		root = r
 	} else {
-		root, err = statedb.Commit(block.NumberU64(), isEIP158, isCancun)
+		root, err = transition.Commit(block.NumberU64(), isEIP158, isCancun)
 		if err != nil {
 			return err
 		}
@@ -1761,7 +1896,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 // writeBlockAndSetHead is the internal implementation of WriteBlockAndSetHead.
 // This function expects the chain mutex to be held.
-func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state state.BlockStateTransition, emitHeadEvent bool) (status WriteStatus, err error) {
 	if err := bc.writeBlockWithState(block, receipts, state); err != nil {
 		return NonStatTy, err
 	}
@@ -2010,7 +2145,12 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 		if err != nil {
 			return nil, it.index, err
 		}
-		res.stats.reportMetrics()
+		blockHasAccessList := block.AccessList() != nil
+		if blockHasAccessList && bc.cfg.BALExecutionMode != BALExecutionModeSequential {
+			res.stats.reportBALMetrics()
+		} else {
+			res.stats.reportMetrics()
+		}
 
 		// Log slow block only if a single block is inserted (usually after the
 		// initial sync) to not overwhelm the users.
@@ -2119,6 +2259,16 @@ type ExecuteConfig struct {
 // ProcessBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
 func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, block *types.Block, config ExecuteConfig) (result *blockProcessingResult, blockEndErr error) {
+	isAmsterdam := bc.chainConfig.IsAmsterdam(block.Number(), block.Time())
+	// TODO: need to check that the block is also postcancun if it contained an access list?
+	// this should be checked during decoding (?)
+	blockHasAccessList := block.AccessList() != nil
+
+	// optimized execution path for blocks which contain BALs
+	if blockHasAccessList && bc.cfg.BALExecutionMode != BALExecutionModeSequential {
+		return bc.processBlockWithAccessList(parentRoot, block, config.WriteHead)
+	}
+
 	var (
 		err       error
 		startTime = time.Now()
@@ -2128,9 +2278,22 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
 	if bc.cfg.NoPrefetch {
-		statedb, err = state.New(parentRoot, bc.statedb)
-		if err != nil {
-			return nil, err
+		if isAmsterdam {
+			reader, err := bc.statedb.Reader(parentRoot)
+			if err != nil {
+				return nil, err
+			}
+
+			readerTracker := state.NewReaderWithTracker(reader)
+			statedb, err = state.NewWithReader(parentRoot, bc.statedb, readerTracker)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			statedb, err = state.New(parentRoot, bc.statedb)
+			if err != nil {
+				return nil, err
+			}
 		}
 	} else {
 		// If prefetching is enabled, run that against the current state to pre-cache
@@ -2138,13 +2301,16 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		//
 		// Note: the main processor and prefetcher share the same reader with a local
 		// cache for mitigating the overhead of state access.
-		prefetch, process, err := bc.statedb.ReadersWithCacheStats(parentRoot)
+		prefetch, process, err := bc.statedb.ReadersWithCache(parentRoot)
 		if err != nil {
 			return nil, err
 		}
 		throwaway, err := state.NewWithReader(parentRoot, bc.statedb, prefetch)
 		if err != nil {
 			return nil, err
+		}
+		if isAmsterdam {
+			process = state.NewReaderWithTracker(process)
 		}
 		statedb, err = state.NewWithReader(parentRoot, bc.statedb, process)
 		if err != nil {
@@ -2153,15 +2319,22 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		// Upload the statistics of reader at the end
 		defer func() {
 			if result != nil {
-				result.stats.StatePrefetchCacheStats = prefetch.GetStats()
-				result.stats.StateReadCacheStats = process.GetStats()
+				if stater, ok := prefetch.(state.ReaderStater); ok {
+					result.stats.StatePrefetchCacheStats = stater.GetStats()
+				}
+				if stater, ok := process.(state.ReaderStater); ok {
+					result.stats.StateReadCacheStats = stater.GetStats()
+				}
 			}
 		}()
 		go func(start time.Time, throwaway *state.StateDB, block *types.Block) {
 			// Disable tracing for prefetcher executions.
 			vmCfg := bc.cfg.VmConfig
 			vmCfg.Tracer = nil
-			bc.prefetcher.Prefetch(block, throwaway, vmCfg, &interrupt)
+			if block.AccessList() == nil {
+				// only use the state prefetcher for non-BAL blocks.
+				bc.prefetcher.Prefetch(block, throwaway, vmCfg, &interrupt)
+			}
 
 			blockPrefetchExecuteTimer.Update(time.Since(start))
 			if interrupt.Load() {
@@ -2190,6 +2363,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 				witnessStats = stateless.NewWitnessStats()
 			}
 		}
+
 		statedb.StartPrefetcher("chain", witness, witnessStats)
 		defer statedb.StopPrefetcher()
 	}
@@ -2210,16 +2384,19 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		}
 	}
 
+	var res *ProcessResult
+	var ptime, vtime time.Duration
+
 	// Process block using the parent state as reference point
 	pstart := time.Now()
 	pctx, _, spanEnd := telemetry.StartSpan(ctx, "bc.processor.Process")
-	res, err := bc.processor.Process(pctx, block, statedb, bc.cfg.VmConfig)
+	res, err = bc.processor.Process(pctx, block, statedb, bc.cfg.VmConfig)
 	spanEnd(&err)
 	if err != nil {
 		bc.reportBadBlock(block, res, err)
 		return nil, err
 	}
-	ptime := time.Since(pstart)
+	ptime = time.Since(pstart)
 
 	vstart := time.Now()
 	_, _, spanEnd = telemetry.StartSpan(ctx, "bc.validator.ValidateState")
@@ -2229,7 +2406,28 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		bc.reportBadBlock(block, res, err)
 		return nil, err
 	}
-	vtime := time.Since(vstart)
+	vtime = time.Since(vstart)
+
+	if isAmsterdam {
+		computedAccessList := res.AccessList.ToEncodingObj()
+		computedAccessListHash := computedAccessList.Hash()
+
+		if *block.Header().BlockAccessListHash != computedAccessListHash {
+			//fmt.Printf("remote:\n%s\nlocal:\n%s\n", block.Body().AccessList.JSONString(), computedAccessList.JSONString())
+			err := fmt.Errorf("block header access list hash mismatch with computed (header=%x computed=%x)", *block.Header().BlockAccessListHash, computedAccessListHash)
+			bc.reportBadBlock(block, res, err)
+			return nil, err
+		}
+		if block.AccessList() == nil {
+			// attach the computed access list to the block so it gets persisted
+			// when the block is written to disk
+			block = block.WithAccessList(computedAccessList)
+		} else if block.AccessList().Hash() != computedAccessListHash {
+			err := fmt.Errorf("block access list hash mismatch (remote=%x computed=%x)", block.AccessList().Hash(), computedAccessListHash)
+			bc.reportBadBlock(block, res, err)
+			return nil, err
+		}
+	}
 
 	// If witnesses was generated and stateless self-validation requested, do
 	// that now. Self validation should *never* run in production, it's more of
@@ -2819,6 +3017,10 @@ func (bc *BlockChain) reportBadBlock(block *types.Block, res *ProcessResult, err
 	}
 	rawdb.WriteBadBlock(bc.db, block)
 	log.Error(summarizeBadBlock(block, receipts, bc.Config(), err))
+}
+
+func (bc *BlockChain) reportBALBlock(block *types.Block, res *ProcessResult, err error) {
+
 }
 
 // logForkReadiness will write a log when a future fork is scheduled, but not

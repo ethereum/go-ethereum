@@ -388,11 +388,11 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			return nil, nil, nil, err
 		}
 		// EIP-7002
-		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
+		if _, err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
 			return nil, nil, nil, err
 		}
 		// EIP-7251
-		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
+		if _, err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
 			return nil, nil, nil, err
 		}
 	}
@@ -406,7 +406,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		Withdrawals:  *block.BlockOverrides.Withdrawals,
 	}
 	chainHeadReader := &simChainHeadReader{ctx, sim.b}
-	b, err := sim.b.Engine().FinalizeAndAssemble(chainHeadReader, header, sim.state, blockBody, receipts)
+	b, err := sim.b.Engine().FinalizeAndAssemble(chainHeadReader, header, sim.state, blockBody, receipts, nil)
 	if err != nil {
 		return nil, nil, nil, err
 	}

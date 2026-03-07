@@ -42,7 +42,9 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 		return nil, errors.New("wrapping nil tracer")
 	}
 	// No state change to journal, return the wrapped hooks as is
-	if hooks.OnBalanceChange == nil && hooks.OnNonceChange == nil && hooks.OnNonceChangeV2 == nil && hooks.OnCodeChange == nil && hooks.OnCodeChangeV2 == nil && hooks.OnStorageChange == nil {
+	if hooks.OnBalanceChange == nil && hooks.OnNonceChange == nil && hooks.OnNonceChangeV2 == nil &&
+		hooks.OnCodeChange == nil && hooks.OnCodeChangeV2 == nil && hooks.OnStorageChange == nil {
+		// TODO(sina) hooks.OnLog should also be handled here
 		return hooks, nil
 	}
 	if hooks.OnNonceChange != nil && hooks.OnNonceChangeV2 != nil {
@@ -56,11 +58,14 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	wrapped := *hooks
 
 	// Create journal
-	j := &journal{hooks: hooks}
+	j := &journal{
+		hooks: hooks,
+	}
 	// Scope hooks need to be re-implemented.
 	wrapped.OnTxEnd = j.OnTxEnd
 	wrapped.OnEnter = j.OnEnter
 	wrapped.OnExit = j.OnExit
+
 	// Wrap state change hooks.
 	if hooks.OnBalanceChange != nil {
 		wrapped.OnBalanceChange = j.OnBalanceChange
@@ -69,6 +74,7 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 		// Regardless of which hook version is used in the tracer,
 		// the journal will want to capture the nonce change reason.
 		wrapped.OnNonceChangeV2 = j.OnNonceChangeV2
+
 		// A precaution to ensure EVM doesn't call both hooks.
 		wrapped.OnNonceChange = nil
 	}
@@ -81,7 +87,6 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	if hooks.OnStorageChange != nil {
 		wrapped.OnStorageChange = j.OnStorageChange
 	}
-
 	return &wrapped, nil
 }
 
@@ -148,7 +153,11 @@ func (j *journal) OnExit(depth int, output []byte, gasUsed uint64, err error, re
 }
 
 func (j *journal) OnBalanceChange(addr common.Address, prev, new *big.Int, reason BalanceChangeReason) {
-	j.entries = append(j.entries, balanceChange{addr: addr, prev: prev, new: new})
+	j.entries = append(j.entries, balanceChange{
+		addr: addr,
+		prev: prev,
+		new:  new,
+	})
 	if j.hooks.OnBalanceChange != nil {
 		j.hooks.OnBalanceChange(addr, prev, new, reason)
 	}
@@ -158,7 +167,11 @@ func (j *journal) OnNonceChangeV2(addr common.Address, prev, new uint64, reason 
 	// When a contract is created, the nonce of the creator is incremented.
 	// This change is not reverted when the creation fails.
 	if reason != NonceChangeContractCreator {
-		j.entries = append(j.entries, nonceChange{addr: addr, prev: prev, new: new})
+		j.entries = append(j.entries, nonceChange{
+			addr: addr,
+			prev: prev,
+			new:  new,
+		})
 	}
 	if j.hooks.OnNonceChangeV2 != nil {
 		j.hooks.OnNonceChangeV2(addr, prev, new, reason)
@@ -194,7 +207,12 @@ func (j *journal) OnCodeChangeV2(addr common.Address, prevCodeHash common.Hash, 
 }
 
 func (j *journal) OnStorageChange(addr common.Address, slot common.Hash, prev, new common.Hash) {
-	j.entries = append(j.entries, storageChange{addr: addr, slot: slot, prev: prev, new: new})
+	j.entries = append(j.entries, storageChange{
+		addr: addr,
+		slot: slot,
+		prev: prev,
+		new:  new,
+	})
 	if j.hooks.OnStorageChange != nil {
 		j.hooks.OnStorageChange(addr, slot, prev, new)
 	}
