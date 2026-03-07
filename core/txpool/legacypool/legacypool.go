@@ -571,10 +571,14 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 		FirstNonceGap:    nil, // Pool allows arbitrary arrival order, don't invalidate nonce gaps
 		UsedAndLeftSlots: nil, // Pool has own mechanism to limit the number of transactions
 		ExistingExpenditure: func(addr common.Address) *big.Int {
+			result := new(big.Int)
 			if list := pool.pending[addr]; list != nil {
-				return list.totalcost.ToBig()
+				result.Add(result, list.totalcost.ToBig())
 			}
-			return new(big.Int)
+			if queue, ok := pool.queue.get(addr); ok {
+				result.Add(result, queue.totalcost.ToBig())
+			}
+			return result
 		},
 		ExistingCost: func(addr common.Address, nonce uint64) *big.Int {
 			if list := pool.pending[addr]; list != nil {
