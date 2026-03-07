@@ -18,6 +18,7 @@ package core
 
 import (
 	"bytes"
+	"math/rand"
 	"runtime"
 	"sync/atomic"
 
@@ -27,6 +28,20 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/sync/errgroup"
+)
+
+const (
+	// heavyTransactionThreshold defines the threshold for classifying a
+	// transaction as heavy. As defined, the transaction consumes more than
+	// 20% of the block's GasUsed is regarded as heavy.
+	//
+	// Heavy transactions are prioritized for prefetching to allow additional
+	// preparation time.
+	heavyTransactionThreshold = 20
+
+	// heavyTransactionPriority defines the probability with which the heavy
+	// transactions will be scheduled first for prefetching.
+	heavyTransactionPriority = 40
 )
 
 // statePrefetcher is a basic Prefetcher that executes transactions from a block
@@ -59,9 +74,59 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 	)
 	workers.SetLimit(max(1, 4*runtime.NumCPU()/5)) // Aggressively run the prefetching
 
-	// Iterate over and process the individual transactions
-	for i, tx := range block.Transactions() {
-		stateCpy := statedb.Copy() // closure
+	var (
+		processed = make(map[common.Hash]struct{}, len(block.Transactions()))
+		heavyTxs  = make(chan *types.Transaction, len(block.Transactions()))
+		normalTxs = make(chan *types.Transaction, len(block.Transactions()))
+		threshold = min(block.GasUsed()*heavyTransactionThreshold/100, params.MaxTxGas/2)
+	)
+	for _, tx := range block.Transactions() {
+		// Note: gasLimit is not equivalent to gasUsed. Ideally, transaction heaviness
+		// should be measured using gasUsed. However, gasUsed is unknown prior to
+		// execution, so gasLimit is used as the indicator instead. This allows transaction
+		// senders to inflate gasLimit to gain higher prefetch priority, but this
+		// trade-off is unavoidable.
+		if tx.Gas() > threshold {
+			heavyTxs <- tx
+		}
+		// The heavy transaction will also be emitted with the normal prefetching
+		// ordering, depends on in which track it will be selected first.
+		normalTxs <- tx
+	}
+	blockPrefetchHeavyTxsMeter.Mark(int64(len(heavyTxs)))
+
+	fetchTx := func() (*types.Transaction, bool) {
+		// Pick the heavy transaction first based on the pre-defined probability
+		if rand.Intn(100) < heavyTransactionPriority {
+			select {
+			case tx := <-heavyTxs:
+				return tx, false
+			default:
+			}
+		}
+		// No more heavy transaction, or no priority for them, pick the transaction
+		// with normal order.
+		select {
+		case tx := <-normalTxs:
+			return tx, false
+		default:
+			return nil, true
+		}
+	}
+	for {
+		next, done := fetchTx()
+		if done {
+			break
+		}
+		if _, exists := processed[next.Hash()]; exists {
+			continue
+		}
+		processed[next.Hash()] = struct{}{}
+
+		var (
+			stateCpy = statedb.Copy() // closure
+			tx       = next           // closure
+		)
 		workers.Go(func() error {
 			// If block precaching was interrupted, abort
 			if interrupt != nil && interrupt.Load() {
@@ -103,7 +168,9 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 			// Disable the nonce check
 			msg.SkipNonceChecks = true
 
-			stateCpy.SetTxContext(tx.Hash(), i)
+			// The transaction index is assigned blindly with zero, it's fine
+			// for prefetching only.
+			stateCpy.SetTxContext(tx.Hash(), 0)
 
 			// We attempt to apply a transaction. The goal is not to execute
 			// the transaction successfully, rather to warm up touched data slots.
