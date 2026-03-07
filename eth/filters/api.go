@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -83,24 +84,26 @@ type filter struct {
 // FilterAPI offers support to create and manage filters. This will allow external clients to retrieve various
 // information related to the Ethereum protocol such as blocks, transactions and logs.
 type FilterAPI struct {
-	sys           *FilterSystem
-	events        *EventSystem
-	filtersMu     sync.Mutex
-	filters       map[rpc.ID]*filter
-	timeout       time.Duration
-	logQueryLimit int
-	rangeLimit    uint64
+	sys             *FilterSystem
+	events          *EventSystem
+	filtersMu       sync.Mutex
+	filters         map[rpc.ID]*filter
+	timeout         time.Duration
+	logQueryLimit   int
+	rangeLimit      uint64
+	maxPendingItems int // max buffered items per polling filter; oldest are dropped when exceeded
 }
 
 // NewFilterAPI returns a new FilterAPI instance.
 func NewFilterAPI(system *FilterSystem) *FilterAPI {
 	api := &FilterAPI{
-		sys:           system,
-		events:        NewEventSystem(system),
-		filters:       make(map[rpc.ID]*filter),
-		timeout:       system.cfg.Timeout,
-		logQueryLimit: system.cfg.LogQueryLimit,
-		rangeLimit:    system.cfg.RangeLimit,
+		sys:             system,
+		events:          NewEventSystem(system),
+		filters:         make(map[rpc.ID]*filter),
+		timeout:         system.cfg.Timeout,
+		logQueryLimit:   system.cfg.LogQueryLimit,
+		rangeLimit:      system.cfg.RangeLimit,
+		maxPendingItems: system.cfg.MaxPendingItems,
 	}
 	go api.timeoutLoop(system.cfg.Timeout)
 
@@ -161,11 +164,21 @@ func (api *FilterAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
 		for {
 			select {
 			case pTx := <-pendingTxs:
+				var drop bool
 				api.filtersMu.Lock()
 				if f, found := api.filters[pendingTxSub.ID]; found {
 					f.txs = append(f.txs, pTx...)
+					// Cap the queue: uninstall filter when the limit is exceeded
+					// to prevent unbounded memory growth if the client polls infrequently.
+					if max := api.maxPendingItems; max > 0 && len(f.txs) > max {
+						drop = true
+					}
 				}
 				api.filtersMu.Unlock()
+				if drop {
+					log.Debug("Pending tx filter queue overflow, uninstalling filter", "id", pendingTxSub.ID)
+					api.UninstallFilter(pendingTxSub.ID)
+				}
 			case <-pendingTxSub.Err():
 				api.filtersMu.Lock()
 				delete(api.filters, pendingTxSub.ID)
@@ -236,11 +249,20 @@ func (api *FilterAPI) NewBlockFilter() rpc.ID {
 		for {
 			select {
 			case h := <-headers:
+				var drop bool
 				api.filtersMu.Lock()
 				if f, found := api.filters[headerSub.ID]; found {
 					f.hashes = append(f.hashes, h.Hash())
+					// Cap the queue: uninstall filter when the limit is exceeded.
+					if max := api.maxPendingItems; max > 0 && len(f.hashes) > max {
+						drop = true
+					}
 				}
 				api.filtersMu.Unlock()
+				if drop {
+					log.Debug("Block filter queue overflow, uninstalling filter", "id", headerSub.ID)
+					api.UninstallFilter(headerSub.ID)
+				}
 			case <-headerSub.Err():
 				api.filtersMu.Lock()
 				delete(api.filters, headerSub.ID)
@@ -422,11 +444,21 @@ func (api *FilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 		for {
 			select {
 			case l := <-logs:
+				var drop bool
 				api.filtersMu.Lock()
 				if f, found := api.filters[logsSub.ID]; found {
 					f.logs = append(f.logs, l...)
+					// Cap the queue: uninstall filter when the limit is exceeded
+					// to prevent unbounded memory growth if the client polls infrequently.
+					if max := api.maxPendingItems; max > 0 && len(f.logs) > max {
+						drop = true
+					}
 				}
 				api.filtersMu.Unlock()
+				if drop {
+					log.Debug("Log filter queue overflow, uninstalling filter", "id", logsSub.ID)
+					api.UninstallFilter(logsSub.ID)
+				}
 			case <-logsSub.Err():
 				api.filtersMu.Lock()
 				delete(api.filters, logsSub.ID)
