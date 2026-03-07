@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie/archive"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb/database"
 	"golang.org/x/sync/errgroup"
@@ -57,6 +58,10 @@ type Trie struct {
 	// reader is the handler trie can retrieve nodes from.
 	reader *Reader
 
+	// archiveResolver is an optional callback to resolve expired nodes from
+	// an archive file.
+	archiveResolver archive.ResolverFn
+
 	// Various tracers for capturing the modifications to trie
 	opTracer       *opTracer
 	prevalueTracer *PrevalueTracer
@@ -70,15 +75,21 @@ func (t *Trie) newFlag() nodeFlag {
 // Copy returns a copy of Trie.
 func (t *Trie) Copy() *Trie {
 	return &Trie{
-		root:           copyNode(t.root),
-		owner:          t.owner,
-		committed:      t.committed,
-		unhashed:       t.unhashed,
-		uncommitted:    t.uncommitted,
-		reader:         t.reader,
-		opTracer:       t.opTracer.copy(),
-		prevalueTracer: t.prevalueTracer.Copy(),
+		root:            copyNode(t.root),
+		owner:           t.owner,
+		committed:       t.committed,
+		unhashed:        t.unhashed,
+		uncommitted:     t.uncommitted,
+		reader:          t.reader,
+		archiveResolver: t.archiveResolver,
+		opTracer:        t.opTracer.copy(),
+		prevalueTracer:  t.prevalueTracer.Copy(),
 	}
+}
+
+// SetArchiveResolver sets the archive resolver callback for expired nodes.
+func (t *Trie) SetArchiveResolver(resolver archive.ResolverFn) {
+	t.archiveResolver = resolver
 }
 
 // New creates the trie instance with provided trie id and the read-only
@@ -218,6 +229,14 @@ func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode no
 		}
 		value, newnode, _, err := t.get(child, key, pos)
 		return value, newnode, true, err
+	case *expiredNode:
+		log.Debug("Resolving expired node in get()", "owner", t.owner, "offset", n.offset, "size", n.size, "pos", pos)
+		newnode, err := resolveExpiredNodeData(n)
+		if err != nil {
+			return nil, n, false, err
+		}
+		value, _, _, err = t.get(newnode, key, pos)
+		return value, newnode, true, err
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
 	}
@@ -352,6 +371,14 @@ func (t *Trie) getNode(origNode node, path []byte, pos int) (item []byte, newnod
 		item, newnode, resolved, err := t.getNode(child, path, pos)
 		return item, newnode, resolved + 1, err
 
+	case *expiredNode:
+		rn, err := resolveExpiredNodeData(n)
+		if err != nil {
+			return nil, n, 0, err
+		}
+		item, newnode, resolvedCount, err := t.getNode(rn, path, pos)
+		return item, newnode, resolvedCount + 1, err
+
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
 	}
@@ -466,6 +493,18 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		// the node and insert into it. This leaves all child nodes on
 		// the path to the value in the trie.
 		rn, err := t.resolveAndTrack(n, prefix)
+		if err != nil {
+			return false, nil, err
+		}
+		dirty, nn, err := t.insert(rn, prefix, key, value)
+		if !dirty || err != nil {
+			return false, rn, err
+		}
+		return true, nn, nil
+
+	case *expiredNode:
+		log.Info("Resolving expired node in insert()", "owner", t.owner, "offset", n.offset, "size", n.size)
+		rn, err := resolveExpiredNodeData(n)
 		if err != nil {
 			return false, nil, err
 		}
@@ -636,6 +675,18 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		}
 		return true, nn, nil
 
+	case *expiredNode:
+		log.Info("Resolving expired node in delete()", "owner", t.owner, "offset", n.offset, "size", n.size)
+		rn, err := resolveExpiredNodeData(n)
+		if err != nil {
+			return false, nil, err
+		}
+		dirty, nn, err := t.delete(rn, prefix, key)
+		if !dirty || err != nil {
+			return false, rn, err
+		}
+		return true, nn, nil
+
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v (%v)", n, n, key))
 	}
@@ -666,14 +717,24 @@ func copyNode(n node) node {
 		}
 	case hashNode:
 		return n
+	case *expiredNode:
+		return &expiredNode{
+			offset:          n.offset,
+			size:            n.size,
+			cachedHash:      common.CopyBytes(n.cachedHash),
+			archiveResolver: n.archiveResolver,
+		}
 	default:
 		panic(fmt.Sprintf("%T: unknown node type", n))
 	}
 }
 
 func (t *Trie) resolve(n node, prefix []byte) (node, error) {
-	if n, ok := n.(hashNode); ok {
+	switch n := n.(type) {
+	case hashNode:
 		return t.resolveAndTrack(n, prefix)
+	case *expiredNode:
+		return resolveExpiredNodeData(n)
 	}
 	return n, nil
 }
@@ -782,6 +843,58 @@ func (t *Trie) hashRoot() []byte {
 // Witness returns a set containing all trie nodes that have been accessed.
 func (t *Trie) Witness() map[string][]byte {
 	return t.prevalueTracer.Values()
+}
+
+// WalkStats holds statistics from a Walk traversal.
+type WalkStats struct {
+	Leaves          int // Number of leaf nodes visited
+	ExpiredResolved int // Number of expired nodes resolved from archive
+}
+
+// Walk recursively traverses the trie, resolving all nodes including
+// hashNodes and expiredNodes. It calls fn for each leaf found.
+// This triggers hash verification for expired nodes via cachedHash.
+func (t *Trie) Walk(fn func(path []byte, value []byte) error) (WalkStats, error) {
+	return t.walk(t.root, nil, fn)
+}
+
+func (t *Trie) walk(n node, path []byte, fn func([]byte, []byte) error) (WalkStats, error) {
+	switch n := n.(type) {
+	case *shortNode:
+		return t.walk(n.Val, append(append([]byte{}, path...), n.Key...), fn)
+	case *fullNode:
+		var stats WalkStats
+		for i, child := range n.Children[:16] {
+			if child != nil {
+				childStats, err := t.walk(child, append(append([]byte{}, path...), byte(i)), fn)
+				if err != nil {
+					return stats, err
+				}
+				stats.Leaves += childStats.Leaves
+				stats.ExpiredResolved += childStats.ExpiredResolved
+			}
+		}
+		return stats, nil
+	case hashNode:
+		resolved, err := t.resolveAndTrack(n, path)
+		if err != nil {
+			return WalkStats{}, err
+		}
+		return t.walk(resolved, path, fn)
+	case *expiredNode:
+		resolved, err := resolveExpiredNodeData(n)
+		if err != nil {
+			return WalkStats{}, err
+		}
+		childStats, err := t.walk(resolved, path, fn)
+		childStats.ExpiredResolved++
+		return childStats, err
+	case valueNode:
+		return WalkStats{Leaves: 1}, fn(path, []byte(n))
+	case nil:
+		return WalkStats{}, nil
+	}
+	return WalkStats{}, nil
 }
 
 // reset drops the referenced root node and cleans all internal state.

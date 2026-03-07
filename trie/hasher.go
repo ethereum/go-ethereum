@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"sync"
 
@@ -96,6 +97,22 @@ func (h *hasher) hash(n node, force bool) []byte {
 	case hashNode:
 		// hash nodes don't have children, so they're left as were
 		return n
+
+	case *expiredNode:
+		// Return the original subtree hash that was cached when the
+		// expired node was decoded. The parent node references this
+		// hash, so we must return the same value to keep the Merkle
+		// root consistent.
+		if n.cachedHash != nil {
+			return n.cachedHash
+		}
+		// Fallback: hash the marker blob (should not happen in practice
+		// because decodeNodeUnsafe always provides the hash).
+		var buf [1 + 2*8]byte // 17 bytes
+		buf[0] = expiredNodeMarker
+		binary.BigEndian.PutUint64(buf[1:], n.offset)
+		binary.BigEndian.PutUint64(buf[9:], n.size)
+		return h.hashData(buf[:])
 
 	default:
 		panic(fmt.Errorf("unexpected node type, %T", n))
@@ -214,6 +231,12 @@ func (h *hasher) proofHash(original node) []byte {
 		return bytes.Clone(h.encodeShortNode(n))
 	case *fullNode:
 		return bytes.Clone(h.encodeFullNode(n))
+	case *expiredNode:
+		var buf [1 + 2*8]byte
+		buf[0] = expiredNodeMarker
+		binary.BigEndian.PutUint64(buf[1:], n.offset)
+		binary.BigEndian.PutUint64(buf[9:], n.size)
+		return buf[:]
 	default:
 		panic(fmt.Errorf("unexpected node type, %T", original))
 	}
