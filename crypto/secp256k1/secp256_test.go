@@ -130,6 +130,40 @@ func TestSignDeterministic(t *testing.T) {
 	}
 }
 
+func TestSignUnsafe(t *testing.T) {
+	pubkey1, seckey := generateKeyPair()
+	msg := make([]byte, 32)
+
+	sig1, err := Sign(msg, seckey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig2, err := SignUnsafe(msg, seckey, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(sig1, sig2) {
+		t.Fatal("signatures not equal")
+	}
+
+	sig3, err := SignUnsafe(msg, seckey, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if bytes.Equal(sig1, sig3) {
+		t.Fatal("signatures with different count param equal")
+	}
+
+	pubkey2, err := RecoverPubkey(msg, sig3)
+	if err != nil {
+		t.Errorf("recover error: %s", err)
+	}
+	if !bytes.Equal(pubkey1, pubkey2) {
+		t.Errorf("pubkey mismatch: want: %x have: %x", pubkey1, pubkey2)
+	}
+}
+
 func TestRandomMessagesWithSameKey(t *testing.T) {
 	pubkey, seckey := generateKeyPair()
 	keys := func() ([]byte, []byte) {

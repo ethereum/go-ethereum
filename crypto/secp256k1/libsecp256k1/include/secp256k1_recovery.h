@@ -87,7 +87,8 @@ SECP256K1_API int secp256k1_ecdsa_sign_recoverable(
     const unsigned char *msghash32,
     const unsigned char *seckey,
     secp256k1_nonce_function noncefp,
-    const void *ndata
+    const void *ndata,
+    const unsigned int initialcount
 ) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4);
 
 /** Recover an ECDSA public key from a signature.

@@ -51,12 +51,20 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 //
 // The produced signature is in the [R || S || V] format where V is 0 or 1.
 func Sign(digestHash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
+	return SignUnsafe(digestHash, prv, 0)
+}
+
+// SignUnsafe signs a hash with a custom starting counter for nonce derivation.
+// WARNING: This function is unsafe and should only be used for specialized cases
+// like finding low-R signatures or canonical signatures. Improper use can lead
+// to private key exposure. Use Sign for standard signing operations.
+func SignUnsafe(digestHash []byte, prv *ecdsa.PrivateKey, counter uint) (sig []byte, err error) {
 	if len(digestHash) != DigestLength {
 		return nil, fmt.Errorf("hash is required to be exactly %d bytes (%d)", DigestLength, len(digestHash))
 	}
 	seckey := math.PaddedBigBytes(prv.D, prv.Params().BitSize/8)
 	defer zeroBytes(seckey)
-	return secp256k1.Sign(digestHash, seckey)
+	return secp256k1.SignUnsafe(digestHash, seckey, counter)
 }
 
 // VerifySignature checks that the given public key created signature over digest.
