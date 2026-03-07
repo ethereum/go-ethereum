@@ -281,19 +281,31 @@ func TestUDPv4_findnode(t *testing.T) {
 	// check that closest neighbors are returned.
 	expected := test.table.findnodeByID(testTarget.ID(), bucketSize, true)
 	test.packetIn(nil, &v4wire.Findnode{Target: testTarget, Expiration: futureExp})
-	waitNeighbors := func(want []*enode.Node) {
-		test.waitPacketOut(func(p *v4wire.Neighbors, to netip.AddrPort, hash []byte) {
-			if len(p.Nodes) != len(want) {
-				t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), len(want))
-				return
-			}
-			for i, n := range p.Nodes {
-				if n.ID.ID() != want[i].ID() {
-					t.Errorf("result mismatch at %d:\n  got: %v\n  want: %v", i, n, expected.entries[i])
+	deadline := time.Now().Add(1 * time.Minute)
+	var waitNeighbors func([]*enode.Node)
+	waitNeighbors = func(want []*enode.Node) {
+		if time.Now().After(deadline) {
+			t.Fatal("timeout waiting for neighbors response")
+		}
+		test.waitPacketOut(func(p v4wire.Packet, to netip.AddrPort, hash []byte) {
+			switch p := p.(type) {
+			case *v4wire.Ping:
+				waitNeighbors(want)
+			case *v4wire.Neighbors:
+				if len(p.Nodes) != len(want) {
+					t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), len(want))
+					return
 				}
-				if !live[n.ID.ID()] {
-					t.Errorf("result includes dead node %v", n.ID.ID())
+				for i, n := range p.Nodes {
+					if n.ID.ID() != want[i].ID() {
+						t.Errorf("result mismatch at %d:\n  got: %v\n  want: %v", i, n, expected.entries[i])
+					}
+					if !live[n.ID.ID()] {
+						t.Errorf("result includes dead node %v", n.ID.ID())
+					}
 				}
+			default:
+				t.Fatalf("unexpected packet type: %T", p)
 			}
 		})
 	}
