@@ -107,14 +107,7 @@ func (s *stateObject) markSelfdestructed() {
 }
 
 func (s *stateObject) touch() {
-	s.db.journal.append(touchChange{
-		account: s.address,
-	})
-	if s.address == ripemd {
-		// Explicitly put it in the dirty-cache, which is otherwise generated from
-		// flattened journals.
-		s.db.journal.dirty(s.address)
-	}
+	s.db.journal.touchChange(s.address)
 }
 
 // getTrie returns the associated storage trie. The trie will be opened
@@ -194,12 +187,7 @@ func (s *stateObject) SetState(key, value common.Hash) common.Hash {
 		return prev
 	}
 	// New value is different, update and journal the change
-	s.db.journal.append(storageChange{
-		account:   s.address,
-		key:       key,
-		prevvalue: prev,
-		origvalue: origin,
-	})
+	s.db.journal.storageChange(s.address, key, prev, origin)
 	s.setState(key, value, origin)
 	return prev
 }
@@ -379,10 +367,7 @@ func (s *stateObject) AddBalance(amount *big.Int) *big.Int {
 // SetBalance sets the balance for the object, and returns the previous balance.
 func (s *stateObject) SetBalance(amount *big.Int) *big.Int {
 	prev := new(big.Int).Set(s.data.Balance)
-	s.db.journal.append(balanceChange{
-		account: s.address,
-		prev:    new(big.Int).Set(s.data.Balance),
-	})
+	s.db.journal.balanceChange(s.address, s.data.Balance)
 	s.setBalance(amount)
 	return prev
 }
@@ -468,10 +453,7 @@ func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 }
 
 func (s *stateObject) SetNonce(nonce uint64) {
-	s.db.journal.append(nonceChange{
-		account: s.address,
-		prev:    s.data.Nonce,
-	})
+	s.db.journal.nonceChange(s.address, s.data.Nonce)
 	s.setNonce(nonce)
 }
 
