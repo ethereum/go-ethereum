@@ -19,9 +19,17 @@ package filters
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -181,5 +189,153 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	}
 	if len(test7.Topics[2]) != 0 {
 		t.Fatalf("expected 0 topics, got %d topics", len(test7.Topics[2]))
+	}
+}
+
+func TestGetFilterChangesDrainSemanticsLogs(t *testing.T) {
+	t.Parallel()
+
+	var (
+		db           = rawdb.NewMemoryDatabase()
+		backend, sys = newTestFilterSystem(db, Config{})
+		api          = NewFilterAPI(sys)
+	)
+	id, err := api.NewFilter(FilterCriteria{})
+	if err != nil {
+		t.Fatalf("failed to create filter: %v", err)
+	}
+
+	want := &types.Log{
+		Address:     common.HexToAddress("0x1000000000000000000000000000000000000001"),
+		Topics:      []common.Hash{common.HexToHash("0x01")},
+		BlockNumber: 7,
+	}
+	if nsend := backend.logsFeed.Send([]*types.Log{want}); nsend == 0 {
+		t.Fatal("logs event not delivered")
+	}
+
+	var first []*types.Log
+	timeout := time.Now().Add(time.Second)
+	for {
+		changes, err := api.GetFilterChanges(id)
+		if err != nil {
+			t.Fatalf("failed to fetch filter changes: %v", err)
+		}
+		first = changes.([]*types.Log)
+		if len(first) > 0 || time.Now().After(timeout) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(first) != 1 {
+		t.Fatalf("expected first poll to return 1 log, got %d", len(first))
+	}
+	if first[0].Address != want.Address || first[0].BlockNumber != want.BlockNumber {
+		t.Fatalf("unexpected log returned: got address=%s block=%d", first[0].Address.Hex(), first[0].BlockNumber)
+	}
+
+	changes, err := api.GetFilterChanges(id)
+	if err != nil {
+		t.Fatalf("failed to fetch drained changes: %v", err)
+	}
+	second := changes.([]*types.Log)
+	if len(second) != 0 {
+		t.Fatalf("expected second poll to be empty, got %d logs", len(second))
+	}
+}
+
+func TestGetFilterChangesHeadBoundaryIncludesHeadBlock(t *testing.T) {
+	t.Parallel()
+
+	genesis := &core.Genesis{
+		Config:  params.TestChainConfig,
+		BaseFee: big.NewInt(params.InitialBaseFee),
+	}
+	db, chain, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 2, func(i int, gen *core.BlockGen) {})
+	blockchain, err := core.NewBlockChain(db, genesis, ethash.NewFaker(), nil)
+	if err != nil {
+		t.Fatalf("failed to create blockchain: %v", err)
+	}
+	if n, err := blockchain.InsertChain(chain[:1]); err != nil {
+		t.Fatalf("failed to insert block %d: %v", n, err)
+	}
+
+	backend, sys := newTestFilterSystem(db, Config{})
+	api := NewFilterAPI(sys)
+	id := api.NewBlockFilter()
+
+	head := backend.CurrentHeader()
+	if head.Number.Uint64() != chain[0].NumberU64() {
+		t.Fatalf("expected filter creation head %d, got %d", chain[0].NumberU64(), head.Number.Uint64())
+	}
+	if nsend := backend.chainFeed.Send(core.ChainEvent{Header: chain[1].Header()}); nsend == 0 {
+		t.Fatal("chain event not delivered")
+	}
+
+	var hashes []common.Hash
+	timeout := time.Now().Add(time.Second)
+	for {
+		changes, err := api.GetFilterChanges(id)
+		if err != nil {
+			t.Fatalf("failed to fetch filter changes: %v", err)
+		}
+		hashes = changes.([]common.Hash)
+		if len(hashes) > 0 || time.Now().After(timeout) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(hashes) != 1 {
+		t.Fatalf("expected 1 new head hash, got %d", len(hashes))
+	}
+	if hashes[0] != chain[1].Hash() {
+		t.Fatalf("expected head hash %x, got %x", chain[1].Hash(), hashes[0])
+	}
+}
+
+func TestGetFilterChangesDrainSemanticsPendingTx(t *testing.T) {
+	t.Parallel()
+
+	var (
+		db           = rawdb.NewMemoryDatabase()
+		backend, sys = newTestFilterSystem(db, Config{})
+		api          = NewFilterAPI(sys)
+	)
+
+	fullTx := true
+	id := api.NewPendingTransactionFilter(&fullTx)
+
+	tx := types.NewTransaction(0, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil)
+	backend.txFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx}})
+
+	// Poll until the tx arrives.
+	var first []*ethapi.RPCTransaction
+	timeout := time.Now().Add(time.Second)
+	for {
+		changes, err := api.GetFilterChanges(id)
+		if err != nil {
+			t.Fatalf("failed to fetch filter changes: %v", err)
+		}
+		first = changes.([]*ethapi.RPCTransaction)
+		if len(first) > 0 || time.Now().After(timeout) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(first) != 1 {
+		t.Fatalf("expected 1 pending tx, got %d", len(first))
+	}
+	if first[0].Hash != tx.Hash() {
+		t.Fatalf("expected tx hash %x, got %x", tx.Hash(), first[0].Hash)
+	}
+
+	// Second poll must be empty (drain semantics).
+	changes, err := api.GetFilterChanges(id)
+	if err != nil {
+		t.Fatalf("failed to fetch drained changes: %v", err)
+	}
+	second := changes.([]*ethapi.RPCTransaction)
+	if len(second) != 0 {
+		t.Fatalf("expected second poll to be empty, got %d txs", len(second))
 	}
 }
