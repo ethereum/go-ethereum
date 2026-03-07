@@ -1130,6 +1130,22 @@ var (
 		StateSchemeFlag,
 		HttpHeaderFlag,
 	}
+
+	// TraverseStateFlags is the flag group of all state traversal flags.
+	TraverseStateFlags = []cli.Flag{
+		&cli.StringFlag{
+			Name:  "account",
+			Usage: "Account address or hash to traverse storage for (enables account mode)",
+		},
+		&cli.StringFlag{
+			Name:  "start",
+			Usage: "Starting key (account key for state mode, storage key for account mode)",
+		},
+		&cli.StringFlag{
+			Name:  "limit",
+			Usage: "Ending key (account key for state mode, storage key for account mode)",
+		},
+	}
 )
 
 // default account to prefund when running Geth in dev mode
