@@ -619,8 +619,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasCosts, value *
 		// State gas charges must persist for block 2D gas accounting even
 		// though the state is reverted. Only zero regular gas as penalty.
 		isCodeValidation := evm.chainRules.IsAmsterdam &&
-			(errors.Is(err, ErrMaxCodeSizeExceeded) || errors.Is(err, ErrInvalidCode) ||
-				(err == ErrCodeStoreOutOfGas && contract.Gas.TotalStateGasCharged > savedTotalStateGas))
+			(errors.Is(err, ErrMaxCodeSizeExceeded) || errors.Is(err, ErrInvalidCode))
 		if !isRevert {
 			if isCodeValidation {
 				contract.Gas.RegularGas = 0
@@ -663,13 +662,6 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 			}
 		}
 		if !contract.UseGas(createDataGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
-			if evm.chainRules.IsAmsterdam && codeErr == nil {
-				// Valid code that merely ran out of gas: track state gas for
-				// block accounting (EIP-8037).
-				contract.Gas.TotalStateGasCharged += createDataGas.StateGas
-				contract.Gas.RegularGas = 0
-				contract.Gas.StateGas = 0
-			}
 			return ret, ErrCodeStoreOutOfGas
 		}
 	} else {
