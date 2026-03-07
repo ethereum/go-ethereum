@@ -154,16 +154,22 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 	}()
 
 	// Remaining logic needs access to Table internals.
+	var nodeToNotify *enode.Node
+
 	tab.mutex.Lock()
-	defer tab.mutex.Unlock()
 
 	if !resp.didRespond {
 		n.livenessChecks /= 3
 		if n.livenessChecks <= 0 {
-			tab.deleteInBucket(b, n.ID())
+			_, nodeToNotify = tab.deleteInBucket(b, n.ID())
 		} else {
 			tab.log.Debug("Node revalidation failed", "b", b.index, "id", n.ID(), "checks", n.livenessChecks, "q", n.revalList.name)
 			tr.moveToList(&tr.fast, n, now, &tab.rand)
+		}
+		tab.mutex.Unlock()
+		// Send notification outside of mutex to avoid deadlock.
+		if nodeToNotify != nil {
+			tab.nodeFeed.Send(nodeToNotify)
 		}
 		return
 	}
@@ -181,6 +187,8 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 	if !endpointChanged {
 		tr.moveToList(&tr.slow, n, now, &tab.rand)
 	}
+
+	tab.mutex.Unlock()
 }
 
 // moveToList ensures n is in the 'dest' list.
