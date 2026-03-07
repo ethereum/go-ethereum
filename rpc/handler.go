@@ -238,6 +238,11 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			callBuffer.pushResponse(resp)
 			if resp != nil && h.batchResponseMaxSize != 0 {
 				responseBytes += len(resp.Result)
+				if resp.Error != nil {
+					if errData, err := json.Marshal(resp.Error); err == nil {
+						responseBytes += len(errData)
+					}
+				}
 				if responseBytes > h.batchResponseMaxSize {
 					err := &internalServerError{errcodeResponseTooLarge, errMsgResponseTooLarge}
 					callBuffer.respondWithError(cp.ctx, h.conn, err)
