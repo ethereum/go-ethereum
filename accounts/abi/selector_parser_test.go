@@ -28,13 +28,13 @@ func TestParseSelector(t *testing.T) {
 	mkType := func(types ...interface{}) []ArgumentMarshaling {
 		var result []ArgumentMarshaling
 		for i, typeOrComponents := range types {
-			name := fmt.Sprintf("name%d", i)
+			name := fmt.Sprintf("param%d", i)
 			if typeName, ok := typeOrComponents.(string); ok {
-				result = append(result, ArgumentMarshaling{name, typeName, typeName, nil, false})
+				result = append(result, ArgumentMarshaling{name, typeName, "", nil, false})
 			} else if components, ok := typeOrComponents.([]ArgumentMarshaling); ok {
-				result = append(result, ArgumentMarshaling{name, "tuple", "tuple", components, false})
+				result = append(result, ArgumentMarshaling{name, "tuple", "", components, false})
 			} else if components, ok := typeOrComponents.([][]ArgumentMarshaling); ok {
-				result = append(result, ArgumentMarshaling{name, "tuple[]", "tuple[]", components[0], false})
+				result = append(result, ArgumentMarshaling{name, "tuple[]", "", components[0], false})
 			} else {
 				log.Fatalf("unexpected type %T", typeOrComponents)
 			}
