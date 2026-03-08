@@ -14,7 +14,7 @@ require (
 	github.com/cloudflare/cloudflare-go v0.114.0
 	github.com/cockroachdb/pebble v1.1.5
 	github.com/consensys/gnark-crypto v0.18.1
-	github.com/crate-crypto/go-eth-kzg v1.4.0
+	github.com/crate-crypto/go-eth-kzg v1.5.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dchest/siphash v1.2.3
 	github.com/deckarep/golang-set/v2 v2.6.0
