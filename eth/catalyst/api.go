@@ -48,15 +48,32 @@ import (
 )
 
 // Register adds the engine API and related APIs to the full node.
+// If SSZ-REST is enabled in the node config, it also starts the SSZ-REST server.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
+	api := NewConsensusAPI(backend)
+
+	cfg := stack.Config()
+
 	stack.RegisterAPIs([]rpc.API{
 		newTestingAPI(backend),
 		{
 			Namespace:     "engine",
-			Service:       NewConsensusAPI(backend),
+			Service:       api,
 			Authenticated: true,
 		},
 	})
+
+	// Start SSZ-REST server if enabled
+	if cfg.SszRestEnabled {
+		jwtSecret, err := node.ObtainJWTSecret(cfg.JWTSecret)
+		if err != nil {
+			return fmt.Errorf("SSZ-REST: failed to obtain JWT secret: %w", err)
+		}
+		sszServer := NewSszRestServer(api, jwtSecret, cfg.AuthAddr, cfg.SszRestPort)
+		stack.RegisterLifecycle(sszServer)
+		log.Info("[SSZ-REST] Server registered", "addr", cfg.AuthAddr, "port", cfg.SszRestPort)
+	}
+
 	return nil
 }
 
@@ -122,6 +139,7 @@ type ConsensusAPI struct {
 
 	forkchoiceLock sync.Mutex // Lock for the forkChoiceUpdated method
 	newPayloadLock sync.Mutex // Lock for the NewPayload method
+
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
@@ -1078,14 +1096,19 @@ func (api *ConsensusAPI) checkFork(timestamp uint64, forks ...forks.Fork) bool {
 
 // ExchangeCapabilities returns the current methods provided by this node.
 func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
+	// Methods that should not be advertised via V1 capabilities
+	skip := map[string]bool{
+		"ExchangeCapabilities": true,
+	}
 	valueT := reflect.TypeOf(api)
 	caps := make([]string, 0, valueT.NumMethod())
 	for i := 0; i < valueT.NumMethod(); i++ {
-		name := []rune(valueT.Method(i).Name)
-		if string(name) == "ExchangeCapabilities" {
+		name := valueT.Method(i).Name
+		if skip[name] {
 			continue
 		}
-		caps = append(caps, "engine_"+string(unicode.ToLower(name[0]))+string(name[1:]))
+		runes := []rune(name)
+		caps = append(caps, "engine_"+string(unicode.ToLower(runes[0]))+string(runes[1:]))
 	}
 	return caps
 }
