@@ -145,7 +145,16 @@ func (c *Contract) RefundGas(gas GasCosts, logger *tracing.Hooks, reason tracing
 	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
 		logger.OnGasChange(c.Gas.RegularGas, c.Gas.RegularGas+gas.RegularGas, reason)
 	}
-	c.Gas.Add(gas)
+	c.Gas.RegularGas += gas.RegularGas
+	c.Gas.StateGas = gas.StateGas
+	/*
+		if c.Gas.StateGas < gas.StateGasCharged {
+			// We overcharged StateGas, during reverts we need to add back to regular gas
+			missing := c.Gas.StateGasCharged - c.Gas.StateGas
+			c.Gas.RegularGas += missing
+		}
+	*/
+	c.Gas.StateGasCharged += gas.StateGasCharged
 }
 
 // Address returns the contracts address

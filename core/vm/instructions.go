@@ -17,7 +17,6 @@
 package vm
 
 import (
-	"errors"
 	"math"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -674,13 +673,9 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// reuse size int for stackvalue
 	stackvalue := size
 
-	// Pass caller's state gas (reservoir) to child and zero it out to avoid
-	// double-counting when the unused portion is refunded on return.
-	stateGas := scope.Contract.Gas.StateGas
-	scope.Contract.Gas.StateGas = 0
 	scope.Contract.UseGas(GasCosts{RegularGas: gas.RegularGas}, evm.Config.Tracer, tracing.GasChangeCallContractCreation)
 
-	res, addr, returnGas, suberr := evm.Create(scope.Contract.Address(), input, GasCosts{RegularGas: gas.RegularGas, StateGas: stateGas}, &value)
+	res, addr, returnGas, suberr := evm.Create(scope.Contract.Address(), input, GasCosts{RegularGas: gas.RegularGas, StateGas: scope.Contract.Gas.StateGas}, &value)
 	// Push item on the stack based on the returned error. If the ruleset is
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
@@ -694,22 +689,6 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	}
 	scope.Stack.push(&stackvalue)
 
-	// For inner CREATEs that fail code validation (EIP-7954 + EIP-8037):
-	// the state was reverted so no state growth occurred. Don't propagate
-	// the code storage state gas to the parent's block gas accounting.
-	// Restore the parent's state gas reservoir since it was not consumed.
-	if evm.chainRules.IsAmsterdam && (errors.Is(suberr, ErrMaxCodeSizeExceeded) || errors.Is(suberr, ErrInvalidCode)) {
-		returnGas.TotalStateGasCharged = 0
-		returnGas.RevertedStateGasSpill = 0
-		returnGas.StateGas = stateGas
-	}
-	// On address collision, child's regular gas is consumed (not returned).
-	// Track as CollisionConsumedGas so block 2D accounting is unaffected
-	// while the user still pays for the consumed gas (not refunded).
-	if evm.chainRules.IsAmsterdam && errors.Is(suberr, ErrContractAddressCollision) {
-		returnGas.CollisionConsumedGas += returnGas.RegularGas
-		returnGas.RegularGas = 0
-	}
 	scope.Contract.RefundGas(returnGas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	if suberr == ErrExecutionReverted {
@@ -744,14 +723,10 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		}
 	}
 
-	// Pass caller's state gas (reservoir) to child and zero it out to avoid
-	// double-counting when the unused portion is refunded on return.
-	stateGas := scope.Contract.Gas.StateGas
-	scope.Contract.Gas.StateGas = 0
 	scope.Contract.UseGas(GasCosts{RegularGas: gas.RegularGas}, evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
 	// reuse size int for stackvalue
 	stackvalue := size
-	res, addr, returnGas, suberr := evm.Create2(scope.Contract.Address(), input, GasCosts{RegularGas: gas.RegularGas, StateGas: stateGas},
+	res, addr, returnGas, suberr := evm.Create2(scope.Contract.Address(), input, GasCosts{RegularGas: gas.RegularGas, StateGas: scope.Contract.Gas.StateGas},
 		&endowment, &salt)
 	// Push item on the stack based on the returned error.
 	if suberr != nil {
@@ -761,22 +736,6 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	}
 	scope.Stack.push(&stackvalue)
 
-	// For inner CREATEs that fail code validation (EIP-7954 + EIP-8037):
-	// the state was reverted so no state growth occurred. Don't propagate
-	// the code storage state gas to the parent's block gas accounting.
-	// Restore the parent's state gas reservoir since it was not consumed.
-	if evm.chainRules.IsAmsterdam && (errors.Is(suberr, ErrMaxCodeSizeExceeded) || errors.Is(suberr, ErrInvalidCode)) {
-		returnGas.TotalStateGasCharged = 0
-		returnGas.RevertedStateGasSpill = 0
-		returnGas.StateGas = stateGas
-	}
-	// On address collision, child's regular gas is consumed (not returned).
-	// Track as CollisionConsumedGas so block 2D accounting is unaffected
-	// while the user still pays for the consumed gas (not refunded).
-	if evm.chainRules.IsAmsterdam && errors.Is(suberr, ErrContractAddressCollision) {
-		returnGas.CollisionConsumedGas += returnGas.RegularGas
-		returnGas.RegularGas = 0
-	}
 	scope.Contract.RefundGas(returnGas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	if suberr == ErrExecutionReverted {
@@ -805,11 +764,7 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if !value.IsZero() {
 		gas += params.CallStipend
 	}
-	// Pass caller's state gas (reservoir) to callee and zero it out to avoid
-	// double-counting when the unused portion is refunded on return.
-	stateGas := scope.Contract.Gas.StateGas
-	scope.Contract.Gas.StateGas = 0
-	ret, returnGas, err := evm.Call(scope.Contract.Address(), toAddr, args, GasCosts{RegularGas: gas, StateGas: stateGas}, &value)
+	ret, returnGas, err := evm.Call(scope.Contract.Address(), toAddr, args, GasCosts{RegularGas: gas, StateGas: scope.Contract.Gas.StateGas}, &value)
 
 	if err != nil {
 		temp.Clear()
@@ -843,9 +798,7 @@ func opCallCode(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		gas += params.CallStipend
 	}
 
-	stateGas := scope.Contract.Gas.StateGas
-	scope.Contract.Gas.StateGas = 0
-	ret, returnGas, err := evm.CallCode(scope.Contract.Address(), toAddr, args, GasCosts{RegularGas: gas, StateGas: stateGas}, &value)
+	ret, returnGas, err := evm.CallCode(scope.Contract.Address(), toAddr, args, GasCosts{RegularGas: gas, StateGas: scope.Contract.Gas.StateGas}, &value)
 	if err != nil {
 		temp.Clear()
 	} else {
@@ -875,7 +828,6 @@ func opDelegateCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
 	stateGas := scope.Contract.Gas.StateGas
-	scope.Contract.Gas.StateGas = 0
 	ret, returnGas, err := evm.DelegateCall(scope.Contract.Caller(), scope.Contract.Address(), toAddr, args, GasCosts{RegularGas: gas, StateGas: stateGas}, scope.Contract.value)
 	if err != nil {
 		temp.Clear()
@@ -906,7 +858,6 @@ func opStaticCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
 	stateGas := scope.Contract.Gas.StateGas
-	scope.Contract.Gas.StateGas = 0
 	ret, returnGas, err := evm.StaticCall(scope.Contract.Address(), toAddr, args, GasCosts{RegularGas: gas, StateGas: stateGas})
 	if err != nil {
 		temp.Clear()

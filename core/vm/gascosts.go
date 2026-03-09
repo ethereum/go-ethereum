@@ -6,25 +6,8 @@ type GasCosts struct {
 	RegularGas uint64
 	StateGas   uint64
 
-	// TotalStateGasCharged tracks the cumulative state gas charged during
-	// execution, including gas that spilled from the reservoir to regular gas.
-	// This is needed for EIP-8037 block gas accounting where the state gas
-	// dimension counts ALL state creation charges, not just reservoir consumption.
-	TotalStateGasCharged uint64
-
-	// RevertedStateGasSpill tracks state gas that was charged from regular gas
-	// (spilled) during execution of a call that subsequently reverted. When a
-	// call fails, its state changes are undone, but the regular gas was already
-	// consumed. Block gas accounting must exclude this amount from the regular
-	// gas dimension since it was for state operations that didn't persist.
-	// This gas is refunded to the user (invisible to both block and receipt).
-	RevertedStateGasSpill uint64
-
-	// CollisionConsumedGas tracks regular gas consumed on CREATE/CREATE2 address
-	// collision. On collision, the child's regular gas is consumed (user pays)
-	// but must be excluded from block regular gas accounting to preserve 2D
-	// block gas semantics. Unlike RevertedStateGasSpill, this is NOT refunded.
-	CollisionConsumedGas uint64
+	// StateGasCharged tracks the cumulative state gas charged during execution.
+	StateGasCharged uint64
 }
 
 func (g GasCosts) Max() uint64 {
@@ -55,7 +38,7 @@ func (g GasCosts) Underflow(b GasCosts) bool {
 // Sub doesn't check for underflows
 func (g *GasCosts) Sub(b GasCosts) {
 	g.RegularGas -= b.RegularGas
-	g.TotalStateGasCharged += b.StateGas
+	g.StateGasCharged += b.StateGas
 	if b.StateGas > g.StateGas {
 		diff := b.StateGas - g.StateGas
 		g.StateGas = 0
@@ -69,30 +52,7 @@ func (g *GasCosts) Sub(b GasCosts) {
 func (g *GasCosts) Add(b GasCosts) {
 	g.RegularGas += b.RegularGas
 	g.StateGas += b.StateGas
-	g.TotalStateGasCharged += b.TotalStateGasCharged
-	g.RevertedStateGasSpill += b.RevertedStateGasSpill
-	g.CollisionConsumedGas += b.CollisionConsumedGas
-}
-
-// RevertStateGas handles state gas accounting when a call reverts (EIP-8037).
-// It computes how much state gas was charged from regular gas (spill) during the
-// call, and either returns it for REVERT errors or tracks it for non-REVERT errors.
-func (g *GasCosts) RevertStateGas(savedTotalStateGas, savedStateGas uint64, isRevert bool) {
-	chargedDuringCall := g.TotalStateGasCharged - savedTotalStateGas
-	fromReservoir := savedStateGas - g.StateGas
-	spilledFromRegular := chargedDuringCall - fromReservoir
-
-	if isRevert {
-		// REVERT: return the spilled state gas to regular gas since the caller
-		// keeps unused gas and state operations were undone.
-		g.RegularGas += spilledFromRegular
-	} else {
-		// Non-REVERT: regular gas is zeroed, but block accounting must exclude
-		// the spill from the regular gas dimension.
-		g.RevertedStateGasSpill += spilledFromRegular
-	}
-	g.TotalStateGasCharged = savedTotalStateGas
-	g.StateGas = savedStateGas
+	g.StateGasCharged += b.StateGasCharged
 }
 
 func (g GasCosts) String() string {

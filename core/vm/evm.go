@@ -257,8 +257,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		return nil, gas, ErrInsufficientBalance
 	}
 	snapshot := evm.StateDB.Snapshot()
-	savedTotalStateGas := gas.TotalStateGasCharged
-	savedStateGas := gas.StateGas
+	stateGas := gas.StateGas
 
 	p, isPrecompile := evm.precompile(addr)
 	if !evm.StateDB.Exist(addr) {
@@ -323,13 +322,8 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			}
 			gas.RegularGas = 0
 		}
-		// State changes are rolled back on any error, so state gas charges
-		// from the reverted execution should not count toward block accounting.
-		// Also restore the state gas reservoir since state creation was undone.
-		gas.RevertStateGas(savedTotalStateGas, savedStateGas, isRevert)
-		// TODO: consider clearing up unused snapshots:
-		//} else {
-		//	evm.StateDB.DiscardSnapshot(snapshot)
+		gas.StateGasCharged = 0
+		gas.StateGas = stateGas
 	}
 	return ret, gas, err
 }
@@ -361,8 +355,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 		return nil, gas, ErrInsufficientBalance
 	}
 	var snapshot = evm.StateDB.Snapshot()
-	savedTotalStateGas := gas.TotalStateGasCharged
-	savedStateGas := gas.StateGas
+	stateGas := gas.StateGas
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -388,7 +381,8 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 			}
 			gas.RegularGas = 0
 		}
-		gas.RevertStateGas(savedTotalStateGas, savedStateGas, isRevert)
+		gas.StateGasCharged = 0
+		gas.StateGas = stateGas
 	}
 	return ret, gas, err
 }
@@ -412,8 +406,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 		return nil, gas, ErrDepth
 	}
 	var snapshot = evm.StateDB.Snapshot()
-	savedTotalStateGas := gas.TotalStateGasCharged
-	savedStateGas := gas.StateGas
+	stateGas := gas.StateGas
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -440,7 +433,8 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 			}
 			gas.RegularGas = 0
 		}
-		gas.RevertStateGas(savedTotalStateGas, savedStateGas, isRevert)
+		gas.StateGasCharged = 0
+		gas.StateGas = stateGas
 	}
 	return ret, gas, err
 }
@@ -467,8 +461,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	// then certain tests start failing; stRevertTest/RevertPrecompiledTouchExactOOG.json.
 	// We could change this, but for now it's left for legacy reasons
 	var snapshot = evm.StateDB.Snapshot()
-	savedTotalStateGas := gas.TotalStateGasCharged
-	savedStateGas := gas.StateGas
+	stateGas := gas.StateGas
 
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
@@ -503,7 +496,8 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 			}
 			gas.RegularGas = 0
 		}
-		gas.RevertStateGas(savedTotalStateGas, savedStateGas, isRevert)
+		gas.StateGasCharged = 0
+		gas.StateGas = stateGas
 	}
 	return ret, gas, err
 }
@@ -573,8 +567,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasCosts, value *
 	// It might be possible the contract code is deployed to a pre-existent
 	// account with non-zero balance.
 	snapshot := evm.StateDB.Snapshot()
-	savedTotalStateGas := gas.TotalStateGasCharged
-	savedStateGas := gas.StateGas
+	stateGas := gas.StateGas
 
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
@@ -613,26 +606,13 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasCosts, value *
 	ret, err = evm.initNewContract(contract, address)
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		isRevert := err == ErrExecutionReverted
-		// Post-Amsterdam code validation errors (ErrMaxCodeSizeExceeded,
-		// ErrInvalidCode): the init code ran and code storage gas was charged.
-		// State gas charges must persist for block 2D gas accounting even
-		// though the state is reverted. Only zero regular gas as penalty.
-		isCodeValidation := evm.chainRules.IsAmsterdam &&
-			(errors.Is(err, ErrMaxCodeSizeExceeded) || errors.Is(err, ErrInvalidCode))
-		if !isRevert {
-			if isCodeValidation {
-				contract.Gas.RegularGas = 0
-			} else {
-				contract.UseGas(contract.Gas, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
-			}
-		}
-		if !isCodeValidation {
-			// State changes are rolled back, so state gas charges from the
-			// reverted execution should not count toward block accounting.
-			// Also restore the state gas reservoir since state creation was undone.
-			contract.Gas.RevertStateGas(savedTotalStateGas, savedStateGas, isRevert)
-		}
+
+		contract.UseGas(contract.Gas, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
+		// State changes are rolled back, so state gas charges from the
+		// reverted execution should not count toward block accounting.
+		// Also restore the state gas reservoir since state creation was undone.
+		contract.Gas.StateGasCharged = 0
+		contract.Gas.StateGas = stateGas
 	}
 	return ret, address, contract.Gas, err
 }
