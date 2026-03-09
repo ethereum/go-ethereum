@@ -7,6 +7,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/nomttrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -33,6 +35,37 @@ func newBintrie(t testing.TB) *bintrie.BinaryTrie {
 func newNomtTrie(t testing.TB) *nomttrie.NomtTrie {
 	t.Helper()
 	diskdb := rawdb.NewMemoryDatabase()
+	backend := nomtdb.New(diskdb, nil)
+	t.Cleanup(func() { backend.Close() })
+
+	nt, err := nomttrie.New(common.Hash{}, backend)
+	require.NoError(t, err)
+	return nt
+}
+
+// newPebbleDB creates a PebbleDB-backed ethdb.Database in a temp directory.
+func newPebbleDB(t testing.TB) ethdb.Database {
+	t.Helper()
+	pdb, err := pebble.New(t.TempDir(), 128, 128, "", false)
+	require.NoError(t, err)
+	db := rawdb.NewDatabase(pdb)
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
+func newBintrieDisk(t testing.TB) *bintrie.BinaryTrie {
+	t.Helper()
+	diskdb := newPebbleDB(t)
+	trieDB := triedb.NewDatabase(diskdb, nil)
+	t.Cleanup(func() { trieDB.Close() })
+	bt, err := bintrie.NewBinaryTrie(types.EmptyRootHash, trieDB)
+	require.NoError(t, err)
+	return bt
+}
+
+func newNomtTrieDisk(t testing.TB) *nomttrie.NomtTrie {
+	t.Helper()
+	diskdb := newPebbleDB(t)
 	backend := nomtdb.New(diskdb, nil)
 	t.Cleanup(func() { backend.Close() })
 
@@ -387,6 +420,97 @@ func BenchmarkBlockWorkload(b *testing.B) {
 
 	b.Run("nomt", func(b *testing.B) {
 		nt := newNomtTrie(b)
+		for _, op := range blocks[0] {
+			applyOpSingleNomt(b, nt, op)
+		}
+		nt.Hash()
+
+		b.ResetTimer()
+		for range b.N {
+			for _, op := range workload {
+				applyOpSingleNomt(b, nt, op)
+			}
+			nt.Hash()
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Benchmarks (PebbleDB-backed)
+// ---------------------------------------------------------------------------
+
+func BenchmarkHashDisk(b *testing.B) {
+	for _, size := range []int{100, 1000, 10000} {
+		b.Run(fmt.Sprintf("size=%d", size), func(b *testing.B) {
+			cfg := StateGenConfig{
+				NumAccounts:  size,
+				NumContracts: 0,
+				MinSlots:     0,
+				MaxSlots:     0,
+				CodeSize:     0,
+				Distribution: Uniform,
+				Seed:         77,
+			}
+			blocks := GenerateBlocks(cfg)
+
+			b.Run("bintrie", func(b *testing.B) {
+				bt := newBintrieDisk(b)
+				for _, op := range blocks[0] {
+					_ = bt.UpdateAccount(op.Address, op.Account, op.CodeLen)
+				}
+				bt.Hash()
+
+				b.ResetTimer()
+				for range b.N {
+					op := blocks[0][0]
+					op.Account.Nonce++
+					_ = bt.UpdateAccount(op.Address, op.Account, op.CodeLen)
+					bt.Hash()
+				}
+			})
+
+			b.Run("nomt", func(b *testing.B) {
+				nt := newNomtTrieDisk(b)
+				for _, op := range blocks[0] {
+					_ = nt.UpdateAccount(op.Address, op.Account, op.CodeLen)
+				}
+				nt.Hash()
+
+				b.ResetTimer()
+				for range b.N {
+					op := blocks[0][0]
+					op.Account.Nonce++
+					_ = nt.UpdateAccount(op.Address, op.Account, op.CodeLen)
+					nt.Hash()
+				}
+			})
+		})
+	}
+}
+
+func BenchmarkBlockWorkloadDisk(b *testing.B) {
+	cfg := smallConfig
+	blocks := GenerateBlocks(cfg)
+	workload := blocks[1]
+
+	b.Run("bintrie", func(b *testing.B) {
+		bt := newBintrieDisk(b)
+		for _, op := range blocks[0] {
+			applyOpSingle(b, bt, op)
+		}
+		bt.Hash()
+
+		b.ResetTimer()
+		for range b.N {
+			for _, op := range workload {
+				applyOpSingle(b, bt, op)
+			}
+			bt.Hash()
+		}
+	})
+
+	b.Run("nomt", func(b *testing.B) {
+		nt := newNomtTrieDisk(b)
 		for _, op := range blocks[0] {
 			applyOpSingleNomt(b, nt, op)
 		}
