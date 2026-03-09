@@ -85,11 +85,14 @@ func (al accessList) equal(other accessList) bool {
 func (al accessList) accessList() types.AccessList {
 	acl := make(types.AccessList, 0, len(al))
 	for addr, slots := range al {
-		tuple := types.AccessTuple{Address: addr, StorageKeys: []common.Hash{}}
-		for slot := range slots {
-			tuple.StorageKeys = append(tuple.StorageKeys, slot)
-		}
 		keys := slices.SortedFunc(maps.Keys(slots), common.Hash.Cmp)
+		// Ensure keys is never nil to avoid JSON serialization issues.
+		// When slots is empty, slices.SortedFunc returns nil, but JSON marshaling
+		// will serialize nil slice as null instead of [], which breaks clients
+		// that expect storageKeys to always be an array.
+		if keys == nil {
+			keys = []common.Hash{}
+		}
 		acl = append(acl, types.AccessTuple{Address: addr, StorageKeys: keys})
 	}
 	slices.SortFunc(acl, func(a, b types.AccessTuple) int { return a.Address.Cmp(b.Address) })
