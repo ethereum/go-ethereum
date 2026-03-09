@@ -17,7 +17,14 @@ type GasCosts struct {
 	// call fails, its state changes are undone, but the regular gas was already
 	// consumed. Block gas accounting must exclude this amount from the regular
 	// gas dimension since it was for state operations that didn't persist.
+	// This gas is refunded to the user (invisible to both block and receipt).
 	RevertedStateGasSpill uint64
+
+	// CollisionConsumedGas tracks regular gas consumed on CREATE/CREATE2 address
+	// collision. On collision, the child's regular gas is consumed (user pays)
+	// but must be excluded from block regular gas accounting to preserve 2D
+	// block gas semantics. Unlike RevertedStateGasSpill, this is NOT refunded.
+	CollisionConsumedGas uint64
 }
 
 func (g GasCosts) Max() uint64 {
@@ -64,6 +71,7 @@ func (g *GasCosts) Add(b GasCosts) {
 	g.StateGas += b.StateGas
 	g.TotalStateGasCharged += b.TotalStateGasCharged
 	g.RevertedStateGasSpill += b.RevertedStateGasSpill
+	g.CollisionConsumedGas += b.CollisionConsumedGas
 }
 
 // RevertStateGas handles state gas accounting when a call reverts (EIP-8037).

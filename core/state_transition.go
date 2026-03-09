@@ -603,12 +603,22 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	var receiptGasUsed uint64
 	if rules.IsAmsterdam {
 		receiptGasUsed = msg.GasLimit - st.gasRemaining.RegularGas - st.gasRemaining.StateGas - st.stateGasRefund
+		// On successful execution, refund regular gas that was consumed for
+		// state operations in child calls that subsequently reverted. This gas
+		// paid for state growth that didn't persist, so the user shouldn't pay.
+		// On failed execution (exceptional halt), all gas is consumed — no refund.
+		if vmerr == nil {
+			receiptGasUsed -= st.gasRemaining.RevertedStateGasSpill
+		}
 	}
 
 	// Return gas to the user
 	if rules.IsAmsterdam {
 		// In Amsterdam, return regular gas + unspent state gas reservoir + state gas refund.
 		gasReturn := st.gasRemaining.RegularGas + st.gasRemaining.StateGas + st.stateGasRefund
+		if vmerr == nil {
+			gasReturn += st.gasRemaining.RevertedStateGasSpill
+		}
 		remaining := uint256.NewInt(gasReturn)
 		remaining.Mul(remaining, uint256.MustFromBig(st.msg.GasPrice))
 		st.state.AddBalance(st.msg.From, remaining, tracing.BalanceIncreaseGasReturn)
@@ -785,7 +795,7 @@ func (st *stateTransition) blockGasUsed(intrinsicGas, execGasStart vm.GasCosts) 
 	// This gas was consumed from the regular pool but was for state operations
 	// that didn't persist, so it shouldn't count in either dimension for block
 	// accounting (invisible to the block). This matches nethermind's approach.
-	execRegularUsed := totalExecUsed - execStateUsed - st.gasRemaining.RevertedStateGasSpill
+	execRegularUsed := totalExecUsed - execStateUsed - st.gasRemaining.RevertedStateGasSpill - st.gasRemaining.CollisionConsumedGas
 
 	txRegular := intrinsicGas.RegularGas + execRegularUsed
 	txState := intrinsicGas.StateGas + execStateUsed - st.stateGasRefund
