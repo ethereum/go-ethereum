@@ -703,6 +703,12 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		returnGas.RevertedStateGasSpill = 0
 		returnGas.StateGas = stateGas
 	}
+	// On address collision, child's regular gas is consumed (not returned).
+	// Track as RevertedStateGasSpill so block 2D accounting is unaffected.
+	if evm.chainRules.IsAmsterdam && errors.Is(suberr, ErrContractAddressCollision) {
+		returnGas.RevertedStateGasSpill += returnGas.RegularGas
+		returnGas.RegularGas = 0
+	}
 	scope.Contract.RefundGas(returnGas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	if suberr == ErrExecutionReverted {
@@ -762,6 +768,12 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		returnGas.TotalStateGasCharged = 0
 		returnGas.RevertedStateGasSpill = 0
 		returnGas.StateGas = stateGas
+	}
+	// On address collision, child's regular gas is consumed (not returned).
+	// Track as RevertedStateGasSpill so block 2D accounting is unaffected.
+	if evm.chainRules.IsAmsterdam && errors.Is(suberr, ErrContractAddressCollision) {
+		returnGas.RevertedStateGasSpill += returnGas.RegularGas
+		returnGas.RegularGas = 0
 	}
 	scope.Contract.RefundGas(returnGas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
