@@ -47,7 +47,7 @@ type encodingType int
 const (
 	encNone encodingType = iota
 	encJSON
-	encJSONPremarshaled
+	encJSONCustom
 	encRLP
 )
 
@@ -57,8 +57,8 @@ func (e encodingType) String() string {
 		return "none"
 	case encJSON:
 		return "json"
-	case encJSONPremarshaled:
-		return "json_premarshaled"
+	case encJSONCustom:
+		return "json_custom"
 	case encRLP:
 		return "rlp"
 	default:
@@ -66,7 +66,7 @@ func (e encodingType) String() string {
 	}
 }
 
-var encodingTypes = []encodingType{encNone, encJSON, encJSONPremarshaled, encRLP}
+var encodingTypes = []encodingType{encNone, encJSON, encJSONCustom, encRLP}
 
 // benchEncode encodes the value using the specified encoding type.
 // It fails the benchmark if encoding fails.
@@ -78,14 +78,14 @@ func benchEncode(b *testing.B, enc encodingType, v any) {
 		if err != nil {
 			b.Fatalf("JSON marshal failed: %v", err)
 		}
-	case encJSONPremarshaled:
-		if pm, ok := v.(rpc.JSONPremarshaled); ok {
-			_, err = pm.PremarshaledJSON()
+	case encJSONCustom:
+		if m, ok := v.(json.Marshaler); ok {
+			_, err = m.MarshalJSON()
 		} else {
 			_, err = json.Marshal(v)
 		}
 		if err != nil {
-			b.Fatalf("JSON premarshaled marshal failed: %v", err)
+			b.Fatalf("JSON MarshalJSON failed: %v", err)
 		}
 	case encRLP:
 		_, err = rlp.EncodeToBytes(v)
