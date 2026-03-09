@@ -295,6 +295,21 @@ func makeCallVariantGasCall(oldCalculatorStateful, oldCalculatorStateless gasFun
 			}
 		}
 
+		// EIP-8037: Charge state gas for new account creation BEFORE the 63/64
+		// child gas allocation. State gas that spills from an empty reservoir to
+		// regular gas must reduce the gas available for callGasTemp, otherwise
+		// the Underflow check in UseGas will fail when the spillover exceeds the
+		// tiny 1/64 remainder after child gas allocation.
+		var stateGasCharged uint64
+		if evm.chainRules.IsAmsterdam && oldStateful.StateGas > 0 {
+			stateGasCharged = oldStateful.StateGas
+			stateGasCost := GasCosts{StateGas: stateGasCharged}
+			if contract.Gas.Underflow(stateGasCost) {
+				return GasCosts{}, ErrOutOfGas
+			}
+			contract.Gas.Sub(stateGasCost)
+		}
+
 		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas.RegularGas, eip150BaseGas.RegularGas, stack.Back(0))
 		if err != nil {
 			return GasCosts{}, err
@@ -331,6 +346,13 @@ func makeCallVariantGasCall(oldCalculatorStateful, oldCalculatorStateless gasFun
 			return GasCosts{}, ErrGasUintOverflow
 		}
 
-		return GasCosts{RegularGas: totalCost, StateGas: oldStateful.StateGas}, nil
+		// If state gas was already charged directly (Amsterdam), don't include
+		// it in the returned cost — it would be double-charged by the
+		// interpreter's UseGas/Sub which increments TotalStateGasCharged again.
+		returnedStateGas := oldStateful.StateGas
+		if stateGasCharged > 0 {
+			returnedStateGas = 0
+		}
+		return GasCosts{RegularGas: totalCost, StateGas: returnedStateGas}, nil
 	}
 }
