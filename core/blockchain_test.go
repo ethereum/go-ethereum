@@ -166,7 +166,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			blockchain.reportBadBlock(block, res, err)
 			return err
 		}
-		err = blockchain.validator.ValidateState(block, statedb, res, false)
+		err = blockchain.validator.ValidateState(block, statedb, res, true)
 		if err != nil {
 			blockchain.reportBadBlock(block, res, err)
 			return err
@@ -3866,7 +3866,8 @@ func TestTransientStorageReset(t *testing.T) {
 			Data:     initCode,
 		})
 		nonce++
-		b.AddTxWithVMConfig(tx, vmConfig)
+		bc := &BlockChain{chainConfig: gspec.Config}
+		b.AddTxWithVMConfig(bc, tx, vmConfig)
 
 		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{
 			Nonce:    nonce,
@@ -3874,7 +3875,7 @@ func TestTransientStorageReset(t *testing.T) {
 			Gas:      100000,
 			To:       &destAddress,
 		})
-		b.AddTxWithVMConfig(tx, vmConfig)
+		b.AddTxWithVMConfig(bc, tx, vmConfig)
 		nonce++
 	})
 

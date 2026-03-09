@@ -480,6 +480,72 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 	}
 }
 
+// UpdateBatch updates a batch of entries concurrently.
+func (t *Trie) UpdateBatch(keys [][]byte, values [][]byte) error {
+	// Short circuit if the trie is already committed and unusable.
+	if t.committed {
+		return ErrCommitted
+	}
+	if len(keys) != len(values) {
+		return fmt.Errorf("keys and values length mismatch: %d != %d", len(keys), len(values))
+	}
+	// Insert the entries sequentially if there are not too many
+	// trie nodes in the trie.
+	fn, ok := t.root.(*fullNode)
+
+	if !ok || len(keys) < 4 { // TODO(rjl493456442) the parallelism threshold should be twisted
+		for i, key := range keys {
+			err := t.Update(key, values[i])
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	var (
+		ikeys = make(map[byte][][]byte)
+		ivals = make(map[byte][][]byte)
+		eg    errgroup.Group
+	)
+	for i, key := range keys {
+		hkey := keybytesToHex(key)
+		ikeys[hkey[0]] = append(ikeys[hkey[0]], hkey)
+		ivals[hkey[0]] = append(ivals[hkey[0]], values[i])
+	}
+	if len(keys) > 0 {
+		fn.flags = t.newFlag()
+	}
+	for p, k := range ikeys {
+		pos := p
+		ks := k
+		eg.Go(func() error {
+			vs := ivals[pos]
+			for i, k := range ks {
+				if len(vs[i]) != 0 {
+					_, n, err := t.insert(fn.Children[pos], []byte{pos}, k[1:], valueNode(vs[i]))
+					if err != nil {
+						return err
+					}
+					fn.Children[pos] = n
+				} else {
+					_, n, err := t.delete(fn.Children[pos], []byte{pos}, k[1:])
+					if err != nil {
+						return err
+					}
+					fn.Children[pos] = n
+				}
+			}
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+	t.unhashed += len(keys)
+	t.uncommitted += len(keys)
+	return nil
+}
+
 // MustDelete is a wrapper of Delete and will omit any encountered error but
 // just print out an error message.
 func (t *Trie) MustDelete(key []byte) {

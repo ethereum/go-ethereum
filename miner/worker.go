@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -70,7 +71,8 @@ type environment struct {
 	sidecars []*types.BlobTxSidecar
 	blobs    int
 
-	witness *stateless.Witness
+	witness    *stateless.Witness
+	accessList bal.ConstructionBlockAccessList
 }
 
 // txFits reports whether the transaction fits into the block size limit.
@@ -174,7 +176,10 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 	}
 
 	// Collect consensus-layer requests if Prague is enabled.
-	var requests [][]byte
+	var (
+		requests [][]byte
+		postMut  = make(bal.StateMutations)
+	)
 	if miner.chainConfig.IsPrague(work.header.Number, work.header.Time) {
 		requests = [][]byte{}
 		// EIP-6110 deposits
@@ -182,12 +187,22 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 			return &newPayloadResult{err: err}
 		}
 		// EIP-7002
-		if err := core.ProcessWithdrawalQueue(&requests, work.evm); err != nil {
+		mut, err := core.ProcessWithdrawalQueue(&requests, work.evm)
+		if err != nil {
 			return &newPayloadResult{err: err}
 		}
+
+		postMut.Merge(mut)
 		// EIP-7251 consolidations
-		if err := core.ProcessConsolidationQueue(&requests, work.evm); err != nil {
+		mut, err = core.ProcessConsolidationQueue(&requests, work.evm)
+		if err != nil {
 			return &newPayloadResult{err: err}
+		}
+		postMut.Merge(mut)
+
+		if work.accessList != nil {
+			work.accessList.AccumulateMutations(postMut, uint16(work.tcount)+1)
+			work.accessList.AccumulateReads(work.state.Reader().(state.StateReaderTracker).GetStateAccessList())
 		}
 	}
 	if requests != nil {
@@ -195,10 +210,30 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 		work.header.RequestsHash = &reqHash
 	}
 
-	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts)
+	// set the block access list on the body after the block has finished executing
+	// but before the header hash is computed (in FinalizeAndAssemble).
+	//
+	// I considered trying to instantiate the beacon consensus engine with a tracer.
+	// however, the BAL tracer instance is used once per block, while the engine object
+	// lives for the entire time the client is running.
+	var onBlockFinalization func(mutations bal.StateMutations) *bal.BlockAccessList
+	if miner.chainConfig.IsAmsterdam(work.header.Number, work.header.Time) {
+		onBlockFinalization = func(withdrawalMut bal.StateMutations) *bal.BlockAccessList {
+			work.accessList.AccumulateMutations(withdrawalMut, uint16(work.tcount)+1)
+			work.accessList.AccumulateReads(work.state.Reader().(state.StateReaderTracker).GetStateAccessList())
+			return work.accessList.ToEncodingObj()
+		}
+	}
+
+	// EIP-8037: set header.GasUsed before FinalizeAndAssemble so the block
+	// header reflects the correct 2D gas metric max(sum_regular, sum_state).
+	work.header.GasUsed = work.gasPool.Used()
+
+	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts, onBlockFinalization)
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
+
 	return &newPayloadResult{
 		block:    block,
 		fees:     totalFees(block, work.receipts),
@@ -293,11 +328,15 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
 	}
+	mut := make(bal.StateMutations)
 	if header.ParentBeaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, env.evm)
+		mut.Merge(core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, env.evm))
 	}
 	if miner.chainConfig.IsPrague(header.Number, header.Time) {
-		core.ProcessParentBlockHash(header.ParentHash, env.evm)
+		mut.Merge(core.ProcessParentBlockHash(header.ParentHash, env.evm))
+	}
+	if env.accessList != nil {
+		env.accessList.AccumulateMutations(mut, 0)
 	}
 	return env, nil
 }
@@ -305,7 +344,7 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 // makeEnv creates a new environment for the sealing block.
 func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase common.Address, witness bool) (*environment, error) {
 	// Retrieve the parent state to execute on top.
-	state, err := miner.chain.StateAt(parent.Root)
+	sdb, err := miner.chain.StateAt(parent.Root)
 	if err != nil {
 		return nil, err
 	}
@@ -316,28 +355,42 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 			return nil, err
 		}
 	}
-	state.StartPrefetcher("miner", bundle, nil)
+	sdb.StartPrefetcher("miner", bundle, nil)
+
+	var accessListBuilder bal.ConstructionBlockAccessList
+	if miner.chainConfig.IsAmsterdam(header.Number, header.Time) {
+		accessListBuilder = make(bal.ConstructionBlockAccessList)
+		sdb = sdb.WithReader(state.NewReaderWithTracker(sdb.Reader()))
+	}
+
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
-		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),
-		state:    state,
-		size:     uint64(header.Size()),
-		coinbase: coinbase,
-		gasPool:  core.NewGasPool(header.GasLimit),
-		header:   header,
-		witness:  state.Witness(),
-		evm:      vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{}),
+		signer:     types.MakeSigner(miner.chainConfig, header.Number, header.Time),
+		state:      sdb,
+		size:       uint64(header.Size()),
+		coinbase:   coinbase,
+		gasPool:    core.NewGasPool(header.GasLimit),
+		header:     header,
+		witness:    sdb.Witness(),
+		evm:        vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), sdb, miner.chainConfig, vm.Config{}),
+		accessList: accessListBuilder,
 	}, nil
 }
 
-func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction) error {
+var (
+	errAccessListOversized = errors.New("access list oversized")
+)
+
+func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction) (err error) {
 	if tx.Type() == types.BlobTxType {
 		return miner.commitBlobTransaction(env, tx)
 	}
+
 	receipt, err := miner.applyTransaction(env, tx)
 	if err != nil {
 		return err
 	}
+
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
 	env.size += tx.Size()
@@ -345,7 +398,7 @@ func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction) e
 	return nil
 }
 
-func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transaction) error {
+func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transaction) (err error) {
 	sc := tx.BlobTxSidecar()
 	if sc == nil {
 		panic("blob transaction without blobs in miner")
@@ -379,18 +432,56 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Snapshot()
 	)
-	receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx)
-	if err != nil {
-		env.state.RevertToSnapshot(snap)
-		env.gasPool.Set(gp)
-		return nil, err
+	var stateCopy *state.StateDB
+	var prevReader state.Reader
+	if env.accessList != nil {
+		prevReader = env.state.Reader()
+		stateCopy = env.state.WithReader(state.NewReaderWithTracker(env.state.Reader()))
+		env.evm.StateDB = stateCopy
+	} else {
+		stateCopy = env.state
 	}
-	env.header.GasUsed = env.gasPool.Used()
-	return receipt, nil
+
+	mutations, receipt, err := core.ApplyTransaction(env.evm, env.gasPool, stateCopy, env.header, tx)
+	if err != nil {
+		if env.accessList != nil {
+			// transaction couldn't be applied.  reset env state to what it was before
+			env.state = env.state.WithReader(prevReader)
+			env.evm.StateDB = env.state
+		} else {
+			env.state.RevertToSnapshot(snap)
+		}
+		env.gasPool.Set(gp)
+	}
+	if env.accessList != nil {
+		al := env.accessList.Copy()
+		al.AccumulateMutations(mutations, uint16(env.tcount)+1)
+		al.AccumulateReads(stateCopy.Reader().(state.StateReaderTracker).GetStateAccessList())
+		if env.size+tx.Size()+uint64(al.ToEncodingObj().EncodedSize()) >= params.MaxBlockSize-maxBlockSizeBufferZone {
+			env.gasPool.Set(gp)
+
+			// transaction couldn't be applied.  reset env state to what it was before
+			env.state = env.state.WithReader(prevReader)
+			env.evm.StateDB = env.state
+			return nil, errAccessListOversized
+		}
+
+		env.state = stateCopy.WithReader(prevReader)
+		env.evm.StateDB = env.state
+		env.accessList = al
+	}
+	return receipt, err
 }
 
 func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
-	isCancun := miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
+	var (
+		isCancun = miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
+		gasLimit = env.header.GasLimit
+	)
+	if env.gasPool == nil {
+		env.gasPool = core.NewGasPool(gasLimit)
+	}
+loop:
 	for {
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {
@@ -489,7 +580,12 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			txs.Shift()
-
+		case errors.Is(err, errAccessListOversized):
+			// Transaction can't be applied because it would cause the block to be oversized due to the
+			// contribution of the state accesses/modifications it makes.
+			// terminate the payload construction as it's not guaranteed we will be able to find a transaction
+			// that can fit in a short amount of time.
+			break loop
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from
 			// the same sender because of `nonce-too-high` clause.

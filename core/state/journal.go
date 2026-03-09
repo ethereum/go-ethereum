@@ -382,7 +382,7 @@ func (ch nonceChange) copy() journalEntry {
 }
 
 func (ch codeChange) revert(s *StateDB) {
-	s.getStateObject(ch.account).setCode(crypto.Keccak256Hash(ch.prevCode), ch.prevCode)
+	s.getStateObject(ch.account).SetCode(crypto.Keccak256Hash(ch.prevCode), ch.prevCode)
 }
 
 func (ch codeChange) dirtied() (common.Address, bool) {

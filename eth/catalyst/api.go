@@ -201,8 +201,12 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, pa
 			return engine.STATUS_INVALID, attributesErr("missing withdrawals")
 		case params.BeaconRoot == nil:
 			return engine.STATUS_INVALID, attributesErr("missing beacon root")
-		case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5):
+		case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5, forks.Amsterdam):
 			return engine.STATUS_INVALID, unsupportedForkErr("fcuV3 must only be called for cancun/prague/osaka payloads")
+		}
+
+		if api.checkFork(params.Timestamp, forks.Amsterdam) {
+			return api.forkchoiceUpdated(update, params, engine.PayloadV4, false)
 		}
 	}
 	// TODO(matt): the spec requires that fcu is applied when called on a valid
@@ -498,6 +502,7 @@ func (api *ConsensusAPI) GetPayloadV6(payloadID engine.PayloadID) (*engine.Execu
 //
 // Note passing nil `forks`, `versions` disables the respective check.
 func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool, versions []engine.PayloadVersion, forks []forks.Fork) (*engine.ExecutionPayloadEnvelope, error) {
+
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
 	if versions != nil && !payloadID.Is(versions...) {
 		return nil, engine.UnsupportedFork
@@ -750,6 +755,8 @@ func (api *ConsensusAPI) NewPayloadV5(ctx context.Context, params engine.Executa
 		return invalidStatus, paramsErr("nil beaconRoot post-cancun")
 	case executionRequests == nil:
 		return invalidStatus, paramsErr("nil executionRequests post-prague")
+	case params.BlockAccessList == nil:
+		return invalidStatus, paramsErr("nil block access list post-amsterdam")
 	case params.SlotNumber == nil:
 		return invalidStatus, paramsErr("nil slotnumber post-amsterdam")
 	case !api.checkFork(params.Timestamp, forks.Amsterdam):
@@ -759,7 +766,7 @@ func (api *ConsensusAPI) NewPayloadV5(ctx context.Context, params engine.Executa
 	if err := validateRequests(requests); err != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(err)
 	}
-	return api.newPayload(ctx, params, versionedHashes, beaconRoot, requests, false)
+	return api.newPayload(context.Background(), params, versionedHashes, beaconRoot, requests, false)
 }
 
 func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, witness bool) (result engine.PayloadStatusV1, err error) {
@@ -1178,6 +1185,10 @@ func getBody(block *types.Block) *engine.ExecutionPayloadBody {
 	result.Withdrawals = block.Withdrawals()
 	if block.Withdrawals() == nil && block.Header().WithdrawalsHash != nil {
 		result.Withdrawals = []*types.Withdrawal{}
+	}
+
+	if block.AccessList() != nil {
+		result.AccessList = block.AccessList()
 	}
 
 	return &result

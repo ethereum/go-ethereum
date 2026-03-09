@@ -558,6 +558,11 @@ func (b testBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 	}
 	panic("unknown type rpc.BlockNumberOrHash")
 }
+
+func (b testBackend) BlockAccessListByNumberOrHash(block rpc.BlockNumberOrHash) (interface{}, error) {
+	panic("not implemented")
+}
+
 func (b testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
 	return b.chain.GetBlock(hash, uint64(number.Int64())).Body(), nil
 }

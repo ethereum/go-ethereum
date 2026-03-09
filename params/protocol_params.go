@@ -88,6 +88,7 @@ const (
 	LogTopicGas           uint64 = 375   // Multiplied by the * of the LOG*, per LOG transaction. e.g. LOG0 incurs 0 * c_txLogTopicGas, LOG4 incurs 4 * c_txLogTopicGas.
 	CreateGas             uint64 = 32000 // Once per CREATE operation & contract-creation transaction.
 	Create2Gas            uint64 = 32000 // Once per CREATE2 operation
+	CreateGasAmsterdam    uint64 = 9000  // Regular gas portion of CREATE in Amsterdam (EIP-8037); state gas is charged separately.
 	CreateNGasEip4762     uint64 = 1000  // Once per CREATEn operations post-verkle
 	SelfdestructRefundGas uint64 = 24000 // Refunded following a selfdestruct operation.
 	MemoryGas             uint64 = 3     // Times the address of the (highest referenced byte in memory + 1). NOTE: referencing happens on read, write and in instructions such as RETURN and CALL.
@@ -99,6 +100,7 @@ const (
 	TxAccessListAddressGas    uint64 = 2400  // Per address specified in EIP 2930 access list
 	TxAccessListStorageKeyGas uint64 = 1900  // Per storage key specified in EIP 2930 access list
 	TxAuthTupleGas            uint64 = 12500 // Per auth tuple code specified in EIP-7702
+	TxAuthTupleRegularGas     uint64 = 7500  // Per auth tuple regular gas specified in EIP-8037
 
 	// These have been changed during the course of the chain
 	CallGasFrontier              uint64 = 40  // Once per CALL operation & message call transaction.
@@ -134,8 +136,10 @@ const (
 	DefaultElasticityMultiplier     = 2          // Bounds the maximum gas limit an EIP-1559 block may have.
 	InitialBaseFee                  = 1000000000 // Initial base fee for EIP-1559 blocks.
 
-	MaxCodeSize     = 24576           // Maximum bytecode to permit for a contract
-	MaxInitCodeSize = 2 * MaxCodeSize // Maximum initcode to permit in a creation transaction and create instructions
+	MaxCodeSize              = 24576                    // Maximum bytecode to permit for a contract
+	MaxInitCodeSize          = 2 * MaxCodeSize          // Maximum initcode to permit in a creation transaction and create instructions
+	MaxCodeSizeAmsterdam     = 32768                    // Maximum bytecode to permit for a contract post Amsterdam
+	MaxInitCodeSizeAmsterdam = 2 * MaxCodeSizeAmsterdam // Maximum initcode to permit in a creation transaction and create instructions post Amsterdam
 
 	// Precompiled contract gas prices
 
@@ -183,6 +187,11 @@ const (
 	HistoryServeWindow = 8191 // Number of blocks to serve historical block hashes for, EIP-2935.
 
 	MaxBlockSize = 8_388_608 // maximum size of an RLP-encoded block
+
+	TargetStateGrowthPerYear  = 100 * 1024 * 1024 * 1024 // 100GB
+	AccountCreationSize       = 112
+	StorageCreationSize       = 32
+	AuthorizationCreationSize = 23
 )
 
 // Bls12381G1MultiExpDiscountTable is the gas discount table for BLS12-381 G1 multi exponentiation operation
@@ -219,4 +228,12 @@ var (
 	// EIP-7251 - Increase the MAX_EFFECTIVE_BALANCE
 	ConsolidationQueueAddress = common.HexToAddress("0x0000BBdDc7CE488642fb579F8B00f3a590007251")
 	ConsolidationQueueCode    = common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe1460d35760115f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1461019a57600182026001905f5b5f82111560685781019083028483029004916001019190604d565b9093900492505050366060146088573661019a573461019a575f5260205ff35b341061019a57600154600101600155600354806004026004013381556001015f358155600101602035815560010160403590553360601b5f5260605f60143760745fa0600101600355005b6003546002548082038060021160e7575060025b5f5b8181146101295782810160040260040181607402815460601b815260140181600101548152602001816002015481526020019060030154905260010160e9565b910180921461013b5790600255610146565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff141561017357505f5b6001546001828201116101885750505f61018e565b01600190035b5f555f6001556074025ff35b5f5ffd")
+)
+
+// System log events.
+var (
+	// EIP-7708 - System logs emitted for ETH transfer and burn
+	EthTransferLogEvent = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef") // keccak256('Transfer(address,address,uint256)')
+	EthBurnLogEvent     = common.HexToHash("0xcc16f5dbb4873280815c1ee09dbd06736cffcc184412cf7a71a0fdb75d397ca5") // keccak256('Burn(address,uint256)')
+
 )

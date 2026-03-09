@@ -111,6 +111,7 @@ var (
 	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
+	accessListPrefix    = []byte("z")
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
@@ -207,6 +208,11 @@ func headerNumberKey(hash common.Hash) []byte {
 // blockBodyKey = blockBodyPrefix + num (uint64 big endian) + hash
 func blockBodyKey(number uint64, hash common.Hash) []byte {
 	return append(append(blockBodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+}
+
+// accessListKey = accessListPrefix + num (uint64 big endian) + hash
+func accessListKey(number uint64, hash common.Hash) []byte {
+	return append(append(accessListPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
 // blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash

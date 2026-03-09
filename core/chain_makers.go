@@ -117,7 +117,8 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 		evm          = vm.NewEVM(blockContext, b.statedb, b.cm.config, vmConfig)
 	)
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx)
+	// TODO: integrate BAL with chain makers...
+	_, receipt, err := ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx)
 	if err != nil {
 		panic(err)
 	}
@@ -163,8 +164,8 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 // AddTxWithVMConfig adds a transaction to the generated block. If no coinbase has
 // been set, the block's coinbase is set to the zero address.
 // The evm interpreter can be customized with the provided vm config.
-func (b *BlockGen) AddTxWithVMConfig(tx *types.Transaction, config vm.Config) {
-	b.addTx(nil, config, tx)
+func (b *BlockGen) AddTxWithVMConfig(bc *BlockChain, tx *types.Transaction, config vm.Config) {
+	b.addTx(bc, config, tx)
 }
 
 // GetBalance returns the balance of the given address at the generated block.
@@ -329,11 +330,11 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 		blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
 		evm := vm.NewEVM(blockContext, statedb, b.cm.config, vm.Config{})
 		// EIP-7002
-		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
+		if _, err := ProcessWithdrawalQueue(&requests, evm); err != nil {
 			panic(fmt.Sprintf("could not process withdrawal requests: %v", err))
 		}
 		// EIP-7251
-		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
+		if _, err := ProcessConsolidationQueue(&requests, evm); err != nil {
 			panic(fmt.Sprintf("could not process consolidation requests: %v", err))
 		}
 	}
@@ -411,7 +412,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 
 		body := types.Body{Transactions: b.txs, Uncles: b.uncles, Withdrawals: b.withdrawals}
-		block, err := b.engine.FinalizeAndAssemble(cm, b.header, statedb, &body, b.receipts)
+		block, err := b.engine.FinalizeAndAssemble(cm, b.header, statedb, &body, b.receipts, nil)
 		if err != nil {
 			panic(err)
 		}
