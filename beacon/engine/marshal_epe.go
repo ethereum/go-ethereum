@@ -68,9 +68,6 @@ func marshalHexBytesArray(buf []byte, items []hexutil.Bytes) []byte {
 }
 
 // writeHexBytes writes a hex-encoded byte slice as a JSON string ("0x...") to buf.
-// NOTE: This function avoids allocations by pre-allocating the buffer space needed;
-// otherwise, we would use hexutil.Encode() and append the result to the buffer.
-// hexutil.Encode() uses 64% more memory than writing to buffer directly.
 func writeHexBytes(buf []byte, data []byte) []byte {
 	buf = append(buf, '"', '0', 'x')
 	buf = slices.Grow(buf, len(data)*2+1)
@@ -81,10 +78,8 @@ func writeHexBytes(buf []byte, data []byte) []byte {
 	return buf
 }
 
-// PremarshaledJSON implements rpc.JSONPremarshaled. It returns pre-serialized
-// JSON by delegating small fields to their existing MarshalJSON methods and
-// hand-rolling only the BlobsBundle.
-func (e ExecutionPayloadEnvelope) PremarshaledJSON() ([]byte, error) {
+// MarshalJSON implements json.Marshaler.
+func (e ExecutionPayloadEnvelope) MarshalJSON() ([]byte, error) {
 	// Marshal the execution payload using its gencodec MarshalJSON.
 	payload, err := e.ExecutionPayload.MarshalJSON()
 	if err != nil {
