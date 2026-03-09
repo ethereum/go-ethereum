@@ -1,527 +1,665 @@
-# Design Document: NOMT-Style Binary Merkle Tree for Geth
+# NOMT Binary Merkle Trie on PebbleDB — Design Document
 
-## Context
+## 1. Overview
 
-Geth's Merkle Patricia Trie (MPT) is I/O-bound during block execution and state commitment. NOMT (Nearly-Optimal Merkle Trie) addresses this by using a binary merkle trie with SSD-optimized page-based storage, achieving significantly higher throughput through batched updates, aggressive prefetching, and minimal disk reads per operation.
+NOMT (Nearly-Optimal Merkle Trie) is a page-based binary merkle trie engine
+integrated into geth as an alternative to the Merkle Patricia Trie (MPT). It
+stores trie nodes in fixed-size 4KB pages optimized for SSD I/O, and uses
+parallel batch updates for high throughput during block execution.
 
-This document describes how to port NOMT's architecture into geth as a **new, independent binary merkle trie implementation** alongside the existing MPT. The existing MPT code (`trie/`, `triedb/hashdb/`, `triedb/pathdb/`) remains untouched — NOMT is added as a new `triedb` backend option. NOMT has two core components:
-- **Beatree** (B-tree for flat key-value storage) — replaced by PebbleDB
-- **Bitbox** (on-disk hash table storing merkle tree pages) — the focus of this implementation
+This implementation stores all data — trie pages, flat account/storage state,
+and stem values — in geth's existing PebbleDB instance under dedicated key
+prefixes. There is no custom storage engine; PebbleDB's LSM-tree, atomic
+batches, and bloom filters handle persistence and crash safety.
+
+```
++-----------------------------------------------------------------------+
+|                        Ethereum State Layer                           |
+|  (StateDB: accounts, storage slots, contract code)                   |
++----------------------------------+------------------------------------+
+                                   |
+                        +----------v-----------+
+                        |      NomtTrie        |
+                        |  (state.Trie impl)   |
+                        |  trie/nomttrie/      |
+                        +----------+-----------+
+                                   |
+              +--------------------+--------------------+
+              |                                         |
+   +----------v-----------+               +-------------v-----------+
+   |   Canonical Root     |               |    Page Tree Engine     |
+   |  BuildInternalTree   |               |    nomt/merkle/         |
+   |  (248-bit tree over  |               |  (PageWalker + workers) |
+   |   all stem hashes)   |               +-------------+-----------+
+   +----------------------+                             |
+                                          +-------------v-----------+
+                                          |       nomt/db/          |
+                                          |  (PebbleDB page store)  |
+                                          +-------------+-----------+
+                                                        |
+              +--------------------+--------------------+
+              |                    |                    |
+   +----------v------+  +---------v--------+  +--------v---------+
+   | Flat State       |  | Stem Values      |  | Trie Pages       |
+   | prefix 0x01-0x02 |  | prefix 0x03      |  | prefix 0x04      |
+   | (accts, storage) |  | (per-slot values)|  | (4KB RawPage)    |
+   +------------------+  +------------------+  +------------------+
+              |                    |                    |
+              +--------------------+--------------------+
+                                   |
+                        +----------v-----------+
+                        |      PebbleDB        |
+                        |   (single instance)  |
+                        +----------------------+
+```
+
+### Design Principles
+
+1. **Single database**: All NOMT data lives in geth's PebbleDB — no custom
+   hash table, no WAL, no separate files.
+2. **Page-level granularity**: The merkle engine operates on 4KB page blobs,
+   not individual 32-byte nodes. PebbleDB stores each page as a single KV pair.
+3. **EIP-7864 compatibility**: Key derivation, stem hashing, and root
+   computation produce roots identical to geth's `trie/bintrie/`.
+4. **Unchanged merkle engine**: The `nomt/merkle/` package (PageWalker,
+   parallel workers) has zero dependency on the storage backend — it accesses
+   pages through the `PageSet` interface.
 
 ---
 
-## 1. NOMT Architecture Overview
+## 2. PebbleDB Key Schema
 
-### 1.1 Binary Merkle Trie
-
-NOMT uses a sparse binary merkle trie where all lookup paths are 256 bits and all nodes are exactly 32 bytes. Three node types exist:
-
-| Type | Value | MSB | Children |
-|------|-------|-----|----------|
-| **Internal** | `hash(left \|\| right)` | `0` | Two child nodes |
-| **Leaf** | `hash(key_path \|\| value_hash)` | `1` | None |
-| **Terminator** | `0x00...00` (all zeros) | N/A | None (empty subtrie) |
-
-The MSB (most significant bit) labeling enables O(1) node type discrimination. All node preimages are 512 bits (64 bytes).
-
-**Key insight**: Because every node is exactly 32 bytes, groups of nodes can be packed into fixed-size pages with predictable layouts — no variable-length encoding needed.
-
-### 1.2 Page Structure
-
-Each page is **4096 bytes** (aligned to SSD page size) and stores a **rootless sub-binary-tree of depth 6**:
+All NOMT data shares the same PebbleDB instance as geth's other subsystems.
+Each NOMT key type uses a distinct single-byte prefix:
 
 ```
-Page Layout (4096 bytes):
-┌─────────────────────────────────────────┐
-│ 126 nodes × 32 bytes = 4032 bytes       │  Nodes at depths 1-6
-│   Level 1:  2 nodes  (siblings)         │  (rootless — the root lives
-│   Level 2:  4 nodes                     │   in the parent page)
-│   Level 3:  8 nodes                     │
-│   Level 4: 16 nodes                     │
-│   Level 5: 32 nodes                     │
-│   Level 6: 64 nodes  (leaf layer)       │
-├─────────────────────────────────────────┤
-│ 24 bytes padding                        │
-├─────────────────────────────────────────┤
-│ 8 bytes: ElidedChildren bitfield (u64)  │  Which child pages are elided
-├─────────────────────────────────────────┤
-│ 32 bytes: PageID (encoded)              │  Unique page identifier
-└─────────────────────────────────────────┘
+PebbleDB Key Layout
+====================
+
+Prefix  Key Format                              Value           Description
+------  ---------------------------------------- --------------- ---------------------------
+0x01    0x01 || accountHash[32]                  RLP(SlimAcct)   Account flat state
+0x02    0x02 || accountHash[32] || slotHash[32]  raw bytes       Storage flat state
+0x03    0x03 || stem[31] || suffix[1]            value[32]       Stem value slot
+0x04    0x04 || PageID.Encode()[32]              RawPage[4032]   Trie page blob
+0x05    0x05 || "root"                           Node[32]        Page tree root hash
 ```
 
-Each page has up to **64 child pages**, one for each leaf position. The tree of pages has maximum depth 42 (since 6 × 42 = 252 ≈ 256 bits).
+Key properties:
 
-### 1.3 Page Identification
-
-A `PageID` is a path through the page tree — a sequence of 0-42 child indices (each 0..63). The encoding uses a base-64-like scheme:
-
-```
-Encoding: For path [c₀, c₁, ..., cₙ]:
-  result = 0
-  for each cᵢ:
-    result += (cᵢ + 1)
-    result <<= 6
-```
-
-This produces a unique, ordered 256-bit representation stored in the last 32 bytes of each page. The ordering property ensures depth-first traversal: parent < children < right siblings.
-
-**Key path mapping**: A 256-bit key maps to a chain of pages. Every 6 bits of the key selects a child index at the corresponding page depth.
-
-### 1.4 Page Elision
-
-If a subtree rooted at a page has fewer than **20 leaves** (the `PAGE_ELISION_THRESHOLD`), that page is not stored on disk. Instead, it is reconstructed on-the-fly from the parent page's nodes. The `ElidedChildren` bitfield (8 bytes, one bit per child slot) tracks which child pages are elided.
-
-This optimization significantly reduces storage and I/O for sparse regions of the trie.
+- **0x01–0x02** (flat state): Used by `triedb/nomtdb/` for geth's standard
+  `StateReader` interface. Accounts are RLP-encoded `SlimAccount` structs.
+- **0x03** (stem values): The 256 value slots per stem node. Each slot stores
+  a 32-byte value (account basic data, code hash, storage value, or code
+  chunk). Key = 33 bytes, value = 32 bytes.
+- **0x04** (trie pages): The binary merkle page tree. Key = 33 bytes (prefix +
+  PageID encoding). Value = 4032 bytes (page contents; the trailing PageID and
+  metadata within the 4096-byte `RawPage` are included).
+- **0x05** (metadata): Currently stores only the page tree root hash,
+  persisted atomically with page updates. Enables root recovery on restart.
 
 ---
 
-## 2. Bitbox: The Page Store
+## 3. Binary Merkle Trie Structure
 
-Bitbox is an on-disk **open-addressing hash table** that maps PageIDs to 4096-byte pages.
+### 3.1. Two-Layer Tree
 
-### 2.1 Hash Table File Layout
-
-```
-HT File Layout:
-┌──────────────────────────────────────────┐
-│ Meta Byte Pages                          │  ceil(num_buckets / 4096) pages
-│   One byte per bucket (occupancy + tag)  │
-├──────────────────────────────────────────┤
-│ Data Pages                               │  num_buckets pages
-│   Each bucket = one 4096-byte page       │  (the actual merkle tree pages)
-└──────────────────────────────────────────┘
-
-Total file size = (meta_pages + num_buckets) × 4096
-```
-
-### 2.2 Meta Map
-
-One byte per bucket encodes state + hash tag for fast probing:
-
-| Byte Value | Meaning |
-|------------|---------|
-| `0x00` | Empty bucket |
-| `0x7F` | Tombstone (deleted) |
-| `0x80 \| (hash >> 57)` | Occupied, with 7-bit hash tag |
-
-The 7-bit hash tag enables filtering ~99% of non-matching buckets without reading the full page from disk.
-
-### 2.3 Probing
-
-Bitbox uses **triangular probing** (probe offsets: 0, 1, 3, 6, 10, ...):
+The trie has two logical layers matching EIP-7864:
 
 ```
-bucket₀ = hash(pageID) % capacity
-bucketᵢ = (bucket₀ + i*(i+1)/2) % capacity
+                        Root (canonical)
+                          |
+         BuildInternalTree over 248-bit stem paths
+                          |
+     +--------+-----------+-----------+--------+
+     |        |           |           |        |
+   stem_0  stem_1  ... stem_k  ... stem_n   (depth 248)
+     |        |           |           |
+  [256 slots each: SHA256 sub-tree of values]
 ```
 
-The hash function is `xxhash3_64` with a random 16-byte seed (generated at DB creation).
+**Internal tree (depth 0–247)**: Binary SHA256 tree where each "leaf" is an
+opaque 32-byte stem hash. Navigated by bits 0–247 of the stem path. This is
+what `BuildInternalTree(skip=0)` computes — its root is the canonical state
+root returned by `Hash()`.
 
-**Page lookup flow**:
-1. Compute `hash(pageID)` → initial bucket
-2. Check meta byte: empty → miss, tombstone → skip, tag mismatch → skip
-3. On tag match: read the 4096-byte data page from disk
-4. Verify: check if the PageID in the last 32 bytes matches
-5. If mismatch (rare): continue probing
-
-### 2.4 WAL (Write-Ahead Log)
-
-Crash recovery uses a simple binary WAL:
+**Stem nodes (depth 248)**: Each stem holds 256 value slots indexed by the
+last byte (suffix). The stem hash is computed as:
 
 ```
-WAL Format:
-[START tag (1 byte)] [sync_seqn (4 bytes LE)]
-repeated:
-  [CLEAR tag (1 byte)] [bucket (8 bytes LE)]
-  [UPDATE tag (1 byte)] [page_id (32 bytes)] [page_diff (16 bytes)]
-     [changed_nodes (N × 32 bytes)] [elided_children (8 bytes)] [bucket (8 bytes LE)]
-[END tag (1 byte)]
-[zero-padded to 4096-byte boundary]
+SHA256(stem_path[31] || 0x00 || subtree_root)
+
+where subtree_root = 8-level binary SHA256 tree over SHA256(value_i) for i in 0..255
 ```
 
-**Recovery protocol**:
-1. On open, if WAL is non-empty, read sync sequence number
-2. If it matches the expected sequence, replay all entries (apply diffs to HT pages, update meta map)
-3. Write changed meta pages to HT file
-4. Truncate and fsync WAL
+### 3.2. Page Tree (Persistent Storage)
 
-### 2.5 Sync Protocol
-
-Persisting dirty pages follows a strict three-phase protocol:
+For persistent storage, the 248-bit internal tree is partitioned into a tree
+of 4KB pages. Each page stores a rootless sub-binary-tree of depth 6:
 
 ```
-Phase 1: begin_sync()
-  ├── Lock meta map (write)
-  ├── For each dirty page:
-  │   ├── Allocate or reuse bucket via probing
-  │   ├── Update meta map (set_full or set_tombstone)
-  │   └── Record changes in WAL builder
-  ├── Build HT page write list
-  └── Update page cache (batch insert + evict)
+Page Tree Organization
+======================
 
-Phase 2: wait_pre_meta()
-  └── Write WAL to disk + fsync (atomic durability point)
+             Root Page (depth 0)           <- 1 page, 126 nodes
+            /         |         \
+     Child 0    ...  Child k  ... Child 63  <- up to 64 child pages
+      /    \                      /    \
+   ...      ...                ...      ... <- up to 64^2 pages at depth 2
+                                                (max depth 42: 6*42=252 bits)
 
-Phase 3: [External] Write meta/manifest (atomic sync point)
-
-Phase 4: post_meta()
-  ├── Write dirty HT pages + meta pages to HT file + fsync
-  └── Truncate WAL (no fsync needed — see rationale below)
+Each page:
++-----------------------------------------------+
+| 126 internal nodes (levels 1-6), 32 bytes each |  4032 bytes
+|                                                 |
+|  Level 1:   2 nodes (left/right of root)       |
+|  Level 2:   4 nodes                            |
+|  Level 3:   8 nodes                            |
+|  Level 4:  16 nodes                            |
+|  Level 5:  32 nodes                            |
+|  Level 6:  64 nodes (bottom layer)             |
+|                                                 |
+| The root of this sub-tree lives in the         |
+| parent page's bottom layer (level 6).          |
++-------------------------------------------------+
+| 24 bytes padding                                |
++-------------------------------------------------+
+| ElidedChildren: 8-byte bitfield (uint64 LE)     |  Which of the 64
+|   bit i = 1 means child page i is elided        |  children are stored
++-------------------------------------------------+  inline (not on disk)
+| PageID: 32-byte encoded identifier              |
++-------------------------------------------------+
+Total: 4096 bytes (SSD page aligned)
 ```
 
-**Why truncate without fsync**: If we crash before the next commit, the WAL replay is idempotent. If we reach the next commit, the new WAL write will fsync.
+**Page elision**: If a subtree has few leaves, its page is not stored on disk.
+Instead, the sub-tree data lives inline in the parent page's bottom-layer
+nodes. The `ElidedChildren` bitfield tracks which of the 64 child slots are
+elided. This avoids storing nearly-empty pages for sparse trie regions.
+
+### 3.3. PageID Encoding
+
+A `PageID` is a path through the page tree — a sequence of child indices
+(each 0–63). The encoding produces a unique 32-byte key for PebbleDB:
+
+```
+PageID Encoding (shift-then-add)
+=================================
+
+For path [c_0, c_1, ..., c_n]:
+  value = 0
+  for each c_i:
+    value = (value << 6) + (c_i + 1)
+
+Store as big-endian 32 bytes.
+
+Examples:
+  Root page:  path=[]         -> 0x00...00
+  Child 0:    path=[0]        -> 0x00...01
+  Child 63:   path=[63]       -> 0x00...40  (64 decimal)
+  [5, 10]:    path=[5,10]     -> 0x00...016B  ((6<<6)+11 = 395)
+
+Properties:
+  - Root encodes to all zeros
+  - Lexicographic ordering: parent < children < right siblings
+  - Unique: no two distinct paths produce the same encoding
+  - Max depth 42 (6*42 = 252 bits, fits in 256-bit key)
+```
 
 ---
 
-## 3. Merkle Tree Updates: The Page Walker
+## 4. Hash Functions
 
-The `PageWalker` is the core algorithm for batch-updating the binary merkle trie. It processes sorted key-value updates left-to-right through the page tree.
-
-### 3.1 Sub-Trie Replacement
-
-Updates are grouped by which terminal node their keys map to. Each terminal is replaced with a new sub-trie built from the updates:
-
-- Delete a leaf → replace with terminator
-- Insert where terminator was → replace with leaf
-- Multiple inserts at same prefix → build an internal sub-trie
-- Delete + insert at same key → replace leaf with new leaf
-
-### 3.2 Partial Compaction
-
-After each replacement, the walker hashes upward (computing internal node hashes) and compacts terminators. It stops at the point where the next update would also affect the result, avoiding redundant work. The last update hashes all the way to the root.
-
-### 3.3 Algorithm Sketch
+All hashing uses **SHA256** (EIP-7864). There is no MSB tagging — nodes are
+either all-zero (terminator) or opaque 32-byte hashes.
 
 ```
-PageWalker.advance_and_replace(terminal_position, operations):
-  1. Build page stack down to terminal position
-     (loading existing pages or creating fresh ones)
-  2. Build new sub-trie from operations (build_trie)
-  3. Place new nodes into the current page
-  4. Hash upward, compacting terminators:
-     while sibling(current) is terminator or leaf:
-       compact (merge leaf up or create terminator pair)
-     stop when next update will affect this path
+Internal node:  SHA256(left[32] || right[32])
+                Both children are 32-byte nodes.
 
-PageWalker.conclude():
-  1. Hash all remaining nodes up to root
-  2. Emit root node + list of UpdatedPage entries
+Stem node:      SHA256(stem_path[31] || 0x00 || subtree_root[32])
+                subtree_root = 8-level binary SHA256 tree over
+                               SHA256(value_i) for i in 0..255
+                (zero-hash pairs produce zero parent, pruning empty branches)
+
+Terminator:     0x00...00 (32 zero bytes)
+                Represents an empty sub-trie at any position.
 ```
 
-### 3.4 Parallel Updates (Workers)
-
-For large batches, the page tree is partitioned into regions (by root page children). Each region is processed by a separate worker goroutine:
-
-1. **Warm-up phase**: Prefetch pages that will be needed (walk keys, load pages from cache/disk)
-2. **Update phase**: Run PageWalker on the region's subset of updates
-3. **Merge phase**: Collect child page root nodes, update the root page
+SHA256 hashers are pooled via `sync.Pool` to avoid allocation pressure during
+batch hashing.
 
 ---
 
-## 4. Flat Key-Value Storage (PebbleDB)
+## 5. Update Pipeline
 
-PebbleDB replaces NOMT's Beatree for storing raw key-value data. This is the "value store" that sits alongside Bitbox:
-
-### 4.1 Key Schema
+### 5.1. Per-Block Flow
 
 ```
-Account data:  key = 0x01 || keccak256(address)       → RLP(SlimAccount)
-Storage data:  key = 0x02 || keccak256(address) || keccak256(slot) → value
-Metadata:      key = 0x00 || "root"                    → current root node (32 bytes)
-               key = 0x00 || "sync_seqn"               → sync sequence number (4 bytes)
-               key = 0x00 || "seed"                     → hash table seed (16 bytes)
+Block Execution
+===============
+
+1. StateDB accumulates changes
+   (UpdateAccount, UpdateStorage, UpdateContractCode)
+           |
+           v
+2. NomtTrie.pending collects stemUpdates
+   Each update = (stem[31], suffix[1], value[32])
+           |
+           v
+3. NomtTrie.Hash() triggers flush:
+           |
+           +---> groupAndHashStems()
+           |       |
+           |       +-- Group by stem path (stable sort)
+           |       +-- For each stem:
+           |       |     Load existing values from PebbleDB (prefix 0x03)
+           |       |     Merge new values, compute SHA256 stem hash
+           |       |     Write updated values back (batch)
+           |       +-- Return sorted []StemKeyValue
+           |
+           +---> mergeStemKVs()
+           |       Merge new stems into allStems (sorted in-place)
+           |       Fast path: in-place update when no new stems added
+           |
+           +---> db.Update(stemKVs)
+           |       Run PageWalker on page tree
+           |       Persist updated pages to PebbleDB (prefix 0x04)
+           |       Persist new page tree root (prefix 0x05)
+           |       All writes in single atomic batch
+           |
+           +---> canonicalRoot()
+                   BuildInternalTree(skip=0, allStems)
+                   Returns 32-byte root matching bintrie exactly
 ```
 
-PebbleDB handles compaction, compression, and point-lookup optimization via bloom filters.
+### 5.2. Page Update Engine (nomt/merkle/)
+
+The PageWalker processes sorted stem updates left-to-right through the page
+tree. It loads pages from PebbleDB via the `PageSet` interface, modifies
+nodes in place, and emits a list of `UpdatedPage` entries.
+
+```
+PageWalker Algorithm
+====================
+
+Input:  sorted [(stem_path, stem_hash)] + current page tree root
+Output: new root + list of UpdatedPage entries
+
+For each stem update:
+  1. Descend through page stack to the target position
+     (load pages from PebbleDB or create fresh ones)
+
+  2. Place the stem hash at the target node position
+
+  3. Hash upward through the page tree:
+     - Compute SHA256(left || right) for modified internal nodes
+     - Compact terminator pairs (both children zero -> parent zero)
+     - Stop when remaining nodes will be affected by future updates
+
+After all updates:
+  4. Hash remaining nodes up to the root
+  5. Return new root + all modified pages
+
+Page Stack (in-memory during walk):
+  +--------+--------+--------+
+  | Root   | Child  | Grand- |  ...up to 42 pages deep
+  | Page   | Page   | child  |
+  +--------+--------+--------+
+  depth 0    depth 1  depth 2
+```
+
+### 5.3. Parallel Workers
+
+For batches with 64+ updates, the page tree is partitioned by root page child
+index (first 6 bits of each stem path = 64 possible buckets). Independent
+subtrees are processed concurrently:
+
+```
+Parallel Update (depth-7 split)
+================================
+
+                    Root Page
+                   /    |    \
+           child 0  child k  child 63    (64 slots)
+              |        |        |
+          +---+---+ +--+--+ +--+---+
+          |Worker1| |W...k| |Worker|    N goroutines
+          +---+---+ +--+--+ +--+---+
+              |        |        |
+        [pages]   [pages]   [pages]     each worker's UpdatedPages
+              \        |       /
+               +-------+------+
+                       |
+              Merge child roots into
+              root page, persist all
+              pages in atomic batch
+```
+
+Each worker gets an independent `PageSet` (via `pageSetFactory`) to avoid
+contention. After workers complete, their child-page roots are merged into
+the root page.
 
 ---
 
-## 5. Go Implementation Plan
+## 6. PebbleDB Page Storage (nomt/db/)
 
-### 5.1 Package Structure
+The `pebblePageSet` implements `merkle.PageSet` backed by PebbleDB:
+
+```
+pebblePageSet
+=============
+
+                     PageWalker
+                         |
+                    PageSet.Get(id)
+                         |
+            +------------+------------+
+            |                         |
+     cache[encoded_id]?           diskdb.Get(0x04||id)
+       /          \                     |
+    hit: copy      miss         +-------+-------+
+    & return                    |               |
+                             found:          not found:
+                             copy to cache,  return fresh
+                             return copy     zeroed page
+
+IMPORTANT: Always return a COPY of cached pages.
+The PageWalker mutates pages in place during updates.
+A shared reference would corrupt the cache.
+```
+
+Page persistence uses PebbleDB's atomic batch writes:
+
+```
+Atomic Batch Write
+==================
+
+batch := diskdb.NewBatch()
+
+for each UpdatedPage:
+  if page was cleared:
+    batch.Delete(0x04 || PageID.Encode())
+  else:
+    batch.Put(0x04 || PageID.Encode(), page[0:4096])
+
+batch.Put(0x05 || "root", new_root[0:32])   // persist root atomically
+batch.Write()                                // single atomic operation
+
+No WAL needed — PebbleDB guarantees atomic batch writes.
+If crash before Write(): no pages or root updated (safe).
+If crash after Write():  all pages and root updated (consistent).
+```
+
+---
+
+## 7. EIP-7864 Key Derivation
+
+Key derivation delegates to `trie/bintrie/` to guarantee identical key
+generation. The 32-byte key is split into a 31-byte stem and 1-byte suffix:
+
+```
+EIP-7864 Key Layout
+====================
+
+|<--------- stem (31 bytes, 248 bits) --------->|<- suffix (1 byte) ->|
+
+Internal tree navigates bits 0-247 (stem path).
+Stem node holds 256 value slots indexed by suffix (0-255).
+
+Account Keys:
+  key = SHA256(SHA256(address) || base_offset)
+  stem = key[0:31]
+  BasicData:  suffix = 0   (nonce at [8:16], balance at [16:32])
+  CodeHash:   suffix = 1   (32-byte code hash)
+
+Storage Keys:
+  key = SHA256(SHA256(address) || storage_offset)
+  stem = key[0:31], suffix = key[31]
+  storage_offset encodes slot position within 256-slot groups
+
+Code Chunk Keys:
+  chunks = ChunkifyCode(bytecode)  (31-byte chunks, right-padded)
+  For chunk number N:
+    groupOffset = (N + 128) % 256
+    if groupOffset == 0 or N == 0:
+      offset[24:32] = uint64_le(N + 128)
+      key = SHA256(SHA256(address) || offset)
+      stem = key[0:31]
+    suffix = groupOffset
+```
+
+---
+
+## 8. Canonical Root vs. Page Tree Root
+
+The system computes two related but distinct roots:
+
+```
+Root Computation
+================
+
+1. Canonical Root (returned by Hash()):
+   BuildInternalTree(skip=0, allStems)
+   - Pure computation over sorted (stem, hash) pairs
+   - 248-bit binary tree, no page structure
+   - Identical to bintrie's root for the same state
+   - This is the state root in block headers
+
+2. Page Tree Root (persisted in PebbleDB):
+   merkle.ParallelUpdate(root, stemKVs, workers, pageSetFactory)
+   - Partitioned into 4KB pages at 6-bit boundaries
+   - Workers split at depth 7, adding SHA256(hash||zeros) wrapping
+   - Root may differ from canonical due to wrapping levels
+   - Used for persistent page storage and incremental updates
+
+The page tree root is an implementation detail. Only the canonical
+root (from BuildInternalTree) is externally visible.
+```
+
+---
+
+## 9. Package Structure
 
 ```
 go-ethereum/
   nomt/
-    core/
-      node.go          # Node type, KeyPath, ValueHash, NodeKind, TERMINATOR
-      hasher.go        # NodeHasher interface, keccak256-based binary hasher
-      page.go          # Page constants, RawPage read/write helpers
-      pageid.go        # PageID encode/decode, child/parent, iterator
-      triepos.go       # TriePosition: depth tracking, page navigation
-      pagediff.go      # PageDiff: 126-bit change tracking bitfield
-      update.go        # build_trie helper, WriteNode, leaf splicing
-    bitbox/
-      db.go            # DB handle: open, sync entry point, utilization
-      htfile.go        # HTOffsets, file creation, layout math
-      metamap.go       # MetaMap: per-bucket metadata byte
-      probe.go         # ProbeSequence: triangular probing, xxhash
-      pagecache.go     # Sharded LRU page cache with fixed-level pinning
-      pageloader.go    # PageLoader: probe-based page retrieval
-      wal.go           # WAL writer and reader (blob format)
-      writeout.go      # write_wal, write_ht, truncate_wal
-      sync.go          # SyncController: begin_sync, wait_pre_meta, post_meta
-      recover.go       # WAL recovery logic
-    merkle/
-      pagewalker.go    # Left-to-right batch trie update engine
-      pageset.go       # PageSet interface for walker's page access
-      elided.go        # ElidedChildren 64-bit bitfield
-      worker.go        # Parallel update workers (warm-up + sharded)
-    io/
-      directio.go      # O_DIRECT helpers (linux/darwin build tags)
-      pagepool.go      # sync.Pool-backed 4096-byte aligned page allocator
+    core/                        Pure data structures, no I/O
+      node.go                    Node type, Terminator, NodeKind
+      hasher.go                  SHA256 hashing (pooled), HashInternal, HashStem
+      page.go                    RawPage [4096]byte, level-order node access
+      pageid.go                  PageID encode/decode, child/parent navigation
+      pagediff.go                126-bit change tracking bitfield
+      triepos.go                 TriePosition: depth tracking, page boundary detection
+      update.go                  StemKeyValue, BuildInternalTree, StemSharedBits
+
+    merkle/                      Page-based update engine, storage-agnostic
+      pageset.go                 PageSet interface, MemoryPageSet
+      pagewalker.go              Left-to-right batch trie updates
+      worker.go                  Parallel workers (partitioned at depth 7)
+      elided.go                  ElidedChildren 64-bit bitfield
+
+    db/                          PebbleDB integration layer
+      db.go                      DB struct, pebblePageSet, atomic batch writes
+                                 Key prefixes: 0x04 (pages), 0x05 (metadata)
+
+  trie/
+    nomttrie/                    state.Trie implementation
+      trie.go                    NomtTrie: UpdateAccount/Storage/Code, Hash, Commit
+      key_encoding.go            EIP-7864 key derivation (delegates to bintrie)
+      stem.go                    Stem value storage, groupAndHashStems
+
   triedb/
-    nomtdb/
-      config.go        # NomtDB configuration
-      database.go      # Database implementing backend interface
-      reader.go        # NodeReader and StateReader implementations
-```
-
-### 5.2 Key Data Structures
-
-```go
-// --- core/node.go ---
-type Node = [32]byte
-type KeyPath = [32]byte
-type ValueHash = [32]byte
-var TERMINATOR Node // all zeros
-
-type NodeKind int
-const (
-    NodeKindTerminator NodeKind = iota
-    NodeKindLeaf
-    NodeKindInternal
-)
-
-// --- core/page.go ---
-const (
-    Depth        = 6
-    NodesPerPage = 126   // (2^7) - 2
-    PageSize     = 4096
-    NumChildren  = 64    // 2^Depth
-)
-
-// --- core/pageid.go ---
-type PageID struct {
-    path []uint8  // each 0..63, len 0..42
-}
-
-// --- bitbox/db.go ---
-type DB struct {
-    pagePool  *PagePool
-    store     HTOffsets
-    seed      [16]byte
-    metaMap   *sync.RWMutex  // guards MetaMap
-    walFD     *os.File
-    htFD      *os.File
-    capacity  int
-    occupied  atomic.Int64
-}
-
-// --- bitbox/probe.go ---
-type ProbeSequence struct {
-    hash   uint64
-    bucket uint64
-    step   uint64
-}
-```
-
-### 5.3 Hash Function
-
-For Ethereum compatibility, use **keccak256** with MSB labeling:
-
-```go
-func HashInternal(left, right Node) Node {
-    h := crypto.Keccak256(left[:], right[:])
-    var node Node
-    copy(node[:], h)
-    node[0] &= 0x7F  // clear MSB → internal
-    return node
-}
-
-func HashLeaf(keyPath KeyPath, valueHash ValueHash) Node {
-    h := crypto.Keccak256(keyPath[:], valueHash[:])
-    var node Node
-    copy(node[:], h)
-    node[0] |= 0x80  // set MSB → leaf
-    return node
-}
-```
-
-> **Trade-off note**: NOMT defaults to Blake3 (~3-5x faster). The `NodeHasher` interface makes this swappable. For production, a protocol change could adopt Blake3.
-
-### 5.4 I/O Adaptation
-
-| NOMT (Rust) | Go Port |
-|-------------|---------|
-| `io_uring` (Linux) | `os.File.ReadAt` / `WriteAt` + goroutine pool |
-| `pread`/`pwrite` (fallback) | Same via `os.File` |
-| `fcntl(F_NOCACHE)` (macOS) | Same via `syscall.Syscall` |
-| `O_DIRECT` (Linux) | `syscall.O_DIRECT` + aligned buffers |
-| mmap WAL builder | `[]byte` buffer (WAL is small) |
-| `threadpool` + channels | goroutines + `chan` |
-
-### 5.5 Geth Integration
-
-The NOMT backend plugs into geth's `triedb` framework as a new backend option alongside HashDB and PathDB:
-
-```go
-// triedb/database.go — add to Config
-type Config struct {
-    HashDB *hashdb.Config
-    PathDB *pathdb.Config
-    NomtDB *nomtdb.Config  // NEW
-}
-
-// nomtdb/database.go — implements backend interface
-type Database struct {
-    bitbox  *bitbox.DB
-    pebble  *pebble.DB
-    cache   *bitbox.PageCache
-    root    core.Node
-    syncSeq uint32
-    lock    sync.RWMutex
-}
-
-func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error)
-func (db *Database) StateReader(root common.Hash) (database.StateReader, error)
-func (db *Database) Commit(root common.Hash, report bool) error
-```
-
-**StateReader** serves accounts and storage directly from PebbleDB (flat reads, no trie traversal for data). **NodeReader** resolves pages from Bitbox and returns individual node values.
-
-### 5.6 Update Flow (Per Block)
-
-```
-1. StateDB collects changed accounts/storage slots
-
-2. Build update set:
-   For each changed key:
-     key_path = keccak256(key)
-     value_hash = keccak256(value)  // or TERMINATOR if deleted
-   Sort by key_path
-
-3. Run PageWalker (parallel workers for large batches):
-   Input:  sorted [(key_path, value_hash)] + current page tree
-   Output: new root node + list of UpdatedPages
-
-4. Persist:
-   a. Write flat KV changes to PebbleDB (batch write)
-   b. Sync dirty pages via SyncController:
-      begin_sync → WAL write → meta update → HT write
-
-5. Return new root hash (the 32-byte root node)
+    nomtdb/                      triedb backend
+      config.go                  Config (NumWorkers)
+      database.go                Database: NodeReader, StateReader, DiskDB, NomtDB
+      reader.go                  Flat state readers, key prefix constants (0x01, 0x02)
 ```
 
 ---
 
-## 6. Implementation Phases
+## 10. Data Flow Diagram
 
-### Phase 1: Core Primitives
-**Goal**: All trie data structures, no I/O.
+Complete flow for a single block's state update:
 
-Files: `nomt/core/*.go` + tests
-
-- Node types, hashing, MSB labeling
-- Page layout (read/write nodes, elided children, page ID from page)
-- PageID encode/decode/iterate
-- TriePosition traversal
-- PageDiff bitfield operations
-
-**Milestone**: All unit tests pass. Hash outputs match NOMT's Rust tests.
-
-### Phase 2: Page Walker
-**Goal**: In-memory batch update engine.
-
-Files: `nomt/merkle/*.go` + tests
-
-- ElidedChildren bitfield
-- PageSet interface + in-memory implementation
-- PageWalker: advance_and_replace, conclude
-- build_trie helper
-
-**Milestone**: Walker produces correct root hashes and page diffs for known inputs.
-
-### Phase 3: Bitbox Storage
-**Goal**: On-disk hash table.
-
-Files: `nomt/bitbox/*.go` (htfile, metamap, probe, pagecache, pageloader, db) + `nomt/io/*.go`
-
-- Page pool (sync.Pool, aligned allocation)
-- Direct I/O helpers (linux/darwin)
-- MetaMap operations
-- HT file creation and opening
-- Probe sequence + page loading
-- Page cache (sharded LRU with fixed-level pinning)
-
-**Milestone**: Can create HT file, insert pages, read them back. Cache serves hot pages.
-
-### Phase 4: WAL and Sync
-**Goal**: Crash-safe persistence.
-
-Files: `nomt/bitbox/wal.go`, `sync.go`, `writeout.go`, `recover.go` + tests
-
-- WAL blob writer/reader
-- SyncController three-phase protocol
-- Recovery from WAL
-- writeout helpers (write_wal, write_ht, truncate_wal)
-
-**Milestone**: Full sync cycle works. Simulated crash recovery restores correct state.
-
-### Phase 5: Geth Backend
-**Goal**: Wire into geth's triedb framework.
-
-Files: `triedb/nomtdb/*.go` + modifications to `triedb/database.go`
-
-- Config, Database, NodeReader, StateReader
-- PebbleDB flat KV integration
-- Update flow: StateSet → PageWalker → SyncController
-- Add NomtDB case to triedb.NewDatabase and triedb.Update
-
-**Milestone**: geth configured with NOMT backend can read/write state via standard interfaces.
-
-### Phase 6: Parallel Workers + Optimization
-**Goal**: Throughput optimization.
-
-- Parallel page walkers (sharded by root page children)
-- Warm-up phase (prefetch pages before updates)
-- Benchmarks vs. existing backends
-
----
-
-## 7. Key Source Files (Reference)
-
-| Component | NOMT Source | Purpose |
-|-----------|-------------|---------|
-| Node types | `nomt/core/src/trie.rs` | Node, KeyPath, TERMINATOR, NodeKind |
-| Hasher | `nomt/core/src/hasher.rs` | MSB labeling, hash functions |
-| Page layout | `nomt/core/src/page.rs` | DEPTH=6, NODES_PER_PAGE=126 |
-| Page IDs | `nomt/core/src/page_id.rs` | Encode/decode, child/parent |
-| Trie position | `nomt/core/src/trie_pos.rs` | Depth tracking, node indexing |
-| Page diff | `nomt/core/src/page_diff.rs` | 126-bit change bitfield |
-| Page walker | `nomt/nomt/src/merkle/page_walker.rs` | Batch update algorithm |
-| Page set | `nomt/nomt/src/merkle/page_set.rs` | Page access interface |
-| Workers | `nomt/nomt/src/merkle/worker.rs` | Parallel update workers |
-| Bitbox DB | `nomt/nomt/src/bitbox/mod.rs` | Hash table DB, sync, probing |
-| HT file | `nomt/nomt/src/bitbox/ht_file.rs` | File layout, create/open |
-| Meta map | `nomt/nomt/src/bitbox/meta_map.rs` | Per-bucket metadata bytes |
-| WAL | `nomt/nomt/src/bitbox/wal.rs` | Write-ahead log format |
-| Page cache | `nomt/nomt/src/page_cache.rs` | Sharded LRU cache |
-
-| Component | Geth Source | Purpose |
-|-----------|-------------|---------|
-| Backend interface | `go-ethereum/triedb/database/database.go` | NodeReader, StateReader |
-| Backend selector | `go-ethereum/triedb/database.go` | Config, NewDatabase |
-| PathDB (reference) | `go-ethereum/triedb/pathdb/database.go` | Similar backend pattern |
-| State DB | `go-ethereum/core/state/statedb.go` | State management layer |
+```
++-----------+    UpdateAccount(addr, acc)     +------------+
+| StateDB   | -----------------------------> | NomtTrie   |
+|           |    UpdateStorage(addr, k, v)    |            |
+|           | -----------------------------> | pending:   |
+|           |    UpdateContractCode(addr, c)  | [{stem,    |
+|           | -----------------------------> |   suffix,  |
++-----------+                                 |   value}]  |
+                                              +-----+------+
+                                                    |
+                                              Hash() called
+                                                    |
+                                              +-----v------+
+                                              | groupAnd   |
+                                              | HashStems  |
+                                              +-----+------+
+                                                    |
+                          +-------------------------+-------------------------+
+                          |                                                   |
+                    +-----v------+                                      +-----v------+
+                    | Load stem  |                                      | Compute    |
+                    | values     |                                      | stem hash  |
+                    | from 0x03  |                                      | SHA256     |
+                    | prefix     |                                      | sub-tree   |
+                    +-----+------+                                      +-----+------+
+                          |                                                   |
+                    +-----v------+                                            |
+                    | Merge new  |                                            |
+                    | values     |                                            |
+                    +-----+------+                                            |
+                          |                                                   |
+                    +-----v------+                                            |
+                    | Write back |                                            |
+                    | to 0x03    |                                            |
+                    | (batch)    |                                            |
+                    +------------+                                            |
+                                                                              |
+                          +---------------------------------------------------+
+                          |
+                    +-----v----------+
+                    | []StemKeyValue |   sorted by stem path
+                    +-----+----------+
+                          |
+              +-----------+-----------+
+              |                       |
+        +-----v------+         +-----v------+
+        | Merge into |         | db.Update  |
+        | allStems   |         +-----+------+
+        | (sorted)   |               |
+        +-----+------+         +-----v-----------+
+              |                 | ParallelUpdate  |
+              |                 | (PageWalker x N)|
+              |                 +-----+-----------+
+              |                       |
+              |                 +-----v------+
+              |                 | PebbleDB   |
+              |                 | batch:     |
+              |                 | put pages  |
+              |                 | put root   |
+              |                 +------------+
+              |
+        +-----v-----------------+
+        | BuildInternalTree     |
+        | skip=0, allStems      |
+        +-----+-----------------+
+              |
+        +-----v------+
+        | Canonical  |   <-- returned by Hash()
+        | state root |       matches bintrie exactly
+        +------------+
+```
 
 ---
 
-## 8. Verification Plan
+## 11. Crash Safety
 
-1. **Unit tests**: Port NOMT's Rust test cases for PageID, PageDiff, MetaMap, ProbeSequence
-2. **Hash compatibility**: Verify node hashes match expected values for known inputs
-3. **PageWalker correctness**: Feed same inputs as Rust tests, compare root hashes
-4. **WAL recovery**: Simulate crashes at each sync phase, verify recovery
-5. **Integration**: Process historical Ethereum blocks, verify state root matches
-6. **Benchmarks**: Compare commit latency and throughput vs. HashDB/PathDB backends
+All persistent state changes are made through PebbleDB's atomic batch writes:
+
+```
+Crash Safety Guarantees
+========================
+
+State changes happen in two atomic batches per Hash() call:
+
+Batch 1 (stem values):
+  Write updated stem values to prefix 0x03
+  -> If crash here: stem values partially updated, but page tree
+     and canonical root unchanged. Next Hash() will recompute
+     stem hashes from flat state, producing correct result.
+
+Batch 2 (page tree):
+  Write updated pages to prefix 0x04
+  Write new page tree root to prefix 0x05
+  -> Atomic: either all pages + root update, or none do.
+  -> If crash before: pages unchanged, root unchanged.
+     Next block re-applies the same page updates.
+  -> If crash after: consistent state, root matches pages.
+
+Recovery on startup:
+  1. Read root from PebbleDB (prefix 0x05)
+  2. If found and valid (32 bytes): use as current root
+  3. If not found: fresh database, root = Terminator
+  No WAL replay, no file scanning, no repair needed.
+```
+
+---
+
+## 12. Performance Characteristics
+
+```
+Operation Costs
+================
+
+Read account:       1 PebbleDB point lookup (prefix 0x03, stem slot 0)
+                    + 1 PebbleDB point lookup (stem slot 1 for code hash)
+                    Bloom filter makes misses fast.
+
+Read storage:       1 PebbleDB point lookup (prefix 0x03)
+
+Write account:      2 pending stemUpdates (basic data + code hash)
+                    Deferred to Hash() — no I/O during execution.
+
+Hash() flush:       O(S) prefix iterations for S dirty stems (load values)
+                    O(S * log(S)) sort
+                    O(S * 256) SHA256 hashing (stem sub-trees)
+                    O(P) page reads/writes for P affected pages
+                    2 PebbleDB atomic batch writes
+
+Parallelism:        Page tree updates partitioned across N workers
+                    (default: runtime.NumCPU())
+                    Workers share no state — each has own PageSet.
+                    Effective for 64+ stems per block.
+
+Memory:             4KB per cached page (pebblePageSet, per-worker)
+                    ~64 bytes per tracked stem (allStems slice)
+                    SHA256 hasher pool (sync.Pool, reused across calls)
+```
+
+---
+
+## 13. Cross-Validation
+
+The implementation is validated against geth's `trie/bintrie/` which
+independently implements EIP-7864. Both produce identical state roots:
+
+```
+Cross-Validation Test Matrix
+==============================
+
+Test                          Accounts   Contracts   Slots    Distributions
+---------------------------   --------   ---------   ------   -------------
+TestRootEquality/Small        100        50          1-20     PowerLaw
+TestRootEquality/Medium       1,000      500         1-100    PowerLaw
+TestRootEquality/Large        10,000     5,000       1-500    PowerLaw
+TestDistributionVariants      100        50          1-20     PowerLaw,Uniform,Exp
+TestIncrementalRootEquality   20         10          1-5      Uniform (per-op)
+TestDeterminism               100        50          1-20     PowerLaw (2x same seed)
+
+All tests verify: bintrie_root == nomt_root at every block boundary.
+Race detector enabled on all test runs.
+```

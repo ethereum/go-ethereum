@@ -3,32 +3,30 @@ package db
 import (
 	"testing"
 
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/nomt/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestOpenClose(t *testing.T) {
-	dir := t.TempDir()
-	db, err := Open(dir, DefaultConfig())
+func newTestDB(t *testing.T) *DB {
+	t.Helper()
+	diskdb := rawdb.NewMemoryDatabase()
+	db, err := New(diskdb, DefaultConfig())
 	require.NoError(t, err)
-
-	assert.Equal(t, core.Terminator, db.Root())
-	require.NoError(t, db.Close())
+	t.Cleanup(func() { db.Close() })
+	return db
 }
 
-func TestOpenCreatesDirectory(t *testing.T) {
-	dir := t.TempDir() + "/subdir"
-	db, err := Open(dir, DefaultConfig())
-	require.NoError(t, err)
-	defer db.Close()
+func TestNewClose(t *testing.T) {
+	db := newTestDB(t)
 	assert.Equal(t, core.Terminator, db.Root())
 }
 
-func TestReopenPreservesState(t *testing.T) {
-	dir := t.TempDir()
+func TestReopenPreservesRoot(t *testing.T) {
+	diskdb := rawdb.NewMemoryDatabase()
 
-	db, err := Open(dir, DefaultConfig())
+	db, err := New(diskdb, DefaultConfig())
 	require.NoError(t, err)
 
 	newRoot, err := db.Update([]core.StemKeyValue{
@@ -36,23 +34,17 @@ func TestReopenPreservesState(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.False(t, core.IsTerminator(&newRoot))
-	require.NoError(t, db.Close())
 
-	// Reopen and set the root.
-	db2, err := Open(dir, DefaultConfig())
+	// "Reopen" by creating a new DB on the same ethdb.
+	db2, err := New(diskdb, DefaultConfig())
 	require.NoError(t, err)
-	defer db2.Close()
 
-	// Root is not automatically persisted (that's the geth integration's
-	// job), but the pages should still be on disk.
-	assert.Equal(t, core.Terminator, db2.Root())
+	// Root is now persisted in PebbleDB, so it should be recovered.
+	assert.Equal(t, newRoot, db2.Root())
 }
 
 func TestUpdateSingleKey(t *testing.T) {
-	dir := t.TempDir()
-	db, err := Open(dir, DefaultConfig())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 
 	newRoot, err := db.Update([]core.StemKeyValue{
 		{Stem: makeStem(0x10), Hash: makeHash(0x42)},
@@ -64,10 +56,7 @@ func TestUpdateSingleKey(t *testing.T) {
 }
 
 func TestUpdateMultipleKeys(t *testing.T) {
-	dir := t.TempDir()
-	db, err := Open(dir, DefaultConfig())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 
 	ops := []core.StemKeyValue{
 		{Stem: makeStem(0x10), Hash: makeHash(0x01)},
@@ -86,11 +75,7 @@ func TestUpdateDeterministic(t *testing.T) {
 	}
 
 	run := func() core.Node {
-		dir := t.TempDir()
-		db, err := Open(dir, DefaultConfig())
-		require.NoError(t, err)
-		defer db.Close()
-
+		db := newTestDB(t)
 		root, err := db.Update(ops)
 		require.NoError(t, err)
 		return root
@@ -102,10 +87,7 @@ func TestUpdateDeterministic(t *testing.T) {
 }
 
 func TestUpdateEmptyOps(t *testing.T) {
-	dir := t.TempDir()
-	db, err := Open(dir, DefaultConfig())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 
 	root, err := db.Update(nil)
 	require.NoError(t, err)
@@ -113,10 +95,7 @@ func TestUpdateEmptyOps(t *testing.T) {
 }
 
 func TestUpdateSortsByStem(t *testing.T) {
-	dir := t.TempDir()
-	db, err := Open(dir, DefaultConfig())
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t)
 
 	// Provide stems in reverse order — should still work.
 	ops := []core.StemKeyValue{
@@ -127,27 +106,6 @@ func TestUpdateSortsByStem(t *testing.T) {
 	root, err := db.Update(ops)
 	require.NoError(t, err)
 	assert.False(t, core.IsTerminator(&root))
-}
-
-func TestSyncSeqnIncrements(t *testing.T) {
-	dir := t.TempDir()
-	db, err := Open(dir, DefaultConfig())
-	require.NoError(t, err)
-	defer db.Close()
-
-	assert.Equal(t, uint32(0), db.SyncSeqn())
-
-	_, err = db.Update([]core.StemKeyValue{
-		{Stem: makeStem(0x10), Hash: makeHash(0x01)},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, uint32(1), db.SyncSeqn())
-
-	_, err = db.Update([]core.StemKeyValue{
-		{Stem: makeStem(0x80), Hash: makeHash(0x02)},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, uint32(2), db.SyncSeqn())
 }
 
 func makeStem(b byte) core.StemPath {

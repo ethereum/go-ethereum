@@ -2,9 +2,6 @@ package triecompare
 
 import (
 	"fmt"
-	"math/bits"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,19 +30,15 @@ func newBintrie(t testing.TB) *bintrie.BinaryTrie {
 	return bt
 }
 
-func newNomtTrieWithDir(t testing.TB, htCapacity uint64) (*nomttrie.NomtTrie, string) {
+func newNomtTrie(t testing.TB) *nomttrie.NomtTrie {
 	t.Helper()
 	diskdb := rawdb.NewMemoryDatabase()
-	dir := t.TempDir()
-	backend := nomtdb.New(diskdb, &nomtdb.Config{
-		DataDir:    dir,
-		HTCapacity: htCapacity,
-	})
+	backend := nomtdb.New(diskdb, nil)
 	t.Cleanup(func() { backend.Close() })
 
 	nt, err := nomttrie.New(common.Hash{}, backend)
 	require.NoError(t, err)
-	return nt, dir
+	return nt
 }
 
 // applyOp applies a single StateOp to both bintrie and nomttrie.
@@ -116,10 +109,9 @@ func TestRootEquality(t *testing.T) {
 	for name, cfg := range configs {
 		t.Run(name, func(t *testing.T) {
 			blocks := GenerateBlocks(cfg)
-			htCap := estimateHTCapacity(cfg.NumAccounts, cfg.NumContracts, (cfg.MinSlots+cfg.MaxSlots)/2)
 
 			bt := newBintrie(t)
-			nt, _ := newNomtTrieWithDir(t, htCap)
+			nt := newNomtTrie(t)
 
 			for blockIdx, ops := range blocks {
 				for _, op := range ops {
@@ -144,11 +136,7 @@ func TestRootEquality(t *testing.T) {
 func TestDeterminism(t *testing.T) {
 	computeRoot := func() common.Hash {
 		blocks := GenerateBlocks(smallConfig)
-		htCap := estimateHTCapacity(
-			smallConfig.NumAccounts, smallConfig.NumContracts,
-			(smallConfig.MinSlots+smallConfig.MaxSlots)/2,
-		)
-		nt, _ := newNomtTrieWithDir(t, htCap)
+		nt := newNomtTrie(t)
 		bt := newBintrie(t)
 		var root common.Hash
 		for _, ops := range blocks {
@@ -185,10 +173,9 @@ func TestDistributionVariants(t *testing.T) {
 			cfg.Seed = 123 // same seed for all
 
 			blocks := GenerateBlocks(cfg)
-			htCap := estimateHTCapacity(cfg.NumAccounts, cfg.NumContracts, (cfg.MinSlots+cfg.MaxSlots)/2)
 
 			bt := newBintrie(t)
-			nt, _ := newNomtTrieWithDir(t, htCap)
+			nt := newNomtTrie(t)
 
 			var binRoot, nomtRoot common.Hash
 			for _, ops := range blocks {
@@ -224,10 +211,9 @@ func TestIncrementalRootEquality(t *testing.T) {
 		Seed:         99,
 	}
 	blocks := GenerateBlocks(cfg)
-	htCap := estimateHTCapacity(cfg.NumAccounts, cfg.NumContracts, 3)
 
 	bt := newBintrie(t)
-	nt, _ := newNomtTrieWithDir(t, htCap)
+	nt := newNomtTrie(t)
 
 	for i, op := range blocks[0] {
 		applyOp(t, bt, nt, op)
@@ -242,8 +228,8 @@ func TestIncrementalRootEquality(t *testing.T) {
 	t.Logf("verified %d incremental hashes match", len(blocks[0]))
 }
 
-// TestStorageFootprint populates state and measures storage used by each
-// implementation. Logs sizes and ratio.
+// TestStorageFootprint populates state and measures serialized node sizes
+// for bintrie. NOMT pages are now in ethdb, so only bintrie size is reported.
 func TestStorageFootprint(t *testing.T) {
 	if testing.Short() {
 		t.Skip("storage footprint test requires medium config")
@@ -251,10 +237,9 @@ func TestStorageFootprint(t *testing.T) {
 
 	cfg := mediumConfig
 	blocks := GenerateBlocks(cfg)
-	htCap := estimateHTCapacity(cfg.NumAccounts, cfg.NumContracts, (cfg.MinSlots+cfg.MaxSlots)/2)
 
 	bt := newBintrie(t)
-	nt, nomtDir := newNomtTrieWithDir(t, htCap)
+	nt := newNomtTrie(t)
 
 	for _, ops := range blocks {
 		for _, op := range ops {
@@ -271,13 +256,7 @@ func TestStorageFootprint(t *testing.T) {
 	_, ns := bt.Commit(false)
 	binBytes := nodesetBytes(ns)
 
-	// NOMT: sum file sizes on disk.
-	nomtBytes := dirSize(t, nomtDir)
-
-	ratio := float64(nomtBytes) / float64(max(binBytes, 1))
 	t.Logf("bintrie serialized nodes: %s (%d bytes)", humanBytes(binBytes), binBytes)
-	t.Logf("NOMT bitbox on disk:      %s (%d bytes)", humanBytes(nomtBytes), nomtBytes)
-	t.Logf("NOMT / bintrie ratio:     %.2fx", ratio)
 }
 
 // ---------------------------------------------------------------------------
@@ -288,7 +267,6 @@ func BenchmarkUpdateAccount(b *testing.B) {
 	cfg := smallConfig
 	blocks := GenerateBlocks(cfg)
 	ops := filterOps(blocks[0], OpUpdateAccount)
-	htCap := estimateHTCapacity(cfg.NumAccounts, cfg.NumContracts, 10)
 
 	b.Run("bintrie", func(b *testing.B) {
 		bt := newBintrie(b)
@@ -300,7 +278,7 @@ func BenchmarkUpdateAccount(b *testing.B) {
 	})
 
 	b.Run("nomt", func(b *testing.B) {
-		nt, _ := newNomtTrieWithDir(b, htCap)
+		nt := newNomtTrie(b)
 		b.ResetTimer()
 		for i := range b.N {
 			op := ops[i%len(ops)]
@@ -313,7 +291,6 @@ func BenchmarkUpdateStorage(b *testing.B) {
 	cfg := smallConfig
 	blocks := GenerateBlocks(cfg)
 	ops := filterOps(blocks[0], OpUpdateStorage)
-	htCap := estimateHTCapacity(cfg.NumAccounts, cfg.NumContracts, 10)
 
 	b.Run("bintrie", func(b *testing.B) {
 		bt := newBintrie(b)
@@ -325,7 +302,7 @@ func BenchmarkUpdateStorage(b *testing.B) {
 	})
 
 	b.Run("nomt", func(b *testing.B) {
-		nt, _ := newNomtTrieWithDir(b, htCap)
+		nt := newNomtTrie(b)
 		b.ResetTimer()
 		for i := range b.N {
 			op := ops[i%len(ops)]
@@ -347,7 +324,6 @@ func BenchmarkHash(b *testing.B) {
 				Seed:         77,
 			}
 			blocks := GenerateBlocks(cfg)
-			htCap := estimateHTCapacity(size, 0, 0)
 
 			b.Run("bintrie", func(b *testing.B) {
 				bt := newBintrie(b)
@@ -367,7 +343,7 @@ func BenchmarkHash(b *testing.B) {
 			})
 
 			b.Run("nomt", func(b *testing.B) {
-				nt, _ := newNomtTrieWithDir(b, htCap)
+				nt := newNomtTrie(b)
 				for _, op := range blocks[0] {
 					_ = nt.UpdateAccount(op.Address, op.Account, op.CodeLen)
 				}
@@ -388,7 +364,6 @@ func BenchmarkHash(b *testing.B) {
 func BenchmarkBlockWorkload(b *testing.B) {
 	cfg := smallConfig
 	blocks := GenerateBlocks(cfg)
-	htCap := estimateHTCapacity(cfg.NumAccounts, cfg.NumContracts, 10)
 
 	// Use block 1 (mutations) as the repeated workload.
 	workload := blocks[1]
@@ -411,7 +386,7 @@ func BenchmarkBlockWorkload(b *testing.B) {
 	})
 
 	b.Run("nomt", func(b *testing.B) {
-		nt, _ := newNomtTrieWithDir(b, htCap)
+		nt := newNomtTrie(b)
 		for _, op := range blocks[0] {
 			applyOpSingleNomt(b, nt, op)
 		}
@@ -478,35 +453,6 @@ func nodesetBytes(ns *trienode.NodeSet) int64 {
 		total += int64(len(node.Blob))
 	}
 	return total
-}
-
-// dirSize walks a directory and returns total file size in bytes.
-func dirSize(t testing.TB, dir string) int64 {
-	t.Helper()
-	var total int64
-	err := filepath.Walk(dir, func(_ string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			total += info.Size()
-		}
-		return nil
-	})
-	require.NoError(t, err)
-	return total
-}
-
-// estimateHTCapacity returns a power-of-2 hash table capacity for ~50% load.
-// Each account uses ~1 stem; each contract uses 1 + ceil(avgSlots/256) stems.
-func estimateHTCapacity(numAccounts, numContracts, avgSlots int) uint64 {
-	stems := numAccounts + numContracts
-	if avgSlots > 0 {
-		stems += numContracts * ((avgSlots + 255) / 256)
-	}
-	// 50% load factor → double the stem count, then round up to power of 2.
-	target := max(uint64(stems*2), 64)
-	return 1 << bits.Len64(target-1)
 }
 
 // humanBytes formats byte counts for log output.

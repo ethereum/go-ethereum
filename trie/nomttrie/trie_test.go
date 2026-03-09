@@ -14,15 +14,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// newTestTrie creates a NomtTrie backed by an in-memory ethdb and a temp
-// Bitbox directory. Returns the trie and a cleanup function.
+// newTestTrie creates a NomtTrie backed by an in-memory ethdb.
 func newTestTrie(t *testing.T) *NomtTrie {
 	t.Helper()
 	diskdb := rawdb.NewMemoryDatabase()
-	backend := nomtdb.New(diskdb, &nomtdb.Config{
-		DataDir:    t.TempDir(),
-		HTCapacity: 1 << 16,
-	})
+	backend := nomtdb.New(diskdb, nil)
 	t.Cleanup(func() { backend.Close() })
 
 	tr, err := New(common.Hash{}, backend)

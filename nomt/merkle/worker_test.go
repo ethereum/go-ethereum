@@ -99,7 +99,7 @@ func TestAssignToWorkersMoreWorkersThanChildren(t *testing.T) {
 // --- Integration tests ---
 
 // permissivePageSet wraps MemoryPageSet to return fresh pages for missing
-// entries (matching bitboxPageSet behavior). This is needed because the
+// entries (matching pebblePageSet behavior). This is needed because the
 // parallel workers descend into child pages that may not exist yet.
 type permissivePageSet struct {
 	*MemoryPageSet

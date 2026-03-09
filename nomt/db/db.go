@@ -1,35 +1,37 @@
-// Package db provides the unified NOMT trie database combining Bitbox
+// Package db provides the NOMT trie database combining PebbleDB page
 // storage with the PageWalker merkle engine.
 //
-// This package handles only the trie structure (merkle pages). Flat
-// key-value storage (accounts, storage slots) stays on geth's PebbleDB.
+// Trie pages are stored as 4KB blobs in geth's ethdb under key prefix 0x04.
+// Flat key-value storage (accounts, storage slots) stays on geth's PebbleDB
+// under separate prefixes managed by triedb/nomtdb.
 package db
 
 import (
 	"bytes"
-	"crypto/rand"
 	"fmt"
-	"os"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/nomt/bitbox"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/nomt/core"
 	"github.com/ethereum/go-ethereum/nomt/merkle"
 )
 
 const (
-	htFileName  = "nomt.ht"
-	walFileName = "nomt.wal"
+	// nomtPagePrefix is the ethdb key prefix for NOMT trie pages.
+	// Key format: 0x04 || PageID.Encode()[32] → RawPage[4032]
+	nomtPagePrefix byte = 0x04
+
+	// nomtMetaPrefix is the ethdb key prefix for NOMT metadata.
+	nomtMetaPrefix byte = 0x05
 )
+
+// nomtMetaRootKey is the ethdb key for the persisted page tree root.
+var nomtMetaRootKey = []byte{nomtMetaPrefix, 'r', 'o', 'o', 't'}
 
 // Config holds configuration for the NOMT database.
 type Config struct {
-	// HTCapacity is the number of hash table buckets. Must be a power of 2.
-	HTCapacity uint64
-
 	// NumWorkers is the number of parallel goroutines for trie updates.
 	// Defaults to runtime.NumCPU() if zero.
 	NumWorkers int
@@ -37,71 +39,34 @@ type Config struct {
 
 // DefaultConfig returns a default configuration.
 func DefaultConfig() Config {
-	return Config{
-		HTCapacity: 1 << 20, // ~1M buckets = ~4GB
-	}
+	return Config{}
 }
 
 // DB is the NOMT trie database.
 type DB struct {
-	dataDir    string
-	bb         *bitbox.DB
+	diskdb     ethdb.Database
 	root       core.Node
-	syncSeqn   uint32
 	numWorkers int
 	mu         sync.RWMutex
 }
 
-// Open opens or creates a NOMT trie database at the given directory.
-func Open(dataDir string, config Config) (*DB, error) {
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		return nil, fmt.Errorf("nomt/db: create datadir: %w", err)
-	}
-
-	htPath := filepath.Join(dataDir, htFileName)
-	walPath := filepath.Join(dataDir, walFileName)
-
-	var bb *bitbox.DB
-	var err error
-
-	if _, statErr := os.Stat(htPath); os.IsNotExist(statErr) {
-		// Create new database.
-		var seed [16]byte
-		if _, err := rand.Read(seed[:]); err != nil {
-			return nil, fmt.Errorf("nomt/db: generate seed: %w", err)
-		}
-		bb, err = bitbox.Create(htPath, config.HTCapacity, seed)
-		if err != nil {
-			return nil, fmt.Errorf("nomt/db: create bitbox: %w", err)
-		}
-	} else {
-		// Open existing database.
-		bb, err = bitbox.Open(htPath)
-		if err != nil {
-			return nil, fmt.Errorf("nomt/db: open bitbox: %w", err)
-		}
-	}
-
+// New creates or opens a NOMT trie database backed by the given ethdb.
+// The page tree root is loaded from persisted metadata if available.
+func New(diskdb ethdb.Database, config Config) (*DB, error) {
 	numWorkers := config.NumWorkers
 	if numWorkers <= 0 {
 		numWorkers = runtime.NumCPU()
 	}
 
 	db := &DB{
-		dataDir:    dataDir,
-		bb:         bb,
+		diskdb:     diskdb,
 		root:       core.Terminator,
 		numWorkers: numWorkers,
 	}
 
-	// Run WAL recovery.
-	seqn, err := bb.Recover(walPath)
-	if err != nil {
-		bb.Close()
-		return nil, fmt.Errorf("nomt/db: recover: %w", err)
-	}
-	if seqn > 0 {
-		db.syncSeqn = seqn
+	// Load persisted root.
+	if data, err := diskdb.Get(nomtMetaRootKey); err == nil && len(data) == 32 {
+		copy(db.root[:], data)
 	}
 
 	return db, nil
@@ -112,20 +77,6 @@ func (db *DB) Root() core.Node {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	return db.root
-}
-
-// SetRoot sets the current trie root (used when loading state from metadata).
-func (db *DB) SetRoot(root core.Node) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	db.root = root
-}
-
-// SyncSeqn returns the current sync sequence number.
-func (db *DB) SyncSeqn() uint32 {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	return db.syncSeqn
 }
 
 // Update applies a batch of stem key-value pairs to the trie.
@@ -148,58 +99,76 @@ func (db *DB) UpdateSorted(ops []core.StemKeyValue) (core.Node, error) {
 	defer db.mu.Unlock()
 
 	pageSetFactory := func() merkle.PageSet {
-		return newBitboxPageSet(db.bb)
+		return newPebblePageSet(db.diskdb)
 	}
 	out := merkle.ParallelUpdate(db.root, ops, db.numWorkers, pageSetFactory)
 
-	// Persist updated pages.
-	walPath := filepath.Join(db.dataDir, walFileName)
-	db.syncSeqn++
-	if err := db.bb.FullSync(walPath, db.syncSeqn, out.Pages); err != nil {
-		return core.Terminator, fmt.Errorf("nomt/db: sync: %w", err)
+	// Persist updated pages via atomic batch write.
+	batch := db.diskdb.NewBatch()
+	for _, up := range out.Pages {
+		key := nomtPageKey(up.PageID)
+		if up.Diff.IsCleared() {
+			if err := batch.Delete(key); err != nil {
+				return core.Terminator, fmt.Errorf("nomt/db: delete page: %w", err)
+			}
+		} else {
+			if err := batch.Put(key, up.Page[:]); err != nil {
+				return core.Terminator, fmt.Errorf("nomt/db: put page: %w", err)
+			}
+		}
+	}
+	// Persist root.
+	if err := batch.Put(nomtMetaRootKey, out.Root[:]); err != nil {
+		return core.Terminator, fmt.Errorf("nomt/db: put root: %w", err)
+	}
+	if err := batch.Write(); err != nil {
+		return core.Terminator, fmt.Errorf("nomt/db: batch write: %w", err)
 	}
 
 	db.root = out.Root
 	return out.Root, nil
 }
 
-// LoadPage loads a page from Bitbox storage by its PageID.
+// LoadPage loads a page from ethdb storage by its PageID.
 func (db *DB) LoadPage(pageID core.PageID) (*core.RawPage, error) {
-	page, _, found, err := db.bb.LoadPage(pageID)
+	data, err := db.diskdb.Get(nomtPageKey(pageID))
 	if err != nil {
-		return nil, fmt.Errorf("nomt/db: load page: %w", err)
+		return nil, nil // Not found.
 	}
-	if !found {
-		return nil, nil
+	if len(data) != core.PageSize {
+		return nil, fmt.Errorf("nomt/db: page size mismatch: got %d, want %d", len(data), core.PageSize)
 	}
+	page := new(core.RawPage)
+	copy(page[:], data)
 	return page, nil
 }
 
-// Close closes the database.
+// Close is a no-op — the ethdb lifecycle is managed by the caller.
 func (db *DB) Close() error {
-	return db.bb.Close()
+	return nil
 }
 
-// --- BitboxPageSet ---
+// --- PebblePageSet ---
 
-// bitboxPageSet implements merkle.PageSet backed by Bitbox disk storage.
-type bitboxPageSet struct {
-	bb    *bitbox.DB
-	cache map[string]*core.RawPage
+// pebblePageSet implements merkle.PageSet backed by ethdb (PebbleDB).
+type pebblePageSet struct {
+	diskdb ethdb.Database
+	cache  map[string]*core.RawPage
 }
 
-func newBitboxPageSet(bb *bitbox.DB) *bitboxPageSet {
-	return &bitboxPageSet{
-		bb:    bb,
-		cache: make(map[string]*core.RawPage, 16),
+func newPebblePageSet(diskdb ethdb.Database) *pebblePageSet {
+	return &pebblePageSet{
+		diskdb: diskdb,
+		cache:  make(map[string]*core.RawPage, 16),
 	}
 }
 
-func (ps *bitboxPageSet) Get(pageID core.PageID) (
+func (ps *pebblePageSet) Get(pageID core.PageID) (
 	*core.RawPage, merkle.PageOrigin, bool,
 ) {
-	key := pageIDKey(pageID)
+	key := pageIDCacheKey(pageID)
 	if cached, ok := ps.cache[key]; ok {
+		// Return a copy so the walker can mutate freely.
 		pageCopy := new(core.RawPage)
 		*pageCopy = *cached
 		return pageCopy, merkle.PageOrigin{
@@ -207,8 +176,8 @@ func (ps *bitboxPageSet) Get(pageID core.PageID) (
 		}, true
 	}
 
-	page, _, found, err := ps.bb.LoadPage(pageID)
-	if err != nil || !found {
+	data, err := ps.diskdb.Get(nomtPageKey(pageID))
+	if err != nil || len(data) != core.PageSize {
 		// Return a fresh page if not found — this handles the case
 		// where the trie is being built from scratch or expanded
 		// into new regions.
@@ -216,7 +185,11 @@ func (ps *bitboxPageSet) Get(pageID core.PageID) (
 		return fresh, merkle.PageOrigin{Kind: merkle.PageOriginFresh}, true
 	}
 
+	page := new(core.RawPage)
+	copy(page[:], data)
 	ps.cache[key] = page
+
+	// Return a copy so the walker can mutate freely.
 	pageCopy := new(core.RawPage)
 	*pageCopy = *page
 	return pageCopy, merkle.PageOrigin{
@@ -224,26 +197,36 @@ func (ps *bitboxPageSet) Get(pageID core.PageID) (
 	}, true
 }
 
-func (ps *bitboxPageSet) Contains(pageID core.PageID) bool {
-	key := pageIDKey(pageID)
+func (ps *pebblePageSet) Contains(pageID core.PageID) bool {
+	key := pageIDCacheKey(pageID)
 	if _, ok := ps.cache[key]; ok {
 		return true
 	}
-	_, _, found, _ := ps.bb.LoadPage(pageID)
-	return found
+	has, _ := ps.diskdb.Has(nomtPageKey(pageID))
+	return has
 }
 
-func (ps *bitboxPageSet) Fresh(pageID core.PageID) *core.RawPage {
+func (ps *pebblePageSet) Fresh(pageID core.PageID) *core.RawPage {
 	return new(core.RawPage)
 }
 
-func (ps *bitboxPageSet) Insert(
+func (ps *pebblePageSet) Insert(
 	pageID core.PageID, page *core.RawPage, origin merkle.PageOrigin,
 ) {
-	ps.cache[pageIDKey(pageID)] = page
+	ps.cache[pageIDCacheKey(pageID)] = page
 }
 
-func pageIDKey(id core.PageID) string {
+// nomtPageKey builds the ethdb key for a NOMT trie page.
+func nomtPageKey(id core.PageID) []byte {
+	encoded := id.Encode()
+	key := make([]byte, 1+len(encoded))
+	key[0] = nomtPagePrefix
+	copy(key[1:], encoded[:])
+	return key
+}
+
+// pageIDCacheKey returns a string key for the in-memory cache.
+func pageIDCacheKey(id core.PageID) string {
 	encoded := id.Encode()
 	return string(encoded[:])
 }

@@ -11,23 +11,22 @@ import (
 // Database is the NOMT triedb backend. It manages the NOMT trie engine for
 // page-based merkle storage and delegates flat state to geth's ethdb.
 type Database struct {
-	diskdb ethdb.Database // geth's existing PebbleDB for flat state + metadata
-	nomt   *db.DB         // NOMT trie engine (Bitbox page storage)
+	diskdb ethdb.Database // geth's existing PebbleDB for flat state + pages
+	nomt   *db.DB         // NOMT trie engine
 	config *Config
 }
 
-// New creates a new NOMT backend. The diskdb is used for flat state storage
-// (accounts, storage slots) and NOMT metadata. The NOMT engine opens its own
-// Bitbox files under config.DataDir.
+// New creates a new NOMT backend. The diskdb is used for flat state storage,
+// NOMT page storage, and metadata. Pass nil config for defaults.
 func New(diskdb ethdb.Database, config *Config) *Database {
-	if config.HTCapacity == 0 {
-		config.HTCapacity = Defaults.HTCapacity
+	if config == nil {
+		config = &Config{}
 	}
-	nomtDB, err := db.Open(config.DataDir, db.Config{
-		HTCapacity: config.HTCapacity,
+	nomtDB, err := db.New(diskdb, db.Config{
+		NumWorkers: config.NumWorkers,
 	})
 	if err != nil {
-		log.Crit("Failed to open NOMT database", "err", err)
+		log.Crit("Failed to create NOMT database", "err", err)
 	}
 	return &Database{
 		diskdb: diskdb,

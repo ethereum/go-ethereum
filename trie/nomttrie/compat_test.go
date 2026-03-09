@@ -29,14 +29,11 @@ func newBintrie(t *testing.T) *bintrie.BinaryTrie {
 	return bt
 }
 
-// newNomtTrieForCompat creates a NomtTrie with in-memory ethdb and temp Bitbox.
+// newNomtTrieForCompat creates a NomtTrie with in-memory ethdb.
 func newNomtTrieForCompat(t *testing.T) *NomtTrie {
 	t.Helper()
 	diskdb := rawdb.NewMemoryDatabase()
-	backend := nomtdb.New(diskdb, &nomtdb.Config{
-		DataDir:    t.TempDir(),
-		HTCapacity: 1 << 16,
-	})
+	backend := nomtdb.New(diskdb, nil)
 	t.Cleanup(func() { backend.Close() })
 
 	tr, err := New(common.Hash{}, backend)
