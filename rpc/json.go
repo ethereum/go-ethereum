@@ -231,9 +231,60 @@ func NewCodec(conn Conn) ServerCodec {
 	dec.UseNumber()
 
 	encode := func(v interface{}, isErrorResponse bool) error {
+		if msg, ok := v.(*jsonrpcMessage); ok {
+			return writeMessage(conn, msg)
+		}
 		return enc.Encode(v)
 	}
 	return NewFuncCodec(conn, encode, dec.Decode)
+}
+
+// writeMessage writes a single jsonrpcMessage directly to the writer.
+func writeMessage(w io.Writer, msg *jsonrpcMessage) error {
+	var buf []byte
+	buf = append(buf, `{"jsonrpc":"2.0"`...)
+	if msg.ID != nil {
+		buf = append(buf, `,"id":`...)
+		buf = append(buf, msg.ID...)
+	}
+	if msg.Method != "" {
+		buf = append(buf, `,"method":`...)
+		buf = appendQuotedString(buf, msg.Method)
+	}
+	if msg.Params != nil {
+		buf = append(buf, `,"params":`...)
+		buf = append(buf, msg.Params...)
+	}
+	if msg.Error != nil {
+		errBytes, err := json.Marshal(msg.Error)
+		if err != nil {
+			return err
+		}
+		buf = append(buf, `,"error":`...)
+		buf = append(buf, errBytes...)
+	}
+	if msg.Result != nil {
+		buf = append(buf, `,"result":`...)
+		buf = append(buf, msg.Result...)
+	}
+	buf = append(buf, '}', '\n')
+	_, err := w.Write(buf)
+	return err
+}
+
+// appendQuotedString appends a JSON-quoted string to buf.
+func appendQuotedString(buf []byte, s string) []byte {
+	buf = append(buf, '"')
+	for _, c := range s {
+		switch c {
+		case '"', '\\':
+			buf = append(buf, '\\', byte(c))
+		default:
+			buf = append(buf, byte(c))
+		}
+	}
+	buf = append(buf, '"')
+	return buf
 }
 
 func (c *jsonCodec) peerInfo() PeerInfo {
