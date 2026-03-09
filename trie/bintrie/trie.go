@@ -143,7 +143,7 @@ func NewBinaryTrie(root common.Hash, db database.NodeDatabase) (*BinaryTrie, err
 		if err != nil {
 			return nil, err
 		}
-		node, err := DeserializeNode(blob, 0)
+		node, err := DeserializeNodeWithHash(blob, 0, root)
 		if err != nil {
 			return nil, err
 		}
@@ -384,7 +384,7 @@ func (t *BinaryTrie) UpdateContractCode(addr common.Address, codeHash common.Has
 		if groupOffset == 0 /* start of new group */ || chunknr == 0 /* first chunk in header group */ {
 			values = make([][]byte, StemNodeWidth)
 			var offset [HashSize]byte
-			binary.LittleEndian.PutUint64(offset[24:], chunknr+128)
+			binary.BigEndian.PutUint64(offset[24:], chunknr+128)
 			key = GetBinaryTreeKey(addr, offset[:])
 		}
 		values[groupOffset] = chunks[i : i+HashSize]

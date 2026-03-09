@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/internal/utesting"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
@@ -937,10 +938,14 @@ func (s *Suite) snapGetTrieNodes(t *utesting.T, tc *trieNodesTest) error {
 	}
 
 	// write0 request
+	paths, err := rlp.EncodeToRawList(tc.paths)
+	if err != nil {
+		panic(err)
+	}
 	req := &snap.GetTrieNodesPacket{
 		ID:    uint64(rand.Int63()),
 		Root:  tc.root,
-		Paths: tc.paths,
+		Paths: paths,
 		Bytes: tc.nBytes,
 	}
 	msg, err := conn.snapRequest(snap.GetTrieNodesMsg, req)

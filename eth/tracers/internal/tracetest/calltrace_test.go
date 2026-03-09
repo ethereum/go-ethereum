@@ -132,7 +132,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 			evm := vm.NewEVM(context, logState, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
-			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+			vmRet, err := core.ApplyMessage(evm, msg, nil)
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
@@ -224,7 +224,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		if tracer.OnTxStart != nil {
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
-		_, err = core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+		_, err = core.ApplyMessage(evm, msg, nil)
 		if err != nil {
 			b.Fatalf("failed to execute transaction: %v", err)
 		}
@@ -374,7 +374,7 @@ func TestInternals(t *testing.T) {
 				t.Fatalf("test %v: failed to create message: %v", tc.name, err)
 			}
 			tc.tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
-			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+			vmRet, err := core.ApplyMessage(evm, msg, nil)
 			if err != nil {
 				t.Fatalf("test %v: failed to execute transaction: %v", tc.name, err)
 			}

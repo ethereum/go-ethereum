@@ -122,7 +122,7 @@ func EncodeToRawList[T any](val []T) (RawList[T], error) {
 	bytes := make([]byte, contentSize+9)
 	offset := 9 - headsize(uint64(contentSize))
 	buf.copyTo(bytes[offset:])
-	return RawList[T]{enc: bytes}, nil
+	return RawList[T]{enc: bytes, length: len(val)}, nil
 }
 
 type listhead struct {

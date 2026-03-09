@@ -43,6 +43,7 @@ type BuildPayloadArgs struct {
 	Random       common.Hash           // The provided randomness value
 	Withdrawals  types.Withdrawals     // The provided withdrawals
 	BeaconRoot   *common.Hash          // The provided beaconRoot (Cancun)
+	SlotNum      *uint64               // The provided slotNumber
 	Version      engine.PayloadVersion // Versioning byte for payload id calculation.
 }
 
@@ -56,6 +57,9 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 	rlp.Encode(hasher, args.Withdrawals)
 	if args.BeaconRoot != nil {
 		hasher.Write(args.BeaconRoot[:])
+	}
+	if args.SlotNum != nil {
+		binary.Write(hasher, binary.BigEndian, args.SlotNum)
 	}
 	var out engine.PayloadID
 	copy(out[:], hasher.Sum(nil)[:8])
@@ -218,6 +222,7 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 		random:      args.Random,
 		withdrawals: args.Withdrawals,
 		beaconRoot:  args.BeaconRoot,
+		slotNum:     args.SlotNum,
 		noTxs:       true,
 	}
 	empty := miner.generateWork(emptyParams, witness)
@@ -248,12 +253,24 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 			random:      args.Random,
 			withdrawals: args.Withdrawals,
 			beaconRoot:  args.BeaconRoot,
+			slotNum:     args.SlotNum,
 			noTxs:       false,
 		}
 
 		for {
 			select {
 			case <-timer.C:
+				// When block building takes close to the full recommit interval,
+				// the timer fires near-instantly on the next iteration. If the
+				// payload was resolved during that build, both timer.C and
+				// payload.stop are ready and Go's select picks one at random.
+				// Check payload.stop first to avoid an unnecessary generateWork.
+				select {
+				case <-payload.stop:
+					log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
+					return
+				default:
+				}
 				start := time.Now()
 				r := miner.generateWork(fullParams, witness)
 				if r.err == nil {
@@ -261,7 +278,7 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 				} else {
 					log.Info("Error while generating work", "id", payload.id, "err", r.err)
 				}
-				timer.Reset(miner.config.Recommit)
+				timer.Reset(max(0, miner.config.Recommit-time.Since(start)))
 			case <-payload.stop:
 				log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
 				return
@@ -272,4 +289,27 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 		}
 	}()
 	return payload, nil
+}
+
+// BuildTestingPayload is for testing_buildBlockV*. It creates a block with the exact content given
+// by the parameters instead of using the locally available transactions.
+func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*types.Transaction, empty bool, extraData []byte) (*engine.ExecutionPayloadEnvelope, error) {
+	fullParams := &generateParams{
+		timestamp:         args.Timestamp,
+		forceTime:         true,
+		parentHash:        args.Parent,
+		coinbase:          args.FeeRecipient,
+		random:            args.Random,
+		withdrawals:       args.Withdrawals,
+		beaconRoot:        args.BeaconRoot,
+		noTxs:             empty,
+		forceOverrides:    true,
+		overrideExtraData: extraData,
+		overrideTxs:       transactions,
+	}
+	res := miner.generateWork(fullParams, false)
+	if res.err != nil {
+		return nil, res.err
+	}
+	return engine.BlockToExecutableData(res.block, new(big.Int), res.sidecars, res.requests), nil
 }

@@ -58,6 +58,10 @@ var (
 	// by a transaction is higher than what's left in the block.
 	ErrGasLimitReached = errors.New("gas limit reached")
 
+	// ErrGasLimitOverflow is returned by the gas pool if the remaining gas
+	// exceeds the maximum value of uint64.
+	ErrGasLimitOverflow = errors.New("gas limit overflow")
+
 	// ErrInsufficientFundsForTransfer is returned if the transaction sender doesn't
 	// have enough funds for transfer(topmost call only).
 	ErrInsufficientFundsForTransfer = errors.New("insufficient funds for transfer")

@@ -109,22 +109,22 @@ func TestPriceHeapSorting(t *testing.T) {
 			order:    []int{3, 2, 1, 0, 4, 5, 6},
 		},
 		// If both basefee and blobfee is specified, sort by the larger distance
-		// of the two from the current network conditions, splitting same (loglog)
+		// of the two from the current network conditions, splitting same
 		// ones via the tip.
 		//
-		// Basefee: 1000
-		// Blobfee: 100
+		// Basefee: 1000 , jumps: 888, 790, 702, 624
+		// Blobfee: 100 , jumps: 85, 73, 62, 53
 		//
-		// Tx #0: (800, 80) - 2 jumps below both => priority -1
-		// Tx #1: (630, 63) - 4 jumps below both => priority -2
-		// Tx #2: (800, 63) - 2 jumps below basefee, 4 jumps below blobfee => priority -2 (blob penalty dominates)
-		// Tx #3: (630, 80) - 4 jumps below basefee, 2 jumps below blobfee => priority -2 (base penalty dominates)
+		// Tx #0: (800, 80) - 2 jumps below both => priority -2
+		// Tx #1: (630, 55) - 4 jumps below both => priority -4
+		// Tx #2: (800, 55) - 2 jumps below basefee, 4 jumps below blobfee => priority -4 (blob penalty dominates)
+		// Tx #3: (630, 80) - 4 jumps below basefee, 2 jumps below blobfee => priority -4 (base penalty dominates)
 		//
 		// Txs 1, 2, 3 share the same priority, split via tip, prefer 0 as the best
 		{
 			execTips: []uint64{1, 2, 3, 4},
 			execFees: []uint64{800, 630, 800, 630},
-			blobFees: []uint64{80, 63, 63, 80},
+			blobFees: []uint64{80, 55, 55, 80},
 			basefee:  1000,
 			blobfee:  100,
 			order:    []int{1, 2, 3, 0},
@@ -142,7 +142,7 @@ func TestPriceHeapSorting(t *testing.T) {
 				blobFee = uint256.NewInt(tt.blobFees[j])
 
 				basefeeJumps = dynamicFeeJumps(execFee)
-				blobfeeJumps = dynamicFeeJumps(blobFee)
+				blobfeeJumps = dynamicBlobFeeJumps(blobFee)
 			)
 			index[addr] = []*blobTxMeta{{
 				id:                   uint64(j),
@@ -201,7 +201,7 @@ func benchmarkPriceHeapReinit(b *testing.B, datacap uint64) {
 			blobFee = uint256.NewInt(rnd.Uint64())
 
 			basefeeJumps = dynamicFeeJumps(execFee)
-			blobfeeJumps = dynamicFeeJumps(blobFee)
+			blobfeeJumps = dynamicBlobFeeJumps(blobFee)
 		)
 		index[addr] = []*blobTxMeta{{
 			id:                   uint64(i),
@@ -277,7 +277,7 @@ func benchmarkPriceHeapOverflow(b *testing.B, datacap uint64) {
 			blobFee = uint256.NewInt(rnd.Uint64())
 
 			basefeeJumps = dynamicFeeJumps(execFee)
-			blobfeeJumps = dynamicFeeJumps(blobFee)
+			blobfeeJumps = dynamicBlobFeeJumps(blobFee)
 		)
 		index[addr] = []*blobTxMeta{{
 			id:                   uint64(i),
@@ -308,7 +308,7 @@ func benchmarkPriceHeapOverflow(b *testing.B, datacap uint64) {
 			blobFee = uint256.NewInt(rnd.Uint64())
 
 			basefeeJumps = dynamicFeeJumps(execFee)
-			blobfeeJumps = dynamicFeeJumps(blobFee)
+			blobfeeJumps = dynamicBlobFeeJumps(blobFee)
 		)
 		metas[i] = &blobTxMeta{
 			id:                   uint64(int(blobs) + i),
