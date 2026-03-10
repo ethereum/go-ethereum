@@ -138,7 +138,13 @@ func (c *Contract) UseGas(gas GasCosts, logger *tracing.Hooks, reason tracing.Ga
 }
 
 // RefundGas refunds gas to the contract
-func (c *Contract) RefundGas(gas GasCosts, logger *tracing.Hooks, reason tracing.GasChangeReason) {
+func (c *Contract) RefundGas(err error, gas GasCosts, logger *tracing.Hooks, reason tracing.GasChangeReason) {
+	// If the preceding call errored, return the state gas
+	// to the parent call
+	if err != nil {
+		gas.StateGas += gas.StateGasCharged
+		gas.StateGasCharged = 0
+	}
 	if gas.Max() == 0 {
 		return
 	}
@@ -147,13 +153,6 @@ func (c *Contract) RefundGas(gas GasCosts, logger *tracing.Hooks, reason tracing
 	}
 	c.Gas.RegularGas += gas.RegularGas
 	c.Gas.StateGas = gas.StateGas
-	/*
-		if c.Gas.StateGas < gas.StateGasCharged {
-			// We overcharged StateGas, during reverts we need to add back to regular gas
-			missing := c.Gas.StateGasCharged - c.Gas.StateGas
-			c.Gas.RegularGas += missing
-		}
-	*/
 	c.Gas.StateGasCharged += gas.StateGasCharged
 }
 

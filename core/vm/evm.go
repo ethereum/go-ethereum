@@ -321,9 +321,6 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			}
 			gas.RegularGas = 0
 		}
-		// Restore gas to the parent on child error
-		gas.StateGas += gas.StateGasCharged
-		gas.StateGasCharged = 0
 	}
 	return ret, gas, err
 }
@@ -380,9 +377,6 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 			}
 			gas.RegularGas = 0
 		}
-		// Restore gas to the parent on child error
-		gas.StateGas += gas.StateGasCharged
-		gas.StateGasCharged = 0
 	}
 	return ret, gas, err
 }
@@ -432,9 +426,6 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 			}
 			gas.RegularGas = 0
 		}
-		// Restore gas to the parent on child error
-		gas.StateGas += gas.StateGasCharged
-		gas.StateGasCharged = 0
 	}
 	return ret, gas, err
 }
@@ -495,9 +486,6 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 			}
 			gas.RegularGas = 0
 		}
-		// Restore gas to the parent on child error
-		gas.StateGas += gas.StateGasCharged
-		gas.StateGasCharged = 0
 	}
 	return ret, gas, err
 }
@@ -611,9 +599,6 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasCosts, value *
 		if err != ErrExecutionReverted {
 			contract.UseGas(contract.Gas, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
 		}
-		// Restore gas to the parent on child error
-		contract.Gas.StateGas += contract.Gas.StateGasCharged
-		contract.Gas.StateGasCharged = 0
 	}
 	return ret, address, contract.Gas, err
 }
