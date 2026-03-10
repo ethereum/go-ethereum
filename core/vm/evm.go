@@ -257,7 +257,6 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		return nil, gas, ErrInsufficientBalance
 	}
 	snapshot := evm.StateDB.Snapshot()
-	stateGas := gas.StateGas
 
 	p, isPrecompile := evm.precompile(addr)
 	if !evm.StateDB.Exist(addr) {
@@ -322,8 +321,9 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			}
 			gas.RegularGas = 0
 		}
+		// Restore gas to the parent on child error
+		gas.StateGas += gas.StateGasCharged
 		gas.StateGasCharged = 0
-		gas.StateGas = stateGas
 	}
 	return ret, gas, err
 }
@@ -355,7 +355,6 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 		return nil, gas, ErrInsufficientBalance
 	}
 	var snapshot = evm.StateDB.Snapshot()
-	stateGas := gas.StateGas
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -381,8 +380,9 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 			}
 			gas.RegularGas = 0
 		}
+		// Restore gas to the parent on child error
+		gas.StateGas += gas.StateGasCharged
 		gas.StateGasCharged = 0
-		gas.StateGas = stateGas
 	}
 	return ret, gas, err
 }
@@ -406,7 +406,6 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 		return nil, gas, ErrDepth
 	}
 	var snapshot = evm.StateDB.Snapshot()
-	stateGas := gas.StateGas
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -433,8 +432,9 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 			}
 			gas.RegularGas = 0
 		}
+		// Restore gas to the parent on child error
+		gas.StateGas += gas.StateGasCharged
 		gas.StateGasCharged = 0
-		gas.StateGas = stateGas
 	}
 	return ret, gas, err
 }
@@ -461,7 +461,6 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	// then certain tests start failing; stRevertTest/RevertPrecompiledTouchExactOOG.json.
 	// We could change this, but for now it's left for legacy reasons
 	var snapshot = evm.StateDB.Snapshot()
-	stateGas := gas.StateGas
 
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
@@ -496,8 +495,9 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 			}
 			gas.RegularGas = 0
 		}
+		// Restore gas to the parent on child error
+		gas.StateGas += gas.StateGasCharged
 		gas.StateGasCharged = 0
-		gas.StateGas = stateGas
 	}
 	return ret, gas, err
 }
@@ -567,7 +567,6 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasCosts, value *
 	// It might be possible the contract code is deployed to a pre-existent
 	// account with non-zero balance.
 	snapshot := evm.StateDB.Snapshot()
-	stateGas := gas.StateGas
 
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
@@ -610,9 +609,9 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasCosts, value *
 		contract.UseGas(contract.Gas, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
 		// State changes are rolled back, so state gas charges from the
 		// reverted execution should not count toward block accounting.
-		// Also restore the state gas reservoir since state creation was undone.
+		// Restore gas to the parent on child error
+		contract.Gas.StateGas += contract.Gas.StateGasCharged
 		contract.Gas.StateGasCharged = 0
-		contract.Gas.StateGas = stateGas
 	}
 	return ret, address, contract.Gas, err
 }
