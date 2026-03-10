@@ -462,6 +462,19 @@ func (b *Block) Size() uint64 {
 	return uint64(c)
 }
 
+// ConsensusSize returns the RLP encoded size of the block without the BAL
+// (block access list), which is not part of the consensus encoding.
+func (b *Block) ConsensusSize() uint64 {
+	c := writeCounter(0)
+	rlp.Encode(&c, &extblock{
+		Header:      b.header,
+		Txs:         b.transactions,
+		Uncles:      b.uncles,
+		Withdrawals: b.withdrawals,
+	})
+	return uint64(c)
+}
+
 // SanityCheck can be used to prevent that unbounded fields are
 // stuffed with junk data to add processing overhead
 func (b *Block) SanityCheck() error {

@@ -49,7 +49,7 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain) *Bloc
 // validated at this point.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// check EIP 7934 RLP-encoded block size cap
-	if v.config.IsOsaka(block.Number(), block.Time()) && block.Size() > params.MaxBlockSize {
+	if v.config.IsOsaka(block.Number(), block.Time()) && block.ConsensusSize() > params.MaxBlockSize {
 		return ErrBlockOversized
 	}
 	// Check whether the block is already imported.
