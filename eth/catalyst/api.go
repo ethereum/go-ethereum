@@ -535,7 +535,7 @@ func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool, versi
 //
 // Client software MAY return an array of all null entries if syncing or otherwise
 // unable to serve blob pool data.
-func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProofV1, error) {
+func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) (engine.BlobAndProofListV1, error) {
 	// Reject the request if Osaka has been activated.
 	// follow https://github.com/ethereum/execution-apis/blob/main/src/engine/osaka.md#cancun-api
 	head := api.eth.BlockChain().CurrentHeader()
@@ -549,7 +549,7 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 	if err != nil {
 		return nil, engine.InvalidParams.With(err)
 	}
-	res := make([]*engine.BlobAndProofV1, len(hashes))
+	res := make(engine.BlobAndProofListV1, len(hashes))
 	for i := 0; i < len(blobs); i++ {
 		// Skip the non-existing blob
 		if blobs[i] == nil {
@@ -588,7 +588,7 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 //
 // Client software MUST return null if syncing or otherwise unable to serve
 // blob pool data.
-func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProofV2, error) {
+func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) (engine.BlobAndProofListV2, error) {
 	head := api.eth.BlockChain().CurrentHeader()
 	if api.config().LatestFork(head.Time) < forks.Osaka {
 		return nil, nil
@@ -599,7 +599,7 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 // GetBlobsV3 returns a set of blobs from the transaction pool. Same as
 // GetBlobsV2, except will return partial responses in case there is a missing
 // blob.
-func (api *ConsensusAPI) GetBlobsV3(hashes []common.Hash) ([]*engine.BlobAndProofV2, error) {
+func (api *ConsensusAPI) GetBlobsV3(hashes []common.Hash) (engine.BlobAndProofListV2, error) {
 	head := api.eth.BlockChain().CurrentHeader()
 	if api.config().LatestFork(head.Time) < forks.Osaka {
 		return nil, nil
@@ -609,7 +609,7 @@ func (api *ConsensusAPI) GetBlobsV3(hashes []common.Hash) ([]*engine.BlobAndProo
 
 // getBlobs returns all available blobs. In v2, partial responses are not allowed,
 // while v3 supports partial responses.
-func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) ([]*engine.BlobAndProofV2, error) {
+func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) (engine.BlobAndProofListV2, error) {
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
@@ -629,7 +629,7 @@ func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) ([]*engine.Blob
 		return nil, engine.InvalidParams.With(err)
 	}
 	// Validate the blobs from the pool and assemble the response
-	res := make([]*engine.BlobAndProofV2, len(hashes))
+	res := make(engine.BlobAndProofListV2, len(hashes))
 	for i := range blobs {
 		// The blob has been evicted since the last AvailableBlobs call.
 		// Return null if partial response is not allowed.

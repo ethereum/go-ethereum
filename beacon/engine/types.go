@@ -152,10 +152,18 @@ type BlobAndProofV1 struct {
 	Proof hexutil.Bytes `json:"proof"`
 }
 
+// BlobAndProofListV1 is a list of BlobAndProofV1 with a hand-rolled JSON marshaler
+// that avoids the overhead of encoding/json for large blob payloads.
+type BlobAndProofListV1 []*BlobAndProofV1
+
 type BlobAndProofV2 struct {
 	Blob       hexutil.Bytes   `json:"blob"`
 	CellProofs []hexutil.Bytes `json:"proofs"` // proofs MUST contain exactly CELLS_PER_EXT_BLOB cell proofs.
 }
+
+// BlobAndProofListV2 is a list of BlobAndProofV2 with a hand-rolled JSON marshaler
+// that avoids the overhead of encoding/json for large blob payloads.
+type BlobAndProofListV2 []*BlobAndProofV2
 
 // JSON type overrides for ExecutionPayloadEnvelope.
 type executionPayloadEnvelopeMarshaling struct {
