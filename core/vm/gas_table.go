@@ -649,6 +649,9 @@ func gasCall8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 }
 
 func gasSelfdestruct8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+	if evm.readOnly {
+		return GasCosts{}, ErrWriteProtection
+	}
 	var (
 		gas     GasCosts
 		address = common.Address(stack.peek().Bytes20())
@@ -657,6 +660,10 @@ func gasSelfdestruct8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory
 		// If the caller cannot afford the cost, this change will be rolled back
 		evm.StateDB.AddAddressToAccessList(address)
 		gas.RegularGas = params.ColdAccountAccessCostEIP2929
+	}
+	// Check we have enough regular gas before we add the address to the BAL
+	if contract.Gas.RegularGas < gas.RegularGas {
+		return gas, nil
 	}
 	// if empty and transfers value
 	if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
