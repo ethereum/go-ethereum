@@ -131,6 +131,31 @@ func (e BlockAccessList) Validate(blockTxCount int) error {
 	return nil
 }
 
+// ValidateGasLimit checks that the total number of BAL items (addresses +
+// unique storage keys) does not exceed block_gas_limit / GasBlockAccessListItem.
+// See EIP-7928 validate_block_access_list_gas_limit.
+func (e BlockAccessList) ValidateGasLimit(blockGasLimit uint64) error {
+	var balItems uint64
+	for _, account := range e {
+		// Count each address as one item
+		balItems++
+		// Count unique storage keys across both reads and writes
+		uniqueSlots := make(map[common.Hash]struct{})
+		for _, sc := range account.StorageChanges {
+			uniqueSlots[sc.Slot.ToHash()] = struct{}{}
+		}
+		for _, sr := range account.StorageReads {
+			uniqueSlots[sr.ToHash()] = struct{}{}
+		}
+		balItems += uint64(len(uniqueSlots))
+	}
+	limit := blockGasLimit / params.GasBlockAccessListItem
+	if balItems > limit {
+		return fmt.Errorf("block access list exceeds gas limit: %d items exceeds limit of %d", balItems, limit)
+	}
+	return nil
+}
+
 // Hash computes the keccak256 hash of the access list
 func (e *BlockAccessList) Hash() common.Hash {
 	var enc bytes.Buffer

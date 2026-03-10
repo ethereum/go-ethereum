@@ -2418,6 +2418,11 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 			bc.reportBadBlock(block, res, err)
 			return nil, err
 		}
+		// EIP-7928: Validate BAL items do not exceed block gas limit
+		if err := computedAccessList.ValidateGasLimit(block.Header().GasLimit); err != nil {
+			bc.reportBadBlock(block, res, err)
+			return nil, err
+		}
 		if block.AccessList() == nil {
 			// attach the computed access list to the block so it gets persisted
 			// when the block is written to disk
