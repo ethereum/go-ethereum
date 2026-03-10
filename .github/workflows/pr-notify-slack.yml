@@ -1,0 +1,62 @@
+# Notify Slack when a PR is ready for review (not draft, title does not contain WIP).
+# Triggers: new PR (non-draft, no WIP), draft -> ready, or title edited to remove WIP.
+name: PR notify Slack
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, edited]
+  workflow_dispatch:
+
+jobs:
+  test-webhook:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Test Slack webhook
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL secret is not set. Add it in repo Settings → Secrets → Actions."
+            exit 1
+          fi
+          BODY=$(jq -n --arg text "Test: PR notify Slack webhook is working (from ${{ github.repository }})" '{text: $text}')
+          curl -sS -X POST -H 'Content-Type: application/json' --data "$BODY" "$SLACK_WEBHOOK_URL"
+          echo ""
+          echo "If you see this and no curl error, check your Slack channel for the test message."
+
+  notify:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.draft == false &&
+      !contains(github.event.pull_request.title, 'WIP') &&
+      (
+        github.event.action != 'edited' ||
+        (
+          github.event.changes.title &&
+          (
+            contains(github.event.changes.title.from, 'WIP')
+          )
+        )
+      )
+    steps:
+      - name: Send Slack notification
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL secret is not set; skipping notification."
+            exit 0
+          fi
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+          # Slack mrkdwn: <url|text> for link
+          BODY=$(jq -n \
+            --arg url "$PR_URL" \
+            --arg title "$PR_TITLE" \
+            --arg author "$PR_AUTHOR" \
+            '{text: ("PR ready for review: <" + $url + "|" + $title + "> by " + $author)}')
+          curl -sS -X POST -H 'Content-Type: application/json' --data "$BODY" "$SLACK_WEBHOOK_URL"
+        if: env.SLACK_WEBHOOK_URL != ''
