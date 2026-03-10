@@ -594,10 +594,13 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasCosts, value *
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 
-		// On ExceptionalHalt, burn all remaining gas. On REVERT, preserve
-		// remaining regular gas (same as CALL paths).
+		// On ExceptionalHalt, burn remaining regular gas. On REVERT, preserve
+		// remaining regular gas. State gas is always preserved.
 		if err != ErrExecutionReverted {
-			contract.UseGas(contract.Gas, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
+			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
+				evm.Config.Tracer.OnGasChange(contract.Gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
+			}
+			contract.Gas.RegularGas = 0
 		}
 	}
 	return ret, address, contract.Gas, err
