@@ -290,6 +290,7 @@ func (r *ReaderWithBlockLevelAccessList) CodeSize(addr common.Address, codeHash 
 // recorded during state reading operations.
 type StateReaderTracker interface {
 	GetStateAccessList() bal.StateAccesses
+	Clear()
 }
 
 func NewReaderWithTracker(r Reader) Reader {
@@ -332,4 +333,8 @@ func (r *readerTracker) Storage(addr common.Address, slot common.Hash) (common.H
 // GetStateAccessList implements StateReaderTracker, returning the access footprint.
 func (r *readerTracker) GetStateAccessList() bal.StateAccesses {
 	return r.access
+}
+
+func (r *readerTracker) Clear() {
+	r.access = make(bal.StateAccesses)
 }
