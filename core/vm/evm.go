@@ -625,10 +625,9 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 		return ret, err
 	}
 
-	// Check code validity once upfront.
-	codeErr := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret)))
-	if codeErr == nil && len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
-		codeErr = ErrInvalidCode
+	// Check prefix before gas calculation.
+	if len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
+		return ret, ErrInvalidCode
 	}
 
 	// Charge code storage gas.
@@ -660,8 +659,9 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 		}
 	}
 
-	if codeErr != nil {
-		return ret, codeErr
+	// Verify max code size after gas calculation.
+	if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
+		return ret, err
 	}
 
 	if len(ret) > 0 {
