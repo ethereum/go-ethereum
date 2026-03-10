@@ -23,11 +23,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
 	"io"
 	"maps"
 	"slices"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -413,10 +414,10 @@ func (e *AccountAccess) validate(blockTxCount int) error {
 		}
 	}
 
-	// validate that code changes could plausibly be correct (none exceed
-	// max code size of a contract)
+	// validate that code changes could plausibly be correct
+	// (none exceed max code size of a contract)
 	for _, codeChange := range e.CodeChanges {
-		if len(codeChange.Code) > params.MaxCodeSize {
+		if len(codeChange.Code) > params.MaxCodeSizeAmsterdam {
 			return fmt.Errorf("code change contained oversized code")
 		}
 	}
