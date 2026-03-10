@@ -622,16 +622,24 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 
 	// Charge code storage gas.
 	if !evm.chainRules.IsEIP4762 {
-		createDataGas := GasCosts{RegularGas: uint64(len(ret)) * params.CreateDataGas}
 		if evm.chainRules.IsAmsterdam {
-			words := (uint64(len(ret)) + 31) / 32
-			createDataGas = GasCosts{
-				RegularGas: words * params.Keccak256WordGas,
-				StateGas:   uint64(len(ret)) * evm.Context.CostPerGasByte,
+			// EIP-8037: spec charges state gas first (charge_state_gas), then
+			// regular gas (charge_gas). If state gas succeeds but regular gas
+			// fails, state_gas_used is still recorded.
+			stateGas := GasCosts{StateGas: uint64(len(ret)) * evm.Context.CostPerGasByte}
+			if !contract.UseGas(stateGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
+				return ret, ErrCodeStoreOutOfGas
 			}
-		}
-		if !contract.UseGas(createDataGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
-			return ret, ErrCodeStoreOutOfGas
+			words := (uint64(len(ret)) + 31) / 32
+			regularGas := GasCosts{RegularGas: words * params.Keccak256WordGas}
+			if !contract.UseGas(regularGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
+				return ret, ErrCodeStoreOutOfGas
+			}
+		} else {
+			createDataGas := GasCosts{RegularGas: uint64(len(ret)) * params.CreateDataGas}
+			if !contract.UseGas(createDataGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
+				return ret, ErrCodeStoreOutOfGas
+			}
 		}
 	} else {
 		consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true, contract.Gas.RegularGas)

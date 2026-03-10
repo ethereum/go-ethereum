@@ -582,7 +582,11 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// After EIP-7623: Data-heavy transactions pay the floor gas.
 		if st.gasUsed() < floorDataGas {
 			prev := st.gasRemaining.RegularGas
-			st.gasRemaining.RegularGas = st.initialGas.RegularGas - floorDataGas
+			// When the calldata floor exceeds actual gas used, any
+			// remaining state gas must also be consumed
+			targetRemaining := (st.initialGas.RegularGas + st.initialGas.StateGas) - floorDataGas
+			st.gasRemaining.StateGas = 0
+			st.gasRemaining.RegularGas = targetRemaining
 			if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
 				t.OnGasChange(prev, st.gasRemaining.RegularGas, tracing.GasChangeTxDataFloor)
 			}
