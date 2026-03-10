@@ -233,12 +233,15 @@ func readAndValidateMessage(in *json.Decoder) (*subConfirmation, *subscriptionRe
 }
 
 type mockConn struct {
-	enc *json.Encoder
+	w io.Writer
 }
 
-// writeJSON writes a message to the connection.
-func (c *mockConn) writeJSON(ctx context.Context, msg interface{}, isError bool) error {
-	return c.enc.Encode(msg)
+func (c *mockConn) writeJSON(ctx context.Context, msg *jsonrpcMessage, isError bool) error {
+	return writeMessage(c.w, msg)
+}
+
+func (c *mockConn) writeJSONBatch(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error {
+	return json.NewEncoder(c.w).Encode(msgs)
 }
 
 // closed returns a channel which is closed when the connection is closed.
@@ -251,7 +254,7 @@ func (c *mockConn) remoteAddr() string { return "" }
 func BenchmarkNotify(b *testing.B) {
 	id := ID("test")
 	notifier := &Notifier{
-		h:         &handler{conn: &mockConn{json.NewEncoder(io.Discard)}},
+		h:         &handler{conn: &mockConn{io.Discard}},
 		sub:       &Subscription{ID: id},
 		activated: true,
 	}
@@ -271,7 +274,7 @@ func TestNotify(t *testing.T) {
 	out := new(bytes.Buffer)
 	id := ID("test")
 	notifier := &Notifier{
-		h:         &handler{conn: &mockConn{json.NewEncoder(out)}},
+		h:         &handler{conn: &mockConn{out}},
 		sub:       &Subscription{ID: id},
 		activated: true,
 	}

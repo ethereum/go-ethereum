@@ -169,7 +169,7 @@ func (b *batchCallBuffer) doWrite(ctx context.Context, conn jsonWriter, isErrorR
 	}
 	b.wrote = true // can only write once
 	if len(b.resp) > 0 {
-		conn.writeJSON(ctx, b.resp, isErrorResponse)
+		conn.writeJSONBatch(ctx, b.resp, isErrorResponse)
 	}
 }
 
@@ -268,7 +268,7 @@ func (h *handler) respondWithBatchTooLarge(cp *callProc, batch []*jsonrpcMessage
 			break
 		}
 	}
-	h.conn.writeJSON(cp.ctx, []*jsonrpcMessage{resp}, true)
+	h.conn.writeJSONBatch(cp.ctx, []*jsonrpcMessage{resp}, true)
 }
 
 // handleMsg handles a single non-batch message.
