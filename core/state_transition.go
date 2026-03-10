@@ -603,7 +603,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// tx_state = adjusted_intrinsic_state + exec_state_used (spec: set_delegation adjusts intrinsic)
 		// tx_regular = total_dimensional_used - tx_state
 		txState := (gas.StateGas - authRefund) + st.gasRemaining.StateGasCharged
-		txRegular := (msg.GasLimit - preRefundRemaining) - txState
+		txRegular := (msg.GasLimit - preRefundRemaining) - txState - st.evm.CollisionBurned
 		txRegular = max(txRegular, floorDataGas)
 		if err := st.gp.ReturnGasAmsterdam(returned, txRegular, txState, st.gasUsed()); err != nil {
 			return nil, err
