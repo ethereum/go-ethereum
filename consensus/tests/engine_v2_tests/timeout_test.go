@@ -17,6 +17,7 @@ import (
 )
 
 func TestCountdownTimeoutToSendTimeoutMessage(t *testing.T) {
+	skipLongInShortMode(t)
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 901, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
@@ -29,6 +30,7 @@ func TestCountdownTimeoutToSendTimeoutMessage(t *testing.T) {
 }
 
 func TestCountdownTimeoutNotToSendTimeoutMessageIfNotInMasternodeList(t *testing.T) {
+	skipLongInShortMode(t)
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 901, params.TestXDPoSMockChainConfig, nil)
 
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
@@ -47,6 +49,7 @@ func TestCountdownTimeoutNotToSendTimeoutMessageIfNotInMasternodeList(t *testing
 }
 
 func TestSyncInfoAfterReachTimeoutSyncThreadhold(t *testing.T) {
+	skipLongInShortMode(t)
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 901, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 	engineV2.SetNewRoundFaker(blockchain, 1, true)
@@ -85,6 +88,7 @@ func TestSyncInfoAfterReachTimeoutSyncThreadhold(t *testing.T) {
 }
 
 func TestTimeoutPeriodAndThreadholdConfigChange(t *testing.T) {
+	skipLongInShortMode(t)
 	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 1799, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 	// engineV2.SetNewRoundFaker(blockchain, 1, true)
@@ -140,6 +144,7 @@ func TestTimeoutPeriodAndThreadholdConfigChange(t *testing.T) {
 
 // Timeout handler
 func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfoAfterReachingThreshold(t *testing.T) {
+	skipLongInShortMode(t)
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
@@ -289,6 +294,7 @@ func TestShouldVerifyTimeoutMessageForFirstV2Block(t *testing.T) {
 }
 
 func TestShouldVerifyTimeoutMessage(t *testing.T) {
+	skipLongInShortMode(t)
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 2251, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
@@ -308,6 +314,7 @@ func TestShouldVerifyTimeoutMessage(t *testing.T) {
 }
 
 func TestTimeoutPoolKeyGoodHygiene(t *testing.T) {
+	skipLongInShortMode(t)
 	blockchain, _, _, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
@@ -371,6 +378,7 @@ func TestTimeoutPoolKeyGoodHygiene(t *testing.T) {
 }
 
 func TestGetTCEpochInfo(t *testing.T) {
+	skipLongInShortMode(t)
 	// First epoch, round 1, switch block 901
 	// Second epoch, round 901, block 1800
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 1805, params.TestXDPoSMockChainConfig, nil)

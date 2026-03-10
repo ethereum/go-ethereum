@@ -32,6 +32,7 @@ func TestIsAuthorisedMNForConsensusV2(t *testing.T) {
 }
 
 func TestIsYourTurnConsensusV2(t *testing.T) {
+	skipLongInShortMode(t)
 	// we skip test for v1 since it's hard to make a real genesis block
 	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 900, params.TestXDPoSMockChainConfig, nil)
 	minePeriod := params.UnitTestV2Configs[0].MinePeriod
@@ -83,6 +84,7 @@ func TestIsYourTurnConsensusV2(t *testing.T) {
 }
 
 func TestIsYourTurnConsensusV2CrossConfig(t *testing.T) {
+	skipLongInShortMode(t)
 	// we skip test for v1 since it's hard to make a real genesis block
 	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 909, params.TestXDPoSMockChainConfig, nil)
 	firstMinePeriod := blockchain.Config().XDPoS.V2.CurrentConfig.MinePeriod

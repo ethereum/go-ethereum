@@ -15,6 +15,7 @@ import (
 )
 
 func TestHookRewardV2(t *testing.T) {
+	skipLongInShortMode(t)
 	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
 	assert.Nil(t, err)
 	configString := string(b)
@@ -96,6 +97,7 @@ func TestHookRewardV2(t *testing.T) {
 }
 
 func TestHookRewardV2SplitReward(t *testing.T) {
+	skipLongInShortMode(t)
 	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
 	assert.Nil(t, err)
 	configString := string(b)
@@ -166,6 +168,7 @@ func TestHookRewardV2SplitReward(t *testing.T) {
 }
 
 func TestHookRewardAfterUpgrade(t *testing.T) {
+	skipLongInShortMode(t)
 	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
 	assert.Nil(t, err)
 	configString := string(b)
@@ -313,6 +316,7 @@ func TestHookRewardAfterUpgrade(t *testing.T) {
 }
 
 func TestFinalizeAfterUpgrade(t *testing.T) {
+	skipLongInShortMode(t)
 	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
 	assert.Nil(t, err)
 	configString := string(b)
@@ -381,6 +385,7 @@ func TestFinalizeAfterUpgrade(t *testing.T) {
 }
 
 func TestRewardHalvingVanishing(t *testing.T) {
+	skipLongInShortMode(t)
 	billion := big.NewInt(1000000000)
 	epochRewardTotal := big.NewInt(16000)
 	epochRewardTotal.Mul(epochRewardTotal, billion)

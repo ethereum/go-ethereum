@@ -13,6 +13,7 @@ import (
 )
 
 func TestGetMissedRoundsInEpochByBlockNumOnlyForV2Consensus(t *testing.T) {
+	skipLongInShortMode(t)
 	_, bc, _, _, _ := PrepareXDCTestBlockChainWith128Candidates(t, 1802, params.TestXDPoSMockChainConfig)
 
 	engine := bc.BlockChain().Engine().(*XDPoS.XDPoS)
@@ -25,6 +26,7 @@ func TestGetMissedRoundsInEpochByBlockNumOnlyForV2Consensus(t *testing.T) {
 }
 
 func TestGetMissedRoundsInEpochByBlockNumReturnEmptyForV2(t *testing.T) {
+	skipLongInShortMode(t)
 	_, bc, cb, _, _ := PrepareXDCTestBlockChainWith128Candidates(t, 1802, params.TestXDPoSMockChainConfig)
 
 	engine := bc.BlockChain().Engine().(*XDPoS.XDPoS)
@@ -57,6 +59,7 @@ func TestGetMissedRoundsInEpochByBlockNumReturnEmptyForV2(t *testing.T) {
 }
 
 func TestGetMissedRoundsInEpochByBlockNumReturnEmptyForV2FistEpoch(t *testing.T) {
+	skipLongInShortMode(t)
 	_, bc, _, _, _ := PrepareXDCTestBlockChainWith128Candidates(t, 1802, params.TestXDPoSMockChainConfig)
 
 	engine := bc.BlockChain().Engine().(*XDPoS.XDPoS)
@@ -71,6 +74,7 @@ func TestGetMissedRoundsInEpochByBlockNumReturnEmptyForV2FistEpoch(t *testing.T)
 }
 
 func TestGetMissedRoundsInEpochByBlockNum(t *testing.T) {
+	skipLongInShortMode(t)
 	blockchain, bc, currentBlock, signer, signFn := PrepareXDCTestBlockChainWith128Candidates(t, 1802, params.TestXDPoSMockChainConfig)
 	chainConfig := params.TestXDPoSMockChainConfig
 	engine := bc.BlockChain().Engine().(*XDPoS.XDPoS)
@@ -112,6 +116,7 @@ func TestGetMissedRoundsInEpochByBlockNum(t *testing.T) {
 }
 
 func TestGetEpochNumbersBetween(t *testing.T) {
+	skipLongInShortMode(t)
 	_, bc, _, _, _ := PrepareXDCTestBlockChainWith128Candidates(t, 1802, params.TestXDPoSMockChainConfig)
 
 	engine := bc.BlockChain().Engine().(*XDPoS.XDPoS)
@@ -169,6 +174,7 @@ func TestGetEpochNumbersBetween(t *testing.T) {
 	assert.EqualError(t, err, "illegal begin block number 1803")
 }
 func TestGetBlockByEpochNumber(t *testing.T) {
+	skipLongInShortMode(t)
 	blockchain, _, currentBlock, signer, signFn := PrepareXDCTestBlockChainWithPenaltyForV2Engine(t, 1802, params.TestXDPoSMockChainConfig)
 
 	blockCoinBase := "0x111000000000000000000000000000000123"

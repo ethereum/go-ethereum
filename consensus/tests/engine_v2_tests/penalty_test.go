@@ -15,6 +15,7 @@ import (
 )
 
 func TestHookPenaltyV2Mining(t *testing.T) {
+	skipLongInShortMode(t)
 	config := params.TestXDPoSMockChainConfig
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)*3, config, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
@@ -67,6 +68,7 @@ func TestHookPenaltyV2Mining(t *testing.T) {
 }
 
 func TestHookPenaltyV2Comeback(t *testing.T) {
+	skipLongInShortMode(t)
 	config := params.TestXDPoSMockChainConfig
 	blockchain, _, _, signer, signFn := PrepareXDCTestBlockChainWithPenaltyForV2Engine(t, int(config.XDPoS.Epoch)*3, config)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
@@ -95,6 +97,7 @@ func TestHookPenaltyV2Comeback(t *testing.T) {
 }
 
 func TestHookPenaltyV2Jump(t *testing.T) {
+	skipLongInShortMode(t)
 	config := params.TestXDPoSMockChainConfig
 	end := int(config.XDPoS.Epoch)*3 - common.MergeSignRange
 	blockchain, _, _, _, _ := PrepareXDCTestBlockChainWithPenaltyForV2Engine(t, int(config.XDPoS.Epoch)*3, config)
@@ -118,6 +121,7 @@ func TestHookPenaltyV2Jump(t *testing.T) {
 
 // Test calculate penalty under startRange blocks, currently is 150
 func TestHookPenaltyV2LessThen150Blocks(t *testing.T) {
+	skipLongInShortMode(t)
 	config := params.TestXDPoSMockChainConfig
 	blockchain, _, _, _, _ := PrepareXDCTestBlockChainWithPenaltyForV2Engine(t, int(config.XDPoS.Epoch)*3, config)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
@@ -139,6 +143,7 @@ func TestHookPenaltyV2LessThen150Blocks(t *testing.T) {
 }
 
 func TestGetPenalties(t *testing.T) {
+	skipLongInShortMode(t)
 	config := params.TestXDPoSMockChainConfig
 	blockchain, _, _, _, _ := PrepareXDCTestBlockChainWithPenaltyForV2Engine(t, int(config.XDPoS.Epoch)*3, config)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
@@ -156,6 +161,7 @@ func TestGetPenalties(t *testing.T) {
 // TestHookPenaltyParolee tests that a penalty stays enough epoch, it will not be penalty.
 // but if it does not stays enough, it will still be penalty.
 func TestHookPenaltyParolee(t *testing.T) {
+	skipLongInShortMode(t)
 	// set upgrade number to 0
 	backup := common.TipUpgradePenalty
 	common.TipUpgradePenalty = big.NewInt(0)
@@ -210,6 +216,7 @@ func TestHookPenaltyParolee(t *testing.T) {
 
 // TestHookPenaltyParoleePerformance tests penalty hook performance
 func TestHookPenaltyParoleePerformance(t *testing.T) {
+	skipLongInShortMode(t)
 	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
 	assert.Nil(t, err)
 	configString := string(b)

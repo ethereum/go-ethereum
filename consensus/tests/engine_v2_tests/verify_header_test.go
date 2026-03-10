@@ -263,6 +263,7 @@ func TestConfigSwitchOnDifferentCertThreshold(t *testing.T) {
     This is to simulate node is syncing from remote during config switch
 */
 func TestConfigSwitchOnDifferentMasternodeCount(t *testing.T) {
+	skipLongInShortMode(t)
 	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
 	assert.Nil(t, err)
 	configString := string(b)
@@ -399,6 +400,7 @@ func TestShouldFailIfNotEnoughQCSignatures(t *testing.T) {
 }
 
 func TestShouldVerifyHeaders(t *testing.T) {
+	skipLongInShortMode(t)
 	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
 	assert.Nil(t, err)
 	configString := string(b)
@@ -436,6 +438,7 @@ func TestShouldVerifyHeaders(t *testing.T) {
 }
 
 func TestShouldVerifyHeadersEvenIfParentsNotYetWrittenIntoDB(t *testing.T) {
+	skipLongInShortMode(t)
 	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
 	assert.Nil(t, err)
 	configString := string(b)

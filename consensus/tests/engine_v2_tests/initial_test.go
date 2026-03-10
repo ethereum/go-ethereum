@@ -13,6 +13,7 @@ import (
 )
 
 func TestInitialFirstV2Block(t *testing.T) {
+	skipLongInShortMode(t)
 	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 900, params.TestXDPoSMockChainConfig, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	header := currentBlock.Header()
@@ -117,6 +118,7 @@ func TestInitialOtherV2Block(t *testing.T) {
 }
 
 func TestSnapshotShouldAlreadyCreatedByUpdateM1(t *testing.T) {
+	skipLongInShortMode(t)
 	// insert new block with new extra fields
 	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 1800, params.TestXDPoSMockChainConfig, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
