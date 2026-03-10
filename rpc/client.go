@@ -364,7 +364,7 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 	resp := batchresp[0]
 	switch {
 	case resp.Error != nil:
-		return resp.jsonErr()
+		return resp.decodeError()
 	case len(resp.Result) == 0:
 		return ErrNoResult
 	default:
@@ -449,7 +449,7 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 		elem := &b[index]
 		switch {
 		case resp.Error != nil:
-			elem.Error = resp.jsonErr()
+			elem.Error = resp.decodeError()
 		case resp.Result == nil:
 			elem.Error = ErrNoResult
 		default:

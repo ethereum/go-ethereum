@@ -293,11 +293,14 @@ type websocketCodec struct {
 
 func newWebsocketCodec(conn *websocket.Conn, host string, req http.Header, readLimit int64) ServerCodec {
 	conn.SetReadLimit(readLimit)
+	var buf []byte
 	encodeMsg := func(msg *jsonrpcMessage, isError bool) error {
-		return conn.WriteJSON(msg)
+		buf = appendMessage(buf[:0], msg)
+		return conn.WriteMessage(websocket.TextMessage, buf)
 	}
 	encodeBatch := func(msgs []*jsonrpcMessage, isError bool) error {
-		return conn.WriteJSON(msgs)
+		buf = appendBatch(buf[:0], msgs)
+		return conn.WriteMessage(websocket.TextMessage, buf)
 	}
 	wc := &websocketCodec{
 		jsonCodec:    NewFuncCodec(conn, encodeMsg, encodeBatch, conn.ReadJSON).(*jsonCodec),

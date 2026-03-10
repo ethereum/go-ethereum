@@ -220,7 +220,7 @@ func readAndValidateMessage(in *json.Decoder) (*subConfirmation, *subscriptionRe
 	case msg.isResponse():
 		var c subConfirmation
 		if msg.Error != nil {
-			return nil, nil, msg.jsonErr()
+			return nil, nil, msg.decodeError()
 		} else if err := json.Unmarshal(msg.Result, &c.subid); err != nil {
 			return nil, nil, fmt.Errorf("invalid response: %v", err)
 		} else {
@@ -237,11 +237,17 @@ type mockConn struct {
 }
 
 func (c *mockConn) writeJSON(ctx context.Context, msg *jsonrpcMessage, isError bool) error {
-	return writeMessage(c.w, msg)
+	buf := appendMessage(nil, msg)
+	buf = append(buf, '\n')
+	_, err := c.w.Write(buf)
+	return err
 }
 
 func (c *mockConn) writeJSONBatch(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error {
-	return json.NewEncoder(c.w).Encode(msgs)
+	buf := appendBatch(nil, msgs)
+	buf = append(buf, '\n')
+	_, err := c.w.Write(buf)
+	return err
 }
 
 // closed returns a channel which is closed when the connection is closed.

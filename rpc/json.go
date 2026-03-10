@@ -108,8 +108,8 @@ func (msg *jsonrpcMessage) errorResponse(err error) *jsonrpcMessage {
 	return resp
 }
 
-// jsonErr decodes the Error field into a jsonError struct.
-func (msg *jsonrpcMessage) jsonErr() *jsonError {
+// decodeError decodes the Error field into a jsonError struct.
+func (msg *jsonrpcMessage) decodeError() *jsonError {
 	if msg.Error == nil {
 		return nil
 	}
@@ -123,6 +123,9 @@ func (msg *jsonrpcMessage) response(result interface{}) *jsonrpcMessage {
 		enc []byte
 		err error
 	)
+	// Call MarshalJSON directly for types that implement it. This avoids the
+	// expensive validation/compaction pass that json.Marshal performs on
+	// encoder output.
 	if m, ok := result.(json.Marshaler); ok {
 		enc, err = m.MarshalJSON()
 	} else {
@@ -227,22 +230,26 @@ func NewFuncCodec(conn deadlineCloser, encodeMsg encodeMsgFunc, encodeBatch enco
 // NewCodec creates a codec on the given connection. If conn implements ConnRemoteAddr, log
 // messages will use it to include the remote address of the connection.
 func NewCodec(conn Conn) ServerCodec {
-	enc := json.NewEncoder(conn)
 	dec := json.NewDecoder(conn)
 	dec.UseNumber()
-
+	var buf []byte
 	encodeMsg := func(msg *jsonrpcMessage, isError bool) error {
-		return writeMessage(conn, msg)
+		buf = appendMessage(buf[:0], msg)
+		buf = append(buf, '\n')
+		_, err := conn.Write(buf)
+		return err
 	}
 	encodeBatch := func(msgs []*jsonrpcMessage, isError bool) error {
-		return enc.Encode(msgs)
+		buf = appendBatch(buf[:0], msgs)
+		buf = append(buf, '\n')
+		_, err := conn.Write(buf)
+		return err
 	}
 	return NewFuncCodec(conn, encodeMsg, encodeBatch, dec.Decode)
 }
 
-// writeMessage writes a single jsonrpcMessage directly to the writer.
-func writeMessage(w io.Writer, msg *jsonrpcMessage) error {
-	var buf []byte
+// appendMessage appends the JSON-RPC encoding of msg to buf.
+func appendMessage(buf []byte, msg *jsonrpcMessage) []byte {
 	buf = append(buf, `{"jsonrpc":"2.0"`...)
 	if msg.ID != nil {
 		buf = append(buf, `,"id":`...)
@@ -264,9 +271,21 @@ func writeMessage(w io.Writer, msg *jsonrpcMessage) error {
 		buf = append(buf, `,"result":`...)
 		buf = append(buf, msg.Result...)
 	}
-	buf = append(buf, '}', '\n')
-	_, err := w.Write(buf)
-	return err
+	buf = append(buf, '}')
+	return buf
+}
+
+// appendBatch appends the JSON-RPC encoding of a message batch to buf.
+func appendBatch(buf []byte, msgs []*jsonrpcMessage) []byte {
+	buf = append(buf, '[')
+	for i, msg := range msgs {
+		if i > 0 {
+			buf = append(buf, ',')
+		}
+		buf = appendMessage(buf, msg)
+	}
+	buf = append(buf, ']')
+	return buf
 }
 
 const hexDigits = "0123456789abcdef"
