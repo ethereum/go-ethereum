@@ -391,11 +391,14 @@ func TestInternalNodeCollectNodes(t *testing.T) {
 		t.Errorf("Expected 3 collected nodes, got %d", len(collectedNodes))
 	}
 
-	// Check paths
+	// Check paths — with the groupDepth fix, mid-group StemNodes get their
+	// storage path extended to the group leaf boundary using stem key bits.
+	// Left stem (all-zero stem): extends with 7 zero bits from depth 1 to 8.
+	// Right stem (stem[0]=0x80, bit 1=1): extends with 1,0,0,0,0,0,0 from depth 1 to 8.
 	expectedPaths := [][]byte{
-		{1, 0}, // left child
-		{1, 1}, // right child
-		{1},    // internal node itself
+		{1, 0, 0, 0, 0, 0, 0, 0, 0}, // left child: path + 0 + 7 zero extension bits
+		{1, 1, 0, 0, 0, 0, 0, 0, 0}, // right child: path + 1 + stem-bit extension (0,0,0,0,0,0,0)
+		{1},                           // internal node itself (at group boundary)
 	}
 
 	for i, expectedPath := range expectedPaths {

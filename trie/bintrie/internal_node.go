@@ -238,7 +238,12 @@ func (bt *InternalNode) collectChildGroups(path []byte, flushfn NodeFlushFn, gro
 		return nil
 	}
 
-	// Continue traversing within the group
+	// Continue traversing within the group.
+	// When a non-InternalNode (StemNode, HashedNode) appears mid-group, its
+	// hash gets projected to a leaf bitmap position by serializeSubtree. The
+	// storage path must be extended to match that projected position so that
+	// lookups after deserialization find the node at the correct path.
+	childDepth := bt.depth + 1
 	if bt.left != nil {
 		switch n := bt.left.(type) {
 		case *InternalNode:
@@ -246,8 +251,8 @@ func (bt *InternalNode) collectChildGroups(path []byte, flushfn NodeFlushFn, gro
 				return err
 			}
 		default:
-			// StemNode, HashedNode, or Empty - they handle their own collection
-			if err := bt.left.CollectNodes(appendBit(path, 0), flushfn, groupDepth); err != nil {
+			extPath := extendPathToGroupLeaf(appendBit(path, 0), bt.left, remainingLevels, childDepth)
+			if err := bt.left.CollectNodes(extPath, flushfn, groupDepth); err != nil {
 				return err
 			}
 		}
@@ -259,13 +264,36 @@ func (bt *InternalNode) collectChildGroups(path []byte, flushfn NodeFlushFn, gro
 				return err
 			}
 		default:
-			// StemNode, HashedNode, or Empty - they handle their own collection
-			if err := bt.right.CollectNodes(appendBit(path, 1), flushfn, groupDepth); err != nil {
+			extPath := extendPathToGroupLeaf(appendBit(path, 1), bt.right, remainingLevels, childDepth)
+			if err := bt.right.CollectNodes(extPath, flushfn, groupDepth); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// extendPathToGroupLeaf extends a storage path to the group's leaf boundary,
+// matching the projection done by serializeSubtree. For StemNodes, the path
+// is extended using the stem's key bits (same as serializeSubtree). For other
+// node types, the path is extended with all-zero (left) bits.
+func extendPathToGroupLeaf(path []byte, node BinaryNode, remainingLevels int, absoluteDepth int) []byte {
+	if remainingLevels <= 0 {
+		return path
+	}
+	if sn, ok := node.(*StemNode); ok {
+		for d := 0; d < remainingLevels; d++ {
+			bit := sn.Stem[(absoluteDepth+d)/8] >> (7 - ((absoluteDepth + d) % 8)) & 1
+			path = appendBit(path, bit)
+		}
+	} else {
+		// HashedNode or other: all-left extension (matches serializeSubtree's
+		// position << remainingDepth behavior).
+		for d := 0; d < remainingLevels; d++ {
+			path = appendBit(path, 0)
+		}
+	}
+	return path
 }
 
 // appendBit appends a bit to a path, returning a new slice

@@ -344,9 +344,10 @@ func buildDeepTreeUnique(depth, maxDepth, position int) BinaryNode {
 		return HashedNode(h)
 	}
 	return &InternalNode{
-		depth: depth,
-		left:  buildDeepTreeUnique(depth+1, maxDepth, position*2),
-		right: buildDeepTreeUnique(depth+1, maxDepth, position*2+1),
+		depth:         depth,
+		left:          buildDeepTreeUnique(depth+1, maxDepth, position*2),
+		right:         buildDeepTreeUnique(depth+1, maxDepth, position*2+1),
+		mustRecompute: true,
 	}
 }
 
