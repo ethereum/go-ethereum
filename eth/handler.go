@@ -31,7 +31,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
 	"github.com/XinFinOrg/XDPoSChain/core"
-	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/eth/bft"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
@@ -282,9 +281,9 @@ func (pm *ProtocolManager) removePeer(id string) {
 func (pm *ProtocolManager) Start(maxPeers int) {
 	pm.maxPeers = maxPeers
 
-	// broadcast transactions
+	// broadcast and announce transactions (only new ones, not resurrected ones)
 	pm.txsCh = make(chan core.NewTxsEvent, txChanSize)
-	pm.txsSub = pm.txpool.SubscribeNewTxsEvent(pm.txsCh)
+	pm.txsSub = pm.txpool.SubscribeTransactions(pm.txsCh, false)
 	pm.orderTxCh = make(chan core.OrderTxPreEvent, txChanSize)
 	if pm.orderpool != nil {
 		pm.orderTxSub = pm.orderpool.SubscribeTxPreEvent(pm.orderTxCh)
@@ -780,11 +779,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				pm.knownTxs.Add(tx.Hash(), struct{}{})
 			}
 		}
-		warped := make([]*txpool.Transaction, len(txs))
-		for i := range txs {
-			warped[i] = &txpool.Transaction{Tx: txs[i]}
-		}
-		pm.txpool.Add(warped, false, false)
+		pm.txpool.Add(txs, false, false)
 
 	case msg.Code == OrderTxMsg:
 		// Transactions arrived, make sure we have a valid and fresh chain to handle them

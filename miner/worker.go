@@ -186,7 +186,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 	}
 	if worker.announceTxs {
 		// Subscribe NewTxsEvent for tx pool
-		worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
+		worker.txsSub = eth.TxPool().SubscribeTransactions(worker.txsCh, true)
 	}
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
@@ -375,7 +375,7 @@ func (w *worker) update() {
 					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], &txpool.LazyTransaction{
 						Hash:      tx.Hash(),
-						Tx:        &txpool.Transaction{Tx: tx},
+						Tx:        tx,
 						Time:      tx.Time(),
 						GasFeeCap: tx.GasFeeCap(),
 						GasTipCap: tx.GasTipCap(),
@@ -1111,10 +1111,10 @@ func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Addr
 			break
 		}
 		warped := lazyTx.Resolve()
-		if warped == nil || warped.Tx == nil {
+		if warped == nil {
 			break
 		}
-		tx := warped.Tx
+		tx := warped
 		to := tx.To()
 		if w.header.Number.Uint64() >= common.DenylistHFNumber {
 			from := tx.From()

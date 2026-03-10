@@ -105,15 +105,16 @@ var errorToString = map[int]string{
 
 type txPool interface {
 	// Add should add the given transactions to the pool.
-	Add(txs []*txpool.Transaction, local bool, sync bool) []error
+	Add(txs []*types.Transaction, local bool, sync bool) []error
 
 	// Pending should return pending transactions.
 	// The slice should be modifiable by the caller.
 	Pending(enforceTips bool) map[common.Address][]*txpool.LazyTransaction
 
-	// SubscribeNewTxsEvent should return an event subscription of
-	// NewTxsEvent and send events to the given channel.
-	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
+	// SubscribeTransactions subscribes to new transaction events. The subscriber
+	// can decide whether to receive notifications only for newly seen transactions
+	// or also for reorged out ones.
+	SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription
 }
 
 type orderPool interface {

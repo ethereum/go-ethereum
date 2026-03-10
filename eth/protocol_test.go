@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
@@ -132,10 +131,10 @@ func testSendTransactions(t *testing.T, protocol int) {
 
 	// Fill the pool with big transactions.
 	const txsize = txsyncPackSize / 10
-	alltxs := make([]*txpool.Transaction, 100)
+	alltxs := make([]*types.Transaction, 100)
 	for nonce := range alltxs {
 		tx := newTestTransaction(testAccount, uint64(nonce), txsize)
-		alltxs[nonce] = &txpool.Transaction{Tx: tx}
+		alltxs[nonce] = tx
 	}
 	pm.txpool.Add(alltxs, false, false)
 
@@ -145,7 +144,7 @@ func testSendTransactions(t *testing.T, protocol int) {
 		defer p.close()
 		seen := make(map[common.Hash]bool)
 		for _, tx := range alltxs {
-			seen[tx.Tx.Hash()] = false
+			seen[tx.Hash()] = false
 		}
 		for n := 0; n < len(alltxs) && !t.Failed(); {
 			var txs []*types.Transaction

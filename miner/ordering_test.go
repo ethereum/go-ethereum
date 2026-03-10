@@ -88,7 +88,7 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 			}
 			groups[addr] = append(groups[addr], &txpool.LazyTransaction{
 				Hash:      tx.Hash(),
-				Tx:        &txpool.Transaction{Tx: tx},
+				Tx:        tx,
 				Time:      tx.Time(),
 				GasFeeCap: tx.GasFeeCap(),
 				GasTipCap: tx.GasTipCap(),
@@ -101,7 +101,7 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 
 	txs := types.Transactions{}
 	for tx := txset.Peek(); tx != nil; tx = txset.Peek() {
-		txs = append(txs, tx.Tx.Tx)
+		txs = append(txs, tx.Tx)
 		txset.Shift()
 	}
 	if len(txs) != expectedCount {
@@ -153,7 +153,7 @@ func TestTransactionTimeSort(t *testing.T) {
 
 		groups[addr] = append(groups[addr], &txpool.LazyTransaction{
 			Hash:      tx.Hash(),
-			Tx:        &txpool.Transaction{Tx: tx},
+			Tx:        tx,
 			Time:      tx.Time(),
 			GasFeeCap: tx.GasFeeCap(),
 			GasTipCap: tx.GasTipCap(),
@@ -164,7 +164,7 @@ func TestTransactionTimeSort(t *testing.T) {
 
 	txs := types.Transactions{}
 	for tx := txset.Peek(); tx != nil; tx = txset.Peek() {
-		txs = append(txs, tx.Tx.Tx)
+		txs = append(txs, tx.Tx)
 		txset.Shift()
 	}
 	if len(txs) != len(keys) {
@@ -193,11 +193,11 @@ func TestNewTransactionsByPriceAndNonce_SpecialSeparation(t *testing.T) {
 
 	genNormalTx := func(nonce uint64, key *ecdsa.PrivateKey) *txpool.LazyTransaction {
 		tx, _ := types.SignTx(types.NewTransaction(nonce, common.HexToAddress("0x1234567890123456789012345678901234567890"), big.NewInt(1), 21000, big.NewInt(1), nil), signer, key)
-		return &txpool.LazyTransaction{Tx: &txpool.Transaction{Tx: tx}, Hash: tx.Hash(), Time: tx.Time(), GasFeeCap: tx.GasFeeCap(), GasTipCap: tx.GasTipCap()}
+		return &txpool.LazyTransaction{Tx: tx, Hash: tx.Hash(), Time: tx.Time(), GasFeeCap: tx.GasFeeCap(), GasTipCap: tx.GasTipCap()}
 	}
 	genSpecialTx := func(nonce uint64, key *ecdsa.PrivateKey) *txpool.LazyTransaction {
 		tx, _ := types.SignTx(types.NewTransaction(nonce, common.BlockSignersBinary, big.NewInt(1), 21000, big.NewInt(1), nil), signer, key)
-		return &txpool.LazyTransaction{Tx: &txpool.Transaction{Tx: tx}, Hash: tx.Hash(), Time: tx.Time(), GasFeeCap: tx.GasFeeCap(), GasTipCap: tx.GasTipCap()}
+		return &txpool.LazyTransaction{Tx: tx, Hash: tx.Hash(), Time: tx.Time(), GasFeeCap: tx.GasFeeCap(), GasTipCap: tx.GasTipCap()}
 	}
 
 	testCases := []struct {
@@ -250,7 +250,7 @@ func TestNewTransactionsByPriceAndNonce_SpecialSeparation(t *testing.T) {
 			normalCount := 0
 			for tx := txset.Peek(); tx != nil; tx = txset.Peek() {
 				resolved := tx.Resolve()
-				if resolved == nil || resolved.Tx.To() == nil || *resolved.Tx.To() == common.BlockSignersBinary {
+				if resolved == nil || resolved.To() == nil || *resolved.To() == common.BlockSignersBinary {
 					t.Errorf("txset contains special or nil-to tx: %v", resolved)
 				}
 				normalCount++

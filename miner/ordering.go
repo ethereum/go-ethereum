@@ -66,15 +66,15 @@ func (s txByPriceAndTime) Len() int {
 
 func (s txByPriceAndTime) Less(i, j int) bool {
 	i_price := s.txs[i].fees
-	if tx := s.txs[i].tx.Resolve(); tx != nil && tx.Tx.To() != nil {
-		if _, ok := s.payersSwap[*tx.Tx.To()]; ok {
+	if tx := s.txs[i].tx.Resolve(); tx != nil && tx.To() != nil {
+		if _, ok := s.payersSwap[*tx.To()]; ok {
 			i_price = common.TRC21GasPrice
 		}
 	}
 
 	j_price := s.txs[j].fees
-	if tx := s.txs[j].tx.Resolve(); tx != nil && tx.Tx.To() != nil {
-		if _, ok := s.payersSwap[*tx.Tx.To()]; ok {
+	if tx := s.txs[j].tx.Resolve(); tx != nil && tx.To() != nil {
+		if _, ok := s.payersSwap[*tx.To()]; ok {
 			j_price = common.TRC21GasPrice
 		}
 	}
@@ -130,8 +130,8 @@ func newTransactionsByPriceAndNonce(signer types.Signer, txs map[common.Address]
 	for from, accTxs := range txs {
 		var normalTxs []*txpool.LazyTransaction
 		for _, lazyTx := range accTxs {
-			if tx := lazyTx.Resolve(); tx.Tx.IsSpecialTransaction() {
-				specialTxs = append(specialTxs, tx.Tx)
+			if tx := lazyTx.Resolve(); tx.IsSpecialTransaction() {
+				specialTxs = append(specialTxs, tx)
 			} else {
 				normalTxs = append(normalTxs, lazyTx)
 			}

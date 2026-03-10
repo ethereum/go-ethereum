@@ -49,7 +49,7 @@ func (pm *ProtocolManager) syncTransactions(p *peer) {
 	for _, batch := range pending {
 		for _, lazy := range batch {
 			if tx := lazy.Resolve(); tx != nil {
-				txs = append(txs, tx.Tx)
+				txs = append(txs, tx)
 			}
 		}
 	}

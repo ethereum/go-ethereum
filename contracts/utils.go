@@ -93,7 +93,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *txpool.TxPool,
 			return err
 		}
 		// Add tx signed to local tx pool.
-		err = pool.Add([]*txpool.Transaction{{Tx: txSigned}}, true, true)[0]
+		err = pool.Add([]*types.Transaction{txSigned}, true, true)[0]
 		if err != nil {
 			log.Error("Fail to add tx sign to local pool.", "error", err, "number", block.NumberU64(), "hash", block.Hash().Hex(), "from", account.Address, "nonce", nonce)
 			return err
@@ -121,7 +121,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *txpool.TxPool,
 				return err
 			}
 			// Add tx signed to local tx pool.
-			err = pool.Add([]*txpool.Transaction{{Tx: txSigned}}, true, true)[0]
+			err = pool.Add([]*types.Transaction{txSigned}, true, true)[0]
 			if err != nil {
 				log.Error("Fail to add tx secret to local pool.", "error", err, "number", block.NumberU64(), "hash", block.Hash().Hex(), "from", account.Address, "nonce", nonce)
 				return err
@@ -150,7 +150,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *txpool.TxPool,
 				return err
 			}
 			// Add tx to pool.
-			err = pool.Add([]*txpool.Transaction{{Tx: txSigned}}, true, true)[0]
+			err = pool.Add([]*types.Transaction{txSigned}, true, true)[0]
 			if err != nil {
 				log.Error("Fail to add tx opening to local pool.", "error", err, "number", block.NumberU64(), "hash", block.Hash().Hex(), "from", account.Address, "nonce", nonce)
 				return err
