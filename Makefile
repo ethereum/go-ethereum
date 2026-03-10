@@ -43,9 +43,9 @@ all:
 test: all
 	go run build/ci.go test -failfast
 
-#? quick-test: Run the tests except time-consuming packages.
+#? quick-test: Run tests in short mode (testing.Short()), fail fast.
 quick-test: all
-	go run build/ci.go test --quick -failfast
+	go run build/ci.go test -short -failfast
 
 #? lint: Run certain pre-selected linters.
 lint: ## Run linters.

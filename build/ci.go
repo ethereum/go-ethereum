@@ -212,7 +212,6 @@ func doTest(cmdline []string) {
 		race     = flag.Bool("race", false, "Execute the race detector")
 		short    = flag.Bool("short", false, "Pass the 'short'-flag to go test")
 		threads  = flag.Int("p", 1, "Number of CPU threads to use for testing")
-		quick    = flag.Bool("quick", false, "Whether to skip long time test")
 		failfast = flag.Bool("failfast", false, "Do not start new tests after the first test failure")
 	)
 	flag.CommandLine.Parse(cmdline)
@@ -255,40 +254,18 @@ func doTest(cmdline []string) {
 
 	packages := flag.CommandLine.Args()
 	if len(packages) > 0 {
-		if *quick {
-			packages = filterPackages(packages)
-		}
 		gotest.Args = append(gotest.Args, packages...)
 		build.MustRun(gotest)
 		return
 	}
 
 	// No packages specified, run all tests for all modules.
-	if *quick {
-		packages = filterPackages(build.FindAllPackages(&tc))
-	} else {
-		packages = []string{"./..."}
-	}
-	gotest.Args = append(gotest.Args, packages...)
+	gotest.Args = append(gotest.Args, "./...")
 	for _, mod := range goModules {
 		test := *gotest
 		test.Dir = mod
 		build.MustRun(&test)
 	}
-}
-
-// filterPackages removes time-consuming packages.
-func filterPackages(packages []string) []string {
-	var filtered []string
-
-	for _, pkg := range packages {
-		if strings.Contains(pkg, "/consensus/tests/engine_v2_tests") {
-			continue
-		}
-		filtered = append(filtered, pkg)
-	}
-
-	return filtered
 }
 
 // doTidy runs go mod tidy check.
