@@ -351,6 +351,17 @@ func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
 	return common.Hash{}
 }
 
+// TransitionComplete checks if the EIP-7612 transition is complete.
+func (s *StateDB) InTransition() bool {
+	completeKey := common.Hash{} // slot 0 for completion flag
+	completeValue := s.GetState(params.BinaryTransitionRegistryAddress, completeKey)
+	return completeValue != (common.Hash{})
+}
+
+func (s *StateDB) isVerkle() bool {
+	return s.db.TrieDB().IsVerkle() || (s.trie != nil && s.trie.IsVerkle())
+}
+
 // TxIndex returns the current transaction index set by SetTxContext.
 func (s *StateDB) TxIndex() int {
 	return s.txIndex
@@ -825,7 +836,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		start   = time.Now()
 		workers errgroup.Group
 	)
-	if s.db.TrieDB().IsVerkle() {
+	if s.isVerkle() {
 		// Whilst MPT storage tries are independent, Verkle has one single trie
 		// for all the accounts and all the storage slots merged together. The
 		// former can thus be simply parallelized, but updating the latter will
@@ -839,7 +850,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 		obj := s.stateObjects[addr] // closure for the task runner below
 		workers.Go(func() error {
-			if s.db.TrieDB().IsVerkle() {
+			if s.isVerkle() {
 				obj.updateTrie()
 			} else {
 				obj.updateRoot()
@@ -856,7 +867,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// If witness building is enabled, gather all the read-only accesses.
 	// Skip witness collection in Verkle mode, they will be gathered
 	// together at the end.
-	if s.witness != nil && !s.db.TrieDB().IsVerkle() {
+	if s.witness != nil && !s.isVerkle() {
 		// Pull in anything that has been accessed before destruction
 		for _, obj := range s.stateObjectsDestruct {
 			// Skip any objects that haven't touched their storage
@@ -913,7 +924,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// only a single trie is used for state hashing. Replacing a non-nil verkle tree
 	// here could result in losing uncommitted changes from storage.
 	start = time.Now()
-	if s.prefetcher != nil {
+	if s.prefetcher != nil && !s.isVerkle() {
 		if trie := s.prefetcher.trie(common.Hash{}, s.originalRoot); trie == nil {
 			log.Error("Failed to retrieve account pre-fetcher trie")
 		} else {
@@ -1139,7 +1150,7 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*acco
 		deletes[addrHash] = op
 
 		// Short circuit if the origin storage was empty.
-		if prev.Root == types.EmptyRootHash || s.db.TrieDB().IsVerkle() {
+		if prev.Root == types.EmptyRootHash || s.isVerkle() {
 			continue
 		}
 		if noStorageWiping {
