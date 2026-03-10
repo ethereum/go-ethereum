@@ -691,3 +691,49 @@ func BenchmarkGetPayloadV5RPCServerOnly(b *testing.B) {
 	b.StopTimer()
 	b.ReportMetric(float64(b.Elapsed().Milliseconds())/float64(b.N), "ms/op")
 }
+
+// BenchmarkGetBlobsV3RPCServerOnly benchmarks only the EL server-side cost of
+// engine_getBlobsV3: method dispatch, JSON serialization, and wire encoding.
+// Client-side decoding is excluded by writing to io.Discard.
+func BenchmarkGetBlobsV3RPCServerOnly(b *testing.B) {
+	blobCount := 72
+	env := newBenchmarkBlobEnv(b, blobCount, 1, forkOsaka)
+	defer env.Close()
+
+	// Register the engine API on the running node's in-process RPC server.
+	rpcServer, err := env.node.RPCHandler()
+	if err != nil {
+		b.Fatalf("RPCHandler failed: %v", err)
+	}
+	rpcServer.RegisterName("engine", env.api)
+
+	// Verify the blobs are available via the direct API first.
+	result, err := env.api.GetBlobsV3(env.vhashes)
+	if err != nil {
+		b.Fatalf("GetBlobsV3 failed: %v", err)
+	}
+	if len(result) != blobCount {
+		b.Fatalf("expected %d blobs, got %d", blobCount, len(result))
+	}
+	b.Logf("blob count: %d", blobCount)
+
+	// Build the JSON-RPC request bytes once.
+	// Format the versioned hashes as a JSON array of hex strings.
+	var hashStrs []string
+	for _, h := range env.vhashes {
+		hashStrs = append(hashStrs, fmt.Sprintf(`"%s"`, h.Hex()))
+	}
+	reqJSON := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"engine_getBlobsV3","params":[[%s]]}`, strings.Join(hashStrs, ","))
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		conn := discardConn{
+			Reader: strings.NewReader(reqJSON),
+			Writer: io.Discard,
+		}
+		codec := rpc.NewCodec(conn)
+		rpcServer.ServeCodec(codec, 0)
+	}
+	b.StopTimer()
+	b.ReportMetric(float64(b.Elapsed().Milliseconds())/float64(b.N), "ms/op")
+}
