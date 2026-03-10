@@ -71,7 +71,7 @@ var (
 )
 
 var testChainConfig = func() *params.ChainConfig {
-	config := *params.AllXDPoSProtocolChanges
+	config := *params.AllDevChainProtocolChanges
 	if config.XDPoS != nil {
 		xdpos := *config.XDPoS
 		if xdpos.Period == 0 {
