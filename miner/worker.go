@@ -377,10 +377,6 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	}, nil
 }
 
-var (
-	errAccessListOversized = errors.New("access list oversized")
-)
-
 func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction) (err error) {
 	if tx.Type() == types.BlobTxType {
 		return miner.commitBlobTransaction(env, tx)
@@ -432,43 +428,19 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Snapshot()
 	)
-	var stateCopy *state.StateDB
-	var prevReader state.Reader
-	if env.accessList != nil {
-		prevReader = env.state.Reader()
-		stateCopy = env.state.WithReader(state.NewReaderWithTracker(env.state.Reader()))
-		env.evm.StateDB = stateCopy
-	} else {
-		stateCopy = env.state
-	}
 
-	mutations, receipt, err := core.ApplyTransaction(env.evm, env.gasPool, stateCopy, env.header, tx)
+	mutations, receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx)
 	if err != nil {
 		if env.accessList != nil {
-			// transaction couldn't be applied.  reset env state to what it was before
-			env.state = env.state.WithReader(prevReader)
-			env.evm.StateDB = env.state
-		} else {
-			env.state.RevertToSnapshot(snap)
+			env.state.Reader().(state.StateReaderTracker).Clear()
 		}
+		env.state.RevertToSnapshot(snap)
 		env.gasPool.Set(gp)
+		return nil, err
 	}
 	if env.accessList != nil {
-		al := env.accessList.Copy()
-		al.AccumulateMutations(mutations, uint16(env.tcount)+1)
-		al.AccumulateReads(stateCopy.Reader().(state.StateReaderTracker).GetStateAccessList())
-		if env.size+tx.Size()+uint64(al.ToEncodingObj().EncodedSize()) >= params.MaxBlockSize-maxBlockSizeBufferZone {
-			env.gasPool.Set(gp)
-
-			// transaction couldn't be applied.  reset env state to what it was before
-			env.state = env.state.WithReader(prevReader)
-			env.evm.StateDB = env.state
-			return nil, errAccessListOversized
-		}
-
-		env.state = stateCopy.WithReader(prevReader)
-		env.evm.StateDB = env.state
-		env.accessList = al
+		env.accessList.AccumulateMutations(mutations, uint16(env.tcount)+1)
+		env.accessList.AccumulateReads(env.state.Reader().(state.StateReaderTracker).GetStateAccessList())
 	}
 	return receipt, err
 }
@@ -481,7 +453,6 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 	if env.gasPool == nil {
 		env.gasPool = core.NewGasPool(gasLimit)
 	}
-loop:
 	for {
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {
@@ -580,12 +551,6 @@ loop:
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			txs.Shift()
-		case errors.Is(err, errAccessListOversized):
-			// Transaction can't be applied because it would cause the block to be oversized due to the
-			// contribution of the state accesses/modifications it makes.
-			// terminate the payload construction as it's not guaranteed we will be able to find a transaction
-			// that can fit in a short amount of time.
-			break loop
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from
 			// the same sender because of `nonce-too-high` clause.

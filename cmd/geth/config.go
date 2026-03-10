@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"os"
 	"reflect"
 	"runtime"
@@ -243,12 +244,12 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	if ctx.IsSet(utils.BlockAccessListExecutionModeFlag.Name) {
 		val := ctx.String(utils.BlockAccessListExecutionModeFlag.Name)
 		switch val {
-		case utils.BalExecutionModeFull:
-			cfg.Eth.BALExecutionMode = 0
+		case utils.BalExecutionModeOptimized:
+			cfg.Eth.BALExecutionMode = bal.BALExecutionOptimized
 		case utils.BalExecutionModeNoBatchIO:
-			cfg.Eth.BALExecutionMode = 1
+			cfg.Eth.BALExecutionMode = bal.BALExecutionNoBatchIO
 		case utils.BalExecutionModeSequential:
-			cfg.Eth.BALExecutionMode = 2
+			cfg.Eth.BALExecutionMode = bal.BALExecutionSequential
 		default:
 			utils.Fatalf("invalid option for --bal.executionmode: %s.  acceptable values are full|nobatchio|sequential", val)
 		}
