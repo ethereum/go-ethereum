@@ -72,13 +72,13 @@ func (g *G1) Unmarshal(buf []byte) (int, error) {
 // The output is in EVM format: 64 bytes total.
 // [32-byte x coordinate][32-byte y coordinate]
 // where each coordinate is a big-endian integer padded to 32 bytes.
-func (p *G1) Marshal() []byte {
+func (g *G1) Marshal() []byte {
 	output := make([]byte, 64)
 
-	xBytes := p.inner.X.Bytes()
+	xBytes := g.inner.X.Bytes()
 	copy(output[:32], xBytes[:])
 
-	yBytes := p.inner.Y.Bytes()
+	yBytes := g.inner.Y.Bytes()
 	copy(output[32:64], yBytes[:])
 
 	return output
