@@ -183,9 +183,9 @@ func cleanlyCloseBody(body io.ReadCloser) error {
 	return body.Close()
 }
 
-func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) error {
+func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg *jsonrpcMessage) error {
 	hc := c.writeConn.(*httpConn)
-	respBody, err := hc.doRequest(ctx, msg)
+	respBody, err := hc.doRequest(ctx, appendMessage(nil, msg))
 	if err != nil {
 		return err
 	}
@@ -202,7 +202,7 @@ func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) e
 
 func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonrpcMessage) error {
 	hc := c.writeConn.(*httpConn)
-	respBody, err := hc.doRequest(ctx, msgs)
+	respBody, err := hc.doRequest(ctx, appendBatch(nil, msgs))
 	if err != nil {
 		return err
 	}
@@ -216,11 +216,7 @@ func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonr
 	return nil
 }
 
-func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadCloser, error) {
-	body, err := json.Marshal(msg)
-	if err != nil {
-		return nil, err
-	}
+func (hc *httpConn) doRequest(ctx context.Context, body []byte) (io.ReadCloser, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, hc.url, io.NopCloser(bytes.NewReader(body)))
 	if err != nil {
 		return nil, err
@@ -272,11 +268,14 @@ func (s *Server) newHTTPServerConn(r *http.Request, w http.ResponseWriter) Serve
 	body := io.LimitReader(r.Body, int64(s.httpBodyLimit))
 	conn := &httpServerConn{Reader: body, Writer: w, r: r}
 
+	var buf []byte
 	encodeMsg := func(msg *jsonrpcMessage, isError bool) error {
-		return httpEncodeValue(conn, w, msg, isError)
+		buf = appendMessage(buf[:0], msg)
+		return httpWriteResult(w, buf, isError)
 	}
 	encodeBatch := func(msgs []*jsonrpcMessage, isError bool) error {
-		return httpEncodeValue(conn, w, msgs, isError)
+		buf = appendBatch(buf[:0], msgs)
+		return httpWriteResult(w, buf, isError)
 	}
 
 	dec := json.NewDecoder(conn)
@@ -285,12 +284,13 @@ func (s *Server) newHTTPServerConn(r *http.Request, w http.ResponseWriter) Serve
 	return NewFuncCodec(conn, encodeMsg, encodeBatch, dec.Decode)
 }
 
-// httpEncodeValue handles the HTTP-specific JSON encoding logic for responses.
+// httpWriteResult writes pre-encoded response data over HTTP.
 // For error responses, it sets Content-Length and flushes to ensure the response
 // is fully written before any HTTP server write timeout occurs.
-func httpEncodeValue(conn *httpServerConn, w http.ResponseWriter, v any, isError bool) error {
+func httpWriteResult(w http.ResponseWriter, data []byte, isError bool) error {
 	if !isError {
-		return json.NewEncoder(conn).Encode(v)
+		_, err := w.Write(data)
+		return err
 	}
 
 	// It's an error response and requires special treatment.
@@ -299,11 +299,7 @@ func httpEncodeValue(conn *httpServerConn, w http.ResponseWriter, v any, isError
 	// server's write timeout occurs. So we need to flush the response. The
 	// Content-Length header also needs to be set to ensure the client knows
 	// when it has the full response.
-	encdata, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	w.Header().Set("content-length", strconv.Itoa(len(encdata)))
+	w.Header().Set("content-length", strconv.Itoa(len(data)))
 
 	// If this request is wrapped in a handler that might remove Content-Length (such
 	// as the automatic gzip we do in package node), we need to ensure the HTTP server
@@ -312,7 +308,7 @@ func httpEncodeValue(conn *httpServerConn, w http.ResponseWriter, v any, isError
 	// the final chunk is missing.
 	w.Header().Set("transfer-encoding", "identity")
 
-	_, err = w.Write(encdata)
+	_, err := w.Write(data)
 	if f, ok := w.(http.Flusher); ok {
 		f.Flush()
 	}
