@@ -1,13 +1,20 @@
 #!/bin/bash
-if test -z "$NETWORK"
-then
-    echo "NETWORK env Must be set, mainnet/testnet/devnet/local"
-    exit 1
-fi
+
+case "$NETWORK" in
+    "")
+        echo "NETWORK environment variable must be set. Allowed values: mainnet/testnet/devnet/local"
+        exit 1
+        ;;
+    mainnet|testnet|devnet|local)
+        ;;
+    *)
+        echo "Invalid NETWORK: $NETWORK. Allowed: mainnet/testnet/devnet/local"
+        exit 1
+        ;;
+esac
 
 echo "Select to run $NETWORK..."
-ln -s /usr/bin/XDC-$NETWORK /usr/bin/XDC
-cp -n /work/$NETWORK/* /work
+cp -n /work/"$NETWORK"/* /work
 
 echo "Start Node..."
 /work/start.sh

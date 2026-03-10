@@ -1,8 +1,4 @@
 // Notice: this file only saves const variables for all network.
-// Please run the following commands after modify this file:
-//     cp common/constants.go common/constants/constants.go.testnet
-//     cp common/constants.go common/constants/constants.go.devnet
-//     cp common/constants.go common/constants/constants.go.local
 
 package common
 
