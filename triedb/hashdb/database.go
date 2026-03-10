@@ -612,6 +612,9 @@ func (db *Database) Close() error {
 // NodeReader returns a reader for accessing trie nodes within the specified state.
 // An error will be returned if the specified state is not available.
 func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
+	if root == types.EmptyRootHash {
+		return &reader{db: db}, nil
+	}
 	if _, err := db.node(root); err != nil {
 		return nil, fmt.Errorf("state %#x is not available, %v", root, err)
 	}
