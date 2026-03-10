@@ -666,6 +666,9 @@ func gasSelfdestruct8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory
 }
 
 func gasSStore8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+	if evm.readOnly {
+		return GasCosts{}, ErrWriteProtection
+	}
 	// If we fail the minimum gas availability invariant, fail (0)
 	if contract.Gas.RegularGas <= params.SstoreSentryGasEIP2200 {
 		return GasCosts{}, errors.New("not enough gas for reentrancy sentry")
@@ -692,7 +695,16 @@ func gasSStore8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 	}
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
-			return GasCosts{RegularGas: cost.RegularGas + params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929, StateGas: params.StorageCreationSize * evm.Context.CostPerGasByte}, nil
+			// EIP-8037: Charge state gas first (before regular gas), matching the
+			// spec's charge_state_gas → charge_gas ordering. This ensures that
+			// state_gas_used is recorded even if the subsequent regular gas charge
+			// fails with OOG.
+			stateGas := GasCosts{StateGas: params.StorageCreationSize * evm.Context.CostPerGasByte}
+			if contract.Gas.Underflow(stateGas) {
+				return GasCosts{}, errors.New("out of gas for state gas")
+			}
+			contract.Gas.Sub(stateGas)
+			return GasCosts{RegularGas: cost.RegularGas + params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929}, nil
 		}
 		if value == (common.Hash{}) { // delete slot (2.1.2b)
 			evm.StateDB.AddRefund(params.SstoreClearsScheduleRefundEIP3529)
