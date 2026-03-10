@@ -145,7 +145,7 @@ func (c *Contract) RefundGas(err error, gas GasCosts, logger *tracing.Hooks, rea
 		gas.StateGas += gas.StateGasCharged
 		gas.StateGasCharged = 0
 	}
-	if gas.Max() == 0 {
+	if gas.RegularGas == 0 && gas.StateGas == 0 && gas.StateGasCharged == 0 {
 		return
 	}
 	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
