@@ -1108,8 +1108,7 @@ func (pool *LegacyPool) addLocals(txs []*types.Transaction) []error {
 // AddLocal enqueues a single local transaction into the pool if it is valid. This is
 // a convenience wrapper around AddLocals.
 func (pool *LegacyPool) addLocal(tx *types.Transaction) error {
-	errs := pool.addLocals([]*types.Transaction{tx})
-	return errs[0]
+	return pool.addLocals([]*types.Transaction{tx})[0]
 }
 
 // AddRemotes enqueues a batch of transactions into the pool if they are valid. If the
@@ -1124,8 +1123,7 @@ func (pool *LegacyPool) AddRemotes(txs []*types.Transaction) []error {
 // addRemote enqueues a single transaction into the pool if it is valid. This is a convenience
 // wrapper around AddRemotes.
 func (pool *LegacyPool) addRemote(tx *types.Transaction) error {
-	errs := pool.AddRemotes([]*types.Transaction{tx})
-	return errs[0]
+	return pool.AddRemotes([]*types.Transaction{tx})[0]
 }
 
 // AddRemotesSync is like AddRemotes, but waits for pool reorganization. Tests use this method.
