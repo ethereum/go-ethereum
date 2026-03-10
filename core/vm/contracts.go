@@ -61,7 +61,7 @@ var PrecompiledContractsByzantium = PrecompiledContracts{
 	common.BytesToAddress([]byte{2}):  &sha256hash{},
 	common.BytesToAddress([]byte{3}):  &ripemd160hash{},
 	common.BytesToAddress([]byte{4}):  &dataCopy{},
-	common.BytesToAddress([]byte{5}):  &bigModExp{eip2565: false, eip7823: false},
+	common.BytesToAddress([]byte{5}):  &bigModExp{eip2565: false, eip7823: false, eip7883: false},
 	common.BytesToAddress([]byte{6}):  &bn256AddByzantium{},
 	common.BytesToAddress([]byte{7}):  &bn256ScalarMulByzantium{},
 	common.BytesToAddress([]byte{8}):  &bn256PairingByzantium{},
@@ -78,7 +78,7 @@ var PrecompiledContractsIstanbul = PrecompiledContracts{
 	common.BytesToAddress([]byte{2}):  &sha256hash{},
 	common.BytesToAddress([]byte{3}):  &ripemd160hash{},
 	common.BytesToAddress([]byte{4}):  &dataCopy{},
-	common.BytesToAddress([]byte{5}):  &bigModExp{eip2565: false, eip7823: false},
+	common.BytesToAddress([]byte{5}):  &bigModExp{eip2565: false, eip7823: false, eip7883: false},
 	common.BytesToAddress([]byte{6}):  &bn256AddIstanbul{},
 	common.BytesToAddress([]byte{7}):  &bn256ScalarMulIstanbul{},
 	common.BytesToAddress([]byte{8}):  &bn256PairingIstanbul{},
@@ -96,7 +96,7 @@ var PrecompiledContractsXDCv2 = PrecompiledContracts{
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: false, eip7823: false},
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: false, eip7823: false, eip7883: false},
 	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
 	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
@@ -110,7 +110,7 @@ var PrecompiledContractsEIP1559 = PrecompiledContracts{
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true, eip7823: false},
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true, eip7823: false, eip7883: false},
 	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
 	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
@@ -124,7 +124,7 @@ var PrecompiledContractsOsaka = PrecompiledContracts{
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true, eip7823: true},
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true, eip7823: true, eip7883: true},
 	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
 	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
@@ -132,6 +132,7 @@ var PrecompiledContractsOsaka = PrecompiledContracts{
 }
 
 var (
+	PrecompiledAddressesOsaka     []common.Address
 	PrecompiledAddressesEIP1559   []common.Address
 	PrecompiledAddressesXDCv2     []common.Address
 	PrecompiledAddressesIstanbul  []common.Address
@@ -154,6 +155,9 @@ func init() {
 	}
 	for k := range PrecompiledContractsEIP1559 {
 		PrecompiledAddressesEIP1559 = append(PrecompiledAddressesEIP1559, k)
+	}
+	for k := range PrecompiledContractsOsaka {
+		PrecompiledAddressesOsaka = append(PrecompiledAddressesOsaka, k)
 	}
 }
 
@@ -182,6 +186,8 @@ func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 // ActivePrecompiles returns the precompile addresses enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
+	case rules.IsOsaka:
+		return PrecompiledAddressesOsaka
 	case rules.IsEIP1559:
 		return PrecompiledAddressesEIP1559
 	case rules.IsXDCxDisable:
@@ -311,6 +317,7 @@ func (c *dataCopy) Run(in []byte) ([]byte, error) {
 type bigModExp struct {
 	eip2565 bool
 	eip7823 bool
+	eip7883 bool
 }
 
 var (
@@ -388,7 +395,11 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	adjExpLen := new(big.Int)
 	if expLen.Cmp(big32) > 0 {
 		adjExpLen.Sub(expLen, big32)
-		adjExpLen.Lsh(adjExpLen, 3)
+		if c.eip7883 {
+			adjExpLen.Lsh(adjExpLen, 4)
+		} else {
+			adjExpLen.Lsh(adjExpLen, 3)
+		}
 	}
 	adjExpLen.Add(adjExpLen, big.NewInt(int64(msb)))
 	// Calculate the gas cost of the operation
@@ -398,6 +409,8 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	} else {
 		gas.Set(modLen)
 	}
+
+	maxLenOver32 := gas.Cmp(big32) > 0
 	if c.eip2565 {
 		// EIP-2565 has three changes
 		// 1. Different multComplexity (inlined here)
@@ -411,6 +424,16 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		gas.Rsh(gas, 3)
 		gas.Mul(gas, gas)
 
+		var minPrice uint64 = 200
+		if c.eip7883 {
+			minPrice = 500
+			if maxLenOver32 {
+				gas.Add(gas, gas)
+			} else {
+				gas = big.NewInt(16)
+			}
+		}
+
 		if adjExpLen.Cmp(big1) > 0 {
 			gas.Mul(gas, adjExpLen)
 		}
@@ -419,18 +442,15 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		if gas.BitLen() > 64 {
 			return math.MaxUint64
 		}
-		// 3. Minimum price of 200 gas
-		if gas.Uint64() < 200 {
-			return 200
-		}
-		return gas.Uint64()
+		return max(minPrice, gas.Uint64())
 	}
+
+	// Pre-Berlin logic.
 	gas = modexpMultComplexity(gas)
 	if adjExpLen.Cmp(big1) > 0 {
 		gas.Mul(gas, adjExpLen)
 	}
 	gas.Div(gas, big20)
-
 	if gas.BitLen() > 64 {
 		return math.MaxUint64
 	}
