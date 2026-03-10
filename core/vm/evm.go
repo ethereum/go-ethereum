@@ -225,6 +225,7 @@ func (evm *EVM) SetTxContext(txCtx TxContext) {
 		txCtx.AccessEvents = state.NewAccessEvents()
 	}
 	evm.TxContext = txCtx
+	evm.CollisionBurned = 0
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and
