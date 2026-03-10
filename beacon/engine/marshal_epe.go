@@ -19,6 +19,7 @@ package engine
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -55,7 +56,11 @@ func marshalBlobsBundle(buf []byte, b *BlobsBundle) []byte {
 }
 
 // marshalHexBytesArray writes an array of hex-encoded byte slices to buf.
+// A nil slice is written as "null" to match encoding/json semantics.
 func marshalHexBytesArray(buf []byte, items []hexutil.Bytes) []byte {
+	if items == nil {
+		return append(buf, "null"...)
+	}
 	buf = append(buf, '[')
 	for i, item := range items {
 		if i > 0 {
@@ -80,6 +85,10 @@ func writeHexBytes(buf []byte, data []byte) []byte {
 
 // MarshalJSON implements json.Marshaler.
 func (e ExecutionPayloadEnvelope) MarshalJSON() ([]byte, error) {
+	if e.ExecutionPayload == nil {
+		return nil, errors.New("missing required field 'executionPayload' for ExecutionPayloadEnvelope")
+	}
+
 	// Marshal the execution payload using its gencodec MarshalJSON.
 	payload, err := e.ExecutionPayload.MarshalJSON()
 	if err != nil {
@@ -125,7 +134,7 @@ func (e ExecutionPayloadEnvelope) MarshalJSON() ([]byte, error) {
 	if e.BlobsBundle != nil {
 		size += estimateBlobsBundleSize(e.BlobsBundle)
 	}
-	size += 128 // JSON bloat (keys, braces, commas, etc.)
+	size += 256 // JSON bloat (keys, braces, commas, etc. and room for growth)
 	buf := make([]byte, 0, size)
 
 	// Write the execution payload to the buffer
