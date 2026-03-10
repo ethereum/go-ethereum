@@ -301,6 +301,7 @@ func (l *list) Contains(nonce uint64) bool {
 // If the new transaction is accepted into the list, the lists' cost and gas
 // thresholds are also potentially updated.
 func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transaction) {
+	base := new(uint256.Int).Set(l.totalcost)
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
 	if old != nil {
@@ -323,22 +324,21 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 		if tx.GasFeeCapIntCmp(thresholdFeeCap) < 0 || tx.GasTipCapIntCmp(thresholdTip) < 0 {
 			return false, nil
 		}
+		// Old is being replaced, subtract old cost
+		if _, underflow := base.SubOverflow(base, uint256.MustFromBig(old.Cost())); underflow {
+			panic("totalcost underflow")
+		}
 	}
 	// Add new tx cost to totalcost
 	cost, overflow := uint256.FromBig(tx.Cost())
 	if overflow {
 		return false, nil
 	}
-	total, overflow := new(uint256.Int).AddOverflow(l.totalcost, cost)
+	total, overflow := new(uint256.Int).AddOverflow(base, cost)
 	if overflow {
 		return false, nil
 	}
 	l.totalcost = total
-
-	// Old is being replaced, subtract old cost
-	if old != nil {
-		l.subTotalCost([]*types.Transaction{old})
-	}
 
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)

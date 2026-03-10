@@ -68,6 +68,52 @@ func TestListAddVeryExpensive(t *testing.T) {
 	}
 }
 
+func TestListAddReplacementAvoidsIntermediateOverflow(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	max := new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 256), common.Big1)
+	oldPrice := new(big.Int).Sub(new(big.Int).Rsh(new(big.Int).Set(max), 1), big.NewInt(100))
+	newPrice := new(big.Int).Add(oldPrice, common.Big1)
+
+	oldTx, err := types.SignTx(types.NewTransaction(0, common.Address{}, common.Big0, 1, oldPrice, nil), types.HomesteadSigner{}, key)
+	if err != nil {
+		t.Fatalf("failed to sign old tx: %v", err)
+	}
+	newTx, err := types.SignTx(types.NewTransaction(0, common.Address{}, common.Big0, 1, newPrice, nil), types.HomesteadSigner{}, key)
+	if err != nil {
+		t.Fatalf("failed to sign replacement tx: %v", err)
+	}
+
+	list := newList(true)
+	inserted, _ := list.Add(oldTx, 0)
+	if !inserted {
+		t.Fatal("failed to insert baseline transaction")
+	}
+	inserted, replaced := list.Add(newTx, 0)
+	if !inserted {
+		t.Fatal("replacement transaction should not overflow after subtracting old cost")
+	}
+	if replaced == nil || replaced.Hash() != oldTx.Hash() {
+		t.Fatal("expected old transaction to be replaced")
+	}
+	want, overflow := uint256.FromBig(newTx.Cost())
+	if overflow {
+		t.Fatal("replacement tx cost overflowed uint256 in test setup")
+	}
+	if list.totalcost.Cmp(want) != 0 {
+		t.Fatalf("totalcost mismatch after replacement: have %v want %v", list.totalcost, want)
+	}
+	if tx := list.txs.Get(newTx.Nonce()); tx == nil || tx.Hash() != newTx.Hash() {
+		t.Fatal("replacement transaction was not stored in list")
+	}
+	list.Forward(1)
+	if list.totalcost.Sign() != 0 {
+		t.Fatalf("totalcost should be zero after removal, have %v", list.totalcost)
+	}
+}
+
 // TestPriceHeapCmp tests that the price heap comparison function works as intended.
 // It also tests combinations where the basefee is higher than the gas fee cap, which
 // are useful to sort in the mempool to support basefee changes.
