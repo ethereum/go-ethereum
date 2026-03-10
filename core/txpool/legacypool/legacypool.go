@@ -1595,7 +1595,7 @@ func (pool *LegacyPool) demoteUnexecutables() {
 type accountSet struct {
 	accounts map[common.Address]struct{}
 	signer   types.Signer
-	cache    []common.Address
+	cache    *[]common.Address
 }
 
 // newAccountSet creates a new address set with an associated signer for sender
@@ -1628,9 +1628,10 @@ func (as *accountSet) addTx(tx *types.Transaction) {
 // reuse. The returned slice should not be changed!
 func (as *accountSet) flatten() []common.Address {
 	if as.cache == nil {
-		as.cache = slices.Collect(maps.Keys(as.accounts))
+		accounts := slices.Collect(maps.Keys(as.accounts))
+		as.cache = &accounts
 	}
-	return as.cache
+	return *as.cache
 }
 
 // merge adds all addresses from the 'other' set into 'as'.
