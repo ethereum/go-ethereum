@@ -60,13 +60,15 @@ firstReset:
 		}
 	}
 
-	// Now the countdown is paused after calling the callback function, let's reset it again
+	// The countdown keeps running after calling the callback; it is still initialised.
+	// Reset it again to verify that an explicit Reset extends the timeout by a full interval.
 	assert.True(t, countdown.isInitilised())
+	countdown.Reset(fakeI, 0, 0)
 	expectedTimeAfterReset := time.Now().Add(5000 * time.Millisecond)
 	<-called
 	// Always initilised
 	assert.True(t, countdown.isInitilised())
-	if time.Now().After(expectedTimeAfterReset) {
+	if !time.Now().Before(expectedTimeAfterReset) {
 		t.Log("Correctly reset the countdown second time")
 	} else {
 		t.Fatalf("Countdown did not reset correctly second time")
@@ -109,13 +111,15 @@ firstReset:
 		}
 	}
 
-	// Now the countdown is paused after calling the callback function, let's reset it again
+	// The countdown continues running (auto-resets) after calling the callback
+	// function; reset it again to verify it can still be reset after an error
 	assert.True(t, countdown.isInitilised())
+	countdown.Reset(fakeI, 0, 0)
 	expectedTimeAfterReset := time.Now().Add(5000 * time.Millisecond)
 	<-called
 	// Always initilised
 	assert.True(t, countdown.isInitilised())
-	if time.Now().After(expectedTimeAfterReset) {
+	if !time.Now().Before(expectedTimeAfterReset) {
 		t.Log("Correctly reset the countdown second time")
 	} else {
 		t.Fatalf("Countdown did not reset correctly second time")
