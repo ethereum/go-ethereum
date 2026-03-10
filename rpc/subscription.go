@@ -171,13 +171,17 @@ func (n *Notifier) activate() error {
 }
 
 func (n *Notifier) send(sub *Subscription, data any) error {
-	msg := jsonrpcSubscriptionNotification{
+	params, err := json.Marshal(subscriptionResultEnc{
+		ID:     string(sub.ID),
+		Result: data,
+	})
+	if err != nil {
+		return err
+	}
+	msg := jsonrpcMessage{
 		Version: vsn,
 		Method:  n.namespace + notificationMethodSuffix,
-		Params: subscriptionResultEnc{
-			ID:     string(sub.ID),
-			Result: data,
-		},
+		Params:  params,
 	}
 	return n.h.conn.writeJSON(context.Background(), &msg, false)
 }

@@ -53,12 +53,6 @@ type subscriptionResultEnc struct {
 	Result any    `json:"result"`
 }
 
-type jsonrpcSubscriptionNotification struct {
-	Version string                `json:"jsonrpc"`
-	Method  string                `json:"method"`
-	Params  subscriptionResultEnc `json:"params"`
-}
-
 // A value of this type can a JSON-RPC request, notification, successful response or
 // error response. Which one it is depends on the fields.
 type jsonrpcMessage struct {
@@ -188,28 +182,32 @@ type ConnRemoteAddr interface {
 // jsonCodec reads and writes JSON-RPC messages to the underlying connection. It also has
 // support for parsing arguments and serializing (result) objects.
 type jsonCodec struct {
-	remote  string
-	closer  sync.Once        // close closed channel once
-	closeCh chan interface{} // closed on Close
-	decode  decodeFunc       // decoder to allow multiple transports
-	encMu   sync.Mutex       // guards the encoder
-	encode  encodeFunc       // encoder to allow multiple transports
-	conn    deadlineCloser
+	remote      string
+	closer      sync.Once        // close closed channel once
+	closeCh     chan interface{} // closed on Close
+	decode      decodeFunc       // decoder to allow multiple transports
+	encMu       sync.Mutex       // guards the encoder
+	encodeMsg   encodeMsgFunc    // single-message encoder
+	encodeBatch encodeBatchFunc  // batch encoder
+	conn        deadlineCloser
 }
 
-type encodeFunc = func(v interface{}, isErrorResponse bool) error
+type encodeMsgFunc = func(msg *jsonrpcMessage, isError bool) error
+
+type encodeBatchFunc = func(msgs []*jsonrpcMessage, isError bool) error
 
 type decodeFunc = func(v interface{}) error
 
 // NewFuncCodec creates a codec which uses the given functions to read and write. If conn
 // implements ConnRemoteAddr, log messages will use it to include the remote address of
 // the connection.
-func NewFuncCodec(conn deadlineCloser, encode encodeFunc, decode decodeFunc) ServerCodec {
+func NewFuncCodec(conn deadlineCloser, encodeMsg encodeMsgFunc, encodeBatch encodeBatchFunc, decode decodeFunc) ServerCodec {
 	codec := &jsonCodec{
-		closeCh: make(chan interface{}),
-		encode:  encode,
-		decode:  decode,
-		conn:    conn,
+		closeCh:     make(chan interface{}),
+		encodeMsg:   encodeMsg,
+		encodeBatch: encodeBatch,
+		decode:      decode,
+		conn:        conn,
 	}
 	if ra, ok := conn.(ConnRemoteAddr); ok {
 		codec.remote = ra.RemoteAddr()
@@ -224,13 +222,13 @@ func NewCodec(conn Conn) ServerCodec {
 	dec := json.NewDecoder(conn)
 	dec.UseNumber()
 
-	encode := func(v interface{}, isErrorResponse bool) error {
-		if msg, ok := v.(*jsonrpcMessage); ok {
-			return writeMessage(conn, msg)
-		}
-		return enc.Encode(v)
+	encodeMsg := func(msg *jsonrpcMessage, isError bool) error {
+		return writeMessage(conn, msg)
 	}
-	return NewFuncCodec(conn, encode, dec.Decode)
+	encodeBatch := func(msgs []*jsonrpcMessage, isError bool) error {
+		return enc.Encode(msgs)
+	}
+	return NewFuncCodec(conn, encodeMsg, encodeBatch, dec.Decode)
 }
 
 // writeMessage writes a single jsonrpcMessage directly to the writer.
@@ -343,7 +341,7 @@ func (c *jsonCodec) readBatch() (messages []*jsonrpcMessage, batch bool, err err
 	return messages, batch, nil
 }
 
-func (c *jsonCodec) writeJSON(ctx context.Context, v interface{}, isErrorResponse bool) error {
+func (c *jsonCodec) writeJSON(ctx context.Context, msg *jsonrpcMessage, isError bool) error {
 	c.encMu.Lock()
 	defer c.encMu.Unlock()
 
@@ -352,7 +350,19 @@ func (c *jsonCodec) writeJSON(ctx context.Context, v interface{}, isErrorRespons
 		deadline = time.Now().Add(defaultWriteTimeout)
 	}
 	c.conn.SetWriteDeadline(deadline)
-	return c.encode(v, isErrorResponse)
+	return c.encodeMsg(msg, isError)
+}
+
+func (c *jsonCodec) writeJSONBatch(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error {
+	c.encMu.Lock()
+	defer c.encMu.Unlock()
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(defaultWriteTimeout)
+	}
+	c.conn.SetWriteDeadline(deadline)
+	return c.encodeBatch(msgs, isError)
 }
 
 func (c *jsonCodec) close() {

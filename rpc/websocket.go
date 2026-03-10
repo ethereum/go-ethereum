@@ -293,11 +293,14 @@ type websocketCodec struct {
 
 func newWebsocketCodec(conn *websocket.Conn, host string, req http.Header, readLimit int64) ServerCodec {
 	conn.SetReadLimit(readLimit)
-	encode := func(v interface{}, isErrorResponse bool) error {
-		return conn.WriteJSON(v)
+	encodeMsg := func(msg *jsonrpcMessage, isError bool) error {
+		return conn.WriteJSON(msg)
+	}
+	encodeBatch := func(msgs []*jsonrpcMessage, isError bool) error {
+		return conn.WriteJSON(msgs)
 	}
 	wc := &websocketCodec{
-		jsonCodec:    NewFuncCodec(conn, encode, conn.ReadJSON).(*jsonCodec),
+		jsonCodec:    NewFuncCodec(conn, encodeMsg, encodeBatch, conn.ReadJSON).(*jsonCodec),
 		conn:         conn,
 		pingReset:    make(chan struct{}, 1),
 		pongReceived: make(chan struct{}),
@@ -332,8 +335,15 @@ func (wc *websocketCodec) peerInfo() PeerInfo {
 	return wc.info
 }
 
-func (wc *websocketCodec) writeJSON(ctx context.Context, v interface{}, isError bool) error {
-	err := wc.jsonCodec.writeJSON(ctx, v, isError)
+func (wc *websocketCodec) writeJSON(ctx context.Context, msg *jsonrpcMessage, isError bool) error {
+	return wc.writeAndResetPing(wc.jsonCodec.writeJSON(ctx, msg, isError))
+}
+
+func (wc *websocketCodec) writeJSONBatch(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error {
+	return wc.writeAndResetPing(wc.jsonCodec.writeJSONBatch(ctx, msgs, isError))
+}
+
+func (wc *websocketCodec) writeAndResetPing(err error) error {
 	if err == nil {
 		// Notify pingLoop to delay the next idle ping.
 		select {
