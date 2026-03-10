@@ -27,6 +27,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -265,17 +266,52 @@ func writeMessage(w io.Writer, msg *jsonrpcMessage) error {
 	return err
 }
 
-// appendQuotedString appends a JSON-quoted string to buf.
+const hexDigits = "0123456789abcdef"
+
+// appendQuotedString appends a JSON-quoted string to buf. Adapted
+// from encoding/json appendString without HTML and JSONP safety escaping.
 func appendQuotedString(buf []byte, s string) []byte {
 	buf = append(buf, '"')
-	for _, c := range s {
-		switch c {
-		case '"', '\\':
-			buf = append(buf, '\\', byte(c))
-		default:
-			buf = append(buf, byte(c))
+	start := 0
+	for i := 0; i < len(s); {
+		if b := s[i]; b < utf8.RuneSelf {
+			if b >= 0x20 && b != '\\' && b != '"' {
+				i++
+				continue
+			}
+			buf = append(buf, s[start:i]...)
+			switch b {
+			case '\\', '"':
+				buf = append(buf, '\\', b)
+			case '\b':
+				buf = append(buf, '\\', 'b')
+			case '\f':
+				buf = append(buf, '\\', 'f')
+			case '\n':
+				buf = append(buf, '\\', 'n')
+			case '\r':
+				buf = append(buf, '\\', 'r')
+			case '\t':
+				buf = append(buf, '\\', 't')
+			default:
+				// This encodes bytes < 0x20 except for \b, \f, \n, \r and \t.
+				buf = append(buf, '\\', 'u', '0', '0', hexDigits[b>>4], hexDigits[b&0xF])
+			}
+			i++
+			start = i
+			continue
 		}
+		c, size := utf8.DecodeRuneInString(s[i:])
+		if c == utf8.RuneError && size == 1 {
+			buf = append(buf, s[start:i]...)
+			buf = append(buf, `\ufffd`...)
+			i += size
+			start = i
+			continue
+		}
+		i += size
 	}
+	buf = append(buf, s[start:]...)
 	buf = append(buf, '"')
 	return buf
 }
