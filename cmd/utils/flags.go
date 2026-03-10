@@ -1124,13 +1124,13 @@ block access list execution type.  possible inputs are:
 - sequential: no performance acceleration
 - full: parallel transaction execution, state root calculation, async warming of access list reads
 - nobatchio: same as 'full', but without async warming of access list reads`,
-		Value:    BalExecutionModeFull,
+		Value:    BalExecutionModeOptimized,
 		Category: flags.MiscCategory,
 	}
 )
 
 const (
-	BalExecutionModeFull       = "full"
+	BalExecutionModeOptimized  = "full"
 	BalExecutionModeNoBatchIO  = "nobatchio"
 	BalExecutionModeSequential = "sequential"
 )

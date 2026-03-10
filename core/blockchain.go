@@ -179,12 +179,6 @@ const (
 	BlockChainVersion uint64 = 9
 )
 
-const (
-	BALExecutionModeFull       = 0
-	BALExecutionModeNoBatchIO  = iota
-	BALExecutionModeSequential = iota
-)
-
 // BlockChainConfig contains the configuration of the BlockChain object.
 type BlockChainConfig struct {
 	// Trie database related options
@@ -246,8 +240,7 @@ type BlockChainConfig struct {
 	StatelessSelfValidation bool // Generate execution witnesses and self-check against them (testing purpose)
 	EnableWitnessStats      bool // Whether trie access statistics collection is enabled
 
-	// TODO clean this config up to use defined constants...
-	BALExecutionMode int
+	BALExecutionMode bal.BALExecutionMode
 }
 
 // DefaultConfig returns the default config.
@@ -609,7 +602,7 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 		statedb   *state.StateDB
 	)
 
-	useAsyncReads := bc.cfg.BALExecutionMode != BALExecutionModeNoBatchIO
+	useAsyncReads := bc.cfg.BALExecutionMode != bal.BALExecutionNoBatchIO
 	al := block.AccessList() // TODO: make the return of this method not be a pointer
 	accessListReader := bal.NewAccessListReader(*al)
 	prefetchReader, err := bc.statedb.ReaderEIP7928(parentRoot, accessListReader.StorageKeys(useAsyncReads), runtime.NumCPU())
@@ -2146,7 +2139,7 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 			return nil, it.index, err
 		}
 		blockHasAccessList := block.AccessList() != nil
-		if blockHasAccessList && bc.cfg.BALExecutionMode != BALExecutionModeSequential {
+		if blockHasAccessList && bc.cfg.BALExecutionMode != bal.BALExecutionSequential {
 			res.stats.reportBALMetrics()
 		} else {
 			res.stats.reportMetrics()
@@ -2265,7 +2258,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	blockHasAccessList := block.AccessList() != nil
 
 	// optimized execution path for blocks which contain BALs
-	if blockHasAccessList && bc.cfg.BALExecutionMode != BALExecutionModeSequential {
+	if blockHasAccessList && bc.cfg.BALExecutionMode != bal.BALExecutionSequential {
 		return bc.processBlockWithAccessList(parentRoot, block, config.WriteHead)
 	}
 
