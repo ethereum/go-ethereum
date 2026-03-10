@@ -60,7 +60,7 @@ type jsonrpcMessage struct {
 	ID      json.RawMessage `json:"id,omitempty"`
 	Method  string          `json:"method,omitempty"`
 	Params  json.RawMessage `json:"params,omitempty"`
-	Error   *jsonError      `json:"error,omitempty"`
+	Error   json.RawMessage `json:"error,omitempty"`
 	Result  json.RawMessage `json:"result,omitempty"`
 }
 
@@ -108,6 +108,16 @@ func (msg *jsonrpcMessage) errorResponse(err error) *jsonrpcMessage {
 	return resp
 }
 
+// jsonErr decodes the Error field into a jsonError struct.
+func (msg *jsonrpcMessage) jsonErr() *jsonError {
+	if msg.Error == nil {
+		return nil
+	}
+	je := new(jsonError)
+	json.Unmarshal(msg.Error, je)
+	return je
+}
+
 func (msg *jsonrpcMessage) response(result interface{}) *jsonrpcMessage {
 	var (
 		enc []byte
@@ -125,19 +135,18 @@ func (msg *jsonrpcMessage) response(result interface{}) *jsonrpcMessage {
 }
 
 func errorMessage(err error) *jsonrpcMessage {
-	msg := &jsonrpcMessage{Version: vsn, ID: null, Error: &jsonError{
+	je := &jsonError{
 		Code:    errcodeDefault,
 		Message: err.Error(),
-	}}
-	ec, ok := err.(Error)
-	if ok {
-		msg.Error.Code = ec.ErrorCode()
 	}
-	de, ok := err.(DataError)
-	if ok {
-		msg.Error.Data = de.ErrorData()
+	if ec, ok := err.(Error); ok {
+		je.Code = ec.ErrorCode()
 	}
-	return msg
+	if de, ok := err.(DataError); ok {
+		je.Data = de.ErrorData()
+	}
+	enc, _ := json.Marshal(je)
+	return &jsonrpcMessage{Version: vsn, ID: null, Error: enc}
 }
 
 type jsonError struct {
@@ -248,12 +257,8 @@ func writeMessage(w io.Writer, msg *jsonrpcMessage) error {
 		buf = append(buf, msg.Params...)
 	}
 	if msg.Error != nil {
-		errBytes, err := json.Marshal(msg.Error)
-		if err != nil {
-			return err
-		}
 		buf = append(buf, `,"error":`...)
-		buf = append(buf, errBytes...)
+		buf = append(buf, msg.Error...)
 	}
 	if msg.Result != nil {
 		buf = append(buf, `,"result":`...)

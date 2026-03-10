@@ -220,7 +220,7 @@ func readAndValidateMessage(in *json.Decoder) (*subConfirmation, *subscriptionRe
 	case msg.isResponse():
 		var c subConfirmation
 		if msg.Error != nil {
-			return nil, nil, msg.Error
+			return nil, nil, msg.jsonErr()
 		} else if err := json.Unmarshal(msg.Result, &c.subid); err != nil {
 			return nil, nil, fmt.Errorf("invalid response: %v", err)
 		} else {
