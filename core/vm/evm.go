@@ -549,6 +549,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasCosts, value *
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 			evm.Config.Tracer.OnGasChange(gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
 		}
+		gas.RegularGas = 0
 		return nil, common.Address{}, gas, ErrContractAddressCollision
 	}
 	// Create a new account on the state only if the object was not present.
