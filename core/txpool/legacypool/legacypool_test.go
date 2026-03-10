@@ -198,7 +198,7 @@ func setupPoolWithConfig(config *params.ChainConfig) (*LegacyPool, *ecdsa.Privat
 
 	key, _ := crypto.GenerateKey()
 	pool := New(testTxPoolConfig, blockchain)
-	if err := pool.Init(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain.CurrentBlock(), newReserver()); err != nil {
+	if err := pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), newReserver()); err != nil {
 		panic(err)
 	}
 	// wait for the pool to initialize
@@ -233,7 +233,7 @@ func validatePoolInternals(pool *LegacyPool) error {
 		if nonce := pool.Nonce(addr); nonce != last+1 {
 			return fmt.Errorf("pending nonce mismatch: have %v, want %v", nonce, last+1)
 		}
-		if txs.totalcost.Cmp(common.Big0) < 0 {
+		if txs.totalcost.Sign() < 0 {
 			return fmt.Errorf("totalcost went negative: %v", txs.totalcost)
 		}
 	}
@@ -318,7 +318,7 @@ func TestStateChangeDuringReset(t *testing.T) {
 	tx1 := pricedTransaction(1, 100000, big.NewInt(250000000), key)
 
 	pool := New(testTxPoolConfig, blockchain)
-	pool.Init(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
 	nonce := pool.Nonce(address)
@@ -386,7 +386,7 @@ func TestInvalidTransactions(t *testing.T) {
 	// Test underpriced: set pool gasTip first, then create transaction with lower gas price
 	// MinGasPrice is 250000000 (0.25 Gwei), so use gas price 300000000 (0.3 Gwei)
 	// which is higher than MinGasPrice but lower than pool's gasTip (1 Gwei)
-	pool.gasTip.Store(big.NewInt(1000000000)) // Set pool gasTip to 1 Gwei (1000000000)
+	pool.gasTip.Store(uint256.NewInt(1000000000)) // Set pool gasTip to 1 Gwei (1000000000)
 	tx = pricedTransaction(1, 100000, big.NewInt(300000000), key)
 	if err, want := pool.addRemote(tx), txpool.ErrUnderpriced; !errors.Is(err, want) {
 		t.Errorf("want %v have %v", want, err)
@@ -813,7 +813,7 @@ func TestPostponing(t *testing.T) {
 	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	pool := New(testTxPoolConfig, blockchain)
-	pool.Init(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
 	// Create two test accounts to produce different gap profiles with
@@ -1031,7 +1031,7 @@ func testQueueGlobalLimiting(t *testing.T, nolocals bool) {
 	config.GlobalQueue = config.AccountQueue*3 - 1 // reduce the queue limits to shorten test time (-1 to make it non divisible)
 
 	pool := New(config, blockchain)
-	pool.Init(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
 	// Create a number of test accounts and fund them (last one will be the local)
@@ -1122,7 +1122,7 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 	config.NoLocals = nolocals
 
 	pool := New(config, blockchain)
-	pool.Init(new(big.Int).SetUint64(config.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(config.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
 	// Create two test accounts to ensure remotes expire but locals do not
@@ -1308,7 +1308,7 @@ func TestPendingGlobalLimiting(t *testing.T) {
 	config.GlobalSlots = config.AccountSlots * 10
 
 	pool := New(config, blockchain)
-	pool.Init(new(big.Int).SetUint64(config.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(config.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
 	// Create a number of test accounts and fund them
@@ -1412,7 +1412,7 @@ func TestCapClearsFromAll(t *testing.T) {
 	config.GlobalSlots = 8
 
 	pool := New(config, blockchain)
-	pool.Init(new(big.Int).SetUint64(config.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(config.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
 	// Create a number of test accounts and fund them
@@ -1446,7 +1446,7 @@ func TestPendingMinimumAllowance(t *testing.T) {
 	config.GlobalSlots = 1
 
 	pool := New(config, blockchain)
-	pool.Init(new(big.Int).SetUint64(config.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(config.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
 	// Create a number of test accounts and fund them
@@ -1492,7 +1492,7 @@ func TestRepricing(t *testing.T) {
 	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	pool := New(testTxPoolConfig, blockchain)
-	pool.Init(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
 	// Keep track of transaction events to ensure all executables get announced
@@ -1741,7 +1741,7 @@ func TestRepricingKeepsLocals(t *testing.T) {
 	blockchain := newTestBlockChain(eip1559Config, 1000000, statedb, new(event.Feed))
 
 	pool := New(testTxPoolConfig, blockchain)
-	pool.Init(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
 	// Create a number of test accounts and fund them
@@ -1820,7 +1820,7 @@ func TestUnderpricing(t *testing.T) {
 	config.GlobalQueue = 2
 
 	pool := New(config, blockchain)
-	pool.Init(new(big.Int).SetUint64(config.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(config.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
 	// Keep track of transaction events to ensure all executables get announced
@@ -1939,7 +1939,7 @@ func TestStableUnderpricing(t *testing.T) {
 	config.AccountSlots = config.GlobalSlots - 1
 
 	pool := New(config, blockchain)
-	pool.Init(new(big.Int).SetUint64(config.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(config.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
 	// Keep track of transaction events to ensure all executables get announced
@@ -2168,7 +2168,7 @@ func TestDeduplication(t *testing.T) {
 	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	pool := New(testTxPoolConfig, blockchain)
-	pool.Init(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
 	// Create a test account to add transactions with
@@ -2235,7 +2235,7 @@ func TestReplacement(t *testing.T) {
 	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	pool := New(testTxPoolConfig, blockchain)
-	pool.Init(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
 	// Keep track of transaction events to ensure all executables get announced
@@ -2447,7 +2447,7 @@ func testJournaling(t *testing.T, nolocals bool) {
 	config.Rejournal = time.Second
 
 	pool := New(config, blockchain)
-	pool.Init(new(big.Int).SetUint64(config.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(config.PriceLimit, blockchain.CurrentBlock(), newReserver())
 
 	// Create two test accounts to ensure remotes expire but locals do not
 	local, _ := crypto.GenerateKey()
@@ -2485,7 +2485,7 @@ func testJournaling(t *testing.T, nolocals bool) {
 	blockchain = newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	pool = New(config, blockchain)
-	pool.Init(new(big.Int).SetUint64(config.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(config.PriceLimit, blockchain.CurrentBlock(), newReserver())
 
 	pending, queued = pool.Stats()
 	if queued != 0 {
@@ -2512,7 +2512,7 @@ func testJournaling(t *testing.T, nolocals bool) {
 	statedb.SetNonce(crypto.PubkeyToAddress(local.PublicKey), 1)
 	blockchain = newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 	pool = New(config, blockchain)
-	pool.Init(new(big.Int).SetUint64(config.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(config.PriceLimit, blockchain.CurrentBlock(), newReserver())
 
 	pending, queued = pool.Stats()
 	if pending != 0 {
@@ -2543,7 +2543,7 @@ func TestStatusCheck(t *testing.T) {
 	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	pool := New(testTxPoolConfig, blockchain)
-	pool.Init(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
 	// Create the test accounts to check various transaction statuses with
@@ -2616,7 +2616,7 @@ func TestSetCodeTransactions(t *testing.T) {
 	blockchain := newTestBlockChain(params.MergedTestChainConfig, 1000000, statedb, new(event.Feed))
 
 	pool := New(testTxPoolConfig, blockchain)
-	pool.Init(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
 	// Create the test accounts
@@ -2820,7 +2820,7 @@ func TestSetCodeTransactionsReorg(t *testing.T) {
 	blockchain := newTestBlockChain(params.MergedTestChainConfig, 1000000, statedb, new(event.Feed))
 
 	pool := New(testTxPoolConfig, blockchain)
-	pool.Init(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain.CurrentBlock(), newReserver())
+	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
 	// Create the test accounts
@@ -3120,7 +3120,7 @@ func TestSetGasPrice(t *testing.T) {
 				if haveErr != nil {
 					t.Errorf("%s: Expected no error, got: %v", tc.description, haveErr)
 				}
-				if newPrice.Cmp(tc.tip) != 0 {
+				if newPrice.ToBig().Cmp(tc.tip) != 0 {
 					t.Errorf("%s: Expected gas price to be set to %v, got %v", tc.description, tc.tip, newPrice)
 				}
 			}

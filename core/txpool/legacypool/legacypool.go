@@ -40,6 +40,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -245,7 +246,7 @@ type LegacyPool struct {
 	config      Config
 	chainconfig *params.ChainConfig
 	chain       BlockChain
-	gasTip      atomic.Pointer[big.Int]
+	gasTip      atomic.Pointer[uint256.Int]
 	txFeed      event.Feed
 	signer      types.Signer
 	mu          sync.RWMutex
@@ -334,12 +335,12 @@ func (pool *LegacyPool) Filter(tx *types.Transaction) bool {
 // head to allow balance / nonce checks. The transaction journal will be loaded
 // from disk and filtered based on the provided starting settings. The internal
 // goroutines will be spun up and the pool deemed operational afterwards.
-func (pool *LegacyPool) Init(gasTip *big.Int, head *types.Header, reserver *txpool.Reserver) error {
+func (pool *LegacyPool) Init(gasTip uint64, head *types.Header, reserver *txpool.Reserver) error {
 	// Set the address reserver to request exclusive access to pooled accounts
 	pool.reserver = reserver
 
 	// Set the basic pool parameters
-	pool.gasTip.Store(gasTip)
+	pool.gasTip.Store(uint256.NewInt(gasTip))
 
 	// Initialize the state with head block, or fallback to empty one in
 	// case the head state is not available(might occur when node is not
@@ -491,11 +492,13 @@ func (pool *LegacyPool) SetGasTip(tip *big.Int) error {
 		return fmt.Errorf("reject too high gas tip: %v, maximum: %v", tip, defaultMaxTip)
 	}
 
-	old := pool.gasTip.Load()
-	pool.gasTip.Store(new(big.Int).Set(tip))
-
+	var (
+		newTip = uint256.MustFromBig(tip)
+		old    = pool.gasTip.Load()
+	)
+	pool.gasTip.Store(newTip)
 	// If the min miner fee increased, remove transactions below the new threshold
-	if tip.Cmp(old) > 0 {
+	if newTip.Cmp(old) > 0 {
 		// pool.priced is sorted by GasFeeCap, so we have to iterate through pool.all instead
 		drop := pool.all.RemotesBelowTip(tip)
 		for _, tx := range drop {
@@ -503,7 +506,7 @@ func (pool *LegacyPool) SetGasTip(tip *big.Int) error {
 		}
 		pool.priced.Removed(len(drop))
 	}
-	log.Info("Legacy pool tip threshold updated", "tip", tip)
+	log.Info("Legacy pool tip threshold updated", "tip", newTip)
 	return nil
 }
 
@@ -591,7 +594,7 @@ func (pool *LegacyPool) Pending(enforceTips bool) map[common.Address][]*txpool.L
 		// If the miner requests tip enforcement, cap the lists now
 		if enforceTips && !pool.locals.contains(addr) {
 			for i, tx := range txs {
-				if !tx.IsSpecialTransaction() && tx.EffectiveGasTipIntCmp(pool.gasTip.Load(), pool.priced.urgent.baseFee) < 0 {
+				if !tx.IsSpecialTransaction() && tx.EffectiveGasTipIntCmp(pool.gasTip.Load().ToBig(), pool.priced.urgent.baseFee) < 0 {
 					txs = txs[:i]
 					break
 				}
@@ -653,7 +656,7 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction, local bool) erro
 			1<<types.DynamicFeeTxType |
 			1<<types.SetCodeTxType,
 		MaxSize: txMaxSize,
-		MinTip:  pool.gasTip.Load(),
+		MinTip:  pool.gasTip.Load().ToBig(),
 		NotSigner: func(from common.Address) bool {
 			return pool.isSigner != nil && !pool.isSigner(from)
 		},
@@ -677,7 +680,7 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction, local bool) error {
 		UsedAndLeftSlots: nil, // Pool has own mechanism to limit the number of transactions
 		ExistingExpenditure: func(addr common.Address) *big.Int {
 			if list := pool.pending[addr]; list != nil {
-				return list.totalcost
+				return list.totalcost.ToBig()
 			}
 			return new(big.Int)
 		},
@@ -1079,7 +1082,7 @@ func (pool *LegacyPool) promoteSpecialTx(addr common.Address, tx *types.Transact
 		pendingGauge.Inc(1)
 	}
 	list.txs.Put(tx)
-	if cost := tx.Cost(); list.costcap.Cmp(cost) < 0 {
+	if cost := uint256.MustFromBig(tx.Cost()); list.costcap.Cmp(cost) < 0 {
 		list.costcap = cost
 	}
 	if gas := tx.Gas(); list.gascap < gas {
@@ -1631,7 +1634,7 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 		if pool.chain.CurrentHeader() != nil {
 			number = pool.chain.CurrentHeader().Number
 		}
-		drops, _ := list.Filter(pool.currentState.GetBalance(addr), gasLimit, pool.trc21FeeCapacity, number)
+		drops, _ := list.Filter(uint256.MustFromBig(pool.currentState.GetBalance(addr)), gasLimit, pool.trc21FeeCapacity, number)
 		for _, tx := range drops {
 			pool.all.Remove(tx.Hash())
 		}
@@ -1836,7 +1839,7 @@ func (pool *LegacyPool) demoteUnexecutables() {
 		if pool.chain.CurrentHeader() != nil {
 			number = pool.chain.CurrentHeader().Number
 		}
-		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), gasLimit, pool.trc21FeeCapacity, number)
+		drops, invalids := list.Filter(uint256.MustFromBig(pool.currentState.GetBalance(addr)), gasLimit, pool.trc21FeeCapacity, number)
 		for _, tx := range drops {
 			hash := tx.Hash()
 			pool.all.Remove(hash)

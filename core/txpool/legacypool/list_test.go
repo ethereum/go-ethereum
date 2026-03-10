@@ -21,8 +21,10 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/holiman/uint256"
 )
 
 // Tests that transactions can be added to strict lists and list contents and
@@ -51,6 +53,21 @@ func TestStrictListAdd(t *testing.T) {
 	}
 }
 
+// TestListAddVeryExpensive tests adding txs which exceed 256 bits in cost. It is
+// expected that the list does not panic.
+func TestListAddVeryExpensive(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	list := newList(true)
+	for i := 0; i < 3; i++ {
+		value := big.NewInt(100)
+		gasprice, _ := new(big.Int).SetString("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0)
+		gaslimit := uint64(i)
+		tx, _ := types.SignTx(types.NewTransaction(uint64(i), common.Address{}, value, gaslimit, gasprice, nil), types.HomesteadSigner{}, key)
+		t.Logf("cost: %x bitlen: %d\n", tx.Cost(), tx.Cost().BitLen())
+		list.Add(tx, DefaultConfig.PriceBump)
+	}
+}
+
 func BenchmarkListAdd(t *testing.B) {
 	// Generate a list of transactions to insert
 	key, _ := crypto.GenerateKey()
@@ -61,7 +78,7 @@ func BenchmarkListAdd(t *testing.B) {
 	}
 	// Insert the transactions in a random order
 	list := newList(true)
-	priceLimit := big.NewInt(int64(DefaultConfig.PriceLimit))
+	priceLimit := uint256.NewInt(DefaultConfig.PriceLimit)
 	t.ResetTimer()
 	for _, v := range rand.Perm(len(txs)) {
 		list.Add(txs[v], DefaultConfig.PriceBump)
