@@ -36,7 +36,6 @@ type GasPool struct {
 
 // NewGasPool initializes the gasPool with the given amount.
 func NewGasPool(amount uint64) *GasPool {
-	fmt.Printf("DEBUG_POOL NewGasPool: amount=%d\n", amount)
 	return &GasPool{
 		remaining: amount,
 		initial:   amount,
@@ -46,7 +45,6 @@ func NewGasPool(amount uint64) *GasPool {
 // SubGas deducts the given amount from the pool if enough gas is
 // available and returns an error otherwise.
 func (gp *GasPool) SubGas(amount uint64) error {
-	fmt.Printf("DEBUG_POOL SubGas: before_remaining=%d amount=%d initial=%d\n", gp.remaining, amount, gp.initial)
 	if gp.remaining < amount {
 		return ErrGasLimitReached
 	}
@@ -57,8 +55,6 @@ func (gp *GasPool) SubGas(amount uint64) error {
 // ReturnGas adds the refunded gas back to the pool and updates
 // the cumulative gas usage accordingly.
 func (gp *GasPool) ReturnGas(returned uint64, gasUsed uint64) error {
-	fmt.Printf("DEBUG_POOL ReturnGas: before_remaining=%d returned=%d gasUsed=%d initial=%d cumR=%d cumS=%d\n",
-		gp.remaining, returned, gasUsed, gp.initial, gp.cumulativeRegular, gp.cumulativeState)
 	if gp.remaining > math.MaxUint64-returned {
 		return fmt.Errorf("%w: remaining: %d, returned: %d", ErrGasLimitOverflow, gp.remaining, returned)
 	}
@@ -77,6 +73,21 @@ func (gp *GasPool) ReturnGas(returned uint64, gasUsed uint64) error {
 	return nil
 }
 
+// ReturnGasAmsterdam handles 2D gas accounting for Amsterdam (EIP-8037).
+// It undoes the SubGas deduction fully and accumulates per-dimension block totals.
+func (gp *GasPool) ReturnGasAmsterdam(returned, txRegular, txState, receiptGasUsed uint64) error {
+	if gp.remaining > math.MaxUint64-returned {
+		return fmt.Errorf("%w: remaining: %d, returned: %d", ErrGasLimitOverflow, gp.remaining, returned)
+	}
+	// Undo SubGas deduction fully (Amsterdam uses cumulative tracking)
+	gp.remaining += returned
+	// Accumulate 2D block dimensions
+	gp.cumulativeRegular += txRegular
+	gp.cumulativeState += txState
+	gp.cumulativeUsed += receiptGasUsed
+	return nil
+}
+
 // Gas returns the amount of gas remaining in the pool.
 func (gp *GasPool) Gas() uint64 {
 	return gp.remaining
@@ -92,8 +103,6 @@ func (gp *GasPool) CumulativeUsed() uint64 {
 // Used returns the amount of consumed gas. For Amsterdam blocks with
 // 2D gas accounting (EIP-8037), returns max(sum_regular, sum_state).
 func (gp *GasPool) Used() uint64 {
-	fmt.Printf("DEBUG_POOL Used: initial=%d remaining=%d cumR=%d cumS=%d cumUsed=%d\n",
-		gp.initial, gp.remaining, gp.cumulativeRegular, gp.cumulativeState, gp.cumulativeUsed)
 	if gp.cumulativeRegular > 0 || gp.cumulativeState > 0 {
 		return max(gp.cumulativeRegular, gp.cumulativeState)
 	}

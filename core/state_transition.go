@@ -260,8 +260,6 @@ type stateTransition struct {
 	initialGas   vm.GasCosts
 	state        vm.StateDB
 	evm          *vm.EVM
-
-	stateGasRefund uint64 // EIP-8037: state gas refund for auth on existing accounts
 }
 
 // newStateTransition initialises and returns a new state transition object.
@@ -570,6 +568,12 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// gas allowance required to complete execution.
 	peakGasUsed := st.gasUsed()
 
+	// EIP-8037: Capture pre-refund remaining for 2D gas accounting.
+	var preRefundRemaining uint64
+	if rules.IsAmsterdam {
+		preRefundRemaining = st.gasRemaining.Sum()
+	}
+
 	// Compute refund counter, capped to a refund quotient.
 	st.gasRemaining.RegularGas += st.calcRefund()
 	if rules.IsPrague {
@@ -587,11 +591,21 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 
 	returned := st.returnGas()
-	fmt.Printf("DEBUG_GAS buyGas_deducted=%d returned=%d gasUsed=%d remR=%d remS=%d initR=%d initS=%d refund=%d stateGasRef=%d SGC=%d\n",
-		msg.GasLimit, returned, st.gasUsed(), st.gasRemaining.RegularGas, st.gasRemaining.StateGas, st.initialGas.RegularGas, st.initialGas.StateGas, st.state.GetRefund(), st.stateGasRefund, st.gasRemaining.StateGasCharged)
 
-	if err := st.gp.ReturnGas(returned, st.gasUsed()); err != nil {
-		return nil, err
+	if rules.IsAmsterdam {
+		// EIP-8037: 2D gas accounting for Amsterdam.
+		// tx_state = adjusted_intrinsic_state + exec_state_used (spec: set_delegation adjusts intrinsic)
+		// tx_regular = total_dimensional_used - tx_state
+		txState := gas.StateGas + st.gasRemaining.StateGasCharged
+		txRegular := (msg.GasLimit - preRefundRemaining) - txState
+		txRegular = max(txRegular, floorDataGas)
+		if err := st.gp.ReturnGasAmsterdam(returned, txRegular, txState, st.gasUsed()); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := st.gp.ReturnGas(returned, st.gasUsed()); err != nil {
+			return nil, err
+		}
 	}
 	effectiveTip := msg.GasPrice
 	if rules.IsLondon {
@@ -670,7 +684,9 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 	// charged in the intrinsic calculation.
 	if st.state.Exist(authority) {
 		if rules.IsAmsterdam {
-			st.stateGasRefund += params.AccountCreationSize * st.evm.Context.CostPerGasByte
+			refund := params.AccountCreationSize * st.evm.Context.CostPerGasByte
+			// EIP-8037: return the account creation state gas to the reservoir
+			st.gasRemaining.StateGas += refund
 		} else {
 			st.state.AddRefund(params.CallNewAccountGas - params.TxAuthTupleGas)
 		}
