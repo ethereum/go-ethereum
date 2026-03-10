@@ -3,18 +3,14 @@
 package ethconfig
 
 import (
-	"math/big"
 	"time"
 
-	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/txpool/legacypool"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/eth/gasprice"
+	"github.com/XinFinOrg/XDPoSChain/miner"
 )
-
-var _ = (*configMarshaling)(nil)
 
 // MarshalTOML marshals as TOML.
 func (c Config) MarshalTOML() (interface{}, error) {
@@ -35,11 +31,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		TrieTimeout             time.Duration
 		Preimages               bool
 		FilterLogCacheSize      int
+		Miner                   miner.Config
 		LogQueryLimit           int
-		Etherbase               common.Address `toml:",omitempty"`
-		MinerThreads            int            `toml:",omitempty"`
-		ExtraData               hexutil.Bytes  `toml:",omitempty"`
-		GasPrice                *big.Int
 		TxPool                  legacypool.Config
 		GPO                     gasprice.Config
 		EnablePreimageRecording bool
@@ -67,11 +60,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.TrieTimeout = c.TrieTimeout
 	enc.Preimages = c.Preimages
 	enc.FilterLogCacheSize = c.FilterLogCacheSize
+	enc.Miner = c.Miner
 	enc.LogQueryLimit = c.LogQueryLimit
-	enc.Etherbase = c.Etherbase
-	enc.MinerThreads = c.MinerThreads
-	enc.ExtraData = c.ExtraData
-	enc.GasPrice = c.GasPrice
 	enc.TxPool = c.TxPool
 	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
@@ -103,11 +93,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		TrieTimeout             *time.Duration
 		Preimages               *bool
 		FilterLogCacheSize      *int
+		Miner                   *miner.Config
 		LogQueryLimit           *int
-		Etherbase               *common.Address `toml:",omitempty"`
-		MinerThreads            *int            `toml:",omitempty"`
-		ExtraData               *hexutil.Bytes  `toml:",omitempty"`
-		GasPrice                *big.Int
 		TxPool                  *legacypool.Config
 		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
@@ -170,20 +157,11 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.FilterLogCacheSize != nil {
 		c.FilterLogCacheSize = *dec.FilterLogCacheSize
 	}
+	if dec.Miner != nil {
+		c.Miner = *dec.Miner
+	}
 	if dec.LogQueryLimit != nil {
 		c.LogQueryLimit = *dec.LogQueryLimit
-	}
-	if dec.Etherbase != nil {
-		c.Etherbase = *dec.Etherbase
-	}
-	if dec.MinerThreads != nil {
-		c.MinerThreads = *dec.MinerThreads
-	}
-	if dec.ExtraData != nil {
-		c.ExtraData = *dec.ExtraData
-	}
-	if dec.GasPrice != nil {
-		c.GasPrice = dec.GasPrice
 	}
 	if dec.TxPool != nil {
 		c.TxPool = *dec.TxPool

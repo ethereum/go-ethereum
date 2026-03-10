@@ -57,6 +57,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/XinFinOrg/XDPoSChain/metrics/exp"
 	"github.com/XinFinOrg/XDPoSChain/metrics/influxdb"
+	"github.com/XinFinOrg/XDPoSChain/miner"
 	"github.com/XinFinOrg/XDPoSChain/node"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
 	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
@@ -330,15 +331,15 @@ var (
 	MinerGasLimitFlag = &cli.Uint64Flag{
 		Name:     "miner-gaslimit",
 		Aliases:  []string{"targetgaslimit"},
-		Usage:    "Target gas limit sets the artificial target gas floor for the blocks to mine",
-		Value:    50000000,
+		Usage:    "Target gas ceiling for mined blocks",
+		Value:    ethconfig.Defaults.Miner.GasCeil,
 		Category: flags.MinerCategory,
 	}
 	MinerGasPriceFlag = &flags.BigFlag{
 		Name:     "miner-gasprice",
 		Aliases:  []string{"gasprice"},
-		Usage:    "Minimal gas price to accept for mining a transactions",
-		Value:    big.NewInt(1),
+		Usage:    "Minimum gas price for mining a transaction",
+		Value:    new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice),
 		Category: flags.MinerCategory,
 	}
 	MinerEtherbaseFlag = &cli.StringFlag{
@@ -1255,11 +1256,11 @@ func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *ethconfig.Config
 		if err != nil {
 			Fatalf("Option %q: %v", MinerEtherbaseFlag.Name, err)
 		}
-		cfg.Etherbase = account.Address
+		cfg.Miner.Etherbase = account.Address
 	} else {
 		if !ctx.IsSet(UnlockedAccountFlag.Name) {
-			cfg.Etherbase = common.HexToAddress(ctx.String(MinerEtherbaseFlag.Name))
-			log.Info("Set etherbase", "address", cfg.Etherbase.Hex())
+			cfg.Miner.Etherbase = common.HexToAddress(ctx.String(MinerEtherbaseFlag.Name))
+			log.Info("Set etherbase", "address", cfg.Miner.Etherbase.Hex())
 		}
 	}
 }
@@ -1454,6 +1455,22 @@ func setTxPool(ctx *cli.Context, cfg *legacypool.Config) {
 	}
 }
 
+func setMiner(ctx *cli.Context, cfg *miner.Config) {
+	if ctx.IsSet(MinerExtraDataFlag.Name) {
+		cfg.ExtraData = []byte(ctx.String(MinerExtraDataFlag.Name))
+	}
+	if ctx.IsSet(MinerGasLimitFlag.Name) {
+		cfg.GasCeil = ctx.Uint64(MinerGasLimitFlag.Name)
+	}
+	if ctx.IsSet(MinerGasPriceFlag.Name) {
+		cfg.GasPrice = flags.GlobalBig(ctx, MinerGasPriceFlag.Name)
+	}
+	if cfg.GasCeil == 0 {
+		log.Warn("Sanitizing invalid miner gas limit", "provided", cfg.GasCeil, "updated", ethconfig.Defaults.Miner.GasCeil)
+		cfg.GasCeil = ethconfig.Defaults.Miner.GasCeil
+	}
+}
+
 func SetXDCXConfig(ctx *cli.Context, cfg *XDCx.Config, XDCDataDir string) {
 	if ctx.IsSet(XDCXDataDirFlag.Name) {
 		log.Warn("The flag XDCx-datadir or XDCx.datadir is deprecated, please remove this flag")
@@ -1476,6 +1493,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setEtherbase(ctx, ks, cfg)
 	setGPO(ctx, &cfg.GPO)
 	setTxPool(ctx, &cfg.TxPool)
+	setMiner(ctx, &cfg.Miner)
 	setLes(ctx, cfg)
 
 	// Cap the cache allowance and tune the garbage collector
@@ -1527,9 +1545,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheGCFlag.Name) {
 		cfg.TrieDirtyCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
 	}
-	if ctx.IsSet(MinerThreadsFlag.Name) {
-		cfg.MinerThreads = ctx.Int(MinerThreadsFlag.Name)
-	}
 	if ctx.IsSet(RPCGlobalGasCapFlag.Name) {
 		cfg.RPCGasCap = ctx.Uint64(RPCGlobalGasCapFlag.Name)
 	}
@@ -1542,10 +1557,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(RPCGlobalRangeLimitFlag.Name) {
 		cfg.RangeLimit = ctx.Uint64(RPCGlobalRangeLimitFlag.Name)
 	}
-	if ctx.IsSet(MinerExtraDataFlag.Name) {
-		cfg.ExtraData = []byte(ctx.String(MinerExtraDataFlag.Name))
-	}
-	cfg.GasPrice = flags.GlobalBig(ctx, MinerGasPriceFlag.Name)
 	if ctx.IsSet(CacheLogSizeFlag.Name) {
 		cfg.FilterLogCacheSize = ctx.Int(CacheLogSizeFlag.Name)
 	}
@@ -1618,6 +1629,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		log.Info("Using developer account", "address", developer.Address)
 
 		cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.Int(DeveloperPeriodFlag.Name)), developer.Address)
+		if !ctx.IsSet(MinerGasPriceFlag.Name) {
+			cfg.Miner.GasPrice = big.NewInt(1)
+		}
 	}
 
 	// VM tracing config.

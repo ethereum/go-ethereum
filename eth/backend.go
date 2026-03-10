@@ -115,6 +115,14 @@ func New(stack *node.Node, config *ethconfig.Config, XDCXServ *XDCx.XDCX, lendin
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
+	if config.Miner.GasCeil == 0 {
+		log.Warn("Sanitizing invalid miner gas limit", "provided", config.Miner.GasCeil, "updated", ethconfig.Defaults.Miner.GasCeil)
+		config.Miner.GasCeil = ethconfig.Defaults.Miner.GasCeil
+	}
+	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) < 0 {
+		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
+		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
+	}
 
 	chainDb, err := stack.OpenDatabase("chaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/", false)
 	if err != nil {
@@ -144,8 +152,8 @@ func New(stack *node.Node, config *ethconfig.Config, XDCXServ *XDCx.XDCX, lendin
 		engine:         CreateConsensusEngine(stack, chainConfig, chainDb),
 		shutdownChan:   make(chan bool),
 		networkId:      networkID,
-		gasPrice:       config.GasPrice,
-		etherbase:      config.Etherbase,
+		gasPrice:       config.Miner.GasPrice,
+		etherbase:      config.Miner.Etherbase,
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:      stack.Server(),
@@ -273,8 +281,8 @@ func New(stack *node.Node, config *ethconfig.Config, XDCXServ *XDCx.XDCX, lendin
 	if eth.protocolManager, err = NewProtocolManagerEx(eth.blockchain.Config(), config.SyncMode, networkID, eth.eventMux, eth.txPool, eth.orderPool, eth.lendingPool, eth.engine, eth.blockchain, chainDb); err != nil {
 		return nil, err
 	}
-	eth.miner = miner.New(eth, eth.blockchain.Config(), eth.EventMux(), eth.engine, stack.Config().AnnounceTxs)
-	eth.miner.SetExtra(makeExtraData(config.ExtraData))
+	eth.miner = miner.New(eth, &config.Miner, eth.blockchain.Config(), eth.EventMux(), eth.engine, stack.Config().AnnounceTxs)
+	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
 	var xdPoS *XDPoS.XDPoS = nil
 	if eth.chainConfig.XDPoS != nil {
@@ -290,7 +298,7 @@ func New(stack *node.Node, config *ethconfig.Config, XDCXServ *XDCx.XDCX, lendin
 	if eth.APIBackend.allowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")
 	}
-	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, config.GPO, config.GasPrice)
+	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, config.GPO, config.Miner.GasPrice)
 
 	// Set global ipc endpoint.
 	eth.blockchain.IPCEndpoint = stack.IPCEndpoint()

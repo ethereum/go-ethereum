@@ -96,7 +96,7 @@ func TestWorkerCheckPreCommitXDPoSMismatch(t *testing.T) {
 	extraData = append(extraData, make([]byte, utils.ExtraSeal)...)
 	genesis := &core.Genesis{
 		Config:     config,
-		GasLimit:   params.TargetGasLimit,
+		GasLimit:   params.XDCGenesisGasLimit,
 		Difficulty: big.NewInt(1),
 		Alloc:      types.GenesisAlloc{},
 		ExtraData:  extraData,
@@ -113,7 +113,7 @@ func TestWorkerCheckPreCommitXDPoSMismatch(t *testing.T) {
 	defer chain.Stop()
 
 	worker := &worker{
-		config:      config,
+		chainConfig: config,
 		engine:      engine,
 		chain:       chain,
 		announceTxs: true,

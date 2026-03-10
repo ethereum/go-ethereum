@@ -18,16 +18,13 @@
 package ethconfig
 
 import (
-	"math/big"
 	"time"
 
-	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/txpool/legacypool"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/eth/gasprice"
-	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/miner"
 )
 
 // FullNodeGPO contains default gasprice oracle settings for full node.
@@ -50,8 +47,8 @@ var Defaults = Config{
 	TrieDirtyCache:     256,
 	TrieTimeout:        5 * time.Minute,
 	FilterLogCacheSize: 32,
+	Miner:              miner.DefaultConfig,
 	LogQueryLimit:      1000,
-	GasPrice:           big.NewInt(0.25 * params.Shannon),
 	TxPool:             legacypool.DefaultConfig,
 	RPCGasCap:          50000000,
 	RPCEVMTimeout:      5 * time.Second,
@@ -60,7 +57,7 @@ var Defaults = Config{
 	RangeLimit:         5000,
 }
 
-//go:generate go run github.com/fjl/gencodec -type Config -field-override configMarshaling -formats toml -out gen_config.go
+//go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
 
 // Config contains configuration options for of the ETH and LES protocols.
 type Config struct {
@@ -93,15 +90,12 @@ type Config struct {
 	// This is the number of blocks for which logs will be cached in the filter system.
 	FilterLogCacheSize int
 
+	// Mining options
+	Miner miner.Config
+
 	// This is the maximum number of addresses or topics allowed in filter criteria
 	// for eth_getLogs.
 	LogQueryLimit int
-
-	// Mining-related options
-	Etherbase    common.Address `toml:",omitempty"`
-	MinerThreads int            `toml:",omitempty"`
-	ExtraData    []byte         `toml:",omitempty"`
-	GasPrice     *big.Int
 
 	// Transaction pool options
 	TxPool legacypool.Config
@@ -128,8 +122,4 @@ type Config struct {
 
 	// RangeLimit restricts the maximum range (end - start) for range queries.
 	RangeLimit uint64 `toml:",omitempty"`
-}
-
-type configMarshaling struct {
-	ExtraData hexutil.Bytes
 }

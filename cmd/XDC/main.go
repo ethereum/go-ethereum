@@ -39,7 +39,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/XinFinOrg/XDPoSChain/node"
-	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/urfave/cli/v2"
 
 	// Force-load the tracer engines to trigger registration
@@ -238,7 +237,6 @@ func init() {
 		// Start system runtime metrics collection
 		go metrics.CollectProcessMetrics(3 * time.Second)
 
-		params.TargetGasLimit = ctx.Uint64(utils.MinerGasLimitFlag.Name)
 		return nil
 	}
 

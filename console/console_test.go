@@ -33,6 +33,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/eth"
 	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
 	"github.com/XinFinOrg/XDPoSChain/internal/jsre"
+	"github.com/XinFinOrg/XDPoSChain/miner"
 	"github.com/XinFinOrg/XDPoSChain/node"
 )
 
@@ -97,8 +98,10 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 		t.Fatalf("failed to create node: %v", err)
 	}
 	ethConf := &ethconfig.Config{
-		Genesis:   core.DeveloperGenesisBlock(15, common.Address{}),
-		Etherbase: common.HexToAddress(testAddress),
+		Genesis: core.DeveloperGenesisBlock(15, common.Address{}),
+		Miner: miner.Config{
+			Etherbase: common.HexToAddress(testAddress),
+		},
 	}
 	if confOverride != nil {
 		confOverride(ethConf)

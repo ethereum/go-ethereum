@@ -113,8 +113,9 @@ type Result struct {
 
 // worker is the main object which takes care of applying messages to the new state
 type worker struct {
-	config *params.ChainConfig
-	engine consensus.Engine
+	config      *Config
+	chainConfig *params.ChainConfig
+	engine      consensus.Engine
 
 	mu sync.Mutex
 
@@ -164,12 +165,15 @@ type worker struct {
 	lastParentBlockCommit string
 }
 
-func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux, announceTxs bool) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, announceTxs bool) *worker {
 	worker := &worker{
 		config:         config,
+		chainConfig:    chainConfig,
 		engine:         engine,
 		eth:            eth,
 		mux:            mux,
+		coinbase:       config.Etherbase,
+		extra:          config.ExtraData,
 		txsCh:          make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:    make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:    make(chan core.ChainSideEvent, chainSideChanSize),
@@ -179,7 +183,6 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		chain:          eth.BlockChain(),
 		proc:           eth.BlockChain().Validator(),
 		possibleUncles: make(map[common.Hash]*types.Block),
-		coinbase:       coinbase,
 		agents:         make(map[Agent]struct{}),
 		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
 		announceTxs:    announceTxs,
@@ -254,7 +257,7 @@ func (w *worker) start() {
 	if engine, ok := w.engine.(*XDPoS.XDPoS); ok {
 		xdposEngine = engine
 	}
-	if w.config != nil && w.config.XDPoS != nil && xdposEngine == nil {
+	if w.chainConfig != nil && w.chainConfig.XDPoS != nil && xdposEngine == nil {
 		log.Warn("XDPoS config enabled but consensus engine is not XDPoS")
 	}
 }
@@ -385,7 +388,7 @@ func (w *worker) update() {
 				txset, specialTxs := newTransactionsByPriceAndNonce(w.current.signer, txs, feeCapacity, w.current.header.BaseFee)
 
 				tcount := w.current.tcount
-				w.current.commitTransactions(w.mux, feeCapacity, txset, specialTxs, w.chain, w.coinbase, &w.pendingLogsFeed)
+				w.current.commitTransactions(w.mux, feeCapacity, txset, specialTxs, w.chain, &w.pendingLogsFeed)
 
 				// Only update the snapshot if any new transactions were added
 				// to the pending block
@@ -395,7 +398,7 @@ func (w *worker) update() {
 				w.currentMu.Unlock()
 			} else {
 				// If we're mining, but nothing is being processed, wake on new transactions
-				if w.config.XDPoS != nil && w.config.XDPoS.Period == 0 {
+				if w.chainConfig.XDPoS != nil && w.chainConfig.XDPoS.Period == 0 {
 					w.commitNewWork()
 				}
 			}
@@ -515,7 +518,7 @@ func (w *worker) wait() {
 				w.commitNewWork()
 			}
 
-			if w.config.XDPoS != nil {
+			if w.chainConfig.XDPoS != nil {
 				c := w.engine.(*XDPoS.XDPoS)
 				err = c.HandleProposedBlock(w.chain, block.Header())
 				if err != nil {
@@ -538,8 +541,8 @@ func (w *worker) wait() {
 					}
 				}
 				// Send tx sign to smart contract blockSigners.
-				if block.NumberU64()%common.MergeSignRange == 0 || !w.config.IsTIP2019(block.Number()) {
-					if err := contracts.CreateTransactionSign(w.config, w.eth.TxPool(), w.eth.AccountManager(), block, w.chainDb, w.coinbase); err != nil {
+				if block.NumberU64()%common.MergeSignRange == 0 || !w.chainConfig.IsTIP2019(block.Number()) {
+					if err := contracts.CreateTransactionSign(w.chainConfig, w.eth.TxPool(), w.eth.AccountManager(), block, w.chainDb, w.coinbase); err != nil {
 						log.Error("Fail to create tx sign for signer", "error", err)
 					}
 				}
@@ -625,7 +628,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	author, _ := w.chain.Engine().Author(parent.Header())
 	var XDCxState *tradingstate.TradingStateDB
 	var lendingState *lendingstate.LendingStateDB
-	if w.config.XDPoS != nil {
+	if w.chainConfig.XDPoS != nil {
 		XDCX := w.eth.GetXDCX()
 		XDCxState, err = XDCX.GetTradingState(parent, author)
 		if err != nil {
@@ -641,8 +644,8 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	}
 
 	work := &Work{
-		config:       w.config,
-		signer:       types.MakeSigner(w.config, header.Number),
+		config:       w.chainConfig,
+		signer:       types.MakeSigner(w.chainConfig, header.Number),
 		state:        state,
 		parentState:  state.Copy(),
 		tradingState: XDCxState,
@@ -650,7 +653,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 		ancestors:    mapset.NewSet[common.Hash](),
 		family:       mapset.NewSet[common.Hash](),
 		header:       header,
-		evm:          vm.NewEVM(core.NewEVMBlockContext(header, w.chain, &header.Coinbase), state, XDCxState, w.config, vm.Config{}),
+		evm:          vm.NewEVM(core.NewEVMBlockContext(header, w.chain, &header.Coinbase), state, XDCxState, w.chainConfig, vm.Config{}),
 		uncles:       make(map[common.Hash]*types.Header),
 		createdAt:    time.Now(),
 	}
@@ -695,7 +698,7 @@ func (w *worker) checkPreCommit() (*types.Block, bool) {
 	if parent == nil {
 		return nil, true
 	}
-	if w.config.XDPoS != nil && xdposEngine == nil {
+	if w.chainConfig.XDPoS != nil && xdposEngine == nil {
 		log.Debug("XDPoS config enabled but consensus engine is not XDPoS")
 		return parent, true
 	}
@@ -709,7 +712,7 @@ func (w *worker) checkPreCommit() (*types.Block, bool) {
 	// Only try to commit new work if we are mining
 	if atomic.LoadInt32(&w.mining) == 1 {
 		// check if we are right after parent's coinbase in the list
-		if w.config.XDPoS != nil && xdposEngine != nil {
+		if w.chainConfig.XDPoS != nil && xdposEngine != nil {
 			ok, err := xdposEngine.YourTurn(w.chain, parent.Header(), w.coinbase)
 			if err != nil {
 				log.Warn("Failed when trying to commit new work", "err", err)
@@ -761,13 +764,13 @@ func (w *worker) commitNewWork() {
 		Extra:      w.extra,
 		Time:       uint64(tstamp),
 	}
-	if w.config.IsDynamicGasLimitBlock(header.Number) {
-		header.GasLimit = core.CalcGasLimit(parent.GasLimit(), params.TargetGasLimit)
+	if w.chainConfig.IsDynamicGasLimitBlock(header.Number) {
+		header.GasLimit = core.CalcGasLimit(parent.GasLimit(), w.config.GasCeil)
 	} else {
-		header.GasLimit = params.TargetGasLimit
+		header.GasLimit = w.config.GasCeil
 	}
 	// Set baseFee if we are on an EIP-1559 chain
-	header.BaseFee = eip1559.CalcBaseFee(w.config, header)
+	header.BaseFee = eip1559.CalcBaseFee(w.chainConfig, header)
 
 	// Only set the coinbase if we are mining (avoid spurious block rewards)
 	if atomic.LoadInt32(&w.mining) == 1 {
@@ -783,12 +786,12 @@ func (w *worker) commitNewWork() {
 		return
 	}
 	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
-	if daoBlock := w.config.DAOForkBlock; daoBlock != nil {
+	if daoBlock := w.chainConfig.DAOForkBlock; daoBlock != nil {
 		// Check whether the block is among the fork extra-override range
 		limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
 		if header.Number.Cmp(daoBlock) >= 0 && header.Number.Cmp(limit) < 0 {
 			// Depending whether we support or oppose the fork, override differently
-			if w.config.DAOForkSupport {
+			if w.chainConfig.DAOForkSupport {
 				header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
 			} else if bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
 				header.Extra = []byte{} // If miner opposes, don't let it use the reserved extra-data
@@ -803,13 +806,13 @@ func (w *worker) commitNewWork() {
 	}
 	// Create the current work task and check any fork transitions needed
 	work := w.current
-	if w.config.DAOForkSupport && w.config.DAOForkBlock != nil && w.config.DAOForkBlock.Cmp(header.Number) == 0 {
+	if w.chainConfig.DAOForkSupport && w.chainConfig.DAOForkBlock != nil && w.chainConfig.DAOForkBlock.Cmp(header.Number) == 0 {
 		misc.ApplyDAOHardFork(work.state)
 	}
 	if common.TIPSigning.Cmp(header.Number) == 0 {
 		work.state.DeleteAddress(common.BlockSignersBinary)
 	}
-	if w.config.IsPrague(header.Number) {
+	if w.chainConfig.IsPrague(header.Number) {
 		core.ProcessParentBlockHash(header.ParentHash, work.evm)
 	}
 	// won't grasp txs at checkpoint
@@ -823,7 +826,7 @@ func (w *worker) commitNewWork() {
 		liquidatedTrades, autoRepayTrades, autoTopUpTrades, autoRecallTrades []*lendingstate.LendingTrade
 	)
 	feeCapacity := work.state.GetTRC21FeeCapacityFromStateWithCache(parent.Root())
-	if w.config.XDPoS != nil {
+	if w.chainConfig.XDPoS != nil {
 		isEpochSwitchBlock, _, err := w.engine.(*XDPoS.XDPoS).IsEpochSwitch(header)
 		if err != nil {
 			log.Error("[commitNewWork] fail to check if block is epoch switch block when fetching pending transactions", "BlockNum", header.Number, "Hash", header.Hash())
@@ -839,10 +842,10 @@ func (w *worker) commitNewWork() {
 			log.Warn("Can't find coinbase account wallet", "coinbase", w.coinbase, "err", err)
 			return
 		}
-		if w.config.XDPoS != nil && w.chain.Config().IsTIPXDCXMiner(header.Number) {
+		if w.chainConfig.XDPoS != nil && w.chain.Config().IsTIPXDCXMiner(header.Number) {
 			XDCX := w.eth.GetXDCX()
 			XDCXLending := w.eth.GetXDCXLending()
-			if XDCX != nil && header.Number.Uint64() > w.config.XDPoS.Epoch {
+			if XDCX != nil && header.Number.Uint64() > w.chainConfig.XDPoS.Epoch {
 				isEpochSwitchBlock, epochNumber, err := w.engine.(*XDPoS.XDPoS).IsEpochSwitch(header)
 				if err != nil {
 					log.Error("[commitNewWork] fail to check if block is epoch switch block when performing XDCX and XDCXLending operations", "BlockNum", header.Number, "Hash", header.Hash())
@@ -866,7 +869,7 @@ func (w *worker) commitNewWork() {
 					lendingOrderPending, _ := w.eth.LendingPool().Pending()
 					lendingInput, lendingMatchingResults = XDCXLending.ProcessOrderPending(header, w.coinbase, w.chain, lendingOrderPending, work.state, work.lendingState, work.tradingState)
 					log.Debug("lending transaction matches found", "lendingInput", len(lendingInput), "lendingMatchingResults", len(lendingMatchingResults))
-					if header.Number.Uint64()%w.config.XDPoS.Epoch == common.LiquidateLendingTradeBlock {
+					if header.Number.Uint64()%w.chainConfig.XDPoS.Epoch == common.LiquidateLendingTradeBlock {
 						updatedTrades, liquidatedTrades, autoRepayTrades, autoTopUpTrades, autoRecallTrades, err = XDCXLending.ProcessLiquidationData(header, w.chain, work.state, work.tradingState, work.lendingState)
 						if err != nil {
 							log.Error("Fail when process lending liquidation data ", "error", err)
@@ -888,7 +891,7 @@ func (w *worker) commitNewWork() {
 					}
 					nonce := work.state.GetNonce(w.coinbase)
 					tx := types.NewTransaction(nonce, common.XDCXAddrBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), txMatchBytes)
-					txM, err := wallet.SignTx(accounts.Account{Address: w.coinbase}, tx, w.config.ChainID)
+					txM, err := wallet.SignTx(accounts.Account{Address: w.coinbase}, tx, w.chainConfig.ChainID)
 					if err != nil {
 						log.Error("Fail to create tx matches", "error", err)
 						return
@@ -913,7 +916,7 @@ func (w *worker) commitNewWork() {
 					}
 					nonce := work.state.GetNonce(w.coinbase)
 					lendingTx := types.NewTransaction(nonce, common.XDCXLendingAddressBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), lendingDataBytes)
-					signedLendingTx, err := wallet.SignTx(accounts.Account{Address: w.coinbase}, lendingTx, w.config.ChainID)
+					signedLendingTx, err := wallet.SignTx(accounts.Account{Address: w.coinbase}, lendingTx, w.chainConfig.ChainID)
 					if err != nil {
 						log.Error("Fail to create lending tx", "error", err)
 						return
@@ -932,7 +935,7 @@ func (w *worker) commitNewWork() {
 					}
 					nonce := work.state.GetNonce(w.coinbase)
 					finalizedTx := types.NewTransaction(nonce, common.XDCXLendingFinalizedTradeAddressBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), finalizedTradeData)
-					signedFinalizedTx, err := wallet.SignTx(accounts.Account{Address: w.coinbase}, finalizedTx, w.config.ChainID)
+					signedFinalizedTx, err := wallet.SignTx(accounts.Account{Address: w.coinbase}, finalizedTx, w.chainConfig.ChainID)
 					if err != nil {
 						log.Error("Fail to create lending tx", "error", err)
 						return
@@ -946,7 +949,7 @@ func (w *worker) commitNewWork() {
 			LendingStateRoot := work.lendingState.IntermediateRoot()
 			txData := append(XDCxStateRoot.Bytes(), LendingStateRoot.Bytes()...)
 			tx := types.NewTransaction(work.state.GetNonce(w.coinbase), common.TradingStateAddrBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), txData)
-			txStateRoot, err := wallet.SignTx(accounts.Account{Address: w.coinbase}, tx, w.config.ChainID)
+			txStateRoot, err := wallet.SignTx(accounts.Account{Address: w.coinbase}, tx, w.chainConfig.ChainID)
 			if err != nil {
 				log.Error("Fail to create tx state root", "error", err)
 				return
@@ -954,7 +957,7 @@ func (w *worker) commitNewWork() {
 			specialTxs = append(specialTxs, txStateRoot)
 		}
 	}
-	work.commitTransactions(w.mux, feeCapacity, txs, specialTxs, w.chain, w.coinbase, &w.pendingLogsFeed)
+	work.commitTransactions(w.mux, feeCapacity, txs, specialTxs, w.chain, &w.pendingLogsFeed)
 	commitEnd := time.Now()
 
 	// compute uncles for the new block.
@@ -995,7 +998,7 @@ func (w *worker) commitNewWork() {
 	w.updateSnapshot()
 }
 
-func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Address]*big.Int, txs *transactionsByPriceAndNonce, specialTxs types.Transactions, bc *core.BlockChain, coinbase common.Address, pendingLogsFeed *event.Feed) {
+func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Address]*big.Int, txs *transactionsByPriceAndNonce, specialTxs types.Transactions, bc *core.BlockChain, pendingLogsFeed *event.Feed) {
 	gp := new(core.GasPool).AddGas(w.header.GasLimit)
 	balanceUpdated := map[common.Address]*big.Int{}
 	totalFeeUsed := big.NewInt(0)
