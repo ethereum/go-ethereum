@@ -65,6 +65,17 @@ type LazyResolver interface {
 	Get(hash common.Hash) *types.Transaction
 }
 
+// PendingFilter is a collection of filter rules to allow retrieving a subset
+// of transactions for announcement or mining.
+//
+// Note, the entries here are not arbitrary useful filters, rather each one has
+// a very specific call site in mind and each one can be evaluated very cheaply
+// by the pool implementations. Only add new ones that satisfy those constraints.
+type PendingFilter struct {
+	MinTip  *uint256.Int // Minimum miner tip required to include a transaction
+	BaseFee *uint256.Int // Minimum 1559 basefee needed to include a transaction
+}
+
 // SubPool represents a specialized transaction pool that lives on its own (e.g.
 // blob pool). Since independent of how many specialized pools we have, they do
 // need to be updated in lockstep and assemble into one coherent view for block
@@ -113,7 +124,7 @@ type SubPool interface {
 	//
 	// The transactions can also be pre-filtered by the dynamic fee components to
 	// reduce allocations and load on downstream subsystems.
-	Pending(minTip *uint256.Int, baseFee *uint256.Int) map[common.Address][]*LazyTransaction
+	Pending(filter PendingFilter) map[common.Address][]*LazyTransaction
 
 	// SubscribeTransactions subscribes to new transaction events. The subscriber
 	// can decide whether to receive notifications only for newly seen transactions

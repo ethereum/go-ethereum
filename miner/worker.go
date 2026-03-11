@@ -862,11 +862,13 @@ func (w *worker) commitNewWork() {
 		}
 		if !isEpochSwitchBlock {
 			// Retrieve the pending transactions pre-filtered by the 1559 dynamic fees
-			var baseFee *uint256.Int
-			if header.BaseFee != nil {
-				baseFee = uint256.MustFromBig(header.BaseFee)
+			filter := txpool.PendingFilter{
+				MinTip: w.tip,
 			}
-			pending := w.eth.TxPool().Pending(w.tip, baseFee)
+			if header.BaseFee != nil {
+				filter.BaseFee = uint256.MustFromBig(header.BaseFee)
+			}
+			pending := w.eth.TxPool().Pending(filter)
 			txs, specialTxs = newTransactionsByPriceAndNonce(w.current.signer, pending, feeCapacity, header.BaseFee)
 		}
 	}

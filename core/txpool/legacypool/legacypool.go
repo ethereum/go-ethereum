@@ -581,7 +581,7 @@ func (pool *LegacyPool) ContentFrom(addr common.Address) ([]*types.Transaction, 
 //
 // The transactions can also be pre-filtered by the dynamic fee components to
 // reduce allocations and load on downstream subsystems.
-func (pool *LegacyPool) Pending(minTip *uint256.Int, baseFee *uint256.Int) map[common.Address][]*txpool.LazyTransaction {
+func (pool *LegacyPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -590,11 +590,11 @@ func (pool *LegacyPool) Pending(minTip *uint256.Int, baseFee *uint256.Int) map[c
 		minTipBig  *big.Int
 		baseFeeBig *big.Int
 	)
-	if minTip != nil {
-		minTipBig = minTip.ToBig()
+	if filter.MinTip != nil {
+		minTipBig = filter.MinTip.ToBig()
 	}
-	if baseFee != nil {
-		baseFeeBig = baseFee.ToBig()
+	if filter.BaseFee != nil {
+		baseFeeBig = filter.BaseFee.ToBig()
 	}
 
 	pending := make(map[common.Address][]*txpool.LazyTransaction, len(pool.pending))

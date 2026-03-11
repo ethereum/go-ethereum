@@ -3085,7 +3085,7 @@ func TestPendingMinTipThreshold(t *testing.T) {
 		t.Fatalf("failed to add tx nonce 1: %v", err)
 	}
 
-	filtered := pool.Pending(uint256.MustFromBig(threshold), nil)
+	filtered := pool.Pending(txpool.PendingFilter{MinTip: uint256.MustFromBig(threshold)})
 	txs := filtered[addr]
 	if len(txs) != 1 {
 		t.Fatalf("unexpected filtered tx count: have %d, want %d", len(txs), 1)
@@ -3099,7 +3099,7 @@ func TestPendingMinTipThreshold(t *testing.T) {
 		t.Fatalf("unexpected surviving tx after tip filter: got nonce %d", have)
 	}
 
-	all := pool.Pending(nil, nil)
+	all := pool.Pending(txpool.PendingFilter{})
 	if len(all[addr]) != 2 {
 		t.Fatalf("unexpected unfiltered tx count: have %d, want %d", len(all[addr]), 2)
 	}
@@ -3132,7 +3132,7 @@ func TestPendingMinTipWithBaseFee(t *testing.T) {
 	minTip := uint256.MustFromBig(minTipBig)
 	baseFee := uint256.MustFromBig(baseFeeBig)
 
-	withBaseFee := pool.Pending(minTip, baseFee)
+	withBaseFee := pool.Pending(txpool.PendingFilter{MinTip: minTip, BaseFee: baseFee})
 	txs := withBaseFee[addr]
 	if len(txs) != 1 {
 		t.Fatalf("unexpected tx count with base fee filter: have %d, want %d", len(txs), 1)
@@ -3146,7 +3146,7 @@ func TestPendingMinTipWithBaseFee(t *testing.T) {
 		t.Fatalf("unexpected surviving tx with base fee filter: got nonce %d", have)
 	}
 
-	withoutBaseFee := pool.Pending(minTip, nil)
+	withoutBaseFee := pool.Pending(txpool.PendingFilter{MinTip: minTip})
 	if len(withoutBaseFee[addr]) != 3 {
 		t.Fatalf("unexpected tx count without base fee filter: have %d, want %d", len(withoutBaseFee[addr]), 3)
 	}
@@ -3180,7 +3180,7 @@ func TestPendingKeepsLocalAndSpecialTransactions(t *testing.T) {
 		t.Fatalf("failed to add local tx: %v", err)
 	}
 
-	filtered := pool.Pending(uint256.MustFromBig(filterTip), nil)
+	filtered := pool.Pending(txpool.PendingFilter{MinTip: uint256.MustFromBig(filterTip)})
 
 	specialPending := filtered[specialAddr]
 	if len(specialPending) != 2 {
@@ -3225,7 +3225,7 @@ func TestPendingDynamicFeeThresholdWithoutBaseFee(t *testing.T) {
 		t.Fatalf("failed to add tx nonce 1: %v", err)
 	}
 
-	filtered := pool.Pending(uint256.MustFromBig(minTipBig), nil)
+	filtered := pool.Pending(txpool.PendingFilter{MinTip: uint256.MustFromBig(minTipBig)})
 	txs := filtered[addr]
 	if len(txs) != 1 {
 		t.Fatalf("unexpected filtered tx count: have %d, want %d", len(txs), 1)
@@ -3239,7 +3239,7 @@ func TestPendingDynamicFeeThresholdWithoutBaseFee(t *testing.T) {
 		t.Fatalf("unexpected surviving tx without base fee: got nonce %d", have)
 	}
 
-	all := pool.Pending(nil, nil)
+	all := pool.Pending(txpool.PendingFilter{})
 	if len(all[addr]) != 2 {
 		t.Fatalf("unexpected unfiltered tx count: have %d, want %d", len(all[addr]), 2)
 	}
