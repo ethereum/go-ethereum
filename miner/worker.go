@@ -1149,11 +1149,11 @@ func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Addr
 		if lazyTx == nil {
 			break
 		}
-		warped := lazyTx.Resolve()
-		if warped == nil {
+		resolvedTx := lazyTx.Resolve()
+		if resolvedTx == nil {
 			break
 		}
-		tx := warped
+		tx := resolvedTx
 		to := tx.To()
 		if w.header.Number.Uint64() >= common.DenylistHFNumber {
 			from := tx.From()
