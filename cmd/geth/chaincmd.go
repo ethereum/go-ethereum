@@ -214,8 +214,8 @@ blockchain database up to a specified point, while preserving block headers. Thi
 helps reduce storage requirements for nodes that don't need full historical data.
 
 The --history.chain flag is required to specify the pruning target:
-  - postmerge:  Prune up to the merge block
-  - postprague: Prune up to the Prague (Pectra) upgrade block`,
+  - postmerge:  Prune up to the merge block. The node will keep the merge block and everything thereafter.
+  - postprague: Prune up to the Prague (Pectra) upgrade block. The node will keep the prague block and everything thereafter.`,
 	}
 
 	downloadEraCommand = &cli.Command{
@@ -678,7 +678,7 @@ func hashish(x string) bool {
 func pruneHistory(ctx *cli.Context) error {
 	// Parse and validate the history mode flag.
 	if !ctx.IsSet(utils.ChainHistoryFlag.Name) {
-		return errors.New("--history.chain flag is required (use 'postmerge' or 'postprague')")
+		return errors.New("--history.chain flag is required")
 	}
 	var mode history.HistoryMode
 	if err := mode.UnmarshalText([]byte(ctx.String(utils.ChainHistoryFlag.Name))); err != nil {
