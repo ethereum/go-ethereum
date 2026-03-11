@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/archive"
 )
@@ -68,6 +70,7 @@ func (n *expiredNode) SetArchiveResolver(resolver archive.ResolverFn) {
 // the reconstructed subtree hash, and stamps the cached hash onto the root.
 // Returns an error if the archive data is corrupted (hash mismatch).
 func resolveExpiredNodeData(n *expiredNode) (node, error) {
+	start := time.Now()
 	records, err := archive.ArchivedNodeResolver(n.offset, n.size)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve expired node: %w", err)
@@ -76,6 +79,11 @@ func resolveExpiredNodeData(n *expiredNode) (node, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to rebuild expired node from archive: %w", err)
 	}
+	depth := subtreeDepth(resolved)
+	log.Debug("Resurrected expired node from archive",
+		"offset", n.offset, "archiveBytes", n.size,
+		"records", len(records), "depth", depth,
+		"elapsed", time.Since(start))
 	// Verify hash integrity: if the original hash is known, check that the
 	// reconstructed subtree produces the same hash. A mismatch means the
 	// archive is corrupted (e.g. missing leaves due to unresolvable hashNodes
@@ -111,6 +119,26 @@ func resolveExpiredNodeData(n *expiredNode) (node, error) {
 	// marking is harmless — the nodes are discarded when the trie is GC'd.
 	markSubtreeDirty(resolved)
 	return resolved, nil
+}
+
+// subtreeDepth returns the maximum depth of a trie subtree.
+func subtreeDepth(n node) int {
+	switch n := n.(type) {
+	case *fullNode:
+		max := 0
+		for _, child := range &n.Children {
+			if child != nil {
+				if d := subtreeDepth(child); d > max {
+					max = d
+				}
+			}
+		}
+		return 1 + max
+	case *shortNode:
+		return 1 + subtreeDepth(n.Val)
+	default:
+		return 0
+	}
 }
 
 // markSubtreeDirty recursively marks all fullNode and shortNode in the
