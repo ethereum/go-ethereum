@@ -189,9 +189,10 @@ func (api *FilterAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) 
 
 	rpcSub := notifier.CreateSubscription()
 
+	txs := make(chan []*types.Transaction, 128)
+	pendingTxSub := api.events.SubscribePendingTxs(txs)
+
 	go func() {
-		txs := make(chan []*types.Transaction, 128)
-		pendingTxSub := api.events.SubscribePendingTxs(txs)
 		defer pendingTxSub.Unsubscribe()
 
 		chainConfig := api.sys.backend.ChainConfig()
@@ -262,9 +263,10 @@ func (api *FilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 
 	rpcSub := notifier.CreateSubscription()
 
+	headers := make(chan *types.Header)
+	headersSub := api.events.SubscribeNewHeads(headers)
+
 	go func() {
-		headers := make(chan *types.Header)
-		headersSub := api.events.SubscribeNewHeads(headers)
 		defer headersSub.Unsubscribe()
 
 		for {
