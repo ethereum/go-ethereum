@@ -27,6 +27,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/holiman/uint256"
 )
 
 func TestTransactionPriceNonceSortLegacy(t *testing.T) {
@@ -90,8 +91,8 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 				Hash:      tx.Hash(),
 				Tx:        tx,
 				Time:      tx.Time(),
-				GasFeeCap: tx.GasFeeCap(),
-				GasTipCap: tx.GasTipCap(),
+				GasFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
+				GasTipCap: uint256.MustFromBig(tx.GasTipCap()),
 			})
 		}
 		expectedCount += count
@@ -155,8 +156,8 @@ func TestTransactionTimeSort(t *testing.T) {
 			Hash:      tx.Hash(),
 			Tx:        tx,
 			Time:      tx.Time(),
-			GasFeeCap: tx.GasFeeCap(),
-			GasTipCap: tx.GasTipCap(),
+			GasFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
+			GasTipCap: uint256.MustFromBig(tx.GasTipCap()),
 		})
 	}
 	// Sort the transactions and cross check the nonce ordering
@@ -193,11 +194,11 @@ func TestNewTransactionsByPriceAndNonce_SpecialSeparation(t *testing.T) {
 
 	genNormalTx := func(nonce uint64, key *ecdsa.PrivateKey) *txpool.LazyTransaction {
 		tx, _ := types.SignTx(types.NewTransaction(nonce, common.HexToAddress("0x1234567890123456789012345678901234567890"), big.NewInt(1), 21000, big.NewInt(1), nil), signer, key)
-		return &txpool.LazyTransaction{Tx: tx, Hash: tx.Hash(), Time: tx.Time(), GasFeeCap: tx.GasFeeCap(), GasTipCap: tx.GasTipCap()}
+		return &txpool.LazyTransaction{Tx: tx, Hash: tx.Hash(), Time: tx.Time(), GasFeeCap: uint256.MustFromBig(tx.GasFeeCap()), GasTipCap: uint256.MustFromBig(tx.GasTipCap())}
 	}
 	genSpecialTx := func(nonce uint64, key *ecdsa.PrivateKey) *txpool.LazyTransaction {
 		tx, _ := types.SignTx(types.NewTransaction(nonce, common.BlockSignersBinary, big.NewInt(1), 21000, big.NewInt(1), nil), signer, key)
-		return &txpool.LazyTransaction{Tx: tx, Hash: tx.Hash(), Time: tx.Time(), GasFeeCap: tx.GasFeeCap(), GasTipCap: tx.GasTipCap()}
+		return &txpool.LazyTransaction{Tx: tx, Hash: tx.Hash(), Time: tx.Time(), GasFeeCap: uint256.MustFromBig(tx.GasFeeCap()), GasTipCap: uint256.MustFromBig(tx.GasTipCap())}
 	}
 
 	testCases := []struct {

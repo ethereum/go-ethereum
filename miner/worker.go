@@ -145,7 +145,7 @@ type worker struct {
 	mu       sync.Mutex
 	coinbase common.Address
 	extra    []byte
-	tip      *big.Int // Minimum tip needed for non-local transaction to include them
+	tip      *uint256.Int // Minimum tip needed for non-local transaction to include them
 
 	snapshotMu       sync.RWMutex // The lock used to protect the block snapshot and state snapshot
 	snapshotBlock    *types.Block
@@ -176,7 +176,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		mux:            mux,
 		coinbase:       config.Etherbase,
 		extra:          config.ExtraData,
-		tip:            config.GasPrice,
+		tip:            uint256.MustFromBig(config.GasPrice),
 		txsCh:          make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:    make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:    make(chan core.ChainSideEvent, chainSideChanSize),
@@ -233,7 +233,7 @@ func (w *worker) setGasTip(tip *big.Int) error {
 	}
 
 	// Copy the value to avoid external mutation through shared pointers.
-	w.tip = new(big.Int).Set(tip)
+	w.tip = uint256.MustFromBig(tip)
 	log.Info("Worker tip updated", "tip", w.tip)
 	return nil
 }
@@ -404,8 +404,8 @@ func (w *worker) update() {
 						Hash:      tx.Hash(),
 						Tx:        tx,
 						Time:      tx.Time(),
-						GasFeeCap: tx.GasFeeCap(),
-						GasTipCap: tx.GasTipCap(),
+						GasFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
+						GasTipCap: uint256.MustFromBig(tx.GasTipCap()),
 					})
 				}
 				feeCapacity := w.current.state.GetTRC21FeeCapacityFromState()
@@ -866,7 +866,7 @@ func (w *worker) commitNewWork() {
 			if header.BaseFee != nil {
 				baseFee = uint256.MustFromBig(header.BaseFee)
 			}
-			pending := w.eth.TxPool().Pending(uint256.MustFromBig(w.tip), baseFee)
+			pending := w.eth.TxPool().Pending(w.tip, baseFee)
 			txs, specialTxs = newTransactionsByPriceAndNonce(w.current.signer, pending, feeCapacity, header.BaseFee)
 		}
 	}

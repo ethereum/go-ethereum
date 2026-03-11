@@ -30,6 +30,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/holiman/uint256"
 )
 
 func newBlockingSubscription() event.Subscription {
@@ -132,8 +133,8 @@ func TestWorkerCheckPreCommitXDPoSMismatch(t *testing.T) {
 }
 
 func TestWorkerSetGasTipValidation(t *testing.T) {
-	w := &worker{tip: big.NewInt(1)}
-	old := new(big.Int).Set(w.tip)
+	w := &worker{tip: uint256.NewInt(1)}
+	old := new(uint256.Int).Set(w.tip)
 
 	tests := []struct {
 		name string
@@ -163,12 +164,12 @@ func TestWorkerSetGasTipCopiesValue(t *testing.T) {
 	if err := w.setGasTip(input); err != nil {
 		t.Fatalf("setGasTip failed: %v", err)
 	}
-	if w.tip == input {
-		t.Fatal("worker tip shares pointer with input")
+	if w.tip == nil {
+		t.Fatal("worker tip was not set")
 	}
 
 	input.Add(input, big.NewInt(1))
-	if w.tip.Cmp(big.NewInt(2*params.GWei)) != 0 {
+	if w.tip.Cmp(uint256.NewInt(2*params.GWei)) != 0 {
 		t.Fatalf("worker tip mutated via input pointer: have %v", w.tip)
 	}
 }
