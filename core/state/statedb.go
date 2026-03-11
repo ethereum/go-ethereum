@@ -991,12 +991,8 @@ func (s *StateDB) clearJournalAndRefund() {
 }
 
 // deleteStorage is designed to delete the storage trie of a designated account.
-// The function will make an attempt to utilize an efficient strategy if the
-// associated state snapshot is reachable; otherwise, it will resort to a less
-// efficient approach.
 func (s *StateDB) deleteStorage(addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, map[common.Hash][]byte, *trienode.NodeSet, error) {
 	var (
-		err            error
 		nodes          = trienode.NewNodeSet(addrHash) // the set for trie node mutations (value is nil)
 		storages       = make(map[common.Hash][]byte)  // the set for storage mutations (value is nil)
 		storageOrigins = make(map[common.Hash][]byte)  // the set for tracking the original value of slot

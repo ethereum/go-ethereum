@@ -177,11 +177,6 @@ func (db *CachingDB) WithSnapshot(snapshot *snapshot.Tree) *CachingDB {
 	return db
 }
 
-// Preimage returns the preimage of associated hash.
-func (db *CachingDB) Preimage(hash common.Hash) []byte {
-	return db.triedb.Preimage(hash)
-}
-
 // StateReader returns a state reader associated with the specified state root.
 func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 	var readers []StateReader
