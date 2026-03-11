@@ -44,6 +44,7 @@ type DumpConfig struct {
 type DumpCollector interface {
 	// OnRoot is called with the state root
 	OnRoot(common.Hash)
+
 	// OnAccount is called once for each account in the trie
 	OnAccount(*common.Address, DumpAccount)
 }
@@ -64,6 +65,7 @@ type DumpAccount struct {
 type Dump struct {
 	Root     string                 `json:"root"`
 	Accounts map[string]DumpAccount `json:"accounts"`
+
 	// Next can be set to represent that this dump is only partial, and Next
 	// is where an iterator should be positioned in order to continue the dump.
 	Next []byte `json:"next,omitempty"` // nil if no more accounts
@@ -155,7 +157,6 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 				AddressHash: acctIt.Hash().Bytes(),
 			}
 			address *common.Address
-			addr    common.Address
 		)
 		addrBytes, err := acctIt.Address()
 		if err != nil {
@@ -167,7 +168,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 			address = &addrBytes
 			account.Address = address
 		}
-		obj := newObject(s, addr, &data)
+		obj := newObject(s, addrBytes, &data)
 		if !conf.SkipCode {
 			account.Code = obj.Code()
 		}
@@ -179,7 +180,6 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 				log.Error("Failed to load storage trie", "err", err)
 				continue
 			}
-
 			for storageIt.Next() {
 				_, content, _, err := rlp.Split(storageIt.Slot())
 				if err != nil {
@@ -197,8 +197,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		c.OnAccount(address, account)
 		accounts++
 		if time.Since(logged) > 8*time.Second {
-			log.Info("Trie dumping in progress", "at", acctIt.Hash().Hex(), "accounts", accounts,
-				"elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Trie dumping in progress", "at", acctIt.Hash().Hex(), "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
 		}
 		if conf.Max > 0 && accounts >= conf.Max {
@@ -211,9 +210,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	if missingPreimages > 0 {
 		log.Warn("Dump incomplete due to missing preimages", "missing", missingPreimages)
 	}
-	log.Info("Trie dumping complete", "accounts", accounts,
-		"elapsed", common.PrettyDuration(time.Since(start)))
-
+	log.Info("Trie dumping complete", "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nextKey
 }
 
