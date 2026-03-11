@@ -856,6 +856,9 @@ func (t *freezerTable) resetTo(tail uint64) error {
 	if err := reset(t.index.Name(), entry.append(nil)); err != nil {
 		return err
 	}
+	if err := t.metadata.setVirtualTail(tail, true); err != nil {
+		return err
+	}
 	if err := t.metadata.setFlushOffset(indexEntrySize, true); err != nil {
 		return err
 	}
