@@ -41,7 +41,7 @@ const (
 	stateSyncing
 
 	// stateStalled indicates that sync progress has stopped for a while
-	// with no progress. This may be caused by network instability (e.g., no eers),
+	// with no progress. This may be caused by network instability (e.g., no peers),
 	// manual operation such as syncing the local chain to a specific block.
 	stateStalled
 )
