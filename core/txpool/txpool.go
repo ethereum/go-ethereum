@@ -25,6 +25,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/holiman/uint256"
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.
@@ -250,10 +251,13 @@ func (p *TxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
 
 // Pending retrieves all currently processable transactions, grouped by origin
 // account and sorted by nonce.
-func (p *TxPool) Pending(enforceTips bool) map[common.Address][]*LazyTransaction {
+//
+// The transactions can also be pre-filtered by the dynamic fee components to
+// reduce allocations and load on downstream subsystems.
+func (p *TxPool) Pending(minTip *uint256.Int, baseFee *uint256.Int) map[common.Address][]*LazyTransaction {
 	txs := make(map[common.Address][]*LazyTransaction)
 	for _, subpool := range p.subpools {
-		maps.Copy(txs, subpool.Pending(enforceTips))
+		maps.Copy(txs, subpool.Pending(minTip, baseFee))
 	}
 	return txs
 }

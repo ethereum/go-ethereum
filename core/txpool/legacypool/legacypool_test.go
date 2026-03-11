@@ -3066,6 +3066,185 @@ func BenchmarkMultiAccountBatchInsert(b *testing.B) {
 	}
 }
 
+func TestPendingMinTipThreshold(t *testing.T) {
+	t.Parallel()
+
+	pool, key := setupPool()
+	defer pool.Close()
+
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	testAddBalance(pool, addr, big.NewInt(1_000_000_000_000_000))
+	threshold := new(big.Int).Add(new(big.Int).Set(common.MinGasPrice), big.NewInt(100))
+	aboveThreshold := new(big.Int).Set(threshold)
+	belowThreshold := new(big.Int).Sub(new(big.Int).Set(threshold), big.NewInt(1))
+
+	if err := pool.addRemoteSync(pricedTransaction(0, 100000, aboveThreshold, key)); err != nil {
+		t.Fatalf("failed to add tx nonce 0: %v", err)
+	}
+	if err := pool.addRemoteSync(pricedTransaction(1, 100000, belowThreshold, key)); err != nil {
+		t.Fatalf("failed to add tx nonce 1: %v", err)
+	}
+
+	filtered := pool.Pending(uint256.MustFromBig(threshold), nil)
+	txs := filtered[addr]
+	if len(txs) != 1 {
+		t.Fatalf("unexpected filtered tx count: have %d, want %d", len(txs), 1)
+	}
+	resolved := txs[0].Resolve()
+	if resolved == nil || resolved.Nonce() != 0 {
+		have := uint64(math.MaxUint64)
+		if resolved != nil {
+			have = resolved.Nonce()
+		}
+		t.Fatalf("unexpected surviving tx after tip filter: got nonce %d", have)
+	}
+
+	all := pool.Pending(nil, nil)
+	if len(all[addr]) != 2 {
+		t.Fatalf("unexpected unfiltered tx count: have %d, want %d", len(all[addr]), 2)
+	}
+}
+
+func TestPendingMinTipWithBaseFee(t *testing.T) {
+	t.Parallel()
+
+	pool, key := setupPoolWithConfig(eip1559Config)
+	defer pool.Close()
+
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	testAddBalance(pool, addr, big.NewInt(1_000_000_000_000_000))
+	minGasTip := new(big.Int).Set(common.MinGasPrice)
+	tipPass := new(big.Int).Add(new(big.Int).Set(minGasTip), big.NewInt(80))
+	tipPassWithoutBaseFeeOnly := new(big.Int).Add(new(big.Int).Set(minGasTip), big.NewInt(60))
+
+	if err := pool.addRemoteSync(dynamicFeeTx(0, 100000, new(big.Int).Add(new(big.Int).Set(minGasTip), big.NewInt(300)), tipPass, key)); err != nil {
+		t.Fatalf("failed to add tx nonce 0: %v", err)
+	}
+	if err := pool.addRemoteSync(dynamicFeeTx(1, 100000, new(big.Int).Add(new(big.Int).Set(minGasTip), big.NewInt(240)), tipPassWithoutBaseFeeOnly, key)); err != nil {
+		t.Fatalf("failed to add tx nonce 1: %v", err)
+	}
+	if err := pool.addRemoteSync(dynamicFeeTx(2, 100000, new(big.Int).Add(new(big.Int).Set(minGasTip), big.NewInt(240)), tipPassWithoutBaseFeeOnly, key)); err != nil {
+		t.Fatalf("failed to add tx nonce 2: %v", err)
+	}
+
+	minTipBig := new(big.Int).Add(new(big.Int).Set(minGasTip), big.NewInt(45))
+	baseFeeBig := big.NewInt(200)
+	minTip := uint256.MustFromBig(minTipBig)
+	baseFee := uint256.MustFromBig(baseFeeBig)
+
+	withBaseFee := pool.Pending(minTip, baseFee)
+	txs := withBaseFee[addr]
+	if len(txs) != 1 {
+		t.Fatalf("unexpected tx count with base fee filter: have %d, want %d", len(txs), 1)
+	}
+	resolved := txs[0].Resolve()
+	if resolved == nil || resolved.Nonce() != 0 {
+		have := uint64(math.MaxUint64)
+		if resolved != nil {
+			have = resolved.Nonce()
+		}
+		t.Fatalf("unexpected surviving tx with base fee filter: got nonce %d", have)
+	}
+
+	withoutBaseFee := pool.Pending(minTip, nil)
+	if len(withoutBaseFee[addr]) != 3 {
+		t.Fatalf("unexpected tx count without base fee filter: have %d, want %d", len(withoutBaseFee[addr]), 3)
+	}
+}
+
+func TestPendingKeepsLocalAndSpecialTransactions(t *testing.T) {
+	t.Parallel()
+
+	pool, _ := setupPool()
+	defer pool.Close()
+	minGasTip := new(big.Int).Set(common.MinGasPrice)
+	filterTip := new(big.Int).Add(new(big.Int).Set(minGasTip), big.NewInt(100))
+
+	specialKey, _ := crypto.GenerateKey()
+	specialAddr := crypto.PubkeyToAddress(specialKey.PublicKey)
+	testAddBalance(pool, specialAddr, big.NewInt(1_000_000_000_000_000))
+
+	specialTx, _ := types.SignTx(types.NewTransaction(0, common.BlockSignersBinary, big.NewInt(1), 100000, new(big.Int).Add(new(big.Int).Set(minGasTip), big.NewInt(1)), nil), types.HomesteadSigner{}, specialKey)
+	if err := pool.addRemoteSync(specialTx); err != nil {
+		t.Fatalf("failed to add special tx: %v", err)
+	}
+	normalTx := pricedTransaction(1, 100000, new(big.Int).Add(new(big.Int).Set(minGasTip), big.NewInt(200)), specialKey)
+	if err := pool.addRemoteSync(normalTx); err != nil {
+		t.Fatalf("failed to add normal tx after special tx: %v", err)
+	}
+
+	localKey, _ := crypto.GenerateKey()
+	localAddr := crypto.PubkeyToAddress(localKey.PublicKey)
+	testAddBalance(pool, localAddr, big.NewInt(1_000_000_000_000_000))
+	if err := pool.addLocal(pricedTransaction(0, 100000, new(big.Int).Add(new(big.Int).Set(minGasTip), big.NewInt(1)), localKey)); err != nil {
+		t.Fatalf("failed to add local tx: %v", err)
+	}
+
+	filtered := pool.Pending(uint256.MustFromBig(filterTip), nil)
+
+	specialPending := filtered[specialAddr]
+	if len(specialPending) != 2 {
+		t.Fatalf("unexpected special account tx count: have %d, want %d", len(specialPending), 2)
+	}
+	first := specialPending[0].Resolve()
+	if first == nil || first.Nonce() != 0 || !first.IsSpecialTransaction() {
+		t.Fatalf("special tx should survive filtering at nonce 0")
+	}
+	second := specialPending[1].Resolve()
+	if second == nil || second.Nonce() != 1 {
+		t.Fatalf("unexpected tx order for special account")
+	}
+
+	localPending := filtered[localAddr]
+	if len(localPending) != 1 {
+		t.Fatalf("unexpected local account tx count: have %d, want %d", len(localPending), 1)
+	}
+	local := localPending[0].Resolve()
+	if local == nil || local.Nonce() != 0 {
+		t.Fatalf("unexpected local tx after filtering")
+	}
+}
+
+func TestPendingDynamicFeeThresholdWithoutBaseFee(t *testing.T) {
+	t.Parallel()
+
+	pool, key := setupPoolWithConfig(eip1559Config)
+	defer pool.Close()
+
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	testAddBalance(pool, addr, big.NewInt(1_000_000_000_000_000))
+
+	minTipBig := new(big.Int).Add(new(big.Int).Set(common.MinGasPrice), big.NewInt(50))
+	equalTip := new(big.Int).Set(minTipBig)
+	belowTip := new(big.Int).Sub(new(big.Int).Set(minTipBig), big.NewInt(1))
+
+	if err := pool.addRemoteSync(dynamicFeeTx(0, 100000, new(big.Int).Add(new(big.Int).Set(equalTip), big.NewInt(100)), equalTip, key)); err != nil {
+		t.Fatalf("failed to add tx nonce 0: %v", err)
+	}
+	if err := pool.addRemoteSync(dynamicFeeTx(1, 100000, new(big.Int).Add(new(big.Int).Set(equalTip), big.NewInt(100)), belowTip, key)); err != nil {
+		t.Fatalf("failed to add tx nonce 1: %v", err)
+	}
+
+	filtered := pool.Pending(uint256.MustFromBig(minTipBig), nil)
+	txs := filtered[addr]
+	if len(txs) != 1 {
+		t.Fatalf("unexpected filtered tx count: have %d, want %d", len(txs), 1)
+	}
+	resolved := txs[0].Resolve()
+	if resolved == nil || resolved.Nonce() != 0 {
+		have := uint64(math.MaxUint64)
+		if resolved != nil {
+			have = resolved.Nonce()
+		}
+		t.Fatalf("unexpected surviving tx without base fee: got nonce %d", have)
+	}
+
+	all := pool.Pending(nil, nil)
+	if len(all[addr]) != 2 {
+		t.Fatalf("unexpected unfiltered tx count: have %d, want %d", len(all[addr]), 2)
+	}
+}
+
 // TestSetGasPrice tests the SetGasPrice validation logic using table-driven tests
 func TestSetGasPrice(t *testing.T) {
 	testCases := []struct {

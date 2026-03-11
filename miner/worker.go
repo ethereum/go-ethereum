@@ -46,6 +46,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/trie"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -860,7 +861,12 @@ func (w *worker) commitNewWork() {
 			log.Error("[commitNewWork] fail to check if block is epoch switch block when fetching pending transactions", "BlockNum", header.Number, "Hash", header.Hash())
 		}
 		if !isEpochSwitchBlock {
-			pending := w.eth.TxPool().Pending(true)
+			// Retrieve the pending transactions pre-filtered by the 1559 dynamic fees
+			var baseFee *uint256.Int
+			if header.BaseFee != nil {
+				baseFee = uint256.MustFromBig(header.BaseFee)
+			}
+			pending := w.eth.TxPool().Pending(uint256.MustFromBig(w.tip), baseFee)
 			txs, specialTxs = newTransactionsByPriceAndNonce(w.current.signer, pending, feeCapacity, header.BaseFee)
 		}
 	}
