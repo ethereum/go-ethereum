@@ -29,7 +29,7 @@ import (
 func CheckMaxInitCodeSize(rules *params.Rules, size uint64) error {
 	if rules.IsAmsterdam {
 		if size > params.MaxInitCodeSizeAmsterdam {
-			return fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, size, params.MaxCodeSizeAmsterdam)
+			return fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, size, params.MaxInitCodeSizeAmsterdam)
 		}
 	} else if rules.IsShanghai {
 		if size > params.MaxInitCodeSize {
