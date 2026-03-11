@@ -766,7 +766,7 @@ func (api *ConsensusAPI) NewPayloadV5(ctx context.Context, params engine.Executa
 	if err := validateRequests(requests); err != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(err)
 	}
-	return api.newPayload(context.Background(), params, versionedHashes, beaconRoot, requests, false)
+	return api.newPayload(ctx, params, versionedHashes, beaconRoot, requests, false)
 }
 
 func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, witness bool) (result engine.PayloadStatusV1, err error) {
