@@ -90,7 +90,8 @@ func main() {
 		fatal("failed to fetch execution witness: %v", err)
 	}
 
-	witness, err := fromExtWitness(&extWitness)
+	witness := new(stateless.Witness)
+	err = witness.FromExtWitness(&extWitness)
 	if err != nil {
 		fatal("failed to convert witness: %v", err)
 	}
@@ -152,23 +153,6 @@ func parseBlockNumber(s string) (*big.Int, error) {
 		return nil, fmt.Errorf("invalid decimal number")
 	}
 	return n, nil
-}
-
-// fromExtWitness converts the consensus ExtWitness into the internal Witness.
-// Duplicated from core/stateless (unexported method) and cmd/keeper/getpayload_example.go.
-func fromExtWitness(ext *stateless.ExtWitness) (*stateless.Witness, error) {
-	w := &stateless.Witness{}
-	w.Headers = ext.Headers
-
-	w.Codes = make(map[string]struct{}, len(ext.Codes))
-	for _, code := range ext.Codes {
-		w.Codes[string(code)] = struct{}{}
-	}
-	w.State = make(map[string]struct{}, len(ext.State))
-	for _, node := range ext.State {
-		w.State[string(node)] = struct{}{}
-	}
-	return w, nil
 }
 
 // jsonPayload is a JSON-friendly representation of Payload. It uses ExtWitness
