@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -419,11 +420,11 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 	ethcl := ethclient.NewClient(client)
 
 	// Subscribe to Transactions
-	ch1 := make(chan common.Hash)
+	ch1 := make(chan common.Hash, 128)
 	ec.SubscribePendingTransactions(context.Background(), ch1)
 
 	// Subscribe to Transactions
-	ch2 := make(chan *types.Transaction)
+	ch2 := make(chan *types.Transaction, 128)
 	ec.SubscribeFullPendingTransactions(context.Background(), ch2)
 
 	// Send a transaction
@@ -452,14 +453,23 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 		t.Fatal(err)
 	}
 	// Check that the transaction was sent over the channel
-	hash := <-ch1
-	if hash != signedTx.Hash() {
-		t.Fatalf("Invalid tx hash received, got %v, want %v", hash, signedTx.Hash())
+	timeout := 10 * time.Second
+	select {
+	case hash := <-ch1:
+		if hash != signedTx.Hash() {
+			t.Fatalf("Invalid tx hash received, got %v, want %v", hash, signedTx.Hash())
+		}
+	case <-time.After(timeout):
+		t.Fatal("Timed out waiting for pending tx hash notification")
 	}
 	// Check that the transaction was sent over the channel
-	tx = <-ch2
-	if tx.Hash() != signedTx.Hash() {
-		t.Fatalf("Invalid tx hash received, got %v, want %v", tx.Hash(), signedTx.Hash())
+	select {
+	case tx := <-ch2:
+		if tx.Hash() != signedTx.Hash() {
+			t.Fatalf("Invalid tx hash received, got %v, want %v", tx.Hash(), signedTx.Hash())
+		}
+	case <-time.After(timeout):
+		t.Fatal("Timed out waiting for pending full tx notification")
 	}
 }
 
