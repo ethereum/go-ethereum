@@ -228,6 +228,8 @@ type skeleton struct {
 	terminate  chan chan error  // Termination channel to abort sync
 	terminated chan struct{}    // Channel to signal that the syncer is dead
 
+	deferredHead *types.Header // Latest forced head received during sync restart
+
 	// Callback hooks used during testing
 	syncStarting func() // callback triggered after a sync cycle is inited but before started
 }
@@ -309,6 +311,10 @@ func (s *skeleton) startup() {
 					// way that requires resyncing it. Restart sync with the new
 					// head to force a cleanup.
 					head = newhead
+					if s.deferredHead != nil {
+						head = s.deferredHead
+						s.deferredHead = nil
+					}
 
 				case err == errSyncTrimmed:
 					// The skeleton chain is not linked with the local chain anymore,
@@ -441,6 +447,9 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			case <-done:
 				return
 			case event := <-s.headEvents:
+				if event.force {
+					s.deferredHead = event.header
+				}
 				event.errc <- errors.New("beacon syncer reorging")
 			}
 		}
