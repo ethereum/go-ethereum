@@ -119,7 +119,7 @@ func (bt *StemNode) Hash() common.Hash {
 		if v != nil {
 			h.Reset()
 			h.Write(v)
-			copy(data[i][:], h.Sum(nil))
+			h.Sum(data[i][:0])
 		}
 	}
 	h.Reset()
