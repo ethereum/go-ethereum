@@ -18,7 +18,6 @@ package bintrie
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"slices"
@@ -114,14 +113,17 @@ func (bt *StemNode) Hash() common.Hash {
 	}
 
 	var data [StemNodeWidth]common.Hash
+	h := newSha256()
+	defer returnSha256(h)
 	for i, v := range bt.Values {
 		if v != nil {
-			h := sha256.Sum256(v)
-			data[i] = common.BytesToHash(h[:])
+			h.Reset()
+			h.Write(v)
+			copy(data[i][:], h.Sum(nil))
 		}
 	}
+	h.Reset()
 
-	h := sha256.New()
 	for level := 1; level <= 8; level++ {
 		for i := range StemNodeWidth / (1 << level) {
 			h.Reset()

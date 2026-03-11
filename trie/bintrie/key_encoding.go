@@ -18,7 +18,6 @@ package bintrie
 
 import (
 	"bytes"
-	"crypto/sha256"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
@@ -51,7 +50,8 @@ func GetBinaryTreeKey(addr common.Address, key []byte) []byte {
 }
 
 func getBinaryTreeKey(addr common.Address, offset []byte, overflow bool) []byte {
-	hasher := sha256.New()
+	hasher := newSha256()
+	defer returnSha256(hasher)
 	hasher.Write(zeroHash[:12])
 	hasher.Write(addr[:])
 	var buf [32]byte
