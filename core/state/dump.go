@@ -68,7 +68,7 @@ type Dump struct {
 
 	// Next can be set to represent that this dump is only partial, and Next
 	// is where an iterator should be positioned in order to continue the dump.
-	Next []byte `json:"next,omitempty"` // nil if no more accounts
+	Next hexutil.Bytes `json:"next,omitempty"` // nil if no more accounts
 }
 
 // OnRoot implements DumpCollector interface
