@@ -165,6 +165,12 @@ func makeCallVariantGasCall(oldCalculatorStateful, oldCalculatorStateless gasFun
 			err        error
 		)
 
+		// Compute stateless gas (memory expansion, value transfer)
+		eip150BaseGas, err := oldCalculatorStateless(evm, contract, stack, mem, memorySize)
+		if err != nil {
+			return 0, err
+		}
+
 		// EIP-2929: cold/warm access list charge
 		if evm.chainRules.IsEIP2929 && !evm.StateDB.AddressInAccessList(addr) {
 			evm.StateDB.AddAddressToAccessList(addr)
@@ -177,12 +183,6 @@ func makeCallVariantGasCall(oldCalculatorStateful, oldCalculatorStateless gasFun
 				return 0, ErrOutOfGas
 			}
 			eip2929Gas = coldCost
-		}
-
-		// Compute stateless gas (memory expansion, value transfer)
-		eip150BaseGas, err := oldCalculatorStateless(evm, contract, stack, mem, memorySize)
-		if err != nil {
-			return 0, err
 		}
 
 		// Ensure the stateless portion is covered
