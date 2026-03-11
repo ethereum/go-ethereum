@@ -173,6 +173,10 @@ func (m *Miner) SetExtra(extra []byte) error {
 	return nil
 }
 
+func (miner *Miner) SetGasTip(tip *big.Int) error {
+	return miner.worker.setGasTip(tip)
+}
+
 // Pending returns the currently pending block and associated state.
 func (m *Miner) Pending() (*types.Block, *state.StateDB) {
 	return m.worker.pending()

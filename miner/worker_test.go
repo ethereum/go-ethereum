@@ -130,3 +130,45 @@ func TestWorkerCheckPreCommitXDPoSMismatch(t *testing.T) {
 		t.Fatalf("expected genesis parent, got number %v", parent.Number())
 	}
 }
+
+func TestWorkerSetGasTipValidation(t *testing.T) {
+	w := &worker{tip: big.NewInt(1)}
+	old := new(big.Int).Set(w.tip)
+
+	tests := []struct {
+		name string
+		tip  *big.Int
+	}{
+		{name: "nil", tip: nil},
+		{name: "negative", tip: big.NewInt(-1)},
+		{name: "too high", tip: new(big.Int).Add(maxGasTip, big.NewInt(1))},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := w.setGasTip(tc.tip); err == nil {
+				t.Fatalf("expected error for %s tip", tc.name)
+			}
+			if w.tip.Cmp(old) != 0 {
+				t.Fatalf("tip changed on invalid input: have %v want %v", w.tip, old)
+			}
+		})
+	}
+}
+
+func TestWorkerSetGasTipCopiesValue(t *testing.T) {
+	w := &worker{}
+	input := big.NewInt(2 * params.GWei)
+
+	if err := w.setGasTip(input); err != nil {
+		t.Fatalf("setGasTip failed: %v", err)
+	}
+	if w.tip == input {
+		t.Fatal("worker tip shares pointer with input")
+	}
+
+	input.Add(input, big.NewInt(1))
+	if w.tip.Cmp(big.NewInt(2*params.GWei)) != 0 {
+		t.Fatalf("worker tip mutated via input pointer: have %v", w.tip)
+	}
+}

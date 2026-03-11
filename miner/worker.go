@@ -70,6 +70,7 @@ var (
 	blockCommitTimer   = metrics.NewRegisteredTimer("miner/time/commit", nil)
 	blockFinalizeTimer = metrics.NewRegisteredTimer("miner/time/finalize", nil)
 	blockTotalTimer    = metrics.NewRegisteredTimer("miner/time/total", nil)
+	maxGasTip          = big.NewInt(1000 * params.GWei)
 )
 
 // Agent can register themself with the worker
@@ -117,8 +118,6 @@ type worker struct {
 	chainConfig *params.ChainConfig
 	engine      consensus.Engine
 
-	mu sync.Mutex
-
 	// Feeds
 	pendingLogsFeed event.Feed
 
@@ -142,8 +141,10 @@ type worker struct {
 	proc    core.Validator
 	chainDb ethdb.Database
 
+	mu       sync.Mutex
 	coinbase common.Address
 	extra    []byte
+	tip      *big.Int // Minimum tip needed for non-local transaction to include them
 
 	snapshotMu       sync.RWMutex // The lock used to protect the block snapshot and state snapshot
 	snapshotBlock    *types.Block
@@ -174,6 +175,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		mux:            mux,
 		coinbase:       config.Etherbase,
 		extra:          config.ExtraData,
+		tip:            config.GasPrice,
 		txsCh:          make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:    make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:    make(chan core.ChainSideEvent, chainSideChanSize),
@@ -212,6 +214,27 @@ func (w *worker) setExtra(extra []byte) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.extra = extra
+}
+
+// setGasTip sets the minimum miner tip needed to include a non-local transaction.
+func (w *worker) setGasTip(tip *big.Int) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if tip == nil {
+		return errors.New("reject nil gas tip")
+	}
+	if tip.Sign() < 0 {
+		return fmt.Errorf("reject negative gas tip: %v", tip)
+	}
+	if tip.Cmp(maxGasTip) > 0 {
+		return fmt.Errorf("reject too high gas tip: %v, maximum: %v", tip, maxGasTip)
+	}
+
+	// Copy the value to avoid external mutation through shared pointers.
+	w.tip = new(big.Int).Set(tip)
+	log.Info("Worker tip updated", "tip", w.tip)
+	return nil
 }
 
 // pending returns the pending state and corresponding block. The returned

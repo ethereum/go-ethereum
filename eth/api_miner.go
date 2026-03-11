@@ -94,12 +94,18 @@ func (api *MinerAPI) SetExtra(extra string) (bool, error) {
 
 // SetGasPrice sets the minimum accepted gas price for the miner.
 func (api *MinerAPI) SetGasPrice(gasPrice hexutil.Big) bool {
-	api.e.lock.Lock()
-	api.e.gasPrice = (*big.Int)(&gasPrice)
-	api.e.lock.Unlock()
+	tip := (*big.Int)(&gasPrice)
+	if err := api.e.txPool.SetGasTip(tip); err != nil {
+		return false
+	}
+	if err := api.e.Miner().SetGasTip(tip); err != nil {
+		return false
+	}
 
-	err := api.e.txPool.SetGasTip((*big.Int)(&gasPrice))
-	return err == nil
+	api.e.lock.Lock()
+	api.e.gasPrice = new(big.Int).Set(tip)
+	api.e.lock.Unlock()
+	return true
 }
 
 // SetEtherbase sets the etherbase of the miner
