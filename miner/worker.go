@@ -780,6 +780,11 @@ func (w *worker) commitNewWork() {
 		return
 	}
 
+	// Recalculate timestamp in case the parent changed while sleeping.
+	tstamp = time.Now().Unix()
+	if parent.Time() >= uint64(tstamp) {
+		tstamp = int64(parent.Time() + 1)
+	}
 	num := parent.Number()
 	header := &types.Header{
 		ParentHash: parent.Hash(),
