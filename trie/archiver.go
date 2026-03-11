@@ -46,6 +46,12 @@ type subtreeInfo struct {
 // Archiver handles the archival process of trie nodes.
 // It walks the state trie, identifies subtrees at height 3,
 // archives their leaf data, and replaces them with expiredNode markers.
+//
+// The archiver uses a streaming approach: it walks the trie using a
+// NodeIterator, probes each node's height via bounded raw DB reads,
+// and archives subtrees immediately when found. This keeps memory
+// usage proportional to the iterator stack depth + the current subtree
+// being processed, rather than loading the entire trie into memory.
 type Archiver struct {
 	db                 ethdb.Database
 	triedb             database.NodeDatabase
@@ -134,23 +140,69 @@ func (a *Archiver) ProcessState(root common.Hash) error {
 	return nil
 }
 
-// processTrie finds and archives all height-3 subtrees in the trie.
+// processTrie finds and archives all height-3 subtrees in the trie using
+// a streaming approach. It walks the trie with a NodeIterator, probes each
+// node's height via bounded raw DB reads, and archives subtrees immediately.
+//
+// Memory usage is O(iterator_stack_depth + current_subtree_size) instead of
+// O(entire_trie) as with the previous recursive approach.
 func (a *Archiver) processTrie(owner common.Hash, t *Trie) error {
 	if t.root == nil {
 		return nil
 	}
 
-	subtrees := a.findHeight3Subtrees(t.root, nil, owner)
-	log.Info("Found subtrees to archive", "owner", owner, "count", len(subtrees))
+	iter, err := t.NodeIterator(nil)
+	if err != nil {
+		return fmt.Errorf("failed to create node iterator: %w", err)
+	}
 
-	lastLog := time.Now()
-	for i, info := range subtrees {
+	var (
+		lastLog = time.Now()
+		found   uint64
+	)
+
+	for iter.Next(true) {
+		if iter.Leaf() {
+			continue
+		}
+
+		// Progress logging
 		if time.Since(lastLog) > 30*time.Second {
-			log.Info("Archiving subtrees", "owner", owner, "progress", fmt.Sprintf("%d/%d", i, len(subtrees)), "archived", a.subtreesArchived)
+			log.Info("Scanning trie for subtrees",
+				"owner", owner,
+				"path", common.Bytes2Hex(iter.Path()),
+				"found", found,
+				"archived", a.subtreesArchived)
 			lastLog = time.Now()
 		}
+
+		path := copyBytes(iter.Path())
+		hash := iter.Hash()
+		if hash == (common.Hash{}) {
+			// Embedded node (no hash), skip — it will be part of a
+			// parent subtree.
+			continue
+		}
+
+		// Probe subtree height via bounded raw DB reads.
+		// This does NOT load the trie into memory — it reads blobs from
+		// the DB, decodes them, computes height, and discards them.
+		height := a.probeHeight(owner, path, hash, 3)
+		if height != 3 {
+			// Too small to archive; the iterator will visit children.
+			// Too tall — descend into children to find height-3 subtrees.
+			continue
+		}
+
+		// height == 3: collect and archive this subtree immediately.
+		info := a.collectSubtree(owner, path, hash)
+		if info == nil {
+			continue
+		}
+		found++
+
 		if err := a.archiveSubtree(info); err != nil {
-			log.Warn("Failed to archive subtree", "path", common.Bytes2Hex(info.path), "err", err)
+			log.Warn("Failed to archive subtree", "path", common.Bytes2Hex(path), "err", err)
 			continue
 		}
 		a.subtreesArchived++
@@ -159,178 +211,275 @@ func (a *Archiver) processTrie(owner common.Hash, t *Trie) error {
 		if err := a.maybeCompact(); err != nil {
 			log.Warn("Compaction failed", "err", err)
 		}
+
+		// Skip children — they're now archived.
+		// We call Next(false) to move past the subtree without descending.
+		iter.Next(false)
 	}
+
+	if iter.Error() != nil {
+		return fmt.Errorf("iterator error: %w", iter.Error())
+	}
+
+	log.Info("Found subtrees to archive", "owner", owner, "count", found)
 	return nil
 }
 
-// findHeight3Subtrees recursively finds all subtrees with height == 3.
+// probeHeight computes the height of a node by reading from the raw DB.
+// It stops early once height exceeds maxHeight (returns maxHeight+1).
+// The decoded nodes are not retained — they are discarded after inspection.
+//
 // Height is measured from leaves: leaves=0, their parents=1, etc.
-func (a *Archiver) findHeight3Subtrees(n node, path []byte, owner common.Hash) []*subtreeInfo {
-	info, err := a.computeSubtreeInfo(n, path, owner)
-	if err != nil {
-		// computeSubtreeInfo failed (e.g. unresolvable hashNode within the
-		// subtree). We cannot archive this node as-is, but deeper children
-		// may still form valid height-3 subtrees. Recurse into them.
-		log.Debug("computeSubtreeInfo failed, trying children", "path", common.Bytes2Hex(path), "err", err)
-		return a.findSubtreesInChildren(n, path, owner)
+func (a *Archiver) probeHeight(owner common.Hash, path []byte, hash common.Hash, maxHeight int) int {
+	blob := a.readNodeBlob(owner, path)
+	if len(blob) == 0 {
+		return 0
 	}
-	if info == nil {
+
+	// Already expired — skip.
+	if blob[0] == expiredNodeMarker {
+		return -1
+	}
+
+	n, err := decodeNodeUnsafe(hash[:], blob)
+	if err != nil {
+		return 0
+	}
+
+	return a.nodeHeight(n, path, owner, maxHeight)
+}
+
+// nodeHeight computes the height of a decoded node, bounded by maxHeight.
+// Returns maxHeight+1 early if the subtree is taller than maxHeight.
+func (a *Archiver) nodeHeight(n node, path []byte, owner common.Hash, maxHeight int) int {
+	switch n := n.(type) {
+	case nil:
+		return 0
+
+	case valueNode:
+		return 0
+
+	case *shortNode:
+		childPath := append(append([]byte{}, path...), n.Key...)
+		switch child := n.Val.(type) {
+		case valueNode:
+			return 1 // shortNode → leaf
+		case hashNode:
+			if maxHeight <= 1 {
+				return maxHeight + 1
+			}
+			childHeight := a.probeHeight(owner, childPath, common.BytesToHash(child), maxHeight-1)
+			if childHeight < 0 {
+				return -1 // expired child
+			}
+			return childHeight + 1
+		default:
+			// Inline node
+			childHeight := a.nodeHeight(child, childPath, owner, maxHeight-1)
+			if childHeight < 0 {
+				return -1
+			}
+			return childHeight + 1
+		}
+
+	case *fullNode:
+		maxH := 0
+		for i, child := range n.Children[:16] {
+			if child == nil {
+				continue
+			}
+			childPath := append(append([]byte{}, path...), byte(i))
+			var childHeight int
+			switch c := child.(type) {
+			case valueNode:
+				childHeight = 0
+			case hashNode:
+				if maxH+1 > maxHeight {
+					return maxHeight + 1
+				}
+				childHeight = a.probeHeight(owner, childPath, common.BytesToHash(c), maxHeight-1)
+			default:
+				childHeight = a.nodeHeight(c, childPath, owner, maxHeight-1)
+			}
+			if childHeight < 0 {
+				continue // expired child, skip
+			}
+			h := childHeight + 1
+			if h > maxH {
+				maxH = h
+			}
+			if maxH > maxHeight {
+				return maxHeight + 1
+			}
+		}
+		return maxH
+
+	case hashNode:
+		return a.probeHeight(owner, path, common.BytesToHash(n), maxHeight)
+
+	case *expiredNode:
+		return -1
+	}
+	return 0
+}
+
+// collectSubtree reads a height-3 subtree from the raw DB and collects its
+// leaves and node paths for archival. The subtree is bounded (height ≤ 3),
+// so memory usage is limited.
+func (a *Archiver) collectSubtree(owner common.Hash, path []byte, hash common.Hash) *subtreeInfo {
+	blob := a.readNodeBlob(owner, path)
+	if len(blob) == 0 {
+		return nil
+	}
+	if blob[0] == expiredNodeMarker {
 		return nil
 	}
 
-	// If this subtree has height 3, it's a candidate for archival
-	if info.height == 3 {
-		// Capture the original subtree root hash for verification.
-		// The hash is available from the node that was passed in:
-		// - hashNode: the hash IS the node
-		// - fullNode/shortNode: loaded from DB, flags.hash is set
-		switch nn := n.(type) {
-		case hashNode:
-			info.rootHash = common.BytesToHash(nn)
-		case *fullNode:
-			if nn.flags.hash != nil {
-				info.rootHash = common.BytesToHash(nn.flags.hash)
-			}
-		case *shortNode:
-			if nn.flags.hash != nil {
-				info.rootHash = common.BytesToHash(nn.flags.hash)
-			}
-		}
-		return []*subtreeInfo{info}
+	n, err := decodeNodeUnsafe(hash[:], blob)
+	if err != nil {
+		log.Warn("Failed to decode node for collection", "path", common.Bytes2Hex(path), "err", err)
+		return nil
 	}
 
-	// If height > 3, recurse into children to find height-3 subtrees
-	if info.height > 3 {
-		return a.findSubtreesInChildren(n, path, owner)
+	info := &subtreeInfo{
+		path:     copyBytes(path),
+		owner:    owner,
+		rootHash: hash,
 	}
 
-	// Height < 3: no archivable subtrees here
-	return nil
+	leaves, nodePaths, height, err := a.collectNodeLeaves(n, path, nil, owner)
+	if err != nil {
+		log.Warn("Failed to collect subtree leaves", "path", common.Bytes2Hex(path), "err", err)
+		return nil
+	}
+
+	info.height = height
+	info.leaves = leaves
+	info.nodePaths = append([][]byte{copyBytes(path)}, nodePaths...)
+	return info
 }
 
-// findSubtreesInChildren recurses into the children of a node to find
-// height-3 subtrees. Used both by the normal height > 3 path and as a
-// fallback when computeSubtreeInfo fails for a node.
-func (a *Archiver) findSubtreesInChildren(n node, path []byte, owner common.Hash) []*subtreeInfo {
-	var results []*subtreeInfo
-	switch n := n.(type) {
-	case *fullNode:
-		for i, child := range n.Children[:16] {
-			if child != nil {
-				childPath := append(append([]byte{}, path...), byte(i))
-				results = append(results, a.findHeight3Subtrees(child, childPath, owner)...)
-			}
-		}
-	case *shortNode:
-		childPath := append(append([]byte{}, path...), n.Key...)
-		results = append(results, a.findHeight3Subtrees(n.Val, childPath, owner)...)
-	case hashNode:
-		// Resolve and recurse
-		resolved, err := a.resolveNode(n, path, owner)
-		if err == nil {
-			results = append(results, a.findHeight3Subtrees(resolved, path, owner)...)
-		}
-	}
-	return results
-}
-
-// computeSubtreeInfo computes height and collects leaves for a subtree.
-// Returns (nil, nil) if the node is nil, already expired, or has no leaves.
-// Returns (nil, error) if any constituent node could not be resolved — the
-// caller MUST NOT archive a subtree when an error is returned, as the leaf
-// set would be incomplete.
-func (a *Archiver) computeSubtreeInfo(n node, path []byte, owner common.Hash) (*subtreeInfo, error) {
+// collectNodeLeaves recursively collects all leaves and node paths in a
+// bounded subtree. relPath is the path relative to the subtree root.
+// Returns (leaves, nodePaths, height, error).
+func (a *Archiver) collectNodeLeaves(n node, absPath, relPath []byte, owner common.Hash) ([]*archive.Record, [][]byte, int, error) {
 	switch n := n.(type) {
 	case nil:
-		return nil, nil
+		return nil, nil, 0, nil
 
 	case valueNode:
-		// Leaf: height 0
-		return &subtreeInfo{
-			path:   copyBytes(path),
-			owner:  owner,
-			height: 0,
-			leaves: []*archive.Record{{
-				Path:  nil, // Empty relative path for leaf at root
-				Value: []byte(n),
-			}},
-			nodePaths: [][]byte{copyBytes(path)},
-		}, nil
+		return []*archive.Record{{
+			Path:  copyBytes(relPath),
+			Value: []byte(n),
+		}}, nil, 0, nil
 
 	case *shortNode:
-		childPath := append(append([]byte{}, path...), n.Key...)
-		childInfo, err := a.computeSubtreeInfo(n.Val, childPath, owner)
+		childAbsPath := append(append([]byte{}, absPath...), n.Key...)
+		var childNode node
+		switch c := n.Val.(type) {
+		case hashNode:
+			resolved, err := a.resolveRawNode(owner, childAbsPath, common.BytesToHash(c))
+			if err != nil {
+				return nil, nil, 0, fmt.Errorf("resolve shortNode child at %s: %w", common.Bytes2Hex(childAbsPath), err)
+			}
+			childNode = resolved
+		default:
+			childNode = c
+		}
+
+		// Pass nil relPath to child — we prepend the key ourselves
+		leaves, nodePaths, height, err := a.collectNodeLeaves(childNode, childAbsPath, nil, owner)
 		if err != nil {
-			return nil, fmt.Errorf("shortNode key=%x: %w", n.Key, err)
-		}
-		if childInfo == nil {
-			return nil, nil
+			return nil, nil, 0, err
 		}
 
-		// Adjust relative paths in leaves to include this node's key
-		for _, leaf := range childInfo.leaves {
-			leaf.Path = append(append([]byte{}, n.Key...), leaf.Path...)
+		// Prepend [relPath + extension key] to leaf relative paths
+		prefix := append(append([]byte{}, relPath...), n.Key...)
+		for _, leaf := range leaves {
+			leaf.Path = append(append([]byte{}, prefix...), leaf.Path...)
 		}
 
-		return &subtreeInfo{
-			path:      copyBytes(path),
-			owner:     owner,
-			height:    childInfo.height + 1,
-			leaves:    childInfo.leaves,
-			nodePaths: append([][]byte{copyBytes(path)}, childInfo.nodePaths...),
-		}, nil
+		return leaves, append([][]byte{copyBytes(absPath)}, nodePaths...), height + 1, nil
 
 	case *fullNode:
 		var (
-			maxHeight = 0
 			allLeaves []*archive.Record
-			allPaths  = [][]byte{copyBytes(path)}
+			allPaths  [][]byte
+			maxHeight int
 		)
 		for i, child := range n.Children[:16] {
-			if child != nil {
-				childPath := append(append([]byte{}, path...), byte(i))
-				childInfo, err := a.computeSubtreeInfo(child, childPath, owner)
+			if child == nil {
+				continue
+			}
+			childAbsPath := append(append([]byte{}, absPath...), byte(i))
+
+			var childNode node
+			switch c := child.(type) {
+			case hashNode:
+				resolved, err := a.resolveRawNode(owner, childAbsPath, common.BytesToHash(c))
 				if err != nil {
-					return nil, fmt.Errorf("fullNode child[%x]: %w", i, err)
+					return nil, nil, 0, fmt.Errorf("resolve fullNode child[%x] at %s: %w", i, common.Bytes2Hex(childAbsPath), err)
 				}
-				if childInfo != nil {
-					if childInfo.height+1 > maxHeight {
-						maxHeight = childInfo.height + 1
-					}
-					// Adjust relative paths to include the branch index
-					for _, leaf := range childInfo.leaves {
-						leaf.Path = append([]byte{byte(i)}, leaf.Path...)
-					}
-					allLeaves = append(allLeaves, childInfo.leaves...)
-					allPaths = append(allPaths, childInfo.nodePaths...)
-				}
+				childNode = resolved
+			default:
+				childNode = c
+			}
+
+			// Pass nil relPath to child — we prepend the index ourselves
+			leaves, nodePaths, height, err := a.collectNodeLeaves(childNode, childAbsPath, nil, owner)
+			if err != nil {
+				return nil, nil, 0, err
+			}
+
+			// Prepend [relPath + branch index] to leaf relative paths
+			prefix := append(append([]byte{}, relPath...), byte(i))
+			for _, leaf := range leaves {
+				leaf.Path = append(append([]byte{}, prefix...), leaf.Path...)
+			}
+
+			allLeaves = append(allLeaves, leaves...)
+			allPaths = append(allPaths, nodePaths...)
+			h := height + 1
+			if h > maxHeight {
+				maxHeight = h
 			}
 		}
-
-		if len(allLeaves) == 0 {
-			return nil, nil
-		}
-
-		return &subtreeInfo{
-			path:      copyBytes(path),
-			owner:     owner,
-			height:    maxHeight,
-			leaves:    allLeaves,
-			nodePaths: allPaths,
-		}, nil
+		return allLeaves, allPaths, maxHeight, nil
 
 	case hashNode:
-		resolved, err := a.resolveNode(n, path, owner)
+		resolved, err := a.resolveRawNode(owner, absPath, common.BytesToHash(n))
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve hashNode at path %s: %w", common.Bytes2Hex(path), err)
+			return nil, nil, 0, err
 		}
-		return a.computeSubtreeInfo(resolved, path, owner)
+		return a.collectNodeLeaves(resolved, absPath, relPath, owner)
 
 	case *expiredNode:
-		// Already archived, skip
-		return nil, nil
+		return nil, nil, 0, nil
 	}
-	return nil, nil
+	return nil, nil, 0, nil
+}
+
+// readNodeBlob reads a trie node blob directly from the raw key-value
+// database, bypassing pathdb layers.
+func (a *Archiver) readNodeBlob(owner common.Hash, path []byte) []byte {
+	if owner == (common.Hash{}) {
+		return rawdb.ReadAccountTrieNode(a.db, path)
+	}
+	return rawdb.ReadStorageTrieNode(a.db, owner, path)
+}
+
+// resolveRawNode reads and decodes a trie node directly from the raw DB.
+// Unlike resolveNode, this does NOT use the trie database (no caching,
+// no diff layers). The decoded node is ephemeral and will be GC'd after use.
+func (a *Archiver) resolveRawNode(owner common.Hash, path []byte, hash common.Hash) (node, error) {
+	blob := a.readNodeBlob(owner, path)
+	if len(blob) == 0 {
+		return nil, fmt.Errorf("node not found: owner=%s path=%s", owner, common.Bytes2Hex(path))
+	}
+	if blob[0] == expiredNodeMarker {
+		return &expiredNode{}, nil
+	}
+	return decodeNodeUnsafe(hash[:], blob)
 }
 
 // archiveSubtree writes leaves to archive and replaces subtree with expiredNode.
@@ -422,19 +571,6 @@ func (a *Archiver) maybeCompact() error {
 		a.lastCompaction = a.subtreesArchived
 	}
 	return nil
-}
-
-// resolveNode resolves a hashNode to its actual node content.
-func (a *Archiver) resolveNode(hash hashNode, path []byte, owner common.Hash) (node, error) {
-	reader, err := a.triedb.NodeReader(a.stateRoot)
-	if err != nil {
-		return nil, err
-	}
-	blob, err := reader.Node(owner, path, common.BytesToHash(hash))
-	if err != nil {
-		return nil, err
-	}
-	return decodeNodeUnsafe(hash, blob)
 }
 
 // encodeExpiredNodeBlob creates the raw bytes for an expiredNode.

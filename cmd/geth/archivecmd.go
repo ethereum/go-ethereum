@@ -197,7 +197,6 @@ func archiveGenerate(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	// Open database in write mode (readOnly=false) unless dry-run
 	dryRun := ctx.Bool(archiveDryRunFlag.Name)
 	chaindb := utils.MakeChainDatabase(ctx, stack, dryRun)
 	defer chaindb.Close()
@@ -208,27 +207,39 @@ func archiveGenerate(ctx *cli.Context) error {
 		return fmt.Errorf("archive generation requires path-based state scheme, got: %s", scheme)
 	}
 
-	// 2. Determine the persistent disk state root.
-	//
-	// The archiver reads and writes directly to the raw key-value database,
-	// bypassing pathdb's in-memory diff layers. This avoids the inconsistency
-	// where diff layers shadow expiredNode markers written to disk.
-	//
-	// The disk root is computed by hashing the account trie root node stored
-	// in the raw database. This root corresponds to the last state that was
-	// fully persisted (i.e., PersistentStateID), which matches the canonical
-	// chain head.
+	// 2. Flush diff layers to disk via pathdb. This ensures the raw DB
+	// contains the complete, up-to-date state trie and that state history
+	// entries are properly written to the freezer.
+	trieDB := utils.MakeTrieDatabase(ctx, stack, chaindb, false, dryRun, false)
+	head, hasDiff := trieDB.DiffHead()
+	if hasDiff {
+		log.Info("Flushing diff layers to disk", "head", head)
+		if err := trieDB.Commit(head, true); err != nil {
+			trieDB.Close()
+			return fmt.Errorf("failed to flush diff layers: %w", err)
+		}
+		log.Info("Diff layers flushed successfully")
+	} else {
+		log.Info("No diff layers to flush, disk state is current", "root", head)
+	}
+	// Close triedb — we work directly with raw DB for archival.
+	// We'll re-open it at the end to write a fresh journal.
+	trieDB.Close()
+
+	// 3. Determine the disk state root (now up-to-date after flush).
 	rootBlob := rawdb.ReadAccountTrieNode(chaindb, nil)
 	if len(rootBlob) == 0 {
 		return errors.New("state trie not found in database")
 	}
 	root := crypto.Keccak256Hash(rootBlob)
-	log.Info("Using persistent disk state root", "root", root)
+	log.Info("Using disk state root", "root", root)
 
 	// Create a raw DB node reader that bypasses pathdb layers
 	nodeDB := &rawDBNodeDatabase{db: chaindb, root: root}
 
-	// 3. Open archive writer (unless dry-run)
+	// 4. Open archive writer (unless dry-run).
+	// The archive file is placed at <datadir>/geth/nodearchive by default,
+	// matching the path used by ArchivedNodeResolver when reading back.
 	var writer *archive.ArchiveWriter
 	archivePath := ctx.String(archiveOutputFlag.Name)
 	if archivePath == "" {
@@ -247,7 +258,7 @@ func archiveGenerate(ctx *cli.Context) error {
 		log.Info("Dry run mode - no changes will be made")
 	}
 
-	// 4. Create and run archiver
+	// 5. Create and run archiver
 	archiver := trie.NewArchiver(
 		chaindb,
 		nodeDB,
@@ -261,7 +272,7 @@ func archiveGenerate(ctx *cli.Context) error {
 		return fmt.Errorf("archive generation failed: %w", err)
 	}
 
-	// 5. Get stats and optionally run final compaction
+	// 6. Get stats and optionally run final compaction
 	subtrees, leaves, bytesDeleted := archiver.Stats()
 
 	if !dryRun && subtrees > 0 {
@@ -271,28 +282,22 @@ func archiveGenerate(ctx *cli.Context) error {
 		}
 	}
 
+	// 7. Re-journal the pathdb state with the current disk root.
+	// After archiving, some trie nodes have been replaced with expired
+	// markers. We re-open pathdb and write a fresh journal (disk layer
+	// only, since all diff layers were flushed in step 2) so that geth
+	// can restart cleanly.
 	if !dryRun {
-		// Delete the pathdb journal. The archiver modified the raw DB
-		// underneath the diff layers, so the journal's buffered state is
-		// inconsistent. Deleting forces geth to restart with a bare disk
-		// layer and rewind the chain head to the disk state.
-		if err := chaindb.Delete([]byte("TrieJournal")); err != nil {
-			log.Warn("Failed to delete pathdb journal key", "err", err)
+		log.Info("Re-journaling pathdb state")
+		freshTrieDB := utils.MakeTrieDatabase(ctx, stack, chaindb, false, false, false)
+		freshRoot := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(chaindb, nil))
+		if err := freshTrieDB.Journal(freshRoot); err != nil {
+			log.Warn("Failed to re-journal pathdb state", "err", err)
 		}
-		log.Info("Deleted pathdb journal to force clean restart")
-
-		// Delete journal file(s) - check both legacy and current locations
-		for _, dir := range []string{"triedb", ""} {
-			for _, name := range []string{"merkle.journal", "verkle.journal"} {
-				journalFile := filepath.Join(stack.ResolvePath(dir), name)
-				if err := os.Remove(journalFile); err == nil {
-					log.Info("Deleted journal file", "path", journalFile)
-				}
-			}
-		}
+		freshTrieDB.Close()
 	}
 
-	// 6. Print summary
+	// 8. Print summary
 	var archiveSize uint64
 	if writer != nil {
 		archiveSize = writer.Offset()

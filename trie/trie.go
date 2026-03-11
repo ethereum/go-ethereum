@@ -503,7 +503,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		return true, nn, nil
 
 	case *expiredNode:
-		log.Info("Resolving expired node in insert()", "owner", t.owner, "offset", n.offset, "size", n.size)
+		log.Debug("Resolving expired node in insert()", "owner", t.owner, "offset", n.offset, "size", n.size)
 		rn, err := resolveExpiredNodeData(n)
 		if err != nil {
 			return false, nil, err
@@ -676,7 +676,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		return true, nn, nil
 
 	case *expiredNode:
-		log.Info("Resolving expired node in delete()", "owner", t.owner, "offset", n.offset, "size", n.size)
+		log.Debug("Resolving expired node in delete()", "owner", t.owner, "offset", n.offset, "size", n.size)
 		rn, err := resolveExpiredNodeData(n)
 		if err != nil {
 			return false, nil, err
