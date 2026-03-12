@@ -17,7 +17,6 @@
 package bintrie
 
 import (
-	"crypto/sha256"
 	"errors"
 	"fmt"
 
@@ -125,7 +124,8 @@ func (bt *InternalNode) Hash() common.Hash {
 		return bt.hash
 	}
 
-	h := sha256.New()
+	h := newSha256()
+	defer returnSha256(h)
 	if bt.left != nil {
 		h.Write(bt.left.Hash().Bytes())
 	} else {
