@@ -719,6 +719,7 @@ func (i *indexIniter) recover() bool {
 // state history.
 type historyIndexer struct {
 	initer  *indexIniter
+	pruner  *indexPruner
 	typ     historyType
 	disk    ethdb.KeyValueStore
 	freezer ethdb.AncientStore
@@ -774,6 +775,7 @@ func newHistoryIndexer(disk ethdb.Database, freezer ethdb.AncientStore, lastHist
 	checkVersion(disk, typ)
 	return &historyIndexer{
 		initer:  newIndexIniter(disk, freezer, typ, lastHistoryID, noWait),
+		pruner:  newIndexPruner(disk, typ),
 		typ:     typ,
 		disk:    disk,
 		freezer: freezer,
@@ -782,6 +784,7 @@ func newHistoryIndexer(disk ethdb.Database, freezer ethdb.AncientStore, lastHist
 
 func (i *historyIndexer) close() {
 	i.initer.close()
+	i.pruner.close()
 }
 
 // inited returns a flag indicating whether the existing state histories
@@ -823,6 +826,12 @@ func (i *historyIndexer) shorten(historyID uint64) error {
 	case i.initer.interrupt <- signal:
 		return <-signal.result
 	}
+}
+
+// prune signals the pruner that the history tail has advanced to the given ID,
+// so that stale index blocks referencing pruned histories can be removed.
+func (i *historyIndexer) prune(newTail uint64) {
+	i.pruner.prune(newTail)
 }
 
 // progress returns the indexing progress made so far. It provides the number
