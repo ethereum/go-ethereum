@@ -92,6 +92,8 @@ func run(args []string, stdin io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("invalid hex data: %w", err)
 	}
+	// Normalize to 0x-prefixed form for consistent output.
+	txHex = "0x" + hex.EncodeToString(rawTx)
 
 	// Decode the transaction so we can display a summary.
 	var tx types.Transaction
