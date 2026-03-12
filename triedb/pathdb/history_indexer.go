@@ -367,9 +367,9 @@ type indexIniter struct {
 	wg sync.WaitGroup
 }
 
-func newIndexIniter(disk ethdb.Database, freezer ethdb.AncientStore, typ historyType, lastID uint64) *indexIniter {
+func newIndexIniter(disk ethdb.Database, freezer ethdb.AncientStore, typ historyType, lastID uint64, noWait bool) *indexIniter {
 	initer := &indexIniter{
-		state:     newIniterState(disk),
+		state:     newIniterState(disk, noWait),
 		disk:      disk,
 		freezer:   freezer,
 		interrupt: make(chan *interruptSignal),
@@ -441,14 +441,17 @@ func (i *indexIniter) run(recover bool) {
 
 		// checkDone reports whether indexing has completed for all histories.
 		checkDone = func() bool {
-			return i.indexed.Load() == i.last.Load()
+			metadata := loadIndexMetadata(i.disk, i.typ)
+			return metadata != nil && metadata.Last == i.last.Load()
 		}
 		// canExit reports whether the initial indexing phase has completed.
 		canExit = func() bool {
 			return !i.state.is(stateSyncing) && checkDone()
 		}
-		heartBeat = time.NewTicker(15 * time.Second)
+		heartBeat = time.NewTimer(0)
 	)
+	defer heartBeat.Stop()
+
 	if recover {
 		if aborted := i.recover(); aborted {
 			return
@@ -507,6 +510,8 @@ func (i *indexIniter) run(recover bool) {
 			}
 
 		case <-heartBeat.C:
+			heartBeat.Reset(time.Second * 15)
+
 			// Short circuit if the indexer is still busy
 			if done != nil {
 				continue
@@ -765,10 +770,10 @@ func checkVersion(disk ethdb.KeyValueStore, typ historyType) {
 
 // newHistoryIndexer constructs the history indexer and launches the background
 // initer to complete the indexing of any remaining state histories.
-func newHistoryIndexer(disk ethdb.Database, freezer ethdb.AncientStore, lastHistoryID uint64, typ historyType) *historyIndexer {
+func newHistoryIndexer(disk ethdb.Database, freezer ethdb.AncientStore, lastHistoryID uint64, typ historyType, noWait bool) *historyIndexer {
 	checkVersion(disk, typ)
 	return &historyIndexer{
-		initer:  newIndexIniter(disk, freezer, typ, lastHistoryID),
+		initer:  newIndexIniter(disk, freezer, typ, lastHistoryID, noWait),
 		typ:     typ,
 		disk:    disk,
 		freezer: freezer,

@@ -67,12 +67,12 @@ type initerState struct {
 	term      chan struct{}
 }
 
-func newIniterState(disk ethdb.Database) *initerState {
+func newIniterState(disk ethdb.Database, noWait bool) *initerState {
 	s := &initerState{
 		disk: disk,
 		term: make(chan struct{}),
 	}
-	go s.update()
+	go s.update(noWait)
 	return s
 }
 
@@ -94,7 +94,7 @@ func (s *initerState) set(state state) {
 	s.state = state
 }
 
-func (s *initerState) update() {
+func (s *initerState) update(noWait bool) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
@@ -102,6 +102,9 @@ func (s *initerState) update() {
 	if headBlock != nil && time.Since(time.Unix(int64(headBlock.Time), 0)) < syncStateTimeWindow {
 		s.set(stateSynced)
 		log.Info("Marked indexing initer as synced")
+	} else if noWait {
+		s.set(stateSynced)
+		log.Info("Marked indexing initer as synced forcibly")
 	} else {
 		s.set(stateSyncing)
 	}
