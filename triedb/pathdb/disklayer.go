@@ -408,6 +408,11 @@ func (dl *diskLayer) writeHistory(typ historyType, diff *diffLayer) (bool, error
 	if err != nil {
 		return false, err
 	}
+	// Notify the index pruner about the new tail so that stale index
+	// blocks referencing the pruned histories can be cleaned up.
+	if indexer != nil && pruned > 0 {
+		indexer.prune(newFirst)
+	}
 	log.Debug("Pruned history", "type", typ, "items", pruned, "tailid", newFirst)
 	return false, nil
 }
