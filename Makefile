@@ -14,12 +14,6 @@ geth:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
-#? pushtx: Build pushtx.
-pushtx:
-	$(GORUN) build/ci.go install ./cmd/pushtx
-	@echo "Done building."
-	@echo "Run \"$(GOBIN)/pushtx\" to launch pushtx."
-
 #? evm: Build evm.
 evm:
 	$(GORUN) build/ci.go install ./cmd/evm
