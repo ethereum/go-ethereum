@@ -85,7 +85,7 @@ func run(args []string, stdin io.Reader) error {
 		txHex = strings.TrimSpace(string(data))
 	}
 	if txHex == "" {
-		return fmt.Errorf("no transaction data provided\nUsage: pushtx [--rpc URL] <tx-hex>")
+		return fmt.Errorf("no transaction data provided (see --help for usage)")
 	}
 
 	rawTx, err := hex.DecodeString(strings.TrimPrefix(txHex, "0x"))

@@ -98,10 +98,20 @@ func fakeRPC(t *testing.T, wantErr bool) *httptest.Server {
 		}
 		// Decode the raw tx to return its hash as the result.
 		var hexData string
-		json.Unmarshal(req.Params[0], &hexData)
-		rawBytes, _ := hexutil.Decode(hexData)
+		if err := json.Unmarshal(req.Params[0], &hexData); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		rawBytes, err := hexutil.Decode(hexData)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		var tx types.Transaction
-		tx.UnmarshalBinary(rawBytes)
+		if err := tx.UnmarshalBinary(rawBytes); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      req.ID,
