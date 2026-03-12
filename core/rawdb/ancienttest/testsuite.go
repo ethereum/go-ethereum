@@ -260,6 +260,46 @@ func basicWrite(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	if err != nil {
 		t.Fatalf("Failed to write ancient data %v", err)
 	}
+
+	// Write should work after truncating from tail but over the head
+	db.TruncateTail(200)
+	head, err := db.Ancients()
+	if err != nil {
+		t.Fatalf("Failed to retrieve head ancients %v", err)
+	}
+	tail, err := db.Tail()
+	if err != nil {
+		t.Fatalf("Failed to retrieve tail ancients %v", err)
+	}
+	if head != 200 || tail != 200 {
+		t.Fatalf("Ancient head and tail are not expected")
+	}
+	_, err = db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		offset := uint64(200)
+		for i := 0; i < 100; i++ {
+			if err := op.AppendRaw("a", offset+uint64(i), dataA[i]); err != nil {
+				return err
+			}
+			if err := op.AppendRaw("b", offset+uint64(i), dataB[i]); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Failed to write ancient data %v", err)
+	}
+	head, err = db.Ancients()
+	if err != nil {
+		t.Fatalf("Failed to retrieve head ancients %v", err)
+	}
+	tail, err = db.Tail()
+	if err != nil {
+		t.Fatalf("Failed to retrieve tail ancients %v", err)
+	}
+	if head != 300 || tail != 200 {
+		t.Fatalf("Ancient head and tail are not expected")
+	}
 }
 
 func nonMutable(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
