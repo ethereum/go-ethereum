@@ -105,6 +105,9 @@ func run(args []string, stdin io.Reader) error {
 	// Send to the RPC endpoint.
 	hash, err := sendRawTransaction(rpcURL, rawTx)
 	if err != nil {
+		// Still print the raw hex so the user can submit it elsewhere
+		// (e.g. etherscan.io/pushTx).
+		fmt.Println("Raw tx:", txHex)
 		return fmt.Errorf("sending transaction: %w", err)
 	}
 	fmt.Println("Transaction submitted successfully")
@@ -112,7 +115,7 @@ func run(args []string, stdin io.Reader) error {
 
 	// Print the raw hex transaction as the last output for easy
 	// copy-paste into block explorers like etherscan.io/pushTx.
-	fmt.Println("Raw tx: 0x" + hex.EncodeToString(rawTx))
+	fmt.Println("Raw tx:", txHex)
 	return nil
 }
 
@@ -152,6 +155,7 @@ func printTxSummary(tx *types.Transaction) {
 	fmt.Println("  Nonce:    ", tx.Nonce())
 	fmt.Println("  Value:    ", formatWei(tx.Value()))
 	fmt.Println("  Gas limit:", tx.Gas())
+	fmt.Println("  Gas price:", formatGwei(tx.GasPrice()))
 	fmt.Println("  Chain ID: ", tx.ChainId())
 }
 
@@ -163,6 +167,15 @@ func formatWei(wei *big.Int) string {
 	}
 	ether := new(big.Float).Quo(new(big.Float).SetInt(wei), new(big.Float).SetFloat64(1e18))
 	return fmt.Sprintf("%s wei (%s ETH)", wei.String(), ether.Text('f', 18))
+}
+
+// formatGwei converts a wei gas price to a human-readable string in Gwei.
+func formatGwei(wei *big.Int) string {
+	if wei == nil || wei.Sign() == 0 {
+		return "0 wei (0 Gwei)"
+	}
+	gwei := new(big.Float).Quo(new(big.Float).SetInt(wei), new(big.Float).SetFloat64(1e9))
+	return fmt.Sprintf("%s wei (%s Gwei)", wei.String(), gwei.Text('f', 9))
 }
 
 func printUsage() {

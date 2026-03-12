@@ -49,7 +49,7 @@ func signedTestTxWithKey(t *testing.T, key *ecdsa.PrivateKey) (*types.Transactio
 
 	tx := types.NewTx(&types.LegacyTx{
 		Nonce:    6,
-		GasPrice: big.NewInt(0),
+		GasPrice: big.NewInt(1_000_000_000), // 1 Gwei – real networks reject gas price 0
 		Gas:      21055,
 		To:       addrPtr(common.HexToAddress("0x78b5290269740033b05bd8d71c97331295eb5918")),
 		Value:    new(big.Int).Mul(big.NewInt(10), big.NewInt(1e18)), // 10 ETH
@@ -149,12 +149,33 @@ func TestRunRPCError(t *testing.T) {
 	defer srv.Close()
 
 	_, txHex := signedTestTx(t)
-	err := run([]string{"--rpc", srv.URL, txHex}, strings.NewReader(""))
-	if err == nil {
+
+	// Capture stdout – raw hex should still be printed on RPC failure.
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+
+	runErr := run([]string{"--rpc", srv.URL, txHex}, strings.NewReader(""))
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if runErr == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "already known") {
-		t.Fatalf("unexpected error message: %v", err)
+	if !strings.Contains(runErr.Error(), "already known") {
+		t.Fatalf("unexpected error message: %v", runErr)
+	}
+
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "Raw tx: 0x") {
+		t.Fatal("expected raw hex in output even on RPC error")
 	}
 }
 
@@ -229,6 +250,24 @@ func TestFormatWei(t *testing.T) {
 		got := formatWei(tt.wei)
 		if got != tt.want {
 			t.Errorf("formatWei(%v) = %q, want %q", tt.wei, got, tt.want)
+		}
+	}
+}
+
+func TestFormatGwei(t *testing.T) {
+	tests := []struct {
+		wei  *big.Int
+		want string
+	}{
+		{nil, "0 wei (0 Gwei)"},
+		{big.NewInt(0), "0 wei (0 Gwei)"},
+		{big.NewInt(1_000_000_000), "1000000000 wei (1.000000000 Gwei)"},
+		{big.NewInt(20_000_000_000), "20000000000 wei (20.000000000 Gwei)"},
+	}
+	for _, tt := range tests {
+		got := formatGwei(tt.wei)
+		if got != tt.want {
+			t.Errorf("formatGwei(%v) = %q, want %q", tt.wei, got, tt.want)
 		}
 	}
 }
