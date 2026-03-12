@@ -3,6 +3,7 @@
 package ethconfig
 
 import (
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -68,7 +69,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		TxSyncDefaultTimeout    time.Duration `toml:",omitempty"`
 		TxSyncMaxTimeout        time.Duration `toml:",omitempty"`
 		RangeLimit              uint64        `toml:",omitempty"`
-		BALExecutionMode        int
+		BALExecutionMode        bal.BALExecutionMode
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -340,7 +341,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		c.RangeLimit = *dec.RangeLimit
 	}
 	if dec.BALExecutionMode != nil {
-		c.BALExecutionMode = *dec.BALExecutionMode
+		c.BALExecutionMode = bal.BALExecutionMode(*dec.BALExecutionMode)
 	}
 	return nil
 }

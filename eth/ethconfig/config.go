@@ -19,6 +19,7 @@ package ethconfig
 
 import (
 	"errors"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -210,7 +211,7 @@ type Config struct {
 	// RangeLimit restricts the maximum range (end - start) for range queries.
 	RangeLimit uint64 `toml:",omitempty"`
 
-	BALExecutionMode int
+	BALExecutionMode bal.BALExecutionMode
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.
