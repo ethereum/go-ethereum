@@ -85,6 +85,7 @@ var (
 		executablePath("abigen"),
 		executablePath("evm"),
 		executablePath("geth"),
+		executablePath("pushtx"),
 		executablePath("rlpdump"),
 		executablePath("clef"),
 	}
@@ -138,6 +139,10 @@ var (
 		{
 			BinaryName:  "geth",
 			Description: "Ethereum CLI client.",
+		},
+		{
+			BinaryName:  "pushtx",
+			Description: "CLI tool for submitting raw signed Ethereum transactions to a JSON-RPC endpoint.",
 		},
 		{
 			BinaryName:  "rlpdump",

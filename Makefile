@@ -2,7 +2,7 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth evm all test lint fmt clean devtools help
+.PHONY: geth pushtx evm all test lint fmt clean devtools help
 
 GOBIN = ./build/bin
 GO ?= latest
@@ -13,6 +13,12 @@ geth:
 	$(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
+
+#? pushtx: Build pushtx.
+pushtx:
+	$(GORUN) build/ci.go install ./cmd/pushtx
+	@echo "Done building."
+	@echo "Run \"$(GOBIN)/pushtx\" to launch pushtx."
 
 #? evm: Build evm.
 evm:
