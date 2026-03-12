@@ -970,7 +970,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		result["requestsHash"] = head.RequestsHash
 	}
 	if head.SlotNumber != nil {
-		result["slotNumber"] = head.SlotNumber
+		result["slotNumber"] = hexutil.Uint64(*head.SlotNumber)
 	}
 	return result
 }
