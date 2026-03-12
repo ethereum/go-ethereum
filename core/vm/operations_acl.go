@@ -311,6 +311,10 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 		if err != nil {
 			return GasCosts{}, err
 		}
+		if contract.Gas.Underflow(intrinsicCost) {
+			return GasCosts{}, ErrOutOfGas
+		}
+
 		// Check if code is a delegation and if so, charge for resolution.
 		if target, ok := types.ParseDelegation(evm.StateDB.GetCode(addr)); ok {
 			if evm.StateDB.AddressInAccessList(target) {
