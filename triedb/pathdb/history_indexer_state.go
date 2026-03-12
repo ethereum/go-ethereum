@@ -69,8 +69,9 @@ type initerState struct {
 
 func newIniterState(disk ethdb.Database, noWait bool) *initerState {
 	s := &initerState{
-		disk: disk,
-		term: make(chan struct{}),
+		state: stateSyncing,
+		disk:  disk,
+		term:  make(chan struct{}),
 	}
 	go s.update(noWait)
 	return s
