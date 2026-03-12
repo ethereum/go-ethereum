@@ -272,6 +272,20 @@ func TestFormatGwei(t *testing.T) {
 	}
 }
 
+func TestTxCost(t *testing.T) {
+	tx := types.NewTx(&types.LegacyTx{
+		GasPrice: big.NewInt(1_000_000_000), // 1 Gwei
+		Gas:      21055,
+		Value:    new(big.Int).Mul(big.NewInt(10), big.NewInt(1e18)), // 10 ETH
+	})
+	got := txCost(tx)
+	// Expected: 10 ETH + 21055 * 1 Gwei = 10000000000000000000 + 21055000000000 = 10000021055000000000
+	want, _ := new(big.Int).SetString("10000021055000000000", 10)
+	if got.Cmp(want) != 0 {
+		t.Errorf("txCost = %s, want %s", got, want)
+	}
+}
+
 func TestRunEqualsSyntax(t *testing.T) {
 	srv := fakeRPC(t, false)
 	defer srv.Close()

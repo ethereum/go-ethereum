@@ -156,7 +156,15 @@ func printTxSummary(tx *types.Transaction) {
 	fmt.Println("  Value:    ", formatWei(tx.Value()))
 	fmt.Println("  Gas limit:", tx.Gas())
 	fmt.Println("  Gas price:", formatGwei(tx.GasPrice()))
+	fmt.Println("  Tx cost:  ", formatWei(txCost(tx)))
 	fmt.Println("  Chain ID: ", tx.ChainId())
+}
+
+// txCost returns value + gas * gasPrice, i.e. the total ETH the sender
+// must hold for the transaction to be accepted by the network.
+func txCost(tx *types.Transaction) *big.Int {
+	gasCost := new(big.Int).Mul(new(big.Int).SetUint64(tx.Gas()), tx.GasPrice())
+	return new(big.Int).Add(tx.Value(), gasCost)
 }
 
 // formatWei converts a wei amount to a human-readable string showing
