@@ -1,6 +1,7 @@
 package engine_v2
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1115,8 +1116,6 @@ func (x *XDPoS_v2) saveRewardToFile(blockHash common.Hash, blockNumber uint64) {
 
 	log.Debug("[saveRewardToFile] Saved rewards", "filename", filename)
 	log.Debug("[saveRewardToFile] Saved rewards", "rewards", string(data))
-
-	return
 }
 
 func deepCloneJSON(original map[string]interface{}) (map[string]interface{}, error) {
@@ -1126,10 +1125,15 @@ func deepCloneJSON(original map[string]interface{}) (map[string]interface{}, err
 	}
 
 	var cloned map[string]interface{}
-	err = json.Unmarshal(data, &cloned)
-	if err != nil {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	if err = dec.Decode(&cloned); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal: %w", err)
 	}
 
 	return cloned, nil
+}
+
+func (x *XDPoS_v2) Config(r uint64) *params.V2Config {
+	return x.config.V2.Config(r)
 }
