@@ -74,6 +74,8 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 	var gas vm.GasCosts
 	if isContractCreation && rules.IsHomestead {
 		if rules.IsAmsterdam {
+			// EIP-8037: account creation is state gas; base tx + CREATE overhead is regular gas.
+			gas.RegularGas = params.TxGas + params.CreateGasAmsterdam
 			gas.StateGas = params.AccountCreationSize * costPerStateByte
 		} else {
 			gas.RegularGas = params.TxGasContractCreation
@@ -258,8 +260,6 @@ type stateTransition struct {
 	initialGas   vm.GasCosts
 	state        vm.StateDB
 	evm          *vm.EVM
-
-	stateGasRefund uint64 // EIP-8037: state gas refund for auth on existing accounts
 }
 
 // newStateTransition initialises and returns a new state transition object.
@@ -470,7 +470,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	var execGasStart vm.GasCosts
 	if rules.IsAmsterdam {
 		// EIP-8037: total intrinsic must fit within the transaction gas limit.
 		if msg.GasLimit < gas.Sum() {
@@ -480,7 +479,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		executionGas := msg.GasLimit - gas.Sum()
 		regularGas := min(params.MaxTxGas-gas.RegularGas, executionGas)
 		st.gasRemaining = vm.GasCosts{RegularGas: regularGas, StateGas: executionGas - regularGas}
-		execGasStart = st.gasRemaining
 	} else {
 		if st.gasRemaining.Underflow(gas) {
 			return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining.RegularGas, gas.RegularGas)
@@ -536,8 +534,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 
 	var (
-		ret   []byte
-		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
+		ret        []byte
+		vmerr      error // vm errors do not effect consensus and are therefore not assigned to err
+		authRefund uint64
 	)
 	if contractCreation {
 		ret, _, st.gasRemaining, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
@@ -549,7 +548,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		if msg.SetCodeAuthorizations != nil {
 			for _, auth := range msg.SetCodeAuthorizations {
 				// Note errors are ignored, we simply skip invalid authorizations here.
-				st.applyAuthorization(rules, &auth)
+				refund, _ := st.applyAuthorization(rules, &auth)
+				authRefund += refund
 			}
 		}
 
@@ -570,9 +570,10 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// gas allowance required to complete execution.
 	peakGasUsed := st.gasUsed()
 
-	var txRegular, txState uint64
+	// EIP-8037: Capture pre-refund remaining for 2D gas accounting.
+	var preRefundRemaining uint64
 	if rules.IsAmsterdam {
-		txRegular, txState = st.blockGasUsed(gas, execGasStart)
+		preRefundRemaining = st.gasRemaining.Sum()
 	}
 
 	// Compute refund counter, capped to a refund quotient.
@@ -581,7 +582,11 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// After EIP-7623: Data-heavy transactions pay the floor gas.
 		if st.gasUsed() < floorDataGas {
 			prev := st.gasRemaining.RegularGas
-			st.gasRemaining.RegularGas = st.initialGas.RegularGas - floorDataGas
+			// When the calldata floor exceeds actual gas used, any
+			// remaining state gas must also be consumed
+			targetRemaining := (st.initialGas.RegularGas + st.initialGas.StateGas) - floorDataGas
+			st.gasRemaining.StateGas = 0
+			st.gasRemaining.RegularGas = targetRemaining
 			if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
 				t.OnGasChange(prev, st.gasRemaining.RegularGas, tracing.GasChangeTxDataFloor)
 			}
@@ -589,20 +594,24 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		if peakGasUsed < floorDataGas {
 			peakGasUsed = floorDataGas
 		}
-		if rules.IsAmsterdam && txRegular < floorDataGas {
-			txRegular = floorDataGas
-		}
 	}
-	// Return gas to the user
-	st.returnGas()
+
+	returned := st.returnGas()
 
 	if rules.IsAmsterdam {
-		err = st.gp.ReturnGasAmsterdam(msg.GasLimit, txRegular, txState)
+		// EIP-8037: 2D gas accounting for Amsterdam.
+		// tx_state = adjusted_intrinsic_state + exec_state_used (spec: set_delegation adjusts intrinsic)
+		// tx_regular = total_dimensional_used - tx_state
+		txState := (gas.StateGas - authRefund) + st.gasRemaining.StateGasCharged
+		txRegular := (msg.GasLimit - preRefundRemaining) - txState - st.evm.CollisionBurned
+		txRegular = max(txRegular, floorDataGas)
+		if err := st.gp.ReturnGasAmsterdam(returned, txRegular, txState, st.gasUsed()); err != nil {
+			return nil, err
+		}
 	} else {
-		err = st.gp.ReturnGas(st.gasRemaining.RegularGas, st.gasUsed())
-	}
-	if err != nil {
-		return nil, err
+		if err := st.gp.ReturnGas(returned, st.gasUsed()); err != nil {
+			return nil, err
+		}
 	}
 	effectiveTip := msg.GasPrice
 	if rules.IsLondon {
@@ -615,8 +624,14 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// are 0. This avoids a negative effectiveTip being applied to
 		// the coinbase when simulating calls.
 	} else {
-		fee := new(uint256.Int).SetUint64(st.gasUsed())
+		// For Amsterdam, the fee is based on what the user pays (receipt gas used).
+		feeGas := st.gasUsed()
+		fee := new(uint256.Int).SetUint64(feeGas)
 		fee.Mul(fee, effectiveTipU256)
+
+		// always read the coinbase account to include it in the BAL (TODO check this is actually part of the spec)
+		st.state.GetBalance(st.evm.Context.Coinbase)
+
 		st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
 
 		// add the coinbase to the witness iff the fee is greater than 0
@@ -625,9 +640,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 	}
 	usedGas := st.gasUsed()
-	if rules.IsAmsterdam {
-		usedGas = max(txRegular, txState)
-	}
 	return &ExecutionResult{
 		UsedGas:    usedGas,
 		MaxUsedGas: peakGasUsed,
@@ -668,34 +680,44 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 }
 
 // applyAuthorization applies an EIP-7702 code delegation to the state.
-func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization) error {
+func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization) (uint64, error) {
 	authority, err := st.validateAuthorization(auth)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	// If the account already exists in state, refund the new account cost
 	// charged in the intrinsic calculation.
+	var refund uint64
 	if st.state.Exist(authority) {
 		if rules.IsAmsterdam {
-			st.stateGasRefund += params.AccountCreationSize * st.evm.Context.CostPerGasByte
+			// EIP-8037: refund account creation state gas to the reservoir
+			refund = params.AccountCreationSize * st.evm.Context.CostPerGasByte
+			st.gasRemaining.StateGas += refund
 		} else {
 			st.state.AddRefund(params.CallNewAccountGas - params.TxAuthTupleGas)
 		}
 	}
 
+	prevDelegation, isDelegated := types.ParseDelegation(st.state.GetCode(authority))
+	_ = prevDelegation // silence unused variable warning
+
 	// Update nonce and account code.
 	st.state.SetNonce(authority, auth.Nonce+1, tracing.NonceChangeAuthorization)
 	if auth.Address == (common.Address{}) {
 		// Delegation to zero address means clear.
-		st.state.SetCode(authority, nil, tracing.CodeChangeAuthorizationClear)
-		return nil
+		if isDelegated {
+			st.state.SetCode(authority, nil, tracing.CodeChangeAuthorizationClear)
+		}
+		return refund, nil
 	}
 
-	// Otherwise install delegation to auth.Address.
-	st.state.SetCode(authority, types.AddressToDelegation(auth.Address), tracing.CodeChangeAuthorization)
+	// install delegation to auth.Address if the delegation changed
+	if !isDelegated || prevDelegation != auth.Address {
+		st.state.SetCode(authority, types.AddressToDelegation(auth.Address), tracing.CodeChangeAuthorization)
+	}
 
-	return nil
+	return refund, nil
 }
 
 // calcRefund computes refund counter, capped to a refund quotient.
@@ -719,33 +741,23 @@ func (st *stateTransition) calcRefund() uint64 {
 
 // returnGas returns ETH for remaining gas,
 // exchanged at the original rate.
-func (st *stateTransition) returnGas() {
-	remaining := uint256.NewInt(st.gasRemaining.RegularGas)
+func (st *stateTransition) returnGas() uint64 {
+	gas := st.gasRemaining.RegularGas + st.gasRemaining.StateGas
+	remaining := uint256.NewInt(gas)
 	remaining.Mul(remaining, uint256.MustFromBig(st.msg.GasPrice))
 	st.state.AddBalance(st.msg.From, remaining, tracing.BalanceIncreaseGasReturn)
 
-	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && st.gasRemaining.RegularGas > 0 {
-		st.evm.Config.Tracer.OnGasChange(st.gasRemaining.RegularGas, 0, tracing.GasChangeTxLeftOverReturned)
+	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && gas > 0 {
+		st.evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeTxLeftOverReturned)
 	}
+	return gas
 }
 
 // gasUsed returns the amount of gas used up by the state transition.
+// For Amsterdam (2D gas), this includes both regular and state gas consumed.
 func (st *stateTransition) gasUsed() uint64 {
 	return (st.initialGas.RegularGas + st.initialGas.StateGas) -
 		(st.gasRemaining.RegularGas + st.gasRemaining.StateGas)
-}
-
-// blockGasUsed returns the per-transaction (regular, state) gas used for
-// block-level 2D accounting (EIP-8037).
-func (st *stateTransition) blockGasUsed(intrinsicGas, execGasStart vm.GasCosts) (uint64, uint64) {
-	totalExecUsed := (execGasStart.RegularGas + execGasStart.StateGas) -
-		(st.gasRemaining.RegularGas + st.gasRemaining.StateGas)
-	execStateUsed := st.gasRemaining.TotalStateGasCharged
-	execRegularUsed := totalExecUsed - execStateUsed
-
-	txRegular := intrinsicGas.RegularGas + execRegularUsed
-	txState := intrinsicGas.StateGas + execStateUsed - st.stateGasRefund
-	return txRegular, txState
 }
 
 // blobGasUsed returns the amount of blob gas used by the message.

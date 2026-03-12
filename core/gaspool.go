@@ -73,13 +73,19 @@ func (gp *GasPool) ReturnGas(returned uint64, gasUsed uint64) error {
 	return nil
 }
 
-// ReturnGasAmsterdam returns unused gas to the pool using two-dimensional
-// gas accounting (EIP-8037).
-func (gp *GasPool) ReturnGasAmsterdam(txGasLimit, txRegular, txState uint64) error {
-	txBlockGas := max(txRegular, txState)
+// ReturnGasAmsterdam handles 2D gas accounting for Amsterdam (EIP-8037).
+// It undoes the SubGas deduction fully and accumulates per-dimension block totals.
+func (gp *GasPool) ReturnGasAmsterdam(returned, txRegular, txState, receiptGasUsed uint64) error {
+	if gp.remaining > math.MaxUint64-returned {
+		return fmt.Errorf("%w: remaining: %d, returned: %d", ErrGasLimitOverflow, gp.remaining, returned)
+	}
+	// Undo SubGas deduction fully (Amsterdam uses cumulative tracking)
+	gp.remaining += returned
+	// Accumulate 2D block dimensions
 	gp.cumulativeRegular += txRegular
 	gp.cumulativeState += txState
-	return gp.ReturnGas(txGasLimit-txBlockGas, txBlockGas)
+	gp.cumulativeUsed += receiptGasUsed
+	return nil
 }
 
 // Gas returns the amount of gas remaining in the pool.
@@ -87,12 +93,10 @@ func (gp *GasPool) Gas() uint64 {
 	return gp.remaining
 }
 
-// CumulativeUsed returns the amount of cumulative consumed gas (refunded included).
-// For Amsterdam blocks with 2D gas accounting, returns max(sum_regular, sum_state).
+// CumulativeUsed returns the cumulative gas consumed for receipt tracking.
+// For Amsterdam blocks, this is the sum of per-tx tx_gas_used_after_refund
+// (what users pay), not the 2D block-level metric.
 func (gp *GasPool) CumulativeUsed() uint64 {
-	if gp.cumulativeRegular > 0 || gp.cumulativeState > 0 {
-		return max(gp.cumulativeRegular, gp.cumulativeState)
-	}
 	return gp.cumulativeUsed
 }
 
@@ -126,6 +130,12 @@ func (gp *GasPool) Set(other *GasPool) {
 	gp.cumulativeUsed = other.cumulativeUsed
 	gp.cumulativeRegular = other.cumulativeRegular
 	gp.cumulativeState = other.cumulativeState
+}
+
+// AmsterdamDimensions returns the per-dimension cumulative gas values
+// for 2D gas accounting (EIP-8037).
+func (gp *GasPool) AmsterdamDimensions() (regular, state uint64) {
+	return gp.cumulativeRegular, gp.cumulativeState
 }
 
 func (gp *GasPool) String() string {

@@ -88,6 +88,7 @@ const (
 	LogTopicGas           uint64 = 375   // Multiplied by the * of the LOG*, per LOG transaction. e.g. LOG0 incurs 0 * c_txLogTopicGas, LOG4 incurs 4 * c_txLogTopicGas.
 	CreateGas             uint64 = 32000 // Once per CREATE operation & contract-creation transaction.
 	Create2Gas            uint64 = 32000 // Once per CREATE2 operation
+	CreateGasAmsterdam    uint64 = 9000  // Regular gas portion of CREATE in Amsterdam (EIP-8037); state gas is charged separately.
 	CreateNGasEip4762     uint64 = 1000  // Once per CREATEn operations post-verkle
 	SelfdestructRefundGas uint64 = 24000 // Refunded following a selfdestruct operation.
 	MemoryGas             uint64 = 3     // Times the address of the (highest referenced byte in memory + 1). NOTE: referencing happens on read, write and in instructions such as RETURN and CALL.
@@ -191,6 +192,9 @@ const (
 	AccountCreationSize       = 112
 	StorageCreationSize       = 32
 	AuthorizationCreationSize = 23
+
+	// TODO: Add when EIP-7928 is implemented
+	// GasBlockAccessListItem = 2000 // EIP-7928: gas cost per BAL item for gas limit check
 )
 
 // Bls12381G1MultiExpDiscountTable is the gas discount table for BLS12-381 G1 multi exponentiation operation

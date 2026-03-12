@@ -341,13 +341,8 @@ func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	if overflow {
 		return GasCosts{}, ErrGasUintOverflow
 	}
-<<<<<<< HEAD
 	if err := CheckMaxInitCodeSize(&evm.chainRules, size); err != nil {
-		return 0, err
-=======
-	if size > params.MaxInitCodeSize {
-		return GasCosts{}, fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
->>>>>>> 15b3ac5932 (core: implement EIP-8037: state creation gas cost increase)
+		return GasCosts{}, err
 	}
 	// Since size <= the protocol-defined maximum initcode size limit, these multiplication cannot overflow
 	moreGas := (params.InitCodeWordGas + params.Keccak256WordGas) * ((size + 31) / 32)
@@ -515,10 +510,10 @@ func gasCreateEip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	if overflow {
 		return GasCosts{}, ErrGasUintOverflow
 	}
-	if size > params.MaxInitCodeSize {
-		return GasCosts{}, fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
+	if err := CheckMaxInitCodeSize(&evm.chainRules, size); err != nil {
+		return GasCosts{}, err
 	}
-	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
+	// Since size <= the protocol-defined maximum initcode size limit, these multiplication cannot overflow
 	words := (size + 31) / 32
 	stateGas := params.AccountCreationSize * evm.Context.CostPerGasByte * words
 	wordGas := params.InitCodeWordGas * words
@@ -534,10 +529,10 @@ func gasCreate2Eip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	if overflow {
 		return GasCosts{}, ErrGasUintOverflow
 	}
-	if size > params.MaxInitCodeSize {
-		return GasCosts{}, fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
+	if err := CheckMaxInitCodeSize(&evm.chainRules, size); err != nil {
+		return GasCosts{}, err
 	}
-	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
+	// Since size <= the protocol-defined maximum initcode size limit, these multiplication cannot overflow
 	words := (size + 31) / 32
 	stateGas := params.AccountCreationSize * evm.Context.CostPerGasByte * words
 	wordGas := (params.InitCodeWordGas + params.Keccak256WordGas) * words

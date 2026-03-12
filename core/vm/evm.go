@@ -129,6 +129,14 @@ type EVM struct {
 
 	readOnly   bool   // Whether to throw on stateful modifications
 	returnData []byte // Last CALL's return data for subsequent reuse
+
+	// CollisionBurned accumulates regular gas burned in CREATE/CREATE2 address
+	// collisions. The spec burns this gas (deducts from gas_left) but does NOT
+	// count it in regular_gas_used, so it must be excluded from txRegular in
+	// 2D block gas accounting.
+	// TODO (MariusVanDerWijden) this seems to be the best way to conform to the current
+	// spec, I wonder if it makes sense to change the spec.
+	CollisionBurned uint64
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
@@ -217,6 +225,7 @@ func (evm *EVM) SetTxContext(txCtx TxContext) {
 		txCtx.AccessEvents = state.NewAccessEvents()
 	}
 	evm.TxContext = txCtx
+	evm.CollisionBurned = 0
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and
@@ -257,8 +266,6 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		return nil, gas, ErrInsufficientBalance
 	}
 	snapshot := evm.StateDB.Snapshot()
-	savedTotalStateGas := gas.TotalStateGasCharged
-	savedStateGas := gas.StateGas
 
 	p, isPrecompile := evm.precompile(addr)
 	if !evm.StateDB.Exist(addr) {
@@ -290,6 +297,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	if !syscall {
 		evm.Context.Transfer(evm.StateDB, caller, addr, value)
 	}
+
 	if isPrecompile {
 		var stateDB StateDB
 		if evm.chainRules.IsAmsterdam {
@@ -315,20 +323,13 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != ErrExecutionReverted {
+		isRevert := err == ErrExecutionReverted
+		if !isRevert {
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
 			}
 			gas.RegularGas = 0
 		}
-		// State changes are rolled back on any error, so state gas charges
-		// from the reverted execution should not count toward block accounting.
-		// Also restore the state gas reservoir since state creation was undone.
-		gas.TotalStateGasCharged = savedTotalStateGas
-		gas.StateGas = savedStateGas
-		// TODO: consider clearing up unused snapshots:
-		//} else {
-		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
 	return ret, gas, err
 }
@@ -360,8 +361,6 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 		return nil, gas, ErrInsufficientBalance
 	}
 	var snapshot = evm.StateDB.Snapshot()
-	savedTotalStateGas := gas.TotalStateGasCharged
-	savedStateGas := gas.StateGas
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -380,14 +379,13 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != ErrExecutionReverted {
+		isRevert := err == ErrExecutionReverted
+		if !isRevert {
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
 			}
 			gas.RegularGas = 0
 		}
-		gas.TotalStateGasCharged = savedTotalStateGas
-		gas.StateGas = savedStateGas
 	}
 	return ret, gas, err
 }
@@ -411,8 +409,6 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 		return nil, gas, ErrDepth
 	}
 	var snapshot = evm.StateDB.Snapshot()
-	savedTotalStateGas := gas.TotalStateGasCharged
-	savedStateGas := gas.StateGas
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -432,14 +428,13 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != ErrExecutionReverted {
+		isRevert := err == ErrExecutionReverted
+		if !isRevert {
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
 			}
 			gas.RegularGas = 0
 		}
-		gas.TotalStateGasCharged = savedTotalStateGas
-		gas.StateGas = savedStateGas
 	}
 	return ret, gas, err
 }
@@ -466,8 +461,6 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	// then certain tests start failing; stRevertTest/RevertPrecompiledTouchExactOOG.json.
 	// We could change this, but for now it's left for legacy reasons
 	var snapshot = evm.StateDB.Snapshot()
-	savedTotalStateGas := gas.TotalStateGasCharged
-	savedStateGas := gas.StateGas
 
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
@@ -495,15 +488,13 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != ErrExecutionReverted {
+		isRevert := err == ErrExecutionReverted
+		if !isRevert {
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
 			}
-
 			gas.RegularGas = 0
 		}
-		gas.TotalStateGasCharged = savedTotalStateGas
-		gas.StateGas = savedStateGas
 	}
 	return ret, gas, err
 }
@@ -566,8 +557,6 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasCosts, value *
 	// It might be possible the contract code is deployed to a pre-existent
 	// account with non-zero balance.
 	snapshot := evm.StateDB.Snapshot()
-	savedTotalStateGas := gas.TotalStateGasCharged
-	savedStateGas := gas.StateGas
 
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
@@ -609,11 +598,6 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasCosts, value *
 		if err != ErrExecutionReverted {
 			contract.UseGas(contract.Gas, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
 		}
-		// State changes are rolled back, so state gas charges from the
-		// reverted execution should not count toward block accounting.
-		// Also restore the state gas reservoir since state creation was undone.
-		contract.Gas.TotalStateGasCharged = savedTotalStateGas
-		contract.Gas.StateGas = savedStateGas
 	}
 	return ret, address, contract.Gas, err
 }

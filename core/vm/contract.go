@@ -138,14 +138,22 @@ func (c *Contract) UseGas(gas GasCosts, logger *tracing.Hooks, reason tracing.Ga
 }
 
 // RefundGas refunds gas to the contract
-func (c *Contract) RefundGas(gas GasCosts, logger *tracing.Hooks, reason tracing.GasChangeReason) {
-	if gas.Max() == 0 {
+func (c *Contract) RefundGas(err error, gas GasCosts, logger *tracing.Hooks, reason tracing.GasChangeReason) {
+	// If the preceding call errored, return the state gas
+	// to the parent call
+	if err != nil {
+		gas.StateGas += gas.StateGasCharged
+		gas.StateGasCharged = 0
+	}
+	if gas.RegularGas == 0 && gas.StateGas == 0 && gas.StateGasCharged == 0 {
 		return
 	}
 	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
 		logger.OnGasChange(c.Gas.RegularGas, c.Gas.RegularGas+gas.RegularGas, reason)
 	}
-	c.Gas.Add(gas)
+	c.Gas.RegularGas += gas.RegularGas
+	c.Gas.StateGas = gas.StateGas
+	c.Gas.StateGasCharged += gas.StateGasCharged
 }
 
 // Address returns the contracts address
