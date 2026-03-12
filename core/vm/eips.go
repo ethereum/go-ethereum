@@ -602,6 +602,7 @@ func enable7843(jt *JumpTable) {
 func enable8037(jt *JumpTable) {
 	jt[CREATE].dynamicGas = gasCreateEip8037
 	jt[CREATE2].dynamicGas = gasCreate2Eip8037
+	// TODO (MariusVanDerWijden) needs a significant refactor once we move to the stateful/stateless split
 	jt[CALL].dynamicGas = makeCallVariantGasCallEIP2929(gasCall8037, 1)
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestruct8037
 	jt[SSTORE].dynamicGas = gasSStore8037
