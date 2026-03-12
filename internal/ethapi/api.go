@@ -969,6 +969,9 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	if head.RequestsHash != nil {
 		result["requestsHash"] = head.RequestsHash
 	}
+	if head.BlockAccessListHash != nil {
+		result["blockAccessListHash"] = head.BlockAccessListHash
+	}
 	if head.SlotNumber != nil {
 		result["slotNumber"] = head.SlotNumber
 	}
