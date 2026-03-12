@@ -19,9 +19,11 @@ package main
 import (
 	"crypto/ecdsa"
 	"encoding/json"
+	"io"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -239,5 +241,46 @@ func TestRunEqualsSyntax(t *testing.T) {
 	err := run([]string{"--rpc=" + srv.URL, txHex}, strings.NewReader(""))
 	if err != nil {
 		t.Fatal("unexpected error:", err)
+	}
+}
+
+func TestRunOutputEndsWithRawHex(t *testing.T) {
+	srv := fakeRPC(t, false)
+	defer srv.Close()
+
+	_, txHex := signedTestTx(t)
+
+	// Capture stdout to verify "Raw tx:" appears in output.
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+
+	runErr := run([]string{"--rpc", srv.URL, txHex}, strings.NewReader(""))
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if runErr != nil {
+		t.Fatal("unexpected error:", runErr)
+	}
+
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	lastLine := lines[len(lines)-1]
+
+	// The last line must be the raw hex transaction.
+	if !strings.HasPrefix(lastLine, "Raw tx: 0x") {
+		t.Fatalf("last output line = %q, want prefix \"Raw tx: 0x\"", lastLine)
+	}
+	// Verify the hex payload round-trips back to the input.
+	rawHex := strings.TrimPrefix(lastLine, "Raw tx: ")
+	if rawHex != txHex {
+		t.Fatalf("raw hex mismatch:\n got  %s\n want %s", rawHex, txHex)
 	}
 }

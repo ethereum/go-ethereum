@@ -107,6 +107,10 @@ func run(args []string, stdin io.Reader) error {
 	}
 	fmt.Println("Transaction submitted successfully")
 	fmt.Println("Hash:", hash.Hex())
+
+	// Print the raw hex transaction as the last output for easy
+	// copy-paste into block explorers like etherscan.io/pushTx.
+	fmt.Println("Raw tx: 0x" + hex.EncodeToString(rawTx))
 	return nil
 }
 
