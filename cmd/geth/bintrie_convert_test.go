@@ -49,7 +49,6 @@ func TestBintrieConvert(t *testing.T) {
 		Preimages: true,
 		PathDB:    pathdb.Defaults,
 	})
-	defer srcTriedb.Close()
 
 	gspec := &core.Genesis{
 		Config:  params.TestChainConfig,
@@ -74,6 +73,7 @@ func TestBintrieConvert(t *testing.T) {
 	genesisBlock := gspec.MustCommit(chaindb, srcTriedb)
 	root := genesisBlock.Root()
 	t.Logf("Genesis root: %x", root)
+	srcTriedb.Close()
 
 	srcTriedb2 := triedb.NewDatabase(chaindb, &triedb.Config{
 		Preimages: true,
