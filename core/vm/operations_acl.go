@@ -18,7 +18,6 @@ package vm
 
 import (
 	"errors"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -312,13 +311,6 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 		if err != nil {
 			return GasCosts{}, err
 		}
-		// Terminate the gas measurement if the leftover gas is not sufficient,
-		// it can effectively prevent accessing the states in the following steps.
-		// It's an essential safeguard before any stateful check.
-		if contract.Gas.RegularGas < intrinsicCost.RegularGas {
-			return GasCosts{}, ErrOutOfGas
-		}
-
 		// Check if code is a delegation and if so, charge for resolution.
 		if target, ok := types.ParseDelegation(evm.StateDB.GetCode(addr)); ok {
 			if evm.StateDB.AddressInAccessList(target) {
@@ -331,6 +323,22 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 				return GasCosts{}, ErrOutOfGas
 			}
 		}
+
+		// EIP-8037: Charge state gas for new account creation BEFORE the 63/64
+		// child gas allocation. State gas that spills from an empty reservoir to
+		// regular gas must reduce the gas available for callGasTemp, otherwise
+		// the Underflow check in UseGas will fail when the spillover exceeds the
+		// tiny 1/64 remainder after child gas allocation.
+		var stateGasCharged uint64
+		if evm.chainRules.IsAmsterdam && intrinsicCost.StateGas > 0 {
+			stateGasCharged = intrinsicCost.StateGas
+			stateGasCost := GasCosts{StateGas: stateGasCharged}
+			if contract.Gas.Underflow(stateGasCost) {
+				return GasCosts{}, ErrOutOfGas
+			}
+			contract.Gas.Sub(stateGasCost)
+		}
+
 		// Calculate the gas budget for the nested call. The costs defined by
 		// EIP-2929 and EIP-7702 have already been applied.
 		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas.RegularGas, intrinsicCost.RegularGas, stack.Back(0))
@@ -358,6 +366,13 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 		if totalCost, overflow = math.SafeAdd(totalCost, evm.callGasTemp); overflow {
 			return GasCosts{}, ErrGasUintOverflow
 		}
-		return GasCosts{RegularGas: totalCost}, nil
+		// If state gas was already charged directly (Amsterdam), don't include
+		// it in the returned cost — it would be double-charged by the
+		// interpreter's UseGas/Sub which increments TotalStateGasCharged again.
+		returnedStateGas := intrinsicCost.StateGas
+		if stateGasCharged > 0 {
+			returnedStateGas = 0
+		}
+		return GasCosts{RegularGas: totalCost, StateGas: returnedStateGas}, nil
 	}
 }
