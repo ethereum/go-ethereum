@@ -107,7 +107,6 @@ func newPersistentDB(path string) (*DB, error) {
 	currentVer := make([]byte, binary.MaxVarintLen64)
 	currentVer = currentVer[:binary.PutVarint(currentVer, int64(dbVersion))]
 
-
 	blob, closer, err := db.Get([]byte(dbVersionKey))
 	switch err {
 	case pebble.ErrNotFound:
@@ -212,7 +211,6 @@ func (db *DB) fetchInt64(key []byte) int64 {
 
 // storeInt64 stores an integer in the given key.
 func (db *DB) storeInt64(key []byte, n int64) error {
-
 	blob := make([]byte, binary.MaxVarintLen64)
 	blob = blob[:binary.PutVarint(blob, n)]
 
