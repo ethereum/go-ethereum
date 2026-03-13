@@ -148,23 +148,20 @@ func (p *indexPruner) process(tail uint64) error {
 		}
 		pruned += pn
 		scanned += sn
+		statePruneHistoryIndexTimer.UpdateSince(start)
 
 	case typeTrienodeHistory:
 		pruned, scanned, err = p.prunePrefix(rawdb.TrienodeHistoryMetadataPrefix, typeTrienode, tail)
 		if err != nil {
 			return err
 		}
+		trienodePruneHistoryIndexTimer.UpdateSince(start)
 
 	default:
 		panic("unknown history type")
 	}
 	if pruned > 0 {
-		p.log.Debug("Pruned stale index blocks", "pruned", pruned, "scanned", scanned, "tail", tail, "elapsed", common.PrettyDuration(time.Since(start)))
-	}
-	if p.typ == typeStateHistory {
-		statePruneHistoryIndexTimer.UpdateSince(start)
-	} else {
-		trienodePruneHistoryIndexTimer.UpdateSince(start)
+		p.log.Info("Pruned stale index blocks", "pruned", pruned, "scanned", scanned, "tail", tail, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
 	return nil
 }
