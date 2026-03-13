@@ -1,0 +1,27 @@
+version: '3.8'
+services:
+  node1:
+    build: .
+    container_name: geth-node1
+    volumes:
+      - ./docker:/app/docker
+    entrypoint: ["/bin/sh"]
+    command: ["/app/docker/node1.sh"]
+    ports:
+      - "8545:8545"
+      - "30303:30303"
+    environment:
+      - NODE_NAME=node1
+
+  node2:
+    build: .
+    container_name: geth-node2
+    volumes:
+      - ./docker:/app/docker
+    entrypoint: ["/bin/sh"]
+    command: ["/app/docker/node2.sh"]
+    ports:
+      - "8546:8546"
+      - "30304:30304"
+    environment:
+      - NODE_NAME=node2
