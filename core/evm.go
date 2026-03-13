@@ -87,7 +87,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 func NewEVMTxContext(msg *Message) vm.TxContext {
 	ctx := vm.TxContext{
 		Origin:     msg.From,
-		GasPrice:   uint256.MustFromBig(msg.GasPrice),
+		GasPrice:   msg.GasPrice,
 		BlobHashes: msg.BlobHashes,
 	}
 	return ctx

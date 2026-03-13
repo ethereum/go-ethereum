@@ -204,6 +204,10 @@ func (b *Big) ToInt() *big.Int {
 	return (*big.Int)(b)
 }
 
+func (b *Big) ToUint256() (*uint256.Int, bool) {
+	return uint256.FromBig((*big.Int)(b))
+}
+
 // String returns the hex encoding of b.
 func (b *Big) String() string {
 	return EncodeBig(b.ToInt())
