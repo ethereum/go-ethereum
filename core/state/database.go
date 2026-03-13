@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/transitiontrie"
@@ -34,6 +35,51 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
+var (
+	transitionStartedKey               = common.Hash{}
+	conversionProgressAddressKey       = common.BytesToHash([]byte{1})
+	conversionProgressSlotKey          = common.BytesToHash([]byte{2})
+	conversionProgressStorageProcessed = common.BytesToHash([]byte{3})
+	transitionEndedKey                 = common.BytesToHash([]byte{4})
+	baseRootKey                        = common.BytesToHash([]byte{5})
+)
+
+func isTransitionActive(reader StateReader) bool {
+	val, err := reader.Storage(params.BinaryTransitionRegistryAddress, transitionStartedKey)
+	if err != nil {
+		return false
+	}
+	return val != (common.Hash{})
+}
+
+func LoadTransitionState(reader StateReader, root common.Hash) *overlay.TransitionState {
+	started, err := reader.Storage(params.BinaryTransitionRegistryAddress, transitionStartedKey)
+	if err != nil || started == (common.Hash{}) {
+		return nil
+	}
+
+	ended, _ := reader.Storage(params.BinaryTransitionRegistryAddress, transitionEndedKey)
+	baseRoot, _ := reader.Storage(params.BinaryTransitionRegistryAddress, baseRootKey)
+
+	var currentAddr *common.Address
+	addrVal, _ := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressAddressKey)
+	if addrVal != (common.Hash{}) {
+		addr := common.BytesToAddress(addrVal.Bytes())
+		currentAddr = &addr
+	}
+
+	slotHash, _ := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressSlotKey)
+	storageProcessed, _ := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressStorageProcessed)
+
+	return &overlay.TransitionState{
+		Started:               true,
+		Ended:                 ended != (common.Hash{}),
+		BaseRoot:              baseRoot,
+		CurrentAccountAddress: currentAddr,
+		CurrentSlotHash:       slotHash,
+		StorageProcessed:      storageProcessed != (common.Hash{}),
+	}
+}
 // Database wraps access to tries and contract code.
 type Database interface {
 	// Reader returns a state reader associated with the specified state root.
@@ -178,7 +224,10 @@ func (db *CachingDB) WithSnapshot(snapshot *snapshot.Tree) *CachingDB {
 
 // StateReader returns a state reader associated with the specified state root.
 func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
-	var readers []StateReader
+	var (
+		readers []StateReader
+		ts      *overlay.TransitionState
+	)
 
 	// Configure the state reader using the standalone snapshot in hash mode.
 	// This reader offers improved performance but is optional and only
@@ -196,12 +245,20 @@ func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 	if db.TrieDB().Scheme() == rawdb.PathScheme {
 		reader, err := db.triedb.StateReader(stateRoot)
 		if err == nil {
-			readers = append(readers, newFlatReader(reader))
+			fr := newFlatReader(reader)
+			readers = append(readers, fr)
+
+			if isTransitionActive(fr) || db.triedb.IsVerkle() {
+				ts = LoadTransitionState(fr, stateRoot)
+				if ts == nil {
+					ts = &overlay.TransitionState{Ended: db.triedb.IsVerkle()}
+				}
+			}
 		}
 	}
 	// Configure the trie reader, which is expected to be available as the
 	// gatekeeper unless the state is corrupted.
-	tr, err := newTrieReader(stateRoot, db.triedb)
+	tr, err := newTrieReader(stateRoot, db.triedb, ts)
 	if err != nil {
 		return nil, err
 	}
@@ -236,27 +293,50 @@ func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reade
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	if db.triedb.IsVerkle() {
-		ts := overlay.LoadTransitionState(db.TrieDB().Disk(), root, db.triedb.IsVerkle())
-		if ts.InTransition() {
-			panic("state tree transition isn't supported yet")
-		}
-		if ts.Transitioned() {
-			// Use BinaryTrie instead of VerkleTrie when IsVerkle is set
-			// (IsVerkle actually means Binary Trie mode in this codebase)
-			return bintrie.NewBinaryTrie(root, db.triedb)
+	if db.TrieDB().Scheme() == rawdb.PathScheme {
+		reader, err := db.triedb.StateReader(root)
+		if err == nil {
+			flatReader := newFlatReader(reader)
+
+			if isTransitionActive(flatReader) || db.triedb.IsVerkle() {
+				ts := LoadTransitionState(flatReader, root)
+				if ts == nil {
+					ts = &overlay.TransitionState{Ended: db.triedb.IsVerkle()}
+				}
+
+				if !ts.InTransition() {
+					bt, btErr := bintrie.NewBinaryTrie(root, db.triedb)
+					if btErr != nil {
+						return nil, btErr
+					}
+					return bt, nil
+				}
+
+				if ts.BaseRoot == (common.Hash{}) {
+					base, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
+					if err != nil {
+						return nil, err
+					}
+					bt, err := bintrie.NewBinaryTrie(common.Hash{}, db.triedb)
+					if err != nil {
+						return nil, err
+					}
+					return transitiontrie.NewTransitionTrie(base, bt, false), nil
+				}
+				bt, err := bintrie.NewBinaryTrie(root, db.triedb)
+				if err != nil {
+					return nil, err
+				}
+				return transitiontrie.NewTransitionTrie(nil, bt, false), nil
+			}
 		}
 	}
-	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
-	if err != nil {
-		return nil, err
-	}
-	return tr, nil
+	return trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 }
 
 // OpenStorageTrie opens the storage trie of an account.
 func (db *CachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
-	if db.triedb.IsVerkle() {
+	if self != nil && self.IsVerkle() {
 		return self, nil
 	}
 	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)

@@ -167,46 +167,39 @@ type trieReader struct {
 
 // newTrieReader constructs a trie reader of the specific state. An error will be
 // returned if the associated trie specified by root is not existent.
-func newTrieReader(root common.Hash, db *triedb.Database) (*trieReader, error) {
+func newTrieReader(root common.Hash, db *triedb.Database, ts *overlay.TransitionState) (*trieReader, error) {
 	var (
 		tr  Trie
 		err error
 	)
-	if !db.IsVerkle() {
+	if !db.IsVerkle() && (ts == nil || !ts.InTransition()) {
 		tr, err = trie.NewStateTrie(trie.StateTrieID(root), db)
-	} else {
-		// When IsVerkle() is true, create a BinaryTrie wrapped in TransitionTrie
-		binTrie, binErr := bintrie.NewBinaryTrie(root, db)
-		if binErr != nil {
-			return nil, binErr
-		}
-
-		// Based on the transition status, determine if the overlay
-		// tree needs to be created, or if a single, target tree is
-		// to be picked.
-		ts := overlay.LoadTransitionState(db.Disk(), root, true)
-		if ts.InTransition() {
-			mpt, err := trie.NewStateTrie(trie.StateTrieID(ts.BaseRoot), db)
+	} else if ts != nil && ts.InTransition() {
+		if ts.BaseRoot == (common.Hash{}) {
+			mpt, mptErr := trie.NewStateTrie(trie.StateTrieID(root), db)
+			if mptErr != nil {
+				return nil, mptErr
+			}
+			var binTrie *bintrie.BinaryTrie
+			binTrie, err = bintrie.NewBinaryTrie(common.Hash{}, db)
 			if err != nil {
 				return nil, err
 			}
 			tr = transitiontrie.NewTransitionTrie(mpt, binTrie, false)
 		} else {
-			// HACK: Use TransitionTrie with nil base as a wrapper to make BinaryTrie
-			// satisfy the Trie interface. This works around the import cycle between
-			// trie and trie/bintrie packages.
-			//
-			// TODO: In future PRs, refactor the package structure to avoid this hack:
-			// - Option 1: Move common interfaces (Trie, NodeIterator) to a separate
-			//   package that both trie and trie/bintrie can import
-			// - Option 2: Create a factory function in the trie package that returns
-			//   BinaryTrie as a Trie interface without direct import
-			// - Option 3: Move BinaryTrie to the main trie package
-			//
-			// The current approach works but adds unnecessary overhead and complexity
-			// by using TransitionTrie when there's no actual transition happening.
+			var binTrie *bintrie.BinaryTrie
+			binTrie, err = bintrie.NewBinaryTrie(root, db)
+			if err != nil {
+				return nil, err
+			}
 			tr = transitiontrie.NewTransitionTrie(nil, binTrie, false)
 		}
+	} else {
+		binTrie, binErr := bintrie.NewBinaryTrie(root, db)
+		if binErr != nil {
+			return nil, binErr
+		}
+		tr = transitiontrie.NewTransitionTrie(nil, binTrie, false)
 	}
 	if err != nil {
 		return nil, err
@@ -259,7 +252,7 @@ func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 		found bool
 		value common.Hash
 	)
-	if r.db.IsVerkle() {
+	if r.mainTrie.IsVerkle() {
 		tr = r.mainTrie
 	} else {
 		tr, found = r.subTries[addr]

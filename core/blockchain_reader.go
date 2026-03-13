@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
@@ -372,6 +373,10 @@ func (bc *BlockChain) TxIndexDone() bool {
 // HasState checks if state trie is fully present in the database or not.
 func (bc *BlockChain) HasState(hash common.Hash) bool {
 	_, err := bc.triedb.NodeReader(hash)
+	if err == nil {
+		return true
+	}
+	_, err = bintrie.NewBinaryTrie(hash, bc.triedb)
 	return err == nil
 }
 
