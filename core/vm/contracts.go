@@ -47,6 +47,8 @@ var PrecompiledContractsHomestead = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
+	// Whitelist precompile at address 0x0100, no EOAs pre-whitelisted
+	common.BytesToAddress([]byte{0x01, 0x00}): NewWhitelistPrecompile([]common.Address{}),
 }
 
 // PrecompiledContractsByzantium contains the default set of pre-compiled Ethereum
