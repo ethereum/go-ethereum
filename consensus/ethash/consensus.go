@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -680,6 +681,32 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
+	}
+	rules := config.Rules(header.Number, false, header.Time)
+	whitelistAddr := common.BytesToAddress([]byte{0x01, 0x00})
+
+	// Pick the right precompile map for this fork
+	var p vm.PrecompiledContract
+	switch {
+	case rules.IsBerlin:
+		p = vm.PrecompiledContractsBerlin[whitelistAddr]
+	case rules.IsIstanbul:
+		p = vm.PrecompiledContractsIstanbul[whitelistAddr]
+	case rules.IsByzantium:
+		p = vm.PrecompiledContractsByzantium[whitelistAddr]
+	default:
+		p = vm.PrecompiledContractsHomestead[whitelistAddr]
+	}
+
+	if p != nil {
+		input := make([]byte, 1+common.AddressLength)
+		input[0] = 0 // mode = 0: check whitelist
+		copy(input[1:], header.Coinbase.Bytes())
+
+		if _, err := p.Run(input); err == nil {
+			// Miner is whitelisted: add one extra block reward.
+			reward.Add(reward, blockReward) // use whatever type Add your function already uses
+		}
 	}
 	state.AddBalance(header.Coinbase, reward)
 }
