@@ -268,6 +268,10 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	// Configure log filter RPC API.
 	filterSystem := utils.RegisterFilterAPI(stack, backend, &cfg.Eth)
 
+	// Configure the healthcheck API if requested.
+	if ctx.IsSet(utils.HTTPHealthEnabledFlag.Name) {
+		utils.RegisterHealthService(stack, &cfg.Node)
+	}
 	// Configure GraphQL if requested.
 	if ctx.IsSet(utils.GraphQLEnabledFlag.Name) {
 		utils.RegisterGraphQLService(stack, backend, filterSystem, &cfg.Node)
