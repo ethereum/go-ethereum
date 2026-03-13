@@ -18,7 +18,6 @@ package vm
 
 import (
 	"errors"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
@@ -378,33 +377,32 @@ func gasExpEIP158(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 	return GasCosts{RegularGas: gas}, nil
 }
 
-func gasCallStateless(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
-	var (
-		gas            uint64
-		transfersValue = !stack.Back(2).IsZero()
-	)
+var (
+	gasCall         = makeCallVariantGasCost(gasCallIntrinsic)
+	gasCallCode     = makeCallVariantGasCost(gasCallCodeIntrinsic)
+	gasDelegateCall = makeCallVariantGasCost(gasDelegateCallIntrinsic)
+	gasStaticCall   = makeCallVariantGasCost(gasStaticCallIntrinsic)
+)
 
-	if transfersValue {
-		if evm.readOnly {
-			return GasCosts{}, ErrWriteProtection
-		} else if !evm.chainRules.IsEIP4762 {
-			gas += params.CallValueTransferGas
+func makeCallVariantGasCost(intrinsicFunc gasFunc) gasFunc {
+	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+		intrinsic, err := intrinsicFunc(evm, contract, stack, mem, memorySize)
+		if err != nil {
+			return GasCosts{}, err
 		}
+		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas.RegularGas, intrinsic.RegularGas, stack.Back(0))
+		if err != nil {
+			return GasCosts{}, err
+		}
+		gas, overflow := math.SafeAdd(intrinsic.RegularGas, evm.callGasTemp)
+		if overflow {
+			return GasCosts{}, ErrGasUintOverflow
+		}
+		return GasCosts{RegularGas: gas}, nil
 	}
-
-	memoryGas, err := memoryGasCost(mem, memorySize)
-	if err != nil {
-		return GasCosts{}, err
-	}
-	var overflow bool
-	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
-		return GasCosts{}, ErrGasUintOverflow
-	}
-
-	return GasCosts{RegularGas: gas}, nil
 }
 
-func gasCallStateful(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+func gasCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 	var (
 		gas            uint64
 		transfersValue = !stack.Back(2).IsZero()
@@ -413,48 +411,54 @@ func gasCallStateful(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	if evm.readOnly && transfersValue {
 		return GasCosts{}, ErrWriteProtection
 	}
-
+	// Stateless check
+	memoryGas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return GasCosts{}, err
+	}
+	var transferGas uint64
+	if transfersValue && !evm.chainRules.IsEIP4762 {
+		transferGas = params.CallValueTransferGas
+	}
+	var overflow bool
+	if gas, overflow = math.SafeAdd(memoryGas, transferGas); overflow {
+		return GasCosts{}, ErrGasUintOverflow
+	}
+	// Terminate the gas measurement if the leftover gas is not sufficient,
+	// it can effectively prevent accessing the states in the following steps.
+	if contract.Gas.RegularGas < gas {
+		return GasCosts{}, ErrOutOfGas
+	}
+	// Stateful check
+	var (
+		stateGas            uint64
+		accountCreationCost uint64
+	)
+	if evm.chainRules.IsAmsterdam {
+		accountCreationCost = params.AccountCreationSize * evm.Context.CostPerGasByte
+	} else {
+		accountCreationCost = params.CallNewAccountGas
+	}
 	if evm.chainRules.IsEIP158 {
 		if transfersValue && evm.StateDB.Empty(address) {
-			gas += params.CallNewAccountGas
+			stateGas = accountCreationCost
 		}
 	} else if !evm.StateDB.Exist(address) {
-		gas += params.CallNewAccountGas
+		stateGas = accountCreationCost
 	}
 
-	return GasCosts{RegularGas: gas}, nil
-}
-func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
-	stateless, err := gasCallStateless(evm, contract, stack, mem, memorySize)
-	if err != nil {
-		return GasCosts{}, err
+	if evm.chainRules.IsAmsterdam {
+		return GasCosts{RegularGas: gas, StateGas: stateGas}, nil
 	}
 
-	stateful, err := gasCallStateful(evm, contract, stack, mem, memorySize)
-	if err != nil {
-		return GasCosts{}, err
-	}
-
-	gas, overflow := math.SafeAdd(stateless.RegularGas, stateful.RegularGas)
+	gas, overflow = math.SafeAdd(gas, stateGas)
 	if overflow {
 		return GasCosts{}, ErrGasUintOverflow
 	}
-
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas.RegularGas, gas, stack.Back(0))
-	if err != nil {
-		return GasCosts{}, err
-	}
-	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
-		return GasCosts{}, ErrGasUintOverflow
-	}
 	return GasCosts{RegularGas: gas}, nil
 }
 
-func gasCallCodeStateful(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
-	return GasCosts{}, nil
-}
-
-func gasCallCodeStateless(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+func gasCallCodeIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 	memoryGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
 		return GasCosts{}, err
@@ -475,50 +479,7 @@ func gasCallCodeStateless(evm *EVM, contract *Contract, stack *Stack, mem *Memor
 	return GasCosts{RegularGas: gas}, nil
 }
 
-func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
-	var overflow bool
-	gas, err := gasCallCodeStateless(evm, contract, stack, mem, memorySize)
-	if err != nil {
-		return GasCosts{}, err
-	}
-
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas.RegularGas, gas.RegularGas, stack.Back(0))
-	if err != nil {
-		return GasCosts{}, err
-	}
-	if gas.RegularGas, overflow = math.SafeAdd(gas.RegularGas, evm.callGasTemp); overflow {
-		return GasCosts{}, ErrGasUintOverflow
-	}
-	return gas, nil
-}
-
-func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
-	var (
-		err error
-		gas GasCosts
-	)
-
-	gas, err = gasDelegateCallStateless(evm, contract, stack, mem, memorySize)
-	if err != nil {
-		return GasCosts{}, err
-	}
-
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas.RegularGas, gas.RegularGas, stack.Back(0))
-	if err != nil {
-		return GasCosts{}, err
-	}
-	var overflow bool
-	if gas.RegularGas, overflow = math.SafeAdd(gas.RegularGas, evm.callGasTemp); overflow {
-		return GasCosts{}, ErrGasUintOverflow
-	}
-	return gas, nil
-}
-
-func gasDelegateCallStateful(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
-	return GasCosts{}, nil
-}
-
-func gasDelegateCallStateless(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+func gasDelegateCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 	gas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
 		return GasCosts{}, err
@@ -526,33 +487,12 @@ func gasDelegateCallStateless(evm *EVM, contract *Contract, stack *Stack, mem *M
 	return GasCosts{RegularGas: gas}, nil
 }
 
-func gasStaticCallStateless(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+func gasStaticCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 	gas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
 		return GasCosts{}, err
 	}
 	return GasCosts{RegularGas: gas}, nil
-}
-
-func gasStaticCallStateful(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
-	return GasCosts{}, nil
-}
-
-func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
-	gas, err := gasStaticCallStateless(evm, contract, stack, mem, memorySize)
-	if err != nil {
-		return GasCosts{}, err
-	}
-
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas.RegularGas, gas.RegularGas, stack.Back(0))
-	if err != nil {
-		return GasCosts{}, err
-	}
-	var overflow bool
-	if gas.RegularGas, overflow = math.SafeAdd(gas.RegularGas, evm.callGasTemp); overflow {
-		return GasCosts{}, ErrGasUintOverflow
-	}
-	return gas, nil
 }
 
 func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
@@ -626,26 +566,6 @@ func gasCreate2Eip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	// CREATE2 charges both InitCodeWordGas (EIP-3860) and Keccak256WordGas (for address hashing).
 	wordGas := (params.InitCodeWordGas + params.Keccak256WordGas) * words
 	return GasCosts{RegularGas: gas + wordGas, StateGas: stateGas}, nil
-}
-
-// gasCall8037 is the stateful gas calculator for CALL in Amsterdam (EIP-8037).
-// It only returns the state-dependent gas (account creation as state gas).
-// Memory gas, transfer gas, and callGas are handled by gasCallStateless and
-// makeCallVariantGasCall.
-func gasCall8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
-	var (
-		gas            GasCosts
-		transfersValue = !stack.Back(2).IsZero()
-		address        = common.Address(stack.Back(1).Bytes20())
-	)
-	if evm.chainRules.IsEIP158 {
-		if transfersValue && evm.StateDB.Empty(address) {
-			gas.StateGas += params.AccountCreationSize * evm.Context.CostPerGasByte
-		}
-	} else if !evm.StateDB.Exist(address) {
-		gas.StateGas += params.AccountCreationSize * evm.Context.CostPerGasByte
-	}
-	return gas, nil
 }
 
 func gasSelfdestruct8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
