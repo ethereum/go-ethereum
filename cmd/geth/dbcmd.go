@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/internal/tablewriter"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -102,6 +103,7 @@ Remove blockchain and state databases`,
 			dbMetadataCmd,
 			dbCheckStateContentCmd,
 			dbInspectHistoryCmd,
+			dbPebbleUpgradeCmd,
 		},
 	}
 	dbInspectCmd = &cli.Command{
@@ -241,6 +243,18 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			},
 		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Description: "This command queries the history of the account or storage slot within the specified block range",
+	}
+	dbPebbleUpgradeCmd = &cli.Command{
+		Action: dbPebbleUpgrade,
+		Name:   "pebble-upgrade",
+		Usage:  "Upgrade a legacy pebble v1 database to pebble v2 format",
+		Flags:  slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
+		Description: `This command upgrades a legacy Pebble v1 database so 
+that it becomes compatible with Pebble v2. The upgrade process converts the
+database format to the oldest format supported by Pebble v2.
+
+WARNING: This is a one-way operation. Once upgraded, the database cannot be
+opened by older versions of geth that use the pebble v1 library.`,
 	}
 )
 
@@ -541,6 +555,21 @@ func dbCompact(ctx *cli.Context) error {
 	log.Info("Stats after compaction")
 	showDBStats(db)
 	return nil
+}
+
+func dbPebbleUpgrade(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	path := stack.ResolvePath("chaindata")
+	dbType := rawdb.PreexistingDatabase(path)
+	if dbType == "" {
+		return fmt.Errorf("no database found at %s", path)
+	}
+	if dbType != rawdb.DBPebble {
+		return fmt.Errorf("database at %s is %s, not pebble", path, dbType)
+	}
+	return pebble.Upgrade(path)
 }
 
 // dbGet shows the value of a given database key
