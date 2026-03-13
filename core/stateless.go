@@ -46,6 +46,7 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 	if err != nil {
 		return err
 	}
+
 	// Create a blockchain that is idle, but can be used to access headers through
 	engine := beacon.New(ethash.NewFaker())
 	chain := &HeaderChain{
@@ -54,24 +55,26 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 		headerCache: lru.NewCache[common.Hash, *types.Header](256),
 		engine:      engine,
 	}
-	// Verify the block header against the parent header from the witness
-	if err := engine.VerifyHeader(chain, block.Header()); err != nil {
-		return err
-	}
 	processor := NewStateProcessor(chain)
 	validator := NewBlockValidator(config)
 
-	// Verify the block body (transactions, withdrawals, blob gas) against the header
+	// Pre-execution: Verify the block header against the parent header
+	if err := engine.VerifyHeader(chain, block.Header()); err != nil {
+		return err
+	}
+
+	// Pre-execution: Verify the block body against the header
 	if err := validator.ValidateBody(block); err != nil {
 		return err
 	}
-	// Run the stateless block processing and self-validate all fields
+
+	// Process the block by executing all transactions
 	res, err := processor.Process(ctx, block, db, vmconfig)
 	if err != nil {
 		return err
 	}
-	if err = validator.ValidateState(block, db, res); err != nil {
-		return err
-	}
-	return nil
+
+	// Post-execution: Validate gas, bloom, receipts, state root and
+	// other post execution artifacts
+	return validator.ValidateState(block, db, res)
 }
