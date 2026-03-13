@@ -10,6 +10,11 @@ a3192784375acec7eaec492799d5c5d0c47a2909a3cc40178898e4ecd20cc416  fixtures_devel
 # https://github.com/ethereum/execution-spec-tests/releases/download/bal%40v5.3.0
 a1840f2e74d7d53f9f36f969bfd280407829b21e85bea206ba907453fdc47ac4 fixtures_bal.tar.gz
 
+# version:spec-tests-zkevm zkevm@v0.3.0
+# https://github.com/ethereum/execution-spec-tests/releases
+# https://github.com/ethereum/execution-spec-tests/releases/download/zkevm%40v0.3.0
+7237c6504243a9b2038bd23005e4fae051bc64f1b8c9bac081131d11f33a5c3c  fixtures_zkevm.tar.gz
+
 # version:golang 1.25.7
 # https://go.dev/dl/
 178f2832820274b43e177d32f06a3ebb0129e427dd20a5e4c88df2c1763cf10a  go1.25.7.src.tar.gz

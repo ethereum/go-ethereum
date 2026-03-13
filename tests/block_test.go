@@ -868,6 +868,42 @@ func TestExecutionSpecBlocktestsBAL(t *testing.T) {
 	testExecutionSpecBlocktests(t, executionSpecBALBlockchainTestDir, skips)
 }
 
+// TestExecutionSpecZkevmBlocktests runs the zkevm test fixtures from execution-spec-tests
+// and validates execution witnesses against geth's stateless execution.
+func TestExecutionSpecZkevmBlocktests(t *testing.T) {
+	if !common.FileExist(executionSpecZkevmBlockchainTestDir) {
+		t.Skipf("directory %s does not exist", executionSpecZkevmBlockchainTestDir)
+	}
+	bt := new(testMatcher)
+
+	bt.walk(t, executionSpecZkevmBlockchainTestDir, func(t *testing.T, name string, test *BlockTest) {
+		execBlockTest(t, bt, test, true)
+
+		// Validate execution witnesses for blocks that have them
+		// TODO: Execution specs don't emit a witness when block is valid right now
+		for _, b := range test.json.Blocks {
+			if b.ExecutionWitness == nil || b.BlockHeader == nil {
+				continue
+			}
+			block, err := b.decode()
+			if err != nil {
+				t.Fatalf("failed to decode block for witness validation: %v", err)
+			}
+			if err := test.validateExecutionWitness(block, b.ExecutionWitness); err != nil {
+				t.Errorf("execution witness validation failed: %v", err)
+			}
+
+			// Validate that the SSZ-encoded statelessInputBytes witness matches the JSON executionWitness
+			// TODO: long term, we will only have statelessInputBytes and we will have no redundancy
+			if b.StatelessInputBytes != nil {
+				if err := validateStatelessInputWitness([]byte(*b.StatelessInputBytes), b.ExecutionWitness); err != nil {
+					t.Errorf("stateless input witness mismatch: %v", err)
+				}
+			}
+		}
+	})
+}
+
 var failures = 0
 
 func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest, buildAndVerifyBAL bool) {
