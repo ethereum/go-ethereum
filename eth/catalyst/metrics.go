@@ -25,9 +25,13 @@ var (
 	// Number of blobs requested via getBlobsV2 that are present in the blobpool
 	getBlobsAvailableCounter = metrics.NewRegisteredCounter("engine/getblobs/available", nil)
 
-	// Number of times getBlobsV2 responded with “hit”
-	getBlobsV2RequestHit = metrics.NewRegisteredCounter("engine/getblobs/hit", nil)
+	// Number of times getBlobsV2/V3 responded with all blobs
+	getBlobsRequestCompleteHit = metrics.NewRegisteredCounter("engine/getblobs/hit", nil)
 
-	// Number of times getBlobsV2 responded with “miss”
-	getBlobsV2RequestMiss = metrics.NewRegisteredCounter("engine/getblobs/miss", nil)
+	// Number of times getBlobsV2/V3 responded with no blobs. V2 will return no
+	// blobs if it doesn't have all the blobs (all or nothing).
+	getBlobsRequestMiss = metrics.NewRegisteredCounter("engine/getblobs/miss", nil)
+
+	// Number of times getBlobsV3 responded with some, but not all, blobs
+	getBlobsRequestPartialHit = metrics.NewRegisteredCounter("engine/getblobs/partial", nil)
 )

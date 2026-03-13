@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -111,12 +112,12 @@ func (dl *diskLayer) markStale() {
 
 // node implements the layer interface, retrieving the trie node with the
 // provided node info. No error will be returned if the node is not found.
-func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, *nodeLoc, error) {
+func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, nodeLoc, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	if dl.stale {
-		return nil, common.Hash{}, nil, errSnapshotStale
+		return nil, common.Hash{}, nodeLoc{}, errSnapshotStale
 	}
 	// Try to retrieve the trie node from the not-yet-written node buffer first
 	// (both the live one and the frozen one). Note the buffer is lock free since
@@ -128,7 +129,7 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 				dirtyNodeHitMeter.Mark(1)
 				dirtyNodeReadMeter.Mark(int64(len(n.Blob)))
 				dirtyNodeHitDepthHist.Update(int64(depth))
-				return n.Blob, n.Hash, &nodeLoc{loc: locDirtyCache, depth: depth}, nil
+				return n.Blob, n.Hash, nodeLoc{loc: locDirtyCache, depth: depth}, nil
 			}
 		}
 	}
@@ -140,7 +141,7 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		if blob := dl.nodes.Get(nil, key); len(blob) > 0 {
 			cleanNodeHitMeter.Mark(1)
 			cleanNodeReadMeter.Mark(int64(len(blob)))
-			return blob, crypto.Keccak256Hash(blob), &nodeLoc{loc: locCleanCache, depth: depth}, nil
+			return blob, crypto.Keccak256Hash(blob), nodeLoc{loc: locCleanCache, depth: depth}, nil
 		}
 		cleanNodeMissMeter.Mark(1)
 	}
@@ -160,7 +161,7 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		dl.nodes.Set(key, blob)
 		cleanNodeWriteMeter.Mark(int64(len(blob)))
 	}
-	return blob, crypto.Keccak256Hash(blob), &nodeLoc{loc: locDiskLayer, depth: depth}, nil
+	return blob, crypto.Keccak256Hash(blob), nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
 
 // account directly retrieves the account RLP associated with a particular
@@ -323,36 +324,61 @@ func (dl *diskLayer) update(root common.Hash, id uint64, block uint64, nodes *no
 	return newDiffLayer(dl, root, id, block, nodes, states)
 }
 
-// writeStateHistory stores the state history and indexes if indexing is
+// writeHistory stores the specified history and indexes if indexing is
 // permitted.
 //
 // What's more, this function also returns a flag indicating whether the
 // buffer flushing is required, ensuring the persistent state ID is always
 // greater than or equal to the first history ID.
-func (dl *diskLayer) writeStateHistory(diff *diffLayer) (bool, error) {
-	// Short circuit if state history is not permitted
-	if dl.db.stateFreezer == nil {
+func (dl *diskLayer) writeHistory(typ historyType, diff *diffLayer) (bool, error) {
+	var (
+		limit     uint64
+		freezer   ethdb.AncientStore
+		indexer   *historyIndexer
+		writeFunc func(writer ethdb.AncientWriter, dl *diffLayer) error
+	)
+	switch typ {
+	case typeStateHistory:
+		freezer = dl.db.stateFreezer
+		indexer = dl.db.stateIndexer
+		writeFunc = writeStateHistory
+		limit = dl.db.config.StateHistory
+	case typeTrienodeHistory:
+		freezer = dl.db.trienodeFreezer
+		indexer = dl.db.trienodeIndexer
+		writeFunc = func(writer ethdb.AncientWriter, diff *diffLayer) error {
+			return writeTrienodeHistory(writer, diff, dl.db.config.FullValueCheckpoint)
+		}
+		// Skip the history commit if the trienode history is not permitted
+		if dl.db.config.TrienodeHistory < 0 {
+			return false, nil
+		}
+		limit = uint64(dl.db.config.TrienodeHistory)
+	default:
+		panic(fmt.Sprintf("unknown history type: %v", typ))
+	}
+	// Short circuit if the history freezer is nil
+	if freezer == nil {
 		return false, nil
 	}
 	// Bail out with an error if writing the state history fails.
 	// This can happen, for example, if the device is full.
-	err := writeStateHistory(dl.db.stateFreezer, diff)
+	err := writeFunc(freezer, diff)
 	if err != nil {
 		return false, err
 	}
-	// Notify the state history indexer for newly created history
-	if dl.db.stateIndexer != nil {
-		if err := dl.db.stateIndexer.extend(diff.stateID()); err != nil {
+	// Notify the history indexer for newly created history
+	if indexer != nil {
+		if err := indexer.extend(diff.stateID()); err != nil {
 			return false, err
 		}
 	}
 	// Determine if the persisted history object has exceeded the
 	// configured limitation.
-	limit := dl.db.config.StateHistory
 	if limit == 0 {
 		return false, nil
 	}
-	tail, err := dl.db.stateFreezer.Tail()
+	tail, err := freezer.Tail()
 	if err != nil {
 		return false, err
 	} // firstID = tail+1
@@ -375,14 +401,14 @@ func (dl *diskLayer) writeStateHistory(diff *diffLayer) (bool, error) {
 	// These measures ensure the persisted state ID always remains greater
 	// than or equal to the first history ID.
 	if persistentID := rawdb.ReadPersistentStateID(dl.db.diskdb); persistentID < newFirst {
-		log.Debug("Skip tail truncation", "persistentID", persistentID, "tailID", tail+1, "headID", diff.stateID(), "limit", limit)
+		log.Debug("Skip tail truncation", "type", typ, "persistentID", persistentID, "tailID", tail+1, "headID", diff.stateID(), "limit", limit)
 		return true, nil
 	}
-	pruned, err := truncateFromTail(dl.db.stateFreezer, typeStateHistory, newFirst-1)
+	pruned, err := truncateFromTail(freezer, typ, newFirst-1)
 	if err != nil {
 		return false, err
 	}
-	log.Debug("Pruned state history", "items", pruned, "tailid", newFirst)
+	log.Debug("Pruned history", "type", typ, "items", pruned, "tailid", newFirst)
 	return false, nil
 }
 
@@ -396,10 +422,22 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	// Construct and store the state history first. If crash happens after storing
 	// the state history but without flushing the corresponding states(journal),
 	// the stored state history will be truncated from head in the next restart.
-	flush, err := dl.writeStateHistory(bottom)
+	flushA, err := dl.writeHistory(typeStateHistory, bottom)
 	if err != nil {
 		return nil, err
 	}
+	// Construct and store the trienode history first. If crash happens after
+	// storing the trienode history but without flushing the corresponding
+	// states(journal), the stored trienode history will be truncated from head
+	// in the next restart.
+	flushB, err := dl.writeHistory(typeTrienodeHistory, bottom)
+	if err != nil {
+		return nil, err
+	}
+	// Since the state history and trienode history may be configured with different
+	// lengths, the buffer will be flushed once either of them meets its threshold.
+	flush := flushA || flushB
+
 	// Mark the diskLayer as stale before applying any mutations on top.
 	dl.stale = true
 
@@ -448,7 +486,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 
 		// Freeze the live buffer and schedule background flushing
 		dl.frozen = combined
-		dl.frozen.flush(bottom.root, dl.db.diskdb, dl.db.stateFreezer, progress, dl.nodes, dl.states, bottom.stateID(), func() {
+		dl.frozen.flush(bottom.root, dl.db.diskdb, []ethdb.AncientWriter{dl.db.stateFreezer, dl.db.trienodeFreezer}, progress, dl.nodes, dl.states, bottom.stateID(), func() {
 			// Resume the background generation if it's not completed yet.
 			// The generator is assumed to be available if the progress is
 			// not nil.
@@ -504,9 +542,14 @@ func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 
 	dl.stale = true
 
-	// Unindex the corresponding state history
+	// Unindex the corresponding history
 	if dl.db.stateIndexer != nil {
 		if err := dl.db.stateIndexer.shorten(dl.id); err != nil {
+			return nil, err
+		}
+	}
+	if dl.db.trienodeIndexer != nil {
+		if err := dl.db.trienodeIndexer.shorten(dl.id); err != nil {
 			return nil, err
 		}
 	}

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/holiman/uint256"
 )
 
 const sampleNumber = 3 // Number of transactions sampled in a block
@@ -257,12 +258,12 @@ func (oracle *Oracle) getBlockValues(ctx context.Context, blockNum uint64, limit
 	sortedTxs := make([]*types.Transaction, len(txs))
 	copy(sortedTxs, txs)
 	baseFee := block.BaseFee()
+	baseFee256 := new(uint256.Int)
+	if baseFee != nil {
+		baseFee256.SetFromBig(baseFee)
+	}
 	slices.SortFunc(sortedTxs, func(a, b *types.Transaction) int {
-		// It's okay to discard the error because a tx would never be
-		// accepted into a block with an invalid effective tip.
-		tip1, _ := a.EffectiveGasTip(baseFee)
-		tip2, _ := b.EffectiveGasTip(baseFee)
-		return tip1.Cmp(tip2)
+		return a.EffectiveGasTipCmp(b, baseFee256)
 	})
 
 	var prices []*big.Int

@@ -245,7 +245,7 @@ func calSizeStats(update *stateUpdate) (SizeStats, error) {
 
 	codeExists := make(map[common.Hash]struct{})
 	for _, code := range update.codes {
-		if _, ok := codeExists[code.hash]; ok || code.exists {
+		if _, ok := codeExists[code.hash]; ok || code.duplicate {
 			continue
 		}
 		stats.ContractCodes += 1
@@ -346,7 +346,7 @@ func (t *SizeTracker) run() {
 
 			// Evict the stale statistics
 			heap.Push(&h, stats[u.root])
-			for u.blockNumber-h[0].BlockNumber > statEvictThreshold {
+			for len(h) > 0 && u.blockNumber-h[0].BlockNumber > statEvictThreshold {
 				delete(stats, h[0].StateRoot)
 				heap.Pop(&h)
 			}

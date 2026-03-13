@@ -123,7 +123,7 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 		if err != nil {
 			panic(err)
 		}
-		it.current, err = DeserializeNode(data, len(it.stack)-1)
+		it.current, err = DeserializeNodeWithHash(data, len(it.stack)-1, common.Hash(node))
 		if err != nil {
 			panic(err)
 		}

@@ -512,6 +512,45 @@ func TestReceiptUnmarshalBinary(t *testing.T) {
 	}
 }
 
+func TestSlimReceiptEncodingDecoding(t *testing.T) {
+	tests := []*Receipt{
+		legacyReceipt,
+		accessListReceipt,
+		eip1559Receipt,
+		{
+			Type:              BlobTxType,
+			Status:            ReceiptStatusSuccessful,
+			CumulativeGasUsed: 100,
+			Logs:              []*Log{},
+		},
+	}
+	for i, want := range tests {
+		enc, err := rlp.EncodeToBytes((*SlimReceipt)(want))
+		if err != nil {
+			t.Fatalf("test %d: encode error: %v", i, err)
+		}
+		got := new(SlimReceipt)
+		if err := rlp.DecodeBytes(enc, got); err != nil {
+			t.Fatalf("test %d: decode error: %v", i, err)
+		}
+		if got.Type != want.Type {
+			t.Errorf("test %d: Type mismatch: got %d, want %d", i, got.Type, want.Type)
+		}
+		if got.Status != want.Status {
+			t.Errorf("test %d: Status mismatch: got %d, want %d", i, got.Status, want.Status)
+		}
+		if !bytes.Equal(got.PostState, want.PostState) {
+			t.Errorf("test %d: PostState mismatch: got %x, want %x", i, got.PostState, want.PostState)
+		}
+		if got.CumulativeGasUsed != want.CumulativeGasUsed {
+			t.Errorf("test %d: CumulativeGasUsed mismatch: got %d, want %d", i, got.CumulativeGasUsed, want.CumulativeGasUsed)
+		}
+		if len(got.Logs) != len(want.Logs) {
+			t.Errorf("test %d: Logs length mismatch: got %d, want %d", i, len(got.Logs), len(want.Logs))
+		}
+	}
+}
+
 func clearComputedFieldsOnReceipts(receipts []*Receipt) []*Receipt {
 	r := make([]*Receipt, len(receipts))
 	for i, receipt := range receipts {

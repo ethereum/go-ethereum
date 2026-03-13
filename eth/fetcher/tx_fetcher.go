@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -71,6 +72,11 @@ const (
 
 	// addTxsBatchSize it the max number of transactions to add in a single batch from a peer.
 	addTxsBatchSize = 128
+
+	// txOnChainCacheLimit is number of on-chain transactions to keep in a cache to avoid
+	// re-fetching them soon after they are mined.
+	// Approx 1MB for 30 minutes of transactions at 18 tps
+	txOnChainCacheLimit = 32768
 )
 
 var (
@@ -114,10 +120,11 @@ type txRequest struct {
 // txDelivery is the notification that a batch of transactions have been added
 // to the pool and should be untracked.
 type txDelivery struct {
-	origin string        // Identifier of the peer originating the notification
-	hashes []common.Hash // Batch of transaction hashes having been delivered
-	metas  []txMetadata  // Batch of metadata associated with the delivered hashes
-	direct bool          // Whether this is a direct reply or a broadcast
+	origin    string        // Identifier of the peer originating the notification
+	hashes    []common.Hash // Batch of transaction hashes having been delivered
+	metas     []txMetadata  // Batch of metadata associated with the delivered hashes
+	direct    bool          // Whether this is a direct reply or a broadcast
+	violation error         // Whether we encountered a protocol violation
 }
 
 // txDrop is the notification that a peer has disconnected.
@@ -151,6 +158,9 @@ type TxFetcher struct {
 	txSeq       uint64                             // Unique transaction sequence number
 	underpriced *lru.Cache[common.Hash, time.Time] // Transactions discarded as too cheap (don't re-fetch)
 
+	chain          *core.BlockChain                  // Blockchain interface for on-chain checks
+	txOnChainCache *lru.Cache[common.Hash, struct{}] // Cache to avoid fetching once the tx gets on chain
+
 	// Stage 1: Waiting lists for newly discovered transactions that might be
 	// broadcast without needing explicit request/reply round trips.
 	waitlist  map[common.Hash]map[string]struct{}           // Transactions waiting for an potential broadcast
@@ -183,36 +193,40 @@ type TxFetcher struct {
 
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
 // based on hash announcements.
-func NewTxFetcher(validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string)) *TxFetcher {
-	return NewTxFetcherForTests(validateMeta, addTxs, fetchTxs, dropPeer, mclock.System{}, time.Now, nil)
+// Chain can be nil to disable on-chain checks.
+func NewTxFetcher(chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string)) *TxFetcher {
+	return NewTxFetcherForTests(chain, validateMeta, addTxs, fetchTxs, dropPeer, mclock.System{}, time.Now, nil)
 }
 
 // NewTxFetcherForTests is a testing method to mock out the realtime clock with
 // a simulated version and the internal randomness with a deterministic one.
+// Chain can be nil to disable on-chain checks.
 func NewTxFetcherForTests(
-	validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string),
+	chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string),
 	clock mclock.Clock, realTime func() time.Time, rand *mrand.Rand) *TxFetcher {
 	return &TxFetcher{
-		notify:       make(chan *txAnnounce),
-		cleanup:      make(chan *txDelivery),
-		drop:         make(chan *txDrop),
-		quit:         make(chan struct{}),
-		waitlist:     make(map[common.Hash]map[string]struct{}),
-		waittime:     make(map[common.Hash]mclock.AbsTime),
-		waitslots:    make(map[string]map[common.Hash]*txMetadataWithSeq),
-		announces:    make(map[string]map[common.Hash]*txMetadataWithSeq),
-		announced:    make(map[common.Hash]map[string]struct{}),
-		fetching:     make(map[common.Hash]string),
-		requests:     make(map[string]*txRequest),
-		alternates:   make(map[common.Hash]map[string]struct{}),
-		underpriced:  lru.NewCache[common.Hash, time.Time](maxTxUnderpricedSetSize),
-		validateMeta: validateMeta,
-		addTxs:       addTxs,
-		fetchTxs:     fetchTxs,
-		dropPeer:     dropPeer,
-		clock:        clock,
-		realTime:     realTime,
-		rand:         rand,
+		notify:         make(chan *txAnnounce),
+		cleanup:        make(chan *txDelivery),
+		drop:           make(chan *txDrop),
+		quit:           make(chan struct{}),
+		waitlist:       make(map[common.Hash]map[string]struct{}),
+		waittime:       make(map[common.Hash]mclock.AbsTime),
+		waitslots:      make(map[string]map[common.Hash]*txMetadataWithSeq),
+		announces:      make(map[string]map[common.Hash]*txMetadataWithSeq),
+		announced:      make(map[common.Hash]map[string]struct{}),
+		fetching:       make(map[common.Hash]string),
+		requests:       make(map[string]*txRequest),
+		alternates:     make(map[common.Hash]map[string]struct{}),
+		underpriced:    lru.NewCache[common.Hash, time.Time](maxTxUnderpricedSetSize),
+		txOnChainCache: lru.NewCache[common.Hash, struct{}](txOnChainCacheLimit),
+		chain:          chain,
+		validateMeta:   validateMeta,
+		addTxs:         addTxs,
+		fetchTxs:       fetchTxs,
+		dropPeer:       dropPeer,
+		clock:          clock,
+		realTime:       realTime,
+		rand:           rand,
 	}
 }
 
@@ -232,6 +246,7 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 		unknownMetas  = make([]txMetadata, 0, len(hashes))
 
 		duplicate   int64
+		onchain     int64
 		underpriced int64
 	)
 	for i, hash := range hashes {
@@ -241,6 +256,12 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 			continue
 		}
 		if err != nil {
+			continue
+		}
+
+		// check on chain as well (no need to check limbo separately, as chain checks limbo too)
+		if _, exist := f.txOnChainCache.Get(hash); exist {
+			onchain++
 			continue
 		}
 
@@ -258,6 +279,7 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 	}
 	txAnnounceKnownMeter.Mark(duplicate)
 	txAnnounceUnderpricedMeter.Mark(underpriced)
+	txAnnounceOnchainMeter.Mark(onchain)
 
 	// If anything's left to announce, push it into the internal loop
 	if len(unknownHashes) == 0 {
@@ -292,6 +314,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		knownMeter       = txReplyKnownMeter
 		underpricedMeter = txReplyUnderpricedMeter
 		otherRejectMeter = txReplyOtherRejectMeter
+		violation        error
 	)
 	if !direct {
 		inMeter = txBroadcastInMeter
@@ -338,6 +361,12 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			case errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) || errors.Is(err, txpool.ErrTxGasPriceTooLow):
 				underpriced++
 
+			case errors.Is(err, txpool.ErrKZGVerificationError):
+				// KZG verification failed, terminate transaction processing immediately.
+				// Since KZG verification is computationally expensive, this acts as a
+				// defensive measure against potential DoS attacks.
+				violation = err
+
 			default:
 				otherreject++
 			}
@@ -346,19 +375,28 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 				kind: batch[j].Type(),
 				size: uint32(batch[j].Size()),
 			})
+			// Terminate the transaction processing if violation is encountered. All
+			// the remaining transactions in response will be silently discarded.
+			if violation != nil {
+				break
+			}
 		}
 		knownMeter.Mark(duplicate)
 		underpricedMeter.Mark(underpriced)
 		otherRejectMeter.Mark(otherreject)
 
 		// If 'other reject' is >25% of the deliveries in any batch, sleep a bit.
-		if otherreject > addTxsBatchSize/4 {
+		if otherreject > int64((len(batch)+3)/4) {
+			log.Debug("Peer delivering stale or invalid transactions", "peer", peer, "rejected", otherreject)
 			time.Sleep(200 * time.Millisecond)
-			log.Debug("Peer delivering stale transactions", "peer", peer, "rejected", otherreject)
+		}
+		// If we encountered a protocol violation, disconnect this peer.
+		if violation != nil {
+			break
 		}
 	}
 	select {
-	case f.cleanup <- &txDelivery{origin: peer, hashes: added, metas: metas, direct: direct}:
+	case f.cleanup <- &txDelivery{origin: peer, hashes: added, metas: metas, direct: direct, violation: violation}:
 		return nil
 	case <-f.quit:
 		return errTerminated
@@ -395,7 +433,20 @@ func (f *TxFetcher) loop() {
 
 		waitTrigger    = make(chan struct{}, 1)
 		timeoutTrigger = make(chan struct{}, 1)
+
+		oldHead *types.Header
 	)
+
+	// Subscribe to chain events to know when transactions are added to chain
+	var headEventCh chan core.ChainEvent
+	if f.chain != nil {
+		headEventCh = make(chan core.ChainEvent, 10)
+		sub := f.chain.SubscribeChainEvent(headEventCh)
+		if sub != nil {
+			defer sub.Unsubscribe()
+		}
+	}
+
 	for {
 		select {
 		case ann := <-f.notify:
@@ -753,6 +804,11 @@ func (f *TxFetcher) loop() {
 				// Something was delivered, try to reschedule requests
 				f.scheduleFetches(timeoutTimer, timeoutTrigger, nil) // Partial delivery may enable others to deliver too
 			}
+			// If we encountered a protocol violation, disconnect the peer
+			if delivery.violation != nil {
+				log.Warn("Disconnect peer for protocol violation", "peer", delivery.origin, "error", delivery.violation)
+				f.dropPeer(delivery.origin)
+			}
 
 		case drop := <-f.drop:
 			// A peer was dropped, remove all traces of it
@@ -813,6 +869,21 @@ func (f *TxFetcher) loop() {
 			if request != nil {
 				f.scheduleFetches(timeoutTimer, timeoutTrigger, nil)
 				f.rescheduleTimeout(timeoutTimer, timeoutTrigger)
+			}
+
+		case ev := <-headEventCh:
+			// New head(s) added
+			newHead := ev.Header
+			if oldHead != nil && newHead.ParentHash != oldHead.Hash() {
+				// Reorg or setHead detected, clear the cache. We could be smarter here and
+				// only remove/add the diff, but this is simpler and not being exact here
+				// only results in a few more fetches.
+				f.txOnChainCache.Purge()
+			}
+			oldHead = newHead
+			// Add all transactions from the new block to the on-chain cache
+			for _, tx := range ev.Transactions {
+				f.txOnChainCache.Add(tx.Hash(), struct{}{})
 			}
 
 		case <-f.quit:

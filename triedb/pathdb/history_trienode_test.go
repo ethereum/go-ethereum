@@ -19,6 +19,7 @@ package pathdb
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -137,14 +138,11 @@ func TestTrienodeHistoryReader(t *testing.T) {
 		}
 	}
 	for i, h := range hs {
-		tr, err := newTrienodeHistoryReader(uint64(i+1), freezer)
-		if err != nil {
-			t.Fatalf("Failed to construct the history reader: %v", err)
-		}
+		tr := newTrienodeHistoryReader(uint64(i+1), freezer)
 		for _, owner := range h.owners {
 			nodes := h.nodes[owner]
 			for key, value := range nodes {
-				blob, err := tr.read(owner, key)
+				blob, _, err := tr.read(owner, key)
 				if err != nil {
 					t.Fatalf("Failed to read trienode history: %v", err)
 				}
@@ -417,23 +415,23 @@ func TestTrienodeHistoryReaderNonExistentPath(t *testing.T) {
 	if err := rawdb.WriteTrienodeHistory(freezer, 1, header, keySection, valueSection); err != nil {
 		t.Fatalf("Failed to write trienode history: %v", err)
 	}
-
-	tr, err := newTrienodeHistoryReader(1, freezer)
-	if err != nil {
-		t.Fatalf("Failed to construct history reader: %v", err)
-	}
+	tr := newTrienodeHistoryReader(1, freezer)
 
 	// Try to read a non-existent path
-	_, err = tr.read(testrand.Hash(), "nonexistent")
-	if err == nil {
-		t.Fatal("Expected error for non-existent trie owner")
+	var (
+		err   error
+		found bool
+	)
+	_, found, err = tr.read(testrand.Hash(), "nonexistent")
+	if found || err != nil {
+		t.Fatal("Expected not found for non-existent trie owner")
 	}
 
 	// Try to read from existing owner but non-existent path
 	owner := h.owners[0]
-	_, err = tr.read(owner, "nonexistent-path")
-	if err == nil {
-		t.Fatal("Expected error for non-existent path")
+	_, found, err = tr.read(owner, "nonexistent-path")
+	if found || err != nil {
+		t.Fatal("Expected not found for non-existent path")
 	}
 }
 
@@ -457,23 +455,19 @@ func TestTrienodeHistoryReaderNilValues(t *testing.T) {
 	if err := rawdb.WriteTrienodeHistory(freezer, 1, header, keySection, valueSection); err != nil {
 		t.Fatalf("Failed to write trienode history: %v", err)
 	}
-
-	tr, err := newTrienodeHistoryReader(1, freezer)
-	if err != nil {
-		t.Fatalf("Failed to construct history reader: %v", err)
-	}
+	tr := newTrienodeHistoryReader(1, freezer)
 
 	// Test reading nil values
-	data1, err := tr.read(owner, "nil1")
-	if err != nil {
+	data1, found, err := tr.read(owner, "nil1")
+	if err != nil || !found {
 		t.Fatalf("Failed to read nil value: %v", err)
 	}
 	if len(data1) != 0 {
 		t.Fatal("Expected nil data for nil value")
 	}
 
-	data2, err := tr.read(owner, "nil2")
-	if err != nil {
+	data2, found, err := tr.read(owner, "nil2")
+	if err != nil || !found {
 		t.Fatalf("Failed to read nil value: %v", err)
 	}
 	if len(data2) != 0 {
@@ -481,8 +475,8 @@ func TestTrienodeHistoryReaderNilValues(t *testing.T) {
 	}
 
 	// Test reading non-nil value
-	data3, err := tr.read(owner, "data1")
-	if err != nil {
+	data3, found, err := tr.read(owner, "data1")
+	if err != nil || !found {
 		t.Fatalf("Failed to read non-nil value: %v", err)
 	}
 	if !bytes.Equal(data3, []byte("some data")) {
@@ -498,7 +492,7 @@ func TestTrienodeHistoryReaderNilKey(t *testing.T) {
 
 	// Add some nil values
 	nodes[owner][""] = []byte("some data")
-	nodes[owner]["data1"] = []byte("some data")
+	nodes[owner]["data1"] = []byte("some data1")
 
 	h := newTrienodeHistory(common.Hash{}, common.Hash{}, 1, nodes)
 
@@ -509,14 +503,10 @@ func TestTrienodeHistoryReaderNilKey(t *testing.T) {
 	if err := rawdb.WriteTrienodeHistory(freezer, 1, header, keySection, valueSection); err != nil {
 		t.Fatalf("Failed to write trienode history: %v", err)
 	}
-
-	tr, err := newTrienodeHistoryReader(1, freezer)
-	if err != nil {
-		t.Fatalf("Failed to construct history reader: %v", err)
-	}
+	tr := newTrienodeHistoryReader(1, freezer)
 
 	// Test reading nil values
-	data1, err := tr.read(owner, "")
+	data1, _, err := tr.read(owner, "")
 	if err != nil {
 		t.Fatalf("Failed to read nil value: %v", err)
 	}
@@ -525,63 +515,17 @@ func TestTrienodeHistoryReaderNilKey(t *testing.T) {
 	}
 
 	// Test reading non-nil value
-	data2, err := tr.read(owner, "data1")
+	data2, _, err := tr.read(owner, "data1")
 	if err != nil {
 		t.Fatalf("Failed to read non-nil value: %v", err)
 	}
-	if !bytes.Equal(data2, []byte("some data")) {
+	if !bytes.Equal(data2, []byte("some data1")) {
 		t.Fatal("Data mismatch for non-nil key")
 	}
 }
 
-// TestTrienodeHistoryReaderIterator tests the iterator functionality
-func TestTrienodeHistoryReaderIterator(t *testing.T) {
-	h := makeTrienodeHistory()
-
-	// Count expected entries
-	expectedCount := 0
-	expectedNodes := make(map[stateIdent]bool)
-	for owner, nodeList := range h.nodeList {
-		expectedCount += len(nodeList)
-		for _, node := range nodeList {
-			expectedNodes[stateIdent{
-				typ:         typeTrienode,
-				addressHash: owner,
-				path:        node,
-			}] = true
-		}
-	}
-
-	// Test the iterator
-	actualCount := 0
-	for x := range h.forEach() {
-		_ = x
-		actualCount++
-	}
-	if actualCount != expectedCount {
-		t.Fatalf("Iterator count mismatch: expected %d, got %d", expectedCount, actualCount)
-	}
-
-	// Test that iterator yields expected state identifiers
-	seen := make(map[stateIdent]bool)
-	for ident := range h.forEach() {
-		if ident.typ != typeTrienode {
-			t.Fatal("Iterator should only yield trienode history identifiers")
-		}
-		key := stateIdent{typ: ident.typ, addressHash: ident.addressHash, path: ident.path}
-		if seen[key] {
-			t.Fatal("Iterator yielded duplicate identifier")
-		}
-		seen[key] = true
-
-		if !expectedNodes[key] {
-			t.Fatalf("Unexpected yielded identifier %v", key)
-		}
-	}
-}
-
-// TestSharedLen tests the sharedLen helper function
-func TestSharedLen(t *testing.T) {
+// TestCommonPrefixLen tests the commonPrefixLen helper function
+func TestCommonPrefixLen(t *testing.T) {
 	tests := []struct {
 		a, b     []byte
 		expected int
@@ -610,13 +554,13 @@ func TestSharedLen(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		result := sharedLen(test.a, test.b)
+		result := commonPrefixLen(test.a, test.b)
 		if result != test.expected {
 			t.Errorf("Test %d: sharedLen(%q, %q) = %d, expected %d",
 				i, test.a, test.b, result, test.expected)
 		}
 		// Test commutativity
-		resultReverse := sharedLen(test.b, test.a)
+		resultReverse := commonPrefixLen(test.b, test.a)
 		if result != resultReverse {
 			t.Errorf("Test %d: sharedLen is not commutative: sharedLen(a,b)=%d, sharedLen(b,a)=%d",
 				i, result, resultReverse)
@@ -678,14 +622,14 @@ func TestDecodeSingleCorruptedData(t *testing.T) {
 	_, keySection, _, _ := h.encode()
 
 	// Test with empty key section
-	_, err := decodeSingle([]byte{}, nil)
+	err := decodeSingle([]byte{}, nil)
 	if err == nil {
 		t.Fatal("Expected error for empty key section")
 	}
 
 	// Test with key section too small for trailer
 	if len(keySection) > 0 {
-		_, err := decodeSingle(keySection[:3], nil) // Less than 4 bytes for trailer
+		err := decodeSingle(keySection[:3], nil) // Less than 4 bytes for trailer
 		if err == nil {
 			t.Fatal("Expected error for key section too small for trailer")
 		}
@@ -698,7 +642,7 @@ func TestDecodeSingleCorruptedData(t *testing.T) {
 	for i := range 10 {
 		corrupted[i] = 0xFF
 	}
-	_, err = decodeSingle(corrupted, nil)
+	err = decodeSingle(corrupted, nil)
 	if err == nil {
 		t.Fatal("Expected error for corrupted varint")
 	}
@@ -708,7 +652,7 @@ func TestDecodeSingleCorruptedData(t *testing.T) {
 	copy(corrupted, keySection)
 	// Set restart count to something too large
 	binary.BigEndian.PutUint32(corrupted[len(corrupted)-4:], 10000)
-	_, err = decodeSingle(corrupted, nil)
+	err = decodeSingle(corrupted, nil)
 	if err == nil {
 		t.Fatal("Expected error for invalid restart count")
 	}
@@ -735,5 +679,59 @@ func testEncodeDecode(t *testing.T, h *trienodeHistory) {
 	}
 	if !compareMapSet(decoded.nodes, h.nodes) {
 		t.Fatal("Trienode content mismatch")
+	}
+}
+
+func TestSearchSingle(t *testing.T) {
+	nodes := make(map[common.Hash]map[string][]byte)
+	ownerA, ownerB := testrand.Hash(), testrand.Hash()
+	nodes[ownerA] = make(map[string][]byte)
+	nodes[ownerB] = make(map[string][]byte)
+
+	for i := 0; i < trienodeDataBlockRestartLen*2; i++ {
+		nodes[ownerA][fmt.Sprintf("%d", 2*i+1)] = testrand.Bytes(rand.Intn(5))
+		nodes[ownerB][fmt.Sprintf("%d", 2*i+1)] = testrand.Bytes(rand.Intn(5))
+	}
+	h := newTrienodeHistory(common.Hash{}, common.Hash{}, 1, nodes)
+
+	var freezer, _ = rawdb.NewTrienodeFreezer(t.TempDir(), false, false)
+	defer freezer.Close()
+
+	header, keySection, valueSection, _ := h.encode()
+	if err := rawdb.WriteTrienodeHistory(freezer, 1, header, keySection, valueSection); err != nil {
+		t.Fatalf("Failed to write trienode history: %v", err)
+	}
+	tr := newTrienodeHistoryReader(1, freezer)
+
+	// Test reading non-existent entry
+	keys := []string{
+		"0",
+		"2",
+		"30",
+		"32",
+		"64",
+		"1000",
+	}
+	for _, key := range keys {
+		_, found, err := tr.read(ownerA, key)
+		if err != nil || found {
+			t.Fatalf("Expected non-existent entry %v", err)
+		}
+		_, found, err = tr.read(ownerB, key)
+		if err != nil || found {
+			t.Fatalf("Expected non-existent entry %v", err)
+		}
+	}
+
+	for owner, subnodes := range nodes {
+		for key, value := range subnodes {
+			got, found, err := tr.read(owner, key)
+			if err != nil || !found {
+				t.Fatal("Failed to read trienode")
+			}
+			if bytes.Compare(got, value) != 0 {
+				t.Fatalf("Unexpected value for key %v, got %v, expected %v", []byte(key), got, value)
+			}
+		}
 	}
 }

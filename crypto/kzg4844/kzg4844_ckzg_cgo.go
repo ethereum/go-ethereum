@@ -143,9 +143,9 @@ func ckzgComputeCellProofs(blob *Blob) ([]Proof, error) {
 	if err != nil {
 		return []Proof{}, err
 	}
-	var p []Proof
-	for _, proof := range proofs {
-		p = append(p, (Proof)(proof))
+	p := make([]Proof, len(proofs))
+	for i, proof := range proofs {
+		p[i] = (Proof)(proof)
 	}
 	return p, nil
 }

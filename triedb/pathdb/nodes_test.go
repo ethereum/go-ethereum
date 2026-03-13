@@ -18,11 +18,13 @@ package pathdb
 
 import (
 	"bytes"
+	"math/rand"
 	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
@@ -124,5 +126,51 @@ func TestNodeSetWithOriginEncode(t *testing.T) {
 	}
 	if dec2.size != s.size {
 		t.Fatalf("Unexpected data size, got: %d, want: %d", dec2.size, s.size)
+	}
+}
+
+func TestEncodeFullNodeCompressed(t *testing.T) {
+	var (
+		elements [][]byte
+		indices  []int
+	)
+	for i := 0; i <= 16; i++ {
+		if rand.Intn(2) == 0 {
+			elements = append(elements, testrand.Bytes(20))
+			indices = append(indices, i)
+		}
+	}
+	enc := encodeNodeCompressed(true, elements, indices)
+	decElements, decIndices, err := decodeNodeCompressed(enc)
+	if err != nil {
+		t.Fatalf("Failed to decode node compressed, %v", err)
+	}
+	if !reflect.DeepEqual(elements, decElements) {
+		t.Fatalf("Elements are not matched")
+	}
+	if !reflect.DeepEqual(indices, decIndices) {
+		t.Fatalf("Indices are not matched")
+	}
+}
+
+func TestEncodeShortNodeCompressed(t *testing.T) {
+	var (
+		elements [][]byte
+		indices  []int
+	)
+	for i := 0; i < 2; i++ {
+		elements = append(elements, testrand.Bytes(20))
+		indices = append(indices, i)
+	}
+	enc := encodeNodeCompressed(false, elements, indices)
+	decElements, decIndices, err := decodeNodeCompressed(enc)
+	if err != nil {
+		t.Fatalf("Failed to decode node compressed, %v", err)
+	}
+	if !reflect.DeepEqual(elements, decElements) {
+		t.Fatalf("Elements are not matched")
+	}
+	if !reflect.DeepEqual(indices, decIndices) {
+		t.Fatalf("Indices are not matched")
 	}
 }
