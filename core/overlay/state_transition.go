@@ -62,4 +62,3 @@ func (ts *TransitionState) Copy() *TransitionState {
 	}
 	return ret
 }
-
