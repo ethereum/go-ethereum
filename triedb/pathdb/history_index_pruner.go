@@ -34,11 +34,11 @@ const (
 	// index pruning too frequently.
 	indexPruningThreshold = 90000
 
-	// indexPruneReopenInterval is how long the iterator is kept open before
+	// iteratorReopenInterval is how long the iterator is kept open before
 	// being released and re-opened. Long-lived iterators hold a read snapshot
 	// that blocks LSM compaction; periodically re-opening avoids stalling the
 	// compactor during a large scan.
-	indexPruneReopenInterval = 3 * time.Minute
+	iteratorReopenInterval = 3 * time.Minute
 )
 
 // indexPruner is responsible for pruning stale index data from the tail side
@@ -214,7 +214,7 @@ func (p *indexPruner) prunePrefix(prefix []byte, elemType elementType, tail uint
 			}
 			// Periodically release the iterator so the LSM compactor
 			// is not blocked by the read snapshot we hold.
-			if time.Since(opened) >= indexPruneReopenInterval {
+			if time.Since(opened) >= iteratorReopenInterval {
 				reopen = true
 				start = common.CopyBytes(key[len(prefix):])
 				break
