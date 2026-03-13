@@ -18,6 +18,7 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	gomath "math"
@@ -156,11 +157,11 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			}
 			return err
 		}
-		statedb, err := state.New(blockchain.GetBlockByHash(block.ParentHash()).Root(), blockchain.statedb)
+		statedb, err := state.New(blockchain.GetBlockByHash(block.ParentHash()).Root(), state.NewDatabase(blockchain.triedb, blockchain.codedb))
 		if err != nil {
 			return err
 		}
-		res, err := blockchain.processor.Process(block, statedb, vm.Config{})
+		res, err := blockchain.processor.Process(context.Background(), block, statedb, vm.Config{})
 		if err != nil {
 			blockchain.reportBadBlock(block, res, err)
 			return err
@@ -3456,7 +3457,7 @@ func testSetCanonical(t *testing.T, scheme string) {
 		gen.AddTx(tx)
 	})
 	for _, block := range side {
-		_, err := chain.InsertBlockWithoutSetHead(block, false)
+		_, err := chain.InsertBlockWithoutSetHead(context.Background(), block, false)
 		if err != nil {
 			t.Fatalf("Failed to insert into chain: %v", err)
 		}

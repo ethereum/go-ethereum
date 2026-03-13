@@ -113,7 +113,7 @@ func (t *memoryTable) truncateTail(items uint64) error {
 		return nil
 	}
 	if t.items < items {
-		return errors.New("truncation above head")
+		return t.reset(items)
 	}
 	for i := uint64(0); i < items-t.offset; i++ {
 		if t.size > uint64(len(t.data[i])) {
@@ -124,6 +124,16 @@ func (t *memoryTable) truncateTail(items uint64) error {
 	}
 	t.data = t.data[items-t.offset:]
 	t.offset = items
+	return nil
+}
+
+// reset clears the entire table and sets both the head and tail to the given
+// value. It assumes the caller holds the lock and that tail > t.items.
+func (t *memoryTable) reset(offset uint64) error {
+	t.size = 0
+	t.data = nil
+	t.items = offset
+	t.offset = offset
 	return nil
 }
 
@@ -387,6 +397,9 @@ func (f *MemoryFreezer) TruncateTail(tail uint64) (uint64, error) {
 		}
 	}
 	f.tail = tail
+	if f.items < tail {
+		f.items = tail
+	}
 	return old, nil
 }
 

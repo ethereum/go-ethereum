@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package rawdb
+package tablewriter
 
 import (
 	"bytes"
@@ -24,7 +24,7 @@ import (
 
 func TestTableWriterTinyGo(t *testing.T) {
 	var buf bytes.Buffer
-	table := NewTableWriter(&buf)
+	table := NewWriter(&buf)
 
 	headers := []string{"Database", "Size", "Items", "Status"}
 	rows := [][]string{
@@ -48,7 +48,7 @@ func TestTableWriterValidationErrors(t *testing.T) {
 	// Test missing headers
 	t.Run("MissingHeaders", func(t *testing.T) {
 		var buf bytes.Buffer
-		table := NewTableWriter(&buf)
+		table := NewWriter(&buf)
 
 		rows := [][]string{{"x", "y", "z"}}
 
@@ -63,7 +63,7 @@ func TestTableWriterValidationErrors(t *testing.T) {
 
 	t.Run("NotEnoughRowColumns", func(t *testing.T) {
 		var buf bytes.Buffer
-		table := NewTableWriter(&buf)
+		table := NewWriter(&buf)
 
 		headers := []string{"A", "B", "C"}
 		badRows := [][]string{
@@ -82,7 +82,7 @@ func TestTableWriterValidationErrors(t *testing.T) {
 
 	t.Run("TooManyRowColumns", func(t *testing.T) {
 		var buf bytes.Buffer
-		table := NewTableWriter(&buf)
+		table := NewWriter(&buf)
 
 		headers := []string{"A", "B", "C"}
 		badRows := [][]string{
@@ -102,7 +102,7 @@ func TestTableWriterValidationErrors(t *testing.T) {
 	// Test mismatched footer columns
 	t.Run("MismatchedFooterColumns", func(t *testing.T) {
 		var buf bytes.Buffer
-		table := NewTableWriter(&buf)
+		table := NewWriter(&buf)
 
 		headers := []string{"A", "B", "C"}
 		rows := [][]string{{"x", "y", "z"}}

@@ -102,6 +102,7 @@ type stEnv struct {
 	ParentExcessBlobGas   *uint64                             `json:"parentExcessBlobGas,omitempty"`
 	ParentBlobGasUsed     *uint64                             `json:"parentBlobGasUsed,omitempty"`
 	ParentBeaconBlockRoot *common.Hash                        `json:"parentBeaconBlockRoot"`
+	SlotNumber            *uint64                             `json:"slotNumber"`
 }
 
 type stEnvMarshaling struct {
@@ -120,6 +121,7 @@ type stEnvMarshaling struct {
 	ExcessBlobGas       *math.HexOrDecimal64
 	ParentExcessBlobGas *math.HexOrDecimal64
 	ParentBlobGasUsed   *math.HexOrDecimal64
+	SlotNumber          *math.HexOrDecimal64
 }
 
 type rejectedTx struct {
@@ -147,15 +149,13 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		isEIP4762   = chainConfig.IsVerkle(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
 		statedb     = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isEIP4762)
 		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp)
-		gaspool     = new(core.GasPool)
+		gaspool     = core.NewGasPool(pre.Env.GasLimit)
 		blockHash   = common.Hash{0x13, 0x37}
 		rejectedTxs []*rejectedTx
 		includedTxs types.Transactions
-		gasUsed     = uint64(0)
 		blobGasUsed = uint64(0)
 		receipts    = make(types.Receipts, 0)
 	)
-	gaspool.AddGas(pre.Env.GasLimit)
 	vmContext := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
@@ -195,6 +195,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 				ExcessBlobGas: pre.Env.ParentExcessBlobGas,
 				BlobGasUsed:   pre.Env.ParentBlobGasUsed,
 				BaseFee:       pre.Env.ParentBaseFee,
+				SlotNumber:    pre.Env.SlotNumber,
 			}
 			header := &types.Header{
 				Time:          pre.Env.Timestamp,
@@ -255,15 +256,18 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		statedb.SetTxContext(tx.Hash(), len(receipts))
 		var (
 			snapshot = statedb.Snapshot()
-			prevGas  = gaspool.Gas()
+			gp       = gaspool.Snapshot()
 		)
-		receipt, err := core.ApplyTransactionWithEVM(msg, gaspool, statedb, vmContext.BlockNumber, blockHash, pre.Env.Timestamp, tx, &gasUsed, evm)
+		receipt, err := core.ApplyTransactionWithEVM(msg, gaspool, statedb, vmContext.BlockNumber, blockHash, pre.Env.Timestamp, tx, evm)
 		if err != nil {
 			statedb.RevertToSnapshot(snapshot)
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From, "error", err)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
-			gaspool.SetGas(prevGas)
+			gaspool.Set(gp)
 			continue
+		}
+		if receipt.Logs == nil {
+			receipt.Logs = []*types.Log{}
 		}
 		includedTxs = append(includedTxs, tx)
 		if hashError != nil {
@@ -346,7 +350,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		Receipts:    receipts,
 		Rejected:    rejectedTxs,
 		Difficulty:  (*math.HexOrDecimal256)(vmContext.Difficulty),
-		GasUsed:     (math.HexOrDecimal64)(gasUsed),
+		GasUsed:     (math.HexOrDecimal64)(gaspool.Used()),
 		BaseFee:     (*math.HexOrDecimal256)(vmContext.BaseFee),
 	}
 	if pre.Env.Withdrawals != nil {

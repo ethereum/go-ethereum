@@ -218,7 +218,11 @@ var (
 		Usage: "Max number of elements (0 = no limit)",
 		Value: 0,
 	}
-
+	OutputFileFlag = &cli.StringFlag{
+		Name:  "output",
+		Usage: "Writes the result in json to the output",
+		Value: "",
+	}
 	SnapshotFlag = &cli.BoolFlag{
 		Name:     "snapshot",
 		Usage:    `Enables snapshot-database mode (default = enable)`,
@@ -321,7 +325,7 @@ var (
 	}
 	ChainHistoryFlag = &cli.StringFlag{
 		Name:     "history.chain",
-		Usage:    `Blockchain history retention ("all" or "postmerge")`,
+		Usage:    `Blockchain history retention ("all", "postmerge", or "postprague")`,
 		Value:    ethconfig.Defaults.HistoryMode.String(),
 		Category: flags.StateCategory,
 	}
@@ -486,8 +490,8 @@ var (
 	// Performance tuning settings
 	CacheFlag = &cli.IntFlag{
 		Name:     "cache",
-		Usage:    "Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode)",
-		Value:    1024,
+		Usage:    "Megabytes of memory allocated to internal caching",
+		Value:    4096,
 		Category: flags.PerfCategory,
 	}
 	CacheDatabaseFlag = &cli.IntFlag{
@@ -1019,6 +1023,13 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Name:     "metrics.influxdb.tags",
 		Usage:    "Comma-separated InfluxDB tags (key/values) attached to all measurements",
 		Value:    metrics.DefaultConfig.InfluxDBTags,
+		Category: flags.MetricsCategory,
+	}
+
+	MetricsInfluxDBIntervalFlag = &cli.DurationFlag{
+		Name:     "metrics.influxdb.interval",
+		Usage:    "Interval between metrics reports to InfluxDB (with time unit, e.g. 10s)",
+		Value:    metrics.DefaultConfig.InfluxDBInterval,
 		Category: flags.MetricsCategory,
 	}
 
@@ -2255,13 +2266,14 @@ func SetupMetrics(cfg *metrics.Config) {
 		bucket       = cfg.InfluxDBBucket
 		organization = cfg.InfluxDBOrganization
 		tagsMap      = SplitTagsFlag(cfg.InfluxDBTags)
+		interval     = cfg.InfluxDBInterval
 	)
 	if enableExport {
-		log.Info("Enabling metrics export to InfluxDB")
-		go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", tagsMap)
+		log.Info("Enabling metrics export to InfluxDB", "interval", interval)
+		go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, interval, endpoint, database, username, password, "geth.", tagsMap)
 	} else if enableExportV2 {
-		log.Info("Enabling metrics export to InfluxDB (v2)")
-		go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "geth.", tagsMap)
+		log.Info("Enabling metrics export to InfluxDB (v2)", "interval", interval)
+		go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, interval, endpoint, token, bucket, organization, "geth.", tagsMap)
 	}
 
 	// Expvar exporter.
@@ -2466,8 +2478,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	}
 	vmcfg := vm.Config{
 		EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name),
-		EnableWitnessStats:      ctx.Bool(VMWitnessStatsFlag.Name),
-		StatelessSelfValidation: ctx.Bool(VMStatelessSelfValidationFlag.Name) || ctx.Bool(VMWitnessStatsFlag.Name),
 	}
 	if ctx.IsSet(VMTraceFlag.Name) {
 		if name := ctx.String(VMTraceFlag.Name); name != "" {
@@ -2480,6 +2490,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		}
 	}
 	options.VmConfig = vmcfg
+
+	options.StatelessSelfValidation = ctx.Bool(VMStatelessSelfValidationFlag.Name) || ctx.Bool(VMWitnessStatsFlag.Name)
+	options.EnableWitnessStats = ctx.Bool(VMWitnessStatsFlag.Name)
 
 	chain, err := core.NewBlockChain(chainDb, gspec, engine, options)
 	if err != nil {

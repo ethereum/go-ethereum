@@ -49,7 +49,7 @@ func (obj *BlockAccessList) EncodeRLP(_w io.Writer) error {
 		}
 		w.ListEnd(_tmp15)
 		_tmp18 := w.List()
-		for _, _tmp19 := range _tmp2.Code {
+		for _, _tmp19 := range _tmp2.CodeChanges {
 			_tmp20 := w.List()
 			w.WriteUint64(uint64(_tmp19.TxIndex))
 			w.WriteBytes(_tmp19.Code)
@@ -228,13 +228,13 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 					return err
 				}
 				_tmp2.NonceChanges = _tmp17
-				// Code:
-				var _tmp21 []CodeChange
+				// CodeChanges:
+				var _tmp21 []encodingCodeChange
 				if _, err := dec.List(); err != nil {
 					return err
 				}
 				for dec.MoreDataInList() {
-					var _tmp22 CodeChange
+					var _tmp22 encodingCodeChange
 					{
 						if _, err := dec.List(); err != nil {
 							return err
@@ -260,7 +260,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 				if err := dec.ListEnd(); err != nil {
 					return err
 				}
-				_tmp2.Code = _tmp21
+				_tmp2.CodeChanges = _tmp21
 				if err := dec.ListEnd(); err != nil {
 					return err
 				}

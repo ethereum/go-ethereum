@@ -195,6 +195,19 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	//      have been handles via pendingStorage above.
 	//   2) we don't have new values, and can deliver empty response back
 	if _, destructed := s.db.stateObjectsDestruct[s.address]; destructed {
+		// Invoke the reader regardless and discard the returned value.
+		// The returned value may not be empty, as it could belong to a
+		// self-destructed contract.
+		//
+		// The read operation is still essential for correctly building
+		// the block-level access list.
+		//
+		// TODO(rjl493456442) the reader interface can be extended with
+		// Touch, recording the read access without the actual disk load.
+		_, err := s.db.reader.Storage(s.address, key)
+		if err != nil {
+			s.db.setError(err)
+		}
 		s.originStorage[key] = common.Hash{} // track the empty slot as origin value
 		return common.Hash{}
 	}
@@ -551,10 +564,7 @@ func (s *stateObject) Code() []byte {
 		s.db.CodeLoadBytes += len(s.code)
 	}(time.Now())
 
-	code, err := s.db.reader.Code(s.address, common.BytesToHash(s.CodeHash()))
-	if err != nil {
-		s.db.setError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
-	}
+	code := s.db.reader.Code(s.address, common.BytesToHash(s.CodeHash()))
 	if len(code) == 0 {
 		s.db.setError(fmt.Errorf("code is not found %x", s.CodeHash()))
 	}
@@ -577,10 +587,7 @@ func (s *stateObject) CodeSize() int {
 		s.db.CodeReads += time.Since(start)
 	}(time.Now())
 
-	size, err := s.db.reader.CodeSize(s.address, common.BytesToHash(s.CodeHash()))
-	if err != nil {
-		s.db.setError(fmt.Errorf("can't load code size %x: %v", s.CodeHash(), err))
-	}
+	size := s.db.reader.CodeSize(s.address, common.BytesToHash(s.CodeHash()))
 	if size == 0 {
 		s.db.setError(fmt.Errorf("code is not found %x", s.CodeHash()))
 	}

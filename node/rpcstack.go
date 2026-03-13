@@ -90,6 +90,9 @@ type httpServer struct {
 	port     int
 
 	handlerNames map[string]string
+
+	// disableHTTP2 disables HTTP/2 support on this server when set to true.
+	disableHTTP2 bool
 }
 
 const (
@@ -140,7 +143,9 @@ func (h *httpServer) start() error {
 	h.server = &http.Server{Handler: h}
 	h.server.Protocols = new(http.Protocols)
 	h.server.Protocols.SetHTTP1(true)
-	h.server.Protocols.SetUnencryptedHTTP2(true)
+	if !h.disableHTTP2 {
+		h.server.Protocols.SetUnencryptedHTTP2(true)
+	}
 	if h.timeouts != (rpc.HTTPTimeouts{}) {
 		CheckTimeouts(&h.timeouts)
 		h.server.ReadTimeout = h.timeouts.ReadTimeout
