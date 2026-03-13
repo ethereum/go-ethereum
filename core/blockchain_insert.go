@@ -137,7 +137,7 @@ func (it *insertIterator) next() (*types.Block, error) {
 	if it.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
 		return block, ErrKnownBlock
 	}
-	// Verify uncle blocks against chain history (pre-mereg only)
+	// Verify uncle blocks against chain history (pre-merge only)
 	if err := it.bc.engine.VerifyUncles(it.bc, block); err != nil {
 		return block, err
 	}
