@@ -451,7 +451,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 	bc.flushInterval.Store(int64(cfg.TrieTimeLimit))
 	bc.statedb = state.NewDatabase(bc.triedb, nil)
-	bc.validator = NewBlockValidator(chainConfig, bc)
+	bc.validator = NewBlockValidator(chainConfig)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(bc.hc)
 	bc.parallelProcessor = NewParallelStateProcessor(bc.hc, &cfg.VmConfig)
@@ -641,7 +641,7 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 		return nil, err
 	}
 
-	if err := bc.validator.ValidateState(block, stateTransition, res.ProcessResult, false); err != nil {
+	if err := bc.validator.ValidateState(block, stateTransition, res.ProcessResult); err != nil {
 		return nil, err
 	}
 
@@ -2012,7 +2012,7 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 	defer close(abort)
 
 	// Peek the error for the first block to decide the directing import logic
-	it := newInsertIterator(chain, results, bc.validator)
+	it := newInsertIterator(chain, results, bc.validator, bc)
 	block, err := it.next()
 
 	// Left-trim all the known blocks that don't need to build snapshot
@@ -2400,7 +2400,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 
 	vstart := time.Now()
 	_, _, spanEnd = telemetry.StartSpan(ctx, "bc.validator.ValidateState")
-	err = bc.validator.ValidateState(block, statedb, res, false)
+	err = bc.validator.ValidateState(block, statedb, res)
 	spanEnd(&err)
 	if err != nil {
 		bc.reportBadBlock(block, res, err)
@@ -2408,30 +2408,11 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	}
 	vtime = time.Since(vstart)
 
-	if isAmsterdam {
+	if isAmsterdam && block.AccessList() == nil {
+		// Attach the computed access list to the block so it gets persisted
+		// when the block is written to disk.
 		computedAccessList := res.AccessList.ToEncodingObj()
-		computedAccessListHash := computedAccessList.Hash()
-
-		if *block.Header().BlockAccessListHash != computedAccessListHash {
-			//fmt.Printf("remote:\n%s\nlocal:\n%s\n", block.Body().AccessList.JSONString(), computedAccessList.JSONString())
-			err := fmt.Errorf("block header access list hash mismatch with computed (header=%x computed=%x)", *block.Header().BlockAccessListHash, computedAccessListHash)
-			bc.reportBadBlock(block, res, err)
-			return nil, err
-		}
-		// EIP-7928: Validate BAL items do not exceed block gas limit
-		if err := computedAccessList.ValidateGasLimit(block.Header().GasLimit); err != nil {
-			bc.reportBadBlock(block, res, err)
-			return nil, err
-		}
-		if block.AccessList() == nil {
-			// attach the computed access list to the block so it gets persisted
-			// when the block is written to disk
-			block = block.WithAccessList(computedAccessList)
-		} else if block.AccessList().Hash() != computedAccessListHash {
-			err := fmt.Errorf("block access list hash mismatch (remote=%x computed=%x)", block.AccessList().Hash(), computedAccessListHash)
-			bc.reportBadBlock(block, res, err)
-			return nil, err
-		}
+		block = block.WithAccessList(computedAccessList)
 	}
 
 	// If witnesses was generated and stateless self-validation requested, do
@@ -2443,23 +2424,9 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	if witness := statedb.Witness(); witness != nil && config.StatelessSelfValidation {
 		log.Warn("Running stateless self-validation", "block", block.Number(), "hash", block.Hash())
 
-		// Remove critical computed fields from the block to force true recalculation
-		context := block.Header()
-		context.Root = common.Hash{}
-		context.ReceiptHash = common.Hash{}
-
-		task := types.NewBlockWithHeader(context).WithBody(*block.Body())
-
 		// Run the stateless self-cross-validation
-		crossStateRoot, crossReceiptRoot, err := ExecuteStateless(ctx, bc.chainConfig, bc.cfg.VmConfig, task, witness)
-		if err != nil {
+		if err := ExecuteStateless(ctx, bc.chainConfig, bc.cfg.VmConfig, block, witness); err != nil {
 			return nil, fmt.Errorf("stateless self-validation failed: %v", err)
-		}
-		if crossStateRoot != block.Root() {
-			return nil, fmt.Errorf("stateless self-validation root mismatch (cross: %x local: %x)", crossStateRoot, block.Root())
-		}
-		if crossReceiptRoot != block.ReceiptHash() {
-			return nil, fmt.Errorf("stateless self-validation receipt root mismatch (cross: %x local: %x)", crossReceiptRoot, block.ReceiptHash())
 		}
 	}
 

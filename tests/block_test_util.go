@@ -19,6 +19,7 @@ package tests
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -30,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
@@ -44,6 +46,7 @@ import (
 	"math/big"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 )
 
@@ -68,11 +71,20 @@ type btJSON struct {
 }
 
 type btBlock struct {
-	BlockHeader     *btHeader
-	ExpectException string
-	Rlp             string
-	UncleHeaders    []*btHeader
-	AccessList      *bal.BlockAccessList `json:"blockAccessList,omitempty"`
+	BlockHeader          *btHeader
+	ExpectException      string
+	Rlp                  string
+	UncleHeaders         []*btHeader
+	AccessList           *bal.BlockAccessList `json:"blockAccessList,omitempty"`
+	ExecutionWitness     *btExecutionWitness  `json:"executionWitness,omitempty"`
+	StatelessInputBytes  *hexutil.Bytes       `json:"statelessInputBytes,omitempty"`
+	StatelessOutputBytes *hexutil.Bytes       `json:"statelessOutputBytes,omitempty"`
+}
+
+type btExecutionWitness struct {
+	State   []hexutil.Bytes `json:"state"`
+	Codes   []hexutil.Bytes `json:"codes"`
+	Headers []hexutil.Bytes `json:"headers"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type btHeader -field-override btHeaderMarshaling -out gen_btheader.go
@@ -469,4 +481,82 @@ func (bb *btBlock) decode() (*types.Block, error) {
 	var b types.Block
 	err = rlp.DecodeBytes(data, &b)
 	return &b, err
+}
+
+// toWitness converts a btExecutionWitness into a stateless.Witness by RLP-decoding
+// the headers and populating the codes and state fields.
+func (ew *btExecutionWitness) toWitness() (*stateless.Witness, error) {
+	w := new(stateless.Witness)
+
+	for _, raw := range ew.Headers {
+		var h types.Header
+		if err := rlp.DecodeBytes(raw, &h); err != nil {
+			return nil, fmt.Errorf("failed to RLP-decode witness header: %v", err)
+		}
+		w.Headers = append(w.Headers, &h)
+	}
+	// EEST fixtures store headers in ascending block number order, but geth's
+	// stateless execution expects Headers[0] to be the parent (highest number)
+	// followed by older ancestors. Reverse the slice to match.
+	slices.Reverse(w.Headers)
+	w.Codes = make(map[string]struct{}, len(ew.Codes))
+	for _, code := range ew.Codes {
+		w.Codes[string(code)] = struct{}{}
+	}
+	w.State = make(map[string]struct{}, len(ew.State))
+	for _, node := range ew.State {
+		w.State[string(node)] = struct{}{}
+	}
+	return w, nil
+}
+
+// validateExecutionWitness checks that the execution witness from the test fixture
+// is sufficient to statelessly execute the given block and produce the correct
+// state root and receipt hash.
+func (t *BlockTest) validateExecutionWitness(block *types.Block, ew *btExecutionWitness) error {
+	config, ok := Forks[t.json.Network]
+	if !ok {
+		return UnsupportedForkError{t.json.Network}
+	}
+	witness, err := ew.toWitness()
+	if err != nil {
+		return fmt.Errorf("failed to parse execution witness: %v", err)
+	}
+	return core.ExecuteStateless(context.TODO(), config, vm.Config{}, block, witness)
+}
+
+// validateStatelessInputWitness checks that the execution witness encoded in the
+// SSZ statelessInputBytes matches the JSON executionWitness field.
+func validateStatelessInputWitness(inputBytes []byte, ew *btExecutionWitness) error {
+	var input SszStatelessInput
+	if err := input.UnmarshalSSZ(inputBytes); err != nil {
+		return fmt.Errorf("failed to SSZ-decode statelessInputBytes: %v", err)
+	}
+	w := input.Witness
+
+	if len(w.State) != len(ew.State) {
+		return fmt.Errorf("witness state count mismatch: ssz=%d json=%d", len(w.State), len(ew.State))
+	}
+	for i := range w.State {
+		if !bytes.Equal(w.State[i], ew.State[i]) {
+			return fmt.Errorf("witness state[%d] mismatch", i)
+		}
+	}
+	if len(w.Codes) != len(ew.Codes) {
+		return fmt.Errorf("witness codes count mismatch: ssz=%d json=%d", len(w.Codes), len(ew.Codes))
+	}
+	for i := range w.Codes {
+		if !bytes.Equal(w.Codes[i], ew.Codes[i]) {
+			return fmt.Errorf("witness codes[%d] mismatch", i)
+		}
+	}
+	if len(w.Headers) != len(ew.Headers) {
+		return fmt.Errorf("witness headers count mismatch: ssz=%d json=%d", len(w.Headers), len(ew.Headers))
+	}
+	for i := range w.Headers {
+		if !bytes.Equal(w.Headers[i], ew.Headers[i]) {
+			return fmt.Errorf("witness headers[%d] mismatch", i)
+		}
+	}
+	return nil
 }
