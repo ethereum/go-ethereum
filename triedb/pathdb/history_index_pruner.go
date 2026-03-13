@@ -128,30 +128,27 @@ func (p *indexPruner) run() {
 // leading blocks whose max history ID is below the given tail.
 func (p *indexPruner) process(tail uint64) error {
 	var (
-		err     error
-		pruned  int
-		scanned int
-		start   = time.Now()
+		err    error
+		pruned int
+		start  = time.Now()
 	)
 	switch p.typ {
 	case typeStateHistory:
-		pn, sn, err := p.prunePrefix(rawdb.StateHistoryAccountMetadataPrefix, typeAccount, tail)
+		n, err := p.prunePrefix(rawdb.StateHistoryAccountMetadataPrefix, typeAccount, tail)
 		if err != nil {
 			return err
 		}
-		pruned += pn
-		scanned += sn
+		pruned += n
 
-		pn, sn, err = p.prunePrefix(rawdb.StateHistoryStorageMetadataPrefix, typeStorage, tail)
+		n, err = p.prunePrefix(rawdb.StateHistoryStorageMetadataPrefix, typeStorage, tail)
 		if err != nil {
 			return err
 		}
-		pruned += pn
-		scanned += sn
+		pruned += n
 		statePruneHistoryIndexTimer.UpdateSince(start)
 
 	case typeTrienodeHistory:
-		pruned, scanned, err = p.prunePrefix(rawdb.TrienodeHistoryMetadataPrefix, typeTrienode, tail)
+		pruned, err = p.prunePrefix(rawdb.TrienodeHistoryMetadataPrefix, typeTrienode, tail)
 		if err != nil {
 			return err
 		}
@@ -161,7 +158,7 @@ func (p *indexPruner) process(tail uint64) error {
 		panic("unknown history type")
 	}
 	if pruned > 0 {
-		p.log.Info("Pruned stale index blocks", "pruned", pruned, "scanned", scanned, "tail", tail, "elapsed", common.PrettyDuration(time.Since(start)))
+		p.log.Info("Pruned stale index blocks", "pruned", pruned, "tail", tail, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
 	return nil
 }
@@ -171,11 +168,10 @@ func (p *indexPruner) process(tail uint64) error {
 // cursor advances after each cycle; when the prefix is fully scanned, the
 // cursor resets so the next cycle starts from the beginning.
 // Returns (prunedBlocks, scannedEntries, error).
-func (p *indexPruner) prunePrefix(prefix []byte, elemType elementType, tail uint64) (int, int, error) {
+func (p *indexPruner) prunePrefix(prefix []byte, elemType elementType, tail uint64) (int, error) {
 	var (
-		pruned  int
-		scanned int
-		batch   = p.disk.NewBatchWithSize(ethdb.IdealBatchSize)
+		pruned int
+		batch  = p.disk.NewBatchWithSize(ethdb.IdealBatchSize)
 	)
 	it := p.disk.NewIterator(prefix, nil)
 	defer it.Release()
@@ -184,10 +180,9 @@ func (p *indexPruner) prunePrefix(prefix []byte, elemType elementType, tail uint
 		// Check for shutdown
 		select {
 		case <-p.closed:
-			return pruned, scanned, nil
+			return pruned, nil
 		default:
 		}
-		scanned++
 		key, value := it.Key(), it.Value()
 
 		ident, bsize := p.identFromKey(key, prefix, elemType)
@@ -200,17 +195,17 @@ func (p *indexPruner) prunePrefix(prefix []byte, elemType elementType, tail uint
 
 		if batch.ValueSize() >= ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
-				return 0, 0, err
+				return 0, err
 			}
 			batch.Reset()
 		}
 	}
 	if batch.ValueSize() > 0 {
 		if err := batch.Write(); err != nil {
-			return 0, 0, err
+			return 0, err
 		}
 	}
-	return pruned, scanned, nil
+	return pruned, nil
 }
 
 // identFromKey reconstructs the stateIdent and bitmapSize from a metadata key.
