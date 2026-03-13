@@ -53,17 +53,8 @@ func main() {
 	}
 	vmConfig := vm.Config{}
 
-	crossStateRoot, crossReceiptRoot, err := core.ExecuteStateless(context.Background(), chainConfig, vmConfig, payload.Block, payload.Witness)
-	if err != nil {
+	if err := core.ExecuteStateless(context.Background(), chainConfig, vmConfig, payload.Block, payload.Witness); err != nil {
 		fmt.Fprintf(os.Stderr, "stateless self-validation failed: %v\n", err)
 		os.Exit(10)
-	}
-	if crossStateRoot != payload.Block.Root() {
-		fmt.Fprintf(os.Stderr, "stateless self-validation root mismatch (cross: %x local: %x)\n", crossStateRoot, payload.Block.Root())
-		os.Exit(11)
-	}
-	if crossReceiptRoot != payload.Block.ReceiptHash() {
-		fmt.Fprintf(os.Stderr, "stateless self-validation receipt root mismatch (cross: %x local: %x)\n", crossReceiptRoot, payload.Block.ReceiptHash())
-		os.Exit(12)
 	}
 }

@@ -522,26 +522,7 @@ func (t *BlockTest) validateExecutionWitness(block *types.Block, ew *btExecution
 	if err != nil {
 		return fmt.Errorf("failed to parse execution witness: %v", err)
 	}
-	// ExecuteStateless expects the block header to have zeroed root and receipt hash
-	// so it can compute them from the witness. Make a copy with those fields cleared.
-	header := types.CopyHeader(block.Header())
-	expectedRoot := header.Root
-	expectedReceiptHash := header.ReceiptHash
-	header.Root = common.Hash{}
-	header.ReceiptHash = common.Hash{}
-
-	witnessBlock := types.NewBlockWithHeader(header).WithBody(*block.Body())
-	stateRoot, receiptRoot, err := core.ExecuteStateless(context.TODO(), config, vm.Config{}, witnessBlock, witness)
-	if err != nil {
-		return fmt.Errorf("stateless execution failed: %v", err)
-	}
-	if stateRoot != expectedRoot {
-		return fmt.Errorf("execution witness state root mismatch: computed %x, expected %x", stateRoot, expectedRoot)
-	}
-	if receiptRoot != expectedReceiptHash {
-		return fmt.Errorf("execution witness receipt root mismatch: computed %x, expected %x", receiptRoot, expectedReceiptHash)
-	}
-	return nil
+	return core.ExecuteStateless(context.TODO(), config, vm.Config{}, block, witness)
 }
 
 // validateStatelessInputWitness checks that the execution witness encoded in the

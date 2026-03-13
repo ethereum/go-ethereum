@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -95,19 +96,21 @@ type insertIterator struct {
 	results <-chan error // Verification result sink from the consensus engine
 	errors  []error      // Header verification errors for the blocks
 
-	index     int       // Current offset of the iterator
-	validator Validator // Validator to run if verification succeeds
+	index     int          // Current offset of the iterator
+	validator Validator    // Validator to run if verification succeeds
+	bc        *BlockChain  // Blockchain for admission checks
 }
 
 // newInsertIterator creates a new iterator based on the given blocks, which are
 // assumed to be a contiguous chain.
-func newInsertIterator(chain types.Blocks, results <-chan error, validator Validator) *insertIterator {
+func newInsertIterator(chain types.Blocks, results <-chan error, validator Validator, bc *BlockChain) *insertIterator {
 	return &insertIterator{
 		chain:     chain,
 		results:   results,
 		errors:    make([]error, 0, len(chain)),
 		index:     -1,
 		validator: validator,
+		bc:        bc,
 	}
 }
 
@@ -127,8 +130,21 @@ func (it *insertIterator) next() (*types.Block, error) {
 	if it.errors[it.index] != nil {
 		return it.chain[it.index], it.errors[it.index]
 	}
-	// Block header valid, run body validation and return
-	return it.chain[it.index], it.validator.ValidateBody(it.chain[it.index])
+	// Block header valid, run admission checks and body validation
+	block := it.chain[it.index]
+	if it.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
+		return block, ErrKnownBlock
+	}
+	if err := it.bc.engine.VerifyUncles(it.bc, block); err != nil {
+		return block, err
+	}
+	if !it.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
+		if !it.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
+			return block, consensus.ErrUnknownAncestor
+		}
+		return block, consensus.ErrPrunedAncestor
+	}
+	return block, it.validator.ValidateBody(block)
 }
 
 // previous returns the previous header that was being processed, or nil.
