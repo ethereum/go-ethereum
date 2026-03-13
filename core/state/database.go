@@ -80,6 +80,7 @@ func LoadTransitionState(reader StateReader, root common.Hash) *overlay.Transiti
 		StorageProcessed:      storageProcessed != (common.Hash{}),
 	}
 }
+
 // Database wraps access to tries and contract code.
 type Database interface {
 	// Reader returns a state reader associated with the specified state root.
@@ -323,9 +324,17 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 					}
 					return transitiontrie.NewTransitionTrie(base, bt, false), nil
 				}
-				bt, err := bintrie.NewBinaryTrie(root, db.triedb)
-				if err != nil {
-					return nil, err
+				bt, btErr := bintrie.NewBinaryTrie(root, db.triedb)
+				if btErr != nil {
+					base, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
+					if err != nil {
+						return nil, btErr
+					}
+					bt, err = bintrie.NewBinaryTrie(common.Hash{}, db.triedb)
+					if err != nil {
+						return nil, err
+					}
+					return transitiontrie.NewTransitionTrie(base, bt, false), nil
 				}
 				return transitiontrie.NewTransitionTrie(nil, bt, false), nil
 			}

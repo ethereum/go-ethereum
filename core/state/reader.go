@@ -187,12 +187,20 @@ func newTrieReader(root common.Hash, db *triedb.Database, ts *overlay.Transition
 			}
 			tr = transitiontrie.NewTransitionTrie(mpt, binTrie, false)
 		} else {
-			var binTrie *bintrie.BinaryTrie
-			binTrie, err = bintrie.NewBinaryTrie(root, db)
-			if err != nil {
-				return nil, err
+			binTrie, binErr := bintrie.NewBinaryTrie(root, db)
+			if binErr != nil {
+				mpt, mptErr := trie.NewStateTrie(trie.StateTrieID(root), db)
+				if mptErr != nil {
+					return nil, binErr
+				}
+				binTrie, err = bintrie.NewBinaryTrie(common.Hash{}, db)
+				if err != nil {
+					return nil, err
+				}
+				tr = transitiontrie.NewTransitionTrie(mpt, binTrie, false)
+			} else {
+				tr = transitiontrie.NewTransitionTrie(nil, binTrie, false)
 			}
-			tr = transitiontrie.NewTransitionTrie(nil, binTrie, false)
 		}
 	} else {
 		binTrie, binErr := bintrie.NewBinaryTrie(root, db)

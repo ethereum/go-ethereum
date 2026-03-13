@@ -96,20 +96,12 @@ func TestBinaryTransitionRegistryBootstrap(t *testing.T) {
 		baseRoot := gen.GetState(registryAddr, slotBaseRoot)
 		t.Logf("block %d: started=%x baseRoot=%x", i, started, baseRoot)
 
-		if i == 2 {
-			if started != (common.Hash{}) {
-				t.Errorf("block %d: first verkle block gen callback runs before Phase 1, registry should not be visible yet", i)
-			}
-		} else {
-			if started == (common.Hash{}) {
-				t.Errorf("block %d: verkle block should have registry slot 0 (started) set", i)
-			}
+		if started == (common.Hash{}) {
+			t.Errorf("block %d: verkle block should have registry slot 0 (started) set", i)
 		}
 
-		if i >= 3 {
-			if baseRoot == (common.Hash{}) {
-				t.Errorf("block %d: should have base root set by Phase 2", i)
-			}
+		if baseRoot == (common.Hash{}) {
+			t.Errorf("block %d: should have base root set", i)
 		}
 	})
 }
