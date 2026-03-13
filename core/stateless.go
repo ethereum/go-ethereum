@@ -27,56 +27,51 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
-// ExecuteStateless runs a stateless execution based on a witness, verifies
-// everything it can locally and returns the state root and receipt root, that
-// need the other side to explicitly check.
+// ExecuteStateless runs a stateless execution based on a witness, fully
+// validating the block including header, body, state root and receipt root.
 //
 // This method is a bit of a sore thumb here, but:
 //   - It cannot be placed in core/stateless, because state.New prodces a circular dep
 //   - It cannot be placed outside of core, because it needs to construct a dud headerchain
 //
 // TODO(karalabe): Would be nice to resolve both issues above somehow and move it.
-func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig vm.Config, block *types.Block, witness *stateless.Witness) (common.Hash, common.Hash, error) {
-	// Sanity check if the supplied block accidentally contains a set root or
-	// receipt hash. If so, be very loud, but still continue.
-	if block.Root() != (common.Hash{}) {
-		log.Error("stateless runner received state root it's expected to calculate (faulty consensus client)", "block", block.Number())
-	}
-	if block.ReceiptHash() != (common.Hash{}) {
-		log.Error("stateless runner received receipt root it's expected to calculate (faulty consensus client)", "block", block.Number())
-	}
+func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig vm.Config, block *types.Block, witness *stateless.Witness) error {
 	// Create and populate the state database to serve as the stateless backend
 	memdb := witness.MakeHashDB()
 	db, err := state.New(witness.Root(), state.NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), nil))
 	if err != nil {
-		return common.Hash{}, common.Hash{}, err
+		return err
 	}
 	// Create a blockchain that is idle, but can be used to access headers through
+	engine := beacon.New(ethash.NewFaker())
 	chain := &HeaderChain{
 		config:      config,
 		chainDb:     memdb,
 		headerCache: lru.NewCache[common.Hash, *types.Header](256),
-		engine:      beacon.New(ethash.NewFaker()),
+		engine:      engine,
+	}
+	// Verify the block header against the parent header from the witness
+	if err := engine.VerifyHeader(chain, block.Header()); err != nil {
+		return err
 	}
 	processor := NewStateProcessor(chain)
-	validator := NewBlockValidator(config, nil) // No chain, we only validate the state, not the block
+	validator := NewBlockValidator(config)
 
-	// Run the stateless blocks processing and self-validate certain fields
+	// Verify the block body (transactions, withdrawals, blob gas) against the header
+	if err := validator.ValidateBody(block); err != nil {
+		return err
+	}
+	// Run the stateless block processing and self-validate all fields
 	res, err := processor.Process(ctx, block, db, vmconfig)
 	if err != nil {
-		return common.Hash{}, common.Hash{}, err
+		return err
 	}
-	if err = validator.ValidateState(block, db, res, true); err != nil {
-		return common.Hash{}, common.Hash{}, err
+	if err = validator.ValidateState(block, db, res); err != nil {
+		return err
 	}
-	// Almost everything validated, but receipt and state root needs to be returned
-	receiptRoot := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
-	stateRoot := db.IntermediateRoot(config.IsEIP158(block.Number()))
-	return stateRoot, receiptRoot, nil
+	return nil
 }
