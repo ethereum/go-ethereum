@@ -215,14 +215,14 @@ func (db *Database) setHistoryIndexer() {
 		if db.stateIndexer != nil {
 			db.stateIndexer.close()
 		}
-		db.stateIndexer = newHistoryIndexer(db.diskdb, db.stateFreezer, db.tree.bottom().stateID(), typeStateHistory)
+		db.stateIndexer = newHistoryIndexer(db.diskdb, db.stateFreezer, db.tree.bottom().stateID(), typeStateHistory, db.config.NoHistoryIndexDelay)
 		log.Info("Enabled state history indexing")
 	}
 	if db.trienodeFreezer != nil {
 		if db.trienodeIndexer != nil {
 			db.trienodeIndexer.close()
 		}
-		db.trienodeIndexer = newHistoryIndexer(db.diskdb, db.trienodeFreezer, db.tree.bottom().stateID(), typeTrienodeHistory)
+		db.trienodeIndexer = newHistoryIndexer(db.diskdb, db.trienodeFreezer, db.tree.bottom().stateID(), typeTrienodeHistory, db.config.NoHistoryIndexDelay)
 		log.Info("Enabled trienode history indexing")
 	}
 }
