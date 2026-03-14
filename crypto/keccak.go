@@ -26,38 +26,40 @@ import (
 )
 
 // NewKeccakState creates a new KeccakState
-func NewKeccakState() KeccakState {
-	return keccak.NewLegacyKeccak256().(KeccakState)
+func NewKeccakState() keccak.KeccakState {
+	h := hasherPool.Get().(keccak.KeccakState)
+	h.Reset()
+	return h
 }
+
+func ReturnToPool(h keccak.KeccakState) { hasherPool.Put(h) }
 
 var hasherPool = sync.Pool{
 	New: func() any {
-		return keccak.NewLegacyKeccak256().(KeccakState)
+		return keccak.NewLegacyKeccak256()
 	},
 }
 
 // Keccak256 calculates and returns the Keccak256 hash of the input data.
 func Keccak256(data ...[]byte) []byte {
 	b := make([]byte, 32)
-	d := hasherPool.Get().(KeccakState)
-	d.Reset()
+	d := NewKeccakState()
 	for _, b := range data {
 		d.Write(b)
 	}
 	d.Read(b)
-	hasherPool.Put(d)
+	ReturnToPool(d)
 	return b
 }
 
 // Keccak256Hash calculates and returns the Keccak256 hash of the input data,
 // converting it to an internal Hash data structure.
 func Keccak256Hash(data ...[]byte) (h common.Hash) {
-	d := hasherPool.Get().(KeccakState)
-	d.Reset()
+	d := NewKeccakState()
 	for _, b := range data {
 		d.Write(b)
 	}
-	d.Read(h[:])
-	hasherPool.Put(d)
+	d.Read(h[:]) //nolint:errcheck
+	ReturnToPool(d)
 	return h
 }
