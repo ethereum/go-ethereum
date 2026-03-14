@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 )
 
@@ -45,6 +44,7 @@ type DumpConfig struct {
 type DumpCollector interface {
 	// OnRoot is called with the state root
 	OnRoot(common.Hash)
+
 	// OnAccount is called once for each account in the trie
 	OnAccount(*common.Address, DumpAccount)
 }
@@ -65,9 +65,10 @@ type DumpAccount struct {
 type Dump struct {
 	Root     string                 `json:"root"`
 	Accounts map[string]DumpAccount `json:"accounts"`
+
 	// Next can be set to represent that this dump is only partial, and Next
 	// is where an iterator should be positioned in order to continue the dump.
-	Next []byte `json:"next,omitempty"` // nil if no more accounts
+	Next hexutil.Bytes `json:"next,omitempty"` // nil if no more accounts
 }
 
 // OnRoot implements DumpCollector interface
@@ -114,9 +115,6 @@ func (d iterativeDump) OnRoot(root common.Hash) {
 
 // DumpToCollector iterates the state according to the given options and inserts
 // the items into a collector for aggregation or serialization.
-//
-// The state iterator is still trie-based and can be converted to snapshot-based
-// once the state snapshot is fully integrated into database. TODO(rjl493456442).
 func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []byte) {
 	// Sanitize the input to allow nil configs
 	if conf == nil {
@@ -131,20 +129,23 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	log.Info("Trie dumping started", "root", s.originalRoot)
 	c.OnRoot(s.originalRoot)
 
-	tr, err := s.db.OpenTrie(s.originalRoot)
+	iteratee, err := s.db.Iteratee(s.originalRoot)
 	if err != nil {
 		return nil
 	}
-	trieIt, err := tr.NodeIterator(conf.Start)
+	var startHash common.Hash
+	if conf.Start != nil {
+		startHash = common.BytesToHash(conf.Start)
+	}
+	acctIt, err := iteratee.NewAccountIterator(startHash)
 	if err != nil {
-		log.Error("Trie dumping error", "err", err)
 		return nil
 	}
-	it := trie.NewIterator(trieIt)
+	defer acctIt.Release()
 
-	for it.Next() {
+	for acctIt.Next() {
 		var data types.StateAccount
-		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
+		if err := rlp.DecodeBytes(acctIt.Account(), &data); err != nil {
 			panic(err)
 		}
 		var (
@@ -153,63 +154,55 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 				Nonce:       data.Nonce,
 				Root:        data.Root[:],
 				CodeHash:    data.CodeHash,
-				AddressHash: it.Key,
+				AddressHash: acctIt.Hash().Bytes(),
 			}
-			address   *common.Address
-			addr      common.Address
-			addrBytes = tr.GetKey(it.Key)
+			address *common.Address
 		)
-		if addrBytes == nil {
+		addrBytes, err := acctIt.Address()
+		if err != nil {
 			missingPreimages++
 			if conf.OnlyWithAddresses {
 				continue
 			}
 		} else {
-			addr = common.BytesToAddress(addrBytes)
-			address = &addr
+			address = &addrBytes
 			account.Address = address
 		}
-		obj := newObject(s, addr, &data)
+		obj := newObject(s, addrBytes, &data)
 		if !conf.SkipCode {
 			account.Code = obj.Code()
 		}
 		if !conf.SkipStorage {
 			account.Storage = make(map[common.Hash]string)
 
-			storageTr, err := s.db.OpenStorageTrie(s.originalRoot, addr, obj.Root(), tr)
+			storageIt, err := iteratee.NewStorageIterator(acctIt.Hash(), obj.Root(), common.Hash{})
 			if err != nil {
 				log.Error("Failed to load storage trie", "err", err)
 				continue
 			}
-			trieIt, err := storageTr.NodeIterator(nil)
-			if err != nil {
-				log.Error("Failed to create trie iterator", "err", err)
-				continue
-			}
-			storageIt := trie.NewIterator(trieIt)
 			for storageIt.Next() {
-				_, content, _, err := rlp.Split(storageIt.Value)
+				_, content, _, err := rlp.Split(storageIt.Slot())
 				if err != nil {
 					log.Error("Failed to decode the value returned by iterator", "error", err)
 					continue
 				}
-				key := storageTr.GetKey(storageIt.Key)
-				if key == nil {
+				key, err := storageIt.Key()
+				if err != nil {
 					continue
 				}
-				account.Storage[common.BytesToHash(key)] = common.Bytes2Hex(content)
+				account.Storage[key] = common.Bytes2Hex(content)
 			}
+			storageIt.Release()
 		}
 		c.OnAccount(address, account)
 		accounts++
 		if time.Since(logged) > 8*time.Second {
-			log.Info("Trie dumping in progress", "at", common.Bytes2Hex(it.Key), "accounts", accounts,
-				"elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Trie dumping in progress", "at", acctIt.Hash().Hex(), "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
 		}
 		if conf.Max > 0 && accounts >= conf.Max {
-			if it.Next() {
-				nextKey = it.Key
+			if acctIt.Next() {
+				nextKey = acctIt.Hash().Bytes()
 			}
 			break
 		}
@@ -217,9 +210,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	if missingPreimages > 0 {
 		log.Warn("Dump incomplete due to missing preimages", "missing", missingPreimages)
 	}
-	log.Info("Trie dumping complete", "accounts", accounts,
-		"elapsed", common.PrettyDuration(time.Since(start)))
-
+	log.Info("Trie dumping complete", "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nextKey
 }
 
