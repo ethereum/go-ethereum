@@ -19,6 +19,7 @@ package tracers
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -281,6 +282,70 @@ func TestStateHooks(t *testing.T) {
 	expected := `{"Balance":{"0x00000000000000000000000000000000deadbeef":"0x3e8","0x71562b71999873db5b286df957af199ec94617f7":"0xde0975924ed6f90"},"Nonce":{"0x71562b71999873db5b286df957af199ec94617f7":"0x3"},"Storage":{"0x00000000000000000000000000000000deadbeef":{"0x0000000000000000000000000000000000000000000000000000000000000000":"0x000000000000000000000000000000000000000000000000000000000000002a"}}}`
 	if expected != fmt.Sprintf("%s", res) {
 		t.Fatalf("unexpected trace result: have %s want %s", res, expected)
+	}
+}
+
+func TestTraceBlockParallelPragueParentHashSystemCall(t *testing.T) {
+	var (
+		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		from   = crypto.PubkeyToAddress(key.PublicKey)
+		to     = common.HexToAddress("0x00000000000000000000000000000000deadbeef")
+		cfg    = *params.AllDevChainProtocolChanges
+		nonce  = uint64(0)
+	)
+
+	genesis := &core.Genesis{
+		Config: &cfg,
+		Alloc: types.GenesisAlloc{
+			from:                         {Balance: big.NewInt(params.Ether)},
+			to:                           {Balance: big.NewInt(0)},
+			params.HistoryStorageAddress: {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
+		},
+	}
+	backend := newTestMergedBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    nonce,
+			To:       &to,
+			Value:    big.NewInt(1),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+		}), types.HomesteadSigner{}, key)
+		b.AddTx(tx)
+		nonce++
+	})
+	defer backend.teardown()
+
+	api := NewAPI(backend)
+	block := backend.chain.GetBlockByNumber(1)
+	if block == nil {
+		t.Fatal("failed to retrieve test block")
+	}
+	parent := backend.chain.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		t.Fatal("failed to retrieve parent block")
+	}
+	statedb, release, err := backend.StateAtBlock(context.Background(), parent, defaultTraceReexec, nil, true, false)
+	if err != nil {
+		t.Fatalf("failed to create parent state: %v", err)
+	}
+	defer release()
+
+	results, err := api.traceBlockParallel(context.Background(), block, statedb, nil)
+	if err != nil {
+		t.Fatalf("traceBlockParallel failed: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("unexpected result length: have %d want 1", len(results))
+	}
+	if results[0].Error != "" {
+		t.Fatalf("unexpected trace error: %v", results[0].Error)
+	}
+	var historyKey common.Hash
+	binary.BigEndian.PutUint64(historyKey[24:], (block.NumberU64()-1)%params.HistoryServeWindow)
+	have := statedb.GetState(params.HistoryStorageAddress, historyKey)
+	want := block.ParentHash()
+	if have != want {
+		t.Fatalf("unexpected parent hash in storage: have %v want %v", have, want)
 	}
 }
 
