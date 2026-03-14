@@ -2,16 +2,20 @@
 
 package keccak
 
-import "unsafe"
+import (
+	"unsafe"
+
+	"golang.org/x/sys/cpu"
+)
+
+func init() { useASM = cpu.X86.HasBMI2 }
 
 //go:noescape
-func keccakF1600(a *[200]byte)
+func keccakF1600BMI2(a *[200]byte)
 
-// Sum256 computes the Keccak-256 hash of data. Zero heap allocations.
-func Sum256(data []byte) [32]byte { return sum256Sponge(data) }
-
-// Hasher is a streaming Keccak-256 hasher. Designed for stack allocation.
-type Hasher struct{ sponge }
+func keccakF1600(a *[200]byte) {
+	keccakF1600BMI2(a)
+}
 
 func xorAndPermute(state *[200]byte, buf *byte) {
 	xorIn(state, unsafe.Slice(buf, rate))

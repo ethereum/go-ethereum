@@ -2,7 +2,15 @@
 
 package keccak
 
-import "unsafe"
+import (
+	"unsafe"
+
+	"golang.org/x/crypto/sha3"
+)
+
+// useASM is set by platform-specific init to indicate hardware acceleration is available.
+// When false, Sum256 and Hasher fall back to x/crypto/sha3.
+var useASM bool
 
 // sponge is the core Keccak-256 sponge state used by native (asm) implementations.
 type sponge struct {
@@ -118,6 +126,95 @@ func sum256Sponge(data []byte) [32]byte {
 	keccakF1600(&state)
 
 	return [32]byte(state[:32])
+}
+
+// Sum256 computes the Keccak-256 hash of data. Zero heap allocations when hardware
+// acceleration is available.
+func Sum256(data []byte) [32]byte {
+	if !useASM {
+		return sum256XCrypto(data)
+	}
+	return sum256Sponge(data)
+}
+
+func sum256XCrypto(data []byte) [32]byte {
+	h := sha3.NewLegacyKeccak256()
+	h.Write(data)
+	var out [32]byte
+	h.Sum(out[:0])
+	return out
+}
+
+// Hasher is a streaming Keccak-256 hasher.
+// Uses platform assembly when available, x/crypto/sha3 otherwise.
+type Hasher struct {
+	sponge
+	xc KeccakState // x/crypto fallback
+}
+
+// Reset resets the hasher to its initial state.
+func (h *Hasher) Reset() {
+	if useASM {
+		h.sponge.Reset()
+	} else {
+		if h.xc == nil {
+			h.xc = sha3.NewLegacyKeccak256().(KeccakState)
+		} else {
+			h.xc.Reset()
+		}
+	}
+}
+
+// Write absorbs data into the hasher.
+// Panics if called after Read.
+func (h *Hasher) Write(p []byte) (int, error) {
+	if !useASM {
+		if h.xc == nil {
+			h.xc = sha3.NewLegacyKeccak256().(KeccakState)
+		}
+		return h.xc.Write(p)
+	}
+	return h.sponge.Write(p)
+}
+
+// Sum256 finalizes and returns the 32-byte Keccak-256 digest.
+// Does not modify the hasher state.
+func (h *Hasher) Sum256() [32]byte {
+	if !useASM {
+		if h.xc == nil {
+			return Sum256(nil)
+		}
+		var out [32]byte
+		h.xc.Sum(out[:0])
+		return out
+	}
+	return h.sponge.Sum256()
+}
+
+// Sum appends the current Keccak-256 digest to b and returns the resulting slice.
+// Does not modify the hasher state.
+func (h *Hasher) Sum(b []byte) []byte {
+	if !useASM {
+		if h.xc == nil {
+			d := Sum256(nil)
+			return append(b, d[:]...)
+		}
+		return h.xc.Sum(b)
+	}
+	return h.sponge.Sum(b)
+}
+
+// Read squeezes an arbitrary number of bytes from the sponge.
+// On the first call, it pads and permutes, transitioning from absorbing to squeezing.
+// Subsequent calls to Write will panic. It never returns an error.
+func (h *Hasher) Read(out []byte) (int, error) {
+	if !useASM {
+		if h.xc == nil {
+			h.xc = sha3.NewLegacyKeccak256().(KeccakState)
+		}
+		return h.xc.Read(out)
+	}
+	return h.sponge.Read(out)
 }
 
 func xorIn(state *[200]byte, data []byte) {

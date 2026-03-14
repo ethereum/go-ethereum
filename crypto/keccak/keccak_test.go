@@ -267,13 +267,14 @@ func benchName(size int) string {
 	}
 }
 
-func BenchmarkFasterKeccak(b *testing.B) {
+// BenchmarkKeccak256Sum tests Sum256 with local faster_keccak implementation.
+func BenchmarkKeccak256Sum(b *testing.B) {
 	for _, size := range benchSizes {
 		data := make([]byte, size)
 		for i := range data {
 			data[i] = byte(i)
 		}
-		b.Run(benchName(size), func(b *testing.B) {
+		b.Run("FasterKeccak/"+benchName(size), func(b *testing.B) {
 			b.SetBytes(int64(size))
 			b.ReportAllocs()
 			for b.Loop() {
@@ -283,13 +284,14 @@ func BenchmarkFasterKeccak(b *testing.B) {
 	}
 }
 
-func BenchmarkXCrypto(b *testing.B) {
+// BenchmarkKeccak256Stdlib tests Sum256 with golang.org/x/crypto/sha3 standard library.
+func BenchmarkKeccak256Stdlib(b *testing.B) {
 	for _, size := range benchSizes {
 		data := make([]byte, size)
 		for i := range data {
 			data[i] = byte(i)
 		}
-		b.Run(benchName(size), func(b *testing.B) {
+		b.Run("StdLib/"+benchName(size), func(b *testing.B) {
 			b.SetBytes(int64(size))
 			b.ReportAllocs()
 			h := sha3.NewLegacyKeccak256()
@@ -302,13 +304,14 @@ func BenchmarkXCrypto(b *testing.B) {
 	}
 }
 
-func BenchmarkFasterKeccakHasher(b *testing.B) {
+// BenchmarkKeccak256Hasher tests Hasher.Sum256() with local faster_keccak implementation.
+func BenchmarkKeccak256Hasher(b *testing.B) {
 	for _, size := range benchSizes {
 		data := make([]byte, size)
 		for i := range data {
 			data[i] = byte(i)
 		}
-		b.Run(benchName(size), func(b *testing.B) {
+		b.Run("FasterKeccak/"+benchName(size), func(b *testing.B) {
 			b.SetBytes(int64(size))
 			b.ReportAllocs()
 			var h Hasher
@@ -321,13 +324,35 @@ func BenchmarkFasterKeccakHasher(b *testing.B) {
 	}
 }
 
-// BenchmarkKeccakStreaming_Sha3 benchmarks the standard sha3 streaming hasher (Reset+Write+Read).
-func BenchmarkKeccakStreaming_Sha3(b *testing.B) {
+// BenchmarkKeccak256HasherStdlib tests Hasher API with golang.org/x/crypto/sha3 standard library.
+func BenchmarkKeccak256HasherStdlib(b *testing.B) {
+	for _, size := range benchSizes {
+		data := make([]byte, size)
+		for i := range data {
+			data[i] = byte(i)
+		}
+		b.Run("StdLib/"+benchName(size), func(b *testing.B) {
+			b.SetBytes(int64(size))
+			b.ReportAllocs()
+			h := sha3.NewLegacyKeccak256().(KeccakState)
+			var buf [32]byte
+			for b.Loop() {
+				h.Reset()
+				h.Write(data)
+				h.Read(buf[:])
+			}
+		})
+	}
+}
+
+// BenchmarkKeccakStreaming benchmarks the streaming hasher (Reset+Write+Read).
+// Use with benchstat: go test -bench=BenchmarkKeccakStreaming -benchmem ./... | benchstat
+func BenchmarkKeccakStreaming(b *testing.B) {
 	data := make([]byte, 32)
 	for i := range data {
 		data[i] = byte(i)
 	}
-	h := sha3.NewLegacyKeccak256().(KeccakState)
+	var h Hasher
 	var buf [32]byte
 	b.SetBytes(int64(len(data)))
 	b.ReportAllocs()
