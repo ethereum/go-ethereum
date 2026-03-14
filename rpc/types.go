@@ -51,9 +51,10 @@ type ServerCodec interface {
 // jsonWriter can write JSON messages to its underlying connection.
 // Implementations must be safe for concurrent use.
 type jsonWriter interface {
-	// writeJSON writes a message to the connection.
-	writeJSON(ctx context.Context, msg interface{}, isError bool) error
-
+	// writeJSON writes a single JSON-RPC message to the connection.
+	writeJSON(ctx context.Context, msg *jsonrpcMessage, isError bool) error
+	// writeJSONBatch writes a batch of JSON-RPC messages to the connection.
+	writeJSONBatch(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error
 	// Closed returns a channel which is closed when the connection is closed.
 	closed() <-chan interface{}
 	// RemoteAddr returns the peer address of the connection.
