@@ -197,29 +197,111 @@ func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolve
 	return bt, err
 }
 
-// CollectNodes collects all child nodes at a given path, and flushes it
-// into the provided node collector.
-func (bt *InternalNode) CollectNodes(path []byte, flushfn NodeFlushFn) error {
-	if bt.left != nil {
-		var p [256]byte
-		copy(p[:], path)
-		childpath := p[:len(path)]
-		childpath = append(childpath, 0)
-		if err := bt.left.CollectNodes(childpath, flushfn); err != nil {
+// CollectNodes collects all child nodes at group boundaries (every groupDepth levels),
+// and flushes them into the provided node collector. Each flush serializes a groupDepth-level
+// subtree group. Nodes within a group are not flushed individually.
+func (bt *InternalNode) CollectNodes(path []byte, flushfn NodeFlushFn, groupDepth int) error {
+	if groupDepth < 1 || groupDepth > MaxGroupDepth {
+		return errors.New("groupDepth must be between 1 and 8")
+	}
+	// Only flush at group boundaries (depth % groupDepth == 0)
+	if bt.depth%groupDepth == 0 {
+		// We're at a group boundary - first collect any nodes in deeper groups,
+		// then flush this group
+		if err := bt.collectChildGroups(path, flushfn, groupDepth, groupDepth-1); err != nil {
 			return err
+		}
+		flushfn(path, bt)
+		return nil
+	}
+	// Not at a group boundary - this shouldn't happen if we're called correctly from root
+	// but handle it by continuing to traverse
+	return bt.collectChildGroups(path, flushfn, groupDepth, groupDepth-(bt.depth%groupDepth)-1)
+}
+
+// collectChildGroups traverses within a group to find and collect nodes in the next group.
+// remainingLevels is how many more levels below the current node until we reach the group boundary.
+// When remainingLevels=0, the current node's children are at the next group boundary.
+func (bt *InternalNode) collectChildGroups(path []byte, flushfn NodeFlushFn, groupDepth int, remainingLevels int) error {
+	if remainingLevels == 0 {
+		// Current node is at depth (groupBoundary - 1), its children are at the next group boundary
+		if bt.left != nil {
+			if err := bt.left.CollectNodes(appendBit(path, 0), flushfn, groupDepth); err != nil {
+				return err
+			}
+		}
+		if bt.right != nil {
+			if err := bt.right.CollectNodes(appendBit(path, 1), flushfn, groupDepth); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Continue traversing within the group.
+	// When a non-InternalNode (StemNode, HashedNode) appears mid-group, its
+	// hash gets projected to a leaf bitmap position by serializeSubtree. The
+	// storage path must be extended to match that projected position so that
+	// lookups after deserialization find the node at the correct path.
+	childDepth := bt.depth + 1
+	if bt.left != nil {
+		switch n := bt.left.(type) {
+		case *InternalNode:
+			if err := n.collectChildGroups(appendBit(path, 0), flushfn, groupDepth, remainingLevels-1); err != nil {
+				return err
+			}
+		default:
+			extPath := extendPathToGroupLeaf(appendBit(path, 0), bt.left, remainingLevels, childDepth)
+			if err := bt.left.CollectNodes(extPath, flushfn, groupDepth); err != nil {
+				return err
+			}
 		}
 	}
 	if bt.right != nil {
-		var p [256]byte
-		copy(p[:], path)
-		childpath := p[:len(path)]
-		childpath = append(childpath, 1)
-		if err := bt.right.CollectNodes(childpath, flushfn); err != nil {
-			return err
+		switch n := bt.right.(type) {
+		case *InternalNode:
+			if err := n.collectChildGroups(appendBit(path, 1), flushfn, groupDepth, remainingLevels-1); err != nil {
+				return err
+			}
+		default:
+			extPath := extendPathToGroupLeaf(appendBit(path, 1), bt.right, remainingLevels, childDepth)
+			if err := bt.right.CollectNodes(extPath, flushfn, groupDepth); err != nil {
+				return err
+			}
 		}
 	}
-	flushfn(path, bt)
 	return nil
+}
+
+// extendPathToGroupLeaf extends a storage path to the group's leaf boundary,
+// matching the projection done by serializeSubtree. For StemNodes, the path
+// is extended using the stem's key bits (same as serializeSubtree). For other
+// node types, the path is extended with all-zero (left) bits.
+func extendPathToGroupLeaf(path []byte, node BinaryNode, remainingLevels int, absoluteDepth int) []byte {
+	if remainingLevels <= 0 {
+		return path
+	}
+	if sn, ok := node.(*StemNode); ok {
+		for d := 0; d < remainingLevels; d++ {
+			bit := sn.Stem[(absoluteDepth+d)/8] >> (7 - ((absoluteDepth + d) % 8)) & 1
+			path = appendBit(path, bit)
+		}
+	} else {
+		// HashedNode or other: all-left extension (matches serializeSubtree's
+		// position << remainingDepth behavior).
+		for d := 0; d < remainingLevels; d++ {
+			path = appendBit(path, 0)
+		}
+	}
+	return path
+}
+
+// appendBit appends a bit to a path, returning a new slice
+func appendBit(path []byte, bit byte) []byte {
+	var p [256]byte
+	copy(p[:], path)
+	result := p[:len(path)]
+	return append(result, bit)
 }
 
 // GetHeight returns the height of the node.
