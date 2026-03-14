@@ -17,13 +17,7 @@
 package overlay
 
 import (
-	"bytes"
-	"encoding/gob"
-
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // TransitionState is a structure that holds the progress markers of the
@@ -67,40 +61,4 @@ func (ts *TransitionState) Copy() *TransitionState {
 		ret.CurrentAccountAddress = &addr
 	}
 	return ret
-}
-
-// LoadTransitionState retrieves the Verkle transition state associated with
-// the given state root hash from the database.
-func LoadTransitionState(db ethdb.KeyValueReader, root common.Hash, isVerkle bool) *TransitionState {
-	var ts *TransitionState
-
-	data, _ := rawdb.ReadVerkleTransitionState(db, root)
-
-	// if a state could be read from the db, attempt to decode it
-	if len(data) > 0 {
-		var (
-			newts TransitionState
-			buf   = bytes.NewBuffer(data[:])
-			dec   = gob.NewDecoder(buf)
-		)
-		// Decode transition state
-		err := dec.Decode(&newts)
-		if err != nil {
-			log.Error("failed to decode transition state", "err", err)
-			return nil
-		}
-		ts = &newts
-	}
-
-	// Fallback that should only happen before the transition
-	if ts == nil {
-		// Initialize the first transition state, with the "ended"
-		// field set to true if the database was created
-		// as a verkle database.
-		log.Debug("no transition state found, starting fresh", "verkle", isVerkle)
-
-		// Start with a fresh state
-		ts = &TransitionState{Ended: isVerkle}
-	}
-	return ts
 }

@@ -190,6 +190,13 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 			return &newPayloadResult{err: err}
 		}
 	}
+	if miner.chainConfig.IsVerkle(work.header.Number, work.header.Time) {
+		parent := miner.chain.GetHeaderByHash(work.header.ParentHash)
+		if parent != nil && !miner.chainConfig.IsVerkle(parent.Number, parent.Time) {
+			core.InitializeBinaryTransitionRegistry(work.state, parent.Root)
+		}
+	}
+
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
 		work.header.RequestsHash = &reqHash

@@ -94,6 +94,13 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
+	if config.IsVerkle(header.Number, header.Time) {
+		parentHeader := p.chain.GetHeaderByHash(block.ParentHash())
+		if parentHeader != nil && !config.IsVerkle(parentHeader.Number, parentHeader.Time) {
+			InitializeBinaryTransitionRegistry(statedb, parentHeader.Root)
+		}
+	}
+
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)

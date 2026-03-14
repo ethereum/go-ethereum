@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 )
 
@@ -170,6 +171,11 @@ func (b *BlockGen) AddTxWithVMConfig(tx *types.Transaction, config vm.Config) {
 // GetBalance returns the balance of the given address at the generated block.
 func (b *BlockGen) GetBalance(addr common.Address) *uint256.Int {
 	return b.statedb.GetBalance(addr)
+}
+
+// GetState returns a storage slot value at the generated block.
+func (b *BlockGen) GetState(addr common.Address, key common.Hash) common.Hash {
+	return b.statedb.GetState(addr, key)
 }
 
 // AddUncheckedTx forcefully adds a transaction to the block without any validation.
@@ -399,6 +405,13 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			ProcessParentBlockHash(b.header.ParentHash, evm)
 		}
 
+		if config.IsVerkle(b.header.Number, b.header.Time) {
+			parentIsVerkle := config.IsVerkle(parent.Number(), parent.Time())
+			if !parentIsVerkle {
+				InitializeBinaryTransitionRegistry(statedb, parent.Root())
+			}
+		}
+
 		// Execute any user modifications to the block
 		if gen != nil {
 			gen(i, b)
@@ -429,13 +442,18 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 
 	// Forcibly use hash-based state scheme for retaining all nodes in disk.
 	var triedbConfig *triedb.Config = triedb.HashDefaults
-	if config.IsVerkle(config.ChainID, 0) {
+	if config.IsVerkle(big.NewInt(0), 0) {
 		triedbConfig = triedb.VerkleDefaults
+	} else if config.VerkleTime != nil {
+		triedbConfig = &triedb.Config{
+			IsVerkle: false,
+			PathDB:   pathdb.Defaults,
+		}
 	}
 	triedb := triedb.NewDatabase(db, triedbConfig)
 	defer triedb.Close()
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		statedb, err := state.New(parent.Root(), state.NewDatabase(triedb, nil))
 		if err != nil {
 			panic(err)
@@ -480,6 +498,11 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 	var triedbConfig *triedb.Config = triedb.HashDefaults
 	if genesis.Config != nil && genesis.Config.IsVerkle(genesis.Config.ChainID, 0) {
 		triedbConfig = triedb.VerkleDefaults
+	} else if genesis.Config != nil && genesis.Config.VerkleTime != nil {
+		triedbConfig = &triedb.Config{
+			IsVerkle: false,
+			PathDB:   pathdb.Defaults,
+		}
 	}
 	genesisTriedb := triedb.NewDatabase(db, triedbConfig)
 	block, err := genesis.Commit(db, genesisTriedb, nil)
