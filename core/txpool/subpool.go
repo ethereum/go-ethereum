@@ -138,6 +138,9 @@ type SubPool interface {
 	// given transaction hash.
 	GetMetadata(hash common.Hash) *TxMetadata
 
+	// GetTxBySenderAndNonce returns a transaction of a sender and it's corresponding nonce.
+	GetTxBySenderAndNonce(sender common.Address, nonce uint64) *types.Transaction
+
 	// ValidateTxBasics checks whether a transaction is valid according to the consensus
 	// rules, but does not check state-dependent validation such as sufficient balance.
 	// This check is meant as a static check which can be performed without holding the

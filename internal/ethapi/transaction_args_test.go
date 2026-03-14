@@ -389,6 +389,11 @@ func (b *backendMock) GetCanonicalTransaction(txHash common.Hash) (bool, *types.
 func (b *backendMock) TxIndexDone() bool                                        { return true }
 func (b *backendMock) GetPoolTransactions() (types.Transactions, error)         { return nil, nil }
 func (b *backendMock) GetPoolTransaction(txHash common.Hash) *types.Transaction { return nil }
+
+// GetTransactionHashBySenderAndNonce implements the Backend interface for testing.
+func (b *backendMock) GetTransactionBySenderAndNonce(ctx context.Context, sender common.Address, nonce uint64) (*common.Hash, error) {
+	return nil, nil
+}
 func (b *backendMock) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
 	return 0, nil
 }
