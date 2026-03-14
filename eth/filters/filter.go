@@ -46,6 +46,7 @@ type Filter struct {
 
 	rangeLogsTestHook chan rangeLogsTestEvent
 	rangeLimit        uint64
+	limit             uint64 // Maximum number of logs to return; 0 means no limit
 }
 
 // NewRangeFilter creates a new filter which uses a bloom filter on blocks to
@@ -57,6 +58,14 @@ func (sys *FilterSystem) NewRangeFilter(begin, end int64, addresses []common.Add
 	filter.end = end
 	filter.rangeLimit = rangeLimit
 
+	return filter
+}
+
+// NewRangeFilterWithLimit creates a new filter with a maximum result count.
+// When limit is non-zero, the returned result is capped to that many logs.
+func (sys *FilterSystem) NewRangeFilterWithLimit(begin, end int64, addresses []common.Address, topics [][]common.Hash, rangeLimit, limit uint64) *Filter {
+	filter := sys.NewRangeFilter(begin, end, addresses, topics, rangeLimit)
+	filter.limit = limit
 	return filter
 }
 
@@ -149,7 +158,14 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	if f.rangeLimit != 0 && (end-begin) > f.rangeLimit {
 		return nil, fmt.Errorf("exceed maximum block range: %d", f.rangeLimit)
 	}
-	return f.rangeLogs(ctx, begin, end)
+	logs, err := f.rangeLogs(ctx, begin, end)
+	if err != nil {
+		return nil, err
+	}
+	if f.limit > 0 && uint64(len(logs)) > f.limit {
+		logs = logs[:f.limit]
+	}
+	return logs, nil
 }
 
 const (
@@ -451,6 +467,11 @@ func (f *Filter) unindexedLogs(ctx context.Context, chainView *filtermaps.ChainV
 			return matches, err
 		}
 		matches = append(matches, found...)
+		// Early exit once the limit is reached on the unindexed path, avoiding
+		// a full raw-block scan when callers only need the first N matches.
+		if f.limit > 0 && uint64(len(matches)) >= f.limit {
+			break
+		}
 	}
 	log.Debug("Performed unindexed log search", "begin", begin, "end", end, "matches", len(matches), "elapsed", common.PrettyDuration(time.Since(start)))
 	return matches, nil
