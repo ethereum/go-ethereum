@@ -97,7 +97,8 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
 	// transactions but may occur for transactions created using the RPC.
-	if tx.Value().Sign() < 0 {
+	value := tx.Value()
+	if value.Sign() < 0 {
 		return ErrNegativeValue
 	}
 	// Ensure the transaction doesn't exceed the current block limit gas
@@ -105,14 +106,16 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		return ErrGasLimit
 	}
 	// Sanity check for extremely large numbers (supported by RLP or RPC)
-	if tx.GasFeeCap().BitLen() > 256 {
+	feeCap := tx.GasFeeCap()
+	if feeCap.BitLen() > 256 {
 		return core.ErrFeeCapVeryHigh
 	}
-	if tx.GasTipCap().BitLen() > 256 {
+	tipCap := tx.GasTipCap()
+	if tipCap.BitLen() > 256 {
 		return core.ErrTipVeryHigh
 	}
 	// Ensure gasFeeCap is greater than or equal to gasTipCap
-	if tx.GasFeeCapIntCmp(tx.GasTipCap()) < 0 {
+	if feeCap.Cmp(tipCap) < 0 {
 		return core.ErrTipAboveFeeCap
 	}
 	// Make sure the transaction is signed properly
