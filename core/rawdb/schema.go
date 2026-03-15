@@ -120,6 +120,9 @@ var (
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
 	skeletonHeaderPrefix  = []byte("S") // skeletonHeaderPrefix + num (uint64 big endian) -> header
 
+	eraTxLookupPrefix = []byte("e")            // eraTxLookupPrefix + hash -> transaction/receipt lookup metadata
+	eraIndexTailKey   = []byte("eraIndexTail") // eraIndexTailKey -> last fully indexed epoch
+
 	// Path-based storage scheme of merkle patricia trie.
 	TrieNodeAccountPrefix = []byte("A") // TrieNodeAccountPrefix + hexPath -> trie node
 	TrieNodeStoragePrefix = []byte("O") // TrieNodeStoragePrefix + accountHash + hexPath -> trie node
@@ -217,6 +220,11 @@ func blockReceiptsKey(number uint64, hash common.Hash) []byte {
 // txLookupKey = txLookupPrefix + hash
 func txLookupKey(hash common.Hash) []byte {
 	return append(txLookupPrefix, hash.Bytes()...)
+}
+
+// eraTxLookupKey = eraTxLookupPrefix + hash
+func eraTxLookupKey(hash common.Hash) []byte {
+	return append(eraTxLookupPrefix, hash.Bytes()...)
 }
 
 // accountSnapshotKey = SnapshotAccountPrefix + hash
