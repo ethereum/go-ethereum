@@ -175,7 +175,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Here we determine genesis hash and active ChainConfig.
 	// We need these to figure out the consensus parameters and to set up history pruning.
-	chainConfig, _, err := core.LoadChainConfig(chainDb, config.Genesis)
+	chainConfig, ghash, err := core.LoadChainConfig(chainDb, config.Genesis)
 	if err != nil {
 		return nil, err
 	}
@@ -187,6 +187,21 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	networkID := config.NetworkId
 	if networkID == 0 {
 		networkID = chainConfig.ChainID.Uint64()
+	}
+
+	// Switch to full sync if we're in snap sync and genesis block is in the future.
+	if config.SyncMode == ethconfig.SnapSync {
+		genesisTime := uint64(0)
+		now := uint64(time.Now().Unix())
+		if config.Genesis != nil {
+			genesisTime = config.Genesis.Timestamp
+		} else if genesis := rawdb.ReadBlock(chainDb, ghash, 0); genesis != nil {
+			genesisTime = genesis.Time()
+		}
+		if genesisTime > uint64(now) {
+			log.Warn("Genesis block is in the future, switching from snap sync to full sync")
+			config.SyncMode = ethconfig.FullSync
+		}
 	}
 
 	// Assemble the Ethereum object.
