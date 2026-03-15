@@ -515,3 +515,15 @@ func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumberOrHash) (*stateless.ExtW
 	}
 	return result.Witness().ToExtWitness(), nil
 }
+
+// ClearTxpool clears all transactions from the transaction pool.
+// This method removes all pending and queued transactions from both the
+// legacy transaction pool and the blob transaction pool.
+//
+// Note: This operation invokes Sync() internally and should be used with
+// caution as it can be susceptible to DoS vectors. It's primarily intended
+// for testing and debugging purposes.
+func (api *DebugAPI) ClearTxpool() error {
+	api.eth.TxPool().Clear()
+	return nil
+}
