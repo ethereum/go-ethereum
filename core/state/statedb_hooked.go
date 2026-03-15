@@ -285,3 +285,7 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 
 	s.inner.Finalise(deleteEmptyObjects)
 }
+
+func (s *hookedStateDB) GetAccumulatedIOMeasurements() *tracing.IOMeasurements {
+	return s.inner.GetAccumulatedIOMeasurements()
+}

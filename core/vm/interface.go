@@ -95,4 +95,8 @@ type StateDB interface {
 
 	// Finalise must be invoked at the end of a transaction
 	Finalise(bool)
+
+	// GetAccumulatedGasMeasurements returns measurements of IO operations that have
+	// been accumulated since the execution of the block started.
+	GetAccumulatedIOMeasurements() *tracing.IOMeasurements
 }
