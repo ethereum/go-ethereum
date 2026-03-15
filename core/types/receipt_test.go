@@ -22,6 +22,7 @@ import (
 	"math"
 	"math/big"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -509,6 +510,101 @@ func TestReceiptUnmarshalBinary(t *testing.T) {
 	eip1559Receipt.Bloom = CreateBloom(eip1559Receipt)
 	if !reflect.DeepEqual(got1559Receipt, eip1559Receipt) {
 		t.Errorf("receipt unmarshalled from binary mismatch, got %v want %v", got1559Receipt, eip1559Receipt)
+	}
+}
+
+func makeStorageConversionTestReceipt(typ uint8) *Receipt {
+	r := &Receipt{
+		Type:              typ,
+		Status:            ReceiptStatusSuccessful,
+		CumulativeGasUsed: 42_000,
+		Logs: []*Log{
+			{
+				Address: common.HexToAddress("0x1"),
+				Topics:  []common.Hash{common.HexToHash("0x2"), common.HexToHash("0x3")},
+				Data:    []byte{0xde, 0xad, 0xbe, 0xef},
+			},
+		},
+	}
+	r.Bloom = CreateBloom(r)
+	return r
+}
+
+func TestConvertConsensusReceiptsToStorage(t *testing.T) {
+	tests := []struct {
+		name     string
+		receipts Receipts
+	}{
+		{
+			name:     "typed-single",
+			receipts: Receipts{makeStorageConversionTestReceipt(DynamicFeeTxType)},
+		},
+		{
+			name:     "legacy-single",
+			receipts: Receipts{makeStorageConversionTestReceipt(LegacyTxType)},
+		},
+		{
+			name: "mixed-multiple",
+			receipts: Receipts{
+				makeStorageConversionTestReceipt(LegacyTxType),
+				makeStorageConversionTestReceipt(DynamicFeeTxType),
+			},
+		},
+		{
+			name:     "empty",
+			receipts: Receipts{},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := rlp.EncodeToBytes(tc.receipts)
+			if err != nil {
+				t.Fatalf("failed to encode consensus receipts: %v", err)
+			}
+			got, err := ConvertConsensusReceiptsToStorage(raw)
+			if err != nil {
+				t.Fatalf("conversion failed: %v", err)
+			}
+			want := EncodeBlockReceiptLists([]Receipts{tc.receipts})[0]
+			if !bytes.Equal(got, want) {
+				t.Fatalf("converted storage receipts mismatch\ngot:  %x\nwant: %x", got, want)
+			}
+		})
+	}
+}
+
+func TestConvertConsensusReceiptsToStorageErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  []byte
+		want string
+	}{
+		{
+			name: "invalid-rlp",
+			raw:  []byte{0xff},
+			want: "invalid block receipts list",
+		},
+		{
+			name: "single-byte-receipt",
+			raw:  []byte{0xc1, 0x01}, // list with one single-byte item
+			want: "single byte",
+		},
+		{
+			name: "typed-empty-payload",
+			raw:  []byte{0xc1, 0x80}, // list with one empty-string item
+			want: "empty payload",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ConvertConsensusReceiptsToStorage(tc.raw)
+			if err == nil {
+				t.Fatalf("expected error")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 
