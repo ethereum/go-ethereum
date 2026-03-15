@@ -25,8 +25,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+type transientStorageKey struct {
+	addr common.Address
+	key  common.Hash
+}
+
 // transientStorage is a representation of EIP-1153 "Transient Storage".
-type transientStorage map[common.Address]Storage
+type transientStorage map[transientStorageKey]common.Hash
 
 // newTransientStorage creates a new instance of a transientStorage.
 func newTransientStorage() transientStorage {
@@ -35,52 +40,43 @@ func newTransientStorage() transientStorage {
 
 // Set sets the transient-storage `value` for `key` at the given `addr`.
 func (t transientStorage) Set(addr common.Address, key, value common.Hash) {
+	tsKey := transientStorageKey{addr: addr, key: key}
 	if value == (common.Hash{}) { // this is a 'delete'
-		if _, ok := t[addr]; ok {
-			delete(t[addr], key)
-			if len(t[addr]) == 0 {
-				delete(t, addr)
-			}
-		}
+		delete(t, tsKey)
 	} else {
-		if _, ok := t[addr]; !ok {
-			t[addr] = make(Storage)
-		}
-		t[addr][key] = value
+		t[tsKey] = value
 	}
 }
 
 // Get gets the transient storage for `key` at the given `addr`.
 func (t transientStorage) Get(addr common.Address, key common.Hash) common.Hash {
-	val, ok := t[addr]
-	if !ok {
-		return common.Hash{}
-	}
-	return val[key]
+	tsKey := transientStorageKey{addr: addr, key: key}
+	return t[tsKey]
 }
 
 // Copy does a deep copy of the transientStorage
 func (t transientStorage) Copy() transientStorage {
-	storage := make(transientStorage)
-	for key, value := range t {
-		storage[key] = value.Copy()
-	}
-	return storage
+	return maps.Clone(t)
 }
 
 // PrettyPrint prints the contents of the access list in a human-readable form
 func (t transientStorage) PrettyPrint() string {
 	out := new(strings.Builder)
-	sortedAddrs := slices.Collect(maps.Keys(t))
-	slices.SortFunc(sortedAddrs, common.Address.Cmp)
+	sortedTSKeys := slices.Collect(maps.Keys(t))
+	slices.SortFunc(sortedTSKeys, func(a, b transientStorageKey) int {
+		r := a.addr.Cmp(b.addr)
+		if r != 0 {
+			return r
+		}
+		return a.key.Cmp(b.key)
+	})
 
-	for _, addr := range sortedAddrs {
-		fmt.Fprintf(out, "%#x:", addr)
-		storage := t[addr]
-		sortedKeys := slices.Collect(maps.Keys(storage))
-		slices.SortFunc(sortedKeys, common.Hash.Cmp)
-		for _, key := range sortedKeys {
-			fmt.Fprintf(out, "  %X : %X\n", key, storage[key])
+	for i := 0; i < len(sortedTSKeys); {
+		tsKey := sortedTSKeys[i]
+		fmt.Fprintf(out, "%#x:", tsKey.addr)
+		for ; i < len(sortedTSKeys) && sortedTSKeys[i].addr == tsKey.addr; i++ {
+			tsKey2 := sortedTSKeys[i]
+			fmt.Fprintf(out, "  %X : %X\n", tsKey2.key, t[tsKey2])
 		}
 	}
 	return out.String()
