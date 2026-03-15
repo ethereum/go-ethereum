@@ -154,9 +154,10 @@ func (api *API) blockByNumberAndHash(ctx context.Context, number rpc.BlockNumber
 // TraceConfig holds extra parameters to trace functions.
 type TraceConfig struct {
 	*logger.Config
-	Tracer  *string
-	Timeout *string
-	Reexec  *uint64
+	Tracer     *string
+	Timeout    *string
+	Reexec     *uint64
+	BlockLevel bool
 	// Config specific to given tracer. Note struct logger
 	// config are historically embedded in main object.
 	TracerConfig json.RawMessage
@@ -618,6 +619,16 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 			return api.traceBlockParallel(ctx, block, statedb, config)
 		}
 	}
+
+	// Check if this is a block-level prestate tracing request,
+	// currently only the prestate tracer is supported in this mode.
+	if config != nil && config.BlockLevel {
+		if config.Tracer == nil || *config.Tracer != "prestateTracer" {
+			return nil, errors.New("only prestateTracer supports block level tracing")
+		}
+		return api.traceBlockAsWhole(ctx, block, statedb, blockCtx, config)
+	}
+
 	// Native tracers have low overhead
 	var (
 		txs       = block.Transactions()
@@ -641,6 +652,75 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res}
 	}
 	return results, nil
+}
+
+// traceBlockAsWhole executes all transactions in a block with a single reused tracer
+// to accumulate block-level result across all transactions.
+func (api *API) traceBlockAsWhole(ctx context.Context, block *types.Block, statedb *state.StateDB, blockCtx vm.BlockContext, config *TraceConfig) ([]*txTraceResult, error) {
+	var (
+		tracer  *Tracer
+		txs     = block.Transactions()
+		txCtx   = &Context{BlockHash: block.Hash(), BlockNumber: block.Number()}
+		signer  = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
+		timeout = defaultTraceTimeout * 10
+		err     error
+	)
+
+	tracer, err = DefaultDirectory.New(*config.Tracer, txCtx, config.TracerConfig, api.backend.ChainConfig())
+	if err != nil {
+		return nil, err
+	}
+
+	// Execute all transactions with the same tracer instance to accumulate state
+	tracingStateDB := state.NewHookedState(statedb, tracer.Hooks)
+	evm := vm.NewEVM(blockCtx, tracingStateDB, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks, NoBaseFee: true})
+
+	if config.Timeout != nil {
+		if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
+			return nil, err
+		}
+	}
+	deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+	go func() {
+		<-deadlineCtx.Done()
+		if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
+			tracer.Stop(errors.New("execution timeout"))
+			// Stop evm execution. Note cancellation is not necessarily immediate.
+			evm.Cancel()
+		}
+	}()
+	defer cancel()
+
+	for i, tx := range txs {
+		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
+		statedb.SetTxContext(tx.Hash(), i)
+
+		if tracer.Hooks.OnTxStart != nil {
+			tracer.Hooks.OnTxStart(evm.GetVMContext(), tx, msg.From)
+		}
+
+		_, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute transaction %s: %w", tx.Hash().Hex(), err)
+		}
+
+		if tracer.Hooks.OnTxEnd != nil {
+			tracer.Hooks.OnTxEnd(nil, nil)
+		}
+
+		statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
+	}
+
+	// Get the accumulated prestate result from the single tracer
+	result, err := tracer.GetResult()
+	if err != nil {
+		return nil, err
+	}
+
+	// Return the merged result as a single element array
+	return []*txTraceResult{{
+		Result: result,
+	}}, nil
 }
 
 // traceBlockParallel is for tracers that have a high overhead (read JS tracers). One thread
