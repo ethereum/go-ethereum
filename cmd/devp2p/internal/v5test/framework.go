@@ -65,6 +65,7 @@ type conn struct {
 	log       logger
 	codec     *v5wire.Codec
 	idCounter uint32
+	sources   map[v5wire.Nonce]string // source addr of WHOAREYOU challenges
 }
 
 type logger interface {
@@ -90,6 +91,7 @@ func newConn(dest *enode.Node, log logger) *conn {
 		remoteAddr: &net.UDPAddr{IP: dest.IP(), Port: dest.UDP()},
 		codec:      v5wire.NewCodec(ln, key, mclock.System{}, nil),
 		log:        log,
+		sources:    make(map[v5wire.Nonce]string),
 	}
 }
 
@@ -200,7 +202,14 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 
 // write sends a packet on the given connection.
 func (tc *conn) write(c net.PacketConn, p v5wire.Packet, challenge *v5wire.Whoareyou) v5wire.Nonce {
-	packet, nonce, err := tc.codec.Encode(tc.remote.ID(), tc.remoteAddr.String(), p, challenge)
+	addr := tc.remoteAddr.String()
+	if challenge != nil {
+		if from, ok := tc.sources[challenge.Nonce]; ok {
+			addr = from
+			delete(tc.sources, challenge.Nonce)
+		}
+	}
+	packet, nonce, err := tc.codec.Encode(tc.remote.ID(), addr, p, challenge)
 	if err != nil {
 		panic(fmt.Errorf("can't encode %v packet: %v", p.Name(), err))
 	}
@@ -225,6 +234,9 @@ func (tc *conn) read(c net.PacketConn) v5wire.Packet {
 	_, _, p, err := tc.codec.Decode(buf[:n], fromAddr.String())
 	if err != nil {
 		return &readError{err}
+	}
+	if w, ok := p.(*v5wire.Whoareyou); ok {
+		tc.sources[w.Nonce] = fromAddr.String()
 	}
 	tc.logf("<< %s", p.Name())
 	return p
