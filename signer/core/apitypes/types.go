@@ -18,7 +18,6 @@ package apitypes
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -291,10 +290,7 @@ func (args *SendTxArgs) validateTxSidecar() error {
 	}
 
 	hashes := make([]common.Hash, n)
-	hasher := sha256.New()
-	for i, c := range args.Commitments {
-		hashes[i] = kzg4844.CalcBlobHashV1(hasher, &c)
-	}
+	kzg4844.CalcBlobHashV1List(args.Commitments, hashes)
 	if args.BlobHashes != nil {
 		for i, h := range hashes {
 			if h != args.BlobHashes[i] {
