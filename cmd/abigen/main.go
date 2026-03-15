@@ -17,6 +17,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,6 +26,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/abigen"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common/compiler"
@@ -71,6 +74,10 @@ var (
 		Name:  "v2",
 		Usage: "Generates v2 bindings",
 	}
+	humanABIFlag = &cli.StringFlag{
+		Name:  "human-abi",
+		Usage: "Path to human-readable ABI file (one signature per line), - for STDIN",
+	}
 )
 
 var app = flags.NewApp("Ethereum ABI wrapper code generator")
@@ -87,18 +94,19 @@ func init() {
 		outFlag,
 		aliasFlag,
 		v2Flag,
+		humanABIFlag,
 	}
 	app.Action = generate
 }
 
 func generate(c *cli.Context) error {
-	flags.CheckExclusive(c, abiFlag, jsonFlag) // Only one source can be selected.
+	flags.CheckExclusive(c, abiFlag, jsonFlag, humanABIFlag) // Only one source can be selected.
 
 	if c.String(pkgFlag.Name) == "" {
 		utils.Fatalf("No destination package specified (--pkg)")
 	}
-	if c.String(abiFlag.Name) == "" && c.String(jsonFlag.Name) == "" {
-		utils.Fatalf("Either contract ABI source (--abi) or combined-json (--combined-json) are required")
+	if c.String(abiFlag.Name) == "" && c.String(jsonFlag.Name) == "" && c.String(humanABIFlag.Name) == "" {
+		utils.Fatalf("Either contract ABI source (--abi), combined-json (--combined-json), or human-readable ABI (--human-abi) are required")
 	}
 	// If the entire solidity code was specified, build and bind based on that
 	var (
@@ -125,6 +133,45 @@ func generate(c *cli.Context) error {
 			utils.Fatalf("Failed to read input ABI: %v", err)
 		}
 		abis = append(abis, string(abi))
+
+		var bin []byte
+		if binFile := c.String(binFlag.Name); binFile != "" {
+			if bin, err = os.ReadFile(binFile); err != nil {
+				utils.Fatalf("Failed to read input bytecode: %v", err)
+			}
+			if strings.Contains(string(bin), "//") {
+				utils.Fatalf("Contract has additional library references, please use other mode(e.g. --combined-json) to catch library infos")
+			}
+		}
+		bins = append(bins, string(bin))
+
+		kind := c.String(typeFlag.Name)
+		if kind == "" {
+			kind = c.String(pkgFlag.Name)
+		}
+		types = append(types, kind)
+	} else if c.String(humanABIFlag.Name) != "" {
+		// Load human-readable ABI and convert to JSON
+		var (
+			humanABI []byte
+			err      error
+		)
+		input := c.String(humanABIFlag.Name)
+		if input == "-" {
+			humanABI, err = io.ReadAll(os.Stdin)
+		} else {
+			humanABI, err = os.ReadFile(input)
+		}
+		if err != nil {
+			utils.Fatalf("Failed to read human-readable ABI: %v", err)
+		}
+
+		jsonABI, err := convertHumanReadableABI(string(humanABI))
+		if err != nil {
+			utils.Fatalf("Failed to parse human-readable ABI: %v", err)
+		}
+
+		abis = append(abis, jsonABI)
 
 		var bin []byte
 		if binFile := c.String(binFlag.Name); binFile != "" {
@@ -232,6 +279,41 @@ func generate(c *cli.Context) error {
 		utils.Fatalf("Failed to write ABI binding: %v", err)
 	}
 	return nil
+}
+
+func convertHumanReadableABI(humanABI string) (string, error) {
+	var abiElements []abi.ABIMarshaling
+
+	scanner := bufio.NewScanner(strings.NewReader(humanABI))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		if line == "" || strings.HasPrefix(line, "//") || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		element, err := abi.ParseHumanReadableABI(line)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse signature '%s': %v", line, err)
+		}
+
+		if element != nil {
+			abiElements = append(abiElements, element)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("failed to read human-readable ABI: %v", err)
+	}
+
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(abiElements); err != nil {
+		return "", fmt.Errorf("failed to encode JSON ABI: %v", err)
+	}
+
+	return buf.String(), nil
 }
 
 func main() {
