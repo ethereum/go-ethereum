@@ -18,6 +18,7 @@ package core
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -142,10 +143,32 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 			fmt.Printf("   %v\n", bh)
 		}
 	}
-	if request.Transaction.Data != nil {
-		d := *request.Transaction.Data
-		if len(d) > 0 {
-			fmt.Printf("data:     %v\n", hexutil.Encode(d))
+	{
+		var (
+			data     []byte
+			inputSet bool
+			dataSet  bool
+		)
+		if request.Transaction.Input != nil {
+			data = *request.Transaction.Input
+			inputSet = true
+		}
+		if request.Transaction.Data != nil {
+			dataSet = true
+			if !inputSet {
+				data = *request.Transaction.Data
+			}
+		}
+		if inputSet && dataSet && !bytes.Equal(*request.Transaction.Input, *request.Transaction.Data) {
+			fmt.Printf("input:    %v\n", hexutil.Encode(*request.Transaction.Input))
+			fmt.Printf("data:     %v\n", hexutil.Encode(*request.Transaction.Data))
+			fmt.Printf("WARNING: both input and data provided and differ; input will be used\n")
+		} else if len(data) > 0 {
+			label := "data"
+			if inputSet {
+				label = "input"
+			}
+			fmt.Printf("%s:     %v\n", label, hexutil.Encode(data))
 		}
 	}
 	if request.Callinfo != nil {
