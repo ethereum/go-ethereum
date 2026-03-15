@@ -17,9 +17,54 @@
 package blobpool
 
 import (
+	"errors"
+
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/billy"
 )
+
+// slotSizer computes the storage shelf size for a given transaction size using
+// O(1) arithmetic. Shelf sizes form an arithmetic sequence:
+//
+//	base, base+step, base+2*step, ...
+//
+// This mirrors the progression in newSlotter and newSlotterEIP7594, but avoids
+// creating and iterating a stateful closure on every lookup.
+type slotSizer struct {
+	base uint32 // Size of the first shelf (txAvgSize)
+	step uint32 // Size increment per subsequent shelf
+	max  uint32 // Largest valid shelf size
+}
+
+// newSlotSizer creates a slotSizer by consuming a slotter closure once to
+// discover its base size, step size, and maximum shelf size.
+func newSlotSizer(slotter billy.SlotSizeFn) slotSizer {
+	first, done := slotter()
+	if done {
+		return slotSizer{base: first, step: 0, max: first}
+	}
+	second, done := slotter()
+	step := second - first
+	last := second
+	for !done {
+		last, done = slotter()
+	}
+	return slotSizer{base: first, step: step, max: last}
+}
+
+// getSlotSize returns the shelf size that can store a transaction of the given
+// byte size, or an error if it exceeds the largest shelf.
+func (s slotSizer) getSlotSize(size uint32) (uint32, error) {
+	if size <= s.base {
+		return s.base, nil
+	}
+	// Round up to the nearest shelf: base + ⌈(size-base)/step⌉ * step
+	slot := s.base + ((size-s.base+s.step-1)/s.step)*s.step
+	if slot > s.max {
+		return 0, errors.New("size exceeds maximum slot size")
+	}
+	return slot, nil
+}
 
 // tryMigrate checks if the billy needs to be migrated and migrates if needed.
 // Returns a slotter that can be used for the database.
