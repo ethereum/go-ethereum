@@ -295,21 +295,33 @@ that they are returned by FINDNODE.`)
 	t.Log("requesting nodes")
 	conn, l1 := s.listen1(t)
 	defer conn.close()
-	foundNodes, err := conn.findnode(l1, dists)
-	if err != nil {
-		t.Fatal(err)
+
+	const maxAttempts = 15
+	const retryInterval = 3 * time.Second
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		foundNodes, err := conn.findnode(l1, dists)
+		if err != nil {
+			t.Fatal(err)
+		}
+		missing := make(map[enode.ID]struct{})
+		for id := range expect {
+			missing[id] = struct{}{}
+		}
+		for _, n := range foundNodes {
+			delete(missing, n.ID())
+		}
+		t.Logf("attempt %d: remote returned %d nodes for distance list %v, missing %d", attempt, len(foundNodes), dists, len(missing))
+		if len(missing) == 0 {
+			t.Logf("all %d expected nodes were returned", len(nodes))
+			return
+		}
+		if attempt < maxAttempts {
+			time.Sleep(retryInterval)
+		}
 	}
-	t.Logf("remote returned %d nodes for distance list %v", len(foundNodes), dists)
-	for _, n := range foundNodes {
-		delete(expect, n.ID())
-	}
-	if len(expect) > 0 {
-		t.Errorf("missing %d nodes in FINDNODE result", len(expect))
-		t.Logf("this can happen if the test is run multiple times in quick succession")
-		t.Logf("and the remote node hasn't removed dead nodes from previous runs yet")
-	} else {
-		t.Logf("all %d expected nodes were returned", len(nodes))
-	}
+	t.Errorf("missing nodes in FINDNODE result after %d attempts", maxAttempts)
+	t.Logf("this can happen if the node has a non-empty table from previous runs")
 }
 
 // A bystander is a node whose only purpose is filling a spot in the remote table.
@@ -331,6 +343,12 @@ func newBystander(t *utesting.T, s *Suite, added chan enode.ID) *bystander {
 		dest:    s.Dest,
 		addedCh: added,
 	}
+	// Establish an initial session and let the remote learn this node before
+	// switching to the passive responder loop below.
+	conn.reqresp(l, &v5wire.Ping{
+		ReqID:  conn.nextReqID(),
+		ENRSeq: s.Dest.Seq(),
+	})
 	bn.done.Add(1)
 	go bn.loop()
 	return bn
@@ -351,21 +369,14 @@ func (bn *bystander) close() {
 func (bn *bystander) loop() {
 	defer bn.done.Done()
 
-	var (
-		lastPing time.Time
-		wasAdded bool
-	)
 	for {
-		// Ping the remote node.
-		if !wasAdded && time.Since(lastPing) > 10*time.Second {
-			bn.conn.reqresp(bn.l, &v5wire.Ping{
+		switch p := bn.conn.read(bn.l).(type) {
+		case *v5wire.Whoareyou:
+			p.Node = bn.dest
+			bn.conn.write(bn.l, &v5wire.Ping{
 				ReqID:  bn.conn.nextReqID(),
 				ENRSeq: bn.dest.Seq(),
-			})
-			lastPing = time.Now()
-		}
-		// Answer packets.
-		switch p := bn.conn.read(bn.l).(type) {
+			}, p)
 		case *v5wire.Ping:
 			bn.conn.write(bn.l, &v5wire.Pong{
 				ReqID:  p.ReqID,
@@ -373,19 +384,18 @@ func (bn *bystander) loop() {
 				ToIP:   bn.dest.IP(),
 				ToPort: uint16(bn.dest.UDP()),
 			}, nil)
-			wasAdded = true
 			bn.notifyAdded()
 		case *v5wire.Findnode:
 			bn.conn.write(bn.l, &v5wire.Nodes{ReqID: p.ReqID, RespCount: 1}, nil)
-			wasAdded = true
 			bn.notifyAdded()
 		case *v5wire.TalkRequest:
 			bn.conn.write(bn.l, &v5wire.TalkResponse{ReqID: p.ReqID}, nil)
 		case *readError:
-			if !netutil.IsTemporaryError(p.err) {
-				bn.conn.logf("shutting down: %v", p.err)
-				return
+			if netutil.IsTemporaryError(p.err) || v5wire.IsInvalidHeader(p.err) {
+				continue
 			}
+			bn.conn.logf("shutting down: %v", p.err)
+			return
 		}
 	}
 }
