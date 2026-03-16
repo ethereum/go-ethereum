@@ -122,6 +122,57 @@ func TestBlobAndProofListV1MarshalJSON(t *testing.T) {
 	}
 }
 
+func TestBlobAndProofListV1UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		json string
+		want BlobAndProofListV1
+	}{
+		{
+			name: "multiple items",
+			json: `[{"blob":"0x0102","proof":"0x0304"},{"blob":"0x","proof":"0x05"}]`,
+			want: BlobAndProofListV1{
+				{
+					Blob:  hexutil.Bytes{0x01, 0x02},
+					Proof: hexutil.Bytes{0x03, 0x04},
+				},
+				{
+					Blob:  hexutil.Bytes{},
+					Proof: hexutil.Bytes{0x05},
+				},
+			},
+		},
+		{
+			name: "nil item",
+			json: `[null,{"blob":"0xaa","proof":"0xbb"}]`,
+			want: BlobAndProofListV1{
+				nil,
+				{
+					Blob:  hexutil.Bytes{0xaa},
+					Proof: hexutil.Bytes{0xbb},
+				},
+			},
+		},
+		{
+			name: "null list",
+			json: `null`,
+			want: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got BlobAndProofListV1
+			if err := got.UnmarshalJSON([]byte(tt.json)); err != nil {
+				t.Fatalf("UnmarshalJSON error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("decoded mismatch\ngot:  %#v\nwant: %#v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBlobAndProofListV2MarshalJSON(t *testing.T) {
 	tests := []struct {
 		name string
@@ -181,6 +232,57 @@ func TestBlobAndProofListV2MarshalJSON(t *testing.T) {
 			}
 			if !bytes.Equal(compactJSON(got), compactJSON(want)) {
 				t.Errorf("JSON mismatch\ngot:  %s\nwant: %s", got, want)
+			}
+		})
+	}
+}
+
+func TestBlobAndProofListV2UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		json string
+		want BlobAndProofListV2
+	}{
+		{
+			name: "multiple items",
+			json: `[{"blob":"0x0102","proofs":["0x0304","0x05"]},{"blob":"0x","proofs":[]}]`,
+			want: BlobAndProofListV2{
+				{
+					Blob:       hexutil.Bytes{0x01, 0x02},
+					CellProofs: []hexutil.Bytes{{0x03, 0x04}, {0x05}},
+				},
+				{
+					Blob:       hexutil.Bytes{},
+					CellProofs: []hexutil.Bytes{},
+				},
+			},
+		},
+		{
+			name: "nil item and nil proofs",
+			json: `[null,{"blob":"0xcc","proofs":null}]`,
+			want: BlobAndProofListV2{
+				nil,
+				{
+					Blob:       hexutil.Bytes{0xcc},
+					CellProofs: nil,
+				},
+			},
+		},
+		{
+			name: "null list",
+			json: `null`,
+			want: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got BlobAndProofListV2
+			if err := got.UnmarshalJSON([]byte(tt.json)); err != nil {
+				t.Fatalf("UnmarshalJSON error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("decoded mismatch\ngot:  %#v\nwant: %#v", got, tt.want)
 			}
 		})
 	}

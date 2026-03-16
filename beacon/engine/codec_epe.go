@@ -17,10 +17,9 @@
 package engine
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"slices"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -55,32 +54,26 @@ func marshalBlobsBundle(buf []byte, b *BlobsBundle) []byte {
 	return buf
 }
 
-// marshalHexBytesArray writes an array of hex-encoded byte slices to buf.
-// A nil slice is written as "null" to match encoding/json semantics.
-func marshalHexBytesArray(buf []byte, items []hexutil.Bytes) []byte {
-	if items == nil {
-		return append(buf, "null"...)
+func unmarshalBlobsBundle(input []byte) (*BlobsBundle, error) {
+	if isJSONNull(input) {
+		return nil, nil
 	}
-	buf = append(buf, '[')
-	for i, item := range items {
-		if i > 0 {
-			buf = append(buf, ',')
+	var bundle BlobsBundle
+	if err := decodeJSONObject(input, func(key string, value json.RawMessage) error {
+		var err error
+		switch key {
+		case "commitments":
+			bundle.Commitments, err = unmarshalHexBytesArray(value)
+		case "proofs":
+			bundle.Proofs, err = unmarshalHexBytesArray(value)
+		case "blobs":
+			bundle.Blobs, err = unmarshalHexBytesArray(value)
 		}
-		buf = writeHexBytes(buf, item)
+		return err
+	}); err != nil {
+		return nil, err
 	}
-	buf = append(buf, ']')
-	return buf
-}
-
-// writeHexBytes writes a hex-encoded byte slice as a JSON string ("0x...") to buf.
-func writeHexBytes(buf []byte, data []byte) []byte {
-	buf = append(buf, '"', '0', 'x')
-	buf = slices.Grow(buf, len(data)*2+1)
-	cur := len(buf)
-	buf = buf[:cur+len(data)*2]
-	hex.Encode(buf[cur:], data)
-	buf = append(buf, '"')
-	return buf
+	return &bundle, nil
 }
 
 // MarshalJSON implements json.Marshaler.
@@ -174,4 +167,86 @@ func (e ExecutionPayloadEnvelope) MarshalJSON() ([]byte, error) {
 	// Close the envelope
 	buf = append(buf, '}')
 	return buf, nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (e *ExecutionPayloadEnvelope) UnmarshalJSON(input []byte) error {
+	var (
+		payloadSeen    bool
+		blockValueSeen bool
+	)
+	*e = ExecutionPayloadEnvelope{}
+	if err := decodeJSONObject(input, func(key string, value json.RawMessage) error {
+		switch key {
+		case "executionPayload":
+			payloadSeen = true
+			if isJSONNull(value) {
+				e.ExecutionPayload = nil
+				return nil
+			}
+			var payload ExecutableData
+			if err := payload.UnmarshalJSON(value); err != nil {
+				return err
+			}
+			e.ExecutionPayload = &payload
+		case "blockValue":
+			blockValueSeen = true
+			if isJSONNull(value) {
+				e.BlockValue = nil
+				return nil
+			}
+			var blockValue hexutil.Big
+			if err := blockValue.UnmarshalJSON(value); err != nil {
+				return err
+			}
+			e.BlockValue = (*big.Int)(&blockValue)
+		case "blobsBundle":
+			bundle, err := unmarshalBlobsBundle(value)
+			if err != nil {
+				return err
+			}
+			e.BlobsBundle = bundle
+		case "executionRequests":
+			requests, err := unmarshalHexBytesArray(value)
+			if err != nil {
+				return err
+			}
+			if requests == nil {
+				e.Requests = nil
+				return nil
+			}
+			e.Requests = make([][]byte, len(requests))
+			for i, req := range requests {
+				e.Requests[i] = req
+			}
+		case "shouldOverrideBuilder":
+			if isJSONNull(value) {
+				e.Override = false
+				return nil
+			}
+			if err := json.Unmarshal(value, &e.Override); err != nil {
+				return err
+			}
+		case "witness":
+			if isJSONNull(value) {
+				e.Witness = nil
+				return nil
+			}
+			var witness hexutil.Bytes
+			if err := witness.UnmarshalJSON(value); err != nil {
+				return err
+			}
+			e.Witness = &witness
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if !payloadSeen || e.ExecutionPayload == nil {
+		return errors.New("missing required field 'executionPayload' for ExecutionPayloadEnvelope")
+	}
+	if !blockValueSeen || e.BlockValue == nil {
+		return errors.New("missing required field 'blockValue' for ExecutionPayloadEnvelope")
+	}
+	return nil
 }

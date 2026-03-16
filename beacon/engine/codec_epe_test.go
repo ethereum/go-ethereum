@@ -214,6 +214,100 @@ func TestMarshalJSONRoundtrip(t *testing.T) {
 	}
 }
 
+func TestUnmarshalJSON(t *testing.T) {
+	witness := hexutil.Bytes{0xde, 0xad}
+	tests := []struct {
+		name string
+		env  ExecutionPayloadEnvelope
+	}{
+		{
+			name: "full envelope with blobs",
+			env: ExecutionPayloadEnvelope{
+				ExecutionPayload: makeTestPayload(),
+				BlockValue:       big.NewInt(12345),
+				BlobsBundle: &BlobsBundle{
+					Commitments: []hexutil.Bytes{{0x01, 0x02}},
+					Proofs:      []hexutil.Bytes{{0x03, 0x04}},
+					Blobs:       []hexutil.Bytes{{0x05, 0x06}},
+				},
+				Requests: [][]byte{{0xaa}, {0xbb, 0xcc}},
+				Override: true,
+				Witness:  &witness,
+			},
+		},
+		{
+			name: "null optional fields",
+			env: ExecutionPayloadEnvelope{
+				ExecutionPayload: makeTestPayload(),
+				BlockValue:       big.NewInt(1),
+				BlobsBundle:      nil,
+				Requests:         nil,
+				Override:         false,
+				Witness:          nil,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input, err := json.Marshal(toCanonical(&tt.env))
+			if err != nil {
+				t.Fatalf("canonical marshal error: %v", err)
+			}
+
+			var got ExecutionPayloadEnvelope
+			if err := got.UnmarshalJSON(input); err != nil {
+				t.Fatalf("UnmarshalJSON error: %v", err)
+			}
+
+			gotJSON, err := json.Marshal(toCanonical(&got))
+			if err != nil {
+				t.Fatalf("canonical marshal after unmarshal error: %v", err)
+			}
+			if !bytes.Equal(compactJSON(gotJSON), compactJSON(input)) {
+				t.Errorf("JSON mismatch after unmarshal\ngot:  %s\nwant: %s", gotJSON, input)
+			}
+		})
+	}
+}
+
+func TestUnmarshalJSONMissingRequiredFields(t *testing.T) {
+	tests := []struct {
+		name string
+		json func(t *testing.T) []byte
+	}{
+		{
+			name: "missing executionPayload",
+			json: func(t *testing.T) []byte {
+				return []byte(`{"blockValue":"0x1"}`)
+			},
+		},
+		{
+			name: "missing blockValue",
+			json: func(t *testing.T) []byte {
+				input, err := json.Marshal(struct {
+					ExecutionPayload *ExecutableData `json:"executionPayload"`
+				}{
+					ExecutionPayload: makeTestPayload(),
+				})
+				if err != nil {
+					t.Fatalf("marshal input: %v", err)
+				}
+				return input
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var env ExecutionPayloadEnvelope
+			if err := env.UnmarshalJSON(tt.json(t)); err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+}
+
 func TestMarshalJSONNilPayload(t *testing.T) {
 	env := ExecutionPayloadEnvelope{
 		ExecutionPayload: nil,
