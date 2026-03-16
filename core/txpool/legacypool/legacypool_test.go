@@ -395,7 +395,11 @@ func TestStateChangeDuringReset(t *testing.T) {
 
 func testAddBalance(pool *LegacyPool, addr common.Address, amount *big.Int) {
 	pool.mu.Lock()
-	pool.currentState.AddBalance(addr, uint256.MustFromBig(amount), tracing.BalanceChangeUnspecified)
+	if amount.Sign() < 0 {
+		pool.currentState.SubBalance(addr, uint256.MustFromBig(new(big.Int).Neg(amount)), tracing.BalanceChangeUnspecified)
+	} else {
+		pool.currentState.AddBalance(addr, uint256.MustFromBig(amount), tracing.BalanceChangeUnspecified)
+	}
 	pool.mu.Unlock()
 }
 
@@ -797,12 +801,13 @@ func TestPostponing(t *testing.T) {
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
 		accs[i] = crypto.PubkeyToAddress(keys[i].PublicKey)
-
-		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(50100))
 	}
-	// Add a batch consecutive pending transactions for validation
+	// Build a batch of consecutive pending transactions and fund each account
+	// for the full batch so strict balance checks still admit the entire set.
 	txs := []*types.Transaction{}
+	initialBalances := make([]*big.Int, len(keys))
 	for i, key := range keys {
+		initialBalances[i] = new(big.Int)
 		for j := 0; j < 100; j++ {
 			var tx *types.Transaction
 			if (i+j)%2 == 0 {
@@ -811,7 +816,11 @@ func TestPostponing(t *testing.T) {
 				tx = transaction(uint64(j), 50000, key)
 			}
 			txs = append(txs, tx)
+			initialBalances[i].Add(initialBalances[i], tx.Cost())
 		}
+	}
+	for i, addr := range accs {
+		testAddBalance(pool, addr, initialBalances[i])
 	}
 	for i, err := range pool.addRemotesSync(txs) {
 		if err != nil {
@@ -838,9 +847,11 @@ func TestPostponing(t *testing.T) {
 	if pool.all.Count() != len(txs) {
 		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), len(txs))
 	}
-	// Reduce the balance of the account, and check that transactions are reorganised
-	for _, addr := range accs {
-		testAddBalance(pool, addr, big.NewInt(-1))
+	// Reduce the balance to just below the expensive tx cost so those txs are
+	// dropped while the cheaper ones are postponed into the queue.
+	reducedBalance := new(big.Int).Sub(txs[1].Cost(), big.NewInt(1))
+	for i, addr := range accs {
+		testAddBalance(pool, addr, new(big.Int).Sub(reducedBalance, initialBalances[i]))
 	}
 	<-pool.requestReset(nil, nil)
 
@@ -1352,7 +1363,7 @@ func TestPendingMinimumAllowance(t *testing.T) {
 	keys := make([]*ecdsa.PrivateKey, 5)
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
-		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
+		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(10000000))
 	}
 	// Generate and queue a batch of transactions
 	nonces := make(map[common.Address]uint64)
@@ -1745,7 +1756,7 @@ func TestStableUnderpricing(t *testing.T) {
 	keys := make([]*ecdsa.PrivateKey, 2)
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
-		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
+		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(100000000))
 	}
 	// Fill up the entire queue with the same transaction price points
 	txs := types.Transactions{}

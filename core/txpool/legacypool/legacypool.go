@@ -559,19 +559,68 @@ func (pool *LegacyPool) ValidateTxBasics(tx *types.Transaction) error {
 	return txpool.ValidateTransaction(tx, pool.currentHead.Load(), pool.signer, opts)
 }
 
+// batchTxValidationState tracks the queue cost baseline for a batch addition so
+// later transactions can account for the net queue growth caused by earlier ones.
+type batchTxValidationState struct {
+	queueCostSnapshot map[common.Address]*big.Int
+}
+
+func newBatchTxValidationState() *batchTxValidationState {
+	return &batchTxValidationState{
+		queueCostSnapshot: make(map[common.Address]*big.Int),
+	}
+}
+
+func (batch *batchTxValidationState) queueSnapshot(pool *LegacyPool, addr common.Address) *big.Int {
+	if batch == nil {
+		return new(big.Int)
+	}
+	if snap, ok := batch.queueCostSnapshot[addr]; ok {
+		return snap
+	}
+	snap := new(big.Int)
+	if list, _ := pool.queue.get(addr); list != nil {
+		snap = list.totalcost.ToBig()
+	}
+	batch.queueCostSnapshot[addr] = snap
+	return snap
+}
+
+func (batch *batchTxValidationState) queueCostDelta(pool *LegacyPool, addr common.Address) *big.Int {
+	if batch == nil {
+		return new(big.Int)
+	}
+	current := new(big.Int)
+	if list, _ := pool.queue.get(addr); list != nil {
+		current = list.totalcost.ToBig()
+	}
+	snapshot := batch.queueSnapshot(pool, addr)
+	
+	// Clamp negative deltas so queued cost reductions can't credit new batch additions.
+	if current.Cmp(snapshot) < 0 {
+		return new(big.Int)
+	}
+	return current.Sub(current, snapshot)
+}
+
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
+	return pool.validateTxWithBatch(tx, nil)
+}
+
+func (pool *LegacyPool) validateTxWithBatch(tx *types.Transaction, batch *batchTxValidationState) error {
 	opts := &txpool.ValidationOptionsWithState{
 		State: pool.currentState,
 
 		FirstNonceGap:    nil, // Pool allows arbitrary arrival order, don't invalidate nonce gaps
 		UsedAndLeftSlots: nil, // Pool has own mechanism to limit the number of transactions
 		ExistingExpenditure: func(addr common.Address) *big.Int {
+			spent := new(big.Int)
 			if list := pool.pending[addr]; list != nil {
-				return list.totalcost.ToBig()
+				spent = list.totalcost.ToBig()
 			}
-			return new(big.Int)
+			return spent.Add(spent, batch.queueCostDelta(pool, addr))
 		},
 		ExistingCost: func(addr common.Address, nonce uint64) *big.Int {
 			if list := pool.pending[addr]; list != nil {
@@ -656,6 +705,10 @@ func (pool *LegacyPool) validateAuth(tx *types.Transaction) error {
 // pending promotion and execution. If the transaction is a replacement for an already
 // pending or queued one, it overwrites the previous transaction if its price is higher.
 func (pool *LegacyPool) add(tx *types.Transaction) (replaced bool, err error) {
+	return pool.addWithBatch(tx, nil)
+}
+
+func (pool *LegacyPool) addWithBatch(tx *types.Transaction, batch *batchTxValidationState) (replaced bool, err error) {
 	// If the transaction is already known, discard it
 	hash := tx.Hash()
 	if pool.all.Get(hash) != nil {
@@ -665,7 +718,7 @@ func (pool *LegacyPool) add(tx *types.Transaction) (replaced bool, err error) {
 	}
 
 	// If the transaction fails basic validation, discard it
-	if err := pool.validateTx(tx); err != nil {
+	if err := pool.validateTxWithBatch(tx, batch); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
 		invalidTxMeter.Mark(1)
 		return false, err
@@ -958,10 +1011,11 @@ func (pool *LegacyPool) addTxsLocked(txs []*types.Transaction) ([]error, *accoun
 	var (
 		dirty = newAccountSet(pool.signer)
 		errs  = make([]error, len(txs))
+		batch = newBatchTxValidationState()
 		valid int64
 	)
 	for i, tx := range txs {
-		replaced, err := pool.add(tx)
+		replaced, err := pool.addWithBatch(tx, batch)
 		errs[i] = err
 		if err == nil {
 			if !replaced {
