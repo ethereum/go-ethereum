@@ -192,10 +192,6 @@ func (beacon *Beacon) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 	if !beacon.IsPoSHeader(block.Header()) {
 		return beacon.ethone.VerifyUncles(chain, block)
 	}
-	// Verify that there is no uncle block. It's explicitly disabled in the beacon
-	if len(block.Uncles()) > 0 {
-		return errTooManyUncles
-	}
 	return nil
 }
 
