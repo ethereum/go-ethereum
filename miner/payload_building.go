@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // BuildPayloadArgs contains the provided parameters for building payload.
@@ -305,13 +306,7 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 				// Check payload.stop first to avoid an unnecessary generateWork.
 				select {
 				case <-payload.stop:
-					payload.lock.Lock()
-					emptyDelivered := payload.full == nil
-					payload.lock.Unlock()
-					bSpan.SetAttributes(
-						telemetry.StringAttribute("exit.reason", "delivery"),
-						telemetry.BoolAttribute("empty.delivered", emptyDelivered),
-					)
+					payload.updateSpanForDelivery(bSpan)
 					log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
 					return
 				default:
@@ -321,13 +316,7 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 				miner.runBuildIteration(bCtx, start, iteration, payload, fullParams, witness)
 				timer.Reset(max(0, miner.config.Recommit-time.Since(start)))
 			case <-payload.stop:
-				payload.lock.Lock()
-				emptyDelivered := payload.full == nil
-				payload.lock.Unlock()
-				bSpan.SetAttributes(
-					telemetry.StringAttribute("exit.reason", "delivery"),
-					telemetry.BoolAttribute("empty.delivered", emptyDelivered),
-				)
+				payload.updateSpanForDelivery(bSpan)
 				log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
 				return
 			case <-endTimer.C:
@@ -338,6 +327,16 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 		}
 	}()
 	return payload, nil
+}
+
+func (p *Payload) updateSpanForDelivery(bSpan trace.Span) {
+	p.lock.Lock()
+	emptyDelivered := p.full == nil
+	p.lock.Unlock()
+	bSpan.SetAttributes(
+		telemetry.StringAttribute("exit.reason", "delivery"),
+		telemetry.BoolAttribute("empty.delivered", emptyDelivered),
+	)
 }
 
 // BuildTestingPayload is for testing_buildBlockV*. It creates a block with the exact content given
