@@ -32,21 +32,21 @@ package state
 //   with mutated states from preceding transactions in the block.
 //
 // - Tracking Layer: Finally, the readerTracker wraps the execution reader to
-//   capture all state accesses made during a specific transaction. These individual
-//   access are subsequently merged to construct a comprehensive access list
+//   capture all state reads made during a specific transaction. These individual
+//   reads are subsequently merged to construct a comprehensive access list
 //   for the entire block.
 //
 // The architecture can be illustrated by the diagram below:
 
-//       [ Block Level Access List ]  <────────────────┐
-//                  ▲                                  │ (Merge)
+//       [ Block Level Read List ]    <────────────────┐
+//                  ▲                                  │ ( Aggregate )
 //                  │                                  │
 //          ┌───────┴───────┐                  ┌───────┴───────┐
-//          │ readerTracker │                  │ readerTracker │  (Access Tracking)
+//          │ readerTracker │                  │ readerTracker │  (State read tracking)
 //          └───────┬───────┘                  └───────┬───────┘
 //                  │                                  │
 //   ┌──────────────┴──────────────┐    ┌──────────────┴──────────────┐
-//   │ ReaderWithBlockLevelAL      │    │ ReaderWithBlockLevelAL      │  (Unified View)
+//   │ ReaderWithBlockLevelAL      │    │ ReaderWithBlockLevelAL      │
 //   │ (Pre-state + Mutations)     │    │ (Pre-state + Mutations)     │
 //   └──────────────┬──────────────┘    └──────────────┬──────────────┘
 //                  │                                  │
@@ -61,6 +61,12 @@ package state
 //                    │        Base Reader          │ (State Root)
 //                    │ (State & Contract Code)     │
 //                    └─────────────────────────────┘
+
+// Note: The block producer, which is responsible for generating the block
+// along with the block-level access list, does not maintain the internal
+// hierarchy (e.g., PrefetchStateReader or ReaderWithBlockLevelAL).
+// Instead, it directly utilizes the readerTracker, wrapped around the
+// base reader, to construct the access list.
 
 import (
 	"maps"
