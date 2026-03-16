@@ -474,6 +474,14 @@ func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
 		s.origin = s.data.Copy()
 		return op, nil, nil
 	}
+	// In Verkle/binary trie mode, all state objects share one unified trie.
+	// The main account trie commit in stateDB.commit() already calls
+	// CollectNodes on this trie, so calling Commit here again would
+	// redundantly traverse and serialize the entire tree per dirty account.
+	if s.db.db.TrieDB().IsVerkle() {
+		s.origin = s.data.Copy()
+		return op, nil, nil
+	}
 	root, nodes := s.trie.Commit(false)
 	s.data.Root = root
 	s.origin = s.data.Copy()
