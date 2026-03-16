@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/txpool"
@@ -193,7 +194,7 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 	if miner.chainConfig.IsVerkle(work.header.Number, work.header.Time) {
 		parent := miner.chain.GetHeaderByHash(work.header.ParentHash)
 		if parent != nil && !miner.chainConfig.IsVerkle(parent.Number, parent.Time) {
-			core.InitializeBinaryTransitionRegistry(work.state, parent.Root)
+			work.state.SetState(params.BinaryTransitionRegistryAddress, common.BytesToHash([]byte{5}), parent.Root)
 		}
 	}
 
@@ -305,6 +306,15 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	}
 	if miner.chainConfig.IsPrague(header.Number, header.Time) {
 		core.ProcessParentBlockHash(header.ParentHash, env.evm)
+	}
+	if miner.chainConfig.IsVerkle(header.Number, header.Time) {
+		parent := miner.chain.GetHeaderByHash(header.ParentHash)
+		if parent != nil && !miner.chainConfig.IsVerkle(parent.Number, parent.Time) {
+			core.InitializeBinaryTransitionRegistry(env.state)
+			if cdb, ok := env.state.Database().(*state.CachingDB); ok {
+				cdb.SetTransitionHint(&overlay.TransitionState{Started: true})
+			}
+		}
 	}
 	return env, nil
 }

@@ -34,9 +34,8 @@ var transitionStatusByteCode []byte = []byte{
 	0xf3, // RETURN
 }
 
-func InitializeBinaryTransitionRegistry(statedb *state.StateDB, parentRoot common.Hash) {
+func InitializeBinaryTransitionRegistry(statedb *state.StateDB) {
 	statedb.SetCode(params.BinaryTransitionRegistryAddress, transitionStatusByteCode, tracing.CodeChangeUnspecified)
 	statedb.SetNonce(params.BinaryTransitionRegistryAddress, 1, tracing.NonceChangeUnspecified)
 	statedb.SetState(params.BinaryTransitionRegistryAddress, common.Hash{}, common.Hash{1})
-	statedb.SetState(params.BinaryTransitionRegistryAddress, common.BytesToHash([]byte{5}), parentRoot)
 }

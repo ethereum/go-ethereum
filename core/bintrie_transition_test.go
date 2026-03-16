@@ -75,6 +75,7 @@ func TestBinaryTransitionRegistryBootstrap(t *testing.T) {
 	slotStarted := common.Hash{}
 	slotBaseRoot := common.BytesToHash([]byte{5})
 
+	firstVerkle := true
 	GenerateChainWithGenesis(gspec, engine, 6, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 
@@ -100,8 +101,15 @@ func TestBinaryTransitionRegistryBootstrap(t *testing.T) {
 			t.Errorf("block %d: verkle block should have registry slot 0 (started) set", i)
 		}
 
-		if isVerkle && baseRoot == (common.Hash{}) {
-			t.Errorf("block %d: first verkle block should not have base root set yet", i)
+		if firstVerkle {
+			if baseRoot != (common.Hash{}) {
+				t.Errorf("block %d: first verkle block should have empty base root during gen (bootstrap detection)", i)
+			}
+			firstVerkle = false
+		} else {
+			if baseRoot == (common.Hash{}) {
+				t.Errorf("block %d: subsequent verkle block should have base root set", i)
+			}
 		}
 	})
 }

@@ -193,9 +193,18 @@ type Trie interface {
 // state snapshot to provide functionalities for state access. It's meant to be a
 // long-live object and has a few caches inside for sharing between blocks.
 type CachingDB struct {
-	triedb *triedb.Database
-	codedb *CodeDB
-	snap   *snapshot.Tree
+	triedb         *triedb.Database
+	codedb         *CodeDB
+	snap           *snapshot.Tree
+	transitionHint *overlay.TransitionState
+}
+
+// SetTransitionHint provides an out-of-band signal that the next OpenTrie
+// call should create a transition trie, even if the on-disk state does not
+// yet contain the transition registry. This is needed for the first verkle
+// block where the registry is initialized in-memory but not yet committed.
+func (db *CachingDB) SetTransitionHint(ts *overlay.TransitionState) {
+	db.transitionHint = ts
 }
 
 // NewDatabase creates a state database with the provided data sources.
@@ -300,13 +309,17 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	}
 	flatReader := newFlatReader(reader)
 
-	if isTransitionActive(flatReader) || db.triedb.IsVerkle() {
+	if isTransitionActive(flatReader) || db.triedb.IsVerkle() || db.transitionHint != nil {
 		if db.TrieDB().Scheme() != rawdb.PathScheme {
 			return nil, fmt.Errorf("hash scheme used in verkle mode")
 		}
 		ts := LoadTransitionState(flatReader, root)
 		if ts == nil {
-			ts = &overlay.TransitionState{Ended: db.triedb.IsVerkle()}
+			if db.transitionHint != nil {
+				ts = db.transitionHint
+			} else {
+				ts = &overlay.TransitionState{Ended: db.triedb.IsVerkle()}
+			}
 		}
 
 		if !ts.InTransition() {
@@ -317,14 +330,16 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 			return bt, nil
 		}
 
-		bt, err := bintrie.NewBinaryTrie(root, db.triedb)
-		if err == nil {
-			// Assume this is the bootstrap block, and start
-			// from a fresh tree.
+		var bt *bintrie.BinaryTrie
+		// Bootstrap case: root and base root are the same
+		if ts.BaseRoot == (common.Hash{}) {
 			bt, err = bintrie.NewBinaryTrie(common.Hash{}, db.triedb)
-			if err != nil {
-				return nil, err
-			}
+			ts.BaseRoot = root
+		} else {
+			bt, err = bintrie.NewBinaryTrie(root, db.triedb)
+		}
+		if err != nil {
+			return nil, err
 		}
 		base, err := trie.NewStateTrie(trie.StateTrieID(ts.BaseRoot), db.triedb)
 		if err != nil {

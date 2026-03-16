@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
+	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -408,13 +409,20 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if config.IsVerkle(b.header.Number, b.header.Time) {
 			parentIsVerkle := config.IsVerkle(parent.Number(), parent.Time())
 			if !parentIsVerkle {
-				InitializeBinaryTransitionRegistry(statedb, parent.Root())
+				InitializeBinaryTransitionRegistry(statedb)
+				if cdb, ok := statedb.Database().(*state.CachingDB); ok {
+					cdb.SetTransitionHint(&overlay.TransitionState{Started: true})
+				}
 			}
 		}
 
 		// Execute any user modifications to the block
 		if gen != nil {
 			gen(i, b)
+		}
+
+		if config.IsVerkle(b.header.Number, b.header.Time) && !config.IsVerkle(parent.Number(), parent.Time()) {
+			statedb.SetState(params.BinaryTransitionRegistryAddress, common.BytesToHash([]byte{5}), parent.Root())
 		}
 
 		requests := b.collectRequests(false)
@@ -519,7 +527,7 @@ func (cm *chainMaker) makeHeader(parent *types.Block, state *state.StateDB, engi
 	time := parent.Time() + 10 // block time is fixed at 10 seconds
 	parentHeader := parent.Header()
 	header := &types.Header{
-		// Root:       state.IntermediateRoot(cm.config.IsEIP158(parent.Number())),
+		Root:       parent.Root(),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
 		Difficulty: engine.CalcDifficulty(cm, time, parentHeader),

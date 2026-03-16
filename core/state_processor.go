@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -97,7 +98,10 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	if config.IsVerkle(header.Number, header.Time) {
 		parentHeader := p.chain.GetHeaderByHash(block.ParentHash())
 		if parentHeader != nil && !config.IsVerkle(parentHeader.Number, parentHeader.Time) {
-			InitializeBinaryTransitionRegistry(statedb, parentHeader.Root)
+			InitializeBinaryTransitionRegistry(statedb)
+			if cdb, ok := statedb.Database().(*state.CachingDB); ok {
+				cdb.SetTransitionHint(&overlay.TransitionState{Started: true})
+			}
 		}
 	}
 
@@ -125,6 +129,13 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	requests, err := postExecution(ctx, config, block, allLogs, evm)
 	if err != nil {
 		return nil, err
+	}
+
+	if config.IsVerkle(header.Number, header.Time) {
+		parentHeader := p.chain.GetHeaderByHash(block.ParentHash())
+		if parentHeader != nil && !config.IsVerkle(parentHeader.Number, parentHeader.Time) {
+			statedb.SetState(params.BinaryTransitionRegistryAddress, common.BytesToHash([]byte{5}), parentHeader.Root)
+		}
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
