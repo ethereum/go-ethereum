@@ -458,7 +458,7 @@ type testBackend struct {
 }
 
 func fakeBlockHash(txh common.Hash) common.Hash {
-	return crypto.Keccak256Hash([]byte("testblock"), txh.Bytes())
+	return crypto.Keccak256HashV([]byte("testblock"), txh.Bytes())
 }
 
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.Engine, generator func(i int, b *core.BlockGen)) *testBackend {
