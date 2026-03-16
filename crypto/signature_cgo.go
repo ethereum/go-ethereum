@@ -59,6 +59,24 @@ func Sign(digestHash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
 	return secp256k1.Sign(digestHash, seckey)
 }
 
+// SignUnsafe calculates an ECDSA signature, using the given RFC6979 counter as the
+// starting point for nonce generation.
+//
+// This function is susceptible to chosen plaintext attacks that can leak
+// information about the private key that is used for signing. Callers must
+// be aware that the given digest cannot be chosen by an adversary. Common
+// solution is to hash any input before calculating the signature.
+//
+// The produced signature is in the [R || S || V] format where V is 0 or 1.
+func SignUnsafe(digestHash []byte, prv *ecdsa.PrivateKey, counter uint) (sig []byte, err error) {
+	if len(digestHash) != DigestLength {
+		return nil, fmt.Errorf("hash is required to be exactly %d bytes (%d)", DigestLength, len(digestHash))
+	}
+	seckey := math.PaddedBigBytes(prv.D, prv.Params().BitSize/8)
+	defer zeroBytes(seckey)
+	return secp256k1.SignUnsafe(digestHash, seckey, counter)
+}
+
 // VerifySignature checks that the given public key created signature over digest.
 // The public key should be in compressed (33 bytes) or uncompressed (65 bytes) format.
 // The signature should have the 64 byte [R || S] format.

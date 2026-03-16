@@ -99,6 +99,82 @@ func Sign(hash []byte, prv *ecdsa.PrivateKey) ([]byte, error) {
 	return sig, nil
 }
 
+// SignUnsafe calculates an ECDSA signature, using the given RFC6979 counter as the
+// starting point for nonce generation.
+//
+// This function is susceptible to chosen plaintext attacks that can leak
+// information about the private key that is used for signing. Callers must
+// be aware that the given hash cannot be chosen by an adversary. Common
+// solution is to hash any input before calculating the signature.
+//
+// The produced signature is in the [R || S || V] format where V is 0 or 1.
+func SignUnsafe(hash []byte, prv *ecdsa.PrivateKey, counter uint) ([]byte, error) {
+	if counter > uint(^uint32(0)) {
+		return nil, errors.New("invalid counter")
+	}
+	if counter == 0 {
+		return Sign(hash, prv)
+	}
+	if len(hash) != DigestLength {
+		return nil, fmt.Errorf("hash is required to be exactly %d bytes (%d)", DigestLength, len(hash))
+	}
+	if prv.Curve != S256() {
+		return nil, errors.New("private key curve is not secp256k1")
+	}
+	// ecdsa.PrivateKey -> secp256k1.PrivateKey
+	var priv secp256k1.PrivateKey
+	if overflow := priv.Key.SetByteSlice(prv.D.Bytes()); overflow || priv.Key.IsZero() {
+		return nil, errors.New("invalid private key")
+	}
+	defer priv.Zero()
+
+	// RFC6979/BIP62 deterministic signing with the ability to choose the initial
+	// RFC6979 extra-iterations counter.
+	privKeyScalar := &priv.Key
+	var privKeyBytes [32]byte
+	privKeyScalar.PutBytes(&privKeyBytes)
+	defer zeroBytes(privKeyBytes[:])
+
+	for iteration := uint32(counter); ; iteration++ {
+		k := secp256k1.NonceRFC6979(privKeyBytes[:], hash, nil, nil, iteration)
+
+		var kG secp256k1.JacobianPoint
+		secp256k1.ScalarBaseMultNonConst(k, &kG)
+		kG.ToAffine()
+
+		var xBuf [32]byte
+		kG.X.PutBytes(&xBuf)
+		var r secp256k1.ModNScalar
+		overflow := r.SetBytes(&xBuf)
+		zeroBytes(xBuf[:])
+		if r.IsZero() {
+			k.Zero()
+			continue
+		}
+		pubKeyRecoveryCode := byte(overflow<<1) | byte(kG.Y.IsOddBit())
+
+		var e secp256k1.ModNScalar
+		e.SetByteSlice(hash)
+
+		kInv := new(secp256k1.ModNScalar).InverseValNonConst(k)
+		k.Zero()
+		s := new(secp256k1.ModNScalar).Mul2(privKeyScalar, &r).Add(&e).Mul(kInv)
+		if s.IsZero() {
+			continue
+		}
+		if s.IsOverHalfOrder() {
+			s.Negate()
+			pubKeyRecoveryCode ^= 0x01
+		}
+
+		sig := make([]byte, SignatureLength)
+		r.PutBytesUnchecked(sig[:32])
+		s.PutBytesUnchecked(sig[32:64])
+		sig[RecoveryIDOffset] = pubKeyRecoveryCode
+		return sig, nil
+	}
+}
+
 // VerifySignature checks that the given public key created signature over hash.
 // The public key should be in compressed (33 bytes) or uncompressed (65 bytes) format.
 // The signature should have the 64 byte [R || S] format.
