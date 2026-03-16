@@ -126,24 +126,38 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		if buffer != nil {
 			n, found := buffer.node(owner, path)
 			if found {
-				dirtyNodeHitMeter.Mark(1)
-				dirtyNodeReadMeter.Mark(int64(len(n.Blob)))
-				dirtyNodeHitDepthHist.Update(int64(depth))
+				if dirtyNodeHitMeter != nil {
+					dirtyNodeHitMeter.Mark(1)
+				}
+				if dirtyNodeReadMeter != nil {
+					dirtyNodeReadMeter.Mark(int64(len(n.Blob)))
+				}
+				if dirtyNodeHitDepthHist != nil {
+					dirtyNodeHitDepthHist.Update(int64(depth))
+				}
 				return n.Blob, n.Hash, nodeLoc{loc: locDirtyCache, depth: depth}, nil
 			}
 		}
 	}
-	dirtyNodeMissMeter.Mark(1)
+	if dirtyNodeMissMeter != nil {
+		dirtyNodeMissMeter.Mark(1)
+	}
 
 	// Try to retrieve the trie node from the clean memory cache
 	key := nodeCacheKey(owner, path)
 	if dl.nodes != nil {
 		if blob := dl.nodes.Get(nil, key); len(blob) > 0 {
-			cleanNodeHitMeter.Mark(1)
-			cleanNodeReadMeter.Mark(int64(len(blob)))
+			if cleanNodeHitMeter != nil {
+				cleanNodeHitMeter.Mark(1)
+			}
+			if cleanNodeReadMeter != nil {
+				cleanNodeReadMeter.Mark(int64(len(blob)))
+			}
 			return blob, crypto.Keccak256Hash(blob), nodeLoc{loc: locCleanCache, depth: depth}, nil
 		}
-		cleanNodeMissMeter.Mark(1)
+		if cleanNodeMissMeter != nil {
+			cleanNodeMissMeter.Mark(1)
+		}
 	}
 	// Try to retrieve the trie node from the disk.
 	var blob []byte
@@ -159,7 +173,9 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 	// database.
 	if dl.nodes != nil && len(blob) > 0 {
 		dl.nodes.Set(key, blob)
-		cleanNodeWriteMeter.Mark(int64(len(blob)))
+		if cleanNodeWriteMeter != nil {
+			cleanNodeWriteMeter.Mark(int64(len(blob)))
+		}
 	}
 	return blob, crypto.Keccak256Hash(blob), nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
