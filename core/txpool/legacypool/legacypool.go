@@ -561,13 +561,17 @@ func (pool *LegacyPool) ValidateTxBasics(tx *types.Transaction) error {
 
 // batchTxValidationState tracks the queue cost baseline for a batch addition so
 // later transactions can account for the net queue growth caused by earlier ones.
+// It also tracks queued nonces introduced by the current batch so replacement
+// cost lookups only see queue state created within that batch.
 type batchTxValidationState struct {
 	queueCostSnapshot map[common.Address]*big.Int
+	batchQueuedNonces map[common.Address]map[uint64]struct{}
 }
 
 func newBatchTxValidationState() *batchTxValidationState {
 	return &batchTxValidationState{
 		queueCostSnapshot: make(map[common.Address]*big.Int),
+		batchQueuedNonces: make(map[common.Address]map[uint64]struct{}),
 	}
 }
 
@@ -603,6 +607,32 @@ func (batch *batchTxValidationState) queueCostDelta(pool *LegacyPool, addr commo
 	return current.Sub(current, snapshot)
 }
 
+func (batch *batchTxValidationState) trackQueuedNonce(addr common.Address, nonce uint64) {
+	if batch == nil {
+		return
+	}
+	if batch.batchQueuedNonces[addr] == nil {
+		batch.batchQueuedNonces[addr] = make(map[uint64]struct{})
+	}
+	batch.batchQueuedNonces[addr][nonce] = struct{}{}
+}
+
+func (batch *batchTxValidationState) batchQueuedCost(pool *LegacyPool, addr common.Address, nonce uint64) *big.Int {
+	if batch == nil {
+		return nil
+	}
+	nonces := batch.batchQueuedNonces[addr]
+	if _, ok := nonces[nonce]; !ok {
+		return nil
+	}
+	if list, ok := pool.queue.get(addr); ok {
+		if tx := list.txs.Get(nonce); tx != nil {
+			return tx.Cost()
+		}
+	}
+	return nil
+}
+
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
@@ -627,6 +657,9 @@ func (pool *LegacyPool) validateTxWithBatch(tx *types.Transaction, batch *batchT
 				if tx := list.txs.Get(nonce); tx != nil {
 					return tx.Cost()
 				}
+			}
+			if cost := batch.batchQueuedCost(pool, addr, nonce); cost != nil {
+				return cost
 			}
 			return nil
 		},
@@ -837,6 +870,7 @@ func (pool *LegacyPool) addWithBatch(tx *types.Transaction, batch *batchTxValida
 	if err != nil {
 		return false, err
 	}
+	batch.trackQueuedNonce(from, tx.Nonce())
 
 	log.Trace("Pooled new future transaction", "hash", hash, "from", from, "to", tx.To())
 	return replaced, nil
