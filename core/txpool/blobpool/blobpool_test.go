@@ -2122,7 +2122,7 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		p := pool.Pending(txpool.PendingFilter{
+		p, _ := pool.Pending(txpool.PendingFilter{
 			MinTip:  uint256.NewInt(1),
 			BaseFee: chain.basefee,
 			BlobFee: chain.blobfee,

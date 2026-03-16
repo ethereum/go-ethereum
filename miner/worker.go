@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -32,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -125,8 +127,23 @@ type generateParams struct {
 }
 
 // generateWork generates a sealing block based on the given parameters.
-func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPayloadResult {
-	work, err := miner.prepareWork(genParam, witness)
+func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, witness bool) (result *newPayloadResult) {
+	ctx, span, spanEnd := telemetry.StartSpan(ctx, "miner.generateWork")
+	defer func() {
+		if result != nil && result.err == nil {
+			span.SetAttributes(
+				telemetry.Int64Attribute("txs.count", int64(len(result.block.Transactions()))),
+				telemetry.Int64Attribute("gas.used", int64(result.block.GasUsed())),
+				telemetry.StringAttribute("fees", result.fees.String()),
+			)
+		}
+		if result != nil {
+			spanEnd(&result.err)
+		} else {
+			spanEnd(nil)
+		}
+	}()
+	work, err := miner.prepareWork(ctx, genParam, witness)
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
@@ -148,7 +165,7 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 		if genParam.forceOverrides && len(genParam.overrideTxs) > 0 {
 			for _, tx := range genParam.overrideTxs {
 				work.state.SetTxContext(tx.Hash(), work.tcount)
-				if err := miner.commitTransaction(work, tx); err != nil {
+				if err := miner.commitTransaction(ctx, work, tx); err != nil {
 					// all passed transactions HAVE to be valid at this point
 					return &newPayloadResult{err: err}
 				}
@@ -160,7 +177,7 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 			})
 			defer timer.Stop()
 
-			err := miner.fillTransactions(interrupt, work)
+			err := miner.fillTransactions(ctx, interrupt, work)
 			if errors.Is(err, errBlockInterruptedByTimeout) {
 				log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(miner.config.Recommit))
 			}
@@ -195,7 +212,7 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 		work.header.RequestsHash = &reqHash
 	}
 
-	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts)
+	block, err := miner.engine.FinalizeAndAssemble(ctx, miner.chain, work.header, work.state, &body, work.receipts)
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
@@ -213,7 +230,9 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 // prepareWork constructs the sealing task according to the given parameters,
 // either based on the last chain head or specified parent. In this function
 // the pending transactions are not filled yet, only the empty task returned.
-func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*environment, error) {
+func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, witness bool) (result *environment, err error) {
+	_, _, spanEnd := telemetry.StartSpan(ctx, "miner.prepareWork")
+	defer spanEnd(&err)
 	miner.confMu.RLock()
 	defer miner.confMu.RUnlock()
 
@@ -330,7 +349,9 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	}, nil
 }
 
-func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction) error {
+func (miner *Miner) commitTransaction(ctx context.Context, env *environment, tx *types.Transaction) (err error) {
+	_, _, spanEnd := telemetry.StartSpan(ctx, "miner.commitTransaction")
+	defer spanEnd(&err)
 	if tx.Type() == types.BlobTxType {
 		return miner.commitBlobTransaction(env, tx)
 	}
@@ -389,7 +410,9 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 	return receipt, nil
 }
 
-func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
+func (miner *Miner) commitTransactions(ctx context.Context, env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "miner.commitTransactions")
+	defer spanEnd(nil)
 	isCancun := miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
 	for {
 		// Check interruption signal and abort building if it's fired.
@@ -479,7 +502,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 		// Start executing the transaction
 		env.state.SetTxContext(tx.Hash(), env.tcount)
 
-		err := miner.commitTransaction(env, tx)
+		err := miner.commitTransaction(ctx, env, tx)
 		switch {
 		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
@@ -503,7 +526,9 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
-func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) error {
+func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int32, env *environment) (err error) {
+	ctx, span, spanEnd := telemetry.StartSpan(ctx, "miner.fillTransactions")
+	defer spanEnd(&err)
 	miner.confMu.RLock()
 	tip := miner.config.GasPrice
 	prio := miner.prio
@@ -523,7 +548,7 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 		filter.GasLimitCap = params.MaxTxGas
 	}
 	filter.BlobTxs = false
-	pendingPlainTxs := miner.txpool.Pending(filter)
+	pendingPlainTxs, plainTxCount := miner.txpool.Pending(filter)
 
 	filter.BlobTxs = true
 	if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
@@ -531,7 +556,11 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 	} else {
 		filter.BlobVersion = types.BlobSidecarVersion0
 	}
-	pendingBlobTxs := miner.txpool.Pending(filter)
+	pendingBlobTxs, blobTxCount := miner.txpool.Pending(filter)
+	span.SetAttributes(
+		telemetry.Int64Attribute("pending.plain.count", int64(plainTxCount)),
+		telemetry.Int64Attribute("pending.blob.count", int64(blobTxCount)),
+	)
 
 	// Split the pending transactions into locals and remotes.
 	prioPlainTxs, normalPlainTxs := make(map[common.Address][]*txpool.LazyTransaction), pendingPlainTxs
@@ -552,7 +581,7 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 		plainTxs := newTransactionsByPriceAndNonce(env.signer, prioPlainTxs, env.header.BaseFee)
 		blobTxs := newTransactionsByPriceAndNonce(env.signer, prioBlobTxs, env.header.BaseFee)
 
-		if err := miner.commitTransactions(env, plainTxs, blobTxs, interrupt); err != nil {
+		if err := miner.commitTransactions(ctx, env, plainTxs, blobTxs, interrupt); err != nil {
 			return err
 		}
 	}
@@ -560,7 +589,7 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 		plainTxs := newTransactionsByPriceAndNonce(env.signer, normalPlainTxs, env.header.BaseFee)
 		blobTxs := newTransactionsByPriceAndNonce(env.signer, normalBlobTxs, env.header.BaseFee)
 
-		if err := miner.commitTransactions(env, plainTxs, blobTxs, interrupt); err != nil {
+		if err := miner.commitTransactions(ctx, env, plainTxs, blobTxs, interrupt); err != nil {
 			return err
 		}
 	}
