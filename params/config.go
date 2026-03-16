@@ -1172,6 +1172,8 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 // BlobConfig returns the blob config associated with the provided fork.
 func (c *ChainConfig) BlobConfig(fork forks.Fork) *BlobConfig {
 	switch fork {
+	case forks.Amsterdam:
+		return c.BlobScheduleConfig.Amsterdam
 	case forks.BPO5:
 		return c.BlobScheduleConfig.BPO5
 	case forks.BPO4:
@@ -1217,6 +1219,8 @@ func (c *ChainConfig) ActiveSystemContracts(time uint64) map[string]common.Addre
 // the fork isn't defined or isn't a time-based fork.
 func (c *ChainConfig) Timestamp(fork forks.Fork) *uint64 {
 	switch {
+	case fork == forks.Amsterdam:
+		return c.AmsterdamTime
 	case fork == forks.BPO5:
 		return c.BPO5Time
 	case fork == forks.BPO4:
