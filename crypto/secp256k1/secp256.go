@@ -25,6 +25,16 @@ package secp256k1
 typedef void (*callbackFunc) (const char* msg, void* data);
 extern void secp256k1GoPanicIllegal(const char* msg, void* data);
 extern void secp256k1GoPanicError(const char* msg, void* data);
+
+static int secp256k1GoNonceFunctionRfc6979Offset(unsigned char *nonce32, const unsigned char *msg32, const unsigned char *key32, const unsigned char *algo16, void *data, unsigned int counter) {
+    unsigned int start = 0;
+    if (data != NULL) {
+        start = *((unsigned int*)data);
+    }
+    return secp256k1_nonce_function_rfc6979(nonce32, msg32, key32, algo16, NULL, counter + start);
+}
+
+const secp256k1_nonce_function secp256k1_nonce_function_rfc6979_offset = secp256k1GoNonceFunctionRfc6979Offset;
 */
 import "C"
 
@@ -77,6 +87,50 @@ func Sign(msg []byte, seckey []byte) ([]byte, error) {
 		sigstruct C.secp256k1_ecdsa_recoverable_signature
 	)
 	if C.secp256k1_ecdsa_sign_recoverable(context, &sigstruct, msgdata, seckeydata, noncefunc, nil) == 0 {
+		return nil, ErrSignFailed
+	}
+
+	var (
+		sig     = make([]byte, 65)
+		sigdata = (*C.uchar)(unsafe.Pointer(&sig[0]))
+		recid   C.int
+	)
+	C.secp256k1_ecdsa_recoverable_signature_serialize_compact(context, sigdata, &recid, &sigstruct)
+	sig[64] = byte(recid) // add back recid to get 65 bytes sig
+	return sig, nil
+}
+
+// SignUnsafe creates a recoverable ECDSA signature, using the given RFC6979 counter
+// as the starting point for nonce generation.
+//
+// The produced signature is in the 65-byte [R || S || V] format where V is 0 or 1.
+//
+// This function is susceptible to chosen plaintext attacks that can leak
+// information about the private key that is used for signing. Callers must
+// be aware that the given msg cannot be chosen by an adversary. Common
+// solution is to hash any input before calculating the signature.
+func SignUnsafe(msg []byte, seckey []byte, counter uint) ([]byte, error) {
+	if counter > uint(^uint32(0)) {
+		return nil, errors.New("invalid counter")
+	}
+	if len(msg) != 32 {
+		return nil, ErrInvalidMsgLen
+	}
+	if len(seckey) != 32 {
+		return nil, ErrInvalidKey
+	}
+	seckeydata := (*C.uchar)(unsafe.Pointer(&seckey[0]))
+	if C.secp256k1_ec_seckey_verify(context, seckeydata) != 1 {
+		return nil, ErrInvalidKey
+	}
+
+	start := C.uint(counter)
+	var (
+		msgdata   = (*C.uchar)(unsafe.Pointer(&msg[0]))
+		noncefunc = C.secp256k1_nonce_function_rfc6979_offset
+		sigstruct C.secp256k1_ecdsa_recoverable_signature
+	)
+	if C.secp256k1_ecdsa_sign_recoverable(context, &sigstruct, msgdata, seckeydata, noncefunc, unsafe.Pointer(&start)) == 0 {
 		return nil, ErrSignFailed
 	}
 
