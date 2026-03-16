@@ -165,12 +165,6 @@ type BlobAndProofV2 struct {
 // that avoids the overhead of encoding/json for large blob payloads.
 type BlobAndProofListV2 []*BlobAndProofV2
 
-// JSON type overrides for ExecutionPayloadEnvelope.
-type executionPayloadEnvelopeMarshaling struct {
-	BlockValue *hexutil.Big
-	Requests   []hexutil.Bytes
-}
-
 type PayloadStatusV1 struct {
 	Status          string         `json:"status"`
 	Witness         *hexutil.Bytes `json:"witness,omitempty"`

@@ -16,6 +16,8 @@
 
 package engine
 
+import "encoding/json"
+
 // estimateBlobAndProofV1Size returns a rough estimate of the JSON size for a BlobAndProofV1.
 func estimateBlobAndProofV1Size(item *BlobAndProofV1) int {
 	if item == nil {
@@ -87,6 +89,39 @@ func (list BlobAndProofListV1) MarshalJSON() ([]byte, error) {
 	return buf, nil
 }
 
+// UnmarshalJSON implements json.Unmarshaler.
+func (list *BlobAndProofListV1) UnmarshalJSON(input []byte) error {
+	if isJSONNull(input) {
+		*list = nil
+		return nil
+	}
+	items := make(BlobAndProofListV1, 0)
+	if err := decodeJSONArray(input, func(value json.RawMessage) error {
+		if isJSONNull(value) {
+			items = append(items, nil)
+			return nil
+		}
+		item := new(BlobAndProofV1)
+		if err := decodeJSONObject(value, func(key string, value json.RawMessage) error {
+			switch key {
+			case "blob":
+				return item.Blob.UnmarshalJSON(value)
+			case "proof":
+				return item.Proof.UnmarshalJSON(value)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		items = append(items, item)
+		return nil
+	}); err != nil {
+		return err
+	}
+	*list = items
+	return nil
+}
+
 // MarshalJSON implements json.Marshaler.
 func (list BlobAndProofListV2) MarshalJSON() ([]byte, error) {
 	// Estimate buffer size.
@@ -106,4 +141,41 @@ func (list BlobAndProofListV2) MarshalJSON() ([]byte, error) {
 	}
 	buf = append(buf, ']')
 	return buf, nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (list *BlobAndProofListV2) UnmarshalJSON(input []byte) error {
+	if isJSONNull(input) {
+		*list = nil
+		return nil
+	}
+	items := make(BlobAndProofListV2, 0)
+	if err := decodeJSONArray(input, func(value json.RawMessage) error {
+		if isJSONNull(value) {
+			items = append(items, nil)
+			return nil
+		}
+		item := new(BlobAndProofV2)
+		if err := decodeJSONObject(value, func(key string, value json.RawMessage) error {
+			switch key {
+			case "blob":
+				return item.Blob.UnmarshalJSON(value)
+			case "proofs":
+				proofs, err := unmarshalHexBytesArray(value)
+				if err != nil {
+					return err
+				}
+				item.CellProofs = proofs
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		items = append(items, item)
+		return nil
+	}); err != nil {
+		return err
+	}
+	*list = items
+	return nil
 }
