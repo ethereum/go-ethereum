@@ -321,7 +321,8 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, err
 		}
-		if err := sim.sanitizeCall(&call, sim.state, header, gp); err != nil {
+		gasCapped, err := sim.sanitizeCall(&call, sim.state, header, gp)
+		if err != nil {
 			return nil, nil, nil, err
 		}
 		var (
@@ -365,7 +366,11 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 				revertErr := newRevertError(result.Revert())
 				callRes.Error = &callError{Message: revertErr.Error(), Code: revertErr.ErrorCode(), Data: revertErr.ErrorData().(string)}
 			} else {
-				callRes.Error = &callError{Message: result.Err.Error(), Code: errCodeVMError}
+				msg := result.Err.Error()
+				if gasCapped {
+					msg += " (gas limit was capped by the RPC server's global gas cap)"
+				}
+				callRes.Error = &callError{Message: msg, Code: errCodeVMError}
 			}
 		} else {
 			callRes.Status = hexutil.Uint64(types.ReceiptStatusSuccessful)
@@ -425,7 +430,7 @@ func repairLogs(calls []simCallResult, hash common.Hash) {
 	}
 }
 
-func (sim *simulator) sanitizeCall(call *TransactionArgs, state vm.StateDB, header *types.Header, gp *core.GasPool) error {
+func (sim *simulator) sanitizeCall(call *TransactionArgs, state vm.StateDB, header *types.Header, gp *core.GasPool) (bool, error) {
 	if call.Nonce == nil {
 		nonce := state.GetNonce(call.from())
 		call.Nonce = (*hexutil.Uint64)(&nonce)
@@ -436,13 +441,14 @@ func (sim *simulator) sanitizeCall(call *TransactionArgs, state vm.StateDB, head
 		call.Gas = (*hexutil.Uint64)(&remaining)
 	}
 	if remaining < uint64(*call.Gas) {
-		return &blockGasLimitReachedError{fmt.Sprintf("block gas limit reached: remaining: %d, required: %d", remaining, *call.Gas)}
+		return false, &blockGasLimitReachedError{fmt.Sprintf("block gas limit reached: remaining: %d, required: %d", remaining, *call.Gas)}
 	}
 	// Clamp to the cross-block gas budget.
 	gas := sim.budget.cap(uint64(*call.Gas))
+	gasCapped := gas < uint64(*call.Gas)
 	call.Gas = (*hexutil.Uint64)(&gas)
 
-	return call.CallDefaults(0, header.BaseFee, sim.chainConfig.ChainID)
+	return gasCapped, call.CallDefaults(0, header.BaseFee, sim.chainConfig.ChainID)
 }
 
 func (sim *simulator) activePrecompiles(base *types.Header) vm.PrecompiledContracts {
