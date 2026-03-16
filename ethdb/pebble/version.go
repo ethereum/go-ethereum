@@ -34,31 +34,31 @@ const formatMinV2 = pebblev2.FormatFlushableIngest
 
 // PeekFormatVersion reads the format version of an existing pebble database
 // without opening it. It returns 0 if the database does not exist.
-func PeekFormatVersion(file string) (uint64, error) {
+func PeekFormatVersion(file string) (bool, uint64, error) {
 	desc, err := pebblev2.Peek(file, v2vfs.Default)
 	if err != nil {
 		// Pebble v2 Peek may fail on very old databases that don't have
 		// the format version marker. Try v1 Peek as fallback.
 		desc1, err1 := pebblev1.Peek(file, v1vfs.Default)
 		if err1 != nil {
-			return 0, err // Return original v2 error
+			return false, 0, err // Return original v2 error
 		}
 		if !desc1.Exists {
-			return 0, nil
+			return false, 0, nil
 		}
-		return uint64(desc1.FormatMajorVersion), nil
+		return true, uint64(desc1.FormatMajorVersion), nil
 	}
 	if !desc.Exists {
-		return 0, nil
+		return false, 0, nil
 	}
-	return uint64(desc.FormatMajorVersion), nil
+	return true, uint64(desc.FormatMajorVersion), nil
 }
 
 // NeedsV1 returns true if the database at the given path requires pebble v1
 // to open (format version too old for pebble v2).
 func NeedsV1(file string) bool {
-	ver, err := PeekFormatVersion(file)
-	if err != nil || ver == 0 {
+	exists, ver, err := PeekFormatVersion(file)
+	if err != nil || !exists {
 		return false // New database or error; use v2
 	}
 	return pebblev2.FormatMajorVersion(ver) < formatMinV2
@@ -69,11 +69,11 @@ func NeedsV1(file string) bool {
 // RatchetFormatMajorVersion to migrate to FormatFlushableIngest (the minimum format
 // version that pebble v2 supports). This is a one-way, offline operation.
 func Upgrade(file string) error {
-	ver, err := PeekFormatVersion(file)
+	exists, ver, err := PeekFormatVersion(file)
 	if err != nil {
 		return err
 	}
-	if ver == 0 {
+	if !exists {
 		return fmt.Errorf("pebble database not found at %s", file)
 	}
 	if pebblev2.FormatMajorVersion(ver) >= formatMinV2 {
