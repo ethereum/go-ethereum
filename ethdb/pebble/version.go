@@ -33,7 +33,7 @@ import (
 const formatMinV2 = pebblev2.FormatFlushableIngest
 
 // PeekFormatVersion reads the format version of an existing pebble database
-// without opening it. It returns 0 if the database does not exist.
+// without opening it.
 func PeekFormatVersion(file string) (bool, uint64, error) {
 	desc, err := pebblev2.Peek(file, v2vfs.Default)
 	if err != nil {
@@ -83,6 +83,10 @@ func Upgrade(file string) error {
 		log.Info("Database format already compatible with pebble v2", "version", ver)
 		return nil
 	}
+	// FormatFlushableIngest exists in both pebble v1 and pebble v2 and it serves
+	// as the natural bridge point: a v1 database can be ratcheted up to
+	// FormatFlushableIngest using pebble v1, and then pebble v2 can open it since
+	// that's its minimum supported format.
 	v1Target := pebblev1.FormatFlushableIngest
 	log.Info("Upgrading pebble database format via v1", "from", ver, "to", v1Target)
 
