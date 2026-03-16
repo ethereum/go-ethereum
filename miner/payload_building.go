@@ -329,10 +329,10 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 	return payload, nil
 }
 
-func (p *Payload) updateSpanForDelivery(bSpan trace.Span) {
-	p.lock.Lock()
-	emptyDelivered := p.full == nil
-	p.lock.Unlock()
+func (payload *Payload) updateSpanForDelivery(bSpan trace.Span) {
+	payload.lock.Lock()
+	emptyDelivered := payload.full == nil
+	payload.lock.Unlock()
 	bSpan.SetAttributes(
 		telemetry.StringAttribute("exit.reason", "delivery"),
 		telemetry.BoolAttribute("empty.delivered", emptyDelivered),
