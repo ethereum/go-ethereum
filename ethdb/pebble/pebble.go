@@ -312,10 +312,9 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		// debt will be less than 1GB, but with more frequent compactions scheduled.
 		L0CompactionThreshold: 2,
 
-		// FormatNewest only sets the on-disk format version marker. It declares
-		// which format features the database may use. The actual features require
-		// explicit opt-in through options.
-		FormatMajorVersion: pebble.FormatNewest,
+		// FormatFlushableIngest is the minimum FormatMajorVersion supported by
+		// pebble v2. The more advanced version can be enabled later.
+		FormatMajorVersion: formatMinV2,
 	}
 	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
 	// for more details.
