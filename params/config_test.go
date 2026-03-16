@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/stretchr/testify/require"
 )
 
@@ -154,4 +155,47 @@ func TestTimestampCompatError(t *testing.T) {
 
 	require.Equal(t, newTimestampCompatError(errWhat, newUint64(0), newUint64(1681338455)).Error(),
 		"mismatching Shanghai fork timestamp in database (have timestamp 0, want timestamp 1681338455, rewindto timestamp 0)")
+}
+
+// TestForkHelperCompleteness ensures that Timestamp() and BlobConfig() cover
+// every fork that LatestFork() can return. This catches the common mistake of
+// adding a new fork to LatestFork but forgetting to update the helper methods.
+func TestForkHelperCompleteness(t *testing.T) {
+	ts := newUint64(1)
+	cfg := &ChainConfig{
+		LondonBlock:  big.NewInt(0),
+		ShanghaiTime: ts,
+		CancunTime:   ts,
+		PragueTime:   ts,
+		OsakaTime:    ts,
+		BPO1Time:     ts,
+		BPO2Time:     ts,
+		BPO3Time:     ts,
+		BPO4Time:     ts,
+		BPO5Time:     ts,
+		AmsterdamTime: ts,
+		BlobScheduleConfig: &BlobScheduleConfig{
+			Cancun:    DefaultCancunBlobConfig,
+			Prague:    DefaultPragueBlobConfig,
+			Osaka:     DefaultPragueBlobConfig,
+			BPO1:      DefaultPragueBlobConfig,
+			BPO2:      DefaultPragueBlobConfig,
+			BPO3:      DefaultPragueBlobConfig,
+			BPO4:      DefaultPragueBlobConfig,
+			BPO5:      DefaultPragueBlobConfig,
+			Amsterdam: DefaultPragueBlobConfig,
+		},
+	}
+	// Timestamp() must return non-nil for every time-based fork (Shanghai onward).
+	for f := forks.Shanghai; f <= forks.Amsterdam; f++ {
+		if cfg.Timestamp(f) == nil {
+			t.Errorf("Timestamp(%s) returned nil — add a case to Timestamp()", f)
+		}
+	}
+	// BlobConfig() must return non-nil for every blob-capable fork (Cancun onward).
+	for f := forks.Cancun; f <= forks.Amsterdam; f++ {
+		if cfg.BlobConfig(f) == nil {
+			t.Errorf("BlobConfig(%s) returned nil — add a case to BlobConfig()", f)
+		}
+	}
 }
