@@ -164,12 +164,12 @@ type noopCodeReader struct{}
 
 func (r *noopCodeReader) Has(addr common.Address, codeHash common.Hash) bool { return false }
 
-func (r *noopCodeReader) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
-	return nil, nil
+func (r *noopCodeReader) Code(addr common.Address, codeHash common.Hash) []byte {
+	return nil
 }
 
-func (r *noopCodeReader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	return 0, nil
+func (r *noopCodeReader) CodeSize(addr common.Address, codeHash common.Hash) int {
+	return 0
 }
 
 func TestReaderWithTracker(t *testing.T) {
