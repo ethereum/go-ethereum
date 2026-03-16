@@ -17,8 +17,10 @@
 package rlp
 
 import (
+	"fmt"
 	"io"
 	"reflect"
+	"slices"
 )
 
 // RawValue represents an encoded RLP value and can be used to delay
@@ -27,6 +29,144 @@ import (
 type RawValue []byte
 
 var rawValueType = reflect.TypeFor[RawValue]()
+
+// RawList represents an encoded RLP list.
+type RawList[T any] struct {
+	// The list is stored in encoded form.
+	// Note this buffer has some special properties:
+	//
+	//   - if the buffer is nil, it's the zero value, representing
+	//     an empty list.
+	//   - if the buffer is non-nil, it must have a length of at least
+	//     9 bytes, which is reserved padding for the encoded list header.
+	//     The remaining bytes, enc[9:], store the content bytes of the list.
+	//
+	// The implementation code mostly works with the Content method because it
+	// returns something valid either way.
+	enc []byte
+
+	// length holds the number of items in the list.
+	length int
+}
+
+// Content returns the RLP-encoded data of the list.
+// This does not include the list-header.
+// The return value is a direct reference to the internal buffer, not a copy.
+func (r *RawList[T]) Content() []byte {
+	if r.enc == nil {
+		return nil
+	} else {
+		return r.enc[9:]
+	}
+}
+
+// EncodeRLP writes the encoded list to the writer.
+func (r RawList[T]) EncodeRLP(w io.Writer) error {
+	_, err := w.Write(r.Bytes())
+	return err
+}
+
+// Bytes returns the RLP encoding of the list.
+// Note the return value aliases the internal buffer.
+func (r *RawList[T]) Bytes() []byte {
+	if r == nil || r.enc == nil {
+		return []byte{0xC0} // zero value encodes as empty list
+	}
+	n := puthead(r.enc, 0xC0, 0xF7, uint64(len(r.Content())))
+	copy(r.enc[9-n:], r.enc[:n])
+	return r.enc[9-n:]
+}
+
+// DecodeRLP decodes the list. This does not perform validation of the items!
+func (r *RawList[T]) DecodeRLP(s *Stream) error {
+	k, size, err := s.Kind()
+	if err != nil {
+		return err
+	}
+	if k != List {
+		return fmt.Errorf("%w for %T", ErrExpectedList, r)
+	}
+	enc := make([]byte, 9+size)
+	if err := s.readFull(enc[9:]); err != nil {
+		return err
+	}
+	n, err := CountValues(enc[9:])
+	if err != nil {
+		if err == ErrValueTooLarge {
+			return ErrElemTooLarge
+		}
+		return err
+	}
+	*r = RawList[T]{enc: enc, length: n}
+	return nil
+}
+
+// Items decodes and returns all items in the list.
+func (r *RawList[T]) Items() ([]T, error) {
+	items := make([]T, r.Len())
+	it := r.ContentIterator()
+	for i := 0; it.Next(); i++ {
+		if err := DecodeBytes(it.Value(), &items[i]); err != nil {
+			return items[:i], err
+		}
+	}
+	return items, nil
+}
+
+// Len returns the number of items in the list.
+func (r *RawList[T]) Len() int {
+	return r.length
+}
+
+// Size returns the encoded size of the list.
+func (r *RawList[T]) Size() uint64 {
+	return ListSize(uint64(len(r.Content())))
+}
+
+// ContentIterator returns an iterator over the content of the list.
+// Note the offsets returned by iterator.Offset are relative to the
+// Content bytes of the list.
+func (r *RawList[T]) ContentIterator() Iterator {
+	return newIterator(r.Content(), 0)
+}
+
+// Append adds an item to the end of the list.
+func (r *RawList[T]) Append(item T) error {
+	if r.enc == nil {
+		r.enc = make([]byte, 9)
+	}
+
+	eb := getEncBuffer()
+	defer encBufferPool.Put(eb)
+
+	if err := eb.encode(item); err != nil {
+		return err
+	}
+	prevEnd := len(r.enc)
+	end := prevEnd + eb.size()
+	r.enc = slices.Grow(r.enc, eb.size())[:end]
+	eb.copyTo(r.enc[prevEnd:end])
+	r.length++
+	return nil
+}
+
+// AppendRaw adds an encoded item to the list.
+// The given byte slice must contain exactly one RLP value.
+func (r *RawList[T]) AppendRaw(b []byte) error {
+	_, tagsize, contentsize, err := readKind(b)
+	if err != nil {
+		return err
+	}
+	if tagsize+contentsize != uint64(len(b)) {
+		return fmt.Errorf("rlp: input has trailing bytes in AppendRaw")
+	}
+	if r.enc == nil {
+		r.enc = make([]byte, 9)
+	}
+	r.enc = append(r.enc, b...)
+	r.length++
+	return nil
+}
 
 // StringSize returns the encoded size of a string.
 func StringSize(s string) uint64 {
@@ -145,11 +285,50 @@ func CountValues(b []byte) (int, error) {
 	for ; len(b) > 0; i++ {
 		_, tagsize, size, err := readKind(b)
 		if err != nil {
-			return 0, err
+			return i + 1, err
 		}
 		b = b[tagsize+size:]
 	}
 	return i, nil
+}
+
+// SplitListValues extracts the raw elements from the list RLP-encoding blob.
+//
+// Note: the returned slice must not be modified, as it shares the same
+// backing array as the original slice. It's acceptable to deep-copy the elements
+// out if necessary, but let's stick with this approach for less allocation
+// overhead.
+func SplitListValues(b []byte) ([][]byte, error) {
+	b, _, err := SplitList(b)
+	if err != nil {
+		return nil, err
+	}
+	n, err := CountValues(b)
+	if err != nil {
+		return nil, err
+	}
+	var elements = make([][]byte, 0, n)
+
+	for len(b) > 0 {
+		_, tagsize, size, err := readKind(b)
+		if err != nil {
+			return nil, err
+		}
+		elements = append(elements, b[:tagsize+size])
+		b = b[tagsize+size:]
+	}
+	return elements, nil
+}
+
+// MergeListValues takes a list of raw elements and rlp-encodes them as list.
+func MergeListValues(elems [][]byte) ([]byte, error) {
+	w := NewEncoderBuffer(nil)
+	offset := w.List()
+	for _, elem := range elems {
+		w.Write(elem)
+	}
+	w.ListEnd(offset)
+	return w.ToBytes(), nil
 }
 
 func readKind(buf []byte) (k Kind, tagsize, contentsize uint64, err error) {

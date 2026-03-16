@@ -25,22 +25,28 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-// parseIndex parses the index data with the supplied byte stream. The index data
-// is a list of fixed-sized metadata. Empty metadata is regarded as invalid.
-func parseIndex(blob []byte) ([]*indexBlockDesc, error) {
+// parseIndex parses the index data from the provided byte stream. The index data
+// is a sequence of fixed-size metadata entries, and any empty metadata entry is
+// considered invalid.
+//
+// Each metadata entry consists of two components: the indexBlockDesc and an
+// optional extension bitmap. The bitmap length may vary across different categories,
+// but must remain consistent within the same category.
+func parseIndex(blob []byte, bitmapSize int) ([]*indexBlockDesc, error) {
 	if len(blob) == 0 {
 		return nil, errors.New("empty state history index")
 	}
-	if len(blob)%indexBlockDescSize != 0 {
-		return nil, fmt.Errorf("corrupted state index, len: %d", len(blob))
+	size := indexBlockDescSize + bitmapSize
+	if len(blob)%size != 0 {
+		return nil, fmt.Errorf("corrupted state index, len: %d, bitmap size: %d", len(blob), bitmapSize)
 	}
 	var (
 		lastID   uint32
-		descList []*indexBlockDesc
+		descList = make([]*indexBlockDesc, 0, len(blob)/size)
 	)
-	for i := 0; i < len(blob)/indexBlockDescSize; i++ {
+	for i := 0; i < len(blob)/size; i++ {
 		var desc indexBlockDesc
-		desc.decode(blob[i*indexBlockDescSize : (i+1)*indexBlockDescSize])
+		desc.decode(blob[i*size : (i+1)*size])
 		if desc.empty() {
 			return nil, errors.New("empty state history index block")
 		}
@@ -69,33 +75,35 @@ func parseIndex(blob []byte) ([]*indexBlockDesc, error) {
 // indexReader is the structure to look up the state history index records
 // associated with the specific state element.
 type indexReader struct {
-	db       ethdb.KeyValueReader
-	descList []*indexBlockDesc
-	readers  map[uint32]*blockReader
-	state    stateIdent
+	db         ethdb.KeyValueReader
+	descList   []*indexBlockDesc
+	readers    map[uint32]*blockReader
+	state      stateIdent
+	bitmapSize int
 }
 
 // loadIndexData loads the index data associated with the specified state.
-func loadIndexData(db ethdb.KeyValueReader, state stateIdent) ([]*indexBlockDesc, error) {
+func loadIndexData(db ethdb.KeyValueReader, state stateIdent, bitmapSize int) ([]*indexBlockDesc, error) {
 	blob := readStateIndex(state, db)
 	if len(blob) == 0 {
 		return nil, nil
 	}
-	return parseIndex(blob)
+	return parseIndex(blob, bitmapSize)
 }
 
 // newIndexReader constructs a index reader for the specified state. Reader with
 // empty data is allowed.
-func newIndexReader(db ethdb.KeyValueReader, state stateIdent) (*indexReader, error) {
-	descList, err := loadIndexData(db, state)
+func newIndexReader(db ethdb.KeyValueReader, state stateIdent, bitmapSize int) (*indexReader, error) {
+	descList, err := loadIndexData(db, state, bitmapSize)
 	if err != nil {
 		return nil, err
 	}
 	return &indexReader{
-		descList: descList,
-		readers:  make(map[uint32]*blockReader),
-		db:       db,
-		state:    state,
+		descList:   descList,
+		readers:    make(map[uint32]*blockReader),
+		db:         db,
+		state:      state,
+		bitmapSize: bitmapSize,
 	}, nil
 }
 
@@ -106,11 +114,9 @@ func (r *indexReader) refresh() error {
 	// may have been modified by additional elements written to the disk.
 	if len(r.descList) != 0 {
 		last := r.descList[len(r.descList)-1]
-		if !last.full() {
-			delete(r.readers, last.id)
-		}
+		delete(r.readers, last.id)
 	}
-	descList, err := loadIndexData(r.db, r.state)
+	descList, err := loadIndexData(r.db, r.state, r.bitmapSize)
 	if err != nil {
 		return err
 	}
@@ -118,26 +124,10 @@ func (r *indexReader) refresh() error {
 	return nil
 }
 
-// newIterator creates an iterator for traversing the index entries.
-func (r *indexReader) newIterator() *indexIterator {
-	return newIndexIterator(r.descList, func(id uint32) (*blockReader, error) {
-		br, ok := r.readers[id]
-		if !ok {
-			var err error
-			br, err = newBlockReader(readStateIndexBlock(r.state, r.db, id))
-			if err != nil {
-				return nil, err
-			}
-			r.readers[id] = br
-		}
-		return br, nil
-	})
-}
-
 // readGreaterThan locates the first element that is greater than the specified
 // id. If no such element is found, MaxUint64 is returned.
 func (r *indexReader) readGreaterThan(id uint64) (uint64, error) {
-	it := r.newIterator()
+	it := r.newIterator(nil)
 	found := it.SeekGT(id)
 	if err := it.Error(); err != nil {
 		return 0, err
@@ -155,57 +145,75 @@ func (r *indexReader) readGreaterThan(id uint64) (uint64, error) {
 // history ids) is stored in these second-layer index blocks, which are size
 // limited.
 type indexWriter struct {
-	descList []*indexBlockDesc // The list of index block descriptions
-	bw       *blockWriter      // The live index block writer
-	frozen   []*blockWriter    // The finalized index block writers, waiting for flush
-	lastID   uint64            // The ID of the latest tracked history
-	state    stateIdent
-	db       ethdb.KeyValueReader
+	descList   []*indexBlockDesc // The list of index block descriptions
+	bw         *blockWriter      // The live index block writer
+	frozen     []*blockWriter    // The finalized index block writers, waiting for flush
+	lastID     uint64            // The ID of the latest tracked history
+	state      stateIdent        // The identifier of the state being indexed
+	bitmapSize int               // The size of optional extension bitmap
+	db         ethdb.KeyValueReader
 }
 
-// newIndexWriter constructs the index writer for the specified state.
-func newIndexWriter(db ethdb.KeyValueReader, state stateIdent) (*indexWriter, error) {
+// newIndexWriter constructs the index writer for the specified state. Additionally,
+// it takes an integer as the limit and prunes all existing elements above that ID.
+// It's essential as the recovery mechanism after unclean shutdown during the history
+// indexing.
+func newIndexWriter(db ethdb.KeyValueReader, state stateIdent, limit uint64, bitmapSize int) (*indexWriter, error) {
 	blob := readStateIndex(state, db)
 	if len(blob) == 0 {
-		desc := newIndexBlockDesc(0)
-		bw, _ := newBlockWriter(nil, desc)
+		desc := newIndexBlockDesc(0, bitmapSize)
+		bw, _ := newBlockWriter(nil, desc, 0 /* useless if the block is empty */, bitmapSize != 0)
 		return &indexWriter{
-			descList: []*indexBlockDesc{desc},
-			bw:       bw,
-			state:    state,
-			db:       db,
+			descList:   []*indexBlockDesc{desc},
+			bw:         bw,
+			state:      state,
+			db:         db,
+			bitmapSize: bitmapSize,
 		}, nil
 	}
-	descList, err := parseIndex(blob)
+	descList, err := parseIndex(blob, bitmapSize)
 	if err != nil {
 		return nil, err
 	}
+	// Trim trailing blocks whose elements all exceed the limit.
+	for i := len(descList) - 1; i > 0 && descList[i].max > limit; i-- {
+		// The previous block has the elements that exceed the limit,
+		// therefore the current block can be entirely dropped.
+		if descList[i-1].max >= limit {
+			descList = descList[:i]
+		}
+	}
+	// Take the last block for appending new elements
 	lastDesc := descList[len(descList)-1]
 	indexBlock := readStateIndexBlock(state, db, lastDesc.id)
-	bw, err := newBlockWriter(indexBlock, lastDesc)
+
+	// Construct the writer for the last block. All elements in this block
+	// that exceed the limit will be truncated.
+	bw, err := newBlockWriter(indexBlock, lastDesc, limit, bitmapSize != 0)
 	if err != nil {
 		return nil, err
 	}
 	return &indexWriter{
-		descList: descList,
-		lastID:   lastDesc.max,
-		bw:       bw,
-		state:    state,
-		db:       db,
+		descList:   descList,
+		lastID:     bw.last(),
+		bw:         bw,
+		state:      state,
+		db:         db,
+		bitmapSize: bitmapSize,
 	}, nil
 }
 
 // append adds the new element into the index writer.
-func (w *indexWriter) append(id uint64) error {
+func (w *indexWriter) append(id uint64, ext []uint16) error {
 	if id <= w.lastID {
 		return fmt.Errorf("append element out of order, last: %d, this: %d", w.lastID, id)
 	}
-	if w.bw.full() {
+	if w.bw.estimateFull(ext) {
 		if err := w.rotate(); err != nil {
 			return err
 		}
 	}
-	if err := w.bw.append(id); err != nil {
+	if err := w.bw.append(id, ext); err != nil {
 		return err
 	}
 	w.lastID = id
@@ -218,10 +226,10 @@ func (w *indexWriter) append(id uint64) error {
 func (w *indexWriter) rotate() error {
 	var (
 		err  error
-		desc = newIndexBlockDesc(w.bw.desc.id + 1)
+		desc = newIndexBlockDesc(w.bw.desc.id+1, w.bitmapSize)
 	)
 	w.frozen = append(w.frozen, w.bw)
-	w.bw, err = newBlockWriter(nil, desc)
+	w.bw, err = newBlockWriter(nil, desc, 0 /* useless if the block is empty */, w.bitmapSize != 0)
 	if err != nil {
 		return err
 	}
@@ -253,7 +261,8 @@ func (w *indexWriter) finish(batch ethdb.Batch) {
 	}
 	w.frozen = nil // release all the frozen writers
 
-	buf := make([]byte, 0, indexBlockDescSize*len(descList))
+	size := indexBlockDescSize + w.bitmapSize
+	buf := make([]byte, 0, size*len(descList))
 	for _, desc := range descList {
 		buf = append(buf, desc.encode()...)
 	}
@@ -262,49 +271,64 @@ func (w *indexWriter) finish(batch ethdb.Batch) {
 
 // indexDeleter is responsible for deleting index data for a specific state.
 type indexDeleter struct {
-	descList []*indexBlockDesc // The list of index block descriptions
-	bw       *blockWriter      // The live index block writer
-	dropped  []uint32          // The list of index block id waiting for deleting
-	lastID   uint64            // The ID of the latest tracked history
-	state    stateIdent
-	db       ethdb.KeyValueReader
+	descList   []*indexBlockDesc // The list of index block descriptions
+	bw         *blockWriter      // The live index block writer
+	dropped    []uint32          // The list of index block id waiting for deleting
+	lastID     uint64            // The ID of the latest tracked history
+	state      stateIdent        // The identifier of the state being indexed
+	bitmapSize int               // The size of optional extension bitmap
+	db         ethdb.KeyValueReader
 }
 
 // newIndexDeleter constructs the index deleter for the specified state.
-func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent) (*indexDeleter, error) {
+func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent, limit uint64, bitmapSize int) (*indexDeleter, error) {
 	blob := readStateIndex(state, db)
 	if len(blob) == 0 {
 		// TODO(rjl493456442) we can probably return an error here,
 		// deleter with no data is meaningless.
-		desc := newIndexBlockDesc(0)
-		bw, _ := newBlockWriter(nil, desc)
+		desc := newIndexBlockDesc(0, bitmapSize)
+		bw, _ := newBlockWriter(nil, desc, 0 /* useless if the block is empty */, bitmapSize != 0)
 		return &indexDeleter{
-			descList: []*indexBlockDesc{desc},
-			bw:       bw,
-			state:    state,
-			db:       db,
+			descList:   []*indexBlockDesc{desc},
+			bw:         bw,
+			state:      state,
+			bitmapSize: bitmapSize,
+			db:         db,
 		}, nil
 	}
-	descList, err := parseIndex(blob)
+	descList, err := parseIndex(blob, bitmapSize)
 	if err != nil {
 		return nil, err
 	}
+	// Trim trailing blocks whose elements all exceed the limit.
+	for i := len(descList) - 1; i > 0 && descList[i].max > limit; i-- {
+		// The previous block has the elements that exceed the limit,
+		// therefore the current block can be entirely dropped.
+		if descList[i-1].max >= limit {
+			descList = descList[:i]
+		}
+	}
+	// Take the block for deleting element from
 	lastDesc := descList[len(descList)-1]
 	indexBlock := readStateIndexBlock(state, db, lastDesc.id)
-	bw, err := newBlockWriter(indexBlock, lastDesc)
+
+	// Construct the writer for the last block. All elements in this block
+	// that exceed the limit will be truncated.
+	bw, err := newBlockWriter(indexBlock, lastDesc, limit, bitmapSize != 0)
 	if err != nil {
 		return nil, err
 	}
 	return &indexDeleter{
-		descList: descList,
-		lastID:   lastDesc.max,
-		bw:       bw,
-		state:    state,
-		db:       db,
+		descList:   descList,
+		lastID:     bw.last(),
+		bw:         bw,
+		state:      state,
+		bitmapSize: bitmapSize,
+		db:         db,
 	}, nil
 }
 
-// empty returns an flag indicating whether the state index is empty.
+// empty returns whether the state index is empty.
 func (d *indexDeleter) empty() bool {
 	return d.bw.empty() && len(d.descList) == 1
 }
@@ -337,7 +361,7 @@ func (d *indexDeleter) pop(id uint64) error {
 	// Open the previous block writer for deleting
 	lastDesc := d.descList[len(d.descList)-1]
 	indexBlock := readStateIndexBlock(d.state, d.db, lastDesc.id)
-	bw, err := newBlockWriter(indexBlock, lastDesc)
+	bw, err := newBlockWriter(indexBlock, lastDesc, lastDesc.max, d.bitmapSize != 0)
 	if err != nil {
 		return err
 	}
@@ -363,7 +387,8 @@ func (d *indexDeleter) finish(batch ethdb.Batch) {
 	if d.empty() {
 		deleteStateIndex(d.state, batch)
 	} else {
-		buf := make([]byte, 0, indexBlockDescSize*len(d.descList))
+		size := indexBlockDescSize + d.bitmapSize
+		buf := make([]byte, 0, size*len(d.descList))
 		for _, desc := range d.descList {
 			buf = append(buf, desc.encode()...)
 		}

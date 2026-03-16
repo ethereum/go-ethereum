@@ -28,7 +28,7 @@ import (
 )
 
 // Tests that snap sync is disabled after a successful sync cycle.
-func TestSnapSyncDisabling68(t *testing.T) { testSnapSyncDisabling(t, eth.ETH68, snap.SNAP1) }
+func TestSnapSyncDisabling69(t *testing.T) { testSnapSyncDisabling(t, eth.ETH69, snap.SNAP1) }
 
 // Tests that snap sync gets disabled as soon as a real block is successfully
 // imported into the blockchain.
@@ -36,17 +36,11 @@ func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 	t.Parallel()
 
 	// Create an empty handler and ensure it's in snap sync mode
-	empty := newTestHandler()
-	if !empty.handler.snapSync.Load() {
-		t.Fatalf("snap sync disabled on pristine blockchain")
-	}
+	empty := newTestHandler(ethconfig.SnapSync)
 	defer empty.close()
 
 	// Create a full handler and ensure snap sync ends up disabled
-	full := newTestHandlerWithBlocks(1024)
-	if full.handler.snapSync.Load() {
-		t.Fatalf("snap sync not disabled on non-empty blockchain")
-	}
+	full := newTestHandlerWithBlocks(1024, ethconfig.SnapSync)
 	defer full.close()
 
 	// Sync up the two handlers via both `eth` and `snap`
@@ -85,18 +79,21 @@ func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 	time.Sleep(250 * time.Millisecond)
 
 	// Check that snap sync was disabled
-	if err := empty.handler.downloader.BeaconSync(ethconfig.SnapSync, full.chain.CurrentBlock(), nil); err != nil {
+	if err := empty.handler.downloader.BeaconSync(full.chain.CurrentBlock(), nil); err != nil {
 		t.Fatal("sync failed:", err)
 	}
-	// Downloader internally has to wait for a timer (3s) to be expired before
-	// exiting. Poll after to determine if sync is disabled.
-	time.Sleep(time.Second * 3)
-	for timeout := time.After(time.Second); ; {
+	// Snap sync and mode switching happen asynchronously, poll for completion.
+	timeout := time.NewTimer(15 * time.Second)
+	tick := time.NewTicker(100 * time.Millisecond)
+	defer timeout.Stop()
+	defer tick.Stop()
+
+	for {
 		select {
-		case <-timeout:
+		case <-timeout.C:
 			t.Fatalf("snap sync not disabled after successful synchronisation")
-		case <-time.After(100 * time.Millisecond):
-			if !empty.handler.snapSync.Load() {
+		case <-tick.C:
+			if empty.handler.synced.Load() && empty.handler.downloader.ConfigSyncMode() == ethconfig.FullSync {
 				return
 			}
 		}

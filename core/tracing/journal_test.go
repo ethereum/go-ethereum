@@ -219,6 +219,42 @@ func TestNonceIncOnCreate(t *testing.T) {
 	}
 }
 
+// TestNonceIncOnCreateParentReverts checks that the creator's nonce increment
+// from CREATE survives the CREATE frame's own revert but is properly reverted
+// when the parent call frame reverts.
+func TestNonceIncOnCreateParentReverts(t *testing.T) {
+	const opCREATE = 0xf0
+
+	tr := &testTracer{t: t}
+	wr, err := WrapWithJournal(&Hooks{OnNonceChange: tr.OnNonceChange})
+	if err != nil {
+		t.Fatalf("failed to wrap test tracer: %v", err)
+	}
+
+	addr := common.HexToAddress("0x1234")
+	{
+		// Parent call frame
+		wr.OnEnter(0, 0, addr, addr, nil, 1000, big.NewInt(0))
+		{
+			// CREATE frame — creator nonce incremented, then CREATE reverts
+			wr.OnEnter(1, opCREATE, addr, addr, nil, 1000, big.NewInt(0))
+			wr.OnNonceChangeV2(addr, 0, 1, NonceChangeContractCreator)
+			wr.OnExit(1, nil, 100, errors.New("revert"), true)
+		}
+		// After CREATE reverts, nonce should still be 1
+		if tr.nonce != 1 {
+			t.Fatalf("nonce after CREATE revert: got %v, want 1", tr.nonce)
+		}
+		// Parent frame also reverts
+		wr.OnExit(0, nil, 150, errors.New("revert"), true)
+	}
+
+	// After parent reverts, nonce should be back to 0
+	if tr.nonce != 0 {
+		t.Fatalf("nonce after parent revert: got %v, want 0", tr.nonce)
+	}
+}
+
 func TestOnNonceChangeV2(t *testing.T) {
 	tr := &testTracer{t: t}
 	wr, err := WrapWithJournal(&Hooks{OnNonceChangeV2: tr.OnNonceChangeV2})

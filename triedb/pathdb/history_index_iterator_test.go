@@ -19,7 +19,9 @@ package pathdb
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand"
+	"slices"
 	"sort"
 	"testing"
 
@@ -28,12 +30,30 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-func makeTestIndexBlock(count int) ([]byte, []uint64) {
+func checkExt(f *extFilter, ext []uint16) bool {
+	if f == nil {
+		return true
+	}
+	fn := uint16(*f)
+
+	for _, n := range ext {
+		if n == fn {
+			return true
+		}
+		if isAncestor(fn, n) {
+			return true
+		}
+	}
+	return false
+}
+
+func makeTestIndexBlock(count int, bitmapSize int) ([]byte, []uint64, [][]uint16) {
 	var (
 		marks    = make(map[uint64]bool)
-		elements []uint64
+		elements = make([]uint64, 0, count)
+		extList  = make([][]uint16, 0, count)
 	)
-	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0))
+	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0, bitmapSize), 0, bitmapSize != 0)
 	for i := 0; i < count; i++ {
 		n := uint64(rand.Uint32())
 		if marks[n] {
@@ -45,17 +65,20 @@ func makeTestIndexBlock(count int) ([]byte, []uint64) {
 	sort.Slice(elements, func(i, j int) bool { return elements[i] < elements[j] })
 
 	for i := 0; i < len(elements); i++ {
-		bw.append(elements[i])
+		ext := randomExt(bitmapSize, 5)
+		extList = append(extList, ext)
+		bw.append(elements[i], ext)
 	}
 	data := bw.finish()
 
-	return data, elements
+	return data, elements, extList
 }
 
-func makeTestIndexBlocks(db ethdb.KeyValueStore, stateIdent stateIdent, count int) []uint64 {
+func makeTestIndexBlocks(db ethdb.KeyValueStore, stateIdent stateIdent, count int, bitmapSize int) ([]uint64, [][]uint16) {
 	var (
 		marks    = make(map[uint64]bool)
 		elements []uint64
+		extList  [][]uint16
 	)
 	for i := 0; i < count; i++ {
 		n := uint64(rand.Uint32())
@@ -67,15 +90,17 @@ func makeTestIndexBlocks(db ethdb.KeyValueStore, stateIdent stateIdent, count in
 	}
 	sort.Slice(elements, func(i, j int) bool { return elements[i] < elements[j] })
 
-	iw, _ := newIndexWriter(db, stateIdent)
+	iw, _ := newIndexWriter(db, stateIdent, 0, bitmapSize)
 	for i := 0; i < len(elements); i++ {
-		iw.append(elements[i])
+		ext := randomExt(bitmapSize, 5)
+		extList = append(extList, ext)
+		iw.append(elements[i], ext)
 	}
 	batch := db.NewBatch()
 	iw.finish(batch)
 	batch.Write()
 
-	return elements
+	return elements, extList
 }
 
 func checkSeekGT(it HistoryIndexIterator, input uint64, exp bool, expVal uint64) error {
@@ -113,43 +138,40 @@ func checkNext(it HistoryIndexIterator, values []uint64) error {
 	return it.Error()
 }
 
-func TestBlockIteratorSeekGT(t *testing.T) {
-	/* 0-size index block is not allowed
-
-	data, elements := makeTestIndexBlock(0)
-	testBlockIterator(t, data, elements)
-	*/
-
-	data, elements := makeTestIndexBlock(1)
-	testBlockIterator(t, data, elements)
-
-	data, elements = makeTestIndexBlock(indexBlockRestartLen)
-	testBlockIterator(t, data, elements)
-
-	data, elements = makeTestIndexBlock(3 * indexBlockRestartLen)
-	testBlockIterator(t, data, elements)
-
-	data, elements = makeTestIndexBlock(indexBlockEntriesCap)
-	testBlockIterator(t, data, elements)
-}
-
-func testBlockIterator(t *testing.T, data []byte, elements []uint64) {
-	br, err := newBlockReader(data)
-	if err != nil {
-		t.Fatalf("Failed to open the block for reading, %v", err)
+func verifySeekGT(t *testing.T, elements []uint64, ext [][]uint16, newIter func(filter *extFilter) HistoryIndexIterator) {
+	set := make(map[extFilter]bool)
+	for _, extList := range ext {
+		for _, f := range extList {
+			set[extFilter(f)] = true
+		}
 	}
-	it := newBlockIterator(br.data, br.restarts)
+	filters := slices.Collect(maps.Keys(set))
 
 	for i := 0; i < 128; i++ {
+		var filter *extFilter
+		if rand.Intn(2) == 0 && len(filters) > 0 {
+			filter = &filters[rand.Intn(len(filters))]
+		} else {
+			filter = nil
+		}
+
 		var input uint64
 		if rand.Intn(2) == 0 {
 			input = elements[rand.Intn(len(elements))]
 		} else {
 			input = uint64(rand.Uint32())
 		}
+
 		index := sort.Search(len(elements), func(i int) bool {
 			return elements[i] > input
 		})
+		for index < len(elements) {
+			if checkExt(filter, ext[index]) {
+				break
+			}
+			index++
+		}
+
 		var (
 			exp     bool
 			expVal  uint64
@@ -160,10 +182,17 @@ func testBlockIterator(t *testing.T, data []byte, elements []uint64) {
 		} else {
 			exp = true
 			expVal = elements[index]
-			if index < len(elements) {
-				remains = elements[index+1:]
+
+			index++
+			for index < len(elements) {
+				if checkExt(filter, ext[index]) {
+					remains = append(remains, elements[index])
+				}
+				index++
 			}
 		}
+
+		it := newIter(filter)
 		if err := checkSeekGT(it, input, exp, expVal); err != nil {
 			t.Fatal(err)
 		}
@@ -171,6 +200,56 @@ func testBlockIterator(t *testing.T, data []byte, elements []uint64) {
 			if err := checkNext(it, remains); err != nil {
 				t.Fatal(err)
 			}
+		}
+	}
+}
+
+func verifyTraversal(t *testing.T, elements []uint64, ext [][]uint16, newIter func(filter *extFilter) HistoryIndexIterator) {
+	set := make(map[extFilter]bool)
+	for _, extList := range ext {
+		for _, f := range extList {
+			set[extFilter(f)] = true
+		}
+	}
+	filters := slices.Collect(maps.Keys(set))
+
+	for i := 0; i < 16; i++ {
+		var filter *extFilter
+		if len(filters) > 0 {
+			filter = &filters[rand.Intn(len(filters))]
+		} else {
+			filter = nil
+		}
+		it := newIter(filter)
+
+		var (
+			pos int
+			exp []uint64
+		)
+		for pos < len(elements) {
+			if checkExt(filter, ext[pos]) {
+				exp = append(exp, elements[pos])
+			}
+			pos++
+		}
+		if err := checkNext(it, exp); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestBlockIteratorSeekGT(t *testing.T) {
+	for _, size := range []int{0, 2, 34} {
+		for _, n := range []int{1, indexBlockRestartLen, 3 * indexBlockRestartLen} {
+			data, elements, ext := makeTestIndexBlock(n, size)
+
+			verifySeekGT(t, elements, ext, func(filter *extFilter) HistoryIndexIterator {
+				br, err := newBlockReader(data, size != 0)
+				if err != nil {
+					t.Fatalf("Failed to open the block for reading, %v", err)
+				}
+				return br.newIterator(filter)
+			})
 		}
 	}
 }
@@ -178,59 +257,18 @@ func testBlockIterator(t *testing.T, data []byte, elements []uint64) {
 func TestIndexIteratorSeekGT(t *testing.T) {
 	ident := newAccountIdent(common.Hash{0x1})
 
-	dbA := rawdb.NewMemoryDatabase()
-	testIndexIterator(t, ident, dbA, makeTestIndexBlocks(dbA, ident, 1))
+	for _, size := range []int{0, 2, 34} {
+		for _, n := range []int{1, 4096, 3 * 4096} {
+			db := rawdb.NewMemoryDatabase()
+			elements, ext := makeTestIndexBlocks(db, ident, n, size)
 
-	dbB := rawdb.NewMemoryDatabase()
-	testIndexIterator(t, ident, dbB, makeTestIndexBlocks(dbB, ident, 3*indexBlockEntriesCap))
-
-	dbC := rawdb.NewMemoryDatabase()
-	testIndexIterator(t, ident, dbC, makeTestIndexBlocks(dbC, ident, indexBlockEntriesCap-1))
-
-	dbD := rawdb.NewMemoryDatabase()
-	testIndexIterator(t, ident, dbD, makeTestIndexBlocks(dbD, ident, indexBlockEntriesCap+1))
-}
-
-func testIndexIterator(t *testing.T, stateIdent stateIdent, db ethdb.Database, elements []uint64) {
-	ir, err := newIndexReader(db, stateIdent)
-	if err != nil {
-		t.Fatalf("Failed to open the index reader, %v", err)
-	}
-	it := newIndexIterator(ir.descList, func(id uint32) (*blockReader, error) {
-		return newBlockReader(readStateIndexBlock(stateIdent, db, id))
-	})
-
-	for i := 0; i < 128; i++ {
-		var input uint64
-		if rand.Intn(2) == 0 {
-			input = elements[rand.Intn(len(elements))]
-		} else {
-			input = uint64(rand.Uint32())
-		}
-		index := sort.Search(len(elements), func(i int) bool {
-			return elements[i] > input
-		})
-		var (
-			exp     bool
-			expVal  uint64
-			remains []uint64
-		)
-		if index == len(elements) {
-			exp = false
-		} else {
-			exp = true
-			expVal = elements[index]
-			if index < len(elements) {
-				remains = elements[index+1:]
-			}
-		}
-		if err := checkSeekGT(it, input, exp, expVal); err != nil {
-			t.Fatal(err)
-		}
-		if exp {
-			if err := checkNext(it, remains); err != nil {
-				t.Fatal(err)
-			}
+			verifySeekGT(t, elements, ext, func(filter *extFilter) HistoryIndexIterator {
+				ir, err := newIndexReader(db, ident, size)
+				if err != nil {
+					t.Fatalf("Failed to open the index reader, %v", err)
+				}
+				return ir.newIterator(filter)
+			})
 		}
 	}
 }
@@ -242,56 +280,82 @@ func TestBlockIteratorTraversal(t *testing.T) {
 	testBlockIterator(t, data, elements)
 	*/
 
-	data, elements := makeTestIndexBlock(1)
-	testBlockIteratorTraversal(t, data, elements)
+	for _, size := range []int{0, 2, 34} {
+		for _, n := range []int{1, indexBlockRestartLen, 3 * indexBlockRestartLen} {
+			data, elements, ext := makeTestIndexBlock(n, size)
 
-	data, elements = makeTestIndexBlock(indexBlockRestartLen)
-	testBlockIteratorTraversal(t, data, elements)
-
-	data, elements = makeTestIndexBlock(3 * indexBlockRestartLen)
-	testBlockIteratorTraversal(t, data, elements)
-
-	data, elements = makeTestIndexBlock(indexBlockEntriesCap)
-	testBlockIteratorTraversal(t, data, elements)
-}
-
-func testBlockIteratorTraversal(t *testing.T, data []byte, elements []uint64) {
-	br, err := newBlockReader(data)
-	if err != nil {
-		t.Fatalf("Failed to open the block for reading, %v", err)
-	}
-	it := newBlockIterator(br.data, br.restarts)
-
-	if err := checkNext(it, elements); err != nil {
-		t.Fatal(err)
+			verifyTraversal(t, elements, ext, func(filter *extFilter) HistoryIndexIterator {
+				br, err := newBlockReader(data, size != 0)
+				if err != nil {
+					t.Fatalf("Failed to open the block for reading, %v", err)
+				}
+				return br.newIterator(filter)
+			})
+		}
 	}
 }
 
 func TestIndexIteratorTraversal(t *testing.T) {
 	ident := newAccountIdent(common.Hash{0x1})
 
-	dbA := rawdb.NewMemoryDatabase()
-	testIndexIteratorTraversal(t, ident, dbA, makeTestIndexBlocks(dbA, ident, 1))
+	for _, size := range []int{0, 2, 34} {
+		for _, n := range []int{1, 4096, 3 * 4096} {
+			db := rawdb.NewMemoryDatabase()
+			elements, ext := makeTestIndexBlocks(db, ident, n, size)
 
-	dbB := rawdb.NewMemoryDatabase()
-	testIndexIteratorTraversal(t, ident, dbB, makeTestIndexBlocks(dbB, ident, 3*indexBlockEntriesCap))
-
-	dbC := rawdb.NewMemoryDatabase()
-	testIndexIteratorTraversal(t, ident, dbC, makeTestIndexBlocks(dbC, ident, indexBlockEntriesCap-1))
-
-	dbD := rawdb.NewMemoryDatabase()
-	testIndexIteratorTraversal(t, ident, dbD, makeTestIndexBlocks(dbD, ident, indexBlockEntriesCap+1))
+			verifyTraversal(t, elements, ext, func(filter *extFilter) HistoryIndexIterator {
+				ir, err := newIndexReader(db, ident, size)
+				if err != nil {
+					t.Fatalf("Failed to open the index reader, %v", err)
+				}
+				return ir.newIterator(filter)
+			})
+		}
+	}
 }
 
-func testIndexIteratorTraversal(t *testing.T, stateIdent stateIdent, db ethdb.KeyValueReader, elements []uint64) {
-	ir, err := newIndexReader(db, stateIdent)
-	if err != nil {
-		t.Fatalf("Failed to open the index reader, %v", err)
+func TestSeqIterBasicIteration(t *testing.T) {
+	it := newSeqIter(5) // iterates over [1..5]
+	it.SeekGT(0)
+
+	var (
+		got      []uint64
+		expected = []uint64{1, 2, 3, 4, 5}
+	)
+	got = append(got, it.ID())
+	for it.Next() {
+		got = append(got, it.ID())
 	}
-	it := newIndexIterator(ir.descList, func(id uint32) (*blockReader, error) {
-		return newBlockReader(readStateIndexBlock(stateIdent, db, id))
-	})
-	if err := checkNext(it, elements); err != nil {
-		t.Fatal(err)
+	if len(got) != len(expected) {
+		t.Fatalf("iteration length mismatch: got %v, expected %v", got, expected)
+	}
+	for i := range expected {
+		if got[i] != expected[i] {
+			t.Fatalf("element mismatch at %d: got %d, expected %d", i, got[i], expected[i])
+		}
+	}
+}
+
+func TestSeqIterSeekGT(t *testing.T) {
+	it := newSeqIter(5)
+
+	tests := []struct {
+		input    uint64
+		ok       bool
+		expected uint64
+	}{
+		{0, true, 1},
+		{1, true, 2},
+		{4, true, 5},
+		{5, false, 0}, // 6 is out of range
+	}
+	for _, tt := range tests {
+		ok := it.SeekGT(tt.input)
+		if ok != tt.ok {
+			t.Fatalf("SeekGT(%d) ok mismatch: got %v, expected %v", tt.input, ok, tt.ok)
+		}
+		if ok && it.ID() != tt.expected {
+			t.Fatalf("SeekGT(%d) positioned at %d, expected %d", tt.input, it.ID(), tt.expected)
+		}
 	}
 }

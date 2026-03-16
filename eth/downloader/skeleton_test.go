@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"sync/atomic"
 	"testing"
@@ -69,6 +70,12 @@ func (hf *hookedBackfiller) resume() {
 	if hf.resumeHook != nil {
 		hf.resumeHook()
 	}
+}
+
+type fakeChainReader struct{}
+
+func (fc *fakeChainReader) CurrentSnapBlock() *types.Header {
+	return &types.Header{Number: big.NewInt(math.MaxInt64)}
 }
 
 // skeletonTestPeer is a mock peer that can only serve header requests from a
@@ -369,7 +376,7 @@ func TestSkeletonSyncInit(t *testing.T) {
 		// Create a skeleton sync and run a cycle
 		wait := make(chan struct{})
 
-		skeleton := newSkeleton(db, newPeerSet(), nil, newHookedBackfiller())
+		skeleton := newSkeleton(db, newPeerSet(), nil, newHookedBackfiller(), &fakeChainReader{})
 		skeleton.syncStarting = func() { close(wait) }
 		skeleton.Sync(tt.head, nil, true)
 
@@ -472,7 +479,7 @@ func TestSkeletonSyncExtend(t *testing.T) {
 		// Create a skeleton sync and run a cycle
 		wait := make(chan struct{})
 
-		skeleton := newSkeleton(db, newPeerSet(), nil, newHookedBackfiller())
+		skeleton := newSkeleton(db, newPeerSet(), nil, newHookedBackfiller(), &fakeChainReader{})
 		skeleton.syncStarting = func() { close(wait) }
 		skeleton.Sync(tt.head, nil, true)
 
@@ -838,7 +845,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		// Create a peer set to feed headers through
 		peerset := newPeerSet()
 		for _, peer := range tt.peers {
-			peerset.Register(newPeerConnection(peer.id, eth.ETH68, peer, log.New("id", peer.id)))
+			peerset.Register(newPeerConnection(peer.id, eth.ETH69, peer, log.New("id", peer.id)))
 		}
 		// Create a peer dropper to track malicious peers
 		dropped := make(map[string]int)
@@ -885,7 +892,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			}
 		}
 		// Create a skeleton sync and run a cycle
-		skeleton := newSkeleton(db, peerset, drop, filler)
+		skeleton := newSkeleton(db, peerset, drop, filler, &fakeChainReader{})
 		skeleton.Sync(tt.head, nil, true)
 
 		// Wait a bit (bleah) for the initial sync loop to go to idle. This might
@@ -905,7 +912,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		// Apply the post-init events if there's any
 		endpeers := tt.peers
 		if tt.newPeer != nil {
-			if err := peerset.Register(newPeerConnection(tt.newPeer.id, eth.ETH68, tt.newPeer, log.New("id", tt.newPeer.id))); err != nil {
+			if err := peerset.Register(newPeerConnection(tt.newPeer.id, eth.ETH69, tt.newPeer, log.New("id", tt.newPeer.id))); err != nil {
 				t.Errorf("test %d: failed to register new peer: %v", i, err)
 			}
 			time.Sleep(time.Millisecond * 50) // given time for peer registration

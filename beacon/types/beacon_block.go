@@ -52,7 +52,7 @@ func BlockFromJSON(forkName string, data []byte) (*BeaconBlock, error) {
 		obj = new(capella.BeaconBlock)
 	case "deneb":
 		obj = new(deneb.BeaconBlock)
-	case "electra":
+	case "electra", "fulu":
 		obj = new(electra.BeaconBlock)
 	default:
 		return nil, fmt.Errorf("unsupported fork: %s", forkName)

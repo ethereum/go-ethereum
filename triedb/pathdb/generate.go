@@ -148,6 +148,7 @@ func (g *generator) stop() {
 	g.abort <- ch
 	<-ch
 	g.running = false
+	log.Debug("Snapshot generation has been terminated")
 }
 
 // completed returns the flag indicating if the whole generation is done.

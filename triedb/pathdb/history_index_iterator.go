@@ -40,31 +40,133 @@ type HistoryIndexIterator interface {
 	Error() error
 }
 
+// extFilter provides utilities for filtering index entries based on their
+// extension field.
+//
+// It supports two primary operations:
+//
+//   - determine whether a given target node ID or any of its descendants
+//     appears explicitly in the extension list.
+//
+//   - determine whether a given target node ID or any of its descendants
+//     is marked in the extension bitmap.
+//
+// Together, these checks allow callers to efficiently filter out the irrelevant
+// index entries during the lookup.
+type extFilter uint16
+
+// exists takes the entire extension field in the index block and determines
+// whether the target ID or its descendants appears. Note, any of descendant
+// can implicitly mean the presence of ancestor.
+func (f extFilter) exists(ext []byte) (bool, error) {
+	fn := uint16(f)
+	list, err := decodeIDs(ext)
+	if err != nil {
+		return false, err
+	}
+	for _, elem := range list {
+		if elem == fn {
+			return true, nil
+		}
+		if isAncestor(fn, elem) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+const (
+	// bitmapBytesTwoLevels is the size of the bitmap for two levels of the
+	// 16-ary tree (16 nodes total, excluding the root).
+	bitmapBytesTwoLevels = 2
+
+	// bitmapBytesThreeLevels is the size of the bitmap for three levels of
+	// the 16-ary tree (272 nodes total, excluding the root).
+	bitmapBytesThreeLevels = 34
+
+	// bitmapElementThresholdTwoLevels is the total number of elements in the
+	// two levels of a 16-ary tree (16 nodes total, excluding the root).
+	bitmapElementThresholdTwoLevels = 16
+
+	// bitmapElementThresholdThreeLevels is the total number of elements in the
+	// two levels of a 16-ary tree (16 nodes total, excluding the root).
+	bitmapElementThresholdThreeLevels = bitmapElementThresholdTwoLevels + 16*16
+)
+
+// contains takes the bitmap from the block metadata and determines whether the
+// target ID or its descendants is marked in the bitmap. Note, any of descendant
+// can implicitly mean the presence of ancestor.
+func (f extFilter) contains(bitmap []byte) (bool, error) {
+	id := int(f)
+	if id == 0 {
+		return true, nil
+	}
+	n := id - 1 // apply the position shift for excluding root node
+
+	switch len(bitmap) {
+	case 0:
+		// Bitmap is not available, return "false positive"
+		return true, nil
+	case bitmapBytesTwoLevels:
+		// Bitmap for 2-level trie with at most 16 elements inside
+		if n >= bitmapElementThresholdTwoLevels {
+			return false, fmt.Errorf("invalid extension filter %d for 2 bytes bitmap", id)
+		}
+		return isBitSet(bitmap, n), nil
+	case bitmapBytesThreeLevels:
+		// Bitmap for 3-level trie with at most 16+16*16 elements inside
+		if n >= bitmapElementThresholdThreeLevels {
+			return false, fmt.Errorf("invalid extension filter %d for 34 bytes bitmap", id)
+		} else if n >= bitmapElementThresholdTwoLevels {
+			return isBitSet(bitmap, n), nil
+		} else {
+			// Check the element itself first
+			if isBitSet(bitmap, n) {
+				return true, nil
+			}
+			// Check descendants: the presence of any descendant implicitly
+			// represents a mutation of its ancestor.
+			return bitmap[2+2*n] != 0 || bitmap[3+2*n] != 0, nil
+		}
+	default:
+		return false, fmt.Errorf("unsupported bitmap size %d", len(bitmap))
+	}
+}
+
 // blockIterator is the iterator to traverse the indices within a single block.
 type blockIterator struct {
 	// immutable fields
 	data     []byte   // Reference to the data segment within the block reader
 	restarts []uint16 // Offsets pointing to the restart sections within the data
+	hasExt   bool     // Flag whether the extension is included in the data
+
+	// Optional extension filter
+	filter *extFilter // Filters index entries based on the extension field.
 
 	// mutable fields
 	id         uint64 // ID of the element at the iterators current position
+	ext        []byte // Extension field of the element at the iterators current position
 	dataPtr    int    // Current read position within the data slice
 	restartPtr int    // Index of the restart section where the iterator is currently positioned
 	exhausted  bool   // Flag whether the iterator has been exhausted
 	err        error  // Accumulated error during the traversal
 }
 
-func newBlockIterator(data []byte, restarts []uint16) *blockIterator {
+func (br *blockReader) newIterator(filter *extFilter) *blockIterator {
 	it := &blockIterator{
-		data:     data,     // hold the slice directly with no deep copy
-		restarts: restarts, // hold the slice directly with no deep copy
+		data:     br.data,     // hold the slice directly with no deep copy
+		restarts: br.restarts, // hold the slice directly with no deep copy
+		hasExt:   br.hasExt,   // flag whether the extension should be resolved
+		filter:   filter,      // optional extension filter
 	}
 	it.reset()
 	return it
 }
 
-func (it *blockIterator) set(dataPtr int, restartPtr int, id uint64) {
+func (it *blockIterator) set(dataPtr int, restartPtr int, id uint64, ext []byte) {
 	it.id = id
+	it.ext = ext
+
 	it.dataPtr = dataPtr
 	it.restartPtr = restartPtr
 	it.exhausted = dataPtr == len(it.data)
@@ -79,6 +181,8 @@ func (it *blockIterator) setErr(err error) {
 
 func (it *blockIterator) reset() {
 	it.id = 0
+	it.ext = nil
+
 	it.dataPtr = -1
 	it.restartPtr = -1
 	it.exhausted = false
@@ -90,12 +194,26 @@ func (it *blockIterator) reset() {
 	}
 }
 
-// SeekGT moves the iterator to the first element whose id is greater than the
+func (it *blockIterator) resolveExt(pos int) ([]byte, int, error) {
+	if !it.hasExt {
+		return nil, 0, nil
+	}
+	length, n := binary.Uvarint(it.data[pos:])
+	if n <= 0 {
+		return nil, 0, fmt.Errorf("too short for extension, pos: %d, datalen: %d", pos, len(it.data))
+	}
+	if len(it.data[pos+n:]) < int(length) {
+		return nil, 0, fmt.Errorf("too short for extension, pos: %d, length: %d, datalen: %d", pos, length, len(it.data))
+	}
+	return it.data[pos+n : pos+n+int(length)], n + int(length), nil
+}
+
+// seekGT moves the iterator to the first element whose id is greater than the
 // given number. It returns whether such element exists.
 //
 // Note, this operation will unset the exhausted status and subsequent traversal
 // is allowed.
-func (it *blockIterator) SeekGT(id uint64) bool {
+func (it *blockIterator) seekGT(id uint64) bool {
 	if it.err != nil {
 		return false
 	}
@@ -112,11 +230,20 @@ func (it *blockIterator) SeekGT(id uint64) bool {
 		return false
 	}
 	if index == 0 {
-		item, n := binary.Uvarint(it.data[it.restarts[0]:])
+		pos := int(it.restarts[0])
+		item, n := binary.Uvarint(it.data[pos:])
+		if n <= 0 {
+			it.setErr(fmt.Errorf("failed to decode item at pos %d", it.restarts[0]))
+			return false
+		}
+		pos = pos + n
 
-		// If the restart size is 1, then the restart pointer shouldn't be 0.
-		// It's not practical and should be denied in the first place.
-		it.set(int(it.restarts[0])+n, 0, item)
+		ext, shift, err := it.resolveExt(pos)
+		if err != nil {
+			it.setErr(err)
+			return false
+		}
+		it.set(pos+shift, 0, item, ext)
 		return true
 	}
 	var (
@@ -154,11 +281,18 @@ func (it *blockIterator) SeekGT(id uint64) bool {
 		}
 		pos += n
 
+		ext, shift, err := it.resolveExt(pos)
+		if err != nil {
+			it.setErr(err)
+			return false
+		}
+		pos += shift
+
 		if result > id {
 			if pos == limit {
-				it.set(pos, restartIndex+1, result)
+				it.set(pos, restartIndex+1, result, ext)
 			} else {
-				it.set(pos, restartIndex, result)
+				it.set(pos, restartIndex, result, ext)
 			}
 			return true
 		}
@@ -170,8 +304,45 @@ func (it *blockIterator) SeekGT(id uint64) bool {
 	}
 	// The element which is the first one greater than the specified id
 	// is exactly the one located at the restart point.
-	item, n := binary.Uvarint(it.data[it.restarts[index]:])
-	it.set(int(it.restarts[index])+n, index, item)
+	pos = int(it.restarts[index])
+	item, n := binary.Uvarint(it.data[pos:])
+	if n <= 0 {
+		it.setErr(fmt.Errorf("failed to decode item at pos %d", it.restarts[index]))
+		return false
+	}
+	pos = pos + n
+
+	ext, shift, err := it.resolveExt(pos)
+	if err != nil {
+		it.setErr(err)
+		return false
+	}
+	it.set(pos+shift, index, item, ext)
+	return true
+}
+
+// SeekGT implements HistoryIndexIterator, is the wrapper of the seekGT with
+// optional extension filter logic applied.
+func (it *blockIterator) SeekGT(id uint64) bool {
+	if !it.seekGT(id) {
+		return false
+	}
+	if it.filter == nil {
+		return true
+	}
+	for {
+		found, err := it.filter.exists(it.ext)
+		if err != nil {
+			it.setErr(err)
+			return false
+		}
+		if found {
+			break
+		}
+		if !it.next() {
+			return false
+		}
+	}
 	return true
 }
 
@@ -183,10 +354,9 @@ func (it *blockIterator) init() {
 	it.restartPtr = 0
 }
 
-// Next implements the HistoryIndexIterator, moving the iterator to the next
-// element. If the iterator has been exhausted, and boolean with false should
-// be returned.
-func (it *blockIterator) Next() bool {
+// next moves the iterator to the next element. If the iterator has been exhausted,
+// and boolean with false should be returned.
+func (it *blockIterator) next() bool {
 	if it.exhausted || it.err != nil {
 		return false
 	}
@@ -198,7 +368,6 @@ func (it *blockIterator) Next() bool {
 		it.setErr(fmt.Errorf("failed to decode item at pos %d", it.dataPtr))
 		return false
 	}
-
 	var val uint64
 	if it.dataPtr == int(it.restarts[it.restartPtr]) {
 		val = v
@@ -206,13 +375,45 @@ func (it *blockIterator) Next() bool {
 		val = it.id + v
 	}
 
+	// Decode the extension field
+	ext, shift, err := it.resolveExt(it.dataPtr + n)
+	if err != nil {
+		it.setErr(err)
+		return false
+	}
+
 	// Move to the next restart section if the data pointer crosses the boundary
 	nextRestartPtr := it.restartPtr
-	if it.restartPtr < len(it.restarts)-1 && it.dataPtr+n == int(it.restarts[it.restartPtr+1]) {
+	if it.restartPtr < len(it.restarts)-1 && it.dataPtr+n+shift == int(it.restarts[it.restartPtr+1]) {
 		nextRestartPtr = it.restartPtr + 1
 	}
-	it.set(it.dataPtr+n, nextRestartPtr, val)
+	it.set(it.dataPtr+n+shift, nextRestartPtr, val, ext)
 
+	return true
+}
+
+// Next implements the HistoryIndexIterator, moving the iterator to the next
+// element. It's a wrapper of next with optional extension filter logic applied.
+func (it *blockIterator) Next() bool {
+	if !it.next() {
+		return false
+	}
+	if it.filter == nil {
+		return true
+	}
+	for {
+		found, err := it.filter.exists(it.ext)
+		if err != nil {
+			it.setErr(err)
+			return false
+		}
+		if found {
+			break
+		}
+		if !it.next() {
+			return false
+		}
+	}
 	return true
 }
 
@@ -226,15 +427,15 @@ func (it *blockIterator) ID() uint64 {
 // Exhausting all the elements is not considered to be an error.
 func (it *blockIterator) Error() error { return it.err }
 
-// blockLoader defines the method to retrieve the specific block for reading.
-type blockLoader func(id uint32) (*blockReader, error)
-
 // indexIterator is an iterator to traverse the history indices belonging to the
 // specific state entry.
 type indexIterator struct {
 	// immutable fields
 	descList []*indexBlockDesc
-	loader   blockLoader
+	reader   *indexReader
+
+	// Optional extension filter
+	filter *extFilter
 
 	// mutable fields
 	blockIt   *blockIterator
@@ -243,10 +444,26 @@ type indexIterator struct {
 	err       error
 }
 
-func newIndexIterator(descList []*indexBlockDesc, loader blockLoader) *indexIterator {
+// newBlockIter initializes the block iterator with the specified block ID.
+func (r *indexReader) newBlockIter(id uint32, filter *extFilter) (*blockIterator, error) {
+	br, ok := r.readers[id]
+	if !ok {
+		var err error
+		br, err = newBlockReader(readStateIndexBlock(r.state, r.db, id), r.bitmapSize != 0)
+		if err != nil {
+			return nil, err
+		}
+		r.readers[id] = br
+	}
+	return br.newIterator(filter), nil
+}
+
+// newIterator initializes the index iterator with the specified extension filter.
+func (r *indexReader) newIterator(filter *extFilter) *indexIterator {
 	it := &indexIterator{
-		descList: descList,
-		loader:   loader,
+		descList: r.descList,
+		reader:   r,
+		filter:   filter,
 	}
 	it.reset()
 	return it
@@ -271,14 +488,30 @@ func (it *indexIterator) reset() {
 }
 
 func (it *indexIterator) open(blockPtr int) error {
-	id := it.descList[blockPtr].id
-	br, err := it.loader(id)
+	blockIt, err := it.reader.newBlockIter(it.descList[blockPtr].id, it.filter)
 	if err != nil {
 		return err
 	}
-	it.blockIt = newBlockIterator(br.data, br.restarts)
+	it.blockIt = blockIt
 	it.blockPtr = blockPtr
 	return nil
+}
+
+func (it *indexIterator) applyFilter(index int) (int, error) {
+	if it.filter == nil {
+		return index, nil
+	}
+	for index < len(it.descList) {
+		found, err := it.filter.contains(it.descList[index].extBitmap)
+		if err != nil {
+			return 0, err
+		}
+		if found {
+			break
+		}
+		index++
+	}
+	return index, nil
 }
 
 // SeekGT moves the iterator to the first element whose id is greater than the
@@ -293,6 +526,11 @@ func (it *indexIterator) SeekGT(id uint64) bool {
 	index := sort.Search(len(it.descList), func(i int) bool {
 		return id < it.descList[i].max
 	})
+	index, err := it.applyFilter(index)
+	if err != nil {
+		it.setErr(err)
+		return false
+	}
 	if index == len(it.descList) {
 		return false
 	}
@@ -304,7 +542,13 @@ func (it *indexIterator) SeekGT(id uint64) bool {
 			return false
 		}
 	}
-	return it.blockIt.SeekGT(id)
+	// Terminate if the element which is greater than the id can be found in the
+	// last block; otherwise move to the next block. It may happen that all the
+	// target elements in this block are all less than id.
+	if it.blockIt.SeekGT(id) {
+		return true
+	}
+	return it.Next()
 }
 
 func (it *indexIterator) init() error {
@@ -325,15 +569,23 @@ func (it *indexIterator) Next() bool {
 		it.setErr(err)
 		return false
 	}
-
 	if it.blockIt.Next() {
 		return true
 	}
-	if it.blockPtr == len(it.descList)-1 {
+	it.blockPtr++
+
+	index, err := it.applyFilter(it.blockPtr)
+	if err != nil {
+		it.setErr(err)
+		return false
+	}
+	it.blockPtr = index
+
+	if it.blockPtr == len(it.descList) {
 		it.exhausted = true
 		return false
 	}
-	if err := it.open(it.blockPtr + 1); err != nil {
+	if err := it.open(it.blockPtr); err != nil {
 		it.setErr(err)
 		return false
 	}
@@ -357,3 +609,48 @@ func (it *indexIterator) Error() error {
 func (it *indexIterator) ID() uint64 {
 	return it.blockIt.ID()
 }
+
+// seqIter provides a simple iterator over a contiguous sequence of
+// unsigned integers, ending at end (end is included).
+type seqIter struct {
+	cur  uint64 // current position
+	end  uint64 // iteration stops at end-1
+	done bool   // true when iteration is exhausted
+}
+
+func newSeqIter(last uint64) *seqIter {
+	return &seqIter{end: last + 1}
+}
+
+// SeekGT positions the iterator at the smallest element > id.
+// Returns false if no such element exists.
+func (it *seqIter) SeekGT(id uint64) bool {
+	if id+1 >= it.end {
+		it.done = true
+		return false
+	}
+	it.cur = id + 1
+	it.done = false
+	return true
+}
+
+// Next advances the iterator. Returns false if exhausted.
+func (it *seqIter) Next() bool {
+	if it.done {
+		return false
+	}
+	if it.cur+1 < it.end {
+		it.cur++
+		return true
+	}
+	// this was the last element
+	it.done = true
+	return false
+}
+
+// ID returns the id of the element where the iterator is positioned at.
+func (it *seqIter) ID() uint64 { return it.cur }
+
+// Error returns any accumulated error. Exhausting all the elements is not
+// considered to be an error.
+func (it *seqIter) Error() error { return nil }

@@ -148,11 +148,15 @@ func TestCreateGas(t *testing.T) {
 				BlockNumber: big.NewInt(0),
 			}
 			config := Config{}
+			chainConfig := params.AllEthashProtocolChanges
 			if tt.eip3860 {
 				config.ExtraEips = []int{3860}
+				vmctx.Random = new(common.Hash)
+
+				chainConfig = params.MergedTestChainConfig
 			}
 
-			evm := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, config)
+			evm := NewEVM(vmctx, statedb, chainConfig, config)
 			var startGas = uint64(testGas)
 			ret, gas, err := evm.Call(common.Address{}, address, nil, startGas, new(uint256.Int))
 			if err != nil {

@@ -22,6 +22,9 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/trie"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -193,5 +196,99 @@ func TestMerkleizeMultipleEntries(t *testing.T) {
 	expected := common.HexToHash("9317155862f7a3867660ddd0966ff799a3d16aa4df1e70a7516eaa4a675191b5")
 	if got != expected {
 		t.Fatalf("invalid root, expected=%x, got = %x", expected, got)
+	}
+}
+
+// TestStorageRoundTrip verifies that GetStorage and DeleteStorage use the same
+// key mapping as UpdateStorage (GetBinaryTreeKeyStorageSlot). This is a regression
+// test: previously GetStorage and DeleteStorage used GetBinaryTreeKey directly,
+// which produced different tree keys and broke the read/delete path.
+func TestStorageRoundTrip(t *testing.T) {
+	tracer := trie.NewPrevalueTracer()
+	tr := &BinaryTrie{
+		root:   NewBinaryNode(),
+		tracer: tracer,
+	}
+	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
+
+	// Create an account first so the root becomes an InternalNode,
+	// which is the realistic state when storage operations happen.
+	acc := &types.StateAccount{
+		Nonce:    1,
+		Balance:  uint256.NewInt(1000),
+		CodeHash: common.HexToHash("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").Bytes(),
+	}
+	if err := tr.UpdateAccount(addr, acc, 0); err != nil {
+		t.Fatalf("UpdateAccount error: %v", err)
+	}
+
+	// Test main storage slots (key[31] >= 64 or key[:31] != 0).
+	// These produce a different stem than the account data, so after
+	// UpdateAccount + UpdateStorage the root is an InternalNode.
+	// Note: header slots (key[31] < 64, key[:31] == 0) share the same
+	// stem as account data and are covered by GetAccount/UpdateAccount path.
+	slots := []common.Hash{
+		common.HexToHash("00000000000000000000000000000000000000000000000000000000000000FF"), // main storage (slot 255)
+		common.HexToHash("0100000000000000000000000000000000000000000000000000000000000001"), // main storage (non-zero prefix)
+	}
+	val := common.TrimLeftZeroes(common.HexToHash("00000000000000000000000000000000000000000000000000000000deadbeef").Bytes())
+
+	for _, slot := range slots {
+		// Write
+		if err := tr.UpdateStorage(addr, slot[:], val); err != nil {
+			t.Fatalf("UpdateStorage(%x) error: %v", slot, err)
+		}
+		// Read back
+		got, err := tr.GetStorage(addr, slot[:])
+		if err != nil {
+			t.Fatalf("GetStorage(%x) error: %v", slot, err)
+		}
+		if len(got) == 0 {
+			t.Fatalf("GetStorage(%x) returned empty, expected value", slot)
+		}
+		// Verify value (right-justified in 32 bytes)
+		var expected [HashSize]byte
+		copy(expected[HashSize-len(val):], val)
+		if !bytes.Equal(got, expected[:]) {
+			t.Fatalf("GetStorage(%x) = %x, want %x", slot, got, expected)
+		}
+		// Delete
+		if err := tr.DeleteStorage(addr, slot[:]); err != nil {
+			t.Fatalf("DeleteStorage(%x) error: %v", slot, err)
+		}
+		// Verify deleted (should read as zero, not the old value)
+		got, err = tr.GetStorage(addr, slot[:])
+		if err != nil {
+			t.Fatalf("GetStorage(%x) after delete error: %v", slot, err)
+		}
+		if len(got) > 0 && !bytes.Equal(got, zero[:]) {
+			t.Fatalf("GetStorage(%x) after delete = %x, expected zero", slot, got)
+		}
+	}
+}
+
+func TestBinaryTrieWitness(t *testing.T) {
+	tracer := trie.NewPrevalueTracer()
+
+	tr := &BinaryTrie{
+		root:   NewBinaryNode(),
+		tracer: tracer,
+	}
+	if w := tr.Witness(); len(w) != 0 {
+		t.Fatal("expected empty witness for fresh trie")
+	}
+
+	tracer.Put([]byte("path1"), []byte("blob1"))
+	tracer.Put([]byte("path2"), []byte("blob2"))
+
+	witness := tr.Witness()
+	if len(witness) != 2 {
+		t.Fatalf("expected 2 witness entries, got %d", len(witness))
+	}
+	if !bytes.Equal(witness[string([]byte("path1"))], []byte("blob1")) {
+		t.Fatal("unexpected witness value for path1")
+	}
+	if !bytes.Equal(witness[string([]byte("path2"))], []byte("blob2")) {
+		t.Fatal("unexpected witness value for path2")
 	}
 }

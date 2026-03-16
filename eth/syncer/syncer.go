@@ -130,7 +130,11 @@ func (s *Syncer) run() {
 				break
 			}
 			if resync {
-				req.errc <- s.backend.Downloader().BeaconDevSync(ethconfig.FullSync, target)
+				if mode := s.backend.Downloader().ConfigSyncMode(); mode != ethconfig.FullSync {
+					req.errc <- fmt.Errorf("unsupported syncmode %v, please relaunch geth with --syncmode full", mode)
+				} else {
+					req.errc <- s.backend.Downloader().BeaconDevSync(target)
+				}
 			}
 
 		case <-ticker.C:

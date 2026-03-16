@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie/utils"
 )
 
 var (
@@ -38,7 +37,7 @@ func init() {
 }
 
 func TestAccountHeaderGas(t *testing.T) {
-	ae := NewAccessEvents(utils.NewPointCache(1024))
+	ae := NewAccessEvents()
 
 	// Check cold read cost
 	gas := ae.BasicDataGas(testAddr, false, math.MaxUint64, false)
@@ -93,7 +92,7 @@ func TestAccountHeaderGas(t *testing.T) {
 // TestContractCreateInitGas checks that the gas cost of contract creation is correctly
 // calculated.
 func TestContractCreateInitGas(t *testing.T) {
-	ae := NewAccessEvents(utils.NewPointCache(1024))
+	ae := NewAccessEvents()
 
 	var testAddr [20]byte
 	for i := byte(0); i < 20; i++ {
@@ -116,7 +115,7 @@ func TestContractCreateInitGas(t *testing.T) {
 // TestMessageCallGas checks that the gas cost of message calls is correctly
 // calculated.
 func TestMessageCallGas(t *testing.T) {
-	ae := NewAccessEvents(utils.NewPointCache(1024))
+	ae := NewAccessEvents()
 
 	// Check cold read cost, without a value
 	gas := ae.MessageCallGas(testAddr, math.MaxUint64)

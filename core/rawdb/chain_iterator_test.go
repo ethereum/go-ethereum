@@ -218,6 +218,36 @@ func TestIndexTransactions(t *testing.T) {
 	verify(0, 8, false, 8)
 }
 
+func TestUnindexTransactionsMissingBody(t *testing.T) {
+	// Construct test chain db
+	chainDB := NewMemoryDatabase()
+	blocks, _ := initDatabaseWithTransactions(chainDB)
+
+	// Index the entire chain.
+	lastBlock := blocks[len(blocks)-1].NumberU64()
+	IndexTransactions(chainDB, 0, lastBlock+1, nil, false)
+
+	// Prove that block 2 body exists in the database.
+	if raw := ReadCanonicalBodyRLP(chainDB, 2, nil); len(raw) == 0 {
+		t.Fatalf("Block 2 body does not exist in the database.")
+	}
+
+	// Delete body for block 2. This simulates a corrupted database.
+	key := blockBodyKey(2, blocks[2].Hash())
+	if err := chainDB.Delete(key); err != nil {
+		t.Fatalf("Failed to delete block body %v", err)
+	}
+
+	// Unindex blocks [0, 3)
+	UnindexTransactions(chainDB, 0, 3, nil, false)
+
+	// Verify that tx index tail is updated to 3.
+	tail := ReadTxIndexTail(chainDB)
+	if tail == nil || *tail != 3 {
+		t.Fatalf("The tx index tail is wrong: got %v want %d", *tail, 3)
+	}
+}
+
 func TestPruneTransactionIndex(t *testing.T) {
 	chainDB := NewMemoryDatabase()
 	blocks, _ := initDatabaseWithTransactions(chainDB)

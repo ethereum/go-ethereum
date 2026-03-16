@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
@@ -493,42 +494,24 @@ func (api *DebugAPI) StateSize(blockHashOrNumber *rpc.BlockNumberOrHash) (interf
 	}, nil
 }
 
-func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumber) (*stateless.ExtWitness, error) {
+func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumberOrHash) (*stateless.ExtWitness, error) {
 	bc := api.eth.blockchain
-	block, err := api.eth.APIBackend.BlockByNumber(context.Background(), bn)
+	block, err := api.eth.APIBackend.BlockByNumberOrHash(context.Background(), bn)
 	if err != nil {
-		return &stateless.ExtWitness{}, fmt.Errorf("block number %v not found", bn)
+		return &stateless.ExtWitness{}, fmt.Errorf("block %v not found", bn)
 	}
-
 	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
-		return &stateless.ExtWitness{}, fmt.Errorf("block number %v found, but parent missing", bn)
+		return &stateless.ExtWitness{}, fmt.Errorf("block %v found, but parent missing", bn)
 	}
-
-	result, err := bc.ProcessBlock(parent.Root, block, false, true)
+	config := core.ExecuteConfig{
+		WriteState:   false,
+		EnableTracer: false,
+		MakeWitness:  true,
+	}
+	result, err := bc.ProcessBlock(context.Background(), parent.Root, block, config)
 	if err != nil {
 		return nil, err
 	}
-
-	return result.Witness().ToExtWitness(), nil
-}
-
-func (api *DebugAPI) ExecutionWitnessByHash(hash common.Hash) (*stateless.ExtWitness, error) {
-	bc := api.eth.blockchain
-	block := bc.GetBlockByHash(hash)
-	if block == nil {
-		return &stateless.ExtWitness{}, fmt.Errorf("block hash %x not found", hash)
-	}
-
-	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
-	if parent == nil {
-		return &stateless.ExtWitness{}, fmt.Errorf("block number %x found, but parent missing", hash)
-	}
-
-	result, err := bc.ProcessBlock(parent.Root, block, false, true)
-	if err != nil {
-		return nil, err
-	}
-
 	return result.Witness().ToExtWitness(), nil
 }

@@ -97,7 +97,7 @@ func LoadTransitionState(db ethdb.KeyValueReader, root common.Hash, isVerkle boo
 		// Initialize the first transition state, with the "ended"
 		// field set to true if the database was created
 		// as a verkle database.
-		log.Debug("no transition state found, starting fresh", "is verkle", db)
+		log.Debug("no transition state found, starting fresh", "verkle", isVerkle)
 
 		// Start with a fresh state
 		ts = &TransitionState{Ended: isVerkle}

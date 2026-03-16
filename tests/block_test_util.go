@@ -97,6 +97,7 @@ type btHeader struct {
 	BlobGasUsed           *uint64
 	ExcessBlobGas         *uint64
 	ParentBeaconBlockRoot *common.Hash
+	SlotNumber            *uint64
 }
 
 type btHeaderMarshaling struct {
@@ -109,6 +110,7 @@ type btHeaderMarshaling struct {
 	BaseFeePerGas *math.HexOrDecimal256
 	BlobGasUsed   *math.HexOrDecimal64
 	ExcessBlobGas *math.HexOrDecimal64
+	SlotNumber    *math.HexOrDecimal64
 }
 
 func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *tracing.Hooks, postCheck func(error, *core.BlockChain)) (result error) {
@@ -116,15 +118,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
 	}
-	return t.run(config, snapshotter, scheme, witness, tracer, postCheck)
-}
 
-// Network returns the network/fork name for this test.
-func (t *BlockTest) Network() string {
-	return t.json.Network
-}
-
-func (t *BlockTest) run(config *params.ChainConfig, snapshotter bool, scheme string, witness bool, tracer *tracing.Hooks, postCheck func(error, *core.BlockChain)) (result error) {
 	// import pre accounts & construct test genesis block & state root
 	// Commit genesis state
 	var (
@@ -146,7 +140,7 @@ func (t *BlockTest) run(config *params.ChainConfig, snapshotter bool, scheme str
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(stdmath.MaxInt64)
 	}
 	triedb := triedb.NewDatabase(db, tconf)
-	gblock, err := gspec.Commit(db, triedb)
+	gblock, err := gspec.Commit(db, triedb, nil)
 	if err != nil {
 		return err
 	}
@@ -167,9 +161,9 @@ func (t *BlockTest) run(config *params.ChainConfig, snapshotter bool, scheme str
 		Preimages:      true,
 		TxLookupLimit:  -1, // disable tx indexing
 		VmConfig: vm.Config{
-			Tracer:                  tracer,
-			StatelessSelfValidation: witness,
+			Tracer: tracer,
 		},
+		StatelessSelfValidation: witness,
 	}
 	if snapshotter {
 		options.SnapshotLimit = 1
@@ -210,6 +204,11 @@ func (t *BlockTest) run(config *params.ChainConfig, snapshotter bool, scheme str
 		}
 	}
 	return t.validateImportedHeaders(chain, validBlocks)
+}
+
+// Network returns the network/fork name for this test.
+func (t *BlockTest) Network() string {
+	return t.json.Network
 }
 
 func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
@@ -345,6 +344,9 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	}
 	if !reflect.DeepEqual(h.ParentBeaconBlockRoot, h2.ParentBeaconRoot) {
 		return fmt.Errorf("parentBeaconBlockRoot: want: %v have: %v", h.ParentBeaconBlockRoot, h2.ParentBeaconRoot)
+	}
+	if !reflect.DeepEqual(h.SlotNumber, h2.SlotNumber) {
+		return fmt.Errorf("slotNumber: want: %v have: %v", h.SlotNumber, h2.SlotNumber)
 	}
 	return nil
 }
