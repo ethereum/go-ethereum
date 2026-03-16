@@ -246,12 +246,30 @@ type ValidationOptionsWithState struct {
 	ExistingCost func(addr common.Address, nonce uint64) *big.Int
 }
 
+func validateStatefulOptions(opts *ValidationOptionsWithState) error {
+	switch {
+	case opts == nil:
+		return fmt.Errorf("%w: missing options", ErrInvalidValidationOptions)
+	case opts.State == nil:
+		return fmt.Errorf("%w: missing state", ErrInvalidValidationOptions)
+	case opts.ExistingExpenditure == nil:
+		return fmt.Errorf("%w: missing ExistingExpenditure callback", ErrInvalidValidationOptions)
+	case opts.ExistingCost == nil:
+		return fmt.Errorf("%w: missing ExistingCost callback", ErrInvalidValidationOptions)
+	default:
+		return nil
+	}
+}
+
 // ValidateTransactionWithState is a helper method to check whether a transaction
 // is valid according to the pool's internal state checks (balance, nonce, gaps).
 //
 // This check is public to allow different transaction pools to check the stateful
 // rules without duplicating code and running the risk of missed updates.
 func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, opts *ValidationOptionsWithState) error {
+	if err := validateStatefulOptions(opts); err != nil {
+		return err
+	}
 	// Ensure the transaction adheres to nonce ordering
 	from, err := types.Sender(signer, tx) // already validated (and cached), but cleaner to check
 	if err != nil {
@@ -280,6 +298,9 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 	// Ensure the transactor has enough funds to cover for replacements or nonce
 	// expansions without overdrafts
 	spent := opts.ExistingExpenditure(from)
+	if spent == nil {
+		return fmt.Errorf("%w: ExistingExpenditure returned nil", ErrInvalidValidationOptions)
+	}
 	if prev := opts.ExistingCost(from, tx.Nonce()); prev != nil {
 		bump := new(big.Int).Sub(cost, prev)
 		need := new(big.Int).Add(spent, bump)

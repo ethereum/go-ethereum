@@ -21,13 +21,17 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 func TestValidateTransactionEIP2681(t *testing.T) {
@@ -91,6 +95,78 @@ func TestValidateTransactionEIP2681(t *testing.T) {
 				} else if !errors.Is(err, tt.wantErr) {
 					t.Errorf("ValidateTransaction() error = %v, wantErr %v", err, tt.wantErr)
 				}
+			}
+		})
+	}
+}
+
+func TestValidateTransactionWithStateRejectsInvalidOptions(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx := createTestTransaction(key, 0)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	if err != nil {
+		t.Fatal(err)
+	}
+	statedb.SetBalance(from, new(uint256.Int).SetUint64(params.Ether), tracing.BalanceChangeUnspecified)
+
+	tests := []struct {
+		name    string
+		opts    *ValidationOptionsWithState
+		wantErr string
+	}{
+		{
+			name:    "missing options",
+			opts:    nil,
+			wantErr: "missing options",
+		},
+		{
+			name: "missing state",
+			opts: &ValidationOptionsWithState{
+				ExistingExpenditure: func(common.Address) *big.Int { return new(big.Int) },
+				ExistingCost:        func(common.Address, uint64) *big.Int { return nil },
+			},
+			wantErr: "missing state",
+		},
+		{
+			name: "missing existing expenditure callback",
+			opts: &ValidationOptionsWithState{
+				State:        statedb,
+				ExistingCost: func(common.Address, uint64) *big.Int { return nil },
+			},
+			wantErr: "missing ExistingExpenditure callback",
+		},
+		{
+			name: "missing existing cost callback",
+			opts: &ValidationOptionsWithState{
+				State:               statedb,
+				ExistingExpenditure: func(common.Address) *big.Int { return new(big.Int) },
+			},
+			wantErr: "missing ExistingCost callback",
+		},
+		{
+			name: "nil expenditure result",
+			opts: &ValidationOptionsWithState{
+				State:               statedb,
+				ExistingExpenditure: func(common.Address) *big.Int { return nil },
+				ExistingCost:        func(common.Address, uint64) *big.Int { return nil },
+			},
+			wantErr: "ExistingExpenditure returned nil",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateTransactionWithState(tx, types.HomesteadSigner{}, tt.opts)
+			if !errors.Is(err, ErrInvalidValidationOptions) {
+				t.Fatalf("expected ErrInvalidValidationOptions, got %v", err)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("expected error containing %q, got %v", tt.wantErr, err)
 			}
 		})
 	}

@@ -28,6 +28,10 @@ var (
 	// ErrInvalidSender is returned if the transaction contains an invalid signature.
 	ErrInvalidSender = errors.New("invalid sender")
 
+	// ErrInvalidValidationOptions is returned if a public validation helper is
+	// invoked without the required state or callbacks.
+	ErrInvalidValidationOptions = errors.New("invalid validation options")
+
 	// ErrUnderpriced is returned if a transaction's gas price is too low to be
 	// included in the pool. If the gas price is lower than the minimum configured
 	// one for the transaction pool, use ErrTxGasPriceTooLow instead.
