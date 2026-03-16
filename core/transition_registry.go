@@ -23,8 +23,19 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+var transitionStatusByteCode []byte = []byte{
+	0x60, 0x00, // PUSH1 <calldata offset>
+	0x35,       // CALLDATALOAD
+	0x54,       // SLOAD
+	0x60, 0x00, // PUSH1 <mem dest>
+	0x52,       // MSTORE
+	0x60, 0x20, // PUSH1 <return size>
+	0x60, 0x00, // PUSH1 <return offset>
+	0xf3, // RETURN
+}
+
 func InitializeBinaryTransitionRegistry(statedb *state.StateDB, parentRoot common.Hash) {
-	statedb.SetCode(params.BinaryTransitionRegistryAddress, []byte{1, 2, 3}, tracing.CodeChangeUnspecified)
+	statedb.SetCode(params.BinaryTransitionRegistryAddress, transitionStatusByteCode, tracing.CodeChangeUnspecified)
 	statedb.SetNonce(params.BinaryTransitionRegistryAddress, 1, tracing.NonceChangeUnspecified)
 	statedb.SetState(params.BinaryTransitionRegistryAddress, common.Hash{}, common.Hash{1})
 	statedb.SetState(params.BinaryTransitionRegistryAddress, common.BytesToHash([]byte{5}), parentRoot)

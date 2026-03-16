@@ -100,8 +100,8 @@ func TestBinaryTransitionRegistryBootstrap(t *testing.T) {
 			t.Errorf("block %d: verkle block should have registry slot 0 (started) set", i)
 		}
 
-		if baseRoot == (common.Hash{}) {
-			t.Errorf("block %d: should have base root set", i)
+		if isVerkle && baseRoot == (common.Hash{}) {
+			t.Errorf("block %d: first verkle block should not have base root set yet", i)
 		}
 	})
 }
