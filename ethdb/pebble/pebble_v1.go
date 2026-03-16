@@ -72,7 +72,7 @@ type V1Database struct {
 	levelsGauge            []*metrics.Gauge // Gauge for tracking the number of tables in levels
 
 	quitLock sync.RWMutex    // Mutex protecting the quit channel and the closed flag
-	quitChan chan chan error  // Quit channel to stop the metrics collection before closing the database
+	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 	closed   bool            // keep track of whether we're Closed
 
 	log log.Logger // Contextual logger tracking the database path
