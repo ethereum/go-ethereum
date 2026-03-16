@@ -188,6 +188,15 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	if value, cached := s.originStorage[key]; cached {
 		return value
 	}
+	// If the account has no on-disk origin and was not destructed in this
+	// block (which requires the reader call for the access list), all
+	// storage slots are empty.
+	if s.origin == nil {
+		if _, destructed := s.db.stateObjectsDestruct[s.address]; !destructed {
+			s.originStorage[key] = common.Hash{}
+			return common.Hash{}
+		}
+	}
 	// If the object was destructed in *this* block (and potentially resurrected),
 	// the storage has been cleared out, and we should *not* consult the previous
 	// database about any storage values. The only possible alternatives are:
