@@ -67,7 +67,10 @@ func NeedsV1(file string) bool {
 // Upgrade upgrades an existing pebble v1 database to be compatible with pebble v2.
 // It opens the database with pebble v1 at its current format version, then uses
 // RatchetFormatMajorVersion to migrate to FormatFlushableIngest (the minimum format
-// version that pebble v2 supports). This is a one-way, offline operation.
+// version that pebble v2 supports).
+//
+// Notably, it's not an irreversible upgrade, the database can still be opened with
+// legacy Geth binary.
 func Upgrade(file string) error {
 	exists, ver, err := PeekFormatVersion(file)
 	if err != nil {

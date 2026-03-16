@@ -314,6 +314,10 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 
 		// FormatFlushableIngest is the minimum FormatMajorVersion supported by
 		// pebble v2. The more advanced version can be enabled later.
+		//
+		// This version is supported by both v1 and v2. It serves as the natural
+		// bridge point: a v1 database can be ratcheted up to FormatFlushableIngest
+		// using pebble v1, and then pebble v2 can open it since that's its minimum.
 		FormatMajorVersion: formatMinV2,
 	}
 	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130

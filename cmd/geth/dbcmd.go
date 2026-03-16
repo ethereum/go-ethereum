@@ -251,10 +251,9 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		Flags:  slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Description: `This command upgrades a legacy Pebble v1 database so 
 that it becomes compatible with Pebble v2. The upgrade process converts the
-database format to the oldest format supported by Pebble v2.
-
-WARNING: This is a one-way operation. Once upgraded, the database cannot be
-opened by older versions of geth that use the pebble v1 library.`,
+database format to the oldest format supported by Pebble v2. It's not the
+one-way operation, instead, the database can still be opened by older versions
+of geth that use the pebble v1 library.`,
 	}
 )
 
