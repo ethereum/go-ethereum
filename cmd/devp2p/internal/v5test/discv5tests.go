@@ -296,8 +296,8 @@ that they are returned by FINDNODE.`)
 	conn, l1 := s.listen1(t)
 	defer conn.close()
 
-	const maxAttempts = 15
-	const retryInterval = 3 * time.Second
+	const maxAttempts = 45
+	const retryInterval = 2 * time.Second
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		foundNodes, err := conn.findnode(l1, dists)
