@@ -331,6 +331,7 @@ type bystander struct {
 	l    net.PacketConn
 
 	addedCh chan enode.ID
+	sent    map[v5wire.Nonce]v5wire.Packet
 	done    sync.WaitGroup
 }
 
@@ -342,6 +343,7 @@ func newBystander(t *utesting.T, s *Suite, added chan enode.ID) *bystander {
 		l:       l,
 		dest:    s.Dest,
 		addedCh: added,
+		sent:    make(map[v5wire.Nonce]v5wire.Packet),
 	}
 	// Establish an initial session and let the remote learn this node before
 	// switching to the passive responder loop below.
@@ -373,23 +375,35 @@ func (bn *bystander) loop() {
 		switch p := bn.conn.read(bn.l).(type) {
 		case *v5wire.Whoareyou:
 			p.Node = bn.dest
-			bn.conn.write(bn.l, &v5wire.Ping{
-				ReqID:  bn.conn.nextReqID(),
-				ENRSeq: bn.dest.Seq(),
-			}, p)
+			if resp, ok := bn.sent[p.Nonce]; ok {
+				nonce := bn.conn.write(bn.l, resp, p)
+				delete(bn.sent, p.Nonce)
+				bn.sent[nonce] = resp
+			} else {
+				bn.conn.write(bn.l, &v5wire.Ping{
+					ReqID:  bn.conn.nextReqID(),
+					ENRSeq: bn.dest.Seq(),
+				}, p)
+			}
 		case *v5wire.Ping:
-			bn.conn.write(bn.l, &v5wire.Pong{
-				ReqID:  p.ReqID,
+			resp := &v5wire.Pong{
+				ReqID:  append([]byte(nil), p.ReqID...),
 				ENRSeq: bn.conn.localNode.Seq(),
 				ToIP:   bn.dest.IP(),
 				ToPort: uint16(bn.dest.UDP()),
-			}, nil)
+			}
+			nonce := bn.conn.write(bn.l, resp, nil)
+			bn.sent[nonce] = resp
 			bn.notifyAdded()
 		case *v5wire.Findnode:
-			bn.conn.write(bn.l, &v5wire.Nodes{ReqID: p.ReqID, RespCount: 1}, nil)
+			resp := &v5wire.Nodes{ReqID: append([]byte(nil), p.ReqID...), RespCount: 1}
+			nonce := bn.conn.write(bn.l, resp, nil)
+			bn.sent[nonce] = resp
 			bn.notifyAdded()
 		case *v5wire.TalkRequest:
-			bn.conn.write(bn.l, &v5wire.TalkResponse{ReqID: p.ReqID}, nil)
+			resp := &v5wire.TalkResponse{ReqID: append([]byte(nil), p.ReqID...)}
+			nonce := bn.conn.write(bn.l, resp, nil)
+			bn.sent[nonce] = resp
 		case *readError:
 			if netutil.IsTemporaryError(p.err) || v5wire.IsInvalidHeader(p.err) {
 				continue
