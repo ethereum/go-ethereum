@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var accountTrieLeavesAtDepth [16]*metrics.Counter
@@ -41,59 +42,68 @@ func init() {
 
 // WitnessStats aggregates statistics for account and storage trie accesses.
 type WitnessStats struct {
-	accountTrieLeaves [16]int64
-	storageTrieLeaves [16]int64
+	accountTrie *trie.LevelStats
+	storageTrie *trie.LevelStats
 }
 
 // NewWitnessStats creates a new WitnessStats collector.
 func NewWitnessStats() *WitnessStats {
-	return &WitnessStats{}
+	return &WitnessStats{
+		accountTrie: trie.NewLevelStats(),
+		storageTrie: trie.NewLevelStats(),
+	}
+}
+
+func (s *WitnessStats) init() {
+	if s.accountTrie == nil {
+		s.accountTrie = trie.NewLevelStats()
+	}
+	if s.storageTrie == nil {
+		s.storageTrie = trie.NewLevelStats()
+	}
 }
 
 // Add records trie access depths from the given node paths.
 // If `owner` is the zero hash, accesses are attributed to the account trie;
 // otherwise, they are attributed to the storage trie of that account.
 func (s *WitnessStats) Add(nodes map[string][]byte, owner common.Hash) {
-	// Extract paths from the nodes map
+	s.init()
+
+	// Extract paths from the nodes map.
 	paths := slices.Collect(maps.Keys(nodes))
 	sort.Strings(paths)
+
+	ownerStat := s.accountTrie
+	if owner != (common.Hash{}) {
+		ownerStat = s.storageTrie
+	}
 
 	for i, path := range paths {
 		// If current path is a prefix of the next path, it's not a leaf.
 		// The last path is always a leaf.
 		if i == len(paths)-1 || !strings.HasPrefix(paths[i+1], paths[i]) {
-			depth := len(path)
-			if owner == (common.Hash{}) {
-				if depth >= len(s.accountTrieLeaves) {
-					depth = len(s.accountTrieLeaves) - 1
-				}
-				s.accountTrieLeaves[depth] += 1
-			} else {
-				if depth >= len(s.storageTrieLeaves) {
-					depth = len(s.storageTrieLeaves) - 1
-				}
-				s.storageTrieLeaves[depth] += 1
-			}
+			ownerStat.AddLeaf(len(path))
 		}
 	}
 }
 
 // ReportMetrics reports the collected statistics to the global metrics registry.
 func (s *WitnessStats) ReportMetrics(blockNumber uint64) {
-	// Encode the metrics as JSON for easier consumption
-	accountLeavesJson, _ := json.Marshal(s.accountTrieLeaves)
-	storageLeavesJson, _ := json.Marshal(s.storageTrieLeaves)
+	s.init()
 
-	// Log account trie depth statistics
-	log.Info("Account trie depth stats",
-		"block", blockNumber,
-		"leavesAtDepth", string(accountLeavesJson))
-	log.Info("Storage trie depth stats",
-		"block", blockNumber,
-		"leavesAtDepth", string(storageLeavesJson))
+	accountTrieLeaves := s.accountTrie.LeafDepths()
+	storageTrieLeaves := s.storageTrie.LeafDepths()
 
-	for i := 0; i < 16; i++ {
-		accountTrieLeavesAtDepth[i].Inc(s.accountTrieLeaves[i])
-		storageTrieLeavesAtDepth[i].Inc(s.storageTrieLeaves[i])
+	// Encode the metrics as JSON for easier consumption.
+	accountLeavesJSON, _ := json.Marshal(accountTrieLeaves)
+	storageLeavesJSON, _ := json.Marshal(storageTrieLeaves)
+
+	// Log account trie depth statistics.
+	log.Info("Account trie depth stats", "block", blockNumber, "leavesAtDepth", string(accountLeavesJSON))
+	log.Info("Storage trie depth stats", "block", blockNumber, "leavesAtDepth", string(storageLeavesJSON))
+
+	for i := 0; i < len(accountTrieLeavesAtDepth); i++ {
+		accountTrieLeavesAtDepth[i].Inc(accountTrieLeaves[i])
+		storageTrieLeavesAtDepth[i].Inc(storageTrieLeaves[i])
 	}
 }

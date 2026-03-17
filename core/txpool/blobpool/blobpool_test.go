@@ -830,8 +830,8 @@ func TestOpenIndex(t *testing.T) {
 		//blobfeeJumps = []float64{34.023, 35.570, 36.879, 29.686, 26.243, 20.358} // log 1.125 (blob fee cap)
 
 		evictExecTipCaps  = []uint64{10, 10, 5, 5, 1, 1}
-		evictExecFeeJumps = []float64{39.098, 38.204, 38.204, 19.549, 19.549, 19.549} //  min(log 1.125 (exec fee cap))
-		evictBlobFeeJumps = []float64{34.023, 34.023, 34.023, 29.686, 26.243, 20.358} // min(log 1.125 (blob fee cap))
+		evictExecFeeJumps = []float64{39.098, 38.204, 38.204, 19.549, 19.549, 19.549}                   //  min(log 1.125 (exec fee cap))
+		evictBlobFeeJumps = []float64{25.517256, 25.517256, 25.517256, 22.264502, 19.682646, 15.268934} // min(log 1.17 (blob fee cap))
 
 		totalSpent = uint256.NewInt(21000*(100+90+200+10+80+300) + blobSize*(55+66+77+33+22+11) + 100*6) // 21000 gas x price + 128KB x blobprice + value
 	)
@@ -1751,8 +1751,8 @@ func TestAdd(t *testing.T) {
 		// Create a blob pool out of the pre-seeded dats
 		chain := &testBlockChain{
 			config:  params.MainnetChainConfig,
-			basefee: uint256.NewInt(1050),
-			blobfee: uint256.NewInt(105),
+			basefee: uint256.NewInt(1),
+			blobfee: uint256.NewInt(1),
 			statedb: statedb,
 		}
 		pool := New(Config{Datadir: storage}, chain, nil)

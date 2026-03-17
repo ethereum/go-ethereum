@@ -32,9 +32,10 @@ func (e Empty) Insert(key []byte, value []byte, _ NodeResolverFn, depth int) (Bi
 	var values [256][]byte
 	values[key[31]] = value
 	return &StemNode{
-		Stem:   slices.Clone(key[:31]),
-		Values: values[:],
-		depth:  depth,
+		Stem:          slices.Clone(key[:31]),
+		Values:        values[:],
+		depth:         depth,
+		mustRecompute: true,
 	}, nil
 }
 
@@ -53,9 +54,10 @@ func (e Empty) GetValuesAtStem(_ []byte, _ NodeResolverFn) ([][]byte, error) {
 
 func (e Empty) InsertValuesAtStem(key []byte, values [][]byte, _ NodeResolverFn, depth int) (BinaryNode, error) {
 	return &StemNode{
-		Stem:   slices.Clone(key[:31]),
-		Values: values,
-		depth:  depth,
+		Stem:          slices.Clone(key[:31]),
+		Values:        values,
+		depth:         depth,
+		mustRecompute: true,
 	}, nil
 }
 

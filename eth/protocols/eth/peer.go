@@ -215,10 +215,10 @@ func (p *Peer) ReplyBlockBodiesRLP(id uint64, bodies []rlp.RawValue) error {
 }
 
 // ReplyReceiptsRLP is the response to GetReceipts.
-func (p *Peer) ReplyReceiptsRLP(id uint64, receipts []rlp.RawValue) error {
-	return p2p.Send(p.rw, ReceiptsMsg, &ReceiptsRLPPacket{
-		RequestId:           id,
-		ReceiptsRLPResponse: receipts,
+func (p *Peer) ReplyReceiptsRLP(id uint64, receipts rlp.RawList[*ReceiptList]) error {
+	return p2p.Send(p.rw, ReceiptsMsg, &ReceiptsPacket{
+		RequestId: id,
+		List:      receipts,
 	})
 }
 

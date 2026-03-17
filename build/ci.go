@@ -168,8 +168,6 @@ var (
 		"focal",    // 20.04, EOL: 04/2030
 		"jammy",    // 22.04, EOL: 04/2032
 		"noble",    // 24.04, EOL: 04/2034
-		"oracular", // 24.10, EOL: 07/2025
-		"plucky",   // 25.04, EOL: 01/2026
 	}
 
 	// This is where the tests should be unpacked.
@@ -1198,7 +1196,7 @@ func doWindowsInstaller(cmdline []string) {
 	var (
 		arch    = flag.String("arch", runtime.GOARCH, "Architecture for cross build packaging")
 		signer  = flag.String("signer", "", `Environment variable holding the signing key (e.g. WINDOWS_SIGNING_KEY)`)
-		signify = flag.String("signify key", "", `Environment variable holding the signify signing key (e.g. WINDOWS_SIGNIFY_KEY)`)
+		signify = flag.String("signify", "", `Environment variable holding the signify signing key (e.g. WINDOWS_SIGNIFY_KEY)`)
 		upload  = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
 		workdir = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
 	)

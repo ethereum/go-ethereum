@@ -18,7 +18,6 @@ package bintrie
 
 import (
 	"bytes"
-	"crypto/sha256"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
@@ -47,13 +46,27 @@ var (
 )
 
 func GetBinaryTreeKey(addr common.Address, key []byte) []byte {
-	hasher := sha256.New()
+	return getBinaryTreeKey(addr, key, false)
+}
+
+func getBinaryTreeKey(addr common.Address, offset []byte, overflow bool) []byte {
+	hasher := newSha256()
+	defer returnSha256(hasher)
 	hasher.Write(zeroHash[:12])
 	hasher.Write(addr[:])
-	hasher.Write(key[:31])
-	hasher.Write([]byte{0})
+	var buf [32]byte
+	// key is big endian, hashed value is little endian
+	for i := range offset[:31] {
+		buf[i] = offset[30-i]
+	}
+	if overflow {
+		// Overflow detected when adding MAIN_STORAGE_OFFSET,
+		// reporting it in the shifter 32 byte value.
+		buf[31] = 1
+	}
+	hasher.Write(buf[:])
 	k := hasher.Sum(nil)
-	k[31] = key[31]
+	k[31] = offset[31]
 	return k
 }
 
@@ -69,24 +82,29 @@ func GetBinaryTreeKeyCodeHash(addr common.Address) []byte {
 	return GetBinaryTreeKey(addr, k[:])
 }
 
-func GetBinaryTreeKeyStorageSlot(address common.Address, key []byte) []byte {
-	var k [32]byte
+func GetBinaryTreeKeyStorageSlot(address common.Address, slotnum []byte) []byte {
+	var offset [32]byte
 
 	// Case when the key belongs to the account header
-	if bytes.Equal(key[:31], zeroHash[:31]) && key[31] < 64 {
-		k[31] = 64 + key[31]
-		return GetBinaryTreeKey(address, k[:])
+	if bytes.Equal(slotnum[:31], zeroHash[:31]) && slotnum[31] < 64 {
+		offset[31] = 64 + slotnum[31]
+		return GetBinaryTreeKey(address, offset[:])
 	}
 
-	// Set the main storage offset
-	// note that the first 64 bytes of the main offset storage
-	// are unreachable, which is consistent with the spec and
-	// what verkle does.
-	k[0] = 1 // 1 << 248
-	copy(k[1:], key[:31])
-	k[31] = key[31]
+	// Set the main storage offset offset = MAIN_STORAGE_OFFSET + slotnum
+	//   * Note that MAIN_STORAGE_OFFSET is 1 << 248, so the number
+	//     can overflow into a 33rd byte, but since the value is
+	//     shifted by one byte in getBinaryTreeKey, this only takes
+	//     note of the overflow, and the value will be added after
+	//     the shift, in order to avoid allocating an extra byte.
+	//   * Note that the first 64 bytes of the main offset storage
+	//     are unreachable, which is consistent with the spec.
+	//   * Note that `slotnum` is big-endian
+	overflow := slotnum[0] == 255
+	copy(offset[:], slotnum)
+	offset[0] += 1 // 1 << 248, handle overflow out of band
 
-	return GetBinaryTreeKey(address, k[:])
+	return getBinaryTreeKey(address, offset[:], overflow)
 }
 
 func GetBinaryTreeKeyCodeChunk(address common.Address, chunknr *uint256.Int) []byte {

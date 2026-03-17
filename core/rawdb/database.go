@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/internal/tablewriter"
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/sync/errgroup"
 )
@@ -477,9 +478,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				bodies.add(size)
 			case bytes.HasPrefix(key, blockReceiptsPrefix) && len(key) == (len(blockReceiptsPrefix)+8+common.HashLength):
 				receipts.add(size)
-			case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerTDSuffix):
+			case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerTDSuffix) && len(key) == (len(headerPrefix)+8+common.HashLength+len(headerTDSuffix)):
 				tds.add(size)
-			case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerHashSuffix):
+			case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerHashSuffix) && len(key) == (len(headerPrefix)+8+common.HashLength+len(headerHashSuffix)):
 				numHashPairings.add(size)
 			case bytes.HasPrefix(key, headerNumberPrefix) && len(key) == (len(headerNumberPrefix)+common.HashLength):
 				hashNumPairings.add(size)
@@ -663,7 +664,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		total.Add(uint64(ancient.size()))
 	}
 
-	table := NewTableWriter(os.Stdout)
+	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Database", "Category", "Size", "Items"})
 	table.SetFooter([]string{"", "Total", common.StorageSize(total.Load()).String(), fmt.Sprintf("%d", count.Load())})
 	table.AppendBulk(stats)

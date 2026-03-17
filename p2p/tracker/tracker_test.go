@@ -24,6 +24,25 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
+// TestCleanAfterStop verifies that the clean method does not crash when called
+// after Stop. This can happen because clean is scheduled via time.AfterFunc and
+// may fire after Stop sets t.expire to nil.
+func TestCleanAfterStop(t *testing.T) {
+	cap := p2p.Cap{Name: "test", Version: 1}
+	timeout := 50 * time.Millisecond
+	tr := New(cap, "peer1", timeout)
+
+	// Track a request to start the expiration timer.
+	tr.Track(Request{ID: 1, ReqCode: 0x01, RespCode: 0x02, Size: 1})
+
+	// Stop the tracker, then wait for the timer to fire.
+	tr.Stop()
+	time.Sleep(timeout + 50*time.Millisecond)
+
+	// Also verify that calling clean directly after stop doesn't panic.
+	tr.clean()
+}
+
 // This checks that metrics gauges for pending requests are be decremented when a
 // Tracker is stopped.
 func TestMetricsOnStop(t *testing.T) {

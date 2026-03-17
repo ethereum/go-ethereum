@@ -113,7 +113,7 @@ func SetupTelemetry(cfg node.OpenTelemetryConfig, stack *node.Node) error {
 	// Define batch span processor options
 	batchOpts := []sdktrace.BatchSpanProcessorOption{
 		// The maximum number of spans that can be queued before dropping
-		sdktrace.WithMaxQueueSize(sdktrace.DefaultMaxExportBatchSize),
+		sdktrace.WithMaxQueueSize(sdktrace.DefaultMaxQueueSize),
 		// The maximum number of spans to export in a single batch
 		sdktrace.WithMaxExportBatchSize(sdktrace.DefaultMaxExportBatchSize),
 		// How long an export operation can take before timing out

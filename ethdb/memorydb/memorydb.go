@@ -338,6 +338,9 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 	return nil
 }
 
+// Close closes the batch and releases all associated resources.
+func (b *batch) Close() {}
+
 // iterator can walk over the (potentially partial) keyspace of a memory key
 // value store. Internally it is a deep copy of the entire iterated state,
 // sorted by keys.
