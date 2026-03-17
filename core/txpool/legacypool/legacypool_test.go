@@ -272,6 +272,173 @@ func deriveSender(tx *types.Transaction) (common.Address, error) {
 	return types.Sender(types.HomesteadSigner{}, tx)
 }
 
+func TestPromoteSpecialTxUpdatesTotalCost(t *testing.T) {
+	pool, key := setupPool()
+	defer pool.Close()
+
+	normal := transaction(0, 21000, key)
+	addr, err := deriveSender(normal)
+	if err != nil {
+		t.Fatalf("failed to derive sender: %v", err)
+	}
+	special := setCodeTx(0, key, nil)
+
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	pool.pending[addr] = newList(true)
+	list := pool.pending[addr]
+
+	inserted, _ := list.Add(normal, pool.config.PriceBump)
+	if !inserted {
+		t.Fatal("failed to insert baseline transaction")
+	}
+	if _, err := pool.promoteSpecialTx(addr, special, false); err != nil {
+		t.Fatalf("promoteSpecialTx failed: %v", err)
+	}
+	want, overflow := uint256.FromBig(special.Cost())
+	if overflow {
+		t.Fatal("special tx cost overflowed uint256 in test setup")
+	}
+	if list.totalcost.Cmp(want) != 0 {
+		t.Fatalf("totalcost mismatch after special promotion: have %v want %v", list.totalcost, want)
+	}
+
+	// Removing the pending tx should not underflow totalcost.
+	list.Forward(1)
+	if list.totalcost.Sign() != 0 {
+		t.Fatalf("totalcost should be zero after removal, have %v", list.totalcost)
+	}
+}
+
+func TestListAddReplacementAvoidsIntermediateOverflow(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	max := new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 256), common.Big1)
+	oldPrice := new(big.Int).Sub(new(big.Int).Rsh(new(big.Int).Set(max), 1), big.NewInt(100))
+	newPrice := new(big.Int).Add(oldPrice, common.Big1)
+
+	oldTx, err := types.SignTx(types.NewTransaction(0, common.Address{}, common.Big0, 1, oldPrice, nil), types.HomesteadSigner{}, key)
+	if err != nil {
+		t.Fatalf("failed to sign old tx: %v", err)
+	}
+	newTx, err := types.SignTx(types.NewTransaction(0, common.Address{}, common.Big0, 1, newPrice, nil), types.HomesteadSigner{}, key)
+	if err != nil {
+		t.Fatalf("failed to sign replacement tx: %v", err)
+	}
+
+	list := newList(true)
+	inserted, _ := list.Add(oldTx, 0)
+	if !inserted {
+		t.Fatal("failed to insert baseline transaction")
+	}
+	inserted, replaced := list.Add(newTx, 0)
+	if !inserted {
+		t.Fatal("replacement transaction should not overflow after subtracting old cost")
+	}
+	if replaced == nil || replaced.Hash() != oldTx.Hash() {
+		t.Fatal("expected old transaction to be replaced")
+	}
+	want, overflow := uint256.FromBig(newTx.Cost())
+	if overflow {
+		t.Fatal("replacement tx cost overflowed uint256 in test setup")
+	}
+	if list.totalcost.Cmp(want) != 0 {
+		t.Fatalf("totalcost mismatch after replacement: have %v want %v", list.totalcost, want)
+	}
+	if tx := list.txs.Get(newTx.Nonce()); tx == nil || tx.Hash() != newTx.Hash() {
+		t.Fatal("replacement transaction was not stored in list")
+	}
+	list.Forward(1)
+	if list.totalcost.Sign() != 0 {
+		t.Fatalf("totalcost should be zero after removal, have %v", list.totalcost)
+	}
+}
+
+func TestPromoteSpecialTxReplacementAvoidsIntermediateOverflow(t *testing.T) {
+	pool, key := setupPool()
+	defer pool.Close()
+
+	max := new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 256), common.Big1)
+	oldPrice := new(big.Int).Sub(new(big.Int).Rsh(new(big.Int).Set(max), 1), big.NewInt(100))
+	newPrice := new(big.Int).Add(oldPrice, common.Big1)
+	oldTx, err := types.SignTx(types.NewTransaction(0, common.Address{}, common.Big0, 1, oldPrice, nil), types.HomesteadSigner{}, key)
+	if err != nil {
+		t.Fatalf("failed to sign old tx: %v", err)
+	}
+	addr, err := deriveSender(oldTx)
+	if err != nil {
+		t.Fatalf("failed to derive sender: %v", err)
+	}
+	special := pricedSetCodeTx(0, 1, uint256.MustFromBig(newPrice), uint256.NewInt(1), key, nil)
+
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	pool.pending[addr] = newList(true)
+	list := pool.pending[addr]
+	inserted, _ := list.Add(oldTx, 0)
+	if !inserted {
+		t.Fatal("failed to insert baseline transaction")
+	}
+	inserted, err = pool.promoteSpecialTx(addr, special, false)
+	if err != nil {
+		t.Fatalf("promoteSpecialTx failed: %v", err)
+	}
+	if !inserted {
+		t.Fatal("special replacement should not overflow after subtracting old cost")
+	}
+	want, overflow := uint256.FromBig(special.Cost())
+	if overflow {
+		t.Fatal("special tx cost overflowed uint256 in test setup")
+	}
+	if list.totalcost.Cmp(want) != 0 {
+		t.Fatalf("totalcost mismatch after special replacement: have %v want %v", list.totalcost, want)
+	}
+	if tx := list.txs.Get(special.Nonce()); tx == nil || tx.Hash() != special.Hash() {
+		t.Fatal("special replacement transaction was not stored in list")
+	}
+	list.Forward(1)
+	if list.totalcost.Sign() != 0 {
+		t.Fatalf("totalcost should be zero after removal, have %v", list.totalcost)
+	}
+}
+
+func TestPromoteSpecialTxOverflowReturnsErrorWithoutMutation(t *testing.T) {
+	pool, key := setupPool()
+	defer pool.Close()
+
+	normal := transaction(0, 21000, key)
+	addr, err := deriveSender(normal)
+	if err != nil {
+		t.Fatalf("failed to derive sender: %v", err)
+	}
+	max := new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 256), common.Big1)
+	special := pricedSetCodeTx(0, 2, uint256.MustFromBig(max), uint256.NewInt(1), key, nil)
+
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	inserted, err := pool.promoteSpecialTx(addr, special, false)
+	if inserted {
+		t.Fatal("overflowing special tx must not be inserted")
+	}
+	if !errors.Is(err, txpool.ErrSpecialTxCostOverflow) {
+		t.Fatalf("wrong error: have %v, want %v", err, txpool.ErrSpecialTxCostOverflow)
+	}
+	if _, ok := pool.pending[addr]; ok {
+		t.Fatal("pending list created for rejected special tx")
+	}
+	if pool.all.Get(special.Hash()) != nil {
+		t.Fatal("rejected special tx should not be tracked in lookup")
+	}
+	if pool.pendingNonces.get(addr) != 0 {
+		t.Fatalf("pending nonce changed for rejected special tx: have %d want 0", pool.pendingNonces.get(addr))
+	}
+}
+
 type testChain struct {
 	*testBlockChain
 	address common.Address

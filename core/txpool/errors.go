@@ -71,5 +71,7 @@ var (
 
 	ErrDuplicateSpecialTransaction = errors.New("duplicate a special transaction")
 
+	ErrSpecialTxCostOverflow = errors.New("special transaction cost overflow")
+
 	ErrMinDeploySMC = errors.New("smart contract creation cost is under allowance")
 )

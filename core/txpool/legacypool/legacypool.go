@@ -1072,17 +1072,38 @@ func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *typ
 }
 
 func (pool *LegacyPool) promoteSpecialTx(addr common.Address, tx *types.Transaction, isLocal bool) (bool, error) {
-	// Try to insert the transaction into the pending queue
-	if pool.pending[addr] == nil {
-		pool.pending[addr] = newList(true)
+	list := pool.pending[addr]
+	newPending := list == nil
+	if newPending {
+		list = newList(true)
+	}
+
+	base := new(uint256.Int).Set(list.totalcost)
+	old := list.txs.Get(tx.Nonce())
+	if old != nil {
+		if old.IsSpecialTransaction() {
+			return false, txpool.ErrDuplicateSpecialTransaction
+		}
+		// Old is being replaced, subtract old cost
+		if _, underflow := base.SubOverflow(base, uint256.MustFromBig(old.Cost())); underflow {
+			panic("totalcost underflow")
+		}
+	}
+	// Keep overflow behavior aligned with list.Add.
+	cost, overflow := uint256.FromBig(tx.Cost())
+	if overflow {
+		return false, txpool.ErrSpecialTxCostOverflow
+	}
+	total, overflow := new(uint256.Int).AddOverflow(base, cost)
+	if overflow {
+		return false, txpool.ErrSpecialTxCostOverflow
+	}
+	list.totalcost = total
+	if newPending {
+		pool.pending[addr] = list
 		pendingAddrsGauge.Inc(1)
 	}
-	list := pool.pending[addr]
 
-	old := list.txs.Get(tx.Nonce())
-	if old.IsSpecialTransaction() {
-		return false, txpool.ErrDuplicateSpecialTransaction
-	}
 	// Otherwise discard any previous transaction and mark this
 	if old != nil {
 		pool.all.Remove(old.Hash())
@@ -1093,7 +1114,7 @@ func (pool *LegacyPool) promoteSpecialTx(addr common.Address, tx *types.Transact
 		pendingGauge.Inc(1)
 	}
 	list.txs.Put(tx)
-	if cost := uint256.MustFromBig(tx.Cost()); list.costcap.Cmp(cost) < 0 {
+	if cost := tx.Cost(); list.costcap.Cmp(cost) < 0 {
 		list.costcap = cost
 	}
 	if gas := tx.Gas(); list.gascap < gas {
@@ -1648,7 +1669,7 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 		if pool.chain.CurrentHeader() != nil {
 			number = pool.chain.CurrentHeader().Number
 		}
-		drops, _ := list.Filter(uint256.MustFromBig(pool.currentState.GetBalance(addr)), gasLimit, pool.trc21FeeCapacity, number)
+		drops, _ := list.Filter(pool.currentState.GetBalance(addr), gasLimit, pool.trc21FeeCapacity, number)
 		for _, tx := range drops {
 			pool.all.Remove(tx.Hash())
 		}
@@ -1853,7 +1874,7 @@ func (pool *LegacyPool) demoteUnexecutables() {
 		if pool.chain.CurrentHeader() != nil {
 			number = pool.chain.CurrentHeader().Number
 		}
-		drops, invalids := list.Filter(uint256.MustFromBig(pool.currentState.GetBalance(addr)), gasLimit, pool.trc21FeeCapacity, number)
+		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), gasLimit, pool.trc21FeeCapacity, number)
 		for _, tx := range drops {
 			hash := tx.Hash()
 			pool.all.Remove(hash)

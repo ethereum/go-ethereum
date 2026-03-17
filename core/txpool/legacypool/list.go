@@ -274,7 +274,7 @@ type list struct {
 	strict bool       // Whether nonces are strictly continuous or not
 	txs    *sortedMap // Heap indexed sorted hash map of the transactions
 
-	costcap   *uint256.Int // Price of the highest costing transaction (reset only if exceeds balance)
+	costcap   *big.Int     // Price of the highest costing transaction (reset only if exceeds balance)
 	gascap    uint64       // Gas limit of the highest spending transaction (reset only if exceeds block limit)
 	totalcost *uint256.Int // Total cost of all transactions in the list
 }
@@ -285,7 +285,7 @@ func newList(strict bool) *list {
 	return &list{
 		strict:    strict,
 		txs:       newSortedMap(),
-		costcap:   new(uint256.Int),
+		costcap:   new(big.Int),
 		totalcost: new(uint256.Int),
 	}
 }
@@ -302,12 +302,13 @@ func (l *list) Contains(nonce uint64) bool {
 // If the new transaction is accepted into the list, the lists' cost and gas
 // thresholds are also potentially updated.
 func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transaction) {
+	base := new(uint256.Int).Set(l.totalcost)
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
-	if old.IsSpecialTransaction() {
-		return false, nil
-	}
 	if old != nil {
+		if old.IsSpecialTransaction() {
+			return false, nil
+		}
 		if old.GasFeeCapCmp(tx) >= 0 || old.GasTipCapCmp(tx) >= 0 {
 			return false, nil
 		}
@@ -328,18 +329,24 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 			return false, nil
 		}
 		// Old is being replaced, subtract old cost
-		l.subTotalCost([]*types.Transaction{old})
+		if _, underflow := base.SubOverflow(base, uint256.MustFromBig(old.Cost())); underflow {
+			panic("totalcost underflow")
+		}
 	}
 	// Add new tx cost to totalcost
 	cost, overflow := uint256.FromBig(tx.Cost())
 	if overflow {
 		return false, nil
 	}
-	l.totalcost.Add(l.totalcost, cost)
+	total, overflow := new(uint256.Int).AddOverflow(base, cost)
+	if overflow {
+		return false, nil
+	}
+	l.totalcost = total
 
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)
-	if l.costcap.Cmp(cost) < 0 {
+	if cost := tx.Cost(); l.costcap.Cmp(cost) < 0 {
 		l.costcap = cost
 	}
 	if gas := tx.Gas(); l.gascap < gas {
@@ -366,12 +373,12 @@ func (l *list) Forward(threshold uint64) types.Transactions {
 // a point in calculating all the costs or if the balance covers all. If the threshold
 // is lower than the costgas cap, the caps will be reset to a new high after removing
 // the newly invalidated transactions.
-func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64, trc21Issuers map[common.Address]*big.Int, number *big.Int) (types.Transactions, types.Transactions) {
+func (l *list) Filter(costLimit *big.Int, gasLimit uint64, trc21Issuers map[common.Address]*big.Int, number *big.Int) (types.Transactions, types.Transactions) {
 	// If all transactions are below the threshold, short circuit
 	if l.costcap.Cmp(costLimit) <= 0 && l.gascap <= gasLimit {
 		return nil, nil
 	}
-	l.costcap = new(uint256.Int).Set(costLimit) // Lower the caps to the thresholds
+	l.costcap = new(big.Int).Set(costLimit) // Lower the caps to the thresholds
 	l.gascap = gasLimit
 
 	// Filter out all the transactions above the account's funds
@@ -379,10 +386,10 @@ func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64, trc21Issuers map[
 		maximum := costLimit
 		if tx.To() != nil {
 			if feeCapacity, ok := trc21Issuers[*tx.To()]; ok {
-				return tx.Gas() > gasLimit || new(big.Int).Add(costLimit.ToBig(), feeCapacity).Cmp(tx.TxCost(number)) < 0
+				return tx.Gas() > gasLimit || new(big.Int).Add(costLimit, feeCapacity).Cmp(tx.TxCost(number)) < 0
 			}
 		}
-		return tx.Gas() > gasLimit || tx.Cost().Cmp(maximum.ToBig()) > 0
+		return tx.Gas() > gasLimit || tx.Cost().Cmp(maximum) > 0
 	})
 
 	if len(removed) == 0 {

@@ -24,7 +24,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"github.com/holiman/uint256"
 )
 
 // Tests that transactions can be added to strict lists and list contents and
@@ -78,7 +77,7 @@ func BenchmarkListAdd(t *testing.B) {
 	}
 	// Insert the transactions in a random order
 	list := newList(true)
-	priceLimit := uint256.NewInt(DefaultConfig.PriceLimit)
+	priceLimit := big.NewInt(int64(DefaultConfig.PriceLimit))
 	t.ResetTimer()
 	for _, v := range rand.Perm(len(txs)) {
 		list.Add(txs[v], DefaultConfig.PriceBump)
