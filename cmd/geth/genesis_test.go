@@ -196,3 +196,83 @@ func TestCustomBackend(t *testing.T) {
 		}
 	}
 }
+
+// TestStateScheme that the state scheme selection and compatibility checks work
+// properly for new and existing datadirs.
+func TestStateScheme(t *testing.T) {
+	t.Parallel()
+	genesis := `{
+		"alloc"      : {
+			"0x0000000000000000000000000000000000000001": {
+				"balance": "0x1"
+			}
+		},
+		"coinbase"   : "0x0000000000000000000000000000000000000000",
+		"difficulty" : "0x20000",
+		"extraData"  : "",
+		"gasLimit"   : "0x2fefd8",
+		"nonce"      : "0x0000000000001338",
+		"mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
+		"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
+		"timestamp"  : "0x00",
+		"config": {
+			"terminalTotalDifficulty": 0
+		}
+	}`
+	type schemeTest struct {
+		initArgs   []string
+		execArgs   []string
+		execExpect string
+	}
+	testfunc := func(t *testing.T, tt schemeTest) error {
+		// Create a temporary data directory to use and inspect later
+		datadir := t.TempDir()
+
+		// Initialize the data directory with the custom genesis block
+		json := filepath.Join(datadir, "genesis.json")
+		if err := os.WriteFile(json, []byte(genesis), 0600); err != nil {
+			return fmt.Errorf("failed to write genesis file: %v", err)
+		}
+		{ // Init
+			args := append(tt.initArgs, "--datadir", datadir, "init", json)
+			geth := runGeth(t, args...)
+			geth.ExpectExit()
+		}
+		{ // Exec + query
+			args := append(tt.execArgs, "--networkid", "1337", "--syncmode=full", "--cache", "16",
+				"--datadir", datadir, "--maxpeers", "0", "--port", "0", "--authrpc.port", "0",
+				"--nodiscover", "--nat", "none", "--ipcdisable",
+				"--exec", "eth.getBlock(0).nonce", "console")
+			geth := runGeth(t, args...)
+			geth.ExpectRegexp(tt.execExpect)
+			geth.ExpectExit()
+		}
+		return nil
+	}
+	for i, tt := range []schemeTest{
+		{ // New datadir defaults to path scheme.
+			execExpect: "0x0000000000001338",
+		},
+		{ // Explicit path first, then autodiscover.
+			initArgs:   []string{"--state.scheme", "path"},
+			execExpect: "0x0000000000001338",
+		},
+		{ // Explicit hash first, then autodiscover.
+			initArgs:   []string{"--state.scheme", "hash"},
+			execExpect: "0x0000000000001338",
+		},
+		{ // Can't start hash on top of existing path database.
+			execArgs:   []string{"--state.scheme", "hash"},
+			execExpect: `Fatal: Failed to register the Ethereum service: incompatible state scheme, stored: path, provided: hash`,
+		},
+		{ // Can't start path on top of existing hash database.
+			initArgs:   []string{"--state.scheme", "hash"},
+			execArgs:   []string{"--state.scheme", "path"},
+			execExpect: `Fatal: Failed to register the Ethereum service: incompatible state scheme, stored: hash, provided: path`,
+		},
+	} {
+		if err := testfunc(t, tt); err != nil {
+			t.Fatalf("test %d-state-scheme: %v", i, err)
+		}
+	}
+}

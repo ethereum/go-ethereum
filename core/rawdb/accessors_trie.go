@@ -267,7 +267,7 @@ func ReadStateScheme(db ethdb.Database) string {
 //     compatible with persistent state scheme.
 func ParseStateScheme(provided string, disk ethdb.Database) (string, error) {
 	// If state scheme is not specified, use the scheme consistent
-	// with persistent state, or fallback to hash mode if database
+	// with persistent state, or fallback to path mode if database
 	// is empty.
 	stored := ReadStateScheme(disk)
 	if provided == "" {

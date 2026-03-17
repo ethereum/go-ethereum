@@ -284,7 +284,7 @@ var (
 	}
 	StateSchemeFlag = &cli.StringFlag{
 		Name:     "state.scheme",
-		Usage:    "Scheme to use for storing ethereum state ('hash' or 'path')",
+		Usage:    "Scheme to use for storing ethereum state ('hash' or 'path', defaults to 'path' for new datadirs)",
 		Category: flags.StateCategory,
 	}
 	StateSizeTrackingFlag = &cli.BoolFlag{
