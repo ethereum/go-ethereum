@@ -20,6 +20,7 @@ package legacypool
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/big"
 	"slices"
@@ -1974,10 +1975,7 @@ func (as *accountSet) addTx(tx *types.Transaction) {
 // reuse. The returned slice should not be changed!
 func (as *accountSet) flatten() []common.Address {
 	if as.cache == nil {
-		accounts := make([]common.Address, 0, len(as.accounts))
-		for account := range as.accounts {
-			accounts = append(accounts, account)
-		}
+		accounts := slices.Collect(maps.Keys(as.accounts))
 		as.cache = &accounts
 	}
 	return *as.cache
@@ -1985,9 +1983,7 @@ func (as *accountSet) flatten() []common.Address {
 
 // merge adds all addresses from the 'other' set into 'as'.
 func (as *accountSet) merge(other *accountSet) {
-	for addr := range other.accounts {
-		as.accounts[addr] = struct{}{}
-	}
+	maps.Copy(as.accounts, other.accounts)
 	as.cache = nil
 }
 
