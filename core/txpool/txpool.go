@@ -275,8 +275,9 @@ func (p *TxPool) Get(hash common.Hash) *types.Transaction {
 }
 
 // Add enqueues a batch of transactions into the pool if they are valid. Due
-// to the large transaction churn, add may postpone fully integrating the tx
-// to a later point to batch multiple ones together.
+//
+// Note, if sync is set the method will block until all internal maintenance
+// related to the add is finished. Only use this during tests for determinism.
 func (p *TxPool) Add(txs []*types.Transaction, sync bool) []error {
 	// Split the input transactions between the subpools. It shouldn't really
 	// happen that we receive merged batches, but better graceful than strange
@@ -456,8 +457,8 @@ func (pool *TxPool) IsSigner(addr common.Address) bool {
 // internal background reset operations. This method will run an explicit reset
 // operation to ensure the pool stabilises, thus avoiding flakey behavior.
 //
-// Note, do not use this in production / live code. In live code, the pool is
-// meant to reset on a separate thread to avoid DoS vectors.
+// Note, this method is only used for testing and is susceptible to DoS vectors.
+// In production code, the pool is meant to reset on a separate thread.
 func (p *TxPool) Sync() error {
 	sync := make(chan error)
 	select {
