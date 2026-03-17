@@ -129,11 +129,11 @@ func New(stack *node.Node, config *ethconfig.Config, XDCXServ *XDCx.XDCX, lendin
 	if err != nil {
 		return nil, err
 	}
-	// Here we determine genesis hash and active ChainConfig.
-	// We need these to figure out the consensus parameters and to set up history pruning.
-	chainConfig, _, err := core.LoadChainConfig(chainDb, config.Genesis)
-	if err != nil {
-		return nil, err
+	// Resolve the effective chain config (and persist it when compatible)
+	// before constructing the consensus engine so it initializes with final network settings.
+	chainConfig, _, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
+	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
+		return nil, genesisErr
 	}
 
 	// Set networkID to chainID by default.
@@ -142,6 +142,7 @@ func New(stack *node.Node, config *ethconfig.Config, XDCXServ *XDCx.XDCX, lendin
 		networkID = chainConfig.ChainID.Uint64()
 	}
 	common.CopyConstants(networkID)
+	engine := CreateConsensusEngine(stack, chainConfig, chainDb)
 
 	// Assemble the Ethereum object.
 	eth := &Ethereum{
@@ -149,7 +150,7 @@ func New(stack *node.Node, config *ethconfig.Config, XDCXServ *XDCx.XDCX, lendin
 		chainDb:        chainDb,
 		eventMux:       stack.EventMux(),
 		accountManager: stack.AccountManager(),
-		engine:         CreateConsensusEngine(stack, chainConfig, chainDb),
+		engine:         engine,
 		shutdownChan:   make(chan bool),
 		networkId:      networkID,
 		gasPrice:       config.Miner.GasPrice,
