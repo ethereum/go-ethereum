@@ -229,9 +229,13 @@ func (tc *conn) read(c net.PacketConn) v5wire.Packet {
 	if err := c.SetReadDeadline(time.Now().Add(waitTime)); err != nil {
 		return &readError{err}
 	}
-	n, _, err := c.ReadFrom(buf)
+	n, fromAddr, err := c.ReadFrom(buf)
 	if err != nil {
 		return &readError{err}
+	}
+	// Verify the packet is from an expected remote address.
+	if fromAddr.String() != tc.remoteAddrFor(c).String() {
+		return readErrorf("packet from unexpected address %v", fromAddr)
 	}
 	// Always use remoteAddr for codec session lookup, even if the actual sender
 	// address differs (e.g. in multi-network setups where packets are routed
