@@ -478,7 +478,7 @@ func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
 	// The main account trie commit in stateDB.commit() already calls
 	// CollectNodes on this trie, so calling Commit here again would
 	// redundantly traverse and serialize the entire tree per dirty account.
-	if s.db.db.TrieDB().IsVerkle() {
+	if s.db.GetTrie().IsVerkle() {
 		s.origin = s.data.Copy()
 		return op, nil, nil
 	}
