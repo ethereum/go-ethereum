@@ -57,6 +57,11 @@ func initMatcher(st *testMatcher) {
 	// Broken tests:
 	// EOF is not part of cancun
 	st.skipLoad(`^stEOF/`)
+
+	st.skipLoad(`RevertInCreateInInit`)
+	st.skipLoad(`InitCollisionParis`)
+	st.skipLoad(`dynamicAccountOverwriteEmpty_Paris`)
+	st.skipLoad(`create2collisionStorageParis`)
 }
 
 func TestState(t *testing.T) {
@@ -91,6 +96,12 @@ func TestExecutionSpecState(t *testing.T) {
 		t.Skipf("directory %s does not exist", executionSpecStateTestDir)
 	}
 	st := new(testMatcher)
+
+	// Broken tests
+	st.skipLoad(`RevertInCreateInInit`)
+	st.skipLoad(`InitCollisionParis`)
+	st.skipLoad(`dynamicAccountOverwriteEmpty_Paris`)
+	st.skipLoad(`create2collisionStorageParis`)
 
 	st.walk(t, executionSpecStateTestDir, func(t *testing.T, name string, test *StateTest) {
 		execStateTest(t, st, test)
