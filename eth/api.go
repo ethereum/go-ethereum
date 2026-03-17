@@ -57,7 +57,7 @@ func (api *EthereumAPI) Mining() bool {
 
 func (api *EthereumAPI) ChainId() hexutil.Uint64 {
 	chainID := new(big.Int)
-	if config := api.e.chainConfig; config.IsEIP155(api.e.blockchain.CurrentBlock().Number) {
+	if config := api.e.blockchain.Config(); config.IsEIP155(api.e.blockchain.CurrentBlock().Number) {
 		chainID = config.ChainID
 	}
 	return (hexutil.Uint64)(chainID.Uint64())

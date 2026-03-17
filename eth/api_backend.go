@@ -63,7 +63,7 @@ type EthAPIBackend struct {
 }
 
 func (b *EthAPIBackend) ChainConfig() *params.ChainConfig {
-	return b.eth.chainConfig
+	return b.eth.blockchain.Config()
 }
 
 func (b *EthAPIBackend) CurrentBlock() *types.Header {
@@ -85,7 +85,7 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 		return b.eth.blockchain.CurrentBlock(), nil
 	}
 	if number == rpc.FinalizedBlockNumber {
-		if b.eth.chainConfig.XDPoS == nil {
+		if b.eth.blockchain.Config().XDPoS == nil {
 			return nil, errors.New("PoW does not support confirmed block lookup")
 		}
 		current := b.eth.blockchain.CurrentBlock()
@@ -138,7 +138,7 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
 	if number == rpc.FinalizedBlockNumber {
-		if b.eth.chainConfig.XDPoS == nil {
+		if b.eth.blockchain.Config().XDPoS == nil {
 			return nil, errors.New("PoW does not support confirmed block lookup")
 		}
 		current := b.eth.blockchain.CurrentBlock()
@@ -273,7 +273,7 @@ func (b *EthAPIBackend) GetEVM(ctx context.Context, state *state.StateDB, XDCxSt
 	} else {
 		context = core.NewEVMBlockContext(header, b.eth.BlockChain(), nil)
 	}
-	return vm.NewEVM(context, state, XDCxState, b.eth.chainConfig, *vmConfig), vmError, nil
+	return vm.NewEVM(context, state, XDCxState, b.eth.blockchain.Config(), *vmConfig), vmError, nil
 }
 
 func (b *EthAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {

@@ -65,8 +65,7 @@ import (
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
-	config      *ethconfig.Config
-	chainConfig *params.ChainConfig
+	config *ethconfig.Config
 
 	// Channel for shutting down the service
 	shutdownChan chan bool // Channel for shutting down the ethereum
@@ -146,7 +145,6 @@ func New(stack *node.Node, config *ethconfig.Config, XDCXServ *XDCx.XDCX, lendin
 	eth := &Ethereum{
 		config:         config,
 		chainDb:        chainDb,
-		chainConfig:    chainConfig,
 		eventMux:       stack.EventMux(),
 		accountManager: stack.AccountManager(),
 		engine:         CreateConsensusEngine(stack, chainConfig, chainDb),
@@ -221,7 +219,7 @@ func New(stack *node.Node, config *ethconfig.Config, XDCXServ *XDCx.XDCX, lendin
 		}
 		vmConfig.Tracer = t
 	}
-	if eth.chainConfig.XDPoS != nil {
+	if chainConfig.XDPoS != nil {
 		c := eth.engine.(*XDPoS.XDPoS)
 		c.GetXDCXService = func() utils.TradingService {
 			return eth.XDCX
@@ -285,7 +283,7 @@ func New(stack *node.Node, config *ethconfig.Config, XDCXServ *XDCx.XDCX, lendin
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
 	var xdPoS *XDPoS.XDPoS = nil
-	if eth.chainConfig.XDPoS != nil {
+	if chainConfig.XDPoS != nil {
 		xdPoS = eth.engine.(*XDPoS.XDPoS)
 	}
 	eth.APIBackend = &EthAPIBackend{
@@ -303,7 +301,7 @@ func New(stack *node.Node, config *ethconfig.Config, XDCXServ *XDCx.XDCX, lendin
 	// Set global ipc endpoint.
 	eth.blockchain.IPCEndpoint = stack.IPCEndpoint()
 
-	if eth.chainConfig.XDPoS != nil {
+	if chainConfig.XDPoS != nil {
 		c := eth.engine.(*XDPoS.XDPoS)
 		signHook := func(block *types.Block) error {
 			eb, err := eth.Etherbase()
@@ -315,7 +313,7 @@ func New(stack *node.Node, config *ethconfig.Config, XDCXServ *XDCx.XDCX, lendin
 			if !ok {
 				return nil
 			}
-			if block.NumberU64()%common.MergeSignRange == 0 || !eth.chainConfig.IsTIP2019(block.Number()) {
+			if block.NumberU64()%common.MergeSignRange == 0 || !chainConfig.IsTIP2019(block.Number()) {
 				if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb, eb); err != nil {
 					return fmt.Errorf("fail to create tx sign for importing block: %v", err)
 				}
@@ -433,7 +431,7 @@ func (e *Ethereum) APIs() []rpc.API {
 			Service:   NewAdminAPI(e),
 		}, {
 			Namespace: "debug",
-			Service:   NewDebugAPI(e.chainConfig, e),
+			Service:   NewDebugAPI(e),
 		}, {
 			Namespace: "net",
 			Service:   e.netRPCService,
@@ -483,7 +481,7 @@ func (e *Ethereum) ValidateMasternode() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if e.chainConfig.XDPoS != nil {
+	if e.blockchain.Config().XDPoS != nil {
 		//check if miner's wallet is in set of validators
 		c := e.engine.(*XDPoS.XDPoS)
 

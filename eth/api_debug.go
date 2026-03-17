@@ -27,7 +27,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/internal/ethapi"
-	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
 	"github.com/XinFinOrg/XDPoSChain/trie"
@@ -36,14 +35,13 @@ import (
 // DebugAPI is the collection of Ethereum full node APIs exposed over
 // the private debugging endpoint.
 type DebugAPI struct {
-	config *params.ChainConfig
-	eth    *Ethereum
+	eth *Ethereum
 }
 
 // NewDebugAPI creates a new API definition for the full node-related
 // private debug methods of the Ethereum service.
-func NewDebugAPI(config *params.ChainConfig, eth *Ethereum) *DebugAPI {
-	return &DebugAPI{config: config, eth: eth}
+func NewDebugAPI(eth *Ethereum) *DebugAPI {
+	return &DebugAPI{eth: eth}
 }
 
 // DumpBlock retrieves the entire state of the database at a given block.
