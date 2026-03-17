@@ -91,7 +91,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	// Make sure the transaction is signed properly
 	from, err := types.Sender(signer, tx)
 	if err != nil {
-		return ErrInvalidSender
+		return fmt.Errorf("%w: %v", ErrInvalidSender, err)
 	}
 	// Limit nonce to 2^64-1 per EIP-2681
 	if tx.Nonce()+1 < tx.Nonce() {
