@@ -129,14 +129,6 @@ type EVM struct {
 
 	readOnly   bool   // Whether to throw on stateful modifications
 	returnData []byte // Last CALL's return data for subsequent reuse
-
-	// CollisionBurned accumulates regular gas burned in CREATE/CREATE2 address
-	// collisions. The spec burns this gas (deducts from gas_left) but does NOT
-	// count it in regular_gas_used, so it must be excluded from txRegular in
-	// 2D block gas accounting.
-	// TODO (MariusVanDerWijden) this seems to be the best way to conform to the current
-	// spec, I wonder if it makes sense to change the spec.
-	CollisionBurned uint64
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
@@ -225,7 +217,6 @@ func (evm *EVM) SetTxContext(txCtx TxContext) {
 		txCtx.AccessEvents = state.NewAccessEvents()
 	}
 	evm.TxContext = txCtx
-	evm.CollisionBurned = 0
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and
@@ -558,7 +549,6 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasCosts, value *
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 			evm.Config.Tracer.OnGasChange(gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
 		}
-		evm.CollisionBurned += gas.RegularGas
 		gas.RegularGas = 0
 		return nil, common.Address{}, gas, ErrContractAddressCollision
 	}
