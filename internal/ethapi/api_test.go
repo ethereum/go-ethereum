@@ -2698,9 +2698,14 @@ func TestSignBlobTransaction(t *testing.T) {
 		t.Fatalf("failed to fill tx defaults: %v\n", err)
 	}
 
-	_, err = api.SignTransaction(context.Background(), argsFromTransaction(res.Tx, b.acc.Address))
+	result, err := api.SignTransaction(context.Background(), argsFromTransaction(res.Tx, b.acc.Address))
 	if err != nil {
 		t.Fatalf("should not fail on blob transaction")
+	}
+	// When no blobs are provided (only blob hashes), the signed transaction
+	// should not have an empty sidecar attached.
+	if result.Tx.BlobTxSidecar() != nil {
+		t.Fatal("signed transaction should not have a sidecar when no blobs were provided")
 	}
 }
 
