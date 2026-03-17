@@ -1141,8 +1141,8 @@ func fastDeleteStorage(originalRoot common.Hash, snaps *snapshot.Tree, addrHash 
 // slowDeleteStorage serves as a less-efficient alternative to "fastDeleteStorage,"
 // employed when the associated state snapshot is not available. It iterates the
 // storage slots along with all internal trie nodes via trie directly.
-func slowDeleteStorage(db Database, trie Trie, originalRoot common.Hash, addr common.Address, addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, map[common.Hash][]byte, *trienode.NodeSet, error) {
-	tr, err := db.OpenStorageTrie(originalRoot, addr, root, trie)
+func slowDeleteStorage(db Database, trie Trie, stateRoot common.Hash, addr common.Address, addrHash common.Hash, storageRoot common.Hash) (map[common.Hash][]byte, map[common.Hash][]byte, *trienode.NodeSet, error) {
+	tr, err := db.OpenStorageTrie(stateRoot, addr, storageRoot, trie)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to open storage trie, err: %w", err)
 	}
@@ -1177,7 +1177,7 @@ func slowDeleteStorage(db Database, trie Trie, originalRoot common.Hash, addr co
 // The function will make an attempt to utilize an efficient strategy if the
 // associated state snapshot is reachable; otherwise, it will resort to a less
 // efficient approach.
-func deleteStorage(db Database, trie Trie, addr common.Address, addrHash common.Hash, root, originalRoot common.Hash) (map[common.Hash][]byte, map[common.Hash][]byte, *trienode.NodeSet, error) {
+func deleteStorage(db Database, trie Trie, stateRoot common.Hash, addr common.Address, addrHash common.Hash, storageRoot common.Hash) (map[common.Hash][]byte, map[common.Hash][]byte, *trienode.NodeSet, error) {
 	var (
 		err            error
 		nodes          *trienode.NodeSet      // the set for trie node mutations (value is nil)
@@ -1189,10 +1189,10 @@ func deleteStorage(db Database, trie Trie, addr common.Address, addrHash common.
 	// one just in case.
 	snaps := db.Snapshot()
 	if snaps != nil {
-		storages, storageOrigins, nodes, err = fastDeleteStorage(originalRoot, snaps, addrHash, root)
+		storages, storageOrigins, nodes, err = fastDeleteStorage(stateRoot, snaps, addrHash, storageRoot)
 	}
 	if snaps == nil || err != nil {
-		storages, storageOrigins, nodes, err = slowDeleteStorage(db, trie, originalRoot, addr, addrHash, root)
+		storages, storageOrigins, nodes, err = slowDeleteStorage(db, trie, stateRoot, addr, addrHash, storageRoot)
 	}
 	if err != nil {
 		return nil, nil, nil, err
@@ -1218,7 +1218,7 @@ func deleteStorage(db Database, trie Trie, addr common.Address, addrHash common.
 // with their values be tracked as original value.
 // In case (d), **original** account along with its storages should be deleted,
 // with their values be tracked as original value.
-func handleDestruction(db Database, trie Trie, noStorageWiping bool, destructions iter.Seq[common.Address], prestates map[common.Address]*types.StateAccount) (map[common.Hash]*accountDelete, []*trienode.NodeSet, error) {
+func handleDestruction(db Database, trie Trie, root common.Hash, noStorageWiping bool, destructions iter.Seq[common.Address], prestates map[common.Address]*types.StateAccount) (map[common.Hash]*accountDelete, []*trienode.NodeSet, error) {
 	var (
 		nodes   []*trienode.NodeSet
 		deletes = make(map[common.Hash]*accountDelete)
@@ -1249,7 +1249,7 @@ func handleDestruction(db Database, trie Trie, noStorageWiping bool, destruction
 			return nil, nil, fmt.Errorf("unexpected storage wiping, %x", addr)
 		}
 		// Remove storage slots belonging to the account.
-		storages, storagesOrigin, set, err := deleteStorage(db, trie, addr, addrHash, prestate.Root, prestate.Root)
+		storages, storagesOrigin, set, err := deleteStorage(db, trie, root, addr, addrHash, prestate.Root)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to delete storage, err: %w", err)
 		}
@@ -1329,7 +1329,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 		stateAccountsDestruct[addr] = &obj.data
 		destructAccountsOrigins[addr] = obj.origin
 	}
-	deletes, delNodes, err := handleDestruction(s.db, s.trie, noStorageWiping, maps.Keys(stateAccountsDestruct), destructAccountsOrigins)
+	deletes, delNodes, err := handleDestruction(s.db, s.trie, s.originalRoot, noStorageWiping, maps.Keys(stateAccountsDestruct), destructAccountsOrigins)
 	if err != nil {
 		return nil, err
 	}

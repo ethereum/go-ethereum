@@ -265,7 +265,7 @@ func (s *BALStateTransition) CommitWithUpdate(block uint64, deleteEmptyObjects b
 		return true
 	})
 
-	deletes, delNodes, err := handleDestruction(s.db, s.stateTrie, noStorageWiping, maps.Keys(s.deletions), destructedPrestates)
+	deletes, delNodes, err := handleDestruction(s.db, s.stateTrie, s.parentRoot, noStorageWiping, maps.Keys(s.deletions), destructedPrestates)
 	if err != nil {
 		return common.Hash{}, nil, err
 	}
