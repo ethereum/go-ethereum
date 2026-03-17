@@ -528,6 +528,12 @@ var (
 		Category: flags.PerfCategory,
 		Value:    ethconfig.Defaults.FilterLogCacheSize,
 	}
+	GCPercentFlag = &cli.IntFlag{
+		Name:     "gcpercent",
+		Usage:    "Set garbage collection target percentage (GOGC). Higher values reduce GC frequency, improving read throughput at the cost of memory. 0 means use the cache-based default",
+		Value:    0,
+		Category: flags.PerfCategory,
+	}
 	FDLimitFlag = &cli.IntFlag{
 		Name:     "fdlimit",
 		Usage:    "Raise the open file descriptor resource limit (default = system fd limit)",
@@ -1752,12 +1758,19 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			ctx.Set(CacheFlag.Name, strconv.Itoa(allowance))
 		}
 	}
-	// Ensure Go's GC ignores the database cache for trigger percentage
-	cache := ctx.Int(CacheFlag.Name)
-	gogc := max(20, min(100, 100/(float64(cache)/1024)))
-
-	log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
-	godebug.SetGCPercent(int(gogc))
+	// Set Go's GC target percentage. If --gcpercent is explicitly set, use
+	// that value directly. Otherwise, compute a default based on cache size
+	// to prevent the GC from treating the database cache as free memory.
+	if ctx.IsSet(GCPercentFlag.Name) {
+		gogc := ctx.Int(GCPercentFlag.Name)
+		log.Info("Set GC target percentage", "GOGC", gogc)
+		godebug.SetGCPercent(gogc)
+	} else {
+		cache := ctx.Int(CacheFlag.Name)
+		gogc := max(20, min(100, 100/(float64(cache)/1024)))
+		log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
+		godebug.SetGCPercent(int(gogc))
+	}
 
 	if ctx.IsSet(SyncTargetFlag.Name) {
 		cfg.SyncMode = ethconfig.FullSync // dev sync target forces full sync

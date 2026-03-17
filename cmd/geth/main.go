@@ -108,6 +108,7 @@ var (
 		utils.CacheNoPrefetchFlag,
 		utils.CachePreimagesFlag,
 		utils.CacheLogSizeFlag,
+		utils.GCPercentFlag,
 		utils.FDLimitFlag,
 		utils.CryptoKZGFlag,
 		utils.ListenPortFlag,
