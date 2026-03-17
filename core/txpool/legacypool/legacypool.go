@@ -343,7 +343,7 @@ func (pool *LegacyPool) Init(gasTip uint64, head *types.Header, reserver *txpool
 	pool.gasTip.Store(uint256.NewInt(gasTip))
 
 	// Initialize the state with head block, or fallback to empty one in
-	// case the head state is not available(might occur when node is not
+	// case the head state is not available (might occur when node is not
 	// fully synced).
 	statedb, err := pool.chain.StateAt(head.Root)
 	if err != nil {

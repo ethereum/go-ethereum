@@ -33,7 +33,7 @@ type MinerAPI struct {
 	agent *miner.RemoteAgent
 }
 
-// NewMinerAPI create a new RPC service which controls the miner of this node.
+// NewMinerAPI creates a new RPC service which controls the miner of this node.
 func NewMinerAPI(e *Ethereum) *MinerAPI {
 	agent := miner.NewRemoteAgent(e.BlockChain(), e.Engine())
 	e.Miner().Register(agent)
