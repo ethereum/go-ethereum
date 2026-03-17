@@ -122,7 +122,8 @@ func Upgrade(file string) error {
 
 	// Verify that pebble v2 can open the upgraded database.
 	opt2 := &pebblev2.Options{
-		Logger: panicLogger{},
+		Logger:             panicLogger{},
+		FormatMajorVersion: formatMinV2,
 	}
 	db2, err := pebblev2.Open(file, opt2)
 	if err != nil {
