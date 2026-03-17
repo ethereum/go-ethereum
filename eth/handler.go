@@ -780,7 +780,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				pm.knownTxs.Add(tx.Hash(), struct{}{})
 			}
 		}
-		pm.txpool.Add(txs, false, false)
+		pm.txpool.Add(txs, false)
 
 	case msg.Code == OrderTxMsg:
 		// Transactions arrived, make sure we have a valid and fresh chain to handle them

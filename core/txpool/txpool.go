@@ -56,11 +56,20 @@ type BlockChain interface {
 type TxPool struct {
 	subpools []SubPool // List of subpools for specialized transaction handling
 
+	localTracker LocalTracker // Optional tracker for local tx submissions
+
 	subs event.SubscriptionScope // Subscription scope to unsubscribe all on shutdown
 	quit chan chan error         // Quit channel to tear down the head updater
 	term chan struct{}           // Termination channel to detect a closed pool
 
 	sync chan chan error // Testing / simulator channel to block until internal reset is done
+}
+
+// LocalTracker is the minimal local transaction tracking functionality used by
+// TxPool local submission helpers.
+type LocalTracker interface {
+	Track(tx *types.Transaction)
+	TrackAll(txs []*types.Transaction)
 }
 
 // New creates a new transaction pool to gather, sort and filter inbound
@@ -268,7 +277,7 @@ func (p *TxPool) Get(hash common.Hash) *types.Transaction {
 // Add enqueues a batch of transactions into the pool if they are valid. Due
 // to the large transaction churn, add may postpone fully integrating the tx
 // to a later point to batch multiple ones together.
-func (p *TxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
+func (p *TxPool) Add(txs []*types.Transaction, sync bool) []error {
 	// Split the input transactions between the subpools. It shouldn't really
 	// happen that we receive merged batches, but better graceful than strange
 	// errors.
@@ -295,7 +304,7 @@ func (p *TxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
 	// back the errors into the original sort order.
 	errsets := make([][]error, len(p.subpools))
 	for i := 0; i < len(p.subpools); i++ {
-		errsets[i] = p.subpools[i].Add(txsets[i], local, sync)
+		errsets[i] = p.subpools[i].Add(txsets[i], sync)
 	}
 	errs := make([]error, len(txs))
 	for i, split := range splits {
@@ -309,6 +318,26 @@ func (p *TxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
 		errsets[split] = errsets[split][1:]
 	}
 	return errs
+}
+
+// SetLocalTracker configures an optional tracker that will receive all local
+// transaction submissions.
+func (p *TxPool) SetLocalTracker(tracker LocalTracker) {
+	p.localTracker = tracker
+}
+
+// AddLocals enqueues a batch of local transactions into the pool if they are
+// valid and tracks them for re-journal/re-submit flows.
+func (p *TxPool) AddLocals(txs []*types.Transaction, sync bool) []error {
+	if p.localTracker != nil {
+		p.localTracker.TrackAll(txs)
+	}
+	return p.Add(txs, sync)
+}
+
+// AddLocal enqueues a single local transaction into the pool if it is valid.
+func (p *TxPool) AddLocal(tx *types.Transaction, sync bool) error {
+	return p.AddLocals([]*types.Transaction{tx}, sync)[0]
 }
 
 // Pending retrieves all currently processable transactions, grouped by origin
@@ -392,23 +421,6 @@ func (p *TxPool) ContentFrom(addr common.Address) ([]*types.Transaction, []*type
 		}
 	}
 	return []*types.Transaction{}, []*types.Transaction{}
-}
-
-// Locals retrieves the accounts currently considered local by the pool.
-func (p *TxPool) Locals() []common.Address {
-	// Retrieve the locals from each subpool and deduplicate them
-	locals := make(map[common.Address]struct{})
-	for _, subpool := range p.subpools {
-		for _, local := range subpool.Locals() {
-			locals[local] = struct{}{}
-		}
-	}
-	// Flatten and return the deduplicated local set
-	flat := make([]common.Address, 0, len(locals))
-	for local := range locals {
-		flat = append(flat, local)
-	}
-	return flat
 }
 
 // Status returns the known status (unknown/pending/queued) of a transaction

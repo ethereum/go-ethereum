@@ -136,7 +136,7 @@ func testSendTransactions(t *testing.T, protocol int) {
 		tx := newTestTransaction(testAccount, uint64(nonce), txsize)
 		alltxs[nonce] = tx
 	}
-	pm.txpool.Add(alltxs, false, false)
+	pm.txpool.Add(alltxs, false)
 
 	// Connect several peers. They should all receive the pending transactions.
 	var wg sync.WaitGroup

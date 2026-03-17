@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/XDCx"
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
@@ -41,6 +42,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/core/txpool/legacypool"
+	"github.com/XinFinOrg/XDPoSChain/core/txpool/locals"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
@@ -65,17 +67,17 @@ import (
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
-	config *ethconfig.Config
+	// core protocol objects
+	config         *ethconfig.Config
+	txPool         *txpool.TxPool
+	localTxTracker *locals.TxTracker
+	blockchain     *core.BlockChain
 
 	// Channel for shutting down the service
 	shutdownChan chan bool // Channel for shutting down the ethereum
 
-	// Handlers
-	txPool *txpool.TxPool
-
 	orderPool       *legacypool.OrderPool
 	lendingPool     *legacypool.LendingPool
-	blockchain      *core.BlockChain
 	protocolManager *ProtocolManager
 
 	// DB interfaces
@@ -267,14 +269,24 @@ func New(stack *node.Node, config *ethconfig.Config, XDCXServ *XDCx.XDCX, lendin
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
 	legacyPool := legacypool.New(config.TxPool, eth.blockchain)
+	eth.orderPool = legacypool.NewOrderPool(eth.blockchain.Config(), eth.blockchain)
+	eth.lendingPool = legacypool.NewLendingPool(eth.blockchain.Config(), eth.blockchain)
 
 	eth.txPool, err = txpool.New(config.TxPool.PriceLimit, eth.blockchain, []txpool.SubPool{legacyPool})
 	if err != nil {
 		return nil, err
 	}
 
-	eth.orderPool = legacypool.NewOrderPool(eth.blockchain.Config(), eth.blockchain)
-	eth.lendingPool = legacypool.NewLendingPool(eth.blockchain.Config(), eth.blockchain)
+	if !config.TxPool.NoLocals {
+		rejournal := config.TxPool.Rejournal
+		if rejournal < time.Second {
+			log.Warn("Sanitizing invalid txpool journal time", "provided", rejournal, "updated", time.Second)
+			rejournal = time.Second
+		}
+		eth.localTxTracker = locals.New(config.TxPool.Journal, rejournal, eth.blockchain.Config(), eth.txPool)
+		eth.txPool.SetLocalTracker(eth.localTxTracker)
+		stack.RegisterLifecycle(eth.localTxTracker)
+	}
 
 	if eth.protocolManager, err = NewProtocolManagerEx(eth.blockchain.Config(), config.SyncMode, networkID, eth.eventMux, eth.txPool, eth.orderPool, eth.lendingPool, eth.engine, eth.blockchain, chainDb); err != nil {
 		return nil, err
