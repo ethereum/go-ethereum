@@ -100,7 +100,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	// Skip further validation for special transactions
 	if tx.IsSpecialTransaction() {
 		if opts.NotSigner(from) {
-			return fmt.Errorf("%w: tip needed %v, tip permitted %v", ErrUnderpriced, opts.MinTip, tx.GasTipCap())
+			return fmt.Errorf("%w: gas tip cap %v, minimum needed %v", ErrUnderpriced, tx.GasTipCap(), opts.MinTip)
 		}
 		return nil
 	}
@@ -115,7 +115,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		return err
 	}
 	if tx.Gas() < intrGas {
-		return fmt.Errorf("%w: needed %v, allowed %v", core.ErrIntrinsicGas, intrGas, tx.Gas())
+		return fmt.Errorf("%w: gas %v, minimum needed %v", core.ErrIntrinsicGas, tx.Gas(), intrGas)
 	}
 	// Ensure the transaction can cover floor data gas.
 	if rules.IsPrague {
@@ -129,7 +129,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	}
 	// Ensure the gas price is high enough to cover the requirement of the calling pool
 	if tx.GasTipCapIntCmp(opts.MinTip) < 0 {
-		return fmt.Errorf("%w: tip needed %v, tip permitted %v", ErrUnderpriced, opts.MinTip, tx.GasTipCap())
+		return fmt.Errorf("%w: gas tip cap %v, minimum needed %v", ErrUnderpriced, tx.GasTipCap(), opts.MinTip)
 	}
 	if tx.Type() == types.SetCodeTxType {
 		if len(tx.SetCodeAuthorizations()) == 0 {
