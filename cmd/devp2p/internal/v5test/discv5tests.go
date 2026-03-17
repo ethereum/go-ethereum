@@ -33,6 +33,7 @@ import (
 type Suite struct {
 	Dest             *enode.Node
 	Listen1, Listen2 string // listening addresses
+	Remote2          string // remote node address for l2 (if different from Dest)
 }
 
 func (s *Suite) listen1(log logger) (*conn, net.PacketConn) {
@@ -44,6 +45,11 @@ func (s *Suite) listen1(log logger) (*conn, net.PacketConn) {
 func (s *Suite) listen2(log logger) (*conn, net.PacketConn, net.PacketConn) {
 	c := newConn(s.Dest, log)
 	l1, l2 := c.listen(s.Listen1), c.listen(s.Listen2)
+	if s.Remote2 != "" {
+		c.listenerRemoteAddr = map[net.PacketConn]*net.UDPAddr{
+			l2: {IP: net.ParseIP(s.Remote2), Port: s.Dest.UDP()},
+		}
+	}
 	return c, l1, l2
 }
 

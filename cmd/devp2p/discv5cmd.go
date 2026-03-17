@@ -69,6 +69,7 @@ var (
 			testTAPFlag,
 			testListen1Flag,
 			testListen2Flag,
+			testRemote2Flag,
 		},
 	}
 	discv5ListenCommand = &cli.Command{
@@ -127,6 +128,7 @@ func discv5Test(ctx *cli.Context) error {
 		Dest:    getNodeArg(ctx),
 		Listen1: ctx.String(testListen1Flag.Name),
 		Listen2: ctx.String(testListen2Flag.Name),
+		Remote2: ctx.String(testRemote2Flag.Name),
 	}
 	return runTests(ctx, suite.AllTests())
 }
