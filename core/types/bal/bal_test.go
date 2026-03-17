@@ -19,6 +19,7 @@ package bal
 import (
 	"bytes"
 	"cmp"
+	"fmt"
 	"reflect"
 	"slices"
 	"testing"
@@ -254,6 +255,118 @@ func TestBlockAccessListValidation(t *testing.T) {
 	listB := cBAL.ToEncodingObj()
 	if err := listB.Validate(testBALMaxIndex); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
+	}
+}
+
+// TestLazyScopeCorrectness verifies that lazy scope allocation produces
+// identical results to the previous eager allocation for mixed workloads:
+// precompile calls (empty scopes) interspersed with state-changing calls.
+func TestLazyScopeCorrectness(t *testing.T) {
+	builder := newAccessListBuilder()
+	sender := common.HexToAddress("0x1234")
+	contract := common.HexToAddress("0x5678")
+	precompile := common.HexToAddress("0x06")
+
+	// Tx-level: sender balance/nonce
+	builder.balanceChange(sender, uint256.NewInt(1000), uint256.NewInt(900))
+	builder.nonceChange(sender, 0, 1)
+
+	// Enter contract scope
+	builder.enterScope()
+	builder.storageRead(contract, common.HexToHash("0x01"))
+
+	// Precompile STATICCALL (empty scope)
+	builder.enterScope()
+	builder.exitScope(false)
+
+	// Another precompile call
+	builder.enterScope()
+	builder.exitScope(false)
+
+	// Contract writes storage
+	builder.storageWrite(contract, common.HexToHash("0x02"), common.Hash{}, common.HexToHash("0xff"))
+
+	// Precompile that reverts (still empty scope, reverted)
+	builder.enterScope()
+	builder.exitScope(true)
+
+	// Nested call to another contract
+	builder.enterScope()
+	builder.balanceChange(precompile, uint256.NewInt(0), uint256.NewInt(100))
+	builder.exitScope(false)
+
+	// Exit contract scope
+	builder.exitScope(false)
+
+	diff, accesses := builder.finalise()
+
+	// Verify sender mutations
+	senderMut, ok := diff.Mutations[sender]
+	if !ok {
+		t.Fatal("sender not in mutations")
+	}
+	if senderMut.Balance == nil || !senderMut.Balance.Eq(uint256.NewInt(900)) {
+		t.Fatalf("sender balance mismatch: got %v", senderMut.Balance)
+	}
+	if senderMut.Nonce == nil || *senderMut.Nonce != 1 {
+		t.Fatalf("sender nonce mismatch: got %v", senderMut.Nonce)
+	}
+
+	// Verify contract mutations (storage write)
+	contractMut, ok := diff.Mutations[contract]
+	if !ok {
+		t.Fatal("contract not in mutations")
+	}
+	if contractMut.StorageWrites == nil {
+		t.Fatal("contract has no storage writes")
+	}
+	if contractMut.StorageWrites[common.HexToHash("0x02")] != common.HexToHash("0xff") {
+		t.Fatal("contract storage write mismatch")
+	}
+
+	// Verify precompile balance change
+	precompileMut, ok := diff.Mutations[precompile]
+	if !ok {
+		t.Fatal("precompile not in mutations")
+	}
+	if precompileMut.Balance == nil || !precompileMut.Balance.Eq(uint256.NewInt(100)) {
+		t.Fatalf("precompile balance mismatch: got %v", precompileMut.Balance)
+	}
+
+	// Verify contract storage read is in accesses
+	contractAccesses, ok := accesses[contract]
+	if !ok {
+		t.Fatal("contract not in accesses")
+	}
+	if _, ok := contractAccesses[common.HexToHash("0x01")]; !ok {
+		t.Fatal("contract storage read not in accesses")
+	}
+}
+
+// BenchmarkPrecompileScopes simulates a precompile-heavy transaction where
+// STATICCALL is invoked thousands of times against a precompile (e.g. bn128_add).
+// Each call creates a scope (EnterScope) that records no state changes (precompiles
+// don't touch state), then exits (ExitScope). This benchmark measures the overhead
+// of scope tracking for such workloads.
+func BenchmarkPrecompileScopes(b *testing.B) {
+	for _, numCalls := range []int{100, 1000, 10000, 100000} {
+		b.Run(fmt.Sprintf("calls=%d", numCalls), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				builder := newAccessListBuilder()
+				// Simulate a transaction: sender balance/nonce change at depth 0,
+				// then thousands of precompile STATICCALL scopes that touch no state.
+				sender := common.HexToAddress("0x1234")
+				builder.balanceChange(sender, uint256.NewInt(1000), uint256.NewInt(900))
+				builder.nonceChange(sender, 0, 1)
+
+				for j := 0; j < numCalls; j++ {
+					builder.enterScope()
+					// Precompile call: no state hooks fire
+					builder.exitScope(false)
+				}
+				builder.finalise()
+			}
+		})
 	}
 }
 

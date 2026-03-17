@@ -50,17 +50,30 @@ func newAccessListBuilder() *idxAccessListBuilder {
 	}
 }
 
-func (c *idxAccessListBuilder) storageRead(address common.Address, key common.Hash) {
-	if _, ok := c.accessesStack[len(c.accessesStack)-1][address]; !ok {
-		c.accessesStack[len(c.accessesStack)-1][address] = &constructionAccountAccess{}
+// currentScope returns the current (topmost) scope, lazily allocating if needed.
+// This avoids allocating a map for scopes that never record any state changes,
+// which is critical for precompile-heavy blocks where STATICCALL creates/destroys
+// thousands of empty scopes per transaction.
+func (c *idxAccessListBuilder) currentScope() map[common.Address]*constructionAccountAccess {
+	top := len(c.accessesStack) - 1
+	if c.accessesStack[top] == nil {
+		c.accessesStack[top] = make(map[common.Address]*constructionAccountAccess)
 	}
-	acctAccesses := c.accessesStack[len(c.accessesStack)-1][address]
-	acctAccesses.StorageRead(key)
+	return c.accessesStack[top]
+}
+
+func (c *idxAccessListBuilder) storageRead(address common.Address, key common.Hash) {
+	scope := c.currentScope()
+	if _, ok := scope[address]; !ok {
+		scope[address] = &constructionAccountAccess{}
+	}
+	scope[address].StorageRead(key)
 }
 
 func (c *idxAccessListBuilder) accountRead(address common.Address) {
-	if _, ok := c.accessesStack[len(c.accessesStack)-1][address]; !ok {
-		c.accessesStack[len(c.accessesStack)-1][address] = &constructionAccountAccess{}
+	scope := c.currentScope()
+	if _, ok := scope[address]; !ok {
+		scope[address] = &constructionAccountAccess{}
 	}
 }
 
@@ -75,11 +88,11 @@ func (c *idxAccessListBuilder) storageWrite(address common.Address, key, prevVal
 		c.prestates[address].storage[key] = prevVal
 	}
 
-	if _, ok := c.accessesStack[len(c.accessesStack)-1][address]; !ok {
-		c.accessesStack[len(c.accessesStack)-1][address] = &constructionAccountAccess{}
+	scope := c.currentScope()
+	if _, ok := scope[address]; !ok {
+		scope[address] = &constructionAccountAccess{}
 	}
-	acctAccesses := c.accessesStack[len(c.accessesStack)-1][address]
-	acctAccesses.StorageWrite(key, prevVal, newVal)
+	scope[address].StorageWrite(key, prevVal, newVal)
 }
 
 func (c *idxAccessListBuilder) balanceChange(address common.Address, prev, cur *uint256.Int) {
@@ -89,11 +102,11 @@ func (c *idxAccessListBuilder) balanceChange(address common.Address, prev, cur *
 	if c.prestates[address].balance == nil {
 		c.prestates[address].balance = prev
 	}
-	if _, ok := c.accessesStack[len(c.accessesStack)-1][address]; !ok {
-		c.accessesStack[len(c.accessesStack)-1][address] = &constructionAccountAccess{}
+	scope := c.currentScope()
+	if _, ok := scope[address]; !ok {
+		scope[address] = &constructionAccountAccess{}
 	}
-	acctAccesses := c.accessesStack[len(c.accessesStack)-1][address]
-	acctAccesses.BalanceChange(cur)
+	scope[address].BalanceChange(cur)
 }
 
 func (c *idxAccessListBuilder) codeChange(address common.Address, prev, cur []byte) {
@@ -113,12 +126,11 @@ func (c *idxAccessListBuilder) codeChange(address common.Address, prev, cur []by
 		}
 		c.prestates[address].code = prev
 	}
-	if _, ok := c.accessesStack[len(c.accessesStack)-1][address]; !ok {
-		c.accessesStack[len(c.accessesStack)-1][address] = &constructionAccountAccess{}
+	scope := c.currentScope()
+	if _, ok := scope[address]; !ok {
+		scope[address] = &constructionAccountAccess{}
 	}
-	acctAccesses := c.accessesStack[len(c.accessesStack)-1][address]
-
-	acctAccesses.CodeChange(cur)
+	scope[address].CodeChange(cur)
 }
 
 // selfDestruct is invoked when an account which has been created and invoked
@@ -127,7 +139,8 @@ func (c *idxAccessListBuilder) codeChange(address common.Address, prev, cur []by
 // Any storage accesses/modifications performed at the contract during execution
 // of the current call are retained in the block access list as state reads.
 func (c *idxAccessListBuilder) selfDestruct(address common.Address) {
-	access := c.accessesStack[len(c.accessesStack)-1][address]
+	scope := c.currentScope()
+	access := scope[address]
 	if len(access.storageMutations) != 0 && access.storageReads == nil {
 		access.storageReads = make(map[common.Hash]struct{})
 	}
@@ -144,16 +157,19 @@ func (c *idxAccessListBuilder) nonceChange(address common.Address, prev, cur uin
 	if c.prestates[address].nonce == nil {
 		c.prestates[address].nonce = &prev
 	}
-	if _, ok := c.accessesStack[len(c.accessesStack)-1][address]; !ok {
-		c.accessesStack[len(c.accessesStack)-1][address] = &constructionAccountAccess{}
+	scope := c.currentScope()
+	if _, ok := scope[address]; !ok {
+		scope[address] = &constructionAccountAccess{}
 	}
-	acctAccesses := c.accessesStack[len(c.accessesStack)-1][address]
-	acctAccesses.NonceChange(cur)
+	scope[address].NonceChange(cur)
 }
 
 // enterScope is called after a new EVM call frame has been entered.
+// The scope map is lazily allocated by currentScope() only when a state
+// change occurs, avoiding heap allocations for precompile calls that
+// don't touch state.
 func (c *idxAccessListBuilder) enterScope() {
-	c.accessesStack = append(c.accessesStack, make(map[common.Address]*constructionAccountAccess))
+	c.accessesStack = append(c.accessesStack, nil)
 }
 
 // exitScope is called after an EVM call scope terminates.  If the call scope
@@ -162,8 +178,14 @@ func (c *idxAccessListBuilder) enterScope() {
 // * mutated accounts/storage are added into the calling scope's access list as state accesses
 func (c *idxAccessListBuilder) exitScope(evmErr bool) {
 	childAccessList := c.accessesStack[len(c.accessesStack)-1]
-	parentAccessList := c.accessesStack[len(c.accessesStack)-2]
+	c.accessesStack = c.accessesStack[:len(c.accessesStack)-1]
 
+	// If no state was accessed in this scope, nothing to merge.
+	if childAccessList == nil {
+		return
+	}
+
+	parentAccessList := c.currentScope()
 	for addr, childAccess := range childAccessList {
 		if _, ok := parentAccessList[addr]; ok {
 		} else {
@@ -177,8 +199,6 @@ func (c *idxAccessListBuilder) exitScope(evmErr bool) {
 			parentAccessList[addr].Merge(childAccess)
 		}
 	}
-
-	c.accessesStack = c.accessesStack[:len(c.accessesStack)-1]
 }
 
 // finalise returns the net state mutations at the access list index as well as
@@ -187,6 +207,11 @@ func (c *idxAccessListBuilder) exitScope(evmErr bool) {
 func (a *idxAccessListBuilder) finalise() (*StateDiff, StateAccesses) {
 	diff := &StateDiff{make(map[common.Address]*AccountMutations)}
 	stateAccesses := make(StateAccesses)
+
+	// Root scope may be nil if no state changes occurred at all.
+	if a.accessesStack[0] == nil {
+		return diff, stateAccesses
+	}
 
 	for addr, access := range a.accessesStack[0] {
 		// remove any reported mutations from the access list with no net difference vs the index prestate value
