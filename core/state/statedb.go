@@ -215,8 +215,19 @@ func (s *StateDB) StartPrefetcher(namespace string, witness *stateless.Witness) 
 	// To prevent this, the account trie is always scheduled for prefetching once
 	// the prefetcher is constructed. For more details, see:
 	// https://github.com/ethereum/go-ethereum/issues/29880
-	s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace, witness == nil)
-	if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, nil, nil, false); err != nil {
+	opener := func(id trie.ID, addr common.Address) (Trie, error) {
+		if s.db.TrieDB().IsVerkle() {
+			return s.db.OpenTrie(id.StateRoot)
+		}
+		if id.Owner != (common.Hash{}) {
+			return s.db.OpenStorageTrie(id.StateRoot, addr, id.Root, nil)
+		}
+		return s.db.OpenTrie(id.StateRoot)
+	}
+	s.prefetcher = newTriePrefetcher(opener, s.originalRoot, namespace, witness == nil)
+
+	id := trie.StateTrieID(s.originalRoot)
+	if err := s.prefetcher.prefetchAccounts(*id, nil, false); err != nil {
 		log.Error("Failed to prefetch account trie", "root", s.originalRoot, "err", err)
 	}
 }
@@ -603,7 +614,8 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	}
 	// Schedule the resolved account for prefetching if it's enabled.
 	if s.prefetcher != nil {
-		if err = s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, []common.Address{addr}, nil, true); err != nil {
+		id := trie.StateTrieID(s.originalRoot)
+		if err = s.prefetcher.prefetchAccounts(*id, []common.Address{addr}, true); err != nil {
 			log.Error("Failed to prefetch account", "addr", addr, "err", err)
 		}
 	}
@@ -816,7 +828,8 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		addressesToPrefetch = append(addressesToPrefetch, addr) // Copy needed for closure
 	}
 	if s.prefetcher != nil && len(addressesToPrefetch) > 0 {
-		if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, addressesToPrefetch, nil, false); err != nil {
+		id := trie.StateTrieID(s.originalRoot)
+		if err := s.prefetcher.prefetchAccounts(*id, addressesToPrefetch, false); err != nil {
 			log.Error("Failed to prefetch addresses", "addresses", len(addressesToPrefetch), "err", err)
 		}
 	}
@@ -968,8 +981,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// only a single trie is used for state hashing. Replacing a non-nil verkle tree
 	// here could result in losing uncommitted changes from storage.
 	start = time.Now()
-	if s.prefetcher != nil && !s.db.TrieDB().IsVerkle() {
-		if trie := s.prefetcher.trie(common.Hash{}, s.originalRoot); trie == nil {
+	if s.prefetcher != nil {
+		id := trie.StateTrieID(s.originalRoot)
+		if trie := s.prefetcher.trie(*id); trie == nil {
 			log.Error("Failed to retrieve account pre-fetcher trie")
 		} else {
 			s.trie = trie
@@ -1017,7 +1031,8 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	s.AccountUpdates += time.Since(start)
 
 	if s.prefetcher != nil {
-		s.prefetcher.used(common.Hash{}, s.originalRoot, usedAddrs, nil)
+		id := trie.StateTrieID(s.originalRoot)
+		s.prefetcher.used(*id, usedAddrs, nil)
 	}
 	// Track the amount of time wasted on hashing the account trie
 	defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())

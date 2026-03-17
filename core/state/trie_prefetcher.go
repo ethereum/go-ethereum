@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -34,18 +35,19 @@ var (
 	errTerminated = errors.New("fetcher is already terminated")
 )
 
+type trieOpener func(id trie.ID, addr common.Address) (Trie, error) // Define the handler to open the trie for pulling
+
 // triePrefetcher is an active prefetcher, which receives accounts or storage
 // items and does trie-loading of them. The goal is to get as much useful content
 // into the caches as possible.
 //
 // Note, the prefetcher's API is not thread safe.
 type triePrefetcher struct {
-	verkle   bool                   // Flag whether the prefetcher is in verkle mode
-	db       Database               // Database to fetch trie nodes through
-	root     common.Hash            // Root hash of the account trie for metrics
-	fetchers map[string]*subfetcher // Subfetchers for each trie
-	term     chan struct{}          // Channel to signal interruption
-	noreads  bool                   // Whether to ignore state-read-only prefetch requests
+	root     common.Hash             // Root hash of the account trie for metrics
+	fetchers map[trie.ID]*subfetcher // Subfetchers for each trie
+	term     chan struct{}           // Channel to signal interruption
+	noreads  bool                    // Whether to ignore state-read-only prefetch requests
+	opener   trieOpener              // Handler to open the trie for pulling
 
 	deliveryMissMeter *metrics.Meter
 
@@ -64,15 +66,14 @@ type triePrefetcher struct {
 	storageWasteMeter     *metrics.Meter
 }
 
-func newTriePrefetcher(db Database, root common.Hash, namespace string, noreads bool) *triePrefetcher {
+func newTriePrefetcher(opener trieOpener, root common.Hash, namespace string, noreads bool) *triePrefetcher {
 	prefix := triePrefetchMetricsPrefix + namespace
 	return &triePrefetcher{
-		verkle:   db.TrieDB().IsVerkle(),
-		db:       db,
 		root:     root,
-		fetchers: make(map[string]*subfetcher), // Active prefetchers use the fetchers map
+		fetchers: make(map[trie.ID]*subfetcher), // Active prefetchers use the fetchers map
 		term:     make(chan struct{}),
 		noreads:  noreads,
+		opener:   opener,
 
 		deliveryMissMeter: metrics.GetOrRegisterMeter(prefix+"/deliverymiss", nil),
 
@@ -117,7 +118,7 @@ func (p *triePrefetcher) report() {
 	for _, fetcher := range p.fetchers {
 		fetcher.wait() // ensure the fetcher's idle before poking in its internals
 
-		if fetcher.root == p.root {
+		if fetcher.id.Owner == (common.Hash{}) {
 			p.accountLoadReadMeter.Mark(int64(len(fetcher.seenReadAddr)))
 			p.accountLoadWriteMeter.Mark(int64(len(fetcher.seenWriteAddr)))
 
@@ -147,18 +148,8 @@ func (p *triePrefetcher) report() {
 	}
 }
 
-// prefetch schedules a batch of trie items to prefetch. After the prefetcher is
-// closed, all the following tasks scheduled will not be executed and an error
-// will be returned.
-//
-// prefetch is called from two locations:
-//
-//  1. Finalize of the state-objects storage roots. This happens at the end
-//     of every transaction, meaning that if several transactions touches
-//     upon the same contract, the parameters invoking this method may be
-//     repeated.
-//  2. Finalize of the main account trie. This happens only once per block.
-func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr common.Address, addrs []common.Address, slots []common.Hash, read bool) error {
+// prefetchAccounts schedules a batch of accounts to prefetch.
+func (p *triePrefetcher) prefetchAccounts(id trie.ID, addrs []common.Address, read bool) error {
 	// If the state item is only being read, but reads are disabled, return
 	if read && p.noreads {
 		return nil
@@ -169,23 +160,42 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 		return errTerminated
 	default:
 	}
-	id := p.trieID(owner, root)
 	fetcher := p.fetchers[id]
 	if fetcher == nil {
-		fetcher = newSubfetcher(p.db, p.root, owner, root, addr)
+		fetcher = newSubfetcher(p.opener, id, common.Address{})
 		p.fetchers[id] = fetcher
 	}
-	return fetcher.schedule(addrs, slots, read)
+	return fetcher.scheduleAccounts(addrs, read)
+}
+
+// prefetchStorage schedules a batch of storage slots to prefetch.
+func (p *triePrefetcher) prefetchStorage(id trie.ID, addr common.Address, slots []common.Hash, read bool) error {
+	// If the state item is only being read, but reads are disabled, return
+	if read && p.noreads {
+		return nil
+	}
+	// Ensure the subfetcher is still alive
+	select {
+	case <-p.term:
+		return errTerminated
+	default:
+	}
+	fetcher := p.fetchers[id]
+	if fetcher == nil {
+		fetcher = newSubfetcher(p.opener, id, addr)
+		p.fetchers[id] = fetcher
+	}
+	return fetcher.scheduleSlots(addr, slots, read)
 }
 
 // trie returns the trie matching the root hash, blocking until the fetcher of
 // the given trie terminates. If no fetcher exists for the request, nil will be
 // returned.
-func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
+func (p *triePrefetcher) trie(id trie.ID) Trie {
 	// Bail if no trie was prefetched for this root
-	fetcher := p.fetchers[p.trieID(owner, root)]
+	fetcher := p.fetchers[id]
 	if fetcher == nil {
-		log.Error("Prefetcher missed to load trie", "owner", owner, "root", root)
+		log.Error("Prefetcher missed to load trie", "owner", id.Owner, "root", id.Root)
 		p.deliveryMissMeter.Mark(1)
 		return nil
 	}
@@ -195,8 +205,8 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 
 // used marks a batch of state items used to allow creating statistics as to
 // how useful or wasteful the fetcher is.
-func (p *triePrefetcher) used(owner common.Hash, root common.Hash, usedAddr []common.Address, usedSlot []common.Hash) {
-	if fetcher := p.fetchers[p.trieID(owner, root)]; fetcher != nil {
+func (p *triePrefetcher) used(id trie.ID, usedAddr []common.Address, usedSlot []common.Hash) {
+	if fetcher := p.fetchers[id]; fetcher != nil {
 		fetcher.wait() // ensure the fetcher's idle before poking in its internals
 
 		fetcher.usedAddr = append(fetcher.usedAddr, usedAddr...)
@@ -204,31 +214,15 @@ func (p *triePrefetcher) used(owner common.Hash, root common.Hash, usedAddr []co
 	}
 }
 
-// trieID returns an unique trie identifier consists the trie owner and root hash.
-func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
-	// The trie in verkle is only identified by state root
-	if p.verkle {
-		return p.root.Hex()
-	}
-	// The trie in merkle is either identified by state root (account trie),
-	// or identified by the owner and trie root (storage trie)
-	trieID := make([]byte, common.HashLength*2)
-	copy(trieID, owner.Bytes())
-	copy(trieID[common.HashLength:], root.Bytes())
-	return string(trieID)
-}
-
 // subfetcher is a trie fetcher goroutine responsible for pulling entries for a
 // single trie. It is spawned when a new root is encountered and lives until the
 // main prefetcher is paused and either all requested items are processed or if
 // the trie being worked on is retrieved from the prefetcher.
 type subfetcher struct {
-	db    Database       // Database to load trie nodes through
-	state common.Hash    // Root hash of the state to prefetch
-	owner common.Hash    // Owner of the trie, usually account hash
-	root  common.Hash    // Root hash of the trie to prefetch
-	addr  common.Address // Address of the account that the trie belongs to
-	trie  Trie           // Trie being populated with nodes
+	id     trie.ID        // The identifier of the trie being populated
+	addr   common.Address // Address of the account that the trie belongs to
+	trie   Trie           // Trie being populated with nodes
+	opener trieOpener     // Handler to open the trie for pulling
 
 	tasks []*subfetcherTask // Items queued up for retrieval
 	lock  sync.Mutex        // Lock protecting the task queue
@@ -250,23 +244,32 @@ type subfetcher struct {
 	usedSlot []common.Hash    // Tracks the storage used in the end
 }
 
-// subfetcherTask is a trie path to prefetch, tagged with whether it originates
-// from a read or a write request.
+type subfetcherTaskKind uint8
+
+const (
+	kindAccount subfetcherTaskKind = iota
+	kindStorage
+)
+
 type subfetcherTask struct {
 	read bool
-	addr *common.Address
-	slot *common.Hash
+	kind subfetcherTaskKind
+
+	// The list of accounts being pulling in kindAccount type
+	accounts []common.Address
+
+	// The list of storage keys being pulling in kindStorage type
+	account common.Address
+	slots   []common.Hash
 }
 
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
 // particular root hash.
-func newSubfetcher(db Database, state common.Hash, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
+func newSubfetcher(opener trieOpener, id trie.ID, addr common.Address) *subfetcher {
 	sf := &subfetcher{
-		db:            db,
-		state:         state,
-		owner:         owner,
-		root:          root,
+		id:            id,
 		addr:          addr,
+		opener:        opener,
 		wake:          make(chan struct{}, 1),
 		stop:          make(chan struct{}),
 		term:          make(chan struct{}),
@@ -279,8 +282,8 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 	return sf
 }
 
-// schedule adds a batch of trie keys to the queue to prefetch.
-func (sf *subfetcher) schedule(addrs []common.Address, slots []common.Hash, read bool) error {
+// scheduleAccounts adds a batch of accounts to the queue to prefetch.
+func (sf *subfetcher) scheduleAccounts(addrs []common.Address, read bool) error {
 	// Ensure the subfetcher is still alive
 	select {
 	case <-sf.term:
@@ -289,12 +292,39 @@ func (sf *subfetcher) schedule(addrs []common.Address, slots []common.Hash, read
 	}
 	// Append the tasks to the current queue
 	sf.lock.Lock()
-	for _, addr := range addrs {
-		sf.tasks = append(sf.tasks, &subfetcherTask{read: read, addr: &addr})
+	sf.tasks = append(sf.tasks, &subfetcherTask{
+		read:     read,
+		kind:     kindAccount,
+		accounts: addrs,
+	})
+	sf.lock.Unlock()
+
+	// Notify the background thread to execute scheduled tasks
+	select {
+	case sf.wake <- struct{}{}:
+		// Wake signal sent
+	default:
+		// Wake signal not sent as a previous one is already queued
 	}
-	for _, slot := range slots {
-		sf.tasks = append(sf.tasks, &subfetcherTask{read: read, slot: &slot})
+	return nil
+}
+
+// scheduleSlots adds a batch of storage slots to the queue to prefetch.
+func (sf *subfetcher) scheduleSlots(addr common.Address, slots []common.Hash, read bool) error {
+	// Ensure the subfetcher is still alive
+	select {
+	case <-sf.term:
+		return errTerminated
+	default:
 	}
+	// Append the tasks to the current queue
+	sf.lock.Lock()
+	sf.tasks = append(sf.tasks, &subfetcherTask{
+		read:    read,
+		kind:    kindStorage,
+		account: addr,
+		slots:   slots,
+	})
 	sf.lock.Unlock()
 
 	// Notify the background thread to execute scheduled tasks
@@ -340,30 +370,9 @@ func (sf *subfetcher) terminate(async bool) {
 
 // openTrie resolves the target trie from database for prefetching.
 func (sf *subfetcher) openTrie() error {
-	// Open the verkle tree if the sub-fetcher is in verkle mode. Note, there is
-	// only a single fetcher for verkle.
-	if sf.db.TrieDB().IsVerkle() {
-		tr, err := sf.db.OpenTrie(sf.state)
-		if err != nil {
-			log.Warn("Trie prefetcher failed opening verkle trie", "root", sf.root, "err", err)
-			return err
-		}
-		sf.trie = tr
-		return nil
-	}
-	// Open the merkle tree if the sub-fetcher is in merkle mode
-	if sf.owner == (common.Hash{}) {
-		tr, err := sf.db.OpenTrie(sf.state)
-		if err != nil {
-			log.Warn("Trie prefetcher failed opening account trie", "root", sf.root, "err", err)
-			return err
-		}
-		sf.trie = tr
-		return nil
-	}
-	tr, err := sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root, nil)
+	tr, err := sf.opener(sf.id, sf.addr)
 	if err != nil {
-		log.Warn("Trie prefetcher failed opening storage trie", "root", sf.root, "err", err)
+		log.Warn("Trie prefetcher failed opening trie", "id", sf.id, "err", err)
 		return err
 	}
 	sf.trie = tr
@@ -389,58 +398,65 @@ func (sf *subfetcher) loop() {
 			sf.lock.Unlock()
 
 			var (
+				// Account tasks
 				addresses []common.Address
-				slots     [][]byte
+
+				// Slot tasks
+				slots = make(map[common.Address][][]byte)
 			)
 			for _, task := range tasks {
-				if task.addr != nil {
-					key := *task.addr
-					if task.read {
-						if _, ok := sf.seenReadAddr[key]; ok {
-							sf.dupsRead++
-							continue
+				if task.kind == kindAccount {
+					for _, addr := range task.accounts {
+						if task.read {
+							if _, ok := sf.seenReadAddr[addr]; ok {
+								sf.dupsRead++
+								continue
+							}
+							if _, ok := sf.seenWriteAddr[addr]; ok {
+								sf.dupsCross++
+								continue
+							}
+							sf.seenReadAddr[addr] = struct{}{}
+						} else {
+							if _, ok := sf.seenReadAddr[addr]; ok {
+								sf.dupsCross++
+								continue
+							}
+							if _, ok := sf.seenWriteAddr[addr]; ok {
+								sf.dupsWrite++
+								continue
+							}
+							sf.seenWriteAddr[addr] = struct{}{}
 						}
-						if _, ok := sf.seenWriteAddr[key]; ok {
-							sf.dupsCross++
-							continue
-						}
-						sf.seenReadAddr[key] = struct{}{}
-					} else {
-						if _, ok := sf.seenReadAddr[key]; ok {
-							sf.dupsCross++
-							continue
-						}
-						if _, ok := sf.seenWriteAddr[key]; ok {
-							sf.dupsWrite++
-							continue
-						}
-						sf.seenWriteAddr[key] = struct{}{}
+						addresses = append(addresses, addr)
 					}
-					addresses = append(addresses, *task.addr)
 				} else {
-					key := *task.slot
-					if task.read {
-						if _, ok := sf.seenReadSlot[key]; ok {
-							sf.dupsRead++
-							continue
+					var keys [][]byte
+					for _, slot := range task.slots {
+						if task.read {
+							if _, ok := sf.seenReadSlot[slot]; ok {
+								sf.dupsRead++
+								continue
+							}
+							if _, ok := sf.seenWriteSlot[slot]; ok {
+								sf.dupsCross++
+								continue
+							}
+							sf.seenReadSlot[slot] = struct{}{}
+						} else {
+							if _, ok := sf.seenReadSlot[slot]; ok {
+								sf.dupsCross++
+								continue
+							}
+							if _, ok := sf.seenWriteSlot[slot]; ok {
+								sf.dupsWrite++
+								continue
+							}
+							sf.seenWriteSlot[slot] = struct{}{}
 						}
-						if _, ok := sf.seenWriteSlot[key]; ok {
-							sf.dupsCross++
-							continue
-						}
-						sf.seenReadSlot[key] = struct{}{}
-					} else {
-						if _, ok := sf.seenReadSlot[key]; ok {
-							sf.dupsCross++
-							continue
-						}
-						if _, ok := sf.seenWriteSlot[key]; ok {
-							sf.dupsWrite++
-							continue
-						}
-						sf.seenWriteSlot[key] = struct{}{}
+						keys = append(keys, slot.Bytes())
 					}
-					slots = append(slots, key.Bytes())
+					slots[task.account] = append(slots[task.account], keys...)
 				}
 			}
 			if len(addresses) != 0 {
@@ -448,8 +464,8 @@ func (sf *subfetcher) loop() {
 					log.Error("Failed to prefetch accounts", "err", err)
 				}
 			}
-			if len(slots) != 0 {
-				if err := sf.trie.PrefetchStorage(sf.addr, slots); err != nil {
+			for addr, keys := range slots {
+				if err := sf.trie.PrefetchStorage(addr, keys); err != nil {
 					log.Error("Failed to prefetch storage", "err", err)
 				}
 			}

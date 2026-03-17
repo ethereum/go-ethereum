@@ -24,8 +24,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testrand"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 )
@@ -50,18 +50,29 @@ func filledStateDB() *StateDB {
 
 func TestUseAfterTerminate(t *testing.T) {
 	db := filledStateDB()
-	prefetcher := newTriePrefetcher(db.db, db.originalRoot, "", true)
-	skey := common.HexToHash("aaa")
 
-	if err := prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, nil, []common.Hash{skey}, false); err != nil {
+	opener := func(id trie.ID, addr common.Address) (Trie, error) {
+		if db.db.TrieDB().IsVerkle() {
+			return db.db.OpenTrie(id.StateRoot)
+		}
+		if id.Owner != (common.Hash{}) {
+			return db.db.OpenStorageTrie(id.StateRoot, addr, id.Root, nil)
+		}
+		return db.db.OpenTrie(id.StateRoot)
+	}
+	prefetcher := newTriePrefetcher(opener, db.originalRoot, "", true)
+	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
+
+	id := trie.StateTrieID(db.originalRoot)
+	if err := prefetcher.prefetchAccounts(*id, []common.Address{addr}, false); err != nil {
 		t.Errorf("Prefetch failed before terminate: %v", err)
 	}
 	prefetcher.terminate(false)
 
-	if err := prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, nil, []common.Hash{skey}, false); err == nil {
+	if err := prefetcher.prefetchAccounts(*id, []common.Address{addr}, false); err == nil {
 		t.Errorf("Prefetch succeeded after terminate: %v", err)
 	}
-	if tr := prefetcher.trie(common.Hash{}, db.originalRoot); tr == nil {
+	if tr := prefetcher.trie(*id); tr == nil {
 		t.Errorf("Prefetcher returned nil trie after terminate")
 	}
 }
@@ -86,17 +97,22 @@ func TestVerklePrefetcher(t *testing.T) {
 	root, _ := state.Commit(0, true, false)
 
 	state, _ = New(root, sdb)
-	fetcher := newTriePrefetcher(sdb, root, "", false)
+
+	opener := func(id trie.ID, addr common.Address) (Trie, error) {
+		return sdb.OpenTrie(id.StateRoot)
+	}
+	fetcher := newTriePrefetcher(opener, root, "", false)
 
 	// Read account
-	fetcher.prefetch(common.Hash{}, root, common.Address{}, []common.Address{addr}, nil, false)
+	id := trie.StateTrieID(root)
+	fetcher.prefetchAccounts(*id, []common.Address{addr}, false)
 
 	// Read storage slot
-	fetcher.prefetch(crypto.Keccak256Hash(addr.Bytes()), common.Hash{}, addr, nil, []common.Hash{skey}, false)
+	fetcher.prefetchStorage(*id, addr, []common.Hash{skey}, false)
 
 	fetcher.terminate(false)
-	accountTrie := fetcher.trie(common.Hash{}, root)
-	storageTrie := fetcher.trie(crypto.Keccak256Hash(addr.Bytes()), common.Hash{})
+	accountTrie := fetcher.trie(*id)
+	storageTrie := fetcher.trie(*id)
 
 	rootA := accountTrie.Hash()
 	rootB := storageTrie.Hash()

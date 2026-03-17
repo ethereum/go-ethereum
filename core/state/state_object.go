@@ -119,6 +119,11 @@ func (s *stateObject) addrHash() common.Hash {
 	return *s.addressHash
 }
 
+// storageTrieID returns the unique identifier for this account's storage trie.
+func (s *stateObject) storageTrieID() trie.ID {
+	return *trie.StorageTrieID(s.db.originalRoot, s.addrHash(), s.data.Root)
+}
+
 func (s *stateObject) markSelfdestructed() {
 	s.selfDestructed = true
 }
@@ -158,7 +163,7 @@ func (s *stateObject) getPrefetchedTrie() Trie {
 		return nil
 	}
 	// Attempt to retrieve the trie from the prefetcher
-	return s.db.prefetcher.trie(s.addrHash(), s.data.Root)
+	return s.db.prefetcher.trie(s.storageTrieID())
 }
 
 // GetState retrieves a value associated with the given storage key.
@@ -223,7 +228,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 
 	// Schedule the resolved storage slots for prefetching if it's enabled.
 	if s.db.prefetcher != nil && s.data.Root != types.EmptyRootHash {
-		if err = s.db.prefetcher.prefetch(s.addrHash(), s.origin.Root, s.address, nil, []common.Hash{key}, true); err != nil {
+		if err = s.db.prefetcher.prefetchStorage(s.storageTrieID(), s.address, []common.Hash{key}, true); err != nil {
 			log.Error("Failed to prefetch storage slot", "addr", s.address, "key", key, "err", err)
 		}
 	}
@@ -284,7 +289,7 @@ func (s *stateObject) finalise() {
 		s.pendingStorage[key] = value
 	}
 	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
-		if err := s.db.prefetcher.prefetch(s.addrHash(), s.data.Root, s.address, nil, slotsToPrefetch, false); err != nil {
+		if err := s.db.prefetcher.prefetchStorage(s.storageTrieID(), s.address, slotsToPrefetch, false); err != nil {
 			log.Error("Failed to prefetch slots", "addr", s.address, "slots", len(slotsToPrefetch), "err", err)
 		}
 	}
@@ -379,7 +384,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		s.db.StorageDeleted.Add(1)
 	}
 	if s.db.prefetcher != nil {
-		s.db.prefetcher.used(s.addrHash(), s.data.Root, nil, used)
+		s.db.prefetcher.used(s.storageTrieID(), nil, used)
 	}
 	s.uncommittedStorage = make(Storage) // empties the commit markers
 	return tr, nil
