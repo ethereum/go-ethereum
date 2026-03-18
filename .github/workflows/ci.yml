@@ -163,23 +163,41 @@ jobs:
     needs: devnet_k8_apply
     if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
     steps:
-      - uses: actions/checkout@v4
-      - name: Send deployment notification
-        run: |
-          curl --location --request POST "66.94.98.186:8080/deploy?environment=devnet&service=xdc&version=${GITHUB_SHA}"
+    - uses: actions/checkout@v4
+    - name: Send deployment notification
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SLACK_WEBHOOK: ${{ secrets.SLACK_DEPLOYMENT_WEBHOOK_URL }}
+        REPO: ${{ github.repository }}
+      run: |
+        # Look up the merged PR that contains this commit
+        PR_JSON=$(curl -s -H "Authorization: Bearer ${GH_TOKEN}" \
+          "https://api.github.com/repos/${REPO}/commits/${GITHUB_SHA}/pulls")
 
-          curl -X POST -H 'Content-type: application/json' \
-            --data '{
-              "text": "Deployment notification",
+        PR_NUMBER=$(echo "$PR_JSON" | jq -r '.[0].number // empty')
+        PR_URL=$(echo "$PR_JSON" | jq -r '.[0].html_url // empty')
+
+        if [ -n "$PR_NUMBER" ]; then
+          PR_LINE="Merged PR: <${PR_URL}|#${PR_NUMBER}>"
+        else
+          PR_LINE="Commit: <https://github.com/${REPO}/commit/${GITHUB_SHA}|${GITHUB_SHA::7}>"
+        fi
+
+        curl -X POST -H 'Content-type: application/json' \
+          --data "$(jq -n \
+            --arg pr_line "$PR_LINE" \
+            --arg sha "$GITHUB_SHA" \
+            '{
+              "text": ":rocket: Deployment: devnet",
               "blocks": [
                 {
                   "type": "header",
-                  "text": {"type": "plain_text", "text": ":rocket:Deployment: devnet"}
+                  "text": {"type": "plain_text", "text": ":rocket: Deployment: devnet"}
                 },
                 {
                   "type": "section",
-                  "text": {"type": "mrkdwn", "text": "Service: *xdc*\nEnvironment: *devnet*\nVersion: `${GITHUB_SHA}`\nMerged PR: <'"${{ github.event.pull_request.html_url }}"'|#'"${{ github.event.pull_request.number }}"'>"}
+                  "text": {"type": "mrkdwn", "text": ("Service: *xdc*\nEnvironment: *devnet*\nVersion: `" + $sha + "`\n" + $pr_line)}
                 }
               ]
-            }' \
-            ${{ secrets.SLACK_DEPLOYMENT_WEBHOOK_URL }}
+            }')" \
+          "$SLACK_WEBHOOK"
