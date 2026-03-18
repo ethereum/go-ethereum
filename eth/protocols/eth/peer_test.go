@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/tracker"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -188,11 +187,6 @@ func TestPartialReceipt(t *testing.T) {
 		}),
 	}
 
-	tresp := tracker.Response{ID: delivery.RequestId, MsgCode: ReceiptsMsg, Size: delivery.List.Len()}
-	if err := peer.tracker.Fulfil(tresp); err != nil {
-		t.Fatalf("Tracker failed: %v", err)
-	}
-
 	receiptList, _ := delivery.List.Items()
 	if err := peer.bufferReceipts(delivery.RequestId, receiptList, delivery.LastBlockIncomplete, backend); err != nil {
 		t.Fatalf("first bufferReceipts failed: %v", err)
@@ -225,10 +219,6 @@ func TestPartialReceipt(t *testing.T) {
 				items: encodeRL(receipts),
 			},
 		}),
-	}
-	tresp = tracker.Response{ID: delivery.RequestId, MsgCode: ReceiptsMsg, Size: delivery.List.Len()}
-	if err := peer.tracker.Fulfil(tresp); err != nil {
-		t.Fatalf("Tracker failed: %v", err)
 	}
 	receiptLists, _ := delivery.List.Items()
 	if err := peer.bufferReceipts(delivery.RequestId, receiptLists, delivery.LastBlockIncomplete, backend); err != nil {
@@ -270,11 +260,6 @@ func TestPartialReceipt(t *testing.T) {
 				items: encodeRL(receipts),
 			},
 		}),
-	}
-
-	tresp = tracker.Response{ID: delivery.RequestId, MsgCode: ReceiptsMsg, Size: delivery.List.Len()}
-	if err := peer.tracker.Fulfil(tresp); err != nil {
-		t.Fatalf("Tracker failed: %v", err)
 	}
 	receiptList, _ = delivery.List.Items()
 	if err := peer.bufferReceipts(delivery.RequestId, receiptList, delivery.LastBlockIncomplete, backend); err != nil {
@@ -358,11 +343,6 @@ func TestPartialReceiptFailure(t *testing.T) {
 			},
 		}),
 	}
-	tresp := tracker.Response{ID: delivery.RequestId, MsgCode: ReceiptsMsg, Size: delivery.List.Len()}
-	if err := peer.tracker.Fulfil(tresp); err == nil {
-		t.Fatal("Unknown response should be rejected by tracker")
-	}
-
 	// If a peer deliverse excessive amount of receipts, it should also fail the validation
 	hashes := []common.Hash{
 		backend.chain.GetBlockByNumber(1).Hash(),
@@ -407,10 +387,6 @@ func TestPartialReceiptFailure(t *testing.T) {
 			items: encodeRL(excessiveReceipts),
 		}}),
 	}
-	tresp = tracker.Response{ID: delivery.RequestId, MsgCode: ReceiptsMsg, Size: delivery.List.Len()}
-	if err = peer.tracker.Fulfil(tresp); err != nil {
-		t.Fatalf("tracker.Fulfil failed: %v", err)
-	}
 	receiptList, _ := delivery.List.Items()
 	err = peer.bufferReceipts(delivery.RequestId, receiptList, delivery.LastBlockIncomplete, backend)
 	if err == nil {
@@ -436,10 +412,6 @@ func TestPartialReceiptFailure(t *testing.T) {
 				{Logs: rlp.RawValue(make([]byte, maxReceiptSize+1))},
 			}),
 		}}),
-	}
-	tresp = tracker.Response{ID: delivery.RequestId, MsgCode: ReceiptsMsg, Size: delivery.List.Len()}
-	if err = peer.tracker.Fulfil(tresp); err != nil {
-		t.Fatalf("tracker.Fulfil failed: %v", err)
 	}
 	receiptList, _ = delivery.List.Items()
 	err = peer.bufferReceipts(delivery.RequestId, receiptList, delivery.LastBlockIncomplete, backend)
