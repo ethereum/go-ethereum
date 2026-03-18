@@ -207,6 +207,31 @@ func (rl *ReceiptList) Append(other *ReceiptList) {
 	rl.items.AppendList(&other.items)
 }
 
+// LogsSize returns the total size of log data in this receipts.
+func (rl *ReceiptList) LogsSize() (uint64, error) {
+	var size uint64
+	it := rl.items.ContentIterator()
+	for it.Next() {
+		content, _, err := rlp.SplitList(it.Value())
+		if err != nil {
+			return 0, fmt.Errorf("invalid receipt structure: %v", err)
+		}
+		rest := content
+		for range 3 {
+			_, _, rest, err = rlp.Split(rest)
+			if err != nil {
+				return 0, fmt.Errorf("invalid receipt structure: %v", err)
+			}
+		}
+		logsContent, _, err := rlp.SplitList(rest)
+		if err != nil {
+			return 0, fmt.Errorf("invalid receipt logs: %v", err)
+		}
+		size += uint64(len(logsContent))
+	}
+	return size, nil
+}
+
 // blockReceiptsToNetwork takes a slice of rlp-encoded receipts, and transactions,
 // and re-encodes them for the network protocol.
 func blockReceiptsToNetwork(blockReceipts, blockBody rlp.RawValue) ([]byte, error) {

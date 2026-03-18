@@ -524,7 +524,6 @@ func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList, id uint64, 
 	// This case happens only if len(receiptLists) == 1 && incomplete == true && buffered before.
 	var previousTxs int
 	var previousLog uint64
-	var log uint64
 	if buffer, ok := p.receiptBuffer[id]; ok && len(buffer.list) > 0 && len(receiptLists) == 1 {
 		previousTxs = buffer.list[len(buffer.list)-1].items.Len()
 		previousLog = buffer.lastLogSize
@@ -542,24 +541,9 @@ func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList, id uint64, 
 		return 0, fmt.Errorf("total number of tx exceeded limit")
 	}
 	// Count log size per receipt
-	it := lastReceipts.items.ContentIterator()
-	for it.Next() {
-		content, _, err := rlp.SplitList(it.Value())
-		if err != nil {
-			return 0, fmt.Errorf("invalid receipt structure: %v", err)
-		}
-		rest := content
-		for range 3 {
-			_, _, rest, err = rlp.Split(rest)
-			if err != nil {
-				return 0, fmt.Errorf("invalid receipt structure: %v", err)
-			}
-		}
-		logsContent, _, err := rlp.SplitList(rest)
-		if err != nil {
-			return 0, fmt.Errorf("invalid receipt logs: %v", err)
-		}
-		log += uint64(len(logsContent))
+	log, err := lastReceipts.LogsSize()
+	if err != nil {
+		return 0, err
 	}
 	// Verify that the overall downloaded receipt size does not exceed the block gas limit.
 	if previousLog+log > gasUsed/params.LogDataGas {
