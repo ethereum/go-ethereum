@@ -1,0 +1,22 @@
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: FreeBSD-build
+    runs-on: [self-hosted-ghr, size-l-x64]
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        submodules: false
+
+    - name: Test in FreeBSD
+      id: test
+      uses: vmactions/freebsd-vm@v1
+      with:
+        release: "15.0"
+        run: |
+          freebsd-version
+          uname -a
+          pkg install -y go
+          go run ./build/ci.go test -p 8
