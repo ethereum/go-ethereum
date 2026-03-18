@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package era
+package onedb
 
 import (
 	"bytes"
@@ -22,6 +22,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -82,7 +83,11 @@ func TestEra1Builder(t *testing.T) {
 		t.Fatalf("failed to open era: %v", err)
 	}
 	defer e.Close()
-	it, err := NewRawIterator(e)
+	eraPtr, ok := e.(*Era)
+	if !ok {
+		t.Fatalf("failed to assert *Era type")
+	}
+	it, err := NewRawIterator(eraPtr)
 	if err != nil {
 		t.Fatalf("failed to make iterator: %s", err)
 	}
@@ -119,7 +124,7 @@ func TestEra1Builder(t *testing.T) {
 		if !bytes.Equal(rawReceipts, chain.receipts[i]) {
 			t.Fatalf("mismatched receipts: want %s, got %s", chain.receipts[i], rawReceipts)
 		}
-		receipts, err := getReceiptsByNumber(e, i)
+		receipts, err := getReceiptsByNumber(eraPtr, i)
 		if err != nil {
 			t.Fatalf("error reading receipts: %v", err)
 		}
@@ -136,7 +141,8 @@ func TestEra1Builder(t *testing.T) {
 		if err != nil {
 			t.Fatalf("error reading td: %v", err)
 		}
-		td := new(big.Int).SetBytes(reverseOrder(rawTd))
+		slices.Reverse(rawTd)
+		td := new(big.Int).SetBytes(rawTd)
 		if td.Cmp(chain.tds[i]) != 0 {
 			t.Fatalf("mismatched tds: want %s, got %s", chain.tds[i], td)
 		}

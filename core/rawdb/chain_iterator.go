@@ -153,9 +153,9 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 					err:    err,
 				}
 			} else {
-				var hashes []common.Hash
-				for _, tx := range body.Transactions {
-					hashes = append(hashes, tx.Hash())
+				hashes := make([]common.Hash, len(body.Transactions))
+				for i, tx := range body.Transactions {
+					hashes[i] = tx.Hash()
 				}
 				result = &blockTxHashes{
 					hashes: hashes,
@@ -357,9 +357,9 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 	}
 	select {
 	case <-interrupt:
-		logger("Transaction unindexing interrupted", "blocks", blocks, "txs", txs, "tail", to, "elapsed", common.PrettyDuration(time.Since(start)))
+		logger("Transaction unindexing interrupted", "blocks", blocks, "txs", txs, "tail", nextNum, "elapsed", common.PrettyDuration(time.Since(start)))
 	default:
-		logger("Unindexed transactions", "blocks", blocks, "txs", txs, "tail", to, "elapsed", common.PrettyDuration(time.Since(start)))
+		logger("Unindexed transactions", "blocks", blocks, "txs", txs, "tail", nextNum, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
 }
 

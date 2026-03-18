@@ -108,6 +108,7 @@ type SendTxArgs struct {
 	BlobHashes []common.Hash `json:"blobVersionedHashes,omitempty"`
 
 	// For BlobTxType transactions with blob sidecar
+	BlobVersion byte                 `json:"blobVersion,omitempty"`
 	Blobs       []kzg4844.Blob       `json:"blobs,omitempty"`
 	Commitments []kzg4844.Commitment `json:"commitments,omitempty"`
 	Proofs      []kzg4844.Proof      `json:"proofs,omitempty"`
@@ -235,37 +236,58 @@ func (args *SendTxArgs) validateTxSidecar() error {
 	if args.Commitments != nil && len(args.Commitments) != n {
 		return fmt.Errorf("number of blobs and commitments mismatch (have=%d, want=%d)", len(args.Commitments), n)
 	}
-	if args.Proofs != nil && len(args.Proofs) != n {
-		return fmt.Errorf("number of blobs and proofs mismatch (have=%d, want=%d)", len(args.Proofs), n)
-	}
 	if args.BlobHashes != nil && len(args.BlobHashes) != n {
 		return fmt.Errorf("number of blobs and hashes mismatch (have=%d, want=%d)", len(args.BlobHashes), n)
 	}
-
+	if args.Proofs != nil {
+		if len(args.Proofs) == n {
+			// v1 transaction
+			for i := range args.Blobs {
+				if err := kzg4844.VerifyBlobProof(&args.Blobs[i], args.Commitments[i], args.Proofs[i]); err != nil {
+					return fmt.Errorf("failed to verify blob proof: %v", err)
+				}
+			}
+		} else if len(args.Proofs) == n*kzg4844.CellProofsPerBlob {
+			// v2 transaction
+			if err := kzg4844.VerifyCellProofs(args.Blobs, args.Commitments, args.Proofs); err != nil {
+				return fmt.Errorf("failed to verify blob proof: %v", err)
+			}
+		} else {
+			return fmt.Errorf("number of proofs and blobs mismatch (have=%d, want=%d or %d)", len(args.Proofs), n, n*kzg4844.CellProofsPerBlob)
+		}
+	}
 	if args.Commitments == nil {
 		// Generate commitment and proof.
 		commitments := make([]kzg4844.Commitment, n)
-		proofs := make([]kzg4844.Proof, n)
-		for i, b := range args.Blobs {
-			c, err := kzg4844.BlobToCommitment(&b)
+		for i := range args.Blobs {
+			c, err := kzg4844.BlobToCommitment(&args.Blobs[i])
 			if err != nil {
 				return fmt.Errorf("blobs[%d]: error computing commitment: %v", i, err)
 			}
 			commitments[i] = c
-			p, err := kzg4844.ComputeBlobProof(&b, c)
-			if err != nil {
-				return fmt.Errorf("blobs[%d]: error computing proof: %v", i, err)
+		}
+		var proofs []kzg4844.Proof
+		if args.BlobVersion == types.BlobSidecarVersion1 {
+			proofs = make([]kzg4844.Proof, 0, n*kzg4844.CellProofsPerBlob)
+			for i := range args.Blobs {
+				p, err := kzg4844.ComputeCellProofs(&args.Blobs[i])
+				if err != nil {
+					return fmt.Errorf("blobs[%d]: error computing cell proof: %v", i, err)
+				}
+				proofs = append(proofs, p...)
 			}
-			proofs[i] = p
+		} else {
+			proofs = make([]kzg4844.Proof, 0, n)
+			for i := range args.Blobs {
+				p, err := kzg4844.ComputeBlobProof(&args.Blobs[i], commitments[i])
+				if err != nil {
+					return fmt.Errorf("blobs[%d]: error computing proof: %v", i, err)
+				}
+				proofs = append(proofs, p)
+			}
 		}
 		args.Commitments = commitments
 		args.Proofs = proofs
-	} else {
-		for i, b := range args.Blobs {
-			if err := kzg4844.VerifyBlobProof(&b, args.Commitments[i], args.Proofs[i]); err != nil {
-				return fmt.Errorf("failed to verify blob proof: %v", err)
-			}
-		}
 	}
 
 	hashes := make([]common.Hash, n)

@@ -113,7 +113,7 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 	}
 	evm := vm.NewEVM(context, state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
 	tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
-	vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+	vmRet, err := core.ApplyMessage(evm, msg, nil)
 	if err != nil {
 		return fmt.Errorf("failed to execute transaction: %v", err)
 	}

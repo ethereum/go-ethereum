@@ -8,7 +8,10 @@ import (
 // GetOrRegisterGaugeFloat64 returns an existing GaugeFloat64 or constructs and registers a
 // new GaugeFloat64.
 func GetOrRegisterGaugeFloat64(name string, r Registry) *GaugeFloat64 {
-	return getOrRegister(name, NewGaugeFloat64, r)
+	if r == nil {
+		r = DefaultRegistry
+	}
+	return r.GetOrRegister(name, func() any { return NewGaugeFloat64() }).(*GaugeFloat64)
 }
 
 // GaugeFloat64Snapshot is a read-only copy of a GaugeFloat64.

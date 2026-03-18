@@ -17,18 +17,27 @@
 package stateless
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 )
+
+func expectedLeaves(counts map[int]int64) [16]int64 {
+	var leaves [16]int64
+	for depth, count := range counts {
+		leaves[depth] = count
+	}
+	return leaves
+}
 
 func TestWitnessStatsAdd(t *testing.T) {
 	tests := []struct {
 		name                  string
 		nodes                 map[string][]byte
 		owner                 common.Hash
-		expectedAccountLeaves map[int64]int64
-		expectedStorageLeaves map[int64]int64
+		expectedAccountLeaves map[int]int64
+		expectedStorageLeaves map[int]int64
 	}{
 		{
 			name:  "empty nodes",
@@ -41,7 +50,7 @@ func TestWitnessStatsAdd(t *testing.T) {
 				"": []byte("data"),
 			},
 			owner:                 common.Hash{},
-			expectedAccountLeaves: map[int64]int64{0: 1},
+			expectedAccountLeaves: map[int]int64{0: 1},
 		},
 		{
 			name: "single account trie leaf",
@@ -49,7 +58,7 @@ func TestWitnessStatsAdd(t *testing.T) {
 				"abc": []byte("data"),
 			},
 			owner:                 common.Hash{},
-			expectedAccountLeaves: map[int64]int64{3: 1},
+			expectedAccountLeaves: map[int]int64{3: 1},
 		},
 		{
 			name: "account trie with internal nodes",
@@ -59,7 +68,7 @@ func TestWitnessStatsAdd(t *testing.T) {
 				"abc": []byte("data3"),
 			},
 			owner:                 common.Hash{},
-			expectedAccountLeaves: map[int64]int64{3: 1}, // Only "abc" is a leaf
+			expectedAccountLeaves: map[int]int64{3: 1}, // Only "abc" is a leaf
 		},
 		{
 			name: "multiple account trie branches",
@@ -72,7 +81,7 @@ func TestWitnessStatsAdd(t *testing.T) {
 				"bcd": []byte("data6"),
 			},
 			owner:                 common.Hash{},
-			expectedAccountLeaves: map[int64]int64{3: 2}, // "abc" (3) + "bcd" (3)
+			expectedAccountLeaves: map[int]int64{3: 2}, // "abc" (3) + "bcd" (3)
 		},
 		{
 			name: "siblings are all leaves",
@@ -82,7 +91,7 @@ func TestWitnessStatsAdd(t *testing.T) {
 				"ac": []byte("data3"),
 			},
 			owner:                 common.Hash{},
-			expectedAccountLeaves: map[int64]int64{2: 3},
+			expectedAccountLeaves: map[int]int64{2: 3},
 		},
 		{
 			name: "storage trie leaves",
@@ -93,7 +102,7 @@ func TestWitnessStatsAdd(t *testing.T) {
 				"124": []byte("data4"),
 			},
 			owner:                 common.HexToHash("0x1234"),
-			expectedStorageLeaves: map[int64]int64{3: 2}, // "123" (3) + "124" (3)
+			expectedStorageLeaves: map[int]int64{3: 2}, // "123" (3) + "124" (3)
 		},
 		{
 			name: "complex trie structure",
@@ -109,7 +118,7 @@ func TestWitnessStatsAdd(t *testing.T) {
 				"3":   []byte("data9"),
 			},
 			owner:                 common.Hash{},
-			expectedAccountLeaves: map[int64]int64{1: 1, 3: 4}, // "123"(3) + "124"(3) + "234"(3) + "235"(3) + "3"(1)
+			expectedAccountLeaves: map[int]int64{1: 1, 3: 4}, // "123"(3) + "124"(3) + "234"(3) + "235"(3) + "3"(1)
 		},
 	}
 
@@ -118,32 +127,59 @@ func TestWitnessStatsAdd(t *testing.T) {
 			stats := NewWitnessStats()
 			stats.Add(tt.nodes, tt.owner)
 
-			var expectedAccountTrieLeaves [16]int64
-			for depth, count := range tt.expectedAccountLeaves {
-				expectedAccountTrieLeaves[depth] = count
+			if got, want := stats.accountTrie.LeafDepths(), expectedLeaves(tt.expectedAccountLeaves); got != want {
+				t.Errorf("account trie leaves = %v, want %v", got, want)
 			}
-			var expectedStorageTrieLeaves [16]int64
-			for depth, count := range tt.expectedStorageLeaves {
-				expectedStorageTrieLeaves[depth] = count
-			}
-
-			// Check account trie depth
-			if stats.accountTrieLeaves != expectedAccountTrieLeaves {
-				t.Errorf("Account trie total depth = %v, want %v", stats.accountTrieLeaves, expectedAccountTrieLeaves)
-			}
-
-			// Check storage trie depth
-			if stats.storageTrieLeaves != expectedStorageTrieLeaves {
-				t.Errorf("Storage trie total depth = %v, want %v", stats.storageTrieLeaves, expectedStorageTrieLeaves)
+			if got, want := stats.storageTrie.LeafDepths(), expectedLeaves(tt.expectedStorageLeaves); got != want {
+				t.Errorf("storage trie leaves = %v, want %v", got, want)
 			}
 		})
 	}
 }
 
+func TestWitnessStatsStorageTrieAggregation(t *testing.T) {
+	stats := NewWitnessStats()
+	ownerA := common.HexToHash("0xa")
+	ownerB := common.HexToHash("0xb")
+
+	stats.Add(map[string][]byte{
+		"a":   []byte("data1"),
+		"ab":  []byte("data2"),
+		"abc": []byte("data3"),
+	}, ownerA)
+	stats.Add(map[string][]byte{
+		"xy": []byte("data4"),
+	}, ownerA)
+	stats.Add(map[string][]byte{
+		"1":   []byte("data5"),
+		"12":  []byte("data6"),
+		"123": []byte("data7"),
+		"124": []byte("data8"),
+	}, ownerB)
+
+	if got, want := stats.storageTrie.LeafDepths(), expectedLeaves(map[int]int64{2: 1, 3: 3}); got != want {
+		t.Errorf("storage leaves = %v, want %v", got, want)
+	}
+	if got, want := stats.accountTrie.LeafDepths(), expectedLeaves(nil); got != want {
+		t.Errorf("account leaves = %v, want %v", got, want)
+	}
+}
+
+func TestWitnessStatsPanicsOnDeepLeaf(t *testing.T) {
+	stats := NewWitnessStats()
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for depth >= 16")
+		}
+	}()
+	stats.Add(map[string][]byte{strings.Repeat("a", 16): []byte("data")}, common.Hash{})
+}
+
 func TestWitnessStatsMinMax(t *testing.T) {
 	stats := NewWitnessStats()
 
-	// Add some account trie nodes with varying depths
+	// Add some account trie nodes with varying depths.
 	stats.Add(map[string][]byte{
 		"a":     []byte("data1"),
 		"ab":    []byte("data2"),
@@ -152,21 +188,21 @@ func TestWitnessStatsMinMax(t *testing.T) {
 		"abcde": []byte("data5"),
 	}, common.Hash{})
 
-	// Only "abcde" is a leaf (depth 5)
-	for i, v := range stats.accountTrieLeaves {
+	// Only "abcde" is a leaf (depth 5).
+	for i, v := range stats.accountTrie.LeafDepths() {
 		if v != 0 && i != 5 {
 			t.Errorf("leaf found at invalid depth %d", i)
 		}
 	}
 
-	// Add more leaves with different depths
+	// Add more leaves with different depths.
 	stats.Add(map[string][]byte{
 		"x":  []byte("data6"),
 		"yz": []byte("data7"),
 	}, common.Hash{})
 
-	// Now we have leaves at depths 1, 2, and 5
-	for i, v := range stats.accountTrieLeaves {
+	// Now we have leaves at depths 1, 2, and 5.
+	for i, v := range stats.accountTrie.LeafDepths() {
 		if v != 0 && (i != 5 && i != 2 && i != 1) {
 			t.Errorf("leaf found at invalid depth %d", i)
 		}
@@ -176,7 +212,7 @@ func TestWitnessStatsMinMax(t *testing.T) {
 func TestWitnessStatsAverage(t *testing.T) {
 	stats := NewWitnessStats()
 
-	// Add nodes that will create leaves at depths 2, 3, and 4
+	// Add nodes that will create leaves at depths 2, 3, and 4.
 	stats.Add(map[string][]byte{
 		"aa":   []byte("data1"),
 		"bb":   []byte("data2"),
@@ -184,22 +220,22 @@ func TestWitnessStatsAverage(t *testing.T) {
 		"dddd": []byte("data4"),
 	}, common.Hash{})
 
-	// All are leaves: 2 + 2 + 3 + 4 = 11 total, 4 samples
+	// All are leaves: 2 + 2 + 3 + 4 = 11 total, 4 samples.
 	expectedAvg := int64(11) / int64(4)
 	var actualAvg, totalSamples int64
-	for i, c := range stats.accountTrieLeaves {
+	for i, c := range stats.accountTrie.LeafDepths() {
 		actualAvg += c * int64(i)
 		totalSamples += c
 	}
 	actualAvg = actualAvg / totalSamples
 
 	if actualAvg != expectedAvg {
-		t.Errorf("Account trie average depth = %d, want %d", actualAvg, expectedAvg)
+		t.Errorf("account trie average depth = %d, want %d", actualAvg, expectedAvg)
 	}
 }
 
 func BenchmarkWitnessStatsAdd(b *testing.B) {
-	// Create a realistic trie node structure
+	// Create a realistic trie node structure.
 	nodes := make(map[string][]byte)
 	for i := 0; i < 100; i++ {
 		base := string(rune('a' + i%26))

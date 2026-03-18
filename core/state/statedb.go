@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -148,8 +147,7 @@ type StateDB struct {
 	StorageReads    time.Duration
 	StorageUpdates  time.Duration
 	StorageCommits  time.Duration
-	SnapshotCommits time.Duration
-	TrieDBCommits   time.Duration
+	DatabaseCommits time.Duration
 	CodeReads       time.Duration
 
 	AccountLoaded  int          // Number of accounts retrieved from the database during the state transition
@@ -158,7 +156,15 @@ type StateDB struct {
 	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
 	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
-	CodeLoaded     int          // Number of contract code loaded during the state transition
+
+	// CodeLoadBytes is the total number of bytes read from contract code.
+	// This value may be smaller than the actual number of bytes read, since
+	// some APIs (e.g. CodeSize) may load the entire code from either the
+	// cache or the database when the size is not available in the cache.
+	CodeLoaded      int // Number of contract code loaded during the state transition
+	CodeLoadBytes   int // Total bytes of resolved code
+	CodeUpdated     int // Number of contracts with code changes that persisted
+	CodeUpdateBytes int // Total bytes of persisted code written
 }
 
 // New creates a new state from a given trie.
@@ -859,13 +865,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				witness := trie.Witness()
 				s.witness.AddState(witness)
 				if s.witnessStats != nil {
-					s.witnessStats.Add(witness, obj.addrHash)
+					s.witnessStats.Add(witness, obj.addrHash())
 				}
 			} else if obj.trie != nil {
 				witness := obj.trie.Witness()
 				s.witness.AddState(witness)
 				if s.witnessStats != nil {
-					s.witnessStats.Add(witness, obj.addrHash)
+					s.witnessStats.Add(witness, obj.addrHash())
 				}
 			}
 		}
@@ -883,13 +889,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				witness := trie.Witness()
 				s.witness.AddState(witness)
 				if s.witnessStats != nil {
-					s.witnessStats.Add(witness, obj.addrHash)
+					s.witnessStats.Add(witness, obj.addrHash())
 				}
 			} else if obj.trie != nil {
 				witness := obj.trie.Witness()
 				s.witness.AddState(witness)
 				if s.witnessStats != nil {
-					s.witnessStats.Add(witness, obj.addrHash)
+					s.witnessStats.Add(witness, obj.addrHash())
 				}
 			}
 		}
@@ -935,8 +941,15 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		if op.isDelete() {
 			deletedAddrs = append(deletedAddrs, addr)
 		} else {
-			s.updateStateObject(s.stateObjects[addr])
+			obj := s.stateObjects[addr]
+			s.updateStateObject(obj)
 			s.AccountUpdated += 1
+
+			// Count code writes post-Finalise so reverted CREATEs are excluded.
+			if obj.dirtyCode {
+				s.CodeUpdated += 1
+				s.CodeUpdateBytes += len(obj.code)
+			}
 		}
 		usedAddrs = append(usedAddrs, addr) // Copy needed for closure
 	}
@@ -1269,7 +1282,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 				return err
 			}
 			lock.Lock()
-			updates[obj.addrHash] = update
+			updates[obj.addrHash()] = update
 			s.StorageCommits = time.Since(start) // overwrite with the longest storage commit runtime
 			lock.Unlock()
 			return nil
@@ -1318,41 +1331,14 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorag
 			return nil, err
 		}
 	}
-	// Commit dirty contract code if any exists
-	if db := s.db.TrieDB().Disk(); db != nil && len(ret.codes) > 0 {
-		batch := db.NewBatch()
-		for _, code := range ret.codes {
-			rawdb.WriteCode(batch, code.hash, code.blob)
-		}
-		if err := batch.Write(); err != nil {
-			return nil, err
-		}
+	start := time.Now()
+	if err := s.db.Commit(ret); err != nil {
+		return nil, err
 	}
-	if !ret.empty() {
-		// If snapshotting is enabled, update the snapshot tree with this new version
-		if snap := s.db.Snapshot(); snap != nil && snap.Snapshot(ret.originRoot) != nil {
-			start := time.Now()
-			if err := snap.Update(ret.root, ret.originRoot, ret.accounts, ret.storages); err != nil {
-				log.Warn("Failed to update snapshot tree", "from", ret.originRoot, "to", ret.root, "err", err)
-			}
-			// Keep 128 diff layers in the memory, persistent layer is 129th.
-			// - head layer is paired with HEAD state
-			// - head-1 layer is paired with HEAD-1 state
-			// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
-			if err := snap.Cap(ret.root, TriesInMemory); err != nil {
-				log.Warn("Failed to cap snapshot tree", "root", ret.root, "layers", TriesInMemory, "err", err)
-			}
-			s.SnapshotCommits += time.Since(start)
-		}
-		// If trie database is enabled, commit the state update as a new layer
-		if db := s.db.TrieDB(); db != nil {
-			start := time.Now()
-			if err := db.Update(ret.root, ret.originRoot, block, ret.nodes, ret.stateSet()); err != nil {
-				return nil, err
-			}
-			s.TrieDBCommits += time.Since(start)
-		}
-	}
+	s.DatabaseCommits = time.Since(start)
+
+	// The reader update must be performed as the final step, otherwise,
+	// the new state would not be visible before db.commit.
 	s.reader, _ = s.db.Reader(s.originalRoot)
 	return ret, err
 }

@@ -47,12 +47,15 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 // estimateGasErrorRatio is the amount of overestimation eth_estimateGas is
 // allowed to produce in order to speed up calculations.
 const estimateGasErrorRatio = 0.015
+
+// maxGetStorageSlots is the maximum total number of storage slots that can
+// be requested in a single eth_getStorageValues call.
+const maxGetStorageSlots = 1024
 
 var errBlobTxNotSupported = errors.New("signing blob transactions not supported")
 var errSubClosed = errors.New("chain subscription closed")
@@ -382,8 +385,7 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 	if len(keys) > 0 {
 		var storageTrie state.Trie
 		if storageRoot != types.EmptyRootHash && storageRoot != (common.Hash{}) {
-			id := trie.StorageTrieID(header.Root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
-			st, err := trie.NewStateTrie(id, statedb.Database().TrieDB())
+			st, err := statedb.Database().OpenStorageTrie(header.Root, address, storageRoot, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -414,7 +416,7 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 		}
 	}
 	// Create the accountProof.
-	tr, err := trie.NewStateTrie(trie.StateTrieID(header.Root), statedb.Database().TrieDB())
+	tr, err := statedb.Database().OpenTrie(header.Root)
 	if err != nil {
 		return nil, err
 	}
@@ -591,6 +593,41 @@ func (api *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Addre
 	return res[:], state.Error()
 }
 
+// GetStorageValues returns multiple storage slot values for multiple accounts
+// at the given block.
+func (api *BlockChainAPI) GetStorageValues(ctx context.Context, requests map[common.Address][]common.Hash, blockNrOrHash rpc.BlockNumberOrHash) (map[common.Address][]hexutil.Bytes, error) {
+	// Count total slots requested.
+	var totalSlots int
+	for _, keys := range requests {
+		totalSlots += len(keys)
+		if totalSlots > maxGetStorageSlots {
+			return nil, &clientLimitExceededError{message: fmt.Sprintf("too many slots (max %d)", maxGetStorageSlots)}
+		}
+	}
+	if totalSlots == 0 {
+		return nil, &invalidParamsError{message: "empty request"}
+	}
+
+	state, _, err := api.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	result := make(map[common.Address][]hexutil.Bytes, len(requests))
+	for addr, keys := range requests {
+		vals := make([]hexutil.Bytes, len(keys))
+		for i, key := range keys {
+			v := state.GetState(addr, key)
+			vals[i] = v[:]
+		}
+		if err := state.Error(); err != nil {
+			return nil, err
+		}
+		result[addr] = vals
+	}
+	return result, nil
+}
+
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
 func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
 	var (
@@ -704,11 +741,10 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
-	gp := new(core.GasPool)
+
+	gp := core.NewGasPool(globalGasCap)
 	if globalGasCap == 0 {
-		gp.AddGas(gomath.MaxUint64)
-	} else {
-		gp.AddGas(globalGasCap)
+		gp = core.NewGasPool(gomath.MaxUint64)
 	}
 	return applyMessage(ctx, b, args, state, header, timeout, gp, &blockCtx, &vm.Config{NoBaseFee: true}, precompiles)
 }
@@ -813,17 +849,12 @@ func (api *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrO
 	if state == nil || err != nil {
 		return nil, err
 	}
-	gasCap := api.b.RPCGasCap()
-	if gasCap == 0 {
-		gasCap = gomath.MaxUint64
-	}
 	sim := &simulator{
-		b:           api.b,
-		state:       state,
-		base:        base,
-		chainConfig: api.b.ChainConfig(),
-		// Each tx and all the series of txes shouldn't consume more gas than cap
-		gp:             new(core.GasPool).AddGas(gasCap),
+		b:              api.b,
+		state:          state,
+		base:           base,
+		chainConfig:    api.b.ChainConfig(),
+		budget:         newGasBudget(api.b.RPCGasCap()),
 		traceTransfers: opts.TraceTransfers,
 		validate:       opts.Validation,
 		fullTx:         opts.ReturnFullTransactions,
@@ -934,6 +965,9 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	if head.RequestsHash != nil {
 		result["requestsHash"] = head.RequestsHash
 	}
+	if head.SlotNumber != nil {
+		result["slotNumber"] = hexutil.Uint64(*head.SlotNumber)
+	}
 	return result
 }
 
@@ -976,6 +1010,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 type RPCTransaction struct {
 	BlockHash           *common.Hash                 `json:"blockHash"`
 	BlockNumber         *hexutil.Big                 `json:"blockNumber"`
+	BlockTimestamp      *hexutil.Uint64              `json:"blockTimestamp"`
 	From                common.Address               `json:"from"`
 	Gas                 hexutil.Uint64               `json:"gas"`
 	GasPrice            *hexutil.Big                 `json:"gasPrice"`
@@ -1022,6 +1057,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	if blockHash != (common.Hash{}) {
 		result.BlockHash = &blockHash
 		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
+		result.BlockTimestamp = (*hexutil.Uint64)(&blockTime)
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
 
@@ -1327,7 +1363,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if msg.BlobGasFeeCap != nil && msg.BlobGasFeeCap.BitLen() == 0 {
 			evm.Context.BlobBaseFee = new(big.Int)
 		}
-		res, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
+		res, err := core.ApplyMessage(evm, msg, nil)
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction(types.LegacyTxType).Hash(), err)
 		}
@@ -1663,7 +1699,7 @@ func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil
 
 // SendRawTransactionSync will add the signed transaction to the transaction pool
 // and wait until the transaction has been included in a block and return the receipt, or the timeout.
-func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hexutil.Bytes, timeoutMs *hexutil.Uint64) (map[string]interface{}, error) {
+func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hexutil.Bytes, timeoutMs *uint64) (map[string]interface{}, error) {
 	tx := new(types.Transaction)
 	if err := tx.UnmarshalBinary(input); err != nil {
 		return nil, err

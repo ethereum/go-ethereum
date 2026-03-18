@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2025 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -13,14 +13,24 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
-package snap
+package era
 
 import (
-	"time"
+	"io"
 
-	"github.com/ethereum/go-ethereum/p2p/tracker"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// requestTracker is a singleton tracker for request times.
-var requestTracker = tracker.New(ProtocolName, time.Minute)
+type ProofVariant uint16
+
+const (
+	ProofNone ProofVariant = iota
+)
+
+// Proof is the interface for all block proof types in the package.
+// It's a stub for later integration into Era.
+type Proof interface {
+	EncodeRLP(w io.Writer) error
+	DecodeRLP(s *rlp.Stream) error
+	Variant() ProofVariant
+}

@@ -517,6 +517,8 @@ func encodeNodeCompressed(addExtension bool, elements [][]byte, indices []int) [
 //
 // - metadata byte layout (1 byte): 0b0
 // - node value
+//
+// TODO(rjl493456442) it's not allocation efficient, please improve it.
 func encodeNodeFull(value []byte) []byte {
 	enc := make([]byte, len(value)+1)
 	copy(enc[1:], value)
@@ -596,20 +598,16 @@ func decodeNodeCompressed(data []byte) ([][]byte, []int, error) {
 }
 
 // decodeNodeFull decodes the byte stream of full value trie node.
-func decodeNodeFull(data []byte) ([]byte, error) {
+func decodeNodeFull(data []byte) (bool, []byte, error) {
 	if len(data) < 1 {
-		return nil, errors.New("invalid data: too short")
+		return false, nil, errors.New("invalid data: too short")
 	}
 	flag := data[0]
 	if flag != byte(0) {
-		return nil, errors.New("invalid data: compressed node value")
+		return false, nil, nil
 	}
-	return data[1:], nil
+	return true, data[1:], nil
 }
-
-// encodeFullFrequency specifies the frequency (1/16) for encoding node in
-// full format. TODO(rjl493456442) making it configurable.
-const encodeFullFrequency = 16
 
 // encodeNodeHistory encodes the history of a node. Typically, the original values
 // of dirty nodes serve as the history, but this can lead to significant storage
@@ -626,7 +624,7 @@ const encodeFullFrequency = 16
 // history records, which is computationally and IO intensive. To mitigate this, we
 // periodically record the full value of a node as a checkpoint. The frequency of
 // these checkpoints is a tradeoff between the compression rate and read overhead.
-func (s *nodeSetWithOrigin) encodeNodeHistory(root common.Hash) (map[common.Hash]map[string][]byte, error) {
+func (s *nodeSetWithOrigin) encodeNodeHistory(root common.Hash, rate uint32) (map[common.Hash]map[string][]byte, error) {
 	var (
 		// the set of all encoded node history elements
 		nodes = make(map[common.Hash]map[string][]byte)
@@ -644,7 +642,7 @@ func (s *nodeSetWithOrigin) encodeNodeHistory(root common.Hash) (map[common.Hash
 			h.Write(root.Bytes())
 			h.Write(owner.Bytes())
 			h.Write([]byte(path))
-			return h.Sum32()%uint32(encodeFullFrequency) == 0
+			return h.Sum32()%rate == 0
 		}
 	)
 	for owner, origins := range s.nodeOrigin {
@@ -664,6 +662,9 @@ func (s *nodeSetWithOrigin) encodeNodeHistory(root common.Hash) (map[common.Hash
 			}
 			encodeFull := encodeFullValue(owner, path)
 			if !encodeFull {
+				// TODO(rjl493456442) the diff-mode reencoding can take non-trivial
+				// time, like 1-2ms per block, is there any way to mitigate the overhead?
+
 				// Partial encoding is required, try to find the node diffs and
 				// fallback to the full-value encoding if fails.
 				//

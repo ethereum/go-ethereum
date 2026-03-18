@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/tracker"
 )
 
 var (
@@ -47,9 +48,10 @@ type Request struct {
 	sink   chan *Response // Channel to deliver the response on
 	cancel chan struct{}  // Channel to cancel requests ahead of time
 
-	code uint64      // Message code of the request packet
-	want uint64      // Message code of the response packet
-	data interface{} // Data content of the request packet
+	code     uint64      // Message code of the request packet
+	want     uint64      // Message code of the response packet
+	numItems int         // Number of requested items
+	data     interface{} // Data content of the request packet
 
 	Peer string    // Demultiplexer if cross-peer requests are batched together
 	Sent time.Time // Timestamp when the request was sent
@@ -190,19 +192,30 @@ func (p *Peer) dispatchResponse(res *Response, metadata func() interface{}) erro
 func (p *Peer) dispatcher() {
 	pending := make(map[uint64]*Request)
 
+loop:
 	for {
 		select {
 		case reqOp := <-p.reqDispatch:
 			req := reqOp.req
 			req.Sent = time.Now()
 
-			requestTracker.Track(p.id, p.version, req.code, req.want, req.id)
-			err := p2p.Send(p.rw, req.code, req.data)
-			reqOp.fail <- err
-
-			if err == nil {
-				pending[req.id] = req
+			treq := tracker.Request{
+				ID:       req.id,
+				ReqCode:  req.code,
+				RespCode: req.want,
+				Size:     req.numItems,
 			}
+			if err := p.tracker.Track(treq); err != nil {
+				reqOp.fail <- err
+				continue loop
+			}
+			if err := p2p.Send(p.rw, req.code, req.data); err != nil {
+				reqOp.fail <- err
+				continue loop
+			}
+
+			pending[req.id] = req
+			reqOp.fail <- nil
 
 		case cancelOp := <-p.reqCancel:
 			// Retrieve the pending request to cancel and short circuit if it
@@ -219,9 +232,6 @@ func (p *Peer) dispatcher() {
 		case resOp := <-p.resDispatch:
 			res := resOp.res
 			res.Req = pending[res.id]
-
-			// Independent if the request exists or not, track this packet
-			requestTracker.Fulfil(p.id, p.version, res.code, res.id)
 
 			switch {
 			case res.Req == nil:
@@ -249,6 +259,7 @@ func (p *Peer) dispatcher() {
 			}
 
 		case <-p.term:
+			p.tracker.Stop()
 			return
 		}
 	}

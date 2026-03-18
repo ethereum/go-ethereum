@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"math/rand"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -248,7 +249,7 @@ func TestNodeDifference(t *testing.T) {
 			old: nil, new: testrand.Bytes(32), expErr: true,
 		},
 		{
-			old: testrand.Bytes(32), new: testrand.Bytes(32), expErr: true,
+			old: bytes.Repeat([]byte{0x1}, 32), new: bytes.Repeat([]byte{0x2}, 32), expErr: true,
 		},
 		// Different node type
 		{
@@ -276,19 +277,19 @@ func TestNodeDifference(t *testing.T) {
 		})
 	}
 
-	for _, test := range tests {
+	for i, test := range tests {
 		_, indices, values, err := NodeDifference(test.old, test.new)
 		if test.expErr && err == nil {
-			t.Fatal("Expect error, got nil")
+			t.Fatalf("Expect error, got nil %d", i)
 		}
 		if !test.expErr && err != nil {
 			t.Fatalf("Unexpect error, %v", err)
 		}
 		if err == nil {
-			if !reflect.DeepEqual(indices, test.expIndices) {
+			if !slices.Equal(indices, test.expIndices) {
 				t.Fatalf("Unexpected indices, want: %v, got: %v", test.expIndices, indices)
 			}
-			if !reflect.DeepEqual(values, test.expValues) {
+			if !slices.EqualFunc(values, test.expValues, bytes.Equal) {
 				t.Fatalf("Unexpected values, want: %v, got: %v", test.expValues, values)
 			}
 		}

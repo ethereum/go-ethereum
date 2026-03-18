@@ -86,7 +86,7 @@ type txPool interface {
 
 	// Pending should return pending transactions.
 	// The slice should be modifiable by the caller.
-	Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction
+	Pending(filter txpool.PendingFilter) (map[common.Address][]*txpool.LazyTransaction, int)
 
 	// SubscribeTransactions subscribes to new transaction events. The subscriber
 	// can decide whether to receive notifications only for newly seen transactions
@@ -179,7 +179,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	addTxs := func(txs []*types.Transaction) []error {
 		return h.txpool.Add(txs, false)
 	}
-
 	validateMeta := func(tx common.Hash, kind byte) error {
 		if h.txpool.Has(tx) {
 			return txpool.ErrAlreadyKnown
@@ -189,8 +188,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return nil
 	}
-
-	h.txFetcher = fetcher.NewTxFetcher(validateMeta, addTxs, fetchTx, h.removePeer)
+	h.txFetcher = fetcher.NewTxFetcher(h.chain, validateMeta, addTxs, fetchTx, h.removePeer)
 	return h, nil
 }
 

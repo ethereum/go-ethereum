@@ -17,6 +17,7 @@
 package apitypes
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
 	"testing"
@@ -227,5 +228,185 @@ func TestType_TypeName(t *testing.T) {
 		if tc.Input.typeName() != tc.Expected {
 			t.Errorf("test %d: expected typeName value of '%v' but got '%v'", i, tc.Expected, tc.Input)
 		}
+	}
+}
+
+func TestValidateTxSidecar(t *testing.T) {
+	t.Parallel()
+
+	// Helper function to create a test blob and its commitment/proof
+	createTestBlob := func() (kzg4844.Blob, kzg4844.Commitment, kzg4844.Proof, common.Hash) {
+		b := make([]byte, 31)
+		rand.Read(b)
+		var blob kzg4844.Blob
+		for i := range b {
+			blob[i+1] = b[i]
+		}
+		commitment, err := kzg4844.BlobToCommitment(&blob)
+		if err != nil {
+			t.Fatal(err)
+		}
+		proof, err := kzg4844.ComputeBlobProof(&blob, commitment)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hash := kzg4844.CalcBlobHashV1(sha256.New(), &commitment)
+		return blob, commitment, proof, hash
+	}
+
+	// Helper function to create test cell proofs for v1 transactions
+	createTestCellProofs := func(blob kzg4844.Blob) []kzg4844.Proof {
+		cellProofs, err := kzg4844.ComputeCellProofs(&blob)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cellProofs
+	}
+
+	blob1, commitment1, proof1, hash1 := createTestBlob()
+	blob2, commitment2, proof2, hash2 := createTestBlob()
+
+	tests := []struct {
+		name    string
+		args    SendTxArgs
+		wantErr bool
+	}{
+		{
+			name:    "no blobs - should pass",
+			args:    SendTxArgs{},
+			wantErr: false,
+		},
+		{
+			name: "valid blobs with commitments and proofs",
+			args: SendTxArgs{
+				Blobs:       []kzg4844.Blob{blob1, blob2},
+				Commitments: []kzg4844.Commitment{commitment1, commitment2},
+				Proofs:      []kzg4844.Proof{proof1, proof2},
+				BlobHashes:  []common.Hash{hash1, hash2},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid blobs without commitments/proofs - should generate them",
+			args: SendTxArgs{
+				Blobs: []kzg4844.Blob{blob1},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid blobs with v1 cell proofs",
+			args: SendTxArgs{
+				Blobs:       []kzg4844.Blob{blob1},
+				Commitments: []kzg4844.Commitment{commitment1},
+				Proofs:      createTestCellProofs(blob1),
+				BlobHashes:  []common.Hash{hash1},
+			},
+			wantErr: false,
+		},
+		{
+			name: "blobs with v1 version flag - should generate cell proofs",
+			args: SendTxArgs{
+				Blobs:       []kzg4844.Blob{blob1},
+				BlobVersion: types.BlobSidecarVersion1,
+			},
+			wantErr: false,
+		},
+		{
+			name: "proofs provided but commitments not",
+			args: SendTxArgs{
+				Blobs:  []kzg4844.Blob{blob1},
+				Proofs: []kzg4844.Proof{proof1},
+			},
+			wantErr: true,
+		},
+		{
+			name: "commitments provided but proofs not",
+			args: SendTxArgs{
+				Blobs:       []kzg4844.Blob{blob1},
+				Commitments: []kzg4844.Commitment{commitment1},
+			},
+			wantErr: true,
+		},
+		{
+			name: "mismatch between blobs and commitments",
+			args: SendTxArgs{
+				Blobs:       []kzg4844.Blob{blob1, blob2},
+				Commitments: []kzg4844.Commitment{commitment1}, // Only one commitment for two blobs
+				Proofs:      []kzg4844.Proof{proof1},
+			},
+			wantErr: true,
+		},
+		{
+			name: "mismatch between blobs and hashes",
+			args: SendTxArgs{
+				Blobs:       []kzg4844.Blob{blob1, blob2},
+				Commitments: []kzg4844.Commitment{commitment1, commitment2},
+				Proofs:      []kzg4844.Proof{proof1, proof2},
+				BlobHashes:  []common.Hash{hash1}, // Only one hash for two blobs
+			},
+			wantErr: true,
+		},
+		{
+			name: "wrong number of proofs",
+			args: SendTxArgs{
+				Blobs:       []kzg4844.Blob{blob1, blob2},
+				Commitments: []kzg4844.Commitment{commitment1, commitment2},
+				Proofs:      []kzg4844.Proof{proof1, proof2, proof1}, // 3 proofs for 2 blobs
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid blob hash",
+			args: SendTxArgs{
+				Blobs:       []kzg4844.Blob{blob1},
+				Commitments: []kzg4844.Commitment{commitment1},
+				Proofs:      []kzg4844.Proof{proof1},
+				BlobHashes:  []common.Hash{hash2}, // Wrong hash
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid proof",
+			args: SendTxArgs{
+				BlobVersion: types.BlobSidecarVersion1,
+				Blobs:       []kzg4844.Blob{blob1},
+				Commitments: []kzg4844.Commitment{commitment1},
+				Proofs:      []kzg4844.Proof{proof1, proof2}, // wrong proof
+				BlobHashes:  []common.Hash{hash1},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Make a copy to avoid modifying the original test case
+			args := tt.args
+			err := args.validateTxSidecar()
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateTxSidecar() expected error but got none")
+					return
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateTxSidecar() unexpected error = %v", err)
+				}
+
+				// For successful cases, verify that commitments and proofs were generated if they weren't provided
+				if len(args.Blobs) > 0 {
+					if args.Commitments == nil || len(args.Commitments) != len(args.Blobs) {
+						t.Errorf("validateTxSidecar() should have generated commitments")
+					}
+					if args.Proofs == nil || (len(args.Proofs) != len(args.Blobs) && len(args.Proofs) != len(args.Blobs)*kzg4844.CellProofsPerBlob) {
+						t.Errorf("validateTxSidecar() should have generated proofs")
+					}
+					if args.BlobHashes == nil || len(args.BlobHashes) != len(args.Blobs) {
+						t.Errorf("validateTxSidecar() should have generated blob hashes")
+					}
+				}
+			}
+		})
 	}
 }

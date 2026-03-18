@@ -7,7 +7,10 @@ import (
 // GetOrRegisterCounter returns an existing Counter or constructs and registers
 // a new Counter.
 func GetOrRegisterCounter(name string, r Registry) *Counter {
-	return getOrRegister(name, NewCounter, r)
+	if r == nil {
+		r = DefaultRegistry
+	}
+	return r.GetOrRegister(name, func() any { return NewCounter() }).(*Counter)
 }
 
 // NewCounter constructs a new Counter.

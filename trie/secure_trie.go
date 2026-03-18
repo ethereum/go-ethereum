@@ -134,9 +134,9 @@ func (t *StateTrie) GetAccountByHash(addrHash common.Hash) (*types.StateAccount,
 // PrefetchAccount attempts to resolve specific accounts from the database
 // to accelerate subsequent trie operations.
 func (t *StateTrie) PrefetchAccount(addresses []common.Address) error {
-	var keys [][]byte
-	for _, addr := range addresses {
-		keys = append(keys, crypto.Keccak256(addr.Bytes()))
+	keys := make([][]byte, len(addresses))
+	for i, addr := range addresses {
+		keys[i] = crypto.Keccak256(addr.Bytes())
 	}
 	return t.trie.Prefetch(keys)
 }
@@ -157,9 +157,9 @@ func (t *StateTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
 // PrefetchStorage attempts to resolve specific storage slots from the database
 // to accelerate subsequent trie operations.
 func (t *StateTrie) PrefetchStorage(_ common.Address, keys [][]byte) error {
-	var keylist [][]byte
-	for _, key := range keys {
-		keylist = append(keylist, crypto.Keccak256(key))
+	keylist := make([][]byte, len(keys))
+	for i, key := range keys {
+		keylist[i] = crypto.Keccak256(key)
 	}
 	return t.trie.Prefetch(keylist)
 }
