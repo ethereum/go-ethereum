@@ -470,10 +470,28 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Compute the floor data cost (EIP-7623), needed for both Prague and Amsterdam validation.
+	if rules.IsPrague {
+		floorDataGas, err = FloorDataGas(msg.Data)
+		if err != nil {
+			return nil, err
+		}
+		if msg.GasLimit < floorDataGas {
+			return nil, fmt.Errorf("%w: have %d, want %d", ErrFloorDataGas, msg.GasLimit, floorDataGas)
+		}
+	}
+
 	if rules.IsAmsterdam {
 		// EIP-8037: total intrinsic must fit within the transaction gas limit.
 		if msg.GasLimit < gas.Sum() {
 			return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, msg.GasLimit, gas.Sum())
+		}
+		// EIP-8037: the regular gas consumption (intrinsic or floor) must fit within MaxTxGas.
+		// The transaction gas limit is no longer statically capped, but regular gas usage is.
+		maxRegularGas := max(gas.RegularGas, floorDataGas)
+		if maxRegularGas > params.MaxTxGas {
+			return nil, fmt.Errorf("%w: max regular gas %d exceeds limit %d", ErrIntrinsicGas, maxRegularGas, params.MaxTxGas)
 		}
 		// Split remaining execution gas into regular and state reservoir.
 		executionGas := msg.GasLimit - gas.Sum()
@@ -484,17 +502,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining.RegularGas, gas.RegularGas)
 		}
 		st.gasRemaining.Sub(gas)
-	}
-
-	// Gas limit suffices for the floor data cost (EIP-7623)
-	if rules.IsPrague {
-		floorDataGas, err = FloorDataGas(msg.Data)
-		if err != nil {
-			return nil, err
-		}
-		if msg.GasLimit < floorDataGas {
-			return nil, fmt.Errorf("%w: have %d, want %d", ErrFloorDataGas, msg.GasLimit, floorDataGas)
-		}
 	}
 	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
 		if rules.IsAmsterdam {
