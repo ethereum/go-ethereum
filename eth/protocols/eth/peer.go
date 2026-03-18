@@ -76,7 +76,7 @@ type Peer struct {
 	resDispatch chan *response // Dispatch channel to fulfil pending requests and untrack them
 
 	receiptBuffer     map[uint64]*receiptRequest // Previously requested receipts to buffer partial receipts
-	receiptBufferLock sync.RWMutex               // Lock for protecting the receiptBuffer
+	receiptBufferLock sync.Mutex                 // Lock for protecting the receiptBuffer
 
 	term chan struct{} // Termination channel to stop the broadcasters
 }
@@ -402,8 +402,8 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, gasUsed []uint64, sink chan
 
 // HandlePartialReceipts re-request partial receipts
 func (p *Peer) requestPartialReceipts(id uint64) error {
-	p.receiptBufferLock.RLock()
-	defer p.receiptBufferLock.RUnlock()
+	p.receiptBufferLock.Lock()
+	defer p.receiptBufferLock.Unlock()
 
 	// Do not re-request for the stale request
 	if _, ok := p.receiptBuffer[id]; !ok {
