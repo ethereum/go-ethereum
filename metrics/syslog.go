@@ -12,7 +12,9 @@ import (
 // Syslog outputs each metric in the given registry to syslog periodically using
 // the given syslogger.
 func Syslog(r Registry, d time.Duration, w *syslog.Writer) {
-	for range time.Tick(d) {
+	ticker := time.NewTicker(d)
+	defer ticker.Stop()
+	for range ticker.C {
 		r.Each(func(name string, i interface{}) {
 			switch metric := i.(type) {
 			case *Counter:

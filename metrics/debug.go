@@ -22,7 +22,9 @@ var (
 // CaptureDebugGCStats captures new values for the Go garbage collector statistics
 // exported in debug.GCStats. This is designed to be called as a goroutine.
 func CaptureDebugGCStats(r Registry, d time.Duration) {
-	for range time.Tick(d) {
+	ticker := time.NewTicker(d)
+	defer ticker.Stop()
+	for range ticker.C {
 		CaptureDebugGCStatsOnce(r)
 	}
 }
