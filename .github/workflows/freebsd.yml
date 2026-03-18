@@ -1,4 +1,7 @@
 on:
+  push:
+    branches:
+      - freebsd-github-action
   workflow_dispatch:
 
 jobs:
