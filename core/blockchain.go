@@ -194,9 +194,8 @@ type BlockChainConfig struct {
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 
-	// This defines the cutoff block for history expiry.
-	// Blocks before this number may be unavailable in the chain database.
-	ChainHistoryMode history.HistoryMode
+	// HistoryPolicy defines the chain history pruning intent.
+	HistoryPolicy history.HistoryPolicy
 
 	// Misc options
 	NoPrefetch bool            // Whether to disable heuristic state prefetching when processing blocks
@@ -227,13 +226,13 @@ type BlockChainConfig struct {
 // Note the returned object is safe to modify!
 func DefaultConfig() *BlockChainConfig {
 	return &BlockChainConfig{
-		TrieCleanLimit:   256,
-		TrieDirtyLimit:   256,
-		TrieTimeLimit:    5 * time.Minute,
-		StateScheme:      rawdb.HashScheme,
-		SnapshotLimit:    256,
-		SnapshotWait:     true,
-		ChainHistoryMode: history.KeepAll,
+		TrieCleanLimit: 256,
+		TrieDirtyLimit: 256,
+		TrieTimeLimit:  5 * time.Minute,
+		StateScheme:    rawdb.HashScheme,
+		SnapshotLimit:  256,
+		SnapshotWait:   true,
+		HistoryPolicy:  history.HistoryPolicy{Mode: history.KeepAll},
 		// Transaction indexing is disabled by default.
 		// This is appropriate for most unit tests.
 		TxLookupLimit: -1,
@@ -715,82 +714,44 @@ func (bc *BlockChain) loadLastState() error {
 
 // initializeHistoryPruning sets bc.historyPrunePoint.
 func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
-	var (
-		freezerTail, _ = bc.db.Tail()
-		genesisHash    = bc.genesisBlock.Hash()
-		mergePoint     = history.MergePrunePoints[genesisHash]
-		praguePoint    = history.PraguePrunePoints[genesisHash]
-	)
-	switch bc.cfg.ChainHistoryMode {
-	case history.KeepAll:
-		if freezerTail == 0 {
-			return nil
-		}
-		// The database was pruned somehow, so we need to figure out if it's a known
-		// configuration or an error.
-		if mergePoint != nil && freezerTail == mergePoint.BlockNumber {
-			bc.historyPrunePoint.Store(mergePoint)
-			return nil
-		}
-		if praguePoint != nil && freezerTail == praguePoint.BlockNumber {
-			bc.historyPrunePoint.Store(praguePoint)
-			return nil
-		}
-		log.Error("Chain history database is pruned with unknown configuration", "tail", freezerTail)
-		return errors.New("unexpected database tail")
+	freezerTail, _ := bc.db.Tail()
+	policy := bc.cfg.HistoryPolicy
 
-	case history.KeepPostMerge:
-		if mergePoint == nil {
-			return errors.New("history pruning requested for unknown network")
+	switch policy.Mode {
+	case history.KeepAll:
+		if freezerTail > 0 {
+			// Database was pruned externally. Record the actual state.
+			log.Warn("Chain history database is pruned", "tail", freezerTail, "mode", policy.Mode)
+			bc.historyPrunePoint.Store(&history.PrunePoint{
+				BlockNumber: freezerTail,
+				BlockHash:   bc.GetCanonicalHash(freezerTail),
+			})
 		}
-		if freezerTail == 0 && latest != 0 {
-			log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned.", bc.cfg.ChainHistoryMode.String()))
-			log.Error("Run 'geth prune-history --history.chain postmerge' to prune pre-merge history.")
-			return errors.New("history pruning requested via configuration")
-		}
-		// Check if DB is pruned further than requested (to Prague).
-		if praguePoint != nil && freezerTail == praguePoint.BlockNumber {
-			log.Error("Chain history database is pruned to Prague block, but postmerge mode was requested.")
-			log.Error("History cannot be unpruned. To restore history, use 'geth import-history'.")
-			log.Error("If you intended to keep post-Prague history, use '--history.chain postprague' instead.")
-			return errors.New("database pruned beyond requested history mode")
-		}
-		if freezerTail > 0 && freezerTail != mergePoint.BlockNumber {
-			return errors.New("chain history database pruned to unknown block")
-		}
-		bc.historyPrunePoint.Store(mergePoint)
 		return nil
 
-	case history.KeepPostPrague:
-		if praguePoint == nil {
-			return errors.New("history pruning requested for unknown network")
-		}
-		// Check if already at the prague prune point.
-		if freezerTail == praguePoint.BlockNumber {
-			bc.historyPrunePoint.Store(praguePoint)
+	case history.KeepPostMerge, history.KeepPostPrague:
+		target := policy.Target
+		// Already at the target.
+		if freezerTail == target.BlockNumber {
+			bc.historyPrunePoint.Store(target)
 			return nil
 		}
-		// Check if database needs pruning.
-		if latest != 0 {
-			if freezerTail == 0 {
-				log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned.", bc.cfg.ChainHistoryMode.String()))
-				log.Error("Run 'geth prune-history --history.chain postprague' to prune pre-Prague history.")
-				return errors.New("history pruning requested via configuration")
-			}
-			if mergePoint != nil && freezerTail == mergePoint.BlockNumber {
-				log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is only pruned to merge block.", bc.cfg.ChainHistoryMode.String()))
-				log.Error("Run 'geth prune-history --history.chain postprague' to prune pre-Prague history.")
-				return errors.New("history pruning requested via configuration")
-			}
-			log.Error("Chain history database is pruned to unknown block", "tail", freezerTail)
-			return errors.New("unexpected database tail")
+		// Database is pruned beyond the target.
+		if freezerTail > target.BlockNumber {
+			return fmt.Errorf("database pruned beyond requested history (tail=%d, target=%d)", freezerTail, target.BlockNumber)
 		}
-		// Fresh database (latest == 0), will sync from prague point.
-		bc.historyPrunePoint.Store(praguePoint)
+		// Database needs pruning (freezerTail < target).
+		if latest != 0 {
+			log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned to the target block.", policy.Mode.String()))
+			log.Error(fmt.Sprintf("Run 'geth prune-history --history.chain %s' to prune history.", policy.Mode.String()))
+			return errors.New("history pruning required")
+		}
+		// Fresh database (latest == 0), will sync from target point.
+		bc.historyPrunePoint.Store(target)
 		return nil
 
 	default:
-		return fmt.Errorf("invalid history mode: %d", bc.cfg.ChainHistoryMode)
+		return fmt.Errorf("invalid history mode: %d", policy.Mode)
 	}
 }
 
