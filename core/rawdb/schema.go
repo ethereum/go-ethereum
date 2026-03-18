@@ -87,6 +87,8 @@ var (
 	// txIndexTailKey tracks the oldest block whose transactions have been indexed.
 	txIndexTailKey = []byte("TransactionIndexTail")
 
+	eraImportTailKey = []byte("eraImportTail") // eraImportTailKey -> last fully imported block
+
 	// fastTxLookupLimitKey tracks the transaction lookup limit during fast sync.
 	// This flag is deprecated, it's kept to avoid reporting errors when inspect
 	// database.
