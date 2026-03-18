@@ -23,121 +23,99 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// TestStemNodeInsertSameStem tests inserting values with the same stem
+// TestStemNodeInsertSameStem tests inserting values with the same stem via NodeStore.
 func TestStemNodeInsertSameStem(t *testing.T) {
+	s := NewNodeStore()
+
 	stem := make([]byte, 31)
 	for i := range stem {
 		stem[i] = byte(i)
 	}
 
-	var values [256][]byte
-	values[0] = common.HexToHash("0x0101").Bytes()
-
-	node := &StemNode{
-		Stem:   stem,
-		Values: values[:],
-		depth:  0,
+	// Insert first value
+	key1 := make([]byte, 32)
+	copy(key1[:31], stem)
+	key1[31] = 0
+	value1 := common.HexToHash("0x0101").Bytes()
+	if err := s.Insert(key1, value1, nil); err != nil {
+		t.Fatal(err)
 	}
 
 	// Insert another value with the same stem but different last byte
-	key := make([]byte, 32)
-	copy(key[:31], stem)
-	key[31] = 10
-	value := common.HexToHash("0x0202").Bytes()
-
-	newNode, err := node.Insert(key, value, nil, 0)
-	if err != nil {
-		t.Fatalf("Failed to insert: %v", err)
+	key2 := make([]byte, 32)
+	copy(key2[:31], stem)
+	key2[31] = 10
+	value2 := common.HexToHash("0x0202").Bytes()
+	if err := s.Insert(key2, value2, nil); err != nil {
+		t.Fatal(err)
 	}
 
-	// Should still be a StemNode
-	stemNode, ok := newNode.(*StemNode)
-	if !ok {
-		t.Fatalf("Expected StemNode, got %T", newNode)
+	// Root should still be a StemNode
+	if s.Root().Kind() != KindStem {
+		t.Fatalf("Expected KindStem root, got kind %d", s.Root().Kind())
 	}
 
 	// Check that both values are present
-	if !bytes.Equal(stemNode.Values[0], values[0]) {
+	v1, _ := s.Get(key1, nil)
+	if !bytes.Equal(v1, value1) {
 		t.Errorf("Value at index 0 mismatch")
 	}
-	if !bytes.Equal(stemNode.Values[10], value) {
+	v2, _ := s.Get(key2, nil)
+	if !bytes.Equal(v2, value2) {
 		t.Errorf("Value at index 10 mismatch")
 	}
 }
 
-// TestStemNodeInsertDifferentStem tests inserting values with different stems
+// TestStemNodeInsertDifferentStem tests inserting values with different stems via NodeStore.
 func TestStemNodeInsertDifferentStem(t *testing.T) {
-	stem1 := make([]byte, 31)
-	for i := range stem1 {
-		stem1[i] = 0x00
-	}
+	s := NewNodeStore()
 
-	var values [256][]byte
-	values[0] = common.HexToHash("0x0101").Bytes()
-
-	node := &StemNode{
-		Stem:   stem1,
-		Values: values[:],
-		depth:  0,
+	// Insert first value with stem of all zeros
+	key1 := make([]byte, 32)
+	key1[31] = 0
+	value1 := common.HexToHash("0x0101").Bytes()
+	if err := s.Insert(key1, value1, nil); err != nil {
+		t.Fatal(err)
 	}
 
 	// Insert with a different stem (first bit different)
-	key := make([]byte, 32)
-	key[0] = 0x80 // First bit is 1 instead of 0
-	value := common.HexToHash("0x0202").Bytes()
-
-	newNode, err := node.Insert(key, value, nil, 0)
-	if err != nil {
-		t.Fatalf("Failed to insert: %v", err)
+	key2 := make([]byte, 32)
+	key2[0] = 0x80 // First bit is 1 instead of 0
+	value2 := common.HexToHash("0x0202").Bytes()
+	if err := s.Insert(key2, value2, nil); err != nil {
+		t.Fatal(err)
 	}
 
 	// Should now be an InternalNode
-	internalNode, ok := newNode.(*InternalNode)
-	if !ok {
-		t.Fatalf("Expected InternalNode, got %T", newNode)
+	if s.Root().Kind() != KindInternal {
+		t.Fatalf("Expected KindInternal root, got kind %d", s.Root().Kind())
 	}
 
 	// Check depth
-	if internalNode.depth != 0 {
-		t.Errorf("Expected depth 0, got %d", internalNode.depth)
+	rootNode := s.getInternal(s.Root().Index())
+	if rootNode.depth != 0 {
+		t.Errorf("Expected depth 0, got %d", rootNode.depth)
 	}
 
-	// Original stem should be on the left (bit 0)
-	leftStem, ok := internalNode.left.(*StemNode)
-	if !ok {
-		t.Fatalf("Expected left child to be StemNode, got %T", internalNode.left)
+	// Verify both values are retrievable
+	v1, _ := s.Get(key1, nil)
+	if !bytes.Equal(v1, value1) {
+		t.Error("Value 1 mismatch")
 	}
-	if !bytes.Equal(leftStem.Stem, stem1) {
-		t.Errorf("Left stem mismatch")
-	}
-
-	// New stem should be on the right (bit 1)
-	rightStem, ok := internalNode.right.(*StemNode)
-	if !ok {
-		t.Fatalf("Expected right child to be StemNode, got %T", internalNode.right)
-	}
-	if !bytes.Equal(rightStem.Stem, key[:31]) {
-		t.Errorf("Right stem mismatch")
+	v2, _ := s.Get(key2, nil)
+	if !bytes.Equal(v2, value2) {
+		t.Error("Value 2 mismatch")
 	}
 }
 
-// TestStemNodeInsertInvalidValueLength tests inserting value with invalid length
+// TestStemNodeInsertInvalidValueLength tests inserting value with invalid length via NodeStore.
 func TestStemNodeInsertInvalidValueLength(t *testing.T) {
-	stem := make([]byte, 31)
-	var values [256][]byte
+	s := NewNodeStore()
 
-	node := &StemNode{
-		Stem:   stem,
-		Values: values[:],
-		depth:  0,
-	}
-
-	// Try to insert value with wrong length
 	key := make([]byte, 32)
-	copy(key[:31], stem)
 	invalidValue := []byte{1, 2, 3} // Not 32 bytes
 
-	_, err := node.Insert(key, invalidValue, nil, 0)
+	err := s.Insert(key, invalidValue, nil)
 	if err == nil {
 		t.Fatal("Expected error for invalid value length")
 	}
@@ -147,220 +125,209 @@ func TestStemNodeInsertInvalidValueLength(t *testing.T) {
 	}
 }
 
-// TestStemNodeCopy tests the Copy method
+// TestStemNodeCopy tests the Copy method via NodeStore.
 func TestStemNodeCopy(t *testing.T) {
-	stem := make([]byte, 31)
-	for i := range stem {
-		stem[i] = byte(i)
+	s := NewNodeStore()
+
+	key1 := make([]byte, 32)
+	for i := range 31 {
+		key1[i] = byte(i)
+	}
+	key1[31] = 0
+	value1 := common.HexToHash("0x0101").Bytes()
+
+	key2 := make([]byte, 32)
+	copy(key2[:31], key1[:31])
+	key2[31] = 255
+	value2 := common.HexToHash("0x0202").Bytes()
+
+	if err := s.Insert(key1, value1, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Insert(key2, value2, nil); err != nil {
+		t.Fatal(err)
 	}
 
-	var values [256][]byte
-	values[0] = common.HexToHash("0x0101").Bytes()
-	values[255] = common.HexToHash("0x0202").Bytes()
+	ns := s.Copy()
 
-	node := &StemNode{
-		Stem:   stem,
-		Values: values[:],
-		depth:  10,
-	}
-
-	// Create a copy
-	copied := node.Copy()
-	copiedStem, ok := copied.(*StemNode)
-	if !ok {
-		t.Fatalf("Expected StemNode, got %T", copied)
-	}
-
-	// Check that values are equal but not the same slice
-	if !bytes.Equal(copiedStem.Stem, node.Stem) {
-		t.Errorf("Stem mismatch after copy")
-	}
-	if &copiedStem.Stem[0] == &node.Stem[0] {
-		t.Error("Stem slice not properly cloned")
-	}
-
-	// Check values
-	if !bytes.Equal(copiedStem.Values[0], node.Values[0]) {
+	// Check that values are equal
+	v1, _ := ns.Get(key1, nil)
+	if !bytes.Equal(v1, value1) {
 		t.Errorf("Value at index 0 mismatch after copy")
 	}
-	if !bytes.Equal(copiedStem.Values[255], node.Values[255]) {
+	v2, _ := ns.Get(key2, nil)
+	if !bytes.Equal(v2, value2) {
 		t.Errorf("Value at index 255 mismatch after copy")
-	}
-
-	// Check that value slices are cloned
-	if copiedStem.Values[0] != nil && &copiedStem.Values[0][0] == &node.Values[0][0] {
-		t.Error("Value slice not properly cloned")
-	}
-
-	// Check depth
-	if copiedStem.depth != node.depth {
-		t.Errorf("Depth mismatch: expected %d, got %d", node.depth, copiedStem.depth)
 	}
 }
 
-// TestStemNodeHash tests the Hash method
+// TestStemNodeHash tests the Hash method.
 func TestStemNodeHash(t *testing.T) {
-	stem := make([]byte, 31)
-	var values [256][]byte
-	values[0] = common.HexToHash("0x0101").Bytes()
+	s := NewNodeStore()
 
-	node := &StemNode{
-		Stem:   stem,
-		Values: values[:],
-		depth:  0,
+	key := make([]byte, 32)
+	key[31] = 0
+	value := common.HexToHash("0x0101").Bytes()
+	if err := s.Insert(key, value, nil); err != nil {
+		t.Fatal(err)
 	}
 
-	hash1 := node.Hash()
+	hash1 := s.ComputeHash(s.Root())
 
 	// Hash should be deterministic
-	hash2 := node.Hash()
+	hash2 := s.ComputeHash(s.Root())
 	if hash1 != hash2 {
 		t.Errorf("Hash not deterministic: %x != %x", hash1, hash2)
 	}
 
 	// Changing a value should change the hash
-	node.Values[1] = common.HexToHash("0x0202").Bytes()
-	node.mustRecompute = true
-	hash3 := node.Hash()
+	key2 := make([]byte, 32)
+	key2[31] = 1
+	value2 := common.HexToHash("0x0202").Bytes()
+	if err := s.Insert(key2, value2, nil); err != nil {
+		t.Fatal(err)
+	}
+	hash3 := s.ComputeHash(s.Root())
 	if hash1 == hash3 {
 		t.Error("Hash didn't change after modifying values")
 	}
 }
 
-// TestStemNodeGetValuesAtStem tests GetValuesAtStem method
+// TestStemNodeGetValuesAtStem tests GetValuesAtStem method via NodeStore.
 func TestStemNodeGetValuesAtStem(t *testing.T) {
+	s := NewNodeStore()
+
 	stem := make([]byte, 31)
 	for i := range stem {
 		stem[i] = byte(i)
 	}
 
-	var values [256][]byte
+	values := make([][]byte, 256)
 	values[0] = common.HexToHash("0x0101").Bytes()
 	values[10] = common.HexToHash("0x0202").Bytes()
 	values[255] = common.HexToHash("0x0303").Bytes()
 
-	node := &StemNode{
-		Stem:   stem,
-		Values: values[:],
-		depth:  0,
+	if err := s.InsertValuesAtStem(stem, values, nil); err != nil {
+		t.Fatal(err)
 	}
 
 	// GetValuesAtStem with matching stem
-	retrievedValues, err := node.GetValuesAtStem(stem, nil)
+	retrievedValues, err := s.GetValuesAtStem(stem, nil)
 	if err != nil {
 		t.Fatalf("Failed to get values: %v", err)
 	}
 
-	// Check that all values match
-	for i := range 256 {
-		if !bytes.Equal(retrievedValues[i], values[i]) {
-			t.Errorf("Value mismatch at index %d", i)
-		}
+	if !bytes.Equal(retrievedValues[0], values[0]) {
+		t.Error("Value at index 0 mismatch")
+	}
+	if !bytes.Equal(retrievedValues[10], values[10]) {
+		t.Error("Value at index 10 mismatch")
+	}
+	if !bytes.Equal(retrievedValues[255], values[255]) {
+		t.Error("Value at index 255 mismatch")
 	}
 
-	// GetValuesAtStem with different stem should return nil
+	// GetValuesAtStem with different stem should return nil values
 	differentStem := make([]byte, 31)
 	differentStem[0] = 0xFF
 
-	shouldBeNil, err := node.GetValuesAtStem(differentStem, nil)
+	shouldBeEmpty, err := s.GetValuesAtStem(differentStem, nil)
 	if err != nil {
 		t.Fatalf("Failed to get values with different stem: %v", err)
 	}
 
-	if shouldBeNil != nil {
-		t.Error("Expected nil for different stem, got non-nil")
+	allNil := true
+	for _, v := range shouldBeEmpty {
+		if v != nil {
+			allNil = false
+			break
+		}
+	}
+	if !allNil {
+		t.Error("Expected all nil values for different stem")
 	}
 }
 
-// TestStemNodeInsertValuesAtStem tests InsertValuesAtStem method
+// TestStemNodeInsertValuesAtStem tests InsertValuesAtStem method via NodeStore.
 func TestStemNodeInsertValuesAtStem(t *testing.T) {
+	s := NewNodeStore()
+
 	stem := make([]byte, 31)
-	var values [256][]byte
+	values := make([][]byte, 256)
 	values[0] = common.HexToHash("0x0101").Bytes()
 
-	node := &StemNode{
-		Stem:   stem,
-		Values: values[:],
-		depth:  0,
+	if err := s.InsertValuesAtStem(stem, values, nil); err != nil {
+		t.Fatal(err)
 	}
 
 	// Insert new values at the same stem
-	var newValues [256][]byte
+	newValues := make([][]byte, 256)
 	newValues[1] = common.HexToHash("0x0202").Bytes()
 	newValues[2] = common.HexToHash("0x0303").Bytes()
 
-	newNode, err := node.InsertValuesAtStem(stem, newValues[:], nil, 0)
-	if err != nil {
-		t.Fatalf("Failed to insert values: %v", err)
-	}
-
-	stemNode, ok := newNode.(*StemNode)
-	if !ok {
-		t.Fatalf("Expected StemNode, got %T", newNode)
+	if err := s.InsertValuesAtStem(stem, newValues, nil); err != nil {
+		t.Fatal(err)
 	}
 
 	// Check that all values are present
-	if !bytes.Equal(stemNode.Values[0], values[0]) {
+	retrieved, err := s.GetValuesAtStem(stem, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(retrieved[0], values[0]) {
 		t.Error("Original value at index 0 missing")
 	}
-	if !bytes.Equal(stemNode.Values[1], newValues[1]) {
+	if !bytes.Equal(retrieved[1], newValues[1]) {
 		t.Error("New value at index 1 missing")
 	}
-	if !bytes.Equal(stemNode.Values[2], newValues[2]) {
+	if !bytes.Equal(retrieved[2], newValues[2]) {
 		t.Error("New value at index 2 missing")
 	}
 }
 
-// TestStemNodeGetHeight tests GetHeight method
+// TestStemNodeGetHeight tests GetHeight method via NodeStore.
 func TestStemNodeGetHeight(t *testing.T) {
-	node := &StemNode{
-		Stem:   make([]byte, 31),
-		Values: make([][]byte, 256),
-		depth:  0,
+	s := NewNodeStore()
+
+	key := make([]byte, 32)
+	value := common.HexToHash("0x01").Bytes()
+	if err := s.Insert(key, value, nil); err != nil {
+		t.Fatal(err)
 	}
 
-	height := node.GetHeight()
+	height := s.GetHeight(s.Root())
 	if height != 1 {
 		t.Errorf("Expected height 1, got %d", height)
 	}
 }
 
-// TestStemNodeCollectNodes tests CollectNodes method
+// TestStemNodeCollectNodes tests CollectNodes method via NodeStore.
 func TestStemNodeCollectNodes(t *testing.T) {
+	s := NewNodeStore()
+
 	stem := make([]byte, 31)
-	var values [256][]byte
+	values := make([][]byte, 256)
 	values[0] = common.HexToHash("0x0101").Bytes()
 
-	node := &StemNode{
-		Stem:   stem,
-		Values: values[:],
-		depth:  0,
+	if err := s.InsertValuesAtStem(stem, values, nil); err != nil {
+		t.Fatal(err)
 	}
 
 	var collectedPaths [][]byte
-	var collectedNodes []BinaryNode
-
-	flushFn := func(path []byte, n BinaryNode) {
-		// Make a copy of the path
+	flushFn := func(path []byte, hash common.Hash, serialized []byte) {
 		pathCopy := make([]byte, len(path))
 		copy(pathCopy, path)
 		collectedPaths = append(collectedPaths, pathCopy)
-		collectedNodes = append(collectedNodes, n)
 	}
 
-	err := node.CollectNodes([]byte{0, 1, 0}, flushFn)
+	err := s.CollectNodes(s.Root(), []byte{0, 1, 0}, flushFn, MaxGroupDepth)
 	if err != nil {
 		t.Fatalf("Failed to collect nodes: %v", err)
 	}
 
 	// Should have collected one node (itself)
-	if len(collectedNodes) != 1 {
-		t.Errorf("Expected 1 collected node, got %d", len(collectedNodes))
-	}
-
-	// Check that the collected node is the same
-	if collectedNodes[0] != node {
-		t.Error("Collected node doesn't match original")
+	if len(collectedPaths) != 1 {
+		t.Errorf("Expected 1 collected node, got %d", len(collectedPaths))
 	}
 
 	// Check the path

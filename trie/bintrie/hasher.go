@@ -37,3 +37,11 @@ func newSha256() hash.Hash {
 func returnSha256(h hash.Hash) {
 	sha256Pool.Put(h)
 }
+
+// sha256Sum256 computes a sha256 digest and returns it as a common.Hash.
+func sha256Sum256(data []byte) [32]byte {
+	return sha256.Sum256(data)
+}
+
+// parallelHashDepth controls below which depth hashing is parallelised.
+const parallelHashDepth = 4

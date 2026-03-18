@@ -17,109 +17,135 @@
 package bintrie
 
 import (
-	"bytes"
-	"errors"
-	"fmt"
-	"slices"
+	"math/bits"
 
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// StemNode represents a group of `NodeWith` values sharing the same stem.
+// StemNode represents a group of `StemNodeWidth` values sharing the same stem.
+// It uses a packed representation: bitmap indicates which of the 256 positions
+// have values, and valueData stores the values contiguously in bitmap order.
 type StemNode struct {
-	Stem   []byte   // Stem path to get to StemNodeWidth values
-	Values [][]byte // All values, indexed by the last byte of the key.
-	depth  int      // Depth of the node
+	Stem      [StemSize]byte       // Stem path to get to StemNodeWidth values
+	bitmap    [StemBitmapSize]byte // bitmap indicating which positions have values
+	valueData []byte              // packed value data (count * HashSize bytes)
+	count     uint16              // number of values present
+	depth     uint8               // Depth of the node
+	shared    bool                // true if valueData is shared with serialized input
 
 	mustRecompute bool        // true if the hash needs to be recomputed
 	hash          common.Hash // cached hash when mustRecompute == false
 }
 
-// Get retrieves the value for the given key.
-func (bt *StemNode) Get(key []byte, _ NodeResolverFn) ([]byte, error) {
-	panic("this should not be called directly")
+// posInData returns the index within valueData for the given suffix.
+// Returns -1 if the suffix is not present.
+func (sn *StemNode) posInData(suffix byte) int {
+	idx := int(suffix)
+	if sn.bitmap[idx/8]>>(7-(idx%8))&1 == 0 {
+		return -1
+	}
+	// Count the bits set before this position to determine the offset
+	pos := 0
+	byteIdx := idx / 8
+	for i := 0; i < byteIdx; i++ {
+		pos += bits.OnesCount8(sn.bitmap[i])
+	}
+	// Count bits in the partial byte
+	mask := byte(0xFF) << (8 - (idx % 8))
+	pos += bits.OnesCount8(sn.bitmap[byteIdx] & mask)
+	return pos
 }
 
-// Insert inserts a new key-value pair into the node.
-func (bt *StemNode) Insert(key []byte, value []byte, _ NodeResolverFn, depth int) (BinaryNode, error) {
-	if !bytes.Equal(bt.Stem, key[:StemSize]) {
-		bitStem := bt.Stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
+// getValue returns the value at the given suffix, or nil if not present.
+func (sn *StemNode) getValue(suffix byte) []byte {
+	pos := sn.posInData(suffix)
+	if pos < 0 {
+		return nil
+	}
+	start := pos * HashSize
+	return sn.valueData[start : start+HashSize]
+}
 
-		n := &InternalNode{depth: bt.depth, mustRecompute: true}
-		bt.depth++
-		var child, other *BinaryNode
-		if bitStem == 0 {
-			n.left = bt
-			child = &n.left
-			other = &n.right
-		} else {
-			n.right = bt
-			child = &n.right
-			other = &n.left
+// hasValue returns true if the given suffix has a value.
+func (sn *StemNode) hasValue(suffix byte) bool {
+	idx := int(suffix)
+	return sn.bitmap[idx/8]>>(7-(idx%8))&1 == 1
+}
+
+// allValues returns all 256 values (nil for absent positions).
+func (sn *StemNode) allValues() [][]byte {
+	values := make([][]byte, StemNodeWidth)
+	dataIdx := 0
+	for i := range StemNodeWidth {
+		if sn.bitmap[i/8]>>(7-(i%8))&1 == 1 {
+			values[i] = sn.valueData[dataIdx*HashSize : (dataIdx+1)*HashSize]
+			dataIdx++
 		}
-
-		bitKey := key[n.depth/8] >> (7 - (n.depth % 8)) & 1
-		if bitKey == bitStem {
-			var err error
-			*child, err = (*child).Insert(key, value, nil, depth+1)
-			if err != nil {
-				return n, fmt.Errorf("insert error: %w", err)
-			}
-			*other = Empty{}
-		} else {
-			var values [StemNodeWidth][]byte
-			values[key[StemSize]] = value
-			*other = &StemNode{
-				Stem:          slices.Clone(key[:StemSize]),
-				Values:        values[:],
-				depth:         depth + 1,
-				mustRecompute: true,
-			}
-		}
-		return n, nil
 	}
-	if len(value) != HashSize {
-		return bt, errors.New("invalid insertion: value length")
-	}
-	bt.Values[key[StemSize]] = value
-	bt.mustRecompute = true
-	return bt, nil
+	return values
 }
 
-// Copy creates a deep copy of the node.
-func (bt *StemNode) Copy() BinaryNode {
-	var values [StemNodeWidth][]byte
-	for i, v := range bt.Values {
-		values[i] = slices.Clone(v)
-	}
-	return &StemNode{
-		Stem:          slices.Clone(bt.Stem),
-		Values:        values[:],
-		depth:         bt.depth,
-		hash:          bt.hash,
-		mustRecompute: bt.mustRecompute,
+// ensureWritable makes the valueData writable (copies if shared with serialized input).
+func (sn *StemNode) ensureWritable() {
+	if sn.shared || cap(sn.valueData)-len(sn.valueData) < HashSize {
+		newData := make([]byte, len(sn.valueData), len(sn.valueData)+HashSize*4)
+		copy(newData, sn.valueData)
+		sn.valueData = newData
+		sn.shared = false
 	}
 }
 
-// GetHeight returns the height of the node.
-func (bt *StemNode) GetHeight() int {
-	return 1
+// setValue sets or inserts a value at the given suffix.
+func (sn *StemNode) setValue(suffix byte, value []byte) {
+	idx := int(suffix)
+	pos := sn.posInData(suffix)
+	if pos >= 0 {
+		// Overwrite existing value
+		copy(sn.valueData[pos*HashSize:], value[:HashSize])
+		return
+	}
+	// New value: insert into bitmap and valueData at the correct position.
+	sn.bitmap[idx/8] |= 1 << (7 - (idx % 8))
+	sn.count++
+
+	// Find the correct position in valueData (count bits before this position).
+	insertPos := 0
+	byteIdx := idx / 8
+	for i := 0; i < byteIdx; i++ {
+		insertPos += bits.OnesCount8(sn.bitmap[i])
+	}
+	mask := byte(0xFF) << (8 - (idx % 8))
+	insertPos += bits.OnesCount8(sn.bitmap[byteIdx] & mask)
+
+	// Insert value at the correct position in valueData.
+	insertOffset := insertPos * HashSize
+	// Grow the slice
+	sn.valueData = append(sn.valueData, make([]byte, HashSize)...)
+	// Shift data after insertion point
+	copy(sn.valueData[insertOffset+HashSize:], sn.valueData[insertOffset:len(sn.valueData)-HashSize])
+	// Copy the new value
+	copy(sn.valueData[insertOffset:], value[:HashSize])
 }
 
 // Hash returns the hash of the node.
-func (bt *StemNode) Hash() common.Hash {
-	if !bt.mustRecompute {
-		return bt.hash
+func (sn *StemNode) Hash() common.Hash {
+	if !sn.mustRecompute {
+		return sn.hash
 	}
 
 	var data [StemNodeWidth]common.Hash
 	h := newSha256()
 	defer returnSha256(h)
-	for i, v := range bt.Values {
-		if v != nil {
+
+	// Hash each present value
+	dataIdx := 0
+	for i := range StemNodeWidth {
+		if sn.bitmap[i/8]>>(7-(i%8))&1 == 1 {
+			v := sn.valueData[dataIdx*HashSize : (dataIdx+1)*HashSize]
 			h.Reset()
 			h.Write(v)
 			h.Sum(data[i][:0])
+			dataIdx++
 		}
 	}
 	h.Reset()
@@ -140,94 +166,18 @@ func (bt *StemNode) Hash() common.Hash {
 	}
 
 	h.Reset()
-	h.Write(bt.Stem)
+	h.Write(sn.Stem[:])
 	h.Write([]byte{0})
 	h.Write(data[0][:])
-	bt.hash = common.BytesToHash(h.Sum(nil))
-	bt.mustRecompute = false
-	return bt.hash
-}
-
-// CollectNodes collects all child nodes at a given path, and flushes it
-// into the provided node collector.
-func (bt *StemNode) CollectNodes(path []byte, flush NodeFlushFn) error {
-	flush(path, bt)
-	return nil
-}
-
-// GetValuesAtStem retrieves the group of values located at the given stem key.
-func (bt *StemNode) GetValuesAtStem(stem []byte, _ NodeResolverFn) ([][]byte, error) {
-	if !bytes.Equal(bt.Stem, stem) {
-		return nil, nil
-	}
-	return bt.Values[:], nil
-}
-
-// InsertValuesAtStem inserts a full value group at the given stem in the internal node.
-// Already-existing values will be overwritten.
-func (bt *StemNode) InsertValuesAtStem(key []byte, values [][]byte, _ NodeResolverFn, depth int) (BinaryNode, error) {
-	if !bytes.Equal(bt.Stem, key[:StemSize]) {
-		bitStem := bt.Stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
-
-		n := &InternalNode{depth: bt.depth, mustRecompute: true}
-		bt.depth++
-		var child, other *BinaryNode
-		if bitStem == 0 {
-			n.left = bt
-			child = &n.left
-			other = &n.right
-		} else {
-			n.right = bt
-			child = &n.right
-			other = &n.left
-		}
-
-		bitKey := key[n.depth/8] >> (7 - (n.depth % 8)) & 1
-		if bitKey == bitStem {
-			var err error
-			*child, err = (*child).InsertValuesAtStem(key, values, nil, depth+1)
-			if err != nil {
-				return n, fmt.Errorf("insert error: %w", err)
-			}
-			*other = Empty{}
-		} else {
-			*other = &StemNode{
-				Stem:          slices.Clone(key[:StemSize]),
-				Values:        values,
-				depth:         n.depth + 1,
-				mustRecompute: true,
-			}
-		}
-		return n, nil
-	}
-
-	// same stem, just merge the two value lists
-	for i, v := range values {
-		if v != nil {
-			bt.Values[i] = v
-			bt.mustRecompute = true
-		}
-	}
-	return bt, nil
-}
-
-func (bt *StemNode) toDot(parent, path string) string {
-	me := fmt.Sprintf("stem%s", path)
-	ret := fmt.Sprintf("%s [label=\"stem=%x c=%x\"]\n", me, bt.Stem, bt.Hash())
-	ret = fmt.Sprintf("%s %s -> %s\n", ret, parent, me)
-	for i, v := range bt.Values {
-		if v != nil {
-			ret = fmt.Sprintf("%s%s%x [label=\"%x\"]\n", ret, me, i, v)
-			ret = fmt.Sprintf("%s%s -> %s%x\n", ret, me, me, i)
-		}
-	}
-	return ret
+	sn.hash = common.BytesToHash(h.Sum(nil))
+	sn.mustRecompute = false
+	return sn.hash
 }
 
 // Key returns the full key for the given index.
-func (bt *StemNode) Key(i int) []byte {
+func (sn *StemNode) Key(i int) []byte {
 	var ret [HashSize]byte
-	copy(ret[:], bt.Stem)
+	copy(ret[:], sn.Stem[:])
 	ret[StemSize] = byte(i)
 	return ret[:]
 }
