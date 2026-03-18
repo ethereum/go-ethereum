@@ -538,28 +538,7 @@ func handleReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 		return fmt.Errorf("Receipts: %w", err)
 	}
 
-	metadata := func() interface{} {
-		hasher := trie.NewStackTrie(nil)
-		hashes := make([]common.Hash, len(receiptLists))
-		for i := range receiptLists {
-			hashes[i] = types.DeriveSha(receiptLists[i].Derivable(), hasher)
-		}
-		return hashes
-	}
-
-	var enc ReceiptsRLPResponse
-	for i := range receiptLists {
-		encReceipts, err := receiptLists[i].EncodeForStorage()
-		if err != nil {
-			return fmt.Errorf("Receipts: invalid list %d: %v", i, err)
-		}
-		enc = append(enc, encReceipts)
-	}
-	return peer.dispatchResponse(&Response{
-		id:   res.RequestId,
-		code: ReceiptsMsg,
-		Res:  &enc,
-	}, metadata)
+	return dispatchReceipts(res.RequestId, receiptLists, peer)
 }
 
 func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
@@ -588,6 +567,10 @@ func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
 		receiptLists = complete
 	}
 
+	return dispatchReceipts(res.RequestId, receiptLists, peer)
+}
+
+func dispatchReceipts(requestId uint64, receiptLists []*ReceiptList, peer *Peer) error {
 	metadata := func() interface{} {
 		hasher := trie.NewStackTrie(nil)
 		hashes := make([]common.Hash, len(receiptLists))
@@ -596,6 +579,7 @@ func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
 		}
 		return hashes
 	}
+
 	var enc ReceiptsRLPResponse
 	for i := range receiptLists {
 		encReceipts, err := receiptLists[i].EncodeForStorage()
@@ -605,7 +589,7 @@ func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
 		enc = append(enc, encReceipts)
 	}
 	return peer.dispatchResponse(&Response{
-		id:   res.RequestId,
+		id:   requestId,
 		code: ReceiptsMsg,
 		Res:  &enc,
 	}, metadata)
