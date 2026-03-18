@@ -142,9 +142,17 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	if err != nil {
 		return nil, err
 	}
-	end, err := resolveSpecial(f.end)
-	if err != nil {
-		return nil, err
+	var end uint64
+	if f.begin != f.end {
+		end, err = resolveSpecial(f.end)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		end = begin
+	}
+	if begin > end {
+		return nil, errInvalidBlockRange
 	}
 	if f.rangeLimit != 0 && (end-begin) > f.rangeLimit {
 		return nil, fmt.Errorf("exceed maximum block range: %d", f.rangeLimit)
@@ -389,9 +397,6 @@ func (f *Filter) rangeLogs(ctx context.Context, firstBlock, lastBlock uint64) ([
 		}()
 	}
 
-	if firstBlock > lastBlock {
-		return nil, nil
-	}
 	mb := f.sys.backend.NewMatcherBackend()
 	defer mb.Close()
 
