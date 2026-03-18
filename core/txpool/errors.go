@@ -16,7 +16,9 @@
 
 package txpool
 
-import "errors"
+import (
+	"errors"
+)
 
 var (
 	// ErrAlreadyKnown is returned if the transactions is already contained
@@ -26,8 +28,9 @@ var (
 	// ErrInvalidSender is returned if the transaction contains an invalid signature.
 	ErrInvalidSender = errors.New("invalid sender")
 
-	// ErrUnderpriced is returned if a transaction's gas price is below the minimum
-	// configured for the transaction pool.
+	// ErrUnderpriced is returned if a transaction's gas price is too low to be
+	// included in the pool. If the gas price is lower than the minimum configured
+	// one for the transaction pool, use ErrTxGasPriceTooLow instead.
 	ErrUnderpriced = errors.New("transaction underpriced")
 
 	// ErrTxPoolOverflow is returned if the transaction pool is full and can't accept
@@ -37,6 +40,10 @@ var (
 	// ErrReplaceUnderpriced is returned if a transaction is attempted to be replaced
 	// with a different one without the required price bump.
 	ErrReplaceUnderpriced = errors.New("replacement transaction underpriced")
+
+	// ErrTxGasPriceTooLow is returned if a transaction's gas price is below the
+	// minimum configured for the transaction pool.
+	ErrTxGasPriceTooLow = errors.New("transaction gas price below minimum")
 
 	// ErrAccountLimitExceeded is returned if a transaction would exceed the number
 	// allowed by a pool for a single account.
@@ -72,6 +79,10 @@ var (
 	ErrDuplicateSpecialTransaction = errors.New("duplicate a special transaction")
 
 	ErrSpecialTxCostOverflow = errors.New("special transaction cost overflow")
+
+	// ErrSpecialTxNotFromSigner is returned if a special transaction is submitted
+	// by an account that is not an authorized signer.
+	ErrSpecialTxNotFromSigner = errors.New("special transaction sender is not a signer")
 
 	ErrMinDeploySMC = errors.New("smart contract creation cost is under allowance")
 )

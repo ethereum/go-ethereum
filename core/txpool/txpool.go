@@ -69,7 +69,7 @@ type TxPool struct {
 // TxPool local submission helpers.
 type LocalTracker interface {
 	Track(tx *types.Transaction)
-	TrackAll(txs []*types.Transaction)
+	IsRetryableReject(err error) bool
 }
 
 // New creates a new transaction pool to gather, sort and filter inbound
@@ -327,18 +327,18 @@ func (p *TxPool) SetLocalTracker(tracker LocalTracker) {
 	p.localTracker = tracker
 }
 
-// AddLocals enqueues a batch of local transactions into the pool if they are
-// valid and tracks them for re-journal/re-submit flows.
-func (p *TxPool) AddLocals(txs []*types.Transaction, sync bool) []error {
-	if p.localTracker != nil {
-		p.localTracker.TrackAll(txs)
-	}
-	return p.Add(txs, sync)
-}
-
-// AddLocal enqueues a single local transaction into the pool if it is valid.
+// AddLocal enqueues a single local transaction into the pool and return the
+// original error. The transaction will be tracked if it was accepted or
+// rejected for a temporary reason, allowing the local tracker to implement
+// re-journal and re-submit flows.
 func (p *TxPool) AddLocal(tx *types.Transaction, sync bool) error {
-	return p.AddLocals([]*types.Transaction{tx}, sync)[0]
+	err := p.Add([]*types.Transaction{tx}, sync)[0]
+	if p.localTracker != nil {
+		if err == nil || p.localTracker.IsRetryableReject(err) {
+			p.localTracker.Track(tx)
+		}
+	}
+	return err
 }
 
 // Pending retrieves all currently processable transactions, grouped by origin

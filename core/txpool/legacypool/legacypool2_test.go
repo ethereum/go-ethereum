@@ -81,12 +81,14 @@ func TestTransactionFutureAttack(t *testing.T) {
 	// Create the pool to test the limit enforcement with
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()))
 	blockchain := newTestBlockChain(eip1559Config, 1000000, statedb, new(event.Feed))
+
 	config := testTxPoolConfig
 	config.GlobalQueue = 100
 	config.GlobalSlots = 100
 	pool := New(config, blockchain)
 	pool.Init(config.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
+
 	fillPool(t, pool)
 	pending, _ := pool.Stats()
 	// Now, future transaction attack starts, let's add a bunch of expensive non-executables, and see if the pending-count drops
@@ -179,7 +181,9 @@ func TestTransactionZAttack(t *testing.T) {
 	ivPending := countInvalidPending()
 	t.Logf("invalid pending: %d\n", ivPending)
 
-	// Now, DETER-Z attack starts, let's add a bunch of expensive non-executables (from N accounts) along with balance-overdraft txs (from one account), and see if the pending-count drops
+	// Now, DETER-Z attack starts, let's add a bunch of expensive non-executables
+	// (from N accounts) along with balance-overdraft txs (from one account), and
+	// see if the pending-count drops
 	for j := 0; j < int(pool.config.GlobalQueue); j++ {
 		futureTxs := types.Transactions{}
 		key, _ := crypto.GenerateKey()

@@ -78,6 +78,11 @@ func (tracker *TxTracker) Track(tx *types.Transaction) {
 	tracker.TrackAll([]*types.Transaction{tx})
 }
 
+// IsRetryableReject determines whether an add error is temporary and retryable.
+func (tracker *TxTracker) IsRetryableReject(err error) bool {
+	return IsTemporaryReject(err)
+}
+
 // TrackAll adds a list of transactions to the tracked set.
 func (tracker *TxTracker) TrackAll(txs []*types.Transaction) {
 	tracker.mu.Lock()
