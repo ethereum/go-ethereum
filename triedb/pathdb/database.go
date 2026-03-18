@@ -102,11 +102,7 @@ func binaryNodeHasher(blob []byte) (common.Hash, error) {
 	if len(blob) == 0 {
 		return types.EmptyBinaryHash, nil
 	}
-	n, err := bintrie.DeserializeNode(blob, 0)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	return n.Hash(), nil
+	return bintrie.DeserializeAndHash(blob, 0)
 }
 
 // Database is a multiple-layered structure for maintaining in-memory states
