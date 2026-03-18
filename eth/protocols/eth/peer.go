@@ -51,6 +51,7 @@ const (
 type receiptRequest struct {
 	request     []common.Hash  // block hashes corresponding to the requested receipts
 	gasUsed     []uint64       // block gas used corresponding to the requested receipts
+	timestamps  []uint64       // block timestamps corresponding to the requested receipts
 	list        []*ReceiptList // list of partially collected receipts
 	lastLogSize uint64         // log size of last receipt list
 }
@@ -75,6 +76,8 @@ type Peer struct {
 	reqCancel   chan *cancel   // Dispatch channel to cancel pending requests and untrack them
 	resDispatch chan *response // Dispatch channel to fulfil pending requests and untrack them
 
+	chainConfig *params.ChainConfig // Chain configuration for fork-aware validation
+
 	receiptBuffer     map[uint64]*receiptRequest // Previously requested receipts to buffer partial receipts
 	receiptBufferLock sync.Mutex                 // Lock for protecting the receiptBuffer
 
@@ -83,7 +86,7 @@ type Peer struct {
 
 // NewPeer creates a wrapper for a network connection and negotiated  protocol
 // version.
-func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Peer {
+func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool, chainConfig *params.ChainConfig) *Peer {
 	cap := p2p.Cap{Name: ProtocolName, Version: version}
 	id := p.ID().String()
 	peer := &Peer{
@@ -99,6 +102,7 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 		reqCancel:     make(chan *cancel),
 		resDispatch:   make(chan *response),
 		txpool:        txpool,
+		chainConfig:   chainConfig,
 		receiptBuffer: make(map[uint64]*receiptRequest),
 		term:          make(chan struct{}),
 	}
@@ -355,9 +359,9 @@ func (p *Peer) RequestBodies(hashes []common.Hash, sink chan *Response) (*Reques
 }
 
 // RequestReceipts fetches a batch of transaction receipts from a remote node.
-// gasUsed provides the total gas used per block, used to estimate the maximum
-// log byte size.
-func (p *Peer) RequestReceipts(hashes []common.Hash, gasUsed []uint64, sink chan *Response) (*Request, error) {
+// `gasUsed` provides the total gas used per block, used to estimate the maximum
+// log byte size. `timestamps` provides the block timestamps for fork aware validation.
+func (p *Peer) RequestReceipts(hashes []common.Hash, gasUsed []uint64, timestamps []uint64, sink chan *Response) (*Request, error) {
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
 	id := rand.Uint64()
 
@@ -377,8 +381,9 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, gasUsed []uint64, sink chan
 		}
 		p.receiptBufferLock.Lock()
 		p.receiptBuffer[id] = &receiptRequest{
-			request: hashes,
-			gasUsed: gasUsed,
+			request:    hashes,
+			gasUsed:    gasUsed,
+			timestamps: timestamps,
 		}
 		p.receiptBufferLock.Unlock()
 	} else {
@@ -459,7 +464,8 @@ func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList, las
 			lastBlock += len(buffer.list) - 1
 		}
 		gasUsed := buffer.gasUsed[lastBlock]
-		logSize, err := p.validateLastBlockReceipt(receiptLists, requestId, gasUsed)
+		timestamp := buffer.timestamps[lastBlock]
+		logSize, err := p.validateLastBlockReceipt(receiptLists, requestId, gasUsed, timestamp)
 		if err != nil {
 			delete(p.receiptBuffer, requestId)
 			return err
@@ -508,7 +514,7 @@ func (p *Peer) flushReceipts(requestId uint64) []*ReceiptList {
 // Note that the last receipt response (which completes receiptLists of a pending block)
 // is not verified here. Those response doesn't need hueristics below since they can be
 // verified by its trie root.
-func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList, id uint64, gasUsed uint64) (uint64, error) {
+func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList, id uint64, gasUsed uint64, timestamp uint64) (uint64, error) {
 	lastReceipts := receiptLists[len(receiptLists)-1]
 
 	// If the receipt is in the middle of retrieval, use the buffered data.
@@ -525,7 +531,13 @@ func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList, id uint64, 
 	}
 
 	// Verify that the total number of transactions delivered is under the limit.
-	if uint64(previousTxs+lastReceipts.items.Len()) > gasUsed/21_000 {
+	var minTxGas uint64
+	if p.chainConfig.AmsterdamTime != nil && *p.chainConfig.AmsterdamTime <= timestamp {
+		minTxGas = 4500
+	} else {
+		minTxGas = 21000
+	}
+	if uint64(previousTxs+lastReceipts.items.Len()) > gasUsed/minTxGas {
 		// should be dropped, don't clear the buffer
 		return 0, fmt.Errorf("total number of tx exceeded limit")
 	}

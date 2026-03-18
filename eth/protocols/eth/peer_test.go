@@ -52,7 +52,7 @@ func newTestPeer(name string, version uint, backend Backend) (*testPeer, <-chan 
 	var id enode.ID
 	rand.Read(id[:])
 
-	peer := NewPeer(version, p2p.NewPeer(id, name, nil), net, backend.TxPool())
+	peer := NewPeer(version, p2p.NewPeer(id, name, nil), net, backend.TxPool(), nil)
 	errc := make(chan error, 1)
 	go func() {
 		defer app.Close()
@@ -115,7 +115,7 @@ func TestPartialReceipt(t *testing.T) {
 		t.Fatalf("failed to create random peer: %v", err)
 	}
 
-	peer := NewPeer(ETH70, p2p.NewPeer(id, "peer", nil), net, nil)
+	peer := NewPeer(ETH70, p2p.NewPeer(id, "peer", nil), net, nil, nil)
 
 	packetCh := make(chan *GetReceiptsPacket70, 1)
 	go func() {
@@ -149,9 +149,15 @@ func TestPartialReceipt(t *testing.T) {
 		backend.chain.GetBlockByNumber(3).GasUsed(),
 		backend.chain.GetBlockByNumber(4).GasUsed(),
 	}
+	timestamps := []uint64{
+		backend.chain.GetBlockByNumber(1).Time(),
+		backend.chain.GetBlockByNumber(2).Time(),
+		backend.chain.GetBlockByNumber(3).Time(),
+		backend.chain.GetBlockByNumber(4).Time(),
+	}
 
 	sink := make(chan *Response, 1)
-	req, err := peer.RequestReceipts(hashes, gasUsed, sink)
+	req, err := peer.RequestReceipts(hashes, gasUsed, timestamps, sink)
 	if err != nil {
 		t.Fatalf("RequestReceipts failed: %v", err)
 	}
@@ -313,7 +319,7 @@ func TestPartialReceiptFailure(t *testing.T) {
 		t.Fatalf("failed to create random peer: %v", err)
 	}
 
-	peer := NewPeer(ETH70, p2p.NewPeer(id, "peer", nil), net, nil)
+	peer := NewPeer(ETH70, p2p.NewPeer(id, "peer", nil), net, nil, nil)
 
 	packetCh := make(chan *GetReceiptsPacket70, 1)
 	go func() {
@@ -370,10 +376,16 @@ func TestPartialReceiptFailure(t *testing.T) {
 		backend.chain.GetBlockByNumber(3).GasUsed(),
 		backend.chain.GetBlockByNumber(4).GasUsed(),
 	}
+	timestamps := []uint64{
+		backend.chain.GetBlockByNumber(1).Time(),
+		backend.chain.GetBlockByNumber(2).Time(),
+		backend.chain.GetBlockByNumber(3).Time(),
+		backend.chain.GetBlockByNumber(4).Time(),
+	}
 
 	// Case 1 ) The number of receipts exceeds maximum tx count
 	sink := make(chan *Response, 1)
-	req, err := peer.RequestReceipts(hashes, gasUsed, sink)
+	req, err := peer.RequestReceipts(hashes, gasUsed, timestamps, sink)
 	if err != nil {
 		t.Fatalf("RequestReceipts failed: %v", err)
 	}
@@ -406,7 +418,7 @@ func TestPartialReceiptFailure(t *testing.T) {
 	}
 
 	// Case 2 ) Total receipt size exceeds the block gas limit
-	req, err = peer.RequestReceipts(hashes, gasUsed, sink)
+	req, err = peer.RequestReceipts(hashes, gasUsed, timestamps, sink)
 	if err != nil {
 		t.Fatalf("RequestReceipts failed: %v", err)
 	}

@@ -315,7 +315,7 @@ func createTestPeers(rand *rand.Rand, n int) []*ethPeer {
 		var id enode.ID
 		rand.Read(id[:])
 		p2pPeer := p2p.NewPeer(id, "test", nil)
-		ep := eth.NewPeer(eth.ETH69, p2pPeer, nil, nil)
+		ep := eth.NewPeer(eth.ETH69, p2pPeer, nil, nil, nil)
 		peers[i] = &ethPeer{Peer: ep}
 	}
 	return peers
