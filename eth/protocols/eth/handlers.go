@@ -573,8 +573,6 @@ func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
 		return fmt.Errorf("Receipts: %w", err)
 	}
 
-	// Assign temporary hashing buffer to each list item, the same buffer is shared
-	// between all receipt list instances.
 	receiptLists, err := res.List.Items()
 	if err != nil {
 		return fmt.Errorf("Receipts: %w", err)
