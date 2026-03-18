@@ -17,7 +17,6 @@
 package txpool
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -33,41 +32,30 @@ type nilHeadSubChain struct{}
 
 func (nilHeadSubChain) Config() *params.ChainConfig { return params.TestChainConfig }
 
-func (nilHeadSubChain) CurrentBlock() *types.Header { return &types.Header{} }
+func (nilHeadSubChain) CurrentBlock() *types.Header { return &types.Header{Root: types.EmptyRootHash} }
 
 func (nilHeadSubChain) SubscribeChainHeadEvent(chan<- core.ChainHeadEvent) event.Subscription {
 	return nil
 }
 
 func (nilHeadSubChain) StateAt(common.Hash) (*state.StateDB, error) {
-	return nil, errors.New("not implemented")
+	return state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 }
 
-func TestTxPoolLoopNilHeadSubscription(t *testing.T) {
+func TestTxPoolCloseNilHeadSubscription(t *testing.T) {
 	t.Parallel()
 
-	pool := &TxPool{
-		chain: nilHeadSubChain{},
-		quit:  make(chan chan error),
-		term:  make(chan struct{}),
-		sync:  make(chan chan error),
+	// TxPool.BlockChain exists to allow mocked chains in tests. A mock that
+	// opts out of head notifications may return a nil subscription.
+	pool, err := New(0, nilHeadSubChain{}, nil)
+	if err != nil {
+		t.Fatalf("failed to create txpool: %v", err)
 	}
-	go pool.loop(nil)
 
-	errc := make(chan error, 1)
-	select {
-	case pool.quit <- errc:
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for txpool loop to accept quit signal")
+	if err := pool.Close(); err != nil {
+		t.Fatalf("unexpected close error: %v", err)
 	}
-	select {
-	case err := <-errc:
-		if err != nil {
-			t.Fatalf("unexpected close error: %v", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for txpool loop to stop")
-	}
+
 	select {
 	case <-pool.term:
 	case <-time.After(time.Second):
