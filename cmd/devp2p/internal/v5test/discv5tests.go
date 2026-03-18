@@ -263,13 +263,23 @@ that they are returned by FINDNODE.`)
 		defer nodes[i].close()
 	}
 
+	// Prefill each bystander with the full bystander set so background FINDNODE
+	// lookups see useful routing data instead of empty responses.
+	known := make([]*enode.Node, 0, len(nodes))
+	for _, bn := range nodes {
+		known = append(known, bn.conn.localNode.Node())
+	}
+	for _, bn := range nodes {
+		bn.known = append([]*enode.Node(nil), known...)
+	}
+
 	// Wait until enough bystanders have actually become live, i.e. the remote node
 	// has revalidated them by sending PING and receiving our PONG.
-	const minLiveNodes = 3
+	requiredLiveNodes := len(nodes)
 	timeout := 60 * time.Second
 	timeoutCh := time.After(timeout)
 	liveSet := make(map[enode.ID]*enode.Node)
-	for len(liveSet) < minLiveNodes {
+	for len(liveSet) < requiredLiveNodes {
 		select {
 		case id := <-liveCh:
 			for _, bn := range nodes {
@@ -280,11 +290,11 @@ that they are returned by FINDNODE.`)
 			}
 			t.Logf("bystander node %v became live", id)
 		case <-timeoutCh:
-			t.Errorf("remote revalidated %d bystander nodes in %v, need %d to continue", len(liveSet), timeout, minLiveNodes)
+			t.Errorf("remote revalidated %d bystander nodes in %v, need %d to continue", len(liveSet), timeout, requiredLiveNodes)
 			return
 		}
 	}
-	t.Logf("continuing after %d bystander nodes became live", len(liveSet))
+	t.Logf("continuing after all %d bystander nodes became live", len(liveSet))
 
 	// Collect live nodes by distance.
 	var dists []uint
@@ -332,9 +342,10 @@ that they are returned by FINDNODE.`)
 
 // A bystander is a node whose only purpose is filling a spot in the remote table.
 type bystander struct {
-	dest *enode.Node
-	conn *conn
-	l    net.PacketConn
+	dest  *enode.Node
+	conn  *conn
+	l     net.PacketConn
+	known []*enode.Node
 
 	liveCh chan enode.ID
 	sent   map[v5wire.Nonce]v5wire.Packet
@@ -404,6 +415,11 @@ func (bn *bystander) loop() {
 			bn.notifyLive()
 		case *v5wire.Findnode:
 			resp := &v5wire.Nodes{ReqID: append([]byte(nil), p.ReqID...), RespCount: 1}
+			for _, n := range bn.known {
+				if slices.Contains(p.Distances, uint(enode.LogDist(n.ID(), bn.id()))) {
+					resp.Nodes = append(resp.Nodes, n.Record())
+				}
+			}
 			nonce := bn.conn.writeTo(bn.l, resp, nil, from)
 			bn.sent[nonce] = resp
 		case *v5wire.TalkRequest:
