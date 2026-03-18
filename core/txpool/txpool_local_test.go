@@ -60,7 +60,7 @@ type testSubPool struct {
 
 func (s *testSubPool) Filter(tx *types.Transaction) bool { return true }
 
-func (s *testSubPool) Init(gasTip uint64, head *types.Header, reserver *Reserver) error { return nil }
+func (s *testSubPool) Init(gasTip uint64, head *types.Header, reserver Reserver) error { return nil }
 
 func (s *testSubPool) Close() error { return nil }
 
