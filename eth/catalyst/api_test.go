@@ -1911,7 +1911,12 @@ func newGetBlobEnv(t testing.TB, version byte) (*node.Node, *ConsensusAPI) {
 	tx1 := makeMultiBlobTx(&config, 0, 2, 0, key1, version) // blob[0, 2)
 	tx2 := makeMultiBlobTx(&config, 0, 2, 2, key2, version) // blob[2, 4)
 	tx3 := makeMultiBlobTx(&config, 0, 2, 4, key3, version) // blob[4, 6)
-	ethServ.TxPool().Add([]*types.Transaction{tx1, tx2, tx3}, true)
+	errs := ethServ.TxPool().Add([]*types.Transaction{tx1, tx2, tx3}, true)
+	for i, err := range errs {
+		if err != nil {
+			t.Logf("Add tx %d failed: %v", i, err)
+		}
+	}
 
 	api := newConsensusAPIWithoutHeartbeat(ethServ)
 	return n, api
@@ -2108,6 +2113,15 @@ func runGetBlobs(t testing.TB, getBlobs getBlobsFn, start, limit int, fillRandom
 		}
 	}
 	if !reflect.DeepEqual(result, expect) {
+		t.Logf("result len=%d, expect len=%d", len(result), len(expect))
+		if len(result) > 0 && result[0] != nil && len(expect) > 0 && expect[0] != nil {
+			t.Logf("result[0].Blob len=%d, expect[0].Blob len=%d", len(result[0].Blob), len(expect[0].Blob))
+			t.Logf("result[0].CellProofs len=%d, expect[0].CellProofs len=%d", len(result[0].CellProofs), len(expect[0].CellProofs))
+			t.Logf("result[0].Blob == expect[0].Blob: %v", reflect.DeepEqual(result[0].Blob, expect[0].Blob))
+			t.Logf("result[0].CellProofs == expect[0].CellProofs: %v", reflect.DeepEqual(result[0].CellProofs, expect[0].CellProofs))
+		} else {
+			t.Logf("result[0]=%v, expect[0]=%v", result, expect)
+		}
 		t.Fatalf("Unexpected result for case %s", name)
 	}
 }

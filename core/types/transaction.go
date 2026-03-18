@@ -510,6 +510,18 @@ func (tx *Transaction) WithoutBlobTxSidecar() *Transaction {
 	return cpy
 }
 
+// WithoutBlob returns a copy of tx with the blob data removed from the sidecar,
+// keeping commitments, proofs and other metadata intact.
+func (tx *Transaction) WithoutBlob() *Transaction {
+	blobtx, ok := tx.inner.(*BlobTx)
+	if !ok || blobtx.Sidecar == nil {
+		return tx
+	}
+	sidecarWithoutBlob := blobtx.Sidecar.Copy()
+	sidecarWithoutBlob.Blobs = nil
+	return tx.WithBlobTxSidecar(sidecarWithoutBlob)
+}
+
 // WithBlobTxSidecar returns a copy of tx with the blob sidecar added.
 func (tx *Transaction) WithBlobTxSidecar(sideCar *BlobTxSidecar) *Transaction {
 	blobtx, ok := tx.inner.(*BlobTx)

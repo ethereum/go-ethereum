@@ -74,7 +74,7 @@ func (s *Suite) sendTxs(t *utesting.T, txs []*types.Transaction) error {
 			for _, tx := range txs {
 				got[tx.Hash()] = true
 			}
-		case *eth.NewPooledTransactionHashesPacket:
+		case *eth.NewPooledTransactionHashesPacket70:
 			for _, hash := range msg.Hashes {
 				got[hash] = true
 			}
@@ -160,7 +160,7 @@ func (s *Suite) sendInvalidTxs(t *utesting.T, txs []*types.Transaction) error {
 					return fmt.Errorf("received bad tx: %s", tx.Hash())
 				}
 			}
-		case *eth.NewPooledTransactionHashesPacket:
+		case *eth.NewPooledTransactionHashesPacket70:
 			for _, hash := range msg.Hashes {
 				if _, ok := invalids[hash]; ok {
 					return fmt.Errorf("received bad tx: %s", hash)

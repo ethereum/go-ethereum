@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/fetcher"
@@ -75,7 +76,7 @@ type txPool interface {
 
 	// GetRLP retrieves the RLP-encoded transaction from local txpool
 	// with given tx hash.
-	GetRLP(hash common.Hash) []byte
+	GetRLP(hash common.Hash, includeBlob bool) []byte
 
 	// GetMetadata returns the transaction type and transaction size with the
 	// given transaction hash.
@@ -97,6 +98,16 @@ type txPool interface {
 	FilterType(kind byte) bool
 }
 
+// blobPool defines the methods needed from a blob pool implementation to
+// support cell-based blob data availability.
+type blobPool interface {
+	Has(hash common.Hash) bool
+	GetCells(hash common.Hash, mask types.CustodyBitmap) ([]kzg4844.Cell, error)
+	ValidateCells([]common.Hash, [][]kzg4844.Cell, *types.CustodyBitmap) []error
+	AddPayload([]common.Hash, [][]kzg4844.Cell, *types.CustodyBitmap) []error
+	GetCustody(hash common.Hash) *types.CustodyBitmap
+}
+
 // handlerConfig is the collection of initialization parameters to create a full
 // node network handler.
 type handlerConfig struct {
@@ -104,11 +115,13 @@ type handlerConfig struct {
 	Database       ethdb.Database         // Database for direct sync insertions
 	Chain          *core.BlockChain       // Blockchain to serve data from
 	TxPool         txPool                 // Transaction pool to propagate from
+	BlobPool       blobPool               // Blob pool for cell-based blob data availability
 	Network        uint64                 // Network identifier to advertise
 	Sync           ethconfig.SyncMode     // Whether to snap or full sync
 	BloomCache     uint64                 // Megabytes to alloc for snap sync bloom
 	EventMux       *event.TypeMux         // Legacy event mux, deprecate for `feed`
 	RequiredBlocks map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
+	Custody        types.CustodyBitmap
 }
 
 type handler struct {
@@ -118,11 +131,13 @@ type handler struct {
 
 	database ethdb.Database
 	txpool   txPool
+	blobpool blobPool
 	chain    *core.BlockChain
 	maxPeers int
 
 	downloader     *downloader.Downloader
 	txFetcher      *fetcher.TxFetcher
+	blobFetcher    *fetcher.BlobFetcher
 	peers          *peerSet
 	txBroadcastKey [16]byte
 
@@ -154,6 +169,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		eventMux:       config.EventMux,
 		database:       config.Database,
 		txpool:         config.TxPool,
+		blobpool:       config.BlobPool,
 		chain:          config.Chain,
 		peers:          newPeerSet(),
 		txBroadcastKey: newBroadcastChoiceKey(),
@@ -189,6 +205,16 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return nil
 	}
 	h.txFetcher = fetcher.NewTxFetcher(h.chain, validateMeta, addTxs, fetchTx, h.removePeer)
+
+	// Construct the blob fetcher for cell-based blob data availability
+	fetchPayloads := func(peer string, hashes []common.Hash, cells *types.CustodyBitmap) error {
+		p := h.peers.peer(peer)
+		if p == nil {
+			return errors.New("unknown peer")
+		}
+		return p.RequestPayload(hashes, cells)
+	}
+	h.blobFetcher = fetcher.NewBlobFetcher(h.blobpool.ValidateCells, h.blobpool.AddPayload, fetchPayloads, h.removePeer, &config.Custody, nil)
 	return h, nil
 }
 
@@ -403,6 +429,7 @@ func (h *handler) unregisterPeer(id string) {
 	}
 	h.downloader.UnregisterPeer(id)
 	h.txFetcher.Drop(id)
+	h.blobFetcher.Drop(id)
 
 	if err := h.peers.unregisterPeer(id); err != nil {
 		logger.Error("Ethereum peer removal failed", "err", err)
@@ -425,6 +452,7 @@ func (h *handler) Start(maxPeers int) {
 
 	// start sync handlers
 	h.txFetcher.Start()
+	h.blobFetcher.Start()
 
 	// start peer handler tracker
 	h.wg.Add(1)
@@ -435,6 +463,7 @@ func (h *handler) Stop() {
 	h.txsSub.Unsubscribe() // quits txBroadcastLoop
 	h.blockRange.stop()
 	h.txFetcher.Stop()
+	h.blobFetcher.Stop()
 	h.downloader.Terminate()
 
 	// Quit chainSync and txsync64.

@@ -1011,7 +1011,7 @@ func (pool *LegacyPool) get(hash common.Hash) *types.Transaction {
 }
 
 // GetRLP returns a RLP-encoded transaction if it is contained in the pool.
-func (pool *LegacyPool) GetRLP(hash common.Hash) []byte {
+func (pool *LegacyPool) GetRLP(hash common.Hash, _ bool) []byte {
 	tx := pool.all.Get(hash)
 	if tx == nil {
 		return nil
