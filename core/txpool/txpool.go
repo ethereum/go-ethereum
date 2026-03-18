@@ -21,11 +21,15 @@ import (
 	"fmt"
 	"maps"
 	"math/big"
+	"sync"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.
@@ -41,11 +45,17 @@ const (
 // BlockChain defines the minimal set of methods needed to back a tx pool with
 // a chain. Exists to allow mocking the live chain out of tests.
 type BlockChain interface {
+	// Config retrieves the chain's fork configuration.
+	Config() *params.ChainConfig
+
 	// CurrentBlock returns the current head of the chain.
 	CurrentBlock() *types.Header
 
 	// SubscribeChainHeadEvent subscribes to new blocks being added to the chain.
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
+
+	// StateAt returns a state database for a given root hash (generally the head).
+	StateAt(root common.Hash) (*state.StateDB, error)
 }
 
 // TxPool is an aggregator for various transaction specific pools, collectively
@@ -55,6 +65,10 @@ type BlockChain interface {
 // resource constraints.
 type TxPool struct {
 	subpools []SubPool // List of subpools for specialized transaction handling
+	chain    BlockChain
+
+	stateLock sync.RWMutex   // The lock for protecting state instance
+	state     *state.StateDB // Current state at the blockchain head
 
 	localTracker LocalTracker // Optional tracker for local tx submissions
 
@@ -80,8 +94,20 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 	// during initialization.
 	head := chain.CurrentBlock()
 
+	// Initialize the state with head block, or fallback to empty one in
+	// case the head state is not available (might occur when node is not
+	// fully synced).
+	statedb, err := chain.StateAt(head.Root)
+	if err != nil {
+		statedb, err = chain.StateAt(types.EmptyRootHash)
+	}
+	if err != nil {
+		return nil, err
+	}
 	pool := &TxPool{
 		subpools: subpools,
+		chain:    chain,
+		state:    statedb,
 		quit:     make(chan chan error),
 		term:     make(chan struct{}),
 		sync:     make(chan chan error),
@@ -95,7 +121,7 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 			return nil, err
 		}
 	}
-	go pool.loop(head, chain)
+	go pool.loop(head)
 	return pool, nil
 }
 
@@ -127,14 +153,14 @@ func (p *TxPool) Close() error {
 // loop is the transaction pool's main event loop, waiting for and reacting to
 // outside blockchain events as well as for various reporting and transaction
 // eviction events.
-func (p *TxPool) loop(head *types.Header, chain BlockChain) {
+func (p *TxPool) loop(head *types.Header) {
 	// Close the termination marker when the pool stops
 	defer close(p.term)
 
 	// Subscribe to chain head events to trigger subpool resets
 	var (
 		newHeadCh  = make(chan core.ChainHeadEvent)
-		newHeadSub = chain.SubscribeChainHeadEvent(newHeadCh)
+		newHeadSub = p.chain.SubscribeChainHeadEvent(newHeadCh)
 	)
 	defer newHeadSub.Unsubscribe()
 
@@ -170,6 +196,16 @@ func (p *TxPool) loop(head *types.Header, chain BlockChain) {
 			// Try to inject a busy marker and start a reset if successful
 			select {
 			case resetBusy <- struct{}{}:
+				// Updates the statedb with the new chain head. The head state may be
+				// unavailable if the initial state sync has not yet completed.
+				if statedb, err := p.chain.StateAt(newHead.Root); err != nil {
+					log.Error("Failed to reset txpool state", "err", err)
+				} else {
+					p.stateLock.Lock()
+					p.state = statedb
+					p.stateLock.Unlock()
+				}
+
 				// Busy marker injected, start a new subpool reset
 				go func(oldHead, newHead *types.Header) {
 					for _, subpool := range p.subpools {
@@ -455,15 +491,15 @@ func (pool *TxPool) IsSigner(addr common.Address) bool {
 // Sync is a helper method for unit tests or simulator runs where the chain events
 // are arriving in quick succession, without any time in between them to run the
 // internal background reset operations. This method will run an explicit reset
-// operation to ensure the pool stabilises, thus avoiding flakey behavior.
+// operation to ensure the pool stabilises, thus avoiding flaky behavior.
 //
 // Note, this method is only used for testing and is susceptible to DoS vectors.
 // In production code, the pool is meant to reset on a separate thread.
 func (p *TxPool) Sync() error {
-	sync := make(chan error)
+	waiter := make(chan error)
 	select {
-	case p.sync <- sync:
-		return <-sync
+	case p.sync <- waiter:
+		return <-waiter
 	case <-p.term:
 		return errors.New("pool already terminated")
 	}

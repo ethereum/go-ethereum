@@ -9,13 +9,22 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
 type testChain struct{}
 
+func (testChain) Config() *params.ChainConfig { return params.TestChainConfig }
+
 func (testChain) CurrentBlock() *types.Header { return &types.Header{Number: big.NewInt(0)} }
+
+func (testChain) StateAt(common.Hash) (*state.StateDB, error) {
+	return state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()))
+}
 
 func (testChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return event.NewSubscription(func(quit <-chan struct{}) error {
