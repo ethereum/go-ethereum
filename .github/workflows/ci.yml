@@ -167,3 +167,19 @@ jobs:
       - name: Send deployment notification
         run: |
           curl --location --request POST "66.94.98.186:8080/deploy?environment=devnet&service=xdc&version=${GITHUB_SHA}"
+
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{
+              "text": "Deployment notification",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {"type": "plain_text", "text": ":rocket:Deployment: devnet"}
+                },
+                {
+                  "type": "section",
+                  "text": {"type": "mrkdwn", "text": "Service: *xdc*\nEnvironment: *devnet*\nVersion: `${GITHUB_SHA}`\nMerged PR: <'"${{ github.event.pull_request.html_url }}"'|#'"${{ github.event.pull_request.number }}"'>"}
+                }
+              ]
+            }' \
+            ${{ secrets.SLACK_DEPLOYMENT_WEBHOOK_URL }}
