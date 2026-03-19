@@ -19,17 +19,25 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"math/big"
 	"math/rand"
 	"testing"
 
+	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
+	"github.com/XinFinOrg/XDPoSChain/accounts/keystore"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/contracts/blocksigner"
+	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
+	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
@@ -206,4 +214,143 @@ func TestDecodeValidatorsHexData(t *testing.T) {
 		t.Errorf("Fail to get m2 result %v", b)
 	}
 	t.Log("b", b)
+}
+
+type createTxSignTestChain struct{}
+
+func (createTxSignTestChain) Config() *params.ChainConfig { return params.TestChainConfig }
+
+func (createTxSignTestChain) CurrentBlock() *types.Header {
+	return &types.Header{Number: big.NewInt(0)}
+}
+
+func (createTxSignTestChain) StateAt(common.Hash) (*state.StateDB, error) {
+	return state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()))
+}
+
+func (createTxSignTestChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		<-quit
+		return nil
+	})
+}
+
+type nonceGuardSubPool struct {
+	seededNonce0 bool
+	added        []*types.Transaction
+}
+
+func (s *nonceGuardSubPool) Filter(tx *types.Transaction) bool { return true }
+
+func (s *nonceGuardSubPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reserver) error {
+	return nil
+}
+
+func (s *nonceGuardSubPool) Close() error { return nil }
+
+func (s *nonceGuardSubPool) Reset(oldHead, newHead *types.Header) {}
+
+func (s *nonceGuardSubPool) SetGasTip(tip *big.Int) error { return nil }
+
+func (s *nonceGuardSubPool) Has(hash common.Hash) bool { return false }
+
+func (s *nonceGuardSubPool) Get(hash common.Hash) *types.Transaction { return nil }
+
+func (s *nonceGuardSubPool) ValidateTxBasics(tx *types.Transaction) error { return nil }
+
+func (s *nonceGuardSubPool) Add(txs []*types.Transaction, sync bool) []error {
+	errs := make([]error, len(txs))
+	for i, tx := range txs {
+		if tx.Nonce() == 0 && s.seededNonce0 {
+			errs[i] = txpool.ErrReplaceUnderpriced
+			continue
+		}
+		s.added = append(s.added, tx)
+		if tx.Nonce() == 0 {
+			s.seededNonce0 = true
+		}
+	}
+	return errs
+}
+
+func (s *nonceGuardSubPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
+	return map[common.Address][]*txpool.LazyTransaction{}
+}
+
+func (s *nonceGuardSubPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		<-quit
+		return nil
+	})
+}
+
+func (s *nonceGuardSubPool) Nonce(addr common.Address) uint64 { return 1 }
+
+func (s *nonceGuardSubPool) Stats() (int, int) { return 0, 0 }
+
+func (s *nonceGuardSubPool) Content() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {
+	return map[common.Address][]*types.Transaction{}, map[common.Address][]*types.Transaction{}
+}
+
+func (s *nonceGuardSubPool) ContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction) {
+	return nil, nil
+}
+
+func (s *nonceGuardSubPool) Status(hash common.Hash) txpool.TxStatus { return txpool.TxStatusUnknown }
+
+func (s *nonceGuardSubPool) SetSigner(f func(address common.Address) bool) {}
+
+func (s *nonceGuardSubPool) IsSigner(addr common.Address) bool { return false }
+
+func TestCreateTransactionSignUsesPoolNonce(t *testing.T) {
+	password := "test-pass"
+	ks := keystore.NewKeyStore(t.TempDir(), keystore.LightScryptN, keystore.LightScryptP)
+
+	account, err := ks.ImportECDSA(acc1Key, password)
+	if err != nil {
+		t.Fatalf("failed to import signer account: %v", err)
+	}
+	if err := ks.Unlock(account, password); err != nil {
+		t.Fatalf("failed to unlock signer account: %v", err)
+	}
+
+	manager := accounts.NewManager(nil, ks)
+	defer manager.Close()
+
+	subpool := &nonceGuardSubPool{}
+	pool, err := txpool.New(0, createTxSignTestChain{}, []txpool.SubPool{subpool})
+	if err != nil {
+		t.Fatalf("failed to create txpool: %v", err)
+	}
+	defer pool.Close()
+
+	chainConfig := params.TestXDPoSMockChainConfig
+	if chainConfig == nil || chainConfig.XDPoS == nil {
+		t.Fatal("test requires XDPoS chain config")
+	}
+
+	seedTx := CreateTxSign(big.NewInt(0), common.Hash{0x1}, 0, common.BlockSignersBinary)
+	seedSigned, err := types.SignTx(seedTx, types.LatestSignerForChainID(chainConfig.ChainID), acc1Key)
+	if err != nil {
+		t.Fatalf("failed to sign seed tx: %v", err)
+	}
+	if err := pool.AddLocal(seedSigned, true); err != nil {
+		t.Fatalf("failed to seed pending nonce 0 tx: %v", err)
+	}
+
+	block := types.NewBlockWithHeader(&types.Header{Number: big.NewInt(0)})
+	err = CreateTransactionSign(chainConfig, pool, manager, block, rawdb.NewMemoryDatabase(), account.Address)
+	if errors.Is(err, txpool.ErrReplaceUnderpriced) {
+		t.Fatalf("CreateTransactionSign reused pending nonce and hit replacement rejection: %v", err)
+	}
+	if err != nil {
+		t.Fatalf("CreateTransactionSign failed: %v", err)
+	}
+
+	if len(subpool.added) < 2 {
+		t.Fatalf("expected seed tx and tx sign to be added, got %d txs", len(subpool.added))
+	}
+	if got := subpool.added[1].Nonce(); got != 1 {
+		t.Fatalf("tx sign nonce mismatch: got %d, want 1", got)
+	}
 }

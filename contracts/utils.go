@@ -84,8 +84,9 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *txpool.TxPool,
 			}
 		}
 
-		// Create and send tx to smart contract for sign validate block.
-		nonce := pool.Nonce(account.Address)
+		// Use the pool's pending nonce so imported-block signing does not reuse
+		// an already-pending nonce and trigger replacement-underpriced errors.
+		nonce := pool.PoolNonce(account.Address)
 		tx := CreateTxSign(block.Number(), block.Hash(), nonce, common.BlockSignersBinary)
 		txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainID)
 		if err != nil {
