@@ -551,16 +551,17 @@ func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
 	if err := peer.tracker.Fulfil(tresp); err != nil {
 		return fmt.Errorf("Receipts: %w", err)
 	}
-
 	receiptLists, err := res.List.Items()
 	if err != nil {
 		return fmt.Errorf("Receipts: %w", err)
 	}
 
-	if err := peer.bufferReceipts(res.RequestId, receiptLists, res.LastBlockIncomplete, backend); err != nil {
+	err = peer.bufferReceipts(res.RequestId, receiptLists, res.LastBlockIncomplete, backend)
+	if err != nil {
 		return err
 	}
 	if res.LastBlockIncomplete {
+		// Request the remaining receipts from the same peer.
 		return peer.requestPartialReceipts(res.RequestId)
 	}
 	if complete := peer.flushReceipts(res.RequestId); complete != nil {
@@ -570,6 +571,7 @@ func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
 	return dispatchReceipts(res.RequestId, receiptLists, peer)
 }
 
+// dispatchReceipts submits a receipt response to the dispatcher.
 func dispatchReceipts(requestId uint64, receiptLists []*ReceiptList, peer *Peer) error {
 	metadata := func() interface{} {
 		hasher := trie.NewStackTrie(nil)
