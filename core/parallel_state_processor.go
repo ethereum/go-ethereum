@@ -200,6 +200,7 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxStateRea
 		for {
 			select {
 			case res := <-txResCh:
+				numTxComplete++
 				if execErr == nil {
 					if res.err != nil {
 						execErr = res.err
@@ -212,7 +213,6 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxStateRea
 						}
 					}
 				}
-				numTxComplete++
 				if numTxComplete == len(block.Transactions()) {
 					break loop
 				}
@@ -220,6 +220,8 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxStateRea
 		}
 
 		if execErr != nil {
+			// Drain stateRootCalcResCh so calcAndVerifyRoot goroutine can exit.
+			<-stateRootCalcResCh
 			resCh <- &ProcessResultWithMetrics{ProcessResult: &ProcessResult{Error: execErr}}
 			return
 		}
