@@ -37,7 +37,7 @@ func FuzzPrecompiledContracts(f *testing.F) {
 			return
 		}
 		inWant := string(input)
-		runPrecompiledContract(nil, p, AccountRef(common.Address{}), input, gas, new(uint256.Int), false)
+		runPrecompiledContract(&EVM{}, p, AccountRef(common.Address{}), input, gas, new(uint256.Int), false)
 		if inHave := string(input); inWant != inHave {
 			t.Errorf("Precompiled %v modified input data", a)
 		}
