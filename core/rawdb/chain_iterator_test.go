@@ -103,69 +103,52 @@ func TestChainIterator(t *testing.T) {
 	}
 }
 
-func initDatabaseWithTransactions(db ethdb.Database) ([]*types.Block, []*types.Transaction) {
-	var blocks []*types.Block
-	var txs []*types.Transaction
+func initDatabaseWithTransactions(db ethdb.Database, numBlocks, txsPerBlock int) []*types.Block {
 	to := common.BytesToAddress([]byte{0x11})
 
-	// Write empty genesis block
-	block := types.NewBlock(&types.Header{Number: big.NewInt(int64(0))}, nil, nil, newTestHasher())
+	var blocks []*types.Block
+	block := types.NewBlock(&types.Header{Number: big.NewInt(0)}, nil, nil, newTestHasher())
 	WriteBlock(db, block)
 	WriteCanonicalHash(db, block.Hash(), block.NumberU64())
 	blocks = append(blocks, block)
 
-	// Create transactions.
-	for i := uint64(1); i <= 10; i++ {
-		var tx *types.Transaction
-		if i%2 == 0 {
-			tx = types.NewTx(&types.LegacyTx{
-				Nonce:    i,
+	for i := 1; i <= numBlocks; i++ {
+		txs := make([]*types.Transaction, txsPerBlock)
+		for j := range txs {
+			txs[j] = types.NewTx(&types.LegacyTx{
+				Nonce:    uint64(i*txsPerBlock + j),
 				GasPrice: big.NewInt(11111),
 				Gas:      1111,
 				To:       &to,
 				Value:    big.NewInt(111),
-				Data:     []byte{0x11, 0x11, 0x11},
-			})
-		} else {
-			tx = types.NewTx(&types.AccessListTx{
-				ChainID:  big.NewInt(1337),
-				Nonce:    i,
-				GasPrice: big.NewInt(11111),
-				Gas:      1111,
-				To:       &to,
-				Value:    big.NewInt(111),
-				Data:     []byte{0x11, 0x11, 0x11},
 			})
 		}
-		txs = append(txs, tx)
-		block := types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, &types.Body{Transactions: types.Transactions{tx}}, nil, newTestHasher())
+		block := types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, &types.Body{Transactions: types.Transactions(txs)}, nil, newTestHasher())
 		WriteBlock(db, block)
 		WriteCanonicalHash(db, block.Hash(), block.NumberU64())
 		blocks = append(blocks, block)
 	}
-
-	return blocks, txs
+	return blocks
 }
 
 func TestIndexTransactions(t *testing.T) {
 	// Construct test chain db
 	chainDB := NewMemoryDatabase()
 
-	_, txs := initDatabaseWithTransactions(chainDB)
+	blocks := initDatabaseWithTransactions(chainDB, 10, 1)
 
-	// verify checks whether the tx indices in the range [from, to)
-	// is expected.
+	// verify checks whether the tx indices in the block range [from, to)
+	// are present or absent.
 	verify := func(from, to int, exist bool, tail uint64) {
-		for i := from; i < to; i++ {
-			if i == 0 {
-				continue
-			}
-			number := ReadTxLookupEntry(chainDB, txs[i-1].Hash())
-			if exist && number == nil {
-				t.Fatalf("Transaction index %d missing", i)
-			}
-			if !exist && number != nil {
-				t.Fatalf("Transaction index %d is not deleted", i)
+		for _, block := range blocks[from:to] {
+			for _, tx := range block.Transactions() {
+				number := ReadTxLookupEntry(chainDB, tx.Hash())
+				if exist && number == nil {
+					t.Fatalf("Transaction index missing for block %d", block.NumberU64())
+				}
+				if !exist && number != nil {
+					t.Fatalf("Transaction index not deleted for block %d", block.NumberU64())
+				}
 			}
 		}
 		number := ReadTxIndexTail(chainDB)
@@ -221,7 +204,7 @@ func TestIndexTransactions(t *testing.T) {
 func TestUnindexTransactionsMissingBody(t *testing.T) {
 	// Construct test chain db
 	chainDB := NewMemoryDatabase()
-	blocks, _ := initDatabaseWithTransactions(chainDB)
+	blocks := initDatabaseWithTransactions(chainDB, 10, 1)
 
 	// Index the entire chain.
 	lastBlock := blocks[len(blocks)-1].NumberU64()
@@ -250,9 +233,12 @@ func TestUnindexTransactionsMissingBody(t *testing.T) {
 
 func TestPruneTransactionIndex(t *testing.T) {
 	chainDB := NewMemoryDatabase()
-	blocks, _ := initDatabaseWithTransactions(chainDB)
+
+	// Create 100 blocks with 8 txs each (800 total tx index entries) so that
+	// parallel workers each get a meaningful share of the keyspace.
+	blocks := initDatabaseWithTransactions(chainDB, 100, 8)
 	lastBlock := blocks[len(blocks)-1].NumberU64()
-	pruneBlock := lastBlock - 3
+	pruneBlock := lastBlock / 2 // prune the first half
 
 	IndexTransactions(chainDB, 0, lastBlock+1, nil, false)
 
