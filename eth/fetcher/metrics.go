@@ -66,8 +66,7 @@ var (
 	blobRequestDoneMeter    = metrics.NewRegisteredMeter("eth/fetcher/blob/request/done", nil)
 	blobRequestTimeoutMeter = metrics.NewRegisteredMeter("eth/fetcher/blob/request/timeout", nil)
 
-	blobReplyInMeter     = metrics.NewRegisteredMeter("eth/fetcher/blob/replies/in", nil)
-	blobReplyRejectMeter = metrics.NewRegisteredMeter("eth/fetcher/blob/replies/reject", nil)
+	blobReplyInMeter = metrics.NewRegisteredMeter("eth/fetcher/blob/replies/in", nil)
 
 	blobFetcherWaitingPeers   = metrics.NewRegisteredGauge("eth/fetcher/blob/waiting/peers", nil)
 	blobFetcherWaitingHashes  = metrics.NewRegisteredGauge("eth/fetcher/blob/waiting/hashes", nil)
