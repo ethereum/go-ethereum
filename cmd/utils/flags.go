@@ -218,6 +218,10 @@ var (
 		Usage: "Max number of elements (0 = no limit)",
 		Value: 0,
 	}
+	AccountFlag = &cli.StringFlag{
+		Name:  "account",
+		Usage: "Specifies the account address or hash to traverse a single storage trie",
+	}
 	OutputFileFlag = &cli.StringFlag{
 		Name:  "output",
 		Usage: "Writes the result in json to the output",
