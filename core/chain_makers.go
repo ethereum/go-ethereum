@@ -25,13 +25,13 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
-	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
@@ -368,6 +368,9 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	}
 	cm := newChainMaker(parent, config, engine)
 
+	var bintriedb *triedb.Database
+	var binBaseRoot common.Hash
+
 	genblock := func(i int, parent *types.Block, triedb *triedb.Database, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, cm: cm, parent: parent, statedb: statedb, engine: engine}
 		b.header = cm.makeHeader(parent, statedb, b.engine)
@@ -409,10 +412,11 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if config.IsVerkle(b.header.Number, b.header.Time) {
 			parentIsVerkle := config.IsVerkle(parent.Number(), parent.Time())
 			if !parentIsVerkle {
-				InitializeBinaryTransitionRegistry(statedb)
+				binBaseRoot = parent.Root()
 				if cdb, ok := statedb.Database().(*state.CachingDB); ok {
-					cdb.SetTransitionHint(&overlay.TransitionState{Started: true})
+					cdb.SetBinaryTrieDB(bintriedb, binBaseRoot)
 				}
+				InitializeBinaryTransitionRegistry(statedb)
 			}
 		}
 
@@ -442,7 +446,11 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))
 		}
-		if err = triedb.Commit(root, false); err != nil {
+		commitdb := triedb
+		if bintriedb != nil && config.IsVerkle(b.header.Number, b.header.Time) {
+			commitdb = bintriedb
+		}
+		if err = commitdb.Commit(root, false); err != nil {
 			panic(fmt.Sprintf("trie write error: %v", err))
 		}
 		return block, b.receipts
@@ -458,11 +466,32 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			PathDB:   pathdb.Defaults,
 		}
 	}
+	if config.VerkleTime != nil && !config.EnableVerkleAtGenesis {
+		vdb := rawdb.NewTable(db, string(rawdb.VerklePrefix))
+		doneGen := struct {
+			Wiping   bool
+			Done     bool
+			Marker   []byte
+			Accounts uint64
+			Slots    uint64
+			Storage  uint64
+		}{Done: true}
+		blob, _ := rlp.EncodeToBytes(doneGen)
+		rawdb.WriteSnapshotGenerator(vdb, blob)
+		rawdb.WriteSnapshotRoot(vdb, common.Hash{})
+
+		bintriedb = triedb.NewDatabase(db, &triedb.Config{IsVerkle: true, PathDB: pathdb.Defaults})
+		defer bintriedb.Close()
+	}
 	triedb := triedb.NewDatabase(db, triedbConfig)
 	defer triedb.Close()
 
 	for i := range n {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(triedb, nil))
+		sdb := state.NewDatabase(triedb, nil)
+		if binBaseRoot != (common.Hash{}) {
+			sdb.SetBinaryTrieDB(bintriedb, binBaseRoot)
+		}
+		statedb, err := state.New(parent.Root(), sdb)
 		if err != nil {
 			panic(err)
 		}

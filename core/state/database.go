@@ -193,18 +193,26 @@ type Trie interface {
 // state snapshot to provide functionalities for state access. It's meant to be a
 // long-live object and has a few caches inside for sharing between blocks.
 type CachingDB struct {
-	triedb         *triedb.Database
-	codedb         *CodeDB
-	snap           *snapshot.Tree
-	transitionHint *overlay.TransitionState
+	triedb    *triedb.Database
+	codedb    *CodeDB
+	snap      *snapshot.Tree
+	bintriedb *triedb.Database
+	baseRoot  common.Hash
 }
 
-// SetTransitionHint provides an out-of-band signal that the next OpenTrie
-// call should create a transition trie, even if the on-disk state does not
-// yet contain the transition registry. This is needed for the first verkle
-// block where the registry is initialized in-memory but not yet committed.
-func (db *CachingDB) SetTransitionHint(ts *overlay.TransitionState) {
-	db.transitionHint = ts
+// SetBinaryTrieDB configures a separate trie database for binary trie nodes
+// during the MPT-to-binary transition. The baseRoot is the frozen MPT root
+// at the point of transition. When set, OpenTrie creates a TransitionTrie
+// with the binary overlay from bintriedb and the MPT base from triedb.
+func (db *CachingDB) SetBinaryTrieDB(bintriedb *triedb.Database, baseRoot common.Hash) {
+	db.bintriedb = bintriedb
+	db.baseRoot = baseRoot
+}
+
+// BinaryTrieDB returns the binary trie database, or nil if no transition
+// is active.
+func (db *CachingDB) BinaryTrieDB() *triedb.Database {
+	return db.bintriedb
 }
 
 // NewDatabase creates a state database with the provided data sources.
@@ -238,6 +246,23 @@ func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 		readers []StateReader
 		ts      *overlay.TransitionState
 	)
+
+	if db.bintriedb != nil {
+		reader, err := db.bintriedb.StateReader(stateRoot)
+		if err == nil {
+			readers = append(readers, newFlatReader(reader))
+		}
+		baseReader, err := db.triedb.StateReader(db.baseRoot)
+		if err == nil {
+			readers = append(readers, newFlatReader(baseReader))
+		}
+		tr, err := newTrieReader(stateRoot, db.bintriedb, nil)
+		if err != nil {
+			return nil, err
+		}
+		readers = append(readers, tr)
+		return newMultiStateReader(readers...)
+	}
 
 	// Configure the state reader using the standalone snapshot in hash mode.
 	// This reader offers improved performance but is optional and only
@@ -303,49 +328,26 @@ func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reade
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	reader, err := db.triedb.StateReader(root)
-	if err != nil {
-		return nil, err
-	}
-	flatReader := newFlatReader(reader)
-
-	if isTransitionActive(flatReader) || db.triedb.IsVerkle() || db.transitionHint != nil {
-		if db.TrieDB().Scheme() != rawdb.PathScheme {
-			return nil, fmt.Errorf("hash scheme used in verkle mode")
-		}
-		ts := LoadTransitionState(flatReader, root)
-		if ts == nil {
-			if db.transitionHint != nil {
-				ts = db.transitionHint
-			} else {
-				ts = &overlay.TransitionState{Ended: db.triedb.IsVerkle()}
-			}
-		}
-
-		if !ts.InTransition() {
-			bt, btErr := bintrie.NewBinaryTrie(root, db.triedb)
-			if btErr != nil {
-				return nil, btErr
-			}
-			return bt, nil
-		}
-
-		var bt *bintrie.BinaryTrie
-		// Bootstrap case: root and base root are the same
-		if ts.BaseRoot == (common.Hash{}) {
-			bt, err = bintrie.NewBinaryTrie(common.Hash{}, db.triedb)
-			ts.BaseRoot = root
-		} else {
-			bt, err = bintrie.NewBinaryTrie(root, db.triedb)
-		}
+	if db.bintriedb != nil {
+		bt, err := bintrie.NewBinaryTrie(root, db.bintriedb)
 		if err != nil {
-			return nil, err
+			bt, err = bintrie.NewBinaryTrie(common.Hash{}, db.bintriedb)
+			if err != nil {
+				return nil, err
+			}
 		}
-		base, err := trie.NewStateTrie(trie.StateTrieID(ts.BaseRoot), db.triedb)
+		base, err := trie.NewStateTrie(trie.StateTrieID(db.baseRoot), db.triedb)
 		if err != nil {
 			return nil, err
 		}
 		return transitiontrie.NewTransitionTrie(base, bt, false), nil
+	}
+	if db.triedb.IsVerkle() {
+		bt, err := bintrie.NewBinaryTrie(root, db.triedb)
+		if err != nil {
+			return nil, err
+		}
+		return bt, nil
 	}
 	return trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 }
@@ -402,6 +404,13 @@ func (db *CachingDB) Commit(update *stateUpdate) error {
 		if err := db.snap.Cap(update.root, TriesInMemory); err != nil {
 			log.Warn("Failed to cap snapshot tree", "root", update.root, "layers", TriesInMemory, "err", err)
 		}
+	}
+	if db.bintriedb != nil {
+		originRoot := update.originRoot
+		if originRoot == db.baseRoot {
+			originRoot = types.EmptyBinaryHash
+		}
+		return db.bintriedb.Update(update.root, originRoot, update.blockNumber, update.nodes, update.stateSet())
 	}
 	return db.triedb.Update(update.root, update.originRoot, update.blockNumber, update.nodes, update.stateSet())
 }

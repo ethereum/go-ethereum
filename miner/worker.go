@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/txpool"
@@ -311,9 +310,6 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 		parent := miner.chain.GetHeaderByHash(header.ParentHash)
 		if parent != nil && !miner.chainConfig.IsVerkle(parent.Number, parent.Time) {
 			core.InitializeBinaryTransitionRegistry(env.state)
-			if cdb, ok := env.state.Database().(*state.CachingDB); ok {
-				cdb.SetTransitionHint(&overlay.TransitionState{Started: true})
-			}
 		}
 	}
 	return env, nil

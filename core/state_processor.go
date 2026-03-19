@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -99,9 +98,6 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		parentHeader := p.chain.GetHeaderByHash(block.ParentHash())
 		if parentHeader != nil && !config.IsVerkle(parentHeader.Number, parentHeader.Time) {
 			InitializeBinaryTransitionRegistry(statedb)
-			if cdb, ok := statedb.Database().(*state.CachingDB); ok {
-				cdb.SetTransitionHint(&overlay.TransitionState{Started: true})
-			}
 		}
 	}
 
