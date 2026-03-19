@@ -366,6 +366,16 @@ func (w *EncoderBuffer) AppendToBytes(dst []byte) []byte {
 	return out
 }
 
+// Size returns the total size of the content that was encoded up to this point.
+// Note this does not count the size of any lists which are still 'open' (i.e. for
+// which ListEnd has not been called yet).
+func (w EncoderBuffer) Size() int {
+	if w.buf == nil {
+		return 0
+	}
+	return w.buf.size()
+}
+
 // Write appends b directly to the encoder output.
 func (w EncoderBuffer) Write(b []byte) (int, error) {
 	return w.buf.Write(b)
