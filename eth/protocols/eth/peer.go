@@ -243,10 +243,10 @@ func (p *Peer) ReplyReceiptsRLP69(id uint64, receipts rlp.RawList[*ReceiptList])
 }
 
 // ReplyReceiptsRLP70 is the response to GetReceipts.
-func (p *Peer) ReplyReceiptsRLP70(id uint64, receipts []rlp.RawValue, lastBlockIncomplete bool) error {
-	return p2p.Send(p.rw, ReceiptsMsg, &ReceiptsRLPPacket70{
+func (p *Peer) ReplyReceiptsRLP70(id uint64, receipts rlp.RawList[*ReceiptList], lastBlockIncomplete bool) error {
+	return p2p.Send(p.rw, ReceiptsMsg, &ReceiptsPacket70{
 		RequestId:           id,
-		ReceiptsRLPResponse: receipts,
+		List:                receipts,
 		LastBlockIncomplete: lastBlockIncomplete,
 	})
 }

@@ -307,14 +307,14 @@ func ServiceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 // If the receipts exceed 10 MiB, it trims them and sets the
 // lastBlockIncomplete flag. Indices smaller than firstBlockReceiptIndex
 // are omitted from the first block receipt list.
-func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest, firstBlockReceiptIndex uint64) ([]rlp.RawValue, bool) {
+func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest, firstBlockReceiptIndex uint64) (rlp.RawList[*ReceiptList], bool) {
 	var (
 		bytes               int
-		receipts            []rlp.RawValue
+		receipts            rlp.RawList[*ReceiptList]
 		lastBlockIncomplete bool
 	)
 	for i, hash := range query {
-		if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe {
+		if bytes >= softResponseLimit || receipts.Len() >= maxReceiptsServe {
 			break
 		}
 		results := chain.GetReceiptsRLP(hash)
@@ -341,7 +341,7 @@ func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest,
 			results, lastBlockIncomplete = trimReceiptsRLP(results, 0, maxPacketSize-bytes)
 		}
 
-		receipts = append(receipts, results)
+		receipts.AppendRaw(results)
 		bytes += len(results)
 	}
 
