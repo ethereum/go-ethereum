@@ -212,21 +212,18 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxReads ba
 		for {
 			select {
 			case res := <-txResCh:
+				numTxComplete++
 				if execErr == nil {
 					// short-circuit if invalid block was detected
 					if res.err != nil {
 						execErr = res.err
-						continue
-					}
-
-					if err := gp.SubGas(res.receipt.CumulativeGasUsed); err != nil {
+					} else if err := gp.SubGas(res.receipt.CumulativeGasUsed); err != nil {
 						execErr = err
 					} else {
 						results = append(results, res)
 						accesses.Merge(res.stateReads)
 					}
 				}
-				numTxComplete++
 				if numTxComplete == len(block.Transactions()) {
 					break loop
 				}
@@ -234,6 +231,8 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxReads ba
 		}
 
 		if execErr != nil {
+			// Drain stateRootCalcResCh so calcAndVerifyRoot goroutine can exit.
+			<-stateRootCalcResCh
 			resCh <- &ProcessResultWithMetrics{ProcessResult: &ProcessResult{Error: execErr}}
 			return
 		}
