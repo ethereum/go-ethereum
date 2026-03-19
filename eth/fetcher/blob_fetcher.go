@@ -318,7 +318,7 @@ func (f *BlobFetcher) loop() {
 								reschedule[peer] = struct{}{}
 							}
 							delete(f.waitlist, hash)
-							//todo delete(f.waittime, hash)
+							delete(f.waittime, hash)
 						}
 						continue
 					}
@@ -419,7 +419,7 @@ func (f *BlobFetcher) loop() {
 			addedCells := make([][]kzg4844.Cell, 0)
 
 			var requestId int
-			request := new(cellRequest)
+			var request *cellRequest
 			for _, hash := range delivery.txs {
 				// Find the request
 				for i, req := range f.requests[delivery.origin] {
