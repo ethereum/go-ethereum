@@ -207,15 +207,22 @@ func (rl *ReceiptList) Append(other *ReceiptList) {
 	rl.items.AppendList(&other.items)
 }
 
-// LogsSize returns the total size of log data in this receipts.
+// LogsSize returns the total size of log data across all receipts of the list.
 func (rl *ReceiptList) LogsSize() (uint64, error) {
 	var size uint64
 	it := rl.items.ContentIterator()
 	for it.Next() {
+		// The encoded receipts are of the form:
+		//
+		//   [txType, status, cumulativeGasUsed, [logs...]]
+		//
+		// We want to count the size of logs.
+		// So we strip the outer list first:
 		content, _, err := rlp.SplitList(it.Value())
 		if err != nil {
 			return 0, fmt.Errorf("invalid receipt structure: %v", err)
 		}
+		// then skip over txType, status, cumulativeGasUsed:
 		rest := content
 		for range 3 {
 			_, _, rest, err = rlp.Split(rest)
@@ -223,6 +230,7 @@ func (rl *ReceiptList) LogsSize() (uint64, error) {
 				return 0, fmt.Errorf("invalid receipt structure: %v", err)
 			}
 		}
+		// and finally access the logs list to get its inner size:
 		logsContent, _, err := rlp.SplitList(rest)
 		if err != nil {
 			return 0, fmt.Errorf("invalid receipt logs: %v", err)
