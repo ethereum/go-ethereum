@@ -5,9 +5,18 @@ import "fmt"
 type GasCosts struct {
 	RegularGas uint64
 	StateGas   uint64
+}
 
-	// StateGasCharged tracks the cumulative state gas charged during execution.
+// GasUsed tracks how much gas has been consumed during execution.
+type GasUsed struct {
+	RegularGasUsed  uint64
 	StateGasCharged uint64
+}
+
+// Add increments gas used counters based on a GasCosts charge.
+func (g *GasUsed) Add(cost GasCosts) {
+	g.RegularGasUsed += cost.RegularGas
+	g.StateGasCharged += cost.StateGas
 }
 
 func (g GasCosts) Max() uint64 {
@@ -38,7 +47,6 @@ func (g GasCosts) Underflow(b GasCosts) bool {
 // Sub doesn't check for underflows
 func (g *GasCosts) Sub(b GasCosts) {
 	g.RegularGas -= b.RegularGas
-	g.StateGasCharged += b.StateGas
 	if b.StateGas > g.StateGas {
 		diff := b.StateGas - g.StateGas
 		g.StateGas = 0
@@ -52,7 +60,6 @@ func (g *GasCosts) Sub(b GasCosts) {
 func (g *GasCosts) Add(b GasCosts) {
 	g.RegularGas += b.RegularGas
 	g.StateGas += b.StateGas
-	g.StateGasCharged += b.StateGasCharged
 }
 
 func (g GasCosts) String() string {

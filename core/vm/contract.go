@@ -42,8 +42,9 @@ type Contract struct {
 	IsDeployment bool
 	IsSystemCall bool
 
-	Gas   GasCosts
-	value *uint256.Int
+	Gas     GasCosts
+	GasUsed GasUsed // EIP-8037: canonical per-frame gas usage accumulator
+	value   *uint256.Int
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
@@ -133,19 +134,21 @@ func (c *Contract) UseGas(gas GasCosts, logger *tracing.Hooks, reason tracing.Ga
 	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
 		logger.OnGasChange(c.Gas.RegularGas, c.Gas.RegularGas-gas.RegularGas, reason)
 	}
+	c.GasUsed.Add(gas)
 	c.Gas.Sub(gas)
 	return true
 }
 
-// RefundGas refunds gas to the contract
-func (c *Contract) RefundGas(err error, gas GasCosts, logger *tracing.Hooks, reason tracing.GasChangeReason) {
+// RefundGas refunds gas to the contract. gasUsed carries the child frame's
+// accumulated gas usage metrics (EIP-8037), incorporated on both success and error.
+func (c *Contract) RefundGas(err error, gas GasCosts, gasUsed GasUsed, logger *tracing.Hooks, reason tracing.GasChangeReason) {
 	// If the preceding call errored, return the state gas
 	// to the parent call
 	if err != nil {
-		gas.StateGas += gas.StateGasCharged
-		gas.StateGasCharged = 0
+		gas.StateGas += gasUsed.StateGasCharged
+		gasUsed.StateGasCharged = 0
 	}
-	if gas.RegularGas == 0 && gas.StateGas == 0 && gas.StateGasCharged == 0 {
+	if gas.RegularGas == 0 && gas.StateGas == 0 && gasUsed.StateGasCharged == 0 && gasUsed.RegularGasUsed == 0 {
 		return
 	}
 	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
@@ -153,7 +156,8 @@ func (c *Contract) RefundGas(err error, gas GasCosts, logger *tracing.Hooks, rea
 	}
 	c.Gas.RegularGas += gas.RegularGas
 	c.Gas.StateGas = gas.StateGas
-	c.Gas.StateGasCharged += gas.StateGasCharged
+	c.GasUsed.StateGasCharged += gasUsed.StateGasCharged
+	c.GasUsed.RegularGasUsed += gasUsed.RegularGasUsed
 }
 
 // Address returns the contracts address

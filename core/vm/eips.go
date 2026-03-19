@@ -600,10 +600,13 @@ func enable7843(jt *JumpTable) {
 
 // enable8037 enables the multidimensional-metering as specified in EIP-8037.
 func enable8037(jt *JumpTable) {
+	// EIP-8037: CREATE/CREATE2 constant gas changes from 32000 to 9000 regular;
+	// the account creation cost moves to state gas (in dynamicGas).
+	jt[CREATE].constantGas = params.CreateGasAmsterdam
 	jt[CREATE].dynamicGas = gasCreateEip8037
+	jt[CREATE2].constantGas = params.CreateGasAmsterdam
 	jt[CREATE2].dynamicGas = gasCreate2Eip8037
-	// TODO (MariusVanDerWijden) needs a significant refactor once we move to the stateful/stateless split
-	jt[CALL].dynamicGas = makeCallVariantGasCallEIP2929(gasCall8037, 1)
+	jt[CALL].dynamicGas = gasCallEIP8037
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestruct8037
 	jt[SSTORE].dynamicGas = gasSStore8037
 }
