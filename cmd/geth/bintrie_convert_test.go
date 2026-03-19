@@ -17,6 +17,7 @@
 package main
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -26,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
@@ -91,22 +91,11 @@ func TestBintrieConvert(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create binary trie: %v", err)
 	}
-	currentRoot := types.EmptyBinaryHash
 
-	if err := runConversion(chaindb, srcTriedb2, bt, root); err != nil {
+	currentRoot, err := runConversionLoop(chaindb, srcTriedb2, destTriedb, bt, root, math.MaxUint64)
+	if err != nil {
 		t.Fatalf("conversion failed: %v", err)
 	}
-	newRoot, nodeSet := bt.Commit(false)
-	if nodeSet != nil {
-		merged := trienode.NewWithNodeSet(nodeSet)
-		if err := destTriedb.Update(newRoot, currentRoot, 0, merged, triedb.NewStateSet()); err != nil {
-			t.Fatalf("triedb update failed: %v", err)
-		}
-		if err := destTriedb.Commit(newRoot, false); err != nil {
-			t.Fatalf("triedb commit failed: %v", err)
-		}
-	}
-	currentRoot = newRoot
 	t.Logf("Binary trie root: %x", currentRoot)
 
 	bt2, err := bintrie.NewBinaryTrie(currentRoot, destTriedb)
@@ -210,18 +199,9 @@ func TestBintrieConvertDeleteSource(t *testing.T) {
 		t.Fatalf("failed to create binary trie: %v", err)
 	}
 
-	if err := runConversion(chaindb, srcTriedb2, bt, root); err != nil {
+	newRoot, err := runConversionLoop(chaindb, srcTriedb2, destTriedb, bt, root, math.MaxUint64)
+	if err != nil {
 		t.Fatalf("conversion failed: %v", err)
-	}
-	newRoot, nodeSet := bt.Commit(false)
-	if nodeSet != nil {
-		merged := trienode.NewWithNodeSet(nodeSet)
-		if err := destTriedb.Update(newRoot, types.EmptyBinaryHash, 0, merged, triedb.NewStateSet()); err != nil {
-			t.Fatalf("triedb update failed: %v", err)
-		}
-		if err := destTriedb.Commit(newRoot, false); err != nil {
-			t.Fatalf("triedb commit failed: %v", err)
-		}
 	}
 
 	if err := deleteMPTData(chaindb, srcTriedb2, root); err != nil {

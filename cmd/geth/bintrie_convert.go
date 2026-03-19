@@ -133,7 +133,7 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	if ctx.NArg() == 1 {
 		root, err = parseRoot(ctx.Args().First())
 		if err != nil {
-			return fmt.Errorf("invalid state root: %v", err)
+			return fmt.Errorf("invalid state root: %w", err)
 		}
 	} else {
 		root = headBlock.Root()
@@ -153,7 +153,7 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 
 	binTrie, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb)
 	if err != nil {
-		return fmt.Errorf("failed to create binary trie: %v", err)
+		return fmt.Errorf("failed to create binary trie: %w", err)
 	}
 	memLimit := ctx.Uint64(memoryLimitFlag.Name) * 1024 * 1024
 
@@ -166,85 +166,9 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	if ctx.Bool(deleteSourceFlag.Name) {
 		log.Info("Deleting source MPT data")
 		if err := deleteMPTData(chaindb, srcTriedb, root); err != nil {
-			return fmt.Errorf("MPT deletion failed: %v", err)
+			return fmt.Errorf("MPT deletion failed: %w", err)
 		}
 		log.Info("Source MPT data deleted")
-	}
-	return nil
-}
-
-func runConversion(chaindb ethdb.Database, srcTriedb *triedb.Database, binTrie *bintrie.BinaryTrie, root common.Hash) error {
-	srcTrie, err := trie.NewStateTrie(trie.StateTrieID(root), srcTriedb)
-	if err != nil {
-		return fmt.Errorf("failed to open source trie: %v", err)
-	}
-	acctIt, err := srcTrie.NodeIterator(nil)
-	if err != nil {
-		return fmt.Errorf("failed to create account iterator: %v", err)
-	}
-	accIter := trie.NewIterator(acctIt)
-
-	for accIter.Next() {
-		var acc types.StateAccount
-		if err := rlp.DecodeBytes(accIter.Value, &acc); err != nil {
-			return fmt.Errorf("invalid account RLP: %v", err)
-		}
-		addrBytes := srcTrie.GetKey(accIter.Key)
-		if addrBytes == nil {
-			return fmt.Errorf("missing preimage for account hash %x (run with --cache.preimages)", accIter.Key)
-		}
-		addr := common.BytesToAddress(addrBytes)
-
-		var code []byte
-		codeHash := common.BytesToHash(acc.CodeHash)
-		if codeHash != types.EmptyCodeHash {
-			code = rawdb.ReadCode(chaindb, codeHash)
-			if code == nil {
-				return fmt.Errorf("missing code for hash %x (account %x)", codeHash, addr)
-			}
-		}
-
-		if err := binTrie.UpdateAccount(addr, &acc, len(code)); err != nil {
-			return fmt.Errorf("failed to update account %x: %v", addr, err)
-		}
-		if len(code) > 0 {
-			if err := binTrie.UpdateContractCode(addr, codeHash, code); err != nil {
-				return fmt.Errorf("failed to update code for %x: %v", addr, err)
-			}
-		}
-
-		if acc.Root != types.EmptyRootHash {
-			addrHash := common.BytesToHash(accIter.Key)
-			storageTrie, err := trie.NewStateTrie(trie.StorageTrieID(root, addrHash, acc.Root), srcTriedb)
-			if err != nil {
-				return fmt.Errorf("failed to open storage trie for %x: %v", addr, err)
-			}
-			storageNodeIt, err := storageTrie.NodeIterator(nil)
-			if err != nil {
-				return fmt.Errorf("failed to create storage iterator for %x: %v", addr, err)
-			}
-			storageIter := trie.NewIterator(storageNodeIt)
-
-			for storageIter.Next() {
-				slotKey := storageTrie.GetKey(storageIter.Key)
-				if slotKey == nil {
-					return fmt.Errorf("missing preimage for storage key %x (account %x)", storageIter.Key, addr)
-				}
-				_, content, _, err := rlp.Split(storageIter.Value)
-				if err != nil {
-					return fmt.Errorf("invalid storage RLP for key %x (account %x): %v", slotKey, addr, err)
-				}
-				if err := binTrie.UpdateStorage(addr, slotKey, content); err != nil {
-					return fmt.Errorf("failed to update storage %x/%x: %v", addr, slotKey, err)
-				}
-			}
-			if storageIter.Err != nil {
-				return fmt.Errorf("storage iteration error for %x: %v", addr, storageIter.Err)
-			}
-		}
-	}
-	if accIter.Err != nil {
-		return fmt.Errorf("account iteration error: %v", accIter.Err)
 	}
 	return nil
 }
@@ -259,18 +183,18 @@ func runConversionLoop(chaindb ethdb.Database, srcTriedb *triedb.Database, destT
 
 	srcTrie, err := trie.NewStateTrie(trie.StateTrieID(root), srcTriedb)
 	if err != nil {
-		return common.Hash{}, fmt.Errorf("failed to open source trie: %v", err)
+		return common.Hash{}, fmt.Errorf("failed to open source trie: %w", err)
 	}
 	acctIt, err := srcTrie.NodeIterator(nil)
 	if err != nil {
-		return common.Hash{}, fmt.Errorf("failed to create account iterator: %v", err)
+		return common.Hash{}, fmt.Errorf("failed to create account iterator: %w", err)
 	}
 	accIter := trie.NewIterator(acctIt)
 
 	for accIter.Next() {
 		var acc types.StateAccount
 		if err := rlp.DecodeBytes(accIter.Value, &acc); err != nil {
-			return common.Hash{}, fmt.Errorf("invalid account RLP: %v", err)
+			return common.Hash{}, fmt.Errorf("invalid account RLP: %w", err)
 		}
 		addrBytes := srcTrie.GetKey(accIter.Key)
 		if addrBytes == nil {
@@ -289,11 +213,11 @@ func runConversionLoop(chaindb ethdb.Database, srcTriedb *triedb.Database, destT
 		}
 
 		if err := binTrie.UpdateAccount(addr, &acc, len(code)); err != nil {
-			return common.Hash{}, fmt.Errorf("failed to update account %x: %v", addr, err)
+			return common.Hash{}, fmt.Errorf("failed to update account %x: %w", addr, err)
 		}
 		if len(code) > 0 {
 			if err := binTrie.UpdateContractCode(addr, codeHash, code); err != nil {
-				return common.Hash{}, fmt.Errorf("failed to update code for %x: %v", addr, err)
+				return common.Hash{}, fmt.Errorf("failed to update code for %x: %w", addr, err)
 			}
 		}
 
@@ -301,11 +225,11 @@ func runConversionLoop(chaindb ethdb.Database, srcTriedb *triedb.Database, destT
 			addrHash := common.BytesToHash(accIter.Key)
 			storageTrie, err := trie.NewStateTrie(trie.StorageTrieID(root, addrHash, acc.Root), srcTriedb)
 			if err != nil {
-				return common.Hash{}, fmt.Errorf("failed to open storage trie for %x: %v", addr, err)
+				return common.Hash{}, fmt.Errorf("failed to open storage trie for %x: %w", addr, err)
 			}
 			storageNodeIt, err := storageTrie.NodeIterator(nil)
 			if err != nil {
-				return common.Hash{}, fmt.Errorf("failed to create storage iterator for %x: %v", addr, err)
+				return common.Hash{}, fmt.Errorf("failed to create storage iterator for %x: %w", addr, err)
 			}
 			storageIter := trie.NewIterator(storageNodeIt)
 
@@ -317,10 +241,10 @@ func runConversionLoop(chaindb ethdb.Database, srcTriedb *triedb.Database, destT
 				}
 				_, content, _, err := rlp.Split(storageIter.Value)
 				if err != nil {
-					return common.Hash{}, fmt.Errorf("invalid storage RLP for key %x (account %x): %v", slotKey, addr, err)
+					return common.Hash{}, fmt.Errorf("invalid storage RLP for key %x (account %x): %w", slotKey, addr, err)
 				}
 				if err := binTrie.UpdateStorage(addr, slotKey, content); err != nil {
-					return common.Hash{}, fmt.Errorf("failed to update storage %x/%x: %v", addr, slotKey, err)
+					return common.Hash{}, fmt.Errorf("failed to update storage %x/%x: %w", addr, slotKey, err)
 				}
 				stats.slots++
 				slotCount++
@@ -333,7 +257,7 @@ func runConversionLoop(chaindb ethdb.Database, srcTriedb *triedb.Database, destT
 				}
 			}
 			if storageIter.Err != nil {
-				return common.Hash{}, fmt.Errorf("storage iteration error for %x: %v", addr, storageIter.Err)
+				return common.Hash{}, fmt.Errorf("storage iteration error for %x: %w", addr, storageIter.Err)
 			}
 		}
 		stats.accounts++
@@ -347,12 +271,12 @@ func runConversionLoop(chaindb ethdb.Database, srcTriedb *triedb.Database, destT
 		}
 	}
 	if accIter.Err != nil {
-		return common.Hash{}, fmt.Errorf("account iteration error: %v", accIter.Err)
+		return common.Hash{}, fmt.Errorf("account iteration error: %w", accIter.Err)
 	}
 
 	_, currentRoot, err = commitBinaryTrie(binTrie, currentRoot, destTriedb)
 	if err != nil {
-		return common.Hash{}, fmt.Errorf("final commit failed: %v", err)
+		return common.Hash{}, fmt.Errorf("final commit failed: %w", err)
 	}
 	stats.commits++
 	stats.report(true)
@@ -386,10 +310,10 @@ func commitBinaryTrie(bt *bintrie.BinaryTrie, currentRoot common.Hash, destDB *t
 	if nodeSet != nil {
 		merged := trienode.NewWithNodeSet(nodeSet)
 		if err := destDB.Update(newRoot, currentRoot, 0, merged, triedb.NewStateSet()); err != nil {
-			return nil, common.Hash{}, fmt.Errorf("triedb update failed: %v", err)
+			return nil, common.Hash{}, fmt.Errorf("triedb update failed: %w", err)
 		}
 		if err := destDB.Commit(newRoot, false); err != nil {
-			return nil, common.Hash{}, fmt.Errorf("triedb commit failed: %v", err)
+			return nil, common.Hash{}, fmt.Errorf("triedb commit failed: %w", err)
 		}
 	}
 	runtime.GC()
@@ -397,7 +321,7 @@ func commitBinaryTrie(bt *bintrie.BinaryTrie, currentRoot common.Hash, destDB *t
 
 	bt, err := bintrie.NewBinaryTrie(newRoot, destDB)
 	if err != nil {
-		return nil, common.Hash{}, fmt.Errorf("failed to reload binary trie: %v", err)
+		return nil, common.Hash{}, fmt.Errorf("failed to reload binary trie: %w", err)
 	}
 	return bt, newRoot, nil
 }
@@ -407,11 +331,11 @@ func deleteMPTData(chaindb ethdb.Database, srcTriedb *triedb.Database, root comm
 
 	srcTrie, err := trie.NewStateTrie(trie.StateTrieID(root), srcTriedb)
 	if err != nil {
-		return fmt.Errorf("failed to open source trie for deletion: %v", err)
+		return fmt.Errorf("failed to open source trie for deletion: %w", err)
 	}
 	acctIt, err := srcTrie.NodeIterator(nil)
 	if err != nil {
-		return fmt.Errorf("failed to create account iterator for deletion: %v", err)
+		return fmt.Errorf("failed to create account iterator for deletion: %w", err)
 	}
 	batch := chaindb.NewBatch()
 	deleted := 0
@@ -430,17 +354,17 @@ func deleteMPTData(chaindb ethdb.Database, srcTriedb *triedb.Database, root comm
 		if acctIt.Leaf() {
 			var acc types.StateAccount
 			if err := rlp.DecodeBytes(acctIt.LeafBlob(), &acc); err != nil {
-				return fmt.Errorf("invalid account during deletion: %v", err)
+				return fmt.Errorf("invalid account during deletion: %w", err)
 			}
 			if acc.Root != types.EmptyRootHash {
 				addrHash := common.BytesToHash(acctIt.LeafKey())
 				storageTrie, err := trie.NewStateTrie(trie.StorageTrieID(root, addrHash, acc.Root), srcTriedb)
 				if err != nil {
-					return fmt.Errorf("failed to open storage trie for deletion: %v", err)
+					return fmt.Errorf("failed to open storage trie for deletion: %w", err)
 				}
 				storageIt, err := storageTrie.NodeIterator(nil)
 				if err != nil {
-					return fmt.Errorf("failed to create storage iterator for deletion: %v", err)
+					return fmt.Errorf("failed to create storage iterator for deletion: %w", err)
 				}
 				for storageIt.Next(true) {
 					if isPathDB {
@@ -454,29 +378,29 @@ func deleteMPTData(chaindb ethdb.Database, srcTriedb *triedb.Database, root comm
 					deleted++
 					if batch.ValueSize() >= ethdb.IdealBatchSize {
 						if err := batch.Write(); err != nil {
-							return fmt.Errorf("batch write failed: %v", err)
+							return fmt.Errorf("batch write failed: %w", err)
 						}
 						batch.Reset()
 					}
 				}
 				if storageIt.Error() != nil {
-					return fmt.Errorf("storage deletion iterator error: %v", storageIt.Error())
+					return fmt.Errorf("storage deletion iterator error: %w", storageIt.Error())
 				}
 			}
 		}
 		if batch.ValueSize() >= ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
-				return fmt.Errorf("batch write failed: %v", err)
+				return fmt.Errorf("batch write failed: %w", err)
 			}
 			batch.Reset()
 		}
 	}
 	if acctIt.Error() != nil {
-		return fmt.Errorf("account deletion iterator error: %v", acctIt.Error())
+		return fmt.Errorf("account deletion iterator error: %w", acctIt.Error())
 	}
 	if batch.ValueSize() > 0 {
 		if err := batch.Write(); err != nil {
-			return fmt.Errorf("final batch write failed: %v", err)
+			return fmt.Errorf("final batch write failed: %w", err)
 		}
 	}
 	log.Info("MPT deletion complete", "nodesDeleted", deleted)
