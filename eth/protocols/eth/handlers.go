@@ -269,33 +269,28 @@ func handleGetReceipts70(backend Backend, msg Decoder, peer *Peer) error {
 // It does not send the bloom filters for the receipts. It is exposed
 // to allow external packages to test protocol behavior.
 func ServiceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest) rlp.RawList[*ReceiptList] {
-	// Gather state data until the fetch or network limits is reached
 	var (
 		bytes    int
 		receipts rlp.RawList[*ReceiptList]
 	)
 	for lookups, hash := range query {
-		if bytes >= softResponseLimit || receipts.Len() >= maxReceiptsServe ||
-			lookups >= 2*maxReceiptsServe {
+		if bytes >= softResponseLimit || receipts.Len() >= maxReceiptsServe || lookups >= 2*maxReceiptsServe {
 			break
 		}
+
 		// Retrieve the requested block's receipts
 		results := chain.GetReceiptsRLP(hash)
 		if results == nil {
-			if header := chain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
-				continue
-			}
-		} else {
-			body := chain.GetBodyRLP(hash)
-			if body == nil {
-				continue
-			}
-			var err error
-			results, err = blockReceiptsToNetwork(results, body)
-			if err != nil {
-				log.Error("Error in block receipts conversion", "hash", hash, "err", err)
-				continue
-			}
+			continue // Can't retrieve the receipts, so we just skip this block.
+		}
+		body := chain.GetBodyRLP(hash)
+		if body == nil {
+			continue // The block body is missing, we also have to skip.
+		}
+		results, _, err := blockReceiptsToNetwork(results, body, receiptQueryParams{})
+		if err != nil {
+			log.Error("Error in block receipts conversion", "hash", hash, "err", err)
+			continue
 		}
 		receipts.AppendRaw(results)
 		bytes += len(results)
@@ -309,9 +304,8 @@ func ServiceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 // are omitted from the first block receipt list.
 func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest, firstBlockReceiptIndex uint64) (rlp.RawList[*ReceiptList], bool) {
 	var (
-		bytes               int
-		receipts            rlp.RawList[*ReceiptList]
-		lastBlockIncomplete bool
+		bytes    int
+		receipts rlp.RawList[*ReceiptList]
 	)
 	for i, hash := range query {
 		if bytes >= softResponseLimit || receipts.Len() >= maxReceiptsServe {
@@ -319,65 +313,28 @@ func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest,
 		}
 		results := chain.GetReceiptsRLP(hash)
 		if results == nil {
-			if header := chain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
-				continue
-			}
-		} else {
-			body := chain.GetBodyRLP(hash)
-			if body == nil {
-				continue
-			}
-			var err error
-			results, err = blockReceiptsToNetwork(results, body)
-			if err != nil {
-				log.Error("Error in block receipts conversion", "hash", hash, "err", err)
-				continue
-			}
+			continue // Can't retrieve the receipts, so we just skip this block.
 		}
-
-		if firstBlockReceiptIndex > 0 && i == 0 {
-			results, lastBlockIncomplete = trimReceiptsRLP(results, int(firstBlockReceiptIndex), maxPacketSize)
-		} else if bytes+len(results) > maxPacketSize {
-			results, lastBlockIncomplete = trimReceiptsRLP(results, 0, maxPacketSize-bytes)
+		body := chain.GetBodyRLP(hash)
+		if body == nil {
+			continue // The block body is missing, we also have to skip.
 		}
-
-		receipts.AppendRaw(results)
-		bytes += len(results)
-	}
-
-	return receipts, lastBlockIncomplete
-}
-
-// trimReceiptsRLP trims raw value from `from` index until it exceeds limit
-func trimReceiptsRLP(receiptsRLP rlp.RawValue, from int, limit int) (rlp.RawValue, bool) {
-	var (
-		out      bytes.Buffer
-		buffer   = rlp.NewEncoderBuffer(&out)
-		iter, _  = rlp.NewListIterator(receiptsRLP)
-		index    int
-		bytes    int
-		overflow bool
-	)
-
-	list := buffer.List()
-	for iter.Next() {
-		if index < from {
-			index++
+		q := receiptQueryParams{sizeLimit: uint64(maxPacketSize - bytes)}
+		if i == 0 {
+			q.firstIndex = firstBlockReceiptIndex
+		}
+		results, incomplete, err := blockReceiptsToNetwork(results, body, q)
+		if err != nil {
+			log.Error("Error in block receipts conversion", "hash", hash, "err", err)
 			continue
 		}
-		receipt := iter.Value()
-		if bytes+len(receipt) > limit {
-			overflow = true
-			break
+		receipts.AppendRaw(results)
+		bytes += len(results)
+		if incomplete {
+			return receipts, true
 		}
-		buffer.Write(receipt)
-		bytes += len(receipt)
-		index++
 	}
-	buffer.ListEnd(list)
-	buffer.Flush()
-
-	return out.Bytes(), overflow
+	return receipts, false
 }
 
 func handleBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {

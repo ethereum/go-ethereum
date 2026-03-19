@@ -240,12 +240,17 @@ func (rl *ReceiptList) LogsSize() (uint64, error) {
 	return size, nil
 }
 
-// blockReceiptsToNetwork takes a slice of rlp-encoded receipts, and transactions,
-// and re-encodes them for the network protocol.
-func blockReceiptsToNetwork(blockReceipts, blockBody rlp.RawValue) ([]byte, error) {
+type receiptQueryParams struct {
+	firstIndex uint64
+	sizeLimit  uint64
+}
+
+// blockReceiptsToNetwork takes a slice of rlp-encoded receipts (in the 'storage' encoding),
+// and an encoded block body, and re-encodes the receipts for the network protocol.
+func blockReceiptsToNetwork(blockReceipts, blockBody rlp.RawValue, q receiptQueryParams) (output []byte, incomplete bool, err error) {
 	txTypesIter, err := txTypesInBody(blockBody)
 	if err != nil {
-		return nil, fmt.Errorf("invalid block body: %v", err)
+		return nil, false, fmt.Errorf("invalid block body: %v", err)
 	}
 	nextTxType, stopTxTypes := iter.Pull(txTypesIter)
 	defer stopTxTypes()
@@ -256,9 +261,24 @@ func blockReceiptsToNetwork(blockReceipts, blockBody rlp.RawValue) ([]byte, erro
 		it, _ = rlp.NewListIterator(blockReceipts)
 	)
 	outer := enc.List()
-	for i := 0; it.Next(); i++ {
-		txType, _ := nextTxType()
+	for i := 0; it.Next() && !incomplete; i++ {
+		txType, end := nextTxType()
+		if end {
+			return nil, false, fmt.Errorf("block has less txs than receipts (%d)", i)
+		}
+		// Skip receipts before the requested index.
+		if uint64(i) < q.firstIndex {
+			continue
+		}
 		content, _, _ := rlp.SplitList(it.Value())
+		// Stop appending receipts when they would go over the size limit.
+		// Note we rely on the assumption that the txType is encoded as a single byte,
+		// which is always true because EIP-2718 does not allow tx types > 0x7f.
+		size := rlp.ListSize(1 + uint64(len(content)))
+		if q.sizeLimit > 0 && (uint64(enc.Size())+size) > q.sizeLimit {
+			break
+		}
+
 		receiptList := enc.List()
 		enc.WriteUint64(uint64(txType))
 		enc.Write(content)
@@ -266,7 +286,7 @@ func blockReceiptsToNetwork(blockReceipts, blockBody rlp.RawValue) ([]byte, erro
 	}
 	enc.ListEnd(outer)
 	enc.Flush()
-	return out.Bytes(), nil
+	return out.Bytes(), incomplete, nil
 }
 
 // txTypesInBody parses the transactions list of an encoded block body, returning just the types.
