@@ -545,8 +545,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		vmerr      error // vm errors do not effect consensus and are therefore not assigned to err
 		authRefund uint64
 	)
+	var execGasUsed vm.GasUsed
 	if contractCreation {
-		ret, _, st.gasRemaining, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
+		ret, _, st.gasRemaining, execGasUsed, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
 	} else {
 		// Increment the nonce for the next transaction.
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
@@ -570,18 +571,12 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 
 		// Execute the transaction's call.
-		ret, st.gasRemaining, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
+		ret, st.gasRemaining, execGasUsed, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
 	}
 
 	// Record the gas used excluding gas refunds. This value represents the actual
 	// gas allowance required to complete execution.
 	peakGasUsed := st.gasUsed()
-
-	// EIP-8037: Capture pre-refund remaining for 2D gas accounting.
-	var preRefundRemaining uint64
-	if rules.IsAmsterdam {
-		preRefundRemaining = st.gasRemaining.Sum()
-	}
 
 	// Compute refund counter, capped to a refund quotient.
 	st.gasRemaining.RegularGas += st.calcRefund()
@@ -607,10 +602,11 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 	if rules.IsAmsterdam {
 		// EIP-8037: 2D gas accounting for Amsterdam.
-		// tx_state = adjusted_intrinsic_state + exec_state_used (spec: set_delegation adjusts intrinsic)
-		// tx_regular = total_dimensional_used - tx_state
-		txState := (gas.StateGas - authRefund) + st.gasRemaining.StateGasCharged
-		txRegular := (msg.GasLimit - preRefundRemaining) - txState
+		// tx_regular = intrinsic_regular + exec_regular_gas_used
+		// tx_state = intrinsic_state (adjusted) + exec_state_gas_used
+		// These are tracked independently, not derived from remaining gas.
+		txState := (gas.StateGas - authRefund) + execGasUsed.StateGasCharged
+		txRegular := gas.RegularGas + execGasUsed.RegularGasUsed
 		txRegular = max(txRegular, floorDataGas)
 		if err := st.gp.ReturnGasAmsterdam(returned, txRegular, txState, st.gasUsed()); err != nil {
 			return nil, err

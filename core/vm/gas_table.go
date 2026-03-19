@@ -710,6 +710,7 @@ func gasSStore8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 			if contract.Gas.Underflow(stateGas) {
 				return GasCosts{}, errors.New("out of gas for state gas")
 			}
+			contract.GasUsed.Add(stateGas)
 			contract.Gas.Sub(stateGas)
 			return GasCosts{RegularGas: cost.RegularGas + params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929}, nil
 		}

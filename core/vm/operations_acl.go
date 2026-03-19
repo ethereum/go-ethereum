@@ -307,6 +307,7 @@ func makeCallVariantGasCall(oldCalculatorStateful, oldCalculatorStateless gasFun
 			if contract.Gas.Underflow(stateGasCost) {
 				return GasCosts{}, ErrOutOfGas
 			}
+			contract.GasUsed.Add(stateGasCost)
 			contract.Gas.Sub(stateGasCost)
 		}
 
@@ -327,10 +328,15 @@ func makeCallVariantGasCall(oldCalculatorStateful, oldCalculatorStateless gasFun
 		if overflow {
 			return GasCosts{}, ErrGasUintOverflow
 		}
+		// EIP-8037: undo the RegularGasUsed increment from the direct UseGas
+		// charge, since this gas will be re-charged via the returned cost.
+		contract.GasUsed.RegularGasUsed -= eip2929Gas
+
 		contract.Gas.RegularGas, overflow = math.SafeAdd(contract.Gas.RegularGas, eip7702Gas)
 		if overflow {
 			return GasCosts{}, ErrGasUintOverflow
 		}
+		contract.GasUsed.RegularGasUsed -= eip7702Gas
 
 		var totalCost uint64
 		totalCost, overflow = math.SafeAdd(eip2929Gas, eip7702Gas)

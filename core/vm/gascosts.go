@@ -5,9 +5,22 @@ import "fmt"
 type GasCosts struct {
 	RegularGas uint64
 	StateGas   uint64
+}
 
-	// StateGasCharged tracks the cumulative state gas charged during execution.
+// GasUsed tracks per-frame gas usage metrics for EIP-8037 2D block gas accounting.
+type GasUsed struct {
+	// RegularGasUsed accumulates all gas charged via charge_gas() in the spec:
+	// State-gas spillover (when StateGas is exhausted and the excess
+	// is paid from RegularGas) does NOT increment RegularGasUsed.
+	RegularGasUsed uint64
+	// StateGasCharged accumulates all gas charged via charge_state_gas()
+	// On child error the charged state gas is restored to the parent's state gas reservoir.
 	StateGasCharged uint64
+}
+
+func (g *GasUsed) Add(cost GasCosts) {
+	g.RegularGasUsed += cost.RegularGas
+	g.StateGasCharged += cost.StateGas
 }
 
 func (g GasCosts) Max() uint64 {
@@ -38,11 +51,11 @@ func (g GasCosts) Underflow(b GasCosts) bool {
 // Sub doesn't check for underflows
 func (g *GasCosts) Sub(b GasCosts) {
 	g.RegularGas -= b.RegularGas
-	g.StateGasCharged += b.StateGas
 	if b.StateGas > g.StateGas {
 		diff := b.StateGas - g.StateGas
 		g.StateGas = 0
 		g.RegularGas -= diff
+		// Note: spillover does NOT increment RegularGasUsed, matching the spec
 	} else {
 		g.StateGas -= b.StateGas
 	}
@@ -52,7 +65,6 @@ func (g *GasCosts) Sub(b GasCosts) {
 func (g *GasCosts) Add(b GasCosts) {
 	g.RegularGas += b.RegularGas
 	g.StateGas += b.StateGas
-	g.StateGasCharged += b.StateGasCharged
 }
 
 func (g GasCosts) String() string {

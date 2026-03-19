@@ -316,7 +316,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				start := time.Now()
 
 				// Execute the message.
-				_, leftOverGas, err := evm.Call(sender.Address(), *msg.To, msg.Data, vm.GasCosts{RegularGas: msg.GasLimit}, uint256.MustFromBig(msg.Value))
+				_, leftOverGas, _, err := evm.Call(sender.Address(), *msg.To, msg.Data, vm.GasCosts{RegularGas: msg.GasLimit}, uint256.MustFromBig(msg.Value))
 				if err != nil {
 					b.Error(err)
 					return
