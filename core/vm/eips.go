@@ -606,7 +606,6 @@ func enable8037(jt *JumpTable) {
 	jt[CREATE].dynamicGas = gasCreateEip8037
 	jt[CREATE2].constantGas = params.CreateGasAmsterdam
 	jt[CREATE2].dynamicGas = gasCreate2Eip8037
-	jt[CALL].dynamicGas = makeCallVariantGasCall(gasCall8037, gasCallStateless)
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestruct8037
 	jt[SSTORE].dynamicGas = gasSStore8037
 }
