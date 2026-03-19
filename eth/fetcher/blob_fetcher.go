@@ -701,17 +701,14 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 		// If any hashes were allocated, request them from the peer
 		if len(hashes) > 0 {
 			// Group hashes by custody bitmap
-			requestByCustody := make(map[string]*cellRequest)
+			requestByCustody := make(map[types.CustodyBitmap]*cellRequest)
 
 			for i, hash := range hashes {
-				custody := custodies[i]
-
-				key := string(custody[:])
-
+				key := *custodies[i]
 				if _, ok := requestByCustody[key]; !ok {
 					requestByCustody[key] = &cellRequest{
 						txs:   []common.Hash{},
-						cells: custody,
+						cells: custodies[i],
 						time:  f.clock.Now(),
 					}
 				}
