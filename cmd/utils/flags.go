@@ -218,17 +218,15 @@ var (
 		Usage: "Max number of elements (0 = no limit)",
 		Value: 0,
 	}
-	TopFlag = &cli.IntFlag{
-		Name:  "top",
-		Usage: "Print the top N results",
-		Value: 5,
+	AccountFlag = &cli.StringFlag{
+		Name:  "account",
+		Usage: "Specifies the account address or hash to traverse a single storage trie",
 	}
 	OutputFileFlag = &cli.StringFlag{
 		Name:  "output",
 		Usage: "Writes the result in json to the output",
 		Value: "",
 	}
-
 	SnapshotFlag = &cli.BoolFlag{
 		Name:     "snapshot",
 		Usage:    `Enables snapshot-database mode (default = enable)`,
@@ -325,7 +323,7 @@ var (
 	}
 	ChainHistoryFlag = &cli.StringFlag{
 		Name:     "history.chain",
-		Usage:    `Blockchain history retention ("all" or "postmerge")`,
+		Usage:    `Blockchain history retention ("all", "postmerge", or "postprague")`,
 		Value:    ethconfig.Defaults.HistoryMode.String(),
 		Category: flags.StateCategory,
 	}
@@ -490,8 +488,8 @@ var (
 	// Performance tuning settings
 	CacheFlag = &cli.IntFlag{
 		Name:     "cache",
-		Usage:    "Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode)",
-		Value:    1024,
+		Usage:    "Megabytes of memory allocated to internal caching",
+		Value:    4096,
 		Category: flags.PerfCategory,
 	}
 	CacheDatabaseFlag = &cli.IntFlag{
@@ -2475,8 +2473,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	}
 	vmcfg := vm.Config{
 		EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name),
-		EnableWitnessStats:      ctx.Bool(VMWitnessStatsFlag.Name),
-		StatelessSelfValidation: ctx.Bool(VMStatelessSelfValidationFlag.Name) || ctx.Bool(VMWitnessStatsFlag.Name),
 	}
 	if ctx.IsSet(VMTraceFlag.Name) {
 		if name := ctx.String(VMTraceFlag.Name); name != "" {
@@ -2489,6 +2485,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		}
 	}
 	options.VmConfig = vmcfg
+
+	options.StatelessSelfValidation = ctx.Bool(VMStatelessSelfValidationFlag.Name) || ctx.Bool(VMWitnessStatsFlag.Name)
+	options.EnableWitnessStats = ctx.Bool(VMWitnessStatsFlag.Name)
 
 	chain, err := core.NewBlockChain(chainDb, gspec, engine, options)
 	if err != nil {

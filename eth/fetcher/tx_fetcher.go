@@ -442,7 +442,9 @@ func (f *TxFetcher) loop() {
 	if f.chain != nil {
 		headEventCh = make(chan core.ChainEvent, 10)
 		sub := f.chain.SubscribeChainEvent(headEventCh)
-		defer sub.Unsubscribe()
+		if sub != nil {
+			defer sub.Unsubscribe()
+		}
 	}
 
 	for {

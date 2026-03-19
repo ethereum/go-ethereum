@@ -53,7 +53,7 @@ var (
 	}
 	removeChainDataFlag = &cli.BoolFlag{
 		Name:  "remove.chain",
-		Usage: "If set, selects the state data for removal",
+		Usage: "If set, selects the chain data for removal",
 	}
 	inspectTrieTopFlag = &cli.IntFlag{
 		Name:  "top",

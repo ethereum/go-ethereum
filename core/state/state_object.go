@@ -474,6 +474,14 @@ func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
 		s.origin = s.data.Copy()
 		return op, nil, nil
 	}
+	// In Verkle/binary trie mode, all state objects share one unified trie.
+	// The main account trie commit in stateDB.commit() already calls
+	// CollectNodes on this trie, so calling Commit here again would
+	// redundantly traverse and serialize the entire tree per dirty account.
+	if s.db.GetTrie().IsVerkle() {
+		s.origin = s.data.Copy()
+		return op, nil, nil
+	}
 	root, nodes := s.trie.Commit(false)
 	s.data.Root = root
 	s.origin = s.data.Copy()
@@ -564,10 +572,7 @@ func (s *stateObject) Code() []byte {
 		s.db.CodeLoadBytes += len(s.code)
 	}(time.Now())
 
-	code, err := s.db.reader.Code(s.address, common.BytesToHash(s.CodeHash()))
-	if err != nil {
-		s.db.setError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
-	}
+	code := s.db.reader.Code(s.address, common.BytesToHash(s.CodeHash()))
 	if len(code) == 0 {
 		s.db.setError(fmt.Errorf("code is not found %x", s.CodeHash()))
 	}
@@ -590,10 +595,7 @@ func (s *stateObject) CodeSize() int {
 		s.db.CodeReads += time.Since(start)
 	}(time.Now())
 
-	size, err := s.db.reader.CodeSize(s.address, common.BytesToHash(s.CodeHash()))
-	if err != nil {
-		s.db.setError(fmt.Errorf("can't load code size %x: %v", s.CodeHash(), err))
-	}
+	size := s.db.reader.CodeSize(s.address, common.BytesToHash(s.CodeHash()))
 	if size == 0 {
 		s.db.setError(fmt.Errorf("code is not found %x", s.CodeHash()))
 	}

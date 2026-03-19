@@ -143,7 +143,7 @@ func NewBinaryTrie(root common.Hash, db database.NodeDatabase) (*BinaryTrie, err
 		if err != nil {
 			return nil, err
 		}
-		node, err := DeserializeNode(blob, 0)
+		node, err := DeserializeNodeWithHash(blob, 0, root)
 		if err != nil {
 			return nil, err
 		}

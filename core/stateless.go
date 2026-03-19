@@ -53,7 +53,7 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 	}
 	// Create and populate the state database to serve as the stateless backend
 	memdb := witness.MakeHashDB()
-	db, err := state.New(witness.Root(), state.NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), nil))
+	db, err := state.New(witness.Root(), state.NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), state.NewCodeDB(memdb)))
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}

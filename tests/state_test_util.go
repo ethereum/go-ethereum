@@ -342,9 +342,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	}
 	// Execute the message.
 	snapshot := st.StateDB.Snapshot()
-	gaspool := new(core.GasPool)
-	gaspool.AddGas(block.GasLimit())
-	vmRet, err := core.ApplyMessage(evm, msg, gaspool)
+	vmRet, err := core.ApplyMessage(evm, msg, core.NewGasPool(block.GasLimit()))
 	if err != nil {
 		st.StateDB.RevertToSnapshot(snapshot)
 		if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
@@ -546,7 +544,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		}
 		snaps, _ = snapshot.New(snapconfig, db, triedb, root)
 	}
-	sdb = state.NewDatabase(triedb, snaps)
+	sdb = state.NewDatabase(triedb, nil).WithSnapshot(snaps)
 	statedb, _ = state.New(root, sdb)
 	return StateTestState{statedb, triedb, snaps}
 }

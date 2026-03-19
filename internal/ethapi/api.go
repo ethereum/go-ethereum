@@ -741,11 +741,10 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
-	gp := new(core.GasPool)
+
+	gp := core.NewGasPool(globalGasCap)
 	if globalGasCap == 0 {
-		gp.AddGas(gomath.MaxUint64)
-	} else {
-		gp.AddGas(globalGasCap)
+		gp = core.NewGasPool(gomath.MaxUint64)
 	}
 	return applyMessage(ctx, b, args, state, header, timeout, gp, &blockCtx, &vm.Config{NoBaseFee: true}, precompiles)
 }
@@ -850,17 +849,12 @@ func (api *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrO
 	if state == nil || err != nil {
 		return nil, err
 	}
-	gasCap := api.b.RPCGasCap()
-	if gasCap == 0 {
-		gasCap = gomath.MaxUint64
-	}
 	sim := &simulator{
-		b:           api.b,
-		state:       state,
-		base:        base,
-		chainConfig: api.b.ChainConfig(),
-		// Each tx and all the series of txes shouldn't consume more gas than cap
-		gp:             new(core.GasPool).AddGas(gasCap),
+		b:              api.b,
+		state:          state,
+		base:           base,
+		chainConfig:    api.b.ChainConfig(),
+		budget:         newGasBudget(api.b.RPCGasCap()),
 		traceTransfers: opts.TraceTransfers,
 		validate:       opts.Validation,
 		fullTx:         opts.ReturnFullTransactions,
@@ -972,7 +966,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		result["requestsHash"] = head.RequestsHash
 	}
 	if head.SlotNumber != nil {
-		result["slotNumber"] = head.SlotNumber
+		result["slotNumber"] = hexutil.Uint64(*head.SlotNumber)
 	}
 	return result
 }
@@ -1369,7 +1363,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if msg.BlobGasFeeCap != nil && msg.BlobGasFeeCap.BitLen() == 0 {
 			evm.Context.BlobBaseFee = new(big.Int)
 		}
-		res, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
+		res, err := core.ApplyMessage(evm, msg, nil)
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction(types.LegacyTxType).Hash(), err)
 		}

@@ -180,6 +180,8 @@ func (b *buffer) flush(root common.Hash, db ethdb.KeyValueStore, freezers []ethd
 			b.flushErr = err
 			return
 		}
+		batch.Close()
+
 		commitBytesMeter.Mark(int64(size))
 		commitNodesMeter.Mark(int64(nodes))
 		commitAccountsMeter.Mark(int64(accounts))

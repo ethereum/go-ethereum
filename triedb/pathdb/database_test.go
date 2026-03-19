@@ -182,6 +182,7 @@ func newTester(t *testing.T, config *testerConfig) *tester {
 			WriteBufferSize:     config.writeBufferSize(),
 			NoAsyncFlush:        true,
 			JournalDirectory:    config.journalDir,
+			NoHistoryIndexDelay: true,
 		}, config.isVerkle)
 
 		obj = &tester{

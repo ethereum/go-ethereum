@@ -14,7 +14,7 @@ require (
 	github.com/cloudflare/cloudflare-go v0.114.0
 	github.com/cockroachdb/pebble v1.1.5
 	github.com/consensys/gnark-crypto v0.18.1
-	github.com/crate-crypto/go-eth-kzg v1.4.0
+	github.com/crate-crypto/go-eth-kzg v1.5.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dchest/siphash v1.2.3
 	github.com/deckarep/golang-set/v2 v2.6.0
@@ -43,7 +43,7 @@ require (
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
 	github.com/jackpal/go-nat-pmp v1.0.2
 	github.com/jedisct1/go-minisign v0.0.0-20230811132847-661be99b8267
-	github.com/karalabe/hid v1.0.1-0.20240306101548-573246063e52
+	github.com/karalabe/hid v1.0.1-0.20260315100226-f5d04adeffeb
 	github.com/klauspost/compress v1.17.8
 	github.com/kylelemons/godebug v1.1.0
 	github.com/mattn/go-colorable v0.1.13
