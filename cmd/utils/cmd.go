@@ -49,6 +49,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/urfave/cli/v2"
 )
@@ -249,6 +250,47 @@ func readList(filename string) ([]string, error) {
 	return strings.Split(string(b), "\n"), nil
 }
 
+func validateImportedHistoryBlock(block *types.Block, receipts types.Receipts) error {
+	header := block.Header()
+
+	if hash := types.CalcUncleHash(block.Uncles()); hash != header.UncleHash {
+		return fmt.Errorf("uncle root hash mismatch (header value %x, calculated %x)", header.UncleHash, hash)
+	}
+	if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash {
+		return fmt.Errorf("transaction root hash mismatch (header value %x, calculated %x)", header.TxHash, hash)
+	}
+	if header.WithdrawalsHash != nil {
+		if block.Withdrawals() == nil {
+			return errors.New("missing withdrawals in block body")
+		}
+		if hash := types.DeriveSha(block.Withdrawals(), trie.NewStackTrie(nil)); hash != *header.WithdrawalsHash {
+			return fmt.Errorf("withdrawals root hash mismatch (header value %x, calculated %x)", *header.WithdrawalsHash, hash)
+		}
+	} else if block.Withdrawals() != nil {
+		return errors.New("withdrawals present in block body")
+	}
+
+	var blobs int
+	for i, tx := range block.Transactions() {
+		blobs += len(tx.BlobHashes())
+		if tx.BlobTxSidecar() != nil {
+			return fmt.Errorf("unexpected blob sidecar in transaction at index %d", i)
+		}
+	}
+	if header.BlobGasUsed != nil {
+		if want := *header.BlobGasUsed / params.BlobTxBlobGasPerBlob; uint64(blobs) != want {
+			return fmt.Errorf("blob gas used mismatch (header %v, calculated %v)", *header.BlobGasUsed, blobs*params.BlobTxBlobGasPerBlob)
+		}
+	} else if blobs > 0 {
+		return errors.New("data blobs present in block body")
+	}
+
+	if hash := types.DeriveSha(receipts, trie.NewStackTrie(nil)); hash != header.ReceiptHash {
+		return fmt.Errorf("receipt root hash mismatch (header value %x, calculated %x)", header.ReceiptHash, hash)
+	}
+	return nil
+}
+
 // ImportHistory imports Era1 files containing historical block information,
 // starting from genesis. The assumption is held that the provided chain
 // segment in Era1 file should all be canonical and verified.
@@ -319,6 +361,9 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 				receipts, err := it.Receipts()
 				if err != nil {
 					return fmt.Errorf("error reading receipts %d: %w", it.Number(), err)
+				}
+				if err := validateImportedHistoryBlock(block, receipts); err != nil {
+					return fmt.Errorf("error validating block %d: %w", it.Number(), err)
 				}
 				enc := types.EncodeBlockReceiptLists([]types.Receipts{receipts})
 				if _, err := chain.InsertReceiptChain([]*types.Block{block}, enc, math.MaxUint64); err != nil {
