@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 func writeMultiBlockIndex(t *testing.T, db ethdb.Database, ident stateIdent, bitmapSize int, startID uint64) []*indexBlockDesc {
@@ -278,6 +279,7 @@ func TestPrunePauseResume(t *testing.T) {
 	pruner := &indexPruner{
 		disk:     db,
 		typ:      typeStateHistory,
+		log:      log.New("type", "account"),
 		closed:   make(chan struct{}),
 		pauseReq: make(chan chan struct{}),
 		resumeCh: make(chan struct{}),

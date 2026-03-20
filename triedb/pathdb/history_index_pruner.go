@@ -38,7 +38,7 @@ const (
 	// being released and re-opened. Long-lived iterators hold a read snapshot
 	// that blocks LSM compaction; periodically re-opening avoids stalling the
 	// compactor during a large scan.
-	iteratorReopenInterval = 3 * time.Minute
+	iteratorReopenInterval = 30 * time.Second
 )
 
 // indexPruner is responsible for pruning stale index data from the tail side
