@@ -138,6 +138,98 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 	}
 }
 
+// TestTransactionLookahead verifies that a sender with a low-tip head transaction
+// followed by a high-tip transaction is promoted above a sender whose single
+// transaction has a tip between the two. Without look-ahead scoring the low-tip
+// head would bury the high-value transaction.
+func TestTransactionLookahead(t *testing.T) {
+	t.Parallel()
+
+	signer := types.LatestSignerForChainID(common.Big1)
+	baseFee := big.NewInt(10)
+
+	keyA, _ := crypto.GenerateKey()
+	keyB, _ := crypto.GenerateKey()
+	addrA := crypto.PubkeyToAddress(keyA.PublicKey)
+	addrB := crypto.PubkeyToAddress(keyB.PublicKey)
+
+	// Sender A: nonce 0 has tip 1, nonce 1 has tip 100.
+	// Head-only score = 1, but look-ahead average ≈ 50.
+	txA0, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
+		Nonce:     0,
+		To:        &common.Address{},
+		Gas:       100,
+		GasFeeCap: big.NewInt(11), // baseFee + 1
+		GasTipCap: big.NewInt(1),
+	}), signer, keyA)
+	txA1, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
+		Nonce:     1,
+		To:        &common.Address{},
+		Gas:       100,
+		GasFeeCap: big.NewInt(110), // baseFee + 100
+		GasTipCap: big.NewInt(100),
+	}), signer, keyA)
+
+	// Sender B: single tx with tip 20.
+	// Without look-ahead, B (tip 20) would rank above A (tip 1).
+	// With look-ahead, A's score (~50) should rank above B (20).
+	txB0, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
+		Nonce:     0,
+		To:        &common.Address{},
+		Gas:       100,
+		GasFeeCap: big.NewInt(30), // baseFee + 20
+		GasTipCap: big.NewInt(20),
+	}), signer, keyB)
+
+	now := time.Now()
+	groups := map[common.Address][]*txpool.LazyTransaction{
+		addrA: {
+			{Hash: txA0.Hash(), Tx: txA0, Time: now, GasFeeCap: uint256.NewInt(11), GasTipCap: uint256.NewInt(1), Gas: 100},
+			{Hash: txA1.Hash(), Tx: txA1, Time: now, GasFeeCap: uint256.NewInt(110), GasTipCap: uint256.NewInt(100), Gas: 100},
+		},
+		addrB: {
+			{Hash: txB0.Hash(), Tx: txB0, Time: now, GasFeeCap: uint256.NewInt(30), GasTipCap: uint256.NewInt(20), Gas: 100},
+		},
+	}
+
+	txset := newTransactionsByPriceAndNonce(signer, groups, baseFee)
+
+	// First tx out should be A's nonce 0 (sender A ranked higher due to look-ahead).
+	first, _ := txset.Peek()
+	if first == nil {
+		t.Fatal("expected a transaction")
+	}
+	if first.Hash != txA0.Hash() {
+		t.Errorf("expected sender A's tx first (look-ahead should promote it), got sender B")
+	}
+	txset.Shift()
+
+	// Second should be A's nonce 1 (tip 100 > B's tip 20).
+	second, _ := txset.Peek()
+	if second == nil {
+		t.Fatal("expected a transaction")
+	}
+	if second.Hash != txA1.Hash() {
+		t.Errorf("expected sender A's nonce 1 second, got %s", second.Hash)
+	}
+	txset.Shift()
+
+	// Third should be B's tx.
+	third, _ := txset.Peek()
+	if third == nil {
+		t.Fatal("expected a transaction")
+	}
+	if third.Hash != txB0.Hash() {
+		t.Errorf("expected sender B's tx third, got %s", third.Hash)
+	}
+	txset.Shift()
+
+	// Should be empty now.
+	if last, _ := txset.Peek(); last != nil {
+		t.Error("expected no more transactions")
+	}
+}
+
 // Tests that if multiple transactions have the same price, the ones seen earlier
 // are prioritized to avoid network spam attacks aiming for a specific ordering.
 func TestTransactionTimeSort(t *testing.T) {

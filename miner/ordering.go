@@ -33,24 +33,80 @@ type txWithMinerFee struct {
 	fees *uint256.Int
 }
 
-// newTxWithMinerFee creates a wrapped transaction, calculating the effective
-// miner gasTipCap if a base fee is provided.
-// Returns error in case of a negative effective miner gasTipCap.
-func newTxWithMinerFee(tx *txpool.LazyTransaction, from common.Address, baseFee *uint256.Int) (*txWithMinerFee, error) {
+// maxLookahead is the maximum number of queued transactions to consider when
+// computing a sender's look-ahead score. This bounds the CPU cost of the
+// optimal-prefix search during heap construction and on every Shift.
+const maxLookahead = 16
+
+// effectiveTip computes the effective miner tip for a single transaction.
+func effectiveTip(tx *txpool.LazyTransaction, baseFee *uint256.Int) *uint256.Int {
 	tip := new(uint256.Int).Set(tx.GasTipCap)
 	if baseFee != nil {
 		if tx.GasFeeCap.Cmp(baseFee) < 0 {
-			return nil, types.ErrGasFeeCapTooLow
+			return nil // cannot pay base fee
 		}
 		tip = new(uint256.Int).Sub(tx.GasFeeCap, baseFee)
 		if tip.Gt(tx.GasTipCap) {
-			tip = tx.GasTipCap
+			tip = new(uint256.Int).Set(tx.GasTipCap)
 		}
 	}
+	return tip
+}
+
+// queueScore computes the optimal look-ahead score for a sender's pending
+// transaction queue. It finds the prefix of the nonce-ordered sequence that
+// maximizes the weighted-average effective tip per gas. This allows the miner
+// to "see through" a low-tip head transaction to high-value ones behind it.
+//
+// For example, if a sender has [0.01 gwei tip @ 21k gas, 100 gwei tip @ 21k gas],
+// the head-only score would be 0.01 gwei, but the optimal prefix score is
+// ~50 gwei — correctly reflecting that committing both yields high revenue.
+func queueScore(headTip *uint256.Int, headGas uint64, pending []*txpool.LazyTransaction, baseFee *uint256.Int) *uint256.Int {
+	best := new(uint256.Int).Set(headTip)
+	if len(pending) == 0 {
+		return best
+	}
+	// Running weighted sum: sum(tip_i * gas_i) and sum(gas_i)
+	sumTipGas := new(uint256.Int).Mul(headTip, new(uint256.Int).SetUint64(headGas))
+	sumGas := new(uint256.Int).SetUint64(headGas)
+
+	lookahead := len(pending)
+	if lookahead > maxLookahead {
+		lookahead = maxLookahead
+	}
+	for i := 0; i < lookahead; i++ {
+		tip := effectiveTip(pending[i], baseFee)
+		if tip == nil {
+			break // tx can't pay base fee, stop looking ahead
+		}
+		gas := new(uint256.Int).SetUint64(pending[i].Gas)
+		sumTipGas.Add(sumTipGas, new(uint256.Int).Mul(tip, gas))
+		sumGas.Add(sumGas, gas)
+
+		avg := new(uint256.Int).Div(sumTipGas, sumGas)
+		if avg.Gt(best) {
+			best.Set(avg)
+		}
+	}
+	return best
+}
+
+// newTxWithMinerFee creates a wrapped transaction, calculating the effective
+// miner gasTipCap if a base fee is provided. The pending slice contains the
+// sender's subsequent queued transactions (nonce-ordered); when non-empty, a
+// look-ahead score is computed so that a low-tip head transaction does not hide
+// high-value transactions behind it.
+// Returns error in case of a negative effective miner gasTipCap.
+func newTxWithMinerFee(tx *txpool.LazyTransaction, from common.Address, baseFee *uint256.Int, pending []*txpool.LazyTransaction) (*txWithMinerFee, error) {
+	tip := effectiveTip(tx, baseFee)
+	if tip == nil {
+		return nil, types.ErrGasFeeCapTooLow
+	}
+	score := queueScore(tip, tx.Gas, pending, baseFee)
 	return &txWithMinerFee{
 		tx:   tx,
 		from: from,
-		fees: tip,
+		fees: score,
 	}, nil
 }
 
@@ -107,7 +163,7 @@ func newTransactionsByPriceAndNonce(signer types.Signer, txs map[common.Address]
 	// Initialize a price and received time based heap with the head transactions
 	heads := make(txByPriceAndTime, 0, len(txs))
 	for from, accTxs := range txs {
-		wrapped, err := newTxWithMinerFee(accTxs[0], from, baseFeeUint)
+		wrapped, err := newTxWithMinerFee(accTxs[0], from, baseFeeUint, accTxs[1:])
 		if err != nil {
 			delete(txs, from)
 			continue
@@ -138,7 +194,7 @@ func (t *transactionsByPriceAndNonce) Peek() (*txpool.LazyTransaction, *uint256.
 func (t *transactionsByPriceAndNonce) Shift() {
 	acc := t.heads[0].from
 	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {
-		if wrapped, err := newTxWithMinerFee(txs[0], acc, t.baseFee); err == nil {
+		if wrapped, err := newTxWithMinerFee(txs[0], acc, t.baseFee, txs[1:]); err == nil {
 			t.heads[0], t.txs[acc] = wrapped, txs[1:]
 			heap.Fix(&t.heads, 0)
 			return
