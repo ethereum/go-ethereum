@@ -44,7 +44,7 @@ func newHistoricStateReader(r *pathdb.HistoricalStateReader) *historicStateReade
 }
 
 // Account implements StateReader, retrieving the account specified by the address.
-func (r *historicStateReader) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *historicStateReader) Account(addr common.Address) (*Account, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -55,17 +55,13 @@ func (r *historicStateReader) Account(addr common.Address) (*types.StateAccount,
 	if account == nil {
 		return nil, nil
 	}
-	acct := &types.StateAccount{
+	acct := &Account{
 		Nonce:    account.Nonce,
 		Balance:  account.Balance,
 		CodeHash: account.CodeHash,
-		Root:     common.BytesToHash(account.Root),
 	}
 	if len(acct.CodeHash) == 0 {
 		acct.CodeHash = types.EmptyCodeHash.Bytes()
-	}
-	if acct.Root == (common.Hash{}) {
-		acct.Root = types.EmptyRootHash
 	}
 	return acct, nil
 }
@@ -150,17 +146,25 @@ func newHistoricalTrieReader(root common.Hash, r *pathdb.HistoricalNodeReader) (
 }
 
 // account is the inner version of Account and assumes the r.lock is already held.
-func (r *historicalTrieReader) account(addr common.Address) (*types.StateAccount, error) {
+func (r *historicalTrieReader) account(addr common.Address) (*Account, error) {
 	account, err := r.tr.GetAccount(addr)
 	if err != nil {
 		return nil, err
 	}
 	if account == nil {
 		r.subRoots[addr] = types.EmptyRootHash
+		return nil, nil
 	} else {
 		r.subRoots[addr] = account.Root
+
+		// Account objects resolved from the trie always include
+		// the full code hash.
+		return &Account{
+			Nonce:    account.Nonce,
+			Balance:  account.Balance,
+			CodeHash: account.CodeHash,
+		}, nil
 	}
-	return account, nil
 }
 
 // Account implements StateReader, retrieving the account specified by the address.
@@ -169,7 +173,7 @@ func (r *historicalTrieReader) account(addr common.Address) (*types.StateAccount
 // the requested account is not yet covered by the snapshot.
 //
 // The returned account might be nil if it's not existent.
-func (r *historicalTrieReader) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *historicalTrieReader) Account(addr common.Address) (*Account, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -253,6 +257,10 @@ func (db *HistoricDB) Reader(stateRoot common.Hash) (Reader, error) {
 		return nil, err
 	}
 	return newReader(db.codedb.Reader(), combined), nil
+}
+
+func (db *HistoricDB) Hasher(stateRoot common.Hash) (Hasher, error) {
+	return &noopHasher{}, nil
 }
 
 // OpenTrie opens the main account trie. It's not supported by historic database.

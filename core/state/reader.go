@@ -71,6 +71,19 @@ func newEmptyAccount() *Account {
 	}
 }
 
+// copy returns a deep-copied account object.
+func (acct *Account) copy() *Account {
+	var balance *uint256.Int
+	if acct.Balance != nil {
+		balance = new(uint256.Int).Set(acct.Balance)
+	}
+	return &Account{
+		Nonce:    acct.Nonce,
+		Balance:  balance,
+		CodeHash: common.CopyBytes(acct.CodeHash),
+	}
+}
+
 // StateReader defines the interface for accessing accounts and storage slots
 // associated with a specific state.
 //
@@ -81,7 +94,7 @@ type StateReader interface {
 	// - Returns a nil account if it does not exist
 	// - Returns an error only if an unexpected issue occurs
 	// - The returned account is safe to modify after the call
-	Account(addr common.Address) (*types.StateAccount, error)
+	Account(addr common.Address) (*Account, error)
 
 	// Storage retrieves the storage slot associated with a particular account
 	// address and slot key.
@@ -118,7 +131,7 @@ func newFlatReader(reader database.StateReader) *flatReader {
 // the requested account is not yet covered by the snapshot.
 //
 // The returned account might be nil if it's not existent.
-func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *flatReader) Account(addr common.Address) (*Account, error) {
 	account, err := r.reader.Account(crypto.Keccak256Hash(addr[:]))
 	if err != nil {
 		return nil, err
@@ -126,17 +139,15 @@ func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 	if account == nil {
 		return nil, nil
 	}
-	acct := &types.StateAccount{
+	acct := &Account{
 		Nonce:    account.Nonce,
 		Balance:  account.Balance,
 		CodeHash: account.CodeHash,
-		Root:     common.BytesToHash(account.Root),
 	}
+	// Account objects resolved from the flat state always omit the
+	// empty code hash.
 	if len(acct.CodeHash) == 0 {
 		acct.CodeHash = types.EmptyCodeHash.Bytes()
-	}
-	if acct.Root == (common.Hash{}) {
-		acct.Root = types.EmptyRootHash
 	}
 	return acct, nil
 }
@@ -242,24 +253,32 @@ func newTrieReader(root common.Hash, db *triedb.Database) (*trieReader, error) {
 }
 
 // account is the inner version of Account and assumes the r.lock is already held.
-func (r *trieReader) account(addr common.Address) (*types.StateAccount, error) {
+func (r *trieReader) account(addr common.Address) (*Account, error) {
 	account, err := r.mainTrie.GetAccount(addr)
 	if err != nil {
 		return nil, err
 	}
 	if account == nil {
 		r.subRoots[addr] = types.EmptyRootHash
+		return nil, nil
 	} else {
 		r.subRoots[addr] = account.Root
+
+		// Account objects resolved from the trie always include
+		// the full code hash.
+		return &Account{
+			Nonce:    account.Nonce,
+			Balance:  account.Balance,
+			CodeHash: account.CodeHash,
+		}, nil
 	}
-	return account, nil
 }
 
 // Account implements StateReader, retrieving the account specified by the address.
 //
 // An error will be returned if the trie state is corrupted. An nil account
 // will be returned if it's not existent in the trie.
-func (r *trieReader) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *trieReader) Account(addr common.Address) (*Account, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -340,7 +359,7 @@ func newMultiStateReader(readers ...StateReader) (*multiStateReader, error) {
 // - Returns a nil account if it does not exist
 // - Returns an error only if an unexpected issue occurs
 // - The returned account is safe to modify after the call
-func (r *multiStateReader) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *multiStateReader) Account(addr common.Address) (*Account, error) {
 	var errs []error
 	for _, reader := range r.readers {
 		acct, err := reader.Account(addr)
@@ -376,7 +395,7 @@ type stateReaderWithCache struct {
 	StateReader
 
 	// Previously resolved state entries.
-	accounts    map[common.Address]*types.StateAccount
+	accounts    map[common.Address]*Account
 	accountLock sync.RWMutex
 
 	// List of storage buckets, each of which is thread-safe.
@@ -393,7 +412,7 @@ type stateReaderWithCache struct {
 func newStateReaderWithCache(sr StateReader) *stateReaderWithCache {
 	r := &stateReaderWithCache{
 		StateReader: sr,
-		accounts:    make(map[common.Address]*types.StateAccount),
+		accounts:    make(map[common.Address]*Account),
 	}
 	for i := range r.storageBuckets {
 		r.storageBuckets[i].storages = make(map[common.Address]map[common.Hash]common.Hash)
@@ -406,7 +425,7 @@ func newStateReaderWithCache(sr StateReader) *stateReaderWithCache {
 // might be nil if it's not existent.
 //
 // An error will be returned if the state is corrupted in the underlying reader.
-func (r *stateReaderWithCache) account(addr common.Address) (*types.StateAccount, bool, error) {
+func (r *stateReaderWithCache) account(addr common.Address) (*Account, bool, error) {
 	// Try to resolve the requested account in the local cache
 	r.accountLock.RLock()
 	acct, ok := r.accounts[addr]
@@ -429,7 +448,7 @@ func (r *stateReaderWithCache) account(addr common.Address) (*types.StateAccount
 // The returned account might be nil if it's not existent.
 //
 // An error will be returned if the state is corrupted in the underlying reader.
-func (r *stateReaderWithCache) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *stateReaderWithCache) Account(addr common.Address) (*Account, error) {
 	account, _, err := r.account(addr)
 	return account, err
 }
@@ -502,7 +521,7 @@ func newStateReaderWithStats(sr *stateReaderWithCache) *stateReaderWithStats {
 // The returned account might be nil if it's not existent.
 //
 // An error will be returned if the state is corrupted in the underlying reader.
-func (r *stateReaderWithStats) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *stateReaderWithStats) Account(addr common.Address) (*Account, error) {
 	account, incache, err := r.stateReaderWithCache.account(addr)
 	if err != nil {
 		return nil, err

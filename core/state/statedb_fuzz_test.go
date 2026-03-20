@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"maps"
 	"math"
 	"math/rand"
 	"reflect"
@@ -183,10 +182,10 @@ func (test *stateTest) run() bool {
 		storages      []map[common.Hash]map[common.Hash][]byte
 		storageOrigin []map[common.Address]map[common.Hash][]byte
 		copyUpdate    = func(update *stateUpdate) {
-			accounts = append(accounts, maps.Clone(update.accounts))
-			accountOrigin = append(accountOrigin, maps.Clone(update.accountsOrigin))
-			storages = append(storages, maps.Clone(update.storages))
-			storageOrigin = append(storageOrigin, maps.Clone(update.storagesOrigin))
+			//accounts = append(accounts, maps.Clone(update.accounts))
+			//accountOrigin = append(accountOrigin, maps.Clone(update.accountsOrigin))
+			//storages = append(storages, maps.Clone(update.storages))
+			//storageOrigin = append(storageOrigin, maps.Clone(update.storagesOrigin))
 		}
 		disk      = rawdb.NewMemoryDatabase()
 		tdb       = triedb.NewDatabase(disk, &triedb.Config{PathDB: pathdb.Defaults})

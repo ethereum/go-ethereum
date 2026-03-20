@@ -259,6 +259,16 @@ func (set *MergedNodeSet) Merge(other *NodeSet) error {
 	return nil
 }
 
+// MergeSet merges the provided set into local one.
+func (set *MergedNodeSet) MergeSet(other *MergedNodeSet) error {
+	for _, subset := range other.Sets {
+		if err := set.Merge(subset); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Nodes returns a two-dimensional map for internal nodes.
 func (set *MergedNodeSet) Nodes() map[common.Hash]map[string]*Node {
 	nodes := make(map[common.Hash]map[string]*Node, len(set.Sets))

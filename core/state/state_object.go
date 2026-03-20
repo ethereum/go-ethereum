@@ -27,11 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/bintrie"
-	"github.com/ethereum/go-ethereum/trie/transitiontrie"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 )
 
@@ -49,13 +44,12 @@ func (s Storage) Copy() Storage {
 // - Finally, call commit to return the changes of storage trie and update account data.
 type stateObject struct {
 	db          *StateDB
-	address     common.Address      // address of ethereum account
-	addressHash *common.Hash        // hash of ethereum address of the account
-	origin      *types.StateAccount // Account original data without any change applied, nil means it was not existent
-	data        types.StateAccount  // Account data with all mutations applied in the scope of block
+	address     common.Address // address of ethereum account
+	addressHash *common.Hash   // hash of ethereum address of the account
+	origin      *Account       // Account original data without any change applied, nil means it was not existent
+	data        Account        // Account data with all mutations applied in the scope of block
 
 	// Write caches.
-	trie Trie   // storage trie, which becomes non-nil on first access
 	code []byte // contract bytecode, which gets set when code is loaded
 
 	originStorage  Storage // Storage entries that have been accessed within the current block
@@ -94,10 +88,10 @@ func (s *stateObject) empty() bool {
 }
 
 // newObject creates a state object.
-func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *stateObject {
+func newObject(db *StateDB, address common.Address, acct *Account) *stateObject {
 	origin := acct
 	if acct == nil {
-		acct = types.NewEmptyStateAccount()
+		acct = newEmptyAccount()
 	}
 	return &stateObject{
 		db:                 db,
@@ -133,15 +127,7 @@ func (s *stateObject) touch() {
 // If a new trie is opened, it will be cached within the state object to allow
 // subsequent reads to expand the same trie instead of reloading from disk.
 func (s *stateObject) getTrie() (Trie, error) {
-	if s.trie == nil {
-		// Assumes the primary account trie is already loaded
-		tr, err := s.db.db.OpenStorageTrie(s.db.originalRoot, s.address, s.data.Root, s.db.trie)
-		if err != nil {
-			return nil, err
-		}
-		s.trie = tr
-	}
-	return s.trie, nil
+	return nil, nil
 }
 
 // GetState retrieves a value associated with the given storage key.
@@ -268,36 +254,16 @@ func (s *stateObject) finalise() {
 }
 
 // updateTrie is responsible for persisting cached storage changes into the
-// object's storage trie. In case the storage trie is not yet loaded, this
-// function will load the trie automatically. If any issues arise during the
-// loading or updating of the trie, an error will be returned. Furthermore,
-// this function will return the mutated storage trie, or nil if there is no
-// storage change at all.
-//
-// It assumes all the dirty storage slots have been finalized before.
-func (s *stateObject) updateTrie() (Trie, error) {
+// state hasher. It assumes all the dirty storage slots have been finalized
+// before.
+func (s *stateObject) updateTrie() error {
 	// Short circuit if nothing was accessed
 	if len(s.uncommittedStorage) == 0 {
-		return s.trie, nil
+		return nil
 	}
-	// Fetcher not running or empty trie, fallback to the database trie
-	tr, err := s.getTrie()
-	if err != nil {
-		s.db.setError(err)
-		return nil, err
-	}
-	// Perform trie updates before deletions. This prevents resolution of unnecessary trie nodes
-	// in circumstances similar to the following:
-	//
-	// Consider nodes `A` and `B` who share the same full node parent `P` and have no other siblings.
-	// During the execution of a block:
-	// - `A` is deleted,
-	// - `C` is created, and also shares the parent `P`.
-	// If the deletion is handled first, then `P` would be left with only one child, thus collapsed
-	// into a shortnode. This requires `B` to be resolved from disk.
-	// Whereas if the created node is handled first, then the collapse is avoided, and `B` is not resolved.
 	var (
-		deletions []common.Hash
+		keys = make([]common.Hash, 0, len(s.uncommittedStorage))
+		vals = make([]common.Hash, 0, len(s.uncommittedStorage))
 	)
 	for key, origin := range s.uncommittedStorage {
 		// Skip noop changes, persist actual changes
@@ -310,51 +276,16 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			log.Error("Storage slot is not found in pending area", "address", s.address, "slot", key)
 			continue
 		}
-		if (value != common.Hash{}) {
-			if err := tr.UpdateStorage(s.address, key[:], common.TrimLeftZeroes(value[:])); err != nil {
-				s.db.setError(err)
-				return nil, err
-			}
-			s.db.StorageUpdated.Add(1)
-		} else {
-			deletions = append(deletions, key)
-		}
-	}
-	for _, key := range deletions {
-		if err := tr.DeleteStorage(s.address, key[:]); err != nil {
-			s.db.setError(err)
-			return nil, err
-		}
-		s.db.StorageDeleted.Add(1)
+		keys = append(keys, key)
+		vals = append(vals, value)
 	}
 	s.uncommittedStorage = make(Storage) // empties the commit markers
-	return tr, nil
-}
-
-// updateRoot flushes all cached storage mutations to trie, recalculating the
-// new storage trie root.
-func (s *stateObject) updateRoot() {
-	// Flush cached storage mutations into trie, short circuit if any error
-	// is occurred or there is no change in the trie.
-	tr, err := s.updateTrie()
-	if err != nil || tr == nil {
-		return
-	}
-	s.data.Root = tr.Hash()
+	return s.db.hasher.UpdateStorage(s.address, keys, vals)
 }
 
 // commitStorage overwrites the clean storage with the storage changes and
 // fulfills the storage diffs into the given accountUpdate struct.
 func (s *stateObject) commitStorage(op *accountUpdate) {
-	var (
-		encode = func(val common.Hash) []byte {
-			if val == (common.Hash{}) {
-				return nil
-			}
-			blob, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(val[:]))
-			return blob
-		}
-	)
 	for key, val := range s.pendingStorage {
 		// Skip the noop storage changes, it might be possible the value
 		// of tracked slot is same in originStorage and pendingStorage
@@ -365,17 +296,17 @@ func (s *stateObject) commitStorage(op *accountUpdate) {
 		}
 		hash := crypto.Keccak256Hash(key[:])
 		if op.storages == nil {
-			op.storages = make(map[common.Hash][]byte)
+			op.storages = make(map[common.Hash]common.Hash)
 		}
-		op.storages[hash] = encode(val)
+		op.storages[hash] = val
 
 		if op.storagesOriginByKey == nil {
-			op.storagesOriginByKey = make(map[common.Hash][]byte)
+			op.storagesOriginByKey = make(map[common.Hash]common.Hash)
 		}
 		if op.storagesOriginByHash == nil {
-			op.storagesOriginByHash = make(map[common.Hash][]byte)
+			op.storagesOriginByHash = make(map[common.Hash]common.Hash)
 		}
-		origin := encode(s.originStorage[key])
+		origin := s.originStorage[key]
 		op.storagesOriginByKey[key] = origin
 		op.storagesOriginByHash[hash] = origin
 
@@ -390,14 +321,12 @@ func (s *stateObject) commitStorage(op *accountUpdate) {
 //
 // Note, commit may run concurrently across all the state objects. Do not assume
 // thread-safe access to the statedb.
-func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
+func (s *stateObject) commit() (*accountUpdate, error) {
 	// commit the account metadata changes
 	op := &accountUpdate{
 		address: s.address,
-		data:    types.SlimAccountRLP(s.data),
-	}
-	if s.origin != nil {
-		op.origin = types.SlimAccountRLP(*s.origin)
+		data:    &s.data,
+		origin:  s.origin,
 	}
 	// commit the contract code if it's modified
 	if s.dirtyCode {
@@ -415,24 +344,8 @@ func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
 	}
 	// Commit storage changes and the associated storage trie
 	s.commitStorage(op)
-	if len(op.storages) == 0 {
-		// nothing changed, don't bother to commit the trie
-		s.origin = s.data.Copy()
-		return op, nil, nil
-	}
-	// In Verkle/binary trie mode, all state objects share one unified trie.
-	// The main account trie commit in stateDB.commit() already calls
-	// CollectNodes on this trie, so calling Commit here again would
-	// redundantly traverse and serialize the entire tree per dirty account.
-	if s.db.GetTrie().IsVerkle() {
-		s.origin = s.data.Copy()
-		return op, nil, nil
-	}
-	// The storage trie root is omitted, as it has already been updated in the
-	// previous updateRoot step.
-	_, nodes := s.trie.Commit(false)
-	s.origin = s.data.Copy()
-	return op, nodes, nil
+	s.origin = s.data.copy()
+	return op, nil
 }
 
 // AddBalance adds amount to s's balance.
@@ -477,21 +390,6 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 		dirtyCode:          s.dirtyCode,
 		selfDestructed:     s.selfDestructed,
 		newContract:        s.newContract,
-	}
-
-	switch s.trie.(type) {
-	case *bintrie.BinaryTrie:
-		// UBT uses only one tree, and the copy has already been
-		// made in mustCopyTrie.
-		obj.trie = db.trie
-	case *transitiontrie.TransitionTrie:
-		// Same thing for the transition tree, since the MPT is
-		// read-only.
-		obj.trie = db.trie
-	case *trie.StateTrie:
-		obj.trie = mustCopyTrie(s.trie)
-	case nil:
-		// do nothing
 	}
 	return obj
 }
@@ -584,5 +482,5 @@ func (s *stateObject) Nonce() uint64 {
 }
 
 func (s *stateObject) Root() common.Hash {
-	return s.data.Root
+	return common.Hash{}
 }

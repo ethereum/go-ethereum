@@ -25,10 +25,17 @@ import (
 
 // AccountMutation describes a state transition for a single account.
 type AccountMutation struct {
-	Account *Account // Null for deletion
+	Account   *Account // Null for deletion
+	DirtyCode bool     // Flag whether the code is changed
+	Code      []byte   // Null for deletion
+}
 
-	CodeDirty bool   // Flag whether the code is changed
-	Code      []byte // Null for deletion
+// SecondaryHash encapsulates the secondary hash of storage tries.
+// It is only relevant in the context of the Merkle Patricia Trie and
+// includes both the post-transition root and the original root.
+type SecondaryHash struct {
+	Hash common.Hash
+	Prev common.Hash
 }
 
 // Hasher defines the minimal interface for computing state root hashes.
@@ -63,7 +70,7 @@ type Hasher interface {
 	// Additionally, if the hasher uses a two-layer structure, the roots of the
 	// secondary tries together with their original hashes will also be returned
 	// for all mutated accounts, regardless of whether their storage was modified.
-	Commit() (common.Hash, *trienode.MergedNodeSet, map[common.Address]common.Hash, map[common.Address]common.Hash, error)
+	Commit() (common.Hash, *trienode.MergedNodeSet, map[common.Address]SecondaryHash, error)
 
 	// Copy returns a deep-copied hasher instance.
 	Copy() Hasher
@@ -111,4 +118,31 @@ type Prover interface {
 	// If the account or storage slot does not exist, the returned proof contains
 	// the nodes required to prove its absence.
 	ProveStorage(addr common.Address, key common.Hash, proofDb ethdb.KeyValueWriter) error
+}
+
+type noopHasher struct{}
+
+func (n noopHasher) UpdateAccount(addresses []common.Address, accounts []AccountMutation) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (n noopHasher) UpdateStorage(address common.Address, keys []common.Hash, values []common.Hash) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (n noopHasher) Hash() common.Hash {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (n noopHasher) Commit() (common.Hash, *trienode.MergedNodeSet, map[common.Address]SecondaryHash, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (n noopHasher) Copy() Hasher {
+	//TODO implement me
+	panic("implement me")
 }
