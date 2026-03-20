@@ -608,13 +608,7 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 
 // HasBAL verifies the existence of a block access list for a block.
 func HasBAL(db ethdb.Reader, hash common.Hash, number uint64) bool {
-	if isCanon(db, number, hash) {
-		return true
-	}
-	if has, err := db.Has(balKey(number, hash)); !has || err != nil {
-		return false
-	}
-	return true
+	return len(ReadBALRLP(db, hash, number)) > 0
 }
 
 // ReadBALRLP retrieves the RLP-encoded block access list for a block.
