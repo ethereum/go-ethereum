@@ -27,6 +27,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -190,4 +192,162 @@ func TestHistoryImportAndExport(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestImportHistoryRejectsForgedTxRootArchive(t *testing.T) {
+	genesis, honest, honestReceipts, _ := makeHistorySingleTxFixture(t)
+	header := honest.Header()
+	header.TxHash = common.HexToHash("0x1234")
+	if header.TxHash == honest.TxHash() {
+		t.Fatal("fixture is not malformed: tx root unexpectedly matches original block")
+	}
+	poisoned := honest.WithSeal(header)
+
+	dir := t.TempDir()
+	if err := writeEra1(dir, poisoned, honestReceipts); err != nil {
+		t.Fatalf("failed to build forged-tx-root era1 archive: %v", err)
+	}
+	imported := newHistoryImportChain(t, genesis, ethash.NewFaker())
+
+	if err := ImportHistory(imported, dir, "mainnet", onedb.From); err == nil {
+		t.Fatal("ImportHistory unexpectedly accepted forged tx root")
+	} else if !strings.Contains(err.Error(), "transaction root hash mismatch") {
+		t.Fatalf("unexpected ImportHistory error: %v", err)
+	}
+}
+
+func TestImportHistoryRejectsForgedWithdrawalsArchive(t *testing.T) {
+	genesis, honest, honestReceipts := makeMergedHistoryFixture(t)
+	header := honest.Header()
+	if header.WithdrawalsHash == nil {
+		t.Fatal("fixture does not have a withdrawals root")
+	}
+	forgedWithdrawalsHash := common.HexToHash("0x5678")
+	if forgedWithdrawalsHash == *header.WithdrawalsHash {
+		t.Fatal("fixture is not malformed: withdrawals root unexpectedly matches original block")
+	}
+	header.WithdrawalsHash = &forgedWithdrawalsHash
+	poisoned := honest.WithSeal(header)
+
+	dir := t.TempDir()
+	if err := writeEra1(dir, poisoned, honestReceipts); err != nil {
+		t.Fatalf("failed to build forged-withdrawals era1 archive: %v", err)
+	}
+	imported := newHistoryImportChain(t, genesis, beacon.New(ethash.NewFaker()))
+
+	if err := ImportHistory(imported, dir, "mainnet", onedb.From); err == nil {
+		t.Fatal("ImportHistory unexpectedly accepted forged withdrawals root")
+	} else if !strings.Contains(err.Error(), "withdrawals root hash mismatch") {
+		t.Fatalf("unexpected ImportHistory error: %v", err)
+	}
+}
+
+func TestImportHistoryRejectsForgedReceiptArchive(t *testing.T) {
+	genesis, honest, honestReceipts, _ := makeHistorySingleTxFixture(t)
+	forgedReceipt := new(types.Receipt)
+	*forgedReceipt = *honestReceipts[0]
+	forgedReceipt.Status = types.ReceiptStatusFailed
+	if got := types.DeriveSha(types.Receipts{forgedReceipt}, trie.NewStackTrie(nil)); got == honest.ReceiptHash() {
+		t.Fatalf("fixture is not malformed: receipt root unexpectedly matches header %s", got)
+	}
+
+	dir := t.TempDir()
+	if err := writeEra1(dir, honest, types.Receipts{forgedReceipt}); err != nil {
+		t.Fatalf("failed to build forged-receipt era1 archive: %v", err)
+	}
+	imported := newHistoryImportChain(t, genesis, ethash.NewFaker())
+
+	if err := ImportHistory(imported, dir, "mainnet", onedb.From); err == nil {
+		t.Fatal("ImportHistory unexpectedly accepted forged receipt root")
+	} else if !strings.Contains(err.Error(), "receipt root hash mismatch") {
+		t.Fatalf("unexpected ImportHistory error: %v", err)
+	}
+}
+
+func writeEra1(dir string, block *types.Block, receipts types.Receipts) error {
+	buf := new(bytes.Buffer)
+	builder := onedb.NewBuilder(buf)
+
+	td := new(big.Int)
+	if diff := block.Difficulty(); diff != nil {
+		td.Set(diff)
+	}
+	root, err := func() (common.Hash, error) {
+		if err := builder.Add(block, receipts, td); err != nil {
+			return common.Hash{}, err
+		}
+		return builder.Finalize()
+	}()
+	if err != nil {
+		return err
+	}
+
+	filename := filepath.Join(dir, onedb.Filename("mainnet", 0, root))
+	if err := os.WriteFile(filename, buf.Bytes(), 0o644); err != nil {
+		return err
+	}
+	sum := sha256.Sum256(buf.Bytes())
+	return os.WriteFile(filepath.Join(dir, "checksums.txt"), []byte(common.BytesToHash(sum[:]).Hex()), 0o644)
+}
+
+func makeHistorySingleTxFixture(t *testing.T) (*core.Genesis, *types.Block, types.Receipts, *types.Transaction) {
+	t.Helper()
+
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	address := crypto.PubkeyToAddress(key.PublicKey)
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc:  types.GenesisAlloc{address: {Balance: big.NewInt(1000000000000000000)}},
+	}
+	signer := types.LatestSigner(genesis.Config)
+	_, blocks, receipts := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 1, func(i int, g *core.BlockGen) {
+		tx, err := types.SignNewTx(key, signer, &types.LegacyTx{
+			Nonce:    uint64(i),
+			To:       &common.Address{0xaa},
+			Value:    big.NewInt(1),
+			Gas:      50_000,
+			GasPrice: big.NewInt(1_000_000_000),
+		})
+		if err != nil {
+			t.Fatalf("sign tx: %v", err)
+		}
+		g.AddTx(tx)
+	})
+	if len(blocks) != 1 || len(receipts) != 1 || len(receipts[0]) != 1 || len(blocks[0].Transactions()) != 1 {
+		t.Fatalf("unexpected fixture lengths: blocks=%d receiptBlocks=%d receipts=%d txs=%d", len(blocks), len(receipts), len(receipts[0]), len(blocks[0].Transactions()))
+	}
+	return genesis, blocks[0], receipts[0], blocks[0].Transactions()[0]
+}
+
+func makeMergedHistoryFixture(t *testing.T) (*core.Genesis, *types.Block, types.Receipts) {
+	t.Helper()
+
+	config := *params.MergedTestChainConfig
+	genesis := &core.Genesis{Config: &config}
+	_, blocks, receipts := core.GenerateChainWithGenesis(genesis, beacon.New(ethash.NewFaker()), 1, nil)
+	if len(blocks) != 1 || len(receipts) != 1 {
+		t.Fatalf("unexpected merged fixture lengths: blocks=%d receiptBlocks=%d", len(blocks), len(receipts))
+	}
+	return genesis, blocks[0], receipts[0]
+}
+
+func newHistoryImportChain(t *testing.T, genesis *core.Genesis, engine consensus.Engine) *core.BlockChain {
+	t.Helper()
+
+	db, err := rawdb.Open(rawdb.NewMemoryDatabase(), rawdb.OpenOptions{})
+	if err != nil {
+		t.Fatalf("failed to open import db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	genesis.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
+	imported, err := core.NewBlockChain(db, genesis, engine, nil)
+	if err != nil {
+		t.Fatalf("unable to initialize imported chain: %v", err)
+	}
+	t.Cleanup(imported.Stop)
+	return imported
 }
