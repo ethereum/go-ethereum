@@ -262,8 +262,8 @@ func blockReceiptsToNetwork(blockReceipts, blockBody rlp.RawValue, q receiptQuer
 	)
 	outer := enc.List()
 	for i := 0; it.Next(); i++ {
-		txType, end := nextTxType()
-		if end {
+		txType, ok := nextTxType()
+		if !ok {
 			return nil, false, fmt.Errorf("block has less txs than receipts (%d)", i)
 		}
 		// Skip receipts before the requested index.
