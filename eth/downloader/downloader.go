@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/partial"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -128,6 +129,9 @@ type Downloader struct {
 	// chain segment is aimed for synchronization.
 	chainCutoffNumber uint64
 	chainCutoffHash   common.Hash
+	chainRetention    uint64 // Bodies/receipts retention window in blocks from HEAD (0 = keep all)
+	partialFilter     partial.ContractFilter // If set, partial state mode is active (skip storage for untracked contracts)
+	lastPivotAdvance  time.Time              // Rate-limits pivot advances in partial state mode
 
 	// Channels
 	headerProcCh chan *headerTask // Channel to feed the header processor new tasks
@@ -146,6 +150,16 @@ type Downloader struct {
 	cancelCh   chan struct{}  // Channel to cancel mid-flight syncs
 	cancelLock sync.RWMutex   // Lock to protect the cancel channel and peer in delivers
 	cancelWg   sync.WaitGroup // Make sure all fetcher goroutines have exited.
+
+	// partialHeadSyncing is set during the second state sync (pivot→HEAD)
+	// for partial state nodes. When true, beaconBackfiller.suspend() should
+	// not call Cancel(), allowing the sync to complete naturally.
+	partialHeadSyncing atomic.Bool
+
+	// partialSyncComplete is set after the initial partial sync completes
+	// successfully (after AdvancePartialHead succeeds). When true, new sync
+	// cycles should be skipped - new blocks come via Engine API with BAL.
+	partialSyncComplete atomic.Bool
 
 	quitCh   chan struct{} // Quit channel to signal termination
 	quitLock sync.Mutex    // Lock to prevent double closes
@@ -226,10 +240,15 @@ type BlockChain interface {
 	// HistoryPruningCutoff returns the configured history pruning point.
 	// Block bodies along with the receipts will be skipped for synchronization.
 	HistoryPruningCutoff() (uint64, common.Hash)
+
+	// AdvancePartialHead updates currentBlock to the given block hash without
+	// re-executing blocks. Used by partial state mode after receipt-importing
+	// post-pivot blocks and re-syncing state at the new root.
+	AdvancePartialHead(common.Hash) error
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(stateDb ethdb.Database, mode ethconfig.SyncMode, mux *event.TypeMux, chain BlockChain, dropPeer peerDropFn, success func()) *Downloader {
+func New(stateDb ethdb.Database, mode ethconfig.SyncMode, mux *event.TypeMux, chain BlockChain, dropPeer peerDropFn, success func(), partialFilter partial.ContractFilter, chainRetention uint64) *Downloader {
 	cutoffNumber, cutoffHash := chain.HistoryPruningCutoff()
 	dl := &Downloader{
 		stateDB:           stateDb,
@@ -240,10 +259,12 @@ func New(stateDb ethdb.Database, mode ethconfig.SyncMode, mux *event.TypeMux, ch
 		blockchain:        chain,
 		chainCutoffNumber: cutoffNumber,
 		chainCutoffHash:   cutoffHash,
+		chainRetention:    chainRetention,
+		partialFilter:     partialFilter,
 		dropPeer:          dropPeer,
 		headerProcCh:      make(chan *headerTask, 1),
 		quitCh:            make(chan struct{}),
-		SnapSyncer:        snap.NewSyncer(stateDb, chain.TrieDB().Scheme()),
+		SnapSyncer:        snap.NewSyncer(stateDb, chain.TrieDB().Scheme(), partialFilter),
 		stateSyncStart:    make(chan *stateSync),
 		syncStartBlock:    chain.CurrentSnapBlock().Number.Uint64(),
 	}
@@ -548,6 +569,28 @@ func (d *Downloader) syncToHead() (err error) {
 			d.ancientLimit = d.chainCutoffNumber
 			log.Info("Extend the ancient range with configured cutoff", "cutoff", d.chainCutoffNumber)
 		}
+		// For partial state mode with chain retention, dynamically restrict
+		// bodies/receipts to only recent blocks. This raises chainCutoffNumber
+		// so that older blocks are routed through InsertHeadersBeforeCutoff
+		// (headers only, no bodies/receipts downloaded from peers).
+		//
+		// Note: chainCutoffHash is cleared to zero because the dynamic cutoff
+		// changes every sync cycle (it's HEAD-N, not a fixed well-known block).
+		// The hash validation in fetchHeaders() is skipped when the hash is
+		// zero, which is safe here — the hash check exists for static cutoffs
+		// like --history.chain postmerge where the cutoff block is predetermined.
+		if d.chainRetention > 0 && height > d.chainRetention {
+			dynamicCutoff := height - d.chainRetention
+			if dynamicCutoff > d.chainCutoffNumber {
+				d.chainCutoffNumber = dynamicCutoff
+				d.chainCutoffHash = common.Hash{} // Dynamic cutoff has no pre-known hash
+				log.Info("Partial state: restricting chain history to recent blocks",
+					"cutoff", dynamicCutoff, "retention", d.chainRetention, "head", height)
+			}
+			if d.chainCutoffNumber > d.ancientLimit {
+				d.ancientLimit = d.chainCutoffNumber
+			}
+		}
 		frozen, _ := d.stateDB.Ancients() // Ignore the error here since light client can also hit here.
 
 		// If a part of blockchain data has already been written into active store,
@@ -593,7 +636,21 @@ func (d *Downloader) syncToHead() (err error) {
 	}
 	if mode == ethconfig.SnapSync {
 		d.pivotLock.Lock()
-		d.pivotHeader = pivot
+		if d.partialFilter != nil && d.pivotHeader != nil {
+			// Reuse existing pivot only if it's recent enough; if the new pivot
+			// is much ahead (beyond staleness window), the old one is too stale
+			// for peers to serve — use the fresh one instead.
+			if pivot.Number.Uint64() < d.pivotHeader.Number.Uint64()+2*uint64(fsMinFullBlocks) {
+				log.Debug("Partial state: reusing recent pivot across sync restart",
+					"pivot", d.pivotHeader.Number.Uint64(), "new_would_be", pivot.Number.Uint64())
+			} else {
+				log.Info("Partial state: existing pivot too stale, using fresh pivot",
+					"old", d.pivotHeader.Number.Uint64(), "new", pivot.Number.Uint64())
+				d.pivotHeader = pivot
+			}
+		} else {
+			d.pivotHeader = pivot
+		}
 		d.pivotLock.Unlock()
 
 		fetchers = append(fetchers, func() error { return d.processSnapSyncContent() })
@@ -925,6 +982,55 @@ func (d *Downloader) processSnapSyncContent() error {
 		if len(results) == 0 {
 			// If pivot sync is done, stop
 			if d.committed.Load() {
+				// Partial state: bridge the gap from pivot state to HEAD state.
+				// After receipt-importing afterP blocks, the state trie exists at
+				// the pivot root but NOT at HEAD's root. Future BAL-based block
+				// processing needs the parent state at HEAD's root, so we run a
+				// second state sync to download it (no execution involved).
+				if d.partialFilter != nil {
+					// Determine the second sync target from the skeleton head
+					// (the CL beacon chain tip). This is more reliable than
+					// CurrentSnapBlock(), which may equal CurrentBlock() if no
+					// afterP blocks were processed before the queue drained —
+					// a race that depends on download timing.
+					currentHead := d.blockchain.CurrentBlock()
+					skHead, _, _, skErr := d.skeleton.Bounds()
+
+					if skErr == nil && skHead.Number.Uint64() > currentHead.Number.Uint64() {
+						// Use the skeleton head as the sync target. It always
+						// has a header; we need the full block for AdvancePartialHead.
+						target := d.blockchain.GetBlockByHash(skHead.Hash())
+						if target == nil {
+							// Skeleton head not fully downloaded yet — use
+							// CurrentSnapBlock (highest receipt-imported block).
+							snapHead := d.blockchain.CurrentSnapBlock()
+							target = d.blockchain.GetBlockByHash(snapHead.Hash())
+						}
+						if target != nil && target.Hash() != currentHead.Hash() {
+							log.Info("Partial state: syncing state to HEAD",
+								"pivot", currentHead.Number, "head", target.Number())
+
+							d.partialHeadSyncing.Store(true)
+
+							sync.Cancel()
+							sync = d.syncState(target.Root())
+							go closeOnErr(sync)
+
+							err := sync.Wait()
+							d.partialHeadSyncing.Store(false)
+
+							if err != nil {
+								log.Error("Partial state second sync failed, will retry", "pivot", currentHead.Number, "head", target.Number(), "err", err)
+								return err
+							}
+							if err := d.blockchain.AdvancePartialHead(target.Hash()); err != nil {
+								return err
+							}
+							d.partialSyncComplete.Store(true)
+							log.Info("Partial state initial sync complete")
+						}
+					}
+				}
 				d.reportSnapSyncProgress(true)
 				return sync.Cancel()
 			}
@@ -970,16 +1076,38 @@ func (d *Downloader) processSnapSyncContent() error {
 			// need to be taken into account, otherwise we're detecting the pivot move
 			// late and will drop peers due to unavailable state!!!
 			if height := latest.Number.Uint64(); height >= pivot.Number.Uint64()+2*uint64(fsMinFullBlocks)-uint64(reorgProtHeaderDelay) {
-				log.Warn("Pivot became stale, moving", "old", pivot.Number.Uint64(), "new", height-uint64(fsMinFullBlocks)+uint64(reorgProtHeaderDelay))
-				pivot = results[len(results)-1-fsMinFullBlocks+reorgProtHeaderDelay].Header // must exist as lower old pivot is uncommitted
+				// For partial state nodes, rate-limit pivot advances (max once per 2 min)
+				// to avoid the restart loop bug, while still recovering from stale pivots.
+				if d.partialFilter != nil {
+					if !d.lastPivotAdvance.IsZero() && time.Since(d.lastPivotAdvance) < 2*time.Minute {
+						log.Debug("Partial state: suppressing pivot move (cooldown active)",
+							"pivot", pivot.Number.Uint64(), "latest", height,
+							"cooldownLeft", 2*time.Minute-time.Since(d.lastPivotAdvance))
+					} else {
+						log.Info("Partial state: advancing stale pivot",
+							"old", pivot.Number.Uint64(),
+							"new", height-uint64(fsMinFullBlocks)+uint64(reorgProtHeaderDelay))
+						pivot = results[len(results)-1-fsMinFullBlocks+reorgProtHeaderDelay].Header
 
-				d.pivotLock.Lock()
-				d.pivotHeader = pivot
-				d.pivotLock.Unlock()
+						d.pivotLock.Lock()
+						d.pivotHeader = pivot
+						d.pivotLock.Unlock()
 
-				// Write out the pivot into the database so a rollback beyond it will
-				// reenable snap sync
-				rawdb.WriteLastPivotNumber(d.stateDB, pivot.Number.Uint64())
+						rawdb.WriteLastPivotNumber(d.stateDB, pivot.Number.Uint64())
+						d.lastPivotAdvance = time.Now()
+					}
+				} else {
+					log.Warn("Pivot became stale, moving", "old", pivot.Number.Uint64(), "new", height-uint64(fsMinFullBlocks)+uint64(reorgProtHeaderDelay))
+					pivot = results[len(results)-1-fsMinFullBlocks+reorgProtHeaderDelay].Header // must exist as lower old pivot is uncommitted
+
+					d.pivotLock.Lock()
+					d.pivotHeader = pivot
+					d.pivotLock.Unlock()
+
+					// Write out the pivot into the database so a rollback beyond it will
+					// reenable snap sync
+					rawdb.WriteLastPivotNumber(d.stateDB, pivot.Number.Uint64())
+				}
 			}
 		}
 		P, beforeP, afterP := splitAroundPivot(pivot.Number.Uint64(), results)
@@ -1012,9 +1140,22 @@ func (d *Downloader) processSnapSyncContent() error {
 				continue
 			}
 		}
-		// Fast sync done, pivot commit done, full import
-		if err := d.importBlockResults(afterP); err != nil {
-			return err
+		// Fast sync done, pivot commit done, import remaining blocks.
+		if d.partialFilter != nil {
+			// Partial state mode ONLY: import afterP with receipts (no execution).
+			// Untracked contracts have empty storage tries, so full execution
+			// would fail. State will be brought to HEAD via a second state sync
+			// at the processSnapSyncContent exit path.
+			if len(afterP) > 0 {
+				if err := d.commitSnapSyncData(afterP, sync); err != nil {
+					return err
+				}
+			}
+		} else {
+			// Normal (full node) mode: execute afterP blocks to advance state.
+			if err := d.importBlockResults(afterP); err != nil {
+				return err
+			}
 		}
 	}
 }

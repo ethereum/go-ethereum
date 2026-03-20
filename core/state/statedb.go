@@ -121,6 +121,11 @@ type StateDB struct {
 	// when accessing state of accounts.
 	dbErr error
 
+	// Partial state filter - if set, GetState/GetCode for untracked
+	// contracts will set dbErr. The filter returns true if the contract
+	// is tracked (has storage available), false otherwise.
+	partialFilter func(addr common.Address) bool
+
 	// The refund counter, also used by state transitioning.
 	refund uint64
 
@@ -266,6 +271,14 @@ func (s *StateDB) setError(err error) {
 // Error returns the memorized database failure occurred earlier.
 func (s *StateDB) Error() error {
 	return s.dbErr
+}
+
+// SetPartialStateFilter configures partial state mode. When set, accessing
+// storage or code of contracts where filter(addr) returns false will
+// set an error retrievable via Error(). This enables eth_call and
+// eth_estimateGas to detect when they access untracked contract state.
+func (s *StateDB) SetPartialStateFilter(filter func(addr common.Address) bool) {
+	s.partialFilter = filter
 }
 
 func (s *StateDB) AddLog(log *types.Log) {
@@ -416,6 +429,12 @@ func (s *StateDB) TxIndex() int {
 func (s *StateDB) GetCode(addr common.Address) []byte {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
+		// Check partial state filter for contracts (skip EOAs - they have empty code)
+		codeHash := common.BytesToHash(stateObject.CodeHash())
+		if s.partialFilter != nil && codeHash != types.EmptyCodeHash && !s.partialFilter(addr) {
+			s.setError(fmt.Errorf("code not tracked for contract %s", addr.Hex()))
+			return nil
+		}
 		if s.witness != nil {
 			s.witness.AddCode(stateObject.Code())
 		}
@@ -427,6 +446,12 @@ func (s *StateDB) GetCode(addr common.Address) []byte {
 func (s *StateDB) GetCodeSize(addr common.Address) int {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
+		// Check partial state filter for contracts (skip EOAs - they have empty code)
+		codeHash := common.BytesToHash(stateObject.CodeHash())
+		if s.partialFilter != nil && codeHash != types.EmptyCodeHash && !s.partialFilter(addr) {
+			s.setError(fmt.Errorf("code not tracked for contract %s", addr.Hex()))
+			return 0
+		}
 		if s.witness != nil {
 			s.witness.AddCode(stateObject.Code())
 		}
@@ -445,6 +470,11 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 
 // GetState retrieves the value associated with the specific key.
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
+	// Check partial state filter - if set and contract not tracked, record error
+	if s.partialFilter != nil && !s.partialFilter(addr) {
+		s.setError(fmt.Errorf("storage not tracked for contract %s", addr.Hex()))
+		return common.Hash{}
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.GetState(hash)
@@ -455,6 +485,11 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 // GetCommittedState retrieves the value associated with the specific key
 // without any mutations caused in the current execution.
 func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
+	// Check partial state filter - if set and contract not tracked, record error
+	if s.partialFilter != nil && !s.partialFilter(addr) {
+		s.setError(fmt.Errorf("storage not tracked for contract %s", addr.Hex()))
+		return common.Hash{}
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.GetCommittedState(hash)
@@ -464,6 +499,11 @@ func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) commo
 
 // GetStateAndCommittedState returns the current value and the original value.
 func (s *StateDB) GetStateAndCommittedState(addr common.Address, hash common.Hash) (common.Hash, common.Hash) {
+	// Check partial state filter - if set and contract not tracked, record error
+	if s.partialFilter != nil && !s.partialFilter(addr) {
+		s.setError(fmt.Errorf("storage not tracked for contract %s", addr.Hex()))
+		return common.Hash{}, common.Hash{}
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.getState(hash)

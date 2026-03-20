@@ -287,7 +287,11 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 	var it snapshot.AccountIterator
 	if chain.TrieDB().Scheme() == rawdb.HashScheme {
 		// The snapshot is assumed to be available in hash mode if
-		// the SNAP protocol is enabled.
+		// the SNAP protocol is enabled. Partial state nodes disable
+		// snapshots, so bail out gracefully if unavailable.
+		if chain.Snapshots() == nil {
+			return nil, nil
+		}
 		it, err = chain.Snapshots().AccountIterator(req.Root, req.Origin)
 	} else {
 		it, err = chain.TrieDB().AccountIterator(req.Root, req.Origin)
@@ -379,7 +383,11 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		// This can be removed once the hash scheme is deprecated.
 		if chain.TrieDB().Scheme() == rawdb.HashScheme {
 			// The snapshot is assumed to be available in hash mode if
-			// the SNAP protocol is enabled.
+			// the SNAP protocol is enabled. Partial state nodes disable
+			// snapshots, so bail out gracefully if unavailable.
+			if chain.Snapshots() == nil {
+				return nil, nil
+			}
 			it, err = chain.Snapshots().StorageIterator(req.Root, account, origin)
 		} else {
 			it, err = chain.TrieDB().StorageIterator(req.Root, account, origin)

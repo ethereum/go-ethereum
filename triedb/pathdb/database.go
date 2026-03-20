@@ -350,7 +350,7 @@ func (db *Database) Disable() error {
 	}
 	// Prevent duplicated disable operation.
 	if db.waitSync {
-		log.Error("Reject duplicated disable operation")
+		log.Info("Reject duplicated disable operation")
 		return nil
 	}
 	db.waitSync = true

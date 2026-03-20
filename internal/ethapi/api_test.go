@@ -3964,6 +3964,12 @@ func (b *testBackend) RPCTxSyncMaxTimeout() time.Duration {
 func (b *backendMock) RPCTxSyncDefaultTimeout() time.Duration { return 2 * time.Second }
 func (b *backendMock) RPCTxSyncMaxTimeout() time.Duration     { return 5 * time.Minute }
 
+// Partial state awareness methods - test backends behave as full nodes
+func (b *testBackend) PartialStateEnabled() bool                      { return false }
+func (b *testBackend) IsContractTracked(addr common.Address) bool     { return true }
+func (b *backendMock) PartialStateEnabled() bool                      { return false }
+func (b *backendMock) IsContractTracked(addr common.Address) bool     { return true }
+
 func makeSignedRaw(t *testing.T, api *TransactionAPI, from, to common.Address, value *big.Int) (hexutil.Bytes, *types.Transaction) {
 	t.Helper()
 
@@ -4052,5 +4058,278 @@ func TestSendRawTransactionSync_Timeout(t *testing.T) {
 	}
 	if got, want := de.ErrorData(), tx.Hash().Hex(); got != want {
 		t.Fatalf("expected ErrorData=%s, got %v", want, got)
+	}
+}
+
+// ============================================================================
+// Partial State Mode Tests
+// ============================================================================
+
+// partialStateTestBackend wraps a testBackend to simulate partial state mode.
+// It tracks a specific set of contracts and returns errors for untracked ones.
+type partialStateTestBackend struct {
+	*testBackend
+	trackedContracts map[common.Address]struct{}
+}
+
+func newPartialStateTestBackend(tb *testBackend, tracked []common.Address) *partialStateTestBackend {
+	m := make(map[common.Address]struct{}, len(tracked))
+	for _, addr := range tracked {
+		m[addr] = struct{}{}
+	}
+	return &partialStateTestBackend{
+		testBackend:      tb,
+		trackedContracts: m,
+	}
+}
+
+func (b *partialStateTestBackend) PartialStateEnabled() bool {
+	return true
+}
+
+func (b *partialStateTestBackend) IsContractTracked(addr common.Address) bool {
+	_, ok := b.trackedContracts[addr]
+	return ok
+}
+
+func TestPartialState_GetStorageAt_UntrackedContract(t *testing.T) {
+	t.Parallel()
+
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			common.HexToAddress("0x1111111111111111111111111111111111111111"): {
+				Balance: big.NewInt(1000000000),
+				Storage: map[common.Hash]common.Hash{
+					common.HexToHash("0x0"): common.HexToHash("0x42"),
+				},
+			},
+		},
+	}
+	tb := newTestBackend(t, 0, genesis, ethash.NewFaker(), nil)
+
+	// Create partial state backend with no tracked contracts
+	b := newPartialStateTestBackend(tb, nil)
+	api := NewBlockChainAPI(b)
+
+	// Query storage for untracked contract should fail
+	untrackedAddr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	_, err := api.GetStorageAt(context.Background(), untrackedAddr, "0x0", rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+
+	if err == nil {
+		t.Fatal("expected error for untracked contract storage")
+	}
+
+	var storageErr *StorageNotTrackedError
+	if !errors.As(err, &storageErr) {
+		t.Fatalf("expected StorageNotTrackedError, got %T: %v", err, err)
+	}
+	if storageErr.Address != untrackedAddr {
+		t.Errorf("expected address %s, got %s", untrackedAddr.Hex(), storageErr.Address.Hex())
+	}
+	if storageErr.ErrorCode() != errCodeStorageNotTracked {
+		t.Errorf("expected error code %d, got %d", errCodeStorageNotTracked, storageErr.ErrorCode())
+	}
+}
+
+func TestPartialState_GetStorageAt_TrackedContract(t *testing.T) {
+	t.Parallel()
+
+	trackedAddr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	expectedValue := common.HexToHash("0x42")
+
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			trackedAddr: {
+				Balance: big.NewInt(1000000000),
+				Storage: map[common.Hash]common.Hash{
+					common.HexToHash("0x0"): expectedValue,
+				},
+			},
+		},
+	}
+	tb := newTestBackend(t, 0, genesis, ethash.NewFaker(), nil)
+
+	// Create partial state backend with the contract tracked
+	b := newPartialStateTestBackend(tb, []common.Address{trackedAddr})
+	api := NewBlockChainAPI(b)
+
+	// Query storage for tracked contract should succeed
+	result, err := api.GetStorageAt(context.Background(), trackedAddr, "0x0", rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if common.BytesToHash(result) != expectedValue {
+		t.Errorf("expected value %s, got %s", expectedValue.Hex(), common.BytesToHash(result).Hex())
+	}
+}
+
+func TestPartialState_GetCode_UntrackedContract(t *testing.T) {
+	t.Parallel()
+
+	contractAddr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			contractAddr: {
+				Balance: big.NewInt(1000000000),
+				Code:    []byte{0x60, 0x00}, // PUSH1 0x00
+			},
+		},
+	}
+	tb := newTestBackend(t, 0, genesis, ethash.NewFaker(), nil)
+
+	// Create partial state backend with no tracked contracts
+	b := newPartialStateTestBackend(tb, nil)
+	api := NewBlockChainAPI(b)
+
+	// Query code for untracked contract should fail
+	_, err := api.GetCode(context.Background(), contractAddr, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+
+	if err == nil {
+		t.Fatal("expected error for untracked contract code")
+	}
+
+	var codeErr *CodeNotTrackedError
+	if !errors.As(err, &codeErr) {
+		t.Fatalf("expected CodeNotTrackedError, got %T: %v", err, err)
+	}
+	if codeErr.ErrorCode() != errCodeCodeNotTracked {
+		t.Errorf("expected error code %d, got %d", errCodeCodeNotTracked, codeErr.ErrorCode())
+	}
+}
+
+func TestPartialState_GetCode_TrackedContract(t *testing.T) {
+	t.Parallel()
+
+	contractAddr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	expectedCode := []byte{0x60, 0x00} // PUSH1 0x00
+
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			contractAddr: {
+				Balance: big.NewInt(1000000000),
+				Code:    expectedCode,
+			},
+		},
+	}
+	tb := newTestBackend(t, 0, genesis, ethash.NewFaker(), nil)
+
+	// Create partial state backend with the contract tracked
+	b := newPartialStateTestBackend(tb, []common.Address{contractAddr})
+	api := NewBlockChainAPI(b)
+
+	// Query code for tracked contract should succeed
+	result, err := api.GetCode(context.Background(), contractAddr, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !bytes.Equal(result, expectedCode) {
+		t.Errorf("expected code %x, got %x", expectedCode, result)
+	}
+}
+
+func TestPartialState_GetProof_AccountOnly(t *testing.T) {
+	t.Parallel()
+
+	// Any account should work for account-only proofs (no storage keys)
+	accountAddr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accountAddr: {
+				Balance: big.NewInt(1000000000),
+			},
+		},
+	}
+	tb := newTestBackend(t, 0, genesis, ethash.NewFaker(), nil)
+
+	// Create partial state backend with no tracked contracts
+	b := newPartialStateTestBackend(tb, nil)
+	api := NewBlockChainAPI(b)
+
+	// Account-only proof should succeed even for untracked addresses
+	result, err := api.GetProof(context.Background(), accountAddr, nil, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Address != accountAddr {
+		t.Errorf("expected address %s, got %s", accountAddr.Hex(), result.Address.Hex())
+	}
+	if result.Balance.ToInt().Cmp(big.NewInt(1000000000)) != 0 {
+		t.Errorf("expected balance 1000000000, got %s", result.Balance.String())
+	}
+}
+
+func TestPartialState_GetProof_StorageKeysUntracked(t *testing.T) {
+	t.Parallel()
+
+	accountAddr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accountAddr: {
+				Balance: big.NewInt(1000000000),
+				Storage: map[common.Hash]common.Hash{
+					common.HexToHash("0x0"): common.HexToHash("0x42"),
+				},
+			},
+		},
+	}
+	tb := newTestBackend(t, 0, genesis, ethash.NewFaker(), nil)
+
+	// Create partial state backend with no tracked contracts
+	b := newPartialStateTestBackend(tb, nil)
+	api := NewBlockChainAPI(b)
+
+	// Proof with storage keys should fail for untracked contracts
+	_, err := api.GetProof(context.Background(), accountAddr, []string{"0x0"}, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+	if err == nil {
+		t.Fatal("expected error for storage proof on untracked contract")
+	}
+
+	var storageErr *StorageNotTrackedError
+	if !errors.As(err, &storageErr) {
+		t.Fatalf("expected StorageNotTrackedError, got %T: %v", err, err)
+	}
+}
+
+func TestPartialState_GetProof_StorageKeysTracked(t *testing.T) {
+	t.Parallel()
+
+	trackedAddr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			trackedAddr: {
+				Balance: big.NewInt(1000000000),
+				Storage: map[common.Hash]common.Hash{
+					common.HexToHash("0x0"): common.HexToHash("0x42"),
+				},
+			},
+		},
+	}
+	tb := newTestBackend(t, 0, genesis, ethash.NewFaker(), nil)
+
+	// Create partial state backend with the contract tracked
+	b := newPartialStateTestBackend(tb, []common.Address{trackedAddr})
+	api := NewBlockChainAPI(b)
+
+	// Proof with storage keys should succeed for tracked contracts
+	result, err := api.GetProof(context.Background(), trackedAddr, []string{"0x0"}, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result.StorageProof) != 1 {
+		t.Fatalf("expected 1 storage proof, got %d", len(result.StorageProof))
+	}
+	if result.StorageProof[0].Value.ToInt().Cmp(big.NewInt(0x42)) != 0 {
+		t.Errorf("expected storage value 0x42, got %s", result.StorageProof[0].Value.String())
 	}
 }

@@ -1368,3 +1368,134 @@ func TestStorageDirtiness(t *testing.T) {
 	state.RevertToSnapshot(snap)
 	checkDirty(common.Hash{0x1}, common.Hash{0x1}, true)
 }
+
+// TestPartialStateFilter tests that the partial state filter correctly blocks
+// access to untracked contract storage and code, while allowing access to
+// tracked contracts and EOAs.
+func TestPartialStateFilter(t *testing.T) {
+	var (
+		db  = rawdb.NewMemoryDatabase()
+		tdb = triedb.NewDatabase(db, nil)
+		sdb = NewDatabase(tdb, nil)
+	)
+	state, _ := New(types.EmptyRootHash, sdb)
+
+	// Set up two contracts and one EOA
+	tracked := common.HexToAddress("0x1111")
+	untracked := common.HexToAddress("0x2222")
+	eoa := common.HexToAddress("0x3333")
+
+	// Give all accounts a balance
+	state.AddBalance(tracked, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
+	state.AddBalance(untracked, uint256.NewInt(200), tracing.BalanceChangeUnspecified)
+	state.AddBalance(eoa, uint256.NewInt(300), tracing.BalanceChangeUnspecified)
+
+	// Set code for the two contracts (not the EOA)
+	state.SetCode(tracked, []byte{0x60, 0x00}, tracing.CodeChangeUnspecified)
+	state.SetCode(untracked, []byte{0x60, 0x01}, tracing.CodeChangeUnspecified)
+
+	// Set storage for the contracts
+	storageKey := common.HexToHash("0x01")
+	state.SetState(tracked, storageKey, common.HexToHash("0xaa"))
+	state.SetState(untracked, storageKey, common.HexToHash("0xbb"))
+
+	// Install partial state filter: only "tracked" address is tracked
+	state.SetPartialStateFilter(func(addr common.Address) bool {
+		return addr == tracked
+	})
+
+	// Test: GetState for tracked contract should succeed
+	val := state.GetState(tracked, storageKey)
+	if val != common.HexToHash("0xaa") {
+		t.Errorf("tracked GetState: got %x, want 0xaa", val)
+	}
+	if state.Error() != nil {
+		t.Errorf("tracked GetState should not set error, got: %v", state.Error())
+	}
+
+	// Test: GetState for untracked contract should set error
+	val = state.GetState(untracked, storageKey)
+	if val != (common.Hash{}) {
+		t.Errorf("untracked GetState: got %x, want empty", val)
+	}
+	if state.Error() == nil {
+		t.Error("untracked GetState should set error")
+	}
+
+	// Reset error for next test
+	state.dbErr = nil
+
+	// Test: GetCode for tracked contract should succeed
+	code := state.GetCode(tracked)
+	if len(code) == 0 {
+		t.Error("tracked GetCode should return code")
+	}
+	if state.Error() != nil {
+		t.Errorf("tracked GetCode should not set error, got: %v", state.Error())
+	}
+
+	// Test: GetCode for untracked contract should set error
+	code = state.GetCode(untracked)
+	if code != nil {
+		t.Errorf("untracked GetCode: got %x, want nil", code)
+	}
+	if state.Error() == nil {
+		t.Error("untracked GetCode should set error")
+	}
+
+	// Reset error for next test
+	state.dbErr = nil
+
+	// Test: GetCode for EOA should NOT set error (EOAs have empty code hash)
+	code = state.GetCode(eoa)
+	if code != nil {
+		t.Errorf("EOA GetCode: got %x, want nil", code)
+	}
+	if state.Error() != nil {
+		t.Errorf("EOA GetCode should not set error, got: %v", state.Error())
+	}
+
+	// Test: GetCodeSize for untracked contract should set error
+	size := state.GetCodeSize(untracked)
+	if size != 0 {
+		t.Errorf("untracked GetCodeSize: got %d, want 0", size)
+	}
+	if state.Error() == nil {
+		t.Error("untracked GetCodeSize should set error")
+	}
+
+	// Reset error for next test
+	state.dbErr = nil
+
+	// Test: GetCommittedState for untracked contract should set error
+	val = state.GetCommittedState(untracked, storageKey)
+	if val != (common.Hash{}) {
+		t.Errorf("untracked GetCommittedState: got %x, want empty", val)
+	}
+	if state.Error() == nil {
+		t.Error("untracked GetCommittedState should set error")
+	}
+
+	// Reset error for next test
+	state.dbErr = nil
+
+	// Test: Balance should still be accessible for untracked contracts
+	// (partial state tracks all account data, just not storage/code)
+	bal := state.GetBalance(untracked)
+	if bal.IsZero() {
+		t.Error("untracked GetBalance should still work")
+	}
+	if state.Error() != nil {
+		t.Errorf("untracked GetBalance should not set error, got: %v", state.Error())
+	}
+
+	// Test: No filter (nil) should allow everything
+	state.SetPartialStateFilter(nil)
+	val = state.GetState(untracked, storageKey)
+	if val != common.HexToHash("0xbb") {
+		t.Errorf("no-filter GetState: got %x, want 0xbb", val)
+	}
+	if state.Error() != nil {
+		t.Errorf("no-filter GetState should not set error, got: %v", state.Error())
+	}
+}

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/partial"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -109,6 +110,8 @@ type handlerConfig struct {
 	BloomCache     uint64                 // Megabytes to alloc for snap sync bloom
 	EventMux       *event.TypeMux         // Legacy event mux, deprecate for `feed`
 	RequiredBlocks map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
+	PartialFilter  partial.ContractFilter // Filter for partial statefulness mode (nil = full node)
+	ChainRetention uint64                // Bodies/receipts retention window for partial state (0 = keep all)
 }
 
 type handler struct {
@@ -132,6 +135,10 @@ type handler struct {
 	blockRange *blockRangeState
 
 	requiredBlocks map[uint64]common.Hash
+
+	// One-off snap query support for partial state storage root resolution.
+	// Maps request ID → response channel for intercepting AccountRange responses.
+	pendingSnapQueries sync.Map // map[uint64]chan *snap.AccountRangePacket
 
 	// channels for fetcher, syncer, txsyncLoop
 	quitSync chan struct{}
@@ -163,11 +170,16 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		handlerStartCh: make(chan struct{}),
 	}
 	// Construct the downloader (long sync)
-	h.downloader = downloader.New(config.Database, config.Sync, h.eventMux, h.chain, h.removePeer, h.enableSyncedFeatures)
+	h.downloader = downloader.New(config.Database, config.Sync, h.eventMux, h.chain, h.removePeer, h.enableSyncedFeatures, config.PartialFilter, config.ChainRetention)
 
-	// If snap sync is requested but snapshots are disabled, fail loudly
+	// If snap sync is requested but snapshots are disabled, fail loudly.
+	// Partial state nodes are an exception: they disable snapshots intentionally
+	// (account data is read directly from the trie, BAL processing never uses snapshots).
 	if h.downloader.ConfigSyncMode() == ethconfig.SnapSync && (config.Chain.Snapshots() == nil && config.Chain.TrieDB().Scheme() == rawdb.HashScheme) {
-		return nil, errors.New("snap sync not supported with snapshots disabled")
+		if !config.Chain.SupportsPartialState() {
+			return nil, errors.New("snap sync not supported with snapshots disabled")
+		}
+		log.Info("Snap sync with snapshots disabled (partial state mode)")
 	}
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)

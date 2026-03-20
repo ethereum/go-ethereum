@@ -92,6 +92,10 @@ type Backend interface {
 	Engine() consensus.Engine
 	HistoryPruningCutoff() uint64
 
+	// Partial state awareness
+	PartialStateEnabled() bool                        // returns true if partial state mode is active
+	IsContractTracked(addr common.Address) bool       // returns true if contract storage is tracked
+
 	// This is copied from filters.Backend
 	// eth/filters needs to be initialized from this backend type, so methods needed by
 	// it must also be included here.
