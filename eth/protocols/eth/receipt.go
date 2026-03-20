@@ -261,7 +261,7 @@ func blockReceiptsToNetwork(blockReceipts, blockBody rlp.RawValue, q receiptQuer
 		it, _ = rlp.NewListIterator(blockReceipts)
 	)
 	outer := enc.List()
-	for i := 0; it.Next() && !incomplete; i++ {
+	for i := 0; it.Next(); i++ {
 		txType, end := nextTxType()
 		if end {
 			return nil, false, fmt.Errorf("block has less txs than receipts (%d)", i)
