@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -176,14 +175,8 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 	}
 	if evm.ChainConfig().IsAmsterdam(blockNumber, blockTime) {
 		// Emit burn logs where accounts with non-empty balances have been deleted
-		removedWithBalance := statedb.GetRemovedAccountsWithBalance()
-		if removedWithBalance != nil {
-			sort.Slice(removedWithBalance, func(i, j int) bool {
-				return removedWithBalance[i].Address.Cmp(removedWithBalance[j].Address) < 0
-			})
-			for _, sd := range removedWithBalance {
-				statedb.AddLog(types.EthBurnLog(blockNumber, sd.Address, sd.Balance))
-			}
+		for _, sd := range statedb.GetRemovedAccountsWithBalance() {
+			statedb.AddLog(types.EthBurnLog(blockNumber, sd.Address, sd.Balance))
 		}
 	}
 	// Update the state with pending changes.
