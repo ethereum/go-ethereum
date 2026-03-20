@@ -103,7 +103,7 @@ type txPool interface {
 type blobPool interface {
 	Has(hash common.Hash) bool
 	GetCells(hash common.Hash, mask types.CustodyBitmap) ([]kzg4844.Cell, error)
-	ValidateCells([]common.Hash, [][]kzg4844.Cell, *types.CustodyBitmap) []error
+	HasPayload(hash common.Hash) bool
 	AddPayload([]common.Hash, [][]kzg4844.Cell, *types.CustodyBitmap) []error
 	GetCustody(hash common.Hash) *types.CustodyBitmap
 }
@@ -214,7 +214,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return p.RequestPayload(hashes, cells)
 	}
-	h.blobFetcher = fetcher.NewBlobFetcher(h.blobpool.ValidateCells, h.blobpool.AddPayload, fetchPayloads, h.removePeer, &config.Custody, nil)
+	h.blobFetcher = fetcher.NewBlobFetcher(h.blobpool.HasPayload, h.blobpool.AddPayload, fetchPayloads, h.removePeer, &config.Custody, nil)
 	return h, nil
 }
 

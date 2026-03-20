@@ -127,9 +127,10 @@ type blobTxMeta struct {
 
 	announced bool // Whether the tx has been announced to listeners
 
-	id          uint64 // Storage ID in the pool's persistent store
-	storageSize uint32 // Byte size in the pool's persistent store
-	size        uint64 // RLP-encoded size of transaction including the attached blob
+	id              uint64 // Storage ID in the pool's persistent store
+	storageSize     uint32 // Byte size in the pool's persistent store
+	size            uint64 // RLP-encoded size of transaction including the attached blob
+	sizeWithoutBlob uint64 // RLP-encoded size of transaction without blob data (for ETH/71)
 
 	custody *types.CustodyBitmap
 
@@ -152,25 +153,26 @@ type blobTxMeta struct {
 // newBlobTxMeta retrieves the indexed metadata fields from a pooled blob transaction
 // and assembles a helper struct to track in memory.
 func newBlobTxMeta(id uint64, size uint64, storageSize uint32, pooledTx *pooledBlobTx) *blobTxMeta {
-	if pooledTx.Sidecar == nil {
-		// This should never happen, as the pool only admits blob transactions with a sidecar
-		panic("missing blob tx sidecar")
+	var version byte
+	if pooledTx.Sidecar != nil {
+		version = pooledTx.Sidecar.Version
 	}
 	meta := &blobTxMeta{
-		hash:        pooledTx.Transaction.Hash(),
-		vhashes:     pooledTx.Transaction.BlobHashes(),
-		version:     pooledTx.Sidecar.Version,
-		id:          id,
-		storageSize: storageSize,
-		size:        size,
-		nonce:       pooledTx.Transaction.Nonce(),
-		costCap:     uint256.MustFromBig(pooledTx.Transaction.Cost()),
-		execTipCap:  uint256.MustFromBig(pooledTx.Transaction.GasTipCap()),
-		execFeeCap:  uint256.MustFromBig(pooledTx.Transaction.GasFeeCap()),
-		blobFeeCap:  uint256.MustFromBig(pooledTx.Transaction.BlobGasFeeCap()),
-		execGas:     pooledTx.Transaction.Gas(),
-		blobGas:     pooledTx.Transaction.BlobGas(),
-		custody:     &pooledTx.Sidecar.Custody,
+		hash:            pooledTx.Transaction.Hash(),
+		vhashes:         pooledTx.Transaction.BlobHashes(),
+		version:         version,
+		id:              id,
+		storageSize:     storageSize,
+		size:            size,
+		sizeWithoutBlob: pooledTx.SizeWithoutBlob,
+		nonce:           pooledTx.Transaction.Nonce(),
+		costCap:         uint256.MustFromBig(pooledTx.Transaction.Cost()),
+		execTipCap:      uint256.MustFromBig(pooledTx.Transaction.GasTipCap()),
+		execFeeCap:      uint256.MustFromBig(pooledTx.Transaction.GasFeeCap()),
+		blobFeeCap:      uint256.MustFromBig(pooledTx.Transaction.BlobGasFeeCap()),
+		execGas:         pooledTx.Transaction.Gas(),
+		blobGas:         pooledTx.Transaction.BlobGas(),
+		custody:         &pooledTx.Sidecar.Custody,
 	}
 	meta.basefeeJumps = dynamicFeeJumps(meta.execFeeCap)
 	meta.blobfeeJumps = dynamicBlobFeeJumps(meta.blobFeeCap)
@@ -179,9 +181,10 @@ func newBlobTxMeta(id uint64, size uint64, storageSize uint32, pooledTx *pooledB
 }
 
 type pooledBlobTx struct {
-	Transaction *types.Transaction
-	Sidecar     *types.BlobTxCellSidecar
-	Size        uint64 // original transaction size (including blobs)
+	Transaction     *types.Transaction
+	Sidecar         *types.BlobTxCellSidecar
+	Size            uint64 // original transaction size (including blobs)
+	SizeWithoutBlob uint64 // transaction size with commitments/proofs but without blob data
 }
 
 // newPooledBlobTx creates pooledBlobTx struct.
@@ -194,9 +197,10 @@ func newPooledBlobTx(tx *types.Transaction) (*pooledBlobTx, error) {
 		return nil, err
 	}
 	return &pooledBlobTx{
-		Transaction: tx.WithoutBlobTxSidecar(),
-		Sidecar:     sidecar,
-		Size:        tx.Size(),
+		Transaction:     tx.WithoutBlobTxSidecar(),
+		Sidecar:         sidecar,
+		Size:            tx.Size(),
+		SizeWithoutBlob: tx.WithoutBlob().Size(),
 	}, nil
 }
 
@@ -1369,30 +1373,6 @@ func (p *BlobPool) checkDelegationLimit(tx *types.Transaction) error {
 	return txpool.ErrInflightTxLimitReached
 }
 
-// ValidateCells validates cells against transaction commitments and proofs.
-func (p *BlobPool) ValidateCells(txs []common.Hash, cells [][]kzg4844.Cell, custody *types.CustodyBitmap) []error {
-	errs := make([]error, len(txs))
-
-	for i, tx := range txs {
-		if _, ok := p.queue[tx]; !ok {
-			errs[i] = fmt.Errorf("transaction %s not found", tx)
-			continue
-		}
-		sidecar := p.queue[tx].BlobTxSidecar()
-		cellProofs := make([]kzg4844.Proof, 0)
-		for _, proofIdx := range custody.Indices() {
-			// should store all proofs
-			for blobIdx := range len(sidecar.Commitments) {
-				idx := blobIdx*kzg4844.CellProofsPerBlob + int(proofIdx)
-				cellProofs = append(cellProofs, sidecar.Proofs[idx])
-			}
-		}
-
-		errs[i] = kzg4844.VerifyCells(cells[i], sidecar.Commitments, cellProofs, custody.Indices())
-	}
-	return errs
-}
-
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 // This function assumes the static validation has been performed already and
@@ -1441,8 +1421,7 @@ func (p *BlobPool) validateTx(tx *types.Transaction, buffer bool) error {
 					next := p.state.GetNonce(addr)
 
 					for nonce, replacement := range replacements {
-						if len(p.index[addr]) > int(nonce-next) {
-							// replacement
+						if nonce >= next && len(p.index[addr]) > int(nonce-next) {
 							originalCost := p.index[addr][nonce-next].costCap
 							replacementCost := replacement.costCap
 
@@ -1464,8 +1443,9 @@ func (p *BlobPool) validateTx(tx *types.Transaction, buffer bool) error {
 				if p.replacementQueue[addr] != nil && p.replacementQueue[addr][nonce] != nil {
 					return p.replacementQueue[addr][nonce].costCap.ToBig()
 				}
-				if uint64(len(p.indexQueue[addr])) > nonce-next-uint64(len(p.index[addr])) {
-					return p.indexQueue[addr][nonce-next-uint64(len(p.index[addr]))].costCap.ToBig()
+				pooledCount := uint64(len(p.index[addr]))
+				if nonce >= next+pooledCount && uint64(len(p.indexQueue[addr])) > nonce-next-pooledCount {
+					return p.indexQueue[addr][nonce-next-pooledCount].costCap.ToBig()
 				}
 			}
 			if uint64(len(p.index[addr])) > nonce-next {
@@ -1500,10 +1480,12 @@ func (p *BlobPool) validateTx(tx *types.Transaction, buffer bool) error {
 			}
 		}
 	} else if buffer {
-		offset := nonce - next - uint64(len(p.index[from]))
-		if uint64(len(p.indexQueue[from])) > offset && offset > 0 {
-			// buffer tx replacement
-			prev = p.indexQueue[from][nonce-next-uint64(len(p.index[from]))]
+		pooledCount := uint64(len(p.index[from]))
+		if nonce >= next+pooledCount {
+			offset := nonce - next - pooledCount
+			if uint64(len(p.indexQueue[from])) > offset && offset > 0 {
+				prev = p.indexQueue[from][offset]
+			}
 		}
 	}
 	if prev == nil {
@@ -1555,6 +1537,13 @@ func (p *BlobPool) Has(hash common.Hash) bool {
 	poolHas := p.lookup.exists(hash)
 	_, gapped := p.gappedSource[hash]
 	return poolHas || gapped
+}
+
+func (p *BlobPool) HasPayload(hash common.Hash) bool {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	return p.lookup.exists(hash) || len(p.cellQueue[hash]) != 0
 }
 
 // getRLP returns the raw RLP-encoded pooledBlobTx data from the store.
@@ -1642,13 +1631,14 @@ func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	size, ok := p.lookup.sizeOfTx(hash)
+	meta, ok := p.lookup.txIndex[hash]
 	if !ok {
 		return nil
 	}
 	return &txpool.TxMetadata{
-		Type: types.BlobTxType,
-		Size: size,
+		Type:            types.BlobTxType,
+		Size:            meta.size,
+		SizeWithoutBlob: meta.sizeWithoutBlob,
 	}
 }
 
@@ -1771,8 +1761,8 @@ func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 		if errs[i] = p.ValidateTxBasics(tx); errs[i] != nil {
 			continue
 		}
-		if len(tx.BlobTxSidecar().Blobs) != 0 {
-			// from user: convert to pooledBlobTx and add
+		sc := tx.BlobTxSidecar()
+		if sc != nil && len(sc.Blobs) != 0 {
 			pooledTx, err := newPooledBlobTx(tx)
 			if err != nil {
 				errs[i] = err
@@ -1780,7 +1770,6 @@ func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 			}
 			errs[i] = p.add(pooledTx)
 		} else {
-			// from p2p, buffer until the corresponding cells arrive
 			errs[i] = p.addBuffer(tx)
 		}
 	}
@@ -1795,7 +1784,8 @@ func (p *BlobPool) addBuffer(tx *types.Transaction) (err error) {
 		sidecar := tx.BlobTxSidecar()
 
 		var cellSidecar types.BlobTxCellSidecar
-		if len(cells) >= kzg4844.DataPerBlob {
+		blobCount := len(sidecar.Commitments)
+		if len(cells) >= kzg4844.DataPerBlob*blobCount {
 			blob, err := kzg4844.RecoverBlobs(cells, p.custodyQueue[tx.Hash()].Indices())
 			if err != nil {
 				return err
@@ -1832,13 +1822,25 @@ func (p *BlobPool) addBuffer(tx *types.Transaction) (err error) {
 	if err := p.validateTx(tx, true); err != nil {
 		return err
 	}
+	// Store the original tx in queue (with BlobTxSidecar intact — Blobs may be nil
+	// from ETH/71 but commitments/proofs are preserved for cell validation later).
 	p.queue[tx.Hash()] = tx
 	from, _ := types.Sender(p.signer, tx)
 
+	// Build a partial pooledBlobTx for metadata tracking.
+	var cellSidecar *types.BlobTxCellSidecar
+	if sidecar := tx.BlobTxSidecar(); sidecar != nil {
+		cellSidecar = &types.BlobTxCellSidecar{
+			Version:     sidecar.Version,
+			Commitments: sidecar.Commitments,
+			Proofs:      sidecar.Proofs,
+		}
+	}
 	next := p.state.GetNonce(from)
 	nonce := tx.Nonce()
 	pooledCount := uint64(len(p.index[from]))
-	meta := newBlobTxMeta(0, tx.Size(), 0, &pooledBlobTx{Transaction: tx, Size: tx.Size()})
+	//todo this is strange
+	meta := newBlobTxMeta(0, tx.Size(), 0, &pooledBlobTx{Transaction: tx, Sidecar: cellSidecar, Size: tx.Size()})
 
 	if nonce < next+pooledCount {
 		// Pooled transaction replacements are stored in replacementQueue for expenditure validation
@@ -1944,7 +1946,6 @@ func (p *BlobPool) addLocked(pooledTx *pooledBlobTx, checkGapped bool) (err erro
 		Config:       p.chain.Config(),
 		MaxBlobCount: maxBlobsPerTx,
 	}); err != nil {
-		log.Trace("Sidecar validation failed", "hash", tx.Hash(), "err", err)
 		return err
 	}
 	// If the address is not yet known, request exclusivity to track the account
@@ -2551,12 +2552,13 @@ func (p *BlobPool) GetCells(hash common.Hash, mask types.CustodyBitmap) ([]kzg48
 	}
 	tx := pooledTx.Transaction
 	sidecar := pooledTx.Sidecar
+	// Return cells in blob-major order: [blob0_cell0, blob0_cell1, ..., blob1_cell0, ...]
+	cellsPerBlob := sidecar.Custody.OneCount()
 	cells := make([]kzg4844.Cell, 0, mask.OneCount()*len(tx.BlobHashes()))
-	for cellIdx, custodyIdx := range sidecar.Custody.Indices() {
-		if mask.IsSet(custodyIdx) {
-			for blobIdx := 0; blobIdx < len(tx.BlobHashes()); blobIdx++ {
-				idx := blobIdx*sidecar.Custody.OneCount() + cellIdx
-				cells = append(cells, sidecar.Cells[idx])
+	for blobIdx := 0; blobIdx < len(tx.BlobHashes()); blobIdx++ {
+		for cellIdx, custodyIdx := range sidecar.Custody.Indices() {
+			if mask.IsSet(custodyIdx) {
+				cells = append(cells, sidecar.Cells[blobIdx*cellsPerBlob+cellIdx])
 			}
 		}
 	}
@@ -2581,7 +2583,8 @@ func (p *BlobPool) AddPayload(txs []common.Hash, cells [][]kzg4844.Cell, custody
 		sidecar := p.queue[hash].BlobTxSidecar()
 
 		var cellSidecar types.BlobTxCellSidecar
-		if len(cells[i]) >= kzg4844.DataPerBlob {
+		blobCount := len(sidecar.Commitments)
+		if len(cells[i]) >= kzg4844.DataPerBlob*blobCount {
 			blob, err := kzg4844.RecoverBlobs(cells[i], custody.Indices())
 			if err != nil {
 				errs[i] = err
@@ -2610,7 +2613,6 @@ func (p *BlobPool) AddPayload(txs []common.Hash, cells [][]kzg4844.Cell, custody
 		}
 
 		errs[i] = p.addLocked(&pooledBlobTx{Transaction: p.queue[hash].WithoutBlobTxSidecar(), Sidecar: &cellSidecar, Size: p.queue[hash].Size()}, true)
-		// todo nonce gap
 
 		// clean up queues
 		tx := p.queue[hash]
@@ -2628,7 +2630,11 @@ func (p *BlobPool) AddPayload(txs []common.Hash, cells [][]kzg4844.Cell, custody
 		}
 
 		// plain tx
-		offset := int(nonce - next - uint64(len(p.index[from])))
+		pooledCount := uint64(len(p.index[from]))
+		if nonce < next+pooledCount {
+			continue
+		}
+		offset := int(nonce - next - pooledCount)
 		if offset > 0 && offset < len(p.indexQueue[from]) {
 			removed := p.indexQueue[from][offset]
 			p.indexQueue[from] = append(p.indexQueue[from][:offset], p.indexQueue[from][offset+1:]...)

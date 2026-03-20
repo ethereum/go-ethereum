@@ -86,8 +86,9 @@ type PendingFilter struct {
 
 // TxMetadata denotes the metadata of a transaction.
 type TxMetadata struct {
-	Type uint8  // The type of the transaction
-	Size uint64 // The length of the 'rlp encoding' of a transaction
+	Type            uint8  // The type of the transaction
+	Size            uint64 // The length of the 'rlp encoding' of a transaction (including blobs)
+	SizeWithoutBlob uint64 // The length without blob data (for ETH/71 announcements)
 }
 
 // SubPool represents a specialized transaction pool that lives on its own (e.g.

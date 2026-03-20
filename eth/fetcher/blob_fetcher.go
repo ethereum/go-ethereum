@@ -40,15 +40,16 @@ type random interface {
 // according to the custody cell indices provided by the consensus client
 // connected to this execution client.
 
+// todo
 var blobFetchTimeout = 5 * time.Second
+var blobAvailabilityTimeout = 2 * time.Second
 
-// todo tuning
 const (
 	availabilityThreshold         = 2
 	maxPayloadRetrievals          = 128
 	maxPayloadAnnounces           = 4096
+	fetchProbability              = 15
 	MAX_CELLS_PER_PARTIAL_REQUEST = 8
-	blobAvailabilityTimeout       = 500 * time.Millisecond
 )
 
 type blobTxAnnounce struct {
@@ -76,9 +77,10 @@ type cellWithSeq struct {
 }
 
 type fetchStatus struct {
-	fetching *types.CustodyBitmap // To avoid fetching cells which had already been fetched / currently being fetched
-	fetched  []uint64             // To sort cells
-	cells    []kzg4844.Cell
+	fetching  *types.CustodyBitmap // To avoid fetching cells which had already been fetched / currently being fetched
+	fetched   []uint64             // Custody indices that have been fetched (per-blob, same for all blobs)
+	blobCells [][]kzg4844.Cell     // Per-blob cell accumulator, indexed by blob
+	blobCount int                  // Number of blobs in this tx (set on first delivery)
 }
 
 // BlobFetcher is responsible for managing type 3 transactions based on peer announcements.
@@ -121,8 +123,8 @@ type BlobFetcher struct {
 	alternates map[common.Hash]map[string]*types.CustodyBitmap // In-flight transaction alternate origins (in case the peer is dropped)
 
 	// Callbacks
-	validateCells func([]common.Hash, [][]kzg4844.Cell, *types.CustodyBitmap) []error
-	addPayload    func([]common.Hash, [][]kzg4844.Cell, *types.CustodyBitmap) []error
+	hasPayload    func(common.Hash) bool
+	addPayload    func([]common.Hash, [][]kzg4844.Cell, *types.CustodyBitmap) []error //todo: peer disconnection is strange here
 	fetchPayloads func(string, []common.Hash, *types.CustodyBitmap) error
 	dropPeer      func(string)
 
@@ -133,7 +135,7 @@ type BlobFetcher struct {
 }
 
 func NewBlobFetcher(
-	validateCells func([]common.Hash, [][]kzg4844.Cell, *types.CustodyBitmap) []error,
+	hasPayload func(common.Hash) bool,
 	addPayload func([]common.Hash, [][]kzg4844.Cell, *types.CustodyBitmap) []error,
 	fetchPayloads func(string, []common.Hash, *types.CustodyBitmap) error, dropPeer func(string),
 	custody *types.CustodyBitmap, rand random) *BlobFetcher {
@@ -151,7 +153,7 @@ func NewBlobFetcher(
 		fetches:       make(map[common.Hash]*fetchStatus),
 		requests:      make(map[string][]*cellRequest),
 		alternates:    make(map[common.Hash]map[string]*types.CustodyBitmap),
-		validateCells: validateCells,
+		hasPayload:    hasPayload,
 		addPayload:    addPayload,
 		fetchPayloads: fetchPayloads,
 		dropPeer:      dropPeer,
@@ -165,7 +167,15 @@ func NewBlobFetcher(
 // Notify is called when a Type 3 transaction is observed on the network. (TransactionPacket / NewPooledTransactionHashesPacket)
 func (f *BlobFetcher) Notify(peer string, txs []common.Hash, cells types.CustodyBitmap) error {
 	blobAnnounceInMeter.Mark(int64(len(txs)))
-	blobAnnounce := &blobTxAnnounce{origin: peer, txs: txs, cells: cells}
+	anns := make([]common.Hash, 0)
+	for _, tx := range txs {
+		if f.hasPayload(tx) {
+			continue
+		}
+		anns = append(anns, tx)
+	}
+
+	blobAnnounce := &blobTxAnnounce{origin: peer, txs: anns, cells: cells}
 	select {
 	case f.notify <- blobAnnounce:
 		return nil
@@ -261,7 +271,7 @@ func (f *BlobFetcher) loop() {
 						} else {
 							randomValue = f.rand.Intn(100)
 						}
-						if randomValue < 15 {
+						if randomValue < fetchProbability {
 							f.full[hash] = struct{}{}
 						} else {
 							f.partial[hash] = struct{}{}
@@ -418,9 +428,6 @@ func (f *BlobFetcher) loop() {
 			f.rescheduleTimeout(timeoutTimer, timeoutTrigger)
 		case delivery := <-f.cleanup:
 			// Remove from announce
-			addedHashes := make([]common.Hash, 0)
-			addedCells := make([][]kzg4844.Cell, 0)
-
 			var requestId int
 			var request *cellRequest
 			for _, hash := range delivery.txs {
@@ -446,9 +453,24 @@ func (f *BlobFetcher) loop() {
 					// Unexpected hash, ignore
 					continue
 				}
-				// Update fetch status
-				f.fetches[hash].fetched = append(f.fetches[hash].fetched, delivery.cellBitmap.Indices()...)
-				f.fetches[hash].cells = append(f.fetches[hash].cells, delivery.cells[i]...)
+				// delivery.cells[i] contains cells for all blobs
+				// in blob-major order: [blob0_cell0, ..., blob0_cellN, blob1_cell0, ...].
+				indices := delivery.cellBitmap.Indices()
+				cellsPerBlob := len(indices)
+				if cellsPerBlob > 0 {
+					status := f.fetches[hash]
+					blobCount := len(delivery.cells[i]) / cellsPerBlob
+					// Initialize per-blob accumulators on first delivery
+					if status.blobCount == 0 {
+						status.blobCount = blobCount
+						status.blobCells = make([][]kzg4844.Cell, blobCount)
+					}
+					for b := 0; b < blobCount; b++ {
+						offset := b * cellsPerBlob
+						status.blobCells[b] = append(status.blobCells[b], delivery.cells[i][offset:offset+cellsPerBlob]...)
+					}
+					status.fetched = append(status.fetched, indices...)
+				}
 
 				// Update announces of this peer
 				delete(f.announces[delivery.origin], hash)
@@ -476,12 +498,26 @@ func (f *BlobFetcher) loop() {
 
 				if completed {
 					blobFetcherFetchTime.Update(int64(time.Duration(f.clock.Now() - request.time)))
-					addedHashes = append(addedHashes, hash)
 					fetchStatus := f.fetches[hash]
-					sort.Slice(fetchStatus.cells, func(i, j int) bool {
-						return fetchStatus.fetched[i] < fetchStatus.fetched[j]
+
+					// Sort each blob's cells by ascending custody index.
+					// RecoverBlobs expects cells[k] to correspond to custodyIndices[k],
+					// and custodyIndices come from CustodyBitmap.Indices() which is always sorted.
+					perm := make([]int, len(fetchStatus.fetched))
+					for i := range perm {
+						perm[i] = i
+					}
+					slices.SortFunc(perm, func(a, b int) int {
+						return int(fetchStatus.fetched[a]) - int(fetchStatus.fetched[b])
 					})
-					addedCells = append(addedCells, fetchStatus.cells)
+					var assembled []kzg4844.Cell
+					for _, blobCells := range fetchStatus.blobCells {
+						for _, p := range perm {
+							assembled = append(assembled, blobCells[p])
+						}
+					}
+					collectedCustody := types.NewCustodyBitmap(fetchStatus.fetched)
+					f.addPayload([]common.Hash{hash}, [][]kzg4844.Cell{assembled}, &collectedCustody)
 
 					// remove announces from other peers
 					for peer, txset := range f.announces {
@@ -494,11 +530,7 @@ func (f *BlobFetcher) loop() {
 					delete(f.fetches, hash)
 				}
 			}
-			// Update mempool status for arrived hashes
 			blobRequestDoneMeter.Mark(int64(len(delivery.txs)))
-			if len(addedHashes) > 0 {
-				f.addPayload(addedHashes, addedCells, delivery.cellBitmap)
-			}
 
 			// Remove the request
 			f.requests[delivery.origin][requestId] = f.requests[delivery.origin][len(f.requests[delivery.origin])-1]
@@ -690,7 +722,6 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 					f.fetches[hash] = &fetchStatus{
 						fetching: unfetched,
 						fetched:  make([]uint64, 0),
-						cells:    make([]kzg4844.Cell, 0),
 					}
 				} else {
 					f.fetches[hash].fetching = f.fetches[hash].fetching.Union(unfetched)

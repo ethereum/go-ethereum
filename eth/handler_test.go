@@ -83,6 +83,15 @@ func (p *testTxPool) Has(hash common.Hash) bool {
 	return p.txPool[hash] != nil
 }
 
+// Has returns an indicator whether txpool has a transaction
+// cached with the given hash.
+func (p *testTxPool) HasPayload(hash common.Hash) bool {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	return p.cellPool[hash] != nil
+}
+
 // Get retrieves the transaction from local txpool with given
 // tx hash.
 func (p *testTxPool) Get(hash common.Hash) *types.Transaction {
@@ -221,17 +230,6 @@ func (p *testTxPool) AddPayload(txs []common.Hash, cells [][]kzg4844.Cell, custo
 		p.cellPool[tx] = cells[i]
 	}
 	return nil
-}
-
-func (p *testTxPool) ValidateCells(txs []common.Hash, cells [][]kzg4844.Cell, custody *types.CustodyBitmap) []error {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	errors := make([]error, len(txs))
-	for i, tx := range txs {
-		errors[i] = kzg4844.VerifyCells(cells[i], p.txPool[tx].BlobTxSidecar().Commitments, p.txPool[tx].BlobTxSidecar().Proofs, custody.Indices())
-	}
-	return errors
 }
 
 // FilterType should check whether the pool supports the given type of transactions.

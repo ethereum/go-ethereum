@@ -254,6 +254,9 @@ func (f *TxFetcher) Notify(peer string, kinds []byte, sizes []uint32, hashes []c
 	for i, hash := range hashes {
 		err := f.validateMeta(hash, kinds[i])
 		if errors.Is(err, txpool.ErrAlreadyKnown) {
+			if kinds[i] == types.BlobTxType {
+				blobFetchHashes = append(blobFetchHashes, hash)
+			}
 			duplicate++
 			continue
 		}

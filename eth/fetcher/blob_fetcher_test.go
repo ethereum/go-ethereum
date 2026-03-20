@@ -17,9 +17,9 @@
 package fetcher
 
 import (
+	"fmt"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -63,11 +63,6 @@ func selectCells(cells []kzg4844.Cell, custody *types.CustodyBitmap) []kzg4844.C
 
 	return result
 }
-
-const (
-	testBlobAvailabilityTimeout = 500 * time.Millisecond
-	testBlobFetchTimeout        = 5 * time.Second
-)
 
 var (
 	testBlobTxHashes = []common.Hash{
@@ -153,16 +148,14 @@ func TestBlobFetcherFullFetch(t *testing.T) {
 	testBlobFetcher(t, blobFetcherTest{
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
-				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
-					return make([]error, len(txs))
-				},
+				func(common.Hash) bool { return false },
 				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash, *types.CustodyBitmap) error { return nil },
 				func(string) {},
 				&custody,
-				&mockRand{value: 5}, // to force full requests (5 < 15)
+				&mockRand{value: 5}, // Force full requests (5 < fetchProbability)
 			)
 		},
 		steps: []interface{}{
@@ -244,16 +237,14 @@ func TestBlobFetcherPartialFetch(t *testing.T) {
 	testBlobFetcher(t, blobFetcherTest{
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
-				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
-					return make([]error, len(txs))
-				},
+				func(common.Hash) bool { return false },
 				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash, *types.CustodyBitmap) error { return nil },
 				func(string) {},
 				&custody,
-				&mockRand{value: 20}, // Force partial requests (20 >= 15)
+				&mockRand{value: 60}, // Force partial requests (20 >= 15)
 			)
 		},
 		steps: []interface{}{
@@ -339,9 +330,7 @@ func TestBlobFetcherFullDelivery(t *testing.T) {
 	testBlobFetcher(t, blobFetcherTest{
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
-				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
-					return make([]error, len(txs))
-				},
+				func(common.Hash) bool { return false },
 				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
 					return make([]error, len(txs))
 				},
@@ -387,16 +376,14 @@ func TestBlobFetcherPartialDelivery(t *testing.T) {
 	testBlobFetcher(t, blobFetcherTest{
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
-				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
-					return make([]error, len(txs))
-				},
+				func(common.Hash) bool { return false },
 				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash, *types.CustodyBitmap) error { return nil },
 				func(string) {},
 				&custody,
-				&mockRand{value: 20},
+				&mockRand{value: 60},
 			)
 		},
 		steps: []interface{}{
@@ -523,16 +510,14 @@ func TestBlobFetcherAvailabilityTimeout(t *testing.T) {
 	testBlobFetcher(t, blobFetcherTest{
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
-				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
-					return make([]error, len(txs))
-				},
+				func(common.Hash) bool { return false },
 				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash, *types.CustodyBitmap) error { return nil },
 				func(string) {},
 				&custody,
-				&mockRand{value: 20},
+				&mockRand{value: 60},
 			)
 		},
 		steps: []interface{}{
@@ -543,7 +528,7 @@ func TestBlobFetcherAvailabilityTimeout(t *testing.T) {
 			isBlobScheduled{announces: nil, fetching: nil},
 
 			// Run clock for timeout
-			doWait{time: testBlobAvailabilityTimeout, step: true},
+			doWait{time: blobAvailabilityTimeout, step: true},
 
 			// After timeout, waitlist should be empty
 			isWaitingAvailability{},
@@ -557,9 +542,7 @@ func TestBlobFetcherPeerDrop(t *testing.T) {
 	testBlobFetcher(t, blobFetcherTest{
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
-				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
-					return make([]error, len(txs))
-				},
+				func(common.Hash) bool { return false },
 				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
 					return make([]error, len(txs))
 				},
@@ -634,9 +617,7 @@ func TestBlobFetcherFetchTimeout(t *testing.T) {
 	testBlobFetcher(t, blobFetcherTest{
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
-				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
-					return make([]error, len(txs))
-				},
+				func(common.Hash) bool { return false },
 				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
 					return make([]error, len(txs))
 				},
@@ -680,7 +661,7 @@ func TestBlobFetcherFetchTimeout(t *testing.T) {
 			},
 
 			// Wait for fetch timeout -> should reschedule to peer B
-			doWait{time: testBlobFetchTimeout, step: true},
+			doWait{time: blobFetchTimeout, step: true},
 			isBlobScheduled{
 				announces: map[string][]blobAnnounce{
 					"B": {{hash: testBlobTxHashes[0], custody: halfCustody}},
@@ -699,7 +680,7 @@ func TestBlobFetcherFetchTimeout(t *testing.T) {
 			},
 
 			// Wait for timeout -> should drop transaction
-			doWait{time: testBlobFetchTimeout, step: true},
+			doWait{time: blobFetchTimeout, step: true},
 			isBlobScheduled{announces: nil, fetching: nil},
 			isFetching{hashes: nil},
 		},
@@ -995,5 +976,106 @@ func testBlobFetcher(t *testing.T, tt blobFetcherTest) {
 			t.Errorf("step %d: unknown step type %T", i, step)
 			return
 		}
+	}
+}
+
+// selectMultiBlobCells extracts cells from a multi-blob sidecar for a given
+// custody mask, returning them in blob-major order.
+func selectMultiBlobCells(sc *types.BlobTxCellSidecar, mask types.CustodyBitmap) []kzg4844.Cell {
+	var result []kzg4844.Cell
+	cellsPerBlob := sc.Custody.OneCount()
+	blobCount := len(sc.Cells) / cellsPerBlob
+	for b := 0; b < blobCount; b++ {
+		for _, idx := range mask.Indices() {
+			result = append(result, sc.Cells[b*cellsPerBlob+int(idx)])
+		}
+	}
+	return result
+}
+
+// TestMultiBlobDeliveryVerification tests that cells delivered in two partial
+// deliveries for a multi-blob tx are correctly assembled and pass KZG cell
+// proof verification via the addPayload callback.
+func TestMultiBlobDeliveryVerification(t *testing.T) {
+	sidecar := testBlobSidecars[2] // 3 blobs
+
+	var verifyErr error
+	testBlobFetcher(t, blobFetcherTest{
+		init: func() *BlobFetcher {
+			return NewBlobFetcher(
+				func(common.Hash) bool { return false },
+				func(txs []common.Hash, cells [][]kzg4844.Cell, cst *types.CustodyBitmap) []error {
+					// Verify delivered cells pass KZG cell proof verification
+					// Debug: compare with expected cells
+					expectedCells := selectMultiBlobCells(sidecar, custody)
+					for ci, c := range cells {
+						if len(c) != len(expectedCells) {
+							verifyErr = fmt.Errorf("cell count mismatch: have %d, want %d", len(c), len(expectedCells))
+							return make([]error, len(txs))
+						}
+						for j := range c {
+							if c[j] != expectedCells[j] {
+								verifyErr = fmt.Errorf("tx %d cell %d mismatch (custody=%v)", ci, j, cst.Indices())
+								return make([]error, len(txs))
+							}
+						}
+					}
+					for _, c := range cells {
+						cs := &types.BlobTxCellSidecar{
+							Version:     sidecar.Version,
+							Cells:       c,
+							Commitments: sidecar.Commitments,
+							Proofs:      sidecar.Proofs,
+							Custody:     *cst,
+						}
+						indices := cs.Custody.Indices()
+						var cellProofs []kzg4844.Proof
+						for blobIdx := range len(cs.Commitments) {
+							for _, proofIdx := range indices {
+								cellProofs = append(cellProofs, cs.Proofs[blobIdx*kzg4844.CellProofsPerBlob+int(proofIdx)])
+							}
+						}
+						verifyErr = kzg4844.VerifyCells(cs.Cells, cs.Commitments, cellProofs, indices)
+					}
+					return make([]error, len(txs))
+				},
+				func(string, []common.Hash, *types.CustodyBitmap) error { return nil },
+				func(string) {},
+				&custody,
+				&mockRand{value: 60}, // Force partial requests (60 >= fetchProbability)
+			)
+		},
+		steps: []interface{}{
+			// Two full-custody peers → passes availability, promotes to announces
+			doBlobNotify{peer: "A", hashes: []common.Hash{testBlobTxHashes[0]}, custody: fullCustody},
+			doBlobNotify{peer: "B", hashes: []common.Hash{testBlobTxHashes[0]}, custody: fullCustody},
+
+			// Two partial peers with front/back custody
+			doBlobNotify{peer: "D", hashes: []common.Hash{testBlobTxHashes[0]}, custody: backCustody},
+			doBlobNotify{peer: "C", hashes: []common.Hash{testBlobTxHashes[0]}, custody: frontCustody},
+
+			// Drop A and B so C and D get scheduled for fetch
+			doDrop("A"),
+			doDrop("B"),
+
+			// Deliver back cells from D → completes fetch and triggers addPayload
+			doBlobEnqueue{
+				peer:    "D",
+				hashes:  []common.Hash{testBlobTxHashes[0]},
+				cells:   [][]kzg4844.Cell{selectMultiBlobCells(sidecar, *backCustody.Intersection(&custody))},
+				custody: *backCustody.Intersection(&custody),
+			},
+			// Deliver front cells from C
+			doBlobEnqueue{
+				peer:    "C",
+				hashes:  []common.Hash{testBlobTxHashes[0]},
+				cells:   [][]kzg4844.Cell{selectMultiBlobCells(sidecar, *frontCustody.Intersection(&custody))},
+				custody: *frontCustody.Intersection(&custody),
+			},
+			isCompleted{testBlobTxHashes[0]},
+		},
+	})
+	if verifyErr != nil {
+		t.Fatalf("KZG cell verification failed after multi-blob delivery: %v", verifyErr)
 	}
 }
