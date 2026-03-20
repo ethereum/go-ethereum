@@ -243,3 +243,111 @@ func TestPrunePreservesReadability(t *testing.T) {
 		t.Fatalf("Expected MaxUint64, got %d", result)
 	}
 }
+
+// TestPrunePauseResume verifies the pause/resume mechanism:
+//   - The pruner pauses mid-iteration and flushes its batch
+//   - Data written while the pruner is paused (simulating indexSingle) is
+//     visible after resume via a fresh iterator
+//   - Pruning still completes correctly after resume
+func TestPrunePauseResume(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+
+	// Create many accounts with multi-block indexes so the pruner is still
+	// iterating when the pause request arrives.
+	var firstBlockMax uint64
+	for i := 0; i < 200; i++ {
+		hash := common.Hash{byte(i)}
+		ident := newAccountIdent(hash)
+		descList := writeMultiBlockIndex(t, db, ident, 0, 1)
+		if i == 0 {
+			firstBlockMax = descList[0].max
+		}
+	}
+	// Target account at the end of the key space — the pruner should not
+	// have visited it yet when the pause is acknowledged.
+	targetIdent := newAccountIdent(common.Hash{0xff})
+	targetDescList := writeMultiBlockIndex(t, db, targetIdent, 0, 1)
+
+	tail := firstBlockMax + 1
+
+	// Construct the pruner without starting run(). Calling process()
+	// directly while run() is active would race: both run()'s main select
+	// and prunePrefix's select listen on pauseReq. If run() receives it
+	// (idle ack), process() runs unpaused and can overwrite data with a
+	// stale iterator snapshot.
+	pruner := &indexPruner{
+		disk:     db,
+		typ:      typeStateHistory,
+		closed:   make(chan struct{}),
+		pauseReq: make(chan chan struct{}),
+		resumeCh: make(chan struct{}),
+	}
+
+	// Run process() in the background.
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- pruner.process(tail)
+	}()
+
+	// Pause — blocks until the pruner has flushed pending writes and
+	// acknowledged. Because pauseReq is unbuffered, the send in pause()
+	// blocks until prunePrefix's select receives it; the pruner checks
+	// the channel on every iteration, so this always succeeds before
+	// the iterator is exhausted.
+	pruner.pause()
+
+	// While paused, append a new element to the target account's index,
+	// simulating what indexSingle would do during the pause window.
+	lastMax := targetDescList[len(targetDescList)-1].max
+	newID := lastMax + 10000
+	iw, err := newIndexWriter(db, targetIdent, lastMax, 0)
+	if err != nil {
+		t.Fatalf("Failed to create index writer: %v", err)
+	}
+	if err := iw.append(newID, nil); err != nil {
+		t.Fatalf("Failed to append: %v", err)
+	}
+	batch := db.NewBatch()
+	iw.finish(batch)
+	if err := batch.Write(); err != nil {
+		t.Fatalf("Failed to write batch: %v", err)
+	}
+
+	// Resume the pruner.
+	pruner.resume()
+
+	// Wait for process() to complete.
+	if err := <-errCh; err != nil {
+		t.Fatalf("process() failed: %v", err)
+	}
+
+	// Verify: the entry written during the pause must still be accessible.
+	// If the pruner used a stale iterator snapshot, it would overwrite the
+	// target's metadata and lose the new entry.
+	ir, err := newIndexReader(db, targetIdent, 0)
+	if err != nil {
+		t.Fatalf("Failed to create index reader: %v", err)
+	}
+	result, err := ir.readGreaterThan(newID - 1)
+	if err != nil {
+		t.Fatalf("Failed to read: %v", err)
+	}
+	if result != newID {
+		t.Fatalf("Entry written during pause was lost: want %d, got %d", newID, result)
+	}
+
+	// Verify: pruning actually occurred on an early account.
+	earlyIdent := newAccountIdent(common.Hash{0x00})
+	earlyBlob := readStateIndex(earlyIdent, db)
+	if len(earlyBlob) == 0 {
+		t.Fatal("Early account index should not be completely empty")
+	}
+	earlyRemaining, err := parseIndex(earlyBlob, 0)
+	if err != nil {
+		t.Fatalf("Failed to parse early account index: %v", err)
+	}
+	// The first block (id=0) should have been pruned.
+	if earlyRemaining[0].id == 0 {
+		t.Fatal("First block of early account should have been pruned")
+	}
+}
