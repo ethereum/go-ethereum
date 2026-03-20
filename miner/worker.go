@@ -207,6 +207,13 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 			return &newPayloadResult{err: err}
 		}
 	}
+	if miner.chainConfig.IsVerkle(work.header.Number, work.header.Time) {
+		parent := miner.chain.GetHeaderByHash(work.header.ParentHash)
+		if parent != nil && !miner.chainConfig.IsVerkle(parent.Number, parent.Time) {
+			work.state.SetState(params.BinaryTransitionRegistryAddress, common.BytesToHash([]byte{5}), parent.Root)
+		}
+	}
+
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
 		work.header.RequestsHash = &reqHash
@@ -317,6 +324,12 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 	}
 	if miner.chainConfig.IsPrague(header.Number, header.Time) {
 		core.ProcessParentBlockHash(header.ParentHash, env.evm)
+	}
+	if miner.chainConfig.IsVerkle(header.Number, header.Time) {
+		parent := miner.chain.GetHeaderByHash(header.ParentHash)
+		if parent != nil && !miner.chainConfig.IsVerkle(parent.Number, parent.Time) {
+			core.InitializeBinaryTransitionRegistry(env.state)
+		}
 	}
 	return env, nil
 }

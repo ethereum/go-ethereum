@@ -152,9 +152,12 @@ func (s *stateObject) getTrie() (Trie, error) {
 // to break the hidden interdependency between retrieving tries from the db or
 // from the prefetcher.
 func (s *stateObject) getPrefetchedTrie() Trie {
+	if s.db.trie != nil && s.db.trie.IsVerkle() {
+		return nil
+	}
 	// If there's nothing to meaningfully return, let the user figure it out by
 	// pulling the trie from disk.
-	if (s.data.Root == types.EmptyRootHash && !s.db.db.TrieDB().IsVerkle()) || s.db.prefetcher == nil {
+	if s.data.Root == types.EmptyRootHash || s.db.prefetcher == nil {
 		return nil
 	}
 	// Attempt to retrieve the trie from the prefetcher

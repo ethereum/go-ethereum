@@ -94,6 +94,13 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
+	if config.IsVerkle(header.Number, header.Time) {
+		parentHeader := p.chain.GetHeaderByHash(block.ParentHash())
+		if parentHeader != nil && !config.IsVerkle(parentHeader.Number, parentHeader.Time) {
+			InitializeBinaryTransitionRegistry(statedb)
+		}
+	}
+
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
@@ -118,6 +125,13 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	requests, err := postExecution(ctx, config, block, allLogs, evm)
 	if err != nil {
 		return nil, err
+	}
+
+	if config.IsVerkle(header.Number, header.Time) {
+		parentHeader := p.chain.GetHeaderByHash(block.ParentHash())
+		if parentHeader != nil && !config.IsVerkle(parentHeader.Number, parentHeader.Time) {
+			statedb.SetState(params.BinaryTransitionRegistryAddress, common.BytesToHash([]byte{5}), parentHeader.Root)
+		}
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
