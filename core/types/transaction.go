@@ -478,12 +478,12 @@ func (tx *Transaction) BlobTxSidecar() *BlobTxSidecar {
 
 // BlobGasFeeCapCmp compares the blob fee cap of two transactions.
 func (tx *Transaction) BlobGasFeeCapCmp(other *Transaction) int {
-	return tx.BlobGasFeeCap().Cmp(other.BlobGasFeeCap())
+	return tx.inner.(*BlobTx).BlobFeeCap.Cmp(other.inner.(*BlobTx).BlobFeeCap)
 }
 
 // BlobGasFeeCapIntCmp compares the blob fee cap of the transaction against the given blob fee cap.
 func (tx *Transaction) BlobGasFeeCapIntCmp(other *big.Int) int {
-	return tx.BlobGasFeeCap().Cmp(other)
+	return tx.inner.(*BlobTx).BlobFeeCap.CmpBig(other)
 }
 
 // WithoutBlobTxSidecar returns a copy of tx with the blob sidecar removed.
