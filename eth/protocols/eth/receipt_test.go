@@ -105,9 +105,12 @@ func TestReceiptList(t *testing.T) {
 		canonBody, _ := rlp.EncodeToBytes(blockBody)
 
 		// convert from storage encoding to network encoding
-		network, err := blockReceiptsToNetwork(canonDB, canonBody)
+		network, incomplete, err := blockReceiptsToNetwork(canonDB, canonBody, receiptQueryParams{})
 		if err != nil {
 			t.Fatalf("test[%d]: blockReceiptsToNetwork error: %v", i, err)
+		}
+		if incomplete {
+			t.Fatalf("test[%d]: blockReceiptsToNetwork returned incomplete == true", i)
 		}
 
 		// parse as Receipts response list from network encoding

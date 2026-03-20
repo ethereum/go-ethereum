@@ -51,6 +51,12 @@ type Chain struct {
 	state   map[common.Address]state.DumpAccount // state of head block
 	senders map[common.Address]*senderInfo
 	config  *params.ChainConfig
+
+	txInfo txInfo
+}
+
+type txInfo struct {
+	LargeReceiptBlock *uint64 `json:"tx-largereceipt"`
 }
 
 // NewChain takes the given chain.rlp file, and decodes and returns
@@ -74,12 +80,20 @@ func NewChain(dir string) (*Chain, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	var txInfo txInfo
+	err = common.LoadJSON(filepath.Join(dir, "txinfo.json"), &txInfo)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Chain{
 		genesis: gen,
 		blocks:  blocks,
 		state:   state,
 		senders: accounts,
 		config:  gen.Config,
+		txInfo:  txInfo,
 	}, nil
 }
 

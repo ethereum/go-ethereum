@@ -202,12 +202,55 @@ func (rl *ReceiptList) Derivable() types.DerivableList {
 	})
 }
 
-// blockReceiptsToNetwork takes a slice of rlp-encoded receipts, and transactions,
-// and re-encodes them for the network protocol.
-func blockReceiptsToNetwork(blockReceipts, blockBody rlp.RawValue) ([]byte, error) {
+// Append appends all items from another ReceiptList to this list.
+func (rl *ReceiptList) Append(other *ReceiptList) {
+	rl.items.AppendList(&other.items)
+}
+
+// LogsSize returns the total size of log data across all receipts of the list.
+func (rl *ReceiptList) LogsSize() (uint64, error) {
+	var size uint64
+	it := rl.items.ContentIterator()
+	for it.Next() {
+		// The encoded receipts are of the form:
+		//
+		//   [txType, status, cumulativeGasUsed, [logs...]]
+		//
+		// We want to count the size of logs.
+		// So we strip the outer list first:
+		content, _, err := rlp.SplitList(it.Value())
+		if err != nil {
+			return 0, fmt.Errorf("invalid receipt structure: %v", err)
+		}
+		// then skip over txType, status, cumulativeGasUsed:
+		rest := content
+		for range 3 {
+			_, _, rest, err = rlp.Split(rest)
+			if err != nil {
+				return 0, fmt.Errorf("invalid receipt structure: %v", err)
+			}
+		}
+		// and finally access the logs list to get its inner size:
+		logsContent, _, err := rlp.SplitList(rest)
+		if err != nil {
+			return 0, fmt.Errorf("invalid receipt logs: %v", err)
+		}
+		size += uint64(len(logsContent))
+	}
+	return size, nil
+}
+
+type receiptQueryParams struct {
+	firstIndex uint64
+	sizeLimit  uint64
+}
+
+// blockReceiptsToNetwork takes a slice of rlp-encoded receipts (in the 'storage' encoding),
+// and an encoded block body, and re-encodes the receipts for the network protocol.
+func blockReceiptsToNetwork(blockReceipts, blockBody rlp.RawValue, q receiptQueryParams) (output []byte, incomplete bool, err error) {
 	txTypesIter, err := txTypesInBody(blockBody)
 	if err != nil {
-		return nil, fmt.Errorf("invalid block body: %v", err)
+		return nil, false, fmt.Errorf("invalid block body: %v", err)
 	}
 	nextTxType, stopTxTypes := iter.Pull(txTypesIter)
 	defer stopTxTypes()
@@ -219,8 +262,24 @@ func blockReceiptsToNetwork(blockReceipts, blockBody rlp.RawValue) ([]byte, erro
 	)
 	outer := enc.List()
 	for i := 0; it.Next(); i++ {
-		txType, _ := nextTxType()
+		txType, ok := nextTxType()
+		if !ok {
+			return nil, false, fmt.Errorf("block has less txs than receipts (%d)", i)
+		}
+		// Skip receipts before the requested index.
+		if uint64(i) < q.firstIndex {
+			continue
+		}
 		content, _, _ := rlp.SplitList(it.Value())
+		// Stop appending receipts when they would go over the size limit.
+		// Note we rely on the assumption that the txType is encoded as a single byte,
+		// which is always true because EIP-2718 does not allow tx types > 0x7f.
+		size := rlp.ListSize(1 + uint64(len(content)))
+		if q.sizeLimit > 0 && (uint64(enc.Size())+size) > q.sizeLimit {
+			incomplete = true
+			break
+		}
+
 		receiptList := enc.List()
 		enc.WriteUint64(uint64(txType))
 		enc.Write(content)
@@ -228,7 +287,7 @@ func blockReceiptsToNetwork(blockReceipts, blockBody rlp.RawValue) ([]byte, erro
 	}
 	enc.ListEnd(outer)
 	enc.Flush()
-	return out.Bytes(), nil
+	return out.Bytes(), incomplete, nil
 }
 
 // txTypesInBody parses the transactions list of an encoded block body, returning just the types.
