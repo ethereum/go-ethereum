@@ -764,6 +764,11 @@ func (s *StateDB) GetRemovedAccountsWithBalance() (list []RemovedAccountWithBala
 			list = append(list, RemovedAccountWithBalance{Address: obj.address, Balance: obj.Balance()})
 		}
 	}
+	if list != nil {
+		sort.Slice(list, func(i, j int) bool {
+			return list[i].Address.Cmp(list[j].Address) < 0
+		})
+	}
 	return list
 }
 
