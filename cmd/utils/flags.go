@@ -1584,7 +1584,9 @@ func setOpenTelemetry(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(RPCTelemetryTagsFlag.Name) {
 		tcfg.Tags = ctx.String(RPCTelemetryTagsFlag.Name)
 	}
-	tcfg.SampleRatio = ctx.Float64(RPCTelemetrySampleRatioFlag.Name)
+	if ctx.IsSet(RPCTelemetrySampleRatioFlag.Name) {
+		tcfg.SampleRatio = ctx.Float64(RPCTelemetrySampleRatioFlag.Name)
+	}
 
 	if tcfg.Endpoint != "" && !tcfg.Enabled {
 		log.Warn(fmt.Sprintf("OpenTelemetry endpoint configured but telemetry is not enabled, use --%s to enable.", RPCTelemetryFlag.Name))
