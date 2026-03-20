@@ -1746,7 +1746,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 
 	addValidMeter.Mark(1)
 
-	// Transaction was addded successfully, but we only announce if it is (close to being)
+	// Transaction was added successfully, but we only announce if it is (close to being)
 	// includable and the previous one was already announced.
 	if p.isAnnouncable(meta) && (meta.nonce == next || (len(txs) > 1 && txs[offset-1].announced)) {
 		meta.announced = true
