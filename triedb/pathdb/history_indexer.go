@@ -831,7 +831,14 @@ func (i *historyIndexer) shorten(historyID uint64) error {
 // prune signals the pruner that the history tail has advanced to the given ID,
 // so that stale index blocks referencing pruned histories can be removed.
 func (i *historyIndexer) prune(newTail uint64) {
-	i.pruner.prune(newTail)
+	select {
+	case <-i.initer.closed:
+		log.Debug("Ignored the pruning signal", "reason", "closed")
+	case <-i.initer.done:
+		i.pruner.prune(newTail)
+	default:
+		log.Debug("Ignored the pruning signal", "reason", "busy")
+	}
 }
 
 // progress returns the indexing progress made so far. It provides the number
