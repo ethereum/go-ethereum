@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/database"
+	"github.com/holiman/uint256"
 )
 
 // ContractCodeReader defines the interface for accessing contract code.
@@ -48,6 +49,26 @@ type ContractCodeReader interface {
 	// CodeSize retrieves a particular contracts code's size. Returns zero code
 	// size if the requested contract code doesn't exist.
 	CodeSize(addr common.Address, codeHash common.Hash) int
+}
+
+// Account represents the metadata of an Ethereum account object.
+// Unlike the representation in the Merkle-Patricia Trie, the storage root
+// is omitted. This structure is designed to provide a unified view over
+// flat state representations and remain compatible with different hashing
+// schemes (e.g., a unified binary tree in the future).
+type Account struct {
+	Nonce    uint64
+	Balance  *uint256.Int
+	CodeHash []byte
+}
+
+// newEmptyAccount returns an empty account.
+// nolint:unused
+func newEmptyAccount() *Account {
+	return &Account{
+		Balance:  uint256.NewInt(0),
+		CodeHash: types.EmptyCodeHash.Bytes(),
+	}
 }
 
 // StateReader defines the interface for accessing accounts and storage slots
