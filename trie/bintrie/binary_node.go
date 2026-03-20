@@ -16,16 +16,7 @@
 
 package bintrie
 
-import (
-	"errors"
-
-	"github.com/ethereum/go-ethereum/common"
-)
-
-type (
-	NodeFlushFn    func([]byte, BinaryNode)
-	NodeResolverFn func([]byte, common.Hash) ([]byte, error)
-)
+import "github.com/ethereum/go-ethereum/common"
 
 // zero is the zero value for a 32-byte array.
 var zero [32]byte
@@ -43,111 +34,14 @@ const (
 	nodeTypeInternal
 )
 
-// BinaryNode is an interface for a binary trie node.
-type BinaryNode interface {
-	Get([]byte, NodeResolverFn) ([]byte, error)
-	Insert([]byte, []byte, NodeResolverFn, int) (BinaryNode, error)
-	Copy() BinaryNode
-	Hash() common.Hash
-	GetValuesAtStem([]byte, NodeResolverFn) ([][]byte, error)
-	InsertValuesAtStem([]byte, [][]byte, NodeResolverFn, int) (BinaryNode, error)
-	CollectNodes([]byte, NodeFlushFn) error
-
-	toDot(parent, path string) string
-	GetHeight() int
-}
-
-// SerializeNode serializes a binary trie node into a byte slice.
-func SerializeNode(node BinaryNode) []byte {
-	switch n := (node).(type) {
-	case *InternalNode:
-		// InternalNode: 1 byte type + 32 bytes left hash + 32 bytes right hash
-		var serialized [NodeTypeBytes + HashSize + HashSize]byte
-		serialized[0] = nodeTypeInternal
-		copy(serialized[1:33], n.left.Hash().Bytes())
-		copy(serialized[33:65], n.right.Hash().Bytes())
-		return serialized[:]
-	case *StemNode:
-		// StemNode: 1 byte type + 31 bytes stem + 32 bytes bitmap + 256*32 bytes values
-		var serialized [NodeTypeBytes + StemSize + BitmapSize + StemNodeWidth*HashSize]byte
-		serialized[0] = nodeTypeStem
-		copy(serialized[NodeTypeBytes:NodeTypeBytes+StemSize], n.Stem)
-		bitmap := serialized[NodeTypeBytes+StemSize : NodeTypeBytes+StemSize+BitmapSize]
-		offset := NodeTypeBytes + StemSize + BitmapSize
-		for i, v := range n.Values {
-			if v != nil {
-				bitmap[i/8] |= 1 << (7 - (i % 8))
-				copy(serialized[offset:offset+HashSize], v)
-				offset += HashSize
-			}
-		}
-		// Only return the actual data, not the entire array
-		return serialized[:offset]
-	default:
-		panic("invalid node type")
+// DeserializeAndHash is a convenience function that deserializes a blob and
+// computes its hash. Used by callers outside the package (e.g., pathdb) that
+// need only the hash without retaining the node.
+func DeserializeAndHash(blob []byte) (common.Hash, error) {
+	s := NewNodeStore()
+	ref, err := s.DeserializeNode(blob, 0)
+	if err != nil {
+		return common.Hash{}, err
 	}
-}
-
-var invalidSerializedLength = errors.New("invalid serialized node length")
-
-// DeserializeNode deserializes a binary trie node from a byte slice. The
-// hash will be recomputed from the deserialized data.
-func DeserializeNode(serialized []byte, depth int) (BinaryNode, error) {
-	return deserializeNode(serialized, depth, common.Hash{}, true)
-}
-
-// DeserializeNodeWithHash deserializes a binary trie node from a byte slice, using the provided hash.
-func DeserializeNodeWithHash(serialized []byte, depth int, hn common.Hash) (BinaryNode, error) {
-	return deserializeNode(serialized, depth, hn, false)
-}
-
-func deserializeNode(serialized []byte, depth int, hn common.Hash, mustRecompute bool) (BinaryNode, error) {
-	if len(serialized) == 0 {
-		return Empty{}, nil
-	}
-
-	switch serialized[0] {
-	case nodeTypeInternal:
-		if len(serialized) != 65 {
-			return nil, invalidSerializedLength
-		}
-		return &InternalNode{
-			depth:         depth,
-			left:          HashedNode(common.BytesToHash(serialized[1:33])),
-			right:         HashedNode(common.BytesToHash(serialized[33:65])),
-			hash:          hn,
-			mustRecompute: mustRecompute,
-		}, nil
-	case nodeTypeStem:
-		if len(serialized) < 64 {
-			return nil, invalidSerializedLength
-		}
-		var values [StemNodeWidth][]byte
-		bitmap := serialized[NodeTypeBytes+StemSize : NodeTypeBytes+StemSize+BitmapSize]
-		offset := NodeTypeBytes + StemSize + BitmapSize
-
-		for i := range StemNodeWidth {
-			if bitmap[i/8]>>(7-(i%8))&1 == 1 {
-				if len(serialized) < offset+HashSize {
-					return nil, invalidSerializedLength
-				}
-				values[i] = serialized[offset : offset+HashSize]
-				offset += HashSize
-			}
-		}
-		return &StemNode{
-			Stem:          serialized[NodeTypeBytes : NodeTypeBytes+StemSize],
-			Values:        values[:],
-			depth:         depth,
-			hash:          hn,
-			mustRecompute: mustRecompute,
-		}, nil
-	default:
-		return nil, errors.New("invalid node type")
-	}
-}
-
-// ToDot converts the binary trie to a DOT language representation. Useful for debugging.
-func ToDot(root BinaryNode) string {
-	return root.toDot("", "")
+	return s.ComputeHash(ref), nil
 }

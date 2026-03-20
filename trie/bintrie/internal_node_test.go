@@ -24,35 +24,26 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// TestInternalNodeGet tests the Get method
+// TestInternalNodeGet tests the Get method via NodeStore
 func TestInternalNodeGet(t *testing.T) {
-	// Create a simple tree structure
+	s := NewNodeStore()
+
 	leftStem := make([]byte, 31)
 	rightStem := make([]byte, 31)
-	rightStem[0] = 0x80 // First bit is 1
+	rightStem[0] = 0x80
 
 	var leftValues, rightValues [256][]byte
 	leftValues[0] = common.HexToHash("0x0101").Bytes()
 	rightValues[0] = common.HexToHash("0x0202").Bytes()
 
-	node := &InternalNode{
-		depth: 0,
-		left: &StemNode{
-			Stem:   leftStem,
-			Values: leftValues[:],
-			depth:  1,
-		},
-		right: &StemNode{
-			Stem:   rightStem,
-			Values: rightValues[:],
-			depth:  1,
-		},
-	}
+	left := s.allocStem(StemNode{Stem: leftStem, Values: leftValues[:], depth: 1})
+	right := s.allocStem(StemNode{Stem: rightStem, Values: rightValues[:], depth: 1})
+	ref := s.allocInternal(InternalNode{depth: 0, left: left, right: right})
 
 	// Get value from left subtree
 	leftKey := make([]byte, 32)
 	leftKey[31] = 0
-	value, err := node.Get(leftKey, nil)
+	value, err := s.Get(ref, leftKey, nil)
 	if err != nil {
 		t.Fatalf("Failed to get left value: %v", err)
 	}
@@ -64,7 +55,7 @@ func TestInternalNodeGet(t *testing.T) {
 	rightKey := make([]byte, 32)
 	rightKey[0] = 0x80
 	rightKey[31] = 0
-	value, err = node.Get(rightKey, nil)
+	value, err = s.Get(ref, rightKey, nil)
 	if err != nil {
 		t.Fatalf("Failed to get right value: %v", err)
 	}
@@ -75,35 +66,25 @@ func TestInternalNodeGet(t *testing.T) {
 
 // TestInternalNodeGetWithResolver tests Get with HashedNode resolution
 func TestInternalNodeGetWithResolver(t *testing.T) {
-	// Create an internal node with a hashed child
-	hashedChild := HashedNode(common.HexToHash("0x1234"))
+	s := NewNodeStore()
+	hashedRef := s.allocHashed(HashedNode{hash: common.HexToHash("0x1234")})
+	ref := s.allocInternal(InternalNode{depth: 0, left: hashedRef, right: EmptyRef})
 
-	node := &InternalNode{
-		depth: 0,
-		left:  hashedChild,
-		right: Empty{},
-	}
-
-	// Mock resolver that returns a stem node
 	resolver := func(path []byte, hash common.Hash) ([]byte, error) {
-		if hash == common.Hash(hashedChild) {
+		if hash == common.HexToHash("0x1234") {
 			stem := make([]byte, 31)
 			var values [256][]byte
 			values[5] = common.HexToHash("0xabcd").Bytes()
-			stemNode := &StemNode{
-				Stem:   stem,
-				Values: values[:],
-				depth:  1,
-			}
-			return SerializeNode(stemNode), nil
+			tmpStore := NewNodeStore()
+			tmpRef := tmpStore.allocStem(StemNode{Stem: stem, Values: values[:], depth: 1})
+			return tmpStore.SerializeNode(tmpRef), nil
 		}
 		return nil, errors.New("node not found")
 	}
 
-	// Get value through the hashed node
 	key := make([]byte, 32)
 	key[31] = 5
-	value, err := node.Get(key, resolver)
+	value, err := s.Get(ref, key, resolver)
 	if err != nil {
 		t.Fatalf("Failed to get value: %v", err)
 	}
@@ -114,153 +95,119 @@ func TestInternalNodeGetWithResolver(t *testing.T) {
 	}
 }
 
-// TestInternalNodeInsert tests the Insert method
+// TestInternalNodeInsert tests the Insert method via NodeStore
 func TestInternalNodeInsert(t *testing.T) {
-	// Start with an internal node with empty children
-	node := &InternalNode{
-		depth: 0,
-		left:  Empty{},
-		right: Empty{},
-	}
+	s := NewNodeStore()
+	ref := s.allocInternal(InternalNode{depth: 0, left: EmptyRef, right: EmptyRef})
 
-	// Insert a value into the left subtree
 	leftKey := make([]byte, 32)
 	leftKey[31] = 10
 	leftValue := common.HexToHash("0x0101").Bytes()
 
-	newNode, err := node.Insert(leftKey, leftValue, nil, 0)
+	newRef, err := s.Insert(ref, leftKey, leftValue, nil, 0)
 	if err != nil {
 		t.Fatalf("Failed to insert: %v", err)
 	}
 
-	internalNode, ok := newNode.(*InternalNode)
-	if !ok {
-		t.Fatalf("Expected InternalNode, got %T", newNode)
+	if newRef.Kind() != KindInternal {
+		t.Fatalf("Expected KindInternal, got %v", newRef.Kind())
 	}
 
-	// Check that left child is now a StemNode
-	leftStem, ok := internalNode.left.(*StemNode)
-	if !ok {
-		t.Fatalf("Expected left child to be StemNode, got %T", internalNode.left)
+	n := s.getInternal(newRef.Index())
+	if n.left.Kind() != KindStem {
+		t.Fatalf("Expected left child to be KindStem, got %v", n.left.Kind())
 	}
 
-	// Check the inserted value
+	leftStem := s.getStem(n.left.Index())
 	if !bytes.Equal(leftStem.Values[10], leftValue) {
 		t.Errorf("Value mismatch: expected %x, got %x", leftValue, leftStem.Values[10])
 	}
 
-	// Right child should still be Empty
-	_, ok = internalNode.right.(Empty)
-	if !ok {
-		t.Errorf("Expected right child to remain Empty, got %T", internalNode.right)
+	if !n.right.IsEmpty() {
+		t.Errorf("Expected right child to remain empty")
 	}
 }
 
 // TestInternalNodeCopy tests the Copy method
 func TestInternalNodeCopy(t *testing.T) {
-	// Create an internal node with stem children
-	leftStem := &StemNode{
+	s := NewNodeStore()
+
+	leftStem := s.allocStem(StemNode{
 		Stem:   make([]byte, 31),
 		Values: make([][]byte, 256),
 		depth:  1,
-	}
-	leftStem.Values[0] = common.HexToHash("0x0101").Bytes()
+	})
+	s.getStem(leftStem.Index()).Values[0] = common.HexToHash("0x0101").Bytes()
 
-	rightStem := &StemNode{
-		Stem:   make([]byte, 31),
+	rightStemBytes := make([]byte, 31)
+	rightStemBytes[0] = 0x80
+	rightStem := s.allocStem(StemNode{
+		Stem:   rightStemBytes,
 		Values: make([][]byte, 256),
 		depth:  1,
-	}
-	rightStem.Stem[0] = 0x80
-	rightStem.Values[0] = common.HexToHash("0x0202").Bytes()
+	})
+	s.getStem(rightStem.Index()).Values[0] = common.HexToHash("0x0202").Bytes()
 
-	node := &InternalNode{
-		depth: 0,
-		left:  leftStem,
-		right: rightStem,
-	}
+	ref := s.allocInternal(InternalNode{depth: 0, left: leftStem, right: rightStem})
 
 	// Create a copy
-	copied := node.Copy()
-	copiedInternal, ok := copied.(*InternalNode)
-	if !ok {
-		t.Fatalf("Expected InternalNode, got %T", copied)
+	ns := s.Copy()
+	n := ns.getInternal(ref.Index())
+
+	if n.depth != 0 {
+		t.Errorf("Depth mismatch: expected 0, got %d", n.depth)
 	}
 
-	// Check depth
-	if copiedInternal.depth != node.depth {
-		t.Errorf("Depth mismatch: expected %d, got %d", node.depth, copiedInternal.depth)
-	}
+	copiedLeft := ns.getStem(n.left.Index())
+	copiedRight := ns.getStem(n.right.Index())
 
-	// Check that children are copied
-	copiedLeft, ok := copiedInternal.left.(*StemNode)
-	if !ok {
-		t.Fatalf("Expected left child to be StemNode, got %T", copiedInternal.left)
-	}
-
-	copiedRight, ok := copiedInternal.right.(*StemNode)
-	if !ok {
-		t.Fatalf("Expected right child to be StemNode, got %T", copiedInternal.right)
-	}
-
-	// Verify deep copy (children should be different objects)
-	if copiedLeft == leftStem {
-		t.Error("Left child not properly copied")
-	}
-	if copiedRight == rightStem {
-		t.Error("Right child not properly copied")
-	}
-
-	// But values should be equal
-	if !bytes.Equal(copiedLeft.Values[0], leftStem.Values[0]) {
+	if !bytes.Equal(copiedLeft.Values[0], common.HexToHash("0x0101").Bytes()) {
 		t.Error("Left child value mismatch after copy")
 	}
-	if !bytes.Equal(copiedRight.Values[0], rightStem.Values[0]) {
+	if !bytes.Equal(copiedRight.Values[0], common.HexToHash("0x0202").Bytes()) {
 		t.Error("Right child value mismatch after copy")
+	}
+
+	// Modify copied store - should not affect original
+	copiedLeft.Values[0] = common.HexToHash("0x9999").Bytes()
+	origLeft := s.getStem(leftStem.Index())
+	if bytes.Equal(origLeft.Values[0], common.HexToHash("0x9999").Bytes()) {
+		t.Error("Copy is not independent from original")
 	}
 }
 
-// TestInternalNodeHash tests the Hash method
+// TestInternalNodeHash tests the ComputeHash method
 func TestInternalNodeHash(t *testing.T) {
-	// Create an internal node
-	node := &InternalNode{
-		depth: 0,
-		left:  HashedNode(common.HexToHash("0x1111")),
-		right: HashedNode(common.HexToHash("0x2222")),
-	}
+	s := NewNodeStore()
+	left := s.allocHashed(HashedNode{hash: common.HexToHash("0x1111")})
+	right := s.allocHashed(HashedNode{hash: common.HexToHash("0x2222")})
+	ref := s.allocInternal(InternalNode{
+		depth:         0,
+		left:          left,
+		right:         right,
+		mustRecompute: true,
+	})
 
-	hash1 := node.Hash()
-
-	// Hash should be deterministic
-	hash2 := node.Hash()
+	hash1 := s.ComputeHash(ref)
+	hash2 := s.ComputeHash(ref)
 	if hash1 != hash2 {
 		t.Errorf("Hash not deterministic: %x != %x", hash1, hash2)
 	}
 
 	// Changing a child should change the hash
-	node.left = HashedNode(common.HexToHash("0x3333"))
-	node.mustRecompute = true
-	hash3 := node.Hash()
+	n := s.getInternal(ref.Index())
+	n.left = s.allocHashed(HashedNode{hash: common.HexToHash("0x3333")})
+	n.mustRecompute = true
+	hash3 := s.ComputeHash(ref)
 	if hash1 == hash3 {
 		t.Error("Hash didn't change after modifying left child")
 	}
-
-	// Test with nil children (should use zero hash)
-	nodeWithNil := &InternalNode{
-		depth:         0,
-		left:          nil,
-		right:         HashedNode(common.HexToHash("0x4444")),
-		mustRecompute: true,
-	}
-	hashWithNil := nodeWithNil.Hash()
-	if hashWithNil == (common.Hash{}) {
-		t.Error("Hash shouldn't be zero even with nil child")
-	}
 }
 
-// TestInternalNodeGetValuesAtStem tests GetValuesAtStem method
+// TestInternalNodeGetValuesAtStem tests GetValuesAtStem
 func TestInternalNodeGetValuesAtStem(t *testing.T) {
-	// Create a tree with values at different stems
+	s := NewNodeStore()
+
 	leftStem := make([]byte, 31)
 	rightStem := make([]byte, 31)
 	rightStem[0] = 0x80
@@ -271,22 +218,11 @@ func TestInternalNodeGetValuesAtStem(t *testing.T) {
 	rightValues[0] = common.HexToHash("0x0201").Bytes()
 	rightValues[20] = common.HexToHash("0x0202").Bytes()
 
-	node := &InternalNode{
-		depth: 0,
-		left: &StemNode{
-			Stem:   leftStem,
-			Values: leftValues[:],
-			depth:  1,
-		},
-		right: &StemNode{
-			Stem:   rightStem,
-			Values: rightValues[:],
-			depth:  1,
-		},
-	}
+	left := s.allocStem(StemNode{Stem: leftStem, Values: leftValues[:], depth: 1})
+	right := s.allocStem(StemNode{Stem: rightStem, Values: rightValues[:], depth: 1})
+	ref := s.allocInternal(InternalNode{depth: 0, left: left, right: right})
 
-	// Get values from left stem
-	values, err := node.GetValuesAtStem(leftStem, nil)
+	values, err := s.GetValuesAtStem(ref, leftStem, nil)
 	if err != nil {
 		t.Fatalf("Failed to get left values: %v", err)
 	}
@@ -297,8 +233,7 @@ func TestInternalNodeGetValuesAtStem(t *testing.T) {
 		t.Error("Left value at index 10 mismatch")
 	}
 
-	// Get values from right stem
-	values, err = node.GetValuesAtStem(rightStem, nil)
+	values, err = s.GetValuesAtStem(ref, rightStem, nil)
 	if err != nil {
 		t.Fatalf("Failed to get right values: %v", err)
 	}
@@ -310,37 +245,27 @@ func TestInternalNodeGetValuesAtStem(t *testing.T) {
 	}
 }
 
-// TestInternalNodeInsertValuesAtStem tests InsertValuesAtStem method
+// TestInternalNodeInsertValuesAtStem tests InsertValuesAtStem
 func TestInternalNodeInsertValuesAtStem(t *testing.T) {
-	// Start with an internal node with empty children
-	node := &InternalNode{
-		depth: 0,
-		left:  Empty{},
-		right: Empty{},
-	}
+	s := NewNodeStore()
+	ref := s.allocInternal(InternalNode{depth: 0, left: EmptyRef, right: EmptyRef})
 
-	// Insert values at a stem in the left subtree
 	stem := make([]byte, 31)
 	var values [256][]byte
 	values[5] = common.HexToHash("0x0505").Bytes()
 	values[10] = common.HexToHash("0x1010").Bytes()
 
-	newNode, err := node.InsertValuesAtStem(stem, values[:], nil, 0)
+	newRef, err := s.InsertValuesAtStem(ref, stem, values[:], nil, 0)
 	if err != nil {
 		t.Fatalf("Failed to insert values: %v", err)
 	}
 
-	internalNode, ok := newNode.(*InternalNode)
-	if !ok {
-		t.Fatalf("Expected InternalNode, got %T", newNode)
+	n := s.getInternal(newRef.Index())
+	if n.left.Kind() != KindStem {
+		t.Fatalf("Expected left child to be KindStem, got %v", n.left.Kind())
 	}
 
-	// Check that left child is now a StemNode with the values
-	leftStem, ok := internalNode.left.(*StemNode)
-	if !ok {
-		t.Fatalf("Expected left child to be StemNode, got %T", internalNode.left)
-	}
-
+	leftStem := s.getStem(n.left.Index())
 	if !bytes.Equal(leftStem.Values[5], values[5]) {
 		t.Error("Value at index 5 mismatch")
 	}
@@ -349,53 +274,38 @@ func TestInternalNodeInsertValuesAtStem(t *testing.T) {
 	}
 }
 
-// TestInternalNodeCollectNodes tests CollectNodes method
+// TestInternalNodeCollectNodes tests CollectNodes
 func TestInternalNodeCollectNodes(t *testing.T) {
-	// Create an internal node with two stem children
-	leftStem := &StemNode{
-		Stem:   make([]byte, 31),
-		Values: make([][]byte, 256),
-		depth:  1,
-	}
-
-	rightStem := &StemNode{
-		Stem:   make([]byte, 31),
-		Values: make([][]byte, 256),
-		depth:  1,
-	}
-	rightStem.Stem[0] = 0x80
-
-	node := &InternalNode{
-		depth: 0,
-		left:  leftStem,
-		right: rightStem,
-	}
+	s := NewNodeStore()
+	left := s.allocStem(StemNode{Stem: make([]byte, 31), Values: make([][]byte, 256), depth: 1})
+	rightStemBytes := make([]byte, 31)
+	rightStemBytes[0] = 0x80
+	right := s.allocStem(StemNode{Stem: rightStemBytes, Values: make([][]byte, 256), depth: 1})
+	ref := s.allocInternal(InternalNode{depth: 0, left: left, right: right})
 
 	var collectedPaths [][]byte
-	var collectedNodes []BinaryNode
+	var collectedRefs []NodeRef
 
-	flushFn := func(path []byte, n BinaryNode) {
+	flushFn := func(path []byte, r NodeRef) {
 		pathCopy := make([]byte, len(path))
 		copy(pathCopy, path)
 		collectedPaths = append(collectedPaths, pathCopy)
-		collectedNodes = append(collectedNodes, n)
+		collectedRefs = append(collectedRefs, r)
 	}
 
-	err := node.CollectNodes([]byte{1}, flushFn)
+	err := s.CollectNodes(ref, []byte{1}, flushFn)
 	if err != nil {
 		t.Fatalf("Failed to collect nodes: %v", err)
 	}
 
-	// Should have collected 3 nodes: left stem, right stem, and the internal node itself
-	if len(collectedNodes) != 3 {
-		t.Errorf("Expected 3 collected nodes, got %d", len(collectedNodes))
+	if len(collectedRefs) != 3 {
+		t.Errorf("Expected 3 collected nodes, got %d", len(collectedRefs))
 	}
 
-	// Check paths
 	expectedPaths := [][]byte{
-		{1, 0}, // left child
-		{1, 1}, // right child
-		{1},    // internal node itself
+		{1, 0},
+		{1, 1},
+		{1},
 	}
 
 	for i, expectedPath := range expectedPaths {
@@ -405,36 +315,16 @@ func TestInternalNodeCollectNodes(t *testing.T) {
 	}
 }
 
-// TestInternalNodeGetHeight tests GetHeight method
+// TestInternalNodeGetHeight tests GetHeight
 func TestInternalNodeGetHeight(t *testing.T) {
-	// Create a tree with different heights
-	// Left subtree: depth 2 (internal -> stem)
-	// Right subtree: depth 1 (stem)
-	leftInternal := &InternalNode{
-		depth: 1,
-		left: &StemNode{
-			Stem:   make([]byte, 31),
-			Values: make([][]byte, 256),
-			depth:  2,
-		},
-		right: Empty{},
-	}
+	s := NewNodeStore()
 
-	rightStem := &StemNode{
-		Stem:   make([]byte, 31),
-		Values: make([][]byte, 256),
-		depth:  1,
-	}
+	deepLeft := s.allocStem(StemNode{Stem: make([]byte, 31), Values: make([][]byte, 256), depth: 2})
+	leftInternal := s.allocInternal(InternalNode{depth: 1, left: deepLeft, right: EmptyRef})
+	rightStem := s.allocStem(StemNode{Stem: make([]byte, 31), Values: make([][]byte, 256), depth: 1})
+	ref := s.allocInternal(InternalNode{depth: 0, left: leftInternal, right: rightStem})
 
-	node := &InternalNode{
-		depth: 0,
-		left:  leftInternal,
-		right: rightStem,
-	}
-
-	height := node.GetHeight()
-	// Height should be max(left height, right height) + 1
-	// Left height: 2, Right height: 1, so total: 3
+	height := s.GetHeight(ref)
 	if height != 3 {
 		t.Errorf("Expected height 3, got %d", height)
 	}
@@ -442,15 +332,15 @@ func TestInternalNodeGetHeight(t *testing.T) {
 
 // TestInternalNodeDepthTooLarge tests handling of excessive depth
 func TestInternalNodeDepthTooLarge(t *testing.T) {
-	// Create an internal node at max depth
-	node := &InternalNode{
+	s := NewNodeStore()
+	ref := s.allocInternal(InternalNode{
 		depth: 31*8 + 1,
-		left:  Empty{},
-		right: Empty{},
-	}
+		left:  EmptyRef,
+		right: EmptyRef,
+	})
 
 	stem := make([]byte, 31)
-	_, err := node.GetValuesAtStem(stem, nil)
+	_, err := s.GetValuesAtStem(ref, stem, nil)
 	if err == nil {
 		t.Fatal("Expected error for excessive depth")
 	}
