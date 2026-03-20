@@ -80,10 +80,10 @@ type Hasher interface {
 // asynchronously warm up trie/state data ahead of mutations or hashing.
 type Prefetcher interface {
 	// PrefetchAccount schedules the account for prefetching.
-	PrefetchAccount(addresses []common.Address)
+	PrefetchAccount(addresses []common.Address, read bool)
 
 	// PrefetchStorage schedules the storage slot for prefetching.
-	PrefetchStorage(addr common.Address, keys []common.Hash)
+	PrefetchStorage(addr common.Address, keys []common.Hash, read bool)
 }
 
 // WitnessCollector is an optional extension implemented by hashers that can

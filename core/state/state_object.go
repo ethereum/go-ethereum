@@ -191,6 +191,12 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	s.db.StorageReads += time.Since(start)
 
 	s.originStorage[key] = value
+
+	// Schedule the resolved storage slots for prefetching if it's enabled.
+	prefetch, ok := s.db.hasher.(Prefetcher)
+	if ok {
+		prefetch.PrefetchStorage(s.address, []common.Hash{key}, true)
+	}
 	return value
 }
 
@@ -223,6 +229,7 @@ func (s *stateObject) setState(key common.Hash, value common.Hash, origin common
 // finalise moves all dirty storage slots into the pending area to be hashed or
 // committed later. It is invoked at the end of every transaction.
 func (s *stateObject) finalise() {
+	slotsToPrefetch := make([]common.Hash, 0, len(s.dirtyStorage))
 	for key, value := range s.dirtyStorage {
 		if origin, exist := s.uncommittedStorage[key]; exist && origin == value {
 			// The slot is reverted to its original value, delete the entry
@@ -235,6 +242,7 @@ func (s *stateObject) finalise() {
 			// The slot is different from its original value and hasn't been
 			// tracked for commit yet.
 			s.uncommittedStorage[key] = s.GetCommittedState(key)
+			slotsToPrefetch = append(slotsToPrefetch, key)
 		}
 		// Aggregate the dirty storage slots into the pending area. It might
 		// be possible that the value of tracked slot here is same with the
@@ -251,6 +259,12 @@ func (s *stateObject) finalise() {
 	// of the newly-created object as it's no longer eligible for self-destruct
 	// by EIP-6780. For non-newly-created objects, it's a no-op.
 	s.newContract = false
+
+	// Schedule the resolved storage slots for prefetching if it's enabled.
+	prefetch, ok := s.db.hasher.(Prefetcher)
+	if ok {
+		prefetch.PrefetchStorage(s.address, slotsToPrefetch, false)
+	}
 }
 
 // updateTrie is responsible for persisting cached storage changes into the
