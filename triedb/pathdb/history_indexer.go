@@ -805,6 +805,8 @@ func (i *historyIndexer) extend(historyID uint64) error {
 	case <-i.initer.closed:
 		return errors.New("indexer is closed")
 	case <-i.initer.done:
+		i.pruner.pause()
+		defer i.pruner.resume()
 		return indexSingle(historyID, i.disk, i.freezer, i.typ)
 	case i.initer.interrupt <- signal:
 		return <-signal.result
@@ -822,6 +824,8 @@ func (i *historyIndexer) shorten(historyID uint64) error {
 	case <-i.initer.closed:
 		return errors.New("indexer is closed")
 	case <-i.initer.done:
+		i.pruner.pause()
+		defer i.pruner.resume()
 		return unindexSingle(historyID, i.disk, i.freezer, i.typ)
 	case i.initer.interrupt <- signal:
 		return <-signal.result
