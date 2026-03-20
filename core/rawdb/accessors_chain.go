@@ -755,11 +755,15 @@ func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 }
 
 // WriteAncientBlocks writes entire block data into ancient store and returns the total written size.
-func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts []rlp.RawValue) (int64, error) {
+func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts []rlp.RawValue, bals []rlp.RawValue) (int64, error) {
 	return db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i, block := range blocks {
 			header := block.Header()
-			if err := writeAncientBlock(op, block, header, receipts[i]); err != nil {
+			var bal rlp.RawValue
+			if bals != nil {
+				bal = bals[i]
+			}
+			if err := writeAncientBlock(op, block, header, receipts[i], bal); err != nil {
 				return err
 			}
 		}
@@ -767,7 +771,7 @@ func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts 
 	})
 }
 
-func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *types.Header, receipts rlp.RawValue) error {
+func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *types.Header, receipts rlp.RawValue, bal rlp.RawValue) error {
 	num := block.NumberU64()
 	if err := op.AppendRaw(ChainFreezerHashTable, num, block.Hash().Bytes()); err != nil {
 		return fmt.Errorf("can't add block %d hash: %v", num, err)
@@ -780,6 +784,9 @@ func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *type
 	}
 	if err := op.Append(ChainFreezerReceiptTable, num, receipts); err != nil {
 		return fmt.Errorf("can't append block %d receipts: %v", num, err)
+	}
+	if err := op.AppendRaw(ChainFreezerBALTable, num, bal); err != nil {
+		return fmt.Errorf("can't append block %d BAL: %v", num, err)
 	}
 	return nil
 }
@@ -803,6 +810,9 @@ func WriteAncientHeaderChain(db ethdb.AncientWriter, headers []*types.Header) (i
 			if err := op.AppendRaw(ChainFreezerReceiptTable, num, nil); err != nil {
 				return fmt.Errorf("can't append block %d receipts: %v", num, err)
 			}
+			if err := op.AppendRaw(ChainFreezerBALTable, num, nil); err != nil {
+				return fmt.Errorf("can't append block %d BAL: %v", num, err)
+			}
 		}
 		return nil
 	})
@@ -811,6 +821,7 @@ func WriteAncientHeaderChain(db ethdb.AncientWriter, headers []*types.Header) (i
 // DeleteBlock removes all block data associated with a hash.
 func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
+	DeleteBAL(db, hash, number)
 	DeleteHeader(db, hash, number)
 	DeleteBody(db, hash, number)
 }
@@ -819,6 +830,7 @@ func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 // the hash to number mapping.
 func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
+	DeleteBAL(db, hash, number)
 	deleteHeaderWithoutNumber(db, hash, number)
 	DeleteBody(db, hash, number)
 }
