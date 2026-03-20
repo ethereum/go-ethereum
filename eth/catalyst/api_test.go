@@ -1961,7 +1961,7 @@ func TestGetBlobsV1(t *testing.T) {
 		// Fill the request for retrieving blobs
 		var (
 			vhashes []common.Hash
-			expect  []*engine.BlobAndProofV1
+			expect  engine.BlobAndProofListV1
 		)
 		// fill missing blob at the beginning
 		if suite.fillRandom {
@@ -2072,13 +2072,13 @@ func BenchmarkGetBlobsV2(b *testing.B) {
 	}
 }
 
-type getBlobsFn func(hashes []common.Hash) ([]*engine.BlobAndProofV2, error)
+type getBlobsFn func(hashes []common.Hash) (engine.BlobAndProofListV2, error)
 
 func runGetBlobs(t testing.TB, getBlobs getBlobsFn, start, limit int, fillRandom bool, expectPartialResponse bool, name string) {
 	// Fill the request for retrieving blobs
 	var (
 		vhashes []common.Hash
-		expect  []*engine.BlobAndProofV2
+		expect  engine.BlobAndProofListV2
 	)
 	for j := start; j < limit; j++ {
 		vhashes = append(vhashes, testBlobVHashes[j])

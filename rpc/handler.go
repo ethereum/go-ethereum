@@ -169,7 +169,7 @@ func (b *batchCallBuffer) doWrite(ctx context.Context, conn jsonWriter, isErrorR
 	}
 	b.wrote = true // can only write once
 	if len(b.resp) > 0 {
-		conn.writeJSON(ctx, b.resp, isErrorResponse)
+		conn.writeJSONBatch(ctx, b.resp, isErrorResponse)
 	}
 }
 
@@ -237,7 +237,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			resp := h.handleCallMsg(cp, msg)
 			callBuffer.pushResponse(resp)
 			if resp != nil && h.batchResponseMaxSize != 0 {
-				responseBytes += len(resp.Result)
+				responseBytes += len(resp.Result) + len(resp.Error)
 				if responseBytes > h.batchResponseMaxSize {
 					err := &internalServerError{errcodeResponseTooLarge, errMsgResponseTooLarge}
 					callBuffer.respondWithError(cp.ctx, h.conn, err)
@@ -268,7 +268,7 @@ func (h *handler) respondWithBatchTooLarge(cp *callProc, batch []*jsonrpcMessage
 			break
 		}
 	}
-	h.conn.writeJSON(cp.ctx, []*jsonrpcMessage{resp}, true)
+	h.conn.writeJSONBatch(cp.ctx, []*jsonrpcMessage{resp}, true)
 }
 
 // handleMsg handles a single non-batch message.
@@ -415,7 +415,7 @@ func (h *handler) handleResponses(batch []*jsonrpcMessage, handleCall func(*json
 		// the op.resp channel.
 		if op.sub != nil {
 			if msg.Error != nil {
-				op.err = msg.Error
+				op.err = msg.decodeError()
 			} else {
 				op.err = json.Unmarshal(msg.Result, &op.sub.subid)
 				if op.err == nil {
@@ -481,9 +481,10 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 		var logctx []any
 		logctx = append(logctx, "reqid", idForLog{msg.ID}, "duration", time.Since(start))
 		if resp.Error != nil {
-			logctx = append(logctx, "err", resp.Error.Message)
-			if resp.Error.Data != nil {
-				logctx = append(logctx, "errdata", formatErrorData(resp.Error.Data))
+			je := resp.decodeError()
+			logctx = append(logctx, "err", je.Message)
+			if je.Data != nil {
+				logctx = append(logctx, "errdata", formatErrorData(je.Data))
 			}
 			h.log.Warn("Served "+msg.Method, logctx...)
 		} else {
@@ -550,7 +551,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	answer := h.runMethod(rctx, msg, callb, args)
 	var rErr error
 	if answer.Error != nil {
-		rErr = errors.New(answer.Error.Message)
+		rErr = errors.New(answer.decodeError().Message)
 	}
 	rSpanEnd(&rErr)
 
@@ -623,7 +624,7 @@ func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *cal
 	_, _, spanEnd := telemetry.StartSpanWithTracer(ctx, h.tracer(), "rpc.encodeJSONResponse", attributes...)
 	response := msg.response(result)
 	if response.Error != nil {
-		err = errors.New(response.Error.Message)
+		err = errors.New(response.decodeError().Message)
 	}
 	spanEnd(&err)
 	return response

@@ -27,6 +27,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -52,12 +53,6 @@ type subscriptionResultEnc struct {
 	Result any    `json:"result"`
 }
 
-type jsonrpcSubscriptionNotification struct {
-	Version string                `json:"jsonrpc"`
-	Method  string                `json:"method"`
-	Params  subscriptionResultEnc `json:"params"`
-}
-
 // A value of this type can a JSON-RPC request, notification, successful response or
 // error response. Which one it is depends on the fields.
 type jsonrpcMessage struct {
@@ -65,7 +60,7 @@ type jsonrpcMessage struct {
 	ID      json.RawMessage `json:"id,omitempty"`
 	Method  string          `json:"method,omitempty"`
 	Params  json.RawMessage `json:"params,omitempty"`
-	Error   *jsonError      `json:"error,omitempty"`
+	Error   json.RawMessage `json:"error,omitempty"`
 	Result  json.RawMessage `json:"result,omitempty"`
 }
 
@@ -113,8 +108,29 @@ func (msg *jsonrpcMessage) errorResponse(err error) *jsonrpcMessage {
 	return resp
 }
 
+// decodeError decodes the Error field into a jsonError struct.
+func (msg *jsonrpcMessage) decodeError() *jsonError {
+	if msg.Error == nil {
+		return nil
+	}
+	je := new(jsonError)
+	json.Unmarshal(msg.Error, je)
+	return je
+}
+
 func (msg *jsonrpcMessage) response(result interface{}) *jsonrpcMessage {
-	enc, err := json.Marshal(result)
+	var (
+		enc []byte
+		err error
+	)
+	// Call MarshalJSON directly for types that implement it. This avoids the
+	// expensive validation/compaction pass that json.Marshal performs on
+	// encoder output.
+	if m, ok := result.(json.Marshaler); ok {
+		enc, err = m.MarshalJSON()
+	} else {
+		enc, err = json.Marshal(result)
+	}
 	if err != nil {
 		return msg.errorResponse(&internalServerError{errcodeMarshalError, err.Error()})
 	}
@@ -122,19 +138,18 @@ func (msg *jsonrpcMessage) response(result interface{}) *jsonrpcMessage {
 }
 
 func errorMessage(err error) *jsonrpcMessage {
-	msg := &jsonrpcMessage{Version: vsn, ID: null, Error: &jsonError{
+	je := &jsonError{
 		Code:    errcodeDefault,
 		Message: err.Error(),
-	}}
-	ec, ok := err.(Error)
-	if ok {
-		msg.Error.Code = ec.ErrorCode()
 	}
-	de, ok := err.(DataError)
-	if ok {
-		msg.Error.Data = de.ErrorData()
+	if ec, ok := err.(Error); ok {
+		je.Code = ec.ErrorCode()
 	}
-	return msg
+	if de, ok := err.(DataError); ok {
+		je.Data = de.ErrorData()
+	}
+	enc, _ := json.Marshal(je)
+	return &jsonrpcMessage{Version: vsn, ID: null, Error: enc}
 }
 
 type jsonError struct {
@@ -179,28 +194,32 @@ type ConnRemoteAddr interface {
 // jsonCodec reads and writes JSON-RPC messages to the underlying connection. It also has
 // support for parsing arguments and serializing (result) objects.
 type jsonCodec struct {
-	remote  string
-	closer  sync.Once        // close closed channel once
-	closeCh chan interface{} // closed on Close
-	decode  decodeFunc       // decoder to allow multiple transports
-	encMu   sync.Mutex       // guards the encoder
-	encode  encodeFunc       // encoder to allow multiple transports
-	conn    deadlineCloser
+	remote      string
+	closer      sync.Once        // close closed channel once
+	closeCh     chan interface{} // closed on Close
+	decode      decodeFunc       // decoder to allow multiple transports
+	encMu       sync.Mutex       // guards the encoder
+	encodeMsg   encodeMsgFunc    // single-message encoder
+	encodeBatch encodeBatchFunc  // batch encoder
+	conn        deadlineCloser
 }
 
-type encodeFunc = func(v interface{}, isErrorResponse bool) error
+type encodeMsgFunc = func(msg *jsonrpcMessage, isError bool) error
+
+type encodeBatchFunc = func(msgs []*jsonrpcMessage, isError bool) error
 
 type decodeFunc = func(v interface{}) error
 
 // NewFuncCodec creates a codec which uses the given functions to read and write. If conn
 // implements ConnRemoteAddr, log messages will use it to include the remote address of
 // the connection.
-func NewFuncCodec(conn deadlineCloser, encode encodeFunc, decode decodeFunc) ServerCodec {
+func NewFuncCodec(conn deadlineCloser, encodeMsg encodeMsgFunc, encodeBatch encodeBatchFunc, decode decodeFunc) ServerCodec {
 	codec := &jsonCodec{
-		closeCh: make(chan interface{}),
-		encode:  encode,
-		decode:  decode,
-		conn:    conn,
+		closeCh:     make(chan interface{}),
+		encodeMsg:   encodeMsg,
+		encodeBatch: encodeBatch,
+		decode:      decode,
+		conn:        conn,
 	}
 	if ra, ok := conn.(ConnRemoteAddr); ok {
 		codec.remote = ra.RemoteAddr()
@@ -211,14 +230,112 @@ func NewFuncCodec(conn deadlineCloser, encode encodeFunc, decode decodeFunc) Ser
 // NewCodec creates a codec on the given connection. If conn implements ConnRemoteAddr, log
 // messages will use it to include the remote address of the connection.
 func NewCodec(conn Conn) ServerCodec {
-	enc := json.NewEncoder(conn)
 	dec := json.NewDecoder(conn)
 	dec.UseNumber()
-
-	encode := func(v interface{}, isErrorResponse bool) error {
-		return enc.Encode(v)
+	var buf []byte
+	encodeMsg := func(msg *jsonrpcMessage, isError bool) error {
+		buf = appendMessage(buf[:0], msg)
+		buf = append(buf, '\n')
+		_, err := conn.Write(buf)
+		return err
 	}
-	return NewFuncCodec(conn, encode, dec.Decode)
+	encodeBatch := func(msgs []*jsonrpcMessage, isError bool) error {
+		buf = appendBatch(buf[:0], msgs)
+		buf = append(buf, '\n')
+		_, err := conn.Write(buf)
+		return err
+	}
+	return NewFuncCodec(conn, encodeMsg, encodeBatch, dec.Decode)
+}
+
+// appendMessage appends the JSON-RPC encoding of msg to buf.
+func appendMessage(buf []byte, msg *jsonrpcMessage) []byte {
+	buf = append(buf, `{"jsonrpc":"2.0"`...)
+	if msg.ID != nil {
+		buf = append(buf, `,"id":`...)
+		buf = append(buf, msg.ID...)
+	}
+	if msg.Method != "" {
+		buf = append(buf, `,"method":`...)
+		buf = appendQuotedString(buf, msg.Method)
+	}
+	if msg.Params != nil {
+		buf = append(buf, `,"params":`...)
+		buf = append(buf, msg.Params...)
+	}
+	if msg.Error != nil {
+		buf = append(buf, `,"error":`...)
+		buf = append(buf, msg.Error...)
+	}
+	if msg.Result != nil {
+		buf = append(buf, `,"result":`...)
+		buf = append(buf, msg.Result...)
+	}
+	buf = append(buf, '}')
+	return buf
+}
+
+// appendBatch appends the JSON-RPC encoding of a message batch to buf.
+func appendBatch(buf []byte, msgs []*jsonrpcMessage) []byte {
+	buf = append(buf, '[')
+	for i, msg := range msgs {
+		if i > 0 {
+			buf = append(buf, ',')
+		}
+		buf = appendMessage(buf, msg)
+	}
+	buf = append(buf, ']')
+	return buf
+}
+
+const hexDigits = "0123456789abcdef"
+
+// appendQuotedString appends a JSON-quoted string to buf. Adapted
+// from encoding/json appendString without HTML and JSONP safety escaping.
+func appendQuotedString(buf []byte, s string) []byte {
+	buf = append(buf, '"')
+	start := 0
+	for i := 0; i < len(s); {
+		if b := s[i]; b < utf8.RuneSelf {
+			if b >= 0x20 && b != '\\' && b != '"' {
+				i++
+				continue
+			}
+			buf = append(buf, s[start:i]...)
+			switch b {
+			case '\\', '"':
+				buf = append(buf, '\\', b)
+			case '\b':
+				buf = append(buf, '\\', 'b')
+			case '\f':
+				buf = append(buf, '\\', 'f')
+			case '\n':
+				buf = append(buf, '\\', 'n')
+			case '\r':
+				buf = append(buf, '\\', 'r')
+			case '\t':
+				buf = append(buf, '\\', 't')
+			default:
+				// This encodes bytes < 0x20 except for \b, \f, \n, \r and \t.
+				buf = append(buf, '\\', 'u', '0', '0', hexDigits[b>>4], hexDigits[b&0xF])
+			}
+			i++
+			start = i
+			continue
+		}
+		c, size := utf8.DecodeRuneInString(s[i:])
+		if c == utf8.RuneError && size == 1 {
+			buf = append(buf, s[start:i]...)
+			buf = append(buf, `\ufffd`...)
+			i += size
+			start = i
+			continue
+		}
+		i += size
+	}
+	buf = append(buf, s[start:]...)
+	buf = append(buf, '"')
+	return buf
 }
 
 func (c *jsonCodec) peerInfo() PeerInfo {
@@ -248,7 +365,7 @@ func (c *jsonCodec) readBatch() (messages []*jsonrpcMessage, batch bool, err err
 	return messages, batch, nil
 }
 
-func (c *jsonCodec) writeJSON(ctx context.Context, v interface{}, isErrorResponse bool) error {
+func (c *jsonCodec) writeJSON(ctx context.Context, msg *jsonrpcMessage, isError bool) error {
 	c.encMu.Lock()
 	defer c.encMu.Unlock()
 
@@ -257,7 +374,19 @@ func (c *jsonCodec) writeJSON(ctx context.Context, v interface{}, isErrorRespons
 		deadline = time.Now().Add(defaultWriteTimeout)
 	}
 	c.conn.SetWriteDeadline(deadline)
-	return c.encode(v, isErrorResponse)
+	return c.encodeMsg(msg, isError)
+}
+
+func (c *jsonCodec) writeJSONBatch(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error {
+	c.encMu.Lock()
+	defer c.encMu.Unlock()
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(defaultWriteTimeout)
+	}
+	c.conn.SetWriteDeadline(deadline)
+	return c.encodeBatch(msgs, isError)
 }
 
 func (c *jsonCodec) close() {
