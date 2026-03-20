@@ -276,6 +276,7 @@ func blockReceiptsToNetwork(blockReceipts, blockBody rlp.RawValue, q receiptQuer
 		// which is always true because EIP-2718 does not allow tx types > 0x7f.
 		size := rlp.ListSize(1 + uint64(len(content)))
 		if q.sizeLimit > 0 && (uint64(enc.Size())+size) > q.sizeLimit {
+			incomplete = true
 			break
 		}
 
