@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -605,6 +606,85 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
+// HasBAL verifies the existence of a block access list for a block.
+func HasBAL(db ethdb.Reader, hash common.Hash, number uint64) bool {
+	return len(ReadBALRLP(db, hash, number)) > 0
+}
+
+// ReadBALRLP retrieves the RLP-encoded block access list for a block.
+func ReadBALRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+	var data []byte
+	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+		if isCanon(reader, number, hash) {
+			data, _ = reader.Ancient(ChainFreezerBALTable, number)
+			return nil
+		}
+		data, _ = db.Get(balKey(number, hash))
+		return nil
+	})
+	return data
+}
+
+// ReadCanonicalBALRLP retrieves the BAL RLP for the canonical block at number.
+// Optionally takes the block hash to avoid looking it up.
+func ReadCanonicalBALRLP(db ethdb.Reader, number uint64, hash *common.Hash) rlp.RawValue {
+	var data []byte
+	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+		data, _ = reader.Ancient(ChainFreezerBALTable, number)
+		if len(data) > 0 {
+			return nil
+		}
+		// BAL is not in ancients, read from db by hash and number.
+		if hash != nil {
+			data, _ = db.Get(balKey(number, *hash))
+		} else {
+			hashBytes, _ := db.Get(headerHashKey(number))
+			data, _ = db.Get(balKey(number, common.BytesToHash(hashBytes)))
+		}
+		return nil
+	})
+	return data
+}
+
+// ReadBAL retrieves and decodes the block access list for a block.
+func ReadBAL(db ethdb.Reader, hash common.Hash, number uint64) *bal.BlockAccessList {
+	data := ReadBALRLP(db, hash, number)
+	if len(data) == 0 {
+		return nil
+	}
+	b := new(bal.BlockAccessList)
+	if err := rlp.DecodeBytes(data, b); err != nil {
+		log.Error("Invalid BAL RLP", "hash", hash, "err", err)
+		return nil
+	}
+	return b
+}
+
+// WriteBAL RLP-encodes and stores a block access list in the active KV store.
+func WriteBAL(db ethdb.KeyValueWriter, hash common.Hash, number uint64, b *bal.BlockAccessList) {
+	bytes, err := rlp.EncodeToBytes(b)
+	if err != nil {
+		log.Crit("Failed to encode BAL", "err", err)
+	}
+	if err := db.Put(balKey(number, hash), bytes); err != nil {
+		log.Crit("Failed to store BAL", "err", err)
+	}
+}
+
+// WriteBALRLP stores a pre-encoded block access list in the active KV store.
+func WriteBALRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, encoded rlp.RawValue) {
+	if err := db.Put(balKey(number, hash), encoded); err != nil {
+		log.Crit("Failed to store BAL", "err", err)
+	}
+}
+
+// DeleteBAL removes a block access list from the active KV store.
+func DeleteBAL(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	if err := db.Delete(balKey(number, hash)); err != nil {
+		log.Crit("Failed to delete BAL", "err", err)
+	}
+}
+
 // ReceiptLogs is a barebone version of ReceiptForStorage which only keeps
 // the list of logs. When decoding a stored receipt into this object we
 // avoid creating the bloom filter.
@@ -669,11 +749,15 @@ func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 }
 
 // WriteAncientBlocks writes entire block data into ancient store and returns the total written size.
-func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts []rlp.RawValue) (int64, error) {
+func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts []rlp.RawValue, bals []rlp.RawValue) (int64, error) {
 	return db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i, block := range blocks {
 			header := block.Header()
-			if err := writeAncientBlock(op, block, header, receipts[i]); err != nil {
+			var bal rlp.RawValue
+			if bals != nil {
+				bal = bals[i]
+			}
+			if err := writeAncientBlock(op, block, header, receipts[i], bal); err != nil {
 				return err
 			}
 		}
@@ -681,7 +765,7 @@ func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts 
 	})
 }
 
-func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *types.Header, receipts rlp.RawValue) error {
+func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *types.Header, receipts rlp.RawValue, bal rlp.RawValue) error {
 	num := block.NumberU64()
 	if err := op.AppendRaw(ChainFreezerHashTable, num, block.Hash().Bytes()); err != nil {
 		return fmt.Errorf("can't add block %d hash: %v", num, err)
@@ -694,6 +778,9 @@ func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *type
 	}
 	if err := op.Append(ChainFreezerReceiptTable, num, receipts); err != nil {
 		return fmt.Errorf("can't append block %d receipts: %v", num, err)
+	}
+	if err := op.AppendRaw(ChainFreezerBALTable, num, bal); err != nil {
+		return fmt.Errorf("can't append block %d BAL: %v", num, err)
 	}
 	return nil
 }
@@ -717,6 +804,9 @@ func WriteAncientHeaderChain(db ethdb.AncientWriter, headers []*types.Header) (i
 			if err := op.AppendRaw(ChainFreezerReceiptTable, num, nil); err != nil {
 				return fmt.Errorf("can't append block %d receipts: %v", num, err)
 			}
+			if err := op.AppendRaw(ChainFreezerBALTable, num, nil); err != nil {
+				return fmt.Errorf("can't append block %d BAL: %v", num, err)
+			}
 		}
 		return nil
 	})
@@ -725,6 +815,7 @@ func WriteAncientHeaderChain(db ethdb.AncientWriter, headers []*types.Header) (i
 // DeleteBlock removes all block data associated with a hash.
 func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
+	DeleteBAL(db, hash, number)
 	DeleteHeader(db, hash, number)
 	DeleteBody(db, hash, number)
 }
@@ -733,6 +824,7 @@ func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 // the hash to number mapping.
 func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
+	DeleteBAL(db, hash, number)
 	deleteHeaderWithoutNumber(db, hash, number)
 	DeleteBody(db, hash, number)
 }

@@ -35,6 +35,9 @@ const (
 
 	// ChainFreezerReceiptTable indicates the name of the freezer receipts table.
 	ChainFreezerReceiptTable = "receipts"
+
+	// ChainFreezerBALTable indicates the name of the freezer block access list table.
+	ChainFreezerBALTable = "bals"
 )
 
 // chainFreezerTableConfigs configures the settings for tables in the chain freezer.
@@ -46,6 +49,7 @@ var chainFreezerTableConfigs = map[string]freezerTableConfig{
 	ChainFreezerHashTable:    {noSnappy: true, prunable: false},
 	ChainFreezerBodiesTable:  {noSnappy: false, prunable: true},
 	ChainFreezerReceiptTable: {noSnappy: false, prunable: true},
+	ChainFreezerBALTable:     {noSnappy: false, prunable: true},
 }
 
 // freezerTableConfig contains the settings for a freezer table.

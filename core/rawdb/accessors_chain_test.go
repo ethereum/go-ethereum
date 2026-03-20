@@ -27,10 +27,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 )
 
 // Tests block header storage and retrieval operations.
@@ -431,7 +433,7 @@ func TestAncientStorage(t *testing.T) {
 	}
 
 	// Write and verify the header in the database
-	WriteAncientBlocks(db, []*types.Block{block}, types.EncodeBlockReceiptLists([]types.Receipts{nil}))
+	WriteAncientBlocks(db, []*types.Block{block}, types.EncodeBlockReceiptLists([]types.Receipts{nil}), nil)
 
 	if blob := ReadHeaderRLP(db, hash, number); len(blob) == 0 {
 		t.Fatalf("no header returned")
@@ -561,7 +563,7 @@ func BenchmarkWriteAncientBlocks(b *testing.B) {
 
 		blocks := allBlocks[i : i+length]
 		receipts := batchReceipts[:length]
-		writeSize, err := WriteAncientBlocks(db, blocks, types.EncodeBlockReceiptLists(receipts))
+		writeSize, err := WriteAncientBlocks(db, blocks, types.EncodeBlockReceiptLists(receipts), nil)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -866,7 +868,7 @@ func TestHeadersRLPStorage(t *testing.T) {
 	}
 	receipts := make([]types.Receipts, 100)
 	// Write first half to ancients
-	WriteAncientBlocks(db, chain[:50], types.EncodeBlockReceiptLists(receipts[:50]))
+	WriteAncientBlocks(db, chain[:50], types.EncodeBlockReceiptLists(receipts[:50]), nil)
 	// Write second half to db
 	for i := 50; i < 100; i++ {
 		WriteCanonicalHash(db, chain[i].Hash(), chain[i].NumberU64())
@@ -898,4 +900,157 @@ func TestHeadersRLPStorage(t *testing.T) {
 	checkSequence(0, 1)    // Only genesis
 	checkSequence(1, 1)    // Only block 1
 	checkSequence(1, 2)    // Genesis + block 1
+}
+
+func makeTestBAL(t *testing.T) (rlp.RawValue, *bal.BlockAccessList) {
+	t.Helper()
+
+	cb := bal.NewConstructionBlockAccessList()
+	addr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	cb.AccountRead(addr)
+	cb.StorageRead(addr, common.BytesToHash([]byte{0x01}))
+	cb.StorageWrite(0, addr, common.BytesToHash([]byte{0x02}), common.BytesToHash([]byte{0xaa}))
+	cb.BalanceChange(0, addr, uint256.NewInt(100))
+	cb.NonceChange(addr, 0, 1)
+
+	var buf bytes.Buffer
+	if err := cb.EncodeRLP(&buf); err != nil {
+		t.Fatalf("failed to encode BAL: %v", err)
+	}
+	encoded := buf.Bytes()
+
+	var decoded bal.BlockAccessList
+	if err := rlp.DecodeBytes(encoded, &decoded); err != nil {
+		t.Fatalf("failed to decode BAL: %v", err)
+	}
+	return encoded, &decoded
+}
+
+// TestBALStorage tests write/read/delete of BALs in the KV store.
+func TestBALStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	hash := common.BytesToHash([]byte{0x03, 0x14})
+	number := uint64(42)
+
+	// Check that no BAL exists in a new database.
+	if HasBAL(db, hash, number) {
+		t.Fatal("BAL found in new database")
+	}
+	if b := ReadBAL(db, hash, number); b != nil {
+		t.Fatalf("non existent BAL returned: %v", b)
+	}
+
+	// Write a BAL and verify it can be read back.
+	encoded, testBAL := makeTestBAL(t)
+	WriteBAL(db, hash, number, testBAL)
+
+	if !HasBAL(db, hash, number) {
+		t.Fatal("HasBAL returned false after write")
+	}
+	if blob := ReadBALRLP(db, hash, number); len(blob) == 0 {
+		t.Fatal("ReadBALRLP returned empty after write")
+	}
+	if b := ReadBAL(db, hash, number); b == nil {
+		t.Fatal("ReadBAL returned nil after write")
+	} else if b.Hash() != testBAL.Hash() {
+		t.Fatalf("BAL hash mismatch: got %x, want %x", b.Hash(), testBAL.Hash())
+	}
+
+	// Also test WriteBALRLP with pre-encoded data.
+	hash2 := common.BytesToHash([]byte{0x03, 0x15})
+	WriteBALRLP(db, hash2, number, encoded)
+	if b := ReadBAL(db, hash2, number); b == nil {
+		t.Fatal("ReadBAL returned nil after WriteBALRLP")
+	} else if b.Hash() != testBAL.Hash() {
+		t.Fatalf("BAL hash mismatch after WriteBALRLP: got %x, want %x", b.Hash(), testBAL.Hash())
+	}
+
+	// Delete the BAL and verify it's gone.
+	DeleteBAL(db, hash, number)
+
+	if HasBAL(db, hash, number) {
+		t.Fatal("HasBAL returned true after delete")
+	}
+	if b := ReadBAL(db, hash, number); b != nil {
+		t.Fatalf("deleted BAL returned: %v", b)
+	}
+}
+
+// TestBALFreezer tests that BALs are frozen alongside other block data
+// and can be read from the freezer.
+func TestBALFreezer(t *testing.T) {
+	frdir := t.TempDir()
+	db, err := Open(NewMemoryDatabase(), OpenOptions{Ancient: frdir})
+	if err != nil {
+		t.Fatalf("failed to create database with ancient backend: %v", err)
+	}
+	defer db.Close()
+
+	// Create a test block.
+	block := types.NewBlockWithHeader(&types.Header{
+		Number:      big.NewInt(0),
+		Extra:       []byte("test block"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
+	})
+	hash, number := block.Hash(), block.NumberU64()
+
+	// Verify no BAL exists before writing.
+	if blob := ReadBALRLP(db, hash, number); len(blob) > 0 {
+		t.Fatalf("non existent BAL returned")
+	}
+
+	// Write a BAL to KV first, then freeze.
+	balRLP, testBAL := makeTestBAL(t)
+
+	// Freeze via WriteAncientBlocks.
+	WriteAncientBlocks(db, []*types.Block{block}, types.EncodeBlockReceiptLists([]types.Receipts{nil}), []rlp.RawValue{balRLP})
+
+	// Verify the BAL can be read from the freezer.
+	if blob := ReadBALRLP(db, hash, number); len(blob) == 0 {
+		t.Fatal("no BAL returned from freezer")
+	}
+	if b := ReadBAL(db, hash, number); b == nil {
+		t.Fatal("ReadBAL returned nil from freezer")
+	} else if b.Hash() != testBAL.Hash() {
+		t.Fatalf("frozen BAL hash mismatch: got %x, want %x", b.Hash(), testBAL.Hash())
+	}
+
+	// Verify ReadCanonicalBALRLP works.
+	if blob := ReadCanonicalBALRLP(db, number, &hash); len(blob) == 0 {
+		t.Fatal("ReadCanonicalBALRLP returned empty for frozen block")
+	}
+}
+
+// TestBALEmptyFreezer tests that pre-EIP-8189 blocks without BALs have empty
+// freezer entries.
+func TestBALEmptyFreezer(t *testing.T) {
+	frdir := t.TempDir()
+	db, err := Open(NewMemoryDatabase(), OpenOptions{Ancient: frdir})
+	if err != nil {
+		t.Fatalf("failed to create database with ancient backend: %v", err)
+	}
+	defer db.Close()
+
+	// Create and freeze a block with no BAL.
+	block := types.NewBlockWithHeader(&types.Header{
+		Number:      big.NewInt(0),
+		Extra:       []byte("no bal block"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
+	})
+	hash, number := block.Hash(), block.NumberU64()
+
+	WriteAncientBlocks(db, []*types.Block{block}, types.EncodeBlockReceiptLists([]types.Receipts{nil}), nil)
+
+	// HasBAL should return false for a block with an empty freezer entry.
+	if HasBAL(db, hash, number) {
+		t.Fatal("HasBAL returned true for block with no BAL")
+	}
+	if b := ReadBAL(db, hash, number); b != nil {
+		t.Fatalf("ReadBAL returned non-nil for block with no BAL: %v", b)
+	}
 }

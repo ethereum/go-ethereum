@@ -327,6 +327,7 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			if len(receipts) == 0 {
 				return fmt.Errorf("block receipts missing, can't freeze block %d", number)
 			}
+			bal := ReadBALRLP(nfdb, hash, number)
 			// Write to the batch.
 			if err := op.AppendRaw(ChainFreezerHashTable, number, hash[:]); err != nil {
 				return fmt.Errorf("can't write hash to Freezer: %v", err)
@@ -339,6 +340,9 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			}
 			if err := op.AppendRaw(ChainFreezerReceiptTable, number, receipts); err != nil {
 				return fmt.Errorf("can't write receipts to Freezer: %v", err)
+			}
+			if err := op.AppendRaw(ChainFreezerBALTable, number, bal); err != nil {
+				return fmt.Errorf("can't write BAL to Freezer: %v", err)
 			}
 			hashes = append(hashes, hash)
 		}
