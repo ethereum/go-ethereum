@@ -26,6 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+//lint:file-ignore U1000 this file intentionally keeps unused helpers for future use
+
 var (
 	// triePrefetchMetricsPrefix is the prefix under which to publish the metrics.
 	triePrefetchMetricsPrefix = "trie/prefetch/"
@@ -111,6 +113,7 @@ func (p *triePrefetcher) terminate(async bool) {
 }
 
 // report aggregates the pre-fetching and usage metrics and reports them.
+// nolint:unused
 func (p *triePrefetcher) report() {
 	if !metrics.Enabled() {
 		return
@@ -205,6 +208,7 @@ func (p *triePrefetcher) trie(id trie.ID) Trie {
 
 // used marks a batch of state items used to allow creating statistics as to
 // how useful or wasteful the fetcher is.
+// nolint:unused
 func (p *triePrefetcher) used(id trie.ID, usedAddr []common.Address, usedSlot []common.Hash) {
 	if fetcher := p.fetchers[id]; fetcher != nil {
 		fetcher.wait() // ensure the fetcher's idle before poking in its internals

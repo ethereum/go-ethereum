@@ -119,11 +119,6 @@ func (s *stateObject) addrHash() common.Hash {
 	return *s.addressHash
 }
 
-// storageTrieID returns the unique identifier for this account's storage trie.
-func (s *stateObject) storageTrieID() trie.ID {
-	return *trie.StorageTrieID(s.db.originalRoot, s.addrHash(), s.data.Root)
-}
-
 func (s *stateObject) markSelfdestructed() {
 	s.selfDestructed = true
 }
@@ -147,23 +142,6 @@ func (s *stateObject) getTrie() (Trie, error) {
 		s.trie = tr
 	}
 	return s.trie, nil
-}
-
-// getPrefetchedTrie returns the associated trie, as populated by the prefetcher
-// if it's available.
-//
-// Note, opposed to getTrie, this method will *NOT* blindly cache the resulting
-// trie in the state object. The caller might want to do that, but it's cleaner
-// to break the hidden interdependency between retrieving tries from the db or
-// from the prefetcher.
-func (s *stateObject) getPrefetchedTrie() Trie {
-	// If there's nothing to meaningfully return, let the user figure it out by
-	// pulling the trie from disk.
-	if (s.data.Root == types.EmptyRootHash && !s.db.db.TrieDB().IsVerkle()) || s.db.prefetcher == nil {
-		return nil
-	}
-	// Attempt to retrieve the trie from the prefetcher
-	return s.db.prefetcher.trie(s.storageTrieID())
 }
 
 // GetState retrieves a value associated with the given storage key.
@@ -226,12 +204,6 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	}
 	s.db.StorageReads += time.Since(start)
 
-	// Schedule the resolved storage slots for prefetching if it's enabled.
-	if s.db.prefetcher != nil && s.data.Root != types.EmptyRootHash {
-		if err = s.db.prefetcher.prefetchStorage(s.storageTrieID(), s.address, []common.Hash{key}, true); err != nil {
-			log.Error("Failed to prefetch storage slot", "addr", s.address, "key", key, "err", err)
-		}
-	}
 	s.originStorage[key] = value
 	return value
 }
@@ -265,7 +237,6 @@ func (s *stateObject) setState(key common.Hash, value common.Hash, origin common
 // finalise moves all dirty storage slots into the pending area to be hashed or
 // committed later. It is invoked at the end of every transaction.
 func (s *stateObject) finalise() {
-	slotsToPrefetch := make([]common.Hash, 0, len(s.dirtyStorage))
 	for key, value := range s.dirtyStorage {
 		if origin, exist := s.uncommittedStorage[key]; exist && origin == value {
 			// The slot is reverted to its original value, delete the entry
@@ -278,7 +249,6 @@ func (s *stateObject) finalise() {
 			// The slot is different from its original value and hasn't been
 			// tracked for commit yet.
 			s.uncommittedStorage[key] = s.GetCommittedState(key)
-			slotsToPrefetch = append(slotsToPrefetch, key) // Copy needed for closure
 		}
 		// Aggregate the dirty storage slots into the pending area. It might
 		// be possible that the value of tracked slot here is same with the
@@ -287,11 +257,6 @@ func (s *stateObject) finalise() {
 		// map as the dirty slot might have been committed already (before the
 		// byzantium fork) and entry is necessary to modify the value back.
 		s.pendingStorage[key] = value
-	}
-	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
-		if err := s.db.prefetcher.prefetchStorage(s.storageTrieID(), s.address, slotsToPrefetch, false); err != nil {
-			log.Error("Failed to prefetch slots", "addr", s.address, "slots", len(slotsToPrefetch), "err", err)
-		}
 	}
 	if len(s.dirtyStorage) > 0 {
 		s.dirtyStorage = make(Storage)
@@ -311,33 +276,15 @@ func (s *stateObject) finalise() {
 //
 // It assumes all the dirty storage slots have been finalized before.
 func (s *stateObject) updateTrie() (Trie, error) {
-	// Short circuit if nothing was accessed, don't trigger a prefetcher warning
-	if len(s.uncommittedStorage) == 0 {
-		// Nothing was written, so we could stop early. Unless we have both reads
-		// and witness collection enabled, in which case we need to fetch the trie.
-		if s.db.witness == nil || len(s.originStorage) == 0 {
-			return s.trie, nil
-		}
-	}
-	// Retrieve a pretecher populated trie, or fall back to the database. This will
-	// block until all prefetch tasks are done, which are needed for witnesses even
-	// for unmodified state objects.
-	tr := s.getPrefetchedTrie()
-	if tr != nil {
-		// Prefetcher returned a live trie, swap it out for the current one
-		s.trie = tr
-	} else {
-		// Fetcher not running or empty trie, fallback to the database trie
-		var err error
-		tr, err = s.getTrie()
-		if err != nil {
-			s.db.setError(err)
-			return nil, err
-		}
-	}
-	// Short circuit if nothing changed, don't bother with hashing anything
+	// Short circuit if nothing was accessed
 	if len(s.uncommittedStorage) == 0 {
 		return s.trie, nil
+	}
+	// Fetcher not running or empty trie, fallback to the database trie
+	tr, err := s.getTrie()
+	if err != nil {
+		s.db.setError(err)
+		return nil, err
 	}
 	// Perform trie updates before deletions. This prevents resolution of unnecessary trie nodes
 	// in circumstances similar to the following:
@@ -351,7 +298,6 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	// Whereas if the created node is handled first, then the collapse is avoided, and `B` is not resolved.
 	var (
 		deletions []common.Hash
-		used      = make([]common.Hash, 0, len(s.uncommittedStorage))
 	)
 	for key, origin := range s.uncommittedStorage {
 		// Skip noop changes, persist actual changes
@@ -373,8 +319,6 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		} else {
 			deletions = append(deletions, key)
 		}
-		// Cache the items for preloading
-		used = append(used, key) // Copy needed for closure
 	}
 	for _, key := range deletions {
 		if err := tr.DeleteStorage(s.address, key[:]); err != nil {
@@ -382,9 +326,6 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			return nil, err
 		}
 		s.db.StorageDeleted.Add(1)
-	}
-	if s.db.prefetcher != nil {
-		s.db.prefetcher.used(s.storageTrieID(), nil, used)
 	}
 	s.uncommittedStorage = make(Storage) // empties the commit markers
 	return tr, nil

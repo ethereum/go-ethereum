@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -75,10 +74,9 @@ func (m *mutation) isDelete() bool {
 // must be created with new root and updated database for accessing post-
 // commit states.
 type StateDB struct {
-	db         Database
-	prefetcher *triePrefetcher
-	reader     Reader
-	trie       Trie // it's resolved on first access
+	db     Database
+	reader Reader
+	trie   Trie // it's resolved on first access
 
 	// originalRoot is the pre-state root, before any changes were made.
 	// It will be updated when the Commit is called.
@@ -132,9 +130,6 @@ type StateDB struct {
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
 	journal *journal
-
-	// State witness if cross validation is needed
-	witness *stateless.Witness
 
 	// Measurements gathered during execution for debugging purposes
 	AccountReads   time.Duration
@@ -200,47 +195,11 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
 func (s *StateDB) StartPrefetcher(namespace string, witness *stateless.Witness) {
-	// Terminate any previously running prefetcher
-	s.StopPrefetcher()
-
-	// Enable witness collection if requested
-	s.witness = witness
-
-	// With the switch to the Proof-of-Stake consensus algorithm, block production
-	// rewards are now handled at the consensus layer. Consequently, a block may
-	// have no state transitions if it contains no transactions and no withdrawals.
-	// In such cases, the account trie won't be scheduled for prefetching, leading
-	// to unnecessary error logs.
-	//
-	// To prevent this, the account trie is always scheduled for prefetching once
-	// the prefetcher is constructed. For more details, see:
-	// https://github.com/ethereum/go-ethereum/issues/29880
-	opener := func(id trie.ID, addr common.Address) (Trie, error) {
-		if s.db.TrieDB().IsVerkle() {
-			return s.db.OpenTrie(id.StateRoot)
-		}
-		if id.Owner != (common.Hash{}) {
-			return s.db.OpenStorageTrie(id.StateRoot, addr, id.Root, nil)
-		}
-		return s.db.OpenTrie(id.StateRoot)
-	}
-	s.prefetcher = newTriePrefetcher(opener, s.originalRoot, namespace, witness == nil)
-
-	id := trie.StateTrieID(s.originalRoot)
-	if err := s.prefetcher.prefetchAccounts(*id, nil, false); err != nil {
-		log.Error("Failed to prefetch account trie", "root", s.originalRoot, "err", err)
-	}
 }
 
 // StopPrefetcher terminates a running prefetcher and reports any leftover stats
 // from the gathered metrics.
-func (s *StateDB) StopPrefetcher() {
-	if s.prefetcher != nil {
-		s.prefetcher.terminate(false)
-		s.prefetcher.report()
-		s.prefetcher = nil
-	}
-}
+func (s *StateDB) StopPrefetcher() {}
 
 // setError remembers the first non-nil error it is called with.
 func (s *StateDB) setError(err error) {
@@ -368,9 +327,6 @@ func (s *StateDB) TxIndex() int {
 func (s *StateDB) GetCode(addr common.Address) []byte {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		if s.witness != nil {
-			s.witness.AddCode(stateObject.Code())
-		}
 		return stateObject.Code()
 	}
 	return nil
@@ -379,9 +335,6 @@ func (s *StateDB) GetCode(addr common.Address) []byte {
 func (s *StateDB) GetCodeSize(addr common.Address) int {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		if s.witness != nil {
-			s.witness.AddCode(stateObject.Code())
-		}
 		return stateObject.CodeSize()
 	}
 	return 0
@@ -612,13 +565,6 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	if acct == nil {
 		return nil
 	}
-	// Schedule the resolved account for prefetching if it's enabled.
-	if s.prefetcher != nil {
-		id := trie.StateTrieID(s.originalRoot)
-		if err = s.prefetcher.prefetchAccounts(*id, []common.Address{addr}, true); err != nil {
-			log.Error("Failed to prefetch account", "addr", addr, "err", err)
-		}
-	}
 	// Insert into the live set
 	obj := newObject(s, addr, acct)
 	s.setStateObject(obj)
@@ -710,9 +656,6 @@ func (s *StateDB) Copy() *StateDB {
 	if s.trie != nil {
 		state.trie = mustCopyTrie(s.trie)
 	}
-	if s.witness != nil {
-		state.witness = s.witness.Copy()
-	}
 	if s.accessEvents != nil {
 		state.accessEvents = s.accessEvents.Copy()
 	}
@@ -797,7 +740,6 @@ func (s *StateDB) LogsForBurnAccounts() []*types.Log {
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
-	addressesToPrefetch := make([]common.Address, 0, len(s.journal.dirties))
 	for addr := range s.journal.dirties {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
@@ -821,16 +763,6 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		} else {
 			obj.finalise()
 			s.markUpdate(addr)
-		}
-		// At this point, also ship the address off to the precacher. The precacher
-		// will start loading tries, and when the change is eventually committed,
-		// the commit-phase will be a lot faster
-		addressesToPrefetch = append(addressesToPrefetch, addr) // Copy needed for closure
-	}
-	if s.prefetcher != nil && len(addressesToPrefetch) > 0 {
-		id := trie.StateTrieID(s.originalRoot)
-		if err := s.prefetcher.prefetchAccounts(*id, addressesToPrefetch, false); err != nil {
-			log.Error("Failed to prefetch addresses", "addresses", len(addressesToPrefetch), "err", err)
 		}
 	}
 	// Invalidate journal because reverting across transactions is not allowed.
@@ -857,15 +789,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			return common.Hash{}
 		}
 		s.trie = tr
-	}
-	// If there was a trie prefetcher operating, terminate it async so that the
-	// individual storage tries can be updated as soon as the disk load finishes.
-	if s.prefetcher != nil {
-		s.prefetcher.terminate(true)
-		defer func() {
-			s.prefetcher.report()
-			s.prefetcher = nil // Pre-byzantium, unset any used up prefetcher
-		}()
 	}
 	// Process all storage updates concurrently. The state object update root
 	// method will internally call a blocking trie fetch from the prefetcher,
@@ -927,47 +850,8 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			obj := s.stateObjects[addr] // closure for the task runner below
 			workers.Go(func() error {
 				obj.updateRoot()
-
-				// If witness building is enabled and the state object has a trie,
-				// gather the witnesses for its specific storage trie
-				if s.witness != nil && obj.trie != nil {
-					s.witness.AddState(obj.trie.Witness(), obj.addrHash())
-				}
 				return nil
 			})
-		}
-	}
-	// If witness building is enabled, gather all the read-only accesses.
-	// Skip witness collection in Verkle mode, they will be gathered
-	// together at the end.
-	if s.witness != nil && !s.db.TrieDB().IsVerkle() {
-		// Pull in anything that has been accessed before destruction
-		for _, obj := range s.stateObjectsDestruct {
-			// Skip any objects that haven't touched their storage
-			if len(obj.originStorage) == 0 {
-				continue
-			}
-			if trie := obj.getPrefetchedTrie(); trie != nil {
-				s.witness.AddState(trie.Witness(), obj.addrHash())
-			} else if obj.trie != nil {
-				s.witness.AddState(obj.trie.Witness(), obj.addrHash())
-			}
-		}
-		// Pull in only-read and non-destructed trie witnesses
-		for _, obj := range s.stateObjects {
-			// Skip any objects that have been updated
-			if _, ok := s.mutations[obj.address]; ok {
-				continue
-			}
-			// Skip any objects that haven't touched their storage
-			if len(obj.originStorage) == 0 {
-				continue
-			}
-			if trie := obj.getPrefetchedTrie(); trie != nil {
-				s.witness.AddState(trie.Witness(), obj.addrHash())
-			} else if obj.trie != nil {
-				s.witness.AddState(obj.trie.Witness(), obj.addrHash())
-			}
 		}
 	}
 	workers.Wait()
@@ -981,14 +865,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// only a single trie is used for state hashing. Replacing a non-nil verkle tree
 	// here could result in losing uncommitted changes from storage.
 	start = time.Now()
-	if s.prefetcher != nil {
-		id := trie.StateTrieID(s.originalRoot)
-		if trie := s.prefetcher.trie(*id); trie == nil {
-			log.Error("Failed to retrieve account pre-fetcher trie")
-		} else {
-			s.trie = trie
-		}
-	}
+
 	// Perform updates before deletions.  This prevents resolution of unnecessary trie nodes
 	// in circumstances similar to the following:
 	//
@@ -1000,7 +877,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// into a shortnode. This requires `B` to be resolved from disk.
 	// Whereas if the created node is handled first, then the collapse is avoided, and `B` is not resolved.
 	var (
-		usedAddrs    []common.Address
 		deletedAddrs []common.Address
 	)
 	for addr, op := range s.mutations {
@@ -1022,7 +898,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				s.CodeUpdateBytes += len(obj.code)
 			}
 		}
-		usedAddrs = append(usedAddrs, addr) // Copy needed for closure
 	}
 	for _, deletedAddr := range deletedAddrs {
 		s.deleteStateObject(deletedAddr)
@@ -1030,20 +905,10 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	}
 	s.AccountUpdates += time.Since(start)
 
-	if s.prefetcher != nil {
-		id := trie.StateTrieID(s.originalRoot)
-		s.prefetcher.used(*id, usedAddrs, nil)
-	}
 	// Track the amount of time wasted on hashing the account trie
 	defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
 
-	hash := s.trie.Hash()
-
-	// If witness building is enabled, gather the account trie witness
-	if s.witness != nil {
-		s.witness.AddState(s.trie.Witness(), common.Hash{})
-	}
-	return hash
+	return s.trie.Hash()
 }
 
 // SetTxContext sets the current transaction hash and index which are
@@ -1476,7 +1341,7 @@ func (s *StateDB) markUpdate(addr common.Address) {
 
 // Witness retrieves the current state witness being collected.
 func (s *StateDB) Witness() *stateless.Witness {
-	return s.witness
+	return nil
 }
 
 func (s *StateDB) AccessEvents() *AccessEvents {
