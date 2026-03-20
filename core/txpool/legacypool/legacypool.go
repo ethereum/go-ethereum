@@ -1408,7 +1408,7 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 	// promote all promotable transactions
 	promoted := make([]*types.Transaction, 0, len(promotable))
 	for _, tx := range promotable {
-		from, _ := pool.signer.Sender(tx)
+		from, _ := types.Sender(pool.signer, tx) // already validated
 		if pool.promoteTx(from, tx.Hash(), tx) {
 			promoted = append(promoted, tx)
 		}
