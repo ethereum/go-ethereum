@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"iter"
@@ -180,12 +181,16 @@ func (db *ChecksumDB) DownloadFile(url, dstPath string) error {
 		return fmt.Errorf("no known hash for file %q", basename)
 	}
 	// Shortcut if already downloaded.
-	if verifyHash(dstPath, hash) == nil {
+	verifyErr := verifyHash(dstPath, hash)
+	if verifyErr == nil {
 		fmt.Printf("%s is up-to-date\n", dstPath)
 		return nil
 	}
-
-	fmt.Printf("%s is stale\n", dstPath)
+	if errors.Is(verifyErr, os.ErrNotExist) {
+		fmt.Printf("%s not found, downloading\n", dstPath)
+	} else {
+		fmt.Printf("%s is stale\n", dstPath)
+	}
 	fmt.Printf("downloading from %s\n", url)
 	resp, err := http.Get(url)
 	if err != nil {
