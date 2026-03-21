@@ -882,3 +882,17 @@ func TestStorageLookup(t *testing.T) {
 		}
 	}
 }
+
+// goos: darwin
+// goarch: arm64
+// pkg: github.com/ethereum/go-ethereum/triedb/pathdb
+// cpu: Apple M1 Pro
+// BenchmarkHashList
+// BenchmarkHashList-8   	52540634	        22.61 ns/op	      24 B/op	       1 allocs/op
+func BenchmarkHashList(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		l := getHashList()
+		putHashList(l)
+	}
+}
