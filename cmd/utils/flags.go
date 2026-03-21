@@ -297,6 +297,12 @@ var (
 		Value:    ethconfig.Defaults.EnableStateSizeTracking,
 		Category: flags.StateCategory,
 	}
+	BinTrieGroupDepthFlag = &cli.IntFlag{
+		Name:     "bintrie.groupdepth",
+		Usage:    "Number of levels per serialized group in binary trie (1-8, default 8). Lower values create smaller groups with more nodes.",
+		Value:    8,
+		Category: flags.StateCategory,
+	}
 	StateHistoryFlag = &cli.Uint64Flag{
 		Name:     "history.state",
 		Usage:    "Number of recent blocks to retain state history for, only relevant in state.scheme=path (default = 90,000 blocks, 0 = entire chain)",
@@ -1813,7 +1819,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.TrienodeHistory = ctx.Int64(TrienodeHistoryFlag.Name)
 	}
 	if ctx.IsSet(TrienodeHistoryFullValueCheckpointFlag.Name) {
-		cfg.NodeFullValueCheckpoint = uint32(ctx.Uint(TrienodeHistoryFullValueCheckpointFlag.Name))
+		cfg.TrienodeHistory = ctx.Int64(TrienodeHistoryFullValueCheckpointFlag.Name)
+	}
+	if ctx.IsSet(BinTrieGroupDepthFlag.Name) {
+		cfg.BinTrieGroupDepth = ctx.Int(BinTrieGroupDepthFlag.Name)
 	}
 	if ctx.IsSet(StateSchemeFlag.Name) {
 		cfg.StateScheme = ctx.String(StateSchemeFlag.Name)
@@ -2431,6 +2440,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		StateHistory:            ctx.Uint64(StateHistoryFlag.Name),
 		TrienodeHistory:         ctx.Int64(TrienodeHistoryFlag.Name),
 		NodeFullValueCheckpoint: uint32(ctx.Uint(TrienodeHistoryFullValueCheckpointFlag.Name)),
+		BinTrieGroupDepth:       ctx.Int(BinTrieGroupDepthFlag.Name),
 
 		// Disable transaction indexing/unindexing.
 		TxLookupLimit: -1,
