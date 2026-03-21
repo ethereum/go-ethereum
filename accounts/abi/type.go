@@ -126,7 +126,7 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 	var varSize int
 	if len(parsedType[3]) > 0 {
 		var err error
-		varSize, err = strconv.Atoi(parsedType[2])
+		varSize, err = strconv.Atoi(parsedType[3])
 		if err != nil {
 			return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
 		}
