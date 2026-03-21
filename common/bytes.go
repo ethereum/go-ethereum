@@ -149,3 +149,24 @@ func TrimRightZeroes(s []byte) []byte {
 	}
 	return s[:idx]
 }
+
+// UpperBound returns the upper bound for iteration over keys with the given prefix.
+// It returns the next key in lexicographic order that is greater than all keys with
+// the given prefix. This is useful for setting iteration bounds in databases.
+// Returns nil if no such upper bound exists (e.g., if prefix is empty or all 0xff bytes).
+func UpperBound(prefix []byte) []byte {
+	if len(prefix) == 0 {
+		return nil
+	}
+	var limit []byte
+	for i := len(prefix) - 1; i >= 0; i-- {
+		c := prefix[i]
+		if c < 0xff {
+			limit = make([]byte, i+1)
+			copy(limit, prefix)
+			limit[i] = c + 1
+			break
+		}
+	}
+	return limit
+}
