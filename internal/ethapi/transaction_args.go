@@ -40,6 +40,8 @@ import (
 // TransactionArgs represents the arguments to construct a new transaction
 // or a message call.
 type TransactionArgs struct {
+	Type *hexutil.Uint64 `json:"type,omitempty"`
+
 	From                 *common.Address `json:"from"`
 	To                   *common.Address `json:"to"`
 	Gas                  *hexutil.Uint64 `json:"gas"`
@@ -70,6 +72,24 @@ type TransactionArgs struct {
 
 	// For SetCodeTxType
 	AuthorizationList []types.SetCodeAuthorization `json:"authorizationList"`
+}
+
+func (args *TransactionArgs) inferTxType(defaultType int) int {
+	usedType := types.LegacyTxType
+	switch {
+	case args.AuthorizationList != nil || defaultType == types.SetCodeTxType:
+		usedType = types.SetCodeTxType
+	case args.BlobHashes != nil || defaultType == types.BlobTxType:
+		usedType = types.BlobTxType
+	case args.MaxFeePerGas != nil || defaultType == types.DynamicFeeTxType:
+		usedType = types.DynamicFeeTxType
+	case args.AccessList != nil || defaultType == types.AccessListTxType:
+		usedType = types.AccessListTxType
+	}
+	if args.GasPrice != nil {
+		usedType = types.LegacyTxType
+	}
+	return usedType
 }
 
 // from retrieves the transaction sender address.
@@ -175,6 +195,32 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config 
 		}
 	} else {
 		args.ChainID = (*hexutil.Big)(want)
+	}
+
+	// Validate explicit transaction type if provided
+	if args.Type != nil {
+		requested := int(*args.Type)
+
+		// Validate supported types
+		switch requested {
+		case types.LegacyTxType,
+			types.AccessListTxType,
+			types.DynamicFeeTxType,
+			types.BlobTxType,
+			types.SetCodeTxType:
+			// ok
+		default:
+			return fmt.Errorf("unsupported transaction type: %d", requested)
+		}
+
+		inferred := args.inferTxType(types.LegacyTxType)
+
+		if requested != inferred {
+			return fmt.Errorf(
+				"transaction type mismatch (requested=%d inferred=%d)",
+				requested, inferred,
+			)
+		}
 	}
 	return nil
 }
