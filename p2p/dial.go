@@ -192,6 +192,10 @@ func newDialScheduler(config dialConfig, it enode.Iterator, setupFunc dialSetupF
 	return d
 }
 
+func (d *dialScheduler) setMaxDialPeers(maxDialPeers int) {
+	d.maxDialPeers = maxDialPeers
+}
+
 // stop shuts down the dialer, canceling all current dial tasks.
 func (d *dialScheduler) stop() {
 	d.cancel()

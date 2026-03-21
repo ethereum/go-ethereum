@@ -415,6 +415,13 @@ func (srv *Server) Start() (err error) {
 	return nil
 }
 
+func (srv *Server) SetMaxPeers(max int) {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+	srv.MaxPeers = max
+	srv.dialsched.setMaxDialPeers(srv.MaxDialedConns())
+}
+
 func (srv *Server) setupLocalNode() error {
 	// Create the devp2p handshake.
 	pubkey := crypto.FromECDSAPub(&srv.PrivateKey.PublicKey)
