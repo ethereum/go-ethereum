@@ -692,6 +692,12 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 	var failed error
 	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 	evm := vm.NewEVM(blockCtx, statedb, api.backend.ChainConfig(), vm.Config{})
+	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
+		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
+	}
+	if api.backend.ChainConfig().IsPrague(block.Number(), block.Time()) {
+		core.ProcessParentBlockHash(block.ParentHash(), evm)
+	}
 
 txloop:
 	for i, tx := range txs {
