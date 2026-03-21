@@ -19,6 +19,7 @@ package rawdb
 import (
 	"encoding/binary"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -383,31 +384,90 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 	if tail == nil || *tail > pruneBlock {
 		return // no index, or index ends above pruneBlock
 	}
-	// There are blocks below pruneBlock in the index. Iterate the entire index to remove
-	// their entries. Note if this fails, the index is messed up, but tail still points to
-	// the old tail.
-	var count, removed int
-	DeleteAllTxLookupEntries(db, func(txhash common.Hash, v []byte) bool {
-		count++
-		if count%10000000 == 0 {
-			log.Info("Pruning tx index", "count", count, "removed", removed)
+
+	workers := runtime.NumCPU()
+	if workers > 16 {
+		workers = 16
+	}
+	start := time.Now()
+	var (
+		wg      sync.WaitGroup
+		removed atomic.Int64
+		scanned atomic.Int64
+	)
+	// Periodically log progress from the main goroutine.
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(8 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				log.Info("Pruning tx index", "scanned", scanned.Load(), "removed", removed.Load(), "elapsed", common.PrettyDuration(time.Since(start)))
+			case <-done:
+				return
+			}
 		}
-		if len(v) > 8 {
-			log.Error("Skipping legacy tx index entry", "hash", txhash)
-			return false
-		}
-		bn := decodeNumber(v)
-		if bn < pruneBlock {
-			removed++
-			return true
-		}
-		return false
-	})
+	}()
+	for i := range workers {
+		wg.Add(1)
+
+		// Split the keyspace by the first byte of the tx hash.
+		// Tx hashes are uniformly distributed so each worker gets
+		// roughly equal work.
+		rangeStart := byte(i * 256 / workers)
+		rangeEnd := byte((i + 1) * 256 / workers)
+		isLast := i == workers-1
+
+		go func() {
+			defer wg.Done()
+
+			var it ethdb.Iterator
+			if rangeStart == 0 {
+				it = NewKeyLengthIterator(db.NewIterator(txLookupPrefix, nil), common.HashLength+len(txLookupPrefix))
+			} else {
+				it = NewKeyLengthIterator(db.NewIterator(txLookupPrefix, []byte{rangeStart}), common.HashLength+len(txLookupPrefix))
+			}
+			defer it.Release()
+
+			batch := db.NewBatch()
+			for it.Next() {
+				// Stop if we've passed this worker's range.
+				if !isLast && it.Key()[len(txLookupPrefix)] >= rangeEnd {
+					break
+				}
+				scanned.Add(1)
+				v := it.Value()
+				if len(v) > 8 {
+					continue // skip legacy format entries
+				}
+				if decodeBlockNumber(v) < pruneBlock {
+					batch.Delete(it.Key())
+					removed.Add(1)
+				}
+				if batch.ValueSize() >= ethdb.IdealBatchSize {
+					if err := batch.Write(); err != nil {
+						log.Crit("Failed to delete tx index entries", "err", err)
+					}
+					batch.Reset()
+				}
+			}
+			if batch.ValueSize() > 0 {
+				if err := batch.Write(); err != nil {
+					log.Crit("Failed to delete tx index entries", "err", err)
+				}
+				batch.Reset()
+			}
+		}()
+	}
+	wg.Wait()
+	close(done)
 	WriteTxIndexTail(db, pruneBlock)
+	log.Info("Pruned transaction index", "removed", removed.Load(), "scanned", scanned.Load(), "elapsed", common.PrettyDuration(time.Since(start)))
 }
 
-func decodeNumber(b []byte) uint64 {
-	var numBuffer [8]byte
-	copy(numBuffer[8-len(b):], b)
-	return binary.BigEndian.Uint64(numBuffer[:])
+func decodeBlockNumber(b []byte) uint64 {
+	var buf [8]byte
+	copy(buf[8-len(b):], b)
+	return binary.BigEndian.Uint64(buf[:])
 }
