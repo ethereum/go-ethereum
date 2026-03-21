@@ -14,14 +14,14 @@ jobs:
     steps:
       - name: Test Slack webhook
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_PULL_REQUEST_WEBHOOK_URL: ${{ secrets.SLACK_PULL_REQUEST_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK_URL" ]; then
-            echo "SLACK_WEBHOOK_URL secret is not set. Add it in repo Settings → Secrets → Actions."
+          if [ -z "$SLACK_PULL_REQUEST_WEBHOOK_URL" ]; then
+            echo "SLACK_PULL_REQUEST_WEBHOOK_URL secret is not set. Add it in repo Settings → Secrets → Actions."
             exit 1
           fi
           BODY=$(jq -n --arg text "Test: PR notify Slack webhook is working (from ${{ github.repository }})" '{text: $text}')
-          curl -sS -X POST -H 'Content-Type: application/json' --data "$BODY" "$SLACK_WEBHOOK_URL"
+          curl -sS -X POST -H 'Content-Type: application/json' --data "$BODY" "$SLACK_PULL_REQUEST_WEBHOOK_URL"
           echo ""
           echo "If you see this and no curl error, check your Slack channel for the test message."
 
@@ -44,10 +44,10 @@ jobs:
     steps:
       - name: Send Slack notification
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_PULL_REQUEST_WEBHOOK_URL: ${{ secrets.SLACK_PULL_REQUEST_WEBHOOK_URL }}
         run: |
-          if [ -z "$SLACK_WEBHOOK_URL" ]; then
-            echo "SLACK_WEBHOOK_URL secret is not set; skipping notification."
+          if [ -z "$SLACK_PULL_REQUEST_WEBHOOK_URL" ]; then
+            echo "SLACK_PULL_REQUEST_WEBHOOK_URL secret is not set; skipping notification."
             exit 0
           fi
           PR_URL="${{ github.event.pull_request.html_url }}"
@@ -59,5 +59,5 @@ jobs:
             --arg title "$PR_TITLE" \
             --arg author "$PR_AUTHOR" \
             '{text: ("PR ready for review: <" + $url + "|" + $title + "> by " + $author)}')
-          curl -sS -X POST -H 'Content-Type: application/json' --data "$BODY" "$SLACK_WEBHOOK_URL"
-        if: env.SLACK_WEBHOOK_URL != ''
+          curl -sS -X POST -H 'Content-Type: application/json' --data "$BODY" "$SLACK_PULL_REQUEST_WEBHOOK_URL"
+        if: env.SLACK_PULL_REQUEST_WEBHOOK_URL != ''

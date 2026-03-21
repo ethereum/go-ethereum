@@ -138,20 +138,29 @@ jobs:
           echo "${{ secrets.KUBE_CONFIG }}" | base64 --decode > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
           git_hash=$(git rev-parse --short "$GITHUB_SHA")
-          masternodes=$(kubectl get deployment -o json| jq -r '.items[] | select(.metadata.name | test("devnet")) | "\(.metadata.name)"')
+          masternodes=$(kubectl get deployment -o json | jq -r '.items[] | select(.metadata.name | test("^masternode[0-9]")) | .metadata.name' | sort)
           rpcs=$(kubectl get deployment -o json| jq -r '.items[] | select(.metadata.name | test("rpc")) | "\(.metadata.name)"')
           echo "Masternodes: $masternodes"
           echo "RPCs: $rpcs"
 
-          skip_names=("devnet1" "devnet2" "devnet3" "devnet4" "devnet9" "devnet10" "devnet11" "devnet12" "devnetrpc" "devnetrpc2")
-          while read -r name; do
-            if [[ " ${skip_names[@]} " =~ " ${name} " ]]; then
-              echo "Skipping deployment: $name"
-              continue
+          # Skip masternode1 through masternode25, update the rest.
+          readarray -t mn_array <<< "$masternodes"
+          total=${#mn_array[@]}
+          echo "Total masternode deployments: $total, skipping masternode1..masternode25"
+
+          for name in "${mn_array[@]}"; do
+            if [[ $name =~ ^masternode[0-9] ]]; then
+              num=${name#masternode}
+              num=${num%%-*}
+              if [[ $num =~ ^[0-9]+$ ]] && (( num >= 1 && num <= 25 )); then
+                echo "Skipping deployment: $name"
+                continue
+              fi
             fi
+
             echo "Updating deployment: $name"
-            kubectl set image deployment/$name $name=xinfinorg/devnet:dev-upgrade-${git_hash} || true
-          done <<< "$masternodes"
+            kubectl set image "deployment/$name" "$name=xinfinorg/devnet:dev-upgrade-${git_hash}" || true
+          done
 
 
           while read -r name; do

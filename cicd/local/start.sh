@@ -24,6 +24,13 @@ do
         bootnodes="${bootnodes},$line"
     fi
 done < "$input"
+#check last line since it's not included in "read" command https://stackoverflow.com/questions/12916352/shell-script-read-missing-last-line
+if [ -z "${bootnodes}" ]
+then
+    bootnodes=$line
+else
+    bootnodes="${bootnodes},$line"
+fi
 
 log_level=3
 if test -z "$LOG_LEVEL"
@@ -88,6 +95,15 @@ else
   gc_mode=$GC_MODE
 fi
 
+miner_gaslimit=50000000
+if test -z "$MINER_GASLIMIT"
+then
+  echo "MINER_GASLIMIT not set, default to $miner_gaslimit"
+else
+  echo "MINER_GASLIMIT found, set to $MINER_GASLIMIT"
+  miner_gaslimit=$MINER_GASLIMIT
+fi
+
 ethstats_address=localhost:2000
 if test -z "$STATS_ADDRESS"
 then
@@ -108,7 +124,7 @@ fi
 
 netstats="${NODE_NAME}-${wallet}:$ethstats_secret@$ethstats_address"
 
-echo "Running a node with wallet: ${wallet}"
+echo "Running a node with wallet: ${wallet} at IP: ${instance_ip}"
 echo "Starting nodes with $bootnodes ..."
 
 # Note: --gcmode=archive means node will store all historical data. This will lead to high memory usage. But sync mode require archive to sync
@@ -124,7 +140,7 @@ XDC \
 --http-port $rpc_port \
 --http-api db,eth,net,txpool,web3,XDPoS \
 --http-vhosts "*" --unlock "${wallet}" --password /work/.pwd --mine \
---miner-gasprice "1" --miner-gaslimit "50000000" --verbosity ${log_level} \
+--miner-gasprice "1" --miner-gaslimit "${miner_gaslimit}" --verbosity ${log_level} \
 --debugdatadir /work/xdcchain \
 --store-reward \
 --ws --ws-addr=0.0.0.0 --ws-port $ws_port \

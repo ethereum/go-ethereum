@@ -293,7 +293,7 @@ var (
 
 	// DevnetChainConfig contains the chain parameters to run a node on the devnet.
 	DevnetChainConfig = &ChainConfig{
-		ChainID:        big.NewInt(551),
+		ChainID:        big.NewInt(5551),
 		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(0),
 		EIP155Block:    big.NewInt(0),

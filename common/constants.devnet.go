@@ -6,7 +6,7 @@ import (
 )
 
 var DevnetConstant = constant{
-	chainID:          551,
+	chainID:          5551,
 	denylistHFNumber: 0,
 	maxMasternodesV2: 108,
 
@@ -29,11 +29,11 @@ var DevnetConstant = constant{
 	tipXDCXReceiverDisable: big.NewInt(0),
 	eip1559Block:           big.NewInt(32400),
 	cancunBlock:            big.NewInt(43200),
-	pragueBlock:            big.NewInt(45000),
+	pragueBlock:            big.NewInt(math.MaxInt64),
 	osakaBlock:             big.NewInt(math.MaxInt64),
-	dynamicGasLimitBlock:   big.NewInt(45000),
-	tipUpgradeReward:       big.NewInt(45000),
-	tipUpgradePenalty:      big.NewInt(45000),
+	dynamicGasLimitBlock:   big.NewInt(math.MaxInt64),
+	tipUpgradeReward:       big.NewInt(math.MaxInt64),
+	tipUpgradePenalty:      big.NewInt(math.MaxInt64),
 	tipEpochHalving:        big.NewInt(math.MaxInt64),
 
 	trc21IssuerSMC:         HexToAddress("0x8c0faeb5C6bEd2129b8674F262Fd45c4e9468bee"),
