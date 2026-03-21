@@ -231,11 +231,17 @@ func GetSignersByExecutingEVM(addrBlockSigner common.Address, client bind.Contra
 
 // Get random from randomize contract.
 func GetRandomizeFromContract(client bind.ContractBackend, addrMasternode common.Address) (int64, error) {
+	return GetRandomizeFromContractAtNumber(client, addrMasternode, nil)
+}
+
+// GetRandomizeFromContractAtNumber reads randomize data at a specific block height.
+// If blockNumber is nil, the latest state is used.
+func GetRandomizeFromContractAtNumber(client bind.ContractBackend, addrMasternode common.Address, blockNumber *big.Int) (int64, error) {
 	randomize, err := randomizeContract.NewXDCRandomize(common.RandomizeSMCBinary, client)
 	if err != nil {
 		log.Error("Fail to get instance of randomize", "error", err)
 	}
-	opts := new(bind.CallOpts)
+	opts := &bind.CallOpts{BlockNumber: blockNumber}
 	secrets, err := randomize.GetSecret(opts, addrMasternode)
 	if err != nil {
 		log.Error("Fail get secrets from randomize", "error", err)
@@ -256,13 +262,13 @@ func GenM2FromRandomize(randomizes []int64, lenSigners int64) ([]int64, error) {
 	for _, j := range randomizes {
 		total += j
 	}
-	rand.Seed(total)
+	rng := rand.New(rand.NewSource(total))
 	for i := len(blockValidator) - 1; i >= 0; i-- {
 		blockLength := len(blockValidator) - 1
 		if blockLength <= 1 {
 			blockLength = 1
 		}
-		randomIndex := int64(rand.Intn(blockLength))
+		randomIndex := int64(rng.Intn(blockLength))
 		temp := blockValidator[randomIndex]
 		blockValidator[randomIndex] = blockValidator[i]
 		blockValidator[i] = temp

@@ -179,7 +179,7 @@ func AttachConsensusV1Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 	// Hook prepares validators M2 for the current epoch at checkpoint block
 	adaptor.EngineV1.HookValidator = func(header *types.Header, signers []common.Address) ([]byte, error) {
 		start := time.Now()
-		validators, err := getValidators(bc, signers)
+		validators, err := getValidatorsAtNumber(bc, signers, parentBlockNumber(header))
 		if err != nil {
 			return []byte{}, err
 		}
@@ -193,7 +193,7 @@ func AttachConsensusV1Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 		number := header.Number.Int64()
 		if number > 0 && number%common.EpocBlockRandomize == 0 {
 			start := time.Now()
-			validators, err := getValidators(bc, signers)
+			validators, err := getValidatorsAtNumber(bc, signers, parentBlockNumber(header))
 			log.Debug("Time Calculated HookVerifyMNs ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 			if err != nil {
 				return err
@@ -307,7 +307,7 @@ func AttachConsensusV1Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 	}
 }
 
-func getValidators(bc *core.BlockChain, masternodes []common.Address) ([]byte, error) {
+func getValidatorsAtNumber(bc *core.BlockChain, masternodes []common.Address, blockNumber *big.Int) ([]byte, error) {
 	if bc.Config().XDPoS == nil {
 		return nil, core.ErrNotXDPoS
 	}
@@ -322,7 +322,7 @@ func getValidators(bc *core.BlockChain, masternodes []common.Address) ([]byte, e
 	lenSigners := int64(len(masternodes))
 	if lenSigners > 0 {
 		for _, addr := range masternodes {
-			random, err := contracts.GetRandomizeFromContract(client, addr)
+			random, err := contracts.GetRandomizeFromContractAtNumber(client, addr, blockNumber)
 			if err != nil {
 				return nil, err
 			}
@@ -336,4 +336,11 @@ func getValidators(bc *core.BlockChain, masternodes []common.Address) ([]byte, e
 		return contracts.BuildValidatorFromM2(m2), nil
 	}
 	return nil, core.ErrNotFoundM1
+}
+
+func parentBlockNumber(header *types.Header) *big.Int {
+	if header == nil || header.Number == nil || header.Number.Sign() == 0 {
+		return nil
+	}
+	return new(big.Int).Sub(header.Number, common.Big1)
 }
