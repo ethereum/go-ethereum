@@ -686,6 +686,18 @@ var (
 		Usage:    "Path to a JWT secret to use for authenticated RPC endpoints",
 		Category: flags.APICategory,
 	}
+	AuthRpcSszRestFlag = &cli.BoolFlag{
+		Name:     "authrpc.ssz-rest",
+		Aliases:  []string{"rest"},
+		Usage:    "Enable the SSZ-REST Engine API transport (EIP-8161)",
+		Category: flags.APICategory,
+	}
+	AuthRpcSszRestPortFlag = &cli.IntFlag{
+		Name:     "authrpc.ssz-rest.port",
+		Usage:    "SSZ-REST Engine API listening port",
+		Value:    node.DefaultSszRestPort,
+		Category: flags.APICategory,
+	}
 
 	// Logging and debug settings
 	EthStatsURLFlag = &cli.StringFlag{
@@ -1343,6 +1355,17 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.IsSet(BatchResponseMaxSize.Name) {
 		cfg.BatchResponseMaxSize = ctx.Int(BatchResponseMaxSize.Name)
+	}
+
+	// SSZ-REST Engine API (EIP-8161)
+	if ctx.Bool(AuthRpcSszRestFlag.Name) {
+		cfg.SszRestEnabled = true
+	}
+	if ctx.IsSet(AuthRpcSszRestPortFlag.Name) {
+		cfg.SszRestPort = ctx.Int(AuthRpcSszRestPortFlag.Name)
+	}
+	if cfg.SszRestEnabled && cfg.SszRestPort == 0 {
+		cfg.SszRestPort = node.DefaultSszRestPort
 	}
 }
 
