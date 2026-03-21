@@ -65,6 +65,8 @@ type conn struct {
 	log       logger
 	codec     *v5wire.Codec
 	idCounter uint32
+
+	listenerRemoteAddr map[net.PacketConn]*net.UDPAddr // per-listener remote address override
 }
 
 type logger interface {
@@ -198,16 +200,25 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 	return results, nil
 }
 
+// remoteAddrFor returns the remote address to use for the given listener.
+func (tc *conn) remoteAddrFor(c net.PacketConn) *net.UDPAddr {
+	if addr, ok := tc.listenerRemoteAddr[c]; ok {
+		return addr
+	}
+	return tc.remoteAddr
+}
+
 // write sends a packet on the given connection.
 func (tc *conn) write(c net.PacketConn, p v5wire.Packet, challenge *v5wire.Whoareyou) v5wire.Nonce {
+	sendAddr := tc.remoteAddrFor(c)
 	packet, nonce, err := tc.codec.Encode(tc.remote.ID(), tc.remoteAddr.String(), p, challenge)
 	if err != nil {
 		panic(fmt.Errorf("can't encode %v packet: %v", p.Name(), err))
 	}
-	if _, err := c.WriteTo(packet, tc.remoteAddr); err != nil {
+	if _, err := c.WriteTo(packet, sendAddr); err != nil {
 		tc.logf("Can't send %s: %v", p.Name(), err)
 	} else {
-		tc.logf(">> %s", p.Name())
+		tc.logf(">> %s (to %v)", p.Name(), sendAddr)
 	}
 	return nonce
 }
@@ -222,7 +233,14 @@ func (tc *conn) read(c net.PacketConn) v5wire.Packet {
 	if err != nil {
 		return &readError{err}
 	}
-	_, _, p, err := tc.codec.Decode(buf[:n], fromAddr.String())
+	// Verify the packet is from an expected remote address.
+	if fromAddr.String() != tc.remoteAddrFor(c).String() {
+		return readErrorf("packet from unexpected address %v", fromAddr)
+	}
+	// Always use remoteAddr for codec session lookup, even if the actual sender
+	// address differs (e.g. in multi-network setups where packets are routed
+	// through a different interface).
+	_, _, p, err := tc.codec.Decode(buf[:n], tc.remoteAddr.String())
 	if err != nil {
 		return &readError{err}
 	}

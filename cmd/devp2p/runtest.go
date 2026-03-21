@@ -77,6 +77,11 @@ var (
 		Value:    v4test.Listen2,
 		Category: flags.TestingCategory,
 	}
+	testRemote2Flag = &cli.StringFlag{
+		Name:     "remote2",
+		Usage:    "Remote node address for second listener (overrides default remote address)",
+		Category: flags.TestingCategory,
+	}
 )
 
 func runTests(ctx *cli.Context, tests []utesting.Test) error {
