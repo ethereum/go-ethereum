@@ -65,6 +65,20 @@ func BenchmarkSha3(b *testing.B) {
 	}
 }
 
+func BenchmarkSha3_2(b *testing.B) {
+	a := []byte("hello world")
+	for b.Loop() {
+		Keccak256Hash(a)
+	}
+}
+
+func BenchmarkKeccak256Address(b *testing.B) {
+	a := []byte("hello world hello world hello world") // 36 bytes to simulate pubkey
+	for b.Loop() {
+		Keccak256Address(a)
+	}
+}
+
 func TestUnmarshalPubkey(t *testing.T) {
 	key, err := UnmarshalPubkey(nil)
 	if err != errInvalidPubkey || key != nil {

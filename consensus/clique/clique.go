@@ -156,8 +156,7 @@ func ecrecover(header *types.Header, sigcache *sigLRU) (common.Address, error) {
 	if err != nil {
 		return common.Address{}, err
 	}
-	var signer common.Address
-	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+	signer := crypto.Keccak256Address(pubkey[1:])
 
 	sigcache.Add(hash, signer)
 	return signer, nil
@@ -645,9 +644,9 @@ func (c *Clique) Close() error {
 
 // SealHash returns the hash of a block prior to it being sealed.
 func SealHash(header *types.Header) (hash common.Hash) {
-	hasher := keccak.NewLegacyKeccak256()
+	hasher := keccak.NewLegacyKeccak256State()
 	encodeSigHeader(hasher, header)
-	hasher.(crypto.KeccakState).Read(hash[:])
+	hasher.Read(hash[:])
 	return hash
 }
 
