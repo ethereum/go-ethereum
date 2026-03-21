@@ -107,6 +107,14 @@ func (msg *jsonrpcMessage) String() string {
 	return string(b)
 }
 
+// encodedSize returns the length of the message when JSON-encoded.
+// Used for batch response size accounting. Error.Data is already RawMessage
+// so it is not double-encoded when marshalling.
+func (msg *jsonrpcMessage) encodedSize() int {
+	b, _ := json.Marshal(msg)
+	return len(b)
+}
+
 func (msg *jsonrpcMessage) errorResponse(err error) *jsonrpcMessage {
 	resp := errorMessage(err)
 	resp.ID = msg.ID
@@ -132,15 +140,19 @@ func errorMessage(err error) *jsonrpcMessage {
 	}
 	de, ok := err.(DataError)
 	if ok {
-		msg.Error.Data = de.ErrorData()
+		if data := de.ErrorData(); data != nil {
+			if enc, err := json.Marshal(data); err == nil {
+				msg.Error.Data = enc
+			}
+		}
 	}
 	return msg
 }
 
 type jsonError struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Code    int             `json:"code"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data,omitempty"`
 }
 
 func (err *jsonError) Error() string {
@@ -155,6 +167,13 @@ func (err *jsonError) ErrorCode() int {
 }
 
 func (err *jsonError) ErrorData() interface{} {
+	if len(err.Data) == 0 {
+		return nil
+	}
+	var v interface{}
+	if json.Unmarshal(err.Data, &v) == nil {
+		return v
+	}
 	return err.Data
 }
 
