@@ -127,6 +127,8 @@ type EVM struct {
 
 	readOnly   bool   // Whether to throw on stateful modifications
 	returnData []byte // Last CALL's return data for subsequent reuse
+
+	arena *stackArena
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
@@ -141,6 +143,7 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
 		jumpDests:   newMapJumpDests(),
+		arena:       newArena(),
 	}
 	evm.precompiles = activePrecompiledContracts(evm.chainRules)
 
@@ -221,6 +224,12 @@ func (evm *EVM) SetTxContext(txCtx TxContext) {
 // it's safe to be called multiple times.
 func (evm *EVM) Cancel() {
 	evm.abort.Store(true)
+}
+
+// Free returns some memory allocated by the EVM, should be called after the EVM was used
+// for the last time. Not necessary, but an improvement.
+func (evm *EVM) Free() {
+	returnStack(evm.arena)
 }
 
 // Cancelled returns true if Cancel has been called
