@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -33,16 +32,11 @@ import (
 // BlockValidator implements Validator.
 type BlockValidator struct {
 	config *params.ChainConfig // Chain configuration options
-	bc     *BlockChain         // Canonical block chain
 }
 
 // NewBlockValidator returns a new block validator which is safe for re-use
-func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain) *BlockValidator {
-	validator := &BlockValidator{
-		config: config,
-		bc:     blockchain,
-	}
-	return validator
+func NewBlockValidator(config *params.ChainConfig) *BlockValidator {
+	return &BlockValidator{config: config}
 }
 
 // ValidateBody validates the given block's uncles and verifies the block
@@ -53,17 +47,9 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	if v.config.IsOsaka(block.Number(), block.Time()) && block.Size() > params.MaxBlockSize {
 		return ErrBlockOversized
 	}
-	// Check whether the block is already imported.
-	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
-		return ErrKnownBlock
-	}
-
 	// Header validity is known at this point. Here we verify that uncles, transactions
 	// and withdrawals given in the block body match the header.
 	header := block.Header()
-	if err := v.bc.engine.VerifyUncles(v.bc, block); err != nil {
-		return err
-	}
 	if hash := types.CalcUncleHash(block.Uncles()); hash != header.UncleHash {
 		return fmt.Errorf("uncle root hash mismatch (header value %x, calculated %x)", header.UncleHash, hash)
 	}
@@ -110,20 +96,12 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 			return errors.New("data blobs present in block body")
 		}
 	}
-
-	// Ancestor block must be known.
-	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
-		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
-			return consensus.ErrUnknownAncestor
-		}
-		return consensus.ErrPrunedAncestor
-	}
 	return nil
 }
 
 // ValidateState validates the various changes that happen after a state transition,
 // such as amount of used gas, the receipt roots and the state root itself.
-func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, res *ProcessResult, stateless bool) error {
+func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, res *ProcessResult) error {
 	if res == nil {
 		return errors.New("nil ProcessResult value")
 	}
@@ -140,11 +118,6 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	rbloom := types.MergeBloom(res.Receipts)
 	if rbloom != header.Bloom {
 		return fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
-	}
-	// In stateless mode, return early because the receipt and state root are not
-	// provided through the witness, rather the cross validator needs to return it.
-	if stateless {
-		return nil
 	}
 	// The receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
 	receiptSha := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))

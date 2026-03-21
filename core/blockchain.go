@@ -422,7 +422,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		return nil, err
 	}
 	bc.flushInterval.Store(int64(cfg.TrieTimeLimit))
-	bc.validator = NewBlockValidator(chainConfig, bc)
+	bc.validator = NewBlockValidator(chainConfig)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(bc.hc)
 
@@ -1869,7 +1869,7 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 	defer close(abort)
 
 	// Peek the error for the first block to decide the directing import logic
-	it := newInsertIterator(chain, results, bc.validator)
+	it := newInsertIterator(chain, results, bc.validator, bc)
 	block, err := it.next()
 
 	// Left-trim all the known blocks that don't need to build snapshot
@@ -2220,7 +2220,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 
 	vstart := time.Now()
 	_, _, spanEnd = telemetry.StartSpan(ctx, "bc.validator.ValidateState")
-	err = bc.validator.ValidateState(block, statedb, res, false)
+	err = bc.validator.ValidateState(block, statedb, res)
 	spanEnd(&err)
 	if err != nil {
 		bc.reportBadBlock(block, res, err)
@@ -2237,23 +2237,9 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	if witness := statedb.Witness(); witness != nil && config.StatelessSelfValidation {
 		log.Warn("Running stateless self-validation", "block", block.Number(), "hash", block.Hash())
 
-		// Remove critical computed fields from the block to force true recalculation
-		context := block.Header()
-		context.Root = common.Hash{}
-		context.ReceiptHash = common.Hash{}
-
-		task := types.NewBlockWithHeader(context).WithBody(*block.Body())
-
 		// Run the stateless self-cross-validation
-		crossStateRoot, crossReceiptRoot, err := ExecuteStateless(ctx, bc.chainConfig, bc.cfg.VmConfig, task, witness)
-		if err != nil {
+		if err := ExecuteStateless(ctx, bc.chainConfig, bc.cfg.VmConfig, block, witness); err != nil {
 			return nil, fmt.Errorf("stateless self-validation failed: %v", err)
-		}
-		if crossStateRoot != block.Root() {
-			return nil, fmt.Errorf("stateless self-validation root mismatch (cross: %x local: %x)", crossStateRoot, block.Root())
-		}
-		if crossReceiptRoot != block.ReceiptHash() {
-			return nil, fmt.Errorf("stateless self-validation receipt root mismatch (cross: %x local: %x)", crossReceiptRoot, block.ReceiptHash())
 		}
 	}
 

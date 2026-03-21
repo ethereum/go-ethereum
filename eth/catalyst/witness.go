@@ -284,11 +284,10 @@ func (api *ConsensusAPI) executeStatelessPayload(params engine.ExecutableData, v
 	api.lastNewPayloadUpdate.Store(time.Now().Unix())
 
 	log.Trace("Executing block statelessly", "number", block.Number(), "hash", params.BlockHash)
-	stateRoot, receiptRoot, err := core.ExecuteStateless(context.Background(), api.config(), vm.Config{}, block, witness)
-	if err != nil {
+	if err := core.ExecuteStateless(context.Background(), api.config(), vm.Config{}, block, witness); err != nil {
 		log.Warn("ExecuteStatelessPayload: execution failed", "err", err)
 		errorMsg := err.Error()
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID, ValidationError: &errorMsg}, nil
 	}
-	return engine.StatelessPayloadStatusV1{Status: engine.VALID, StateRoot: stateRoot, ReceiptsRoot: receiptRoot}, nil
+	return engine.StatelessPayloadStatusV1{Status: engine.VALID, StateRoot: block.Root(), ReceiptsRoot: block.ReceiptHash()}, nil
 }
