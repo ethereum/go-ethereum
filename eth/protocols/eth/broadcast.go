@@ -113,29 +113,55 @@ func (p *Peer) announceTransactions() {
 				pending      []common.Hash
 				pendingTypes []byte
 				pendingSizes []uint32
+				mask         types.CustodyBitmap
 				size         common.StorageSize
+				processed    = make(map[int]bool)
 			)
 			for count = 0; count < len(queue) && size < maxTxPacketSize; count++ {
 				if meta := p.txpool.GetMetadata(queue[count]); meta != nil {
+					custody := p.blobpool.GetCustody(queue[count])
+					if custody != nil {
+						// blob tx
+						if mask.OneCount() == 0 {
+							mask = *custody
+						} else {
+							if mask != *custody {
+								// group by mask
+								continue
+							}
+						}
+					}
 					pending = append(pending, queue[count])
 					pendingTypes = append(pendingTypes, meta.Type)
-					pendingSizes = append(pendingSizes, uint32(meta.Size))
+					if p.version >= ETH71 && meta.SizeWithoutBlob > 0 {
+						pendingSizes = append(pendingSizes, uint32(meta.SizeWithoutBlob))
+					} else {
+						pendingSizes = append(pendingSizes, uint32(meta.Size))
+					}
 					size += common.HashLength
+
+					processed[count] = true
 				}
 			}
-			// Shift and trim queue
-			queue = queue[:copy(queue, queue[count:])]
+			// Shift and trim queue using processed map
+			var remaining []common.Hash
+			for i, h := range queue {
+				if !processed[i] {
+					remaining = append(remaining, h)
+				}
+			}
+			queue = remaining
 
 			// If there's anything available to transfer, fire up an async writer
 			if len(pending) > 0 {
 				done = make(chan struct{})
 				go func() {
-					if err := p.sendPooledTransactionHashes(pending, pendingTypes, pendingSizes); err != nil {
+					if err := p.sendPooledTransactionHashes(pending, pendingTypes, pendingSizes, mask); err != nil {
 						fail <- err
 						return
 					}
 					close(done)
-					p.Log().Trace("Sent transaction announcements", "count", len(pending))
+					p.Log().Trace("Sent transaction announcements", "count", len(pending), "mask", mask, "tx", pending)
 				}()
 			}
 		}

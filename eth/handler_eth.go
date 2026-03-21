@@ -33,6 +33,7 @@ type ethHandler handler
 
 func (h *ethHandler) Chain() *core.BlockChain { return h.chain }
 func (h *ethHandler) TxPool() eth.TxPool      { return h.txpool }
+func (h *ethHandler) BlobPool() eth.BlobPool  { return h.blobpool }
 
 // RunPeer is invoked when a peer joins on the `eth` protocol.
 func (h *ethHandler) RunPeer(peer *eth.Peer, hand eth.Handler) error {
@@ -58,8 +59,19 @@ func (h *ethHandler) AcceptTxs() bool {
 func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 	// Consume any broadcasts and announces, forwarding the rest to the downloader
 	switch packet := packet.(type) {
-	case *eth.NewPooledTransactionHashesPacket:
-		return h.txFetcher.Notify(peer.ID(), packet.Types, packet.Sizes, packet.Hashes)
+	case *eth.NewPooledTransactionHashesPacket71:
+		hashes, err := h.txFetcher.Notify(peer.ID(), packet.Types, packet.Sizes, packet.Hashes)
+		if err != nil {
+			return err
+		}
+		if len(hashes) != 0 {
+			return h.blobFetcher.Notify(peer.ID(), hashes, packet.Mask)
+		}
+		return nil
+
+	case *eth.NewPooledTransactionHashesPacket70:
+		_, err := h.txFetcher.Notify(peer.ID(), packet.Types, packet.Sizes, packet.Hashes)
+		return err
 
 	case *eth.TransactionsPacket:
 		txs, err := packet.Items()
@@ -81,6 +93,9 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		}
 		return h.txFetcher.Enqueue(peer.ID(), txs, true)
 
+	case *eth.CellsResponse:
+		return h.blobFetcher.Enqueue(peer.ID(), packet.Hashes, packet.Cells, packet.Mask)
+
 	default:
 		return fmt.Errorf("unexpected eth packet type: %T", packet)
 	}
@@ -98,11 +113,17 @@ func handleTransactions(peer *eth.Peer, list []*types.Transaction, directBroadca
 				// If we receive any blob transactions missing sidecars, or with
 				// sidecars that don't correspond to the versioned hashes reported
 				// in the header, disconnect from the sending peer.
-				if tx.BlobTxSidecar() == nil {
-					return errors.New("received sidecar-less blob transaction")
-				}
-				if err := tx.BlobTxSidecar().ValidateBlobCommitmentHashes(tx.BlobHashes()); err != nil {
-					return err
+				if peer.Version() >= eth.ETH71 {
+					if tx.BlobTxSidecar() != nil && len(tx.BlobTxSidecar().Blobs) != 0 {
+						return fmt.Errorf("not allowed to respond with full-blob transaction under eth71")
+					}
+				} else {
+					if tx.BlobTxSidecar() == nil {
+						return errors.New("received sidecar-less blob transaction")
+					}
+					if err := tx.BlobTxSidecar().ValidateBlobCommitmentHashes(tx.BlobHashes()); err != nil {
+						return err
+					}
 				}
 			}
 		}

@@ -139,7 +139,7 @@ func fuzz(input []byte) int {
 			if verbose {
 				fmt.Println("Notify", peer, announceIdxs)
 			}
-			if err := f.Notify(peer, types, sizes, announces); err != nil {
+			if _, err := f.Notify(peer, types, sizes, announces); err != nil {
 				panic(err)
 			}
 

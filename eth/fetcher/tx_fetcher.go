@@ -232,7 +232,7 @@ func NewTxFetcherForTests(
 
 // Notify announces the fetcher of the potential availability of a new batch of
 // transactions in the network.
-func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []common.Hash) error {
+func (f *TxFetcher) Notify(peer string, kinds []byte, sizes []uint32, hashes []common.Hash) ([]common.Hash, error) {
 	// Keep track of all the announced transactions
 	txAnnounceInMeter.Mark(int64(len(hashes)))
 
@@ -245,13 +245,18 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 		unknownHashes = make([]common.Hash, 0, len(hashes))
 		unknownMetas  = make([]txMetadata, 0, len(hashes))
 
+		blobFetchHashes = make([]common.Hash, 0, len(hashes))
+
 		duplicate   int64
 		onchain     int64
 		underpriced int64
 	)
 	for i, hash := range hashes {
-		err := f.validateMeta(hash, types[i])
+		err := f.validateMeta(hash, kinds[i])
 		if errors.Is(err, txpool.ErrAlreadyKnown) {
+			if kinds[i] == types.BlobTxType {
+				blobFetchHashes = append(blobFetchHashes, hash)
+			}
 			duplicate++
 			continue
 		}
@@ -271,11 +276,14 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 		}
 
 		unknownHashes = append(unknownHashes, hash)
+		if kinds[i] == types.BlobTxType {
+			blobFetchHashes = append(blobFetchHashes, hash)
+		}
 
 		// Transaction metadata has been available since eth68, and all
 		// legacy eth protocols (prior to eth68) have been deprecated.
 		// Therefore, metadata is always expected in the announcement.
-		unknownMetas = append(unknownMetas, txMetadata{kind: types[i], size: sizes[i]})
+		unknownMetas = append(unknownMetas, txMetadata{kind: kinds[i], size: sizes[i]})
 	}
 	txAnnounceKnownMeter.Mark(duplicate)
 	txAnnounceUnderpricedMeter.Mark(underpriced)
@@ -283,14 +291,14 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 
 	// If anything's left to announce, push it into the internal loop
 	if len(unknownHashes) == 0 {
-		return nil
+		return blobFetchHashes, nil
 	}
 	announce := &txAnnounce{origin: peer, hashes: unknownHashes, metas: unknownMetas}
 	select {
 	case f.notify <- announce:
-		return nil
+		return blobFetchHashes, nil
 	case <-f.quit:
-		return errTerminated
+		return nil, errTerminated
 	}
 }
 

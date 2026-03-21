@@ -486,7 +486,7 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 //   - 8. Fully duplicate transactions (matching hash) must be dropped
 //   - 9. Duplicate nonces from the same account must be dropped
 func TestOpenDrops(t *testing.T) {
-	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
 	storage := t.TempDir()
@@ -513,75 +513,76 @@ func TestOpenDrops(t *testing.T) {
 		S:          new(uint256.Int),
 	})
 	blob, _ := rlp.EncodeToBytes(tx)
-	badsig, _ := store.Put(blob)
+	badsig := tx.Hash()
+	store.Put(blob)
 
 	// Insert a sequence of transactions with a nonce gap in between to verify
 	// that anything gapped will get evicted (case 3).
 	var (
 		gapper, _ = crypto.GenerateKey()
 
-		valids = make(map[uint64]struct{})
-		gapped = make(map[uint64]struct{})
+		valids = make(map[common.Hash]struct{})
+		gapped = make(map[common.Hash]struct{})
 	)
 	for _, nonce := range []uint64{0, 1, 3, 4, 6, 7} { // first gap at #2, another at #5
 		tx := makeTx(nonce, 1, 1, 1, gapper)
 		blob, _ := rlp.EncodeToBytes(tx)
 
-		id, _ := store.Put(blob)
+		store.Put(blob)
 		if nonce < 2 {
-			valids[id] = struct{}{}
+			valids[tx.Hash()] = struct{}{}
 		} else {
-			gapped[id] = struct{}{}
+			gapped[tx.Hash()] = struct{}{}
 		}
 	}
 	// Insert a sequence of transactions with a gapped starting nonce to verify
 	// that the entire set will get dropped (case 3).
 	var (
 		dangler, _ = crypto.GenerateKey()
-		dangling   = make(map[uint64]struct{})
+		dangling   = make(map[common.Hash]struct{})
 	)
 	for _, nonce := range []uint64{1, 2, 3} { // first gap at #0, all set dangling
 		tx := makeTx(nonce, 1, 1, 1, dangler)
 		blob, _ := rlp.EncodeToBytes(tx)
 
-		id, _ := store.Put(blob)
-		dangling[id] = struct{}{}
+		store.Put(blob)
+		dangling[tx.Hash()] = struct{}{}
 	}
 	// Insert a sequence of transactions with already passed nonces to veirfy
 	// that the entire set will get dropped (case 4).
 	var (
 		filler, _ = crypto.GenerateKey()
-		filled    = make(map[uint64]struct{})
+		filled    = make(map[common.Hash]struct{})
 	)
 	for _, nonce := range []uint64{0, 1, 2} { // account nonce at 3, all set filled
 		tx := makeTx(nonce, 1, 1, 1, filler)
 		blob, _ := rlp.EncodeToBytes(tx)
 
-		id, _ := store.Put(blob)
-		filled[id] = struct{}{}
+		store.Put(blob)
+		filled[tx.Hash()] = struct{}{}
 	}
 	// Insert a sequence of transactions with partially passed nonces to verify
 	// that the included part of the set will get dropped (case 4).
 	var (
 		overlapper, _ = crypto.GenerateKey()
-		overlapped    = make(map[uint64]struct{})
+		overlapped    = make(map[common.Hash]struct{})
 	)
 	for _, nonce := range []uint64{0, 1, 2, 3} { // account nonce at 2, half filled
 		tx := makeTx(nonce, 1, 1, 1, overlapper)
 		blob, _ := rlp.EncodeToBytes(tx)
 
-		id, _ := store.Put(blob)
+		store.Put(blob)
 		if nonce >= 2 {
-			valids[id] = struct{}{}
+			valids[tx.Hash()] = struct{}{}
 		} else {
-			overlapped[id] = struct{}{}
+			overlapped[tx.Hash()] = struct{}{}
 		}
 	}
 	// Insert a sequence of transactions with an underpriced first to verify that
 	// the entire set will get dropped (case 5).
 	var (
 		underpayer, _ = crypto.GenerateKey()
-		underpaid     = make(map[uint64]struct{})
+		underpaid     = make(map[common.Hash]struct{})
 	)
 	for i := 0; i < 5; i++ { // make #0 underpriced
 		var tx *types.Transaction
@@ -592,15 +593,15 @@ func TestOpenDrops(t *testing.T) {
 		}
 		blob, _ := rlp.EncodeToBytes(tx)
 
-		id, _ := store.Put(blob)
-		underpaid[id] = struct{}{}
+		store.Put(blob)
+		underpaid[tx.Hash()] = struct{}{}
 	}
 
 	// Insert a sequence of transactions with an underpriced in between to verify
 	// that it and anything newly gapped will get evicted (case 5).
 	var (
 		outpricer, _ = crypto.GenerateKey()
-		outpriced    = make(map[uint64]struct{})
+		outpriced    = make(map[common.Hash]struct{})
 	)
 	for i := 0; i < 5; i++ { // make #2 underpriced
 		var tx *types.Transaction
@@ -611,18 +612,18 @@ func TestOpenDrops(t *testing.T) {
 		}
 		blob, _ := rlp.EncodeToBytes(tx)
 
-		id, _ := store.Put(blob)
+		store.Put(blob)
 		if i < 2 {
-			valids[id] = struct{}{}
+			valids[tx.Hash()] = struct{}{}
 		} else {
-			outpriced[id] = struct{}{}
+			outpriced[tx.Hash()] = struct{}{}
 		}
 	}
 	// Insert a sequence of transactions fully overdrafted to verify that the
 	// entire set will get invalidated (case 6).
 	var (
 		exceeder, _ = crypto.GenerateKey()
-		exceeded    = make(map[uint64]struct{})
+		exceeded    = make(map[common.Hash]struct{})
 	)
 	for _, nonce := range []uint64{0, 1, 2} { // nonce 0 overdrafts the account
 		var tx *types.Transaction
@@ -633,14 +634,14 @@ func TestOpenDrops(t *testing.T) {
 		}
 		blob, _ := rlp.EncodeToBytes(tx)
 
-		id, _ := store.Put(blob)
-		exceeded[id] = struct{}{}
+		store.Put(blob)
+		exceeded[tx.Hash()] = struct{}{}
 	}
 	// Insert a sequence of transactions partially overdrafted to verify that part
 	// of the set will get invalidated (case 6).
 	var (
 		overdrafter, _ = crypto.GenerateKey()
-		overdrafted    = make(map[uint64]struct{})
+		overdrafted    = make(map[common.Hash]struct{})
 	)
 	for _, nonce := range []uint64{0, 1, 2} { // nonce 1 overdrafts the account
 		var tx *types.Transaction
@@ -651,44 +652,46 @@ func TestOpenDrops(t *testing.T) {
 		}
 		blob, _ := rlp.EncodeToBytes(tx)
 
-		id, _ := store.Put(blob)
+		store.Put(blob)
 		if nonce < 1 {
-			valids[id] = struct{}{}
+			valids[tx.Hash()] = struct{}{}
 		} else {
-			overdrafted[id] = struct{}{}
+			overdrafted[tx.Hash()] = struct{}{}
 		}
 	}
 	// Insert a sequence of transactions overflowing the account cap to verify
 	// that part of the set will get invalidated (case 7).
 	var (
 		overcapper, _ = crypto.GenerateKey()
-		overcapped    = make(map[uint64]struct{})
+		overcapped    = make(map[common.Hash]struct{})
 	)
 	for nonce := uint64(0); nonce < maxTxsPerAccount+3; nonce++ {
-		blob, _ := rlp.EncodeToBytes(makeTx(nonce, 1, 1, 1, overcapper))
+		tx := makeTx(nonce, 1, 1, 1, overcapper)
+		blob, _ := rlp.EncodeToBytes(tx)
 
-		id, _ := store.Put(blob)
+		store.Put(blob)
 		if nonce < maxTxsPerAccount {
-			valids[id] = struct{}{}
+			valids[tx.Hash()] = struct{}{}
 		} else {
-			overcapped[id] = struct{}{}
+			overcapped[tx.Hash()] = struct{}{}
 		}
 	}
 	// Insert a batch of duplicated transactions to verify that only one of each
 	// version will remain (case 8).
 	var (
 		duplicater, _ = crypto.GenerateKey()
-		duplicated    = make(map[uint64]struct{})
+		duplicated    = make(map[common.Hash]struct{})
 	)
 	for _, nonce := range []uint64{0, 1, 2} {
-		blob, _ := rlp.EncodeToBytes(makeTx(nonce, 1, 1, 1, duplicater))
+		tx := makeTx(nonce, 1, 1, 1, duplicater)
+		blob, _ := rlp.EncodeToBytes(tx)
 
 		for i := 0; i < int(nonce)+1; i++ {
-			id, _ := store.Put(blob)
+			store.Put(blob)
 			if i == 0 {
-				valids[id] = struct{}{}
+				valids[tx.Hash()] = struct{}{}
 			} else {
-				duplicated[id] = struct{}{}
+				duplicated[tx.Hash()] = struct{}{}
 			}
 		}
 	}
@@ -696,17 +699,18 @@ func TestOpenDrops(t *testing.T) {
 	// remain (case 9).
 	var (
 		repeater, _ = crypto.GenerateKey()
-		repeated    = make(map[uint64]struct{})
+		repeated    = make(map[common.Hash]struct{})
 	)
 	for _, nonce := range []uint64{0, 1, 2} {
 		for i := 0; i < int(nonce)+1; i++ {
-			blob, _ := rlp.EncodeToBytes(makeTx(nonce, 1, uint64(i)+1 /* unique hashes */, 1, repeater))
+			tx := makeTx(nonce, 1, uint64(i)+1 /* unique hashes */, 1, repeater)
+			blob, _ := rlp.EncodeToBytes(tx)
 
-			id, _ := store.Put(blob)
+			store.Put(blob)
 			if i == 0 {
-				valids[id] = struct{}{}
+				valids[tx.Hash()] = struct{}{}
 			} else {
-				repeated[id] = struct{}{}
+				repeated[tx.Hash()] = struct{}{}
 			}
 		}
 	}
@@ -743,39 +747,41 @@ func TestOpenDrops(t *testing.T) {
 
 	// Verify that the malformed (case 1), badly signed (case 2) and gapped (case
 	// 3) txs have been deleted from the pool
-	alive := make(map[uint64]struct{})
+	alive := make(map[common.Hash]struct{})
 	for _, txs := range pool.index {
 		for _, tx := range txs {
 			switch tx.id {
 			case malformed:
 				t.Errorf("malformed RLP transaction remained in storage")
-			case badsig:
-				t.Errorf("invalidly signed transaction remained in storage")
 			default:
-				if _, ok := dangling[tx.id]; ok {
+				if badsig == tx.hash {
+					t.Errorf("invalidly signed transaction remained in storage")
+				}
+				if _, ok := dangling[tx.hash]; ok {
 					t.Errorf("dangling transaction remained in storage: %d", tx.id)
-				} else if _, ok := filled[tx.id]; ok {
+				} else if _, ok := filled[tx.hash]; ok {
 					t.Errorf("filled transaction remained in storage: %d", tx.id)
-				} else if _, ok := overlapped[tx.id]; ok {
+				} else if _, ok := overlapped[tx.hash]; ok {
 					t.Errorf("overlapped transaction remained in storage: %d", tx.id)
-				} else if _, ok := gapped[tx.id]; ok {
+				} else if _, ok := gapped[tx.hash]; ok {
 					t.Errorf("gapped transaction remained in storage: %d", tx.id)
-				} else if _, ok := underpaid[tx.id]; ok {
+				} else if _, ok := underpaid[tx.hash]; ok {
 					t.Errorf("underpaid transaction remained in storage: %d", tx.id)
-				} else if _, ok := outpriced[tx.id]; ok {
+				} else if _, ok := outpriced[tx.hash]; ok {
 					t.Errorf("outpriced transaction remained in storage: %d", tx.id)
-				} else if _, ok := exceeded[tx.id]; ok {
+				} else if _, ok := exceeded[tx.hash]; ok {
 					t.Errorf("fully overdrafted transaction remained in storage: %d", tx.id)
-				} else if _, ok := overdrafted[tx.id]; ok {
+				} else if _, ok := overdrafted[tx.hash]; ok {
 					t.Errorf("partially overdrafted transaction remained in storage: %d", tx.id)
-				} else if _, ok := overcapped[tx.id]; ok {
+				} else if _, ok := overcapped[tx.hash]; ok {
 					t.Errorf("overcapped transaction remained in storage: %d", tx.id)
-				} else if _, ok := duplicated[tx.id]; ok {
-					t.Errorf("duplicated transaction remained in storage: %d", tx.id)
-				} else if _, ok := repeated[tx.id]; ok {
+				} else if _, ok := repeated[tx.hash]; ok {
 					t.Errorf("repeated nonce transaction remained in storage: %d", tx.id)
 				} else {
-					alive[tx.id] = struct{}{}
+					if _, ok := alive[tx.hash]; ok {
+						t.Errorf("duplicated transaction remained in storage: %d", tx.id)
+					}
+					alive[tx.hash] = struct{}{}
 				}
 			}
 		}
@@ -784,14 +790,14 @@ func TestOpenDrops(t *testing.T) {
 	if len(alive) != len(valids) {
 		t.Errorf("valid transaction count mismatch: have %d, want %d", len(alive), len(valids))
 	}
-	for id := range alive {
-		if _, ok := valids[id]; !ok {
-			t.Errorf("extra transaction %d", id)
+	for hash := range alive {
+		if _, ok := valids[hash]; !ok {
+			t.Errorf("extra transaction %s", hash)
 		}
 	}
-	for id := range valids {
-		if _, ok := alive[id]; !ok {
-			t.Errorf("missing transaction %d", id)
+	for hash := range valids {
+		if _, ok := alive[hash]; !ok {
+			t.Errorf("missing transaction %s", hash)
 		}
 	}
 	// Verify all the calculated pool internals. Interestingly, this is **not**
@@ -1010,7 +1016,10 @@ func TestOpenCap(t *testing.T) {
 
 		keep = []common.Address{addr1, addr3}
 		drop = []common.Address{addr2}
-		size = 2 * (txAvgSize + blobSize + uint64(txBlobOverhead))
+		// After migration to pooledBlobTx, cells (128 x 2048 = 2*blobSize) replace blobs.
+		// The actual billy slot size for pooledBlobTx is 2*(blobSize+txBlobOverhead)+txAvgSize.
+		pooledSlotSize uint64 = 2*(blobSize+uint64(txBlobOverhead)) + txAvgSize
+		size                  = 2 * pooledSlotSize
 	)
 	store.Put(blob1)
 	store.Put(blob2)
@@ -1019,7 +1028,7 @@ func TestOpenCap(t *testing.T) {
 
 	// Verify pool capping twice: first by reducing the data cap, then restarting
 	// with a high cap to ensure everything was persisted previously
-	for _, datacap := range []uint64{2 * (txAvgSize + blobSize + uint64(txBlobOverhead)), 1000 * (txAvgSize + blobSize + uint64(txBlobOverhead))} {
+	for _, datacap := range []uint64{size, 1000 * pooledSlotSize} {
 		// Create a blob pool out of the pre-seeded data, but cap it to 2 blob transaction
 		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
@@ -1325,7 +1334,7 @@ func TestBlobCountLimit(t *testing.T) {
 
 	// Check that first succeeds second fails.
 	if errs[0] != nil {
-		t.Fatalf("expected tx with 7 blobs to succeed, got %v", errs[0])
+		t.Fatalf("expected tx with 7 blobs to succeed, got: %v", errs[0])
 	}
 	if !errors.Is(errs[1], txpool.ErrTxBlobLimitExceeded) {
 		t.Fatalf("expected tx with 8 blobs to fail, got: %v", errs[1])
@@ -2112,7 +2121,8 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 			b.Fatal(err)
 		}
 		statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-		pool.add(tx)
+		pooledTx, _ := newPooledBlobTx(tx)
+		pool.add(pooledTx)
 	}
 	statedb.Commit(0, true, false)
 	defer pool.Close()
@@ -2131,5 +2141,119 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 		if len(p) != int(capacity) {
 			b.Fatalf("have %d want %d", len(p), capacity)
 		}
+	}
+}
+
+func TestGetCells(t *testing.T) {
+	storage := t.TempDir()
+
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(params.BlobTxMaxBlobs), nil)
+
+	var (
+		key1, _ = crypto.GenerateKey()
+
+		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
+
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 3, 0, key1, types.BlobSidecarVersion1) // blobs [0, 3)
+
+		pooledTx1, _ = newPooledBlobTx(tx1)
+
+		blob1, _ = rlp.EncodeToBytes(pooledTx1)
+	)
+
+	store.Put(blob1)
+	store.Close()
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(0, true, false)
+
+	chain := &testBlockChain{
+		config:  params.MainnetChainConfig,
+		basefee: uint256.NewInt(params.InitialBaseFee),
+		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+	defer pool.Close()
+
+	tests := []struct {
+		name        string
+		hash        common.Hash
+		mask        types.CustodyBitmap
+		expectedLen int
+		shouldFail  bool
+	}{
+		{
+			name:        "Get cells with single index",
+			hash:        tx1.Hash(),
+			mask:        types.NewCustodyBitmap([]uint64{5}),
+			expectedLen: 3,
+			shouldFail:  false,
+		},
+		{
+			name:        "Get cells with all indices",
+			hash:        tx1.Hash(),
+			mask:        *types.CustodyBitmapAll,
+			expectedLen: 384,
+			shouldFail:  false,
+		},
+		{
+			name:        "Get cells with no indices",
+			hash:        tx1.Hash(),
+			mask:        types.CustodyBitmap{},
+			expectedLen: 0,
+			shouldFail:  false,
+		},
+		{
+			name:        "Get cells for non-existent transaction",
+			hash:        common.Hash{0x01, 0x02, 0x03},
+			mask:        types.NewCustodyBitmap([]uint64{0, 1}),
+			expectedLen: 0,
+			shouldFail:  true,
+		},
+		{
+			name:        "Get cells with random indices",
+			hash:        tx1.Hash(),
+			mask:        types.NewRandomCustodyBitmap(8),
+			expectedLen: 24,
+			shouldFail:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cells, err := pool.GetCells(tt.hash, tt.mask)
+
+			if err != nil && !tt.shouldFail {
+				t.Errorf("expected to success, got %v", err)
+			}
+			if err == nil && tt.shouldFail {
+				t.Errorf("expected to fail, got %v", err)
+			}
+
+			if len(cells) != tt.expectedLen {
+				t.Errorf("expected %d cells, got %d", tt.expectedLen, len(cells))
+			}
+
+			if tt.expectedLen > 0 && tt.expectedLen%3 == 0 {
+				blobCount := 3
+				cellsPerBlob := tt.expectedLen / blobCount
+
+				for blobIdx := 0; blobIdx < blobCount; blobIdx++ {
+					startIdx := blobIdx * cellsPerBlob
+					endIdx := startIdx + cellsPerBlob
+
+					if endIdx > len(cells) {
+						t.Errorf("blob %d: expected cells up to index %d, but only have %d cells",
+							blobIdx, endIdx-1, len(cells))
+					}
+				}
+			}
+		})
 	}
 }

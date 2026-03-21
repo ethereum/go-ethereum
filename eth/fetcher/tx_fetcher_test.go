@@ -1888,7 +1888,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 		// Process the original or expanded steps
 		switch step := step.(type) {
 		case doTxNotify:
-			if err := fetcher.Notify(step.peer, step.types, step.sizes, step.hashes); err != nil {
+			if _, err := fetcher.Notify(step.peer, step.types, step.sizes, step.hashes); err != nil {
 				t.Errorf("step %d: %v", i, err)
 			}
 			<-wait // Fetcher needs to process this, wait until it's done

@@ -1163,6 +1163,11 @@ func (api *ConsensusAPI) getBodiesByRange(start, count hexutil.Uint64) ([]*engin
 	return bodies, nil
 }
 
+func (api *ConsensusAPI) BlobCustodyUpdatedV1(custodyColumns []uint64) {
+	bitmap := types.NewCustodyBitmap(custodyColumns)
+	api.eth.BlobFetcher().UpdateCustody(bitmap)
+}
+
 func getBody(block *types.Block) *engine.ExecutionPayloadBody {
 	if block == nil {
 		return nil

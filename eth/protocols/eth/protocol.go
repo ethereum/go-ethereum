@@ -24,12 +24,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Constants to match up protocol versions and messages
 const (
 	ETH69 = 69
+	ETH71 = 71
 )
 
 // ProtocolName is the official short name of the `eth` protocol used during
@@ -38,11 +40,11 @@ const ProtocolName = "eth"
 
 // ProtocolVersions are the supported versions of the `eth` protocol (first
 // is primary).
-var ProtocolVersions = []uint{ETH69}
+var ProtocolVersions = []uint{ETH71, ETH69}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH69: 18}
+var protocolLengths = map[uint]uint64{ETH69: 18, ETH71: 20}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
@@ -65,6 +67,8 @@ const (
 	GetReceiptsMsg                = 0x0f
 	ReceiptsMsg                   = 0x10
 	BlockRangeUpdateMsg           = 0x11
+	GetCellsMsg                   = 0x12
+	CellsMsg                      = 0x13
 )
 
 var (
@@ -230,11 +234,20 @@ type ReceiptsPacket struct {
 // ReceiptsRLPResponse is used for receipts, when we already have it encoded
 type ReceiptsRLPResponse []rlp.RawValue
 
-// NewPooledTransactionHashesPacket represents a transaction announcement packet on eth/68 and newer.
-type NewPooledTransactionHashesPacket struct {
+// NewPooledTransactionHashesPacket70 represents a transaction announcement packet on eth/69.
+type NewPooledTransactionHashesPacket70 struct {
 	Types  []byte
 	Sizes  []uint32
 	Hashes []common.Hash
+}
+
+// NewPooledTransactionHashesPacket71 represents a transaction announcement packet on eth/71
+// with an additional custody bitmap field for cell-based blob data availability.
+type NewPooledTransactionHashesPacket71 struct {
+	Types  []byte
+	Sizes  []uint32
+	Hashes []common.Hash
+	Mask   types.CustodyBitmap
 }
 
 // GetPooledTransactionsRequest represents a transaction query.
@@ -273,6 +286,31 @@ type BlockRangeUpdatePacket struct {
 	LatestBlockHash common.Hash
 }
 
+// GetCellsRequest represents a request for cells of blob transactions.
+type GetCellsRequest struct {
+	Hashes []common.Hash
+	Mask   types.CustodyBitmap
+}
+
+// GetCellsRequestPacket represents a cell request with request ID wrapping.
+type GetCellsRequestPacket struct {
+	RequestId uint64
+	GetCellsRequest
+}
+
+// CellsResponse represents a response containing cells for blob transactions.
+type CellsResponse struct {
+	Hashes []common.Hash
+	Cells  [][]kzg4844.Cell
+	Mask   types.CustodyBitmap
+}
+
+// CellsPacket represents a cells response with request ID wrapping.
+type CellsPacket struct {
+	RequestId uint64
+	CellsResponse
+}
+
 func (*StatusPacket) Name() string { return "Status" }
 func (*StatusPacket) Kind() byte   { return StatusMsg }
 
@@ -291,8 +329,11 @@ func (*GetBlockBodiesRequest) Kind() byte   { return GetBlockBodiesMsg }
 func (*BlockBodiesResponse) Name() string { return "BlockBodies" }
 func (*BlockBodiesResponse) Kind() byte   { return BlockBodiesMsg }
 
-func (*NewPooledTransactionHashesPacket) Name() string { return "NewPooledTransactionHashes" }
-func (*NewPooledTransactionHashesPacket) Kind() byte   { return NewPooledTransactionHashesMsg }
+func (*NewPooledTransactionHashesPacket70) Name() string { return "NewPooledTransactionHashes" }
+func (*NewPooledTransactionHashesPacket70) Kind() byte   { return NewPooledTransactionHashesMsg }
+
+func (*NewPooledTransactionHashesPacket71) Name() string { return "NewPooledTransactionHashes" }
+func (*NewPooledTransactionHashesPacket71) Kind() byte   { return NewPooledTransactionHashesMsg }
 
 func (*GetPooledTransactionsRequest) Name() string { return "GetPooledTransactions" }
 func (*GetPooledTransactionsRequest) Kind() byte   { return GetPooledTransactionsMsg }
@@ -311,3 +352,9 @@ func (*ReceiptsRLPResponse) Kind() byte   { return ReceiptsMsg }
 
 func (*BlockRangeUpdatePacket) Name() string { return "BlockRangeUpdate" }
 func (*BlockRangeUpdatePacket) Kind() byte   { return BlockRangeUpdateMsg }
+
+func (*GetCellsRequest) Name() string { return "GetCells" }
+func (*GetCellsRequest) Kind() byte   { return GetCellsMsg }
+
+func (*CellsResponse) Name() string { return "Cells" }
+func (*CellsResponse) Kind() byte   { return CellsMsg }

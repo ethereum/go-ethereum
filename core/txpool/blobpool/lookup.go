@@ -18,11 +18,14 @@ package blobpool
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 type txMetadata struct {
-	id   uint64 // the billy id of transction
-	size uint64 // the RLP encoded size of transaction (blobs are included)
+	id              uint64 // the billy id of transction
+	size            uint64 // the RLP encoded size of transaction (blobs are included)
+	sizeWithoutBlob uint64 // the RLP encoded size without blob data (for ETH/71 announcements)
+	custody         types.CustodyBitmap
 }
 
 // lookup maps blob versioned hashes to transaction hashes that include them,
@@ -91,8 +94,10 @@ func (l *lookup) track(tx *blobTxMeta) {
 	}
 	// Map the transaction hash to the datastore id and RLP-encoded transaction size
 	l.txIndex[tx.hash] = &txMetadata{
-		id:   tx.id,
-		size: tx.size,
+		id:              tx.id,
+		size:            tx.size,
+		sizeWithoutBlob: tx.sizeWithoutBlob,
+		custody:         *tx.custody,
 	}
 }
 
