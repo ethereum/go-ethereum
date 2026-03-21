@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
-	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -90,9 +89,6 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		}
 		if header == nil {
 			return nil, errUnknownBlock
-		}
-		if header.Number.Uint64() < f.sys.backend.HistoryPruningCutoff() {
-			return nil, &history.PrunedHistoryError{}
 		}
 		return f.blockLogs(ctx, header)
 	}
