@@ -252,10 +252,7 @@ func readList(filename string) ([]string, error) {
 // ImportHistory imports Era1 files containing historical block information,
 // starting from genesis. The assumption is held that the provided chain
 // segment in Era1 file should all be canonical and verified.
-func ImportHistory(chain *core.BlockChain, dir string, network string, from func(f era.ReadAtSeekCloser) (era.Era, error)) error {
-	if chain.CurrentSnapBlock().Number.BitLen() != 0 {
-		return errors.New("history import only supported when starting from genesis")
-	}
+func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, network string, from func(f era.ReadAtSeekCloser) (era.Era, error)) error {
 	entries, err := era.ReadDir(dir, network)
 	if err != nil {
 		return fmt.Errorf("error reading %s: %w", dir, err)
@@ -267,6 +264,13 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 	if len(checksums) != len(entries) {
 		return fmt.Errorf("expected equal number of checksums and entries, have: %d checksums, %d entries",
 			len(checksums), len(entries))
+	}
+
+	// Determine resume point from last successfully imported block
+	var resumeBlock uint64
+	if tail := rawdb.ReadEraImportTail(db); tail != nil {
+		resumeBlock = *tail
+		log.Info("Resuming era import", "lastBlock", resumeBlock)
 	}
 
 	var (
@@ -281,12 +285,29 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 		err := func() error {
 			path := filepath.Join(dir, file)
 
-			// validate against checksum file in directory
 			f, err := os.Open(path)
 			if err != nil {
 				return fmt.Errorf("open %s: %w", path, err)
 			}
 			defer f.Close()
+
+			// Peek at era block range to see if we can skip entirely
+			e, err := from(f)
+			if err != nil {
+				return fmt.Errorf("error opening era: %w", err)
+			}
+			eraStart := e.Start()
+			eraEnd := eraStart + e.Count() - 1
+
+			// Skip era files fully behind resume point
+			if resumeBlock > 0 && eraEnd <= resumeBlock {
+				log.Debug("Skipping already imported Era file", "file", file, "eraEnd", eraEnd, "resumeBlock", resumeBlock)
+				return nil
+			}
+
+			if _, err := f.Seek(0, io.SeekStart); err != nil {
+				return fmt.Errorf("seek %s: %w", path, err)
+			}
 			if _, err := io.Copy(h, f); err != nil {
 				return fmt.Errorf("checksum %s: %w", path, err)
 			}
@@ -294,12 +315,13 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 			want := checksums[i]
 			h.Reset()
 			scratch.Reset()
-
 			if got != want {
 				return fmt.Errorf("%s checksum mismatch: have %s want %s", file, got, want)
 			}
-			// Import all block data from Era1.
-			e, err := from(f)
+			if _, err := f.Seek(0, io.SeekStart); err != nil {
+				return fmt.Errorf("seek %s: %w", path, err)
+			}
+			e, err = from(f)
 			if err != nil {
 				return fmt.Errorf("error opening era: %w", err)
 			}
@@ -316,6 +338,10 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 				if block.Number().BitLen() == 0 {
 					continue // skip genesis
 				}
+				// Skip blocks already imported (mid-epoch resume)
+				if resumeBlock > 0 && block.Number().Uint64() <= resumeBlock {
+					continue
+				}
 				receipts, err := it.Receipts()
 				if err != nil {
 					return fmt.Errorf("error reading receipts %d: %w", it.Number(), err)
@@ -324,6 +350,8 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 				if _, err := chain.InsertReceiptChain([]*types.Block{block}, enc, math.MaxUint64); err != nil {
 					return fmt.Errorf("error inserting body %d: %w", it.Number(), err)
 				}
+				rawdb.WriteEraImportTail(db, block.Number().Uint64())
+				resumeBlock = block.Number().Uint64()
 				imported++
 
 				if time.Since(reported) >= 8*time.Second {

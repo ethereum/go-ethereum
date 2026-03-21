@@ -32,6 +32,21 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+func ReadEraImportTail(db ethdb.KeyValueReader) *uint64 {
+	data, _ := db.Get(eraImportTailKey)
+	if len(data) == 0 {
+		return nil
+	}
+	tail := binary.BigEndian.Uint64(data)
+	return &tail
+}
+
+func WriteEraImportTail(db ethdb.KeyValueWriter, blockNumber uint64) {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, blockNumber)
+	db.Put(eraImportTailKey, buf)
+}
+
 // DecodeTxLookupEntry decodes the supplied tx lookup data.
 func DecodeTxLookupEntry(data []byte, db ethdb.Reader) *uint64 {
 	// Database v6 tx lookup just stores the block number
