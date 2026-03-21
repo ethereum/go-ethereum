@@ -1862,12 +1862,6 @@ func (api *TransactionAPI) SignTransaction(ctx context.Context, args Transaction
 	if err != nil {
 		return nil, err
 	}
-	// If the transaction-to-sign was a blob transaction, then the signed one
-	// no longer retains the blobs, only the blob hashes. In this step, we need
-	// to put back the blob(s).
-	if args.IsEIP4844() {
-		signed = signed.WithBlobTxSidecar(types.NewBlobTxSidecar(sidecarVersion, args.Blobs, args.Commitments, args.Proofs))
-	}
 	data, err := signed.MarshalBinary()
 	if err != nil {
 		return nil, err
