@@ -14,11 +14,12 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package pebble implements the key-value database layer based on pebble.
+// Legacy pebble v1 wrapper. This file mirrors pebble.go but with V1-prefixed
+// types so that it can coexist alongside a future v2 variant in the same package.
+
 package pebble
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"runtime"
@@ -27,36 +28,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cockroachdb/pebble/v2"
-	"github.com/cockroachdb/pebble/v2/bloom"
+	"github.com/cockroachdb/pebble"
+	"github.com/cockroachdb/pebble/bloom"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
-const (
-	// minCache is the minimum amount of memory in megabytes to allocate to pebble
-	// read and write caching, split half and half.
-	minCache = 16
-
-	// minHandles is the minimum number of files handles to allocate to the open
-	// database files.
-	minHandles = 16
-
-	// metricsGatheringInterval specifies the interval to retrieve pebble database
-	// compaction, io and pause stats to report to the user.
-	metricsGatheringInterval = 3 * time.Second
-
-	// degradationWarnInterval specifies how often warning should be printed if the
-	// leveldb database cannot keep up with requested writes.
-	degradationWarnInterval = time.Minute
-)
-
-// Database is a persistent key-value store based on the pebble v2 storage engine.
+// V1Database is a persistent key-value store based on the pebble v1 storage engine.
 // Apart from basic data storage functionality it also supports batch writes and
 // iterating over the keyspace in binary-alphabetical order.
-type Database struct {
+type V1Database struct {
 	fn        string     // filename for reporting
 	db        *pebble.DB // Underlying pebble storage engine
 	namespace string     // Namespace for metrics
@@ -78,8 +61,8 @@ type Database struct {
 	zombieMemTablesGauge   *metrics.Gauge   // Gauge for tracking the number of zombie memory tables
 	blockCacheHitGauge     *metrics.Gauge   // Gauge for tracking the number of total hit in the block cache
 	blockCacheMissGauge    *metrics.Gauge   // Gauge for tracking the number of total miss in the block cache
-	tableCacheHitGauge     *metrics.Gauge   // Gauge for tracking the number of total hit in the file cache
-	tableCacheMissGauge    *metrics.Gauge   // Gauge for tracking the number of total miss in the file cache
+	tableCacheHitGauge     *metrics.Gauge   // Gauge for tracking the number of total hit in the table cache
+	tableCacheMissGauge    *metrics.Gauge   // Gauge for tracking the number of total miss in the table cache
 	filterHitGauge         *metrics.Gauge   // Gauge for tracking the number of total hit in bloom filter
 	filterMissGauge        *metrics.Gauge   // Gauge for tracking the number of total miss in bloom filter
 	estimatedCompDebtGauge *metrics.Gauge   // Gauge for tracking the number of bytes that need to be compacted
@@ -109,7 +92,7 @@ type Database struct {
 	writeOptions *pebble.WriteOptions
 }
 
-func (d *Database) onCompactionBegin(info pebble.CompactionInfo) {
+func (d *V1Database) onCompactionBegin(info pebble.CompactionInfo) {
 	if d.activeComp == 0 {
 		d.compStartTime = time.Now()
 	}
@@ -122,7 +105,7 @@ func (d *Database) onCompactionBegin(info pebble.CompactionInfo) {
 	d.activeComp++
 }
 
-func (d *Database) onCompactionEnd(info pebble.CompactionInfo) {
+func (d *V1Database) onCompactionEnd(info pebble.CompactionInfo) {
 	if d.activeComp == 1 {
 		d.compTime.Add(int64(time.Since(d.compStartTime)))
 	} else if d.activeComp == 0 {
@@ -131,7 +114,7 @@ func (d *Database) onCompactionEnd(info pebble.CompactionInfo) {
 	d.activeComp--
 }
 
-func (d *Database) onWriteStallBegin(b pebble.WriteStallBeginInfo) {
+func (d *V1Database) onWriteStallBegin(b pebble.WriteStallBeginInfo) {
 	d.writeDelayStartTime = time.Now()
 	d.writeDelayCount.Add(1)
 	d.writeStalled.Store(true)
@@ -150,7 +133,7 @@ func (d *Database) onWriteStallBegin(b pebble.WriteStallBeginInfo) {
 	}
 }
 
-func (d *Database) onWriteStallEnd() {
+func (d *V1Database) onWriteStallEnd() {
 	d.writeDelayTime.Add(int64(time.Since(d.writeDelayStartTime)))
 	d.writeStalled.Store(false)
 
@@ -161,24 +144,9 @@ func (d *Database) onWriteStallEnd() {
 	d.writeDelayStartTime = time.Time{}
 }
 
-// panicLogger is just a noop logger to disable Pebble's internal logger.
-//
-// TODO(karalabe): Remove when Pebble sets this as the default.
-type panicLogger struct{}
-
-func (l panicLogger) Infof(format string, args ...interface{}) {
-}
-
-func (l panicLogger) Errorf(format string, args ...interface{}) {
-}
-
-func (l panicLogger) Fatalf(format string, args ...interface{}) {
-	panic(fmt.Errorf("fatal: "+format, args...))
-}
-
-// New returns a wrapped pebble DB object. The namespace is the prefix that the
+// NewV1 returns a wrapped pebble v1 DB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string, readonly bool) (*Database, error) {
+func NewV1(file string, cache int, handles int, namespace string, readonly bool) (*V1Database, error) {
 	// Ensure we have some minimal caching and file guarantees
 	if cache < minCache {
 		cache = minCache
@@ -187,7 +155,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		handles = minHandles
 	}
 	logger := log.New("database", file)
-	logger.Info("Allocated cache and file handles", "cache", common.StorageSize(cache*1024*1024), "handles", handles, "version", "v2")
+	logger.Info("Allocated cache and file handles", "cache", common.StorageSize(cache*1024*1024), "handles", handles, "version", "v1")
 
 	// The max memtable size is limited by the uint32 offsets stored in
 	// internal/arenaskl.node, DeferredBatchOp, and flushableBatchEntry.
@@ -218,7 +186,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	if memTableSize >= maxMemTableSize {
 		memTableSize = maxMemTableSize - 1
 	}
-	db := &Database{
+	db := &V1Database{
 		fn:        file,
 		log:       logger,
 		quitChan:  make(chan chan error),
@@ -233,7 +201,6 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		// of course). Geth is expected to handle recovery from an unclean shutdown.
 		writeOptions: pebble.NoSync,
 	}
-	numCPU := runtime.NumCPU()
 	opt := &pebble.Options{
 		// Pebble has a single combined cache area and the write
 		// buffers are taken from this too. Assign all available
@@ -258,30 +225,20 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 
 		// The default compaction concurrency(1 thread),
 		// Here use all available CPUs for faster compaction.
-		CompactionConcurrencyRange: func() (int, int) { return numCPU, numCPU },
+		MaxConcurrentCompactions: runtime.NumCPU,
 
 		// Per-level options. Options for at least one level must be specified. The
 		// options for the last level are used for all subsequent levels.
-		Levels: [7]pebble.LevelOptions{
-			{FilterPolicy: bloom.FilterPolicy(10)},
-			{FilterPolicy: bloom.FilterPolicy(10)},
-			{FilterPolicy: bloom.FilterPolicy(10)},
-			{FilterPolicy: bloom.FilterPolicy(10)},
-			{FilterPolicy: bloom.FilterPolicy(10)},
-			{FilterPolicy: bloom.FilterPolicy(10)},
+		Levels: []pebble.LevelOptions{
+			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 4 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 8 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 16 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 32 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 64 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
 
 			// Pebble doesn't use the Bloom filter at level6 for read efficiency.
-			{},
-		},
-		// Per-level target file sizes (replaces LevelOptions.TargetFileSize in v2).
-		TargetFileSizes: [7]int64{
-			2 * 1024 * 1024,
-			4 * 1024 * 1024,
-			8 * 1024 * 1024,
-			16 * 1024 * 1024,
-			32 * 1024 * 1024,
-			64 * 1024 * 1024,
-			128 * 1024 * 1024,
+			{TargetFileSize: 128 * 1024 * 1024},
 		},
 		ReadOnly: readonly,
 		EventListener: &pebble.EventListener{
@@ -311,14 +268,6 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		// the compaction debt as around 10GB. By reducing it to 2, the compaction
 		// debt will be less than 1GB, but with more frequent compactions scheduled.
 		L0CompactionThreshold: 2,
-
-		// FormatFlushableIngest is the minimum FormatMajorVersion supported by
-		// pebble v2. The more advanced version can be enabled later.
-		//
-		// This version is supported by both v1 and v2. It serves as the natural
-		// bridge point: a v1 database can be ratcheted up to FormatFlushableIngest
-		// using pebble v1, and then pebble v2 can open it since that's its minimum.
-		FormatMajorVersion: formatMinV2,
 	}
 	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
 	// for more details.
@@ -329,7 +278,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	// - there is one more overlapping sub-level0;
 	// - there is an additional 256 MB of compaction debt;
 	//
-	// The maximum concurrency is still capped by CompactionConcurrencyRange, but with
+	// The maximum concurrency is still capped by MaxConcurrentCompactions, but with
 	// these settings compactions can scale up more readily.
 	opt.Experimental.L0CompactionConcurrency = 1
 	opt.Experimental.CompactionDebtConcurrency = 1 << 28 // 256MB
@@ -374,7 +323,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 
 // Close stops the metrics collection, flushes any pending data to disk and closes
 // all io accesses to the underlying key-value store.
-func (d *Database) Close() error {
+func (d *V1Database) Close() error {
 	d.quitLock.Lock()
 	defer d.quitLock.Unlock()
 	// Allow double closing, simplifies things
@@ -394,7 +343,7 @@ func (d *Database) Close() error {
 }
 
 // Has retrieves if a key is present in the key-value store.
-func (d *Database) Has(key []byte) (bool, error) {
+func (d *V1Database) Has(key []byte) (bool, error) {
 	d.quitLock.RLock()
 	defer d.quitLock.RUnlock()
 	if d.closed {
@@ -413,7 +362,7 @@ func (d *Database) Has(key []byte) (bool, error) {
 }
 
 // Get retrieves the given key if it's present in the key-value store.
-func (d *Database) Get(key []byte) ([]byte, error) {
+func (d *V1Database) Get(key []byte) ([]byte, error) {
 	d.quitLock.RLock()
 	defer d.quitLock.RUnlock()
 	if d.closed {
@@ -432,7 +381,7 @@ func (d *Database) Get(key []byte) ([]byte, error) {
 }
 
 // Put inserts the given value into the key-value store.
-func (d *Database) Put(key []byte, value []byte) error {
+func (d *V1Database) Put(key []byte, value []byte) error {
 	d.quitLock.RLock()
 	defer d.quitLock.RUnlock()
 	if d.closed {
@@ -442,7 +391,7 @@ func (d *Database) Put(key []byte, value []byte) error {
 }
 
 // Delete removes the key from the key-value store.
-func (d *Database) Delete(key []byte) error {
+func (d *V1Database) Delete(key []byte) error {
 	d.quitLock.RLock()
 	defer d.quitLock.RUnlock()
 	if d.closed {
@@ -453,7 +402,7 @@ func (d *Database) Delete(key []byte) error {
 
 // DeleteRange deletes all of the keys (and values) in the range [start,end)
 // (inclusive on start, exclusive on end).
-func (d *Database) DeleteRange(start, end []byte) error {
+func (d *V1Database) DeleteRange(start, end []byte) error {
 	d.quitLock.RLock()
 	defer d.quitLock.RUnlock()
 
@@ -471,39 +420,24 @@ func (d *Database) DeleteRange(start, end []byte) error {
 
 // NewBatch creates a write-only key-value store that buffers changes to its host
 // database until a final write is called.
-func (d *Database) NewBatch() ethdb.Batch {
-	return &batch{
+func (d *V1Database) NewBatch() ethdb.Batch {
+	return &v1batch{
 		b:  d.db.NewBatch(),
 		db: d,
 	}
 }
 
 // NewBatchWithSize creates a write-only database batch with pre-allocated buffer.
-func (d *Database) NewBatchWithSize(size int) ethdb.Batch {
-	return &batch{
+func (d *V1Database) NewBatchWithSize(size int) ethdb.Batch {
+	return &v1batch{
 		b:  d.db.NewBatchWithSize(size),
 		db: d,
 	}
 }
 
-// upperBound returns the upper bound for the given prefix
-func upperBound(prefix []byte) (limit []byte) {
-	for i := len(prefix) - 1; i >= 0; i-- {
-		c := prefix[i]
-		if c == 0xff {
-			continue
-		}
-		limit = make([]byte, i+1)
-		copy(limit, prefix)
-		limit[i] = c + 1
-		break
-	}
-	return limit
-}
-
 // Stat returns the internal metrics of Pebble in a text format. It's a developer
 // method to read everything there is to read, independent of Pebble version.
-func (d *Database) Stat() (string, error) {
+func (d *V1Database) Stat() (string, error) {
 	return d.db.Metrics().String(), nil
 }
 
@@ -514,7 +448,7 @@ func (d *Database) Stat() (string, error) {
 // A nil start is treated as a key before all keys in the data store; a nil limit
 // is treated as a key after all keys in the data store. If both is nil then it
 // will compact entire data store.
-func (d *Database) Compact(start []byte, limit []byte) error {
+func (d *V1Database) Compact(start []byte, limit []byte) error {
 	// There is no special flag to represent the end of key range
 	// in pebble(nil in leveldb). Use an ugly hack to construct a
 	// large key to represent it.
@@ -526,17 +460,17 @@ func (d *Database) Compact(start []byte, limit []byte) error {
 	if limit == nil {
 		limit = ethdb.MaximumKey
 	}
-	return d.db.Compact(context.Background(), start, limit, true) // Parallelization is preferred
+	return d.db.Compact(start, limit, true) // Parallelization is preferred
 }
 
 // Path returns the path to the database directory.
-func (d *Database) Path() string {
+func (d *V1Database) Path() string {
 	return d.fn
 }
 
 // SyncKeyValue flushes all pending writes in the write-ahead-log to disk,
 // ensuring data durability up to that point.
-func (d *Database) SyncKeyValue() error {
+func (d *V1Database) SyncKeyValue() error {
 	// The entry (value=nil) is not written to the database; it is only
 	// added to the WAL. Writing this special log entry in sync mode
 	// automatically flushes all previous writes, ensuring database
@@ -546,9 +480,21 @@ func (d *Database) SyncKeyValue() error {
 	return d.db.Apply(b, pebble.Sync)
 }
 
+// NewIterator creates a binary-alphabetical iterator over a subset
+// of database content with a particular key prefix, starting at a particular
+// initial key (or after, if it does not exist).
+func (d *V1Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
+	iter, _ := d.db.NewIter(&pebble.IterOptions{
+		LowerBound: append(prefix, start...),
+		UpperBound: upperBound(prefix),
+	})
+	iter.First()
+	return &v1pebbleIterator{iter: iter, moved: true, released: false}
+}
+
 // meter periodically retrieves internal pebble counters and reports them to
 // the metrics subsystem.
-func (d *Database) meter(refresh time.Duration, namespace string) {
+func (d *V1Database) meter(refresh time.Duration, namespace string) {
 	var errc chan error
 	timer := time.NewTimer(refresh)
 	defer timer.Stop()
@@ -585,10 +531,10 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		compTimes[i%2] = compTime
 
 		for _, levelMetrics := range stats.Levels {
-			nWrite += int64(levelMetrics.TableBytesCompacted)
-			nWrite += int64(levelMetrics.TableBytesFlushed)
-			compWrite += int64(levelMetrics.TableBytesCompacted)
-			compRead += int64(levelMetrics.TableBytesRead)
+			nWrite += int64(levelMetrics.BytesCompacted)
+			nWrite += int64(levelMetrics.BytesFlushed)
+			compWrite += int64(levelMetrics.BytesCompacted)
+			compRead += int64(levelMetrics.BytesRead)
 		}
 
 		nWrite += int64(stats.WAL.BytesWritten)
@@ -627,8 +573,8 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		d.liveMemTablesGauge.Update(stats.MemTable.Count)
 		d.zombieMemTablesGauge.Update(stats.MemTable.ZombieCount)
 		d.estimatedCompDebtGauge.Update(int64(stats.Compact.EstimatedDebt))
-		d.tableCacheHitGauge.Update(stats.FileCache.Hits)
-		d.tableCacheMissGauge.Update(stats.FileCache.Misses)
+		d.tableCacheHitGauge.Update(stats.TableCache.Hits)
+		d.tableCacheMissGauge.Update(stats.TableCache.Misses)
 		d.blockCacheHitGauge.Update(stats.BlockCache.Hits)
 		d.blockCacheMissGauge.Update(stats.BlockCache.Misses)
 		d.filterHitGauge.Update(stats.Filter.Hits)
@@ -639,7 +585,7 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 			if i >= len(d.levelsGauge) {
 				d.levelsGauge = append(d.levelsGauge, metrics.GetOrRegisterGauge(namespace+fmt.Sprintf("tables/level%v", i), nil))
 			}
-			d.levelsGauge[i].Update(level.TablesCount)
+			d.levelsGauge[i].Update(level.NumFiles)
 		}
 
 		// Sleep a bit, then repeat the stats collection
@@ -654,16 +600,16 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 	errc <- nil
 }
 
-// batch is a write-only batch that commits changes to its host database
-// when Write is called. A batch cannot be used concurrently.
-type batch struct {
+// v1batch is a write-only batch that commits changes to its host database
+// when Write is called. A v1batch cannot be used concurrently.
+type v1batch struct {
 	b    *pebble.Batch
-	db   *Database
+	db   *V1Database
 	size int
 }
 
 // Put inserts the given value into the batch for later committing.
-func (b *batch) Put(key, value []byte) error {
+func (b *v1batch) Put(key, value []byte) error {
 	if err := b.b.Set(key, value, nil); err != nil {
 		return err
 	}
@@ -672,7 +618,7 @@ func (b *batch) Put(key, value []byte) error {
 }
 
 // Delete inserts the key removal into the batch for later committing.
-func (b *batch) Delete(key []byte) error {
+func (b *v1batch) Delete(key []byte) error {
 	if err := b.b.Delete(key, nil); err != nil {
 		return err
 	}
@@ -682,7 +628,7 @@ func (b *batch) Delete(key []byte) error {
 
 // DeleteRange removes all keys in the range [start, end) from the batch for
 // later committing, inclusive on start, exclusive on end.
-func (b *batch) DeleteRange(start, end []byte) error {
+func (b *v1batch) DeleteRange(start, end []byte) error {
 	// There is no special flag to represent the end of key range
 	// in pebble(nil in leveldb). Use an ugly hack to construct a
 	// large key to represent it.
@@ -698,12 +644,12 @@ func (b *batch) DeleteRange(start, end []byte) error {
 }
 
 // ValueSize retrieves the amount of data queued up for writing.
-func (b *batch) ValueSize() int {
+func (b *v1batch) ValueSize() int {
 	return b.size
 }
 
 // Write flushes any accumulated data to disk.
-func (b *batch) Write() error {
+func (b *v1batch) Write() error {
 	b.db.quitLock.RLock()
 	defer b.db.quitLock.RUnlock()
 	if b.db.closed {
@@ -713,13 +659,13 @@ func (b *batch) Write() error {
 }
 
 // Reset resets the batch for reuse.
-func (b *batch) Reset() {
+func (b *v1batch) Reset() {
 	b.b.Reset()
 	b.size = 0
 }
 
 // Replay replays the batch contents.
-func (b *batch) Replay(w ethdb.KeyValueWriter) error {
+func (b *v1batch) Replay(w ethdb.KeyValueWriter) error {
 	reader := b.b.Reader()
 	for {
 		kind, k, v, ok, err := reader.Next()
@@ -753,35 +699,23 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 
 // Close closes the batch and releases all associated resources. After it is
 // closed, any subsequent operations on this batch are undefined.
-func (b *batch) Close() {
+func (b *v1batch) Close() {
 	b.b.Close()
 }
 
-// pebbleIterator is a wrapper of underlying iterator in storage engine.
+// v1pebbleIterator is a wrapper of underlying iterator in storage engine.
 // The purpose of this structure is to implement the missing APIs.
 //
-// The pebble iterator is not thread-safe.
-type pebbleIterator struct {
+// The v1pebbleIterator is not thread-safe.
+type v1pebbleIterator struct {
 	iter     *pebble.Iterator
 	moved    bool
 	released bool
 }
 
-// NewIterator creates a binary-alphabetical iterator over a subset
-// of database content with a particular key prefix, starting at a particular
-// initial key (or after, if it does not exist).
-func (d *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
-	iter, _ := d.db.NewIter(&pebble.IterOptions{
-		LowerBound: append(prefix, start...),
-		UpperBound: upperBound(prefix),
-	})
-	iter.First()
-	return &pebbleIterator{iter: iter, moved: true, released: false}
-}
-
 // Next moves the iterator to the next key/value pair. It returns whether the
 // iterator is exhausted.
-func (iter *pebbleIterator) Next() bool {
+func (iter *v1pebbleIterator) Next() bool {
 	if iter.moved {
 		iter.moved = false
 		return iter.iter.Valid()
@@ -791,27 +725,27 @@ func (iter *pebbleIterator) Next() bool {
 
 // Error returns any accumulated error. Exhausting all the key/value pairs
 // is not considered to be an error.
-func (iter *pebbleIterator) Error() error {
+func (iter *v1pebbleIterator) Error() error {
 	return iter.iter.Error()
 }
 
 // Key returns the key of the current key/value pair, or nil if done. The caller
 // should not modify the contents of the returned slice, and its contents may
 // change on the next call to Next.
-func (iter *pebbleIterator) Key() []byte {
+func (iter *v1pebbleIterator) Key() []byte {
 	return iter.iter.Key()
 }
 
 // Value returns the value of the current key/value pair, or nil if done. The
 // caller should not modify the contents of the returned slice, and its contents
 // may change on the next call to Next.
-func (iter *pebbleIterator) Value() []byte {
+func (iter *v1pebbleIterator) Value() []byte {
 	return iter.iter.Value()
 }
 
 // Release releases associated resources. Release should always succeed and can
 // be called multiple times without causing error.
-func (iter *pebbleIterator) Release() {
+func (iter *v1pebbleIterator) Release() {
 	if !iter.released {
 		iter.iter.Close()
 		iter.released = true

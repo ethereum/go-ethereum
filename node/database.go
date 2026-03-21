@@ -114,7 +114,19 @@ func newLevelDBDatabase(file string, cache int, handles int, namespace string, r
 
 // newPebbleDBDatabase creates a persistent key-value database without a freezer
 // moving immutable chain segments into cold storage.
+//
+// If the database already exists with a legacy pebble v1 format, it is opened
+// using pebble v1 for backward compatibility and a warning is logged directing
+// the user to upgrade offline. New databases use pebble v2.
 func newPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.KeyValueStore, error) {
+	if pebble.NeedsV1(file) {
+		log.Warn("Pebble database uses legacy v1 format; upgrade offline with 'geth db pebble-upgrade'")
+		db, err := pebble.NewV1(file, cache, handles, namespace, readonly)
+		if err != nil {
+			return nil, err
+		}
+		return db, nil
+	}
 	db, err := pebble.New(file, cache, handles, namespace, readonly)
 	if err != nil {
 		return nil, err
