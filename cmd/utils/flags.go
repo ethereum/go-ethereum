@@ -1067,19 +1067,19 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 
 	RPCTelemetryEndpointFlag = &cli.StringFlag{
 		Name:     "rpc.telemetry.endpoint",
-		Usage:    "Defines where RPC telemetry is sent (e.g., http://localhost:4318)",
+		Usage:    "Defines where RPC telemetry is sent (e.g., http://localhost:4318 or grpc://localhost:4317)",
 		Category: flags.APICategory,
 	}
 
 	RPCTelemetryUserFlag = &cli.StringFlag{
 		Name:     "rpc.telemetry.username",
-		Usage:    "HTTP Basic Auth username for OpenTelemetry",
+		Usage:    "Basic Auth username for OpenTelemetry",
 		Category: flags.APICategory,
 	}
 
 	RPCTelemetryPasswordFlag = &cli.StringFlag{
 		Name:     "rpc.telemetry.password",
-		Usage:    "HTTP Basic Auth password for OpenTelemetry",
+		Usage:    "Basic Auth password for OpenTelemetry",
 		Category: flags.APICategory,
 	}
 
