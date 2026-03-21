@@ -29,6 +29,7 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	var (
 		fromBlock rpc.BlockNumber = 0x123435
 		toBlock   rpc.BlockNumber = 0xabcdef
+		limit     uint64          = 0x2
 		address0                  = common.HexToAddress("70c87d191324e6712a591f304b4eedef6ad9bb9d")
 		address1                  = common.HexToAddress("9b2055d370f73ec7d8a03e965129118dc8f5bf83")
 		topic0                    = common.HexToHash("3ac225168df54212a25c1c01fd35bebfea408fdac2e31ddd6f80a4bbf9a5f1ca")
@@ -53,6 +54,9 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	if len(test0.Topics) != 0 {
 		t.Fatalf("expected 0 topics, got %d topics", len(test0.Topics))
 	}
+	if test0.Limit != nil {
+		t.Fatalf("expected nil limit, got %d", *test0.Limit)
+	}
 
 	// from, to block number
 	var test1 FilterCriteria
@@ -65,6 +69,22 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	}
 	if test1.ToBlock.Int64() != toBlock.Int64() {
 		t.Fatalf("expected ToBlock %d, got %d", toBlock, test1.ToBlock)
+	}
+	if test1.Limit != nil {
+		t.Fatalf("expected nil limit, got %d", *test1.Limit)
+	}
+
+	// limit
+	var testLimit FilterCriteria
+	vector = fmt.Sprintf(`{"limit":"0x%x"}`, limit)
+	if err := json.Unmarshal([]byte(vector), &testLimit); err != nil {
+		t.Fatal(err)
+	}
+	if testLimit.Limit == nil {
+		t.Fatal("expected non-nil limit")
+	}
+	if *testLimit.Limit != limit {
+		t.Fatalf("expected limit %d, got %d", limit, *testLimit.Limit)
 	}
 
 	// single address

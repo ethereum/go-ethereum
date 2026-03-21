@@ -205,6 +205,11 @@ type FilterQuery struct {
 	// {{A}, {B}}         matches topic A in first position AND B in second position
 	// {{A, B}, {C, D}}   matches topic (A OR B) in first position AND (C OR D) in second position
 	Topics [][]common.Hash
+
+	// Limit caps the maximum number of logs returned.
+	// When non-nil and non-zero, at most Limit matching logs are returned.
+	// Example: set Limit to 1 to receive a single matching event.
+	Limit *uint64
 }
 
 // LogFilterer provides access to contract log events using a one-off query or continuous
