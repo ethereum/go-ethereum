@@ -922,3 +922,150 @@ func TestTransactionReceiptsSubscription(t *testing.T) {
 		})
 	}
 }
+
+// TestPendingTxFilterQueueCap verifies that the pending transaction polling filter
+// uninstalls the filter when the queue exceeds MaxPendingItems, preventing
+// unbounded memory growth when the client polls infrequently.
+func TestPendingTxFilterQueueCap(t *testing.T) {
+	t.Parallel()
+
+	const maxItems = 5
+
+	var (
+		db           = rawdb.NewMemoryDatabase()
+		backend, sys = newTestFilterSystem(db, Config{MaxPendingItems: maxItems})
+		api          = NewFilterAPI(sys)
+	)
+
+	fid := api.NewPendingTransactionFilter(nil)
+
+	// Send 10 transactions in two batches — more than MaxPendingItems
+	batch1 := make([]*types.Transaction, 8)
+	for i := range batch1 {
+		batch1[i] = types.NewTransaction(uint64(i), common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil)
+	}
+	batch2 := make([]*types.Transaction, 2)
+	for i := range batch2 {
+		batch2[i] = types.NewTransaction(uint64(len(batch1)+i), common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil)
+	}
+
+	time.Sleep(50 * time.Millisecond) // give subscription time to install
+	backend.txFeed.Send(core.NewTxsEvent{Txs: batch1})
+	backend.txFeed.Send(core.NewTxsEvent{Txs: batch2})
+
+	// Poll until we get an error or timeout
+	timeout := time.Now().Add(2 * time.Second)
+	var gotErr error
+	for time.Now().Before(timeout) {
+		_, err := api.GetFilterChanges(fid)
+		if err != nil {
+			gotErr = err
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if gotErr == nil {
+		t.Error("expected filter to be uninstalled and return an error, but got none")
+	} else if !errors.Is(gotErr, errFilterNotFound) {
+		t.Errorf("expected errFilterNotFound, got %v", gotErr)
+	}
+}
+
+// TestBlockFilterQueueCap verifies that the block polling filter
+// uninstalls the filter when the queue exceeds MaxPendingItems.
+func TestBlockFilterQueueCap(t *testing.T) {
+	t.Parallel()
+
+	const maxItems = 3
+
+	var (
+		db           = rawdb.NewMemoryDatabase()
+		backend, sys = newTestFilterSystem(db, Config{MaxPendingItems: maxItems})
+		api          = NewFilterAPI(sys)
+		genesis      = &core.Genesis{
+			Config:  params.TestChainConfig,
+			BaseFee: big.NewInt(params.InitialBaseFee),
+		}
+		_, chain, _ = core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 7, func(i int, gen *core.BlockGen) {})
+	)
+
+	fid := api.NewBlockFilter()
+	time.Sleep(50 * time.Millisecond) // give subscription time to install
+
+	// Send 7 block headers — more than maxItems
+	for _, blk := range chain {
+		backend.chainFeed.Send(core.ChainEvent{Header: blk.Header()})
+	}
+
+	// Poll until we get an error or timeout
+	timeout := time.Now().Add(2 * time.Second)
+	var gotErr error
+	for time.Now().Before(timeout) {
+		_, err := api.GetFilterChanges(fid)
+		if err != nil {
+			gotErr = err
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if gotErr == nil {
+		t.Error("expected filter to be uninstalled and return an error, but got none")
+	} else if !errors.Is(gotErr, errFilterNotFound) {
+		t.Errorf("expected errFilterNotFound, got %v", gotErr)
+	}
+}
+
+// TestLogFilterQueueCap verifies that the log polling filter
+// uninstalls the filter when the queue exceeds MaxPendingItems.
+func TestLogFilterQueueCap(t *testing.T) {
+	t.Parallel()
+
+	const maxItems = 3
+
+	var (
+		db           = rawdb.NewMemoryDatabase()
+		backend, sys = newTestFilterSystem(db, Config{MaxPendingItems: maxItems})
+		api          = NewFilterAPI(sys)
+
+		addr = common.HexToAddress("0x1111111111111111111111111111111111111111")
+
+		// 7 logs — more than maxItems
+		allLogs = []*types.Log{
+			{Address: addr, BlockNumber: 1},
+			{Address: addr, BlockNumber: 2},
+			{Address: addr, BlockNumber: 3},
+			{Address: addr, BlockNumber: 4},
+			{Address: addr, BlockNumber: 5},
+			{Address: addr, BlockNumber: 6},
+			{Address: addr, BlockNumber: 7},
+		}
+	)
+
+	fid, err := api.NewFilter(FilterCriteria{})
+	if err != nil {
+		t.Fatalf("NewFilter error: %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond) // give subscription time to install
+	backend.logsFeed.Send(allLogs)
+
+	// Poll until we get an error or timeout
+	timeout := time.Now().Add(2 * time.Second)
+	var gotErr error
+	for time.Now().Before(timeout) {
+		_, err := api.GetFilterChanges(fid)
+		if err != nil {
+			gotErr = err
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if gotErr == nil {
+		t.Error("expected filter to be uninstalled and return an error, but got none")
+	} else if !errors.Is(gotErr, errFilterNotFound) {
+		t.Errorf("expected errFilterNotFound, got %v", gotErr)
+	}
+}
