@@ -26,6 +26,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		NoPruning               bool
 		NoPrefetch              bool
 		TxLookupLimit           uint64 `toml:",omitempty"`
+		TxIndexSender           bool   `toml:",omitempty"`
 		TransactionHistory      uint64 `toml:",omitempty"`
 		LogHistory              uint64 `toml:",omitempty"`
 		LogNoHistory            bool   `toml:",omitempty"`
@@ -79,6 +80,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.NoPruning = c.NoPruning
 	enc.NoPrefetch = c.NoPrefetch
 	enc.TxLookupLimit = c.TxLookupLimit
+	enc.TxIndexSender = c.TxIndexSender
 	enc.TransactionHistory = c.TransactionHistory
 	enc.LogHistory = c.LogHistory
 	enc.LogNoHistory = c.LogNoHistory
@@ -136,6 +138,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		NoPruning               *bool
 		NoPrefetch              *bool
 		TxLookupLimit           *uint64 `toml:",omitempty"`
+		TxIndexSender           *bool   `toml:",omitempty"`
 		TransactionHistory      *uint64 `toml:",omitempty"`
 		LogHistory              *uint64 `toml:",omitempty"`
 		LogNoHistory            *bool   `toml:",omitempty"`
@@ -209,6 +212,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.TxLookupLimit != nil {
 		c.TxLookupLimit = *dec.TxLookupLimit
+	}
+	if dec.TxIndexSender != nil {
+		c.TxIndexSender = *dec.TxIndexSender
 	}
 	if dec.TransactionHistory != nil {
 		c.TransactionHistory = *dec.TransactionHistory
