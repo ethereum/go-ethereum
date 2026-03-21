@@ -273,7 +273,7 @@ func validatePoolInternals(pool *LegacyPool) error {
 	}
 	// Ensure all auths in pool are tracked
 	for _, tx := range pool.all.txs {
-		for _, addr := range tx.SetCodeAuthorities() {
+		for _, addr := range tx.UniqueSetCodeAuthorities() {
 			list := pool.all.auths[addr]
 			if i := slices.Index(list, tx.Hash()); i < 0 {
 				return fmt.Errorf("authority not tracked: addr %s, tx %s", addr, tx.Hash())
