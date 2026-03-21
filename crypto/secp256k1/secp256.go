@@ -43,6 +43,16 @@ func init() {
 	C.secp256k1_context_set_error_callback(context, C.callbackFunc(C.secp256k1GoPanicError), nil)
 }
 
+// noescape hides a pointer from escape analysis. It is the identity function
+// but escape analysis doesn't think the output depends on the input.
+//
+//go:nosplit
+//go:nocheckptr
+func noescape(p unsafe.Pointer) unsafe.Pointer {
+	x := uintptr(p)
+	return unsafe.Pointer(x ^ 0)
+}
+
 var (
 	ErrInvalidMsgLen       = errors.New("invalid message length, need 32 bytes")
 	ErrInvalidSignatureLen = errors.New("invalid signature length")
@@ -104,8 +114,8 @@ func RecoverPubkey(msg []byte, sig []byte) ([]byte, error) {
 
 	var (
 		pubkey  = make([]byte, 65)
-		sigdata = (*C.uchar)(unsafe.Pointer(&sig[0]))
-		msgdata = (*C.uchar)(unsafe.Pointer(&msg[0]))
+		sigdata = (*C.uchar)(noescape(unsafe.Pointer(&sig[0])))
+		msgdata = (*C.uchar)(noescape(unsafe.Pointer(&msg[0])))
 	)
 	if C.secp256k1_ext_ecdsa_recover(context, (*C.uchar)(unsafe.Pointer(&pubkey[0])), sigdata, msgdata) == 0 {
 		return nil, ErrRecoverFailed
