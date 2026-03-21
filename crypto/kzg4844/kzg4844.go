@@ -18,12 +18,14 @@
 package kzg4844
 
 import (
+	"crypto/sha256"
 	"embed"
 	"errors"
 	"hash"
 	"reflect"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -183,6 +185,14 @@ func CalcBlobHashV1(hasher hash.Hash, commit *Commitment) (vh [32]byte) {
 	hasher.Sum(vh[:0])
 	vh[0] = 0x01 // version
 	return vh
+}
+
+// Hashes List of commitments
+func CalcBlobHashV1List(list []Commitment, hashes []common.Hash) {
+	hasher := sha256.New()
+	for nr, commit := range list {
+		hashes[nr] = CalcBlobHashV1(hasher, &commit)
+	}
 }
 
 // IsValidVersionedHash checks that h is a structurally-valid versioned blob hash.

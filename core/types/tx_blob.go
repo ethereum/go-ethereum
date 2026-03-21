@@ -18,7 +18,6 @@ package types
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math/big"
@@ -87,11 +86,8 @@ func NewBlobTxSidecar(version byte, blobs []kzg4844.Blob, commitments []kzg4844.
 
 // BlobHashes computes the blob hashes of the given blobs.
 func (sc *BlobTxSidecar) BlobHashes() []common.Hash {
-	hasher := sha256.New()
 	h := make([]common.Hash, len(sc.Commitments))
-	for i := range sc.Blobs {
-		h[i] = kzg4844.CalcBlobHashV1(hasher, &sc.Commitments[i])
-	}
+	kzg4844.CalcBlobHashV1List(sc.Commitments, h)
 	return h
 }
 
@@ -153,11 +149,11 @@ func (sc *BlobTxSidecar) ValidateBlobCommitmentHashes(hashes []common.Hash) erro
 	if len(sc.Commitments) != len(hashes) {
 		return fmt.Errorf("invalid number of %d blob commitments compared to %d blob hashes", len(sc.Commitments), len(hashes))
 	}
-	hasher := sha256.New()
+	computed := make([]common.Hash, len(sc.Commitments))
+	kzg4844.CalcBlobHashV1List(sc.Commitments, computed)
 	for i, vhash := range hashes {
-		computed := kzg4844.CalcBlobHashV1(hasher, &sc.Commitments[i])
-		if vhash != computed {
-			return fmt.Errorf("blob %d: computed hash %#x mismatches transaction one %#x", i, computed, vhash)
+		if vhash != computed[i] {
+			return fmt.Errorf("blob %d: computed hash %#x mismatches transaction one %#x", i, computed[i], vhash)
 		}
 	}
 	return nil

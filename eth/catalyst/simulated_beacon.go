@@ -19,7 +19,6 @@ package catalyst
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math"
@@ -270,15 +269,17 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		// Independently calculate the blob hashes from sidecars.
 		blobHashes = make([]common.Hash, 0)
 		if envelope.BlobsBundle != nil {
-			hasher := sha256.New()
-			for _, commit := range envelope.BlobsBundle.Commitments {
+			blobHashes = make([]common.Hash, len(envelope.BlobsBundle.Commitments))
+			commits := make([]kzg4844.Commitment, len(envelope.BlobsBundle.Commitments))
+			for nr, commit := range envelope.BlobsBundle.Commitments {
 				var c kzg4844.Commitment
 				if len(commit) != len(c) {
 					return errors.New("invalid commitment length")
 				}
-				copy(c[:], commit)
-				blobHashes = append(blobHashes, kzg4844.CalcBlobHashV1(hasher, &c))
+				copy(commits[nr][:], commit)
 			}
+
+			kzg4844.CalcBlobHashV1List(commits, blobHashes)
 		}
 		beaconRoot = &common.Hash{}
 		requests = envelope.Requests
