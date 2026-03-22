@@ -29,6 +29,7 @@ import (
 )
 
 type nilHeadSubChain struct{}
+type trackedHeadSubChain struct{ nilHeadSubChain }
 
 func (nilHeadSubChain) Config() *params.ChainConfig { return params.TestChainConfig }
 
@@ -40,6 +41,10 @@ func (nilHeadSubChain) SubscribeChainHeadEvent(chan<- core.ChainHeadEvent) event
 
 func (nilHeadSubChain) StateAt(common.Hash) (*state.StateDB, error) {
 	return state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+}
+
+func (trackedHeadSubChain) SubscribeChainHeadEvent(chan<- core.ChainHeadEvent) event.Subscription {
+	return event.NewSubscription(func(<-chan struct{}) error { return nil })
 }
 
 func TestTxPoolCloseNilHeadSubscription(t *testing.T) {
@@ -60,5 +65,20 @@ func TestTxPoolCloseNilHeadSubscription(t *testing.T) {
 	case <-pool.term:
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for txpool loop termination")
+	}
+}
+
+func TestTxPoolNewTracksHeadSubscription(t *testing.T) {
+	t.Parallel()
+
+	pool, err := New(0, trackedHeadSubChain{}, nil)
+	if err != nil {
+		t.Fatalf("failed to create txpool: %v", err)
+	}
+	if count := pool.subs.Count(); count != 1 {
+		t.Fatalf("unexpected subscription count: have %d want %d", count, 1)
+	}
+	if err := pool.Close(); err != nil {
+		t.Fatalf("unexpected close error: %v", err)
 	}
 }

@@ -68,6 +68,7 @@ type TxPool struct {
 
 	stateLock sync.RWMutex   // The lock for protecting state instance
 	state     *state.StateDB // Current state at the blockchain head
+	headCh    chan core.ChainHeadEvent
 
 	subs event.SubscriptionScope // Subscription scope to unsubscribe all on shutdown
 	quit chan chan error         // Quit channel to tear down the head updater
@@ -98,9 +99,13 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 		subpools: subpools,
 		chain:    chain,
 		state:    statedb,
+		headCh:   make(chan core.ChainHeadEvent),
 		quit:     make(chan chan error),
 		term:     make(chan struct{}),
 		sync:     make(chan chan error),
+	}
+	if sub := chain.SubscribeChainHeadEvent(pool.headCh); sub != nil {
+		pool.subs.Track(sub)
 	}
 	reserver := NewReservationTracker()
 	for i, subpool := range subpools {
@@ -146,15 +151,6 @@ func (p *TxPool) Close() error {
 func (p *TxPool) loop(head *types.Header) {
 	// Close the termination marker when the pool stops
 	defer close(p.term)
-
-	// Subscribe to chain head events to trigger subpool resets
-	var (
-		newHeadCh  = make(chan core.ChainHeadEvent)
-		newHeadSub = p.chain.SubscribeChainHeadEvent(newHeadCh)
-	)
-	if newHeadSub != nil {
-		defer newHeadSub.Unsubscribe()
-	}
 
 	// Track the previous and current head to feed to an idle reset
 	var (
@@ -221,7 +217,7 @@ func (p *TxPool) loop(head *types.Header) {
 		}
 		// Wait for the next chain head event or a previous reset finish
 		select {
-		case event := <-newHeadCh:
+		case event := <-p.headCh:
 			// Chain moved forward, store the head for later consumption
 			newHead = event.Header
 
