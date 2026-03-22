@@ -12,7 +12,11 @@ jobs:
   Build-Container-Image:
     runs-on: ubuntu-latest
 
-    if: ${{ github.event.label.name == 'CI:Build' }} # source: https://stackoverflow.com/questions/62325286/run-github-actions-when-pull-requests-have-a-specific-label
+
+    #if: ${{ github.event.label.name == 'CI:Build' }} # source: https://stackoverflow.com/questions/62325286/run-github-actions-when-pull-requests-have-a-specific-label
+    
+    # Run the build once the merge is complete: https://github.com/orgs/community/discussions/26724#discussioncomment-3253096
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
 
     permissions:
       contents: read
