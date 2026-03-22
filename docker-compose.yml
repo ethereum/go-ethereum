@@ -1,0 +1,25 @@
+
+services:
+  geth:
+    image: go-etherium:0.0.1-all-tools
+    # geth --dev --http --http.api eth,web3,net --http.corsdomain "https://remix.ethereum.org"
+
+    command:  >
+      geth
+      --dev 
+      --http # works in localhost but doesn't listen on the public address
+      --http.addr 0.0.0.0 
+      --http.api eth,web3,debug,net 
+      --http.corsdomain "https://remix.ethereum.org"
+      --datadir=/root/.ethereum
+      --http.vhosts="*"
+    ports:
+      - 8545:8545
+      - 8546:8546
+      - 30303:30303
+    volumes:
+      - geth-datadir:/root/.ethereum
+
+volumes:
+  geth-datadir:
+
