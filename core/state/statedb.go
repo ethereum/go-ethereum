@@ -748,18 +748,24 @@ type RemovedAccountWithBalance struct {
 	Balance *uint256.Int
 }
 
-// GetRemovedAccountsWithBalance returns a list of accounts scheduled for
+// EmitLogsForBurnAccounts emits the eth transfer logs for accounts scheduled for
 // removal which still have positive balance. The purpose of this function is
 // to handle a corner case of EIP-7708 where a self-destructed account might
 // still receive funds between sending/burning its previous balance and actual
 // removal. In this case the burning of these remaining balances still need to
 // be logged.
 // Specification EIP-7708: https://eips.ethereum.org/EIPS/eip-7708
-func (s *StateDB) GetRemovedAccountsWithBalance() (list []RemovedAccountWithBalance) {
+//
+// This function should only be invoked at the transaction boundary, specifically
+// before the Finalise.
+func (s *StateDB) EmitLogsForBurnAccounts() {
+	var list []RemovedAccountWithBalance
 	for addr := range s.journal.dirties {
-		if obj, exist := s.stateObjects[addr]; exist &&
-			obj.selfDestructed && !obj.Balance().IsZero() {
-			list = append(list, RemovedAccountWithBalance{Address: obj.address, Balance: obj.Balance()})
+		if obj, exist := s.stateObjects[addr]; exist && obj.selfDestructed && !obj.Balance().IsZero() {
+			list = append(list, RemovedAccountWithBalance{
+				Address: obj.address,
+				Balance: obj.Balance(),
+			})
 		}
 	}
 	if list != nil {
@@ -767,7 +773,9 @@ func (s *StateDB) GetRemovedAccountsWithBalance() (list []RemovedAccountWithBala
 			return list[i].Address.Cmp(list[j].Address) < 0
 		})
 	}
-	return list
+	for _, acct := range list {
+		s.AddLog(types.EthBurnLog(acct.Address, acct.Balance))
+	}
 }
 
 // Finalise finalises the state by removing the destructed objects and clears
