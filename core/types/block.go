@@ -21,13 +21,14 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"io"
 	"math/big"
 	"reflect"
 	"slices"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/core/types/bal"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
