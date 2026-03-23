@@ -613,7 +613,7 @@ func HasAccessList(db ethdb.Reader, hash common.Hash, number uint64) bool {
 
 // ReadAccessListRLP retrieves the RLP-encoded block access list for a block from KV.
 func ReadAccessListRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
-	data, _ := db.Get(balKey(number, hash))
+	data, _ := db.Get(accessListKey(number, hash))
 	return data
 }
 
@@ -642,14 +642,14 @@ func WriteAccessList(db ethdb.KeyValueWriter, hash common.Hash, number uint64, b
 
 // WriteAccessListRLP stores a pre-encoded block access list in the active KV store.
 func WriteAccessListRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, encoded rlp.RawValue) {
-	if err := db.Put(balKey(number, hash), encoded); err != nil {
+	if err := db.Put(accessListKey(number, hash), encoded); err != nil {
 		log.Crit("Failed to store BAL", "err", err)
 	}
 }
 
 // DeleteAccessList removes a block access list from the active KV store.
 func DeleteAccessList(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-	if err := db.Delete(balKey(number, hash)); err != nil {
+	if err := db.Delete(accessListKey(number, hash)); err != nil {
 		log.Crit("Failed to delete BAL", "err", err)
 	}
 }
