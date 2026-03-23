@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -132,15 +133,19 @@ func errorMessage(err error) *jsonrpcMessage {
 	}
 	de, ok := err.(DataError)
 	if ok {
-		msg.Error.Data = de.ErrorData()
+		data, err := marshalErrorData(de.ErrorData())
+		if err != nil {
+			return errorMessage(&internalServerError{errcodeMarshalError, err.Error()})
+		}
+		msg.Error.Data = data
 	}
 	return msg
 }
 
 type jsonError struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Code    int             `json:"code"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data,omitempty"`
 }
 
 func (err *jsonError) Error() string {
@@ -155,7 +160,44 @@ func (err *jsonError) ErrorCode() int {
 }
 
 func (err *jsonError) ErrorData() interface{} {
-	return err.Data
+	if len(err.Data) == 0 {
+		return nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(err.Data))
+	dec.UseNumber()
+
+	var data interface{}
+	if err := dec.Decode(&data); err != nil {
+		return nil
+	}
+	return data
+}
+
+func (err *jsonError) encodedSize() int {
+	size := len(`{"code":`) + len(strconv.Itoa(err.Code)) + len(`,"message":`) + jsonStringSize(err.Message)
+	if len(err.Data) > 0 {
+		size += len(`,"data":`) + len(err.Data)
+	}
+	return size + len(`}`)
+}
+
+func marshalErrorData(data interface{}) (json.RawMessage, error) {
+	if data == nil {
+		return nil, nil
+	}
+	enc, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(enc), nil
+}
+
+func jsonStringSize(s string) int {
+	enc, err := json.Marshal(s)
+	if err != nil {
+		return 0
+	}
+	return len(enc)
 }
 
 // Conn is a subset of the methods of net.Conn which are sufficient for ServerCodec.
