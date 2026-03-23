@@ -109,7 +109,7 @@ var (
 		},
 		{
 			Name:   "womir",
-			GOOS:   "js",
+			GOOS:   "wasip1",
 			GOARCH: "wasm",
 			Tags:   "womir",
 		},
