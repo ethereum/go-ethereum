@@ -121,15 +121,6 @@ func (s *stateObject) touch() {
 	s.db.journal.touchChange(s.address)
 }
 
-// getTrie returns the associated storage trie. The trie will be opened if it's
-// not loaded previously. An error will be returned if trie can't be loaded.
-//
-// If a new trie is opened, it will be cached within the state object to allow
-// subsequent reads to expand the same trie instead of reloading from disk.
-func (s *stateObject) getTrie() (Trie, error) {
-	return nil, nil
-}
-
 // GetState retrieves a value associated with the given storage key.
 func (s *stateObject) GetState(key common.Hash) common.Hash {
 	value, _ := s.getState(key)
@@ -294,6 +285,7 @@ func (s *stateObject) updateTrie() error {
 		vals = append(vals, value)
 	}
 	s.uncommittedStorage = make(Storage) // empties the commit markers
+
 	return s.db.hasher.UpdateStorage(s.address, keys, vals)
 }
 
@@ -344,12 +336,12 @@ func (s *stateObject) commit() (*accountUpdate, error) {
 	}
 	// commit the contract code if it's modified
 	if s.dirtyCode {
+		s.dirtyCode = false // reset the dirty flag
+	
 		op.code = &contractCode{
 			hash: common.BytesToHash(s.CodeHash()),
 			blob: s.code,
 		}
-		s.dirtyCode = false // reset the dirty flag
-
 		if s.origin == nil {
 			op.code.originHash = types.EmptyCodeHash
 		} else {
@@ -493,8 +485,4 @@ func (s *stateObject) Balance() *uint256.Int {
 
 func (s *stateObject) Nonce() uint64 {
 	return s.data.Nonce
-}
-
-func (s *stateObject) Root() common.Hash {
-	return common.Hash{}
 }

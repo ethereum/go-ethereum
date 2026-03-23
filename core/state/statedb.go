@@ -42,26 +42,6 @@ import (
 // TriesInMemory represents the number of layers that are kept in RAM.
 const TriesInMemory = 128
 
-type mutationType int
-
-const (
-	update mutationType = iota
-	deletion
-)
-
-type mutation struct {
-	typ     mutationType
-	applied bool
-}
-
-func (m *mutation) copy() *mutation {
-	return &mutation{typ: m.typ, applied: m.applied}
-}
-
-func (m *mutation) isDelete() bool {
-	return m.typ == deletion
-}
-
 // StateDB structs within the ethereum protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
 // nested states. It's the general query interface to retrieve:
@@ -144,7 +124,6 @@ type StateDB struct {
 	CodeReads       time.Duration
 
 	AccountLoaded  int          // Number of accounts retrieved from the database during the state transition
-	AccountUpdated int          // Number of accounts updated during the state transition
 	AccountDeleted int          // Number of accounts deleted during the state transition
 	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
 	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
@@ -154,10 +133,8 @@ type StateDB struct {
 	// This value may be smaller than the actual number of bytes read, since
 	// some APIs (e.g. CodeSize) may load the entire code from either the
 	// cache or the database when the size is not available in the cache.
-	CodeLoaded      int // Number of contract code loaded during the state transition
-	CodeLoadBytes   int // Total bytes of resolved code
-	CodeUpdated     int // Number of contracts with code changes that persisted
-	CodeUpdateBytes int // Total bytes of persisted code written
+	CodeLoaded    int // Number of contract code loaded during the state transition
+	CodeLoadBytes int // Total bytes of resolved code
 }
 
 // New creates a new state from a given trie.
@@ -309,19 +286,6 @@ func (s *StateDB) GetNonce(addr common.Address) uint64 {
 	}
 
 	return 0
-}
-
-// GetStorageRoot retrieves the storage root from the given address or empty
-// if object not found.
-//
-// Note: the storage root returned corresponds to the trie since last Intermediate
-// operation, some recent in-memory changes are excluded.
-func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.Root()
-	}
-	return common.Hash{}
 }
 
 // TxIndex returns the current transaction index set by SetTxContext.
@@ -777,64 +741,73 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
 
-	// Process all storage updates concurrently. The state object update root
-	// method will internally call a blocking trie fetch from the prefetcher,
-	// so there's no need to explicitly wait for the prefetchers to finish.
+	// Pre-process mutations whose preceding deletion has not yet been
+	// applied. This happens when an account is deleted and then re-created
+	// within the same block and the deletion was overwritten by the update.
+	// Notify the hasher of the deletion first so that any cached storage
+	// trie is evicted and the re-created account starts with a fresh trie.
 	var (
-		start   = time.Now()
-		workers errgroup.Group
+		delAddrs []common.Address
+		delAccts []AccountMut
+		start    = time.Now()
 	)
+	for addr, op := range s.mutations {
+		if !op.precedingDelete {
+			continue
+		}
+		op.precedingDelete = false
+		delAddrs = append(delAddrs, addr)
+		delAccts = append(delAccts, AccountMut{Account: nil})
+	}
+	if len(delAddrs) > 0 {
+		if err := s.hasher.UpdateAccount(delAddrs, delAccts); err != nil {
+			s.setError(err)
+			return common.Hash{}
+		}
+	}
+	s.AccountUpdates += time.Since(start)
+
+	// Process all storage updates concurrently, flushing them to hasher.
+	start = time.Now()
+	var workers errgroup.Group
 	for addr, op := range s.mutations {
 		if op.applied || op.isDelete() {
 			continue
 		}
-		obj := s.stateObjects[addr] // closure for the task runner below
+		obj := s.stateObjects[addr]
 		workers.Go(obj.updateTrie)
 	}
-	workers.Wait()
+	if err := workers.Wait(); err != nil {
+		s.setError(err)
+	}
 	s.StorageUpdates += time.Since(start)
 
-	// Now we're about to start to write changes to the trie. The trie is so far
-	// _untouched_. We can check with the prefetcher, if it can give us a trie
-	// which has the same root, but also has some content loaded into it.
-	//
-	// Don't check prefetcher if verkle trie has been used. In the context of verkle,
-	// only a single trie is used for state hashing. Replacing a non-nil verkle tree
-	// here could result in losing uncommitted changes from storage.
-	start = time.Now()
-
+	// Process all account updates
 	var (
 		addresses []common.Address
-		accounts  []AccountMutation
+		accounts  []AccountMut
 	)
+	start = time.Now()
 	for addr, op := range s.mutations {
 		if op.applied {
 			continue
 		}
 		op.applied = true
-
 		addresses = append(addresses, addr)
+
 		if op.isDelete() {
-			accounts = append(accounts, AccountMutation{Account: nil})
-		} else {
-			obj := s.stateObjects[addr]
-			mut := AccountMutation{
-				Account:   &obj.data,
-				DirtyCode: obj.dirtyCode,
-				Code:      obj.code,
-			}
-			accounts = append(accounts, mut)
-
-			s.AccountUpdated += 1
-
-			// Count code writes post-Finalise so reverted CREATEs are excluded.
-			if obj.dirtyCode {
-				s.CodeUpdated += 1
-				s.CodeUpdateBytes += len(obj.code)
-			}
+			accounts = append(accounts, AccountMut{Account: nil})
+			continue
 		}
+		obj := s.stateObjects[addr]
+		mut := AccountMut{Account: &obj.data}
+		if obj.dirtyCode {
+			mut.Code = &CodeMut{Code: obj.code}
+		}
+		accounts = append(accounts, mut)
 	}
 	if err := s.hasher.UpdateAccount(addresses, accounts); err != nil {
+		s.setError(err)
 		return common.Hash{}
 	}
 	s.AccountUpdates += time.Since(start)
@@ -1028,7 +1001,6 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	}
 	accountReadMeters.Mark(int64(s.AccountLoaded))
 	storageReadMeters.Mark(int64(s.StorageLoaded))
-	accountUpdatedMeter.Mark(int64(s.AccountUpdated))
 	storageUpdatedMeter.Mark(s.StorageUpdated.Load())
 	accountDeletedMeter.Mark(int64(s.AccountDeleted))
 	storageDeletedMeter.Mark(s.StorageDeleted.Load())
@@ -1038,7 +1010,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	storageTriesDeletedMeter.Mark(int64(storageTrieNodesDeleted))
 
 	// Clear the metric markers
-	s.AccountLoaded, s.AccountUpdated, s.AccountDeleted = 0, 0, 0
+	s.AccountLoaded, s.AccountDeleted = 0, 0
 	s.StorageLoaded = 0
 	s.StorageUpdated.Store(0)
 	s.StorageDeleted.Store(0)
@@ -1184,25 +1156,6 @@ func (s *StateDB) AddressInAccessList(addr common.Address) bool {
 // SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
 func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	return s.accessList.Contains(addr, slot)
-}
-
-// markDelete is invoked when an account is deleted but the deletion is
-// not yet committed. The pending mutation is cached and will be applied
-// all together
-func (s *StateDB) markDelete(addr common.Address) {
-	if _, ok := s.mutations[addr]; !ok {
-		s.mutations[addr] = &mutation{}
-	}
-	s.mutations[addr].applied = false
-	s.mutations[addr].typ = deletion
-}
-
-func (s *StateDB) markUpdate(addr common.Address) {
-	if _, ok := s.mutations[addr]; !ok {
-		s.mutations[addr] = &mutation{}
-	}
-	s.mutations[addr].applied = false
-	s.mutations[addr].typ = update
 }
 
 // Witness retrieves the current state witness being collected.

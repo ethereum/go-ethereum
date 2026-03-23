@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -126,134 +127,137 @@ func (s SizeStats) add(diff SizeStats) SizeStats {
 
 // calSizeStats measures the state size changes of the provided state update.
 func calSizeStats(update *stateUpdate) (SizeStats, error) {
-	return SizeStats{}, nil
-	//stats := SizeStats{
-	//	BlockNumber: update.blockNumber,
-	//	StateRoot:   update.root,
-	//}
-	//
-	//// Measure the account changes
-	//for addr, oldValue := range update.accountsOrigin {
-	//	addrHash := crypto.Keccak256Hash(addr.Bytes())
-	//	newValue, exists := update.accounts[addrHash]
-	//	if !exists {
-	//		return SizeStats{}, fmt.Errorf("account %x not found", addr)
-	//	}
-	//	oldLen, newLen := len(oldValue), len(newValue)
-	//
-	//	switch {
-	//	case oldLen > 0 && newLen == 0:
-	//		// Account deletion
-	//		stats.Accounts -= 1
-	//		stats.AccountBytes -= accountKeySize + int64(oldLen)
-	//	case oldLen == 0 && newLen > 0:
-	//		// Account creation
-	//		stats.Accounts += 1
-	//		stats.AccountBytes += accountKeySize + int64(newLen)
-	//	default:
-	//		// Account update
-	//		stats.AccountBytes += int64(newLen - oldLen)
-	//	}
-	//}
-	//
-	//// Measure storage changes
-	//for addr, slots := range update.storagesOrigin {
-	//	addrHash := crypto.Keccak256Hash(addr.Bytes())
-	//	subset, exists := update.storages[addrHash]
-	//	if !exists {
-	//		return SizeStats{}, fmt.Errorf("storage %x not found", addr)
-	//	}
-	//	for key, oldValue := range slots {
-	//		var (
-	//			exists   bool
-	//			newValue []byte
-	//		)
-	//		if update.rawStorageKey {
-	//			newValue, exists = subset[crypto.Keccak256Hash(key.Bytes())]
-	//		} else {
-	//			newValue, exists = subset[key]
-	//		}
-	//		if !exists {
-	//			return SizeStats{}, fmt.Errorf("storage slot %x-%x not found", addr, key)
-	//		}
-	//		oldLen, newLen := len(oldValue), len(newValue)
-	//
-	//		switch {
-	//		case oldLen > 0 && newLen == 0:
-	//			// Storage deletion
-	//			stats.Storages -= 1
-	//			stats.StorageBytes -= storageKeySize + int64(oldLen)
-	//		case oldLen == 0 && newLen > 0:
-	//			// Storage creation
-	//			stats.Storages += 1
-	//			stats.StorageBytes += storageKeySize + int64(newLen)
-	//		default:
-	//			// Storage update
-	//			stats.StorageBytes += int64(newLen - oldLen)
-	//		}
-	//	}
-	//}
-	//
-	//// Measure trienode changes
-	//for owner, subset := range update.nodes.Sets {
-	//	var (
-	//		keyPrefix int64
-	//		isAccount = owner == (common.Hash{})
-	//	)
-	//	if isAccount {
-	//		keyPrefix = accountTrienodePrefixSize
-	//	} else {
-	//		keyPrefix = storageTrienodePrefixSize
-	//	}
-	//
-	//	// Iterate over Origins since every modified node has an origin entry
-	//	for path, oldNode := range subset.Origins {
-	//		newNode, exists := subset.Nodes[path]
-	//		if !exists {
-	//			return SizeStats{}, fmt.Errorf("node %x-%v not found", owner, path)
-	//		}
-	//		keySize := keyPrefix + int64(len(path))
-	//
-	//		switch {
-	//		case len(oldNode) > 0 && len(newNode.Blob) == 0:
-	//			// Node deletion
-	//			if isAccount {
-	//				stats.AccountTrienodes -= 1
-	//				stats.AccountTrienodeBytes -= keySize + int64(len(oldNode))
-	//			} else {
-	//				stats.StorageTrienodes -= 1
-	//				stats.StorageTrienodeBytes -= keySize + int64(len(oldNode))
-	//			}
-	//		case len(oldNode) == 0 && len(newNode.Blob) > 0:
-	//			// Node creation
-	//			if isAccount {
-	//				stats.AccountTrienodes += 1
-	//				stats.AccountTrienodeBytes += keySize + int64(len(newNode.Blob))
-	//			} else {
-	//				stats.StorageTrienodes += 1
-	//				stats.StorageTrienodeBytes += keySize + int64(len(newNode.Blob))
-	//			}
-	//		default:
-	//			// Node update
-	//			if isAccount {
-	//				stats.AccountTrienodeBytes += int64(len(newNode.Blob) - len(oldNode))
-	//			} else {
-	//				stats.StorageTrienodeBytes += int64(len(newNode.Blob) - len(oldNode))
-	//			}
-	//		}
-	//	}
-	//}
-	//
-	//codeExists := make(map[common.Hash]struct{})
-	//for _, code := range update.codes {
-	//	if _, ok := codeExists[code.hash]; ok || code.duplicate {
-	//		continue
-	//	}
-	//	stats.ContractCodes += 1
-	//	stats.ContractCodeBytes += codeKeySize + int64(len(code.blob))
-	//	codeExists[code.hash] = struct{}{}
-	//}
-	//return stats, nil
+	stats := SizeStats{
+		BlockNumber: update.blockNumber,
+		StateRoot:   update.root,
+	}
+	accounts, accountOrigin, storages, storageOrigin, err := update.encodeMerkle()
+	if err != nil {
+		return SizeStats{}, err
+	}
+
+	// Measure the account changes
+	for addr, oldValue := range accountOrigin {
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		newValue, exists := accounts[addrHash]
+		if !exists {
+			return SizeStats{}, fmt.Errorf("account %x not found", addr)
+		}
+		oldLen, newLen := len(oldValue), len(newValue)
+
+		switch {
+		case oldLen > 0 && newLen == 0:
+			// Account deletion
+			stats.Accounts -= 1
+			stats.AccountBytes -= accountKeySize + int64(oldLen)
+		case oldLen == 0 && newLen > 0:
+			// Account creation
+			stats.Accounts += 1
+			stats.AccountBytes += accountKeySize + int64(newLen)
+		default:
+			// Account update
+			stats.AccountBytes += int64(newLen - oldLen)
+		}
+	}
+
+	// Measure storage changes
+	for addr, slots := range storageOrigin {
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		subset, exists := storages[addrHash]
+		if !exists {
+			return SizeStats{}, fmt.Errorf("storage %x not found", addr)
+		}
+		for key, oldValue := range slots {
+			var (
+				exists   bool
+				newValue []byte
+			)
+			if update.rawStorageKey {
+				newValue, exists = subset[crypto.Keccak256Hash(key.Bytes())]
+			} else {
+				newValue, exists = subset[key]
+			}
+			if !exists {
+				return SizeStats{}, fmt.Errorf("storage slot %x-%x not found", addr, key)
+			}
+			oldLen, newLen := len(oldValue), len(newValue)
+
+			switch {
+			case oldLen > 0 && newLen == 0:
+				// Storage deletion
+				stats.Storages -= 1
+				stats.StorageBytes -= storageKeySize + int64(oldLen)
+			case oldLen == 0 && newLen > 0:
+				// Storage creation
+				stats.Storages += 1
+				stats.StorageBytes += storageKeySize + int64(newLen)
+			default:
+				// Storage update
+				stats.StorageBytes += int64(newLen - oldLen)
+			}
+		}
+	}
+
+	// Measure trienode changes
+	for owner, subset := range update.nodes.Sets {
+		var (
+			keyPrefix int64
+			isAccount = owner == (common.Hash{})
+		)
+		if isAccount {
+			keyPrefix = accountTrienodePrefixSize
+		} else {
+			keyPrefix = storageTrienodePrefixSize
+		}
+
+		// Iterate over Origins since every modified node has an origin entry
+		for path, oldNode := range subset.Origins {
+			newNode, exists := subset.Nodes[path]
+			if !exists {
+				return SizeStats{}, fmt.Errorf("node %x-%v not found", owner, path)
+			}
+			keySize := keyPrefix + int64(len(path))
+
+			switch {
+			case len(oldNode) > 0 && len(newNode.Blob) == 0:
+				// Node deletion
+				if isAccount {
+					stats.AccountTrienodes -= 1
+					stats.AccountTrienodeBytes -= keySize + int64(len(oldNode))
+				} else {
+					stats.StorageTrienodes -= 1
+					stats.StorageTrienodeBytes -= keySize + int64(len(oldNode))
+				}
+			case len(oldNode) == 0 && len(newNode.Blob) > 0:
+				// Node creation
+				if isAccount {
+					stats.AccountTrienodes += 1
+					stats.AccountTrienodeBytes += keySize + int64(len(newNode.Blob))
+				} else {
+					stats.StorageTrienodes += 1
+					stats.StorageTrienodeBytes += keySize + int64(len(newNode.Blob))
+				}
+			default:
+				// Node update
+				if isAccount {
+					stats.AccountTrienodeBytes += int64(len(newNode.Blob) - len(oldNode))
+				} else {
+					stats.StorageTrienodeBytes += int64(len(newNode.Blob) - len(oldNode))
+				}
+			}
+		}
+	}
+
+	codeExists := make(map[common.Hash]struct{})
+	for _, code := range update.codes {
+		if _, ok := codeExists[code.hash]; ok || code.duplicate {
+			continue
+		}
+		stats.ContractCodes += 1
+		stats.ContractCodeBytes += codeKeySize + int64(len(code.blob))
+		codeExists[code.hash] = struct{}{}
+	}
+	return stats, nil
 }
 
 type stateSizeQuery struct {

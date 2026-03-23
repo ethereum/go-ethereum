@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -220,8 +221,10 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	return newReader(db.codedb.Reader(), sr), nil
 }
 
+// Hasher implements Database, returning a hasher associated with the specified
+// state root.
 func (db *CachingDB) Hasher(stateRoot common.Hash) (Hasher, error) {
-	return &noopHasher{}, nil
+	return newMerkleHasher(stateRoot, db.triedb)
 }
 
 // ReadersWithCacheStats creates a pair of state readers that share the same
@@ -300,18 +303,26 @@ func (db *CachingDB) Commit(update *stateUpdate) error {
 	}
 	// If snapshotting is enabled, update the snapshot tree with this new version
 	if db.snap != nil && db.snap.Snapshot(update.originRoot) != nil {
-		//if err := db.snap.Update(update.root, update.originRoot, update.accounts, update.storages); err != nil {
-		//	log.Warn("Failed to update snapshot tree", "from", update.originRoot, "to", update.root, "err", err)
-		//}
-		//// Keep 128 diff layers in the memory, persistent layer is 129th.
-		//// - head layer is paired with HEAD state
-		//// - head-1 layer is paired with HEAD-1 state
-		//// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
-		//if err := db.snap.Cap(update.root, TriesInMemory); err != nil {
-		//	log.Warn("Failed to cap snapshot tree", "root", update.root, "layers", TriesInMemory, "err", err)
-		//}
+		accounts, _, storages, _, err := update.encodeMerkle()
+		if err != nil {
+			return err
+		}
+		if err := db.snap.Update(update.root, update.originRoot, accounts, storages); err != nil {
+			log.Warn("Failed to update snapshot tree", "from", update.originRoot, "to", update.root, "err", err)
+		}
+		// Keep 128 diff layers in the memory, persistent layer is 129th.
+		// - head layer is paired with HEAD state
+		// - head-1 layer is paired with HEAD-1 state
+		// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
+		if err := db.snap.Cap(update.root, TriesInMemory); err != nil {
+			log.Warn("Failed to cap snapshot tree", "root", update.root, "layers", TriesInMemory, "err", err)
+		}
 	}
-	return db.triedb.Update(update.root, update.originRoot, update.blockNumber, update.nodes, update.stateSet())
+	stateSet, err := update.stateSet()
+	if err != nil {
+		return err
+	}
+	return db.triedb.Update(update.root, update.originRoot, update.blockNumber, update.nodes, stateSet)
 }
 
 // Iteratee returns a state iteratee associated with the specified state root,

@@ -2265,7 +2265,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	stats.CodeReads = statedb.CodeReads
 
 	stats.AccountLoaded = statedb.AccountLoaded
-	stats.AccountUpdated = statedb.AccountUpdated
+	//stats.AccountUpdated = statedb.AccountUpdated
 	stats.AccountDeleted = statedb.AccountDeleted
 	stats.StorageLoaded = statedb.StorageLoaded
 	stats.StorageUpdated = int(statedb.StorageUpdated.Load())
@@ -2273,8 +2273,8 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 
 	stats.CodeLoaded = statedb.CodeLoaded
 	stats.CodeLoadBytes = statedb.CodeLoadBytes
-	stats.CodeUpdated = statedb.CodeUpdated
-	stats.CodeUpdateBytes = statedb.CodeUpdateBytes
+	//stats.CodeUpdated = statedb.CodeUpdated
+	//stats.CodeUpdateBytes = statedb.CodeUpdateBytes
 
 	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // The time spent on EVM processing
 	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation
