@@ -769,3 +769,75 @@ func (api *API) GetBlockInfoByEpochNum(epochNumber uint64) (*utils.EpochNumInfo,
 	}
 	return api.GetBlockInfoByV2EpochNum(epochNumber)
 }
+
+// GetSigningTxCountByEpoch returns the signing transaction count for ALL masternodes
+// (including non-active ones) in the epoch that ends at epochBlockNum.
+// epochBlockNum must be an epoch-switch block number.
+func (api *API) GetSigningTxCountByEpoch(epochBlockNum rpc.BlockNumber) (map[common.Address]uint64, error) {
+	header := api.chain.GetHeaderByNumber(uint64(epochBlockNum.Int64()))
+	if header == nil {
+		return nil, fmt.Errorf("block %d not found", epochBlockNum)
+	}
+
+	isEpochSwitch, _, err := api.XDPoS.IsEpochSwitch(header)
+	if err != nil {
+		return nil, err
+	}
+	if !isEpochSwitch {
+		return nil, fmt.Errorf("block %d is not an epoch switch block", epochBlockNum)
+	}
+
+	// Walk backwards from epochBlockNum-1 to the previous epoch switch block,
+	// collecting signing txs from every block.
+	mapBlkHash := map[uint64]common.Hash{}
+	// sigData maps blockHash -> list of signers who signed for that block
+	sigData := make(map[common.Hash][]common.Address)
+
+	h := header
+	for i := header.Number.Uint64() - 1; ; i-- {
+		parentHash := h.ParentHash
+		h = api.chain.GetHeader(parentHash, i)
+		if h == nil {
+			return nil, fmt.Errorf("failed to get header at number %d hash %s", i, parentHash.Hex())
+		}
+
+		mapBlkHash[i] = h.Hash()
+
+		signingTxs, ok := api.XDPoS.GetCachedSigningTxs(h.Hash())
+		if !ok {
+			block := api.chain.GetBlock(h.Hash(), i)
+			if block != nil {
+				signingTxs = api.XDPoS.CacheSigningTxs(h.Hash(), block.Transactions())
+			}
+		}
+		for _, tx := range signingTxs {
+			blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+			from := *tx.From()
+			sigData[blkHash] = append(sigData[blkHash], from)
+		}
+
+		prevIsEpochSwitch, _, err := api.XDPoS.IsEpochSwitch(h)
+		if err != nil {
+			return nil, err
+		}
+		if prevIsEpochSwitch || i == 0 {
+			break
+		}
+	}
+
+	// Count signings: for each block at MergeSignRange boundary, tally unique signers.
+	result := make(map[common.Address]uint64)
+	for blockNum, blkHash := range mapBlkHash {
+		if blockNum%common.MergeSignRange != 0 {
+			continue
+		}
+		seen := make(map[common.Address]bool)
+		for _, addr := range sigData[blkHash] {
+			if !seen[addr] {
+				seen[addr] = true
+				result[addr]++
+			}
+		}
+	}
+	return result, nil
+}

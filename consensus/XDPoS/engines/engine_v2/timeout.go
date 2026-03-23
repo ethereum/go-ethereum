@@ -124,7 +124,7 @@ func (x *XDPoS_v2) getTCEpochInfo(chain consensus.ChainReader, timeoutRound type
 		Round:  epochRound,
 		Number: epochSwitchInfo.EpochSwitchBlockInfo.Number,
 	}
-	log.Info("[getTCEpochInfo] Init epochInfo", "number", epochBlockInfo.Number, "round", epochRound, "tcRound", timeoutRound, "tcEpoch", tempTCEpoch)
+	log.Debug("[getTCEpochInfo] Init epochInfo", "number", epochBlockInfo.Number, "round", epochRound, "tcRound", timeoutRound, "tcEpoch", tempTCEpoch)
 	for epochBlockInfo.Round > timeoutRound && tempTCEpoch > 0 {
 		tempTCEpoch--
 		epochBlockInfo, err = x.GetBlockByEpochNumber(chain, tempTCEpoch)
@@ -135,7 +135,7 @@ func (x *XDPoS_v2) getTCEpochInfo(chain consensus.ChainReader, timeoutRound type
 		log.Debug("[getTCEpochInfo] Loop to get right epochInfo", "number", epochBlockInfo.Number, "round", epochBlockInfo.Round, "tcRound", timeoutRound, "tcEpoch", tempTCEpoch)
 	}
 	tcEpoch := tempTCEpoch
-	log.Info("[getTCEpochInfo] Final TC epochInfo", "number", epochBlockInfo.Number, "round", epochBlockInfo.Round, "tcRound", timeoutRound, "tcEpoch", tcEpoch)
+	log.Debug("[getTCEpochInfo] Final TC epochInfo", "number", epochBlockInfo.Number, "round", epochBlockInfo.Round, "tcRound", timeoutRound, "tcEpoch", tcEpoch)
 
 	epochInfo, err := x.getEpochSwitchInfo(chain, nil, epochBlockInfo.Hash)
 	if err != nil {
