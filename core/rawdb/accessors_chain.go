@@ -606,15 +606,15 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
-// HasBAL verifies the existence of a block access list for a block.
-func HasBAL(db ethdb.Reader, hash common.Hash, number uint64) bool {
-	return len(ReadBALRLP(db, hash, number)) > 0
+// HasAccessList verifies the existence of a block access list for a block.
+func HasAccessList(db ethdb.Reader, hash common.Hash, number uint64) bool {
+	return len(ReadAccessListRLP(db, hash, number)) > 0
 }
 
-// ReadBALRLP retrieves the RLP-encoded block access list for a block.
-func ReadBALRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+// ReadAccessListRLP retrieves the RLP-encoded block access list for a block.
+func ReadAccessListRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
-	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+	err := db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
 		if isCanon(reader, number, hash) {
 			data, _ = reader.Ancient(ChainFreezerBALTable, number)
 			return nil
@@ -622,12 +622,15 @@ func ReadBALRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 		data, _ = db.Get(balKey(number, hash))
 		return nil
 	})
+	if err != nil {
+		log.Crit("error reading from ancient store", "err", err)
+	}
 	return data
 }
 
-// ReadCanonicalBALRLP retrieves the BAL RLP for the canonical block at number.
+// ReadCanonicalAccessListRLP retrieves the BAL RLP for the canonical block at number.
 // Optionally takes the block hash to avoid looking it up.
-func ReadCanonicalBALRLP(db ethdb.Reader, number uint64, hash *common.Hash) rlp.RawValue {
+func ReadCanonicalAccessListRLP(db ethdb.Reader, number uint64, hash *common.Hash) rlp.RawValue {
 	var data []byte
 	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
 		data, _ = reader.Ancient(ChainFreezerBALTable, number)
@@ -646,9 +649,9 @@ func ReadCanonicalBALRLP(db ethdb.Reader, number uint64, hash *common.Hash) rlp.
 	return data
 }
 
-// ReadBAL retrieves and decodes the block access list for a block.
-func ReadBAL(db ethdb.Reader, hash common.Hash, number uint64) *bal.BlockAccessList {
-	data := ReadBALRLP(db, hash, number)
+// ReadAccessList retrieves and decodes the block access list for a block.
+func ReadAccessList(db ethdb.Reader, hash common.Hash, number uint64) *bal.BlockAccessList {
+	data := ReadAccessListRLP(db, hash, number)
 	if len(data) == 0 {
 		return nil
 	}
@@ -660,26 +663,24 @@ func ReadBAL(db ethdb.Reader, hash common.Hash, number uint64) *bal.BlockAccessL
 	return b
 }
 
-// WriteBAL RLP-encodes and stores a block access list in the active KV store.
-func WriteBAL(db ethdb.KeyValueWriter, hash common.Hash, number uint64, b *bal.BlockAccessList) {
+// WriteAccessList RLP-encodes and stores a block access list in the active KV store.
+func WriteAccessList(db ethdb.KeyValueWriter, hash common.Hash, number uint64, b *bal.BlockAccessList) {
 	bytes, err := rlp.EncodeToBytes(b)
 	if err != nil {
 		log.Crit("Failed to encode BAL", "err", err)
 	}
-	if err := db.Put(balKey(number, hash), bytes); err != nil {
-		log.Crit("Failed to store BAL", "err", err)
-	}
+	WriteAccessListRLP(db, hash, number, bytes)
 }
 
-// WriteBALRLP stores a pre-encoded block access list in the active KV store.
-func WriteBALRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, encoded rlp.RawValue) {
+// WriteAccessListRLP stores a pre-encoded block access list in the active KV store.
+func WriteAccessListRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, encoded rlp.RawValue) {
 	if err := db.Put(balKey(number, hash), encoded); err != nil {
 		log.Crit("Failed to store BAL", "err", err)
 	}
 }
 
-// DeleteBAL removes a block access list from the active KV store.
-func DeleteBAL(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+// DeleteAccessList removes a block access list from the active KV store.
+func DeleteAccessList(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(balKey(number, hash)); err != nil {
 		log.Crit("Failed to delete BAL", "err", err)
 	}
@@ -739,13 +740,23 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 	if body == nil {
 		return nil
 	}
-	return types.NewBlockWithHeader(header).WithBody(*body)
+	block := types.NewBlockWithHeader(header).WithBody(*body)
+	if header.BlockAccessListHash != nil {
+		accessList := ReadAccessList(db, hash, number)
+		if accessList != nil {
+			block = block.WithAccessList(accessList)
+		}
+	}
+	return block
 }
 
 // WriteBlock serializes a block into the database, header and body separately.
 func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 	WriteBody(db, block.Hash(), block.NumberU64(), block.Body())
 	WriteHeader(db, block.Header())
+	if block.AccessList() != nil {
+		WriteAccessList(db, block.Hash(), block.NumberU64(), block.AccessList())
+	}
 }
 
 // WriteAncientBlocks writes entire block data into ancient store and returns the total written size.
@@ -815,7 +826,7 @@ func WriteAncientHeaderChain(db ethdb.AncientWriter, headers []*types.Header) (i
 // DeleteBlock removes all block data associated with a hash.
 func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
-	DeleteBAL(db, hash, number)
+	DeleteAccessList(db, hash, number)
 	DeleteHeader(db, hash, number)
 	DeleteBody(db, hash, number)
 }
@@ -824,7 +835,7 @@ func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 // the hash to number mapping.
 func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
-	DeleteBAL(db, hash, number)
+	DeleteAccessList(db, hash, number)
 	deleteHeaderWithoutNumber(db, hash, number)
 	DeleteBody(db, hash, number)
 }

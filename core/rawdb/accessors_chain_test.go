@@ -934,45 +934,45 @@ func TestBALStorage(t *testing.T) {
 	number := uint64(42)
 
 	// Check that no BAL exists in a new database.
-	if HasBAL(db, hash, number) {
+	if HasAccessList(db, hash, number) {
 		t.Fatal("BAL found in new database")
 	}
-	if b := ReadBAL(db, hash, number); b != nil {
+	if b := ReadAccessList(db, hash, number); b != nil {
 		t.Fatalf("non existent BAL returned: %v", b)
 	}
 
 	// Write a BAL and verify it can be read back.
 	encoded, testBAL := makeTestBAL(t)
-	WriteBAL(db, hash, number, testBAL)
+	WriteAccessList(db, hash, number, testBAL)
 
-	if !HasBAL(db, hash, number) {
-		t.Fatal("HasBAL returned false after write")
+	if !HasAccessList(db, hash, number) {
+		t.Fatal("HasAccessList returned false after write")
 	}
-	if blob := ReadBALRLP(db, hash, number); len(blob) == 0 {
-		t.Fatal("ReadBALRLP returned empty after write")
+	if blob := ReadAccessListRLP(db, hash, number); len(blob) == 0 {
+		t.Fatal("ReadAccessListRLP returned empty after write")
 	}
-	if b := ReadBAL(db, hash, number); b == nil {
-		t.Fatal("ReadBAL returned nil after write")
+	if b := ReadAccessList(db, hash, number); b == nil {
+		t.Fatal("ReadAccessList returned nil after write")
 	} else if b.Hash() != testBAL.Hash() {
 		t.Fatalf("BAL hash mismatch: got %x, want %x", b.Hash(), testBAL.Hash())
 	}
 
-	// Also test WriteBALRLP with pre-encoded data.
+	// Also test WriteAccessListRLP with pre-encoded data.
 	hash2 := common.BytesToHash([]byte{0x03, 0x15})
-	WriteBALRLP(db, hash2, number, encoded)
-	if b := ReadBAL(db, hash2, number); b == nil {
-		t.Fatal("ReadBAL returned nil after WriteBALRLP")
+	WriteAccessListRLP(db, hash2, number, encoded)
+	if b := ReadAccessList(db, hash2, number); b == nil {
+		t.Fatal("ReadAccessList returned nil after WriteAccessListRLP")
 	} else if b.Hash() != testBAL.Hash() {
-		t.Fatalf("BAL hash mismatch after WriteBALRLP: got %x, want %x", b.Hash(), testBAL.Hash())
+		t.Fatalf("BAL hash mismatch after WriteAccessListRLP: got %x, want %x", b.Hash(), testBAL.Hash())
 	}
 
 	// Delete the BAL and verify it's gone.
-	DeleteBAL(db, hash, number)
+	DeleteAccessList(db, hash, number)
 
-	if HasBAL(db, hash, number) {
-		t.Fatal("HasBAL returned true after delete")
+	if HasAccessList(db, hash, number) {
+		t.Fatal("HasAccessList returned true after delete")
 	}
-	if b := ReadBAL(db, hash, number); b != nil {
+	if b := ReadAccessList(db, hash, number); b != nil {
 		t.Fatalf("deleted BAL returned: %v", b)
 	}
 }
@@ -998,7 +998,7 @@ func TestBALFreezer(t *testing.T) {
 	hash, number := block.Hash(), block.NumberU64()
 
 	// Verify no BAL exists before writing.
-	if blob := ReadBALRLP(db, hash, number); len(blob) > 0 {
+	if blob := ReadAccessListRLP(db, hash, number); len(blob) > 0 {
 		t.Fatalf("non existent BAL returned")
 	}
 
@@ -1009,18 +1009,18 @@ func TestBALFreezer(t *testing.T) {
 	WriteAncientBlocks(db, []*types.Block{block}, types.EncodeBlockReceiptLists([]types.Receipts{nil}), []rlp.RawValue{balRLP})
 
 	// Verify the BAL can be read from the freezer.
-	if blob := ReadBALRLP(db, hash, number); len(blob) == 0 {
+	if blob := ReadAccessListRLP(db, hash, number); len(blob) == 0 {
 		t.Fatal("no BAL returned from freezer")
 	}
-	if b := ReadBAL(db, hash, number); b == nil {
-		t.Fatal("ReadBAL returned nil from freezer")
+	if b := ReadAccessList(db, hash, number); b == nil {
+		t.Fatal("ReadAccessList returned nil from freezer")
 	} else if b.Hash() != testBAL.Hash() {
 		t.Fatalf("frozen BAL hash mismatch: got %x, want %x", b.Hash(), testBAL.Hash())
 	}
 
-	// Verify ReadCanonicalBALRLP works.
-	if blob := ReadCanonicalBALRLP(db, number, &hash); len(blob) == 0 {
-		t.Fatal("ReadCanonicalBALRLP returned empty for frozen block")
+	// Verify ReadCanonicalAccessListRLP works.
+	if blob := ReadCanonicalAccessListRLP(db, number, &hash); len(blob) == 0 {
+		t.Fatal("ReadCanonicalAccessListRLP returned empty for frozen block")
 	}
 }
 
@@ -1046,11 +1046,11 @@ func TestBALEmptyFreezer(t *testing.T) {
 
 	WriteAncientBlocks(db, []*types.Block{block}, types.EncodeBlockReceiptLists([]types.Receipts{nil}), nil)
 
-	// HasBAL should return false for a block with an empty freezer entry.
-	if HasBAL(db, hash, number) {
-		t.Fatal("HasBAL returned true for block with no BAL")
+	// HasAccessList should return false for a block with an empty freezer entry.
+	if HasAccessList(db, hash, number) {
+		t.Fatal("HasAccessList returned true for block with no BAL")
 	}
-	if b := ReadBAL(db, hash, number); b != nil {
-		t.Fatalf("ReadBAL returned non-nil for block with no BAL: %v", b)
+	if b := ReadAccessList(db, hash, number); b != nil {
+		t.Fatalf("ReadAccessList returned non-nil for block with no BAL: %v", b)
 	}
 }

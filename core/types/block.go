@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"io"
 	"math/big"
 	"reflect"
@@ -99,23 +100,27 @@ type Header struct {
 	// RequestsHash was added by EIP-7685 and is ignored in legacy headers.
 	RequestsHash *common.Hash `json:"requestsHash" rlp:"optional"`
 
+	// BlockAccessListHash was added by EIP-7928 and is ignored in legacy headers.
+	BlockAccessListHash *common.Hash `json:"balHash" rlp:"optional"`
+
 	// SlotNumber was added by EIP-7843 and is ignored in legacy headers.
 	SlotNumber *uint64 `json:"slotNumber" rlp:"optional"`
 }
 
 // field type overrides for gencodec
 type headerMarshaling struct {
-	Difficulty    *hexutil.Big
-	Number        *hexutil.Big
-	GasLimit      hexutil.Uint64
-	GasUsed       hexutil.Uint64
-	Time          hexutil.Uint64
-	Extra         hexutil.Bytes
-	BaseFee       *hexutil.Big
-	Hash          common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
-	BlobGasUsed   *hexutil.Uint64
-	ExcessBlobGas *hexutil.Uint64
-	SlotNumber    *hexutil.Uint64
+	Difficulty          *hexutil.Big
+	Number              *hexutil.Big
+	GasLimit            hexutil.Uint64
+	GasUsed             hexutil.Uint64
+	Time                hexutil.Uint64
+	Extra               hexutil.Bytes
+	BaseFee             *hexutil.Big
+	Hash                common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+	BlobGasUsed         *hexutil.Uint64
+	ExcessBlobGas       *hexutil.Uint64
+	BlockAccessListHash *common.Hash
+	SlotNumber          *hexutil.Uint64
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
@@ -204,6 +209,7 @@ type Block struct {
 	uncles       []*Header
 	transactions Transactions
 	withdrawals  Withdrawals
+	accessList   *bal.BlockAccessList
 
 	// caches
 	hash atomic.Pointer[common.Hash]
@@ -358,9 +364,10 @@ func (b *Block) Body() *Body {
 // Accessors for body data. These do not return a copy because the content
 // of the body slices does not affect the cached hash/size in block.
 
-func (b *Block) Uncles() []*Header          { return b.uncles }
-func (b *Block) Transactions() Transactions { return b.transactions }
-func (b *Block) Withdrawals() Withdrawals   { return b.withdrawals }
+func (b *Block) Uncles() []*Header                { return b.uncles }
+func (b *Block) Transactions() Transactions       { return b.transactions }
+func (b *Block) Withdrawals() Withdrawals         { return b.withdrawals }
+func (b *Block) AccessList() *bal.BlockAccessList { return b.accessList }
 
 func (b *Block) Transaction(hash common.Hash) *Transaction {
 	for _, transaction := range b.transactions {
@@ -509,6 +516,24 @@ func (b *Block) WithBody(body Body) *Block {
 	}
 	for i := range body.Uncles {
 		block.uncles[i] = CopyHeader(body.Uncles[i])
+	}
+	return block
+}
+
+// WithAccessList returns a copy of the block with the given access list embedded.
+func (b *Block) WithAccessList(accessList *bal.BlockAccessList) *Block {
+	alCopy := accessList.Copy()
+	alHash := accessList.Hash()
+	b.header.BlockAccessListHash = &alHash
+	block := &Block{
+		header:       b.header,
+		transactions: slices.Clone(b.transactions),
+		uncles:       make([]*Header, len(b.uncles)),
+		withdrawals:  slices.Clone(b.withdrawals),
+		accessList:   &alCopy,
+	}
+	for i := range b.uncles {
+		block.uncles[i] = CopyHeader(b.uncles[i])
 	}
 	return block
 }
