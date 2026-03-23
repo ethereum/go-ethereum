@@ -743,12 +743,12 @@ func (s *StateDB) GetRefund() uint64 {
 	return s.refund
 }
 
-type RemovedAccountWithBalance struct {
-	Address common.Address
-	Balance *uint256.Int
+type removedAccountWithBalance struct {
+	address common.Address
+	balance *uint256.Int
 }
 
-// EmitLogsForBurnAccounts emits the eth transfer logs for accounts scheduled for
+// EmitLogsForBurnAccounts emits the eth burn logs for accounts scheduled for
 // removal which still have positive balance. The purpose of this function is
 // to handle a corner case of EIP-7708 where a self-destructed account might
 // still receive funds between sending/burning its previous balance and actual
@@ -759,22 +759,22 @@ type RemovedAccountWithBalance struct {
 // This function should only be invoked at the transaction boundary, specifically
 // before the Finalise.
 func (s *StateDB) EmitLogsForBurnAccounts() {
-	var list []RemovedAccountWithBalance
+	var list []removedAccountWithBalance
 	for addr := range s.journal.dirties {
 		if obj, exist := s.stateObjects[addr]; exist && obj.selfDestructed && !obj.Balance().IsZero() {
-			list = append(list, RemovedAccountWithBalance{
-				Address: obj.address,
-				Balance: obj.Balance(),
+			list = append(list, removedAccountWithBalance{
+				address: obj.address,
+				balance: obj.Balance(),
 			})
 		}
 	}
 	if list != nil {
 		sort.Slice(list, func(i, j int) bool {
-			return list[i].Address.Cmp(list[j].Address) < 0
+			return list[i].address.Cmp(list[j].address) < 0
 		})
 	}
 	for _, acct := range list {
-		s.AddLog(types.EthBurnLog(acct.Address, acct.Balance))
+		s.AddLog(types.EthBurnLog(acct.address, acct.balance))
 	}
 }
 
