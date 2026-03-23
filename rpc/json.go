@@ -107,6 +107,25 @@ func (msg *jsonrpcMessage) String() string {
 	return string(b)
 }
 
+// size returns the approximate wire-size of the response.
+// For successful responses it returns len(Result), which is already a json.RawMessage.
+// For error responses it returns the serialized size of the entire error response,
+// since Error.Data may contain large payloads that would be serialized to the wire.
+func (msg *jsonrpcMessage) size() int {
+	if msg == nil {
+		return 0
+	}
+	if msg.Result != nil {
+		return len(msg.Result)
+	}
+	if msg.Error != nil {
+		// Re-serialize to capture full error response size including Error.Data
+		b, _ := json.Marshal(msg)
+		return len(b)
+	}
+	return 0
+}
+
 func (msg *jsonrpcMessage) errorResponse(err error) *jsonrpcMessage {
 	resp := errorMessage(err)
 	resp.ID = msg.ID
