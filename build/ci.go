@@ -117,13 +117,11 @@ var (
 			Name:   "wasm-js",
 			GOOS:   "js",
 			GOARCH: "wasm",
-			Tags:   "example",
 		},
 		{
 			Name:   "wasm-wasi",
 			GOOS:   "wasip1",
 			GOARCH: "wasm",
-			Tags:   "example",
 		},
 		{
 			Name: "example",
