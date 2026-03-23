@@ -70,6 +70,19 @@ func (testError) Error() string          { return "testError" }
 func (testError) ErrorCode() int         { return 444 }
 func (testError) ErrorData() interface{} { return "testError data" }
 
+type largeDataError struct{}
+
+func (largeDataError) Error() string { return "largeDataError" }
+func (largeDataError) ErrorCode() int {
+	return 444
+}
+func (largeDataError) ErrorData() interface{} {
+	// Returns a 100-byte string to exceed the 60-byte batch response limit
+	// when serialized as JSON: "largeDataError data padding..." (~33 bytes)
+	// plus JSON overhead, the error response itself is ~50 bytes
+	return "largeDataError data padding padding padding"
+}
+
 type MarshalErrObj struct{}
 
 func (o *MarshalErrObj) MarshalText() ([]byte, error) {
@@ -126,6 +139,10 @@ func (s *testService) InvalidRets3() (string, string, error) {
 
 func (s *testService) ReturnError() error {
 	return testError{}
+}
+
+func (s *testService) ReturnLargeError() error {
+	return largeDataError{}
 }
 
 func (s *testService) MarshalError() *MarshalErrObj {
