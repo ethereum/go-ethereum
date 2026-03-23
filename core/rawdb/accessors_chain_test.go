@@ -433,7 +433,7 @@ func TestAncientStorage(t *testing.T) {
 	}
 
 	// Write and verify the header in the database
-	WriteAncientBlocks(db, []*types.Block{block}, types.EncodeBlockReceiptLists([]types.Receipts{nil}), nil)
+	WriteAncientBlocks(db, []*types.Block{block}, types.EncodeBlockReceiptLists([]types.Receipts{nil}))
 
 	if blob := ReadHeaderRLP(db, hash, number); len(blob) == 0 {
 		t.Fatalf("no header returned")
@@ -563,7 +563,7 @@ func BenchmarkWriteAncientBlocks(b *testing.B) {
 
 		blocks := allBlocks[i : i+length]
 		receipts := batchReceipts[:length]
-		writeSize, err := WriteAncientBlocks(db, blocks, types.EncodeBlockReceiptLists(receipts), nil)
+		writeSize, err := WriteAncientBlocks(db, blocks, types.EncodeBlockReceiptLists(receipts))
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -868,7 +868,7 @@ func TestHeadersRLPStorage(t *testing.T) {
 	}
 	receipts := make([]types.Receipts, 100)
 	// Write first half to ancients
-	WriteAncientBlocks(db, chain[:50], types.EncodeBlockReceiptLists(receipts[:50]), nil)
+	WriteAncientBlocks(db, chain[:50], types.EncodeBlockReceiptLists(receipts[:50]))
 	// Write second half to db
 	for i := 50; i < 100; i++ {
 		WriteCanonicalHash(db, chain[i].Hash(), chain[i].NumberU64())
@@ -977,80 +977,4 @@ func TestBALStorage(t *testing.T) {
 	}
 }
 
-// TestBALFreezer tests that BALs are frozen alongside other block data
-// and can be read from the freezer.
-func TestBALFreezer(t *testing.T) {
-	frdir := t.TempDir()
-	db, err := Open(NewMemoryDatabase(), OpenOptions{Ancient: frdir})
-	if err != nil {
-		t.Fatalf("failed to create database with ancient backend: %v", err)
-	}
-	defer db.Close()
 
-	// Create a test block.
-	block := types.NewBlockWithHeader(&types.Header{
-		Number:      big.NewInt(0),
-		Extra:       []byte("test block"),
-		UncleHash:   types.EmptyUncleHash,
-		TxHash:      types.EmptyTxsHash,
-		ReceiptHash: types.EmptyReceiptsHash,
-	})
-	hash, number := block.Hash(), block.NumberU64()
-
-	// Verify no BAL exists before writing.
-	if blob := ReadAccessListRLP(db, hash, number); len(blob) > 0 {
-		t.Fatalf("non existent BAL returned")
-	}
-
-	// Write a BAL to KV first, then freeze.
-	balRLP, testBAL := makeTestBAL(t)
-
-	// Freeze via WriteAncientBlocks.
-	WriteAncientBlocks(db, []*types.Block{block}, types.EncodeBlockReceiptLists([]types.Receipts{nil}), []rlp.RawValue{balRLP})
-
-	// Verify the BAL can be read from the freezer.
-	if blob := ReadAccessListRLP(db, hash, number); len(blob) == 0 {
-		t.Fatal("no BAL returned from freezer")
-	}
-	if b := ReadAccessList(db, hash, number); b == nil {
-		t.Fatal("ReadAccessList returned nil from freezer")
-	} else if b.Hash() != testBAL.Hash() {
-		t.Fatalf("frozen BAL hash mismatch: got %x, want %x", b.Hash(), testBAL.Hash())
-	}
-
-	// Verify ReadCanonicalAccessListRLP works.
-	if blob := ReadCanonicalAccessListRLP(db, number, &hash); len(blob) == 0 {
-		t.Fatal("ReadCanonicalAccessListRLP returned empty for frozen block")
-	}
-}
-
-// TestBALEmptyFreezer tests that pre-EIP-8189 blocks without BALs have empty
-// freezer entries.
-func TestBALEmptyFreezer(t *testing.T) {
-	frdir := t.TempDir()
-	db, err := Open(NewMemoryDatabase(), OpenOptions{Ancient: frdir})
-	if err != nil {
-		t.Fatalf("failed to create database with ancient backend: %v", err)
-	}
-	defer db.Close()
-
-	// Create and freeze a block with no BAL.
-	block := types.NewBlockWithHeader(&types.Header{
-		Number:      big.NewInt(0),
-		Extra:       []byte("no bal block"),
-		UncleHash:   types.EmptyUncleHash,
-		TxHash:      types.EmptyTxsHash,
-		ReceiptHash: types.EmptyReceiptsHash,
-	})
-	hash, number := block.Hash(), block.NumberU64()
-
-	WriteAncientBlocks(db, []*types.Block{block}, types.EncodeBlockReceiptLists([]types.Receipts{nil}), nil)
-
-	// HasAccessList should return false for a block with an empty freezer entry.
-	if HasAccessList(db, hash, number) {
-		t.Fatal("HasAccessList returned true for block with no BAL")
-	}
-	if b := ReadAccessList(db, hash, number); b != nil {
-		t.Fatalf("ReadAccessList returned non-nil for block with no BAL: %v", b)
-	}
-}

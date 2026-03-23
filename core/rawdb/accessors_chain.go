@@ -611,41 +611,9 @@ func HasAccessList(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	return len(ReadAccessListRLP(db, hash, number)) > 0
 }
 
-// ReadAccessListRLP retrieves the RLP-encoded block access list for a block.
+// ReadAccessListRLP retrieves the RLP-encoded block access list for a block from KV.
 func ReadAccessListRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
-	var data []byte
-	err := db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
-		if isCanon(reader, number, hash) {
-			data, _ = reader.Ancient(ChainFreezerBALTable, number)
-			return nil
-		}
-		data, _ = db.Get(balKey(number, hash))
-		return nil
-	})
-	if err != nil {
-		log.Crit("error reading from ancient store", "err", err)
-	}
-	return data
-}
-
-// ReadCanonicalAccessListRLP retrieves the BAL RLP for the canonical block at number.
-// Optionally takes the block hash to avoid looking it up.
-func ReadCanonicalAccessListRLP(db ethdb.Reader, number uint64, hash *common.Hash) rlp.RawValue {
-	var data []byte
-	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
-		data, _ = reader.Ancient(ChainFreezerBALTable, number)
-		if len(data) > 0 {
-			return nil
-		}
-		// BAL is not in ancients, read from db by hash and number.
-		if hash != nil {
-			data, _ = db.Get(balKey(number, *hash))
-		} else {
-			hashBytes, _ := db.Get(headerHashKey(number))
-			data, _ = db.Get(balKey(number, common.BytesToHash(hashBytes)))
-		}
-		return nil
-	})
+	data, _ := db.Get(balKey(number, hash))
 	return data
 }
 
@@ -760,15 +728,11 @@ func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 }
 
 // WriteAncientBlocks writes entire block data into ancient store and returns the total written size.
-func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts []rlp.RawValue, bals []rlp.RawValue) (int64, error) {
+func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts []rlp.RawValue) (int64, error) {
 	return db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i, block := range blocks {
 			header := block.Header()
-			var bal rlp.RawValue
-			if bals != nil {
-				bal = bals[i]
-			}
-			if err := writeAncientBlock(op, block, header, receipts[i], bal); err != nil {
+			if err := writeAncientBlock(op, block, header, receipts[i]); err != nil {
 				return err
 			}
 		}
@@ -776,7 +740,7 @@ func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts 
 	})
 }
 
-func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *types.Header, receipts rlp.RawValue, bal rlp.RawValue) error {
+func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *types.Header, receipts rlp.RawValue) error {
 	num := block.NumberU64()
 	if err := op.AppendRaw(ChainFreezerHashTable, num, block.Hash().Bytes()); err != nil {
 		return fmt.Errorf("can't add block %d hash: %v", num, err)
@@ -789,9 +753,6 @@ func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *type
 	}
 	if err := op.Append(ChainFreezerReceiptTable, num, receipts); err != nil {
 		return fmt.Errorf("can't append block %d receipts: %v", num, err)
-	}
-	if err := op.AppendRaw(ChainFreezerBALTable, num, bal); err != nil {
-		return fmt.Errorf("can't append block %d BAL: %v", num, err)
 	}
 	return nil
 }
@@ -815,9 +776,6 @@ func WriteAncientHeaderChain(db ethdb.AncientWriter, headers []*types.Header) (i
 			if err := op.AppendRaw(ChainFreezerReceiptTable, num, nil); err != nil {
 				return fmt.Errorf("can't append block %d receipts: %v", num, err)
 			}
-			if err := op.AppendRaw(ChainFreezerBALTable, num, nil); err != nil {
-				return fmt.Errorf("can't append block %d BAL: %v", num, err)
-			}
 		}
 		return nil
 	})
@@ -826,7 +784,6 @@ func WriteAncientHeaderChain(db ethdb.AncientWriter, headers []*types.Header) (i
 // DeleteBlock removes all block data associated with a hash.
 func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
-	DeleteAccessList(db, hash, number)
 	DeleteHeader(db, hash, number)
 	DeleteBody(db, hash, number)
 }
@@ -835,7 +792,6 @@ func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 // the hash to number mapping.
 func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
-	DeleteAccessList(db, hash, number)
 	deleteHeaderWithoutNumber(db, hash, number)
 	DeleteBody(db, hash, number)
 }
