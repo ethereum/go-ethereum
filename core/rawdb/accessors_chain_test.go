@@ -976,5 +976,3 @@ func TestBALStorage(t *testing.T) {
 		t.Fatalf("deleted BAL returned: %v", b)
 	}
 }
-
-
