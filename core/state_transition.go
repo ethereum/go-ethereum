@@ -583,8 +583,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			st.evm.AccessEvents.AddAccount(st.evm.Context.Coinbase, true, math.MaxUint64)
 		}
 	}
-	// TODO(rjl493456442) export evm.chainRules
-	if st.evm.ChainConfig().IsAmsterdam(st.evm.Context.BlockNumber, st.evm.Context.Time) {
+	if rules.IsAmsterdam {
 		st.evm.StateDB.EmitLogsForBurnAccounts()
 	}
 	return &ExecutionResult{
