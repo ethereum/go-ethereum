@@ -311,7 +311,7 @@ func doInstallKeeper(cmdline []string) {
 		args := slices.Clone(gobuild.Args)
 		args = append(args, "-o", executablePath(outputName))
 		args = append(args, ".")
-		build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env})
+		build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env, Dir: gobuild.Dir})
 	}
 }
 
