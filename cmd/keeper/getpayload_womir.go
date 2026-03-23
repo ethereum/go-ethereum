@@ -14,23 +14,36 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build wasm && !womir
-// +build wasm,!womir
+//go:build womir
 
 package main
 
-import (
-	"unsafe"
-)
+import "unsafe"
 
-//go:wasmimport geth_io len
-func hintLen() uint32
+// These match the WOMIR guest-io imports (env module).
+// Protocol: __hint_input prepares next item, __hint_buffer reads words.
+// Each item has format: [byte_len_u32_le, ...data_words_padded_to_4bytes]
+//
+//go:wasmimport env __hint_input
+func hintInput()
 
-//go:wasmimport geth_io read
-func hintRead(data unsafe.Pointer)
+//go:wasmimport env __hint_buffer
+func hintBuffer(ptr unsafe.Pointer, numWords uint32)
+func readWord() uint32 {
+	var buf [4]byte
+	hintBuffer(unsafe.Pointer(&buf[0]), 1)
+	return uint32(buf[0]) | uint32(buf[1])<<8 | uint32(buf[2])<<16 | uint32(buf[3])<<24
+}
+func readBytes() []byte {
+	hintInput()
+	byteLen := readWord()
+	numWords := (byteLen + 3) / 4
+	data := make([]byte, numWords*4)
+	hintBuffer(unsafe.Pointer(&data[0]), numWords)
+	return data[:byteLen]
+}
 
+// getInput reads the RLP-encoded Payload from the WOMIR hint stream.
 func getInput() []byte {
-	data := make([]byte, hintLen())
-	hintRead(unsafe.Pointer(&data[0]))
-	return data
+	return readBytes()
 }
