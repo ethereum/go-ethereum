@@ -17,8 +17,6 @@
 package types
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/params"
@@ -69,7 +67,7 @@ type logMarshaling struct {
 
 // EthTransferLog creates and ETH transfer log according to EIP-7708.
 // Specification: https://eips.ethereum.org/EIPS/eip-7708
-func EthTransferLog(blockNumber *big.Int, from, to common.Address, amount *uint256.Int) *Log {
+func EthTransferLog(from, to common.Address, amount *uint256.Int) *Log {
 	amount32 := amount.Bytes32()
 	return &Log{
 		Address: params.SystemAddress,
@@ -79,15 +77,12 @@ func EthTransferLog(blockNumber *big.Int, from, to common.Address, amount *uint2
 			common.BytesToHash(to.Bytes()),
 		},
 		Data: amount32[:],
-		// This is a non-consensus field, but assigned here because
-		// core/state doesn't know the current block number.
-		BlockNumber: blockNumber.Uint64(),
 	}
 }
 
 // EthBurnLog creates an ETH burn log according to EIP-7708.
 // Specification: https://eips.ethereum.org/EIPS/eip-7708
-func EthBurnLog(blockNumber *big.Int, from common.Address, amount *uint256.Int) *Log {
+func EthBurnLog(from common.Address, amount *uint256.Int) *Log {
 	amount32 := amount.Bytes32()
 	return &Log{
 		Address: params.SystemAddress,
@@ -96,8 +91,5 @@ func EthBurnLog(blockNumber *big.Int, from common.Address, amount *uint256.Int) 
 			common.BytesToHash(from.Bytes()),
 		},
 		Data: amount32[:],
-		// This is a non-consensus field, but assigned here because
-		// core/state doesn't know the current block number.
-		BlockNumber: blockNumber.Uint64(),
 	}
 }

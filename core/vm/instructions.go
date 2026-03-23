@@ -936,9 +936,9 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	}
 	if evm.chainRules.IsAmsterdam && !balance.IsZero() {
 		if this != beneficiary {
-			evm.StateDB.AddLog(types.EthTransferLog(evm.Context.BlockNumber, this, beneficiary, balance))
+			evm.StateDB.AddLog(types.EthTransferLog(this, beneficiary, balance))
 		} else if newContract {
-			evm.StateDB.AddLog(types.EthBurnLog(evm.Context.BlockNumber, this, balance))
+			evm.StateDB.AddLog(types.EthBurnLog(this, balance))
 		}
 	}
 
@@ -1093,9 +1093,6 @@ func makeLog(size int) executionFunc {
 			Address: scope.Contract.Address(),
 			Topics:  topics,
 			Data:    d,
-			// This is a non-consensus field, but assigned here because
-			// core/state doesn't know the current block number.
-			BlockNumber: evm.Context.BlockNumber.Uint64(),
 		})
 
 		return nil, nil

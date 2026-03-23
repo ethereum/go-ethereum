@@ -176,7 +176,7 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 	if evm.ChainConfig().IsAmsterdam(blockNumber, blockTime) {
 		// Emit burn logs where accounts with non-empty balances have been deleted
 		for _, sd := range statedb.GetRemovedAccountsWithBalance() {
-			statedb.AddLog(types.EthBurnLog(blockNumber, sd.Address, sd.Balance))
+			statedb.AddLog(types.EthBurnLog(sd.Address, sd.Balance))
 		}
 	}
 	// Update the state with pending changes.
