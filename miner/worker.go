@@ -461,6 +461,7 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 		env.accessList.AccumulateMutations(mutations, uint16(env.tcount)+1)
 		env.accessList.AccumulateReads(env.state.Reader().(state.StateReaderTracker).GetStateAccessList())
 	}
+	env.header.GasUsed = env.gasPool.Used()
 	return receipt, err
 }
 
