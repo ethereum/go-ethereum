@@ -276,96 +276,91 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 	)
 
 	for i, file := range entries {
-		path := filepath.Join(dir, file)
+		err := func() error {
+			path := filepath.Join(dir, file)
 
-		// Validate against checksum file in directory.
-		f, err := os.Open(path)
-		if err != nil {
-			return fmt.Errorf("open %s: %w", path, err)
-		}
-		h := sha256.New()
-		if _, err := io.Copy(h, f); err != nil {
-			f.Close()
-			return fmt.Errorf("checksum %s: %w", path, err)
-		}
-		got := common.BytesToHash(h.Sum(nil)).Hex()
-		if got != checksums[i] {
-			f.Close()
-			return fmt.Errorf("%s checksum mismatch: have %s want %s", file, got, checksums[i])
-		}
-		if _, err := f.Seek(0, io.SeekStart); err != nil {
-			f.Close()
-			return fmt.Errorf("seek %s: %w", path, err)
-		}
+			// Validate against checksum file in directory.
+			f, err := os.Open(path)
+			if err != nil {
+				return fmt.Errorf("open %s: %w", path, err)
+			}
+			defer f.Close()
 
-		e, err := from(f)
-		if err != nil {
-			f.Close() // onedb.From does not close on metadata errors
-			return fmt.Errorf("error opening era: %w", err)
-		}
-		it, err := e.Iterator()
-		if err != nil {
-			e.Close()
-			return fmt.Errorf("error creating iterator: %w", err)
-		}
+			h := sha256.New()
+			if _, err := io.Copy(h, f); err != nil {
+				return fmt.Errorf("checksum %s: %w", path, err)
+			}
+			got := common.BytesToHash(h.Sum(nil)).Hex()
+			if got != checksums[i] {
+				return fmt.Errorf("%s checksum mismatch: have %s want %s", file, got, checksums[i])
+			}
+			if _, err := f.Seek(0, io.SeekStart); err != nil {
+				return fmt.Errorf("seek %s: %w", path, err)
+			}
 
-		var (
-			blocks       = make([]*types.Block, 0, importBatchSize)
-			receiptsList = make([]types.Receipts, 0, importBatchSize)
-			flush        = func() error {
-				if len(blocks) == 0 {
+			// Import all block data from Era1.
+			e, err := from(f)
+			if err != nil {
+				return fmt.Errorf("error opening era: %w", err)
+			}
+			defer e.Close()
+
+			it, err := e.Iterator()
+			if err != nil {
+				return fmt.Errorf("error creating iterator: %w", err)
+			}
+
+			var (
+				blocks       = make([]*types.Block, 0, importBatchSize)
+				receiptsList = make([]types.Receipts, 0, importBatchSize)
+				flush        = func() error {
+					if len(blocks) == 0 {
+						return nil
+					}
+					enc := types.EncodeBlockReceiptLists(receiptsList)
+					if _, err := chain.InsertReceiptChain(blocks, enc, math.MaxUint64); err != nil {
+						return fmt.Errorf("error inserting blocks %d-%d: %w",
+							blocks[0].NumberU64(), blocks[len(blocks)-1].NumberU64(), err)
+					}
+					imported += len(blocks)
+					if time.Since(reported) >= 8*time.Second {
+						head := blocks[len(blocks)-1].NumberU64()
+						log.Info("Importing Era files", "head", head, "imported", imported,
+							"elapsed", common.PrettyDuration(time.Since(start)))
+						imported = 0
+						reported = time.Now()
+					}
+					blocks = blocks[:0]
+					receiptsList = receiptsList[:0]
 					return nil
 				}
-				enc := types.EncodeBlockReceiptLists(receiptsList)
-				if _, err := chain.InsertReceiptChain(blocks, enc, math.MaxUint64); err != nil {
-					return fmt.Errorf("error inserting blocks %d-%d: %w",
-						blocks[0].NumberU64(), blocks[len(blocks)-1].NumberU64(), err)
+			)
+			for it.Next() {
+				block, err := it.Block()
+				if err != nil {
+					return fmt.Errorf("error reading block %d: %w", it.Number(), err)
 				}
-				imported += len(blocks)
-				if time.Since(reported) >= 8*time.Second {
-					head := blocks[len(blocks)-1].NumberU64()
-					log.Info("Importing Era files", "head", head, "imported", imported,
-						"elapsed", common.PrettyDuration(time.Since(start)))
-					imported = 0
-					reported = time.Now()
+				if block.Number().BitLen() == 0 {
+					continue // skip genesis
 				}
-				blocks = blocks[:0]
-				receiptsList = receiptsList[:0]
-				return nil
-			}
-		)
-		for it.Next() {
-			block, err := it.Block()
-			if err != nil {
-				e.Close()
-				return fmt.Errorf("error reading block %d: %w", it.Number(), err)
-			}
-			if block.Number().BitLen() == 0 {
-				continue // skip genesis
-			}
-			receipts, err := it.Receipts()
-			if err != nil {
-				e.Close()
-				return fmt.Errorf("error reading receipts %d: %w", it.Number(), err)
-			}
-			blocks = append(blocks, block)
-			receiptsList = append(receiptsList, receipts)
-			if len(blocks) == importBatchSize {
-				if err := flush(); err != nil {
-					e.Close()
-					return err
+				receipts, err := it.Receipts()
+				if err != nil {
+					return fmt.Errorf("error reading receipts %d: %w", it.Number(), err)
+				}
+				blocks = append(blocks, block)
+				receiptsList = append(receiptsList, receipts)
+				if len(blocks) == importBatchSize {
+					if err := flush(); err != nil {
+						return err
+					}
 				}
 			}
-		}
-		if err := it.Error(); err != nil {
-			e.Close()
-			return err
-		}
-		if err := flush(); err != nil {
-			e.Close()
-			return err
-		}
-		if err := e.Close(); err != nil {
+			if err := it.Error(); err != nil {
+				return err
+			}
+			return flush()
+		}()
+		if err != nil {
 			return err
 		}
 	}
