@@ -1966,19 +1966,18 @@ func NewDebugAPI(b Backend) *DebugAPI {
 
 // GetRawHeader retrieves the RLP encoding for a single header.
 func (api *DebugAPI) GetRawHeader(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
-	var hash common.Hash
+	var header *types.Header
 	if h, ok := blockNrOrHash.Hash(); ok {
-		hash = h
+		header, _ = api.b.HeaderByHash(ctx, h)
+		if header == nil {
+			return nil, fmt.Errorf("header #%d not found", h)
+		}
 	} else {
-		block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
-		if block == nil || err != nil {
+		var err error
+		header, err = api.b.HeaderByNumberOrHash(ctx, blockNrOrHash)
+		if header == nil || err != nil {
 			return nil, err
 		}
-		hash = block.Hash()
-	}
-	header, _ := api.b.HeaderByHash(ctx, hash)
-	if header == nil {
-		return nil, fmt.Errorf("header #%d not found", hash)
 	}
 	return rlp.EncodeToBytes(header)
 }
