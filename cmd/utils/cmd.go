@@ -249,91 +249,9 @@ func readList(filename string) ([]string, error) {
 	return strings.Split(string(b), "\n"), nil
 }
 
-type eraReceiptFormat uint8
-
-const (
-	eraReceiptFormatConsensus eraReceiptFormat = iota // era1: full receipts
-	eraReceiptFormatSlim                              // erae: slim receipts
-)
-
-func receiptFormat(file string) (eraReceiptFormat, error) {
-	switch filepath.Ext(file) {
-	case ".era1":
-		return eraReceiptFormatConsensus, nil
-	case ".erae":
-		return eraReceiptFormatSlim, nil
-	default:
-		return 0, fmt.Errorf("unsupported era file: %s", file)
-	}
-}
-
-// convertSlimReceiptsToStorage converts slim receipt encoding
-// [tx-type, post-state-or-status, gas-used, logs] into storage encoding
-// [post-state-or-status, gas-used, logs].
-func convertSlimReceiptsToStorage(input []byte, expectedTxs int) (rlp.RawValue, error) {
-	var (
-		out bytes.Buffer
-		enc = rlp.NewEncoderBuffer(&out)
-	)
-	blockListIter, err := rlp.NewListIterator(input)
-	if err != nil {
-		return nil, fmt.Errorf("invalid block receipts list: %w", err)
-	}
-	outerList := enc.List()
-	receipts := 0
-	for ; blockListIter.Next(); receipts++ {
-		dataIter, err := rlp.NewListIterator(blockListIter.Value())
-		if err != nil {
-			return nil, fmt.Errorf("slim receipt %d has invalid data: %w", receipts, err)
-		}
-		innerList := enc.List()
-		fields := 0
-		for dataIter.Next() {
-			switch fields {
-			case 0:
-				// Skip tx type.
-			case 1, 2, 3:
-				enc.Write(dataIter.Value())
-			default:
-				return nil, fmt.Errorf("slim receipt %d has too many fields", receipts)
-			}
-			fields++
-		}
-		enc.ListEnd(innerList)
-		if dataIter.Err() != nil {
-			return nil, fmt.Errorf("slim receipt %d iterator error: %w", receipts, dataIter.Err())
-		}
-		if fields != 4 {
-			return nil, fmt.Errorf("slim receipt %d has %d fields, want 4", receipts, fields)
-		}
-	}
-	enc.ListEnd(outerList)
-	if blockListIter.Err() != nil {
-		return nil, fmt.Errorf("block receipt list iterator error: %w", blockListIter.Err())
-	}
-	if expectedTxs >= 0 && receipts != expectedTxs {
-		return nil, fmt.Errorf("tx/receipt count mismatch: %d txs, %d receipts", expectedTxs, receipts)
-	}
-	if err := enc.Flush(); err != nil {
-		return nil, err
-	}
-	return out.Bytes(), nil
-}
-
-func convertReceiptsToStorage(input []byte, format eraReceiptFormat, expectedTxs int) (rlp.RawValue, error) {
-	switch format {
-	case eraReceiptFormatConsensus:
-		return types.ConvertConsensusReceiptsToStorage(input)
-	case eraReceiptFormatSlim:
-		return convertSlimReceiptsToStorage(input, expectedTxs)
-	default:
-		return nil, fmt.Errorf("unsupported receipt format: %d", format)
-	}
-}
-
-// ImportHistory imports Era files containing historical block information,
+// ImportHistory imports Era1 files containing historical block information,
 // starting from genesis. The assumption is held that the provided chain
-// segment in era file should all be canonical and verified.
+// segment in Era1 file should all be canonical and verified.
 func ImportHistory(chain *core.BlockChain, dir string, network string, from func(f era.ReadAtSeekCloser) (era.Era, error)) error {
 	if chain.CurrentSnapBlock().Number.BitLen() != 0 {
 		return errors.New("history import only supported when starting from genesis")
@@ -358,10 +276,6 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 	)
 
 	for i, file := range entries {
-		format, err := receiptFormat(file)
-		if err != nil {
-			return err
-		}
 		path := filepath.Join(dir, file)
 
 		// Validate against checksum file in directory.
@@ -396,13 +310,14 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 		}
 
 		var (
-			blocks   = make([]*types.Block, 0, importBatchSize)
-			receipts = make([]rlp.RawValue, 0, importBatchSize)
-			flush    = func() error {
+			blocks       = make([]*types.Block, 0, importBatchSize)
+			receiptsList = make([]types.Receipts, 0, importBatchSize)
+			flush        = func() error {
 				if len(blocks) == 0 {
 					return nil
 				}
-				if _, err := chain.InsertReceiptChain(blocks, receipts, math.MaxUint64); err != nil {
+				enc := types.EncodeBlockReceiptLists(receiptsList)
+				if _, err := chain.InsertReceiptChain(blocks, enc, math.MaxUint64); err != nil {
 					return fmt.Errorf("error inserting blocks %d-%d: %w",
 						blocks[0].NumberU64(), blocks[len(blocks)-1].NumberU64(), err)
 				}
@@ -415,7 +330,7 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 					reported = time.Now()
 				}
 				blocks = blocks[:0]
-				receipts = receipts[:0]
+				receiptsList = receiptsList[:0]
 				return nil
 			}
 		)
@@ -428,18 +343,13 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 			if block.Number().BitLen() == 0 {
 				continue // skip genesis
 			}
-			raw, err := e.GetRawReceiptsByNumber(block.NumberU64())
+			receipts, err := it.Receipts()
 			if err != nil {
 				e.Close()
 				return fmt.Errorf("error reading receipts %d: %w", it.Number(), err)
 			}
-			enc, err := convertReceiptsToStorage(raw, format, len(block.Transactions()))
-			if err != nil {
-				e.Close()
-				return fmt.Errorf("error converting receipts %d: %w", it.Number(), err)
-			}
 			blocks = append(blocks, block)
-			receipts = append(receipts, enc)
+			receiptsList = append(receiptsList, receipts)
 			if len(blocks) == importBatchSize {
 				if err := flush(); err != nil {
 					e.Close()
