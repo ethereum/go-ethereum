@@ -1573,7 +1573,16 @@ func (p *BlobPool) getRLP(hash common.Hash) []byte {
 }
 
 // Get returns a transaction if it is contained in the pool, or nil otherwise.
-func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
+// TODO: We could do the following (especially beneficial for GetRLP):
+// 1) Make Get and GetRLP return blob transactions without blobs (not without sidecars).
+// 2) Store transactions (without blobs) and cells separately:
+//   - (1) Store them separately on disk, tracking both IDs.
+//   - (2) Keep transactions in memory and store cells on disk.
+//
+// However, this approach does not fit well with eth71 peers, since blobs
+// must be included in that case. It may require decoding and re-encoding,
+// as well as double disk I/O each time.
+func (p *BlobPool) Get(hash common.Hash, includeBlob bool) *types.Transaction {
 	data := p.getRLP(hash)
 	if len(data) == 0 {
 		return nil
@@ -1582,6 +1591,9 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 	if err := rlp.DecodeBytes(data, &pooledTx); err != nil {
 		log.Error("Blobs corrupted for traced transaction", "hash", hash, "err", err)
 		return nil
+	}
+	if !includeBlob {
+		return pooledTx.Transaction
 	}
 	tx, err := pooledTx.convert()
 	if err != nil {

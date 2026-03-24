@@ -274,9 +274,9 @@ func (p *TxPool) Has(hash common.Hash) bool {
 }
 
 // Get returns a transaction if it is contained in the pool, or nil otherwise.
-func (p *TxPool) Get(hash common.Hash) *types.Transaction {
+func (p *TxPool) Get(hash common.Hash, includeBlob bool) *types.Transaction {
 	for _, subpool := range p.subpools {
-		if tx := subpool.Get(hash); tx != nil {
+		if tx := subpool.Get(hash, includeBlob); tx != nil {
 			return tx
 		}
 	}

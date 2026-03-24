@@ -997,7 +997,7 @@ func (pool *LegacyPool) Status(hash common.Hash) txpool.TxStatus {
 }
 
 // Get returns a transaction if it is contained in the pool and nil otherwise.
-func (pool *LegacyPool) Get(hash common.Hash) *types.Transaction {
+func (pool *LegacyPool) Get(hash common.Hash, _ bool) *types.Transaction {
 	tx := pool.get(hash)
 	if tx == nil {
 		return nil

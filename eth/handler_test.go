@@ -94,7 +94,7 @@ func (p *testTxPool) HasPayload(hash common.Hash) bool {
 
 // Get retrieves the transaction from local txpool with given
 // tx hash.
-func (p *testTxPool) Get(hash common.Hash) *types.Transaction {
+func (p *testTxPool) Get(hash common.Hash, includeBlob bool) *types.Transaction {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	return p.txPool[hash]

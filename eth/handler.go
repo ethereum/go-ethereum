@@ -72,7 +72,7 @@ type txPool interface {
 
 	// Get retrieves the transaction from local txpool with given
 	// tx hash.
-	Get(hash common.Hash) *types.Transaction
+	Get(hash common.Hash, includeBlob bool) *types.Transaction
 
 	// GetRLP retrieves the RLP-encoded transaction from local txpool
 	// with given tx hash.

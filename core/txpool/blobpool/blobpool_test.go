@@ -1158,10 +1158,10 @@ func TestChangingSlotterSize(t *testing.T) {
 		}
 
 		// Verify the regular two txs are always available.
-		if got := pool.Get(tx1.Hash()); got == nil {
+		if got := pool.Get(tx1.Hash(), true); got == nil {
 			t.Errorf("expected tx %s from %s in pool", tx1.Hash(), addr1)
 		}
-		if got := pool.Get(tx2.Hash()); got == nil {
+		if got := pool.Get(tx2.Hash(), true); got == nil {
 			t.Errorf("expected tx %s from %s in pool", tx2.Hash(), addr2)
 		}
 
@@ -1267,10 +1267,10 @@ func TestBillyMigration(t *testing.T) {
 		}
 
 		// Verify the regular two txs are always available.
-		if got := pool.Get(tx1.Hash()); got == nil {
+		if got := pool.Get(tx1.Hash(), true); got == nil {
 			t.Errorf("expected tx %s from %s in pool", tx1.Hash(), addr1)
 		}
-		if got := pool.Get(tx2.Hash()); got == nil {
+		if got := pool.Get(tx2.Hash(), true); got == nil {
 			t.Errorf("expected tx %s from %s in pool", tx2.Hash(), addr2)
 		}
 
@@ -1905,13 +1905,13 @@ func TestGetBlobs(t *testing.T) {
 	}
 
 	// Verify the regular three txs are always available.
-	if got := pool.Get(tx1.Hash()); got == nil {
+	if got := pool.Get(tx1.Hash(), true); got == nil {
 		t.Errorf("expected tx %s from %s in pool", tx1.Hash(), addr1)
 	}
-	if got := pool.Get(tx2.Hash()); got == nil {
+	if got := pool.Get(tx2.Hash(), true); got == nil {
 		t.Errorf("expected tx %s from %s in pool", tx2.Hash(), addr2)
 	}
-	if got := pool.Get(tx3.Hash()); got == nil {
+	if got := pool.Get(tx3.Hash(), true); got == nil {
 		t.Errorf("expected tx %s from %s in pool", tx3.Hash(), addr3)
 	}
 

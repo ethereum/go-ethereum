@@ -360,7 +360,7 @@ func (b *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
 }
 
 func (b *EthAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction {
-	return b.eth.txPool.Get(hash)
+	return b.eth.txPool.Get(hash, true)
 }
 
 // GetCanonicalTransaction retrieves the lookup along with the transaction itself
