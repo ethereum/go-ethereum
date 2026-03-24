@@ -415,20 +415,22 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 		// Split the keyspace by the first byte of the tx hash.
 		// Tx hashes are uniformly distributed so each worker gets
 		// roughly equal work.
-		rangeStart := byte(i * 256 / workers)
-		rangeEnd := byte((i + 1) * 256 / workers)
-		isLast := i == workers-1
+		rangeStart := []byte{byte(i * 256 / workers)}
+		// nil rangeEnd lets the last worker run to the end of the iterator.
+		var rangeEnd []byte
+		if i < workers-1 {
+			rangeEnd = []byte{byte((i + 1) * 256 / workers)}
+		}
 
 		go func() {
 			defer wg.Done()
 
-			it := NewKeyLengthIterator(db.NewIterator(txLookupPrefix, []byte{rangeStart}), common.HashLength+len(txLookupPrefix))
+			it := NewKeyLengthIterator(db.NewIterator(txLookupPrefix, rangeStart), common.HashLength+len(txLookupPrefix))
 			defer it.Release()
 
 			batch := db.NewBatch()
 			for it.Next() {
-				// Stop if we've passed this worker's range.
-				if !isLast && it.Key()[len(txLookupPrefix)] >= rangeEnd {
+				if rangeEnd != nil && it.Key()[len(txLookupPrefix)] >= rangeEnd[0] {
 					break
 				}
 				scanned.Add(1)
