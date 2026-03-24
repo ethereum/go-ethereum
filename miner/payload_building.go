@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -339,9 +340,7 @@ func (payload *Payload) updateSpanForDelivery(bSpan trace.Span) {
 	)
 }
 
-// BuildTestingPayload is for testing_buildBlockV*. It creates a block with the exact content given
-// by the parameters instead of using the locally available transactions.
-func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*types.Transaction, empty bool, extraData []byte) (*engine.ExecutionPayloadEnvelope, error) {
+func (miner *Miner) buildPayloadWithOverrides(args *BuildPayloadArgs, transactions []*types.Transaction, empty bool, extraData []byte, gasLimit *uint64) (*newPayloadResult, error) {
 	fullParams := &generateParams{
 		timestamp:         args.Timestamp,
 		forceTime:         true,
@@ -355,10 +354,43 @@ func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*
 		forceOverrides:    true,
 		overrideExtraData: extraData,
 		overrideTxs:       transactions,
+		overrideGasLimit:  gasLimit,
 	}
 	res := miner.generateWork(context.Background(), fullParams, false)
 	if res.err != nil {
 		return nil, res.err
 	}
-	return engine.BlockToExecutableData(res.block, res.fees, res.sidecars, res.requests), nil
+	return res, nil
+}
+
+// BuildPayloadWithOverrides creates a block with the content given by the parameters instead
+// of using locally-available transactions.  It attempts to include any transactions in the exact
+// order they are specified.
+func (miner *Miner) BuildPayloadWithOverrides(args *BuildPayloadArgs, transactions []*types.Transaction, empty bool, extraData []byte, gasLimit *uint64) (*engine.ExecutionPayloadEnvelope, error) {
+	res, err := miner.buildPayloadWithOverrides(args, transactions, empty, extraData, gasLimit)
+	if err != nil {
+		return nil, err
+	}
+	return engine.BlockToExecutableData(res.block, new(big.Int), res.sidecars, res.requests), nil
+}
+
+// BuildTestingPayload is for testing_buildBlockV*. It creates a block with the exact content given
+// by the parameters instead of using the locally available transactions.
+// If a block cannot be constructed with the given parameters, an error is returned.
+func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*types.Transaction, empty bool, extraData []byte, gasLimit *uint64) (*engine.ExecutionPayloadEnvelope, error) {
+	res, err := miner.buildPayloadWithOverrides(args, transactions, empty, extraData, gasLimit)
+	if err != nil {
+		return nil, err
+	}
+	// validate that the constructed block contains exactly the transactions specified, and in the specified order.
+	if len(res.block.Transactions()) != len(transactions) {
+		return nil, fmt.Errorf("constructed payload contained different number of txs than specified. want=%d, got=%d\n", len(transactions), len(res.block.Transactions()))
+	}
+	for i, expectedTx := range transactions {
+		if res.block.Transactions()[i].Hash() != expectedTx.Hash() {
+			return nil, fmt.Errorf("constructed block contained unexpected transaction at index %d: %x.  expected %x\n", i, res.block.Transactions()[i].Hash(), expectedTx.Hash())
+		}
+	}
+
+	return engine.BlockToExecutableData(res.block, new(big.Int), res.sidecars, res.requests), nil
 }
