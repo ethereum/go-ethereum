@@ -378,6 +378,7 @@ func (f *BlobFetcher) loop() {
 					}
 					delete(f.waittime, hash)
 					delete(f.waitlist, hash)
+					blobAnnounceTimeoutMeter.Mark(1)
 				}
 			}
 
