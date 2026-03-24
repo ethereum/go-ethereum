@@ -273,6 +273,8 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 		start    = time.Now()
 		reported = time.Now()
 		imported = 0
+		h        = sha256.New()
+		buf      = bytes.NewBuffer(nil)
 	)
 
 	for i, file := range entries {
@@ -286,11 +288,12 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 			}
 			defer f.Close()
 
-			h := sha256.New()
 			if _, err := io.Copy(h, f); err != nil {
 				return fmt.Errorf("checksum %s: %w", path, err)
 			}
-			got := common.BytesToHash(h.Sum(nil)).Hex()
+			got := common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex()
+			h.Reset()
+			buf.Reset()
 			if got != checksums[i] {
 				return fmt.Errorf("%s checksum mismatch: have %s want %s", file, got, checksums[i])
 			}
