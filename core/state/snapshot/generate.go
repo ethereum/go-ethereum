@@ -161,8 +161,8 @@ func (result *proofResult) forEach(callback func(key []byte, val []byte) error) 
 // the error will be returned to abort the entire procedure.
 func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix []byte, kind string, origin []byte, max int, valueConvertFn func([]byte) ([]byte, error)) (*proofResult, error) {
 	var (
-		keys     [][]byte
-		vals     [][]byte
+		keys     = make([][]byte, 0, max)
+		vals     = make([][]byte, 0, max)
 		proof    = rawdb.NewMemoryDatabase()
 		diskMore = false
 		iter     = ctx.iterator(kind)
