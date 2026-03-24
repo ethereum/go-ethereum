@@ -297,10 +297,6 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 			if got != checksums[i] {
 				return fmt.Errorf("%s checksum mismatch: have %s want %s", file, got, checksums[i])
 			}
-			if _, err := f.Seek(0, io.SeekStart); err != nil {
-				return fmt.Errorf("seek %s: %w", path, err)
-			}
-
 			// Import all block data from Era1.
 			e, err := from(f)
 			if err != nil {
