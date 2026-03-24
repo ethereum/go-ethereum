@@ -422,12 +422,7 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 		go func() {
 			defer wg.Done()
 
-			var it ethdb.Iterator
-			if rangeStart == 0 {
-				it = NewKeyLengthIterator(db.NewIterator(txLookupPrefix, nil), common.HashLength+len(txLookupPrefix))
-			} else {
-				it = NewKeyLengthIterator(db.NewIterator(txLookupPrefix, []byte{rangeStart}), common.HashLength+len(txLookupPrefix))
-			}
+			it := NewKeyLengthIterator(db.NewIterator(txLookupPrefix, []byte{rangeStart}), common.HashLength+len(txLookupPrefix))
 			defer it.Release()
 
 			batch := db.NewBatch()
