@@ -527,12 +527,20 @@ func TestBlobFetcherAvailabilityTimeout(t *testing.T) {
 			isWaitingAvailability{testBlobTxHashes[0]: map[string]struct{}{"A": {}}},
 			isBlobScheduled{announces: nil, fetching: nil},
 
-			// Run clock for timeout
+			// Run clock for timeout → partial converts to full, peer A moves to announces
 			doWait{time: blobAvailabilityTimeout, step: true},
 
-			// After timeout, waitlist should be empty
+			// After timeout, waitlist should be empty but tx promoted to full fetch
 			isWaitingAvailability{},
-			isBlobScheduled{announces: nil, fetching: nil},
+			isDecidedFull{testBlobTxHashes[0]: struct{}{}},
+			isBlobScheduled{
+				announces: map[string][]blobAnnounce{
+					"A": {{hash: testBlobTxHashes[0], custody: halfCustody}},
+				},
+				fetching: map[string][]blobAnnounce{
+					"A": {{hash: testBlobTxHashes[0], custody: halfCustody}},
+				},
+			},
 		},
 	})
 }

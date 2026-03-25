@@ -60,7 +60,7 @@ var (
 
 	blobAnnounceInMeter  = metrics.NewRegisteredMeter("eth/fetcher/blob/announces/in", nil)
 	blobAnnounceDOSMeter = metrics.NewRegisteredMeter("eth/fetcher/blob/announces/dos", nil)
-	// This metric is to track the number of availability failure
+	// This metric tracks partial→full conversions due to availability timeout
 	blobAnnounceTimeoutMeter = metrics.NewRegisteredMeter("eth/fetcher/blob/announces/timeout", nil)
 
 	blobRequestOutMeter     = metrics.NewRegisteredMeter("eth/fetcher/blob/request/out", nil)

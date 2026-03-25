@@ -364,24 +364,40 @@ func (f *BlobFetcher) loop() {
 			}
 
 		case <-waitTrigger:
-			// At least one transaction's waiting time ran out, pop all expired ones
-			// and update the blobpool according to availability
+			// At least one transaction's waiting time ran out. Instead of dropping,
+			// convert timed-out partial fetches to full fetches so we don't lose
+			// the transaction. All peers in the waitlist announced full custody
+			// (that was the entry condition), so they can serve as full fetch sources.
+			reschedule := make(map[string]struct{})
 			for hash, instance := range f.waittime {
 				if time.Duration(f.clock.Now()-instance)+txGatherSlack > blobAvailabilityTimeout {
-					// No need to check availability count (transactions that passed
-					// the threshold are already promoted to the announces map on notification)
+					// partial -> full conversion
+					delete(f.partial, hash)
+					f.full[hash] = struct{}{}
+					blobAnnounceTimeoutMeter.Mark(1)
+
 					for peer := range f.waitlist[hash] {
+						if f.announces[peer] == nil {
+							f.announces[peer] = make(map[common.Hash]*cellWithSeq)
+						}
+						f.announces[peer][hash] = &cellWithSeq{
+							cells: types.CustodyBitmapData,
+							seq:   f.txSeq,
+						}
+						f.txSeq++
 						delete(f.waitslots[peer], hash)
 						if len(f.waitslots[peer]) == 0 {
 							delete(f.waitslots, peer)
 						}
+						reschedule[peer] = struct{}{}
 					}
 					delete(f.waittime, hash)
 					delete(f.waitlist, hash)
-					blobAnnounceTimeoutMeter.Mark(1)
 				}
 			}
-
+			if len(reschedule) > 0 {
+				f.scheduleFetches(timeoutTimer, timeoutTrigger, reschedule)
+			}
 			// If transactions are still waiting for availability, reschedule the wait timer
 			if len(f.waittime) > 0 {
 				f.rescheduleWait(waitTimer, waitTrigger)
