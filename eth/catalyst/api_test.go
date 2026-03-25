@@ -1690,17 +1690,26 @@ func TestWitnessCreationAndConsumption(t *testing.T) {
 		t.Fatalf("witness missing from payload")
 	}
 	// Test stateless execution of the created witness
+	wantStateRoot := envelope.ExecutionPayload.StateRoot
+	wantReceiptRoot := envelope.ExecutionPayload.ReceiptsRoot
+
+	envelope.ExecutionPayload.StateRoot = common.Hash{}
+	envelope.ExecutionPayload.ReceiptsRoot = common.Hash{}
+
 	res, err := api.ExecuteStatelessPayloadV3(*envelope.ExecutionPayload, []common.Hash{}, &common.Hash{42}, *envelope.Witness)
 	if err != nil {
 		t.Fatalf("error executing stateless payload witness: %v", err)
 	}
-	if res.StateRoot != envelope.ExecutionPayload.StateRoot {
-		t.Fatalf("stateless state root mismatch: have %v, want %v", res.StateRoot, envelope.ExecutionPayload.StateRoot)
+	if res.StateRoot != wantStateRoot {
+		t.Fatalf("stateless state root mismatch: have %v, want %v", res.StateRoot, wantStateRoot)
 	}
-	if res.ReceiptsRoot != envelope.ExecutionPayload.ReceiptsRoot {
-		t.Fatalf("stateless receipt root mismatch: have %v, want %v", res.ReceiptsRoot, envelope.ExecutionPayload.ReceiptsRoot)
+	if res.ReceiptsRoot != wantReceiptRoot {
+		t.Fatalf("stateless receipt root mismatch: have %v, want %v", res.ReceiptsRoot, wantReceiptRoot)
 	}
 	// Test block insertion with witness creation
+	envelope.ExecutionPayload.StateRoot = wantStateRoot
+	envelope.ExecutionPayload.ReceiptsRoot = wantReceiptRoot
+
 	res2, err := api.NewPayloadWithWitnessV3(context.Background(), *envelope.ExecutionPayload, []common.Hash{}, &common.Hash{42})
 	if err != nil {
 		t.Fatalf("error executing stateless payload witness: %v", err)
@@ -1709,15 +1718,21 @@ func TestWitnessCreationAndConsumption(t *testing.T) {
 		t.Fatalf("witness missing from payload")
 	}
 	// Test stateless execution of the created witness
+	wantStateRoot = envelope.ExecutionPayload.StateRoot
+	wantReceiptRoot = envelope.ExecutionPayload.ReceiptsRoot
+
+	envelope.ExecutionPayload.StateRoot = common.Hash{}
+	envelope.ExecutionPayload.ReceiptsRoot = common.Hash{}
+
 	res, err = api.ExecuteStatelessPayloadV3(*envelope.ExecutionPayload, []common.Hash{}, &common.Hash{42}, *res2.Witness)
 	if err != nil {
 		t.Fatalf("error executing stateless payload witness: %v", err)
 	}
-	if res.StateRoot != envelope.ExecutionPayload.StateRoot {
-		t.Fatalf("stateless state root mismatch: have %v, want %v", res.StateRoot, envelope.ExecutionPayload.StateRoot)
+	if res.StateRoot != wantStateRoot {
+		t.Fatalf("stateless state root mismatch: have %v, want %v", res.StateRoot, wantStateRoot)
 	}
-	if res.ReceiptsRoot != envelope.ExecutionPayload.ReceiptsRoot {
-		t.Fatalf("stateless receipt root mismatch: have %v, want %v", res.ReceiptsRoot, envelope.ExecutionPayload.ReceiptsRoot)
+	if res.ReceiptsRoot != wantReceiptRoot {
+		t.Fatalf("stateless receipt root mismatch: have %v, want %v", res.ReceiptsRoot, wantReceiptRoot)
 	}
 }
 
