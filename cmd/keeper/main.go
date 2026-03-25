@@ -53,7 +53,8 @@ func main() {
 	}
 	vmConfig := vm.Config{}
 
-	if err := core.ExecuteStateless(context.Background(), chainConfig, vmConfig, payload.Block, payload.Witness); err != nil {
+	_, _, err = core.ExecuteStateless(context.Background(), chainConfig, vmConfig, payload.Block, payload.Witness, true)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "stateless self-validation failed: %v\n", err)
 		os.Exit(10)
 	}
