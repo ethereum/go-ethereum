@@ -217,8 +217,10 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 		}
 		postMut.Merge(mut)
 
-		work.accessList.AccumulateMutations(postMut, uint16(work.tcount)+1)
-		work.accessList.AccumulateReads(work.state.Reader().(state.StateReaderTracker).GetStateAccessList())
+		if work.accessList != nil {
+			work.accessList.AccumulateMutations(postMut, uint16(work.tcount)+1)
+			work.accessList.AccumulateReads(work.state.Reader().(state.StateReaderTracker).GetStateAccessList())
+		}
 	}
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
@@ -348,7 +350,9 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 	if miner.chainConfig.IsPrague(header.Number, header.Time) {
 		mut.Merge(core.ProcessParentBlockHash(header.ParentHash, env.evm))
 	}
-	env.accessList.AccumulateMutations(mut, 0)
+	if env.accessList != nil {
+		env.accessList.AccumulateMutations(mut, 0)
+	}
 	return env, nil
 }
 
