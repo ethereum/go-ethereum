@@ -102,7 +102,7 @@ type Header struct {
 	RequestsHash *common.Hash `json:"requestsHash" rlp:"optional"`
 
 	// BlockAccessListHash was added by EIP-7928 and is ignored in legacy headers.
-	BlockAccessListHash *common.Hash `json:"balHash" rlp:"optional"`
+	BlockAccessListHash *common.Hash `json:"blockAccessListHash" rlp:"optional"`
 
 	// SlotNumber was added by EIP-7843 and is ignored in legacy headers.
 	SlotNumber *uint64 `json:"slotNumber" rlp:"optional"`
