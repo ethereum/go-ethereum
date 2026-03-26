@@ -147,6 +147,12 @@ var PrecompiledContractsBLS = PrecompiledContractsPrague
 
 var PrecompiledContractsVerkle = PrecompiledContractsBerlin
 
+var PrecompiledContractsMLDSA = PrecompiledContracts{
+	mldsa65VerifyAddr: &mldsa65VerifyPrecompile{},
+}
+
+var PrecompiledAddressesMLDSA = []common.Address{mldsa65VerifyAddr}
+
 // PrecompiledContractsOsaka contains the set of pre-compiled Ethereum
 // contracts used in the Osaka release.
 var PrecompiledContractsOsaka = PrecompiledContracts{
@@ -234,27 +240,37 @@ func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 
 // ActivePrecompiledContracts returns a copy of precompiled contracts enabled with the current configuration.
 func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
-	return maps.Clone(activePrecompiledContracts(rules))
+	precompiles := maps.Clone(activePrecompiledContracts(rules))
+	if rules.IsMLDSAPrecompile {
+		maps.Copy(precompiles, PrecompiledContractsMLDSA)
+	}
+	return precompiles
 }
 
 // ActivePrecompiles returns the precompile addresses enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
+	var active []common.Address
 	switch {
 	case rules.IsOsaka:
-		return PrecompiledAddressesOsaka
+		active = PrecompiledAddressesOsaka
 	case rules.IsPrague:
-		return PrecompiledAddressesPrague
+		active = PrecompiledAddressesPrague
 	case rules.IsCancun:
-		return PrecompiledAddressesCancun
+		active = PrecompiledAddressesCancun
 	case rules.IsBerlin:
-		return PrecompiledAddressesBerlin
+		active = PrecompiledAddressesBerlin
 	case rules.IsIstanbul:
-		return PrecompiledAddressesIstanbul
+		active = PrecompiledAddressesIstanbul
 	case rules.IsByzantium:
-		return PrecompiledAddressesByzantium
+		active = PrecompiledAddressesByzantium
 	default:
-		return PrecompiledAddressesHomestead
+		active = PrecompiledAddressesHomestead
 	}
+	if !rules.IsMLDSAPrecompile {
+		return active
+	}
+	addresses := append([]common.Address{}, active...)
+	return append(addresses, PrecompiledAddressesMLDSA...)
 }
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.

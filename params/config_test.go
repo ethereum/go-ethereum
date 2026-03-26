@@ -110,6 +110,17 @@ func TestCheckCompatible(t *testing.T) {
 				RewindToTime: 9,
 			},
 		},
+		{
+			stored:        &ChainConfig{MLDSAPrecompileTime: newUint64(10)},
+			new:           &ChainConfig{MLDSAPrecompileTime: newUint64(20)},
+			headTimestamp: 25,
+			wantErr: &ConfigCompatError{
+				What:         "ML-DSA precompile timestamp",
+				StoredTime:   newUint64(10),
+				NewTime:      newUint64(20),
+				RewindToTime: 9,
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -136,6 +147,18 @@ func TestConfigRules(t *testing.T) {
 	stamp = math.MaxInt64
 	if r := c.Rules(big.NewInt(0), true, stamp); !r.IsShanghai {
 		t.Errorf("expected %v to be shanghai", stamp)
+	}
+
+	mldsaTime := uint64(700)
+	c = &ChainConfig{
+		LondonBlock:         new(big.Int),
+		MLDSAPrecompileTime: &mldsaTime,
+	}
+	if r := c.Rules(big.NewInt(0), false, mldsaTime-1); r.IsMLDSAPrecompile {
+		t.Errorf("expected ML-DSA precompile to stay disabled before timestamp")
+	}
+	if r := c.Rules(big.NewInt(0), false, mldsaTime); !r.IsMLDSAPrecompile {
+		t.Errorf("expected ML-DSA precompile to activate without merge gating")
 	}
 }
 

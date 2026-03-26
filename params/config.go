@@ -456,17 +456,18 @@ type ChainConfig struct {
 
 	// Fork scheduling was switched from blocks to timestamps here
 
-	ShanghaiTime  *uint64 `json:"shanghaiTime,omitempty"`  // Shanghai switch time (nil = no fork, 0 = already on shanghai)
-	CancunTime    *uint64 `json:"cancunTime,omitempty"`    // Cancun switch time (nil = no fork, 0 = already on cancun)
-	PragueTime    *uint64 `json:"pragueTime,omitempty"`    // Prague switch time (nil = no fork, 0 = already on prague)
-	OsakaTime     *uint64 `json:"osakaTime,omitempty"`     // Osaka switch time (nil = no fork, 0 = already on osaka)
-	BPO1Time      *uint64 `json:"bpo1Time,omitempty"`      // BPO1 switch time (nil = no fork, 0 = already on bpo1)
-	BPO2Time      *uint64 `json:"bpo2Time,omitempty"`      // BPO2 switch time (nil = no fork, 0 = already on bpo2)
-	BPO3Time      *uint64 `json:"bpo3Time,omitempty"`      // BPO3 switch time (nil = no fork, 0 = already on bpo3)
-	BPO4Time      *uint64 `json:"bpo4Time,omitempty"`      // BPO4 switch time (nil = no fork, 0 = already on bpo4)
-	BPO5Time      *uint64 `json:"bpo5Time,omitempty"`      // BPO5 switch time (nil = no fork, 0 = already on bpo5)
-	AmsterdamTime *uint64 `json:"amsterdamTime,omitempty"` // Amsterdam switch time (nil = no fork, 0 = already on amsterdam)
-	VerkleTime    *uint64 `json:"verkleTime,omitempty"`    // Verkle switch time (nil = no fork, 0 = already on verkle)
+	ShanghaiTime        *uint64 `json:"shanghaiTime,omitempty"`        // Shanghai switch time (nil = no fork, 0 = already on shanghai)
+	CancunTime          *uint64 `json:"cancunTime,omitempty"`          // Cancun switch time (nil = no fork, 0 = already on cancun)
+	PragueTime          *uint64 `json:"pragueTime,omitempty"`          // Prague switch time (nil = no fork, 0 = already on prague)
+	OsakaTime           *uint64 `json:"osakaTime,omitempty"`           // Osaka switch time (nil = no fork, 0 = already on osaka)
+	BPO1Time            *uint64 `json:"bpo1Time,omitempty"`            // BPO1 switch time (nil = no fork, 0 = already on bpo1)
+	BPO2Time            *uint64 `json:"bpo2Time,omitempty"`            // BPO2 switch time (nil = no fork, 0 = already on bpo2)
+	BPO3Time            *uint64 `json:"bpo3Time,omitempty"`            // BPO3 switch time (nil = no fork, 0 = already on bpo3)
+	BPO4Time            *uint64 `json:"bpo4Time,omitempty"`            // BPO4 switch time (nil = no fork, 0 = already on bpo4)
+	BPO5Time            *uint64 `json:"bpo5Time,omitempty"`            // BPO5 switch time (nil = no fork, 0 = already on bpo5)
+	AmsterdamTime       *uint64 `json:"amsterdamTime,omitempty"`       // Amsterdam switch time (nil = no fork, 0 = already on amsterdam)
+	MLDSAPrecompileTime *uint64 `json:"mldsaPrecompileTime,omitempty"` // ML-DSA precompile switch time (nil = disabled)
+	VerkleTime          *uint64 `json:"verkleTime,omitempty"`          // Verkle switch time (nil = no fork, 0 = already on verkle)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -595,6 +596,9 @@ func (c *ChainConfig) String() string {
 	if c.AmsterdamTime != nil {
 		result += fmt.Sprintf(", AmsterdamTime: %v", *c.AmsterdamTime)
 	}
+	if c.MLDSAPrecompileTime != nil {
+		result += fmt.Sprintf(", MLDSAPrecompileTime: %v", *c.MLDSAPrecompileTime)
+	}
 	if c.VerkleTime != nil {
 		result += fmt.Sprintf(", VerkleTime: %v", *c.VerkleTime)
 	}
@@ -690,10 +694,13 @@ func (c *ChainConfig) Description() string {
 	if c.AmsterdamTime != nil {
 		banner += fmt.Sprintf(" - Amsterdam:									 @%-10v blob: (%s)\n", *c.AmsterdamTime, c.BlobScheduleConfig.Amsterdam)
 	}
+	if c.MLDSAPrecompileTime != nil {
+		banner += fmt.Sprintf(" - ML-DSA precompile:            @%-10v\n", *c.MLDSAPrecompileTime)
+	}
 	if c.VerkleTime != nil {
 		banner += fmt.Sprintf(" - Verkle:                      @%-10v blob: (%s)\n", *c.VerkleTime, c.BlobScheduleConfig.Verkle)
 	}
-	banner += fmt.Sprintf("\nAll fork specifications can be found at https://ethereum.github.io/execution-specs/src/ethereum/forks/\n")
+	banner += "\nAll fork specifications can be found at https://ethereum.github.io/execution-specs/src/ethereum/forks/\n"
 	return banner
 }
 
@@ -864,6 +871,11 @@ func (c *ChainConfig) IsBPO5(num *big.Int, time uint64) bool {
 // IsAmsterdam returns whether time is either equal to the Amsterdam fork time or greater.
 func (c *ChainConfig) IsAmsterdam(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.AmsterdamTime, time)
+}
+
+// IsMLDSAPrecompile returns whether the ML-DSA precompile is enabled at the given time.
+func (c *ChainConfig) IsMLDSAPrecompile(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.MLDSAPrecompileTime, time)
 }
 
 // IsVerkle returns whether time is either equal to the Verkle fork time or greater.
@@ -1125,6 +1137,9 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if isForkTimestampIncompatible(c.AmsterdamTime, newcfg.AmsterdamTime, headTimestamp) {
 		return newTimestampCompatError("Amsterdam fork timestamp", c.AmsterdamTime, newcfg.AmsterdamTime)
 	}
+	if isForkTimestampIncompatible(c.MLDSAPrecompileTime, newcfg.MLDSAPrecompileTime, headTimestamp) {
+		return newTimestampCompatError("ML-DSA precompile timestamp", c.MLDSAPrecompileTime, newcfg.MLDSAPrecompileTime)
+	}
 	return nil
 }
 
@@ -1380,7 +1395,7 @@ type Rules struct {
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka        bool
-	IsAmsterdam, IsVerkle                                   bool
+	IsAmsterdam, IsMLDSAPrecompile, IsVerkle                bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1389,24 +1404,25 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 	isMerge = isMerge && c.IsLondon(num)
 	isVerkle := isMerge && c.IsVerkle(num, timestamp)
 	return Rules{
-		IsHomestead:      c.IsHomestead(num),
-		IsEIP150:         c.IsEIP150(num),
-		IsEIP155:         c.IsEIP155(num),
-		IsEIP158:         c.IsEIP158(num),
-		IsByzantium:      c.IsByzantium(num),
-		IsConstantinople: c.IsConstantinople(num),
-		IsPetersburg:     c.IsPetersburg(num),
-		IsIstanbul:       c.IsIstanbul(num),
-		IsBerlin:         c.IsBerlin(num),
-		IsEIP2929:        c.IsBerlin(num) && !isVerkle,
-		IsLondon:         c.IsLondon(num),
-		IsMerge:          isMerge,
-		IsShanghai:       isMerge && c.IsShanghai(num, timestamp),
-		IsCancun:         isMerge && c.IsCancun(num, timestamp),
-		IsPrague:         isMerge && c.IsPrague(num, timestamp),
-		IsOsaka:          isMerge && c.IsOsaka(num, timestamp),
-		IsAmsterdam:      isMerge && c.IsAmsterdam(num, timestamp),
-		IsVerkle:         isVerkle,
-		IsEIP4762:        isVerkle,
+		IsHomestead:       c.IsHomestead(num),
+		IsEIP150:          c.IsEIP150(num),
+		IsEIP155:          c.IsEIP155(num),
+		IsEIP158:          c.IsEIP158(num),
+		IsByzantium:       c.IsByzantium(num),
+		IsConstantinople:  c.IsConstantinople(num),
+		IsPetersburg:      c.IsPetersburg(num),
+		IsIstanbul:        c.IsIstanbul(num),
+		IsBerlin:          c.IsBerlin(num),
+		IsEIP2929:         c.IsBerlin(num) && !isVerkle,
+		IsLondon:          c.IsLondon(num),
+		IsMerge:           isMerge,
+		IsShanghai:        isMerge && c.IsShanghai(num, timestamp),
+		IsCancun:          isMerge && c.IsCancun(num, timestamp),
+		IsPrague:          isMerge && c.IsPrague(num, timestamp),
+		IsOsaka:           isMerge && c.IsOsaka(num, timestamp),
+		IsAmsterdam:       isMerge && c.IsAmsterdam(num, timestamp),
+		IsMLDSAPrecompile: c.IsMLDSAPrecompile(num, timestamp),
+		IsVerkle:          isVerkle,
+		IsEIP4762:         isVerkle,
 	}
 }

@@ -24,7 +24,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloudflare/circl/sign/mldsa/mldsa65"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // precompiledTest defines the input/output pairs for precompiled contract tests.
@@ -68,6 +70,7 @@ var allPrecompiles = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{0x0f, 0x10}): &bls12381MapG2{},
 
 	common.BytesToAddress([]byte{0x0b}): &p256Verify{},
+	mldsa65VerifyAddr:                   &mldsa65VerifyPrecompile{},
 }
 
 // EIP-152 test vectors
@@ -299,6 +302,150 @@ func TestPrecompileBlake2FMalformedInput(t *testing.T) {
 }
 
 func TestPrecompiledEcrecover(t *testing.T) { testJson("ecRecover", "01", t) }
+
+func TestActivePrecompiledContractsMLDSA65(t *testing.T) {
+	rules := params.Rules{IsCancun: true}
+	if _, ok := ActivePrecompiledContracts(rules)[mldsa65VerifyAddr]; ok {
+		t.Fatal("unexpected ML-DSA precompile before activation")
+	}
+	for _, addr := range ActivePrecompiles(rules) {
+		if addr == mldsa65VerifyAddr {
+			t.Fatal("unexpected ML-DSA precompile address before activation")
+		}
+	}
+
+	rules.IsMLDSAPrecompile = true
+	if _, ok := ActivePrecompiledContracts(rules)[mldsa65VerifyAddr]; !ok {
+		t.Fatal("missing ML-DSA precompile after activation")
+	}
+	found := false
+	for _, addr := range ActivePrecompiles(rules) {
+		if addr == mldsa65VerifyAddr {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("missing ML-DSA precompile address after activation")
+	}
+}
+
+func TestPrecompiledMLDSA65Verify(t *testing.T) {
+	pk, sk, err := mldsa65.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg := []byte("hello geth pq")
+
+	sig := make([]byte, mldsa65.SignatureSize)
+	if err := mldsa65.SignTo(sk, msg, nil, true, sig); err != nil {
+		t.Fatal(err)
+	}
+	pkBytes, err := pk.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	in := append(append(pkBytes, sig...), msg...)
+	out, _, err := RunPrecompiledContract(&mldsa65VerifyPrecompile{}, in, 10_000_000, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := common.LeftPadBytes([]byte{1}, 32); !bytes.Equal(out, want) {
+		t.Fatalf("expected 1, got %x", out)
+	}
+}
+
+func TestPrecompiledMLDSA65VerifyInvalidInputs(t *testing.T) {
+	zero := make([]byte, 32)
+
+	t.Run("too short", func(t *testing.T) {
+		in := make([]byte, mldsa65.PublicKeySize+mldsa65.SignatureSize-1)
+		out, _, err := RunPrecompiledContract(&mldsa65VerifyPrecompile{}, in, 10_000_000, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(out, zero) {
+			t.Fatalf("expected 0, got %x", out)
+		}
+	})
+
+	t.Run("tampered msg", func(t *testing.T) {
+		pk, sk, err := mldsa65.GenerateKey(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		msg := []byte("hello geth pq")
+		sig := make([]byte, mldsa65.SignatureSize)
+		if err := mldsa65.SignTo(sk, msg, nil, true, sig); err != nil {
+			t.Fatal(err)
+		}
+		pkBytes, err := pk.MarshalBinary()
+		if err != nil {
+			t.Fatal(err)
+		}
+		badMsg := []byte("hello geth PQ")
+		in := append(append(pkBytes, sig...), badMsg...)
+		out, _, err := RunPrecompiledContract(&mldsa65VerifyPrecompile{}, in, 10_000_000, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(out, zero) {
+			t.Fatalf("expected 0, got %x", out)
+		}
+	})
+
+	t.Run("tampered sig", func(t *testing.T) {
+		pk, sk, err := mldsa65.GenerateKey(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		msg := []byte("hello geth pq")
+		sig := make([]byte, mldsa65.SignatureSize)
+		if err := mldsa65.SignTo(sk, msg, nil, true, sig); err != nil {
+			t.Fatal(err)
+		}
+		sig[0] ^= 0xff
+		pkBytes, err := pk.MarshalBinary()
+		if err != nil {
+			t.Fatal(err)
+		}
+		in := append(append(pkBytes, sig...), msg...)
+		out, _, err := RunPrecompiledContract(&mldsa65VerifyPrecompile{}, in, 10_000_000, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(out, zero) {
+			t.Fatalf("expected 0, got %x", out)
+		}
+	})
+}
+
+func BenchmarkPrecompiledMLDSA65Verify(b *testing.B) {
+	pk, sk, err := mldsa65.GenerateKey(nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msg := make([]byte, 1024)
+	sig := make([]byte, mldsa65.SignatureSize)
+	if err := mldsa65.SignTo(sk, msg, nil, true, sig); err != nil {
+		b.Fatal(err)
+	}
+	pkBytes, err := pk.MarshalBinary()
+	if err != nil {
+		b.Fatal(err)
+	}
+	in := append(append(pkBytes, sig...), msg...)
+	p := &mldsa65VerifyPrecompile{}
+	gas := p.RequiredGas(in)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, _, err := RunPrecompiledContract(p, in, gas, nil); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
 
 func testJson(name, addr string, t *testing.T) {
 	tests, err := loadJson(name)
