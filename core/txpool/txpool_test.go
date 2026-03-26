@@ -114,7 +114,9 @@ func (failingSubPool) ValidateTxBasics(*types.Transaction) error { return nil }
 
 func (failingSubPool) Add([]*types.Transaction, bool) []error { return nil }
 
-func (failingSubPool) Pending(PendingFilter) map[common.Address][]*LazyTransaction { return nil }
+func (failingSubPool) Pending(PendingFilter) (map[common.Address][]*LazyTransaction, int) {
+	return nil, 0
+}
 
 func (failingSubPool) SubscribeTransactions(chan<- core.NewTxsEvent, bool) event.Subscription {
 	return nil
