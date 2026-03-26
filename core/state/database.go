@@ -224,7 +224,7 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 // Hasher implements Database, returning a hasher associated with the specified
 // state root.
 func (db *CachingDB) Hasher(stateRoot common.Hash) (Hasher, error) {
-	return newMerkleHasher(stateRoot, db.triedb)
+	return newMerkleHasher(stateRoot, db.triedb, true, true)
 }
 
 // ReadersWithCacheStats creates a pair of state readers that share the same

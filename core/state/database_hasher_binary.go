@@ -117,6 +117,8 @@ func (h *binaryHasher) Commit() (common.Hash, *trienode.MergedNodeSet, map[commo
 	return root, nodes, nil, nil
 }
 
+func (h *binaryHasher) Close() {}
+
 func (h *binaryHasher) Copy() Hasher {
 	return &binaryHasher{
 		db:   h.db,
