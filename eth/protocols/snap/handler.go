@@ -561,7 +561,11 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 		reader = chain.Snapshots().Snapshot(req.Root)
 	}
 	if reader == nil {
-		reader, _ = triedb.StateReader(req.Root)
+		var err error
+		reader, err = triedb.StateReader(req.Root)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create state reader for root %x: %w", req.Root, err)
+		}
 	}
 
 	// Retrieve trie nodes until the packet size limit is reached
