@@ -743,41 +743,6 @@ func (s *StateDB) GetRefund() uint64 {
 	return s.refund
 }
 
-type removedAccountWithBalance struct {
-	address common.Address
-	balance *uint256.Int
-}
-
-// EmitLogsForBurnAccounts emits the eth burn logs for accounts scheduled for
-// removal which still have positive balance. The purpose of this function is
-// to handle a corner case of EIP-7708 where a self-destructed account might
-// still receive funds between sending/burning its previous balance and actual
-// removal. In this case the burning of these remaining balances still need to
-// be logged.
-// Specification EIP-7708: https://eips.ethereum.org/EIPS/eip-7708
-//
-// This function should only be invoked at the transaction boundary, specifically
-// before the Finalise.
-func (s *StateDB) EmitLogsForBurnAccounts() {
-	var list []removedAccountWithBalance
-	for addr := range s.journal.dirties {
-		if obj, exist := s.stateObjects[addr]; exist && obj.selfDestructed && !obj.Balance().IsZero() {
-			list = append(list, removedAccountWithBalance{
-				address: obj.address,
-				balance: obj.Balance(),
-			})
-		}
-	}
-	if list != nil {
-		sort.Slice(list, func(i, j int) bool {
-			return list[i].address.Cmp(list[j].address) < 0
-		})
-	}
-	for _, acct := range list {
-		s.AddLog(types.EthBurnLog(acct.address, acct.balance))
-	}
-}
-
 // Finalise finalises the state by removing the destructed objects and clears
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
@@ -859,55 +824,22 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		workers errgroup.Group
 	)
 	if s.db.TrieDB().IsVerkle() {
-		// Bypass per-account updateTrie() for binary trie. In binary trie mode
-		// there is only one unified trie (OpenStorageTrie returns self), so the
-		// per-account trie setup in updateTrie() (getPrefetchedTrie, getTrie,
-		// prefetcher.used) is redundant overhead. Apply all storage updates
-		// directly in a single pass.
-		for addr, op := range s.mutations {
-			if op.applied || op.isDelete() {
-				continue
-			}
-			obj := s.stateObjects[addr]
-			if len(obj.uncommittedStorage) == 0 {
-				continue
-			}
-			for key, origin := range obj.uncommittedStorage {
-				value, exist := obj.pendingStorage[key]
-				if value == origin || !exist {
-					continue
-				}
-				if (value != common.Hash{}) {
-					if err := s.trie.UpdateStorage(addr, key[:], common.TrimLeftZeroes(value[:])); err != nil {
-						s.setError(err)
-					}
-				} else {
-					if err := s.trie.DeleteStorage(addr, key[:]); err != nil {
-						s.setError(err)
-					}
-				}
-			}
+		// Whilst MPT storage tries are independent, Verkle has one single trie
+		// for all the accounts and all the storage slots merged together. The
+		// former can thus be simply parallelized, but updating the latter will
+		// need concurrency support within the trie itself. That's a TODO for a
+		// later time.
+		workers.SetLimit(1)
+	}
+	for addr, op := range s.mutations {
+		if op.applied || op.isDelete() {
+			continue
 		}
-		// Clear uncommittedStorage and assign trie on each touched object.
-		// obj.trie must be set because this path bypasses updateTrie(), which
-		// is where obj.trie normally gets lazily loaded via getTrie().
-		for addr, op := range s.mutations {
-			if op.applied || op.isDelete() {
-				continue
-			}
-			obj := s.stateObjects[addr]
-			if len(obj.uncommittedStorage) > 0 {
-				obj.uncommittedStorage = make(Storage)
-			}
-			obj.trie = s.trie
-		}
-	} else {
-		for addr, op := range s.mutations {
-			if op.applied || op.isDelete() {
-				continue
-			}
-			obj := s.stateObjects[addr] // closure for the task runner below
-			workers.Go(func() error {
+		obj := s.stateObjects[addr] // closure for the task runner below
+		workers.Go(func() error {
+			if s.db.TrieDB().IsVerkle() {
+				obj.updateTrie()
+			} else {
 				obj.updateRoot()
 
 				// If witness building is enabled and the state object has a trie,
@@ -915,9 +847,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				if s.witness != nil && obj.trie != nil {
 					s.witness.AddState(obj.trie.Witness())
 				}
-				return nil
-			})
-		}
+			}
+			return nil
+		})
 	}
 	// If witness building is enabled, gather all the read-only accesses.
 	// Skip witness collection in Verkle mode, they will be gathered
@@ -979,7 +911,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// only a single trie is used for state hashing. Replacing a non-nil verkle tree
 	// here could result in losing uncommitted changes from storage.
 	start = time.Now()
-	if s.prefetcher != nil && !s.db.TrieDB().IsVerkle() {
+	if s.prefetcher != nil {
 		if trie := s.prefetcher.trie(common.Hash{}, s.originalRoot); trie == nil {
 			log.Error("Failed to retrieve account pre-fetcher trie")
 		} else {
@@ -1407,7 +1339,11 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorag
 
 	// The reader update must be performed as the final step, otherwise,
 	// the new state would not be visible before db.commit.
-	s.reader, _ = s.db.Reader(s.originalRoot)
+	reader, readerErr := s.db.Reader(s.originalRoot)
+	if readerErr != nil {
+		log.Error("Failed to create state reader after commit", "root", s.originalRoot, "err", readerErr)
+	}
+	s.reader = reader
 	return ret, err
 }
 
