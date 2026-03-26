@@ -148,12 +148,18 @@ type structLogLegacy struct {
 	Gas           uint64             `json:"gas"`
 	GasCost       uint64             `json:"gasCost"`
 	Depth         int                `json:"depth"`
-	Error         string             `json:"error,omitempty"`
+	Error         *string            `json:"error,omitempty"`
 	Stack         *[]string          `json:"stack,omitempty"`
 	ReturnData    string             `json:"returnData,omitempty"`
 	Memory        *[]string          `json:"memory,omitempty"`
 	Storage       *map[string]string `json:"storage,omitempty"`
 	RefundCounter uint64             `json:"refund,omitempty"`
+}
+
+func formatMemoryWord(chunk []byte) string {
+	var word [32]byte
+	copy(word[:], chunk)
+	return hexutil.Encode(word[:])
 }
 
 // toLegacyJSON converts the structLog to legacy json-encoded legacy form.
@@ -164,8 +170,10 @@ func (s *StructLog) toLegacyJSON() json.RawMessage {
 		Gas:           s.Gas,
 		GasCost:       s.GasCost,
 		Depth:         s.Depth,
-		Error:         s.ErrorString(),
 		RefundCounter: s.RefundCounter,
+	}
+	if err := s.ErrorString(); err != "" {
+		msg.Error = &err
 	}
 	if s.Stack != nil {
 		stack := make([]string, len(s.Stack))
@@ -175,7 +183,7 @@ func (s *StructLog) toLegacyJSON() json.RawMessage {
 		msg.Stack = &stack
 	}
 	if len(s.ReturnData) > 0 {
-		msg.ReturnData = hexutil.Bytes(s.ReturnData).String()
+		msg.ReturnData = hexutil.Encode(s.ReturnData)
 	}
 	if len(s.Memory) > 0 {
 		memory := make([]string, 0, (len(s.Memory)+31)/32)
@@ -184,14 +192,14 @@ func (s *StructLog) toLegacyJSON() json.RawMessage {
 			if end > len(s.Memory) {
 				end = len(s.Memory)
 			}
-			memory = append(memory, fmt.Sprintf("%x", s.Memory[i:end]))
+			memory = append(memory, formatMemoryWord(s.Memory[i:end]))
 		}
 		msg.Memory = &memory
 	}
 	if len(s.Storage) > 0 {
 		storage := make(map[string]string)
 		for i, storageValue := range s.Storage {
-			storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
+			storage[i.Hex()] = storageValue.Hex()
 		}
 		msg.Storage = &storage
 	}
