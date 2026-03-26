@@ -29,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
@@ -173,10 +174,20 @@ func (dl *diffLayer) rebloom(origin *diskLayer) {
 	// Retrieve the parent bloom or create a fresh empty one
 	if parent, ok := dl.parent.(*diffLayer); ok {
 		parent.lock.RLock()
-		dl.diffed, _ = parent.diffed.Copy()
+		bloom, err := parent.diffed.Copy()
 		parent.lock.RUnlock()
+		if err != nil {
+			log.Error("Failed to copy parent bloom filter", "err", err)
+			bloom, _ = bloomfilter.New(uint64(bloomSize), uint64(bloomFuncs))
+		}
+		dl.diffed = bloom
 	} else {
-		dl.diffed, _ = bloomfilter.New(uint64(bloomSize), uint64(bloomFuncs))
+		bloom, err := bloomfilter.New(uint64(bloomSize), uint64(bloomFuncs))
+		if err != nil {
+			log.Error("Failed to create bloom filter", "err", err)
+			return
+		}
+		dl.diffed = bloom
 	}
 	for hash := range dl.accountData {
 		dl.diffed.AddHash(accountBloomHash(hash))
