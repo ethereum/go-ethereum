@@ -109,7 +109,10 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 	}
 	// matcher is the final sequence matcher that signals a match when all underlying
 	// matchers signal a match for consecutive log value indices.
-	matcher := newMatchSequence(params, matchers)
+	matcher, err := newMatchSequence(params, matchers)
+	if err != nil {
+		return nil, err
+	}
 
 	m := &matcherEnv{
 		ctx:        ctx,
@@ -389,7 +392,8 @@ func (m *singleMatcherInstance) getMatchesForLayer(ctx context.Context, layerInd
 			filterRow := groupRows[i]
 			filterRows, ok := m.filterRows[mapIndex]
 			if !ok {
-				panic("dropped map in mapIndices")
+				m.stats.setState(&st, stNone)
+				return nil, fmt.Errorf("internal inconsistency: mapIndex %d present in mapIndices but missing from filterRows", mapIndex)
 			}
 			if layerIndex == 0 {
 				matchBaseRowAccessMeter.Mark(1)
@@ -674,19 +678,23 @@ func (m *matchSequence) mergeNextStats(stats matchOrderStats) {
 // newMatchSequence creates a recursive sequence matcher from a list of underlying
 // matchers. The resulting matcher signals a match at log value index X when each
 // underlying matcher matchers[i] returns a match at X+i.
-func newMatchSequence(params *Params, matchers []matcher) matcher {
+func newMatchSequence(params *Params, matchers []matcher) (matcher, error) {
 	if len(matchers) == 0 {
-		panic("zero length sequence matchers are not allowed")
+		return nil, fmt.Errorf("zero length sequence matchers are not allowed")
 	}
 	if len(matchers) == 1 {
-		return matchers[0]
+		return matchers[0], nil
+	}
+	base, err := newMatchSequence(params, matchers[:len(matchers)-1])
+	if err != nil {
+		return nil, err
 	}
 	return &matchSequence{
 		params: params,
-		base:   newMatchSequence(params, matchers[:len(matchers)-1]),
+		base:   base,
 		next:   matchers[len(matchers)-1],
 		offset: uint64(len(matchers) - 1),
-	}
+	}, nil
 }
 
 // matchSequenceInstance is an instance of matchSequence.
