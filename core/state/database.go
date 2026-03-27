@@ -150,6 +150,9 @@ type CachingDB struct {
 	triedb *triedb.Database
 	codedb *CodeDB
 	snap   *snapshot.Tree
+
+	prefetch     bool
+	prefetchRead bool
 }
 
 // NewDatabase creates a state database with the provided data sources.
@@ -174,6 +177,13 @@ func NewDatabaseForTesting() *CachingDB {
 // registration must be performed before the cachingDB is used.
 func (db *CachingDB) WithSnapshot(snapshot *snapshot.Tree) *CachingDB {
 	db.snap = snapshot
+	return db
+}
+
+// EnablePrefetch enables the hasher prefetching feature.
+func (db *CachingDB) EnablePrefetch(prefetchRead bool) *CachingDB {
+	db.prefetch = true
+	db.prefetchRead = prefetchRead
 	return db
 }
 
@@ -224,7 +234,7 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 // Hasher implements Database, returning a hasher associated with the specified
 // state root.
 func (db *CachingDB) Hasher(stateRoot common.Hash) (Hasher, error) {
-	return newMerkleHasher(stateRoot, db.triedb, true, true)
+	return newMerkleHasher(stateRoot, db.triedb, db.prefetch, db.prefetchRead)
 }
 
 // ReadersWithCacheStats creates a pair of state readers that share the same

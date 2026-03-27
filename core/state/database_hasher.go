@@ -93,9 +93,9 @@ type Prefetcher interface {
 // WitnessCollector is an optional extension implemented by hashers that can
 // construct a state witness for the most recent committed state transition.
 type WitnessCollector interface {
-	// Witness returns the state witness corresponding to the most recent
+	// CollectWitness returns the state witness corresponding to the most recent
 	// committed state transition.
-	Witness() (*stateless.Witness, error)
+	CollectWitness(*stateless.Witness)
 }
 
 // Prover is an optional extension implemented by hashers that can construct

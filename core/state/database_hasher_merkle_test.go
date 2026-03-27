@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
@@ -537,5 +538,92 @@ func TestMerkleHasherCopy(t *testing.T) {
 	}
 	if h.Hash() != origRoot {
 		t.Fatal("original root changed after mutating copy")
+	}
+}
+
+// proofNodes collects the raw RLP-encoded trie nodes written by Prove calls.
+type proofNodes struct{ nodes [][]byte }
+
+func (p *proofNodes) Put(key []byte, value []byte) error {
+	p.nodes = append(p.nodes, common.CopyBytes(value))
+	return nil
+}
+func (p *proofNodes) Delete([]byte) error { return nil }
+
+// TestMerkleHasherWitness verifies that the witness returned by Witness()
+// contains every trie node on the Merkle proof path for each accessed account
+// and storage slot, including nodes from deleted storage tries.
+func TestMerkleHasherWitness(t *testing.T) {
+	h := makeBaseState(t, hasherTestConfig{"prefetchAll", true, true})
+
+	// Mutate addr1 storage, then delete and recreate with different
+	// storage so that both deletedTries and storageTries are populated.
+	h.PrefetchStorage(hasherAddr1, []common.Hash{hasherSlot1}, false)
+	if err := h.UpdateStorage(hasherAddr1, []common.Hash{hasherSlot1}, []common.Hash{hasherVal2}); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.UpdateAccount([]common.Address{hasherAddr1}, []AccountMut{hasherDeleteAccount()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.UpdateStorage(hasherAddr1, []common.Hash{hasherSlot3}, []common.Hash{hasherVal3}); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.UpdateAccount(
+		[]common.Address{hasherAddr1, hasherAddr2},
+		[]AccountMut{hasherAccount(10, 500), hasherAccount(2, 300)},
+	); err != nil {
+		t.Fatal(err)
+	}
+	witness := &stateless.Witness{
+		Codes: make(map[string]struct{}),
+		State: make(map[string]struct{}),
+	}
+	h.CollectWitness(witness)
+
+	if len(witness.State) == 0 {
+		t.Fatal("witness should contain trie nodes")
+	}
+	// Open a separate prover from the same pre-state root. Proofs
+	// generated here traverse the same trie paths that the mutating
+	// hasher loaded, so every proof node must be in the witness.
+	prover, err := newMerkleHasher(h.root, h.db, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prover.Close()
+
+	// Collect all expected proof nodes into a single set. The union of
+	// account proofs (addr1, addr2) and storage proofs (addr1/slot1)
+	// should exactly equal witness.State — no missing, no extra.
+	expected := make(map[string]struct{})
+
+	for _, addr := range []common.Address{hasherAddr1, hasherAddr2} {
+		pn := &proofNodes{}
+		if err := prover.ProveAccount(addr, pn); err != nil {
+			t.Fatal(err)
+		}
+		for _, node := range pn.nodes {
+			expected[string(node)] = struct{}{}
+		}
+	}
+	// Storage proof for addr1/slot1 (accessed before deletion).
+	// Slot2 was in the base state but never read or written during the
+	// block, so its leaf node is correctly absent from the witness.
+	pn := &proofNodes{}
+	if err := prover.ProveStorage(hasherAddr1, hasherSlot1, pn); err != nil {
+		t.Fatal(err)
+	}
+	for _, node := range pn.nodes {
+		expected[string(node)] = struct{}{}
+	}
+	// Every expected proof node must be in the witness.
+	for node := range expected {
+		if _, ok := witness.State[node]; !ok {
+			t.Fatal("proof node missing from witness")
+		}
+	}
+	// The witness must not contain any extra nodes beyond the proofs.
+	if len(witness.State) != len(expected) {
+		t.Fatalf("witness has %d nodes, expected %d (extra junk present)", len(witness.State), len(expected))
 	}
 }

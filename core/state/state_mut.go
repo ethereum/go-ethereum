@@ -38,7 +38,11 @@ type mutation struct {
 }
 
 func (m *mutation) copy() *mutation {
-	return &mutation{typ: m.typ, applied: m.applied, precedingDelete: m.precedingDelete}
+	return &mutation{
+		typ:             m.typ,
+		applied:         m.applied,
+		precedingDelete: m.precedingDelete,
+	}
 }
 
 func (m *mutation) isDelete() bool {

@@ -23,7 +23,6 @@ import (
 	"maps"
 	"slices"
 	"sort"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -111,30 +110,11 @@ type StateDB struct {
 	// Snapshot and RevertToSnapshot.
 	journal *journal
 
+	// State witness if cross validation is needed
+	witness *stateless.Witness
+
 	// Measurements gathered during execution for debugging purposes
-	AccountReads   time.Duration
-	AccountHashes  time.Duration
-	AccountUpdates time.Duration
-	AccountCommits time.Duration
-
-	StorageReads    time.Duration
-	StorageUpdates  time.Duration
-	StorageCommits  time.Duration
-	DatabaseCommits time.Duration
-	CodeReads       time.Duration
-
-	AccountLoaded  int          // Number of accounts retrieved from the database during the state transition
-	AccountDeleted int          // Number of accounts deleted during the state transition
-	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
-	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
-	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
-
-	// CodeLoadBytes is the total number of bytes read from contract code.
-	// This value may be smaller than the actual number of bytes read, since
-	// some APIs (e.g. CodeSize) may load the entire code from either the
-	// cache or the database when the size is not available in the cache.
-	CodeLoaded    int // Number of contract code loaded during the state transition
-	CodeLoadBytes int // Total bytes of resolved code
+	Stats
 }
 
 // New creates a new state from a given trie.
@@ -173,15 +153,10 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 	return sdb, nil
 }
 
-// StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
-// state trie concurrently while the state is mutated so that when we reach the
-// commit phase, most of the needed data is already hot.
-func (s *StateDB) StartPrefetcher(namespace string, witness *stateless.Witness) {
+// TraceWitness enables execution witness gathering.
+func (s *StateDB) TraceWitness(witness *stateless.Witness) {
+	s.witness = witness
 }
-
-// StopPrefetcher terminates a running prefetcher and reports any leftover stats
-// from the gathered metrics.
-func (s *StateDB) StopPrefetcher() {}
 
 // setError remembers the first non-nil error it is called with.
 func (s *StateDB) setError(err error) {
@@ -206,7 +181,7 @@ func (s *StateDB) AddLog(log *types.Log) {
 }
 
 // GetLogs returns the logs matching the specified transaction hash, and annotates
-// them with the given blockNumber and blockHash.
+// them with the given block attributes.
 func (s *StateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash, blockTime uint64) []*types.Log {
 	logs := s.logs[hash]
 	for _, l := range logs {
@@ -217,6 +192,7 @@ func (s *StateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common
 	return logs
 }
 
+// Logs returns the un-annotated logs in order.
 func (s *StateDB) Logs() []*types.Log {
 	logs := make([]*types.Log, 0, s.logSize)
 	for _, lgs := range s.logs {
@@ -296,6 +272,9 @@ func (s *StateDB) TxIndex() int {
 func (s *StateDB) GetCode(addr common.Address) []byte {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
+		if s.witness != nil {
+			s.witness.AddCode(stateObject.Code())
+		}
 		return stateObject.Code()
 	}
 	return nil
@@ -304,6 +283,9 @@ func (s *StateDB) GetCode(addr common.Address) []byte {
 func (s *StateDB) GetCodeSize(addr common.Address) int {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
+		if s.witness != nil {
+			s.witness.AddCode(stateObject.Code())
+		}
 		return stateObject.CodeSize()
 	}
 	return 0
@@ -502,14 +484,13 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	if _, ok := s.stateObjectsDestruct[addr]; ok {
 		return nil
 	}
-	s.AccountLoaded++
-
 	start := time.Now()
 	acct, err := s.reader.Account(addr)
 	if err != nil {
 		s.setError(fmt.Errorf("getStateObject (%x) error: %w", addr.Bytes(), err))
 		return nil
 	}
+	s.AccountLoaded++
 	s.AccountReads += time.Since(start)
 
 	// Short circuit if the account is not found
@@ -610,6 +591,9 @@ func (s *StateDB) Copy() *StateDB {
 		accessList:       s.accessList.Copy(),
 		transientStorage: s.transientStorage.Copy(),
 		journal:          s.journal.copy(),
+	}
+	if s.witness != nil {
+		state.witness = s.witness.Copy()
 	}
 	if s.accessEvents != nil {
 		state.accessEvents = s.accessEvents.Copy()
@@ -756,6 +740,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			continue
 		}
 		op.precedingDelete = false
+
 		delAddrs = append(delAddrs, addr)
 		delAccts = append(delAccts, AccountMut{Account: nil})
 	}
@@ -764,6 +749,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			s.setError(err)
 			return common.Hash{}
 		}
+		s.AccountDeleted += len(delAddrs)
 	}
 	s.AccountUpdates += time.Since(start)
 
@@ -797,14 +783,20 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 
 		if op.isDelete() {
 			accounts = append(accounts, AccountMut{Account: nil})
+			s.AccountDeleted += 1
 			continue
 		}
 		obj := s.stateObjects[addr]
 		mut := AccountMut{Account: &obj.data}
 		if obj.dirtyCode {
 			mut.Code = &CodeMut{Code: obj.code}
+
+			// Count code writes post-Finalise so reverted CREATEs are excluded.
+			s.CodeUpdated += 1
+			s.CodeUpdateBytes += len(obj.code)
 		}
 		accounts = append(accounts, mut)
+		s.AccountUpdated += 1
 	}
 	if err := s.hasher.UpdateAccount(addresses, accounts); err != nil {
 		s.setError(err)
@@ -932,8 +924,7 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*acco
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to delete storage, err: %w", err)
 		}
-		op.storages = storages
-		op.storagesOrigin = storagesOrigin
+		op.storages, op.storagesOrigin = storages, storagesOrigin
 
 		// Aggregate the associated trie node changes.
 		if err := nodes.Merge(set); err != nil {
@@ -957,15 +948,6 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	if s.dbErr != nil {
 		return nil, fmt.Errorf("commit aborted due to database error: %v", s.dbErr)
 	}
-	// Commit objects to the trie, measuring the elapsed time
-	var (
-		accountTrieNodesUpdated int
-		accountTrieNodesDeleted int
-		storageTrieNodesUpdated int
-		storageTrieNodesDeleted int
-
-		updates = make(map[common.Hash]*accountUpdate, len(s.mutations)) // aggregated account updates
-	)
 	// Given that some accounts could be destroyed and then recreated within
 	// the same block, account deletions must be processed first. This ensures
 	// that the storage trie nodes deleted during destruction and recreated
@@ -974,6 +956,8 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	if err != nil {
 		return nil, err
 	}
+	// Aggregated account updates
+	updates := make(map[common.Hash]*accountUpdate, len(s.mutations))
 	for addr, op := range s.mutations {
 		if op.isDelete() {
 			continue
@@ -992,29 +976,16 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	// Handle all state updates afterwards, concurrently to one another to shave
 	// off some milliseconds from the commit operation. Also accumulate the code
 	// writes to run in parallel with the computations.
+	start := time.Now()
 	root, set, secondaryHashes, err := s.hasher.Commit()
 	if err != nil {
 		return nil, err
 	}
+	s.HasherCommits = time.Since(start)
+
 	if err := nodes.MergeSet(set); err != nil {
 		return nil, err
 	}
-	accountReadMeters.Mark(int64(s.AccountLoaded))
-	storageReadMeters.Mark(int64(s.StorageLoaded))
-	storageUpdatedMeter.Mark(s.StorageUpdated.Load())
-	accountDeletedMeter.Mark(int64(s.AccountDeleted))
-	storageDeletedMeter.Mark(s.StorageDeleted.Load())
-	accountTrieUpdatedMeter.Mark(int64(accountTrieNodesUpdated))
-	accountTrieDeletedMeter.Mark(int64(accountTrieNodesDeleted))
-	storageTriesUpdatedMeter.Mark(int64(storageTrieNodesUpdated))
-	storageTriesDeletedMeter.Mark(int64(storageTrieNodesDeleted))
-
-	// Clear the metric markers
-	s.AccountLoaded, s.AccountDeleted = 0, 0
-	s.StorageLoaded = 0
-	s.StorageUpdated.Store(0)
-	s.StorageDeleted.Store(0)
-
 	// Clear all internal flags and update state root at the end.
 	s.mutations = make(map[common.Address]*mutation)
 	s.stateObjectsDestruct = make(map[common.Address]*stateObject)
@@ -1022,6 +993,12 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	origin := s.originalRoot
 	s.originalRoot = root
 
+	if s.witness != nil {
+		builder, ok := s.hasher.(WitnessCollector)
+		if ok {
+			builder.CollectWitness(s.witness)
+		}
+	}
 	return newStateUpdate(noStorageWiping, origin, root, blockNumber, deletes, updates, nodes, secondaryHashes), nil
 }
 
@@ -1160,7 +1137,7 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 
 // Witness retrieves the current state witness being collected.
 func (s *StateDB) Witness() *stateless.Witness {
-	return nil
+	return s.witness
 }
 
 func (s *StateDB) AccessEvents() *AccessEvents {

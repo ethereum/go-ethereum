@@ -171,14 +171,13 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		s.originStorage[key] = common.Hash{} // track the empty slot as origin value
 		return common.Hash{}
 	}
-	s.db.StorageLoaded++
-
 	start := time.Now()
 	value, err := s.db.reader.Storage(s.address, key)
 	if err != nil {
 		s.db.setError(err)
 		return common.Hash{}
 	}
+	s.db.StorageLoaded++
 	s.db.StorageReads += time.Since(start)
 
 	s.originStorage[key] = value
@@ -267,8 +266,10 @@ func (s *stateObject) updateTrie() error {
 		return nil
 	}
 	var (
-		keys = make([]common.Hash, 0, len(s.uncommittedStorage))
-		vals = make([]common.Hash, 0, len(s.uncommittedStorage))
+		updates int64
+		deletes int64
+		keys    = make([]common.Hash, 0, len(s.uncommittedStorage))
+		vals    = make([]common.Hash, 0, len(s.uncommittedStorage))
 	)
 	for key, origin := range s.uncommittedStorage {
 		// Skip noop changes, persist actual changes
@@ -281,10 +282,17 @@ func (s *stateObject) updateTrie() error {
 			log.Error("Storage slot is not found in pending area", "address", s.address, "slot", key)
 			continue
 		}
+		if value == (common.Hash{}) {
+			deletes += 1
+		} else {
+			updates += 1
+		}
 		keys = append(keys, key)
 		vals = append(vals, value)
 	}
 	s.uncommittedStorage = make(Storage) // empties the commit markers
+	s.db.StorageUpdated.Add(updates)
+	s.db.StorageDeleted.Add(deletes)
 
 	return s.db.hasher.UpdateStorage(s.address, keys, vals)
 }
@@ -337,7 +345,7 @@ func (s *stateObject) commit() (*accountUpdate, error) {
 	// commit the contract code if it's modified
 	if s.dirtyCode {
 		s.dirtyCode = false // reset the dirty flag
-	
+
 		op.code = &contractCode{
 			hash: common.BytesToHash(s.CodeHash()),
 			blob: s.code,

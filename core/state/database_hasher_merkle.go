@@ -21,12 +21,14 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb"
+	"golang.org/x/sync/errgroup"
 )
 
 // wrapTrie pairs a StateTrie with an optional background prefetcher that
@@ -36,6 +38,7 @@ type wrapTrie struct {
 	prefetcher *prefetcher
 }
 
+// newWrapTrie creates a merkle trie with the optional prefetcher enabled.
 func newWrapTrie(id *trie.ID, db *triedb.Database, prefetch bool, prefetchRead bool) (*wrapTrie, error) {
 	t, err := trie.NewStateTrie(id, db)
 	if err != nil {
@@ -59,7 +62,7 @@ func (tr *wrapTrie) term() {
 	tr.prefetcher = nil
 }
 
-// The methods below shadow the embedded StateTrie so that any direct trie
+// The methods below shadow the embedded trie.StateTrie so that any direct trie
 // access auto-terminates the prefetcher first. This makes data-race freedom
 // structural: callers never need to remember to call term() manually.
 
@@ -98,9 +101,9 @@ func (tr *wrapTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 	return tr.StateTrie.Prove(key, proofDb)
 }
 
-func (tr *wrapTrie) copy() *wrapTrie {
+func (tr *wrapTrie) Witness() map[string][]byte {
 	tr.term()
-	return &wrapTrie{StateTrie: tr.StateTrie.Copy()}
+	return tr.StateTrie.Witness()
 }
 
 func (tr *wrapTrie) prefetchAccounts(addresses []common.Address, read bool) {
@@ -117,22 +120,31 @@ func (tr *wrapTrie) prefetchStorage(addr common.Address, keys []common.Hash, rea
 	tr.prefetcher.scheduleSlots(addr, keys, read)
 }
 
-// rootReader wraps the account trie for loading the storage root. It is
-// essential to use an independent trie to prevent potential data races
-// with the optional prefetcher.
-type rootReader struct {
+// copy returns a deep-copied state trie. Notably the prefetcher is deliberately
+// not copied, as it only belongs to the original one.
+func (tr *wrapTrie) copy() *wrapTrie {
+	tr.term()
+	return &wrapTrie{StateTrie: tr.StateTrie.Copy()}
+}
+
+// storageRootReader wraps the account trie for loading the storage root. It is
+// essential to use an independent trie to prevent potential data races with
+// the optional prefetcher.
+//
+// TODO(rjl493456442) use the flat state for better read efficiency.
+type storageRootReader struct {
 	tr *trie.StateTrie
 }
 
-func newRootReader(root common.Hash, db *triedb.Database) (*rootReader, error) {
+func newStorageRootReader(root common.Hash, db *triedb.Database) (*storageRootReader, error) {
 	t, err := trie.NewStateTrie(trie.StateTrieID(root), db)
 	if err != nil {
 		return nil, err
 	}
-	return &rootReader{tr: t}, nil
+	return &storageRootReader{tr: t}, nil
 }
 
-func (r *rootReader) readStorageRoot(address common.Address) (common.Hash, error) {
+func (r *storageRootReader) read(address common.Address) (common.Hash, error) {
 	acct, err := r.tr.GetAccount(address)
 	if err != nil {
 		return common.Hash{}, err
@@ -143,8 +155,8 @@ func (r *rootReader) readStorageRoot(address common.Address) (common.Hash, error
 	return acct.Root, nil
 }
 
-func (r *rootReader) copy() *rootReader {
-	return &rootReader{tr: r.tr.Copy()}
+func (r *storageRootReader) copy() *storageRootReader {
+	return &storageRootReader{tr: r.tr.Copy()}
 }
 
 // merkleHasher is a Hasher implementation backed by the traditional two-layer
@@ -152,7 +164,7 @@ func (r *rootReader) copy() *rootReader {
 type merkleHasher struct {
 	db           *triedb.Database
 	root         common.Hash
-	reader       *rootReader
+	reader       *storageRootReader
 	prefetch     bool
 	prefetchRead bool
 
@@ -160,7 +172,7 @@ type merkleHasher struct {
 	storageTries map[common.Address]*wrapTrie
 
 	// deletedTries preserves storage tries of accounts that were deleted
-	// during the block. Keyed by address; only the first deletion per
+	// during the block keyed by address. Only the first deletion per
 	// address is recorded (the pre-block incarnation).
 	deletedTries map[common.Address]*wrapTrie
 
@@ -169,7 +181,8 @@ type merkleHasher struct {
 	// UpdateStorage or set to EmptyRootHash on deletion.
 	storageRoots map[common.Address]Hashes
 
-	storageLock sync.Mutex // guards storage trie fields
+	// Lock guards storage trie fields
+	storageLock sync.Mutex
 }
 
 func newMerkleHasher(root common.Hash, db *triedb.Database, prefetch bool, prefetchRead bool) (*merkleHasher, error) {
@@ -177,7 +190,7 @@ func newMerkleHasher(root common.Hash, db *triedb.Database, prefetch bool, prefe
 	if err != nil {
 		return nil, err
 	}
-	r, err := newRootReader(root, db)
+	r, err := newStorageRootReader(root, db)
 	if err != nil {
 		return nil, err
 	}
@@ -201,11 +214,14 @@ func (h *merkleHasher) storageRoot(addr common.Address) (common.Hash, error) {
 	if hashes, ok := h.storageRoots[addr]; ok {
 		return hashes.Hash, nil
 	}
-	root, err := h.reader.readStorageRoot(addr)
+	root, err := h.reader.read(addr)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	h.storageRoots[addr] = Hashes{Prev: root, Hash: root}
+	h.storageRoots[addr] = Hashes{
+		Prev: root,
+		Hash: root,
+	}
 	return root, nil
 }
 
@@ -223,6 +239,7 @@ func (h *merkleHasher) openStorageTrie(address common.Address, prefetch bool) (*
 		return nil, err
 	}
 	id := trie.StorageTrieID(h.root, crypto.Keccak256Hash(address.Bytes()), root)
+
 	tr, err := newWrapTrie(id, h.db, h.prefetch && prefetch, h.prefetchRead)
 	if err != nil {
 		return nil, err
@@ -231,8 +248,9 @@ func (h *merkleHasher) openStorageTrie(address common.Address, prefetch bool) (*
 	return tr, nil
 }
 
+// deleteAccount removes the account specified by the address from the state.
 func (h *merkleHasher) deleteAccount(addr common.Address) error {
-	// Deletion: capture the original storage root before modifying the trie.
+	// Capture the original storage root before modifying the trie.
 	_, err := h.storageRoot(addr)
 	if err != nil {
 		return err
@@ -251,6 +269,7 @@ func (h *merkleHasher) deleteAccount(addr common.Address) error {
 	return h.acctTrie.DeleteAccount(addr)
 }
 
+// update writes the account specified by the address into the state.
 func (h *merkleHasher) updateAccount(addr common.Address, account AccountMut) error {
 	root, err := h.storageRoot(addr)
 	if err != nil {
@@ -265,10 +284,12 @@ func (h *merkleHasher) updateAccount(addr common.Address, account AccountMut) er
 	return h.acctTrie.UpdateAccount(addr, data, 0)
 }
 
-// UpdateAccount implements Hasher.
+// UpdateAccount implements Hasher, writing a list of account mutations
+// into the state. The assumption is held all the storage changes have
+// already been written beforehand.
 func (h *merkleHasher) UpdateAccount(addresses []common.Address, accounts []AccountMut) error {
+	var err error
 	for i, addr := range addresses {
-		var err error
 		if accounts[i].Account == nil {
 			err = h.deleteAccount(addr)
 		} else {
@@ -281,7 +302,9 @@ func (h *merkleHasher) UpdateAccount(addresses []common.Address, accounts []Acco
 	return nil
 }
 
-// UpdateStorage implements Hasher.
+// UpdateStorage implements Hasher, writing a list of storage slot mutations
+// into the state. This function must be invoked first before writing the
+// associated account metadata into the state.
 func (h *merkleHasher) UpdateStorage(address common.Address, keys []common.Hash, values []common.Hash) error {
 	tr, err := h.openStorageTrie(address, false)
 	if err != nil {
@@ -289,18 +312,19 @@ func (h *merkleHasher) UpdateStorage(address common.Address, keys []common.Hash,
 	}
 	for i, key := range keys {
 		if values[i] == (common.Hash{}) {
-			if err := tr.DeleteStorage(address, key[:]); err != nil {
-				return err
-			}
+			err = tr.DeleteStorage(address, key[:])
 		} else {
-			if err := tr.UpdateStorage(address, key[:], common.TrimLeftZeroes(values[i][:])); err != nil {
-				return err
-			}
+			err = tr.UpdateStorage(address, key[:], common.TrimLeftZeroes(values[i][:]))
+		}
+		if err != nil {
+			return err
 		}
 	}
 	// Hash outside the lock to allow full parallelism across accounts.
 	hash := tr.Hash()
 
+	// Write back the storage root back for reflecting the most recent
+	// changes.
 	h.storageLock.Lock()
 	h.storageRoots[address] = Hashes{
 		Prev: h.storageRoots[address].Prev,
@@ -310,50 +334,64 @@ func (h *merkleHasher) UpdateStorage(address common.Address, keys []common.Hash,
 	return nil
 }
 
+// Hash implements Hasher, computing the state root hash without committing.
 func (h *merkleHasher) Hash() common.Hash {
 	return h.acctTrie.Hash()
 }
 
-// Close terminates all prefetcher goroutines. Safe to call multiple times.
-func (h *merkleHasher) Close() {
-	h.acctTrie.term()
-	for _, tr := range h.storageTries {
-		tr.term()
-	}
-	for _, tr := range h.deletedTries {
-		tr.term()
-	}
-}
-
+// Commit implements Hasher, finalizing all pending changes and returning
+// the resulting state root hash, along with the set of dirty trie nodes
+// generated by the updates.
 func (h *merkleHasher) Commit() (common.Hash, *trienode.MergedNodeSet, map[common.Address]Hashes, error) {
 	// Explicitly terminate all resolved tries. Some of them may not be
 	// terminated due to read-only prefetching. This is essential to
 	// prevent goroutine leaks.
 	h.Close()
 
-	nodes := trienode.NewMergedNodeSet()
+	var (
+		eg   errgroup.Group
+		root common.Hash
+
+		lock  sync.Mutex
+		nodes = trienode.NewMergedNodeSet()
+		merge = func(set *trienode.NodeSet) error {
+			lock.Lock()
+			defer lock.Unlock()
+
+			return nodes.Merge(set)
+		}
+	)
+	eg.Go(func() error {
+		r, set := h.acctTrie.Commit(true)
+		root = r
+		if set == nil {
+			return nil
+		}
+		return merge(set)
+	})
 	for _, tr := range h.storageTries {
-		if _, set := tr.Commit(false); set != nil {
-			if err := nodes.Merge(set); err != nil {
-				return common.Hash{}, nil, nil, err
+		eg.Go(func() error {
+			_, set := tr.Commit(false)
+			if set == nil {
+				return nil
 			}
-		}
+			return merge(set)
+		})
 	}
-	root, set := h.acctTrie.Commit(true)
-	if set != nil {
-		if err := nodes.Merge(set); err != nil {
-			return common.Hash{}, nil, nil, err
-		}
+	if err := eg.Wait(); err != nil {
+		return common.Hash{}, nil, nil, err
 	}
 	return root, nodes, h.storageRoots, nil
 }
 
+// Copy implements Hasher, returning a deep-copied hasher instance.
 func (h *merkleHasher) Copy() Hasher {
 	cpy := &merkleHasher{
 		db:           h.db,
 		root:         h.root,
 		reader:       h.reader.copy(),
 		prefetch:     false,
+		prefetchRead: false,
 		acctTrie:     h.acctTrie.copy(),
 		storageTries: make(map[common.Address]*wrapTrie, len(h.storageTries)),
 		deletedTries: make(map[common.Address]*wrapTrie, len(h.deletedTries)),
@@ -368,18 +406,43 @@ func (h *merkleHasher) Copy() Hasher {
 	return cpy
 }
 
-// ProveAccount implements Prover.
+// Close terminates all prefetcher goroutines. Safe to call multiple times.
+func (h *merkleHasher) Close() {
+	h.acctTrie.term()
+	for _, tr := range h.storageTries {
+		tr.term()
+	}
+	for _, tr := range h.deletedTries {
+		tr.term()
+	}
+}
+
+// ProveAccount implements Prover, constructing a proof for the given account.
 func (h *merkleHasher) ProveAccount(addr common.Address, proofDb ethdb.KeyValueWriter) error {
 	return h.acctTrie.Prove(crypto.Keccak256(addr.Bytes()), proofDb)
 }
 
-// ProveStorage implements Prover.
+// ProveStorage implements Prover, constructing a proof for the given storage
+// slot of the specified account.
 func (h *merkleHasher) ProveStorage(addr common.Address, key common.Hash, proofDb ethdb.KeyValueWriter) error {
 	tr, err := h.openStorageTrie(addr, false)
 	if err != nil {
 		return err
 	}
 	return tr.Prove(crypto.Keccak256(key.Bytes()), proofDb)
+}
+
+// CollectWitness implements WitnessCollector. It aggregates all trie nodes
+// accessed (both read and write) across the account trie, all active storage
+// tries and deleted storage tries into a single state witness.
+func (h *merkleHasher) CollectWitness(witness *stateless.Witness) {
+	witness.AddState(h.acctTrie.Witness(), common.Hash{})
+	for addr, tr := range h.storageTries {
+		witness.AddState(tr.Witness(), crypto.Keccak256Hash(addr.Bytes()))
+	}
+	for addr, tr := range h.deletedTries {
+		witness.AddState(tr.Witness(), crypto.Keccak256Hash(addr.Bytes()))
+	}
 }
 
 // PrefetchAccount implements Prefetcher, preloading the nodes of specific accounts.

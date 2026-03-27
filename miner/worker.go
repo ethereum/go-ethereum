@@ -80,11 +80,6 @@ func (env *environment) txFitsSize(tx *types.Transaction) bool {
 	return env.size+tx.Size() < params.MaxBlockSize-maxBlockSizeBufferZone
 }
 
-// discard terminates the background threads before discarding it.
-func (env *environment) discard() {
-	env.state.StopPrefetcher()
-}
-
 const (
 	commitInterruptNone int32 = iota
 	commitInterruptNewHead
@@ -147,8 +142,6 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
-	defer work.discard()
-
 	// Check withdrawals fit max block size.
 	// Due to the cap on withdrawal count, this can actually never happen, but we still need to
 	// check to ensure the CL notices there's a problem if the withdrawal cap is ever lifted.
@@ -334,8 +327,8 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 		if err != nil {
 			return nil, err
 		}
+		state.TraceWitness(bundle)
 	}
-	state.StartPrefetcher("miner", bundle)
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
 		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),

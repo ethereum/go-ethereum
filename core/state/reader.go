@@ -63,7 +63,6 @@ type Account struct {
 }
 
 // newEmptyAccount returns an empty account.
-// nolint:unused
 func newEmptyAccount() *Account {
 	return &Account{
 		Balance:  uint256.NewInt(0),

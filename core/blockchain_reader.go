@@ -424,6 +424,11 @@ func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	return state.New(root, state.NewDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
 }
 
+// StateWithPrefetching returns a new mutable state based on a particular point in time.
+func (bc *BlockChain) StateWithPrefetching(root common.Hash) (*state.StateDB, error) {
+	return state.New(root, state.NewDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps).EnablePrefetch(false))
+}
+
 // HistoricState returns a historic state specified by the given root.
 // Live states are not available and won't be served, please use `State`
 // or `StateAt` instead.
