@@ -721,10 +721,7 @@ func (bc *BlockChain) loadLastState() error {
 // initializeHistoryPruning sets bc.historyPrunePoint based on actual DB state,
 // and prunes chain history at startup if needed.
 func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
-	freezerTail, err := bc.db.Tail()
-	if err != nil {
-		return err
-	}
+	freezerTail, _ := bc.db.Tail()
 	policy := bc.cfg.HistoryPolicy
 	// Compute the current prune target from the policy.
 	var target uint64
