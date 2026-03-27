@@ -881,10 +881,12 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 					if err := s.trie.UpdateStorage(addr, key[:], common.TrimLeftZeroes(value[:])); err != nil {
 						s.setError(err)
 					}
+					s.StorageUpdated.Add(1)
 				} else {
 					if err := s.trie.DeleteStorage(addr, key[:]); err != nil {
 						s.setError(err)
 					}
+					s.StorageDeleted.Add(1)
 				}
 			}
 		}
