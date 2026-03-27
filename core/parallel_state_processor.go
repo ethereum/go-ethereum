@@ -3,15 +3,16 @@ package core
 import (
 	"cmp"
 	"fmt"
-	"runtime"
-	"slices"
-	"time"
-
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"golang.org/x/sync/errgroup"
+	"runtime"
+	"slices"
+	"time"
 )
 
 // ProcessResultWithMetrics wraps ProcessResult with some metrics that are
@@ -104,20 +105,36 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStar
 	var allLogs []*types.Log
 	var allReceipts []*types.Receipt
 	for _, result := range results {
+		// EIP-8037 check_transaction: verify this tx fits in remaining
+		// block capacity per-dimension BEFORE adding its actual usage.
+		// Regular gas is capped at MaxTxGas; state gas uses full tx.gas.
+		regularAvailable := header.GasLimit - sumRegular
+		stateAvailable := header.GasLimit - sumState
+		if min(params.MaxTxGas, result.txGasLimit) > regularAvailable ||
+			result.txGasLimit > stateAvailable {
+			return &ProcessResultWithMetrics{
+				ProcessResult: &ProcessResult{Error: ErrGasLimitReached},
+			}
+		}
+
+		// Tx fits; add actual gas usage.
 		sumRegular += result.txRegular
 		sumState += result.txState
+
+		// Verify BAL mutations match for included txs.
+		if result.balErr != nil {
+			return &ProcessResultWithMetrics{
+				ProcessResult: &ProcessResult{Error: result.balErr},
+			}
+		}
+
 		cumulativeReceipt += result.execGas
 		result.receipt.CumulativeGasUsed = cumulativeReceipt
 		allLogs = append(allLogs, result.receipt.Logs...)
 		allReceipts = append(allReceipts, result.receipt)
 	}
-	// Block gas = max(sum_regular, sum_state) per EIP-8037.
+
 	blockGasUsed := max(sumRegular, sumState)
-	if blockGasUsed > header.GasLimit {
-		return &ProcessResultWithMetrics{
-			ProcessResult: &ProcessResult{Error: fmt.Errorf("gas limit exceeded")},
-		}
-	}
 
 	var postMut bal.StateMutations
 	// Read requests if Prague is enabled.
@@ -156,14 +173,14 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStar
 	accessList := bal.NewAccessListReader(*block.AccessList())
 	if !postMut.Eq(*accessList.MutationsAt(lastBALIdx)) {
 		return &ProcessResultWithMetrics{
-			ProcessResult: &ProcessResult{Error: fmt.Errorf("mismatch between local/remote access list mutations for final idx")},
+			ProcessResult: &ProcessResult{Error: fmt.Errorf("invalid block access list: mismatch between local/remote access list mutations for final idx")},
 		}
 	}
 
 	accesses.Merge(postTxAccesses)
 	if !validateStateAccesses(lastBALIdx, accessList, accesses) {
 		return &ProcessResultWithMetrics{
-			ProcessResult: &ProcessResult{Error: fmt.Errorf("mismatch between local/remote access list for state accesses")},
+			ProcessResult: &ProcessResult{Error: fmt.Errorf("invalid block access list: mismatch between local/remote access list for state accesses")},
 		}
 	}
 
@@ -182,11 +199,13 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStar
 }
 
 type txExecResult struct {
-	idx      int // transaction index
-	receipt  *types.Receipt
-	err      error // non-EVM error which would render the block invalid
-	blockGas uint64
-	execGas  uint64
+	idx        int // transaction index
+	receipt    *types.Receipt
+	err        error // non-EVM error which would render the block invalid (e.g. tx apply failure)
+	balErr     error // BAL mutation mismatch (deferred until after gas limit check)
+	blockGas   uint64
+	execGas    uint64
+	txGasLimit uint64 // original tx gas limit (for pre-execution gas capacity check)
 
 	// Per-tx dimensional gas for Amsterdam 2D gas accounting (EIP-8037).
 	txRegular uint64
@@ -201,7 +220,6 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxReads ba
 	// 1. if the block has transactions, receive the execution results from all of them and return an error on resCh if any txs err'd
 	// 2. once all txs are executed, compute the post-tx state transition and produce the ProcessResult sending it on resCh (or an error if the post-tx state didn't match what is reported in the BAL)
 	var results []txExecResult
-	gp := NewGasPool(block.GasLimit())
 	var execErr error
 	var numTxComplete int
 
@@ -217,8 +235,6 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxReads ba
 					// short-circuit if invalid block was detected
 					if res.err != nil {
 						execErr = res.err
-					} else if err := gp.SubGas(res.receipt.CumulativeGasUsed); err != nil {
-						execErr = err
 					} else {
 						results = append(results, res)
 						accesses.Merge(res.stateReads)
@@ -254,6 +270,7 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxReads ba
 type stateRootCalculationResult struct {
 	err     error
 	metrics *state.BALStateTransitionMetrics
+	root    common.Hash
 }
 
 // calcAndVerifyRoot performs the post-state root hash calculation, verifying
@@ -298,17 +315,19 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 	}
 
 	accessList := bal.NewAccessListReader(*block.AccessList())
+	var balMismatch error
 	if !accessList.MutationsAt(balIdx).Eq(mut) {
-		err := fmt.Errorf("mismatch between local/remote computed state mutations at bal idx %d. got:\n%s\nexpected:\n%s\n", balIdx, mut.String(), accessList.MutationsAt(balIdx).String())
-		return &txExecResult{err: err}
+		balMismatch = fmt.Errorf("invalid block access list: mismatch between local/remote computed state mutations at bal idx %d. got:\n%s\nexpected:\n%s\n", balIdx, mut.String(), accessList.MutationsAt(balIdx).String())
 	}
 
 	txRegular, txState := gp.AmsterdamDimensions()
 	return &txExecResult{
 		idx:        balIdx,
+		balErr:     balMismatch,
 		receipt:    receipt,
 		execGas:    receipt.GasUsed,
 		blockGas:   gp.Used(),
+		txGasLimit: tx.Gas(),
 		txRegular:  txRegular,
 		txState:    txState,
 		stateReads: db.Reader().(state.StateReaderTracker).GetStateAccessList(),
@@ -337,7 +356,7 @@ func (p *ParallelStateProcessor) processBlockPreTx(block *types.Block, statedb *
 	mutations.Merge(pbhMutations)
 	reads := readerWithTracker.(state.StateReaderTracker).GetStateAccessList()
 	if !accessList.MutationsAt(0).Eq(mutations) {
-		return nil, fmt.Errorf("mismatch between local/remote access list mutations at idx 0")
+		return nil, fmt.Errorf("invalid block access list: mismatch between local/remote access list mutations at idx 0")
 	}
 	return reads, nil
 }

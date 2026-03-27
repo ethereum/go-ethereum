@@ -122,6 +122,8 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 				return fmt.Errorf("access list hash mismatch.  local: %x. remote: %x\n", block.AccessList().Hash(), *block.Header().BlockAccessListHash)
 			} else if err := block.AccessList().Validate(len(block.Transactions())); err != nil {
 				return fmt.Errorf("invalid block access list: %v", err)
+			} else if err := block.AccessList().ValidateGasLimit(block.GasLimit()); err != nil {
+				return fmt.Errorf("invalid block access list: %v", err)
 			}
 		} else {
 			//panic("TODO: implement local access list construction path if importing a block without an access list")
