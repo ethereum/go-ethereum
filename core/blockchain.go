@@ -2170,24 +2170,18 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	// If we are past Byzantium, enable prefetching to pull in trie node paths
 	// while processing transactions. Before Byzantium the prefetcher is mostly
 	// useless due to the intermediate root hashing after each transaction.
-	var (
-		witness      *stateless.Witness
-		witnessStats *stateless.WitnessStats
-	)
+	var witness *stateless.Witness
 	if bc.chainConfig.IsByzantium(block.Number()) {
 		// Generate witnesses either if we're self-testing, or if it's the
 		// only block being inserted. A bit crude, but witnesses are huge,
 		// so we refuse to make an entire chain of them.
 		if config.StatelessSelfValidation || config.MakeWitness {
-			witness, err = stateless.NewWitness(block.Header(), bc)
+			witness, err = stateless.NewWitness(block.Header(), bc, config.EnableWitnessStats)
 			if err != nil {
 				return nil, err
 			}
-			if config.EnableWitnessStats {
-				witnessStats = stateless.NewWitnessStats()
-			}
 		}
-		statedb.StartPrefetcher("chain", witness, witnessStats)
+		statedb.StartPrefetcher("chain", witness)
 		defer statedb.StopPrefetcher()
 	}
 
@@ -2306,8 +2300,8 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		stats.BlockWrite = time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.DatabaseCommits
 	}
 	// Report the collected witness statistics
-	if witnessStats != nil {
-		witnessStats.ReportMetrics(block.NumberU64())
+	if witness != nil {
+		witness.ReportMetrics(block.NumberU64())
 	}
 	elapsed := time.Since(startTime) + 1 // prevent zero division
 	stats.TotalTime = elapsed
