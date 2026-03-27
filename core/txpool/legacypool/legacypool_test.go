@@ -229,6 +229,13 @@ func (r *reserver) Has(address common.Address) bool {
 	return false // reserver only supports a single pool
 }
 
+func (r *reserver) Owns(address common.Address) bool {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+	_, exists := r.accounts[address]
+	return exists
+}
+
 func setupPoolWithConfig(config *params.ChainConfig) (*LegacyPool, *ecdsa.PrivateKey) {
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	blockchain := newTestBlockChain(config, 10000000, statedb, new(event.Feed))
@@ -390,6 +397,46 @@ func TestStateChangeDuringReset(t *testing.T) {
 	nonce = pool.Nonce(address)
 	if nonce != 2 {
 		t.Fatalf("Invalid nonce, want 2, got %d", nonce)
+	}
+}
+
+func TestPromoteExecutablesQueueEmptyWithoutReservation(t *testing.T) {
+	t.Parallel()
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	chain := newTestBlockChain(params.TestChainConfig, 10000000, statedb, new(event.Feed))
+
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	statedb.SetBalance(addr, uint256.NewInt(params.Ether), tracing.BalanceChangeUnspecified)
+
+	r := &reserver{accounts: make(map[common.Address]struct{})}
+	pool := New(testTxPoolConfig, chain)
+	if err := pool.Init(testTxPoolConfig.PriceLimit, chain.CurrentBlock(), r); err != nil {
+		t.Fatalf("failed to init pool: %v", err)
+	}
+	defer pool.Close()
+	<-pool.initDoneCh
+
+	queuedTx := pricedTransaction(5, 100000, big.NewInt(params.GWei), key)
+	if err := pool.addRemoteSync(queuedTx); err != nil {
+		t.Fatalf("failed to add queued tx: %v", err)
+	}
+
+	r.lock.Lock()
+	delete(r.accounts, addr)
+	r.lock.Unlock()
+
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	pool.currentState.SetNonce(addr, 10, tracing.NonceChangeUnspecified)
+	pool.promoteExecutables([]common.Address{addr})
+
+	if _, ok := pool.queue.get(addr); ok {
+		t.Fatal("queue should be empty after stale tx is dropped")
 	}
 }
 
