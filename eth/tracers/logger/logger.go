@@ -157,9 +157,9 @@ type structLogLegacy struct {
 }
 
 func formatMemoryWord(chunk []byte) string {
-    if len(chunk) == 32 {
-        return hexutil.Encode(chunk)
-    }
+	if len(chunk) == 32 {
+		return hexutil.Encode(chunk)
+	}
 	var word [32]byte
 	copy(word[:], chunk)
 	return hexutil.Encode(word[:])
