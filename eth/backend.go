@@ -221,7 +221,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			rawdb.WriteDatabaseVersion(chainDb, core.BlockChainVersion)
 		}
 	}
-	histPolicy, err := history.NewPolicy(config.HistoryMode, genesisHash)
+	histPolicy, err := history.NewPolicy(config.HistoryMode, genesisHash, config.HistoryBlocks)
 	if err != nil {
 		return nil, err
 	}

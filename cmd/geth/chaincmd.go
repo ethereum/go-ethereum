@@ -720,6 +720,9 @@ func pruneHistory(ctx *cli.Context) error {
 	if mode == history.KeepAll {
 		return errors.New("--history.chain=all is not valid for pruning. To restore history, use 'geth import-history'")
 	}
+	if mode == history.KeepRecent {
+		return errors.New("--history.chain=recent is not valid for prune-history. Use it as a runtime flag with geth instead")
+	}
 
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -731,7 +734,7 @@ func pruneHistory(ctx *cli.Context) error {
 
 	// Determine the prune point based on the history mode.
 	genesisHash := chain.Genesis().Hash()
-	policy, err := history.NewPolicy(mode, genesisHash)
+	policy, err := history.NewPolicy(mode, genesisHash, 0)
 	if err != nil {
 		return err
 	}

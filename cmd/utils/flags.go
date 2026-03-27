@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
@@ -323,8 +324,14 @@ var (
 	}
 	ChainHistoryFlag = &cli.StringFlag{
 		Name:     "history.chain",
-		Usage:    `Blockchain history retention ("all", "postmerge", or "postprague")`,
+		Usage:    `Blockchain history retention ("all", "postmerge", "postprague" or "recent")`,
 		Value:    ethconfig.Defaults.HistoryMode.String(),
+		Category: flags.StateCategory,
+	}
+	HistoryBlocksFlag = &cli.Uint64Flag{
+		Name:     "history.blocks",
+		Usage:    "Number of recent blocks to keep bodies/receipts for in rolling pruning mode (default = ~1 month, minimum 100000)",
+		Value:    216000,
 		Category: flags.StateCategory,
 	}
 	LogHistoryFlag = &cli.Uint64Flag{
@@ -1780,6 +1787,20 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			Fatalf("--%s: %v", ChainHistoryFlag.Name, err)
 		}
 	}
+	if ctx.IsSet(HistoryBlocksFlag.Name) {
+		cfg.HistoryBlocks = ctx.Uint64(HistoryBlocksFlag.Name)
+		if cfg.HistoryBlocks < params.FullImmutabilityThreshold+10000 {
+			Fatalf("--%s: value %d is too small, minimum is %d", HistoryBlocksFlag.Name, cfg.HistoryBlocks, params.FullImmutabilityThreshold+10000)
+		}
+		if cfg.HistoryMode != history.KeepRecent {
+			log.Info("Setting history mode to recent due to --history.blocks flag")
+			cfg.HistoryMode = history.KeepRecent
+		}
+	}
+	if cfg.HistoryMode == history.KeepRecent && cfg.HistoryBlocks == 0 {
+		// use default (~1 month)
+		cfg.HistoryBlocks = HistoryBlocksFlag.Value
+	}
 
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheDatabaseFlag.Name) {
 		cfg.DatabaseCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
@@ -1837,6 +1858,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.TransactionHistory = 0
 			log.Warn("Disabled transaction unindexing for archive node")
 		}
+	}
+	// Cap transaction history to history blocks in rolling expiry mode.
+	// Block bodies have been anyway pruned and the txes are not accessible.
+	if cfg.HistoryMode == history.KeepRecent && cfg.TransactionHistory > cfg.HistoryBlocks {
+		log.Warn("Cap transaction history to history.blocks window", "was", cfg.TransactionHistory, "now", cfg.HistoryBlocks)
+		cfg.TransactionHistory = cfg.HistoryBlocks
 	}
 	if ctx.IsSet(LogHistoryFlag.Name) {
 		cfg.LogHistory = ctx.Uint64(LogHistoryFlag.Name)

@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -472,14 +473,20 @@ func (bc *BlockChain) StateIndexProgress() (uint64, error) {
 	return bc.triedb.IndexProgress()
 }
 
-// HistoryPruningCutoff returns the configured history pruning point.
-// Blocks before this might not be available in the database.
+// HistoryPruningCutoff returns the actual history pruning point based on DB state.
+// Blocks before this are not available in the database.
 func (bc *BlockChain) HistoryPruningCutoff() (uint64, common.Hash) {
 	pt := bc.historyPrunePoint.Load()
 	if pt == nil {
 		return 0, bc.genesisBlock.Hash()
 	}
 	return pt.BlockNumber, pt.BlockHash
+}
+
+// HistoryPolicy returns the configured history pruning policy. The downloader
+// uses this to decide what blocks to fetch during sync.
+func (bc *BlockChain) HistoryPolicy() history.HistoryPolicy {
+	return bc.cfg.HistoryPolicy
 }
 
 // TrieDB retrieves the low level trie database used for data storage.
