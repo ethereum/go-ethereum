@@ -972,6 +972,23 @@ func TestEstimateGas(t *testing.T) {
 			},
 			expectErr: core.ErrSetCodeTxCreate,
 		},
+		// EstimateGas with unsigned (zero-signature) EIP-7702 authorization
+		// should succeed, using the sender as the authority. This allows
+		// callers to estimate gas before signing the authorization.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:  &accounts[0].addr,
+				To:    &accounts[1].addr,
+				Value: (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{{
+					ChainID: *uint256.NewInt(0),
+					Address: accounts[0].addr,
+					Nonce:   uint64(genBlocks + 1),
+				}},
+			},
+			want: 46000,
+		},
 	}
 	for i, tc := range testSuite {
 		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
