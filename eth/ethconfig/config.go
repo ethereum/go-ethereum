@@ -97,6 +97,10 @@ type Config struct {
 	// HistoryMode configures chain history retention.
 	HistoryMode history.HistoryMode
 
+	// HistoryBlocks specifies the rolling window size for KeepRecent mode.
+	// Only used when HistoryMode is KeepRecent.
+	HistoryBlocks uint64 `toml:",omitempty"`
+
 	// This can be set to list of enrtree:// URLs which will be queried for
 	// nodes to connect to.
 	EthDiscoveryURLs  []string
