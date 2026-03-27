@@ -2111,10 +2111,40 @@ func (p *BlobPool) Content() (map[common.Address][]*types.Transaction, map[commo
 // ContentFrom retrieves the data content of the transaction pool, returning the
 // pending as well as queued transactions of this address, grouped by nonce.
 //
-// For the blob pool, this method will return nothing for now.
-// TODO(karalabe): Abstract out the returned metadata.
+// Returned blob transactions will not contain the blob sidecar to avoid
+// excessive data transfer. The blob versioned hashes are still available
+// on the returned transactions.
 func (p *BlobPool) ContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction) {
-	return []*types.Transaction{}, []*types.Transaction{}
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	// Collect pending (indexed) transactions, stripping blob sidecars
+	var pending []*types.Transaction
+	if metas, ok := p.index[addr]; ok {
+		pending = make([]*types.Transaction, 0, len(metas))
+		for _, meta := range metas {
+			data, err := p.store.Get(meta.id)
+			if err != nil {
+				log.Error("Tracked blob transaction missing from store", "hash", meta.hash, "id", meta.id, "err", err)
+				continue
+			}
+			tx := new(types.Transaction)
+			if err := rlp.DecodeBytes(data, tx); err != nil {
+				log.Error("Blobs corrupted for tracked transaction", "hash", meta.hash, "id", meta.id, "err", err)
+				continue
+			}
+			pending = append(pending, tx.WithoutBlobTxSidecar())
+		}
+	}
+	// Collect queued (gapped) transactions, stripping blob sidecars
+	var queued []*types.Transaction
+	if gtxs, ok := p.gapped[addr]; ok && len(gtxs) > 0 {
+		queued = make([]*types.Transaction, 0, len(gtxs))
+		for _, tx := range gtxs {
+			queued = append(queued, tx.WithoutBlobTxSidecar())
+		}
+	}
+	return pending, queued
 }
 
 // Status returns the known status (unknown/pending/queued) of a transaction
