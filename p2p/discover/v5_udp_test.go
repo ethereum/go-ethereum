@@ -937,6 +937,7 @@ func newUDPV5Test(t *testing.T) *udpV5Test {
 		PrivateKey:   test.localkey,
 		Log:          testlog.Logger(t, log.LvlTrace),
 		ValidSchemes: enode.ValidSchemesForTesting,
+		PingInterval: 1000 * time.Hour,
 	})
 	test.udp.codec = &testCodec{test: test, id: ln.ID()}
 	test.table = test.udp.tab
