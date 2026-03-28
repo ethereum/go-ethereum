@@ -106,12 +106,10 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStar
 	var allReceipts []*types.Receipt
 	for _, result := range results {
 		// EIP-8037 check_transaction: verify this tx fits in remaining
-		// block capacity per-dimension BEFORE adding its actual usage.
-		// Regular gas is capped at MaxTxGas; state gas uses full tx.gas.
+		// regular gas capacity. State gas is not checked per-tx;
+		// block-end validation enforces max(regular, state) <= gas_limit.
 		regularAvailable := header.GasLimit - sumRegular
-		stateAvailable := header.GasLimit - sumState
-		if min(params.MaxTxGas, result.txGasLimit) > regularAvailable ||
-			result.txGasLimit > stateAvailable {
+		if min(params.MaxTxGas, result.txGasLimit) > regularAvailable {
 			return &ProcessResultWithMetrics{
 				ProcessResult: &ProcessResult{Error: ErrGasLimitReached},
 			}
