@@ -23,6 +23,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -57,6 +58,65 @@ func TestBuildSchema(t *testing.T) {
 	// Make sure the schema can be parsed and matched up to the object model.
 	if _, err := newHandler(stack, nil, nil, []string{}, []string{}); err != nil {
 		t.Errorf("Could not construct GraphQL handler: %v", err)
+	}
+}
+
+func TestSyncStateSchemaFields(t *testing.T) {
+	ddir := t.TempDir()
+	conf := node.DefaultConfig
+	conf.DataDir = ddir
+	stack, err := node.New(&conf)
+	if err != nil {
+		t.Fatalf("could not create new node: %v", err)
+	}
+	defer stack.Close()
+
+	h, err := newHandler(stack, nil, nil, []string{}, []string{})
+	if err != nil {
+		t.Fatalf("could not construct GraphQL handler: %v", err)
+	}
+	res := h.Schema.Exec(context.Background(), `{ __type(name: "SyncState") { fields { name } } }`, "", nil)
+	if len(res.Errors) > 0 {
+		t.Fatalf("failed to execute introspection query: %v", res.Errors)
+	}
+	var got struct {
+		Type struct {
+			Fields []struct {
+				Name string `json:"name"`
+			} `json:"fields"`
+		} `json:"__type"`
+	}
+	if err := json.Unmarshal(res.Data, &got); err != nil {
+		t.Fatalf("failed to decode introspection response: %v", err)
+	}
+	names := make([]string, 0, len(got.Type.Fields))
+	for _, field := range got.Type.Fields {
+		names = append(names, field.Name)
+	}
+	want := []string{
+		"startingBlock",
+		"currentBlock",
+		"highestBlock",
+		"syncedAccounts",
+		"syncedAccountBytes",
+		"syncedBytecodes",
+		"syncedBytecodeBytes",
+		"syncedStorage",
+		"syncedStorageBytes",
+		"healedTrienodes",
+		"healedTrienodeBytes",
+		"healedBytecodes",
+		"healedBytecodeBytes",
+		"healingTrienodes",
+		"healingBytecode",
+		"txIndexFinishedBlocks",
+		"txIndexRemainingBlocks",
+		"stateIndexRemaining",
+	}
+	for _, field := range want {
+		if !slices.Contains(names, field) {
+			t.Fatalf("SyncState schema is missing field %q", field)
+		}
 	}
 }
 
