@@ -510,17 +510,20 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 			head.Difficulty = params.GenesisDifficulty
 		}
 	}
-	if g.Config != nil && g.Config.IsLondon(common.Big0) {
+	conf := g.Config
+	if conf != nil {
 		if g.BaseFee != nil {
-			head.BaseFee = g.BaseFee
-		} else {
+			if !conf.IsLondon(common.Big0) {
+				log.Warn("Invalid genesis, unexpected BaseFee set before London, allowing it for testing purposes")
+			}
+		} else if conf.IsLondon(common.Big0) {
 			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 		}
 	}
 	var (
 		withdrawals []*types.Withdrawal
 	)
-	if conf := g.Config; conf != nil {
+	if conf != nil {
 		num := big.NewInt(int64(g.Number))
 		if conf.IsShanghai(num, g.Timestamp) {
 			head.WithdrawalsHash = &types.EmptyWithdrawalsHash
