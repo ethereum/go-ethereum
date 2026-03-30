@@ -57,6 +57,10 @@ const estimateGasErrorRatio = 0.015
 // be requested in a single eth_getStorageValues call.
 const maxGetStorageSlots = 1024
 
+// maxGetProofKeys is the maximum number of storage keys that can be
+// requested in a single eth_getProof call.
+const maxGetProofKeys = 1024
+
 var errBlobTxNotSupported = errors.New("signing blob transactions not supported")
 var errSubClosed = errors.New("chain subscription closed")
 
@@ -362,6 +366,9 @@ func (n *proofList) Delete(key []byte) error {
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
 func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
+	if len(storageKeys) > maxGetProofKeys {
+		return nil, &invalidParamsError{fmt.Sprintf("too many storage keys requested (max %d, got %d)", maxGetProofKeys, len(storageKeys))}
+	}
 	var (
 		keys         = make([]common.Hash, len(storageKeys))
 		keyLengths   = make([]int, len(storageKeys))
@@ -393,6 +400,9 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 		}
 		// Create the proofs for the storageKeys.
 		for i, key := range keys {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			// Output key encoding is a bit special: if the input was a 32-byte hash, it is
 			// returned as such. Otherwise, we apply the QUANTITY encoding mandated by the
 			// JSON-RPC spec for getProof. This behavior exists to preserve backwards
