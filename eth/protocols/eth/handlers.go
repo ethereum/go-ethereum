@@ -328,6 +328,9 @@ func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest,
 			log.Error("Error in block receipts conversion", "hash", hash, "err", err)
 			continue
 		}
+		if results == nil {
+			break
+		}
 		receipts.AppendRaw(results)
 		bytes += len(results)
 		if incomplete {
