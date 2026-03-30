@@ -350,6 +350,7 @@ func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*
 		random:            args.Random,
 		withdrawals:       args.Withdrawals,
 		beaconRoot:        args.BeaconRoot,
+		slotNum:           args.SlotNum,
 		noTxs:             empty,
 		forceOverrides:    true,
 		overrideExtraData: extraData,

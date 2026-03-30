@@ -75,7 +75,7 @@ type environment struct {
 	witness *stateless.Witness
 }
 
-// txFits reports whether the transaction fits into the block size limit.
+// txFitsSize reports whether the transaction fits into the block size limit.
 func (env *environment) txFitsSize(tx *types.Transaction) bool {
 	return env.size+tx.Size() < params.MaxBlockSize-maxBlockSizeBufferZone
 }
@@ -330,12 +330,12 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	}
 	var bundle *stateless.Witness
 	if witness {
-		bundle, err = stateless.NewWitness(header, miner.chain)
+		bundle, err = stateless.NewWitness(header, miner.chain, false)
 		if err != nil {
 			return nil, err
 		}
 	}
-	state.StartPrefetcher("miner", bundle, nil)
+	state.StartPrefetcher("miner", bundle)
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
 		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),

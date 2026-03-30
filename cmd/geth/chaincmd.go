@@ -731,13 +731,16 @@ func pruneHistory(ctx *cli.Context) error {
 
 	// Determine the prune point based on the history mode.
 	genesisHash := chain.Genesis().Hash()
-	prunePoint := history.GetPrunePoint(genesisHash, mode)
-	if prunePoint == nil {
+	policy, err := history.NewPolicy(mode, genesisHash)
+	if err != nil {
+		return err
+	}
+	if policy.Target == nil {
 		return fmt.Errorf("prune point for %q not found for this network", mode.String())
 	}
 	var (
-		targetBlock     = prunePoint.BlockNumber
-		targetBlockHash = prunePoint.BlockHash
+		targetBlock     = policy.Target.BlockNumber
+		targetBlockHash = policy.Target.BlockHash
 	)
 
 	// Check the current freezer tail to see if pruning is needed/possible.
