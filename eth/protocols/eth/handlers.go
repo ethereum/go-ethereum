@@ -329,6 +329,8 @@ func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest,
 			continue
 		}
 		if results == nil {
+			// This case triggers when the first receipt of the block receipts list doesn't
+			// fit. We don't append anything to the response here and consider it finished.
 			break
 		}
 		receipts.AppendRaw(results)
