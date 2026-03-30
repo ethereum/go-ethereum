@@ -841,6 +841,16 @@ func (api *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrO
 	} else if len(opts.BlockStateCalls) > maxSimulateBlocks {
 		return nil, &clientLimitExceededError{message: "too many blocks"}
 	}
+	var totalCalls int
+	for _, block := range opts.BlockStateCalls {
+		if len(block.Calls) > maxSimulateCallsPerBlock {
+			return nil, &clientLimitExceededError{message: fmt.Sprintf("too many calls in block: %d > %d", len(block.Calls), maxSimulateCallsPerBlock)}
+		}
+		totalCalls += len(block.Calls)
+		if totalCalls > maxSimulateTotalCalls {
+			return nil, &clientLimitExceededError{message: fmt.Sprintf("too many calls: %d > %d", totalCalls, maxSimulateTotalCalls)}
+		}
+	}
 	if blockNrOrHash == nil {
 		n := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		blockNrOrHash = &n
