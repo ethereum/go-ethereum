@@ -220,6 +220,7 @@ func TestStemNodeHash(t *testing.T) {
 
 	// Changing a value should change the hash
 	node.Values[1] = common.HexToHash("0x0202").Bytes()
+	node.mustRecompute = true
 	hash3 := node.Hash()
 	if hash1 == hash3 {
 		t.Error("Hash didn't change after modifying values")

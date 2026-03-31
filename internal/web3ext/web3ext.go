@@ -428,11 +428,6 @@ web3._extend({
 			inputFormatter:[null, null],
 		}),
 		new web3._extend.Method({
-			name: 'freezeClient',
-			call: 'debug_freezeClient',
-			params: 1,
-		}),
-		new web3._extend.Method({
 			name: 'getAccessibleState',
 			call: 'debug_getAccessibleState',
 			params: 2,
@@ -471,6 +466,12 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'stateSize',
 			call: 'debug_stateSize',
+			params: 1,
+			inputFormatter: [null],
+		}),
+		new web3._extend.Method({
+			name: 'executionWitness',
+			call: 'debug_executionWitness',
 			params: 1,
 			inputFormatter: [null],
 		}),
@@ -566,6 +567,12 @@ web3._extend({
 			call: 'eth_getProof',
 			params: 3,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null, web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getStorageValues',
+			call: 'eth_getStorageValues',
+			params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 		new web3._extend.Method({
 			name: 'createAccessList',

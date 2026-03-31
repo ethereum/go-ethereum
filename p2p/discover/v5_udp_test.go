@@ -856,10 +856,10 @@ type testCodecFrame struct {
 }
 
 func (c *testCodec) Encode(toID enode.ID, addr string, p v5wire.Packet, _ *v5wire.Whoareyou) ([]byte, v5wire.Nonce, error) {
-	// To match the behavior of v5wire.Codec, we return the cached encoding of
-	// WHOAREYOU challenges.
-	if wp, ok := p.(*v5wire.Whoareyou); ok && len(wp.Encoded) > 0 {
-		return wp.Encoded, wp.Nonce, nil
+	if wp, ok := p.(*v5wire.Whoareyou); ok && len(wp.ChallengeData) > 0 {
+		// To match the behavior of v5wire.Codec, we return the cached encoding of
+		// WHOAREYOU challenges.
+		return wp.ChallengeData, wp.Nonce, nil
 	}
 
 	c.ctr++
@@ -874,7 +874,7 @@ func (c *testCodec) Encode(toID enode.ID, addr string, p v5wire.Packet, _ *v5wir
 	// Store recently sent challenges.
 	if w, ok := p.(*v5wire.Whoareyou); ok {
 		w.Nonce = authTag
-		w.Encoded = frame
+		w.ChallengeData = frame
 		if c.sentChallenges == nil {
 			c.sentChallenges = make(map[enode.ID]*v5wire.Whoareyou)
 		}
@@ -911,6 +911,7 @@ func (c *testCodec) decodeFrame(input []byte) (frame testCodecFrame, p v5wire.Pa
 	case v5wire.WhoareyouPacket:
 		dec := new(v5wire.Whoareyou)
 		err = rlp.DecodeBytes(frame.Packet, &dec)
+		dec.ChallengeData = bytes.Clone(input)
 		p = dec
 	default:
 		p, err = v5wire.DecodeMessage(frame.Ptype, frame.Packet)

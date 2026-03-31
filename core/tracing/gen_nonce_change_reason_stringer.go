@@ -23,8 +23,9 @@ const _NonceChangeReason_name = "UnspecifiedGenesisEoACallContractCreatorNewCont
 var _NonceChangeReason_index = [...]uint8{0, 11, 18, 25, 40, 51, 64, 70, 82}
 
 func (i NonceChangeReason) String() string {
-	if i >= NonceChangeReason(len(_NonceChangeReason_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_NonceChangeReason_index)-1 {
 		return "NonceChangeReason(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _NonceChangeReason_name[_NonceChangeReason_index[i]:_NonceChangeReason_index[i+1]]
+	return _NonceChangeReason_name[_NonceChangeReason_index[idx]:_NonceChangeReason_index[idx+1]]
 }

@@ -112,7 +112,6 @@ const (
 	errCodeClientLimitExceeded     = -38026
 	errCodeInternalError           = -32603
 	errCodeInvalidParams           = -32602
-	errCodeReverted                = -32000
 	errCodeVMError                 = -32015
 	errCodeTxSyncTimeout           = 4
 )
@@ -142,7 +141,7 @@ func txValidationError(err error) *invalidTxError {
 		return &invalidTxError{Message: err.Error(), Code: errCodeIntrinsicGas}
 	case errors.Is(err, core.ErrInsufficientFundsForTransfer):
 		return &invalidTxError{Message: err.Error(), Code: errCodeInsufficientFunds}
-	case errors.Is(err, core.ErrMaxInitCodeSizeExceeded):
+	case errors.Is(err, vm.ErrMaxInitCodeSizeExceeded):
 		return &invalidTxError{Message: err.Error(), Code: errCodeMaxInitCodeSizeExceeded}
 	}
 	return &invalidTxError{

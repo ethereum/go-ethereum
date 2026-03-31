@@ -45,7 +45,7 @@ type layer interface {
 	// Note:
 	// - the returned node is not a copy, please don't modify it.
 	// - no error will be returned if the requested node is not found in database.
-	node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, *nodeLoc, error)
+	node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, nodeLoc, error)
 
 	// account directly retrieves the account RLP associated with a particular
 	// hash in the slim data format. An error will be returned if the read
@@ -215,14 +215,14 @@ func (db *Database) setHistoryIndexer() {
 		if db.stateIndexer != nil {
 			db.stateIndexer.close()
 		}
-		db.stateIndexer = newHistoryIndexer(db.diskdb, db.stateFreezer, db.tree.bottom().stateID(), typeStateHistory)
+		db.stateIndexer = newHistoryIndexer(db.diskdb, db.stateFreezer, db.tree.bottom().stateID(), typeStateHistory, db.config.NoHistoryIndexDelay)
 		log.Info("Enabled state history indexing")
 	}
 	if db.trienodeFreezer != nil {
 		if db.trienodeIndexer != nil {
 			db.trienodeIndexer.close()
 		}
-		db.trienodeIndexer = newHistoryIndexer(db.diskdb, db.trienodeFreezer, db.tree.bottom().stateID(), typeTrienodeHistory)
+		db.trienodeIndexer = newHistoryIndexer(db.diskdb, db.trienodeFreezer, db.tree.bottom().stateID(), typeTrienodeHistory, db.config.NoHistoryIndexDelay)
 		log.Info("Enabled trienode history indexing")
 	}
 }

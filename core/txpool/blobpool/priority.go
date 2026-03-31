@@ -18,13 +18,19 @@ package blobpool
 
 import (
 	"math"
-	"math/bits"
 
 	"github.com/holiman/uint256"
 )
 
 // log1_125 is used in the eviction priority calculation.
 var log1_125 = math.Log(1.125)
+
+// log1_17 is used in the eviction priority calculation for blob fees.
+// EIP-7892 (BPO) changed the ratio of target to max blobs, and with that
+// also the maximum blob fee decrease in a slot from 1.125 to approx 1.17 .
+// Since we want priorities to approximate time, we should change our log
+// calculation for blob fees.
+var log1_17 = log1_125 * 4 / 3
 
 // evictionPriority calculates the eviction priority based on the algorithm
 // described in the BlobPool docs for both fee components.
@@ -36,23 +42,20 @@ func evictionPriority(basefeeJumps float64, txBasefeeJumps, blobfeeJumps, txBlob
 		basefeePriority = evictionPriority1D(basefeeJumps, txBasefeeJumps)
 		blobfeePriority = evictionPriority1D(blobfeeJumps, txBlobfeeJumps)
 	)
-	if basefeePriority < blobfeePriority {
-		return basefeePriority
-	}
-	return blobfeePriority
+	return min(0, basefeePriority, blobfeePriority)
 }
 
 // evictionPriority1D calculates the eviction priority based on the algorithm
 // described in the BlobPool docs for a single fee component.
 func evictionPriority1D(basefeeJumps float64, txfeeJumps float64) int {
 	jumps := txfeeJumps - basefeeJumps
-	if int(jumps) == 0 {
-		return 0 // can't log2 0
+	if jumps <= 0 {
+		return int(math.Floor(jumps))
 	}
-	if jumps < 0 {
-		return -intLog2(uint(-math.Floor(jumps)))
-	}
-	return intLog2(uint(math.Ceil(jumps)))
+	// We only use the negative part for ordering. The positive part is only used
+	// for threshold comparison (with a negative threshold), so the value is almost
+	// irrelevant, as long as it's positive.
+	return int((math.Ceil(jumps)))
 }
 
 // dynamicFeeJumps calculates the log1.125(fee), namely the number of fee jumps
@@ -70,21 +73,9 @@ func dynamicFeeJumps(fee *uint256.Int) float64 {
 	return math.Log(fee.Float64()) / log1_125
 }
 
-// intLog2 is a helper to calculate the integral part of a log2 of an unsigned
-// integer. It is a very specific calculation that's not particularly useful in
-// general, but it's what we need here (it's fast).
-func intLog2(n uint) int {
-	switch {
-	case n == 0:
-		panic("log2(0) is undefined")
-
-	case n < 2048:
-		return bits.UintSize - bits.LeadingZeros(n) - 1
-
-	default:
-		// The input is log1.125(uint256) = log2(uint256) / log2(1.125). At the
-		// most extreme, log2(uint256) will be a bit below 257, and the constant
-		// log2(1.125) ~= 0.17. The larges input thus is ~257 / ~0.17 ~= ~1511.
-		panic("dynamic fee jump diffs cannot reach this")
+func dynamicBlobFeeJumps(fee *uint256.Int) float64 {
+	if fee.IsZero() {
+		return 0 // can't log2 zero, should never happen outside tests, but don't choke
 	}
+	return math.Log(fee.Float64()) / log1_17
 }

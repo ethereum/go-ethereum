@@ -30,8 +30,10 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -323,26 +325,31 @@ func XTestDelivery(t *testing.T) {
 					emptyList []*types.Header
 					txset     [][]*types.Transaction
 					uncleset  [][]*types.Header
+					bodies    []eth.BlockBody
 				)
 				numToSkip := rand.Intn(len(f.Headers))
 				for _, hdr := range f.Headers[0 : len(f.Headers)-numToSkip] {
-					txset = append(txset, world.getTransactions(hdr.Number.Uint64()))
+					txs := world.getTransactions(hdr.Number.Uint64())
+					txset = append(txset, txs)
 					uncleset = append(uncleset, emptyList)
+					txsList, _ := rlp.EncodeToRawList(txs)
+					bodies = append(bodies, eth.BlockBody{Transactions: txsList})
 				}
-				var (
-					txsHashes   = make([]common.Hash, len(txset))
-					uncleHashes = make([]common.Hash, len(uncleset))
-				)
+				hashes := eth.BlockBodyHashes{
+					TransactionRoots: make([]common.Hash, len(txset)),
+					UncleHashes:      make([]common.Hash, len(uncleset)),
+					WithdrawalRoots:  make([]common.Hash, len(txset)),
+				}
 				hasher := trie.NewStackTrie(nil)
 				for i, txs := range txset {
-					txsHashes[i] = types.DeriveSha(types.Transactions(txs), hasher)
+					hashes.TransactionRoots[i] = types.DeriveSha(types.Transactions(txs), hasher)
 				}
 				for i, uncles := range uncleset {
-					uncleHashes[i] = types.CalcUncleHash(uncles)
+					hashes.UncleHashes[i] = types.CalcUncleHash(uncles)
 				}
+
 				time.Sleep(100 * time.Millisecond)
-				_, err := q.DeliverBodies(peer.id, txset, txsHashes, uncleset, uncleHashes, nil, nil)
-				if err != nil {
+				if _, err := q.DeliverBodies(peer.id, hashes, bodies); err != nil {
 					fmt.Printf("delivered %d bodies %v\n", len(txset), err)
 				}
 			} else {

@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -45,7 +46,6 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
-	"golang.org/x/crypto/sha3"
 )
 
 // StateTest checks transaction processing without block context.
@@ -342,9 +342,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	}
 	// Execute the message.
 	snapshot := st.StateDB.Snapshot()
-	gaspool := new(core.GasPool)
-	gaspool.AddGas(block.GasLimit())
-	vmRet, err := core.ApplyMessage(evm, msg, gaspool)
+	vmRet, err := core.ApplyMessage(evm, msg, core.NewGasPool(block.GasLimit()))
 	if err != nil {
 		st.StateDB.RevertToSnapshot(snapshot)
 		if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
@@ -496,7 +494,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 }
 
 func rlpHash(x interface{}) (h common.Hash) {
-	hw := sha3.NewLegacyKeccak256()
+	hw := keccak.NewLegacyKeccak256()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])
 	return h
@@ -546,7 +544,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		}
 		snaps, _ = snapshot.New(snapconfig, db, triedb, root)
 	}
-	sdb = state.NewDatabase(triedb, snaps)
+	sdb = state.NewDatabase(triedb, nil).WithSnapshot(snaps)
 	statedb, _ = state.New(root, sdb)
 	return StateTestState{statedb, triedb, snaps}
 }

@@ -1139,6 +1139,7 @@ const (
 	opTruncateHeadAll
 	opTruncateTail
 	opTruncateTailAll
+	opTruncateTailOverHead
 	opCheckAll
 	opMax // boundary value, not an actual op
 )
@@ -1226,6 +1227,11 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 			step.target = deleted + uint64(len(items))
 			items = items[:0]
 			deleted = step.target
+		case opTruncateTailOverHead:
+			newDeleted := deleted + uint64(len(items)) + 10
+			step.target = newDeleted
+			deleted = newDeleted
+			items = items[:0]
 		}
 		steps = append(steps, step)
 	}
@@ -1268,7 +1274,7 @@ func runRandTest(rt randTest) bool {
 			for i := 0; i < len(step.items); i++ {
 				batch.AppendRaw(step.items[i], step.blobs[i])
 			}
-			batch.commit()
+			rt[i].err = batch.commit()
 			values = append(values, step.blobs...)
 
 		case opRetrieve:
@@ -1290,24 +1296,28 @@ func runRandTest(rt randTest) bool {
 			}
 
 		case opTruncateHead:
-			f.truncateHead(step.target)
+			rt[i].err = f.truncateHead(step.target)
 
 			length := f.items.Load() - f.itemHidden.Load()
 			values = values[:length]
 
 		case opTruncateHeadAll:
-			f.truncateHead(step.target)
+			rt[i].err = f.truncateHead(step.target)
 			values = nil
 
 		case opTruncateTail:
 			prev := f.itemHidden.Load()
-			f.truncateTail(step.target)
+			rt[i].err = f.truncateTail(step.target)
 
 			truncated := f.itemHidden.Load() - prev
 			values = values[truncated:]
 
 		case opTruncateTailAll:
-			f.truncateTail(step.target)
+			rt[i].err = f.truncateTail(step.target)
+			values = nil
+
+		case opTruncateTailOverHead:
+			rt[i].err = f.truncateTail(step.target)
 			values = nil
 		}
 		// Abort the test on error.
@@ -1631,5 +1641,45 @@ func TestFreezerAncientBytes(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestTruncateOverHead(t *testing.T) {
+	t.Parallel()
+
+	fn := fmt.Sprintf("t-%d", rand.Uint64())
+	f, err := newTable(os.TempDir(), fn, metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 100, freezerTableConfig{noSnappy: true}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Tail truncation on an empty table
+	if err := f.truncateTail(10); err != nil {
+		t.Fatal(err)
+	}
+	batch := f.newBatch()
+	data := getChunk(10, 1)
+	require.NoError(t, batch.AppendRaw(uint64(10), data))
+	require.NoError(t, batch.commit())
+
+	got, err := f.RetrieveItems(uint64(10), 1, 0)
+	require.NoError(t, err)
+	if !bytes.Equal(got[0], data) {
+		t.Fatalf("Unexpected bytes, want: %v, got: %v", data, got[0])
+	}
+
+	// Tail truncation on the non-empty table
+	if err := f.truncateTail(20); err != nil {
+		t.Fatal(err)
+	}
+	batch = f.newBatch()
+	data = getChunk(10, 1)
+	require.NoError(t, batch.AppendRaw(uint64(20), data))
+	require.NoError(t, batch.commit())
+
+	got, err = f.RetrieveItems(uint64(20), 1, 0)
+	require.NoError(t, err)
+	if !bytes.Equal(got[0], data) {
+		t.Fatalf("Unexpected bytes, want: %v, got: %v", data, got[0])
 	}
 }

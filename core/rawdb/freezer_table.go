@@ -707,12 +707,13 @@ func (t *freezerTable) truncateTail(items uint64) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	// Ensure the given truncate target falls in the correct range
+	// Short-circuit if the requested tail deletion points to a stale position
 	if t.itemHidden.Load() >= items {
 		return nil
 	}
+	// If the requested tail exceeds the current head, reset the entire table
 	if t.items.Load() < items {
-		return errors.New("truncation above head")
+		return t.resetTo(items)
 	}
 	// Load the new tail index by the given new tail position
 	var (
@@ -822,10 +823,9 @@ func (t *freezerTable) truncateTail(items uint64) error {
 	shorten := indexEntrySize * int64(newDeleted-deleted)
 	if t.metadata.flushOffset <= shorten {
 		return fmt.Errorf("invalid index flush offset: %d, shorten: %d", t.metadata.flushOffset, shorten)
-	} else {
-		if err := t.metadata.setFlushOffset(t.metadata.flushOffset-shorten, true); err != nil {
-			return err
-		}
+	}
+	if err := t.metadata.setFlushOffset(t.metadata.flushOffset-shorten, true); err != nil {
+		return err
 	}
 	// Retrieve the new size and update the total size counter
 	newSize, err := t.sizeNolock()
@@ -833,6 +833,59 @@ func (t *freezerTable) truncateTail(items uint64) error {
 		return err
 	}
 	t.sizeGauge.Dec(int64(oldSize - newSize))
+	return nil
+}
+
+// resetTo clears the entire table and sets both the head and tail to the given
+// value. It assumes the caller holds the lock and that tail > t.items.
+func (t *freezerTable) resetTo(tail uint64) error {
+	// Sync the entire table before resetting, eliminating the potential
+	// data corruption.
+	err := t.doSync()
+	if err != nil {
+		return err
+	}
+	// Update the index file to reflect the new offset
+	if err := t.index.Close(); err != nil {
+		return err
+	}
+	entry := &indexEntry{
+		filenum: t.headId + 1,
+		offset:  uint32(tail),
+	}
+	if err := reset(t.index.Name(), entry.append(nil)); err != nil {
+		return err
+	}
+	if err := t.metadata.setVirtualTail(tail, true); err != nil {
+		return err
+	}
+	if err := t.metadata.setFlushOffset(indexEntrySize, true); err != nil {
+		return err
+	}
+	t.index, err = openFreezerFileForAppend(t.index.Name())
+	if err != nil {
+		return err
+	}
+
+	// Purge all the existing data file
+	if err := t.head.Close(); err != nil {
+		return err
+	}
+	t.headId = t.headId + 1
+	t.tailId = t.headId
+	t.headBytes = 0
+
+	t.head, err = t.openFile(t.headId, openFreezerFileTruncated)
+	if err != nil {
+		return err
+	}
+	t.releaseFilesBefore(t.headId, true)
+
+	t.items.Store(tail)
+	t.itemOffset.Store(tail)
+	t.itemHidden.Store(tail)
+	t.sizeGauge.Update(0)
+
 	return nil
 }
 
@@ -1247,25 +1300,20 @@ func (t *freezerTable) doSync() error {
 	if t.index == nil || t.head == nil || t.metadata.file == nil {
 		return errClosed
 	}
-	var err error
-	trackError := func(e error) {
-		if e != nil && err == nil {
-			err = e
-		}
+	if err := t.index.Sync(); err != nil {
+		return err
 	}
-	trackError(t.index.Sync())
-	trackError(t.head.Sync())
-
+	if err := t.head.Sync(); err != nil {
+		return err
+	}
 	// A crash may occur before the offset is updated, leaving the offset
-	// points to a old position. If so, the extra items above the offset
+	// points to an old position. If so, the extra items above the offset
 	// will be truncated during the next run.
 	stat, err := t.index.Stat()
 	if err != nil {
 		return err
 	}
-	offset := stat.Size()
-	trackError(t.metadata.setFlushOffset(offset, true))
-	return err
+	return t.metadata.setFlushOffset(stat.Size(), true)
 }
 
 func (t *freezerTable) dumpIndexStdout(start, stop int64) {

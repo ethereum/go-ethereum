@@ -155,7 +155,9 @@ func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
 		}
 
 		cfg.historyPruneBlock = new(uint64)
-		*cfg.historyPruneBlock = history.PrunePoints[params.MainnetGenesisHash].BlockNumber
+		if p, err := history.NewPolicy(history.KeepPostMerge, params.MainnetGenesisHash); err == nil {
+			*cfg.historyPruneBlock = p.Target.BlockNumber
+		}
 	case ctx.Bool(testSepoliaFlag.Name):
 		cfg.fsys = builtinTestFiles
 		if ctx.IsSet(filterQueryFileFlag.Name) {
@@ -180,7 +182,9 @@ func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
 		}
 
 		cfg.historyPruneBlock = new(uint64)
-		*cfg.historyPruneBlock = history.PrunePoints[params.SepoliaGenesisHash].BlockNumber
+		if p, err := history.NewPolicy(history.KeepPostMerge, params.SepoliaGenesisHash); err == nil {
+			*cfg.historyPruneBlock = p.Target.BlockNumber
+		}
 	default:
 		cfg.fsys = os.DirFS(".")
 		cfg.filterQueryFile = ctx.String(filterQueryFileFlag.Name)

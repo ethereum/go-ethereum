@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,13 +14,36 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package snap
+//go:build !windows
+// +build !windows
+
+package rawdb
 
 import (
-	"time"
-
-	"github.com/ethereum/go-ethereum/p2p/tracker"
+	"errors"
+	"os"
+	"syscall"
 )
 
-// requestTracker is a singleton tracker for request times.
-var requestTracker = tracker.New(ProtocolName, time.Minute)
+// syncDir ensures that the directory metadata (e.g. newly renamed files)
+// is flushed to durable storage.
+func syncDir(name string) error {
+	f, err := os.Open(name)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// Some file systems do not support fsyncing directories (e.g. some FUSE
+	// mounts). Ignore EINVAL in those cases.
+	if err := f.Sync(); err != nil {
+		if errors.Is(err, os.ErrInvalid) {
+			return nil
+		}
+		if patherr, ok := err.(*os.PathError); ok && patherr.Err == syscall.EINVAL {
+			return nil
+		}
+		return err
+	}
+	return nil
+}

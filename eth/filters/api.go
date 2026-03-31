@@ -187,11 +187,13 @@ func (api *FilterAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) 
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
 
-	rpcSub := notifier.CreateSubscription()
+	var (
+		rpcSub       = notifier.CreateSubscription()
+		txs          = make(chan []*types.Transaction, 128)
+		pendingTxSub = api.events.SubscribePendingTxs(txs)
+	)
 
 	go func() {
-		txs := make(chan []*types.Transaction, 128)
-		pendingTxSub := api.events.SubscribePendingTxs(txs)
 		defer pendingTxSub.Unsubscribe()
 
 		chainConfig := api.sys.backend.ChainConfig()
@@ -260,11 +262,13 @@ func (api *FilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
 
-	rpcSub := notifier.CreateSubscription()
+	var (
+		rpcSub     = notifier.CreateSubscription()
+		headers    = make(chan *types.Header)
+		headersSub = api.events.SubscribeNewHeads(headers)
+	)
 
 	go func() {
-		headers := make(chan *types.Header)
-		headersSub := api.events.SubscribeNewHeads(headers)
 		defer headersSub.Unsubscribe()
 
 		for {
@@ -531,6 +535,9 @@ func (api *FilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Lo
 		end := rpc.LatestBlockNumber.Int64()
 		if f.crit.ToBlock != nil {
 			end = f.crit.ToBlock.Int64()
+		}
+		if begin >= 0 && begin < int64(api.events.backend.HistoryPruningCutoff()) {
+			return nil, &history.PrunedHistoryError{}
 		}
 		// Construct the range filter
 		filter = api.sys.NewRangeFilter(begin, end, f.crit.Addresses, f.crit.Topics, api.rangeLimit)

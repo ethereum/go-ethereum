@@ -239,6 +239,7 @@ func TestInternalNodeHash(t *testing.T) {
 
 	// Changing a child should change the hash
 	node.left = HashedNode(common.HexToHash("0x3333"))
+	node.mustRecompute = true
 	hash3 := node.Hash()
 	if hash1 == hash3 {
 		t.Error("Hash didn't change after modifying left child")
@@ -246,9 +247,10 @@ func TestInternalNodeHash(t *testing.T) {
 
 	// Test with nil children (should use zero hash)
 	nodeWithNil := &InternalNode{
-		depth: 0,
-		left:  nil,
-		right: HashedNode(common.HexToHash("0x4444")),
+		depth:         0,
+		left:          nil,
+		right:         HashedNode(common.HexToHash("0x4444")),
+		mustRecompute: true,
 	}
 	hashWithNil := nodeWithNil.Hash()
 	if hashWithNil == (common.Hash{}) {

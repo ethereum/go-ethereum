@@ -40,8 +40,8 @@ func (w *Witness) ToExtWitness() *ExtWitness {
 	return ext
 }
 
-// fromExtWitness converts the consensus witness format into our internal one.
-func (w *Witness) fromExtWitness(ext *ExtWitness) error {
+// FromExtWitness converts the consensus witness format into our internal one.
+func (w *Witness) FromExtWitness(ext *ExtWitness) error {
 	w.Headers = ext.Headers
 
 	w.Codes = make(map[string]struct{}, len(ext.Codes))
@@ -66,7 +66,7 @@ func (w *Witness) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&ext); err != nil {
 		return err
 	}
-	return w.fromExtWitness(&ext)
+	return w.FromExtWitness(&ext)
 }
 
 // ExtWitness is a witness RLP encoding for transferring across clients.

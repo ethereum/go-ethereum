@@ -166,6 +166,7 @@ func InspectFreezerTable(ancient string, freezerName string, tableName string, s
 	if err != nil {
 		return err
 	}
+	defer table.Close()
 	table.dumpIndexStdout(start, end)
 	return nil
 }

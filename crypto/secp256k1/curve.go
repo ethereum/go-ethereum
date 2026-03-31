@@ -73,6 +73,10 @@ func (bitCurve *BitCurve) Params() *elliptic.CurveParams {
 
 // IsOnCurve returns true if the given (x,y) lies on the BitCurve.
 func (bitCurve *BitCurve) IsOnCurve(x, y *big.Int) bool {
+	if x.Cmp(bitCurve.P) >= 0 || y.Cmp(bitCurve.P) >= 0 {
+		return false
+	}
+
 	// y² = x³ + b
 	y2 := new(big.Int).Mul(y, y) //y²
 	y2.Mod(y2, bitCurve.P)       //y²%P

@@ -229,6 +229,10 @@ func (s *hookedStateDB) AddLog(log *types.Log) {
 	}
 }
 
+func (s *hookedStateDB) EmitLogsForBurnAccounts() {
+	s.inner.EmitLogsForBurnAccounts()
+}
+
 func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 	if s.hooks.OnBalanceChange == nil && s.hooks.OnNonceChangeV2 == nil && s.hooks.OnNonceChange == nil && s.hooks.OnCodeChangeV2 == nil && s.hooks.OnCodeChange == nil {
 		// Short circuit if no relevant hooks are set.

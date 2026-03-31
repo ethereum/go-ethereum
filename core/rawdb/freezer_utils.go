@@ -22,6 +22,13 @@ import (
 	"path/filepath"
 )
 
+func atomicRename(src, dest string) error {
+	if err := os.Rename(src, dest); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(src))
+}
+
 // copyFrom copies data from 'srcPath' at offset 'offset' into 'destPath'.
 // The 'destPath' is created if it doesn't exist, otherwise it is overwritten.
 // Before the copy is executed, there is a callback can be registered to
@@ -73,13 +80,48 @@ func copyFrom(srcPath, destPath string, offset uint64, before func(f *os.File) e
 		return err
 	}
 	f = nil
-	return os.Rename(fname, destPath)
+
+	return atomicRename(fname, destPath)
+}
+
+// reset atomically replaces the file at the given path with the provided content.
+func reset(path string, content []byte) error {
+	// Create a temp file in the same dir where we want it to wind up
+	f, err := os.CreateTemp(filepath.Dir(path), "*")
+	if err != nil {
+		return err
+	}
+	fname := f.Name()
+
+	// Clean up the leftover file
+	defer func() {
+		if f != nil {
+			f.Close()
+		}
+		os.Remove(fname)
+	}()
+
+	// Write the content into the temp file
+	_, err = f.Write(content)
+	if err != nil {
+		return err
+	}
+	// Permanently persist the content into disk
+	if err := f.Sync(); err != nil {
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	f = nil
+
+	return atomicRename(fname, path)
 }
 
 // openFreezerFileForAppend opens a freezer table file and seeks to the end
 func openFreezerFileForAppend(filename string) (*os.File, error) {
 	// Open the file without the O_APPEND flag
-	// because it has differing behaviour during Truncate operations
+	// because it has differing behavior during Truncate operations
 	// on different OS's
 	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {

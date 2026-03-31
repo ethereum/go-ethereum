@@ -91,6 +91,7 @@ type txFetcherTest struct {
 // and deterministic randomness.
 func newTestTxFetcher() *TxFetcher {
 	return NewTxFetcher(
+		nil,
 		func(common.Hash, byte) error { return nil },
 		func(txs []*types.Transaction) []error {
 			return make([]error, len(txs))
@@ -2191,6 +2192,7 @@ func TestTransactionForgotten(t *testing.T) {
 	}
 
 	fetcher := NewTxFetcherForTests(
+		nil,
 		func(common.Hash, byte) error { return nil },
 		func(txs []*types.Transaction) []error {
 			errs := make([]error, len(txs))

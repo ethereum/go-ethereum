@@ -412,19 +412,19 @@ type SyncPeer interface {
 
 	// RequestAccountRange fetches a batch of accounts rooted in a specific account
 	// trie, starting with the origin.
-	RequestAccountRange(id uint64, root, origin, limit common.Hash, bytes uint64) error
+	RequestAccountRange(id uint64, root, origin, limit common.Hash, bytes int) error
 
 	// RequestStorageRanges fetches a batch of storage slots belonging to one or
 	// more accounts. If slots from only one account is requested, an origin marker
 	// may also be used to retrieve from there.
-	RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, bytes uint64) error
+	RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, bytes int) error
 
 	// RequestByteCodes fetches a batch of bytecodes by hash.
-	RequestByteCodes(id uint64, hashes []common.Hash, bytes uint64) error
+	RequestByteCodes(id uint64, hashes []common.Hash, bytes int) error
 
 	// RequestTrieNodes fetches a batch of account or storage trie nodes rooted in
 	// a specific state trie.
-	RequestTrieNodes(id uint64, root common.Hash, paths []TrieNodePathSet, bytes uint64) error
+	RequestTrieNodes(id uint64, root common.Hash, count int, paths []TrieNodePathSet, bytes int) error
 
 	// Log retrieves the peer's own contextual logger.
 	Log() log.Logger
@@ -1102,7 +1102,7 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 			if cap < minRequestSize { // Don't bother with peers below a bare minimum performance
 				cap = minRequestSize
 			}
-			if err := peer.RequestAccountRange(reqid, root, req.origin, req.limit, uint64(cap)); err != nil {
+			if err := peer.RequestAccountRange(reqid, root, req.origin, req.limit, cap); err != nil {
 				peer.Log().Debug("Failed to request account range", "err", err)
 				s.scheduleRevertAccountRequest(req)
 			}
@@ -1359,7 +1359,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 			if subtask != nil {
 				origin, limit = req.origin[:], req.limit[:]
 			}
-			if err := peer.RequestStorageRanges(reqid, root, accounts, origin, limit, uint64(cap)); err != nil {
+			if err := peer.RequestStorageRanges(reqid, root, accounts, origin, limit, cap); err != nil {
 				log.Debug("Failed to request storage", "err", err)
 				s.scheduleRevertStorageRequest(req)
 			}
@@ -1492,7 +1492,7 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 			defer s.pend.Done()
 
 			// Attempt to send the remote request and revert if it fails
-			if err := peer.RequestTrieNodes(reqid, root, pathsets, maxRequestSize); err != nil {
+			if err := peer.RequestTrieNodes(reqid, root, len(paths), pathsets, maxRequestSize); err != nil {
 				log.Debug("Failed to request trienode healers", "err", err)
 				s.scheduleRevertTrienodeHealRequest(req)
 			}
@@ -1699,9 +1699,13 @@ func (s *Syncer) revertAccountRequest(req *accountRequest) {
 	}
 	close(req.stale)
 
-	// Remove the request from the tracked set
+	// Remove the request from the tracked set and restore the peer to the
+	// idle pool so it can be reassigned work (skip if peer already left).
 	s.lock.Lock()
 	delete(s.accountReqs, req.id)
+	if _, ok := s.peers[req.peer]; ok {
+		s.accountIdlers[req.peer] = struct{}{}
+	}
 	s.lock.Unlock()
 
 	// If there's a timeout timer still running, abort it and mark the account
@@ -1740,9 +1744,13 @@ func (s *Syncer) revertBytecodeRequest(req *bytecodeRequest) {
 	}
 	close(req.stale)
 
-	// Remove the request from the tracked set
+	// Remove the request from the tracked set and restore the peer to the
+	// idle pool so it can be reassigned work (skip if peer already left).
 	s.lock.Lock()
 	delete(s.bytecodeReqs, req.id)
+	if _, ok := s.peers[req.peer]; ok {
+		s.bytecodeIdlers[req.peer] = struct{}{}
+	}
 	s.lock.Unlock()
 
 	// If there's a timeout timer still running, abort it and mark the code
@@ -1781,9 +1789,13 @@ func (s *Syncer) revertStorageRequest(req *storageRequest) {
 	}
 	close(req.stale)
 
-	// Remove the request from the tracked set
+	// Remove the request from the tracked set and restore the peer to the
+	// idle pool so it can be reassigned work (skip if peer already left).
 	s.lock.Lock()
 	delete(s.storageReqs, req.id)
+	if _, ok := s.peers[req.peer]; ok {
+		s.storageIdlers[req.peer] = struct{}{}
+	}
 	s.lock.Unlock()
 
 	// If there's a timeout timer still running, abort it and mark the storage
@@ -1826,9 +1838,13 @@ func (s *Syncer) revertTrienodeHealRequest(req *trienodeHealRequest) {
 	}
 	close(req.stale)
 
-	// Remove the request from the tracked set
+	// Remove the request from the tracked set and restore the peer to the
+	// idle pool so it can be reassigned work (skip if peer already left).
 	s.lock.Lock()
 	delete(s.trienodeHealReqs, req.id)
+	if _, ok := s.peers[req.peer]; ok {
+		s.trienodeHealIdlers[req.peer] = struct{}{}
+	}
 	s.lock.Unlock()
 
 	// If there's a timeout timer still running, abort it and mark the trie node
@@ -1867,9 +1883,13 @@ func (s *Syncer) revertBytecodeHealRequest(req *bytecodeHealRequest) {
 	}
 	close(req.stale)
 
-	// Remove the request from the tracked set
+	// Remove the request from the tracked set and restore the peer to the
+	// idle pool so it can be reassigned work (skip if peer already left).
 	s.lock.Lock()
 	delete(s.bytecodeHealReqs, req.id)
+	if _, ok := s.peers[req.peer]; ok {
+		s.bytecodeHealIdlers[req.peer] = struct{}{}
+	}
 	s.lock.Unlock()
 
 	// If there's a timeout timer still running, abort it and mark the code

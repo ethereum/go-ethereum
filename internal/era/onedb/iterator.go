@@ -14,14 +14,16 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package era
+package onedb
 
 import (
 	"errors"
 	"io"
 	"math/big"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -32,8 +34,8 @@ type Iterator struct {
 
 // NewIterator returns a new Iterator instance. Next must be immediately
 // called on new iterators to load the first item.
-func NewIterator(e *Era) (*Iterator, error) {
-	inner, err := NewRawIterator(e)
+func NewIterator(e era.Era) (era.Iterator, error) {
+	inner, err := NewRawIterator(e.(*Era))
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +109,8 @@ func (it *Iterator) TotalDifficulty() (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-	return new(big.Int).SetBytes(reverseOrder(td)), nil
+	slices.Reverse(td)
+	return new(big.Int).SetBytes(td), nil
 }
 
 // RawIterator reads an RLP-encode Era1 entries.
@@ -151,22 +154,22 @@ func (it *RawIterator) Next() bool {
 		return false
 	}
 	var n int64
-	if it.Header, n, it.err = newSnappyReader(it.e.s, TypeCompressedHeader, off); it.err != nil {
+	if it.Header, n, it.err = newSnappyReader(it.e.s, era.TypeCompressedHeader, off); it.err != nil {
 		it.clear()
 		return true
 	}
 	off += n
-	if it.Body, n, it.err = newSnappyReader(it.e.s, TypeCompressedBody, off); it.err != nil {
+	if it.Body, n, it.err = newSnappyReader(it.e.s, era.TypeCompressedBody, off); it.err != nil {
 		it.clear()
 		return true
 	}
 	off += n
-	if it.Receipts, n, it.err = newSnappyReader(it.e.s, TypeCompressedReceipts, off); it.err != nil {
+	if it.Receipts, n, it.err = newSnappyReader(it.e.s, era.TypeCompressedReceipts, off); it.err != nil {
 		it.clear()
 		return true
 	}
 	off += n
-	if it.TotalDifficulty, _, it.err = it.e.s.ReaderAt(TypeTotalDifficulty, off); it.err != nil {
+	if it.TotalDifficulty, _, it.err = it.e.s.ReaderAt(era.TypeTotalDifficulty, off); it.err != nil {
 		it.clear()
 		return true
 	}

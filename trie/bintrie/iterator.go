@@ -119,27 +119,43 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 		return it.Next(descend)
 	case HashedNode:
 		// resolve the node
-		data, err := it.trie.nodeResolver(it.Path(), common.Hash(node))
+		resolverPath := it.Path()
+		data, err := it.trie.nodeResolver(resolverPath, common.Hash(node))
 		if err != nil {
 			panic(err)
 		}
-		it.current, err = DeserializeNode(data, len(it.stack)-1)
+		if data == nil {
+			// Empty/nil node — treat as Empty, backtrack
+			it.current = Empty{}
+			it.stack[len(it.stack)-1].Node = it.current
+			return it.Next(descend)
+		}
+		it.current, err = DeserializeNodeWithHash(data, len(it.stack)-1, common.Hash(node))
 		if err != nil {
 			panic(err)
 		}
 
 		// update the stack and parent with the resolved node
 		it.stack[len(it.stack)-1].Node = it.current
-		parent := &it.stack[len(it.stack)-2]
-		if parent.Index == 0 {
-			parent.Node.(*InternalNode).left = it.current
-		} else {
-			parent.Node.(*InternalNode).right = it.current
+		if len(it.stack) >= 2 {
+			parent := &it.stack[len(it.stack)-2]
+			if parent.Index == 0 {
+				parent.Node.(*InternalNode).left = it.current
+			} else {
+				parent.Node.(*InternalNode).right = it.current
+			}
 		}
 		return it.Next(descend)
 	case Empty:
-		// do nothing
-		return false
+		// Empty node - go back to parent and continue
+		if len(it.stack) <= 1 {
+			it.lastErr = errIteratorEnd
+			return false
+		}
+		it.stack = it.stack[:len(it.stack)-1]
+		it.current = it.stack[len(it.stack)-1].Node
+		it.stack[len(it.stack)-1].Index++
+		return it.Next(descend)
 	default:
 		panic("invalid node type")
 	}
