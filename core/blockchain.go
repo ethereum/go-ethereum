@@ -2225,38 +2225,9 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	}
 	vtime := time.Since(vstart)
 
-	// If witnesses was generated and stateless self-validation requested, do
-	// that now. Self validation should *never* run in production, it's more of
-	// a tight integration to enable running *all* consensus tests through the
-	// witness builder/runner, which would otherwise be impossible due to the
-	// various invalid chain states/behaviors being contained in those tests.
-	xvstart := time.Now()
-	if witness := statedb.Witness(); witness != nil && config.StatelessSelfValidation {
-		log.Warn("Running stateless self-validation", "block", block.Number(), "hash", block.Hash())
-
-		// Remove critical computed fields from the block to force true recalculation
-		context := block.Header()
-		context.Root = common.Hash{}
-		context.ReceiptHash = common.Hash{}
-
-		task := types.NewBlockWithHeader(context).WithBody(*block.Body())
-
-		// Run the stateless self-cross-validation
-		crossStateRoot, crossReceiptRoot, err := ExecuteStateless(ctx, bc.chainConfig, bc.cfg.VmConfig, task, witness)
-		if err != nil {
-			return nil, fmt.Errorf("stateless self-validation failed: %v", err)
-		}
-		if crossStateRoot != block.Root() {
-			return nil, fmt.Errorf("stateless self-validation root mismatch (cross: %x local: %x)", crossStateRoot, block.Root())
-		}
-		if crossReceiptRoot != block.ReceiptHash() {
-			return nil, fmt.Errorf("stateless self-validation receipt root mismatch (cross: %x local: %x)", crossReceiptRoot, block.ReceiptHash())
-		}
-	}
-
 	var (
 		proctime = time.Since(startTime) // processing + validation + cross validation
-		stats    = NewExecuteStats(statedb, ptime, vtime, time.Since(xvstart))
+		stats    = NewExecuteStats(statedb, ptime, vtime)
 	)
 	// Write the block to the chain and get the status.
 	var status WriteStatus
@@ -2284,6 +2255,9 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	stats.TotalTime = elapsed
 	stats.MgasPerSecond = float64(res.GasUsed) * 1000 / float64(elapsed)
 
+	if config.StatelessSelfValidation {
+		bc.crossValidation(ctx, statedb, block)
+	}
 	return &blockProcessingResult{
 		usedGas:  res.GasUsed,
 		procTime: proctime,
@@ -2291,6 +2265,39 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		witness:  witness,
 		stats:    stats,
 	}, nil
+}
+
+func (bc *BlockChain) crossValidation(ctx context.Context, statedb *state.StateDB, block *types.Block) error {
+	// If witnesses was generated and stateless self-validation requested, do
+	// that now. Self validation should *never* run in production, it's more of
+	// a tight integration to enable running *all* consensus tests through the
+	// witness builder/runner, which would otherwise be impossible due to the
+	// various invalid chain states/behaviors being contained in those tests.
+	if witness := statedb.Witness(); witness != nil {
+		xvstart := time.Now()
+		log.Warn("Running stateless self-validation", "block", block.Number(), "hash", block.Hash())
+
+		// Remove critical computed fields from the block to force true recalculation
+		context := block.Header()
+		context.Root = common.Hash{}
+		context.ReceiptHash = common.Hash{}
+
+		task := types.NewBlockWithHeader(context).WithBody(*block.Body())
+
+		// Run the stateless self-cross-validation
+		crossStateRoot, crossReceiptRoot, err := ExecuteStateless(ctx, bc.chainConfig, bc.cfg.VmConfig, task, witness)
+		if err != nil {
+			return fmt.Errorf("stateless self-validation failed: %v", err)
+		}
+		if crossStateRoot != block.Root() {
+			return fmt.Errorf("stateless self-validation root mismatch (cross: %x local: %x)", crossStateRoot, block.Root())
+		}
+		if crossReceiptRoot != block.ReceiptHash() {
+			return fmt.Errorf("stateless self-validation receipt root mismatch (cross: %x local: %x)", crossReceiptRoot, block.ReceiptHash())
+		}
+		blockCrossValidationTimer.UpdateSince(xvstart)
+	}
+	return nil
 }
 
 // insertSideChain is called when an import batch hits upon a pruned ancestor

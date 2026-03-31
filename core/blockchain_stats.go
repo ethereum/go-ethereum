@@ -38,12 +38,9 @@ type ExecuteStats struct {
 	AccountUpdates time.Duration // Time spent on the account trie update
 	StorageUpdates time.Duration // Time spent on the storage trie update
 
-	// EVM execution time
-	Execution time.Duration // Time spent on the EVM execution
-
-	// Validation times
-	Validation      time.Duration // Time spent on the block validation
-	CrossValidation time.Duration // Optional, time spent on the block cross validation
+	// EVM execution and validation time
+	Execution  time.Duration // Time spent on the EVM execution
+	Validation time.Duration // Time spent on the block validation
 
 	// Commit times
 	HasherCommit   time.Duration // Time spent on trie commit
@@ -70,7 +67,7 @@ type ExecuteStats struct {
 	StatePrefetchCacheStats state.ReaderStats
 }
 
-func NewExecuteStats(stateDB *state.StateDB, process time.Duration, validation time.Duration, crossValidation time.Duration) *ExecuteStats {
+func NewExecuteStats(stateDB *state.StateDB, process time.Duration, validation time.Duration) *ExecuteStats {
 	return &ExecuteStats{
 		// State read times
 		AccountReads: stateDB.AccountReads,
@@ -82,9 +79,8 @@ func NewExecuteStats(stateDB *state.StateDB, process time.Duration, validation t
 		AccountUpdates: stateDB.AccountUpdates,
 		StorageUpdates: stateDB.StorageUpdates,
 
-		Execution:       process - stateDB.StateReadTime(),
-		Validation:      validation - stateDB.StateHashTime(),
-		CrossValidation: crossValidation,
+		Execution:  process - stateDB.StateReadTime(),
+		Validation: validation - stateDB.StateHashTime(),
 
 		AccountLoaded:   stateDB.AccountLoaded,
 		AccountUpdated:  stateDB.AccountUpdated,
@@ -121,7 +117,6 @@ func (s *ExecuteStats) reportMetrics() {
 
 	blockExecutionTimer.Update(s.Execution)                 // The time spent on EVM processing
 	blockValidationTimer.Update(s.Validation)               // The time spent on block validation
-	blockCrossValidationTimer.Update(s.CrossValidation)     // The time spent on stateless cross validation
 	triedbCommitTimer.Update(s.DatabaseCommit)              // Trie database commits are complete, we can mark them
 	blockWriteTimer.Update(s.BlockWrite)                    // The time spent on block write
 	blockInsertTimer.Update(s.TotalTime)                    // The total time spent on block execution

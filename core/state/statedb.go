@@ -1020,11 +1020,10 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorag
 	}
 	s.DatabaseCommits = time.Since(start)
 
-	// The reader update must be performed as the final step, otherwise,
-	// the new state would not be visible before db.commit.
+	// The reader/hasher update must be performed as the final step
 	s.reader, _ = s.db.Reader(s.originalRoot)
 	s.hasher, _ = s.db.Hasher(s.originalRoot)
-	return ret, err
+	return ret, nil
 }
 
 // Commit writes the state mutations into the configured data stores.
