@@ -234,6 +234,9 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 // Hasher implements Database, returning a hasher associated with the specified
 // state root.
 func (db *CachingDB) Hasher(stateRoot common.Hash) (Hasher, error) {
+	if db.TrieDB().IsVerkle() {
+		return newBinaryHasher(stateRoot, db.triedb, db.prefetch, db.prefetchRead)
+	}
 	return newMerkleHasher(stateRoot, db.triedb, db.prefetch, db.prefetchRead)
 }
 
@@ -328,7 +331,7 @@ func (db *CachingDB) Commit(update *stateUpdate) error {
 			log.Warn("Failed to cap snapshot tree", "root", update.root, "layers", TriesInMemory, "err", err)
 		}
 	}
-	stateSet, err := update.stateSet()
+	stateSet, err := update.stateSet(!db.TrieDB().IsVerkle())
 	if err != nil {
 		return err
 	}

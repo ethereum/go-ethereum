@@ -2123,21 +2123,23 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	}
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
+	// Enable trie node prewarming after the Byzantium fork. Before that, state
+	// computation occurs at transaction boundaries, making prewarming ineffective.
+	// The read-only state should also be prewarmed to construct a comprehensive
+	// execution witness.
+	if bc.chainConfig.IsByzantium(block.Number()) {
+		sdb = sdb.EnablePrefetch(makeWitness)
+	}
 	if bc.cfg.NoPrefetch {
 		statedb, err = state.New(parentRoot, sdb)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		// Enable trie node prewarming. The read-only state should also
-		// be prewarmed for constructing a comprehensive execution witness.
-		sdb = sdb.EnablePrefetch(makeWitness)
-
-		// If prefetching is enabled, run that against the current state to pre-cache
-		// transactions and probabilistically some of the account/storage trie nodes.
-		//
-		// Note: the main processor and prefetcher share the same reader with a local
-		// cache for mitigating the overhead of state access.
+		// If transaction prefetching is enabled, run that against the current state
+		// to pre-cache transactions. Note: the main processor and prefetcher share
+		// the same reader with a local cache for mitigating the overhead of state
+		// access.
 		prefetch, process, err := sdb.ReadersWithCacheStats(parentRoot)
 		if err != nil {
 			return nil, err

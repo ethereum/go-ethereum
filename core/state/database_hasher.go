@@ -128,7 +128,6 @@ type Prover interface {
 // returns an empty state root.
 type noopHasher struct{}
 
-func (n *noopHasher) Close()                                             {}
 func (n *noopHasher) UpdateAccount([]common.Address, []AccountMut) error { return nil }
 func (n *noopHasher) UpdateStorage(common.Address, []common.Hash, []common.Hash) error {
 	return nil

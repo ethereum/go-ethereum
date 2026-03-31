@@ -250,12 +250,70 @@ func (sc *stateUpdate) encodeMerkle() (map[common.Hash][]byte, map[common.Addres
 	return accounts, accountOrigin, storages, storageOrigin, nil
 }
 
+func (sc *stateUpdate) encodeBinary() (map[common.Hash][]byte, map[common.Address][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Address]map[common.Hash][]byte, error) {
+	var (
+		accounts      = make(map[common.Hash][]byte)
+		storages      = make(map[common.Hash]map[common.Hash][]byte)
+		accountOrigin = make(map[common.Address][]byte)
+		storageOrigin = make(map[common.Address]map[common.Hash][]byte)
+	)
+	for addr, prev := range sc.accountsOrigin {
+		if prev == nil {
+			accountOrigin[addr] = nil
+		} else {
+			accountOrigin[addr] = types.SlimAccountRLP(types.StateAccount{
+				Balance:  prev.Balance,
+				Nonce:    prev.Nonce,
+				CodeHash: prev.CodeHash,
+			})
+		}
+
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		data := sc.accounts[addrHash]
+		if data == nil {
+			accounts[addrHash] = nil
+		} else {
+			accounts[addrHash] = types.SlimAccountRLP(types.StateAccount{
+				Balance:  data.Balance,
+				Nonce:    data.Nonce,
+				CodeHash: data.CodeHash,
+			})
+		}
+	}
+	for addr, slots := range sc.storagesOrigin {
+		subset := make(map[common.Hash][]byte)
+		for key, val := range slots {
+			subset[key] = encodeSlot(val)
+		}
+		storageOrigin[addr] = subset
+	}
+	for addrHash, slots := range sc.storages {
+		subset := make(map[common.Hash][]byte)
+		for key, val := range slots {
+			subset[key] = encodeSlot(val)
+		}
+		storages[addrHash] = subset
+	}
+	return accounts, accountOrigin, storages, storageOrigin, nil
+}
+
 // stateSet converts the current stateUpdate object into a triedb.StateSet
 // object. This function extracts the necessary data from the stateUpdate
 // struct and formats it into the StateSet structure consumed by the triedb
 // package.
-func (sc *stateUpdate) stateSet() (*triedb.StateSet, error) {
-	accounts, accountOrigin, storages, storageOrigin, err := sc.encodeMerkle()
+func (sc *stateUpdate) stateSet(isMerkle bool) (*triedb.StateSet, error) {
+	var (
+		err           error
+		accounts      = make(map[common.Hash][]byte)
+		storages      = make(map[common.Hash]map[common.Hash][]byte)
+		accountOrigin = make(map[common.Address][]byte)
+		storageOrigin = make(map[common.Address]map[common.Hash][]byte)
+	)
+	if isMerkle {
+		accounts, accountOrigin, storages, storageOrigin, err = sc.encodeMerkle()
+	} else {
+		accounts, accountOrigin, storages, storageOrigin, err = sc.encodeBinary()
+	}
 	if err != nil {
 		return nil, err
 	}

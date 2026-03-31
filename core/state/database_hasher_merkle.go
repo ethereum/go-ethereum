@@ -66,9 +66,9 @@ func (tr *wrapTrie) term() {
 // access auto-terminates the prefetcher first. This makes data-race freedom
 // structural: callers never need to remember to call term() manually.
 
-func (tr *wrapTrie) UpdateAccount(address common.Address, acc *types.StateAccount, codeLen int) error {
+func (tr *wrapTrie) UpdateAccount(address common.Address, acc *types.StateAccount) error {
 	tr.term()
-	return tr.StateTrie.UpdateAccount(address, acc, codeLen)
+	return tr.StateTrie.UpdateAccount(address, acc, 0)
 }
 
 func (tr *wrapTrie) DeleteAccount(address common.Address) error {
@@ -106,6 +106,7 @@ func (tr *wrapTrie) Witness() map[string][]byte {
 	return tr.StateTrie.Witness()
 }
 
+// prefetchAccounts prewarms the trie with the specified account list.
 func (tr *wrapTrie) prefetchAccounts(addresses []common.Address, read bool) {
 	if tr.prefetcher == nil {
 		return
@@ -113,6 +114,7 @@ func (tr *wrapTrie) prefetchAccounts(addresses []common.Address, read bool) {
 	tr.prefetcher.scheduleAccounts(addresses, read)
 }
 
+// prefetchStorage prewarms the trie with the specified storage list.
 func (tr *wrapTrie) prefetchStorage(addr common.Address, keys []common.Hash, read bool) {
 	if tr.prefetcher == nil {
 		return
@@ -281,7 +283,7 @@ func (h *merkleHasher) updateAccount(addr common.Address, account AccountMut) er
 		Root:     root,
 		CodeHash: account.Account.CodeHash,
 	}
-	return h.acctTrie.UpdateAccount(addr, data, 0)
+	return h.acctTrie.UpdateAccount(addr, data)
 }
 
 // UpdateAccount implements Hasher, writing a list of account mutations
