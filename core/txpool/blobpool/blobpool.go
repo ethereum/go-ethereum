@@ -1750,7 +1750,85 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 	return blobs, commitments, proofs, nil
 }
 
-// AvailableBlobs returns the number of blobs that are available in the subpool.
+// GetBlobCells returns cells for the given versioned blob hashes,
+// filtered by the requested cell indices(mask).
+// Each entry in the result corresponds to one vhash. Nil entries mean the blob
+// was not available.
+func (p *BlobPool) GetBlobCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*kzg4844.Cell, [][]*kzg4844.Proof, error) {
+	var (
+		cells  = make([][]*kzg4844.Cell, len(vhashes))
+		proofs = make([][]*kzg4844.Proof, len(vhashes))
+		vindex = make(map[common.Hash][]int) // Indices of versioned hashes in the request
+		filled = make(map[common.Hash]struct{})
+	)
+	for i, h := range vhashes {
+		vindex[h] = append(vindex[h], i)
+	}
+	requestedIndices := mask.Indices()
+
+	for _, vhash := range vhashes {
+		if _, ok := filled[vhash]; ok {
+			continue
+		}
+		p.lock.RLock()
+		txID, exists := p.lookup.storeidOfBlob(vhash)
+		p.lock.RUnlock()
+		if !exists {
+			continue
+		}
+		data, err := p.store.Get(txID)
+		if err != nil {
+			continue
+		}
+		var pooledTx pooledBlobTx
+		if err := rlp.DecodeBytes(data, &pooledTx); err != nil {
+			continue
+		}
+		sidecar := pooledTx.Sidecar
+		if sidecar == nil {
+			continue
+		}
+		tx := pooledTx.Transaction
+		cellsPerBlob := sidecar.Custody.OneCount()
+		storedIndices := sidecar.Custody.Indices()
+
+		for blobIdx, hash := range tx.BlobHashes() {
+			indices, ok := vindex[hash]
+			if !ok {
+				continue
+			}
+			filled[hash] = struct{}{}
+
+			blobCells := make([]*kzg4844.Cell, len(requestedIndices))
+			blobProofs := make([]*kzg4844.Proof, len(requestedIndices))
+
+			for i, cellIdx := range requestedIndices {
+				pos := -1
+				for k, storedIdx := range storedIndices {
+					if storedIdx == cellIdx {
+						pos = k
+						break
+					}
+				}
+				if pos >= 0 {
+					cell := sidecar.Cells[blobIdx*cellsPerBlob+pos]
+					blobCells[i] = &cell
+					proofIdx := blobIdx*kzg4844.CellProofsPerBlob + int(cellIdx)
+					if proofIdx < len(sidecar.Proofs) {
+						proof := sidecar.Proofs[proofIdx]
+						blobProofs[i] = &proof
+					}
+				}
+			}
+			for _, idx := range indices {
+				cells[idx] = blobCells
+				proofs[idx] = blobProofs
+			}
+		}
+	}
+	return cells, proofs, nil
+}
+
 func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) int {
 	available := 0
 	for _, vhash := range vhashes {

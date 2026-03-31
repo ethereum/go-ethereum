@@ -157,6 +157,11 @@ type BlobAndProofV2 struct {
 	CellProofs []hexutil.Bytes `json:"proofs"` // proofs MUST contain exactly CELLS_PER_EXT_BLOB cell proofs.
 }
 
+type BlobCellsAndProofsV1 struct {
+	BlobCells []hexutil.Bytes `json:"blob_cells"`
+	Proofs    []hexutil.Bytes `json:"proofs"`
+}
+
 // JSON type overrides for ExecutionPayloadEnvelope.
 type executionPayloadEnvelopeMarshaling struct {
 	BlockValue *hexutil.Big

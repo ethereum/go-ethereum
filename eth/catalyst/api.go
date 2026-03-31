@@ -660,6 +660,66 @@ func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) ([]*engine.Blob
 	return res, nil
 }
 
+// GetBlobsV4 returns cell-level blob data from the transaction pool.
+// V4 returns only the requested cells as specified by the indices_bitarray.
+func (api *ConsensusAPI) GetBlobsV4(hashes []common.Hash, indicesBitarray hexutil.Bytes) ([]*engine.BlobCellsAndProofsV1, error) {
+	head := api.eth.BlockChain().CurrentHeader()
+	// Sparse blobpool is not necessarily coupled with the Amsterdam fork and
+	// can technically be supported after the Osaka fork
+	// (where cell proofs are introduced).
+	if api.config().LatestFork(head.Time) < forks.Osaka {
+		return nil, nil
+	}
+	if len(hashes) > 128 {
+		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
+	}
+	if len(indicesBitarray) != 16 {
+		return nil, engine.InvalidParams.With(fmt.Errorf("indices_bitarray must be 16 bytes, got %d", len(indicesBitarray)))
+	}
+	var mask types.CustodyBitmap
+	copy(mask[:], indicesBitarray)
+	cells, proofs, err := api.eth.BlobTxPool().GetBlobCells(hashes, mask)
+	if err != nil {
+		return nil, engine.InvalidParams.With(err)
+	}
+	var (
+		res      = make([]*engine.BlobCellsAndProofsV1, len(hashes))
+		hitCount int
+	)
+	getBlobsRequestedCounter.Inc(int64(len(hashes)))
+	for i := range hashes {
+		if cells[i] == nil || proofs[i] == nil {
+			continue
+		}
+		hitCount++
+		blobCells := make([]hexutil.Bytes, len(cells[i]))
+		for j, cell := range cells[i] {
+			if cell != nil {
+				blobCells[j] = cell[:]
+			}
+		}
+		blobProofs := make([]hexutil.Bytes, len(proofs[i]))
+		for j, proof := range proofs[i] {
+			if proof != nil {
+				blobProofs[j] = proof[:]
+			}
+		}
+		res[i] = &engine.BlobCellsAndProofsV1{
+			BlobCells: blobCells,
+			Proofs:    blobProofs,
+		}
+	}
+	getBlobsAvailableCounter.Inc(int64(hitCount))
+	if hitCount == len(hashes) {
+		getBlobsRequestCompleteHit.Inc(1)
+	} else if hitCount > 0 {
+		getBlobsRequestPartialHit.Inc(1)
+	} else {
+		getBlobsRequestMiss.Inc(1)
+	}
+	return res, nil
+}
+
 // Helper for NewPayload* methods.
 var invalidStatus = engine.PayloadStatusV1{Status: engine.INVALID}
 
