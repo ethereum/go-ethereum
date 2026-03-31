@@ -28,10 +28,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/types/bal"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -110,18 +109,17 @@ type Header struct {
 
 // field type overrides for gencodec
 type headerMarshaling struct {
-	Difficulty          *hexutil.Big
-	Number              *hexutil.Big
-	GasLimit            hexutil.Uint64
-	GasUsed             hexutil.Uint64
-	Time                hexutil.Uint64
-	Extra               hexutil.Bytes
-	BaseFee             *hexutil.Big
-	Hash                common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
-	BlobGasUsed         *hexutil.Uint64
-	ExcessBlobGas       *hexutil.Uint64
-	BlockAccessListHash *common.Hash
-	SlotNumber          *hexutil.Uint64
+	Difficulty    *hexutil.Big
+	Number        *hexutil.Big
+	GasLimit      hexutil.Uint64
+	GasUsed       hexutil.Uint64
+	Time          hexutil.Uint64
+	Extra         hexutil.Bytes
+	BaseFee       *hexutil.Big
+	Hash          common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+	BlobGasUsed   *hexutil.Uint64
+	ExcessBlobGas *hexutil.Uint64
+	SlotNumber    *hexutil.Uint64
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
@@ -523,20 +521,20 @@ func (b *Block) WithBody(body Body) *Block {
 
 // WithAccessList returns a copy of the block with the given access list embedded.
 func (b *Block) WithAccessList(accessList *bal.BlockAccessList) *Block {
-	alCopy := accessList.Copy()
-	alHash := accessList.Hash()
-	b.header.BlockAccessListHash = &alHash
-	block := &Block{
+	return b.WithAccessListUnsafe(accessList.Copy())
+}
+
+// WithAccessListUnsafe returns a copy of the block with the given access list
+// embedded. Note that the access list is not deep-copied; use WithAccessList
+// if the provided list may be modified by other actors.
+func (b *Block) WithAccessListUnsafe(accessList *bal.BlockAccessList) *Block {
+	return &Block{
 		header:       b.header,
-		transactions: slices.Clone(b.transactions),
-		uncles:       make([]*Header, len(b.uncles)),
-		withdrawals:  slices.Clone(b.withdrawals),
-		accessList:   &alCopy,
+		transactions: b.transactions,
+		uncles:       b.uncles,
+		withdrawals:  b.withdrawals,
+		accessList:   accessList,
 	}
-	for i := range b.uncles {
-		block.uncles[i] = CopyHeader(b.uncles[i])
-	}
-	return block
 }
 
 // Hash returns the keccak256 hash of b's header.

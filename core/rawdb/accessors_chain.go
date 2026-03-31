@@ -608,7 +608,8 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 
 // HasAccessList verifies the existence of a block access list for a block.
 func HasAccessList(db ethdb.Reader, hash common.Hash, number uint64) bool {
-	return len(ReadAccessListRLP(db, hash, number)) > 0
+	has, _ := db.Has(accessListKey(number, hash))
+	return has
 }
 
 // ReadAccessListRLP retrieves the RLP-encoded block access list for a block from KV.
@@ -709,21 +710,23 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 		return nil
 	}
 	block := types.NewBlockWithHeader(header).WithBody(*body)
+
+	// Best-effort assembly of the block access list from the database.
 	if header.BlockAccessListHash != nil {
-		accessList := ReadAccessList(db, hash, number)
-		if accessList != nil {
-			block = block.WithAccessList(accessList)
-		}
+		al := ReadAccessList(db, hash, number)
+		block = block.WithAccessListUnsafe(al)
 	}
 	return block
 }
 
 // WriteBlock serializes a block into the database, header and body separately.
 func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
-	WriteBody(db, block.Hash(), block.NumberU64(), block.Body())
+	hash, number := block.Hash(), block.NumberU64()
+	WriteBody(db, hash, number, block.Body())
 	WriteHeader(db, block.Header())
-	if block.AccessList() != nil {
-		WriteAccessList(db, block.Hash(), block.NumberU64(), block.AccessList())
+
+	if accessList := block.AccessList(); accessList != nil {
+		WriteAccessList(db, hash, number, accessList)
 	}
 }
 
