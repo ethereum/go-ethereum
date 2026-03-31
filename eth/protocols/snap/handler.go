@@ -55,6 +55,10 @@ const (
 	// number is there to limit the number of disk lookups.
 	maxTrieNodeLookups = 1024
 
+	// maxAccessListLookups is the maximum number of BALs to server. This number
+	// is there to limit the number of disk lookups.
+	maxAccessListLookups = 1024
+
 	// maxTrieNodeTimeSpent is the maximum time we should spend on looking up trie nodes.
 	// If we spend too much time, then it's a fairly high chance of timing out
 	// at the remote side, which means all the work is in vain.
@@ -316,6 +320,17 @@ func HandleMessage(backend Backend, peer *Peer) error {
 		}
 
 		return backend.Handle(peer, &TrieNodesPacket{res.ID, nodes})
+
+	case msg.Code == GetAccessListsMsg:
+		var req GetAccessListsPacket
+		if err := msg.Decode(&req); err != nil {
+			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		}
+		bals := ServiceGetAccessListsQuery(backend.Chain(), &req)
+		return p2p.Send(peer.rw, AccessListsMsg, &AccessListsPacket{
+			ID:          req.ID,
+			AccessLists: bals,
+		})
 
 	default:
 		return fmt.Errorf("%w: %v", errInvalidMsgCode, msg.Code)
@@ -652,6 +667,35 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 		}
 	}
 	return nodes, nil
+}
+
+// ServiceGetAccessListsQuery assembles the response to an access list query.
+// It is exposed to allow external packages to test protocol behavior.
+func ServiceGetAccessListsQuery(chain *core.BlockChain, req *GetAccessListsPacket) []rlp.RawValue {
+	if req.Bytes > softResponseLimit {
+		req.Bytes = softResponseLimit
+	}
+	// Cap the number of lookups
+	if len(req.Hashes) > maxAccessListLookups {
+		req.Hashes = req.Hashes[:maxAccessListLookups]
+	}
+	var (
+		bals  []rlp.RawValue
+		bytes uint64
+	)
+	for _, hash := range req.Hashes {
+		if bal := chain.GetAccessListRLP(hash); len(bal) > 0 {
+			bals = append(bals, bal)
+			bytes += uint64(len(bal))
+		} else {
+			// Either the block is unknown or the BAL doesn't exist
+			bals = append(bals, nil)
+		}
+		if bytes > req.Bytes {
+			break
+		}
+	}
+	return bals
 }
 
 func nextBytes(it *rlp.Iterator) []byte {

@@ -28,6 +28,7 @@ import (
 // Constants to match up protocol versions and messages
 const (
 	SNAP1 = 1
+	SNAP2 = 2
 )
 
 // ProtocolName is the official short name of the `snap` protocol used during
@@ -36,11 +37,11 @@ const ProtocolName = "snap"
 
 // ProtocolVersions are the supported versions of the `snap` protocol (first
 // is primary).
-var ProtocolVersions = []uint{SNAP1}
+var ProtocolVersions = []uint{SNAP2, SNAP1}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{SNAP1: 8}
+var protocolLengths = map[uint]uint64{SNAP2: 10, SNAP1: 8}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
@@ -54,6 +55,8 @@ const (
 	ByteCodesMsg        = 0x05
 	GetTrieNodesMsg     = 0x06
 	TrieNodesMsg        = 0x07
+	GetAccessListsMsg   = 0x08
+	AccessListsMsg      = 0x09
 )
 
 var (
@@ -215,6 +218,21 @@ type TrieNodesPacket struct {
 	Nodes [][]byte // Requested state trie nodes
 }
 
+// GetAccessListsPacket requests BALs for a set of block hashes.
+type GetAccessListsPacket struct {
+	ID     uint64        // Request ID to match up responses with
+	Hashes []common.Hash // Block hashes to retrieve BALs for
+	Bytes  uint64        // Soft limit at which to stop returning data
+}
+
+// AccessListsPacket is the response to GetAccessListsPacket.
+// Each entry corresponds to the requested hash at the same index.
+// Empty entries indicate the BAL is unavailable.
+type AccessListsPacket struct {
+	ID          uint64         // ID of the request this is a response for
+	AccessLists []rlp.RawValue // Requested BALs
+}
+
 func (*GetAccountRangePacket) Name() string { return "GetAccountRange" }
 func (*GetAccountRangePacket) Kind() byte   { return GetAccountRangeMsg }
 
@@ -238,3 +256,9 @@ func (*GetTrieNodesPacket) Kind() byte   { return GetTrieNodesMsg }
 
 func (*TrieNodesPacket) Name() string { return "TrieNodes" }
 func (*TrieNodesPacket) Kind() byte   { return TrieNodesMsg }
+
+func (*GetAccessListsPacket) Name() string { return "GetAccessLists" }
+func (*GetAccessListsPacket) Kind() byte   { return GetAccessListsMsg }
+
+func (*AccessListsPacket) Name() string { return "AccessLists" }
+func (*AccessListsPacket) Kind() byte   { return AccessListsMsg }
