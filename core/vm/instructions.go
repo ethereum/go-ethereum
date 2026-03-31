@@ -299,7 +299,7 @@ func opCallDataCopy(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// These values are checked for overflow during gas cost calculation
 	memOffset64 := memOffset.Uint64()
 	length64 := length.Uint64()
-	scope.Memory.Set(memOffset64, length64, getData(scope.Contract.Input, dataOffset64, length64))
+	scope.Memory.SetFromData(memOffset64, length64, dataOffset64, scope.Contract.Input)
 
 	return nil, nil
 }
@@ -372,8 +372,8 @@ func opExtCodeCopy(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	}
 	addr := common.Address(a.Bytes20())
 	code := evm.StateDB.GetCode(addr)
-	codeCopy := getData(code, uint64CodeOffset, length.Uint64())
-	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
+
+	scope.Memory.SetFromData(memOffset.Uint64(), length.Uint64(), uint64CodeOffset, code)
 
 	return nil, nil
 }
@@ -526,7 +526,7 @@ func opSstore(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opJump(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	if evm.abort.Load() {
+	if evm.Cancelled() {
 		return nil, errStopToken
 	}
 	pos := scope.Stack.pop()
@@ -538,7 +538,7 @@ func opJump(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opJumpi(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	if evm.abort.Load() {
+	if evm.Cancelled() {
 		return nil, errStopToken
 	}
 	pos, cond := scope.Stack.pop(), scope.Stack.pop()
@@ -571,82 +571,82 @@ func opGas(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opSwap1(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.swap1()
+	scope.Stack.swap(1)
 	return nil, nil
 }
 
 func opSwap2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.swap2()
+	scope.Stack.swap(2)
 	return nil, nil
 }
 
 func opSwap3(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.swap3()
+	scope.Stack.swap(3)
 	return nil, nil
 }
 
 func opSwap4(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.swap4()
+	scope.Stack.swap(4)
 	return nil, nil
 }
 
 func opSwap5(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.swap5()
+	scope.Stack.swap(5)
 	return nil, nil
 }
 
 func opSwap6(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.swap6()
+	scope.Stack.swap(6)
 	return nil, nil
 }
 
 func opSwap7(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.swap7()
+	scope.Stack.swap(7)
 	return nil, nil
 }
 
 func opSwap8(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.swap8()
+	scope.Stack.swap(8)
 	return nil, nil
 }
 
 func opSwap9(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.swap9()
+	scope.Stack.swap(9)
 	return nil, nil
 }
 
 func opSwap10(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.swap10()
+	scope.Stack.swap(10)
 	return nil, nil
 }
 
 func opSwap11(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.swap11()
+	scope.Stack.swap(11)
 	return nil, nil
 }
 
 func opSwap12(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.swap12()
+	scope.Stack.swap(12)
 	return nil, nil
 }
 
 func opSwap13(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.swap13()
+	scope.Stack.swap(13)
 	return nil, nil
 }
 
 func opSwap14(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.swap14()
+	scope.Stack.swap(14)
 	return nil, nil
 }
 
 func opSwap15(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.swap15()
+	scope.Stack.swap(15)
 	return nil, nil
 }
 
 func opSwap16(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.swap16()
+	scope.Stack.swap(16)
 	return nil, nil
 }
 

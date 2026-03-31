@@ -65,6 +65,32 @@ func (m *Memory) Set(offset, size uint64, value []byte) {
 	}
 }
 
+// SetFromData copies src[dataOffset:] into m.store[memOffset:memOffset+size],
+// zero-padding if src is shorter than size. This avoids allocating an intermediate
+// padded buffer (unlike getData + Set).
+func (m *Memory) SetFromData(memOffset, size, dataOffset uint64, data []byte) {
+	if size == 0 {
+		return
+	}
+	if memOffset+size > uint64(len(m.store)) {
+		panic("invalid memory: store empty")
+	}
+	dst := m.store[memOffset : memOffset+size]
+	dataLen := uint64(len(data))
+	if dataOffset >= dataLen {
+		// All zeros.
+		clear(dst)
+		return
+	}
+	avail := dataLen - dataOffset
+	if avail >= size {
+		copy(dst, data[dataOffset:dataOffset+size])
+	} else {
+		copy(dst[:avail], data[dataOffset:dataOffset+avail])
+		clear(dst[avail:])
+	}
+}
+
 // Set32 sets the 32 bytes starting at offset to the value of val, left-padded with zeroes to
 // 32 bytes.
 func (m *Memory) Set32(offset uint64, val *uint256.Int) {
