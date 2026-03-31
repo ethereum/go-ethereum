@@ -58,15 +58,8 @@ var (
 	// to retrieved concurrently.
 	largeStorageGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/large", nil)
 
-	// skipStorageHealingGauge is the metric to track how many storages are retrieved
-	// in multiple requests but healing is not necessary.
-	skipStorageHealingGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/noheal", nil)
-
 	// largeStorageDiscardGauge is the metric to track how many chunked storages are
 	// discarded during the snap sync.
 	largeStorageDiscardGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/chunk/discard", nil)
 	largeStorageResumedGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/chunk/resume", nil)
-
-	stateSyncTimeGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/time/statesync", nil)
-	stateHealTimeGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/time/stateheal", nil)
 )

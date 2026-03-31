@@ -372,20 +372,15 @@ func (dlp *downloadTesterPeer) RequestByteCodes(id uint64, hashes []common.Hash,
 	return nil
 }
 
-// RequestTrieNodes fetches a batch of account or storage trie nodes.
-func (dlp *downloadTesterPeer) RequestTrieNodes(id uint64, root common.Hash, count int, paths []snap.TrieNodePathSet, bytes int) error {
-	encPaths, err := rlp.EncodeToRawList(paths)
-	if err != nil {
-		panic(err)
+// RequestAccessLists fetches a batch of BALs by block hash.
+func (dlp *downloadTesterPeer) RequestAccessLists(id uint64, hashes []common.Hash, bytes int) error {
+	req := &snap.GetAccessListsPacket{
+		ID:     id,
+		Hashes: hashes,
+		Bytes:  uint64(bytes),
 	}
-	req := &snap.GetTrieNodesPacket{
-		ID:    id,
-		Root:  root,
-		Paths: encPaths,
-		Bytes: uint64(bytes),
-	}
-	nodes, _ := snap.ServiceGetTrieNodesQuery(dlp.chain, req)
-	go dlp.dl.downloader.SnapSyncer.OnTrieNodes(dlp, id, nodes)
+	als := snap.ServiceGetAccessListsQuery(dlp.chain, req)
+	go dlp.dl.downloader.SnapSyncer.OnAccessLists(dlp, id, als)
 	return nil
 }
 

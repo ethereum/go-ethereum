@@ -1185,10 +1185,10 @@ func (bc *BlockChain) SnapSyncComplete(hash common.Hash) error {
 	if !bc.HasState(root) {
 		return fmt.Errorf("non existent state [%x..]", root[:4])
 	}
-	// Destroy any existing state snapshot and regenerate it in the background,
-	// also resuming the normal maintenance of any previously paused snapshot.
+	// Set up the snapshot tree from the synced flat state. Snap/2 downloads
+	// flat state directly as the snapshot.
 	if bc.snaps != nil {
-		bc.snaps.Rebuild(root)
+		bc.snaps.RebuildFromSyncedState(root)
 	}
 
 	// If all checks out, manually set the head block.

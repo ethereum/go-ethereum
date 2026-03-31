@@ -25,20 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// genTrie interface is used by the snap syncer to generate merkle tree nodes
-// based on a received batch of states.
-type genTrie interface {
-	// update inserts the state item into generator trie.
-	update(key, value []byte) error
-
-	// delete removes the state item from the generator trie.
-	delete(key []byte) error
-
-	// commit flushes the right boundary nodes if complete flag is true. This
-	// function must be called before flushing the associated database batch.
-	commit(complete bool) common.Hash
-}
-
 // pathTrie is a wrapper over the stackTrie, incorporating numerous additional
 // logics to handle the semi-completed trie and potential leftover dangling
 // nodes in the database. It is utilized for constructing the merkle tree nodes
@@ -292,30 +278,3 @@ func (t *pathTrie) commit(complete bool) common.Hash {
 }
 
 // hashTrie is a wrapper over the stackTrie for implementing genTrie interface.
-type hashTrie struct {
-	tr *trie.StackTrie
-}
-
-// newHashTrie initializes the hash trie.
-func newHashTrie(batch ethdb.Batch) *hashTrie {
-	return &hashTrie{tr: trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
-		rawdb.WriteLegacyTrieNode(batch, hash, blob)
-	})}
-}
-
-// update implements genTrie interface, inserting a (key, value) pair into
-// the stack trie.
-func (t *hashTrie) update(key, value []byte) error {
-	return t.tr.Update(key, value)
-}
-
-// delete implements genTrie interface, ignoring the state item for deleting.
-func (t *hashTrie) delete(key []byte) error { return nil }
-
-// commit implements genTrie interface, committing the nodes on right boundary.
-func (t *hashTrie) commit(complete bool) common.Hash {
-	if !complete {
-		return common.Hash{} // the hash is meaningless for incomplete commit
-	}
-	return t.tr.Hash() // return hash only if it's claimed as complete
-}

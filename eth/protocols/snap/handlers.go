@@ -598,3 +598,16 @@ func ServiceGetAccessListsQuery(chain *core.BlockChain, req *GetAccessListsPacke
 	}
 	return response
 }
+
+// nolint:unused
+func handleAccessLists(backend Backend, msg Decoder, peer *Peer) error {
+	res := new(AccessListsPacket)
+	if err := msg.Decode(res); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	tresp := tracker.Response{ID: res.ID, MsgCode: AccessListsMsg, Size: res.AccessLists.Len()}
+	if err := peer.tracker.Fulfil(tresp); err != nil {
+		return fmt.Errorf("BALs: %w", err)
+	}
+	return backend.Handle(peer, res)
+}

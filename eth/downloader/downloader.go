@@ -278,7 +278,7 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	default:
 		log.Error("Unknown downloader mode", "mode", mode)
 	}
-	progress, pending := d.SnapSyncer.Progress()
+	progress := d.SnapSyncer.Progress()
 
 	return ethereum.SyncProgress{
 		StartingBlock:       d.syncStatsChainOrigin,
@@ -290,12 +290,6 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 		SyncedBytecodeBytes: uint64(progress.BytecodeBytes),
 		SyncedStorage:       progress.StorageSynced,
 		SyncedStorageBytes:  uint64(progress.StorageBytes),
-		HealedTrienodes:     progress.TrienodeHealSynced,
-		HealedTrienodeBytes: uint64(progress.TrienodeHealBytes),
-		HealedBytecodes:     progress.BytecodeHealSynced,
-		HealedBytecodeBytes: uint64(progress.BytecodeHealBytes),
-		HealingTrienodes:    pending.TrienodeHeal,
-		HealingBytecode:     pending.BytecodeHeal,
 	}
 }
 
@@ -883,13 +877,48 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	return nil
 }
 
+// checkDeepReorg checks if the old pivot block was reorged by comparing its
+// state root against the current canonical chain. If the canonical header at
+// the old pivot's block number has a different state root, the syncer's flat
+// state is from the old fork and must be wiped. Returns true if a deep reorg
+// was detected.
+//
+// Returns false (no reorg) when the canonical hash or header is missing. This
+// avoids false positives from pruned or not-yet-downloaded data. If the chain
+// really did shorten past the old pivot, sync.catchUp's from > to guard will
+// catch this.
+func checkDeepReorg(db ethdb.Database, oldNumber uint64, oldRoot common.Hash) bool {
+	oldHash := rawdb.ReadCanonicalHash(db, oldNumber)
+	if oldHash == (common.Hash{}) {
+		return false
+	}
+	oldHeader := rawdb.ReadHeader(db, oldHash, oldNumber)
+	if oldHeader == nil {
+		return false
+	}
+	return oldHeader.Root != oldRoot
+}
+
+// restartSnapSync cancels the current state sync and starts a new one with the
+// given root. Before restarting, it checks for deep reorgs and wipes sync
+// progress if the old pivot was reorged.
+func (d *Downloader) restartSnapSync(oldSync *stateSync, newRoot common.Hash, newNumber uint64) *stateSync {
+	if checkDeepReorg(d.stateDB, oldSync.number, oldSync.root) {
+		log.Warn("Deep reorg detected, restarting snap sync from scratch",
+			"number", oldSync.number, "oldRoot", oldSync.root)
+		rawdb.WriteSnapshotSyncStatus(d.stateDB, nil)
+	}
+	oldSync.Cancel()
+	return d.syncState(newRoot, newNumber)
+}
+
 // processSnapSyncContent takes fetch results from the queue and writes them to the
 // database. It also controls the synchronisation of state nodes of the pivot block.
 func (d *Downloader) processSnapSyncContent() error {
 	// Start syncing state of the reported head block. This should get us most of
 	// the state of the pivot block.
 	d.pivotLock.RLock()
-	sync := d.syncState(d.pivotHeader.Root)
+	sync := d.syncState(d.pivotHeader.Root, d.pivotHeader.Number.Uint64())
 	d.pivotLock.RUnlock()
 
 	defer func() {
@@ -960,9 +989,7 @@ func (d *Downloader) processSnapSyncContent() error {
 		if oldPivot == nil { // no results piling up, we can move the pivot
 			if !d.committed.Load() { // not yet passed the pivot, we can move the pivot
 				if pivot.Root != sync.root { // pivot position changed, we can move the pivot
-					sync.Cancel()
-					sync = d.syncState(pivot.Root)
-
+					sync = d.restartSnapSync(sync, pivot.Root, pivot.Number.Uint64())
 					go closeOnErr(sync)
 				}
 			}
@@ -976,9 +1003,7 @@ func (d *Downloader) processSnapSyncContent() error {
 		if P != nil {
 			// If new pivot block found, cancel old state retrieval and restart
 			if oldPivot != P {
-				sync.Cancel()
-				sync = d.syncState(P.Header.Root)
-
+				sync = d.restartSnapSync(sync, P.Header.Root, P.Header.Number.Uint64())
 				go closeOnErr(sync)
 				oldPivot = P
 			}
@@ -1096,7 +1121,12 @@ func (d *Downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) erro
 		return d.SnapSyncer.OnByteCodes(peer, packet.ID, packet.Codes)
 
 	case *snap.TrieNodesPacket:
-		return d.SnapSyncer.OnTrieNodes(peer, packet.ID, packet.Nodes)
+		// Snap/2 no longer requests trie nodes. Stale responses from
+		// snap/1 peers are silently ignored.
+		return nil
+
+	case *snap.AccessListsPacket:
+		return d.SnapSyncer.OnAccessLists(peer, packet.ID, packet.AccessLists)
 
 	default:
 		return fmt.Errorf("unexpected snap packet type: %T", packet)
