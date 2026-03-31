@@ -312,10 +312,6 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 			if err != nil {
 				return fmt.Errorf("open %s: %w", path, err)
 			}
-			// Validate checksum.
-			if _, err := f.Seek(0, io.SeekStart); err != nil {
-				return fmt.Errorf("seek %s: %w", path, err)
-			}
 			if _, err := io.Copy(h, f); err != nil {
 				return fmt.Errorf("checksum %s: %w", path, err)
 			}
