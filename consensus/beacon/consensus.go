@@ -286,7 +286,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		}
 	} else {
 		if header.BlockAccessListHash != nil {
-			return fmt.Errorf("invalid block access list hash: have %x, expected nil", header.BlockAccessListHash)
+			return fmt.Errorf("invalid block access list hash: have %x, expected nil", *header.BlockAccessListHash)
 		}
 		if header.SlotNumber != nil {
 			return fmt.Errorf("invalid slotNumber: have %d, expected nil", *header.SlotNumber)
