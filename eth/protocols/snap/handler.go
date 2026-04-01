@@ -672,9 +672,6 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 // ServiceGetAccessListsQuery assembles the response to an access list query.
 // It is exposed to allow external packages to test protocol behavior.
 func ServiceGetAccessListsQuery(chain *core.BlockChain, req *GetAccessListsPacket) []rlp.RawValue {
-	if req.Bytes > softResponseLimit {
-		req.Bytes = softResponseLimit
-	}
 	// Cap the number of lookups
 	if len(req.Hashes) > maxAccessListLookups {
 		req.Hashes = req.Hashes[:maxAccessListLookups]
@@ -691,7 +688,7 @@ func ServiceGetAccessListsQuery(chain *core.BlockChain, req *GetAccessListsPacke
 			// Either the block is unknown or the BAL doesn't exist
 			bals = append(bals, nil)
 		}
-		if bytes > req.Bytes {
+		if bytes > softResponseLimit {
 			break
 		}
 	}

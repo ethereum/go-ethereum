@@ -37,7 +37,7 @@ const ProtocolName = "snap"
 
 // ProtocolVersions are the supported versions of the `snap` protocol (first
 // is primary).
-var ProtocolVersions = []uint{SNAP2, SNAP1}
+var ProtocolVersions = []uint{SNAP1}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
@@ -222,7 +222,6 @@ type TrieNodesPacket struct {
 type GetAccessListsPacket struct {
 	ID     uint64        // Request ID to match up responses with
 	Hashes []common.Hash // Block hashes to retrieve BALs for
-	Bytes  uint64        // Soft limit at which to stop returning data
 }
 
 // AccessListsPacket is the response to GetAccessListsPacket.

@@ -80,7 +80,6 @@ func TestServiceGetAccessListsQuery(t *testing.T) {
 	req := &GetAccessListsPacket{
 		ID:     1,
 		Hashes: hashes,
-		Bytes:  softResponseLimit,
 	}
 	result := ServiceGetAccessListsQuery(bc, req)
 
@@ -106,7 +105,6 @@ func TestServiceGetAccessListsQueryEmpty(t *testing.T) {
 	req := &GetAccessListsPacket{
 		ID:     2,
 		Hashes: mixed,
-		Bytes:  softResponseLimit,
 	}
 	result := ServiceGetAccessListsQuery(bc, req)
 
@@ -149,7 +147,6 @@ func TestServiceGetAccessListsQueryCap(t *testing.T) {
 	req := &GetAccessListsPacket{
 		ID:     3,
 		Hashes: hashes,
-		Bytes:  softResponseLimit,
 	}
 	result := ServiceGetAccessListsQuery(bc, req)
 
@@ -174,7 +171,6 @@ func TestServiceGetAccessListsQueryByteLimit(t *testing.T) {
 	req := &GetAccessListsPacket{
 		ID:     0,
 		Hashes: hashes,
-		Bytes:  softResponseLimit,
 	}
 	result := ServiceGetAccessListsQuery(bc, req)
 
