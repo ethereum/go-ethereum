@@ -1045,11 +1045,11 @@ func (s *StateDB) clearJournalAndRefund() {
 }
 
 // deleteStorage is designed to delete the storage trie of a designated account.
-func (s *StateDB) deleteStorage(addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, map[common.Hash][]byte, *trienode.NodeSet, error) {
+func (s *StateDB) deleteStorage(addrHash common.Hash, root common.Hash) (map[common.Hash]common.Hash, map[common.Hash]common.Hash, *trienode.NodeSet, error) {
 	var (
-		nodes          = trienode.NewNodeSet(addrHash) // the set for trie node mutations (value is nil)
-		storages       = make(map[common.Hash][]byte)  // the set for storage mutations (value is nil)
-		storageOrigins = make(map[common.Hash][]byte)  // the set for tracking the original value of slot
+		nodes          = trienode.NewNodeSet(addrHash)     // the set for trie node mutations (value is nil)
+		storages       = make(map[common.Hash]common.Hash) // the set for storage mutations (value is nil)
+		storageOrigins = make(map[common.Hash]common.Hash) // the set for tracking the original value of slot
 	)
 	iteratee, err := s.db.Iteratee(s.originalRoot)
 	if err != nil {
@@ -1065,19 +1065,24 @@ func (s *StateDB) deleteStorage(addrHash common.Hash, root common.Hash) (map[com
 		nodes.AddNode(path, trienode.NewDeletedWithPrev(blob))
 	})
 	for it.Next() {
-		slot := common.CopyBytes(it.Slot())
-		if err := it.Error(); err != nil { // error might occur after Slot function
+		slot := it.Slot()
+		// Error might occur after Slot function
+		if err := it.Error(); err != nil {
 			return nil, nil, nil, err
 		}
+		if slot == (common.Hash{}) {
+			return nil, nil, nil, fmt.Errorf("unexpected empty storage slot, addr: %x, slot: %x", addrHash, it.Hash())
+		}
 		key := it.Hash()
-		storages[key] = nil
+		storages[key] = common.Hash{}
 		storageOrigins[key] = slot
 
-		if err := stack.Update(key.Bytes(), slot); err != nil {
+		if err := stack.Update(key.Bytes(), encodeSlot(slot)); err != nil {
 			return nil, nil, nil, err
 		}
 	}
-	if err := it.Error(); err != nil { // error might occur during iteration
+	// Error might occur during iteration
+	if err := it.Error(); err != nil {
 		return nil, nil, nil, err
 	}
 	if stack.Hash() != root {
@@ -1104,10 +1109,10 @@ func (s *StateDB) deleteStorage(addrHash common.Hash, root common.Hash) (map[com
 // with their values be tracked as original value.
 // In case (d), **original** account along with its storages should be deleted,
 // with their values be tracked as original value.
-func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*accountDelete, []*trienode.NodeSet, error) {
+func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*AccountDelete, []*trienode.NodeSet, error) {
 	var (
 		nodes   []*trienode.NodeSet
-		deletes = make(map[common.Hash]*accountDelete)
+		deletes = make(map[common.Hash]*AccountDelete)
 	)
 	for addr, prevObj := range s.stateObjectsDestruct {
 		prev := prevObj.origin
@@ -1122,9 +1127,9 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*acco
 		}
 		// The account was existent, it can be either case (c) or (d).
 		addrHash := crypto.Keccak256Hash(addr.Bytes())
-		op := &accountDelete{
-			address: addr,
-			origin:  types.SlimAccountRLP(*prev),
+		op := &AccountDelete{
+			Address: addr,
+			Origin:  prev,
 		}
 		deletes[addrHash] = op
 
@@ -1140,8 +1145,8 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*acco
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to delete storage, err: %w", err)
 		}
-		op.storages = storages
-		op.storagesOrigin = storagesOrigin
+		op.Storages = storages
+		op.StoragesOrigin = storagesOrigin
 
 		// Aggregate the associated trie node changes.
 		nodes = append(nodes, set)
@@ -1156,7 +1161,7 @@ func (s *StateDB) GetTrie() Trie {
 
 // commit gathers the state mutations accumulated along with the associated
 // trie changes, resetting all internal flags with the new state as the base.
-func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNumber uint64) (*stateUpdate, error) {
+func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNumber uint64) (*StateUpdate, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1177,7 +1182,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 
 		lock    sync.Mutex                                               // protect two maps below
 		nodes   = trienode.NewMergedNodeSet()                            // aggregated trie nodes
-		updates = make(map[common.Hash]*accountUpdate, len(s.mutations)) // aggregated account updates
+		updates = make(map[common.Hash]*AccountUpdate, len(s.mutations)) // aggregated account updates
 
 		// merge aggregates the dirty trie nodes into the global set.
 		//
@@ -1305,12 +1310,16 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	origin := s.originalRoot
 	s.originalRoot = root
 
-	return newStateUpdate(noStorageWiping, origin, root, blockNumber, deletes, updates, nodes), nil
+	typ := StorageKeyHashed
+	if noStorageWiping {
+		typ = StorageKeyPlain
+	}
+	return NewStateUpdate(typ, origin, root, blockNumber, deletes, updates, nodes), nil
 }
 
 // commitAndFlush is a wrapper of commit which also commits the state mutations
 // to the configured data stores.
-func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorageWiping bool, deriveCodeFields bool) (*stateUpdate, error) {
+func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorageWiping bool, deriveCodeFields bool) (*StateUpdate, error) {
 	ret, err := s.commit(deleteEmptyObjects, noStorageWiping, block)
 	if err != nil {
 		return nil, err
@@ -1351,17 +1360,17 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping 
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return ret.root, nil
+	return ret.Root, nil
 }
 
 // CommitWithUpdate writes the state mutations and returns the state update for
 // external processing (e.g., live tracing hooks or size tracker).
-func (s *StateDB) CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, *stateUpdate, error) {
+func (s *StateDB) CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, *StateUpdate, error) {
 	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping, true)
 	if err != nil {
 		return common.Hash{}, nil, err
 	}
-	return ret.root, ret, nil
+	return ret.Root, ret, nil
 }
 
 // Prepare handles the preparatory steps for executing a state transition with.

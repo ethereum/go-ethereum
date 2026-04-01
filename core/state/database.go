@@ -70,7 +70,7 @@ type Database interface {
 	// Commit flushes all pending writes and finalizes the state transition,
 	// committing the changes to the underlying storage. It returns an error
 	// if the commit fails.
-	Commit(update *stateUpdate) error
+	Commit(update *StateUpdate) error
 }
 
 // Trie is a Ethereum Merkle Patricia trie.

@@ -24,9 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 )
 
@@ -144,11 +142,8 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	defer acctIt.Release()
 
 	for acctIt.Next() {
-		var data types.StateAccount
-		if err := rlp.DecodeBytes(acctIt.Account(), &data); err != nil {
-			panic(err)
-		}
 		var (
+			data    = acctIt.Account()
 			account = DumpAccount{
 				Balance:     data.Balance.String(),
 				Nonce:       data.Nonce,
@@ -168,7 +163,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 			address = &addrBytes
 			account.Address = address
 		}
-		obj := newObject(s, addrBytes, &data)
+		obj := newObject(s, addrBytes, data)
 		if !conf.SkipCode {
 			account.Code = obj.Code()
 		}
@@ -181,16 +176,11 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 				continue
 			}
 			for storageIt.Next() {
-				_, content, _, err := rlp.Split(storageIt.Slot())
-				if err != nil {
-					log.Error("Failed to decode the value returned by iterator", "error", err)
-					continue
-				}
 				key, err := storageIt.Key()
 				if err != nil {
 					continue
 				}
-				account.Storage[key] = common.Bytes2Hex(content)
+				account.Storage[key] = storageIt.Slot().String()
 			}
 			storageIt.Release()
 		}

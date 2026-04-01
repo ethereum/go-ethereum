@@ -140,35 +140,44 @@ func (db *MPTDatabase) TrieDB() *triedb.Database {
 // Commit flushes all pending writes and finalizes the state transition,
 // committing the changes to the underlying storage. It returns an error
 // if the commit fails.
-func (db *MPTDatabase) Commit(update *stateUpdate) error {
+func (db *MPTDatabase) Commit(update *StateUpdate) error {
 	// Short circuit if nothing to commit
-	if update.empty() {
+	if update.Empty() {
 		return nil
 	}
 	// Commit dirty contract code if any exists
-	if len(update.codes) > 0 {
-		batch := db.codedb.NewBatchWithSize(len(update.codes))
-		for _, code := range update.codes {
-			batch.Put(code.hash, code.blob)
+	if len(update.Codes) > 0 {
+		batch := db.codedb.NewBatchWithSize(len(update.Codes))
+		for _, code := range update.Codes {
+			batch.Put(code.Hash, code.Blob)
 		}
 		if err := batch.Commit(); err != nil {
 			return err
 		}
 	}
+	// Encode the state mutations in the MPT format
+	accounts, accountOrigin, storages, storageOrigin := update.EncodeMPTState()
+
 	// If snapshotting is enabled, update the snapshot tree with this new version
-	if db.snap != nil && db.snap.Snapshot(update.originRoot) != nil {
-		if err := db.snap.Update(update.root, update.originRoot, update.accounts, update.storages); err != nil {
-			log.Warn("Failed to update snapshot tree", "from", update.originRoot, "to", update.root, "err", err)
+	if db.snap != nil && db.snap.Snapshot(update.OriginRoot) != nil {
+		if err := db.snap.Update(update.Root, update.OriginRoot, accounts, storages); err != nil {
+			log.Warn("Failed to update snapshot tree", "from", update.OriginRoot, "to", update.Root, "err", err)
 		}
 		// Keep 128 diff layers in the memory, persistent layer is 129th.
 		// - head layer is paired with HEAD state
 		// - head-1 layer is paired with HEAD-1 state
 		// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
-		if err := db.snap.Cap(update.root, TriesInMemory); err != nil {
-			log.Warn("Failed to cap snapshot tree", "root", update.root, "layers", TriesInMemory, "err", err)
+		if err := db.snap.Cap(update.Root, TriesInMemory); err != nil {
+			log.Warn("Failed to cap snapshot tree", "root", update.Root, "layers", TriesInMemory, "err", err)
 		}
 	}
-	return db.triedb.Update(update.root, update.originRoot, update.blockNumber, update.nodes, update.stateSet())
+	return db.triedb.Update(update.Root, update.OriginRoot, update.BlockNumber, update.Nodes, &triedb.StateSet{
+		Accounts:       accounts,
+		AccountsOrigin: accountOrigin,
+		Storages:       storages,
+		StoragesOrigin: storageOrigin,
+		RawStorageKey:  update.StorageKeyType == StorageKeyPlain,
+	})
 }
 
 // Iteratee returns a state iteratee associated with the specified state root,

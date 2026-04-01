@@ -113,22 +113,31 @@ func (db *UBTDatabase) TrieDB() *triedb.Database {
 // Commit flushes all pending writes and finalizes the state transition,
 // committing the changes to the underlying storage. It returns an error
 // if the commit fails.
-func (db *UBTDatabase) Commit(update *stateUpdate) error {
+func (db *UBTDatabase) Commit(update *StateUpdate) error {
 	// Short circuit if nothing to commit
-	if update.empty() {
+	if update.Empty() {
 		return nil
 	}
 	// Commit dirty contract code if any exists
-	if len(update.codes) > 0 {
-		batch := db.codedb.NewBatchWithSize(len(update.codes))
-		for _, code := range update.codes {
-			batch.Put(code.hash, code.blob)
+	if len(update.Codes) > 0 {
+		batch := db.codedb.NewBatchWithSize(len(update.Codes))
+		for _, code := range update.Codes {
+			batch.Put(code.Hash, code.Blob)
 		}
 		if err := batch.Commit(); err != nil {
 			return err
 		}
 	}
-	return db.triedb.Update(update.root, update.originRoot, update.blockNumber, update.nodes, update.stateSet())
+	// Encode the state mutations in the UBT format
+	accounts, accountOrigin, storages, storageOrigin := update.EncodeUBTState()
+
+	return db.triedb.Update(update.Root, update.OriginRoot, update.BlockNumber, update.Nodes, &triedb.StateSet{
+		Accounts:       accounts,
+		AccountsOrigin: accountOrigin,
+		Storages:       storages,
+		StoragesOrigin: storageOrigin,
+		RawStorageKey:  update.StorageKeyType == StorageKeyPlain,
+	})
 }
 
 // Iteratee returns a state iteratee associated with the specified state root,
