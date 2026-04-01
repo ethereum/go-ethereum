@@ -647,11 +647,10 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	// Allocate the result buffer once, zero-filled.
 	result := make([]byte, modLen)
 	switch {
-	case mod.BitLen() == 0:
-		// Modulo 0 is undefined, return zero
-		return common.LeftPadBytes([]byte{}, int(modLen)), nil
-	case base.BitLen() == 1: // a bit length of 1 means it's 1 (or -1).
-		//If base == 1, then we can just return base % mod (if mod >= 1, which it is)
+	case mod.BitLen() <= 1:
+		// Leave the result as zero for mod 0 (undefined) and 1.
+	case base.BitLen() == 1:
+		// If base == 1 (and mod > 1), then the result is 1.
 		result[modLen-1] = 1
 	default:
 		base.Exp(base, exp, mod).FillBytes(result)
