@@ -66,7 +66,6 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 	// Iterate in deterministic order so error messages and behavior are stable (e.g. for tests).
 	addrs := slices.SortedFunc(maps.Keys(*diff), common.Address.Cmp)
 
-
 	// Tracks destinations of precompiles that were moved.
 	dirtyAddrs := make(map[common.Address]struct{})
 	for _, addr := range addrs {
