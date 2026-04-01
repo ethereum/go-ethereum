@@ -271,19 +271,23 @@ func TestPrunePauseResume(t *testing.T) {
 
 	tail := firstBlockMax + 1
 
-	// Construct the pruner without starting run(). Calling process()
-	// directly while run() is active would race: both run()'s main select
-	// and prunePrefix's select listen on pauseReq. If run() receives it
-	// (idle ack), process() runs unpaused and can overwrite data with a
-	// stale iterator snapshot.
+	// Construct the pruner without starting run(). We call process()
+	// directly to exercise the mid-iteration pause path deterministically.
 	pruner := &indexPruner{
 		disk:     db,
 		typ:      typeStateHistory,
 		log:      log.New("type", "account"),
 		closed:   make(chan struct{}),
-		pauseReq: make(chan chan struct{}),
+		pauseReq: make(chan chan struct{}, 1), // buffered so we can pre-deposit
 		resumeCh: make(chan struct{}),
 	}
+
+	// Pre-deposit a pause request before process() starts. Because
+	// pauseReq is buffered, this succeeds immediately. When prunePrefix's
+	// select checks the channel on an early iteration, it will find the
+	// pending request and pause — no scheduling race is possible.
+	ack := make(chan struct{})
+	pruner.pauseReq <- ack
 
 	// Run process() in the background.
 	errCh := make(chan error, 1)
@@ -291,12 +295,8 @@ func TestPrunePauseResume(t *testing.T) {
 		errCh <- pruner.process(tail)
 	}()
 
-	// Pause — blocks until the pruner has flushed pending writes and
-	// acknowledged. Because pauseReq is unbuffered, the send in pause()
-	// blocks until prunePrefix's select receives it; the pruner checks
-	// the channel on every iteration, so this always succeeds before
-	// the iterator is exhausted.
-	pruner.pause()
+	// Block until the pruner has flushed pending writes and acknowledged.
+	<-ack
 
 	// While paused, append a new element to the target account's index,
 	// simulating what indexSingle would do during the pause window.
