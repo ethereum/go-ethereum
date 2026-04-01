@@ -764,21 +764,10 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 		log.Error("Database pruned beyond configured history mode", "tail", freezerTail, "target", target, "mode", policy.Mode)
 		return fmt.Errorf("database pruned beyond requested history (tail=%d, target=%d)", freezerTail, target)
 	}
-	// Need to prune (freezerTail < target).
-	switch policy.Mode {
-	case history.KeepPostMerge, history.KeepPostPrague:
-		// Static modes require the user to run 'geth prune-history' offline
-		// rather than blocking startup for hours (tx index pruning is slow).
-		return fmt.Errorf("history not pruned to target block %d (current tail %d), run 'geth prune-history --history.chain=%s' first", target, freezerTail, policy.Mode)
-
-	case history.KeepRecent:
-		// The rolling pruner will gradually catch up in the background.
-		if freezerTail > 0 {
-			bc.updateHistoryPrunePoint(freezerTail)
-		}
-		log.Warn("Chain history is behind pruning target, rolling pruner will catch up", "tail", freezerTail, "target", target)
-	}
-	return nil
+	// Need to prune (freezerTail < target). Large-scale pruning is not
+	// performed at startup to avoid blocking the node for hours (tx index
+	// pruning is particularly slow). Use 'geth prune-history' instead.
+	return fmt.Errorf("history not pruned to target block %d (current tail %d), run 'geth prune-history' first", target, freezerTail)
 }
 
 // SetHead rewinds the local chain to a new head. Depending on whether the node
