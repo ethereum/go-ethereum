@@ -2338,6 +2338,10 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) (map[common.Address][]*t
 					break // execution gas limit is too high
 				}
 			}
+			// Skip transactions without enough cells to recover blobs
+			if tx.custody != nil && tx.custody.OneCount() < kzg4844.DataPerBlob {
+				break // not enough cells to build a full payload, discard rest of txs from the account
+			}
 			// Transaction was accepted according to the filter, append to the pending list
 			lazies = append(lazies, &txpool.LazyTransaction{
 				Pool:      p,
