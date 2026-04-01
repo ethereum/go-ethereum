@@ -201,7 +201,7 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxReads ba
 	// 1. if the block has transactions, receive the execution results from all of them and return an error on resCh if any txs err'd
 	// 2. once all txs are executed, compute the post-tx state transition and produce the ProcessResult sending it on resCh (or an error if the post-tx state didn't match what is reported in the BAL)
 	var results []txExecResult
-	gp := NewGasPool(block.GasLimit())
+	var cumulativeStateGas, cumulativeRegularGas uint64
 	var execErr error
 	var numTxComplete int
 
@@ -217,9 +217,10 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxReads ba
 					// short-circuit if invalid block was detected
 					if res.err != nil {
 						execErr = res.err
-					} else if err := gp.SubGas(res.receipt.CumulativeGasUsed); err != nil {
-						execErr = err
+					} else if bottleneck := max(cumulativeRegularGas+res.txRegular, cumulativeStateGas+res.txState); bottleneck > block.GasLimit() {
+						execErr = fmt.Errorf("block used too much gas in bottleneck dimension: %d. block gas limit is %d", bottleneck, block.GasLimit())
 					} else {
+						cumulativeStateGas += res.txState
 						results = append(results, res)
 						accesses.Merge(res.stateReads)
 					}
