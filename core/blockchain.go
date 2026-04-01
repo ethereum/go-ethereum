@@ -728,10 +728,12 @@ func (bc *BlockChain) loadLastState() error {
 
 // initializeHistoryPruning sets bc.historyPrunePoint based on actual DB state.
 func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
-	freezerTail, _ := bc.db.Tail(rawdb.ChainFreezerBlockDataGroup)
-	policy := bc.cfg.HistoryPolicy
+	var (
+		freezerTail, _ = bc.db.Tail(rawdb.ChainFreezerBlockDataGroup)
+		policy         = bc.cfg.HistoryPolicy
+		target         uint64
+	)
 	// Compute the current prune target from the policy.
-	var target uint64
 	switch policy.Mode {
 	case history.KeepAll:
 		if freezerTail > 0 {
@@ -747,8 +749,9 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 	case history.KeepRecent:
 		head := bc.CurrentBlock()
 		if head == nil || head.Number.Uint64() <= policy.Window {
-			// Chain too short for pruning. Record actual DB state.
 			if freezerTail > 0 {
+				// Chain too short for pruning. Record actual DB state.
+				log.Warn("Chain too short for pruning", "tail", freezerTail, "window", policy.Window)
 				bc.updateHistoryPrunePoint(freezerTail)
 			}
 			return nil
