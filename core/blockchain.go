@@ -718,8 +718,7 @@ func (bc *BlockChain) loadLastState() error {
 	return nil
 }
 
-// initializeHistoryPruning sets bc.historyPrunePoint based on actual DB state,
-// and prunes chain history at startup if needed.
+// initializeHistoryPruning sets bc.historyPrunePoint based on actual DB state.
 func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 	freezerTail, _ := bc.db.Tail()
 	policy := bc.cfg.HistoryPolicy
@@ -727,8 +726,9 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 	var target uint64
 	switch policy.Mode {
 	case history.KeepAll:
-		// No pruning. Record actual DB state if already pruned.
 		if freezerTail > 0 {
+			// Database was pruned externally. Record the actual state.
+			log.Warn("Chain history database is pruned", "tail", freezerTail, "mode", policy.Mode)
 			bc.updateHistoryPrunePoint(freezerTail)
 		}
 		return nil
@@ -761,12 +761,11 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 			bc.updateHistoryPrunePoint(freezerTail)
 			return nil
 		}
-		log.Error("Database pruned beyond configured history mode", "tail", freezerTail, "target", target, "mode", policy.Mode)
 		return fmt.Errorf("database pruned beyond requested history (tail=%d, target=%d)", freezerTail, target)
 	}
 	// Need to prune (freezerTail < target). Large-scale pruning is not
 	// performed at startup to avoid blocking the node for hours (tx index
-	// pruning is particularly slow). Use 'geth prune-history' instead.
+	// pruning is particularly slow).
 	return fmt.Errorf("history not pruned to target block %d (current tail %d), run 'geth prune-history' first", target, freezerTail)
 }
 
