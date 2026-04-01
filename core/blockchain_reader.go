@@ -505,7 +505,7 @@ func (bc *BlockChain) StateIndexProgress() (uint64, uint64, error) {
 	return bc.triedb.IndexProgress()
 }
 
-// HistoryPruningCutoff returns the actual history pruning point based on DB state.
+// HistoryPruningCutoff returns the history pruning point based on DB state.
 // Blocks before this are not available in the database.
 func (bc *BlockChain) HistoryPruningCutoff() (uint64, common.Hash) {
 	pt := bc.historyPrunePoint.Load()
