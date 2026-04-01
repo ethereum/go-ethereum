@@ -156,36 +156,45 @@ func TestPruneChainHistory(t *testing.T) {
 	}
 }
 
-func TestInitHistoryPruningStartupPrune(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping slow test")
-	}
-	db, gspec, blocks := newTestChain(t, 91000)
+func TestInitHistoryPruningStaticModeRequiresPruneHistory(t *testing.T) {
+	db, gspec, blocks := newTestChain(t, 200)
 	defer db.Close()
 
-	// Reopen with a static target at block 500. The chain is long enough
-	// (91000 >= 500 + 90000) so initializeHistoryPruning should prune.
+	// Reopen with a static target at block 50. The database is not yet
+	// pruned to that target, so startup should fail and tell the user to
+	// run 'geth prune-history'.
 	policy := history.HistoryPolicy{
 		Mode: history.KeepPostMerge,
 		Target: &history.PrunePoint{
-			BlockNumber: 500,
-			BlockHash:   blocks[499].Hash(),
+			BlockNumber: 50,
+			BlockHash:   blocks[49].Hash(),
 		},
 	}
+	_, err := reopenChain(db, gspec, policy)
+	if err == nil {
+		t.Fatal("expected error when history not pruned to static target, got nil")
+	}
+
+	// Freezer tail should remain at 0 — no pruning happened.
+	tail, _ := db.Tail(rawdb.ChainFreezerBlockDataGroup)
+	if tail != 0 {
+		t.Errorf("freezer tail: got %d, want 0 (startup should not prune)", tail)
+	}
+}
+
+func TestInitHistoryPruningKeepRecentAllowsStartup(t *testing.T) {
+	db, gspec, _ := newTestChain(t, 200)
+	defer db.Close()
+
+	// Reopen with KeepRecent and a small window. The tail (0) is behind the
+	// target but KeepRecent should still allow startup — the rolling pruner
+	// handles catch-up in the background.
+	policy := history.HistoryPolicy{Mode: history.KeepRecent, Window: 50}
 	chain, err := reopenChain(db, gspec, policy)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	defer chain.Stop()
-
-	tail, _ := db.Tail(rawdb.ChainFreezerBlockDataGroup)
-	if tail != 500 {
-		t.Errorf("freezer tail: got %d, want 500", tail)
-	}
-	cutoff, _ := chain.HistoryPruningCutoff()
-	if cutoff != 500 {
-		t.Errorf("prune cutoff: got %d, want 500", cutoff)
-	}
 }
 
 func TestInitHistoryPruningStaticModeBeyondTarget(t *testing.T) {
