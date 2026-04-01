@@ -182,19 +182,20 @@ func TestInitHistoryPruningStaticModeRequiresPruneHistory(t *testing.T) {
 	}
 }
 
-func TestInitHistoryPruningKeepRecentAllowsStartup(t *testing.T) {
-	db, gspec, _ := newTestChain(t, 200)
+func TestInitHistoryPruningKeepRecentRequiresPruneHistory(t *testing.T) {
+	db, gspec, blocks := newTestChain(t, 200)
 	defer db.Close()
 
-	// Reopen with KeepRecent and a small window. The tail (0) is behind the
-	// target but KeepRecent should still allow startup — the rolling pruner
-	// handles catch-up in the background.
+	// Set the head block so CurrentBlock() returns block 200 on reopen.
+	rawdb.WriteHeadBlockHash(db, blocks[len(blocks)-1].Hash())
+
+	// Reopen with KeepRecent and a small window. The tail (0) is behind
+	// the target (200-50=150), so startup should fail.
 	policy := history.HistoryPolicy{Mode: history.KeepRecent, Window: 50}
-	chain, err := reopenChain(db, gspec, policy)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := reopenChain(db, gspec, policy)
+	if err == nil {
+		t.Fatal("expected error when history not pruned to target, got nil")
 	}
-	defer chain.Stop()
 }
 
 func TestInitHistoryPruningStaticModeBeyondTarget(t *testing.T) {
