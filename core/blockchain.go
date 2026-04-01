@@ -764,22 +764,20 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 		log.Error("Database pruned beyond configured history mode", "tail", freezerTail, "target", target, "mode", policy.Mode)
 		return fmt.Errorf("database pruned beyond requested history (tail=%d, target=%d)", freezerTail, target)
 	}
-	// Need to prune (freezerTail < target). Ensure the target is frozen.
-	if latest < target+params.FullImmutabilityThreshold {
-		return fmt.Errorf("chain not far enough past target block %d, need %d more blocks",
-			target, target+params.FullImmutabilityThreshold-latest)
-	}
-	// For static prune points, verify the canonical hash matches.
-	if policy.Target != nil {
-		hash := bc.GetCanonicalHash(target)
-		if hash != policy.Target.BlockHash {
-			return fmt.Errorf("target block hash mismatch at block %d: got %s, want %s", target, hash.Hex(), policy.Target.BlockHash.Hex())
+	// Need to prune (freezerTail < target).
+	switch policy.Mode {
+	case history.KeepPostMerge, history.KeepPostPrague:
+		// Static modes require the user to run 'geth prune-history' offline
+		// rather than blocking startup for hours (tx index pruning is slow).
+		return fmt.Errorf("history not pruned to target block %d (current tail %d), run 'geth prune-history --history.chain=%s' first", target, freezerTail, policy.Mode)
+
+	case history.KeepRecent:
+		// The rolling pruner will gradually catch up in the background.
+		if freezerTail > 0 {
+			bc.updateHistoryPrunePoint(freezerTail)
 		}
+		log.Warn("Chain history is behind pruning target, rolling pruner will catch up", "tail", freezerTail, "target", target)
 	}
-	if err := bc.pruneChainHistory(target); err != nil {
-		return fmt.Errorf("failed to prune chain history: %w", err)
-	}
-	log.Info("Pruned chain history at startup", "from", freezerTail, "to", target)
 	return nil
 }
 
