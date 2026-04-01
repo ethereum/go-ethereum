@@ -2423,16 +2423,16 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	}
 	options := &core.BlockChainConfig{
 		TrieCleanLimit:          ethconfig.Defaults.TrieCleanCache,
-		NoPrefetch:              ctx.Bool(CacheNoPrefetchFlag.Name),
+		NoPrefetch:              ethconfig.Defaults.NoPrefetch,
 		TrieDirtyLimit:          ethconfig.Defaults.TrieDirtyCache,
 		ArchiveMode:             ctx.String(GCModeFlag.Name) == "archive",
 		TrieTimeLimit:           ethconfig.Defaults.TrieTimeout,
 		SnapshotLimit:           ethconfig.Defaults.SnapshotCache,
-		Preimages:               ctx.Bool(CachePreimagesFlag.Name),
+		Preimages:               ethconfig.Defaults.Preimages,
 		StateScheme:             scheme,
-		StateHistory:            ctx.Uint64(StateHistoryFlag.Name),
-		TrienodeHistory:         ctx.Int64(TrienodeHistoryFlag.Name),
-		NodeFullValueCheckpoint: uint32(ctx.Uint(TrienodeHistoryFullValueCheckpointFlag.Name)),
+		StateHistory:            ethconfig.Defaults.StateHistory,
+		TrienodeHistory:         ethconfig.Defaults.TrienodeHistory,
+		NodeFullValueCheckpoint: ethconfig.Defaults.NodeFullValueCheckpoint,
 
 		// Disable transaction indexing/unindexing.
 		TxLookupLimit: -1,
@@ -2444,12 +2444,30 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		TrieJournalDirectory: stack.ResolvePath("triedb"),
 
 		// Enable state size tracking if enabled
-		StateSizeTracking: ctx.Bool(StateSizeTrackingFlag.Name),
+		StateSizeTracking: ethconfig.Defaults.EnableStateSizeTracking,
 
 		// Configure the slow block statistic logger (disabled by default)
 		SlowBlockThreshold: ethconfig.Defaults.SlowBlockThreshold,
 	}
-	// Only enable slow block logging if the flag was explicitly set
+	// Only override with CLI flags if explicitly set
+	if ctx.IsSet(CacheNoPrefetchFlag.Name) {
+		options.NoPrefetch = ctx.Bool(CacheNoPrefetchFlag.Name)
+	}
+	if ctx.IsSet(CachePreimagesFlag.Name) {
+		options.Preimages = ctx.Bool(CachePreimagesFlag.Name)
+	}
+	if ctx.IsSet(StateHistoryFlag.Name) {
+		options.StateHistory = ctx.Uint64(StateHistoryFlag.Name)
+	}
+	if ctx.IsSet(TrienodeHistoryFlag.Name) {
+		options.TrienodeHistory = ctx.Int64(TrienodeHistoryFlag.Name)
+	}
+	if ctx.IsSet(TrienodeHistoryFullValueCheckpointFlag.Name) {
+		options.NodeFullValueCheckpoint = uint32(ctx.Uint(TrienodeHistoryFullValueCheckpointFlag.Name))
+	}
+	if ctx.IsSet(StateSizeTrackingFlag.Name) {
+		options.StateSizeTracking = ctx.Bool(StateSizeTrackingFlag.Name)
+	}
 	if ctx.IsSet(LogSlowBlockFlag.Name) {
 		options.SlowBlockThreshold = ctx.Duration(LogSlowBlockFlag.Name)
 	}
