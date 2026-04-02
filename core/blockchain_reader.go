@@ -468,7 +468,7 @@ func (bc *BlockChain) TxIndexProgress() (TxIndexProgress, error) {
 }
 
 // StateIndexProgress returns the historical state indexing progress.
-func (bc *BlockChain) StateIndexProgress() (uint64, error) {
+func (bc *BlockChain) StateIndexProgress() (uint64, uint64, error) {
 	return bc.triedb.IndexProgress()
 }
 

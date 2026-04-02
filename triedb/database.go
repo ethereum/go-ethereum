@@ -367,10 +367,10 @@ func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek 
 
 // IndexProgress returns the indexing progress made so far. It provides the
 // number of states that remain unindexed.
-func (db *Database) IndexProgress() (uint64, error) {
+func (db *Database) IndexProgress() (uint64, uint64, error) {
 	pdb, ok := db.backend.(*pathdb.Database)
 	if !ok {
-		return 0, errors.New("not supported")
+		return 0, 0, errors.New("not supported")
 	}
 	return pdb.IndexProgress()
 }
