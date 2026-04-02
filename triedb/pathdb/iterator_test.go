@@ -369,7 +369,7 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 		if i%8 == 0 {
 			e[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 4, i)
 		}
-		if i > 50 || i < 85 {
+		if i > 50 && i < 85 {
 			f[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 5, i)
 		}
 		if i%64 == 0 {
