@@ -102,7 +102,7 @@ func (s *BALStateTransition) Error() error {
 }
 
 func (s *BALStateTransition) setError(err error) {
-	if s.err != nil {
+	if s.err == nil {
 		s.err = err
 	}
 }
