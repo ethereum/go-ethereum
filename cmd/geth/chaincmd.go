@@ -211,6 +211,7 @@ This command dumps out the state for a given block (or latest, if none provided)
 		ArgsUsage: "",
 		Flags: slices.Concat(utils.DatabaseFlags, []cli.Flag{
 			utils.ChainHistoryFlag,
+			utils.HistoryBlocksFlag,
 		}),
 		Description: `
 The prune-history command removes historical block bodies and receipts from the
@@ -219,7 +220,8 @@ helps reduce storage requirements for nodes that don't need full historical data
 
 The --history.chain flag is required to specify the pruning target:
   - postmerge:  Prune up to the merge block. The node will keep the merge block and everything thereafter.
-  - postprague: Prune up to the Prague (Pectra) upgrade block. The node will keep the prague block and everything thereafter.`,
+  - postprague: Prune up to the Prague (Pectra) upgrade block. The node will keep the prague block and everything thereafter.
+  - recent:     Prune to keep only the last N blocks (set N with --history.blocks).`,
 	}
 
 	downloadEraCommand = &cli.Command{
@@ -723,9 +725,6 @@ func pruneHistory(ctx *cli.Context) error {
 	if mode == history.KeepAll {
 		return errors.New("--history.chain=all is not valid for pruning. To restore history, use 'geth import-history'")
 	}
-	if mode == history.KeepRecent {
-		return errors.New("--history.chain=recent is not valid for prune-history. Use it as a runtime flag with geth instead")
-	}
 
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -735,51 +734,60 @@ func pruneHistory(ctx *cli.Context) error {
 	defer chaindb.Close()
 	defer chain.Stop()
 
-	// Determine the prune point based on the history mode.
-	genesisHash := chain.Genesis().Hash()
-	policy, err := history.NewPolicy(mode, genesisHash, 0)
-	if err != nil {
-		return err
-	}
-	if policy.Target == nil {
-		return fmt.Errorf("prune point for %q not found for this network", mode.String())
-	}
-	var (
-		targetBlock     = policy.Target.BlockNumber
-		targetBlockHash = policy.Target.BlockHash
-	)
-
-	// Check the current freezer tail to see if pruning is needed/possible.
-	freezerTail, _ := chaindb.Tail(rawdb.ChainFreezerBlockDataGroup)
-	if freezerTail > 0 {
-		if freezerTail == targetBlock {
-			log.Info("Database already pruned to target block", "tail", freezerTail)
-			return nil
-		}
-		if freezerTail > targetBlock {
-			// Database is pruned beyond the target - can't unprune.
-			return fmt.Errorf("database is already pruned to block %d, which is beyond target %d. Cannot unprune. To restore history, use 'geth import-history'", freezerTail, targetBlock)
-		}
-		// freezerTail < targetBlock: we can prune further, continue below.
-	}
-
-	// Check we're far enough past the target to ensure all data is in freezer.
+	// Determine the prune target based on the history mode.
 	currentHeader := chain.CurrentHeader()
 	if currentHeader == nil {
 		return errors.New("current header not found")
 	}
+	var targetBlock uint64
+	switch mode {
+	case history.KeepPostMerge, history.KeepPostPrague:
+		genesisHash := chain.Genesis().Hash()
+		policy, err := history.NewPolicy(mode, genesisHash, 0)
+		if err != nil {
+			return err
+		}
+		if policy.Target == nil {
+			return fmt.Errorf("prune point for %q not found for this network", mode.String())
+		}
+		targetBlock = policy.Target.BlockNumber
+
+		// Double-check the target block in db has the expected hash.
+		hash := rawdb.ReadCanonicalHash(chaindb, targetBlock)
+		if hash != policy.Target.BlockHash {
+			return fmt.Errorf("target block hash mismatch at block %d: got %s, want %s", targetBlock, hash.Hex(), policy.Target.BlockHash.Hex())
+		}
+
+	case history.KeepRecent:
+		window := utils.HistoryBlocksFlag.Value
+		if ctx.IsSet(utils.HistoryBlocksFlag.Name) {
+			window = ctx.Uint64(utils.HistoryBlocksFlag.Name)
+		}
+		if window < params.FullImmutabilityThreshold+10000 {
+			return fmt.Errorf("--%s: value %d is too small, minimum is %d", utils.HistoryBlocksFlag.Name, window, params.FullImmutabilityThreshold+10000)
+		}
+		head := currentHeader.Number.Uint64()
+		if head <= window {
+			log.Info("Chain too short for pruning", "head", head, "window", window)
+			return nil
+		}
+		targetBlock = head - window
+	}
+
+	// Check the current freezer tail to see if pruning is needed/possible.
+	freezerTail, _ := chaindb.Tail(rawdb.ChainFreezerBlockDataGroup)
+	if freezerTail >= targetBlock {
+		log.Info("Database already pruned to or beyond target", "tail", freezerTail, "target", targetBlock)
+		return nil
+	}
+
+	// Check we're far enough past the target to ensure all data is in freezer.
 	if currentHeader.Number.Uint64() < targetBlock+params.FullImmutabilityThreshold {
 		return fmt.Errorf("chain not far enough past target block %d, need %d more blocks",
 			targetBlock, targetBlock+params.FullImmutabilityThreshold-currentHeader.Number.Uint64())
 	}
 
-	// Double-check the target block in db has the expected hash.
-	hash := rawdb.ReadCanonicalHash(chaindb, targetBlock)
-	if hash != targetBlockHash {
-		return fmt.Errorf("target block hash mismatch: got %s, want %s", hash.Hex(), targetBlockHash.Hex())
-	}
-
-	log.Info("Starting history pruning", "head", currentHeader.Number, "target", targetBlock, "targetHash", targetBlockHash.Hex())
+	log.Info("Starting history pruning", "head", currentHeader.Number, "target", targetBlock)
 	start := time.Now()
 	rawdb.PruneTransactionIndex(chaindb, targetBlock)
 	if _, err := chaindb.TruncateTail(rawdb.ChainFreezerBlockDataGroup, targetBlock); err != nil {
