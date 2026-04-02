@@ -2415,7 +2415,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		TrieCleanLimit:          ethconfig.Defaults.TrieCleanCache,
 		NoPrefetch:              ctx.Bool(CacheNoPrefetchFlag.Name),
 		TrieDirtyLimit:          ethconfig.Defaults.TrieDirtyCache,
-		ArchiveMode:             ctx.String(GCModeFlag.Name) == "archive",
 		TrieTimeLimit:           ethconfig.Defaults.TrieTimeout,
 		SnapshotLimit:           ethconfig.Defaults.SnapshotCache,
 		Preimages:               ctx.Bool(CachePreimagesFlag.Name),
@@ -2438,6 +2437,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 
 		// Configure the slow block statistic logger (disabled by default)
 		SlowBlockThreshold: ethconfig.Defaults.SlowBlockThreshold,
+	}
+	if ctx.IsSet(GCModeFlag.Name) {
+		options.ArchiveMode = ctx.String(GCModeFlag.Name) == "archive"
 	}
 	// Only enable slow block logging if the flag was explicitly set
 	if ctx.IsSet(LogSlowBlockFlag.Name) {
