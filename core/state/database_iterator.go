@@ -30,8 +30,9 @@ import (
 // Iterator is an iterator to step over all the accounts or the specific
 // storage in the specific state.
 type Iterator interface {
-	// Next steps the iterator forward one element, returning false if exhausted,
-	// or an error if iteration failed for some reason.
+	// Next steps the iterator forward one element. It returns false if the iterator
+	// is exhausted or if an error occurs. Any error encountered is retained and
+	// can be retrieved via Error().
 	Next() bool
 
 	// Error returns any failure that occurred during iteration, which might have
@@ -117,8 +118,9 @@ func newFlatAccountIterator(it snapshot.AccountIterator, preimage PreimageReader
 	return &flatAccountIterator{it: it, preimage: preimage}
 }
 
-// Next steps the iterator forward one element, returning false if exhausted,
-// or an error if iteration failed for some reason.
+// Next steps the iterator forward one element. It returns false if the iterator
+// is exhausted or if an error occurs. Any error encountered is retained and
+// can be retrieved via Error().
 func (ai *flatAccountIterator) Next() bool {
 	if ai.err != nil {
 		return false
@@ -184,8 +186,9 @@ func newFlatStorageIterator(it snapshot.StorageIterator, preimage PreimageReader
 	return &flatStorageIterator{it: it, preimage: preimage}
 }
 
-// Next steps the iterator forward one element, returning false if exhausted,
-// or an error if iteration failed for some reason.
+// Next steps the iterator forward one element. It returns false if the iterator
+// is exhausted or if an error occurs. Any error encountered is retained and
+// can be retrieved via Error().
 func (si *flatStorageIterator) Next() bool {
 	return si.it.Next()
 }
@@ -247,8 +250,9 @@ func newMerkleTrieIterator(tr Trie, start common.Hash, account bool) (*merkleIte
 	}, nil
 }
 
-// Next steps the iterator forward one element, returning false if exhausted,
-// or an error if iteration failed for some reason.
+// Next steps the iterator forward one element. It returns false if the iterator
+// is exhausted or if an error occurs. Any error encountered is retained and
+// can be retrieved via Error().
 func (ti *merkleIterator) Next() bool {
 	return ti.it.Next()
 }
@@ -383,7 +387,7 @@ func (si *stateIteratee) NewStorageIterator(addressHash common.Hash, start commo
 		return newFlatStorageIterator(it, si.triedb), nil
 	}
 	if !si.merkle {
-		return nil, fmt.Errorf("state %x is not available for account traversal", si.root)
+		return nil, fmt.Errorf("state %x is not available for storage traversal", si.root)
 	}
 	// The snapshot is not usable so far, construct the storage iterator from
 	// the trie as the fallback. It's not as efficient as the flat state iterator.
