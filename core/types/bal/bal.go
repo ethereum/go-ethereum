@@ -104,6 +104,7 @@ func (s StateMutations) Merge(next StateMutations) {
 					}
 				}
 			}
+			s[account] = mut
 		} else {
 			s[account] = *diff.Copy()
 		}
