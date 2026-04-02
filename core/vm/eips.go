@@ -349,19 +349,19 @@ func enable8024(jt *JumpTable) {
 	jt[DUPN] = &operation{
 		execute:     opDupN,
 		constantGas: GasFastestStep,
-		minStack:    minStack(1, 0),
+		minStack:    minStack(17, 0),
 		maxStack:    maxStack(0, 1),
 	}
 	jt[SWAPN] = &operation{
 		execute:     opSwapN,
 		constantGas: GasFastestStep,
-		minStack:    minStack(2, 0),
+		minStack:    minStack(18, 0),
 		maxStack:    maxStack(0, 0),
 	}
 	jt[EXCHANGE] = &operation{
 		execute:     opExchange,
 		constantGas: GasFastestStep,
-		minStack:    minStack(2, 0),
+		minStack:    minStack(3, 0),
 		maxStack:    maxStack(0, 0),
 	}
 }
