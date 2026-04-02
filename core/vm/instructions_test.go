@@ -1014,11 +1014,12 @@ func TestEIP8024_Execution(t *testing.T) {
 	evm := NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
 
 	tests := []struct {
-		name       string
-		codeHex    string
-		wantErr    error
-		wantOpcode OpCode
-		wantVals   []uint64
+		name        string
+		codeHex     string
+		wantErr     error
+		wantOpcode  OpCode
+		wantOperand *byte
+		wantVals    []uint64
 	}{
 		{
 			name:    "DUPN",
@@ -1063,10 +1064,18 @@ func TestEIP8024_Execution(t *testing.T) {
 			},
 		},
 		{
-			name:       "INVALID_SWAPN_LOW",
-			codeHex:    "e75b",
-			wantErr:    &ErrInvalidOpCode{},
-			wantOpcode: SWAPN,
+			name:        "INVALID_DUPN_LOW",
+			codeHex:     "e65b",
+			wantErr:     &ErrInvalidOpCode{},
+			wantOpcode:  DUPN,
+			wantOperand: ptrToByte(0x5b),
+		},
+		{
+			name:        "INVALID_SWAPN_LOW",
+			codeHex:     "e75b",
+			wantErr:     &ErrInvalidOpCode{},
+			wantOpcode:  SWAPN,
+			wantOperand: ptrToByte(0x5b),
 		},
 		{
 			name:    "JUMP_OVER_INVALID_DUPN",
@@ -1079,10 +1088,11 @@ func TestEIP8024_Execution(t *testing.T) {
 			wantVals: []uint64{1, 0, 0},
 		},
 		{
-			name:       "INVALID_EXCHANGE",
-			codeHex:    "e852",
-			wantErr:    &ErrInvalidOpCode{},
-			wantOpcode: EXCHANGE,
+			name:        "INVALID_EXCHANGE",
+			codeHex:     "e852",
+			wantErr:     &ErrInvalidOpCode{},
+			wantOpcode:  EXCHANGE,
+			wantOperand: ptrToByte(0x52),
 		},
 		{
 			name:       "UNDERFLOW_DUPN",
@@ -1150,9 +1160,20 @@ func TestEIP8024_Execution(t *testing.T) {
 				// Fail if we don't get the error we expect.
 				switch tc.wantErr.(type) {
 				case *ErrInvalidOpCode:
-					var want *ErrInvalidOpCode
-					if !errors.As(err, &want) {
+					var got *ErrInvalidOpCode
+					if !errors.As(err, &got) {
 						t.Fatalf("expected ErrInvalidOpCode, got %v", err)
+					}
+					if got.opcode != tc.wantOpcode {
+						t.Fatalf("ErrInvalidOpCode.opcode=%s; want %s", got.opcode, tc.wantOpcode)
+					}
+					if tc.wantOperand != nil {
+						if got.operand == nil {
+							t.Fatalf("ErrInvalidOpCode.operand=nil; want 0x%02x", *tc.wantOperand)
+						}
+						if *got.operand != *tc.wantOperand {
+							t.Fatalf("ErrInvalidOpCode.operand=0x%02x; want 0x%02x", *got.operand, *tc.wantOperand)
+						}
 					}
 				case *ErrStackUnderflow:
 					var want *ErrStackUnderflow
@@ -1182,4 +1203,9 @@ func TestEIP8024_Execution(t *testing.T) {
 			}
 		})
 	}
+}
+
+func ptrToByte(v byte) *byte {
+	b := v
+	return &b
 }

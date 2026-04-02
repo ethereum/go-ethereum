@@ -996,7 +996,8 @@ func opDupN(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 	// This range is excluded to preserve compatibility with existing opcodes.
 	if x > 90 && x < 128 {
-		return nil, &ErrInvalidOpCode{opcode: OpCode(x)}
+		operand := x
+		return nil, &ErrInvalidOpCode{opcode: DUPN, operand: &operand}
 	}
 	n := decodeSingle(x)
 
@@ -1023,7 +1024,8 @@ func opSwapN(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 	// This range is excluded to preserve compatibility with existing opcodes.
 	if x > 90 && x < 128 {
-		return nil, &ErrInvalidOpCode{opcode: OpCode(x)}
+		operand := x
+		return nil, &ErrInvalidOpCode{opcode: SWAPN, operand: &operand}
 	}
 	n := decodeSingle(x)
 
@@ -1053,7 +1055,8 @@ func opExchange(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// This range is excluded both to preserve compatibility with existing opcodes
 	// and to keep decode_pair’s 16-aligned arithmetic mapping valid (0–81, 128–255).
 	if x > 81 && x < 128 {
-		return nil, &ErrInvalidOpCode{opcode: OpCode(x)}
+		operand := x
+		return nil, &ErrInvalidOpCode{opcode: EXCHANGE, operand: &operand}
 	}
 	n, m := decodePair(x)
 	need := max(n, m) + 1
