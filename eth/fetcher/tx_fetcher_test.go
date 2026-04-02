@@ -93,7 +93,7 @@ func newTestTxFetcher() *TxFetcher {
 	return NewTxFetcher(
 		nil,
 		func(common.Hash, byte) error { return nil },
-		func(txs []*types.Transaction) []error {
+		func(_ string, txs []*types.Transaction) []error {
 			return make([]error, len(txs))
 		},
 		func(string, []common.Hash) error { return nil },
@@ -1172,7 +1172,7 @@ func TestTransactionFetcherUnderpricedDedup(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			f := newTestTxFetcher()
-			f.addTxs = func(txs []*types.Transaction) []error {
+			f.addTxs = func(_ string, txs []*types.Transaction) []error {
 				errs := make([]error, len(txs))
 				for i := 0; i < len(errs); i++ {
 					if i%3 == 0 {
@@ -1270,7 +1270,7 @@ func TestTransactionFetcherUnderpricedDoSProtection(t *testing.T) {
 	testTransactionFetcher(t, txFetcherTest{
 		init: func() *TxFetcher {
 			f := newTestTxFetcher()
-			f.addTxs = func(txs []*types.Transaction) []error {
+			f.addTxs = func(_ string, txs []*types.Transaction) []error {
 				errs := make([]error, len(txs))
 				for i := 0; i < len(errs); i++ {
 					errs[i] = txpool.ErrUnderpriced
@@ -1787,7 +1787,7 @@ func TestTransactionProtocolViolation(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			f := newTestTxFetcher()
-			f.addTxs = func(txs []*types.Transaction) []error {
+			f.addTxs = func(_ string, txs []*types.Transaction) []error {
 				var errs []error
 				for range txs {
 					errs = append(errs, txpool.ErrKZGVerificationError)
@@ -2194,7 +2194,7 @@ func TestTransactionForgotten(t *testing.T) {
 	fetcher := NewTxFetcherForTests(
 		nil,
 		func(common.Hash, byte) error { return nil },
-		func(txs []*types.Transaction) []error {
+		func(_ string, txs []*types.Transaction) []error {
 			errs := make([]error, len(txs))
 			for i := 0; i < len(errs); i++ {
 				errs[i] = txpool.ErrUnderpriced

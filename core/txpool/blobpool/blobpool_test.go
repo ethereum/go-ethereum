@@ -2122,7 +2122,7 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 		}
 		statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		pooledTx, _ := newPooledBlobTx(tx)
-		pool.add(pooledTx)
+		pool.AddPooledTx(pooledTx)
 	}
 	statedb.Commit(0, true, false)
 	defer pool.Close()

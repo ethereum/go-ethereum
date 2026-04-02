@@ -80,7 +80,7 @@ func fuzz(input []byte) int {
 	f := fetcher.NewTxFetcherForTests(
 		nil,
 		func(common.Hash, byte) error { return nil },
-		func(txs []*types.Transaction) []error {
+		func(_ string, txs []*types.Transaction) []error {
 			return make([]error, len(txs))
 		},
 		func(string, []common.Hash) error { return nil },

@@ -17,7 +17,6 @@
 package fetcher
 
 import (
-	"fmt"
 	"slices"
 	"testing"
 
@@ -149,8 +148,8 @@ func TestBlobFetcherFullFetch(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
-					return make([]error, len(txs))
+				func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error {
+					return nil
 				},
 				func(string, []common.Hash, *types.CustodyBitmap) error { return nil },
 				func(string) {},
@@ -238,8 +237,8 @@ func TestBlobFetcherPartialFetch(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
-					return make([]error, len(txs))
+				func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error {
+					return nil
 				},
 				func(string, []common.Hash, *types.CustodyBitmap) error { return nil },
 				func(string) {},
@@ -331,8 +330,8 @@ func TestBlobFetcherFullDelivery(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
-					return make([]error, len(txs))
+				func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error {
+					return nil
 				},
 				func(string, []common.Hash, *types.CustodyBitmap) error { return nil },
 				func(string) {},
@@ -377,8 +376,8 @@ func TestBlobFetcherPartialDelivery(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
-					return make([]error, len(txs))
+				func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error {
+					return nil
 				},
 				func(string, []common.Hash, *types.CustodyBitmap) error { return nil },
 				func(string) {},
@@ -511,8 +510,8 @@ func TestBlobFetcherAvailabilityTimeout(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
-					return make([]error, len(txs))
+				func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error {
+					return nil
 				},
 				func(string, []common.Hash, *types.CustodyBitmap) error { return nil },
 				func(string) {},
@@ -551,8 +550,8 @@ func TestBlobFetcherPeerDrop(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
-					return make([]error, len(txs))
+				func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error {
+					return nil
 				},
 				func(string, []common.Hash, *types.CustodyBitmap) error { return nil },
 				func(string) {},
@@ -626,8 +625,8 @@ func TestBlobFetcherFetchTimeout(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []common.Hash, _ [][]kzg4844.Cell, _ *types.CustodyBitmap) []error {
-					return make([]error, len(txs))
+				func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error {
+					return nil
 				},
 				func(string, []common.Hash, *types.CustodyBitmap) error { return nil },
 				func(string) {},
@@ -1012,40 +1011,21 @@ func TestMultiBlobDeliveryVerification(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []common.Hash, cells [][]kzg4844.Cell, cst *types.CustodyBitmap) []error {
-					// Verify delivered cells pass KZG cell proof verification
-					// Debug: compare with expected cells
-					expectedCells := selectMultiBlobCells(sidecar, custody)
-					for ci, c := range cells {
-						if len(c) != len(expectedCells) {
-							verifyErr = fmt.Errorf("cell count mismatch: have %d, want %d", len(c), len(expectedCells))
-							return make([]error, len(txs))
-						}
-						for j := range c {
-							if c[j] != expectedCells[j] {
-								verifyErr = fmt.Errorf("tx %d cell %d mismatch (custody=%v)", ci, j, cst.Indices())
-								return make([]error, len(txs))
-							}
-						}
-					}
-					for _, c := range cells {
-						cs := &types.BlobTxCellSidecar{
-							Version:     sidecar.Version,
-							Cells:       c,
-							Commitments: sidecar.Commitments,
-							Proofs:      sidecar.Proofs,
-							Custody:     *cst,
-						}
-						indices := cs.Custody.Indices()
+				func(hash common.Hash, deliveries map[string]*PeerCellDelivery, cst *types.CustodyBitmap) error {
+					// Verify each peer's delivered cells pass KZG cell proof verification
+					for _, d := range deliveries {
 						var cellProofs []kzg4844.Proof
-						for blobIdx := range len(cs.Commitments) {
-							for _, proofIdx := range indices {
-								cellProofs = append(cellProofs, cs.Proofs[blobIdx*kzg4844.CellProofsPerBlob+int(proofIdx)])
+						for blobIdx := 0; blobIdx < len(sidecar.Commitments); blobIdx++ {
+							for _, idx := range d.Indices {
+								cellProofs = append(cellProofs, sidecar.Proofs[blobIdx*kzg4844.CellProofsPerBlob+int(idx)])
 							}
 						}
-						verifyErr = kzg4844.VerifyCells(cs.Cells, cs.Commitments, cellProofs, indices)
+						verifyErr = kzg4844.VerifyCells(d.Cells, sidecar.Commitments, cellProofs, d.Indices)
+						if verifyErr != nil {
+							return verifyErr
+						}
 					}
-					return make([]error, len(txs))
+					return nil
 				},
 				func(string, []common.Hash, *types.CustodyBitmap) error { return nil },
 				func(string) {},

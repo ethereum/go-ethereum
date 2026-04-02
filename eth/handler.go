@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -104,8 +105,8 @@ type blobPool interface {
 	Has(hash common.Hash) bool
 	GetCells(hash common.Hash, mask types.CustodyBitmap) ([]kzg4844.Cell, error)
 	HasPayload(hash common.Hash) bool
-	AddPayload([]common.Hash, [][]kzg4844.Cell, *types.CustodyBitmap) []error
 	GetCustody(hash common.Hash) *types.CustodyBitmap
+	AddPooledTx(pooledTx *blobpool.PooledBlobTx) error
 }
 
 // handlerConfig is the collection of initialization parameters to create a full
@@ -138,6 +139,7 @@ type handler struct {
 	downloader     *downloader.Downloader
 	txFetcher      *fetcher.TxFetcher
 	blobFetcher    *fetcher.BlobFetcher
+	blobBuffer     *blobpool.BlobBuffer
 	peers          *peerSet
 	txBroadcastKey [16]byte
 
@@ -192,11 +194,34 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return p.RequestTxs(hashes)
 	}
-	addTxs := func(txs []*types.Transaction) []error {
-		return h.txpool.Add(txs, false)
+	// Construct the blob buffer for assembling blob txs from separate tx and cell deliveries
+	h.blobBuffer = blobpool.NewBlobBuffer(h.blobpool.AddPooledTx, h.removePeer)
+
+	addTxs := func(peer string, txs []*types.Transaction) []error {
+		errs := make([]error, len(txs))
+		p := h.peers.peer(peer)
+		isETH71 := p != nil && p.Version() >= eth.ETH71
+
+		var poolTxs []*types.Transaction
+		var index []int
+		for i, tx := range txs {
+			if isETH71 && tx.Type() == types.BlobTxType {
+				errs[i] = h.blobBuffer.AddTx(tx, peer)
+			} else {
+				poolTxs = append(poolTxs, tx)
+				index = append(index, i)
+			}
+		}
+		if len(poolTxs) > 0 {
+			poolErrs := h.txpool.Add(poolTxs, false)
+			for j, idx := range index {
+				errs[idx] = poolErrs[j]
+			}
+		}
+		return errs
 	}
 	validateMeta := func(tx common.Hash, kind byte) error {
-		if h.txpool.Has(tx) {
+		if h.txpool.Has(tx) || h.blobBuffer.HasTx(tx) {
 			return txpool.ErrAlreadyKnown
 		}
 		if !h.txpool.FilterType(kind) {
@@ -214,7 +239,17 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return p.RequestPayload(hashes, cells)
 	}
-	h.blobFetcher = fetcher.NewBlobFetcher(h.blobpool.HasPayload, h.blobpool.AddPayload, fetchPayloads, h.removePeer, &config.Custody, nil)
+	hasPayload := func(hash common.Hash) bool {
+		return h.blobpool.HasPayload(hash) || h.blobBuffer.HasCells(hash)
+	}
+	addCells := func(hash common.Hash, deliveries map[string]*fetcher.PeerCellDelivery, custody *types.CustodyBitmap) error {
+		converted := make(map[string]*blobpool.PeerDelivery, len(deliveries))
+		for peer, d := range deliveries {
+			converted[peer] = &blobpool.PeerDelivery{Cells: d.Cells, Indices: d.Indices}
+		}
+		return h.blobBuffer.AddCells(hash, converted, custody)
+	}
+	h.blobFetcher = fetcher.NewBlobFetcher(hasPayload, addCells, fetchPayloads, h.removePeer, &config.Custody, nil)
 	return h, nil
 }
 

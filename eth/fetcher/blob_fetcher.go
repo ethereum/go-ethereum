@@ -76,11 +76,17 @@ type cellWithSeq struct {
 	cells *types.CustodyBitmap
 }
 
+// PeerCellDelivery holds cells delivered by a single peer.
+type PeerCellDelivery struct {
+	Cells   []kzg4844.Cell // blob-major order as received
+	Indices []uint64       // custody indices provided by this peer
+}
+
 type fetchStatus struct {
-	fetching  *types.CustodyBitmap // To avoid fetching cells which had already been fetched / currently being fetched
-	fetched   []uint64             // Custody indices that have been fetched (per-blob, same for all blobs)
-	blobCells [][]kzg4844.Cell     // Per-blob cell accumulator, indexed by blob
-	blobCount int                  // Number of blobs in this tx (set on first delivery)
+	fetching   *types.CustodyBitmap         // To avoid fetching cells which had already been fetched / currently being fetched
+	fetched    []uint64                     // Custody indices that have been fetched (per-blob, same for all blobs)
+	deliveries map[string]*PeerCellDelivery // Per-peer cell deliveries
+	blobCount  int                          // Number of blobs in this tx (set on first delivery)
 }
 
 // BlobFetcher is responsible for managing type 3 transactions based on peer announcements.
@@ -124,7 +130,7 @@ type BlobFetcher struct {
 
 	// Callbacks
 	hasPayload    func(common.Hash) bool
-	addPayload    func([]common.Hash, [][]kzg4844.Cell, *types.CustodyBitmap) []error //todo: peer disconnection is strange here
+	addCells      func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error
 	fetchPayloads func(string, []common.Hash, *types.CustodyBitmap) error
 	dropPeer      func(string)
 
@@ -136,7 +142,7 @@ type BlobFetcher struct {
 
 func NewBlobFetcher(
 	hasPayload func(common.Hash) bool,
-	addPayload func([]common.Hash, [][]kzg4844.Cell, *types.CustodyBitmap) []error,
+	addCells func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error,
 	fetchPayloads func(string, []common.Hash, *types.CustodyBitmap) error, dropPeer func(string),
 	custody *types.CustodyBitmap, rand random) *BlobFetcher {
 	return &BlobFetcher{
@@ -154,7 +160,7 @@ func NewBlobFetcher(
 		requests:      make(map[string][]*cellRequest),
 		alternates:    make(map[common.Hash]map[string]*types.CustodyBitmap),
 		hasPayload:    hasPayload,
-		addPayload:    addPayload,
+		addCells:      addCells,
 		fetchPayloads: fetchPayloads,
 		dropPeer:      dropPeer,
 		custody:       custody,
@@ -470,21 +476,18 @@ func (f *BlobFetcher) loop() {
 					// Unexpected hash, ignore
 					continue
 				}
-				// delivery.cells[i] contains cells for all blobs
-				// in blob-major order: [blob0_cell0, ..., blob0_cellN, blob1_cell0, ...].
 				indices := delivery.cellBitmap.Indices()
 				cellsPerBlob := len(indices)
 				if cellsPerBlob > 0 {
 					status := f.fetches[hash]
 					blobCount := len(delivery.cells[i]) / cellsPerBlob
-					// Initialize per-blob accumulators on first delivery
 					if status.blobCount == 0 {
 						status.blobCount = blobCount
-						status.blobCells = make([][]kzg4844.Cell, blobCount)
+						status.deliveries = make(map[string]*PeerCellDelivery)
 					}
-					for b := 0; b < blobCount; b++ {
-						offset := b * cellsPerBlob
-						status.blobCells[b] = append(status.blobCells[b], delivery.cells[i][offset:offset+cellsPerBlob]...)
+					status.deliveries[delivery.origin] = &PeerCellDelivery{
+						Cells:   delivery.cells[i],
+						Indices: indices,
 					}
 					status.fetched = append(status.fetched, indices...)
 				}
@@ -515,28 +518,10 @@ func (f *BlobFetcher) loop() {
 
 				if completed {
 					blobFetcherFetchTime.Update(int64(time.Duration(f.clock.Now() - request.time)))
-					fetchStatus := f.fetches[hash]
+					status := f.fetches[hash]
+					collectedCustody := types.NewCustodyBitmap(status.fetched)
+					f.addCells(hash, status.deliveries, &collectedCustody)
 
-					// Sort each blob's cells by ascending custody index.
-					// RecoverBlobs expects cells[k] to correspond to custodyIndices[k],
-					// and custodyIndices come from CustodyBitmap.Indices() which is always sorted.
-					perm := make([]int, len(fetchStatus.fetched))
-					for i := range perm {
-						perm[i] = i
-					}
-					slices.SortFunc(perm, func(a, b int) int {
-						return int(fetchStatus.fetched[a]) - int(fetchStatus.fetched[b])
-					})
-					var assembled []kzg4844.Cell
-					for _, blobCells := range fetchStatus.blobCells {
-						for _, p := range perm {
-							assembled = append(assembled, blobCells[p])
-						}
-					}
-					collectedCustody := types.NewCustodyBitmap(fetchStatus.fetched)
-					f.addPayload([]common.Hash{hash}, [][]kzg4844.Cell{assembled}, &collectedCustody)
-
-					// remove announces from other peers
 					for peer, txset := range f.announces {
 						delete(txset, hash)
 						if len(txset) == 0 {

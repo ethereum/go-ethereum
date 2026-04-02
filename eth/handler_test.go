@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -222,13 +223,12 @@ func (p *testTxPool) AddCells(hash common.Hash, cells []kzg4844.Cell, mask types
 	p.custody[hash] = mask
 }
 
-func (p *testTxPool) AddPayload(txs []common.Hash, cells [][]kzg4844.Cell, custody *types.CustodyBitmap) []error {
+func (p *testTxPool) AddPooledTx(pooledTx *blobpool.PooledBlobTx) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-
-	for i, tx := range txs {
-		p.cellPool[tx] = cells[i]
-	}
+	hash := pooledTx.Transaction.Hash()
+	p.cellPool[hash] = pooledTx.Sidecar.Cells
+	p.txPool[hash] = pooledTx.Transaction
 	return nil
 }
 

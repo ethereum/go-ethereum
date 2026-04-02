@@ -180,10 +180,10 @@ type TxFetcher struct {
 	alternates map[common.Hash]map[string]struct{} // In-flight transaction alternate origins if retrieval fails
 
 	// Callbacks
-	validateMeta func(common.Hash, byte) error      // Validate a tx metadata based on the local txpool
-	addTxs       func([]*types.Transaction) []error // Insert a batch of transactions into local txpool
-	fetchTxs     func(string, []common.Hash) error  // Retrieves a set of txs from a remote peer
-	dropPeer     func(string)                       // Drops a peer in case of announcement violation
+	validateMeta func(common.Hash, byte) error              // Validate a tx metadata based on the local txpool
+	addTxs       func(string, []*types.Transaction) []error // Insert a batch of transactions into local txpool
+	fetchTxs     func(string, []common.Hash) error          // Retrieves a set of txs from a remote peer
+	dropPeer     func(string)                               // Drops a peer in case of announcement violation
 
 	step     chan struct{}    // Notification channel when the fetcher loop iterates
 	clock    mclock.Clock     // Monotonic clock or simulated clock for tests
@@ -194,7 +194,7 @@ type TxFetcher struct {
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
 // based on hash announcements.
 // Chain can be nil to disable on-chain checks.
-func NewTxFetcher(chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string)) *TxFetcher {
+func NewTxFetcher(chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func(string, []*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string)) *TxFetcher {
 	return NewTxFetcherForTests(chain, validateMeta, addTxs, fetchTxs, dropPeer, mclock.System{}, time.Now, nil)
 }
 
@@ -202,7 +202,7 @@ func NewTxFetcher(chain *core.BlockChain, validateMeta func(common.Hash, byte) e
 // a simulated version and the internal randomness with a deterministic one.
 // Chain can be nil to disable on-chain checks.
 func NewTxFetcherForTests(
-	chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string),
+	chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func(string, []*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string),
 	clock mclock.Clock, realTime func() time.Time, rand *mrand.Rand) *TxFetcher {
 	return &TxFetcher{
 		notify:         make(chan *txAnnounce),
@@ -352,7 +352,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		)
 		batch := txs[i:end]
 
-		for j, err := range f.addTxs(batch) {
+		for j, err := range f.addTxs(peer, batch) {
 			// Track the transaction hash if the price is too low for us.
 			// Avoid re-request this transaction when we receive another
 			// announcement.
