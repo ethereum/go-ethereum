@@ -169,10 +169,11 @@ func (s *BALStateTransition) commitAccount(addr common.Address) (*accountUpdate,
 	)
 	op := &accountUpdate{
 		address: addr,
-		data:    types.SlimAccountRLP(*s.postStates[addr]), // TODO: cache the updated state acocunt somewhere
+		data:    types.SlimAccountRLP(*s.postStates[addr]), // TODO: cache the updated state account somewhere
 	}
-	if prestate, exist := s.prestates.Load(addr); exist {
-		prestate := prestate.(*types.StateAccount)
+	var prestate *types.StateAccount
+	if ps, exist := s.prestates.Load(addr); exist {
+		prestate = ps.(*types.StateAccount)
 		op.origin = types.SlimAccountRLP(*prestate)
 	}
 
@@ -181,10 +182,10 @@ func (s *BALStateTransition) commitAccount(addr common.Address) (*accountUpdate,
 			hash: crypto.Keccak256Hash(s.diffs[addr].Code),
 			blob: s.diffs[addr].Code,
 		}
-		if op.origin == nil {
+		if prestate == nil {
 			code.originHash = types.EmptyCodeHash
 		} else {
-			code.originHash = crypto.Keccak256Hash(op.origin)
+			code.originHash = common.BytesToHash(prestate.CodeHash)
 		}
 		op.code = &code
 	}
