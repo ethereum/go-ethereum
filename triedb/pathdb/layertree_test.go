@@ -575,6 +575,40 @@ func TestDescendant(t *testing.T) {
 	}
 }
 
+func TestDuplicateRootLookup(t *testing.T) {
+	// Chain:
+	//   C1->C2->C3 (HEAD)
+	tr := newTestLayerTree() // base = 0x1
+	tr.add(common.Hash{0x2}, common.Hash{0x1}, 1, NewNodeSetWithOrigin(nil, nil),
+		NewStateSetWithOrigin(randomAccountSet("0xa"), randomStorageSet([]string{"0xa"}, [][]string{{"0x1"}}, nil), nil, nil, false))
+	tr.add(common.Hash{0x3}, common.Hash{0x2}, 2, NewNodeSetWithOrigin(nil, nil),
+		NewStateSetWithOrigin(randomAccountSet("0xa"), randomStorageSet([]string{"0xa"}, [][]string{{"0x1"}}, nil), nil, nil, false))
+
+	// A fork block with the same state root as C2; inserting it must not
+	// pollute the lookup history for the canonical descendant C3.
+	tr.add(common.Hash{0x2}, common.Hash{0x1}, 1, NewNodeSetWithOrigin(nil, nil),
+		NewStateSetWithOrigin(randomAccountSet("0xa"), randomStorageSet([]string{"0xa"}, [][]string{{"0x1"}}, nil), nil, nil, false))
+	if n := tr.len(); n != 3 {
+		t.Fatalf("duplicate root insert changed layer count, got %d, want 3", n)
+	}
+
+	l, err := tr.lookupAccount(common.HexToHash("0xa"), common.Hash{0x3})
+	if err != nil {
+		t.Fatalf("account lookup failed: %v", err)
+	}
+	if l.rootHash() != (common.Hash{0x3}) {
+		t.Errorf("unexpected account tip, want %x, got %x", common.Hash{0x3}, l.rootHash())
+	}
+
+	l, err = tr.lookupStorage(common.HexToHash("0xa"), common.HexToHash("0x1"), common.Hash{0x3})
+	if err != nil {
+		t.Fatalf("storage lookup failed: %v", err)
+	}
+	if l.rootHash() != (common.Hash{0x3}) {
+		t.Errorf("unexpected storage tip, want %x, got %x", common.Hash{0x3}, l.rootHash())
+	}
+}
+
 func TestAccountLookup(t *testing.T) {
 	// Chain:
 	//   C1->C2->C3->C4 (HEAD)
