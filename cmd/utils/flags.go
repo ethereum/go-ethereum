@@ -598,6 +598,12 @@ var (
 		Usage:    "Record information useful for VM and contract debugging",
 		Category: flags.VMCategory,
 	}
+	VMEnableExperimentalInterpFlag = &cli.BoolFlag{
+		Name:     "evm.experimental",
+		Usage:    "Enable the experimental EVM interpreter. This flag may be removed or changed without notice.",
+		Category: flags.VMCategory,
+		Hidden:   true,
+	}
 	VMTraceFlag = &cli.StringFlag{
 		Name:     "vmtrace",
 		Usage:    "Name of tracer which should record internal VM operations (costly)",
@@ -1891,6 +1897,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(VMEnableDebugFlag.Name) {
 		cfg.EnablePreimageRecording = ctx.Bool(VMEnableDebugFlag.Name)
+	}
+	if ctx.IsSet(VMEnableExperimentalInterpFlag.Name) {
+		cfg.EnableExperimentalInterpreter = ctx.Bool(VMEnableExperimentalInterpFlag.Name)
 	}
 	if ctx.IsSet(VMWitnessStatsFlag.Name) {
 		cfg.EnableWitnessStats = ctx.Bool(VMWitnessStatsFlag.Name)

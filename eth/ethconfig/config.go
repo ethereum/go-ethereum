@@ -168,6 +168,9 @@ type Config struct {
 	// Enables tracking of SHA3 preimages in the VM
 	EnablePreimageRecording bool
 
+	// Enables the experimental EVM interpreter
+	EnableExperimentalInterpreter bool
+
 	// Enables collection of witness trie access statistics
 	EnableWitnessStats bool
 

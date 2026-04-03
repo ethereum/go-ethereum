@@ -136,6 +136,7 @@ var (
 		utils.DeveloperGasLimitFlag,
 		utils.DeveloperPeriodFlag,
 		utils.VMEnableDebugFlag,
+		utils.VMEnableExperimentalInterpFlag,
 		utils.VMTraceFlag,
 		utils.VMTraceJsonConfigFlag,
 		utils.VMWitnessStatsFlag,
