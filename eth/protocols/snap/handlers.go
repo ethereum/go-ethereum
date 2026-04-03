@@ -569,6 +569,9 @@ func handleGetAccessLists(backend Backend, msg Decoder, peer *Peer) error {
 // ServiceGetAccessListsQuery assembles the response to an access list query.
 // It is exposed to allow external packages to test protocol behavior.
 func ServiceGetAccessListsQuery(chain *core.BlockChain, req *GetAccessListsPacket) []rlp.RawValue {
+	if req.Bytes > softResponseLimit {
+		req.Bytes = softResponseLimit
+	}
 	// Cap the number of lookups
 	if len(req.Hashes) > maxAccessListLookups {
 		req.Hashes = req.Hashes[:maxAccessListLookups]
@@ -585,7 +588,7 @@ func ServiceGetAccessListsQuery(chain *core.BlockChain, req *GetAccessListsPacke
 			// Either the block is unknown or the BAL doesn't exist
 			bals = append(bals, nil)
 		}
-		if bytes > softResponseLimit {
+		if bytes > req.Bytes {
 			break
 		}
 	}

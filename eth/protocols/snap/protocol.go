@@ -222,6 +222,7 @@ type TrieNodesPacket struct {
 type GetAccessListsPacket struct {
 	ID     uint64        // Request ID to match up responses with
 	Hashes []common.Hash // Block hashes to retrieve BALs for
+	Bytes  uint64        // Soft limit at which to stop returning data
 }
 
 // AccessListsPacket is the response to GetAccessListsPacket.
