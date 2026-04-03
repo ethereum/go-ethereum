@@ -29,12 +29,12 @@ import (
 // Currently there are two optimizations over the standard loop:
 //
 //  1. Switch dispatch: the standard interpreter calls operation.execute() via a function
-//     pointer table. This is an indirect call that the CPU can't predict and the compiler won't
+//     pointer table. This is an indirect call that the CPU can't predict and the compiler can't
 //     inline.
 //     runExperimental replaces this with a switch statement for common
 //     opcodes, with the opcode logic inlined in each case. The remaining opcodes
 //     fall through to the default case which uses the standard jump table.
-//     TODO: Eventualy, we can migrate over everything.
+//     TODO: Eventually, we can migrate over everything.
 //
 //  2. Gas accumulation: the standard interpreter checks and writes contract.Gas (on the heap)
 //     on every opcode.
