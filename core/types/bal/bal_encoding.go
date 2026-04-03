@@ -367,7 +367,7 @@ func (e *AccountAccess) validate(blockTxCount int) error {
 		return errors.New("balance changes not in ascending order by tx index")
 	}
 
-	if len(e.BalanceChanges) > 0 && int(e.BalanceChanges[len(e.BalanceChanges)-1].TxIdx) >= blockTxCount+2 {
+	if len(e.BalanceChanges) > 0 && int(e.BalanceChanges[len(e.BalanceChanges)-1].TxIdx) > blockTxCount+1 {
 		return errors.New("highest balance change index beyond what is allowed")
 	}
 	// check that the balance values are set and there are no duplicate index entries
