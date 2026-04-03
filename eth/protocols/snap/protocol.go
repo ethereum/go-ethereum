@@ -229,8 +229,8 @@ type GetAccessListsPacket struct {
 // Each entry corresponds to the requested hash at the same index.
 // Empty entries indicate the BAL is unavailable.
 type AccessListsPacket struct {
-	ID          uint64         // ID of the request this is a response for
-	AccessLists []rlp.RawValue // Requested BALs
+	ID          uint64                    // ID of the request this is a response for
+	AccessLists rlp.RawList[rlp.RawValue] // Requested BALs
 }
 
 func (*GetAccountRangePacket) Name() string { return "GetAccountRange" }

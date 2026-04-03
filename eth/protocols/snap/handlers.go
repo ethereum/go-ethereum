@@ -559,16 +559,15 @@ func handleGetAccessLists(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&req); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	bals := ServiceGetAccessListsQuery(backend.Chain(), &req)
 	return p2p.Send(peer.rw, AccessListsMsg, &AccessListsPacket{
 		ID:          req.ID,
-		AccessLists: bals,
+		AccessLists: ServiceGetAccessListsQuery(backend.Chain(), &req),
 	})
 }
 
 // ServiceGetAccessListsQuery assembles the response to an access list query.
 // It is exposed to allow external packages to test protocol behavior.
-func ServiceGetAccessListsQuery(chain *core.BlockChain, req *GetAccessListsPacket) []rlp.RawValue {
+func ServiceGetAccessListsQuery(chain *core.BlockChain, req *GetAccessListsPacket) rlp.RawList[rlp.RawValue] {
 	if req.Bytes > softResponseLimit {
 		req.Bytes = softResponseLimit
 	}
@@ -577,20 +576,25 @@ func ServiceGetAccessListsQuery(chain *core.BlockChain, req *GetAccessListsPacke
 		req.Hashes = req.Hashes[:maxAccessListLookups]
 	}
 	var (
-		bals  []rlp.RawValue
-		bytes uint64
+		err      error
+		bytes    uint64
+		response = rlp.RawList[rlp.RawValue]{}
 	)
 	for _, hash := range req.Hashes {
 		if bal := chain.GetAccessListRLP(hash); len(bal) > 0 {
-			bals = append(bals, bal)
+			err = response.AppendRaw(bal)
 			bytes += uint64(len(bal))
 		} else {
 			// Either the block is unknown or the BAL doesn't exist
-			bals = append(bals, nil)
+			err = response.AppendRaw(rlp.EmptyString)
+			bytes += 1
+		}
+		if err != nil {
+			break
 		}
 		if bytes > req.Bytes {
 			break
 		}
 	}
-	return bals
+	return response
 }
