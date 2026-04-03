@@ -406,6 +406,10 @@ func (evm *EVM) runExperimental(contract *Contract, stack *Stack, mem *Memory, c
 
 		case PUSH0:
 			if !evm.chainRules.IsShanghai {
+				if contract.Gas < gasUsed {
+					return nil, ErrOutOfGas
+				}
+				contract.Gas -= gasUsed
 				return nil, &ErrInvalidOpCode{opcode: op}
 			}
 			gasUsed += GasQuickStep
