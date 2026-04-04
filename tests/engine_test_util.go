@@ -204,7 +204,21 @@ func (t *EngineTest) Run(scheme string, tracer *tracing.Hooks, postCheck func(er
 	}
 
 	// Create engine handler and execute payloads
+	// Uses the same core functions as ConsensusAPI (ExecutableDataToBlock,
+	// InsertBlockWithoutSetHead, SetCanonical) — different from blocktest's InsertChain.
 	handler := newEngineHandler(chain)
+
+	// Send initial forkchoiceUpdated to genesis (matching consume engine behavior)
+	genesisHash := chain.Genesis().Hash()
+	initialFcResp := handler.forkchoiceUpdated(engine.ForkchoiceStateV1{
+		HeadBlockHash:      genesisHash,
+		SafeBlockHash:      genesisHash,
+		FinalizedBlockHash: genesisHash,
+	})
+	if initialFcResp.PayloadStatus.Status != engine.VALID {
+		return fmt.Errorf("initial FCU to genesis returned %s", initialFcResp.PayloadStatus.Status)
+	}
+
 	for i, payload := range t.json.Payloads {
 		status, err := handler.newPayloadVersioned(payload)
 		// Check error code expectation
