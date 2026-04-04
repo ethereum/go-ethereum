@@ -93,20 +93,12 @@ func (p *Params) deriveFields() {
 
 // addressValue returns the log value hash of a log emitting address.
 func addressValue(address common.Address) common.Hash {
-	var result common.Hash
-	hasher := sha256.New()
-	hasher.Write(address[:])
-	hasher.Sum(result[:0])
-	return result
+	return common.Hash(sha256.Sum256(address[:]))
 }
 
 // topicValue returns the log value hash of a log topic.
 func topicValue(topic common.Hash) common.Hash {
-	var result common.Hash
-	hasher := sha256.New()
-	hasher.Write(topic[:])
-	hasher.Sum(result[:0])
-	return result
+	return common.Hash(sha256.Sum256(topic[:]))
 }
 
 // sanitize derives any missing fields and validates the parameter values.
@@ -154,14 +146,11 @@ func (p *Params) lastEpochMap(epoch uint32) uint32 {
 // layers while avoiding putting too many heavy rows next to each other on
 // higher order layers.
 func (p *Params) rowIndex(mapIndex, layerIndex uint32, logValue common.Hash) uint32 {
-	hasher := sha256.New()
-	hasher.Write(logValue[:])
-	var indexEnc [8]byte
-	binary.LittleEndian.PutUint32(indexEnc[0:4], p.maskedMapIndex(mapIndex, layerIndex))
-	binary.LittleEndian.PutUint32(indexEnc[4:8], layerIndex)
-	hasher.Write(indexEnc[:])
-	var hash common.Hash
-	hasher.Sum(hash[:0])
+	var buf [common.HashLength + 8]byte
+	copy(buf[:common.HashLength], logValue[:])
+	binary.LittleEndian.PutUint32(buf[common.HashLength:common.HashLength+4], p.maskedMapIndex(mapIndex, layerIndex))
+	binary.LittleEndian.PutUint32(buf[common.HashLength+4:common.HashLength+8], layerIndex)
+	hash := sha256.Sum256(buf[:])
 	return binary.LittleEndian.Uint32(hash[:4]) % p.mapHeight
 }
 
