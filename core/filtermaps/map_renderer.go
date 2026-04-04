@@ -45,6 +45,8 @@ var (
 	errChainUpdate = errors.New("rendered section of chain updated")
 )
 
+type lvPos struct{ rowIndex, layerIndex uint32 }
+
 // mapRenderer represents a process that renders filter maps in a specified
 // range according to the actual targetView.
 type mapRenderer struct {
@@ -54,6 +56,8 @@ type mapRenderer struct {
 	finishedMaps map[uint32]*renderedMap
 	finished     common.Range[uint32]
 	iterator     *logIterator
+
+	rowMappingCache lru.BasicLRU[common.Hash, lvPos]
 }
 
 // renderedMap represents a single filter map that is being rendered in memory.
@@ -110,10 +114,11 @@ func (f *FilterMaps) renderMapsFromSnapshot(cp *renderedMap) (*mapRenderer, erro
 			lastBlock:   cp.lastBlock,
 			blockLvPtrs: slices.Clone(cp.blockLvPtrs),
 		},
-		finishedMaps: make(map[uint32]*renderedMap),
-		finished:     common.NewRange(cp.mapIndex, 0),
-		renderBefore: math.MaxUint32,
-		iterator:     iter,
+		finishedMaps:    make(map[uint32]*renderedMap),
+		finished:        common.NewRange(cp.mapIndex, 0),
+		renderBefore:    math.MaxUint32,
+		iterator:        iter,
+		rowMappingCache: lru.NewBasicLRU[common.Hash, lvPos](cachedRowMappings),
 	}, nil
 }
 
@@ -131,10 +136,11 @@ func (f *FilterMaps) renderMapsFromMapBoundary(firstMap, renderBefore uint32, st
 			mapIndex:  firstMap,
 			lastBlock: iter.blockNumber,
 		},
-		finishedMaps: make(map[uint32]*renderedMap),
-		finished:     common.NewRange(firstMap, 0),
-		renderBefore: renderBefore,
-		iterator:     iter,
+		finishedMaps:    make(map[uint32]*renderedMap),
+		finished:        common.NewRange(firstMap, 0),
+		renderBefore:    renderBefore,
+		iterator:        iter,
+		rowMappingCache: lru.NewBasicLRU[common.Hash, lvPos](cachedRowMappings),
 	}, nil
 }
 
@@ -266,7 +272,7 @@ func (r *mapRenderer) makeSnapshot() {
 		mapIndex:      r.currentMap.mapIndex,
 		lastBlock:     r.currentMap.lastBlock,
 		lastBlockId:   r.iterator.chainView.BlockId(r.currentMap.lastBlock),
-		blockLvPtrs:   r.currentMap.blockLvPtrs,
+		blockLvPtrs:   slices.Clone(r.currentMap.blockLvPtrs),
 		finished:      true,
 		headDelimiter: r.iterator.lvIndex,
 	})
@@ -319,9 +325,7 @@ func (r *mapRenderer) renderCurrentMap(stopCb func() bool) (bool, error) {
 	if r.iterator.lvIndex == 0 {
 		r.currentMap.blockLvPtrs = []uint64{0}
 	}
-	type lvPos struct{ rowIndex, layerIndex uint32 }
-	rowMappingCache := lru.NewCache[common.Hash, lvPos](cachedRowMappings)
-	defer rowMappingCache.Purge()
+	r.rowMappingCache.Purge()
 
 	for r.iterator.lvIndex < uint64(r.currentMap.mapIndex+1)<<r.f.logValuesPerMap && !r.iterator.finished {
 		waitCnt++
@@ -337,7 +341,7 @@ func (r *mapRenderer) renderCurrentMap(stopCb func() bool) (bool, error) {
 			waitCnt = 0
 		}
 		if logValue := r.iterator.getValueHash(); logValue != (common.Hash{}) {
-			lvp, cached := rowMappingCache.Get(logValue)
+			lvp, cached := r.rowMappingCache.Get(logValue)
 			if !cached {
 				lvp = lvPos{rowIndex: r.f.rowIndex(r.currentMap.mapIndex, 0, logValue)}
 			}
@@ -348,7 +352,7 @@ func (r *mapRenderer) renderCurrentMap(stopCb func() bool) (bool, error) {
 			}
 			r.currentMap.filterMap[lvp.rowIndex] = append(r.currentMap.filterMap[lvp.rowIndex], r.f.columnIndex(r.iterator.lvIndex, &logValue))
 			if !cached {
-				rowMappingCache.Add(logValue, lvp)
+				r.rowMappingCache.Add(logValue, lvp)
 			}
 		}
 		if err := r.iterator.next(); err != nil {
