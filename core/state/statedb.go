@@ -1437,6 +1437,11 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 	return s.accessList.Contains(addr, slot)
 }
 
+// AccessList returns the current access list as a types.AccessList snapshot.
+func (s *StateDB) AccessList() types.AccessList {
+	return s.accessList.export()
+}
+
 // markDelete is invoked when an account is deleted but the deletion is
 // not yet committed. The pending mutation is cached and will be applied
 // all together

@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 type accessList struct {
@@ -141,6 +142,26 @@ func (al *accessList) Equal(other *accessList) bool {
 		return false
 	}
 	return slices.EqualFunc(al.slots, other.slots, maps.Equal)
+}
+
+// export converts the internal access list into a types.AccessList.
+// The result is sorted by address and storage keys for deterministic output.
+func (al *accessList) export() types.AccessList {
+	result := make(types.AccessList, 0, len(al.addresses))
+	sortedAddrs := slices.Collect(maps.Keys(al.addresses))
+	slices.SortFunc(sortedAddrs, common.Address.Cmp)
+	for _, addr := range sortedAddrs {
+		idx := al.addresses[addr]
+		tuple := types.AccessTuple{Address: addr, StorageKeys: []common.Hash{}}
+		if idx >= 0 {
+			keys := slices.SortedFunc(maps.Keys(al.slots[idx]), common.Hash.Cmp)
+			if keys != nil {
+				tuple.StorageKeys = keys
+			}
+		}
+		result = append(result, tuple)
+	}
+	return result
 }
 
 // PrettyPrint prints the contents of the access list in a human-readable form

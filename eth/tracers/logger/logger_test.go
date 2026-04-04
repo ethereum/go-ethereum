@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -41,6 +42,15 @@ func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) co
 
 func (*dummyStatedb) GetStateAndCommittedState(common.Address, common.Hash) (common.Hash, common.Hash) {
 	return common.Hash{}, common.Hash{}
+}
+
+func (*dummyStatedb) AccessList() types.AccessList {
+	return types.AccessList{
+		{
+			Address:     common.HexToAddress("0xaaaa"),
+			StorageKeys: []common.Hash{common.HexToHash("0x01")},
+		},
+	}
 }
 
 func TestStoreCapture(t *testing.T) {
@@ -92,6 +102,89 @@ func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 			}
 			if have, want := string(blob), tt.want; have != want {
 				t.Fatalf("mismatched results\n\thave: %v\n\twant: %v", have, want)
+			}
+		})
+	}
+}
+
+func TestAccessListCapture(t *testing.T) {
+	type resultLog struct {
+		AccessList types.AccessList `json:"accessList,omitempty"`
+	}
+	type execResult struct {
+		StructLogs []resultLog `json:"structLogs"`
+	}
+
+	tests := []struct {
+		name        string
+		mode        AccessListMode
+		wantCapture bool
+	}{
+		{"disabled by default", AccessListModeDisabled, false},
+		{"full mode", AccessListModeFull, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := NewStructLogger(&Config{AccessListMode: tt.mode})
+			evm := vm.NewEVM(vm.BlockContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: logger.Hooks()})
+			contract := vm.NewContract(common.Address{}, common.Address{}, new(uint256.Int), 100000, nil)
+			contract.Code = []byte{byte(vm.PUSH1), 0x0, byte(vm.SLOAD)}
+
+			logger.OnTxStart(evm.GetVMContext(), nil, common.Address{})
+			_, err := evm.Run(contract, []byte{}, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			blob, err := logger.GetResult()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var result execResult
+			if err := json.Unmarshal(blob, &result); err != nil {
+				t.Fatal(err)
+			}
+			if len(result.StructLogs) == 0 {
+				t.Fatal("expected at least one struct log")
+			}
+			for _, log := range result.StructLogs {
+				if tt.wantCapture && log.AccessList == nil {
+					t.Fatal("expected access list to be captured, got nil")
+				}
+				if !tt.wantCapture && log.AccessList != nil {
+					t.Fatal("expected no access list capture, got non-nil")
+				}
+			}
+		})
+	}
+}
+
+func TestAccessListModeUnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		input   string
+		want    AccessListMode
+		wantErr bool
+	}{
+		{`""`, AccessListModeDisabled, false},
+		{`"disabled"`, AccessListModeDisabled, false},
+		{`"full"`, AccessListModeFull, false},
+		{`"invalid"`, "", true},
+		{`"Full"`, "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			var mode AccessListMode
+			err := json.Unmarshal([]byte(tt.input), &mode)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if mode != tt.want {
+				t.Fatalf("got %q, want %q", mode, tt.want)
 			}
 		})
 	}

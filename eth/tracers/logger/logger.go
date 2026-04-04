@@ -40,13 +40,39 @@ import (
 // Storage represents a contract's storage.
 type Storage map[common.Hash]common.Hash
 
+// AccessListMode represents the capture mode for access lists in tracing.
+type AccessListMode string
+
+const (
+	AccessListModeDisabled AccessListMode = ""     // default, no access list capture
+	AccessListModeFull     AccessListMode = "full" // capture full access list at each step
+)
+
+// UnmarshalJSON parses the access list mode from JSON input.
+func (m *AccessListMode) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	switch s {
+	case "", "disabled":
+		*m = AccessListModeDisabled
+	case "full":
+		*m = AccessListModeFull
+	default:
+		return fmt.Errorf("unknown access list mode %q, want \"disabled\" or \"full\"", s)
+	}
+	return nil
+}
+
 // Config are the configuration options for structured logger the EVM
 type Config struct {
-	EnableMemory     bool // enable memory capture
-	DisableStack     bool // disable stack capture
-	DisableStorage   bool // disable storage capture
-	EnableReturnData bool // enable return data capture
-	Limit            int  // maximum size of output, but zero means unlimited
+	EnableMemory     bool           // enable memory capture
+	DisableStack     bool           // disable stack capture
+	DisableStorage   bool           // disable storage capture
+	EnableReturnData bool           // enable return data capture
+	AccessListMode   AccessListMode // access list capture mode (default: disabled)
+	Limit            int            // maximum size of output, but zero means unlimited
 	// Chain overrides, can be used to execute a trace using future fork rules
 	Overrides *params.ChainConfig `json:"overrides,omitempty"`
 }
@@ -65,6 +91,7 @@ type StructLog struct {
 	Stack         []uint256.Int               `json:"stack"`
 	ReturnData    []byte                      `json:"returnData,omitempty"`
 	Storage       map[common.Hash]common.Hash `json:"-"`
+	AccessList    types.AccessList            `json:"accessList,omitempty"`
 	Depth         int                         `json:"depth"`
 	RefundCounter uint64                      `json:"refund"`
 	Err           error                       `json:"-"`
@@ -153,6 +180,7 @@ type structLogLegacy struct {
 	ReturnData    string             `json:"returnData,omitempty"`
 	Memory        *[]string          `json:"memory,omitempty"`
 	Storage       *map[string]string `json:"storage,omitempty"`
+	AccessList    types.AccessList   `json:"accessList,omitempty"`
 	RefundCounter uint64             `json:"refund,omitempty"`
 }
 
@@ -203,6 +231,9 @@ func (s *StructLog) toLegacyJSON() json.RawMessage {
 			storage[i.Hex()] = storageValue.Hex()
 		}
 		msg.Storage = &storage
+	}
+	if len(s.AccessList) > 0 {
+		msg.AccessList = s.AccessList
 	}
 	element, _ := json.Marshal(msg)
 	return element
@@ -287,7 +318,16 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 		stack        = scope.StackData()
 		stackLen     = len(stack)
 	)
-	log := StructLog{pc, op, gas, cost, nil, len(memory), nil, nil, nil, depth, l.env.StateDB.GetRefund(), err}
+	log := StructLog{
+		Pc:            pc,
+		Op:            op,
+		Gas:           gas,
+		GasCost:       cost,
+		MemorySize:    len(memory),
+		Depth:         depth,
+		RefundCounter: l.env.StateDB.GetRefund(),
+		Err:           err,
+	}
 	if l.cfg.EnableMemory {
 		log.Memory = memory
 	}
@@ -296,6 +336,11 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 	}
 	if l.cfg.EnableReturnData {
 		log.ReturnData = rData
+	}
+	if l.cfg.AccessListMode == AccessListModeFull {
+		// TODO: export() sorts and allocates on every opcode step, even when the
+		// access list hasn't changed. This may cause GC pressure on long traces.
+		log.AccessList = l.env.StateDB.AccessList()
 	}
 
 	// Copy a snapshot of the current storage to a new container

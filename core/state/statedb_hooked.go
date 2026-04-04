@@ -90,6 +90,10 @@ func (s *hookedStateDB) GetRefund() uint64 {
 	return s.inner.GetRefund()
 }
 
+func (s *hookedStateDB) AccessList() types.AccessList {
+	return s.inner.AccessList()
+}
+
 func (s *hookedStateDB) GetStateAndCommittedState(addr common.Address, hash common.Hash) (common.Hash, common.Hash) {
 	return s.inner.GetStateAndCommittedState(addr, hash)
 }
