@@ -650,9 +650,16 @@ func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) ([]*engine.Blob
 			CellProofs: cellProofs,
 		}
 	}
-	if len(res) == len(hashes) {
+
+	nonNilCount := 0
+	for _, r := range res {
+		if r != nil {
+			nonNilCount++
+		}
+	}
+	if nonNilCount == len(hashes) {
 		getBlobsRequestCompleteHit.Inc(1)
-	} else if len(res) > 0 {
+	} else if nonNilCount > 0 {
 		getBlobsRequestPartialHit.Inc(1)
 	} else {
 		getBlobsRequestMiss.Inc(1)
