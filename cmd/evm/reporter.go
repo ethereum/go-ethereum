@@ -85,3 +85,9 @@ func report(ctx *cli.Context, results []testResult) {
 	out, _ := json.MarshalIndent(results, "", "  ")
 	fmt.Println(string(out))
 }
+
+// reportNDJSON prints one JSON object per result as it completes.
+func reportNDJSON(r testResult) {
+	out, _ := json.Marshal(r)
+	fmt.Println(string(out))
+}
