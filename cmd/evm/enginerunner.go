@@ -192,7 +192,7 @@ func runEngineTest(ctx *cli.Context, fname string) ([]testResult, error) {
 		}
 		test := testsByName[name]
 		result := &testResult{Name: name, Pass: true}
-		var finalRoot *common.Hash
+		var finalHash *common.Hash
 		if err := test.Run(rawdb.PathScheme, tracer, func(res error, chain *core.BlockChain) {
 			if ctx.Bool(DumpFlag.Name) {
 				if s, _ := chain.State(); s != nil {
@@ -200,16 +200,20 @@ func runEngineTest(ctx *cli.Context, fname string) ([]testResult, error) {
 				}
 			}
 			if chain != nil {
-				root := chain.CurrentBlock().Root
-				finalRoot = &root
+				hash := chain.CurrentBlock().Hash()
+				finalHash = &hash
 			}
 		}); err != nil {
 			result.Pass, result.Error = false, err.Error()
 		}
 
 		result.Fork = test.Network()
-		if result.Pass && finalRoot != nil {
-			result.Root = finalRoot
+		if finalHash != nil {
+			result.BlockHash = finalHash
+		}
+		result.PayloadStatus = test.LastPayloadStatus
+		if result.Pass && test.LastValidationError != "" {
+			result.Error = test.LastValidationError
 		}
 
 		if ctx.IsSet(FuzzFlag.Name) {

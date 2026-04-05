@@ -33,13 +33,15 @@ const (
 // testResult contains the execution status after running a state test, any
 // error that might have occurred and a dump of the final state if requested.
 type testResult struct {
-	Name  string       `json:"name"`
-	Pass  bool         `json:"pass"`
-	Root  *common.Hash `json:"stateRoot,omitempty"`
-	Fork  string       `json:"fork"`
-	Error string       `json:"error"`
-	State *state.Dump  `json:"state,omitempty"`
-	Stats *execStats   `json:"benchStats,omitempty"`
+	Name          string       `json:"name"`
+	Pass          bool         `json:"pass"`
+	Root          *common.Hash `json:"stateRoot,omitempty"`
+	Fork          string       `json:"fork"`
+	Error         string       `json:"error"`
+	BlockHash     *common.Hash `json:"lastBlockHash,omitempty"`
+	PayloadStatus string       `json:"lastPayloadStatus,omitempty"`
+	State         *state.Dump  `json:"state,omitempty"`
+	Stats         *execStats   `json:"benchStats,omitempty"`
 }
 
 func (r testResult) String() string {

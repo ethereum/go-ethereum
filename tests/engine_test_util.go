@@ -46,7 +46,9 @@ import (
 
 // EngineTest checks processing of engine API payloads.
 type EngineTest struct {
-	json etJSON
+	json                etJSON
+	LastPayloadStatus   string // set during Run, exposed for the runner
+	LastValidationError string // actual validation error from engine
 }
 
 func (t *EngineTest) UnmarshalJSON(in []byte) error {
@@ -234,6 +236,11 @@ func (t *EngineTest) Run(scheme string, tracer *tracing.Hooks, postCheck func(er
 		}
 		if err != nil {
 			return fmt.Errorf("payload %d: unexpected error: %v", i, err)
+		}
+		// Track last payload status and validation error for result reporting
+		t.LastPayloadStatus = status.Status
+		if status.ValidationError != nil {
+			t.LastValidationError = *status.ValidationError
 		}
 		// Check validation error expectation
 		if payload.ValidationError != "" {

@@ -51,7 +51,8 @@ import (
 // StateTest checks transaction processing without block context.
 // See https://github.com/ethereum/EIPs/issues/176 for the test format specification.
 type StateTest struct {
-	json stJSON
+	json       stJSON
+	LastTxError string // actual tx error, for result reporting
 }
 
 // StateSubtest selects a specific configuration of a General State Test.
@@ -211,7 +212,7 @@ func (t *StateTest) checkError(subtest StateSubtest, err error) error {
 		return fmt.Errorf("unexpected error: %w", err)
 	}
 	if err != nil && expectedError != "" {
-		// Ignore expected errors (TODO MariusVanDerWijden check error string)
+		t.LastTxError = err.Error()
 		return nil
 	}
 	return nil

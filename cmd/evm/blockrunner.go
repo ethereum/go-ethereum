@@ -173,17 +173,16 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 		}
 		test := tests[name]
 		result := &testResult{Name: name, Pass: true}
-		var finalRoot *common.Hash
+		var finalHash *common.Hash
 		if err := test.Run(false, rawdb.PathScheme, ctx.Bool(WitnessCrossCheckFlag.Name), tracer, func(res error, chain *core.BlockChain) {
 			if ctx.Bool(DumpFlag.Name) {
 				if s, _ := chain.State(); s != nil {
 					result.State = dump(s)
 				}
 			}
-			// Capture final state root for end marker
 			if chain != nil {
-				root := chain.CurrentBlock().Root
-				finalRoot = &root
+				hash := chain.CurrentBlock().Hash()
+				finalHash = &hash
 			}
 		}); err != nil {
 			result.Pass, result.Error = false, err.Error()
@@ -191,9 +190,11 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 
 		// Always assign fork (regardless of pass/fail or tracer)
 		result.Fork = test.Network()
-		// Assign root if test succeeded
-		if result.Pass && finalRoot != nil {
-			result.Root = finalRoot
+		if finalHash != nil {
+			result.BlockHash = finalHash
+		}
+		if result.Pass && test.LastBlockError != "" {
+			result.Error = test.LastBlockError
 		}
 
 		// When fuzzing, write results after every block

@@ -48,7 +48,8 @@ import (
 
 // A BlockTest checks handling of entire blocks.
 type BlockTest struct {
-	json btJSON
+	json           btJSON
+	LastBlockError string // actual error from rejected blocks, for result reporting
 }
 
 // UnmarshalJSON implements json.Unmarshaler interface.
@@ -250,6 +251,7 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 		cb, err := b.decode()
 		if err != nil {
 			if b.BlockHeader == nil {
+				t.LastBlockError = err.Error()
 				log.Info("Block decoding failed", "index", bi, "err", err)
 				continue // OK - block is supposed to be invalid, continue with next block
 			} else {
@@ -261,6 +263,7 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 		i, err := blockchain.InsertChain(blocks)
 		if err != nil {
 			if b.BlockHeader == nil {
+				t.LastBlockError = err.Error()
 				continue // OK - block is supposed to be invalid, continue with next block
 			} else {
 				return nil, fmt.Errorf("block #%v insertion into chain failed: %v", blocks[i].Number(), err)

@@ -210,6 +210,9 @@ func runStateTest(ctx *cli.Context, fname string) ([]testResult, error) {
 					result.Pass, result.Error = false, err.Error()
 					return
 				}
+				if test.LastTxError != "" {
+					result.Error = test.LastTxError
+				}
 			})
 			results = append(results, *result)
 		}
