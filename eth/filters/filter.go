@@ -19,7 +19,6 @@ package filters
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 	"slices"
