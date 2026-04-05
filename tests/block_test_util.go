@@ -268,7 +268,7 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 		}
 		if b.BlockHeader == nil {
 			if data, err := json.MarshalIndent(cb.Header(), "", "  "); err == nil {
-				fmt.Fprintf(os.Stdout, "block (index %d) insertion should have failed due to: %v:\n%v\n",
+				fmt.Fprintf(os.Stderr, "block (index %d) insertion should have failed due to: %v:\n%v\n",
 					bi, b.ExpectException, string(data))
 			}
 			return nil, fmt.Errorf("block (index %d) insertion should have failed due to: %v",
