@@ -16,14 +16,17 @@ var _ = (*accountMarshaling)(nil)
 func (a account) MarshalJSON() ([]byte, error) {
 	type account struct {
 		Balance  *hexutil.Big                `json:"balance,omitempty"`
-		Code     hexutil.Bytes               `json:"code,omitempty"`
+		Code     *hexutil.Bytes              `json:"code,omitempty"`
 		CodeHash *common.Hash                `json:"codeHash,omitempty"`
 		Nonce    uint64                      `json:"nonce,omitempty"`
 		Storage  map[common.Hash]common.Hash `json:"storage,omitempty"`
 	}
 	var enc account
 	enc.Balance = (*hexutil.Big)(a.Balance)
-	enc.Code = a.Code
+	if a.codeChanged || len(a.Code) > 0 {
+		code := hexutil.Bytes(a.Code)
+		enc.Code = &code
+	}
 	enc.CodeHash = a.CodeHash
 	enc.Nonce = a.Nonce
 	enc.Storage = a.Storage

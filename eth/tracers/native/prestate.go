@@ -44,12 +44,13 @@ func init() {
 type stateMap = map[common.Address]*account
 
 type account struct {
-	Balance  *big.Int                    `json:"balance,omitempty"`
-	Code     []byte                      `json:"code,omitempty"`
-	CodeHash *common.Hash                `json:"codeHash,omitempty"`
-	Nonce    uint64                      `json:"nonce,omitempty"`
-	Storage  map[common.Hash]common.Hash `json:"storage,omitempty"`
-	empty    bool
+	Balance     *big.Int                    `json:"balance,omitempty"`
+	Code        []byte                      `json:"code,omitempty"`
+	CodeHash    *common.Hash                `json:"codeHash,omitempty"`
+	Nonce       uint64                      `json:"nonce,omitempty"`
+	Storage     map[common.Hash]common.Hash `json:"storage,omitempty"`
+	empty       bool
+	codeChanged bool // code was changed in diff post-state
 }
 
 func (a *account) exists() bool {
@@ -270,12 +271,13 @@ func (t *prestateTracer) processDiffState() {
 		if t.pre[addr].CodeHash != nil {
 			prevCodeHash = *t.pre[addr].CodeHash
 		}
-		// Empty code hashes are excluded from the prestate. Normalize
-		// the empty code hash to a zero hash to make it comparable.
-		if newCodeHash == types.EmptyCodeHash {
-			newCodeHash = common.Hash{}
+		// Empty code hashes are excluded from the prestate. Use a normalized
+		// copy only for comparison; keep the original value for post-state output.
+		normalizedNewCodeHash := newCodeHash
+		if normalizedNewCodeHash == types.EmptyCodeHash {
+			normalizedNewCodeHash = common.Hash{}
 		}
-		if newCodeHash != prevCodeHash {
+		if normalizedNewCodeHash != prevCodeHash {
 			modified = true
 			postAccount.CodeHash = &newCodeHash
 		}
@@ -284,6 +286,7 @@ func (t *prestateTracer) processDiffState() {
 			if !bytes.Equal(newCode, t.pre[addr].Code) {
 				modified = true
 				postAccount.Code = newCode
+				postAccount.codeChanged = true
 			}
 		}
 
