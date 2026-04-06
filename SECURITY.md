@@ -19,7 +19,7 @@ Audit reports are published in the `docs` folder: https://github.com/ethereum/go
 
 **Please do not file a public ticket** mentioning the vulnerability.
 
-To find out how to disclose a vulnerability in Ethereum visit [https://bounty.ethereum.org](https://bounty.ethereum.org) or email bounty@ethereum.org. Please read the [disclosure page](https://github.com/ethereum/go-ethereum/security/advisories?state=published) for more information about publicly disclosed security vulnerabilities.
+To find out how to disclose a vulnerability in Ethereum visit [https://ethereum.org/en/bug-bounty/](https://ethereum.org/en/bug-bounty/) or email bounty@ethereum.org. Please read the [disclosure page](https://github.com/ethereum/go-ethereum/security/advisories?state=published) for more information about publicly disclosed security vulnerabilities.
 
 
 The following key may be used to communicate sensitive information to developers.
