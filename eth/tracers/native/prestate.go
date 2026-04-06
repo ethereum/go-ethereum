@@ -45,7 +45,7 @@ type stateMap = map[common.Address]*account
 
 type account struct {
 	Balance  *big.Int                    `json:"balance,omitempty"`
-	Code     []byte                      `json:"code,omitempty"`
+	Code     *hexutil.Bytes              `json:"code,omitempty"`
 	CodeHash *common.Hash                `json:"codeHash,omitempty"`
 	Nonce    uint64                      `json:"nonce,omitempty"`
 	Storage  map[common.Hash]common.Hash `json:"storage,omitempty"`
@@ -53,12 +53,11 @@ type account struct {
 }
 
 func (a *account) exists() bool {
-	return a.Nonce > 0 || len(a.Code) > 0 || len(a.Storage) > 0 || (a.Balance != nil && a.Balance.Sign() != 0)
+	return a.Nonce > 0 || (a.Code != nil && len(*a.Code) > 0) || len(a.Storage) > 0 || (a.Balance != nil && a.Balance.Sign() != 0)
 }
 
 type accountMarshaling struct {
 	Balance *hexutil.Big
-	Code    hexutil.Bytes
 }
 
 type prestateTracer struct {
@@ -270,20 +269,26 @@ func (t *prestateTracer) processDiffState() {
 		if t.pre[addr].CodeHash != nil {
 			prevCodeHash = *t.pre[addr].CodeHash
 		}
-		// Empty code hashes are excluded from the prestate. Normalize
-		// the empty code hash to a zero hash to make it comparable.
-		if newCodeHash == types.EmptyCodeHash {
-			newCodeHash = common.Hash{}
+		// Empty code hashes are excluded from the prestate. Use a normalized
+		// copy only for comparison; keep the original value for post-state output.
+		normalizedNewCodeHash := newCodeHash
+		if normalizedNewCodeHash == types.EmptyCodeHash {
+			normalizedNewCodeHash = common.Hash{}
 		}
-		if newCodeHash != prevCodeHash {
+		if normalizedNewCodeHash != prevCodeHash {
 			modified = true
 			postAccount.CodeHash = &newCodeHash
 		}
 		if !t.config.DisableCode {
 			newCode := t.env.StateDB.GetCode(addr)
-			if !bytes.Equal(newCode, t.pre[addr].Code) {
+			var preCode []byte
+			if t.pre[addr].Code != nil {
+				preCode = []byte(*t.pre[addr].Code)
+			}
+			if !bytes.Equal(newCode, preCode) {
 				modified = true
-				postAccount.Code = newCode
+				hcode := hexutil.Bytes(newCode)
+				postAccount.Code = &hcode // non-nil even if empty, so "0x" is output
 			}
 		}
 
@@ -326,7 +331,10 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 	acc := &account{
 		Balance: t.env.StateDB.GetBalance(addr).ToBig(),
 		Nonce:   t.env.StateDB.GetNonce(addr),
-		Code:    t.env.StateDB.GetCode(addr),
+	}
+	if code := t.env.StateDB.GetCode(addr); len(code) > 0 {
+		hcode := hexutil.Bytes(code)
+		acc.Code = &hcode
 	}
 	codeHash := t.env.StateDB.GetCodeHash(addr)
 	// If the code is empty, we don't need to store it in the prestate.

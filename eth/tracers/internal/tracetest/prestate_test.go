@@ -29,8 +29,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests"
+	"github.com/holiman/uint256"
 )
 
 // prestateTrace is the result of a prestateTrace run.
@@ -47,6 +50,102 @@ type account struct {
 type prestateTracerTest struct {
 	tracerTestEnv
 	Result interface{} `json:"result"`
+}
+
+func TestPrestateWithDiffMode_7702Deauth(t *testing.T) {
+	chainConfig := params.AllDevChainProtocolChanges
+	authorityKey, _ := crypto.GenerateKey()
+	senderKey, _ := crypto.GenerateKey()
+	authorityAddr := crypto.PubkeyToAddress(authorityKey.PublicKey)
+	senderAddr := crypto.PubkeyToAddress(senderKey.PublicKey)
+	delegateTarget := common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+	genesis := &core.Genesis{
+		Config:   chainConfig,
+		BaseFee:  big.NewInt(params.InitialBaseFee),
+		GasLimit: 8000000,
+		Alloc: types.GenesisAlloc{
+			authorityAddr: {
+				Balance: big.NewInt(1e18),
+				Code:    types.AddressToDelegation(delegateTarget),
+			},
+			senderAddr: {
+				Balance: big.NewInt(1e18),
+			},
+		},
+	}
+	signer := types.LatestSignerForChainID(chainConfig.ChainID)
+	auth, err := types.SignSetCode(authorityKey, types.SetCodeAuthorization{
+		ChainID: *uint256.MustFromBig(chainConfig.ChainID),
+		Address: common.Address{},
+		Nonce:   0,
+	})
+	if err != nil {
+		t.Fatalf("failed to sign authorization: %v", err)
+	}
+	tx := types.MustSignNewTx(senderKey, signer, &types.SetCodeTx{
+		ChainID:   uint256.MustFromBig(chainConfig.ChainID),
+		Nonce:     0,
+		GasFeeCap: uint256.NewInt(params.InitialBaseFee * 2),
+		GasTipCap: uint256.NewInt(1),
+		Gas:       100000,
+		To:        senderAddr,
+		AuthList:  []types.SetCodeAuthorization{auth},
+	})
+	state := tests.MakePreState(rawdb.NewMemoryDatabase(), genesis.Alloc, false, rawdb.HashScheme)
+	defer state.Close()
+	tracerCfg := json.RawMessage(`{"diffMode":true}`)
+	tracer, err := tracers.DefaultDirectory.New("prestateTracer", new(tracers.Context), tracerCfg, chainConfig)
+	if err != nil {
+		t.Fatalf("failed to create tracer: %v", err)
+	}
+	blockCtx := vm.BlockContext{
+		CanTransfer: core.CanTransfer,
+		Transfer:    core.Transfer,
+		BlockNumber: big.NewInt(1),
+		Time:        0,
+		GasLimit:    8000000,
+		BaseFee:     big.NewInt(params.InitialBaseFee),
+	}
+	msg, err := core.TransactionToMessage(tx, signer, blockCtx.BaseFee)
+	if err != nil {
+		t.Fatalf("failed to convert tx to message: %v", err)
+	}
+	evm := vm.NewEVM(blockCtx, state.StateDB, chainConfig, vm.Config{Tracer: tracer.Hooks})
+	tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
+	vmRet, err := core.ApplyMessage(evm, msg, nil)
+	if err != nil {
+		t.Fatalf("failed to apply message: %v", err)
+	}
+	tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, nil)
+
+	res, err := tracer.GetResult()
+	if err != nil {
+		t.Fatalf("failed to get result: %v", err)
+	}
+	var result struct {
+		Post map[common.Address]json.RawMessage `json:"post"`
+	}
+	if err := json.Unmarshal(res, &result); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
+	}
+	postRaw, ok := result.Post[authorityAddr]
+	if !ok {
+		t.Fatalf("authority address not found in post state; full result: %s", res)
+	}
+	var postAccount struct {
+		Code     string `json:"code"`
+		CodeHash string `json:"codeHash"`
+	}
+	if err := json.Unmarshal(postRaw, &postAccount); err != nil {
+		t.Fatalf("failed to unmarshal post account: %v", err)
+	}
+	if postAccount.Code != "0x" {
+		t.Errorf("post code: got %q, want %q", postAccount.Code, "0x")
+	}
+	wantCodeHash := types.EmptyCodeHash.Hex()
+	if postAccount.CodeHash != wantCodeHash {
+		t.Errorf("post codeHash: got %q, want %q", postAccount.CodeHash, wantCodeHash)
+	}
 }
 
 func TestPrestateTracerLegacy(t *testing.T) {
