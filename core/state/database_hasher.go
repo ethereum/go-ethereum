@@ -33,9 +33,19 @@ type CodeMut struct {
 // - Account == nil: delete the account
 // - Code == nil:  leave code unchanged
 // - Code != nil: apply the given code mutation
+// - CodeSize: the account's CURRENT total code size, not just the bytes
+//   carried in Code. It is used by implementations that pack the code
+//   size into their on-trie account encoding (e.g. the binary trie
+//   BasicData leaf). Callers must always populate this field to the
+//   account's real code size, obtained via stateObject.CodeSize() or an
+//   equivalent source — even on balance/nonce-only updates where the
+//   code bytes themselves are not loaded. Leaving it at zero on a
+//   non-code-touching update silently corrupts on-trie state for any
+//   hasher that stores code size.
 type AccountMut struct {
-	Account *Account // Null for deletion
-	Code    *CodeMut // Null for unchanged
+	Account  *Account // Null for deletion
+	Code     *CodeMut // Null for unchanged
+	CodeSize int      // Current code length (must be set by the caller)
 }
 
 // Hashes encapsulates a trie root together with its original (pre-update) root.

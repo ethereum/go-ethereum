@@ -153,22 +153,25 @@ func (h *binaryHasher) deleteAccount(addr common.Address) error {
 }
 
 // update writes the account specified by the address into the state.
+//
+// The account's code size is taken from AccountMut.CodeSize, which the
+// caller (StateDB.IntermediateRoot) populates via stateObject.CodeSize().
+// Per EIP-7864 the code_size field is packed into the BasicData leaf
+// (bytes 5-7) and is consensus-critical; BinaryTrie.UpdateAccount rewrites
+// the entire BasicData blob on every call, so passing the wrong codeLen
+// would silently overwrite the stored code_size. In particular, for
+// balance/nonce-only updates the new code bytes (account.Code) are nil
+// and len(obj.code) is 0, yet the account may still have a non-zero code
+// size that must be preserved — the caller gets this right by consulting
+// the stateObject, which falls back to a reader code-size lookup when
+// the bytes are not loaded.
 func (h *binaryHasher) updateAccount(addr common.Address, account AccountMut) error {
-	// Determine code size: use the new code length if provided,
-	// otherwise fall back to the cached or trie-stored value.
-	//
-	// TODO(rjl493456442) the contract code length is not assigned
-	// if it's not modified, fix it.
-	codeLen := 0
-	if account.Code != nil {
-		codeLen = len(account.Code.Code)
-	}
 	data := &types.StateAccount{
 		Nonce:    account.Account.Nonce,
 		Balance:  account.Account.Balance,
 		CodeHash: account.Account.CodeHash,
 	}
-	if err := h.trie.UpdateAccount(addr, data, codeLen); err != nil {
+	if err := h.trie.UpdateAccount(addr, data, account.CodeSize); err != nil {
 		return err
 	}
 	// Write chunked code into the trie when dirty.

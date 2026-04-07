@@ -787,7 +787,18 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			continue
 		}
 		obj := s.stateObjects[addr]
-		mut := AccountMut{Account: &obj.data}
+		// CodeSize must be the account's CURRENT total code size, even for
+		// non-code-touching mutations. obj.CodeSize() returns len(obj.code)
+		// when the code is loaded, otherwise falls back to a code-size
+		// lookup via the reader. Hashers that pack code size into the
+		// on-trie account encoding (e.g. the binary trie BasicData leaf,
+		// per EIP-7864) rely on this value. Passing the default 0 here on
+		// a balance/nonce-only update would silently corrupt the BasicData
+		// leaf of every contract touched without a code write.
+		mut := AccountMut{
+			Account:  &obj.data,
+			CodeSize: obj.CodeSize(),
+		}
 		if obj.dirtyCode {
 			mut.Code = &CodeMut{Code: obj.code}
 
