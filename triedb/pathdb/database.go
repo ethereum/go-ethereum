@@ -125,10 +125,11 @@ type Database struct {
 	// readOnly is the flag whether the mutation is allowed to be applied.
 	// It will be set automatically when the database is journaled during
 	// the shutdown to reject all following unexpected mutations.
-	readOnly bool       // Flag if database is opened in read only mode
-	waitSync bool       // Flag if database is deactivated due to initial state sync
-	isVerkle bool       // Flag if database is used for verkle tree
-	hasher   nodeHasher // Trie node hasher
+	readOnly  bool           // Flag if database is opened in read only mode
+	waitSync  bool           // Flag if database is deactivated due to initial state sync
+	isVerkle  bool           // Flag if database is used for verkle tree
+	hasher    nodeHasher     // Trie node hasher
+	flatCodec flatStateCodec // Flat-state key derivation, persistence and iteration
 
 	config *Config        // Configuration for database
 	diskdb ethdb.Database // Persistent storage for matured trie nodes
@@ -153,11 +154,12 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	config = config.sanitize()
 
 	db := &Database{
-		readOnly: config.ReadOnly,
-		isVerkle: isVerkle,
-		config:   config,
-		diskdb:   diskdb,
-		hasher:   merkleNodeHasher,
+		readOnly:  config.ReadOnly,
+		isVerkle:  isVerkle,
+		config:    config,
+		diskdb:    diskdb,
+		hasher:    merkleNodeHasher,
+		flatCodec: &merkleFlatCodec{},
 	}
 	// Establish a dedicated database namespace tailored for verkle-specific
 	// data, ensuring the isolation of both verkle and merkle tree data. It's
@@ -167,6 +169,10 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	if isVerkle {
 		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.VerklePrefix))
 		db.hasher = binaryNodeHasher
+		// NOTE: bintrieFlatCodec is introduced in a later commit. Until then,
+		// verkle databases also use the merkle codec for backward compatibility
+		// (the existing snapshot path is disabled for verkle anyway via the
+		// noBuild guard at setStateGenerator).
 	}
 	// Construct the layer tree by resolving the in-disk singleton state
 	// and in-memory layer journal.
