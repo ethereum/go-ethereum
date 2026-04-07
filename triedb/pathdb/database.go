@@ -276,7 +276,7 @@ func (db *Database) setStateGenerator() error {
 	// Construct the generator and link it to the disk layer, ensuring that the
 	// generation progress is resolved to prevent accessing uncovered states
 	// regardless of whether background state snapshot generation is allowed.
-	dl.setGenerator(newGenerator(db.diskdb, noBuild, generator.Marker, stats))
+	dl.setGenerator(newGenerator(db.diskdb, db.flatCodec, noBuild, generator.Marker, stats))
 
 	// Short circuit if the background generation is not permitted
 	if noBuild || db.waitSync {

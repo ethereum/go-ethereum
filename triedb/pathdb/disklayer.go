@@ -17,7 +17,6 @@
 package pathdb
 
 import (
-	"bytes"
 	"fmt"
 	"sync"
 	"time"
@@ -199,13 +198,15 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 
 	// If the layer is being generated, ensure the requested account has
 	// already been covered by the generator.
+	codec := dl.db.flatCodec
 	marker := dl.genMarker()
-	if marker != nil && bytes.Compare(hash.Bytes(), marker) > 0 {
+	if marker != nil && codec.MarkerCompare(hash.Bytes(), marker) > 0 {
 		return nil, errNotCoveredYet
 	}
 	// Try to retrieve the account from the memory cache
+	cacheKey := codec.AccountCacheKey(hash)
 	if dl.states != nil {
-		if blob, found := dl.states.HasGet(nil, hash[:]); found {
+		if blob, found := dl.states.HasGet(nil, cacheKey); found {
 			cleanStateHitMeter.Mark(1)
 			cleanStateReadMeter.Mark(int64(len(blob)))
 
@@ -219,7 +220,7 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 		cleanStateMissMeter.Mark(1)
 	}
 	// Try to retrieve the account from the disk.
-	blob := rawdb.ReadAccountSnapshot(dl.db.diskdb, hash)
+	blob := codec.ReadAccount(dl.db.diskdb, hash)
 
 	// Store the resolved data in the clean cache. The background buffer flusher
 	// may also write to the clean cache concurrently, but two writers cannot
@@ -227,7 +228,7 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 	// it will be found in the frozen buffer, eliminating the need to check the
 	// database.
 	if dl.states != nil {
-		dl.states.Set(hash[:], blob)
+		dl.states.Set(cacheKey, blob)
 		cleanStateWriteMeter.Mark(int64(len(blob)))
 	}
 	if len(blob) == 0 {
@@ -276,14 +277,19 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 
 	// If the layer is being generated, ensure the requested storage slot
 	// has already been covered by the generator.
-	key := storageKeySlice(accountHash, storageHash)
+	codec := dl.db.flatCodec
+	combinedKey := storageKeySlice(accountHash, storageHash) // marker comparison key (merkle layout)
 	marker := dl.genMarker()
-	if marker != nil && bytes.Compare(key, marker) > 0 {
+	if marker != nil && codec.MarkerCompare(combinedKey, marker) > 0 {
 		return nil, errNotCoveredYet
 	}
-	// Try to retrieve the storage slot from the memory cache
+	// Try to retrieve the storage slot from the memory cache. The codec
+	// decides the cache key shape so it can avoid colliding with account
+	// keys (relevant once the bintrie codec lands; for merkle this remains
+	// the historical 64-byte combined key).
+	cacheKey := codec.StorageCacheKey(accountHash, storageHash)
 	if dl.states != nil {
-		if blob, found := dl.states.HasGet(nil, key); found {
+		if blob, found := dl.states.HasGet(nil, cacheKey); found {
 			cleanStateHitMeter.Mark(1)
 			cleanStateReadMeter.Mark(int64(len(blob)))
 
@@ -296,8 +302,8 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 		}
 		cleanStateMissMeter.Mark(1)
 	}
-	// Try to retrieve the account from the disk
-	blob := rawdb.ReadStorageSnapshot(dl.db.diskdb, accountHash, storageHash)
+	// Try to retrieve the storage slot from the disk
+	blob := codec.ReadStorage(dl.db.diskdb, accountHash, storageHash)
 
 	// Store the resolved data in the clean cache. The background buffer flusher
 	// may also write to the clean cache concurrently, but two writers cannot
@@ -305,7 +311,7 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 	// it will be found in the frozen buffer, eliminating the need to check the
 	// database.
 	if dl.states != nil {
-		dl.states.Set(key, blob)
+		dl.states.Set(cacheKey, blob)
 		cleanStateWriteMeter.Mark(int64(len(blob)))
 	}
 	if len(blob) == 0 {
@@ -491,7 +497,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 
 		// Freeze the live buffer and schedule background flushing
 		dl.frozen = combined
-		dl.frozen.flush(bottom.root, dl.db.diskdb, []ethdb.AncientWriter{dl.db.stateFreezer, dl.db.trienodeFreezer}, progress, dl.nodes, dl.states, bottom.stateID(), func() {
+		dl.frozen.flush(bottom.root, dl.db.diskdb, dl.db.flatCodec, []ethdb.AncientWriter{dl.db.stateFreezer, dl.db.trienodeFreezer}, progress, dl.nodes, dl.states, bottom.stateID(), func() {
 			// Resume the background generation if it's not completed yet.
 			// The generator is assumed to be available if the progress is
 			// not nil.
@@ -599,7 +605,7 @@ func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 	writeNodes(batch, nodes, dl.nodes)
 
 	// Provide the original values of modified accounts and storages for revert
-	writeStates(batch, progress, accounts, storages, dl.states)
+	writeStates(batch, dl.db.flatCodec, progress, accounts, storages, dl.states)
 	rawdb.WritePersistentStateID(batch, dl.id-1)
 	rawdb.WriteSnapshotRoot(batch, h.meta.parent)
 	if err := batch.Write(); err != nil {

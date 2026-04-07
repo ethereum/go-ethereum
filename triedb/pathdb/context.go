@@ -95,19 +95,21 @@ type generatorContext struct {
 	account *holdableIterator   // Iterator of account snapshot data
 	storage *holdableIterator   // Iterator of storage snapshot data
 	db      ethdb.KeyValueStore // Key-value store containing the snapshot data
+	codec   flatStateCodec      // Flat-state codec for prefix/key-length selection
 	batch   ethdb.Batch         // Database batch for writing data atomically
 	logged  time.Time           // The timestamp when last generation progress was displayed
 }
 
 // newGeneratorContext initializes the context for generation.
-func newGeneratorContext(root common.Hash, marker []byte, db ethdb.KeyValueStore) *generatorContext {
+func newGeneratorContext(root common.Hash, marker []byte, db ethdb.KeyValueStore, codec flatStateCodec) *generatorContext {
 	ctx := &generatorContext{
 		root:   root,
 		db:     db,
+		codec:  codec,
 		batch:  db.NewBatch(),
 		logged: time.Now(),
 	}
-	accMarker, storageMarker := splitMarker(marker)
+	accMarker, storageMarker := codec.SplitMarker(marker)
 	ctx.openIterator(snapAccount, accMarker)
 	ctx.openIterator(snapStorage, storageMarker)
 	return ctx
@@ -118,12 +120,12 @@ func newGeneratorContext(root common.Hash, marker []byte, db ethdb.KeyValueStore
 // to time to avoid blocking leveldb compaction for a long time.
 func (ctx *generatorContext) openIterator(kind string, start []byte) {
 	if kind == snapAccount {
-		iter := ctx.db.NewIterator(rawdb.SnapshotAccountPrefix, start)
-		ctx.account = newHoldableIterator(rawdb.NewKeyLengthIterator(iter, 1+common.HashLength))
+		iter := ctx.db.NewIterator(ctx.codec.AccountPrefix(), start)
+		ctx.account = newHoldableIterator(rawdb.NewKeyLengthIterator(iter, ctx.codec.AccountKeyLength()))
 		return
 	}
-	iter := ctx.db.NewIterator(rawdb.SnapshotStoragePrefix, start)
-	ctx.storage = newHoldableIterator(rawdb.NewKeyLengthIterator(iter, 1+2*common.HashLength))
+	iter := ctx.db.NewIterator(ctx.codec.StoragePrefix(), start)
+	ctx.storage = newHoldableIterator(rawdb.NewKeyLengthIterator(iter, ctx.codec.StorageKeyLength()))
 }
 
 // reopenIterator releases the specified snapshot iterator and re-open it

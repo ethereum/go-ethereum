@@ -137,7 +137,7 @@ func TestAccountIteratorBasics(t *testing.T) {
 
 	db := rawdb.NewMemoryDatabase()
 	batch := db.NewBatch()
-	states.write(batch, nil, nil)
+	states.write(batch, &merkleFlatCodec{}, nil, nil)
 	batch.Write()
 	it = newDiskAccountIterator(db, common.Hash{})
 	verifyIterator(t, 100, it, verifyNothing) // Nil is allowed for single layer iterator
@@ -176,7 +176,7 @@ func TestStorageIteratorBasics(t *testing.T) {
 
 	db := rawdb.NewMemoryDatabase()
 	batch := db.NewBatch()
-	states.write(batch, nil, nil)
+	states.write(batch, &merkleFlatCodec{}, nil, nil)
 	batch.Write()
 	for account := range accounts {
 		it := newDiskStorageIterator(db, account, common.Hash{})

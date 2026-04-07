@@ -260,7 +260,7 @@ func (r *HistoricalStateReader) AccountRLP(address common.Address) ([]byte, erro
 	// and try to define a low granularity lock if the current approach doesn't
 	// work later.
 	dl := r.db.tree.bottom()
-	hash := crypto.Keccak256Hash(address.Bytes())
+	hash := r.db.flatCodec.AccountKey(address)
 	latest, err := dl.account(hash, 0)
 	if err != nil {
 		return nil, err
@@ -310,8 +310,7 @@ func (r *HistoricalStateReader) Storage(address common.Address, key common.Hash)
 	// and try to define a low granularity lock if the current approach doesn't
 	// work later.
 	dl := r.db.tree.bottom()
-	addrHash := crypto.Keccak256Hash(address.Bytes())
-	keyHash := crypto.Keccak256Hash(key.Bytes())
+	addrHash, keyHash := r.db.flatCodec.StorageKey(address, key)
 	latest, err := dl.storage(addrHash, keyHash, 0)
 	if err != nil {
 		return nil, err

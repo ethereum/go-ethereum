@@ -71,10 +71,16 @@ func writeNodes(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.No
 // This function assumes the background generator is already terminated and states
 // before the supplied marker has been correctly generated.
 //
+// The codec parameter abstracts the trie-specific persistence and cache key
+// derivation. The marker comparisons retain merkle-specific shape (two-tier
+// account+storage marker) because the bintrie path uses a separate writer
+// (writeStems, added in a later commit) that operates on a single-tier
+// marker over stems rather than (account, storage) pairs.
+//
 // TODO(rjl493456442) do we really need this generation marker? The state updates
 // after the marker can also be written and will be fixed by generator later if
 // it's outdated.
-func writeStates(batch ethdb.Batch, genMarker []byte, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte, clean *fastcache.Cache) (int, int) {
+func writeStates(batch ethdb.Batch, codec flatStateCodec, genMarker []byte, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte, clean *fastcache.Cache) (int, int) {
 	var (
 		accounts int
 		slots    int
@@ -88,15 +94,16 @@ func writeStates(batch ethdb.Batch, genMarker []byte, accountData map[common.Has
 			continue
 		}
 		accounts += 1
+		cacheKey := codec.AccountCacheKey(addrHash)
 		if len(blob) == 0 {
-			rawdb.DeleteAccountSnapshot(batch, addrHash)
+			codec.DeleteAccount(batch, addrHash)
 			if clean != nil {
-				clean.Set(addrHash[:], nil)
+				clean.Set(cacheKey, nil)
 			}
 		} else {
-			rawdb.WriteAccountSnapshot(batch, addrHash, blob)
+			codec.WriteAccount(batch, addrHash, blob)
 			if clean != nil {
-				clean.Set(addrHash[:], blob)
+				clean.Set(cacheKey, blob)
 			}
 		}
 	}
@@ -116,16 +123,16 @@ func writeStates(batch ethdb.Batch, genMarker []byte, accountData map[common.Has
 				continue
 			}
 			slots += 1
-			key := storageKeySlice(addrHash, storageHash)
+			cacheKey := codec.StorageCacheKey(addrHash, storageHash)
 			if len(blob) == 0 {
-				rawdb.DeleteStorageSnapshot(batch, addrHash, storageHash)
+				codec.DeleteStorage(batch, addrHash, storageHash)
 				if clean != nil {
-					clean.Set(key, nil)
+					clean.Set(cacheKey, nil)
 				}
 			} else {
-				rawdb.WriteStorageSnapshot(batch, addrHash, storageHash, blob)
+				codec.WriteStorage(batch, addrHash, storageHash, blob)
 				if clean != nil {
-					clean.Set(key, blob)
+					clean.Set(cacheKey, blob)
 				}
 			}
 		}
