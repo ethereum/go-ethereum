@@ -216,10 +216,15 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 		return nil, nil
 	}
 
-	// If the account has been deleted, then values[10] will be 0 and not nil. If it has
-	// been recreated after that, then its code keccak will NOT be 0. So return `nil` if
-	// the nonce, and values[10], and code keccak is 0.
-	if bytes.Equal(values[BasicDataLeafKey], zero[:]) && len(values) > 10 && len(values[10]) > 0 && bytes.Equal(values[CodeHashLeafKey], zero[:]) {
+	// If the account has been deleted, BasicData and CodeHash will both be
+	// 32-byte zero blobs (not nil) and the accountDeletedMarkerKey sentinel
+	// will be a non-empty 32-byte zero blob written by DeleteAccount. If the
+	// account has been recreated since, UpdateAccount will have overwritten
+	// BasicData and CodeHash with non-zero values, so this branch won't hit.
+	if bytes.Equal(values[BasicDataLeafKey], zero[:]) &&
+		len(values) > accountDeletedMarkerKey &&
+		len(values[accountDeletedMarkerKey]) > 0 &&
+		bytes.Equal(values[CodeHashLeafKey], zero[:]) {
 		return nil, nil
 	}
 
@@ -294,10 +299,46 @@ func (t *BinaryTrie) UpdateStorage(address common.Address, key, value []byte) er
 	return nil
 }
 
-// DeleteAccount is a no-op as it is disabled in stateless.
+// DeleteAccount removes the account metadata (basic data and code hash) for
+// the given address from the trie.
+//
+// Binary trie leaves cannot be "physically" removed — there is no delete
+// primitive on StemNode. Instead, the bintrie uses a tombstone convention:
+// BasicData (offset 0) and CodeHash (offset 1) are overwritten with 32 zero
+// bytes, and a non-nil 32-byte sentinel is written at the deletion marker
+// offset that GetAccount consults. This matches the detection logic at
+// GetAccount around trie.go:219 which treats "BasicData and CodeHash are
+// zero AND the sentinel is present" as an absent account while still
+// distinguishing it from "never existed" (all-nil slots).
+//
+// Storage slots and code chunks are NOT touched by this function. If the
+// caller needs to wipe storage on self-destruct, it must walk the relevant
+// slots explicitly — bintrie's unified keyspace has no cheap way to
+// enumerate every slot of a given account.
 func (t *BinaryTrie) DeleteAccount(addr common.Address) error {
-	return nil
+	var (
+		err      error
+		zeroBlob [HashSize]byte
+		values   = make([][]byte, StemNodeWidth)
+		stem     = GetBinaryTreeKey(addr, zero[:])
+	)
+	// Clear BasicData (nonce, balance, code size) and CodeHash.
+	values[BasicDataLeafKey] = zeroBlob[:]
+	values[CodeHashLeafKey] = zeroBlob[:]
+	// Write a non-nil 32-byte sentinel at the deletion marker offset so
+	// GetAccount can tell "deleted" apart from "never existed" on a
+	// subsequent read. See GetAccount's deletion branch around trie.go:219.
+	values[accountDeletedMarkerKey] = zeroBlob[:]
+
+	t.root, err = t.root.InsertValuesAtStem(stem, values, t.nodeResolver, 0)
+	return err
 }
+
+// accountDeletedMarkerKey is the stem offset used as a "this account was
+// deleted" sentinel. It lives in the EIP-7864 reserved range (offsets 2-63)
+// and is consulted only by GetAccount's deletion-detection branch. Keep this
+// in sync with the check in GetAccount (trie.go:219).
+const accountDeletedMarkerKey = 10
 
 // DeleteStorage removes any existing value for key from the trie. If a node was not
 // found in the database, a trie.MissingNodeError is returned.
