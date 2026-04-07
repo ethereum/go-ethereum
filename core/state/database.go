@@ -204,10 +204,25 @@ func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 	// This reader offers improved performance but is optional and only
 	// partially useful if the snapshot data in path database is not
 	// fully generated.
+	//
+	// For binary-trie databases the reader needs codec-specific key
+	// derivation (EIP-7864 stem || offset) and a separate decode path
+	// (BasicData/CodeHash leaves rather than slim RLP), so we install
+	// a bintrieFlatReader instead of the historical merkle flatReader.
+	// If the underlying path-database reader can't expose raw-byte
+	// access — e.g. a hypothetical wrapper that only implements the
+	// minimal database.StateReader — we silently fall through to the
+	// trie reader, which always works.
 	if db.TrieDB().Scheme() == rawdb.PathScheme {
 		reader, err := db.triedb.StateReader(stateRoot)
 		if err == nil {
-			readers = append(readers, newFlatReader(reader))
+			if db.TrieDB().IsVerkle() {
+				if br := newBintrieFlatReader(reader); br != nil {
+					readers = append(readers, br)
+				}
+			} else {
+				readers = append(readers, newFlatReader(reader))
+			}
 		}
 	}
 	// Configure the trie reader, which is expected to be available as the

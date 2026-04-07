@@ -254,7 +254,7 @@ func (g *generator) checkAndFlushBin(ctx *bintrieGeneratorContext, current []byt
 		// Persist progress regardless of whether the batch is empty —
 		// it may be that all observed stems were already on disk and
 		// nothing actually changed.
-		journalProgress(ctx.batch, current, g.stats)
+		g.journalProgress(ctx.batch, current, g.stats)
 
 		if err := ctx.batch.Write(); err != nil {
 			return err
@@ -296,7 +296,7 @@ func (g *generator) generateBintrie(ctx *bintrieGeneratorContext) {
 	if len(g.progress) == 0 {
 		batch := ctx.db.NewBatch()
 		rawdb.WriteSnapshotRoot(batch, ctx.root)
-		journalProgress(batch, g.progress, g.stats)
+		g.journalProgress(batch, g.progress, g.stats)
 		if err := batch.Write(); err != nil {
 			log.Crit("Failed to write initialized bintrie state marker", "err", err)
 		}
@@ -319,7 +319,7 @@ func (g *generator) generateBintrie(ctx *bintrieGeneratorContext) {
 
 	// Successful completion: write the nil "done" marker so subsequent
 	// loads know the snapshot is complete.
-	journalProgress(ctx.batch, nil, g.stats)
+	g.journalProgress(ctx.batch, nil, g.stats)
 	if err := ctx.batch.Write(); err != nil {
 		log.Error("Failed to flush bintrie batch", "err", err)
 		abort = <-g.abort

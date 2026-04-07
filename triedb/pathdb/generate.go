@@ -206,13 +206,20 @@ func generateSnapshot(triedb *Database, root common.Hash, noBuild bool) *diskLay
 }
 
 // journalProgress persists the generator stats into the database to resume later.
-func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorStats) {
+//
+// It is a method on generator so it can stamp the journal entry with the
+// active scheme (merkle vs. bintrie). loadGenerator uses that flag to
+// discard journals from a different scheme rather than blindly resuming
+// with an incompatible marker shape.
+func (g *generator) journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorStats) {
 	// Write out the generator marker. Note it's a standalone disk layer generator
 	// which is not mixed with journal. It's ok if the generator is persisted while
 	// journal is not.
+	_, isBintrie := g.codec.(*bintrieFlatCodec)
 	entry := journalGenerator{
-		Done:   marker == nil,
-		Marker: marker,
+		Done:      marker == nil,
+		Marker:    marker,
+		IsBintrie: isBintrie,
 	}
 	if stats != nil {
 		entry.Accounts = stats.accounts
@@ -603,7 +610,7 @@ func (g *generator) checkAndFlush(ctx *generatorContext, current []byte) error {
 		// Persist the progress marker regardless of whether the batch is empty or not.
 		// It may happen that all the flat states in the database are correct, so the
 		// generator indeed makes progress even if there is nothing to commit.
-		journalProgress(ctx.batch, current, g.stats)
+		g.journalProgress(ctx.batch, current, g.stats)
 
 		// Flush out the database writes atomically
 		if err := ctx.batch.Write(); err != nil {
@@ -782,7 +789,7 @@ func (g *generator) generate(ctx *generatorContext) {
 	if len(g.progress) == 0 {
 		batch := g.db.NewBatch()
 		rawdb.WriteSnapshotRoot(batch, ctx.root)
-		journalProgress(batch, g.progress, g.stats)
+		g.journalProgress(batch, g.progress, g.stats)
 		if err := batch.Write(); err != nil {
 			log.Crit("Failed to write initialized state marker", "err", err)
 		}
@@ -815,7 +822,7 @@ func (g *generator) generate(ctx *generatorContext) {
 	// Snapshot fully generated, set the marker to nil.
 	// Note even there is nothing to commit, persist the
 	// generator anyway to mark the snapshot is complete.
-	journalProgress(ctx.batch, nil, g.stats)
+	g.journalProgress(ctx.batch, nil, g.stats)
 	if err := ctx.batch.Write(); err != nil {
 		log.Error("Failed to flush batch", "err", err)
 		abort = <-g.abort

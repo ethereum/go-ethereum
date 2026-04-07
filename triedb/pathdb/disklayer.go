@@ -17,6 +17,7 @@
 package pathdb
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -535,6 +536,18 @@ func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 	}
 	if dl.id == 0 {
 		return nil, fmt.Errorf("%w: zero state id", errStateUnrecoverable)
+	}
+	// Bintrie flat state does not yet support revert. State history for
+	// bintrie carries keccak-keyed account/storage entries (the merkle
+	// shape), but the bintrie disk layout is per-stem and the merkle
+	// origin maps cannot be replayed onto it. Reorgs would silently
+	// produce wrong answers — fail loudly here so misuse is obvious.
+	//
+	// See BINTRIE_FLAT_STATE_REORG_GAP.md for the full design and the
+	// follow-up that lifts this restriction by emitting bintrie-shaped
+	// origin records on the write path.
+	if _, isBintrie := dl.db.flatCodec.(*bintrieFlatCodec); isBintrie {
+		return nil, errors.New("bintrie flat state revert is not supported (see BINTRIE_FLAT_STATE_REORG_GAP.md)")
 	}
 	// Apply the reverse state changes upon the current state. This must
 	// be done before holding the lock in order to access state in "this"

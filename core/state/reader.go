@@ -179,6 +179,128 @@ func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 	return value, nil
 }
 
+// bintrieFlatReader is the binary-trie analogue of flatReader. It exposes
+// the StateReader interface backed by the path database's per-stem flat
+// state, doing the EIP-7864 key derivation locally so the underlying
+// pathdb reader only sees raw 32-byte (stem || offset) lookup keys.
+//
+// Each Account call performs TWO underlying lookups (BasicData at offset
+// 0 and CodeHash at offset 1), because the diff layers store one entry
+// per offset rather than a pre-aggregated stem blob — this lets two
+// different blocks touch the same account at different offsets without
+// stomping on each other. Storage calls perform a single lookup at the
+// slot's full bintrie key.
+//
+// The reader holds a pathdb.RawStateReader (a small extension of
+// database.StateReader that exposes AccountRLP for raw-byte access)
+// because reader.Account() in pathdb decodes its result as slim RLP,
+// which is the wrong format for bintrie leaves. AccountRLP returns the
+// raw 32-byte leaf value untouched.
+type bintrieFlatReader struct {
+	reader pathdbRawStateReader
+}
+
+// pathdbRawStateReader is the local view of pathdb.RawStateReader. It is
+// duplicated here (rather than imported) to avoid pulling pathdb into
+// every consumer of state.StateReader; the runtime type-assertion in
+// CachingDB.StateReader satisfies the interface dynamically.
+type pathdbRawStateReader interface {
+	database.StateReader
+	AccountRLP(hash common.Hash) ([]byte, error)
+}
+
+// newBintrieFlatReader constructs a state reader backed by the bintrie
+// codec. It returns nil if the underlying database.StateReader is not
+// raw-byte capable (which would be the case for any merkle path-database
+// reader); callers should fall through to the trie reader in that case.
+func newBintrieFlatReader(reader database.StateReader) *bintrieFlatReader {
+	raw, ok := reader.(pathdbRawStateReader)
+	if !ok {
+		return nil
+	}
+	return &bintrieFlatReader{reader: raw}
+}
+
+// Account implements StateReader. It performs two underlying reads — one
+// for the BasicData leaf (offset 0) and one for the CodeHash leaf
+// (offset 1) — and combines them into a unified Account. If both leaves
+// are absent the account is treated as non-existent (return nil, nil).
+//
+// Returning nil-with-no-error matches the merkle flatReader's
+// "not present" semantics: the trie reader is the gatekeeper that
+// distinguishes "missing" from "present-with-zero-balance".
+func (r *bintrieFlatReader) Account(addr common.Address) (*Account, error) {
+	basicKey := common.BytesToHash(bintrie.GetBinaryTreeKeyBasicData(addr))
+	codeKey := common.BytesToHash(bintrie.GetBinaryTreeKeyCodeHash(addr))
+
+	basicBlob, err := r.reader.AccountRLP(basicKey)
+	if err != nil {
+		return nil, err
+	}
+	codeBlob, err := r.reader.AccountRLP(codeKey)
+	if err != nil {
+		return nil, err
+	}
+	if len(basicBlob) == 0 && len(codeBlob) == 0 {
+		return nil, nil
+	}
+	// A bintrie leaf is always either absent or exactly 32 bytes; a
+	// shorter blob is a corruption signal we surface as an error rather
+	// than silently constructing a junk account.
+	if len(basicBlob) != 0 && len(basicBlob) != 32 {
+		return nil, errors.New("bintrie BasicData leaf has invalid length")
+	}
+	if len(codeBlob) != 0 && len(codeBlob) != 32 {
+		return nil, errors.New("bintrie CodeHash leaf has invalid length")
+	}
+
+	acct := &Account{}
+	if len(basicBlob) == 32 {
+		var basic [32]byte
+		copy(basic[:], basicBlob)
+		nonce, balance, _ := bintrie.UnpackBasicData(basic)
+		acct.Nonce = nonce
+		acct.Balance = balance
+	} else {
+		// CodeHash present but BasicData absent: treat as a freshly
+		// created account whose body has not been written yet. The
+		// merkle path returns the empty-balance form in this case too.
+		acct.Balance = uint256.NewInt(0)
+	}
+	if len(codeBlob) == 32 {
+		acct.CodeHash = common.CopyBytes(codeBlob)
+	} else {
+		acct.CodeHash = types.EmptyCodeHash.Bytes()
+	}
+	return acct, nil
+}
+
+// Storage implements StateReader. The caller's (addr, slot) pair is
+// turned into a single 32-byte (stem || offset) bintrie key via
+// GetBinaryTreeKeyStorageSlot, and we look it up via AccountRLP because
+// the diff layer stores all bintrie leaves under accountData regardless
+// of whether they came from an account header or a storage write.
+//
+// A nil result means "no entry in the flat state"; the caller must
+// distinguish this from "entry present with zero value", which the
+// bintrie writes as 32 zero bytes (the bintrie's tombstone convention).
+func (r *bintrieFlatReader) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
+	fullKey := bintrie.GetBinaryTreeKeyStorageSlot(addr, slot[:])
+	blob, err := r.reader.AccountRLP(common.BytesToHash(fullKey))
+	if err != nil {
+		return common.Hash{}, err
+	}
+	if len(blob) == 0 {
+		return common.Hash{}, nil
+	}
+	if len(blob) != 32 {
+		return common.Hash{}, errors.New("bintrie storage leaf has invalid length")
+	}
+	var value common.Hash
+	copy(value[:], blob)
+	return value, nil
+}
+
 // trieReader implements the StateReader interface, providing functions to access
 // state from the referenced trie.
 //
