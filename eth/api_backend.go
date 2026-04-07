@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -276,6 +277,19 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 func (b *EthAPIBackend) HistoryPruningCutoff() uint64 {
 	bn, _ := b.eth.blockchain.HistoryPruningCutoff()
 	return bn
+}
+
+func (b *EthAPIBackend) HistoryRetention() ethapi.HistoryRetention {
+	cfg := b.eth.config
+	return ethapi.HistoryRetention{
+		TxIndexHistory:   cfg.TransactionHistory,
+		LogIndexHistory:  cfg.LogHistory,
+		LogIndexDisabled: cfg.LogNoHistory,
+		StateHistory:     cfg.StateHistory,
+		TrienodeHistory:  cfg.TrienodeHistory,
+		StateArchive:     cfg.NoPruning,
+		StateScheme:      b.eth.blockchain.TrieDB().Scheme(),
+	}
 }
 
 func (b *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
