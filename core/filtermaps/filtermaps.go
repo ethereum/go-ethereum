@@ -135,6 +135,18 @@ type FilterMaps struct {
 	testProcessEventsHook                  func()
 }
 
+// IndexProgress reports the currently indexed log range.
+type IndexProgress struct {
+	Disabled         bool
+	Initialized      bool
+	HeadIndexed      bool
+	TailBlock        uint64
+	HeadBlock        uint64
+	MapsFirst        uint32
+	MapsAfterLast    uint32
+	TailPartialEpoch uint32
+}
+
 // filterMap is a full or partial in-memory representation of a filter map where
 // rows are allowed to have a nil value meaning the row is not stored in the
 // structure. Note that therefore a known empty row should be represented with
@@ -296,6 +308,30 @@ func (f *FilterMaps) Start() {
 func (f *FilterMaps) Stop() {
 	close(f.closeCh)
 	f.closeWg.Wait()
+}
+
+// IndexProgress returns the currently indexed log range.
+func (f *FilterMaps) IndexProgress() IndexProgress {
+	f.indexLock.RLock()
+	defer f.indexLock.RUnlock()
+
+	progress := IndexProgress{
+		Initialized:      f.indexedRange.initialized,
+		HeadIndexed:      f.indexedRange.headIndexed,
+		MapsFirst:        f.indexedRange.maps.First(),
+		MapsAfterLast:    f.indexedRange.maps.AfterLast(),
+		TailPartialEpoch: f.indexedRange.tailPartialEpoch,
+	}
+	if f.indexedRange.hasIndexedBlocks() {
+		progress.TailBlock = f.indexedRange.blocks.First()
+		progress.HeadBlock = f.indexedRange.blocks.Last()
+	}
+	select {
+	case <-f.disabledCh:
+		progress.Disabled = true
+	default:
+	}
+	return progress
 }
 
 // checkRevertRange checks whether the existing index is consistent with the
