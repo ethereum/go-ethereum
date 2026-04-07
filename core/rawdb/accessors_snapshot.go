@@ -112,6 +112,34 @@ func DeleteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash com
 	}
 }
 
+// ReadBinTrieStem retrieves the flat-state stem blob for the given 31-byte
+// stem. Returns nil if no entry exists under this stem.
+//
+// The stem blob is a packed representation of the (offset, value) pairs at
+// that stem in the binary trie; callers must decode it to extract any
+// specific offset. See trie/bintrie and EIP-7864 for the on-trie layout.
+func ReadBinTrieStem(db ethdb.KeyValueReader, stem []byte) []byte {
+	data, _ := db.Get(binTrieStemKey(stem))
+	return data
+}
+
+// WriteBinTrieStem stores the flat-state stem blob for the given 31-byte
+// stem. The blob is written verbatim; encoding/decoding is the caller's
+// responsibility.
+func WriteBinTrieStem(db ethdb.KeyValueWriter, stem []byte, blob []byte) {
+	if err := db.Put(binTrieStemKey(stem), blob); err != nil {
+		log.Crit("Failed to store bintrie stem", "err", err)
+	}
+}
+
+// DeleteBinTrieStem removes the flat-state stem blob entry for the given
+// 31-byte stem.
+func DeleteBinTrieStem(db ethdb.KeyValueWriter, stem []byte) {
+	if err := db.Delete(binTrieStemKey(stem)); err != nil {
+		log.Crit("Failed to delete bintrie stem", "err", err)
+	}
+}
+
 // IterateStorageSnapshots returns an iterator for walking the entire storage
 // space of a specific account.
 func IterateStorageSnapshots(db ethdb.Iteratee, accountHash common.Hash) ethdb.Iterator {

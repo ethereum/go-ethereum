@@ -126,6 +126,20 @@ var (
 	TrieNodeStoragePrefix = []byte("O") // TrieNodeStoragePrefix + accountHash + hexPath -> trie node
 	stateIDPrefix         = []byte("L") // stateIDPrefix + state root -> state id
 
+	// Binary-trie flat-state scheme. A stem is 31 bytes per EIP-7864 (the
+	// common prefix of the 32-byte tree key); the stored value is a packed
+	// blob containing the subset of 256 offset values that are populated
+	// for this stem (layout: 32-byte bitmap of present offsets, followed
+	// by N 32-byte values in offset order).
+	//
+	// Note: bintrie pathdb wraps the disk database in a table keyed by
+	// VerklePrefix ("v"), so this prefix is effectively nested inside "v"
+	// when used by pathdb. It is defined as a distinct top-level byte
+	// ("X") to prevent accidental collisions with other top-level
+	// namespaces (e.g. blockBodyPrefix "b") when the codec is ever used
+	// against an unwrapped database.
+	BinTrieStemPrefix = []byte("X") // BinTrieStemPrefix + stem(31B) -> stem blob
+
 	// State history indexing within path-based storage scheme
 	StateHistoryIndexPrefix           = []byte("m")   // The global prefix of state history index data
 	StateHistoryAccountMetadataPrefix = []byte("ma")  // StateHistoryAccountMetadataPrefix + account address hash => account metadata
@@ -294,6 +308,22 @@ func storageTrieNodeKey(accountHash common.Hash, path []byte) []byte {
 	n := copy(buf, TrieNodeStoragePrefix)
 	n += copy(buf[n:], accountHash.Bytes())
 	copy(buf[n:], path)
+	return buf
+}
+
+// binTrieStemKey = BinTrieStemPrefix + stem (31 bytes).
+//
+// A bintrie stem is the common 31-byte prefix of the 32-byte tree key (see
+// EIP-7864). The stem blob stored under this key holds the packed set of
+// (offset, value) pairs at that stem, from which BasicData (offset 0),
+// CodeHash (offset 1), header storage (offsets 64-127), code chunks
+// (offsets 128-255) and main-storage slots can be extracted.
+func binTrieStemKey(stem []byte) []byte {
+	// Callers always pass a 31-byte stem. We allocate the exact size to
+	// avoid accidental aliasing with backing storage.
+	buf := make([]byte, len(BinTrieStemPrefix)+len(stem))
+	n := copy(buf, BinTrieStemPrefix)
+	copy(buf[n:], stem)
 	return buf
 }
 
