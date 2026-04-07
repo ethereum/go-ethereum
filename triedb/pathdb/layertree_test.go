@@ -916,3 +916,118 @@ func TestStorageLookup(t *testing.T) {
 		}
 	}
 }
+
+// TestLookupZeroBaseRootFallback is a regression test for a sentinel
+// collision in accountTip/storageTip: before the fix they returned
+// common.Hash{} as both the "stale" marker and the disk-layer fallback
+// when the disk root itself happened to be zero. lookupAccount/Storage
+// then misreported a legitimate fallback as errSnapshotStale.
+//
+// On the merkle path the collision was invisible because the empty
+// merkle trie hashes to types.EmptyRootHash (a concrete non-zero
+// keccak), so the disk layer's root was never the zero hash in
+// practice. The bug only surfaces once the disk layer root can
+// legitimately be zero (for example a fresh verkle/bintrie database
+// where the empty binary trie hashes to EmptyVerkleHash ==
+// common.Hash{}).
+//
+// The test constructs a layer tree whose base layer's root IS the zero
+// hash, stacks diff layers on top, and exercises four cases:
+//
+//  1. Look up an account NEVER written → should fall through to the
+//     disk layer and return (diskLayer, nil). Before the fix this
+//     returned errSnapshotStale because the fallback hash collided
+//     with the sentinel.
+//  2. Symmetric case for lookupStorage.
+//  3. Look up an account written in a diff layer → should return that
+//     diff layer (the normal happy path is unaffected by the fix).
+//  4. Look up any key at a state root that isn't part of the tree
+//     (neither the disk root nor a descendant of it) → MUST still
+//     return errSnapshotStale. This pins the "other half" of the
+//     contract so a future refactor that always returns ok=true would
+//     fail here.
+func TestLookupZeroBaseRootFallback(t *testing.T) {
+	// Build a layer tree whose disk-layer root is common.Hash{} —
+	// mirrors the bintrie/verkle configuration where the empty trie
+	// hashes to EmptyVerkleHash. newTestLayerTree can't be reused
+	// because it hard-codes common.Hash{0x1}.
+	db := New(rawdb.NewMemoryDatabase(), nil, false)
+	base := newDiskLayer(common.Hash{}, 0, db, nil, nil, newBuffer(0, nil, nil, 0), nil)
+	tr := newLayerTree(base)
+
+	// Stack two diff layers on the zero-rooted disk layer, each
+	// touching a known account and slot so we have something for the
+	// happy-path lookups to find later.
+	if err := tr.add(
+		common.Hash{0x2}, common.Hash{},
+		1,
+		NewNodeSetWithOrigin(nil, nil),
+		NewStateSetWithOrigin(
+			randomAccountSet("0xa"),
+			randomStorageSet([]string{"0xa"}, [][]string{{"0x1"}}, nil),
+			nil, nil, false),
+	); err != nil {
+		t.Fatalf("add first diff layer: %v", err)
+	}
+	if err := tr.add(
+		common.Hash{0x3}, common.Hash{0x2},
+		2,
+		NewNodeSetWithOrigin(nil, nil),
+		NewStateSetWithOrigin(
+			randomAccountSet("0xb"),
+			nil, nil, nil, false),
+	); err != nil {
+		t.Fatalf("add second diff layer: %v", err)
+	}
+
+	// Case 1: unknown account queried at the head. The lookup must
+	// fall through the diff layers, hit the disk-layer fallback at
+	// base=common.Hash{}, and return the disk layer with no error —
+	// NOT errSnapshotStale.
+	l, err := tr.lookupAccount(common.HexToHash("0xdead"), common.Hash{0x3})
+	if err != nil {
+		t.Fatalf("lookupAccount on zero-base disk layer: unexpected error %v", err)
+	}
+	if l.rootHash() != (common.Hash{}) {
+		t.Errorf("expected fall-through to disk layer (root=0), got %x", l.rootHash())
+	}
+
+	// Case 2: symmetric check for storage. Slot 0x99 was never written,
+	// so the lookup must fall through to the disk layer just like
+	// Case 1.
+	l, err = tr.lookupStorage(
+		common.HexToHash("0xdead"), common.HexToHash("0x99"), common.Hash{0x3})
+	if err != nil {
+		t.Fatalf("lookupStorage on zero-base disk layer: unexpected error %v", err)
+	}
+	if l.rootHash() != (common.Hash{}) {
+		t.Errorf("expected fall-through to disk layer (root=0), got %x", l.rootHash())
+	}
+
+	// Case 3: happy path. Account 0xa was written at diff layer 0x2.
+	// The lookup must return that layer, proving the fix didn't break
+	// the normal resolution path.
+	l, err = tr.lookupAccount(common.HexToHash("0xa"), common.Hash{0x3})
+	if err != nil {
+		t.Fatalf("lookupAccount(known): %v", err)
+	}
+	if l.rootHash() != (common.Hash{0x2}) {
+		t.Errorf("known account tip: want %x, got %x",
+			common.Hash{0x2}, l.rootHash())
+	}
+
+	// Case 4: truly stale state root. This pins the other half of the
+	// contract — the boolean must actually signal not-found for an
+	// unknown state, otherwise a refactor that always returned
+	// ok=true would still pass cases 1–3.
+	_, err = tr.lookupAccount(common.HexToHash("0xa"), common.HexToHash("0xdeadbeef"))
+	if !errors.Is(err, errSnapshotStale) {
+		t.Errorf("lookupAccount(stale state): want errSnapshotStale, got %v", err)
+	}
+	_, err = tr.lookupStorage(
+		common.HexToHash("0xa"), common.HexToHash("0x1"),
+		common.HexToHash("0xdeadbeef"))
+	if !errors.Is(err, errSnapshotStale) {
+		t.Errorf("lookupStorage(stale state): want errSnapshotStale, got %v", err)
+	}
+}
