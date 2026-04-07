@@ -17,12 +17,14 @@
 package state
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
@@ -264,5 +266,119 @@ func TestBinaryHasherWitness(t *testing.T) {
 	}
 	if nodesWithRead <= nodesWithoutRead {
 		t.Fatalf("read-only prefetching should add extra nodes to witness: got %d (with read) vs %d (without)", nodesWithRead, nodesWithoutRead)
+	}
+}
+
+// TestBinaryHasherLeafProduction verifies that binaryHasher implements
+// LeafProducer and reports stem writes corresponding to each trie
+// mutation. Covers the three mutation kinds the hasher performs:
+// account update, storage update, and account delete.
+func TestBinaryHasherLeafProduction(t *testing.T) {
+	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.VerkleDefaults)
+	h := newTestBinaryHasher(t, db, types.EmptyBinaryHash, hasherTestConfig{"leaf", false, false})
+
+	// Type assertion: binaryHasher must satisfy LeafProducer.
+	lp, ok := Hasher(h).(LeafProducer)
+	if !ok {
+		t.Fatal("binaryHasher should implement LeafProducer")
+	}
+
+	// --- Account update: expect two writes (BasicData + CodeHash) ---
+	if err := h.UpdateAccount(
+		[]common.Address{hasherAddr1},
+		[]AccountMut{hasherAccount(1, 100)},
+	); err != nil {
+		t.Fatalf("UpdateAccount: %v", err)
+	}
+	writes := lp.DrainStemWrites()
+	if len(writes) != 2 {
+		t.Fatalf("UpdateAccount: got %d stem writes, want 2 (BasicData + CodeHash)", len(writes))
+	}
+	// Offsets 0 and 1 respectively, and the BasicData stem matches the
+	// CodeHash stem (same address → same 31-byte stem).
+	if writes[0].Offset != bintrie.BasicDataLeafKey {
+		t.Errorf("write[0].Offset = %d, want %d (BasicDataLeafKey)", writes[0].Offset, bintrie.BasicDataLeafKey)
+	}
+	if writes[1].Offset != bintrie.CodeHashLeafKey {
+		t.Errorf("write[1].Offset = %d, want %d (CodeHashLeafKey)", writes[1].Offset, bintrie.CodeHashLeafKey)
+	}
+	if writes[0].Stem != writes[1].Stem {
+		t.Errorf("stems differ: %x vs %x", writes[0].Stem, writes[1].Stem)
+	}
+	if len(writes[0].Value) != 32 {
+		t.Errorf("write[0].Value length = %d, want 32", len(writes[0].Value))
+	}
+	if len(writes[1].Value) != 32 {
+		t.Errorf("write[1].Value length = %d, want 32", len(writes[1].Value))
+	}
+	// The code hash leaf should be the empty-code hash (non-zero).
+	if !bytes.Equal(writes[1].Value, types.EmptyCodeHash.Bytes()) {
+		t.Errorf("write[1].Value = %x, want empty code hash %x", writes[1].Value, types.EmptyCodeHash.Bytes())
+	}
+
+	// --- Drain again: should be empty (drain is destructive) ---
+	if again := lp.DrainStemWrites(); len(again) != 0 {
+		t.Fatalf("second drain should be empty, got %d writes", len(again))
+	}
+
+	// --- Storage update: non-zero value produces one write ---
+	if err := h.UpdateStorage(hasherAddr1, []common.Hash{hasherSlot1}, []common.Hash{hasherVal1}); err != nil {
+		t.Fatalf("UpdateStorage: %v", err)
+	}
+	writes = lp.DrainStemWrites()
+	if len(writes) != 1 {
+		t.Fatalf("UpdateStorage: got %d writes, want 1", len(writes))
+	}
+	// The recorded value should match hasherVal1 (a common.Hash), which
+	// is already 32 bytes wide.
+	if !bytes.Equal(writes[0].Value, hasherVal1[:]) {
+		t.Errorf("UpdateStorage value: got %x, want %x", writes[0].Value, hasherVal1)
+	}
+
+	// --- Storage "delete" (zero value): one write with 32 zero bytes ---
+	if err := h.UpdateStorage(hasherAddr1, []common.Hash{hasherSlot1}, []common.Hash{{}}); err != nil {
+		t.Fatalf("UpdateStorage (zero): %v", err)
+	}
+	writes = lp.DrainStemWrites()
+	if len(writes) != 1 {
+		t.Fatalf("UpdateStorage (zero): got %d writes, want 1", len(writes))
+	}
+	var zeros [32]byte
+	if !bytes.Equal(writes[0].Value, zeros[:]) {
+		t.Errorf("zero-value storage write should record 32 zero bytes, got %x", writes[0].Value)
+	}
+
+	// --- Account delete: two writes with nil values ---
+	if err := h.UpdateAccount(
+		[]common.Address{hasherAddr1},
+		[]AccountMut{{Account: nil}},
+	); err != nil {
+		t.Fatalf("UpdateAccount delete: %v", err)
+	}
+	writes = lp.DrainStemWrites()
+	if len(writes) != 2 {
+		t.Fatalf("delete: got %d writes, want 2 (BasicData + CodeHash clear)", len(writes))
+	}
+	for i, w := range writes {
+		if w.Value != nil {
+			t.Errorf("delete write[%d] should have nil Value (clear), got %x", i, w.Value)
+		}
+	}
+	if writes[0].Offset != bintrie.BasicDataLeafKey || writes[1].Offset != bintrie.CodeHashLeafKey {
+		t.Errorf("delete offsets: got %d,%d, want %d,%d", writes[0].Offset, writes[1].Offset, bintrie.BasicDataLeafKey, bintrie.CodeHashLeafKey)
+	}
+}
+
+// TestMerkleHasherNoLeafProducer verifies that merkleHasher does NOT
+// implement LeafProducer — the interface is strictly opt-in and the MPT
+// path has no concept of stem writes.
+func TestMerkleHasherNoLeafProducer(t *testing.T) {
+	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
+	h, err := newMerkleHasher(types.EmptyRootHash, db, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := Hasher(h).(LeafProducer); ok {
+		t.Fatal("merkleHasher should NOT implement LeafProducer")
 	}
 }

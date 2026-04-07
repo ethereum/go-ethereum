@@ -54,6 +54,55 @@ type Hashes struct {
 	Prev common.Hash // Pre-mutation root
 }
 
+// StemWrite describes a single write to a bintrie stem offset. It is used
+// by LeafProducer-capable hashers to report flat-state mutations derived
+// from their trie updates so a downstream flat-state layer can be kept
+// consistent with the hasher's on-trie view.
+//
+// Stem is the 31-byte common prefix of the EIP-7864 tree key. Offset is
+// the index into the stem's 256-value group (0..255). Value is the
+// 32-byte leaf value that was written; the caller uses the per-call
+// policy documented on the binary hasher:
+//   - Account create/update: two writes (BasicData, CodeHash) with
+//     non-nil 32-byte values.
+//   - Storage update to a non-zero value: one write with the 32-byte
+//     normalized value.
+//   - Storage update to zero (the bintrie's "delete" convention): one
+//     write with 32 zero bytes (tombstone / present with zero).
+//   - Account delete: two writes with nil values, signalling the flat
+//     state to clear the corresponding offsets.
+type StemWrite struct {
+	Stem   [31]byte
+	Offset byte
+	Value  []byte
+}
+
+// LeafProducer is an optional extension to Hasher for implementations
+// that track flat-state mutations alongside trie updates. Callers use it
+// to harvest the set of stem writes needed to keep an out-of-band flat
+// state layer consistent with the hasher's trie mutations.
+//
+// The binary hasher implements this interface; the merkle hasher does
+// not, because merkle flat state is MPT-shaped and does not use stems.
+// Callers check via a type assertion:
+//
+//	if lp, ok := h.(LeafProducer); ok {
+//	    writes := lp.DrainStemWrites()
+//	    // ... propagate writes into the state update ...
+//	}
+//
+// DrainStemWrites is intended to be called ONCE per block, AFTER all
+// UpdateAccount/UpdateStorage calls for that block have completed. The
+// implementation must reset its internal buffer on drain so subsequent
+// calls return only writes accumulated since the last drain.
+type LeafProducer interface {
+	// DrainStemWrites returns all stem writes accumulated since the last
+	// drain, in the order they were produced, and resets the internal
+	// buffer. The returned slice is owned by the caller; the hasher
+	// allocates a fresh slice on the next update.
+	DrainStemWrites() []StemWrite
+}
+
 // Hasher defines the minimal interface for computing state root hashes.
 //
 // It abstracts over different trie implementations, such as the traditional

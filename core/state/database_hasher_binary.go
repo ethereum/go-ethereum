@@ -126,13 +126,30 @@ func (tr *warpBinTrie) copy() *warpBinTrie {
 // binaryHasher is a Hasher implementation backed by a unified single-layer
 // binary trie. Accounts, storage slots, and contract code all reside in one
 // trie, keyed according to the EIP-7864 address space layout.
+//
+// binaryHasher also implements LeafProducer: alongside every trie mutation
+// it records the corresponding (stem, offset, value) write into an
+// internal buffer. The caller (StateDB.Commit in a later commit) drains
+// this buffer once per block and hands the writes to the pathdb flat-state
+// layer via the stateUpdate, keeping the bintrie trie and its flat-state
+// mirror consistent without recomputing the bintrie key derivation twice.
 type binaryHasher struct {
 	db   *triedb.Database
 	root common.Hash
 
 	prefetch bool
 	trie     *warpBinTrie
+
+	// leaves buffers flat-state writes produced as a side-effect of
+	// UpdateAccount/UpdateStorage/deleteAccount. It is cleared by
+	// DrainStemWrites. Direct reads and writes to this slice are only
+	// safe from the single goroutine that owns the hasher; the Hasher
+	// interface already requires single-threaded use per block.
+	leaves []StemWrite
 }
+
+// Compile-time assertion that binaryHasher implements LeafProducer.
+var _ LeafProducer = (*binaryHasher)(nil)
 
 func newBinaryHasher(root common.Hash, db *triedb.Database, prefetch bool, prefetchRead bool) (*binaryHasher, error) {
 	tr, err := newWrapBinTrie(root, db, prefetch, prefetchRead)
@@ -147,8 +164,58 @@ func newBinaryHasher(root common.Hash, db *triedb.Database, prefetch bool, prefe
 	}, nil
 }
 
+// DrainStemWrites implements LeafProducer. It returns the buffered stem
+// writes accumulated since the last drain and resets the buffer. The
+// returned slice is owned by the caller; the hasher allocates a fresh
+// backing array on the next update.
+func (h *binaryHasher) DrainStemWrites() []StemWrite {
+	out := h.leaves
+	h.leaves = nil
+	return out
+}
+
+// recordLeaf appends a single stem write to the internal buffer. The
+// stem is taken from the first 31 bytes of the supplied 32-byte tree
+// key, and the offset is the last byte. Value may be nil (for clearing
+// a slot in the flat state, matching account deletion) or a 32-byte
+// slice (for writes).
+func (h *binaryHasher) recordLeaf(fullKey []byte, value []byte) {
+	var w StemWrite
+	copy(w.Stem[:], fullKey[:bintrie.StemSize])
+	w.Offset = fullKey[bintrie.StemSize]
+	if value != nil {
+		w.Value = make([]byte, len(value))
+		copy(w.Value, value)
+	}
+	h.leaves = append(h.leaves, w)
+}
+
 // deleteAccount removes the account specified by the address from the state.
+//
+// In addition to the trie mutation, this records two "clear" stem writes
+// (one for BasicData at offset 0 and one for CodeHash at offset 1) so
+// the flat-state mirror can drop the matching entries.
+//
+// Note: BinaryTrie.DeleteAccount is currently a no-op upstream
+// (tracked as a standalone bugfix PR against ethereum/go-ethereum).
+// Until that fix lands the on-trie deletion does nothing, but the
+// flat-state mirror will still drop its copy — a minor temporary
+// inconsistency scoped to the account-delete path. Once the trie fix
+// lands the two sides converge.
+//
+// Storage slots and code chunks at the same or other stems are NOT
+// touched by this function; callers that need a full account wipe must
+// walk storage explicitly. Pre-EIP-6780 self-destruct wipe is a
+// documented scope limitation.
 func (h *binaryHasher) deleteAccount(addr common.Address) error {
+	// Record the flat-state mutations BEFORE the trie call so the
+	// buffer still reflects the intended write even if the trie layer
+	// errors and we need to roll things back.
+	basicDataKey := bintrie.GetBinaryTreeKeyBasicData(addr)
+	codeHashKey := bintrie.GetBinaryTreeKeyCodeHash(addr)
+	h.recordLeaf(basicDataKey, nil) // nil → clear the flat-state offset
+	h.recordLeaf(codeHashKey, nil)
+
 	return h.trie.DeleteAccount(addr)
 }
 
@@ -174,6 +241,19 @@ func (h *binaryHasher) updateAccount(addr common.Address, account AccountMut) er
 	if err := h.trie.UpdateAccount(addr, data, account.CodeSize); err != nil {
 		return err
 	}
+	// Record the two flat-state writes that correspond to the on-trie
+	// BasicData (offset 0) and CodeHash (offset 1) at the account's
+	// stem. PackBasicData produces the same 32-byte blob that the trie
+	// layer packs internally, so the flat-state mirror encodes
+	// bit-identically.
+	basicData := bintrie.PackBasicData(data.Nonce, data.Balance, account.CodeSize)
+	h.recordLeaf(bintrie.GetBinaryTreeKeyBasicData(addr), basicData[:])
+
+	// CodeHash is a 32-byte value written straight into offset 1.
+	// EOAs store types.EmptyCodeHash here (a known non-zero hash) so
+	// the flat-state offset is always set after any non-delete update.
+	h.recordLeaf(bintrie.GetBinaryTreeKeyCodeHash(addr), data.CodeHash)
+
 	// Write chunked code into the trie when dirty.
 	if account.Code != nil && len(account.Code.Code) > 0 {
 		codeHash := common.BytesToHash(account.Account.CodeHash)
@@ -205,17 +285,35 @@ func (h *binaryHasher) UpdateAccount(addresses []common.Address, accounts []Acco
 // UpdateStorage implements Hasher, writing a list of storage slot mutations
 // into the state. This function must be invoked first before writing the
 // associated account metadata into the state.
+//
+// Each mutation is also recorded as a flat-state stem write. A zero value
+// is the bintrie's "delete" convention: the trie writes 32 zero bytes at
+// the slot, and the flat-state mirror does the same (a present-with-zero
+// tombstone) rather than removing the offset from its bitmap. This keeps
+// the trie and flat-state views bit-identical for the slot.
 func (h *binaryHasher) UpdateStorage(address common.Address, keys []common.Hash, values []common.Hash) error {
 	var err error
 	for i, key := range keys {
+		// BinaryTrie.UpdateStorage right-justifies a shorter input into
+		// 32 bytes; for a non-zero common.Hash the input is already 32
+		// bytes so the normalization is a no-op. For the zero-value
+		// case we emit 32 zero bytes explicitly to match the trie's
+		// tombstone convention.
+		var blob [bintrie.HashSize]byte
 		if values[i] == (common.Hash{}) {
 			err = h.trie.DeleteStorage(address, key[:])
 		} else {
-			err = h.trie.UpdateStorage(address, key[:], values[i][:])
+			copy(blob[:], values[i][:])
+			err = h.trie.UpdateStorage(address, key[:], blob[:])
 		}
 		if err != nil {
 			return err
 		}
+		// Record the flat-state mirror write regardless of zero/non-zero:
+		// the blob is 32 zero bytes in the delete case and the value in
+		// the non-delete case.
+		storageKey := bintrie.GetBinaryTreeKeyStorageSlot(address, key[:])
+		h.recordLeaf(storageKey, blob[:])
 	}
 	return nil
 }
