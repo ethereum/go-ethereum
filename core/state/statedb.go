@@ -1010,7 +1010,16 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 			builder.CollectWitness(s.witness)
 		}
 	}
-	return newStateUpdate(noStorageWiping, origin, root, blockNumber, deletes, updates, nodes, secondaryHashes), nil
+	// If the hasher tracks flat-state leaf production (currently only the
+	// binary hasher), drain the buffered stem writes so the downstream
+	// state update can carry them into the pathdb flat-state layer. Merkle
+	// hashers do not implement this interface and the call short-circuits
+	// to nil — newStateUpdate accepts nil as "no leaves".
+	var leaves []StemWrite
+	if producer, ok := s.hasher.(LeafProducer); ok {
+		leaves = producer.DrainStemWrites()
+	}
+	return newStateUpdate(noStorageWiping, origin, root, blockNumber, deletes, updates, nodes, secondaryHashes, leaves), nil
 }
 
 // commitAndFlush is a wrapper of commit which also commits the state mutations

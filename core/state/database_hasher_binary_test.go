@@ -382,3 +382,84 @@ func TestMerkleHasherNoLeafProducer(t *testing.T) {
 		t.Fatal("merkleHasher should NOT implement LeafProducer")
 	}
 }
+
+// TestStateUpdateEncodeBinaryFromLeaves verifies that stateUpdate.encodeBinary
+// turns a slice of StemWrite values into the per-offset accountData map that
+// pathdb's bintrie codec consumes. Three things matter:
+//
+//  1. Every leaf becomes one accountData entry, keyed by stem||offset.
+//  2. nil-value leaves (account/storage deletes) become nil entries.
+//  3. Non-nil leaves are deeply copied — encodeBinary must not retain
+//     pointers into the hasher's internal slab.
+//
+// storages/storageOrigin/accountOrigin remain empty: the bintrie path uses
+// only accountData (per the layered-read design) and does not yet support
+// state-history rollback.
+func TestStateUpdateEncodeBinaryFromLeaves(t *testing.T) {
+	// Build a small leaves slice covering each kind of write the binary
+	// hasher emits: account update (BasicData + CodeHash), storage write,
+	// and a delete (nil value).
+	var (
+		stemA [bintrie.StemSize]byte
+		stemB [bintrie.StemSize]byte
+	)
+	for i := range stemA {
+		stemA[i] = byte(0x10 + i)
+		stemB[i] = byte(0xA0 + i)
+	}
+	basicDataValue := bytes.Repeat([]byte{0xAA}, 32)
+	codeHashValue := bytes.Repeat([]byte{0xBB}, 32)
+	storageValue := bytes.Repeat([]byte{0xCC}, 32)
+
+	leaves := []StemWrite{
+		// Account update at stemA: BasicData + CodeHash.
+		{Stem: stemA, Offset: bintrie.BasicDataLeafKey, Value: basicDataValue},
+		{Stem: stemA, Offset: bintrie.CodeHashLeafKey, Value: codeHashValue},
+		// Storage write at stemB.
+		{Stem: stemB, Offset: 7, Value: storageValue},
+		// Account delete at a third stem (nil values clear offsets 0+1).
+		{Stem: [bintrie.StemSize]byte{0xFF, 0xFF}, Offset: bintrie.BasicDataLeafKey, Value: nil},
+		{Stem: [bintrie.StemSize]byte{0xFF, 0xFF}, Offset: bintrie.CodeHashLeafKey, Value: nil},
+	}
+
+	su := &stateUpdate{leaves: leaves}
+	accounts, accountOrigin, storages, storageOrigin, err := su.encodeBinary()
+	if err != nil {
+		t.Fatalf("encodeBinary: %v", err)
+	}
+
+	if len(accounts) != len(leaves) {
+		t.Fatalf("accounts len = %d, want %d", len(accounts), len(leaves))
+	}
+	if len(storages) != 0 {
+		t.Errorf("storages should be empty for bintrie, got %d entries", len(storages))
+	}
+	if len(accountOrigin) != 0 || len(storageOrigin) != 0 {
+		t.Errorf("origin maps should be empty for bintrie")
+	}
+
+	// Check each leaf round-trips through the map under its full key.
+	for i, w := range leaves {
+		var fullKey common.Hash
+		copy(fullKey[:bintrie.StemSize], w.Stem[:])
+		fullKey[bintrie.StemSize] = w.Offset
+		got, ok := accounts[fullKey]
+		if !ok {
+			t.Errorf("leaf %d: missing key %x", i, fullKey)
+			continue
+		}
+		if w.Value == nil {
+			if got != nil {
+				t.Errorf("leaf %d: nil leaf became %x", i, got)
+			}
+			continue
+		}
+		if !bytes.Equal(got, w.Value) {
+			t.Errorf("leaf %d: got %x, want %x", i, got, w.Value)
+		}
+		// Aliasing check: the encoder must own its bytes.
+		if len(got) > 0 && &got[0] == &w.Value[0] {
+			t.Errorf("leaf %d: encodeBinary aliased the input slice", i)
+		}
+	}
+}

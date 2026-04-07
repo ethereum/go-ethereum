@@ -17,8 +17,6 @@
 package pathdb
 
 import (
-	"bytes"
-
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -71,71 +69,16 @@ func writeNodes(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.No
 // This function assumes the background generator is already terminated and states
 // before the supplied marker has been correctly generated.
 //
-// The codec parameter abstracts the trie-specific persistence and cache key
-// derivation. The marker comparisons retain merkle-specific shape (two-tier
-// account+storage marker) because the bintrie path uses a separate writer
-// (writeStems, added in a later commit) that operates on a single-tier
-// marker over stems rather than (account, storage) pairs.
+// The codec parameter abstracts the trie-specific persistence: merkleFlatCodec
+// performs a per-entry rawdb write for each accountData/storageData entry,
+// while bintrieFlatCodec aggregates per-offset writes into per-stem
+// read-modify-writes. Either way, the genMarker filtering, cache update, and
+// metric reporting all happen inside the codec — writeStates is just a thin
+// dispatcher.
 //
 // TODO(rjl493456442) do we really need this generation marker? The state updates
 // after the marker can also be written and will be fixed by generator later if
 // it's outdated.
 func writeStates(batch ethdb.Batch, codec flatStateCodec, genMarker []byte, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte, clean *fastcache.Cache) (int, int) {
-	var (
-		accounts int
-		slots    int
-	)
-	for addrHash, blob := range accountData {
-		// Skip any account not yet covered by the snapshot. The account
-		// at the generation marker position (addrHash == genMarker[:common.HashLength])
-		// should still be updated, as it would be skipped in the next
-		// generation cycle.
-		if genMarker != nil && bytes.Compare(addrHash[:], genMarker) > 0 {
-			continue
-		}
-		accounts += 1
-		cacheKey := codec.AccountCacheKey(addrHash)
-		if len(blob) == 0 {
-			codec.DeleteAccount(batch, addrHash)
-			if clean != nil {
-				clean.Set(cacheKey, nil)
-			}
-		} else {
-			codec.WriteAccount(batch, addrHash, blob)
-			if clean != nil {
-				clean.Set(cacheKey, blob)
-			}
-		}
-	}
-	for addrHash, storages := range storageData {
-		// Skip any account not covered yet by the snapshot
-		if genMarker != nil && bytes.Compare(addrHash[:], genMarker) > 0 {
-			continue
-		}
-		midAccount := genMarker != nil && bytes.Equal(addrHash[:], genMarker[:common.HashLength])
-
-		for storageHash, blob := range storages {
-			// Skip any storage slot not yet covered by the snapshot. The storage slot
-			// at the generation marker position (addrHash == genMarker[:common.HashLength]
-			// and storageHash == genMarker[common.HashLength:]) should still be updated,
-			// as it would be skipped in the next generation cycle.
-			if midAccount && bytes.Compare(storageHash[:], genMarker[common.HashLength:]) > 0 {
-				continue
-			}
-			slots += 1
-			cacheKey := codec.StorageCacheKey(addrHash, storageHash)
-			if len(blob) == 0 {
-				codec.DeleteStorage(batch, addrHash, storageHash)
-				if clean != nil {
-					clean.Set(cacheKey, nil)
-				}
-			} else {
-				codec.WriteStorage(batch, addrHash, storageHash, blob)
-				if clean != nil {
-					clean.Set(cacheKey, blob)
-				}
-			}
-		}
-	}
-	return accounts, slots
+	return codec.Flush(batch, genMarker, accountData, storageData, clean)
 }

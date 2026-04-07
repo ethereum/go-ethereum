@@ -265,3 +265,126 @@ func TestBintrieCodecSplitMarker(t *testing.T) {
 		t.Fatalf("SplitMarker: acc=%x full=%x, want both %x", acc, full, marker)
 	}
 }
+
+// TestBintrieCodecFlushAggregates verifies the per-stem aggregation that
+// the codec's Flush method performs. Two distinct offsets at the SAME stem
+// should produce a single on-disk stem blob containing both offsets after
+// one Flush call — proving the codec collapses what would have been N
+// read-modify-writes into one.
+//
+// Three offsets are written across two stems (2 + 1) so we exercise both
+// the multi-offset and single-offset paths in a single test.
+func TestBintrieCodecFlushAggregates(t *testing.T) {
+	codec, db := newTestBintrieCodec(t)
+
+	// Build a per-offset accountData map mimicking what encodeBinary
+	// produces from a binaryHasher.DrainStemWrites: the keys are full
+	// 32-byte (stem || offset) tuples and the values are 32-byte leaves.
+	addr := common.HexToAddress("0xCafeBabeDeadBeef00112233445566778899aabb")
+	stem := bintrie.GetBinaryTreeKey(addr, make([]byte, 32))[:bintrie.StemSize]
+
+	basicData := bytes.Repeat([]byte{0xAA}, stemBlobValueSize)
+	codeHash := bytes.Repeat([]byte{0xBB}, stemBlobValueSize)
+	storageVal := bytes.Repeat([]byte{0xCC}, stemBlobValueSize)
+	otherStem := bytes.Repeat([]byte{0x42}, bintrie.StemSize)
+	otherVal := bytes.Repeat([]byte{0xDD}, stemBlobValueSize)
+
+	mkKey := func(stem []byte, offset byte) common.Hash {
+		var k common.Hash
+		copy(k[:bintrie.StemSize], stem)
+		k[bintrie.StemSize] = offset
+		return k
+	}
+	accountData := map[common.Hash][]byte{
+		mkKey(stem, bintrie.BasicDataLeafKey):       basicData,
+		mkKey(stem, bintrie.CodeHashLeafKey):        codeHash,
+		mkKey(stem, 64):                             storageVal, // header storage slot
+		mkKey(otherStem, bintrie.BasicDataLeafKey):  otherVal,
+	}
+
+	batch := db.NewBatch()
+	accW, stoW := codec.Flush(batch, nil, accountData, nil, nil)
+	flushBatch(t, batch)
+
+	if accW != 4 {
+		t.Errorf("account write count: got %d, want 4", accW)
+	}
+	if stoW != 0 {
+		t.Errorf("storage write count: got %d, want 0 (no storage map)", stoW)
+	}
+
+	// All three offsets at `stem` should be readable from a single on-disk
+	// blob; aggregation worked iff the second/third writes did not clobber
+	// the first.
+	blob := rawdb.ReadBinTrieStem(db, stem)
+	if len(blob) == 0 {
+		t.Fatal("stem blob missing after Flush")
+	}
+	for offset, want := range map[byte][]byte{
+		bintrie.BasicDataLeafKey: basicData,
+		bintrie.CodeHashLeafKey:  codeHash,
+		64:                       storageVal,
+	} {
+		got, err := extractStemOffset(blob, offset)
+		if err != nil {
+			t.Fatalf("extract offset %d: %v", offset, err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("offset %d: got %x, want %x", offset, got, want)
+		}
+	}
+
+	// The other stem should also have its single offset.
+	otherBlob := rawdb.ReadBinTrieStem(db, otherStem)
+	if got, _ := extractStemOffset(otherBlob, bintrie.BasicDataLeafKey); !bytes.Equal(got, otherVal) {
+		t.Errorf("other stem BasicData: got %x, want %x", got, otherVal)
+	}
+}
+
+// TestBintrieCodecFlushDelete verifies that nil-valued entries in the
+// accountData map clear the corresponding offset, and that clearing every
+// populated offset at a stem removes the on-disk key entirely (matching
+// the per-call DeleteStorage semantics tested elsewhere).
+func TestBintrieCodecFlushDelete(t *testing.T) {
+	codec, db := newTestBintrieCodec(t)
+
+	// Seed: write two offsets at one stem.
+	stem := bytes.Repeat([]byte{0x77}, bintrie.StemSize)
+	v0 := bytes.Repeat([]byte{0x01}, stemBlobValueSize)
+	v1 := bytes.Repeat([]byte{0x02}, stemBlobValueSize)
+
+	mkKey := func(offset byte) common.Hash {
+		var k common.Hash
+		copy(k[:bintrie.StemSize], stem)
+		k[bintrie.StemSize] = offset
+		return k
+	}
+	batch := db.NewBatch()
+	codec.Flush(batch, nil, map[common.Hash][]byte{
+		mkKey(0): v0,
+		mkKey(1): v1,
+	}, nil, nil)
+	flushBatch(t, batch)
+
+	// Now flush a nil for offset 0 — only offset 1 should remain.
+	batch = db.NewBatch()
+	codec.Flush(batch, nil, map[common.Hash][]byte{mkKey(0): nil}, nil, nil)
+	flushBatch(t, batch)
+
+	blob := rawdb.ReadBinTrieStem(db, stem)
+	if got, _ := extractStemOffset(blob, 0); got != nil {
+		t.Errorf("offset 0 should be cleared, got %x", got)
+	}
+	if got, _ := extractStemOffset(blob, 1); !bytes.Equal(got, v1) {
+		t.Errorf("offset 1 should survive, got %x want %x", got, v1)
+	}
+
+	// Clear the last remaining offset; the on-disk key should disappear.
+	batch = db.NewBatch()
+	codec.Flush(batch, nil, map[common.Hash][]byte{mkKey(1): nil}, nil, nil)
+	flushBatch(t, batch)
+
+	if raw := rawdb.ReadBinTrieStem(db, stem); raw != nil {
+		t.Errorf("stem should be deleted, got %x", raw)
+	}
+}

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -236,22 +237,27 @@ func (c *bintrieFlatCodec) DeleteStorage(batch ethdb.Batch, _ common.Hash, stora
 // Write/Delete methods to ensure the policy (nil value clears, empty
 // blob deletes) is consistent.
 //
+// Returns the merged blob (or nil if the stem was deleted) so callers
+// such as Flush can repopulate the clean cache without an extra disk
+// read. The returned slice is freshly allocated and owned by the caller.
+//
 // Important: the read comes from c.db, NOT from the batch. A second
 // call for the same stem within a flush would re-read the pre-flush
 // state; see the pre-aggregation requirement documented on
 // bintrieFlatCodec.
-func (c *bintrieFlatCodec) applyWrites(batch ethdb.Batch, stem []byte, writes []stemOffsetValue) {
+func (c *bintrieFlatCodec) applyWrites(batch ethdb.Batch, stem []byte, writes []stemOffsetValue) []byte {
 	existing := rawdb.ReadBinTrieStem(c.db, stem)
 	merged, err := mergeStemBlob(existing, writes)
 	if err != nil {
 		crit("bintrie applyWrites: %v", err)
-		return
+		return nil
 	}
 	if merged == nil {
 		rawdb.DeleteBinTrieStem(batch, stem)
-		return
+		return nil
 	}
 	rawdb.WriteBinTrieStem(batch, stem, merged)
+	return merged
 }
 
 // splitAccountBlob validates and splits the two-slot account payload
@@ -373,6 +379,94 @@ func (c *bintrieFlatCodec) SplitMarker(marker []byte) ([]byte, []byte) {
 // ordering.
 func (c *bintrieFlatCodec) MarkerCompare(key []byte, marker []byte) int {
 	return bytes.Compare(key, marker)
+}
+
+// Flush drains the in-memory accountData and storageData maps into the
+// batch using the bintrie per-stem layout. The maps are expected to hold
+// per-offset entries — each key is a 32-byte (stem || offset) tuple
+// produced by AccountKey/StorageKey, and each value is a 32-byte leaf
+// (or nil to clear that offset).
+//
+// All entries are first grouped by stem, then a single
+// read-modify-write is issued per stem so the codec touches each stem
+// at most once during a flush. This is what allows the per-call
+// pre-aggregation requirement documented on bintrieFlatCodec to be
+// satisfied even when many writes target the same stem.
+//
+// storageData is also walked because higher-level callers may emit
+// storage entries that the codec routes through the storage map for
+// historical reasons; for the bintrie path, entries should normally
+// arrive on accountData but we accept either layout.
+//
+// Returns (offset count from accountData, offset count from storageData)
+// so the metric reporting in writeStates remains comparable to the
+// merkle path. The clean cache is updated with the merged stem blob
+// (one cache entry per stem, not per offset) — readers extract the
+// requested offset on hit.
+func (c *bintrieFlatCodec) Flush(batch ethdb.Batch, genMarker []byte, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte, clean *fastcache.Cache) (int, int) {
+	// Aggregate per-offset writes into per-stem batches. We use [31]byte
+	// as the map key because bytes slices aren't hashable in Go and the
+	// stem itself is fixed size; the alternative (using common.Hash with
+	// a zero pad) would waste a byte per entry.
+	type aggregator struct {
+		writes []stemOffsetValue
+	}
+	aggregated := make(map[[bintrie.StemSize]byte]*aggregator)
+
+	addWrite := func(fullKey common.Hash, value []byte) {
+		var stem [bintrie.StemSize]byte
+		copy(stem[:], fullKey[:bintrie.StemSize])
+		offset := fullKey[bintrie.StemSize]
+		ag, exists := aggregated[stem]
+		if !exists {
+			ag = &aggregator{}
+			aggregated[stem] = ag
+		}
+		ag.writes = append(ag.writes, stemOffsetValue{Offset: offset, Value: value})
+	}
+
+	var (
+		accountWrites int
+		storageWrites int
+	)
+	for fullKey, value := range accountData {
+		// genMarker filtering: skip stems that the generator hasn't
+		// reached yet. We compare against the FULL key (stem || offset)
+		// because the bintrie marker is itself a 32-byte key.
+		if genMarker != nil && bytes.Compare(fullKey[:], genMarker) > 0 {
+			continue
+		}
+		accountWrites++
+		addWrite(fullKey, value)
+	}
+	for _, slots := range storageData {
+		for fullKey, value := range slots {
+			if genMarker != nil && bytes.Compare(fullKey[:], genMarker) > 0 {
+				continue
+			}
+			storageWrites++
+			addWrite(fullKey, value)
+		}
+	}
+	// Issue one RMW per stem and update the clean cache with the merged
+	// blob (or invalidate it if the stem was deleted).
+	for stem, ag := range aggregated {
+		merged := c.applyWrites(batch, stem[:], ag.writes)
+		if clean != nil {
+			// Reuse AccountCacheKey to derive the cache key — for
+			// bintrie this only depends on the stem so the trailing
+			// offset byte in the synthetic full key is irrelevant.
+			var fullKey common.Hash
+			copy(fullKey[:bintrie.StemSize], stem[:])
+			cacheKey := c.AccountCacheKey(fullKey)
+			if merged == nil {
+				clean.Set(cacheKey, nil)
+			} else {
+				clean.Set(cacheKey, merged)
+			}
+		}
+	}
+	return accountWrites, storageWrites
 }
 
 // crit is a shim around log.Crit that allows tests to replace the fatal

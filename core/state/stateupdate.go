@@ -91,6 +91,14 @@ type stateUpdate struct {
 	codes           map[common.Address]*contractCode // codes contains mutated contract codes, keyed by address.
 	nodes           *trienode.MergedNodeSet          // nodes aggregates all dirty trie nodes produced by the update.
 	secondaryHashes map[common.Address]Hashes        // hashes of secondary tries
+
+	// leaves is the ordered list of stem-offset writes harvested from a
+	// LeafProducer-capable hasher (the binary hasher). For merkle hashers
+	// it is always nil; for the binary hasher it is the bintrie's view of
+	// the same state mutations the trie just absorbed, in flat-state form.
+	// encodeBinary turns this into the per-offset accountData map that
+	// pathdb's bintrie codec consumes at flush time.
+	leaves []StemWrite
 }
 
 // empty returns a flag indicating the state transition is empty or not.
@@ -104,7 +112,11 @@ func (sc *stateUpdate) empty() bool {
 //
 // rawStorageKey is a flag indicating whether to use the raw storage slot key or
 // the hash of the slot key for constructing state update object.
-func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash, blockNumber uint64, deletes map[common.Hash]*accountDelete, updates map[common.Hash]*accountUpdate, nodes *trienode.MergedNodeSet, secondaryHashes map[common.Address]Hashes) *stateUpdate {
+//
+// leaves carries the per-offset stem writes produced by a LeafProducer-capable
+// hasher (the binary hasher). It is nil for merkle hashers and consumed by
+// encodeBinary to populate the bintrie flat-state map.
+func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash, blockNumber uint64, deletes map[common.Hash]*accountDelete, updates map[common.Hash]*accountUpdate, nodes *trienode.MergedNodeSet, secondaryHashes map[common.Address]Hashes, leaves []StemWrite) *stateUpdate {
 	var (
 		accounts       = make(map[common.Hash]*Account)
 		accountsOrigin = make(map[common.Address]*Account)
@@ -182,6 +194,7 @@ func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash
 		codes:           codes,
 		nodes:           nodes,
 		secondaryHashes: secondaryHashes,
+		leaves:          leaves,
 	}
 }
 
@@ -250,49 +263,50 @@ func (sc *stateUpdate) encodeMerkle() (map[common.Hash][]byte, map[common.Addres
 	return accounts, accountOrigin, storages, storageOrigin, nil
 }
 
+// encodeBinary produces the bintrie flat-state representation consumed by
+// pathdb. Unlike encodeMerkle (which keys accounts/storage by keccak hashes
+// and slim-RLP encodes the values), the bintrie path uses one entry per
+// EIP-7864 leaf:
+//
+//	key   = stem(31B) || offset(1B), zero-padded into a common.Hash
+//	value = the 32-byte leaf payload, or nil to clear the offset
+//
+// Account header writes (BasicData at offset 0, CodeHash at offset 1) and
+// storage slot / code chunk writes are uniform — the binary hasher emits
+// each as a stemWrite via DrainStemWrites and we route every one of them
+// into the accounts map. The storages map stays empty: bintrie has no
+// per-account storage grouping at the flat-state layer, and pathdb's
+// disklayer/lookup tree both work fine with a single accountData map of
+// 32-byte keys.
+//
+// accountOrigin and storageOrigin are returned empty because state-history
+// rollback for bintrie is deferred to a follow-up PR (see
+// BINTRIE_FLAT_STATE_REORG_GAP.md). The pathdb layer's revertTo path
+// panics for bintrie before it would observe these maps anyway.
 func (sc *stateUpdate) encodeBinary() (map[common.Hash][]byte, map[common.Address][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Address]map[common.Hash][]byte, error) {
 	var (
-		accounts      = make(map[common.Hash][]byte)
+		accounts      = make(map[common.Hash][]byte, len(sc.leaves))
 		storages      = make(map[common.Hash]map[common.Hash][]byte)
 		accountOrigin = make(map[common.Address][]byte)
 		storageOrigin = make(map[common.Address]map[common.Hash][]byte)
 	)
-	for addr, prev := range sc.accountsOrigin {
-		if prev == nil {
-			accountOrigin[addr] = nil
-		} else {
-			accountOrigin[addr] = types.SlimAccountRLP(types.StateAccount{
-				Balance:  prev.Balance,
-				Nonce:    prev.Nonce,
-				CodeHash: prev.CodeHash,
-			})
+	for _, w := range sc.leaves {
+		var fullKey common.Hash
+		copy(fullKey[:len(w.Stem)], w.Stem[:])
+		fullKey[len(w.Stem)] = w.Offset
+		// nil Value means "clear this offset" (account delete or storage
+		// slot wipe). The pathdb codec interprets a nil entry as a delete
+		// during flush, matching merkle's nil-blob convention.
+		if w.Value == nil {
+			accounts[fullKey] = nil
+			continue
 		}
-
-		addrHash := crypto.Keccak256Hash(addr.Bytes())
-		data := sc.accounts[addrHash]
-		if data == nil {
-			accounts[addrHash] = nil
-		} else {
-			accounts[addrHash] = types.SlimAccountRLP(types.StateAccount{
-				Balance:  data.Balance,
-				Nonce:    data.Nonce,
-				CodeHash: data.CodeHash,
-			})
-		}
-	}
-	for addr, slots := range sc.storagesOrigin {
-		subset := make(map[common.Hash][]byte)
-		for key, val := range slots {
-			subset[key] = encodeSlot(val)
-		}
-		storageOrigin[addr] = subset
-	}
-	for addrHash, slots := range sc.storages {
-		subset := make(map[common.Hash][]byte)
-		for key, val := range slots {
-			subset[key] = encodeSlot(val)
-		}
-		storages[addrHash] = subset
+		// Take an owning copy: the hasher reuses its underlying buffers
+		// across blocks, so retaining its slices would create cross-block
+		// aliasing bugs in the pathdb diff layer.
+		v := make([]byte, len(w.Value))
+		copy(v, w.Value)
+		accounts[fullKey] = v
 	}
 	return accounts, accountOrigin, storages, storageOrigin, nil
 }
