@@ -277,7 +277,14 @@ func (t *prestateTracer) processDiffState() {
 		}
 		if newCodeHash != prevCodeHash {
 			modified = true
-			postAccount.CodeHash = &newCodeHash
+			// If code was cleared, report the canonical empty code hash
+			// rather than the zero hash used for comparison.
+			if newCodeHash == (common.Hash{}) {
+				emptyHash := types.EmptyCodeHash
+				postAccount.CodeHash = &emptyHash
+			} else {
+				postAccount.CodeHash = &newCodeHash
+			}
 		}
 		if !t.config.DisableCode {
 			newCode := t.env.StateDB.GetCode(addr)
