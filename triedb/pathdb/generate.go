@@ -130,6 +130,13 @@ func newGenerator(db ethdb.KeyValueStore, codec flatStateCodec, noBuild bool, pr
 }
 
 // run starts the state snapshot generation in the background.
+//
+// The dispatch on codec type chooses between the merkle two-tier
+// account/storage iteration (`generate`) and the bintrie single-tier
+// stem iteration (`generateBintrie`). Both share the same lifecycle
+// (g.running, g.abort, g.done) and the same progress journal format,
+// so the only difference visible to callers of run/stop is which
+// background routine is launched.
 func (g *generator) run(root common.Hash) {
 	if g.noBuild {
 		log.Warn("Snapshot generation is not permitted")
@@ -140,6 +147,10 @@ func (g *generator) run(root common.Hash) {
 		log.Warn("Paused the leftover generation cycle")
 	}
 	g.running = true
+	if _, isBintrie := g.codec.(*bintrieFlatCodec); isBintrie {
+		go g.generateBintrie(newBintrieGeneratorContext(root, g.progress, g.db))
+		return
+	}
 	go g.generate(newGeneratorContext(root, g.progress, g.db, g.codec))
 }
 
