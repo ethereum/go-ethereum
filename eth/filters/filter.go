@@ -147,7 +147,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		return nil, err
 	}
 	if f.rangeLimit != 0 && (end-begin) > f.rangeLimit {
-		return nil, fmt.Errorf("exceed maximum block range: %d", f.rangeLimit)
+		return nil, errRangeLimitExceeded{limit: f.rangeLimit}
 	}
 	return f.rangeLogs(ctx, begin, end)
 }
