@@ -19,6 +19,7 @@ package filters
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"strings"
 	"testing"
