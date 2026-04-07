@@ -1368,3 +1368,87 @@ func TestStorageDirtiness(t *testing.T) {
 	state.RevertToSnapshot(snap)
 	checkDirty(common.Hash{0x1}, common.Hash{0x1}, true)
 }
+
+// TestVerkleCodeSizePreserved is a regression test for a latent bug in the
+// binary-trie path of updateStateObject: `len(obj.code)` was used as the
+// code length argument to trie.UpdateAccount, but obj.code is only loaded
+// when the code itself was modified in this block. For balance- or
+// nonce-only changes, obj.code is empty, so the previous version passed
+// codeLen=0, which zero'd out the codeSize field packed into the bintrie
+// BasicData leaf, corrupting the state root.
+//
+// The bug was invisible to the MPT path because StateTrie.UpdateAccount
+// ignores its codeLen parameter (the parameter is named `_`). For the
+// bintrie path where codeSize is part of the leaf blob, the corruption is
+// silent but real.
+//
+// This test verifies that the state root produced by "create contract,
+// commit, reload, modify balance, commit" matches the state root produced
+// by a single commit of the final state. Equality can only hold if the
+// code size survives the balance-only commit.
+func TestVerkleCodeSizePreserved(t *testing.T) {
+	newVerkleState := func(t *testing.T) (*StateDB, *triedb.Database) {
+		t.Helper()
+		disk := rawdb.NewMemoryDatabase()
+		tdb := triedb.NewDatabase(disk, triedb.VerkleDefaults)
+		sdb := NewDatabase(tdb, nil)
+		// For a fresh verkle pathdb, the disk layer root is EmptyVerkleHash
+		// (all-zero hash), not EmptyRootHash (keccak of empty RLP). Using
+		// the wrong one fails with "triedb parent layer missing" at commit.
+		state, err := New(types.EmptyVerkleHash, sdb)
+		if err != nil {
+			t.Fatalf("failed to initialize state: %v", err)
+		}
+		return state, tdb
+	}
+
+	var (
+		addr = common.HexToAddress("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+		code = make([]byte, 1234) // non-trivial code length, > 0 so codeSize matters
+	)
+	for i := range code {
+		code[i] = byte(i)
+	}
+
+	// Path A: create contract, commit, reload, modify only balance, commit.
+	// This is the bug scenario — on the second commit, obj.code is not
+	// loaded, so `len(obj.code)` would be 0 without the fix. We keep the
+	// triedb layers in memory (no tdb.Commit) so we can chain a second
+	// block on top of the first.
+	stateA, tdbA := newVerkleState(t)
+	sdbA := NewDatabase(tdbA, nil)
+	stateA.SetBalance(addr, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
+	stateA.SetCode(addr, code, tracing.CodeChangeUnspecified)
+	rootA1, err := stateA.Commit(0, true, false)
+	if err != nil {
+		t.Fatalf("path A first commit: %v", err)
+	}
+
+	// Reload state at rootA1. obj.code is NOT loaded in the new StateDB.
+	stateA, err = New(rootA1, sdbA)
+	if err != nil {
+		t.Fatalf("path A reload: %v", err)
+	}
+	// Balance-only modification. dirtyCode stays false; obj.code stays unloaded.
+	stateA.SetBalance(addr, uint256.NewInt(200), tracing.BalanceChangeUnspecified)
+	rootA2, err := stateA.Commit(1, true, false)
+	if err != nil {
+		t.Fatalf("path A second commit: %v", err)
+	}
+
+	// Path B: construct the same final state in one shot (balance=200 + code).
+	// obj.code is loaded because SetCode was just called, so codeSize is
+	// always correct here — this is the "known-good" reference.
+	stateB, _ := newVerkleState(t)
+	stateB.SetBalance(addr, uint256.NewInt(200), tracing.BalanceChangeUnspecified)
+	stateB.SetCode(addr, code, tracing.CodeChangeUnspecified)
+	rootB, err := stateB.Commit(0, true, false)
+	if err != nil {
+		t.Fatalf("path B commit: %v", err)
+	}
+
+	if rootA2 != rootB {
+		t.Fatalf("state root mismatch after balance-only update:\n  path A (reload + balance): %x\n  path B (fresh, same final state): %x\n  regression: updateStateObject passed codeLen=0 because obj.code was not loaded",
+			rootA2, rootB)
+	}
+}

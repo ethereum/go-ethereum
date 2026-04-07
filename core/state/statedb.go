@@ -560,8 +560,16 @@ func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common
 
 // updateStateObject writes the given object to the trie.
 func (s *StateDB) updateStateObject(obj *stateObject) {
-	// Encode the account and update the account trie
-	if err := s.trie.UpdateAccount(obj.Address(), &obj.data, len(obj.code)); err != nil {
+	// Encode the account and update the account trie. The code size must be
+	// the account's current total code size, not just the bytes loaded in
+	// this block. For balance/nonce-only updates `obj.code` is empty and
+	// `len(obj.code)` would spuriously be 0, which is invisible to the MPT
+	// path (StateTrie.UpdateAccount ignores its codeLen parameter) but
+	// corrupts the BasicData leaf for the binary trie path where the code
+	// size is packed into the leaf blob. obj.CodeSize() returns the cached
+	// code length, or falls back to a code-size lookup via the reader, so
+	// it's always correct for both paths.
+	if err := s.trie.UpdateAccount(obj.Address(), &obj.data, obj.CodeSize()); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", obj.Address(), err))
 	}
 	if obj.dirtyCode {
