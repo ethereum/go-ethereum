@@ -34,7 +34,7 @@ func newTestBinaryHasher(t *testing.T, db *triedb.Database, root common.Hash, cf
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { h.Close() })
+	t.Cleanup(func() { h.TermPrefetch() })
 	return h
 }
 
@@ -59,7 +59,7 @@ func commitAndReopenBinary(t *testing.T, h *binaryHasher, cfg hasherTestConfig) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { h2.Close() })
+	t.Cleanup(func() { h2.TermPrefetch() })
 	return h2
 }
 
@@ -209,7 +209,7 @@ func TestBinaryHasherCopy(t *testing.T) {
 	origRoot := h.Hash()
 
 	cpy := h.Copy()
-	defer cpy.(*binaryHasher).Close()
+	defer cpy.(*binaryHasher).TermPrefetch()
 
 	// Mutate the copy: delete slot3, add slot2 with new value.
 	if err := cpy.UpdateStorage(hasherAddr1, []common.Hash{hasherSlot3, hasherSlot2}, []common.Hash{{}, hasherVal3}); err != nil {

@@ -88,6 +88,9 @@ type Prefetcher interface {
 
 	// PrefetchStorage schedules the storage slot for prefetching.
 	PrefetchStorage(addr common.Address, keys []common.Hash, read bool)
+
+	// TermPrefetch terminates all the background prefetching activities.
+	TermPrefetch()
 }
 
 // WitnessCollector is an optional extension implemented by hashers that can
@@ -137,3 +140,4 @@ func (n *noopHasher) Commit() (common.Hash, *trienode.MergedNodeSet, map[common.
 	return common.Hash{}, trienode.NewMergedNodeSet(), make(map[common.Address]Hashes), nil
 }
 func (n *noopHasher) Copy() Hasher { return &noopHasher{} }
+func (n *noopHasher) Close()       {}

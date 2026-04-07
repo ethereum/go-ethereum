@@ -238,11 +238,6 @@ func (h *binaryHasher) Commit() (common.Hash, *trienode.MergedNodeSet, map[commo
 	return root, nodes, nil, nil
 }
 
-// Close terminates all prefetcher goroutines. Safe to call multiple times.
-func (h *binaryHasher) Close() {
-	h.trie.term()
-}
-
 // Copy implements Hasher, returning a deep-copied hasher instance.
 func (h *binaryHasher) Copy() Hasher {
 	return &binaryHasher{
@@ -286,4 +281,9 @@ func (h *binaryHasher) PrefetchStorage(addr common.Address, keys []common.Hash, 
 		return
 	}
 	h.trie.prefetchStorage(addr, keys, read)
+}
+
+// TermPrefetch terminates all prefetcher goroutines. Safe to call multiple times.
+func (h *binaryHasher) TermPrefetch() {
+	h.trie.term()
 }

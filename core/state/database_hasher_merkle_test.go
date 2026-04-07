@@ -80,7 +80,7 @@ func newTestHasher(t *testing.T, db *triedb.Database, root common.Hash, cfg hash
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { h.Close() })
+	t.Cleanup(func() { h.TermPrefetch() })
 	return h
 }
 
@@ -105,7 +105,7 @@ func commitAndReopen(t *testing.T, h *merkleHasher, cfg hasherTestConfig) *merkl
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { h2.Close() })
+	t.Cleanup(func() { h2.TermPrefetch() })
 	return h2
 }
 
@@ -524,7 +524,7 @@ func TestMerkleHasherCopy(t *testing.T) {
 	origRoot := h.Hash()
 
 	cpy := h.Copy()
-	defer cpy.(*merkleHasher).Close()
+	defer cpy.(*merkleHasher).TermPrefetch()
 
 	// Mutate the copy: delete slot3, add slot2 with new value.
 	if err := cpy.UpdateStorage(hasherAddr1, []common.Hash{hasherSlot3, hasherSlot2}, []common.Hash{{}, hasherVal3}); err != nil {
@@ -590,7 +590,7 @@ func TestMerkleHasherWitness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer prover.Close()
+	defer prover.TermPrefetch()
 
 	// Collect all expected proof nodes into a single set. The union of
 	// account proofs (addr1, addr2) and storage proofs (addr1/slot1)

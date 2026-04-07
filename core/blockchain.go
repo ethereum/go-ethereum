@@ -2113,10 +2113,12 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	var (
 		err         error
 		startTime   = time.Now()
-		statedb     *state.StateDB
 		interrupt   atomic.Bool
 		sdb         = state.NewDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
 		makeWitness bool
+
+		throwaway *state.StateDB // StateDB for speculative transaction pre-executor
+		statedb   *state.StateDB // StateDB for sequential transaction executor
 	)
 	if bc.chainConfig.IsByzantium(block.Number()) && (config.StatelessSelfValidation || config.MakeWitness) {
 		makeWitness = true
@@ -2129,6 +2131,17 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	// execution witness.
 	if bc.chainConfig.IsByzantium(block.Number()) {
 		sdb = sdb.EnablePrefetch(makeWitness)
+
+		// Explicitly terminate all the background prefetcher. This is essential
+		// to prevent goroutine leaks.
+		defer func() {
+			if statedb != nil {
+				statedb.StopPrefetcher()
+			}
+			if throwaway != nil {
+				throwaway.StopPrefetcher()
+			}
+		}()
 	}
 	if bc.cfg.NoPrefetch {
 		statedb, err = state.New(parentRoot, sdb)
@@ -2144,7 +2157,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		if err != nil {
 			return nil, err
 		}
-		throwaway, err := state.NewWithReader(parentRoot, sdb, prefetch)
+		throwaway, err = state.NewWithReader(parentRoot, sdb, prefetch)
 		if err != nil {
 			return nil, err
 		}

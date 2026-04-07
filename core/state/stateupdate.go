@@ -304,10 +304,10 @@ func (sc *stateUpdate) encodeBinary() (map[common.Hash][]byte, map[common.Addres
 func (sc *stateUpdate) stateSet(isMerkle bool) (*triedb.StateSet, error) {
 	var (
 		err           error
-		accounts      = make(map[common.Hash][]byte)
-		storages      = make(map[common.Hash]map[common.Hash][]byte)
-		accountOrigin = make(map[common.Address][]byte)
-		storageOrigin = make(map[common.Address]map[common.Hash][]byte)
+		accounts      map[common.Hash][]byte
+		storages      map[common.Hash]map[common.Hash][]byte
+		accountOrigin map[common.Address][]byte
+		storageOrigin map[common.Address]map[common.Hash][]byte
 	)
 	if isMerkle {
 		accounts, accountOrigin, storages, storageOrigin, err = sc.encodeMerkle()

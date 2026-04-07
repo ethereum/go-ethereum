@@ -424,9 +424,23 @@ func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	return state.New(root, state.NewDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
 }
 
-// StateWithPrefetching returns a new mutable state based on a particular point in time.
-func (bc *BlockChain) StateWithPrefetching(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, state.NewDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps).EnablePrefetch(false))
+// StateConfig specifies the configuration for initializating the stateDB.
+type StateConfig struct {
+	Prefetch     bool
+	PrefetchRead bool
+	WithSnapshot bool
+}
+
+// StateWithConfig returns a new mutable state based on a particular point in time.
+func (bc *BlockChain) StateWithConfig(root common.Hash, config StateConfig) (*state.StateDB, error) {
+	sdb := state.NewDatabase(bc.triedb, bc.codedb)
+	if config.WithSnapshot {
+		sdb = sdb.WithSnapshot(bc.snaps)
+	}
+	if config.Prefetch {
+		sdb = sdb.EnablePrefetch(config.PrefetchRead)
+	}
+	return state.New(root, sdb)
 }
 
 // HistoricState returns a historic state specified by the given root.
