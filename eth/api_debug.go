@@ -211,6 +211,17 @@ type storageEntry struct {
 	Value common.Hash  `json:"value"`
 }
 
+type filterMapsProgressResult struct {
+	Disabled         bool           `json:"disabled"`
+	Initialized      bool           `json:"initialized"`
+	HeadIndexed      bool           `json:"headIndexed"`
+	TailBlock        hexutil.Uint64 `json:"tailBlock"`
+	HeadBlock        hexutil.Uint64 `json:"headBlock"`
+	MapsFirst        hexutil.Uint64 `json:"mapsFirst"`
+	MapsAfterLast    hexutil.Uint64 `json:"mapsAfterLast"`
+	TailPartialEpoch hexutil.Uint64 `json:"tailPartialEpoch"`
+}
+
 // StorageRangeAt returns the storage at the given block height and transaction index.
 func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, txIndex int, contractAddress common.Address, keyStart hexutil.Bytes, maxResult int) (StorageRangeResult, error) {
 	var block *types.Block
@@ -267,6 +278,24 @@ func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Add
 		result.NextKey = &next
 	}
 	return result, nil
+}
+
+// GetFilterMapsProgress returns the current log indexer progress.
+func (api *DebugAPI) GetFilterMapsProgress() (*filterMapsProgressResult, error) {
+	if api.eth.filterMaps == nil {
+		return nil, errors.New("filter maps are not initialized")
+	}
+	progress := api.eth.filterMaps.IndexProgress()
+	return &filterMapsProgressResult{
+		Disabled:         progress.Disabled,
+		Initialized:      progress.Initialized,
+		HeadIndexed:      progress.HeadIndexed,
+		TailBlock:        hexutil.Uint64(progress.TailBlock),
+		HeadBlock:        hexutil.Uint64(progress.HeadBlock),
+		MapsFirst:        hexutil.Uint64(progress.MapsFirst),
+		MapsAfterLast:    hexutil.Uint64(progress.MapsAfterLast),
+		TailPartialEpoch: hexutil.Uint64(progress.TailPartialEpoch),
+	}, nil
 }
 
 // GetModifiedAccountsByNumber returns all accounts that have changed between the

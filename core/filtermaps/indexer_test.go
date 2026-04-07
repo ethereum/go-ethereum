@@ -219,6 +219,51 @@ func testIndexerMatcherView(t *testing.T, concurrentRead bool) {
 	}
 }
 
+func TestIndexProgress(t *testing.T) {
+	ts := newTestSetup(t)
+	defer ts.close()
+
+	ts.chain.addBlocks(100, 5, 2, 4, false)
+	ts.setHistory(80, false)
+	ts.fm.WaitIdle()
+
+	want := IndexProgress{
+		Initialized:      ts.fm.indexedRange.initialized,
+		HeadIndexed:      ts.fm.indexedRange.headIndexed,
+		MapsFirst:        ts.fm.indexedRange.maps.First(),
+		MapsAfterLast:    ts.fm.indexedRange.maps.AfterLast(),
+		TailPartialEpoch: ts.fm.indexedRange.tailPartialEpoch,
+	}
+	if ts.fm.indexedRange.hasIndexedBlocks() {
+		want.TailBlock = ts.fm.indexedRange.blocks.First()
+		want.HeadBlock = ts.fm.indexedRange.blocks.Last()
+	}
+	if got := ts.fm.IndexProgress(); got != want {
+		t.Fatalf("wrong progress: got %#v want %#v", got, want)
+	}
+}
+
+func TestIndexProgressDisabled(t *testing.T) {
+	ts := newTestSetup(t)
+	defer ts.close()
+
+	ts.chain.addBlocks(10, 5, 2, 4, false)
+	ts.setHistory(0, true)
+	ts.fm.WaitIdle()
+
+	want := IndexProgress{
+		Disabled:         true,
+		Initialized:      ts.fm.indexedRange.initialized,
+		HeadIndexed:      ts.fm.indexedRange.headIndexed,
+		MapsFirst:        ts.fm.indexedRange.maps.First(),
+		MapsAfterLast:    ts.fm.indexedRange.maps.AfterLast(),
+		TailPartialEpoch: ts.fm.indexedRange.tailPartialEpoch,
+	}
+	if got := ts.fm.IndexProgress(); got != want {
+		t.Fatalf("wrong disabled progress: got %#v want %#v", got, want)
+	}
+}
+
 func TestLogsByIndex(t *testing.T) {
 	ts := newTestSetup(t)
 	defer func() {
