@@ -8,7 +8,7 @@ import (
 	"golang.org/x/sys/cpu"
 )
 
-func init() { useASM = cpu.X86.HasBMI2 }
+func init() { useASM = cpu.X86.HasBMI2 && cpu.X86.HasBMI1 }
 
 //go:noescape
 func keccakF1600BMI2(a *[200]byte)
