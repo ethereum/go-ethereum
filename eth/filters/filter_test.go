@@ -638,12 +638,13 @@ func TestRangeLimit(t *testing.T) {
 		t.Fatal("expected range limit error, got nil")
 	}
 
-	if r, ok := err.(rpc.Error); ok {
-		if r.ErrorCode() != -32602 {
-			t.Fatalf("expected error code -32602, got %d", r.ErrorCode())
+	var re rpc.Error
+	if errors.As(err, &re) {
+		if re.ErrorCode() != -32602 {
+			t.Fatalf("expected error code -32602, got %d", re.ErrorCode())
 		}
-		if r.Error() != "exceed maximum block range 5" {
-			t.Fatalf("expected error message 'exceed maximum block range 5', got %q", r.Error())
+		if re.Error() != "exceed maximum block range 5" {
+			t.Fatalf("expected error message 'exceed maximum block range 5', got %q", re.Error())
 		}
 	} else {
 		t.Fatalf("expected rpc error, got %v", err)
