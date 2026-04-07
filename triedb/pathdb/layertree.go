@@ -319,8 +319,8 @@ func (tree *layerTree) lookupAccount(accountHash common.Hash, state common.Hash)
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
 
-	tip := tree.lookup.accountTip(accountHash, state, tree.base.root)
-	if tip == (common.Hash{}) {
+	tip, ok := tree.lookup.accountTip(accountHash, state, tree.base.root)
+	if !ok {
 		return nil, fmt.Errorf("[%#x] %w", state, errSnapshotStale)
 	}
 	l := tree.layers[tip]
@@ -337,8 +337,8 @@ func (tree *layerTree) lookupStorage(accountHash common.Hash, slotHash common.Ha
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
 
-	tip := tree.lookup.storageTip(accountHash, slotHash, state, tree.base.root)
-	if tip == (common.Hash{}) {
+	tip, ok := tree.lookup.storageTip(accountHash, slotHash, state, tree.base.root)
+	if !ok {
 		return nil, fmt.Errorf("[%#x] %w", state, errSnapshotStale)
 	}
 	l := tree.layers[tip]
