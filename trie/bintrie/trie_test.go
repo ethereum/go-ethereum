@@ -267,9 +267,11 @@ func TestStorageRoundTrip(t *testing.T) {
 	}
 }
 
-// newTestTrie creates a fresh BinaryTrie with an empty root and a default
-// prevalue tracer. Used by tests that need a realistic trie instance.
-func newTestTrie(t *testing.T) *BinaryTrie {
+// newEmptyTestTrie creates a fresh BinaryTrie with an empty root and a
+// default prevalue tracer. Use this for tests that populate the trie
+// incrementally via Update*; for tests that want a pre-populated trie with
+// a fixed entry set, use makeTrie (in iterator_test.go) instead.
+func newEmptyTestTrie(t *testing.T) *BinaryTrie {
 	t.Helper()
 	return &BinaryTrie{
 		root:   NewBinaryNode(),
@@ -292,7 +294,7 @@ func makeAccount(nonce uint64, balance uint64, codeHash common.Hash) *types.Stat
 // Regression test for the no-op DeleteAccount bug where the deletion was
 // silently ignored and the old values remained in the trie.
 func TestDeleteAccountRoundTrip(t *testing.T) {
-	tr := newTestTrie(t)
+	tr := newEmptyTestTrie(t)
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
 	codeHash := common.HexToHash("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
 
@@ -334,7 +336,7 @@ func TestDeleteAccountRoundTrip(t *testing.T) {
 // TestDeleteAccountOnMissingAccount verifies that deleting an account that
 // was never created does not error and subsequent reads still return nil.
 func TestDeleteAccountOnMissingAccount(t *testing.T) {
-	tr := newTestTrie(t)
+	tr := newEmptyTestTrie(t)
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
 
 	// Delete without any prior create. Should not panic or error on an
@@ -354,7 +356,7 @@ func TestDeleteAccountOnMissingAccount(t *testing.T) {
 // TestDeleteAccountPreservesOtherAccounts verifies that deleting one account
 // does not affect accounts at different stems.
 func TestDeleteAccountPreservesOtherAccounts(t *testing.T) {
-	tr := newTestTrie(t)
+	tr := newEmptyTestTrie(t)
 	addrA := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
 	addrB := common.HexToAddress("0xabcdef1234567890abcdef1234567890abcdef12")
 	codeHashA := common.HexToHash("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
@@ -403,7 +405,7 @@ func TestDeleteAccountPreservesOtherAccounts(t *testing.T) {
 // then recreated with different values; the second read must return the new
 // values, not the stale ones from before deletion.
 func TestDeleteAccountThenRecreate(t *testing.T) {
-	tr := newTestTrie(t)
+	tr := newEmptyTestTrie(t)
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
 	codeHash1 := common.HexToHash("1111111111111111111111111111111111111111111111111111111111111111")
 	codeHash2 := common.HexToHash("2222222222222222222222222222222222222222222222222222222222222222")
@@ -441,10 +443,16 @@ func TestDeleteAccountThenRecreate(t *testing.T) {
 
 // TestDeleteAccountDoesNotAffectMainStorage verifies that DeleteAccount only
 // clears the account's BasicData and CodeHash, leaving main storage slots
-// (which live at different stems) untouched. Wiping storage on self-destruct
-// is a separate concern handled at the StateDB level.
+// untouched. Main storage slots live at different stems entirely (their
+// keys route through the non-header branch in GetBinaryTreeKeyStorageSlot),
+// so this test exercises the inter-stem isolation. Header-range storage
+// slots share the same stem and are covered separately by
+// TestDeleteAccountPreservesHeaderStorage.
+//
+// Wiping storage on self-destruct is a separate concern handled at the
+// StateDB level.
 func TestDeleteAccountDoesNotAffectMainStorage(t *testing.T) {
-	tr := newTestTrie(t)
+	tr := newEmptyTestTrie(t)
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
 	codeHash := common.HexToHash("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
 
@@ -497,7 +505,7 @@ func TestDeleteAccountDoesNotAffectMainStorage(t *testing.T) {
 // slice as "do not overwrite"; this test pins that invariant so a future
 // change cannot silently corrupt slots 0-63 of any contract.
 func TestDeleteAccountPreservesHeaderStorage(t *testing.T) {
-	tr := newTestTrie(t)
+	tr := newEmptyTestTrie(t)
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
 	codeHash := common.HexToHash("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
 
@@ -575,7 +583,7 @@ func TestDeleteAccountHashIsDeterministic(t *testing.T) {
 	acc := makeAccount(42, 1000, codeHash)
 
 	run := func() common.Hash {
-		tr := newTestTrie(t)
+		tr := newEmptyTestTrie(t)
 		if err := tr.UpdateAccount(addr, acc, 0); err != nil {
 			t.Fatalf("UpdateAccount: %v", err)
 		}
@@ -595,7 +603,7 @@ func TestDeleteAccountHashIsDeterministic(t *testing.T) {
 	// the empty-trie root, because zero blobs hash to non-zero leaves. If
 	// this assertion ever flips, the tombstone semantics have silently
 	// changed and the deletion-detection branch in GetAccount needs review.
-	empty := newTestTrie(t).Hash()
+	empty := newEmptyTestTrie(t).Hash()
 	if first == empty {
 		t.Fatalf("post-delete root unexpectedly equals empty-trie root %x; tombstone semantics changed", empty)
 	}

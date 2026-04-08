@@ -31,6 +31,13 @@ const (
 	BasicDataBalanceOffset  = 16
 )
 
+// accountDeletedMarkerKey is the stem offset used as a "this account was
+// deleted" sentinel. It lives in the EIP-7864 reserved range (offsets 2-63)
+// and is written by DeleteAccount and read by GetAccount's deletion-
+// detection branch. Both sides reference this constant directly, so there
+// is no magic number to keep in sync.
+const accountDeletedMarkerKey = 10
+
 var (
 	zeroInt                             = uint256.NewInt(0)
 	zeroHash                            = common.Hash{}
