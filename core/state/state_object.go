@@ -198,6 +198,11 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	}
 
 	if value, cached := s.originStorage[key]; cached {
+		// EIP-7928: record the access even on cache hit so the BAL
+		// tracker is aware of it.
+		if rt, ok := s.db.reader.(StateReaderTracker); ok {
+			rt.TouchStorage(s.address, key)
+		}
 		return value
 	}
 	// If the object was destructed in *this* block (and potentially resurrected),
@@ -213,12 +218,8 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		//
 		// The read operation is still essential for correctly building
 		// the block-level access list.
-		//
-		// TODO(rjl493456442) the reader interface can be extended with
-		// Touch, recording the read access without the actual disk load.
-		_, err := s.db.reader.Storage(s.address, key)
-		if err != nil {
-			s.db.setError(err)
+		if rt, ok := s.db.reader.(StateReaderTracker); ok {
+			rt.TouchStorage(s.address, key)
 		}
 		s.originStorage[key] = common.Hash{} // track the empty slot as origin value
 		return common.Hash{}

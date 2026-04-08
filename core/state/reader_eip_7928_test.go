@@ -24,8 +24,10 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/testrand"
+	"github.com/holiman/uint256"
 )
 
 type countingStateReader struct {
@@ -197,5 +199,67 @@ func TestReaderWithTracker(t *testing.T) {
 		if !maps.Equal(slots, entry) {
 			t.Fatal("Unexpected slots")
 		}
+	}
+}
+
+// TestTrackerSurvivesStateDBCache verifies that the BAL reader tracker records
+// account and storage accesses even when the StateDB serves them from its
+// in-memory cache (stateObjects / originStorage). This is a regression test
+// for a bug where a reverted transaction left cached entries that subsequent
+// transactions read without hitting the reader, causing the BAL to be incomplete.
+func TestTrackerSurvivesStateDBCache(t *testing.T) {
+	var (
+		sdb            = NewDatabaseForTesting()
+		statedb, _     = New(types.EmptyRootHash, sdb)
+		addr           = common.HexToAddress("0xaaaa")
+		slot           = common.HexToHash("0x01")
+	)
+	// Set up committed state with one account that has a storage slot.
+	statedb.SetBalance(addr, uint256.NewInt(1e18), tracing.BalanceChangeUnspecified)
+	statedb.SetNonce(addr, 5, tracing.NonceChangeUnspecified)
+	statedb.SetState(addr, slot, common.HexToHash("0x42"))
+	root, _ := statedb.Commit(0, false, false)
+	sdb.TrieDB().Commit(root, false)
+
+	// Create a fresh StateDB with a reader tracker (as the miner does).
+	var (
+		reader, _ = sdb.Reader(root)
+		tracked   = NewReaderWithTracker(reader)
+		live, _   = NewWithReader(root, sdb, tracked)
+		tracker   = live.Reader().(StateReaderTracker)
+	)
+
+	// Simulate a failed transaction: read account and storage, then revert.
+	snap := live.Snapshot()
+	live.GetNonce(addr)
+	live.GetState(addr, slot)
+
+	reads := tracker.GetStateAccessList()
+	if _, ok := reads[addr]; !ok {
+		t.Fatal("addr should be tracked after first read")
+	}
+	if _, ok := reads[addr][slot]; !ok {
+		t.Fatal("slot should be tracked after first read")
+	}
+
+	tracker.Clear()
+	live.RevertToSnapshot(snap)
+
+	reads = tracker.GetStateAccessList()
+	if len(reads) != 0 {
+		t.Fatal("tracker should be empty after Clear")
+	}
+
+	// Simulate the next transaction reading the same account and slot.
+	// Both hit the stateObjects/originStorage caches.
+	live.GetNonce(addr)
+	live.GetState(addr, slot)
+
+	reads = tracker.GetStateAccessList()
+	if _, ok := reads[addr]; !ok {
+		t.Fatal("addr must be tracked on cache hit (account)")
+	}
+	if _, ok := reads[addr][slot]; !ok {
+		t.Fatal("slot must be tracked on cache hit (storage)")
 	}
 }

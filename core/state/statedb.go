@@ -619,6 +619,13 @@ func (s *StateDB) deleteStateObject(addr common.Address) {
 func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
+		// EIP-7928: record the access even on cache hit so the BAL
+		// tracker is aware of it. Without this, a cache entry left
+		// behind by a reverted transaction hides the read from the
+		// tracker, producing an incomplete block access list.
+		if rt, ok := s.reader.(StateReaderTracker); ok {
+			rt.TouchAccount(addr)
+		}
 		return obj
 	}
 	// Short circuit if the account is already destructed in this block.

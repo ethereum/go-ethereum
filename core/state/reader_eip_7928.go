@@ -290,6 +290,14 @@ func (r *ReaderWithBlockLevelAccessList) CodeSize(addr common.Address, codeHash 
 type StateReaderTracker interface {
 	GetStateAccessList() bal.StateAccesses
 	Clear()
+
+	// TouchAccount records an account access without performing a database read.
+	// This is used to ensure cache hits in the StateDB are still tracked for BAL.
+	TouchAccount(addr common.Address)
+
+	// TouchStorage records a storage slot access without performing a database read.
+	// This is used to ensure cache hits in the StateDB are still tracked for BAL.
+	TouchStorage(addr common.Address, slot common.Hash)
 }
 
 func NewReaderWithTracker(r Reader) Reader {
@@ -336,4 +344,21 @@ func (r *readerTracker) GetStateAccessList() bal.StateAccesses {
 
 func (r *readerTracker) Clear() {
 	r.access = make(bal.StateAccesses)
+}
+
+// TouchAccount records an account access without performing a database read.
+func (r *readerTracker) TouchAccount(addr common.Address) {
+	if _, exists := r.access[addr]; !exists {
+		r.access[addr] = make(bal.StorageAccessList)
+	}
+}
+
+// TouchStorage records a storage slot access without performing a database read.
+func (r *readerTracker) TouchStorage(addr common.Address, slot common.Hash) {
+	list, exists := r.access[addr]
+	if !exists {
+		list = make(bal.StorageAccessList)
+		r.access[addr] = list
+	}
+	list[slot] = struct{}{}
 }
