@@ -73,18 +73,21 @@ func (gp *GasPool) ReturnGas(returned uint64, gasUsed uint64) error {
 	return nil
 }
 
-// ReturnGasAmsterdam handles 2D gas accounting for Amsterdam (EIP-8037).
-// It undoes the SubGas deduction fully and accumulates per-dimension block totals.
-func (gp *GasPool) ReturnGasAmsterdam(returned, txRegular, txState, receiptGasUsed uint64) error {
-	if gp.remaining > math.MaxUint64-returned {
-		return fmt.Errorf("%w: remaining: %d, returned: %d", ErrGasLimitOverflow, gp.remaining, returned)
-	}
-	// Undo SubGas deduction fully (Amsterdam uses cumulative tracking)
-	gp.remaining += returned
-	// Accumulate 2D block dimensions
+// ReturnGasAmsterdam calculates the new remaining gas in the pool after the
+// execution of a message.
+func (gp *GasPool) ReturnGasAmsterdam(txRegular, txState, receiptGasUsed uint64) error {
 	gp.cumulativeRegular += txRegular
 	gp.cumulativeState += txState
 	gp.cumulativeUsed += receiptGasUsed
+
+	blockUsed := max(gp.cumulativeRegular, gp.cumulativeState)
+	if gp.initial < blockUsed {
+		return fmt.Errorf("%w: block gas overflow: initial %d, used %d (regular: %d, state: %d)",
+			ErrGasLimitReached, gp.initial, blockUsed, gp.cumulativeRegular, gp.cumulativeState)
+	}
+	// TX inclusion: only the regular dimension is checked when deciding
+	// whether the next transaction fits.
+	gp.remaining = gp.initial - gp.cumulativeRegular
 	return nil
 }
 
@@ -130,6 +133,12 @@ func (gp *GasPool) Set(other *GasPool) {
 	gp.cumulativeUsed = other.cumulativeUsed
 	gp.cumulativeRegular = other.cumulativeRegular
 	gp.cumulativeState = other.cumulativeState
+}
+
+// AmsterdamDimensions returns the per-dimension cumulative gas values
+// for 2D gas accounting (EIP-8037).
+func (gp *GasPool) AmsterdamDimensions() (regular, state uint64) {
+	return gp.cumulativeRegular, gp.cumulativeState
 }
 
 func (gp *GasPool) String() string {

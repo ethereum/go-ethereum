@@ -608,7 +608,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		txState := (gas.StateGas - authRefund) + execGasUsed.StateGasCharged
 		txRegular := gas.RegularGas + execGasUsed.RegularGasUsed
 		txRegular = max(txRegular, floorDataGas)
-		if err := st.gp.ReturnGasAmsterdam(returned, txRegular, txState, st.gasUsed()); err != nil {
+		if err := st.gp.ReturnGasAmsterdam(txRegular, txState, st.gasUsed()); err != nil {
 			return nil, err
 		}
 	} else {

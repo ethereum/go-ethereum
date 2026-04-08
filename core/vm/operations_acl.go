@@ -243,6 +243,10 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 				return GasCosts{}, ErrOutOfGas
 			}
 		}
+		if gas > contract.Gas.RegularGas {
+			return GasCosts{RegularGas: gas}, nil
+		}
+
 		// if empty and transfers value
 		if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
 			gas += params.CreateBySelfdestructGas
@@ -349,6 +353,10 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc intrinsicGasFunc) gasFunc {
 		// part of the dynamic gas. This will ensure it is correctly reported to
 		// tracers.
 		contract.Gas.RegularGas += eip2929Cost + eip7702Cost
+		// Undo the RegularGasUsed increments from the direct UseGas charges,
+		// since this gas will be re-charged via the returned cost.
+		contract.GasUsed.RegularGasUsed -= eip2929Cost
+		contract.GasUsed.RegularGasUsed -= eip7702Cost
 
 		// Aggregate the gas costs from all components, including EIP-2929, EIP-7702,
 		// the CALL opcode itself, and the cost incurred by nested calls.
@@ -394,15 +402,12 @@ func makeCallVariantGasCallEIP8037(intrinsicFunc intrinsicGasFunc, stateGasFunc 
 		if err != nil {
 			return GasCosts{}, err
 		}
-		// Early OOG check before stateful operations.
-		if contract.Gas.RegularGas < intrinsicCost {
-			return GasCosts{}, ErrOutOfGas
-		}
 
-		// Compute state gas (new account creation as state gas).
-		stateGas, err := stateGasFunc(evm, contract, stack, mem, memorySize)
-		if err != nil {
-			return GasCosts{}, err
+		// Charge intrinsic cost directly (regular gas). This must happen
+		// BEFORE state gas to prevent reservoir inflation, and also serves
+		// as the OOG guard before stateful operations.
+		if !contract.UseGas(GasCosts{RegularGas: intrinsicCost}, evm.Config.Tracer, tracing.GasChangeCallOpCode) {
+			return GasCosts{}, ErrOutOfGas
 		}
 
 		// EIP-7702 delegation check.
@@ -418,8 +423,11 @@ func makeCallVariantGasCallEIP8037(intrinsicFunc intrinsicGasFunc, stateGasFunc 
 			}
 		}
 
-		// Charge state gas directly before callGas computation. State gas that
-		// spills to regular gas must reduce the gas available for callGasTemp.
+		// Compute and charge state gas (new account creation) AFTER regular gas.
+		stateGas, err := stateGasFunc(evm, contract, stack, mem, memorySize)
+		if err != nil {
+			return GasCosts{}, err
+		}
 		if stateGas.StateGas > 0 {
 			stateGasCost := GasCosts{StateGas: stateGas.StateGas}
 			if contract.Gas.Underflow(stateGasCost) {
@@ -430,16 +438,15 @@ func makeCallVariantGasCallEIP8037(intrinsicFunc intrinsicGasFunc, stateGasFunc 
 		}
 
 		// Calculate the gas budget for the nested call (63/64 rule).
-		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas.RegularGas, intrinsicCost, stack.Back(0))
+		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas.RegularGas, 0, stack.Back(0))
 		if err != nil {
 			return GasCosts{}, err
 		}
 
-		// Temporarily add gas charges back for tracer reporting.
-		contract.Gas.RegularGas += eip2929Cost + eip7702Cost
-		// Undo GasUsed increments from direct UseGas charges.
-		contract.GasUsed.RegularGasUsed -= eip2929Cost
-		contract.GasUsed.RegularGasUsed -= eip7702Cost
+		// Temporarily undo direct regular charges for tracer reporting.
+		// The interpreter will charge the returned totalCost.
+		contract.Gas.RegularGas += eip2929Cost + eip7702Cost + intrinsicCost
+		contract.GasUsed.RegularGasUsed -= eip2929Cost + eip7702Cost + intrinsicCost
 
 		// Aggregate total cost.
 		var (
