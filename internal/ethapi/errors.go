@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
@@ -130,6 +131,8 @@ func txValidationError(err error) *invalidTxError {
 	case errors.Is(err, core.ErrFeeCapVeryHigh):
 		return &invalidTxError{Message: err.Error(), Code: errCodeInvalidParams}
 	case errors.Is(err, core.ErrTipVeryHigh):
+		return &invalidTxError{Message: err.Error(), Code: errCodeInvalidParams}
+	case errors.Is(err, types.ErrUint256Overflow):
 		return &invalidTxError{Message: err.Error(), Code: errCodeInvalidParams}
 	case errors.Is(err, core.ErrTipAboveFeeCap):
 		return &invalidTxError{Message: err.Error(), Code: errCodeInvalidParams}

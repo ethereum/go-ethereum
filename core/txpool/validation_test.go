@@ -96,6 +96,44 @@ func TestValidateTransactionEIP2681(t *testing.T) {
 	}
 }
 
+func TestValidateTransactionValueOverflow(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	head := &types.Header{
+		Number:     big.NewInt(1),
+		GasLimit:   5000000,
+		Time:       1,
+		Difficulty: big.NewInt(1),
+	}
+	signer := types.LatestSigner(params.TestChainConfig)
+	opts := &ValidationOptions{
+		Config:       params.TestChainConfig,
+		Accept:       0xFF,
+		MaxSize:      32 * 1024,
+		MaxBlobCount: 6,
+		MinTip:       big.NewInt(0),
+	}
+	to := common.HexToAddress("0x0000000000000000000000000000000000000001")
+	overflowValue := new(big.Int).Lsh(big.NewInt(1), 256)
+	tx := types.NewTx(&types.LegacyTx{
+		Nonce:    0,
+		To:       &to,
+		Value:    overflowValue,
+		Gas:      21000,
+		GasPrice: big.NewInt(1),
+	})
+	tx, err = types.SignTx(tx, types.HomesteadSigner{}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = ValidateTransaction(tx, head, signer, opts)
+	if !errors.Is(err, types.ErrUint256Overflow) {
+		t.Fatalf("expected %v, got %v", types.ErrUint256Overflow, err)
+	}
+}
+
 // createTestTransaction creates a basic transaction for testing
 func createTestTransaction(key *ecdsa.PrivateKey, nonce uint64) *types.Transaction {
 	to := common.HexToAddress("0x0000000000000000000000000000000000000001")

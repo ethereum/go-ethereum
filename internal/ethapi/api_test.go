@@ -3968,6 +3968,11 @@ type configTimeBackend struct {
 	time    uint64
 }
 
+type overflowRejectingBackend struct {
+	*backendMock
+	lastTx *types.Transaction
+}
+
 func (b configTimeBackend) ChainConfig() *params.ChainConfig {
 	return b.genesis.Config
 }
@@ -3997,6 +4002,14 @@ func (b *testBackend) RPCTxSyncMaxTimeout() time.Duration {
 }
 func (b *backendMock) RPCTxSyncDefaultTimeout() time.Duration { return 2 * time.Second }
 func (b *backendMock) RPCTxSyncMaxTimeout() time.Duration     { return 5 * time.Minute }
+
+func (b *overflowRejectingBackend) SendTx(ctx context.Context, tx *types.Transaction) error {
+	b.lastTx = tx
+	if tx.Value().BitLen() > 256 {
+		return types.ErrUint256Overflow
+	}
+	return nil
+}
 
 func makeSignedRaw(t *testing.T, api *TransactionAPI, from, to common.Address, value *big.Int) (hexutil.Bytes, *types.Transaction) {
 	t.Helper()
@@ -4087,6 +4100,43 @@ func TestSendRawTransactionSync_Timeout(t *testing.T) {
 	if got, want := de.ErrorData(), tx.Hash().Hex(); got != want {
 		t.Fatalf("expected ErrorData=%s, got %v", want, got)
 	}
+}
+
+func TestSendRawTransactionRejectsValueOverflow(t *testing.T) {
+	t.Parallel()
+
+	key, err := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	require.NoError(t, err)
+
+	backend := &overflowRejectingBackend{backendMock: newBackendMock()}
+	api := NewTransactionAPI(backend, nil)
+
+	to := common.Address{0x42}
+	overflowValue := new(big.Int).Lsh(big.NewInt(1), 256)
+	tx, err := types.SignNewTx(key, types.LatestSigner(backend.ChainConfig()), &types.LegacyTx{
+		Nonce:    0,
+		GasPrice: big.NewInt(2),
+		Gas:      21000,
+		To:       &to,
+		Value:    overflowValue,
+	})
+	require.NoError(t, err)
+
+	raw, err := tx.MarshalBinary()
+	require.NoError(t, err)
+
+	_, err = api.SendRawTransaction(context.Background(), raw)
+	require.ErrorIs(t, err, types.ErrUint256Overflow)
+	require.NotNil(t, backend.lastTx)
+	require.Equal(t, overflowValue, backend.lastTx.Value())
+}
+
+func TestTxValidationErrorUint256Overflow(t *testing.T) {
+	t.Parallel()
+
+	err := txValidationError(types.ErrUint256Overflow)
+	require.Equal(t, errCodeInvalidParams, err.ErrorCode())
+	require.ErrorContains(t, err, types.ErrUint256Overflow.Error())
 }
 
 func TestGetStorageValues(t *testing.T) {
