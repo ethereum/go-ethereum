@@ -486,6 +486,75 @@ func TestDeleteAccountDoesNotAffectMainStorage(t *testing.T) {
 	}
 }
 
+// TestDeleteAccountPreservesHeaderStorage verifies that DeleteAccount does
+// not clobber header-range storage slots (key[31] < 64), which live at the
+// SAME stem as BasicData/CodeHash but at offsets 64-127. The safety here
+// relies on StemNode.InsertValuesAtStem treating nil entries in the values
+// slice as "do not overwrite"; this test pins that invariant so a future
+// change cannot silently corrupt slots 0-63 of any contract.
+func TestDeleteAccountPreservesHeaderStorage(t *testing.T) {
+	tr := newTestTrie(t)
+	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
+	codeHash := common.HexToHash("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
+
+	// Create account.
+	if err := tr.UpdateAccount(addr, makeAccount(1, 100, codeHash), 0); err != nil {
+		t.Fatalf("UpdateAccount: %v", err)
+	}
+
+	// Create a second, unrelated account so the root promotes from StemNode
+	// to InternalNode. BinaryTrie.GetStorage walks via root.Get, which is
+	// only implemented on InternalNode/Empty — calling it with a StemNode
+	// root panics. The existing main-storage test gets away with this because
+	// the main-storage slot lands on a separate stem and forces the same
+	// promotion implicitly; here we want a same-stem header slot, so the
+	// promotion has to come from a second account.
+	other := common.HexToAddress("0xabcdef1234567890abcdef1234567890abcdef12")
+	if err := tr.UpdateAccount(other, makeAccount(0, 0, common.Hash{}), 0); err != nil {
+		t.Fatalf("UpdateAccount(other): %v", err)
+	}
+
+	// Write a header-range storage slot — key[:31] == 0 and key[31] < 64
+	// — which routes through the header branch in GetBinaryTreeKeyStorageSlot
+	// and lands on the same stem as BasicData/CodeHash.
+	var slot [HashSize]byte
+	slot[31] = 5
+	value := []byte{0xde, 0xad, 0xbe, 0xef}
+	if err := tr.UpdateStorage(addr, slot[:], value); err != nil {
+		t.Fatalf("UpdateStorage: %v", err)
+	}
+
+	// Delete the account.
+	if err := tr.DeleteAccount(addr); err != nil {
+		t.Fatalf("DeleteAccount: %v", err)
+	}
+
+	// Account metadata should be gone.
+	got, err := tr.GetAccount(addr)
+	if err != nil {
+		t.Fatalf("GetAccount after delete: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("GetAccount after delete: got %+v, want nil", got)
+	}
+
+	// Header storage slot must survive — DeleteAccount only writes offsets
+	// BasicDataLeafKey, CodeHashLeafKey, and accountDeletedMarkerKey, leaving
+	// the header-storage offsets (64-127) untouched.
+	stored, err := tr.GetStorage(addr, slot[:])
+	if err != nil {
+		t.Fatalf("GetStorage after DeleteAccount: %v", err)
+	}
+	if len(stored) == 0 {
+		t.Fatal("header storage slot was wiped by DeleteAccount, expected it to survive")
+	}
+	var expected [HashSize]byte
+	copy(expected[HashSize-len(value):], value)
+	if !bytes.Equal(stored, expected[:]) {
+		t.Fatalf("header storage slot: got %x, want %x", stored, expected)
+	}
+}
+
 func TestBinaryTrieWitness(t *testing.T) {
 	tracer := trie.NewPrevalueTracer()
 
