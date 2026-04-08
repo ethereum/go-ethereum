@@ -331,7 +331,10 @@ func (t *BinaryTrie) DeleteAccount(addr common.Address) error {
 	values[accountDeletedMarkerKey] = zeroBlob[:]
 
 	t.root, err = t.root.InsertValuesAtStem(stem, values, t.nodeResolver, 0)
-	return err
+	if err != nil {
+		return fmt.Errorf("DeleteAccount (%x) error: %v", addr, err)
+	}
+	return nil
 }
 
 // accountDeletedMarkerKey is the stem offset used as a "this account was
