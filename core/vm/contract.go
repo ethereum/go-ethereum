@@ -141,7 +141,7 @@ func (c *Contract) UseGas(gas GasCosts, logger *tracing.Hooks, reason tracing.Ga
 
 // RefundGas refunds gas to the contract. gasUsed carries the child frame's
 // accumulated gas usage metrics (EIP-8037), incorporated on both success and error.
-func (c *Contract) RefundGas(err error, gas GasCosts, gasUsed GasUsed, logger *tracing.Hooks, reason tracing.GasChangeReason) {
+func (c *Contract) RefundGas(err error, initialRegularGasUsed uint64, gas GasCosts, gasUsed GasUsed, logger *tracing.Hooks, reason tracing.GasChangeReason) {
 	// If the preceding call errored, return the state gas
 	// to the parent call
 	if err != nil {
@@ -157,7 +157,7 @@ func (c *Contract) RefundGas(err error, gas GasCosts, gasUsed GasUsed, logger *t
 	c.Gas.RegularGas += gas.RegularGas
 	c.Gas.StateGas = gas.StateGas
 	c.GasUsed.StateGasCharged += gasUsed.StateGasCharged
-	c.GasUsed.RegularGasUsed += gasUsed.RegularGasUsed
+	c.GasUsed.RegularGasUsed = initialRegularGasUsed + gasUsed.RegularGasUsed
 }
 
 // Address returns the contracts address
