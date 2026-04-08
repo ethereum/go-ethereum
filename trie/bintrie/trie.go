@@ -317,7 +317,6 @@ func (t *BinaryTrie) UpdateStorage(address common.Address, key, value []byte) er
 // enumerate every slot of a given account.
 func (t *BinaryTrie) DeleteAccount(addr common.Address) error {
 	var (
-		err      error
 		zeroBlob [HashSize]byte
 		values   = make([][]byte, StemNodeWidth)
 		stem     = GetBinaryTreeKey(addr, zero[:])
@@ -330,10 +329,11 @@ func (t *BinaryTrie) DeleteAccount(addr common.Address) error {
 	// subsequent read. See GetAccount's deletion branch around trie.go:219.
 	values[accountDeletedMarkerKey] = zeroBlob[:]
 
-	t.root, err = t.root.InsertValuesAtStem(stem, values, t.nodeResolver, 0)
+	root, err := t.root.InsertValuesAtStem(stem, values, t.nodeResolver, 0)
 	if err != nil {
 		return fmt.Errorf("DeleteAccount (%x) error: %v", addr, err)
 	}
+	t.root = root
 	return nil
 }
 
