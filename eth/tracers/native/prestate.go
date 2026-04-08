@@ -266,25 +266,15 @@ func (t *prestateTracer) processDiffState() {
 			modified = true
 			postAccount.Nonce = newNonce
 		}
-		prevCodeHash := common.Hash{}
+		// Empty code hashes are excluded from the prestate, so default
+		// to EmptyCodeHash to match what GetCodeHash returns for codeless accounts.
+		prevCodeHash := types.EmptyCodeHash
 		if t.pre[addr].CodeHash != nil {
 			prevCodeHash = *t.pre[addr].CodeHash
 		}
-		// Empty code hashes are excluded from the prestate. Normalize
-		// the empty code hash to a zero hash to make it comparable.
-		if newCodeHash == types.EmptyCodeHash {
-			newCodeHash = common.Hash{}
-		}
 		if newCodeHash != prevCodeHash {
 			modified = true
-			// If code was cleared, report the canonical empty code hash
-			// rather than the zero hash used for comparison.
-			if newCodeHash == (common.Hash{}) {
-				emptyHash := types.EmptyCodeHash
-				postAccount.CodeHash = &emptyHash
-			} else {
-				postAccount.CodeHash = &newCodeHash
-			}
+			postAccount.CodeHash = &newCodeHash
 		}
 		if !t.config.DisableCode {
 			newCode := t.env.StateDB.GetCode(addr)
