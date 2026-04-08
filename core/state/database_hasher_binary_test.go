@@ -383,6 +383,89 @@ func TestMerkleHasherNoLeafProducer(t *testing.T) {
 	}
 }
 
+// TestBinaryHasherWritesBothBasicAndCodeHash is a load-bearing invariant
+// test for the A1 remediation. The bintrieFlatReader.Account method
+// performs TWO independent AccountRLP reads (BasicData at offset 0 and
+// CodeHash at offset 1). Cross-read consistency is only safe if the
+// hasher ALWAYS co-writes both leaves whenever it touches an account —
+// if a future optimization (e.g., a code-only update) emitted only the
+// CodeHash leaf, the two reads could resolve to different layers and
+// return a torn view.
+//
+// This test locks the invariant down: after an UpdateAccount call, the
+// drained stem writes must contain EXACTLY ONE BasicData write and
+// EXACTLY ONE CodeHash write for the touched address, both at the same
+// stem. Any change to binaryHasher.updateAccount that drops either
+// write will fail this test and the developer will be forced to
+// re-evaluate the bintrieFlatReader.Account torn-read argument before
+// shipping.
+func TestBinaryHasherWritesBothBasicAndCodeHash(t *testing.T) {
+	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.VerkleDefaults)
+	h := newTestBinaryHasher(t, db, types.EmptyBinaryHash, hasherTestConfig{"inv", false, false})
+
+	lp, ok := Hasher(h).(LeafProducer)
+	if !ok {
+		t.Fatal("binaryHasher should implement LeafProducer")
+	}
+
+	// Update a single account. The hasher MUST emit exactly two stem
+	// writes: BasicData (offset 0) and CodeHash (offset 1), at the
+	// same stem.
+	if err := h.UpdateAccount(
+		[]common.Address{hasherAddr1},
+		[]AccountMut{hasherAccount(1, 100)},
+	); err != nil {
+		t.Fatalf("UpdateAccount: %v", err)
+	}
+	writes := lp.DrainStemWrites()
+	if len(writes) != 2 {
+		t.Fatalf("expected exactly 2 stem writes per UpdateAccount (BasicData + CodeHash), got %d", len(writes))
+	}
+
+	// Verify one is BasicData and one is CodeHash.
+	seenBasic := false
+	seenCode := false
+	for _, w := range writes {
+		switch w.Offset {
+		case bintrie.BasicDataLeafKey:
+			seenBasic = true
+		case bintrie.CodeHashLeafKey:
+			seenCode = true
+		default:
+			t.Errorf("unexpected stem write offset %d (want %d or %d)", w.Offset, bintrie.BasicDataLeafKey, bintrie.CodeHashLeafKey)
+		}
+	}
+	if !seenBasic {
+		t.Error("UpdateAccount did NOT emit a BasicData leaf write — bintrieFlatReader.Account torn-read invariant broken")
+	}
+	if !seenCode {
+		t.Error("UpdateAccount did NOT emit a CodeHash leaf write — bintrieFlatReader.Account torn-read invariant broken")
+	}
+
+	// Verify both writes target the same stem.
+	if writes[0].Stem != writes[1].Stem {
+		t.Errorf("BasicData and CodeHash writes at different stems: %x vs %x", writes[0].Stem, writes[1].Stem)
+	}
+
+	// Exercise the delete path too: binaryHasher.deleteAccount should
+	// also emit both nil writes.
+	if err := h.UpdateAccount(
+		[]common.Address{hasherAddr1},
+		[]AccountMut{{Account: nil}},
+	); err != nil {
+		t.Fatalf("UpdateAccount (delete): %v", err)
+	}
+	deleteWrites := lp.DrainStemWrites()
+	if len(deleteWrites) != 2 {
+		t.Fatalf("expected 2 stem writes per account delete, got %d", len(deleteWrites))
+	}
+	for i, w := range deleteWrites {
+		if w.Value != nil {
+			t.Errorf("delete write[%d] should have nil Value, got %x", i, w.Value)
+		}
+	}
+}
+
 // TestStateUpdateEncodeBinaryFromLeaves verifies that stateUpdate.encodeBinary
 // turns a slice of StemWrite values into the per-offset accountData map that
 // pathdb's bintrie codec consumes. Three things matter:

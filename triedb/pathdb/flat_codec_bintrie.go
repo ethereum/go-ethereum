@@ -126,18 +126,36 @@ func (c *bintrieFlatCodec) StorageKey(addr common.Address, slot common.Hash) (co
 // Disk reads
 // ---------------------------------------------------------------------
 
-// ReadAccount returns the raw stem blob for the account's stem — NOT a
-// decoded account. The caller (e.g. bintrieFlatReader in a later commit)
-// is responsible for extracting BasicData (offset 0) and CodeHash
-// (offset 1) from the blob.
+// ReadAccount returns the 32-byte value stored at the offset indicated
+// by the input key (the final byte of `key` is the bintrie offset).
+// Returns nil if the offset is not populated in the on-disk stem blob.
 //
-// This signature asymmetry with merkleFlatCodec.ReadAccount (which
-// returns slim-RLP-encoded account bytes) is intentional: a bintrie stem
-// blob can contain data for many logical fields, and the caller decides
-// which offsets to extract. A higher-level "return an assembled Account"
-// helper would have to re-encode into a format no consumer wants.
+// The per-offset return shape matches ReadStorage and, crucially,
+// matches the buffer-path return shape: the pathdb diff-layer buffer
+// stores per-offset entries (keyed by the full 32-byte stem||offset
+// key) holding 32-byte leaf values. When `disklayer.account()` falls
+// through from the buffer to the codec's disk read, both sides must
+// agree on the per-offset representation — otherwise a length check in
+// the consumer (bintrieFlatReader.Account) fails on every
+// post-buffer-flush read. Prior to this commit the disk path returned
+// the whole stem blob while the buffer path returned a 32-byte value,
+// which caused every real-world read to error once the buffer spilled
+// to disk.
+//
+// A malformed stem blob is treated as "entry absent" (returning nil)
+// to match the behavior of rawdb.ReadStorageSnapshot on the merkle
+// path — the interface has no error channel, and propagating nil lets
+// the multi-reader fall through to the trie reader as a gatekeeper.
 func (c *bintrieFlatCodec) ReadAccount(db ethdb.KeyValueReader, key common.Hash) []byte {
-	return rawdb.ReadBinTrieStem(db, stemFromKey(key))
+	blob := rawdb.ReadBinTrieStem(db, stemFromKey(key))
+	if len(blob) == 0 {
+		return nil
+	}
+	val, err := extractStemOffset(blob, offsetFromKey(key))
+	if err != nil {
+		return nil
+	}
+	return val
 }
 
 // ReadStorage returns the 32-byte value stored at the storage slot's
@@ -285,27 +303,37 @@ func splitAccountBlob(blob []byte) ([]stemOffsetValue, error) {
 
 // AccountCacheKey returns a disambiguated byte key for the shared
 // fastcache-backed clean state cache. The prefix byte
-// bintrieCacheKeyPrefix keeps bintrie stem lookups disjoint from merkle
-// account lookups (both of which use 32-byte keys), and from merkle
-// storage lookups (which use 64-byte keys). The stem (31 bytes) is
-// embedded after the prefix; the offset byte is not included because
-// the cache entry caches the whole stem blob, not a single offset.
+// bintrieCacheKeyPrefix keeps bintrie lookups disjoint from merkle
+// account lookups (32-byte keys) and from merkle storage lookups
+// (64-byte keys).
+//
+// The full 32-byte (stem || offset) key is embedded after the prefix
+// so each offset at a given stem gets its own cache entry. This is
+// required because ReadAccount now returns the per-offset 32-byte
+// leaf value rather than the whole stem blob: caching under a
+// stem-only key would collapse BasicData and CodeHash (or any two
+// offsets at the same stem) into a single slot and the second hit
+// would return the wrong offset's value.
+//
+// Resulting layout: 1 byte prefix + 32 bytes full key = 33 bytes
+// total. The stem is at bytes[1..31]; the offset is at byte[32].
 func (c *bintrieFlatCodec) AccountCacheKey(key common.Hash) []byte {
-	out := make([]byte, 1+bintrie.StemSize)
+	out := make([]byte, 1+common.HashLength)
 	out[0] = bintrieCacheKeyPrefix
-	copy(out[1:], stemFromKey(key))
+	copy(out[1:], key[:])
 	return out
 }
 
-// StorageCacheKey returns the cache key for a storage entry. For bintrie
-// this is the same stem as the account cache key — storage slots and
-// account header live at different stems in the general case, but
-// multiple storage slots of the same stem share a single cache entry.
-// The accountKey parameter is ignored (see StorageKey).
+// StorageCacheKey returns the cache key for a storage entry. The
+// accountKey parameter is ignored (see StorageKey). The full storage
+// key — which already encodes (stem || offset) via
+// GetBinaryTreeKeyStorageSlot — is embedded directly so each slot at
+// a stem has its own cache entry, matching the per-offset semantics
+// of AccountCacheKey.
 func (c *bintrieFlatCodec) StorageCacheKey(_ common.Hash, storageKey common.Hash) []byte {
-	out := make([]byte, 1+bintrie.StemSize)
+	out := make([]byte, 1+common.HashLength)
 	out[0] = bintrieCacheKeyPrefix
-	copy(out[1:], stemFromKey(storageKey))
+	copy(out[1:], storageKey[:])
 	return out
 }
 
@@ -387,29 +415,34 @@ func (c *bintrieFlatCodec) MarkerCompare(key []byte, marker []byte) int {
 // produced by AccountKey/StorageKey, and each value is a 32-byte leaf
 // (or nil to clear that offset).
 //
-// All entries are first grouped by stem, then a single
-// read-modify-write is issued per stem so the codec touches each stem
-// at most once during a flush. This is what allows the per-call
-// pre-aggregation requirement documented on bintrieFlatCodec to be
-// satisfied even when many writes target the same stem.
+// Writes are aggregated per stem and a single read-modify-write is
+// issued per stem, so the codec touches each stem at most once during
+// a flush and the per-call pre-aggregation requirement is satisfied
+// even when many writes target the same stem.
 //
-// storageData is also walked because higher-level callers may emit
-// storage entries that the codec routes through the storage map for
-// historical reasons; for the bintrie path, entries should normally
-// arrive on accountData but we accept either layout.
+// storageData is walked alongside accountData; bintrie entries should
+// normally arrive on accountData but we accept either layout for
+// robustness.
+//
+// Cache update: after the per-stem RMW, the clean cache is updated
+// with each written offset's new value (per-offset entries, matching
+// the shape returned by ReadAccount after the A1 remediation). Offsets
+// that were not touched by this flush retain their existing cache
+// entries, which remain valid because the RMW did not modify them.
 //
 // Returns (offset count from accountData, offset count from storageData)
-// so the metric reporting in writeStates remains comparable to the
-// merkle path. The clean cache is updated with the merged stem blob
-// (one cache entry per stem, not per offset) — readers extract the
-// requested offset on hit.
+// for metric reporting parity with the merkle path.
 func (c *bintrieFlatCodec) Flush(batch ethdb.Batch, genMarker []byte, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte, clean *fastcache.Cache) (int, int) {
-	// Aggregate per-offset writes into per-stem batches. We use [31]byte
-	// as the map key because bytes slices aren't hashable in Go and the
-	// stem itself is fixed size; the alternative (using common.Hash with
-	// a zero pad) would waste a byte per entry.
+	// Aggregate per-offset writes into per-stem batches. We use
+	// [31]byte as the map key because byte slices aren't hashable in
+	// Go and the stem is fixed size; the alternative (common.Hash with
+	// a zero pad) wastes a byte per entry without buying anything.
 	type aggregator struct {
-		writes []stemOffsetValue
+		// fullKeys preserves the original 32-byte lookup keys so the
+		// cache update loop below can store per-offset entries without
+		// reconstructing the key from (stem, offset) pairs.
+		fullKeys []common.Hash
+		writes   []stemOffsetValue
 	}
 	aggregated := make(map[[bintrie.StemSize]byte]*aggregator)
 
@@ -422,6 +455,7 @@ func (c *bintrieFlatCodec) Flush(batch ethdb.Batch, genMarker []byte, accountDat
 			ag = &aggregator{}
 			aggregated[stem] = ag
 		}
+		ag.fullKeys = append(ag.fullKeys, fullKey)
 		ag.writes = append(ag.writes, stemOffsetValue{Offset: offset, Value: value})
 	}
 
@@ -448,22 +482,19 @@ func (c *bintrieFlatCodec) Flush(batch ethdb.Batch, genMarker []byte, accountDat
 			addWrite(fullKey, value)
 		}
 	}
-	// Issue one RMW per stem and update the clean cache with the merged
-	// blob (or invalidate it if the stem was deleted).
-	for stem, ag := range aggregated {
-		merged := c.applyWrites(batch, stem[:], ag.writes)
-		if clean != nil {
-			// Reuse AccountCacheKey to derive the cache key — for
-			// bintrie this only depends on the stem so the trailing
-			// offset byte in the synthetic full key is irrelevant.
-			var fullKey common.Hash
-			copy(fullKey[:bintrie.StemSize], stem[:])
+	// Issue one RMW per stem, then update the clean cache per-offset
+	// using the fullKeys we captured in the aggregator. A nil/empty
+	// value stored in the cache means "confirmed absent" (the reader
+	// will fall through to the trie reader on this per feedback #3 /
+	// Commit A2); a 32-byte value means the offset is populated.
+	for _, ag := range aggregated {
+		c.applyWrites(batch, ag.fullKeys[0][:bintrie.StemSize], ag.writes)
+		if clean == nil {
+			continue
+		}
+		for i, fullKey := range ag.fullKeys {
 			cacheKey := c.AccountCacheKey(fullKey)
-			if merged == nil {
-				clean.Set(cacheKey, nil)
-			} else {
-				clean.Set(cacheKey, merged)
-			}
+			clean.Set(cacheKey, ag.writes[i].Value)
 		}
 	}
 	return accountWrites, storageWrites

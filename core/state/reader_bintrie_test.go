@@ -170,3 +170,163 @@ func TestBintrieFlatReaderMissingAccount(t *testing.T) {
 		t.Errorf("missing account: got %+v, want nil", got)
 	}
 }
+
+// TestBintrieFlatReaderEndToEndAfterFlush is the smoking-gun regression
+// test for A1 (fix bintrieFlatReader disk-layer shape). Before the A1
+// remediation, `bintrieFlatCodec.ReadAccount` returned the full stem
+// blob from disk while `bintrieFlatReader.Account` expected a per-offset
+// 32-byte value — so every disk-layer hit errored with "bintrie
+// BasicData leaf invalid length". The original TestBintrieFlatReaderEndToEnd
+// did not catch this because it never flushed the write buffer to disk:
+// all reads came from the in-memory diff-layer buffer (which stores
+// per-offset entries correctly).
+//
+// This test explicitly calls `tdb.Commit(root, false)` after the state
+// commit, forcing the buffer to flush. Subsequent reads MUST hit the
+// disk-layer code path. If A1 regresses, the reads either error out or
+// return wrong data.
+func TestBintrieFlatReaderEndToEndAfterFlush(t *testing.T) {
+	disk := rawdb.NewMemoryDatabase()
+	tdb := triedb.NewDatabase(disk, triedb.VerkleDefaults)
+	sdb := NewDatabase(tdb, nil)
+
+	state, err := New(types.EmptyVerkleHash, sdb)
+	if err != nil {
+		t.Fatalf("init state: %v", err)
+	}
+
+	var (
+		addrA   = common.HexToAddress("0xAAaaAAaaAAaaAAaaAAaaAAaaAAaaAAaaAAaaAAaa")
+		addrB   = common.HexToAddress("0xBBbbBBbbBBbbBBbbBBbbBBbbBBbbBBbbBBbbBBbb")
+		balance = uint256.NewInt(0xCAFE)
+		slot    = common.HexToHash("0x07")
+		value   = common.HexToHash("0x42")
+	)
+
+	state.SetBalance(addrA, balance, tracing.BalanceChangeUnspecified)
+	state.SetNonce(addrA, 5, tracing.NonceChangeUnspecified)
+	state.SetCode(addrA, []byte{0x60, 0x80, 0x60, 0x40}, tracing.CodeChangeUnspecified)
+	state.SetState(addrA, slot, value)
+	state.SetBalance(addrB, uint256.NewInt(0xBEEF), tracing.BalanceChangeUnspecified)
+
+	root, err := state.Commit(0, true, false)
+	if err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	// Force buffer → disk flush. Without this, all reads below would hit
+	// the in-memory diff-layer buffer path, masking the A1 bug.
+	if err := tdb.Commit(root, false); err != nil {
+		t.Fatalf("tdb.Commit (flush to disk): %v", err)
+	}
+
+	// Open a fresh StateReader for the flushed root. Reads now go
+	// through the disk layer via `codec.ReadAccount`, which (post-A1)
+	// must return per-offset 32-byte values matching what the reader
+	// expects.
+	reader, err := sdb.StateReader(root)
+	if err != nil {
+		t.Fatalf("StateReader after flush: %v", err)
+	}
+
+	gotA, err := reader.Account(addrA)
+	if err != nil {
+		t.Fatalf("Account A after flush: %v", err)
+	}
+	if gotA == nil {
+		t.Fatal("addrA: account is nil after flush (A1 regression)")
+	}
+	if gotA.Nonce != 5 {
+		t.Errorf("addrA nonce after flush: got %d, want 5", gotA.Nonce)
+	}
+	if gotA.Balance.Cmp(balance) != 0 {
+		t.Errorf("addrA balance after flush: got %s, want %s", gotA.Balance, balance)
+	}
+
+	gotB, err := reader.Account(addrB)
+	if err != nil {
+		t.Fatalf("Account B after flush: %v", err)
+	}
+	if gotB == nil {
+		t.Fatal("addrB: account is nil after flush (A1 regression)")
+	}
+	if gotB.Balance.Uint64() != 0xBEEF {
+		t.Errorf("addrB balance after flush: got %s, want 0xBEEF", gotB.Balance)
+	}
+
+	gotSlot, err := reader.Storage(addrA, slot)
+	if err != nil {
+		t.Fatalf("Storage after flush: %v", err)
+	}
+	if gotSlot != value {
+		t.Errorf("storage slot after flush: got %x, want %x", gotSlot, value)
+	}
+}
+
+// TestBintrieFlatReaderMultipleOffsetsPerStem verifies that multiple
+// offsets at the same stem (BasicData at offset 0, CodeHash at offset 1,
+// a header storage slot at offset 64+slotnum) all round-trip correctly
+// through the per-offset read path. This exercises the "same stem, many
+// offsets" common case for contract accounts with header storage.
+func TestBintrieFlatReaderMultipleOffsetsPerStem(t *testing.T) {
+	disk := rawdb.NewMemoryDatabase()
+	tdb := triedb.NewDatabase(disk, triedb.VerkleDefaults)
+	sdb := NewDatabase(tdb, nil)
+
+	state, err := New(types.EmptyVerkleHash, sdb)
+	if err != nil {
+		t.Fatalf("init state: %v", err)
+	}
+
+	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
+	state.SetBalance(addr, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
+	state.SetNonce(addr, 7, tracing.NonceChangeUnspecified)
+	state.SetCode(addr, []byte{0xDE, 0xAD, 0xBE, 0xEF}, tracing.CodeChangeUnspecified)
+	// Header slots 0..63 (per EIP-7864) live at the same stem as
+	// BasicData/CodeHash. Set a few to exercise multi-offset per stem.
+	state.SetState(addr, common.HexToHash("0x00"), common.HexToHash("0x11"))
+	state.SetState(addr, common.HexToHash("0x01"), common.HexToHash("0x22"))
+	state.SetState(addr, common.HexToHash("0x05"), common.HexToHash("0x33"))
+
+	root, err := state.Commit(0, true, false)
+	if err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	// Flush so the reads hit the disk path.
+	if err := tdb.Commit(root, false); err != nil {
+		t.Fatalf("tdb.Commit: %v", err)
+	}
+
+	reader, err := sdb.StateReader(root)
+	if err != nil {
+		t.Fatalf("StateReader: %v", err)
+	}
+
+	gotAcct, err := reader.Account(addr)
+	if err != nil {
+		t.Fatalf("Account: %v", err)
+	}
+	if gotAcct == nil {
+		t.Fatal("account is nil")
+	}
+	if gotAcct.Nonce != 7 {
+		t.Errorf("nonce: got %d, want 7", gotAcct.Nonce)
+	}
+	if gotAcct.Balance.Uint64() != 100 {
+		t.Errorf("balance: got %s, want 100", gotAcct.Balance)
+	}
+
+	for _, tc := range []struct{ slot, want common.Hash }{
+		{common.HexToHash("0x00"), common.HexToHash("0x11")},
+		{common.HexToHash("0x01"), common.HexToHash("0x22")},
+		{common.HexToHash("0x05"), common.HexToHash("0x33")},
+	} {
+		got, err := reader.Storage(addr, tc.slot)
+		if err != nil {
+			t.Fatalf("Storage(%x): %v", tc.slot, err)
+		}
+		if got != tc.want {
+			t.Errorf("slot %x: got %x, want %x", tc.slot, got, tc.want)
+		}
+	}
+}

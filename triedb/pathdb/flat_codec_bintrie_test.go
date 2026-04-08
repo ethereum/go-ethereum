@@ -48,8 +48,9 @@ func flushBatch(t *testing.T, batch interface{ Write() error }) {
 
 // TestBintrieCodecAccountRoundTrip verifies that an account written via
 // WriteAccount (a two-slot BasicData||CodeHash blob) is persisted under
-// the account's stem and can be read back by extracting the relevant
-// offsets from the stem blob.
+// the account's stem and can be read back by calling ReadAccount with
+// the appropriate per-offset key (A1 remediation: ReadAccount now
+// returns a per-offset 32-byte value, matching the buffer-path shape).
 func TestBintrieCodecAccountRoundTrip(t *testing.T) {
 	codec, db := newTestBintrieCodec(t)
 	addr := common.HexToAddress("0x1111111111111111111111111111111111111111")
@@ -62,19 +63,19 @@ func TestBintrieCodecAccountRoundTrip(t *testing.T) {
 	codec.WriteAccount(batch, codec.AccountKey(addr), blob)
 	flushBatch(t, batch)
 
-	// Read back via ReadAccount — returns the raw stem blob, not the
-	// decoded account. Extract offsets 0 and 1 manually.
-	got := codec.ReadAccount(db, codec.AccountKey(addr))
-	if len(got) == 0 {
-		t.Fatal("ReadAccount returned empty for just-written account")
+	// Read each offset individually. `codec.AccountKey(addr)` returns
+	// the BasicData key (offset 0); the CodeHash key has the same stem
+	// with offset 1.
+	basicKey := codec.AccountKey(addr)
+	codeKey := common.BytesToHash(bintrie.GetBinaryTreeKeyCodeHash(addr))
+
+	gotBasic := codec.ReadAccount(db, basicKey)
+	if !bytes.Equal(gotBasic, basicData) {
+		t.Fatalf("BasicData read: got %x, want %x", gotBasic, basicData)
 	}
-	gotBasic, err := extractStemOffset(got, bintrie.BasicDataLeafKey)
-	if err != nil || !bytes.Equal(gotBasic, basicData) {
-		t.Fatalf("BasicData extract: got %x err=%v, want %x", gotBasic, err, basicData)
-	}
-	gotCode, err := extractStemOffset(got, bintrie.CodeHashLeafKey)
-	if err != nil || !bytes.Equal(gotCode, codeHash) {
-		t.Fatalf("CodeHash extract: got %x err=%v, want %x", gotCode, err, codeHash)
+	gotCode := codec.ReadAccount(db, codeKey)
+	if !bytes.Equal(gotCode, codeHash) {
+		t.Fatalf("CodeHash read: got %x, want %x", gotCode, codeHash)
 	}
 }
 
@@ -129,14 +130,14 @@ func TestBintrieCodecMultipleWritesSameStem(t *testing.T) {
 	codec.WriteStorage(batch, acctKey, storageKey, storageValue)
 	flushBatch(t, batch)
 
-	// All three offsets should now be readable.
-	accountBlob := codec.ReadAccount(db, codec.AccountKey(addr))
-	gotBasic, _ := extractStemOffset(accountBlob, bintrie.BasicDataLeafKey)
-	if !bytes.Equal(gotBasic, basicData) {
+	// All three offsets should now be readable via per-offset reads.
+	basicKey := codec.AccountKey(addr)
+	codeKey := common.BytesToHash(bintrie.GetBinaryTreeKeyCodeHash(addr))
+
+	if gotBasic := codec.ReadAccount(db, basicKey); !bytes.Equal(gotBasic, basicData) {
 		t.Fatalf("BasicData lost after storage write: got %x, want %x", gotBasic, basicData)
 	}
-	gotCode, _ := extractStemOffset(accountBlob, bintrie.CodeHashLeafKey)
-	if !bytes.Equal(gotCode, codeHash) {
+	if gotCode := codec.ReadAccount(db, codeKey); !bytes.Equal(gotCode, codeHash) {
 		t.Fatalf("CodeHash lost after storage write: got %x, want %x", gotCode, codeHash)
 	}
 	gotStorage := codec.ReadStorage(db, acctKey, storageKey)
@@ -173,14 +174,20 @@ func TestBintrieCodecDeleteAccount(t *testing.T) {
 	codec.DeleteAccount(batch, codec.AccountKey(addr))
 	flushBatch(t, batch)
 
-	accountBlob := codec.ReadAccount(db, codec.AccountKey(addr))
-	if len(accountBlob) == 0 {
+	basicKey := codec.AccountKey(addr)
+	codeKey := common.BytesToHash(bintrie.GetBinaryTreeKeyCodeHash(addr))
+
+	// Verify the underlying stem blob still exists (the storage slot
+	// at offset 64 should have prevented a full delete).
+	stemBlob := rawdb.ReadBinTrieStem(db, stemFromKey(basicKey))
+	if len(stemBlob) == 0 {
 		t.Fatal("stem blob was fully deleted; header storage should still be present")
 	}
-	if got, _ := extractStemOffset(accountBlob, bintrie.BasicDataLeafKey); got != nil {
+	// BasicData and CodeHash now read back as nil (offset cleared).
+	if got := codec.ReadAccount(db, basicKey); got != nil {
 		t.Fatalf("BasicData not cleared: %x", got)
 	}
-	if got, _ := extractStemOffset(accountBlob, bintrie.CodeHashLeafKey); got != nil {
+	if got := codec.ReadAccount(db, codeKey); got != nil {
 		t.Fatalf("CodeHash not cleared: %x", got)
 	}
 	if got := codec.ReadStorage(db, acctKey, storageKey); !bytes.Equal(got, storageValue) {
@@ -224,8 +231,11 @@ func TestBintrieCodecDeleteLastOffsetRemovesKey(t *testing.T) {
 }
 
 // TestBintrieCodecCacheKeysDisjoint verifies that the bintrie cache key
-// prefix keeps it disjoint from merkle account keys. This is the
-// collision check that Agent 2 flagged in the review.
+// prefix keeps it disjoint from merkle account keys AND that two
+// different offsets at the same stem produce DIFFERENT cache keys
+// (the A1 remediation moved from per-stem caching to per-offset
+// caching — without the full-key embedding, BasicData and CodeHash
+// would collide in the cache and return wrong values).
 func TestBintrieCodecCacheKeysDisjoint(t *testing.T) {
 	codec := &bintrieFlatCodec{}
 	merkle := &merkleFlatCodec{}
@@ -242,6 +252,20 @@ func TestBintrieCodecCacheKeysDisjoint(t *testing.T) {
 	}
 	if binKey[0] != bintrieCacheKeyPrefix {
 		t.Fatalf("bintrie cache key missing prefix byte: %x", binKey)
+	}
+	// Per-offset disambiguation: two keys with the same stem but
+	// different offsets must produce distinct cache keys.
+	var basicKey common.Hash
+	copy(basicKey[:], hash[:])
+	basicKey[31] = bintrie.BasicDataLeafKey
+	var codeKey common.Hash
+	copy(codeKey[:], hash[:])
+	codeKey[31] = bintrie.CodeHashLeafKey
+
+	basicCacheKey := codec.AccountCacheKey(basicKey)
+	codeCacheKey := codec.AccountCacheKey(codeKey)
+	if bytes.Equal(basicCacheKey, codeCacheKey) {
+		t.Fatalf("per-offset cache keys collided at same stem: %x", basicCacheKey)
 	}
 }
 
@@ -338,6 +362,60 @@ func TestBintrieCodecFlushAggregates(t *testing.T) {
 	otherBlob := rawdb.ReadBinTrieStem(db, otherStem)
 	if got, _ := extractStemOffset(otherBlob, bintrie.BasicDataLeafKey); !bytes.Equal(got, otherVal) {
 		t.Errorf("other stem BasicData: got %x, want %x", got, otherVal)
+	}
+}
+
+// TestBintrieCodecCrossFlushRMW verifies that writes to the SAME stem
+// from DIFFERENT flush passes (simulating blocks N and N+1) correctly
+// merge on disk. Flush1 writes offsets 0+1 at stemX; Flush2 writes
+// offset 64 at the same stem. After both flushes, all three offsets
+// must be readable — the second flush must not clobber the first.
+//
+// This is the regression test for cross-flush RMW correctness and is
+// the bread-and-butter behavior of the per-stem codec layout. Before
+// the A1 remediation, the buffer → disk shape mismatch also masked
+// this (different writes would be invisible through the reader), so
+// the regression test had no teeth.
+func TestBintrieCodecCrossFlushRMW(t *testing.T) {
+	codec, db := newTestBintrieCodec(t)
+
+	stem := bytes.Repeat([]byte{0x99}, bintrie.StemSize)
+	mkKey := func(offset byte) common.Hash {
+		var k common.Hash
+		copy(k[:bintrie.StemSize], stem)
+		k[bintrie.StemSize] = offset
+		return k
+	}
+	basicVal := bytes.Repeat([]byte{0xAA}, stemBlobValueSize)
+	codeVal := bytes.Repeat([]byte{0xBB}, stemBlobValueSize)
+	slotVal := bytes.Repeat([]byte{0xCC}, stemBlobValueSize)
+
+	// Flush 1: write BasicData (offset 0) and CodeHash (offset 1).
+	batch := db.NewBatch()
+	codec.Flush(batch, nil, map[common.Hash][]byte{
+		mkKey(bintrie.BasicDataLeafKey): basicVal,
+		mkKey(bintrie.CodeHashLeafKey):  codeVal,
+	}, nil, nil)
+	flushBatch(t, batch)
+
+	// Flush 2: write a header storage slot at offset 64 — same stem.
+	batch = db.NewBatch()
+	codec.Flush(batch, nil, map[common.Hash][]byte{
+		mkKey(64): slotVal,
+	}, nil, nil)
+	flushBatch(t, batch)
+
+	// After both flushes, all three offsets must be readable. Before
+	// the RMW, Flush 2 would overwrite the stem blob and erase
+	// BasicData + CodeHash.
+	if got := codec.ReadAccount(db, mkKey(bintrie.BasicDataLeafKey)); !bytes.Equal(got, basicVal) {
+		t.Errorf("BasicData lost after second flush: got %x, want %x", got, basicVal)
+	}
+	if got := codec.ReadAccount(db, mkKey(bintrie.CodeHashLeafKey)); !bytes.Equal(got, codeVal) {
+		t.Errorf("CodeHash lost after second flush: got %x, want %x", got, codeVal)
+	}
+	if got := codec.ReadAccount(db, mkKey(64)); !bytes.Equal(got, slotVal) {
+		t.Errorf("header slot at offset 64 missing: got %x, want %x", got, slotVal)
 	}
 }
 

@@ -18,6 +18,7 @@ package state
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -221,37 +222,51 @@ func newBintrieFlatReader(reader database.StateReader) *bintrieFlatReader {
 	return &bintrieFlatReader{reader: raw}
 }
 
-// Account implements StateReader. It performs two underlying reads — one
-// for the BasicData leaf (offset 0) and one for the CodeHash leaf
-// (offset 1) — and combines them into a unified Account. If both leaves
-// are absent the account is treated as non-existent (return nil, nil).
+// Account implements StateReader. It performs two underlying reads —
+// one for the BasicData leaf (offset 0) and one for the CodeHash leaf
+// (offset 1) — and combines them into a unified Account.
 //
-// Returning nil-with-no-error matches the merkle flatReader's
-// "not present" semantics: the trie reader is the gatekeeper that
-// distinguishes "missing" from "present-with-zero-balance".
+// Torn-read invariant (load-bearing): binaryHasher.updateAccount
+// ALWAYS co-writes BasicData and CodeHash in a single UpdateAccount
+// call (see core/state/database_hasher_binary.go:updateAccount). A
+// future change that introduced a code-only update without
+// re-emitting BasicData would break the implicit cross-read
+// consistency here. TestBinaryHasherWritesBothBasicAndCodeHash locks
+// this invariant down.
+//
+// Fall-through vs confirmed-absent (see A2):
+//   - both leaves genuinely absent from the flat state →
+//     errNotCoveredYet → multiStateReader falls through to trie reader.
+//   - both leaves present-but-stem-blob-has-zero-offsets (post-delete
+//     tombstone) → (nil, nil) → confirmed absent.
+//
+// At this commit (A1) we still return (nil, nil) for the absent case.
+// A2 tightens this to an errNotCoveredYet sentinel so the trie reader
+// runs on miss.
 func (r *bintrieFlatReader) Account(addr common.Address) (*Account, error) {
 	basicKey := common.BytesToHash(bintrie.GetBinaryTreeKeyBasicData(addr))
 	codeKey := common.BytesToHash(bintrie.GetBinaryTreeKeyCodeHash(addr))
 
 	basicBlob, err := r.reader.AccountRLP(basicKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("bintrie BasicData read %x: %w", addr, err)
 	}
 	codeBlob, err := r.reader.AccountRLP(codeKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("bintrie CodeHash read %x: %w", addr, err)
 	}
 	if len(basicBlob) == 0 && len(codeBlob) == 0 {
 		return nil, nil
 	}
-	// A bintrie leaf is always either absent or exactly 32 bytes; a
-	// shorter blob is a corruption signal we surface as an error rather
-	// than silently constructing a junk account.
+	// A bintrie leaf is always either absent or exactly 32 bytes. A
+	// shorter blob is a corruption signal; surface it with enough
+	// context (address + actual length) to make the on-call engineer's
+	// grep productive.
 	if len(basicBlob) != 0 && len(basicBlob) != 32 {
-		return nil, errors.New("bintrie BasicData leaf has invalid length")
+		return nil, fmt.Errorf("bintrie BasicData leaf invalid length: addr=%x len=%d want=32", addr, len(basicBlob))
 	}
 	if len(codeBlob) != 0 && len(codeBlob) != 32 {
-		return nil, errors.New("bintrie CodeHash leaf has invalid length")
+		return nil, fmt.Errorf("bintrie CodeHash leaf invalid length: addr=%x len=%d want=32", addr, len(codeBlob))
 	}
 
 	acct := &Account{}
@@ -288,13 +303,13 @@ func (r *bintrieFlatReader) Storage(addr common.Address, slot common.Hash) (comm
 	fullKey := bintrie.GetBinaryTreeKeyStorageSlot(addr, slot[:])
 	blob, err := r.reader.AccountRLP(common.BytesToHash(fullKey))
 	if err != nil {
-		return common.Hash{}, err
+		return common.Hash{}, fmt.Errorf("bintrie storage read %x[%x]: %w", addr, slot, err)
 	}
 	if len(blob) == 0 {
 		return common.Hash{}, nil
 	}
 	if len(blob) != 32 {
-		return common.Hash{}, errors.New("bintrie storage leaf has invalid length")
+		return common.Hash{}, fmt.Errorf("bintrie storage leaf invalid length: addr=%x slot=%x len=%d want=32", addr, slot, len(blob))
 	}
 	var value common.Hash
 	copy(value[:], blob)
