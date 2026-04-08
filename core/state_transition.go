@@ -484,7 +484,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 	if rules.IsAmsterdam {
 		// EIP-8037: total intrinsic must fit within the transaction gas limit.
-		if msg.GasLimit < gas.Sum() {
+		if gas.Sum() > msg.GasLimit {
 			return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, msg.GasLimit, gas.Sum())
 		}
 		// EIP-8037: the regular gas consumption (intrinsic or floor) must fit within MaxTxGas.
