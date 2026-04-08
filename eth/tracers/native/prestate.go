@@ -44,14 +44,15 @@ func init() {
 type stateMap = map[common.Address]*account
 
 type account struct {
-	Balance  *big.Int                    `json:"balance,omitempty"`
-	// Pointer so omitempty can omit unchanged code (nil) while still
-	// emitting "0x" when code is cleared (e.g. EIP-7702 deauthorization).
+	Balance *big.Int `json:"balance,omitempty"`
+	// Code is a pointer so omitempty can omit unchanged code (nil) while
+	// still emitting "0x" when code is cleared (e.g. EIP-7702 deauth).
 	Code     *[]byte                     `json:"code,omitempty"`
 	CodeHash *common.Hash                `json:"codeHash,omitempty"`
 	Nonce    uint64                      `json:"nonce,omitempty"`
 	Storage  map[common.Hash]common.Hash `json:"storage,omitempty"`
-	empty    bool
+
+	empty bool
 }
 
 func (a *account) exists() bool {
