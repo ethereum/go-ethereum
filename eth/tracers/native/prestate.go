@@ -45,7 +45,7 @@ type stateMap = map[common.Address]*account
 
 type account struct {
 	Balance  *big.Int                    `json:"balance,omitempty"`
-	Code     []byte                      `json:"code,omitempty"`
+	Code     *[]byte                     `json:"code,omitempty"`
 	CodeHash *common.Hash                `json:"codeHash,omitempty"`
 	Nonce    uint64                      `json:"nonce,omitempty"`
 	Storage  map[common.Hash]common.Hash `json:"storage,omitempty"`
@@ -53,12 +53,12 @@ type account struct {
 }
 
 func (a *account) exists() bool {
-	return a.Nonce > 0 || len(a.Code) > 0 || len(a.Storage) > 0 || (a.Balance != nil && a.Balance.Sign() != 0)
+	return a.Nonce > 0 || (a.Code != nil && len(*a.Code) > 0) || len(a.Storage) > 0 || (a.Balance != nil && a.Balance.Sign() != 0)
 }
 
 type accountMarshaling struct {
 	Balance *hexutil.Big
-	Code    hexutil.Bytes
+	Code    *hexutil.Bytes
 }
 
 type prestateTracer struct {
@@ -288,9 +288,16 @@ func (t *prestateTracer) processDiffState() {
 		}
 		if !t.config.DisableCode {
 			newCode := t.env.StateDB.GetCode(addr)
-			if !bytes.Equal(newCode, t.pre[addr].Code) {
+			var prevCode []byte
+			if t.pre[addr].Code != nil {
+				prevCode = *t.pre[addr].Code
+			}
+			if !bytes.Equal(newCode, prevCode) {
 				modified = true
-				postAccount.Code = newCode
+				if newCode == nil {
+					newCode = []byte{}
+				}
+				postAccount.Code = &newCode
 			}
 		}
 
@@ -330,10 +337,13 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 		return
 	}
 
+	code := t.env.StateDB.GetCode(addr)
 	acc := &account{
 		Balance: t.env.StateDB.GetBalance(addr).ToBig(),
 		Nonce:   t.env.StateDB.GetNonce(addr),
-		Code:    t.env.StateDB.GetCode(addr),
+	}
+	if len(code) > 0 {
+		acc.Code = &code
 	}
 	codeHash := t.env.StateDB.GetCodeHash(addr)
 	// If the code is empty, we don't need to store it in the prestate.
