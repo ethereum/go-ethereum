@@ -466,23 +466,27 @@ func TestDeleteAccountDoesNotAffectMainStorage(t *testing.T) {
 	}
 
 	// Account should be absent.
-	if got, _ := tr.GetAccount(addr); got != nil {
+	got, err := tr.GetAccount(addr)
+	if err != nil {
+		t.Fatalf("GetAccount after delete: %v", err)
+	}
+	if got != nil {
 		t.Fatalf("GetAccount after delete: got %+v, want nil", got)
 	}
 
 	// Main storage slot should still be readable — DeleteAccount must not
 	// have touched it.
-	got, err := tr.GetStorage(addr, slot[:])
+	stored, err := tr.GetStorage(addr, slot[:])
 	if err != nil {
 		t.Fatalf("GetStorage after DeleteAccount: %v", err)
 	}
-	if len(got) == 0 {
+	if len(stored) == 0 {
 		t.Fatal("main storage slot was wiped by DeleteAccount, expected it to survive")
 	}
 	var expected [HashSize]byte
 	copy(expected[HashSize-len(value):], value)
-	if !bytes.Equal(got, expected[:]) {
-		t.Fatalf("main storage slot: got %x, want %x", got, expected)
+	if !bytes.Equal(stored, expected[:]) {
+		t.Fatalf("main storage slot: got %x, want %x", stored, expected)
 	}
 }
 
