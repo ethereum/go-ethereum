@@ -256,8 +256,8 @@ func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, err
 type stateTransition struct {
 	gp           *GasPool
 	msg          *Message
-	gasRemaining vm.GasCosts
-	initialGas   vm.GasCosts
+	gasRemaining vm.GasBudget
+	initialGas   vm.GasBudget
 	state        vm.StateDB
 	evm          *vm.EVM
 }
@@ -323,7 +323,7 @@ func (st *stateTransition) buyGas() error {
 	if st.evm.ChainConfig().IsAmsterdam(st.evm.Context.BlockNumber, st.evm.Context.Time) {
 		limit = min(st.msg.GasLimit, params.MaxTxGas)
 	}
-	st.initialGas = vm.GasCosts{RegularGas: limit, StateGas: st.msg.GasLimit - limit}
+	st.initialGas = vm.GasBudget{RegularGas: limit, StateGas: st.msg.GasLimit - limit}
 	mgvalU256, _ := uint256.FromBig(mgval)
 	st.state.SubBalance(st.msg.From, mgvalU256, tracing.BalanceDecreaseGasBuy)
 	return nil
@@ -496,7 +496,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// Split remaining execution gas into regular and state reservoir.
 		executionGas := msg.GasLimit - gas.Sum()
 		regularGas := min(params.MaxTxGas-gas.RegularGas, executionGas)
-		st.gasRemaining = vm.GasCosts{RegularGas: regularGas, StateGas: executionGas - regularGas}
+		st.gasRemaining = vm.GasBudget{RegularGas: regularGas, StateGas: executionGas - regularGas}
 	} else {
 		if st.gasRemaining.Underflow(gas) {
 			return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining.RegularGas, gas.RegularGas)
@@ -605,8 +605,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// tx_regular = intrinsic_regular + exec_regular_gas_used
 		// tx_state = intrinsic_state (adjusted) + exec_state_gas_used
 		// These are tracked independently, not derived from remaining gas.
-		txState := (gas.StateGas - authRefund) + execGasUsed.StateGasCharged
-		txRegular := gas.RegularGas + execGasUsed.RegularGasUsed
+		txState := (gas.StateGas - authRefund) + execGasUsed.StateGas
+		txRegular := gas.RegularGas + execGasUsed.RegularGas
 		txRegular = max(txRegular, floorDataGas)
 		if err := st.gp.ReturnGasAmsterdam(txRegular, txState, st.gasUsed()); err != nil {
 			return nil, err

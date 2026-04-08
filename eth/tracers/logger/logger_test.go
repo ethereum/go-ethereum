@@ -47,7 +47,7 @@ func TestStoreCapture(t *testing.T) {
 	var (
 		logger   = NewStructLogger(nil)
 		evm      = vm.NewEVM(vm.BlockContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: logger.Hooks()})
-		contract = vm.NewContract(common.Address{}, common.Address{}, new(uint256.Int), vm.GasCosts{RegularGas: 100000}, nil)
+		contract = vm.NewContract(common.Address{}, common.Address{}, new(uint256.Int), vm.GasBudget{RegularGas: 100000}, nil)
 	)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x0, byte(vm.SSTORE)}
 	var index common.Hash

@@ -42,13 +42,13 @@ type Contract struct {
 	IsDeployment bool
 	IsSystemCall bool
 
-	Gas     GasCosts
+	Gas     GasBudget
 	GasUsed GasUsed // EIP-8037: canonical per-frame gas usage accumulator
 	value   *uint256.Int
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
-func NewContract(caller common.Address, address common.Address, value *uint256.Int, gas GasCosts, jumpDests JumpDestCache) *Contract {
+func NewContract(caller common.Address, address common.Address, value *uint256.Int, gas GasBudget, jumpDests JumpDestCache) *Contract {
 	// Initialize the jump analysis cache if it's nil, mostly for tests
 	if jumpDests == nil {
 		jumpDests = newMapJumpDests()
@@ -145,10 +145,10 @@ func (c *Contract) RefundGas(err error, initialRegularGasUsed uint64, gas GasCos
 	// If the preceding call errored, return the state gas
 	// to the parent call
 	if err != nil {
-		gas.StateGas += gasUsed.StateGasCharged
-		gasUsed.StateGasCharged = 0
+		gas.StateGas += gasUsed.StateGas
+		gasUsed.StateGas = 0
 	}
-	if gas.RegularGas == 0 && gas.StateGas == 0 && gasUsed.StateGasCharged == 0 && gasUsed.RegularGasUsed == 0 {
+	if gas.RegularGas == 0 && gas.StateGas == 0 && gasUsed.StateGas == 0 && gasUsed.RegularGas == 0 {
 		return
 	}
 	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
@@ -156,8 +156,8 @@ func (c *Contract) RefundGas(err error, initialRegularGasUsed uint64, gas GasCos
 	}
 	c.Gas.RegularGas += gas.RegularGas
 	c.Gas.StateGas = gas.StateGas
-	c.GasUsed.StateGasCharged += gasUsed.StateGasCharged
-	c.GasUsed.RegularGasUsed = initialRegularGasUsed + gasUsed.RegularGasUsed
+	c.GasUsed.StateGas += gasUsed.StateGas
+	c.GasUsed.RegularGas = initialRegularGasUsed + gasUsed.RegularGas
 }
 
 // Address returns the contracts address

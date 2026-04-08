@@ -196,7 +196,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			return nil, ErrOutOfGas
 		} else {
 			contract.Gas.RegularGas -= cost
-			contract.GasUsed.RegularGasUsed += cost // EIP-8037: track constant gas
+			contract.GasUsed.RegularGas += cost // EIP-8037: track constant gas
 		}
 
 		// All ops with a dynamic memory usage also has a dynamic gas cost.
@@ -231,7 +231,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 				if contract.Gas.RegularGas < dynamicCost.RegularGas {
 					return nil, ErrOutOfGas
 				}
-				contract.GasUsed.RegularGasUsed += dynamicCost.RegularGas
+				contract.GasUsed.RegularGas += dynamicCost.RegularGas
 				contract.Gas.RegularGas -= dynamicCost.RegularGas
 				stateOnly := GasCosts{StateGas: dynamicCost.StateGas}
 				if contract.Gas.Underflow(stateOnly) {

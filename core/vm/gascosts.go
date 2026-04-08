@@ -7,16 +7,17 @@ type GasCosts struct {
 	StateGas   uint64
 }
 
+// GasBudget tracks how much gas is available in a call frame.
+type GasBudget = GasCosts
+
 // GasUsed tracks how much gas has been consumed during execution.
-type GasUsed struct {
-	RegularGasUsed  uint64
-	StateGasCharged uint64
-}
+type GasUsed = GasCosts
 
 // Add increments gas used counters based on a GasCosts charge.
+// doesn't check for overflows.
 func (g *GasUsed) Add(cost GasCosts) {
-	g.RegularGasUsed += cost.RegularGas
-	g.StateGasCharged += cost.StateGas
+	g.RegularGas += cost.RegularGas
+	g.StateGas += cost.StateGas
 }
 
 func (g GasCosts) Max() uint64 {
@@ -54,12 +55,6 @@ func (g *GasCosts) Sub(b GasCosts) {
 	} else {
 		g.StateGas -= b.StateGas
 	}
-}
-
-// Add doesn't check for overflows
-func (g *GasCosts) Add(b GasCosts) {
-	g.RegularGas += b.RegularGas
-	g.StateGas += b.StateGas
 }
 
 func (g GasCosts) String() string {
