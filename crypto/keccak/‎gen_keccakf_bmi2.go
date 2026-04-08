@@ -9,6 +9,8 @@
 //   - State alternates between the original array (DI) and a 200-byte stack
 //     buffer, avoiding a second 200-byte copy
 //   - Frame is only 200 bytes (25 × 8 for temp state)
+//   - Optional XOR-and-permute: when buf != nil, XORs rate bytes into state
+//     before permuting, eliminating one full memory pass
 //
 // Usage: go run gen_keccakf_bmi2.go
 
@@ -52,7 +54,10 @@ var groups = [5][5]lane{
 // D-value registers, indexed by lane%5.
 var dReg = [5]string{"R14", "R15", "BP", "SI", "DX"}
 
-const fsize = 200
+const (
+	fsize     = 200
+	rateLanes = 17 // rate / 8 = 136 / 8 = 17 lanes
+)
 
 var p func(string, ...any)
 
@@ -71,10 +76,23 @@ func main() {
 	p("#include \"textflag.h\"")
 	p("")
 
-	// Function.
-	p("// func keccakF1600BMI2(a *[200]byte)")
-	p("TEXT ·keccakF1600BMI2(SB), NOSPLIT, $%d-8", fsize)
+	// Single function: keccakF1600BMI2(a *[200]byte, buf *byte)
+	// When buf != nil, XORs rate bytes into state before permuting.
+	// When buf == nil, just permutes.
+	p("// func keccakF1600BMI2(a *[200]byte, buf *byte)")
+	p("TEXT ·keccakF1600BMI2(SB), NOSPLIT, $%d-16", fsize)
 	p("\tMOVQ a+0(FP), DI")
+	p("\tMOVQ buf+8(FP), BX")
+	p("\tTESTQ BX, BX")
+	p("\tJZ rounds")
+	p("")
+	p("\t// XOR %d lanes (%d bytes) of buf into state.", rateLanes, rateLanes*8)
+	for i := 0; i < rateLanes; i++ {
+		p("\tMOVQ %d(BX), AX", i*8)
+		p("\tXORQ AX, %d(DI)", i*8)
+	}
+	p("")
+	p("rounds:")
 
 	for round := 0; round < 24; round++ {
 		p("")
@@ -103,18 +121,19 @@ func emitRound(srcArray bool, round int) {
 	}
 
 	// D values: D[x] = C[(x+4)%5] ^ rol(C[(x+1)%5], 1).
+	// D[0..2] go directly into R14, R15, BP (no conflicts).
 	for _, x := range []int{0, 1, 2} {
 		p("\tRORXQ $63, %s, %s", colR[(x+1)%5], dReg[x])
 		p("\tXORQ %s, %s", colR[(x+4)%5], dReg[x])
 	}
-	// Do = CX ^ rol(SI, 1) → R8 temp, then move to SI
+	// D[3] and D[4] target SI and DX, which still hold column parities
+	// C[4] and C[3] needed as inputs, so compute via temps first.
 	p("\tRORXQ $63, SI, R8")
 	p("\tXORQ CX, R8")
-	// Du = DX ^ rol(AX, 1) → R9 temp, then move to DX
 	p("\tRORXQ $63, AX, R9")
 	p("\tXORQ DX, R9")
-	p("\tMOVQ R8, SI") // SI = Do
-	p("\tMOVQ R9, DX") // DX = Du
+	p("\tMOVQ R8, SI") // SI = D[3]
+	p("\tMOVQ R9, DX") // DX = D[4]
 
 	// Five chi groups.
 	for g := 0; g < 5; g++ {

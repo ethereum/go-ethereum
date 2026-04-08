@@ -3,7 +3,7 @@
 package keccak
 
 import (
-	"unsafe"
+	"encoding/binary"
 
 	"golang.org/x/crypto/sha3"
 )
@@ -59,7 +59,11 @@ func (s *sponge) Write(p []byte) (int, error) {
 
 // Sum256 finalizes and returns the 32-byte Keccak-256 digest.
 // Does not modify the sponge state.
+// Panics if called after Read.
 func (s *sponge) Sum256() [32]byte {
+	if s.squeezing {
+		panic("keccak: Sum after Read")
+	}
 	state := s.state
 	xorIn(&state, s.buf[:s.absorbed])
 	state[s.absorbed] ^= 0x01
@@ -217,14 +221,13 @@ func (h *Hasher) Read(out []byte) (int, error) {
 	return h.sponge.Read(out)
 }
 
+// xorIn XORs data into the first len(data) bytes of state using uint64 loads.
 func xorIn(state *[200]byte, data []byte) {
-	stateU64 := (*[25]uint64)(unsafe.Pointer(state))
-	n := len(data) >> 3
-	p := unsafe.Pointer(unsafe.SliceData(data))
-	for i := range n {
-		stateU64[i] ^= *(*uint64)(unsafe.Add(p, uintptr(i)<<3))
+	for i := 0; i+8 <= len(data); i += 8 {
+		v := binary.LittleEndian.Uint64(state[i:]) ^ binary.LittleEndian.Uint64(data[i:])
+		binary.LittleEndian.PutUint64(state[i:], v)
 	}
-	for i := n << 3; i < len(data); i++ {
+	for i := len(data) &^ 7; i < len(data); i++ {
 		state[i] ^= data[i]
 	}
 }

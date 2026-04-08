@@ -246,25 +246,14 @@ func FuzzSum256(f *testing.F) {
 	})
 }
 
-func BenchmarkSum256_500K(b *testing.B) {
-	data := make([]byte, 500*1024)
-	b.SetBytes(int64(len(data)))
-	b.ReportAllocs()
-	for b.Loop() {
-		Sum256(data)
-	}
-}
-
 // Comparison benchmarks: faster_keccak vs golang.org/x/crypto/sha3.
 var benchSizes = []int{32, 128, 256, 1024, 4096, 500 * 1024}
 
 func benchName(size int) string {
-	switch {
-	case size >= 1024:
+	if size >= 1024 {
 		return fmt.Sprintf("%dK", size/1024)
-	default:
-		return fmt.Sprintf("%dB", size)
 	}
+	return fmt.Sprintf("%dB", size)
 }
 
 // BenchmarkKeccak256Sum tests Sum256 with local faster_keccak implementation.

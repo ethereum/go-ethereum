@@ -2,22 +2,20 @@
 
 package keccak
 
-import (
-	"unsafe"
+import "golang.org/x/sys/cpu"
 
-	"golang.org/x/sys/cpu"
-)
+func init() { useASM = cpu.X86.HasBMI1 && cpu.X86.HasBMI2 }
 
-func init() { useASM = cpu.X86.HasBMI2 && cpu.X86.HasBMI1 }
-
+// keccakF1600BMI2 permutes state. When buf != nil, it first XORs rate bytes
+// of buf into state, saving one full memory pass.
+//
 //go:noescape
-func keccakF1600BMI2(a *[200]byte)
+func keccakF1600BMI2(a *[200]byte, buf *byte)
 
 func keccakF1600(a *[200]byte) {
-	keccakF1600BMI2(a)
+	keccakF1600BMI2(a, nil)
 }
 
 func xorAndPermute(state *[200]byte, buf *byte) {
-	xorIn(state, unsafe.Slice(buf, rate))
-	keccakF1600(state)
+	keccakF1600BMI2(state, buf)
 }

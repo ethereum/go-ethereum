@@ -4,9 +4,50 @@
 
 #include "textflag.h"
 
-// func keccakF1600BMI2(a *[200]byte)
-TEXT ·keccakF1600BMI2(SB), NOSPLIT, $200-8
+// func keccakF1600BMI2(a *[200]byte, buf *byte)
+TEXT ·keccakF1600BMI2(SB), NOSPLIT, $200-16
 	MOVQ a+0(FP), DI
+	MOVQ buf+8(FP), BX
+	TESTQ BX, BX
+	JZ rounds
+
+	// XOR 17 lanes (136 bytes) of buf into state.
+	MOVQ 0(BX), AX
+	XORQ AX, 0(DI)
+	MOVQ 8(BX), AX
+	XORQ AX, 8(DI)
+	MOVQ 16(BX), AX
+	XORQ AX, 16(DI)
+	MOVQ 24(BX), AX
+	XORQ AX, 24(DI)
+	MOVQ 32(BX), AX
+	XORQ AX, 32(DI)
+	MOVQ 40(BX), AX
+	XORQ AX, 40(DI)
+	MOVQ 48(BX), AX
+	XORQ AX, 48(DI)
+	MOVQ 56(BX), AX
+	XORQ AX, 56(DI)
+	MOVQ 64(BX), AX
+	XORQ AX, 64(DI)
+	MOVQ 72(BX), AX
+	XORQ AX, 72(DI)
+	MOVQ 80(BX), AX
+	XORQ AX, 80(DI)
+	MOVQ 88(BX), AX
+	XORQ AX, 88(DI)
+	MOVQ 96(BX), AX
+	XORQ AX, 96(DI)
+	MOVQ 104(BX), AX
+	XORQ AX, 104(DI)
+	MOVQ 112(BX), AX
+	XORQ AX, 112(DI)
+	MOVQ 120(BX), AX
+	XORQ AX, 120(DI)
+	MOVQ 128(BX), AX
+	XORQ AX, 128(DI)
+
+rounds:
 
 	// Round 0
 	MOVQ $0x0000000000000001, R13
