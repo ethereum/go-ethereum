@@ -302,3 +302,71 @@ func TestBintrieGeneratorResumeMidStem(t *testing.T) {
 		}
 	}
 }
+
+// TestBintrieGeneratorWithContractCode verifies that the generator
+// correctly writes code-chunk offsets (128..255) into stem blobs for
+// contracts with non-trivial code. This is the A16/T10 test.
+func TestBintrieGeneratorWithContractCode(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+
+	// Build a bintrie with one contract that has ~100 bytes of code.
+	// Per EIP-7864, code is chunked into 31-byte pieces starting at
+	// offset 128 of the account's stem.
+	tr, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, &bintrieDiskStore{db: db})
+	if err != nil {
+		t.Fatalf("new bintrie: %v", err)
+	}
+	addr := common.HexToAddress("0xContractContractContractContractContrac")
+	code := make([]byte, 100)
+	for i := range code {
+		code[i] = byte(i)
+	}
+	if err := tr.UpdateAccount(addr, &types.StateAccount{
+		Nonce:    1,
+		Balance:  uint256.NewInt(1000),
+		CodeHash: types.EmptyCodeHash[:],
+	}, len(code)); err != nil {
+		t.Fatalf("UpdateAccount: %v", err)
+	}
+	codeHash := common.BytesToHash(types.EmptyCodeHash[:])
+	if err := tr.UpdateContractCode(addr, codeHash, code); err != nil {
+		t.Fatalf("UpdateContractCode: %v", err)
+	}
+	root, nodes := tr.Commit(false)
+
+	// Persist trie nodes
+	batch := db.NewBatch()
+	for path, node := range nodes.Nodes {
+		if !node.IsDeleted() {
+			rawdb.WriteAccountTrieNode(batch, []byte(path), node.Blob)
+		}
+	}
+	if err := batch.Write(); err != nil {
+		t.Fatalf("flush trie nodes: %v", err)
+	}
+
+	// Run the generator
+	runTestBintrieGenerator(t, db, root, nil)
+
+	// Verify account header offsets are present.
+	stem := bintrie.GetBinaryTreeKeyBasicData(addr)[:bintrie.StemSize]
+	blob := rawdb.ReadBinTrieStem(db, stem)
+	if len(blob) == 0 {
+		t.Fatal("stem blob missing for contract account")
+	}
+	basic, _ := extractStemOffset(blob, bintrie.BasicDataLeafKey)
+	if len(basic) != 32 {
+		t.Errorf("BasicData: got len %d, want 32", len(basic))
+	}
+	codeHashLeaf, _ := extractStemOffset(blob, bintrie.CodeHashLeafKey)
+	if len(codeHashLeaf) != 32 {
+		t.Errorf("CodeHash: got len %d, want 32", len(codeHashLeaf))
+	}
+
+	// Verify at least one code chunk offset (128) is present.
+	// 100 bytes of code = ceil(100/31) = 4 chunks, at offsets 128..131.
+	codeChunk0, _ := extractStemOffset(blob, 128)
+	if len(codeChunk0) != 32 {
+		t.Errorf("Code chunk at offset 128: got len %d, want 32 (code chunk missing from stem blob)", len(codeChunk0))
+	}
+}

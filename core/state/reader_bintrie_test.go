@@ -348,3 +348,127 @@ func TestBintrieFlatReaderMultipleOffsetsPerStem(t *testing.T) {
 		}
 	}
 }
+
+// TestBintrieFlatReaderStorageTombstone verifies the bintrie "tombstone"
+// convention: a storage slot set to zero is present-with-32-zero-bytes,
+// which must be distinguishable from "never written" (absent). This is
+// the A16/T8 integration test.
+func TestBintrieFlatReaderStorageTombstone(t *testing.T) {
+	disk := rawdb.NewMemoryDatabase()
+	tdb := triedb.NewDatabase(disk, triedb.VerkleDefaults)
+	sdb := NewDatabase(tdb, nil)
+
+	addr := common.HexToAddress("0xABCDEF0123456789ABCDEF0123456789ABCDEF01")
+	slot := common.HexToHash("0x07")
+	nonZero := common.HexToHash("0x42")
+
+	// Block 1: set slot to non-zero.
+	state1, _ := New(types.EmptyVerkleHash, sdb)
+	state1.SetBalance(addr, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+	state1.SetState(addr, slot, nonZero)
+	root1, err := state1.Commit(0, true, false)
+	if err != nil {
+		t.Fatalf("commit block 1: %v", err)
+	}
+
+	// Block 2: set the same slot to zero (the bintrie writes 32 zero
+	// bytes as a tombstone rather than deleting the offset).
+	state2, _ := New(root1, sdb)
+	state2.SetState(addr, slot, common.Hash{})
+	root2, err := state2.Commit(1, true, false)
+	if err != nil {
+		t.Fatalf("commit block 2: %v", err)
+	}
+
+	// Read at block 2: should be the zero hash.
+	reader2, err := sdb.StateReader(root2)
+	if err != nil {
+		t.Fatalf("StateReader(block2): %v", err)
+	}
+	got2, err := reader2.Storage(addr, slot)
+	if err != nil {
+		t.Fatalf("Storage(block2): %v", err)
+	}
+	if got2 != (common.Hash{}) {
+		t.Errorf("block 2 slot: got %x, want zero", got2)
+	}
+
+	// Read at block 1: should still be the non-zero value.
+	reader1, err := sdb.StateReader(root1)
+	if err != nil {
+		t.Fatalf("StateReader(block1): %v", err)
+	}
+	got1, err := reader1.Storage(addr, slot)
+	if err != nil {
+		t.Fatalf("Storage(block1): %v", err)
+	}
+	if got1 != nonZero {
+		t.Errorf("block 1 slot: got %x, want %x", got1, nonZero)
+	}
+}
+
+// TestBintrieFlatReaderMultiBlockEvolution verifies that diff-layer
+// chaining works correctly across multiple blocks for the bintrie path.
+// This is the A16/T9 integration test.
+func TestBintrieFlatReaderMultiBlockEvolution(t *testing.T) {
+	disk := rawdb.NewMemoryDatabase()
+	tdb := triedb.NewDatabase(disk, triedb.VerkleDefaults)
+	sdb := NewDatabase(tdb, nil)
+
+	addr := common.HexToAddress("0xDeaDBeefDeaDBeefDeaDBeefDeaDBeefDeaDBeef")
+
+	// Block 1: nonce=1, balance=100
+	state1, _ := New(types.EmptyVerkleHash, sdb)
+	state1.SetBalance(addr, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
+	state1.SetNonce(addr, 1, tracing.NonceChangeUnspecified)
+	root1, err := state1.Commit(0, true, false)
+	if err != nil {
+		t.Fatalf("commit block 1: %v", err)
+	}
+
+	// Block 2: nonce=2 (balance unchanged at 100)
+	state2, _ := New(root1, sdb)
+	state2.SetNonce(addr, 2, tracing.NonceChangeUnspecified)
+	root2, err := state2.Commit(1, true, false)
+	if err != nil {
+		t.Fatalf("commit block 2: %v", err)
+	}
+
+	// Block 3: balance=200 (nonce unchanged at 2)
+	state3, _ := New(root2, sdb)
+	state3.SetBalance(addr, uint256.NewInt(200), tracing.BalanceChangeUnspecified)
+	root3, err := state3.Commit(2, true, false)
+	if err != nil {
+		t.Fatalf("commit block 3: %v", err)
+	}
+
+	// Read at each root and verify the expected snapshot.
+	for _, tc := range []struct {
+		name    string
+		root    common.Hash
+		nonce   uint64
+		balance uint64
+	}{
+		{"block1", root1, 1, 100},
+		{"block2", root2, 2, 100},
+		{"block3", root3, 2, 200},
+	} {
+		reader, err := sdb.StateReader(tc.root)
+		if err != nil {
+			t.Fatalf("%s StateReader: %v", tc.name, err)
+		}
+		got, err := reader.Account(addr)
+		if err != nil {
+			t.Fatalf("%s Account: %v", tc.name, err)
+		}
+		if got == nil {
+			t.Fatalf("%s: account is nil", tc.name)
+		}
+		if got.Nonce != tc.nonce {
+			t.Errorf("%s nonce: got %d, want %d", tc.name, got.Nonce, tc.nonce)
+		}
+		if got.Balance.Uint64() != tc.balance {
+			t.Errorf("%s balance: got %d, want %d", tc.name, got.Balance.Uint64(), tc.balance)
+		}
+	}
+}
