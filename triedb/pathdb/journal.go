@@ -50,10 +50,10 @@ var (
 // - Version 1: storage.Incomplete field is removed
 // - Version 2: add post-modification state values
 // - Version 3: a flag has been added to indicate whether the storage slot key is the raw key or a hash
-// - Version 4: reserved for bintrie flat-state (per-stem layout). Bumping now
-//              discards any v3 journals belonging to a bintrie database so
-//              that the new layout can be introduced cleanly in follow-up
-//              commits without a migration path.
+// - Version 4: bintrie flat-state per-stem layout. The journalGenerator
+//              struct gains an IsBintrie flag (rlp:"optional", defaults to
+//              false) so the loader can discard journals from a mismatched
+//              scheme and trigger a full flat-state regeneration.
 const journalVersion uint64 = 4
 
 // loadJournal tries to parse the layer journal from the disk.

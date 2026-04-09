@@ -47,15 +47,13 @@ import (
 // reads the stem from the store (not from the in-flight batch), so a
 // second write at the same stem would re-read the pre-flush state and
 // clobber the first write. The codec's public surface area is designed
-// around this assumption; Commit 8 of the bintrie flat-state plan
-// restructures writeStates to pre-aggregate per-stem writes so callers
-// do not have to handle this manually.
+// around this assumption; the Flush method pre-aggregates per-stem
+// writes so callers do not have to handle this manually.
 //
-// This codec is NOT wired into pathdb.Database.New yet — that happens in a
-// later commit once the leaf-production hook in binaryHasher and the
-// stateUpdate wiring are in place. Until then, all call sites still
-// dispatch through merkleFlatCodec and bintrie mode continues to use the
-// (soon to be replaced) keccak-shaped flat-state layout.
+// This codec is wired into pathdb.Database.New when isVerkle is true
+// (see database.go). The leaf-production hook in binaryHasher emits
+// per-offset writes via DrainStemWrites, which encodeBinary routes
+// into the per-offset accountData map consumed by Flush.
 type bintrieFlatCodec struct {
 	// db is the underlying key-value store used by applyWrites to read
 	// the current stem blob before merging in new (offset, value) pairs.
@@ -357,9 +355,10 @@ func (c *bintrieFlatCodec) AccountPrefix() []byte {
 
 // StoragePrefix returns the same prefix as AccountPrefix because bintrie
 // flat-state entries are stored in a single namespace (stems contain
-// both account and storage data). The generator in a later commit uses
-// a single iterator over this prefix rather than the two-tier
-// account-then-storage walk used by the merkle generator.
+// both account and storage data). The bintrie generator
+// (generate_bintrie.go) uses a single iterator over this prefix
+// rather than the two-tier account-then-storage walk used by the
+// merkle generator.
 func (c *bintrieFlatCodec) StoragePrefix() []byte {
 	return rawdb.BinTrieStemPrefix
 }

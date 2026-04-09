@@ -129,10 +129,11 @@ func (tr *warpBinTrie) copy() *warpBinTrie {
 //
 // binaryHasher also implements LeafProducer: alongside every trie mutation
 // it records the corresponding (stem, offset, value) write into an
-// internal buffer. The caller (StateDB.Commit in a later commit) drains
-// this buffer once per block and hands the writes to the pathdb flat-state
-// layer via the stateUpdate, keeping the bintrie trie and its flat-state
-// mirror consistent without recomputing the bintrie key derivation twice.
+// internal buffer. StateDB.commit() drains this buffer once per block
+// via LeafProducer.DrainStemWrites and hands the writes to the pathdb
+// flat-state layer via stateUpdate.encodeBinary, keeping the bintrie
+// trie and its flat-state mirror consistent without recomputing the
+// bintrie key derivation twice.
 type binaryHasher struct {
 	db   *triedb.Database
 	root common.Hash
