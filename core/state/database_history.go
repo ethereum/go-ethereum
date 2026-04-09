@@ -34,13 +34,14 @@ import (
 // historicStateReader implements StateReader, wrapping a historical state reader
 // defined in path database and provide historic state serving over the path scheme.
 type historicStateReader struct {
-	reader *pathdb.HistoricalStateReader
-	lock   sync.Mutex // Lock for protecting concurrent read
+	reader   *pathdb.HistoricalStateReader
+	isVerkle bool       // true when the database uses the binary trie scheme
+	lock     sync.Mutex // Lock for protecting concurrent read
 }
 
 // newHistoricStateReader constructs a reader for historical state serving.
-func newHistoricStateReader(r *pathdb.HistoricalStateReader) *historicStateReader {
-	return &historicStateReader{reader: r}
+func newHistoricStateReader(r *pathdb.HistoricalStateReader, isVerkle bool) *historicStateReader {
+	return &historicStateReader{reader: r, isVerkle: isVerkle}
 }
 
 // Account implements StateReader, retrieving the account specified by the address.
@@ -83,6 +84,17 @@ func (r *historicStateReader) Storage(addr common.Address, key common.Hash) (com
 	}
 	if len(blob) == 0 {
 		return common.Hash{}, nil
+	}
+	// Bintrie storage leaves are raw 32-byte values (not RLP-encoded)
+	// because the bintrie flat-state codec stores leaves verbatim.
+	// The merkle path encodes storage values as trimmed-left-zeros RLP
+	// before writing, so rlp.Split is the correct decoder there.
+	// Without this dispatch, bintrie historical storage reads would
+	// either decode garbage or error from rlp.Split on raw 32 bytes.
+	if r.isVerkle {
+		var slot common.Hash
+		copy(slot[:], blob)
+		return slot, nil
 	}
 	_, content, _, err := rlp.Split(blob)
 	if err != nil {
@@ -240,7 +252,7 @@ func (db *HistoricDB) Reader(stateRoot common.Hash) (Reader, error) {
 	var readers []StateReader
 	sr, err := db.triedb.HistoricStateReader(stateRoot)
 	if err == nil {
-		readers = append(readers, newHistoricStateReader(sr))
+		readers = append(readers, newHistoricStateReader(sr, db.triedb.IsVerkle()))
 	}
 	nr, err := db.triedb.HistoricNodeReader(stateRoot)
 	if err == nil {

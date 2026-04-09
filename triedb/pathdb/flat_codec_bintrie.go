@@ -409,6 +409,16 @@ func (c *bintrieFlatCodec) MarkerCompare(key []byte, marker []byte) int {
 	return bytes.Compare(key, marker)
 }
 
+// StorageMarkerKey returns the 32-byte storageHash directly. For bintrie,
+// the storageHash IS the full (stem || offset) key because
+// bintrieFlatCodec.StorageKey returns (zeroHash, fullKey). Comparing
+// this directly against the 32-byte generator marker yields the correct
+// ordering — unlike the merkle 64-byte combined key which was fail-open
+// for bintrie (see A4 remediation plan for the full diagnosis).
+func (c *bintrieFlatCodec) StorageMarkerKey(_ common.Hash, storageHash common.Hash) []byte {
+	return storageHash[:]
+}
+
 // Flush drains the in-memory accountData and storageData maps into the
 // batch using the bintrie per-stem layout. The maps are expected to hold
 // per-offset entries — each key is a 32-byte (stem || offset) tuple

@@ -278,10 +278,18 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 
 	// If the layer is being generated, ensure the requested storage slot
 	// has already been covered by the generator.
+	//
+	// The codec derives the scheme-appropriate marker comparison key:
+	// merkle uses the 64-byte (accountHash||storageHash) concatenation;
+	// bintrie uses the 32-byte storageHash directly (which is the full
+	// stem||offset key matching the bintrie generator's 32-byte marker).
+	// Pre-A4 this always used the 64-byte shape, which was fail-open
+	// for bintrie because the zero accountHash sorts before any
+	// sha256-derived marker byte.
 	codec := dl.db.flatCodec
-	combinedKey := storageKeySlice(accountHash, storageHash) // marker comparison key (merkle layout)
+	markerKey := codec.StorageMarkerKey(accountHash, storageHash)
 	marker := dl.genMarker()
-	if marker != nil && codec.MarkerCompare(combinedKey, marker) > 0 {
+	if marker != nil && codec.MarkerCompare(markerKey, marker) > 0 {
 		return nil, errNotCoveredYet
 	}
 	// Try to retrieve the storage slot from the memory cache. The codec

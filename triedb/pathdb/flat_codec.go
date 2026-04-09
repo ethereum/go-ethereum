@@ -129,6 +129,14 @@ type flatStateCodec interface {
 	// disklayer.account/storage gating logic and by writeStates.
 	MarkerCompare(key []byte, marker []byte) int
 
+	// StorageMarkerKey returns the byte representation used to compare a
+	// (accountHash, storageHash) pair against the generator progress
+	// marker in disklayer.storage's generation-progress gate. Merkle
+	// uses the 64-byte concatenation (two-tier keying); bintrie uses
+	// the 32-byte storageHash directly (single-tier, stem||offset key
+	// space matching the bintrie generator's 32-byte marker).
+	StorageMarkerKey(accountHash, storageHash common.Hash) []byte
+
 	// Flush drains all pending mutations from the in-memory accountData and
 	// storageData maps into the supplied batch and updates the clean cache
 	// in lockstep. The codec controls iteration order, key derivation, and
@@ -231,6 +239,10 @@ func (c *merkleFlatCodec) SplitMarker(marker []byte) ([]byte, []byte) {
 
 func (c *merkleFlatCodec) MarkerCompare(key []byte, marker []byte) int {
 	return bytes.Compare(key, marker)
+}
+
+func (c *merkleFlatCodec) StorageMarkerKey(accountHash, storageHash common.Hash) []byte {
+	return storageKeySlice(accountHash, storageHash)
 }
 
 // Flush drains the supplied account/storage maps into the batch using the
