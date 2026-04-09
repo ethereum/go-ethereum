@@ -312,7 +312,7 @@ that they are returned by FINDNODE.`)
 	conn, l1 := s.listen1(t)
 	defer conn.close()
 
-	const maxAttempts = 45
+	const maxAttempts = 5
 	const retryInterval = 2 * time.Second
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
