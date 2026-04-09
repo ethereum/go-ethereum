@@ -185,22 +185,13 @@ func TestBintrieGeneratorRebuildsStems(t *testing.T) {
 	}
 }
 
-// TestBintrieGeneratorResume verifies the resume path: a generator
-// started with a non-zero marker should produce on-disk stem blobs
-// covering only the keys at or after the marker. We pick the marker as
-// the SECOND populated stem in the trie so the assertions can verify
-// the first stem was skipped and the second-onwards stems were emitted.
-//
-// This is a thinner check than the rebuild test because the iterator's
-// resume contract is exercised more thoroughly by the iterator-level
-// tests in trie/bintrie/iterator_test.go — here we just confirm the
-// generator wires through to it.
-func TestBintrieGeneratorResume(t *testing.T) {
+// TestBintrieGeneratorResumeStemBoundary verifies that a generator
+// started from a stem-boundary marker (stem || offset 0) correctly
+// generates only the stems at or after the marker.
+func TestBintrieGeneratorResumeStemBoundary(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	root, accounts := buildTestBintrie(t, db)
 
-	// Pick the larger of the two account stems as the resume marker;
-	// after generation, only the larger stem should appear on disk.
 	stem1 := bintrie.GetBinaryTreeKeyBasicData(accounts[0].addr)[:bintrie.StemSize]
 	stem2 := bintrie.GetBinaryTreeKeyBasicData(accounts[1].addr)[:bintrie.StemSize]
 	larger := stem1
@@ -209,8 +200,6 @@ func TestBintrieGeneratorResume(t *testing.T) {
 		larger, smaller = stem2, stem1
 	}
 
-	// Marker must be a 32-byte key (stem || offset). Offset 0 picks the
-	// BasicData of the larger stem.
 	marker := make([]byte, 32)
 	copy(marker, larger)
 
@@ -221,5 +210,95 @@ func TestBintrieGeneratorResume(t *testing.T) {
 	}
 	if got := rawdb.ReadBinTrieStem(db, larger); len(got) == 0 {
 		t.Errorf("larger stem should have been generated after resume marker")
+	}
+}
+
+// TestBintrieGeneratorResumeMidStem is the regression test for review
+// finding C1 (mid-stem resume drops earlier offsets). Before A3's fix,
+// flushStem OVERWROTE the on-disk stem blob with only the offsets
+// accumulated after the resume point. Offsets from a prior pass that
+// were already on disk were silently lost.
+//
+// The test simulates a two-pass generation:
+//
+//  1. Pre-seed the disk with a stem blob containing offsets 0 and 1
+//     (simulating what a prior pass wrote before being interrupted).
+//  2. Run the generator with marker = stem||1 (resume INSIDE the stem,
+//     past offset 0).
+//  3. After the generator completes, verify that the on-disk blob
+//     contains ALL offsets (0, 1, and everything else the trie has)
+//     — not just the offsets from the resumed walk.
+//
+// Before A3: step 3 would show only the post-marker offsets.
+func TestBintrieGeneratorResumeMidStem(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	root, accounts := buildTestBintrie(t, db)
+
+	// Pick addr1 (the one with storage). It has BasicData (offset 0),
+	// CodeHash (offset 1), and storage slot 7 at offset 64+7=71.
+	a := accounts[0]
+	stem := bintrie.GetBinaryTreeKeyBasicData(a.addr)[:bintrie.StemSize]
+
+	// Step 1: Pre-seed the disk with a partial stem blob containing
+	// only offsets 0 and 1 — as if a prior generator pass wrote them
+	// before being interrupted.
+	preSeed := newStemBuilder()
+	preSeed.set(bintrie.BasicDataLeafKey, bytes.Repeat([]byte{0xAA}, 32))
+	preSeed.set(bintrie.CodeHashLeafKey, bytes.Repeat([]byte{0xBB}, 32))
+	rawdb.WriteBinTrieStem(db, stem, preSeed.encode())
+
+	// Step 2: Resume from offset 1 — the generator should pick up at
+	// offset 1 of this stem and walk forward. The builder will
+	// accumulate only offset 1 + storage offset from the trie walk.
+	// The RMW in flushStem must merge them with the pre-seeded disk
+	// blob to preserve offset 0.
+	marker := make([]byte, 32)
+	copy(marker[:bintrie.StemSize], stem)
+	marker[bintrie.StemSize] = bintrie.CodeHashLeafKey // resume at offset 1
+
+	runTestBintrieGenerator(t, db, root, marker)
+
+	// Step 3: After the full run, verify the disk blob has ALL offsets.
+	blob := rawdb.ReadBinTrieStem(db, stem)
+	if len(blob) == 0 {
+		t.Fatal("stem blob missing after mid-stem resume")
+	}
+
+	// Offset 0 (BasicData): must survive the mid-stem resume because
+	// the RMW merged the builder's new content with the existing disk
+	// blob. Before A3, this offset was silently dropped.
+	basic, err := extractStemOffset(blob, bintrie.BasicDataLeafKey)
+	if err != nil {
+		t.Fatalf("extract BasicData: %v", err)
+	}
+	if len(basic) != 32 {
+		t.Fatalf("BasicData lost after mid-stem resume (A3 regression): got len=%d, want 32", len(basic))
+	}
+
+	// Offset 1 (CodeHash): the generator walked this offset (it's at
+	// the marker), so the trie's authoritative value should overwrite
+	// the pre-seeded one.
+	code, err := extractStemOffset(blob, bintrie.CodeHashLeafKey)
+	if err != nil {
+		t.Fatalf("extract CodeHash: %v", err)
+	}
+	if len(code) != 32 {
+		t.Fatalf("CodeHash missing after resume: got len=%d", len(code))
+	}
+
+	// Storage slot must also be present (the generator walked it as
+	// part of the full stem traversal).
+	storageKey := bintrie.GetBinaryTreeKeyStorageSlot(a.addr, a.slot[:])
+	storageOffset := storageKey[bintrie.StemSize]
+	storageStem := storageKey[:bintrie.StemSize]
+	if bytes.Equal(storageStem, stem) {
+		// Storage is at the same stem (header slot) — verify it's in the blob.
+		storageVal, err := extractStemOffset(blob, storageOffset)
+		if err != nil {
+			t.Fatalf("extract storage: %v", err)
+		}
+		if !bytes.Equal(storageVal, a.slotVal) {
+			t.Errorf("storage value: got %x, want %x", storageVal, a.slotVal)
+		}
 	}
 }

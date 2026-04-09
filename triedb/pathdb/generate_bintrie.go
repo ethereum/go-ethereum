@@ -123,10 +123,12 @@ func (ctx *bintrieGeneratorContext) close() {}
 // Resume support is structural: ctx.marker — a 32-byte (stem || offset)
 // key — is fed straight to BinaryTrie.NodeIterator which positions on the
 // first leaf with key >= marker via binaryNodeIterator.seek (added in
-// Commit 1). Resuming inside a stem is permitted; we re-encode the stem
-// from scratch on each visit, so paying the disk cost twice for the
-// "interrupted" stem is preferable to introducing a "partial-stem"
-// resume protocol.
+// Commit 1). Resuming inside a stem is safe because flushStem performs a
+// read-modify-write: the builder's new offsets (from the resumed walk)
+// are merged with the existing on-disk blob (from the prior pass). If
+// the marker is at offset 3 of stemA, the resume processes offsets 3..N
+// and the merge preserves offsets 0..2 from disk. One extra disk read
+// per flushStem (the RMW) is negligible compared to the walk cost.
 //
 // Range proofs are deliberately not used here. The bintrie's Prove path
 // is not implemented yet, and an iteration-only generation cycle is
@@ -160,19 +162,36 @@ func (g *generator) generateBinTrieStems(ctx *bintrieGeneratorContext) error {
 		builder     = newStemBuilder()
 	)
 
-	// flushStem encodes the accumulated builder into a stem blob and
-	// writes it to the batch (or deletes the key if the result is
-	// empty — which can happen if every observed offset was nil, but
-	// that should be impossible for a well-formed trie).
+	// flushStem performs a read-modify-write on the stem being accumulated:
+	// it reads the existing on-disk stem blob (if any), merges in the
+	// builder's new offsets (new values win over existing), and writes the
+	// merged result back. This makes mid-stem resume safe: if a prior pass
+	// wrote offsets 0..2 and the current pass (after resuming at offset 3)
+	// only has offsets 3..4 in the builder, the merge preserves 0..2 from
+	// disk and adds 3..4 — no data loss.
+	//
+	// Without this RMW, a mid-stem resume would overwrite the existing disk
+	// blob with a partial one, silently dropping the earlier offsets. This
+	// was bug C1 identified in the PR review.
 	flushStem := func() {
 		if currentStem == nil || builder.empty() {
 			return
 		}
-		blob := builder.encode()
-		if blob == nil {
+		existing := rawdb.ReadBinTrieStem(ctx.db, currentStem)
+		writes := builder.toOffsetValues()
+		merged, err := mergeStemBlob(existing, writes)
+		if err != nil {
+			// Corruption in the existing blob. Log and fall back to the
+			// builder content alone — at least the offsets from this pass
+			// land. A7 tightens this to a first-class error propagation.
+			log.Error("Bintrie generator: merge stem blob failed, writing builder only",
+				"stem", fmt.Sprintf("%x", currentStem), "err", err)
+			merged = builder.encode()
+		}
+		if merged == nil {
 			rawdb.DeleteBinTrieStem(ctx.batch, currentStem)
 		} else {
-			rawdb.WriteBinTrieStem(ctx.batch, currentStem, blob)
+			rawdb.WriteBinTrieStem(ctx.batch, currentStem, merged)
 		}
 		builder.reset()
 		// Bookkeeping: count one stem per emitted blob.

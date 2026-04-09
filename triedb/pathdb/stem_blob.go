@@ -267,6 +267,29 @@ func (b *stemBuilder) reset() {
 	b.values = [stemBlobBitmapBits][]byte{}
 }
 
+// toOffsetValues converts the builder's populated entries into a slice
+// of (offset, value) pairs suitable for passing to mergeStemBlob. Only
+// offsets with non-nil values are emitted; cleared (nil-value) offsets
+// are skipped since their absence in the merge input leaves the
+// existing blob's value intact — which is the correct behavior for the
+// generator's RMW pattern where the builder holds only the new writes.
+func (b *stemBuilder) toOffsetValues() []stemOffsetValue {
+	count := bitmapPopcount(b.bitmap)
+	if count == 0 {
+		return nil
+	}
+	out := make([]stemOffsetValue, 0, count)
+	for offset := range stemBlobBitmapBits {
+		if b.values[offset] != nil {
+			out = append(out, stemOffsetValue{
+				Offset: byte(offset),
+				Value:  b.values[offset],
+			})
+		}
+	}
+	return out
+}
+
 // stemOffsetValue is a single (offset, value) pair passed to mergeStemBlob.
 // A nil Value clears the offset.
 type stemOffsetValue struct {
