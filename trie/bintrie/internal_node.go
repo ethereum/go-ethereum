@@ -58,8 +58,8 @@ func keyToPath(depth int, key []byte) ([]byte, error) {
 
 // InternalNode is a binary trie internal node.
 type InternalNode struct {
-	left, right BinaryNode
-	depth       int
+	children [2]BinaryNode // children[0] = left, children[1] = right
+	depth    int
 
 	mustRecompute bool        // true if the hash needs to be recomputed
 	hash          common.Hash // cached hash when mustRecompute == false
@@ -70,28 +70,8 @@ func (bt *InternalNode) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([
 	if bt.depth > 31*8 {
 		return nil, errors.New("node too deep")
 	}
-
 	bit := stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
-	if bit == 0 {
-		if hn, ok := bt.left.(HashedNode); ok {
-			path, err := keyToPath(bt.depth, stem)
-			if err != nil {
-				return nil, fmt.Errorf("GetValuesAtStem resolve error: %w", err)
-			}
-			data, err := resolver(path, common.Hash(hn))
-			if err != nil {
-				return nil, fmt.Errorf("GetValuesAtStem resolve error: %w", err)
-			}
-			node, err := DeserializeNodeWithHash(data, bt.depth+1, common.Hash(hn))
-			if err != nil {
-				return nil, fmt.Errorf("GetValuesAtStem node deserialization error: %w", err)
-			}
-			bt.left = node
-		}
-		return bt.left.GetValuesAtStem(stem, resolver)
-	}
-
-	if hn, ok := bt.right.(HashedNode); ok {
+	if hn, ok := bt.children[bit].(HashedNode); ok {
 		path, err := keyToPath(bt.depth, stem)
 		if err != nil {
 			return nil, fmt.Errorf("GetValuesAtStem resolve error: %w", err)
@@ -104,9 +84,9 @@ func (bt *InternalNode) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([
 		if err != nil {
 			return nil, fmt.Errorf("GetValuesAtStem node deserialization error: %w", err)
 		}
-		bt.right = node
+		bt.children[bit] = node
 	}
-	return bt.right.GetValuesAtStem(stem, resolver)
+	return bt.children[bit].GetValuesAtStem(stem, resolver)
 }
 
 // Get retrieves the value for the given key.
@@ -131,8 +111,7 @@ func (bt *InternalNode) Insert(key []byte, value []byte, resolver NodeResolverFn
 // Copy creates a deep copy of the node.
 func (bt *InternalNode) Copy() BinaryNode {
 	return &InternalNode{
-		left:          bt.left.Copy(),
-		right:         bt.right.Copy(),
+		children:      [2]BinaryNode{bt.children[0].Copy(), bt.children[1].Copy()},
 		depth:         bt.depth,
 		mustRecompute: bt.mustRecompute,
 		hash:          bt.hash,
@@ -146,19 +125,19 @@ func (bt *InternalNode) Hash() common.Hash {
 	}
 
 	// At shallow depths, parallelize when both children need rehashing:
-	// hash left subtree in a goroutine, right subtree inline, then combine.
+	// hash children[0] in a goroutine, children[1] inline, then combine.
 	// Skip goroutine overhead when only one child is dirty (common case
 	// for narrow state updates that touch a single path through the trie).
-	if bt.depth < parallelDepth() && isDirty(bt.left) && isDirty(bt.right) {
+	if bt.depth < parallelDepth() && isDirty(bt.children[0]) && isDirty(bt.children[1]) {
 		var input [64]byte
 		var lh common.Hash
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			lh = bt.left.Hash()
+			lh = bt.children[0].Hash()
 		}()
-		rh := bt.right.Hash()
+		rh := bt.children[1].Hash()
 		copy(input[32:], rh[:])
 		wg.Wait()
 		copy(input[:32], lh[:])
@@ -170,15 +149,12 @@ func (bt *InternalNode) Hash() common.Hash {
 	// Deeper nodes: sequential using pooled hasher (goroutine overhead > hash cost)
 	h := newSha256()
 	defer returnSha256(h)
-	if bt.left != nil {
-		h.Write(bt.left.Hash().Bytes())
-	} else {
-		h.Write(zero[:])
-	}
-	if bt.right != nil {
-		h.Write(bt.right.Hash().Bytes())
-	} else {
-		h.Write(zero[:])
+	for _, child := range bt.children {
+		if child != nil {
+			h.Write(child.Hash().Bytes())
+		} else {
+			h.Write(zero[:])
+		}
 	}
 	bt.hash = common.BytesToHash(h.Sum(nil))
 	bt.mustRecompute = false
@@ -188,39 +164,11 @@ func (bt *InternalNode) Hash() common.Hash {
 // InsertValuesAtStem inserts a full value group at the given stem in the internal node.
 // Already-existing values will be overwritten.
 func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolver NodeResolverFn, depth int) (BinaryNode, error) {
-	var err error
 	bit := stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
-	if bit == 0 {
-		if bt.left == nil {
-			bt.left = Empty{}
-		}
-
-		if hn, ok := bt.left.(HashedNode); ok {
-			path, err := keyToPath(bt.depth, stem)
-			if err != nil {
-				return nil, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
-			}
-			data, err := resolver(path, common.Hash(hn))
-			if err != nil {
-				return nil, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
-			}
-			node, err := DeserializeNodeWithHash(data, bt.depth+1, common.Hash(hn))
-			if err != nil {
-				return nil, fmt.Errorf("InsertValuesAtStem node deserialization error: %w", err)
-			}
-			bt.left = node
-		}
-
-		bt.left, err = bt.left.InsertValuesAtStem(stem, values, resolver, depth+1)
-		bt.mustRecompute = true
-		return bt, err
+	if bt.children[bit] == nil {
+		bt.children[bit] = Empty{}
 	}
-
-	if bt.right == nil {
-		bt.right = Empty{}
-	}
-
-	if hn, ok := bt.right.(HashedNode); ok {
+	if hn, ok := bt.children[bit].(HashedNode); ok {
 		path, err := keyToPath(bt.depth, stem)
 		if err != nil {
 			return nil, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
@@ -233,10 +181,10 @@ func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolve
 		if err != nil {
 			return nil, fmt.Errorf("InsertValuesAtStem node deserialization error: %w", err)
 		}
-		bt.right = node
+		bt.children[bit] = node
 	}
-
-	bt.right, err = bt.right.InsertValuesAtStem(stem, values, resolver, depth+1)
+	var err error
+	bt.children[bit], err = bt.children[bit].InsertValuesAtStem(stem, values, resolver, depth+1)
 	bt.mustRecompute = true
 	return bt, err
 }
@@ -244,22 +192,15 @@ func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolve
 // CollectNodes collects all child nodes at a given path, and flushes it
 // into the provided node collector.
 func (bt *InternalNode) CollectNodes(path []byte, flushfn NodeFlushFn) error {
-	if bt.left != nil {
-		var p [256]byte
-		copy(p[:], path)
-		childpath := p[:len(path)]
-		childpath = append(childpath, 0)
-		if err := bt.left.CollectNodes(childpath, flushfn); err != nil {
-			return err
-		}
-	}
-	if bt.right != nil {
-		var p [256]byte
-		copy(p[:], path)
-		childpath := p[:len(path)]
-		childpath = append(childpath, 1)
-		if err := bt.right.CollectNodes(childpath, flushfn); err != nil {
-			return err
+	for i, child := range bt.children {
+		if child != nil {
+			var p [256]byte
+			copy(p[:], path)
+			childpath := p[:len(path)]
+			childpath = append(childpath, byte(i))
+			if err := child.CollectNodes(childpath, flushfn); err != nil {
+				return err
+			}
 		}
 	}
 	flushfn(path, bt)
@@ -268,17 +209,13 @@ func (bt *InternalNode) CollectNodes(path []byte, flushfn NodeFlushFn) error {
 
 // GetHeight returns the height of the node.
 func (bt *InternalNode) GetHeight() int {
-	var (
-		leftHeight  int
-		rightHeight int
-	)
-	if bt.left != nil {
-		leftHeight = bt.left.GetHeight()
+	var maxHeight int
+	for _, child := range bt.children {
+		if child != nil {
+			maxHeight = max(maxHeight, child.GetHeight())
+		}
 	}
-	if bt.right != nil {
-		rightHeight = bt.right.GetHeight()
-	}
-	return 1 + max(leftHeight, rightHeight)
+	return 1 + maxHeight
 }
 
 func (bt *InternalNode) toDot(parent, path string) string {
@@ -287,12 +224,10 @@ func (bt *InternalNode) toDot(parent, path string) string {
 	if len(parent) > 0 {
 		ret = fmt.Sprintf("%s %s -> %s\n", ret, parent, me)
 	}
-
-	if bt.left != nil {
-		ret = fmt.Sprintf("%s%s", ret, bt.left.toDot(me, fmt.Sprintf("%s%02x", path, 0)))
-	}
-	if bt.right != nil {
-		ret = fmt.Sprintf("%s%s", ret, bt.right.toDot(me, fmt.Sprintf("%s%02x", path, 1)))
+	for i, child := range bt.children {
+		if child != nil {
+			ret = fmt.Sprintf("%s%s", ret, child.toDot(me, fmt.Sprintf("%s%02x", path, i)))
+		}
 	}
 	return ret
 }

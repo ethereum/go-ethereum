@@ -61,11 +61,11 @@ type BinaryNode interface {
 func SerializeNode(node BinaryNode) []byte {
 	switch n := (node).(type) {
 	case *InternalNode:
-		// InternalNode: 1 byte type + 32 bytes left hash + 32 bytes right hash
+		// InternalNode: 1 byte type + 32 bytes children[0] hash + 32 bytes children[1] hash
 		var serialized [NodeTypeBytes + HashSize + HashSize]byte
 		serialized[0] = nodeTypeInternal
-		copy(serialized[1:33], n.left.Hash().Bytes())
-		copy(serialized[33:65], n.right.Hash().Bytes())
+		copy(serialized[1:33], n.children[0].Hash().Bytes())
+		copy(serialized[33:65], n.children[1].Hash().Bytes())
 		return serialized[:]
 	case *StemNode:
 		// StemNode: 1 byte type + 31 bytes stem + 32 bytes bitmap + 256*32 bytes values
@@ -112,9 +112,11 @@ func deserializeNode(serialized []byte, depth int, hn common.Hash, mustRecompute
 			return nil, invalidSerializedLength
 		}
 		return &InternalNode{
-			depth:         depth,
-			left:          HashedNode(common.BytesToHash(serialized[1:33])),
-			right:         HashedNode(common.BytesToHash(serialized[33:65])),
+			depth: depth,
+			children: [2]BinaryNode{
+				HashedNode(common.BytesToHash(serialized[1:33])),
+				HashedNode(common.BytesToHash(serialized[33:65])),
+			},
 			hash:          hn,
 			mustRecompute: mustRecompute,
 		}, nil
