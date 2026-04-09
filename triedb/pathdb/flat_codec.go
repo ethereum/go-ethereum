@@ -152,7 +152,7 @@ type flatStateCodec interface {
 	// reporting; the merkle codec reports one per map entry, while the
 	// bintrie codec reports one per logical offset write (so the metrics
 	// remain comparable across schemes).
-	Flush(batch ethdb.Batch, genMarker []byte, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte, clean *fastcache.Cache) (int, int)
+	Flush(batch ethdb.Batch, genMarker []byte, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte, clean *fastcache.Cache) (int, int, error)
 }
 
 // merkleFlatCodec implements flatStateCodec for the keccak-keyed MPT flat
@@ -254,7 +254,7 @@ func (c *merkleFlatCodec) StorageMarkerKey(accountHash, storageHash common.Hash)
 // This is the implementation that previously lived directly in writeStates.
 // It has been moved into the codec so the bintrie codec can supply its own
 // per-stem aggregating implementation alongside this one.
-func (c *merkleFlatCodec) Flush(batch ethdb.Batch, genMarker []byte, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte, clean *fastcache.Cache) (int, int) {
+func (c *merkleFlatCodec) Flush(batch ethdb.Batch, genMarker []byte, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte, clean *fastcache.Cache) (int, int, error) {
 	var (
 		accounts int
 		slots    int
@@ -311,5 +311,5 @@ func (c *merkleFlatCodec) Flush(batch ethdb.Batch, genMarker []byte, accountData
 			}
 		}
 	}
-	return accounts, slots
+	return accounts, slots, nil
 }

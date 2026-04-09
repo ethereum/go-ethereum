@@ -327,7 +327,7 @@ func TestBintrieCodecFlushAggregates(t *testing.T) {
 	}
 
 	batch := db.NewBatch()
-	accW, stoW := codec.Flush(batch, nil, accountData, nil, nil)
+	accW, stoW, _ := codec.Flush(batch, nil, accountData, nil, nil)
 	flushBatch(t, batch)
 
 	if accW != 4 {

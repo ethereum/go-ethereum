@@ -79,6 +79,6 @@ func writeNodes(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.No
 // TODO(rjl493456442) do we really need this generation marker? The state updates
 // after the marker can also be written and will be fixed by generator later if
 // it's outdated.
-func writeStates(batch ethdb.Batch, codec flatStateCodec, genMarker []byte, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte, clean *fastcache.Cache) (int, int) {
+func writeStates(batch ethdb.Batch, codec flatStateCodec, genMarker []byte, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte, clean *fastcache.Cache) (int, int, error) {
 	return codec.Flush(batch, genMarker, accountData, storageData, clean)
 }

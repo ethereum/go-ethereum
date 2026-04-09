@@ -633,7 +633,9 @@ func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 	writeNodes(batch, nodes, dl.nodes)
 
 	// Provide the original values of modified accounts and storages for revert
-	writeStates(batch, dl.db.flatCodec, progress, accounts, storages, dl.states)
+	if _, _, err := writeStates(batch, dl.db.flatCodec, progress, accounts, storages, dl.states); err != nil {
+		return nil, err
+	}
 	rawdb.WritePersistentStateID(batch, dl.id-1)
 	rawdb.WriteSnapshotRoot(batch, h.meta.parent)
 	if err := batch.Write(); err != nil {

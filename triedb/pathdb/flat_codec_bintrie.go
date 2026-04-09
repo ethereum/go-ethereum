@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 )
 
@@ -208,10 +209,11 @@ func (c *bintrieFlatCodec) ReadStorage(db ethdb.KeyValueReader, _ common.Hash, s
 func (c *bintrieFlatCodec) WriteAccount(batch ethdb.Batch, key common.Hash, blob []byte) {
 	writes, err := splitAccountBlob(blob)
 	if err != nil {
-		crit("bintrie WriteAccount: %v", err)
-		return
+		log.Crit("bintrie WriteAccount: split failed", "key", key, "err", err)
 	}
-	c.applyWrites(batch, stemFromKey(key), writes)
+	if _, err := c.applyWrites(batch, stemFromKey(key), writes); err != nil {
+		log.Crit("bintrie WriteAccount: apply failed", "key", key, "err", err)
+	}
 }
 
 // DeleteAccount clears offsets 0 (BasicData) and 1 (CodeHash) at the
@@ -224,7 +226,9 @@ func (c *bintrieFlatCodec) DeleteAccount(batch ethdb.Batch, key common.Hash) {
 		{Offset: bintrie.BasicDataLeafKey, Value: nil},
 		{Offset: bintrie.CodeHashLeafKey, Value: nil},
 	}
-	c.applyWrites(batch, stemFromKey(key), writes)
+	if _, err := c.applyWrites(batch, stemFromKey(key), writes); err != nil {
+		log.Crit("bintrie DeleteAccount: apply failed", "key", key, "err", err)
+	}
 }
 
 // WriteStorage writes a single storage-slot value. The blob must be 32
@@ -234,18 +238,21 @@ func (c *bintrieFlatCodec) DeleteAccount(batch ethdb.Batch, key common.Hash) {
 // The first parameter (accountKey) is ignored — see StorageKey.
 func (c *bintrieFlatCodec) WriteStorage(batch ethdb.Batch, _ common.Hash, storageKey common.Hash, blob []byte) {
 	if len(blob) != stemBlobValueSize {
-		crit("bintrie WriteStorage: value has len %d, want %d", len(blob), stemBlobValueSize)
-		return
+		log.Crit("bintrie WriteStorage: wrong value length", "key", storageKey, "len", len(blob), "want", stemBlobValueSize)
 	}
 	writes := []stemOffsetValue{{Offset: offsetFromKey(storageKey), Value: blob}}
-	c.applyWrites(batch, stemFromKey(storageKey), writes)
+	if _, err := c.applyWrites(batch, stemFromKey(storageKey), writes); err != nil {
+		log.Crit("bintrie WriteStorage: apply failed", "key", storageKey, "err", err)
+	}
 }
 
 // DeleteStorage clears a single offset at a stem. If the stem has no
 // other populated offsets afterwards, the key is removed entirely.
 func (c *bintrieFlatCodec) DeleteStorage(batch ethdb.Batch, _ common.Hash, storageKey common.Hash) {
 	writes := []stemOffsetValue{{Offset: offsetFromKey(storageKey), Value: nil}}
-	c.applyWrites(batch, stemFromKey(storageKey), writes)
+	if _, err := c.applyWrites(batch, stemFromKey(storageKey), writes); err != nil {
+		log.Crit("bintrie DeleteStorage: apply failed", "key", storageKey, "err", err)
+	}
 }
 
 // applyWrites performs a read-modify-write on the given stem: reads the
@@ -263,19 +270,18 @@ func (c *bintrieFlatCodec) DeleteStorage(batch ethdb.Batch, _ common.Hash, stora
 // call for the same stem within a flush would re-read the pre-flush
 // state; see the pre-aggregation requirement documented on
 // bintrieFlatCodec.
-func (c *bintrieFlatCodec) applyWrites(batch ethdb.Batch, stem []byte, writes []stemOffsetValue) []byte {
+func (c *bintrieFlatCodec) applyWrites(batch ethdb.Batch, stem []byte, writes []stemOffsetValue) ([]byte, error) {
 	existing := rawdb.ReadBinTrieStem(c.db, stem)
 	merged, err := mergeStemBlob(existing, writes)
 	if err != nil {
-		crit("bintrie applyWrites: %v", err)
-		return nil
+		return nil, fmt.Errorf("bintrie stem %x: %w", stem, err)
 	}
 	if merged == nil {
 		rawdb.DeleteBinTrieStem(batch, stem)
-		return nil
+		return nil, nil
 	}
 	rawdb.WriteBinTrieStem(batch, stem, merged)
-	return merged
+	return merged, nil
 }
 
 // splitAccountBlob validates and splits the two-slot account payload
@@ -442,7 +448,7 @@ func (c *bintrieFlatCodec) StorageMarkerKey(_ common.Hash, storageHash common.Ha
 //
 // Returns (offset count from accountData, offset count from storageData)
 // for metric reporting parity with the merkle path.
-func (c *bintrieFlatCodec) Flush(batch ethdb.Batch, genMarker []byte, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte, clean *fastcache.Cache) (int, int) {
+func (c *bintrieFlatCodec) Flush(batch ethdb.Batch, genMarker []byte, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte, clean *fastcache.Cache) (int, int, error) {
 	// Aggregate per-offset writes into per-stem batches. We use
 	// [31]byte as the map key because byte slices aren't hashable in
 	// Go and the stem is fixed size; the alternative (common.Hash with
@@ -498,7 +504,9 @@ func (c *bintrieFlatCodec) Flush(batch ethdb.Batch, genMarker []byte, accountDat
 	// will fall through to the trie reader on this per feedback #3 /
 	// Commit A2); a 32-byte value means the offset is populated.
 	for _, ag := range aggregated {
-		c.applyWrites(batch, ag.fullKeys[0][:bintrie.StemSize], ag.writes)
+		if _, err := c.applyWrites(batch, ag.fullKeys[0][:bintrie.StemSize], ag.writes); err != nil {
+			return accountWrites, storageWrites, fmt.Errorf("bintrie Flush: %w", err)
+		}
 		if clean == nil {
 			continue
 		}
@@ -507,19 +515,6 @@ func (c *bintrieFlatCodec) Flush(batch ethdb.Batch, genMarker []byte, accountDat
 			clean.Set(cacheKey, ag.writes[i].Value)
 		}
 	}
-	return accountWrites, storageWrites
+	return accountWrites, storageWrites, nil
 }
 
-// crit is a shim around log.Crit that allows tests to replace the fatal
-// behavior with a panic if needed. Defined at the package level to match
-// the single-call-per-error style used by the merkle codec.
-func crit(format string, args ...any) {
-	// Import cycle avoidance: we delegate to log.Crit via the existing
-	// import in this package (see flat_codec.go for the merkle codec,
-	// which uses log.Crit through rawdb's own accessors).
-	// Here we keep the dependency light by just panicking; production
-	// flat-state corruption is unrecoverable and panicking surfaces the
-	// issue immediately rather than letting a silently-corrupted state
-	// root propagate.
-	panic(fmt.Sprintf(format, args...))
-}

@@ -423,7 +423,7 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 }
 
 // write flushes state mutations into the provided database batch as a whole.
-func (s *stateSet) write(batch ethdb.Batch, codec flatStateCodec, genMarker []byte, clean *fastcache.Cache) (int, int) {
+func (s *stateSet) write(batch ethdb.Batch, codec flatStateCodec, genMarker []byte, clean *fastcache.Cache) (int, int, error) {
 	return writeStates(batch, codec, genMarker, s.accountData, s.storageData, clean)
 }
 

@@ -173,7 +173,11 @@ func (b *buffer) flush(root common.Hash, db ethdb.KeyValueStore, codec flatState
 			return
 		}
 		nodes := b.nodes.write(batch, nodesCache)
-		accounts, slots := b.states.write(batch, codec, progress, statesCache)
+		accounts, slots, flushErr := b.states.write(batch, codec, progress, statesCache)
+		if flushErr != nil {
+			b.flushErr = flushErr
+			return
+		}
 		rawdb.WritePersistentStateID(batch, id)
 		rawdb.WriteSnapshotRoot(batch, root)
 
