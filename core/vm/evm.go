@@ -538,9 +538,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 			evm.Config.Tracer.OnGasChange(gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
 		}
 		// Burn all gas on collision
-		collisionUsed := GasUsed{RegularGas: gas.RegularGas}
-		gas.RegularGas = 0
-		return nil, common.Address{}, gas, collisionUsed, ErrContractAddressCollision
+		return nil, common.Address{}, GasBudget{}, GasUsed{}, ErrContractAddressCollision
 	}
 	// Create a new account on the state only if the object was not present.
 	// It might be possible the contract code is deployed to a pre-existent

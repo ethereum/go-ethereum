@@ -651,26 +651,14 @@ func opSwap16(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	if evm.readOnly {
-		return nil, ErrWriteProtection
-	}
 	var (
 		value        = scope.Stack.pop()
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
-		gas          = scope.Contract.Gas
 	)
+	gas := scope.Contract.Gas
 	if evm.chainRules.IsEIP150 {
 		gas.RegularGas -= gas.RegularGas / 64
-	}
-
-	// EIP-7954: check init code size after gas is charged (by the gas function)
-	// but before execution. This aborts the caller's execution, ensuring all
-	// regular gas is consumed while the state gas spill is tracked.
-	if evm.chainRules.IsAmsterdam {
-		if err := CheckMaxInitCodeSize(&evm.chainRules, uint64(len(input))); err != nil {
-			return nil, err
-		}
 	}
 
 	// reuse size int for stackvalue
@@ -704,28 +692,16 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	if evm.readOnly {
-		return nil, ErrWriteProtection
-	}
 	var (
 		endowment    = scope.Stack.pop()
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		salt         = scope.Stack.pop()
 		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
-		gas          = scope.Contract.Gas
 	)
 
 	// Apply EIP150
+	gas := scope.Contract.Gas
 	gas.RegularGas -= gas.RegularGas / 64
-
-	// EIP-7954: check init code size after gas is charged (by the gas function)
-	// but before execution. This aborts the caller's execution, ensuring all
-	// regular gas is consumed while the state gas spill is tracked.
-	if evm.chainRules.IsAmsterdam {
-		if err := CheckMaxInitCodeSize(&evm.chainRules, uint64(len(input))); err != nil {
-			return nil, err
-		}
-	}
 
 	regularGasUsed := scope.Contract.GasUsed.RegularGas
 	scope.Contract.UseGas(GasCosts{RegularGas: gas.RegularGas}, evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
