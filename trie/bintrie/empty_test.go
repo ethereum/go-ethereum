@@ -105,7 +105,8 @@ func TestEmptyHash(t *testing.T) {
 	}
 }
 
-// TestEmptyGetValuesAtStem tests the GetValuesAtStem method
+// TestEmptyGetValuesAtStem tests that GetValuesAtStem returns nil for an empty node,
+// signaling that no values exist at the queried stem.
 func TestEmptyGetValuesAtStem(t *testing.T) {
 	node := Empty{}
 
@@ -114,16 +115,8 @@ func TestEmptyGetValuesAtStem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-
-	// Should return an array of 256 nil values
-	if len(values) != 256 {
-		t.Errorf("Expected 256 values, got %d", len(values))
-	}
-
-	for i, v := range values {
-		if v != nil {
-			t.Errorf("Expected nil value at index %d, got %x", i, v)
-		}
+	if values != nil {
+		t.Errorf("Expected nil values from Empty.GetValuesAtStem, got %d entries", len(values))
 	}
 }
 

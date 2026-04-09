@@ -23,6 +23,50 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// TestStemNodeGet tests the Get method for matching stem, non-matching stem,
+// and nil-value suffix scenarios.
+func TestStemNodeGet(t *testing.T) {
+	stem := make([]byte, StemSize)
+	stem[0] = 0xAB
+	var values [StemNodeWidth][]byte
+	values[5] = common.HexToHash("0xdeadbeef").Bytes()
+
+	node := &StemNode{Stem: stem, Values: values[:], depth: 0}
+
+	// Matching stem, populated suffix → returns value.
+	key := make([]byte, HashSize)
+	copy(key[:StemSize], stem)
+	key[StemSize] = 5
+	got, err := node.Get(key, nil)
+	if err != nil {
+		t.Fatalf("Get error: %v", err)
+	}
+	if !bytes.Equal(got, values[5]) {
+		t.Fatalf("Get = %x, want %x", got, values[5])
+	}
+
+	// Matching stem, empty suffix → returns nil (slot not set).
+	key[StemSize] = 99
+	got, err = node.Get(key, nil)
+	if err != nil {
+		t.Fatalf("Get error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("Get(empty suffix) = %x, want nil", got)
+	}
+
+	// Non-matching stem → returns nil, nil.
+	otherKey := make([]byte, HashSize)
+	otherKey[0] = 0xFF
+	got, err = node.Get(otherKey, nil)
+	if err != nil {
+		t.Fatalf("Get error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("Get(wrong stem) = %x, want nil", got)
+	}
+}
+
 // TestStemNodeInsertSameStem tests inserting values with the same stem
 func TestStemNodeInsertSameStem(t *testing.T) {
 	stem := make([]byte, 31)

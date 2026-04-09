@@ -292,3 +292,162 @@ func TestBinaryTrieWitness(t *testing.T) {
 		t.Fatal("unexpected witness value for path2")
 	}
 }
+
+// testAccount is a helper that creates a BinaryTrie with a tracer and
+// inserts a single account, returning the trie.
+func testAccount(t *testing.T, addr common.Address, nonce uint64, balance uint64) *BinaryTrie {
+	t.Helper()
+	tr := &BinaryTrie{
+		root:   NewBinaryNode(),
+		tracer: trie.NewPrevalueTracer(),
+	}
+	acc := &types.StateAccount{
+		Nonce:    nonce,
+		Balance:  uint256.NewInt(balance),
+		CodeHash: types.EmptyCodeHash[:],
+	}
+	if err := tr.UpdateAccount(addr, acc, 0); err != nil {
+		t.Fatalf("UpdateAccount error: %v", err)
+	}
+	return tr
+}
+
+// TestGetAccountNonMembershipStemRoot verifies that querying a non-existent
+// address returns nil when the trie root is a StemNode (single-account trie).
+// This is a regression test: previously the StemNode branch in GetAccount
+// returned the root's values without verifying the stem.
+func TestGetAccountNonMembershipStemRoot(t *testing.T) {
+	addr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	tr := testAccount(t, addr, 42, 100)
+
+	// Verify root is a StemNode (single stem inserted).
+	if _, ok := tr.root.(*StemNode); !ok {
+		t.Fatalf("expected StemNode root, got %T", tr.root)
+	}
+
+	// Query a completely different address — must return nil.
+	other := common.HexToAddress("0x2222222222222222222222222222222222222222")
+	got, err := tr.GetAccount(other)
+	if err != nil {
+		t.Fatalf("GetAccount error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil for non-existent account, got nonce=%d balance=%s", got.Nonce, got.Balance)
+	}
+
+	// Original account must still be retrievable.
+	got, err = tr.GetAccount(addr)
+	if err != nil {
+		t.Fatalf("GetAccount(original) error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected original account, got nil")
+	}
+	if got.Nonce != 42 {
+		t.Fatalf("expected nonce=42, got %d", got.Nonce)
+	}
+}
+
+// TestGetAccountNonMembershipInternalRoot verifies that querying a non-existent
+// address returns nil when the trie root is an InternalNode (multi-account trie).
+func TestGetAccountNonMembershipInternalRoot(t *testing.T) {
+	tr := &BinaryTrie{
+		root:   NewBinaryNode(),
+		tracer: trie.NewPrevalueTracer(),
+	}
+
+	// Insert two accounts whose binary tree keys have different first bits
+	// so the root splits into an InternalNode.
+	addr1 := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	addr2 := common.HexToAddress("0x9999999999999999999999999999999999999999")
+	for _, addr := range []common.Address{addr1, addr2} {
+		acc := &types.StateAccount{
+			Nonce:    1,
+			Balance:  uint256.NewInt(1),
+			CodeHash: types.EmptyCodeHash[:],
+		}
+		if err := tr.UpdateAccount(addr, acc, 0); err != nil {
+			t.Fatalf("UpdateAccount error: %v", err)
+		}
+	}
+
+	// Verify root is an InternalNode.
+	if _, ok := tr.root.(*InternalNode); !ok {
+		t.Fatalf("expected InternalNode root, got %T", tr.root)
+	}
+
+	// Query a non-existent address — must return nil.
+	other := common.HexToAddress("0x5555555555555555555555555555555555555555")
+	got, err := tr.GetAccount(other)
+	if err != nil {
+		t.Fatalf("GetAccount error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil for non-existent account, got nonce=%d", got.Nonce)
+	}
+}
+
+// TestGetStorageNonMembershipStemRoot verifies that querying storage for a
+// non-existent address returns nil when the root is a StemNode. This is a
+// regression test: previously StemNode.Get panicked unconditionally.
+func TestGetStorageNonMembershipStemRoot(t *testing.T) {
+	addr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	tr := testAccount(t, addr, 1, 100)
+
+	// Verify root is a StemNode.
+	if _, ok := tr.root.(*StemNode); !ok {
+		t.Fatalf("expected StemNode root, got %T", tr.root)
+	}
+
+	// Query storage for a different address — must return nil, not panic.
+	other := common.HexToAddress("0x2222222222222222222222222222222222222222")
+	slot := common.HexToHash("0x01")
+	got, err := tr.GetStorage(other, slot[:])
+	if err != nil {
+		t.Fatalf("GetStorage error: %v", err)
+	}
+	if len(got) > 0 && !bytes.Equal(got, zero[:]) {
+		t.Fatalf("expected nil/zero for non-existent storage, got %x", got)
+	}
+}
+
+// TestGetStorageNonMembershipInternalRoot verifies that querying storage for a
+// non-existent address returns nil when the root is an InternalNode.
+func TestGetStorageNonMembershipInternalRoot(t *testing.T) {
+	tr := &BinaryTrie{
+		root:   NewBinaryNode(),
+		tracer: trie.NewPrevalueTracer(),
+	}
+
+	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
+	acc := &types.StateAccount{
+		Nonce:    1,
+		Balance:  uint256.NewInt(1000),
+		CodeHash: types.EmptyCodeHash[:],
+	}
+	if err := tr.UpdateAccount(addr, acc, 0); err != nil {
+		t.Fatalf("UpdateAccount error: %v", err)
+	}
+
+	// Add a storage slot so the root becomes an InternalNode (storage
+	// slots use a different stem than account data).
+	slot := common.HexToHash("0xFF")
+	val := common.TrimLeftZeroes(common.HexToHash("0xdeadbeef").Bytes())
+	if err := tr.UpdateStorage(addr, slot[:], val); err != nil {
+		t.Fatalf("UpdateStorage error: %v", err)
+	}
+
+	if _, ok := tr.root.(*InternalNode); !ok {
+		t.Fatalf("expected InternalNode root, got %T", tr.root)
+	}
+
+	// Query storage for a non-existent address — must return nil.
+	other := common.HexToAddress("0x9999999999999999999999999999999999999999")
+	got, err := tr.GetStorage(other, slot[:])
+	if err != nil {
+		t.Fatalf("GetStorage error: %v", err)
+	}
+	if len(got) > 0 && !bytes.Equal(got, zero[:]) {
+		t.Fatalf("expected nil/zero for non-existent storage, got %x", got)
+	}
+}
