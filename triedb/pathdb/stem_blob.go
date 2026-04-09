@@ -84,6 +84,9 @@ func encodeStemBlob(bitmap [stemBlobBitmapSize]byte, values [][]byte) ([]byte, e
 	if count != len(values) {
 		return nil, fmt.Errorf("stem blob popcount=%d values=%d: %w", count, len(values), errStemBlobMalformed)
 	}
+	if count > stemBlobBitmapBits {
+		return nil, fmt.Errorf("stem blob value count %d exceeds max %d: %w", count, stemBlobBitmapBits, errStemBlobMalformed)
+	}
 	if count == 0 {
 		return nil, nil
 	}

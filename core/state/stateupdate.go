@@ -301,10 +301,18 @@ func (sc *stateUpdate) encodeBinary() (map[common.Hash][]byte, map[common.Addres
 			accounts[fullKey] = nil
 			continue
 		}
+		// Defensive length check: every non-nil bintrie leaf must be
+		// exactly 32 bytes. A wrong-length leaf from the hasher would
+		// silently produce garbage in the diff layer; catch it here at
+		// the trust boundary rather than deep in the flush path where
+		// the stemBuilder.set panic would fire with less context.
+		if len(w.Value) != 32 {
+			return nil, nil, nil, nil, fmt.Errorf("bintrie leaf at stem %x offset %d has value len %d, want 32", w.Stem, w.Offset, len(w.Value))
+		}
 		// Take an owning copy: the hasher reuses its underlying buffers
 		// across blocks, so retaining its slices would create cross-block
 		// aliasing bugs in the pathdb diff layer.
-		v := make([]byte, len(w.Value))
+		v := make([]byte, 32)
 		copy(v, w.Value)
 		accounts[fullKey] = v
 	}
