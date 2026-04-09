@@ -42,7 +42,7 @@ type Contract struct {
 	IsDeployment bool
 	IsSystemCall bool
 
-	Gas   uint64
+	Gas   GasCosts
 	value *uint256.Int
 }
 
@@ -56,7 +56,7 @@ func NewContract(caller common.Address, address common.Address, value *uint256.I
 		caller:    caller,
 		address:   address,
 		jumpDests: jumpDests,
-		Gas:       gas,
+		Gas:       GasCosts{RegularGas: gas},
 		value:     value,
 	}
 }
@@ -127,13 +127,13 @@ func (c *Contract) Caller() common.Address {
 
 // UseGas attempts the use gas and subtracts it and returns true on success
 func (c *Contract) UseGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
-	if c.Gas < gas {
+	if c.Gas.RegularGas < gas {
 		return false
 	}
 	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
-		logger.OnGasChange(c.Gas, c.Gas-gas, reason)
+		logger.OnGasChange(c.Gas.RegularGas, c.Gas.RegularGas-gas, reason)
 	}
-	c.Gas -= gas
+	c.Gas.RegularGas -= gas
 	return true
 }
 
@@ -143,9 +143,9 @@ func (c *Contract) RefundGas(gas uint64, logger *tracing.Hooks, reason tracing.G
 		return
 	}
 	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
-		logger.OnGasChange(c.Gas, c.Gas+gas, reason)
+		logger.OnGasChange(c.Gas.RegularGas, c.Gas.RegularGas+gas, reason)
 	}
-	c.Gas += gas
+	c.Gas.RegularGas += gas
 }
 
 // Address returns the contracts address
