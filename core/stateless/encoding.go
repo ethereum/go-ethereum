@@ -17,6 +17,7 @@
 package stateless
 
 import (
+	"errors"
 	"io"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -42,6 +43,9 @@ func (w *Witness) ToExtWitness() *ExtWitness {
 
 // FromExtWitness converts the consensus witness format into our internal one.
 func (w *Witness) FromExtWitness(ext *ExtWitness) error {
+	if len(ext.Headers) == 0 {
+		return errors.New("witness must contain at least one header")
+	}
 	w.Headers = ext.Headers
 
 	w.Codes = make(map[string]struct{}, len(ext.Codes))

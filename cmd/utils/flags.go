@@ -218,6 +218,10 @@ var (
 		Usage: "Max number of elements (0 = no limit)",
 		Value: 0,
 	}
+	AccountFlag = &cli.StringFlag{
+		Name:  "account",
+		Usage: "Specifies the account address or hash to traverse a single storage trie",
+	}
 	OutputFileFlag = &cli.StringFlag{
 		Name:  "output",
 		Usage: "Writes the result in json to the output",
@@ -1580,7 +1584,9 @@ func setOpenTelemetry(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(RPCTelemetryTagsFlag.Name) {
 		tcfg.Tags = ctx.String(RPCTelemetryTagsFlag.Name)
 	}
-	tcfg.SampleRatio = ctx.Float64(RPCTelemetrySampleRatioFlag.Name)
+	if ctx.IsSet(RPCTelemetrySampleRatioFlag.Name) {
+		tcfg.SampleRatio = ctx.Float64(RPCTelemetrySampleRatioFlag.Name)
+	}
 
 	if tcfg.Endpoint != "" && !tcfg.Enabled {
 		log.Warn(fmt.Sprintf("OpenTelemetry endpoint configured but telemetry is not enabled, use --%s to enable.", RPCTelemetryFlag.Name))

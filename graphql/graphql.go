@@ -1531,6 +1531,9 @@ func (s *SyncState) TxIndexRemainingBlocks() hexutil.Uint64 {
 func (s *SyncState) StateIndexRemaining() hexutil.Uint64 {
 	return hexutil.Uint64(s.progress.StateIndexRemaining)
 }
+func (s *SyncState) TrienodeIndexRemaining() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.TrienodeIndexRemaining)
+}
 
 // Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not
 // yet received the latest block headers from its peers. In case it is synchronizing:

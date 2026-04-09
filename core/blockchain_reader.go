@@ -296,6 +296,14 @@ func (bc *BlockChain) GetReceiptsRLP(hash common.Hash) rlp.RawValue {
 	return rawdb.ReadReceiptsRLP(bc.db, hash, number)
 }
 
+func (bc *BlockChain) GetAccessListRLP(hash common.Hash) rlp.RawValue {
+	number, ok := rawdb.ReadHeaderNumber(bc.db, hash)
+	if !ok {
+		return nil
+	}
+	return rawdb.ReadAccessListRLP(bc.db, hash, number)
+}
+
 // GetUnclesInChain retrieves all the uncles from a given block backwards until
 // a specific distance is reached.
 func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
@@ -468,7 +476,7 @@ func (bc *BlockChain) TxIndexProgress() (TxIndexProgress, error) {
 }
 
 // StateIndexProgress returns the historical state indexing progress.
-func (bc *BlockChain) StateIndexProgress() (uint64, error) {
+func (bc *BlockChain) StateIndexProgress() (uint64, uint64, error) {
 	return bc.triedb.IndexProgress()
 }
 

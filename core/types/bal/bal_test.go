@@ -190,8 +190,8 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 	}
 }
 
-func makeTestBAL(sort bool) BlockAccessList {
-	list := BlockAccessList{}
+func makeTestBAL(sort bool) *BlockAccessList {
+	list := &BlockAccessList{}
 	for i := 0; i < 5; i++ {
 		list.Accesses = append(list.Accesses, makeTestAccountAccess(sort))
 	}

@@ -274,40 +274,66 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 		reported = time.Now()
 		imported = 0
 		h        = sha256.New()
-		scratch  = bytes.NewBuffer(nil)
+		buf      = bytes.NewBuffer(nil)
 	)
 
 	for i, file := range entries {
 		err := func() error {
 			path := filepath.Join(dir, file)
 
-			// validate against checksum file in directory
+			// Validate against checksum file in directory.
 			f, err := os.Open(path)
 			if err != nil {
 				return fmt.Errorf("open %s: %w", path, err)
 			}
 			defer f.Close()
+
 			if _, err := io.Copy(h, f); err != nil {
 				return fmt.Errorf("checksum %s: %w", path, err)
 			}
-			got := common.BytesToHash(h.Sum(scratch.Bytes()[:])).Hex()
-			want := checksums[i]
+			got := common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex()
 			h.Reset()
-			scratch.Reset()
-
-			if got != want {
-				return fmt.Errorf("%s checksum mismatch: have %s want %s", file, got, want)
+			buf.Reset()
+			if got != checksums[i] {
+				return fmt.Errorf("%s checksum mismatch: have %s want %s", file, got, checksums[i])
 			}
 			// Import all block data from Era1.
 			e, err := from(f)
 			if err != nil {
 				return fmt.Errorf("error opening era: %w", err)
 			}
+			defer e.Close()
+
 			it, err := e.Iterator()
 			if err != nil {
 				return fmt.Errorf("error creating iterator: %w", err)
 			}
 
+			var (
+				blocks       = make([]*types.Block, 0, importBatchSize)
+				receiptsList = make([]types.Receipts, 0, importBatchSize)
+				flush        = func() error {
+					if len(blocks) == 0 {
+						return nil
+					}
+					enc := types.EncodeBlockReceiptLists(receiptsList)
+					if _, err := chain.InsertReceiptChain(blocks, enc, math.MaxUint64); err != nil {
+						return fmt.Errorf("error inserting blocks %d-%d: %w",
+							blocks[0].NumberU64(), blocks[len(blocks)-1].NumberU64(), err)
+					}
+					imported += len(blocks)
+					if time.Since(reported) >= 8*time.Second {
+						head := blocks[len(blocks)-1].NumberU64()
+						log.Info("Importing Era files", "head", head, "imported", imported,
+							"elapsed", common.PrettyDuration(time.Since(start)))
+						imported = 0
+						reported = time.Now()
+					}
+					blocks = blocks[:0]
+					receiptsList = receiptsList[:0]
+					return nil
+				}
+			)
 			for it.Next() {
 				block, err := it.Block()
 				if err != nil {
@@ -320,23 +346,18 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 				if err != nil {
 					return fmt.Errorf("error reading receipts %d: %w", it.Number(), err)
 				}
-				enc := types.EncodeBlockReceiptLists([]types.Receipts{receipts})
-				if _, err := chain.InsertReceiptChain([]*types.Block{block}, enc, math.MaxUint64); err != nil {
-					return fmt.Errorf("error inserting body %d: %w", it.Number(), err)
-				}
-				imported++
-
-				if time.Since(reported) >= 8*time.Second {
-					log.Info("Importing Era files", "head", it.Number(), "imported", imported,
-						"elapsed", common.PrettyDuration(time.Since(start)))
-					imported = 0
-					reported = time.Now()
+				blocks = append(blocks, block)
+				receiptsList = append(receiptsList, receipts)
+				if len(blocks) == importBatchSize {
+					if err := flush(); err != nil {
+						return err
+					}
 				}
 			}
 			if err := it.Error(); err != nil {
 				return err
 			}
-			return nil
+			return flush()
 		}()
 		if err != nil {
 			return err

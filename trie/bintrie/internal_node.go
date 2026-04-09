@@ -17,11 +17,32 @@
 package bintrie
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math/bits"
+	"runtime"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 )
+
+// parallelDepth returns the tree depth below which Hash() spawns goroutines.
+func parallelDepth() int {
+	return min(bits.Len(uint(runtime.NumCPU())), 8)
+}
+
+// isDirty reports whether a BinaryNode child needs rehashing.
+func isDirty(n BinaryNode) bool {
+	switch v := n.(type) {
+	case *InternalNode:
+		return v.mustRecompute
+	case *StemNode:
+		return v.mustRecompute
+	default:
+		return false
+	}
+}
 
 func keyToPath(depth int, key []byte) ([]byte, error) {
 	if depth > 31*8 {
@@ -124,6 +145,29 @@ func (bt *InternalNode) Hash() common.Hash {
 		return bt.hash
 	}
 
+	// At shallow depths, parallelize when both children need rehashing:
+	// hash left subtree in a goroutine, right subtree inline, then combine.
+	// Skip goroutine overhead when only one child is dirty (common case
+	// for narrow state updates that touch a single path through the trie).
+	if bt.depth < parallelDepth() && isDirty(bt.left) && isDirty(bt.right) {
+		var input [64]byte
+		var lh common.Hash
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			lh = bt.left.Hash()
+		}()
+		rh := bt.right.Hash()
+		copy(input[32:], rh[:])
+		wg.Wait()
+		copy(input[:32], lh[:])
+		bt.hash = sha256.Sum256(input[:])
+		bt.mustRecompute = false
+		return bt.hash
+	}
+
+	// Deeper nodes: sequential using pooled hasher (goroutine overhead > hash cost)
 	h := newSha256()
 	defer returnSha256(h)
 	if bt.left != nil {

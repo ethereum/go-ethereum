@@ -426,7 +426,7 @@ const (
 	// NonceChangeNewContract is the nonce change of a newly created contract.
 	NonceChangeNewContract NonceChangeReason = 4
 
-	// NonceChangeTransaction is the nonce change due to a EIP-7702 authorization.
+	// NonceChangeAuthorization is the nonce change due to a EIP-7702 authorization.
 	NonceChangeAuthorization NonceChangeReason = 5
 
 	// NonceChangeRevert is emitted when the nonce is reverted back to a previous value due to call failure.

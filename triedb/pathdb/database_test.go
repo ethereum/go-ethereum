@@ -182,6 +182,7 @@ func newTester(t *testing.T, config *testerConfig) *tester {
 			WriteBufferSize:     config.writeBufferSize(),
 			NoAsyncFlush:        true,
 			JournalDirectory:    config.journalDir,
+			NoHistoryIndexDelay: true,
 		}, config.isVerkle)
 
 		obj = &tester{
@@ -986,7 +987,7 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 			t.Fatalf("Unexpected state history found, %d", i)
 		}
 	}
-	remain, err := env.db.IndexProgress()
+	remain, _, err := env.db.IndexProgress()
 	if err != nil {
 		t.Fatalf("Failed to obtain the progress, %v", err)
 	}
@@ -1000,7 +1001,7 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 			panic(fmt.Errorf("failed to update state changes, err: %w", err))
 		}
 	}
-	remain, err = env.db.IndexProgress()
+	remain, _, err = env.db.IndexProgress()
 	if err != nil {
 		t.Fatalf("Failed to obtain the progress, %v", err)
 	}

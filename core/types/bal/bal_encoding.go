@@ -350,9 +350,12 @@ func (e *BlockAccessList) PrettyPrint() string {
 }
 
 // Copy returns a deep copy of the access list
-func (e *BlockAccessList) Copy() (res BlockAccessList) {
-	for _, accountAccess := range e.Accesses {
-		res.Accesses = append(res.Accesses, accountAccess.Copy())
+func (e *BlockAccessList) Copy() *BlockAccessList {
+	cpy := &BlockAccessList{
+		Accesses: make([]AccountAccess, 0, len(e.Accesses)),
 	}
-	return
+	for _, accountAccess := range e.Accesses {
+		cpy.Accesses = append(cpy.Accesses, accountAccess.Copy())
+	}
+	return cpy
 }
