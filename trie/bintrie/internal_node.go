@@ -58,7 +58,7 @@ func keyToPath(depth int, key []byte) ([]byte, error) {
 
 // InternalNode is a binary trie internal node.
 type InternalNode struct {
-	children [2]BinaryNode // children[0] = left, children[1] = right
+	children [2]BinaryNode // 0: left, 1: right
 	depth    int
 
 	mustRecompute bool        // true if the hash needs to be recomputed
@@ -125,7 +125,7 @@ func (bt *InternalNode) Hash() common.Hash {
 	}
 
 	// At shallow depths, parallelize when both children need rehashing:
-	// hash children[0] in a goroutine, children[1] inline, then combine.
+	// hash left subtree in a goroutine, right subtree inline, then combine.
 	// Skip goroutine overhead when only one child is dirty (common case
 	// for narrow state updates that touch a single path through the trie).
 	if bt.depth < parallelDepth() && isDirty(bt.children[0]) && isDirty(bt.children[1]) {

@@ -138,10 +138,10 @@ func TestInternalNodeInsert(t *testing.T) {
 		t.Fatalf("Expected InternalNode, got %T", newNode)
 	}
 
-	// Check that children[0] is now a StemNode
+	// Check that left child is now a StemNode
 	leftStem, ok := internalNode.children[0].(*StemNode)
 	if !ok {
-		t.Fatalf("Expected children[0] to be StemNode, got %T", internalNode.children[0])
+		t.Fatalf("Expected left child to be StemNode, got %T", internalNode.children[0])
 	}
 
 	// Check the inserted value
@@ -149,10 +149,10 @@ func TestInternalNodeInsert(t *testing.T) {
 		t.Errorf("Value mismatch: expected %x, got %x", leftValue, leftStem.Values[10])
 	}
 
-	// children[1] should still be Empty
+	// Right child should still be Empty
 	_, ok = internalNode.children[1].(Empty)
 	if !ok {
-		t.Errorf("Expected children[1] to remain Empty, got %T", internalNode.children[1])
+		t.Errorf("Expected right child to remain Empty, got %T", internalNode.children[1])
 	}
 }
 
@@ -194,12 +194,12 @@ func TestInternalNodeCopy(t *testing.T) {
 	// Check that children are copied
 	copiedLeft, ok := copiedInternal.children[0].(*StemNode)
 	if !ok {
-		t.Fatalf("Expected children[0] to be StemNode, got %T", copiedInternal.children[0])
+		t.Fatalf("Expected left child to be StemNode, got %T", copiedInternal.children[0])
 	}
 
 	copiedRight, ok := copiedInternal.children[1].(*StemNode)
 	if !ok {
-		t.Fatalf("Expected children[1] to be StemNode, got %T", copiedInternal.children[1])
+		t.Fatalf("Expected right child to be StemNode, got %T", copiedInternal.children[1])
 	}
 
 	// Verify deep copy (children should be different objects)
@@ -333,10 +333,10 @@ func TestInternalNodeInsertValuesAtStem(t *testing.T) {
 		t.Fatalf("Expected InternalNode, got %T", newNode)
 	}
 
-	// Check that children[0] is now a StemNode with the values
+	// Check that left child is now a StemNode with the values
 	leftStem, ok := internalNode.children[0].(*StemNode)
 	if !ok {
-		t.Fatalf("Expected children[0] to be StemNode, got %T", internalNode.children[0])
+		t.Fatalf("Expected left child to be StemNode, got %T", internalNode.children[0])
 	}
 
 	if !bytes.Equal(leftStem.Values[5], values[5]) {

@@ -64,7 +64,7 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 
 	switch node := it.current.(type) {
 	case *InternalNode:
-		// index: 0 = nothing visited, 1=children[0] visited, 2=children[1] visited
+		// index: 0 = nothing visited, 1=left visited, 2=right visited
 		context := &it.stack[len(it.stack)-1]
 
 		for context.Index < 2 {

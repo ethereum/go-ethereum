@@ -167,7 +167,7 @@ func TestIteratorHashedNodeNilData(t *testing.T) {
 		t.Fatalf("expected InternalNode root, got %T", tr.root)
 	}
 
-	// Replace children[1] with a zero-hash HashedNode. nodeResolver
+	// Replace right child with a zero-hash HashedNode. nodeResolver
 	// short-circuits on common.Hash{} and returns (nil, nil), which
 	// triggers the nil-data guard in the iterator.
 	root.children[1] = HashedNode(common.Hash{})
