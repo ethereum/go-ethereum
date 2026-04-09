@@ -25,7 +25,6 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -141,7 +140,14 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		if blob := dl.nodes.Get(nil, key); len(blob) > 0 {
 			cleanNodeHitMeter.Mark(1)
 			cleanNodeReadMeter.Mark(int64(len(blob)))
-			return blob, crypto.Keccak256Hash(blob), nodeLoc{loc: locCleanCache, depth: depth}, nil
+			// Use the scheme-appropriate hasher (keccak256 for merkle,
+			// sha256-via-bintrie for binary trie). Prior to A5 this was
+			// hard-coded to crypto.Keccak256Hash, which returned the wrong
+			// hash for bintrie nodes — masked by noHashCheck=true in the
+			// verkle NodeReader, but silently wrong for any caller without
+			// that flag (e.g. HistoricalNodeReader.Node).
+			h, _ := dl.db.hasher(blob)
+			return blob, h, nodeLoc{loc: locCleanCache, depth: depth}, nil
 		}
 		cleanNodeMissMeter.Mark(1)
 	}
@@ -161,7 +167,8 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		dl.nodes.Set(key, blob)
 		cleanNodeWriteMeter.Mark(int64(len(blob)))
 	}
-	return blob, crypto.Keccak256Hash(blob), nodeLoc{loc: locDiskLayer, depth: depth}, nil
+	h, _ := dl.db.hasher(blob)
+	return blob, h, nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
 
 // account directly retrieves the account RLP associated with a particular
