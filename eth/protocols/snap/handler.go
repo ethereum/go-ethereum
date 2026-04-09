@@ -141,7 +141,7 @@ var snap2 = map[uint64]msgHandler{
 	GetByteCodesMsg:     handleGetByteCodes,
 	ByteCodesMsg:        handleByteCodes,
 	GetAccessListsMsg:   handleGetAccessLists,
-	// AccessListsMsg: TODO
+	AccessListsMsg:      handleAccessLists,
 }
 
 // HandleMessage is invoked whenever an inbound message is received from a

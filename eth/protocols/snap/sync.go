@@ -520,13 +520,13 @@ func (s *Syncer) Sync(root common.Hash, number uint64, cancel chan struct{}) err
 	log.Info("Starting state download", "root", root)
 	for {
 		// Download: fetch all required state data
-		err := s.download(cancel)
+		err := s.downloadState(cancel)
 		if err == errPivotStale {
 			// Pivot moved: catch up to new pivot
 			if err := s.catchUp(cancel); err != nil {
 				return err
 			}
-			s.resetDownload(root, number)
+			s.resetDownloadState(root, number)
 			log.Info("Resuming state download", "root", root)
 			continue
 		}
@@ -558,7 +558,7 @@ func (s *Syncer) Sync(root common.Hash, number uint64, cancel chan struct{}) err
 
 // download runs the bulk flat-state download. It fetches
 // account ranges, storage slots, and bytecodes, writing flat state to disk.
-func (s *Syncer) download(cancel chan struct{}) error {
+func (s *Syncer) downloadState(cancel chan struct{}) error {
 	// If the pivot moved since the last run (downloader cancelled and restarted
 	// us with a new root), signal catch-up before downloading.
 	if s.previousRoot != s.root {
@@ -638,14 +638,14 @@ func (s *Syncer) download(cancel chan struct{}) error {
 	}
 }
 
-// resetDownload resets the download state for a new pivot after catch-up.
+// resetDownloadState resets the download state for a new pivot after catch-up.
 // It regenerates the task list for accounts not yet downloaded, clears
 // in-flight requests, and updates the root.
-func (s *Syncer) resetDownload(root common.Hash, number uint64) {
+func (s *Syncer) resetDownloadState(root common.Hash, number uint64) {
 	s.lock.Lock()
 	s.root = root
 	s.number = number
-	s.previousRoot = root // Prevent download() from returning errPivotStale again
+	s.previousRoot = root // Prevent downloadState() from returning errPivotStale again
 	s.previousNumber = number
 
 	// Clear stateless peers bc they may be able to serve the new pivot
@@ -662,16 +662,13 @@ func (s *Syncer) catchUp(cancel chan struct{}) error {
 	to := s.number
 	s.lock.RUnlock()
 
-	// The new pivot must be ahead of the old one. This can fail if a reorg
-	// replaced the block at the pivot height (same number, different root)
-	// or if a deep reorg shortened the chain past the old pivot. In either
-	// case, catch-up can't roll forward, so wipe progress and return an
-	// error so the caller restarts with a fresh sync.
-	//
-	// Note: this check lives here rather than in checkDeepReorg because
-	// catchUp is reached both when the downloader actively moves the pivot
-	// (via restartSnapSync) and when the syncer resumes from persisted
-	// progress after a restart. checkDeepReorg only covers the former.
+	// The new pivot must be ahead of the old one. The range is inverted if
+	// a reorg replaced the block at the pivot height (same number, different
+	// root) or if the chain shortened past the old pivot. In either case,
+	// catch-up can't roll forward — wipe progress and restart. This also
+	// catches reorgs missed by checkDeepReorg, which only runs when the
+	// downloader actively restarts the syncer, not on resume from persisted
+	// progress.
 	if from > to {
 		log.Warn("Catch-up range inverted, wiping sync progress", "from", from, "to", to)
 		rawdb.WriteSnapshotSyncStatus(s.db, nil)
@@ -745,8 +742,6 @@ func (s *Syncer) fetchAccessLists(hashes []common.Hash, cancel chan struct{}) ([
 		pending[h] = struct{}{}
 	}
 	fetched := make(map[common.Hash]rlp.RawValue, len(hashes))
-
-	// Create ephemeral channels for this fetch cycle
 	var (
 		accessListReqFails = make(chan *accessListRequest)
 		accessListResps    = make(chan *accessListResponse)
@@ -785,6 +780,7 @@ func (s *Syncer) fetchAccessLists(hashes []common.Hash, cancel chan struct{}) ([
 			s.processAccessListResponse(res, pending, fetched)
 		}
 	}
+
 	// Assemble results in input order
 	results := make([]rlp.RawValue, len(hashes))
 	for i, h := range hashes {
@@ -869,15 +865,19 @@ func (s *Syncer) assignAccessListTasks(pending map[common.Hash]struct{}, success
 // processAccessListResponse handles a successful access list response by
 // matching results to pending hashes and storing them.
 func (s *Syncer) processAccessListResponse(res *accessListResponse, pending map[common.Hash]struct{}, fetched map[common.Hash]rlp.RawValue) {
-	// Each response entry corresponds to the requested hash at the same index
+	// Each response entry corresponds to the requested hash at the same index.
 	for i, raw := range res.accessLists {
-		if i >= len(res.req.hashes) {
-			break
-		}
 		h := res.req.hashes[i]
+
+		// Peer doesn't have this BAL. Add it back to pending for retry.
+		if bytes.Equal(raw, rlp.EmptyString) {
+			pending[h] = struct{}{}
+			continue
+		}
 		fetched[h] = raw
 		delete(pending, h)
 	}
+
 	// Re-add hashes that were not served back to pending
 	for i := len(res.accessLists); i < len(res.req.hashes); i++ {
 		pending[res.req.hashes[i]] = struct{}{}
@@ -2387,6 +2387,12 @@ func (s *Syncer) OnAccessLists(peer SyncPeer, id uint64, accessLists rlp.RawList
 		// Signal this request as failed, and ready for rescheduling
 		s.scheduleRevertAccessListRequest(req)
 		return nil
+	}
+	if len(bals) > len(req.hashes) {
+		s.lock.Unlock()
+		s.scheduleRevertAccessListRequest(req)
+		logger.Warn("Peer sent more BALs than requested", "count", len(bals), "requested", len(req.hashes))
+		return errors.New("more BALs than requested")
 	}
 	s.lock.Unlock()
 

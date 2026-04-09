@@ -48,6 +48,7 @@ func verifyAccessList(b *bal.BlockAccessList, header *types.Header) error {
 func (s *Syncer) applyAccessList(b *bal.BlockAccessList) error {
 	batch := s.db.NewBatch()
 
+	// Iterate over all accounts in the access list
 	for _, access := range b.Accesses {
 		addr := common.Address(access.Address)
 		accountHash := crypto.Keccak256Hash(addr[:])

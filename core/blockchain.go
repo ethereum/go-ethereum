@@ -1188,7 +1188,7 @@ func (bc *BlockChain) SnapSyncComplete(hash common.Hash) error {
 	// Set up the snapshot tree from the synced flat state. Snap/2 downloads
 	// flat state directly as the snapshot.
 	if bc.snaps != nil {
-		bc.snaps.RebuildFromSyncedState(root)
+		bc.snaps.InitFromSyncedState(root)
 	}
 
 	// If all checks out, manually set the head block.
