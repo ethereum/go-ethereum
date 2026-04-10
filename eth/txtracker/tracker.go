@@ -137,6 +137,11 @@ func (t *Tracker) NotifyAccepted(peer string, hashes []common.Hash) {
 		t.order = t.order[1:]
 		delete(t.txs, oldest)
 	}
+	// Compact the backing array when it grows too large. Reslicing
+	// with order[1:] doesn't free earlier slots in the array.
+	if cap(t.order) > 2*maxTracked {
+		t.order = append([]common.Hash(nil), t.order...)
+	}
 }
 
 // GetAllPeerStats returns a snapshot of per-peer inclusion statistics.
