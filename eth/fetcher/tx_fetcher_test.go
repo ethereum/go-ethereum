@@ -97,7 +97,7 @@ func newTestTxFetcher() *TxFetcher {
 			return make([]error, len(txs))
 		},
 		func(string, []common.Hash) error { return nil },
-		nil,
+		nil, nil,
 	)
 }
 
@@ -2203,6 +2203,7 @@ func TestTransactionForgotten(t *testing.T) {
 		},
 		func(string, []common.Hash) error { return nil },
 		func(string) {},
+		nil,
 		mockClock,
 		mockTime,
 		rand.New(rand.NewSource(0)), // Use fixed seed for deterministic behavior
