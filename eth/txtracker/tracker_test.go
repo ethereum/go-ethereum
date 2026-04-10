@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
@@ -62,6 +63,14 @@ func (c *mockChain) sendHead(num uint64) {
 	})
 }
 
+func hashTxs(txs []*types.Transaction) []common.Hash {
+	hashes := make([]common.Hash, len(txs))
+	for i, tx := range txs {
+		hashes[i] = tx.Hash()
+	}
+	return hashes
+}
+
 func makeTx(nonce uint64) *types.Transaction {
 	return types.NewTx(&types.LegacyTx{Nonce: nonce, GasPrice: big.NewInt(1), Gas: 21000})
 }
@@ -78,7 +87,7 @@ func TestNotifyReceived(t *testing.T) {
 	defer tr.Stop()
 
 	txs := []*types.Transaction{makeTx(1), makeTx(2), makeTx(3)}
-	tr.NotifyReceived("peerA", txs)
+	tr.NotifyAccepted("peerA", hashTxs(txs))
 
 	// No chain events yet — stats should be empty.
 	stats := tr.GetAllPeerStats()
@@ -94,7 +103,7 @@ func TestInclusionEMA(t *testing.T) {
 	defer tr.Stop()
 
 	tx := makeTx(1)
-	tr.NotifyReceived("peerA", []*types.Transaction{tx})
+	tr.NotifyAccepted("peerA", []common.Hash{tx.Hash()})
 
 	// Block 1 includes peerA's tx.
 	chain.addBlock(1, []*types.Transaction{tx})
@@ -125,7 +134,7 @@ func TestFinalization(t *testing.T) {
 	defer tr.Stop()
 
 	tx := makeTx(1)
-	tr.NotifyReceived("peerA", []*types.Transaction{tx})
+	tr.NotifyAccepted("peerA", []common.Hash{tx.Hash()})
 
 	// Include in block 1.
 	chain.addBlock(1, []*types.Transaction{tx})
@@ -158,8 +167,8 @@ func TestMultiplePeers(t *testing.T) {
 
 	tx1 := makeTx(1)
 	tx2 := makeTx(2)
-	tr.NotifyReceived("peerA", []*types.Transaction{tx1})
-	tr.NotifyReceived("peerB", []*types.Transaction{tx2})
+	tr.NotifyAccepted("peerA", []common.Hash{tx1.Hash()})
+	tr.NotifyAccepted("peerB", []common.Hash{tx2.Hash()})
 
 	// Both included in block 1.
 	chain.addBlock(1, []*types.Transaction{tx1, tx2})
@@ -188,8 +197,8 @@ func TestFirstDelivererWins(t *testing.T) {
 	defer tr.Stop()
 
 	tx := makeTx(1)
-	tr.NotifyReceived("peerA", []*types.Transaction{tx})
-	tr.NotifyReceived("peerB", []*types.Transaction{tx}) // duplicate, should be ignored
+	tr.NotifyAccepted("peerA", []common.Hash{tx.Hash()})
+	tr.NotifyAccepted("peerB", []common.Hash{tx.Hash()}) // duplicate, should be ignored
 
 	chain.addBlock(1, []*types.Transaction{tx})
 	chain.sendHead(1)
@@ -216,7 +225,7 @@ func TestNoFinalizationCredit(t *testing.T) {
 	defer tr.Stop()
 
 	tx := makeTx(1)
-	tr.NotifyReceived("peerA", []*types.Transaction{tx})
+	tr.NotifyAccepted("peerA", []common.Hash{tx.Hash()})
 
 	// Include but don't finalize.
 	chain.addBlock(1, []*types.Transaction{tx})
@@ -241,7 +250,7 @@ func TestEMADecay(t *testing.T) {
 	defer tr.Stop()
 
 	tx := makeTx(1)
-	tr.NotifyReceived("peerA", []*types.Transaction{tx})
+	tr.NotifyAccepted("peerA", []common.Hash{tx.Hash()})
 
 	// Include in block 1.
 	chain.addBlock(1, []*types.Transaction{tx})
