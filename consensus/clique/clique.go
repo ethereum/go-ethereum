@@ -697,6 +697,9 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	if header.ParentBeaconRoot != nil {
 		panic("unexpected parent beacon root value in clique")
 	}
+	if header.BlockAccessListHash != nil {
+		panic("unexpected block access list hash value in clique")
+	}
 	if header.SlotNumber != nil {
 		panic("unexpected slot number value in clique")
 	}
