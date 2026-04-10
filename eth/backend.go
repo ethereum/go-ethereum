@@ -470,8 +470,18 @@ func (s *Ethereum) Start() error {
 	// Start the networking layer
 	s.handler.Start(s.p2pServer.MaxPeers)
 
-	// Start the connection manager
-	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() }, nil)
+	// Start the transaction tracker (records tx deliveries, credits peer inclusions).
+	s.handler.txTracker.Start(s.blockchain)
+
+	// Start the connection manager with inclusion-based peer protection.
+	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() }, func() map[string]PeerInclusionStats {
+		stats := s.handler.txTracker.GetAllPeerStats()
+		result := make(map[string]PeerInclusionStats, len(stats))
+		for id, ps := range stats {
+			result[id] = PeerInclusionStats{Included: ps.Included, RecentIncluded: ps.RecentIncluded}
+		}
+		return result
+	})
 
 	// Subscribe to chain events for the filterMaps head updater.
 	s.fmHeadSub = s.blockchain.SubscribeChainEvent(s.fmHeadEventCh)
@@ -597,6 +607,7 @@ func (s *Ethereum) Stop() error {
 	// Stop all the peer-related stuff first.
 	s.discmix.Close()
 	s.dropper.Stop()
+	s.handler.txTracker.Stop()
 	s.handler.Stop()
 
 	// Then stop everything else.

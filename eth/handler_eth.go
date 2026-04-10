@@ -66,6 +66,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		if err != nil {
 			return fmt.Errorf("Transactions: %v", err)
 		}
+		h.txTracker.NotifyReceived(peer.ID(), txs)
 		if err := handleTransactions(peer, txs, true); err != nil {
 			return fmt.Errorf("Transactions: %v", err)
 		}
@@ -76,6 +77,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		if err != nil {
 			return fmt.Errorf("PooledTransactions: %v", err)
 		}
+		h.txTracker.NotifyReceived(peer.ID(), txs)
 		if err := handleTransactions(peer, txs, false); err != nil {
 			return fmt.Errorf("PooledTransactions: %v", err)
 		}
