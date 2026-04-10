@@ -567,16 +567,6 @@ func TestDeleteAccountPreservesHeaderStorage(t *testing.T) {
 	}
 }
 
-// TestDeleteAccountHashIsDeterministic verifies that two independent tries
-// running the same UpdateAccount → DeleteAccount sequence produce identical
-// root hashes. This is the consensus-critical property of the tombstone
-// model: deletion may not produce a pristine-empty root (zero blobs hash to
-// non-zero leaves), but it MUST be deterministic across independent runs.
-//
-// A regression that introduced any non-determinism into the tombstone write
-// path (e.g. relying on map iteration order, randomized offsets) would
-// silently fork the network on the first self-destruct after enabling flat
-// state.
 func TestDeleteAccountHashIsDeterministic(t *testing.T) {
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
 	codeHash := common.HexToHash("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
@@ -599,13 +589,9 @@ func TestDeleteAccountHashIsDeterministic(t *testing.T) {
 		t.Fatalf("non-deterministic root after Update+Delete: first=%x second=%x", first, second)
 	}
 
-	// Sanity check the tombstone model itself: the post-delete root is NOT
-	// the empty-trie root, because zero blobs hash to non-zero leaves. If
-	// this assertion ever flips, the tombstone semantics have silently
-	// changed and the deletion-detection branch in GetAccount needs review.
 	empty := newEmptyTestTrie(t).Hash()
 	if first == empty {
-		t.Fatalf("post-delete root unexpectedly equals empty-trie root %x; tombstone semantics changed", empty)
+		t.Fatalf("post-delete root unexpectedly equals empty-trie root %x", empty)
 	}
 }
 
