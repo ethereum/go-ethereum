@@ -218,8 +218,8 @@ func (cm *dropper) filterProtectedPeers(droppable []*p2p.Peer) []*p2p.Peer {
 	}
 	protectedSet := make(map[*p2p.Peer]struct{})
 
-	protectTopN := func(entries []peerWithStats, maxPeers int, cat protectionCategory) {
-		n := int(float64(maxPeers) * cat.frac)
+	protectTopN := func(entries []peerWithStats, cat protectionCategory) {
+		n := int(float64(len(entries)) * cat.frac)
 		if n == 0 || len(entries) == 0 {
 			return
 		}
@@ -238,8 +238,8 @@ func (cm *dropper) filterProtectedPeers(droppable []*p2p.Peer) []*p2p.Peer {
 		dialCopy := make([]peerWithStats, len(dialed))
 		copy(dialCopy, dialed)
 
-		protectTopN(inCopy, cm.maxInboundPeers, cat)
-		protectTopN(dialCopy, cm.maxDialPeers, cat)
+		protectTopN(inCopy, cat)
+		protectTopN(dialCopy, cat)
 	}
 	if len(protectedSet) == 0 {
 		return droppable
