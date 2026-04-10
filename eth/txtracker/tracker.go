@@ -85,6 +85,14 @@ func (t *Tracker) Start(chain Chain) {
 	go t.loop()
 }
 
+// NotifyPeerDrop removes a disconnected peer's stats to prevent unbounded
+// growth. Safe to call from any goroutine.
+func (t *Tracker) NotifyPeerDrop(peer string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.peers, peer)
+}
+
 // Stop shuts down the tracker.
 func (t *Tracker) Stop() {
 	t.sub.Unsubscribe()
