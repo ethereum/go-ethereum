@@ -33,114 +33,92 @@ func makePeers(n int) []*p2p.Peer {
 	return peers
 }
 
-func TestFilterProtectedNoStats(t *testing.T) {
-	// When the stats func returns nil/empty, all peers remain droppable.
+func TestProtectedPeersNoStats(t *testing.T) {
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
 	cm.peerStatsFunc = func() map[string]PeerInclusionStats { return nil }
 
 	peers := makePeers(10)
-	result := cm.filterProtectedPeers(peers)
-	if len(result) != len(peers) {
-		t.Fatalf("expected all peers droppable with nil stats, got %d/%d", len(result), len(peers))
+	protected := cm.protectedPeers(peers)
+	if len(protected) != 0 {
+		t.Fatalf("expected no protected peers with nil stats, got %d", len(protected))
 	}
 }
 
-func TestFilterProtectedEmptyStats(t *testing.T) {
+func TestProtectedPeersEmptyStats(t *testing.T) {
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
 	cm.peerStatsFunc = func() map[string]PeerInclusionStats {
 		return map[string]PeerInclusionStats{}
 	}
 
 	peers := makePeers(10)
-	result := cm.filterProtectedPeers(peers)
-	if len(result) != len(peers) {
-		t.Fatalf("expected all peers droppable with empty stats, got %d/%d", len(result), len(peers))
+	protected := cm.protectedPeers(peers)
+	if len(protected) != 0 {
+		t.Fatalf("expected no protected peers with empty stats, got %d", len(protected))
 	}
 }
 
-func TestFilterProtectedTopPeer(t *testing.T) {
+func TestProtectedPeersTopPeer(t *testing.T) {
 	// 20 peers, 10% of 20 = 2 protected per category.
-	// NewPeer creates non-inbound peers, so all go to dialed bucket.
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
 
 	peers := makePeers(20)
 	stats := make(map[string]PeerInclusionStats)
-	// Peer 0: top by Finalized
 	stats[peers[0].ID().String()] = PeerInclusionStats{Finalized: 100}
-	// Peer 1: top by RecentIncluded
 	stats[peers[1].ID().String()] = PeerInclusionStats{RecentIncluded: 5.0}
 
 	cm.peerStatsFunc = func() map[string]PeerInclusionStats { return stats }
 
-	result := cm.filterProtectedPeers(peers)
-	// 2 categories × 2 protected each = up to 4, but peers 0 and 1 are
-	// different so both should be removed. Other peers have zero scores.
-	protected := len(peers) - len(result)
-	if protected != 2 {
-		t.Fatalf("expected 2 protected peers, got %d", protected)
+	protected := cm.protectedPeers(peers)
+	if len(protected) != 2 {
+		t.Fatalf("expected 2 protected peers, got %d", len(protected))
 	}
-	// Verify peers 0 and 1 are not in result.
-	for _, p := range result {
-		id := p.ID().String()
-		if id == peers[0].ID().String() || id == peers[1].ID().String() {
-			t.Fatalf("peer %s should be protected", id)
-		}
+	if !protected[peers[0]] {
+		t.Fatal("peer 0 should be protected (top Finalized)")
+	}
+	if !protected[peers[1]] {
+		t.Fatal("peer 1 should be protected (top RecentIncluded)")
 	}
 }
 
-func TestFilterProtectedZeroScore(t *testing.T) {
+func TestProtectedPeersZeroScore(t *testing.T) {
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
 
 	peers := makePeers(10)
 	stats := make(map[string]PeerInclusionStats)
-	// All peers have zero stats.
 	for _, p := range peers {
 		stats[p.ID().String()] = PeerInclusionStats{}
 	}
 	cm.peerStatsFunc = func() map[string]PeerInclusionStats { return stats }
 
-	result := cm.filterProtectedPeers(peers)
-	if len(result) != len(peers) {
-		t.Fatalf("expected no protection with zero scores, got %d protected", len(peers)-len(result))
+	protected := cm.protectedPeers(peers)
+	if len(protected) != 0 {
+		t.Fatalf("expected no protection with zero scores, got %d", len(protected))
 	}
 }
 
-func TestFilterProtectedOverlap(t *testing.T) {
-	// One peer is top in both categories — should only be removed once.
+func TestProtectedPeersOverlap(t *testing.T) {
+	// One peer is top in both categories — counted once.
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
 
 	peers := makePeers(20)
 	stats := make(map[string]PeerInclusionStats)
-	// Peer 0 is top in both.
 	stats[peers[0].ID().String()] = PeerInclusionStats{Finalized: 100, RecentIncluded: 5.0}
 
 	cm.peerStatsFunc = func() map[string]PeerInclusionStats { return stats }
 
-	result := cm.filterProtectedPeers(peers)
-	protected := len(peers) - len(result)
-	if protected != 1 {
-		t.Fatalf("expected 1 protected peer (overlap), got %d", protected)
+	protected := cm.protectedPeers(peers)
+	if len(protected) != 1 {
+		t.Fatalf("expected 1 protected peer (overlap), got %d", len(protected))
 	}
 }
 
-func TestFilterProtectedAllProtected(t *testing.T) {
-	// 10 peers: 10% = 1 per category. Give all 10 peers high scores in
-	// one of the two categories so the union covers everyone.
+func TestProtectedPeersNilFunc(t *testing.T) {
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
+	// peerStatsFunc is nil (default).
 
 	peers := makePeers(10)
-	stats := make(map[string]PeerInclusionStats)
-	// Peer 0 has the highest Finalized → protected by total-finalized.
-	stats[peers[0].ID().String()] = PeerInclusionStats{Finalized: 100}
-	// Peer 1 has the highest RecentIncluded → protected by recent-included.
-	stats[peers[1].ID().String()] = PeerInclusionStats{RecentIncluded: 5.0}
-
-	cm.peerStatsFunc = func() map[string]PeerInclusionStats { return stats }
-
-	result := cm.filterProtectedPeers(peers)
-	// 10% of 10 = 1 per category, 2 categories = 2 protected.
-	// 10 - 2 = 8 droppable.
-	if len(result) != 8 {
-		t.Fatalf("expected 8 droppable peers, got %d", len(result))
+	protected := cm.protectedPeers(peers)
+	if protected != nil {
+		t.Fatalf("expected nil with nil stats func, got %v", protected)
 	}
 }
