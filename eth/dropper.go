@@ -83,11 +83,19 @@ var protectionCategories = []protectionCategory{
 	{"recent-included", func(s PeerInclusionStats) float64 { return s.RecentIncluded }, inclusionProtectionFrac},
 }
 
-// dropper monitors the state of the peer pool and makes changes as follows:
-//   - during sync the Downloader handles peer connections, so dropper is disabled
-//   - if not syncing and the peer count is close to the limit, it drops peers
-//     randomly every peerDropInterval to make space for new peers
-//   - peers are dropped separately from the inbound pool and from the dialed pool
+// dropper monitors the state of the peer pool and introduces churn by
+// periodically disconnecting a random peer to make room for new connections.
+//
+// Behavior:
+//   - During sync the Downloader handles peer connections, so dropper is disabled.
+//   - When not syncing and a peer category (inbound or dialed) is close to its
+//     limit, a random peer from that category is disconnected every 3–7 minutes.
+//   - Trusted, static, and recently connected peers are never dropped.
+//   - Peers that contribute the most on-chain transaction inclusions are
+//     protected from dropping. Two scoring categories are used (total finalized
+//     inclusions and recent inclusion EMA), each protecting the top 10% of
+//     inbound and dialed peers independently. The union of all protected sets
+//     is shielded; the drop target is chosen randomly from the remainder.
 type dropper struct {
 	maxDialPeers    int // maximum number of dialed peers
 	maxInboundPeers int // maximum number of inbound peers
