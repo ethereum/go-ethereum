@@ -797,6 +797,7 @@ func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number 
 	DeleteReceipts(db, hash, number)
 	deleteHeaderWithoutNumber(db, hash, number)
 	DeleteBody(db, hash, number)
+	DeleteAccessList(db, hash, number)
 }
 
 const badBlockToKeep = 10
