@@ -471,7 +471,7 @@ func (s *Ethereum) Start() error {
 	s.handler.Start(s.p2pServer.MaxPeers)
 
 	// Start the connection manager
-	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() })
+	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() }, nil)
 
 	// Subscribe to chain events for the filterMaps head updater.
 	s.fmHeadSub = s.blockchain.SubscribeChainEvent(s.fmHeadEventCh)
