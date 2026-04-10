@@ -1,6 +1,13 @@
 // Package txtracker provides minimal per-peer transaction inclusion tracking.
-// It records which peer delivered each transaction and credits peers when
-// their delivered transactions are included on chain.
+//
+// It records which peer delivered each transaction body (via NotifyReceived)
+// and monitors the chain for inclusion and finalization events. When a
+// delivered transaction is finalized on chain, the delivering peer is
+// credited. A per-block exponential moving average (EMA) of inclusions
+// tracks recent peer productivity.
+//
+// The primary consumer is the peer dropper (eth/dropper.go), which uses
+// these stats to protect high-value peers from random disconnection.
 package txtracker
 
 import (
