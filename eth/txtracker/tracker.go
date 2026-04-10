@@ -156,6 +156,12 @@ func (t *Tracker) handleChainHead(ev core.ChainHeadEvent) {
 			blockIncl[peer]++
 		}
 	}
+	// Ensure peers with inclusions in this block have entries.
+	for peer := range blockIncl {
+		if t.peers[peer] == nil {
+			t.peers[peer] = &peerStats{}
+		}
+	}
 	// Update EMA for all tracked peers (decay inactive ones).
 	for peer, ps := range t.peers {
 		ps.recentIncluded = (1-emaAlpha)*ps.recentIncluded + emaAlpha*float64(blockIncl[peer])
