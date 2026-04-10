@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/fetcher"
+	"github.com/ethereum/go-ethereum/eth/txtracker"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -123,6 +124,7 @@ type handler struct {
 
 	downloader     *downloader.Downloader
 	txFetcher      *fetcher.TxFetcher
+	txTracker      *txtracker.Tracker
 	peers          *peerSet
 	txBroadcastKey [16]byte
 
@@ -189,6 +191,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return nil
 	}
 	h.txFetcher = fetcher.NewTxFetcher(h.chain, validateMeta, addTxs, fetchTx, h.removePeer)
+	h.txTracker = txtracker.New()
 	return h, nil
 }
 
