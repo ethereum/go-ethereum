@@ -806,6 +806,24 @@ func (iter *snapshotIterator) Release() {
 	iter.storage.Release()
 }
 
+type codeIterator struct {
+	iter ethdb.Iterator
+}
+
+func (iter *codeIterator) Next() (byte, []byte, []byte, bool) {
+	for iter.iter.Next() {
+		key := iter.iter.Key()
+		if bytes.HasPrefix(key, rawdb.CodePrefix) && len(key) == (len(rawdb.CodePrefix)+common.HashLength) {
+			return utils.OpBatchAdd, key, iter.iter.Value(), true
+		}
+	}
+	return 0, nil, nil, false
+}
+
+func (iter *codeIterator) Release() {
+	iter.iter.Release()
+}
+
 // chainExporters defines the export scheme for all exportable chain data.
 var chainExporters = map[string]func(db ethdb.Database) utils.ChainDataIterator{
 	"preimage": func(db ethdb.Database) utils.ChainDataIterator {
@@ -816,6 +834,10 @@ var chainExporters = map[string]func(db ethdb.Database) utils.ChainDataIterator{
 		account := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
 		storage := db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
 		return &snapshotIterator{account: account, storage: storage}
+	},
+	"code": func(db ethdb.Database) utils.ChainDataIterator {
+		iter := db.NewIterator(rawdb.CodePrefix, nil)
+		return &codeIterator{iter: iter}
 	},
 }
 
