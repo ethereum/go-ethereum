@@ -61,7 +61,7 @@ var (
 // to decide which peers to protect. Any stats provider (e.g. txtracker) can
 // implement getPeerInclusionStatsFunc by returning this struct per peer ID.
 type PeerInclusionStats struct {
-	Included       int64   // Cumulative on-chain inclusions attributed to this peer
+	Finalized      int64   // Cumulative finalized inclusions attributed to this peer
 	RecentIncluded float64 // EMA of per-block inclusions (0 if not tracked)
 }
 
@@ -79,7 +79,7 @@ type protectionCategory struct {
 // protectionCategories is the list of protection criteria. Each category
 // independently selects its top-N peers per pool; the union is protected.
 var protectionCategories = []protectionCategory{
-	{"total-included", func(s PeerInclusionStats) float64 { return float64(s.Included) }, inclusionProtectionFrac},
+	{"total-finalized", func(s PeerInclusionStats) float64 { return float64(s.Finalized) }, inclusionProtectionFrac},
 	{"recent-included", func(s PeerInclusionStats) float64 { return s.RecentIncluded }, inclusionProtectionFrac},
 }
 

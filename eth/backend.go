@@ -478,7 +478,7 @@ func (s *Ethereum) Start() error {
 		stats := s.handler.txTracker.GetAllPeerStats()
 		result := make(map[string]PeerInclusionStats, len(stats))
 		for id, ps := range stats {
-			result[id] = PeerInclusionStats{Included: ps.Included, RecentIncluded: ps.RecentIncluded}
+			result[id] = PeerInclusionStats{Finalized: ps.Finalized, RecentIncluded: ps.RecentIncluded}
 		}
 		return result
 	})
