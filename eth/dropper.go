@@ -52,9 +52,9 @@ var (
 	droppedInbound = metrics.NewRegisteredMeter("eth/dropper/inbound", nil)
 	// droppedOutbound is the number of outbound peers dropped
 	droppedOutbound = metrics.NewRegisteredMeter("eth/dropper/outbound", nil)
-	// droppedProtected counts times a drop was skipped because all
+	// dropSkipped counts times a drop was skipped because all
 	// droppable candidates were protected by inclusion stats.
-	droppedProtected = metrics.NewRegisteredMeter("eth/dropper/protected", nil)
+	dropSkipped = metrics.NewRegisteredMeter("eth/dropper/protected", nil)
 )
 
 // PeerInclusionStats holds the per-peer inclusion data needed by the dropper
@@ -177,7 +177,7 @@ func (cm *dropper) dropRandomPeer() bool {
 	if cm.peerStatsFunc != nil {
 		droppable = cm.filterProtectedPeers(droppable)
 		if len(droppable) == 0 {
-			droppedProtected.Mark(1)
+			dropSkipped.Mark(1)
 			return false
 		}
 	}
