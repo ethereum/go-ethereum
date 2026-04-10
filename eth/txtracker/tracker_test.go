@@ -35,6 +35,11 @@ func (c *mockChain) GetBlockByNumber(number uint64) *types.Block {
 	return c.blocks[number]
 }
 
+func (c *mockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+	// In tests we only key by number; ignore hash.
+	return c.GetBlockByNumber(number)
+}
+
 func (c *mockChain) CurrentFinalBlock() *types.Header {
 	c.mu.Lock()
 	defer c.mu.Unlock()
