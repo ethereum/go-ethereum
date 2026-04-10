@@ -41,9 +41,7 @@ func TestSingleMatch(t *testing.T) {
 			t.Fatalf("Invalid length of matches (got %d, expected 1)", len(matches))
 		}
 		if matches[0] != lvIndex {
-			if len(matches) != 1 {
-				t.Fatalf("Incorrect match returned (got %d, expected %d)", matches[0], lvIndex)
-			}
+			t.Fatalf("Incorrect match returned (got %d, expected %d)", matches[0], lvIndex)
 		}
 	}
 }
