@@ -35,8 +35,7 @@ type StemNode struct {
 	hash          common.Hash // cached hash when mustRecompute == false
 }
 
-// Get retrieves the value for the given key. Returns (nil, nil) if the
-// key's stem does not match this node's stem (non-membership).
+// Get retrieves the value for the given key.
 func (bt *StemNode) Get(key []byte, _ NodeResolverFn) ([]byte, error) {
 	if !bytes.Equal(bt.Stem, key[:StemSize]) {
 		return nil, nil

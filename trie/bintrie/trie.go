@@ -202,9 +202,6 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	if err != nil {
 		return nil, fmt.Errorf("GetAccount (%x) error: %v", addr, err)
 	}
-	if values == nil {
-		return nil, nil
-	}
 
 	// The following code is required for the MPT->Binary conversion.
 	// An account can be partially migrated, where storage slots were moved to the binary
@@ -212,7 +209,7 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	// are in the binary trie but basic account information must be read in the base tree (MPT).
 	// TODO: we can simplify this logic depending if the conversion is in progress or finished.
 	emptyAccount := true
-	for i := 0; i <= CodeHashLeafKey && emptyAccount; i++ {
+	for i := 0; values != nil && i <= CodeHashLeafKey && emptyAccount; i++ {
 		emptyAccount = emptyAccount && values[i] == nil
 	}
 	if emptyAccount {

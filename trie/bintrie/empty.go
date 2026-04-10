@@ -48,7 +48,8 @@ func (e Empty) Hash() common.Hash {
 }
 
 func (e Empty) GetValuesAtStem(_ []byte, _ NodeResolverFn) ([][]byte, error) {
-	return nil, nil
+	var values [256][]byte
+	return values[:], nil
 }
 
 func (e Empty) InsertValuesAtStem(key []byte, values [][]byte, _ NodeResolverFn, depth int) (BinaryNode, error) {
