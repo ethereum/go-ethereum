@@ -146,7 +146,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		return h
 	}
 	var (
-		isEIP4762   = chainConfig.IsVerkle(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+		isEIP4762   = chainConfig.IsUBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
 		statedb     = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isEIP4762)
 		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp)
 		gaspool     = core.NewGasPool(pre.Env.GasLimit)
@@ -378,7 +378,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 }
 
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool) *state.StateDB {
-	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true, IsVerkle: isBintrie})
+	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true, IsUBT: isBintrie})
 	sdb := state.NewDatabase(tdb, nil)
 
 	root := types.EmptyRootHash

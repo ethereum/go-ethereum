@@ -32,7 +32,7 @@ import (
 // Config defines all necessary options for database.
 type Config struct {
 	Preimages bool           // Flag whether the preimage of node key is recorded
-	IsVerkle  bool           // Flag whether the db is holding a verkle tree
+	IsUBT     bool           // Flag whether the db is holding a verkle tree
 	HashDB    *hashdb.Config // Configs for hash-based scheme
 	PathDB    *pathdb.Config // Configs for experimental path-based scheme
 }
@@ -41,15 +41,15 @@ type Config struct {
 // default settings.
 var HashDefaults = &Config{
 	Preimages: false,
-	IsVerkle:  false,
+	IsUBT:     false,
 	HashDB:    hashdb.Defaults,
 }
 
-// VerkleDefaults represents a config for holding verkle trie data
+// UBTDefaults represents a config for holding verkle trie data
 // using path-based scheme with default settings.
-var VerkleDefaults = &Config{
+var UBTDefaults = &Config{
 	Preimages: false,
-	IsVerkle:  true,
+	IsUBT:     true,
 	PathDB:    pathdb.Defaults,
 }
 
@@ -109,7 +109,7 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 		log.Crit("Both 'hash' and 'path' mode are configured")
 	}
 	if config.PathDB != nil {
-		db.backend = pathdb.New(diskdb, config.PathDB, config.IsVerkle)
+		db.backend = pathdb.New(diskdb, config.PathDB, config.IsUBT)
 	} else {
 		db.backend = hashdb.New(diskdb, config.HashDB)
 	}
@@ -375,9 +375,9 @@ func (db *Database) IndexProgress() (uint64, uint64, error) {
 	return pdb.IndexProgress()
 }
 
-// IsVerkle returns the indicator if the database is holding a verkle tree.
-func (db *Database) IsVerkle() bool {
-	return db.config.IsVerkle
+// IsUBT returns the indicator if the database is holding a verkle tree.
+func (db *Database) IsUBT() bool {
+	return db.config.IsUBT
 }
 
 // Disk returns the underlying disk database.

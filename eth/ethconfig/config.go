@@ -200,8 +200,8 @@ type Config struct {
 	// OverrideBPO2 (TODO: remove after the fork)
 	OverrideBPO2 *uint64 `toml:",omitempty"`
 
-	// OverrideVerkle (TODO: remove after the fork)
-	OverrideVerkle *uint64 `toml:",omitempty"`
+	// OverrideUBT (TODO: remove after the fork)
+	OverrideUBT *uint64 `toml:",omitempty"`
 
 	// EIP-7966: eth_sendRawTransactionSync timeouts
 	TxSyncDefaultTimeout time.Duration `toml:",omitempty"`

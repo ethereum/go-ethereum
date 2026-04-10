@@ -143,7 +143,7 @@ type testerConfig struct {
 	layers       int    // Number of state transitions to generate for
 	enableIndex  bool   // Enable state history indexing or not
 	journalDir   string // Directory path for persisting journal files
-	isVerkle     bool   // Enables Verkle trie mode if true
+	isUBT     bool   // Enables Verkle trie mode if true
 
 	writeBuffer *int // Optional, the size of memory allocated for write buffer
 	trieCache   *int // Optional, the size of memory allocated for trie cache
@@ -183,7 +183,7 @@ func newTester(t *testing.T, config *testerConfig) *tester {
 			NoAsyncFlush:        true,
 			JournalDirectory:    config.journalDir,
 			NoHistoryIndexDelay: true,
-		}, config.isVerkle)
+		}, config.isUBT)
 
 		obj = &tester{
 			db:           db,

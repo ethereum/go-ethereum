@@ -228,7 +228,7 @@ func Transition(ctx *cli.Context) error {
 		collector = make(Alloc)
 		btleaves  map[common.Hash]hexutil.Bytes
 	)
-	isBinary := chainConfig.IsVerkle(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp)
+	isBinary := chainConfig.IsUBT(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp)
 	if !isBinary {
 		s.DumpToCollector(collector, nil)
 	} else {
@@ -452,7 +452,7 @@ func BinKeys(ctx *cli.Context) error {
 			return err
 		}
 	}
-	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.VerkleDefaults)
+	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.UBTDefaults)
 	defer db.Close()
 
 	bt, err := genBinTrieFromAlloc(alloc, db)
@@ -496,7 +496,7 @@ func BinTrieRoot(ctx *cli.Context) error {
 			return err
 		}
 	}
-	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.VerkleDefaults)
+	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.UBTDefaults)
 	defer db.Close()
 
 	bt, err := genBinTrieFromAlloc(alloc, db)

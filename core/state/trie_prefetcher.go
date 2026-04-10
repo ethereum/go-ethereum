@@ -67,7 +67,7 @@ type triePrefetcher struct {
 func newTriePrefetcher(db Database, root common.Hash, namespace string, noreads bool) *triePrefetcher {
 	prefix := triePrefetchMetricsPrefix + namespace
 	return &triePrefetcher{
-		verkle:   db.TrieDB().IsVerkle(),
+		verkle:   db.TrieDB().IsUBT(),
 		db:       db,
 		root:     root,
 		fetchers: make(map[string]*subfetcher), // Active prefetchers use the fetchers map
@@ -342,7 +342,7 @@ func (sf *subfetcher) terminate(async bool) {
 func (sf *subfetcher) openTrie() error {
 	// Open the verkle tree if the sub-fetcher is in verkle mode. Note, there is
 	// only a single fetcher for verkle.
-	if sf.db.TrieDB().IsVerkle() {
+	if sf.db.TrieDB().IsUBT() {
 		tr, err := sf.db.OpenTrie(sf.state)
 		if err != nil {
 			log.Warn("Trie prefetcher failed opening verkle trie", "root", sf.root, "err", err)

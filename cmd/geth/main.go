@@ -64,7 +64,7 @@ var (
 		utils.OverrideOsaka,
 		utils.OverrideBPO1,
 		utils.OverrideBPO2,
-		utils.OverrideVerkle,
+		utils.OverrideUBT,
 		utils.OverrideGenesisFlag,
 		utils.EnablePersonal, // deprecated
 		utils.TxPoolLocalsFlag,

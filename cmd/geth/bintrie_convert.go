@@ -144,7 +144,7 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	defer srcTriedb.Close()
 
 	destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
-		IsVerkle: true,
+		IsUBT: true,
 		PathDB: &pathdb.Config{
 			JournalDirectory: stack.ResolvePath("triedb-bintrie"),
 		},

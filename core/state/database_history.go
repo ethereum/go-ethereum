@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -299,4 +300,24 @@ func (db *HistoricDB) Commit(update *stateUpdate) error {
 // through which the account iterator and storage iterator can be created.
 func (db *HistoricDB) Iteratee(root common.Hash) (Iteratee, error) {
 	return nil, errors.New("not implemented")
+}
+
+// WithSnapshot is not supported by historic database.
+func (db *HistoricDB) WithSnapshot(snap *snapshot.Tree) Database {
+	return db
+}
+
+// Snapshot returns nil as historic database does not support snapshots.
+func (db *HistoricDB) Snapshot() *snapshot.Tree {
+	return nil
+}
+
+// StateReader is not supported by historic database; use Reader instead.
+func (db *HistoricDB) StateReader(stateRoot common.Hash) (StateReader, error) {
+	return nil, errors.New("not implemented")
+}
+
+// ReadersWithCacheStats is not supported by historic database.
+func (db *HistoricDB) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reader, error) {
+	return nil, nil, errors.New("not implemented")
 }

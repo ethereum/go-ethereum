@@ -213,7 +213,7 @@ func init() {
 
 func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 	switch {
-	case rules.IsVerkle:
+	case rules.IsUBT:
 		return PrecompiledContractsVerkle
 	case rules.IsOsaka:
 		return PrecompiledContractsOsaka

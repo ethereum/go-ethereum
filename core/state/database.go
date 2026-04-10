@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -28,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -56,6 +54,21 @@ type Database interface {
 	// committing the changes to the underlying storage. It returns an error
 	// if the commit fails.
 	Commit(update *stateUpdate) error
+
+	// WithSnapshot configures the snapshot tree. This registration must be
+	// performed before the database is used.
+	WithSnapshot(snap *snapshot.Tree) Database
+
+	// Snapshot returns the underlying state snapshot.
+	Snapshot() *snapshot.Tree
+
+	// StateReader returns a state reader associated with the specified state root.
+	StateReader(stateRoot common.Hash) (StateReader, error)
+
+	// ReadersWithCacheStats creates a pair of state readers that share the same
+	// underlying state reader and internal state cache, while maintaining separate
+	// statistics respectively.
+	ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reader, error)
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -139,46 +152,53 @@ type Trie interface {
 	// with the node that proves the absence of the key.
 	Prove(key []byte, proofDb ethdb.KeyValueWriter) error
 
-	// IsVerkle returns true if the trie is verkle-tree based
-	IsVerkle() bool
+	// IsUBT returns true if the trie is verkle-tree based
+	IsUBT() bool
 }
 
-// CachingDB is an implementation of Database interface. It leverages both trie and
-// state snapshot to provide functionalities for state access. It's meant to be a
-// long-live object and has a few caches inside for sharing between blocks.
-type CachingDB struct {
+// MPTDB is an implementation of Database interface for Merkle Patricia Tries.
+// It leverages both trie and state snapshot to provide functionalities for state
+// access. It's meant to be a long-live object and has a few caches inside for
+// sharing between blocks.
+type MPTDB struct {
 	triedb *triedb.Database
 	codedb *CodeDB
 	snap   *snapshot.Tree
 }
 
 // NewDatabase creates a state database with the provided data sources.
-func NewDatabase(triedb *triedb.Database, codedb *CodeDB) *CachingDB {
+func NewDatabase(tdb *triedb.Database, codedb *CodeDB) Database {
 	if codedb == nil {
-		codedb = NewCodeDB(triedb.Disk())
+		codedb = NewCodeDB(tdb.Disk())
 	}
-	return &CachingDB{
-		triedb: triedb,
+	if tdb.IsUBT() {
+		return &UBTDB{
+			triedb: tdb,
+			codedb: codedb,
+		}
+	}
+	return &MPTDB{
+		triedb: tdb,
 		codedb: codedb,
 	}
 }
 
 // NewDatabaseForTesting is similar to NewDatabase, but it initializes the caching
 // db by using an ephemeral memory db with default config for testing.
-func NewDatabaseForTesting() *CachingDB {
+func NewDatabaseForTesting() Database {
 	db := rawdb.NewMemoryDatabase()
 	return NewDatabase(triedb.NewDatabase(db, nil), NewCodeDB(db))
 }
 
 // WithSnapshot configures the provided contract code cache. Note that this
-// registration must be performed before the cachingDB is used.
-func (db *CachingDB) WithSnapshot(snapshot *snapshot.Tree) *CachingDB {
+// registration must be performed before the MPTDB is used.
+func (db *MPTDB) WithSnapshot(snapshot *snapshot.Tree) Database {
 	db.snap = snapshot
 	return db
 }
 
 // StateReader returns a state reader associated with the specified state root.
-func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
+func (db *MPTDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 	var readers []StateReader
 
 	// Configure the state reader using the standalone snapshot in hash mode.
@@ -213,7 +233,7 @@ func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 
 // Reader implements Database, returning a reader associated with the specified
 // state root.
-func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
+func (db *MPTDB) Reader(stateRoot common.Hash) (Reader, error) {
 	sr, err := db.StateReader(stateRoot)
 	if err != nil {
 		return nil, err
@@ -224,7 +244,7 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 // ReadersWithCacheStats creates a pair of state readers that share the same
 // underlying state reader and internal state cache, while maintaining separate
 // statistics respectively.
-func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reader, error) {
+func (db *MPTDB) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reader, error) {
 	r, err := db.StateReader(stateRoot)
 	if err != nil {
 		return nil, nil, err
@@ -236,18 +256,7 @@ func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reade
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
-func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	if db.triedb.IsVerkle() {
-		ts := overlay.LoadTransitionState(db.TrieDB().Disk(), root, db.triedb.IsVerkle())
-		if ts.InTransition() {
-			panic("state tree transition isn't supported yet")
-		}
-		if ts.Transitioned() {
-			// Use BinaryTrie instead of VerkleTrie when IsVerkle is set
-			// (IsVerkle actually means Binary Trie mode in this codebase)
-			return bintrie.NewBinaryTrie(root, db.triedb)
-		}
-	}
+func (db *MPTDB) OpenTrie(root common.Hash) (Trie, error) {
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {
 		return nil, err
@@ -256,10 +265,7 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 }
 
 // OpenStorageTrie opens the storage trie of an account.
-func (db *CachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
-	if db.triedb.IsVerkle() {
-		return self, nil
-	}
+func (db *MPTDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
 	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)
 	if err != nil {
 		return nil, err
@@ -268,19 +274,19 @@ func (db *CachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 }
 
 // TrieDB retrieves any intermediate trie-node caching layer.
-func (db *CachingDB) TrieDB() *triedb.Database {
+func (db *MPTDB) TrieDB() *triedb.Database {
 	return db.triedb
 }
 
 // Snapshot returns the underlying state snapshot.
-func (db *CachingDB) Snapshot() *snapshot.Tree {
+func (db *MPTDB) Snapshot() *snapshot.Tree {
 	return db.snap
 }
 
 // Commit flushes all pending writes and finalizes the state transition,
 // committing the changes to the underlying storage. It returns an error
 // if the commit fails.
-func (db *CachingDB) Commit(update *stateUpdate) error {
+func (db *MPTDB) Commit(update *stateUpdate) error {
 	// Short circuit if nothing to commit
 	if update.empty() {
 		return nil
@@ -313,8 +319,8 @@ func (db *CachingDB) Commit(update *stateUpdate) error {
 
 // Iteratee returns a state iteratee associated with the specified state root,
 // through which the account iterator and storage iterator can be created.
-func (db *CachingDB) Iteratee(root common.Hash) (Iteratee, error) {
-	return newStateIteratee(!db.triedb.IsVerkle(), root, db.triedb, db.snap)
+func (db *MPTDB) Iteratee(root common.Hash) (Iteratee, error) {
+	return newStateIteratee(true, root, db.triedb, db.snap)
 }
 
 // mustCopyTrie returns a deep-copied trie.

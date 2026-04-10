@@ -376,7 +376,7 @@ func syncHistory(stores ...ethdb.AncientWriter) error {
 // persistent state may appear if the trienode history was disabled during the
 // previous run. This process detects and resolves such gaps, preventing
 // unexpected panics.
-func repairHistory(db ethdb.Database, isVerkle bool, readOnly bool, stateID uint64, enableTrienode bool) (ethdb.ResettableAncientStore, ethdb.ResettableAncientStore, error) {
+func repairHistory(db ethdb.Database, isUBT bool, readOnly bool, stateID uint64, enableTrienode bool) (ethdb.ResettableAncientStore, ethdb.ResettableAncientStore, error) {
 	ancient, err := db.AncientDatadir()
 	if err != nil {
 		// TODO error out if ancient store is disabled. A tons of unit tests
@@ -386,7 +386,7 @@ func repairHistory(db ethdb.Database, isVerkle bool, readOnly bool, stateID uint
 	}
 	// State history is mandatory as it is the key component that ensures
 	// resilience to deep reorgs.
-	states, err := rawdb.NewStateFreezer(ancient, isVerkle, readOnly)
+	states, err := rawdb.NewStateFreezer(ancient, isUBT, readOnly)
 	if err != nil {
 		log.Crit("Failed to open state history freezer", "err", err)
 	}
@@ -395,7 +395,7 @@ func repairHistory(db ethdb.Database, isVerkle bool, readOnly bool, stateID uint
 	// node with state proofs.
 	var trienodes ethdb.ResettableAncientStore
 	if enableTrienode {
-		trienodes, err = rawdb.NewTrienodeFreezer(ancient, isVerkle, readOnly)
+		trienodes, err = rawdb.NewTrienodeFreezer(ancient, isUBT, readOnly)
 		if err != nil {
 			log.Crit("Failed to open trienode history freezer", "err", err)
 		}

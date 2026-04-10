@@ -51,9 +51,9 @@ var (
 		LondonBlock:             big.NewInt(0),
 		Ethash:                  new(params.EthashConfig),
 		ShanghaiTime:            u64(0),
-		VerkleTime:              u64(0),
+		UBTTime:              u64(0),
 		TerminalTotalDifficulty: common.Big0,
-		EnableVerkleAtGenesis:   true,
+		EnableUBTAtGenesis:   true,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Verkle: params.DefaultPragueBlobConfig,
 		},
@@ -188,7 +188,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 	// block 1 parent hash is 0x0100....
 	// block 2 parent hash is 0x0200....
 	// etc
-	checkBlockHashes := func(statedb *state.StateDB, isVerkle bool) {
+	checkBlockHashes := func(statedb *state.StateDB, isUBT bool) {
 		statedb.SetNonce(params.HistoryStorageAddress, 1, tracing.NonceChangeUnspecified)
 		statedb.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode, tracing.CodeChangeUnspecified)
 		// Process n blocks, from 1 .. num
@@ -196,7 +196,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		for i := 1; i <= num; i++ {
 			header := &types.Header{ParentHash: common.Hash{byte(i)}, Number: big.NewInt(int64(i)), Difficulty: new(big.Int)}
 			chainConfig := params.MergedTestChainConfig
-			if isVerkle {
+			if isUBT {
 				chainConfig = testVerkleChainConfig
 			}
 			vmContext := NewEVMBlockContext(header, nil, new(common.Address))
@@ -205,9 +205,9 @@ func TestProcessParentBlockHash(t *testing.T) {
 		}
 		// Read block hashes for block 0 .. num-1
 		for i := 0; i < num; i++ {
-			have, want := getContractStoredBlockHash(statedb, uint64(i), isVerkle), common.Hash{byte(i + 1)}
+			have, want := getContractStoredBlockHash(statedb, uint64(i), isUBT), common.Hash{byte(i + 1)}
 			if have != want {
-				t.Errorf("block %d, verkle=%v, have parent hash %v, want %v", i, isVerkle, have, want)
+				t.Errorf("block %d, verkle=%v, have parent hash %v, want %v", i, isUBT, have, want)
 			}
 		}
 	}
@@ -226,11 +226,11 @@ func TestProcessParentBlockHash(t *testing.T) {
 }
 
 // getContractStoredBlockHash is a utility method which reads the stored parent blockhash for block 'number'
-func getContractStoredBlockHash(statedb *state.StateDB, number uint64, isVerkle bool) common.Hash {
+func getContractStoredBlockHash(statedb *state.StateDB, number uint64, isUBT bool) common.Hash {
 	ringIndex := number % params.HistoryServeWindow
 	var key common.Hash
 	binary.BigEndian.PutUint64(key[24:], ringIndex)
-	if isVerkle {
+	if isUBT {
 		return statedb.GetState(params.HistoryStorageAddress, key)
 	}
 	return statedb.GetState(params.HistoryStorageAddress, key)
