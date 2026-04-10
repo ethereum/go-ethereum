@@ -1,6 +1,6 @@
 // Package txtracker provides minimal per-peer transaction inclusion tracking.
 //
-// It records which peer delivered each transaction body (via NotifyReceived)
+// It records which peer delivered each accepted transaction (via NotifyAccepted)
 // and monitors the chain for inclusion and finalization events. When a
 // delivered transaction is finalized on chain, the delivering peer is
 // credited. A per-block exponential moving average (EMA) of inclusions
@@ -91,14 +91,15 @@ func (t *Tracker) Stop() {
 	t.wg.Wait()
 }
 
-// NotifyReceived records that a peer delivered transaction bodies.
+// NotifyAccepted records that a peer delivered transactions that were accepted
+// by the pool. Only accepted (not rejected/duplicate) txs should be recorded
+// to prevent attribution poisoning from replayed or invalid txs.
 // Safe to call from any goroutine.
-func (t *Tracker) NotifyReceived(peer string, txs []*types.Transaction) {
+func (t *Tracker) NotifyAccepted(peer string, hashes []common.Hash) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	for _, tx := range txs {
-		hash := tx.Hash()
+	for _, hash := range hashes {
 		if _, ok := t.txs[hash]; ok {
 			continue // already tracked, keep first deliverer
 		}

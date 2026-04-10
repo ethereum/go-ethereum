@@ -66,25 +66,50 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		if err != nil {
 			return fmt.Errorf("Transactions: %v", err)
 		}
-		h.txTracker.NotifyReceived(peer.ID(), txs)
 		if err := handleTransactions(peer, txs, true); err != nil {
 			return fmt.Errorf("Transactions: %v", err)
 		}
-		return h.txFetcher.Enqueue(peer.ID(), txs, false)
+		h.enqueueAndTrack(peer.ID(), txs, false)
+		return nil
 
 	case *eth.PooledTransactionsPacket:
 		txs, err := packet.List.Items()
 		if err != nil {
 			return fmt.Errorf("PooledTransactions: %v", err)
 		}
-		h.txTracker.NotifyReceived(peer.ID(), txs)
 		if err := handleTransactions(peer, txs, false); err != nil {
 			return fmt.Errorf("PooledTransactions: %v", err)
 		}
-		return h.txFetcher.Enqueue(peer.ID(), txs, true)
+		h.enqueueAndTrack(peer.ID(), txs, true)
+		return nil
 
 	default:
 		return fmt.Errorf("unexpected eth packet type: %T", packet)
+	}
+}
+
+// enqueueAndTrack sends transactions to the fetcher for pool submission and
+// notifies the tracker for any that were accepted by the pool.
+func (h *ethHandler) enqueueAndTrack(peer string, txs []*types.Transaction, direct bool) {
+	// Collect hashes before enqueue (Enqueue may reorder/filter the slice).
+	hashes := make([]common.Hash, len(txs))
+	for i, tx := range txs {
+		hashes[i] = tx.Hash()
+	}
+	// Enqueue submits to pool via addTxs callback. After return, check
+	// which txs the pool now knows about (accepted, not rejected).
+	h.txFetcher.Enqueue(peer, txs, direct)
+
+	// Credit the peer for txs the pool accepted. We check pool.Has
+	// because Enqueue doesn't return per-tx acceptance status.
+	var accepted []common.Hash
+	for _, hash := range hashes {
+		if h.txpool.Has(hash) {
+			accepted = append(accepted, hash)
+		}
+	}
+	if len(accepted) > 0 {
+		h.txTracker.NotifyAccepted(peer, accepted)
 	}
 }
 
