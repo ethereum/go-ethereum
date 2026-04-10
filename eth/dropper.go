@@ -85,17 +85,22 @@ var protectionCategories = []protectionCategory{
 
 // dropper monitors the state of the peer pool and introduces churn by
 // periodically disconnecting a random peer to make room for new connections.
+// The main goal is to allow new peers to join the network and to facilitate
+// continuous topology adaptation.
 //
 // Behavior:
 //   - During sync the Downloader handles peer connections, so dropper is disabled.
 //   - When not syncing and a peer category (inbound or dialed) is close to its
 //     limit, a random peer from that category is disconnected every 3–7 minutes.
-//   - Trusted, static, and recently connected peers are never dropped.
-//   - Peers that contribute the most on-chain transaction inclusions are
-//     protected from dropping. Two scoring categories are used (total finalized
-//     inclusions and recent inclusion EMA), each protecting the top 10% of
-//     inbound and dialed peers independently. The union of all protected sets
-//     is shielded; the drop target is chosen randomly from the remainder.
+//   - Trusted and static peers are never dropped.
+//   - Recently connected peers are also protected from dropping to give them time
+//     to prove their value before being at risk of disconnection.
+//   - Some peers are protected from dropping based on their role. This is not based
+//     on a unified score function, but rather on the concept of protected peer pools.
+//     Each pool independently selects its top fraction of peers by a specific score
+//     (e.g. total finalized inclusions, recent inclusion EMA); the union of all
+//     protected sets is shielded from random dropping, and the drop target is chosen
+//     randomly from the remainder.
 type dropper struct {
 	maxDialPeers    int // maximum number of dialed peers
 	maxInboundPeers int // maximum number of inbound peers
