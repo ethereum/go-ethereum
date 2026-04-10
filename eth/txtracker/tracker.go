@@ -74,6 +74,10 @@ func New() *Tracker {
 // Start begins listening for chain head events.
 func (t *Tracker) Start(chain Chain) {
 	t.chain = chain
+	// Seed lastFinalNum so checkFinalization doesn't backfill from genesis.
+	if fh := chain.CurrentFinalBlock(); fh != nil {
+		t.lastFinalNum = fh.Number.Uint64()
+	}
 	t.headCh = make(chan core.ChainHeadEvent, 128)
 	t.sub = chain.SubscribeChainHeadEvent(t.headCh)
 	t.wg.Add(1)
