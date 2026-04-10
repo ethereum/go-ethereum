@@ -43,7 +43,7 @@ func TestFilterProtectedEmptyStats(t *testing.T) {
 }
 
 func TestFilterProtectedTopPeer(t *testing.T) {
-	// 20 peers, maxDialPeers=20, 10% = 2 protected per category.
+	// 20 peers, 10% of 20 = 2 protected per category.
 	// NewPeer creates non-inbound peers, so all go to dialed bucket.
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
 
@@ -108,18 +108,23 @@ func TestFilterProtectedOverlap(t *testing.T) {
 }
 
 func TestFilterProtectedAllProtected(t *testing.T) {
-	// Only 2 droppable peers, both are top by different categories.
+	// 10 peers: 10% = 1 per category. Give all 10 peers high scores in
+	// one of the two categories so the union covers everyone.
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
 
-	peers := makePeers(2)
+	peers := makePeers(10)
 	stats := make(map[string]PeerInclusionStats)
+	// Peer 0 has the highest Finalized → protected by total-finalized.
 	stats[peers[0].ID().String()] = PeerInclusionStats{Finalized: 100}
+	// Peer 1 has the highest RecentIncluded → protected by recent-included.
 	stats[peers[1].ID().String()] = PeerInclusionStats{RecentIncluded: 5.0}
 
 	cm.peerStatsFunc = func() map[string]PeerInclusionStats { return stats }
 
 	result := cm.filterProtectedPeers(peers)
-	if len(result) != 0 {
-		t.Fatalf("expected all peers protected, got %d droppable", len(result))
+	// 10% of 10 = 1 per category, 2 categories = 2 protected.
+	// 10 - 2 = 8 droppable.
+	if len(result) != 8 {
+		t.Fatalf("expected 8 droppable peers, got %d", len(result))
 	}
 }
