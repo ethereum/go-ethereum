@@ -159,27 +159,23 @@ func (cm *dropper) dropRandomPeer() bool {
 	}
 	numDialed := len(peers) - numInbound
 
+	// Compute the set of inclusion-protected peers before filtering.
+	protected := cm.protectedPeers(peers)
+
 	selectDoNotDrop := func(p *p2p.Peer) bool {
-		// Avoid dropping trusted and static peers, or recent peers.
-		// Only drop peers if their respective category (dialed/inbound)
-		// is close to limit capacity.
 		return p.Trusted() || p.StaticDialed() ||
 			p.Lifetime() < mclock.AbsTime(doNotDropBefore) ||
 			(p.DynDialed() && cm.maxDialPeers-numDialed > peerDropThreshold) ||
-			(p.Inbound() && cm.maxInboundPeers-numInbound > peerDropThreshold)
+			(p.Inbound() && cm.maxInboundPeers-numInbound > peerDropThreshold) ||
+			protected[p]
 	}
 
 	droppable := slices.DeleteFunc(peers, selectDoNotDrop)
 	if len(droppable) == 0 {
-		return false
-	}
-	// Protect peers with the highest inclusion stats.
-	if cm.peerStatsFunc != nil {
-		droppable = cm.filterProtectedPeers(droppable)
-		if len(droppable) == 0 {
+		if len(protected) > 0 {
 			dropSkipped.Mark(1)
-			return false
 		}
+		return false
 	}
 	p := droppable[mrand.Intn(len(droppable))]
 	log.Debug("Dropping random peer", "inbound", p.Inbound(),
@@ -193,34 +189,35 @@ func (cm *dropper) dropRandomPeer() bool {
 	return true
 }
 
-// filterProtectedPeers removes peers from the droppable list that are
-// protected by any of the protection categories. Each category independently
-// selects the top-N peers per inbound/dialed pool by score; the union of all
-// selections is protected.
-func (cm *dropper) filterProtectedPeers(droppable []*p2p.Peer) []*p2p.Peer {
+// protectedPeers computes the set of peers that should not be dropped based
+// on inclusion stats. Each protection category independently selects its
+// top-N peers per inbound/dialed pool; the union is returned.
+func (cm *dropper) protectedPeers(peers []*p2p.Peer) map[*p2p.Peer]bool {
+	if cm.peerStatsFunc == nil {
+		return nil
+	}
 	stats := cm.peerStatsFunc()
 	if len(stats) == 0 {
-		return droppable
+		return nil
 	}
 	type peerWithStats struct {
 		peer *p2p.Peer
 		s    PeerInclusionStats
 	}
 	var inbound, dialed []peerWithStats
-	for _, p := range droppable {
-		id := p.ID().String()
-		entry := peerWithStats{p, stats[id]}
+	for _, p := range peers {
+		entry := peerWithStats{p, stats[p.ID().String()]}
 		if p.Inbound() {
 			inbound = append(inbound, entry)
 		} else {
 			dialed = append(dialed, entry)
 		}
 	}
-	protectedSet := make(map[*p2p.Peer]struct{})
+	result := make(map[*p2p.Peer]bool)
 
 	protectTopN := func(entries []peerWithStats, cat protectionCategory) {
 		n := int(float64(len(entries)) * cat.frac)
-		if n == 0 || len(entries) == 0 {
+		if n == 0 {
 			return
 		}
 		sort.Slice(entries, func(i, j int) bool {
@@ -228,7 +225,7 @@ func (cm *dropper) filterProtectedPeers(droppable []*p2p.Peer) []*p2p.Peer {
 		})
 		for i := 0; i < n && i < len(entries); i++ {
 			if cat.score(entries[i].s) > 0 {
-				protectedSet[entries[i].peer] = struct{}{}
+				result[entries[i].peer] = true
 			}
 		}
 	}
@@ -237,21 +234,11 @@ func (cm *dropper) filterProtectedPeers(droppable []*p2p.Peer) []*p2p.Peer {
 		copy(inCopy, inbound)
 		dialCopy := make([]peerWithStats, len(dialed))
 		copy(dialCopy, dialed)
-
 		protectTopN(inCopy, cat)
 		protectTopN(dialCopy, cat)
 	}
-	if len(protectedSet) == 0 {
-		return droppable
-	}
-	log.Debug("Protecting high-value peers from drop",
-		"protected", len(protectedSet), "droppable", len(droppable))
-
-	result := make([]*p2p.Peer, 0, len(droppable))
-	for _, p := range droppable {
-		if _, ok := protectedSet[p]; !ok {
-			result = append(result, p)
-		}
+	if len(result) > 0 {
+		log.Debug("Protecting high-value peers from drop", "protected", len(result))
 	}
 	return result
 }
