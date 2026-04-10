@@ -37,6 +37,7 @@ type PeerStats struct {
 type Chain interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	GetBlockByNumber(number uint64) *types.Block
+	GetBlock(hash common.Hash, number uint64) *types.Block
 	CurrentFinalBlock() *types.Header
 }
 
@@ -146,8 +147,9 @@ func (t *Tracker) loop() {
 }
 
 func (t *Tracker) handleChainHead(ev core.ChainHeadEvent) {
-	// Update recent-inclusion EMA from the new head block.
-	block := t.chain.GetBlockByNumber(ev.Header.Number.Uint64())
+	// Fetch the head block by hash (not just number) to avoid using a
+	// reorged block if the tracker goroutine lags behind the chain.
+	block := t.chain.GetBlock(ev.Header.Hash(), ev.Header.Number.Uint64())
 	if block == nil {
 		return
 	}
