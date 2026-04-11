@@ -457,6 +457,9 @@ func (h *merkleHasher) PrefetchStorage(addr common.Address, keys []common.Hash, 
 
 // TermPrefetch terminates all prefetcher goroutines. Safe to call multiple times.
 func (h *merkleHasher) TermPrefetch() {
+	if h == nil {
+		return
+	}
 	h.acctTrie.term()
 	for _, tr := range h.storageTries {
 		tr.term()

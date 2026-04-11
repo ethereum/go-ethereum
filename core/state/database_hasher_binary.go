@@ -387,5 +387,8 @@ func (h *binaryHasher) PrefetchStorage(addr common.Address, keys []common.Hash, 
 
 // TermPrefetch terminates all prefetcher goroutines. Safe to call multiple times.
 func (h *binaryHasher) TermPrefetch() {
+	if h == nil {
+		return
+	}
 	h.trie.term()
 }
