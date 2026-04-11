@@ -99,7 +99,7 @@ type ExecutableData struct {
 	Withdrawals   []*types.Withdrawal `json:"withdrawals"`
 	BlobGasUsed   *uint64             `json:"blobGasUsed"`
 	ExcessBlobGas *uint64             `json:"excessBlobGas"`
-	SlotNumber    *uint64             `json:"slotNumber"`
+	SlotNumber    *uint64             `json:"slotNumber,omitempty"`
 }
 
 // JSON type overrides for executableData.
