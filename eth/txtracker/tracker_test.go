@@ -96,9 +96,14 @@ func makeTx(nonce uint64) *types.Transaction {
 	return types.NewTx(&types.LegacyTx{Nonce: nonce, GasPrice: big.NewInt(1), Gas: 21000})
 }
 
-// waitForHead gives the tracker time to process a chain head event.
-func waitForHead() {
-	time.Sleep(50 * time.Millisecond)
+// waitStep blocks until the tracker has processed one event.
+func waitStep(t *testing.T, tr *Tracker) {
+	t.Helper()
+	select {
+	case <-tr.step:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for tracker step")
+	}
 }
 
 func TestNotifyReceived(t *testing.T) {
@@ -132,7 +137,7 @@ func TestInclusionEMA(t *testing.T) {
 	// Block 1 includes peerA's tx.
 	chain.addBlock(1, []*types.Transaction{tx})
 	chain.sendHead(1)
-	waitForHead()
+	waitStep(t, tr)
 
 	stats := tr.GetAllPeerStats()
 	if stats["peerA"].RecentIncluded <= 0 {
@@ -143,7 +148,7 @@ func TestInclusionEMA(t *testing.T) {
 	// Block 2 has no txs from peerA — EMA should decay.
 	chain.addBlock(2, nil)
 	chain.sendHead(2)
-	waitForHead()
+	waitStep(t, tr)
 
 	stats = tr.GetAllPeerStats()
 	if stats["peerA"].RecentIncluded >= ema1 {
@@ -163,7 +168,7 @@ func TestFinalization(t *testing.T) {
 	// Include in block 1.
 	chain.addBlock(1, []*types.Transaction{tx})
 	chain.sendHead(1)
-	waitForHead()
+	waitStep(t, tr)
 
 	// Not finalized yet.
 	stats := tr.GetAllPeerStats()
@@ -175,7 +180,7 @@ func TestFinalization(t *testing.T) {
 	chain.setFinalBlock(1)
 	chain.addBlock(2, nil)
 	chain.sendHead(2)
-	waitForHead()
+	waitStep(t, tr)
 
 	stats = tr.GetAllPeerStats()
 	if stats["peerA"].Finalized != 1 {
@@ -197,13 +202,13 @@ func TestMultiplePeers(t *testing.T) {
 	// Both included in block 1.
 	chain.addBlock(1, []*types.Transaction{tx1, tx2})
 	chain.sendHead(1)
-	waitForHead()
+	waitStep(t, tr)
 
 	// Finalize.
 	chain.setFinalBlock(1)
 	chain.addBlock(2, nil)
 	chain.sendHead(2)
-	waitForHead()
+	waitStep(t, tr)
 
 	stats := tr.GetAllPeerStats()
 	if stats["peerA"].Finalized != 1 {
@@ -226,12 +231,12 @@ func TestFirstDelivererWins(t *testing.T) {
 
 	chain.addBlock(1, []*types.Transaction{tx})
 	chain.sendHead(1)
-	waitForHead()
+	waitStep(t, tr)
 
 	chain.setFinalBlock(1)
 	chain.addBlock(2, nil)
 	chain.sendHead(2)
-	waitForHead()
+	waitStep(t, tr)
 
 	stats := tr.GetAllPeerStats()
 	if stats["peerA"].Finalized != 1 {
@@ -254,12 +259,12 @@ func TestNoFinalizationCredit(t *testing.T) {
 	// Include but don't finalize.
 	chain.addBlock(1, []*types.Transaction{tx})
 	chain.sendHead(1)
-	waitForHead()
+	waitStep(t, tr)
 
 	// Send more heads without finalization.
 	chain.addBlock(2, nil)
 	chain.sendHead(2)
-	waitForHead()
+	waitStep(t, tr)
 
 	stats := tr.GetAllPeerStats()
 	if stats["peerA"].Finalized != 0 {
@@ -279,13 +284,13 @@ func TestEMADecay(t *testing.T) {
 	// Include in block 1.
 	chain.addBlock(1, []*types.Transaction{tx})
 	chain.sendHead(1)
-	waitForHead()
+	waitStep(t, tr)
 
 	// Send 30 empty blocks — EMA should decay close to zero.
 	for i := uint64(2); i <= 31; i++ {
 		chain.addBlock(i, nil)
 		chain.sendHead(i)
-		waitForHead()
+		waitStep(t, tr)
 	}
 
 	stats := tr.GetAllPeerStats()

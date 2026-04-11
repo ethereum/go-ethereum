@@ -76,6 +76,7 @@ type Tracker struct {
 	sub          event.Subscription
 
 	quit chan struct{}
+	step chan struct{} // test sync: sent after each event is processed
 	wg   sync.WaitGroup
 }
 
@@ -85,6 +86,7 @@ func New() *Tracker {
 		txs:   make(map[common.Hash]string),
 		peers: make(map[string]*peerStats),
 		quit:  make(chan struct{}),
+		step:  make(chan struct{}, 1),
 	}
 }
 
@@ -171,6 +173,10 @@ func (t *Tracker) loop() {
 		select {
 		case ev := <-t.headCh:
 			t.handleChainHead(ev)
+			select {
+			case t.step <- struct{}{}:
+			default:
+			}
 		case <-t.sub.Err():
 			return
 		case <-t.quit:
