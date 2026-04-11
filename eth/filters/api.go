@@ -53,6 +53,7 @@ type invalidParamsError struct {
 
 func (e invalidParamsError) Error() string  { return e.err.Error() }
 func (e invalidParamsError) ErrorCode() int { return -32602 }
+func (e invalidParamsError) Unwrap() error  { return e.err }
 
 func invalidParamsErr(format string, args ...any) error {
 	return invalidParamsError{fmt.Errorf(format, args...)}
@@ -450,11 +451,11 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 	}
 	if api.logQueryLimit != 0 {
 		if len(crit.Addresses) > api.logQueryLimit {
-			return nil, errExceedLogQueryLimit
+			return nil, invalidParamsErr("%w", errExceedLogQueryLimit)
 		}
 		for _, topics := range crit.Topics {
 			if len(topics) > api.logQueryLimit {
-				return nil, errExceedLogQueryLimit
+				return nil, invalidParamsErr("%w", errExceedLogQueryLimit)
 			}
 		}
 	}

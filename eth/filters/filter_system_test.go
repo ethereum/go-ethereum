@@ -591,8 +591,19 @@ func TestExceedLogQueryLimit(t *testing.T) {
 		FromBlock: big.NewInt(0),
 		ToBlock:   big.NewInt(100),
 		Addresses: addresses,
-	}); err != errExceedLogQueryLimit {
+	}); !errors.Is(err, errExceedLogQueryLimit) {
 		t.Errorf("Expected GetLogs with 6 addresses to return errExceedLogQueryLimit, got: %v", err)
+	} else {
+		var re rpc.Error
+		if !errors.As(err, &re) {
+			t.Fatalf("expected rpc error, got %v", err)
+		}
+		if re.ErrorCode() != -32602 {
+			t.Fatalf("expected error code -32602, got %d", re.ErrorCode())
+		}
+		if re.Error() != "exceed max addresses or topics per search position" {
+			t.Fatalf("expected error message %q, got %q", "exceed max addresses or topics per search position", re.Error())
+		}
 	}
 
 	// Test that 5 topics at one position do not result in error
@@ -611,8 +622,19 @@ func TestExceedLogQueryLimit(t *testing.T) {
 		ToBlock:   big.NewInt(100),
 		Addresses: addresses[:1],
 		Topics:    [][]common.Hash{topics},
-	}); err != errExceedLogQueryLimit {
+	}); !errors.Is(err, errExceedLogQueryLimit) {
 		t.Errorf("Expected GetLogs with 6 topics at one position to return errExceedLogQueryLimit, got: %v", err)
+	} else {
+		var re rpc.Error
+		if !errors.As(err, &re) {
+			t.Fatalf("expected rpc error, got %v", err)
+		}
+		if re.ErrorCode() != -32602 {
+			t.Fatalf("expected error code -32602, got %d", re.ErrorCode())
+		}
+		if re.Error() != "exceed max addresses or topics per search position" {
+			t.Fatalf("expected error message %q, got %q", "exceed max addresses or topics per search position", re.Error())
+		}
 	}
 }
 
