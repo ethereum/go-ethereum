@@ -113,9 +113,9 @@ func handleTransactions(peer *eth.Peer, list []*types.Transaction, directBroadca
 				// If we receive any blob transactions missing sidecars, or with
 				// sidecars that don't correspond to the versioned hashes reported
 				// in the header, disconnect from the sending peer.
-				if peer.Version() >= eth.ETH71 {
+				if peer.Version() >= eth.ETH72 {
 					if tx.BlobTxSidecar() != nil && len(tx.BlobTxSidecar().Blobs) != 0 {
-						return fmt.Errorf("not allowed to respond with full-blob transaction under eth71")
+						return fmt.Errorf("not allowed to respond with full-blob transaction under eth72")
 					}
 				} else {
 					if tx.BlobTxSidecar() == nil {

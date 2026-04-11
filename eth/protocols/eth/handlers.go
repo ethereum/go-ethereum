@@ -523,7 +523,7 @@ func handleGetPooledTransactions(backend Backend, msg Decoder, peer *Peer) error
 	if err := msg.Decode(&query); err != nil {
 		return err
 	}
-	hashes, txs := answerGetPooledTransactions(backend, query.GetPooledTransactionsRequest, peer.version < ETH71)
+	hashes, txs := answerGetPooledTransactions(backend, query.GetPooledTransactionsRequest, peer.version < ETH72)
 	return peer.ReplyPooledTransactionsRLP(query.RequestId, hashes, txs)
 }
 

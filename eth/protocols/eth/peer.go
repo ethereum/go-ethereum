@@ -172,7 +172,7 @@ func (p *Peer) AsyncSendTransactions(hashes []common.Hash) {
 func (p *Peer) sendPooledTransactionHashes(hashes []common.Hash, types []byte, sizes []uint32, cells types.CustodyBitmap) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	p.knownTxs.Add(hashes...)
-	if p.version >= ETH71 {
+	if p.version >= ETH72 {
 		return p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket71{Types: types, Sizes: sizes, Hashes: hashes, Mask: cells})
 	}
 	return p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket70{Types: types, Sizes: sizes, Hashes: hashes})

@@ -67,7 +67,7 @@ func NewBlobBuffer(addToPool func(*PooledBlobTx) error, dropPeer func(string)) *
 	}
 }
 
-// AddTx buffers a blob transaction (without blobs) from an ETH/71 peer.
+// AddTx buffers a blob transaction (without blobs) from an ETH/72 peer.
 // If cells are already buffered, verification and pool insertion are attempted.
 func (b *BlobBuffer) AddTx(tx *types.Transaction, peer string) error {
 	b.evict()

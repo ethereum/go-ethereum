@@ -133,7 +133,7 @@ func (p *Peer) announceTransactions() {
 					}
 					pending = append(pending, queue[count])
 					pendingTypes = append(pendingTypes, meta.Type)
-					if p.version >= ETH71 && meta.SizeWithoutBlob > 0 {
+					if p.version >= ETH72 && meta.SizeWithoutBlob > 0 {
 						pendingSizes = append(pendingSizes, uint32(meta.SizeWithoutBlob))
 					} else {
 						pendingSizes = append(pendingSizes, uint32(meta.Size))

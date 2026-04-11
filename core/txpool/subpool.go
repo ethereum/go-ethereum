@@ -88,7 +88,7 @@ type PendingFilter struct {
 type TxMetadata struct {
 	Type            uint8  // The type of the transaction
 	Size            uint64 // The length of the 'rlp encoding' of a transaction (including blobs)
-	SizeWithoutBlob uint64 // The length without blob data (for ETH/71 announcements)
+	SizeWithoutBlob uint64 // The length without blob data (for ETH/72 announcements)
 }
 
 // SubPool represents a specialized transaction pool that lives on its own (e.g.
@@ -133,7 +133,7 @@ type SubPool interface {
 	Get(hash common.Hash, includeBlob bool) *types.Transaction
 
 	// GetRLP returns a RLP-encoded transaction if it is contained in the pool.
-	// If includeBlob is false, blob data is stripped from blob transactions (ETH/71).
+	// If includeBlob is false, blob data is stripped from blob transactions (ETH/72).
 	GetRLP(hash common.Hash, includeBlob bool) []byte
 
 	// GetMetadata returns the transaction type and transaction size with the

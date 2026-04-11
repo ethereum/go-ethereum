@@ -194,7 +194,7 @@ var eth69 = map[uint64]msgHandler{
 	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
 }
 
-var eth71 = map[uint64]msgHandler{
+var eth72 = map[uint64]msgHandler{
 	TransactionsMsg:               handleTransactions,
 	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes71,
 	GetBlockHeadersMsg:            handleGetBlockHeaders,
@@ -227,8 +227,8 @@ func handleMessage(backend Backend, peer *Peer) error {
 	switch peer.version {
 	case ETH69:
 		handlers = eth69
-	case ETH71:
-		handlers = eth71
+	case ETH72:
+		handlers = eth72
 	default:
 		return fmt.Errorf("unknown eth protocol version: %v", peer.version)
 	}

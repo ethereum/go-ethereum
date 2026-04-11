@@ -200,12 +200,12 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	addTxs := func(peer string, txs []*types.Transaction) []error {
 		errs := make([]error, len(txs))
 		p := h.peers.peer(peer)
-		isETH71 := p != nil && p.Version() >= eth.ETH71
+		isETH72 := p != nil && p.Version() >= eth.ETH72
 
 		var poolTxs []*types.Transaction
 		var index []int
 		for i, tx := range txs {
-			if isETH71 && tx.Type() == types.BlobTxType {
+			if isETH72 && tx.Type() == types.BlobTxType {
 				errs[i] = h.blobBuffer.AddTx(tx, peer)
 			} else {
 				poolTxs = append(poolTxs, tx)

@@ -130,7 +130,7 @@ type blobTxMeta struct {
 	id              uint64 // Storage ID in the pool's persistent store
 	storageSize     uint32 // Byte size in the pool's persistent store
 	size            uint64 // RLP-encoded size of transaction including the attached blob
-	sizeWithoutBlob uint64 // RLP-encoded size of transaction without blob data (for ETH/71)
+	sizeWithoutBlob uint64 // RLP-encoded size of transaction without blob data (for ETH/72)
 
 	custody *types.CustodyBitmap
 
@@ -1500,7 +1500,7 @@ func (p *BlobPool) getRLP(hash common.Hash) []byte {
 //   - (1) Store them separately on disk, tracking both IDs.
 //   - (2) Keep transactions in memory and store cells on disk.
 //
-// However, this approach does not fit well with eth71 peers, since blobs
+// However, this approach does not fit well with eth72 peers, since blobs
 // must be included in that case. It may require decoding and re-encoding,
 // as well as double disk I/O each time.
 func (p *BlobPool) Get(hash common.Hash, includeBlob bool) *types.Transaction {

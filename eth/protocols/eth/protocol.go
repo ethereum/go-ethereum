@@ -31,7 +31,7 @@ import (
 // Constants to match up protocol versions and messages
 const (
 	ETH69 = 69
-	ETH71 = 71
+	ETH72 = 72
 )
 
 // ProtocolName is the official short name of the `eth` protocol used during
@@ -40,11 +40,11 @@ const ProtocolName = "eth"
 
 // ProtocolVersions are the supported versions of the `eth` protocol (first
 // is primary).
-var ProtocolVersions = []uint{ETH71, ETH69}
+var ProtocolVersions = []uint{ETH72, ETH69}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH69: 18, ETH71: 20}
+var protocolLengths = map[uint]uint64{ETH69: 18, ETH72: 20}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
@@ -241,7 +241,7 @@ type NewPooledTransactionHashesPacket70 struct {
 	Hashes []common.Hash
 }
 
-// NewPooledTransactionHashesPacket71 represents a transaction announcement packet on eth/71
+// NewPooledTransactionHashesPacket71 represents a transaction announcement packet on ETH/72
 // with an additional custody bitmap field for cell-based blob data availability.
 type NewPooledTransactionHashesPacket71 struct {
 	Types  []byte
