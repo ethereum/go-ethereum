@@ -110,10 +110,13 @@ func TestNotifyReceived(t *testing.T) {
 	txs := []*types.Transaction{makeTx(1), makeTx(2), makeTx(3)}
 	tr.NotifyAccepted("peerA", hashTxs(txs))
 
-	// No chain events yet — stats should be empty.
+	// No chain events yet — peer entry exists but with zero stats.
 	stats := tr.GetAllPeerStats()
-	if len(stats) != 0 {
-		t.Fatalf("expected empty stats before any chain events, got %d peers", len(stats))
+	if stats["peerA"].Finalized != 0 {
+		t.Fatalf("expected zero Finalized before chain events, got %d", stats["peerA"].Finalized)
+	}
+	if stats["peerA"].RecentIncluded != 0 {
+		t.Fatalf("expected zero RecentIncluded before chain events, got %f", stats["peerA"].RecentIncluded)
 	}
 }
 
