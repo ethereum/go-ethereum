@@ -131,6 +131,10 @@ func (t *Tracker) NotifyAccepted(peer string, hashes []common.Hash) {
 		t.txs[hash] = peer
 		t.order = append(t.order, hash)
 	}
+	// Ensure the delivering peer has a stats entry.
+	if len(hashes) > 0 && t.peers[peer] == nil {
+		t.peers[peer] = &peerStats{}
+	}
 	// Evict oldest entries if over capacity.
 	for len(t.txs) > maxTracked {
 		oldest := t.order[0]
@@ -192,12 +196,9 @@ func (t *Tracker) handleChainHead(ev core.ChainHeadEvent) {
 			blockIncl[peer]++
 		}
 	}
-	// Ensure peers with inclusions in this block have entries.
-	for peer := range blockIncl {
-		if t.peers[peer] == nil {
-			t.peers[peer] = &peerStats{}
-		}
-	}
+	// Only credit peers that are still tracked (not disconnected).
+	// Don't create entries for unknown peers — they may have been
+	// removed by NotifyPeerDrop and should not be resurrected.
 	// Update EMA for all tracked peers (decay inactive ones).
 	for peer, ps := range t.peers {
 		ps.recentIncluded = (1-emaAlpha)*ps.recentIncluded + emaAlpha*float64(blockIncl[peer])
@@ -231,8 +232,7 @@ func (t *Tracker) checkFinalization() {
 			}
 			ps := t.peers[peer]
 			if ps == nil {
-				ps = &peerStats{}
-				t.peers[peer] = ps
+				continue // peer disconnected, skip credit
 			}
 			ps.finalized++
 			credited++
