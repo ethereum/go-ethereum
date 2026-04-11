@@ -180,11 +180,11 @@ type TxFetcher struct {
 	alternates map[common.Hash]map[string]struct{} // In-flight transaction alternate origins if retrieval fails
 
 	// Callbacks
-	validateMeta func(common.Hash, byte) error      // Validate a tx metadata based on the local txpool
-	addTxs       func([]*types.Transaction) []error          // Insert a batch of transactions into local txpool
-	fetchTxs     func(string, []common.Hash) error           // Retrieves a set of txs from a remote peer
-	dropPeer     func(string)                                // Drops a peer in case of announcement violation
-	onAccepted   func(peer string, hashes []common.Hash)     // Optional: notified with accepted tx hashes per peer
+	validateMeta func(common.Hash, byte) error           // Validate a tx metadata based on the local txpool
+	addTxs       func([]*types.Transaction) []error      // Insert a batch of transactions into local txpool
+	fetchTxs     func(string, []common.Hash) error       // Retrieves a set of txs from a remote peer
+	dropPeer     func(string)                            // Drops a peer in case of announcement violation
+	onAccepted   func(peer string, hashes []common.Hash) // Optional: notified with accepted tx hashes per peer
 
 	step     chan struct{}    // Notification channel when the fetcher loop iterates
 	clock    mclock.Clock     // Monotonic clock or simulated clock for tests
