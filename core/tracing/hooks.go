@@ -167,6 +167,8 @@ type (
 	// GasChangeHook is invoked when the gas changes.
 	GasChangeHook = func(old, new uint64, reason GasChangeReason)
 
+	// TODO(sina, rjl), please add GasChangeV2Hook by landing the multi-dimensional gas
+
 	/*
 		- Chain events -
 	*/

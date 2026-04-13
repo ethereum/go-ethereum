@@ -55,7 +55,7 @@ func TestLoopInterrupt(t *testing.T) {
 		timeout := make(chan bool)
 
 		go func(evm *EVM) {
-			_, _, err := evm.Call(common.Address{}, address, nil, math.MaxUint64, new(uint256.Int))
+			_, _, err := evm.Call(common.Address{}, address, nil, NewGasBudget(math.MaxUint64), new(uint256.Int))
 			errChannel <- err
 		}(evm)
 
@@ -85,7 +85,7 @@ func BenchmarkInterpreter(b *testing.B) {
 		value             = uint256.NewInt(0)
 		stack             = newstack()
 		mem               = NewMemory()
-		contract          = NewContract(common.Address{}, common.Address{}, value, startGas, nil)
+		contract          = NewContract(common.Address{}, common.Address{}, value, NewGasBudget(startGas), nil)
 	)
 	stack.push(uint256.NewInt(123))
 	stack.push(uint256.NewInt(123))

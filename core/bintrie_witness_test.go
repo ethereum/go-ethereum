@@ -97,11 +97,11 @@ func TestProcessVerkle(t *testing.T) {
 
 	txCost1 := params.TxGas
 	txCost2 := params.TxGas
-	contractCreationCost := intrinsicContractCreationGas +
+	contractCreationCost := intrinsicContractCreationGas.RegularGas +
 		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + /* creation */
 		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* creation with value */
 		739 /* execution costs */
-	codeWithExtCodeCopyGas := intrinsicCodeWithExtCodeCopyGas +
+	codeWithExtCodeCopyGas := intrinsicCodeWithExtCodeCopyGas.RegularGas +
 		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + /* creation (tx) */
 		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + /* creation (CREATE at pc=0x20) */
 		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* write code hash */

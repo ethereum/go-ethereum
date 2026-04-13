@@ -42,12 +42,12 @@ type Contract struct {
 	IsDeployment bool
 	IsSystemCall bool
 
-	Gas   GasCosts
+	Gas   GasBudget
 	value *uint256.Int
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
-func NewContract(caller common.Address, address common.Address, value *uint256.Int, gas uint64, jumpDests JumpDestCache) *Contract {
+func NewContract(caller common.Address, address common.Address, value *uint256.Int, gas GasBudget, jumpDests JumpDestCache) *Contract {
 	// Initialize the jump analysis cache if it's nil, mostly for tests
 	if jumpDests == nil {
 		jumpDests = newMapJumpDests()
@@ -56,7 +56,7 @@ func NewContract(caller common.Address, address common.Address, value *uint256.I
 		caller:    caller,
 		address:   address,
 		jumpDests: jumpDests,
-		Gas:       GasCosts{RegularGas: gas},
+		Gas:       gas,
 		value:     value,
 	}
 }
@@ -126,26 +126,26 @@ func (c *Contract) Caller() common.Address {
 }
 
 // UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
-	if c.Gas.RegularGas < gas {
+func (c *Contract) UseGas(cost GasCosts, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
+	prior, ok := c.Gas.Charge(cost)
+	if !ok {
 		return false
 	}
 	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
-		logger.OnGasChange(c.Gas.RegularGas, c.Gas.RegularGas-gas, reason)
+		logger.OnGasChange(prior, c.Gas.RegularGas, reason)
 	}
-	c.Gas.RegularGas -= gas
 	return true
 }
 
-// RefundGas refunds gas to the contract
-func (c *Contract) RefundGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) {
-	if gas == 0 {
+// RefundGas refunds the leftover gas budget back to the contract.
+func (c *Contract) RefundGas(refund GasBudget, logger *tracing.Hooks, reason tracing.GasChangeReason) {
+	prior, changed := c.Gas.Refund(refund)
+	if !changed {
 		return
 	}
 	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
-		logger.OnGasChange(c.Gas.RegularGas, c.Gas.RegularGas+gas, reason)
+		logger.OnGasChange(prior, c.Gas.RegularGas, reason)
 	}
-	c.Gas.RegularGas += gas
 }
 
 // Address returns the contracts address
