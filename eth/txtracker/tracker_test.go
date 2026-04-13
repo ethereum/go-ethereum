@@ -30,15 +30,24 @@ import (
 )
 
 // mockChain implements the Chain interface for testing.
+//
+// Blocks are stored by hash to exercise the reorg-safe lookup path in
+// tracker.handleChainHead (which calls GetBlock(hash, number)). A separate
+// canonicalByNum index maps each height to its canonical block hash, used
+// by GetBlockByNumber (the finalization path).
 type mockChain struct {
-	mu       sync.Mutex
-	headFeed event.Feed
-	blocks   map[uint64]*types.Block
-	finalNum uint64
+	mu             sync.Mutex
+	headFeed       event.Feed
+	blocksByHash   map[common.Hash]*types.Block
+	canonicalByNum map[uint64]common.Hash
+	finalNum       uint64
 }
 
 func newMockChain() *mockChain {
-	return &mockChain{blocks: make(map[uint64]*types.Block)}
+	return &mockChain{
+		blocksByHash:   make(map[common.Hash]*types.Block),
+		canonicalByNum: make(map[uint64]common.Hash),
+	}
 }
 
 func (c *mockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
@@ -48,12 +57,17 @@ func (c *mockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event
 func (c *mockChain) GetBlockByNumber(number uint64) *types.Block {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.blocks[number]
+	hash, ok := c.canonicalByNum[number]
+	if !ok {
+		return nil
+	}
+	return c.blocksByHash[hash]
 }
 
 func (c *mockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
-	// In tests we only key by number; ignore hash.
-	return c.GetBlockByNumber(number)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.blocksByHash[hash]
 }
 
 func (c *mockChain) CurrentFinalBlock() *types.Header {
@@ -65,11 +79,30 @@ func (c *mockChain) CurrentFinalBlock() *types.Header {
 	return &types.Header{Number: new(big.Int).SetUint64(c.finalNum)}
 }
 
-func (c *mockChain) addBlock(num uint64, txs []*types.Transaction) {
+// addBlock adds a canonical block at the given height. Overwrites any
+// prior canonical block at that height.
+func (c *mockChain) addBlock(num uint64, txs []*types.Transaction) *types.Block {
+	return c.addBlockAtHeight(num, num, txs, true)
+}
+
+// addBlockAtHeight adds a block at the given height. The salt parameter
+// ensures distinct block hashes for two blocks at the same height (used
+// for reorg tests). If canonical is true, the block becomes the canonical
+// block for that height (looked up by GetBlockByNumber).
+func (c *mockChain) addBlockAtHeight(num, salt uint64, txs []*types.Transaction, canonical bool) *types.Block {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	header := &types.Header{Number: new(big.Int).SetUint64(num)}
-	c.blocks[num] = types.NewBlock(header, &types.Body{Transactions: txs}, nil, trie.NewListHasher())
+	// Mix salt into Extra so siblings at the same height get distinct hashes.
+	header := &types.Header{
+		Number: new(big.Int).SetUint64(num),
+		Extra:  big.NewInt(int64(salt)).Bytes(),
+	}
+	block := types.NewBlock(header, &types.Body{Transactions: txs}, nil, trie.NewListHasher())
+	c.blocksByHash[block.Hash()] = block
+	if canonical {
+		c.canonicalByNum[num] = block.Hash()
+	}
+	return block
 }
 
 func (c *mockChain) setFinalBlock(num uint64) {
@@ -78,10 +111,24 @@ func (c *mockChain) setFinalBlock(num uint64) {
 	c.finalNum = num
 }
 
+// sendHead emits a chain head event for the canonical block at the given
+// height. The emitted header carries the real block's hash so the
+// tracker's GetBlock(hash, number) lookup resolves correctly.
 func (c *mockChain) sendHead(num uint64) {
-	c.headFeed.Send(core.ChainHeadEvent{
-		Header: &types.Header{Number: new(big.Int).SetUint64(num)},
-	})
+	c.mu.Lock()
+	hash := c.canonicalByNum[num]
+	block := c.blocksByHash[hash]
+	c.mu.Unlock()
+	if block == nil {
+		panic("sendHead: no canonical block at height")
+	}
+	c.headFeed.Send(core.ChainHeadEvent{Header: block.Header()})
+}
+
+// sendHeadBlock emits a chain head event for the given block (may be
+// non-canonical). Used for reorg tests.
+func (c *mockChain) sendHeadBlock(block *types.Block) {
+	c.headFeed.Send(core.ChainHeadEvent{Header: block.Header()})
 }
 
 func hashTxs(txs []*types.Transaction) []common.Hash {
@@ -322,5 +369,47 @@ func TestEMADecay(t *testing.T) {
 	stats := tr.GetAllPeerStats()
 	if stats["peerA"].RecentIncluded > 0.02 {
 		t.Fatalf("expected RecentIncluded near zero after 30 empty blocks, got %f", stats["peerA"].RecentIncluded)
+	}
+}
+
+// TestReorgSafety verifies that handleChainHead resolves the head block by
+// HASH (not just by number), so a head event announcing a sibling block at
+// the same height does not credit transactions from the canonical block.
+//
+// Regression check: if the tracker were changed to use GetBlockByNumber,
+// it would always fetch the canonical block A and credit peerA even when
+// the head points to sibling B.
+func TestReorgSafety(t *testing.T) {
+	tr := New()
+	chain := newMockChain()
+	tr.Start(chain)
+	defer tr.Stop()
+
+	tx := makeTx(1)
+	tr.NotifyAccepted("peerA", []common.Hash{tx.Hash()})
+
+	// Two blocks at height 1: canonical A contains tx; sibling B does not.
+	blockA := chain.addBlockAtHeight(1, 1, []*types.Transaction{tx}, true)
+	blockB := chain.addBlockAtHeight(1, 2, nil, false)
+	if blockA.Hash() == blockB.Hash() {
+		t.Fatal("sibling blocks ended up with the same hash")
+	}
+
+	// Head announces sibling B. A hash-aware tracker fetches B, sees no
+	// peerA txs, and leaves the EMA at zero. A number-only tracker would
+	// instead fetch A and credit peerA.
+	chain.sendHeadBlock(blockB)
+	waitStep(t, tr)
+
+	if got := tr.GetAllPeerStats()["peerA"].RecentIncluded; got != 0 {
+		t.Fatalf("expected RecentIncluded=0 after sibling-B head event, got %f (tracker followed the wrong block)", got)
+	}
+
+	// Now announce canonical A; peerA should be credited.
+	chain.sendHeadBlock(blockA)
+	waitStep(t, tr)
+
+	if got := tr.GetAllPeerStats()["peerA"].RecentIncluded; got <= 0 {
+		t.Fatalf("expected RecentIncluded>0 after canonical-A head event, got %f", got)
 	}
 }
