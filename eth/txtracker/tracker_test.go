@@ -454,3 +454,105 @@ func TestRecentFinalizedDecays(t *testing.T) {
 		t.Fatalf("expected RecentFinalized to decay, got %f >= peak %f", after, peak)
 	}
 }
+
+// TestRequestLatencyFirstSampleBootstrap asserts that the first latency
+// sample seeds the EMA directly (no slow ramp-up from zero), and that the
+// sample counter starts at 1.
+func TestRequestLatencyFirstSampleBootstrap(t *testing.T) {
+	tr := New()
+	tr.NotifyRequestLatency("peerA", 200*time.Millisecond)
+
+	stats := tr.GetAllPeerStats()
+	ps := stats["peerA"]
+	if ps.RequestLatencyEMA != 200*time.Millisecond {
+		t.Fatalf("expected first sample to seed EMA at 200ms, got %v", ps.RequestLatencyEMA)
+	}
+	if ps.RequestSamples != 1 {
+		t.Fatalf("expected RequestSamples=1, got %d", ps.RequestSamples)
+	}
+}
+
+// TestRequestLatencyEMAUpdate verifies the EMA formula (1-α)·old + α·new.
+func TestRequestLatencyEMAUpdate(t *testing.T) {
+	tr := New()
+	tr.NotifyRequestLatency("peerA", 100*time.Millisecond)
+	tr.NotifyRequestLatency("peerA", 1000*time.Millisecond)
+
+	// Expected: 0.99*100ms + 0.01*1000ms = 109ms
+	got := tr.GetAllPeerStats()["peerA"].RequestLatencyEMA
+	want := 109 * time.Millisecond
+	delta := got - want
+	if delta < 0 {
+		delta = -delta
+	}
+	if delta > 1*time.Microsecond {
+		t.Fatalf("EMA mismatch: got %v, want %v (delta %v)", got, want, delta)
+	}
+	if samples := tr.GetAllPeerStats()["peerA"].RequestSamples; samples != 2 {
+		t.Fatalf("expected RequestSamples=2, got %d", samples)
+	}
+}
+
+// TestRequestLatencySlowEMAConvergence verifies that the slow alpha
+// requires many samples to noticeably shift the EMA. Starting at 100ms
+// and feeding 5s (timeout) samples, the EMA should still be well below
+// 1s after 50 samples.
+func TestRequestLatencySlowEMAConvergence(t *testing.T) {
+	tr := New()
+	tr.NotifyRequestLatency("peerA", 100*time.Millisecond)
+	for i := 0; i < 50; i++ {
+		tr.NotifyRequestLatency("peerA", 5*time.Second)
+	}
+	got := tr.GetAllPeerStats()["peerA"].RequestLatencyEMA
+	if got < 1*time.Second {
+		// Expected ≈ (0.99)^50 * 100ms + (1-(0.99)^50) * 5s ≈ 1.99s
+		// The lower bound proves a meaningful shift; the upper bound (below)
+		// proves the slow alpha damped the convergence.
+		t.Fatalf("EMA did not move enough under sustained timeouts, got %v", got)
+	}
+	if got > 3*time.Second {
+		t.Fatalf("EMA converged too fast for slow alpha=0.01, got %v", got)
+	}
+}
+
+// TestRequestLatencyMultiplePeersIsolated verifies per-peer isolation: a
+// sample for peerA does not affect peerB's stats.
+func TestRequestLatencyMultiplePeersIsolated(t *testing.T) {
+	tr := New()
+	tr.NotifyRequestLatency("peerA", 100*time.Millisecond)
+	tr.NotifyRequestLatency("peerB", 5*time.Second)
+
+	stats := tr.GetAllPeerStats()
+	if stats["peerA"].RequestLatencyEMA != 100*time.Millisecond {
+		t.Errorf("peerA EMA: got %v, want 100ms", stats["peerA"].RequestLatencyEMA)
+	}
+	if stats["peerB"].RequestLatencyEMA != 5*time.Second {
+		t.Errorf("peerB EMA: got %v, want 5s", stats["peerB"].RequestLatencyEMA)
+	}
+	if stats["peerA"].RequestSamples != 1 || stats["peerB"].RequestSamples != 1 {
+		t.Errorf("expected RequestSamples=1 for each peer, got A=%d B=%d",
+			stats["peerA"].RequestSamples, stats["peerB"].RequestSamples)
+	}
+}
+
+// TestRequestLatencyPeerDropResetsStats verifies that NotifyPeerDrop
+// removes the peer's latency history along with its other stats.
+func TestRequestLatencyPeerDropResetsStats(t *testing.T) {
+	tr := New()
+	tr.NotifyRequestLatency("peerA", 200*time.Millisecond)
+	tr.NotifyPeerDrop("peerA")
+
+	if _, ok := tr.GetAllPeerStats()["peerA"]; ok {
+		t.Fatal("peerA stats should be removed after NotifyPeerDrop")
+	}
+
+	// A subsequent latency sample re-creates the entry as a fresh peer.
+	tr.NotifyRequestLatency("peerA", 50*time.Millisecond)
+	ps := tr.GetAllPeerStats()["peerA"]
+	if ps.RequestSamples != 1 {
+		t.Fatalf("expected RequestSamples=1 after re-add, got %d", ps.RequestSamples)
+	}
+	if ps.RequestLatencyEMA != 50*time.Millisecond {
+		t.Fatalf("expected fresh EMA bootstrap, got %v", ps.RequestLatencyEMA)
+	}
+}

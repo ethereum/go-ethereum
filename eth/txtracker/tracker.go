@@ -28,6 +28,7 @@ package txtracker
 
 import (
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -46,12 +47,22 @@ const (
 	// sustained contribution over long windows, not recent bursts.
 	// Half-life ≈ 6930 chain heads (~23 hours on 12s blocks).
 	finalizedEMAAlpha = 0.0001
+	// EMA smoothing factor for per-request latency average. Slow on purpose:
+	// short bursts shouldn't shift the score, sustained behavior should.
+	// Half-life ≈ ln(0.5)/ln(0.99) ≈ 69 samples.
+	latencyEMAAlpha = 0.01
+	// MinLatencySamples is the number of latency samples a peer must accumulate
+	// before its RequestLatencyEMA is considered meaningful for protection.
+	// Prevents a single lucky-fast reply from displacing established peers.
+	MinLatencySamples = 10
 )
 
-// PeerStats holds the per-peer inclusion data.
+// PeerStats holds the per-peer inclusion and responsiveness data.
 type PeerStats struct {
-	RecentFinalized float64 // EMA of per-block finalization credits (slow)
-	RecentIncluded  float64 // EMA of per-block inclusions (fast)
+	RecentFinalized   float64       // EMA of per-block finalization credits (slow)
+	RecentIncluded    float64       // EMA of per-block inclusions (fast)
+	RequestLatencyEMA time.Duration // Slow EMA of tx-request response latency (timeouts count as the timeout value)
+	RequestSamples    int64         // Number of latency samples seen for this peer
 }
 
 // Chain is the blockchain interface needed by the tracker.
@@ -63,8 +74,10 @@ type Chain interface {
 }
 
 type peerStats struct {
-	recentFinalized float64
-	recentIncluded  float64
+	recentFinalized   float64
+	recentIncluded    float64
+	requestLatencyEMA time.Duration
+	requestSamples    int64
 }
 
 // Tracker records which peer delivered each transaction and credits peers
@@ -155,6 +168,33 @@ func (t *Tracker) NotifyAccepted(peer string, hashes []common.Hash) {
 	}
 }
 
+// NotifyRequestLatency records a tx-request response latency sample for the
+// given peer. Timeouts should be reported as the timeout value (so they count
+// against the EMA rather than being silently omitted). The EMA uses a slow
+// alpha so isolated bursts don't shift the score appreciably.
+// Safe to call from any goroutine.
+func (t *Tracker) NotifyRequestLatency(peer string, latency time.Duration) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	ps := t.peers[peer]
+	if ps == nil {
+		ps = &peerStats{}
+		t.peers[peer] = ps
+	}
+	if ps.requestSamples == 0 {
+		// Bootstrap the EMA with the first sample so it doesn't drift up
+		// from zero over many samples before reaching realistic values.
+		ps.requestLatencyEMA = latency
+	} else {
+		ps.requestLatencyEMA = time.Duration(
+			float64(ps.requestLatencyEMA)*(1-latencyEMAAlpha) +
+				float64(latency)*latencyEMAAlpha,
+		)
+	}
+	ps.requestSamples++
+}
+
 // GetAllPeerStats returns a snapshot of per-peer inclusion statistics.
 // Safe to call from any goroutine.
 func (t *Tracker) GetAllPeerStats() map[string]PeerStats {
@@ -164,8 +204,10 @@ func (t *Tracker) GetAllPeerStats() map[string]PeerStats {
 	result := make(map[string]PeerStats, len(t.peers))
 	for id, ps := range t.peers {
 		result[id] = PeerStats{
-			RecentFinalized: ps.recentFinalized,
-			RecentIncluded:  ps.recentIncluded,
+			RecentFinalized:   ps.recentFinalized,
+			RecentIncluded:    ps.recentIncluded,
+			RequestLatencyEMA: ps.requestLatencyEMA,
+			RequestSamples:    ps.requestSamples,
 		}
 	}
 	return result
