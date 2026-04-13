@@ -75,6 +75,21 @@ type protectionCategory struct {
 var protectionCategories = []protectionCategory{
 	{"recent-finalized", func(s txtracker.PeerStats) float64 { return s.RecentFinalized }, inclusionProtectionFrac},
 	{"recent-included", func(s txtracker.PeerStats) float64 { return s.RecentIncluded }, inclusionProtectionFrac},
+	{"request-latency", func(s txtracker.PeerStats) float64 {
+		// Low-latency peers should rank higher. Peers with too few samples
+		// score 0 so the existing `score <= 0` filter excludes them — this
+		// prevents a single lucky-fast reply from winning protection. Peers
+		// whose EMA reaches the timeout also score 0 by this path because
+		// the reciprocal of a very large duration is tiny but positive; the
+		// per-pool top-N will still push faster peers ahead of them.
+		if s.RequestSamples < txtracker.MinLatencySamples {
+			return 0
+		}
+		if s.RequestLatencyEMA <= 0 {
+			return 0
+		}
+		return 1.0 / float64(s.RequestLatencyEMA)
+	}, inclusionProtectionFrac},
 }
 
 // dropper monitors the state of the peer pool and introduces churn by

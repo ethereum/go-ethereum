@@ -19,6 +19,7 @@ package eth
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/eth/txtracker"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -230,5 +231,110 @@ func TestProtectedByPoolPerPoolIndependence(t *testing.T) {
 	}
 	if len(protected) != 4 {
 		t.Fatalf("expected 4 protected peers (top-2 of each pool), got %d", len(protected))
+	}
+}
+
+// TestProtectedByPoolRequestLatencyBasic verifies the latency protection
+// category: with no competing inclusion stats, the lowest-latency peers
+// (among those with enough samples) win top-N protection.
+func TestProtectedByPoolRequestLatencyBasic(t *testing.T) {
+	dialed := makePeers(20) // frac=0.1 → n=2 per category
+	stats := make(map[string]txtracker.PeerStats)
+	// Three peers have enough samples; the two fastest should win.
+	stats[dialed[0].ID().String()] = txtracker.PeerStats{
+		RequestLatencyEMA: 50 * time.Millisecond,
+		RequestSamples:    50,
+	}
+	stats[dialed[1].ID().String()] = txtracker.PeerStats{
+		RequestLatencyEMA: 100 * time.Millisecond,
+		RequestSamples:    50,
+	}
+	stats[dialed[2].ID().String()] = txtracker.PeerStats{
+		RequestLatencyEMA: 2 * time.Second,
+		RequestSamples:    50,
+	}
+
+	protected := protectedPeersByPool(nil, dialed, stats)
+
+	if !protected[dialed[0]] {
+		t.Error("fastest peer should be protected")
+	}
+	if !protected[dialed[1]] {
+		t.Error("second-fastest peer should be protected")
+	}
+	if protected[dialed[2]] {
+		t.Error("slowest peer should not be in top-2")
+	}
+	if len(protected) != 2 {
+		t.Fatalf("expected top-2 latency protection, got %d", len(protected))
+	}
+}
+
+// TestProtectedByPoolRequestLatencyBootstrapGuard verifies that peers with
+// fewer than MinLatencySamples do not earn latency-based protection, even
+// if their few samples indicate very low latency.
+func TestProtectedByPoolRequestLatencyBootstrapGuard(t *testing.T) {
+	dialed := makePeers(20)
+	stats := make(map[string]txtracker.PeerStats)
+	// A lucky-fast peer with only 1 sample — must NOT be protected.
+	stats[dialed[0].ID().String()] = txtracker.PeerStats{
+		RequestLatencyEMA: 1 * time.Millisecond,
+		RequestSamples:    1,
+	}
+	// A warmed-up but slower peer — should be protected on latency.
+	stats[dialed[1].ID().String()] = txtracker.PeerStats{
+		RequestLatencyEMA: 500 * time.Millisecond,
+		RequestSamples:    txtracker.MinLatencySamples,
+	}
+
+	protected := protectedPeersByPool(nil, dialed, stats)
+
+	if protected[dialed[0]] {
+		t.Error("under-sampled peer should not be protected (bootstrap guard)")
+	}
+	if !protected[dialed[1]] {
+		t.Error("warmed-up peer should be protected")
+	}
+}
+
+// TestProtectedByPoolRequestLatencyPerPool verifies that the latency
+// category selects top-N per pool independently, consistent with the
+// other categories. An inbound peer with lower latency does not prevent
+// a dialed peer from being protected as top of the dialed pool.
+func TestProtectedByPoolRequestLatencyPerPool(t *testing.T) {
+	inbound := makePeers(20)
+	dialed := make([]*p2p.Peer, 20)
+	for i := range dialed {
+		id := enode.ID{byte(100 + i)}
+		dialed[i] = p2p.NewPeer(id, fmt.Sprintf("dialed%d", i), nil)
+	}
+	stats := make(map[string]txtracker.PeerStats)
+	// All inbound peers are very fast (50ms).
+	for _, p := range inbound {
+		stats[p.ID().String()] = txtracker.PeerStats{
+			RequestLatencyEMA: 50 * time.Millisecond,
+			RequestSamples:    50,
+		}
+	}
+	// Dialed peers are slower (1s) — globally they would all lose, but
+	// per-pool top-N should still protect two of them.
+	for _, p := range dialed {
+		stats[p.ID().String()] = txtracker.PeerStats{
+			RequestLatencyEMA: 1 * time.Second,
+			RequestSamples:    50,
+		}
+	}
+
+	protected := protectedPeersByPool(inbound, dialed, stats)
+
+	// 2 from inbound + 2 from dialed = 4.
+	var dialedProtected int
+	for _, p := range dialed {
+		if protected[p] {
+			dialedProtected++
+		}
+	}
+	if dialedProtected != 2 {
+		t.Fatalf("expected 2 dialed peers protected by per-pool top-N, got %d", dialedProtected)
 	}
 }
