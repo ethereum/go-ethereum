@@ -35,7 +35,7 @@ type (
 	// CanTransferFunc is the signature of a transfer guard function
 	CanTransferFunc func(StateDB, common.Address, *uint256.Int) bool
 	// TransferFunc is the signature of a transfer function
-	TransferFunc func(StateDB, common.Address, common.Address, *uint256.Int)
+	TransferFunc func(StateDB, common.Address, common.Address, *uint256.Int, *params.Rules)
 	// GetHashFunc returns the n'th block hash in the blockchain
 	// and is used by the BLOCKHASH EVM op code.
 	GetHashFunc func(uint64) common.Hash
@@ -283,8 +283,9 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	// Calling this is required even for zero-value transfers,
 	// to ensure the state clearing mechanism is applied.
 	if !syscall {
-		evm.Context.Transfer(evm.StateDB, caller, addr, value)
+		evm.Context.Transfer(evm.StateDB, caller, addr, value, &evm.chainRules)
 	}
+
 	if isPrecompile {
 		var stateDB StateDB
 		if evm.chainRules.IsAmsterdam {
@@ -302,7 +303,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			contract.IsSystemCall = isSystemCall(caller)
 			contract.SetCallCode(evm.resolveCodeHash(addr), code)
 			ret, err = evm.Run(contract, input, false)
-			gas = contract.Gas
+			gas = contract.Gas.RegularGas
 		}
 	}
 	// When an error was returned by the EVM or when setting the creation code
@@ -364,7 +365,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 		contract := NewContract(caller, caller, value, gas, evm.jumpDests)
 		contract.SetCallCode(evm.resolveCodeHash(addr), evm.resolveCode(addr))
 		ret, err = evm.Run(contract, input, false)
-		gas = contract.Gas
+		gas = contract.Gas.RegularGas
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
@@ -412,7 +413,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 		contract := NewContract(originCaller, caller, value, gas, evm.jumpDests)
 		contract.SetCallCode(evm.resolveCodeHash(addr), evm.resolveCode(addr))
 		ret, err = evm.Run(contract, input, false)
-		gas = contract.Gas
+		gas = contract.Gas.RegularGas
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
@@ -471,7 +472,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 		// above we revert to the snapshot and consume any gas remaining. Additionally
 		// when we're in Homestead this also counts for code storage gas errors.
 		ret, err = evm.Run(contract, input, true)
-		gas = contract.Gas
+		gas = contract.Gas.RegularGas
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
@@ -567,7 +568,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 		}
 		gas = gas - consumed
 	}
-	evm.Context.Transfer(evm.StateDB, caller, address, value)
+	evm.Context.Transfer(evm.StateDB, caller, address, value, &evm.chainRules)
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
@@ -582,10 +583,10 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
-			contract.UseGas(contract.Gas, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
+			contract.UseGas(contract.Gas.RegularGas, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
 		}
 	}
-	return ret, address, contract.Gas, err
+	return ret, address, contract.Gas.RegularGas, err
 }
 
 // initNewContract runs a new contract's creation code, performs checks on the
@@ -612,7 +613,7 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 			return ret, ErrCodeStoreOutOfGas
 		}
 	} else {
-		consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true, contract.Gas)
+		consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true, contract.Gas.RegularGas)
 		contract.UseGas(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
 		if len(ret) > 0 && (consumed < wanted) {
 			return ret, ErrCodeStoreOutOfGas

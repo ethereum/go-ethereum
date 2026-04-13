@@ -76,6 +76,7 @@ var (
 	errSelf             = errors.New("is self")
 	errAlreadyDialing   = errors.New("already dialing")
 	errAlreadyConnected = errors.New("already connected")
+	errPendingInbound   = errors.New("peer has pending inbound connection")
 	errRecentlyDialed   = errors.New("recently dialed")
 	errNetRestrict      = errors.New("not contained in netrestrict list")
 	errNoPort           = errors.New("node does not provide TCP port")
@@ -104,12 +105,15 @@ type dialScheduler struct {
 	remStaticCh   chan *enode.Node
 	addPeerCh     chan *conn
 	remPeerCh     chan *conn
+	addPendingCh  chan enode.ID
+	remPendingCh  chan enode.ID
 
 	// Everything below here belongs to loop and
 	// should only be accessed by code on the loop goroutine.
-	dialing   map[enode.ID]*dialTask // active tasks
-	peers     map[enode.ID]struct{}  // all connected peers
-	dialPeers int                    // current number of dialed peers
+	dialing        map[enode.ID]*dialTask // active tasks
+	peers          map[enode.ID]struct{}  // all connected peers
+	pendingInbound map[enode.ID]struct{}  // in-progress inbound connections
+	dialPeers      int                    // current number of dialed peers
 
 	// The static map tracks all static dial tasks. The subset of usable static dial tasks
 	// (i.e. those passing checkDial) is kept in staticPool. The scheduler prefers
@@ -163,19 +167,22 @@ func (cfg dialConfig) withDefaults() dialConfig {
 func newDialScheduler(config dialConfig, it enode.Iterator, setupFunc dialSetupFunc) *dialScheduler {
 	cfg := config.withDefaults()
 	d := &dialScheduler{
-		dialConfig:    cfg,
-		historyTimer:  mclock.NewAlarm(cfg.clock),
-		setupFunc:     setupFunc,
-		dnsLookupFunc: net.DefaultResolver.LookupNetIP,
-		dialing:       make(map[enode.ID]*dialTask),
-		static:        make(map[enode.ID]*dialTask),
-		peers:         make(map[enode.ID]struct{}),
-		doneCh:        make(chan *dialTask),
-		nodesIn:       make(chan *enode.Node),
-		addStaticCh:   make(chan *enode.Node),
-		remStaticCh:   make(chan *enode.Node),
-		addPeerCh:     make(chan *conn),
-		remPeerCh:     make(chan *conn),
+		dialConfig:     cfg,
+		historyTimer:   mclock.NewAlarm(cfg.clock),
+		setupFunc:      setupFunc,
+		dnsLookupFunc:  net.DefaultResolver.LookupNetIP,
+		dialing:        make(map[enode.ID]*dialTask),
+		static:         make(map[enode.ID]*dialTask),
+		peers:          make(map[enode.ID]struct{}),
+		pendingInbound: make(map[enode.ID]struct{}),
+		doneCh:         make(chan *dialTask),
+		nodesIn:        make(chan *enode.Node),
+		addStaticCh:    make(chan *enode.Node),
+		remStaticCh:    make(chan *enode.Node),
+		addPeerCh:      make(chan *conn),
+		remPeerCh:      make(chan *conn),
+		addPendingCh:   make(chan enode.ID),
+		remPendingCh:   make(chan enode.ID),
 	}
 	d.lastStatsLog = d.clock.Now()
 	d.ctx, d.cancel = context.WithCancel(context.Background())
@@ -219,6 +226,22 @@ func (d *dialScheduler) peerAdded(c *conn) {
 func (d *dialScheduler) peerRemoved(c *conn) {
 	select {
 	case d.remPeerCh <- c:
+	case <-d.ctx.Done():
+	}
+}
+
+// inboundPending notifies the scheduler about a pending inbound connection.
+func (d *dialScheduler) inboundPending(id enode.ID) {
+	select {
+	case d.addPendingCh <- id:
+	case <-d.ctx.Done():
+	}
+}
+
+// inboundCompleted notifies the scheduler that an inbound connection completed or failed.
+func (d *dialScheduler) inboundCompleted(id enode.ID) {
+	select {
+	case d.remPendingCh <- id:
 	case <-d.ctx.Done():
 	}
 }
@@ -275,6 +298,15 @@ loop:
 			}
 			delete(d.peers, c.node.ID())
 			d.updateStaticPool(c.node.ID())
+
+		case id := <-d.addPendingCh:
+			d.pendingInbound[id] = struct{}{}
+			d.log.Trace("Marked node as pending inbound", "id", id)
+
+		case id := <-d.remPendingCh:
+			delete(d.pendingInbound, id)
+			d.updateStaticPool(id)
+			d.log.Trace("Unmarked node as pending inbound", "id", id)
 
 		case node := <-d.addStaticCh:
 			id := node.ID()
@@ -389,6 +421,9 @@ func (d *dialScheduler) checkDial(n *enode.Node) error {
 	}
 	if _, ok := d.peers[n.ID()]; ok {
 		return errAlreadyConnected
+	}
+	if _, ok := d.pendingInbound[n.ID()]; ok {
+		return errPendingInbound
 	}
 	if d.netRestrict != nil && !d.netRestrict.ContainsAddr(n.IPAddr()) {
 		return errNetRestrict

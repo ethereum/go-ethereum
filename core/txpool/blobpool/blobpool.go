@@ -1865,11 +1865,11 @@ func (p *BlobPool) drop() {
 //
 // The transactions can also be pre-filtered by the dynamic fee components to
 // reduce allocations and load on downstream subsystems.
-func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
+func (p *BlobPool) Pending(filter txpool.PendingFilter) (map[common.Address][]*txpool.LazyTransaction, int) {
 	// If only plain transactions are requested, this pool is unsuitable as it
 	// contains none, don't even bother.
 	if !filter.BlobTxs {
-		return nil
+		return nil, 0
 	}
 	// Track the amount of time waiting to retrieve the list of pending blob txs
 	// from the pool and the amount of time actually spent on assembling the data.
@@ -1885,6 +1885,7 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*tx
 		pendtimeHist.Update(time.Since(execStart).Nanoseconds())
 	}()
 
+	var count int
 	pending := make(map[common.Address][]*txpool.LazyTransaction, len(p.index))
 	for addr, txs := range p.index {
 		lazies := make([]*txpool.LazyTransaction, 0, len(txs))
@@ -1930,9 +1931,10 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*tx
 		}
 		if len(lazies) > 0 {
 			pending[addr] = lazies
+			count += len(lazies)
 		}
 	}
-	return pending
+	return pending, count
 }
 
 // updateStorageMetrics retrieves a bunch of stats from the data store and pushes

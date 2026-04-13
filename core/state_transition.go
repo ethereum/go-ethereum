@@ -583,6 +583,11 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			st.evm.AccessEvents.AddAccount(st.evm.Context.Coinbase, true, math.MaxUint64)
 		}
 	}
+	if rules.IsAmsterdam {
+		for _, log := range st.evm.StateDB.LogsForBurnAccounts() {
+			st.evm.StateDB.AddLog(log)
+		}
+	}
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
 		MaxUsedGas: peakGasUsed,

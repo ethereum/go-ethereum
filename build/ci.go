@@ -108,16 +108,20 @@ var (
 			Env:  map[string]string{"GOMIPS": "softfloat", "CGO_ENABLED": "0"},
 		},
 		{
+			Name:   "womir",
+			GOOS:   "wasip1",
+			GOARCH: "wasm",
+			Tags:   "womir",
+		},
+		{
 			Name:   "wasm-js",
 			GOOS:   "js",
 			GOARCH: "wasm",
-			Tags:   "example",
 		},
 		{
 			Name:   "wasm-wasi",
 			GOOS:   "wasip1",
 			GOARCH: "wasm",
-			Tags:   "example",
 		},
 		{
 			Name: "example",
@@ -163,11 +167,11 @@ var (
 
 	// Distros for which packages are created
 	debDistros = []string{
-		"xenial",   // 16.04, EOL: 04/2026
-		"bionic",   // 18.04, EOL: 04/2028
-		"focal",    // 20.04, EOL: 04/2030
-		"jammy",    // 22.04, EOL: 04/2032
-		"noble",    // 24.04, EOL: 04/2034
+		"xenial", // 16.04, EOL: 04/2026
+		"bionic", // 18.04, EOL: 04/2028
+		"focal",  // 20.04, EOL: 04/2030
+		"jammy",  // 22.04, EOL: 04/2032
+		"noble",  // 24.04, EOL: 04/2034
 	}
 
 	// This is where the tests should be unpacked.
@@ -305,7 +309,7 @@ func doInstallKeeper(cmdline []string) {
 		args := slices.Clone(gobuild.Args)
 		args = append(args, "-o", executablePath(outputName))
 		args = append(args, ".")
-		build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env})
+		build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env, Dir: gobuild.Dir})
 	}
 }
 

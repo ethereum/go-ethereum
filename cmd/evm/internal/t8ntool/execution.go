@@ -365,10 +365,6 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		// Set requestsHash on block.
 		h := types.CalcRequestsHash(requests)
 		execRs.RequestsHash = &h
-		for i := range requests {
-			// remove prefix
-			requests[i] = requests[i][1:]
-		}
 		execRs.Requests = requests
 	}
 

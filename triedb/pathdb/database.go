@@ -215,14 +215,14 @@ func (db *Database) setHistoryIndexer() {
 		if db.stateIndexer != nil {
 			db.stateIndexer.close()
 		}
-		db.stateIndexer = newHistoryIndexer(db.diskdb, db.stateFreezer, db.tree.bottom().stateID(), typeStateHistory)
+		db.stateIndexer = newHistoryIndexer(db.diskdb, db.stateFreezer, db.tree.bottom().stateID(), typeStateHistory, db.config.NoHistoryIndexDelay)
 		log.Info("Enabled state history indexing")
 	}
 	if db.trienodeFreezer != nil {
 		if db.trienodeIndexer != nil {
 			db.trienodeIndexer.close()
 		}
-		db.trienodeIndexer = newHistoryIndexer(db.diskdb, db.trienodeFreezer, db.tree.bottom().stateID(), typeTrienodeHistory)
+		db.trienodeIndexer = newHistoryIndexer(db.diskdb, db.trienodeFreezer, db.tree.bottom().stateID(), typeTrienodeHistory, db.config.NoHistoryIndexDelay)
 		log.Info("Enabled trienode history indexing")
 	}
 }
@@ -626,11 +626,26 @@ func (db *Database) HistoryRange() (uint64, uint64, error) {
 
 // IndexProgress returns the indexing progress made so far. It provides the
 // number of states that remain unindexed.
-func (db *Database) IndexProgress() (uint64, error) {
-	if db.stateIndexer == nil {
-		return 0, nil
+func (db *Database) IndexProgress() (uint64, uint64, error) {
+	var (
+		stateProgress uint64
+		trieProgress  uint64
+	)
+	if db.stateIndexer != nil {
+		prog, err := db.stateIndexer.progress()
+		if err != nil {
+			return 0, 0, err
+		}
+		stateProgress = prog
 	}
-	return db.stateIndexer.progress()
+	if db.trienodeIndexer != nil {
+		prog, err := db.trienodeIndexer.progress()
+		if err != nil {
+			return 0, 0, err
+		}
+		trieProgress = prog
+	}
+	return stateProgress, trieProgress, nil
 }
 
 // AccountIterator creates a new account iterator for the specified root hash and

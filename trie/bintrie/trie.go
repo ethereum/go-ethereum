@@ -191,7 +191,7 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	case *InternalNode:
 		values, err = r.GetValuesAtStem(key[:StemSize], t.nodeResolver)
 	case *StemNode:
-		values = r.Values
+		values, err = r.GetValuesAtStem(key[:StemSize], t.nodeResolver)
 	case Empty:
 		return nil, nil
 	default:
@@ -216,10 +216,12 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 		return nil, nil
 	}
 
-	// If the account has been deleted, then values[10] will be 0 and not nil. If it has
-	// been recreated after that, then its code keccak will NOT be 0. So return `nil` if
-	// the nonce, and values[10], and code keccak is 0.
-	if bytes.Equal(values[BasicDataLeafKey], zero[:]) && len(values) > 10 && len(values[10]) > 0 && bytes.Equal(values[CodeHashLeafKey], zero[:]) {
+	// If the account has been deleted, BasicData and CodeHash will both be
+	// 32-byte zero blobs (not nil). If the account is recreated afterwards,
+	// UpdateAccount overwrites BasicData and CodeHash with non-zero values,
+	// so this branch won't activate..
+	if bytes.Equal(values[BasicDataLeafKey], zero[:]) &&
+		bytes.Equal(values[CodeHashLeafKey], zero[:]) {
 		return nil, nil
 	}
 
@@ -294,8 +296,22 @@ func (t *BinaryTrie) UpdateStorage(address common.Address, key, value []byte) er
 	return nil
 }
 
-// DeleteAccount is a no-op as it is disabled in stateless.
+// DeleteAccount erases an account by overwriting the account
+// descriptors with 0s.
 func (t *BinaryTrie) DeleteAccount(addr common.Address) error {
+	var (
+		values = make([][]byte, StemNodeWidth)
+		stem   = GetBinaryTreeKey(addr, zero[:])
+	)
+	// Clear BasicData (nonce, balance, code size) and CodeHash.
+	values[BasicDataLeafKey] = zero[:]
+	values[CodeHashLeafKey] = zero[:]
+
+	root, err := t.root.InsertValuesAtStem(stem, values, t.nodeResolver, 0)
+	if err != nil {
+		return fmt.Errorf("DeleteAccount (%x) error: %v", addr, err)
+	}
+	t.root = root
 	return nil
 }
 

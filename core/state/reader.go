@@ -98,7 +98,7 @@ func newFlatReader(reader database.StateReader) *flatReader {
 //
 // The returned account might be nil if it's not existent.
 func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
-	account, err := r.reader.Account(crypto.Keccak256Hash(addr.Bytes()))
+	account, err := r.reader.Account(crypto.Keccak256Hash(addr[:]))
 	if err != nil {
 		return nil, err
 	}
@@ -128,8 +128,8 @@ func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 //
 // The returned storage slot might be empty if it's not existent.
 func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
-	addrHash := crypto.Keccak256Hash(addr.Bytes())
-	slotHash := crypto.Keccak256Hash(key.Bytes())
+	addrHash := crypto.Keccak256Hash(addr[:])
+	slotHash := crypto.Keccak256Hash(key[:])
 	ret, err := r.reader.Storage(addrHash, slotHash)
 	if err != nil {
 		return common.Hash{}, err

@@ -105,9 +105,10 @@ type Config struct {
 	FullValueCheckpoint uint32 // The rate at which trie nodes are encoded in full-value format
 
 	// Testing configurations
-	SnapshotNoBuild   bool // Flag Whether the state generation is disabled
-	NoAsyncFlush      bool // Flag whether the background buffer flushing is disabled
-	NoAsyncGeneration bool // Flag whether the background generation is disabled
+	SnapshotNoBuild     bool // Flag Whether the state generation is disabled
+	NoAsyncFlush        bool // Flag whether the background buffer flushing is disabled
+	NoAsyncGeneration   bool // Flag whether the background generation is disabled
+	NoHistoryIndexDelay bool // Flag whether the history index delay is disabled
 }
 
 // sanitize checks the provided user configurations and changes anything that's

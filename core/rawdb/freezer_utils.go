@@ -26,13 +26,7 @@ func atomicRename(src, dest string) error {
 	if err := os.Rename(src, dest); err != nil {
 		return err
 	}
-	dir, err := os.Open(filepath.Dir(src))
-	if err != nil {
-		return err
-	}
-	defer dir.Close()
-
-	return dir.Sync()
+	return syncDir(filepath.Dir(src))
 }
 
 // copyFrom copies data from 'srcPath' at offset 'offset' into 'destPath'.
