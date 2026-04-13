@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2026 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -26,8 +26,6 @@ import (
 )
 
 // UBTDB is an implementation of Database interface for Universal Binary Tries.
-// It provides the same functionality as MPTDB but uses binary tries for state
-// storage instead of Merkle Patricia Tries.
 type UBTDB struct {
 	triedb *triedb.Database
 	codedb *CodeDB

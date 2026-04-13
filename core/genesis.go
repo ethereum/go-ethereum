@@ -136,8 +136,8 @@ func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
 	var config *triedb.Config
 	if isUBT {
 		config = &triedb.Config{
-			PathDB:   pathdb.Defaults,
-			IsUBT: true,
+			PathDB: pathdb.Defaults,
+			IsUBT:  true,
 		}
 	}
 	// Create an ephemeral in-memory database for computing hash,
@@ -276,10 +276,10 @@ func (e *GenesisMismatchError) Error() string {
 
 // ChainOverrides contains the changes to chain config.
 type ChainOverrides struct {
-	OverrideOsaka  *uint64
-	OverrideBPO1   *uint64
-	OverrideBPO2   *uint64
-	OverrideUBT *uint64
+	OverrideOsaka *uint64
+	OverrideBPO1  *uint64
+	OverrideBPO2  *uint64
+	OverrideUBT   *uint64
 }
 
 // apply applies the chain overrides on the supplied chain config.

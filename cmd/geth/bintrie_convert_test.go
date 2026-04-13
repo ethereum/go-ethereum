@@ -82,8 +82,8 @@ func TestBintrieConvert(t *testing.T) {
 	defer srcTriedb2.Close()
 
 	destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
-		IsUBT: true,
-		PathDB:   pathdb.Defaults,
+		IsUBT:  true,
+		PathDB: pathdb.Defaults,
 	})
 	defer destTriedb.Close()
 
@@ -190,8 +190,8 @@ func TestBintrieConvertDeleteSource(t *testing.T) {
 	})
 
 	destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
-		IsUBT: true,
-		PathDB:   pathdb.Defaults,
+		IsUBT:  true,
+		PathDB: pathdb.Defaults,
 	})
 
 	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb)

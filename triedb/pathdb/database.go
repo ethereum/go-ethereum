@@ -127,7 +127,7 @@ type Database struct {
 	// the shutdown to reject all following unexpected mutations.
 	readOnly bool       // Flag if database is opened in read only mode
 	waitSync bool       // Flag if database is deactivated due to initial state sync
-	isUBT bool       // Flag if database is used for verkle tree
+	isUBT    bool       // Flag if database is used for verkle tree
 	hasher   nodeHasher // Trie node hasher
 
 	config *Config        // Configuration for database
@@ -154,7 +154,7 @@ func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 
 	db := &Database{
 		readOnly: config.ReadOnly,
-		isUBT: isUBT,
+		isUBT:    isUBT,
 		config:   config,
 		diskdb:   diskdb,
 		hasher:   merkleNodeHasher,

@@ -285,9 +285,9 @@ func TestVerkleGenesisCommit(t *testing.T) {
 		CancunTime:              &verkleTime,
 		PragueTime:              &verkleTime,
 		OsakaTime:               &verkleTime,
-		UBTTime:              &verkleTime,
+		UBTTime:                 &verkleTime,
 		TerminalTotalDifficulty: big.NewInt(0),
-		EnableUBTAtGenesis:   true,
+		EnableUBTAtGenesis:      true,
 		Ethash:                  nil,
 		Clique:                  nil,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
@@ -320,8 +320,8 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	config.NoAsyncFlush = true
 
 	triedb := triedb.NewDatabase(db, &triedb.Config{
-		IsUBT: true,
-		PathDB:   &config,
+		IsUBT:  true,
+		PathDB: &config,
 	})
 	block := genesis.MustCommit(db, triedb)
 	if !bytes.Equal(block.Root().Bytes(), expected) {
