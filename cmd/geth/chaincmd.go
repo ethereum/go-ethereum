@@ -541,7 +541,6 @@ func importHistory(ctx *cli.Context) error {
 	if err := utils.ImportHistory(chain, db, dir, network, from); err != nil {
 		return err
 	}
-
 	fmt.Printf("Import done in %v\n", time.Since(start))
 	return nil
 }
