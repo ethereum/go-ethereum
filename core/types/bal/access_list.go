@@ -78,3 +78,18 @@ func (s *StateAccessList) Merge(other *StateAccessList) {
 		maps.Copy(slots, otherSlots)
 	}
 }
+
+func (s *StateAccessList) Eq(other StateAccessList) bool {
+	if len(s.list) != len(other.list) {
+		return false
+	}
+	for addr, accesses := range s.list {
+		if _, ok := other.list[addr]; !ok {
+			return false
+		}
+		if !maps.Equal(accesses, other.list[addr]) {
+			return false
+		}
+	}
+	return true
+}

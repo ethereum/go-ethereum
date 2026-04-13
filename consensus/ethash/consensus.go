@@ -22,6 +22,8 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core/types/bal"
+
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -504,9 +506,10 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 }
 
 // Finalize implements consensus.Engine, accumulating the block and uncle rewards.
-func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) {
+func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) (*bal.StateAccessList, *bal.StateMutations) {
 	// Accumulate any block and uncle rewards
 	accumulateRewards(chain.Config(), state, header, body.Uncles)
+	return nil, nil
 }
 
 // SealHash returns the hash of a block prior to it being sealed.

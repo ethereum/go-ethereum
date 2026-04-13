@@ -111,6 +111,25 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 	}
 
+	// block access list hash must be present in header after the Amsterdam hard fork
+	if v.config.IsAmsterdam(block.Number(), block.Time()) {
+		if block.Header().BlockAccessListHash == nil {
+			// TODO: verify that this check isn't also done elsewhere
+			return fmt.Errorf("block access list hash not set in header")
+		}
+		// if the block does not come with an access list, we compute the access list locally
+		// as part of execution and validate against the header's access list hash.
+		if block.AccessList() != nil {
+			if *block.Header().BlockAccessListHash != block.AccessList().Hash() {
+				return fmt.Errorf("access list hash mismatch.  local: %x. remote: %x\n", block.AccessList().Hash(), *block.Header().BlockAccessListHash)
+			} else if err := block.AccessList().Validate(len(block.Transactions()), block.GasLimit()); err != nil {
+				return fmt.Errorf("invalid block access list: %v", err)
+			}
+		}
+	} else if block.AccessList() != nil {
+		return fmt.Errorf("block had access list before amsterdam")
+	}
+
 	// Ancestor block must be known.
 	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
