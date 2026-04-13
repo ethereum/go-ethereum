@@ -100,7 +100,7 @@ func merkleNodeHasher(blob []byte) (common.Hash, error) {
 // binaryNodeHasher computes the hash of the given verkle node.
 func binaryNodeHasher(blob []byte) (common.Hash, error) {
 	if len(blob) == 0 {
-		return types.EmptyVerkleHash, nil
+		return types.EmptyBinaryHash, nil
 	}
 	n, err := bintrie.DeserializeNode(blob, 0)
 	if err != nil {
