@@ -279,7 +279,10 @@ func gasKeccak256(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 // expansion
 func pureMemoryGascost(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 	gas, err := memoryGasCost(mem, memorySize)
-	return GasCosts{RegularGas: gas}, err
+	if err != nil {
+		return GasCosts{}, err
+	}
+	return GasCosts{RegularGas: gas}, nil
 }
 
 var (
@@ -461,12 +464,18 @@ func gasCallCodeIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memor
 
 func gasDelegateCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 	gas, err := memoryGasCost(mem, memorySize)
-	return GasCosts{RegularGas: gas}, err
+	if err != nil {
+		return GasCosts{}, err
+	}
+	return GasCosts{RegularGas: gas}, nil
 }
 
 func gasStaticCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 	gas, err := memoryGasCost(mem, memorySize)
-	return GasCosts{RegularGas: gas}, err
+	if err != nil {
+		return GasCosts{}, err
+	}
+	return GasCosts{RegularGas: gas}, nil
 }
 
 func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
