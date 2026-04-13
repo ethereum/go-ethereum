@@ -277,7 +277,8 @@ func (f *BlobFetcher) loop() {
 						} else {
 							randomValue = f.rand.Intn(100)
 						}
-						if randomValue < fetchProbability {
+						// For eager mode, always fetch immediately
+						if randomValue < fetchProbability || f.custody.OneCount() >= kzg4844.DataPerBlob {
 							f.full[hash] = struct{}{}
 						} else {
 							f.partial[hash] = struct{}{}
