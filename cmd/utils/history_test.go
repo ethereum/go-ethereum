@@ -182,7 +182,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unable to initialize chain: %v", err)
 			}
-			if err := ImportHistory(imported, dir, "mainnet", tt.from); err != nil {
+			if err := ImportHistory(imported, db2, dir, "mainnet", tt.from); err != nil {
 				t.Fatalf("failed to import chain: %v", err)
 			}
 			if have, want := imported.CurrentHeader(), chain.CurrentHeader(); have.Hash() != want.Hash() {
