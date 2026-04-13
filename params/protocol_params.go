@@ -194,8 +194,7 @@ const (
 	StorageCreationSize       = 32
 	AuthorizationCreationSize = 23
 
-	// TODO: Add when EIP-7928 is implemented
-	// GasBlockAccessListItem = 2000 // EIP-7928: gas cost per BAL item for gas limit check
+	GasBlockAccessListItem = 2000 // EIP-7928: gas cost per BAL item for gas limit check
 )
 
 // Bls12381G1MultiExpDiscountTable is the gas discount table for BLS12-381 G1 multi exponentiation operation

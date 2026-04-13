@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/internal/testrand"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
@@ -36,9 +37,9 @@ func equalBALs(a *BlockAccessList, b *BlockAccessList) bool {
 	return true
 }
 
-func makeTestConstructionBAL() *ConstructionBlockAccessList {
-	return &ConstructionBlockAccessList{
-		map[common.Address]*ConstructionAccountAccess{
+func makeTestConstructionBAL() ConstructionBlockAccessList {
+	return ConstructionBlockAccessList{
+		list: map[common.Address]*ConstructionAccountAccesses{
 			common.BytesToAddress([]byte{0xff, 0xff}): {
 				StorageWrites: map[common.Hash]map[uint16]common.Hash{
 					common.BytesToHash([]byte{0x01}): {
@@ -60,18 +61,13 @@ func makeTestConstructionBAL() *ConstructionBlockAccessList {
 					1: 2,
 					2: 6,
 				},
-				CodeChange: map[uint16][]byte{
-					0: common.Hex2Bytes("deadbeef"),
-				},
+				CodeChanges: map[uint16][]byte{0: common.Hex2Bytes("deadbeef")},
 			},
 			common.BytesToAddress([]byte{0xff, 0xff, 0xff}): {
 				StorageWrites: map[common.Hash]map[uint16]common.Hash{
 					common.BytesToHash([]byte{0x01}): {
 						2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
 						3: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}),
-					},
-					common.BytesToHash([]byte{0x10}): {
-						21: common.BytesToHash([]byte{1, 2, 3, 4, 5}),
 					},
 				},
 				StorageReads: map[common.Hash]struct{}{
@@ -84,11 +80,9 @@ func makeTestConstructionBAL() *ConstructionBlockAccessList {
 				NonceChanges: map[uint16]uint64{
 					1: 2,
 				},
-				CodeChange: map[uint16][]byte{
-					0: common.Hex2Bytes("deadbeef"),
-				},
 			},
 		},
+		transactionCount: 1,
 	}
 }
 
@@ -104,10 +98,12 @@ func TestBALEncoding(t *testing.T) {
 	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 10000000)); err != nil {
 		t.Fatalf("decoding failed: %v\n", err)
 	}
-	if dec.Hash() != bal.toEncodingObj().Hash() {
+	if dec.Hash() != bal.ToEncodingObj().Hash() {
 		t.Fatalf("encoded block hash doesn't match decoded")
 	}
-	if !equalBALs(bal.toEncodingObj(), &dec) {
+
+	// TODO (jwasinger): we should have a fuzzer to expand on what this test case does.
+	if !equalBALs(bal.ToEncodingObj(), &dec) {
 		t.Fatal("decoded BAL doesn't match")
 	}
 }
@@ -115,18 +111,18 @@ func TestBALEncoding(t *testing.T) {
 func makeTestAccountAccess(sort bool) AccountAccess {
 	var (
 		storageWrites []encodingSlotWrites
-		storageReads  [][32]byte
+		storageReads  []common.Hash
 		balances      []encodingBalanceChange
 		nonces        []encodingAccountNonce
 	)
 	for i := 0; i < 5; i++ {
 		slot := encodingSlotWrites{
-			Slot: testrand.Hash(),
+			Slot: NewEncodedStorageFromHash(testrand.Hash()),
 		}
 		for j := 0; j < 3; j++ {
 			slot.Accesses = append(slot.Accesses, encodingStorageWrite{
-				TxIdx:      uint16(2 * j),
-				ValueAfter: testrand.Hash(),
+				TxIdx:      uint16(i*3 + j),
+				ValueAfter: NewEncodedStorageFromHash(testrand.Hash()),
 			})
 		}
 		if sort {
@@ -138,7 +134,7 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 	}
 	if sort {
 		slices.SortFunc(storageWrites, func(a, b encodingSlotWrites) int {
-			return bytes.Compare(a.Slot[:], b.Slot[:])
+			return bytes.Compare(a.Slot.inner.Bytes(), b.Slot.inner.Bytes())
 		})
 	}
 
@@ -146,15 +142,15 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 		storageReads = append(storageReads, testrand.Hash())
 	}
 	if sort {
-		slices.SortFunc(storageReads, func(a, b [32]byte) int {
+		slices.SortFunc(storageReads, func(a, b common.Hash) int {
 			return bytes.Compare(a[:], b[:])
 		})
 	}
 
 	for i := 0; i < 5; i++ {
 		balances = append(balances, encodingBalanceChange{
-			TxIdx:   uint16(2 * i),
-			Balance: [16]byte(testrand.Bytes(16)),
+			TxIdx:   uint16(i),
+			Balance: new(uint256.Int).SetBytes(testrand.Bytes(32)),
 		})
 	}
 	if sort {
@@ -165,7 +161,7 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 
 	for i := 0; i < 5; i++ {
 		nonces = append(nonces, encodingAccountNonce{
-			TxIdx: uint16(2 * i),
+			TxIdx: uint16(i),
 			Nonce: uint64(i + 100),
 		})
 	}
@@ -175,28 +171,32 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 		})
 	}
 
+	var encodedStorageReads []*EncodedStorage
+	for _, slot := range storageReads {
+		encodedStorageReads = append(encodedStorageReads, NewEncodedStorageFromHash(slot))
+	}
 	return AccountAccess{
 		Address:        [20]byte(testrand.Bytes(20)),
-		StorageWrites:  storageWrites,
-		StorageReads:   storageReads,
+		StorageChanges: storageWrites,
+		StorageReads:   encodedStorageReads,
 		BalanceChanges: balances,
 		NonceChanges:   nonces,
 		CodeChanges: []encodingCodeChange{
 			{
-				TxIndex: 100,
+				TxIndex: 3,
 				Code:    testrand.Bytes(256),
 			},
 		},
 	}
 }
 
-func makeTestBAL(sort bool) *BlockAccessList {
-	list := &BlockAccessList{}
+func makeTestBAL(sort bool) BlockAccessList {
+	list := BlockAccessList{}
 	for i := 0; i < 5; i++ {
-		list.Accesses = append(list.Accesses, makeTestAccountAccess(sort))
+		list = append(list, makeTestAccountAccess(sort))
 	}
 	if sort {
-		slices.SortFunc(list.Accesses, func(a, b AccountAccess) int {
+		slices.SortFunc(list, func(a, b AccountAccess) int {
 			return bytes.Compare(a.Address[:], b.Address[:])
 		})
 	}
@@ -208,28 +208,29 @@ func TestBlockAccessListCopy(t *testing.T) {
 	cpy := list.Copy()
 	cpyCpy := cpy.Copy()
 
-	if !reflect.DeepEqual(list, cpy) {
+	if !reflect.DeepEqual(list, *cpy) {
 		t.Fatal("block access mismatch")
 	}
-	if !reflect.DeepEqual(cpy, cpyCpy) {
+	if !reflect.DeepEqual(*cpy, *cpyCpy) {
 		t.Fatal("block access mismatch")
 	}
 
 	// Make sure the mutations on copy won't affect the origin
-	for _, aa := range cpyCpy.Accesses {
-		for i := 0; i < len(aa.StorageReads); i++ {
-			aa.StorageReads[i] = [32]byte(testrand.Bytes(32))
+	for i := range *cpyCpy {
+		for j := 0; j < len((*cpyCpy)[i].StorageReads); j++ {
+			(*cpyCpy)[i].StorageReads[j] = NewEncodedStorageFromHash(testrand.Hash())
 		}
 	}
-	if !reflect.DeepEqual(list, cpy) {
+	if !reflect.DeepEqual(list, *cpy) {
 		t.Fatal("block access mismatch")
 	}
 }
 
 func TestBlockAccessListValidation(t *testing.T) {
 	// Validate the block access list after RLP decoding
+	testBALMaxIndex := 20
 	enc := makeTestBAL(true)
-	if err := enc.Validate(); err != nil {
+	if err := enc.Validate(testBALMaxIndex, params.MaxGasLimit); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 	var buf bytes.Buffer
@@ -241,14 +242,17 @@ func TestBlockAccessListValidation(t *testing.T) {
 	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 0)); err != nil {
 		t.Fatalf("Unexpected RLP-decode error: %v", err)
 	}
-	if err := dec.Validate(); err != nil {
+	if err := dec.Validate(testBALMaxIndex, params.MaxGasLimit); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 
 	// Validate the derived block access list
 	cBAL := makeTestConstructionBAL()
-	listB := cBAL.toEncodingObj()
-	if err := listB.Validate(); err != nil {
+	listB := cBAL.ToEncodingObj()
+	if err := listB.Validate(testBALMaxIndex, params.MaxGasLimit); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 }
+
+// BALReader test ideas
+// * BAL which doesn't have any pre-tx system contracts should return an empty state diff at idx 0

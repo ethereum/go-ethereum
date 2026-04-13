@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core/types/bal"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -573,8 +575,9 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 
 // Finalize implements consensus.Engine. There is no post-transaction
 // consensus rules in clique, do nothing here.
-func (c *Clique) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) {
+func (c *Clique) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) (*bal.StateAccessList, *bal.StateMutations) {
 	// No block rewards in PoA, so the state remains as is
+	return nil, nil
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks

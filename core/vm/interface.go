@@ -98,5 +98,5 @@ type StateDB interface {
 	AccessEvents() *state.AccessEvents
 
 	// Finalise must be invoked at the end of a transaction
-	Finalise(bool) *bal.StateAccessList
+	Finalise(bool) (*bal.StateAccessList, *bal.StateMutations)
 }

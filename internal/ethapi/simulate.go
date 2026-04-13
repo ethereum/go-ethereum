@@ -256,6 +256,9 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]*simBlo
 }
 
 func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header, parent *types.Header, headers []*types.Header, timeout time.Duration) (*types.Block, []simCallResult, map[common.Hash]common.Address, error) {
+	if sim.chainConfig.IsAmsterdam(header.Number, header.Time) {
+		return nil, nil, nil, fmt.Errorf("eth simulate does not yet support Amsterdam")
+	}
 	// Set header fields that depend only on parent block.
 	// Parent hash is needed for evm.GetHashFn to work.
 	header.ParentHash = parent.Hash()
@@ -401,11 +404,11 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			return nil, nil, nil, err
 		}
 		// EIP-7002
-		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
+		if _, _, err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
 			return nil, nil, nil, err
 		}
 		// EIP-7251
-		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
+		if _, _, err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
 			return nil, nil, nil, err
 		}
 	}

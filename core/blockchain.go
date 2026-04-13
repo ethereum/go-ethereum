@@ -2112,11 +2112,12 @@ type ExecuteConfig struct {
 // it writes the block and associated state to database.
 func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, block *types.Block, config ExecuteConfig) (result *blockProcessingResult, blockEndErr error) {
 	var (
-		err       error
-		startTime = time.Now()
-		statedb   *state.StateDB
-		interrupt atomic.Bool
-		sdb       state.Database
+		err         error
+		startTime   = time.Now()
+		statedb     *state.StateDB
+		interrupt   atomic.Bool
+		sdb         state.Database
+		isAmsterdam = bc.chainConfig.IsAmsterdam(block.Number(), block.Time())
 	)
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
@@ -2239,6 +2240,37 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		return nil, err
 	}
 	vtime := time.Since(vstart)
+
+	if isAmsterdam {
+		computedAccessList := res.AccessList.ToEncodingObj()
+		computedAccessListHash := computedAccessList.Hash()
+
+		if *block.Header().BlockAccessListHash != computedAccessListHash {
+			err := fmt.Errorf("block header access list hash mismatch (remote =%x local=%x)", *block.Header().BlockAccessListHash, computedAccessListHash)
+			bc.reportBadBlock(block, res, err)
+			return nil, err
+		}
+		// note that we don't validate that the computed BAL's size aligns with the gas
+		// limit here because it should be impossible case if the parameters in 7928
+		// are tuned correctly.
+
+		if block.AccessList() == nil {
+			// attach the computed access list to the block so it gets persisted
+			// when the block is written to disk
+			block = block.WithAccessList(computedAccessList)
+		}
+		// Failing the access list max size validation should be impossible here
+		// better safe than sorry.
+		if err := computedAccessList.ValidateGasLimit(block.GasLimit()); err != nil {
+			err := fmt.Errorf("block access list validation failed: %v", err)
+			bc.reportBadBlock(block, res, err)
+			return nil, err
+		} else if block.AccessList().Hash() != computedAccessListHash {
+			err := fmt.Errorf("block access list hash mismatch (remote=%x computed=%x)", block.AccessList().Hash(), computedAccessListHash)
+			bc.reportBadBlock(block, res, err)
+			return nil, err
+		}
+	}
 
 	// If witnesses was generated and stateless self-validation requested, do
 	// that now. Self validation should *never* run in production, it's more of

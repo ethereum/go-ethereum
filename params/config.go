@@ -323,14 +323,16 @@ var (
 		CancunTime:              newUint64(0),
 		PragueTime:              newUint64(0),
 		OsakaTime:               newUint64(0),
+		AmsterdamTime:           newUint64(0),
 		UBTTime:                 nil,
 		TerminalTotalDifficulty: big.NewInt(0),
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
 		BlobScheduleConfig: &BlobScheduleConfig{
-			Cancun: DefaultCancunBlobConfig,
-			Prague: DefaultPragueBlobConfig,
-			Osaka:  DefaultOsakaBlobConfig,
+			Cancun:    DefaultCancunBlobConfig,
+			Prague:    DefaultPragueBlobConfig,
+			Osaka:     DefaultOsakaBlobConfig,
+			Amsterdam: DefaultOsakaBlobConfig,
 		},
 	}
 

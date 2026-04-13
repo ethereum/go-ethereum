@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/core/types/bal"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -51,6 +53,8 @@ type BlockGen struct {
 	withdrawals []*types.Withdrawal
 
 	engine consensus.Engine
+
+	accessList *bal.ConstructionBlockAccessList
 }
 
 // SetCoinbase sets the coinbase of the generated block.
@@ -117,11 +121,15 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 		evm          = vm.NewEVM(blockContext, b.statedb, b.cm.config, vmConfig)
 	)
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx)
+	txAccesses, txMut, receipt, err := ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx)
 	if err != nil {
 		panic(err)
 	}
 	b.header.GasUsed = b.gasPool.Used()
+	if b.accessList != nil {
+		b.accessList.AddTransactionMutations(txMut, len(b.txs))
+		b.accessList.AddAccesses(txAccesses)
+	}
 
 	// Merge the tx-local access event into the "block-local" one, in order to collect
 	// all values, so that the witness can be built.
@@ -325,16 +333,28 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 		if err := ParseDepositLogs(&requests, blockLogs, b.cm.config); err != nil {
 			panic(fmt.Sprintf("failed to parse deposit log: %v", err))
 		}
+		// TODO: these accesses should be accumulated in the BAL
 		// create EVM for system calls
 		blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
 		evm := vm.NewEVM(blockContext, statedb, b.cm.config, vm.Config{})
+
+		mut := new(bal.StateMutations)
 		// EIP-7002
-		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
+		withdrawalAccess, withdrawalMut, err := ProcessWithdrawalQueue(&requests, evm)
+		if err != nil {
 			panic(fmt.Sprintf("could not process withdrawal requests: %v", err))
 		}
+		mut.Merge(withdrawalMut)
 		// EIP-7251
-		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
+		consolidationAccess, consolidationMut, err := ProcessConsolidationQueue(&requests, evm)
+		if err != nil {
 			panic(fmt.Sprintf("could not process consolidation requests: %v", err))
+		}
+		mut.Merge(consolidationMut)
+		if b.cm.config.IsAmsterdam(b.header.Number, b.header.Time) {
+			b.accessList.AddAccesses(withdrawalAccess)
+			b.accessList.AddAccesses(consolidationAccess)
+			b.accessList.AddBlockFinalizeMutations(mut)
 		}
 	}
 	return requests
@@ -364,7 +384,10 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	genblock := func(i int, parent *types.Block, triedb *triedb.Database, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, cm: cm, parent: parent, statedb: statedb, engine: engine}
 		b.header = cm.makeHeader(parent, statedb, b.engine)
-
+		isAmsterdam := config.IsAmsterdam(b.header.Number, b.header.Time)
+		if isAmsterdam {
+			b.accessList = bal.NewConstructionBlockAccessList()
+		}
 		// Set the difficulty for clique block. The chain maker doesn't have access
 		// to a chain, so the difficulty will be left unset (nil). Set it here to the
 		// correct value.
@@ -391,13 +414,31 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			misc.ApplyDAOHardFork(statedb)
 		}
 
+		preTxMutations := bal.NewStateMutations()
 		if config.IsPrague(b.header.Number, b.header.Time) || config.IsUBT(b.header.Number, b.header.Time) {
 			// EIP-2935
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
 			blockContext.Random = &common.Hash{} // enable post-merge instruction set
 			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
-			ProcessParentBlockHash(b.header.ParentHash, evm)
+			accesses, mutations := ProcessParentBlockHash(b.header.ParentHash, evm)
+			if isAmsterdam {
+				preTxMutations.Merge(mutations)
+				b.accessList.AddAccesses(accesses)
+			}
+
+			beaconRoot := common.Hash{}
+			if b.header.ParentBeaconRoot != nil {
+				beaconRoot = *b.header.ParentBeaconRoot
+			}
+			reads, writes := ProcessBeaconBlockRoot(beaconRoot, evm)
+			if isAmsterdam {
+				preTxMutations.Merge(writes)
+				b.accessList.AddAccesses(reads)
+				b.accessList.AddBlockInitMutations(preTxMutations)
+			}
 		}
+
+		// TODO: what about the parent beacon root, and post-block system contract (forget what it is rn)?
 
 		// Execute any user modifications to the block
 		if gen != nil {
