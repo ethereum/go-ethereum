@@ -52,9 +52,14 @@ var (
 	droppedInbound = metrics.NewRegisteredMeter("eth/dropper/inbound", nil)
 	// droppedOutbound is the number of outbound peers dropped
 	droppedOutbound = metrics.NewRegisteredMeter("eth/dropper/outbound", nil)
-	// dropSkipped counts times a drop was skipped because all
-	// droppable candidates were protected by inclusion stats.
-	dropSkipped = metrics.NewRegisteredMeter("eth/dropper/protected", nil)
+	// dropSkipped counts times a drop was attempted but no peer was dropped,
+	// for any reason (pool has headroom, all candidates trusted/static/young,
+	// or protected by inclusion stats).
+	dropSkipped = metrics.NewRegisteredMeter("eth/dropper/skipped", nil)
+	// dropSkippedProtected counts the subset of skips caused specifically by
+	// inclusion-based peer protection: at least one otherwise-droppable peer
+	// was kept only because it was in the protected set.
+	dropSkippedProtected = metrics.NewRegisteredMeter("eth/dropper/skipped_protected", nil)
 )
 
 // PeerInclusionStats holds the per-peer inclusion data needed by the dropper
@@ -169,24 +174,33 @@ func (cm *dropper) dropRandomPeer() bool {
 	// inclusion protection.
 	if cm.maxDialPeers-numDialed > peerDropThreshold &&
 		cm.maxInboundPeers-numInbound > peerDropThreshold {
+		dropSkipped.Mark(1)
 		return false
 	}
 
 	// Compute the set of inclusion-protected peers before filtering.
 	protected := cm.protectedPeers(peers)
 
-	selectDoNotDrop := func(p *p2p.Peer) bool {
+	baseNotDrop := func(p *p2p.Peer) bool {
 		return p.Trusted() || p.StaticDialed() ||
 			p.Lifetime() < mclock.AbsTime(doNotDropBefore) ||
 			(p.DynDialed() && cm.maxDialPeers-numDialed > peerDropThreshold) ||
-			(p.Inbound() && cm.maxInboundPeers-numInbound > peerDropThreshold) ||
-			protected[p]
+			(p.Inbound() && cm.maxInboundPeers-numInbound > peerDropThreshold)
+	}
+	selectDoNotDrop := func(p *p2p.Peer) bool {
+		return baseNotDrop(p) || protected[p]
 	}
 
 	droppable := slices.DeleteFunc(peers, selectDoNotDrop)
 	if len(droppable) == 0 {
-		if len(protected) > 0 {
-			dropSkipped.Mark(1)
+		dropSkipped.Mark(1)
+		// If any protected peer would otherwise have been droppable,
+		// protection was the cause of the skip.
+		for p := range protected {
+			if !baseNotDrop(p) {
+				dropSkippedProtected.Mark(1)
+				break
+			}
 		}
 		return false
 	}
