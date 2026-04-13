@@ -113,15 +113,41 @@ func TestNotifyReceived(t *testing.T) {
 	defer tr.Stop()
 
 	txs := []*types.Transaction{makeTx(1), makeTx(2), makeTx(3)}
-	tr.NotifyAccepted("peerA", hashTxs(txs))
+	hashes := hashTxs(txs)
+	tr.NotifyAccepted("peerA", hashes)
 
-	// No chain events yet — peer entry exists but with zero stats.
+	// Public surface: peer entry was created with zero stats before any
+	// chain events. Map lookups would return a zero value for a missing
+	// key, so assert presence explicitly.
 	stats := tr.GetAllPeerStats()
-	if stats["peerA"].Finalized != 0 {
-		t.Fatalf("expected zero Finalized before chain events, got %d", stats["peerA"].Finalized)
+	if len(stats) != 1 {
+		t.Fatalf("expected 1 peer entry, got %d", len(stats))
 	}
-	if stats["peerA"].RecentIncluded != 0 {
-		t.Fatalf("expected zero RecentIncluded before chain events, got %f", stats["peerA"].RecentIncluded)
+	ps, ok := stats["peerA"]
+	if !ok {
+		t.Fatal("expected peerA entry, not found")
+	}
+	if ps.Finalized != 0 || ps.RecentIncluded != 0 {
+		t.Fatalf("expected zero stats before chain events, got %+v", ps)
+	}
+
+	// Internal state: all tx→deliverer mappings recorded, insertion order
+	// preserved in the FIFO slice.
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
+	if len(tr.txs) != 3 {
+		t.Fatalf("expected 3 tracked txs, got %d", len(tr.txs))
+	}
+	if len(tr.order) != 3 {
+		t.Fatalf("expected order length 3, got %d", len(tr.order))
+	}
+	for i, h := range hashes {
+		if got := tr.txs[h]; got != "peerA" {
+			t.Fatalf("tx %d: expected deliverer=peerA, got %q", i, got)
+		}
+		if tr.order[i] != h {
+			t.Fatalf("order[%d] mismatch", i)
+		}
 	}
 }
 
