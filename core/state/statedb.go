@@ -27,11 +27,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core/types/bal"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -193,11 +194,19 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		journal:              newJournal(),
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
+		stateReadList:        bal.NewStateAccessList(),
 	}
 	if db.Type().Is(TypeUBT) {
 		sdb.accessEvents = NewAccessEvents()
 	}
 	return sdb, nil
+}
+
+// WithReader returns a copy of the StateDB instance with the specified reader.
+func (s *StateDB) WithReader(reader Reader) *StateDB {
+	cpy := s.Copy()
+	cpy.reader = reader
+	return cpy
 }
 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
@@ -799,8 +808,9 @@ func (s *StateDB) LogsForBurnAccounts() []*types.Log {
 // Finalise finalises the state by removing the destructed objects and clears
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
-func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.StateAccessList {
+func (s *StateDB) Finalise(deleteEmptyObjects bool) (accesses *bal.StateAccessList, mutations *bal.StateMutations) {
 	addressesToPrefetch := make([]common.Address, 0, len(s.journal.dirties))
+	mutations = bal.NewStateMutations()
 	for addr := range s.journal.dirties {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
@@ -822,8 +832,18 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.StateAccessList {
 			if _, ok := s.stateObjectsDestruct[obj.address]; !ok {
 				s.stateObjectsDestruct[obj.address] = obj
 			}
+			// a pre-existing account can only be removed from the state under the following circumstance:
+			// it had a balance and was the target of a create2 which selfdestructed in the initcode
+			if !obj.txPreBalance.IsZero() {
+				mutations.Set(addr, &bal.AccountMutations{
+					Balance: uint256.NewInt(0),
+				})
+			}
 		} else {
-			obj.finalise()
+			mut := obj.finalise()
+			if mut != nil {
+				mutations.Set(addr, mut)
+			}
 			s.markUpdate(addr)
 		}
 		// At this point, also ship the address off to the precacher. The precacher
@@ -838,8 +858,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.StateAccessList {
 	}
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
-
-	return s.stateReadList
+	return s.stateReadList, mutations
 }
 
 // IntermediateRoot computes the current root hash of the state trie.

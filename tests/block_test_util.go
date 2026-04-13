@@ -98,6 +98,7 @@ type btHeader struct {
 	ExcessBlobGas         *uint64
 	ParentBeaconBlockRoot *common.Hash
 	SlotNumber            *uint64
+	BlockAccessListHash   *common.Hash
 }
 
 type btHeaderMarshaling struct {
@@ -225,8 +226,10 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 		Coinbase:      t.json.Genesis.Coinbase,
 		Alloc:         t.json.Pre,
 		BaseFee:       t.json.Genesis.BaseFeePerGas,
-		BlobGasUsed:   t.json.Genesis.BlobGasUsed,
-		ExcessBlobGas: t.json.Genesis.ExcessBlobGas,
+		BlobGasUsed:         t.json.Genesis.BlobGasUsed,
+		ExcessBlobGas:       t.json.Genesis.ExcessBlobGas,
+		SlotNumber:          t.json.Genesis.SlotNumber,
+		BlockAccessListHash: t.json.Genesis.BlockAccessListHash,
 	}
 }
 

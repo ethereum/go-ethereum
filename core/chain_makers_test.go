@@ -181,6 +181,175 @@ func TestGeneratePOSChain(t *testing.T) {
 	}
 }
 
+func TestGenerateBALChain(t *testing.T) {
+	var (
+		keyHex  = "9c647b8b7c4e7c3490668fb6c11473619db80c93704c70893d3813af4090c39c"
+		key, _  = crypto.HexToECDSA(keyHex)
+		address = crypto.PubkeyToAddress(key.PublicKey) // 658bdf435d810c91414ec09147daa6db62406379
+		aa      = common.Address{0xaa}
+		bb      = common.Address{0xbb}
+		funds   = big.NewInt(0).Mul(big.NewInt(1337), big.NewInt(params.Ether))
+		config  = *params.MergedTestChainConfig
+		gspec   = &Genesis{
+			Config: &config,
+			Alloc: types.GenesisAlloc{
+				address:                          {Balance: funds},
+				params.BeaconRootsAddress:        {Code: params.BeaconRootsCode},
+				params.WithdrawalQueueAddress:    {Code: params.WithdrawalQueueCode},
+				params.ConsolidationQueueAddress: {Code: params.ConsolidationQueueCode},
+				params.HistoryStorageAddress:     {Code: params.HistoryStorageCode},
+			},
+			BaseFee:    big.NewInt(params.InitialBaseFee),
+			Difficulty: common.Big0,
+			GasLimit:   5_000_000,
+
+			// TODO: why do I have to set the bal hash here, and why does it trigger an issue with the genesis
+			// being reported as not present if I omit the following line?
+			BlockAccessListHash: &common.Hash{}, // TODO: probably bad to initialize this to something other than keccak(nil) but idk
+		}
+		gendb = rawdb.NewMemoryDatabase()
+		db    = rawdb.NewMemoryDatabase()
+	)
+
+	// init 0xaa with some storage elements
+	storage := make(map[common.Hash]common.Hash)
+	storage[common.Hash{0x00}] = common.Hash{0x00}
+	storage[common.Hash{0x01}] = common.Hash{0x01}
+	storage[common.Hash{0x02}] = common.Hash{0x02}
+	storage[common.Hash{0x03}] = common.HexToHash("0303")
+	gspec.Alloc[aa] = types.Account{
+		Balance: common.Big1,
+		Nonce:   1,
+		Storage: storage,
+		Code:    common.Hex2Bytes("6042"),
+	}
+	gspec.Alloc[bb] = types.Account{
+		Balance: common.Big2,
+		Nonce:   1,
+		Storage: storage,
+		Code:    common.Hex2Bytes("600154600354"),
+	}
+	genesis := gspec.MustCommit(gendb, triedb.NewDatabase(gendb, triedb.HashDefaults))
+	engine := beacon.New(ethash.NewFaker())
+
+	genchain, genreceipts := GenerateChain(gspec.Config, genesis, engine, gendb, 4, func(i int, gen *BlockGen) {
+		// TODO: I think we can remove SetBeaconRoot entirely
+		// and provide a different mechanism to set it?
+
+		// gen.SetParentBeaconRoot(common.Hash{byte(i + 1)})
+
+		if gspec.Config.IsAmsterdam(gen.header.Number, gen.header.Time) {
+			// TODO: parameterize the slot num
+			gen.header.SlotNumber = new(uint64)
+			*gen.header.SlotNumber = gen.header.Number.Uint64()
+		}
+		// Add value transfer tx.
+		tx := types.MustSignNewTx(key, gen.Signer(), &types.LegacyTx{
+			Nonce:    gen.TxNonce(address),
+			To:       &address,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: new(big.Int).Add(gen.BaseFee(), common.Big1),
+		})
+		gen.AddTx(tx)
+
+		// Add withdrawals.
+		if i == 1 {
+			gen.AddWithdrawal(&types.Withdrawal{
+				Validator: 42,
+				Address:   common.Address{0xee},
+				Amount:    1337,
+			})
+			gen.AddWithdrawal(&types.Withdrawal{
+				Validator: 13,
+				Address:   common.Address{0xee},
+				Amount:    1,
+			})
+		}
+		if i == 3 {
+			gen.AddWithdrawal(&types.Withdrawal{
+				Validator: 42,
+				Address:   common.Address{0xee},
+				Amount:    1337,
+			})
+			gen.AddWithdrawal(&types.Withdrawal{
+				Validator: 13,
+				Address:   common.Address{0xee},
+				Amount:    1,
+			})
+		}
+	})
+
+	// Import the chain. This runs all block validation rules.
+	blockchain, err := NewBlockChain(db, gspec, engine, nil)
+	if err != nil {
+		fmt.Printf("err is %v\n", err)
+	}
+	defer blockchain.Stop()
+
+	if i, err := blockchain.InsertChain(genchain); err != nil {
+		t.Fatalf("insert error (block %d): %v\n", genchain[i].NumberU64(), err)
+	}
+
+	// enforce that withdrawal indexes are monotonically increasing from 0
+	var (
+		withdrawalIndex uint64
+	)
+	for i := range genchain {
+		blocknum := genchain[i].NumberU64()
+		block := blockchain.GetBlockByNumber(blocknum)
+		if block == nil {
+			t.Fatalf("block %d not found", blocknum)
+		}
+
+		// Verify receipts.
+		genBlockReceipts := genreceipts[i]
+		for _, r := range genBlockReceipts {
+			if r.BlockNumber.Cmp(block.Number()) != 0 {
+				t.Errorf("receipt has wrong block number %d, want %d", r.BlockNumber, block.Number())
+			}
+			if r.BlockHash != block.Hash() {
+				t.Errorf("receipt has wrong block hash %v, want %v", r.BlockHash, block.Hash())
+			}
+
+			// patch up empty logs list to make DeepEqual below work
+			if r.Logs == nil {
+				r.Logs = []*types.Log{}
+			}
+		}
+		blockchainReceipts := blockchain.GetReceiptsByHash(block.Hash())
+		if !reflect.DeepEqual(genBlockReceipts, blockchainReceipts) {
+			t.Fatalf("receipts mismatch\ngenerated: %s\nblockchain: %s", spew.Sdump(genBlockReceipts), spew.Sdump(blockchainReceipts))
+		}
+
+		// Verify withdrawals.
+		if len(block.Withdrawals()) == 0 {
+			continue
+		}
+		for j := 0; j < len(block.Withdrawals()); j++ {
+			if block.Withdrawals()[j].Index != withdrawalIndex {
+				t.Fatalf("withdrawal index %d does not equal expected index %d", block.Withdrawals()[j].Index, withdrawalIndex)
+			}
+			withdrawalIndex += 1
+		}
+
+		// TODO: can we reinstate the following?
+		/*
+				// Verify parent beacon root.
+				want := common.Hash{byte(blocknum)}
+				if got := block.BeaconRoot(); *got != want {
+					t.Fatalf("block %d, wrong parent beacon root: got %s, want %s", i, got, want)
+				}
+			state, _ := blockchain.State()
+			idx := block.Time()%8191 + 8191
+			got := state.GetState(params.BeaconRootsAddress, common.BigToHash(new(big.Int).SetUint64(idx)))
+			if got != want {
+				t.Fatalf("block %d, wrong parent beacon root in state: got %s, want %s", i, got, want)
+			}
+		*/
+	}
+}
+
 func ExampleGenerateChain() {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")

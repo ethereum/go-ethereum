@@ -21,11 +21,12 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/ethereum/go-ethereum/core/types/bal"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -234,7 +235,7 @@ func (s *hookedStateDB) LogsForBurnAccounts() []*types.Log {
 	return s.inner.LogsForBurnAccounts()
 }
 
-func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.StateAccessList {
+func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) (*bal.StateAccessList, *bal.StateMutations) {
 	if s.hooks.OnBalanceChange == nil && s.hooks.OnNonceChangeV2 == nil && s.hooks.OnNonceChange == nil && s.hooks.OnCodeChangeV2 == nil && s.hooks.OnCodeChange == nil {
 		// Short circuit if no relevant hooks are set.
 		return s.inner.Finalise(deleteEmptyObjects)
