@@ -56,10 +56,6 @@ var (
 	// for any reason (pool has headroom, all candidates trusted/static/young,
 	// or protected by inclusion stats).
 	dropSkipped = metrics.NewRegisteredMeter("eth/dropper/skipped", nil)
-	// dropSkippedProtected counts the subset of skips caused specifically by
-	// inclusion-based peer protection: at least one otherwise-droppable peer
-	// was kept only because it was in the protected set.
-	dropSkippedProtected = metrics.NewRegisteredMeter("eth/dropper/skipped_protected", nil)
 )
 
 // PeerInclusionStats holds the per-peer inclusion data needed by the dropper
@@ -181,27 +177,17 @@ func (cm *dropper) dropRandomPeer() bool {
 	// Compute the set of inclusion-protected peers before filtering.
 	protected := cm.protectedPeers(peers)
 
-	baseNotDrop := func(p *p2p.Peer) bool {
+	selectDoNotDrop := func(p *p2p.Peer) bool {
 		return p.Trusted() || p.StaticDialed() ||
 			p.Lifetime() < mclock.AbsTime(doNotDropBefore) ||
 			(p.DynDialed() && cm.maxDialPeers-numDialed > peerDropThreshold) ||
-			(p.Inbound() && cm.maxInboundPeers-numInbound > peerDropThreshold)
-	}
-	selectDoNotDrop := func(p *p2p.Peer) bool {
-		return baseNotDrop(p) || protected[p]
+			(p.Inbound() && cm.maxInboundPeers-numInbound > peerDropThreshold) ||
+			protected[p]
 	}
 
 	droppable := slices.DeleteFunc(peers, selectDoNotDrop)
 	if len(droppable) == 0 {
 		dropSkipped.Mark(1)
-		// If any protected peer would otherwise have been droppable,
-		// protection was the cause of the skip.
-		for p := range protected {
-			if !baseNotDrop(p) {
-				dropSkippedProtected.Mark(1)
-				break
-			}
-		}
 		return false
 	}
 	p := droppable[mrand.Intn(len(droppable))]
