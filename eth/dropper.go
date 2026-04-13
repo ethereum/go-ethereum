@@ -236,8 +236,21 @@ func (cm *dropper) protectedPeers(peers []*p2p.Peer) map[*p2p.Peer]bool {
 			dialed = append(dialed, p)
 		}
 	}
-	// protectPool selects the top-frac peers from pool by score and adds them to result.
+	result := protectedPeersByPool(inbound, dialed, stats)
+	if len(result) > 0 {
+		log.Debug("Protecting high-value peers from drop", "protected", len(result))
+	}
+	return result
+}
+
+// protectedPeersByPool selects the union of top-N peers per protection
+// category across the given already-split inbound and dialed pools.
+// Factored from protectedPeers so tests can exercise the per-pool
+// selection logic without needing to construct direction-flagged
+// *p2p.Peer instances (which require unexported p2p types).
+func protectedPeersByPool(inbound, dialed []*p2p.Peer, stats map[string]PeerInclusionStats) map[*p2p.Peer]bool {
 	result := make(map[*p2p.Peer]bool)
+	// protectPool selects the top-frac peers from pool by score and adds them to result.
 	protectPool := func(pool []*p2p.Peer, score func(*p2p.Peer) float64, frac float64) {
 		n := int(float64(len(pool)) * frac)
 		if n == 0 {
@@ -259,9 +272,6 @@ func (cm *dropper) protectedPeers(peers []*p2p.Peer) map[*p2p.Peer]bool {
 		}
 		protectPool(inbound, score, cat.frac)
 		protectPool(dialed, score, cat.frac)
-	}
-	if len(result) > 0 {
-		log.Debug("Protecting high-value peers from drop", "protected", len(result))
 	}
 	return result
 }
