@@ -66,9 +66,11 @@ func (s *Suite) dialAs(key *ecdsa.PrivateKey) (*Conn, error) {
 		return nil, err
 	}
 	conn.caps = []p2p.Cap{
+		{Name: "eth", Version: 72},
+		{Name: "eth", Version: 70},
 		{Name: "eth", Version: 69},
 	}
-	conn.ourHighestProtoVersion = 69
+	conn.ourHighestProtoVersion = 72
 	return &conn, nil
 }
 
@@ -167,11 +169,15 @@ func (c *Conn) ReadEth() (any, error) {
 		case eth.TransactionsMsg:
 			msg = new(eth.TransactionsPacket)
 		case eth.NewPooledTransactionHashesMsg:
-			msg = new(eth.NewPooledTransactionHashesPacket70)
+			msg = new(eth.NewPooledTransactionHashesPacket72)
 		case eth.GetPooledTransactionsMsg:
 			msg = new(eth.GetPooledTransactionsPacket)
 		case eth.PooledTransactionsMsg:
 			msg = new(eth.PooledTransactionsPacket)
+		case eth.GetCellsMsg:
+			msg = new(eth.GetCellsRequest)
+		case eth.CellsMsg:
+			msg = new(eth.CellsResponse)
 		default:
 			panic(fmt.Sprintf("unhandled eth msg code %d", code))
 		}

@@ -234,16 +234,16 @@ type ReceiptsPacket struct {
 // ReceiptsRLPResponse is used for receipts, when we already have it encoded
 type ReceiptsRLPResponse []rlp.RawValue
 
-// NewPooledTransactionHashesPacket70 represents a transaction announcement packet on eth/69.
-type NewPooledTransactionHashesPacket70 struct {
+// NewPooledTransactionHashesPacket71 represents a transaction announcement packet on eth/69.
+type NewPooledTransactionHashesPacket71 struct {
 	Types  []byte
 	Sizes  []uint32
 	Hashes []common.Hash
 }
 
-// NewPooledTransactionHashesPacket71 represents a transaction announcement packet on ETH/72
+// NewPooledTransactionHashesPacket72 represents a transaction announcement packet on ETH/72
 // with an additional custody bitmap field for cell-based blob data availability.
-type NewPooledTransactionHashesPacket71 struct {
+type NewPooledTransactionHashesPacket72 struct {
 	Types  []byte
 	Sizes  []uint32
 	Hashes []common.Hash
@@ -329,11 +329,11 @@ func (*GetBlockBodiesRequest) Kind() byte   { return GetBlockBodiesMsg }
 func (*BlockBodiesResponse) Name() string { return "BlockBodies" }
 func (*BlockBodiesResponse) Kind() byte   { return BlockBodiesMsg }
 
-func (*NewPooledTransactionHashesPacket70) Name() string { return "NewPooledTransactionHashes" }
-func (*NewPooledTransactionHashesPacket70) Kind() byte   { return NewPooledTransactionHashesMsg }
-
 func (*NewPooledTransactionHashesPacket71) Name() string { return "NewPooledTransactionHashes" }
 func (*NewPooledTransactionHashesPacket71) Kind() byte   { return NewPooledTransactionHashesMsg }
+
+func (*NewPooledTransactionHashesPacket72) Name() string { return "NewPooledTransactionHashes" }
+func (*NewPooledTransactionHashesPacket72) Kind() byte   { return NewPooledTransactionHashesMsg }
 
 func (*GetPooledTransactionsRequest) Name() string { return "GetPooledTransactions" }
 func (*GetPooledTransactionsRequest) Kind() byte   { return GetPooledTransactionsMsg }

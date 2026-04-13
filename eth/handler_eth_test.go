@@ -51,7 +51,7 @@ func (h *testEthHandler) PeerInfo(enode.ID) interface{}        { panic("not used
 
 func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 	switch packet := packet.(type) {
-	case *eth.NewPooledTransactionHashesPacket70:
+	case *eth.NewPooledTransactionHashesPacket71:
 		h.txAnnounces.Send(packet.Hashes)
 		return nil
 
