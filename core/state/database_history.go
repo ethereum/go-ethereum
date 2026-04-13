@@ -316,8 +316,3 @@ func (db *HistoricDB) Snapshot() *snapshot.Tree {
 func (db *HistoricDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 	return nil, errors.New("not implemented")
 }
-
-// ReadersWithCacheStats is not supported by historic database.
-func (db *HistoricDB) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reader, error) {
-	return nil, nil, errors.New("not implemented")
-}

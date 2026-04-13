@@ -20,42 +20,53 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/bintrie"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
-// UBTDB is an implementation of Database interface for Universal Binary Tries.
-// It provides the same functionality as MerkleDB but uses binary tries for state
-// storage instead of Merkle Patricia Tries.
-type UBTDB struct {
+// MerkleDB is an implementation of Database interface for Merkle Patricia Tries.
+// It leverages both trie and state snapshot to provide functionalities for state
+// access. It's meant to be a long-live object and has a few caches inside for
+// sharing between blocks.
+type MerkleDB struct {
 	triedb *triedb.Database
 	codedb *CodeDB
 	snap   *snapshot.Tree
 }
 
-// NewUBTDB creates a state database with the Unified binary trie manner.
-func NewUBTDB(triedb *triedb.Database, codedb *CodeDB) *UBTDB {
+// NewMerkleDB creates a state database with the Merkle Patricia Trie manner.
+func NewMerkleDB(tdb *triedb.Database, codedb *CodeDB) *MerkleDB {
 	if codedb == nil {
-		codedb = NewCodeDB(triedb.Disk())
+		codedb = NewCodeDB(tdb.Disk())
 	}
-	return &UBTDB{
-		triedb: triedb,
+	return &MerkleDB{
+		triedb: tdb,
 		codedb: codedb,
 	}
 }
 
-// WithSnapshot configures the snapshot tree. Note that this registration must
-// be performed before the UBTDB is used.
-func (db *UBTDB) WithSnapshot(snapshot *snapshot.Tree) Database {
+// WithSnapshot configures the provided contract code cache. Note that this
+// registration must be performed before the MerkleDB is used.
+func (db *MerkleDB) WithSnapshot(snapshot *snapshot.Tree) Database {
 	db.snap = snapshot
 	return db
 }
 
 // StateReader returns a state reader associated with the specified state root.
-func (db *UBTDB) StateReader(stateRoot common.Hash) (StateReader, error) {
+func (db *MerkleDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 	var readers []StateReader
 
+	// Configure the state reader using the standalone snapshot in hash mode.
+	// This reader offers improved performance but is optional and only
+	// partially useful if the snapshot is not fully generated.
+	if db.TrieDB().Scheme() == rawdb.HashScheme && db.snap != nil {
+		snap := db.snap.Snapshot(stateRoot)
+		if snap != nil {
+			readers = append(readers, newFlatReader(snap))
+		}
+	}
 	// Configure the state reader using the path database in path mode.
 	// This reader offers improved performance but is optional and only
 	// partially useful if the snapshot data in path database is not
@@ -79,7 +90,7 @@ func (db *UBTDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 
 // Reader implements Database, returning a reader associated with the specified
 // state root.
-func (db *UBTDB) Reader(stateRoot common.Hash) (Reader, error) {
+func (db *MerkleDB) Reader(stateRoot common.Hash) (Reader, error) {
 	sr, err := db.StateReader(stateRoot)
 	if err != nil {
 		return nil, err
@@ -90,7 +101,7 @@ func (db *UBTDB) Reader(stateRoot common.Hash) (Reader, error) {
 // ReadersWithCacheStats creates a pair of state readers that share the same
 // underlying state reader and internal state cache, while maintaining separate
 // statistics respectively.
-func (db *UBTDB) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reader, error) {
+func (db *MerkleDB) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reader, error) {
 	r, err := db.StateReader(stateRoot)
 	if err != nil {
 		return nil, nil, err
@@ -102,30 +113,37 @@ func (db *UBTDB) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reader, e
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
-func (db *UBTDB) OpenTrie(root common.Hash) (Trie, error) {
-	return bintrie.NewBinaryTrie(root, db.triedb)
+func (db *MerkleDB) OpenTrie(root common.Hash) (Trie, error) {
+	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
+	if err != nil {
+		return nil, err
+	}
+	return tr, nil
 }
 
-// OpenStorageTrie opens the storage trie of an account. In binary trie mode,
-// all state objects share one unified trie, so the main trie is returned.
-func (db *UBTDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
-	return self, nil
+// OpenStorageTrie opens the storage trie of an account.
+func (db *MerkleDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
+	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)
+	if err != nil {
+		return nil, err
+	}
+	return tr, nil
 }
 
 // TrieDB retrieves any intermediate trie-node caching layer.
-func (db *UBTDB) TrieDB() *triedb.Database {
+func (db *MerkleDB) TrieDB() *triedb.Database {
 	return db.triedb
 }
 
 // Snapshot returns the underlying state snapshot.
-func (db *UBTDB) Snapshot() *snapshot.Tree {
+func (db *MerkleDB) Snapshot() *snapshot.Tree {
 	return db.snap
 }
 
 // Commit flushes all pending writes and finalizes the state transition,
 // committing the changes to the underlying storage. It returns an error
 // if the commit fails.
-func (db *UBTDB) Commit(update *stateUpdate) error {
+func (db *MerkleDB) Commit(update *stateUpdate) error {
 	// Short circuit if nothing to commit
 	if update.empty() {
 		return nil
@@ -158,6 +176,6 @@ func (db *UBTDB) Commit(update *stateUpdate) error {
 
 // Iteratee returns a state iteratee associated with the specified state root,
 // through which the account iterator and storage iterator can be created.
-func (db *UBTDB) Iteratee(root common.Hash) (Iteratee, error) {
-	return newStateIteratee(false, root, db.triedb, db.snap)
+func (db *MerkleDB) Iteratee(root common.Hash) (Iteratee, error) {
+	return newStateIteratee(true, root, db.triedb, db.snap)
 }
