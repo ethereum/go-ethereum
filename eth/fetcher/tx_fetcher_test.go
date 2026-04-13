@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"math/rand"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -110,6 +111,7 @@ func newTestTxFetcher() *TxFetcher {
 			return make([]error, len(txs))
 		},
 		func(string, []common.Hash) error { return nil },
+		nil,
 		nil,
 		nil,
 		newTestBlobBuffer(),
@@ -2219,6 +2221,7 @@ func TestTransactionForgotten(t *testing.T) {
 		func(string, []common.Hash) error { return nil },
 		func(string) {},
 		nil,
+		nil,
 		newTestBlobBuffer(),
 		mockClock,
 		mockTime,
@@ -2299,4 +2302,105 @@ func TestTransactionForgotten(t *testing.T) {
 	if size := fetcher.underpriced.Len(); size != 1 {
 		t.Errorf("wrong final underpriced cache size: got %d, want 1", size)
 	}
+}
+
+// latencyRecorder is a thread-safe recorder for onRequestLatency callbacks.
+type latencyRecorder struct {
+	mu      sync.Mutex
+	samples []latencySample
+}
+
+type latencySample struct {
+	peer    string
+	latency time.Duration
+}
+
+func (r *latencyRecorder) record(peer string, latency time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.samples = append(r.samples, latencySample{peer, latency})
+}
+
+func (r *latencyRecorder) snapshot() []latencySample {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]latencySample, len(r.samples))
+	copy(out, r.samples)
+	return out
+}
+
+// TestTransactionFetcherRequestLatencyOnDelivery asserts that an in-time
+// direct delivery of a requested batch fires the onRequestLatency callback
+// exactly once with the actual round-trip latency.
+func TestTransactionFetcherRequestLatencyOnDelivery(t *testing.T) {
+	rec := &latencyRecorder{}
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: func() *TxFetcher {
+			f := newTestTxFetcher()
+			f.onRequestLatency = rec.record
+			return f
+		},
+		steps: []interface{}{
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			// Wait for the announce-arrival timer; request is dispatched at this point.
+			doWait{time: txArriveTimeout, step: true},
+			// Simulate 200ms round-trip before the response arrives.
+			doWait{time: 200 * time.Millisecond, step: false},
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true},
+			doFunc(func() {
+				samples := rec.snapshot()
+				if len(samples) != 1 {
+					t.Fatalf("expected 1 latency sample, got %d (%v)", len(samples), samples)
+				}
+				if samples[0].peer != "A" {
+					t.Errorf("peer mismatch: got %q, want A", samples[0].peer)
+				}
+				if samples[0].latency != 200*time.Millisecond {
+					t.Errorf("latency mismatch: got %v, want 200ms", samples[0].latency)
+				}
+			}),
+		},
+	})
+}
+
+// TestTransactionFetcherRequestLatencyOnTimeout asserts that when a request
+// times out (no reply within txFetchTimeout), onRequestLatency fires once
+// with the timeout value, and a subsequent (late) delivery does not fire
+// a duplicate sample.
+func TestTransactionFetcherRequestLatencyOnTimeout(t *testing.T) {
+	rec := &latencyRecorder{}
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: func() *TxFetcher {
+			f := newTestTxFetcher()
+			f.onRequestLatency = rec.record
+			return f
+		},
+		steps: []interface{}{
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			// Push the clock past the request deadline; the timeout handler
+			// should fire and record a single timeout-valued sample.
+			doWait{time: txFetchTimeout, step: true},
+			doFunc(func() {
+				samples := rec.snapshot()
+				if len(samples) != 1 {
+					t.Fatalf("expected 1 timeout sample, got %d (%v)", len(samples), samples)
+				}
+				if samples[0].peer != "A" {
+					t.Errorf("peer mismatch: got %q, want A", samples[0].peer)
+				}
+				if samples[0].latency != txFetchTimeout {
+					t.Errorf("latency mismatch: got %v, want %v", samples[0].latency, txFetchTimeout)
+				}
+			}),
+			// A late reply from the slow peer must not produce a second sample.
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true},
+			doFunc(func() {
+				samples := rec.snapshot()
+				if len(samples) != 1 {
+					t.Fatalf("late delivery double-counted latency: got %d samples, want 1", len(samples))
+				}
+			}),
+		},
+	})
 }
