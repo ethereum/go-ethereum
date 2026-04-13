@@ -144,7 +144,7 @@ func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
 	// all the derived states will be discarded to not pollute disk.
 	emptyRoot := types.EmptyRootHash
 	if isUBT {
-		emptyRoot = types.EmptyVerkleHash
+		emptyRoot = types.EmptyBinaryHash
 	}
 	db := rawdb.NewMemoryDatabase()
 	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb.NewDatabase(db, config), nil))
@@ -169,7 +169,7 @@ func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
 func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database, tracer *tracing.Hooks) (common.Hash, error) {
 	emptyRoot := types.EmptyRootHash
 	if triedb.IsUBT() {
-		emptyRoot = types.EmptyVerkleHash
+		emptyRoot = types.EmptyBinaryHash
 	}
 	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb, nil))
 	if err != nil {
