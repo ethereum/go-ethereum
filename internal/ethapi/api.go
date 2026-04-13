@@ -458,11 +458,11 @@ func decodeStorageKey(s string) (h common.Hash, inputLength int, err error) {
 		s = "0" + s
 	}
 	if len(s) > 64 {
-		return common.Hash{}, len(s) / 2, errors.New("storage key too long (want at most 32 bytes)")
+		return common.Hash{}, len(s) / 2, &invalidParamsError{"storage key too long (want at most 32 bytes)"}
 	}
 	b, err := hex.DecodeString(s)
 	if err != nil {
-		return common.Hash{}, 0, errors.New("invalid hex in storage key")
+		return common.Hash{}, 0, &invalidParamsError{"invalid hex in storage key"}
 	}
 	return common.BytesToHash(b), len(b), nil
 }
@@ -1856,13 +1856,13 @@ type SignTransactionResult struct {
 // the given from address and it needs to be unlocked.
 func (api *TransactionAPI) SignTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
 	if args.Gas == nil {
-		return nil, errors.New("gas not specified")
+		return nil, &invalidParamsError{"gas not specified"}
 	}
 	if args.GasPrice == nil && (args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil) {
-		return nil, errors.New("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
+		return nil, &invalidParamsError{"missing gasPrice or maxFeePerGas/maxPriorityFeePerGas"}
 	}
 	if args.Nonce == nil {
-		return nil, errors.New("nonce not specified")
+		return nil, &invalidParamsError{"nonce not specified"}
 	}
 	sidecarVersion := types.BlobSidecarVersion0
 	if len(args.Blobs) > 0 {
@@ -1931,7 +1931,7 @@ func (api *TransactionAPI) PendingTransactions() ([]*RPCTransaction, error) {
 // This API is not capable for submitting blob transaction with sidecar.
 func (api *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs, gasPrice *hexutil.Big, gasLimit *hexutil.Uint64) (common.Hash, error) {
 	if sendArgs.Nonce == nil {
-		return common.Hash{}, errors.New("missing transaction nonce in transaction spec")
+		return common.Hash{}, &invalidParamsError{"missing transaction nonce in transaction spec"}
 	}
 	if err := sendArgs.setDefaults(ctx, api.b, sidecarConfig{}); err != nil {
 		return common.Hash{}, err

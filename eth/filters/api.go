@@ -42,9 +42,9 @@ var (
 	errPendingLogsUnsupported = invalidParamsErr("pending logs are not supported")
 	errUnknownBlock           = errors.New("unknown block")
 	errFilterNotFound         = errors.New("filter not found")
-	errExceedMaxTopics        = errors.New("exceed max topics")
-	errExceedLogQueryLimit    = errors.New("exceed max addresses or topics per search position")
-	errExceedMaxTxHashes      = errors.New("exceed max number of transaction hashes allowed per transactionReceipts subscription")
+	errExceedMaxTopics        = invalidParamsErr("exceed max topics")
+	errExceedLogQueryLimit    = invalidParamsErr("exceed max addresses or topics per search position")
+	errExceedMaxTxHashes      = invalidParamsErr("exceed max number of transaction hashes allowed per transactionReceipts subscription")
 )
 
 type invalidParamsError struct {

@@ -119,24 +119,24 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config 
 		args.Nonce = (*hexutil.Uint64)(&nonce)
 	}
 	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
-		return errors.New(`both "data" and "input" are set and not equal. Please use "input" to pass transaction call data`)
+		return &invalidParamsError{`both "data" and "input" are set and not equal. Please use "input" to pass transaction call data`}
 	}
 
 	// BlobTx fields
 	if args.BlobHashes != nil && len(args.BlobHashes) == 0 {
-		return errors.New("need at least 1 blob for a blob transaction")
+		return &invalidParamsError{"need at least 1 blob for a blob transaction"}
 	}
 	if args.BlobHashes != nil && len(args.BlobHashes) > params.BlobTxMaxBlobs {
-		return fmt.Errorf("too many blobs in transaction (have=%d, max=%d)", len(args.BlobHashes), params.BlobTxMaxBlobs)
+		return &invalidParamsError{fmt.Sprintf("too many blobs in transaction (have=%d, max=%d)", len(args.BlobHashes), params.BlobTxMaxBlobs)}
 	}
 
 	// create check
 	if args.To == nil {
 		if args.BlobHashes != nil {
-			return errors.New(`missing "to" in blob transaction`)
+			return &invalidParamsError{`missing "to" in blob transaction`}
 		}
 		if len(args.data()) == 0 {
-			return errors.New(`contract creation without any data provided`)
+			return &invalidParamsError{`contract creation without any data provided`}
 		}
 	}
 
@@ -171,7 +171,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config 
 	want := b.ChainConfig().ChainID
 	if args.ChainID != nil {
 		if have := (*big.Int)(args.ChainID); have.Cmp(want) != 0 {
-			return fmt.Errorf("chainId does not match node's (have=%v, want=%v)", have, want)
+			return &invalidParamsError{fmt.Sprintf("chainId does not match node's (have=%v, want=%v)", have, want)}
 		}
 	} else {
 		args.ChainID = (*hexutil.Big)(want)
@@ -183,14 +183,14 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config 
 func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head *types.Header) error {
 	// Sanity check the EIP-4844 fee parameters.
 	if args.BlobFeeCap != nil && args.BlobFeeCap.ToInt().Sign() == 0 {
-		return errors.New("maxFeePerBlobGas, if specified, must be non-zero")
+		return &invalidParamsError{"maxFeePerBlobGas, if specified, must be non-zero"}
 	}
 	if b.ChainConfig().IsCancun(head.Number, head.Time) {
 		args.setCancunFeeDefaults(b.ChainConfig(), head)
 	}
 	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
-		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+		return &invalidParamsError{"both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"}
 	}
 	// If the tx has completely specified a fee mechanism, no default is needed.
 	// This allows users who are not yet synced past London to get defaults for
@@ -200,10 +200,10 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head
 	// Sanity check the EIP-1559 fee parameters if present.
 	if args.GasPrice == nil && eip1559ParamsSet {
 		if args.MaxFeePerGas.ToInt().Sign() == 0 {
-			return errors.New("maxFeePerGas must be non-zero")
+			return &invalidParamsError{"maxFeePerGas must be non-zero"}
 		}
 		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
-			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
+			return &invalidParamsError{fmt.Sprintf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)}
 		}
 		return nil // No need to set anything, user already set MaxFeePerGas and MaxPriorityFeePerGas
 	}
@@ -274,7 +274,7 @@ func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *typ
 	}
 	// Both EIP-1559 fee parameters are now set; sanity check them.
 	if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
-		return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
+		return &invalidParamsError{fmt.Sprintf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)}
 	}
 	return nil
 }
@@ -288,24 +288,24 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config sideca
 
 	// Passing blobs is not allowed in all contexts, only in specific methods.
 	if !config.blobSidecarAllowed {
-		return errors.New(`"blobs" is not supported for this RPC method`)
+		return &invalidParamsError{`"blobs" is not supported for this RPC method`}
 	}
 
 	// Assume user provides either only blobs (w/o hashes), or
 	// blobs together with commitments and proofs.
 	if args.Commitments == nil && args.Proofs != nil {
-		return errors.New(`blob proofs provided while commitments were not`)
+		return &invalidParamsError{`blob proofs provided while commitments were not`}
 	} else if args.Commitments != nil && args.Proofs == nil {
-		return errors.New(`blob commitments provided while proofs were not`)
+		return &invalidParamsError{`blob commitments provided while proofs were not`}
 	}
 
 	// len(blobs) == len(commitments) == len(hashes)
 	n := len(args.Blobs)
 	if args.BlobHashes != nil && len(args.BlobHashes) != n {
-		return fmt.Errorf("number of blobs and hashes mismatch (have=%d, want=%d)", len(args.BlobHashes), n)
+		return &invalidParamsError{fmt.Sprintf("number of blobs and hashes mismatch (have=%d, want=%d)", len(args.BlobHashes), n)}
 	}
 	if args.Commitments != nil && len(args.Commitments) != n {
-		return fmt.Errorf("number of blobs and commitments mismatch (have=%d, want=%d)", len(args.Commitments), n)
+		return &invalidParamsError{fmt.Sprintf("number of blobs and commitments mismatch (have=%d, want=%d)", len(args.Commitments), n)}
 	}
 
 	// if V0: len(blobs) == len(proofs)
@@ -316,7 +316,7 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config sideca
 	}
 	if args.Proofs != nil && len(args.Proofs) != proofLen {
 		if len(args.Proofs) != n {
-			return fmt.Errorf("number of blobs and proofs mismatch (have=%d, want=%d)", len(args.Proofs), proofLen)
+			return &invalidParamsError{fmt.Sprintf("number of blobs and proofs mismatch (have=%d, want=%d)", len(args.Proofs), proofLen)}
 		}
 		// Unset the commitments and proofs, as they may be submitted in the legacy format
 		log.Debug("Unset legacy commitments and proofs", "blobs", n, "proofs", len(args.Proofs))
@@ -378,7 +378,7 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config sideca
 	if args.BlobHashes != nil {
 		for i, h := range hashes {
 			if h != args.BlobHashes[i] {
-				return fmt.Errorf("blob hash verification failed (have=%s, want=%s)", args.BlobHashes[i], h)
+				return &invalidParamsError{fmt.Sprintf("blob hash verification failed (have=%s, want=%s)", args.BlobHashes[i], h)}
 			}
 		}
 	} else {
@@ -392,13 +392,13 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config sideca
 func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int, chainID *big.Int) error {
 	// Reject invalid combinations of pre- and post-1559 fee styles
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
-		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+		return &invalidParamsError{"both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"}
 	}
 	if args.ChainID == nil {
 		args.ChainID = (*hexutil.Big)(chainID)
 	} else {
 		if have := (*big.Int)(args.ChainID); have.Cmp(chainID) != 0 {
-			return fmt.Errorf("chainId does not match node's (have=%v, want=%v)", have, chainID)
+			return &invalidParamsError{fmt.Sprintf("chainId does not match node's (have=%v, want=%v)", have, chainID)}
 		}
 	}
 	if args.Gas == nil {
