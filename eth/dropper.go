@@ -164,6 +164,14 @@ func (cm *dropper) dropRandomPeer() bool {
 	}
 	numDialed := len(peers) - numInbound
 
+	// Fast path: if neither pool is near capacity, every non-trusted/non-static
+	// peer is already do-not-drop by pool-threshold rules. No point computing
+	// inclusion protection.
+	if cm.maxDialPeers-numDialed > peerDropThreshold &&
+		cm.maxInboundPeers-numInbound > peerDropThreshold {
+		return false
+	}
+
 	// Compute the set of inclusion-protected peers before filtering.
 	protected := cm.protectedPeers(peers)
 
