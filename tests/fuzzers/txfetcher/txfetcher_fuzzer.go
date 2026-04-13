@@ -84,7 +84,7 @@ func fuzz(input []byte) int {
 			return make([]error, len(txs))
 		},
 		func(string, []common.Hash) error { return nil },
-		nil, nil,
+		nil, nil, nil,
 		clock,
 		func() time.Time {
 			nanoTime := int64(clock.Now())

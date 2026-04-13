@@ -180,11 +180,12 @@ type TxFetcher struct {
 	alternates map[common.Hash]map[string]struct{} // In-flight transaction alternate origins if retrieval fails
 
 	// Callbacks
-	validateMeta func(common.Hash, byte) error           // Validate a tx metadata based on the local txpool
-	addTxs       func([]*types.Transaction) []error      // Insert a batch of transactions into local txpool
-	fetchTxs     func(string, []common.Hash) error       // Retrieves a set of txs from a remote peer
-	dropPeer     func(string)                            // Drops a peer in case of announcement violation
-	onAccepted   func(peer string, hashes []common.Hash) // Optional: notified with accepted tx hashes per peer
+	validateMeta     func(common.Hash, byte) error            // Validate a tx metadata based on the local txpool
+	addTxs           func([]*types.Transaction) []error       // Insert a batch of transactions into local txpool
+	fetchTxs         func(string, []common.Hash) error        // Retrieves a set of txs from a remote peer
+	dropPeer         func(string)                             // Drops a peer in case of announcement violation
+	onAccepted       func(peer string, hashes []common.Hash)  // Optional: notified with accepted tx hashes per peer
+	onRequestLatency func(peer string, latency time.Duration) // Optional: notified once per completed/timed-out tx request
 
 	step     chan struct{}    // Notification channel when the fetcher loop iterates
 	clock    mclock.Clock     // Monotonic clock or simulated clock for tests
@@ -195,40 +196,41 @@ type TxFetcher struct {
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
 // based on hash announcements.
 // Chain can be nil to disable on-chain checks.
-func NewTxFetcher(chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string), onAccepted func(string, []common.Hash)) *TxFetcher {
-	return NewTxFetcherForTests(chain, validateMeta, addTxs, fetchTxs, dropPeer, onAccepted, mclock.System{}, time.Now, nil)
+func NewTxFetcher(chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string), onAccepted func(string, []common.Hash), onRequestLatency func(string, time.Duration)) *TxFetcher {
+	return NewTxFetcherForTests(chain, validateMeta, addTxs, fetchTxs, dropPeer, onAccepted, onRequestLatency, mclock.System{}, time.Now, nil)
 }
 
 // NewTxFetcherForTests is a testing method to mock out the realtime clock with
 // a simulated version and the internal randomness with a deterministic one.
 // Chain can be nil to disable on-chain checks.
 func NewTxFetcherForTests(
-	chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string), onAccepted func(string, []common.Hash),
+	chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string), onAccepted func(string, []common.Hash), onRequestLatency func(string, time.Duration),
 	clock mclock.Clock, realTime func() time.Time, rand *mrand.Rand) *TxFetcher {
 	return &TxFetcher{
-		notify:         make(chan *txAnnounce),
-		cleanup:        make(chan *txDelivery),
-		drop:           make(chan *txDrop),
-		quit:           make(chan struct{}),
-		waitlist:       make(map[common.Hash]map[string]struct{}),
-		waittime:       make(map[common.Hash]mclock.AbsTime),
-		waitslots:      make(map[string]map[common.Hash]*txMetadataWithSeq),
-		announces:      make(map[string]map[common.Hash]*txMetadataWithSeq),
-		announced:      make(map[common.Hash]map[string]struct{}),
-		fetching:       make(map[common.Hash]string),
-		requests:       make(map[string]*txRequest),
-		alternates:     make(map[common.Hash]map[string]struct{}),
-		underpriced:    lru.NewCache[common.Hash, time.Time](maxTxUnderpricedSetSize),
-		txOnChainCache: lru.NewCache[common.Hash, struct{}](txOnChainCacheLimit),
-		chain:          chain,
-		validateMeta:   validateMeta,
-		addTxs:         addTxs,
-		fetchTxs:       fetchTxs,
-		dropPeer:       dropPeer,
-		onAccepted:     onAccepted,
-		clock:          clock,
-		realTime:       realTime,
-		rand:           rand,
+		notify:           make(chan *txAnnounce),
+		cleanup:          make(chan *txDelivery),
+		drop:             make(chan *txDrop),
+		quit:             make(chan struct{}),
+		waitlist:         make(map[common.Hash]map[string]struct{}),
+		waittime:         make(map[common.Hash]mclock.AbsTime),
+		waitslots:        make(map[string]map[common.Hash]*txMetadataWithSeq),
+		announces:        make(map[string]map[common.Hash]*txMetadataWithSeq),
+		announced:        make(map[common.Hash]map[string]struct{}),
+		fetching:         make(map[common.Hash]string),
+		requests:         make(map[string]*txRequest),
+		alternates:       make(map[common.Hash]map[string]struct{}),
+		underpriced:      lru.NewCache[common.Hash, time.Time](maxTxUnderpricedSetSize),
+		txOnChainCache:   lru.NewCache[common.Hash, struct{}](txOnChainCacheLimit),
+		chain:            chain,
+		validateMeta:     validateMeta,
+		addTxs:           addTxs,
+		fetchTxs:         fetchTxs,
+		dropPeer:         dropPeer,
+		onAccepted:       onAccepted,
+		onRequestLatency: onRequestLatency,
+		clock:            clock,
+		realTime:         realTime,
+		rand:             rand,
 	}
 }
 
@@ -673,6 +675,14 @@ func (f *TxFetcher) loop() {
 					// Keep track of the request as dangling, but never expire
 					f.requests[peer].hashes = nil
 					txFetcherSlowPeers.Inc(1)
+					// Record the request as a timeout-latency sample. The slow
+					// EMA in the consumer counts timeouts as the timeout value
+					// itself, so a peer that times out repeatedly drags its
+					// score down without us having to wait for an eventual
+					// (possibly never-arriving) reply.
+					if f.onRequestLatency != nil {
+						f.onRequestLatency(peer, txFetchTimeout)
+					}
 				}
 			}
 			// Schedule a new transaction retrieval
@@ -769,6 +779,11 @@ func (f *TxFetcher) loop() {
 				if req.hashes == nil {
 					txFetcherSlowPeers.Dec(1)
 					txFetcherSlowWait.Update(time.Duration(f.clock.Now() - req.time).Nanoseconds())
+					// Already counted as a timeout sample at the timeout site;
+					// don't double-record on eventual delivery.
+				} else if f.onRequestLatency != nil {
+					// Normal in-time delivery. Record the actual round-trip.
+					f.onRequestLatency(delivery.origin, time.Duration(f.clock.Now()-req.time))
 				}
 				delete(f.requests, delivery.origin)
 
