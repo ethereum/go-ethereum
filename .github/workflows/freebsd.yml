@@ -1,8 +1,10 @@
 on:
   push:
     branches:
-      - freebsd-github-action
-
+      - master
+  pull_request:
+    branches:
+      - master
   workflow_dispatch:
 
 jobs:
