@@ -544,7 +544,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		}
 		snaps, _ = snapshot.New(snapconfig, db, triedb, root)
 	}
-	sdb = state.NewDatabase(triedb, nil).WithSnapshot(snaps)
+	sdb = state.NewMPTDatabase(triedb, nil).WithSnapshot(snaps)
 	statedb, _ = state.New(root, sdb)
 	return StateTestState{statedb, triedb, snaps}
 }

@@ -2121,9 +2121,9 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
 	if bc.chainConfig.IsUBT(block.Number(), block.Time()) {
-		sdb = state.NewUBTDB(bc.triedb, bc.codedb)
+		sdb = state.NewUBTDatabase(bc.triedb, bc.codedb)
 	} else {
-		sdb = state.NewMerkleDB(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
+		sdb = state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
 	}
 	// If prefetching is enabled, run that against the current state to pre-cache
 	// transactions and probabilistically some of the account/storage trie nodes.

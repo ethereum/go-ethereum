@@ -422,7 +422,7 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 // StateAt returns a new mutable state based on a particular point in time.
 func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	// TODO(rjl493456442) support ubt later
-	return state.New(root, state.NewMerkleDB(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
+	return state.New(root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
 }
 
 // HistoricState returns a historic state specified by the given root.

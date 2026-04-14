@@ -21,7 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
@@ -30,8 +29,27 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
+// DatabaseType represents the type of trie backing the state database.
+type DatabaseType int
+
+const (
+	// TypeMPT indicates a Merkle Patricia Trie (MPT) backed database.
+	TypeMPT DatabaseType = iota
+
+	// TypeUBT indicates a Unified Binary Trie (UBT) backed database.
+	TypeUBT
+)
+
+// Is returns the flag indicating the database type equals to the given one.
+func (typ DatabaseType) Is(t DatabaseType) bool {
+	return typ == t
+}
+
 // Database wraps access to tries and contract code.
 type Database interface {
+	// Type returns the trie type backing this database (MPT or UBT).
+	Type() DatabaseType
+
 	// Reader returns a state reader associated with the specified state root.
 	Reader(root common.Hash) (Reader, error)
 
@@ -52,9 +70,6 @@ type Database interface {
 	// committing the changes to the underlying storage. It returns an error
 	// if the commit fails.
 	Commit(update *stateUpdate) error
-
-	// Snapshot returns the underlying state snapshot.
-	Snapshot() *snapshot.Tree
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -144,12 +159,12 @@ type Trie interface {
 
 // NewDatabase creates a state database with the provided data sources.
 //
-// Deprecated, please use NewMerkleDB or NewUBTDB directly.
+// Deprecated, please use NewMPTDatabase or NewUBTDatabase directly.
 func NewDatabase(tdb *triedb.Database, codedb *CodeDB) Database {
 	if tdb.IsUBT() {
-		return NewUBTDB(tdb, codedb)
+		return NewUBTDatabase(tdb, codedb)
 	}
-	return NewMerkleDB(tdb, codedb)
+	return NewMPTDatabase(tdb, codedb)
 }
 
 // NewDatabaseForTesting is similar to NewDatabase, but it initializes the caching

@@ -209,7 +209,7 @@ func (test *stateTest) run() bool {
 		if i != 0 {
 			root = roots[len(roots)-1]
 		}
-		state, err := New(root, NewDatabase(tdb, nil).WithSnapshot(snaps))
+		state, err := New(root, NewMPTDatabase(tdb, nil).WithSnapshot(snaps))
 		if err != nil {
 			panic(err)
 		}

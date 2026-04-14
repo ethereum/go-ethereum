@@ -26,36 +26,38 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
-// MerkleDB is an implementation of Database interface for Merkle Patricia Tries.
+// MPTDatabase is an implementation of Database interface for Merkle Patricia Tries.
 // It leverages both trie and state snapshot to provide functionalities for state
-// access. It's meant to be a long-live object and has a few caches inside for
-// sharing between blocks.
-type MerkleDB struct {
+// access.
+type MPTDatabase struct {
 	triedb *triedb.Database
 	codedb *CodeDB
 	snap   *snapshot.Tree
 }
 
-// NewMerkleDB creates a state database with the Merkle Patricia Trie manner.
-func NewMerkleDB(tdb *triedb.Database, codedb *CodeDB) *MerkleDB {
+// Type returns Merkle, indicating this database is backed by a Merkle Patricia Trie.
+func (db *MPTDatabase) Type() DatabaseType { return TypeMPT }
+
+// NewMPTDatabase creates a state database with the Merkle Patricia Trie manner.
+func NewMPTDatabase(tdb *triedb.Database, codedb *CodeDB) *MPTDatabase {
 	if codedb == nil {
 		codedb = NewCodeDB(tdb.Disk())
 	}
-	return &MerkleDB{
+	return &MPTDatabase{
 		triedb: tdb,
 		codedb: codedb,
 	}
 }
 
-// WithSnapshot configures the provided contract code cache. Note that this
-// registration must be performed before the MerkleDB is used.
-func (db *MerkleDB) WithSnapshot(snapshot *snapshot.Tree) Database {
+// WithSnapshot configures the provided state snapshot. Note that this
+// registration must be performed before the MPTDatabase is used.
+func (db *MPTDatabase) WithSnapshot(snapshot *snapshot.Tree) Database {
 	db.snap = snapshot
 	return db
 }
 
 // StateReader returns a state reader associated with the specified state root.
-func (db *MerkleDB) StateReader(stateRoot common.Hash) (StateReader, error) {
+func (db *MPTDatabase) StateReader(stateRoot common.Hash) (StateReader, error) {
 	var readers []StateReader
 
 	// Configure the state reader using the standalone snapshot in hash mode.
@@ -90,7 +92,7 @@ func (db *MerkleDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 
 // Reader implements Database, returning a reader associated with the specified
 // state root.
-func (db *MerkleDB) Reader(stateRoot common.Hash) (Reader, error) {
+func (db *MPTDatabase) Reader(stateRoot common.Hash) (Reader, error) {
 	sr, err := db.StateReader(stateRoot)
 	if err != nil {
 		return nil, err
@@ -101,7 +103,7 @@ func (db *MerkleDB) Reader(stateRoot common.Hash) (Reader, error) {
 // ReadersWithCacheStats creates a pair of state readers that share the same
 // underlying state reader and internal state cache, while maintaining separate
 // statistics respectively.
-func (db *MerkleDB) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reader, error) {
+func (db *MPTDatabase) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reader, error) {
 	r, err := db.StateReader(stateRoot)
 	if err != nil {
 		return nil, nil, err
@@ -113,7 +115,7 @@ func (db *MerkleDB) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reader
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
-func (db *MerkleDB) OpenTrie(root common.Hash) (Trie, error) {
+func (db *MPTDatabase) OpenTrie(root common.Hash) (Trie, error) {
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {
 		return nil, err
@@ -122,7 +124,7 @@ func (db *MerkleDB) OpenTrie(root common.Hash) (Trie, error) {
 }
 
 // OpenStorageTrie opens the storage trie of an account.
-func (db *MerkleDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
+func (db *MPTDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
 	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)
 	if err != nil {
 		return nil, err
@@ -131,19 +133,14 @@ func (db *MerkleDB) OpenStorageTrie(stateRoot common.Hash, address common.Addres
 }
 
 // TrieDB retrieves any intermediate trie-node caching layer.
-func (db *MerkleDB) TrieDB() *triedb.Database {
+func (db *MPTDatabase) TrieDB() *triedb.Database {
 	return db.triedb
-}
-
-// Snapshot returns the underlying state snapshot.
-func (db *MerkleDB) Snapshot() *snapshot.Tree {
-	return db.snap
 }
 
 // Commit flushes all pending writes and finalizes the state transition,
 // committing the changes to the underlying storage. It returns an error
 // if the commit fails.
-func (db *MerkleDB) Commit(update *stateUpdate) error {
+func (db *MPTDatabase) Commit(update *stateUpdate) error {
 	// Short circuit if nothing to commit
 	if update.empty() {
 		return nil
@@ -176,6 +173,6 @@ func (db *MerkleDB) Commit(update *stateUpdate) error {
 
 // Iteratee returns a state iteratee associated with the specified state root,
 // through which the account iterator and storage iterator can be created.
-func (db *MerkleDB) Iteratee(root common.Hash) (Iteratee, error) {
+func (db *MPTDatabase) Iteratee(root common.Hash) (Iteratee, error) {
 	return newStateIteratee(true, root, db.triedb, db.snap)
 }
