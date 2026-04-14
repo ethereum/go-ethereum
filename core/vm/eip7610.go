@@ -83,16 +83,16 @@ var eip7610AccountSets = func() map[uint64]map[common.Address]struct{} {
 // occur in the event of an address collision, which is extremely unlikely.
 //
 // This check is skipped for blocks prior to EIP-158, serving as a safeguard
-// against potential address collisions in the future.
+// against potential address collisions in the future. Chains that are not
+// registered in eip7610Accounts are assumed to have no rejected accounts,
+// and false is returned for them.
 func isEIP7610RejectedAccount(chainID *big.Int, addr common.Address, isEIP158 bool) bool {
 	// Short circuit for blocks prior to EIP-158.
 	if !isEIP158 {
 		return false
 	}
-	// The network is unknown or has no rejected accounts; the set must be
-	// provided by the network operators themselves. Only a small number of
-	// networks enabled EIP-158 after genesis; for all others, this set
-	// will always be empty.
+	// Unknown chains fall through as a nil set; the second lookup then
+	// returns the zero value (false), treating the chain as empty.
 	_, exist := eip7610AccountSets[chainID.Uint64()][addr]
 	return exist
 }
