@@ -1068,8 +1068,19 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 		}
 		return headHeader, wipe // Only force wipe if full synced
 	}
+	deleteTxLookupEntries := func(db ethdb.KeyValueWriter, hash common.Hash, num uint64) {
+		body := rawdb.ReadBody(bc.db, hash, num)
+		if body == nil {
+			return
+		}
+		for _, tx := range body.Transactions {
+			rawdb.DeleteTxLookupEntry(db, tx.Hash())
+		}
+	}
 	// Rewind the header chain, deleting all block bodies until then
 	delFn := func(db ethdb.KeyValueWriter, hash common.Hash, num uint64) {
+		deleteTxLookupEntries(db, hash, num)
+
 		// Ignore the error here since light client won't hit this path
 		frozen, _ := bc.db.Ancients()
 		if num+1 <= frozen {
@@ -1086,31 +1097,36 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			rawdb.DeleteBody(db, hash, num)
 			rawdb.DeleteReceipts(db, hash, num)
 		}
-		// Todo(rjl493456442) txlookup, log index, etc
+		// Todo(rjl493456442) log index, etc
 	}
 	// If SetHead was only called as a chain reparation method, try to skip
 	// touching the header chain altogether, unless the freezer is broken
-	if repair {
-		if target, force := updateFn(bc.db, bc.CurrentBlock()); force {
-			bc.hc.SetHead(target.Number.Uint64(), nil, delFn)
-		}
-	} else {
-		// Rewind the chain to the requested head and keep going backwards until a
-		// block with a state is found or snap sync pivot is passed
-		if time > 0 {
-			log.Warn("Rewinding blockchain to timestamp", "target", time)
-			bc.hc.SetHeadWithTimestamp(time, updateFn, delFn)
+	bc.txLookupLock.Lock()
+	func() {
+		defer bc.txLookupLock.Unlock()
+
+		if repair {
+			if target, force := updateFn(bc.db, bc.CurrentBlock()); force {
+				bc.hc.SetHead(target.Number.Uint64(), nil, delFn)
+			}
 		} else {
-			log.Warn("Rewinding blockchain to block", "target", head)
-			bc.hc.SetHead(head, updateFn, delFn)
+			// Rewind the chain to the requested head and keep going backwards until a
+			// block with a state is found or snap sync pivot is passed
+			if time > 0 {
+				log.Warn("Rewinding blockchain to timestamp", "target", time)
+				bc.hc.SetHeadWithTimestamp(time, updateFn, delFn)
+			} else {
+				log.Warn("Rewinding blockchain to block", "target", head)
+				bc.hc.SetHead(head, updateFn, delFn)
+			}
 		}
-	}
+		bc.txLookupCache.Purge()
+	}()
 	// Clear out any stale content from the caches
 	bc.bodyCache.Purge()
 	bc.bodyRLPCache.Purge()
 	bc.receiptsCache.Purge()
 	bc.blockCache.Purge()
-	bc.txLookupCache.Purge()
 
 	// Clear safe block, finalized block if needed
 	headBlock := bc.CurrentBlock()
