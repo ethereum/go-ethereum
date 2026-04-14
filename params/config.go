@@ -476,13 +476,13 @@ type ChainConfig struct {
 
 	// EnableUBTAtGenesis is a flag that specifies whether the network uses
 	// the Verkle tree starting from the genesis block. If set to true, the
-	// genesis state will be committed using the Verkle tree, eliminating the
-	// need for any Verkle transition later.
+	// genesis state will be committed using the Binary tree, eliminating the
+	// need for any Binary transition later.
 	//
-	// This is a temporary flag only for verkle devnet testing, where verkle is
+	// This is a temporary flag only for binary devnet testing, where binary is
 	// activated at genesis, and the configured activation date has already passed.
 	//
-	// In production networks (mainnet and public testnets), verkle activation
+	// In production networks (mainnet and public testnets), binary activation
 	// always occurs after the genesis block, making this flag irrelevant in
 	// those cases.
 	EnableUBTAtGenesis bool `json:"enableUBTAtGenesis,omitempty"`
@@ -691,7 +691,7 @@ func (c *ChainConfig) Description() string {
 		banner += fmt.Sprintf(" - Amsterdam:									 @%-10v blob: (%s)\n", *c.AmsterdamTime, c.BlobScheduleConfig.Amsterdam)
 	}
 	if c.UBTTime != nil {
-		banner += fmt.Sprintf(" - Verkle:                      @%-10v blob: (%s)\n", *c.UBTTime, c.BlobScheduleConfig.Verkle)
+		banner += fmt.Sprintf(" - UBT:                         @%-10v blob: (%s)\n", *c.UBTTime, c.BlobScheduleConfig.UBT)
 	}
 	banner += fmt.Sprintf("\nAll fork specifications can be found at https://ethereum.github.io/execution-specs/src/ethereum/forks/\n")
 	return banner
@@ -717,13 +717,13 @@ type BlobScheduleConfig struct {
 	Cancun    *BlobConfig `json:"cancun,omitempty"`
 	Prague    *BlobConfig `json:"prague,omitempty"`
 	Osaka     *BlobConfig `json:"osaka,omitempty"`
-	Verkle    *BlobConfig `json:"verkle,omitempty"`
 	BPO1      *BlobConfig `json:"bpo1,omitempty"`
 	BPO2      *BlobConfig `json:"bpo2,omitempty"`
 	BPO3      *BlobConfig `json:"bpo3,omitempty"`
 	BPO4      *BlobConfig `json:"bpo4,omitempty"`
 	BPO5      *BlobConfig `json:"bpo5,omitempty"`
 	Amsterdam *BlobConfig `json:"amsterdam,omitempty"`
+	UBT       *BlobConfig `json:"ubt,omitempty"`
 }
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.

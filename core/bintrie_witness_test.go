@@ -55,7 +55,7 @@ var (
 		TerminalTotalDifficulty: common.Big0,
 		EnableUBTAtGenesis:      true,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
-			Verkle: params.DefaultPragueBlobConfig,
+			UBT: params.DefaultPragueBlobConfig,
 		},
 	}
 )

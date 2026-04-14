@@ -294,7 +294,7 @@ func TestVerkleGenesisCommit(t *testing.T) {
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
 			Osaka:  params.DefaultOsakaBlobConfig,
-			Verkle: params.DefaultPragueBlobConfig,
+			UBT:    params.DefaultPragueBlobConfig,
 		},
 	}
 

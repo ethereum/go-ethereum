@@ -153,7 +153,7 @@ type Trie interface {
 	// with the node that proves the absence of the key.
 	Prove(key []byte, proofDb ethdb.KeyValueWriter) error
 
-	// IsUBT returns true if the trie is verkle-tree based
+	// IsUBT returns true if the trie is unified binary trie based.
 	IsUBT() bool
 }
 
