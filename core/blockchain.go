@@ -2271,7 +2271,9 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	stats.MgasPerSecond = float64(res.GasUsed) * 1000 / float64(elapsed)
 
 	if config.StatelessSelfValidation {
-		bc.crossValidation(ctx, statedb, block)
+		if err := bc.crossValidation(ctx, statedb, block); err != nil {
+			return nil, err
+		}
 	}
 	return &blockProcessingResult{
 		usedGas:  res.GasUsed,

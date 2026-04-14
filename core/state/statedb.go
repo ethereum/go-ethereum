@@ -862,7 +862,7 @@ func (s *StateDB) deleteStorage(addrHash common.Hash) (map[common.Hash]common.Ha
 		key := it.Hash()
 		storages[key] = common.Hash{}
 
-		_, content, _, err := rlp.Split(it.Slot())
+		_, content, _, err := rlp.Split(slot)
 		if err != nil {
 			return nil, nil, nil, err
 		}

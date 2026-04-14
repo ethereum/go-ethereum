@@ -27,15 +27,15 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
-// warpBinTrie pairs a BinaryTrie with an optional background prefetcher that
+// wrapBinTrie pairs a BinaryTrie with an optional background prefetcher that
 // preloads trie nodes ahead of mutation.
-type warpBinTrie struct {
+type wrapBinTrie struct {
 	*bintrie.BinaryTrie
 	prefetcher *prefetcher
 }
 
 // newWrapBinTrie creates a binary trie with the optional prefetcher enabled.
-func newWrapBinTrie(root common.Hash, db *triedb.Database, prefetch bool, prefetchRead bool) (*warpBinTrie, error) {
+func newWrapBinTrie(root common.Hash, db *triedb.Database, prefetch bool, prefetchRead bool) (*wrapBinTrie, error) {
 	t, err := bintrie.NewBinaryTrie(root, db)
 	if err != nil {
 		return nil, err
@@ -44,13 +44,13 @@ func newWrapBinTrie(root common.Hash, db *triedb.Database, prefetch bool, prefet
 	if prefetch {
 		p = newPrefetcher(t, prefetchRead)
 	}
-	return &warpBinTrie{BinaryTrie: t, prefetcher: p}, nil
+	return &wrapBinTrie{BinaryTrie: t, prefetcher: p}, nil
 }
 
 // term synchronously terminates the prefetcher (no-op if nil or already done).
 // After termination the prefetcher reference is nilled so subsequent calls are
 // a cheap pointer check.
-func (tr *warpBinTrie) term() {
+func (tr *wrapBinTrie) term() {
 	if tr.prefetcher == nil {
 		return
 	}
@@ -62,54 +62,54 @@ func (tr *warpBinTrie) term() {
 // access auto-terminates the prefetcher first. This makes data-race freedom
 // structural: callers never need to remember to call term() manually.
 
-func (tr *warpBinTrie) UpdateAccount(address common.Address, acc *types.StateAccount, codeLen int) error {
+func (tr *wrapBinTrie) UpdateAccount(address common.Address, acc *types.StateAccount, codeLen int) error {
 	tr.term()
 	return tr.BinaryTrie.UpdateAccount(address, acc, codeLen)
 }
 
-func (tr *warpBinTrie) DeleteAccount(address common.Address) error {
+func (tr *wrapBinTrie) DeleteAccount(address common.Address) error {
 	tr.term()
 	return tr.BinaryTrie.DeleteAccount(address)
 }
 
-func (tr *warpBinTrie) UpdateStorage(address common.Address, key, value []byte) error {
+func (tr *wrapBinTrie) UpdateStorage(address common.Address, key, value []byte) error {
 	tr.term()
 	return tr.BinaryTrie.UpdateStorage(address, key, value)
 }
 
-func (tr *warpBinTrie) DeleteStorage(address common.Address, key []byte) error {
+func (tr *wrapBinTrie) DeleteStorage(address common.Address, key []byte) error {
 	tr.term()
 	return tr.BinaryTrie.DeleteStorage(address, key)
 }
 
-func (tr *warpBinTrie) Hash() common.Hash {
+func (tr *wrapBinTrie) Hash() common.Hash {
 	tr.term()
 	return tr.BinaryTrie.Hash()
 }
 
-func (tr *warpBinTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
+func (tr *wrapBinTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	tr.term()
 	return tr.BinaryTrie.Commit(collectLeaf)
 }
 
-func (tr *warpBinTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
+func (tr *wrapBinTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 	tr.term()
 	return tr.BinaryTrie.Prove(key, proofDb)
 }
 
-func (tr *warpBinTrie) Witness() map[string][]byte {
+func (tr *wrapBinTrie) Witness() map[string][]byte {
 	tr.term()
 	return tr.BinaryTrie.Witness()
 }
 
-func (tr *warpBinTrie) prefetchAccounts(addresses []common.Address, read bool) {
+func (tr *wrapBinTrie) prefetchAccounts(addresses []common.Address, read bool) {
 	if tr.prefetcher == nil {
 		return
 	}
 	tr.prefetcher.scheduleAccounts(addresses, read)
 }
 
-func (tr *warpBinTrie) prefetchStorage(addr common.Address, keys []common.Hash, read bool) {
+func (tr *wrapBinTrie) prefetchStorage(addr common.Address, keys []common.Hash, read bool) {
 	if tr.prefetcher == nil {
 		return
 	}
@@ -118,9 +118,9 @@ func (tr *warpBinTrie) prefetchStorage(addr common.Address, keys []common.Hash, 
 
 // copy returns a deep-copied state trie. Notably the prefetcher is deliberately
 // not copied, as it only belongs to the original one.
-func (tr *warpBinTrie) copy() *warpBinTrie {
+func (tr *wrapBinTrie) copy() *wrapBinTrie {
 	tr.term()
-	return &warpBinTrie{BinaryTrie: tr.BinaryTrie.Copy()}
+	return &wrapBinTrie{BinaryTrie: tr.BinaryTrie.Copy()}
 }
 
 // binaryHasher is a Hasher implementation backed by a unified single-layer
@@ -139,7 +139,7 @@ type binaryHasher struct {
 	root common.Hash
 
 	prefetch bool
-	trie     *warpBinTrie
+	trie     *wrapBinTrie
 
 	// leaves buffers flat-state writes produced as a side-effect of
 	// UpdateAccount/UpdateStorage/deleteAccount. It is cleared by
@@ -350,20 +350,23 @@ func (h *binaryHasher) Copy() Hasher {
 	}
 }
 
-// ProveAccount implements Prover, constructing a proof for the given account.
+// ProveAccount implements Prover. NOTE: BinaryTrie.Prove is not yet
+// implemented (panics at runtime). The key derivation also needs to use
+// bintrie tree keys instead of keccak256. Do not call until the bintrie
+// proof path is implemented.
 func (h *binaryHasher) ProveAccount(addr common.Address, proofDb ethdb.KeyValueWriter) error {
 	return h.trie.Prove(crypto.Keccak256(addr.Bytes()), proofDb)
 }
 
-// ProveStorage implements Prover, constructing a proof for the given storage
-// slot of the specified account.
+// ProveStorage implements Prover. NOTE: same limitation as ProveAccount —
+// BinaryTrie.Prove panics and the key derivation is wrong.
 func (h *binaryHasher) ProveStorage(addr common.Address, key common.Hash, proofDb ethdb.KeyValueWriter) error {
 	return h.trie.Prove(crypto.Keccak256(key.Bytes()), proofDb)
 }
 
 // CollectWitness implements WitnessCollector. It aggregates all trie nodes
-// accessed (both read and write) across the account trie, all active storage
-// tries and deleted storage tries into a single state witness.
+// accessed during the state transition from the unified binary trie into
+// a single state witness.
 func (h *binaryHasher) CollectWitness(witness *stateless.Witness) {
 	witness.AddState(h.trie.Witness(), common.Hash{})
 }
@@ -376,8 +379,8 @@ func (h *binaryHasher) PrefetchAccount(addresses []common.Address, read bool) {
 	h.trie.prefetchAccounts(addresses, read)
 }
 
-// PrefetchStorage implements Prefetcher. The storage trie is opened eagerly
-// so the prefetcher can begin loading nodes in the background.
+// PrefetchStorage implements Prefetcher, scheduling storage slot nodes for
+// background loading in the unified binary trie.
 func (h *binaryHasher) PrefetchStorage(addr common.Address, keys []common.Hash, read bool) {
 	if !h.prefetch {
 		return

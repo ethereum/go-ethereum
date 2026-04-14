@@ -121,7 +121,7 @@ type Hasher interface {
 	// UpdateAccount writes a list of accounts into the state.
 	UpdateAccount(addresses []common.Address, accounts []AccountMut) error
 
-	// UpdateStorage writes a list of storage slot value.
+	// UpdateStorage writes a list of storage slot values.
 	UpdateStorage(address common.Address, keys []common.Hash, values []common.Hash) error
 
 	// Hash computes and returns the state root hash without committing.

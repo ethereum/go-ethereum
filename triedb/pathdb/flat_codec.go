@@ -36,8 +36,8 @@ import (
 //
 // Two implementations are provided:
 //   - merkleFlatCodec: keccak-keyed flat state, the historical MPT scheme.
-//   - bintrieFlatCodec: per-stem flat state for the unified binary trie. Added
-//     in a later commit. Until then, only merkleFlatCodec is wired.
+//   - bintrieFlatCodec: per-stem flat state for the unified binary trie.
+//     Wired into pathdb.Database.New when isVerkle is true.
 //
 // All methods MUST be safe for concurrent use; the codec is shared across
 // goroutines (the disk layer's read path, the buffer flush path, and the
@@ -46,9 +46,10 @@ type flatStateCodec interface {
 	// AccountKey derives the flat-state lookup key for an account.
 	//
 	// For Merkle: returns keccak256(addr).
-	// For Bintrie: returns the stem of the BasicData leaf (a 31-byte stem
-	// zero-padded into a common.Hash). Subsequent reads of the stem blob
-	// extract the BasicData and CodeHash leaves at offsets 0 and 1.
+	// For Bintrie: returns the full 32-byte tree key (stem || offset) for
+	// the BasicData leaf. Since BasicDataLeafKey is 0, the last byte is
+	// zero, but the result is a full key — callers use stemFromKey /
+	// offsetFromKey to decompose it.
 	AccountKey(addr common.Address) common.Hash
 
 	// StorageKey derives the flat-state lookup keys for a storage slot.
@@ -272,7 +273,7 @@ func (c *merkleFlatCodec) Flush(batch ethdb.Batch, genMarker []byte, accountData
 		if len(blob) == 0 {
 			c.DeleteAccount(batch, addrHash)
 			if clean != nil {
-				clean.Set(cacheKey, nil)
+				clean.Set(cacheKey, []byte{})
 			}
 		} else {
 			c.WriteAccount(batch, addrHash, blob)
@@ -301,7 +302,7 @@ func (c *merkleFlatCodec) Flush(batch ethdb.Batch, genMarker []byte, accountData
 			if len(blob) == 0 {
 				c.DeleteStorage(batch, addrHash, storageHash)
 				if clean != nil {
-					clean.Set(cacheKey, nil)
+					clean.Set(cacheKey, []byte{})
 				}
 			} else {
 				c.WriteStorage(batch, addrHash, storageHash, blob)

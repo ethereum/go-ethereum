@@ -141,12 +141,11 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 			cleanNodeHitMeter.Mark(1)
 			cleanNodeReadMeter.Mark(int64(len(blob)))
 			// Use the scheme-appropriate hasher (keccak256 for merkle,
-			// sha256-via-bintrie for binary trie). Prior to A5 this was
-			// hard-coded to crypto.Keccak256Hash, which returned the wrong
-			// hash for bintrie nodes — masked by noHashCheck=true in the
-			// verkle NodeReader, but silently wrong for any caller without
-			// that flag (e.g. HistoricalNodeReader.Node).
-			h, _ := dl.db.hasher(blob)
+			// sha256-via-bintrie for binary trie).
+			h, err := dl.db.hasher(blob)
+			if err != nil {
+				return nil, common.Hash{}, nodeLoc{}, fmt.Errorf("hash cached trie node: %w", err)
+			}
 			return blob, h, nodeLoc{loc: locCleanCache, depth: depth}, nil
 		}
 		cleanNodeMissMeter.Mark(1)
@@ -167,7 +166,10 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		dl.nodes.Set(key, blob)
 		cleanNodeWriteMeter.Mark(int64(len(blob)))
 	}
-	h, _ := dl.db.hasher(blob)
+	h, err := dl.db.hasher(blob)
+	if err != nil {
+		return nil, common.Hash{}, nodeLoc{}, fmt.Errorf("hash disk trie node: %w", err)
+	}
 	return blob, h, nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
 
@@ -557,12 +559,8 @@ func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 	// shape), but the bintrie disk layout is per-stem and the merkle
 	// origin maps cannot be replayed onto it. Reorgs would silently
 	// produce wrong answers — fail loudly here so misuse is obvious.
-	//
-	// See BINTRIE_FLAT_STATE_REORG_GAP.md for the full design and the
-	// follow-up that lifts this restriction by emitting bintrie-shaped
-	// origin records on the write path.
 	if _, isBintrie := dl.db.flatCodec.(*bintrieFlatCodec); isBintrie {
-		return nil, errors.New("bintrie flat state revert is not supported (see BINTRIE_FLAT_STATE_REORG_GAP.md)")
+		return nil, errors.New("bintrie flat state revert is not supported")
 	}
 	// Apply the reverse state changes upon the current state. This must
 	// be done before holding the lock in order to access state in "this"

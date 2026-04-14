@@ -280,9 +280,8 @@ func (sc *stateUpdate) encodeMerkle() (map[common.Hash][]byte, map[common.Addres
 // 32-byte keys.
 //
 // accountOrigin and storageOrigin are returned empty because state-history
-// rollback for bintrie is deferred to a follow-up PR (see
-// BINTRIE_FLAT_STATE_REORG_GAP.md). The pathdb layer's revertTo path
-// panics for bintrie before it would observe these maps anyway.
+// rollback for bintrie is not yet supported. The pathdb disklayer.revert
+// guard blocks bintrie reverts before it would observe these maps.
 func (sc *stateUpdate) encodeBinary() (map[common.Hash][]byte, map[common.Address][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Address]map[common.Hash][]byte, error) {
 	var (
 		accounts      = make(map[common.Hash][]byte, len(sc.leaves))
@@ -393,7 +392,17 @@ func (sc *stateUpdate) ToTracingUpdate() (*tracing.StateUpdate, error) {
 		if !exists {
 			return nil, fmt.Errorf("account %x not found", addr)
 		}
-		hashes := sc.secondaryHashes[addr]
+		var hashes Hashes
+		if sc.secondaryHashes != nil {
+			var ok bool
+			hashes, ok = sc.secondaryHashes[addr]
+			if !ok {
+				return nil, fmt.Errorf("ToTracingUpdate: missing secondary hash for %x", addr)
+			}
+		} else {
+			// Bintrie: no per-account storage sub-tries, use empty root.
+			hashes = Hashes{Hash: types.EmptyRootHash, Prev: types.EmptyRootHash}
+		}
 		change := &tracing.AccountChange{}
 
 		if oldData != nil {

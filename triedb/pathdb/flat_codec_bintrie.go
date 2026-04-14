@@ -152,6 +152,7 @@ func (c *bintrieFlatCodec) ReadAccount(db ethdb.KeyValueReader, key common.Hash)
 	}
 	val, err := extractStemOffset(blob, offsetFromKey(key))
 	if err != nil {
+		log.Error("Corrupt bintrie stem blob in ReadAccount", "key", key, "err", err)
 		return nil
 	}
 	return val
@@ -159,13 +160,8 @@ func (c *bintrieFlatCodec) ReadAccount(db ethdb.KeyValueReader, key common.Hash)
 
 // ReadStorage returns the 32-byte value stored at the storage slot's
 // offset within its stem, or nil if the offset is not populated.
-//
-// Unlike ReadAccount, this method DOES perform offset extraction from
-// the stem blob: storage-slot reads are always a single-offset query, so
-// returning the whole blob would just force every caller to re-run the
-// extraction. A malformed stem blob is treated as absent and logged
-// (returning nil) to match the behavior of rawdb.ReadStorageSnapshot on
-// the merkle path.
+// Like ReadAccount, it extracts a single offset from the on-disk stem
+// blob. A malformed stem blob is treated as absent and logged.
 //
 // The first parameter (accountKey) is ignored: see StorageKey for the
 // reasoning behind the bintrie's zero-hash convention.
@@ -176,11 +172,7 @@ func (c *bintrieFlatCodec) ReadStorage(db ethdb.KeyValueReader, _ common.Hash, s
 	}
 	val, err := extractStemOffset(blob, offsetFromKey(storageKey))
 	if err != nil {
-		// A well-formed blob never errors on a point read. If we get
-		// here the on-disk layout is corrupted — return nil rather than
-		// propagating the error, since the interface has no error path
-		// (the caller expects a value-or-nil just like
-		// rawdb.ReadStorageSnapshot).
+		log.Error("Corrupt bintrie stem blob in ReadStorage", "key", storageKey, "err", err)
 		return nil
 	}
 	return val
@@ -192,9 +184,9 @@ func (c *bintrieFlatCodec) ReadStorage(db ethdb.KeyValueReader, _ common.Hash, s
 
 // WriteAccount writes an account entry. The blob is expected to be a
 // two-slot payload containing BasicData (bytes 0..31) followed by the
-// code hash (bytes 32..63) — the caller (binaryHasher, in a later
-// commit) packs these together because they live at the same stem and
-// benefit from a single read-modify-write pass.
+// code hash (bytes 32..63) — the caller (binaryHasher) packs these
+// together because they live at the same stem and benefit from a
+// single read-modify-write pass.
 //
 // Writing nil or an empty blob is equivalent to clearing offsets 0 and 1
 // at this stem (a partial account deletion); the codec merges the
@@ -392,8 +384,8 @@ func (c *bintrieFlatCodec) StoragePrefixSize() int {
 // ---------------------------------------------------------------------
 
 // SplitMarker splits a generation progress marker into the account and
-// full components. For bintrie the marker is a single 31-byte stem (or
-// the full 32-byte key with offset 0), not the merkle two-tier
+// full components. For bintrie the marker is a full 32-byte key
+// (stem || offset), not the merkle two-tier
 // account-then-storage format, so both returned slices point at the
 // same data. The second half of the merkle marker (storage offset) has
 // no equivalent for bintrie: the generator iterates stems directly,
@@ -419,7 +411,7 @@ func (c *bintrieFlatCodec) MarkerCompare(key []byte, marker []byte) int {
 // bintrieFlatCodec.StorageKey returns (zeroHash, fullKey). Comparing
 // this directly against the 32-byte generator marker yields the correct
 // ordering — unlike the merkle 64-byte combined key which was fail-open
-// for bintrie (see A4 remediation plan for the full diagnosis).
+// for bintrie.
 func (c *bintrieFlatCodec) StorageMarkerKey(_ common.Hash, storageHash common.Hash) []byte {
 	return storageHash[:]
 }
@@ -441,7 +433,7 @@ func (c *bintrieFlatCodec) StorageMarkerKey(_ common.Hash, storageHash common.Ha
 //
 // Cache update: after the per-stem RMW, the clean cache is updated
 // with each written offset's new value (per-offset entries, matching
-// the shape returned by ReadAccount after the A1 remediation). Offsets
+// the shape returned by ReadAccount). Offsets
 // that were not touched by this flush retain their existing cache
 // entries, which remain valid because the RMW did not modify them.
 //
@@ -498,10 +490,10 @@ func (c *bintrieFlatCodec) Flush(batch ethdb.Batch, genMarker []byte, accountDat
 		}
 	}
 	// Issue one RMW per stem, then update the clean cache per-offset
-	// using the fullKeys we captured in the aggregator. A nil/empty
-	// value stored in the cache means "confirmed absent" (the reader
-	// will fall through to the trie reader on this per feedback #3 /
-	// Commit A2); a 32-byte value means the offset is populated.
+	// using the fullKeys we captured in the aggregator. An empty value
+	// stored in the cache means "confirmed absent" (the reader will
+	// fall through to the trie reader); a 32-byte value means the
+	// offset is populated.
 	for _, ag := range aggregated {
 		if _, err := c.applyWrites(batch, ag.fullKeys[0][:bintrie.StemSize], ag.writes); err != nil {
 			return accountWrites, storageWrites, fmt.Errorf("bintrie Flush: %w", err)
@@ -511,7 +503,11 @@ func (c *bintrieFlatCodec) Flush(batch ethdb.Batch, genMarker []byte, accountDat
 		}
 		for i, fullKey := range ag.fullKeys {
 			cacheKey := c.AccountCacheKey(fullKey)
-			clean.Set(cacheKey, ag.writes[i].Value)
+			val := ag.writes[i].Value
+			if val == nil {
+				val = []byte{}
+			}
+			clean.Set(cacheKey, val)
 		}
 	}
 	return accountWrites, storageWrites, nil

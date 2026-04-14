@@ -173,20 +173,15 @@ func (g *generator) generateBinTrieStems(ctx *bintrieGeneratorContext) error {
 	// Without this RMW, a mid-stem resume would overwrite the existing disk
 	// blob with a partial one, silently dropping the earlier offsets. This
 	// was bug C1 identified in the PR review.
-	flushStem := func() {
+	flushStem := func() error {
 		if currentStem == nil || builder.empty() {
-			return
+			return nil
 		}
 		existing := rawdb.ReadBinTrieStem(ctx.db, currentStem)
 		writes := builder.toOffsetValues()
 		merged, err := mergeStemBlob(existing, writes)
 		if err != nil {
-			// Corruption in the existing blob. Log and fall back to the
-			// builder content alone — at least the offsets from this pass
-			// land. A7 tightens this to a first-class error propagation.
-			log.Error("Bintrie generator: merge stem blob failed, writing builder only",
-				"stem", fmt.Sprintf("%x", currentStem), "err", err)
-			merged = builder.encode()
+			return fmt.Errorf("merge stem %x failed: %w", currentStem, err)
 		}
 		if merged == nil {
 			rawdb.DeleteBinTrieStem(ctx.batch, currentStem)
@@ -196,6 +191,7 @@ func (g *generator) generateBinTrieStems(ctx *bintrieGeneratorContext) error {
 		builder.reset()
 		// Bookkeeping: count one stem per emitted blob.
 		g.stats.accounts++
+		return nil
 	}
 
 	for it.Next(true) {
@@ -218,7 +214,9 @@ func (g *generator) generateBinTrieStems(ctx *bintrieGeneratorContext) error {
 		// Stem boundary detection: if we've moved to a new stem, persist
 		// the previous one before starting a new builder.
 		if currentStem != nil && !bytes.Equal(key[:bintrie.StemSize], currentStem) {
-			flushStem()
+			if err := flushStem(); err != nil {
+				return err
+			}
 			currentStem = nil
 		}
 		if currentStem == nil {
@@ -246,7 +244,9 @@ func (g *generator) generateBinTrieStems(ctx *bintrieGeneratorContext) error {
 		return err
 	}
 	// Flush the trailing stem (the loop only flushes on transitions).
-	flushStem()
+	if err := flushStem(); err != nil {
+		return err
+	}
 	return nil
 }
 
