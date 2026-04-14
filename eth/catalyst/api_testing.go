@@ -74,6 +74,7 @@ func (api *testingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes en
 		Random:       payloadAttributes.Random,
 		Withdrawals:  payloadAttributes.Withdrawals,
 		BeaconRoot:   payloadAttributes.BeaconRoot,
+		SlotNum:      payloadAttributes.SlotNumber,
 	}
 	return api.eth.Miner().BuildTestingPayload(args, txs, buildEmpty, extra)
 }
