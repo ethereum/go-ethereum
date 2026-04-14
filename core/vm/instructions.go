@@ -566,7 +566,7 @@ func opMsize(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opGas(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetUint64(scope.Contract.Gas))
+	scope.Stack.push(new(uint256.Int).SetUint64(scope.Contract.Gas.RegularGas))
 	return nil, nil
 }
 
@@ -658,7 +658,7 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		value        = scope.Stack.pop()
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
-		gas          = scope.Contract.Gas
+		gas          = scope.Contract.Gas.RegularGas
 	)
 	if evm.chainRules.IsEIP150 {
 		gas -= gas / 64
@@ -702,7 +702,7 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		salt         = scope.Stack.pop()
 		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
-		gas          = scope.Contract.Gas
+		gas          = scope.Contract.Gas.RegularGas
 	)
 
 	// Apply EIP150

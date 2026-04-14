@@ -370,7 +370,7 @@ func (dlp *downloadTesterPeer) RequestTrieNodes(id uint64, root common.Hash, cou
 		Paths: encPaths,
 		Bytes: uint64(bytes),
 	}
-	nodes, _ := snap.ServiceGetTrieNodesQuery(dlp.chain, req, time.Now())
+	nodes, _ := snap.ServiceGetTrieNodesQuery(dlp.chain, req)
 	go dlp.dl.downloader.SnapSyncer.OnTrieNodes(dlp, id, nodes)
 	return nil
 }

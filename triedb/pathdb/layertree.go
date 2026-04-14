@@ -151,6 +151,15 @@ func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, block uint6
 	if root == parentRoot {
 		return errors.New("layer cycle")
 	}
+	// If a layer with this root already exists, skip the insertion. Fork blocks
+	// can produce the same state root as the canonical block (same parent, same
+	// coinbase, zero txs); overwriting tree.layers[root] would corrupt the parent
+	// chain for any child layers already built on top of the existing one, and
+	// appending a duplicate root to the lookup indices causes accountTip/storageTip
+	// to resolve the wrong layer.
+	if tree.get(root) != nil {
+		return nil
+	}
 	parent := tree.get(parentRoot)
 	if parent == nil {
 		return fmt.Errorf("triedb parent [%#x] layer missing", parentRoot)
@@ -310,8 +319,8 @@ func (tree *layerTree) lookupAccount(accountHash common.Hash, state common.Hash)
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
 
-	tip := tree.lookup.accountTip(accountHash, state, tree.base.root)
-	if tip == (common.Hash{}) {
+	tip, ok := tree.lookup.accountTip(accountHash, state, tree.base.root)
+	if !ok {
 		return nil, fmt.Errorf("[%#x] %w", state, errSnapshotStale)
 	}
 	l := tree.layers[tip]
@@ -328,8 +337,8 @@ func (tree *layerTree) lookupStorage(accountHash common.Hash, slotHash common.Ha
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
 
-	tip := tree.lookup.storageTip(accountHash, slotHash, state, tree.base.root)
-	if tip == (common.Hash{}) {
+	tip, ok := tree.lookup.storageTip(accountHash, slotHash, state, tree.base.root)
+	if !ok {
 		return nil, fmt.Errorf("[%#x] %w", state, errSnapshotStale)
 	}
 	l := tree.layers[tip]

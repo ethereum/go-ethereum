@@ -151,7 +151,7 @@ func (b *testBackend) teardown() {
 	b.chain.Stop()
 }
 
-func (b *testBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, StateReleaseFunc, error) {
+func (b *testBackend) StateAtBlock(ctx context.Context, block *types.Block, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, StateReleaseFunc, error) {
 	statedb, err := b.chain.StateAt(block.Root())
 	if err != nil {
 		return nil, nil, errStateNotFound
@@ -167,12 +167,12 @@ func (b *testBackend) StateAtBlock(ctx context.Context, block *types.Block, reex
 	return statedb, release, nil
 }
 
-func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*types.Transaction, vm.BlockContext, *state.StateDB, StateReleaseFunc, error) {
+func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int) (*types.Transaction, vm.BlockContext, *state.StateDB, StateReleaseFunc, error) {
 	parent := b.chain.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
 		return nil, vm.BlockContext{}, nil, nil, errBlockNotFound
 	}
-	statedb, release, err := b.StateAtBlock(ctx, parent, reexec, nil, true, false)
+	statedb, release, err := b.StateAtBlock(ctx, parent, nil, true, false)
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, errStateNotFound
 	}
@@ -200,6 +200,18 @@ type stateTracer struct {
 	Balance map[common.Address]*hexutil.Big
 	Nonce   map[common.Address]hexutil.Uint64
 	Storage map[common.Address]map[common.Hash]common.Hash
+}
+
+type tracedOpcodeLog struct {
+	Op      string            `json:"op"`
+	Refund  *uint64           `json:"refund,omitempty"`
+	Storage map[string]string `json:"storage,omitempty"`
+}
+
+type tracedOpcodeResult struct {
+	Failed      bool              `json:"failed"`
+	ReturnValue string            `json:"returnValue"`
+	StructLogs  []tracedOpcodeLog `json:"structLogs"`
 }
 
 func newStateTracer(ctx *Context, cfg json.RawMessage, chainCfg *params.ChainConfig) (*Tracer, error) {
@@ -1055,6 +1067,176 @@ func TestTracingWithOverrides(t *testing.T) {
 			t.Logf("result: %v\n", string(resBytes))
 			t.Errorf("test %d, result mismatch, have\n%v\n, want\n%v\n", i, have, want)
 		}
+	}
+}
+
+func TestTraceTransactionRefundAndStorageSnapshots(t *testing.T) {
+	t.Parallel()
+
+	accounts := newAccounts(1)
+	contract := common.HexToAddress("0x00000000000000000000000000000000deadbeef")
+	slot0 := common.BigToHash(big.NewInt(0))
+	txSigner := types.HomesteadSigner{}
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			contract: {
+				Nonce: 1,
+				Code: []byte{
+					byte(vm.PUSH1), 0x00,
+					byte(vm.SLOAD),
+					byte(vm.POP),
+					byte(vm.PUSH1), 0x00,
+					byte(vm.PUSH1), 0x00,
+					byte(vm.SSTORE),
+					byte(vm.STOP),
+				},
+				Storage: map[common.Hash]common.Hash{
+					slot0: common.BigToHash(big.NewInt(1)),
+				},
+			},
+		},
+	}
+	var target common.Hash
+	backend := newTestBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    0,
+			To:       &contract,
+			Value:    big.NewInt(0),
+			Gas:      100000,
+			GasPrice: b.BaseFee(),
+		}), txSigner, accounts[0].key)
+		b.AddTx(tx)
+		target = tx.Hash()
+	})
+	defer backend.teardown()
+
+	api := NewAPI(backend)
+	result, err := api.TraceTransaction(context.Background(), target, nil)
+	if err != nil {
+		t.Fatalf("failed to trace refunding transaction: %v", err)
+	}
+	var traced tracedOpcodeResult
+	if err := json.Unmarshal(result.(json.RawMessage), &traced); err != nil {
+		t.Fatalf("failed to unmarshal trace result: %v", err)
+	}
+	if traced.Failed {
+		t.Fatal("expected refunding transaction to succeed")
+	}
+	if traced.ReturnValue != "0x" {
+		t.Fatalf("unexpected return value: have %s want 0x", traced.ReturnValue)
+	}
+	slotHex := slot0.Hex()
+	oneHex := common.BigToHash(big.NewInt(1)).Hex()
+	zeroHex := common.Hash{}.Hex()
+	var (
+		foundSloadSnapshot  bool
+		foundSstoreSnapshot bool
+		foundRefund         bool
+	)
+	for _, log := range traced.StructLogs {
+		switch log.Op {
+		case "SLOAD":
+			if got := log.Storage[slotHex]; got == oneHex {
+				foundSloadSnapshot = true
+			}
+		case "SSTORE":
+			if got := log.Storage[slotHex]; got == zeroHex {
+				foundSstoreSnapshot = true
+			}
+		}
+		if log.Refund != nil && *log.Refund > 0 {
+			foundRefund = true
+		}
+	}
+	if !foundSloadSnapshot {
+		t.Fatal("expected SLOAD snapshot to include the pre-existing non-zero storage value")
+	}
+	if !foundSstoreSnapshot {
+		t.Fatal("expected SSTORE snapshot to include the post-write zeroed storage value")
+	}
+	if !foundRefund {
+		t.Fatal("expected at least one structLog entry with a non-zero refund field")
+	}
+}
+
+func TestTraceTransactionFailureReturnValues(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		code            []byte
+		wantReturnValue string
+	}{
+		{
+			name: "revert preserves return data",
+			code: []byte{
+				byte(vm.PUSH1), 0x2a,
+				byte(vm.PUSH1), 0x00,
+				byte(vm.MSTORE),
+				byte(vm.PUSH1), 0x20,
+				byte(vm.PUSH1), 0x00,
+				byte(vm.REVERT),
+			},
+			wantReturnValue: "0x000000000000000000000000000000000000000000000000000000000000002a",
+		},
+		{
+			name: "hard failure clears return data",
+			code: []byte{
+				byte(vm.INVALID),
+			},
+			wantReturnValue: "0x",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			accounts := newAccounts(1)
+			contract := common.HexToAddress("0x00000000000000000000000000000000deadbeef")
+			txSigner := types.HomesteadSigner{}
+			genesis := &core.Genesis{
+				Config: params.TestChainConfig,
+				Alloc: types.GenesisAlloc{
+					accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+					contract: {
+						Nonce: 1,
+						Code:  tc.code,
+					},
+				},
+			}
+			var target common.Hash
+			backend := newTestBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
+				tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+					Nonce:    0,
+					To:       &contract,
+					Value:    big.NewInt(0),
+					Gas:      100000,
+					GasPrice: b.BaseFee(),
+				}), txSigner, accounts[0].key)
+				b.AddTx(tx)
+				target = tx.Hash()
+			})
+			defer backend.teardown()
+
+			api := NewAPI(backend)
+			result, err := api.TraceTransaction(context.Background(), target, nil)
+			if err != nil {
+				t.Fatalf("failed to trace transaction: %v", err)
+			}
+			var traced tracedOpcodeResult
+			if err := json.Unmarshal(result.(json.RawMessage), &traced); err != nil {
+				t.Fatalf("failed to unmarshal trace result: %v", err)
+			}
+			if !traced.Failed {
+				t.Fatal("expected traced transaction to fail")
+			}
+			if traced.ReturnValue != tc.wantReturnValue {
+				t.Fatalf("unexpected returnValue: have %s want %s", traced.ReturnValue, tc.wantReturnValue)
+			}
+			if len(traced.StructLogs) == 0 {
+				t.Fatal("expected failing trace to still include structLogs")
+			}
+		})
 	}
 }
 

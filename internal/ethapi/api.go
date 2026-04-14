@@ -180,6 +180,7 @@ func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
 		"txIndexFinishedBlocks":  hexutil.Uint64(progress.TxIndexFinishedBlocks),
 		"txIndexRemainingBlocks": hexutil.Uint64(progress.TxIndexRemainingBlocks),
 		"stateIndexRemaining":    hexutil.Uint64(progress.StateIndexRemaining),
+		"trienodeIndexRemaining": hexutil.Uint64(progress.TrienodeIndexRemaining),
 	}, nil
 }
 
@@ -897,6 +898,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		if err := blockOverrides.Apply(&blockCtx); err != nil {
 			return 0, err
 		}
+		header = blockOverrides.MakeHeader(header)
 	}
 	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
 	precompiles := vm.ActivePrecompiledContracts(rules)
@@ -904,13 +906,17 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		return 0, err
 	}
 	// Construct the gas estimator option from the user input
+	var blobBaseFee *big.Int
+	if blockOverrides != nil && blockOverrides.BlobBaseFee != nil {
+		blobBaseFee = blockOverrides.BlobBaseFee.ToInt()
+	}
 	opts := &gasestimator.Options{
-		Config:         b.ChainConfig(),
-		Chain:          NewChainContext(ctx, b),
-		Header:         header,
-		BlockOverrides: blockOverrides,
-		State:          state,
-		ErrorRatio:     estimateGasErrorRatio,
+		Config:      b.ChainConfig(),
+		Chain:       NewChainContext(ctx, b),
+		Header:      header,
+		State:       state,
+		BlobBaseFee: blobBaseFee,
+		ErrorRatio:  estimateGasErrorRatio,
 	}
 	// Set any required transaction default, but make sure the gas cap itself is not messed with
 	// if it was not specified in the original argument list.

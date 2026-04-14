@@ -38,7 +38,11 @@ import (
 // for releasing state.
 var noopReleaser = tracers.StateReleaseFunc(func() {})
 
-func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
+// reexecLimit is the maximum number of ancestor blocks to walk back when
+// attempting to reconstruct missing historical state for hash-scheme nodes.
+const reexecLimit = uint64(128)
+
+func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *state.StateDB, readOnly bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
 	var (
 		current  *types.Block
 		database state.Database
@@ -99,7 +103,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			}
 		}
 		// Database does not have the state for the given block, try to regenerate
-		for i := uint64(0); i < reexec; i++ {
+		for i := uint64(0); i < reexecLimit; i++ {
 			if err := ctx.Err(); err != nil {
 				return nil, nil, err
 			}
@@ -120,7 +124,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		if err != nil {
 			switch err.(type) {
 			case *trie.MissingNodeError:
-				return nil, nil, fmt.Errorf("required historical state unavailable (reexec=%d)", reexec)
+				return nil, nil, fmt.Errorf("required historical state unavailable (reexec=%d)", reexecLimit)
 			default:
 				return nil, nil, err
 			}
@@ -190,10 +194,9 @@ func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), erro
 }
 
 // stateAtBlock retrieves the state database associated with a certain block.
-// If no state is locally available for the given block, a number of blocks
-// are attempted to be reexecuted to generate the desired state. The optional
-// base layer statedb can be provided which is regarded as the statedb of the
-// parent block.
+// If no state is locally available for the given block, up to reexecLimit ancestor
+// blocks are reexecuted to generate the desired state. The optional base layer
+// statedb can be provided which is regarded as the statedb of the parent block.
 //
 // An additional release function will be returned if the requested state is
 // available. Release is expected to be invoked when the returned state is no
@@ -202,7 +205,6 @@ func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), erro
 //
 // Parameters:
 //   - block:      The block for which we want the state(state = block.Root)
-//   - reexec:     The maximum number of blocks to reprocess trying to obtain the desired state
 //   - base:       If the caller is tracing multiple blocks, the caller can provide the parent
 //     state continuously from the callsite.
 //   - readOnly:   If true, then the live 'blockchain' state database is used. No mutation should
@@ -211,9 +213,9 @@ func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), erro
 //   - preferDisk: This arg can be used by the caller to signal that even though the 'base' is
 //     provided, it would be preferable to start from a fresh state, if we have it
 //     on disk.
-func (eth *Ethereum) stateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
+func (eth *Ethereum) stateAtBlock(ctx context.Context, block *types.Block, base *state.StateDB, readOnly bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
 	if eth.blockchain.TrieDB().Scheme() == rawdb.HashScheme {
-		return eth.hashState(ctx, block, reexec, base, readOnly, preferDisk)
+		return eth.hashState(ctx, block, base, readOnly, preferDisk)
 	}
 	return eth.pathState(block)
 }
@@ -225,7 +227,7 @@ func (eth *Ethereum) stateAtBlock(ctx context.Context, block *types.Block, reexe
 // function will return the state of block after the pre-block operations have
 // been completed (e.g. updating system contracts), but before post-block
 // operations are completed (e.g. processing withdrawals).
-func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*types.Transaction, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
+func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block, txIndex int) (*types.Transaction, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
 	// Short circuit if it's genesis block.
 	if block.NumberU64() == 0 {
 		return nil, vm.BlockContext{}, nil, nil, errors.New("no transaction in genesis")
@@ -237,7 +239,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	}
 	// Lookup the statedb of parent block from the live database,
 	// otherwise regenerate it on the flight.
-	statedb, release, err := eth.stateAtBlock(ctx, parent, reexec, nil, true, false)
+	statedb, release, err := eth.stateAtBlock(ctx, parent, nil, true, false)
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, err
 	}

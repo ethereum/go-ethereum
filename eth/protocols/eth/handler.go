@@ -167,7 +167,6 @@ func Handle(backend Backend, peer *Peer) error {
 type msgHandler func(backend Backend, msg Decoder, peer *Peer) error
 type Decoder interface {
 	Decode(val interface{}) error
-	Time() time.Time
 }
 
 var eth69 = map[uint64]msgHandler{

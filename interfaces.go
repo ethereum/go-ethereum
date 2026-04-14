@@ -139,8 +139,9 @@ type SyncProgress struct {
 	TxIndexFinishedBlocks  uint64 // Number of blocks whose transactions are already indexed
 	TxIndexRemainingBlocks uint64 // Number of blocks whose transactions are not indexed yet
 
-	// "historical state indexing" fields
-	StateIndexRemaining uint64 // Number of states remain unindexed
+	// "historical data indexing" fields
+	StateIndexRemaining    uint64 // Number of states remain unindexed
+	TrienodeIndexRemaining uint64 // Number of trienodes remain unindexed
 }
 
 // Done returns the indicator if the initial sync is finished or not.
@@ -148,7 +149,7 @@ func (prog SyncProgress) Done() bool {
 	if prog.CurrentBlock < prog.HighestBlock {
 		return false
 	}
-	return prog.TxIndexRemainingBlocks == 0 && prog.StateIndexRemaining == 0
+	return prog.TxIndexRemainingBlocks == 0 && prog.StateIndexRemaining == 0 && prog.TrienodeIndexRemaining == 0
 }
 
 // ChainSyncReader wraps access to the node's current sync status. If there's no
