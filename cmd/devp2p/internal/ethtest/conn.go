@@ -175,9 +175,9 @@ func (c *Conn) ReadEth() (any, error) {
 		case eth.PooledTransactionsMsg:
 			msg = new(eth.PooledTransactionsPacket)
 		case eth.GetCellsMsg:
-			msg = new(eth.GetCellsRequest)
+			msg = new(eth.GetCellsRequestPacket)
 		case eth.CellsMsg:
-			msg = new(eth.CellsResponse)
+			msg = new(eth.CellsPacket)
 		default:
 			panic(fmt.Sprintf("unhandled eth msg code %d", code))
 		}
