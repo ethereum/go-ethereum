@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -2078,6 +2079,121 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 		t.Errorf("Failed to retrieve ancient count: %v\n", err)
 	} else if int(frozen) != tt.expFrozen {
 		t.Errorf("Frozen block count mismatch: have %d, want %d", frozen, tt.expFrozen)
+	}
+}
+
+func TestSetHeadTxLookupCleanupWithAncients(t *testing.T) {
+	type freezer interface {
+		Freeze() error
+		Ancients() (uint64, error)
+	}
+
+	datadir := t.TempDir()
+	ancient := filepath.Join(datadir, "ancient")
+
+	pdb, err := pebble.New(datadir, 0, 0, "", false)
+	if err != nil {
+		t.Fatalf("failed to create persistent key-value database: %v", err)
+	}
+	db, err := rawdb.Open(pdb, rawdb.OpenOptions{Ancient: ancient})
+	if err != nil {
+		t.Fatalf("failed to create persistent freezer database: %v", err)
+	}
+	defer db.Close()
+
+	var (
+		testBankKey, _  = crypto.GenerateKey()
+		testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
+		gspec           = &Genesis{
+			BaseFee: big.NewInt(params.InitialBaseFee),
+			Config:  params.AllEthashProtocolChanges,
+			Alloc:   types.GenesisAlloc{testBankAddress: {Balance: big.NewInt(1000000000000000000)}},
+		}
+		engine  = ethash.NewFullFaker()
+		options = &BlockChainConfig{
+			TrieCleanLimit: 256,
+			TrieDirtyLimit: 256,
+			TrieTimeLimit:  5 * time.Minute,
+			SnapshotLimit:  0,
+			TxLookupLimit:  -1,
+			StateScheme:    rawdb.HashScheme,
+		}
+		signer     = types.HomesteadSigner{}
+		nonce      = uint64(0)
+		retainedTx *types.Transaction
+		removedTx  *types.Transaction
+	)
+
+	chain, err := NewBlockChain(db, gspec, engine, options)
+	if err != nil {
+		t.Fatalf("failed to create chain: %v", err)
+	}
+	defer chain.Stop()
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 24, func(i int, b *BlockGen) {
+		tx, err := types.SignTx(types.NewTransaction(nonce, common.HexToAddress("0xdeadbeef"), big.NewInt(1), params.TxGas, b.header.BaseFee, nil), signer, testBankKey)
+		if err != nil {
+			t.Fatalf("failed to sign transaction: %v", err)
+		}
+		b.AddTx(tx)
+		switch i {
+		case 7:
+			retainedTx = tx
+		case 15:
+			removedTx = tx
+		}
+		nonce++
+	})
+	if _, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("failed to insert canonical chain: %v", err)
+	}
+	if retainedTx == nil || removedTx == nil {
+		t.Fatal("failed to capture test transactions")
+	}
+
+	chain.triedb.Commit(blocks[7].Root(), false)
+	chain.triedb.Close()
+	chain.triedb = triedb.NewDatabase(chain.db, &triedb.Config{HashDB: hashdb.Defaults})
+
+	chain.SetFinalized(blocks[15].Header())
+	if err := db.(freezer).Freeze(); err != nil {
+		t.Fatalf("failed to freeze chain data: %v", err)
+	}
+
+	if entry := rawdb.ReadTxLookupEntry(chain.db, retainedTx.Hash()); entry == nil || *entry != 8 {
+		t.Fatalf("retained txlookup setup failed: have %v, want 8", entry)
+	}
+	if entry := rawdb.ReadTxLookupEntry(chain.db, removedTx.Hash()); entry == nil || *entry != 16 {
+		t.Fatalf("removed txlookup setup failed: have %v, want 16", entry)
+	}
+
+	if err := chain.SetHead(8); err != nil {
+		t.Fatalf("failed to rewind chain: %v", err)
+	}
+
+	if head := chain.CurrentBlock(); head.Number.Uint64() != 8 {
+		t.Fatalf("head block mismatch after rewind: have %d, want 8", head.Number.Uint64())
+	}
+	if frozen, err := db.(freezer).Ancients(); err != nil {
+		t.Fatalf("failed to retrieve ancient count: %v", err)
+	} else if frozen != 9 {
+		t.Fatalf("ancient count mismatch after rewind: have %d, want 9", frozen)
+	}
+
+	if entry := rawdb.ReadTxLookupEntry(chain.db, removedTx.Hash()); entry != nil {
+		t.Fatalf("removed txlookup still exists after rewind: %d", *entry)
+	}
+	if tx, _, _, _ := rawdb.ReadCanonicalTransaction(chain.db, removedTx.Hash()); tx != nil {
+		t.Fatalf("removed canonical transaction still exists after rewind: %s", removedTx.Hash())
+	}
+
+	if entry := rawdb.ReadTxLookupEntry(chain.db, retainedTx.Hash()); entry == nil || *entry != 8 {
+		t.Fatalf("retained txlookup mismatch after rewind: have %v, want 8", entry)
+	}
+	if tx, _, blockNumber, _ := rawdb.ReadCanonicalTransaction(chain.db, retainedTx.Hash()); tx == nil {
+		t.Fatal("retained canonical transaction missing after rewind")
+	} else if blockNumber != 8 {
+		t.Fatalf("retained canonical transaction number mismatch: have %d, want 8", blockNumber)
 	}
 }
 

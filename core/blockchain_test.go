@@ -4544,3 +4544,64 @@ func TestSetHeadBeyondRootFinalizedBug(t *testing.T) {
 			currentFinal.Number.Uint64())
 	}
 }
+
+func TestSetHeadTxLookupCleanup(t *testing.T) {
+	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+		t.Run(scheme, func(t *testing.T) {
+			_, _, blockchain, err := newCanonical(ethash.NewFaker(), 100, true, scheme)
+			if err != nil {
+				t.Fatalf("failed to create pristine chain: %v", err)
+			}
+			defer blockchain.Stop()
+
+			retainedBlock := blockchain.GetBlockByNumber(50)
+			if retainedBlock == nil {
+				t.Fatal("retained block not found")
+			}
+			removedBlock := blockchain.CurrentBlock()
+			if removedBlock.Number.Uint64() != 100 {
+				t.Fatalf("setup failed: expected head 100, got %d", removedBlock.Number.Uint64())
+			}
+
+			retainedTx := types.NewTransaction(0, common.Address{0x01}, big.NewInt(0), params.TxGas, big.NewInt(1), nil)
+			removedTx := types.NewTransaction(1, common.Address{0x02}, big.NewInt(0), params.TxGas, big.NewInt(1), nil)
+
+			rawdb.WriteBody(blockchain.db, retainedBlock.Hash(), retainedBlock.NumberU64(), &types.Body{Transactions: []*types.Transaction{retainedTx}})
+			rawdb.WriteBody(blockchain.db, removedBlock.Hash(), removedBlock.Number.Uint64(), &types.Body{Transactions: []*types.Transaction{removedTx}})
+			rawdb.WriteTxLookupEntries(blockchain.db, retainedBlock.NumberU64(), []common.Hash{retainedTx.Hash()})
+			rawdb.WriteTxLookupEntries(blockchain.db, removedBlock.Number.Uint64(), []common.Hash{removedTx.Hash()})
+
+			if entry := rawdb.ReadTxLookupEntry(blockchain.db, retainedTx.Hash()); entry == nil || *entry != retainedBlock.NumberU64() {
+				t.Fatalf("retained txlookup setup failed: have %v, want %d", entry, retainedBlock.NumberU64())
+			}
+			if entry := rawdb.ReadTxLookupEntry(blockchain.db, removedTx.Hash()); entry == nil || *entry != removedBlock.Number.Uint64() {
+				t.Fatalf("removed txlookup setup failed: have %v, want %d", entry, removedBlock.Number.Uint64())
+			}
+
+			if err := blockchain.SetHead(retainedBlock.NumberU64()); err != nil {
+				t.Fatalf("failed to rewind chain: %v", err)
+			}
+
+			if entry := rawdb.ReadTxLookupEntry(blockchain.db, removedTx.Hash()); entry != nil {
+				t.Fatalf("removed txlookup still exists after rewind: %d", *entry)
+			}
+			if tx, _, _, _ := rawdb.ReadCanonicalTransaction(blockchain.db, removedTx.Hash()); tx != nil {
+				t.Fatalf("removed canonical transaction still exists after rewind: %s", removedTx.Hash())
+			}
+
+			if entry := rawdb.ReadTxLookupEntry(blockchain.db, retainedTx.Hash()); entry == nil || *entry != retainedBlock.NumberU64() {
+				t.Fatalf("retained txlookup mismatch after rewind: have %v, want %d", entry, retainedBlock.NumberU64())
+			}
+			if tx, blockHash, blockNumber, _ := rawdb.ReadCanonicalTransaction(blockchain.db, retainedTx.Hash()); tx == nil {
+				t.Fatal("retained canonical transaction missing after rewind")
+			} else {
+				if blockNumber != retainedBlock.NumberU64() {
+					t.Fatalf("retained canonical transaction number mismatch: have %d, want %d", blockNumber, retainedBlock.NumberU64())
+				}
+				if blockHash != retainedBlock.Hash() {
+					t.Fatalf("retained canonical transaction hash mismatch: have %s, want %s", blockHash, retainedBlock.Hash())
+				}
+			}
+		})
+	}
+}
