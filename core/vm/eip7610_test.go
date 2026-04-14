@@ -18,14 +18,15 @@ package vm
 
 import (
 	"fmt"
-	"maps"
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func Example_mainnetEIP7610Accounts() {
-	list := slices.SortedFunc(maps.Keys(mainnetEIP7610Accounts), common.Address.Cmp)
+	list := slices.Clone(eip7610Accounts[params.MainnetChainConfig.ChainID.Uint64()])
+	slices.SortFunc(list, common.Address.Cmp)
 	for _, addr := range list {
 		fmt.Println(addr.Hex())
 	}
