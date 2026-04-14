@@ -242,11 +242,12 @@ func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, err
 //  5. Run Script section
 //  6. Derive new state root
 type stateTransition struct {
-	gp           *GasPool
-	msg          *Message
-	gasRemaining vm.GasBudget
-	state        vm.StateDB
-	evm          *vm.EVM
+	gp            *GasPool
+	msg           *Message
+	initialBudget vm.GasBudget
+	gasRemaining  vm.GasBudget
+	state         vm.StateDB
+	evm           *vm.EVM
 }
 
 // newStateTransition initialises and returns a new state transition object.
@@ -304,6 +305,7 @@ func (st *stateTransition) buyGas() error {
 		st.evm.Config.Tracer.OnGasChange(0, st.msg.GasLimit, tracing.GasChangeTxInitialBalance)
 	}
 	st.gasRemaining = vm.NewGasBudget(st.msg.GasLimit)
+	st.initialBudget = st.gasRemaining.Copy()
 
 	mgvalU256, _ := uint256.FromBig(mgval)
 	st.state.SubBalance(st.msg.From, mgvalU256, tracing.BalanceDecreaseGasBuy)
@@ -552,7 +554,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// Return gas to the gas pool
 	if rules.IsAmsterdam {
 		// Refund is excluded for returning
-		err = st.gp.ReturnGas(st.gasRemaining.InitialGas-peakGasUsed, st.gasUsed())
+		err = st.gp.ReturnGas(st.initialBudget.RegularGas-peakGasUsed, st.gasUsed())
 	} else {
 		// Refund is included for returning
 		err = st.gp.ReturnGas(st.gasRemaining.RegularGas, st.gasUsed())
@@ -684,7 +686,7 @@ func (st *stateTransition) returnGas() {
 
 // gasUsed returns the amount of gas used up by the state transition.
 func (st *stateTransition) gasUsed() uint64 {
-	return st.gasRemaining.Used()
+	return st.gasRemaining.Used(st.initialBudget)
 }
 
 // blobGasUsed returns the amount of blob gas used by the message.

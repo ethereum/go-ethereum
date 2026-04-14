@@ -43,17 +43,16 @@ func (g GasCosts) String() string {
 type GasBudget struct {
 	RegularGas uint64 // The leftover gas for execution and state gas usage
 	StateGas   uint64 // The state gas reservoir
-	InitialGas uint64 // records the starting allowance for usage tracking
 }
 
 // NewGasBudget creates a GasBudget with the given initial regular gas allowance.
 func NewGasBudget(gas uint64) GasBudget {
-	return GasBudget{RegularGas: gas, InitialGas: gas}
+	return GasBudget{RegularGas: gas}
 }
 
 // Used returns the amount of regular gas consumed so far.
-func (g GasBudget) Used() uint64 {
-	return g.InitialGas - g.RegularGas
+func (g GasBudget) Used(initial GasBudget) uint64 {
+	return initial.RegularGas - g.RegularGas
 }
 
 // Exhaust sets all remaining gas to zero, preserving the initial amount
@@ -61,6 +60,10 @@ func (g GasBudget) Used() uint64 {
 func (g *GasBudget) Exhaust() {
 	g.RegularGas = 0
 	g.StateGas = 0
+}
+
+func (g *GasBudget) Copy() GasBudget {
+	return GasBudget{RegularGas: g.RegularGas, StateGas: g.StateGas}
 }
 
 // String returns a visual representation of the gas budget vector.
