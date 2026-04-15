@@ -221,3 +221,34 @@ func TestMultiplePeersIsolated(t *testing.T) {
 		t.Errorf("peerB latency: got %v, want 5s", stats["peerB"].RequestLatencyEMA)
 	}
 }
+
+// TestLatencyTimestampSet verifies that NotifyRequestLatency stamps the
+// peer's LastLatencySample with approximately time.Now().
+func TestLatencyTimestampSet(t *testing.T) {
+	s := New()
+	before := time.Now()
+	s.NotifyRequestLatency("peerA", 100*time.Millisecond)
+	after := time.Now()
+
+	got := s.GetAllPeerStats()["peerA"].LastLatencySample
+	if got.Before(before) || got.After(after) {
+		t.Fatalf("LastLatencySample = %v not in [%v, %v]", got, before, after)
+	}
+}
+
+// TestLatencyTimestampUpdatesOnEachSample verifies that a later
+// NotifyRequestLatency call advances LastLatencySample.
+func TestLatencyTimestampUpdatesOnEachSample(t *testing.T) {
+	s := New()
+	s.NotifyRequestLatency("peerA", 100*time.Millisecond)
+	first := s.GetAllPeerStats()["peerA"].LastLatencySample
+
+	// Small sleep so the second timestamp is detectably later.
+	time.Sleep(2 * time.Millisecond)
+	s.NotifyRequestLatency("peerA", 200*time.Millisecond)
+	second := s.GetAllPeerStats()["peerA"].LastLatencySample
+
+	if !second.After(first) {
+		t.Fatalf("expected second sample timestamp > first, got first=%v second=%v", first, second)
+	}
+}
