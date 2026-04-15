@@ -56,10 +56,7 @@ func NewSuite(dest *enode.Node, chainDir, engineURL, jwt string) (*Suite, error)
 	if err != nil {
 		return nil, err
 	}
-	engine, err := NewEngineClient(chainDir, engineURL, jwt)
-	if err != nil {
-		return nil, err
-	}
+	engine := NewEngineClient(engineURL, jwt, chain)
 
 	return &Suite{
 		Dest:   dest,
