@@ -482,8 +482,9 @@ func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
 		s.origin = s.data.Copy()
 		return op, nil, nil
 	}
-	root, nodes := s.trie.Commit(false)
-	s.data.Root = root
+	// The storage trie root is omitted, as it has already been updated in the
+	// previous updateRoot step.
+	_, nodes := s.trie.Commit(false)
 	s.origin = s.data.Copy()
 	return op, nodes, nil
 }
