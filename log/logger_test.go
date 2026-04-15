@@ -33,6 +33,7 @@ func TestLoggingWithVmodule(t *testing.T) {
 	}
 }
 
+// TestLoggingWithVmoduleDowngrade checks that vmodule can be downgraded.
 func TestLoggingWithVmoduleDowngrade(t *testing.T) {
 	out := new(bytes.Buffer)
 	glog := NewGlogHandler(NewTerminalHandlerWithLevel(out, LevelTrace, false))
@@ -59,6 +60,34 @@ func TestLoggingWithVmoduleDowngrade(t *testing.T) {
 	logger.Warn("after vmodule downgrade, this should be logged")
 	if !bytes.Contains(out.Bytes(), []byte("after vmodule downgrade, this should be logged")) {
 		t.Fatal("expected 'should appear' to be logged")
+	}
+}
+
+// TestWithAttrsVerbosityChange checks that verbosity changes affect child loggers.
+func TestWithAttrsVerbosityChange(t *testing.T) {
+	out := new(bytes.Buffer)
+	glog := NewGlogHandler(NewTerminalHandlerWithLevel(out, LevelTrace, false))
+	glog.Verbosity(LevelInfo)
+
+	// Create a child logger with an extra attribute.
+	child := slog.New(glog.WithAttrs([]slog.Attr{slog.String("peer", "foo")}))
+
+	// Debug should be filtered at Info level.
+	child.Debug("this should be filtered")
+	if bytes.Contains(out.Bytes(), []byte("this should be filtered")) {
+		t.Fatal("expected debug message to be filtered at Info level")
+	}
+
+	// Change verbosity on the parent to allow Debug.
+	glog.Verbosity(LevelDebug)
+
+	// Child should pick up the new level and include its attributes.
+	child.Debug("this should be logged")
+	if !bytes.Contains(out.Bytes(), []byte("this should be logged")) {
+		t.Fatal("expected child logger to pick up verbosity change")
+	}
+	if !bytes.Contains(out.Bytes(), []byte("peer=foo")) {
+		t.Fatal("expected child logger to include WithAttrs attributes")
 	}
 }
 
