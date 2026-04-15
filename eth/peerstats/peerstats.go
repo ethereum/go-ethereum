@@ -53,6 +53,13 @@ const (
 	// before its RequestLatencyEMA is considered meaningful for protection.
 	// Prevents a single lucky-fast reply from displacing established peers.
 	MinLatencySamples = 100
+	// MaxLatencyStaleness is the oldest allowed age of a peer's last
+	// latency sample before their RequestLatencyEMA is disregarded for
+	// protection. Prevents a peer from earning a fast score during a
+	// burst of activity and then holding protection indefinitely by
+	// going silent on tx announcements (no further requests → no fresh
+	// samples → EMA frozen at its last value).
+	MaxLatencyStaleness = 10 * time.Minute
 )
 
 // PeerStats is the exported per-peer snapshot returned by GetAllPeerStats.
@@ -61,6 +68,7 @@ type PeerStats struct {
 	RecentIncluded    float64       // EMA of per-block inclusions (fast)
 	RequestLatencyEMA time.Duration // Slow EMA of tx-request response latency (timeouts count as the timeout value)
 	RequestSamples    int64         // Number of latency samples seen (for bootstrap guard)
+	LastLatencySample time.Time     // Wall-clock time of the most recent latency sample (for staleness gate)
 }
 
 // peerStats is the internal mutable state per peer.
@@ -69,6 +77,7 @@ type peerStats struct {
 	recentIncluded    float64
 	requestLatencyEMA time.Duration
 	requestSamples    int64
+	lastLatencySample time.Time
 }
 
 // Stats is the per-peer quality aggregator.
@@ -141,6 +150,7 @@ func (s *Stats) NotifyRequestLatency(peer string, latency time.Duration) {
 		)
 	}
 	ps.requestSamples++
+	ps.lastLatencySample = time.Now()
 }
 
 // NotifyPeerDrop removes a peer's stats on disconnect. A rare stale
@@ -166,6 +176,7 @@ func (s *Stats) GetAllPeerStats() map[string]PeerStats {
 			RecentIncluded:    ps.recentIncluded,
 			RequestLatencyEMA: ps.requestLatencyEMA,
 			RequestSamples:    ps.requestSamples,
+			LastLatencySample: ps.lastLatencySample,
 		}
 	}
 	return result

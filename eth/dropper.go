@@ -84,6 +84,12 @@ var protectionCategories = []protectionCategory{
 		if s.RequestSamples < peerstats.MinLatencySamples {
 			return 0
 		}
+		// Freshness gate: a peer that earned a fast EMA but then went
+		// silent on announcements (no requests → no fresh samples) must
+		// not keep that score indefinitely. Ignore stale data.
+		if time.Since(s.LastLatencySample) > peerstats.MaxLatencyStaleness {
+			return 0
+		}
 		if s.RequestLatencyEMA <= 0 {
 			return 0
 		}
