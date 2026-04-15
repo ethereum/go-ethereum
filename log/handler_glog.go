@@ -167,27 +167,25 @@ func (h *GlogHandler) Handle(ctx context.Context, r slog.Record) error {
 func (h *GlogHandler) handle(ctx context.Context, r slog.Record, origin slog.Handler) error {
 	cfg := h.config.Load()
 
-	// Fast path: cache hit
-	if lvl, ok := cfg.cache.Load(r.PC); ok {
-		if lvl.(slog.Level) <= r.Level {
-			return origin.Handle(ctx, r)
+	var lvl slog.Level
+	cachedLvl, ok := cfg.cache.Load(r.PC)
+	if ok {
+		// Fast path: cache hit
+		lvl = cachedLvl.(slog.Level)
+	} else {
+		// Resolve the callsite file.
+		fs := runtime.CallersFrames([]uintptr{r.PC})
+		frame, _ := fs.Next()
+		file := frame.File
+		// Match against patterns and cache the level applied at this callsite.
+		lvl = cfg.level // default: use global level
+		for _, rule := range cfg.patterns {
+			if rule.pattern.MatchString("+" + file) {
+				lvl = rule.level
+			}
 		}
-		return nil
+		cfg.cache.Store(r.PC, lvl)
 	}
-
-	// Resolve the callsite file once.
-	fs := runtime.CallersFrames([]uintptr{r.PC})
-	frame, _ := fs.Next()
-	file := frame.File
-
-	// Match against patterns and cache the level applied at this callsitte
-	lvl := cfg.level // default: use global level
-	for _, rule := range cfg.patterns {
-		if rule.pattern.MatchString("+" + file) {
-			lvl = rule.level
-		}
-	}
-	cfg.cache.Store(r.PC, lvl)
 
 	// Handle the message.
 	if lvl <= r.Level {
