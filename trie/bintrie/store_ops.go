@@ -68,6 +68,9 @@ func (s *NodeStore) getSingle(ref NodeRef, stem []byte, suffix byte, resolver No
 			if !hasParent {
 				return nil, errors.New("getSingle: hashed node at root")
 			}
+			if resolver == nil {
+				return nil, errors.New("getSingle: cannot resolve hashed node without resolver")
+			}
 			hn := s.getHashed(cur.Index())
 			parentNode := s.getInternal(parentIdx)
 			path := makeKeyPath(int(parentNode.depth), stem)
@@ -137,6 +140,9 @@ func (s *NodeStore) getValuesAtStem(ref NodeRef, stem []byte, resolver NodeResol
 		case KindHashed:
 			if !hasParent {
 				return nil, errors.New("getValuesAtStem: hashed node at root")
+			}
+			if resolver == nil {
+				return nil, errors.New("getValuesAtStem: cannot resolve hashed node without resolver")
 			}
 			hn := s.getHashed(cur.Index())
 			parentNode := s.getInternal(parentIdx)
@@ -249,6 +255,9 @@ func (s *NodeStore) insertSingleInternal(stem []byte, suffix byte, value []byte,
 		case KindHashed:
 			if pathLen == 0 {
 				return errors.New("insertSingle: hashed node at root")
+			}
+			if resolver == nil {
+				return errors.New("insertSingleInternal: cannot resolve hashed node without resolver")
 			}
 			p := pathStack[pathLen-1]
 			parentNode := s.getInternal(p.internalIdx)
@@ -371,6 +380,9 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 		bit := stem[node.depth/8] >> (7 - (node.depth % 8)) & 1
 		if bit == 0 {
 			if node.left.Kind() == KindHashed {
+				if resolver == nil {
+					return ref, errors.New("insertValuesAtStem: cannot resolve hashed node without resolver")
+				}
 				hn := s.getHashed(node.left.Index())
 				path := makeKeyPath(int(node.depth), stem)
 				data, err := resolver(path, hn.hash)
@@ -391,6 +403,9 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 			node.left = newChild
 		} else {
 			if node.right.Kind() == KindHashed {
+				if resolver == nil {
+					return ref, errors.New("insertValuesAtStem: cannot resolve hashed node without resolver")
+				}
 				hn := s.getHashed(node.right.Index())
 				path := makeKeyPath(int(node.depth), stem)
 				data, err := resolver(path, hn.hash)
