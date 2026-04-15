@@ -24,6 +24,8 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/version"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 const ourPath = "github.com/ethereum/go-ethereum" // Path to our module
@@ -73,7 +75,7 @@ func Archive(gitCommit string) string {
 func ClientName(clientIdentifier string) string {
 	git, _ := VCS()
 	return fmt.Sprintf("%s/v%v/%v-%v/%v",
-		strings.Title(clientIdentifier),
+		cases.Title(language.English, cases.NoLower).String(clientIdentifier),
 		WithCommit(git.Commit, git.Date),
 		runtime.GOOS, runtime.GOARCH,
 		runtime.Version(),

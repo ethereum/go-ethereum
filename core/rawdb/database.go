@@ -38,6 +38,8 @@ import (
 	"github.com/ethereum/go-ethereum/internal/tablewriter"
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var ErrDeleteRangeInterrupted = errors.New("safe delete range operation interrupted")
@@ -657,11 +659,12 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	if err != nil {
 		return err
 	}
+	caser := cases.Title(language.English, cases.NoLower)
 	for _, ancient := range ancients {
 		for _, table := range ancient.sizes {
 			stats = append(stats, []string{
-				fmt.Sprintf("Ancient store (%s)", strings.Title(ancient.name)),
-				strings.Title(table.name),
+				fmt.Sprintf("Ancient store (%s)", caser.String(ancient.name)),
+				caser.String(table.name),
 				table.size.String(),
 				fmt.Sprintf("%d", ancient.count),
 			})

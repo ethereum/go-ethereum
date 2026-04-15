@@ -20,10 +20,11 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var (
@@ -47,7 +48,7 @@ The output of this command is supposed to be machine-readable.
 func printVersion(ctx *cli.Context) error {
 	git, _ := version.VCS()
 
-	fmt.Println(strings.Title(clientIdentifier))
+	fmt.Println(cases.Title(language.English, cases.NoLower).String(clientIdentifier))
 	fmt.Println("Version:", version.WithMeta)
 	if git.Commit != "" {
 		fmt.Println("Git Commit:", git.Commit)
