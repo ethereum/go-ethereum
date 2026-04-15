@@ -124,7 +124,7 @@ func (s *NodeStore) allocStem() uint32 {
 	}
 	s.stemCount++
 	if s.stemCount > indexMask {
-		panic("internal node pool overflow")
+		panic("stem node pool overflow")
 	}
 	return idx
 }
@@ -162,7 +162,7 @@ func (s *NodeStore) allocHashed() uint32 {
 	}
 	s.hashedCount++
 	if s.hashedCount > indexMask {
-		panic("internal node pool overflow")
+		panic("hashed node pool overflow")
 	}
 	return idx
 }
