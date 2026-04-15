@@ -246,6 +246,12 @@ func (it *binaryNodeIterator) LeafProof() [][]byte {
 
 	proof := make([][]byte, 0, len(it.stack)+StemNodeWidth)
 
+	if len(it.stack) < 2 {
+		proof = append(proof, sn.Stem[:])
+		proof = append(proof, sn.allValues()...)
+		return proof
+	}
+
 	for i := range it.stack[:len(it.stack)-2] {
 		state := it.stack[i]
 		internalNode := it.store.getInternal(state.Node.Index())
