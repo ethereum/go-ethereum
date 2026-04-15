@@ -202,13 +202,7 @@ func (h *GlogHandler) handle(ctx context.Context, r slog.Record, origin slog.Han
 // Note the handler created here will still listen to Verbosity and Vmodule settings
 // done on the original handler.
 func (h *GlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	// fork the log config at this point
-	cfg := h.config.Load()
-	newcfg := &glogConfig{level: cfg.level, patterns: cfg.patterns}
-
-	sub := GlogHandler{origin: h.origin.WithAttrs(attrs)}
-	sub.config.Store(newcfg)
-	return &sub
+	return &glogWithAttrs{base: h, origin: h.origin.WithAttrs(attrs)}
 }
 
 type glogWithAttrs struct{
