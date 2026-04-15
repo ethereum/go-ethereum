@@ -205,8 +205,8 @@ func (h *GlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &glogWithAttrs{base: h, origin: h.origin.WithAttrs(attrs)}
 }
 
-type glogWithAttrs struct{
-	base *GlogHandler
+type glogWithAttrs struct {
+	base   *GlogHandler
 	origin slog.Handler
 }
 
@@ -229,4 +229,3 @@ func (wh *glogWithAttrs) WithAttrs(attrs []slog.Attr) slog.Handler {
 func (wh *glogWithAttrs) WithGroup(name string) slog.Handler {
 	panic("not implemented")
 }
-
