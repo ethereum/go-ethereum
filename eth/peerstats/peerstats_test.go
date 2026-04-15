@@ -181,7 +181,7 @@ func TestNotifyPeerDropClearsStats(t *testing.T) {
 
 // TestStaleRequestLatencyAfterDrop documents the accepted behavior: a
 // late sample after NotifyPeerDrop recreates a 1-sample entry. The
-// dropper's MinLatencySamples=10 guard ensures this is harmless.
+// dropper's MinLatencySamples=100 guard ensures this is harmless.
 func TestStaleRequestLatencyAfterDrop(t *testing.T) {
 	s := New()
 	s.NotifyRequestLatency("peerA", 200*time.Millisecond)
