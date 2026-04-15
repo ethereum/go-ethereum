@@ -76,6 +76,11 @@ func copyFrom(srcPath, destPath string, offset uint64, before func(f *os.File) e
 	// we do the final move.
 	src.Close()
 
+	// Permanently persist the content into disk
+	if err := f.Sync(); err != nil {
+		return err
+	}
+
 	if err := f.Close(); err != nil {
 		return err
 	}
