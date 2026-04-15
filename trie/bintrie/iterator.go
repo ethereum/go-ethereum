@@ -173,7 +173,10 @@ func (it *binaryNodeIterator) Hash() common.Hash {
 
 // Parent returns the hash of the parent of the current node.
 func (it *binaryNodeIterator) Parent() common.Hash {
-	return it.store.ComputeHash(it.stack[len(it.stack)-1].Node)
+	if len(it.stack) < 2 {
+		return common.Hash{}
+	}
+	return it.store.ComputeHash(it.stack[len(it.stack)-2].Node)
 }
 
 // Path returns the hex-encoded path to the current node.
