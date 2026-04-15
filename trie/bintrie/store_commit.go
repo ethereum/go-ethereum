@@ -156,8 +156,13 @@ func (s *NodeStore) deserializeNode(serialized []byte, depth int, hn common.Hash
 		copy(leftHash[:], serialized[NodeTypeBytes:NodeTypeBytes+HashSize])
 		copy(rightHash[:], serialized[NodeTypeBytes+HashSize:])
 
-		leftRef := s.newHashedRef(leftHash)
-		rightRef := s.newHashedRef(rightHash)
+		var leftRef, rightRef NodeRef
+		if leftHash != (common.Hash{}) {
+			leftRef = s.newHashedRef(leftHash)
+		}
+		if rightHash != (common.Hash{}) {
+			rightRef = s.newHashedRef(rightHash)
+		}
 
 		ref := s.newInternalRef(depth)
 		node := s.getInternal(ref.Index())
