@@ -97,6 +97,7 @@ func (sn *StemNode) ensureWritable() {
 
 // setValue sets or inserts a value at the given suffix.
 func (sn *StemNode) setValue(suffix byte, value []byte) {
+	sn.ensureWritable()
 	idx := int(suffix)
 	pos := sn.posInData(suffix)
 	if pos >= 0 {

@@ -192,7 +192,6 @@ func (s *NodeStore) InsertSingle(stem []byte, suffix byte, value []byte, resolve
 	if s.root.Kind() == KindStem {
 		sn := s.getStem(s.root.Index())
 		if sn.Stem == [StemSize]byte(stem[:StemSize]) {
-			sn.ensureWritable()
 			sn.setValue(suffix, value)
 			sn.mustRecompute = true
 			return nil
@@ -235,7 +234,6 @@ func (s *NodeStore) insertSingleInternal(stem []byte, suffix byte, value []byte,
 		case KindStem:
 			sn := s.getStem(cur.Index())
 			if sn.Stem == [StemSize]byte(stem[:StemSize]) {
-				sn.ensureWritable()
 				sn.setValue(suffix, value)
 				sn.mustRecompute = true
 				return nil
@@ -432,7 +430,6 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 		sn := s.getStem(ref.Index())
 		if sn.Stem == [StemSize]byte(stem[:StemSize]) {
 			// Same stem — merge values
-			sn.ensureWritable()
 			for i, v := range values {
 				if v != nil {
 					sn.setValue(byte(i), v)
