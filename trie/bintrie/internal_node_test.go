@@ -90,7 +90,7 @@ func TestInternalNodeGetWithResolver(t *testing.T) {
 			ref := rs.newStemRef(stem, 1)
 			sn := rs.getStem(ref.Index())
 			sn.setValue(5, common.HexToHash("0xabcd").Bytes())
-			return rs.SerializeNode(ref, MaxGroupDepth), nil
+			return rs.SerializeNode(ref), nil
 		}
 		return nil, errors.New("node not found")
 	}
@@ -290,7 +290,7 @@ func TestInternalNodeCollectNodes(t *testing.T) {
 		collectedPaths = append(collectedPaths, pathCopy)
 	}
 
-	err := s.CollectNodes(s.Root(), []byte{1}, flushFn, MaxGroupDepth)
+	err := s.CollectNodes(s.Root(), []byte{1}, flushFn)
 	if err != nil {
 		t.Fatalf("Failed to collect nodes: %v", err)
 	}

@@ -98,86 +98,20 @@ func (s *NodeStore) hashInternal(idx uint32) common.Hash {
 
 // --- Serialization ---
 
-// countSubtreeChildren counts non-empty children at the bottom layer of a subtree.
-func (s *NodeStore) countSubtreeChildren(ref NodeRef, remainingDepth int) int {
-	if remainingDepth == 0 {
-		if ref.IsEmpty() {
-			return 0
-		}
-		return 1
-	}
-	if ref.Kind() == KindInternal {
-		node := s.getInternal(ref.Index())
-		return s.countSubtreeChildren(node.left, remainingDepth-1) + s.countSubtreeChildren(node.right, remainingDepth-1)
-	}
-	if ref.IsEmpty() {
-		return 0
-	}
-	return 1
-}
-
-// serializeSubtreeDirect writes child hashes directly into the serialized buffer.
-func (s *NodeStore) serializeSubtreeDirect(ref NodeRef, remainingDepth int, position int, absoluteDepth int, bitmap []byte, out []byte, hashOffset *int) {
-	if remainingDepth == 0 {
-		if ref.IsEmpty() {
-			return
-		}
-		bitmap[position/8] |= 1 << (7 - (position % 8))
-		h := s.ComputeHash(ref)
-		copy(out[*hashOffset:*hashOffset+HashSize], h[:])
-		*hashOffset += HashSize
-		return
-	}
-
-	if ref.Kind() == KindInternal {
-		node := s.getInternal(ref.Index())
-		leftPos := position * 2
-		rightPos := position*2 + 1
-		s.serializeSubtreeDirect(node.left, remainingDepth-1, leftPos, absoluteDepth+1, bitmap, out, hashOffset)
-		s.serializeSubtreeDirect(node.right, remainingDepth-1, rightPos, absoluteDepth+1, bitmap, out, hashOffset)
-		return
-	}
-
-	if ref.IsEmpty() {
-		return
-	}
-
-	// Leaf (StemNode or HashedNode) at a non-zero remaining depth: compute its position.
-	leafPos := position
-	if ref.Kind() == KindStem {
-		sn := s.getStem(ref.Index())
-		for d := 0; d < remainingDepth; d++ {
-			bit := sn.Stem[(absoluteDepth+d)/8] >> (7 - ((absoluteDepth + d) % 8)) & 1
-			leafPos = leafPos*2 + int(bit)
-		}
-	} else {
-		leafPos = position << remainingDepth
-	}
-	bitmap[leafPos/8] |= 1 << (7 - (leafPos % 8))
-	h := s.ComputeHash(ref)
-	copy(out[*hashOffset:*hashOffset+HashSize], h[:])
-	*hashOffset += HashSize
-}
-
-// SerializeNode serializes a node referenced by ref.
-func (s *NodeStore) SerializeNode(ref NodeRef, groupDepth int) []byte {
-	if groupDepth < 1 || groupDepth > MaxGroupDepth {
-		panic("groupDepth must be between 1 and 8")
-	}
-
+// SerializeNode serializes a node referenced by ref into the flat format:
+//   - InternalNode: [nodeTypeInternal(1)][leftHash(32)][rightHash(32)] = 65 bytes
+//   - StemNode:     [nodeTypeStem(1)][stem(31)][bitmap(32)][valueData(variable)]
+func (s *NodeStore) SerializeNode(ref NodeRef) []byte {
 	switch ref.Kind() {
 	case KindInternal:
 		node := s.getInternal(ref.Index())
-		bitmapSize := BitmapSizeForDepth(groupDepth)
-		hashCount := s.countSubtreeChildren(ref, groupDepth)
-		serializedLen := NodeTypeBytes + 1 + bitmapSize + hashCount*HashSize
-		serialized := make([]byte, serializedLen)
+		var serialized [NodeTypeBytes + HashSize + HashSize]byte
 		serialized[0] = nodeTypeInternal
-		serialized[1] = byte(groupDepth)
-		bitmap := serialized[2 : 2+bitmapSize]
-		hashOffset := 2 + bitmapSize
-		s.serializeSubtreeDirect(ref, groupDepth, 0, int(node.depth), bitmap, serialized, &hashOffset)
-		return serialized
+		lh := s.ComputeHash(node.left)
+		rh := s.ComputeHash(node.right)
+		copy(serialized[NodeTypeBytes:NodeTypeBytes+HashSize], lh[:])
+		copy(serialized[NodeTypeBytes+HashSize:], rh[:])
+		return serialized[:]
 
 	case KindStem:
 		sn := s.getStem(ref.Index())
@@ -215,27 +149,23 @@ func (s *NodeStore) deserializeNode(serialized []byte, depth int, hn common.Hash
 
 	switch serialized[0] {
 	case nodeTypeInternal:
-		if len(serialized) < NodeTypeBytes+1 {
+		if len(serialized) != NodeTypeBytes+2*HashSize {
 			return EmptyRef, errInvalidSerializedLength
 		}
-		groupDepth := int(serialized[1])
-		if groupDepth < 1 || groupDepth > MaxGroupDepth {
-			return EmptyRef, errors.New("invalid group depth")
-		}
-		bitmapSize := BitmapSizeForDepth(groupDepth)
-		if len(serialized) < NodeTypeBytes+1+bitmapSize {
-			return EmptyRef, errInvalidSerializedLength
-		}
-		bitmap := serialized[2 : 2+bitmapSize]
-		hashData := serialized[2+bitmapSize:]
+		var leftHash, rightHash common.Hash
+		copy(leftHash[:], serialized[NodeTypeBytes:NodeTypeBytes+HashSize])
+		copy(rightHash[:], serialized[NodeTypeBytes+HashSize:])
 
-		hashIdx := 0
-		ref, err := s.deserializeSubtree(groupDepth, 0, depth, bitmap, hashData, &hashIdx, mustRecompute)
-		if err != nil {
-			return EmptyRef, err
-		}
-		if ref.Kind() == KindInternal && !mustRecompute {
-			s.getInternal(ref.Index()).hash = hn
+		leftRef := s.newHashedRef(leftHash)
+		rightRef := s.newHashedRef(rightHash)
+
+		ref := s.newInternalRef(depth)
+		node := s.getInternal(ref.Index())
+		node.left = leftRef
+		node.right = rightRef
+		if !mustRecompute {
+			node.hash = hn
+			node.mustRecompute = false
 		}
 		return ref, nil
 
@@ -271,165 +201,32 @@ func (s *NodeStore) deserializeNode(serialized []byte, depth int, hn common.Hash
 	}
 }
 
-func (s *NodeStore) deserializeSubtree(remainingDepth int, position int, nodeDepth int, bitmap []byte, hashData []byte, hashIdx *int, mustRecompute bool) (NodeRef, error) {
-	if remainingDepth == 0 {
-		if bitmap[position/8]>>(7-(position%8))&1 == 1 {
-			if len(hashData) < (*hashIdx+1)*HashSize {
-				return EmptyRef, errInvalidSerializedLength
-			}
-			hash := common.BytesToHash(hashData[*hashIdx*HashSize : (*hashIdx+1)*HashSize])
-			*hashIdx++
-			return s.newHashedRef(hash), nil
-		}
-		return EmptyRef, nil
-	}
-
-	leftPos := position * 2
-	rightPos := position*2 + 1
-
-	left, err := s.deserializeSubtree(remainingDepth-1, leftPos, nodeDepth+1, bitmap, hashData, hashIdx, true)
-	if err != nil {
-		return EmptyRef, err
-	}
-	right, err := s.deserializeSubtree(remainingDepth-1, rightPos, nodeDepth+1, bitmap, hashData, hashIdx, true)
-	if err != nil {
-		return EmptyRef, err
-	}
-
-	if left.IsEmpty() && right.IsEmpty() {
-		return EmptyRef, nil
-	}
-
-	if nodeDepth > 248 {
-		panic("node depth exceeds maximum binary trie depth")
-	}
-	idx := s.allocInternal()
-	n := s.getInternal(idx)
-	n.depth = uint8(nodeDepth)
-	n.left = left
-	n.right = right
-	n.mustRecompute = mustRecompute
-	return MakeRef(KindInternal, idx), nil
-}
-
 // --- CollectNodes (Commit) ---
 
-// CollectNodes traverses the trie, flushing nodes at group boundaries.
-func (s *NodeStore) CollectNodes(ref NodeRef, path []byte, flushfn NodeFlushFn, groupDepth int) error {
-	if groupDepth < 1 || groupDepth > MaxGroupDepth {
-		return errors.New("groupDepth must be between 1 and 8")
-	}
-	buf := make([]byte, len(path), len(path)+MaxGroupDepth+1)
-	copy(buf, path)
-	return s.collectNodesBuf(ref, buf, flushfn, groupDepth)
-}
-
-func (s *NodeStore) collectNodesBuf(ref NodeRef, buf []byte, flushfn NodeFlushFn, groupDepth int) error {
+// CollectNodes traverses the trie, serializing and flushing each node via flushfn.
+// Children are flushed before their parents (post-order traversal).
+func (s *NodeStore) CollectNodes(ref NodeRef, path []byte, flushfn NodeFlushFn) error {
 	switch ref.Kind() {
+	case KindEmpty:
+		return nil
 	case KindInternal:
 		node := s.getInternal(ref.Index())
-		if int(node.depth)%groupDepth == 0 {
-			if err := s.collectChildGroupsBuf(ref, buf, flushfn, groupDepth, groupDepth-1); err != nil {
-				return err
-			}
-			serialized := s.SerializeNode(ref, groupDepth)
-			flushfn(buf, s.ComputeHash(ref), serialized)
-			return nil
+		if err := s.CollectNodes(node.left, append(path, 0), flushfn); err != nil {
+			return err
 		}
-		return s.collectChildGroupsBuf(ref, buf, flushfn, groupDepth, groupDepth-(int(node.depth)%groupDepth)-1)
-
+		if err := s.CollectNodes(node.right, append(path, 1), flushfn); err != nil {
+			return err
+		}
+		flushfn(path, s.ComputeHash(ref), s.SerializeNode(ref))
+		return nil
 	case KindStem:
-		serialized := s.SerializeNode(ref, groupDepth)
-		flushfn(buf, s.ComputeHash(ref), serialized)
+		flushfn(path, s.ComputeHash(ref), s.SerializeNode(ref))
 		return nil
-
-	case KindHashed, KindEmpty:
-		return nil
-
+	case KindHashed:
+		return nil // Already committed
 	default:
-		return fmt.Errorf("collectNodesBuf: unexpected kind %d", ref.Kind())
+		return fmt.Errorf("CollectNodes: unexpected kind %d", ref.Kind())
 	}
-}
-
-func (s *NodeStore) collectChildGroupsBuf(ref NodeRef, buf []byte, flushfn NodeFlushFn, groupDepth int, remainingLevels int) error {
-	if ref.Kind() != KindInternal {
-		return nil
-	}
-	node := s.getInternal(ref.Index())
-	saved := len(buf)
-	childDepth := int(node.depth) + 1
-
-	if remainingLevels == 0 {
-		if !node.left.IsEmpty() {
-			buf = append(buf, 0)
-			if err := s.collectNodesBuf(node.left, buf, flushfn, groupDepth); err != nil {
-				return err
-			}
-			buf = buf[:saved]
-		}
-		if !node.right.IsEmpty() {
-			buf = append(buf, 1)
-			if err := s.collectNodesBuf(node.right, buf, flushfn, groupDepth); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	// Left child
-	if !node.left.IsEmpty() {
-		if node.left.Kind() == KindInternal {
-			buf = append(buf, 0)
-			if err := s.collectChildGroupsBuf(node.left, buf, flushfn, groupDepth, remainingLevels-1); err != nil {
-				return err
-			}
-			buf = buf[:saved]
-		} else {
-			buf = append(buf, 0)
-			buf = s.extendPathBuf(buf, node.left, remainingLevels, childDepth)
-			if err := s.collectNodesBuf(node.left, buf, flushfn, groupDepth); err != nil {
-				return err
-			}
-			buf = buf[:saved]
-		}
-	}
-
-	// Right child
-	if !node.right.IsEmpty() {
-		if node.right.Kind() == KindInternal {
-			buf = append(buf, 1)
-			if err := s.collectChildGroupsBuf(node.right, buf, flushfn, groupDepth, remainingLevels-1); err != nil {
-				return err
-			}
-		} else {
-			buf = append(buf, 1)
-			buf = s.extendPathBuf(buf, node.right, remainingLevels, childDepth)
-			if err := s.collectNodesBuf(node.right, buf, flushfn, groupDepth); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-// extendPathBuf extends the path buffer to the group's leaf boundary.
-func (s *NodeStore) extendPathBuf(buf []byte, ref NodeRef, remainingLevels int, absoluteDepth int) []byte {
-	if remainingLevels <= 0 {
-		return buf
-	}
-	if ref.Kind() == KindStem {
-		sn := s.getStem(ref.Index())
-		for d := 0; d < remainingLevels; d++ {
-			bit := sn.Stem[(absoluteDepth+d)/8] >> (7 - ((absoluteDepth + d) % 8)) & 1
-			buf = append(buf, bit)
-		}
-	} else {
-		for d := 0; d < remainingLevels; d++ {
-			buf = append(buf, 0)
-		}
-	}
-	return buf
 }
 
 // ToDot generates a DOT representation for debugging.

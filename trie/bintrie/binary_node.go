@@ -27,18 +27,7 @@ const (
 	NodeTypeBytes  = 1   // Size of node type prefix in serialization
 	HashSize       = 32  // Size of a hash in bytes
 	StemBitmapSize = 32  // Size of the bitmap in a stem node (256 values = 32 bytes)
-
-	// MaxGroupDepth is the maximum allowed group depth for InternalNode serialization.
-	MaxGroupDepth = 8
 )
-
-// BitmapSizeForDepth returns the bitmap size in bytes for a given group depth.
-func BitmapSizeForDepth(groupDepth int) int {
-	if groupDepth <= 3 {
-		return 1
-	}
-	return 1 << (groupDepth - 3)
-}
 
 const (
 	nodeTypeStem = iota + 1

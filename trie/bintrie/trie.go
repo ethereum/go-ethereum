@@ -107,10 +107,9 @@ func ChunkifyCode(code []byte) ChunkedCode {
 
 // BinaryTrie is the implementation of https://eips.ethereum.org/EIPS/eip-7864.
 type BinaryTrie struct {
-	store      *NodeStore
-	reader     *trie.Reader
-	tracer     *trie.PrevalueTracer
-	groupDepth int
+	store  *NodeStore
+	reader *trie.Reader
+	tracer *trie.PrevalueTracer
 }
 
 // ToDot converts the binary trie to a DOT language representation. Useful for debugging.
@@ -126,10 +125,9 @@ func NewBinaryTrie(root common.Hash, db database.NodeDatabase) (*BinaryTrie, err
 		return nil, err
 	}
 	t := &BinaryTrie{
-		store:      NewNodeStore(),
-		reader:     reader,
-		tracer:     trie.NewPrevalueTracer(),
-		groupDepth: MaxGroupDepth,
+		store:  NewNodeStore(),
+		reader: reader,
+		tracer: trie.NewPrevalueTracer(),
 	}
 	// Parse the root node if it's not empty
 	if root != types.EmptyBinaryHash && root != types.EmptyRootHash {
@@ -311,14 +309,9 @@ func (t *BinaryTrie) Hash() common.Hash {
 func (t *BinaryTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 	nodeset := trienode.NewNodeSet(common.Hash{})
 
-	groupDepth := t.groupDepth
-	if groupDepth == 0 {
-		groupDepth = MaxGroupDepth
-	}
-
 	err := t.store.CollectNodes(t.store.Root(), nil, func(path []byte, hash common.Hash, serialized []byte) {
 		nodeset.AddNode(path, trienode.NewNodeWithPrev(hash, serialized, t.tracer.Get(path)))
-	}, groupDepth)
+	})
 	if err != nil {
 		panic(fmt.Errorf("CollectNodes failed: %v", err))
 	}
@@ -345,10 +338,9 @@ func (t *BinaryTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 // Copy creates a deep copy of the trie.
 func (t *BinaryTrie) Copy() *BinaryTrie {
 	return &BinaryTrie{
-		store:      t.store.Copy(),
-		reader:     t.reader,
-		tracer:     t.tracer.Copy(),
-		groupDepth: t.groupDepth,
+		store:  t.store.Copy(),
+		reader: t.reader,
+		tracer: t.tracer.Copy(),
 	}
 }
 

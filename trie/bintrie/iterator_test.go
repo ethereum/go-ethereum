@@ -31,7 +31,6 @@ func makeTrie(t *testing.T, entries [][2]common.Hash) *BinaryTrie {
 	tr := &BinaryTrie{
 		store:      store,
 		tracer:     trie.NewPrevalueTracer(),
-		groupDepth: MaxGroupDepth,
 	}
 	for _, kv := range entries {
 		if err := store.Insert(kv[0][:], kv[1][:], nil); err != nil {
@@ -66,7 +65,6 @@ func TestIteratorEmptyTrie(t *testing.T) {
 	tr := &BinaryTrie{
 		store:      NewNodeStore(),
 		tracer:     trie.NewPrevalueTracer(),
-		groupDepth: MaxGroupDepth,
 	}
 	it, err := newBinaryNodeIterator(tr, nil)
 	if err != nil {

@@ -190,7 +190,6 @@ func TestStorageRoundTrip(t *testing.T) {
 	tr := &BinaryTrie{
 		store:      NewNodeStore(),
 		tracer:     tracer,
-		groupDepth: MaxGroupDepth,
 	}
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
 
@@ -259,7 +258,6 @@ func newEmptyTestTrie(t *testing.T) *BinaryTrie {
 	return &BinaryTrie{
 		store:      NewNodeStore(),
 		tracer:     trie.NewPrevalueTracer(),
-		groupDepth: MaxGroupDepth,
 	}
 }
 
@@ -585,7 +583,6 @@ func TestBinaryTrieWitness(t *testing.T) {
 	tr := &BinaryTrie{
 		store:      NewNodeStore(),
 		tracer:     tracer,
-		groupDepth: MaxGroupDepth,
 	}
 	if w := tr.Witness(); len(w) != 0 {
 		t.Fatal("expected empty witness for fresh trie")
@@ -613,7 +610,6 @@ func testAccount(t *testing.T, addr common.Address, nonce uint64, balance uint64
 	tr := &BinaryTrie{
 		store:      NewNodeStore(),
 		tracer:     trie.NewPrevalueTracer(),
-		groupDepth: MaxGroupDepth,
 	}
 	acc := &types.StateAccount{
 		Nonce:    nonce,
@@ -668,7 +664,6 @@ func TestGetAccountNonMembershipInternalRoot(t *testing.T) {
 	tr := &BinaryTrie{
 		store:      NewNodeStore(),
 		tracer:     trie.NewPrevalueTracer(),
-		groupDepth: MaxGroupDepth,
 	}
 
 	// Insert two accounts whose binary tree keys have different first bits
@@ -732,7 +727,6 @@ func TestGetStorageNonMembershipInternalRoot(t *testing.T) {
 	tr := &BinaryTrie{
 		store:      NewNodeStore(),
 		tracer:     trie.NewPrevalueTracer(),
-		groupDepth: MaxGroupDepth,
 	}
 
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")

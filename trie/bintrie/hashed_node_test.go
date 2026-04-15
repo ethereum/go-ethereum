@@ -95,7 +95,7 @@ func TestHashedNodeInsertValuesAtStem(t *testing.T) {
 			sn.setValue(byte(i), v)
 		}
 	}
-	serialized := rs.SerializeNode(ref, MaxGroupDepth)
+	serialized := rs.SerializeNode(ref)
 
 	validResolver := func(path []byte, hash common.Hash) ([]byte, error) {
 		return serialized, nil
