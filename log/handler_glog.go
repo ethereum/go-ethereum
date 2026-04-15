@@ -170,7 +170,7 @@ func (h *GlogHandler) handle(ctx context.Context, r slog.Record, origin slog.Han
 	// Fast path: cache hit
 	if lvl, ok := cfg.cache.Load(r.PC); ok {
 		if lvl.(slog.Level) <= r.Level {
-			return h.origin.Handle(ctx, r)
+			return origin.Handle(ctx, r)
 		}
 		return nil
 	}
@@ -191,7 +191,7 @@ func (h *GlogHandler) handle(ctx context.Context, r slog.Record, origin slog.Han
 
 	// Handle the message.
 	if lvl <= r.Level {
-		return h.origin.Handle(ctx, r)
+		return origin.Handle(ctx, r)
 	}
 	return nil
 }
