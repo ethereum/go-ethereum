@@ -133,11 +133,13 @@ func (s *NodeStore) SerializeNode(ref NodeRef) []byte {
 var errInvalidSerializedLength = errors.New("invalid serialized node length")
 
 // DeserializeNode deserializes a node from bytes, recomputing its hash.
+// The serialized buffer must not be modified after this call.
 func (s *NodeStore) DeserializeNode(serialized []byte, depth int) (NodeRef, error) {
 	return s.deserializeNode(serialized, depth, common.Hash{}, true)
 }
 
 // DeserializeNodeWithHash deserializes a node, using the provided hash.
+// The serialized buffer must not be modified after this call.
 func (s *NodeStore) DeserializeNodeWithHash(serialized []byte, depth int, hn common.Hash) (NodeRef, error) {
 	return s.deserializeNode(serialized, depth, hn, false)
 }
@@ -193,7 +195,9 @@ func (s *NodeStore) deserializeNode(serialized []byte, depth int, hn common.Hash
 		if len(serialized) < dataEnd {
 			return EmptyRef, errInvalidSerializedLength
 		}
-		// Zero-copy sub-slice of serialized data
+		// Zero-copy: valueData aliases the serialized buffer. The shared
+		// flag triggers copy-on-write via ensureWritable() before mutation.
+		// Callers must not modify serialized after this call.
 		sn.valueData = serialized[dataStart:dataEnd]
 		sn.shared = true
 		sn.depth = uint8(depth)
