@@ -463,14 +463,7 @@ func (s *Ethereum) Start() error {
 	s.handler.txTracker.Start(s.blockchain)
 
 	// Start the connection manager with inclusion-based peer protection.
-	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() }, func() map[string]PeerInclusionStats {
-		stats := s.handler.txTracker.GetAllPeerStats()
-		result := make(map[string]PeerInclusionStats, len(stats))
-		for id, ps := range stats {
-			result[id] = PeerInclusionStats{Finalized: ps.Finalized, RecentIncluded: ps.RecentIncluded}
-		}
-		return result
-	})
+	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() }, s.handler.txTracker.GetAllPeerStats)
 
 	// start log indexer
 	s.filterMaps.Start()

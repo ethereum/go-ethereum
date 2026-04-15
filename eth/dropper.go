@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/eth/txtracker"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -58,30 +59,22 @@ var (
 	dropSkipped = metrics.NewRegisteredMeter("eth/dropper/skipped", nil)
 )
 
-// PeerInclusionStats holds the per-peer inclusion data needed by the dropper
-// to decide which peers to protect. Any stats provider (e.g. txtracker) can
-// implement getPeerInclusionStatsFunc by returning this struct per peer ID.
-type PeerInclusionStats struct {
-	Finalized      int64   // Cumulative finalized inclusions attributed to this peer
-	RecentIncluded float64 // EMA of per-block inclusions (0 if not tracked)
-}
-
 // Callback type to get per-peer inclusion statistics.
-type getPeerInclusionStatsFunc func() map[string]PeerInclusionStats
+type getPeerStatsFunc func() map[string]txtracker.PeerStats
 
 // protectionCategory defines a peer scoring function and the fraction of peers
 // to protect per inbound/dialed category. Multiple categories are unioned.
 type protectionCategory struct {
 	name  string
-	score func(PeerInclusionStats) float64
+	score func(txtracker.PeerStats) float64
 	frac  float64 // fraction of max peers to protect (0.0–1.0)
 }
 
 // protectionCategories is the list of protection criteria. Each category
 // independently selects its top-N peers per pool; the union is protected.
 var protectionCategories = []protectionCategory{
-	{"total-finalized", func(s PeerInclusionStats) float64 { return float64(s.Finalized) }, inclusionProtectionFrac},
-	{"recent-included", func(s PeerInclusionStats) float64 { return s.RecentIncluded }, inclusionProtectionFrac},
+	{"total-finalized", func(s txtracker.PeerStats) float64 { return float64(s.Finalized) }, inclusionProtectionFrac},
+	{"recent-included", func(s txtracker.PeerStats) float64 { return s.RecentIncluded }, inclusionProtectionFrac},
 }
 
 // dropper monitors the state of the peer pool and introduces churn by
@@ -107,7 +100,7 @@ type dropper struct {
 	maxInboundPeers int // maximum number of inbound peers
 	peersFunc       getPeersFunc
 	syncingFunc     getSyncingFunc
-	peerStatsFunc   getPeerInclusionStatsFunc // optional: inclusion stats for protection
+	peerStatsFunc   getPeerStatsFunc // optional: inclusion stats for protection
 
 	// peerDropTimer introduces churn if we are close to limit capacity.
 	// We handle Dialed and Inbound connections separately
@@ -139,7 +132,7 @@ func newDropper(maxDialPeers, maxInboundPeers int) *dropper {
 
 // Start the dropper. peerStatsFunc is optional (nil disables inclusion
 // protection).
-func (cm *dropper) Start(srv *p2p.Server, syncingFunc getSyncingFunc, peerStatsFunc getPeerInclusionStatsFunc) {
+func (cm *dropper) Start(srv *p2p.Server, syncingFunc getSyncingFunc, peerStatsFunc getPeerStatsFunc) {
 	cm.peersFunc = srv.Peers
 	cm.syncingFunc = syncingFunc
 	cm.peerStatsFunc = peerStatsFunc
@@ -234,7 +227,7 @@ func (cm *dropper) protectedPeers(peers []*p2p.Peer) map[*p2p.Peer]bool {
 // Factored from protectedPeers so tests can exercise the per-pool
 // selection logic without needing to construct direction-flagged
 // *p2p.Peer instances (which require unexported p2p types).
-func protectedPeersByPool(inbound, dialed []*p2p.Peer, stats map[string]PeerInclusionStats) map[*p2p.Peer]bool {
+func protectedPeersByPool(inbound, dialed []*p2p.Peer, stats map[string]txtracker.PeerStats) map[*p2p.Peer]bool {
 	result := make(map[*p2p.Peer]bool)
 	// protectPool selects the top-frac peers from pool by score and adds them to result.
 	protectPool := func(pool []*p2p.Peer, score func(*p2p.Peer) float64, frac float64) {

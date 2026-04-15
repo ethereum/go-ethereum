@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/eth/txtracker"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
@@ -35,7 +36,7 @@ func makePeers(n int) []*p2p.Peer {
 
 func TestProtectedPeersNoStats(t *testing.T) {
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
-	cm.peerStatsFunc = func() map[string]PeerInclusionStats { return nil }
+	cm.peerStatsFunc = func() map[string]txtracker.PeerStats { return nil }
 
 	peers := makePeers(10)
 	protected := cm.protectedPeers(peers)
@@ -46,8 +47,8 @@ func TestProtectedPeersNoStats(t *testing.T) {
 
 func TestProtectedPeersEmptyStats(t *testing.T) {
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
-	cm.peerStatsFunc = func() map[string]PeerInclusionStats {
-		return map[string]PeerInclusionStats{}
+	cm.peerStatsFunc = func() map[string]txtracker.PeerStats {
+		return map[string]txtracker.PeerStats{}
 	}
 
 	peers := makePeers(10)
@@ -62,11 +63,11 @@ func TestProtectedPeersTopPeer(t *testing.T) {
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
 
 	peers := makePeers(20)
-	stats := make(map[string]PeerInclusionStats)
-	stats[peers[0].ID().String()] = PeerInclusionStats{Finalized: 100}
-	stats[peers[1].ID().String()] = PeerInclusionStats{RecentIncluded: 5.0}
+	stats := make(map[string]txtracker.PeerStats)
+	stats[peers[0].ID().String()] = txtracker.PeerStats{Finalized: 100}
+	stats[peers[1].ID().String()] = txtracker.PeerStats{RecentIncluded: 5.0}
 
-	cm.peerStatsFunc = func() map[string]PeerInclusionStats { return stats }
+	cm.peerStatsFunc = func() map[string]txtracker.PeerStats { return stats }
 
 	protected := cm.protectedPeers(peers)
 	if len(protected) != 2 {
@@ -84,11 +85,11 @@ func TestProtectedPeersZeroScore(t *testing.T) {
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
 
 	peers := makePeers(10)
-	stats := make(map[string]PeerInclusionStats)
+	stats := make(map[string]txtracker.PeerStats)
 	for _, p := range peers {
-		stats[p.ID().String()] = PeerInclusionStats{}
+		stats[p.ID().String()] = txtracker.PeerStats{}
 	}
-	cm.peerStatsFunc = func() map[string]PeerInclusionStats { return stats }
+	cm.peerStatsFunc = func() map[string]txtracker.PeerStats { return stats }
 
 	protected := cm.protectedPeers(peers)
 	if len(protected) != 0 {
@@ -101,10 +102,10 @@ func TestProtectedPeersOverlap(t *testing.T) {
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
 
 	peers := makePeers(20)
-	stats := make(map[string]PeerInclusionStats)
-	stats[peers[0].ID().String()] = PeerInclusionStats{Finalized: 100, RecentIncluded: 5.0}
+	stats := make(map[string]txtracker.PeerStats)
+	stats[peers[0].ID().String()] = txtracker.PeerStats{Finalized: 100, RecentIncluded: 5.0}
 
-	cm.peerStatsFunc = func() map[string]PeerInclusionStats { return stats }
+	cm.peerStatsFunc = func() map[string]txtracker.PeerStats { return stats }
 
 	protected := cm.protectedPeers(peers)
 	if len(protected) != 1 {
@@ -137,12 +138,12 @@ func TestProtectedByPoolPerPoolTopN(t *testing.T) {
 		dialed[i] = p2p.NewPeer(id, fmt.Sprintf("dialed%d", i), nil)
 	}
 	// Strictly increasing scores: highest wins in each pool.
-	stats := make(map[string]PeerInclusionStats)
+	stats := make(map[string]txtracker.PeerStats)
 	for i, p := range inbound {
-		stats[p.ID().String()] = PeerInclusionStats{Finalized: int64(1 + i)}
+		stats[p.ID().String()] = txtracker.PeerStats{Finalized: int64(1 + i)}
 	}
 	for i, p := range dialed {
-		stats[p.ID().String()] = PeerInclusionStats{Finalized: int64(1 + i)}
+		stats[p.ID().String()] = txtracker.PeerStats{Finalized: int64(1 + i)}
 	}
 
 	protected := protectedPeersByPool(inbound, dialed, stats)
@@ -172,10 +173,10 @@ func TestProtectedByPoolCrossCategoryOverlap(t *testing.T) {
 	//   Finalized winners:      P2 (tie-broken-ok), P0
 	//   RecentIncluded winners: P2, P1
 	// Union: {P0, P1, P2}.
-	stats := make(map[string]PeerInclusionStats)
-	stats[dialed[0].ID().String()] = PeerInclusionStats{Finalized: 100, RecentIncluded: 0}
-	stats[dialed[1].ID().String()] = PeerInclusionStats{Finalized: 0, RecentIncluded: 5.0}
-	stats[dialed[2].ID().String()] = PeerInclusionStats{Finalized: 200, RecentIncluded: 10.0}
+	stats := make(map[string]txtracker.PeerStats)
+	stats[dialed[0].ID().String()] = txtracker.PeerStats{Finalized: 100, RecentIncluded: 0}
+	stats[dialed[1].ID().String()] = txtracker.PeerStats{Finalized: 0, RecentIncluded: 5.0}
+	stats[dialed[2].ID().String()] = txtracker.PeerStats{Finalized: 200, RecentIncluded: 10.0}
 
 	protected := protectedPeersByPool(nil, dialed, stats)
 
@@ -202,13 +203,13 @@ func TestProtectedByPoolPerPoolIndependence(t *testing.T) {
 		id := enode.ID{byte(100 + i)}
 		dialed[i] = p2p.NewPeer(id, fmt.Sprintf("dialed%d", i), nil)
 	}
-	stats := make(map[string]PeerInclusionStats)
+	stats := make(map[string]txtracker.PeerStats)
 	// Every inbound peer outscores every dialed peer.
 	for i, p := range inbound {
-		stats[p.ID().String()] = PeerInclusionStats{Finalized: int64(1000 + i)}
+		stats[p.ID().String()] = txtracker.PeerStats{Finalized: int64(1000 + i)}
 	}
 	for i, p := range dialed {
-		stats[p.ID().String()] = PeerInclusionStats{Finalized: int64(1 + i)}
+		stats[p.ID().String()] = txtracker.PeerStats{Finalized: int64(1 + i)}
 	}
 
 	protected := protectedPeersByPool(inbound, dialed, stats)
