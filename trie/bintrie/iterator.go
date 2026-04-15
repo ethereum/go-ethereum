@@ -139,6 +139,7 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 		}
 
 		// Update the stack and parent with the resolved node
+		oldHashedIdx := it.current.Index()
 		it.current = resolved
 		it.stack[len(it.stack)-1].Node = resolved
 		parent := &it.stack[len(it.stack)-2]
@@ -148,6 +149,7 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 		} else {
 			parentNode.right = resolved
 		}
+		it.store.freeHashedNode(oldHashedIdx)
 		return it.Next(descend)
 
 	case KindEmpty:
