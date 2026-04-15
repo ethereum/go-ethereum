@@ -20,10 +20,10 @@ package bintrie
 type NodeKind uint8
 
 const (
-	KindEmpty    NodeKind = iota // no node
-	KindInternal                 // internal binary branching node
-	KindStem                     // leaf group containing up to 256 values
-	KindHashed                   // unresolved node (hash only)
+	KindEmpty    NodeKind = iota
+	KindInternal
+	KindStem     // up to 256 values per stem
+	KindHashed
 )
 
 // NodeRef is a compact, GC-invisible reference to a node in a NodeStore.
@@ -37,20 +37,17 @@ const (
 	kindShift uint32 = 30
 	indexMask uint32 = (1 << kindShift) - 1
 
-	// EmptyRef is the zero-value NodeRef, representing an empty node.
+	// EmptyRef represents an empty node.
 	EmptyRef NodeRef = 0
 )
 
-// MakeRef creates a NodeRef from a kind and pool index.
 func MakeRef(kind NodeKind, idx uint32) NodeRef {
 	return NodeRef(uint32(kind)<<kindShift | (idx & indexMask))
 }
 
-// Kind returns the node type tag.
 func (r NodeRef) Kind() NodeKind { return NodeKind(uint32(r) >> kindShift) }
 
-// Index returns the pool index within the node's typed pool.
+// Index within the typed pool.
 func (r NodeRef) Index() uint32 { return uint32(r) & indexMask }
 
-// IsEmpty returns true if this ref represents an empty node.
 func (r NodeRef) IsEmpty() bool { return r == EmptyRef }

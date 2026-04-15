@@ -34,7 +34,7 @@ func keyToPath(depth int, key []byte) ([]byte, error) {
 	return path, nil
 }
 
-// makeKeyPath is a simplified version of keyToPath that doesn't return an error.
+// makeKeyPath is like keyToPath but panics on invalid depth.
 func makeKeyPath(depth int, key []byte) []byte {
 	path := make([]byte, 0, depth+1)
 	for i := range depth + 1 {
@@ -44,10 +44,9 @@ func makeKeyPath(depth int, key []byte) []byte {
 	return path
 }
 
-// InternalNode is a binary trie internal node.
 type InternalNode struct {
 	left, right   NodeRef
 	depth         uint8
-	mustRecompute bool        // true if the hash needs to be recomputed
-	hash          common.Hash // cached hash when mustRecompute == false
+	mustRecompute bool
+	hash          common.Hash
 }

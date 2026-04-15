@@ -26,12 +26,10 @@ import (
 // NodeResolverFn resolves a hashed node from the database.
 type NodeResolverFn func([]byte, common.Hash) ([]byte, error)
 
-// GetSingle retrieves a single value at stem[suffix] from the trie root.
 func (s *NodeStore) GetSingle(stem []byte, suffix byte, resolver NodeResolverFn) ([]byte, error) {
 	return s.getSingle(s.root, stem, suffix, resolver)
 }
 
-// getSingle retrieves a single value using iterative traversal.
 func (s *NodeStore) getSingle(ref NodeRef, stem []byte, suffix byte, resolver NodeResolverFn) ([]byte, error) {
 	cur := ref
 	// Track parent for HashedNode resolution (update parent's child ref).
@@ -100,12 +98,10 @@ func (s *NodeStore) getSingle(ref NodeRef, stem []byte, suffix byte, resolver No
 	}
 }
 
-// GetValuesAtStem retrieves all 256 values at a stem.
 func (s *NodeStore) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([][]byte, error) {
 	return s.getValuesAtStem(s.root, stem, resolver)
 }
 
-// getValuesAtStem uses iterative traversal to find the StemNode.
 func (s *NodeStore) getValuesAtStem(ref NodeRef, stem []byte, resolver NodeResolverFn) ([][]byte, error) {
 	cur := ref
 	var parentIdx uint32
@@ -173,13 +169,11 @@ func (s *NodeStore) getValuesAtStem(ref NodeRef, stem []byte, resolver NodeResol
 	}
 }
 
-// InsertSingle inserts a single value at stem[suffix] into the trie.
 func (s *NodeStore) InsertSingle(stem []byte, suffix byte, value []byte, resolver NodeResolverFn) error {
 	if len(value) != HashSize {
 		return errors.New("invalid insertion: value length")
 	}
 
-	// Handle root-is-empty case
 	if s.root.IsEmpty() {
 		ref := s.newStemRef(stem, 0)
 		sn := s.getStem(ref.Index())
@@ -188,7 +182,6 @@ func (s *NodeStore) InsertSingle(stem []byte, suffix byte, value []byte, resolve
 		return nil
 	}
 
-	// Handle root-is-stem case
 	if s.root.Kind() == KindStem {
 		sn := s.getStem(s.root.Index())
 		if sn.Stem == [StemSize]byte(stem[:StemSize]) {
@@ -196,17 +189,14 @@ func (s *NodeStore) InsertSingle(stem []byte, suffix byte, value []byte, resolve
 			sn.mustRecompute = true
 			return nil
 		}
-		// Different stem — promote root to internal node via split
 		newRoot := s.splitStemInsert(s.root, stem, suffix, value, int(sn.depth))
 		s.root = newRoot
 		return nil
 	}
 
-	// Root is an InternalNode — iterative descent
 	return s.insertSingleInternal(stem, suffix, value, resolver)
 }
 
-// insertSingleInternal handles insertion when root is an InternalNode.
 func (s *NodeStore) insertSingleInternal(stem []byte, suffix byte, value []byte, resolver NodeResolverFn) error {
 	type pathEntry struct {
 		internalIdx uint32
@@ -297,8 +287,7 @@ func (s *NodeStore) insertSingleInternal(stem []byte, suffix byte, value []byte,
 	}
 }
 
-// splitStemInsert handles the case where we need to split a StemNode
-// into a chain of InternalNodes because the new key has a different stem.
+// splitStemInsert splits a StemNode into InternalNodes for a divergent stem.
 func (s *NodeStore) splitStemInsert(existingRef NodeRef, newStem []byte, suffix byte, value []byte, depth int) NodeRef {
 	existing := s.getStem(existingRef.Index())
 	existingDepth := depth
@@ -360,7 +349,6 @@ func (s *NodeStore) splitStemInsert(existingRef NodeRef, newStem []byte, suffix 
 	}
 }
 
-// InsertValuesAtStem inserts a full group of values at the given stem.
 func (s *NodeStore) InsertValuesAtStem(stem []byte, values [][]byte, resolver NodeResolverFn) error {
 	newRoot, err := s.insertValuesAtStem(s.root, stem, values, resolver, 0)
 	if err != nil {
@@ -370,7 +358,6 @@ func (s *NodeStore) InsertValuesAtStem(stem []byte, values [][]byte, resolver No
 	return nil
 }
 
-// insertValuesAtStem recursively inserts values at a stem.
 func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte, resolver NodeResolverFn, depth int) (NodeRef, error) {
 	switch ref.Kind() {
 	case KindInternal:
@@ -482,7 +469,7 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 	}
 }
 
-// splitStemValuesInsert handles splitting a StemNode when inserting values with a different stem.
+// splitStemValuesInsert splits a StemNode when the new stem diverges.
 func (s *NodeStore) splitStemValuesInsert(existingRef NodeRef, newStem []byte, values [][]byte, resolver NodeResolverFn, depth int) (NodeRef, error) {
 	existing := s.getStem(existingRef.Index())
 
@@ -542,17 +529,14 @@ func (s *NodeStore) splitStemValuesInsert(existingRef NodeRef, newStem []byte, v
 	return nRef, nil
 }
 
-// Insert inserts a key-value pair using the full 32-byte key.
 func (s *NodeStore) Insert(key []byte, value []byte, resolver NodeResolverFn) error {
 	return s.InsertSingle(key[:StemSize], key[StemSize], value, resolver)
 }
 
-// Get retrieves the value for the given 32-byte key.
 func (s *NodeStore) Get(key []byte, resolver NodeResolverFn) ([]byte, error) {
 	return s.GetSingle(key[:StemSize], key[StemSize], resolver)
 }
 
-// GetHeight returns the height of the trie rooted at ref.
 func (s *NodeStore) GetHeight(ref NodeRef) int {
 	switch ref.Kind() {
 	case KindInternal:

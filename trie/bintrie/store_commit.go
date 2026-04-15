@@ -25,15 +25,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// NodeFlushFn is called during commit to flush serialized nodes.
 type NodeFlushFn func(path []byte, hash common.Hash, serialized []byte)
 
-// Hash computes and returns the root hash.
 func (s *NodeStore) Hash() common.Hash {
 	return s.ComputeHash(s.root)
 }
 
-// ComputeHash computes the hash of the node referenced by ref.
 func (s *NodeStore) ComputeHash(ref NodeRef) common.Hash {
 	switch ref.Kind() {
 	case KindInternal:
@@ -49,11 +46,7 @@ func (s *NodeStore) ComputeHash(ref NodeRef) common.Hash {
 	}
 }
 
-// hashInternal computes the hash of an InternalNode. At shallow depths
-// (< parallelHashDepth), the left subtree is hashed in a goroutine while
-// the right subtree is hashed inline. This is safe because left and right
-// subtrees are disjoint in a well-formed tree — no node appears in both.
-// ComputeHash must not be called concurrently with mutations to the NodeStore.
+// hashInternal hashes an InternalNode, parallelising at shallow depths.
 func (s *NodeStore) hashInternal(idx uint32) common.Hash {
 	node := s.getInternal(idx)
 	if !node.mustRecompute {
@@ -96,11 +89,7 @@ func (s *NodeStore) hashInternal(idx uint32) common.Hash {
 	return node.hash
 }
 
-// --- Serialization ---
-
-// SerializeNode serializes a node referenced by ref into the flat format:
-//   - InternalNode: [nodeTypeInternal(1)][leftHash(32)][rightHash(32)] = 65 bytes
-//   - StemNode:     [nodeTypeStem(1)][stem(31)][bitmap(32)][valueData(variable)]
+// SerializeNode serializes a node into the flat on-disk format.
 func (s *NodeStore) SerializeNode(ref NodeRef) []byte {
 	switch ref.Kind() {
 	case KindInternal:
@@ -128,18 +117,14 @@ func (s *NodeStore) SerializeNode(ref NodeRef) []byte {
 	}
 }
 
-// --- Deserialization ---
-
 var errInvalidSerializedLength = errors.New("invalid serialized node length")
 
 // DeserializeNode deserializes a node from bytes, recomputing its hash.
-// The serialized buffer must not be modified after this call.
 func (s *NodeStore) DeserializeNode(serialized []byte, depth int) (NodeRef, error) {
 	return s.deserializeNode(serialized, depth, common.Hash{}, true)
 }
 
 // DeserializeNodeWithHash deserializes a node, using the provided hash.
-// The serialized buffer must not be modified after this call.
 func (s *NodeStore) DeserializeNodeWithHash(serialized []byte, depth int, hn common.Hash) (NodeRef, error) {
 	return s.deserializeNode(serialized, depth, hn, false)
 }
@@ -195,9 +180,7 @@ func (s *NodeStore) deserializeNode(serialized []byte, depth int, hn common.Hash
 		if len(serialized) < dataEnd {
 			return EmptyRef, errInvalidSerializedLength
 		}
-		// Zero-copy: valueData aliases the serialized buffer. The shared
-		// flag triggers copy-on-write via ensureWritable() before mutation.
-		// Callers must not modify serialized after this call.
+		// Zero-copy: aliases the serialized buffer; ensureWritable() COWs before mutation.
 		sn.valueData = serialized[dataStart:dataEnd]
 		sn.shared = true
 		sn.depth = uint8(depth)
@@ -210,10 +193,7 @@ func (s *NodeStore) deserializeNode(serialized []byte, depth int, hn common.Hash
 	}
 }
 
-// --- CollectNodes (Commit) ---
-
-// CollectNodes traverses the trie, serializing and flushing each node via flushfn.
-// Children are flushed before their parents (post-order traversal).
+// CollectNodes flushes every node via flushfn in post-order.
 func (s *NodeStore) CollectNodes(ref NodeRef, path []byte, flushfn NodeFlushFn) error {
 	switch ref.Kind() {
 	case KindEmpty:
@@ -244,7 +224,6 @@ func (s *NodeStore) CollectNodes(ref NodeRef, path []byte, flushfn NodeFlushFn) 
 	}
 }
 
-// ToDot generates a DOT representation for debugging.
 func (s *NodeStore) ToDot(ref NodeRef, parent, path string) string {
 	switch ref.Kind() {
 	case KindInternal:

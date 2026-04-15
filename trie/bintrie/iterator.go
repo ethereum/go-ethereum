@@ -47,7 +47,6 @@ func newBinaryNodeIterator(t *BinaryTrie, _ []byte) (trie.NodeIterator, error) {
 	return it, nil
 }
 
-// Next moves the iterator to the next node.
 func (it *binaryNodeIterator) Next(descend bool) bool {
 	if it.lastErr == errIteratorEnd {
 		return false
@@ -160,7 +159,6 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 	}
 }
 
-// Error returns the error status of the iterator.
 func (it *binaryNodeIterator) Error() error {
 	if it.lastErr == errIteratorEnd {
 		return nil
@@ -168,12 +166,10 @@ func (it *binaryNodeIterator) Error() error {
 	return it.lastErr
 }
 
-// Hash returns the hash of the current node.
 func (it *binaryNodeIterator) Hash() common.Hash {
 	return it.store.ComputeHash(it.current)
 }
 
-// Parent returns the hash of the parent of the current node.
 func (it *binaryNodeIterator) Parent() common.Hash {
 	if len(it.stack) < 2 {
 		return common.Hash{}
@@ -181,7 +177,7 @@ func (it *binaryNodeIterator) Parent() common.Hash {
 	return it.store.ComputeHash(it.stack[len(it.stack)-2].Node)
 }
 
-// Path returns the hex-encoded path to the current node.
+// Path returns the bit-path to the current node.
 func (it *binaryNodeIterator) Path() []byte {
 	if it.Leaf() {
 		return it.LeafKey()
@@ -196,12 +192,10 @@ func (it *binaryNodeIterator) Path() []byte {
 	return path
 }
 
-// NodeBlob returns the serialized bytes of the current node.
 func (it *binaryNodeIterator) NodeBlob() []byte {
 	return it.store.SerializeNode(it.current)
 }
 
-// Leaf returns true iff the current node is a leaf node.
 func (it *binaryNodeIterator) Leaf() bool {
 	if it.current.Kind() != KindStem {
 		return false
@@ -221,7 +215,6 @@ func (it *binaryNodeIterator) Leaf() bool {
 	return sn.hasValue(byte(currentValueIndex))
 }
 
-// LeafKey returns the key of the leaf.
 func (it *binaryNodeIterator) LeafKey() []byte {
 	if it.current.Kind() != KindStem {
 		panic("Leaf() called on an binary node iterator not at a leaf location")
@@ -230,7 +223,6 @@ func (it *binaryNodeIterator) LeafKey() []byte {
 	return sn.Key(it.stack[len(it.stack)-1].Index - 1)
 }
 
-// LeafBlob returns the content of the leaf.
 func (it *binaryNodeIterator) LeafBlob() []byte {
 	if it.current.Kind() != KindStem {
 		panic("LeafBlob() called on an binary node iterator not at a leaf location")
@@ -239,7 +231,6 @@ func (it *binaryNodeIterator) LeafBlob() []byte {
 	return sn.getValue(byte(it.stack[len(it.stack)-1].Index - 1))
 }
 
-// LeafProof returns the Merkle proof of the leaf.
 func (it *binaryNodeIterator) LeafProof() [][]byte {
 	if it.current.Kind() != KindStem {
 		panic("LeafProof() called on an binary node iterator not at a leaf location")
@@ -274,8 +265,7 @@ func (it *binaryNodeIterator) LeafProof() [][]byte {
 	return proof
 }
 
-// AddResolver sets an intermediate database to use for looking up trie nodes
-// before reaching into the real persistent layer.
+// AddResolver is a no-op (satisfies the NodeIterator interface).
 func (it *binaryNodeIterator) AddResolver(trie.NodeResolver) {
 	// Not implemented, but should not panic
 }

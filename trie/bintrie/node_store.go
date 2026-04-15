@@ -24,31 +24,16 @@ import "github.com/ethereum/go-ethereum/common"
 // of the backing data, only the outer pointer slice grows).
 const storeChunkSize = 4096
 
-// NodeStore is a GC-friendly arena for binary trie nodes.
-//
-// Instead of allocating each node as a separate heap object with interface
-// pointers (which the GC must scan), NodeStore packs nodes into typed chunked
-// pools. InternalNode and HashedNode contain ZERO Go pointers, so their pool
-// backing arrays are allocated in noscan spans — the GC skips them entirely.
-// StemNode has one pointer (valueData []byte) per node.
-//
-// For a trie with 25K InternalNodes, this reduces GC-scanned pointer-words
-// from ~125K (with interface-based nodes) to ~25K (just StemNode valueData),
-// an ~80% reduction. At mainnet scale (millions of nodes), this prevents
-// multi-second GC pauses.
+// NodeStore is a GC-friendly arena for binary trie nodes. Nodes are packed
+// into typed chunked pools so pointer-free types (InternalNode, HashedNode)
+// land in noscan spans the GC skips entirely.
 type NodeStore struct {
-	// InternalNode pool — NOSCAN: InternalNode contains zero Go pointers.
-	// Children are NodeRef (uint32), hash is [32]byte.
 	internalChunks []*[storeChunkSize]InternalNode
 	internalCount  uint32
 
-	// StemNode pool — each StemNode has one pointer (valueData []byte).
-	// Still much better than the old design where each InternalNode had
-	// two BinaryNode interface pointers (4 pointer-words each).
 	stemChunks []*[storeChunkSize]StemNode
 	stemCount  uint32
 
-	// HashedNode pool — NOSCAN: HashedNode is just [32]byte.
 	hashedChunks []*[storeChunkSize]HashedNode
 	hashedCount  uint32
 
@@ -60,18 +45,13 @@ type NodeStore struct {
 	freeHashed    []uint32
 }
 
-// NewNodeStore creates a new empty NodeStore.
 func NewNodeStore() *NodeStore {
 	return &NodeStore{root: EmptyRef}
 }
 
-// Root returns the root NodeRef.
 func (s *NodeStore) Root() NodeRef { return s.root }
 
-// SetRoot sets the root NodeRef.
 func (s *NodeStore) SetRoot(ref NodeRef) { s.root = ref }
-
-// --- InternalNode allocation ---
 
 func (s *NodeStore) allocInternal() uint32 {
 	if n := len(s.freeInternals); n > 0 {
@@ -96,7 +76,6 @@ func (s *NodeStore) getInternal(idx uint32) *InternalNode {
 	return &s.internalChunks[idx/storeChunkSize][idx%storeChunkSize]
 }
 
-// newInternalRef allocates an InternalNode and returns its NodeRef.
 func (s *NodeStore) newInternalRef(depth int) NodeRef {
 	if depth > 248 {
 		panic("node depth exceeds maximum binary trie depth")
@@ -107,8 +86,6 @@ func (s *NodeStore) newInternalRef(depth int) NodeRef {
 	n.mustRecompute = true
 	return MakeRef(KindInternal, idx)
 }
-
-// --- StemNode allocation ---
 
 func (s *NodeStore) allocStem() uint32 {
 	if n := len(s.freeStems); n > 0 {
@@ -133,7 +110,6 @@ func (s *NodeStore) getStem(idx uint32) *StemNode {
 	return &s.stemChunks[idx/storeChunkSize][idx%storeChunkSize]
 }
 
-// newStemRef allocates a StemNode with the given stem/depth and returns its NodeRef.
 func (s *NodeStore) newStemRef(stem []byte, depth int) NodeRef {
 	if depth > 248 {
 		panic("node depth exceeds maximum binary trie depth")
@@ -145,8 +121,6 @@ func (s *NodeStore) newStemRef(stem []byte, depth int) NodeRef {
 	sn.mustRecompute = true
 	return MakeRef(KindStem, idx)
 }
-
-// --- HashedNode allocation ---
 
 func (s *NodeStore) allocHashed() uint32 {
 	if n := len(s.freeHashed); n > 0 {
@@ -175,14 +149,12 @@ func (s *NodeStore) freeHashedNode(idx uint32) {
 	s.freeHashed = append(s.freeHashed, idx)
 }
 
-// newHashedRef allocates a HashedNode and returns its NodeRef.
 func (s *NodeStore) newHashedRef(hash common.Hash) NodeRef {
 	idx := s.allocHashed()
 	*s.getHashed(idx) = HashedNode{hash: hash}
 	return MakeRef(KindHashed, idx)
 }
 
-// Copy creates a deep copy of the NodeStore and all its nodes.
 func (s *NodeStore) Copy() *NodeStore {
 	ns := &NodeStore{
 		root:          s.root,
@@ -190,21 +162,16 @@ func (s *NodeStore) Copy() *NodeStore {
 		stemCount:     s.stemCount,
 		hashedCount:   s.hashedCount,
 	}
-
-	// Deep copy internal chunks
 	ns.internalChunks = make([]*[storeChunkSize]InternalNode, len(s.internalChunks))
 	for i, chunk := range s.internalChunks {
 		cp := *chunk
 		ns.internalChunks[i] = &cp
 	}
-
-	// Deep copy stem chunks (need to deep copy valueData)
 	ns.stemChunks = make([]*[storeChunkSize]StemNode, len(s.stemChunks))
 	for i, chunk := range s.stemChunks {
 		cp := *chunk
 		ns.stemChunks[i] = &cp
 	}
-	// Deep copy pointer fields for each active stem
 	for i := uint32(0); i < s.stemCount; i++ {
 		src := s.getStem(i)
 		dst := ns.getStem(i)
@@ -213,15 +180,11 @@ func (s *NodeStore) Copy() *NodeStore {
 			copy(dst.valueData, src.valueData)
 		}
 	}
-
-	// Deep copy hashed chunks
 	ns.hashedChunks = make([]*[storeChunkSize]HashedNode, len(s.hashedChunks))
 	for i, chunk := range s.hashedChunks {
 		cp := *chunk
 		ns.hashedChunks[i] = &cp
 	}
-
-	// Copy free lists
 	if len(s.freeInternals) > 0 {
 		ns.freeInternals = make([]uint32, len(s.freeInternals))
 		copy(ns.freeInternals, s.freeInternals)

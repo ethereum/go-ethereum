@@ -22,23 +22,20 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// StemNode represents a group of `StemNodeWidth` values sharing the same stem.
-// It uses a packed representation: bitmap indicates which of the 256 positions
-// have values, and valueData stores the values contiguously in bitmap order.
+// StemNode holds up to 256 values sharing a 31-byte stem, packed via bitmap.
 type StemNode struct {
-	Stem      [StemSize]byte       // Stem path to get to StemNodeWidth values
-	bitmap    [StemBitmapSize]byte // bitmap indicating which positions have values
-	valueData []byte              // packed value data (count * HashSize bytes)
-	count     uint16              // number of values present
-	depth     uint8               // Depth of the node
-	shared    bool                // true if valueData is shared with serialized input
+	Stem      [StemSize]byte
+	bitmap    [StemBitmapSize]byte
+	valueData []byte
+	count     uint16
+	depth     uint8
+	shared    bool // true if valueData is shared with serialized input
 
 	mustRecompute bool        // true if the hash needs to be recomputed
 	hash          common.Hash // cached hash when mustRecompute == false
 }
 
-// posInData returns the index within valueData for the given suffix.
-// Returns -1 if the suffix is not present.
+// posInData returns the offset within valueData, or -1 if absent.
 func (sn *StemNode) posInData(suffix byte) int {
 	idx := int(suffix)
 	if sn.bitmap[idx/8]>>(7-(idx%8))&1 == 0 {
@@ -56,7 +53,6 @@ func (sn *StemNode) posInData(suffix byte) int {
 	return pos
 }
 
-// getValue returns the value at the given suffix, or nil if not present.
 func (sn *StemNode) getValue(suffix byte) []byte {
 	pos := sn.posInData(suffix)
 	if pos < 0 {
@@ -66,7 +62,6 @@ func (sn *StemNode) getValue(suffix byte) []byte {
 	return sn.valueData[start : start+HashSize]
 }
 
-// hasValue returns true if the given suffix has a value.
 func (sn *StemNode) hasValue(suffix byte) bool {
 	idx := int(suffix)
 	return sn.bitmap[idx/8]>>(7-(idx%8))&1 == 1
@@ -85,7 +80,7 @@ func (sn *StemNode) allValues() [][]byte {
 	return values
 }
 
-// ensureWritable makes the valueData writable (copies if shared with serialized input).
+// ensureWritable copies valueData if shared (copy-on-write).
 func (sn *StemNode) ensureWritable() {
 	if sn.shared || cap(sn.valueData)-len(sn.valueData) < HashSize {
 		newData := make([]byte, len(sn.valueData), len(sn.valueData)+HashSize*4)
@@ -95,21 +90,17 @@ func (sn *StemNode) ensureWritable() {
 	}
 }
 
-// setValue sets or inserts a value at the given suffix.
 func (sn *StemNode) setValue(suffix byte, value []byte) {
 	sn.ensureWritable()
 	idx := int(suffix)
 	pos := sn.posInData(suffix)
 	if pos >= 0 {
-		// Overwrite existing value
 		copy(sn.valueData[pos*HashSize:], value[:HashSize])
 		return
 	}
-	// New value: insert into bitmap and valueData at the correct position.
 	sn.bitmap[idx/8] |= 1 << (7 - (idx % 8))
 	sn.count++
 
-	// Find the correct position in valueData (count bits before this position).
 	insertPos := 0
 	byteIdx := idx / 8
 	for i := 0; i < byteIdx; i++ {
@@ -118,17 +109,12 @@ func (sn *StemNode) setValue(suffix byte, value []byte) {
 	mask := byte(0xFF) << (8 - (idx % 8))
 	insertPos += bits.OnesCount8(sn.bitmap[byteIdx] & mask)
 
-	// Insert value at the correct position in valueData.
 	insertOffset := insertPos * HashSize
-	// Grow the slice
 	sn.valueData = append(sn.valueData, make([]byte, HashSize)...)
-	// Shift data after insertion point
 	copy(sn.valueData[insertOffset+HashSize:], sn.valueData[insertOffset:len(sn.valueData)-HashSize])
-	// Copy the new value
 	copy(sn.valueData[insertOffset:], value[:HashSize])
 }
 
-// Hash returns the hash of the node.
 func (sn *StemNode) Hash() common.Hash {
 	if !sn.mustRecompute {
 		return sn.hash
@@ -175,7 +161,6 @@ func (sn *StemNode) Hash() common.Hash {
 	return sn.hash
 }
 
-// Key returns the full key for the given index.
 func (sn *StemNode) Key(i int) []byte {
 	var ret [HashSize]byte
 	copy(ret[:], sn.Stem[:])
