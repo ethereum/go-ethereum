@@ -243,15 +243,15 @@ func TestProtectedByPoolRequestLatencyBasic(t *testing.T) {
 	// Three peers have enough samples; the two fastest should win.
 	stats[dialed[0].ID().String()] = peerstats.PeerStats{
 		RequestLatencyEMA: 50 * time.Millisecond,
-		RequestSamples:    50,
+		RequestSamples:    peerstats.MinLatencySamples,
 	}
 	stats[dialed[1].ID().String()] = peerstats.PeerStats{
 		RequestLatencyEMA: 100 * time.Millisecond,
-		RequestSamples:    50,
+		RequestSamples:    peerstats.MinLatencySamples,
 	}
 	stats[dialed[2].ID().String()] = peerstats.PeerStats{
 		RequestLatencyEMA: 2 * time.Second,
-		RequestSamples:    50,
+		RequestSamples:    peerstats.MinLatencySamples,
 	}
 
 	protected := protectedPeersByPool(nil, dialed, stats)
@@ -313,7 +313,7 @@ func TestProtectedByPoolRequestLatencyPerPool(t *testing.T) {
 	for _, p := range inbound {
 		stats[p.ID().String()] = peerstats.PeerStats{
 			RequestLatencyEMA: 50 * time.Millisecond,
-			RequestSamples:    50,
+			RequestSamples:    peerstats.MinLatencySamples,
 		}
 	}
 	// Dialed peers are slower (1s) — globally they would all lose, but
@@ -321,7 +321,7 @@ func TestProtectedByPoolRequestLatencyPerPool(t *testing.T) {
 	for _, p := range dialed {
 		stats[p.ID().String()] = peerstats.PeerStats{
 			RequestLatencyEMA: 1 * time.Second,
-			RequestSamples:    50,
+			RequestSamples:    peerstats.MinLatencySamples,
 		}
 	}
 

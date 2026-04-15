@@ -52,7 +52,7 @@ const (
 	// MinLatencySamples is the number of latency samples a peer must accumulate
 	// before its RequestLatencyEMA is considered meaningful for protection.
 	// Prevents a single lucky-fast reply from displacing established peers.
-	MinLatencySamples = 10
+	MinLatencySamples = 100
 )
 
 // PeerStats is the exported per-peer snapshot returned by GetAllPeerStats.
