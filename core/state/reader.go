@@ -180,23 +180,6 @@ func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 	return value, nil
 }
 
-// errBintrieFlatStateMiss is returned by bintrieFlatReader's Account
-// and Storage methods whenever the flat state has no data for the
-// queried key. Returning a non-nil error (rather than (nil, nil) or
-// the zero hash) is essential because multiStateReader.Account/Storage
-// short-circuits on the first err == nil result — if bintrieFlatReader
-// returned "absent" as a success value, the trie reader would never
-// run, and any flat-state corruption, in-transition state, or missing
-// stem would be silently misreported as "account does not exist".
-//
-// This sentinel triggers the fall-through to the next reader in the
-// chain (typically the trieReader), which serves as the gatekeeper for
-// distinguishing "genuinely absent" from "temporarily missing from
-// flat state". The merkle flatReader has the same contract via
-// pathdb's internal errNotCoveredYet; we define a local sentinel to
-// avoid a cross-package import cycle with triedb/pathdb.
-var errBintrieFlatStateMiss = errors.New("bintrie flat state: entry not covered")
-
 // bintrieFlatReader is the binary-trie analogue of flatReader. It exposes
 // the StateReader interface backed by the path database's per-stem flat
 // state, doing the EIP-7864 key derivation locally so the underlying
@@ -254,15 +237,8 @@ func newBintrieFlatReader(reader database.StateReader) *bintrieFlatReader {
 // Return value contract:
 //   - both leaves 32 bytes → decoded Account, nil error.
 //   - either leaf invalid length → corruption error, surfaced as-is.
-//   - both leaves absent (nil from AccountRLP) → errBintrieFlatStateMiss
-//     sentinel. This does NOT mean "account does not exist" — it means
-//     "the flat state has no data for this stem right now" (possibly
-//     because the generator hasn't reached it, or because the account
-//     has simply never been touched by a block that flushed). The
-//     multiStateReader is responsible for falling through to the trie
-//     reader, which is the authoritative source. Returning (nil, nil)
-//     here would short-circuit the fall-through and silently hide
-//     every corruption mode the other A-commits are fixing.
+//   - both leaves absent → (nil, nil): authoritative non-membership.
+//     Uncovered keys already fail with errNotCoveredYet at the pathdb layer.
 func (r *bintrieFlatReader) Account(addr common.Address) (*Account, error) {
 	basicKey := common.BytesToHash(bintrie.GetBinaryTreeKeyBasicData(addr))
 	codeKey := common.BytesToHash(bintrie.GetBinaryTreeKeyCodeHash(addr))
@@ -276,10 +252,7 @@ func (r *bintrieFlatReader) Account(addr common.Address) (*Account, error) {
 		return nil, fmt.Errorf("bintrie CodeHash read %x: %w", addr, err)
 	}
 	if len(basicBlob) == 0 && len(codeBlob) == 0 {
-		// Flat state has no data for this stem. Fall through to the
-		// next reader in the multi-reader chain (trie reader) rather
-		// than silently returning "not found".
-		return nil, fmt.Errorf("%w: addr=%x", errBintrieFlatStateMiss, addr)
+		return nil, nil // Authoritative absence: pathdb confirmed key is covered
 	}
 	// A bintrie leaf is always either absent or exactly 32 bytes. A
 	// shorter blob is a corruption signal; surface it with enough
@@ -322,11 +295,9 @@ func (r *bintrieFlatReader) Account(addr common.Address) (*Account, error) {
 // Return value contract:
 //   - 32-byte leaf found → decode as common.Hash and return.
 //   - invalid-length leaf → corruption error.
-//   - no leaf at this slot → errBintrieFlatStateMiss sentinel so
-//     multiStateReader falls through to the trie reader. A slot that
-//     was explicitly set to zero is NOT absent — the bintrie tombstone
-//     convention writes 32 zero bytes, which is a present 32-byte leaf
-//     and returns common.Hash{} via the normal path.
+//   - no leaf → (common.Hash{}, nil): authoritative non-membership.
+//     A slot explicitly set to zero is NOT absent — the bintrie
+//     tombstone convention writes 32 zero bytes (a present leaf).
 func (r *bintrieFlatReader) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
 	fullKey := bintrie.GetBinaryTreeKeyStorageSlot(addr, slot[:])
 	blob, err := r.reader.AccountRLP(common.BytesToHash(fullKey))
@@ -334,10 +305,7 @@ func (r *bintrieFlatReader) Storage(addr common.Address, slot common.Hash) (comm
 		return common.Hash{}, fmt.Errorf("bintrie storage read %x[%x]: %w", addr, slot, err)
 	}
 	if len(blob) == 0 {
-		// Flat state has no entry at this slot. Fall through to the
-		// trie reader to distinguish "never written" from "written
-		// then flushed out". See errBintrieFlatStateMiss.
-		return common.Hash{}, fmt.Errorf("%w: addr=%x slot=%x", errBintrieFlatStateMiss, addr, slot)
+		return common.Hash{}, nil // Authoritative absence: pathdb confirmed key is covered
 	}
 	if len(blob) != 32 {
 		return common.Hash{}, fmt.Errorf("bintrie storage leaf invalid length: addr=%x slot=%x len=%d want=32", addr, slot, len(blob))

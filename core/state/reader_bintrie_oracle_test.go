@@ -97,11 +97,10 @@ func TestBintrieFlatStateConsistencyOracle(t *testing.T) {
 			t.Fatalf("block %d: StateReader: %v", blockNum, err)
 		}
 
-		// For each known address, read via the flat reader. The flat
-		// reader may return errBintrieFlatStateMiss (which the
-		// multiStateReader falls through to the trie reader for), so
-		// the final answer comes from the highest-priority reader that
-		// has data. We compare the FINAL answer to what we expect.
+		// For each known address, read via the multiStateReader which
+		// tries the flat reader first (authoritative for covered keys)
+		// and falls through to the trie reader only if the pathdb
+		// returns errNotCoveredYet for keys not yet generated.
 		for _, a := range addrs {
 			got, err := flatReader.Account(a)
 			if err != nil {
