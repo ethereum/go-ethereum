@@ -25,7 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/eth/txtracker"
+	"github.com/ethereum/go-ethereum/eth/peerstats"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -60,28 +60,28 @@ var (
 )
 
 // Callback type to get per-peer inclusion statistics.
-type getPeerStatsFunc func() map[string]txtracker.PeerStats
+type getPeerStatsFunc func() map[string]peerstats.PeerStats
 
 // protectionCategory defines a peer scoring function and the fraction of peers
 // to protect per inbound/dialed category. Multiple categories are unioned.
 type protectionCategory struct {
-	score func(txtracker.PeerStats) float64
+	score func(peerstats.PeerStats) float64
 	frac  float64 // fraction of max peers to protect (0.0–1.0)
 }
 
 // protectionCategories is the list of protection criteria. Each category
 // independently selects its top-N peers per pool; the union is protected.
 var protectionCategories = []protectionCategory{
-	{func(s txtracker.PeerStats) float64 { return s.RecentFinalized }, inclusionProtectionFrac}, // Recent finalized
-	{func(s txtracker.PeerStats) float64 { return s.RecentIncluded }, inclusionProtectionFrac},  // Recent included
-	{func(s txtracker.PeerStats) float64 { // Request latency
+	{func(s peerstats.PeerStats) float64 { return s.RecentFinalized }, inclusionProtectionFrac}, // Recent finalized
+	{func(s peerstats.PeerStats) float64 { return s.RecentIncluded }, inclusionProtectionFrac},  // Recent included
+	{func(s peerstats.PeerStats) float64 { // Request latency
 		// Low-latency peers should rank higher. Peers with too few samples
 		// score 0 so the existing `score > 0` filter excludes them — this
 		// prevents a single lucky-fast reply from winning protection. Peers
 		// whose EMA reaches the timeout also score low by this path because
 		// the reciprocal of a very large duration is tiny but positive; the
 		// per-pool top-N will still push faster peers ahead of them.
-		if s.RequestSamples < txtracker.MinLatencySamples {
+		if s.RequestSamples < peerstats.MinLatencySamples {
 			return 0
 		}
 		if s.RequestLatencyEMA <= 0 {
@@ -243,7 +243,7 @@ func (cm *dropper) protectedPeers(peers []*p2p.Peer) map[*p2p.Peer]bool {
 // Factored from protectedPeers so tests can exercise the per-pool
 // selection logic without needing to construct direction-flagged
 // *p2p.Peer instances (which require unexported p2p types).
-func protectedPeersByPool(inbound, dialed []*p2p.Peer, stats map[string]txtracker.PeerStats) map[*p2p.Peer]bool {
+func protectedPeersByPool(inbound, dialed []*p2p.Peer, stats map[string]peerstats.PeerStats) map[*p2p.Peer]bool {
 	result := make(map[*p2p.Peer]bool)
 	// protectPool selects the top-frac peers from pool by score and adds them to result.
 	protectPool := func(pool []*p2p.Peer, cat protectionCategory) {

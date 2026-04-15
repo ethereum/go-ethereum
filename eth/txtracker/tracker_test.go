@@ -75,8 +75,7 @@ func (c *mockChain) CurrentFinalBlock() *types.Header {
 	return &types.Header{Number: new(big.Int).SetUint64(c.finalNum)}
 }
 
-// addBlock adds a canonical block at the given height. Overwrites any
-// prior canonical block at that height.
+// addBlock adds a canonical block at the given height.
 func (c *mockChain) addBlock(num uint64, txs []*types.Transaction) *types.Block {
 	return c.addBlockAtHeight(num, num, txs, true)
 }
@@ -95,7 +94,6 @@ func (c *mockChain) addBlockAtHeight(num, salt uint64, txs []*types.Transaction,
 func (c *mockChain) addBlockAtHeightWithTime(num, salt uint64, txs []*types.Transaction, canonical bool, blockTime uint64) *types.Block {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	// Mix salt into Extra so siblings at the same height get distinct hashes.
 	header := &types.Header{
 		Number: new(big.Int).SetUint64(num),
 		Extra:  big.NewInt(int64(salt)).Bytes(),
@@ -115,9 +113,7 @@ func (c *mockChain) setFinalBlock(num uint64) {
 	c.finalNum = num
 }
 
-// sendHead emits a chain head event for the canonical block at the given
-// height. The emitted header carries the real block's hash so the
-// tracker's GetBlock(hash, number) lookup resolves correctly.
+// sendHead emits a chain head event for the canonical block at the given height.
 func (c *mockChain) sendHead(num uint64) {
 	c.mu.Lock()
 	hash := c.canonicalByNum[num]
@@ -147,6 +143,43 @@ func makeTx(nonce uint64) *types.Transaction {
 	return types.NewTx(&types.LegacyTx{Nonce: nonce, GasPrice: big.NewInt(1), Gas: 21000})
 }
 
+// mockConsumer captures NotifyBlock invocations so tests can assert on the
+// signals the tracker emits.
+type mockConsumer struct {
+	mu      sync.Mutex
+	signals []signal
+}
+
+type signal struct {
+	inclusions, finalized map[string]int
+}
+
+func (c *mockConsumer) NotifyBlock(inclusions, finalized map[string]int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// Deep-copy so tests inspecting older signals aren't tripped up by
+	// later iterations mutating the same map (they don't today, but
+	// this keeps the assertion model simple).
+	in := make(map[string]int, len(inclusions))
+	for k, v := range inclusions {
+		in[k] = v
+	}
+	fn := make(map[string]int, len(finalized))
+	for k, v := range finalized {
+		fn[k] = v
+	}
+	c.signals = append(c.signals, signal{in, fn})
+}
+
+func (c *mockConsumer) last() signal {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.signals) == 0 {
+		return signal{}
+	}
+	return c.signals[len(c.signals)-1]
+}
+
 // waitStep blocks until the tracker has processed one event.
 func waitStep(t *testing.T, tr *Tracker) {
 	t.Helper()
@@ -157,232 +190,187 @@ func waitStep(t *testing.T, tr *Tracker) {
 	}
 }
 
-func TestNotifyReceived(t *testing.T) {
+// TestNotifyAcceptedRecordsMapping verifies the tx-lifecycle surface:
+// NotifyAccepted records tx→peer mappings in insertion order, with
+// first-deliverer-wins semantics on duplicates.
+func TestNotifyAcceptedRecordsMapping(t *testing.T) {
 	tr := New()
-	chain := newMockChain()
-	tr.Start(chain)
-	defer tr.Stop()
 
 	txs := []*types.Transaction{makeTx(1), makeTx(2), makeTx(3)}
 	hashes := hashTxs(txs)
 	tr.NotifyAccepted("peerA", hashes)
 
-	// Public surface: peer entry was created with zero stats before any
-	// chain events. Map lookups would return a zero value for a missing
-	// key, so assert presence explicitly.
-	stats := tr.GetAllPeerStats()
-	if len(stats) != 1 {
-		t.Fatalf("expected 1 peer entry, got %d", len(stats))
-	}
-	ps, ok := stats["peerA"]
-	if !ok {
-		t.Fatal("expected peerA entry, not found")
-	}
-	if ps.RecentFinalized != 0 || ps.RecentIncluded != 0 {
-		t.Fatalf("expected zero stats before chain events, got %+v", ps)
-	}
-
-	// Internal state: all tx→deliverer mappings recorded.
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
 	if tr.txs.Len() != 3 {
 		t.Fatalf("expected 3 tracked txs, got %d", tr.txs.Len())
 	}
+	// Keys() walks the internal list from the least-recently-added end,
+	// which for the tracker's add-once/Peek-only usage is insertion order.
+	for i, h := range tr.txs.Keys() {
+		if hashes[i] != h {
+			t.Fatalf("insertion order mismatch at %d", i)
+		}
+	}
 	for i, h := range hashes {
-		got, ok := tr.txs.Peek(h)
+		ti, ok := tr.txs.Peek(h)
 		if !ok {
 			t.Fatalf("tx %d: not tracked", i)
 		}
-		if got.Deliverer != "peerA" {
-			t.Fatalf("tx %d: expected deliverer=peerA, got %q", i, got.Deliverer)
+		if ti.Deliverer != "peerA" {
+			t.Fatalf("tx %d: expected deliverer=peerA, got %q", i, ti.Deliverer)
 		}
 	}
 }
 
-func TestInclusionEMA(t *testing.T) {
+// TestNotifyAcceptedFirstDelivererWins verifies duplicate accepts
+// preserve the original deliverer.
+func TestNotifyAcceptedFirstDelivererWins(t *testing.T) {
 	tr := New()
-	chain := newMockChain()
-	tr.Start(chain)
-	defer tr.Stop()
-
 	tx := makeTx(1)
 	tr.NotifyAccepted("peerA", []common.Hash{tx.Hash()})
+	tr.NotifyAccepted("peerB", []common.Hash{tx.Hash()})
 
-	// Block 1 includes peerA's tx.
-	chain.addBlock(1, []*types.Transaction{tx})
-	chain.sendHead(1)
-	waitStep(t, tr)
-
-	stats := tr.GetAllPeerStats()
-	if stats["peerA"].RecentIncluded <= 0 {
-		t.Fatalf("expected RecentIncluded > 0 after inclusion, got %f", stats["peerA"].RecentIncluded)
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
+	ti, ok := tr.txs.Peek(tx.Hash())
+	if !ok {
+		t.Fatal("tx not tracked")
 	}
-	ema1 := stats["peerA"].RecentIncluded
-
-	// Block 2 has no txs from peerA — EMA should decay.
-	chain.addBlock(2, nil)
-	chain.sendHead(2)
-	waitStep(t, tr)
-
-	stats = tr.GetAllPeerStats()
-	if stats["peerA"].RecentIncluded >= ema1 {
-		t.Fatalf("expected EMA to decay, got %f >= %f", stats["peerA"].RecentIncluded, ema1)
+	if ti.Deliverer != "peerA" {
+		t.Fatalf("expected first deliverer peerA to win, got %q", ti.Deliverer)
+	}
+	if tr.txs.Len() != 1 {
+		t.Fatalf("expected single tracked tx, got %d", tr.txs.Len())
 	}
 }
 
-func TestFinalization(t *testing.T) {
+// TestHandleChainHeadEmitsInclusions verifies the tracker emits a
+// correct per-peer inclusion map to its consumer when a head block
+// contains tracked transactions.
+func TestHandleChainHeadEmitsInclusions(t *testing.T) {
 	tr := New()
 	chain := newMockChain()
-	tr.Start(chain)
+	consumer := &mockConsumer{}
+	tr.Start(chain, consumer)
 	defer tr.Stop()
 
-	tx := makeTx(1)
-	tr.NotifyAccepted("peerA", []common.Hash{tx.Hash()})
-
-	// Include in block 1.
-	chain.addBlock(1, []*types.Transaction{tx})
-	chain.sendHead(1)
-	waitStep(t, tr)
-
-	// Not finalized yet.
-	stats := tr.GetAllPeerStats()
-	if stats["peerA"].RecentFinalized != 0 {
-		t.Fatalf("expected RecentFinalized=0 before finalization, got %f", stats["peerA"].RecentFinalized)
-	}
-
-	// Finalize block 1, then send head 2 to trigger the finalization EMA update.
-	chain.setFinalBlock(1)
-	chain.addBlock(2, nil)
-	chain.sendHead(2)
-	waitStep(t, tr)
-
-	stats = tr.GetAllPeerStats()
-	if stats["peerA"].RecentFinalized <= 0 {
-		t.Fatalf("expected RecentFinalized>0 after finalization, got %f", stats["peerA"].RecentFinalized)
-	}
-}
-
-func TestMultiplePeers(t *testing.T) {
-	tr := New()
-	chain := newMockChain()
-	tr.Start(chain)
-	defer tr.Stop()
-
-	tx1 := makeTx(1)
-	tx2 := makeTx(2)
+	tx1, tx2 := makeTx(1), makeTx(2)
 	tr.NotifyAccepted("peerA", []common.Hash{tx1.Hash()})
 	tr.NotifyAccepted("peerB", []common.Hash{tx2.Hash()})
 
-	// Both included in block 1.
 	chain.addBlock(1, []*types.Transaction{tx1, tx2})
 	chain.sendHead(1)
 	waitStep(t, tr)
 
-	// Finalize.
+	sig := consumer.last()
+	if sig.inclusions["peerA"] != 1 {
+		t.Errorf("peerA inclusions: got %d, want 1", sig.inclusions["peerA"])
+	}
+	if sig.inclusions["peerB"] != 1 {
+		t.Errorf("peerB inclusions: got %d, want 1", sig.inclusions["peerB"])
+	}
+	if len(sig.finalized) != 0 {
+		t.Errorf("expected empty finalized map, got %v", sig.finalized)
+	}
+}
+
+// TestHandleChainHeadEmptyBlock verifies an empty head block emits an
+// empty inclusion map (so peerstats can decay all known peers).
+func TestHandleChainHeadEmptyBlock(t *testing.T) {
+	tr := New()
+	chain := newMockChain()
+	consumer := &mockConsumer{}
+	tr.Start(chain, consumer)
+	defer tr.Stop()
+
+	chain.addBlock(1, nil)
+	chain.sendHead(1)
+	waitStep(t, tr)
+
+	sig := consumer.last()
+	if len(sig.inclusions) != 0 {
+		t.Errorf("expected empty inclusions, got %v", sig.inclusions)
+	}
+}
+
+// TestHandleChainHeadEmitsFinalization verifies that when finalization
+// advances, the consumer receives per-peer finalization credits
+// accumulated over the newly-finalized range.
+func TestHandleChainHeadEmitsFinalization(t *testing.T) {
+	tr := New()
+	chain := newMockChain()
+	consumer := &mockConsumer{}
+	tr.Start(chain, consumer)
+	defer tr.Stop()
+
+	tx := makeTx(1)
+	tr.NotifyAccepted("peerA", []common.Hash{tx.Hash()})
+
+	// Include in block 1, not yet finalized.
+	chain.addBlock(1, []*types.Transaction{tx})
+	chain.sendHead(1)
+	waitStep(t, tr)
+
+	if credits := consumer.last().finalized["peerA"]; credits != 0 {
+		t.Fatalf("expected no finalization credits before finalization, got %d", credits)
+	}
+
+	// Finalize block 1; next head triggers the finalization scan.
 	chain.setFinalBlock(1)
 	chain.addBlock(2, nil)
 	chain.sendHead(2)
 	waitStep(t, tr)
 
-	stats := tr.GetAllPeerStats()
-	if stats["peerA"].RecentFinalized <= 0 {
-		t.Fatalf("peerA: expected RecentFinalized>0, got %f", stats["peerA"].RecentFinalized)
-	}
-	if stats["peerB"].RecentFinalized <= 0 {
-		t.Fatalf("peerB: expected RecentFinalized>0, got %f", stats["peerB"].RecentFinalized)
+	if credits := consumer.last().finalized["peerA"]; credits != 1 {
+		t.Fatalf("expected 1 finalization credit, got %d", credits)
 	}
 }
 
-func TestFirstDelivererWins(t *testing.T) {
+// TestFinalizationSkipsOrphanedInclusion verifies the finalization scan
+// re-checks the recorded inclusion block hash against the canonical chain:
+// a tx whose recorded inclusion block was reorged out must not yield a
+// finalization credit.
+func TestFinalizationSkipsOrphanedInclusion(t *testing.T) {
 	tr := New()
 	chain := newMockChain()
-	tr.Start(chain)
+	consumer := &mockConsumer{}
+	tr.Start(chain, consumer)
 	defer tr.Stop()
 
 	tx := makeTx(1)
 	tr.NotifyAccepted("peerA", []common.Hash{tx.Hash()})
-	tr.NotifyAccepted("peerB", []common.Hash{tx.Hash()}) // duplicate, should be ignored
 
-	chain.addBlock(1, []*types.Transaction{tx})
-	chain.sendHead(1)
+	// The tx is first seen in block A at height 1 (canonical at the time),
+	// recording (BlockNum=1, BlockHash=A).
+	blockA := chain.addBlockAtHeight(1, 1, []*types.Transaction{tx}, true)
+	chain.sendHeadBlock(blockA)
 	waitStep(t, tr)
 
+	// Reorg: sibling B (without the tx) becomes canonical at height 1.
+	chain.addBlockAtHeight(1, 2, nil, true)
+
+	// Finalize height 1; next head triggers the finalization scan. The
+	// recorded hash A no longer matches canonical-at-1 (now B), so no
+	// credit may be emitted.
 	chain.setFinalBlock(1)
 	chain.addBlock(2, nil)
 	chain.sendHead(2)
 	waitStep(t, tr)
 
-	stats := tr.GetAllPeerStats()
-	if stats["peerA"].RecentFinalized <= 0 {
-		t.Fatalf("peerA should be credited, got RecentFinalized=%f", stats["peerA"].RecentFinalized)
-	}
-	if stats["peerB"].RecentFinalized != 0 {
-		t.Fatalf("peerB should NOT be credited, got RecentFinalized=%f", stats["peerB"].RecentFinalized)
+	if credits := consumer.last().finalized["peerA"]; credits != 0 {
+		t.Fatalf("expected no credit for orphaned inclusion, got %d", credits)
 	}
 }
 
-func TestNoFinalizationCredit(t *testing.T) {
-	tr := New()
-	chain := newMockChain()
-	tr.Start(chain)
-	defer tr.Stop()
-
-	tx := makeTx(1)
-	tr.NotifyAccepted("peerA", []common.Hash{tx.Hash()})
-
-	// Include but don't finalize.
-	chain.addBlock(1, []*types.Transaction{tx})
-	chain.sendHead(1)
-	waitStep(t, tr)
-
-	// Send more heads without finalization.
-	chain.addBlock(2, nil)
-	chain.sendHead(2)
-	waitStep(t, tr)
-
-	stats := tr.GetAllPeerStats()
-	if stats["peerA"].RecentFinalized != 0 {
-		t.Fatalf("expected RecentFinalized=0 without finalization, got %f", stats["peerA"].RecentFinalized)
-	}
-}
-
-func TestEMADecay(t *testing.T) {
-	tr := New()
-	chain := newMockChain()
-	tr.Start(chain)
-	defer tr.Stop()
-
-	tx := makeTx(1)
-	tr.NotifyAccepted("peerA", []common.Hash{tx.Hash()})
-
-	// Include in block 1.
-	chain.addBlock(1, []*types.Transaction{tx})
-	chain.sendHead(1)
-	waitStep(t, tr)
-
-	// Send 30 empty blocks — EMA should decay close to zero.
-	for i := uint64(2); i <= 31; i++ {
-		chain.addBlock(i, nil)
-		chain.sendHead(i)
-		waitStep(t, tr)
-	}
-
-	stats := tr.GetAllPeerStats()
-	if stats["peerA"].RecentIncluded > 0.02 {
-		t.Fatalf("expected RecentIncluded near zero after 30 empty blocks, got %f", stats["peerA"].RecentIncluded)
-	}
-}
-
-// TestReorgSafety verifies that handleChainHead resolves the head block by
-// HASH (not just by number), so a head event announcing a sibling block at
-// the same height does not credit transactions from the canonical block.
-//
-// Regression check: handleChainHead uses GetBlock(hash, number) so a head
-// event announcing sibling B fetches B, not the canonical block A.
+// TestReorgSafety verifies the tracker resolves the head block by HASH
+// so a head event pointing at a sibling block does not emit inclusions
+// from the canonical block at the same height.
 func TestReorgSafety(t *testing.T) {
 	tr := New()
 	chain := newMockChain()
-	tr.Start(chain)
+	consumer := &mockConsumer{}
+	tr.Start(chain, consumer)
 	defer tr.Stop()
 
 	tx := makeTx(1)
@@ -395,77 +383,33 @@ func TestReorgSafety(t *testing.T) {
 		t.Fatal("sibling blocks ended up with the same hash")
 	}
 
-	// Head announces sibling B. A hash-aware tracker fetches B, sees no
-	// peerA txs, and leaves the EMA at zero. A number-only tracker would
-	// instead fetch A and credit peerA.
+	// Head announces sibling B — emit must contain no peerA inclusions.
 	chain.sendHeadBlock(blockB)
 	waitStep(t, tr)
-
-	if got := tr.GetAllPeerStats()["peerA"].RecentIncluded; got != 0 {
-		t.Fatalf("expected RecentIncluded=0 after sibling-B head event, got %f (tracker followed the wrong block)", got)
+	if incl := consumer.last().inclusions["peerA"]; incl != 0 {
+		t.Fatalf("sibling-B head should emit 0 peerA inclusions, got %d", incl)
 	}
 
-	// Now announce canonical A; peerA should be credited.
+	// Head announces canonical A — emit must contain 1 peerA inclusion.
 	chain.sendHeadBlock(blockA)
 	waitStep(t, tr)
-
-	if got := tr.GetAllPeerStats()["peerA"].RecentIncluded; got <= 0 {
-		t.Fatalf("expected RecentIncluded>0 after canonical-A head event, got %f", got)
-	}
-}
-
-// TestRecentFinalizedDecays verifies that the finalization EMA decays
-// for a peer that earned credits in the past but has no new
-// finalization activity. The decay is slow (α=0.0001), so we
-// just assert monotonic decrease, not convergence to zero.
-func TestRecentFinalizedDecays(t *testing.T) {
-	tr := New()
-	chain := newMockChain()
-	tr.Start(chain)
-	defer tr.Stop()
-
-	tx := makeTx(1)
-	tr.NotifyAccepted("peerA", []common.Hash{tx.Hash()})
-
-	// Include and finalize in block 1.
-	chain.addBlock(1, []*types.Transaction{tx})
-	chain.sendHead(1)
-	waitStep(t, tr)
-	chain.setFinalBlock(1)
-	chain.addBlock(2, nil)
-	chain.sendHead(2)
-	waitStep(t, tr)
-
-	peak := tr.GetAllPeerStats()["peerA"].RecentFinalized
-	if peak <= 0 {
-		t.Fatalf("expected RecentFinalized>0 after finalization, got %f", peak)
-	}
-
-	// Send many empty heads — peer contributes zero each block,
-	// EMA should decay monotonically.
-	for i := uint64(3); i <= 50; i++ {
-		chain.addBlock(i, nil)
-		chain.sendHead(i)
-		waitStep(t, tr)
-	}
-
-	after := tr.GetAllPeerStats()["peerA"].RecentFinalized
-	if after >= peak {
-		t.Fatalf("expected RecentFinalized to decay, got %f >= peak %f", after, peak)
+	if incl := consumer.last().inclusions["peerA"]; incl != 1 {
+		t.Fatalf("canonical-A head should emit 1 peerA inclusion, got %d", incl)
 	}
 }
 
 // TestPreSlotGate verifies that a tx delivered at or after the slot of its
-// inclusion block earns no credit. This blocks the simple
-// post-block-propagation re-broadcast attribution attack: a peer that
+// inclusion block is not reported in the inclusion signal. This blocks the
+// simple post-block-propagation re-broadcast attribution attack: a peer that
 // learns a tx from the just-mined block and re-broadcasts it to our pool
 // should not gain credit when that block is processed. The finalization
-// path applies the same gate (ti.AddedAt >= blockTime) and is exercised
-// by the existing TestFinalization with the new clock semantics.
+// path applies the same gate (ti.AddedAt >= blockTime) because entries
+// skipped here never record a BlockNum/BlockHash.
 func TestPreSlotGate(t *testing.T) {
 	tr := New()
 	chain := newMockChain()
-	tr.Start(chain)
+	consumer := &mockConsumer{}
+	tr.Start(chain, consumer)
 	defer tr.Stop()
 
 	// Pin the tracker's clock so NotifyAccepted records a known addedAt.
@@ -482,9 +426,8 @@ func TestPreSlotGate(t *testing.T) {
 	chain.sendHead(1)
 	waitStep(t, tr)
 
-	preEMA := tr.GetAllPeerStats()["peerA"].RecentIncluded
-	if preEMA <= 0 {
-		t.Fatalf("expected RecentIncluded>0 after pre-slot delivery, got %f", preEMA)
+	if incl := consumer.last().inclusions["peerA"]; incl != 1 {
+		t.Fatalf("expected 1 inclusion for pre-slot delivery, got %d", incl)
 	}
 
 	// Block 2: slot strictly BEFORE delivery — post-slot, must NOT credit.
@@ -492,112 +435,20 @@ func TestPreSlotGate(t *testing.T) {
 	chain.sendHead(2)
 	waitStep(t, tr)
 
-	// With the gate, only EMA decay occurs (no contribution this block).
-	// Without the gate, RecentIncluded would have ticked up again.
-	after := tr.GetAllPeerStats()["peerA"].RecentIncluded
-	if after >= preEMA {
-		t.Fatalf("expected EMA to decay (no credit for post-slot tx), got %f >= preEMA %f", after, preEMA)
+	if incl := consumer.last().inclusions["peerA"]; incl != 0 {
+		t.Fatalf("expected 0 inclusions for post-slot delivery, got %d", incl)
 	}
 }
 
-// TestRequestLatencyFirstSampleBootstrap asserts that the first latency
-// sample seeds the EMA directly (no slow ramp-up from zero), and that the
-// sample counter starts at 1.
-func TestRequestLatencyFirstSampleBootstrap(t *testing.T) {
+// TestHandleChainHeadNilConsumer verifies the tracker tolerates a nil
+// consumer (useful for tests that only exercise tx-lifecycle behavior).
+func TestHandleChainHeadNilConsumer(t *testing.T) {
 	tr := New()
-	tr.NotifyRequestLatency("peerA", 200*time.Millisecond)
+	chain := newMockChain()
+	tr.Start(chain, nil)
+	defer tr.Stop()
 
-	stats := tr.GetAllPeerStats()
-	ps := stats["peerA"]
-	if ps.RequestLatencyEMA != 200*time.Millisecond {
-		t.Fatalf("expected first sample to seed EMA at 200ms, got %v", ps.RequestLatencyEMA)
-	}
-	if ps.RequestSamples != 1 {
-		t.Fatalf("expected RequestSamples=1, got %d", ps.RequestSamples)
-	}
-}
-
-// TestRequestLatencyEMAUpdate verifies the EMA formula (1-α)·old + α·new.
-func TestRequestLatencyEMAUpdate(t *testing.T) {
-	tr := New()
-	tr.NotifyRequestLatency("peerA", 100*time.Millisecond)
-	tr.NotifyRequestLatency("peerA", 1000*time.Millisecond)
-
-	// Expected: 0.99*100ms + 0.01*1000ms = 109ms
-	got := tr.GetAllPeerStats()["peerA"].RequestLatencyEMA
-	want := 109 * time.Millisecond
-	delta := got - want
-	if delta < 0 {
-		delta = -delta
-	}
-	if delta > 1*time.Microsecond {
-		t.Fatalf("EMA mismatch: got %v, want %v (delta %v)", got, want, delta)
-	}
-	if samples := tr.GetAllPeerStats()["peerA"].RequestSamples; samples != 2 {
-		t.Fatalf("expected RequestSamples=2, got %d", samples)
-	}
-}
-
-// TestRequestLatencySlowEMAConvergence verifies that the slow alpha
-// requires many samples to noticeably shift the EMA. Starting at 100ms
-// and feeding 5s (timeout) samples, the EMA should still be well below
-// 1s after 50 samples.
-func TestRequestLatencySlowEMAConvergence(t *testing.T) {
-	tr := New()
-	tr.NotifyRequestLatency("peerA", 100*time.Millisecond)
-	for i := 0; i < 50; i++ {
-		tr.NotifyRequestLatency("peerA", 5*time.Second)
-	}
-	got := tr.GetAllPeerStats()["peerA"].RequestLatencyEMA
-	if got < 1*time.Second {
-		// Expected ≈ (0.99)^50 * 100ms + (1-(0.99)^50) * 5s ≈ 1.99s
-		// The lower bound proves a meaningful shift; the upper bound (below)
-		// proves the slow alpha damped the convergence.
-		t.Fatalf("EMA did not move enough under sustained timeouts, got %v", got)
-	}
-	if got > 3*time.Second {
-		t.Fatalf("EMA converged too fast for slow alpha=0.01, got %v", got)
-	}
-}
-
-// TestRequestLatencyMultiplePeersIsolated verifies per-peer isolation: a
-// sample for peerA does not affect peerB's stats.
-func TestRequestLatencyMultiplePeersIsolated(t *testing.T) {
-	tr := New()
-	tr.NotifyRequestLatency("peerA", 100*time.Millisecond)
-	tr.NotifyRequestLatency("peerB", 5*time.Second)
-
-	stats := tr.GetAllPeerStats()
-	if stats["peerA"].RequestLatencyEMA != 100*time.Millisecond {
-		t.Errorf("peerA EMA: got %v, want 100ms", stats["peerA"].RequestLatencyEMA)
-	}
-	if stats["peerB"].RequestLatencyEMA != 5*time.Second {
-		t.Errorf("peerB EMA: got %v, want 5s", stats["peerB"].RequestLatencyEMA)
-	}
-	if stats["peerA"].RequestSamples != 1 || stats["peerB"].RequestSamples != 1 {
-		t.Errorf("expected RequestSamples=1 for each peer, got A=%d B=%d",
-			stats["peerA"].RequestSamples, stats["peerB"].RequestSamples)
-	}
-}
-
-// TestRequestLatencyPeerDropResetsStats verifies that NotifyPeerDrop
-// removes the peer's latency history along with its other stats.
-func TestRequestLatencyPeerDropResetsStats(t *testing.T) {
-	tr := New()
-	tr.NotifyRequestLatency("peerA", 200*time.Millisecond)
-	tr.NotifyPeerDrop("peerA")
-
-	if _, ok := tr.GetAllPeerStats()["peerA"]; ok {
-		t.Fatal("peerA stats should be removed after NotifyPeerDrop")
-	}
-
-	// A subsequent latency sample re-creates the entry as a fresh peer.
-	tr.NotifyRequestLatency("peerA", 50*time.Millisecond)
-	ps := tr.GetAllPeerStats()["peerA"]
-	if ps.RequestSamples != 1 {
-		t.Fatalf("expected RequestSamples=1 after re-add, got %d", ps.RequestSamples)
-	}
-	if ps.RequestLatencyEMA != 50*time.Millisecond {
-		t.Fatalf("expected fresh EMA bootstrap, got %v", ps.RequestLatencyEMA)
-	}
+	chain.addBlock(1, nil)
+	chain.sendHead(1)
+	waitStep(t, tr) // should not panic
 }

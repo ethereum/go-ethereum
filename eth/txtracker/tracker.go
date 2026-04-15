@@ -14,16 +14,14 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package txtracker provides minimal per-peer transaction inclusion tracking.
+// Package txtracker maps accepted transactions to their delivering peer
+// and observes chain-head and finalization events to emit per-block
+// per-peer signals to a StatsConsumer (typically eth/peerstats).
 //
-// It records which peer delivered each accepted transaction (via NotifyAccepted)
-// and monitors the chain for inclusion and finalization events. When a
-// delivered transaction is finalized on chain, the delivering peer is
-// credited. A per-block exponential moving average (EMA) of inclusions
-// tracks recent peer productivity.
-//
-// The primary consumer is the peer dropper (eth/dropper.go), which uses
-// these stats to protect high-value peers from random disconnection.
+// The tracker owns the tx-hash → deliverer mapping with FIFO eviction,
+// a chain-head subscription goroutine, and the computation of per-block
+// inclusion counts and finalization credits. It does NOT maintain
+// per-peer aggregates — that is peerstats' job.
 package txtracker
 
 import (
@@ -41,30 +39,7 @@ import (
 const (
 	// Maximum number of tx→deliverer mappings to retain.
 	maxTracked = 262144
-	// EMA smoothing factor for per-block inclusion rate.
-	emaAlpha = 0.05
-	// EMA smoothing factor for per-block finalization rate. Very slow on
-	// purpose: finalization is permanent, and the score should reflect
-	// sustained contribution over long windows, not recent bursts.
-	// Half-life ≈ 6930 chain heads (~23 hours on 12s blocks).
-	finalizedEMAAlpha = 0.0001
-	// EMA smoothing factor for per-request latency average. Slow on purpose:
-	// short bursts shouldn't shift the score, sustained behavior should.
-	// Half-life ≈ ln(0.5)/ln(0.99) ≈ 69 samples.
-	latencyEMAAlpha = 0.01
-	// MinLatencySamples is the number of latency samples a peer must accumulate
-	// before its RequestLatencyEMA is considered meaningful for protection.
-	// Prevents a single lucky-fast reply from displacing established peers.
-	MinLatencySamples = 10
 )
-
-// PeerStats holds the per-peer inclusion and responsiveness data.
-type PeerStats struct {
-	RecentFinalized   float64       // EMA of per-block finalization credits (slow)
-	RecentIncluded    float64       // EMA of per-block inclusions (fast)
-	RequestLatencyEMA time.Duration // Slow EMA of tx-request response latency (timeouts count as the timeout value)
-	RequestSamples    int64         // Number of latency samples seen for this peer
-}
 
 // Chain is the blockchain interface needed by the tracker.
 type Chain interface {
@@ -74,11 +49,18 @@ type Chain interface {
 	CurrentFinalBlock() *types.Header
 }
 
-type peerStats struct {
-	recentFinalized   float64
-	recentIncluded    float64
-	requestLatencyEMA time.Duration
-	requestSamples    int64
+// StatsConsumer receives per-block signals about peer inclusion and
+// finalization. The tracker invokes NotifyBlock exactly once per handled chain
+// head, AFTER releasing its own lock, with:
+//
+//   - inclusions: per-peer count of transactions in the head block
+//   - finalized:  per-peer count of transactions in blocks that became
+//     finalized since the previous call (possibly zero-range)
+//
+// Either map may be empty but the map itself is never nil when called.
+// NotifyBlock must not call back into the tracker.
+type StatsConsumer interface {
+	NotifyBlock(inclusions, finalized map[string]int)
 }
 
 // TxInfo records the per-transaction state the tracker maintains.
@@ -99,14 +81,14 @@ type TxInfo struct {
 	BlockHash common.Hash
 }
 
-// Tracker records which peer delivered each transaction and credits peers
-// when their transactions appear on chain.
+// Tracker records which peer delivered each transaction and emits
+// per-block inclusion and finalization signals to a StatsConsumer.
 type Tracker struct {
-	mu    sync.Mutex
-	txs   lru.BasicLRU[common.Hash, *TxInfo] // tx hash -> tx info with lru eviction
-	peers map[string]*peerStats
+	mu  sync.Mutex
+	txs lru.BasicLRU[common.Hash, *TxInfo] // tx hash -> tx info with lru eviction
 
 	chain        Chain
+	consumer     StatsConsumer
 	lastFinalNum uint64 // last finalized block number processed
 	headCh       chan core.ChainHeadEvent
 	sub          event.Subscription
@@ -121,17 +103,19 @@ type Tracker struct {
 // New creates a new tracker.
 func New() *Tracker {
 	return &Tracker{
-		txs:   lru.NewBasicLRU[common.Hash, *TxInfo](maxTracked),
-		peers: make(map[string]*peerStats),
-		quit:  make(chan struct{}),
-		step:  make(chan struct{}, 1),
-		now:   func() uint64 { return uint64(time.Now().Unix()) },
+		txs:  lru.NewBasicLRU[common.Hash, *TxInfo](maxTracked),
+		quit: make(chan struct{}),
+		step: make(chan struct{}, 1),
+		now:  func() uint64 { return uint64(time.Now().Unix()) },
 	}
 }
 
-// Start begins listening for chain head events.
-func (t *Tracker) Start(chain Chain) {
+// Start begins listening for chain head events. `consumer` receives
+// per-block signals; if nil, signals are computed but discarded
+// (useful in tests that exercise only the tx-lifecycle surface).
+func (t *Tracker) Start(chain Chain, consumer StatsConsumer) {
 	t.chain = chain
+	t.consumer = consumer
 	// Seed lastFinalNum so checkFinalization doesn't backfill from genesis.
 	if fh := chain.CurrentFinalBlock(); fh != nil {
 		t.lastFinalNum = fh.Number.Uint64()
@@ -140,14 +124,6 @@ func (t *Tracker) Start(chain Chain) {
 	t.sub = chain.SubscribeChainHeadEvent(t.headCh)
 	t.wg.Add(1)
 	go t.loop()
-}
-
-// NotifyPeerDrop removes a disconnected peer's stats to prevent unbounded
-// growth. Safe to call from any goroutine.
-func (t *Tracker) NotifyPeerDrop(peer string) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	delete(t.peers, peer)
 }
 
 // Stop shuts down the tracker.
@@ -176,55 +152,6 @@ func (t *Tracker) NotifyAccepted(peer string, hashes []common.Hash) {
 		}
 		t.txs.Add(hash, &TxInfo{Deliverer: peer, AddedAt: addedAt})
 	}
-	// Ensure the delivering peer has a stats entry.
-	if len(hashes) > 0 && t.peers[peer] == nil {
-		t.peers[peer] = &peerStats{}
-	}
-}
-
-// NotifyRequestLatency records a tx-request response latency sample for the
-// given peer. Timeouts should be reported as the timeout value (so they count
-// against the EMA rather than being silently omitted). The EMA uses a slow
-// alpha so isolated bursts don't shift the score appreciably.
-// Safe to call from any goroutine.
-func (t *Tracker) NotifyRequestLatency(peer string, latency time.Duration) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	ps := t.peers[peer]
-	if ps == nil {
-		ps = &peerStats{}
-		t.peers[peer] = ps
-	}
-	if ps.requestSamples == 0 {
-		// Bootstrap the EMA with the first sample so it doesn't drift up
-		// from zero over many samples before reaching realistic values.
-		ps.requestLatencyEMA = latency
-	} else {
-		ps.requestLatencyEMA = time.Duration(
-			float64(ps.requestLatencyEMA)*(1-latencyEMAAlpha) +
-				float64(latency)*latencyEMAAlpha,
-		)
-	}
-	ps.requestSamples++
-}
-
-// GetAllPeerStats returns a snapshot of per-peer inclusion statistics.
-// Safe to call from any goroutine.
-func (t *Tracker) GetAllPeerStats() map[string]PeerStats {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	result := make(map[string]PeerStats, len(t.peers))
-	for id, ps := range t.peers {
-		result[id] = PeerStats{
-			RecentFinalized:   ps.recentFinalized,
-			RecentIncluded:    ps.recentIncluded,
-			RequestLatencyEMA: ps.requestLatencyEMA,
-			RequestSamples:    ps.requestSamples,
-		}
-	}
-	return result
 }
 
 func (t *Tracker) loop() {
@@ -246,6 +173,10 @@ func (t *Tracker) loop() {
 	}
 }
 
+// handleChainHead computes per-peer deltas for the new head block and any
+// newly-finalized blocks, then hands them to the StatsConsumer AFTER
+// releasing t.mu. The lock-release-before-consumer pattern avoids any
+// cross-package lock ordering.
 func (t *Tracker) handleChainHead(ev core.ChainHeadEvent) {
 	// Fetch the head block by hash (not just number) to avoid using a
 	// reorged block if the tracker goroutine lags behind the chain.
@@ -254,39 +185,35 @@ func (t *Tracker) handleChainHead(ev core.ChainHeadEvent) {
 		return
 	}
 	t.mu.Lock()
-	defer t.mu.Unlock()
 
-	// Count per-peer inclusions in this block for the inclusion EMA, and
-	// record (BlockNum, BlockHash) on first inclusion so the iterate-t.txs
-	// finalization scan can find the entry later without re-reading the
-	// block. Skip txs whose delivery arrived at or after this block's slot
-	// — those are likely post-slot re-broadcasts of an already-mined tx,
-	// not genuine relay work.
+	// Count per-peer inclusions in this block, and record (BlockNum,
+	// BlockHash) on first inclusion so the iterate-t.txs finalization
+	// scan can find the entry later without re-reading the block. Skip
+	// txs whose delivery arrived at or after this block's slot — those
+	// are likely post-slot re-broadcasts of an already-mined tx, not
+	// genuine relay work.
 	blockTime := block.Time()
 	blockNum := block.Number().Uint64()
 	blockHash := block.Hash()
-	blockIncl := make(map[string]int)
+	inclusions := make(map[string]int)
 	for _, tx := range block.Transactions() {
 		ti, ok := t.txs.Peek(tx.Hash())
 		if !ok || ti.AddedAt >= blockTime {
 			continue
 		}
-		blockIncl[ti.Deliverer]++
+		inclusions[ti.Deliverer]++
 		if ti.BlockNum == 0 {
 			ti.BlockNum = blockNum
 			ti.BlockHash = blockHash
 		}
 	}
 	// Accumulate per-peer finalization credits over the newly-finalized
-	// range (possibly zero blocks). Only counts peers still tracked.
-	blockFinal := t.collectFinalizationCredits()
+	// range (possibly zero blocks).
+	finalized := t.collectFinalizationCredits()
+	t.mu.Unlock()
 
-	// Update both EMAs for all tracked peers (decays inactive ones).
-	// Don't create entries for unknown peers — they may have been
-	// removed by NotifyPeerDrop and should not be resurrected.
-	for peer, ps := range t.peers {
-		ps.recentIncluded = (1-emaAlpha)*ps.recentIncluded + emaAlpha*float64(blockIncl[peer])
-		ps.recentFinalized = (1-finalizedEMAAlpha)*ps.recentFinalized + finalizedEMAAlpha*float64(blockFinal[peer])
+	if t.consumer != nil {
+		t.consumer.NotifyBlock(inclusions, finalized)
 	}
 }
 
