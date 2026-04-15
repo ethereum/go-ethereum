@@ -24,7 +24,6 @@ const (
 	KindInternal                 // internal binary branching node
 	KindStem                     // leaf group containing up to 256 values
 	KindHashed                   // unresolved node (hash only)
-	KindInvalid                  // sentinel for validation
 )
 
 // NodeRef is a compact, GC-invisible reference to a node in a NodeStore.
