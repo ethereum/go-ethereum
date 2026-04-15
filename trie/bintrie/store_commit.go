@@ -216,10 +216,16 @@ func (s *NodeStore) CollectNodes(ref NodeRef, path []byte, flushfn NodeFlushFn) 
 		return nil
 	case KindInternal:
 		node := s.getInternal(ref.Index())
-		if err := s.CollectNodes(node.left, append(path, 0), flushfn); err != nil {
+		leftPath := make([]byte, len(path)+1)
+		copy(leftPath, path)
+		leftPath[len(path)] = 0
+		if err := s.CollectNodes(node.left, leftPath, flushfn); err != nil {
 			return err
 		}
-		if err := s.CollectNodes(node.right, append(path, 1), flushfn); err != nil {
+		rightPath := make([]byte, len(path)+1)
+		copy(rightPath, path)
+		rightPath[len(path)] = 1
+		if err := s.CollectNodes(node.right, rightPath, flushfn); err != nil {
 			return err
 		}
 		flushfn(path, s.ComputeHash(ref), s.SerializeNode(ref))
