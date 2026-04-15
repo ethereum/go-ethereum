@@ -302,14 +302,15 @@ func (s *NodeStore) splitStemInsert(existingRef NodeRef, newStem []byte, suffix 
 	first := true
 
 	for {
+		if existingDepth >= StemSize*8 {
+			panic("splitStemInsert: identical stems")
+		}
+
 		bitExisting := existing.Stem[existingDepth/8] >> (7 - (existingDepth % 8)) & 1
 		bitNew := newStem[existingDepth/8] >> (7 - (existingDepth % 8)) & 1
 
-		newInternalIdx := s.allocInternal()
-		newInternal := s.getInternal(newInternalIdx)
-		newInternal.depth = uint8(existingDepth)
-		newInternal.mustRecompute = true
-		newRef := MakeRef(KindInternal, newInternalIdx)
+		newRef := s.newInternalRef(existingDepth)
+		newInternal := s.getInternal(newRef.Index())
 
 		if first {
 			firstRef = newRef
@@ -346,7 +347,7 @@ func (s *NodeStore) splitStemInsert(existingRef NodeRef, newStem []byte, suffix 
 		}
 
 		// Same bit — continue splitting
-		lastInternalIdx = newInternalIdx
+		lastInternalIdx = newRef.Index()
 		lastIsLeft = (bitExisting == 0)
 		existingDepth++
 	}
@@ -472,6 +473,10 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 // splitStemValuesInsert handles splitting a StemNode when inserting values with a different stem.
 func (s *NodeStore) splitStemValuesInsert(existingRef NodeRef, newStem []byte, values [][]byte, resolver NodeResolverFn, depth int) (NodeRef, error) {
 	existing := s.getStem(existingRef.Index())
+
+	if int(existing.depth) >= StemSize*8 {
+		panic("splitStemValuesInsert: identical stems")
+	}
 
 	bitStem := existing.Stem[existing.depth/8] >> (7 - (existing.depth % 8)) & 1
 	nRef := s.newInternalRef(int(existing.depth))
