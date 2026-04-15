@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 const (
@@ -419,10 +420,17 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		Withdrawals:  *block.BlockOverrides.Withdrawals,
 	}
 	chainHeadReader := &simChainHeadReader{ctx, sim.b}
-	b, err := sim.b.Engine().FinalizeAndAssemble(ctx, chainHeadReader, header, sim.state, blockBody, receipts)
-	if err != nil {
-		return nil, nil, nil, err
-	}
+
+	// Finalize the state transition by applying operations such as withdrawals,
+	// uncle rewards, and related processing.
+	sim.b.Engine().Finalize(chainHeadReader, header, sim.state, blockBody)
+
+	// Calculate the state root after applying all mutations.
+	header.Root = sim.state.IntermediateRoot(chainHeadReader.Config().IsEIP158(header.Number))
+
+	// Assemble the block for delivery.
+	b := types.NewBlock(header, blockBody, receipts, trie.NewStackTrie(nil))
+
 	repairLogs(callResults, b.Hash())
 	return b, callResults, senders, nil
 }

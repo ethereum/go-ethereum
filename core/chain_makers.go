@@ -17,7 +17,6 @@
 package core
 
 import (
-	"context"
 	"fmt"
 	"math/big"
 
@@ -32,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 )
@@ -411,11 +411,21 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			b.header.RequestsHash = &reqHash
 		}
 
-		body := types.Body{Transactions: b.txs, Uncles: b.uncles, Withdrawals: b.withdrawals}
-		block, err := b.engine.FinalizeAndAssemble(context.Background(), cm, b.header, statedb, &body, b.receipts)
-		if err != nil {
-			panic(err)
+		body := types.Body{
+			Transactions: b.txs,
+			Uncles:       b.uncles,
+			Withdrawals:  b.withdrawals,
 		}
+
+		// Finalize the state transition by applying operations such as withdrawals,
+		// uncle rewards, and related processing.
+		b.engine.Finalize(cm, b.header, statedb, &body)
+
+		// Calculate the state root after applying all mutations.
+		b.header.Root = statedb.IntermediateRoot(cm.Config().IsEIP158(b.header.Number))
+
+		// Assemble the block for delivery.
+		block := types.NewBlock(b.header, &body, b.receipts, trie.NewStackTrie(nil))
 
 		// Write state changes to db
 		root, err := statedb.Commit(b.header.Number.Uint64(), config.IsEIP158(b.header.Number), config.IsCancun(b.header.Number, b.header.Time))

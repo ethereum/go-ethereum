@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
 )
 
@@ -183,7 +184,17 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 			}
 		}
 	}
-	body := types.Body{Transactions: work.txs, Withdrawals: genParam.withdrawals}
+	// Construct the block body, the withdrawal list should never be null
+	// if Shanghai has been activated.
+	body := types.Body{
+		Transactions: work.txs,
+		Withdrawals:  genParam.withdrawals,
+	}
+	if miner.chainConfig.IsShanghai(work.header.Number, work.header.Time) {
+		if body.Withdrawals == nil {
+			body.Withdrawals = make([]*types.Withdrawal, 0)
+		}
+	}
 
 	allLogs := make([]*types.Log, 0)
 	for _, r := range work.receipts {
@@ -211,11 +222,16 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 		reqHash := types.CalcRequestsHash(requests)
 		work.header.RequestsHash = &reqHash
 	}
+	// Finalize the state transition by applying operations such as withdrawals,
+	// uncle rewards, and related processing.
+	miner.engine.Finalize(miner.chain, work.header, work.state, &body)
 
-	block, err := miner.engine.FinalizeAndAssemble(ctx, miner.chain, work.header, work.state, &body, work.receipts)
-	if err != nil {
-		return &newPayloadResult{err: err}
-	}
+	// Calculate the state root after applying all mutations.
+	work.header.Root = work.state.IntermediateRoot(miner.chain.Config().IsEIP158(work.header.Number))
+
+	// Assemble the block for delivery.
+	block := types.NewBlock(work.header, &body, work.receipts, trie.NewStackTrie(nil))
+
 	return &newPayloadResult{
 		block:    block,
 		fees:     totalFees(block, work.receipts),
