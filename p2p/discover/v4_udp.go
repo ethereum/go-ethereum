@@ -499,13 +499,15 @@ func (t *UDPv4) loop() {
 			nextTimeout = nil
 
 			// Notify and remove callbacks whose deadline is in the past.
-			for el := plist.Front(); el != nil; el = el.Next() {
+			for el := plist.Front(); el != nil; {
+				next := el.Next()
 				p := el.Value.(*replyMatcher)
 				if now.After(p.deadline) || now.Equal(p.deadline) {
 					p.errc <- errTimeout
 					plist.Remove(el)
 					contTimeouts++
 				}
+				el = next
 			}
 			// If we've accumulated too many timeouts, do an NTP time sync check
 			if contTimeouts > ntpFailureThreshold {
