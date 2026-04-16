@@ -34,17 +34,18 @@ import (
 // historicStateReader implements StateReader, wrapping a historical state reader
 // defined in path database and provide historic state serving over the path scheme.
 type historicStateReader struct {
-	reader *pathdb.HistoricalStateReader
-	lock   sync.Mutex // Lock for protecting concurrent read
+	reader   *pathdb.HistoricalStateReader
+	isVerkle bool       // true when the database uses the binary trie scheme
+	lock     sync.Mutex // Lock for protecting concurrent read
 }
 
 // newHistoricStateReader constructs a reader for historical state serving.
-func newHistoricStateReader(r *pathdb.HistoricalStateReader) *historicStateReader {
-	return &historicStateReader{reader: r}
+func newHistoricStateReader(r *pathdb.HistoricalStateReader, isVerkle bool) *historicStateReader {
+	return &historicStateReader{reader: r, isVerkle: isVerkle}
 }
 
 // Account implements StateReader, retrieving the account specified by the address.
-func (r *historicStateReader) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *historicStateReader) Account(addr common.Address) (*Account, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -55,17 +56,13 @@ func (r *historicStateReader) Account(addr common.Address) (*types.StateAccount,
 	if account == nil {
 		return nil, nil
 	}
-	acct := &types.StateAccount{
+	acct := &Account{
 		Nonce:    account.Nonce,
 		Balance:  account.Balance,
 		CodeHash: account.CodeHash,
-		Root:     common.BytesToHash(account.Root),
 	}
 	if len(acct.CodeHash) == 0 {
 		acct.CodeHash = types.EmptyCodeHash.Bytes()
-	}
-	if acct.Root == (common.Hash{}) {
-		acct.Root = types.EmptyRootHash
 	}
 	return acct, nil
 }
@@ -87,6 +84,17 @@ func (r *historicStateReader) Storage(addr common.Address, key common.Hash) (com
 	}
 	if len(blob) == 0 {
 		return common.Hash{}, nil
+	}
+	// Bintrie storage leaves are raw 32-byte values (not RLP-encoded)
+	// because the bintrie flat-state codec stores leaves verbatim.
+	// The merkle path encodes storage values as trimmed-left-zeros RLP
+	// before writing, so rlp.Split is the correct decoder there.
+	// Without this dispatch, bintrie historical storage reads would
+	// either decode garbage or error from rlp.Split on raw 32 bytes.
+	if r.isVerkle {
+		var slot common.Hash
+		copy(slot[:], blob)
+		return slot, nil
 	}
 	_, content, _, err := rlp.Split(blob)
 	if err != nil {
@@ -150,17 +158,25 @@ func newHistoricalTrieReader(root common.Hash, r *pathdb.HistoricalNodeReader) (
 }
 
 // account is the inner version of Account and assumes the r.lock is already held.
-func (r *historicalTrieReader) account(addr common.Address) (*types.StateAccount, error) {
+func (r *historicalTrieReader) account(addr common.Address) (*Account, error) {
 	account, err := r.tr.GetAccount(addr)
 	if err != nil {
 		return nil, err
 	}
 	if account == nil {
 		r.subRoots[addr] = types.EmptyRootHash
+		return nil, nil
 	} else {
 		r.subRoots[addr] = account.Root
+
+		// Account objects resolved from the trie always include
+		// the full code hash.
+		return &Account{
+			Nonce:    account.Nonce,
+			Balance:  account.Balance,
+			CodeHash: account.CodeHash,
+		}, nil
 	}
-	return account, nil
 }
 
 // Account implements StateReader, retrieving the account specified by the address.
@@ -169,7 +185,7 @@ func (r *historicalTrieReader) account(addr common.Address) (*types.StateAccount
 // the requested account is not yet covered by the snapshot.
 //
 // The returned account might be nil if it's not existent.
-func (r *historicalTrieReader) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *historicalTrieReader) Account(addr common.Address) (*Account, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -236,7 +252,7 @@ func (db *HistoricDB) Reader(stateRoot common.Hash) (Reader, error) {
 	var readers []StateReader
 	sr, err := db.triedb.HistoricStateReader(stateRoot)
 	if err == nil {
-		readers = append(readers, newHistoricStateReader(sr))
+		readers = append(readers, newHistoricStateReader(sr, db.triedb.IsVerkle()))
 	}
 	nr, err := db.triedb.HistoricNodeReader(stateRoot)
 	if err == nil {
@@ -253,6 +269,10 @@ func (db *HistoricDB) Reader(stateRoot common.Hash) (Reader, error) {
 		return nil, err
 	}
 	return newReader(db.codedb.Reader(), combined), nil
+}
+
+func (db *HistoricDB) Hasher(stateRoot common.Hash) (Hasher, error) {
+	return &noopHasher{}, nil
 }
 
 // OpenTrie opens the main account trie. It's not supported by historic database.

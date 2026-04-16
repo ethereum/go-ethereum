@@ -21,86 +21,71 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/internal/testrand"
-	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
 )
 
 func filledStateDB() *StateDB {
 	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
 
-	// Create an account and check if the retrieved balance is correct
 	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
 	skey := common.HexToHash("aaa")
 	sval := common.HexToHash("bbb")
 
-	state.SetBalance(addr, uint256.NewInt(42), tracing.BalanceChangeUnspecified) // Change the account trie
-	state.SetCode(addr, []byte("hello"), tracing.CodeChangeUnspecified)          // Change an external metadata
-	state.SetState(addr, skey, sval)                                             // Change the storage trie
+	state.SetBalance(addr, uint256.NewInt(42), tracing.BalanceChangeUnspecified)
+	state.SetCode(addr, []byte("hello"), tracing.CodeChangeUnspecified)
+	state.SetState(addr, skey, sval)
 	for i := 0; i < 100; i++ {
 		sk := common.BigToHash(big.NewInt(int64(i)))
-		state.SetState(addr, sk, sk) // Change the storage trie
+		state.SetState(addr, sk, sk)
 	}
 	return state
 }
 
-func TestUseAfterTerminate(t *testing.T) {
+func TestSubfetcherUseAfterTerminate(t *testing.T) {
 	db := filledStateDB()
-	prefetcher := newTriePrefetcher(db.db, db.originalRoot, "", true)
-	skey := common.HexToHash("aaa")
 
-	if err := prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, nil, []common.Hash{skey}, false); err != nil {
-		t.Errorf("Prefetch failed before terminate: %v", err)
+	// Open a trie and create a subfetcher for it.
+	id := trie.StateTrieID(db.originalRoot)
+	tr, err := trie.NewStateTrie(id, db.db.TrieDB())
+	if err != nil {
+		t.Fatalf("Failed to open trie: %v", err)
 	}
-	prefetcher.terminate(false)
+	sf := newPrefetcher(tr, false)
+	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
 
-	if err := prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, nil, []common.Hash{skey}, false); err == nil {
-		t.Errorf("Prefetch succeeded after terminate: %v", err)
+	// Scheduling before termination should succeed.
+	if err := sf.scheduleAccounts([]common.Address{addr}, false); err != nil {
+		t.Fatalf("Schedule failed before terminate: %v", err)
 	}
-	if tr := prefetcher.trie(common.Hash{}, db.originalRoot); tr == nil {
-		t.Errorf("Prefetcher returned nil trie after terminate")
+	// Terminate synchronously — waits for pending tasks.
+	sf.terminate()
+
+	// Scheduling after termination should fail.
+	if err := sf.scheduleAccounts([]common.Address{addr}, false); err == nil {
+		t.Fatal("Schedule succeeded after terminate")
 	}
 }
 
-func TestVerklePrefetcher(t *testing.T) {
-	disk := rawdb.NewMemoryDatabase()
-	db := triedb.NewDatabase(disk, triedb.VerkleDefaults)
-	sdb := NewDatabase(db, nil)
+func TestWrapTriePrefetch(t *testing.T) {
+	db := filledStateDB()
 
-	state, err := New(types.EmptyRootHash, sdb)
+	// Create a wrapTrie with prefetching enabled.
+	id := trie.StateTrieID(db.originalRoot)
+	tr, err := newWrapTrie(id, db.db.TrieDB(), true, true)
 	if err != nil {
-		t.Fatalf("failed to initialize state: %v", err)
+		t.Fatalf("Failed to create wrapTrie: %v", err)
 	}
-	// Create an account and check if the retrieved balance is correct
-	addr := testrand.Address()
-	skey := testrand.Hash()
-	sval := testrand.Hash()
+	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
 
-	state.SetBalance(addr, uint256.NewInt(42), tracing.BalanceChangeUnspecified) // Change the account trie
-	state.SetCode(addr, []byte("hello"), tracing.CodeChangeUnspecified)          // Change an external metadata
-	state.SetState(addr, skey, sval)                                             // Change the storage trie
-	root, _ := state.Commit(0, true, false)
+	// Schedule some prefetch work.
+	tr.prefetchAccounts([]common.Address{addr}, false)
 
-	state, _ = New(root, sdb)
-	fetcher := newTriePrefetcher(sdb, root, "", false)
-
-	// Read account
-	fetcher.prefetch(common.Hash{}, root, common.Address{}, []common.Address{addr}, nil, false)
-
-	// Read storage slot
-	fetcher.prefetch(crypto.Keccak256Hash(addr.Bytes()), common.Hash{}, addr, nil, []common.Hash{skey}, false)
-
-	fetcher.terminate(false)
-	accountTrie := fetcher.trie(common.Hash{}, root)
-	storageTrie := fetcher.trie(crypto.Keccak256Hash(addr.Bytes()), common.Hash{})
-
-	rootA := accountTrie.Hash()
-	rootB := storageTrie.Hash()
-	if rootA != rootB {
-		t.Fatal("Two different tries are retrieved")
+	// Terminate and verify the trie is usable.
+	tr.term()
+	if tr.Hash() == (common.Hash{}) {
+		t.Fatal("wrapTrie hash is zero after prefetch")
 	}
 }

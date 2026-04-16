@@ -25,7 +25,6 @@ import (
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -424,8 +423,8 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 }
 
 // write flushes state mutations into the provided database batch as a whole.
-func (s *stateSet) write(batch ethdb.Batch, genMarker []byte, clean *fastcache.Cache) (int, int) {
-	return writeStates(batch, genMarker, s.accountData, s.storageData, clean)
+func (s *stateSet) write(batch ethdb.Batch, codec flatStateCodec, genMarker []byte, clean *fastcache.Cache) (int, int, error) {
+	return writeStates(batch, codec, genMarker, s.accountData, s.storageData, clean)
 }
 
 // reset clears all cached state data, including any optional sorted lists that
@@ -438,11 +437,13 @@ func (s *stateSet) reset() {
 	s.storageListSorted = make(map[common.Hash][]common.Hash)
 }
 
-// dbsize returns the approximate size for db write.
-func (s *stateSet) dbsize() int {
-	m := len(s.accountData) * len(rawdb.SnapshotAccountPrefix)
+// dbsize returns the approximate size for db write. The codec supplies
+// the per-entry on-disk overhead so this calculation tracks the actual
+// schema in use (merkle vs. bintrie).
+func (s *stateSet) dbsize(codec flatStateCodec) int {
+	m := len(s.accountData) * codec.AccountPrefixSize()
 	for _, slots := range s.storageData {
-		m += len(slots) * len(rawdb.SnapshotStoragePrefix)
+		m += len(slots) * codec.StoragePrefixSize()
 	}
 	return m + int(s.size)
 }

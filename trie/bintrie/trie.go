@@ -242,29 +242,21 @@ func (t *BinaryTrie) GetStorage(addr common.Address, key []byte) ([]byte, error)
 }
 
 // UpdateAccount updates the account information for the given address.
+//
+// The BasicData encoding (nonce, balance, code size packed into 32 bytes)
+// is delegated to PackBasicData so that callers outside the trie layer —
+// notably the flat-state codec that writes stem blobs to pathdb — can
+// produce a bit-identical value without duplicating the layout logic.
 func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount, codeLen int) error {
 	var (
-		err       error
-		basicData [HashSize]byte
-		values    = make([][]byte, StemNodeWidth)
-		stem      = GetBinaryTreeKey(addr, zero[:])
+		values = make([][]byte, StemNodeWidth)
+		stem   = GetBinaryTreeKey(addr, zero[:])
 	)
-	binary.BigEndian.PutUint32(basicData[BasicDataCodeSizeOffset-1:], uint32(codeLen))
-	binary.BigEndian.PutUint64(basicData[BasicDataNonceOffset:], acc.Nonce)
-
-	// Because the balance is a max of 16 bytes, truncate
-	// the extra values. This happens in devmode, where
-	// 0xff**HashSize is allocated to the developer account.
-	balanceBytes := acc.Balance.Bytes()
-	// TODO: reduce the size of the allocation in devmode, then panic instead
-	// of truncating.
-	if len(balanceBytes) > 16 {
-		balanceBytes = balanceBytes[16:]
-	}
-	copy(basicData[HashSize-len(balanceBytes):], balanceBytes[:])
+	basicData := PackBasicData(acc.Nonce, acc.Balance, codeLen)
 	values[BasicDataLeafKey] = basicData[:]
 	values[CodeHashLeafKey] = acc.CodeHash[:]
 
+	var err error
 	t.root, err = t.root.InsertValuesAtStem(stem, values, t.nodeResolver, 0)
 	return err
 }
@@ -352,9 +344,10 @@ func (t *BinaryTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration
-// starts at the key after the given start key.
+// starts at the first leaf with key >= startKey. A nil/empty startKey iterates
+// the whole trie.
 func (t *BinaryTrie) NodeIterator(startKey []byte) (trie.NodeIterator, error) {
-	return newBinaryNodeIterator(t, nil)
+	return newBinaryNodeIterator(t, startKey)
 }
 
 // Prove constructs a Merkle proof for key. The result contains all encoded nodes

@@ -17,7 +17,7 @@
 package pathdb
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -25,7 +25,6 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -141,7 +140,13 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		if blob := dl.nodes.Get(nil, key); len(blob) > 0 {
 			cleanNodeHitMeter.Mark(1)
 			cleanNodeReadMeter.Mark(int64(len(blob)))
-			return blob, crypto.Keccak256Hash(blob), nodeLoc{loc: locCleanCache, depth: depth}, nil
+			// Use the scheme-appropriate hasher (keccak256 for merkle,
+			// sha256-via-bintrie for binary trie).
+			h, err := dl.db.hasher(blob)
+			if err != nil {
+				return nil, common.Hash{}, nodeLoc{}, fmt.Errorf("hash cached trie node: %w", err)
+			}
+			return blob, h, nodeLoc{loc: locCleanCache, depth: depth}, nil
 		}
 		cleanNodeMissMeter.Mark(1)
 	}
@@ -161,7 +166,11 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		dl.nodes.Set(key, blob)
 		cleanNodeWriteMeter.Mark(int64(len(blob)))
 	}
-	return blob, crypto.Keccak256Hash(blob), nodeLoc{loc: locDiskLayer, depth: depth}, nil
+	h, err := dl.db.hasher(blob)
+	if err != nil {
+		return nil, common.Hash{}, nodeLoc{}, fmt.Errorf("hash disk trie node: %w", err)
+	}
+	return blob, h, nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
 
 // account directly retrieves the account RLP associated with a particular
@@ -199,13 +208,15 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 
 	// If the layer is being generated, ensure the requested account has
 	// already been covered by the generator.
+	codec := dl.db.flatCodec
 	marker := dl.genMarker()
-	if marker != nil && bytes.Compare(hash.Bytes(), marker) > 0 {
+	if marker != nil && codec.MarkerCompare(hash.Bytes(), marker) > 0 {
 		return nil, errNotCoveredYet
 	}
 	// Try to retrieve the account from the memory cache
+	cacheKey := codec.AccountCacheKey(hash)
 	if dl.states != nil {
-		if blob, found := dl.states.HasGet(nil, hash[:]); found {
+		if blob, found := dl.states.HasGet(nil, cacheKey); found {
 			cleanStateHitMeter.Mark(1)
 			cleanStateReadMeter.Mark(int64(len(blob)))
 
@@ -219,7 +230,7 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 		cleanStateMissMeter.Mark(1)
 	}
 	// Try to retrieve the account from the disk.
-	blob := rawdb.ReadAccountSnapshot(dl.db.diskdb, hash)
+	blob := codec.ReadAccount(dl.db.diskdb, hash)
 
 	// Store the resolved data in the clean cache. The background buffer flusher
 	// may also write to the clean cache concurrently, but two writers cannot
@@ -227,7 +238,7 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 	// it will be found in the frozen buffer, eliminating the need to check the
 	// database.
 	if dl.states != nil {
-		dl.states.Set(hash[:], blob)
+		dl.states.Set(cacheKey, blob)
 		cleanStateWriteMeter.Mark(int64(len(blob)))
 	}
 	if len(blob) == 0 {
@@ -276,14 +287,27 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 
 	// If the layer is being generated, ensure the requested storage slot
 	// has already been covered by the generator.
-	key := storageKeySlice(accountHash, storageHash)
+	//
+	// The codec derives the scheme-appropriate marker comparison key:
+	// merkle uses the 64-byte (accountHash||storageHash) concatenation;
+	// bintrie uses the 32-byte storageHash directly (which is the full
+	// stem||offset key matching the bintrie generator's 32-byte marker).
+	// Pre-A4 this always used the 64-byte shape, which was fail-open
+	// for bintrie because the zero accountHash sorts before any
+	// sha256-derived marker byte.
+	codec := dl.db.flatCodec
+	markerKey := codec.StorageMarkerKey(accountHash, storageHash)
 	marker := dl.genMarker()
-	if marker != nil && bytes.Compare(key, marker) > 0 {
+	if marker != nil && codec.MarkerCompare(markerKey, marker) > 0 {
 		return nil, errNotCoveredYet
 	}
-	// Try to retrieve the storage slot from the memory cache
+	// Try to retrieve the storage slot from the memory cache. The codec
+	// decides the cache key shape so it can avoid colliding with account
+	// keys (relevant once the bintrie codec lands; for merkle this remains
+	// the historical 64-byte combined key).
+	cacheKey := codec.StorageCacheKey(accountHash, storageHash)
 	if dl.states != nil {
-		if blob, found := dl.states.HasGet(nil, key); found {
+		if blob, found := dl.states.HasGet(nil, cacheKey); found {
 			cleanStateHitMeter.Mark(1)
 			cleanStateReadMeter.Mark(int64(len(blob)))
 
@@ -296,8 +320,8 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 		}
 		cleanStateMissMeter.Mark(1)
 	}
-	// Try to retrieve the account from the disk
-	blob := rawdb.ReadStorageSnapshot(dl.db.diskdb, accountHash, storageHash)
+	// Try to retrieve the storage slot from the disk
+	blob := codec.ReadStorage(dl.db.diskdb, accountHash, storageHash)
 
 	// Store the resolved data in the clean cache. The background buffer flusher
 	// may also write to the clean cache concurrently, but two writers cannot
@@ -305,7 +329,7 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 	// it will be found in the frozen buffer, eliminating the need to check the
 	// database.
 	if dl.states != nil {
-		dl.states.Set(key, blob)
+		dl.states.Set(cacheKey, blob)
 		cleanStateWriteMeter.Mark(int64(len(blob)))
 	}
 	if len(blob) == 0 {
@@ -491,7 +515,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 
 		// Freeze the live buffer and schedule background flushing
 		dl.frozen = combined
-		dl.frozen.flush(bottom.root, dl.db.diskdb, []ethdb.AncientWriter{dl.db.stateFreezer, dl.db.trienodeFreezer}, progress, dl.nodes, dl.states, bottom.stateID(), func() {
+		dl.frozen.flush(bottom.root, dl.db.diskdb, dl.db.flatCodec, []ethdb.AncientWriter{dl.db.stateFreezer, dl.db.trienodeFreezer}, progress, dl.nodes, dl.states, bottom.stateID(), func() {
 			// Resume the background generation if it's not completed yet.
 			// The generator is assumed to be available if the progress is
 			// not nil.
@@ -529,6 +553,14 @@ func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 	}
 	if dl.id == 0 {
 		return nil, fmt.Errorf("%w: zero state id", errStateUnrecoverable)
+	}
+	// Bintrie flat state does not yet support revert. State history for
+	// bintrie carries keccak-keyed account/storage entries (the merkle
+	// shape), but the bintrie disk layout is per-stem and the merkle
+	// origin maps cannot be replayed onto it. Reorgs would silently
+	// produce wrong answers — fail loudly here so misuse is obvious.
+	if _, isBintrie := dl.db.flatCodec.(*bintrieFlatCodec); isBintrie {
+		return nil, errors.New("bintrie flat state revert is not supported")
 	}
 	// Apply the reverse state changes upon the current state. This must
 	// be done before holding the lock in order to access state in "this"
@@ -599,7 +631,9 @@ func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 	writeNodes(batch, nodes, dl.nodes)
 
 	// Provide the original values of modified accounts and storages for revert
-	writeStates(batch, progress, accounts, storages, dl.states)
+	if _, _, err := writeStates(batch, dl.db.flatCodec, progress, accounts, storages, dl.states); err != nil {
+		return nil, err
+	}
 	rawdb.WritePersistentStateID(batch, dl.id-1)
 	rawdb.WriteSnapshotRoot(batch, h.meta.parent)
 	if err := batch.Write(); err != nil {

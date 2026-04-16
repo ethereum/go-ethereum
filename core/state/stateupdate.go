@@ -17,6 +17,7 @@
 package state
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 
@@ -29,71 +30,75 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
-// contractCode represents contract bytecode along with its associated metadata.
+// contractCode encapsulates contract bytecode and its associated metadata.
 type contractCode struct {
 	hash       common.Hash // hash is the cryptographic hash of the current contract code.
-	blob       []byte      // blob is the binary representation of the current contract code.
-	originHash common.Hash // originHash is the cryptographic hash of the code before mutation.
+	originHash common.Hash // originHash is the cryptographic hash of the code prior to mutation.
+	blob       []byte      // blob is the raw byte representation of the current contract code.
 
 	// Derived fields, populated only when state tracking is enabled.
 	duplicate  bool   // duplicate indicates whether the updated code already exists.
-	originBlob []byte // originBlob is the original binary representation of the contract code.
+	originBlob []byte // originBlob is the original byte representation of the contract code.
 }
 
-// accountDelete represents an operation for deleting an Ethereum account.
+// accountDelete represents a deletion operation for an Ethereum account.
 type accountDelete struct {
-	address common.Address // address is the unique account identifier
-	origin  []byte         // origin is the original value of account data in slim-RLP encoding.
+	address common.Address // address uniquely identifies the account.
+	origin  Account        // origin is the account state prior to deletion.
 
-	// storages stores mutated slots, the value should be nil.
-	storages map[common.Hash][]byte
-
-	// storagesOrigin stores the original values of mutated slots in
-	// prefix-zero-trimmed RLP format. The map key refers to the **HASH**
-	// of the raw storage slot key.
-	storagesOrigin map[common.Hash][]byte
+	storages       map[common.Hash]common.Hash // storages contains mutated storage slots.
+	storagesOrigin map[common.Hash]common.Hash // storagesOrigin holds original values of mutated slots; keys are hashes of raw storage slot keys.
 }
 
-// accountUpdate represents an operation for updating an Ethereum account.
+// accountUpdate represents an update operation for an Ethereum account.
 type accountUpdate struct {
-	address  common.Address         // address is the unique account identifier
-	data     []byte                 // data is the slim-RLP encoded account data.
-	origin   []byte                 // origin is the original value of account data in slim-RLP encoding.
-	code     *contractCode          // code represents mutated contract code; nil means it's not modified.
-	storages map[common.Hash][]byte // storages stores mutated slots in prefix-zero-trimmed RLP format.
+	address  common.Address              // address uniquely identifies the account.
+	data     *Account                    // data is the updated account state; nil indicates deletion.
+	origin   *Account                    // origin is the previous account state; nil indicates non-existence.
+	code     *contractCode               // code contains updated contract code; nil if unchanged.
+	storages map[common.Hash]common.Hash // storages contains updated storage slots.
 
-	// storagesOriginByKey and storagesOriginByHash both store the original values
-	// of mutated slots in prefix-zero-trimmed RLP format. The difference is that
-	// storagesOriginByKey uses the **raw** storage slot key as the map ID, while
-	// storagesOriginByHash uses the **hash** of the storage slot key instead.
-	storagesOriginByKey  map[common.Hash][]byte
-	storagesOriginByHash map[common.Hash][]byte
+	// storagesOriginByKey and storagesOriginByHash both record original values
+	// of mutated storage slots:
+	// - storagesOriginByKey uses raw storage slot keys.
+	// - storagesOriginByHash uses hashed storage slot keys.
+	storagesOriginByKey  map[common.Hash]common.Hash
+	storagesOriginByHash map[common.Hash]common.Hash
 }
 
-// stateUpdate represents the difference between two states resulting from state
-// execution. It contains information about mutated contract codes, accounts,
-// and storage slots, along with their original values.
+// stateUpdate captures the difference between two states resulting from
+// execution. It records all mutated accounts, contract codes, and storage
+// slots, along with their original values.
 type stateUpdate struct {
-	originRoot  common.Hash // hash of the state before applying mutation
-	root        common.Hash // hash of the state after applying mutation
-	blockNumber uint64      // Associated block number
+	originRoot  common.Hash // originRoot is the state root before applying changes.
+	root        common.Hash // root is the state root after applying changes.
+	blockNumber uint64      // blockNumber is the associated block height.
 
-	accounts       map[common.Hash][]byte    // accounts stores mutated accounts in 'slim RLP' encoding
-	accountsOrigin map[common.Address][]byte // accountsOrigin stores the original values of mutated accounts in 'slim RLP' encoding
+	accounts       map[common.Hash]*Account    // accounts contains mutated accounts, keyed by account hash.
+	accountsOrigin map[common.Address]*Account // accountsOrigin holds original values of mutated accounts, keyed by address.
 
-	// storages stores mutated slots in 'prefix-zero-trimmed' RLP format.
-	// The value is keyed by account hash and **storage slot key hash**.
-	storages map[common.Hash]map[common.Hash][]byte
+	// storages contains mutated storage slots, keyed by account hash and
+	// storage slot key hash.
+	storages map[common.Hash]map[common.Hash]common.Hash
 
-	// storagesOrigin stores the original values of mutated slots in
-	// 'prefix-zero-trimmed' RLP format.
-	// (a) the value is keyed by account hash and **storage slot key** if rawStorageKey is true;
-	// (b) the value is keyed by account hash and **storage slot key hash** if rawStorageKey is false;
-	storagesOrigin map[common.Address]map[common.Hash][]byte
+	// storagesOrigin holds original values of mutated storage slots.
+	// The key format depends on rawStorageKey:
+	// - if true:  keyed by account address and raw storage slot key.
+	// - if false: keyed by account address and storage slot key hash.
+	storagesOrigin map[common.Address]map[common.Hash]common.Hash
 	rawStorageKey  bool
 
-	codes map[common.Address]*contractCode // codes contains the set of dirty codes
-	nodes *trienode.MergedNodeSet          // Aggregated dirty nodes caused by state changes
+	codes           map[common.Address]*contractCode // codes contains mutated contract codes, keyed by address.
+	nodes           *trienode.MergedNodeSet          // nodes aggregates all dirty trie nodes produced by the update.
+	secondaryHashes map[common.Address]Hashes        // hashes of secondary tries
+
+	// leaves is the ordered list of stem-offset writes harvested from a
+	// LeafProducer-capable hasher (the binary hasher). For merkle hashers
+	// it is always nil; for the binary hasher it is the bintrie's view of
+	// the same state mutations the trie just absorbed, in flat-state form.
+	// encodeBinary turns this into the per-offset accountData map that
+	// pathdb's bintrie codec consumes at flush time.
+	leaves []StemWrite
 }
 
 // empty returns a flag indicating the state transition is empty or not.
@@ -107,12 +112,16 @@ func (sc *stateUpdate) empty() bool {
 //
 // rawStorageKey is a flag indicating whether to use the raw storage slot key or
 // the hash of the slot key for constructing state update object.
-func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash, blockNumber uint64, deletes map[common.Hash]*accountDelete, updates map[common.Hash]*accountUpdate, nodes *trienode.MergedNodeSet) *stateUpdate {
+//
+// leaves carries the per-offset stem writes produced by a LeafProducer-capable
+// hasher (the binary hasher). It is nil for merkle hashers and consumed by
+// encodeBinary to populate the bintrie flat-state map.
+func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash, blockNumber uint64, deletes map[common.Hash]*accountDelete, updates map[common.Hash]*accountUpdate, nodes *trienode.MergedNodeSet, secondaryHashes map[common.Address]Hashes, leaves []StemWrite) *stateUpdate {
 	var (
-		accounts       = make(map[common.Hash][]byte)
-		accountsOrigin = make(map[common.Address][]byte)
-		storages       = make(map[common.Hash]map[common.Hash][]byte)
-		storagesOrigin = make(map[common.Address]map[common.Hash][]byte)
+		accounts       = make(map[common.Hash]*Account)
+		accountsOrigin = make(map[common.Address]*Account)
+		storages       = make(map[common.Hash]map[common.Hash]common.Hash)
+		storagesOrigin = make(map[common.Address]map[common.Hash]common.Hash)
 		codes          = make(map[common.Address]*contractCode)
 	)
 	// Since some accounts might be destroyed and recreated within the same
@@ -120,7 +129,7 @@ func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash
 	for addrHash, op := range deletes {
 		addr := op.address
 		accounts[addrHash] = nil
-		accountsOrigin[addr] = op.origin
+		accountsOrigin[addr] = &op.origin
 
 		// If storage wiping exists, the hash of the storage slot key must be used
 		if len(op.storages) > 0 {
@@ -174,31 +183,168 @@ func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash
 		}
 	}
 	return &stateUpdate{
-		originRoot:     originRoot,
-		root:           root,
-		blockNumber:    blockNumber,
-		accounts:       accounts,
-		accountsOrigin: accountsOrigin,
-		storages:       storages,
-		storagesOrigin: storagesOrigin,
-		rawStorageKey:  rawStorageKey,
-		codes:          codes,
-		nodes:          nodes,
+		originRoot:      originRoot,
+		root:            root,
+		blockNumber:     blockNumber,
+		accounts:        accounts,
+		accountsOrigin:  accountsOrigin,
+		storages:        storages,
+		storagesOrigin:  storagesOrigin,
+		rawStorageKey:   rawStorageKey,
+		codes:           codes,
+		nodes:           nodes,
+		secondaryHashes: secondaryHashes,
+		leaves:          leaves,
 	}
+}
+
+func encodeSlot(val common.Hash) []byte {
+	if val == (common.Hash{}) {
+		return nil
+	}
+	blob, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(val[:]))
+	return blob
+}
+
+func (sc *stateUpdate) encodeMerkle() (map[common.Hash][]byte, map[common.Address][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Address]map[common.Hash][]byte, error) {
+	var (
+		accounts      = make(map[common.Hash][]byte)
+		storages      = make(map[common.Hash]map[common.Hash][]byte)
+		accountOrigin = make(map[common.Address][]byte)
+		storageOrigin = make(map[common.Address]map[common.Hash][]byte)
+	)
+	for addr, prev := range sc.accountsOrigin {
+		if prev == nil {
+			accountOrigin[addr] = nil
+		} else {
+			pair, ok := sc.secondaryHashes[addr]
+			if !ok {
+				return nil, nil, nil, nil, errors.New("no secondary hash")
+			}
+			accountOrigin[addr] = types.SlimAccountRLP(types.StateAccount{
+				Balance:  prev.Balance,
+				Nonce:    prev.Nonce,
+				CodeHash: prev.CodeHash,
+				Root:     pair.Prev,
+			})
+		}
+
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		data := sc.accounts[addrHash]
+		if data == nil {
+			accounts[addrHash] = nil
+		} else {
+			pair, ok := sc.secondaryHashes[addr]
+			if !ok {
+				return nil, nil, nil, nil, errors.New("no secondary hash")
+			}
+			accounts[addrHash] = types.SlimAccountRLP(types.StateAccount{
+				Balance:  data.Balance,
+				Nonce:    data.Nonce,
+				CodeHash: data.CodeHash,
+				Root:     pair.Hash,
+			})
+		}
+	}
+	for addr, slots := range sc.storagesOrigin {
+		subset := make(map[common.Hash][]byte)
+		for key, val := range slots {
+			subset[key] = encodeSlot(val)
+		}
+		storageOrigin[addr] = subset
+	}
+	for addrHash, slots := range sc.storages {
+		subset := make(map[common.Hash][]byte)
+		for key, val := range slots {
+			subset[key] = encodeSlot(val)
+		}
+		storages[addrHash] = subset
+	}
+	return accounts, accountOrigin, storages, storageOrigin, nil
+}
+
+// encodeBinary produces the bintrie flat-state representation consumed by
+// pathdb. Unlike encodeMerkle (which keys accounts/storage by keccak hashes
+// and slim-RLP encodes the values), the bintrie path uses one entry per
+// EIP-7864 leaf:
+//
+//	key   = stem(31B) || offset(1B), zero-padded into a common.Hash
+//	value = the 32-byte leaf payload, or nil to clear the offset
+//
+// Account header writes (BasicData at offset 0, CodeHash at offset 1) and
+// storage slot / code chunk writes are uniform — the binary hasher emits
+// each as a stemWrite via DrainStemWrites and we route every one of them
+// into the accounts map. The storages map stays empty: bintrie has no
+// per-account storage grouping at the flat-state layer, and pathdb's
+// disklayer/lookup tree both work fine with a single accountData map of
+// 32-byte keys.
+//
+// accountOrigin and storageOrigin are returned empty because state-history
+// rollback for bintrie is not yet supported. The pathdb disklayer.revert
+// guard blocks bintrie reverts before it would observe these maps.
+func (sc *stateUpdate) encodeBinary() (map[common.Hash][]byte, map[common.Address][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Address]map[common.Hash][]byte, error) {
+	var (
+		accounts      = make(map[common.Hash][]byte, len(sc.leaves))
+		storages      = make(map[common.Hash]map[common.Hash][]byte)
+		accountOrigin = make(map[common.Address][]byte)
+		storageOrigin = make(map[common.Address]map[common.Hash][]byte)
+	)
+	for _, w := range sc.leaves {
+		var fullKey common.Hash
+		copy(fullKey[:len(w.Stem)], w.Stem[:])
+		fullKey[len(w.Stem)] = w.Offset
+		// nil Value means "clear this offset" (account delete or storage
+		// slot wipe). The pathdb codec interprets a nil entry as a delete
+		// during flush, matching merkle's nil-blob convention.
+		if w.Value == nil {
+			accounts[fullKey] = nil
+			continue
+		}
+		// Defensive length check: every non-nil bintrie leaf must be
+		// exactly 32 bytes. A wrong-length leaf from the hasher would
+		// silently produce garbage in the diff layer; catch it here at
+		// the trust boundary rather than deep in the flush path where
+		// the stemBuilder.set panic would fire with less context.
+		if len(w.Value) != 32 {
+			return nil, nil, nil, nil, fmt.Errorf("bintrie leaf at stem %x offset %d has value len %d, want 32", w.Stem, w.Offset, len(w.Value))
+		}
+		// Take an owning copy: the hasher reuses its underlying buffers
+		// across blocks, so retaining its slices would create cross-block
+		// aliasing bugs in the pathdb diff layer.
+		v := make([]byte, 32)
+		copy(v, w.Value)
+		accounts[fullKey] = v
+	}
+	return accounts, accountOrigin, storages, storageOrigin, nil
 }
 
 // stateSet converts the current stateUpdate object into a triedb.StateSet
 // object. This function extracts the necessary data from the stateUpdate
 // struct and formats it into the StateSet structure consumed by the triedb
 // package.
-func (sc *stateUpdate) stateSet() *triedb.StateSet {
-	return &triedb.StateSet{
-		Accounts:       sc.accounts,
-		AccountsOrigin: sc.accountsOrigin,
-		Storages:       sc.storages,
-		StoragesOrigin: sc.storagesOrigin,
-		RawStorageKey:  sc.rawStorageKey,
+func (sc *stateUpdate) stateSet(isMerkle bool) (*triedb.StateSet, error) {
+	var (
+		err           error
+		accounts      map[common.Hash][]byte
+		storages      map[common.Hash]map[common.Hash][]byte
+		accountOrigin map[common.Address][]byte
+		storageOrigin map[common.Address]map[common.Hash][]byte
+	)
+	if isMerkle {
+		accounts, accountOrigin, storages, storageOrigin, err = sc.encodeMerkle()
+	} else {
+		accounts, accountOrigin, storages, storageOrigin, err = sc.encodeBinary()
 	}
+	if err != nil {
+		return nil, err
+	}
+	return &triedb.StateSet{
+		Accounts:       accounts,
+		AccountsOrigin: accountOrigin,
+		Storages:       storages,
+		StoragesOrigin: storageOrigin,
+		RawStorageKey:  sc.rawStorageKey,
+	}, nil
 }
 
 // deriveCodeFields derives the missing fields of contract code changes
@@ -246,30 +392,33 @@ func (sc *stateUpdate) ToTracingUpdate() (*tracing.StateUpdate, error) {
 		if !exists {
 			return nil, fmt.Errorf("account %x not found", addr)
 		}
+		var hashes Hashes
+		if sc.secondaryHashes != nil {
+			var ok bool
+			hashes, ok = sc.secondaryHashes[addr]
+			if !ok {
+				return nil, fmt.Errorf("ToTracingUpdate: missing secondary hash for %x", addr)
+			}
+		} else {
+			// Bintrie: no per-account storage sub-tries, use empty root.
+			hashes = Hashes{Hash: types.EmptyRootHash, Prev: types.EmptyRootHash}
+		}
 		change := &tracing.AccountChange{}
 
-		if len(oldData) > 0 {
-			acct, err := types.FullAccount(oldData)
-			if err != nil {
-				return nil, err
-			}
+		if oldData != nil {
 			change.Prev = &types.StateAccount{
-				Nonce:    acct.Nonce,
-				Balance:  acct.Balance,
-				Root:     acct.Root,
-				CodeHash: acct.CodeHash,
+				Nonce:    oldData.Nonce,
+				Balance:  oldData.Balance,
+				Root:     hashes.Prev,
+				CodeHash: oldData.CodeHash,
 			}
 		}
-		if len(newData) > 0 {
-			acct, err := types.FullAccount(newData)
-			if err != nil {
-				return nil, err
-			}
+		if newData != nil {
 			change.New = &types.StateAccount{
-				Nonce:    acct.Nonce,
-				Balance:  acct.Balance,
-				Root:     acct.Root,
-				CodeHash: acct.CodeHash,
+				Nonce:    newData.Nonce,
+				Balance:  newData.Balance,
+				Root:     hashes.Hash,
+				CodeHash: newData.CodeHash,
 			}
 		}
 		update.AccountChanges[addr] = change
@@ -284,40 +433,24 @@ func (sc *stateUpdate) ToTracingUpdate() (*tracing.StateUpdate, error) {
 		}
 		storageChanges := make(map[common.Hash]*tracing.StorageChange, len(slots))
 
-		for key, encPrev := range slots {
+		for key, prev := range slots {
 			// Get new value - handle both raw and hashed key formats
 			var (
 				exists  bool
-				encNew  []byte
-				decPrev []byte
-				decNew  []byte
-				err     error
+				current common.Hash
 			)
 			if sc.rawStorageKey {
-				encNew, exists = subset[crypto.Keccak256Hash(key.Bytes())]
+				current, exists = subset[crypto.Keccak256Hash(key.Bytes())]
 			} else {
-				encNew, exists = subset[key]
+				current, exists = subset[key]
 			}
 			if !exists {
 				return nil, fmt.Errorf("storage slot %x-%x not found", addr, key)
 			}
 
-			// Decode the prev and new values
-			if len(encPrev) > 0 {
-				_, decPrev, _, err = rlp.Split(encPrev)
-				if err != nil {
-					return nil, fmt.Errorf("failed to decode prevValue: %v", err)
-				}
-			}
-			if len(encNew) > 0 {
-				_, decNew, _, err = rlp.Split(encNew)
-				if err != nil {
-					return nil, fmt.Errorf("failed to decode newValue: %v", err)
-				}
-			}
 			storageChanges[key] = &tracing.StorageChange{
-				Prev: common.BytesToHash(decPrev),
-				New:  common.BytesToHash(decNew),
+				Prev: prev,
+				New:  current,
 			}
 		}
 		update.StorageChanges[addr] = storageChanges

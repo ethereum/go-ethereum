@@ -183,10 +183,11 @@ func (test *stateTest) run() bool {
 		storages      []map[common.Hash]map[common.Hash][]byte
 		storageOrigin []map[common.Address]map[common.Hash][]byte
 		copyUpdate    = func(update *stateUpdate) {
-			accounts = append(accounts, maps.Clone(update.accounts))
-			accountOrigin = append(accountOrigin, maps.Clone(update.accountsOrigin))
-			storages = append(storages, maps.Clone(update.storages))
-			storageOrigin = append(storageOrigin, maps.Clone(update.storagesOrigin))
+			encoded, _ := update.stateSet(true)
+			accounts = append(accounts, maps.Clone(encoded.Accounts))
+			accountOrigin = append(accountOrigin, maps.Clone(encoded.AccountsOrigin))
+			storages = append(storages, maps.Clone(encoded.Storages))
+			storageOrigin = append(storageOrigin, maps.Clone(encoded.StoragesOrigin))
 		}
 		disk      = rawdb.NewMemoryDatabase()
 		tdb       = triedb.NewDatabase(disk, &triedb.Config{PathDB: pathdb.Defaults})

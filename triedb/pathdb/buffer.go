@@ -132,7 +132,10 @@ func (b *buffer) size() uint64 {
 
 // flush persists the in-memory dirty trie node into the disk if the configured
 // memory threshold is reached. Note, all data must be written atomically.
-func (b *buffer) flush(root common.Hash, db ethdb.KeyValueStore, freezers []ethdb.AncientWriter, progress []byte, nodesCache, statesCache *fastcache.Cache, id uint64, postFlush func()) {
+//
+// codec is the flat-state codec used for state persistence and cache key
+// derivation. It is supplied by the disk layer's owning Database.
+func (b *buffer) flush(root common.Hash, db ethdb.KeyValueStore, codec flatStateCodec, freezers []ethdb.AncientWriter, progress []byte, nodesCache, statesCache *fastcache.Cache, id uint64, postFlush func()) {
 	if b.done != nil {
 		panic("duplicated flush operation")
 	}
@@ -158,7 +161,7 @@ func (b *buffer) flush(root common.Hash, db ethdb.KeyValueStore, freezers []ethd
 		// Terminate the state snapshot generation if it's active
 		var (
 			start = time.Now()
-			batch = db.NewBatchWithSize((b.nodes.dbsize() + b.states.dbsize()) * 11 / 10) // extra 10% for potential pebble internal stuff
+			batch = db.NewBatchWithSize((b.nodes.dbsize() + b.states.dbsize(codec)) * 11 / 10) // extra 10% for potential pebble internal stuff
 		)
 		// Explicitly sync the state freezer to ensure all written data is persisted to disk
 		// before updating the key-value store.
@@ -170,7 +173,11 @@ func (b *buffer) flush(root common.Hash, db ethdb.KeyValueStore, freezers []ethd
 			return
 		}
 		nodes := b.nodes.write(batch, nodesCache)
-		accounts, slots := b.states.write(batch, progress, statesCache)
+		accounts, slots, flushErr := b.states.write(batch, codec, progress, statesCache)
+		if flushErr != nil {
+			b.flushErr = flushErr
+			return
+		}
 		rawdb.WritePersistentStateID(batch, id)
 		rawdb.WriteSnapshotRoot(batch, root)
 

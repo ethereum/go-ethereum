@@ -388,17 +388,15 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 		return nil, err
 	}
 	codeHash := statedb.GetCodeHash(address)
-	storageRoot := statedb.GetStorageRoot(address)
-
+	hasher, err := statedb.Database().Hasher(header.Root)
+	if err != nil {
+		return nil, err
+	}
+	prover, ok := hasher.(state.Prover)
+	if !ok {
+		return nil, errors.New("state proving is not supported")
+	}
 	if len(keys) > 0 {
-		var storageTrie state.Trie
-		if storageRoot != types.EmptyRootHash && storageRoot != (common.Hash{}) {
-			st, err := statedb.Database().OpenStorageTrie(header.Root, address, storageRoot, nil)
-			if err != nil {
-				return nil, err
-			}
-			storageTrie = st
-		}
 		// Create the proofs for the storageKeys.
 		for i, key := range keys {
 			if err := ctx.Err(); err != nil {
@@ -414,12 +412,8 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 			} else {
 				outputKey = hexutil.Encode(key[:])
 			}
-			if storageTrie == nil {
-				storageProof[i] = StorageResult{outputKey, &hexutil.Big{}, []string{}}
-				continue
-			}
 			var proof proofList
-			if err := storageTrie.Prove(crypto.Keccak256(key.Bytes()), &proof); err != nil {
+			if err := prover.ProveStorage(address, crypto.Keccak256Hash(key.Bytes()), &proof); err != nil {
 				return nil, err
 			}
 			value := (*hexutil.Big)(statedb.GetState(address, key).Big())
@@ -427,12 +421,8 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 		}
 	}
 	// Create the accountProof.
-	tr, err := statedb.Database().OpenTrie(header.Root)
-	if err != nil {
-		return nil, err
-	}
 	var accountProof proofList
-	if err := tr.Prove(crypto.Keccak256(address.Bytes()), &accountProof); err != nil {
+	if err := prover.ProveAccount(address, &accountProof); err != nil {
 		return nil, err
 	}
 	balance := statedb.GetBalance(address).ToBig()
@@ -442,7 +432,7 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 		Balance:      (*hexutil.Big)(balance),
 		CodeHash:     codeHash,
 		Nonce:        hexutil.Uint64(statedb.GetNonce(address)),
-		StorageHash:  storageRoot,
+		//StorageHash:  storageRoot, // TODO(rjl493456442)
 		StorageProof: storageProof,
 	}, statedb.Error()
 }

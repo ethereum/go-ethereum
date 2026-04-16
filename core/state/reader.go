@@ -18,6 +18,7 @@ package state
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/database"
+	"github.com/holiman/uint256"
 )
 
 // ContractCodeReader defines the interface for accessing contract code.
@@ -50,6 +52,38 @@ type ContractCodeReader interface {
 	CodeSize(addr common.Address, codeHash common.Hash) int
 }
 
+// Account represents the metadata of an Ethereum account object.
+// Unlike the representation in the Merkle-Patricia Trie, the storage root
+// is omitted. This structure is designed to provide a unified view over
+// flat state representations and remain compatible with different hashing
+// schemes (e.g., a unified binary tree in the future).
+type Account struct {
+	Nonce    uint64
+	Balance  *uint256.Int
+	CodeHash []byte
+}
+
+// newEmptyAccount returns an empty account.
+func newEmptyAccount() *Account {
+	return &Account{
+		Balance:  uint256.NewInt(0),
+		CodeHash: types.EmptyCodeHash.Bytes(),
+	}
+}
+
+// copy returns a deep-copied account object.
+func (acct *Account) copy() *Account {
+	var balance *uint256.Int
+	if acct.Balance != nil {
+		balance = new(uint256.Int).Set(acct.Balance)
+	}
+	return &Account{
+		Nonce:    acct.Nonce,
+		Balance:  balance,
+		CodeHash: common.CopyBytes(acct.CodeHash),
+	}
+}
+
 // StateReader defines the interface for accessing accounts and storage slots
 // associated with a specific state.
 //
@@ -60,7 +94,7 @@ type StateReader interface {
 	// - Returns a nil account if it does not exist
 	// - Returns an error only if an unexpected issue occurs
 	// - The returned account is safe to modify after the call
-	Account(addr common.Address) (*types.StateAccount, error)
+	Account(addr common.Address) (*Account, error)
 
 	// Storage retrieves the storage slot associated with a particular account
 	// address and slot key.
@@ -97,7 +131,7 @@ func newFlatReader(reader database.StateReader) *flatReader {
 // the requested account is not yet covered by the snapshot.
 //
 // The returned account might be nil if it's not existent.
-func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *flatReader) Account(addr common.Address) (*Account, error) {
 	account, err := r.reader.Account(crypto.Keccak256Hash(addr[:]))
 	if err != nil {
 		return nil, err
@@ -105,17 +139,15 @@ func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 	if account == nil {
 		return nil, nil
 	}
-	acct := &types.StateAccount{
+	acct := &Account{
 		Nonce:    account.Nonce,
 		Balance:  account.Balance,
 		CodeHash: account.CodeHash,
-		Root:     common.BytesToHash(account.Root),
 	}
+	// Account objects resolved from the flat state always omit the
+	// empty code hash.
 	if len(acct.CodeHash) == 0 {
 		acct.CodeHash = types.EmptyCodeHash.Bytes()
-	}
-	if acct.Root == (common.Hash{}) {
-		acct.Root = types.EmptyRootHash
 	}
 	return acct, nil
 }
@@ -145,6 +177,141 @@ func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 	}
 	var value common.Hash
 	value.SetBytes(content)
+	return value, nil
+}
+
+// bintrieFlatReader is the binary-trie analogue of flatReader. It exposes
+// the StateReader interface backed by the path database's per-stem flat
+// state, doing the EIP-7864 key derivation locally so the underlying
+// pathdb reader only sees raw 32-byte (stem || offset) lookup keys.
+//
+// Each Account call performs TWO underlying lookups (BasicData at offset
+// 0 and CodeHash at offset 1), because the diff layers store one entry
+// per offset rather than a pre-aggregated stem blob — this lets two
+// different blocks touch the same account at different offsets without
+// stomping on each other. Storage calls perform a single lookup at the
+// slot's full bintrie key.
+//
+// The reader holds a pathdb.RawStateReader (a small extension of
+// database.StateReader that exposes AccountRLP for raw-byte access)
+// because reader.Account() in pathdb decodes its result as slim RLP,
+// which is the wrong format for bintrie leaves. AccountRLP returns the
+// raw 32-byte leaf value untouched.
+type bintrieFlatReader struct {
+	reader pathdbRawStateReader
+}
+
+// pathdbRawStateReader is the local view of pathdb.RawStateReader. It is
+// duplicated here (rather than imported) to avoid pulling pathdb into
+// every consumer of state.StateReader; the runtime type-assertion in
+// CachingDB.StateReader satisfies the interface dynamically.
+type pathdbRawStateReader interface {
+	database.StateReader
+	AccountRLP(hash common.Hash) ([]byte, error)
+}
+
+// newBintrieFlatReader constructs a state reader backed by the bintrie
+// codec. It returns nil if the underlying database.StateReader is not
+// raw-byte capable (which would be the case for any merkle path-database
+// reader); callers should fall through to the trie reader in that case.
+func newBintrieFlatReader(reader database.StateReader) *bintrieFlatReader {
+	raw, ok := reader.(pathdbRawStateReader)
+	if !ok {
+		return nil
+	}
+	return &bintrieFlatReader{reader: raw}
+}
+
+// Account implements StateReader. It performs two underlying reads —
+// one for the BasicData leaf (offset 0) and one for the CodeHash leaf
+// (offset 1) — and combines them into a unified Account.
+//
+// Torn-read invariant (load-bearing): binaryHasher.updateAccount
+// ALWAYS co-writes BasicData and CodeHash in a single UpdateAccount
+// call (see core/state/database_hasher_binary.go:updateAccount). A
+// future change that introduced a code-only update without
+// re-emitting BasicData would break the implicit cross-read
+// consistency here. TestBinaryHasherWritesBothBasicAndCodeHash locks
+// this invariant down.
+//
+// Return value contract:
+//   - both leaves 32 bytes → decoded Account, nil error.
+//   - either leaf invalid length → corruption error, surfaced as-is.
+//   - both leaves absent → (nil, nil): authoritative non-membership.
+//     Uncovered keys already fail with errNotCoveredYet at the pathdb layer.
+func (r *bintrieFlatReader) Account(addr common.Address) (*Account, error) {
+	basicKey := common.BytesToHash(bintrie.GetBinaryTreeKeyBasicData(addr))
+	codeKey := common.BytesToHash(bintrie.GetBinaryTreeKeyCodeHash(addr))
+
+	basicBlob, err := r.reader.AccountRLP(basicKey)
+	if err != nil {
+		return nil, fmt.Errorf("bintrie BasicData read %x: %w", addr, err)
+	}
+	codeBlob, err := r.reader.AccountRLP(codeKey)
+	if err != nil {
+		return nil, fmt.Errorf("bintrie CodeHash read %x: %w", addr, err)
+	}
+	if len(basicBlob) == 0 && len(codeBlob) == 0 {
+		return nil, nil // Authoritative absence: pathdb confirmed key is covered
+	}
+	// A bintrie leaf is always either absent or exactly 32 bytes. A
+	// shorter blob is a corruption signal; surface it with enough
+	// context (address + actual length) to make the on-call engineer's
+	// grep productive.
+	if len(basicBlob) != 0 && len(basicBlob) != 32 {
+		return nil, fmt.Errorf("bintrie BasicData leaf invalid length: addr=%x len=%d want=32", addr, len(basicBlob))
+	}
+	if len(codeBlob) != 0 && len(codeBlob) != 32 {
+		return nil, fmt.Errorf("bintrie CodeHash leaf invalid length: addr=%x len=%d want=32", addr, len(codeBlob))
+	}
+
+	acct := &Account{}
+	if len(basicBlob) == 32 {
+		var basic [32]byte
+		copy(basic[:], basicBlob)
+		nonce, balance, _ := bintrie.UnpackBasicData(basic)
+		acct.Nonce = nonce
+		acct.Balance = balance
+	} else {
+		// CodeHash present but BasicData absent: treat as a freshly
+		// created account whose body has not been written yet. The
+		// merkle path returns the empty-balance form in this case too.
+		acct.Balance = uint256.NewInt(0)
+	}
+	if len(codeBlob) == 32 {
+		acct.CodeHash = common.CopyBytes(codeBlob)
+	} else {
+		acct.CodeHash = types.EmptyCodeHash.Bytes()
+	}
+	return acct, nil
+}
+
+// Storage implements StateReader. The caller's (addr, slot) pair is
+// turned into a single 32-byte (stem || offset) bintrie key via
+// GetBinaryTreeKeyStorageSlot, and we look it up via AccountRLP because
+// the diff layer stores all bintrie leaves under accountData regardless
+// of whether they came from an account header or a storage write.
+//
+// Return value contract:
+//   - 32-byte leaf found → decode as common.Hash and return.
+//   - invalid-length leaf → corruption error.
+//   - no leaf → (common.Hash{}, nil): authoritative non-membership.
+//     A slot explicitly set to zero is NOT absent — the bintrie
+//     tombstone convention writes 32 zero bytes (a present leaf).
+func (r *bintrieFlatReader) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
+	fullKey := bintrie.GetBinaryTreeKeyStorageSlot(addr, slot[:])
+	blob, err := r.reader.AccountRLP(common.BytesToHash(fullKey))
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("bintrie storage read %x[%x]: %w", addr, slot, err)
+	}
+	if len(blob) == 0 {
+		return common.Hash{}, nil // Authoritative absence: pathdb confirmed key is covered
+	}
+	if len(blob) != 32 {
+		return common.Hash{}, fmt.Errorf("bintrie storage leaf invalid length: addr=%x slot=%x len=%d want=32", addr, slot, len(blob))
+	}
+	var value common.Hash
+	copy(value[:], blob)
 	return value, nil
 }
 
@@ -221,24 +388,32 @@ func newTrieReader(root common.Hash, db *triedb.Database) (*trieReader, error) {
 }
 
 // account is the inner version of Account and assumes the r.lock is already held.
-func (r *trieReader) account(addr common.Address) (*types.StateAccount, error) {
+func (r *trieReader) account(addr common.Address) (*Account, error) {
 	account, err := r.mainTrie.GetAccount(addr)
 	if err != nil {
 		return nil, err
 	}
 	if account == nil {
 		r.subRoots[addr] = types.EmptyRootHash
+		return nil, nil
 	} else {
 		r.subRoots[addr] = account.Root
+
+		// Account objects resolved from the trie always include
+		// the full code hash.
+		return &Account{
+			Nonce:    account.Nonce,
+			Balance:  account.Balance,
+			CodeHash: account.CodeHash,
+		}, nil
 	}
-	return account, nil
 }
 
 // Account implements StateReader, retrieving the account specified by the address.
 //
 // An error will be returned if the trie state is corrupted. An nil account
 // will be returned if it's not existent in the trie.
-func (r *trieReader) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *trieReader) Account(addr common.Address) (*Account, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -319,7 +494,7 @@ func newMultiStateReader(readers ...StateReader) (*multiStateReader, error) {
 // - Returns a nil account if it does not exist
 // - Returns an error only if an unexpected issue occurs
 // - The returned account is safe to modify after the call
-func (r *multiStateReader) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *multiStateReader) Account(addr common.Address) (*Account, error) {
 	var errs []error
 	for _, reader := range r.readers {
 		acct, err := reader.Account(addr)
@@ -355,7 +530,7 @@ type stateReaderWithCache struct {
 	StateReader
 
 	// Previously resolved state entries.
-	accounts    map[common.Address]*types.StateAccount
+	accounts    map[common.Address]*Account
 	accountLock sync.RWMutex
 
 	// List of storage buckets, each of which is thread-safe.
@@ -372,7 +547,7 @@ type stateReaderWithCache struct {
 func newStateReaderWithCache(sr StateReader) *stateReaderWithCache {
 	r := &stateReaderWithCache{
 		StateReader: sr,
-		accounts:    make(map[common.Address]*types.StateAccount),
+		accounts:    make(map[common.Address]*Account),
 	}
 	for i := range r.storageBuckets {
 		r.storageBuckets[i].storages = make(map[common.Address]map[common.Hash]common.Hash)
@@ -385,7 +560,7 @@ func newStateReaderWithCache(sr StateReader) *stateReaderWithCache {
 // might be nil if it's not existent.
 //
 // An error will be returned if the state is corrupted in the underlying reader.
-func (r *stateReaderWithCache) account(addr common.Address) (*types.StateAccount, bool, error) {
+func (r *stateReaderWithCache) account(addr common.Address) (*Account, bool, error) {
 	// Try to resolve the requested account in the local cache
 	r.accountLock.RLock()
 	acct, ok := r.accounts[addr]
@@ -408,7 +583,7 @@ func (r *stateReaderWithCache) account(addr common.Address) (*types.StateAccount
 // The returned account might be nil if it's not existent.
 //
 // An error will be returned if the state is corrupted in the underlying reader.
-func (r *stateReaderWithCache) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *stateReaderWithCache) Account(addr common.Address) (*Account, error) {
 	account, _, err := r.account(addr)
 	return account, err
 }
@@ -481,7 +656,7 @@ func newStateReaderWithStats(sr *stateReaderWithCache) *stateReaderWithStats {
 // The returned account might be nil if it's not existent.
 //
 // An error will be returned if the state is corrupted in the underlying reader.
-func (r *stateReaderWithStats) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *stateReaderWithStats) Account(addr common.Address) (*Account, error) {
 	account, incache, err := r.stateReaderWithCache.account(addr)
 	if err != nil {
 		return nil, err

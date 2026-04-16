@@ -232,38 +232,31 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 }
 
 func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Address, start []byte, maxResult int) (StorageRangeResult, error) {
-	storageRoot := statedb.GetStorageRoot(address)
-	if storageRoot == types.EmptyRootHash || storageRoot == (common.Hash{}) {
-		return StorageRangeResult{}, nil // empty storage
+	it, err := statedb.Database().Iteratee(root)
+	if err != nil {
+		return StorageRangeResult{}, err
+	}
+	storageIt, err := it.NewStorageIterator(crypto.Keccak256Hash(address.Bytes()), common.BytesToHash(start))
+	if err != nil {
+		return StorageRangeResult{}, err
 	}
 	// TODO(rjl493456442) it's problematic for traversing the state with in-memory
 	// state mutations, specifically txIndex != 0.
-	id := trie.StorageTrieID(root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
-	tr, err := trie.NewStateTrie(id, statedb.Database().TrieDB())
-	if err != nil {
-		return StorageRangeResult{}, err
-	}
-	trieIt, err := tr.NodeIterator(start)
-	if err != nil {
-		return StorageRangeResult{}, err
-	}
-	it := trie.NewIterator(trieIt)
 	result := StorageRangeResult{Storage: storageMap{}}
-	for i := 0; i < maxResult && it.Next(); i++ {
-		_, content, _, err := rlp.Split(it.Value)
+	for i := 0; i < maxResult && storageIt.Next(); i++ {
+		_, content, _, err := rlp.Split(storageIt.Slot())
 		if err != nil {
 			return StorageRangeResult{}, err
 		}
 		e := storageEntry{Value: common.BytesToHash(content)}
-		if preimage := tr.GetKey(it.Key); preimage != nil {
-			preimage := common.BytesToHash(preimage)
+		if preimage, err := storageIt.Key(); err == nil {
 			e.Key = &preimage
 		}
-		result.Storage[common.BytesToHash(it.Key)] = e
+		result.Storage[storageIt.Hash()] = e
 	}
 	// Add the 'next key' so clients can continue downloading.
-	if it.Next() {
-		next := common.BytesToHash(it.Key)
+	if storageIt.Next() {
+		next := storageIt.Hash()
 		result.NextKey = &next
 	}
 	return result, nil

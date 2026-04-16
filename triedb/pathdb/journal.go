@@ -50,7 +50,11 @@ var (
 // - Version 1: storage.Incomplete field is removed
 // - Version 2: add post-modification state values
 // - Version 3: a flag has been added to indicate whether the storage slot key is the raw key or a hash
-const journalVersion uint64 = 3
+// - Version 4: bintrie flat-state per-stem layout. The journalGenerator
+//              struct gains an IsBintrie flag (rlp:"optional", defaults to
+//              false) so the loader can discard journals from a mismatched
+//              scheme and trigger a full flat-state regeneration.
+const journalVersion uint64 = 4
 
 // loadJournal tries to parse the layer journal from the disk.
 func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
@@ -119,10 +123,27 @@ type journalGenerator struct {
 	Accounts uint64
 	Slots    uint64
 	Storage  uint64
+
+	// IsBintrie distinguishes a bintrie generator's progress marker from a
+	// merkle one. The two markers have incompatible semantics (single-tier
+	// 32-byte stem||offset vs. two-tier accountHash+storageHash) and the
+	// loader discards the journal whenever this flag does not match the
+	// database's mode, forcing a full regeneration.
+	//
+	// Marshalled with rlp:"optional" so older v3 journals (which never
+	// wrote this field) decode cleanly to false — the merkle default.
+	IsBintrie bool `rlp:"optional"`
 }
 
 // loadGenerator loads the state generation progress marker from the database.
-func loadGenerator(db ethdb.KeyValueReader, hash nodeHasher) (*journalGenerator, common.Hash, error) {
+//
+// isBintrie indicates the database's active scheme. A persisted generator
+// from the *other* scheme is discarded outright (and a fresh marker is
+// returned) because the marker shapes are mutually unintelligible: a
+// merkle marker is two-tier accountHash+storageHash, while a bintrie
+// marker is a single 32-byte stem||offset key. Resuming with the wrong
+// shape would either skip large stretches of the trie or revisit them.
+func loadGenerator(db ethdb.KeyValueReader, hash nodeHasher, isBintrie bool) (*journalGenerator, common.Hash, error) {
 	trieRoot, err := hash(rawdb.ReadAccountTrieNode(db, nil))
 	if err != nil {
 		return nil, common.Hash{}, err
@@ -137,6 +158,15 @@ func loadGenerator(db ethdb.KeyValueReader, hash nodeHasher) (*journalGenerator,
 	var generator journalGenerator
 	if err := rlp.DecodeBytes(blob, &generator); err != nil {
 		log.Info("State snapshot generator is not compatible")
+		return nil, trieRoot, nil
+	}
+	// Scheme mismatch — drop the journal and force a full regeneration.
+	// IsBintrie defaults to false on legacy v3 entries (the field is
+	// rlp:"optional"), which is exactly the right answer for a merkle
+	// database opened against an old journal.
+	if generator.IsBintrie != isBintrie {
+		log.Info("State snapshot generator is for a different scheme, discarding",
+			"journalIsBintrie", generator.IsBintrie, "dbIsBintrie", isBintrie)
 		return nil, trieRoot, nil
 	}
 	// The state snapshot is inconsistent with the trie data and must

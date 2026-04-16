@@ -41,6 +41,7 @@ const (
 )
 
 // Database key scheme for states.
+// nolint:unused
 var (
 	accountKeySize            = int64(len(rawdb.SnapshotAccountPrefix) + common.HashLength)
 	storageKeySize            = int64(len(rawdb.SnapshotStoragePrefix) + common.HashLength*2)
@@ -130,11 +131,15 @@ func calSizeStats(update *stateUpdate) (SizeStats, error) {
 		BlockNumber: update.blockNumber,
 		StateRoot:   update.root,
 	}
+	accounts, accountOrigin, storages, storageOrigin, err := update.encodeMerkle()
+	if err != nil {
+		return SizeStats{}, err
+	}
 
 	// Measure the account changes
-	for addr, oldValue := range update.accountsOrigin {
+	for addr, oldValue := range accountOrigin {
 		addrHash := crypto.Keccak256Hash(addr.Bytes())
-		newValue, exists := update.accounts[addrHash]
+		newValue, exists := accounts[addrHash]
 		if !exists {
 			return SizeStats{}, fmt.Errorf("account %x not found", addr)
 		}
@@ -156,9 +161,9 @@ func calSizeStats(update *stateUpdate) (SizeStats, error) {
 	}
 
 	// Measure storage changes
-	for addr, slots := range update.storagesOrigin {
+	for addr, slots := range storageOrigin {
 		addrHash := crypto.Keccak256Hash(addr.Bytes())
-		subset, exists := update.storages[addrHash]
+		subset, exists := storages[addrHash]
 		if !exists {
 			return SizeStats{}, fmt.Errorf("storage %x not found", addr)
 		}

@@ -324,7 +324,10 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 // makeEnv creates a new environment for the sealing block.
 func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase common.Address, witness bool) (*environment, error) {
 	// Retrieve the parent state to execute on top.
-	state, err := miner.chain.StateAt(parent.Root)
+	state, err := miner.chain.StateWithConfig(parent.Root, core.StateConfig{
+		Prefetch:     true,
+		PrefetchRead: witness,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -334,8 +337,8 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 		if err != nil {
 			return nil, err
 		}
+		state.TraceWitness(bundle)
 	}
-	state.StartPrefetcher("miner", bundle)
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
 		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),

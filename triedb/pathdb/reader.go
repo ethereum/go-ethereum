@@ -51,6 +51,26 @@ func (loc nodeLoc) string() string {
 	return fmt.Sprintf("loc: %s, depth: %d", loc.loc, loc.depth)
 }
 
+// RawStateReader is an extension of database.StateReader that exposes raw
+// byte access to flat-state entries without applying any scheme-specific
+// decoding (slim-RLP for merkle, no-op for bintrie). The bintrie state
+// reader in core/state uses it to fetch the BasicData and CodeHash leaves
+// for an account separately and reconstruct a slim account locally.
+//
+// The merkle pathdb reader implements this interface trivially because
+// it already has AccountRLP. Callers should type-assert before using it
+// rather than relying on the database.StateReader interface unconditionally.
+type RawStateReader interface {
+	database.StateReader
+
+	// AccountRLP returns the raw flat-state entry stored under the given
+	// lookup key. Semantics depend on the active codec:
+	//   - merkle: slim-RLP-encoded account bytes
+	//   - bintrie: 32-byte leaf value at the (stem || offset) tuple
+	// Returns nil if the entry is not present.
+	AccountRLP(hash common.Hash) ([]byte, error)
+}
+
 // reader implements the database.NodeReader interface, providing the functionalities to
 // retrieve trie nodes by wrapping the internal state layer.
 type reader struct {
@@ -260,7 +280,7 @@ func (r *HistoricalStateReader) AccountRLP(address common.Address) ([]byte, erro
 	// and try to define a low granularity lock if the current approach doesn't
 	// work later.
 	dl := r.db.tree.bottom()
-	hash := crypto.Keccak256Hash(address.Bytes())
+	hash := r.db.flatCodec.AccountKey(address)
 	latest, err := dl.account(hash, 0)
 	if err != nil {
 		return nil, err
@@ -310,8 +330,7 @@ func (r *HistoricalStateReader) Storage(address common.Address, key common.Hash)
 	// and try to define a low granularity lock if the current approach doesn't
 	// work later.
 	dl := r.db.tree.bottom()
-	addrHash := crypto.Keccak256Hash(address.Bytes())
-	keyHash := crypto.Keccak256Hash(key.Bytes())
+	addrHash, keyHash := r.db.flatCodec.StorageKey(address, key)
 	latest, err := dl.storage(addrHash, keyHash, 0)
 	if err != nil {
 		return nil, err

@@ -93,6 +93,7 @@ type generator struct {
 	running bool // Flag indicating whether the background generation is running
 
 	db    ethdb.KeyValueStore // Key-value store containing the snapshot data
+	codec flatStateCodec      // Flat-state codec for key derivation, persistence, iterators
 	stats *generatorStats     // Generation statistics used throughout the entire life cycle
 	abort chan chan struct{}  // Notification channel to abort generating the snapshot in this layer
 	done  chan struct{}       // Notification channel when generation is done
@@ -109,7 +110,11 @@ type generator struct {
 // progress indicates the starting position for resuming snapshot generation.
 // It must be provided even if generation is not allowed; otherwise, uncovered
 // states may be exposed for serving.
-func newGenerator(db ethdb.KeyValueStore, noBuild bool, progress []byte, stats *generatorStats) *generator {
+//
+// codec is the flat-state codec used for marker handling, prefix selection,
+// persistence, and iterator construction. It must match the codec configured
+// on the owning Database.
+func newGenerator(db ethdb.KeyValueStore, codec flatStateCodec, noBuild bool, progress []byte, stats *generatorStats) *generator {
 	if stats == nil {
 		stats = &generatorStats{start: time.Now()}
 	}
@@ -117,6 +122,7 @@ func newGenerator(db ethdb.KeyValueStore, noBuild bool, progress []byte, stats *
 		noBuild:  noBuild,
 		progress: progress,
 		db:       db,
+		codec:    codec,
 		stats:    stats,
 		abort:    make(chan chan struct{}),
 		done:     make(chan struct{}),
@@ -124,6 +130,13 @@ func newGenerator(db ethdb.KeyValueStore, noBuild bool, progress []byte, stats *
 }
 
 // run starts the state snapshot generation in the background.
+//
+// The dispatch on codec type chooses between the merkle two-tier
+// account/storage iteration (`generate`) and the bintrie single-tier
+// stem iteration (`generateBintrie`). Both share the same lifecycle
+// (g.running, g.abort, g.done) and the same progress journal format,
+// so the only difference visible to callers of run/stop is which
+// background routine is launched.
 func (g *generator) run(root common.Hash) {
 	if g.noBuild {
 		log.Warn("Snapshot generation is not permitted")
@@ -134,7 +147,11 @@ func (g *generator) run(root common.Hash) {
 		log.Warn("Paused the leftover generation cycle")
 	}
 	g.running = true
-	go g.generate(newGeneratorContext(root, g.progress, g.db))
+	if _, isBintrie := g.codec.(*bintrieFlatCodec); isBintrie {
+		go g.generateBintrie(newBintrieGeneratorContext(root, g.progress, g.db))
+		return
+	}
+	go g.generate(newGeneratorContext(root, g.progress, g.db, g.codec))
 }
 
 // stop terminates the background generation if it's actively running.
@@ -168,15 +185,6 @@ func (g *generator) progressMarker() []byte {
 	return g.progress
 }
 
-// splitMarker is an internal helper which splits the generation progress marker
-// into two parts.
-func splitMarker(marker []byte) ([]byte, []byte) {
-	var accMarker []byte
-	if len(marker) > 0 {
-		accMarker = marker[:common.HashLength]
-	}
-	return accMarker, marker
-}
 
 // generateSnapshot regenerates a brand-new snapshot based on an existing state
 // database and head block asynchronously. The snapshot is returned immediately
@@ -188,7 +196,7 @@ func generateSnapshot(triedb *Database, root common.Hash, noBuild bool) *diskLay
 		genMarker = []byte{} // Initialized but empty!
 	)
 	dl := newDiskLayer(root, 0, triedb, nil, nil, newBuffer(triedb.config.WriteBufferSize, nil, nil, 0), nil)
-	dl.setGenerator(newGenerator(triedb.diskdb, noBuild, genMarker, stats))
+	dl.setGenerator(newGenerator(triedb.diskdb, triedb.flatCodec, noBuild, genMarker, stats))
 
 	if !noBuild {
 		dl.generator.run(root)
@@ -198,13 +206,20 @@ func generateSnapshot(triedb *Database, root common.Hash, noBuild bool) *diskLay
 }
 
 // journalProgress persists the generator stats into the database to resume later.
-func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorStats) {
+//
+// It is a method on generator so it can stamp the journal entry with the
+// active scheme (merkle vs. bintrie). loadGenerator uses that flag to
+// discard journals from a different scheme rather than blindly resuming
+// with an incompatible marker shape.
+func (g *generator) journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorStats) {
 	// Write out the generator marker. Note it's a standalone disk layer generator
 	// which is not mixed with journal. It's ok if the generator is persisted while
 	// journal is not.
+	_, isBintrie := g.codec.(*bintrieFlatCodec)
 	entry := journalGenerator{
-		Done:   marker == nil,
-		Marker: marker,
+		Done:      marker == nil,
+		Marker:    marker,
+		IsBintrie: isBintrie,
 	}
 	if stats != nil {
 		entry.Accounts = stats.accounts
@@ -595,7 +610,7 @@ func (g *generator) checkAndFlush(ctx *generatorContext, current []byte) error {
 		// Persist the progress marker regardless of whether the batch is empty or not.
 		// It may happen that all the flat states in the database are correct, so the
 		// generator indeed makes progress even if there is nothing to commit.
-		journalProgress(ctx.batch, current, g.stats)
+		g.journalProgress(ctx.batch, current, g.stats)
 
 		// Flush out the database writes atomically
 		if err := ctx.batch.Write(); err != nil {
@@ -633,12 +648,12 @@ func (g *generator) generateStorages(ctx *generatorContext, account common.Hash,
 		}(time.Now())
 
 		if delete {
-			rawdb.DeleteStorageSnapshot(ctx.batch, account, common.BytesToHash(key))
+			g.codec.DeleteStorage(ctx.batch, account, common.BytesToHash(key))
 			wipedStorageMeter.Mark(1)
 			return nil
 		}
 		if write {
-			rawdb.WriteStorageSnapshot(ctx.batch, account, common.BytesToHash(key), val)
+			g.codec.WriteStorage(ctx.batch, account, common.BytesToHash(key), val)
 			generatedStorageMeter.Mark(1)
 		} else {
 			recoveredStorageMeter.Mark(1)
@@ -682,7 +697,7 @@ func (g *generator) generateAccounts(ctx *generatorContext, accMarker []byte) er
 
 		start := time.Now()
 		if delete {
-			rawdb.DeleteAccountSnapshot(ctx.batch, account)
+			g.codec.DeleteAccount(ctx.batch, account)
 			wipedAccountMeter.Mark(1)
 			accountWriteCounter.Inc(time.Since(start).Nanoseconds())
 
@@ -708,7 +723,7 @@ func (g *generator) generateAccounts(ctx *generatorContext, accMarker []byte) er
 			} else {
 				data := types.SlimAccountRLP(acc)
 				dataLen = len(data)
-				rawdb.WriteAccountSnapshot(ctx.batch, account, data)
+				g.codec.WriteAccount(ctx.batch, account, data)
 				generatedAccountMeter.Mark(1)
 			}
 			g.stats.storage += common.StorageSize(1 + common.HashLength + dataLen)
@@ -774,7 +789,7 @@ func (g *generator) generate(ctx *generatorContext) {
 	if len(g.progress) == 0 {
 		batch := g.db.NewBatch()
 		rawdb.WriteSnapshotRoot(batch, ctx.root)
-		journalProgress(batch, g.progress, g.stats)
+		g.journalProgress(batch, g.progress, g.stats)
 		if err := batch.Write(); err != nil {
 			log.Crit("Failed to write initialized state marker", "err", err)
 		}
@@ -788,7 +803,7 @@ func (g *generator) generate(ctx *generatorContext) {
 	// processed twice by the generator(they are already processed in the
 	// last run) but it's fine.
 	var (
-		accMarker, _ = splitMarker(g.progress)
+		accMarker, _ = g.codec.SplitMarker(g.progress)
 		abort        chan struct{}
 	)
 	if err := g.generateAccounts(ctx, accMarker); err != nil {
@@ -807,7 +822,7 @@ func (g *generator) generate(ctx *generatorContext) {
 	// Snapshot fully generated, set the marker to nil.
 	// Note even there is nothing to commit, persist the
 	// generator anyway to mark the snapshot is complete.
-	journalProgress(ctx.batch, nil, g.stats)
+	g.journalProgress(ctx.batch, nil, g.stats)
 	if err := ctx.batch.Write(); err != nil {
 		log.Error("Failed to flush batch", "err", err)
 		abort = <-g.abort

@@ -125,10 +125,11 @@ type Database struct {
 	// readOnly is the flag whether the mutation is allowed to be applied.
 	// It will be set automatically when the database is journaled during
 	// the shutdown to reject all following unexpected mutations.
-	readOnly bool       // Flag if database is opened in read only mode
-	waitSync bool       // Flag if database is deactivated due to initial state sync
-	isVerkle bool       // Flag if database is used for verkle tree
-	hasher   nodeHasher // Trie node hasher
+	readOnly  bool           // Flag if database is opened in read only mode
+	waitSync  bool           // Flag if database is deactivated due to initial state sync
+	isVerkle  bool           // Flag if database is used for verkle tree
+	hasher    nodeHasher     // Trie node hasher
+	flatCodec flatStateCodec // Flat-state key derivation, persistence and iteration
 
 	config *Config        // Configuration for database
 	diskdb ethdb.Database // Persistent storage for matured trie nodes
@@ -153,11 +154,12 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	config = config.sanitize()
 
 	db := &Database{
-		readOnly: config.ReadOnly,
-		isVerkle: isVerkle,
-		config:   config,
-		diskdb:   diskdb,
-		hasher:   merkleNodeHasher,
+		readOnly:  config.ReadOnly,
+		isVerkle:  isVerkle,
+		config:    config,
+		diskdb:    diskdb,
+		hasher:    merkleNodeHasher,
+		flatCodec: &merkleFlatCodec{},
 	}
 	// Establish a dedicated database namespace tailored for verkle-specific
 	// data, ensuring the isolation of both verkle and merkle tree data. It's
@@ -167,6 +169,12 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	if isVerkle {
 		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.VerklePrefix))
 		db.hasher = binaryNodeHasher
+		// Wire the bintrie flat-state codec so the disklayer/buffer/generator
+		// all use the per-stem on-disk layout. The codec needs a reader for
+		// the read-modify-write performed by applyWrites; the namespaced
+		// db.diskdb is the right backing store because all bintrie keys
+		// (trie nodes AND stem blobs) live under the verkle prefix.
+		db.flatCodec = newBintrieFlatCodec(db.diskdb)
 	}
 	// Construct the layer tree by resolving the in-disk singleton state
 	// and in-memory layer journal.
@@ -232,7 +240,7 @@ func (db *Database) setHistoryIndexer() {
 func (db *Database) setStateGenerator() error {
 	// Load the state snapshot generation progress marker to prevent access
 	// to uncovered states.
-	generator, root, err := loadGenerator(db.diskdb, db.hasher)
+	generator, root, err := loadGenerator(db.diskdb, db.hasher, db.isVerkle)
 	if err != nil {
 		return err
 	}
@@ -264,13 +272,18 @@ func (db *Database) setStateGenerator() error {
 	// Disable the background snapshot building in these circumstances:
 	// - the database is opened in read only mode
 	// - the snapshot build is explicitly disabled
-	// - the database is opened in verkle tree mode
-	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isVerkle
+	//
+	// Note: bintrie/verkle mode is no longer excluded here. The bintrie
+	// codec ships its own snapshot generator (see generate_bintrie.go) so
+	// the unified flat-state path can populate stem blobs from an existing
+	// trie. Generator dispatch in newGenerator/generator.run picks the
+	// right routine based on the active flatStateCodec.
+	noBuild := db.readOnly || db.config.SnapshotNoBuild
 
 	// Construct the generator and link it to the disk layer, ensuring that the
 	// generation progress is resolved to prevent accessing uncovered states
 	// regardless of whether background state snapshot generation is allowed.
-	dl.setGenerator(newGenerator(db.diskdb, noBuild, generator.Marker, stats))
+	dl.setGenerator(newGenerator(db.diskdb, db.flatCodec, noBuild, generator.Marker, stats))
 
 	// Short circuit if the background generation is not permitted
 	if noBuild || db.waitSync {
@@ -408,7 +421,9 @@ func (db *Database) Enable(root common.Hash) error {
 
 	// Re-construct a new disk layer backed by persistent state
 	// and schedule the state snapshot generation if it's permitted.
-	db.tree.init(generateSnapshot(db, root, db.isVerkle || db.config.SnapshotNoBuild))
+	// Bintrie/verkle is no longer treated as "noBuild" — the bintrie
+	// generator (Commit 9) handles regeneration from the unified trie.
+	db.tree.init(generateSnapshot(db, root, db.config.SnapshotNoBuild))
 
 	// After snap sync, the state of the database may have changed completely.
 	// To ensure the history indexer always matches the current state, we must:
