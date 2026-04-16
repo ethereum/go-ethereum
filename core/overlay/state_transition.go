@@ -86,8 +86,14 @@ func LoadTransitionState(db ethdb.KeyValueReader, root common.Hash, isVerkle boo
 		// Decode transition state
 		err := dec.Decode(&newts)
 		if err != nil {
-			log.Error("failed to decode transition state", "err", err)
-			return nil
+			log.Error("failed to decode transition state", "root", root, "err", err)
+			// Corrupted transition state data must not silently restart
+			// the transition via the fallback path. Return an ended state
+			// rather than nil to avoid triggering the fresh-start fallback,
+			// which would incorrectly mark the transition as complete when
+			// the on-disk data was merely corrupted.
+			ts = &TransitionState{Ended: false, Started: false}
+			return ts
 		}
 		ts = &newts
 	}
