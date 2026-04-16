@@ -1,0 +1,38 @@
+name: Windows Runner Smoke Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Smoke test
+    runs-on: [self-hosted, windows, x64]
+    env:
+      GETH_MINGW: 'C:\msys64\mingw64'
+      GETH_CC: 'C:\msys64\mingw64\bin\gcc.exe'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: Show tool versions
+        shell: cmd
+        run: |
+          echo === git ===
+          git --version
+          echo === go ===
+          go version
+          echo === gcc ===
+          "%GETH_CC%" --version
+
+      - name: Build (amd64)
+        shell: cmd
+        run: |
+          set PATH=%GETH_MINGW%\bin;%PATH%
+          go run build/ci.go install -arch amd64 -cc %GETH_CC%
