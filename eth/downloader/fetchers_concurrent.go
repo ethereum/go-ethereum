@@ -333,7 +333,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			if peer := d.peers.Peer(res.Req.Peer); peer != nil {
 				// Deliver the received chunk of data and check chain validity
 				accepted, err := queue.deliver(peer, res)
-				if errors.Is(err, errInvalidChain) {
+				if errors.Is(err, errInvalidChain) || errors.Is(err, errInvalidBody) || errors.Is(err, errInvalidReceipt) {
 					return err
 				}
 				// Unless a peer delivered something completely else than requested (usually

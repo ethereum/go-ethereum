@@ -671,10 +671,10 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	}
 	// Assemble each of the results with their headers and retrieved data parts
 	var (
-		accepted int
-		failure  error
-		i        int
-		hashes   []common.Hash
+		accepted   int
+		failure    error
+		i          int
+		foundStale bool
 	)
 	for _, header := range request.Headers {
 		// Short circuit assembly if no more fetch results are found
@@ -686,42 +686,41 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 			failure = err
 			break
 		}
-		hashes = append(hashes, header.Hash())
 		i++
 	}
 
 	for _, header := range request.Headers[:i] {
 		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil && !stale {
 			reconstruct(accepted, res)
+			accepted++
 		} else {
-			// else: between here and above, some other peer filled this result,
+			// Between here and above, some other peer filled this result,
 			// or it was indeed a no-op. This should not happen, but if it does it's
 			// not something to panic about
 			log.Error("Delivery stale", "stale", stale, "number", header.Number.Uint64(), "err", err)
-			failure = errStaleDelivery
+			foundStale = true
 		}
 		// Clean up a successful fetch
-		delete(taskPool, hashes[accepted])
-		accepted++
+		delete(taskPool, header.Hash())
 	}
 	resDropMeter.Mark(int64(results - accepted))
 
 	// Return all failed or missing fetches to the queue
-	for _, header := range request.Headers[accepted:] {
+	for _, header := range request.Headers[i:] {
 		taskQueue.Push(header, -int64(header.Number.Uint64()))
 	}
 	// Wake up Results
 	if accepted > 0 {
 		q.active.Signal()
 	}
-	if failure == nil {
-		return accepted, nil
+	if failure != nil {
+		return accepted, failure
 	}
 	// If none of the data was good, it's a stale delivery
-	if accepted > 0 {
-		return accepted, fmt.Errorf("partial failure: %v", failure)
+	if foundStale {
+		return accepted, errStaleDelivery
 	}
-	return accepted, fmt.Errorf("%w: %v", failure, errStaleDelivery)
+	return accepted, nil
 }
 
 // Prepare configures the result cache to allow accepting and caching inbound
