@@ -281,15 +281,18 @@ func ServiceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 		// Retrieve the requested block's receipts
 		results := chain.GetReceiptsRLP(hash)
 		if results == nil {
-			continue // Can't retrieve the receipts, so we just skip this block.
+			receipts.Append(nil)
+			continue
 		}
 		body := chain.GetBodyRLP(hash)
 		if body == nil {
-			continue // The block body is missing, we also have to skip.
+			receipts.Append(nil)
+			continue
 		}
 		results, _, err := blockReceiptsToNetwork(results, body, receiptQueryParams{})
 		if err != nil {
 			log.Error("Error in block receipts conversion", "hash", hash, "err", err)
+			receipts.Append(nil)
 			continue
 		}
 		receipts.AppendRaw(results)
@@ -313,11 +316,13 @@ func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest,
 		}
 		results := chain.GetReceiptsRLP(hash)
 		if results == nil {
-			continue // Can't retrieve the receipts, so we just skip this block.
+			receipts.Append(nil)
+			continue
 		}
 		body := chain.GetBodyRLP(hash)
 		if body == nil {
-			continue // The block body is missing, we also have to skip.
+			receipts.Append(nil)
+			continue
 		}
 		q := receiptQueryParams{sizeLimit: uint64(maxPacketSize - bytes)}
 		if i == 0 {
@@ -326,6 +331,7 @@ func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest,
 		results, incomplete, err := blockReceiptsToNetwork(results, body, q)
 		if err != nil {
 			log.Error("Error in block receipts conversion", "hash", hash, "err", err)
+			receipts.Append(nil)
 			continue
 		}
 		if results == nil {
