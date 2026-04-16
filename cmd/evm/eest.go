@@ -18,6 +18,11 @@ package main
 
 import "regexp"
 
+var (
+	eestTestMetadataPattern = `tests\/([^\/]+)\/([^\/]+)\/([^:]+)::([^[]+)\[fork_([^\-\]]+)-[^-]+-(.+)\]`
+	eestTestMetadataRegexp  = regexp.MustCompile(eestTestMetadataPattern)
+)
+
 // testMetadata provides more granular access to the test information encoded
 // within its filename by the execution spec test (EEST).
 type testMetadata struct {
@@ -31,11 +36,7 @@ type testMetadata struct {
 // parseTestMetadata reads a test name and parses out more specific information
 // about the test.
 func parseTestMetadata(s string) *testMetadata {
-	var (
-		pattern = `tests\/([^\/]+)\/([^\/]+)\/([^:]+)::([^[]+)\[fork_([^-\]]+)-[^-]+-(.+)\]`
-		re      = regexp.MustCompile(pattern)
-	)
-	match := re.FindStringSubmatch(s)
+	match := eestTestMetadataRegexp.FindStringSubmatch(s)
 	if len(match) == 0 {
 		return nil
 	}
