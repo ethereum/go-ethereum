@@ -662,22 +662,8 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		return fmt.Errorf("got GetLogs(common.Hash{}) == %v, want GetLogs(common.Hash{}) == %v",
 			state.GetLogs(common.Hash{}, 0, common.Hash{}, 0), checkstate.GetLogs(common.Hash{}, 0, common.Hash{}, 0))
 	}
-	if !maps.Equal(state.journal.dirties, checkstate.journal.dirties) {
-		getKeys := func(dirty map[common.Address]int) string {
-			var keys []common.Address
-			out := new(strings.Builder)
-			for key := range dirty {
-				keys = append(keys, key)
-			}
-			slices.SortFunc(keys, common.Address.Cmp)
-			for i, key := range keys {
-				fmt.Fprintf(out, "  %d. %v\n", i, key)
-			}
-			return out.String()
-		}
-		have := getKeys(state.journal.dirties)
-		want := getKeys(checkstate.journal.dirties)
-		return fmt.Errorf("dirty-journal set mismatch.\nhave:\n%v\nwant:\n%v\n", have, want)
+	if !maps.Equal(state.journal.mutationSet(), checkstate.journal.mutationSet()) {
+		return fmt.Errorf("journal mutation set mismatch.\nhave:\n%v\nwant:\n%v\n", state.journal.mutationSet(), checkstate.journal.mutationSet())
 	}
 	return nil
 }
@@ -691,12 +677,47 @@ func TestTouchDelete(t *testing.T) {
 	snapshot := s.state.Snapshot()
 	s.state.AddBalance(common.Address{}, new(uint256.Int), tracing.BalanceChangeUnspecified)
 
-	if len(s.state.journal.dirties) != 1 {
-		t.Fatal("expected one dirty state object")
+	if len(s.state.journal.mutationSet()) != 1 {
+		t.Fatal("expected one mutated state object")
 	}
 	s.state.RevertToSnapshot(snapshot)
-	if len(s.state.journal.dirties) != 0 {
-		t.Fatal("expected no dirty state object")
+	if len(s.state.journal.mutationSet()) != 0 {
+		t.Fatal("expected no journal mutations")
+	}
+}
+
+func TestJournalMutationTracking(t *testing.T) {
+	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	addr := common.HexToAddress("0x01")
+	key := common.HexToHash("0x02")
+
+	if got := state.journal.mutation(addr); got != 0 {
+		t.Fatalf("unexpected initial mutation set: %v", got)
+	}
+	snapshot := state.Snapshot()
+
+	state.SetBalance(addr, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+	state.SetNonce(addr, 2, tracing.NonceChangeUnspecified)
+	state.SetCode(addr, []byte{0x1}, tracing.CodeChangeUnspecified)
+	state.SetState(addr, key, common.Hash{0x3})
+
+	want := journalMutationKindCreate.mask() |
+		journalMutationKindBalance.mask() |
+		journalMutationKindNonce.mask() |
+		journalMutationKindCode.mask() |
+		journalMutationKindStorage.mask()
+	if got := state.journal.mutation(addr); got != want {
+		t.Fatalf("mutation set mismatch: have %08b, want %08b", got, want)
+	}
+
+	copy := state.Copy()
+	if got := copy.journal.mutation(addr); got != want {
+		t.Fatalf("copy mutation set mismatch: have %08b, want %08b", got, want)
+	}
+
+	state.RevertToSnapshot(snapshot)
+	if got := state.journal.mutation(addr); got != 0 {
+		t.Fatalf("unexpected mutation set after revert: %08b", got)
 	}
 }
 

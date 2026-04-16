@@ -18,7 +18,6 @@ package state
 
 import (
 	"fmt"
-	"maps"
 	"slices"
 	"sort"
 
@@ -32,15 +31,116 @@ type revision struct {
 	journalIndex int
 }
 
+// journalMutation represents a set of mutations applied to a certain account.
+type journalMutation uint8
+
+// journalMutationKind indicates the type of account mutation.
+type journalMutationKind uint8
+
+const (
+	journalMutationKindTouch journalMutationKind = iota + 1
+	journalMutationKindCreate
+	journalMutationKindSelfDestruct
+	journalMutationKindBalance
+	journalMutationKindNonce
+	journalMutationKindCode
+	journalMutationKindStorage
+)
+
+func (k journalMutationKind) mask() journalMutation {
+	if k == 0 {
+		return 0
+	}
+	return journalMutation(1) << (k - 1)
+}
+
+type journalMutationCounts struct {
+	touch        int
+	create       int
+	selfDestruct int
+	balance      int
+	nonce        int
+	code         int
+	storage      int
+}
+
+type journalMutationState struct {
+	mask   journalMutation
+	counts journalMutationCounts
+}
+
+func (s *journalMutationState) add(kind journalMutationKind) {
+	s.counts.add(kind)
+	s.mask |= kind.mask()
+}
+
+func (s *journalMutationState) remove(kind journalMutationKind) bool {
+	if s.counts.remove(kind) {
+		s.mask &^= kind.mask()
+	}
+	return s.mask == 0
+}
+
+func (s journalMutationState) copy() *journalMutationState {
+	cpy := s
+	return &cpy
+}
+
+func (c *journalMutationCounts) add(kind journalMutationKind) {
+	switch kind {
+	case journalMutationKindTouch:
+		c.touch++
+	case journalMutationKindCreate:
+		c.create++
+	case journalMutationKindSelfDestruct:
+		c.selfDestruct++
+	case journalMutationKindBalance:
+		c.balance++
+	case journalMutationKindNonce:
+		c.nonce++
+	case journalMutationKindCode:
+		c.code++
+	case journalMutationKindStorage:
+		c.storage++
+	}
+}
+
+func (c *journalMutationCounts) remove(kind journalMutationKind) bool {
+	switch kind {
+	case journalMutationKindTouch:
+		c.touch--
+		return c.touch == 0
+	case journalMutationKindCreate:
+		c.create--
+		return c.create == 0
+	case journalMutationKindSelfDestruct:
+		c.selfDestruct--
+		return c.selfDestruct == 0
+	case journalMutationKindBalance:
+		c.balance--
+		return c.balance == 0
+	case journalMutationKindNonce:
+		c.nonce--
+		return c.nonce == 0
+	case journalMutationKindCode:
+		c.code--
+		return c.code == 0
+	case journalMutationKindStorage:
+		c.storage--
+		return c.storage == 0
+	}
+	return false
+}
+
 // journalEntry is a modification entry in the state change journal that can be
 // reverted on demand.
 type journalEntry interface {
 	// revert undoes the changes introduced by this journal entry.
 	revert(*StateDB)
 
-	// dirtied returns the Ethereum address modified by this journal entry.
-	// indicates false if no address was changed.
-	dirtied() (common.Address, bool)
+	// mutation returns the account mutation introduced by this entry.
+	// It indicates false if no tracked account mutation was made.
+	mutation() (common.Address, journalMutationKind, bool)
 
 	// copy returns a deep-copied journal entry.
 	copy() journalEntry
@@ -50,8 +150,8 @@ type journalEntry interface {
 // commit. These are tracked to be able to be reverted in the case of an execution
 // exception or request for reversal.
 type journal struct {
-	entries []journalEntry         // Current changes tracked by the journal
-	dirties map[common.Address]int // Dirty accounts and the number of changes
+	entries   []journalEntry                           // Current changes tracked by the journal
+	mutations map[common.Address]*journalMutationState // Account mutation state accumulated across entries
 
 	validRevisions []revision
 	nextRevisionId int
@@ -60,7 +160,7 @@ type journal struct {
 // newJournal creates a new initialized journal.
 func newJournal() *journal {
 	return &journal{
-		dirties: make(map[common.Address]int),
+		mutations: make(map[common.Address]*journalMutationState),
 	}
 }
 
@@ -70,7 +170,7 @@ func newJournal() *journal {
 func (j *journal) reset() {
 	j.entries = j.entries[:0]
 	j.validRevisions = j.validRevisions[:0]
-	clear(j.dirties)
+	clear(j.mutations)
 	j.nextRevisionId = 0
 }
 
@@ -101,33 +201,70 @@ func (j *journal) revertToSnapshot(revid int, s *StateDB) {
 // append inserts a new modification entry to the end of the change journal.
 func (j *journal) append(entry journalEntry) {
 	j.entries = append(j.entries, entry)
-	if addr, dirty := entry.dirtied(); dirty {
-		j.dirties[addr]++
+	if addr, kind, dirty := entry.mutation(); dirty {
+		state := j.mutations[addr]
+		if state == nil {
+			state = new(journalMutationState)
+			j.mutations[addr] = state
+		}
+		state.add(kind)
 	}
 }
 
 // revert undoes a batch of journalled modifications along with any reverted
-// dirty handling too.
+// mutation tracking too.
 func (j *journal) revert(statedb *StateDB, snapshot int) {
 	for i := len(j.entries) - 1; i >= snapshot; i-- {
 		// Undo the changes made by the operation
 		j.entries[i].revert(statedb)
 
-		// Drop any dirty tracking induced by the change
-		if addr, dirty := j.entries[i].dirtied(); dirty {
-			if j.dirties[addr]--; j.dirties[addr] == 0 {
-				delete(j.dirties, addr)
+		// Drop any mutation tracking induced by the change.
+		if addr, kind, dirty := j.entries[i].mutation(); dirty {
+			state := j.mutations[addr]
+			if state == nil {
+				panic(fmt.Errorf("journal mutation tracking missing for %x", addr[:]))
+			}
+			if state.remove(kind) {
+				delete(j.mutations, addr)
 			}
 		}
 	}
 	j.entries = j.entries[:snapshot]
 }
 
-// dirty explicitly sets an address to dirty, even if the change entries would
-// otherwise suggest it as clean. This method is an ugly hack to handle the RIPEMD
-// precompile consensus exception.
-func (j *journal) dirty(addr common.Address) {
-	j.dirties[addr]++
+// ripemdMagic explicitly keeps RIPEMD160 in the mutation set with a touch change.
+//
+// Ethereum Mainnet contains an old empty-account touch/revert quirk for address
+// 0x03. If we only relied on the journal entry above, the revert path would
+// remove the account from the mutation set together with the touch.
+//
+// Keep an explicit touch marker so tx finalisation still sees RIPEMD160
+// on the mutation pass when replaying that historical case.
+func (j *journal) ripemdMagic() {
+	state := j.mutations[ripemd]
+	if state == nil {
+		state = new(journalMutationState)
+		j.mutations[ripemd] = state
+	}
+	state.add(journalMutationKindTouch)
+}
+
+func (j *journal) mutation(addr common.Address) journalMutation {
+	if state := j.mutations[addr]; state != nil {
+		return state.mask
+	}
+	return 0
+}
+
+func (j *journal) mutationSet() map[common.Address]journalMutation {
+	if j.mutations == nil {
+		return nil
+	}
+	out := make(map[common.Address]journalMutation, len(j.mutations))
+	for addr, state := range j.mutations {
+		out[addr] = state.mask
+	}
+	return out
 }
 
 // length returns the current number of entries in the journal.
@@ -143,10 +280,21 @@ func (j *journal) copy() *journal {
 	}
 	return &journal{
 		entries:        entries,
-		dirties:        maps.Clone(j.dirties),
+		mutations:      copyMutationStates(j.mutations),
 		validRevisions: slices.Clone(j.validRevisions),
 		nextRevisionId: j.nextRevisionId,
 	}
+}
+
+func copyMutationStates(src map[common.Address]*journalMutationState) map[common.Address]*journalMutationState {
+	if src == nil {
+		return nil
+	}
+	dst := make(map[common.Address]*journalMutationState, len(src))
+	for addr, state := range src {
+		dst[addr] = state.copy()
+	}
+	return dst
 }
 
 func (j *journal) logChange(txHash common.Hash) {
@@ -212,9 +360,18 @@ func (j *journal) touchChange(address common.Address) {
 		account: address,
 	})
 	if address == ripemd {
-		// Explicitly put it in the dirty-cache, which is otherwise generated from
-		// flattened journals.
-		j.dirty(address)
+		// Preserve the historical RIPEMD160 precompile consensus exception.
+		//
+		// Mainnet contains an old empty-account touch/revert quirk for address
+		// 0x03. If we only relied on the journal entry above, the revert path
+		// would remove the account from the dirty set together with the touch.
+		// Keep an explicit dirty marker so tx finalisation still sees the
+		// account on the dirty pass when replaying that historical case.
+		//
+		// This does not force deletion by itself: Finalise will still delete the
+		// account only if the state object is present at tx end and qualifies for
+		// deletion there.
+		j.ripemdMagic()
 	}
 }
 
@@ -295,8 +452,8 @@ func (ch createObjectChange) revert(s *StateDB) {
 	delete(s.stateObjects, ch.account)
 }
 
-func (ch createObjectChange) dirtied() (common.Address, bool) {
-	return ch.account, true
+func (ch createObjectChange) mutation() (common.Address, journalMutationKind, bool) {
+	return ch.account, journalMutationKindCreate, true
 }
 
 func (ch createObjectChange) copy() journalEntry {
@@ -309,8 +466,8 @@ func (ch createContractChange) revert(s *StateDB) {
 	s.getStateObject(ch.account).newContract = false
 }
 
-func (ch createContractChange) dirtied() (common.Address, bool) {
-	return common.Address{}, false
+func (ch createContractChange) mutation() (common.Address, journalMutationKind, bool) {
+	return common.Address{}, 0, false
 }
 
 func (ch createContractChange) copy() journalEntry {
@@ -326,8 +483,8 @@ func (ch selfDestructChange) revert(s *StateDB) {
 	}
 }
 
-func (ch selfDestructChange) dirtied() (common.Address, bool) {
-	return ch.account, true
+func (ch selfDestructChange) mutation() (common.Address, journalMutationKind, bool) {
+	return ch.account, journalMutationKindSelfDestruct, true
 }
 
 func (ch selfDestructChange) copy() journalEntry {
@@ -341,8 +498,8 @@ var ripemd = common.HexToAddress("0000000000000000000000000000000000000003")
 func (ch touchChange) revert(s *StateDB) {
 }
 
-func (ch touchChange) dirtied() (common.Address, bool) {
-	return ch.account, true
+func (ch touchChange) mutation() (common.Address, journalMutationKind, bool) {
+	return ch.account, journalMutationKindTouch, true
 }
 
 func (ch touchChange) copy() journalEntry {
@@ -355,8 +512,8 @@ func (ch balanceChange) revert(s *StateDB) {
 	s.getStateObject(ch.account).setBalance(ch.prev)
 }
 
-func (ch balanceChange) dirtied() (common.Address, bool) {
-	return ch.account, true
+func (ch balanceChange) mutation() (common.Address, journalMutationKind, bool) {
+	return ch.account, journalMutationKindBalance, true
 }
 
 func (ch balanceChange) copy() journalEntry {
@@ -370,8 +527,8 @@ func (ch nonceChange) revert(s *StateDB) {
 	s.getStateObject(ch.account).setNonce(ch.prev)
 }
 
-func (ch nonceChange) dirtied() (common.Address, bool) {
-	return ch.account, true
+func (ch nonceChange) mutation() (common.Address, journalMutationKind, bool) {
+	return ch.account, journalMutationKindNonce, true
 }
 
 func (ch nonceChange) copy() journalEntry {
@@ -385,8 +542,8 @@ func (ch codeChange) revert(s *StateDB) {
 	s.getStateObject(ch.account).setCode(crypto.Keccak256Hash(ch.prevCode), ch.prevCode)
 }
 
-func (ch codeChange) dirtied() (common.Address, bool) {
-	return ch.account, true
+func (ch codeChange) mutation() (common.Address, journalMutationKind, bool) {
+	return ch.account, journalMutationKindCode, true
 }
 
 func (ch codeChange) copy() journalEntry {
@@ -400,8 +557,8 @@ func (ch storageChange) revert(s *StateDB) {
 	s.getStateObject(ch.account).setState(ch.key, ch.prevvalue, ch.origvalue)
 }
 
-func (ch storageChange) dirtied() (common.Address, bool) {
-	return ch.account, true
+func (ch storageChange) mutation() (common.Address, journalMutationKind, bool) {
+	return ch.account, journalMutationKindStorage, true
 }
 
 func (ch storageChange) copy() journalEntry {
@@ -417,8 +574,8 @@ func (ch transientStorageChange) revert(s *StateDB) {
 	s.setTransientState(ch.account, ch.key, ch.prevalue)
 }
 
-func (ch transientStorageChange) dirtied() (common.Address, bool) {
-	return common.Address{}, false
+func (ch transientStorageChange) mutation() (common.Address, journalMutationKind, bool) {
+	return common.Address{}, 0, false
 }
 
 func (ch transientStorageChange) copy() journalEntry {
@@ -433,8 +590,8 @@ func (ch refundChange) revert(s *StateDB) {
 	s.refund = ch.prev
 }
 
-func (ch refundChange) dirtied() (common.Address, bool) {
-	return common.Address{}, false
+func (ch refundChange) mutation() (common.Address, journalMutationKind, bool) {
+	return common.Address{}, 0, false
 }
 
 func (ch refundChange) copy() journalEntry {
@@ -453,8 +610,8 @@ func (ch addLogChange) revert(s *StateDB) {
 	s.logSize--
 }
 
-func (ch addLogChange) dirtied() (common.Address, bool) {
-	return common.Address{}, false
+func (ch addLogChange) mutation() (common.Address, journalMutationKind, bool) {
+	return common.Address{}, 0, false
 }
 
 func (ch addLogChange) copy() journalEntry {
@@ -476,8 +633,8 @@ func (ch accessListAddAccountChange) revert(s *StateDB) {
 	s.accessList.DeleteAddress(ch.address)
 }
 
-func (ch accessListAddAccountChange) dirtied() (common.Address, bool) {
-	return common.Address{}, false
+func (ch accessListAddAccountChange) mutation() (common.Address, journalMutationKind, bool) {
+	return common.Address{}, 0, false
 }
 
 func (ch accessListAddAccountChange) copy() journalEntry {
@@ -490,8 +647,8 @@ func (ch accessListAddSlotChange) revert(s *StateDB) {
 	s.accessList.DeleteSlot(ch.address, ch.slot)
 }
 
-func (ch accessListAddSlotChange) dirtied() (common.Address, bool) {
-	return common.Address{}, false
+func (ch accessListAddSlotChange) mutation() (common.Address, journalMutationKind, bool) {
+	return common.Address{}, 0, false
 }
 
 func (ch accessListAddSlotChange) copy() journalEntry {

@@ -760,7 +760,7 @@ type removedAccountWithBalance struct {
 // before the Finalise.
 func (s *StateDB) LogsForBurnAccounts() []*types.Log {
 	var list []removedAccountWithBalance
-	for addr := range s.journal.dirties {
+	for addr := range s.journal.mutations {
 		if obj, exist := s.stateObjects[addr]; exist && obj.selfDestructed && !obj.Balance().IsZero() {
 			list = append(list, removedAccountWithBalance{
 				address: obj.address,
@@ -785,16 +785,16 @@ func (s *StateDB) LogsForBurnAccounts() []*types.Log {
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
-	addressesToPrefetch := make([]common.Address, 0, len(s.journal.dirties))
-	for addr := range s.journal.dirties {
+	addressesToPrefetch := make([]common.Address, 0, len(s.journal.mutations))
+	for addr := range s.journal.mutations {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
-			// ripeMD is 'touched' at block 1714175, in tx 0x1237f737031e40bcde4a8b7e717b2d15e3ecadfe49bb1bbc71ee9deb09c6fcf2
-			// That tx goes out of gas, and although the notion of 'touched' does not exist there, the
-			// touch-event will still be recorded in the journal. Since ripeMD is a special snowflake,
-			// it will persist in the journal even though the journal is reverted. In this special circumstance,
-			// it may exist in `s.journal.dirties` but not in `s.stateObjects`.
-			// Thus, we can safely ignore it here
+			// RIPEMD160 (0x03) gets an extra dirty marker for a historical
+			// mainnet consensus exception around empty-account touch/revert
+			// handling. That marker survives journal revert, so the account may
+			// remain in s.journal.mutations even though its state object was rolled
+			// back and no longer exists. In that case there is nothing to
+			// finalise or delete, so ignore it here.
 			continue
 		}
 		if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
