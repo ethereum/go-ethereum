@@ -244,7 +244,7 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.StateAccessList {
 	// that state change hooks will be invoked in deterministic
 	// order when the accounts are deleted below
 	var selfDestructedAddrs []common.Address
-	for addr := range s.inner.journal.dirties {
+	for addr := range s.inner.journal.mutations {
 		obj := s.inner.stateObjects[addr]
 		if obj == nil || !obj.selfDestructed {
 			// Not self-destructed, keep searching.
