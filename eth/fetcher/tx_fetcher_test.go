@@ -2287,53 +2287,51 @@ func TestTransactionForgotten(t *testing.T) {
 	}
 }
 
-// latencyRecorder is a thread-safe recorder for onRequestLatency callbacks.
-type latencyRecorder struct {
+// resultRecorder is a thread-safe recorder for onRequestResult callbacks.
+type resultRecorder struct {
 	mu      sync.Mutex
-	samples []latencySample
+	samples []resultSample
 }
 
-type latencySample struct {
+type resultSample struct {
 	peer    string
 	latency time.Duration
+	timeout bool
 }
 
-func (r *latencyRecorder) record(peer string, latency time.Duration) {
+func (r *resultRecorder) record(peer string, latency time.Duration, timeout bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.samples = append(r.samples, latencySample{peer, latency})
+	r.samples = append(r.samples, resultSample{peer, latency, timeout})
 }
 
-func (r *latencyRecorder) snapshot() []latencySample {
+func (r *resultRecorder) snapshot() []resultSample {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	out := make([]latencySample, len(r.samples))
+	out := make([]resultSample, len(r.samples))
 	copy(out, r.samples)
 	return out
 }
 
-// TestTransactionFetcherRequestLatencyOnDelivery asserts that an in-time
-// direct delivery of a requested batch fires the onRequestLatency callback
-// exactly once with the actual round-trip latency.
-func TestTransactionFetcherRequestLatencyOnDelivery(t *testing.T) {
-	rec := &latencyRecorder{}
+// TestTransactionFetcherRequestResultOnDelivery asserts that an in-time
+// direct delivery fires the onRequestResult callback with timeout=false.
+func TestTransactionFetcherRequestResultOnDelivery(t *testing.T) {
+	rec := &resultRecorder{}
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			f := newTestTxFetcher()
-			f.onRequestLatency = rec.record
+			f.onRequestResult = rec.record
 			return f
 		},
 		steps: []interface{}{
 			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
-			// Wait for the announce-arrival timer; request is dispatched at this point.
 			doWait{time: txArriveTimeout, step: true},
-			// Simulate 200ms round-trip before the response arrives.
 			doWait{time: 200 * time.Millisecond, step: false},
 			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true},
 			doFunc(func() {
 				samples := rec.snapshot()
 				if len(samples) != 1 {
-					t.Fatalf("expected 1 latency sample, got %d (%v)", len(samples), samples)
+					t.Fatalf("expected 1 sample, got %d (%v)", len(samples), samples)
 				}
 				if samples[0].peer != "A" {
 					t.Errorf("peer mismatch: got %q, want A", samples[0].peer)
@@ -2341,28 +2339,28 @@ func TestTransactionFetcherRequestLatencyOnDelivery(t *testing.T) {
 				if samples[0].latency != 200*time.Millisecond {
 					t.Errorf("latency mismatch: got %v, want 200ms", samples[0].latency)
 				}
+				if samples[0].timeout {
+					t.Error("expected timeout=false for delivery")
+				}
 			}),
 		},
 	})
 }
 
-// TestTransactionFetcherRequestLatencyOnTimeout asserts that when a request
-// times out (no reply within txFetchTimeout), onRequestLatency fires once
-// with the timeout value, and a subsequent (late) delivery does not fire
-// a duplicate sample.
-func TestTransactionFetcherRequestLatencyOnTimeout(t *testing.T) {
-	rec := &latencyRecorder{}
+// TestTransactionFetcherRequestResultOnTimeout asserts that a timed-out
+// request fires onRequestResult with timeout=true and the timeout value,
+// and a subsequent (late) delivery does not fire a duplicate sample.
+func TestTransactionFetcherRequestResultOnTimeout(t *testing.T) {
+	rec := &resultRecorder{}
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			f := newTestTxFetcher()
-			f.onRequestLatency = rec.record
+			f.onRequestResult = rec.record
 			return f
 		},
 		steps: []interface{}{
 			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
 			doWait{time: txArriveTimeout, step: true},
-			// Push the clock past the request deadline; the timeout handler
-			// should fire and record a single timeout-valued sample.
 			doWait{time: txFetchTimeout, step: true},
 			doFunc(func() {
 				samples := rec.snapshot()
@@ -2375,13 +2373,14 @@ func TestTransactionFetcherRequestLatencyOnTimeout(t *testing.T) {
 				if samples[0].latency != txFetchTimeout {
 					t.Errorf("latency mismatch: got %v, want %v", samples[0].latency, txFetchTimeout)
 				}
+				if !samples[0].timeout {
+					t.Error("expected timeout=true for timed-out request")
+				}
 			}),
-			// A late reply from the slow peer must not produce a second sample.
 			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true},
 			doFunc(func() {
-				samples := rec.snapshot()
-				if len(samples) != 1 {
-					t.Fatalf("late delivery double-counted latency: got %d samples, want 1", len(samples))
+				if len(rec.snapshot()) != 1 {
+					t.Fatalf("late delivery double-counted: got %d samples, want 1", len(rec.snapshot()))
 				}
 			}),
 		},

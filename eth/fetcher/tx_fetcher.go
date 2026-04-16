@@ -185,7 +185,7 @@ type TxFetcher struct {
 	fetchTxs         func(string, []common.Hash) error        // Retrieves a set of txs from a remote peer
 	dropPeer         func(string)                             // Drops a peer in case of announcement violation
 	onAccepted       func(peer string, hashes []common.Hash)  // Optional: notified with accepted tx hashes per peer
-	onRequestLatency func(peer string, latency time.Duration) // Optional: notified once per completed/timed-out tx request
+	onRequestResult func(peer string, latency time.Duration, timeout bool) // Optional: notified once per completed/timed-out tx request
 
 	step     chan struct{}    // Notification channel when the fetcher loop iterates
 	clock    mclock.Clock     // Monotonic clock or simulated clock for tests
@@ -196,15 +196,15 @@ type TxFetcher struct {
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
 // based on hash announcements.
 // Chain can be nil to disable on-chain checks.
-func NewTxFetcher(chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string), onAccepted func(string, []common.Hash), onRequestLatency func(string, time.Duration)) *TxFetcher {
-	return NewTxFetcherForTests(chain, validateMeta, addTxs, fetchTxs, dropPeer, onAccepted, onRequestLatency, mclock.System{}, time.Now, nil)
+func NewTxFetcher(chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string), onAccepted func(string, []common.Hash), onRequestResult func(string, time.Duration, bool)) *TxFetcher {
+	return NewTxFetcherForTests(chain, validateMeta, addTxs, fetchTxs, dropPeer, onAccepted, onRequestResult, mclock.System{}, time.Now, nil)
 }
 
 // NewTxFetcherForTests is a testing method to mock out the realtime clock with
 // a simulated version and the internal randomness with a deterministic one.
 // Chain can be nil to disable on-chain checks.
 func NewTxFetcherForTests(
-	chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string), onAccepted func(string, []common.Hash), onRequestLatency func(string, time.Duration),
+	chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string), onAccepted func(string, []common.Hash), onRequestResult func(string, time.Duration, bool),
 	clock mclock.Clock, realTime func() time.Time, rand *mrand.Rand) *TxFetcher {
 	return &TxFetcher{
 		notify:           make(chan *txAnnounce),
@@ -227,7 +227,7 @@ func NewTxFetcherForTests(
 		fetchTxs:         fetchTxs,
 		dropPeer:         dropPeer,
 		onAccepted:       onAccepted,
-		onRequestLatency: onRequestLatency,
+		onRequestResult: onRequestResult,
 		clock:            clock,
 		realTime:         realTime,
 		rand:             rand,
@@ -680,8 +680,8 @@ func (f *TxFetcher) loop() {
 					// itself, so a peer that times out repeatedly drags its
 					// score down without us having to wait for an eventual
 					// (possibly never-arriving) reply.
-					if f.onRequestLatency != nil {
-						f.onRequestLatency(peer, txFetchTimeout)
+					if f.onRequestResult != nil {
+						f.onRequestResult(peer, txFetchTimeout, true)
 					}
 				}
 			}
@@ -781,9 +781,9 @@ func (f *TxFetcher) loop() {
 					txFetcherSlowWait.Update(time.Duration(f.clock.Now() - req.time).Nanoseconds())
 					// Already counted as a timeout sample at the timeout site;
 					// don't double-record on eventual delivery.
-				} else if f.onRequestLatency != nil {
+				} else if f.onRequestResult != nil {
 					// Normal in-time delivery. Record the actual round-trip.
-					f.onRequestLatency(delivery.origin, time.Duration(f.clock.Now()-req.time))
+					f.onRequestResult(delivery.origin, time.Duration(f.clock.Now()-req.time), false)
 				}
 				delete(f.requests, delivery.origin)
 

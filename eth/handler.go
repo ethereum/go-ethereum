@@ -194,7 +194,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 	h.txTracker = txtracker.New()
 	h.peerStats = peerstats.New()
-	h.txFetcher = fetcher.NewTxFetcher(h.chain, validateMeta, addTxs, fetchTx, h.removePeer, h.txTracker.NotifyAccepted, h.peerStats.NotifyRequestLatency)
+	h.txFetcher = fetcher.NewTxFetcher(h.chain, validateMeta, addTxs, fetchTx, h.removePeer, h.txTracker.NotifyAccepted, h.peerStats.NotifyRequestResult)
 	return h, nil
 }
 
