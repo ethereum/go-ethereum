@@ -219,32 +219,17 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			}
 			// Consume the gas and return an error if not enough gas is available.
 			// cost is explicitly set so that the capture state defer method can get the proper cost
-			var dynamicCost GasCosts
+			var dynamicCost uint64
 			dynamicCost, err = operation.dynamicGas(evm, contract, stack, mem, memorySize)
-			cost += dynamicCost.RegularGas // for tracing
+			cost += dynamicCost // for tracing
 			if err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
 			}
-			// for tracing: this gas consumption event is emitted below in the debug section.
-			if evm.chainRules.IsAmsterdam && dynamicCost.StateGas > 0 {
-				// EIP-8037: charge regular gas before state gas.
-				if contract.Gas.RegularGas < dynamicCost.RegularGas {
-					return nil, ErrOutOfGas
-				}
-				contract.GasUsed.RegularGas += dynamicCost.RegularGas
-				contract.Gas.RegularGas -= dynamicCost.RegularGas
-				stateOnly := GasCosts{StateGas: dynamicCost.StateGas}
-				if contract.Gas.Underflow(stateOnly) {
-					return nil, ErrOutOfGas
-				}
-				contract.GasUsed.Add(stateOnly)
-				contract.Gas.Sub(stateOnly)
-			} else if contract.Gas.Underflow(dynamicCost) {
+			if contract.Gas.RegularGas < dynamicCost {
 				return nil, ErrOutOfGas
-			} else {
-				contract.GasUsed.Add(dynamicCost)
-				contract.Gas.Sub(dynamicCost)
 			}
+			contract.Gas.RegularGas -= dynamicCost
+			contract.GasUsed.RegularGas += dynamicCost
 		}
 
 		// Do tracing before potential memory expansion

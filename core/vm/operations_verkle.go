@@ -24,40 +24,40 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func gasSStore4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
-	return GasCosts{RegularGas: evm.AccessEvents.SlotGas(contract.Address(), stack.peek().Bytes32(), true, contract.Gas.RegularGas, true)}, nil
+func gasSStore4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return evm.AccessEvents.SlotGas(contract.Address(), stack.peek().Bytes32(), true, contract.Gas.RegularGas, true), nil
 }
 
-func gasSLoad4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
-	return GasCosts{RegularGas: evm.AccessEvents.SlotGas(contract.Address(), stack.peek().Bytes32(), false, contract.Gas.RegularGas, true)}, nil
+func gasSLoad4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return evm.AccessEvents.SlotGas(contract.Address(), stack.peek().Bytes32(), false, contract.Gas.RegularGas, true), nil
 }
 
-func gasBalance4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+func gasBalance4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	address := stack.peek().Bytes20()
-	return GasCosts{RegularGas: evm.AccessEvents.BasicDataGas(address, false, contract.Gas.RegularGas, true)}, nil
+	return evm.AccessEvents.BasicDataGas(address, false, contract.Gas.RegularGas, true), nil
 }
 
-func gasExtCodeSize4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
-	address := stack.peek().Bytes20()
-	if _, isPrecompile := evm.precompile(address); isPrecompile {
-		return GasCosts{}, nil
-	}
-	return GasCosts{RegularGas: evm.AccessEvents.BasicDataGas(address, false, contract.Gas.RegularGas, true)}, nil
-}
-
-func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+func gasExtCodeSize4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	address := stack.peek().Bytes20()
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
-		return GasCosts{}, nil
+		return 0, nil
 	}
-	return GasCosts{RegularGas: evm.AccessEvents.CodeHashGas(address, false, contract.Gas.RegularGas, true)}, nil
+	return evm.AccessEvents.BasicDataGas(address, false, contract.Gas.RegularGas, true), nil
+}
+
+func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	address := stack.peek().Bytes20()
+	if _, isPrecompile := evm.precompile(address); isPrecompile {
+		return 0, nil
+	}
+	return evm.AccessEvents.CodeHashGas(address, false, contract.Gas.RegularGas, true), nil
 }
 
 func makeCallVariantGasEIP4762(oldCalculator gasFunc, withTransferCosts bool) gasFunc {
-	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		var (
 			target           = common.Address(stack.Back(1).Bytes20())
-			witnessGas       GasCosts
+			witnessGas       uint64
 			_, isPrecompile  = evm.precompile(target)
 			isSystemContract = target == params.HistoryStorageAddress
 		)
@@ -67,36 +67,37 @@ func makeCallVariantGasEIP4762(oldCalculator gasFunc, withTransferCosts bool) ga
 		if withTransferCosts && !stack.Back(2).IsZero() {
 			wantedValueTransferWitnessGas := evm.AccessEvents.ValueTransferGas(contract.Address(), target, contract.Gas.RegularGas)
 			if wantedValueTransferWitnessGas > contract.Gas.RegularGas {
-				return GasCosts{RegularGas: wantedValueTransferWitnessGas}, nil
+				return wantedValueTransferWitnessGas, nil
 			}
-			witnessGas = GasCosts{RegularGas: wantedValueTransferWitnessGas}
+			witnessGas = wantedValueTransferWitnessGas
 		} else if isPrecompile || isSystemContract {
-			witnessGas = GasCosts{RegularGas: params.WarmStorageReadCostEIP2929}
+			witnessGas = params.WarmStorageReadCostEIP2929
 		} else {
 			// The charging for the value transfer is done BEFORE subtracting
 			// the 1/64th gas, as this is considered part of the CALL instruction.
 			// (so before we get to this point)
 			// But the message call is part of the subcall, for which only 63/64th
 			// of the gas should be available.
-			wantedMessageCallWitnessGas := evm.AccessEvents.MessageCallGas(target, contract.Gas.RegularGas-witnessGas.RegularGas)
+			wantedMessageCallWitnessGas := evm.AccessEvents.MessageCallGas(target, contract.Gas.RegularGas-witnessGas)
 			var overflow bool
-			if witnessGas.RegularGas, overflow = math.SafeAdd(witnessGas.RegularGas, wantedMessageCallWitnessGas); overflow {
-				return GasCosts{RegularGas: 0}, ErrGasUintOverflow
+			if witnessGas, overflow = math.SafeAdd(witnessGas, wantedMessageCallWitnessGas); overflow {
+				return 0, ErrGasUintOverflow
 			}
-			if witnessGas.RegularGas > contract.Gas.RegularGas {
+			if witnessGas > contract.Gas.RegularGas {
 				return witnessGas, nil
 			}
 		}
 
-		contract.Gas.Sub(witnessGas)
+		witnessGasCost := GasCosts{RegularGas: witnessGas}
+		contract.Gas.Sub(witnessGasCost)
 		// if the operation fails, adds witness gas to the gas before returning the error
 		gas, err := oldCalculator(evm, contract, stack, mem, memorySize)
-		contract.Gas.Add(witnessGas) // restore witness gas so that it can be charged at the callsite
+		contract.Gas.Add(witnessGasCost) // restore witness gas so that it can be charged at the callsite
 		var overflow bool
-		if gas.RegularGas, overflow = math.SafeAdd(gas.RegularGas, witnessGas.RegularGas); overflow {
-			return GasCosts{}, ErrGasUintOverflow
+		if gas, overflow = math.SafeAdd(gas, witnessGas); overflow {
+			return 0, ErrGasUintOverflow
 		}
-		return GasCosts{RegularGas: gas.RegularGas}, err
+		return gas, err
 	}
 }
 
@@ -107,20 +108,20 @@ var (
 	gasDelegateCallEIP4762 = makeCallVariantGasEIP4762(gasDelegateCall, false)
 )
 
-func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	beneficiaryAddr := common.Address(stack.peek().Bytes20())
 	if _, isPrecompile := evm.precompile(beneficiaryAddr); isPrecompile {
-		return GasCosts{}, nil
+		return 0, nil
 	}
 	if contract.IsSystemCall {
-		return GasCosts{}, nil
+		return 0, nil
 	}
 	contractAddr := contract.Address()
 	wanted := evm.AccessEvents.BasicDataGas(contractAddr, false, contract.Gas.RegularGas, false)
 	if wanted > contract.Gas.RegularGas {
-		return GasCosts{RegularGas: wanted}, nil
+		return wanted, nil
 	}
-	statelessGas := GasCosts{RegularGas: wanted}
+	statelessGas := wanted
 	balanceIsZero := evm.StateDB.GetBalance(contractAddr).Sign() == 0
 	_, isPrecompile := evm.precompile(beneficiaryAddr)
 	isSystemContract := beneficiaryAddr == params.HistoryStorageAddress
@@ -130,39 +131,39 @@ func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 	}
 
 	if contractAddr != beneficiaryAddr {
-		wanted := evm.AccessEvents.BasicDataGas(beneficiaryAddr, false, contract.Gas.RegularGas-statelessGas.RegularGas, false)
-		if wanted > contract.Gas.RegularGas-statelessGas.RegularGas {
-			return GasCosts{RegularGas: statelessGas.RegularGas + wanted}, nil
+		wanted := evm.AccessEvents.BasicDataGas(beneficiaryAddr, false, contract.Gas.RegularGas-statelessGas, false)
+		if wanted > contract.Gas.RegularGas-statelessGas {
+			return statelessGas + wanted, nil
 		}
-		statelessGas.RegularGas += wanted
+		statelessGas += wanted
 	}
 	// Charge write costs if it transfers value
 	if !balanceIsZero {
-		wanted := evm.AccessEvents.BasicDataGas(contractAddr, true, contract.Gas.RegularGas-statelessGas.RegularGas, false)
-		if wanted > contract.Gas.RegularGas-statelessGas.RegularGas {
-			return GasCosts{RegularGas: statelessGas.RegularGas + wanted}, nil
+		wanted := evm.AccessEvents.BasicDataGas(contractAddr, true, contract.Gas.RegularGas-statelessGas, false)
+		if wanted > contract.Gas.RegularGas-statelessGas {
+			return statelessGas + wanted, nil
 		}
-		statelessGas.RegularGas += wanted
+		statelessGas += wanted
 
 		if contractAddr != beneficiaryAddr {
 			if evm.StateDB.Exist(beneficiaryAddr) {
-				wanted = evm.AccessEvents.BasicDataGas(beneficiaryAddr, true, contract.Gas.RegularGas-statelessGas.RegularGas, false)
+				wanted = evm.AccessEvents.BasicDataGas(beneficiaryAddr, true, contract.Gas.RegularGas-statelessGas, false)
 			} else {
-				wanted = evm.AccessEvents.AddAccount(beneficiaryAddr, true, contract.Gas.RegularGas-statelessGas.RegularGas)
+				wanted = evm.AccessEvents.AddAccount(beneficiaryAddr, true, contract.Gas.RegularGas-statelessGas)
 			}
-			if wanted > contract.Gas.RegularGas-statelessGas.RegularGas {
-				return GasCosts{RegularGas: statelessGas.RegularGas + wanted}, nil
+			if wanted > contract.Gas.RegularGas-statelessGas {
+				return statelessGas + wanted, nil
 			}
-			statelessGas.RegularGas += wanted
+			statelessGas += wanted
 		}
 	}
 	return statelessGas, nil
 }
 
-func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	gas, err := gasCodeCopy(evm, contract, stack, mem, memorySize)
 	if err != nil {
-		return GasCosts{}, err
+		return 0, err
 	}
 	if !contract.IsDeployment && !contract.IsSystemCall {
 		var (
@@ -175,31 +176,31 @@ func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 		}
 
 		_, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(contract.Code, uint64CodeOffset, length.Uint64())
-		_, wanted := evm.AccessEvents.CodeChunksRangeGas(contract.Address(), copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false, contract.Gas.RegularGas-gas.RegularGas)
-		gas.RegularGas += wanted
+		_, wanted := evm.AccessEvents.CodeChunksRangeGas(contract.Address(), copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false, contract.Gas.RegularGas-gas)
+		gas += wanted
 	}
 	return gas, nil
 }
 
-func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	// memory expansion first (dynamic part of pre-2929 implementation)
 	gas, err := gasExtCodeCopy(evm, contract, stack, mem, memorySize)
 	if err != nil {
-		return GasCosts{}, err
+		return 0, err
 	}
 	addr := common.Address(stack.peek().Bytes20())
 	_, isPrecompile := evm.precompile(addr)
 	if isPrecompile || addr == params.HistoryStorageAddress {
 		var overflow bool
-		if gas.RegularGas, overflow = math.SafeAdd(gas.RegularGas, params.WarmStorageReadCostEIP2929); overflow {
-			return GasCosts{}, ErrGasUintOverflow
+		if gas, overflow = math.SafeAdd(gas, params.WarmStorageReadCostEIP2929); overflow {
+			return 0, ErrGasUintOverflow
 		}
-		return GasCosts{RegularGas: gas.RegularGas}, nil
+		return gas, nil
 	}
-	wgas := evm.AccessEvents.BasicDataGas(addr, false, contract.Gas.RegularGas-gas.RegularGas, true)
+	wgas := evm.AccessEvents.BasicDataGas(addr, false, contract.Gas.RegularGas-gas, true)
 	var overflow bool
-	if gas.RegularGas, overflow = math.SafeAdd(gas.RegularGas, wgas); overflow {
-		return GasCosts{}, ErrGasUintOverflow
+	if gas, overflow = math.SafeAdd(gas, wgas); overflow {
+		return 0, ErrGasUintOverflow
 	}
-	return GasCosts{RegularGas: gas.RegularGas}, nil
+	return gas, nil
 }

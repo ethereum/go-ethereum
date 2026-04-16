@@ -135,6 +135,112 @@ func (j *journal) length() int {
 	return len(j.entries)
 }
 
+// computeStateGrowthCost walks journal entries from the given snapshot revision
+// to the current tip and computes the signed net state growth cost.
+// It mirrors the EIP-8037 spec's compute_state_growth_cost(snapshot, current).
+//
+// Positive cost = state grew (accounts created, slots set, code deployed).
+// Negative cost = state shrank (accounts removed, slots cleared).
+func (j *journal) computeStateGrowthCost(revid int, s *StateDB, costPerStateByte uint64) int64 {
+	// Find the journal index for this revision.
+	idx := sort.Search(len(j.validRevisions), func(i int) bool {
+		return j.validRevisions[i].id >= revid
+	})
+	if idx == len(j.validRevisions) || j.validRevisions[idx].id != revid {
+		panic(fmt.Errorf("revision id %v not found for state growth cost", revid))
+	}
+	snapshotIdx := j.validRevisions[idx].journalIndex
+
+	// Track which accounts were created and which (addr, key) slots were
+	// touched since the snapshot. We only care about net effect.
+	type slotKey struct {
+		addr common.Address
+		key  common.Hash
+	}
+	// For accounts: track the first createObjectChange. We need to know
+	// if the account existed at snapshot time (it didn't if created after).
+	accountCreated := make(map[common.Address]bool) // addr → was created since snapshot
+	// For storage: track the value at snapshot time (first prevvalue seen).
+	slotSnapshotValue := make(map[slotKey]common.Hash)
+	slotSeen := make(map[slotKey]bool)
+	// For code: track the code length at snapshot time (first prevCode seen).
+	codeSnapshotLen := make(map[common.Address]int)
+	codeSeen := make(map[common.Address]bool)
+
+	for i := snapshotIdx; i < len(j.entries); i++ {
+		switch ch := j.entries[i].(type) {
+		case createObjectChange:
+			if !accountCreated[ch.account] {
+				accountCreated[ch.account] = true
+			}
+		case storageChange:
+			sk := slotKey{ch.account, ch.key}
+			if !slotSeen[sk] {
+				slotSeen[sk] = true
+				slotSnapshotValue[sk] = ch.prevvalue
+			}
+		case codeChange:
+			if !codeSeen[ch.account] {
+				codeSeen[ch.account] = true
+				codeSnapshotLen[ch.account] = len(ch.prevCode)
+			}
+		}
+	}
+
+	var cost int64
+
+	// Account creation: +112 bytes for each account that was created
+	// and still exists now (not deleted by a revert within this scope).
+	for addr := range accountCreated {
+		// Check if the account currently exists in stateObjects.
+		// If it was created and then the snapshot was reverted past it,
+		// it won't be here. But since we only walk entries that haven't
+		// been reverted, the account should exist.
+		if _, exists := s.stateObjects[addr]; exists {
+			cost += int64(112 * costPerStateByte)
+		}
+	}
+
+	// Storage slots: compare snapshot value vs current value.
+	for sk, snapshotVal := range slotSnapshotValue {
+		obj := s.getStateObject(sk.addr)
+		if obj == nil {
+			continue
+		}
+		// Current value is in dirtyStorage (in-tx mutations).
+		currentVal, dirty := obj.dirtyStorage[sk.key]
+		if !dirty {
+			// Not dirty means value didn't change from committed state,
+			// which means the journal changes were reverted. Net effect = 0.
+			continue
+		}
+		snapshotZero := snapshotVal == (common.Hash{})
+		currentZero := currentVal == (common.Hash{})
+		if snapshotZero && !currentZero {
+			cost += int64(32 * costPerStateByte) // new slot
+		} else if !snapshotZero && currentZero {
+			cost -= int64(32 * costPerStateByte) // removed slot
+		}
+	}
+
+	// Code: compare snapshot code length vs current code length.
+	for addr, snapshotLen := range codeSnapshotLen {
+		obj := s.getStateObject(addr)
+		if obj == nil {
+			continue
+		}
+		currentLen := len(obj.code)
+		if snapshotLen == 0 && currentLen > 0 {
+			cost += int64(uint64(currentLen) * costPerStateByte)
+		}
+		// Note: code can only be set once per account in practice,
+		// so we don't handle the removal case (code is never cleared
+		// to empty during normal execution).
+	}
+
+	return cost
+}
+
 // copy returns a deep-copied journal.
 func (j *journal) copy() *journal {
 	entries := make([]journalEntry, 0, j.length())

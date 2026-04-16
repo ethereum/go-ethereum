@@ -86,6 +86,10 @@ type StateDB interface {
 	RevertToSnapshot(int)
 	Snapshot() int
 
+	// ComputeStateGrowthCost returns the signed net state growth cost (in gas)
+	// between the given snapshot revision and the current state (EIP-8037).
+	ComputeStateGrowthCost(revid int, costPerStateByte uint64) int64
+
 	AddLog(*types.Log)
 	EmitLogsForBurnAccounts()
 	AddPreimage(common.Hash, []byte)

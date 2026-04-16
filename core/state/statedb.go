@@ -738,6 +738,13 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	s.journal.revertToSnapshot(revid, s)
 }
 
+// ComputeStateGrowthCost returns the signed net state growth cost (in gas)
+// between the given snapshot revision and the current state.
+// This implements the EIP-8037 diff-at-return mechanism.
+func (s *StateDB) ComputeStateGrowthCost(revid int, costPerStateByte uint64) int64 {
+	return s.journal.computeStateGrowthCost(revid, s, costPerStateByte)
+}
+
 // GetRefund returns the current value of the refund counter.
 func (s *StateDB) GetRefund() uint64 {
 	return s.refund

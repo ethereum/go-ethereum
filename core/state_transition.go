@@ -74,9 +74,9 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 	var gas vm.GasCosts
 	if isContractCreation && rules.IsHomestead {
 		if rules.IsAmsterdam {
-			// EIP-8037: account creation is state gas; base tx + CREATE overhead is regular gas.
+			// EIP-8037 diff-at-return: account creation state gas is computed
+			// from the state diff at call return, not charged as intrinsic gas.
 			gas.RegularGas = params.TxGas + params.CreateGasAmsterdam
-			gas.StateGas = params.AccountCreationSize * costPerStateByte
 		} else {
 			gas.RegularGas = params.TxGasContractCreation
 		}

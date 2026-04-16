@@ -239,6 +239,7 @@ func isSystemCall(caller common.Address) bool {
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, gas GasBudget, value *uint256.Int) (ret []byte, leftOverGas GasBudget, gasUsed GasUsed, err error) {
+	initialStateGas := gas.StateGas // EIP-8037: remember for diff-at-return
 	// Capture the tracer start/end events in debug mode
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, CALL, caller, addr, input, gas, value.ToBig())
@@ -305,6 +306,12 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			gasUsed = contract.GasUsed
 		}
 	}
+	// EIP-8037 diff-at-return: charge state gas based on actual state diff.
+	if err == nil {
+		if stateErr := evm.chargeStateGasAtReturn(snapshot, initialStateGas, &gas, &gasUsed); stateErr != nil {
+			err = stateErr
+		}
+	}
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally,
 	// when we're in homestead this also counts for code storage gas errors.
@@ -330,6 +337,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 // CallCode differs from Call in the sense that it executes the given address'
 // code with the caller as context.
 func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byte, gas GasBudget, value *uint256.Int) (ret []byte, leftOverGas GasBudget, gasUsed GasUsed, err error) {
+	initialStateGas := gas.StateGas // EIP-8037: remember for diff-at-return
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, CALLCODE, caller, addr, input, gas, value.ToBig())
@@ -365,6 +373,12 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 		gas = contract.Gas
 		gasUsed = contract.GasUsed
 	}
+	// EIP-8037 diff-at-return: charge state gas based on actual state diff.
+	if err == nil {
+		if stateErr := evm.chargeStateGasAtReturn(snapshot, initialStateGas, &gas, &gasUsed); stateErr != nil {
+			err = stateErr
+		}
+	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		isRevert := err == ErrExecutionReverted
@@ -385,6 +399,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 // DelegateCall differs from CallCode in the sense that it executes the given address'
 // code with the caller as context and the caller is set to the caller of the caller.
 func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address, addr common.Address, input []byte, gas GasBudget, value *uint256.Int) (ret []byte, leftOverGas GasBudget, gasUsed GasUsed, err error) {
+	initialStateGas := gas.StateGas // EIP-8037: remember for diff-at-return
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
 		// DELEGATECALL inherits value from parent call
@@ -415,6 +430,12 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 		gas = contract.Gas
 		gasUsed = contract.GasUsed
 	}
+	// EIP-8037 diff-at-return: charge state gas based on actual state diff.
+	if err == nil {
+		if stateErr := evm.chargeStateGasAtReturn(snapshot, initialStateGas, &gas, &gasUsed); stateErr != nil {
+			err = stateErr
+		}
+	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		isRevert := err == ErrExecutionReverted
@@ -434,6 +455,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 // Opcodes that attempt to perform such modifications will result in exceptions
 // instead of performing the modifications.
 func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []byte, gas GasBudget) (ret []byte, leftOverGas GasBudget, gasUsed GasUsed, err error) {
+	initialStateGas := gas.StateGas // EIP-8037: remember for diff-at-return
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, STATICCALL, caller, addr, input, gas, nil)
@@ -464,6 +486,13 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 		gas = contract.Gas
 		gasUsed = contract.GasUsed
 	}
+	// EIP-8037 diff-at-return: charge state gas based on actual state diff.
+	// (StaticCall shouldn't create state, but charge anyway for correctness.)
+	if err == nil {
+		if stateErr := evm.chargeStateGasAtReturn(snapshot, initialStateGas, &gas, &gasUsed); stateErr != nil {
+			err = stateErr
+		}
+	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		isRevert := err == ErrExecutionReverted
@@ -480,6 +509,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value *uint256.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, leftOverGas GasBudget, used GasUsed, err error) {
+	initialStateGas := gas.StateGas // EIP-8037: remember for diff-at-return
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	var nonce uint64
@@ -580,6 +610,12 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	contract.IsDeployment = true
 
 	ret, err = evm.initNewContract(contract, address)
+	// EIP-8037 diff-at-return: charge state gas based on actual state diff.
+	if err == nil {
+		if stateErr := evm.chargeStateGasAtReturn(snapshot, initialStateGas, &contract.Gas, &contract.GasUsed); stateErr != nil {
+			err = stateErr
+		}
+	}
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
@@ -608,19 +644,14 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 	}
 
 	if evm.chainRules.IsAmsterdam {
-		// Check max code size BEFORE charging gas so over-max code
-		// does not consume state gas (which would inflate tx_state).
+		// Check max code size BEFORE charging gas.
 		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
 			return ret, err
 		}
-		// EIP-8037: Charge regular gas (keccak256 hash) first, then state gas
-		// (code storage). Regular-before-state prevents reservoir inflation.
+		// EIP-8037: Charge regular gas (keccak256 hash) only.
+		// Code deposit state gas is computed from the state diff at call return.
 		regularGas := GasCosts{RegularGas: toWordSize(uint64(len(ret))) * params.Keccak256WordGas}
 		if !contract.UseGas(regularGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
-			return ret, ErrCodeStoreOutOfGas
-		}
-		stateGas := GasCosts{StateGas: uint64(len(ret)) * evm.Context.CostPerGasByte}
-		if !contract.UseGas(stateGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
 			return ret, ErrCodeStoreOutOfGas
 		}
 	} else if evm.chainRules.IsEIP4762 {
@@ -691,6 +722,47 @@ func (evm *EVM) resolveCodeHash(addr common.Address) common.Hash {
 		}
 	}
 	return evm.StateDB.GetCodeHash(addr)
+}
+
+// chargeStateGasAtReturn implements EIP-8037 diff-at-return: after a successful
+// call, compute the net state growth cost from the journal diff and charge it
+// from the gas budget (state gas reservoir first, then spillover to regular gas).
+// initialStateGas is the reservoir value at call entry, needed to compute how
+// much inner calls already consumed.
+// Returns an error if the call cannot afford the state gas, in which case the
+// caller should revert the state to the snapshot.
+func (evm *EVM) chargeStateGasAtReturn(snapshot int, initialStateGas uint64, gas *GasBudget, gasUsed *GasUsed) error {
+	if !evm.chainRules.IsAmsterdam {
+		return nil
+	}
+	growthCost := evm.StateDB.ComputeStateGrowthCost(snapshot, evm.Context.CostPerGasByte)
+
+	// Inner calls already deducted from reservoir.
+	alreadyPaid := int64(initialStateGas) - int64(gas.StateGas)
+	thisCallCost := growthCost - alreadyPaid
+
+	if thisCallCost <= 0 {
+		// Negative cost = state shrank relative to what was paid, credit the reservoir.
+		if thisCallCost < 0 {
+			gas.StateGas += uint64(-thisCallCost)
+		}
+		return nil
+	}
+	cost := uint64(thisCallCost)
+	if gas.StateGas >= cost {
+		gas.StateGas -= cost
+		gasUsed.StateGas += cost
+	} else if gas.StateGas+gas.RegularGas >= cost {
+		// Spillover: reservoir exhausted, take remainder from regular gas.
+		remainder := cost - gas.StateGas
+		gasUsed.StateGas += gas.StateGas
+		gas.StateGas = 0
+		gas.RegularGas -= remainder
+		gasUsed.RegularGas += remainder
+	} else {
+		return ErrOutOfGas
+	}
+	return nil
 }
 
 // ChainConfig returns the environment's chain configuration

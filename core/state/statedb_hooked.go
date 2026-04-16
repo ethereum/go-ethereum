@@ -150,6 +150,10 @@ func (s *hookedStateDB) Snapshot() int {
 	return s.inner.Snapshot()
 }
 
+func (s *hookedStateDB) ComputeStateGrowthCost(revid int, costPerStateByte uint64) int64 {
+	return s.inner.ComputeStateGrowthCost(revid, costPerStateByte)
+}
+
 func (s *hookedStateDB) AddPreimage(hash common.Hash, bytes []byte) {
 	s.inner.AddPreimage(hash, bytes)
 }
