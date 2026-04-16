@@ -7,12 +7,21 @@ on:
       - '.github/workflows/windows-smoke.yml'
 
 jobs:
-  smoke:
-    name: Smoke test
+  windows:
+    name: Windows ${{ matrix.arch }}
     runs-on: [self-hosted, windows, x64]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            mingw: 'C:\msys64\mingw64'
+          - arch: '386'
+            mingw: 'C:\msys64\mingw32'
     env:
-      GETH_MINGW: 'C:\msys64\mingw64'
-      GETH_CC: 'C:\msys64\mingw64\bin\gcc.exe'
+      GETH_ARCH: ${{ matrix.arch }}
+      GETH_MINGW: ${{ matrix.mingw }}
+      GETH_CC: ${{ matrix.mingw }}\bin\gcc.exe
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,15 +36,18 @@ jobs:
       - name: Show tool versions
         shell: cmd
         run: |
-          echo === git ===
-          git --version
-          echo === go ===
+          echo === arch: %GETH_ARCH% ===
           go version
-          echo === gcc ===
           "%GETH_CC%" --version
 
-      - name: Build (amd64)
+      - name: Build
         shell: cmd
         run: |
           set PATH=%GETH_MINGW%\bin;%PATH%
-          go run build/ci.go install -arch amd64 -cc %GETH_CC%
+          go run build/ci.go install -arch %GETH_ARCH% -cc %GETH_CC%
+
+      - name: Test
+        shell: cmd
+        run: |
+          set PATH=%GETH_MINGW%\bin;%PATH%
+          go run build/ci.go test -arch %GETH_ARCH% -cc %GETH_CC% -short
