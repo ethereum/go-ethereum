@@ -19,6 +19,8 @@ package bintrie
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -778,4 +780,131 @@ func TestGetStorageNonMembershipInternalRoot(t *testing.T) {
 	if len(got) > 0 && !bytes.Equal(got, zero[:]) {
 		t.Fatalf("expected nil/zero for non-existent storage, got %x", got)
 	}
+}
+
+// TestConcurrentStorageUpdates exercises BinaryTrie under concurrent writes
+// from multiple goroutines — the scenario that triggers a data race when
+// IntermediateRoot parallelizes per-account updateTrie() calls on a single
+// shared binary trie. This test must pass with -race enabled.
+func TestConcurrentStorageUpdates(t *testing.T) {
+	tr := newEmptyTestTrie(t)
+
+	// Create multiple accounts so the root becomes an InternalNode with
+	// subtrees that different goroutines will traverse concurrently.
+	addrs := []common.Address{
+		common.HexToAddress("0x1111111111111111111111111111111111111111"),
+		common.HexToAddress("0x2222222222222222222222222222222222222222"),
+		common.HexToAddress("0x9999999999999999999999999999999999999999"),
+		common.HexToAddress("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+	}
+	for _, addr := range addrs {
+		acc := makeAccount(1, 100, common.HexToHash("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"))
+		if err := tr.UpdateAccount(addr, acc, 0); err != nil {
+			t.Fatalf("UpdateAccount: %v", err)
+		}
+	}
+
+	// Spawn goroutines that concurrently call UpdateStorage and DeleteStorage
+	// on different addresses but the same shared trie. This mirrors the
+	// errgroup pattern in IntermediateRoot.
+	const slotsPerAddr = 20
+	var wg sync.WaitGroup
+	errs := make(chan error, len(addrs)*slotsPerAddr)
+
+	for _, addr := range addrs {
+		wg.Add(1)
+		go func(addr common.Address) {
+			defer wg.Done()
+			for i := 0; i < slotsPerAddr; i++ {
+				slot := common.HexToHash(fmt.Sprintf("00000000000000000000000000000000000000000000000000000000000000%02x", 0x80+i))
+				val := common.TrimLeftZeroes(common.HexToHash(fmt.Sprintf("00000000000000000000000000000000000000000000000000000000%04x%04x", addr[0], i)).Bytes())
+				if err := tr.UpdateStorage(addr, slot[:], val); err != nil {
+					errs <- fmt.Errorf("UpdateStorage(%x, slot %d): %v", addr, i, err)
+					return
+				}
+			}
+		}(addr)
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		t.Fatal(err)
+	}
+
+	// Verify all values are readable and correct.
+	for _, addr := range addrs {
+		for i := 0; i < slotsPerAddr; i++ {
+			slot := common.HexToHash(fmt.Sprintf("00000000000000000000000000000000000000000000000000000000000000%02x", 0x80+i))
+			got, err := tr.GetStorage(addr, slot[:])
+			if err != nil {
+				t.Fatalf("GetStorage(%x, slot %d): %v", addr, i, err)
+			}
+			if len(got) == 0 {
+				t.Fatalf("GetStorage(%x, slot %d): empty, expected value", addr, i)
+			}
+		}
+	}
+
+	// Hash must not race with prior writes — call it to exercise the
+	// read path after concurrent mutations.
+	h := tr.Hash()
+	if h == (common.Hash{}) {
+		t.Fatal("trie hash is zero after concurrent updates")
+	}
+}
+
+// TestConcurrentReadWrite exercises concurrent reads and writes on the same
+// BinaryTrie, verifying no data race under the race detector.
+func TestConcurrentReadWrite(t *testing.T) {
+	tr := newEmptyTestTrie(t)
+
+	addr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	acc := makeAccount(1, 100, common.HexToHash("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"))
+	if err := tr.UpdateAccount(addr, acc, 0); err != nil {
+		t.Fatalf("UpdateAccount: %v", err)
+	}
+
+	// Pre-populate some storage so reads have data to find.
+	for i := 0; i < 10; i++ {
+		slot := common.HexToHash(fmt.Sprintf("00000000000000000000000000000000000000000000000000000000000000%02x", 0x80+i))
+		val := common.HexToHash(fmt.Sprintf("00000000000000000000000000000000000000000000000000000000dead%04x", i)).Bytes()
+		if err := tr.UpdateStorage(addr, slot[:], common.TrimLeftZeroes(val)); err != nil {
+			t.Fatalf("seed UpdateStorage: %v", err)
+		}
+	}
+
+	var wg sync.WaitGroup
+
+	// Writer goroutine.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 10; i < 30; i++ {
+			slot := common.HexToHash(fmt.Sprintf("00000000000000000000000000000000000000000000000000000000000000%02x", 0x80+i))
+			val := common.HexToHash(fmt.Sprintf("00000000000000000000000000000000000000000000000000000000beef%04x", i)).Bytes()
+			tr.UpdateStorage(addr, slot[:], common.TrimLeftZeroes(val))
+		}
+	}()
+
+	// Reader goroutine.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 10; i++ {
+			slot := common.HexToHash(fmt.Sprintf("00000000000000000000000000000000000000000000000000000000000000%02x", 0x80+i))
+			tr.GetStorage(addr, slot[:])
+		}
+	}()
+
+	// Hash goroutine.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 5; i++ {
+			tr.Hash()
+		}
+	}()
+
+	wg.Wait()
 }
