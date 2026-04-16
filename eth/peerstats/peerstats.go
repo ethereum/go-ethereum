@@ -26,9 +26,10 @@
 // Signal sources:
 //   - NotifyBlock(inclusions, finalized) — per-block deltas from txtracker
 //     (computed under txtracker's own lock, then passed in after release)
-//   - NotifyRequestLatency(peer, latency) — per-request samples from the
-//     fetcher; timeouts are reported with the timeout value so slow peers
-//     contribute to the EMA
+//   - NotifyRequestResult(peer, latency, timeout) — per-request outcomes
+//     from the fetcher; timeouts are reported with the timeout value so
+//     slow peers contribute to the EMA, and the timeout flag increments
+//     the per-peer timeout counter
 //   - NotifyPeerDrop(peer) — called from the handler on disconnect
 package peerstats
 
@@ -67,8 +68,9 @@ type PeerStats struct {
 	RecentFinalized   float64       // EMA of per-block finalization credits (slow)
 	RecentIncluded    float64       // EMA of per-block inclusions (fast)
 	RequestLatencyEMA time.Duration // Slow EMA of tx-request response latency (timeouts count as the timeout value)
-	RequestSamples    int64         // Number of latency samples seen (for bootstrap guard)
-	LastLatencySample time.Time     // Wall-clock time of the most recent latency sample (for staleness gate)
+	RequestSuccesses  int64         // Requests answered before timeout
+	RequestTimeouts   int64         // Requests that timed out
+	LastLatencySample time.Time     // Wall-clock time of the most recent request result (for staleness gate)
 }
 
 // peerStats is the internal mutable state per peer.
@@ -76,7 +78,8 @@ type peerStats struct {
 	recentFinalized   float64
 	recentIncluded    float64
 	requestLatencyEMA time.Duration
-	requestSamples    int64
+	requestSuccesses  int64
+	requestTimeouts   int64
 	lastLatencySample time.Time
 }
 
@@ -126,11 +129,13 @@ func (s *Stats) NotifyBlock(inclusions, finalized map[string]int) {
 	}
 }
 
-// NotifyRequestLatency records a tx-request response latency sample for
-// the given peer. Timeouts should be reported as the timeout value.
-// Creates a peer entry if one doesn't exist (a peer may have latency
-// samples before any inclusion signal).
-func (s *Stats) NotifyRequestLatency(peer string, latency time.Duration) {
+// NotifyRequestResult records a tx-request outcome for the given peer.
+// latency is the round-trip time (for timeouts, pass the timeout value).
+// timeout indicates whether the request timed out rather than receiving a
+// normal delivery. Both cases update the latency EMA; the timeout flag
+// additionally increments the per-peer timeout counter.
+// Creates a peer entry if one doesn't exist.
+func (s *Stats) NotifyRequestResult(peer string, latency time.Duration, timeout bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -139,7 +144,7 @@ func (s *Stats) NotifyRequestLatency(peer string, latency time.Duration) {
 		ps = &peerStats{}
 		s.peers[peer] = ps
 	}
-	if ps.requestSamples == 0 {
+	if ps.requestSuccesses+ps.requestTimeouts == 0 {
 		// Bootstrap the EMA with the first sample so it doesn't drift up
 		// from zero over many samples before reaching realistic values.
 		ps.requestLatencyEMA = latency
@@ -149,7 +154,11 @@ func (s *Stats) NotifyRequestLatency(peer string, latency time.Duration) {
 				float64(latency)*latencyEMAAlpha,
 		)
 	}
-	ps.requestSamples++
+	if timeout {
+		ps.requestTimeouts++
+	} else {
+		ps.requestSuccesses++
+	}
 	ps.lastLatencySample = time.Now()
 }
 
@@ -175,7 +184,8 @@ func (s *Stats) GetAllPeerStats() map[string]PeerStats {
 			RecentFinalized:   ps.recentFinalized,
 			RecentIncluded:    ps.recentIncluded,
 			RequestLatencyEMA: ps.requestLatencyEMA,
-			RequestSamples:    ps.requestSamples,
+			RequestSuccesses:  ps.requestSuccesses,
+			RequestTimeouts:   ps.requestTimeouts,
 			LastLatencySample: ps.lastLatencySample,
 		}
 	}

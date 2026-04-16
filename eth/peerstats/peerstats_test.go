@@ -114,26 +114,29 @@ func TestNotifyBlockInclusionEMAUpdate(t *testing.T) {
 	}
 }
 
-// TestNotifyRequestLatencyFirstSampleBootstrap asserts that the first
+// TestNotifyRequestResultFirstSampleBootstrap asserts that the first
 // latency sample seeds the EMA directly.
-func TestNotifyRequestLatencyFirstSampleBootstrap(t *testing.T) {
+func TestNotifyRequestResultFirstSampleBootstrap(t *testing.T) {
 	s := New()
-	s.NotifyRequestLatency("peerA", 200*time.Millisecond)
+	s.NotifyRequestResult("peerA", 200*time.Millisecond, false)
 
 	ps := s.GetAllPeerStats()["peerA"]
 	if ps.RequestLatencyEMA != 200*time.Millisecond {
 		t.Fatalf("expected first sample to seed EMA at 200ms, got %v", ps.RequestLatencyEMA)
 	}
-	if ps.RequestSamples != 1 {
-		t.Fatalf("expected RequestSamples=1, got %d", ps.RequestSamples)
+	if ps.RequestSuccesses != 1 {
+		t.Fatalf("expected RequestSuccesses=1, got %d", ps.RequestSuccesses)
+	}
+	if ps.RequestTimeouts != 0 {
+		t.Fatalf("expected RequestTimeouts=0, got %d", ps.RequestTimeouts)
 	}
 }
 
-// TestNotifyRequestLatencyEMAUpdate verifies the EMA formula for latency.
-func TestNotifyRequestLatencyEMAUpdate(t *testing.T) {
+// TestNotifyRequestResultEMAUpdate verifies the EMA formula for latency.
+func TestNotifyRequestResultEMAUpdate(t *testing.T) {
 	s := New()
-	s.NotifyRequestLatency("peerA", 100*time.Millisecond)
-	s.NotifyRequestLatency("peerA", 1000*time.Millisecond)
+	s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
+	s.NotifyRequestResult("peerA", 1000*time.Millisecond, false)
 
 	// Expected: 0.99*100ms + 0.01*1000ms = 109ms
 	got := s.GetAllPeerStats()["peerA"].RequestLatencyEMA
@@ -145,18 +148,19 @@ func TestNotifyRequestLatencyEMAUpdate(t *testing.T) {
 	if delta > 1*time.Microsecond {
 		t.Fatalf("EMA mismatch: got %v, want %v", got, want)
 	}
-	if samples := s.GetAllPeerStats()["peerA"].RequestSamples; samples != 2 {
-		t.Fatalf("expected RequestSamples=2, got %d", samples)
+	ps := s.GetAllPeerStats()["peerA"]
+	if ps.RequestSuccesses != 2 {
+		t.Fatalf("expected RequestSuccesses=2, got %d", ps.RequestSuccesses)
 	}
 }
 
-// TestNotifyRequestLatencySlowConvergence verifies the slow alpha
+// TestNotifyRequestResultSlowConvergence verifies the slow alpha
 // damps convergence under sustained timeouts.
-func TestNotifyRequestLatencySlowConvergence(t *testing.T) {
+func TestNotifyRequestResultSlowConvergence(t *testing.T) {
 	s := New()
-	s.NotifyRequestLatency("peerA", 100*time.Millisecond)
+	s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
 	for i := 0; i < 50; i++ {
-		s.NotifyRequestLatency("peerA", 5*time.Second)
+		s.NotifyRequestResult("peerA", 5*time.Second, false)
 	}
 	got := s.GetAllPeerStats()["peerA"].RequestLatencyEMA
 	if got < 1*time.Second {
@@ -171,7 +175,7 @@ func TestNotifyRequestLatencySlowConvergence(t *testing.T) {
 // from GetAllPeerStats.
 func TestNotifyPeerDropClearsStats(t *testing.T) {
 	s := New()
-	s.NotifyRequestLatency("peerA", 200*time.Millisecond)
+	s.NotifyRequestResult("peerA", 200*time.Millisecond, false)
 	s.NotifyPeerDrop("peerA")
 
 	if _, ok := s.GetAllPeerStats()["peerA"]; ok {
@@ -184,14 +188,14 @@ func TestNotifyPeerDropClearsStats(t *testing.T) {
 // dropper's MinLatencySamples=100 guard ensures this is harmless.
 func TestStaleRequestLatencyAfterDrop(t *testing.T) {
 	s := New()
-	s.NotifyRequestLatency("peerA", 200*time.Millisecond)
+	s.NotifyRequestResult("peerA", 200*time.Millisecond, false)
 	s.NotifyPeerDrop("peerA")
 	// Late sample racing with the drop.
-	s.NotifyRequestLatency("peerA", 50*time.Millisecond)
+	s.NotifyRequestResult("peerA", 50*time.Millisecond, false)
 
 	ps := s.GetAllPeerStats()["peerA"]
-	if ps.RequestSamples != 1 {
-		t.Fatalf("expected fresh RequestSamples=1, got %d", ps.RequestSamples)
+	if ps.RequestSuccesses != 1 {
+		t.Fatalf("expected fresh RequestSuccesses=1, got %d", ps.RequestSuccesses)
 	}
 	if ps.RequestLatencyEMA != 50*time.Millisecond {
 		t.Fatalf("expected fresh bootstrap at 50ms, got %v", ps.RequestLatencyEMA)
@@ -204,8 +208,8 @@ func TestStaleRequestLatencyAfterDrop(t *testing.T) {
 func TestMultiplePeersIsolated(t *testing.T) {
 	s := New()
 	s.NotifyBlock(map[string]int{"peerA": 5, "peerB": 0}, nil)
-	s.NotifyRequestLatency("peerA", 100*time.Millisecond)
-	s.NotifyRequestLatency("peerB", 5*time.Second)
+	s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
+	s.NotifyRequestResult("peerB", 5*time.Second, false)
 	s.NotifyBlock(nil, map[string]int{"peerA": 2})
 
 	stats := s.GetAllPeerStats()
@@ -222,12 +226,12 @@ func TestMultiplePeersIsolated(t *testing.T) {
 	}
 }
 
-// TestLatencyTimestampSet verifies that NotifyRequestLatency stamps the
+// TestLatencyTimestampSet verifies that NotifyRequestResult stamps the
 // peer's LastLatencySample with approximately time.Now().
 func TestLatencyTimestampSet(t *testing.T) {
 	s := New()
 	before := time.Now()
-	s.NotifyRequestLatency("peerA", 100*time.Millisecond)
+	s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
 	after := time.Now()
 
 	got := s.GetAllPeerStats()["peerA"].LastLatencySample
@@ -237,18 +241,53 @@ func TestLatencyTimestampSet(t *testing.T) {
 }
 
 // TestLatencyTimestampUpdatesOnEachSample verifies that a later
-// NotifyRequestLatency call advances LastLatencySample.
+// NotifyRequestResult call advances LastLatencySample.
 func TestLatencyTimestampUpdatesOnEachSample(t *testing.T) {
 	s := New()
-	s.NotifyRequestLatency("peerA", 100*time.Millisecond)
+	s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
 	first := s.GetAllPeerStats()["peerA"].LastLatencySample
 
 	// Small sleep so the second timestamp is detectably later.
 	time.Sleep(2 * time.Millisecond)
-	s.NotifyRequestLatency("peerA", 200*time.Millisecond)
+	s.NotifyRequestResult("peerA", 200*time.Millisecond, false)
 	second := s.GetAllPeerStats()["peerA"].LastLatencySample
 
 	if !second.After(first) {
 		t.Fatalf("expected second sample timestamp > first, got first=%v second=%v", first, second)
+	}
+}
+
+// TestRequestResultTimeoutCounting verifies that timeout=true increments
+// RequestTimeouts (not RequestSuccesses) and still updates the EMA.
+func TestRequestResultTimeoutCounting(t *testing.T) {
+	s := New()
+	s.NotifyRequestResult("peerA", 5*time.Second, true)
+
+	ps := s.GetAllPeerStats()["peerA"]
+	if ps.RequestTimeouts != 1 {
+		t.Fatalf("expected RequestTimeouts=1, got %d", ps.RequestTimeouts)
+	}
+	if ps.RequestSuccesses != 0 {
+		t.Fatalf("expected RequestSuccesses=0, got %d", ps.RequestSuccesses)
+	}
+	if ps.RequestLatencyEMA != 5*time.Second {
+		t.Fatalf("EMA should bootstrap to timeout value, got %v", ps.RequestLatencyEMA)
+	}
+}
+
+// TestRequestResultMixedCounting verifies that a mix of successes and
+// timeouts increments the correct counters independently.
+func TestRequestResultMixedCounting(t *testing.T) {
+	s := New()
+	s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
+	s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
+	s.NotifyRequestResult("peerA", 5*time.Second, true)
+
+	ps := s.GetAllPeerStats()["peerA"]
+	if ps.RequestSuccesses != 2 {
+		t.Fatalf("expected RequestSuccesses=2, got %d", ps.RequestSuccesses)
+	}
+	if ps.RequestTimeouts != 1 {
+		t.Fatalf("expected RequestTimeouts=1, got %d", ps.RequestTimeouts)
 	}
 }

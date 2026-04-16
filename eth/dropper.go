@@ -81,7 +81,7 @@ var protectionCategories = []protectionCategory{
 		// whose EMA reaches the timeout also score low by this path because
 		// the reciprocal of a very large duration is tiny but positive; the
 		// per-pool top-N will still push faster peers ahead of them.
-		if s.RequestSamples < peerstats.MinLatencySamples {
+		if s.RequestSuccesses+s.RequestTimeouts < peerstats.MinLatencySamples {
 			return 0
 		}
 		// Freshness gate: a peer that earned a fast EMA but then went
