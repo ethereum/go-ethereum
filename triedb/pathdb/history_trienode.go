@@ -375,7 +375,7 @@ func decodeKeyEntry(keySection []byte, offset int) (uint64, uint64, []byte, int,
 	byteRead += nn
 
 	// Validate that the values can fit in an int to prevent overflow on 32-bit systems
-	if nShared > uint64(math.MaxUint32) || nUnshared > uint64(math.MaxUint32) || nValue > uint64(math.MaxUint32) {
+	if nShared > uint64(math.MaxInt) || nUnshared > uint64(math.MaxInt) || nValue > uint64(math.MaxInt) {
 		return 0, 0, nil, 0, errors.New("key/value size too large")
 	}
 
