@@ -422,7 +422,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 		{limit + 1, nil, nil, limit}, // No more than the possible block count should be returned
 		{0, []common.Hash{backend.chain.Genesis().Hash()}, []bool{true}, 1},      // The genesis block should be retrievable
 		{0, []common.Hash{backend.chain.CurrentBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
-		{0, []common.Hash{{}}, []bool{false}, 0},                                 // A non existent block should not be returned
+		{0, []common.Hash{{}}, []bool{false}, 1},                                 // A non existent block should not be returned
 
 		// Existing and non-existing blocks interleaved should not cause problems
 		{0, []common.Hash{
@@ -433,7 +433,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 			{},
 			backend.chain.GetBlockByNumber(100).Hash(),
 			{},
-		}, []bool{false, true, false, true, false, true, false}, 3},
+		}, []bool{false, true, false, true, false, true, false}, 7},
 	}
 	// Run each of the tests and verify the results against the chain
 	for i, tt := range tests {
@@ -460,9 +460,13 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 		}
 		for j, hash := range tt.explicit {
 			hashes = append(hashes, hash)
-			if tt.available[j] && len(bodies) < tt.expected {
-				block := backend.chain.GetBlockByHash(hash)
-				bodies = append(bodies, encodeBody(block))
+			if len(bodies) < tt.expected {
+				if tt.available[j] {
+					block := backend.chain.GetBlockByHash(hash)
+					bodies = append(bodies, encodeBody(block))
+				} else {
+					bodies = append(bodies, BlockBody{})
+				}
 			}
 		}
 
@@ -590,9 +594,9 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 	)
 	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
 		if i == 1 {
-			// Insert a missing block hash to verify the server returns a nil placeholder
+			// Insert a missing block hash to verify the server returns an empty placeholder
 			hashes = append(hashes, common.HexToHash("0xdeadbeef"))
-			receipts.Append(nil)
+			receipts.AppendRaw(rlp.EmptyList)
 		}
 		block := backend.chain.GetBlockByNumber(i)
 		hashes = append(hashes, block.Hash())

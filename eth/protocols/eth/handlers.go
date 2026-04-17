@@ -241,6 +241,9 @@ func ServiceGetBlockBodiesQuery(chain *core.BlockChain, query GetBlockBodiesRequ
 		if data := chain.GetBodyRLP(hash); len(data) != 0 {
 			bodies = append(bodies, data)
 			bytes += len(data)
+		} else {
+			// Append an empty body [[], []] as placeholder for missing block
+			bodies = append(bodies, []byte{0xc2, 0xc0, 0xc0})
 		}
 	}
 	return bodies
@@ -281,18 +284,18 @@ func ServiceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 		// Retrieve the requested block's receipts
 		results := chain.GetReceiptsRLP(hash)
 		if results == nil {
-			receipts.Append(nil)
+			receipts.AppendRaw(rlp.EmptyList)
 			continue
 		}
 		body := chain.GetBodyRLP(hash)
 		if body == nil {
-			receipts.Append(nil)
+			receipts.AppendRaw(rlp.EmptyList)
 			continue
 		}
 		results, _, err := blockReceiptsToNetwork(results, body, receiptQueryParams{})
 		if err != nil {
 			log.Error("Error in block receipts conversion", "hash", hash, "err", err)
-			receipts.Append(nil)
+			receipts.AppendRaw(rlp.EmptyList)
 			continue
 		}
 		receipts.AppendRaw(results)
@@ -316,12 +319,12 @@ func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest,
 		}
 		results := chain.GetReceiptsRLP(hash)
 		if results == nil {
-			receipts.Append(nil)
+			receipts.AppendRaw(rlp.EmptyList)
 			continue
 		}
 		body := chain.GetBodyRLP(hash)
 		if body == nil {
-			receipts.Append(nil)
+			receipts.AppendRaw(rlp.EmptyList)
 			continue
 		}
 		q := receiptQueryParams{sizeLimit: uint64(maxPacketSize - bytes)}
@@ -331,7 +334,7 @@ func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest,
 		results, incomplete, err := blockReceiptsToNetwork(results, body, q)
 		if err != nil {
 			log.Error("Error in block receipts conversion", "hash", hash, "err", err)
-			receipts.Append(nil)
+			receipts.AppendRaw(rlp.EmptyList)
 			continue
 		}
 		if results == nil {
