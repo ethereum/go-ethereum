@@ -38,7 +38,7 @@ func (s *NodeStore) ComputeHash(ref NodeRef) common.Hash {
 	case KindStem:
 		return s.getStem(ref.Index()).Hash()
 	case KindHashed:
-		return s.getHashed(ref.Index()).hash
+		return s.getHashed(ref.Index()).Hash()
 	case KindEmpty:
 		return common.Hash{}
 	default:
@@ -259,7 +259,7 @@ func (s *NodeStore) ToDot(ref NodeRef, parent, path string) string {
 	case KindHashed:
 		hn := s.getHashed(ref.Index())
 		me := fmt.Sprintf("hash%s", path)
-		ret := fmt.Sprintf("%s [label=\"%x\"]\n", me, hn.hash)
+		ret := fmt.Sprintf("%s [label=\"%x\"]\n", me, hn.Hash())
 		ret = fmt.Sprintf("%s %s -> %s\n", ret, parent, me)
 		return ret
 	default:

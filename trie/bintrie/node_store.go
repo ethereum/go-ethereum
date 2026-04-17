@@ -151,7 +151,7 @@ func (s *NodeStore) freeHashedNode(idx uint32) {
 
 func (s *NodeStore) newHashedRef(hash common.Hash) NodeRef {
 	idx := s.allocHashed()
-	*s.getHashed(idx) = HashedNode{hash: hash}
+	*s.getHashed(idx) = HashedNode(hash)
 	return MakeRef(KindHashed, idx)
 }
 

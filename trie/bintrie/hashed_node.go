@@ -18,7 +18,8 @@ package bintrie
 
 import "github.com/ethereum/go-ethereum/common"
 
-// HashedNode is an unresolved node (hash only).
-type HashedNode struct {
-	hash common.Hash
-}
+// HashedNode is an unresolved node — only its hash is known.
+type HashedNode common.Hash
+
+// Hash returns the node's hash.
+func (h HashedNode) Hash() common.Hash { return common.Hash(h) }

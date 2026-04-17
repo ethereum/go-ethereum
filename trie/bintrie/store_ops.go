@@ -72,11 +72,11 @@ func (s *NodeStore) getSingle(ref NodeRef, stem []byte, suffix byte, resolver No
 			hn := s.getHashed(cur.Index())
 			parentNode := s.getInternal(parentIdx)
 			path := makeKeyPath(int(parentNode.depth), stem)
-			data, err := resolver(path, hn.hash)
+			data, err := resolver(path, hn.Hash())
 			if err != nil {
 				return nil, fmt.Errorf("getSingle resolve error: %w", err)
 			}
-			resolved, err := s.DeserializeNodeWithHash(data, int(parentNode.depth)+1, hn.hash)
+			resolved, err := s.DeserializeNodeWithHash(data, int(parentNode.depth)+1, hn.Hash())
 			if err != nil {
 				return nil, fmt.Errorf("getSingle deserialization error: %w", err)
 			}
@@ -143,11 +143,11 @@ func (s *NodeStore) getValuesAtStem(ref NodeRef, stem []byte, resolver NodeResol
 			hn := s.getHashed(cur.Index())
 			parentNode := s.getInternal(parentIdx)
 			path := makeKeyPath(int(parentNode.depth), stem)
-			data, err := resolver(path, hn.hash)
+			data, err := resolver(path, hn.Hash())
 			if err != nil {
 				return nil, fmt.Errorf("getValuesAtStem resolve error: %w", err)
 			}
-			resolved, err := s.DeserializeNodeWithHash(data, int(parentNode.depth)+1, hn.hash)
+			resolved, err := s.DeserializeNodeWithHash(data, int(parentNode.depth)+1, hn.Hash())
 			if err != nil {
 				return nil, fmt.Errorf("getValuesAtStem deserialization error: %w", err)
 			}
@@ -251,11 +251,11 @@ func (s *NodeStore) insertSingleInternal(stem []byte, suffix byte, value []byte,
 			parentNode := s.getInternal(p.internalIdx)
 			hn := s.getHashed(cur.Index())
 			path := makeKeyPath(int(parentNode.depth), stem)
-			data, err := resolver(path, hn.hash)
+			data, err := resolver(path, hn.Hash())
 			if err != nil {
 				return fmt.Errorf("insertSingle resolve error: %w", err)
 			}
-			resolved, err := s.DeserializeNodeWithHash(data, int(parentNode.depth)+1, hn.hash)
+			resolved, err := s.DeserializeNodeWithHash(data, int(parentNode.depth)+1, hn.Hash())
 			if err != nil {
 				return fmt.Errorf("insertSingle deserialization error: %w", err)
 			}
@@ -370,11 +370,11 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 				}
 				hn := s.getHashed(node.left.Index())
 				path := makeKeyPath(int(node.depth), stem)
-				data, err := resolver(path, hn.hash)
+				data, err := resolver(path, hn.Hash())
 				if err != nil {
 					return ref, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
 				}
-				resolved, err := s.DeserializeNodeWithHash(data, int(node.depth)+1, hn.hash)
+				resolved, err := s.DeserializeNodeWithHash(data, int(node.depth)+1, hn.Hash())
 				if err != nil {
 					return ref, fmt.Errorf("InsertValuesAtStem deserialization error: %w", err)
 				}
@@ -393,11 +393,11 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 				}
 				hn := s.getHashed(node.right.Index())
 				path := makeKeyPath(int(node.depth), stem)
-				data, err := resolver(path, hn.hash)
+				data, err := resolver(path, hn.Hash())
 				if err != nil {
 					return ref, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
 				}
-				resolved, err := s.DeserializeNodeWithHash(data, int(node.depth)+1, hn.hash)
+				resolved, err := s.DeserializeNodeWithHash(data, int(node.depth)+1, hn.Hash())
 				if err != nil {
 					return ref, fmt.Errorf("InsertValuesAtStem deserialization error: %w", err)
 				}
@@ -437,11 +437,11 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 		if resolver == nil {
 			return ref, errors.New("InsertValuesAtStem: resolver is nil")
 		}
-		data, err := resolver(path, hn.hash)
+		data, err := resolver(path, hn.Hash())
 		if err != nil {
 			return ref, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
 		}
-		resolved, err := s.DeserializeNodeWithHash(data, depth, hn.hash)
+		resolved, err := s.DeserializeNodeWithHash(data, depth, hn.Hash())
 		if err != nil {
 			return ref, fmt.Errorf("InsertValuesAtStem deserialization error: %w", err)
 		}

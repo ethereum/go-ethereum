@@ -126,12 +126,12 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 			return false
 		}
 		hn := it.store.getHashed(it.current.Index())
-		data, err := it.trie.nodeResolver(it.Path(), hn.hash)
+		data, err := it.trie.nodeResolver(it.Path(), hn.Hash())
 		if err != nil {
 			it.lastErr = err
 			return false
 		}
-		resolved, err := it.store.DeserializeNodeWithHash(data, len(it.stack)-1, hn.hash)
+		resolved, err := it.store.DeserializeNodeWithHash(data, len(it.stack)-1, hn.Hash())
 		if err != nil {
 			it.lastErr = err
 			return false
