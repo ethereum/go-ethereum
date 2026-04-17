@@ -92,6 +92,9 @@ func stateTestCmd(ctx *cli.Context) error {
 		}
 		report(ctx, results)
 	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
 	return nil
 }
 
