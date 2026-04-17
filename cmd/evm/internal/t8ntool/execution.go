@@ -17,9 +17,11 @@
 package t8ntool
 
 import (
+	"encoding/json"
 	"fmt"
 	stdmath "math"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -47,6 +49,9 @@ type Prestate struct {
 	Env        stEnv                         `json:"env"`
 	Pre        types.GenesisAlloc            `json:"pre"`
 	TreeLeaves map[common.Hash]hexutil.Bytes `json:"vkt,omitempty"`
+	// AllocPath, when non-empty, causes Apply to stream the alloc from disk
+	// instead of reading Pre, so the full map never materializes in memory.
+	AllocPath string `json:"-"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type ExecutionResult -field-override executionResultMarshaling -out gen_execresult.go
@@ -146,8 +151,19 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		return h
 	}
 	var (
-		isEIP4762   = chainConfig.IsUBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
-		statedb     = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isEIP4762)
+		isEIP4762 = chainConfig.IsUBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+		statedb   *state.StateDB
+	)
+	if pre.AllocPath != "" {
+		var err error
+		statedb, err = MakePreStateStreaming(rawdb.NewMemoryDatabase(), pre.AllocPath, isEIP4762)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	} else {
+		statedb = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isEIP4762)
+	}
+	var (
 		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp)
 		gaspool     = core.NewGasPool(pre.Env.GasLimit)
 		blockHash   = common.Hash{0x13, 0x37}
@@ -412,6 +428,76 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool
 		panic(fmt.Errorf("failed to reopen state after commit: %v", err))
 	}
 	return statedb
+}
+
+// MakePreStateStreaming is like MakePreState, but decodes the alloc from disk
+// one account at a time so the full map is never held in memory.
+func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie bool) (*state.StateDB, error) {
+	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true, IsUBT: isBintrie})
+	sdb := state.NewDatabase(tdb, nil)
+
+	root := types.EmptyRootHash
+	if isBintrie {
+		root = types.EmptyBinaryHash
+	}
+	statedb, err := state.New(root, sdb)
+	if err != nil {
+		return nil, NewError(ErrorEVM, fmt.Errorf("failed to create initial statedb: %v", err))
+	}
+
+	f, err := os.Open(allocPath)
+	if err != nil {
+		return nil, NewError(ErrorIO, fmt.Errorf("failed reading alloc file: %v", err))
+	}
+	defer f.Close()
+
+	dec := json.NewDecoder(f)
+	tok, err := dec.Token()
+	if err != nil {
+		return nil, NewError(ErrorJson, fmt.Errorf("failed reading alloc opening token: %v", err))
+	}
+	if d, ok := tok.(json.Delim); !ok || d != '{' {
+		return nil, NewError(ErrorJson, fmt.Errorf("expected alloc object, got %v", tok))
+	}
+	for dec.More() {
+		keyTok, err := dec.Token()
+		if err != nil {
+			return nil, NewError(ErrorJson, fmt.Errorf("failed reading alloc key: %v", err))
+		}
+		keyStr, ok := keyTok.(string)
+		if !ok {
+			return nil, NewError(ErrorJson, fmt.Errorf("alloc key not a string: %v", keyTok))
+		}
+		addr := common.HexToAddress(keyStr)
+		var acct types.Account
+		if err := dec.Decode(&acct); err != nil {
+			return nil, NewError(ErrorJson, fmt.Errorf("failed decoding account %s: %v", keyStr, err))
+		}
+		statedb.SetCode(addr, acct.Code, tracing.CodeChangeUnspecified)
+		statedb.SetNonce(addr, acct.Nonce, tracing.NonceChangeGenesis)
+		if acct.Balance != nil {
+			statedb.SetBalance(addr, uint256.MustFromBig(acct.Balance), tracing.BalanceIncreaseGenesisBalance)
+		}
+		for k, v := range acct.Storage {
+			statedb.SetState(addr, k, v)
+		}
+	}
+	if _, err := dec.Token(); err != nil {
+		return nil, NewError(ErrorJson, fmt.Errorf("failed reading alloc closing token: %v", err))
+	}
+
+	root, err = statedb.Commit(0, false, false)
+	if err != nil {
+		return nil, NewError(ErrorEVM, fmt.Errorf("failed to commit initial state: %v", err))
+	}
+	if isBintrie {
+		return statedb, nil
+	}
+	statedb, err = state.New(root, sdb)
+	if err != nil {
+		return nil, NewError(ErrorEVM, fmt.Errorf("failed to reopen state after commit: %v", err))
+	}
+	return statedb, nil
 }
 
 func rlpHash(x any) (h common.Hash) {
