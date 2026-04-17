@@ -173,7 +173,7 @@ func GetChainConfig(forkString string) (baseConfig *params.ChainConfig, eips []i
 	}
 	for _, eip := range eipsStrings {
 		if eipNum, err := strconv.Atoi(eip); err != nil {
-			return nil, nil, fmt.Errorf("syntax error, invalid eip number %v", eipNum)
+			return nil, nil, fmt.Errorf("syntax error, invalid eip number %v", eip)
 		} else {
 			if !vm.ValidEip(eipNum) {
 				return nil, nil, fmt.Errorf("syntax error, invalid eip number %v", eipNum)
