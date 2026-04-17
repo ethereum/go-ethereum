@@ -562,9 +562,10 @@ func (q *queue) DeliverBodies(id string, hashes eth.BlockBodyHashes, bodies []et
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	txLists := make([][]*types.Transaction, len(bodies))
-	uncleLists := make([][]*types.Header, len(bodies))
-	withdrawalLists := make([][]*types.Withdrawal, len(bodies))
+	nresults := len(hashes.TransactionRoots)
+	txLists := make([][]*types.Transaction, nresults)
+	uncleLists := make([][]*types.Header, nresults)
+	withdrawalLists := make([][]*types.Withdrawal, nresults)
 
 	validate := func(index int, header *types.Header) error {
 		// Detect skipped response: the peer returned an empty body for a non-empty block
@@ -618,8 +619,9 @@ func (q *queue) DeliverBodies(id string, hashes eth.BlockBodyHashes, bodies []et
 		result.Withdrawals = withdrawalLists[index]
 		result.SetBodyDone()
 	}
+
 	return q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool,
-		bodyReqTimer, bodyInMeter, bodyDropMeter, len(bodies), validate, reconstruct)
+		bodyReqTimer, bodyInMeter, bodyDropMeter, nresults, validate, reconstruct)
 }
 
 // DeliverReceipts injects a receipt retrieval response into the results queue.
