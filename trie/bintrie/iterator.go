@@ -47,6 +47,8 @@ func newBinaryNodeIterator(t *BinaryTrie, _ []byte) (trie.NodeIterator, error) {
 	return it, nil
 }
 
+// Next moves the iterator to the next node. If descend is false, children of
+// the current node are skipped.
 func (it *binaryNodeIterator) Next(descend bool) bool {
 	if it.lastErr == errIteratorEnd {
 		return false
@@ -60,11 +62,12 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 
 	switch it.current.Kind() {
 	case KindInternal:
+		// index: 0 = nothing visited, 1 = left visited, 2 = right visited.
 		node := it.store.getInternal(it.current.Index())
 		context := &it.stack[len(it.stack)-1]
 
 		if !descend {
-			// Skip children: pop this node and advance parent
+			// Skip children: pop this node and advance parent.
 			if len(it.stack) == 1 {
 				it.lastErr = errIteratorEnd
 				return false
@@ -75,6 +78,7 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 			return it.Next(true)
 		}
 
+		// Recurse into both children.
 		if context.Index == 0 {
 			if !node.left.IsEmpty() {
 				it.stack = append(it.stack, binaryNodeIteratorState{Node: node.left})
@@ -93,6 +97,7 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 			context.Index++
 		}
 
+		// Reached the end of this node; go back to the parent unless we're at the root.
 		if len(it.stack) == 1 {
 			it.lastErr = errIteratorEnd
 			return false
@@ -103,6 +108,7 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 		return it.Next(descend)
 
 	case KindStem:
+		// Look for the next non-empty value in this stem.
 		sn := it.store.getStem(it.current.Index())
 		for i := it.stack[len(it.stack)-1].Index; i < 256; i++ {
 			if sn.hasValue(byte(i)) {
@@ -111,6 +117,7 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 			}
 		}
 
+		// No more values in this stem; go back to parent to get the next leaf.
 		if len(it.stack) == 1 {
 			it.lastErr = errIteratorEnd
 			return false
@@ -121,6 +128,8 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 		return it.Next(descend)
 
 	case KindHashed:
+		// Resolve the hashed node from disk, then rewire the parent to point at the
+		// resolved node in place.
 		if len(it.stack) < 2 {
 			it.lastErr = errors.New("cannot resolve hashed root during iteration")
 			return false
@@ -137,7 +146,6 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 			return false
 		}
 
-		// Update the stack and parent with the resolved node
 		oldHashedIdx := it.current.Index()
 		it.current = resolved
 		it.stack[len(it.stack)-1].Node = resolved
@@ -170,6 +178,9 @@ func (it *binaryNodeIterator) Hash() common.Hash {
 	return it.store.ComputeHash(it.current)
 }
 
+// Parent returns the hash of the current node's parent. When the immediate
+// parent is an internal node whose hash has not been materialised, the
+// returned hash may be the one of a grandparent instead.
 func (it *binaryNodeIterator) Parent() common.Hash {
 	if len(it.stack) < 2 {
 		return common.Hash{}
@@ -178,6 +189,7 @@ func (it *binaryNodeIterator) Parent() common.Hash {
 }
 
 // Path returns the bit-path to the current node.
+// Callers must not retain references to the returned slice after calling Next.
 func (it *binaryNodeIterator) Path() []byte {
 	if it.Leaf() {
 		return it.LeafKey()
@@ -196,6 +208,11 @@ func (it *binaryNodeIterator) NodeBlob() []byte {
 	return it.store.SerializeNode(it.current)
 }
 
+// Leaf reports whether the iterator is currently positioned at a leaf value.
+// A StemNode holds up to 256 values; the iterator is only "at a leaf" when
+// positioned at a specific non-nil value inside the stem, not merely at the
+// StemNode itself. The stack Index points to the NEXT position after the
+// current value, so Index == 0 means we haven't yielded anything yet.
 func (it *binaryNodeIterator) Leaf() bool {
 	if it.current.Kind() != KindStem {
 		return false
@@ -215,6 +232,9 @@ func (it *binaryNodeIterator) Leaf() bool {
 	return sn.hasValue(byte(currentValueIndex))
 }
 
+// LeafKey returns the key of the leaf. Panics if the iterator is not
+// positioned at a leaf. Callers must not retain references to the returned
+// slice after calling Next.
 func (it *binaryNodeIterator) LeafKey() []byte {
 	if it.current.Kind() != KindStem {
 		panic("Leaf() called on an binary node iterator not at a leaf location")
@@ -223,6 +243,9 @@ func (it *binaryNodeIterator) LeafKey() []byte {
 	return sn.Key(it.stack[len(it.stack)-1].Index - 1)
 }
 
+// LeafBlob returns the leaf value. Panics if the iterator is not positioned
+// at a leaf. Callers must not retain references to the returned slice after
+// calling Next.
 func (it *binaryNodeIterator) LeafBlob() []byte {
 	if it.current.Kind() != KindStem {
 		panic("LeafBlob() called on an binary node iterator not at a leaf location")
@@ -231,6 +254,9 @@ func (it *binaryNodeIterator) LeafBlob() []byte {
 	return sn.getValue(byte(it.stack[len(it.stack)-1].Index - 1))
 }
 
+// LeafProof returns the Merkle proof of the leaf. Panics if the iterator is
+// not positioned at a leaf. Callers must not retain references to the
+// returned slices after calling Next.
 func (it *binaryNodeIterator) LeafProof() [][]byte {
 	if it.current.Kind() != KindStem {
 		panic("LeafProof() called on an binary node iterator not at a leaf location")

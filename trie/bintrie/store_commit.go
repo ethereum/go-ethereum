@@ -46,7 +46,12 @@ func (s *NodeStore) ComputeHash(ref NodeRef) common.Hash {
 	}
 }
 
-// hashInternal hashes an InternalNode, parallelising at shallow depths.
+// hashInternal hashes an InternalNode and caches the result.
+//
+// At shallow depths (< parallelHashDepth) the left subtree is hashed in a
+// goroutine while the right subtree is hashed inline, then the two digests
+// are combined. Below that threshold the goroutine spawn cost outweighs the
+// hashing work, so deeper nodes hash both children sequentially.
 func (s *NodeStore) hashInternal(idx uint32) common.Hash {
 	node := s.getInternal(idx)
 	if !node.mustRecompute {
