@@ -349,7 +349,7 @@ func TestImportECDSA(t *testing.T) {
 	_, ks := tmpKeyStore(t)
 	key, err := crypto.GenerateKey()
 	if err != nil {
-		t.Fatalf("failed to generate key: %v", key)
+		t.Fatalf("failed to generate key: %v", err)
 	}
 	if _, err = ks.ImportECDSA(key, "old"); err != nil {
 		t.Errorf("importing failed: %v", err)
