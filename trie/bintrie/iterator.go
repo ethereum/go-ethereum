@@ -67,24 +67,13 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 		// index: 0 = nothing visited, 1=left visited, 2=right visited
 		context := &it.stack[len(it.stack)-1]
 
-		// recurse into both children
-		if context.Index == 0 {
-			if _, isempty := node.left.(Empty); node.left != nil && !isempty {
-				it.stack = append(it.stack, binaryNodeIteratorState{Node: node.left})
-				it.current = node.left
+		for context.Index < 2 {
+			child := node.children[context.Index]
+			if _, isempty := child.(Empty); child != nil && !isempty {
+				it.stack = append(it.stack, binaryNodeIteratorState{Node: child})
+				it.current = child
 				return it.Next(descend)
 			}
-
-			context.Index++
-		}
-
-		if context.Index == 1 {
-			if _, isempty := node.right.(Empty); node.right != nil && !isempty {
-				it.stack = append(it.stack, binaryNodeIteratorState{Node: node.right})
-				it.current = node.right
-				return it.Next(descend)
-			}
-
 			context.Index++
 		}
 
@@ -139,11 +128,7 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 		it.stack[len(it.stack)-1].Node = it.current
 		if len(it.stack) >= 2 {
 			parent := &it.stack[len(it.stack)-2]
-			if parent.Index == 0 {
-				parent.Node.(*InternalNode).left = it.current
-			} else {
-				parent.Node.(*InternalNode).right = it.current
-			}
+			parent.Node.(*InternalNode).children[parent.Index] = it.current
 		}
 		return it.Next(descend)
 	case Empty:
@@ -268,15 +253,8 @@ func (it *binaryNodeIterator) LeafProof() [][]byte {
 	for i := range it.stack[:len(it.stack)-2] {
 		state := it.stack[i]
 		internalNode := state.Node.(*InternalNode) // should panic if the node isn't an InternalNode
-
-		// Add the sibling hash to the proof
-		if state.Index == 0 {
-			// We came from left, so include right sibling
-			proof = append(proof, internalNode.right.Hash().Bytes())
-		} else {
-			// We came from right, so include left sibling
-			proof = append(proof, internalNode.left.Hash().Bytes())
-		}
+		sibling := internalNode.children[1-state.Index]
+		proof = append(proof, sibling.Hash().Bytes())
 	}
 
 	// Add the stem and siblings

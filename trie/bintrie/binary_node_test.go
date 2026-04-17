@@ -30,9 +30,8 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 	rightHash := common.HexToHash("0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321")
 
 	node := &InternalNode{
-		depth: 5,
-		left:  HashedNode(leftHash),
-		right: HashedNode(rightHash),
+		depth:    5,
+		children: [2]BinaryNode{HashedNode(leftHash), HashedNode(rightHash)},
 	}
 
 	// Serialize the node
@@ -64,13 +63,13 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 		t.Errorf("Expected depth 5, got %d", internalNode.depth)
 	}
 
-	// Check the left and right hashes
-	if internalNode.left.Hash() != leftHash {
-		t.Errorf("Left hash mismatch: expected %x, got %x", leftHash, internalNode.left.Hash())
+	// Check the children hashes
+	if internalNode.children[0].Hash() != leftHash {
+		t.Errorf("Left hash mismatch: expected %x, got %x", leftHash, internalNode.children[0].Hash())
 	}
 
-	if internalNode.right.Hash() != rightHash {
-		t.Errorf("Right hash mismatch: expected %x, got %x", rightHash, internalNode.right.Hash())
+	if internalNode.children[1].Hash() != rightHash {
+		t.Errorf("Right hash mismatch: expected %x, got %x", rightHash, internalNode.children[1].Hash())
 	}
 }
 

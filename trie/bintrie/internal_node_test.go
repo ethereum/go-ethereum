@@ -37,15 +37,17 @@ func TestInternalNodeGet(t *testing.T) {
 
 	node := &InternalNode{
 		depth: 0,
-		left: &StemNode{
-			Stem:   leftStem,
-			Values: leftValues[:],
-			depth:  1,
-		},
-		right: &StemNode{
-			Stem:   rightStem,
-			Values: rightValues[:],
-			depth:  1,
+		children: [2]BinaryNode{
+			&StemNode{
+				Stem:   leftStem,
+				Values: leftValues[:],
+				depth:  1,
+			},
+			&StemNode{
+				Stem:   rightStem,
+				Values: rightValues[:],
+				depth:  1,
+			},
 		},
 	}
 
@@ -79,9 +81,8 @@ func TestInternalNodeGetWithResolver(t *testing.T) {
 	hashedChild := HashedNode(common.HexToHash("0x1234"))
 
 	node := &InternalNode{
-		depth: 0,
-		left:  hashedChild,
-		right: Empty{},
+		depth:    0,
+		children: [2]BinaryNode{hashedChild, Empty{}},
 	}
 
 	// Mock resolver that returns a stem node
@@ -118,9 +119,8 @@ func TestInternalNodeGetWithResolver(t *testing.T) {
 func TestInternalNodeInsert(t *testing.T) {
 	// Start with an internal node with empty children
 	node := &InternalNode{
-		depth: 0,
-		left:  Empty{},
-		right: Empty{},
+		depth:    0,
+		children: [2]BinaryNode{Empty{}, Empty{}},
 	}
 
 	// Insert a value into the left subtree
@@ -139,9 +139,9 @@ func TestInternalNodeInsert(t *testing.T) {
 	}
 
 	// Check that left child is now a StemNode
-	leftStem, ok := internalNode.left.(*StemNode)
+	leftStem, ok := internalNode.children[0].(*StemNode)
 	if !ok {
-		t.Fatalf("Expected left child to be StemNode, got %T", internalNode.left)
+		t.Fatalf("Expected left child to be StemNode, got %T", internalNode.children[0])
 	}
 
 	// Check the inserted value
@@ -150,9 +150,9 @@ func TestInternalNodeInsert(t *testing.T) {
 	}
 
 	// Right child should still be Empty
-	_, ok = internalNode.right.(Empty)
+	_, ok = internalNode.children[1].(Empty)
 	if !ok {
-		t.Errorf("Expected right child to remain Empty, got %T", internalNode.right)
+		t.Errorf("Expected right child to remain Empty, got %T", internalNode.children[1])
 	}
 }
 
@@ -175,9 +175,8 @@ func TestInternalNodeCopy(t *testing.T) {
 	rightStem.Values[0] = common.HexToHash("0x0202").Bytes()
 
 	node := &InternalNode{
-		depth: 0,
-		left:  leftStem,
-		right: rightStem,
+		depth:    0,
+		children: [2]BinaryNode{leftStem, rightStem},
 	}
 
 	// Create a copy
@@ -193,14 +192,14 @@ func TestInternalNodeCopy(t *testing.T) {
 	}
 
 	// Check that children are copied
-	copiedLeft, ok := copiedInternal.left.(*StemNode)
+	copiedLeft, ok := copiedInternal.children[0].(*StemNode)
 	if !ok {
-		t.Fatalf("Expected left child to be StemNode, got %T", copiedInternal.left)
+		t.Fatalf("Expected left child to be StemNode, got %T", copiedInternal.children[0])
 	}
 
-	copiedRight, ok := copiedInternal.right.(*StemNode)
+	copiedRight, ok := copiedInternal.children[1].(*StemNode)
 	if !ok {
-		t.Fatalf("Expected right child to be StemNode, got %T", copiedInternal.right)
+		t.Fatalf("Expected right child to be StemNode, got %T", copiedInternal.children[1])
 	}
 
 	// Verify deep copy (children should be different objects)
@@ -224,9 +223,8 @@ func TestInternalNodeCopy(t *testing.T) {
 func TestInternalNodeHash(t *testing.T) {
 	// Create an internal node
 	node := &InternalNode{
-		depth: 0,
-		left:  HashedNode(common.HexToHash("0x1111")),
-		right: HashedNode(common.HexToHash("0x2222")),
+		depth:    0,
+		children: [2]BinaryNode{HashedNode(common.HexToHash("0x1111")), HashedNode(common.HexToHash("0x2222"))},
 	}
 
 	hash1 := node.Hash()
@@ -238,7 +236,7 @@ func TestInternalNodeHash(t *testing.T) {
 	}
 
 	// Changing a child should change the hash
-	node.left = HashedNode(common.HexToHash("0x3333"))
+	node.children[0] = HashedNode(common.HexToHash("0x3333"))
 	node.mustRecompute = true
 	hash3 := node.Hash()
 	if hash1 == hash3 {
@@ -248,8 +246,7 @@ func TestInternalNodeHash(t *testing.T) {
 	// Test with nil children (should use zero hash)
 	nodeWithNil := &InternalNode{
 		depth:         0,
-		left:          nil,
-		right:         HashedNode(common.HexToHash("0x4444")),
+		children:      [2]BinaryNode{nil, HashedNode(common.HexToHash("0x4444"))},
 		mustRecompute: true,
 	}
 	hashWithNil := nodeWithNil.Hash()
@@ -273,15 +270,17 @@ func TestInternalNodeGetValuesAtStem(t *testing.T) {
 
 	node := &InternalNode{
 		depth: 0,
-		left: &StemNode{
-			Stem:   leftStem,
-			Values: leftValues[:],
-			depth:  1,
-		},
-		right: &StemNode{
-			Stem:   rightStem,
-			Values: rightValues[:],
-			depth:  1,
+		children: [2]BinaryNode{
+			&StemNode{
+				Stem:   leftStem,
+				Values: leftValues[:],
+				depth:  1,
+			},
+			&StemNode{
+				Stem:   rightStem,
+				Values: rightValues[:],
+				depth:  1,
+			},
 		},
 	}
 
@@ -314,9 +313,8 @@ func TestInternalNodeGetValuesAtStem(t *testing.T) {
 func TestInternalNodeInsertValuesAtStem(t *testing.T) {
 	// Start with an internal node with empty children
 	node := &InternalNode{
-		depth: 0,
-		left:  Empty{},
-		right: Empty{},
+		depth:    0,
+		children: [2]BinaryNode{Empty{}, Empty{}},
 	}
 
 	// Insert values at a stem in the left subtree
@@ -336,9 +334,9 @@ func TestInternalNodeInsertValuesAtStem(t *testing.T) {
 	}
 
 	// Check that left child is now a StemNode with the values
-	leftStem, ok := internalNode.left.(*StemNode)
+	leftStem, ok := internalNode.children[0].(*StemNode)
 	if !ok {
-		t.Fatalf("Expected left child to be StemNode, got %T", internalNode.left)
+		t.Fatalf("Expected left child to be StemNode, got %T", internalNode.children[0])
 	}
 
 	if !bytes.Equal(leftStem.Values[5], values[5]) {
@@ -366,9 +364,8 @@ func TestInternalNodeCollectNodes(t *testing.T) {
 	rightStem.Stem[0] = 0x80
 
 	node := &InternalNode{
-		depth: 0,
-		left:  leftStem,
-		right: rightStem,
+		depth:    0,
+		children: [2]BinaryNode{leftStem, rightStem},
 	}
 
 	var collectedPaths [][]byte
@@ -412,12 +409,14 @@ func TestInternalNodeGetHeight(t *testing.T) {
 	// Right subtree: depth 1 (stem)
 	leftInternal := &InternalNode{
 		depth: 1,
-		left: &StemNode{
-			Stem:   make([]byte, 31),
-			Values: make([][]byte, 256),
-			depth:  2,
+		children: [2]BinaryNode{
+			&StemNode{
+				Stem:   make([]byte, 31),
+				Values: make([][]byte, 256),
+				depth:  2,
+			},
+			Empty{},
 		},
-		right: Empty{},
 	}
 
 	rightStem := &StemNode{
@@ -427,9 +426,8 @@ func TestInternalNodeGetHeight(t *testing.T) {
 	}
 
 	node := &InternalNode{
-		depth: 0,
-		left:  leftInternal,
-		right: rightStem,
+		depth:    0,
+		children: [2]BinaryNode{leftInternal, rightStem},
 	}
 
 	height := node.GetHeight()
@@ -444,9 +442,8 @@ func TestInternalNodeGetHeight(t *testing.T) {
 func TestInternalNodeDepthTooLarge(t *testing.T) {
 	// Create an internal node at max depth
 	node := &InternalNode{
-		depth: 31*8 + 1,
-		left:  Empty{},
-		right: Empty{},
+		depth:    31*8 + 1,
+		children: [2]BinaryNode{Empty{}, Empty{}},
 	}
 
 	stem := make([]byte, 31)

@@ -50,16 +50,9 @@ func (bt *StemNode) Insert(key []byte, value []byte, _ NodeResolverFn, depth int
 
 		n := &InternalNode{depth: bt.depth, mustRecompute: true}
 		bt.depth++
-		var child, other *BinaryNode
-		if bitStem == 0 {
-			n.left = bt
-			child = &n.left
-			other = &n.right
-		} else {
-			n.right = bt
-			child = &n.right
-			other = &n.left
-		}
+		n.children[bitStem] = bt
+		child := &n.children[bitStem]
+		other := &n.children[1-bitStem]
 
 		bitKey := key[n.depth/8] >> (7 - (n.depth % 8)) & 1
 		if bitKey == bitStem {
@@ -174,16 +167,9 @@ func (bt *StemNode) InsertValuesAtStem(key []byte, values [][]byte, _ NodeResolv
 
 		n := &InternalNode{depth: bt.depth, mustRecompute: true}
 		bt.depth++
-		var child, other *BinaryNode
-		if bitStem == 0 {
-			n.left = bt
-			child = &n.left
-			other = &n.right
-		} else {
-			n.right = bt
-			child = &n.right
-			other = &n.left
-		}
+		n.children[bitStem] = bt
+		child := &n.children[bitStem]
+		other := &n.children[1-bitStem]
 
 		bitKey := key[n.depth/8] >> (7 - (n.depth % 8)) & 1
 		if bitKey == bitStem {
