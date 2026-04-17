@@ -43,5 +43,5 @@ func sha256Sum256(data []byte) [32]byte {
 	return sha256.Sum256(data)
 }
 
-// parallelHashDepth controls below which depth hashing is parallelised.
+// parallelHashDepth controls the tree hashing parallelization depth threshold
 const parallelHashDepth = 4
