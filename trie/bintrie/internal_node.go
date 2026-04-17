@@ -34,16 +34,6 @@ func keyToPath(depth int, key []byte) ([]byte, error) {
 	return path, nil
 }
 
-// makeKeyPath is like keyToPath but panics on invalid depth.
-func makeKeyPath(depth int, key []byte) []byte {
-	path := make([]byte, 0, depth+1)
-	for i := range depth + 1 {
-		bit := key[i/8] >> (7 - (i % 8)) & 1
-		path = append(path, bit)
-	}
-	return path
-}
-
 type InternalNode struct {
 	left, right   NodeRef
 	depth         uint8

@@ -71,7 +71,10 @@ func (s *NodeStore) getSingle(ref NodeRef, stem []byte, suffix byte, resolver No
 			}
 			hn := s.getHashed(cur.Index())
 			parentNode := s.getInternal(parentIdx)
-			path := makeKeyPath(int(parentNode.depth), stem)
+			path, err := keyToPath(int(parentNode.depth), stem)
+			if err != nil {
+				return nil, fmt.Errorf("getSingle path error: %w", err)
+			}
 			data, err := resolver(path, hn.Hash())
 			if err != nil {
 				return nil, fmt.Errorf("getSingle resolve error: %w", err)
@@ -142,7 +145,10 @@ func (s *NodeStore) getValuesAtStem(ref NodeRef, stem []byte, resolver NodeResol
 			}
 			hn := s.getHashed(cur.Index())
 			parentNode := s.getInternal(parentIdx)
-			path := makeKeyPath(int(parentNode.depth), stem)
+			path, err := keyToPath(int(parentNode.depth), stem)
+			if err != nil {
+				return nil, fmt.Errorf("getValuesAtStem path error: %w", err)
+			}
 			data, err := resolver(path, hn.Hash())
 			if err != nil {
 				return nil, fmt.Errorf("getValuesAtStem resolve error: %w", err)
@@ -250,7 +256,10 @@ func (s *NodeStore) insertSingleInternal(stem []byte, suffix byte, value []byte,
 			p := pathStack[pathLen-1]
 			parentNode := s.getInternal(p.internalIdx)
 			hn := s.getHashed(cur.Index())
-			path := makeKeyPath(int(parentNode.depth), stem)
+			path, err := keyToPath(int(parentNode.depth), stem)
+			if err != nil {
+				return fmt.Errorf("insertSingle path error: %w", err)
+			}
 			data, err := resolver(path, hn.Hash())
 			if err != nil {
 				return fmt.Errorf("insertSingle resolve error: %w", err)
@@ -369,7 +378,10 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 					return ref, errors.New("insertValuesAtStem: cannot resolve hashed node without resolver")
 				}
 				hn := s.getHashed(node.left.Index())
-				path := makeKeyPath(int(node.depth), stem)
+				path, err := keyToPath(int(node.depth), stem)
+				if err != nil {
+					return ref, fmt.Errorf("InsertValuesAtStem path error: %w", err)
+				}
 				data, err := resolver(path, hn.Hash())
 				if err != nil {
 					return ref, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
@@ -392,7 +404,10 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 					return ref, errors.New("insertValuesAtStem: cannot resolve hashed node without resolver")
 				}
 				hn := s.getHashed(node.right.Index())
-				path := makeKeyPath(int(node.depth), stem)
+				path, err := keyToPath(int(node.depth), stem)
+				if err != nil {
+					return ref, fmt.Errorf("InsertValuesAtStem path error: %w", err)
+				}
 				data, err := resolver(path, hn.Hash())
 				if err != nil {
 					return ref, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
