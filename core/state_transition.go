@@ -123,7 +123,7 @@ func FloorDataGas(rules params.Rules, data []byte) (uint64, error) {
 		tokenCost uint64
 	)
 	if rules.IsAmsterdam {
-		// EIP-7976 changes both how calldata is priced.
+		// EIP-7976 changes how calldata is priced.
 		// From 10/40 to 64/64 for zero/non-zero bytes.
 		tokens = uint64(len(data)) * params.TxTokenPerNonZeroByte
 		tokenCost = params.TxCostFloorPerToken7976
