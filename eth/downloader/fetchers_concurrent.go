@@ -323,18 +323,21 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			delete(pending, res.Req.Peer)
 			delete(stales, res.Req.Peer)
 
-			// Signal the dispatcher that the round trip is done. We'll drop the
-			// peer if the data turns out to be junk.
-			res.Done <- nil
-			res.Req.Close()
-
 			// If the peer was previously banned and failed to deliver its pack
 			// in a reasonable time frame, ignore its message.
 			if peer := d.peers.Peer(res.Req.Peer); peer != nil {
 				// Deliver the received chunk of data and check chain validity
 				accepted, err := queue.deliver(peer, res)
-				if errors.Is(err, errInvalidChain) || errors.Is(err, errInvalidBody) || errors.Is(err, errInvalidReceipt) {
+				if errors.Is(err, errInvalidChain) {
+					res.Done <- err
+					res.Req.Close()
 					return err
+				}
+				if errors.Is(err, errInvalidBody) || errors.Is(err, errInvalidReceipt) {
+					// Signal the dispatcher with the error to drop the peer.
+					res.Done <- err
+					res.Req.Close()
+					continue
 				}
 				// Unless a peer delivered something completely else than requested (usually
 				// caused by a timed out request which came through in the end), set it to
@@ -343,6 +346,9 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 					queue.updateCapacity(peer, accepted, res.Time)
 				}
 			}
+			// Signal the dispatcher that the round trip is done.
+			res.Done <- nil
+			res.Req.Close()
 
 		case cont := <-queue.waker():
 			// The header fetcher sent a continuation flag, check if it's done
