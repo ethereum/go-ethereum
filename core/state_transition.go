@@ -114,22 +114,38 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 		}
 	}
 	if accessList != nil {
-		gas.RegularGas += uint64(len(accessList)) * params.TxAccessListAddressGas
-		gas.RegularGas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
-	}
-	if authList != nil {
+		addresses := uint64(len(accessList))
+		storageKeys := uint64(accessList.StorageKeys())
+		if (math.MaxUint64-gas.RegularGas)/params.TxAccessListAddressGas < addresses {
+			return vm.GasCosts{}, ErrGasUintOverflow
+		}
+		gas.RegularGas += addresses * params.TxAccessListAddressGas
+		if (math.MaxUint64-gas.RegularGas)/params.TxAccessListStorageKeyGas < storageKeys {
+			return vm.GasCosts{}, ErrGasUintOverflow
+		}
+		gas.RegularGas += storageKeys * params.TxAccessListStorageKeyGas
+
+		// EIP-7981: access list data is charged in addition to the base charge.
 		if rules.IsAmsterdam {
-			gas.RegularGas += uint64(len(authList)) * params.TxAuthTupleRegularGas
-			gas.StateGas += uint64(len(authList)) * (params.AuthorizationCreationSize + params.AccountCreationSize) * costPerStateByte
-		} else {
-			gas.RegularGas += uint64(len(authList)) * params.CallNewAccountGas
+			const (
+				addressCost    = common.AddressLength * params.TxCostFloorPerToken7976 * params.TxTokenPerNonZeroByte
+				storageKeyCost = common.HashLength * params.TxCostFloorPerToken7976 * params.TxTokenPerNonZeroByte
+			)
+			if (math.MaxUint64-gas.RegularGas)/addressCost < addresses {
+				return vm.GasCosts{}, ErrGasUintOverflow
+			}
+			gas.RegularGas += addresses * addressCost
+			if (math.MaxUint64-gas.RegularGas)/storageKeyCost < storageKeys {
+				return vm.GasCosts{}, ErrGasUintOverflow
+			}
+			gas.RegularGas += storageKeys * storageKeyCost
 		}
 	}
 	return gas, nil
 }
 
 // FloorDataGas computes the minimum gas required for a transaction based on its data tokens (EIP-7623).
-func FloorDataGas(rules params.Rules, data []byte) (uint64, error) {
+func FloorDataGas(rules params.Rules, data []byte, accessList types.AccessList) (uint64, error) {
 	var (
 		tokens    uint64
 		tokenCost uint64
@@ -139,6 +155,9 @@ func FloorDataGas(rules params.Rules, data []byte) (uint64, error) {
 		// From 10/40 to 64/64 for zero/non-zero bytes.
 		tokens = uint64(len(data)) * params.TxTokenPerNonZeroByte
 		tokenCost = params.TxCostFloorPerToken7976
+		// EIP-7981 adds additional tokens for every entry in the accesslist
+		tokens += uint64(len(accessList)) * common.AddressLength * params.TxTokenPerNonZeroByte
+		tokens += uint64(accessList.StorageKeys()) * common.HashLength * params.TxTokenPerNonZeroByte
 	} else {
 		var (
 			z  = uint64(bytes.Count(data, []byte{0}))
@@ -486,7 +505,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 	// Compute the floor data cost (EIP-7623), needed for both Prague and Amsterdam validation.
 	if rules.IsPrague {
-		floorDataGas, err = FloorDataGas(rules, msg.Data)
+		floorDataGas, err = FloorDataGas(rules, msg.Data, msg.AccessList)
 		if err != nil {
 			return nil, err
 		}

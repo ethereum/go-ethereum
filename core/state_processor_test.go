@@ -487,7 +487,7 @@ func TestEIP8037MaxRegularGasValidation(t *testing.T) {
 	}
 
 	// Verify that floor data gas exceeds MaxTxGas
-	floorGas, err := FloorDataGas(rules, largeData)
+	floorGas, err := FloorDataGas(rules, largeData, nil)
 	if err != nil {
 		t.Fatalf("Failed to calculate floor data gas: %v", err)
 	}
