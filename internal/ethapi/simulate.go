@@ -417,7 +417,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 
 	blockBody := &types.Body{
 		Transactions: txes,
-		Withdrawals:  *block.BlockOverrides.Withdrawals,
+		Withdrawals:  *block.BlockOverrides.Withdrawals, // Withdrawal is also sanitized as non-nil
 	}
 	chainHeadReader := &simChainHeadReader{ctx, sim.b}
 

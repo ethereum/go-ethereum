@@ -190,7 +190,11 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 		Transactions: work.txs,
 		Withdrawals:  genParam.withdrawals,
 	}
-	if miner.chainConfig.IsShanghai(work.header.Number, work.header.Time) {
+	if !miner.chainConfig.IsShanghai(work.header.Number, work.header.Time) {
+		if body.Withdrawals != nil {
+			return &newPayloadResult{err: errors.New("unexpected withdrawals before shanghai")}
+		}
+	} else {
 		if body.Withdrawals == nil {
 			body.Withdrawals = make([]*types.Withdrawal, 0)
 		}

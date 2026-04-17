@@ -416,7 +416,15 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			Uncles:       b.uncles,
 			Withdrawals:  b.withdrawals,
 		}
-
+		if !config.IsShanghai(b.header.Number, b.header.Time) {
+			if body.Withdrawals != nil {
+				panic("unexpected withdrawal before shanghai")
+			}
+		} else {
+			if body.Withdrawals == nil {
+				body.Withdrawals = make([]*types.Withdrawal, 0)
+			}
+		}
 		// Finalize the state transition by applying operations such as withdrawals,
 		// uncle rewards, and related processing.
 		b.engine.Finalize(cm, b.header, statedb, &body)
