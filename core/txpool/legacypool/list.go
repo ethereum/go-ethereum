@@ -689,5 +689,6 @@ func (l *pricedList) SetBaseFee(baseFee *big.Int) {
 		base.SetFromBig(baseFee)
 	}
 	l.urgent.baseFee = base
+	l.floating.baseFee = new(uint256.Int).Set(base)
 	l.Reheap()
 }
