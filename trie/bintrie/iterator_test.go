@@ -29,8 +29,8 @@ func makeTrie(t *testing.T, entries [][2]common.Hash) *BinaryTrie {
 	t.Helper()
 	store := NewNodeStore()
 	tr := &BinaryTrie{
-		store:      store,
-		tracer:     trie.NewPrevalueTracer(),
+		store:  store,
+		tracer: trie.NewPrevalueTracer(),
 	}
 	for _, kv := range entries {
 		if err := store.Insert(kv[0][:], kv[1][:], nil); err != nil {
@@ -63,8 +63,8 @@ func countLeaves(t *testing.T, tr *BinaryTrie) int {
 // no nodes and reports no error.
 func TestIteratorEmptyTrie(t *testing.T) {
 	tr := &BinaryTrie{
-		store:      NewNodeStore(),
-		tracer:     trie.NewPrevalueTracer(),
+		store:  NewNodeStore(),
+		tracer: trie.NewPrevalueTracer(),
 	}
 	it, err := newBinaryNodeIterator(tr, nil)
 	if err != nil {

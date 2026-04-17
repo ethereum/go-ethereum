@@ -20,9 +20,9 @@ package bintrie
 type NodeKind uint8
 
 const (
-	KindEmpty    NodeKind = iota
+	KindEmpty NodeKind = iota
 	KindInternal
-	KindStem     // up to 256 values per stem
+	KindStem // up to 256 values per stem
 	KindHashed
 )
 

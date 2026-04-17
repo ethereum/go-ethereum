@@ -174,9 +174,9 @@ func (t *BinaryTrie) GetWithHashedKey(key []byte) ([]byte, error) {
 // GetAccount returns the account information for the given address.
 func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error) {
 	var (
-		err    error
-		acc    = &types.StateAccount{}
-		key    = GetBinaryTreeKey(addr, zero[:])
+		err error
+		acc = &types.StateAccount{}
+		key = GetBinaryTreeKey(addr, zero[:])
 	)
 
 	values, err := t.store.GetValuesAtStem(key[:StemSize], t.nodeResolver)

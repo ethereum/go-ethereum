@@ -188,8 +188,8 @@ func TestMerkleizeMultipleEntries(t *testing.T) {
 func TestStorageRoundTrip(t *testing.T) {
 	tracer := trie.NewPrevalueTracer()
 	tr := &BinaryTrie{
-		store:      NewNodeStore(),
-		tracer:     tracer,
+		store:  NewNodeStore(),
+		tracer: tracer,
 	}
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
 
@@ -256,8 +256,8 @@ func TestStorageRoundTrip(t *testing.T) {
 func newEmptyTestTrie(t *testing.T) *BinaryTrie {
 	t.Helper()
 	return &BinaryTrie{
-		store:      NewNodeStore(),
-		tracer:     trie.NewPrevalueTracer(),
+		store:  NewNodeStore(),
+		tracer: trie.NewPrevalueTracer(),
 	}
 }
 
@@ -581,8 +581,8 @@ func TestBinaryTrieWitness(t *testing.T) {
 	tracer := trie.NewPrevalueTracer()
 
 	tr := &BinaryTrie{
-		store:      NewNodeStore(),
-		tracer:     tracer,
+		store:  NewNodeStore(),
+		tracer: tracer,
 	}
 	if w := tr.Witness(); len(w) != 0 {
 		t.Fatal("expected empty witness for fresh trie")
@@ -608,8 +608,8 @@ func TestBinaryTrieWitness(t *testing.T) {
 func testAccount(t *testing.T, addr common.Address, nonce uint64, balance uint64) *BinaryTrie {
 	t.Helper()
 	tr := &BinaryTrie{
-		store:      NewNodeStore(),
-		tracer:     trie.NewPrevalueTracer(),
+		store:  NewNodeStore(),
+		tracer: trie.NewPrevalueTracer(),
 	}
 	acc := &types.StateAccount{
 		Nonce:    nonce,
@@ -662,8 +662,8 @@ func TestGetAccountNonMembershipStemRoot(t *testing.T) {
 // address returns nil when the trie root is an InternalNode (multi-account trie).
 func TestGetAccountNonMembershipInternalRoot(t *testing.T) {
 	tr := &BinaryTrie{
-		store:      NewNodeStore(),
-		tracer:     trie.NewPrevalueTracer(),
+		store:  NewNodeStore(),
+		tracer: trie.NewPrevalueTracer(),
 	}
 
 	// Insert two accounts whose binary tree keys have different first bits
@@ -725,8 +725,8 @@ func TestGetStorageNonMembershipStemRoot(t *testing.T) {
 // non-existent address returns nil when the root is an InternalNode.
 func TestGetStorageNonMembershipInternalRoot(t *testing.T) {
 	tr := &BinaryTrie{
-		store:      NewNodeStore(),
-		tracer:     trie.NewPrevalueTracer(),
+		store:  NewNodeStore(),
+		tracer: trie.NewPrevalueTracer(),
 	}
 
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
