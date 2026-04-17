@@ -89,7 +89,7 @@ func genValueTx(nbytes int) func(int, *BlockGen) {
 	data := make([]byte, nbytes)
 	return func(i int, gen *BlockGen) {
 		toaddr := common.Address{}
-		cost, _ := IntrinsicGas(data, nil, nil, false, false, false, false)
+		cost, _ := IntrinsicGas(data, nil, nil, false, false, false, false, false)
 		signer := gen.Signer()
 		gasPrice := big.NewInt(0)
 		if gen.header.BaseFee != nil {
