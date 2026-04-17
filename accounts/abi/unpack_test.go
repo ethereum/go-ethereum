@@ -801,7 +801,7 @@ func TestUnmarshal(t *testing.T) {
 	}
 
 	if len(outAddrStruct.B) != 2 {
-		t.Fatal("expected 1 item, got", len(outAddrStruct.B))
+		t.Fatal("expected 2 item, got", len(outAddrStruct.B))
 	}
 
 	if outAddrStruct.B[0] != (common.Address{2}) {
