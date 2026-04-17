@@ -20,8 +20,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"math/rand"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -655,6 +657,40 @@ func TestDecodeSingleCorruptedData(t *testing.T) {
 	err = decodeSingle(corrupted, nil)
 	if err == nil {
 		t.Fatal("Expected error for invalid restart count")
+	}
+}
+
+// TestDecodeKeyEntryIntOverflow checks that varints exceeding int range are
+// rejected before the int() cast, which would wrap to a negative value on
+// 32-bit builds and panic in the slice expression.
+func TestDecodeKeyEntryIntOverflow(t *testing.T) {
+	oversize := uint64(math.MaxInt) + 1
+	tests := []struct {
+		name      string
+		nShared   uint64
+		nUnshared uint64
+		nValue    uint64
+	}{
+		{"oversize nShared", oversize, 0, 0},
+		{"oversize nUnshared", 0, oversize, 0},
+		{"oversize nValue", 0, 0, oversize},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := make([]byte, 3*binary.MaxVarintLen64)
+			off := 0
+			off += binary.PutUvarint(buf[off:], tt.nShared)
+			off += binary.PutUvarint(buf[off:], tt.nUnshared)
+			off += binary.PutUvarint(buf[off:], tt.nValue)
+
+			_, _, _, _, err := decodeKeyEntry(buf[:off], 0)
+			if err == nil {
+				t.Fatal("expected error for varint exceeding int range, got nil")
+			}
+			if !strings.Contains(err.Error(), "too large") {
+				t.Fatalf("expected 'too large' error, got: %v", err)
+			}
+		})
 	}
 }
 
