@@ -32,6 +32,7 @@ type StemNode struct {
 	depth  int      // Depth of the node
 
 	mustRecompute bool        // true if the hash needs to be recomputed
+	dirty         bool        // true if the node's on-disk blob is stale (needs flush)
 	hash          common.Hash // cached hash when mustRecompute == false
 }
 
@@ -48,8 +49,11 @@ func (bt *StemNode) Insert(key []byte, value []byte, _ NodeResolverFn, depth int
 	if !bytes.Equal(bt.Stem, key[:StemSize]) {
 		bitStem := bt.Stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
 
-		n := &InternalNode{depth: bt.depth, mustRecompute: true}
+		n := &InternalNode{depth: bt.depth, mustRecompute: true, dirty: true}
 		bt.depth++
+		// bt is re-parented under n and sits at a new path — rewrite its blob.
+		bt.mustRecompute = true
+		bt.dirty = true
 		var child, other *BinaryNode
 		if bitStem == 0 {
 			n.left = bt
@@ -77,6 +81,7 @@ func (bt *StemNode) Insert(key []byte, value []byte, _ NodeResolverFn, depth int
 				Values:        values[:],
 				depth:         depth + 1,
 				mustRecompute: true,
+				dirty:         true,
 			}
 		}
 		return n, nil
@@ -86,6 +91,7 @@ func (bt *StemNode) Insert(key []byte, value []byte, _ NodeResolverFn, depth int
 	}
 	bt.Values[key[StemSize]] = value
 	bt.mustRecompute = true
+	bt.dirty = true
 	return bt, nil
 }
 
@@ -101,6 +107,7 @@ func (bt *StemNode) Copy() BinaryNode {
 		depth:         bt.depth,
 		hash:          bt.hash,
 		mustRecompute: bt.mustRecompute,
+		dirty:         bt.dirty,
 	}
 }
 
@@ -151,10 +158,14 @@ func (bt *StemNode) Hash() common.Hash {
 	return bt.hash
 }
 
-// CollectNodes collects all child nodes at a given path, and flushes it
-// into the provided node collector.
+// CollectNodes flushes the stem via the collector when dirty; clean stems
+// are skipped.
 func (bt *StemNode) CollectNodes(path []byte, flush NodeFlushFn) error {
+	if !bt.dirty {
+		return nil
+	}
 	flush(path, bt)
+	bt.dirty = false
 	return nil
 }
 
@@ -172,8 +183,11 @@ func (bt *StemNode) InsertValuesAtStem(key []byte, values [][]byte, _ NodeResolv
 	if !bytes.Equal(bt.Stem, key[:StemSize]) {
 		bitStem := bt.Stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
 
-		n := &InternalNode{depth: bt.depth, mustRecompute: true}
+		n := &InternalNode{depth: bt.depth, mustRecompute: true, dirty: true}
 		bt.depth++
+		// bt is re-parented under n and sits at a new path — rewrite its blob.
+		bt.mustRecompute = true
+		bt.dirty = true
 		var child, other *BinaryNode
 		if bitStem == 0 {
 			n.left = bt
@@ -199,6 +213,7 @@ func (bt *StemNode) InsertValuesAtStem(key []byte, values [][]byte, _ NodeResolv
 				Values:        values,
 				depth:         n.depth + 1,
 				mustRecompute: true,
+				dirty:         true,
 			}
 		}
 		return n, nil
@@ -209,6 +224,7 @@ func (bt *StemNode) InsertValuesAtStem(key []byte, values [][]byte, _ NodeResolv
 		if v != nil {
 			bt.Values[i] = v
 			bt.mustRecompute = true
+			bt.dirty = true
 		}
 	}
 	return bt, nil

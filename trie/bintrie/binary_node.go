@@ -93,15 +93,15 @@ var invalidSerializedLength = errors.New("invalid serialized node length")
 // DeserializeNode deserializes a binary trie node from a byte slice. The
 // hash will be recomputed from the deserialized data.
 func DeserializeNode(serialized []byte, depth int) (BinaryNode, error) {
-	return deserializeNode(serialized, depth, common.Hash{}, true)
+	return deserializeNode(serialized, depth, common.Hash{}, true, true)
 }
 
 // DeserializeNodeWithHash deserializes a binary trie node from a byte slice, using the provided hash.
 func DeserializeNodeWithHash(serialized []byte, depth int, hn common.Hash) (BinaryNode, error) {
-	return deserializeNode(serialized, depth, hn, false)
+	return deserializeNode(serialized, depth, hn, false, false)
 }
 
-func deserializeNode(serialized []byte, depth int, hn common.Hash, mustRecompute bool) (BinaryNode, error) {
+func deserializeNode(serialized []byte, depth int, hn common.Hash, mustRecompute, dirty bool) (BinaryNode, error) {
 	if len(serialized) == 0 {
 		return Empty{}, nil
 	}
@@ -117,6 +117,7 @@ func deserializeNode(serialized []byte, depth int, hn common.Hash, mustRecompute
 			right:         HashedNode(common.BytesToHash(serialized[33:65])),
 			hash:          hn,
 			mustRecompute: mustRecompute,
+			dirty:         dirty,
 		}, nil
 	case nodeTypeStem:
 		if len(serialized) < 64 {
@@ -141,6 +142,7 @@ func deserializeNode(serialized []byte, depth int, hn common.Hash, mustRecompute
 			depth:         depth,
 			hash:          hn,
 			mustRecompute: mustRecompute,
+			dirty:         dirty,
 		}, nil
 	default:
 		return nil, errors.New("invalid node type")

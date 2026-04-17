@@ -351,17 +351,20 @@ func TestInternalNodeInsertValuesAtStem(t *testing.T) {
 
 // TestInternalNodeCollectNodes tests CollectNodes method
 func TestInternalNodeCollectNodes(t *testing.T) {
-	// Create an internal node with two stem children
+	// Create an internal node with two stem children. All three are
+	// marked dirty to mirror production semantics — see CollectNodes.
 	leftStem := &StemNode{
 		Stem:   make([]byte, 31),
 		Values: make([][]byte, 256),
 		depth:  1,
+		dirty:  true,
 	}
 
 	rightStem := &StemNode{
 		Stem:   make([]byte, 31),
 		Values: make([][]byte, 256),
 		depth:  1,
+		dirty:  true,
 	}
 	rightStem.Stem[0] = 0x80
 
@@ -369,6 +372,7 @@ func TestInternalNodeCollectNodes(t *testing.T) {
 		depth: 0,
 		left:  leftStem,
 		right: rightStem,
+		dirty: true,
 	}
 
 	var collectedPaths [][]byte
@@ -402,6 +406,52 @@ func TestInternalNodeCollectNodes(t *testing.T) {
 		if !bytes.Equal(collectedPaths[i], expectedPath) {
 			t.Errorf("Path %d mismatch: expected %v, got %v", i, expectedPath, collectedPaths[i])
 		}
+	}
+}
+
+// TestInternalNodeCollectNodesSkipsClean verifies clean subtrees are not
+// flushed. A dirty internal node over clean children only flushes itself;
+// a fully clean tree flushes nothing.
+func TestInternalNodeCollectNodesSkipsClean(t *testing.T) {
+	leftStem := &StemNode{
+		Stem:   make([]byte, 31),
+		Values: make([][]byte, 256),
+		depth:  1,
+	}
+	rightStem := &StemNode{
+		Stem:   make([]byte, 31),
+		Values: make([][]byte, 256),
+		depth:  1,
+	}
+	rightStem.Stem[0] = 0x80
+
+	dirtyParent := &InternalNode{
+		depth: 0,
+		left:  leftStem,
+		right: rightStem,
+		dirty: true,
+	}
+
+	var collected []BinaryNode
+	flushFn := func(_ []byte, n BinaryNode) { collected = append(collected, n) }
+
+	if err := dirtyParent.CollectNodes([]byte{1}, flushFn); err != nil {
+		t.Fatalf("CollectNodes: %v", err)
+	}
+	if len(collected) != 1 || collected[0] != dirtyParent {
+		t.Fatalf("expected only the dirty parent to be flushed, got %d nodes", len(collected))
+	}
+	if dirtyParent.dirty {
+		t.Errorf("parent dirty flag should be cleared after flush")
+	}
+
+	// Second call on the same tree should be a no-op: everything is clean.
+	collected = nil
+	if err := dirtyParent.CollectNodes([]byte{1}, flushFn); err != nil {
+		t.Fatalf("CollectNodes (second call): %v", err)
+	}
+	if len(collected) != 0 {
+		t.Errorf("expected no nodes to be flushed on clean tree, got %d", len(collected))
 	}
 }
 

@@ -62,6 +62,7 @@ type InternalNode struct {
 	depth       int
 
 	mustRecompute bool        // true if the hash needs to be recomputed
+	dirty         bool        // true if the node's on-disk blob is stale (needs flush)
 	hash          common.Hash // cached hash when mustRecompute == false
 }
 
@@ -135,6 +136,7 @@ func (bt *InternalNode) Copy() BinaryNode {
 		right:         bt.right.Copy(),
 		depth:         bt.depth,
 		mustRecompute: bt.mustRecompute,
+		dirty:         bt.dirty,
 		hash:          bt.hash,
 	}
 }
@@ -213,6 +215,7 @@ func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolve
 
 		bt.left, err = bt.left.InsertValuesAtStem(stem, values, resolver, depth+1)
 		bt.mustRecompute = true
+		bt.dirty = true
 		return bt, err
 	}
 
@@ -238,12 +241,17 @@ func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolve
 
 	bt.right, err = bt.right.InsertValuesAtStem(stem, values, resolver, depth+1)
 	bt.mustRecompute = true
+	bt.dirty = true
 	return bt, err
 }
 
 // CollectNodes collects all child nodes at a given path, and flushes it
-// into the provided node collector.
+// into the provided node collector. Clean subtrees (dirty == false) are
+// skipped.
 func (bt *InternalNode) CollectNodes(path []byte, flushfn NodeFlushFn) error {
+	if !bt.dirty {
+		return nil
+	}
 	if bt.left != nil {
 		var p [256]byte
 		copy(p[:], path)
@@ -263,6 +271,7 @@ func (bt *InternalNode) CollectNodes(path []byte, flushfn NodeFlushFn) error {
 		}
 	}
 	flushfn(path, bt)
+	bt.dirty = false
 	return nil
 }
 

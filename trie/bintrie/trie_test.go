@@ -779,3 +779,123 @@ func TestGetStorageNonMembershipInternalRoot(t *testing.T) {
 		t.Fatalf("expected nil/zero for non-existent storage, got %x", got)
 	}
 }
+
+// commitKeyN derives a distinct 32-byte key from a seed integer. Used by
+// TestBinaryTrieCommitIncremental and BenchmarkCollectNodes_SparseWrite to
+// populate a trie with many disjoint stems.
+func commitKeyN(i int) [HashSize]byte {
+	var k [HashSize]byte
+	binary.BigEndian.PutUint64(k[:8], uint64(i)*0x9e3779b97f4a7c15)
+	binary.BigEndian.PutUint64(k[8:16], uint64(i)*0xc2b2ae3d27d4eb4f)
+	binary.BigEndian.PutUint64(k[16:24], uint64(i)*0x165667b19e3779f9)
+	binary.BigEndian.PutUint64(k[24:32], uint64(i)*0x85ebca77c2b2ae63)
+	return k
+}
+
+// TestBinaryTrieCommitIncremental verifies that a second Commit with only a
+// single modified leaf flushes only the path from that leaf to the root,
+// not the entire tree.
+func TestBinaryTrieCommitIncremental(t *testing.T) {
+	tr := &BinaryTrie{
+		root:   NewBinaryNode(),
+		tracer: trie.NewPrevalueTracer(),
+	}
+
+	const n = 512
+	keys := make([][HashSize]byte, n)
+	for i := range n {
+		keys[i] = commitKeyN(i + 1)
+		var v [HashSize]byte
+		binary.BigEndian.PutUint64(v[24:], uint64(i+1))
+		var err error
+		tr.root, err = tr.root.Insert(keys[i][:], v[:], nil, 0)
+		if err != nil {
+			t.Fatalf("Insert %d: %v", i, err)
+		}
+	}
+
+	_, ns1 := tr.Commit(false)
+	if len(ns1.Nodes) == 0 {
+		t.Fatal("first Commit produced empty NodeSet")
+	}
+	if len(ns1.Nodes) < n {
+		t.Fatalf("first Commit: expected at least %d nodes, got %d", n, len(ns1.Nodes))
+	}
+
+	// Second Commit on the same trie with no modifications: NodeSet must
+	// be empty because every subtree is clean.
+	_, nsNoop := tr.Commit(false)
+	if len(nsNoop.Nodes) != 0 {
+		t.Fatalf("no-op Commit: expected empty NodeSet, got %d nodes", len(nsNoop.Nodes))
+	}
+
+	// Modify a single leaf's value. Only the path from that leaf to the
+	// root should appear in the next Commit's NodeSet.
+	var newVal [HashSize]byte
+	newVal[0] = 0xff
+	var err error
+	tr.root, err = tr.root.Insert(keys[n/2][:], newVal[:], nil, 0)
+	if err != nil {
+		t.Fatalf("Insert (modify): %v", err)
+	}
+	_, ns2 := tr.Commit(false)
+
+	// Path length for a binary trie of n=512 stems is bounded by the
+	// internal depth at which the modified stem sits. Allow generous
+	// slack: up to 64 nodes is fine, anywhere near n (512) is a regression.
+	if len(ns2.Nodes) == 0 {
+		t.Fatal("modified Commit produced empty NodeSet")
+	}
+	if len(ns2.Nodes) > 64 {
+		t.Fatalf("modified Commit: expected small NodeSet, got %d nodes (first Commit had %d)", len(ns2.Nodes), len(ns1.Nodes))
+	}
+	if len(ns2.Nodes) >= len(ns1.Nodes) {
+		t.Fatalf("expected second NodeSet (%d) to be smaller than first (%d)", len(ns2.Nodes), len(ns1.Nodes))
+	}
+}
+
+// BenchmarkCollectNodes_SparseWrite measures Commit cost when only one leaf
+// changes between blocks — the common case for state updates. After warm-up
+// (populate + initial Commit), each iteration modifies a single leaf and
+// re-Commits. Under the skip-clean optimization, each iteration flushes
+// only the root-to-leaf path; pre-fix behavior would re-flush the entire
+// tree every iteration.
+func BenchmarkCollectNodes_SparseWrite(b *testing.B) {
+	const n = 10_000
+
+	tr := &BinaryTrie{
+		root:   NewBinaryNode(),
+		tracer: trie.NewPrevalueTracer(),
+	}
+	keys := make([][HashSize]byte, n)
+	for i := range n {
+		keys[i] = commitKeyN(i + 1)
+		var v [HashSize]byte
+		binary.BigEndian.PutUint64(v[24:], uint64(i+1))
+		var err error
+		tr.root, err = tr.root.Insert(keys[i][:], v[:], nil, 0)
+		if err != nil {
+			b.Fatalf("Insert %d: %v", i, err)
+		}
+	}
+	// Flush the initial tree so subsequent Commits reflect the
+	// single-modification workload we want to measure.
+	_, _ = tr.Commit(false)
+
+	var newVal [HashSize]byte
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		idx := i % n
+		binary.BigEndian.PutUint64(newVal[24:], uint64(i+1))
+		var err error
+		tr.root, err = tr.root.Insert(keys[idx][:], newVal[:], nil, 0)
+		if err != nil {
+			b.Fatalf("Insert at iter %d: %v", i, err)
+		}
+		_, ns := tr.Commit(false)
+		if len(ns.Nodes) == 0 {
+			b.Fatalf("iter %d: empty NodeSet", i)
+		}
+	}
+}
