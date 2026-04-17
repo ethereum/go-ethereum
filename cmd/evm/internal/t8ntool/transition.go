@@ -223,22 +223,56 @@ func Transition(ctx *cli.Context) error {
 			return err
 		}
 	}
-	// Dump the execution result
+	// Dump the execution result.
+	//
+	// When the alloc output targets a regular file (not stdout/stderr or the
+	// binary-trie path), stream entries to disk to keep peak memory bounded
+	// to one account's JSON encoding rather than the full post-state.
 	var (
-		collector = make(Alloc)
+		collector Alloc
 		btleaves  map[common.Hash]hexutil.Bytes
 	)
 	isBinary := chainConfig.IsUBT(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp)
-	if !isBinary {
+	outputAlloc := ctx.String(OutputAllocFlag.Name)
+	streamAllocToDisk := !isBinary && outputAlloc != "" &&
+		outputAlloc != "stdout" && outputAlloc != "stderr"
+
+	switch {
+	case streamAllocToDisk:
+		if err := writeStreamedAlloc(filepath.Join(baseDir, outputAlloc), s); err != nil {
+			return err
+		}
+	case !isBinary:
+		collector = make(Alloc)
 		s.DumpToCollector(collector, nil)
-	} else {
+	default:
 		btleaves = make(map[common.Hash]hexutil.Bytes)
 		if err := s.DumpBinTrieLeaves(btleaves); err != nil {
 			return err
 		}
 	}
+	return dispatchOutput(ctx, baseDir, result, collector, body, btleaves, streamAllocToDisk)
+}
 
-	return dispatchOutput(ctx, baseDir, result, collector, body, btleaves)
+// writeStreamedAlloc writes the post-state alloc to path by streaming entries
+// from the state iterator, producing the same JSON shape as saveFile for an
+// Alloc map without buffering the full state in memory.
+func writeStreamedAlloc(path string, s *state.StateDB) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return NewError(ErrorIO, fmt.Errorf("failed creating alloc output file: %v", err))
+	}
+	sa := newStreamingAlloc(f)
+	s.DumpToCollector(sa, nil)
+	if err := sa.Close(); err != nil {
+		f.Close()
+		return NewError(ErrorIO, fmt.Errorf("failed writing alloc output: %v", err))
+	}
+	if err := f.Close(); err != nil {
+		return NewError(ErrorIO, fmt.Errorf("failed closing alloc output file: %v", err))
+	}
+	log.Info("Wrote file", "file", path)
+	return nil
 }
 
 func applyLondonChecks(env *stEnv, chainConfig *params.ChainConfig) error {
@@ -327,6 +361,12 @@ func (g Alloc) OnAccount(addr *common.Address, dumpAccount state.DumpAccount) {
 	if addr == nil {
 		return
 	}
+	g[*addr] = dumpAccountToTypesAccount(dumpAccount)
+}
+
+// dumpAccountToTypesAccount converts a state.DumpAccount into the types.Account
+// shape used for alloc output by both the buffered and streaming collectors.
+func dumpAccountToTypesAccount(dumpAccount state.DumpAccount) types.Account {
 	balance, _ := new(big.Int).SetString(dumpAccount.Balance, 0)
 	var storage map[common.Hash]common.Hash
 	if dumpAccount.Storage != nil {
@@ -335,13 +375,69 @@ func (g Alloc) OnAccount(addr *common.Address, dumpAccount state.DumpAccount) {
 			storage[k] = common.HexToHash(v)
 		}
 	}
-	genesisAccount := types.Account{
+	return types.Account{
 		Code:    dumpAccount.Code,
 		Storage: storage,
 		Balance: balance,
 		Nonce:   dumpAccount.Nonce,
 	}
-	g[*addr] = genesisAccount
+}
+
+// streamingAlloc is a DumpCollector that writes each account directly to an
+// io.Writer as a JSON object ({addr: account, ...}), producing the same
+// shape as saveFile on an Alloc map. Peak memory is one account's marshal
+// output rather than the whole post-state plus its MarshalIndent buffer.
+//
+// Usage: OnRoot (opening brace), OnAccount per entry, Close (closing brace).
+type streamingAlloc struct {
+	w        io.Writer
+	wroteOne bool
+	err      error
+}
+
+func newStreamingAlloc(w io.Writer) *streamingAlloc {
+	return &streamingAlloc{w: w}
+}
+
+func (s *streamingAlloc) OnRoot(common.Hash) {
+	if s.err != nil {
+		return
+	}
+	_, s.err = io.WriteString(s.w, "{")
+}
+
+func (s *streamingAlloc) OnAccount(addr *common.Address, dumpAccount state.DumpAccount) {
+	if s.err != nil || addr == nil {
+		return
+	}
+	keyJSON, err := json.Marshal(*addr)
+	if err != nil {
+		s.err = err
+		return
+	}
+	valueJSON, err := json.Marshal(dumpAccountToTypesAccount(dumpAccount))
+	if err != nil {
+		s.err = err
+		return
+	}
+	separator := ""
+	if s.wroteOne {
+		separator = ","
+	}
+	if _, err := fmt.Fprintf(s.w, "%s%s:%s", separator, keyJSON, valueJSON); err != nil {
+		s.err = err
+		return
+	}
+	s.wroteOne = true
+}
+
+// Close finishes the JSON object by emitting the closing brace.
+func (s *streamingAlloc) Close() error {
+	if s.err != nil {
+		return s.err
+	}
+	_, err := io.WriteString(s.w, "}")
+	return err
 }
 
 // saveFile marshals the object to the given file
@@ -359,8 +455,9 @@ func saveFile(baseDir, filename string, data interface{}) error {
 }
 
 // dispatchOutput writes the output data to either stderr or stdout, or to the specified
-// files
-func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, alloc Alloc, body hexutil.Bytes, bt map[common.Hash]hexutil.Bytes) error {
+// files. When allocAlreadyWritten is true, the alloc has been streamed to disk
+// by the caller and dispatchOutput skips its alloc branch.
+func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, alloc Alloc, body hexutil.Bytes, bt map[common.Hash]hexutil.Bytes, allocAlreadyWritten bool) error {
 	stdOutObject := make(map[string]interface{})
 	stdErrObject := make(map[string]interface{})
 	dispatch := func(baseDir, fName, name string, obj interface{}) error {
@@ -378,8 +475,10 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 		}
 		return nil
 	}
-	if err := dispatch(baseDir, ctx.String(OutputAllocFlag.Name), "alloc", alloc); err != nil {
-		return err
+	if !allocAlreadyWritten {
+		if err := dispatch(baseDir, ctx.String(OutputAllocFlag.Name), "alloc", alloc); err != nil {
+			return err
+		}
 	}
 	if err := dispatch(baseDir, ctx.String(OutputResultFlag.Name), "result", result); err != nil {
 		return err
