@@ -26,73 +26,16 @@ import (
 // NodeResolverFn resolves a hashed node from the database.
 type NodeResolverFn func([]byte, common.Hash) ([]byte, error)
 
-// GetValue returns the value at (stem, suffix) or nil if absent. It walks
-// the trie from the root, resolving any HashedNode encountered on the path
-// via the supplied resolver.
+// GetValue returns the value at (stem, suffix) or nil if absent. Thin
+// wrapper over GetValuesAtStem — the underlying StemNode returns its
+// 256-slot array as a slice header (no allocation), so the per-call cost
+// is the tree walk plus one index.
 func (s *NodeStore) GetValue(stem []byte, suffix byte, resolver NodeResolverFn) ([]byte, error) {
-	cur := s.root
-	// Track parent for HashedNode resolution (update parent's child ref).
-	var parentIdx uint32
-	var parentIsLeft bool
-
-	for {
-		switch cur.Kind() {
-		case kindInternal:
-			node := s.getInternal(cur.Index())
-			if node.depth >= 31*8 {
-				return nil, errors.New("node too deep")
-			}
-			bit := stem[node.depth/8] >> (7 - (node.depth % 8)) & 1
-			parentIdx = cur.Index()
-			if bit == 0 {
-				parentIsLeft = true
-				cur = node.left
-			} else {
-				parentIsLeft = false
-				cur = node.right
-			}
-
-		case kindStem:
-			sn := s.getStem(cur.Index())
-			if sn.Stem != [StemSize]byte(stem[:StemSize]) {
-				return nil, nil
-			}
-			return sn.getValue(suffix), nil
-
-		case kindHashed:
-			if resolver == nil {
-				return nil, errors.New("GetValue: cannot resolve hashed node without resolver")
-			}
-			hn := s.getHashed(cur.Index())
-			parentNode := s.getInternal(parentIdx)
-			path, err := keyToPath(int(parentNode.depth), stem)
-			if err != nil {
-				return nil, fmt.Errorf("GetValue path error: %w", err)
-			}
-			data, err := resolver(path, hn.Hash())
-			if err != nil {
-				return nil, fmt.Errorf("GetValue resolve error: %w", err)
-			}
-			resolved, err := s.deserializeNodeWithHash(data, int(parentNode.depth)+1, hn.Hash())
-			if err != nil {
-				return nil, fmt.Errorf("GetValue deserialization error: %w", err)
-			}
-			// Update parent's child ref.
-			s.freeHashedNode(cur.Index())
-			if parentIsLeft {
-				parentNode.left = resolved
-			} else {
-				parentNode.right = resolved
-			}
-			cur = resolved
-
-		case kindEmpty:
-			return nil, nil
-
-		default:
-			return nil, fmt.Errorf("GetValue: unexpected node kind %d", cur.Kind())
-		}
+	values, err := s.GetValuesAtStem(stem, resolver)
+	if err != nil || values == nil {
+		return nil, err
 	}
+	return values[suffix], nil
 }
 
 func (s *NodeStore) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([][]byte, error) {
@@ -169,191 +112,19 @@ func (s *NodeStore) getValuesAtStem(ref nodeRef, stem []byte, resolver NodeResol
 	}
 }
 
+// InsertSingle writes a single value slot at (stem, suffix). Thin wrapper
+// over InsertValuesAtStem — builds a stack-allocated 256-slot array with
+// only the target slot set and delegates. Matches the original design
+// gballet referenced (comment 3101751325): one primary insert path; the
+// single-slot variant dispatches through it so the split / resolve logic
+// lives in one place.
 func (s *NodeStore) InsertSingle(stem []byte, suffix byte, value []byte, resolver NodeResolverFn) error {
 	if len(value) != HashSize {
 		return errors.New("invalid insertion: value length")
 	}
-
-	if s.root.IsEmpty() {
-		ref := s.newStemRef(stem, 0)
-		sn := s.getStem(ref.Index())
-		sn.setValue(suffix, value)
-		s.root = ref
-		return nil
-	}
-
-	if s.root.Kind() == kindStem {
-		sn := s.getStem(s.root.Index())
-		if sn.Stem == [StemSize]byte(stem[:StemSize]) {
-			sn.setValue(suffix, value)
-			sn.mustRecompute = true
-			sn.dirty = true
-			return nil
-		}
-		newRoot := s.splitStemInsert(s.root, stem, suffix, value, int(sn.depth))
-		s.root = newRoot
-		return nil
-	}
-
-	return s.insertSingleInternal(stem, suffix, value, resolver)
-}
-
-func (s *NodeStore) insertSingleInternal(stem []byte, suffix byte, value []byte, resolver NodeResolverFn) error {
-	type pathEntry struct {
-		internalIdx uint32
-		isLeft      bool
-	}
-	var pathStack [256]pathEntry // stack-allocated, max depth 248
-	pathLen := 0
-
-	cur := s.root
-
-	for {
-		switch cur.Kind() {
-		case kindInternal:
-			node := s.getInternal(cur.Index())
-			node.mustRecompute = true
-			node.dirty = true
-			bit := stem[node.depth/8] >> (7 - (node.depth % 8)) & 1
-			pathStack[pathLen] = pathEntry{internalIdx: cur.Index(), isLeft: bit == 0}
-			pathLen++
-			if bit == 0 {
-				cur = node.left
-			} else {
-				cur = node.right
-			}
-
-		case kindStem:
-			sn := s.getStem(cur.Index())
-			if sn.Stem == [StemSize]byte(stem[:StemSize]) {
-				sn.setValue(suffix, value)
-				sn.mustRecompute = true
-				sn.dirty = true
-				return nil
-			}
-			// Different stem — split
-			parentDepth := int(s.getInternal(pathStack[pathLen-1].internalIdx).depth) + 1
-			newRef := s.splitStemInsert(cur, stem, suffix, value, parentDepth)
-			p := pathStack[pathLen-1]
-			parent := s.getInternal(p.internalIdx)
-			if p.isLeft {
-				parent.left = newRef
-			} else {
-				parent.right = newRef
-			}
-			return nil
-
-		case kindHashed:
-			if pathLen == 0 {
-				return errors.New("insertSingle: hashed node at root")
-			}
-			if resolver == nil {
-				return errors.New("insertSingleInternal: cannot resolve hashed node without resolver")
-			}
-			p := pathStack[pathLen-1]
-			parentNode := s.getInternal(p.internalIdx)
-			hn := s.getHashed(cur.Index())
-			path, err := keyToPath(int(parentNode.depth), stem)
-			if err != nil {
-				return fmt.Errorf("insertSingle path error: %w", err)
-			}
-			data, err := resolver(path, hn.Hash())
-			if err != nil {
-				return fmt.Errorf("insertSingle resolve error: %w", err)
-			}
-			resolved, err := s.deserializeNodeWithHash(data, int(parentNode.depth)+1, hn.Hash())
-			if err != nil {
-				return fmt.Errorf("insertSingle deserialization error: %w", err)
-			}
-			s.freeHashedNode(cur.Index())
-			if p.isLeft {
-				parentNode.left = resolved
-			} else {
-				parentNode.right = resolved
-			}
-			cur = resolved
-
-		case kindEmpty:
-			parentDepth := int(s.getInternal(pathStack[pathLen-1].internalIdx).depth) + 1
-			ref := s.newStemRef(stem, parentDepth)
-			sn := s.getStem(ref.Index())
-			sn.setValue(suffix, value)
-			p := pathStack[pathLen-1]
-			parent := s.getInternal(p.internalIdx)
-			if p.isLeft {
-				parent.left = ref
-			} else {
-				parent.right = ref
-			}
-			return nil
-
-		default:
-			return fmt.Errorf("insertSingle: unexpected node kind %d", cur.Kind())
-		}
-	}
-}
-
-// splitStemInsert splits a StemNode into InternalNodes for a divergent stem.
-func (s *NodeStore) splitStemInsert(existingRef nodeRef, newStem []byte, suffix byte, value []byte, depth int) nodeRef {
-	existing := s.getStem(existingRef.Index())
-	existingDepth := depth
-
-	var firstRef nodeRef
-	var lastInternalIdx uint32
-	var lastIsLeft bool
-	first := true
-
-	for {
-		if existingDepth >= StemSize*8 {
-			panic("splitStemInsert: identical stems")
-		}
-
-		bitExisting := existing.Stem[existingDepth/8] >> (7 - (existingDepth % 8)) & 1
-		bitNew := newStem[existingDepth/8] >> (7 - (existingDepth % 8)) & 1
-
-		newRef := s.newInternalRef(existingDepth)
-		newInternal := s.getInternal(newRef.Index())
-
-		if first {
-			firstRef = newRef
-			first = false
-		} else {
-			parent := s.getInternal(lastInternalIdx)
-			if lastIsLeft {
-				parent.left = newRef
-			} else {
-				parent.right = newRef
-			}
-		}
-
-		if bitExisting != bitNew {
-			// Divergence point
-			existing.depth = uint8(existingDepth + 1)
-
-			newStemIdx := s.allocStem()
-			newSn := s.getStem(newStemIdx)
-			copy(newSn.Stem[:], newStem[:StemSize])
-			newSn.depth = uint8(existingDepth + 1)
-			newSn.mustRecompute = true
-			newSn.dirty = true
-			newSn.setValue(suffix, value)
-			newStemRef := makeRef(kindStem, newStemIdx)
-
-			if bitExisting == 0 {
-				newInternal.left = existingRef
-				newInternal.right = newStemRef
-			} else {
-				newInternal.left = newStemRef
-				newInternal.right = existingRef
-			}
-			return firstRef
-		}
-
-		// Same bit — continue splitting
-		lastInternalIdx = newRef.Index()
-		lastIsLeft = (bitExisting == 0)
-		existingDepth++
-	}
+	var values [StemNodeWidth][]byte
+	values[suffix] = value
+	return s.InsertValuesAtStem(stem, values[:], resolver)
 }
 
 func (s *NodeStore) InsertValuesAtStem(stem []byte, values [][]byte, resolver NodeResolverFn) error {
