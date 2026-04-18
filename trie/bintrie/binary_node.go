@@ -39,9 +39,9 @@ const (
 // the hash of a serialized node without maintaining a NodeStore.
 func DeserializeAndHash(blob []byte, depth int) (common.Hash, error) {
 	s := NewNodeStore()
-	ref, err := s.DeserializeNode(blob, depth)
+	ref, err := s.deserializeNode(blob, depth)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return s.ComputeHash(ref), nil
+	return s.computeHash(ref), nil
 }

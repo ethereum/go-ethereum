@@ -114,8 +114,8 @@ type BinaryTrie struct {
 
 // ToDot converts the binary trie to a DOT language representation. Useful for debugging.
 func (t *BinaryTrie) ToDot() string {
-	t.store.ComputeHash(t.store.Root())
-	return t.store.ToDot(t.store.Root(), "", "")
+	t.store.computeHash(t.store.root)
+	return t.store.toDot(t.store.root, "", "")
 }
 
 // NewBinaryTrie creates a new binary trie.
@@ -135,11 +135,11 @@ func NewBinaryTrie(root common.Hash, db database.NodeDatabase) (*BinaryTrie, err
 		if err != nil {
 			return nil, err
 		}
-		ref, err := t.store.DeserializeNodeWithHash(blob, 0, root)
+		ref, err := t.store.deserializeNodeWithHash(blob, 0, root)
 		if err != nil {
 			return nil, err
 		}
-		t.store.SetRoot(ref)
+		t.store.root = ref
 	}
 	return t, nil
 }
@@ -301,7 +301,7 @@ func (t *BinaryTrie) DeleteStorage(addr common.Address, key []byte) error {
 // Hash returns the root hash of the trie. It does not write to the database and
 // can be used even if the trie doesn't have one.
 func (t *BinaryTrie) Hash() common.Hash {
-	return t.store.ComputeHash(t.store.Root())
+	return t.store.computeHash(t.store.root)
 }
 
 // Commit writes all nodes to the trie's memory database, tracking the internal
@@ -309,7 +309,7 @@ func (t *BinaryTrie) Hash() common.Hash {
 func (t *BinaryTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 	nodeset := trienode.NewNodeSet(common.Hash{})
 
-	err := t.store.CollectNodes(t.store.Root(), nil, func(path []byte, hash common.Hash, serialized []byte) {
+	err := t.store.collectNodes(t.store.root, nil, func(path []byte, hash common.Hash, serialized []byte) {
 		nodeset.AddNode(path, trienode.NewNodeWithPrev(hash, serialized, t.tracer.Get(path)))
 	})
 	if err != nil {

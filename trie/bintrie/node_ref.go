@@ -16,38 +16,38 @@
 
 package bintrie
 
-// NodeKind identifies the type of a trie node stored in a NodeRef.
-type NodeKind uint8
+// nodeKind identifies the type of a trie node stored in a nodeRef.
+type nodeKind uint8
 
 const (
-	KindEmpty NodeKind = iota
-	KindInternal
-	KindStem // up to 256 values per stem
-	KindHashed
+	kindEmpty nodeKind = iota
+	kindInternal
+	kindStem // up to 256 values per stem
+	kindHashed
 )
 
-// NodeRef is a compact, GC-invisible reference to a node in a NodeStore.
+// nodeRef is a compact, GC-invisible reference to a node in a NodeStore.
 // It packs a 2-bit type tag (bits 31-30) and a 30-bit index (bits 29-0)
-// into a single uint32. Because NodeRef contains no Go pointers, slices
-// of structs containing NodeRef fields are allocated in noscan spans —
+// into a single uint32. Because nodeRef contains no Go pointers, slices
+// of structs containing nodeRef fields are allocated in noscan spans —
 // the garbage collector never examines them.
-type NodeRef uint32
+type nodeRef uint32
 
 const (
 	kindShift uint32 = 30
 	indexMask uint32 = (1 << kindShift) - 1
 
-	// EmptyRef represents an empty node.
-	EmptyRef NodeRef = 0
+	// emptyRef represents an empty node.
+	emptyRef nodeRef = 0
 )
 
-func MakeRef(kind NodeKind, idx uint32) NodeRef {
-	return NodeRef(uint32(kind)<<kindShift | (idx & indexMask))
+func makeRef(kind nodeKind, idx uint32) nodeRef {
+	return nodeRef(uint32(kind)<<kindShift | (idx & indexMask))
 }
 
-func (r NodeRef) Kind() NodeKind { return NodeKind(uint32(r) >> kindShift) }
+func (r nodeRef) Kind() nodeKind { return nodeKind(uint32(r) >> kindShift) }
 
 // Index within the typed pool.
-func (r NodeRef) Index() uint32 { return uint32(r) & indexMask }
+func (r nodeRef) Index() uint32 { return uint32(r) & indexMask }
 
-func (r NodeRef) IsEmpty() bool { return r == EmptyRef }
+func (r nodeRef) IsEmpty() bool { return r == emptyRef }

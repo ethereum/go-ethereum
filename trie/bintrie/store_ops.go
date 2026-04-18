@@ -30,7 +30,7 @@ func (s *NodeStore) GetSingle(stem []byte, suffix byte, resolver NodeResolverFn)
 	return s.getSingle(s.root, stem, suffix, resolver)
 }
 
-func (s *NodeStore) getSingle(ref NodeRef, stem []byte, suffix byte, resolver NodeResolverFn) ([]byte, error) {
+func (s *NodeStore) getSingle(ref nodeRef, stem []byte, suffix byte, resolver NodeResolverFn) ([]byte, error) {
 	cur := ref
 	// Track parent for HashedNode resolution (update parent's child ref).
 	var parentIdx uint32
@@ -39,7 +39,7 @@ func (s *NodeStore) getSingle(ref NodeRef, stem []byte, suffix byte, resolver No
 
 	for {
 		switch cur.Kind() {
-		case KindInternal:
+		case kindInternal:
 			node := s.getInternal(cur.Index())
 			if node.depth >= 31*8 {
 				return nil, errors.New("node too deep")
@@ -55,14 +55,14 @@ func (s *NodeStore) getSingle(ref NodeRef, stem []byte, suffix byte, resolver No
 				cur = node.right
 			}
 
-		case KindStem:
+		case kindStem:
 			sn := s.getStem(cur.Index())
 			if sn.Stem != [StemSize]byte(stem[:StemSize]) {
 				return nil, nil
 			}
 			return sn.getValue(suffix), nil
 
-		case KindHashed:
+		case kindHashed:
 			if !hasParent {
 				return nil, errors.New("getSingle: hashed node at root")
 			}
@@ -79,7 +79,7 @@ func (s *NodeStore) getSingle(ref NodeRef, stem []byte, suffix byte, resolver No
 			if err != nil {
 				return nil, fmt.Errorf("getSingle resolve error: %w", err)
 			}
-			resolved, err := s.DeserializeNodeWithHash(data, int(parentNode.depth)+1, hn.Hash())
+			resolved, err := s.deserializeNodeWithHash(data, int(parentNode.depth)+1, hn.Hash())
 			if err != nil {
 				return nil, fmt.Errorf("getSingle deserialization error: %w", err)
 			}
@@ -92,7 +92,7 @@ func (s *NodeStore) getSingle(ref NodeRef, stem []byte, suffix byte, resolver No
 			}
 			cur = resolved
 
-		case KindEmpty:
+		case kindEmpty:
 			return nil, nil
 
 		default:
@@ -105,7 +105,7 @@ func (s *NodeStore) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([][]b
 	return s.getValuesAtStem(s.root, stem, resolver)
 }
 
-func (s *NodeStore) getValuesAtStem(ref NodeRef, stem []byte, resolver NodeResolverFn) ([][]byte, error) {
+func (s *NodeStore) getValuesAtStem(ref nodeRef, stem []byte, resolver NodeResolverFn) ([][]byte, error) {
 	cur := ref
 	var parentIdx uint32
 	var parentIsLeft bool
@@ -113,7 +113,7 @@ func (s *NodeStore) getValuesAtStem(ref NodeRef, stem []byte, resolver NodeResol
 
 	for {
 		switch cur.Kind() {
-		case KindInternal:
+		case kindInternal:
 			node := s.getInternal(cur.Index())
 			if node.depth >= 31*8 {
 				return nil, errors.New("node too deep")
@@ -129,14 +129,14 @@ func (s *NodeStore) getValuesAtStem(ref NodeRef, stem []byte, resolver NodeResol
 				cur = node.right
 			}
 
-		case KindStem:
+		case kindStem:
 			sn := s.getStem(cur.Index())
 			if sn.Stem != [StemSize]byte(stem[:StemSize]) {
 				return nil, nil
 			}
 			return sn.allValues(), nil
 
-		case KindHashed:
+		case kindHashed:
 			if !hasParent {
 				return nil, errors.New("getValuesAtStem: hashed node at root")
 			}
@@ -153,7 +153,7 @@ func (s *NodeStore) getValuesAtStem(ref NodeRef, stem []byte, resolver NodeResol
 			if err != nil {
 				return nil, fmt.Errorf("getValuesAtStem resolve error: %w", err)
 			}
-			resolved, err := s.DeserializeNodeWithHash(data, int(parentNode.depth)+1, hn.Hash())
+			resolved, err := s.deserializeNodeWithHash(data, int(parentNode.depth)+1, hn.Hash())
 			if err != nil {
 				return nil, fmt.Errorf("getValuesAtStem deserialization error: %w", err)
 			}
@@ -165,7 +165,7 @@ func (s *NodeStore) getValuesAtStem(ref NodeRef, stem []byte, resolver NodeResol
 			}
 			cur = resolved
 
-		case KindEmpty:
+		case kindEmpty:
 			var values [StemNodeWidth][]byte
 			return values[:], nil
 
@@ -188,7 +188,7 @@ func (s *NodeStore) InsertSingle(stem []byte, suffix byte, value []byte, resolve
 		return nil
 	}
 
-	if s.root.Kind() == KindStem {
+	if s.root.Kind() == kindStem {
 		sn := s.getStem(s.root.Index())
 		if sn.Stem == [StemSize]byte(stem[:StemSize]) {
 			sn.setValue(suffix, value)
@@ -216,7 +216,7 @@ func (s *NodeStore) insertSingleInternal(stem []byte, suffix byte, value []byte,
 
 	for {
 		switch cur.Kind() {
-		case KindInternal:
+		case kindInternal:
 			node := s.getInternal(cur.Index())
 			node.mustRecompute = true
 			node.dirty = true
@@ -229,7 +229,7 @@ func (s *NodeStore) insertSingleInternal(stem []byte, suffix byte, value []byte,
 				cur = node.right
 			}
 
-		case KindStem:
+		case kindStem:
 			sn := s.getStem(cur.Index())
 			if sn.Stem == [StemSize]byte(stem[:StemSize]) {
 				sn.setValue(suffix, value)
@@ -249,7 +249,7 @@ func (s *NodeStore) insertSingleInternal(stem []byte, suffix byte, value []byte,
 			}
 			return nil
 
-		case KindHashed:
+		case kindHashed:
 			if pathLen == 0 {
 				return errors.New("insertSingle: hashed node at root")
 			}
@@ -267,7 +267,7 @@ func (s *NodeStore) insertSingleInternal(stem []byte, suffix byte, value []byte,
 			if err != nil {
 				return fmt.Errorf("insertSingle resolve error: %w", err)
 			}
-			resolved, err := s.DeserializeNodeWithHash(data, int(parentNode.depth)+1, hn.Hash())
+			resolved, err := s.deserializeNodeWithHash(data, int(parentNode.depth)+1, hn.Hash())
 			if err != nil {
 				return fmt.Errorf("insertSingle deserialization error: %w", err)
 			}
@@ -279,7 +279,7 @@ func (s *NodeStore) insertSingleInternal(stem []byte, suffix byte, value []byte,
 			}
 			cur = resolved
 
-		case KindEmpty:
+		case kindEmpty:
 			parentDepth := int(s.getInternal(pathStack[pathLen-1].internalIdx).depth) + 1
 			ref := s.newStemRef(stem, parentDepth)
 			sn := s.getStem(ref.Index())
@@ -300,11 +300,11 @@ func (s *NodeStore) insertSingleInternal(stem []byte, suffix byte, value []byte,
 }
 
 // splitStemInsert splits a StemNode into InternalNodes for a divergent stem.
-func (s *NodeStore) splitStemInsert(existingRef NodeRef, newStem []byte, suffix byte, value []byte, depth int) NodeRef {
+func (s *NodeStore) splitStemInsert(existingRef nodeRef, newStem []byte, suffix byte, value []byte, depth int) nodeRef {
 	existing := s.getStem(existingRef.Index())
 	existingDepth := depth
 
-	var firstRef NodeRef
+	var firstRef nodeRef
 	var lastInternalIdx uint32
 	var lastIsLeft bool
 	first := true
@@ -343,7 +343,7 @@ func (s *NodeStore) splitStemInsert(existingRef NodeRef, newStem []byte, suffix 
 			newSn.mustRecompute = true
 			newSn.dirty = true
 			newSn.setValue(suffix, value)
-			newStemRef := MakeRef(KindStem, newStemIdx)
+			newStemRef := makeRef(kindStem, newStemIdx)
 
 			if bitExisting == 0 {
 				newInternal.left = existingRef
@@ -371,13 +371,13 @@ func (s *NodeStore) InsertValuesAtStem(stem []byte, values [][]byte, resolver No
 	return nil
 }
 
-func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte, resolver NodeResolverFn, depth int) (NodeRef, error) {
+func (s *NodeStore) insertValuesAtStem(ref nodeRef, stem []byte, values [][]byte, resolver NodeResolverFn, depth int) (nodeRef, error) {
 	switch ref.Kind() {
-	case KindInternal:
+	case kindInternal:
 		node := s.getInternal(ref.Index())
 		bit := stem[node.depth/8] >> (7 - (node.depth % 8)) & 1
 		if bit == 0 {
-			if node.left.Kind() == KindHashed {
+			if node.left.Kind() == kindHashed {
 				if resolver == nil {
 					return ref, errors.New("insertValuesAtStem: cannot resolve hashed node without resolver")
 				}
@@ -390,7 +390,7 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 				if err != nil {
 					return ref, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
 				}
-				resolved, err := s.DeserializeNodeWithHash(data, int(node.depth)+1, hn.Hash())
+				resolved, err := s.deserializeNodeWithHash(data, int(node.depth)+1, hn.Hash())
 				if err != nil {
 					return ref, fmt.Errorf("InsertValuesAtStem deserialization error: %w", err)
 				}
@@ -403,7 +403,7 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 			}
 			node.left = newChild
 		} else {
-			if node.right.Kind() == KindHashed {
+			if node.right.Kind() == kindHashed {
 				if resolver == nil {
 					return ref, errors.New("insertValuesAtStem: cannot resolve hashed node without resolver")
 				}
@@ -416,7 +416,7 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 				if err != nil {
 					return ref, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
 				}
-				resolved, err := s.DeserializeNodeWithHash(data, int(node.depth)+1, hn.Hash())
+				resolved, err := s.deserializeNodeWithHash(data, int(node.depth)+1, hn.Hash())
 				if err != nil {
 					return ref, fmt.Errorf("InsertValuesAtStem deserialization error: %w", err)
 				}
@@ -433,7 +433,7 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 		node.dirty = true
 		return ref, nil
 
-	case KindStem:
+	case kindStem:
 		sn := s.getStem(ref.Index())
 		if sn.Stem == [StemSize]byte(stem[:StemSize]) {
 			// Same stem — merge values
@@ -449,7 +449,7 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 		// Different stem — split
 		return s.splitStemValuesInsert(ref, stem, values, resolver, depth)
 
-	case KindHashed:
+	case kindHashed:
 		hn := s.getHashed(ref.Index())
 		path, err := keyToPath(depth, stem)
 		if err != nil {
@@ -462,14 +462,14 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 		if err != nil {
 			return ref, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
 		}
-		resolved, err := s.DeserializeNodeWithHash(data, depth, hn.Hash())
+		resolved, err := s.deserializeNodeWithHash(data, depth, hn.Hash())
 		if err != nil {
 			return ref, fmt.Errorf("InsertValuesAtStem deserialization error: %w", err)
 		}
 		s.freeHashedNode(ref.Index())
 		return s.insertValuesAtStem(resolved, stem, values, resolver, depth)
 
-	case KindEmpty:
+	case kindEmpty:
 		// Create new StemNode
 		stemIdx := s.allocStem()
 		sn := s.getStem(stemIdx)
@@ -484,7 +484,7 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 				sn.valueData = append(sn.valueData, v[:HashSize]...)
 			}
 		}
-		return MakeRef(KindStem, stemIdx), nil
+		return makeRef(kindStem, stemIdx), nil
 
 	default:
 		return ref, fmt.Errorf("insertValuesAtStem: unexpected kind %d", ref.Kind())
@@ -492,7 +492,7 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 }
 
 // splitStemValuesInsert splits a StemNode when the new stem diverges.
-func (s *NodeStore) splitStemValuesInsert(existingRef NodeRef, newStem []byte, values [][]byte, resolver NodeResolverFn, depth int) (NodeRef, error) {
+func (s *NodeStore) splitStemValuesInsert(existingRef nodeRef, newStem []byte, values [][]byte, resolver NodeResolverFn, depth int) (nodeRef, error) {
 	existing := s.getStem(existingRef.Index())
 
 	if int(existing.depth) >= StemSize*8 {
@@ -507,7 +507,7 @@ func (s *NodeStore) splitStemValuesInsert(existingRef NodeRef, newStem []byte, v
 	bitKey := newStem[nNode.depth/8] >> (7 - (nNode.depth % 8)) & 1
 	if bitKey == bitStem {
 		// Same direction — need deeper split
-		var child NodeRef
+		var child nodeRef
 		if bitStem == 0 {
 			nNode.left = existingRef
 			child = nNode.left
@@ -521,10 +521,10 @@ func (s *NodeStore) splitStemValuesInsert(existingRef NodeRef, newStem []byte, v
 		}
 		if bitStem == 0 {
 			nNode.left = newChild
-			nNode.right = EmptyRef
+			nNode.right = emptyRef
 		} else {
 			nNode.right = newChild
-			nNode.left = EmptyRef
+			nNode.left = emptyRef
 		}
 	} else {
 		// Divergence — create new StemNode for the new values
@@ -539,7 +539,7 @@ func (s *NodeStore) splitStemValuesInsert(existingRef NodeRef, newStem []byte, v
 				newSn.setValue(byte(i), v)
 			}
 		}
-		newStemRef := MakeRef(KindStem, newStemIdx)
+		newStemRef := makeRef(kindStem, newStemIdx)
 
 		if bitStem == 0 {
 			nNode.left = existingRef
@@ -560,19 +560,19 @@ func (s *NodeStore) Get(key []byte, resolver NodeResolverFn) ([]byte, error) {
 	return s.GetSingle(key[:StemSize], key[StemSize], resolver)
 }
 
-func (s *NodeStore) GetHeight(ref NodeRef) int {
+func (s *NodeStore) getHeight(ref nodeRef) int {
 	switch ref.Kind() {
-	case KindInternal:
+	case kindInternal:
 		node := s.getInternal(ref.Index())
-		lh := s.GetHeight(node.left)
-		rh := s.GetHeight(node.right)
+		lh := s.getHeight(node.left)
+		rh := s.getHeight(node.right)
 		if lh > rh {
 			return 1 + lh
 		}
 		return 1 + rh
-	case KindStem:
+	case kindStem:
 		return 1
-	case KindEmpty:
+	case kindEmpty:
 		return 0
 	default:
 		return 0

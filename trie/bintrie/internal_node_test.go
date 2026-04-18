@@ -39,7 +39,7 @@ func TestInternalNodeGet(t *testing.T) {
 
 	// Build tree: root -> left stem, right stem
 	// Insert left stem values
-	s.SetRoot(EmptyRef)
+	s.root = emptyRef
 	if err := s.InsertValuesAtStem(leftStem, leftValues, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -79,8 +79,8 @@ func TestInternalNodeGetWithResolver(t *testing.T) {
 	rootRef := s.newInternalRef(0)
 	rootNode := s.getInternal(rootRef.Index())
 	rootNode.left = hashedChild
-	rootNode.right = EmptyRef
-	s.SetRoot(rootRef)
+	rootNode.right = emptyRef
+	s.root = rootRef
 
 	// Mock resolver that returns a stem node
 	resolver := func(path []byte, hash common.Hash) ([]byte, error) {
@@ -90,7 +90,7 @@ func TestInternalNodeGetWithResolver(t *testing.T) {
 			ref := rs.newStemRef(stem, 1)
 			sn := rs.getStem(ref.Index())
 			sn.setValue(5, common.HexToHash("0xabcd").Bytes())
-			return rs.SerializeNode(ref), nil
+			return rs.serializeNode(ref), nil
 		}
 		return nil, errors.New("node not found")
 	}
@@ -173,12 +173,12 @@ func TestInternalNodeHash(t *testing.T) {
 	rootNode := s.getInternal(rootRef.Index())
 	rootNode.left = leftRef
 	rootNode.right = rightRef
-	s.SetRoot(rootRef)
+	s.root = rootRef
 
-	hash1 := s.ComputeHash(rootRef)
+	hash1 := s.computeHash(rootRef)
 
 	// Hash should be deterministic
-	hash2 := s.ComputeHash(rootRef)
+	hash2 := s.computeHash(rootRef)
 	if hash1 != hash2 {
 		t.Errorf("Hash not deterministic: %x != %x", hash1, hash2)
 	}
@@ -186,7 +186,7 @@ func TestInternalNodeHash(t *testing.T) {
 	// Changing a child should change the hash
 	rootNode.left = s.newHashedRef(common.HexToHash("0x3333"))
 	rootNode.mustRecompute = true
-	hash3 := s.ComputeHash(rootRef)
+	hash3 := s.computeHash(rootRef)
 	if hash1 == hash3 {
 		t.Error("Hash didn't change after modifying left child")
 	}
@@ -290,7 +290,7 @@ func TestInternalNodeCollectNodes(t *testing.T) {
 		collectedPaths = append(collectedPaths, pathCopy)
 	}
 
-	err := s.CollectNodes(s.Root(), []byte{1}, flushFn)
+	err := s.collectNodes(s.root, []byte{1}, flushFn)
 	if err != nil {
 		t.Fatalf("Failed to collect nodes: %v", err)
 	}
@@ -322,7 +322,7 @@ func TestInternalNodeGetHeight(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	height := s.GetHeight(s.Root())
+	height := s.getHeight(s.root)
 	if height < 2 {
 		t.Errorf("Expected height >= 2, got %d", height)
 	}

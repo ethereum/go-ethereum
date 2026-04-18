@@ -28,18 +28,18 @@ import (
 type NodeFlushFn func(path []byte, hash common.Hash, serialized []byte)
 
 func (s *NodeStore) Hash() common.Hash {
-	return s.ComputeHash(s.root)
+	return s.computeHash(s.root)
 }
 
-func (s *NodeStore) ComputeHash(ref NodeRef) common.Hash {
+func (s *NodeStore) computeHash(ref nodeRef) common.Hash {
 	switch ref.Kind() {
-	case KindInternal:
+	case kindInternal:
 		return s.hashInternal(ref.Index())
-	case KindStem:
+	case kindStem:
 		return s.getStem(ref.Index()).Hash()
-	case KindHashed:
+	case kindHashed:
 		return s.getHashed(ref.Index()).Hash()
-	case KindEmpty:
+	case kindEmpty:
 		return common.Hash{}
 	default:
 		return common.Hash{}
@@ -65,12 +65,12 @@ func (s *NodeStore) hashInternal(idx uint32) common.Hash {
 		if !node.left.IsEmpty() {
 			wg.Add(1)
 			go func() {
-				lh = s.ComputeHash(node.left)
+				lh = s.computeHash(node.left)
 				wg.Done()
 			}()
 		}
 		if !node.right.IsEmpty() {
-			rh := s.ComputeHash(node.right)
+			rh := s.computeHash(node.right)
 			copy(input[32:], rh[:])
 		}
 		wg.Wait()
@@ -82,11 +82,11 @@ func (s *NodeStore) hashInternal(idx uint32) common.Hash {
 
 	var input [64]byte
 	if !node.left.IsEmpty() {
-		lh := s.ComputeHash(node.left)
+		lh := s.computeHash(node.left)
 		copy(input[:32], lh[:])
 	}
 	if !node.right.IsEmpty() {
-		rh := s.ComputeHash(node.right)
+		rh := s.computeHash(node.right)
 		copy(input[32:], rh[:])
 	}
 	node.hash = sha256Sum256(input[:])
@@ -95,19 +95,19 @@ func (s *NodeStore) hashInternal(idx uint32) common.Hash {
 }
 
 // SerializeNode serializes a node into the flat on-disk format.
-func (s *NodeStore) SerializeNode(ref NodeRef) []byte {
+func (s *NodeStore) serializeNode(ref nodeRef) []byte {
 	switch ref.Kind() {
-	case KindInternal:
+	case kindInternal:
 		node := s.getInternal(ref.Index())
 		var serialized [NodeTypeBytes + HashSize + HashSize]byte
 		serialized[0] = nodeTypeInternal
-		lh := s.ComputeHash(node.left)
-		rh := s.ComputeHash(node.right)
+		lh := s.computeHash(node.left)
+		rh := s.computeHash(node.right)
 		copy(serialized[NodeTypeBytes:NodeTypeBytes+HashSize], lh[:])
 		copy(serialized[NodeTypeBytes+HashSize:], rh[:])
 		return serialized[:]
 
-	case KindStem:
+	case kindStem:
 		sn := s.getStem(ref.Index())
 		serializedLen := NodeTypeBytes + StemSize + StemBitmapSize + len(sn.valueData)
 		serialized := make([]byte, serializedLen)
@@ -126,31 +126,31 @@ var errInvalidSerializedLength = errors.New("invalid serialized node length")
 
 // DeserializeNode deserializes a node from bytes, recomputing its hash. The
 // returned node is marked dirty (provenance unknown, safe re-flush default).
-func (s *NodeStore) DeserializeNode(serialized []byte, depth int) (NodeRef, error) {
-	return s.deserializeNode(serialized, depth, common.Hash{}, true, true)
+func (s *NodeStore) deserializeNode(serialized []byte, depth int) (nodeRef, error) {
+	return s.decodeNode(serialized, depth, common.Hash{}, true, true)
 }
 
 // DeserializeNodeWithHash deserializes a node whose hash is already known and
 // whose blob is already on disk (mustRecompute=false, dirty=false).
-func (s *NodeStore) DeserializeNodeWithHash(serialized []byte, depth int, hn common.Hash) (NodeRef, error) {
-	return s.deserializeNode(serialized, depth, hn, false, false)
+func (s *NodeStore) deserializeNodeWithHash(serialized []byte, depth int, hn common.Hash) (nodeRef, error) {
+	return s.decodeNode(serialized, depth, hn, false, false)
 }
 
-func (s *NodeStore) deserializeNode(serialized []byte, depth int, hn common.Hash, mustRecompute, dirty bool) (NodeRef, error) {
+func (s *NodeStore) decodeNode(serialized []byte, depth int, hn common.Hash, mustRecompute, dirty bool) (nodeRef, error) {
 	if len(serialized) == 0 {
-		return EmptyRef, nil
+		return emptyRef, nil
 	}
 
 	switch serialized[0] {
 	case nodeTypeInternal:
 		if len(serialized) != NodeTypeBytes+2*HashSize {
-			return EmptyRef, errInvalidSerializedLength
+			return emptyRef, errInvalidSerializedLength
 		}
 		var leftHash, rightHash common.Hash
 		copy(leftHash[:], serialized[NodeTypeBytes:NodeTypeBytes+HashSize])
 		copy(rightHash[:], serialized[NodeTypeBytes+HashSize:])
 
-		var leftRef, rightRef NodeRef
+		var leftRef, rightRef nodeRef
 		if leftHash != (common.Hash{}) {
 			leftRef = s.newHashedRef(leftHash)
 		}
@@ -171,7 +171,7 @@ func (s *NodeStore) deserializeNode(serialized []byte, depth int, hn common.Hash
 
 	case nodeTypeStem:
 		if len(serialized) < 64 {
-			return EmptyRef, errInvalidSerializedLength
+			return emptyRef, errInvalidSerializedLength
 		}
 		stemIdx := s.allocStem()
 		sn := s.getStem(stemIdx)
@@ -186,7 +186,7 @@ func (s *NodeStore) deserializeNode(serialized []byte, depth int, hn common.Hash
 		dataStart := NodeTypeBytes + StemSize + StemBitmapSize
 		dataEnd := dataStart + int(count)*HashSize
 		if len(serialized) < dataEnd {
-			return EmptyRef, errInvalidSerializedLength
+			return emptyRef, errInvalidSerializedLength
 		}
 		// Zero-copy: aliases the serialized buffer; ensureWritable() COWs before mutation.
 		sn.valueData = serialized[dataStart:dataEnd]
@@ -195,21 +195,21 @@ func (s *NodeStore) deserializeNode(serialized []byte, depth int, hn common.Hash
 		sn.hash = hn
 		sn.mustRecompute = mustRecompute
 		sn.dirty = dirty
-		return MakeRef(KindStem, stemIdx), nil
+		return makeRef(kindStem, stemIdx), nil
 
 	default:
-		return EmptyRef, errors.New("invalid node type")
+		return emptyRef, errors.New("invalid node type")
 	}
 }
 
 // CollectNodes flushes every node that needs flushing via flushfn in post-order.
 // Invariant: any ancestor of a node that needs flushing is itself marked, so a
 // clean root means the whole subtree is clean.
-func (s *NodeStore) CollectNodes(ref NodeRef, path []byte, flushfn NodeFlushFn) error {
+func (s *NodeStore) collectNodes(ref nodeRef, path []byte, flushfn NodeFlushFn) error {
 	switch ref.Kind() {
-	case KindEmpty:
+	case kindEmpty:
 		return nil
-	case KindInternal:
+	case kindInternal:
 		node := s.getInternal(ref.Index())
 		if !node.dirty {
 			return nil
@@ -217,50 +217,50 @@ func (s *NodeStore) CollectNodes(ref NodeRef, path []byte, flushfn NodeFlushFn) 
 		leftPath := make([]byte, len(path)+1)
 		copy(leftPath, path)
 		leftPath[len(path)] = 0
-		if err := s.CollectNodes(node.left, leftPath, flushfn); err != nil {
+		if err := s.collectNodes(node.left, leftPath, flushfn); err != nil {
 			return err
 		}
 		rightPath := make([]byte, len(path)+1)
 		copy(rightPath, path)
 		rightPath[len(path)] = 1
-		if err := s.CollectNodes(node.right, rightPath, flushfn); err != nil {
+		if err := s.collectNodes(node.right, rightPath, flushfn); err != nil {
 			return err
 		}
-		flushfn(path, s.ComputeHash(ref), s.SerializeNode(ref))
+		flushfn(path, s.computeHash(ref), s.serializeNode(ref))
 		node.dirty = false
 		return nil
-	case KindStem:
+	case kindStem:
 		sn := s.getStem(ref.Index())
 		if !sn.dirty {
 			return nil
 		}
-		flushfn(path, s.ComputeHash(ref), s.SerializeNode(ref))
+		flushfn(path, s.computeHash(ref), s.serializeNode(ref))
 		sn.dirty = false
 		return nil
-	case KindHashed:
+	case kindHashed:
 		return nil // Already committed
 	default:
 		return fmt.Errorf("CollectNodes: unexpected kind %d", ref.Kind())
 	}
 }
 
-func (s *NodeStore) ToDot(ref NodeRef, parent, path string) string {
+func (s *NodeStore) toDot(ref nodeRef, parent, path string) string {
 	switch ref.Kind() {
-	case KindInternal:
+	case kindInternal:
 		node := s.getInternal(ref.Index())
 		me := fmt.Sprintf("internal%s", path)
-		ret := fmt.Sprintf("%s [label=\"I: %x\"]\n", me, s.ComputeHash(ref))
+		ret := fmt.Sprintf("%s [label=\"I: %x\"]\n", me, s.computeHash(ref))
 		if len(parent) > 0 {
 			ret = fmt.Sprintf("%s %s -> %s\n", ret, parent, me)
 		}
 		if !node.left.IsEmpty() {
-			ret += s.ToDot(node.left, me, fmt.Sprintf("%s%02x", path, 0))
+			ret += s.toDot(node.left, me, fmt.Sprintf("%s%02x", path, 0))
 		}
 		if !node.right.IsEmpty() {
-			ret += s.ToDot(node.right, me, fmt.Sprintf("%s%02x", path, 1))
+			ret += s.toDot(node.right, me, fmt.Sprintf("%s%02x", path, 1))
 		}
 		return ret
-	case KindStem:
+	case kindStem:
 		sn := s.getStem(ref.Index())
 		me := fmt.Sprintf("stem%s", path)
 		ret := fmt.Sprintf("%s [label=\"stem=%x c=%x\"]\n", me, sn.Stem, sn.Hash())
@@ -276,7 +276,7 @@ func (s *NodeStore) ToDot(ref NodeRef, parent, path string) string {
 			ret += fmt.Sprintf("%s -> %s%x\n", me, me, i)
 		}
 		return ret
-	case KindHashed:
+	case kindHashed:
 		hn := s.getHashed(ref.Index())
 		me := fmt.Sprintf("hash%s", path)
 		ret := fmt.Sprintf("%s [label=\"%x\"]\n", me, hn.Hash())

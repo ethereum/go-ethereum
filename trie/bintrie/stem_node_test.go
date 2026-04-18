@@ -51,8 +51,8 @@ func TestStemNodeInsertSameStem(t *testing.T) {
 	}
 
 	// Root should still be a StemNode
-	if s.Root().Kind() != KindStem {
-		t.Fatalf("Expected KindStem root, got kind %d", s.Root().Kind())
+	if s.root.Kind() != kindStem {
+		t.Fatalf("Expected kindStem root, got kind %d", s.root.Kind())
 	}
 
 	// Check that both values are present
@@ -87,12 +87,12 @@ func TestStemNodeInsertDifferentStem(t *testing.T) {
 	}
 
 	// Should now be an InternalNode
-	if s.Root().Kind() != KindInternal {
-		t.Fatalf("Expected KindInternal root, got kind %d", s.Root().Kind())
+	if s.root.Kind() != kindInternal {
+		t.Fatalf("Expected kindInternal root, got kind %d", s.root.Kind())
 	}
 
 	// Check depth
-	rootNode := s.getInternal(s.Root().Index())
+	rootNode := s.getInternal(s.root.Index())
 	if rootNode.depth != 0 {
 		t.Errorf("Expected depth 0, got %d", rootNode.depth)
 	}
@@ -172,10 +172,10 @@ func TestStemNodeHash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	hash1 := s.ComputeHash(s.Root())
+	hash1 := s.computeHash(s.root)
 
 	// Hash should be deterministic
-	hash2 := s.ComputeHash(s.Root())
+	hash2 := s.computeHash(s.root)
 	if hash1 != hash2 {
 		t.Errorf("Hash not deterministic: %x != %x", hash1, hash2)
 	}
@@ -187,7 +187,7 @@ func TestStemNodeHash(t *testing.T) {
 	if err := s.Insert(key2, value2, nil); err != nil {
 		t.Fatal(err)
 	}
-	hash3 := s.ComputeHash(s.Root())
+	hash3 := s.computeHash(s.root)
 	if hash1 == hash3 {
 		t.Error("Hash didn't change after modifying values")
 	}
@@ -295,7 +295,7 @@ func TestStemNodeGetHeight(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	height := s.GetHeight(s.Root())
+	height := s.getHeight(s.root)
 	if height != 1 {
 		t.Errorf("Expected height 1, got %d", height)
 	}
@@ -320,7 +320,7 @@ func TestStemNodeCollectNodes(t *testing.T) {
 		collectedPaths = append(collectedPaths, pathCopy)
 	}
 
-	err := s.CollectNodes(s.Root(), []byte{0, 1, 0}, flushFn)
+	err := s.collectNodes(s.root, []byte{0, 1, 0}, flushFn)
 	if err != nil {
 		t.Fatalf("Failed to collect nodes: %v", err)
 	}

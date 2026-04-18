@@ -144,8 +144,8 @@ func TestIteratorEmptyNodeBacktrack(t *testing.T) {
 		{common.HexToHash("8000000000000000000000000000000000000000000000000000000000000001"), oneKey},
 	})
 
-	if tr.store.Root().Kind() != KindInternal {
-		t.Fatalf("expected InternalNode root, got kind %d", tr.store.Root().Kind())
+	if tr.store.root.Kind() != kindInternal {
+		t.Fatalf("expected InternalNode root, got kind %d", tr.store.root.Kind())
 	}
 	if leaves := countLeaves(t, tr); leaves != 2 {
 		t.Fatalf("expected 2 leaves, got %d (Empty backtrack bug?)", leaves)
@@ -161,8 +161,8 @@ func TestIteratorHashedNodeNilData(t *testing.T) {
 		{common.HexToHash("8000000000000000000000000000000000000000000000000000000000000001"), oneKey},
 	})
 
-	root := tr.store.Root()
-	if root.Kind() != KindInternal {
+	root := tr.store.root
+	if root.Kind() != kindInternal {
 		t.Fatalf("expected InternalNode root, got kind %d", root.Kind())
 	}
 	rootNode := tr.store.getInternal(root.Index())

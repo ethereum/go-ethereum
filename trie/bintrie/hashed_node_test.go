@@ -30,8 +30,8 @@ func TestHashedNodeHash(t *testing.T) {
 	s := NewNodeStore()
 	ref := s.newHashedRef(hash)
 
-	if s.ComputeHash(ref) != hash {
-		t.Errorf("Hash mismatch: expected %x, got %x", hash, s.ComputeHash(ref))
+	if s.computeHash(ref) != hash {
+		t.Errorf("Hash mismatch: expected %x, got %x", hash, s.computeHash(ref))
 	}
 }
 
@@ -40,10 +40,10 @@ func TestHashedNodeCopy(t *testing.T) {
 	hash := common.HexToHash("0xabcdef")
 	s := NewNodeStore()
 	ref := s.newHashedRef(hash)
-	s.SetRoot(ref)
+	s.root = ref
 
 	ns := s.Copy()
-	copiedHash := ns.ComputeHash(ns.Root())
+	copiedHash := ns.computeHash(ns.root)
 
 	if copiedHash != hash {
 		t.Errorf("Hash mismatch after copy: expected %x, got %x", hash, copiedHash)
@@ -55,7 +55,7 @@ func TestHashedNodeInsertValuesAtStem(t *testing.T) {
 	// Test 1: nil resolver should return an error
 	s := NewNodeStore()
 	hashedRef := s.newHashedRef(common.HexToHash("0x1234"))
-	s.SetRoot(hashedRef)
+	s.root = hashedRef
 
 	stem := make([]byte, StemSize)
 	values := make([][]byte, StemNodeWidth)
@@ -72,7 +72,7 @@ func TestHashedNodeInsertValuesAtStem(t *testing.T) {
 
 	s2 := NewNodeStore()
 	hashedRef2 := s2.newHashedRef(common.HexToHash("0x1234"))
-	s2.SetRoot(hashedRef2)
+	s2.root = hashedRef2
 
 	err = s2.InsertValuesAtStem(stem, values, mockResolver)
 	if err == nil {
@@ -95,7 +95,7 @@ func TestHashedNodeInsertValuesAtStem(t *testing.T) {
 			sn.setValue(byte(i), v)
 		}
 	}
-	serialized := rs.SerializeNode(ref)
+	serialized := rs.serializeNode(ref)
 
 	validResolver := func(path []byte, hash common.Hash) ([]byte, error) {
 		return serialized, nil
@@ -103,7 +103,7 @@ func TestHashedNodeInsertValuesAtStem(t *testing.T) {
 
 	s3 := NewNodeStore()
 	hashedRef3 := s3.newHashedRef(common.HexToHash("0x1234"))
-	s3.SetRoot(hashedRef3)
+	s3.root = hashedRef3
 
 	newValues := make([][]byte, StemNodeWidth)
 	newValues[2] = common.HexToHash("0x3333333333333333333333333333333333333333333333333333333333333333").Bytes()
@@ -137,8 +137,8 @@ func TestHashedNodeGetError(t *testing.T) {
 	rootNode := s.getInternal(rootRef.Index())
 	hashedLeft := s.newHashedRef(common.HexToHash("0x1234"))
 	rootNode.left = hashedLeft
-	rootNode.right = EmptyRef
-	s.SetRoot(rootRef)
+	rootNode.right = emptyRef
+	s.root = rootRef
 
 	key := make([]byte, 32) // goes left
 	key[31] = 5

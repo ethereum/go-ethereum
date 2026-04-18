@@ -41,7 +41,7 @@ func TestSingleEntry(t *testing.T) {
 	if err := s.Insert(zeroKey[:], oneKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	if s.GetHeight(s.Root()) != 1 {
+	if s.getHeight(s.root) != 1 {
 		t.Fatal("invalid depth")
 	}
 	expected := common.HexToHash("aab1060e04cb4f5dc6f697ae93156a95714debbf77d54238766adc5709282b6f")
@@ -59,7 +59,7 @@ func TestTwoEntriesDiffFirstBit(t *testing.T) {
 	if err := s.Insert(common.HexToHash("8000000000000000000000000000000000000000000000000000000000000000").Bytes(), twoKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	if s.GetHeight(s.Root()) != 2 {
+	if s.getHeight(s.root) != 2 {
 		t.Fatal("invalid height")
 	}
 	if s.Hash() != common.HexToHash("dfc69c94013a8b3c65395625a719a87534a7cfd38719251ad8c8ea7fe79f065e") {
@@ -81,7 +81,7 @@ func TestOneStemColocatedValues(t *testing.T) {
 	if err := s.Insert(common.HexToHash("00000000000000000000000000000000000000000000000000000000000000FF").Bytes(), fourKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	if s.GetHeight(s.Root()) != 1 {
+	if s.getHeight(s.root) != 1 {
 		t.Fatal("invalid height")
 	}
 }
@@ -102,7 +102,7 @@ func TestTwoStemColocatedValues(t *testing.T) {
 	if err := s.Insert(common.HexToHash("8000000000000000000000000000000000000000000000000000000000000004").Bytes(), twoKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	if s.GetHeight(s.Root()) != 2 {
+	if s.getHeight(s.root) != 2 {
 		t.Fatal("invalid height")
 	}
 }
@@ -118,7 +118,7 @@ func TestTwoKeysMatchFirst42Bits(t *testing.T) {
 	if err := s.Insert(key2, twoKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	if s.GetHeight(s.Root()) != 1+42+1 {
+	if s.getHeight(s.root) != 1+42+1 {
 		t.Fatal("invalid height")
 	}
 }
@@ -131,7 +131,7 @@ func TestInsertDuplicateKey(t *testing.T) {
 	if err := s.Insert(oneKey[:], twoKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	if s.GetHeight(s.Root()) != 1 {
+	if s.getHeight(s.root) != 1 {
 		t.Fatal("invalid height")
 	}
 	// Verify that the value is updated
@@ -153,7 +153,7 @@ func TestLargeNumberOfEntries(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	height := s.GetHeight(s.Root())
+	height := s.getHeight(s.root)
 	if height != 1+8 {
 		t.Fatalf("invalid height, wanted %d, got %d", 1+8, height)
 	}
@@ -631,8 +631,8 @@ func TestGetAccountNonMembershipStemRoot(t *testing.T) {
 	tr := testAccount(t, addr, 42, 100)
 
 	// Verify root is a StemNode (single stem inserted).
-	if tr.store.Root().Kind() != KindStem {
-		t.Fatalf("expected StemNode root, got kind %d", tr.store.Root().Kind())
+	if tr.store.root.Kind() != kindStem {
+		t.Fatalf("expected StemNode root, got kind %d", tr.store.root.Kind())
 	}
 
 	// Query a completely different address — must return nil.
@@ -682,8 +682,8 @@ func TestGetAccountNonMembershipInternalRoot(t *testing.T) {
 	}
 
 	// Verify root is an InternalNode.
-	if tr.store.Root().Kind() != KindInternal {
-		t.Fatalf("expected InternalNode root, got kind %d", tr.store.Root().Kind())
+	if tr.store.root.Kind() != kindInternal {
+		t.Fatalf("expected InternalNode root, got kind %d", tr.store.root.Kind())
 	}
 
 	// Query a non-existent address — must return nil.
@@ -705,8 +705,8 @@ func TestGetStorageNonMembershipStemRoot(t *testing.T) {
 	tr := testAccount(t, addr, 1, 100)
 
 	// Verify root is a StemNode.
-	if tr.store.Root().Kind() != KindStem {
-		t.Fatalf("expected StemNode root, got kind %d", tr.store.Root().Kind())
+	if tr.store.root.Kind() != kindStem {
+		t.Fatalf("expected StemNode root, got kind %d", tr.store.root.Kind())
 	}
 
 	// Query storage for a different address — must return nil, not panic.
@@ -747,8 +747,8 @@ func TestGetStorageNonMembershipInternalRoot(t *testing.T) {
 		t.Fatalf("UpdateStorage error: %v", err)
 	}
 
-	if tr.store.Root().Kind() != KindInternal {
-		t.Fatalf("expected InternalNode root, got kind %d", tr.store.Root().Kind())
+	if tr.store.root.Kind() != kindInternal {
+		t.Fatalf("expected InternalNode root, got kind %d", tr.store.root.Kind())
 	}
 
 	// Query storage for a non-existent address — must return nil.

@@ -37,10 +37,10 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 	rootNode := s.getInternal(rootRef.Index())
 	rootNode.left = leftRef
 	rootNode.right = rightRef
-	s.SetRoot(rootRef)
+	s.root = rootRef
 
 	// Serialize the node — flat 65-byte format
-	serialized := s.SerializeNode(rootRef)
+	serialized := s.serializeNode(rootRef)
 
 	// Check the serialized format: [type(1)][leftHash(32)][rightHash(32)]
 	if serialized[0] != nodeTypeInternal {
@@ -62,14 +62,14 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 
 	// Deserialize into a new store
 	ds := NewNodeStore()
-	deserialized, err := ds.DeserializeNode(serialized, 0)
+	deserialized, err := ds.deserializeNode(serialized, 0)
 	if err != nil {
 		t.Fatalf("Failed to deserialize node: %v", err)
 	}
 
 	// Root should be an InternalNode
-	if deserialized.Kind() != KindInternal {
-		t.Fatalf("Expected KindInternal, got kind %d", deserialized.Kind())
+	if deserialized.Kind() != kindInternal {
+		t.Fatalf("Expected kindInternal, got kind %d", deserialized.Kind())
 	}
 
 	internalNode := ds.getInternal(deserialized.Index())
@@ -78,19 +78,19 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 	}
 
 	// Left child should be a HashedNode with the correct hash
-	if internalNode.left.Kind() != KindHashed {
-		t.Fatalf("Expected left child to be KindHashed, got %d", internalNode.left.Kind())
+	if internalNode.left.Kind() != kindHashed {
+		t.Fatalf("Expected left child to be kindHashed, got %d", internalNode.left.Kind())
 	}
-	if ds.ComputeHash(internalNode.left) != leftHash {
-		t.Errorf("Left hash mismatch: expected %x, got %x", leftHash, ds.ComputeHash(internalNode.left))
+	if ds.computeHash(internalNode.left) != leftHash {
+		t.Errorf("Left hash mismatch: expected %x, got %x", leftHash, ds.computeHash(internalNode.left))
 	}
 
 	// Right child should be a HashedNode with the correct hash
-	if internalNode.right.Kind() != KindHashed {
-		t.Fatalf("Expected right child to be KindHashed, got %d", internalNode.right.Kind())
+	if internalNode.right.Kind() != kindHashed {
+		t.Fatalf("Expected right child to be kindHashed, got %d", internalNode.right.Kind())
 	}
-	if ds.ComputeHash(internalNode.right) != rightHash {
-		t.Errorf("Right hash mismatch: expected %x, got %x", rightHash, ds.ComputeHash(internalNode.right))
+	if ds.computeHash(internalNode.right) != rightHash {
+		t.Errorf("Right hash mismatch: expected %x, got %x", rightHash, ds.computeHash(internalNode.right))
 	}
 }
 
@@ -116,7 +116,7 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 	}
 
 	// Serialize the node
-	serialized := s.SerializeNode(ref)
+	serialized := s.serializeNode(ref)
 
 	// Check the serialized format
 	if serialized[0] != nodeTypeStem {
@@ -130,13 +130,13 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 
 	// Deserialize into a new store
 	ds := NewNodeStore()
-	deserializedRef, err := ds.DeserializeNode(serialized, 10)
+	deserializedRef, err := ds.deserializeNode(serialized, 10)
 	if err != nil {
 		t.Fatalf("Failed to deserialize node: %v", err)
 	}
 
-	if deserializedRef.Kind() != KindStem {
-		t.Fatalf("Expected KindStem, got kind %d", deserializedRef.Kind())
+	if deserializedRef.Kind() != kindStem {
+		t.Fatalf("Expected kindStem, got kind %d", deserializedRef.Kind())
 	}
 
 	stemNode := ds.getStem(deserializedRef.Index())
@@ -171,13 +171,13 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 // TestDeserializeEmptyNode tests deserialization of empty node.
 func TestDeserializeEmptyNode(t *testing.T) {
 	s := NewNodeStore()
-	deserialized, err := s.DeserializeNode([]byte{}, 0)
+	deserialized, err := s.deserializeNode([]byte{}, 0)
 	if err != nil {
 		t.Fatalf("Failed to deserialize empty node: %v", err)
 	}
 
 	if !deserialized.IsEmpty() {
-		t.Fatalf("Expected EmptyRef, got kind %d", deserialized.Kind())
+		t.Fatalf("Expected emptyRef, got kind %d", deserialized.Kind())
 	}
 }
 
@@ -186,7 +186,7 @@ func TestDeserializeInvalidType(t *testing.T) {
 	s := NewNodeStore()
 	invalidData := []byte{99, 0, 0, 0} // Type byte 99 is invalid
 
-	_, err := s.DeserializeNode(invalidData, 0)
+	_, err := s.deserializeNode(invalidData, 0)
 	if err == nil {
 		t.Fatal("Expected error for invalid type byte, got nil")
 	}
@@ -198,7 +198,7 @@ func TestDeserializeInvalidLength(t *testing.T) {
 	// InternalNode with valid type byte but wrong length (needs exactly 65 bytes)
 	invalidData := []byte{nodeTypeInternal, 0, 0, 0}
 
-	_, err := s.DeserializeNode(invalidData, 0)
+	_, err := s.deserializeNode(invalidData, 0)
 	if err == nil {
 		t.Fatal("Expected error for invalid data length, got nil")
 	}

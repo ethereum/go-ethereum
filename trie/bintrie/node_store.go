@@ -37,7 +37,7 @@ type NodeStore struct {
 	hashedChunks []*[storeChunkSize]HashedNode
 	hashedCount  uint32
 
-	root NodeRef
+	root nodeRef
 
 	// Free lists for recycling deleted node slots.
 	freeInternals []uint32
@@ -46,12 +46,8 @@ type NodeStore struct {
 }
 
 func NewNodeStore() *NodeStore {
-	return &NodeStore{root: EmptyRef}
+	return &NodeStore{root: emptyRef}
 }
-
-func (s *NodeStore) Root() NodeRef { return s.root }
-
-func (s *NodeStore) SetRoot(ref NodeRef) { s.root = ref }
 
 func (s *NodeStore) allocInternal() uint32 {
 	if n := len(s.freeInternals); n > 0 {
@@ -76,7 +72,7 @@ func (s *NodeStore) getInternal(idx uint32) *InternalNode {
 	return &s.internalChunks[idx/storeChunkSize][idx%storeChunkSize]
 }
 
-func (s *NodeStore) newInternalRef(depth int) NodeRef {
+func (s *NodeStore) newInternalRef(depth int) nodeRef {
 	if depth > 248 {
 		panic("node depth exceeds maximum binary trie depth")
 	}
@@ -85,7 +81,7 @@ func (s *NodeStore) newInternalRef(depth int) NodeRef {
 	n.depth = uint8(depth)
 	n.mustRecompute = true
 	n.dirty = true
-	return MakeRef(KindInternal, idx)
+	return makeRef(kindInternal, idx)
 }
 
 func (s *NodeStore) allocStem() uint32 {
@@ -111,7 +107,7 @@ func (s *NodeStore) getStem(idx uint32) *StemNode {
 	return &s.stemChunks[idx/storeChunkSize][idx%storeChunkSize]
 }
 
-func (s *NodeStore) newStemRef(stem []byte, depth int) NodeRef {
+func (s *NodeStore) newStemRef(stem []byte, depth int) nodeRef {
 	if depth > 248 {
 		panic("node depth exceeds maximum binary trie depth")
 	}
@@ -121,7 +117,7 @@ func (s *NodeStore) newStemRef(stem []byte, depth int) NodeRef {
 	sn.depth = uint8(depth)
 	sn.mustRecompute = true
 	sn.dirty = true
-	return MakeRef(KindStem, idx)
+	return makeRef(kindStem, idx)
 }
 
 func (s *NodeStore) allocHashed() uint32 {
@@ -151,10 +147,10 @@ func (s *NodeStore) freeHashedNode(idx uint32) {
 	s.freeHashed = append(s.freeHashed, idx)
 }
 
-func (s *NodeStore) newHashedRef(hash common.Hash) NodeRef {
+func (s *NodeStore) newHashedRef(hash common.Hash) nodeRef {
 	idx := s.allocHashed()
 	*s.getHashed(idx) = HashedNode(hash)
-	return MakeRef(KindHashed, idx)
+	return makeRef(kindHashed, idx)
 }
 
 func (s *NodeStore) Copy() *NodeStore {
