@@ -268,6 +268,13 @@ func New(stateDb ethdb.Database, mode ethconfig.SyncMode, mux *event.TypeMux, ch
 		stateSyncStart:    make(chan *stateSync),
 		syncStartBlock:    chain.CurrentSnapBlock().Number.Uint64(),
 	}
+	// Rehydrate the partial-state completion flag across restarts. Without
+	// this, a freshly-started process would re-enter the downloader loop for
+	// every beacon forkchoice update, defeating beaconBackfiller.resume()'s
+	// short-circuit.
+	if partialFilter != nil && rawdb.ReadPartialSyncComplete(stateDb) {
+		dl.partialSyncComplete.Store(true)
+	}
 	// Create the post-merge skeleton syncer and start the process
 	dl.skeleton = newSkeleton(stateDb, dl.peers, dropPeer, newBeaconBackfiller(dl, success), chain)
 
@@ -1027,6 +1034,9 @@ func (d *Downloader) processSnapSyncContent() error {
 								return err
 							}
 							d.partialSyncComplete.Store(true)
+							// Persist the completion flag so a restart does not
+							// re-run the sync cycle on every beacon forkchoice.
+							rawdb.WritePartialSyncComplete(d.stateDB)
 							log.Info("Partial state initial sync complete")
 						}
 					}
