@@ -1366,3 +1366,38 @@ func TestStorageDirtiness(t *testing.T) {
 	state.RevertToSnapshot(snap)
 	checkDirty(common.Hash{0x1}, common.Hash{0x1}, true)
 }
+
+// TestStateDBCopyUBT exercises StateDB.Copy on a UBT-backed state database.
+// Before the mustCopyTrie fix, this panicked with "unknown trie type
+// *bintrie.BinaryTrie" because the type switch in mustCopyTrie only covered
+// *trie.StateTrie and *transitiontrie.TransitionTrie.
+func TestStateDBCopyUBT(t *testing.T) {
+	disk := rawdb.NewMemoryDatabase()
+	tdb := triedb.NewDatabase(disk, triedb.UBTDefaults)
+	sdb := NewDatabase(tdb, nil)
+
+	orig, err := New(types.EmptyRootHash, sdb)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	// Touch the trie so StateDB.Copy actually has to copy it.
+	addr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	orig.SetBalance(addr, uint256.NewInt(1_000), tracing.BalanceChangeUnspecified)
+
+	// Must not panic.
+	cpy := orig.Copy()
+	if cpy == nil {
+		t.Fatal("Copy returned nil")
+	}
+
+	// The copy must be independent: mutating the copy does not affect the
+	// original. Use balance as an observable.
+	cpy.SetBalance(addr, uint256.NewInt(2_000), tracing.BalanceChangeUnspecified)
+	if got, want := orig.GetBalance(addr), uint256.NewInt(1_000); got.Cmp(want) != 0 {
+		t.Fatalf("original balance mutated through copy: got %s, want %s", got, want)
+	}
+	if got, want := cpy.GetBalance(addr), uint256.NewInt(2_000); got.Cmp(want) != 0 {
+		t.Fatalf("copy balance did not update: got %s, want %s", got, want)
+	}
+}
