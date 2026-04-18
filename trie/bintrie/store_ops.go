@@ -38,12 +38,11 @@ func (s *NodeStore) GetValue(stem []byte, suffix byte, resolver NodeResolverFn) 
 	return values[suffix], nil
 }
 
+// GetValuesAtStem returns the 256 value slots at stem, or nil if the stem
+// is not in the trie. The returned slice is a view over the in-place
+// StemNode values array (no allocation) and must be treated read-only.
 func (s *NodeStore) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([][]byte, error) {
-	return s.getValuesAtStem(s.root, stem, resolver)
-}
-
-func (s *NodeStore) getValuesAtStem(ref nodeRef, stem []byte, resolver NodeResolverFn) ([][]byte, error) {
-	cur := ref
+	cur := s.root
 	var parentIdx uint32
 	var parentIsLeft bool
 
@@ -125,13 +124,14 @@ func (s *NodeStore) InsertSingle(stem []byte, suffix byte, value []byte, resolve
 	return s.InsertValuesAtStem(stem, values[:], resolver)
 }
 
+// InsertValuesAtStem writes the supplied value slots at stem. values may be
+// sparse (nil entries are ignored). The recursive implementation dispatches
+// through the same body, so a single code path handles internal descent,
+// HashedNode resolution, stem merge, and stem split.
 func (s *NodeStore) InsertValuesAtStem(stem []byte, values [][]byte, resolver NodeResolverFn) error {
-	newRoot, err := s.insertValuesAtStem(s.root, stem, values, resolver, 0)
-	if err != nil {
-		return err
-	}
-	s.root = newRoot
-	return nil
+	var err error
+	s.root, err = s.insertValuesAtStem(s.root, stem, values, resolver, 0)
+	return err
 }
 
 func (s *NodeStore) insertValuesAtStem(ref nodeRef, stem []byte, values [][]byte, resolver NodeResolverFn, depth int) (nodeRef, error) {
