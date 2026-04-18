@@ -19,9 +19,6 @@ package bintrie
 import "github.com/ethereum/go-ethereum/common"
 
 // storeChunkSize is the number of nodes per chunk in each typed pool.
-// Using fixed-size array chunks ensures that pointers to nodes within
-// existing chunks remain valid when new chunks are added (no reallocation
-// of the backing data, only the outer pointer slice grows).
 const storeChunkSize = 4096
 
 // NodeStore is a GC-friendly arena for binary trie nodes. Nodes are packed
