@@ -36,6 +36,7 @@ func (e Empty) Insert(key []byte, value []byte, _ NodeResolverFn, depth int) (Bi
 		Values:        values[:],
 		depth:         depth,
 		mustRecompute: true,
+		dirty:         true,
 	}, nil
 }
 
@@ -58,6 +59,7 @@ func (e Empty) InsertValuesAtStem(key []byte, values [][]byte, _ NodeResolverFn,
 		Values:        values,
 		depth:         depth,
 		mustRecompute: true,
+		dirty:         true,
 	}, nil
 }
 
