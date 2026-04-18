@@ -17,9 +17,11 @@
 package bintrie
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math/bits"
+	"runtime"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -46,19 +48,26 @@ func (s *NodeStore) computeHash(ref nodeRef) common.Hash {
 	}
 }
 
+// parallelDepth returns the tree depth below which hashInternal spawns
+// goroutines for shallow-depth parallelism.
+func parallelDepth() int {
+	return min(bits.Len(uint(runtime.NumCPU())), 8)
+}
+
 // hashInternal hashes an InternalNode and caches the result.
 //
-// At shallow depths (< parallelHashDepth) the left subtree is hashed in a
+// At shallow depths (< parallelDepth()) the left subtree is hashed in a
 // goroutine while the right subtree is hashed inline, then the two digests
 // are combined. Below that threshold the goroutine spawn cost outweighs the
-// hashing work, so deeper nodes hash both children sequentially.
+// hashing work, so deeper nodes hash both children sequentially via the
+// pooled hasher.
 func (s *NodeStore) hashInternal(idx uint32) common.Hash {
 	node := s.getInternal(idx)
 	if !node.mustRecompute {
 		return node.hash
 	}
 
-	if node.depth < parallelHashDepth {
+	if int(node.depth) < parallelDepth() {
 		var input [64]byte
 		var lh common.Hash
 		var wg sync.WaitGroup
@@ -75,21 +84,26 @@ func (s *NodeStore) hashInternal(idx uint32) common.Hash {
 		}
 		wg.Wait()
 		copy(input[:32], lh[:])
-		node.hash = sha256Sum256(input[:])
+		node.hash = sha256.Sum256(input[:])
 		node.mustRecompute = false
 		return node.hash
 	}
 
-	var input [64]byte
+	h := newSha256()
+	defer returnSha256(h)
 	if !node.left.IsEmpty() {
 		lh := s.computeHash(node.left)
-		copy(input[:32], lh[:])
+		h.Write(lh[:])
+	} else {
+		h.Write(make([]byte, HashSize))
 	}
 	if !node.right.IsEmpty() {
 		rh := s.computeHash(node.right)
-		copy(input[32:], rh[:])
+		h.Write(rh[:])
+	} else {
+		h.Write(make([]byte, HashSize))
 	}
-	node.hash = sha256Sum256(input[:])
+	node.hash = common.BytesToHash(h.Sum(nil))
 	node.mustRecompute = false
 	return node.hash
 }
