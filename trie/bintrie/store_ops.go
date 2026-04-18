@@ -26,16 +26,14 @@ import (
 // NodeResolverFn resolves a hashed node from the database.
 type NodeResolverFn func([]byte, common.Hash) ([]byte, error)
 
-func (s *NodeStore) GetSingle(stem []byte, suffix byte, resolver NodeResolverFn) ([]byte, error) {
-	return s.getSingle(s.root, stem, suffix, resolver)
-}
-
-func (s *NodeStore) getSingle(ref nodeRef, stem []byte, suffix byte, resolver NodeResolverFn) ([]byte, error) {
-	cur := ref
+// GetValue returns the value at (stem, suffix) or nil if absent. It walks
+// the trie from the root, resolving any HashedNode encountered on the path
+// via the supplied resolver.
+func (s *NodeStore) GetValue(stem []byte, suffix byte, resolver NodeResolverFn) ([]byte, error) {
+	cur := s.root
 	// Track parent for HashedNode resolution (update parent's child ref).
 	var parentIdx uint32
 	var parentIsLeft bool
-	hasParent := false
 
 	for {
 		switch cur.Kind() {
@@ -46,7 +44,6 @@ func (s *NodeStore) getSingle(ref nodeRef, stem []byte, suffix byte, resolver No
 			}
 			bit := stem[node.depth/8] >> (7 - (node.depth % 8)) & 1
 			parentIdx = cur.Index()
-			hasParent = true
 			if bit == 0 {
 				parentIsLeft = true
 				cur = node.left
@@ -63,27 +60,24 @@ func (s *NodeStore) getSingle(ref nodeRef, stem []byte, suffix byte, resolver No
 			return sn.getValue(suffix), nil
 
 		case kindHashed:
-			if !hasParent {
-				return nil, errors.New("getSingle: hashed node at root")
-			}
 			if resolver == nil {
-				return nil, errors.New("getSingle: cannot resolve hashed node without resolver")
+				return nil, errors.New("GetValue: cannot resolve hashed node without resolver")
 			}
 			hn := s.getHashed(cur.Index())
 			parentNode := s.getInternal(parentIdx)
 			path, err := keyToPath(int(parentNode.depth), stem)
 			if err != nil {
-				return nil, fmt.Errorf("getSingle path error: %w", err)
+				return nil, fmt.Errorf("GetValue path error: %w", err)
 			}
 			data, err := resolver(path, hn.Hash())
 			if err != nil {
-				return nil, fmt.Errorf("getSingle resolve error: %w", err)
+				return nil, fmt.Errorf("GetValue resolve error: %w", err)
 			}
 			resolved, err := s.deserializeNodeWithHash(data, int(parentNode.depth)+1, hn.Hash())
 			if err != nil {
-				return nil, fmt.Errorf("getSingle deserialization error: %w", err)
+				return nil, fmt.Errorf("GetValue deserialization error: %w", err)
 			}
-			// Update parent's child ref
+			// Update parent's child ref.
 			s.freeHashedNode(cur.Index())
 			if parentIsLeft {
 				parentNode.left = resolved
@@ -96,7 +90,7 @@ func (s *NodeStore) getSingle(ref nodeRef, stem []byte, suffix byte, resolver No
 			return nil, nil
 
 		default:
-			return nil, fmt.Errorf("getSingle: unexpected node kind %d", cur.Kind())
+			return nil, fmt.Errorf("GetValue: unexpected node kind %d", cur.Kind())
 		}
 	}
 }
@@ -555,7 +549,7 @@ func (s *NodeStore) Insert(key []byte, value []byte, resolver NodeResolverFn) er
 }
 
 func (s *NodeStore) Get(key []byte, resolver NodeResolverFn) ([]byte, error) {
-	return s.GetSingle(key[:StemSize], key[StemSize], resolver)
+	return s.GetValue(key[:StemSize], key[StemSize], resolver)
 }
 
 func (s *NodeStore) getHeight(ref nodeRef) int {
