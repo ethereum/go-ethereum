@@ -82,9 +82,9 @@ func (b *testBALBuilder) StorageWrite(txIdx uint16, addr common.Address, slot, v
 func (b *testBALBuilder) CodeChange(addr common.Address, txIdx uint16, code []byte) {
 	acc := b.ensureAccount(addr)
 	if acc.CodeChanges == nil {
-		acc.CodeChanges = make(map[uint16]bal.CodeChange)
+		acc.CodeChanges = make(map[uint16][]byte)
 	}
-	acc.CodeChanges[txIdx] = bal.CodeChange{TxIdx: txIdx, Code: code}
+	acc.CodeChanges[txIdx] = code
 }
 
 // Build converts the construction BAL to the encoding format via RLP round-trip.
