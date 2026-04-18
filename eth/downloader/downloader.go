@@ -389,6 +389,18 @@ func (d *Downloader) synchronise(beaconPing chan struct{}) (err error) {
 	}
 	defer d.synchronising.Store(false)
 
+	// Partial-state nodes must not run a downloader cycle once the initial
+	// sync has completed; every live block arrives via the Engine API's
+	// newPayload path and is processed with ApplyBALAndComputeRoot. Running
+	// the downloader here would try to download + (re-)execute blocks
+	// against storage we intentionally don't have. beaconBackfiller.resume
+	// already guards this at a higher layer; this check is defense in depth
+	// for any other caller of synchronise (tests, future wiring).
+	if d.partialFilter != nil && d.partialSyncComplete.Load() {
+		log.Debug("Partial state: sync complete, skipping downloader cycle")
+		return nil
+	}
+
 	// Post a user notification of the sync (only once per session)
 	if d.notified.CompareAndSwap(false, true) {
 		log.Info("Block synchronisation started")
