@@ -817,3 +817,44 @@ func TestCommitSkipCleanSubtrees(t *testing.T) {
 		t.Fatalf("expected second NodeSet (%d) to be smaller than first (%d)", len(ns2.Nodes), len(ns1.Nodes))
 	}
 }
+
+// BenchmarkCollectNodesSparseWrite measures Commit cost when one leaf
+// changes per block — the common case for state updates. After warm-up
+// (populate + initial Commit), each iteration modifies a single leaf and
+// re-Commits. Matches the shape of the same-named benchmark on master so
+// the two trees can be benchstat'd directly.
+func BenchmarkCollectNodesSparseWrite(b *testing.B) {
+	const n = 10_000
+	tr := &BinaryTrie{
+		store:  NewNodeStore(),
+		tracer: trie.NewPrevalueTracer(),
+	}
+	keys := make([][HashSize]byte, n)
+	for i := range n {
+		binary.BigEndian.PutUint64(keys[i][:8], uint64(i+1)*0x9e3779b97f4a7c15)
+		binary.BigEndian.PutUint64(keys[i][8:16], uint64(i+1)*0xc2b2ae3d27d4eb4f)
+		binary.BigEndian.PutUint64(keys[i][16:24], uint64(i+1)*0x165667b19e3779f9)
+		binary.BigEndian.PutUint64(keys[i][24:32], uint64(i+1)*0x85ebca77c2b2ae63)
+		var v [HashSize]byte
+		binary.BigEndian.PutUint64(v[24:], uint64(i+1))
+		if err := tr.store.Insert(keys[i][:], v[:], nil); err != nil {
+			b.Fatalf("warmup Insert %d: %v", i, err)
+		}
+	}
+	_, _ = tr.Commit(false) // warmup flush
+
+	var newVal [HashSize]byte
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		idx := i % n
+		binary.BigEndian.PutUint64(newVal[24:], uint64(i+1))
+		if err := tr.store.Insert(keys[idx][:], newVal[:], nil); err != nil {
+			b.Fatalf("iter %d Insert: %v", i, err)
+		}
+		_, ns := tr.Commit(false)
+		if len(ns.Nodes) == 0 {
+			b.Fatalf("iter %d: empty NodeSet", i)
+		}
+	}
+}
