@@ -317,6 +317,15 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			frozen, _ = f.Ancients()
 			if frozen > f.chainRetention {
 				newTail := frozen - f.chainRetention
+				// Never prune past the snap-sync pivot. Partial-state mode
+				// relies on the pivot block as the anchor for state
+				// reconstruction; if its body/receipts are pruned from the
+				// ancient store, a future reorg spanning the pivot cannot
+				// recover. If lastPivotNumber is unset we keep the classic
+				// formula untouched.
+				if pivot := ReadLastPivotNumber(nfdb); pivot != nil && *pivot < newTail {
+					newTail = *pivot
+				}
 				oldTail, _ := f.Tail()
 				if newTail > oldTail {
 					if _, err := f.TruncateTail(newTail); err != nil {

@@ -1394,6 +1394,12 @@ func (bc *BlockChain) AdvancePartialHead(hash common.Hash) error {
 	// depends on canonical hash mappings that don't exist yet.
 	batch := bc.db.NewBatch()
 	currentHead := bc.CurrentBlock()
+	// Include the pivot itself: WriteBlockWithoutState persisted its header+body
+	// via the Engine API newPayload path, and InsertReceiptChain.writeLive
+	// skipped writing its canonical-hash entry because HasBlock was already
+	// true. Without this explicit write, startup's freezer gap-check rejects
+	// the datadir because headerHashKey(pivot) is empty in leveldb.
+	rawdb.WriteCanonicalHash(batch, currentHead.Hash(), currentHead.Number.Uint64())
 	current := block.Header()
 	for current.Number.Uint64() > currentHead.Number.Uint64() {
 		rawdb.WriteCanonicalHash(batch, current.Hash(), current.Number.Uint64())
