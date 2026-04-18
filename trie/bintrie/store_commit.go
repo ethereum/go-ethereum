@@ -124,17 +124,19 @@ func (s *NodeStore) SerializeNode(ref NodeRef) []byte {
 
 var errInvalidSerializedLength = errors.New("invalid serialized node length")
 
-// DeserializeNode deserializes a node from bytes, recomputing its hash.
+// DeserializeNode deserializes a node from bytes, recomputing its hash. The
+// returned node is marked dirty (provenance unknown, safe re-flush default).
 func (s *NodeStore) DeserializeNode(serialized []byte, depth int) (NodeRef, error) {
-	return s.deserializeNode(serialized, depth, common.Hash{}, true)
+	return s.deserializeNode(serialized, depth, common.Hash{}, true, true)
 }
 
-// DeserializeNodeWithHash deserializes a node, using the provided hash.
+// DeserializeNodeWithHash deserializes a node whose hash is already known and
+// whose blob is already on disk (mustRecompute=false, dirty=false).
 func (s *NodeStore) DeserializeNodeWithHash(serialized []byte, depth int, hn common.Hash) (NodeRef, error) {
-	return s.deserializeNode(serialized, depth, hn, false)
+	return s.deserializeNode(serialized, depth, hn, false, false)
 }
 
-func (s *NodeStore) deserializeNode(serialized []byte, depth int, hn common.Hash, mustRecompute bool) (NodeRef, error) {
+func (s *NodeStore) deserializeNode(serialized []byte, depth int, hn common.Hash, mustRecompute, dirty bool) (NodeRef, error) {
 	if len(serialized) == 0 {
 		return EmptyRef, nil
 	}
@@ -164,6 +166,7 @@ func (s *NodeStore) deserializeNode(serialized []byte, depth int, hn common.Hash
 			node.hash = hn
 			node.mustRecompute = false
 		}
+		node.dirty = dirty
 		return ref, nil
 
 	case nodeTypeStem:
@@ -191,6 +194,7 @@ func (s *NodeStore) deserializeNode(serialized []byte, depth int, hn common.Hash
 		sn.depth = uint8(depth)
 		sn.hash = hn
 		sn.mustRecompute = mustRecompute
+		sn.dirty = dirty
 		return MakeRef(KindStem, stemIdx), nil
 
 	default:
@@ -198,13 +202,18 @@ func (s *NodeStore) deserializeNode(serialized []byte, depth int, hn common.Hash
 	}
 }
 
-// CollectNodes flushes every node via flushfn in post-order.
+// CollectNodes flushes every node that needs flushing via flushfn in post-order.
+// Invariant: any ancestor of a node that needs flushing is itself marked, so a
+// clean root means the whole subtree is clean.
 func (s *NodeStore) CollectNodes(ref NodeRef, path []byte, flushfn NodeFlushFn) error {
 	switch ref.Kind() {
 	case KindEmpty:
 		return nil
 	case KindInternal:
 		node := s.getInternal(ref.Index())
+		if !node.dirty {
+			return nil
+		}
 		leftPath := make([]byte, len(path)+1)
 		copy(leftPath, path)
 		leftPath[len(path)] = 0
@@ -218,9 +227,15 @@ func (s *NodeStore) CollectNodes(ref NodeRef, path []byte, flushfn NodeFlushFn) 
 			return err
 		}
 		flushfn(path, s.ComputeHash(ref), s.SerializeNode(ref))
+		node.dirty = false
 		return nil
 	case KindStem:
+		sn := s.getStem(ref.Index())
+		if !sn.dirty {
+			return nil
+		}
 		flushfn(path, s.ComputeHash(ref), s.SerializeNode(ref))
+		sn.dirty = false
 		return nil
 	case KindHashed:
 		return nil // Already committed

@@ -193,6 +193,7 @@ func (s *NodeStore) InsertSingle(stem []byte, suffix byte, value []byte, resolve
 		if sn.Stem == [StemSize]byte(stem[:StemSize]) {
 			sn.setValue(suffix, value)
 			sn.mustRecompute = true
+			sn.dirty = true
 			return nil
 		}
 		newRoot := s.splitStemInsert(s.root, stem, suffix, value, int(sn.depth))
@@ -218,6 +219,7 @@ func (s *NodeStore) insertSingleInternal(stem []byte, suffix byte, value []byte,
 		case KindInternal:
 			node := s.getInternal(cur.Index())
 			node.mustRecompute = true
+			node.dirty = true
 			bit := stem[node.depth/8] >> (7 - (node.depth % 8)) & 1
 			pathStack[pathLen] = pathEntry{internalIdx: cur.Index(), isLeft: bit == 0}
 			pathLen++
@@ -232,6 +234,7 @@ func (s *NodeStore) insertSingleInternal(stem []byte, suffix byte, value []byte,
 			if sn.Stem == [StemSize]byte(stem[:StemSize]) {
 				sn.setValue(suffix, value)
 				sn.mustRecompute = true
+				sn.dirty = true
 				return nil
 			}
 			// Different stem — split
@@ -338,6 +341,7 @@ func (s *NodeStore) splitStemInsert(existingRef NodeRef, newStem []byte, suffix 
 			copy(newSn.Stem[:], newStem[:StemSize])
 			newSn.depth = uint8(existingDepth + 1)
 			newSn.mustRecompute = true
+			newSn.dirty = true
 			newSn.setValue(suffix, value)
 			newStemRef := MakeRef(KindStem, newStemIdx)
 
@@ -426,6 +430,7 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 			node.right = newChild
 		}
 		node.mustRecompute = true
+		node.dirty = true
 		return ref, nil
 
 	case KindStem:
@@ -436,6 +441,7 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 				if v != nil {
 					sn.setValue(byte(i), v)
 					sn.mustRecompute = true
+					sn.dirty = true
 				}
 			}
 			return ref, nil
@@ -470,6 +476,7 @@ func (s *NodeStore) insertValuesAtStem(ref NodeRef, stem []byte, values [][]byte
 		copy(sn.Stem[:], stem[:StemSize])
 		sn.depth = uint8(depth)
 		sn.mustRecompute = true
+		sn.dirty = true
 		for i, v := range values {
 			if v != nil {
 				sn.count++
@@ -526,6 +533,7 @@ func (s *NodeStore) splitStemValuesInsert(existingRef NodeRef, newStem []byte, v
 		copy(newSn.Stem[:], newStem[:StemSize])
 		newSn.depth = nNode.depth + 1
 		newSn.mustRecompute = true
+		newSn.dirty = true
 		for i, v := range values {
 			if v != nil {
 				newSn.setValue(byte(i), v)

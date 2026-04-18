@@ -23,6 +23,9 @@ import (
 )
 
 // StemNode holds up to 256 values sharing a 31-byte stem, packed via bitmap.
+//
+// Invariant: dirty=false implies mustRecompute=false. Every mutation that
+// invalidates the cached hash MUST also mark the blob for re-flush.
 type StemNode struct {
 	Stem      [StemSize]byte
 	bitmap    [StemBitmapSize]byte
@@ -31,7 +34,8 @@ type StemNode struct {
 	depth     uint8
 	shared    bool // true if valueData is shared with serialized input
 
-	mustRecompute bool        // true if the hash needs to be recomputed
+	mustRecompute bool        // hash is stale (cleared by Hash)
+	dirty         bool        // on-disk blob is stale (cleared by CollectNodes)
 	hash          common.Hash // cached hash when mustRecompute == false
 }
 

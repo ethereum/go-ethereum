@@ -34,9 +34,12 @@ func keyToPath(depth int, key []byte) ([]byte, error) {
 	return path, nil
 }
 
+// Invariant: dirty=false implies mustRecompute=false. Every mutation that
+// invalidates the cached hash MUST also mark the blob for re-flush.
 type InternalNode struct {
 	left, right   NodeRef
 	depth         uint8
-	mustRecompute bool
+	mustRecompute bool // hash is stale (cleared by Hash)
+	dirty         bool // on-disk blob is stale (cleared by CollectNodes)
 	hash          common.Hash
 }

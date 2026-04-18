@@ -84,6 +84,7 @@ func (s *NodeStore) newInternalRef(depth int) NodeRef {
 	n := s.getInternal(idx)
 	n.depth = uint8(depth)
 	n.mustRecompute = true
+	n.dirty = true
 	return MakeRef(KindInternal, idx)
 }
 
@@ -119,6 +120,7 @@ func (s *NodeStore) newStemRef(stem []byte, depth int) NodeRef {
 	copy(sn.Stem[:], stem[:StemSize])
 	sn.depth = uint8(depth)
 	sn.mustRecompute = true
+	sn.dirty = true
 	return MakeRef(KindStem, idx)
 }
 
