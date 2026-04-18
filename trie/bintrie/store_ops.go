@@ -46,7 +46,6 @@ func (s *NodeStore) getValuesAtStem(ref nodeRef, stem []byte, resolver NodeResol
 	cur := ref
 	var parentIdx uint32
 	var parentIsLeft bool
-	hasParent := false
 
 	for {
 		switch cur.Kind() {
@@ -57,7 +56,6 @@ func (s *NodeStore) getValuesAtStem(ref nodeRef, stem []byte, resolver NodeResol
 			}
 			bit := stem[node.depth/8] >> (7 - (node.depth % 8)) & 1
 			parentIdx = cur.Index()
-			hasParent = true
 			if bit == 0 {
 				parentIsLeft = true
 				cur = node.left
@@ -74,9 +72,9 @@ func (s *NodeStore) getValuesAtStem(ref nodeRef, stem []byte, resolver NodeResol
 			return sn.allValues(), nil
 
 		case kindHashed:
-			if !hasParent {
-				return nil, errors.New("getValuesAtStem: hashed node at root")
-			}
+			// HashedNode at root is impossible: NewBinaryTrie resolves the
+			// root eagerly before any query. Any HashedNode we encounter here
+			// is necessarily a child of a previously-visited internal node.
 			if resolver == nil {
 				return nil, errors.New("getValuesAtStem: cannot resolve hashed node without resolver")
 			}
