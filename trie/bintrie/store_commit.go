@@ -123,12 +123,26 @@ func (s *NodeStore) serializeNode(ref nodeRef) []byte {
 
 	case kindStem:
 		sn := s.getStem(ref.Index())
-		serializedLen := NodeTypeBytes + StemSize + StemBitmapSize + len(sn.valueData)
+		// Count present slots to size the blob.
+		var count int
+		for _, v := range sn.values {
+			if v != nil {
+				count++
+			}
+		}
+		serializedLen := NodeTypeBytes + StemSize + StemBitmapSize + count*HashSize
 		serialized := make([]byte, serializedLen)
 		serialized[0] = nodeTypeStem
 		copy(serialized[NodeTypeBytes:NodeTypeBytes+StemSize], sn.Stem[:])
-		copy(serialized[NodeTypeBytes+StemSize:NodeTypeBytes+StemSize+StemBitmapSize], sn.bitmap[:])
-		copy(serialized[NodeTypeBytes+StemSize+StemBitmapSize:], sn.valueData)
+		bitmap := serialized[NodeTypeBytes+StemSize : NodeTypeBytes+StemSize+StemBitmapSize]
+		offset := NodeTypeBytes + StemSize + StemBitmapSize
+		for i, v := range sn.values {
+			if v != nil {
+				bitmap[i/8] |= 1 << (7 - (i % 8))
+				copy(serialized[offset:offset+HashSize], v)
+				offset += HashSize
+			}
+		}
 		return serialized
 
 	default:
@@ -184,27 +198,25 @@ func (s *NodeStore) decodeNode(serialized []byte, depth int, hn common.Hash, mus
 		return ref, nil
 
 	case nodeTypeStem:
-		if len(serialized) < 64 {
+		if len(serialized) < NodeTypeBytes+StemSize+StemBitmapSize {
 			return emptyRef, errInvalidSerializedLength
 		}
 		stemIdx := s.allocStem()
 		sn := s.getStem(stemIdx)
 		copy(sn.Stem[:], serialized[NodeTypeBytes:NodeTypeBytes+StemSize])
-		copy(sn.bitmap[:], serialized[NodeTypeBytes+StemSize:NodeTypeBytes+StemSize+StemBitmapSize])
-
-		var count uint16
-		for i := range StemBitmapSize {
-			count += uint16(bits.OnesCount8(sn.bitmap[i]))
+		bitmap := serialized[NodeTypeBytes+StemSize : NodeTypeBytes+StemSize+StemBitmapSize]
+		offset := NodeTypeBytes + StemSize + StemBitmapSize
+		for i := range StemNodeWidth {
+			if bitmap[i/8]>>(7-(i%8))&1 != 1 {
+				continue
+			}
+			if len(serialized) < offset+HashSize {
+				return emptyRef, errInvalidSerializedLength
+			}
+			// Zero-copy: each slot aliases the serialized input buffer.
+			sn.values[i] = serialized[offset : offset+HashSize]
+			offset += HashSize
 		}
-		sn.count = count
-		dataStart := NodeTypeBytes + StemSize + StemBitmapSize
-		dataEnd := dataStart + int(count)*HashSize
-		if len(serialized) < dataEnd {
-			return emptyRef, errInvalidSerializedLength
-		}
-		// Zero-copy: aliases the serialized buffer; ensureWritable() COWs before mutation.
-		sn.valueData = serialized[dataStart:dataEnd]
-		sn.shared = true
 		sn.depth = uint8(depth)
 		sn.hash = hn
 		sn.mustRecompute = mustRecompute
@@ -279,13 +291,10 @@ func (s *NodeStore) toDot(ref nodeRef, parent, path string) string {
 		me := fmt.Sprintf("stem%s", path)
 		ret := fmt.Sprintf("%s [label=\"stem=%x c=%x\"]\n", me, sn.Stem, sn.Hash())
 		ret = fmt.Sprintf("%s %s -> %s\n", ret, parent, me)
-		idx := 0
-		for i := range StemNodeWidth {
-			if sn.bitmap[i/8]>>(7-i%8)&1 != 1 {
+		for i, v := range sn.values {
+			if v == nil {
 				continue
 			}
-			v := sn.valueData[idx*HashSize : (idx+1)*HashSize]
-			idx++
 			ret += fmt.Sprintf("%s%x [label=\"%x\"]\n", me, i, v)
 			ret += fmt.Sprintf("%s -> %s%x\n", me, me, i)
 		}

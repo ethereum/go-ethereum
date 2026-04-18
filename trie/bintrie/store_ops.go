@@ -479,9 +479,7 @@ func (s *NodeStore) insertValuesAtStem(ref nodeRef, stem []byte, values [][]byte
 		sn.dirty = true
 		for i, v := range values {
 			if v != nil {
-				sn.count++
-				sn.bitmap[i/8] |= 1 << (7 - (i % 8))
-				sn.valueData = append(sn.valueData, v[:HashSize]...)
+				sn.values[i] = v
 			}
 		}
 		return makeRef(kindStem, stemIdx), nil

@@ -170,12 +170,18 @@ func (s *NodeStore) Copy() *NodeStore {
 		cp := *chunk
 		ns.stemChunks[i] = &cp
 	}
+	// Deep-copy each stem's value slots — they may alias serialized buffers,
+	// so we can't rely on the chunk-wise struct copy above.
 	for i := uint32(0); i < s.stemCount; i++ {
 		src := s.getStem(i)
 		dst := ns.getStem(i)
-		if len(src.valueData) > 0 {
-			dst.valueData = make([]byte, len(src.valueData))
-			copy(dst.valueData, src.valueData)
+		for j, v := range src.values {
+			if v == nil {
+				continue
+			}
+			cp := make([]byte, len(v))
+			copy(cp, v)
+			dst.values[j] = cp
 		}
 	}
 	ns.hashedChunks = make([]*[storeChunkSize]HashedNode, len(s.hashedChunks))

@@ -17,106 +17,40 @@
 package bintrie
 
 import (
-	"math/bits"
-
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// StemNode holds up to 256 values sharing a 31-byte stem, packed via bitmap.
+// StemNode holds up to 256 values sharing a 31-byte stem.
 //
 // Invariant: dirty=false implies mustRecompute=false. Every mutation that
 // invalidates the cached hash MUST also mark the blob for re-flush.
 type StemNode struct {
-	Stem      [StemSize]byte
-	bitmap    [StemBitmapSize]byte
-	valueData []byte
-	count     uint16
-	depth     uint8
-	shared    bool // true if valueData is shared with serialized input
+	Stem   [StemSize]byte
+	values [StemNodeWidth][]byte // nil == slot absent
+
+	depth uint8
 
 	mustRecompute bool        // hash is stale (cleared by Hash)
 	dirty         bool        // on-disk blob is stale (cleared by CollectNodes)
 	hash          common.Hash // cached hash when mustRecompute == false
 }
 
-// posInData returns the offset within valueData, or -1 if absent.
-func (sn *StemNode) posInData(suffix byte) int {
-	idx := int(suffix)
-	if sn.bitmap[idx/8]>>(7-(idx%8))&1 == 0 {
-		return -1
-	}
-	// Count the bits set before this position to determine the offset
-	pos := 0
-	byteIdx := idx / 8
-	for i := 0; i < byteIdx; i++ {
-		pos += bits.OnesCount8(sn.bitmap[i])
-	}
-	// Count bits in the partial byte
-	mask := byte(0xFF) << (8 - (idx % 8))
-	pos += bits.OnesCount8(sn.bitmap[byteIdx] & mask)
-	return pos
-}
-
 func (sn *StemNode) getValue(suffix byte) []byte {
-	pos := sn.posInData(suffix)
-	if pos < 0 {
-		return nil
-	}
-	start := pos * HashSize
-	return sn.valueData[start : start+HashSize]
+	return sn.values[suffix]
 }
 
 func (sn *StemNode) hasValue(suffix byte) bool {
-	idx := int(suffix)
-	return sn.bitmap[idx/8]>>(7-(idx%8))&1 == 1
+	return sn.values[suffix] != nil
 }
 
-// allValues returns all 256 values (nil for absent positions).
+// allValues returns the underlying slot array as a slice. nil entries mean
+// absent. Callers must treat it as read-only.
 func (sn *StemNode) allValues() [][]byte {
-	values := make([][]byte, StemNodeWidth)
-	dataIdx := 0
-	for i := range StemNodeWidth {
-		if sn.bitmap[i/8]>>(7-(i%8))&1 == 1 {
-			values[i] = sn.valueData[dataIdx*HashSize : (dataIdx+1)*HashSize]
-			dataIdx++
-		}
-	}
-	return values
-}
-
-// ensureWritable copies valueData if shared (copy-on-write).
-func (sn *StemNode) ensureWritable() {
-	if sn.shared || cap(sn.valueData)-len(sn.valueData) < HashSize {
-		newData := make([]byte, len(sn.valueData), len(sn.valueData)+HashSize*4)
-		copy(newData, sn.valueData)
-		sn.valueData = newData
-		sn.shared = false
-	}
+	return sn.values[:]
 }
 
 func (sn *StemNode) setValue(suffix byte, value []byte) {
-	sn.ensureWritable()
-	idx := int(suffix)
-	pos := sn.posInData(suffix)
-	if pos >= 0 {
-		copy(sn.valueData[pos*HashSize:], value[:HashSize])
-		return
-	}
-	sn.bitmap[idx/8] |= 1 << (7 - (idx % 8))
-	sn.count++
-
-	insertPos := 0
-	byteIdx := idx / 8
-	for i := 0; i < byteIdx; i++ {
-		insertPos += bits.OnesCount8(sn.bitmap[i])
-	}
-	mask := byte(0xFF) << (8 - (idx % 8))
-	insertPos += bits.OnesCount8(sn.bitmap[byteIdx] & mask)
-
-	insertOffset := insertPos * HashSize
-	sn.valueData = append(sn.valueData, make([]byte, HashSize)...)
-	copy(sn.valueData[insertOffset+HashSize:], sn.valueData[insertOffset:len(sn.valueData)-HashSize])
-	copy(sn.valueData[insertOffset:], value[:HashSize])
+	sn.values[suffix] = value
 }
 
 func (sn *StemNode) Hash() common.Hash {
@@ -128,28 +62,21 @@ func (sn *StemNode) Hash() common.Hash {
 	h := newSha256()
 	defer returnSha256(h)
 
-	// Hash each present value
-	dataIdx := 0
-	for i := range StemNodeWidth {
-		if sn.bitmap[i/8]>>(7-(i%8))&1 == 1 {
-			v := sn.valueData[dataIdx*HashSize : (dataIdx+1)*HashSize]
+	for i, v := range sn.values {
+		if v != nil {
 			h.Reset()
 			h.Write(v)
 			h.Sum(data[i][:0])
-			dataIdx++
 		}
 	}
-	h.Reset()
 
 	for level := 1; level <= 8; level++ {
 		for i := range StemNodeWidth / (1 << level) {
-			h.Reset()
-
 			if data[i*2] == (common.Hash{}) && data[i*2+1] == (common.Hash{}) {
 				data[i] = common.Hash{}
 				continue
 			}
-
+			h.Reset()
 			h.Write(data[i*2][:])
 			h.Write(data[i*2+1][:])
 			data[i] = common.Hash(h.Sum(nil))
