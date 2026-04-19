@@ -645,9 +645,9 @@ func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common
 			gnosisTx.ChainId = (*math.HexOrDecimal256)(api.chainID)
 			typedData = gnosisTx.ToTypedData()
 			sighash, _, _ = apitypes.TypedDataAndHash(typedData)
-			if !bytes.Equal(sighash, gnosisTx.InputExpHash.Bytes()) {
-				return nil, fmt.Errorf("mismatched safeTxHash; have %#x want %#x", sighash, gnosisTx.InputExpHash[:])
-			}
+		}
+		if !bytes.Equal(sighash, gnosisTx.InputExpHash.Bytes()) {
+			return nil, fmt.Errorf("mismatched safeTxHash; have %#x want %#x", sighash, gnosisTx.InputExpHash[:])
 		}
 	}
 	signature, preimage, err := api.signTypedData(ctx, signerAddress, typedData, msgs)
