@@ -229,7 +229,7 @@ func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, er
 		return nil, err // e.g., the referred state history has been pruned
 	}
 	if meta.parent != root {
-		return nil, fmt.Errorf("state %#x is not canonincal", root)
+		return nil, fmt.Errorf("state %#x is not canonical", root)
 	}
 	return &HistoricalStateReader{
 		id:     *id,
@@ -352,7 +352,7 @@ func (db *Database) HistoricNodeReader(root common.Hash) (*HistoricalNodeReader,
 		return nil, fmt.Errorf("state %#x is not available", root) // e.g., the referred trienode history has been pruned
 	}
 	if meta.parent != root {
-		return nil, fmt.Errorf("state %#x is not canonincal", root)
+		return nil, fmt.Errorf("state %#x is not canonical", root)
 	}
 	return &HistoricalNodeReader{
 		id:     *id,
