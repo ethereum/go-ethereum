@@ -64,7 +64,7 @@ func TestProtectedPeersTopPeer(t *testing.T) {
 
 	peers := makePeers(20)
 	stats := make(map[string]txtracker.PeerStats)
-	stats[peers[0].ID().String()] = txtracker.PeerStats{Finalized: 100}
+	stats[peers[0].ID().String()] = txtracker.PeerStats{RecentFinalized: 100}
 	stats[peers[1].ID().String()] = txtracker.PeerStats{RecentIncluded: 5.0}
 
 	cm.peerStatsFunc = func() map[string]txtracker.PeerStats { return stats }
@@ -74,7 +74,7 @@ func TestProtectedPeersTopPeer(t *testing.T) {
 		t.Fatalf("expected 2 protected peers, got %d", len(protected))
 	}
 	if !protected[peers[0]] {
-		t.Fatal("peer 0 should be protected (top Finalized)")
+		t.Fatal("peer 0 should be protected (top RecentFinalized)")
 	}
 	if !protected[peers[1]] {
 		t.Fatal("peer 1 should be protected (top RecentIncluded)")
@@ -103,7 +103,7 @@ func TestProtectedPeersOverlap(t *testing.T) {
 
 	peers := makePeers(20)
 	stats := make(map[string]txtracker.PeerStats)
-	stats[peers[0].ID().String()] = txtracker.PeerStats{Finalized: 100, RecentIncluded: 5.0}
+	stats[peers[0].ID().String()] = txtracker.PeerStats{RecentFinalized: 100, RecentIncluded: 5.0}
 
 	cm.peerStatsFunc = func() map[string]txtracker.PeerStats { return stats }
 
@@ -128,7 +128,7 @@ func TestProtectedPeersNilFunc(t *testing.T) {
 // independently in each of the inbound and dialed pools, not globally.
 // With 10 peers per pool and inclusionProtectionFrac=0.1, exactly 1 peer
 // is protected per pool per category — so 2 total (one per pool), both
-// for the Finalized category since we don't set RecentIncluded.
+// for the RecentFinalized category since we don't set RecentIncluded.
 func TestProtectedByPoolPerPoolTopN(t *testing.T) {
 	inbound := makePeers(10)
 	dialed := makePeers(10)
@@ -140,10 +140,10 @@ func TestProtectedByPoolPerPoolTopN(t *testing.T) {
 	// Strictly increasing scores: highest wins in each pool.
 	stats := make(map[string]txtracker.PeerStats)
 	for i, p := range inbound {
-		stats[p.ID().String()] = txtracker.PeerStats{Finalized: int64(1 + i)}
+		stats[p.ID().String()] = txtracker.PeerStats{RecentFinalized: float64(1 + i)}
 	}
 	for i, p := range dialed {
-		stats[p.ID().String()] = txtracker.PeerStats{Finalized: int64(1 + i)}
+		stats[p.ID().String()] = txtracker.PeerStats{RecentFinalized: float64(1 + i)}
 	}
 
 	protected := protectedPeersByPool(inbound, dialed, stats)
@@ -168,15 +168,15 @@ func TestProtectedByPoolPerPoolTopN(t *testing.T) {
 func TestProtectedByPoolCrossCategoryOverlap(t *testing.T) {
 	// 20 dialed peers so 0.1 * 20 = 2 protected per category.
 	dialed := makePeers(20)
-	// P0: high Finalized only. P1: high RecentIncluded only. P2: high both.
+	// P0: high RecentFinalized only. P1: high RecentIncluded only. P2: high both.
 	// With n=2 per category:
-	//   Finalized winners:      P2 (tie-broken-ok), P0
+	//   RecentFinalized winners: P2 (tie-broken-ok), P0
 	//   RecentIncluded winners: P2, P1
 	// Union: {P0, P1, P2}.
 	stats := make(map[string]txtracker.PeerStats)
-	stats[dialed[0].ID().String()] = txtracker.PeerStats{Finalized: 100, RecentIncluded: 0}
-	stats[dialed[1].ID().String()] = txtracker.PeerStats{Finalized: 0, RecentIncluded: 5.0}
-	stats[dialed[2].ID().String()] = txtracker.PeerStats{Finalized: 200, RecentIncluded: 10.0}
+	stats[dialed[0].ID().String()] = txtracker.PeerStats{RecentFinalized: 100, RecentIncluded: 0}
+	stats[dialed[1].ID().String()] = txtracker.PeerStats{RecentFinalized: 0, RecentIncluded: 5.0}
+	stats[dialed[2].ID().String()] = txtracker.PeerStats{RecentFinalized: 200, RecentIncluded: 10.0}
 
 	protected := protectedPeersByPool(nil, dialed, stats)
 
@@ -196,7 +196,7 @@ func TestProtectedByPoolCrossCategoryOverlap(t *testing.T) {
 // top-N must still protect the top dialed peers.
 func TestProtectedByPoolPerPoolIndependence(t *testing.T) {
 	// 20 inbound, 20 dialed — frac=0.1 → 2 protected per pool per category.
-	// Global top-4 of Finalized would be inbound[16..19] — zero dialed.
+	// Global top-4 of RecentFinalized would be inbound[16..19] — zero dialed.
 	inbound := makePeers(20)
 	dialed := make([]*p2p.Peer, 20)
 	for i := range dialed {
@@ -206,15 +206,15 @@ func TestProtectedByPoolPerPoolIndependence(t *testing.T) {
 	stats := make(map[string]txtracker.PeerStats)
 	// Every inbound peer outscores every dialed peer.
 	for i, p := range inbound {
-		stats[p.ID().String()] = txtracker.PeerStats{Finalized: int64(1000 + i)}
+		stats[p.ID().String()] = txtracker.PeerStats{RecentFinalized: float64(1000 + i)}
 	}
 	for i, p := range dialed {
-		stats[p.ID().String()] = txtracker.PeerStats{Finalized: int64(1 + i)}
+		stats[p.ID().String()] = txtracker.PeerStats{RecentFinalized: float64(1 + i)}
 	}
 
 	protected := protectedPeersByPool(inbound, dialed, stats)
 
-	// Per-pool top-2 of Finalized:
+	// Per-pool top-2 of RecentFinalized:
 	//   inbound: inbound[18], inbound[19]
 	//   dialed:  dialed[18], dialed[19]
 	// Global top-N would contain zero dialed peers, so asserting the top
