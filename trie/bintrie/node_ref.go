@@ -53,4 +53,4 @@ func (r nodeRef) Kind() nodeKind { return nodeKind(uint32(r) >> kindShift) }
 // Index within the typed pool.
 func (r nodeRef) Index() uint32 { return uint32(r) & indexMask }
 
-func (r nodeRef) IsEmpty() bool { return r == emptyRef }
+func (r nodeRef) IsEmpty() bool { return r.Kind() == kindEmpty }
