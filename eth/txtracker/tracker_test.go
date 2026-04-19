@@ -174,7 +174,7 @@ func TestNotifyReceived(t *testing.T) {
 	if !ok {
 		t.Fatal("expected peerA entry, not found")
 	}
-	if ps.Finalized != 0 || ps.RecentIncluded != 0 {
+	if ps.RecentFinalized != 0 || ps.RecentIncluded != 0 {
 		t.Fatalf("expected zero stats before chain events, got %+v", ps)
 	}
 
@@ -245,19 +245,19 @@ func TestFinalization(t *testing.T) {
 
 	// Not finalized yet.
 	stats := tr.GetAllPeerStats()
-	if stats["peerA"].Finalized != 0 {
-		t.Fatalf("expected Finalized=0 before finalization, got %d", stats["peerA"].Finalized)
+	if stats["peerA"].RecentFinalized != 0 {
+		t.Fatalf("expected RecentFinalized=0 before finalization, got %f", stats["peerA"].RecentFinalized)
 	}
 
-	// Finalize block 1, then send head 2 to trigger checkFinalization.
+	// Finalize block 1, then send head 2 to trigger the finalization EMA update.
 	chain.setFinalBlock(1)
 	chain.addBlock(2, nil)
 	chain.sendHead(2)
 	waitStep(t, tr)
 
 	stats = tr.GetAllPeerStats()
-	if stats["peerA"].Finalized != 1 {
-		t.Fatalf("expected Finalized=1 after finalization, got %d", stats["peerA"].Finalized)
+	if stats["peerA"].RecentFinalized <= 0 {
+		t.Fatalf("expected RecentFinalized>0 after finalization, got %f", stats["peerA"].RecentFinalized)
 	}
 }
 
@@ -284,11 +284,11 @@ func TestMultiplePeers(t *testing.T) {
 	waitStep(t, tr)
 
 	stats := tr.GetAllPeerStats()
-	if stats["peerA"].Finalized != 1 {
-		t.Fatalf("peerA: expected Finalized=1, got %d", stats["peerA"].Finalized)
+	if stats["peerA"].RecentFinalized <= 0 {
+		t.Fatalf("peerA: expected RecentFinalized>0, got %f", stats["peerA"].RecentFinalized)
 	}
-	if stats["peerB"].Finalized != 1 {
-		t.Fatalf("peerB: expected Finalized=1, got %d", stats["peerB"].Finalized)
+	if stats["peerB"].RecentFinalized <= 0 {
+		t.Fatalf("peerB: expected RecentFinalized>0, got %f", stats["peerB"].RecentFinalized)
 	}
 }
 
@@ -312,11 +312,11 @@ func TestFirstDelivererWins(t *testing.T) {
 	waitStep(t, tr)
 
 	stats := tr.GetAllPeerStats()
-	if stats["peerA"].Finalized != 1 {
-		t.Fatalf("peerA should be credited, got Finalized=%d", stats["peerA"].Finalized)
+	if stats["peerA"].RecentFinalized <= 0 {
+		t.Fatalf("peerA should be credited, got RecentFinalized=%f", stats["peerA"].RecentFinalized)
 	}
-	if stats["peerB"].Finalized != 0 {
-		t.Fatalf("peerB should NOT be credited, got Finalized=%d", stats["peerB"].Finalized)
+	if stats["peerB"].RecentFinalized != 0 {
+		t.Fatalf("peerB should NOT be credited, got RecentFinalized=%f", stats["peerB"].RecentFinalized)
 	}
 }
 
@@ -340,8 +340,8 @@ func TestNoFinalizationCredit(t *testing.T) {
 	waitStep(t, tr)
 
 	stats := tr.GetAllPeerStats()
-	if stats["peerA"].Finalized != 0 {
-		t.Fatalf("expected Finalized=0 without finalization, got %d", stats["peerA"].Finalized)
+	if stats["peerA"].RecentFinalized != 0 {
+		t.Fatalf("expected RecentFinalized=0 without finalization, got %f", stats["peerA"].RecentFinalized)
 	}
 }
 
@@ -411,5 +411,46 @@ func TestReorgSafety(t *testing.T) {
 
 	if got := tr.GetAllPeerStats()["peerA"].RecentIncluded; got <= 0 {
 		t.Fatalf("expected RecentIncluded>0 after canonical-A head event, got %f", got)
+	}
+}
+
+// TestRecentFinalizedDecays verifies that the finalization EMA decays
+// for a peer that earned credits in the past but has no new
+// finalization activity. The decay is slow (α=0.0001), so we
+// just assert monotonic decrease, not convergence to zero.
+func TestRecentFinalizedDecays(t *testing.T) {
+	tr := New()
+	chain := newMockChain()
+	tr.Start(chain)
+	defer tr.Stop()
+
+	tx := makeTx(1)
+	tr.NotifyAccepted("peerA", []common.Hash{tx.Hash()})
+
+	// Include and finalize in block 1.
+	chain.addBlock(1, []*types.Transaction{tx})
+	chain.sendHead(1)
+	waitStep(t, tr)
+	chain.setFinalBlock(1)
+	chain.addBlock(2, nil)
+	chain.sendHead(2)
+	waitStep(t, tr)
+
+	peak := tr.GetAllPeerStats()["peerA"].RecentFinalized
+	if peak <= 0 {
+		t.Fatalf("expected RecentFinalized>0 after finalization, got %f", peak)
+	}
+
+	// Send many empty heads — peer contributes zero each block,
+	// EMA should decay monotonically.
+	for i := uint64(3); i <= 50; i++ {
+		chain.addBlock(i, nil)
+		chain.sendHead(i)
+		waitStep(t, tr)
+	}
+
+	after := tr.GetAllPeerStats()["peerA"].RecentFinalized
+	if after >= peak {
+		t.Fatalf("expected RecentFinalized to decay, got %f >= peak %f", after, peak)
 	}
 }

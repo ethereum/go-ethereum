@@ -73,7 +73,7 @@ type protectionCategory struct {
 // protectionCategories is the list of protection criteria. Each category
 // independently selects its top-N peers per pool; the union is protected.
 var protectionCategories = []protectionCategory{
-	{"total-finalized", func(s txtracker.PeerStats) float64 { return float64(s.Finalized) }, inclusionProtectionFrac},
+	{"recent-finalized", func(s txtracker.PeerStats) float64 { return s.RecentFinalized }, inclusionProtectionFrac},
 	{"recent-included", func(s txtracker.PeerStats) float64 { return s.RecentIncluded }, inclusionProtectionFrac},
 }
 
@@ -89,12 +89,14 @@ var protectionCategories = []protectionCategory{
 //   - Trusted and static peers are never dropped.
 //   - Recently connected peers are also protected from dropping to give them time
 //     to prove their value before being at risk of disconnection.
-//   - Some peers are protected from dropping based on their role. This is not based
-//     on a unified score function, but rather on the concept of protected peer pools.
-//     Each pool independently selects its top fraction of peers by a specific score
-//     (e.g. total finalized inclusions, recent inclusion EMA); the union of all
-//     protected sets is shielded from random dropping, and the drop target is chosen
-//     randomly from the remainder.
+//   - Some peers are protected from dropping based on their contribution
+//     to the tx pool. Each pool (inbound/dialed) independently selects its
+//     top fraction of peers by a per-peer EMA score — a slow EMA of
+//     finalized inclusions (~1-day half-life, rewards sustained long-term
+//     contribution) and a fast EMA of recent block inclusions (rewards
+//     current activity). The union of all protected sets is shielded from
+//     random dropping, and the drop target is chosen randomly from the
+//     remainder.
 type dropper struct {
 	maxDialPeers    int // maximum number of dialed peers
 	maxInboundPeers int // maximum number of inbound peers

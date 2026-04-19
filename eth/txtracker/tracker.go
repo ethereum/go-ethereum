@@ -41,12 +41,17 @@ const (
 	maxTracked = 262144
 	// EMA smoothing factor for per-block inclusion rate.
 	emaAlpha = 0.05
+	// EMA smoothing factor for per-block finalization rate. Very slow on
+	// purpose: finalization is permanent, and the score should reflect
+	// sustained contribution over long windows, not recent bursts.
+	// Half-life ≈ 6930 chain heads (~23 hours on 12s blocks).
+	finalizedEMAAlpha = 0.0001
 )
 
 // PeerStats holds the per-peer inclusion data.
 type PeerStats struct {
-	Finalized      int64   // Cumulative finalized inclusions attributed to this peer
-	RecentIncluded float64 // EMA of per-block inclusions (at chain head time)
+	RecentFinalized float64 // EMA of per-block finalization credits (slow)
+	RecentIncluded  float64 // EMA of per-block inclusions (fast)
 }
 
 // Chain is the blockchain interface needed by the tracker.
@@ -58,8 +63,8 @@ type Chain interface {
 }
 
 type peerStats struct {
-	finalized      int64
-	recentIncluded float64
+	recentFinalized float64
+	recentIncluded  float64
 }
 
 // Tracker records which peer delivered each transaction and credits peers
@@ -159,8 +164,8 @@ func (t *Tracker) GetAllPeerStats() map[string]PeerStats {
 	result := make(map[string]PeerStats, len(t.peers))
 	for id, ps := range t.peers {
 		result[id] = PeerStats{
-			Finalized:      ps.finalized,
-			RecentIncluded: ps.recentIncluded,
+			RecentFinalized: ps.recentFinalized,
+			RecentIncluded:  ps.recentIncluded,
 		}
 	}
 	return result
@@ -195,37 +200,41 @@ func (t *Tracker) handleChainHead(ev core.ChainHeadEvent) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	// Count per-peer inclusions in this block for the EMA.
+	// Count per-peer inclusions in this block for the inclusion EMA.
 	blockIncl := make(map[string]int)
 	for _, tx := range block.Transactions() {
 		if peer := t.txs[tx.Hash()]; peer != "" {
 			blockIncl[peer]++
 		}
 	}
-	// Only credit peers that are still tracked (not disconnected).
+	// Accumulate per-peer finalization credits over the newly-finalized
+	// range (possibly zero blocks). Only counts peers still tracked.
+	blockFinal := t.collectFinalizationCredits()
+
+	// Update both EMAs for all tracked peers (decays inactive ones).
 	// Don't create entries for unknown peers — they may have been
 	// removed by NotifyPeerDrop and should not be resurrected.
-	// Update EMA for all tracked peers (decay inactive ones).
 	for peer, ps := range t.peers {
 		ps.recentIncluded = (1-emaAlpha)*ps.recentIncluded + emaAlpha*float64(blockIncl[peer])
+		ps.recentFinalized = (1-finalizedEMAAlpha)*ps.recentFinalized + finalizedEMAAlpha*float64(blockFinal[peer])
 	}
-	// Check if the finalized block has advanced.
-	t.checkFinalization()
 }
 
-// checkFinalization credits peers for transactions in newly finalized blocks.
-// Must be called with t.mu held.
-func (t *Tracker) checkFinalization() {
+// collectFinalizationCredits accumulates per-peer finalization credits for
+// blocks newly finalized since lastFinalNum. Returns a (possibly empty) map
+// keyed by peer ID; advances lastFinalNum. Must be called with t.mu held.
+// Peers that have already been removed by NotifyPeerDrop are skipped so
+// dropped peers are not resurrected by old on-chain data.
+func (t *Tracker) collectFinalizationCredits() map[string]int {
+	credits := make(map[string]int)
 	finalHeader := t.chain.CurrentFinalBlock()
 	if finalHeader == nil {
-		return
+		return credits
 	}
 	finalNum := finalHeader.Number.Uint64()
 	if finalNum <= t.lastFinalNum {
-		return
+		return credits
 	}
-	// Credit peers for all blocks from lastFinalNum+1 to finalNum.
-	var credited int
 	for num := t.lastFinalNum + 1; num <= finalNum; num++ {
 		block := t.chain.GetBlockByNumber(num)
 		if block == nil {
@@ -236,17 +245,24 @@ func (t *Tracker) checkFinalization() {
 			if peer == "" {
 				continue
 			}
-			ps := t.peers[peer]
-			if ps == nil {
+			if _, ok := t.peers[peer]; !ok {
 				continue // peer disconnected, skip credit
 			}
-			ps.finalized++
-			credited++
+			credits[peer]++
 		}
 	}
-	if credited > 0 {
-		log.Trace("Credited peers for finalized inclusions",
-			"from", t.lastFinalNum+1, "to", finalNum, "txs", credited)
+	if total := sumCounts(credits); total > 0 {
+		log.Trace("Accumulated finalization credits",
+			"from", t.lastFinalNum+1, "to", finalNum, "txs", total)
 	}
 	t.lastFinalNum = finalNum
+	return credits
+}
+
+func sumCounts(m map[string]int) int {
+	var sum int
+	for _, v := range m {
+		sum += v
+	}
+	return sum
 }
