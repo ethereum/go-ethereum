@@ -36,10 +36,11 @@ type NodeStore struct {
 
 	root nodeRef
 
-	// Free lists for recycling deleted node slots.
-	freeInternals []uint32
-	freeStems     []uint32
-	freeHashed    []uint32
+	// Free list for recycling hashed-node slots after resolve. Internal and
+	// stem nodes are never freed under current semantics (no delete path,
+	// stem-split keeps the old stem at a deeper position), so they don't
+	// have free lists.
+	freeHashed []uint32
 }
 
 func NewNodeStore() *NodeStore {
@@ -47,12 +48,6 @@ func NewNodeStore() *NodeStore {
 }
 
 func (s *NodeStore) allocInternal() uint32 {
-	if n := len(s.freeInternals); n > 0 {
-		idx := s.freeInternals[n-1]
-		s.freeInternals = s.freeInternals[:n-1]
-		*s.getInternal(idx) = InternalNode{}
-		return idx
-	}
 	idx := s.internalCount
 	chunkIdx := idx / storeChunkSize
 	if uint32(len(s.internalChunks)) <= chunkIdx {
@@ -82,12 +77,6 @@ func (s *NodeStore) newInternalRef(depth int) nodeRef {
 }
 
 func (s *NodeStore) allocStem() uint32 {
-	if n := len(s.freeStems); n > 0 {
-		idx := s.freeStems[n-1]
-		s.freeStems = s.freeStems[:n-1]
-		*s.getStem(idx) = StemNode{}
-		return idx
-	}
 	idx := s.stemCount
 	chunkIdx := idx / storeChunkSize
 	if uint32(len(s.stemChunks)) <= chunkIdx {
@@ -185,14 +174,6 @@ func (s *NodeStore) Copy() *NodeStore {
 	for i, chunk := range s.hashedChunks {
 		cp := *chunk
 		ns.hashedChunks[i] = &cp
-	}
-	if len(s.freeInternals) > 0 {
-		ns.freeInternals = make([]uint32, len(s.freeInternals))
-		copy(ns.freeInternals, s.freeInternals)
-	}
-	if len(s.freeStems) > 0 {
-		ns.freeStems = make([]uint32, len(s.freeStems))
-		copy(ns.freeStems, s.freeStems)
 	}
 	if len(s.freeHashed) > 0 {
 		ns.freeHashed = make([]uint32, len(s.freeHashed))
