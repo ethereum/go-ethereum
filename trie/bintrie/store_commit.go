@@ -74,8 +74,11 @@ func (s *NodeStore) hashInternal(idx uint32) common.Hash {
 		if !node.left.IsEmpty() {
 			wg.Add(1)
 			go func() {
+				// defer wg.Done() so a panic in computeHash still releases
+				// the waiter; without this, a recover() higher in the call
+				// stack would leave the parent stuck in wg.Wait forever.
+				defer wg.Done()
 				lh = s.computeHash(node.left)
-				wg.Done()
 			}()
 		}
 		if !node.right.IsEmpty() {
