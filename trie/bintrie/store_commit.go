@@ -89,21 +89,19 @@ func (s *NodeStore) hashInternal(idx uint32) common.Hash {
 		return node.hash
 	}
 
-	h := newSha256()
-	defer returnSha256(h)
+	// Deep sequential branch — mirrors the shallow branch's shape to keep
+	// input on the stack. Writing lh/rh through hash.Hash (interface)
+	// forces escape; copy into a local [64]byte and hash it in one shot.
+	var input [64]byte
 	if !node.left.IsEmpty() {
 		lh := s.computeHash(node.left)
-		h.Write(lh[:])
-	} else {
-		h.Write(make([]byte, HashSize))
+		copy(input[:HashSize], lh[:])
 	}
 	if !node.right.IsEmpty() {
 		rh := s.computeHash(node.right)
-		h.Write(rh[:])
-	} else {
-		h.Write(make([]byte, HashSize))
+		copy(input[HashSize:], rh[:])
 	}
-	node.hash = common.BytesToHash(h.Sum(nil))
+	node.hash = sha256.Sum256(input[:])
 	node.mustRecompute = false
 	return node.hash
 }
