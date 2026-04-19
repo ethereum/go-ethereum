@@ -309,7 +309,10 @@ func (t *BinaryTrie) Hash() common.Hash {
 func (t *BinaryTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 	nodeset := trienode.NewNodeSet(common.Hash{})
 
-	err := t.store.collectNodes(t.store.root, nil, func(path []byte, hash common.Hash, serialized []byte) {
+	// Pre-size the path buffer: collectNodes reuses it in-place via
+	// append/truncate; 32 covers typical binary-trie depth without regrowth.
+	pathBuf := make([]byte, 0, 32)
+	err := t.store.collectNodes(t.store.root, pathBuf, func(path []byte, hash common.Hash, serialized []byte) {
 		nodeset.AddNode(path, trienode.NewNodeWithPrev(hash, serialized, t.tracer.Get(path)))
 	})
 	if err != nil {
