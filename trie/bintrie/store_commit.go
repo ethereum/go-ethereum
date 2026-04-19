@@ -241,7 +241,7 @@ func (s *nodeStore) collectNodes(ref nodeRef, path []byte, flushfn nodeFlushFn) 
 		}
 		// Reuse path buffer across children: flushfn consumers
 		// (NodeSet.AddNode, tracer.Get) clone via string(path), so in-place
-		// mutation is safe. Saves ~17 allocs/op on this benchmark.
+		// mutation is safe.
 		path = append(path, 0)
 		if err := s.collectNodes(node.left, path, flushfn); err != nil {
 			return err
