@@ -51,8 +51,15 @@ func (sn *StemNode) allValues() [][]byte {
 	return sn.values[:]
 }
 
+// setValue mutates a value slot and marks the stem for re-hash and
+// re-flush. This is the only API for post-load value mutation; direct
+// values[...] writes are reserved for the on-disk load path in
+// decodeNode, which must leave mustRecompute/dirty at their loaded
+// state.
 func (sn *StemNode) setValue(suffix byte, value []byte) {
 	sn.values[suffix] = value
+	sn.mustRecompute = true
+	sn.dirty = true
 }
 
 func (sn *StemNode) Hash() common.Hash {

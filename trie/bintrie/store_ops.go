@@ -199,12 +199,10 @@ func (s *NodeStore) insertValuesAtStem(ref nodeRef, stem []byte, values [][]byte
 	case kindStem:
 		sn := s.getStem(ref.Index())
 		if sn.Stem == [StemSize]byte(stem[:StemSize]) {
-			// Same stem — merge values
+			// Same stem — merge values (setValue marks dirty+mustRecompute)
 			for i, v := range values {
 				if v != nil {
 					sn.setValue(byte(i), v)
-					sn.mustRecompute = true
-					sn.dirty = true
 				}
 			}
 			return ref, nil
@@ -233,7 +231,8 @@ func (s *NodeStore) insertValuesAtStem(ref nodeRef, stem []byte, values [][]byte
 		return s.insertValuesAtStem(resolved, stem, values, resolver, depth)
 
 	case kindEmpty:
-		// Create new StemNode
+		// Create new StemNode. Flag flips before the value loop so an
+		// all-nil values input still marks the newly-created stem dirty.
 		stemIdx := s.allocStem()
 		sn := s.getStem(stemIdx)
 		copy(sn.Stem[:], stem[:StemSize])
@@ -242,7 +241,7 @@ func (s *NodeStore) insertValuesAtStem(ref nodeRef, stem []byte, values [][]byte
 		sn.dirty = true
 		for i, v := range values {
 			if v != nil {
-				sn.values[i] = v
+				sn.setValue(byte(i), v)
 			}
 		}
 		return makeRef(kindStem, stemIdx), nil
