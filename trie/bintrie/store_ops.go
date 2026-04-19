@@ -278,6 +278,11 @@ func (s *NodeStore) splitStemValuesInsert(existingRef nodeRef, newStem []byte, v
 		}
 		newChild, err := s.insertValuesAtStem(child, newStem, values, resolver, depth+1)
 		if err != nil {
+			// Roll back the depth increment so a retry sees the same
+			// existing state and extracts bitStem at the correct offset.
+			// nRef itself leaks (no internal free-list), but the slot is
+			// unreachable from the tree and harmless.
+			existing.depth--
 			return nRef, err
 		}
 		if bitStem == 0 {
