@@ -23,9 +23,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// TestStemNodeInsertSameStem tests inserting values with the same stem via NodeStore.
+// TestStemNodeInsertSameStem tests inserting values with the same stem via nodeStore.
 func TestStemNodeInsertSameStem(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 
 	stem := make([]byte, 31)
 	for i := range stem {
@@ -66,9 +66,9 @@ func TestStemNodeInsertSameStem(t *testing.T) {
 	}
 }
 
-// TestStemNodeInsertDifferentStem tests inserting values with different stems via NodeStore.
+// TestStemNodeInsertDifferentStem tests inserting values with different stems via nodeStore.
 func TestStemNodeInsertDifferentStem(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 
 	// Insert first value with stem of all zeros
 	key1 := make([]byte, 32)
@@ -108,9 +108,9 @@ func TestStemNodeInsertDifferentStem(t *testing.T) {
 	}
 }
 
-// TestStemNodeInsertInvalidValueLength tests inserting value with invalid length via NodeStore.
+// TestStemNodeInsertInvalidValueLength tests inserting value with invalid length via nodeStore.
 func TestStemNodeInsertInvalidValueLength(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 
 	key := make([]byte, 32)
 	invalidValue := []byte{1, 2, 3} // Not 32 bytes
@@ -125,9 +125,9 @@ func TestStemNodeInsertInvalidValueLength(t *testing.T) {
 	}
 }
 
-// TestStemNodeCopy tests the Copy method via NodeStore.
+// TestStemNodeCopy tests the Copy method via nodeStore.
 func TestStemNodeCopy(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 
 	key1 := make([]byte, 32)
 	for i := range 31 {
@@ -163,7 +163,7 @@ func TestStemNodeCopy(t *testing.T) {
 
 // TestStemNodeHash tests the Hash method.
 func TestStemNodeHash(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 
 	key := make([]byte, 32)
 	key[31] = 0
@@ -193,9 +193,9 @@ func TestStemNodeHash(t *testing.T) {
 	}
 }
 
-// TestStemNodeGetValuesAtStem tests GetValuesAtStem method via NodeStore.
+// TestStemNodeGetValuesAtStem tests GetValuesAtStem method via nodeStore.
 func TestStemNodeGetValuesAtStem(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 
 	stem := make([]byte, 31)
 	for i := range stem {
@@ -248,9 +248,9 @@ func TestStemNodeGetValuesAtStem(t *testing.T) {
 	}
 }
 
-// TestStemNodeInsertValuesAtStem tests InsertValuesAtStem method via NodeStore.
+// TestStemNodeInsertValuesAtStem tests InsertValuesAtStem method via nodeStore.
 func TestStemNodeInsertValuesAtStem(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 
 	stem := make([]byte, 31)
 	values := make([][]byte, 256)
@@ -285,9 +285,9 @@ func TestStemNodeInsertValuesAtStem(t *testing.T) {
 	}
 }
 
-// TestStemNodeGetHeight tests GetHeight method via NodeStore.
+// TestStemNodeGetHeight tests GetHeight method via nodeStore.
 func TestStemNodeGetHeight(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 
 	key := make([]byte, 32)
 	value := common.HexToHash("0x01").Bytes()
@@ -301,9 +301,9 @@ func TestStemNodeGetHeight(t *testing.T) {
 	}
 }
 
-// TestStemNodeCollectNodes tests CollectNodes method via NodeStore.
+// TestStemNodeCollectNodes tests CollectNodes method via nodeStore.
 func TestStemNodeCollectNodes(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 
 	stem := make([]byte, 31)
 	values := make([][]byte, 256)

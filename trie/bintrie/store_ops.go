@@ -23,14 +23,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// NodeResolverFn resolves a hashed node from the database.
-type NodeResolverFn func([]byte, common.Hash) ([]byte, error)
+// nodeResolverFn resolves a hashed node from the database.
+type nodeResolverFn func([]byte, common.Hash) ([]byte, error)
 
 // GetValue returns the value at (stem, suffix) or nil if absent. Thin
 // wrapper over GetValuesAtStem — the underlying StemNode returns its
 // 256-slot array as a slice header (no allocation), so the per-call cost
 // is the tree walk plus one index.
-func (s *NodeStore) GetValue(stem []byte, suffix byte, resolver NodeResolverFn) ([]byte, error) {
+func (s *nodeStore) GetValue(stem []byte, suffix byte, resolver nodeResolverFn) ([]byte, error) {
 	values, err := s.GetValuesAtStem(stem, resolver)
 	if err != nil || values == nil {
 		return nil, err
@@ -41,7 +41,7 @@ func (s *NodeStore) GetValue(stem []byte, suffix byte, resolver NodeResolverFn) 
 // GetValuesAtStem returns the 256 value slots at stem, or nil if the stem
 // is not in the trie. The returned slice is a view over the in-place
 // StemNode values array (no allocation) and must be treated read-only.
-func (s *NodeStore) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([][]byte, error) {
+func (s *nodeStore) GetValuesAtStem(stem []byte, resolver nodeResolverFn) ([][]byte, error) {
 	cur := s.root
 	var parentIdx uint32
 	var parentIsLeft bool
@@ -115,7 +115,7 @@ func (s *NodeStore) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([][]b
 // gballet referenced (comment 3101751325): one primary insert path; the
 // single-slot variant dispatches through it so the split / resolve logic
 // lives in one place.
-func (s *NodeStore) InsertSingle(stem []byte, suffix byte, value []byte, resolver NodeResolverFn) error {
+func (s *nodeStore) InsertSingle(stem []byte, suffix byte, value []byte, resolver nodeResolverFn) error {
 	if len(value) != HashSize {
 		return errors.New("invalid insertion: value length")
 	}
@@ -128,13 +128,13 @@ func (s *NodeStore) InsertSingle(stem []byte, suffix byte, value []byte, resolve
 // sparse (nil entries are ignored). The recursive implementation dispatches
 // through the same body, so a single code path handles internal descent,
 // HashedNode resolution, stem merge, and stem split.
-func (s *NodeStore) InsertValuesAtStem(stem []byte, values [][]byte, resolver NodeResolverFn) error {
+func (s *nodeStore) InsertValuesAtStem(stem []byte, values [][]byte, resolver nodeResolverFn) error {
 	var err error
 	s.root, err = s.insertValuesAtStem(s.root, stem, values, resolver, 0)
 	return err
 }
 
-func (s *NodeStore) insertValuesAtStem(ref nodeRef, stem []byte, values [][]byte, resolver NodeResolverFn, depth int) (nodeRef, error) {
+func (s *nodeStore) insertValuesAtStem(ref nodeRef, stem []byte, values [][]byte, resolver nodeResolverFn, depth int) (nodeRef, error) {
 	switch ref.Kind() {
 	case kindInternal:
 		node := s.getInternal(ref.Index())
@@ -252,7 +252,7 @@ func (s *NodeStore) insertValuesAtStem(ref nodeRef, stem []byte, values [][]byte
 }
 
 // splitStemValuesInsert splits a StemNode when the new stem diverges.
-func (s *NodeStore) splitStemValuesInsert(existingRef nodeRef, newStem []byte, values [][]byte, resolver NodeResolverFn, depth int) (nodeRef, error) {
+func (s *nodeStore) splitStemValuesInsert(existingRef nodeRef, newStem []byte, values [][]byte, resolver nodeResolverFn, depth int) (nodeRef, error) {
 	existing := s.getStem(existingRef.Index())
 
 	if int(existing.depth) >= StemSize*8 {
@@ -317,15 +317,15 @@ func (s *NodeStore) splitStemValuesInsert(existingRef nodeRef, newStem []byte, v
 	return nRef, nil
 }
 
-func (s *NodeStore) Insert(key []byte, value []byte, resolver NodeResolverFn) error {
+func (s *nodeStore) Insert(key []byte, value []byte, resolver nodeResolverFn) error {
 	return s.InsertSingle(key[:StemSize], key[StemSize], value, resolver)
 }
 
-func (s *NodeStore) Get(key []byte, resolver NodeResolverFn) ([]byte, error) {
+func (s *nodeStore) Get(key []byte, resolver nodeResolverFn) ([]byte, error) {
 	return s.GetValue(key[:StemSize], key[StemSize], resolver)
 }
 
-func (s *NodeStore) getHeight(ref nodeRef) int {
+func (s *nodeStore) getHeight(ref nodeRef) int {
 	switch ref.Kind() {
 	case kindInternal:
 		node := s.getInternal(ref.Index())

@@ -21,10 +21,10 @@ import "github.com/ethereum/go-ethereum/common"
 // storeChunkSize is the number of nodes per chunk in each typed pool.
 const storeChunkSize = 4096
 
-// NodeStore is a GC-friendly arena for binary trie nodes. Nodes are packed
+// nodeStore is a GC-friendly arena for binary trie nodes. Nodes are packed
 // into typed chunked pools so pointer-free types (InternalNode, HashedNode)
 // land in noscan spans the GC skips entirely.
-type NodeStore struct {
+type nodeStore struct {
 	internalChunks []*[storeChunkSize]InternalNode
 	internalCount  uint32
 
@@ -43,11 +43,11 @@ type NodeStore struct {
 	freeHashed []uint32
 }
 
-func NewNodeStore() *NodeStore {
-	return &NodeStore{root: emptyRef}
+func newNodeStore() *nodeStore {
+	return &nodeStore{root: emptyRef}
 }
 
-func (s *NodeStore) allocInternal() uint32 {
+func (s *nodeStore) allocInternal() uint32 {
 	idx := s.internalCount
 	chunkIdx := idx / storeChunkSize
 	if uint32(len(s.internalChunks)) <= chunkIdx {
@@ -60,11 +60,11 @@ func (s *NodeStore) allocInternal() uint32 {
 	return idx
 }
 
-func (s *NodeStore) getInternal(idx uint32) *InternalNode {
+func (s *nodeStore) getInternal(idx uint32) *InternalNode {
 	return &s.internalChunks[idx/storeChunkSize][idx%storeChunkSize]
 }
 
-func (s *NodeStore) newInternalRef(depth int) nodeRef {
+func (s *nodeStore) newInternalRef(depth int) nodeRef {
 	if depth > 248 {
 		panic("node depth exceeds maximum binary trie depth")
 	}
@@ -76,7 +76,7 @@ func (s *NodeStore) newInternalRef(depth int) nodeRef {
 	return makeRef(kindInternal, idx)
 }
 
-func (s *NodeStore) allocStem() uint32 {
+func (s *nodeStore) allocStem() uint32 {
 	idx := s.stemCount
 	chunkIdx := idx / storeChunkSize
 	if uint32(len(s.stemChunks)) <= chunkIdx {
@@ -89,11 +89,11 @@ func (s *NodeStore) allocStem() uint32 {
 	return idx
 }
 
-func (s *NodeStore) getStem(idx uint32) *StemNode {
+func (s *nodeStore) getStem(idx uint32) *StemNode {
 	return &s.stemChunks[idx/storeChunkSize][idx%storeChunkSize]
 }
 
-func (s *NodeStore) newStemRef(stem []byte, depth int) nodeRef {
+func (s *nodeStore) newStemRef(stem []byte, depth int) nodeRef {
 	if depth > 248 {
 		panic("node depth exceeds maximum binary trie depth")
 	}
@@ -106,7 +106,7 @@ func (s *NodeStore) newStemRef(stem []byte, depth int) nodeRef {
 	return makeRef(kindStem, idx)
 }
 
-func (s *NodeStore) allocHashed() uint32 {
+func (s *nodeStore) allocHashed() uint32 {
 	if n := len(s.freeHashed); n > 0 {
 		idx := s.freeHashed[n-1]
 		s.freeHashed = s.freeHashed[:n-1]
@@ -125,22 +125,22 @@ func (s *NodeStore) allocHashed() uint32 {
 	return idx
 }
 
-func (s *NodeStore) getHashed(idx uint32) *HashedNode {
+func (s *nodeStore) getHashed(idx uint32) *HashedNode {
 	return &s.hashedChunks[idx/storeChunkSize][idx%storeChunkSize]
 }
 
-func (s *NodeStore) freeHashedNode(idx uint32) {
+func (s *nodeStore) freeHashedNode(idx uint32) {
 	s.freeHashed = append(s.freeHashed, idx)
 }
 
-func (s *NodeStore) newHashedRef(hash common.Hash) nodeRef {
+func (s *nodeStore) newHashedRef(hash common.Hash) nodeRef {
 	idx := s.allocHashed()
 	*s.getHashed(idx) = HashedNode(hash)
 	return makeRef(kindHashed, idx)
 }
 
-func (s *NodeStore) Copy() *NodeStore {
-	ns := &NodeStore{
+func (s *nodeStore) Copy() *nodeStore {
+	ns := &nodeStore{
 		root:          s.root,
 		internalCount: s.internalCount,
 		stemCount:     s.stemCount,

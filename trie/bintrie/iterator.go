@@ -32,7 +32,7 @@ type binaryNodeIteratorState struct {
 
 type binaryNodeIterator struct {
 	trie    *BinaryTrie
-	store   *NodeStore
+	store   *nodeStore
 	current nodeRef
 	lastErr error
 

@@ -24,9 +24,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// TestInternalNodeGet tests the Get method via NodeStore.
+// TestInternalNodeGet tests the Get method via nodeStore.
 func TestInternalNodeGet(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 
 	leftStem := make([]byte, 31)
 	rightStem := make([]byte, 31)
@@ -71,10 +71,10 @@ func TestInternalNodeGet(t *testing.T) {
 	}
 }
 
-// TestInternalNodeGetWithResolver tests Get with HashedNode resolution via NodeStore.
+// TestInternalNodeGetWithResolver tests Get with HashedNode resolution via nodeStore.
 func TestInternalNodeGetWithResolver(t *testing.T) {
 	// Create a store with an internal node containing a hashed child
-	s := NewNodeStore()
+	s := newNodeStore()
 	hashedChild := s.newHashedRef(common.HexToHash("0x1234"))
 	rootRef := s.newInternalRef(0)
 	rootNode := s.getInternal(rootRef.Index())
@@ -85,7 +85,7 @@ func TestInternalNodeGetWithResolver(t *testing.T) {
 	// Mock resolver that returns a stem node
 	resolver := func(path []byte, hash common.Hash) ([]byte, error) {
 		if hash == common.HexToHash("0x1234") {
-			rs := NewNodeStore()
+			rs := newNodeStore()
 			stem := make([]byte, 31)
 			ref := rs.newStemRef(stem, 1)
 			sn := rs.getStem(ref.Index())
@@ -109,9 +109,9 @@ func TestInternalNodeGetWithResolver(t *testing.T) {
 	}
 }
 
-// TestInternalNodeInsert tests the Insert method via NodeStore.
+// TestInternalNodeInsert tests the Insert method via nodeStore.
 func TestInternalNodeInsert(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 
 	leftKey := make([]byte, 32)
 	leftKey[31] = 10
@@ -131,9 +131,9 @@ func TestInternalNodeInsert(t *testing.T) {
 	}
 }
 
-// TestInternalNodeCopy tests the Copy method via NodeStore.
+// TestInternalNodeCopy tests the Copy method via nodeStore.
 func TestInternalNodeCopy(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 
 	leftKey := make([]byte, 32)
 	leftKey[31] = 0
@@ -164,9 +164,9 @@ func TestInternalNodeCopy(t *testing.T) {
 	}
 }
 
-// TestInternalNodeHash tests the Hash method via NodeStore.
+// TestInternalNodeHash tests the Hash method via nodeStore.
 func TestInternalNodeHash(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 	leftRef := s.newHashedRef(common.HexToHash("0x1111"))
 	rightRef := s.newHashedRef(common.HexToHash("0x2222"))
 	rootRef := s.newInternalRef(0)
@@ -192,9 +192,9 @@ func TestInternalNodeHash(t *testing.T) {
 	}
 }
 
-// TestInternalNodeGetValuesAtStem tests GetValuesAtStem method via NodeStore.
+// TestInternalNodeGetValuesAtStem tests GetValuesAtStem method via nodeStore.
 func TestInternalNodeGetValuesAtStem(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 
 	leftStem := make([]byte, 31)
 	rightStem := make([]byte, 31)
@@ -239,9 +239,9 @@ func TestInternalNodeGetValuesAtStem(t *testing.T) {
 	}
 }
 
-// TestInternalNodeInsertValuesAtStem tests InsertValuesAtStem method via NodeStore.
+// TestInternalNodeInsertValuesAtStem tests InsertValuesAtStem method via nodeStore.
 func TestInternalNodeInsertValuesAtStem(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 
 	stem := make([]byte, 31)
 	values := make([][]byte, 256)
@@ -265,9 +265,9 @@ func TestInternalNodeInsertValuesAtStem(t *testing.T) {
 	}
 }
 
-// TestInternalNodeCollectNodes tests CollectNodes method via NodeStore.
+// TestInternalNodeCollectNodes tests CollectNodes method via nodeStore.
 func TestInternalNodeCollectNodes(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 
 	leftStem := make([]byte, 31)
 	rightStem := make([]byte, 31)
@@ -301,9 +301,9 @@ func TestInternalNodeCollectNodes(t *testing.T) {
 	}
 }
 
-// TestInternalNodeGetHeight tests GetHeight method via NodeStore.
+// TestInternalNodeGetHeight tests GetHeight method via nodeStore.
 func TestInternalNodeGetHeight(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 
 	// Insert values that create a deeper tree
 	stem1 := make([]byte, 31) // left
@@ -328,9 +328,9 @@ func TestInternalNodeGetHeight(t *testing.T) {
 	}
 }
 
-// TestInternalNodeDepthTooLarge tests handling of excessive depth via NodeStore.
+// TestInternalNodeDepthTooLarge tests handling of excessive depth via nodeStore.
 func TestInternalNodeDepthTooLarge(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 	// Creating an internal node beyond max depth should panic
 	defer func() {
 		if r := recover(); r == nil {

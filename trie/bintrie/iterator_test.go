@@ -27,7 +27,7 @@ import (
 // makeTrie creates a BinaryTrie populated with the given key-value pairs.
 func makeTrie(t *testing.T, entries [][2]common.Hash) *BinaryTrie {
 	t.Helper()
-	store := NewNodeStore()
+	store := newNodeStore()
 	tr := &BinaryTrie{
 		store:  store,
 		tracer: trie.NewPrevalueTracer(),
@@ -63,7 +63,7 @@ func countLeaves(t *testing.T, tr *BinaryTrie) int {
 // no nodes and reports no error.
 func TestIteratorEmptyTrie(t *testing.T) {
 	tr := &BinaryTrie{
-		store:  NewNodeStore(),
+		store:  newNodeStore(),
 		tracer: trie.NewPrevalueTracer(),
 	}
 	it, err := newBinaryNodeIterator(tr, nil)

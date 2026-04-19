@@ -37,7 +37,7 @@ var (
 )
 
 func TestSingleEntry(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 	if err := s.Insert(zeroKey[:], oneKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestSingleEntry(t *testing.T) {
 }
 
 func TestTwoEntriesDiffFirstBit(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 	if err := s.Insert(zeroKey[:], oneKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestTwoEntriesDiffFirstBit(t *testing.T) {
 }
 
 func TestOneStemColocatedValues(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 	if err := s.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000003").Bytes(), oneKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestOneStemColocatedValues(t *testing.T) {
 }
 
 func TestTwoStemColocatedValues(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 	// stem: 0...0
 	if err := s.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000003").Bytes(), oneKey[:], nil); err != nil {
 		t.Fatal(err)
@@ -108,7 +108,7 @@ func TestTwoStemColocatedValues(t *testing.T) {
 }
 
 func TestTwoKeysMatchFirst42Bits(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 	// key1 and key 2 have the same prefix of 42 bits (b0*42+b1+b1) and differ after.
 	key1 := common.HexToHash("0000000000C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0").Bytes()
 	key2 := common.HexToHash("0000000000E00000000000000000000000000000000000000000000000000000").Bytes()
@@ -124,7 +124,7 @@ func TestTwoKeysMatchFirst42Bits(t *testing.T) {
 }
 
 func TestInsertDuplicateKey(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 	if err := s.Insert(oneKey[:], oneKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestInsertDuplicateKey(t *testing.T) {
 }
 
 func TestLargeNumberOfEntries(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 	for i := range StemNodeWidth {
 		var key [HashSize]byte
 		key[0] = byte(i)
@@ -160,7 +160,7 @@ func TestLargeNumberOfEntries(t *testing.T) {
 }
 
 func TestMerkleizeMultipleEntries(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 	keys := [][]byte{
 		zeroKey[:],
 		common.HexToHash("8000000000000000000000000000000000000000000000000000000000000000").Bytes(),
@@ -188,7 +188,7 @@ func TestMerkleizeMultipleEntries(t *testing.T) {
 func TestStorageRoundTrip(t *testing.T) {
 	tracer := trie.NewPrevalueTracer()
 	tr := &BinaryTrie{
-		store:  NewNodeStore(),
+		store:  newNodeStore(),
 		tracer: tracer,
 	}
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
@@ -256,7 +256,7 @@ func TestStorageRoundTrip(t *testing.T) {
 func newEmptyTestTrie(t *testing.T) *BinaryTrie {
 	t.Helper()
 	return &BinaryTrie{
-		store:  NewNodeStore(),
+		store:  newNodeStore(),
 		tracer: trie.NewPrevalueTracer(),
 	}
 }
@@ -581,7 +581,7 @@ func TestBinaryTrieWitness(t *testing.T) {
 	tracer := trie.NewPrevalueTracer()
 
 	tr := &BinaryTrie{
-		store:  NewNodeStore(),
+		store:  newNodeStore(),
 		tracer: tracer,
 	}
 	if w := tr.Witness(); len(w) != 0 {
@@ -608,7 +608,7 @@ func TestBinaryTrieWitness(t *testing.T) {
 func testAccount(t *testing.T, addr common.Address, nonce uint64, balance uint64) *BinaryTrie {
 	t.Helper()
 	tr := &BinaryTrie{
-		store:  NewNodeStore(),
+		store:  newNodeStore(),
 		tracer: trie.NewPrevalueTracer(),
 	}
 	acc := &types.StateAccount{
@@ -662,7 +662,7 @@ func TestGetAccountNonMembershipStemRoot(t *testing.T) {
 // address returns nil when the trie root is an InternalNode (multi-account trie).
 func TestGetAccountNonMembershipInternalRoot(t *testing.T) {
 	tr := &BinaryTrie{
-		store:  NewNodeStore(),
+		store:  newNodeStore(),
 		tracer: trie.NewPrevalueTracer(),
 	}
 
@@ -725,7 +725,7 @@ func TestGetStorageNonMembershipStemRoot(t *testing.T) {
 // non-existent address returns nil when the root is an InternalNode.
 func TestGetStorageNonMembershipInternalRoot(t *testing.T) {
 	tr := &BinaryTrie{
-		store:  NewNodeStore(),
+		store:  newNodeStore(),
 		tracer: trie.NewPrevalueTracer(),
 	}
 
@@ -768,7 +768,7 @@ func TestGetStorageNonMembershipInternalRoot(t *testing.T) {
 // flushes only the root-to-leaf path.
 func TestCommitSkipCleanSubtrees(t *testing.T) {
 	tr := &BinaryTrie{
-		store:  NewNodeStore(),
+		store:  newNodeStore(),
 		tracer: trie.NewPrevalueTracer(),
 	}
 	const n = 200
@@ -826,7 +826,7 @@ func TestCommitSkipCleanSubtrees(t *testing.T) {
 func BenchmarkCollectNodesSparseWrite(b *testing.B) {
 	const n = 10_000
 	tr := &BinaryTrie{
-		store:  NewNodeStore(),
+		store:  newNodeStore(),
 		tracer: trie.NewPrevalueTracer(),
 	}
 	keys := make([][HashSize]byte, n)

@@ -27,13 +27,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-type NodeFlushFn func(path []byte, hash common.Hash, serialized []byte)
+type nodeFlushFn func(path []byte, hash common.Hash, serialized []byte)
 
-func (s *NodeStore) Hash() common.Hash {
+func (s *nodeStore) Hash() common.Hash {
 	return s.computeHash(s.root)
 }
 
-func (s *NodeStore) computeHash(ref nodeRef) common.Hash {
+func (s *nodeStore) computeHash(ref nodeRef) common.Hash {
 	switch ref.Kind() {
 	case kindInternal:
 		return s.hashInternal(ref.Index())
@@ -59,7 +59,7 @@ var parallelHashDepth = min(bits.Len(uint(runtime.NumCPU())), 8)
 // goroutine while the right subtree is hashed inline, then the two digests
 // are combined. Below that threshold the goroutine spawn cost outweighs the
 // hashing work, so deeper nodes hash both children sequentially.
-func (s *NodeStore) hashInternal(idx uint32) common.Hash {
+func (s *nodeStore) hashInternal(idx uint32) common.Hash {
 	node := s.getInternal(idx)
 	if !node.mustRecompute {
 		return node.hash
@@ -108,7 +108,7 @@ func (s *NodeStore) hashInternal(idx uint32) common.Hash {
 }
 
 // SerializeNode serializes a node into the flat on-disk format.
-func (s *NodeStore) serializeNode(ref nodeRef) []byte {
+func (s *nodeStore) serializeNode(ref nodeRef) []byte {
 	switch ref.Kind() {
 	case kindInternal:
 		node := s.getInternal(ref.Index())
@@ -153,17 +153,17 @@ var errInvalidSerializedLength = errors.New("invalid serialized node length")
 
 // DeserializeNode deserializes a node from bytes, recomputing its hash. The
 // returned node is marked dirty (provenance unknown, safe re-flush default).
-func (s *NodeStore) deserializeNode(serialized []byte, depth int) (nodeRef, error) {
+func (s *nodeStore) deserializeNode(serialized []byte, depth int) (nodeRef, error) {
 	return s.decodeNode(serialized, depth, common.Hash{}, true, true)
 }
 
 // DeserializeNodeWithHash deserializes a node whose hash is already known and
 // whose blob is already on disk (mustRecompute=false, dirty=false).
-func (s *NodeStore) deserializeNodeWithHash(serialized []byte, depth int, hn common.Hash) (nodeRef, error) {
+func (s *nodeStore) deserializeNodeWithHash(serialized []byte, depth int, hn common.Hash) (nodeRef, error) {
 	return s.decodeNode(serialized, depth, hn, false, false)
 }
 
-func (s *NodeStore) decodeNode(serialized []byte, depth int, hn common.Hash, mustRecompute, dirty bool) (nodeRef, error) {
+func (s *nodeStore) decodeNode(serialized []byte, depth int, hn common.Hash, mustRecompute, dirty bool) (nodeRef, error) {
 	if len(serialized) == 0 {
 		return emptyRef, nil
 	}
@@ -230,7 +230,7 @@ func (s *NodeStore) decodeNode(serialized []byte, depth int, hn common.Hash, mus
 // CollectNodes flushes every node that needs flushing via flushfn in post-order.
 // Invariant: any ancestor of a node that needs flushing is itself marked, so a
 // clean root means the whole subtree is clean.
-func (s *NodeStore) collectNodes(ref nodeRef, path []byte, flushfn NodeFlushFn) error {
+func (s *nodeStore) collectNodes(ref nodeRef, path []byte, flushfn nodeFlushFn) error {
 	switch ref.Kind() {
 	case kindEmpty:
 		return nil
@@ -269,7 +269,7 @@ func (s *NodeStore) collectNodes(ref nodeRef, path []byte, flushfn NodeFlushFn) 
 	}
 }
 
-func (s *NodeStore) toDot(ref nodeRef, parent, path string) string {
+func (s *nodeStore) toDot(ref nodeRef, parent, path string) string {
 	switch ref.Kind() {
 	case kindInternal:
 		node := s.getInternal(ref.Index())

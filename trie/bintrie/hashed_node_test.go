@@ -24,10 +24,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// TestHashedNodeHash tests the Hash method via NodeStore.
+// TestHashedNodeHash tests the Hash method via nodeStore.
 func TestHashedNodeHash(t *testing.T) {
 	hash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
-	s := NewNodeStore()
+	s := newNodeStore()
 	ref := s.newHashedRef(hash)
 
 	if s.computeHash(ref) != hash {
@@ -35,10 +35,10 @@ func TestHashedNodeHash(t *testing.T) {
 	}
 }
 
-// TestHashedNodeCopy tests the Copy method via NodeStore.
+// TestHashedNodeCopy tests the Copy method via nodeStore.
 func TestHashedNodeCopy(t *testing.T) {
 	hash := common.HexToHash("0xabcdef")
-	s := NewNodeStore()
+	s := newNodeStore()
 	ref := s.newHashedRef(hash)
 	s.root = ref
 
@@ -50,10 +50,10 @@ func TestHashedNodeCopy(t *testing.T) {
 	}
 }
 
-// TestHashedNodeInsertValuesAtStem tests InsertValuesAtStem resolution via NodeStore.
+// TestHashedNodeInsertValuesAtStem tests InsertValuesAtStem resolution via nodeStore.
 func TestHashedNodeInsertValuesAtStem(t *testing.T) {
 	// Test 1: nil resolver should return an error
-	s := NewNodeStore()
+	s := newNodeStore()
 	hashedRef := s.newHashedRef(common.HexToHash("0x1234"))
 	s.root = hashedRef
 
@@ -70,7 +70,7 @@ func TestHashedNodeInsertValuesAtStem(t *testing.T) {
 		return []byte{0xff, 0xff, 0xff}, nil
 	}
 
-	s2 := NewNodeStore()
+	s2 := newNodeStore()
 	hashedRef2 := s2.newHashedRef(common.HexToHash("0x1234"))
 	s2.root = hashedRef2
 
@@ -87,7 +87,7 @@ func TestHashedNodeInsertValuesAtStem(t *testing.T) {
 	originalValues[1] = common.HexToHash("0x2222222222222222222222222222222222222222222222222222222222222222").Bytes()
 
 	// Build the serialized node
-	rs := NewNodeStore()
+	rs := newNodeStore()
 	ref := rs.newStemRef(stem, 0)
 	sn := rs.getStem(ref.Index())
 	for i, v := range originalValues {
@@ -101,7 +101,7 @@ func TestHashedNodeInsertValuesAtStem(t *testing.T) {
 		return serialized, nil
 	}
 
-	s3 := NewNodeStore()
+	s3 := newNodeStore()
 	hashedRef3 := s3.newHashedRef(common.HexToHash("0x1234"))
 	s3.root = hashedRef3
 
@@ -131,7 +131,7 @@ func TestHashedNodeInsertValuesAtStem(t *testing.T) {
 
 // TestHashedNodeGetError tests that getting through an unresolved HashedNode root returns error.
 func TestHashedNodeGetError(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 	// Create root as hashed, then try to resolve through InternalNode parent
 	rootRef := s.newInternalRef(0)
 	rootNode := s.getInternal(rootRef.Index())

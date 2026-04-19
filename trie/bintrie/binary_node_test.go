@@ -24,12 +24,12 @@ import (
 )
 
 // TestSerializeDeserializeInternalNode tests flat 65-byte serialization and
-// deserialization of InternalNode through NodeStore.
+// deserialization of InternalNode through nodeStore.
 func TestSerializeDeserializeInternalNode(t *testing.T) {
 	leftHash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 	rightHash := common.HexToHash("0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321")
 
-	s := NewNodeStore()
+	s := newNodeStore()
 	leftRef := s.newHashedRef(leftHash)
 	rightRef := s.newHashedRef(rightHash)
 
@@ -61,7 +61,7 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 	}
 
 	// Deserialize into a new store
-	ds := NewNodeStore()
+	ds := newNodeStore()
 	deserialized, err := ds.deserializeNode(serialized, 0)
 	if err != nil {
 		t.Fatalf("Failed to deserialize node: %v", err)
@@ -94,7 +94,7 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 	}
 }
 
-// TestSerializeDeserializeStemNode tests serialization and deserialization of StemNode through NodeStore.
+// TestSerializeDeserializeStemNode tests serialization and deserialization of StemNode through nodeStore.
 func TestSerializeDeserializeStemNode(t *testing.T) {
 	stem := make([]byte, StemSize)
 	for i := range stem {
@@ -106,7 +106,7 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 	values[10] = common.HexToHash("0x0202020202020202020202020202020202020202020202020202020202020202").Bytes()
 	values[255] = common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303").Bytes()
 
-	s := NewNodeStore()
+	s := newNodeStore()
 	ref := s.newStemRef(stem, 10)
 	sn := s.getStem(ref.Index())
 	for i, v := range values {
@@ -129,7 +129,7 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 	}
 
 	// Deserialize into a new store
-	ds := NewNodeStore()
+	ds := newNodeStore()
 	deserializedRef, err := ds.deserializeNode(serialized, 10)
 	if err != nil {
 		t.Fatalf("Failed to deserialize node: %v", err)
@@ -170,7 +170,7 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 
 // TestDeserializeEmptyNode tests deserialization of empty node.
 func TestDeserializeEmptyNode(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 	deserialized, err := s.deserializeNode([]byte{}, 0)
 	if err != nil {
 		t.Fatalf("Failed to deserialize empty node: %v", err)
@@ -183,7 +183,7 @@ func TestDeserializeEmptyNode(t *testing.T) {
 
 // TestDeserializeInvalidType tests deserialization with invalid type byte.
 func TestDeserializeInvalidType(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 	invalidData := []byte{99, 0, 0, 0} // Type byte 99 is invalid
 
 	_, err := s.deserializeNode(invalidData, 0)
@@ -194,7 +194,7 @@ func TestDeserializeInvalidType(t *testing.T) {
 
 // TestDeserializeInvalidLength tests deserialization with invalid data length.
 func TestDeserializeInvalidLength(t *testing.T) {
-	s := NewNodeStore()
+	s := newNodeStore()
 	// InternalNode with valid type byte but wrong length (needs exactly 65 bytes)
 	invalidData := []byte{nodeTypeInternal, 0, 0, 0}
 

@@ -36,9 +36,9 @@ const (
 
 // DeserializeAndHash deserializes a node from bytes and returns its hash.
 // This is a convenience function for external callers that need to compute
-// the hash of a serialized node without maintaining a NodeStore.
+// the hash of a serialized node without maintaining a nodeStore.
 func DeserializeAndHash(blob []byte, depth int) (common.Hash, error) {
-	s := NewNodeStore()
+	s := newNodeStore()
 	ref, err := s.deserializeNode(blob, depth)
 	if err != nil {
 		return common.Hash{}, err

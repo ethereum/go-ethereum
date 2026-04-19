@@ -26,7 +26,7 @@ const (
 	kindHashed
 )
 
-// nodeRef is a compact, GC-invisible reference to a node in a NodeStore.
+// nodeRef is a compact, GC-invisible reference to a node in a nodeStore.
 // It packs a 2-bit type tag (bits 31-30) and a 30-bit index (bits 29-0)
 // into a single uint32. Because nodeRef contains no Go pointers, slices
 // of structs containing nodeRef fields are allocated in noscan spans —

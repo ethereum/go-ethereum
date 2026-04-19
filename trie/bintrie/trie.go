@@ -107,7 +107,7 @@ func ChunkifyCode(code []byte) ChunkedCode {
 
 // BinaryTrie is the implementation of https://eips.ethereum.org/EIPS/eip-7864.
 type BinaryTrie struct {
-	store  *NodeStore
+	store  *nodeStore
 	reader *trie.Reader
 	tracer *trie.PrevalueTracer
 }
@@ -125,7 +125,7 @@ func NewBinaryTrie(root common.Hash, db database.NodeDatabase) (*BinaryTrie, err
 		return nil, err
 	}
 	t := &BinaryTrie{
-		store:  NewNodeStore(),
+		store:  newNodeStore(),
 		reader: reader,
 		tracer: trie.NewPrevalueTracer(),
 	}
