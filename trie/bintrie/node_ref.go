@@ -42,7 +42,10 @@ const (
 )
 
 func makeRef(kind nodeKind, idx uint32) nodeRef {
-	return nodeRef(uint32(kind)<<kindShift | (idx & indexMask))
+	if idx > indexMask {
+		panic("nodeRef index overflow")
+	}
+	return nodeRef(uint32(kind)<<kindShift | idx)
 }
 
 func (r nodeRef) Kind() nodeKind { return nodeKind(uint32(r) >> kindShift) }
