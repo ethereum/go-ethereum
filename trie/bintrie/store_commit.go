@@ -48,26 +48,24 @@ func (s *NodeStore) computeHash(ref nodeRef) common.Hash {
 	}
 }
 
-// parallelDepth returns the tree depth below which hashInternal spawns
-// goroutines for shallow-depth parallelism.
-func parallelDepth() int {
-	return min(bits.Len(uint(runtime.NumCPU())), 8)
-}
+// parallelHashDepth is the tree depth below which hashInternal spawns
+// goroutines for shallow-depth parallelism. Computed once at init because
+// NumCPU() never changes after startup.
+var parallelHashDepth = min(bits.Len(uint(runtime.NumCPU())), 8)
 
 // hashInternal hashes an InternalNode and caches the result.
 //
-// At shallow depths (< parallelDepth()) the left subtree is hashed in a
+// At shallow depths (< parallelHashDepth) the left subtree is hashed in a
 // goroutine while the right subtree is hashed inline, then the two digests
 // are combined. Below that threshold the goroutine spawn cost outweighs the
-// hashing work, so deeper nodes hash both children sequentially via the
-// pooled hasher.
+// hashing work, so deeper nodes hash both children sequentially.
 func (s *NodeStore) hashInternal(idx uint32) common.Hash {
 	node := s.getInternal(idx)
 	if !node.mustRecompute {
 		return node.hash
 	}
 
-	if int(node.depth) < parallelDepth() {
+	if int(node.depth) < parallelHashDepth {
 		var input [64]byte
 		var lh common.Hash
 		var wg sync.WaitGroup
