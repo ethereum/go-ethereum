@@ -438,14 +438,11 @@ func (s *serverWithLimits) fail(desc string) {
 // failLocked calculates the dynamic failure delay and applies it.
 func (s *serverWithLimits) failLocked(desc string) {
 	log.Debug("Server error", "description", desc)
-	s.failureDelay *= 2
 	now := s.clock.Now()
 	if now > s.failureDelayEnd {
 		s.failureDelay *= math.Pow(2, -float64(now-s.failureDelayEnd)/float64(maxFailureDelay))
 	}
-	if s.failureDelay < float64(minFailureDelay) {
-		s.failureDelay = float64(minFailureDelay)
-	}
+	s.failureDelay = max(min(s.failureDelay*2, float64(maxFailureDelay)), float64(minFailureDelay))
 	s.failureDelayEnd = now + mclock.AbsTime(s.failureDelay)
 	s.delay(time.Duration(s.failureDelay))
 }

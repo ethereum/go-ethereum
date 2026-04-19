@@ -47,7 +47,7 @@ type nodeLoc struct {
 }
 
 // string returns the string representation of node location.
-func (loc *nodeLoc) string() string {
+func (loc nodeLoc) string() string {
 	return fmt.Sprintf("loc: %s, depth: %d", loc.loc, loc.depth)
 }
 
@@ -177,7 +177,7 @@ func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 	return &reader{
 		db:          db,
 		state:       root,
-		noHashCheck: db.isVerkle,
+		noHashCheck: db.isUBT,
 		layer:       layer,
 	}, nil
 }
@@ -349,7 +349,7 @@ func (db *Database) HistoricNodeReader(root common.Hash) (*HistoricalNodeReader,
 	// are not accessible.
 	meta, err := readTrienodeMetadata(db.trienodeFreezer, *id+1)
 	if err != nil {
-		return nil, err // e.g., the referred trienode history has been pruned
+		return nil, fmt.Errorf("state %#x is not available", root) // e.g., the referred trienode history has been pruned
 	}
 	if meta.parent != root {
 		return nil, fmt.Errorf("state %#x is not canonincal", root)

@@ -90,8 +90,18 @@ func SerializeNode(node BinaryNode) []byte {
 
 var invalidSerializedLength = errors.New("invalid serialized node length")
 
-// DeserializeNode deserializes a binary trie node from a byte slice.
+// DeserializeNode deserializes a binary trie node from a byte slice. The
+// hash will be recomputed from the deserialized data.
 func DeserializeNode(serialized []byte, depth int) (BinaryNode, error) {
+	return deserializeNode(serialized, depth, common.Hash{}, true, true)
+}
+
+// DeserializeNodeWithHash deserializes a binary trie node from a byte slice, using the provided hash.
+func DeserializeNodeWithHash(serialized []byte, depth int, hn common.Hash) (BinaryNode, error) {
+	return deserializeNode(serialized, depth, hn, false, false)
+}
+
+func deserializeNode(serialized []byte, depth int, hn common.Hash, mustRecompute, dirty bool) (BinaryNode, error) {
 	if len(serialized) == 0 {
 		return Empty{}, nil
 	}
@@ -102,9 +112,12 @@ func DeserializeNode(serialized []byte, depth int) (BinaryNode, error) {
 			return nil, invalidSerializedLength
 		}
 		return &InternalNode{
-			depth: depth,
-			left:  HashedNode(common.BytesToHash(serialized[1:33])),
-			right: HashedNode(common.BytesToHash(serialized[33:65])),
+			depth:         depth,
+			left:          HashedNode(common.BytesToHash(serialized[1:33])),
+			right:         HashedNode(common.BytesToHash(serialized[33:65])),
+			hash:          hn,
+			mustRecompute: mustRecompute,
+			dirty:         dirty,
 		}, nil
 	case nodeTypeStem:
 		if len(serialized) < 64 {
@@ -124,9 +137,12 @@ func DeserializeNode(serialized []byte, depth int) (BinaryNode, error) {
 			}
 		}
 		return &StemNode{
-			Stem:   serialized[NodeTypeBytes : NodeTypeBytes+StemSize],
-			Values: values[:],
-			depth:  depth,
+			Stem:          serialized[NodeTypeBytes : NodeTypeBytes+StemSize],
+			Values:        values[:],
+			depth:         depth,
+			hash:          hn,
+			mustRecompute: mustRecompute,
+			dirty:         dirty,
 		}, nil
 	default:
 		return nil, errors.New("invalid node type")

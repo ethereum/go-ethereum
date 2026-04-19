@@ -220,3 +220,45 @@ func TestEmptyGetHeight(t *testing.T) {
 		t.Errorf("Expected height 0 for empty node, got %d", height)
 	}
 }
+
+// TestEmptyInsertMarksDirty verifies that a StemNode produced by Empty.Insert
+// is marked dirty. Without this, CollectNodes would skip the freshly created
+// stem and its blob would never reach disk, producing "missing trie node"
+// errors on subsequent reads.
+func TestEmptyInsertMarksDirty(t *testing.T) {
+	key := make([]byte, 32)
+	key[0] = 0xaa
+	val := make([]byte, 32)
+	val[0] = 0xbb
+	n, err := Empty{}.Insert(key, val, nil, 0)
+	if err != nil {
+		t.Fatalf("Insert: %v", err)
+	}
+	sn, ok := n.(*StemNode)
+	if !ok {
+		t.Fatalf("expected *StemNode, got %T", n)
+	}
+	if !sn.dirty {
+		t.Fatalf("stem produced by Empty.Insert must have dirty=true")
+	}
+}
+
+// TestEmptyInsertValuesAtStemMarksDirty is the analogous guard for the
+// bulk-insert entry point. Fresh stems created here must be dirty.
+func TestEmptyInsertValuesAtStemMarksDirty(t *testing.T) {
+	key := make([]byte, 32)
+	key[0] = 0xcc
+	values := make([][]byte, 256)
+	values[0] = make([]byte, 32)
+	n, err := Empty{}.InsertValuesAtStem(key, values, nil, 3)
+	if err != nil {
+		t.Fatalf("InsertValuesAtStem: %v", err)
+	}
+	sn, ok := n.(*StemNode)
+	if !ok {
+		t.Fatalf("expected *StemNode, got %T", n)
+	}
+	if !sn.dirty {
+		t.Fatalf("stem produced by Empty.InsertValuesAtStem must have dirty=true")
+	}
+}

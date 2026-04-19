@@ -143,7 +143,7 @@ type testerConfig struct {
 	layers       int    // Number of state transitions to generate for
 	enableIndex  bool   // Enable state history indexing or not
 	journalDir   string // Directory path for persisting journal files
-	isVerkle     bool   // Enables Verkle trie mode if true
+	isUBT        bool   // Enables Verkle trie mode if true
 
 	writeBuffer *int // Optional, the size of memory allocated for write buffer
 	trieCache   *int // Optional, the size of memory allocated for trie cache
@@ -182,7 +182,8 @@ func newTester(t *testing.T, config *testerConfig) *tester {
 			WriteBufferSize:     config.writeBufferSize(),
 			NoAsyncFlush:        true,
 			JournalDirectory:    config.journalDir,
-		}, config.isVerkle)
+			NoHistoryIndexDelay: true,
+		}, config.isUBT)
 
 		obj = &tester{
 			db:           db,
@@ -986,7 +987,7 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 			t.Fatalf("Unexpected state history found, %d", i)
 		}
 	}
-	remain, err := env.db.IndexProgress()
+	remain, _, err := env.db.IndexProgress()
 	if err != nil {
 		t.Fatalf("Failed to obtain the progress, %v", err)
 	}
@@ -1000,7 +1001,7 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 			panic(fmt.Errorf("failed to update state changes, err: %w", err))
 		}
 	}
-	remain, err = env.db.IndexProgress()
+	remain, _, err = env.db.IndexProgress()
 	if err != nil {
 		t.Fatalf("Failed to obtain the progress, %v", err)
 	}

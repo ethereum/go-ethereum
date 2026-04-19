@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
@@ -81,7 +82,7 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 	if header == nil {
 		return state.Dump{}, fmt.Errorf("block #%d not found", blockNr)
 	}
-	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
+	stateDb, err := api.eth.BlockChain().StateAt(header)
 	if err != nil {
 		return state.Dump{}, err
 	}
@@ -166,7 +167,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 			if header == nil {
 				return state.Dump{}, fmt.Errorf("block #%d not found", number)
 			}
-			stateDb, err = api.eth.BlockChain().StateAt(header.Root)
+			stateDb, err = api.eth.BlockChain().StateAt(header)
 			if err != nil {
 				return state.Dump{}, err
 			}
@@ -176,7 +177,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 		if block == nil {
 			return state.Dump{}, fmt.Errorf("block %s not found", hash.Hex())
 		}
-		stateDb, err = api.eth.BlockChain().StateAt(block.Root())
+		stateDb, err = api.eth.BlockChain().StateAt(block.Header())
 		if err != nil {
 			return state.Dump{}, err
 		}
@@ -221,7 +222,7 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 	if block == nil {
 		return StorageRangeResult{}, fmt.Errorf("block %v not found", blockNrOrHash)
 	}
-	_, _, statedb, release, err := api.eth.stateAtTransaction(ctx, block, txIndex, 0)
+	_, _, statedb, release, err := api.eth.stateAtTransaction(ctx, block, txIndex)
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
@@ -235,6 +236,8 @@ func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Add
 	if storageRoot == types.EmptyRootHash || storageRoot == (common.Hash{}) {
 		return StorageRangeResult{}, nil // empty storage
 	}
+	// TODO(rjl493456442) it's problematic for traversing the state with in-memory
+	// state mutations, specifically txIndex != 0.
 	id := trie.StorageTrieID(root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
 	tr, err := trie.NewStateTrie(id, statedb.Database().TrieDB())
 	if err != nil {
@@ -493,34 +496,22 @@ func (api *DebugAPI) StateSize(blockHashOrNumber *rpc.BlockNumberOrHash) (interf
 	}, nil
 }
 
-func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumber) (*stateless.ExtWitness, error) {
+func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumberOrHash) (*stateless.ExtWitness, error) {
 	bc := api.eth.blockchain
-	block, err := api.eth.APIBackend.BlockByNumber(context.Background(), bn)
+	block, err := api.eth.APIBackend.BlockByNumberOrHash(context.Background(), bn)
 	if err != nil {
-		return &stateless.ExtWitness{}, fmt.Errorf("block number %v not found", bn)
+		return &stateless.ExtWitness{}, fmt.Errorf("block %v not found", bn)
 	}
 	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
-		return &stateless.ExtWitness{}, fmt.Errorf("block number %v found, but parent missing", bn)
+		return &stateless.ExtWitness{}, fmt.Errorf("block %v found, but parent missing", bn)
 	}
-	result, err := bc.ProcessBlock(parent.Root, block, false, true)
-	if err != nil {
-		return nil, err
+	config := core.ExecuteConfig{
+		WriteState:   false,
+		EnableTracer: false,
+		MakeWitness:  true,
 	}
-	return result.Witness().ToExtWitness(), nil
-}
-
-func (api *DebugAPI) ExecutionWitnessByHash(hash common.Hash) (*stateless.ExtWitness, error) {
-	bc := api.eth.blockchain
-	block := bc.GetBlockByHash(hash)
-	if block == nil {
-		return &stateless.ExtWitness{}, fmt.Errorf("block hash %x not found", hash)
-	}
-	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
-	if parent == nil {
-		return &stateless.ExtWitness{}, fmt.Errorf("block number %x found, but parent missing", hash)
-	}
-	result, err := bc.ProcessBlock(parent.Root, block, false, true)
+	result, err := bc.ProcessBlock(context.Background(), parent.Root, block, config)
 	if err != nil {
 		return nil, err
 	}

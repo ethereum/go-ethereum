@@ -35,7 +35,7 @@ function coverbuild {
   sed -i -e 's/TestFuzzCorpus/Test'$function'Corpus/' ./"${function,,}"_test.go
 
 cat << DOG > $OUT/$fuzzer
-#/bin/sh
+#!/bin/sh
 
   cd $OUT/$path
   go test -run Test${function}Corpus -v $tags -coverprofile \$1 -coverpkg $coverpkg

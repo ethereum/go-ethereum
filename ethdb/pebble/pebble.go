@@ -300,10 +300,14 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		// debt will be less than 1GB, but with more frequent compactions scheduled.
 		L0CompactionThreshold: 2,
 	}
+	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
+	// for more details.
+	opt.Experimental.ReadSamplingMultiplier = -1
+
 	// These two settings define the conditions under which compaction concurrency
 	// is increased. Specifically, one additional compaction job will be enabled when:
 	// - there is one more overlapping sub-level0;
-	// - there is an additional 512 MB of compaction debt;
+	// - there is an additional 256 MB of compaction debt;
 	//
 	// The maximum concurrency is still capped by MaxConcurrentCompactions, but with
 	// these settings compactions can scale up more readily.
@@ -725,6 +729,12 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 			return fmt.Errorf("unhandled operation, keytype: %v", kind)
 		}
 	}
+}
+
+// Close closes the batch and releases all associated resources. After it is
+// closed, any subsequent operations on this batch are undefined.
+func (b *batch) Close() {
+	b.b.Close()
 }
 
 // pebbleIterator is a wrapper of underlying iterator in storage engine.

@@ -1093,6 +1093,18 @@ func (b *Block) ExcessBlobGas(ctx context.Context) (*hexutil.Uint64, error) {
 	return &ret, nil
 }
 
+func (b *Block) SlotNumber(ctx context.Context) (*hexutil.Uint64, error) {
+	header, err := b.resolveHeader(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if header.SlotNumber == nil {
+		return nil, nil
+	}
+	ret := hexutil.Uint64(*header.SlotNumber)
+	return &ret, nil
+}
+
 // BlockFilterCriteria encapsulates criteria passed to a `logs` accessor inside
 // a block.
 type BlockFilterCriteria struct {
@@ -1518,6 +1530,9 @@ func (s *SyncState) TxIndexRemainingBlocks() hexutil.Uint64 {
 }
 func (s *SyncState) StateIndexRemaining() hexutil.Uint64 {
 	return hexutil.Uint64(s.progress.StateIndexRemaining)
+}
+func (s *SyncState) TrienodeIndexRemaining() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.TrienodeIndexRemaining)
 }
 
 // Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not

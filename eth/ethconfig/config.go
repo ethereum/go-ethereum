@@ -59,11 +59,11 @@ var Defaults = Config{
 	StateHistory:            pathdb.Defaults.StateHistory,
 	TrienodeHistory:         pathdb.Defaults.TrienodeHistory,
 	NodeFullValueCheckpoint: pathdb.Defaults.FullValueCheckpoint,
-	DatabaseCache:           512,
-	TrieCleanCache:          154,
-	TrieDirtyCache:          256,
+	DatabaseCache:           2048,
+	TrieCleanCache:          614,
+	TrieDirtyCache:          1024,
+	SnapshotCache:           409,
 	TrieTimeout:             60 * time.Minute,
-	SnapshotCache:           102,
 	FilterLogCacheSize:      32,
 	LogQueryLimit:           1000,
 	Miner:                   miner.DefaultConfig,
@@ -75,7 +75,7 @@ var Defaults = Config{
 	RPCTxFeeCap:             1, // 1 ether
 	TxSyncDefaultTimeout:    20 * time.Second,
 	TxSyncMaxTimeout:        1 * time.Minute,
-	SlowBlockThreshold:      time.Second * 2,
+	SlowBlockThreshold:      -1, // Disabled by default; set via --debug.logslowblock flag
 	RangeLimit:              0,
 }
 
@@ -130,8 +130,9 @@ type Config struct {
 	// presence of these blocks for every new peer connection.
 	RequiredBlocks map[uint64]common.Hash `toml:"-"`
 
-	// SlowBlockThreshold is the block execution speed threshold (Mgas/s)
-	// below which detailed statistics are logged.
+	// SlowBlockThreshold is the block execution time threshold beyond which
+	// detailed statistics are logged. Negative means disabled (default), zero
+	// logs all blocks, positive filters by execution time.
 	SlowBlockThreshold time.Duration `toml:",omitempty"`
 
 	// Database options
@@ -199,8 +200,8 @@ type Config struct {
 	// OverrideBPO2 (TODO: remove after the fork)
 	OverrideBPO2 *uint64 `toml:",omitempty"`
 
-	// OverrideVerkle (TODO: remove after the fork)
-	OverrideVerkle *uint64 `toml:",omitempty"`
+	// OverrideUBT (TODO: remove after the fork)
+	OverrideUBT *uint64 `toml:",omitempty"`
 
 	// EIP-7966: eth_sendRawTransactionSync timeouts
 	TxSyncDefaultTimeout time.Duration `toml:",omitempty"`

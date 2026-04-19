@@ -285,16 +285,16 @@ func TestVerkleGenesisCommit(t *testing.T) {
 		CancunTime:              &verkleTime,
 		PragueTime:              &verkleTime,
 		OsakaTime:               &verkleTime,
-		VerkleTime:              &verkleTime,
+		UBTTime:                 &verkleTime,
 		TerminalTotalDifficulty: big.NewInt(0),
-		EnableVerkleAtGenesis:   true,
+		EnableUBTAtGenesis:      true,
 		Ethash:                  nil,
 		Clique:                  nil,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
 			Osaka:  params.DefaultOsakaBlobConfig,
-			Verkle: params.DefaultPragueBlobConfig,
+			UBT:    params.DefaultPragueBlobConfig,
 		},
 	}
 
@@ -308,7 +308,7 @@ func TestVerkleGenesisCommit(t *testing.T) {
 		},
 	}
 
-	expected := common.FromHex("19056b480530799a4fdaa9fd9407043b965a3a5c37b4d2a1a9a4f3395a327561")
+	expected := common.FromHex("0870fd587c41dc778019de8c5cb3193fe4ef1f417976461952d3712ba39163f5")
 	got := genesis.ToBlock().Root().Bytes()
 	if !bytes.Equal(got, expected) {
 		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)
@@ -320,8 +320,8 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	config.NoAsyncFlush = true
 
 	triedb := triedb.NewDatabase(db, &triedb.Config{
-		IsVerkle: true,
-		PathDB:   &config,
+		IsUBT:  true,
+		PathDB: &config,
 	})
 	block := genesis.MustCommit(db, triedb)
 	if !bytes.Equal(block.Root().Bytes(), expected) {
@@ -329,7 +329,7 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	}
 
 	// Test that the trie is verkle
-	if !triedb.IsVerkle() {
+	if !triedb.IsUBT() {
 		t.Fatalf("expected trie to be verkle")
 	}
 	vdb := rawdb.NewTable(db, string(rawdb.VerklePrefix))

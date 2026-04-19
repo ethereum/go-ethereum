@@ -42,7 +42,7 @@ func parseIndex(blob []byte, bitmapSize int) ([]*indexBlockDesc, error) {
 	}
 	var (
 		lastID   uint32
-		descList []*indexBlockDesc
+		descList = make([]*indexBlockDesc, 0, len(blob)/size)
 	)
 	for i := 0; i < len(blob)/size; i++ {
 		var desc indexBlockDesc

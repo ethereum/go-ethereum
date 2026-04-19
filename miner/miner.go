@@ -18,6 +18,7 @@
 package miner
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"sync"
@@ -135,8 +136,8 @@ func (miner *Miner) SetGasTip(tip *big.Int) error {
 }
 
 // BuildPayload builds the payload according to the provided parameters.
-func (miner *Miner) BuildPayload(args *BuildPayloadArgs, witness bool) (*Payload, error) {
-	return miner.buildPayload(args, witness)
+func (miner *Miner) BuildPayload(ctx context.Context, args *BuildPayloadArgs, witness bool) (*Payload, error) {
+	return miner.buildPayload(ctx, args, witness)
 }
 
 // getPending retrieves the pending block based on the current head block.
@@ -156,16 +157,17 @@ func (miner *Miner) getPending() *newPayloadResult {
 	if miner.chainConfig.IsShanghai(new(big.Int).Add(header.Number, big.NewInt(1)), timestamp) {
 		withdrawal = []*types.Withdrawal{}
 	}
-	ret := miner.generateWork(&generateParams{
-		timestamp:   timestamp,
-		forceTime:   false,
-		parentHash:  header.Hash(),
-		coinbase:    miner.config.PendingFeeRecipient,
-		random:      common.Hash{},
-		withdrawals: withdrawal,
-		beaconRoot:  nil,
-		noTxs:       false,
-	}, false) // we will never make a witness for a pending block
+	ret := miner.generateWork(context.Background(),
+		&generateParams{
+			timestamp:   timestamp,
+			forceTime:   false,
+			parentHash:  header.Hash(),
+			coinbase:    miner.config.PendingFeeRecipient,
+			random:      common.Hash{},
+			withdrawals: withdrawal,
+			beaconRoot:  nil,
+			noTxs:       false,
+		}, false) // we will never make a witness for a pending block
 	if ret.err != nil {
 		return nil
 	}

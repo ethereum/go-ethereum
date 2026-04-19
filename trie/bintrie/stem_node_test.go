@@ -23,6 +23,50 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// TestStemNodeGet tests the Get method for matching stem, non-matching stem,
+// and nil-value suffix scenarios.
+func TestStemNodeGet(t *testing.T) {
+	stem := make([]byte, StemSize)
+	stem[0] = 0xAB
+	var values [StemNodeWidth][]byte
+	values[5] = common.HexToHash("0xdeadbeef").Bytes()
+
+	node := &StemNode{Stem: stem, Values: values[:], depth: 0}
+
+	// Matching stem, populated suffix → returns value.
+	key := make([]byte, HashSize)
+	copy(key[:StemSize], stem)
+	key[StemSize] = 5
+	got, err := node.Get(key, nil)
+	if err != nil {
+		t.Fatalf("Get error: %v", err)
+	}
+	if !bytes.Equal(got, values[5]) {
+		t.Fatalf("Get = %x, want %x", got, values[5])
+	}
+
+	// Matching stem, empty suffix → returns nil (slot not set).
+	key[StemSize] = 99
+	got, err = node.Get(key, nil)
+	if err != nil {
+		t.Fatalf("Get error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("Get(empty suffix) = %x, want nil", got)
+	}
+
+	// Non-matching stem → returns nil, nil.
+	otherKey := make([]byte, HashSize)
+	otherKey[0] = 0xFF
+	got, err = node.Get(otherKey, nil)
+	if err != nil {
+		t.Fatalf("Get error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("Get(wrong stem) = %x, want nil", got)
+	}
+}
+
 // TestStemNodeInsertSameStem tests inserting values with the same stem
 func TestStemNodeInsertSameStem(t *testing.T) {
 	stem := make([]byte, 31)
@@ -220,6 +264,7 @@ func TestStemNodeHash(t *testing.T) {
 
 	// Changing a value should change the hash
 	node.Values[1] = common.HexToHash("0x0202").Bytes()
+	node.mustRecompute = true
 	hash3 := node.Hash()
 	if hash1 == hash3 {
 		t.Error("Hash didn't change after modifying values")
@@ -334,6 +379,7 @@ func TestStemNodeCollectNodes(t *testing.T) {
 		Stem:   stem,
 		Values: values[:],
 		depth:  0,
+		dirty:  true,
 	}
 
 	var collectedPaths [][]byte
@@ -365,5 +411,46 @@ func TestStemNodeCollectNodes(t *testing.T) {
 	// Check the path
 	if !bytes.Equal(collectedPaths[0], []byte{0, 1, 0}) {
 		t.Errorf("Path mismatch: expected [0, 1, 0], got %v", collectedPaths[0])
+	}
+}
+
+// TestStemNodeCollectNodesSkipsClean verifies that a clean stem is not
+// flushed, and that flushing a dirty stem clears its dirty flag so that
+// a subsequent CollectNodes on the same node is a no-op.
+func TestStemNodeCollectNodesSkipsClean(t *testing.T) {
+	stem := make([]byte, 31)
+	node := &StemNode{
+		Stem:   stem,
+		Values: make([][]byte, 256),
+		depth:  0,
+	}
+
+	var collected []BinaryNode
+	flushFn := func(_ []byte, n BinaryNode) { collected = append(collected, n) }
+
+	if err := node.CollectNodes([]byte{0}, flushFn); err != nil {
+		t.Fatalf("CollectNodes on clean stem: %v", err)
+	}
+	if len(collected) != 0 {
+		t.Fatalf("expected clean stem not to be flushed, got %d", len(collected))
+	}
+
+	node.dirty = true
+	if err := node.CollectNodes([]byte{0}, flushFn); err != nil {
+		t.Fatalf("CollectNodes on dirty stem: %v", err)
+	}
+	if len(collected) != 1 {
+		t.Fatalf("expected dirty stem to be flushed once, got %d", len(collected))
+	}
+	if node.dirty {
+		t.Errorf("stem dirty flag should be cleared after flush")
+	}
+
+	collected = nil
+	if err := node.CollectNodes([]byte{0}, flushFn); err != nil {
+		t.Fatalf("CollectNodes after flush: %v", err)
+	}
+	if len(collected) != 0 {
+		t.Errorf("expected no flush on clean stem, got %d", len(collected))
 	}
 }

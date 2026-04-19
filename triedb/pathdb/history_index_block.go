@@ -65,13 +65,13 @@ func (d *indexBlockDesc) encode() []byte {
 	return buf[:]
 }
 
-// decode unpacks index block descriptor from byte stream. It's safe to mutate
+// decode unpacks index block descriptor from byte stream. It's unsafe to mutate
 // the provided byte stream after the function call.
 func (d *indexBlockDesc) decode(blob []byte) {
 	d.max = binary.BigEndian.Uint64(blob[:8])
 	d.entries = binary.BigEndian.Uint16(blob[8:10])
 	d.id = binary.BigEndian.Uint32(blob[10:14])
-	d.extBitmap = bytes.Clone(blob[indexBlockDescSize:])
+	d.extBitmap = blob[indexBlockDescSize:] // no-deep copy!
 }
 
 // copy returns a deep-copied object.

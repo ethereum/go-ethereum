@@ -490,6 +490,66 @@ func quickcfg() *quick.Config {
 	}
 }
 
+func TestSetFallbackNodes_DNSHostname(t *testing.T) {
+	// Create a node with a DNS hostname but no IP, simulating an enode URL
+	// like enode://<key>@localhost:30303.
+	key := newkey()
+	node := enode.NewV4(&key.PublicKey, nil, 30303, 30303).WithHostname("localhost")
+
+	// Verify the node has a hostname but no valid IP.
+	if node.Hostname() != "localhost" {
+		t.Fatal("expected hostname to be set")
+	}
+	if node.IPAddr().IsValid() {
+		t.Fatal("expected no IP address")
+	}
+
+	// Create a table and set the hostname node as a bootnode.
+	// This should resolve the hostname to an IP address.
+	db, _ := enode.OpenDB(t.TempDir() + "/node.db")
+	defer db.Close()
+
+	cfg := Config{Log: testlog.Logger(t, log.LvlTrace)}
+	cfg = cfg.withDefaults()
+	tab := &Table{
+		cfg:             cfg,
+		log:             cfg.Log,
+		refreshReq:      make(chan chan struct{}),
+		revalResponseCh: make(chan revalidationResponse),
+		addNodeCh:       make(chan addNodeOp),
+		addNodeHandled:  make(chan bool),
+		trackRequestCh:  make(chan trackRequestOp),
+		initDone:        make(chan struct{}),
+		closeReq:        make(chan struct{}),
+		closed:          make(chan struct{}),
+		ips:             netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit},
+	}
+	for i := range tab.buckets {
+		tab.buckets[i] = &bucket{
+			index: i,
+			ips:   netutil.DistinctNetSet{Subnet: bucketSubnet, Limit: bucketIPLimit},
+		}
+	}
+
+	err := tab.setFallbackNodes([]*enode.Node{node})
+	if err != nil {
+		t.Fatalf("setFallbackNodes failed: %v", err)
+	}
+	if len(tab.nursery) != 1 {
+		t.Fatalf("expected 1 nursery node, got %d", len(tab.nursery))
+	}
+
+	// The resolved node should have a valid IP and retain the hostname.
+	resolved := tab.nursery[0]
+	if !resolved.IPAddr().IsValid() {
+		t.Fatal("expected resolved node to have a valid IP")
+	}
+	if resolved.Hostname() != "localhost" {
+		t.Errorf("expected hostname to be preserved, got %q", resolved.Hostname())
+	}
+	t.Logf("resolved localhost to %v", resolved.IPAddr())
+}
+
 func newkey() *ecdsa.PrivateKey {
 	key, err := crypto.GenerateKey()
 	if err != nil {

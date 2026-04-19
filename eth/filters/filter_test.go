@@ -19,6 +19,7 @@ package filters
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"strings"
 	"testing"
@@ -357,7 +358,8 @@ func testFilters(t *testing.T, history uint64, noHistory bool) {
 			want: `[{"address":"0xff00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696333"],"data":"0x","blockNumber":"0x3e7","transactionHash":"0x53e3675800c6908424b61b35a44e51ca4c73ca603e58a65b32c67968b4f42200","transactionIndex":"0x0","blockHash":"0x2e4620a2b426b0612ec6cad9603f466723edaed87f98c9137405dd4f7a2409ff","blockTimestamp":"0x2706","logIndex":"0x0","removed":false}]`,
 		},
 		{
-			f: sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil, 0),
+			f:   sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil, 0),
+			err: errInvalidBlockRange.Error(),
 		},
 		{
 			f:   sys.NewRangeFilter(int64(rpc.SafeBlockNumber), int64(rpc.LatestBlockNumber), nil, nil, 0),
@@ -633,7 +635,19 @@ func TestRangeLimit(t *testing.T) {
 	// Set rangeLimit to 5, but request a range of 9 (end - begin = 9, from 0 to 9)
 	filter := sys.NewRangeFilter(0, 9, nil, nil, 5)
 	_, err = filter.Logs(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "exceed maximum block range") {
-		t.Fatalf("expected range limit error, got %v", err)
+	if err == nil {
+		t.Fatal("expected range limit error, got nil")
+	}
+
+	var re rpc.Error
+	if errors.As(err, &re) {
+		if re.ErrorCode() != -32602 {
+			t.Fatalf("expected error code -32602, got %d", re.ErrorCode())
+		}
+		if re.Error() != "exceed maximum block range 5" {
+			t.Fatalf("expected error message 'exceed maximum block range 5', got %q", re.Error())
+		}
+	} else {
+		t.Fatalf("expected rpc error, got %v", err)
 	}
 }

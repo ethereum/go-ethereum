@@ -28,6 +28,7 @@ import (
 // Constants to match up protocol versions and messages
 const (
 	SNAP1 = 1
+	//SNAP2 = 2
 )
 
 // ProtocolName is the official short name of the `snap` protocol used during
@@ -40,7 +41,7 @@ var ProtocolVersions = []uint{SNAP1}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{SNAP1: 8}
+var protocolLengths = map[uint]uint64{ /*SNAP2: 10,*/ SNAP1: 8}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
@@ -54,6 +55,8 @@ const (
 	ByteCodesMsg        = 0x05
 	GetTrieNodesMsg     = 0x06
 	TrieNodesMsg        = 0x07
+	GetAccessListsMsg   = 0x08
+	AccessListsMsg      = 0x09
 )
 
 var (
@@ -76,6 +79,12 @@ type GetAccountRangePacket struct {
 	Origin common.Hash // Hash of the first account to retrieve
 	Limit  common.Hash // Hash of the last account to retrieve
 	Bytes  uint64      // Soft limit at which to stop returning data
+}
+
+type accountRangeInput struct {
+	ID       uint64                    // ID of the request this is a response for
+	Accounts rlp.RawList[*AccountData] // List of consecutive accounts from the trie
+	Proof    rlp.RawList[[]byte]       // List of trie nodes proving the account range
 }
 
 // AccountRangePacket represents an account query response.
@@ -123,6 +132,12 @@ type GetStorageRangesPacket struct {
 	Bytes    uint64        // Soft limit at which to stop returning data
 }
 
+type storageRangesInput struct {
+	ID    uint64                      // ID of the request this is a response for
+	Slots rlp.RawList[[]*StorageData] // Lists of consecutive storage slots for the requested accounts
+	Proof rlp.RawList[[]byte]         // Merkle proofs for the *last* slot range, if it's incomplete
+}
+
 // StorageRangesPacket represents a storage slot query response.
 type StorageRangesPacket struct {
 	ID    uint64           // ID of the request this is a response for
@@ -161,6 +176,11 @@ type GetByteCodesPacket struct {
 	Bytes  uint64        // Soft limit at which to stop returning data
 }
 
+type byteCodesInput struct {
+	ID    uint64              // ID of the request this is a response for
+	Codes rlp.RawList[[]byte] // Requested contract bytecodes
+}
+
 // ByteCodesPacket represents a contract bytecode query response.
 type ByteCodesPacket struct {
 	ID    uint64   // ID of the request this is a response for
@@ -169,10 +189,10 @@ type ByteCodesPacket struct {
 
 // GetTrieNodesPacket represents a state trie node query.
 type GetTrieNodesPacket struct {
-	ID    uint64            // Request ID to match up responses with
-	Root  common.Hash       // Root hash of the account trie to serve
-	Paths []TrieNodePathSet // Trie node hashes to retrieve the nodes for
-	Bytes uint64            // Soft limit at which to stop returning data
+	ID    uint64                       // Request ID to match up responses with
+	Root  common.Hash                  // Root hash of the account trie to serve
+	Paths rlp.RawList[TrieNodePathSet] // Trie node hashes to retrieve the nodes for
+	Bytes uint64                       // Soft limit at which to stop returning data
 }
 
 // TrieNodePathSet is a list of trie node paths to retrieve. A naive way to
@@ -187,10 +207,30 @@ type GetTrieNodesPacket struct {
 // that a slot is accessed before the account path is fully expanded.
 type TrieNodePathSet [][]byte
 
+type trieNodesInput struct {
+	ID    uint64              // ID of the request this is a response for
+	Nodes rlp.RawList[[]byte] // Requested state trie nodes
+}
+
 // TrieNodesPacket represents a state trie node query response.
 type TrieNodesPacket struct {
 	ID    uint64   // ID of the request this is a response for
 	Nodes [][]byte // Requested state trie nodes
+}
+
+// GetAccessListsPacket requests BALs for a set of block hashes.
+type GetAccessListsPacket struct {
+	ID     uint64        // Request ID to match up responses with
+	Hashes []common.Hash // Block hashes to retrieve BALs for
+	Bytes  uint64        // Soft limit at which to stop returning data
+}
+
+// AccessListsPacket is the response to GetAccessListsPacket.
+// Each entry corresponds to the requested hash at the same index.
+// Empty entries indicate the BAL is unavailable.
+type AccessListsPacket struct {
+	ID          uint64                    // ID of the request this is a response for
+	AccessLists rlp.RawList[rlp.RawValue] // Requested BALs
 }
 
 func (*GetAccountRangePacket) Name() string { return "GetAccountRange" }
@@ -216,3 +256,9 @@ func (*GetTrieNodesPacket) Kind() byte   { return GetTrieNodesMsg }
 
 func (*TrieNodesPacket) Name() string { return "TrieNodes" }
 func (*TrieNodesPacket) Kind() byte   { return TrieNodesMsg }
+
+func (*GetAccessListsPacket) Name() string { return "GetAccessLists" }
+func (*GetAccessListsPacket) Kind() byte   { return GetAccessListsMsg }
+
+func (*AccessListsPacket) Name() string { return "AccessLists" }
+func (*AccessListsPacket) Kind() byte   { return AccessListsMsg }

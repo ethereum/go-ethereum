@@ -143,7 +143,7 @@ func NewBinaryTrie(root common.Hash, db database.NodeDatabase) (*BinaryTrie, err
 		if err != nil {
 			return nil, err
 		}
-		node, err := DeserializeNode(blob, 0)
+		node, err := DeserializeNodeWithHash(blob, 0, root)
 		if err != nil {
 			return nil, err
 		}
@@ -191,7 +191,7 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	case *InternalNode:
 		values, err = r.GetValuesAtStem(key[:StemSize], t.nodeResolver)
 	case *StemNode:
-		values = r.Values
+		values, err = r.GetValuesAtStem(key[:StemSize], t.nodeResolver)
 	case Empty:
 		return nil, nil
 	default:
@@ -216,10 +216,12 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 		return nil, nil
 	}
 
-	// If the account has been deleted, then values[10] will be 0 and not nil. If it has
-	// been recreated after that, then its code keccak will NOT be 0. So return `nil` if
-	// the nonce, and values[10], and code keccak is 0.
-	if bytes.Equal(values[BasicDataLeafKey], zero[:]) && len(values) > 10 && len(values[10]) > 0 && bytes.Equal(values[CodeHashLeafKey], zero[:]) {
+	// If the account has been deleted, BasicData and CodeHash will both be
+	// 32-byte zero blobs (not nil). If the account is recreated afterwards,
+	// UpdateAccount overwrites BasicData and CodeHash with non-zero values,
+	// so this branch won't activate..
+	if bytes.Equal(values[BasicDataLeafKey], zero[:]) &&
+		bytes.Equal(values[CodeHashLeafKey], zero[:]) {
 		return nil, nil
 	}
 
@@ -236,7 +238,7 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 // not be modified by the caller. If a node was not found in the database, a
 // trie.MissingNodeError is returned.
 func (t *BinaryTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
-	return t.root.Get(GetBinaryTreeKey(addr, key), t.nodeResolver)
+	return t.root.Get(GetBinaryTreeKeyStorageSlot(addr, key), t.nodeResolver)
 }
 
 // UpdateAccount updates the account information for the given address.
@@ -294,15 +296,29 @@ func (t *BinaryTrie) UpdateStorage(address common.Address, key, value []byte) er
 	return nil
 }
 
-// DeleteAccount is a no-op as it is disabled in stateless.
+// DeleteAccount erases an account by overwriting the account
+// descriptors with 0s.
 func (t *BinaryTrie) DeleteAccount(addr common.Address) error {
+	var (
+		values = make([][]byte, StemNodeWidth)
+		stem   = GetBinaryTreeKey(addr, zero[:])
+	)
+	// Clear BasicData (nonce, balance, code size) and CodeHash.
+	values[BasicDataLeafKey] = zero[:]
+	values[CodeHashLeafKey] = zero[:]
+
+	root, err := t.root.InsertValuesAtStem(stem, values, t.nodeResolver, 0)
+	if err != nil {
+		return fmt.Errorf("DeleteAccount (%x) error: %v", addr, err)
+	}
+	t.root = root
 	return nil
 }
 
 // DeleteStorage removes any existing value for key from the trie. If a node was not
 // found in the database, a trie.MissingNodeError is returned.
 func (t *BinaryTrie) DeleteStorage(addr common.Address, key []byte) error {
-	k := GetBinaryTreeKey(addr, key)
+	k := GetBinaryTreeKeyStorageSlot(addr, key)
 	var zero [HashSize]byte
 	root, err := t.root.Insert(k, zero[:], t.nodeResolver, 0)
 	if err != nil {
@@ -361,8 +377,8 @@ func (t *BinaryTrie) Copy() *BinaryTrie {
 	}
 }
 
-// IsVerkle returns true if the trie is a Verkle tree.
-func (t *BinaryTrie) IsVerkle() bool {
+// IsUBT returns true if the trie is a Verkle tree.
+func (t *BinaryTrie) IsUBT() bool {
 	// TODO @gballet This is technically NOT a verkle tree, but it has the same
 	// behavior and basic structure, so for all intents and purposes, it can be
 	// treated as such. Rename this when verkle gets removed.
@@ -384,7 +400,7 @@ func (t *BinaryTrie) UpdateContractCode(addr common.Address, codeHash common.Has
 		if groupOffset == 0 /* start of new group */ || chunknr == 0 /* first chunk in header group */ {
 			values = make([][]byte, StemNodeWidth)
 			var offset [HashSize]byte
-			binary.LittleEndian.PutUint64(offset[24:], chunknr+128)
+			binary.BigEndian.PutUint64(offset[24:], chunknr+128)
 			key = GetBinaryTreeKey(addr, offset[:])
 		}
 		values[groupOffset] = chunks[i : i+HashSize]
@@ -424,5 +440,5 @@ func (t *BinaryTrie) PrefetchStorage(addr common.Address, keys [][]byte) error {
 
 // Witness returns a set containing all trie nodes that have been accessed.
 func (t *BinaryTrie) Witness() map[string][]byte {
-	panic("not implemented")
+	return t.tracer.Values()
 }

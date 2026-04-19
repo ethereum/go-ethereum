@@ -284,11 +284,8 @@ func newTrienodeReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader, r
 }
 
 // readTrienode retrieves the trienode data from the specified trienode history.
-func (r *trienodeReader) readTrienode(addrHash common.Hash, path string, historyID uint64) ([]byte, error) {
-	tr, err := newTrienodeHistoryReader(historyID, r.freezer)
-	if err != nil {
-		return nil, err
-	}
+func (r *trienodeReader) readTrienode(addrHash common.Hash, path string, historyID uint64) ([]byte, bool, error) {
+	tr := newTrienodeHistoryReader(historyID, r.freezer)
 	return tr.read(addrHash, path)
 }
 
@@ -355,15 +352,19 @@ func (r *trienodeReader) readOptimized(state stateIdent, it HistoryIndexIterator
 		seq += 1
 
 		eg.Go(func() error {
+			data, found, err := r.readTrienode(state.addressHash, state.path, id)
+			if err != nil {
+				term.Store(true)
+				return err
+			}
 			// In optimistic readahead mode, it is theoretically possible to encounter a
 			// NotFound error, where the trie node does not actually exist and the iterator
 			// reports a false-positive mutation record. Terminate the iterator if so, as
 			// all the necessary data (checkpoints and all diffs) required has already been
 			// fetching.
-			data, err := r.readTrienode(state.addressHash, state.path, id)
-			if err != nil {
+			if !found {
 				term.Store(true)
-				log.Debug("Failed to read the trienode", "err", err)
+				log.Debug("Failed to read the trienode")
 				return nil
 			}
 			full, _, err := decodeNodeFull(data)

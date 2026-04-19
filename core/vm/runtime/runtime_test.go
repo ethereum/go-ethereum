@@ -65,6 +65,21 @@ func TestDefaults(t *testing.T) {
 	if cfg.BlockNumber == nil {
 		t.Error("expected block number to be non nil")
 	}
+	if cfg.Random == nil {
+		t.Error("expected Random to be non nil")
+	}
+}
+
+func TestDefaultsPreserveRandom(t *testing.T) {
+	h := common.HexToHash("0x01")
+	cfg := &Config{Random: &h}
+	setDefaults(cfg)
+	if cfg.Random == nil {
+		t.Fatal("expected Random to remain non-nil")
+	}
+	if *cfg.Random != h {
+		t.Fatalf("expected Random to be preserved, got %x, want %x", *cfg.Random, h)
+	}
 }
 
 func TestEVM(t *testing.T) {
