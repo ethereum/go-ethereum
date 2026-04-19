@@ -17,6 +17,8 @@
 package bintrie
 
 import (
+	"crypto/sha256"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -58,36 +60,36 @@ func (sn *StemNode) Hash() common.Hash {
 		return sn.hash
 	}
 
+	// Use sha256.Sum256 (returns [32]byte by value) instead of a pooled
+	// hash.Hash: feeding data[i][:0] into the interface method Sum forces
+	// data to heap (escape analysis is conservative through interfaces).
+	// Sum256 takes []byte and returns by value, so data stays on stack.
 	var data [StemNodeWidth]common.Hash
-	h := newSha256()
-	defer returnSha256(h)
 
 	for i, v := range sn.values {
 		if v != nil {
-			h.Reset()
-			h.Write(v)
-			h.Sum(data[i][:0])
+			data[i] = sha256.Sum256(v)
 		}
 	}
 
+	var pair [2 * HashSize]byte
 	for level := 1; level <= 8; level++ {
 		for i := range StemNodeWidth / (1 << level) {
 			if data[i*2] == (common.Hash{}) && data[i*2+1] == (common.Hash{}) {
 				data[i] = common.Hash{}
 				continue
 			}
-			h.Reset()
-			h.Write(data[i*2][:])
-			h.Write(data[i*2+1][:])
-			data[i] = common.Hash(h.Sum(nil))
+			copy(pair[:HashSize], data[i*2][:])
+			copy(pair[HashSize:], data[i*2+1][:])
+			data[i] = sha256.Sum256(pair[:])
 		}
 	}
 
-	h.Reset()
-	h.Write(sn.Stem[:])
-	h.Write([]byte{0})
-	h.Write(data[0][:])
-	sn.hash = common.BytesToHash(h.Sum(nil))
+	var final [StemSize + 1 + HashSize]byte
+	copy(final[:StemSize], sn.Stem[:])
+	final[StemSize] = 0
+	copy(final[StemSize+1:], data[0][:])
+	sn.hash = sha256.Sum256(final[:])
 	sn.mustRecompute = false
 	return sn.hash
 }
