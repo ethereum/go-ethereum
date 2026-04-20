@@ -19,7 +19,7 @@ func (obj *BlockAccessList) EncodeRLP(_w io.Writer) error {
 			_tmp7 := w.List()
 			for _, _tmp8 := range _tmp5.Accesses {
 				_tmp9 := w.List()
-				w.WriteUint64(_tmp8.TxIdx)
+				w.WriteUint64(uint64(_tmp8.TxIdx))
 				w.WriteBytes(_tmp8.ValueAfter[:])
 				w.ListEnd(_tmp9)
 			}
@@ -35,7 +35,7 @@ func (obj *BlockAccessList) EncodeRLP(_w io.Writer) error {
 		_tmp12 := w.List()
 		for _, _tmp13 := range _tmp2.BalanceChanges {
 			_tmp14 := w.List()
-			w.WriteUint64(_tmp13.TxIdx)
+			w.WriteUint64(uint64(_tmp13.TxIdx))
 			w.WriteBytes(_tmp13.Balance[:])
 			w.ListEnd(_tmp14)
 		}
@@ -43,7 +43,7 @@ func (obj *BlockAccessList) EncodeRLP(_w io.Writer) error {
 		_tmp15 := w.List()
 		for _, _tmp16 := range _tmp2.NonceChanges {
 			_tmp17 := w.List()
-			w.WriteUint64(_tmp16.TxIdx)
+			w.WriteUint64(uint64(_tmp16.TxIdx))
 			w.WriteUint64(_tmp16.Nonce)
 			w.ListEnd(_tmp17)
 		}
@@ -51,7 +51,7 @@ func (obj *BlockAccessList) EncodeRLP(_w io.Writer) error {
 		_tmp18 := w.List()
 		for _, _tmp19 := range _tmp2.CodeChanges {
 			_tmp20 := w.List()
-			w.WriteUint64(_tmp19.TxIndex)
+			w.WriteUint64(uint64(_tmp19.TxIndex))
 			w.WriteBytes(_tmp19.Code)
 			w.ListEnd(_tmp20)
 		}
@@ -115,7 +115,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 									return err
 								}
 								// TxIdx:
-								_tmp9, err := dec.Uint64()
+								_tmp9, err := dec.Uint32()
 								if err != nil {
 									return err
 								}
@@ -174,7 +174,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 							return err
 						}
 						// TxIdx:
-						_tmp15, err := dec.Uint64()
+						_tmp15, err := dec.Uint32()
 						if err != nil {
 							return err
 						}
@@ -207,7 +207,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 							return err
 						}
 						// TxIdx:
-						_tmp19, err := dec.Uint64()
+						_tmp19, err := dec.Uint32()
 						if err != nil {
 							return err
 						}
@@ -240,7 +240,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 							return err
 						}
 						// TxIndex:
-						_tmp23, err := dec.Uint64()
+						_tmp23, err := dec.Uint32()
 						if err != nil {
 							return err
 						}

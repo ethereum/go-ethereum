@@ -86,19 +86,19 @@ func encodeBalance(val *uint256.Int) [16]byte {
 
 // encodingBalanceChange is the encoding format of BalanceChange.
 type encodingBalanceChange struct {
-	TxIdx   uint64   `ssz-size:"8"`
+	TxIdx   uint32   `ssz-size:"4"`
 	Balance [16]byte `ssz-size:"16"`
 }
 
 // encodingAccountNonce is the encoding format of NonceChange.
 type encodingAccountNonce struct {
-	TxIdx uint64 `ssz-size:"8"`
+	TxIdx uint32 `ssz-size:"4"`
 	Nonce uint64 `ssz-size:"8"`
 }
 
 // encodingStorageWrite is the encoding format of StorageWrites.
 type encodingStorageWrite struct {
-	TxIdx      uint64
+	TxIdx      uint32
 	ValueAfter [32]byte `ssz-size:"32"`
 }
 
@@ -112,7 +112,7 @@ type encodingSlotWrites struct {
 // working representation.
 func (e *encodingSlotWrites) validate() error {
 	if slices.IsSortedFunc(e.Accesses, func(a, b encodingStorageWrite) int {
-		return cmp.Compare[uint64](a.TxIdx, b.TxIdx)
+		return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
 	}) {
 		return nil
 	}
@@ -122,7 +122,7 @@ func (e *encodingSlotWrites) validate() error {
 // encodingCodeChange contains the runtime bytecode deployed at an address
 // and the transaction index where the deployment took place.
 type encodingCodeChange struct {
-	TxIndex uint64 `ssz-size:"8"`
+	TxIndex uint32 `ssz-size:"4"`
 	Code    []byte `ssz-max:"300000"` // TODO(rjl493456442) shall we put the limit here? The limit will be increased gradually
 }
 
@@ -161,21 +161,21 @@ func (e *AccountAccess) validate() error {
 
 	// Check the balance changes are sorted in order
 	if !slices.IsSortedFunc(e.BalanceChanges, func(a, b encodingBalanceChange) int {
-		return cmp.Compare[uint64](a.TxIdx, b.TxIdx)
+		return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
 	}) {
 		return errors.New("balance changes not in ascending order by tx index")
 	}
 
 	// Check the nonce changes are sorted in order
 	if !slices.IsSortedFunc(e.NonceChanges, func(a, b encodingAccountNonce) int {
-		return cmp.Compare[uint64](a.TxIdx, b.TxIdx)
+		return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
 	}) {
 		return errors.New("nonce changes not in ascending order by tx index")
 	}
 
 	// Check the code changes are sorted in order
 	if !slices.IsSortedFunc(e.CodeChanges, func(a, b encodingCodeChange) int {
-		return cmp.Compare[uint64](a.TxIndex, b.TxIndex)
+		return cmp.Compare[uint32](a.TxIndex, b.TxIndex)
 	}) {
 		return errors.New("code changes not in ascending order by tx index")
 	}
@@ -244,7 +244,7 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 		obj.Accesses = make([]encodingStorageWrite, 0, len(slotWrites))
 
 		indices := slices.Collect(maps.Keys(slotWrites))
-		slices.SortFunc(indices, cmp.Compare[uint64])
+		slices.SortFunc(indices, cmp.Compare[uint32])
 		for _, index := range indices {
 			obj.Accesses = append(obj.Accesses, encodingStorageWrite{
 				TxIdx:      index,
@@ -263,7 +263,7 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 
 	// Convert balance changes
 	balanceIndices := slices.Collect(maps.Keys(a.BalanceChanges))
-	slices.SortFunc(balanceIndices, cmp.Compare[uint64])
+	slices.SortFunc(balanceIndices, cmp.Compare[uint32])
 	for _, idx := range balanceIndices {
 		res.BalanceChanges = append(res.BalanceChanges, encodingBalanceChange{
 			TxIdx:   idx,
@@ -273,7 +273,7 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 
 	// Convert nonce changes
 	nonceIndices := slices.Collect(maps.Keys(a.NonceChanges))
-	slices.SortFunc(nonceIndices, cmp.Compare[uint64])
+	slices.SortFunc(nonceIndices, cmp.Compare[uint32])
 	for _, idx := range nonceIndices {
 		res.NonceChanges = append(res.NonceChanges, encodingAccountNonce{
 			TxIdx: idx,
@@ -283,7 +283,7 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 
 	// Convert code change
 	codeIndices := slices.Collect(maps.Keys(a.CodeChange))
-	slices.SortFunc(codeIndices, cmp.Compare[uint64])
+	slices.SortFunc(codeIndices, cmp.Compare[uint32])
 	for _, idx := range codeIndices {
 		res.CodeChanges = append(res.CodeChanges, encodingCodeChange{
 			TxIndex: idx,
