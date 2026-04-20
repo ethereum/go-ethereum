@@ -236,6 +236,20 @@ and expects an empty TALKRESP response.`)
 	}
 }
 
+// TestFindnodeWrongIP establishes a session on one IP, then sends FINDNODE from a
+// different IP and expects the remote node to restart the handshake with WHOAREYOU.
+//
+// Why it exists:
+// This test checks that discv5 sessions are tied to the UDP endpoint, not just the peer
+// identity. Reusing a previously established session from a different source IP/port
+// should fail decryption/authentication and trigger a fresh challenge instead of
+// producing a valid NODES response. It extends the existing wrong-IP coverage from PING
+// to FINDNODE.
+//
+// Relevant spec:
+// The discv5 session model binds handshake state and session secrets to a specific UDP
+// endpoint. When a peer switches endpoints, recipients should refuse to decrypt messages
+// from the new endpoint and answer with WHOAREYOU so the session is re-established.
 func (s *Suite) TestFindnodeWrongIP(t *utesting.T) {
 	t.Log(`This test establishes a session on one IP, then sends FINDNODE from another IP.
 The remote node should challenge the second endpoint with WHOAREYOU instead of returning NODES.`)
@@ -260,6 +274,21 @@ The remote node should challenge the second endpoint with WHOAREYOU instead of r
 	}
 }
 
+// TestFindnodeHandshake sends FINDNODE without an existing session and verifies
+// that the remote node answers only after the WHOAREYOU handshake completes.
+//
+// Why it exists:
+// This test makes FINDNODE's handshake gating explicit. Without an existing session, the
+// recipient should not answer the initial request directly with NODES. It must first send
+// WHOAREYOU, require the requester to resend the same FINDNODE as a handshake packet, and
+// only then return the response. The test also checks that the challenge nonce matches the
+// original request and that the eventual NODES reply carries the right request ID.
+//
+// Relevant spec:
+// In discv5, when the recipient has no valid session or cannot decrypt/authenticate an
+// incoming request, it must respond with WHOAREYOU. The requester then resends the same
+// request as a handshake packet, and only after the handshake succeeds should the
+// recipient answer the request.
 func (s *Suite) TestFindnodeHandshake(t *utesting.T) {
 	t.Log(`This test checks that the remote answers a FINDNODE request only after completing the WHOAREYOU handshake.`)
 
@@ -320,6 +349,21 @@ func (s *Suite) TestFindnodeZeroDistance(t *utesting.T) {
 	}
 }
 
+// TestUnsolicitedNodes sends an unsolicited authenticated NODES packet and checks
+// that the advertised node is neither contacted nor returned by later FINDNODE queries.
+//
+// Why it exists:
+// This test checks that a peer cannot inject arbitrary ENRs into the remote node's view
+// of the network by sending unsolicited NODES. Even when the packet is authenticated and
+// well-formed, accepting it as useful routing data would allow table pollution. The test
+// therefore looks for two concrete bad outcomes: the remote node contacting the injected
+// fake node, or the fake node later appearing in FINDNODE results.
+//
+// Relevant spec:
+// In discv5, NODES is defined as the response to FINDNODE or TOPICQUERY, not as a
+// free-standing advertisement. Handling of NODES is therefore request/response-oriented,
+// keyed to an earlier query and request ID. Ignoring unsolicited NODES is the hygiene
+// behavior implied by that response model.
 func (s *Suite) TestUnsolicitedNodes(t *utesting.T) {
 	t.Log(`This test sends an unsolicited NODES response advertising a fake node.
 The remote node should neither contact the injected node nor return it from later FINDNODE queries.`)
