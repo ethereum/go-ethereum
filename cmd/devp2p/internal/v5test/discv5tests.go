@@ -259,30 +259,44 @@ The remote node should challenge the second endpoint with WHOAREYOU instead of r
 }
 
 func (s *Suite) TestFindnodeHandshake(t *utesting.T) {
+	t.Log(`This test checks that the remote answers a FINDNODE request only after completing the WHOAREYOU handshake.`)
+
 	conn, l1 := s.listen1(t)
 	defer conn.close()
 
 	req := &v5wire.Findnode{ReqID: conn.nextReqID(), Distances: []uint{0}}
 	nonce := conn.write(l1, req, nil)
 
-	challenge, ok := conn.read(l1).(*v5wire.Whoareyou)
+	resp, from := conn.readFrom(l1)
+	challenge, ok := resp.(*v5wire.Whoareyou)
 	if !ok {
-		t.Fatal("expected WHOAREYOU before NODES")
+		t.Fatalf("expected WHOAREYOU before NODES, got %T (%v) from %v", resp, resp, from)
 	}
 	if challenge.Nonce != nonce {
 		t.Fatalf("wrong nonce %x in WHOAREYOU (want %x)", challenge.Nonce[:], nonce[:])
 	}
 
 	challenge.Node = conn.remote
-	conn.write(l1, req, challenge)
+	conn.writeTo(l1, req, challenge, from)
 
-	resp := conn.read(l1)
-	nodes, ok := resp.(*v5wire.Nodes)
-	if !ok {
-		t.Fatal("expected NODES after completing handshake, got", resp)
-	}
-	if !bytes.Equal(nodes.ReqID, req.ReqID) {
-		t.Fatalf("wrong request ID %x in NODES, want %x", nodes.ReqID, req.ReqID)
+	for {
+		resp, from := conn.readFrom(l1)
+		switch resp := resp.(type) {
+		case *v5wire.Ping:
+			conn.writeTo(l1, &v5wire.Pong{
+				ReqID:  resp.ReqID,
+				ENRSeq: conn.localNode.Seq(),
+				ToIP:   from.IP,
+				ToPort: uint16(from.Port),
+			}, nil, from)
+		case *v5wire.Nodes:
+			if !bytes.Equal(resp.ReqID, req.ReqID) {
+				t.Fatalf("wrong request ID %x in NODES, want %x", resp.ReqID, req.ReqID)
+			}
+			return
+		default:
+			t.Fatalf("expected NODES after completing handshake, got %T (%v) from %v", resp, resp, from)
+		}
 	}
 }
 
