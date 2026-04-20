@@ -221,7 +221,7 @@ func (w *indentWriter) Write(b []byte) (n int, err error) {
 // flush ensures the current line is terminated.
 func (w *indentWriter) flush() {
 	if w.inLine {
-		fmt.Println(w.out)
+		fmt.Fprintln(w.out)
 		w.inLine = false
 	}
 }
