@@ -55,6 +55,7 @@ func (s *Suite) AllTests() []utesting.Test {
 		{Name: "HandshakeResend", Fn: s.TestHandshakeResend},
 		{Name: "TalkRequest", Fn: s.TestTalkRequest},
 		{Name: "FindnodeWrongIP", Fn: s.TestFindnodeWrongIP},
+		{Name: "FindnodeHandshake", Fn: s.TestFindnodeHandshake},
 		{Name: "FindnodeZeroDistance", Fn: s.TestFindnodeZeroDistance},
 		{Name: "FindnodeResults", Fn: s.TestFindnodeResults},
 	}
@@ -254,6 +255,34 @@ The remote node should challenge the second endpoint with WHOAREYOU instead of r
 		t.Fatalf("unexpected NODES response on wrong IP: %+v", resp)
 	default:
 		t.Fatal("expected WHOAREYOU, got", resp)
+	}
+}
+
+func (s *Suite) TestFindnodeHandshake(t *utesting.T) {
+	conn, l1 := s.listen1(t)
+	defer conn.close()
+
+	req := &v5wire.Findnode{ReqID: conn.nextReqID(), Distances: []uint{0}}
+	nonce := conn.write(l1, req, nil)
+
+	challenge, ok := conn.read(l1).(*v5wire.Whoareyou)
+	if !ok {
+		t.Fatal("expected WHOAREYOU before NODES")
+	}
+	if challenge.Nonce != nonce {
+		t.Fatalf("wrong nonce %x in WHOAREYOU (want %x)", challenge.Nonce[:], nonce[:])
+	}
+
+	challenge.Node = conn.remote
+	conn.write(l1, req, challenge)
+
+	resp := conn.read(l1)
+	nodes, ok := resp.(*v5wire.Nodes)
+	if !ok {
+		t.Fatal("expected NODES after completing handshake, got", resp)
+	}
+	if !bytes.Equal(nodes.ReqID, req.ReqID) {
+		t.Fatalf("wrong request ID %x in NODES, want %x", nodes.ReqID, req.ReqID)
 	}
 }
 
