@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
@@ -58,6 +59,7 @@ func (s *Suite) AllTests() []utesting.Test {
 		{Name: "FindnodeHandshake", Fn: s.TestFindnodeHandshake},
 		{Name: "FindnodeZeroDistance", Fn: s.TestFindnodeZeroDistance},
 		{Name: "FindnodeResults", Fn: s.TestFindnodeResults},
+		{Name: "UnsolicitedNodes", Fn: s.TestUnsolicitedNodes},
 	}
 }
 
@@ -315,6 +317,38 @@ func (s *Suite) TestFindnodeZeroDistance(t *utesting.T) {
 	}
 	if nodes[0].ID() != conn.remote.ID() {
 		t.Errorf("ID of response node is %v, want %v", nodes[0].ID(), conn.remote.ID())
+	}
+}
+
+func (s *Suite) TestUnsolicitedNodes(t *utesting.T) {
+	conn, l1 := s.listen1(t)
+	defer conn.close()
+
+	// Establish session so the unsolicited packet is well-formed and authenticated.
+	ping := &v5wire.Ping{ReqID: conn.nextReqID()}
+	if resp := conn.reqresp(l1, ping); resp.Kind() != v5wire.PongMsg {
+		t.Fatal("expected PONG, got", resp)
+	}
+
+	fakeConn, fakeL := s.listen1(t)
+	defer fakeConn.close()
+	fakeConn.setEndpoint(fakeL)
+
+	unsolicited := &v5wire.Nodes{
+		ReqID:     conn.nextReqID(),
+		RespCount: 1,
+		Nodes:     []*enr.Record{fakeConn.localNode.Node().Record()},
+	}
+	conn.write(l1, unsolicited, nil)
+
+	results, err := conn.findnode(l1, []uint{uint(enode.LogDist(fakeConn.localNode.ID(), s.Dest.ID()))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range results {
+		if n.ID() == fakeConn.localNode.ID() {
+			t.Fatal("FINDNODE result contains node from unsolicited NODES response")
+		}
 	}
 }
 
