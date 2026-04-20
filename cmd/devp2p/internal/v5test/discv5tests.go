@@ -54,6 +54,7 @@ func (s *Suite) AllTests() []utesting.Test {
 		{Name: "PingMultiIP", Fn: s.TestPingMultiIP},
 		{Name: "HandshakeResend", Fn: s.TestHandshakeResend},
 		{Name: "TalkRequest", Fn: s.TestTalkRequest},
+		{Name: "FindnodeWrongIP", Fn: s.TestFindnodeWrongIP},
 		{Name: "FindnodeZeroDistance", Fn: s.TestFindnodeZeroDistance},
 		{Name: "FindnodeResults", Fn: s.TestFindnodeResults},
 	}
@@ -229,6 +230,30 @@ and expects an empty TALKRESP response.`)
 		}
 	default:
 		t.Fatal("expected TALKRESP, got", resp.Name())
+	}
+}
+
+func (s *Suite) TestFindnodeWrongIP(t *utesting.T) {
+	t.Log(`This test establishes a session on one IP, then sends FINDNODE from another IP.
+The remote node should challenge the second endpoint with WHOAREYOU instead of returning NODES.`)
+
+	conn, l1, l2 := s.listen2(t)
+	defer conn.close()
+
+	ping := &v5wire.Ping{ReqID: conn.nextReqID()}
+	if resp := conn.reqresp(l1, ping); resp.Kind() != v5wire.PongMsg {
+		t.Fatal("expected PONG, got", resp)
+	}
+
+	req := &v5wire.Findnode{ReqID: conn.nextReqID(), Distances: []uint{0}}
+	conn.write(l2, req, nil)
+	switch resp := conn.read(l2).(type) {
+	case *v5wire.Whoareyou:
+		t.Log("got WHOAREYOU for FINDNODE on wrong IP as expected")
+	case *v5wire.Nodes:
+		t.Fatalf("unexpected NODES response on wrong IP: %+v", resp)
+	default:
+		t.Fatal("expected WHOAREYOU, got", resp)
 	}
 }
 
