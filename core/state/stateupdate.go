@@ -127,11 +127,6 @@ func NewStateUpdate(typ StorageKeyEncoding, originRoot common.Hash, root common.
 		accounts[addrHash] = nil
 		accountsOrigin[addr] = op.Origin
 
-		// If storage wiping is present, the StorageKeyEncoding MUST be hashed.
-		// Deleted storage slots are iterated from either the trie or the flat
-		// state snapshot, both of which use the storage slot hash as the identifier.
-		// Fortunately, storage wiping is no longer practical after the Cancun fork
-		// and is not expected to occur.
 		if len(op.Storages) > 0 {
 			storages[addrHash] = op.Storages
 		}

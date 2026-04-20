@@ -181,16 +181,16 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 				return nil, err
 			}
 			for storageIt.Next() {
-				key, err := storageIt.Key()
-				if err != nil {
-					// Silently ignore the storage slot without the key preimage.
-					continue
-				}
 				val := storageIt.Slot()
 				if err := storageIt.Error(); err != nil {
+					storageIt.Release()
 					return nil, err
 				}
-				account.Storage[key] = val.Hex()
+				key, err := storageIt.Key()
+				if err != nil {
+					continue
+				}
+				account.Storage[key] = common.Bytes2Hex(common.TrimLeftZeroes(val[:]))
 			}
 			storageIt.Release()
 		}
