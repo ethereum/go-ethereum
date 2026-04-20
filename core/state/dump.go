@@ -113,7 +113,7 @@ func (d iterativeDump) OnRoot(root common.Hash) {
 
 // DumpToCollector iterates the state according to the given options and inserts
 // the items into a collector for aggregation or serialization.
-func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []byte) {
+func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []byte, err error) {
 	// Sanitize the input to allow nil configs
 	if conf == nil {
 		conf = new(DumpConfig)
@@ -129,7 +129,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 
 	iteratee, err := s.db.Iteratee(s.originalRoot)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	var startHash common.Hash
 	if conf.Start != nil {
@@ -137,13 +137,19 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	}
 	acctIt, err := iteratee.NewAccountIterator(startHash)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer acctIt.Release()
 
 	for acctIt.Next() {
+		data := acctIt.Account()
+		if err := acctIt.Error(); err != nil {
+			return nil, err
+		}
+		if data == nil {
+			return nil, fmt.Errorf("unexpected nil account value")
+		}
 		var (
-			data    = acctIt.Account()
 			account = DumpAccount{
 				Balance:     data.Balance.String(),
 				Nonce:       data.Nonce,
@@ -172,15 +178,19 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 
 			storageIt, err := iteratee.NewStorageIterator(acctIt.Hash(), common.Hash{})
 			if err != nil {
-				log.Error("Failed to load storage trie", "err", err)
-				continue
+				return nil, err
 			}
 			for storageIt.Next() {
 				key, err := storageIt.Key()
 				if err != nil {
+					// Silently ignore the storage slot without the key preimage.
 					continue
 				}
-				account.Storage[key] = storageIt.Slot().String()
+				val := storageIt.Slot()
+				if err := storageIt.Error(); err != nil {
+					return nil, err
+				}
+				account.Storage[key] = val.Hex()
 			}
 			storageIt.Release()
 		}
@@ -201,7 +211,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		log.Warn("Dump incomplete due to missing preimages", "missing", missingPreimages)
 	}
 	log.Info("Trie dumping complete", "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
-	return nextKey
+	return nextKey, nil
 }
 
 // DumpBinTrieLeaves collects all binary trie leaf nodes into the provided map.
@@ -232,7 +242,8 @@ func (s *StateDB) RawDump(opts *DumpConfig) Dump {
 	dump := &Dump{
 		Accounts: make(map[string]DumpAccount),
 	}
-	dump.Next = s.DumpToCollector(dump, opts)
+	next, _ := s.DumpToCollector(dump, opts)
+	dump.Next = next
 	return *dump
 }
 
