@@ -189,6 +189,9 @@ func newFlatStorageIterator(it snapshot.StorageIterator, preimage PreimageReader
 // is exhausted or if an error occurs. Any error encountered is retained and
 // can be retrieved via Error().
 func (si *flatStorageIterator) Next() bool {
+	if si.err != nil {
+		return false
+	}
 	return si.it.Next()
 }
 
@@ -263,6 +266,9 @@ func newMerkleTrieIterator(tr Trie, start common.Hash, account bool) (*merkleIte
 // is exhausted or if an error occurs. Any error encountered is retained and
 // can be retrieved via Error().
 func (ti *merkleIterator) Next() bool {
+	if ti.err != nil {
+		return false
+	}
 	return ti.it.Next()
 }
 
