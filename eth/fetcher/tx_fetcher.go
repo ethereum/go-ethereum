@@ -180,11 +180,11 @@ type TxFetcher struct {
 	alternates map[common.Hash]map[string]struct{} // In-flight transaction alternate origins if retrieval fails
 
 	// Callbacks
-	validateMeta     func(common.Hash, byte) error            // Validate a tx metadata based on the local txpool
-	addTxs           func([]*types.Transaction) []error       // Insert a batch of transactions into local txpool
-	fetchTxs         func(string, []common.Hash) error        // Retrieves a set of txs from a remote peer
-	dropPeer         func(string)                             // Drops a peer in case of announcement violation
-	onAccepted       func(peer string, hashes []common.Hash)  // Optional: notified with accepted tx hashes per peer
+	validateMeta    func(common.Hash, byte) error                          // Validate a tx metadata based on the local txpool
+	addTxs          func([]*types.Transaction) []error                     // Insert a batch of transactions into local txpool
+	fetchTxs        func(string, []common.Hash) error                      // Retrieves a set of txs from a remote peer
+	dropPeer        func(string)                                           // Drops a peer in case of announcement violation
+	onAccepted      func(peer string, hashes []common.Hash)                // Optional: notified with accepted tx hashes per peer
 	onRequestResult func(peer string, latency time.Duration, timeout bool) // Optional: notified once per completed/timed-out tx request
 
 	step     chan struct{}    // Notification channel when the fetcher loop iterates
@@ -207,30 +207,30 @@ func NewTxFetcherForTests(
 	chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string), onAccepted func(string, []common.Hash), onRequestResult func(string, time.Duration, bool),
 	clock mclock.Clock, realTime func() time.Time, rand *mrand.Rand) *TxFetcher {
 	return &TxFetcher{
-		notify:           make(chan *txAnnounce),
-		cleanup:          make(chan *txDelivery),
-		drop:             make(chan *txDrop),
-		quit:             make(chan struct{}),
-		waitlist:         make(map[common.Hash]map[string]struct{}),
-		waittime:         make(map[common.Hash]mclock.AbsTime),
-		waitslots:        make(map[string]map[common.Hash]*txMetadataWithSeq),
-		announces:        make(map[string]map[common.Hash]*txMetadataWithSeq),
-		announced:        make(map[common.Hash]map[string]struct{}),
-		fetching:         make(map[common.Hash]string),
-		requests:         make(map[string]*txRequest),
-		alternates:       make(map[common.Hash]map[string]struct{}),
-		underpriced:      lru.NewCache[common.Hash, time.Time](maxTxUnderpricedSetSize),
-		txOnChainCache:   lru.NewCache[common.Hash, struct{}](txOnChainCacheLimit),
-		chain:            chain,
-		validateMeta:     validateMeta,
-		addTxs:           addTxs,
-		fetchTxs:         fetchTxs,
-		dropPeer:         dropPeer,
-		onAccepted:       onAccepted,
+		notify:          make(chan *txAnnounce),
+		cleanup:         make(chan *txDelivery),
+		drop:            make(chan *txDrop),
+		quit:            make(chan struct{}),
+		waitlist:        make(map[common.Hash]map[string]struct{}),
+		waittime:        make(map[common.Hash]mclock.AbsTime),
+		waitslots:       make(map[string]map[common.Hash]*txMetadataWithSeq),
+		announces:       make(map[string]map[common.Hash]*txMetadataWithSeq),
+		announced:       make(map[common.Hash]map[string]struct{}),
+		fetching:        make(map[common.Hash]string),
+		requests:        make(map[string]*txRequest),
+		alternates:      make(map[common.Hash]map[string]struct{}),
+		underpriced:     lru.NewCache[common.Hash, time.Time](maxTxUnderpricedSetSize),
+		txOnChainCache:  lru.NewCache[common.Hash, struct{}](txOnChainCacheLimit),
+		chain:           chain,
+		validateMeta:    validateMeta,
+		addTxs:          addTxs,
+		fetchTxs:        fetchTxs,
+		dropPeer:        dropPeer,
+		onAccepted:      onAccepted,
 		onRequestResult: onRequestResult,
-		clock:            clock,
-		realTime:         realTime,
-		rand:             rand,
+		clock:           clock,
+		realTime:        realTime,
+		rand:            rand,
 	}
 }
 

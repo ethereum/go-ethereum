@@ -175,12 +175,6 @@ func (c *mockConsumer) last() signal {
 	return c.signals[len(c.signals)-1]
 }
 
-func (c *mockConsumer) count() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return len(c.signals)
-}
-
 // waitStep blocks until the tracker has processed one event.
 func waitStep(t *testing.T, tr *Tracker) {
 	t.Helper()
