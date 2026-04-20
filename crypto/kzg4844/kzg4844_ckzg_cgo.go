@@ -191,6 +191,7 @@ func ckzgVerifyCellProofBatch(blobs []Blob, commitments []Commitment, cellProofs
 	return nil
 }
 
+// ckzgVerifyCells verifies that the cell data corresponds to the provided commitments.
 func ckzgVerifyCells(cells []Cell, commitments []Commitment, cellProofs []Proof, cellIndices []uint64) error {
 	ckzgIniter.Do(ckzgInit)
 	var (
@@ -227,6 +228,7 @@ func ckzgVerifyCells(cells []Cell, commitments []Commitment, cellProofs []Proof,
 	return nil
 }
 
+// ckzgComputeCells computes cells from blobs.
 func ckzgComputeCells(blobs []Blob) ([]Cell, error) {
 	ckzgIniter.Do(ckzgInit)
 	cells := make([]Cell, 0, ckzg4844.CellsPerExtBlob*len(blobs))
@@ -243,6 +245,7 @@ func ckzgComputeCells(blobs []Blob) ([]Cell, error) {
 	return cells, nil
 }
 
+// ckzgRecoverBlobs recovers blobs from cells and cell indices.
 func ckzgRecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 	ckzgIniter.Do(ckzgInit)
 
