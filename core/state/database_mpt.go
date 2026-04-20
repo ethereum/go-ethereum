@@ -81,7 +81,7 @@ func (db *MPTDatabase) StateReader(stateRoot common.Hash) (StateReader, error) {
 	}
 	// Configure the trie reader, which is expected to be available as the
 	// gatekeeper unless the state is corrupted.
-	tr, err := newTrieReader(stateRoot, db.triedb)
+	tr, err := newMPTTrieReader(stateRoot, db.triedb)
 	if err != nil {
 		return nil, err
 	}
