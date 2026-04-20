@@ -195,12 +195,21 @@ func (tracker *TxTracker) loop() {
 			return nil
 		})
 
-		// Setup the writer for the upcoming transactions
-		if err := tracker.journal.setupWriter(); err != nil {
+		// Setup the writer for the upcoming transactions.
+		// Hold the mutex to avoid racing with recheck/TrackAll
+		// which also access journal.writer.
+		tracker.mu.Lock()
+		err := tracker.journal.setupWriter()
+		tracker.mu.Unlock()
+		if err != nil {
 			log.Error("Failed to setup the journal writer", "err", err)
 			return
 		}
-		defer tracker.journal.close()
+		defer func() {
+			tracker.mu.Lock()
+			tracker.journal.close()
+			tracker.mu.Unlock()
+		}()
 	}
 	var (
 		lastJournal = time.Now()
