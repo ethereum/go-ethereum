@@ -153,7 +153,7 @@ func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 //
 // mptTrieReader is safe for concurrent read.
 type mptTrieReader struct {
-	root common.Hash      // State root which uniquely represent a state
+	root common.Hash      // State root which uniquely represents a state
 	db   *triedb.Database // Database for loading trie
 
 	mainTrie Trie                           // Main trie, resolved in constructor, not thread-safe
@@ -194,7 +194,7 @@ func (r *mptTrieReader) account(addr common.Address) (*types.StateAccount, error
 
 // Account implements StateReader, retrieving the account specified by the address.
 //
-// An error will be returned if the trie state is corrupted. An nil account
+// An error will be returned if the trie state is corrupted. A nil account
 // will be returned if it's not existent in the trie.
 func (r *mptTrieReader) Account(addr common.Address) (*types.StateAccount, error) {
 	r.lock.Lock()
