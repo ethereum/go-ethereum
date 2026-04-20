@@ -26,12 +26,10 @@ func keyToPath(depth int, key []byte) ([]byte, error) {
 	if depth >= 31*8 {
 		return nil, errors.New("node too deep")
 	}
-	path := make([]byte, 0, depth+1)
-	for i := range depth + 1 {
-		bit := key[i/8] >> (7 - (i % 8)) & 1
-		path = append(path, bit)
-	}
-	return path, nil
+	keyLen := min(len(key), 31)
+	ba := new(BitArray).SetBytes(uint8(keyLen*8), key[:keyLen])
+	path := new(BitArray).MSBs(ba, uint8(depth+1))
+	return path.ActiveBytes(), nil
 }
 
 // Invariant: dirty=false implies mustRecompute=false. Every mutation that

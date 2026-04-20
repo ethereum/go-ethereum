@@ -245,28 +245,28 @@ func TestKeyToPath(t *testing.T) {
 			name:     "depth 0",
 			depth:    0,
 			key:      []byte{0x80}, // 10000000 in binary
-			expected: []byte{1},
+			expected: []byte{1},    // 1 bit packed: MSB=1 → 0x01
 			wantErr:  false,
 		},
 		{
 			name:     "depth 7",
 			depth:    7,
 			key:      []byte{0xFF}, // 11111111 in binary
-			expected: []byte{1, 1, 1, 1, 1, 1, 1, 1},
+			expected: []byte{0xFF}, // 8 bits packed into 1 byte
 			wantErr:  false,
 		},
 		{
 			name:     "depth crossing byte boundary",
 			depth:    10,
 			key:      []byte{0xFF, 0x00}, // 11111111 00000000 in binary
-			expected: []byte{1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0},
+			expected: []byte{0x07, 0xF8}, // 11 bits = 11111111000 → 0x07F8
 			wantErr:  false,
 		},
 		{
 			name:     "max valid depth",
 			depth:    StemSize*8 - 1,
 			key:      make([]byte, HashSize),
-			expected: make([]byte, StemSize*8),
+			expected: make([]byte, StemSize), // 248 bits of zeros → 31 packed bytes
 			wantErr:  false,
 		},
 		{

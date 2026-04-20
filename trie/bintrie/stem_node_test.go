@@ -313,14 +313,13 @@ func TestStemNodeCollectNodes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var collectedPaths [][]byte
-	flushFn := func(path []byte, hash common.Hash, serialized []byte) {
-		pathCopy := make([]byte, len(path))
-		copy(pathCopy, path)
-		collectedPaths = append(collectedPaths, pathCopy)
+	var collectedPaths []BitArray
+	flushFn := func(path BitArray, hash common.Hash, serialized []byte) {
+		collectedPaths = append(collectedPaths, path)
 	}
 
-	s.collectNodes(s.root, []byte{0, 1, 0}, flushFn, 8)
+	initialPath := NewBitArray(3, 0b010)
+	s.collectNodes(s.root, initialPath, flushFn, 8)
 
 	// Should have collected one node (itself)
 	if len(collectedPaths) != 1 {
@@ -328,7 +327,8 @@ func TestStemNodeCollectNodes(t *testing.T) {
 	}
 
 	// Check the path
-	if !bytes.Equal(collectedPaths[0], []byte{0, 1, 0}) {
-		t.Errorf("Path mismatch: expected [0, 1, 0], got %v", collectedPaths[0])
+	expectedPath := NewBitArray(3, 0b010)
+	if !collectedPaths[0].Equal(&expectedPath) {
+		t.Errorf("Path mismatch: expected %v, got %v", expectedPath, collectedPaths[0])
 	}
 }

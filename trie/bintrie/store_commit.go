@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-type nodeFlushFn func(path []byte, hash common.Hash, serialized []byte)
+type nodeFlushFn func(path BitArray, hash common.Hash, serialized []byte)
 
 func (s *nodeStore) Hash() common.Hash {
 	return s.computeHash(s.root)
@@ -340,7 +340,10 @@ func (s *nodeStore) decodeNode(serialized []byte, depth int, hn common.Hash, mus
 // CollectNodes flushes every node that needs flushing via flushfn in post-order.
 // Invariant: any ancestor of a node that needs flushing is itself marked, so a
 // clean root means the whole subtree is clean.
-func (s *nodeStore) collectNodes(ref nodeRef, path []byte, flushfn nodeFlushFn, groupDepth int) {
+//
+// BitArray is passed by value (33 bytes) to keep child paths on the stack.
+// Passing by pointer causes escape to heap per recursive call.
+func (s *nodeStore) collectNodes(ref nodeRef, path BitArray, flushfn nodeFlushFn, groupDepth int) {
 	switch ref.Kind() {
 	case kindInternal:
 		node := s.getInternal(ref.Index())
@@ -375,7 +378,7 @@ func (s *nodeStore) collectNodes(ref nodeRef, path []byte, flushfn nodeFlushFn, 
 // collectChildGroups traverses within a group to find and collect nodes in the next group.
 // remainingLevels is how many more levels below the current node until we reach the group boundary.
 // When remainingLevels=0, the current node's children are at the next group boundary.
-func (s *nodeStore) collectChildGroups(node *InternalNode, path []byte, flushfn nodeFlushFn, groupDepth int, remainingLevels int) error {
+func (s *nodeStore) collectChildGroups(node *InternalNode, path BitArray, flushfn nodeFlushFn, groupDepth int, remainingLevels int) error {
 	if remainingLevels == 0 {
 		// Current node is at depth (groupBoundary - 1), its children are at the next group boundary
 		if !node.left.IsEmpty() {
@@ -418,32 +421,32 @@ func (s *nodeStore) collectChildGroups(node *InternalNode, path []byte, flushfn 
 // matching the projection done by serializeSubtree. For StemNodes, the path
 // is extended using the stem's key bits (same as serializeSubtree). For other
 // node types, the path is extended with all-zero (left) bits.
-func (s *nodeStore) extendPathToGroupLeaf(path []byte, node nodeRef, remainingLevels int) []byte {
+func (s *nodeStore) extendPathToGroupLeaf(path BitArray, node nodeRef, remainingLevels int) BitArray {
 	if remainingLevels <= 0 {
 		return path
 	}
 	if node.Kind() == kindStem {
 		sn := s.getStem(node.Index())
-		for _ = range remainingLevels {
-			bit := sn.Stem[len(path)/8] >> (7 - (len(path) % 8)) & 1
+		for range remainingLevels {
+			n := path.Len()
+			bit := sn.Stem[n/8] >> (7 - (n % 8)) & 1
 			path = appendBit(path, bit)
 		}
 	} else {
 		// HashedNode or other: all-left extension (matches serializeSubtree's
 		// position << remainingDepth behavior).
-		for _ = range remainingLevels {
+		for range remainingLevels {
 			path = appendBit(path, 0)
 		}
 	}
 	return path
 }
 
-// appendBit appends a bit to a path, returning a new slice
-func appendBit(path []byte, bit byte) []byte {
-	var p [256]byte
-	copy(p[:], path)
-	result := p[:len(path)]
-	return append(result, bit)
+// appendBit returns a new BitArray with bit appended to path.
+func appendBit(path BitArray, bit uint8) BitArray {
+	var p BitArray
+	p.AppendBit(&path, bit)
+	return p
 }
 
 func (s *nodeStore) toDot(ref nodeRef, parent, path string) string {
