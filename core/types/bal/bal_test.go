@@ -40,7 +40,7 @@ func makeTestConstructionBAL() *ConstructionBlockAccessList {
 	return &ConstructionBlockAccessList{
 		map[common.Address]*ConstructionAccountAccess{
 			common.BytesToAddress([]byte{0xff, 0xff}): {
-				StorageWrites: map[common.Hash]map[uint16]common.Hash{
+				StorageWrites: map[common.Hash]map[uint64]common.Hash{
 					common.BytesToHash([]byte{0x01}): {
 						1: common.BytesToHash([]byte{1, 2, 3, 4}),
 						2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
@@ -52,20 +52,20 @@ func makeTestConstructionBAL() *ConstructionBlockAccessList {
 				StorageReads: map[common.Hash]struct{}{
 					common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7}): {},
 				},
-				BalanceChanges: map[uint16]*uint256.Int{
+				BalanceChanges: map[uint64]*uint256.Int{
 					1: uint256.NewInt(100),
 					2: uint256.NewInt(500),
 				},
-				NonceChanges: map[uint16]uint64{
+				NonceChanges: map[uint64]uint64{
 					1: 2,
 					2: 6,
 				},
-				CodeChange: map[uint16][]byte{
+				CodeChange: map[uint64][]byte{
 					0: common.Hex2Bytes("deadbeef"),
 				},
 			},
 			common.BytesToAddress([]byte{0xff, 0xff, 0xff}): {
-				StorageWrites: map[common.Hash]map[uint16]common.Hash{
+				StorageWrites: map[common.Hash]map[uint64]common.Hash{
 					common.BytesToHash([]byte{0x01}): {
 						2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
 						3: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}),
@@ -77,14 +77,14 @@ func makeTestConstructionBAL() *ConstructionBlockAccessList {
 				StorageReads: map[common.Hash]struct{}{
 					common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}): {},
 				},
-				BalanceChanges: map[uint16]*uint256.Int{
+				BalanceChanges: map[uint64]*uint256.Int{
 					2: uint256.NewInt(100),
 					3: uint256.NewInt(500),
 				},
-				NonceChanges: map[uint16]uint64{
+				NonceChanges: map[uint64]uint64{
 					1: 2,
 				},
-				CodeChange: map[uint16][]byte{
+				CodeChange: map[uint64][]byte{
 					0: common.Hex2Bytes("deadbeef"),
 				},
 			},
@@ -125,13 +125,13 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 		}
 		for j := 0; j < 3; j++ {
 			slot.Accesses = append(slot.Accesses, encodingStorageWrite{
-				TxIdx:      uint16(2 * j),
+				TxIdx:      uint64(2 * j),
 				ValueAfter: testrand.Hash(),
 			})
 		}
 		if sort {
 			slices.SortFunc(slot.Accesses, func(a, b encodingStorageWrite) int {
-				return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
+				return cmp.Compare[uint64](a.TxIdx, b.TxIdx)
 			})
 		}
 		storageWrites = append(storageWrites, slot)
@@ -153,25 +153,25 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 
 	for i := 0; i < 5; i++ {
 		balances = append(balances, encodingBalanceChange{
-			TxIdx:   uint16(2 * i),
+			TxIdx:   uint64(2 * i),
 			Balance: [16]byte(testrand.Bytes(16)),
 		})
 	}
 	if sort {
 		slices.SortFunc(balances, func(a, b encodingBalanceChange) int {
-			return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
+			return cmp.Compare[uint64](a.TxIdx, b.TxIdx)
 		})
 	}
 
 	for i := 0; i < 5; i++ {
 		nonces = append(nonces, encodingAccountNonce{
-			TxIdx: uint16(2 * i),
+			TxIdx: uint64(2 * i),
 			Nonce: uint64(i + 100),
 		})
 	}
 	if sort {
 		slices.SortFunc(nonces, func(a, b encodingAccountNonce) int {
-			return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
+			return cmp.Compare[uint64](a.TxIdx, b.TxIdx)
 		})
 	}
 
@@ -187,6 +187,38 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 				Code:    testrand.Bytes(256),
 			},
 		},
+	}
+}
+
+func TestBALEncodingLargeTxIndex(t *testing.T) {
+	var buf bytes.Buffer
+	bal := NewConstructionBlockAccessList()
+	addr := common.BytesToAddress([]byte{0xaa})
+	largeIdx := uint64(1 << 16)
+	bal.StorageWrite(largeIdx, addr, common.BytesToHash([]byte{0x01}), common.BytesToHash([]byte{0x02}))
+	bal.BalanceChange(largeIdx, addr, uint256.NewInt(1))
+	bal.NonceChange(addr, largeIdx, 2)
+	bal.CodeChange(addr, largeIdx, common.Hex2Bytes("deadbeef"))
+
+	if err := bal.EncodeRLP(&buf); err != nil {
+		t.Fatalf("encoding failed: %v", err)
+	}
+	var dec BlockAccessList
+	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 0)); err != nil {
+		t.Fatalf("decoding failed: %v", err)
+	}
+	got := dec.Accesses[0]
+	if got.StorageWrites[0].Accesses[0].TxIdx != largeIdx {
+		t.Fatalf("storage write tx index mismatch: got %d want %d", got.StorageWrites[0].Accesses[0].TxIdx, largeIdx)
+	}
+	if got.BalanceChanges[0].TxIdx != largeIdx {
+		t.Fatalf("balance change tx index mismatch: got %d want %d", got.BalanceChanges[0].TxIdx, largeIdx)
+	}
+	if got.NonceChanges[0].TxIdx != largeIdx {
+		t.Fatalf("nonce change tx index mismatch: got %d want %d", got.NonceChanges[0].TxIdx, largeIdx)
+	}
+	if got.CodeChanges[0].TxIndex != largeIdx {
+		t.Fatalf("code change tx index mismatch: got %d want %d", got.CodeChanges[0].TxIndex, largeIdx)
 	}
 }
 
