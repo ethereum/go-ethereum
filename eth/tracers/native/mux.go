@@ -65,10 +65,11 @@ func newMuxTracerFromConfig(ctx *tracers.Context, cfg json.RawMessage, chainConf
 // the aggregated JSON result returned by GetResult.
 //
 // For hooks that have both a V1 and V2 form (OnCodeChange / OnCodeChangeV2,
-// OnNonceChange / OnNonceChangeV2, OnSystemCallStart / OnSystemCallStartV2),
-// the mux exposes only the V2 variant upward. The fanout then prefers each
-// child's V2 hook and falls back to V1 if only V1 is set, mirroring the
-// precedence already used in core/state_processor.go.
+// OnNonceChange / OnNonceChangeV2, OnGasChange / OnGasChangeV2,
+// OnSystemCallStart / OnSystemCallStartV2), the mux exposes only the V2
+// variant upward. The fanout then prefers each child's V2 hook and falls
+// back to V1 if only V1 is set, mirroring the precedence already used in
+// core/state_processor.go.
 func NewMuxTracer(names []string, objects []*tracers.Tracer) (*tracers.Tracer, error) {
 	t := &muxTracer{names: names, tracers: objects}
 	return &tracers.Tracer{
@@ -79,7 +80,7 @@ func NewMuxTracer(names []string, objects []*tracers.Tracer) (*tracers.Tracer, e
 			OnExit:              t.OnExit,
 			OnOpcode:            t.OnOpcode,
 			OnFault:             t.OnFault,
-			OnGasChange:         t.OnGasChange,
+			OnGasChangeV2:       t.OnGasChangeV2,
 			OnBalanceChange:     t.OnBalanceChange,
 			OnNonceChangeV2:     t.OnNonceChangeV2,
 			OnCodeChangeV2:      t.OnCodeChangeV2,
@@ -109,10 +110,12 @@ func (t *muxTracer) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.
 	}
 }
 
-func (t *muxTracer) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {
+func (t *muxTracer) OnGasChangeV2(old, new tracing.Gas, reason tracing.GasChangeReason) {
 	for _, t := range t.tracers {
-		if t.OnGasChange != nil {
-			t.OnGasChange(old, new, reason)
+		if t.OnGasChangeV2 != nil {
+			t.OnGasChangeV2(old, new, reason)
+		} else if t.OnGasChange != nil {
+			t.OnGasChange(old.Regular, new.Regular, reason)
 		}
 	}
 }

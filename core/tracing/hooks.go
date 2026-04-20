@@ -164,10 +164,34 @@ type (
 	// FaultHook is invoked when an error occurs during the execution of an opcode.
 	FaultHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, depth int, err error)
 
-	// GasChangeHook is invoked when the gas changes.
+	// GasChangeHook is invoked when the regular gas dimension changes.
+	//
+	// This hook is the single-dimensional, pre-Amsterdam gas tracing hook. It
+	// remains the canonical hook for all forks prior to Amsterdam (where gas
+	// metering is single-dimensional) and continues to fire post-Amsterdam for
+	// any change that affects the regular gas dimension. Tracers that do not
+	// need visibility into the state-access gas dimension should keep using
+	// this hook; they require no changes to work across the Amsterdam fork.
 	GasChangeHook = func(old, new uint64, reason GasChangeReason)
 
-	// TODO(sina, rjl), please add GasChangeV2Hook by landing the multi-dimensional gas
+	// GasChangeHookV2 is invoked when any gas dimension changes under the
+	// multi-dimensional gas metering introduced by EIP-8037 (Amsterdam).
+	//
+	// Compatibility:
+	//   - Post-Amsterdam: fires for changes to either the regular or the
+	//     state-access dimension. The non-changing dimension is passed through
+	//     unchanged in both `old` and `new` so consumers always observe the
+	//     complete gas vector.
+	//   - Pre-Amsterdam: the core does not emit state-gas changes and the
+	//     state dimension is always zero. Tracers that register only V2 will
+	//     still receive regular-gas changes with Gas{State: 0} and behave
+	//     identically to the V1 hook; there is no pre-Amsterdam-only code path
+	//     that V2 misses.
+	//
+	// V1 and V2 coexist: when both are registered on a tracer, only V2 hook is
+	// invoked. Tracers SHOULD register at most one of the two to avoid
+	// double-counting.
+	GasChangeHookV2 = func(old, new Gas, reason GasChangeReason)
 
 	/*
 		- Chain events -
@@ -250,13 +274,14 @@ type (
 
 type Hooks struct {
 	// VM events
-	OnTxStart   TxStartHook
-	OnTxEnd     TxEndHook
-	OnEnter     EnterHook
-	OnExit      ExitHook
-	OnOpcode    OpcodeHook
-	OnFault     FaultHook
-	OnGasChange GasChangeHook
+	OnTxStart     TxStartHook
+	OnTxEnd       TxEndHook
+	OnEnter       EnterHook
+	OnExit        ExitHook
+	OnOpcode      OpcodeHook
+	OnFault       FaultHook
+	OnGasChange   GasChangeHook
+	OnGasChangeV2 GasChangeHookV2
 	// Chain events
 	OnBlockchainInit    BlockchainInitHook
 	OnClose             CloseHook
@@ -278,6 +303,35 @@ type Hooks struct {
 	OnLog           LogHook
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
+}
+
+// HasGasHook reports whether any gas-change hook is registered. Call sites
+// should use this to short-circuit before constructing the Gas / GasBudget
+// arguments to FireGasChange when tracing is off — the dispatch is otherwise
+// always paid the cost of evaluating those args.
+func (h *Hooks) HasGasHook() bool {
+	return h != nil && (h.OnGasChangeV2 != nil || h.OnGasChange != nil)
+}
+
+// FireGasChange dispatches a gas change event to the registered hooks. If the
+// multi-dimensional OnGasChangeV2 hook is set it is invoked with the full Gas
+// vectors; otherwise the single-dimensional OnGasChange hook is invoked with
+// the regular-gas dimension only. The call is a no-op when the receiver is
+// nil, when neither hook is registered, or when the reason is GasChangeIgnored.
+//
+// Call sites SHOULD use this helper instead of invoking the hooks directly so
+// that both variants stay consistent across the Amsterdam fork boundary.
+func (h *Hooks) FireGasChange(old, new Gas, reason GasChangeReason) {
+	if h == nil || reason == GasChangeIgnored {
+		return
+	}
+	if h.OnGasChangeV2 != nil {
+		h.OnGasChangeV2(old, new, reason)
+		return
+	}
+	if h.OnGasChange != nil {
+		h.OnGasChange(old.Regular, new.Regular, reason)
+	}
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful
@@ -334,6 +388,19 @@ const (
 	// It is only emitted when the tracer has opted in to use the journaling wrapper (WrapWithJournal).
 	BalanceChangeRevert BalanceChangeReason = 15
 )
+
+// Gas represents a multi-dimensional gas budget introduced by EIP-8037.
+// It carries the regular execution gas and the state-access gas, which are
+// metered independently from the Amsterdam fork onwards.
+//
+// Before Amsterdam, gas metering is single-dimensional and only the Regular
+// field is meaningful; State is always zero. The struct is shaped so that
+// pre-Amsterdam call sites can populate it as Gas{Regular: g} without loss
+// of fidelity relative to the legacy single-uint64 hook.
+type Gas struct {
+	Regular uint64 // Regular is the budget for ordinary execution gas.
+	State   uint64 // State is the budget dedicated to state-access gas (zero pre-Amsterdam).
+}
 
 // GasChangeReason is used to indicate the reason for a gas change, useful
 // for tracing and reporting.
