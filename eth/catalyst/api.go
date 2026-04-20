@@ -325,8 +325,13 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 		// generating the payload. It's a special corner case that a few slots are
 		// missing and we are requested to generate the payload in slot.
 	} else {
-		// If the head block is already in our canonical chain, the beacon client is
-		// probably resyncing. Ignore the update.
+		// In EPBs we can reorg to a parent of the head within 32 blocks.
+		// Allow this once the client is synced.
+		if api.eth.Synced() && api.eth.BlockChain().CurrentBlock().Number.Uint64()-block.NumberU64() < 32 {
+			if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
+				return engine.ForkChoiceResponse{PayloadStatus: engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &latestValid}}, err
+			}
+		}
 		log.Info("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().Number)
 		return valid(nil), nil
 	}
