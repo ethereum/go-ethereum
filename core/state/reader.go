@@ -246,7 +246,7 @@ func (r *mptTrieReader) Storage(addr common.Address, key common.Hash) (common.Ha
 //
 // ubtTrieReader is safe for concurrent read.
 type ubtTrieReader struct {
-	root common.Hash      // State root which uniquely represent a state
+	root common.Hash      // State root which uniquely represents a state
 	db   *triedb.Database // Database for loading trie
 	tr   Trie             // Referenced unified binary trie
 	lock sync.Mutex       // Lock for protecting concurrent read
@@ -297,7 +297,7 @@ func newUBTTrieReader(root common.Hash, db *triedb.Database) (*ubtTrieReader, er
 
 // Account implements StateReader, retrieving the account specified by the address.
 //
-// An error will be returned if the trie state is corrupted. An nil account
+// An error will be returned if the trie state is corrupted. A nil account
 // will be returned if it's not existent in the trie.
 func (r *ubtTrieReader) Account(addr common.Address) (*types.StateAccount, error) {
 	r.lock.Lock()
