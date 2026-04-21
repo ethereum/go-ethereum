@@ -237,6 +237,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV4(ctx context.Context, update engine.
 func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes, payloadVersion engine.PayloadVersion, payloadWitness bool) (result engine.ForkChoiceResponse, err error) {
 	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.forkchoiceUpdated")
 	defer spanEnd(&err)
+
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()
 
