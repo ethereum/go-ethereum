@@ -598,10 +598,14 @@ func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int3
 
 // totalFees computes total consumed miner fees in Wei. Block transactions and receipts have to have the same order.
 func totalFees(block *types.Block, receipts []*types.Receipt) *big.Int {
+	baseFee := block.BaseFee()
 	feesWei := new(big.Int)
+	var gasUsed, product big.Int
 	for i, tx := range block.Transactions() {
-		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
-		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
+		minerFee, _ := tx.EffectiveGasTip(baseFee)
+		gasUsed.SetUint64(receipts[i].GasUsed)
+		product.Mul(&gasUsed, minerFee)
+		feesWei.Add(feesWei, &product)
 	}
 	return feesWei
 }
