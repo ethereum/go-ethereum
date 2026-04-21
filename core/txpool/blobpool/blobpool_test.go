@@ -2227,32 +2227,31 @@ func TestGetCells(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cells, err := pool.GetCells(tt.hash, tt.mask)
-
-			if err != nil && !tt.shouldFail {
-				t.Errorf("expected to success, got %v", err)
+			vhashes := pool.GetBlobHashes(tt.hash)
+			if tt.shouldFail {
+				if vhashes != nil {
+					t.Errorf("expected nil vhashes for non-existent tx")
+				}
+				return
 			}
-			if err == nil && tt.shouldFail {
-				t.Errorf("expected to fail, got %v", err)
+			if vhashes == nil {
+				t.Fatalf("expected vhashes, got nil")
 			}
-
-			if len(cells) != tt.expectedLen {
-				t.Errorf("expected %d cells, got %d", tt.expectedLen, len(cells))
+			blobCells, _, err := pool.GetBlobCells(vhashes, tt.mask)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
-
-			if tt.expectedLen > 0 && tt.expectedLen%3 == 0 {
-				blobCount := 3
-				cellsPerBlob := tt.expectedLen / blobCount
-
-				for blobIdx := 0; blobIdx < blobCount; blobIdx++ {
-					startIdx := blobIdx * cellsPerBlob
-					endIdx := startIdx + cellsPerBlob
-
-					if endIdx > len(cells) {
-						t.Errorf("blob %d: expected cells up to index %d, but only have %d cells",
-							blobIdx, endIdx-1, len(cells))
+			// Count total non-nil cells across all blobs
+			totalCells := 0
+			for _, bc := range blobCells {
+				for _, c := range bc {
+					if c != nil {
+						totalCells++
 					}
 				}
+			}
+			if totalCells != tt.expectedLen {
+				t.Errorf("expected %d cells, got %d", tt.expectedLen, totalCells)
 			}
 		})
 	}

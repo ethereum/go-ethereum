@@ -623,14 +623,39 @@ func answerGetCells(backend Backend, query GetCellsRequest) ([]common.Hash, [][]
 		if cellCounts >= maxCells {
 			break
 		}
-		cell, _ := backend.BlobPool().GetCells(hash, query.Mask)
-		if len(cell) == 0 {
-			// skip this tx
+		// Look up the blob versioned hashes for this transaction
+		vhashes := backend.BlobPool().GetBlobHashes(hash)
+		if len(vhashes) == 0 {
+			continue
+		}
+		blobCells, _, _ := backend.BlobPool().GetBlobCells(vhashes, query.Mask)
+
+		// Flatten per-blob cells into a single slice. If any blob has a nil
+		// entry (unavailable cell), skip the entire transaction.
+		var flat []kzg4844.Cell
+		skip := false
+		for _, bc := range blobCells {
+			if bc == nil {
+				skip = true
+				break
+			}
+			for _, c := range bc {
+				if c == nil {
+					skip = true
+					break
+				}
+				flat = append(flat, *c)
+			}
+			if skip {
+				break
+			}
+		}
+		if skip || len(flat) == 0 {
 			continue
 		}
 		hashes = append(hashes, hash)
-		cells = append(cells, cell)
-		cellCounts += len(cell)
+		cells = append(cells, flat)
+		cellCounts += len(flat)
 	}
 	return hashes, cells, query.Mask
 }

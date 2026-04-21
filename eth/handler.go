@@ -103,7 +103,8 @@ type txPool interface {
 // support cell-based blob data availability.
 type blobPool interface {
 	Has(hash common.Hash) bool
-	GetCells(hash common.Hash, mask types.CustodyBitmap) ([]kzg4844.Cell, error)
+	GetBlobHashes(hash common.Hash) []common.Hash
+	GetBlobCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*kzg4844.Cell, [][]*kzg4844.Proof, error)
 	HasPayload(hash common.Hash) bool
 	GetCustody(hash common.Hash) *types.CustodyBitmap
 	AddPooledTx(pooledTx *blobpool.PooledBlobTx) error

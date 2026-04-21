@@ -1671,6 +1671,17 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 	return blobs, commitments, proofs, nil
 }
 
+// GetBlobHashes returns the blob versioned hashes for a given transaction hash.
+func (p *BlobPool) GetBlobHashes(txHash common.Hash) []common.Hash {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+	vhashes, ok := p.lookup.blobHashesOfTx(txHash)
+	if !ok {
+		return nil
+	}
+	return vhashes
+}
+
 // GetBlobCells returns cells for the given versioned blob hashes,
 // filtered by the requested cell indices(mask).
 // Each entry in the result corresponds to one vhash. Nil entries mean the blob
@@ -2435,39 +2446,4 @@ func (p *BlobPool) GetCustody(hash common.Hash) *types.CustodyBitmap {
 		return &meta.custody
 	}
 	return nil
-}
-
-// GetCells returns the cells matching the given custody bitmap for a transaction.
-func (p *BlobPool) GetCells(hash common.Hash, mask types.CustodyBitmap) ([]kzg4844.Cell, error) {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-	id, ok := p.lookup.storeidOfTx(hash)
-	if !ok {
-		return nil, errors.New("requested cells don't exist")
-	}
-	data, err := p.store.Get(id)
-	if err != nil {
-		return nil, errors.New("tracked blob transaction missing from store")
-	}
-	// Decode the blob transaction
-	var pooledTx PooledBlobTx
-	if err := rlp.DecodeBytes(data, &pooledTx); err != nil {
-		return nil, errors.New("blobs corrupted for traced transaction")
-	}
-	tx := pooledTx.Transaction
-	sidecar := pooledTx.Sidecar
-	// Return cells in blob-major order: [blob0_cell0, blob0_cell1, ..., blob1_cell0, ...]
-	cellsPerBlob := sidecar.Custody.OneCount()
-	cells := make([]kzg4844.Cell, 0, mask.OneCount()*len(tx.BlobHashes()))
-	for blobIdx := 0; blobIdx < len(tx.BlobHashes()); blobIdx++ {
-		for cellIdx, custodyIdx := range sidecar.Custody.Indices() {
-			if mask.IsSet(custodyIdx) {
-				cells = append(cells, sidecar.Cells[blobIdx*cellsPerBlob+cellIdx])
-			}
-		}
-	}
-	if len(cells) != mask.OneCount()*len(tx.BlobHashes()) {
-		return nil, fmt.Errorf("not enough cells: tx %s, needed %d, have %d", tx.Hash(), len(tx.BlobHashes())*mask.OneCount(), len(cells))
-	}
-	return cells, nil
 }

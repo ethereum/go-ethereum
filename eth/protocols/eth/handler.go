@@ -89,8 +89,10 @@ type Backend interface {
 
 // BlobPool defines the methods needed by the protocol handler to serve cell requests.
 type BlobPool interface {
-	// GetCells retrieves cells for a given transaction hash filtered by the custody bitmap.
-	GetCells(hash common.Hash, mask types.CustodyBitmap) ([]kzg4844.Cell, error)
+	// GetBlobHashes returns the blob versioned hashes for a given transaction hash.
+	GetBlobHashes(hash common.Hash) []common.Hash
+	// GetBlobCells retrieves cells and proofs for given versioned blob hashes filtered by the custody bitmap.
+	GetBlobCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*kzg4844.Cell, [][]*kzg4844.Proof, error)
 	// GetCustody returns the custody bitmap for a given transaction hash.
 	GetCustody(hash common.Hash) *types.CustodyBitmap
 	// Has returns whether the blob pool contains a transaction with the given hash.

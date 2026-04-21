@@ -26,6 +26,7 @@ type txMetadata struct {
 	size            uint64 // the RLP encoded size of transaction (blobs are included)
 	sizeWithoutBlob uint64 // the RLP encoded size without blob data (for ETH/72 announcements)
 	custody         types.CustodyBitmap
+	vhashes         []common.Hash // blob versioned hashes for the transaction
 }
 
 // lookup maps blob versioned hashes to transaction hashes that include them,
@@ -57,6 +58,15 @@ func (l *lookup) storeidOfTx(txhash common.Hash) (uint64, bool) {
 		return 0, false
 	}
 	return meta.id, true
+}
+
+// blobHashesOfTx returns the blob versioned hashes for a transaction.
+func (l *lookup) blobHashesOfTx(txhash common.Hash) ([]common.Hash, bool) {
+	meta, ok := l.txIndex[txhash]
+	if !ok {
+		return nil, false
+	}
+	return meta.vhashes, true
 }
 
 // storeidOfBlob returns the datastore storage item id of a blob.
@@ -98,6 +108,7 @@ func (l *lookup) track(tx *blobTxMeta) {
 		size:            tx.size,
 		sizeWithoutBlob: tx.sizeWithoutBlob,
 		custody:         *tx.custody,
+		vhashes:         tx.vhashes,
 	}
 }
 

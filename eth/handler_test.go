@@ -17,7 +17,6 @@
 package eth
 
 import (
-	"errors"
 	"maps"
 	"math/big"
 	"math/rand"
@@ -181,28 +180,59 @@ func (p *testTxPool) Pending(filter txpool.PendingFilter) (map[common.Address][]
 func (p *testTxPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
 	return p.txFeed.Subscribe(ch)
 }
-func (p *testTxPool) GetCells(hash common.Hash, mask types.CustodyBitmap) ([]kzg4844.Cell, error) {
+func (p *testTxPool) GetBlobHashes(hash common.Hash) []common.Hash {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	_, exists := p.txPool[hash]
+	tx, exists := p.txPool[hash]
 	if !exists {
-		return nil, errors.New("Requested tx does not exist")
+		return nil
 	}
+	return tx.BlobHashes()
+}
 
-	var cells []kzg4844.Cell
+func (p *testTxPool) GetBlobCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*kzg4844.Cell, [][]*kzg4844.Proof, error) {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
 
-	if cells, exists = p.cellPool[hash]; !exists {
-		return nil, errors.New("Requested cells do not exist")
-	}
+	requestedIndices := mask.Indices()
+	cells := make([][]*kzg4844.Cell, len(vhashes))
+	proofs := make([][]*kzg4844.Proof, len(vhashes))
 
-	result := make([]kzg4844.Cell, 0, mask.OneCount())
-	for _, idx := range mask.Indices() {
-		if int(idx) < len(cells) {
-			result = append(result, cells[idx])
+	for i, vhash := range vhashes {
+		// Find the tx containing this versioned hash
+		var foundTx *types.Transaction
+		var blobIdx int
+		for _, tx := range p.txPool {
+			for j, bh := range tx.BlobHashes() {
+				if bh == vhash {
+					foundTx = tx
+					blobIdx = j
+					break
+				}
+			}
+			if foundTx != nil {
+				break
+			}
 		}
+		if foundTx == nil {
+			continue
+		}
+		txCells, ok := p.cellPool[foundTx.Hash()]
+		if !ok {
+			continue
+		}
+		_ = blobIdx // cells in the mock are stored flat by cell index
+		blobCells := make([]*kzg4844.Cell, len(requestedIndices))
+		for j, idx := range requestedIndices {
+			if int(idx) < len(txCells) {
+				cell := txCells[idx]
+				blobCells[j] = &cell
+			}
+		}
+		cells[i] = blobCells
 	}
-	return result, nil
+	return cells, proofs, nil
 }
 
 func (p *testTxPool) GetCustody(hash common.Hash) *types.CustodyBitmap {
