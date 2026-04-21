@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
 )
 
@@ -226,21 +225,10 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 		reqHash := types.CalcRequestsHash(requests)
 		work.header.RequestsHash = &reqHash
 	}
-	// Finalize the state transition by applying operations such as withdrawals,
-	// uncle rewards, and related processing.
-	_, _, finalizeSpanEnd := telemetry.StartSpan(ctx, "miner.Finalize")
-	miner.engine.Finalize(miner.chain, work.header, work.state, &body)
-	finalizeSpanEnd(nil)
-
-	// Calculate the state root after applying all mutations.
-	_, _, rootSpanEnd := telemetry.StartSpan(ctx, "miner.IntermediateRoot")
-	work.header.Root = work.state.IntermediateRoot(miner.chain.Config().IsEIP158(work.header.Number))
-	rootSpanEnd(nil)
-
 	// Assemble the block for delivery.
-	_, _, blockSpanEnd := telemetry.StartSpan(ctx, "miner.NewBlock")
-	block := types.NewBlock(work.header, &body, work.receipts, trie.NewStackTrie(nil))
-	blockSpanEnd(nil)
+	_, _, assembleSpanEnd := telemetry.StartSpan(ctx, "miner.AssembleBlock")
+	block := core.AssembleBlock(miner.engine, miner.chain, work.header, work.state, &body, work.receipts)
+	assembleSpanEnd(nil)
 
 	return &newPayloadResult{
 		block:    block,
@@ -439,6 +427,7 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 func (miner *Miner) commitTransactions(ctx context.Context, env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
 	ctx, _, spanEnd := telemetry.StartSpan(ctx, "miner.commitTransactions")
 	defer spanEnd(nil)
+
 	isCancun := miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
 	for {
 		// Check interruption signal and abort building if it's fired.
@@ -555,6 +544,7 @@ func (miner *Miner) commitTransactions(ctx context.Context, env *environment, pl
 func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int32, env *environment) (err error) {
 	ctx, span, spanEnd := telemetry.StartSpan(ctx, "miner.fillTransactions")
 	defer spanEnd(&err)
+
 	miner.confMu.RLock()
 	tip := miner.config.GasPrice
 	prio := miner.prio
