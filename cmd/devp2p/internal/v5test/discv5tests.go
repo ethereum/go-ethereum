@@ -324,12 +324,13 @@ func (s *Suite) TestUnsolicitedNodes(t *utesting.T) {
 	t.Log(`This test sends an unsolicited NODES response advertising a fake node.
 The remote node should neither contact the injected node nor return it from later FINDNODE queries.`)
 
-	conn, l1 := s.listen1(t)
-	defer conn.close()
+	injectConn, injectL := s.listen1(t)
+	defer injectConn.close()
 
-	// Establish session so the unsolicited packet is well-formed and authenticated.
-	ping := &v5wire.Ping{ReqID: conn.nextReqID()}
-	if resp := conn.reqresp(l1, ping); resp.Kind() != v5wire.PongMsg {
+	// Establish a session for the injection path so the unsolicited packet is
+	// well-formed and authenticated.
+	ping := &v5wire.Ping{ReqID: injectConn.nextReqID()}
+	if resp := injectConn.reqresp(injectL, ping); resp.Kind() != v5wire.PongMsg {
 		t.Fatal("expected PONG, got", resp)
 	}
 
@@ -338,12 +339,12 @@ The remote node should neither contact the injected node nor return it from late
 	fakeConn.setEndpoint(fakeL)
 
 	unsolicited := &v5wire.Nodes{
-		ReqID:     conn.nextReqID(),
+		ReqID:     injectConn.nextReqID(),
 		RespCount: 1,
 		Nodes:     []*enr.Record{fakeConn.localNode.Node().Record()},
 	}
 	t.Log("sending unsolicited NODES response with injected node")
-	conn.write(l1, unsolicited, nil)
+	injectConn.write(injectL, unsolicited, nil)
 
 	checkNoContact := func(phase string) {
 		buf := make([]byte, 1280)
@@ -363,10 +364,13 @@ The remote node should neither contact the injected node nor return it from late
 	}
 	checkNoContact("after unsolicited NODES")
 
+	probeConn, probeL := s.listen1(t)
+	defer probeConn.close()
+
 	dist := uint(enode.LogDist(fakeConn.localNode.ID(), s.Dest.ID()))
 	const maxAttempts = 3
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		results, err := conn.findnode(l1, []uint{dist})
+		results, err := probeConn.findnode(probeL, []uint{dist})
 		if err != nil {
 			t.Fatal(err)
 		}
