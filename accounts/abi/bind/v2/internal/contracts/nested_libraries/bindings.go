@@ -49,6 +49,13 @@ func NewC1() *C1 {
 	return &C1{abi: *parsed}
 }
 
+// ABI returns the parsed ABI of the contract. The returned value shares
+// its internal maps (Methods, Events, Errors) with the binding, so callers
+// must not mutate it.
+func (c *C1) ABI() abi.ABI {
+	return c.abi
+}
+
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *C1) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
@@ -127,6 +134,13 @@ func NewC2() *C2 {
 	return &C2{abi: *parsed}
 }
 
+// ABI returns the parsed ABI of the contract. The returned value shares
+// its internal maps (Methods, Events, Errors) with the binding, so callers
+// must not mutate it.
+func (c *C2) ABI() abi.ABI {
+	return c.abi
+}
+
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *C2) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
@@ -201,6 +215,13 @@ func NewL1() *L1 {
 	return &L1{abi: *parsed}
 }
 
+// ABI returns the parsed ABI of the contract. The returned value shares
+// its internal maps (Methods, Events, Errors) with the binding, so callers
+// must not mutate it.
+func (c *L1) ABI() abi.ABI {
+	return c.abi
+}
+
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *L1) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
@@ -264,6 +285,13 @@ func NewL2() *L2 {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}
 	return &L2{abi: *parsed}
+}
+
+// ABI returns the parsed ABI of the contract. The returned value shares
+// its internal maps (Methods, Events, Errors) with the binding, so callers
+// must not mutate it.
+func (c *L2) ABI() abi.ABI {
+	return c.abi
 }
 
 // Instance creates a wrapper for a deployed contract instance at the given address.
@@ -331,6 +359,13 @@ func NewL2b() *L2b {
 	return &L2b{abi: *parsed}
 }
 
+// ABI returns the parsed ABI of the contract. The returned value shares
+// its internal maps (Methods, Events, Errors) with the binding, so callers
+// must not mutate it.
+func (c *L2b) ABI() abi.ABI {
+	return c.abi
+}
+
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *L2b) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
@@ -391,6 +426,13 @@ func NewL3() *L3 {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}
 	return &L3{abi: *parsed}
+}
+
+// ABI returns the parsed ABI of the contract. The returned value shares
+// its internal maps (Methods, Events, Errors) with the binding, so callers
+// must not mutate it.
+func (c *L3) ABI() abi.ABI {
+	return c.abi
 }
 
 // Instance creates a wrapper for a deployed contract instance at the given address.
@@ -459,6 +501,13 @@ func NewL4() *L4 {
 	return &L4{abi: *parsed}
 }
 
+// ABI returns the parsed ABI of the contract. The returned value shares
+// its internal maps (Methods, Events, Errors) with the binding, so callers
+// must not mutate it.
+func (c *L4) ABI() abi.ABI {
+	return c.abi
+}
+
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *L4) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
@@ -522,6 +571,13 @@ func NewL4b() *L4b {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}
 	return &L4b{abi: *parsed}
+}
+
+// ABI returns the parsed ABI of the contract. The returned value shares
+// its internal maps (Methods, Events, Errors) with the binding, so callers
+// must not mutate it.
+func (c *L4b) ABI() abi.ABI {
+	return c.abi
 }
 
 // Instance creates a wrapper for a deployed contract instance at the given address.

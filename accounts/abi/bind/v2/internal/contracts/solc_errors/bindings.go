@@ -45,6 +45,13 @@ func NewC() *C {
 	return &C{abi: *parsed}
 }
 
+// ABI returns the parsed ABI of the contract. The returned value shares
+// its internal maps (Methods, Events, Errors) with the binding, so callers
+// must not mutate it.
+func (c *C) ABI() abi.ABI {
+	return c.abi
+}
+
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *C) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
@@ -180,6 +187,13 @@ func NewC2() *C2 {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}
 	return &C2{abi: *parsed}
+}
+
+// ABI returns the parsed ABI of the contract. The returned value shares
+// its internal maps (Methods, Events, Errors) with the binding, so callers
+// must not mutate it.
+func (c *C2) ABI() abi.ABI {
+	return c.abi
 }
 
 // Instance creates a wrapper for a deployed contract instance at the given address.

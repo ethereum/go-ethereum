@@ -45,6 +45,13 @@ func NewInteractor() *Interactor {
 	return &Interactor{abi: *parsed}
 }
 
+// ABI returns the parsed ABI of the contract. The returned value shares
+// its internal maps (Methods, Events, Errors) with the binding, so callers
+// must not mutate it.
+func (c *Interactor) ABI() abi.ABI {
+	return c.abi
+}
+
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *Interactor) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
