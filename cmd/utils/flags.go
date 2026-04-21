@@ -1278,8 +1278,8 @@ func setNAT(ctx *cli.Context, cfg *p2p.Config) {
 	}
 }
 
-// SplitAndTrim splits input separated by a comma
-// and trims excessive white space from the substrings.
+// SplitAndTrim splits a comma-separated string into substrings,
+// trims surrounding whitespace, and returns only non-empty strings.
 func SplitAndTrim(input string) (ret []string) {
 	l := strings.Split(input, ",")
 	for _, r := range l {
