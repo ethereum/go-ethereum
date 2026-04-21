@@ -279,10 +279,10 @@ func (s *nodeStore) toDot(ref nodeRef, parent, path string) string {
 			ret = fmt.Sprintf("%s %s -> %s\n", ret, parent, me)
 		}
 		if !node.left.IsEmpty() {
-			ret += s.toDot(node.left, me, fmt.Sprintf("%s%02x", path, 0))
+			ret += s.toDot(node.left, me, fmt.Sprintf("%s%b", path, 0))
 		}
 		if !node.right.IsEmpty() {
-			ret += s.toDot(node.right, me, fmt.Sprintf("%s%02x", path, 1))
+			ret += s.toDot(node.right, me, fmt.Sprintf("%s%b", path, 1))
 		}
 		return ret
 	case kindStem:
