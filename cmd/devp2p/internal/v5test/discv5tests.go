@@ -345,34 +345,38 @@ The remote node should neither contact the injected node nor return it from late
 	t.Log("sending unsolicited NODES response with injected node")
 	conn.write(l1, unsolicited, nil)
 
-	const contactWindow = 500 * time.Millisecond
-	buf := make([]byte, 1280)
-	if err := fakeL.SetReadDeadline(time.Now().Add(contactWindow)); err != nil {
-		t.Fatal(err)
+	checkNoContact := func(phase string) {
+		buf := make([]byte, 1280)
+		if err := fakeL.SetReadDeadline(time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		for {
+			n, from, err := fakeL.ReadFrom(buf)
+			if err == nil {
+				t.Fatalf("%s: remote contacted injected node: %d bytes from %v", phase, n, from)
+			}
+			if netutil.IsTimeout(err) {
+				return
+			}
+			t.Fatalf("%s: checking for unexpected contact failed: %v", phase, err)
+		}
 	}
-	if n, from, err := fakeL.ReadFrom(buf); err == nil {
-		t.Fatalf("remote contacted injected node after unsolicited NODES: %d bytes from %v", n, from)
-	} else if !netutil.IsTimeout(err) {
-		t.Fatalf("waiting for unexpected contact failed: %v", err)
-	}
+	checkNoContact("after unsolicited NODES")
 
 	dist := uint(enode.LogDist(fakeConn.localNode.ID(), s.Dest.ID()))
 	const maxAttempts = 3
-	const retryInterval = 200 * time.Millisecond
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		results, err := conn.findnode(l1, []uint{dist})
 		if err != nil {
 			t.Fatal(err)
 		}
+		checkNoContact("during FINDNODE probes")
 		for _, n := range results {
 			if n.ID() == fakeConn.localNode.ID() {
 				t.Fatalf("attempt %d: FINDNODE result contains node from unsolicited NODES response", attempt)
 			}
 		}
 		t.Logf("attempt %d: injected node not returned in FINDNODE results", attempt)
-		if attempt < maxAttempts {
-			time.Sleep(retryInterval)
-		}
 	}
 }
 
