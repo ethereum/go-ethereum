@@ -228,13 +228,19 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	}
 	// Finalize the state transition by applying operations such as withdrawals,
 	// uncle rewards, and related processing.
+	_, _, finalizeSpanEnd := telemetry.StartSpan(ctx, "miner.Finalize")
 	miner.engine.Finalize(miner.chain, work.header, work.state, &body)
+	finalizeSpanEnd(nil)
 
 	// Calculate the state root after applying all mutations.
+	_, _, rootSpanEnd := telemetry.StartSpan(ctx, "miner.IntermediateRoot")
 	work.header.Root = work.state.IntermediateRoot(miner.chain.Config().IsEIP158(work.header.Number))
+	rootSpanEnd(nil)
 
 	// Assemble the block for delivery.
+	_, _, blockSpanEnd := telemetry.StartSpan(ctx, "miner.NewBlock")
 	block := types.NewBlock(work.header, &body, work.receipts, trie.NewStackTrie(nil))
+	blockSpanEnd(nil)
 
 	return &newPayloadResult{
 		block:    block,
