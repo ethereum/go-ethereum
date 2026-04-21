@@ -18,6 +18,8 @@ package kzg4844
 
 import (
 	"crypto/rand"
+	mrand "math/rand"
+	"slices"
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
@@ -254,6 +256,51 @@ func benchmarkComputeCellProofs(b *testing.B, ckzg bool) {
 	}
 }
 
+// randCellIndices picks n random unique indices from [0, CellsPerBlob) in sorted order.
+func randCellIndices(rng *mrand.Rand, n int) []uint64 {
+	perm := rng.Perm(CellsPerBlob)
+	indices := make([]uint64, n)
+	for i := 0; i < n; i++ {
+		indices[i] = uint64(perm[i])
+	}
+	slices.Sort(indices)
+	return indices
+}
+
+// randBlobAndProofs generates random blobs and precomputes their cells, proofs, and commitments.
+type randBlobAndProofs struct {
+	blobs       []Blob
+	commitments []Commitment
+	cells       []Cell // flat: blobs[i] cells at [i*CellsPerBlob : (i+1)*CellsPerBlob]
+	proofs      []Proof
+}
+
+func newBlobs(t *testing.T, blobCount int) *randBlobAndProofs {
+	d := &randBlobAndProofs{
+		blobs:       make([]Blob, blobCount),
+		commitments: make([]Commitment, blobCount),
+	}
+	for i := range blobCount {
+		d.blobs[i] = *randBlob()
+		commitment, err := BlobToCommitment(&d.blobs[i])
+		if err != nil {
+			t.Fatalf("failed to compute commitment: %v", err)
+		}
+		d.commitments[i] = commitment
+		proofs, err := ComputeCellProofs(&d.blobs[i])
+		if err != nil {
+			t.Fatalf("failed to compute cell proofs: %v", err)
+		}
+		d.proofs = append(d.proofs, proofs...)
+	}
+	cells, err := ComputeCells(d.blobs)
+	if err != nil {
+		t.Fatalf("failed to compute cells: %v", err)
+	}
+	d.cells = cells
+	return d
+}
+
 func TestCKZGVerifyPartialCells(t *testing.T)  { testVerifyPartialCells(t, true) }
 func TestGoKZGVerifyPartialCells(t *testing.T) { testVerifyPartialCells(t, false) }
 
@@ -264,48 +311,101 @@ func testVerifyPartialCells(t *testing.T, ckzg bool) {
 	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
 	useCKZG.Store(ckzg)
 
-	const blobCount = 3
-	var blobs []*Blob
-	var commitments []Commitment
-	for range blobCount {
-		blob := randBlob()
-		commitment, err := BlobToCommitment(blob)
-		if err != nil {
-			t.Fatalf("failed to commit blob: %v", err)
-		}
-		blobs = append(blobs, blob)
-		commitments = append(commitments, commitment)
-	}
-
-	var (
-		partialCells  []Cell
-		partialProofs []Proof
-		commits       []Commitment
-		indices       []uint64
+	const (
+		iterations = 50
+		blobCount  = 3
+		cellsCount = 8
 	)
+	// Precompute blobs once, vary only cell indices per iteration
+	d := newBlobs(t, blobCount)
 
-	for bi, blob := range blobs {
-		proofs, err := ComputeCellProofs(blob)
-		if err != nil {
-			t.Fatalf("failed to compute cell proofs: %v", err)
+	for iter := range iterations {
+		rng := mrand.New(mrand.NewSource(int64(iter)))
+		indices := randCellIndices(rng, cellsCount)
+
+		var partialCells []Cell
+		var partialProofs []Proof
+		for i := range blobCount {
+			for _, idx := range indices {
+				partialCells = append(partialCells, d.cells[i*CellsPerBlob+int(idx)])
+				partialProofs = append(partialProofs, d.proofs[i*CellProofsPerBlob+int(idx)])
+			}
 		}
-		cells, err := ComputeCells([]Blob{*blob})
-		if err != nil {
-			t.Fatalf("failed to compute cells: %v", err)
-		}
-		commits = append(commits, commitments[bi])
-
-		// sample 0, 31, 63, 95 cells
-		step := len(cells) / 4
-
-		indices = []uint64{0, uint64(step - 1), uint64(2*step - 1), uint64(3*step - 1)}
-		for _, idx := range indices {
-			partialCells = append(partialCells, cells[idx])
-			partialProofs = append(partialProofs, proofs[idx])
+		if err := VerifyCells(partialCells, d.commitments, partialProofs, indices); err != nil {
+			t.Fatalf("iter %d: failed to verify partial cells: %v", iter, err)
 		}
 	}
-	if err := VerifyCells(partialCells, commits, partialProofs, indices); err != nil {
-		t.Fatalf("failed to verify partial cell proofs: %v", err)
+}
+
+func TestCKZGVerifyCellsWithCorruptedCells(t *testing.T) {
+	testVerifyCellsWithCorruptedCells(t, true)
+}
+func TestGoKZGVerifyCellsWithCorruptedCells(t *testing.T) {
+	testVerifyCellsWithCorruptedCells(t, false)
+}
+
+func testVerifyCellsWithCorruptedCells(t *testing.T, ckzg bool) {
+	if ckzg && !ckzgAvailable {
+		t.Skip("CKZG unavailable in this test build")
+	}
+	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
+	useCKZG.Store(ckzg)
+
+	const blobCount = 3
+	d := newBlobs(t, blobCount)
+	indices := []uint64{0, 15, 63, 64, 95, 100, 120, 127}
+
+	var partialCells []Cell
+	var partialProofs []Proof
+	for i := range blobCount {
+		for _, idx := range indices {
+			partialCells = append(partialCells, d.cells[i*CellsPerBlob+int(idx)])
+			partialProofs = append(partialProofs, d.proofs[i*CellProofsPerBlob+int(idx)])
+		}
+	}
+	// Corrupt the first cell
+	corruptedCells := make([]Cell, len(partialCells))
+	copy(corruptedCells, partialCells)
+	corruptedCells[0][0] ^= 0xff
+
+	if err := VerifyCells(corruptedCells, d.commitments, partialProofs, indices); err == nil {
+		t.Fatal("expected verification failure with corrupted cell")
+	}
+}
+
+func TestCKZGVerifyCellsWithCorruptedProofs(t *testing.T) {
+	testVerifyCellsWithCorruptedProofs(t, true)
+}
+func TestGoKZGVerifyCellsWithCorruptedProofs(t *testing.T) {
+	testVerifyCellsWithCorruptedProofs(t, false)
+}
+
+func testVerifyCellsWithCorruptedProofs(t *testing.T, ckzg bool) {
+	if ckzg && !ckzgAvailable {
+		t.Skip("CKZG unavailable in this test build")
+	}
+	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
+	useCKZG.Store(ckzg)
+
+	const blobCount = 3
+	d := newBlobs(t, blobCount)
+	indices := []uint64{0, 15, 63, 64, 95, 100, 120, 127}
+
+	var partialCells []Cell
+	var partialProofs []Proof
+	for i := range blobCount {
+		for _, idx := range indices {
+			partialCells = append(partialCells, d.cells[i*CellsPerBlob+int(idx)])
+			partialProofs = append(partialProofs, d.proofs[i*CellProofsPerBlob+int(idx)])
+		}
+	}
+	// Swap first and last proof
+	wrongProofs := make([]Proof, len(partialProofs))
+	copy(wrongProofs, partialProofs)
+	wrongProofs[0], wrongProofs[len(wrongProofs)-1] = wrongProofs[len(wrongProofs)-1], wrongProofs[0]
+
+	if err := VerifyCells(partialCells, d.commitments, wrongProofs, indices); err == nil {
+		t.Fatal("expected verification failure with swapped proofs")
 	}
 }
 
@@ -319,53 +419,64 @@ func testRecoverBlob(t *testing.T, ckzg bool) {
 	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
 	useCKZG.Store(ckzg)
 
-	blobs := []Blob{}
-	blobs = append(blobs, *randBlob())
-	blobs = append(blobs, *randBlob())
-	blobs = append(blobs, *randBlob())
+	// Precompute blobs once, vary only cell indices per iteration
+	d := newBlobs(t, 3)
 
-	cells, err := ComputeCells(blobs)
-	if err != nil {
-		t.Fatalf("failed to compute cells: %v", err)
-	}
-	proofs := make([]Proof, 0)
-	commitments := make([]Commitment, len(blobs))
-	for i, blob := range blobs {
-		proof, err := ComputeCellProofs(&blob)
-		if err != nil {
-			t.Fatalf("failed to compute proof: %v", err)
+	for iter := range 50 {
+		rng := mrand.New(mrand.NewSource(int64(iter)))
+		numCells := DataPerBlob + rng.Intn(CellsPerBlob-DataPerBlob+1)
+		indices := randCellIndices(rng, numCells)
+
+		var partialCells []Cell
+		for bi := range 3 {
+			for _, idx := range indices {
+				partialCells = append(partialCells, d.cells[bi*CellsPerBlob+int(idx)])
+			}
 		}
-		proofs = append(proofs, proof...)
-
-		commitment, err := BlobToCommitment(&blob)
+		recovered, err := RecoverBlobs(partialCells, indices)
 		if err != nil {
-			t.Fatalf("failed to compute commitment: %v", err)
+			t.Fatalf("iter %d: failed to recover blob with %d cells: %v", iter, numCells, err)
 		}
-		commitments[i] = commitment
+		if err := VerifyCellProofs(recovered, d.commitments, d.proofs); err != nil {
+			t.Fatalf("iter %d: recovered blobs failed verification: %v", iter, err)
+		}
+		for i := range d.blobs {
+			if recovered[i] != d.blobs[i] {
+				t.Fatalf("iter %d: recovered blob %d does not match original", iter, i)
+			}
+		}
 	}
+}
 
-	var (
-		partialCells []Cell
-		indices      []uint64
-	)
+func TestCKZGRecoverBlobWithInsufficientCells(t *testing.T) {
+	testRecoverBlobWithInsufficientCells(t, true)
+}
+func TestGoKZGRecoverBlobWithInsufficientCells(t *testing.T) {
+	testRecoverBlobWithInsufficientCells(t, false)
+}
 
-	for ci := 64; ci < 128; ci++ {
-		indices = append(indices, uint64(ci))
+func testRecoverBlobWithInsufficientCells(t *testing.T, ckzg bool) {
+	if ckzg && !ckzgAvailable {
+		t.Skip("CKZG unavailable in this test build")
 	}
+	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
+	useCKZG.Store(ckzg)
 
-	for i := 0; i < len(cells); i += 128 {
-		start := i + 64
-		end := i + 128
-		partialCells = append(partialCells, cells[start:end]...)
+	const blobCount = 3
+	d := newBlobs(t, blobCount)
+
+	// Use DataPerBlob-1 cells (one short of minimum required)
+	indices := make([]uint64, DataPerBlob-1)
+	for i := range indices {
+		indices[i] = uint64(i)
 	}
-
-	recoverBlobs, err := RecoverBlobs(partialCells, indices)
-
-	if err != nil {
-		t.Fatalf("failed to recover blob: %v", err)
+	var partialCells []Cell
+	for bi := range blobCount {
+		for _, idx := range indices {
+			partialCells = append(partialCells, d.cells[bi*CellsPerBlob+int(idx)])
+		}
 	}
-
-	if err := VerifyCellProofs(recoverBlobs, commitments, proofs); err != nil {
-		t.Fatalf("failed to verify recovered blob: %v", err)
+	if _, err := RecoverBlobs(partialCells, indices); err == nil {
+		t.Fatalf("expected error with only %d cells, got none", len(indices))
 	}
 }
