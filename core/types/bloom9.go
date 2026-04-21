@@ -161,3 +161,11 @@ func bloomValues(data []byte, hashbuf *[6]byte) (uint, byte, uint, byte, uint, b
 func BloomLookup(bin Bloom, topic bytesBacked) bool {
 	return bin.Test(topic.Bytes())
 }
+
+// BloomValues returns the (index, value) byte pairs that a bloom filter would
+// set when adding the given data. Callers can cache the result to avoid
+// re-hashing the same input on repeated bloom membership tests.
+func BloomValues(data []byte) (uint, byte, uint, byte, uint, byte) {
+	var buf [6]byte
+	return bloomValues(data, &buf)
+}

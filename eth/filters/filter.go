@@ -33,12 +33,33 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+// bloomProbe holds the precomputed bloom bit positions and bit masks for a
+// single address or topic, so that bloom membership can be tested with plain
+// bit-ANDs instead of re-hashing on every block.
+type bloomProbe struct {
+	i1, i2, i3 uint
+	v1, v2, v3 byte
+}
+
+// test reports whether all three bits set by this probe are present in bloom.
+func (p *bloomProbe) test(bloom *types.Bloom) bool {
+	return bloom[p.i1]&p.v1 != 0 &&
+		bloom[p.i2]&p.v2 != 0 &&
+		bloom[p.i3]&p.v3 != 0
+}
+
 // Filter can be used to retrieve and filter logs.
 type Filter struct {
 	sys *FilterSystem
 
 	addresses []common.Address
 	topics    [][]common.Hash
+
+	// Precomputed bloom probes for addresses and topics. These mirror the
+	// structure of addresses/topics so repeated block-bloom tests avoid
+	// re-hashing the same inputs.
+	addrProbes  []bloomProbe
+	topicProbes [][]bloomProbe
 
 	block      *common.Hash // Block hash if filtering a single block
 	begin, end int64        // Range interval if filtering multiple blocks
@@ -71,11 +92,41 @@ func (sys *FilterSystem) NewBlockFilter(block common.Hash, addresses []common.Ad
 // newFilter creates a generic filter that can either filter based on a block hash,
 // or based on range queries. The search criteria needs to be explicitly set.
 func newFilter(sys *FilterSystem, addresses []common.Address, topics [][]common.Hash) *Filter {
-	return &Filter{
-		sys:       sys,
-		addresses: addresses,
-		topics:    topics,
+	var addrProbes []bloomProbe
+	if len(addresses) > 0 {
+		addrProbes = make([]bloomProbe, len(addresses))
+		for i, addr := range addresses {
+			addrProbes[i] = newBloomProbe(addr.Bytes())
+		}
 	}
+	var topicProbes [][]bloomProbe
+	if len(topics) > 0 {
+		topicProbes = make([][]bloomProbe, len(topics))
+		for i, sub := range topics {
+			if len(sub) == 0 {
+				continue
+			}
+			probes := make([]bloomProbe, len(sub))
+			for j, t := range sub {
+				probes[j] = newBloomProbe(t.Bytes())
+			}
+			topicProbes[i] = probes
+		}
+	}
+	return &Filter{
+		sys:         sys,
+		addresses:   addresses,
+		topics:      topics,
+		addrProbes:  addrProbes,
+		topicProbes: topicProbes,
+	}
+}
+
+// newBloomProbe precomputes the bloom bit-triplet for data.
+func newBloomProbe(data []byte) bloomProbe {
+	var p bloomProbe
+	p.i1, p.v1, p.i2, p.v2, p.i3, p.v3 = types.BloomValues(data)
+	return p
 }
 
 // Logs searches the blockchain for matching log entries, returning all from the
@@ -457,10 +508,43 @@ func (f *Filter) unindexedLogs(ctx context.Context, chainView *filtermaps.ChainV
 
 // blockLogs returns the logs matching the filter criteria within a single block.
 func (f *Filter) blockLogs(ctx context.Context, header *types.Header) ([]*types.Log, error) {
-	if bloomFilter(header.Bloom, f.addresses, f.topics) {
+	if f.bloomMatch(&header.Bloom) {
 		return f.checkMatches(ctx, header)
 	}
 	return nil, nil
+}
+
+// bloomMatch tests the filter's addresses and topics against the given bloom
+// using the precomputed probes.
+func (f *Filter) bloomMatch(bloom *types.Bloom) bool {
+	if len(f.addrProbes) > 0 {
+		matched := false
+		for i := range f.addrProbes {
+			if f.addrProbes[i].test(bloom) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	for _, sub := range f.topicProbes {
+		if len(sub) == 0 {
+			continue // wildcard
+		}
+		matched := false
+		for i := range sub {
+			if sub[i].test(bloom) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
 }
 
 // checkMatches checks if the receipts belonging to the given header contain any log events that
@@ -530,35 +614,6 @@ func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []comm
 		}
 	}
 	return ret
-}
-
-func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]common.Hash) bool {
-	if len(addresses) > 0 {
-		var included bool
-		for _, addr := range addresses {
-			if types.BloomLookup(bloom, addr) {
-				included = true
-				break
-			}
-		}
-		if !included {
-			return false
-		}
-	}
-
-	for _, sub := range topics {
-		included := len(sub) == 0 // empty rule set == wildcard
-		for _, topic := range sub {
-			if types.BloomLookup(bloom, topic) {
-				included = true
-				break
-			}
-		}
-		if !included {
-			return false
-		}
-	}
-	return true
 }
 
 // ReceiptWithTx contains a receipt and its corresponding transaction
