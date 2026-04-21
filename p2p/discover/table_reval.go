@@ -76,8 +76,16 @@ func (tr *tableRevalidation) nodeEndpointChanged(tab *Table, n *tableNode) {
 // run performs node revalidation.
 // It returns the next time it should be invoked, which is used in the Table main loop
 // to schedule a timer. However, run can be called at any time.
+//
+// run acquires tab.mutex to synchronize with node additions performed from
+// the doRefresh background goroutine, which reach this file through
+// tab.handleAddNode -> tr.nodeAdded -> list.push -> list.schedule and therefore
+// mutate the same revalidationList fields that run reads.
 func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) (nextTime mclock.AbsTime) {
-	reval := func(list *revalidationList) {
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+
+	runList := func(list *revalidationList) {
 		if list.nextTime <= now {
 			if n := list.get(&tab.rand, tr.activeReq); n != nil {
 				tr.startRequest(tab, n)
@@ -87,24 +95,21 @@ func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) (nextTime mcloc
 			list.schedule(now, &tab.rand)
 		}
 	}
-	reval(&tr.fast)
-	reval(&tr.slow)
+	runList(&tr.fast)
+	runList(&tr.slow)
 
 	return min(tr.fast.nextTime, tr.slow.nextTime)
 }
 
 // startRequest spawns a revalidation request for node n.
+// The caller must hold tab.mutex.
 func (tr *tableRevalidation) startRequest(tab *Table, n *tableNode) {
 	if _, ok := tr.activeReq[n.ID()]; ok {
 		panic(fmt.Errorf("duplicate startRequest (node %v)", n.ID()))
 	}
 	tr.activeReq[n.ID()] = struct{}{}
 	resp := revalidationResponse{n: n}
-
-	// Fetch the node while holding lock.
-	tab.mutex.Lock()
 	node := n.Node
-	tab.mutex.Unlock()
 
 	go tab.doRevalidate(resp, node)
 }
