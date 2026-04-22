@@ -107,18 +107,83 @@ func (s *nodeStore) hashInternal(idx uint32) common.Hash {
 	return node.hash
 }
 
-// SerializeNode serializes a node into the flat on-disk format.
-func (s *nodeStore) serializeNode(ref nodeRef) []byte {
+// serializeSubtree recursively collects child hashes from a subtree of InternalNodes.
+// It traverses up to `remainingDepth` levels, storing hashes of bottom-layer children.
+// position tracks the current index (0 to 2^groupDepth - 1) for bitmap placement.
+// hashes collects the hashes of present children, bitmap tracks which positions are present.
+func (s *nodeStore) serializeSubtree(ref nodeRef, remainingDepth int, position int, absoluteDepth int, bitmap []byte, hashes *[]common.Hash) {
+	if remainingDepth == 0 {
+		// Bottom layer: store hash if not empty
+		switch ref.Kind() {
+		case kindEmpty:
+			// Leave bitmap bit unset, don't add hash
+			return
+		default:
+			// StemNode, HashedNode, or InternalNode at boundary: store hash
+			bitmap[position/8] |= 1 << (7 - (position % 8))
+			*hashes = append(*hashes, s.computeHash(ref))
+		}
+		return
+	}
+
 	switch ref.Kind() {
 	case kindInternal:
+		leftPos := position * 2
+		rightPos := position*2 + 1
+		s.serializeSubtree(s.getInternal(ref.Index()).left, remainingDepth-1, leftPos, absoluteDepth+1, bitmap, hashes)
+		s.serializeSubtree(s.getInternal(ref.Index()).right, remainingDepth-1, rightPos, absoluteDepth+1, bitmap, hashes)
+	case kindEmpty:
+		return
+	default:
+		// StemNode or HashedNode encountered before reaching the group's bottom
+		// layer. Compute the leaf bitmap position where this node's hash will
+		// be stored.
+		leafPos := position
+		switch ref.Kind() {
+		case kindStem:
+			sn := s.getStem(ref.Index())
+			// Extend position using the stem's key bits so that
+			// GetValuesAtStem traversal (which follows key bits) finds the hash.
+			for d := 0; d < remainingDepth; d++ {
+				bit := sn.Stem[(absoluteDepth+d)/8] >> (7 - ((absoluteDepth + d) % 8)) & 1
+				leafPos = leafPos*2 + int(bit)
+			}
+		default:
+			// HashedNode or unknown: extend all-left (no key bits available).
+			// This matches the all-zero path that resolveNode would follow.
+			leafPos = position << remainingDepth
+		}
+		bitmap[leafPos/8] |= 1 << (7 - (leafPos % 8))
+		*hashes = append(*hashes, s.computeHash(ref))
+	}
+}
+
+// SerializeNode serializes a node into the flat on-disk format.
+func (s *nodeStore) serializeNode(ref nodeRef, groupDepth int) []byte {
+	switch ref.Kind() {
+	case kindInternal:
+		// InternalNode group: 1 byte type + 1 byte group depth + variable bitmap + N×32 byte hashes
+		bitmapSize := bitmapSizeForDepth(groupDepth)
+		bitmap := make([]byte, bitmapSize)
+		var hashes []common.Hash
+
 		node := s.getInternal(ref.Index())
-		var serialized [NodeTypeBytes + HashSize + HashSize]byte
+		s.serializeSubtree(ref, groupDepth, 0, int(node.depth), bitmap, &hashes)
+
+		// Build serialized output
+		serializedLen := NodeTypeBytes + 1 + bitmapSize + len(hashes)*HashSize
+		serialized := make([]byte, serializedLen)
 		serialized[0] = nodeTypeInternal
-		lh := s.computeHash(node.left)
-		rh := s.computeHash(node.right)
-		copy(serialized[NodeTypeBytes:NodeTypeBytes+HashSize], lh[:])
-		copy(serialized[NodeTypeBytes+HashSize:], rh[:])
-		return serialized[:]
+		serialized[1] = byte(groupDepth) // group depth => bitmap size for a sparse group
+		copy(serialized[2:2+bitmapSize], bitmap)
+
+		offset := NodeTypeBytes + 1 + bitmapSize
+		for _, h := range hashes {
+			copy(serialized[offset:offset+HashSize], h.Bytes())
+			offset += HashSize
+		}
+
+		return serialized
 
 	case kindStem:
 		sn := s.getStem(ref.Index())
@@ -298,7 +363,7 @@ func (s *nodeStore) collectNodes(ref nodeRef, path []byte, flushfn nodeFlushFn, 
 			if err := s.collectChildGroups(node, path, flushfn, groupDepth, groupDepth-1); err != nil {
 				return err
 			}
-			flushfn(path, s.computeHash(ref), s.serializeNode(ref))
+			flushfn(path, s.computeHash(ref), s.serializeNode(ref, groupDepth))
 			return nil
 		}
 		// Not at a group boundary - this shouldn't happen if we're called correctly from root
@@ -309,7 +374,7 @@ func (s *nodeStore) collectNodes(ref nodeRef, path []byte, flushfn nodeFlushFn, 
 		if !sn.dirty {
 			return nil
 		}
-		flushfn(path, s.computeHash(ref), s.serializeNode(ref))
+		flushfn(path, s.computeHash(ref), s.serializeNode(ref, groupDepth))
 		sn.dirty = false
 		return nil
 	case kindHashed:
