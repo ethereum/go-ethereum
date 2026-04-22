@@ -205,7 +205,7 @@ func (it *binaryNodeIterator) Path() []byte {
 }
 
 func (it *binaryNodeIterator) NodeBlob() []byte {
-	return it.store.serializeNode(it.current)
+	return it.store.serializeNode(it.current, it.trie.groupDepth)
 }
 
 // Leaf reports whether the iterator is currently positioned at a leaf value.
