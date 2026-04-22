@@ -107,7 +107,7 @@ func ChunkifyCode(code []byte) ChunkedCode {
 
 // BinaryTrie is the implementation of https://eips.ethereum.org/EIPS/eip-7864.
 type BinaryTrie struct {
-	root       BinaryNode
+	store      *nodeStore
 	reader     *trie.Reader
 	tracer     *trie.PrevalueTracer
 	groupDepth int // Number of levels per serialized group (1-8, default 8)
@@ -130,7 +130,7 @@ func NewBinaryTrie(root common.Hash, db database.NodeDatabase, groupDepth int) (
 		return nil, err
 	}
 	t := &BinaryTrie{
-		root:       NewBinaryNode(),
+		store:      newNodeStore(),
 		reader:     reader,
 		tracer:     trie.NewPrevalueTracer(),
 		groupDepth: groupDepth,

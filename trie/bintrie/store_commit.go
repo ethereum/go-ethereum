@@ -230,7 +230,11 @@ func (s *nodeStore) decodeNode(serialized []byte, depth int, hn common.Hash, mus
 // CollectNodes flushes every node that needs flushing via flushfn in post-order.
 // Invariant: any ancestor of a node that needs flushing is itself marked, so a
 // clean root means the whole subtree is clean.
-func (s *nodeStore) collectNodes(ref nodeRef, path []byte, flushfn nodeFlushFn) error {
+func (s *nodeStore) collectNodes(ref nodeRef, path []byte, flushfn nodeFlushFn, groupDepth int) error {
+	if groupDepth < 1 || groupDepth > MaxGroupDepth {
+		return errors.New("groupDepth must be between 1 and 8")
+	}
+
 	switch ref.Kind() {
 	case kindEmpty:
 		return nil
@@ -239,21 +243,19 @@ func (s *nodeStore) collectNodes(ref nodeRef, path []byte, flushfn nodeFlushFn) 
 		if !node.dirty {
 			return nil
 		}
-		// Reuse path buffer across children: flushfn consumers
-		// (NodeSet.AddNode, tracer.Get) clone via string(path), so in-place
-		// mutation is safe.
-		path = append(path, 0)
-		if err := s.collectNodes(node.left, path, flushfn); err != nil {
-			return err
+		// Only flush at group boundaries (depth % groupDepth == 0)
+		if int(node.depth)%groupDepth == 0 {
+			// We're at a group boundary - first collect any nodes in deeper groups,
+			// then flush this group
+			if err := s.collectChildGroups(node, path, flushfn, groupDepth, groupDepth-1); err != nil {
+				return err
+			}
+			flushfn(path, s.computeHash(ref), s.serializeNode(ref))
+			return nil
 		}
-		path[len(path)-1] = 1
-		if err := s.collectNodes(node.right, path, flushfn); err != nil {
-			return err
-		}
-		path = path[:len(path)-1]
-		flushfn(path, s.computeHash(ref), s.serializeNode(ref))
-		node.dirty = false
-		return nil
+		// Not at a group boundary - this shouldn't happen if we're called correctly from root
+		// but handle it by continuing to traverse
+		return s.collectChildGroups(path, flushfn, groupDepth, groupDepth-(int(node.depth)%groupDepth)-1)
 	case kindStem:
 		sn := s.getStem(ref.Index())
 		if !sn.dirty {
@@ -267,6 +269,91 @@ func (s *nodeStore) collectNodes(ref nodeRef, path []byte, flushfn nodeFlushFn) 
 	default:
 		return fmt.Errorf("CollectNodes: unexpected kind %d", ref.Kind())
 	}
+}
+
+// collectChildGroups traverses within a group to find and collect nodes in the next group.
+// remainingLevels is how many more levels below the current node until we reach the group boundary.
+// When remainingLevels=0, the current node's children are at the next group boundary.
+func (s *nodeStore) collectChildGroups(node *InternalNode, path []byte, flushfn nodeFlushFn, groupDepth int, remainingLevels int) error {
+	if remainingLevels == 0 {
+		// Current node is at depth (groupBoundary - 1), its children are at the next group boundary
+		if !node.left.IsEmpty() {
+			if err := s.collectNodes(node.left, appendBit(path, 0), flushfn, groupDepth); err != nil {
+				return err
+			}
+		}
+		if !node.right.IsEmpty() {
+			if err := s.collectNodes(node.right, appendBit(path, 1), flushfn, groupDepth); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Continue traversing within the group.
+	childDepth := node.depth + 1
+
+	if !node.left.IsEmpty() {
+		switch node.left.Kind() {
+		case kindInternal:
+			n := s.getInternal(node.left.Index())
+			if err := s.collectChildGroups(n, appendBit(path, 0), flushfn, groupDepth, remainingLevels-1); err != nil {
+				return err
+			}
+		default:
+			extPath := s.extendPathToGroupLeaf(appendBit(path, 0), node.left, remainingLevels, int(childDepth))
+			if err := s.collectNodes(node.left, extPath, flushfn, groupDepth); err != nil {
+				return err
+			}
+		}
+	}
+	if !node.right.IsEmpty() {
+		switch node.right.Kind() {
+		case kindInternal:
+			n := s.getInternal(node.right.Index())
+			if err := s.collectChildGroups(n, appendBit(path, 1), flushfn, groupDepth, remainingLevels-1); err != nil {
+				return err
+			}
+		default:
+			extPath := s.extendPathToGroupLeaf(appendBit(path, 1), node.right, remainingLevels, int(childDepth))
+			if err := s.collectNodes(node.right, extPath, flushfn, groupDepth); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// extendPathToGroupLeaf extends a storage path to the group's leaf boundary,
+// matching the projection done by serializeSubtree. For StemNodes, the path
+// is extended using the stem's key bits (same as serializeSubtree). For other
+// node types, the path is extended with all-zero (left) bits.
+func (s *nodeStore) extendPathToGroupLeaf(path []byte, node nodeRef, remainingLevels int, absoluteDepth int) []byte {
+	if remainingLevels <= 0 {
+		return path
+	}
+	if node.Kind() == kindStem {
+		sn := s.getStem(node.Index())
+		for d := 0; d < remainingLevels; d++ {
+			bit := sn.Stem[(absoluteDepth+d)/8] >> (7 - ((absoluteDepth + d) % 8)) & 1
+			path = appendBit(path, bit)
+		}
+	} else {
+		// HashedNode or other: all-left extension (matches serializeSubtree's
+		// position << remainingDepth behavior).
+		for d := 0; d < remainingLevels; d++ {
+			path = appendBit(path, 0)
+		}
+	}
+	return path
+}
+
+// appendBit appends a bit to a path, returning a new slice
+func appendBit(path []byte, bit byte) []byte {
+	var p [256]byte
+	copy(p[:], path)
+	result := p[:len(path)]
+	return append(result, bit)
 }
 
 func (s *nodeStore) toDot(ref nodeRef, parent, path string) string {

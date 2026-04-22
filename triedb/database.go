@@ -32,7 +32,7 @@ import (
 // Config defines all necessary options for database.
 type Config struct {
 	Preimages         bool           // Flag whether the preimage of node key is recorded
-	IsVerkle          bool           // Flag whether the db is holding a verkle tree
+	IsUBT             bool           // Flag whether the db is holding a unified binary tree
 	BinTrieGroupDepth int            // Number of levels per serialized group in binary trie (1-8, default 8)
 	HashDB            *hashdb.Config // Configs for hash-based scheme
 	PathDB            *pathdb.Config // Configs for experimental path-based scheme
@@ -46,7 +46,7 @@ var HashDefaults = &Config{
 	HashDB:    hashdb.Defaults,
 }
 
-// UBTDefaults represents a config for holding verkle trie data
+// UBTDefaults represents a config for holding unified binary trie data
 // using path-based scheme with default settings.
 var UBTDefaults = &Config{
 	Preimages:         false,
