@@ -19,14 +19,14 @@ package downloader
 import (
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// syncState starts downloading state with the given root hash and block number.
-func (d *Downloader) syncState(root common.Hash, number uint64) *stateSync {
+// syncState starts downloading state with the given pivot header.
+func (d *Downloader) syncState(pivot *types.Header) *stateSync {
 	// Create the state sync
-	s := newStateSync(d, root, number)
+	s := newStateSync(d, pivot)
 	select {
 	case d.stateSyncStart <- s:
 		// If we tell the statesync to restart with a new root, we also need
@@ -58,7 +58,7 @@ func (d *Downloader) stateFetcher() {
 // runStateSync runs a state synchronisation until it completes or another root
 // hash is requested to be switched over to.
 func (d *Downloader) runStateSync(s *stateSync) *stateSync {
-	log.Trace("State sync starting", "root", s.root)
+	log.Trace("State sync starting", "pivot", s.pivot.Hash(), "number", s.pivot.Number)
 
 	go s.run()
 	defer s.Cancel()
@@ -75,11 +75,10 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 }
 
 // stateSync schedules requests for downloading a particular state trie defined
-// by a given state root.
+// by a given pivot header.
 type stateSync struct {
-	d      *Downloader // Downloader instance to access and manage current peerset
-	root   common.Hash // State root currently being synced
-	number uint64      // Block number of the pivot
+	d     *Downloader   // Downloader instance to access and manage current peerset
+	pivot *types.Header // Pivot header currently being synced
 
 	started    chan struct{} // Started is signalled once the sync loop starts
 	cancel     chan struct{} // Channel to signal a termination request
@@ -90,11 +89,10 @@ type stateSync struct {
 
 // newStateSync creates a new state trie download scheduler. This method does not
 // yet start the sync. The user needs to call run to initiate.
-func newStateSync(d *Downloader, root common.Hash, number uint64) *stateSync {
+func newStateSync(d *Downloader, pivot *types.Header) *stateSync {
 	return &stateSync{
 		d:       d,
-		root:    root,
-		number:  number,
+		pivot:   pivot,
 		cancel:  make(chan struct{}),
 		done:    make(chan struct{}),
 		started: make(chan struct{}),
@@ -106,7 +104,7 @@ func newStateSync(d *Downloader, root common.Hash, number uint64) *stateSync {
 // finish.
 func (s *stateSync) run() {
 	close(s.started)
-	s.err = s.d.SnapSyncer.Sync(s.root, s.number, s.cancel)
+	s.err = s.d.SnapSyncer.Sync(s.pivot, s.cancel)
 	close(s.done)
 }
 

@@ -41,6 +41,18 @@ func verifyAccessList(b *bal.BlockAccessList, header *types.Header) error {
 	return nil
 }
 
+// isFetched tell us if accountHash has been downloaded.
+func (s *Syncer) isFetched(accountHash common.Hash) bool {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	for _, task := range s.tasks {
+		if bytes.Compare(accountHash[:], task.Last[:]) <= 0 {
+			return bytes.Compare(accountHash[:], task.Next[:]) < 0
+		}
+	}
+	return true
+}
+
 // applyAccessList applies a single block's access list diffs to the flat state
 // in the database. For each account, it applies the post-block values (highest
 // TxIdx entry) for balance, nonce, code, and storage. The storageRoot field is
@@ -52,6 +64,11 @@ func (s *Syncer) applyAccessList(b *bal.BlockAccessList) error {
 	for _, access := range b.Accesses {
 		addr := common.Address(access.Address)
 		accountHash := crypto.Keccak256Hash(addr[:])
+
+		// Skip accounts whose hash range hasn't been downloaded yet.
+		if !s.isFetched(accountHash) {
+			continue
+		}
 
 		// Read the existing account from flat state (may not exist yet)
 		var (
@@ -95,22 +112,35 @@ func (s *Syncer) applyAccessList(b *bal.BlockAccessList) error {
 			}
 		}
 
-		// Apply storage writes (last entry per slot = post-block state)
+		// Apply storage writes (last entry per slot = post-block state).
 		for _, slotWrites := range access.StorageWrites {
 			if n := len(slotWrites.Accesses); n > 0 {
 				value := slotWrites.Accesses[n-1].ValueAfter
 				storageHash := crypto.Keccak256Hash(slotWrites.Slot[:])
-				rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, value[:])
+				if value == (common.Hash{}) {
+					rawdb.DeleteStorageSnapshot(batch, accountHash, storageHash)
+				} else {
+					rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, value[:])
+				}
 			}
 		}
 
 		// Don't create empty accounts in flat state (EIP-161).
-		// This handles the case where an account is created and
-		// self-destructed in the same transaction. The BAL will
-		// include it with a balance change to zero, but the account
-		// should not exist in state.
-		if isNew && account.Balance.IsZero() && account.Nonce == 0 &&
-			bytes.Equal(account.CodeHash, types.EmptyCodeHash[:]) {
+		isEmpty := account.Balance.IsZero() && account.Nonce == 0 &&
+			bytes.Equal(account.CodeHash, types.EmptyCodeHash[:])
+		switch {
+		case isEmpty && isNew:
+			// This handles the case where an account is created and
+			// self-destructed in the same transaction. The BAL will
+			// include it with a balance change to zero, but the account
+			// should not exist in state.
+			continue
+		case isEmpty && !isNew:
+			// Existing account got fully drained (e.g., pre-funded
+			// address that gets deployed to with init code that
+			// self-destructs). Delete the entry so the trie rebuild
+			// doesn't pick it up as an empty leaf.
+			rawdb.DeleteAccountSnapshot(batch, accountHash)
 			continue
 		}
 

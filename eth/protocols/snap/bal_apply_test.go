@@ -201,6 +201,41 @@ func TestAccessListApplicationMultiTx(t *testing.T) {
 	}
 }
 
+// TestAccessListApplicationZeroStorage verifies that a BAL slot write with a
+// zero post-value deletes the snapshot entry instead of writing 32 zero
+// bytes.
+func TestAccessListApplicationZeroStorage(t *testing.T) {
+	t.Parallel()
+	db := rawdb.NewMemoryDatabase()
+	syncer := NewSyncer(db, rawdb.HashScheme)
+	addr := common.HexToAddress("0x06")
+	accountHash := crypto.Keccak256Hash(addr[:])
+
+	// Existing account with a non-zero storage slot.
+	original := types.StateAccount{
+		Nonce:    1,
+		Balance:  uint256.NewInt(1),
+		Root:     types.EmptyRootHash,
+		CodeHash: types.EmptyCodeHash[:],
+	}
+	rawdb.WriteAccountSnapshot(db, accountHash, types.SlimAccountRLP(original))
+	rawSlot := common.HexToHash("0xaa")
+	slotHash := crypto.Keccak256Hash(rawSlot[:])
+	rawdb.WriteStorageSnapshot(db, accountHash, slotHash, common.HexToHash("0x42").Bytes())
+
+	// BAL writes the slot to zero (deletion).
+	cb := bal.NewConstructionBlockAccessList()
+	cb.StorageWrite(0, addr, rawSlot, common.Hash{})
+	b := buildTestBAL(t, &cb)
+	if err := syncer.applyAccessList(b); err != nil {
+		t.Fatalf("applyAccessList failed: %v", err)
+	}
+
+	if val := rawdb.ReadStorageSnapshot(db, accountHash, slotHash); len(val) != 0 {
+		t.Errorf("zeroed slot should have been deleted, got %x", val)
+	}
+}
+
 // TestAccessListApplicationNewAccount verifies that applyAccessList creates
 // new accounts that don't exist in the DB yet.
 func TestAccessListApplicationNewAccount(t *testing.T) {
@@ -255,6 +290,100 @@ func TestAccessListApplicationNewAccount(t *testing.T) {
 	}
 }
 
+// TestAccessListApplicationSkipsUnfetched verifies that applyAccessList does
+// not write account entries for addresses whose hash falls in a range that
+// hasn't been downloaded yet.
+func TestAccessListApplicationSkipsUnfetched(t *testing.T) {
+	t.Parallel()
+	db := rawdb.NewMemoryDatabase()
+	syncer := NewSyncer(db, rawdb.HashScheme)
+
+	// Pick two addresses and order them by hash.
+	addrA := common.HexToAddress("0x01")
+	addrB := common.HexToAddress("0x02")
+	hashA := crypto.Keccak256Hash(addrA[:])
+	hashB := crypto.Keccak256Hash(addrB[:])
+	fetchedAddr, fetchedHash := addrA, hashA
+	unfetchedAddr, unfetchedHash := addrB, hashB
+	if bytes.Compare(hashA[:], hashB[:]) > 0 {
+		fetchedAddr, fetchedHash = addrB, hashB
+		unfetchedAddr, unfetchedHash = addrA, hashA
+	}
+
+	// One remaining task covering [unfetchedHash, MaxHash]: the fetched hash
+	// is below Next so isFetched returns true; the unfetched hash equals Next
+	// so isFetched returns false.
+	syncer.tasks = []*accountTask{{
+		Next:           unfetchedHash,
+		Last:           common.MaxHash,
+		SubTasks:       make(map[common.Hash][]*storageTask),
+		stateCompleted: make(map[common.Hash]struct{}),
+	}}
+
+	cb := bal.NewConstructionBlockAccessList()
+	cb.BalanceChange(0, fetchedAddr, uint256.NewInt(100))
+	cb.BalanceChange(0, unfetchedAddr, uint256.NewInt(200))
+	b := buildTestBAL(t, &cb)
+
+	if err := syncer.applyAccessList(b); err != nil {
+		t.Fatalf("applyAccessList failed: %v", err)
+	}
+
+	// The fetched account should have been written.
+	if data := rawdb.ReadAccountSnapshot(db, fetchedHash); len(data) == 0 {
+		t.Error("expected fetched account to be written")
+	}
+	// The unfetched account should not have been touched.
+	if data := rawdb.ReadAccountSnapshot(db, unfetchedHash); len(data) != 0 {
+		t.Errorf("unfetched account should not be written, got %x", data)
+	}
+}
+
+// TestAccessListApplicationSkipsUnfetchedStorage verifies that storage writes
+// are also skipped when the parent account's hash range isn't downloaded yet.
+func TestAccessListApplicationSkipsUnfetchedStorage(t *testing.T) {
+	t.Parallel()
+	db := rawdb.NewMemoryDatabase()
+	syncer := NewSyncer(db, rawdb.HashScheme)
+
+	addrA := common.HexToAddress("0x01")
+	addrB := common.HexToAddress("0x02")
+	hashA := crypto.Keccak256Hash(addrA[:])
+	hashB := crypto.Keccak256Hash(addrB[:])
+
+	unfetchedAddr, unfetchedHash := addrB, hashB
+	if bytes.Compare(hashA[:], hashB[:]) > 0 {
+		unfetchedAddr, unfetchedHash = addrA, hashA
+	}
+
+	syncer.tasks = []*accountTask{{
+		Next:           unfetchedHash,
+		Last:           common.MaxHash,
+		SubTasks:       make(map[common.Hash][]*storageTask),
+		stateCompleted: make(map[common.Hash]struct{}),
+	}}
+
+	// BAL touches an unfetched account with a storage write AND an empty
+	// balance mutation. Neither should result in any flat-state writes.
+	rawSlot := common.HexToHash("0xaa")
+	slotHash := crypto.Keccak256Hash(rawSlot[:])
+	cb := bal.NewConstructionBlockAccessList()
+	cb.BalanceChange(0, unfetchedAddr, uint256.NewInt(0)) // empty mutation
+	cb.StorageWrite(0, unfetchedAddr, rawSlot, common.HexToHash("0xff"))
+	b := buildTestBAL(t, &cb)
+
+	if err := syncer.applyAccessList(b); err != nil {
+		t.Fatalf("applyAccessList failed: %v", err)
+	}
+
+	if data := rawdb.ReadAccountSnapshot(db, unfetchedHash); len(data) != 0 {
+		t.Errorf("unfetched account should not be written, got %x", data)
+	}
+	if val := rawdb.ReadStorageSnapshot(db, unfetchedHash, slotHash); len(val) != 0 {
+		t.Errorf("storage for unfetched account should not be written, got %x", val)
+	}
+}
+
 // TestAccessListApplicationSameTxCreateDestroy tests the edge case where an
 // account is created and self-destructed in the same transaction during the
 // pivot gap. Per EIP-7928, such accounts appear in the BAL with a balance
@@ -295,5 +424,42 @@ func TestAccessListApplicationSameTxCreateDestroy(t *testing.T) {
 		t.Errorf("account created for same-tx create+destroy: "+
 			"balance=%v, nonce=%d, codeHash=%x, root=%v",
 			account.Balance, account.Nonce, account.CodeHash, account.Root)
+	}
+}
+
+// TestAccessListApplicationDestroyExisting verifies that when a BAL reduces
+// an existing flat-state account to nonce=0, balance=0, empty code (the
+// pre-funded destruction pattern), applyAccessList deletes the entry rather
+// than leaving it zereod.
+func TestAccessListApplicationDestroyExisting(t *testing.T) {
+	t.Parallel()
+	db := rawdb.NewMemoryDatabase()
+	syncer := NewSyncer(db, rawdb.HashScheme)
+	addr := common.HexToAddress("0x05")
+	accountHash := crypto.Keccak256Hash(addr[:])
+
+	// Pre-funded account: has balance, no nonce, no code.
+	original := types.StateAccount{
+		Nonce:    0,
+		Balance:  uint256.NewInt(1000),
+		Root:     types.EmptyRootHash,
+		CodeHash: types.EmptyCodeHash[:],
+	}
+	rawdb.WriteAccountSnapshot(db, accountHash, types.SlimAccountRLP(original))
+
+	// The BAL zeros the balance. Nonce and code were already empty, so
+	// the account ends up fully empty after applying.
+	cb := bal.NewConstructionBlockAccessList()
+	cb.BalanceChange(0, addr, uint256.NewInt(0))
+	b := buildTestBAL(t, &cb)
+	if err := syncer.applyAccessList(b); err != nil {
+		t.Fatalf("applyAccessList failed: %v", err)
+	}
+
+	if data := rawdb.ReadAccountSnapshot(db, accountHash); len(data) != 0 {
+		account, _ := types.FullAccount(data)
+		t.Errorf("destroyed account should have been deleted from flat state, "+
+			"got balance=%v, nonce=%d, codeHash=%x",
+			account.Balance, account.Nonce, account.CodeHash)
 	}
 }

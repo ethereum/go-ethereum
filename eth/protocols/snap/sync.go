@@ -64,7 +64,7 @@ const (
 	// come close to that, requesting 4x should be a good approximation.
 	maxCodeRequestCount = maxRequestSize / (24 * 1024) * 4
 
-	// maxAccessListRequestCount is the maximum number of block access lists to
+	// maxAccessListRequestCount is the maximum number of block BALs to
 	// request in a single query. BALs average ~72 KiB compressed (per EIP-7928),
 	// and EIP-8189 recommends a 2 MiB response soft limit, so we target ~28
 	// blocks per request to avoid server-side truncation.
@@ -73,6 +73,11 @@ const (
 	// to avoid server-side truncation and re-requesting. It is currently based on
 	// the assumption that the gas limit is 60M.
 	maxAccessListRequestCount = 28
+
+	// syncProgressVersion is the version byte prepended to the JSON-encoded
+	// SyncProgress when persisted. On load, a mismatching version byte causes
+	// the persisted progress to be discarded and sync to start fresh.
+	syncProgressVersion byte = 2
 )
 
 var (
@@ -88,6 +93,11 @@ var (
 // ErrCancelled is returned from snap syncing if the operation was prematurely
 // terminated.
 var ErrCancelled = errors.New("sync cancelled")
+
+// errAccessListPeersExhausted is returned from fetchAccessLists when every
+// connected peer has been marked stateless for BAL requests and there
+// are still hashes left to fetch.
+var errAccessListPeersExhausted = errors.New("all peers exhausted for BAL requests")
 
 // accountRequest tracks a pending account range request to ensure responses are
 // to actual requests and to validate any security constraints.
@@ -292,9 +302,9 @@ type storageTask struct {
 // sync. Opposed to full and fast sync, there is no way to restart a suspended
 // snap sync without prior knowledge of the suspension point.
 type SyncProgress struct {
-	Root        common.Hash    // State root being synced (for pivot move detection)
-	BlockNumber uint64         // Block number of the pivot
-	Tasks       []*accountTask // The suspended account tasks (contract tasks within)
+	Pivot    *types.Header  // Pivot header being synced (for pivot move and reorg detection)
+	Tasks    []*accountTask // The suspended account tasks (contract tasks within)
+	Complete bool           // True once sync ran to completion for Pivot
 
 	// Status report during syncing phase
 	AccountSynced  uint64             // Number of accounts downloaded
@@ -303,7 +313,6 @@ type SyncProgress struct {
 	BytecodeBytes  common.StorageSize // Number of bytecode bytes downloaded
 	StorageSynced  uint64             // Number of storage slots downloaded
 	StorageBytes   common.StorageSize // Number of storage trie bytes persisted to disk
-
 }
 
 // SyncPeer abstracts out the methods required for a peer to be synced against
@@ -347,12 +356,11 @@ type Syncer struct {
 	db     ethdb.Database // Database to store the trie nodes into (and dedup)
 	scheme string         // Node scheme used in node database
 
-	root           common.Hash    // Current state trie root being synced
-	number         uint64         // Block number of the current pivot
-	previousRoot   common.Hash    // Root from previous sync run (for pivot move detection)
-	previousNumber uint64         // Block number of the previous pivot
-	tasks          []*accountTask // Current account task set being synced
-	update         chan struct{}  // Notification channel for possible sync progression
+	pivot         *types.Header  // Current pivot header being synced
+	previousPivot *types.Header  // Pivot from previous sync run (for pivot move detection)
+	complete      bool           // Whether the persisted progress was a completed sync
+	tasks         []*accountTask // Current account task set being synced
+	update        chan struct{}  // Notification channel for possible sync progression
 
 	peers    map[string]SyncPeer // Currently active peers to download from
 	peerJoin *event.Feed         // Event feed to react to peers joining
@@ -364,12 +372,12 @@ type Syncer struct {
 	accountIdlers    map[string]struct{} // Peers that aren't serving account requests
 	bytecodeIdlers   map[string]struct{} // Peers that aren't serving bytecode requests
 	storageIdlers    map[string]struct{} // Peers that aren't serving storage requests
-	accessListIdlers map[string]struct{} // Peers that aren't serving access list requests
+	accessListIdlers map[string]struct{} // Peers that aren't serving BAL requests
 
 	accountReqs    map[uint64]*accountRequest    // Account requests currently running
 	bytecodeReqs   map[uint64]*bytecodeRequest   // Bytecode requests currently running
 	storageReqs    map[uint64]*storageRequest    // Storage requests currently running
-	accessListReqs map[uint64]*accessListRequest // Access list requests currently running
+	accessListReqs map[uint64]*accessListRequest // BAL requests currently running
 
 	accountSynced  uint64             // Number of accounts downloaded
 	accountBytes   common.StorageSize // Number of account trie bytes persisted to disk
@@ -384,7 +392,7 @@ type Syncer struct {
 	logTime   time.Time // Time instance when status was last reported
 
 	pend sync.WaitGroup // Tracks network request goroutines for graceful shutdown
-	lock sync.RWMutex   // Protects fields that can change outside of sync (peers, reqs, root)
+	lock sync.RWMutex   // Protects fields that can change outside of sync (peers, reqs, pivot)
 }
 
 // NewSyncer creates a new snapshot syncer to download the Ethereum state over the
@@ -469,44 +477,47 @@ func (s *Syncer) Unregister(id string) error {
 	return nil
 }
 
-// errPivotStale is returned from download when the pivot has become stale
-// and the syncer needs to perform access list catch-up before continuing.
-var errPivotStale = errors.New("pivot stale")
-
 // Sync starts (or resumes a previous) sync cycle to iterate over a state trie
-// with the given root and reconstruct the nodes based on the snapshot leaves.
-// The number parameter is the block number of the pivot block.
-func (s *Syncer) Sync(root common.Hash, number uint64, cancel chan struct{}) error {
+// with the given pivot header and reconstruct the nodes based on the snapshot
+// leaves.
+func (s *Syncer) Sync(pivot *types.Header, cancel chan struct{}) error {
+	if pivot == nil {
+		return errors.New("snap sync: pivot header is nil")
+	}
 	s.lock.Lock()
-	s.root = root
-	s.number = number
-	s.previousRoot = root // Default: no pivot move. loadSyncStatus may overwrite.
-	s.previousNumber = number
+	s.pivot = pivot
+	s.previousPivot = nil // loadSyncStatus overwrites when resuming from persisted progress
 	s.statelessPeers = make(map[string]struct{})
 	s.lock.Unlock()
 	if s.startTime.IsZero() {
 		s.startTime = time.Now()
 	}
+	root := pivot.Root
 
 	// Retrieve the previous sync status from DB. If there's no persisted
 	// status, sync is either fresh or already complete.
 	s.loadSyncStatus()
-	var syncComplete bool
-	defer func() {
-		if !syncComplete {
-			for _, task := range s.tasks {
-				s.forwardAccountTask(task)
-			}
-			s.cleanAccountTasks()
-			s.saveSyncStatus()
-		}
-	}()
 
-	log.Debug("Starting snapshot sync cycle", "root", root)
-	defer s.report(true)
+	// isPivotChanged is true when we have prior progress against a different
+	// pivot. That means we need to roll forward via catchUp, or wipe and
+	// restart if the prior pivot was reorged out.
+	isPivotChanged := s.previousPivot != nil && s.previousPivot.Hash() != s.pivot.Hash()
 
-	// Whether sync completed or not, disregard any future packets
+	// Skip if we've already finished syncing this pivot.
+	if !isPivotChanged && s.complete {
+		log.Info("Snap sync already complete for this pivot", "root", root)
+		return nil
+	}
+
+	// We're committing to running this sync. Clear the complete flag so a
+	// mid-run save (on cancel or error) doesn't persist a stale Complete=true
+	// status from a prior pivot.
+	s.lock.Lock()
+	s.complete = false
+	s.lock.Unlock()
+
 	defer func() {
+		// Whether sync completed or not, disregard any future packets
 		log.Debug("Terminating snapshot sync cycle", "root", root)
 		s.lock.Lock()
 		s.accountReqs = make(map[uint64]*accountRequest)
@@ -514,57 +525,68 @@ func (s *Syncer) Sync(root common.Hash, number uint64, cancel chan struct{}) err
 		s.bytecodeReqs = make(map[uint64]*bytecodeRequest)
 		s.accessListReqs = make(map[uint64]*accessListRequest)
 		s.lock.Unlock()
+
+		// Persist final task state.
+		for _, task := range s.tasks {
+			s.forwardAccountTask(task)
+		}
+		s.cleanAccountTasks()
+		s.saveSyncStatus()
+
+		// Log final progress.
+		s.report(true)
 	}()
 
-	// Sync loop
-	log.Info("Starting state download", "root", root)
-	for {
-		// Download: fetch all required state data
-		err := s.downloadState(cancel)
-		if err == errPivotStale {
-			// Pivot moved: catch up to new pivot
-			if err := s.catchUp(cancel); err != nil {
-				return err
-			}
-			s.resetDownloadState(root, number)
-			log.Info("Resuming state download", "root", root)
-			continue
-		}
+	log.Debug("Starting snapshot sync cycle", "root", root)
 
-		// Download error that isn't a stale pivot. This is typically due to
-		// the downloader cancelling the sync because the pivot moved. This
-		// error propagates to the downloader which will restart the sync with
-		// a new root.
-		if err != nil {
+	// If we resumed against a different pivot, decide whether the persisted
+	// progress is still usable. If yes, roll forward via BAL catch-up. If not,
+	// wipe everything and restart fresh.
+	if isPivotChanged {
+		if isPivotReorged(s.db, s.previousPivot, s.pivot) {
+			log.Warn("Persisted progress unusable, restarting snap sync from scratch",
+				"number", s.previousPivot.Number, "oldHash", s.previousPivot.Hash())
+			s.resetSyncState()
+		} else if err := s.catchUp(cancel); err != nil {
 			return err
 		}
-		log.Info("State download complete", "root", root)
-
-		// Trie rebuild: build all tries from flat state and verify root
-		log.Info("Starting trie rebuild", "root", root)
-		if err := triedb.GenerateTrie(s.db, s.scheme, root); err != nil {
-			return err
-		}
-		log.Info("Trie rebuild complete", "root", root)
-
-		// Sync complete: clear persisted status so we don't re-run.
-		// Set syncComplete to prevent the deferred saveSyncStatus from
-		// overwriting the nil.
-		syncComplete = true
-		rawdb.WriteSnapshotSyncStatus(s.db, nil)
-		return nil
 	}
+
+	// Pin previousPivot to the current pivot before downloadState runs.
+	// This is what saveSyncStatus persists. If the download is interrupted
+	// and the next Sync gets a different pivot, this is how isPivotReorged
+	// recognizes the partial flat state belongs to the old pivot. Without
+	// it, isPivotReorged sees nil, skips the reorg branch, and downloadState
+	// would resume from the persisted task markers but mix the old pivot's
+	// already-downloaded accounts with the new pivot's data.
+	s.lock.Lock()
+	s.previousPivot = s.pivot
+	s.lock.Unlock()
+
+	log.Info("Starting state download", "root", root)
+	if err := s.downloadState(cancel); err != nil {
+		return err
+	}
+	log.Info("State download complete", "root", root)
+
+	log.Info("Starting trie generation", "root", root)
+	if err := triedb.GenerateTrie(s.db, s.scheme, root); err != nil {
+		return err
+	}
+	log.Info("Trie generation complete", "root", root)
+
+	// Mark sync complete. The deferred saveSyncStatus persists this with
+	// Complete=true so a follow-up Sync call for the same pivot can skip
+	// the work entirely.
+	s.lock.Lock()
+	s.complete = true
+	s.lock.Unlock()
+	return nil
 }
 
 // download runs the bulk flat-state download. It fetches
 // account ranges, storage slots, and bytecodes, writing flat state to disk.
 func (s *Syncer) downloadState(cancel chan struct{}) error {
-	// If the pivot moved since the last run (downloader cancelled and restarted
-	// us with a new root), signal catch-up before downloading.
-	if s.previousRoot != s.root {
-		return errPivotStale
-	}
-
 	// Subscribe to peer events
 	peerJoin := make(chan string, 16)
 	peerJoinSub := s.peerJoin.Subscribe(peerJoin)
@@ -638,95 +660,105 @@ func (s *Syncer) downloadState(cancel chan struct{}) error {
 	}
 }
 
-// resetDownloadState resets the download state for a new pivot after catch-up.
-// It regenerates the task list for accounts not yet downloaded, clears
-// in-flight requests, and updates the root.
-func (s *Syncer) resetDownloadState(root common.Hash, number uint64) {
-	s.lock.Lock()
-	s.root = root
-	s.number = number
-	s.previousRoot = root // Prevent downloadState() from returning errPivotStale again
-	s.previousNumber = number
+// isPivotReorged reports whether the previous pivot is no longer usable
+// as a starting point for forward catch-up. Either it was reorged out
+// of the canonical chain, or the new pivot doesn't advance past it.
+func isPivotReorged(db ethdb.Database, prev, curr *types.Header) bool {
+	// If the new pivot is at or below the old one, there's nothing for
+	// catchUp to roll forward.
+	if curr.Number.Cmp(prev.Number) <= 0 {
+		return true
+	}
+	// If there's no canonical hash at the old pivot's height, something
+	// is wrong. Headers up to the new pivot should already be indexed,
+	// so a missing entry at an earlier block means the chain state is
+	// broken. The most common cause is a chain rewind across the
+	// snap-synced pivot, which resets head to genesis and deletes
+	// canonical entries above it (see rewindPathHead in core/blockchain.go).
+	// Bail and let the fresh sync recover.
+	canonical := rawdb.ReadCanonicalHash(db, prev.Number.Uint64())
+	if canonical == (common.Hash{}) {
+		return true
+	}
 
-	// Clear stateless peers bc they may be able to serve the new pivot
-	s.statelessPeers = make(map[string]struct{})
-	s.lock.Unlock()
+	// If canonical at the old pivot's height has a different hash, the
+	// old pivot was reorged out.
+	return canonical != prev.Hash()
 }
 
-// catchUp runs the BAL catch-up. When the pivot has moved (previousRoot !=
-// root), it fetches BALs for the gap blocks, verifies them against
-// block headers, and applies the diffs to roll flat state forward.
+// catchUp runs the BAL catch-up. When the pivot has moved, it fetches BALs
+// for the gap blocks, verifies them against block headers, and applies the
+// diffs to roll flat state forward.
 func (s *Syncer) catchUp(cancel chan struct{}) error {
 	s.lock.RLock()
-	from := s.previousNumber + 1
-	to := s.number
+	from := s.previousPivot.Number.Uint64() + 1
+	to := s.pivot.Number.Uint64()
 	s.lock.RUnlock()
+	log.Info("Starting BAL catch-up", "from", from, "to", to, "blocks", to-from+1)
 
-	// The new pivot must be ahead of the old one. The range is inverted if
-	// a reorg replaced the block at the pivot height (same number, different
-	// root) or if the chain shortened past the old pivot. In either case,
-	// catch-up can't roll forward — wipe progress and restart. This also
-	// catches reorgs missed by checkDeepReorg, which only runs when the
-	// downloader actively restarts the syncer, not on resume from persisted
-	// progress.
-	if from > to {
-		log.Warn("Catch-up range inverted, wiping sync progress", "from", from, "to", to)
-		rawdb.WriteSnapshotSyncStatus(s.db, nil)
-		return fmt.Errorf("catch-up range inverted (from %d > to %d): pivot reorged", from, to)
-	}
-	log.Info("Starting access list catch-up", "from", from, "to", to, "blocks", to-from+1)
-
-	// Collect block hashes for the gap range
+	// Collect block hashes and headers for the gap range.
 	hashes := make([]common.Hash, 0, to-from+1)
+	headers := make(map[common.Hash]*types.Header, to-from+1)
 	for num := from; num <= to; num++ {
 		hash := rawdb.ReadCanonicalHash(s.db, num)
 		if hash == (common.Hash{}) {
 			return fmt.Errorf("missing canonical hash for block %d during catch-up", num)
 		}
-		hashes = append(hashes, hash)
-	}
-
-	// Fetch BALs from peers
-	rawBALs, err := s.fetchAccessLists(hashes, cancel)
-	if err != nil {
-		return err
-	}
-
-	// Verify and apply each BAL in block order
-	for i, raw := range rawBALs {
-		num := from + uint64(i)
-		hash := hashes[i]
-
-		// Decode the raw RLP into a BlockAccessList
-		var bal bal.BlockAccessList
-		if err := rlp.DecodeBytes(raw, &bal); err != nil {
-			return fmt.Errorf("failed to decode BAL for block %d: %v", num, err)
-		}
-
-		// Verify against the block header
 		header := rawdb.ReadHeader(s.db, hash, num)
 		if header == nil {
 			return fmt.Errorf("missing header for block %d (hash %v) during catch-up", num, hash)
 		}
-		if err := verifyAccessList(&bal, header); err != nil {
-			return fmt.Errorf("BAL verification failed for block %d: %v", num, err)
+		hashes = append(hashes, hash)
+		headers[hash] = header
+	}
+
+	// Fetch BALs from peers
+	rawBALs, err := s.fetchAccessLists(hashes, headers, cancel)
+	if err != nil {
+		return err
+	}
+
+	// Apply each BAL in block order. BALs are already verified by fetchAccessLists.
+	for i, raw := range rawBALs {
+		select {
+		case <-cancel:
+			return ErrCancelled
+		default:
+		}
+		num := from + uint64(i)
+		hash := hashes[i]
+
+		// Decode the raw RLP into a BAL.
+		var b bal.BlockAccessList
+		if err := rlp.DecodeBytes(raw, &b); err != nil {
+			return fmt.Errorf("failed to decode BAL for block %d: %v", num, err)
 		}
 
-		// Apply the state diffs
-		if err := s.applyAccessList(&bal); err != nil {
+		// applyAccessList failures are persistent. If a block's apply fails
+		// here, the next Sync will resume from this block and hit the same
+		// failure. Auto-recovery isn't implemented yet.
+		if err := s.applyAccessList(&b); err != nil {
 			return fmt.Errorf("BAL application failed for block %d: %v", num, err)
 		}
+
+		// Persist incremental progress so a crash mid-catchUp can resume
+		// from the next unapplied block.
+		s.lock.Lock()
+		s.previousPivot = headers[hash]
+		s.lock.Unlock()
+		s.saveSyncStatus()
 	}
-	log.Info("Access list catch-up complete", "blocks", len(rawBALs))
+	log.Info("BAL catch-up complete", "blocks", len(rawBALs))
 	return nil
 }
 
 // fetchAccessLists fetches BALs for the given block hashes from
 // remote peers. It runs its own event loop to assign requests
-// to idle peers and process responses asynchronously. Results are returned in
-// the same order as the input hashes.
-func (s *Syncer) fetchAccessLists(hashes []common.Hash, cancel chan struct{}) ([]rlp.RawValue, error) {
-	log.Debug("Fetching access lists for catch-up", "blocks", len(hashes))
+// to idle peers and process responses asynchronously. Each BAL is verified
+// against its header before being accepted. Results are returned in the
+// same order as the input hashes.
+func (s *Syncer) fetchAccessLists(hashes []common.Hash, headers map[common.Hash]*types.Header, cancel chan struct{}) ([]rlp.RawValue, error) {
+	log.Debug("Fetching BALs for catch-up", "blocks", len(hashes))
 
 	// Subscribe to peer events
 	peerJoin := make(chan string, 16)
@@ -745,10 +777,28 @@ func (s *Syncer) fetchAccessLists(hashes []common.Hash, cancel chan struct{}) ([
 	var (
 		accessListReqFails = make(chan *accessListRequest)
 		accessListResps    = make(chan *accessListResponse)
+		lastStallLog       = time.Now()
 	)
 	for len(fetched) < len(hashes) {
-		// Assign access list retrieval tasks to idle peers
+		// Assign BAL retrieval tasks to idle peers
 		s.assignAccessListTasks(pending, accessListResps, accessListReqFails, cancel)
+
+		// If every peer is now stateless and nothing is in flight, no event
+		// short of cancel or a new peer joining can move us forward. Surface
+		// this so the caller can return and let a higher-level retry happen
+		// against a fresh peer set.
+		if s.accessListPeersExhausted() {
+			log.Warn("BAL peers exhausted, stopping catch-up early",
+				"fetched", len(fetched), "remaining", len(pending))
+			return nil, errAccessListPeersExhausted
+		}
+
+		// Periodic visibility while stalled with peers connected but idle.
+		if len(pending) > 0 && time.Since(lastStallLog) > 30*time.Second {
+			lastStallLog = time.Now()
+			log.Warn("BAL catch-up stalled, awaiting peers",
+				"fetched", len(fetched), "remaining", len(pending))
+		}
 
 		// Wait for something to happen
 		select {
@@ -777,7 +827,7 @@ func (s *Syncer) fetchAccessLists(hashes []common.Hash, cancel chan struct{}) ([
 				pending[h] = struct{}{}
 			}
 		case res := <-accessListResps:
-			s.processAccessListResponse(res, pending, fetched)
+			s.processAccessListResponse(res, headers, pending, fetched)
 		}
 	}
 
@@ -789,7 +839,7 @@ func (s *Syncer) fetchAccessLists(hashes []common.Hash, cancel chan struct{}) ([
 	return results, nil
 }
 
-// assignAccessListTasks attempts to assign access list fetch requests to idle
+// assignAccessListTasks attempts to assign BAL fetch requests to idle
 // peers for any hashes still in pending.
 func (s *Syncer) assignAccessListTasks(pending map[common.Hash]struct{}, success chan *accessListResponse, fail chan *accessListRequest, cancel chan struct{}) {
 	s.lock.Lock()
@@ -842,7 +892,7 @@ func (s *Syncer) assignAccessListTasks(pending map[common.Hash]struct{}, success
 			stale:   make(chan struct{}),
 		}
 		req.timeout = time.AfterFunc(s.rates.TargetTimeout(), func() {
-			peer.Log().Debug("Access list request timed out", "reqid", reqid)
+			peer.Log().Debug("BAL request timed out", "reqid", reqid)
 			s.rates.Update(idle, AccessListsMsg, 0, 0)
 			s.scheduleRevertAccessListRequest(req)
 		})
@@ -855,16 +905,22 @@ func (s *Syncer) assignAccessListTasks(pending map[common.Hash]struct{}, success
 
 			// Attempt to send the remote request and revert if it fails
 			if err := peer.RequestAccessLists(reqid, batch, softResponseLimit); err != nil {
-				log.Debug("Failed to request access lists", "err", err)
+				log.Debug("Failed to request BALs", "err", err)
 				s.scheduleRevertAccessListRequest(req)
 			}
 		}()
 	}
 }
 
-// processAccessListResponse handles a successful access list response by
-// matching results to pending hashes and storing them.
-func (s *Syncer) processAccessListResponse(res *accessListResponse, pending map[common.Hash]struct{}, fetched map[common.Hash]rlp.RawValue) {
+// processAccessListResponse handles a successful BAL response. It
+// verifies each non-empty BAL against the corresponding block header and
+// stores the verified ones in fetched.
+func (s *Syncer) processAccessListResponse(res *accessListResponse, headers map[common.Hash]*types.Header, pending map[common.Hash]struct{}, fetched map[common.Hash]rlp.RawValue) {
+	type verified struct {
+		hash common.Hash
+		raw  rlp.RawValue
+	}
+	var ok []verified
 	// Each response entry corresponds to the requested hash at the same index.
 	for i, raw := range res.accessLists {
 		h := res.req.hashes[i]
@@ -874,25 +930,68 @@ func (s *Syncer) processAccessListResponse(res *accessListResponse, pending map[
 			pending[h] = struct{}{}
 			continue
 		}
-		fetched[h] = raw
-		delete(pending, h)
+		var b bal.BlockAccessList
+		if err := rlp.DecodeBytes(raw, &b); err != nil {
+			log.Warn("Peer sent unparseable BAL, marking stateless",
+				"peer", res.req.peer, "block", h, "err", err)
+			s.rejectAccessListResponse(res, pending)
+			return
+		}
+		header, found := headers[h]
+		if !found {
+			// Caller must supply a header for every requested hash.
+			log.Error("Missing header for fetched BAL", "block", h)
+			s.rejectAccessListResponse(res, pending)
+			return
+		}
+		if err := verifyAccessList(&b, header); err != nil {
+			log.Warn("Peer sent BAL that failed verification, marking stateless",
+				"peer", res.req.peer, "block", h, "err", err)
+			s.rejectAccessListResponse(res, pending)
+			return
+		}
+		ok = append(ok, verified{hash: h, raw: raw})
 	}
 
 	// Re-add hashes that were not served back to pending
 	for i := len(res.accessLists); i < len(res.req.hashes); i++ {
 		pending[res.req.hashes[i]] = struct{}{}
 	}
+
+	// Commit the verified entries.
+	for _, v := range ok {
+		fetched[v.hash] = v.raw
+		delete(pending, v.hash)
+	}
+}
+
+// rejectAccessListResponse marks the responding peer stateless and re-adds
+// every hash from the request to pending so the work moves to other peers.
+func (s *Syncer) rejectAccessListResponse(res *accessListResponse, pending map[common.Hash]struct{}) {
+	s.lock.Lock()
+	s.statelessPeers[res.req.peer] = struct{}{}
+	s.lock.Unlock()
+	for _, h := range res.req.hashes {
+		pending[h] = struct{}{}
+	}
 }
 
 // loadSyncStatus retrieves a previously aborted sync status from the database,
-// or generates a fresh one if none is available.
+// or generates a fresh one if none is available. The persisted blob is framed
+// as `[version byte | JSON payload]`; a missing or mismatching version byte
+// causes the progress to be discarded and sync to start fresh.
 func (s *Syncer) loadSyncStatus() {
 	var progress SyncProgress
 
-	if status := rawdb.ReadSnapshotSyncStatus(s.db); status != nil {
-		if err := json.Unmarshal(status, &progress); err != nil {
+	if raw := rawdb.ReadSnapshotSyncStatus(s.db); len(raw) > 0 {
+		if raw[0] != syncProgressVersion {
+			log.Info("Discarding old-format sync progress", "version", raw[0], "expected", syncProgressVersion)
+		} else if err := json.Unmarshal(raw[1:], &progress); err != nil {
 			log.Error("Failed to decode snap sync status", "err", err)
 		} else {
+			s.lock.Lock()
+			defer s.lock.Unlock()
+
 			for _, task := range progress.Tasks {
 				log.Debug("Scheduled account sync task", "from", task.Next, "last", task.Last)
 			}
@@ -905,11 +1004,8 @@ func (s *Syncer) loadSyncStatus() {
 				}
 				task.StorageCompleted = nil
 			}
-			s.lock.Lock()
-			defer s.lock.Unlock()
-
-			s.previousRoot = progress.Root
-			s.previousNumber = progress.BlockNumber
+			s.previousPivot = progress.Pivot
+			s.complete = progress.Complete
 			s.accountSynced = progress.AccountSynced
 			s.accountBytes = progress.AccountBytes
 			s.bytecodeSynced = progress.BytecodeSynced
@@ -920,9 +1016,27 @@ func (s *Syncer) loadSyncStatus() {
 		}
 	}
 	// Either we've failed to decode the previous state, or there was none.
-	// Start a fresh sync by chunking up the account range and scheduling
-	// them for retrieval.
+	s.resetSyncState()
+}
+
+// resetSyncState wipes all persisted snap-sync data (sync status, account
+// and storage snapshots) and re-initializes in-memory state with a fresh
+// chunking of the account hash range.
+func (s *Syncer) resetSyncState() {
+	rawdb.DeleteSnapshotSyncStatus(s.db)
+	if err := s.db.DeleteRange(rawdb.SnapshotAccountPrefix, []byte{rawdb.SnapshotAccountPrefix[0] + 1}); err != nil {
+		log.Crit("Failed to wipe account snapshot range", "err", err)
+	}
+	if err := s.db.DeleteRange(rawdb.SnapshotStoragePrefix, []byte{rawdb.SnapshotStoragePrefix[0] + 1}); err != nil {
+		log.Crit("Failed to wipe storage snapshot range", "err", err)
+	}
+
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	s.tasks = nil
+	s.previousPivot = nil
+	s.complete = false
 	s.accountSynced, s.accountBytes = 0, 0
 	s.bytecodeSynced, s.bytecodeBytes = 0, 0
 	s.storageSynced, s.storageBytes = 0, 0
@@ -951,7 +1065,7 @@ func (s *Syncer) loadSyncStatus() {
 	}
 }
 
-// saveSyncStatus marshals the remaining sync tasks into leveldb.
+// saveSyncStatus marshals the remaining sync tasks into db.
 func (s *Syncer) saveSyncStatus() {
 	// Serialize any partial progress to disk before spinning down
 	for _, task := range s.tasks {
@@ -964,11 +1078,11 @@ func (s *Syncer) saveSyncStatus() {
 			log.Debug("Leftover completed storages", "number", len(task.StorageCompleted), "next", task.Next, "last", task.Last)
 		}
 	}
-	// Store the actual progress markers
+	// Store the actual progress markers.
 	progress := &SyncProgress{
-		Root:           s.root,
-		BlockNumber:    s.number,
+		Pivot:          s.previousPivot,
 		Tasks:          s.tasks,
+		Complete:       s.complete,
 		AccountSynced:  s.accountSynced,
 		AccountBytes:   s.accountBytes,
 		BytecodeSynced: s.bytecodeSynced,
@@ -976,10 +1090,12 @@ func (s *Syncer) saveSyncStatus() {
 		StorageSynced:  s.storageSynced,
 		StorageBytes:   s.storageBytes,
 	}
-	status, err := json.Marshal(progress)
+	blob, err := json.Marshal(progress)
 	if err != nil {
 		panic(err) // This can only fail during implementation
 	}
+	// Prepend the version byte so future format changes can be detected on load.
+	status := append([]byte{syncProgressVersion}, blob...)
 	rawdb.WriteSnapshotSyncStatus(s.db, status)
 }
 
@@ -1125,7 +1241,7 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 				peer.Log().Debug("Failed to request account range", "err", err)
 				s.scheduleRevertAccountRequest(req)
 			}
-		}(s.root)
+		}(s.pivot.Root)
 
 		// Inject the request into the task to block further assignments
 		task.req = req
@@ -1354,7 +1470,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 				log.Debug("Failed to request storage", "err", err)
 				s.scheduleRevertStorageRequest(req)
 			}
-		}(s.root)
+		}(s.pivot.Root)
 
 		// Inject the request into the subtask to block further assignments
 		if subtask != nil {
@@ -1564,13 +1680,13 @@ func (s *Syncer) scheduleRevertAccessListRequest(req *accessListRequest) {
 	}
 }
 
-// revertAccessListRequest cleans up an access list request and returns all
+// revertAccessListRequest cleans up an BAL request and returns all
 // failed retrieval tasks to the scheduler for reassignment.
 func (s *Syncer) revertAccessListRequest(req *accessListRequest) {
-	log.Debug("Reverting access list request", "peer", req.peer)
+	log.Debug("Reverting BAL request", "peer", req.peer)
 	select {
 	case <-req.stale:
-		log.Trace("Access list request already reverted", "peer", req.peer, "reqid", req.id)
+		log.Trace("BAL request already reverted", "peer", req.peer, "reqid", req.id)
 		return
 	default:
 	}
@@ -2024,7 +2140,7 @@ func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 	// retrieved was either already pruned remotely, or the peer is not yet
 	// synced to our head.
 	if len(hashes) == 0 && len(accounts) == 0 && len(proof) == 0 {
-		logger.Debug("Peer rejected account range request", "root", s.root)
+		logger.Debug("Peer rejected account range request", "root", s.pivot.Root)
 		s.statelessPeers[peer.ID()] = struct{}{}
 		s.lock.Unlock()
 
@@ -2032,7 +2148,7 @@ func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 		s.scheduleRevertAccountRequest(req)
 		return nil
 	}
-	root := s.root
+	root := s.pivot.Root
 	s.lock.Unlock()
 
 	// Reconstruct a partial trie from the response and verify it
@@ -2326,7 +2442,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 	return nil
 }
 
-// OnAccessLists is a callback method to invoke when a batch of access lists
+// OnAccessLists is a callback method to invoke when a batch of BALs
 // are received from a remote peer.
 func (s *Syncer) OnAccessLists(peer SyncPeer, id uint64, accessLists rlp.RawList[rlp.RawValue]) error {
 	// Convert RawList to slice of raw values
@@ -2363,7 +2479,7 @@ func (s *Syncer) OnAccessLists(peer SyncPeer, id uint64, accessLists rlp.RawList
 	req, ok := s.accessListReqs[id]
 	if !ok {
 		// Request stale, perhaps the peer timed out but came through in the end
-		logger.Warn("Unexpected access list packet")
+		logger.Warn("Unexpected BAL packet")
 		s.lock.Unlock()
 		return nil
 	}
@@ -2380,7 +2496,7 @@ func (s *Syncer) OnAccessLists(peer SyncPeer, id uint64, accessLists rlp.RawList
 	// Response is valid, but check if peer is signalling that it does not have
 	// the requested data.
 	if len(bals) == 0 {
-		logger.Debug("Peer rejected access list request")
+		logger.Debug("Peer rejected BAL request")
 		s.statelessPeers[peer.ID()] = struct{}{}
 		s.lock.Unlock()
 
@@ -2477,6 +2593,26 @@ func estimateRemainingSlots(hashes int, last common.Hash) (uint64, error) {
 		return 0, errors.New("too few slots for estimation")
 	}
 	return space.Uint64() - uint64(hashes), nil
+}
+
+// accessListPeersExhausted reports whether forward progress on BAL fetches is
+// impossible: at least one peer is connected, every connected peer is marked
+// stateless, and no BAL requests are in flight.
+func (s *Syncer) accessListPeersExhausted() bool {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	if len(s.peers) == 0 {
+		return false
+	}
+	if len(s.accessListReqs) > 0 {
+		return false
+	}
+	for id := range s.peers {
+		if _, ok := s.statelessPeers[id]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // sortIdlePeers builds a list of idle peers sorted by download capacity

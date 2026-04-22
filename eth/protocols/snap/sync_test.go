@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 	mrand "math/rand"
@@ -178,7 +179,7 @@ func (t *testPeer) ID() string      { return t.id }
 func (t *testPeer) Log() log.Logger { return t.logger }
 
 func (t *testPeer) Stats() string {
-	return fmt.Sprintf(`Account requests: %d Storage requests: %d Bytecode requests: %d`, t.nAccountRequests, t.nStorageRequests, t.nBytecodeRequests)
+	return fmt.Sprintf(`Account requests: %d Storage requests: %d Bytecode requests: %d`, t.nAccountRequests.Load(), t.nStorageRequests.Load(), t.nBytecodeRequests.Load())
 }
 
 func (t *testPeer) RequestAccountRange(id uint64, root, origin, limit common.Hash, bytes int) error {
@@ -207,7 +208,7 @@ func (t *testPeer) RequestByteCodes(id uint64, hashes []common.Hash, bytes int) 
 }
 
 func (t *testPeer) RequestAccessLists(id uint64, hashes []common.Hash, bytes int) error {
-	t.nAccessListRequests++
+	t.nAccessListRequests.Add(1)
 	t.logger.Trace("Fetching set of BALs", "reqid", id, "hashes", len(hashes), "bytes", common.StorageSize(bytes))
 	go t.accessListRequestHandler(t, id, hashes, bytes)
 	return nil
@@ -592,7 +593,7 @@ func testSyncBloatedProof(t *testing.T, scheme string) {
 		return nil
 	}
 	syncer := setupSyncer(nodeScheme, source)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err == nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err == nil {
 		t.Fatal("No error returned from incomplete/cancelled sync")
 	}
 }
@@ -605,6 +606,33 @@ func setupSyncer(scheme string, peers ...*testPeer) *Syncer {
 		peer.remote = syncer
 	}
 	return syncer
+}
+
+// mkPivot builds a minimal pivot header with the given block number and state
+// root, suitable for test calls into Syncer.Sync.
+func mkPivot(num uint64, root common.Hash) *types.Header {
+	return &types.Header{
+		Number:     new(big.Int).SetUint64(num),
+		Root:       root,
+		Difficulty: common.Big0,
+	}
+}
+
+// makeAccessListHeaders builds a header map keyed by block hash where each
+// header's BlockAccessListHash matches the BAL it points to. fetchAccessLists
+// uses these headers to verify peer responses, so tests need to provide them
+// alongside any BALs they expect to be accepted.
+func makeAccessListHeaders(bals map[common.Hash]rlp.RawValue) map[common.Hash]*types.Header {
+	headers := make(map[common.Hash]*types.Header, len(bals))
+	for h, raw := range bals {
+		var b bal.BlockAccessList
+		if err := rlp.DecodeBytes(raw, &b); err != nil {
+			continue
+		}
+		bh := b.Hash()
+		headers[h] = &types.Header{BlockAccessListHash: &bh}
+	}
+	return headers
 }
 
 // TestSync tests a basic sync with one peer
@@ -634,7 +662,7 @@ func testSync(t *testing.T, scheme string) {
 		return source
 	}
 	syncer := setupSyncer(nodeScheme, mkSource("source"))
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	verifyTrie(scheme, syncer.db, sourceAccountTrie.Hash(), t)
@@ -669,7 +697,7 @@ func testSyncTinyTriePanic(t *testing.T, scheme string) {
 	}
 	syncer := setupSyncer(nodeScheme, mkSource("source"))
 	done := checkStall(t, term)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
@@ -704,7 +732,7 @@ func testMultiSync(t *testing.T, scheme string) {
 	}
 	syncer := setupSyncer(nodeScheme, mkSource("sourceA"), mkSource("sourceB"))
 	done := checkStall(t, term)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
@@ -741,7 +769,7 @@ func testSyncWithStorage(t *testing.T, scheme string) {
 	}
 	syncer := setupSyncer(scheme, mkSource("sourceA"))
 	done := checkStall(t, term)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
@@ -791,7 +819,7 @@ func testMultiSyncManyUseless(t *testing.T, scheme string) {
 		mkSource("noStorage", true, false),
 	)
 	done := checkStall(t, term)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
@@ -846,7 +874,7 @@ func testMultiSyncManyUselessWithLowTimeout(t *testing.T, scheme string) {
 	syncer.rates.OverrideTTLLimit = time.Millisecond
 
 	done := checkStall(t, term)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
@@ -899,7 +927,7 @@ func testMultiSyncManyUnresponsive(t *testing.T, scheme string) {
 	syncer.rates.OverrideTTLLimit = time.Millisecond
 
 	done := checkStall(t, term)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
@@ -953,7 +981,7 @@ func testSyncBoundaryAccountTrie(t *testing.T, scheme string) {
 		mkSource("peer-b"),
 	)
 	done := checkStall(t, term)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
@@ -1000,7 +1028,7 @@ func testSyncNoStorageAndOneCappedPeer(t *testing.T, scheme string) {
 		mkSource("capped", true),
 	)
 	done := checkStall(t, term)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
@@ -1045,7 +1073,7 @@ func testSyncNoStorageAndOneCodeCorruptPeer(t *testing.T, scheme string) {
 		mkSource("corrupt", corruptCodeRequestHandler),
 	)
 	done := checkStall(t, term)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
@@ -1088,7 +1116,7 @@ func testSyncNoStorageAndOneAccountCorruptPeer(t *testing.T, scheme string) {
 		mkSource("corrupt", corruptAccountRequestHandler),
 	)
 	done := checkStall(t, term)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
@@ -1134,7 +1162,7 @@ func testSyncNoStorageAndOneCodeCappedPeer(t *testing.T, scheme string) {
 		}),
 	)
 	done := checkStall(t, term)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
@@ -1186,7 +1214,7 @@ func testSyncBoundaryStorageTrie(t *testing.T, scheme string) {
 		mkSource("peer-b"),
 	)
 	done := checkStall(t, term)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
@@ -1233,7 +1261,7 @@ func testSyncWithStorageAndOneCappedPeer(t *testing.T, scheme string) {
 		mkSource("slow", true),
 	)
 	done := checkStall(t, term)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
@@ -1279,7 +1307,7 @@ func testSyncWithStorageAndCorruptPeer(t *testing.T, scheme string) {
 		mkSource("corrupt", corruptStorageRequestHandler),
 	)
 	done := checkStall(t, term)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
@@ -1322,7 +1350,7 @@ func testSyncWithStorageAndNonProvingPeer(t *testing.T, scheme string) {
 		mkSource("corrupt", noProofStorageRequestHandler),
 	)
 	done := checkStall(t, term)
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	close(done)
@@ -1362,7 +1390,7 @@ func testSyncWithStorageMisbehavingProve(t *testing.T, scheme string) {
 		return source
 	}
 	syncer := setupSyncer(nodeScheme, mkSource("sourceA"))
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	verifyTrie(scheme, syncer.db, sourceAccountTrie.Hash(), t)
@@ -1401,7 +1429,7 @@ func testSyncWithUnevenStorage(t *testing.T, scheme string) {
 		return source
 	}
 	syncer := setupSyncer(scheme, mkSource("source"))
-	if err := syncer.Sync(accountTrie.Hash(), 0, cancel); err != nil {
+	if err := syncer.Sync(mkPivot(0, accountTrie.Hash()), cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
 	verifyTrie(scheme, syncer.db, accountTrie.Hash(), t)
@@ -1907,68 +1935,157 @@ func TestSlotEstimation(t *testing.T) {
 	}
 }
 
-// TestPivotMoveDetection verifies that when the syncer is restarted with a
-// different root (simulating the downloader's cancel+restart on pivot move),
-// downloadState() returns errPivotStale immediately.
-func TestPivotMoveDetection(t *testing.T) {
+// TestIsPivotReorged verifies the four conditions isPivotReorged covers:
+// reorged out, non-advancing pivot, missing canonical, and the happy path
+// where the previous pivot is still canonical and the new pivot advances.
+func TestIsPivotReorged(t *testing.T) {
 	t.Parallel()
 
-	rootA := common.HexToHash("0xaaaa")
-	rootB := common.HexToHash("0xbbbb")
+	// Reorged: canonical hash at prev's height differs from prev. The
+	// previous pivot was reorged out by an alternate chain at the same
+	// (or higher) height.
+	t.Run("Reorged_DifferentHash", func(t *testing.T) {
+		db := rawdb.NewMemoryDatabase()
+		prev := mkPivot(100, common.HexToHash("0xaaaa"))
+		curr := mkPivot(105, common.HexToHash("0xcccc"))
+		canonical := mkPivot(100, common.HexToHash("0xbbbb"))
+		rawdb.WriteHeader(db, canonical)
+		rawdb.WriteCanonicalHash(db, canonical.Hash(), canonical.Number.Uint64())
 
-	db := rawdb.NewMemoryDatabase()
-	syncer := NewSyncer(db, rawdb.HashScheme)
+		if !isPivotReorged(db, prev, curr) {
+			t.Fatal("expected reorg detection when canonical hash differs")
+		}
+	})
 
-	// Simulate a previous sync run against rootA with some pending tasks
-	syncer.root = rootA
-	syncer.tasks = []*accountTask{
-		{Next: common.Hash{}, Last: common.MaxHash, SubTasks: make(map[common.Hash][]*storageTask), stateCompleted: make(map[common.Hash]struct{})},
-	}
-	syncer.saveSyncStatus()
+	// NonAdvancingPivot: new pivot is at or below the old one. There's
+	// nothing for catchUp to roll forward, regardless of canonical state.
+	t.Run("NonAdvancingPivot", func(t *testing.T) {
+		db := rawdb.NewMemoryDatabase()
+		prev := mkPivot(100, common.HexToHash("0xaaaa"))
+		curr := mkPivot(95, common.HexToHash("0xcccc"))
+		rawdb.WriteHeader(db, prev)
+		rawdb.WriteCanonicalHash(db, prev.Hash(), prev.Number.Uint64())
 
-	// Simulate downloader restarting us with rootB (as Sync() would do)
-	syncer.root = rootB
-	syncer.previousRoot = rootB // Sync() sets this as default
-	syncer.loadSyncStatus()     // Overwrites previousRoot with persisted rootA
+		if !isPivotReorged(db, prev, curr) {
+			t.Fatal("expected reorg detection when new pivot is at or below the old one")
+		}
+	})
 
-	if syncer.previousRoot != rootA {
-		t.Fatalf("previousRoot mismatch: got %v, want %v", syncer.previousRoot, rootA)
-	}
-	if syncer.root != rootB {
-		t.Fatalf("root mismatch: got %v, want %v", syncer.root, rootB)
-	}
-	// downloadState() should detect the mismatch and return errPivotStale
-	cancel := make(chan struct{})
-	err := syncer.downloadState(cancel)
-	if err != errPivotStale {
-		t.Fatalf("expected errPivotStale, got %v", err)
-	}
+	// MissingCanonical: canonical hash at prev's height is absent while
+	// curr advances past it. By the time Sync is called, headers up to
+	// curr should be indexed, so this implies broken chain state.
+	t.Run("MissingCanonical", func(t *testing.T) {
+		db := rawdb.NewMemoryDatabase()
+		prev := mkPivot(100, common.HexToHash("0xaaaa"))
+		curr := mkPivot(105, common.HexToHash("0xcccc"))
+
+		if !isPivotReorged(db, prev, curr) {
+			t.Fatal("expected reorg detection when canonical hash is missing at prev's height")
+		}
+	})
+
+	// NotReorged_SameHash: prev is still canonical and curr advances past
+	// it. Catch-up is feasible.
+	t.Run("NotReorged_SameHash", func(t *testing.T) {
+		db := rawdb.NewMemoryDatabase()
+		prev := mkPivot(100, common.HexToHash("0xaaaa"))
+		curr := mkPivot(105, common.HexToHash("0xcccc"))
+		rawdb.WriteHeader(db, prev)
+		rawdb.WriteCanonicalHash(db, prev.Hash(), prev.Number.Uint64())
+
+		if isPivotReorged(db, prev, curr) {
+			t.Fatal("should not detect reorg when prev is canonical and curr advances")
+		}
+	})
 }
 
-// TestCatchUpInvertedRange verifies that catchUp returns an error and wipes
-// sync progress when the new pivot is at the same (or lower) block number as
-// the old pivot..
-func TestCatchUpInvertedRange(t *testing.T) {
+// TestSyncDetectsPivotReorged exercises the reorg-handling branch in Sync
+// end-to-end.
+//
+// Setup: persisted progress points at an orphan pivot at block 100; the new
+// canonical header at block 100 has a different hash. Sync is then called with
+// a new pivot at the same height.
+//
+// If isPivotReorged works, loadSyncStatus restores previousPivot, the check
+// flags it as reorged, resetSyncState clears previousPivot, catchUp is
+// skipped, and the fresh download proceeds to completion.
+//
+// If detection doesn't fire, the pivot-move check would call catchUp with
+// from = 101 and to = 100 — the inverted-range guard surfaces that as an
+// error, failing the test. So Sync returning nil is the positive signal that
+// reorg detection and the reset worked.
+func TestSyncDetectsPivotReorged(t *testing.T) {
 	t.Parallel()
+
+	nodeScheme, sourceAccountTrie, elems := makeAccountTrieNoStorage(100, rawdb.HashScheme)
+	root := sourceAccountTrie.Hash()
+
 	db := rawdb.NewMemoryDatabase()
-	syncer := NewSyncer(db, rawdb.HashScheme)
 
-	// Simulate: old pivot at block 100, new pivot at block 100 (same number,
-	// different root). This happens when a reorg replaces the pivot block.
-	syncer.previousNumber = 100
-	syncer.number = 100
+	// Persist progress against an orphan pivot — same height as the new
+	// canonical pivot we'll sync to, different hash. Populate a partial task
+	// and non-zero counter so the reset path has something to clean up.
+	orphanPivot := mkPivot(100, common.HexToHash("0xdead"))
+	seed := NewSyncer(db, nodeScheme)
+	// previousPivot reflects where flat state matches and it is what
+	// saveSyncStatus persists. Set it to simulate a prior sync reaching
+	// orphanPivot.
+	seed.previousPivot = orphanPivot
+	seed.pivot = orphanPivot
+	seed.accountSynced = 42
+	seed.tasks = []*accountTask{{
+		Next:           common.HexToHash("0x80"),
+		Last:           common.MaxHash,
+		SubTasks:       make(map[common.Hash][]*storageTask),
+		stateCompleted: make(map[common.Hash]struct{}),
+	}}
+	seed.saveSyncStatus()
 
-	// Write some sync progress so we can verify it gets wiped
-	rawdb.WriteSnapshotSyncStatus(db, []byte("some progress"))
-	cancel := make(chan struct{})
-	err := syncer.catchUp(cancel)
-	if err == nil {
-		t.Fatal("expected error from catchUp with inverted range")
+	// Pre-write orphan flat-state entries at hashes the test peer won't
+	// re-serve. After resetSyncState wipes the snapshot ranges, these
+	// should be gone.
+	orphanAccountHash := common.HexToHash("0xdeadbeef")
+	rawdb.WriteAccountSnapshot(db, orphanAccountHash, []byte{0xde, 0xad})
+	orphanStorageAccount := common.HexToHash("0xfeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface")
+	orphanStorageSlot := common.HexToHash("0xabcd")
+	rawdb.WriteStorageSnapshot(db, orphanStorageAccount, orphanStorageSlot, []byte{0xff, 0xff})
+
+	// Canonical header at block 100 is newPivot — different hash from the
+	// orphan pivot, which is what isPivotReorged will detect.
+	newPivot := mkPivot(100, root)
+	rawdb.WriteHeader(db, newPivot)
+	rawdb.WriteCanonicalHash(db, newPivot.Hash(), newPivot.Number.Uint64())
+
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() { once.Do(func() { close(cancel) }) }
+	)
+	syncer := NewSyncer(db, nodeScheme)
+	src := newTestPeer("source", t, term)
+	src.accountTrie = sourceAccountTrie.Copy()
+	src.accountValues = elems
+	syncer.Register(src)
+	src.remote = syncer
+
+	if err := syncer.Sync(newPivot, cancel); err != nil {
+		t.Fatalf("sync failed (reorg detection likely broken): %v", err)
 	}
-
-	// Verify sync progress was wiped
-	if status := rawdb.ReadSnapshotSyncStatus(db); status != nil {
-		t.Fatal("sync progress should be wiped after inverted catch-up range")
+	// After successful completion, status should be marked Complete=true
+	// against the new (canonical) pivot.
+	loader := NewSyncer(db, nodeScheme)
+	loader.loadSyncStatus()
+	if !loader.complete {
+		t.Fatal("sync status should be marked Complete=true after successful completion")
+	}
+	if loader.previousPivot == nil || loader.previousPivot.Hash() != newPivot.Hash() {
+		t.Fatalf("expected persisted pivot to match new pivot")
+	}
+	if data := rawdb.ReadAccountSnapshot(db, orphanAccountHash); len(data) != 0 {
+		t.Errorf("orphan account snapshot should be wiped, got %x", data)
+	}
+	if val := rawdb.ReadStorageSnapshot(db, orphanStorageAccount, orphanStorageSlot); len(val) != 0 {
+		t.Errorf("orphan storage snapshot should be wiped, got %x", val)
 	}
 }
 
@@ -2007,8 +2124,9 @@ func testInterruptedDownloadRecovery(t *testing.T, scheme string) {
 	src1.accountRequestHandler = cancelAfterHandler
 	syncer1.Register(src1)
 	src1.remote = syncer1
-	syncer1.root = root
-	syncer1.previousRoot = root
+	pivot := mkPivot(0, root)
+	syncer1.pivot = pivot
+	syncer1.previousPivot = pivot // Sync sets this before downloadState
 	syncer1.loadSyncStatus()
 	syncer1.downloadState(cancel1)
 
@@ -2044,8 +2162,9 @@ func testInterruptedDownloadRecovery(t *testing.T, scheme string) {
 	src2.accountValues = elems
 	syncer2.Register(src2)
 	src2.remote = syncer2
-	syncer2.root = root
-	syncer2.previousRoot = root
+	pivot2 := mkPivot(0, root)
+	syncer2.pivot = pivot2
+	syncer2.previousPivot = pivot2 // Sync sets this before downloadState
 	syncer2.loadSyncStatus()
 	if err := syncer2.downloadState(cancel2); err != nil {
 		t.Fatalf("resumed download failed: %v", err)
@@ -2056,6 +2175,52 @@ func testInterruptedDownloadRecovery(t *testing.T, scheme string) {
 		if data := rawdb.ReadAccountSnapshot(db, common.BytesToHash(entry.k)); len(data) == 0 {
 			t.Errorf("missing account after resumed download: %x", entry.k)
 		}
+	}
+}
+
+// TestSyncPersistsPivotDuringDownload verifies that after a fresh Sync is
+// interrupted mid-download, the persisted previousPivot equals the current
+// pivot (not nil). Without this, a follow-up Sync at a different pivot
+// would not see that the partial flat state belongs to the old pivot, and
+// would mix old-pivot accounts with new-pivot data.
+func TestSyncPersistsPivotDuringDownload(t *testing.T) {
+	t.Parallel()
+	nodeScheme, sourceAccountTrie, elems := makeAccountTrieNoStorage(100, rawdb.HashScheme)
+
+	var (
+		once      sync.Once
+		cancel    = make(chan struct{})
+		term      = func() { once.Do(func() { close(cancel) }) }
+		responses atomic.Int32
+	)
+	db := rawdb.NewMemoryDatabase()
+	syncer := NewSyncer(db, nodeScheme)
+	src := newTestPeer("source", t, term)
+	src.accountTrie = sourceAccountTrie.Copy()
+	src.accountValues = elems
+	src.accountRequestHandler = func(tp *testPeer, id uint64, root common.Hash, origin common.Hash, limit common.Hash, cap int) error {
+		if responses.Add(1) > 2 {
+			term()
+			return nil
+		}
+		return defaultAccountRequestHandler(tp, id, root, origin, limit, cap)
+	}
+	syncer.Register(src)
+	src.remote = syncer
+
+	pivot := mkPivot(0, sourceAccountTrie.Hash())
+	// Sync should be interrupted by the cancel after a couple of responses.
+	_ = syncer.Sync(pivot, cancel)
+
+	// Persisted previousPivot must equal the pivot, so a follow-up Sync at a
+	// different pivot can recognize the partial flat state belongs to this one.
+	loader := NewSyncer(db, nodeScheme)
+	loader.loadSyncStatus()
+	if loader.previousPivot == nil {
+		t.Fatal("expected persisted previousPivot to be set after interrupted download, got nil")
+	}
+	if loader.previousPivot.Hash() != pivot.Hash() {
+		t.Errorf("persisted previousPivot mismatch: got %v, want %v", loader.previousPivot.Hash(), pivot.Hash())
 	}
 }
 
@@ -2179,7 +2344,7 @@ func testPivotMovement(t *testing.T, scheme string, pivotMoves int) {
 	}
 	syncer1.Register(src1)
 	src1.remote = syncer1
-	syncer1.Sync(rootA, numA, cancel1)
+	syncer1.Sync(mkPivot(numA, rootA), cancel1)
 
 	// Subsequent runs: each move triggers catch-up then resumes download
 	for i, move := range moves {
@@ -2195,7 +2360,7 @@ func testPivotMovement(t *testing.T, scheme string, pivotMoves int) {
 		src.accessLists = move.bals
 		syncer.Register(src)
 		src.remote = syncer
-		if err := syncer.Sync(move.root, move.blockNum, cancel); err != nil {
+		if err := syncer.Sync(mkPivot(move.blockNum, move.root), cancel); err != nil {
 			t.Fatalf("pivot move %d: sync failed: %v", i+1, err)
 		}
 
@@ -2214,16 +2379,151 @@ func testPivotMovement(t *testing.T, scheme string, pivotMoves int) {
 	}
 }
 
-// TestSyncStatusClearedAfterCompletion verifies that the persisted sync status
-// is cleared after a full sync completes (download + trie rebuild), so the
-// next Sync() call starts fresh.
-func TestSyncStatusClearedAfterCompletion(t *testing.T) {
+// TestCatchUpPersistsIncrementally verifies that catchUp updates and persists
+// previousPivot after each successfully applied BAL. If a later block in the
+// gap fails to apply, the persisted state reflects the last successful block,
+// so a follow-up Sync can resume from there rather than reapplying everything.
+func TestCatchUpPersistsIncrementally(t *testing.T) {
 	t.Parallel()
-	testSyncStatusClearedAfterCompletion(t, rawdb.HashScheme)
-	testSyncStatusClearedAfterCompletion(t, rawdb.PathScheme)
+
+	nodeScheme, sourceAccountTrie, elems, addrs := makeAccountTrieWithAddresses(100, rawdb.HashScheme)
+	rootA := sourceAccountTrie.Hash()
+	numA := uint64(100)
+
+	goodAddr := addrs[0]
+	corruptAddr := addrs[1]
+
+	type balBlock struct {
+		header *types.Header
+		bal    rlp.RawValue
+	}
+
+	db := rawdb.NewMemoryDatabase()
+	emptyHash := common.Hash{}
+	zero := uint64(0)
+
+	// Write the header and canonical hash for block A so the reorg-detection
+	// canonical-lookup in Sync passes (otherwise it'd treat A as reorged out
+	// and reset instead of running catchUp).
+	pivotAHeader := &types.Header{
+		Number: new(big.Int).SetUint64(numA), Root: rootA, Difficulty: common.Big0,
+		BaseFee: common.Big0, WithdrawalsHash: &emptyHash,
+		BlobGasUsed: &zero, ExcessBlobGas: &zero,
+		ParentBeaconRoot: &emptyHash, RequestsHash: &emptyHash,
+	}
+	rawdb.WriteHeader(db, pivotAHeader)
+	rawdb.WriteCanonicalHash(db, pivotAHeader.Hash(), numA)
+	pivotA := pivotAHeader
+
+	// Build three sequential BAL blocks (A+1, A+2, A+3). The first two touch
+	// goodAddr, the third touches corruptAddr so that block's apply fails
+	// once we've corrupted that account's snapshot.
+	blocks := make([]balBlock, 3)
+	for i := 0; i < 3; i++ {
+		blockNum := numA + uint64(i) + 1
+		target := goodAddr
+		if i == 2 {
+			target = corruptAddr
+		}
+		balance := uint256.NewInt(uint64(1000 * (i + 1)))
+
+		cb := bal.NewConstructionBlockAccessList()
+		cb.BalanceChange(0, target, balance)
+		var buf bytes.Buffer
+		if err := cb.EncodeRLP(&buf); err != nil {
+			t.Fatal(err)
+		}
+		var b bal.BlockAccessList
+		if err := rlp.DecodeBytes(buf.Bytes(), &b); err != nil {
+			t.Fatal(err)
+		}
+		balHash := b.Hash()
+		header := &types.Header{
+			Number: new(big.Int).SetUint64(blockNum), Difficulty: common.Big0,
+			BaseFee: common.Big0, WithdrawalsHash: &emptyHash,
+			BlobGasUsed: &zero, ExcessBlobGas: &zero,
+			ParentBeaconRoot: &emptyHash, RequestsHash: &emptyHash,
+			BlockAccessListHash: &balHash,
+		}
+		rawdb.WriteHeader(db, header)
+		rawdb.WriteCanonicalHash(db, header.Hash(), blockNum)
+		blocks[i] = balBlock{header: header, bal: buf.Bytes()}
+	}
+
+	// First sync: complete sync to A so persisted state has previousPivot=A,
+	// flat state covers all accounts.
+	{
+		var (
+			once   sync.Once
+			cancel = make(chan struct{})
+			term   = func() { once.Do(func() { close(cancel) }) }
+		)
+		syncer := NewSyncer(db, nodeScheme)
+		src := newTestPeer("seed", t, term)
+		src.accountTrie = sourceAccountTrie.Copy()
+		src.accountValues = elems
+		syncer.Register(src)
+		src.remote = syncer
+		if err := syncer.Sync(pivotA, cancel); err != nil {
+			t.Fatalf("seed sync failed: %v", err)
+		}
+	}
+
+	// Corrupt the flat-state snapshot for corruptAddr so applyAccessList will
+	// fail when block A+3's BAL touches it. types.FullAccount rejects this
+	// payload as undecodable.
+	rawdb.WriteAccountSnapshot(db, crypto.Keccak256Hash(corruptAddr[:]), []byte{0xff, 0xff, 0xff, 0xff})
+
+	// Second sync: target is A+3. catchUp should apply A+1 and A+2 (good
+	// account), persist after each, then fail on A+3 (corrupt account).
+	pivotB := blocks[2].header
+	balsByHash := map[common.Hash]rlp.RawValue{
+		blocks[0].header.Hash(): blocks[0].bal,
+		blocks[1].header.Hash(): blocks[1].bal,
+		blocks[2].header.Hash(): blocks[2].bal,
+	}
+
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() { once.Do(func() { close(cancel) }) }
+	)
+	syncer := NewSyncer(db, nodeScheme)
+	src := newTestPeer("catchup", t, term)
+	src.accountTrie = sourceAccountTrie.Copy()
+	src.accountValues = elems
+	src.accessLists = balsByHash
+	syncer.Register(src)
+	src.remote = syncer
+
+	if err := syncer.Sync(pivotB, cancel); err == nil {
+		t.Fatal("expected Sync to fail when applyAccessList hits corrupt flat state")
+	}
+
+	// Persisted previousPivot should now reflect the last successfully applied
+	// block (A+2). Without per-iteration saves, it would still be at A.
+	loader := NewSyncer(db, nodeScheme)
+	loader.loadSyncStatus()
+	if loader.previousPivot == nil {
+		t.Fatal("expected persisted previousPivot to be set after partial catchUp")
+	}
+	wantHash := blocks[1].header.Hash()
+	if loader.previousPivot.Hash() != wantHash {
+		t.Errorf("persisted previousPivot mismatch after partial catchUp: got %v, want %v (block A+2)",
+			loader.previousPivot.Hash(), wantHash)
+	}
 }
 
-func testSyncStatusClearedAfterCompletion(t *testing.T, scheme string) {
+// TestSyncStatusMarkedCompleteAfterCompletion verifies that after a full sync
+// completes, the persisted sync status has Complete=true. This lets a
+// subsequent Sync call distinguish "already done" from "fresh node" and skip.
+func TestSyncStatusMarkedCompleteAfterCompletion(t *testing.T) {
+	t.Parallel()
+	testSyncStatusMarkedCompleteAfterCompletion(t, rawdb.HashScheme)
+	testSyncStatusMarkedCompleteAfterCompletion(t, rawdb.PathScheme)
+}
+
+func testSyncStatusMarkedCompleteAfterCompletion(t *testing.T, scheme string) {
 	var (
 		once   sync.Once
 		cancel = make(chan struct{})
@@ -2238,12 +2538,61 @@ func testSyncStatusClearedAfterCompletion(t *testing.T, scheme string) {
 		return source
 	}
 	syncer := setupSyncer(nodeScheme, mkSource("source"))
-	if err := syncer.Sync(sourceAccountTrie.Hash(), 0, cancel); err != nil {
+	pivot := mkPivot(0, sourceAccountTrie.Hash())
+	if err := syncer.Sync(pivot, cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
-	// After successful sync, status should be cleared
-	if status := rawdb.ReadSnapshotSyncStatus(syncer.db); status != nil {
-		t.Fatal("sync status should be nil after successful completion")
+
+	// After successful sync, persisted status should be present with
+	// Complete=true and the pivot we synced to.
+	loader := NewSyncer(syncer.db, nodeScheme)
+	loader.loadSyncStatus()
+	if !loader.complete {
+		t.Fatal("expected persisted status to have Complete=true after successful sync")
+	}
+	if loader.previousPivot == nil || loader.previousPivot.Hash() != pivot.Hash() {
+		t.Fatalf("expected persisted pivot to match synced pivot")
+	}
+}
+
+// TestSyncSkipsIfAlreadyComplete verifies that a follow-up Sync call for the
+// same pivot returns immediately without doing any work, since the persisted
+// status indicates the sync is already complete. To prove the skip path actually
+// fires, we deliberately wipe the flat state between the two calls. If it skips,
+// Sync returns nil without touching flat state. If it doesn't kip, GenerateTrie
+// would run against an empty snapshot and fail with a root mismatch.
+func TestSyncSkipsIfAlreadyComplete(t *testing.T) {
+	t.Parallel()
+
+	nodeScheme, sourceAccountTrie, elems := makeAccountTrieNoStorage(100, rawdb.HashScheme)
+	pivot := mkPivot(0, sourceAccountTrie.Hash())
+
+	var (
+		once1   sync.Once
+		cancel1 = make(chan struct{})
+		term1   = func() { once1.Do(func() { close(cancel1) }) }
+	)
+	src1 := newTestPeer("source1", t, term1)
+	src1.accountTrie = sourceAccountTrie.Copy()
+	src1.accountValues = elems
+	syncer := setupSyncer(nodeScheme, src1)
+	if err := syncer.Sync(pivot, cancel1); err != nil {
+		t.Fatalf("first sync failed: %v", err)
+	}
+
+	// Wipe the flat state. The persisted status (with Complete=true) stays.
+	if err := syncer.db.DeleteRange(rawdb.SnapshotAccountPrefix, []byte{rawdb.SnapshotAccountPrefix[0] + 1}); err != nil {
+		t.Fatalf("failed to wipe account snapshot: %v", err)
+	}
+	if err := syncer.db.DeleteRange(rawdb.SnapshotStoragePrefix, []byte{rawdb.SnapshotStoragePrefix[0] + 1}); err != nil {
+		t.Fatalf("failed to wipe storage snapshot: %v", err)
+	}
+
+	// Second sync must take the skip path. If it didn't, the empty flat
+	// state would cause GenerateTrie to fail with a root mismatch.
+	cancel2 := make(chan struct{})
+	if err := syncer.Sync(pivot, cancel2); err != nil {
+		t.Fatalf("second sync should have skipped, got error: %v", err)
 	}
 }
 
@@ -2270,8 +2619,9 @@ func TestInterruptedRebuildRecovery(t *testing.T) {
 	src1.accountValues = elems
 	syncer1.Register(src1)
 	src1.remote = syncer1
-	syncer1.root = root
-	syncer1.previousRoot = root
+	pivot := mkPivot(0, root)
+	syncer1.pivot = pivot
+	syncer1.previousPivot = pivot // Sync sets this before downloadState
 	syncer1.loadSyncStatus()
 
 	if err := syncer1.downloadState(cancel1); err != nil {
@@ -2301,12 +2651,14 @@ func TestInterruptedRebuildRecovery(t *testing.T) {
 	syncer2.Register(src2)
 	src2.remote = syncer2
 
-	if err := syncer2.Sync(root, 0, cancel2); err != nil {
+	if err := syncer2.Sync(mkPivot(0, root), cancel2); err != nil {
 		t.Fatalf("resumed sync failed: %v", err)
 	}
-	// After rebuild completes, status should be cleared
-	if status := rawdb.ReadSnapshotSyncStatus(db); status != nil {
-		t.Fatal("sync status should be nil after rebuild completes")
+	// After rebuild completes, status should be marked Complete=true.
+	loader := NewSyncer(db, nodeScheme)
+	loader.loadSyncStatus()
+	if !loader.complete {
+		t.Fatal("sync status should be marked Complete=true after rebuild completes")
 	}
 }
 
@@ -2340,7 +2692,7 @@ func TestFetchAccessListsMultiplePeers(t *testing.T) {
 		return source
 	}
 	syncer := setupSyncer(rawdb.HashScheme, mkSource("peer-a"), mkSource("peer-b"), mkSource("peer-c"))
-	results, err := syncer.fetchAccessLists(hashes, cancel)
+	results, err := syncer.fetchAccessLists(hashes, makeAccessListHeaders(bals), cancel)
 	if err != nil {
 		t.Fatalf("fetchAccessLists failed: %v", err)
 	}
@@ -2386,7 +2738,7 @@ func TestFetchAccessListsPeerTimeout(t *testing.T) {
 	good.accessLists = bals
 	syncer := setupSyncer(rawdb.HashScheme, nonResponsive, good)
 	syncer.rates.OverrideTTLLimit = time.Millisecond // Fast timeout
-	results, err := syncer.fetchAccessLists(hashes, cancel)
+	results, err := syncer.fetchAccessLists(hashes, makeAccessListHeaders(bals), cancel)
 	if err != nil {
 		t.Fatalf("fetchAccessLists failed: %v", err)
 	}
@@ -2422,7 +2774,7 @@ func TestFetchAccessListsPeerRejection(t *testing.T) {
 	good := newTestPeer("good", t, term)
 	good.accessLists = bals
 	syncer := setupSyncer(rawdb.HashScheme, rejector, good)
-	results, err := syncer.fetchAccessLists(hashes, cancel)
+	results, err := syncer.fetchAccessLists(hashes, makeAccessListHeaders(bals), cancel)
 	if err != nil {
 		t.Fatalf("fetchAccessLists failed: %v", err)
 	}
@@ -2450,7 +2802,7 @@ func TestFetchAccessListsCancel(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 		close(cancel)
 	}()
-	_, err := syncer.fetchAccessLists(hashes, cancel)
+	_, err := syncer.fetchAccessLists(hashes, nil, cancel)
 	if err != ErrCancelled {
 		t.Fatalf("expected ErrCancelled, got %v", err)
 	}
@@ -2487,7 +2839,7 @@ func TestFetchAccessListsPeerDrop(t *testing.T) {
 	good := newTestPeer("good", t, term)
 	good.accessLists = bals
 	syncer := setupSyncer(rawdb.HashScheme, dropped, good)
-	results, err := syncer.fetchAccessLists(hashes, cancel)
+	results, err := syncer.fetchAccessLists(hashes, makeAccessListHeaders(bals), cancel)
 	if err != nil {
 		t.Fatalf("fetchAccessLists failed: %v", err)
 	}
@@ -2561,7 +2913,7 @@ func TestFetchAccessListsShortResponse(t *testing.T) {
 		fetchErr error
 	)
 	go func() {
-		results, fetchErr = syncer.fetchAccessLists(hashes, cancel)
+		results, fetchErr = syncer.fetchAccessLists(hashes, makeAccessListHeaders(allBALs), cancel)
 		close(done)
 	}()
 
@@ -2647,7 +2999,7 @@ func TestFetchAccessListsEmptyPlaceholder(t *testing.T) {
 		fetchErr error
 	)
 	go func() {
-		results, fetchErr = syncer.fetchAccessLists(hashes, cancel)
+		results, fetchErr = syncer.fetchAccessLists(hashes, makeAccessListHeaders(allBALs), cancel)
 		close(done)
 	}()
 
@@ -2668,6 +3020,117 @@ func TestFetchAccessListsEmptyPlaceholder(t *testing.T) {
 			t.Errorf("result %d (hash %v) is not a valid BAL: %v (got raw bytes %x)",
 				i, hashes[i], err, raw)
 		}
+	}
+}
+
+// TestFetchAccessListsRejectsBadBAL verifies that when a peer delivers a BAL
+// whose hash doesn't match the canonical block header, fetchAccessLists marks
+// the peer stateless, drops the response, and surfaces the exhaustion error
+// once no other peers can serve the work.
+func TestFetchAccessListsRejectsBadBAL(t *testing.T) {
+	t.Parallel()
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() { once.Do(func() { close(cancel) }) }
+	)
+	hash := common.HexToHash("0x01")
+	hashes := []common.Hash{hash}
+
+	// Build a BAL we'll actually serve.
+	cb := bal.NewConstructionBlockAccessList()
+	cb.BalanceChange(0, common.HexToAddress("0xaa"), uint256.NewInt(42))
+	var buf bytes.Buffer
+	if err := cb.EncodeRLP(&buf); err != nil {
+		t.Fatal(err)
+	}
+	served := buf.Bytes()
+
+	// Build a header whose BlockAccessListHash points at something else, so
+	// the served BAL fails verification.
+	mismatch := common.HexToHash("0xdeadbeef")
+	headers := map[common.Hash]*types.Header{
+		hash: {BlockAccessListHash: &mismatch},
+	}
+
+	peer := newTestPeer("liar", t, term)
+	peer.accessLists = map[common.Hash]rlp.RawValue{hash: served}
+	syncer := setupSyncer(rawdb.HashScheme, peer)
+
+	results, err := syncer.fetchAccessLists(hashes, headers, cancel)
+	if !errors.Is(err, errAccessListPeersExhausted) {
+		t.Fatalf("expected errAccessListPeersExhausted, got %v", err)
+	}
+	if results != nil {
+		t.Errorf("expected nil results on error, got %v", results)
+	}
+	syncer.lock.RLock()
+	_, stateless := syncer.statelessPeers[peer.id]
+	syncer.lock.RUnlock()
+	if !stateless {
+		t.Error("expected liar peer to be marked stateless after bad BAL")
+	}
+}
+
+// TestCatchUpRetriesOnBadBAL verifies that when one peer serves a BAL that
+// fails verification but another serves a valid one, fetchAccessLists routes
+// the work around the bad peer and returns the verified BAL.
+func TestCatchUpRetriesOnBadBAL(t *testing.T) {
+	t.Parallel()
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() { once.Do(func() { close(cancel) }) }
+	)
+	hash := common.HexToHash("0x01")
+	hashes := []common.Hash{hash}
+
+	cb := bal.NewConstructionBlockAccessList()
+	cb.BalanceChange(0, common.HexToAddress("0xaa"), uint256.NewInt(42))
+	var buf bytes.Buffer
+	if err := cb.EncodeRLP(&buf); err != nil {
+		t.Fatal(err)
+	}
+	good := buf.Bytes()
+
+	// A second BAL with different content used as the "bad" payload. It
+	// decodes cleanly but its hash will not match the header.
+	other := bal.NewConstructionBlockAccessList()
+	other.BalanceChange(0, common.HexToAddress("0xbb"), uint256.NewInt(99))
+	var otherBuf bytes.Buffer
+	if err := other.EncodeRLP(&otherBuf); err != nil {
+		t.Fatal(err)
+	}
+	bad := otherBuf.Bytes()
+
+	headers := makeAccessListHeaders(map[common.Hash]rlp.RawValue{hash: good})
+
+	liar := newTestPeer("liar", t, term)
+	liar.accessLists = map[common.Hash]rlp.RawValue{hash: bad}
+	honest := newTestPeer("honest", t, term)
+	honest.accessLists = map[common.Hash]rlp.RawValue{hash: good}
+
+	syncer := setupSyncer(rawdb.HashScheme, liar, honest)
+	// Bias the capacity sort so the liar is asked first, exercising the
+	// reject-and-retry path rather than getting lucky on assignment order.
+	syncer.rates.Update(liar.id, AccessListsMsg, time.Millisecond, 1000)
+
+	results, err := syncer.fetchAccessLists(hashes, headers, cancel)
+	if err != nil {
+		t.Fatalf("fetchAccessLists failed: %v", err)
+	}
+	if !bytes.Equal(results[0], good) {
+		t.Errorf("expected the honest BAL, got %x", results[0])
+	}
+	syncer.lock.RLock()
+	_, liarStateless := syncer.statelessPeers[liar.id]
+	_, honestStateless := syncer.statelessPeers[honest.id]
+	syncer.lock.RUnlock()
+	if !liarStateless {
+		t.Error("expected liar to be marked stateless")
+	}
+	if honestStateless {
+		t.Error("expected honest peer to remain in good standing")
 	}
 }
 
