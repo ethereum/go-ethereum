@@ -19,7 +19,7 @@ package vm
 import "fmt"
 
 // GasUsed is the per-frame accumulator for gas consumption.
-// StateGas is signed because of 0 -> X -> 0 SSTORE refunds.
+// StateGas is signed, because it can be negative in a 0 -> x -> 0 scenario.
 type GasUsed struct {
 	RegularGas uint64
 	StateGas   int64
@@ -55,6 +55,10 @@ func (g GasCosts) String() string {
 type GasBudget struct {
 	RegularGas uint64 // The leftover gas for execution and state gas usage
 	StateGas   uint64 // The state gas reservoir
+
+	// Tracks the gas refunds in this call frame. Needed so we can
+	// revert the refunds if the call frame reverts.
+	StateGasRefund uint64
 }
 
 // NewGasBudgetReg creates a GasBudget with the given initial regular gas allowance.
