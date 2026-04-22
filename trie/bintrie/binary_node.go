@@ -27,6 +27,8 @@ const (
 	NodeTypeBytes  = 1   // Size of node type prefix in serialization
 	HashSize       = 32  // Size of a hash in bytes
 	StemBitmapSize = 32  // Size of the bitmap in a stem node (256 values = 32 bytes)
+
+	MaxGroupDepth = 8
 )
 
 const (

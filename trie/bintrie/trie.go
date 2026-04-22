@@ -107,9 +107,10 @@ func ChunkifyCode(code []byte) ChunkedCode {
 
 // BinaryTrie is the implementation of https://eips.ethereum.org/EIPS/eip-7864.
 type BinaryTrie struct {
-	store  *nodeStore
-	reader *trie.Reader
-	tracer *trie.PrevalueTracer
+	root       BinaryNode
+	reader     *trie.Reader
+	tracer     *trie.PrevalueTracer
+	groupDepth int // Number of levels per serialized group (1-8, default 8)
 }
 
 // ToDot converts the binary trie to a DOT language representation. Useful for debugging.
@@ -119,15 +120,20 @@ func (t *BinaryTrie) ToDot() string {
 }
 
 // NewBinaryTrie creates a new binary trie.
-func NewBinaryTrie(root common.Hash, db database.NodeDatabase) (*BinaryTrie, error) {
+// groupDepth specifies the number of levels per serialized group (1-8).
+func NewBinaryTrie(root common.Hash, db database.NodeDatabase, groupDepth int) (*BinaryTrie, error) {
+	if groupDepth < 1 || groupDepth > MaxGroupDepth {
+		groupDepth = MaxGroupDepth // Default to 8
+	}
 	reader, err := trie.NewReader(root, common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
 	t := &BinaryTrie{
-		store:  newNodeStore(),
-		reader: reader,
-		tracer: trie.NewPrevalueTracer(),
+		root:       NewBinaryNode(),
+		reader:     reader,
+		tracer:     trie.NewPrevalueTracer(),
+		groupDepth: groupDepth,
 	}
 	// Parse the root node if it's not empty
 	if root != types.EmptyBinaryHash && root != types.EmptyRootHash {
@@ -341,9 +347,10 @@ func (t *BinaryTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 // Copy creates a deep copy of the trie.
 func (t *BinaryTrie) Copy() *BinaryTrie {
 	return &BinaryTrie{
-		store:  t.store.Copy(),
-		reader: t.reader,
-		tracer: t.tracer.Copy(),
+		root:       t.root.Copy(),
+		reader:     t.reader,
+		tracer:     t.tracer.Copy(),
+		groupDepth: t.groupDepth,
 	}
 }
 
