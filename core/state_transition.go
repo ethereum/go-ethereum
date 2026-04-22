@@ -89,7 +89,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 			gas.RegularGas += uint64(len(authList)) * params.TxAuthTupleRegularGas
 			gas.StateGas += uint64(len(authList)) * (params.AuthorizationCreationSize + params.AccountCreationSize) * costPerStateByte
 		} else {
-			gas.RegularGas += uint64(len(authList)) * params.TxAuthTupleGas
+			gas.RegularGas += uint64(len(authList)) * params.CallNewAccountGas
 		}
 	}
 	dataLen := uint64(len(data))
@@ -605,6 +605,42 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 		// Execute the transaction's call.
 		ret, st.gasRemaining, execGasUsed, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
+	}
+
+	// On outer level tx failure, no state is written.
+	if rules.IsAmsterdam && vmerr != nil {
+		st.gasRemaining.StateGas += execGasUsed.StateGas
+		execGasUsed.StateGas = 0
+	}
+
+	// Refund costs for selfdestructed accounts and slots.
+	if rules.IsAmsterdam && vmerr == nil {
+		cpsb := st.evm.Context.CostPerGasByte
+		stateGasUsed := execGasUsed.StateGas + cost.StateGas
+		var sdRefund uint64
+		for _, addr := range st.state.SameTxSelfDestructs() {
+			r := params.AccountCreationSize * cpsb
+			r += uint64(st.state.NewStorageSlotCount(addr)) * params.StorageCreationSize * cpsb
+			r += uint64(st.state.GetCodeSize(addr)) * cpsb
+			sdRefund += r
+		}
+		if sdRefund > stateGasUsed {
+			sdRefund = stateGasUsed
+		}
+		if sdRefund > 0 {
+			st.gasRemaining.StateGas += sdRefund
+			if execGasUsed.StateGas >= sdRefund {
+				execGasUsed.StateGas -= sdRefund
+			} else {
+				extra := sdRefund - execGasUsed.StateGas
+				execGasUsed.StateGas = 0
+				if cost.StateGas >= extra {
+					cost.StateGas -= extra
+				} else {
+					cost.StateGas = 0
+				}
+			}
+		}
 	}
 
 	// Record the gas used excluding gas refunds. This value represents the actual

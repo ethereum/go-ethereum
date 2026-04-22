@@ -687,6 +687,36 @@ func (s *StateDB) IsNewContract(addr common.Address) bool {
 	return obj.newContract
 }
 
+// SameTxSelfDestructs returns the addresses that were both created and
+// self-destructed in the current transaction (EIP-6780). Used for the
+// EIP-8037 same-tx selfdestruct state-gas refund.
+func (s *StateDB) SameTxSelfDestructs() []common.Address {
+	var out []common.Address
+	for addr, obj := range s.stateObjects {
+		if obj.newContract && obj.selfDestructed {
+			out = append(out, addr)
+		}
+	}
+	return out
+}
+
+// NewStorageSlotCount returns the number of storage slots that were written
+// to a non-zero value in the current transaction on the given account. Used
+// for the EIP-8037 same-tx selfdestruct state-gas refund.
+func (s *StateDB) NewStorageSlotCount(addr common.Address) int {
+	obj, ok := s.stateObjects[addr]
+	if !ok {
+		return 0
+	}
+	var count int
+	for _, v := range obj.dirtyStorage {
+		if v != (common.Hash{}) {
+			count++
+		}
+	}
+	return count
+}
+
 // Copy creates a deep, independent copy of the state.
 // Snapshots of the copied state cannot be applied to the copy.
 func (s *StateDB) Copy() *StateDB {

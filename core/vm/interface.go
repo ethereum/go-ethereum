@@ -71,6 +71,14 @@ type StateDB interface {
 	// during the current transaction.
 	IsNewContract(addr common.Address) bool
 
+	// SameTxSelfDestructs returns addresses that were created and then
+	// self-destructed in the current transaction.
+	SameTxSelfDestructs() []common.Address
+
+	// NewStorageSlotCount returns the number of storage slots written to a
+	// non-zero value in the current transaction on the given address.
+	NewStorageSlotCount(addr common.Address) int
+
 	// Empty returns whether the given account is empty. Empty
 	// is defined according to EIP161 (balance = nonce = code = 0).
 	Empty(common.Address) bool

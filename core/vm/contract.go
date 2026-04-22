@@ -160,6 +160,18 @@ func (c *Contract) RefundGas(err error, initialRegularGasUsed uint64, gas GasBud
 	c.GasUsed.RegularGas = initialRegularGasUsed + gasUsed.RegularGas
 }
 
+// Refunds the account creation state costs if a CREATE/CREATE2 call fails.
+func (c *Contract) RefundCreateStateGas(refund uint64) {
+	if refund > 0 {
+		c.Gas.StateGas += refund
+		if c.GasUsed.StateGas >= refund {
+			c.GasUsed.StateGas -= refund
+		} else {
+			c.GasUsed.StateGas = 0
+		}
+	}
+}
+
 // Address returns the contracts address
 func (c *Contract) Address() common.Address {
 	return c.address

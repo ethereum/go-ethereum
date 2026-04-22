@@ -682,7 +682,9 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(&stackvalue)
 
 	scope.Contract.RefundGas(suberr, regularGasUsed, returnGas, childGasUsed, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
-
+	if evm.chainRules.IsAmsterdam && suberr != nil {
+		scope.Contract.RefundCreateStateGas(params.AccountCreationSize * evm.Context.CostPerGasByte)
+	}
 	if suberr == ErrExecutionReverted {
 		evm.returnData = res // set REVERT data to return data buffer
 		return res, nil
@@ -719,6 +721,9 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(&stackvalue)
 
 	scope.Contract.RefundGas(suberr, regularGasUsed, returnGas, childGasUsed, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	if evm.chainRules.IsAmsterdam && suberr != nil {
+		scope.Contract.RefundCreateStateGas(params.AccountCreationSize * evm.Context.CostPerGasByte)
+	}
 
 	if suberr == ErrExecutionReverted {
 		evm.returnData = res // set REVERT data to return data buffer

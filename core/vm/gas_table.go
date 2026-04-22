@@ -671,12 +671,14 @@ func gasSStore8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 	}
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
-			// EIP-8037: Return both regular and state gas. The interpreter
-			// charges regular gas before state gas, preventing reservoir
-			// inflation when the regular charge OOGs.
+			// EIP-8037: Return both regular and state gas. System calls do not charge state gas.
+			var stateGas uint64
+			if !contract.IsSystemCall {
+				stateGas = params.StorageCreationSize * evm.Context.CostPerGasByte
+			}
 			return GasCosts{
 				RegularGas: cost.RegularGas + params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929,
-				StateGas:   params.StorageCreationSize * evm.Context.CostPerGasByte,
+				StateGas:   stateGas,
 			}, nil
 		}
 		if value == (common.Hash{}) { // delete slot (2.1.2b)
@@ -695,9 +697,18 @@ func gasSStore8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 	}
 	if original == value {
 		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
-			// EIP 2200 Original clause:
-			//evm.StateDB.AddRefund(params.SstoreSetGasEIP2200 - params.SloadGasEIP2200)
-			evm.StateDB.AddRefund(params.StorageCreationSize*evm.Context.CostPerGasByte + params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929)
+			// EIP-8037 point (2): refund state gas directly to the reservoir
+			// at the SSTORE restoration point (0→x→0 in same tx); not to the
+			// refund counter, which is capped at gas_used/5.
+			stateRefund := params.StorageCreationSize * evm.Context.CostPerGasByte
+			contract.Gas.StateGas += stateRefund
+			if contract.GasUsed.StateGas >= stateRefund {
+				contract.GasUsed.StateGas -= stateRefund
+			} else {
+				contract.GasUsed.StateGas = 0
+			}
+			// Regular portion of the refund still goes through the refund counter.
+			evm.StateDB.AddRefund(params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929)
 		} else { // reset to original existing slot (2.2.2.2)
 			// EIP 2200 Original clause:
 			//	evm.StateDB.AddRefund(params.SstoreResetGasEIP2200 - params.SloadGasEIP2200)
