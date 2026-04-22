@@ -209,6 +209,13 @@ func IsValidVersionedHash(h []byte) bool {
 }
 
 // VerifyCells verifies a batch of proofs corresponding to the cells and commitments.
+//
+// For this function, it is sufficient to only provide some of the cells.
+// For each blob being proven, the cells slice must contain at least 64 items.
+//
+// The `cellIndices` specify which of the 128 cells of each blob are given.
+// Thus, `len(cellIndices)` must be >= 64 and <= 128 to be valid, and
+// `len(cells)` must be a multiple of `len(cellIndices)`.
 func VerifyCells(cells []Cell, commitments []Commitment, proofs []Proof, cellIndices []uint64) error {
 	if useCKZG.Load() {
 		return ckzgVerifyCells(cells, commitments, proofs, cellIndices)
@@ -225,6 +232,8 @@ func ComputeCells(blobs []Blob) ([]Cell, error) {
 }
 
 // RecoverBlobs recovers blobs from the given cells and cell indices.
+//
+// For the layout of cells and cellIndices, please see [VerifyCells].
 func RecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 	if useCKZG.Load() {
 		return ckzgRecoverBlobs(cells, cellIndices)
