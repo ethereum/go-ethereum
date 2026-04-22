@@ -576,9 +576,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 
 	var (
-		ret        []byte
-		vmerr      error // vm errors do not effect consensus and are therefore not assigned to err
-		authRefund uint64
+		ret   []byte
+		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
 	var execGasUsed vm.GasUsed
 	if contractCreation {
@@ -591,8 +590,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		if msg.SetCodeAuthorizations != nil {
 			for _, auth := range msg.SetCodeAuthorizations {
 				// Note errors are ignored, we simply skip invalid authorizations here.
-				refund, _ := st.applyAuthorization(rules, &auth)
-				authRefund += refund
+				st.applyAuthorization(rules, &auth)
 			}
 		}
 
@@ -639,8 +637,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// EIP-8037: 2D gas accounting for Amsterdam.
 		// tx_regular = intrinsic_regular + exec_regular_gas_used
 		// tx_state = intrinsic_state (adjusted) + exec_state_gas_used
-		// These are tracked independently, not derived from remaining gas.
-		txState := (cost.StateGas - authRefund) + execGasUsed.StateGas
+		txState := cost.StateGas + execGasUsed.StateGas
 		txRegular := cost.RegularGas + execGasUsed.RegularGas
 		txRegular = max(txRegular, floorDataGas)
 		if err := st.gp.ReturnGasAmsterdam(txRegular, txState, st.gasUsed()); err != nil {
