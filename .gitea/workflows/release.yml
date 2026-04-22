@@ -166,6 +166,24 @@ jobs:
       env:
         GETH_MINGW: 'C:\msys64\mingw64'
 
+    - name: "Create/upload archive (amd64)"
+      shell: cmd
+      run: |
+        go run build/ci.go archive -arch amd64 -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+      env:
+        WINDOWS_SIGNING_KEY: ${{ secrets.WINDOWS_SIGNING_KEY }}
+        AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
+
+    - name: "Create/upload NSIS installer (amd64)"
+      shell: cmd
+      run: |
+        set "PATH=C:\Program Files (x86)\NSIS;%PATH%"
+        go run build/ci.go nsis -arch amd64 -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+        del /Q build\bin\*
+      env:
+        WINDOWS_SIGNING_KEY: ${{ secrets.WINDOWS_SIGNING_KEY }}
+        AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
+
     - name: "Build (386)"
       shell: cmd
       run: |
@@ -173,6 +191,24 @@ jobs:
         go run build/ci.go install -dlgo -arch 386 -cc %GETH_MINGW%\bin\gcc.exe
       env:
         GETH_MINGW: 'C:\msys64\mingw32'
+
+    - name: "Create/upload archive (386)"
+      shell: cmd
+      run: |
+        go run build/ci.go archive -arch 386 -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+      env:
+        WINDOWS_SIGNING_KEY: ${{ secrets.WINDOWS_SIGNING_KEY }}
+        AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
+
+    - name: "Create/upload NSIS installer (386)"
+      shell: cmd
+      run: |
+        set "PATH=C:\Program Files (x86)\NSIS;%PATH%"
+        go run build/ci.go nsis -arch 386 -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+        del /Q build\bin\*
+      env:
+        WINDOWS_SIGNING_KEY: ${{ secrets.WINDOWS_SIGNING_KEY }}
+        AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
 
   docker:
     name: Docker Image
