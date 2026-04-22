@@ -99,6 +99,31 @@ func TestSnapSuite(t *testing.T) {
 	}
 }
 
+func TestSnap2Suite(t *testing.T) {
+	jwtPath, secret, err := makeJWTSecret(t)
+	if err != nil {
+		t.Fatalf("could not make jwt secret: %v", err)
+	}
+	geth, err := runGeth("./testdata", jwtPath)
+	if err != nil {
+		t.Fatalf("could not run geth: %v", err)
+	}
+	defer geth.Close()
+
+	suite, err := NewSuite(geth.Server().Self(), "./testdata", geth.HTTPAuthEndpoint(), common.Bytes2Hex(secret[:]))
+	if err != nil {
+		t.Fatalf("could not create new test suite: %v", err)
+	}
+	for _, test := range suite.Snap2Tests() {
+		t.Run(test.Name, func(t *testing.T) {
+			result := utesting.RunTests([]utesting.Test{{Name: test.Name, Fn: test.Fn}}, os.Stdout)
+			if result[0].Failed {
+				t.Fatal()
+			}
+		})
+	}
+}
+
 // runGeth creates and starts a geth node
 func runGeth(dir string, jwtPath string) (*node.Node, error) {
 	stack, err := node.New(&node.Config{

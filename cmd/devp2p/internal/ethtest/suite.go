@@ -106,6 +106,16 @@ func (s *Suite) SnapTests() []utesting.Test {
 	}
 }
 
+// Snap2Tests returns the list of tests for the snap/2 protocol (EIP-8189).
+// These tests require the peer to advertise and negotiate snap/2.
+func (s *Suite) Snap2Tests() []utesting.Test {
+	return []utesting.Test{
+		{Name: "Status", Fn: s.TestSnap2Status},
+		{Name: "GetBlockAccessLists", Fn: s.TestSnap2GetBlockAccessLists},
+		{Name: "TrieNodesRemoved", Fn: s.TestSnap2TrieNodesRemoved},
+	}
+}
+
 func (s *Suite) TestStatus(t *utesting.T) {
 	t.Log(`This test is just a sanity check. It performs an eth protocol handshake.`)
 	conn, err := s.dialAndPeer(nil)
