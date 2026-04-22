@@ -5,10 +5,10 @@
 # https://github.com/ethereum/execution-spec-tests/releases/download/v5.1.0
 a3192784375acec7eaec492799d5c5d0c47a2909a3cc40178898e4ecd20cc416  fixtures_develop.tar.gz
 
-# version:spec-tests-bal v5.6.1
+# version:spec-tests-bal v5.7.0
 # https://github.com/ethereum/execution-spec-tests/releases
-# https://github.com/ethereum/execution-spec-tests/releases/download/bal%40v5.6.1
-741530c88f6a48c15184d1504316c02c3a76c2322c410a04b643a85185dc62e9 fixtures_bal.tar.gz
+# https://github.com/ethereum/execution-spec-tests/releases/download/bal%40v5.7.0
+1b458d1d932e6b5ff4e2ac43882b48a145de5f13d2fb34833162a75e5690d2b5 fixtures_bal.tar.gz
 
 # version:golang 1.25.9
 # https://go.dev/dl/
