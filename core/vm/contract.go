@@ -141,22 +141,21 @@ func (c *Contract) UseGas(cost GasCosts, logger *tracing.Hooks, reason tracing.G
 
 // RefundGas refunds gas to the contract.
 func (c *Contract) RefundGas(err error, initialRegularGasUsed uint64, gas GasBudget, gasUsed GasUsed, logger *tracing.Hooks, reason tracing.GasChangeReason) {
-	// If the preceding call errored, return the child's state-gas reservoir
-	// and any net state-gas consumption to the parent. A negative
-	// gasUsed.StateGas (an unabsorbed SSTORE 0→x→0 refund) is an inflation
-	// to undo: the matching state mutation was reverted with the child, so
-	// the refund must not leak back to the parent.
 	if err != nil {
-		if gasUsed.StateGas >= 0 {
+		if gasUsed.StateGas > 0 {
 			gas.StateGas += uint64(gasUsed.StateGas)
-		} else if undo := uint64(-gasUsed.StateGas); gas.StateGas >= undo {
-			gas.StateGas -= undo
-		} else {
-			gas.StateGas = 0
 		}
 		gasUsed.StateGas = 0
+		if gas.StateGasRefund > 0 {
+			if gas.StateGas >= gas.StateGasRefund {
+				gas.StateGas -= gas.StateGasRefund
+			} else {
+				gas.StateGas = 0
+			}
+			gas.StateGasRefund = 0
+		}
 	}
-	if gas.RegularGas == 0 && gas.StateGas == 0 && gasUsed.StateGas == 0 && gasUsed.RegularGas == 0 {
+	if gas.RegularGas == 0 && gas.StateGas == 0 && gasUsed.StateGas == 0 && gasUsed.RegularGas == 0 && gas.StateGasRefund == 0 {
 		return
 	}
 	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
@@ -164,6 +163,9 @@ func (c *Contract) RefundGas(err error, initialRegularGasUsed uint64, gas GasBud
 	}
 	c.Gas.RegularGas += gas.RegularGas
 	c.Gas.StateGas = gas.StateGas
+	// Propagate the child's applied inline refund so a later ancestor
+	// error can still undo the reservoir inflation.
+	c.Gas.StateGasRefund += gas.StateGasRefund
 	c.GasUsed.StateGas += gasUsed.StateGas
 	c.GasUsed.RegularGas = initialRegularGasUsed + gasUsed.RegularGas
 }
@@ -172,6 +174,7 @@ func (c *Contract) RefundGas(err error, initialRegularGasUsed uint64, gas GasBud
 func (c *Contract) RefundCreateStateGas(refund uint64) {
 	if refund > 0 {
 		c.Gas.StateGas += refund
+		c.Gas.StateGasRefund += refund
 		c.GasUsed.StateGas -= int64(refund)
 	}
 }

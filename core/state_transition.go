@@ -322,7 +322,7 @@ func (st *stateTransition) to() common.Address {
 	return *st.msg.To
 }
 
-func (st *stateTransition) buyGas() error {
+func (st *stateTransition) buyGas() (uint64, error) {
 	mgval := new(big.Int).SetUint64(st.msg.GasLimit)
 	mgval.Mul(mgval, st.msg.GasPrice)
 	balanceCheck := new(big.Int).Set(mgval)
@@ -346,13 +346,10 @@ func (st *stateTransition) buyGas() error {
 	}
 	balanceCheckU256, overflow := uint256.FromBig(balanceCheck)
 	if overflow {
-		return fmt.Errorf("%w: address %v required balance exceeds 256 bits", ErrInsufficientFunds, st.msg.From.Hex())
+		return 0, fmt.Errorf("%w: address %v required balance exceeds 256 bits", ErrInsufficientFunds, st.msg.From.Hex())
 	}
 	if have, want := st.state.GetBalance(st.msg.From), balanceCheckU256; have.Cmp(want) < 0 {
-		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
-	}
-	if err := st.gp.SubGas(st.msg.GasLimit); err != nil {
-		return err
+		return 0, fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
 	}
 
 	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil {
@@ -368,23 +365,23 @@ func (st *stateTransition) buyGas() error {
 	st.gasRemaining = st.initialBudget.Copy()
 	mgvalU256, _ := uint256.FromBig(mgval)
 	st.state.SubBalance(st.msg.From, mgvalU256, tracing.BalanceDecreaseGasBuy)
-	return nil
+	return st.msg.GasLimit, nil
 }
 
-func (st *stateTransition) preCheck() error {
+func (st *stateTransition) preCheck() (uint64, error) {
 	// Only check transactions that are not fake
 	msg := st.msg
 	if !msg.SkipNonceChecks {
 		// Make sure this transaction's nonce is correct.
 		stNonce := st.state.GetNonce(msg.From)
 		if msgNonce := msg.Nonce; stNonce < msgNonce {
-			return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooHigh,
+			return 0, fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooHigh,
 				msg.From.Hex(), msgNonce, stNonce)
 		} else if stNonce > msgNonce {
-			return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooLow,
+			return 0, fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooLow,
 				msg.From.Hex(), msgNonce, stNonce)
 		} else if stNonce+1 < stNonce {
-			return fmt.Errorf("%w: address %v, nonce: %d", ErrNonceMax,
+			return 0, fmt.Errorf("%w: address %v, nonce: %d", ErrNonceMax,
 				msg.From.Hex(), stNonce)
 		}
 	}
@@ -393,13 +390,13 @@ func (st *stateTransition) preCheck() error {
 	if !msg.SkipTransactionChecks {
 		// Verify tx gas limit does not exceed EIP-7825 cap.
 		if !isAmsterdam && isOsaka && msg.GasLimit > params.MaxTxGas {
-			return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGas, msg.GasLimit)
+			return 0, fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGas, msg.GasLimit)
 		}
 		// Make sure the sender is an EOA
 		code := st.state.GetCode(msg.From)
 		_, delegated := types.ParseDelegation(code)
 		if len(code) > 0 && !delegated {
-			return fmt.Errorf("%w: address %v, len(code): %d", ErrSenderNoEOA, msg.From.Hex(), len(code))
+			return 0, fmt.Errorf("%w: address %v, len(code): %d", ErrSenderNoEOA, msg.From.Hex(), len(code))
 		}
 	}
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
@@ -408,21 +405,21 @@ func (st *stateTransition) preCheck() error {
 		skipCheck := st.evm.Config.NoBaseFee && msg.GasFeeCap.BitLen() == 0 && msg.GasTipCap.BitLen() == 0
 		if !skipCheck {
 			if l := msg.GasFeeCap.BitLen(); l > 256 {
-				return fmt.Errorf("%w: address %v, maxFeePerGas bit length: %d", ErrFeeCapVeryHigh,
+				return 0, fmt.Errorf("%w: address %v, maxFeePerGas bit length: %d", ErrFeeCapVeryHigh,
 					msg.From.Hex(), l)
 			}
 			if l := msg.GasTipCap.BitLen(); l > 256 {
-				return fmt.Errorf("%w: address %v, maxPriorityFeePerGas bit length: %d", ErrTipVeryHigh,
+				return 0, fmt.Errorf("%w: address %v, maxPriorityFeePerGas bit length: %d", ErrTipVeryHigh,
 					msg.From.Hex(), l)
 			}
 			if msg.GasFeeCap.Cmp(msg.GasTipCap) < 0 {
-				return fmt.Errorf("%w: address %v, maxPriorityFeePerGas: %s, maxFeePerGas: %s", ErrTipAboveFeeCap,
+				return 0, fmt.Errorf("%w: address %v, maxPriorityFeePerGas: %s, maxFeePerGas: %s", ErrTipAboveFeeCap,
 					msg.From.Hex(), msg.GasTipCap, msg.GasFeeCap)
 			}
 			// This will panic if baseFee is nil, but basefee presence is verified
 			// as part of header validation.
 			if msg.GasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 {
-				return fmt.Errorf("%w: address %v, maxFeePerGas: %s, baseFee: %s", ErrFeeCapTooLow,
+				return 0, fmt.Errorf("%w: address %v, maxFeePerGas: %s, baseFee: %s", ErrFeeCapTooLow,
 					msg.From.Hex(), msg.GasFeeCap, st.evm.Context.BaseFee)
 			}
 		}
@@ -433,17 +430,17 @@ func (st *stateTransition) preCheck() error {
 		// has it as a non-nillable value, so any msg derived from blob transaction has it non-nil.
 		// However, messages created through RPC (eth_call) don't have this restriction.
 		if msg.To == nil {
-			return ErrBlobTxCreate
+			return 0, ErrBlobTxCreate
 		}
 		if len(msg.BlobHashes) == 0 {
-			return ErrMissingBlobHashes
+			return 0, ErrMissingBlobHashes
 		}
 		if isOsaka && len(msg.BlobHashes) > params.BlobTxMaxBlobs {
-			return ErrTooManyBlobs
+			return 0, ErrTooManyBlobs
 		}
 		for i, hash := range msg.BlobHashes {
 			if !kzg4844.IsValidVersionedHash(hash[:]) {
-				return fmt.Errorf("blob %d has invalid hash version", i)
+				return 0, fmt.Errorf("blob %d has invalid hash version", i)
 			}
 		}
 	}
@@ -456,7 +453,7 @@ func (st *stateTransition) preCheck() error {
 				// This will panic if blobBaseFee is nil, but blobBaseFee presence
 				// is verified as part of header validation.
 				if msg.BlobGasFeeCap.Cmp(st.evm.Context.BlobBaseFee) < 0 {
-					return fmt.Errorf("%w: address %v blobGasFeeCap: %v, blobBaseFee: %v", ErrBlobFeeCapTooLow,
+					return 0, fmt.Errorf("%w: address %v blobGasFeeCap: %v, blobBaseFee: %v", ErrBlobFeeCapTooLow,
 						msg.From.Hex(), msg.BlobGasFeeCap, st.evm.Context.BlobBaseFee)
 				}
 			}
@@ -465,10 +462,10 @@ func (st *stateTransition) preCheck() error {
 	// Check that EIP-7702 authorization list signatures are well formed.
 	if msg.SetCodeAuthorizations != nil {
 		if msg.To == nil {
-			return fmt.Errorf("%w (sender %v)", ErrSetCodeTxCreate, msg.From)
+			return 0, fmt.Errorf("%w (sender %v)", ErrSetCodeTxCreate, msg.From)
 		}
 		if len(msg.SetCodeAuthorizations) == 0 {
-			return fmt.Errorf("%w (sender %v)", ErrEmptyAuthList, msg.From)
+			return 0, fmt.Errorf("%w (sender %v)", ErrEmptyAuthList, msg.From)
 		}
 	}
 	return st.buyGas()
@@ -496,7 +493,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
 
 	// Check clauses 1-3, buy gas if everything is correct
-	if err := st.preCheck(); err != nil {
+	gas, err := st.preCheck()
+	if err != nil {
 		return nil, err
 	}
 
@@ -506,10 +504,31 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		contractCreation = msg.To == nil
 		floorDataGas     uint64
 	)
+
+	if !rules.IsAmsterdam {
+		if err := st.gp.SubGas(gas); err != nil {
+			return nil, err
+		}
+	}
+
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
 	cost, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules, st.evm.Context.CostPerGasByte)
 	if err != nil {
 		return nil, err
+	}
+
+	// Regular gas check for block inclusion post-amsterdam includes state gas.
+	if rules.IsAmsterdam {
+		subGasAmount := msg.GasLimit
+		if subGasAmount > cost.StateGas {
+			subGasAmount -= cost.StateGas
+		} else {
+			subGasAmount = 0
+		}
+		subGasAmount = min(subGasAmount, params.MaxTxGas)
+		if err := st.gp.SubGas(subGasAmount); err != nil {
+			return nil, err
+		}
 	}
 
 	// Compute the floor data cost (EIP-7623), needed for both Prague and Amsterdam validation.
