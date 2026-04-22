@@ -31,6 +31,15 @@ const (
 	MaxGroupDepth = 8
 )
 
+// bitmapSizeForDepth returns the bitmap size in bytes for a given group depth.
+// For depths 1-3, returns 1 byte. For depths 4-8, returns 2^(depth-3) bytes.
+func bitmapSizeForDepth(groupDepth int) int {
+	if groupDepth <= 3 {
+		return 1
+	}
+	return 1 << (groupDepth - 3)
+}
+
 const (
 	nodeTypeStem = iota + 1
 	nodeTypeInternal

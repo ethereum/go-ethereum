@@ -163,6 +163,62 @@ func (s *nodeStore) deserializeNodeWithHash(serialized []byte, depth int, hn com
 	return s.decodeNode(serialized, depth, hn, false, false)
 }
 
+// deserializeSubtree reconstructs an InternalNode subtree from grouped serialization.
+// remainingDepth is how many more levels to build, position is current index in the bitmap,
+// nodeDepth is the actual trie depth for the node being created.
+// hashIdx tracks the current position in the hash data (incremented as hashes are consumed).
+func (s *nodeStore) deserializeSubtree(hn common.Hash, remainingDepth int, position int, nodeDepth int, bitmap []byte, hashData []byte, hashIdx *int, mustRecompute bool, dirty bool) (nodeRef, error) {
+	if remainingDepth == 0 {
+		// Bottom layer: check bitmap and return HashedNode or Empty
+		if bitmap[position/8]>>(7-(position%8))&1 == 1 {
+			if len(hashData) < (*hashIdx+1)*HashSize {
+				return emptyRef, errInvalidSerializedLength
+			}
+			hash := common.BytesToHash(hashData[*hashIdx*HashSize : (*hashIdx+1)*HashSize])
+			*hashIdx++
+			return s.newHashedRef(hash), nil
+		}
+		return emptyRef, nil
+	}
+
+	// Check if this entire subtree is empty by examining all relevant bitmap bits
+	leftPos := position * 2
+	rightPos := position*2 + 1
+
+	// note that the parent might not need root computations, but the children
+	// do, because their hash isn't saved. This will incur more hash computations
+	// than if it's a single node, but as long as it's sha256 or blake3, that isn't
+	// a problem. If the parent isn't modified, it won't be recomputed and neither
+	// will the children.
+	left, err := s.deserializeSubtree(common.Hash{}, remainingDepth-1, leftPos, nodeDepth+1, bitmap, hashData, hashIdx, true, dirty)
+	if err != nil {
+		return emptyRef, err
+	}
+	right, err := s.deserializeSubtree(common.Hash{}, remainingDepth-1, rightPos, nodeDepth+1, bitmap, hashData, hashIdx, true, dirty)
+	if err != nil {
+		return emptyRef, err
+	}
+
+	// If both children are empty, return Empty
+	if left.IsEmpty() && right.IsEmpty() {
+		return emptyRef, nil
+	}
+
+	ref := s.newInternalRef(nodeDepth)
+	node := s.getInternal(ref.Index())
+	node.left = left
+	node.right = right
+	node.mustRecompute = mustRecompute
+	if !mustRecompute {
+		// mustRecompute will only be false for the root of the subtree,
+		// for which we already know the hash.
+		node.hash = hn
+		node.mustRecompute = false
+	}
+	node.dirty = dirty
+	return ref, nil
+}
+
 func (s *nodeStore) decodeNode(serialized []byte, depth int, hn common.Hash, mustRecompute, dirty bool) (nodeRef, error) {
 	if len(serialized) == 0 {
 		return emptyRef, nil
@@ -170,31 +226,23 @@ func (s *nodeStore) decodeNode(serialized []byte, depth int, hn common.Hash, mus
 
 	switch serialized[0] {
 	case nodeTypeInternal:
-		if len(serialized) != NodeTypeBytes+2*HashSize {
+		// Grouped format: 1 byte type + 1 byte group depth + variable bitmap + N×32 byte hashes
+		if len(serialized) < NodeTypeBytes+1 {
 			return emptyRef, errInvalidSerializedLength
 		}
-		var leftHash, rightHash common.Hash
-		copy(leftHash[:], serialized[NodeTypeBytes:NodeTypeBytes+HashSize])
-		copy(rightHash[:], serialized[NodeTypeBytes+HashSize:])
+		groupDepth := int(serialized[1])
+		if groupDepth < 1 || groupDepth > MaxGroupDepth {
+			return 0, errors.New("invalid group depth")
+		}
+		bitmapSize := bitmapSizeForDepth(groupDepth)
+		if len(serialized) < NodeTypeBytes+1+bitmapSize {
+			return 0, errInvalidSerializedLength
+		}
+		bitmap := serialized[2 : 2+bitmapSize]
+		hashData := serialized[2+bitmapSize:]
 
-		var leftRef, rightRef nodeRef
-		if leftHash != (common.Hash{}) {
-			leftRef = s.newHashedRef(leftHash)
-		}
-		if rightHash != (common.Hash{}) {
-			rightRef = s.newHashedRef(rightHash)
-		}
-
-		ref := s.newInternalRef(depth)
-		node := s.getInternal(ref.Index())
-		node.left = leftRef
-		node.right = rightRef
-		if !mustRecompute {
-			node.hash = hn
-			node.mustRecompute = false
-		}
-		node.dirty = dirty
-		return ref, nil
+		hashIdx := 0
+		return s.deserializeSubtree(hn, groupDepth, 0, depth, bitmap, hashData, &hashIdx, mustRecompute, dirty)
 
 	case nodeTypeStem:
 		if len(serialized) < NodeTypeBytes+StemSize+StemBitmapSize {
