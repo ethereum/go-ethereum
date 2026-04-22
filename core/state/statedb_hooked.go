@@ -80,6 +80,14 @@ func (s *hookedStateDB) GetCodeSize(addr common.Address) int {
 	return s.inner.GetCodeSize(addr)
 }
 
+func (s *hookedStateDB) SameTxSelfDestructs() []common.Address {
+	return s.inner.SameTxSelfDestructs()
+}
+
+func (s *hookedStateDB) NewStorageSlotCount(addr common.Address) int {
+	return s.inner.NewStorageSlotCount(addr)
+}
+
 func (s *hookedStateDB) AddRefund(u uint64) {
 	s.inner.AddRefund(u)
 }
