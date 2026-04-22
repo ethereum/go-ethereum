@@ -40,8 +40,9 @@ func makeTestBAL(minSize int) *bal.BlockAccessList {
 		StorageReads: make([]*bal.EncodedStorage, n),
 	}
 	for i := range access.StorageReads {
-		read := access.StorageReads[i].ToHash()
-		binary.BigEndian.PutUint64(read[24:], uint64(i))
+		var slot common.Hash
+		binary.BigEndian.PutUint64(slot[24:], uint64(i))
+		access.StorageReads[i] = bal.NewEncodedStorageFromHash(slot)
 	}
 	return &bal.BlockAccessList{access}
 }

@@ -211,7 +211,7 @@ func (s *EncodedStorage) ToHash() common.Hash {
 	return s.inner.Bytes32()
 }
 
-func newEncodedStorageFromHash(hash common.Hash) *EncodedStorage {
+func NewEncodedStorageFromHash(hash common.Hash) *EncodedStorage {
 	return &EncodedStorage{
 		new(uint256.Int).SetBytes(hash[:]),
 	}
@@ -469,7 +469,7 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 	slices.SortFunc(writeSlots, common.Hash.Cmp)
 	for _, slot := range writeSlots {
 		var obj encodingSlotWrites
-		obj.Slot = newEncodedStorageFromHash(slot)
+		obj.Slot = NewEncodedStorageFromHash(slot)
 
 		slotWrites := a.StorageWrites[slot]
 		obj.Accesses = make([]encodingStorageWrite, 0, len(slotWrites))
@@ -479,7 +479,7 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 		for _, index := range indices {
 			obj.Accesses = append(obj.Accesses, encodingStorageWrite{
 				TxIdx:      index,
-				ValueAfter: newEncodedStorageFromHash(slotWrites[index]),
+				ValueAfter: NewEncodedStorageFromHash(slotWrites[index]),
 			})
 		}
 		res.StorageChanges = append(res.StorageChanges, obj)
@@ -489,7 +489,7 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 	readSlots := slices.Collect(maps.Keys(a.StorageReads))
 	slices.SortFunc(readSlots, common.Hash.Cmp)
 	for _, slot := range readSlots {
-		res.StorageReads = append(res.StorageReads, newEncodedStorageFromHash(slot))
+		res.StorageReads = append(res.StorageReads, NewEncodedStorageFromHash(slot))
 	}
 
 	// Convert balance changes

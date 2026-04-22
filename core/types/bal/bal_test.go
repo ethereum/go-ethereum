@@ -117,12 +117,12 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 	)
 	for i := 0; i < 5; i++ {
 		slot := encodingSlotWrites{
-			Slot: newEncodedStorageFromHash(testrand.Hash()),
+			Slot: NewEncodedStorageFromHash(testrand.Hash()),
 		}
 		for j := 0; j < 3; j++ {
 			slot.Accesses = append(slot.Accesses, encodingStorageWrite{
 				TxIdx:      uint16(i*3 + j),
-				ValueAfter: newEncodedStorageFromHash(testrand.Hash()),
+				ValueAfter: NewEncodedStorageFromHash(testrand.Hash()),
 			})
 		}
 		if sort {
@@ -173,7 +173,7 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 
 	var encodedStorageReads []*EncodedStorage
 	for _, slot := range storageReads {
-		encodedStorageReads = append(encodedStorageReads, newEncodedStorageFromHash(slot))
+		encodedStorageReads = append(encodedStorageReads, NewEncodedStorageFromHash(slot))
 	}
 	return AccountAccess{
 		Address:        [20]byte(testrand.Bytes(20)),
@@ -208,20 +208,20 @@ func TestBlockAccessListCopy(t *testing.T) {
 	cpy := list.Copy()
 	cpyCpy := cpy.Copy()
 
-	if !reflect.DeepEqual(list, cpy) {
+	if !reflect.DeepEqual(list, *cpy) {
 		t.Fatal("block access mismatch")
 	}
-	if !reflect.DeepEqual(cpy, cpyCpy) {
+	if !reflect.DeepEqual(*cpy, *cpyCpy) {
 		t.Fatal("block access mismatch")
 	}
 
 	// Make sure the mutations on copy won't affect the origin
-	for _, aa := range *cpyCpy {
-		for i := 0; i < len(aa.StorageReads); i++ {
-			aa.StorageReads[i] = &EncodedStorage{new(uint256.Int).SetBytes(testrand.Bytes(32))}
+	for i := range *cpyCpy {
+		for j := 0; j < len((*cpyCpy)[i].StorageReads); j++ {
+			(*cpyCpy)[i].StorageReads[j] = NewEncodedStorageFromHash(testrand.Hash())
 		}
 	}
-	if !reflect.DeepEqual(list, cpy) {
+	if !reflect.DeepEqual(list, *cpy) {
 		t.Fatal("block access mismatch")
 	}
 }
