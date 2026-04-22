@@ -18,9 +18,10 @@ package state
 
 import (
 	"bytes"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"math/big"
 	"sort"
+
+	"github.com/ethereum/go-ethereum/core/types/bal"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/stateless"

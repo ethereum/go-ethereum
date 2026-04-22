@@ -37,12 +37,13 @@ func makeTestBAL(minSize int) *bal.BlockAccessList {
 	n := minSize/33 + 1 // 33 bytes per storage read slot in RLP
 	access := bal.AccountAccess{
 		Address:      common.HexToAddress("0x01"),
-		StorageReads: make([][32]byte, n),
+		StorageReads: make([]*bal.EncodedStorage, n),
 	}
 	for i := range access.StorageReads {
-		binary.BigEndian.PutUint64(access.StorageReads[i][24:], uint64(i))
+		read := access.StorageReads[i].ToHash()
+		binary.BigEndian.PutUint64(read[24:], uint64(i))
 	}
-	return &bal.BlockAccessList{Accesses: []bal.AccountAccess{access}}
+	return &bal.BlockAccessList{access}
 }
 
 // getChainWithBALs creates a minimal test chain with BALs stored for each block.

@@ -19,10 +19,11 @@ package state
 import (
 	"bytes"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"maps"
 	"slices"
 	"time"
+
+	"github.com/ethereum/go-ethereum/core/types/bal"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"

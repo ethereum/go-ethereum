@@ -21,12 +21,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"io"
 	"math/big"
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/core/types/bal"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -579,28 +580,6 @@ func (c *Clique) Finalize(chain consensus.ChainHeaderReader, header *types.Heade
 	return nil, nil
 }
 
-<<<<<<< HEAD
-=======
-// FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
-// nor block rewards given, and returns the final block.
-func (c *Clique) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, createBAL func(*bal.StateAccessList, *bal.StateMutations) *bal.BlockAccessList) (*types.Block, error) {
-	if createBAL != nil {
-		panic("BALs not supported")
-	}
-	if len(body.Withdrawals) > 0 {
-		return nil, errors.New("clique does not support withdrawals")
-	}
-	// Finalize block
-	c.Finalize(chain, header, state, body)
-
-	// Assign the final state root to header.
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-
-	// Assemble and return the final block for sealing.
-	return types.NewBlock(header, &types.Body{Transactions: body.Transactions}, receipts, trie.NewStackTrie(nil)), nil
-}
-
->>>>>>> 1d26ca9bc1 (all: implement BAL single-threaded execution and validation)
 // Authorize injects a private key into the consensus engine to mint new blocks
 // with.
 func (c *Clique) Authorize(signer common.Address) {

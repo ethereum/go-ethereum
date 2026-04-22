@@ -18,9 +18,10 @@ package engine
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"math/big"
 	"slices"
+
+	"github.com/ethereum/go-ethereum/core/types/bal"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"

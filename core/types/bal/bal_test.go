@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/internal/testrand"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
@@ -37,48 +38,51 @@ func equalBALs(a *BlockAccessList, b *BlockAccessList) bool {
 }
 
 func makeTestConstructionBAL() ConstructionBlockAccessList {
-	return map[common.Address]*ConstructionAccountAccesses{
-		common.BytesToAddress([]byte{0xff, 0xff}): {
-			StorageWrites: map[common.Hash]map[uint16]common.Hash{
-				common.BytesToHash([]byte{0x01}): {
-					1: common.BytesToHash([]byte{1, 2, 3, 4}),
-					2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
+	return ConstructionBlockAccessList{
+		list: map[common.Address]*ConstructionAccountAccesses{
+			common.BytesToAddress([]byte{0xff, 0xff}): {
+				StorageWrites: map[common.Hash]map[uint16]common.Hash{
+					common.BytesToHash([]byte{0x01}): {
+						1: common.BytesToHash([]byte{1, 2, 3, 4}),
+						2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
+					},
+					common.BytesToHash([]byte{0x10}): {
+						20: common.BytesToHash([]byte{1, 2, 3, 4}),
+					},
 				},
-				common.BytesToHash([]byte{0x10}): {
-					20: common.BytesToHash([]byte{1, 2, 3, 4}),
+				StorageReads: map[common.Hash]struct{}{
+					common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7}): {},
+				},
+				BalanceChanges: map[uint16]*uint256.Int{
+					1: uint256.NewInt(100),
+					2: uint256.NewInt(500),
+				},
+				NonceChanges: map[uint16]uint64{
+					1: 2,
+					2: 6,
+				},
+				CodeChanges: map[uint16][]byte{0: common.Hex2Bytes("deadbeef")},
+			},
+			common.BytesToAddress([]byte{0xff, 0xff, 0xff}): {
+				StorageWrites: map[common.Hash]map[uint16]common.Hash{
+					common.BytesToHash([]byte{0x01}): {
+						2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
+						3: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}),
+					},
+				},
+				StorageReads: map[common.Hash]struct{}{
+					common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}): {},
+				},
+				BalanceChanges: map[uint16]*uint256.Int{
+					2: uint256.NewInt(100),
+					3: uint256.NewInt(500),
+				},
+				NonceChanges: map[uint16]uint64{
+					1: 2,
 				},
 			},
-			StorageReads: map[common.Hash]struct{}{
-				common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7}): {},
-			},
-			BalanceChanges: map[uint16]*uint256.Int{
-				1: uint256.NewInt(100),
-				2: uint256.NewInt(500),
-			},
-			NonceChanges: map[uint16]uint64{
-				1: 2,
-				2: 6,
-			},
-			CodeChanges: map[uint16][]byte{0: common.Hex2Bytes("deadbeef")},
 		},
-		common.BytesToAddress([]byte{0xff, 0xff, 0xff}): {
-			StorageWrites: map[common.Hash]map[uint16]common.Hash{
-				common.BytesToHash([]byte{0x01}): {
-					2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
-					3: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}),
-				},
-			},
-			StorageReads: map[common.Hash]struct{}{
-				common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}): {},
-			},
-			BalanceChanges: map[uint16]*uint256.Int{
-				2: uint256.NewInt(100),
-				3: uint256.NewInt(500),
-			},
-			NonceChanges: map[uint16]uint64{
-				1: 2,
-			},
-		},
+		transactionCount: 1,
 	}
 }
 
@@ -212,7 +216,7 @@ func TestBlockAccessListCopy(t *testing.T) {
 	}
 
 	// Make sure the mutations on copy won't affect the origin
-	for _, aa := range cpyCpy {
+	for _, aa := range *cpyCpy {
 		for i := 0; i < len(aa.StorageReads); i++ {
 			aa.StorageReads[i] = &EncodedStorage{new(uint256.Int).SetBytes(testrand.Bytes(32))}
 		}
@@ -226,7 +230,7 @@ func TestBlockAccessListValidation(t *testing.T) {
 	// Validate the block access list after RLP decoding
 	testBALMaxIndex := 20
 	enc := makeTestBAL(true)
-	if err := enc.Validate(testBALMaxIndex); err != nil {
+	if err := enc.Validate(testBALMaxIndex, params.MaxGasLimit); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 	var buf bytes.Buffer
@@ -238,14 +242,14 @@ func TestBlockAccessListValidation(t *testing.T) {
 	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 0)); err != nil {
 		t.Fatalf("Unexpected RLP-decode error: %v", err)
 	}
-	if err := dec.Validate(testBALMaxIndex); err != nil {
+	if err := dec.Validate(testBALMaxIndex, params.MaxGasLimit); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 
 	// Validate the derived block access list
 	cBAL := makeTestConstructionBAL()
 	listB := cBAL.ToEncodingObj()
-	if err := listB.Validate(testBALMaxIndex); err != nil {
+	if err := listB.Validate(testBALMaxIndex, params.MaxGasLimit); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 }

@@ -18,8 +18,9 @@ package core
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"sync/atomic"
+
+	"github.com/ethereum/go-ethereum/core/types/bal"
 
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"

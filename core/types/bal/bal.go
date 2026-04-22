@@ -19,9 +19,10 @@ package bal
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
-	"maps"
 )
 
 // ConstructionAccountAccesses contains post-block account state for mutations as well as
