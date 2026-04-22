@@ -572,6 +572,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 		dirtyCode:          s.dirtyCode,
 		selfDestructed:     s.selfDestructed,
 		newContract:        s.newContract,
+		txPreBalance:       s.txPreBalance.Clone(),
 	}
 
 	switch s.trie.(type) {

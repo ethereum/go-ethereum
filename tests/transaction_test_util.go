@@ -82,7 +82,7 @@ func (tt *TransactionTest) Run() error {
 		}
 		// Intrinsic cost
 		// TODO (MariusVanDerWijden): correctly set this for post-amsterdam tests.
-		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, *rules, 0)
+		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules, 0)
 		if err != nil {
 			return
 		}

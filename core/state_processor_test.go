@@ -469,6 +469,7 @@ func TestEIP8037MaxRegularGasValidation(t *testing.T) {
 				Amsterdam: params.DefaultOsakaBlobConfig,
 			},
 		}
+		rules   = config.Rules(common.Big0, true, 0)
 		signer  = types.LatestSigner(config)
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	)
@@ -486,7 +487,7 @@ func TestEIP8037MaxRegularGasValidation(t *testing.T) {
 	}
 
 	// Verify that floor data gas exceeds MaxTxGas
-	floorGas, err := FloorDataGas(largeData)
+	floorGas, err := FloorDataGas(rules, largeData)
 	if err != nil {
 		t.Fatalf("Failed to calculate floor data gas: %v", err)
 	}
