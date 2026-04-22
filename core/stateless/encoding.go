@@ -34,6 +34,10 @@ func (w *Witness) ToExtWitness() *ExtWitness {
 	for code := range w.Codes {
 		ext.Codes = append(ext.Codes, []byte(code))
 	}
+	ext.Keys = make([]hexutil.Bytes, 0, len(w.Keys))
+	for key := range w.Keys {
+		ext.Keys = append(ext.Keys, []byte(key))
+	}
 	ext.State = make([]hexutil.Bytes, 0, len(w.State))
 	for node := range w.State {
 		ext.State = append(ext.State, []byte(node))
@@ -51,6 +55,10 @@ func (w *Witness) FromExtWitness(ext *ExtWitness) error {
 	w.Codes = make(map[string]struct{}, len(ext.Codes))
 	for _, code := range ext.Codes {
 		w.Codes[string(code)] = struct{}{}
+	}
+	w.Keys = make(map[string]struct{}, len(ext.Keys))
+	for _, key := range ext.Keys {
+		w.Keys[string(key)] = struct{}{}
 	}
 	w.State = make(map[string]struct{}, len(ext.State))
 	for _, node := range ext.State {

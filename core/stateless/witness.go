@@ -40,6 +40,7 @@ type Witness struct {
 
 	Headers []*types.Header     // Past headers in reverse order (0=parent, 1=parent's-parent, etc). First *must* be set.
 	Codes   map[string]struct{} // Set of bytecodes ran or accessed
+	Keys    map[string]struct{} // Set of accessed trie keys
 	State   map[string]struct{} // Set of MPT state trie nodes (account and storage together)
 
 	chain HeaderReader  // Chain reader to convert block hash ops to header proofs
@@ -64,6 +65,7 @@ func NewWitness(context *types.Header, chain HeaderReader, enableStats bool) (*W
 		context: context,
 		Headers: headers,
 		Codes:   make(map[string]struct{}),
+		Keys:    make(map[string]struct{}),
 		State:   make(map[string]struct{}),
 		chain:   chain,
 	}
@@ -119,8 +121,16 @@ func (w *Witness) ReportMetrics(blockNumber uint64) {
 	w.stats.ReportMetrics(blockNumber)
 }
 
-func (w *Witness) AddKey() {
-	panic("not yet implemented")
+func (w *Witness) AddKey(keys ...[]byte) {
+	if w.Keys == nil {
+		w.Keys = make(map[string]struct{})
+	}
+	for _, key := range keys {
+		if len(key) == 0 {
+			continue
+		}
+		w.Keys[string(key)] = struct{}{}
+	}
 }
 
 // Copy deep-copies the witness object.  Witness.Block isn't deep-copied as it
@@ -129,6 +139,7 @@ func (w *Witness) Copy() *Witness {
 	cpy := &Witness{
 		Headers: slices.Clone(w.Headers),
 		Codes:   maps.Clone(w.Codes),
+		Keys:    maps.Clone(w.Keys),
 		State:   maps.Clone(w.State),
 		chain:   w.chain,
 	}
