@@ -194,6 +194,7 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		journal:              newJournal(),
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
+		stateReadList:        bal.NewStateAccessList(),
 	}
 	if db.Type().Is(TypeUBT) {
 		sdb.accessEvents = NewAccessEvents()
