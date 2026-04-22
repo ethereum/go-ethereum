@@ -609,14 +609,16 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 	// On outer level tx failure, no state is written.
 	if rules.IsAmsterdam && vmerr != nil {
-		st.gasRemaining.StateGas += execGasUsed.StateGas
+		if execGasUsed.StateGas > 0 {
+			st.gasRemaining.StateGas += uint64(execGasUsed.StateGas)
+		}
 		execGasUsed.StateGas = 0
 	}
 
 	// Refund costs for selfdestructed accounts and slots.
 	if rules.IsAmsterdam && vmerr == nil {
 		cpsb := st.evm.Context.CostPerGasByte
-		stateGasUsed := execGasUsed.StateGas + cost.StateGas
+		stateGasUsed := int64(cost.StateGas) + execGasUsed.StateGas
 		var sdRefund uint64
 		for _, addr := range st.state.SameTxSelfDestructs() {
 			r := params.AccountCreationSize * cpsb
@@ -624,15 +626,22 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			r += uint64(st.state.GetCodeSize(addr)) * cpsb
 			sdRefund += r
 		}
-		if sdRefund > stateGasUsed {
-			sdRefund = stateGasUsed
+		if stateGasUsed < 0 {
+			sdRefund = 0
+		} else if sdRefund > uint64(stateGasUsed) {
+			sdRefund = uint64(stateGasUsed)
 		}
 		if sdRefund > 0 {
 			st.gasRemaining.StateGas += sdRefund
-			if execGasUsed.StateGas >= sdRefund {
-				execGasUsed.StateGas -= sdRefund
+			if execGasUsed.StateGas >= int64(sdRefund) {
+				execGasUsed.StateGas -= int64(sdRefund)
 			} else {
-				extra := sdRefund - execGasUsed.StateGas
+				var extra uint64
+				if execGasUsed.StateGas > 0 {
+					extra = sdRefund - uint64(execGasUsed.StateGas)
+				} else {
+					extra = sdRefund
+				}
 				execGasUsed.StateGas = 0
 				if cost.StateGas >= extra {
 					cost.StateGas -= extra
@@ -673,7 +682,12 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// EIP-8037: 2D gas accounting for Amsterdam.
 		// tx_regular = intrinsic_regular + exec_regular_gas_used
 		// tx_state = intrinsic_state (adjusted) + exec_state_gas_used
-		txState := cost.StateGas + execGasUsed.StateGas
+		// execGasUsed.StateGas may be negative when an SSTORE 0→x→0 refund
+		// exceeded the intrinsic-charged state gas
+		txState := cost.StateGas
+		if execGasUsed.StateGas > 0 {
+			txState += uint64(execGasUsed.StateGas)
+		}
 		txRegular := cost.RegularGas + execGasUsed.RegularGas
 		txRegular = max(txRegular, floorDataGas)
 		if err := st.gp.ReturnGasAmsterdam(txRegular, txState, st.gasUsed()); err != nil {
