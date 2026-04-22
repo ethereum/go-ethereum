@@ -139,13 +139,21 @@ func (c *Contract) UseGas(cost GasCosts, logger *tracing.Hooks, reason tracing.G
 	return true
 }
 
-// RefundGas refunds gas to the contract. gasUsed carries the child frame's
-// accumulated gas usage metrics (EIP-8037), incorporated on both success and error.
+// RefundGas refunds gas to the contract.
 func (c *Contract) RefundGas(err error, initialRegularGasUsed uint64, gas GasBudget, gasUsed GasUsed, logger *tracing.Hooks, reason tracing.GasChangeReason) {
-	// If the preceding call errored, return the state gas
-	// to the parent call
+	// If the preceding call errored, return the child's state-gas reservoir
+	// and any net state-gas consumption to the parent. A negative
+	// gasUsed.StateGas (an unabsorbed SSTORE 0→x→0 refund) is an inflation
+	// to undo: the matching state mutation was reverted with the child, so
+	// the refund must not leak back to the parent.
 	if err != nil {
-		gas.StateGas += gasUsed.StateGas
+		if gasUsed.StateGas >= 0 {
+			gas.StateGas += uint64(gasUsed.StateGas)
+		} else if undo := uint64(-gasUsed.StateGas); gas.StateGas >= undo {
+			gas.StateGas -= undo
+		} else {
+			gas.StateGas = 0
+		}
 		gasUsed.StateGas = 0
 	}
 	if gas.RegularGas == 0 && gas.StateGas == 0 && gasUsed.StateGas == 0 && gasUsed.RegularGas == 0 {
@@ -164,11 +172,7 @@ func (c *Contract) RefundGas(err error, initialRegularGasUsed uint64, gas GasBud
 func (c *Contract) RefundCreateStateGas(refund uint64) {
 	if refund > 0 {
 		c.Gas.StateGas += refund
-		if c.GasUsed.StateGas >= refund {
-			c.GasUsed.StateGas -= refund
-		} else {
-			c.GasUsed.StateGas = 0
-		}
+		c.GasUsed.StateGas -= int64(refund)
 	}
 }
 

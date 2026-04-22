@@ -702,11 +702,7 @@ func gasSStore8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 			// refund counter, which is capped at gas_used/5.
 			stateRefund := params.StorageCreationSize * evm.Context.CostPerGasByte
 			contract.Gas.StateGas += stateRefund
-			if contract.GasUsed.StateGas >= stateRefund {
-				contract.GasUsed.StateGas -= stateRefund
-			} else {
-				contract.GasUsed.StateGas = 0
-			}
+			contract.GasUsed.StateGas -= int64(stateRefund)
 			// Regular portion of the refund still goes through the refund counter.
 			evm.StateDB.AddRefund(params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929)
 		} else { // reset to original existing slot (2.2.2.2)

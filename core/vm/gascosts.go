@@ -18,11 +18,16 @@ package vm
 
 import "fmt"
 
-type GasUsed = GasCosts
+// GasUsed is the per-frame accumulator for gas consumption.
+// StateGas is signed because of 0 -> X -> 0 SSTORE refunds.
+type GasUsed struct {
+	RegularGas uint64
+	StateGas   int64
+}
 
 func (g *GasUsed) Add(costs GasCosts) {
 	g.RegularGas += costs.RegularGas
-	g.StateGas += costs.StateGas
+	g.StateGas += int64(costs.StateGas)
 }
 
 // GasCosts denotes a vector of gas costs in the
@@ -66,11 +71,9 @@ func (g GasBudget) Used(initial GasBudget) uint64 {
 	return (initial.RegularGas + initial.StateGas) - (g.RegularGas + g.StateGas)
 }
 
-// Exhaust sets all remaining gas to zero, preserving the initial amount
-// for usage tracking.
+// Exhaust burns the remaining regular gas on exceptional halt.
 func (g *GasBudget) Exhaust() {
 	g.RegularGas = 0
-	g.StateGas = 0
 }
 
 func (g *GasBudget) Copy() GasBudget {
