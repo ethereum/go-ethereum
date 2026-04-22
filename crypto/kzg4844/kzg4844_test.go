@@ -47,14 +47,20 @@ func randBlob() *Blob {
 	return &blob
 }
 
-func TestCKZGWithPoint(t *testing.T)  { testKZGWithPoint(t, true) }
-func TestGoKZGWithPoint(t *testing.T) { testKZGWithPoint(t, false) }
-func testKZGWithPoint(t *testing.T, ckzg bool) {
+func switchBackend(t testing.TB, ckzg bool) (switchBack func()) {
+	t.Helper()
 	if ckzg && !ckzgAvailable {
 		t.Skip("CKZG unavailable in this test build")
 	}
-	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
+	prev := useCKZG.Load()
 	useCKZG.Store(ckzg)
+	return func() { useCKZG.Store(prev) }
+}
+
+func TestCKZGWithPoint(t *testing.T)  { testKZGWithPoint(t, true) }
+func TestGoKZGWithPoint(t *testing.T) { testKZGWithPoint(t, false) }
+func testKZGWithPoint(t *testing.T, ckzg bool) {
+	defer switchBackend(t, ckzg)()
 
 	blob := randBlob()
 
@@ -75,11 +81,7 @@ func testKZGWithPoint(t *testing.T, ckzg bool) {
 func TestCKZGWithBlob(t *testing.T)  { testKZGWithBlob(t, true) }
 func TestGoKZGWithBlob(t *testing.T) { testKZGWithBlob(t, false) }
 func testKZGWithBlob(t *testing.T, ckzg bool) {
-	if ckzg && !ckzgAvailable {
-		t.Skip("CKZG unavailable in this test build")
-	}
-	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
-	useCKZG.Store(ckzg)
+	defer switchBackend(t, ckzg)()
 
 	blob := randBlob()
 
@@ -99,11 +101,7 @@ func testKZGWithBlob(t *testing.T, ckzg bool) {
 func BenchmarkCKZGBlobToCommitment(b *testing.B)  { benchmarkBlobToCommitment(b, true) }
 func BenchmarkGoKZGBlobToCommitment(b *testing.B) { benchmarkBlobToCommitment(b, false) }
 func benchmarkBlobToCommitment(b *testing.B, ckzg bool) {
-	if ckzg && !ckzgAvailable {
-		b.Skip("CKZG unavailable in this test build")
-	}
-	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
-	useCKZG.Store(ckzg)
+	defer switchBackend(b, ckzg)()
 
 	blob := randBlob()
 
@@ -115,11 +113,7 @@ func benchmarkBlobToCommitment(b *testing.B, ckzg bool) {
 func BenchmarkCKZGComputeProof(b *testing.B)  { benchmarkComputeProof(b, true) }
 func BenchmarkGoKZGComputeProof(b *testing.B) { benchmarkComputeProof(b, false) }
 func benchmarkComputeProof(b *testing.B, ckzg bool) {
-	if ckzg && !ckzgAvailable {
-		b.Skip("CKZG unavailable in this test build")
-	}
-	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
-	useCKZG.Store(ckzg)
+	defer switchBackend(b, ckzg)()
 
 	var (
 		blob  = randBlob()
@@ -134,11 +128,7 @@ func benchmarkComputeProof(b *testing.B, ckzg bool) {
 func BenchmarkCKZGVerifyProof(b *testing.B)  { benchmarkVerifyProof(b, true) }
 func BenchmarkGoKZGVerifyProof(b *testing.B) { benchmarkVerifyProof(b, false) }
 func benchmarkVerifyProof(b *testing.B, ckzg bool) {
-	if ckzg && !ckzgAvailable {
-		b.Skip("CKZG unavailable in this test build")
-	}
-	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
-	useCKZG.Store(ckzg)
+	defer switchBackend(b, ckzg)()
 
 	var (
 		blob            = randBlob()
@@ -155,11 +145,7 @@ func benchmarkVerifyProof(b *testing.B, ckzg bool) {
 func BenchmarkCKZGComputeBlobProof(b *testing.B)  { benchmarkComputeBlobProof(b, true) }
 func BenchmarkGoKZGComputeBlobProof(b *testing.B) { benchmarkComputeBlobProof(b, false) }
 func benchmarkComputeBlobProof(b *testing.B, ckzg bool) {
-	if ckzg && !ckzgAvailable {
-		b.Skip("CKZG unavailable in this test build")
-	}
-	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
-	useCKZG.Store(ckzg)
+	defer switchBackend(b, ckzg)()
 
 	var (
 		blob          = randBlob()
@@ -174,11 +160,7 @@ func benchmarkComputeBlobProof(b *testing.B, ckzg bool) {
 func BenchmarkCKZGVerifyBlobProof(b *testing.B)  { benchmarkVerifyBlobProof(b, true) }
 func BenchmarkGoKZGVerifyBlobProof(b *testing.B) { benchmarkVerifyBlobProof(b, false) }
 func benchmarkVerifyBlobProof(b *testing.B, ckzg bool) {
-	if ckzg && !ckzgAvailable {
-		b.Skip("CKZG unavailable in this test build")
-	}
-	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
-	useCKZG.Store(ckzg)
+	defer switchBackend(b, ckzg)()
 
 	var (
 		blob          = randBlob()
@@ -194,11 +176,7 @@ func benchmarkVerifyBlobProof(b *testing.B, ckzg bool) {
 func TestCKZGCells(t *testing.T)  { testKZGCells(t, true) }
 func TestGoKZGCells(t *testing.T) { testKZGCells(t, false) }
 func testKZGCells(t *testing.T, ckzg bool) {
-	if ckzg && !ckzgAvailable {
-		t.Skip("CKZG unavailable in this test build")
-	}
-	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
-	useCKZG.Store(ckzg)
+	defer switchBackend(t, ckzg)()
 
 	blob1 := randBlob()
 	blob2 := randBlob()
@@ -238,11 +216,7 @@ func BenchmarkGOKZGComputeCellProofs(b *testing.B) { benchmarkComputeCellProofs(
 func BenchmarkCKZGComputeCellProofs(b *testing.B)  { benchmarkComputeCellProofs(b, true) }
 
 func benchmarkComputeCellProofs(b *testing.B, ckzg bool) {
-	if ckzg && !ckzgAvailable {
-		b.Skip("CKZG unavailable in this test build")
-	}
-	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
-	useCKZG.Store(ckzg)
+	defer switchBackend(b, ckzg)()
 
 	blob := randBlob()
 	_, _ = ComputeCellProofs(blob) // for kzg initialization
@@ -305,11 +279,7 @@ func TestCKZGVerifyPartialCells(t *testing.T)  { testVerifyPartialCells(t, true)
 func TestGoKZGVerifyPartialCells(t *testing.T) { testVerifyPartialCells(t, false) }
 
 func testVerifyPartialCells(t *testing.T, ckzg bool) {
-	if ckzg && !ckzgAvailable {
-		t.Skip("CKZG unavailable in this test build")
-	}
-	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
-	useCKZG.Store(ckzg)
+	defer switchBackend(t, ckzg)()
 
 	const (
 		iterations = 50
@@ -345,11 +315,7 @@ func TestGoKZGVerifyCellsWithCorruptedCells(t *testing.T) {
 }
 
 func testVerifyCellsWithCorruptedCells(t *testing.T, ckzg bool) {
-	if ckzg && !ckzgAvailable {
-		t.Skip("CKZG unavailable in this test build")
-	}
-	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
-	useCKZG.Store(ckzg)
+	defer switchBackend(t, ckzg)()
 
 	const blobCount = 3
 	d := newBlobs(t, blobCount)
@@ -381,11 +347,7 @@ func TestGoKZGVerifyCellsWithCorruptedProofs(t *testing.T) {
 }
 
 func testVerifyCellsWithCorruptedProofs(t *testing.T, ckzg bool) {
-	if ckzg && !ckzgAvailable {
-		t.Skip("CKZG unavailable in this test build")
-	}
-	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
-	useCKZG.Store(ckzg)
+	defer switchBackend(t, ckzg)()
 
 	const blobCount = 3
 	d := newBlobs(t, blobCount)
@@ -413,11 +375,7 @@ func TestCKZGRecoverBlob(t *testing.T)  { testRecoverBlob(t, true) }
 func TestGoKZGRecoverBlob(t *testing.T) { testRecoverBlob(t, false) }
 
 func testRecoverBlob(t *testing.T, ckzg bool) {
-	if ckzg && !ckzgAvailable {
-		t.Skip("CKZG unavailable in this test build")
-	}
-	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
-	useCKZG.Store(ckzg)
+	defer switchBackend(t, ckzg)()
 
 	// Precompute blobs once, vary only cell indices per iteration
 	d := newBlobs(t, 3)
@@ -456,11 +414,7 @@ func TestGoKZGRecoverBlobWithInsufficientCells(t *testing.T) {
 }
 
 func testRecoverBlobWithInsufficientCells(t *testing.T, ckzg bool) {
-	if ckzg && !ckzgAvailable {
-		t.Skip("CKZG unavailable in this test build")
-	}
-	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
-	useCKZG.Store(ckzg)
+	defer switchBackend(t, ckzg)()
 
 	const blobCount = 3
 	d := newBlobs(t, blobCount)
