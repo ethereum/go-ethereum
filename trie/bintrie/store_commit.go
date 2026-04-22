@@ -232,7 +232,7 @@ func (s *nodeStore) decodeNode(serialized []byte, depth int, hn common.Hash, mus
 // clean root means the whole subtree is clean.
 func (s *nodeStore) collectNodes(ref nodeRef, path []byte, flushfn nodeFlushFn, groupDepth int) error {
 	if groupDepth < 1 || groupDepth > MaxGroupDepth {
-		return errors.New("groupDepth must be between 1 and 8")
+		return fmt.Errorf("groupDepth %d,  must be between 1 and 8", groupDepth)
 	}
 
 	switch ref.Kind() {
