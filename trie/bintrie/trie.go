@@ -113,6 +113,10 @@ type BinaryTrie struct {
 	groupDepth int // Number of levels per serialized group (1-8, default 8)
 }
 
+func (t *BinaryTrie) GroupDepth() int {
+	return t.groupDepth
+}
+
 // ToDot converts the binary trie to a DOT language representation. Useful for debugging.
 func (t *BinaryTrie) ToDot() string {
 	t.store.computeHash(t.store.root)
