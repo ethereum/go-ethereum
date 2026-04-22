@@ -83,6 +83,15 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 	} else {
 		gas.RegularGas = params.TxGas
 	}
+	// EIP-8037: authorization tuples contribute both regular and state gas.
+	if authList != nil {
+		if rules.IsAmsterdam {
+			gas.RegularGas += uint64(len(authList)) * params.TxAuthTupleRegularGas
+			gas.StateGas += uint64(len(authList)) * (params.AuthorizationCreationSize + params.AccountCreationSize) * costPerStateByte
+		} else {
+			gas.RegularGas += uint64(len(authList)) * params.TxAuthTupleGas
+		}
+	}
 	dataLen := uint64(len(data))
 	// Bump the required gas by the amount of transactional data
 	if dataLen > 0 {
