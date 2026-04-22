@@ -40,7 +40,7 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 	s.root = rootRef
 
 	// Serialize the node — flat 65-byte format
-	serialized := s.serializeNode(rootRef)
+	serialized := s.serializeNode(rootRef, 8)
 
 	// Check the serialized format: [type(1)][leftHash(32)][rightHash(32)]
 	if serialized[0] != nodeTypeInternal {
@@ -116,7 +116,7 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 	}
 
 	// Serialize the node
-	serialized := s.serializeNode(ref)
+	serialized := s.serializeNode(ref, 8)
 
 	// Check the serialized format
 	if serialized[0] != nodeTypeStem {

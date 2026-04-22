@@ -90,7 +90,7 @@ func TestInternalNodeGetWithResolver(t *testing.T) {
 			ref := rs.newStemRef(stem, 1)
 			sn := rs.getStem(ref.Index())
 			sn.setValue(5, common.HexToHash("0xabcd").Bytes())
-			return rs.serializeNode(ref), nil
+			return rs.serializeNode(ref, 8), nil
 		}
 		return nil, errors.New("node not found")
 	}
