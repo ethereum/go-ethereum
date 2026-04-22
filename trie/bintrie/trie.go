@@ -320,7 +320,7 @@ func (t *BinaryTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 	pathBuf := make([]byte, 0, 32)
 	err := t.store.collectNodes(t.store.root, pathBuf, func(path []byte, hash common.Hash, serialized []byte) {
 		nodeset.AddNode(path, trienode.NewNodeWithPrev(hash, serialized, t.tracer.Get(path)))
-	})
+	}, t.groupDepth)
 	if err != nil {
 		panic(fmt.Errorf("CollectNodes failed: %v", err))
 	}
@@ -347,7 +347,7 @@ func (t *BinaryTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 // Copy creates a deep copy of the trie.
 func (t *BinaryTrie) Copy() *BinaryTrie {
 	return &BinaryTrie{
-		root:       t.root.Copy(),
+		store:      t.store.Copy(),
 		reader:     t.reader,
 		tracer:     t.tracer.Copy(),
 		groupDepth: t.groupDepth,

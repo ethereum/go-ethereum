@@ -255,7 +255,7 @@ func (s *nodeStore) collectNodes(ref nodeRef, path []byte, flushfn nodeFlushFn, 
 		}
 		// Not at a group boundary - this shouldn't happen if we're called correctly from root
 		// but handle it by continuing to traverse
-		return s.collectChildGroups(path, flushfn, groupDepth, groupDepth-(int(node.depth)%groupDepth)-1)
+		return s.collectChildGroups(node, path, flushfn, groupDepth, groupDepth-(int(node.depth)%groupDepth)-1)
 	case kindStem:
 		sn := s.getStem(ref.Index())
 		if !sn.dirty {
