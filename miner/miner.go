@@ -151,11 +151,23 @@ func (miner *Miner) getPending() *newPayloadResult {
 		return cached
 	}
 	var (
-		timestamp  = uint64(time.Now().Unix())
-		withdrawal types.Withdrawals
+		timestamp   = uint64(time.Now().Unix())
+		childNumber = new(big.Int).Add(header.Number, big.NewInt(1))
+		withdrawal  types.Withdrawals
+		slotNum     *uint64
 	)
-	if miner.chainConfig.IsShanghai(new(big.Int).Add(header.Number, big.NewInt(1)), timestamp) {
+	if miner.chainConfig.IsShanghai(childNumber, timestamp) {
 		withdrawal = []*types.Withdrawal{}
+	}
+	// Post-Amsterdam, prepareWork requires a slot number (EIP-7843). The pending
+	// block is synthetic and has no canonical slot, so derive one from the parent
+	// when available and fall back to zero otherwise.
+	if miner.chainConfig.IsAmsterdam(childNumber, timestamp) {
+		var n uint64
+		if header.SlotNumber != nil {
+			n = *header.SlotNumber + 1
+		}
+		slotNum = &n
 	}
 	ret := miner.generateWork(context.Background(),
 		&generateParams{
@@ -166,6 +178,7 @@ func (miner *Miner) getPending() *newPayloadResult {
 			random:      common.Hash{},
 			withdrawals: withdrawal,
 			beaconRoot:  nil,
+			slotNum:     slotNum,
 			noTxs:       false,
 		}, false) // we will never make a witness for a pending block
 	if ret.err != nil {
