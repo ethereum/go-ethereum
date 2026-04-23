@@ -20,6 +20,7 @@ package kzg4844
 import (
 	"embed"
 	"errors"
+	"fmt"
 	"hash"
 	"reflect"
 	"sync/atomic"
@@ -208,15 +209,30 @@ func IsValidVersionedHash(h []byte) bool {
 	return len(h) == 32 && h[0] == 0x01
 }
 
-// VerifyCells verifies a batch of proofs corresponding to the cells and commitments.
+// VerifyCells verifies a batch of proofs corresponding to the cells and blob commitments.
 //
 // For this function, it is sufficient to only provide some of the cells.
 // For each blob being proven, the cells slice must contain at least 64 items.
 //
 // The `cellIndices` specify which of the 128 cells of each blob are given.
-// Thus, `len(cellIndices)` must be >= 64 and <= 128 to be valid, and
+// Thus, `len(cellIndices)` must be >= 64 and <= 128 to be valid.
 // `len(cells)` must be a multiple of `len(cellIndices)`.
+//
+// One proof must be given for each cell. As such, `len(proofs)` must equal `len(cells)`.
 func VerifyCells(cells []Cell, commitments []Commitment, proofs []Proof, cellIndices []uint64) error {
+	// commitments/proofs/cells validation
+	switch {
+	case len(commitments) == 0:
+		return errors.New("no commitments")
+	case len(proofs)%len(commitments) != 0:
+		return errors.New("len(proofs) must be a multiple of len(commitments)")
+	case len(cells) != len(proofs):
+		return errors.New("mismatched len(cellProofs) and len(cells)")
+	}
+	if err := validateCellIndices(cells, cellIndices); err != nil {
+		return err
+	}
+
 	if useCKZG.Load() {
 		return ckzgVerifyCells(cells, commitments, proofs, cellIndices)
 	}
@@ -235,8 +251,36 @@ func ComputeCells(blobs []Blob) ([]Cell, error) {
 //
 // For the layout of cells and cellIndices, please see [VerifyCells].
 func RecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
+	if err := validateCellIndices(cells, cellIndices); err != nil {
+		return nil, err
+	}
 	if useCKZG.Load() {
 		return ckzgRecoverBlobs(cells, cellIndices)
 	}
 	return gokzgRecoverBlobs(cells, cellIndices)
+}
+
+func validateCellIndices(cells []Cell, cellIndices []uint64) error {
+	switch {
+	case len(cellIndices) == 0:
+		return errors.New("no cellIndices given")
+	case len(cellIndices) < len(cells):
+		return errors.New("less cellIndices than cells")
+	case len(cellIndices) > CellsPerBlob:
+		return errors.New("too many cellIndices")
+	case len(cells)%len(cellIndices) != 0:
+		return errors.New("len(cells) must be a multiple of len(cellIndices)")
+	}
+	// check no duplicates
+	var bm [CellsPerBlob / 8]uint64
+	for _, i := range cellIndices {
+		if i >= CellsPerBlob {
+			return fmt.Errorf("invalid cell index %d", i)
+		}
+		if bm[i>>8]&(1<<(i%8)) != 0 {
+			return fmt.Errorf("duplicate cell index %d")
+		}
+		bm[i>>8] |= 1 << (i % 8)
+	}
+	return nil
 }

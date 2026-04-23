@@ -153,10 +153,6 @@ func gokzgVerifyCellProofBatch(blobs []Blob, commitments []Commitment, cellProof
 // gokzgVerifyCells verifies that the cell data corresponds to the provided commitment.
 func gokzgVerifyCells(cells []Cell, commitments []Commitment, cellProofs []Proof, cellIndices []uint64) error {
 	gokzgIniter.Do(gokzgInit)
-	if len(commitments) == 0 || len(cellProofs)%len(commitments) != 0 ||
-		len(cellProofs) != len(cells) || len(cellIndices) == 0 {
-		return errors.New("wrong cell proofs and commitments length")
-	}
 
 	var (
 		proofs   = make([]gokzg4844.KZGProof, len(cellProofs))
