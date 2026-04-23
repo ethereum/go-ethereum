@@ -31,9 +31,6 @@ type revision struct {
 	journalIndex int
 }
 
-// journalMutation represents a set of mutations applied to a certain account.
-type journalMutation uint8
-
 // journalMutationKind indicates the type of account mutation.
 type journalMutationKind uint8
 
@@ -47,13 +44,6 @@ const (
 	journalMutationKindStorage
 )
 
-func (k journalMutationKind) mask() journalMutation {
-	if k == 0 {
-		return 0
-	}
-	return journalMutation(1) << (k - 1)
-}
-
 type journalMutationCounts struct {
 	touch        int
 	create       int
@@ -64,25 +54,60 @@ type journalMutationCounts struct {
 	storage      int
 }
 
+// journalMutationState tracks, per account, both the per-kind count of mutation
+// entries currently present in the journal and the pre-tx value of each
+// metadata field captured on its first touch (balance/nonce/code).
+// The *Set flags indicate whether the corresponding field has been mutated
+// at least once in the current tx window; they are cleared when all entries
+// of that kind are reverted. Storage slots are tracked elsewhere.
 type journalMutationState struct {
-	mask   journalMutation
 	counts journalMutationCounts
+
+	balance    *uint256.Int
+	balanceSet bool
+	nonce      uint64
+	nonceSet   bool
+	code       []byte
+	codeSet    bool
 }
 
 func (s *journalMutationState) add(kind journalMutationKind) {
 	s.counts.add(kind)
-	s.mask |= kind.mask()
 }
 
-func (s *journalMutationState) remove(kind journalMutationKind) bool {
-	if s.counts.remove(kind) {
-		s.mask &^= kind.mask()
+// remove drops one occurrence of the given mutation kind. It returns two
+// booleans: kindEmpty is true when no entries of that kind remain for the
+// account, and stateEmpty is true when no entries of any kind remain.
+func (s *journalMutationState) remove(kind journalMutationKind) (kindEmpty, stateEmpty bool) {
+	kindEmpty = s.counts.remove(kind)
+	return kindEmpty, s.counts == (journalMutationCounts{})
+}
+
+// clearKind drops the stashed original for the given mutation kind. It is
+// invoked during revert once no journal entries of that kind remain for the
+// account. Kinds that don't correspond to a tracked metadata field are no-ops.
+func (s *journalMutationState) clearKind(kind journalMutationKind) {
+	switch kind {
+	case journalMutationKindBalance:
+		s.balance = nil
+		s.balanceSet = false
+	case journalMutationKindNonce:
+		s.nonce = 0
+		s.nonceSet = false
+	case journalMutationKindCode:
+		s.code = nil
+		s.codeSet = false
 	}
-	return s.mask == 0
 }
 
 func (s journalMutationState) copy() *journalMutationState {
 	cpy := s
+	if s.balance != nil {
+		cpy.balance = new(uint256.Int).Set(s.balance)
+	}
+	if s.code != nil {
+		cpy.code = slices.Clone(s.code)
+	}
 	return &cpy
 }
 
@@ -146,12 +171,55 @@ type journalEntry interface {
 	copy() journalEntry
 }
 
+// stashBalance records prev as the pre-tx balance of addr, iff this is the
+// first balance touch seen in the current tx. Subsequent balance writes are
+// ignored so the stored value remains the true pre-tx original.
+func (j *journal) stashBalance(addr common.Address, prev *uint256.Int) {
+	s := j.mutationStateFor(addr)
+	if s.balanceSet {
+		return
+	}
+	s.balance = prev.Clone()
+	s.balanceSet = true
+}
+
+// stashNonce records prev as the pre-tx nonce of addr on first touch.
+func (j *journal) stashNonce(addr common.Address, prev uint64) {
+	s := j.mutationStateFor(addr)
+	if s.nonceSet {
+		return
+	}
+	s.nonce = prev
+	s.nonceSet = true
+}
+
+// stashCode records prev as the pre-tx code of addr on first touch.
+func (j *journal) stashCode(addr common.Address, prev []byte) {
+	s := j.mutationStateFor(addr)
+	if s.codeSet {
+		return
+	}
+	s.code = slices.Clone(prev)
+	s.codeSet = true
+}
+
+// mutationStateFor returns the mutation state for addr, creating an empty one
+// if absent.
+func (j *journal) mutationStateFor(addr common.Address) *journalMutationState {
+	s := j.mutations[addr]
+	if s == nil {
+		s = new(journalMutationState)
+		j.mutations[addr] = s
+	}
+	return s
+}
+
 // journal contains the list of state modifications applied since the last state
 // commit. These are tracked to be able to be reverted in the case of an execution
 // exception or request for reversal.
 type journal struct {
 	entries   []journalEntry                           // Current changes tracked by the journal
-	mutations map[common.Address]*journalMutationState // Account mutation state accumulated across entries
+	mutations map[common.Address]*journalMutationState // Per-account mutation kinds and pre-tx originals
 
 	validRevisions []revision
 	nextRevisionId int
@@ -224,7 +292,14 @@ func (j *journal) revert(statedb *StateDB, snapshot int) {
 			if state == nil {
 				panic(fmt.Errorf("journal mutation tracking missing for %x", addr[:]))
 			}
-			if state.remove(kind) {
+			kindEmpty, stateEmpty := state.remove(kind)
+			if kindEmpty {
+				// No entries of this kind remain for this account; drop the
+				// corresponding stashed original so the state mirrors the
+				// live mutation set.
+				state.clearKind(kind)
+			}
+			if stateEmpty {
 				delete(j.mutations, addr)
 			}
 		}
@@ -247,24 +322,6 @@ func (j *journal) ripemdMagic() {
 		j.mutations[ripemd] = state
 	}
 	state.add(journalMutationKindTouch)
-}
-
-func (j *journal) mutation(addr common.Address) journalMutation {
-	if state := j.mutations[addr]; state != nil {
-		return state.mask
-	}
-	return 0
-}
-
-func (j *journal) mutationSet() map[common.Address]journalMutation {
-	if j.mutations == nil {
-		return nil
-	}
-	out := make(map[common.Address]journalMutation, len(j.mutations))
-	for addr, state := range j.mutations {
-		out[addr] = state.mask
-	}
-	return out
 }
 
 // length returns the current number of entries in the journal.
@@ -335,6 +392,7 @@ func (j *journal) refundChange(previous uint64) {
 }
 
 func (j *journal) balanceChange(addr common.Address, previous *uint256.Int) {
+	j.stashBalance(addr, previous)
 	j.append(balanceChange{
 		account: addr,
 		prev:    previous.Clone(),
@@ -342,6 +400,7 @@ func (j *journal) balanceChange(addr common.Address, previous *uint256.Int) {
 }
 
 func (j *journal) setCode(address common.Address, prevCode []byte) {
+	j.stashCode(address, prevCode)
 	j.append(codeChange{
 		account:  address,
 		prevCode: prevCode,
@@ -349,6 +408,7 @@ func (j *journal) setCode(address common.Address, prevCode []byte) {
 }
 
 func (j *journal) nonceChange(address common.Address, prev uint64) {
+	j.stashNonce(address, prev)
 	j.append(nonceChange{
 		account: address,
 		prev:    prev,

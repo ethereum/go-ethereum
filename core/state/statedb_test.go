@@ -662,10 +662,28 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		return fmt.Errorf("got GetLogs(common.Hash{}) == %v, want GetLogs(common.Hash{}) == %v",
 			state.GetLogs(common.Hash{}, 0, common.Hash{}, 0), checkstate.GetLogs(common.Hash{}, 0, common.Hash{}, 0))
 	}
-	if !maps.Equal(state.journal.mutationSet(), checkstate.journal.mutationSet()) {
-		return fmt.Errorf("journal mutation set mismatch.\nhave:\n%v\nwant:\n%v\n", state.journal.mutationSet(), checkstate.journal.mutationSet())
+	if !equalMutationSets(state.journal.mutations, checkstate.journal.mutations) {
+		return fmt.Errorf("journal mutation set mismatch.\nhave:\n%v\nwant:\n%v\n", state.journal.mutations, checkstate.journal.mutations)
 	}
 	return nil
+}
+
+// equalMutationSets checks that two journal mutation maps have the same set of
+// addresses and, for each address, the same per-kind counts. The stashed
+// original values are ignored because comparing them across two independent
+// state databases (with distinct pointer identities) isn't the point of this
+// check — we only care that the two journals agree on what was touched.
+func equalMutationSets(a, b map[common.Address]*journalMutationState) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for addr, sa := range a {
+		sb, ok := b[addr]
+		if !ok || sa.counts != sb.counts {
+			return false
+		}
+	}
+	return true
 }
 
 func TestTouchDelete(t *testing.T) {
@@ -677,11 +695,11 @@ func TestTouchDelete(t *testing.T) {
 	snapshot := s.state.Snapshot()
 	s.state.AddBalance(common.Address{}, new(uint256.Int), tracing.BalanceChangeUnspecified)
 
-	if len(s.state.journal.mutationSet()) != 1 {
+	if len(s.state.journal.mutations) != 1 {
 		t.Fatal("expected one mutated state object")
 	}
 	s.state.RevertToSnapshot(snapshot)
-	if len(s.state.journal.mutationSet()) != 0 {
+	if len(s.state.journal.mutations) != 0 {
 		t.Fatal("expected no journal mutations")
 	}
 }
@@ -691,8 +709,8 @@ func TestJournalMutationTracking(t *testing.T) {
 	addr := common.HexToAddress("0x01")
 	key := common.HexToHash("0x02")
 
-	if got := state.journal.mutation(addr); got != 0 {
-		t.Fatalf("unexpected initial mutation set: %v", got)
+	if _, ok := state.journal.mutations[addr]; ok {
+		t.Fatal("unexpected initial mutation entry")
 	}
 	snapshot := state.Snapshot()
 
@@ -701,23 +719,30 @@ func TestJournalMutationTracking(t *testing.T) {
 	state.SetCode(addr, []byte{0x1}, tracing.CodeChangeUnspecified)
 	state.SetState(addr, key, common.Hash{0x3})
 
-	want := journalMutationKindCreate.mask() |
-		journalMutationKindBalance.mask() |
-		journalMutationKindNonce.mask() |
-		journalMutationKindCode.mask() |
-		journalMutationKindStorage.mask()
-	if got := state.journal.mutation(addr); got != want {
-		t.Fatalf("mutation set mismatch: have %08b, want %08b", got, want)
+	want := journalMutationCounts{
+		create:  1,
+		balance: 1,
+		nonce:   1,
+		code:    1,
+		storage: 1,
 	}
+	checkCounts := func(got *journalMutationState, label string) {
+		t.Helper()
+		if got == nil {
+			t.Fatalf("%s: missing mutation entry for %x", label, addr)
+		}
+		if got.counts != want {
+			t.Fatalf("%s: counts=%+v, want=%+v", label, got.counts, want)
+		}
+	}
+	checkCounts(state.journal.mutations[addr], "state")
 
 	copy := state.Copy()
-	if got := copy.journal.mutation(addr); got != want {
-		t.Fatalf("copy mutation set mismatch: have %08b, want %08b", got, want)
-	}
+	checkCounts(copy.journal.mutations[addr], "copy")
 
 	state.RevertToSnapshot(snapshot)
-	if got := state.journal.mutation(addr); got != 0 {
-		t.Fatalf("unexpected mutation set after revert: %08b", got)
+	if _, ok := state.journal.mutations[addr]; ok {
+		t.Fatalf("unexpected mutation entry after revert")
 	}
 }
 
