@@ -154,7 +154,7 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 	for i := 0; i < 5; i++ {
 		balances = append(balances, encodingBalanceChange{
 			TxIdx:   uint32(2 * i),
-			Balance: [16]byte(testrand.Bytes(16)),
+			Balance: new(uint256.Int).SetBytes(testrand.Bytes(16)),
 		})
 	}
 	if sort {

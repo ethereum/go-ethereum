@@ -40,7 +40,7 @@ import (
 
 // BlockAccessList is the encoding format of ConstructionBlockAccessList.
 type BlockAccessList struct {
-	Accesses []AccountAccess `ssz-max:"300000"`
+	Accesses []AccountAccess
 }
 
 // Validate returns an error if the contents of the access list are not ordered
@@ -73,39 +73,28 @@ func (e *BlockAccessList) Hash() common.Hash {
 	return crypto.Keccak256Hash(enc.Bytes())
 }
 
-// encodeBalance encodes the provided balance into 16-bytes.
-func encodeBalance(val *uint256.Int) [16]byte {
-	valBytes := val.Bytes()
-	if len(valBytes) > 16 {
-		panic("can't encode value that is greater than 16 bytes in size")
-	}
-	var enc [16]byte
-	copy(enc[16-len(valBytes):], valBytes[:])
-	return enc
-}
-
 // encodingBalanceChange is the encoding format of BalanceChange.
 type encodingBalanceChange struct {
-	TxIdx   uint32   `ssz-size:"2"`
-	Balance [16]byte `ssz-size:"16"`
+	TxIdx   uint32
+	Balance *uint256.Int
 }
 
 // encodingAccountNonce is the encoding format of NonceChange.
 type encodingAccountNonce struct {
-	TxIdx uint32 `ssz-size:"2"`
-	Nonce uint64 `ssz-size:"8"`
+	TxIdx uint32
+	Nonce uint64
 }
 
 // encodingStorageWrite is the encoding format of StorageWrites.
 type encodingStorageWrite struct {
 	TxIdx      uint32
-	ValueAfter [32]byte `ssz-size:"32"`
+	ValueAfter [32]byte
 }
 
 // encodingStorageWrite is the encoding format of SlotWrites.
 type encodingSlotWrites struct {
-	Slot     [32]byte               `ssz-size:"32"`
-	Accesses []encodingStorageWrite `ssz-max:"300000"`
+	Slot     [32]byte
+	Accesses []encodingStorageWrite
 }
 
 // validate returns an instance of the encoding-representation slot writes in
@@ -122,18 +111,18 @@ func (e *encodingSlotWrites) validate() error {
 // encodingCodeChange contains the runtime bytecode deployed at an address
 // and the transaction index where the deployment took place.
 type encodingCodeChange struct {
-	TxIndex uint32 `ssz-size:"2"`
-	Code    []byte `ssz-max:"300000"` // TODO(rjl493456442) shall we put the limit here? The limit will be increased gradually
+	TxIndex uint32
+	Code    []byte
 }
 
 // AccountAccess is the encoding format of ConstructionAccountAccess.
 type AccountAccess struct {
-	Address        [20]byte                `ssz-size:"20"`    // 20-byte Ethereum address
-	StorageWrites  []encodingSlotWrites    `ssz-max:"300000"` // Storage changes (slot -> [tx_index -> new_value])
-	StorageReads   [][32]byte              `ssz-max:"300000"` // Read-only storage keys
-	BalanceChanges []encodingBalanceChange `ssz-max:"300000"` // Balance changes ([tx_index -> post_balance])
-	NonceChanges   []encodingAccountNonce  `ssz-max:"300000"` // Nonce changes ([tx_index -> new_nonce])
-	CodeChanges    []encodingCodeChange    `ssz-max:"300000"` // Code changes ([tx_index -> new_code])
+	Address        [20]byte                // 20-byte Ethereum address
+	StorageWrites  []encodingSlotWrites    // Storage changes (slot -> [tx_index -> new_value])
+	StorageReads   [][32]byte              // Read-only storage keys
+	BalanceChanges []encodingBalanceChange // Balance changes ([tx_index -> post_balance])
+	NonceChanges   []encodingAccountNonce  // Nonce changes ([tx_index -> new_nonce])
+	CodeChanges    []encodingCodeChange    // Code changes ([tx_index -> new_code])
 }
 
 // validate converts the account accesses out of encoding format.
@@ -267,7 +256,7 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 	for _, idx := range balanceIndices {
 		res.BalanceChanges = append(res.BalanceChanges, encodingBalanceChange{
 			TxIdx:   idx,
-			Balance: encodeBalance(a.BalanceChanges[idx]),
+			Balance: a.BalanceChanges[idx].Clone(),
 		})
 	}
 
@@ -332,8 +321,7 @@ func (e *BlockAccessList) PrettyPrint() string {
 
 		printWithIndent(1, "balance changes:")
 		for _, change := range accountDiff.BalanceChanges {
-			balance := new(uint256.Int).SetBytes(change.Balance[:]).String()
-			printWithIndent(2, fmt.Sprintf("%d: %s", change.TxIdx, balance))
+			printWithIndent(2, fmt.Sprintf("%d: %s", change.TxIdx, change.Balance))
 		}
 
 		printWithIndent(1, "nonce changes:")
