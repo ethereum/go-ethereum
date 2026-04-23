@@ -20,7 +20,6 @@ package kzg4844
 import (
 	"embed"
 	"errors"
-	"fmt"
 	"hash"
 	"reflect"
 	"sync/atomic"
@@ -214,6 +213,8 @@ func IsValidVersionedHash(h []byte) bool {
 // For this function, it is sufficient to only provide some of the cells.
 //
 // The `cellIndices` specify which of the 128 cells of each blob are given.
+// Indices must be given in ascending order.
+//
 // Note the list of indices is shared among all blobs, i.e. for a given list of indices
 // [1, 2, 13], the cells slice must contain cells [1, 2, 13] of each blob.
 // Thus, `len(cells)` must be a multiple of `len(cellIndices)`.
@@ -272,16 +273,6 @@ func validateCellIndices(cells []Cell, cellIndices []uint64) error {
 	case len(cells)%len(cellIndices) != 0:
 		return errors.New("len(cells) must be a multiple of len(cellIndices)")
 	}
-	// check no duplicates
-	var bm [CellsPerBlob / 8]uint64
-	for _, i := range cellIndices {
-		if i >= CellsPerBlob {
-			return fmt.Errorf("invalid cell index %d", i)
-		}
-		if bm[i>>8]&(1<<(i%8)) != 0 {
-			return fmt.Errorf("duplicate cell index %d", i)
-		}
-		bm[i>>8] |= 1 << (i % 8)
-	}
+	// The library checks the canonical ordering of indices, so we don't have to do it here.
 	return nil
 }
