@@ -1003,7 +1003,7 @@ func opDupN(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	}
 
 	//The n‘th stack item is duplicated at the top of the stack.
-	scope.Stack.push(scope.Stack.Back(n - 1))
+	scope.Stack.push(scope.Stack.back(n - 1))
 	*pc += 1
 	return nil, nil
 }
@@ -1032,7 +1032,7 @@ func opSwapN(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 	// The (n+1)’th stack item is swapped with the top of the stack.
 	top := scope.Stack.peek()
-	nth := scope.Stack.Back(n)
+	nth := scope.Stack.back(n)
 	*top, *nth = *nth, *top
 	*pc += 1
 	return nil, nil
@@ -1064,8 +1064,8 @@ func opExchange(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	}
 
 	// The (n+1)’th stack item is swapped with the (m+1)’th stack item.
-	nth := scope.Stack.Back(n)
-	mth := scope.Stack.Back(m)
+	nth := scope.Stack.back(n)
+	mth := scope.Stack.back(m)
 	*nth, *mth = *mth, *nth
 	*pc += 1
 	return nil, nil

@@ -56,7 +56,7 @@ func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 func makeCallVariantGasEIP4762(oldCalculator gasFunc, withTransferCosts bool) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 		var (
-			target           = common.Address(stack.Back(1).Bytes20())
+			target           = common.Address(stack.back(1).Bytes20())
 			witnessGas       uint64
 			_, isPrecompile  = evm.precompile(target)
 			isSystemContract = target == params.HistoryStorageAddress
@@ -64,7 +64,7 @@ func makeCallVariantGasEIP4762(oldCalculator gasFunc, withTransferCosts bool) ga
 
 		// If value is transferred, it is charged before 1/64th
 		// is subtracted from the available gas pool.
-		if withTransferCosts && !stack.Back(2).IsZero() {
+		if withTransferCosts && !stack.back(2).IsZero() {
 			wantedValueTransferWitnessGas := evm.AccessEvents.ValueTransferGas(contract.Address(), target, contract.Gas.RegularGas)
 			if wantedValueTransferWitnessGas > contract.Gas.RegularGas {
 				return GasCosts{RegularGas: wantedValueTransferWitnessGas}, nil
@@ -168,8 +168,8 @@ func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	gas := gasCost.RegularGas
 	if !contract.IsDeployment && !contract.IsSystemCall {
 		var (
-			codeOffset = stack.Back(1)
-			length     = stack.Back(2)
+			codeOffset = stack.back(1)
+			length     = stack.back(2)
 		)
 		uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
 		if overflow {

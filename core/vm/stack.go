@@ -33,10 +33,15 @@ func newArena() *stackArena {
 	return stackPool.New().(*stackArena)
 }
 
+// 1025, because in stack() there is a condition check
+// for the stack size that would fail if it was set to
+// 1024.
+const initialStackSize = 1025
+
 var stackPool = sync.Pool{
 	New: func() any {
 		return &stackArena{
-			data: make([]uint256.Int, 1025),
+			data: make([]uint256.Int, initialStackSize),
 		}
 	},
 }
@@ -93,9 +98,8 @@ func (s *Stack) Data() []uint256.Int {
 }
 
 func (s *Stack) push(d *uint256.Int) {
-	s.inner.data[s.inner.top] = *d
-	s.inner.top++
-	s.size++
+	elem := s.get()
+	*elem = *d
 }
 
 // get returns a pointer to a newly created element
@@ -176,7 +180,7 @@ func (s *Stack) peek() *uint256.Int {
 	return &s.inner.data[s.bottom+s.size-1]
 }
 
-// Back returns the n'th item in stack
-func (s *Stack) Back(n int) *uint256.Int {
+// back returns the n'th item in stack
+func (s *Stack) back(n int) *uint256.Int {
 	return &s.inner.data[s.bottom+s.size-n-1]
 }
