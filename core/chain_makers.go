@@ -465,8 +465,10 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 				body.Withdrawals = make([]*types.Withdrawal, 0)
 			}
 		}
-		// Assemble the block for delivery.
-		block := AssembleBlock(b.engine, cm, b.header, statedb, &body, b.receipts)
+		// Assemble the block for delivery. When Amsterdam is active,
+		// pass the accumulated BAL so engine.Finalize's accesses and
+		// mutations are folded in and the BAL is attached to the block.
+		block := AssembleBlock(b.engine, cm, b.header, statedb, &body, b.receipts, b.accessList)
 
 		// Write state changes to db
 		root, err := statedb.Commit(b.header.Number.Uint64(), config.IsEIP158(b.header.Number), config.IsCancun(b.header.Number, b.header.Time))
