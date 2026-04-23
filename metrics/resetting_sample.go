@@ -3,7 +3,7 @@ package metrics
 // ResettingSample converts an ordinary sample into one that resets whenever its
 // snapshot is retrieved. This will break for multi-monitor systems, but when only
 // a single metric is being pushed out, this ensure that low-frequency events don't
-// skew th charts indefinitely.
+// skew the charts indefinitely.
 func ResettingSample(sample Sample) Sample {
 	return &resettingSample{
 		Sample: sample,
