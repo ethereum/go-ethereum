@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
@@ -73,6 +74,14 @@ type environment struct {
 	blobs    int
 
 	witness *stateless.Witness
+
+	// accessList accumulates the block's BAL (EIP-7928). Non-nil only when
+	// Amsterdam is active. Populated from pre-tx system calls
+	// (ProcessBeaconBlockRoot, ProcessParentBlockHash) in prepareWork, each
+	// transaction in applyTransaction, post-tx system calls
+	// (ProcessWithdrawalQueue, ProcessConsolidationQueue) in generateWork,
+	// and finally engine.Finalize inside AssembleBlock.
+	accessList *bal.ConstructionBlockAccessList
 }
 
 // txFitsSize reports whether the transaction fits into the block size limit.
@@ -213,21 +222,33 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 			return &newPayloadResult{err: err}
 		}
 		// EIP-7002
-		if _, _, err := core.ProcessWithdrawalQueue(&requests, work.evm); err != nil {
+		wqAccesses, wqMutations, err := core.ProcessWithdrawalQueue(&requests, work.evm)
+		if err != nil {
 			return &newPayloadResult{err: err}
 		}
 		// EIP-7251 consolidations
-		if _, _, err := core.ProcessConsolidationQueue(&requests, work.evm); err != nil {
+		cqAccesses, cqMutations, err := core.ProcessConsolidationQueue(&requests, work.evm)
+		if err != nil {
 			return &newPayloadResult{err: err}
+		}
+		if work.accessList != nil {
+			postMut := bal.NewStateMutations()
+			postMut.Merge(wqMutations)
+			postMut.Merge(cqMutations)
+			work.accessList.AddBlockFinalizeMutations(postMut)
+			work.accessList.AddAccesses(wqAccesses)
+			work.accessList.AddAccesses(cqAccesses)
 		}
 	}
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
 		work.header.RequestsHash = &reqHash
 	}
-	// Assemble the block for delivery.
+	// Assemble the block for delivery. AssembleBlock calls engine.Finalize
+	// and, when a BAL is supplied, folds its accesses/mutations into the BAL,
+	// sets header.BlockAccessListHash, and attaches the BAL to the block.
 	_, _, assembleSpanEnd := telemetry.StartSpan(ctx, "miner.AssembleBlock")
-	block := core.AssembleBlock(miner.engine, miner.chain, work.header, work.state, &body, work.receipts)
+	block := core.AssembleBlock(miner.engine, miner.chain, work.header, work.state, &body, work.receipts, work.accessList)
 	assembleSpanEnd(nil)
 
 	return &newPayloadResult{
@@ -327,10 +348,18 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 		return nil, err
 	}
 	if header.ParentBeaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, env.evm)
+		accesses, mutations := core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, env.evm)
+		if env.accessList != nil {
+			env.accessList.AddBlockInitMutations(mutations)
+			env.accessList.AddAccesses(accesses)
+		}
 	}
 	if miner.chainConfig.IsPrague(header.Number, header.Time) {
-		core.ProcessParentBlockHash(header.ParentHash, env.evm)
+		accesses, mutations := core.ProcessParentBlockHash(header.ParentHash, env.evm)
+		if env.accessList != nil {
+			env.accessList.AddBlockInitMutations(mutations)
+			env.accessList.AddAccesses(accesses)
+		}
 	}
 	return env, nil
 }
@@ -351,7 +380,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	}
 	state.StartPrefetcher("miner", bundle)
 	// Note the passed coinbase may be different with header.Coinbase.
-	return &environment{
+	env := &environment{
 		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),
 		state:    state,
 		size:     uint64(header.Size()),
@@ -360,7 +389,11 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 		header:   header,
 		witness:  state.Witness(),
 		evm:      vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{}),
-	}, nil
+	}
+	if miner.chainConfig.IsAmsterdam(header.Number, header.Time) {
+		env.accessList = bal.NewConstructionBlockAccessList()
+	}
+	return env, nil
 }
 
 func (miner *Miner) commitTransaction(ctx context.Context, env *environment, tx *types.Transaction) (err error) {
@@ -414,11 +447,15 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Snapshot()
 	)
-	_, _, receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx)
+	txAccesses, txMutations, receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.Set(gp)
 		return nil, err
+	}
+	if env.accessList != nil {
+		env.accessList.AddTransactionMutations(txMutations, env.tcount)
+		env.accessList.AddAccesses(txAccesses)
 	}
 	env.header.GasUsed = env.gasPool.Used()
 	return receipt, nil
