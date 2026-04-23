@@ -212,7 +212,6 @@ func IsValidVersionedHash(h []byte) bool {
 // VerifyCells verifies a batch of proofs corresponding to the cells and blob commitments.
 //
 // For this function, it is sufficient to only provide some of the cells.
-// For each blob being proven, the cells slice must contain at least 64 items.
 //
 // The `cellIndices` specify which of the 128 cells of each blob are given.
 // Note the list of indices is shared among all blobs, i.e. for a given list of indices
@@ -249,6 +248,7 @@ func ComputeCells(blobs []Blob) ([]Cell, error) {
 }
 
 // RecoverBlobs recovers blobs from the given cells and cell indices.
+// In order to successfully recover, at least DataPerBlob (64) cells must be provided.
 //
 // For the layout of cells and cellIndices, please see [VerifyCells].
 func RecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
