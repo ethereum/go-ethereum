@@ -14,31 +14,31 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package pathdb
+package internal
 
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-// holdableIterator is a wrapper of underlying database iterator. It extends
+// HoldableIterator is a wrapper of underlying database iterator. It extends
 // the basic iterator interface by adding Hold which can hold the element
 // locally where the iterator is currently located and serve it up next time.
-type holdableIterator struct {
+type HoldableIterator struct {
 	it     ethdb.Iterator
 	key    []byte
 	val    []byte
 	atHeld bool
 }
 
-// newHoldableIterator initializes the holdableIterator with the given iterator.
-func newHoldableIterator(it ethdb.Iterator) *holdableIterator {
-	return &holdableIterator{it: it}
+// NewHoldableIterator initializes the HoldableIterator with the given iterator.
+func NewHoldableIterator(it ethdb.Iterator) *HoldableIterator {
+	return &HoldableIterator{it: it}
 }
 
 // Hold holds the element locally where the iterator is currently located which
 // can be served up next time.
-func (it *holdableIterator) Hold() {
+func (it *HoldableIterator) Hold() {
 	if it.it.Key() == nil {
 		return // nothing to hold
 	}
@@ -49,7 +49,7 @@ func (it *holdableIterator) Hold() {
 
 // Next moves the iterator to the next key/value pair. It returns whether the
 // iterator is exhausted.
-func (it *holdableIterator) Next() bool {
+func (it *HoldableIterator) Next() bool {
 	if !it.atHeld && it.key != nil {
 		it.atHeld = true
 	} else if it.atHeld {
@@ -65,11 +65,11 @@ func (it *holdableIterator) Next() bool {
 
 // Error returns any accumulated error. Exhausting all the key/value pairs
 // is not considered to be an error.
-func (it *holdableIterator) Error() error { return it.it.Error() }
+func (it *HoldableIterator) Error() error { return it.it.Error() }
 
 // Release releases associated resources. Release should always succeed and can
 // be called multiple times without causing error.
-func (it *holdableIterator) Release() {
+func (it *HoldableIterator) Release() {
 	it.atHeld = false
 	it.key = nil
 	it.val = nil
@@ -79,7 +79,7 @@ func (it *holdableIterator) Release() {
 // Key returns the key of the current key/value pair, or nil if done. The caller
 // should not modify the contents of the returned slice, and its contents may
 // change on the next call to Next.
-func (it *holdableIterator) Key() []byte {
+func (it *HoldableIterator) Key() []byte {
 	if it.key != nil {
 		return it.key
 	}
@@ -89,7 +89,7 @@ func (it *holdableIterator) Key() []byte {
 // Value returns the value of the current key/value pair, or nil if done. The
 // caller should not modify the contents of the returned slice, and its contents
 // may change on the next call to Next.
-func (it *holdableIterator) Value() []byte {
+func (it *HoldableIterator) Value() []byte {
 	if it.val != nil {
 		return it.val
 	}

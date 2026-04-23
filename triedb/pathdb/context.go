@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/triedb/internal"
 )
 
 const (
@@ -91,12 +92,12 @@ func (gs *generatorStats) log(msg string, root common.Hash, marker []byte) {
 // current generation cycle. It must be recreated if the generation cycle is
 // restarted.
 type generatorContext struct {
-	root    common.Hash         // State root of the generation target
-	account *holdableIterator   // Iterator of account snapshot data
-	storage *holdableIterator   // Iterator of storage snapshot data
-	db      ethdb.KeyValueStore // Key-value store containing the snapshot data
-	batch   ethdb.Batch         // Database batch for writing data atomically
-	logged  time.Time           // The timestamp when last generation progress was displayed
+	root    common.Hash                // State root of the generation target
+	account *internal.HoldableIterator // Iterator of account snapshot data
+	storage *internal.HoldableIterator // Iterator of storage snapshot data
+	db      ethdb.KeyValueStore        // Key-value store containing the snapshot data
+	batch   ethdb.Batch                // Database batch for writing data atomically
+	logged  time.Time                  // The timestamp when last generation progress was displayed
 }
 
 // newGeneratorContext initializes the context for generation.
@@ -119,11 +120,11 @@ func newGeneratorContext(root common.Hash, marker []byte, db ethdb.KeyValueStore
 func (ctx *generatorContext) openIterator(kind string, start []byte) {
 	if kind == snapAccount {
 		iter := ctx.db.NewIterator(rawdb.SnapshotAccountPrefix, start)
-		ctx.account = newHoldableIterator(rawdb.NewKeyLengthIterator(iter, 1+common.HashLength))
+		ctx.account = internal.NewHoldableIterator(rawdb.NewKeyLengthIterator(iter, 1+common.HashLength))
 		return
 	}
 	iter := ctx.db.NewIterator(rawdb.SnapshotStoragePrefix, start)
-	ctx.storage = newHoldableIterator(rawdb.NewKeyLengthIterator(iter, 1+2*common.HashLength))
+	ctx.storage = internal.NewHoldableIterator(rawdb.NewKeyLengthIterator(iter, 1+2*common.HashLength))
 }
 
 // reopenIterator releases the specified snapshot iterator and re-open it
@@ -140,10 +141,10 @@ func (ctx *generatorContext) reopenIterator(kind string) {
 		// Iterator exhausted, release forever and create an already exhausted virtual iterator
 		iter.Release()
 		if kind == snapAccount {
-			ctx.account = newHoldableIterator(memorydb.New().NewIterator(nil, nil))
+			ctx.account = internal.NewHoldableIterator(memorydb.New().NewIterator(nil, nil))
 			return
 		}
-		ctx.storage = newHoldableIterator(memorydb.New().NewIterator(nil, nil))
+		ctx.storage = internal.NewHoldableIterator(memorydb.New().NewIterator(nil, nil))
 		return
 	}
 	next := iter.Key()
@@ -158,7 +159,7 @@ func (ctx *generatorContext) close() {
 }
 
 // iterator returns the corresponding iterator specified by the kind.
-func (ctx *generatorContext) iterator(kind string) *holdableIterator {
+func (ctx *generatorContext) iterator(kind string) *internal.HoldableIterator {
 	if kind == snapAccount {
 		return ctx.account
 	}

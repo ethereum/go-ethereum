@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
@@ -60,8 +61,8 @@ func buildExpectedRoot(t *testing.T, accounts []testAccount) common.Hash {
 	return acctTrie.Hash()
 }
 
-// computeStorageRoot computes the storage trie root from sorted slots.
-func computeStorageRoot(slots []testSlot) common.Hash {
+// computeStorageRootFromSlots computes the storage trie root from sorted slots.
+func computeStorageRootFromSlots(slots []testSlot) common.Hash {
 	sort.Slice(slots, func(i, j int) bool {
 		return bytes.Compare(slots[i].hash[:], slots[j].hash[:]) < 0
 	})
@@ -74,7 +75,7 @@ func computeStorageRoot(slots []testSlot) common.Hash {
 
 func TestGenerateTrieEmpty(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	if err := GenerateTrie(db, rawdb.HashScheme, types.EmptyRootHash); err != nil {
+	if err := GenerateTrie(db, rawdb.HashScheme, types.EmptyRootHash, nil); err != nil {
 		t.Fatalf("GenerateTrie on empty state failed: %v", err)
 	}
 }
@@ -107,7 +108,7 @@ func TestGenerateTrieAccountsOnly(t *testing.T) {
 	}
 	root := buildExpectedRoot(t, accounts)
 
-	if err := GenerateTrie(db, rawdb.HashScheme, root); err != nil {
+	if err := GenerateTrie(db, rawdb.HashScheme, root, nil); err != nil {
 		t.Fatalf("GenerateTrie failed: %v", err)
 	}
 }
@@ -119,7 +120,7 @@ func TestGenerateTrieWithStorage(t *testing.T) {
 		{hash: common.HexToHash("0xaa"), value: []byte{0x01, 0x02, 0x03}},
 		{hash: common.HexToHash("0xbb"), value: []byte{0x04, 0x05, 0x06}},
 	}
-	storageRoot := computeStorageRoot(slots)
+	storageRoot := computeStorageRootFromSlots(slots)
 
 	accounts := []testAccount{
 		{
@@ -154,7 +155,7 @@ func TestGenerateTrieWithStorage(t *testing.T) {
 	}
 	root := buildExpectedRoot(t, accounts)
 
-	if err := GenerateTrie(db, rawdb.HashScheme, root); err != nil {
+	if err := GenerateTrie(db, rawdb.HashScheme, root, nil); err != nil {
 		t.Fatalf("GenerateTrie failed: %v", err)
 	}
 }
@@ -171,8 +172,133 @@ func TestGenerateTrieRootMismatch(t *testing.T) {
 	rawdb.WriteAccountSnapshot(db, common.HexToHash("0x01"), types.SlimAccountRLP(acct))
 
 	wrongRoot := common.HexToHash("0xdeadbeef")
-	err := GenerateTrie(db, rawdb.HashScheme, wrongRoot)
+	err := GenerateTrie(db, rawdb.HashScheme, wrongRoot, nil)
 	if err == nil {
 		t.Fatal("expected error for root mismatch, got nil")
+	}
+}
+
+// TestGenerateTrieFixesStaleRoots writes flat state with a mix of stale,
+// empty, and correct account roots, then checks that GenerateTrie produces
+// the expected state root.
+func TestGenerateTrieFixesStaleRoots(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+
+	const n = 300
+	accounts := make([]testAccount, 0, n)
+	for i := 0; i < n; i++ {
+		addr := common.BytesToAddress([]byte{byte(i >> 8), byte(i)})
+		hash := crypto.Keccak256Hash(addr[:])
+
+		acc := testAccount{
+			hash: hash,
+			account: types.StateAccount{
+				Nonce:    uint64(i),
+				Balance:  uint256.NewInt(uint64(i + 1)),
+				Root:     types.EmptyRootHash,
+				CodeHash: types.EmptyCodeHash.Bytes(),
+			},
+		}
+		// Every third account has no storage; the rest get slots.
+		if i%3 != 0 {
+			acc.storage = []testSlot{
+				{hash: common.BytesToHash([]byte{byte(i), 0xaa}), value: []byte{byte(i), 0x01}},
+				{hash: common.BytesToHash([]byte{byte(i), 0xbb}), value: []byte{byte(i), 0x02}},
+			}
+			acc.account.Root = computeStorageRootFromSlots(acc.storage)
+		}
+		accounts = append(accounts, acc)
+	}
+	// Expected state root with all Roots correct.
+	expectedRoot := buildExpectedRoot(t, accounts)
+
+	// Write flat state. Storage-bearing accounts rotate through three on-disk
+	// Root states that GenerateTrie's pre-pass must all bring into alignment:
+	//   - stale non-empty Root
+	//   - stale empty Root
+	//   - correct Root
+	for i, a := range accounts {
+		for _, s := range a.storage {
+			rawdb.WriteStorageSnapshot(db, a.hash, s.hash, s.value)
+		}
+		onDisk := a.account
+		if len(a.storage) > 0 {
+			switch i % 3 {
+			case 0:
+				onDisk.Root = common.BytesToHash([]byte{byte(i), 0xde, 0xad})
+			case 1:
+				onDisk.Root = types.EmptyRootHash
+			}
+		}
+		rawdb.WriteAccountSnapshot(db, a.hash, types.SlimAccountRLP(onDisk))
+	}
+
+	if err := GenerateTrie(db, rawdb.HashScheme, expectedRoot, nil); err != nil {
+		t.Fatalf("GenerateTrie failed: %v", err)
+	}
+}
+
+// TestUpdateStorageRootsCancel verifies updateStorageRoots respects the
+// cancel channel.
+func TestUpdateStorageRootsCancel(t *testing.T) {
+	t.Parallel()
+	db := rawdb.NewMemoryDatabase()
+
+	for i := 0; i < 100; i++ {
+		addr := common.BytesToAddress([]byte{byte(i)})
+		hash := crypto.Keccak256Hash(addr[:])
+		rawdb.WriteAccountSnapshot(db, hash, types.SlimAccountRLP(types.StateAccount{
+			Balance:  uint256.NewInt(1),
+			Root:     types.EmptyRootHash,
+			CodeHash: types.EmptyCodeHash[:],
+		}))
+	}
+
+	cancel := make(chan struct{})
+	close(cancel)
+	if err := updateStorageRoots(db, cancel); err != ErrCancelled {
+		t.Fatalf("expected ErrCancelled, got %v", err)
+	}
+}
+
+// TestGenerateTrieOrphanStorage exercises the orphan-slot skip path: flat
+// storage entries for an accountHash that has no corresponding account
+// snapshot. updateStorageRoots must skip these without including them in
+// any account's storage root.
+func TestGenerateTrieOrphanStorage(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+
+	// One legitimate account with storage.
+	liveAccountHash := crypto.Keccak256Hash(common.HexToAddress("0x01").Bytes())
+	slots := []testSlot{
+		{hash: common.HexToHash("0xaa"), value: []byte{0x01}},
+	}
+	for _, s := range slots {
+		rawdb.WriteStorageSnapshot(db, liveAccountHash, s.hash, s.value)
+	}
+	acc := testAccount{
+		hash: liveAccountHash,
+		account: types.StateAccount{
+			Nonce:    1,
+			Balance:  uint256.NewInt(1),
+			Root:     computeStorageRootFromSlots(slots),
+			CodeHash: types.EmptyCodeHash.Bytes(),
+		},
+		storage: slots,
+	}
+	rawdb.WriteAccountSnapshot(db, acc.hash, types.SlimAccountRLP(acc.account))
+
+	// Orphan storage: entries for an accountHash smaller than liveAccountHash,
+	// with no account snapshot behind them. Must be ordered before liveAccountHash
+	// so the storage iterator encounters them first.
+	var orphanAccountHash common.Hash
+	copy(orphanAccountHash[:], liveAccountHash[:])
+	orphanAccountHash[0] = 0x00 // guarantees cmp < 0 against liveAccountHash
+	rawdb.WriteStorageSnapshot(db, orphanAccountHash, common.HexToHash("0xbb"), []byte{0x02})
+
+	expectedRoot := buildExpectedRoot(t, []testAccount{acc})
+
+	if err := GenerateTrie(db, rawdb.HashScheme, expectedRoot, nil); err != nil {
+		t.Fatalf("GenerateTrie with orphan storage failed: %v", err)
 	}
 }
