@@ -513,6 +513,9 @@ func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 	// Make it possible to default to newer tx, but use legacy if gasprice is provided
 	if args.GasPrice != nil {
 		usedType = types.LegacyTxType
+		if args.AccessList != nil {
+			usedType = types.AccessListTxType
+		}
 	}
 	var data types.TxData
 	switch usedType {
