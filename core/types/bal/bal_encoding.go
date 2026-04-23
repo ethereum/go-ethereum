@@ -88,12 +88,12 @@ type encodingAccountNonce struct {
 // encodingStorageWrite is the encoding format of StorageWrites.
 type encodingStorageWrite struct {
 	TxIdx      uint32
-	ValueAfter [32]byte
+	ValueAfter *uint256.Int
 }
 
 // encodingStorageWrite is the encoding format of SlotWrites.
 type encodingSlotWrites struct {
-	Slot     [32]byte
+	Slot     *uint256.Int
 	Accesses []encodingStorageWrite
 }
 
@@ -119,7 +119,7 @@ type encodingCodeChange struct {
 type AccountAccess struct {
 	Address        [20]byte                // 20-byte Ethereum address
 	StorageWrites  []encodingSlotWrites    // Storage changes (slot -> [tx_index -> new_value])
-	StorageReads   [][32]byte              // Read-only storage keys
+	StorageReads   []*uint256.Int          // Read-only storage keys
 	BalanceChanges []encodingBalanceChange // Balance changes ([tx_index -> post_balance])
 	NonceChanges   []encodingAccountNonce  // Nonce changes ([tx_index -> new_nonce])
 	CodeChanges    []encodingCodeChange    // Code changes ([tx_index -> new_code])
@@ -131,7 +131,7 @@ type AccountAccess struct {
 func (e *AccountAccess) validate() error {
 	// Check the storage write slots are sorted in order
 	if !slices.IsSortedFunc(e.StorageWrites, func(a, b encodingSlotWrites) int {
-		return bytes.Compare(a.Slot[:], b.Slot[:])
+		return a.Slot.Cmp(b.Slot)
 	}) {
 		return errors.New("storage writes slots not in lexicographic order")
 	}
@@ -142,8 +142,8 @@ func (e *AccountAccess) validate() error {
 	}
 
 	// Check the storage read slots are sorted in order
-	if !slices.IsSortedFunc(e.StorageReads, func(a, b [32]byte) int {
-		return bytes.Compare(a[:], b[:])
+	if !slices.IsSortedFunc(e.StorageReads, func(a, b *uint256.Int) int {
+		return a.Cmp(b)
 	}) {
 		return errors.New("storage read slots not in lexicographic order")
 	}
@@ -182,16 +182,32 @@ func (e *AccountAccess) validate() error {
 func (e *AccountAccess) Copy() AccountAccess {
 	res := AccountAccess{
 		Address:        e.Address,
-		StorageReads:   slices.Clone(e.StorageReads),
-		BalanceChanges: slices.Clone(e.BalanceChanges),
+		StorageReads:   make([]*uint256.Int, 0, len(e.StorageReads)),
+		BalanceChanges: make([]encodingBalanceChange, 0, len(e.BalanceChanges)),
 		NonceChanges:   slices.Clone(e.NonceChanges),
 		StorageWrites:  make([]encodingSlotWrites, 0, len(e.StorageWrites)),
 		CodeChanges:    make([]encodingCodeChange, 0, len(e.CodeChanges)),
 	}
+	for _, slot := range e.StorageReads {
+		res.StorageReads = append(res.StorageReads, slot.Clone())
+	}
+	for _, change := range e.BalanceChanges {
+		res.BalanceChanges = append(res.BalanceChanges, encodingBalanceChange{
+			TxIdx:   change.TxIdx,
+			Balance: change.Balance.Clone(),
+		})
+	}
 	for _, storageWrite := range e.StorageWrites {
+		accesses := make([]encodingStorageWrite, 0, len(storageWrite.Accesses))
+		for _, w := range storageWrite.Accesses {
+			accesses = append(accesses, encodingStorageWrite{
+				TxIdx:      w.TxIdx,
+				ValueAfter: w.ValueAfter.Clone(),
+			})
+		}
 		res.StorageWrites = append(res.StorageWrites, encodingSlotWrites{
-			Slot:     storageWrite.Slot,
-			Accesses: slices.Clone(storageWrite.Accesses),
+			Slot:     storageWrite.Slot.Clone(),
+			Accesses: accesses,
 		})
 	}
 	for _, codeChange := range e.CodeChanges {
@@ -216,7 +232,7 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 	res := AccountAccess{
 		Address:        addr,
 		StorageWrites:  make([]encodingSlotWrites, 0, len(a.StorageWrites)),
-		StorageReads:   make([][32]byte, 0, len(a.StorageReads)),
+		StorageReads:   make([]*uint256.Int, 0, len(a.StorageReads)),
 		BalanceChanges: make([]encodingBalanceChange, 0, len(a.BalanceChanges)),
 		NonceChanges:   make([]encodingAccountNonce, 0, len(a.NonceChanges)),
 		CodeChanges:    make([]encodingCodeChange, 0, len(a.CodeChange)),
@@ -226,18 +242,19 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 	writeSlots := slices.Collect(maps.Keys(a.StorageWrites))
 	slices.SortFunc(writeSlots, common.Hash.Cmp)
 	for _, slot := range writeSlots {
-		var obj encodingSlotWrites
-		obj.Slot = slot
-
+		obj := encodingSlotWrites{
+			Slot: new(uint256.Int).SetBytes(slot[:]),
+		}
 		slotWrites := a.StorageWrites[slot]
 		obj.Accesses = make([]encodingStorageWrite, 0, len(slotWrites))
 
 		indices := slices.Collect(maps.Keys(slotWrites))
 		slices.SortFunc(indices, cmp.Compare[uint32])
 		for _, index := range indices {
+			val := slotWrites[index]
 			obj.Accesses = append(obj.Accesses, encodingStorageWrite{
 				TxIdx:      index,
-				ValueAfter: slotWrites[index],
+				ValueAfter: new(uint256.Int).SetBytes(val[:]),
 			})
 		}
 		res.StorageWrites = append(res.StorageWrites, obj)
@@ -247,7 +264,7 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 	readSlots := slices.Collect(maps.Keys(a.StorageReads))
 	slices.SortFunc(readSlots, common.Hash.Cmp)
 	for _, slot := range readSlots {
-		res.StorageReads = append(res.StorageReads, slot)
+		res.StorageReads = append(res.StorageReads, new(uint256.Int).SetBytes(slot[:]))
 	}
 
 	// Convert balance changes
@@ -308,15 +325,15 @@ func (e *BlockAccessList) PrettyPrint() string {
 
 		printWithIndent(1, "storage writes:")
 		for _, sWrite := range accountDiff.StorageWrites {
-			printWithIndent(2, fmt.Sprintf("%x:", sWrite.Slot))
+			printWithIndent(2, fmt.Sprintf("%s:", sWrite.Slot.Hex()))
 			for _, access := range sWrite.Accesses {
-				printWithIndent(3, fmt.Sprintf("%d: %x", access.TxIdx, access.ValueAfter))
+				printWithIndent(3, fmt.Sprintf("%d: %s", access.TxIdx, access.ValueAfter.Hex()))
 			}
 		}
 
 		printWithIndent(1, "storage reads:")
 		for _, slot := range accountDiff.StorageReads {
-			printWithIndent(2, fmt.Sprintf("%x", slot))
+			printWithIndent(2, slot.Hex())
 		}
 
 		printWithIndent(1, "balance changes:")

@@ -16,12 +16,20 @@ func (obj *BlockAccessList) EncodeRLP(_w io.Writer) error {
 		_tmp4 := w.List()
 		for _, _tmp5 := range _tmp2.StorageWrites {
 			_tmp6 := w.List()
-			w.WriteBytes(_tmp5.Slot[:])
+			if _tmp5.Slot == nil {
+				w.Write(rlp.EmptyString)
+			} else {
+				w.WriteUint256(_tmp5.Slot)
+			}
 			_tmp7 := w.List()
 			for _, _tmp8 := range _tmp5.Accesses {
 				_tmp9 := w.List()
 				w.WriteUint64(uint64(_tmp8.TxIdx))
-				w.WriteBytes(_tmp8.ValueAfter[:])
+				if _tmp8.ValueAfter == nil {
+					w.Write(rlp.EmptyString)
+				} else {
+					w.WriteUint256(_tmp8.ValueAfter)
+				}
 				w.ListEnd(_tmp9)
 			}
 			w.ListEnd(_tmp7)
@@ -30,7 +38,11 @@ func (obj *BlockAccessList) EncodeRLP(_w io.Writer) error {
 		w.ListEnd(_tmp4)
 		_tmp10 := w.List()
 		for _, _tmp11 := range _tmp2.StorageReads {
-			w.WriteBytes(_tmp11[:])
+			if _tmp11 == nil {
+				w.Write(rlp.EmptyString)
+			} else {
+				w.WriteUint256(_tmp11)
+			}
 		}
 		w.ListEnd(_tmp10)
 		_tmp12 := w.List()
@@ -103,11 +115,11 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 							return err
 						}
 						// Slot:
-						var _tmp6 [32]byte
-						if err := dec.ReadBytes(_tmp6[:]); err != nil {
+						var _tmp6 uint256.Int
+						if err := dec.ReadUint256(&_tmp6); err != nil {
 							return err
 						}
-						_tmp5.Slot = _tmp6
+						_tmp5.Slot = &_tmp6
 						// Accesses:
 						var _tmp7 []encodingStorageWrite
 						if _, err := dec.List(); err != nil {
@@ -126,11 +138,11 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 								}
 								_tmp8.TxIdx = _tmp9
 								// ValueAfter:
-								var _tmp10 [32]byte
-								if err := dec.ReadBytes(_tmp10[:]); err != nil {
+								var _tmp10 uint256.Int
+								if err := dec.ReadUint256(&_tmp10); err != nil {
 									return err
 								}
-								_tmp8.ValueAfter = _tmp10
+								_tmp8.ValueAfter = &_tmp10
 								if err := dec.ListEnd(); err != nil {
 									return err
 								}
@@ -152,16 +164,16 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 				}
 				_tmp2.StorageWrites = _tmp4
 				// StorageReads:
-				var _tmp11 [][32]byte
+				var _tmp11 []*uint256.Int
 				if _, err := dec.List(); err != nil {
 					return err
 				}
 				for dec.MoreDataInList() {
-					var _tmp12 [32]byte
-					if err := dec.ReadBytes(_tmp12[:]); err != nil {
+					var _tmp12 uint256.Int
+					if err := dec.ReadUint256(&_tmp12); err != nil {
 						return err
 					}
-					_tmp11 = append(_tmp11, _tmp12)
+					_tmp11 = append(_tmp11, &_tmp12)
 				}
 				if err := dec.ListEnd(); err != nil {
 					return err

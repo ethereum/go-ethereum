@@ -115,18 +115,21 @@ func TestBALEncoding(t *testing.T) {
 func makeTestAccountAccess(sort bool) AccountAccess {
 	var (
 		storageWrites []encodingSlotWrites
-		storageReads  [][32]byte
+		storageReads  []*uint256.Int
 		balances      []encodingBalanceChange
 		nonces        []encodingAccountNonce
 	)
+	randSlot := func() *uint256.Int {
+		return new(uint256.Int).SetBytes(testrand.Bytes(32))
+	}
 	for i := 0; i < 5; i++ {
 		slot := encodingSlotWrites{
-			Slot: testrand.Hash(),
+			Slot: randSlot(),
 		}
 		for j := 0; j < 3; j++ {
 			slot.Accesses = append(slot.Accesses, encodingStorageWrite{
 				TxIdx:      uint32(2 * j),
-				ValueAfter: testrand.Hash(),
+				ValueAfter: randSlot(),
 			})
 		}
 		if sort {
@@ -138,16 +141,16 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 	}
 	if sort {
 		slices.SortFunc(storageWrites, func(a, b encodingSlotWrites) int {
-			return bytes.Compare(a.Slot[:], b.Slot[:])
+			return a.Slot.Cmp(b.Slot)
 		})
 	}
 
 	for i := 0; i < 5; i++ {
-		storageReads = append(storageReads, testrand.Hash())
+		storageReads = append(storageReads, randSlot())
 	}
 	if sort {
-		slices.SortFunc(storageReads, func(a, b [32]byte) int {
-			return bytes.Compare(a[:], b[:])
+		slices.SortFunc(storageReads, func(a, b *uint256.Int) int {
+			return a.Cmp(b)
 		})
 	}
 
@@ -218,7 +221,7 @@ func TestBlockAccessListCopy(t *testing.T) {
 	// Make sure the mutations on copy won't affect the origin
 	for _, aa := range cpyCpy.Accesses {
 		for i := 0; i < len(aa.StorageReads); i++ {
-			aa.StorageReads[i] = [32]byte(testrand.Bytes(32))
+			aa.StorageReads[i] = new(uint256.Int).SetBytes(testrand.Bytes(32))
 		}
 	}
 	if !reflect.DeepEqual(list, cpy) {
