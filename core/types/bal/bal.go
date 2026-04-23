@@ -25,7 +25,7 @@ import (
 )
 
 // ConstructionAccountAccess contains post-block account state for mutations as well as
-// all storage keys that were read during execution.  It is used when building block
+// all storage keys that were read during execution. It is used when building block
 // access list during execution.
 type ConstructionAccountAccess struct {
 	// StorageWrites is the post-state values of an account's storage slots

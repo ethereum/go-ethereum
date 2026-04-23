@@ -33,26 +33,58 @@ import (
 	"github.com/holiman/uint256"
 )
 
-//go:generate go run github.com/ethereum/go-ethereum/rlp/rlpgen -out bal_encoding_rlp_generated.go -type BlockAccessList -decoder
+//go:generate go run github.com/ethereum/go-ethereum/rlp/rlpgen -out bal_encoding_rlp_generated.go -type AccountAccess -decoder
 
 // These are objects used as input for the access list encoding. They mirror
 // the spec format.
 
 // BlockAccessList is the encoding format of ConstructionBlockAccessList.
-type BlockAccessList struct {
-	Accesses []AccountAccess
+type BlockAccessList []AccountAccess
+
+// EncodeRLP implements rlp.Encoder. It encodes the access list as a single
+// RLP list of AccountAccess entries.
+func (e BlockAccessList) EncodeRLP(w io.Writer) error {
+	buf := rlp.NewEncoderBuffer(w)
+	l := buf.List()
+	for i := range e {
+		if err := e[i].EncodeRLP(buf); err != nil {
+			return err
+		}
+	}
+	buf.ListEnd(l)
+	return buf.Flush()
+}
+
+// DecodeRLP implements rlp.Decoder.
+func (e *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
+	if _, err := s.List(); err != nil {
+		return err
+	}
+	var list BlockAccessList
+	for s.MoreDataInList() {
+		var a AccountAccess
+		if err := a.DecodeRLP(s); err != nil {
+			return err
+		}
+		list = append(list, a)
+	}
+	if err := s.ListEnd(); err != nil {
+		return err
+	}
+	*e = list
+	return nil
 }
 
 // Validate returns an error if the contents of the access list are not ordered
 // according to the spec or any code changes are contained which exceed protocol
 // max code size.
 func (e *BlockAccessList) Validate() error {
-	if !slices.IsSortedFunc(e.Accesses, func(a, b AccountAccess) int {
+	if !slices.IsSortedFunc(*e, func(a, b AccountAccess) int {
 		return bytes.Compare(a.Address[:], b.Address[:])
 	}) {
 		return errors.New("block access list accounts not in lexicographic order")
 	}
-	for _, entry := range e.Accesses {
+	for _, entry := range *e {
 		if err := entry.validate(); err != nil {
 			return err
 		}
@@ -63,12 +95,11 @@ func (e *BlockAccessList) Validate() error {
 // Hash computes the keccak256 hash of the access list
 func (e *BlockAccessList) Hash() common.Hash {
 	var enc bytes.Buffer
-	err := e.EncodeRLP(&enc)
-	if err != nil {
-		// errors here are related to BAL values exceeding maximum size defined
-		// by the spec. Hard-fail because these cases are not expected to be hit
-		// under reasonable conditions.
-		panic(err)
+	if err := e.EncodeRLP(&enc); err != nil {
+		// Errors here are related to BAL values exceeding maximum size defined
+		// by the spec. Return empty hash because these cases are not expected
+		// to be hit under reasonable conditions.
+		return common.Hash{}
 	}
 	return crypto.Keccak256Hash(enc.Bytes())
 }
@@ -308,9 +339,9 @@ func (b *ConstructionBlockAccessList) toEncodingObj() *BlockAccessList {
 	}
 	slices.SortFunc(addresses, common.Address.Cmp)
 
-	var res BlockAccessList
+	res := make(BlockAccessList, 0, len(addresses))
 	for _, addr := range addresses {
-		res.Accesses = append(res.Accesses, b.Accounts[addr].toEncodingObj(addr))
+		res = append(res, b.Accounts[addr].toEncodingObj(addr))
 	}
 	return &res
 }
@@ -320,7 +351,7 @@ func (e *BlockAccessList) PrettyPrint() string {
 	printWithIndent := func(indent int, text string) {
 		fmt.Fprintf(&res, "%s%s\n", strings.Repeat("    ", indent), text)
 	}
-	for _, accountDiff := range e.Accesses {
+	for _, accountDiff := range *e {
 		printWithIndent(0, fmt.Sprintf("%x:", accountDiff.Address))
 
 		printWithIndent(1, "storage writes:")
@@ -356,11 +387,9 @@ func (e *BlockAccessList) PrettyPrint() string {
 
 // Copy returns a deep copy of the access list
 func (e *BlockAccessList) Copy() *BlockAccessList {
-	cpy := &BlockAccessList{
-		Accesses: make([]AccountAccess, 0, len(e.Accesses)),
+	cpy := make(BlockAccessList, 0, len(*e))
+	for _, accountAccess := range *e {
+		cpy = append(cpy, accountAccess.Copy())
 	}
-	for _, accountAccess := range e.Accesses {
-		cpy.Accesses = append(cpy.Accesses, accountAccess.Copy())
-	}
-	return cpy
+	return &cpy
 }

@@ -29,13 +29,6 @@ import (
 	"github.com/holiman/uint256"
 )
 
-func equalBALs(a *BlockAccessList, b *BlockAccessList) bool {
-	if !reflect.DeepEqual(a, b) {
-		return false
-	}
-	return true
-}
-
 func makeTestConstructionBAL() *ConstructionBlockAccessList {
 	return &ConstructionBlockAccessList{
 		map[common.Address]*ConstructionAccountAccess{
@@ -101,13 +94,13 @@ func TestBALEncoding(t *testing.T) {
 		t.Fatalf("encoding failed: %v\n", err)
 	}
 	var dec BlockAccessList
-	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 10000000)); err != nil {
+	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 0)); err != nil {
 		t.Fatalf("decoding failed: %v\n", err)
 	}
 	if dec.Hash() != bal.toEncodingObj().Hash() {
 		t.Fatalf("encoded block hash doesn't match decoded")
 	}
-	if !equalBALs(bal.toEncodingObj(), &dec) {
+	if !reflect.DeepEqual(bal.toEncodingObj(), &dec) {
 		t.Fatal("decoded BAL doesn't match")
 	}
 }
@@ -118,6 +111,7 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 		storageReads  []*uint256.Int
 		balances      []encodingBalanceChange
 		nonces        []encodingAccountNonce
+		codes         []encodingCodeChange
 	)
 	randSlot := func() *uint256.Int {
 		return new(uint256.Int).SetBytes(testrand.Bytes(32))
@@ -178,32 +172,39 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 		})
 	}
 
+	for i := 0; i < 5; i++ {
+		codes = append(codes, encodingCodeChange{
+			TxIndex: uint32(2 * i),
+			Code:    testrand.Bytes(256),
+		})
+	}
+	if sort {
+		slices.SortFunc(codes, func(a, b encodingCodeChange) int {
+			return cmp.Compare[uint32](a.TxIndex, b.TxIndex)
+		})
+	}
+
 	return AccountAccess{
 		Address:        [20]byte(testrand.Bytes(20)),
 		StorageWrites:  storageWrites,
 		StorageReads:   storageReads,
 		BalanceChanges: balances,
 		NonceChanges:   nonces,
-		CodeChanges: []encodingCodeChange{
-			{
-				TxIndex: 100,
-				Code:    testrand.Bytes(256),
-			},
-		},
+		CodeChanges:    codes,
 	}
 }
 
 func makeTestBAL(sort bool) *BlockAccessList {
-	list := &BlockAccessList{}
+	list := make(BlockAccessList, 0, 5)
 	for i := 0; i < 5; i++ {
-		list.Accesses = append(list.Accesses, makeTestAccountAccess(sort))
+		list = append(list, makeTestAccountAccess(sort))
 	}
 	if sort {
-		slices.SortFunc(list.Accesses, func(a, b AccountAccess) int {
+		slices.SortFunc(list, func(a, b AccountAccess) int {
 			return bytes.Compare(a.Address[:], b.Address[:])
 		})
 	}
-	return list
+	return &list
 }
 
 func TestBlockAccessListCopy(t *testing.T) {
@@ -219,7 +220,7 @@ func TestBlockAccessListCopy(t *testing.T) {
 	}
 
 	// Make sure the mutations on copy won't affect the origin
-	for _, aa := range cpyCpy.Accesses {
+	for _, aa := range *cpyCpy {
 		for i := 0; i < len(aa.StorageReads); i++ {
 			aa.StorageReads[i] = new(uint256.Int).SetBytes(testrand.Bytes(32))
 		}

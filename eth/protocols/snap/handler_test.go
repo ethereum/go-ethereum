@@ -48,7 +48,7 @@ func makeTestBAL(minSize int) *bal.BlockAccessList {
 		binary.BigEndian.PutUint64(b[24:], uint64(i))
 		access.StorageReads[i] = new(uint256.Int).SetBytes(b[:])
 	}
-	return &bal.BlockAccessList{Accesses: []bal.AccountAccess{access}}
+	return &bal.BlockAccessList{access}
 }
 
 // getChainWithBALs creates a minimal test chain with BALs stored for each block.
