@@ -18,6 +18,7 @@
 package state
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"maps"
@@ -801,7 +802,7 @@ func (s *StateDB) LogsForBurnAccounts() []*types.Log {
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccessList {
 	addressesToPrefetch := make([]common.Address, 0, len(s.journal.mutations))
-	for addr := range s.journal.mutations {
+	for addr, state := range s.journal.mutations {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
 			// RIPEMD160 (0x03) gets an extra dirty marker for a historical
@@ -822,7 +823,43 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccess
 			if _, ok := s.stateObjectsDestruct[obj.address]; !ok {
 				s.stateObjectsDestruct[obj.address] = obj
 			}
+			// Aggregate the account mutation into the block-level accessList
+			// if Amsterdam has been activated.
+			if s.stateAccessList != nil {
+				// Notably, if the account is deleted during the transaction,
+				// its pre-transaction nonce, code, and storage must be empty.
+				//
+				// EIP-6780 restricts self-destruct to contracts deployed within
+				// the same transaction, while EIP-7610 rejects deployments to
+				// destinations with non-empty storage, non-zero nonce and non-empty
+				// code.
+				//
+				// Therefore, when an account is deleted, its pre-transaction nonce
+				// code and storage is guaranteed to be empty, leaving nothing to
+				// clean up here.
+				balance := uint256.NewInt(0)
+				if state.balanceSet && balance.Cmp(state.balance) != 0 {
+					s.stateAccessList.BalanceChange(uint16(s.txIndex+1), addr, balance)
+				}
+			}
 		} else {
+			// Aggregate the account mutation into the block-level accessList
+			// if Amsterdam has been activated.
+			if s.stateAccessList != nil {
+				balance := obj.Balance()
+				if state.balanceSet && balance.Cmp(state.balance) != 0 {
+					s.stateAccessList.BalanceChange(uint16(s.txIndex+1), addr, balance)
+				}
+				nonce := obj.Nonce()
+				if state.nonceSet && nonce != state.nonce {
+					s.stateAccessList.NonceChange(addr, uint16(s.txIndex+1), nonce)
+				}
+				if state.codeSet {
+					if code := obj.Code(); !bytes.Equal(code, state.code) {
+						s.stateAccessList.CodeChange(addr, uint16(s.txIndex+1), code)
+					}
+				}
+			}
 			obj.finalise()
 			s.markUpdate(addr)
 		}

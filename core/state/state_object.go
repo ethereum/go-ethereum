@@ -274,6 +274,13 @@ func (s *stateObject) finalise() {
 		// map as the dirty slot might have been committed already (before the
 		// byzantium fork) and entry is necessary to modify the value back.
 		s.pendingStorage[key] = value
+
+		// Aggregate storage writes into the block-level access list.
+		// All slots in the dirtyStorage set must have post-transaction
+		// values that differ from their pre-transaction values.
+		if s.db.stateAccessList != nil {
+			s.db.stateAccessList.StorageWrite(uint16(s.db.txIndex+1), s.address, key, value)
+		}
 	}
 	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
 		if err := s.db.prefetcher.prefetch(s.addrHash(), s.data.Root, s.address, nil, slotsToPrefetch, false); err != nil {
