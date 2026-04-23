@@ -239,7 +239,7 @@ func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount,
 	// TODO: reduce the size of the allocation in devmode, then panic instead
 	// of truncating.
 	if len(balanceBytes) > 16 {
-		balanceBytes = balanceBytes[16:]
+		balanceBytes = balanceBytes[len(balanceBytes)-16:]
 	}
 	copy(basicData[HashSize-len(balanceBytes):], balanceBytes[:])
 	values[BasicDataLeafKey] = basicData[:]
