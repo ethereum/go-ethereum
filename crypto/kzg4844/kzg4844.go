@@ -278,7 +278,7 @@ func validateCellIndices(cells []Cell, cellIndices []uint64) error {
 			return fmt.Errorf("invalid cell index %d", i)
 		}
 		if bm[i>>8]&(1<<(i%8)) != 0 {
-			return fmt.Errorf("duplicate cell index %d")
+			return fmt.Errorf("duplicate cell index %d", i)
 		}
 		bm[i>>8] |= 1 << (i % 8)
 	}
