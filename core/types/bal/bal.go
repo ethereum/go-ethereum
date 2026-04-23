@@ -71,8 +71,8 @@ type ConstructionBlockAccessList struct {
 }
 
 // NewConstructionBlockAccessList instantiates an empty access list.
-func NewConstructionBlockAccessList() ConstructionBlockAccessList {
-	return ConstructionBlockAccessList{
+func NewConstructionBlockAccessList() *ConstructionBlockAccessList {
+	return &ConstructionBlockAccessList{
 		Accounts: make(map[common.Address]*ConstructionAccountAccess),
 	}
 }
@@ -169,5 +169,5 @@ func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 		aaCopy.CodeChange = codes
 		res.Accounts[addr] = &aaCopy
 	}
-	return &res
+	return res
 }

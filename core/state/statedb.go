@@ -128,7 +128,7 @@ type StateDB struct {
 	accessEvents *AccessEvents
 
 	// Per-transaction state access footprint for EIP-7928
-	stateReadList *bal.StateAccessList
+	stateAccessList *bal.ConstructionBlockAccessList
 
 	// Transient storage
 	transientStorage transientStorage
@@ -589,7 +589,7 @@ func (s *StateDB) deleteStateObject(addr common.Address) {
 // the object is not found or was deleted in this execution context.
 func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	// Record state access regardless of whether the account exists.
-	s.stateReadList.AddAccount(addr)
+	s.stateAccessList.AccountRead(addr)
 
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
@@ -799,7 +799,7 @@ func (s *StateDB) LogsForBurnAccounts() []*types.Log {
 // Finalise finalises the state by removing the destructed objects and clears
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
-func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.StateAccessList {
+func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccessList {
 	addressesToPrefetch := make([]common.Address, 0, len(s.journal.mutations))
 	for addr := range s.journal.mutations {
 		obj, exist := s.stateObjects[addr]
@@ -839,7 +839,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.StateAccessList {
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
 
-	return s.stateReadList
+	return s.stateAccessList
 }
 
 // IntermediateRoot computes the current root hash of the state trie.
@@ -1435,7 +1435,7 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 	s.transientStorage = newTransientStorage()
 
 	if rules.IsAmsterdam {
-		s.stateReadList = bal.NewStateAccessList()
+		s.stateAccessList = bal.NewConstructionBlockAccessList()
 	}
 }
 

@@ -184,7 +184,7 @@ func (s *stateObject) getState(key common.Hash) (common.Hash, common.Hash) {
 // without any mutations caused in the current execution.
 func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	// Record slot access regardless of whether the storage slot exists.
-	s.db.stateReadList.AddState(s.address, key)
+	s.db.stateAccessList.StorageRead(s.address, key)
 
 	// If we have a pending write or clean cached, return that
 	if value, pending := s.pendingStorage[key]; pending {
