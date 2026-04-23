@@ -423,8 +423,8 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	}
 	chainHeadReader := &simChainHeadReader{ctx, sim.b}
 
-	// Assemble the block
-	b := core.AssembleBlock(sim.b.Engine(), chainHeadReader, header, sim.state, blockBody, receipts)
+	// Assemble the block. Simulated blocks don't carry a BAL.
+	b := core.AssembleBlock(sim.b.Engine(), chainHeadReader, header, sim.state, blockBody, receipts, nil)
 
 	repairLogs(callResults, b.Hash())
 	return b, callResults, senders, nil

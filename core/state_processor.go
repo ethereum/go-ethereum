@@ -409,9 +409,26 @@ func onSystemCallStart(tracer *tracing.Hooks, ctx *tracing.VMContext) {
 }
 
 // AssembleBlock finalizes the state and assembles the block with provided
-// body and receipts.
-func AssembleBlock(engine consensus.Engine, chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt) *types.Block {
-	engine.Finalize(chain, header, state, body)
+// body and receipts. When accessList is non-nil (EIP-7928 / Amsterdam), the
+// accesses and mutations produced by engine.Finalize (e.g. withdrawal balance
+// changes) are accumulated into it as block-finalize entries, the computed
+// BAL hash is written into the header, and the finalized BAL is attached to
+// the returned block.
+func AssembleBlock(engine consensus.Engine, chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, accessList *bal.ConstructionBlockAccessList) *types.Block {
+	finalizeAccesses, finalizeMutations := engine.Finalize(chain, header, state, body)
+	if accessList != nil {
+		if finalizeMutations != nil {
+			accessList.AddBlockFinalizeMutations(finalizeMutations)
+		}
+		if finalizeAccesses != nil {
+			accessList.AddAccesses(finalizeAccesses)
+		}
+		encoded := accessList.ToEncodingObj()
+		balHash := encoded.Hash()
+		header.BlockAccessListHash = &balHash
+		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+		return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)).WithAccessListUnsafe(encoded)
+	}
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
 }
