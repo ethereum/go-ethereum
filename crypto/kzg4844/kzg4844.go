@@ -215,8 +215,9 @@ func IsValidVersionedHash(h []byte) bool {
 // For each blob being proven, the cells slice must contain at least 64 items.
 //
 // The `cellIndices` specify which of the 128 cells of each blob are given.
-// Thus, `len(cellIndices)` must be >= 64 and <= 128 to be valid.
-// `len(cells)` must be a multiple of `len(cellIndices)`.
+// Note the list of indices is shared among all blobs, i.e. for a given list of indices
+// [1, 2, 13], the cells slice must contain cells [1, 2, 13] of each blob.
+// Thus, `len(cells)` must be a multiple of `len(cellIndices)`.
 //
 // One proof must be given for each cell. As such, `len(proofs)` must equal `len(cells)`.
 func VerifyCells(cells []Cell, commitments []Commitment, proofs []Proof, cellIndices []uint64) error {
