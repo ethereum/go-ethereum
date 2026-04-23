@@ -18,7 +18,6 @@ package kzg4844
 
 import (
 	"encoding/json"
-	"errors"
 	"sync"
 
 	gokzg4844 "github.com/crate-crypto/go-eth-kzg"
@@ -203,10 +202,6 @@ func gokzgComputeCells(blobs []Blob) ([]Cell, error) {
 // gokzgRecoverBlobs recovers blobs from cells and cell indices.
 func gokzgRecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 	gokzgIniter.Do(gokzgInit)
-
-	if len(cellIndices) == 0 || len(cells)%len(cellIndices) != 0 {
-		return []Blob{}, errors.New("cells with wrong length")
-	}
 
 	blobCount := len(cells) / len(cellIndices)
 	blobs := make([]Blob, 0, blobCount)
