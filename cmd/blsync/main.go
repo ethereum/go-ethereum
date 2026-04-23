@@ -44,7 +44,7 @@ func main() {
 		utils.BeaconGenesisTimeFlag,
 		utils.BeaconCheckpointFlag,
 		utils.BeaconCheckpointFileFlag,
-		//TODO datadir for optional permanent database
+		utils.DataDirFlag,
 		utils.MainnetFlag,
 		utils.SepoliaFlag,
 		utils.HoleskyFlag,
@@ -87,11 +87,15 @@ func makeRPCClient(ctx *cli.Context) *rpc.Client {
 		log.Warn("No engine API target specified, performing a dry run")
 		return nil
 	}
-	if !ctx.IsSet(utils.BlsyncJWTSecretFlag.Name) {
-		utils.Fatalf("JWT secret parameter missing") //TODO use default if datadir is specified
+	jwtFileName := ctx.String(utils.BlsyncJWTSecretFlag.Name)
+	if jwtFileName == "" && ctx.IsSet(utils.DataDirFlag.Name) {
+		jwtFileName = (&node.Config{Name: "geth", DataDir: ctx.String(utils.DataDirFlag.Name)}).ResolvePath("jwtsecret")
+	}
+	if jwtFileName == "" {
+		utils.Fatalf("JWT secret parameter missing")
 	}
 
-	engineApiUrl, jwtFileName := ctx.String(utils.BlsyncApiFlag.Name), ctx.String(utils.BlsyncJWTSecretFlag.Name)
+	engineApiUrl := ctx.String(utils.BlsyncApiFlag.Name)
 	var jwtSecret [32]byte
 	if jwt, err := node.ObtainJWTSecret(jwtFileName); err == nil {
 		copy(jwtSecret[:], jwt)
