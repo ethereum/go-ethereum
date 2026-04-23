@@ -994,6 +994,9 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	if head.SlotNumber != nil {
 		result["slotNumber"] = hexutil.Uint64(*head.SlotNumber)
 	}
+	if head.BlockAccessListHash != nil {
+		result["blockAccessListHash"] = head.BlockAccessListHash
+	}
 	return result
 }
 
@@ -1028,6 +1031,9 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 	fields["uncles"] = uncleHashes
 	if block.Withdrawals() != nil {
 		fields["withdrawals"] = block.Withdrawals()
+	}
+	if block.AccessList() != nil {
+		fields["blockAccessList"] = block.AccessList()
 	}
 	return fields
 }
