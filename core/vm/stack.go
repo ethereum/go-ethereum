@@ -30,7 +30,7 @@ type stackArena struct {
 }
 
 func newArena() *stackArena {
-	return stackPool.New().(*stackArena)
+	return stackPool.Get().(*stackArena)
 }
 
 // 1025, because in stack() there is a condition check
