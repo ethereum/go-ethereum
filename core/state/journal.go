@@ -179,7 +179,8 @@ func (j *journal) stashBalance(addr common.Address, prev *uint256.Int) {
 	if s.balanceSet {
 		return
 	}
-	s.balance = prev.Clone()
+	// The balance is already deep-copied in the StateDB
+	s.balance = prev
 	s.balanceSet = true
 }
 
@@ -199,7 +200,8 @@ func (j *journal) stashCode(addr common.Address, prev []byte) {
 	if s.codeSet {
 		return
 	}
-	s.code = slices.Clone(prev)
+	// The code is already deep-copied in the StateDB
+	s.code = prev
 	s.codeSet = true
 }
 
