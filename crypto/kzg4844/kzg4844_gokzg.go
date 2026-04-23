@@ -172,8 +172,7 @@ func gokzgVerifyCells(cells []Cell, commitments []Commitment, cellProofs []Proof
 			commits = append(commits, gokzg4844.KZGCommitment(commitment))
 		}
 	}
-	blobCounts := len(cellProofs) / len(cellIndices)
-	for j := 0; j < blobCounts; j++ {
+	for j := 0; j < len(commitments); j++ {
 		indices = append(indices, cellIndices...)
 	}
 
