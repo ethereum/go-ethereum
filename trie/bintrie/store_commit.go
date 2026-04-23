@@ -364,6 +364,7 @@ func (s *nodeStore) collectNodes(ref nodeRef, path []byte, flushfn nodeFlushFn, 
 				return err
 			}
 			flushfn(path, s.computeHash(ref), s.serializeNode(ref, groupDepth))
+			node.dirty = false
 			return nil
 		}
 		// Not at a group boundary - this shouldn't happen if we're called correctly from root
