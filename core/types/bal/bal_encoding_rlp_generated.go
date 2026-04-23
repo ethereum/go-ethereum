@@ -115,7 +115,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 									return err
 								}
 								// TxIdx:
-								_tmp9, err := dec.Uint16()
+								_tmp9, err := dec.Uint32()
 								if err != nil {
 									return err
 								}
@@ -174,7 +174,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 							return err
 						}
 						// TxIdx:
-						_tmp15, err := dec.Uint16()
+						_tmp15, err := dec.Uint32()
 						if err != nil {
 							return err
 						}
@@ -207,7 +207,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 							return err
 						}
 						// TxIdx:
-						_tmp19, err := dec.Uint16()
+						_tmp19, err := dec.Uint32()
 						if err != nil {
 							return err
 						}
@@ -240,7 +240,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 							return err
 						}
 						// TxIndex:
-						_tmp23, err := dec.Uint16()
+						_tmp23, err := dec.Uint32()
 						if err != nil {
 							return err
 						}
