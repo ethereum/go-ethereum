@@ -17,14 +17,50 @@
 package types
 
 import (
+	"fmt"
+	"math/big"
 	"math/bits"
 	"math/rand"
 
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 )
 
-// `CustodyBitmap` is a bitmap to represent which custody index to store (little endian)
+// CustodyBitmap is a bitmap to represent which custody index to store (little endian).
+// It is serialized as a hex-encoded uint128 quantity (e.g. "0x89") for JSON-RPC.
 type CustodyBitmap [16]byte
+
+// MarshalText implements encoding.TextMarshaler.
+// Encodes the bitmap as a hex-encoded uint128 quantity.
+func (b CustodyBitmap) MarshalText() ([]byte, error) {
+	var be [16]byte
+	for i := range b {
+		be[15-i] = b[i]
+	}
+	v := new(big.Int).SetBytes(be[:])
+	return []byte("0x" + v.Text(16)), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+// Parses a hex-encoded uint128 quantity into the bitmap.
+func (b *CustodyBitmap) UnmarshalText(input []byte) error {
+	s := string(input)
+	if len(s) < 2 || (s[:2] != "0x" && s[:2] != "0X") {
+		return fmt.Errorf("custody bitmap: missing 0x prefix")
+	}
+	v, ok := new(big.Int).SetString(s[2:], 16)
+	if !ok {
+		return fmt.Errorf("custody bitmap: invalid hex %q", s)
+	}
+	if v.BitLen() > 128 {
+		return fmt.Errorf("custody bitmap: value exceeds 128 bits")
+	}
+	*b = CustodyBitmap{}
+	beBytes := v.Bytes() // big-endian
+	for i, byt := range beBytes {
+		b[len(beBytes)-1-i] = byt
+	}
+	return nil
+}
 
 var (
 	CustodyBitmapAll = func() *CustodyBitmap {

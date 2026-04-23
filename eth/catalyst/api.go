@@ -662,7 +662,7 @@ func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) ([]*engine.Blob
 
 // GetBlobsV4 returns cell-level blob data from the transaction pool.
 // V4 returns only the requested cells as specified by the indices_bitarray.
-func (api *ConsensusAPI) GetBlobsV4(hashes []common.Hash, indicesBitarray hexutil.Bytes) ([]*engine.BlobCellsAndProofsV1, error) {
+func (api *ConsensusAPI) GetBlobsV4(hashes []common.Hash, indicesBitarray types.CustodyBitmap) ([]*engine.BlobCellsAndProofsV1, error) {
 	head := api.eth.BlockChain().CurrentHeader()
 	// Sparse blobpool is not necessarily coupled with the Amsterdam fork and
 	// can technically be supported after the Osaka fork
@@ -673,12 +673,7 @@ func (api *ConsensusAPI) GetBlobsV4(hashes []common.Hash, indicesBitarray hexuti
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
-	if len(indicesBitarray) != 16 {
-		return nil, engine.InvalidParams.With(fmt.Errorf("indices_bitarray must be 16 bytes, got %d", len(indicesBitarray)))
-	}
-	var mask types.CustodyBitmap
-	copy(mask[:], indicesBitarray)
-	cells, proofs, err := api.eth.BlobTxPool().GetBlobCells(hashes, mask)
+	cells, proofs, err := api.eth.BlobTxPool().GetBlobCells(hashes, indicesBitarray)
 	if err != nil {
 		return nil, engine.InvalidParams.With(err)
 	}
@@ -1223,9 +1218,8 @@ func (api *ConsensusAPI) getBodiesByRange(start, count hexutil.Uint64) ([]*engin
 	return bodies, nil
 }
 
-func (api *ConsensusAPI) BlobCustodyUpdatedV1(custodyColumns []uint64) {
-	bitmap := types.NewCustodyBitmap(custodyColumns)
-	api.eth.BlobFetcher().UpdateCustody(bitmap)
+func (api *ConsensusAPI) BlobCustodyUpdatedV1(indicesBitarray types.CustodyBitmap) {
+	api.eth.BlobFetcher().UpdateCustody(indicesBitarray)
 }
 
 func getBody(block *types.Block) *engine.ExecutionPayloadBody {
