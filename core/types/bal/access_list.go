@@ -79,7 +79,7 @@ func (s *StateAccessList) Merge(other *StateAccessList) {
 	}
 }
 
-// Copy returns a deep copy of the StateAccessList. A nil receiver copies to nil.
+// Copy returns a deep copy of the StateAccessList.
 func (s *StateAccessList) Copy() *StateAccessList {
 	if s == nil {
 		return nil
