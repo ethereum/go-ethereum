@@ -318,12 +318,9 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
-	if sim.chainConfig.IsPrague(header.Number, header.Time) || sim.chainConfig.IsUBT(header.Number, header.Time) {
-		core.ProcessParentBlockHash(header.ParentHash, evm)
-	}
-	if header.ParentBeaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, evm)
-	}
+	// Run pre-execution system calls
+	core.PreExecution(ctx, header.ParentBeaconRoot, header.ParentHash, sim.chainConfig, evm, header.Number, header.Time)
+
 	var allLogs []*types.Log
 	for i, call := range block.Calls {
 		// Terminate if the context is cancelled
@@ -393,7 +390,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		header.BlobGasUsed = &blobGasUsed
 	}
 
-	// Process EIP-7685 requests
+	// Run post-execution system calls
 	requests, err := core.PostExecution(ctx, sim.chainConfig, header.Number, header.Time, allLogs, evm)
 	if err != nil {
 		return nil, nil, nil, err

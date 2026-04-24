@@ -81,21 +81,13 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		misc.ApplyDAOHardFork(tracingStateDB)
 	}
 	var (
-		context vm.BlockContext
+		context = NewEVMBlockContext(header, p.chain, nil)
 		signer  = types.MakeSigner(config, header.Number, header.Time)
+		evm     = vm.NewEVM(context, tracingStateDB, config, cfg)
 	)
-
-	// Apply pre-execution system calls.
-	context = NewEVMBlockContext(header, p.chain, nil)
-	evm := vm.NewEVM(context, tracingStateDB, config, cfg)
 	defer evm.Release()
-
-	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-		ProcessBeaconBlockRoot(*beaconRoot, evm)
-	}
-	if config.IsPrague(block.Number(), block.Time()) || config.IsUBT(block.Number(), block.Time()) {
-		ProcessParentBlockHash(block.ParentHash(), evm)
-	}
+	// Run the pre-execution system calls
+	PreExecution(ctx, block.BeaconRoot(), block.ParentHash(), config, evm, block.Number(), block.Time())
 
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
@@ -118,6 +110,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		allLogs = append(allLogs, receipt.Logs...)
 		spanEnd(nil)
 	}
+	// Run the post-execution system calls
 	requests, err := PostExecution(ctx, config, block.Number(), block.Time(), allLogs, evm)
 	if err != nil {
 		return nil, err
@@ -131,6 +124,19 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		Logs:     allLogs,
 		GasUsed:  gp.Used(),
 	}, nil
+}
+
+// PreExecution processes pre-execution system calls.
+func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent common.Hash, config *params.ChainConfig, evm *vm.EVM, number *big.Int, time uint64) {
+	_, _, spanEnd := telemetry.StartSpan(ctx, "core.preExecution")
+	defer spanEnd(nil)
+
+	if beaconRoot != nil {
+		ProcessBeaconBlockRoot(*beaconRoot, evm)
+	}
+	if config.IsPrague(number, time) || config.IsUBT(number, time) {
+		ProcessParentBlockHash(parent, evm)
+	}
 }
 
 // PostExecution processes post-execution system calls when Prague is enabled.

@@ -317,12 +317,8 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
 	}
-	if header.ParentBeaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, env.evm)
-	}
-	if miner.chainConfig.IsPrague(header.Number, header.Time) {
-		core.ProcessParentBlockHash(header.ParentHash, env.evm)
-	}
+	// Run pre-execution system calls
+	core.PreExecution(ctx, header.ParentBeaconRoot, header.ParentHash, miner.chainConfig, env.evm, header.Number, header.Time)
 	return env, nil
 }
 

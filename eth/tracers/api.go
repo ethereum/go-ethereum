@@ -372,6 +372,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			// as per EIP-4788.
 			context := core.NewEVMBlockContext(next.Header(), api.chainContext(ctx), nil)
 			evm := vm.NewEVM(context, statedb, api.backend.ChainConfig(), vm.Config{})
+
 			if beaconRoot := next.BeaconRoot(); beaconRoot != nil {
 				core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 			}
