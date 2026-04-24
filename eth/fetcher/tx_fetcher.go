@@ -991,8 +991,6 @@ func (f *TxFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}, 
 		if len(f.announces[peer]) == 0 {
 			return // continue in the for-each
 		}
-		// hashes is allocated lazily: peers that collect no new hashes
-		// (all announces already being fetched) skip the 8KB allocation.
 		var (
 			hashes []common.Hash
 			bytes  uint64
