@@ -98,7 +98,10 @@ func (s *CheckpointInit) Process(requester request.Requester, events []request.E
 			case ssDefault:
 				if resp != nil {
 					if checkpoint := resp.(*types.BootstrapData); checkpoint.Header.Hash() == common.Hash(req.(ReqCheckpointData)) {
-						s.chain.CheckpointInit(*checkpoint)
+						err := s.chain.CheckpointInit(*checkpoint)
+						if err != nil {
+							return
+						}
 						s.initialized = true
 						return
 					}
