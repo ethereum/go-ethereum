@@ -251,10 +251,7 @@ func (s *nodeStore) deserializeSubtree(hn common.Hash, remainingDepth int, posit
 	rightPos := position*2 + 1
 
 	// note that the parent might not need root computations, but the children
-	// do, because their hash isn't saved. This will incur more hash computations
-	// than if it's a single node, but as long as it's sha256 or blake3, that isn't
-	// a problem. If the parent isn't modified, it won't be recomputed and neither
-	// will the children.
+	// do, because their hash isn't saved. Hence `mustRecompute` is set to `true`.
 	left, err := s.deserializeSubtree(common.Hash{}, remainingDepth-1, leftPos, nodeDepth+1, bitmap, hashData, hashIdx, true, dirty)
 	if err != nil {
 		return emptyRef, err
