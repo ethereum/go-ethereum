@@ -318,7 +318,9 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 		return nil, err
 	}
 	// Run pre-execution system calls
-	core.PreExecution(ctx, header.ParentBeaconRoot, header.ParentHash, miner.chainConfig, env.evm, header.Number, header.Time)
+	if err := core.PreExecution(ctx, header.ParentBeaconRoot, header.ParentHash, miner.chainConfig, env.evm, header.Number, header.Time); err != nil {
+		return nil, err
+	}
 	return env, nil
 }
 

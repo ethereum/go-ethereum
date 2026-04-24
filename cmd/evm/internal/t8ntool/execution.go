@@ -230,17 +230,16 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		misc.ApplyDAOHardFork(statedb)
 	}
 	evm := vm.NewEVM(vmContext, statedb, chainConfig, vmConfig)
-
-	var (
-		prevNumber uint64
-		prevHash   common.Hash
-	)
-	if pre.Env.BlockHashes != nil && chainConfig.IsPrague(new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp) {
-		prevNumber = pre.Env.Number - 1
-		prevHash = pre.Env.BlockHashes[math.HexOrDecimal64(prevNumber)]
+	if beaconRoot := pre.Env.ParentBeaconBlockRoot; beaconRoot != nil {
+		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
-	core.PreExecution(context.Background(), pre.Env.ParentBeaconBlockRoot, prevHash, chainConfig, evm, vmContext.BlockNumber, vmContext.Time)
-
+	if pre.Env.BlockHashes != nil && chainConfig.IsPrague(new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp) {
+		var (
+			prevNumber = pre.Env.Number - 1
+			prevHash   = pre.Env.BlockHashes[math.HexOrDecimal64(prevNumber)]
+		)
+		core.ProcessParentBlockHash(prevHash, evm)
+	}
 	for i := 0; txIt.Next(); i++ {
 		tx, err := txIt.Tx()
 		if err != nil {

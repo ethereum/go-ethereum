@@ -75,7 +75,6 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	if hooks := cfg.Tracer; hooks != nil {
 		tracingStateDB = state.NewHookedState(statedb, hooks)
 	}
-
 	// Mutate the block and state according to any hard-fork specs
 	if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(tracingStateDB)
@@ -87,8 +86,9 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	)
 	defer evm.Release()
 	// Run the pre-execution system calls
-	PreExecution(ctx, block.BeaconRoot(), block.ParentHash(), config, evm, block.Number(), block.Time())
-
+	if err := PreExecution(ctx, block.BeaconRoot(), block.ParentHash(), config, evm, block.Number(), block.Time()); err != nil {
+		return nil, err
+	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
@@ -127,16 +127,20 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 }
 
 // PreExecution processes pre-execution system calls.
-func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent common.Hash, config *params.ChainConfig, evm *vm.EVM, number *big.Int, time uint64) {
+func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent common.Hash, config *params.ChainConfig, evm *vm.EVM, number *big.Int, time uint64) error {
 	_, _, spanEnd := telemetry.StartSpan(ctx, "core.preExecution")
 	defer spanEnd(nil)
 
+	// EIP-4788
+	// TODO(rjl) it should be enforced if cancun is enabled
 	if beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
+	// EIP-2935
 	if config.IsPrague(number, time) || config.IsUBT(number, time) {
 		ProcessParentBlockHash(parent, evm)
 	}
+	return nil
 }
 
 // PostExecution processes post-execution system calls when Prague is enabled.

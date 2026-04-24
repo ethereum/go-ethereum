@@ -250,8 +250,10 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	defer evm.Release()
 
 	// Run pre-execution system calls
-	core.PreExecution(ctx, block.BeaconRoot(), block.ParentHash(), eth.blockchain.Config(), evm, block.Number(), block.Time())
+	if err := core.PreExecution(ctx, block.BeaconRoot(), block.ParentHash(), eth.blockchain.Config(), evm, block.Number(), block.Time()); err != nil {
+		return nil, vm.BlockContext{}, nil, nil, err
 
+	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, context, statedb, release, nil
 	}
