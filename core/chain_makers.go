@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 
@@ -314,28 +315,18 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 		// off the statedb before executing the system calls.
 		statedb = statedb.Copy()
 	}
-
-	if b.cm.config.IsPrague(b.header.Number, b.header.Time) {
-		requests = [][]byte{}
-		// EIP-6110 deposits
-		var blockLogs []*types.Log
-		for _, r := range b.receipts {
-			blockLogs = append(blockLogs, r.Logs...)
-		}
-		if err := ParseDepositLogs(&requests, blockLogs, b.cm.config); err != nil {
-			panic(fmt.Sprintf("failed to parse deposit log: %v", err))
-		}
-		// create EVM for system calls
-		blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
-		evm := vm.NewEVM(blockContext, statedb, b.cm.config, vm.Config{})
-		// EIP-7002
-		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
-			panic(fmt.Sprintf("could not process withdrawal requests: %v", err))
-		}
-		// EIP-7251
-		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
-			panic(fmt.Sprintf("could not process consolidation requests: %v", err))
-		}
+	// EIP-6110 deposits
+	var blockLogs []*types.Log
+	for _, r := range b.receipts {
+		blockLogs = append(blockLogs, r.Logs...)
+	}
+	// TODO(rjl493456442) the EVM instance should be shared across the entire
+	// generation life cycle.
+	blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
+	evm := vm.NewEVM(blockContext, statedb, b.cm.config, vm.Config{})
+	requests, err := PostExecution(context.Background(), b.cm.config, b.header.Number, b.header.Time, blockLogs, evm)
+	if err != nil {
+		panic(fmt.Sprintf("failed to run post-execution: %v", err))
 	}
 	return requests
 }
