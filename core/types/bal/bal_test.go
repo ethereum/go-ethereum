@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/internal/testrand"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
@@ -233,7 +234,7 @@ func TestBlockAccessListCopy(t *testing.T) {
 func TestBlockAccessListValidation(t *testing.T) {
 	// Validate the block access list after RLP decoding
 	enc := makeTestBAL(true)
-	if err := enc.Validate(); err != nil {
+	if err := enc.Validate(params.Rules{}); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 	var buf bytes.Buffer
@@ -245,14 +246,14 @@ func TestBlockAccessListValidation(t *testing.T) {
 	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 0)); err != nil {
 		t.Fatalf("Unexpected RLP-decode error: %v", err)
 	}
-	if err := dec.Validate(); err != nil {
+	if err := dec.Validate(params.Rules{}); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 
 	// Validate the derived block access list
 	cBAL := makeTestConstructionBAL()
 	listB := cBAL.toEncodingObj()
-	if err := listB.Validate(); err != nil {
+	if err := listB.Validate(params.Rules{}); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 }

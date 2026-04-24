@@ -78,14 +78,14 @@ func (e *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
 // Validate returns an error if the contents of the access list are not ordered
 // according to the spec or any code changes are contained which exceed protocol
 // max code size.
-func (e *BlockAccessList) Validate() error {
+func (e *BlockAccessList) Validate(rules params.Rules) error {
 	if !slices.IsSortedFunc(*e, func(a, b AccountAccess) int {
 		return bytes.Compare(a.Address[:], b.Address[:])
 	}) {
 		return errors.New("block access list accounts not in lexicographic order")
 	}
 	for _, entry := range *e {
-		if err := entry.validate(); err != nil {
+		if err := entry.validate(rules); err != nil {
 			return err
 		}
 	}
@@ -159,7 +159,7 @@ type AccountAccess struct {
 // validate converts the account accesses out of encoding format.
 // If any of the keys in the encoding object are not ordered according to the
 // spec, an error is returned.
-func (e *AccountAccess) validate() error {
+func (e *AccountAccess) validate(rules params.Rules) error {
 	// Check the storage write slots are sorted in order
 	if !slices.IsSortedFunc(e.StorageWrites, func(a, b encodingSlotWrites) int {
 		return a.Slot.Cmp(b.Slot)
@@ -200,9 +200,14 @@ func (e *AccountAccess) validate() error {
 		return errors.New("code changes not in ascending order by tx index")
 	}
 	for _, change := range e.CodeChanges {
-		// TODO(rjl493456442): This check should be fork-aware, since the limit may
-		// differ across forks.
-		if len(change.Code) > params.MaxCodeSize {
+		var sizeLimit int
+		switch {
+		case rules.IsAmsterdam:
+			sizeLimit = params.MaxCodeSizeAmsterdam
+		default:
+			sizeLimit = params.MaxCodeSize
+		}
+		if len(change.Code) > sizeLimit {
 			return errors.New("code change contained oversized code")
 		}
 	}
@@ -257,8 +262,8 @@ func (b *ConstructionBlockAccessList) EncodeRLP(wr io.Writer) error {
 
 var _ rlp.Encoder = &ConstructionBlockAccessList{}
 
-// toEncodingObj creates an instance of the ConstructionAccountAccess of the type that is
-// used as input for the encoding.
+// toEncodingObj creates an instance of the ConstructionAccountAccess of the type
+// that is used as input for the encoding.
 func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAccess {
 	res := AccountAccess{
 		Address:        addr,
@@ -324,7 +329,12 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 	for _, idx := range codeIndices {
 		res.CodeChanges = append(res.CodeChanges, encodingCodeChange{
 			TxIndex: idx,
-			Code:    a.CodeChange[idx],
+
+			// TODO(rjl493456442) the contract code is not deep-copied.
+			// In theory the deep-copy is unnecessary, the semantics of
+			// the function should be probably changed that the returned
+			// AccessList is unsafe for modification.
+			Code: a.CodeChange[idx],
 		})
 	}
 	return res
