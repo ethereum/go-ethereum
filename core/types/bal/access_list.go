@@ -78,3 +78,17 @@ func (s *StateAccessList) Merge(other *StateAccessList) {
 		maps.Copy(slots, otherSlots)
 	}
 }
+
+// Copy returns a deep copy of the StateAccessList.
+func (s *StateAccessList) Copy() *StateAccessList {
+	if s == nil {
+		return nil
+	}
+	cpy := &StateAccessList{
+		list: make(map[common.Address]StorageAccessList, len(s.list)),
+	}
+	for addr, slots := range s.list {
+		cpy.list[addr] = maps.Clone(slots)
+	}
+	return cpy
+}
