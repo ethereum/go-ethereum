@@ -156,22 +156,22 @@ func (it *RawIterator) Next() bool {
 	var n int64
 	if it.Header, n, it.err = newSnappyReader(it.e.s, era.TypeCompressedHeader, off); it.err != nil {
 		it.clear()
-		return true
+		return false
 	}
 	off += n
 	if it.Body, n, it.err = newSnappyReader(it.e.s, era.TypeCompressedBody, off); it.err != nil {
 		it.clear()
-		return true
+		return false
 	}
 	off += n
 	if it.Receipts, n, it.err = newSnappyReader(it.e.s, era.TypeCompressedReceipts, off); it.err != nil {
 		it.clear()
-		return true
+		return false
 	}
 	off += n
 	if it.TotalDifficulty, _, it.err = it.e.s.ReaderAt(era.TypeTotalDifficulty, off); it.err != nil {
 		it.clear()
-		return true
+		return false
 	}
 	it.next += 1
 	return true
