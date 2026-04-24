@@ -129,6 +129,9 @@ func (hub *Hub) writePairings() error {
 		return err
 	}
 
+	if err := pairingFile.Truncate(0); err != nil {
+		return err
+	}
 	if _, err := pairingFile.Write(pairingData); err != nil {
 		return err
 	}
