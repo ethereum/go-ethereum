@@ -131,6 +131,9 @@ type StateDB struct {
 	// Per-transaction state access footprint for EIP-7928
 	stateAccessList *bal.ConstructionBlockAccessList
 
+	// Block access index (0 for pre-execution, 1..n for transactions, n+1 for post-execution)
+	blockAccessIndex uint16
+
 	// Transient storage
 	transientStorage transientStorage
 
@@ -695,6 +698,7 @@ func (s *StateDB) Copy() *StateDB {
 		refund:               s.refund,
 		thash:                s.thash,
 		txIndex:              s.txIndex,
+		blockAccessIndex:     s.blockAccessIndex,
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
 		preimages:            maps.Clone(s.preimages),
@@ -741,6 +745,9 @@ func (s *StateDB) Copy() *StateDB {
 			*cpy[i] = *l
 		}
 		state.logs[hash] = cpy
+	}
+	if s.stateAccessList != nil {
+		state.stateAccessList = s.stateAccessList.Copy()
 	}
 	return state
 }
@@ -807,9 +814,12 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccess
 		obj, exist := s.stateObjects[addr]
 		if !exist {
 			// RIPEMD160 (0x03) gets an extra dirty marker for a historical
-			// mainnet consensus exception around empty-account touch/revert
-			// handling. That marker survives journal revert, so the account may
-			// remain in s.journal.mutations even though its state object was rolled
+			// mainnet consensus exception (at block 1714175, in tx
+			// 0x1237f737031e40bcde4a8b7e717b2d15e3ecadfe49bb1bbc71ee9deb09c6fcf2)
+			// around empty-account touch/revert handling.
+			//
+			// That marker survives journal revert, so the account may remain in
+			// s.journal.mutations even though its state object was rolled
 			// back and no longer exists. In that case there is nothing to
 			// finalise or delete, so ignore it here.
 			continue
@@ -840,7 +850,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccess
 				// clean up here.
 				balance := uint256.NewInt(0)
 				if state.balanceSet && balance.Cmp(state.balance) != 0 {
-					s.stateAccessList.BalanceChange(uint16(s.txIndex+1), addr, balance)
+					s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
 				}
 			}
 		} else {
@@ -849,15 +859,15 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccess
 			if s.stateAccessList != nil {
 				balance := obj.Balance()
 				if state.balanceSet && balance.Cmp(state.balance) != 0 {
-					s.stateAccessList.BalanceChange(uint16(s.txIndex+1), addr, balance)
+					s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
 				}
 				nonce := obj.Nonce()
 				if state.nonceSet && nonce != state.nonce {
-					s.stateAccessList.NonceChange(addr, uint16(s.txIndex+1), nonce)
+					s.stateAccessList.NonceChange(addr, s.blockAccessIndex, nonce)
 				}
 				if state.codeSet {
 					if code := obj.Code(); !bytes.Equal(code, state.code) {
-						s.stateAccessList.CodeChange(addr, uint16(s.txIndex+1), code)
+						s.stateAccessList.CodeChange(addr, s.blockAccessIndex, code)
 					}
 				}
 			}
@@ -1090,9 +1100,10 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 // SetTxContext sets the current transaction hash and index which are
 // used when the EVM emits new state logs. It should be invoked before
 // transaction execution.
-func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
+func (s *StateDB) SetTxContext(thash common.Hash, ti int, blockAccessIndex uint16) {
 	s.thash = thash
 	s.txIndex = ti
+	s.blockAccessIndex = blockAccessIndex
 }
 
 func (s *StateDB) clearJournalAndRefund() {

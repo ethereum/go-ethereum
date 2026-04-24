@@ -280,7 +280,7 @@ func (s *stateObject) finalise() {
 		// All slots in the dirtyStorage set must have post-transaction
 		// values that differ from their pre-transaction values.
 		if s.db.stateAccessList != nil {
-			s.db.stateAccessList.StorageWrite(uint16(s.db.txIndex+1), s.address, key, value)
+			s.db.stateAccessList.StorageWrite(s.db.blockAccessIndex, s.address, key, value)
 		}
 	}
 	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {

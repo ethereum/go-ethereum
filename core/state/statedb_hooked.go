@@ -288,3 +288,7 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlock
 	}
 	return s.inner.Finalise(deleteEmptyObjects)
 }
+
+func (s *hookedStateDB) SetTxContext(thash common.Hash, ti int, blockAccessIndex uint16) {
+	s.inner.SetTxContext(thash, ti, blockAccessIndex)
+}
