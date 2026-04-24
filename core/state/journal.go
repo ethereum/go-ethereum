@@ -78,8 +78,8 @@ func (s *journalMutationState) add(kind journalMutationKind) {
 // remove drops one occurrence of the given mutation kind. It returns two
 // booleans: kindEmpty is true when no entries of that kind remain for the
 // account, and stateEmpty is true when no entries of any kind remain.
-func (s *journalMutationState) remove(kind journalMutationKind) (kindEmpty, stateEmpty bool) {
-	kindEmpty = s.counts.remove(kind)
+func (s *journalMutationState) remove(kind journalMutationKind) (bool, bool) {
+	kindEmpty := s.counts.remove(kind)
 	return kindEmpty, s.counts == (journalMutationCounts{})
 }
 
@@ -100,8 +100,8 @@ func (s *journalMutationState) clearKind(kind journalMutationKind) {
 	}
 }
 
-func (s journalMutationState) copy() *journalMutationState {
-	cpy := s
+func (s *journalMutationState) copy() *journalMutationState {
+	cpy := *s
 	if s.balance != nil {
 		cpy.balance = new(uint256.Int).Set(s.balance)
 	}
@@ -179,7 +179,7 @@ func (j *journal) stashBalance(addr common.Address, prev *uint256.Int) {
 	if s.balanceSet {
 		return
 	}
-	// The balance is already deep-copied in the StateDB
+	// The balance is already deep-copied and safe to hold the object here.
 	s.balance = prev
 	s.balanceSet = true
 }
@@ -200,7 +200,8 @@ func (j *journal) stashCode(addr common.Address, prev []byte) {
 	if s.codeSet {
 		return
 	}
-	// The code is already deep-copied in the StateDB
+	// The code is already deep-copied in the StateDB, safe to
+	// hold the reference here.
 	s.code = prev
 	s.codeSet = true
 }
@@ -394,10 +395,11 @@ func (j *journal) refundChange(previous uint64) {
 }
 
 func (j *journal) balanceChange(addr common.Address, previous *uint256.Int) {
-	j.stashBalance(addr, previous)
+	prev := previous.Clone()
+	j.stashBalance(addr, prev)
 	j.append(balanceChange{
 		account: addr,
-		prev:    previous.Clone(),
+		prev:    prev,
 	})
 }
 
