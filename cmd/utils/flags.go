@@ -1821,7 +1821,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.TrienodeHistory = ctx.Int64(TrienodeHistoryFlag.Name)
 	}
 	if ctx.IsSet(TrienodeHistoryFullValueCheckpointFlag.Name) {
-		cfg.TrienodeHistory = ctx.Int64(TrienodeHistoryFullValueCheckpointFlag.Name)
+		cfg.NodeFullValueCheckpoint = uint32(ctx.Uint(TrienodeHistoryFullValueCheckpointFlag.Name))
 	}
 	if ctx.IsSet(BinTrieGroupDepthFlag.Name) {
 		cfg.BinTrieGroupDepth = ctx.Int(BinTrieGroupDepthFlag.Name)
