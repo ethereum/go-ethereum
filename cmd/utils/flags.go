@@ -299,8 +299,8 @@ var (
 	}
 	BinTrieGroupDepthFlag = &cli.IntFlag{
 		Name:     "bintrie.groupdepth",
-		Usage:    "Number of levels per serialized group in binary trie (1-8, default 8). Lower values create smaller groups with more nodes.",
-		Value:    8,
+		Usage:    "Number of levels per serialized group in binary trie (1-8, default 5). Lower values create smaller groups with more nodes.",
+		Value:    5,
 		Category: flags.StateCategory,
 	}
 	StateHistoryFlag = &cli.Uint64Flag{
