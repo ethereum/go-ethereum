@@ -17,6 +17,7 @@
 package ethtest
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
@@ -131,6 +132,31 @@ func (c *Conn) Write(proto Proto, code uint64, msg any) error {
 }
 
 var errDisc error = errors.New("disconnect")
+
+// decodeDisconnect parses a disconnect message payload. Per the RLPx spec the
+// payload is a list containing a single reason, but some implementations
+// (including older geth) sent the reason as a bare byte. Accept both forms.
+func decodeDisconnect(data []byte) (p2p.DiscReason, error) {
+	s := rlp.NewStream(bytes.NewReader(data), uint64(len(data)))
+	k, _, err := s.Kind()
+	if err != nil {
+		return 0, err
+	}
+	var reason p2p.DiscReason
+	if k == rlp.List {
+		if _, err := s.List(); err != nil {
+			return 0, err
+		}
+		if err := s.Decode(&reason); err != nil {
+			return 0, err
+		}
+		return reason, nil
+	}
+	if err := s.Decode(&reason); err != nil {
+		return 0, err
+	}
+	return reason, nil
+}
 
 // ReadEth reads an Eth sub-protocol wire message.
 func (c *Conn) ReadEth() (any, error) {
@@ -343,11 +369,11 @@ loop:
 			}
 			return fmt.Errorf("wrong protocol version: have %v, want %v", msg.ProtocolVersion, c.caps)
 		case discMsg:
-			var msg []p2p.DiscReason
-			if rlp.DecodeBytes(data, &msg); len(msg) == 0 {
-				return errors.New("invalid disconnect message")
+			reason, decErr := decodeDisconnect(data)
+			if decErr != nil {
+				return fmt.Errorf("invalid disconnect message: %v (raw=0x%x)", decErr, data)
 			}
-			return fmt.Errorf("disconnect received: %v", pretty.Sdump(msg))
+			return fmt.Errorf("disconnect received: %v", reason)
 		case pingMsg:
 			// TODO (renaynay): in the future, this should be an error
 			// (PINGs should not be a response upon fresh connection)
