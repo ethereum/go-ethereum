@@ -17,6 +17,7 @@ func (s SimulateCallResult) MarshalJSON() ([]byte, error) {
 		ReturnValue hexutil.Bytes  `json:"returnData"`
 		Logs        []*types.Log   `json:"logs"`
 		GasUsed     hexutil.Uint64 `json:"gasUsed"`
+		MaxUsedGas  hexutil.Uint64 `json:"maxUsedGas"`
 		Status      hexutil.Uint64 `json:"status"`
 		Error       *CallError     `json:"error,omitempty"`
 	}
@@ -24,6 +25,7 @@ func (s SimulateCallResult) MarshalJSON() ([]byte, error) {
 	enc.ReturnValue = s.ReturnValue
 	enc.Logs = s.Logs
 	enc.GasUsed = hexutil.Uint64(s.GasUsed)
+	enc.MaxUsedGas = hexutil.Uint64(s.MaxUsedGas)
 	enc.Status = hexutil.Uint64(s.Status)
 	enc.Error = s.Error
 	return json.Marshal(&enc)
@@ -35,6 +37,7 @@ func (s *SimulateCallResult) UnmarshalJSON(input []byte) error {
 		ReturnValue *hexutil.Bytes  `json:"returnData"`
 		Logs        []*types.Log    `json:"logs"`
 		GasUsed     *hexutil.Uint64 `json:"gasUsed"`
+		MaxUsedGas  *hexutil.Uint64 `json:"maxUsedGas"`
 		Status      *hexutil.Uint64 `json:"status"`
 		Error       *CallError      `json:"error,omitempty"`
 	}
@@ -50,6 +53,9 @@ func (s *SimulateCallResult) UnmarshalJSON(input []byte) error {
 	}
 	if dec.GasUsed != nil {
 		s.GasUsed = uint64(*dec.GasUsed)
+	}
+	if dec.MaxUsedGas != nil {
+		s.MaxUsedGas = uint64(*dec.MaxUsedGas)
 	}
 	if dec.Status != nil {
 		s.Status = uint64(*dec.Status)

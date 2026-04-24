@@ -914,6 +914,7 @@ type SimulateCallResult struct {
 	ReturnValue []byte       `json:"returnData"`
 	Logs        []*types.Log `json:"logs"`
 	GasUsed     uint64       `json:"gasUsed"`
+	MaxUsedGas  uint64       `json:"maxUsedGas"`
 	Status      uint64       `json:"status"`
 	Error       *CallError   `json:"error,omitempty"`
 }
@@ -921,6 +922,7 @@ type SimulateCallResult struct {
 type simulateCallResultMarshaling struct {
 	ReturnValue hexutil.Bytes
 	GasUsed     hexutil.Uint64
+	MaxUsedGas  hexutil.Uint64
 	Status      hexutil.Uint64
 }
 
