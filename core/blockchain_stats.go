@@ -101,6 +101,8 @@ func (s *ExecuteStats) reportMetrics() {
 	accountCacheMissMeter.Mark(s.StateReadCacheStats.StateStats.AccountCacheMiss)
 	storageCacheHitMeter.Mark(s.StateReadCacheStats.StateStats.StorageCacheHit)
 	storageCacheMissMeter.Mark(s.StateReadCacheStats.StateStats.StorageCacheMiss)
+	codeCacheHitMeter.Mark(s.StateReadCacheStats.CodeStats.CacheHit)
+	codeCacheMissMeter.Mark(s.StateReadCacheStats.CodeStats.CacheMiss)
 }
 
 // slowBlockLog represents the JSON structure for slow block logging.
