@@ -125,6 +125,7 @@ func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 	genesis.ExcessBlobGas = genesisHeader.ExcessBlobGas
 	genesis.BlobGasUsed = genesisHeader.BlobGasUsed
 	genesis.SlotNumber = genesisHeader.SlotNumber
+	genesis.BlockAccessListHash = genesisHeader.BlockAccessListHash
 
 	return &genesis, nil
 }
