@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -334,4 +335,78 @@ func wrapError(err error, ctx string) error {
 
 func (err *decodeError) Error() string {
 	return fmt.Sprintf("%v (decode path: %s)", err.what, strings.Join(err.stack, "<-"))
+}
+
+// StripPartitionRoot strips the leading nibble n from a partition subtree
+// root blob produced by a StackTrie built over keys that all share that
+// nibble. Returns the hash the canonical top-level branch should mount in
+// slot n and, if a new node had to be constructed during stripping, the
+// blob the caller must persist.
+func StripPartitionRoot(blob []byte, n byte) (hash common.Hash, writeBlob []byte, err error) {
+	elems, err := decodeNodeElements(blob)
+	if err != nil {
+		return common.Hash{}, nil, fmt.Errorf("decode partition root: %w", err)
+	}
+	if len(elems) != 2 {
+		return common.Hash{}, nil, fmt.Errorf("expected shortNode (2 elements), got %d", len(elems))
+	}
+
+	// Elements from SplitListValues come with their RLP tag. Strip the
+	// tag off the compact-key element to get the raw compact bytes.
+	compactKey, _, err := rlp.SplitString(elems[0])
+	if err != nil {
+		return common.Hash{}, nil, fmt.Errorf("parse compact key: %w", err)
+	}
+	hex := compactToHex(compactKey)
+	if len(hex) == 0 {
+		return common.Hash{}, nil, fmt.Errorf("partition root has empty key")
+	}
+	if hex[0] != n {
+		return common.Hash{}, nil, fmt.Errorf("partition root key starts with nibble %d, want %d", hex[0], n)
+	}
+	childOrValue := elems[1]
+
+	// Case 1: extension of exactly [n] -> reuse the existing child. This is the
+	// common case, the partition has many accounts, they all share exactly the
+	// leading N, and diverge at the second nibble.
+	if !hasTerm(hex) && len(hex) == 1 {
+		content, _, err := rlp.SplitString(childOrValue)
+		if err != nil {
+			return common.Hash{}, nil, fmt.Errorf("parse child ref: %w", err)
+		}
+		if len(content) != common.HashLength {
+			return common.Hash{}, nil, fmt.Errorf("child ref is %d bytes, expected 32", len(content))
+		}
+		return common.BytesToHash(content), nil, nil
+	}
+
+	// Case 2: extension with path [n, more...] -> The new node is an extension
+	// with path [more...], same child. All accounts in the partition happen to
+	// share the second nibble (or more) too. The extension "ate" more than just
+	// the leading N.
+	strippedCompact := hexToCompact(hex[1:])
+	newKeyRLP, err := rlp.EncodeToBytes(strippedCompact)
+	if err != nil {
+		return common.Hash{}, nil, fmt.Errorf("encode stripped key: %w", err)
+	}
+
+	// Case 3: leaf with path [n, more..., term] -> The new node is a leaf with
+	// path [more..., term], same value. The partition's single account produces
+	// a leaf whose path is the full 64-nibble account hash plus terminator.
+	writeBlob, err = encodeNodeElements([][]byte{newKeyRLP, childOrValue})
+	if err != nil {
+		return common.Hash{}, nil, fmt.Errorf("encode stripped node: %w", err)
+	}
+	return crypto.Keccak256Hash(writeBlob), writeBlob, nil
+}
+
+// AssembleBranch constructs a fullNode (17-slot branch) from the given
+// children and returns its RLP encoding and 32-byte hash.
+func AssembleBranch(children [17][]byte) ([]byte, common.Hash, error) {
+	fn := &fullnodeEncoder{Children: children}
+	w := rlp.NewEncoderBuffer(nil)
+	fn.encode(w)
+	blob := w.ToBytes()
+	w.Flush()
+	return blob, crypto.Keccak256Hash(blob), nil
 }

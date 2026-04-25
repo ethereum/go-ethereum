@@ -208,3 +208,59 @@ func WriteSnapshotSyncStatus(db ethdb.KeyValueWriter, status []byte) {
 		log.Crit("Failed to store snapshot sync status", "err", err)
 	}
 }
+
+// WriteGenerateTrieProgress records a partition's current progress.
+func WriteGenerateTrieProgress(db ethdb.KeyValueWriter, partition byte, hash common.Hash) {
+	if err := db.Put(generateTrieProgressKey(partition), hash[:]); err != nil {
+		log.Crit("Failed to store generate-trie progress marker", "err", err)
+	}
+}
+
+// DeleteGenerateTrieProgress removes a partition's progress marker.
+func DeleteGenerateTrieProgress(db ethdb.KeyValueWriter, partition byte) {
+	if err := db.Delete(generateTrieProgressKey(partition)); err != nil {
+		log.Crit("Failed to remove generate-trie progress marker", "err", err)
+	}
+}
+
+// ReadGenerateTriePartitionDone returns the raw subtree root blob for a
+// partition that has previously completed.
+func ReadGenerateTriePartitionDone(db ethdb.KeyValueReader, partition byte) ([]byte, bool) {
+	data, err := db.Get(generateTriePartitionDoneKey(partition))
+	if err != nil {
+		return nil, false
+	}
+	if len(data) == 0 {
+		return nil, false
+	}
+	switch data[0] {
+	case 0x00:
+		// Partition is done and it is empty.
+		return nil, true
+	case 0x01:
+		// Partition is done and the blob follows.
+		return data[1:], true
+	default:
+		return nil, false
+	}
+}
+
+// WriteGenerateTriePartitionDone records a completed partition.
+func WriteGenerateTriePartitionDone(db ethdb.KeyValueWriter, partition byte, blob []byte) {
+	var value []byte
+	if blob == nil {
+		value = []byte{0x00}
+	} else {
+		value = append([]byte{0x01}, blob...)
+	}
+	if err := db.Put(generateTriePartitionDoneKey(partition), value); err != nil {
+		log.Crit("Failed to store generate-trie done marker", "err", err)
+	}
+}
+
+// DeleteGenerateTriePartitionDone removes a partition's done marker.
+func DeleteGenerateTriePartitionDone(db ethdb.KeyValueWriter, partition byte) {
+	if err := db.Delete(generateTriePartitionDoneKey(partition)); err != nil {
+		log.Crit("Failed to remove generate-trie done marker", "err", err)
+	}
+}
