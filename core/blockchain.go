@@ -2246,6 +2246,10 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		computedAccessListHash := computedAccessList.Hash()
 
 		if *block.Header().BlockAccessListHash != computedAccessListHash {
+			if block.AccessList() != nil {
+				log.Error("BAL mismatch: dumping remote BAL", "bal", block.AccessList().JSONString())
+			}
+			log.Error("BAL mismatch: dumping local BAL", "bal", computedAccessList.JSONString())
 			err := fmt.Errorf("block header access list hash mismatch (remote =%x local=%x)", *block.Header().BlockAccessListHash, computedAccessListHash)
 			bc.reportBadBlock(block, res, err)
 			return nil, err
