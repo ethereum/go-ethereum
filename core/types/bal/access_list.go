@@ -72,7 +72,9 @@ func (s *StateAccessList) Merge(other *StateAccessList) {
 	for addr, otherSlots := range other.list {
 		slots, exists := s.list[addr]
 		if !exists {
-			s.list[addr] = otherSlots
+			// Clone the borrowed map so later mutations on either list
+			// don't leak into the other.
+			s.list[addr] = maps.Clone(otherSlots)
 			continue
 		}
 		maps.Copy(slots, otherSlots)

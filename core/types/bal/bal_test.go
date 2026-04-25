@@ -252,3 +252,27 @@ func TestBlockAccessListValidation(t *testing.T) {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 }
+
+// TestStateAccessListMergeIsolation verifies that StateAccessList.Merge does
+// not alias the source's inner storage map into the receiver. Regression test
+// for a bug where mutations to a merged list leaked back into the source.
+func TestStateAccessListMergeIsolation(t *testing.T) {
+	addr := common.BytesToAddress([]byte{0x01})
+	slotA := common.BytesToHash([]byte{0x0A})
+	slotB := common.BytesToHash([]byte{0x0B})
+
+	src := NewStateAccessList()
+	src.AddState(addr, slotA)
+
+	dst := NewStateAccessList()
+	dst.Merge(src)
+
+	// Mutate only the receiver. Before the fix this also mutated src because
+	// Merge assigned src's inner map by reference when the receiver lacked
+	// the address.
+	dst.AddState(addr, slotB)
+
+	if _, leaked := src.list[addr][slotB]; leaked {
+		t.Fatalf("Merge aliased source map: slotB leaked into src after dst-only mutation")
+	}
+}
