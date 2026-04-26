@@ -583,6 +583,18 @@ func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
 		}
 	}
 	s.storageOrigin = storageSet
+
+	// Compute the size of origin data, keeping consistent with NewStateSetWithOrigin
+	var size int
+	for _, data := range s.accountOrigin {
+		size += common.HashLength + len(data)
+	}
+	for _, slots := range s.storageOrigin {
+		for _, data := range slots {
+			size += 2*common.HashLength + len(data)
+		}
+	}
+	s.size = s.stateSet.size + uint64(size)
 	return nil
 }
 
