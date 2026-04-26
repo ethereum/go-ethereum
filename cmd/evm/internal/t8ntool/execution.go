@@ -270,7 +270,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 				continue
 			}
 		}
-		statedb.SetTxContext(tx.Hash(), len(receipts), uint16(len(receipts)+1))
+		statedb.SetTxContext(tx.Hash(), len(receipts), uint32(len(receipts)+1))
 		var (
 			snapshot = statedb.Snapshot()
 			gp       = gaspool.Snapshot()
@@ -336,7 +336,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	for _, receipt := range receipts {
 		allLogs = append(allLogs, receipt.Logs...)
 	}
-	requests, err := core.PostExecution(context.Background(), chainConfig, vmContext.BlockNumber, vmContext.Time, allLogs, evm, uint16(len(receipts)+1))
+	requests, err := core.PostExecution(context.Background(), chainConfig, vmContext.BlockNumber, vmContext.Time, allLogs, evm, uint32(len(receipts)+1))
 	if err != nil {
 		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("failed to process post-execution: %v", err))
 	}

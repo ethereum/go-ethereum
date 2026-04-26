@@ -132,7 +132,7 @@ type StateDB struct {
 	stateAccessList *bal.ConstructionBlockAccessList
 
 	// Block access index (0 for pre-execution, 1..n for transactions, n+1 for post-execution)
-	blockAccessIndex uint16
+	blockAccessIndex uint32
 
 	// Transient storage
 	transientStorage transientStorage
@@ -1097,7 +1097,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 // SetTxContext sets the current transaction hash and index which are
 // used when the EVM emits new state logs. It should be invoked before
 // transaction execution.
-func (s *StateDB) SetTxContext(thash common.Hash, ti int, blockAccessIndex uint16) {
+func (s *StateDB) SetTxContext(thash common.Hash, ti int, blockAccessIndex uint32) {
 	s.thash = thash
 	s.txIndex = ti
 	s.blockAccessIndex = blockAccessIndex

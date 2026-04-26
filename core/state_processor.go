@@ -94,7 +94,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		if err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
-		statedb.SetTxContext(tx.Hash(), i, uint16(i+1))
+		statedb.SetTxContext(tx.Hash(), i, uint32(i+1))
 		_, _, spanEnd := telemetry.StartSpan(ctx, "core.ApplyTransactionWithEVM",
 			telemetry.StringAttribute("tx.hash", tx.Hash().Hex()),
 			telemetry.Int64Attribute("tx.index", int64(i)),
@@ -109,7 +109,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		allLogs = append(allLogs, receipt.Logs...)
 		spanEnd(nil)
 	}
-	requests, err := PostExecution(ctx, config, block.Number(), block.Time(), allLogs, evm, uint16(len(block.Transactions())+1))
+	requests, err := PostExecution(ctx, config, block.Number(), block.Time(), allLogs, evm, uint32(len(block.Transactions())+1))
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent common.Ha
 // PostExecution processes post-execution system calls when Prague is enabled.
 // If Prague is not activated, it returns null requests to differentiate from
 // empty requests.
-func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.Int, time uint64, allLogs []*types.Log, evm *vm.EVM, blockAccessIndex uint16) (requests [][]byte, err error) {
+func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.Int, time uint64, allLogs []*types.Log, evm *vm.EVM, blockAccessIndex uint32) (requests [][]byte, err error) {
 	_, _, spanEnd := telemetry.StartSpan(ctx, "core.postExecution")
 	defer spanEnd(&err)
 
@@ -309,17 +309,17 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
 
 // ProcessWithdrawalQueue calls the EIP-7002 withdrawal queue contract.
 // It returns the opaque request data returned by the contract.
-func ProcessWithdrawalQueue(requests *[][]byte, evm *vm.EVM, blockAccessIndex uint16) error {
+func ProcessWithdrawalQueue(requests *[][]byte, evm *vm.EVM, blockAccessIndex uint32) error {
 	return processRequestsSystemCall(requests, evm, 0x01, params.WithdrawalQueueAddress, blockAccessIndex)
 }
 
 // ProcessConsolidationQueue calls the EIP-7251 consolidation queue contract.
 // It returns the opaque request data returned by the contract.
-func ProcessConsolidationQueue(requests *[][]byte, evm *vm.EVM, blockAccessIndex uint16) error {
+func ProcessConsolidationQueue(requests *[][]byte, evm *vm.EVM, blockAccessIndex uint32) error {
 	return processRequestsSystemCall(requests, evm, 0x02, params.ConsolidationQueueAddress, blockAccessIndex)
 }
 
-func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte, addr common.Address, blockAccessIndex uint16) error {
+func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte, addr common.Address, blockAccessIndex uint32) error {
 	if tracer := evm.Config.Tracer; tracer != nil {
 		onSystemCallStart(tracer, evm.GetVMContext())
 		if tracer.OnSystemCallEnd != nil {

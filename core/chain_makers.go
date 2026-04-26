@@ -117,7 +117,7 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 		blockContext = NewEVMBlockContext(b.header, bc, &b.header.Coinbase)
 		evm          = vm.NewEVM(blockContext, b.statedb, b.cm.config, vmConfig)
 	)
-	b.statedb.SetTxContext(tx.Hash(), len(b.txs), uint16(len(b.txs)+1))
+	b.statedb.SetTxContext(tx.Hash(), len(b.txs), uint32(len(b.txs)+1))
 	receipt, err := ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx)
 	if err != nil {
 		panic(err)
@@ -323,7 +323,7 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 	blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
 	evm := vm.NewEVM(blockContext, statedb, b.cm.config, vm.Config{})
 
-	requests, err := PostExecution(context.Background(), b.cm.config, b.header.Number, b.header.Time, blockLogs, evm, uint16(len(b.txs)+1))
+	requests, err := PostExecution(context.Background(), b.cm.config, b.header.Number, b.header.Time, blockLogs, evm, uint32(len(b.txs)+1))
 	if err != nil {
 		panic(fmt.Sprintf("failed to run post-execution: %v", err))
 	}
