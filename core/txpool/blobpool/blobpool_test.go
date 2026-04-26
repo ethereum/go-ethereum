@@ -2235,3 +2235,20 @@ func BenchmarkWriteUnderReaderLoad(b *testing.B) {
 	close(stop)
 	wg.Wait()
 }
+
+// BenchmarkSetGasTipDrop times a SetGasTip call that drops every tx in a
+// freshly populated pool of numTxs blob transactions whose tips fall below
+// the new threshold.
+func BenchmarkSetGasTipDrop(b *testing.B) {
+	const numTxs = 256
+
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		pool, _, _ := setupGetBenchPool(b, numTxs)
+		b.StartTimer()
+		// Any tip far above the per-tx execTipCap (10) drops everything.
+		pool.SetGasTip(big.NewInt(1_000_000_000))
+		b.StopTimer()
+		pool.Close()
+	}
+}

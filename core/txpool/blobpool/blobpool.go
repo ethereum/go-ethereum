@@ -1165,8 +1165,9 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 // SetGasTip implements txpool.SubPool, allowing the blob pool's gas requirements
 // to be kept in sync with the main transaction pool's gas requirements.
 func (p *BlobPool) SetGasTip(tip *big.Int) {
+	var dropped []uint64
+
 	p.lock.Lock()
-	defer p.lock.Unlock()
 
 	// Store the new minimum gas tip
 	old := p.gasTip.Load()
@@ -1209,15 +1210,10 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 						heap.Remove(p.evict, p.evict.index[addr])
 						p.reserver.Release(addr)
 					}
-					// Clear out the transactions from the data store
 					log.Warn("Dropping underpriced blob transaction", "from", addr, "rejected", tx.nonce, "tip", tx.execTipCap, "want", tip, "drop", nonces, "ids", ids)
 					dropUnderpricedMeter.Mark(int64(len(ids)))
 
-					for _, id := range ids {
-						if err := p.store.Delete(id); err != nil {
-							log.Error("Failed to delete dropped transaction", "id", id, "err", err)
-						}
-					}
+					dropped = append(dropped, ids...)
 					break
 				}
 			}
@@ -1225,6 +1221,14 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 	}
 	log.Debug("Blobpool tip threshold updated", "tip", tip)
 	pooltipGauge.Update(tip.Int64())
+	p.lock.Unlock()
+
+	// Flush the dropped transactions to disk without holding the pool lock.
+	for _, id := range dropped {
+		if err := p.store.Delete(id); err != nil {
+			log.Error("Failed to delete dropped transaction", "id", id, "err", err)
+		}
+	}
 	p.updateStorageMetrics()
 }
 
