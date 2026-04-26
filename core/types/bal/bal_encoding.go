@@ -180,19 +180,19 @@ func (e *BlockAccessList) Hash() common.Hash {
 
 // encodingBalanceChange is the encoding format of BalanceChange.
 type encodingBalanceChange struct {
-	TxIdx   uint16       `json:"txIndex"`
+	TxIdx   uint32       `json:"txIndex"`
 	Balance *uint256.Int `json:"balance"`
 }
 
 // encodingAccountNonce is the encoding format of NonceChange.
 type encodingAccountNonce struct {
-	TxIdx uint16 `json:"txIndex"`
+	TxIdx uint32 `json:"txIndex"`
 	Nonce uint64 `json:"nonce"`
 }
 
 // encodingStorageWrite is the encoding format of StorageWrites.
 type encodingStorageWrite struct {
-	TxIdx      uint16          `json:"txIndex"`
+	TxIdx      uint32          `json:"txIndex"`
 	ValueAfter *EncodedStorage `json:"valueAfter"`
 }
 
@@ -278,7 +278,7 @@ func (e *encodingSlotWrites) validate(blockTxCount int) error {
 		return errors.New("nil slot key")
 	}
 	if !slices.IsSortedFunc(e.Accesses, func(a, b encodingStorageWrite) int {
-		return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
+		return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
 	}) {
 		return errors.New("storage write tx indices not in order")
 	}
@@ -303,7 +303,7 @@ func (e *encodingSlotWrites) validate(blockTxCount int) error {
 // encodingCodeChange contains the runtime bytecode deployed at an address
 // and the transaction index where the deployment took place.
 type encodingCodeChange struct {
-	TxIndex uint16 `ssz-size:"2"`
+	TxIndex uint32 `ssz-size:"4"`
 	Code    []byte `ssz-max:"300000"` // TODO(rjl493456442) shall we put the limit here? The limit will be increased gradually
 }
 
@@ -366,7 +366,7 @@ func (e *AccountAccess) validate(blockTxCount int) error {
 	// Check the balance changes are sorted in order
 	// and that none of them report an index above what is allowed
 	if !slices.IsSortedFunc(e.BalanceChanges, func(a, b encodingBalanceChange) int {
-		return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
+		return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
 	}) {
 		return errors.New("balance changes not in ascending order by tx index")
 	}
@@ -387,7 +387,7 @@ func (e *AccountAccess) validate(blockTxCount int) error {
 	// Check the nonce changes are sorted in order
 	// and that none of them report an index above what is allowed
 	if !slices.IsSortedFunc(e.NonceChanges, func(a, b encodingAccountNonce) int {
-		return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
+		return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
 	}) {
 		return errors.New("nonce changes not in ascending order by tx index")
 	}
@@ -403,7 +403,7 @@ func (e *AccountAccess) validate(blockTxCount int) error {
 	// TODO: contact testing team to add a test case which has the code changes out of order,
 	// as it wasn't checked here previously
 	if !slices.IsSortedFunc(e.CodeChanges, func(a, b encodingCodeChange) int {
-		return cmp.Compare[uint16](a.TxIndex, b.TxIndex)
+		return cmp.Compare[uint32](a.TxIndex, b.TxIndex)
 	}) {
 		return errors.New("code changes not in ascending order")
 	}
@@ -475,7 +475,7 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 		obj.Accesses = make([]encodingStorageWrite, 0, len(slotWrites))
 
 		indices := slices.Collect(maps.Keys(slotWrites))
-		slices.SortFunc(indices, cmp.Compare[uint16])
+		slices.SortFunc(indices, cmp.Compare[uint32])
 		for _, index := range indices {
 			obj.Accesses = append(obj.Accesses, encodingStorageWrite{
 				TxIdx:      index,
@@ -494,7 +494,7 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 
 	// Convert balance changes
 	balanceIndices := slices.Collect(maps.Keys(a.BalanceChanges))
-	slices.SortFunc(balanceIndices, cmp.Compare[uint16])
+	slices.SortFunc(balanceIndices, cmp.Compare[uint32])
 	for _, idx := range balanceIndices {
 		res.BalanceChanges = append(res.BalanceChanges, encodingBalanceChange{
 			TxIdx:   idx,
@@ -504,7 +504,7 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 
 	// Convert nonce changes
 	nonceIndices := slices.Collect(maps.Keys(a.NonceChanges))
-	slices.SortFunc(nonceIndices, cmp.Compare[uint16])
+	slices.SortFunc(nonceIndices, cmp.Compare[uint32])
 	for _, idx := range nonceIndices {
 		res.NonceChanges = append(res.NonceChanges, encodingAccountNonce{
 			TxIdx: idx,
@@ -514,7 +514,7 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 
 	// Convert code change
 	codeChangeIdxs := slices.Collect(maps.Keys(a.CodeChanges))
-	slices.SortFunc(codeChangeIdxs, cmp.Compare[uint16])
+	slices.SortFunc(codeChangeIdxs, cmp.Compare[uint32])
 	for _, idx := range codeChangeIdxs {
 		res.CodeChanges = append(res.CodeChanges, encodingCodeChange{
 			idx,

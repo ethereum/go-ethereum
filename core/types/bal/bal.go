@@ -32,7 +32,7 @@ type ConstructionAccountAccesses struct {
 	// StorageWrites is the post-state values of an account's storage slots
 	// that were modified in a block, keyed by the slot key and the tx index
 	// where the modification occurred.
-	StorageWrites map[common.Hash]map[uint16]common.Hash
+	StorageWrites map[common.Hash]map[uint32]common.Hash
 
 	// StorageReads is the set of slot keys that were accessed during block
 	// execution.
@@ -43,18 +43,18 @@ type ConstructionAccountAccesses struct {
 
 	// BalanceChanges contains the post-transaction balances of an account,
 	// keyed by transaction indices where it was changed.
-	BalanceChanges map[uint16]*uint256.Int
+	BalanceChanges map[uint32]*uint256.Int
 
 	// NonceChanges contains the post-state nonce values of an account keyed
 	// by tx index.
-	NonceChanges map[uint16]uint64
+	NonceChanges map[uint32]uint64
 
-	CodeChanges map[uint16][]byte
+	CodeChanges map[uint32][]byte
 }
 
 func (c *ConstructionAccountAccesses) Copy() (res ConstructionAccountAccesses) {
 	if c.StorageWrites != nil {
-		res.StorageWrites = make(map[common.Hash]map[uint16]common.Hash)
+		res.StorageWrites = make(map[common.Hash]map[uint32]common.Hash)
 		for slot, writes := range c.StorageWrites {
 			res.StorageWrites[slot] = maps.Clone(writes)
 		}
@@ -191,33 +191,33 @@ func (c *ConstructionBlockAccessList) addMutations(muts *StateMutations, index i
 		return
 	}
 	// TO
-	idx := uint16(index)
+	idx := uint32(index)
 	for addr, mut := range muts.list {
 		if _, exist := c.list[addr]; !exist {
 			c.list[addr] = newConstructionAccountAccesses()
 		}
 		if mut.Nonce != nil {
 			if c.list[addr].NonceChanges == nil {
-				c.list[addr].NonceChanges = make(map[uint16]uint64)
+				c.list[addr].NonceChanges = make(map[uint32]uint64)
 			}
 			c.list[addr].NonceChanges[idx] = *mut.Nonce
 		}
 		if mut.Balance != nil {
 			if c.list[addr].BalanceChanges == nil {
-				c.list[addr].BalanceChanges = make(map[uint16]*uint256.Int)
+				c.list[addr].BalanceChanges = make(map[uint32]*uint256.Int)
 			}
 			c.list[addr].BalanceChanges[idx] = mut.Balance.Clone()
 		}
 		if mut.Code != nil {
 			if c.list[addr].CodeChanges == nil {
-				c.list[addr].CodeChanges = make(map[uint16][]byte)
+				c.list[addr].CodeChanges = make(map[uint32][]byte)
 			}
 			c.list[addr].CodeChanges[idx] = bytes.Clone(mut.Code)
 		}
 		if len(mut.StorageWrites) > 0 {
 			for key, val := range mut.StorageWrites {
 				if c.list[addr].StorageWrites[key] == nil {
-					c.list[addr].StorageWrites[key] = make(map[uint16]common.Hash)
+					c.list[addr].StorageWrites[key] = make(map[uint32]common.Hash)
 				}
 				c.list[addr].StorageWrites[key][idx] = val
 
@@ -252,11 +252,11 @@ func (c *ConstructionBlockAccessList) AddAccesses(reads *StateAccessList) {
 
 func newConstructionAccountAccesses() *ConstructionAccountAccesses {
 	return &ConstructionAccountAccesses{
-		StorageWrites:  make(map[common.Hash]map[uint16]common.Hash),
+		StorageWrites:  make(map[common.Hash]map[uint32]common.Hash),
 		StorageReads:   make(map[common.Hash]struct{}),
-		BalanceChanges: make(map[uint16]*uint256.Int),
-		NonceChanges:   make(map[uint16]uint64),
-		CodeChanges:    make(map[uint16][]byte),
+		BalanceChanges: make(map[uint32]*uint256.Int),
+		NonceChanges:   make(map[uint32]uint64),
+		CodeChanges:    make(map[uint32][]byte),
 	}
 }
 

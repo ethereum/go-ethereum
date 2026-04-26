@@ -110,7 +110,7 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 							return err
 						}
 						// TxIdx:
-						_tmp7, err := dec.Uint16()
+						_tmp7, err := dec.Uint32()
 						if err != nil {
 							return err
 						}
@@ -169,7 +169,7 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 					return err
 				}
 				// TxIdx:
-				_tmp13, err := dec.Uint16()
+				_tmp13, err := dec.Uint32()
 				if err != nil {
 					return err
 				}
@@ -202,7 +202,7 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 					return err
 				}
 				// TxIdx:
-				_tmp17, err := dec.Uint16()
+				_tmp17, err := dec.Uint32()
 				if err != nil {
 					return err
 				}
@@ -235,7 +235,7 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 					return err
 				}
 				// TxIndex:
-				_tmp21, err := dec.Uint16()
+				_tmp21, err := dec.Uint32()
 				if err != nil {
 					return err
 				}
