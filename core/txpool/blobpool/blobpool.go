@@ -1373,46 +1373,64 @@ func (p *BlobPool) Has(hash common.Hash) bool {
 	return poolHas || gapped
 }
 
-func (p *BlobPool) getRLP(hash common.Hash) []byte {
-	// Track the amount of time waiting to retrieve a fully resolved blob tx from
-	// the pool and the amount of time actually spent on pulling the data from disk.
+// getAndVerify resolves a hash to its on-disk payload with the pool lock
+// released across the disk read, retrying once if a concurrent reinject moved
+// the same hash to a new slot.
+func (p *BlobPool) getAndVerify(hash common.Hash) ([]byte, *types.Transaction) {
 	getStart := time.Now()
 	p.lock.RLock()
 	getwaitHist.Update(time.Since(getStart).Nanoseconds())
-	defer p.lock.RUnlock()
 
+	id, ok := p.lookup.storeidOfTx(hash)
+	p.lock.RUnlock()
+	if !ok {
+		return nil, nil
+	}
 	defer func(start time.Time) {
 		gettimeHist.Update(time.Since(start).Nanoseconds())
 	}(time.Now())
 
-	// Pull the blob from disk and return an assembled response
-	id, ok := p.lookup.storeidOfTx(hash)
-	if !ok {
-		return nil
+	for retry := 0; retry < 2; retry++ {
+		data, err := p.store.Get(id)
+		if err != nil {
+			log.Warn("Failed to read blob tx from store", "hash", hash, "id", id, "err", err)
+			return nil, nil
+		}
+		tx := new(types.Transaction)
+		if err := rlp.DecodeBytes(data, tx); err != nil {
+			log.Warn("Failed to decode blob tx from store", "hash", hash, "id", id, "err", err)
+			return nil, nil
+		}
+		p.lock.RLock()
+		currentID, stillTracked := p.lookup.storeidOfTx(hash)
+		p.lock.RUnlock()
+		if !stillTracked {
+			return nil, nil
+		}
+		if currentID == id && tx.Hash() == hash {
+			return data, tx
+		}
+		if tx.Hash() != hash {
+			log.Debug("Blob tx slot reused by concurrent writer", "hash", hash, "id", id, "got", tx.Hash())
+		}
+		if currentID == id {
+			return nil, nil
+		}
+		id = currentID
 	}
-	data, err := p.store.Get(id)
-	if err != nil {
-		log.Error("Tracked blob transaction missing from store", "hash", hash, "id", id, "err", err)
-		return nil
-	}
+	return nil, nil
+}
+
+// getRLP returns a RLP-encoded transaction if it is contained in the pool.
+func (p *BlobPool) getRLP(hash common.Hash) []byte {
+	data, _ := p.getAndVerify(hash)
 	return data
 }
 
 // Get returns a transaction if it is contained in the pool, or nil otherwise.
 func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
-	data := p.getRLP(hash)
-	if len(data) == 0 {
-		return nil
-	}
-	item := new(types.Transaction)
-	if err := rlp.DecodeBytes(data, item); err != nil {
-		id, _ := p.lookup.storeidOfTx(hash)
-
-		log.Error("Blobs corrupted for traced transaction",
-			"hash", hash, "id", id, "err", err)
-		return nil
-	}
-	return item
+	_, tx := p.getAndVerify(hash)
+	return tx
 }
 
 // GetRLP returns a RLP-encoded transaction if it is contained in the pool.

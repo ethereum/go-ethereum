@@ -31,6 +31,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
@@ -2132,4 +2133,105 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 			b.Fatalf("have %d want %d", len(p), capacity)
 		}
 	}
+}
+
+// setupGetBenchPool provisions a blob pool with numTxs blob transactions and
+// returns it together with the inserted transaction hashes and the first sender.
+func setupGetBenchPool(b *testing.B, numTxs int) (*BlobPool, []common.Hash, common.Address) {
+	b.Helper()
+	var (
+		basefee    = uint64(1050)
+		blobfee    = uint64(105)
+		signer     = types.LatestSigner(params.MainnetChainConfig)
+		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		chain      = &testBlockChain{
+			config:  params.MainnetChainConfig,
+			basefee: uint256.NewInt(basefee),
+			blobfee: uint256.NewInt(blobfee),
+			statedb: statedb,
+		}
+		pool = New(Config{Datadir: b.TempDir()}, chain, nil)
+	)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		b.Fatalf("failed to create blob pool: %v", err)
+	}
+	hashes := make([]common.Hash, 0, numTxs)
+	var firstAddr common.Address
+	for i := 0; i < numTxs; i++ {
+		blobtx := makeUnsignedTx(0, 10, basefee+10, blobfee)
+		blobtx.R = uint256.NewInt(1)
+		blobtx.S = uint256.NewInt(uint64(100 + i))
+		blobtx.V = uint256.NewInt(0)
+		tx := types.NewTx(blobtx)
+		addr, err := types.Sender(signer, tx)
+		if err != nil {
+			b.Fatal(err)
+		}
+		statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+		if err := pool.add(tx); err != nil {
+			b.Fatalf("add tx %d: %v", i, err)
+		}
+		hashes = append(hashes, tx.Hash())
+		if i == 0 {
+			firstAddr = addr
+		}
+	}
+	statedb.Commit(0, true, false)
+	return pool, hashes, firstAddr
+}
+
+// BenchmarkGetRLP measures the per-call cost of a successful GetRLP against
+// a real billy store (disk Get + RLP decode + hash verification).
+func BenchmarkGetRLP(b *testing.B) {
+	pool, hashes, _ := setupGetBenchPool(b, 1024)
+	defer pool.Close()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if data := pool.GetRLP(hashes[i%len(hashes)]); data == nil {
+			b.Fatalf("GetRLP returned nil for known hash")
+		}
+	}
+}
+
+// BenchmarkWriteUnderReaderLoad measures the latency of a write-lock probe
+// (Nonce on a tracked address) while readerConcurrency goroutines are
+// calling GetRLP in a tight loop. The probe does near-zero in-lock work, so
+// the per-iter time is dominated by lock-acquisition wait.
+func BenchmarkWriteUnderReaderLoad(b *testing.B) {
+	pool, hashes, addr := setupGetBenchPool(b, 1024)
+	defer pool.Close()
+
+	const readerConcurrency = 4
+	var (
+		stop = make(chan struct{})
+		wg   sync.WaitGroup
+	)
+	for i := 0; i < readerConcurrency; i++ {
+		wg.Add(1)
+		go func(seed int) {
+			defer wg.Done()
+			r := rand.New(rand.NewSource(int64(seed)))
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					pool.GetRLP(hashes[r.Intn(len(hashes))])
+				}
+			}
+		}(i)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pool.Nonce(addr)
+	}
+	b.StopTimer()
+
+	close(stop)
+	wg.Wait()
 }
