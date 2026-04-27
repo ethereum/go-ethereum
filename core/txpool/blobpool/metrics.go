@@ -105,7 +105,7 @@ var (
 	addValidMeter        = metrics.NewRegisteredMeter("blobpool/add/valid", nil)        // Valid transaction, add, neutral
 
 	// Gapped queue metrics for observability
-	gappedGauge          = metrics.NewRegisteredGauge("blobpool/gapped/count", nil)     // Current gapped queue size
-	gappedPromotedMeter  = metrics.NewRegisteredMeter("blobpool/gapped/promoted", nil)  // Gapped txs successfully promoted to pool
-	gappedEvictedMeter   = metrics.NewRegisteredMeter("blobpool/gapped/evicted", nil)   // Gapped txs evicted due to timeout/stale
+	gappedGauge         = metrics.NewRegisteredGauge("blobpool/gapped/count", nil)    // Current gapped queue size
+	gappedPromotedMeter = metrics.NewRegisteredMeter("blobpool/gapped/promoted", nil) // Gapped txs successfully promoted to pool
+	gappedEvictedMeter  = metrics.NewRegisteredMeter("blobpool/gapped/evicted", nil)  // Gapped txs evicted due to timeout/stale
 )
