@@ -78,8 +78,8 @@ func (s *journalMutationState) add(kind journalMutationKind) {
 // remove drops one occurrence of the given mutation kind. It returns two
 // booleans: kindEmpty is true when no entries of that kind remain for the
 // account, and stateEmpty is true when no entries of any kind remain.
-func (s *journalMutationState) remove(kind journalMutationKind) (bool, bool) {
-	kindEmpty := s.counts.remove(kind)
+func (s *journalMutationState) remove(kind journalMutationKind) (kindEmpty bool, stateEmpty bool) {
+	kindEmpty = s.counts.remove(kind)
 	return kindEmpty, s.counts == (journalMutationCounts{})
 }
 
