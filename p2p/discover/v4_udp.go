@@ -446,10 +446,8 @@ func (t *UDPv4) loop() {
 		}
 		// Start the timer so it fires when the next pending reply has expired.
 		now := time.Now()
-		for el := plist.Front(); el != nil; {
-			next := el.Next()
-			nextTimeout = el.Value.(*replyMatcher)
-			if dist := nextTimeout.deadline.Sub(now); dist < 2*respTimeout {
+		for p, el := range iterList[*replyMatcher](plist) {
+			if dist := p.deadline.Sub(now); dist < 2*respTimeout {
 				timeout.Reset(dist)
 				return
 			}
@@ -458,7 +456,6 @@ func (t *UDPv4) loop() {
 			// backwards after the deadline was assigned.
 			nextTimeout.errc <- errClockWarp
 			plist.Remove(el)
-			el = next
 		}
 		nextTimeout = nil
 		timeout.Stop()
@@ -480,9 +477,7 @@ func (t *UDPv4) loop() {
 
 		case r := <-t.gotreply:
 			var matched bool // whether any replyMatcher considered the reply acceptable.
-			for el := plist.Front(); el != nil; {
-				next := el.Next()
-				p := el.Value.(*replyMatcher)
+			for p, el := range iterList[*replyMatcher](plist) {
 				if p.from == r.from && p.ptype == r.data.Kind() && p.ip == r.ip {
 					ok, requestDone := p.callback(r.data)
 					matched = matched || ok
@@ -495,7 +490,6 @@ func (t *UDPv4) loop() {
 					// Reset the continuous timeout counter (time drift detection)
 					contTimeouts = 0
 				}
-				el = next
 			}
 			r.matched <- matched
 
@@ -503,15 +497,12 @@ func (t *UDPv4) loop() {
 			nextTimeout = nil
 
 			// Notify and remove callbacks whose deadline is in the past.
-			for el := plist.Front(); el != nil; {
-				next := el.Next()
-				p := el.Value.(*replyMatcher)
+			for p, el := range iterList[*replyMatcher](plist) {
 				if now.After(p.deadline) || now.Equal(p.deadline) {
 					p.errc <- errTimeout
 					plist.Remove(el)
 					contTimeouts++
 				}
-				el = next
 			}
 			// If we've accumulated too many timeouts, do an NTP time sync check
 			if contTimeouts > ntpFailureThreshold {
