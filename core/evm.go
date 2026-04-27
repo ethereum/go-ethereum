@@ -83,6 +83,15 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	}
 }
 
+// CostPerStateByte computes the cost per one byte of state creation
+// after EIP-8037.
+func CostPerStateByte(header *types.Header, config *params.ChainConfig) uint64 {
+	if !config.IsAmsterdam(header.Number, header.Time) {
+		return 0
+	}
+	return 1174 // Fixed cost for devnet-4
+}
+
 // NewEVMTxContext creates a new transaction context for a single transaction.
 func NewEVMTxContext(msg *Message) vm.TxContext {
 	ctx := vm.TxContext{
