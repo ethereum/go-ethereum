@@ -581,13 +581,14 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			if midAccount && bytes.Compare(storageHash[:], base.genMarker[common.HashLength:]) > 0 {
 				continue
 			}
+			cacheKey := storageCacheKey(accountHash, storageHash)
 			if len(data) > 0 {
 				rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, data)
-				base.cache.Set(append(accountHash[:], storageHash[:]...), data)
+				base.cache.Set(cacheKey[:], data)
 				snapshotCleanStorageWriteMeter.Mark(int64(len(data)))
 			} else {
 				rawdb.DeleteStorageSnapshot(batch, accountHash, storageHash)
-				base.cache.Set(append(accountHash[:], storageHash[:]...), nil)
+				base.cache.Set(cacheKey[:], nil)
 			}
 			snapshotFlushStorageItemMeter.Mark(1)
 			snapshotFlushStorageSizeMeter.Mark(int64(len(data)))

@@ -29,6 +29,13 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
+func storageCacheKey(accountHash, storageHash common.Hash) [2 * common.HashLength]byte {
+	var key [2 * common.HashLength]byte
+	copy(key[:common.HashLength], accountHash[:])
+	copy(key[common.HashLength:], storageHash[:])
+	return key
+}
+
 // diskLayer is a low level persistent snapshot built on top of a key-value store.
 type diskLayer struct {
 	diskdb ethdb.KeyValueStore // Key-value store containing the base snapshot
@@ -148,25 +155,25 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	if dl.stale {
 		return nil, ErrSnapshotStale
 	}
-	key := append(accountHash[:], storageHash[:]...)
+	key := storageCacheKey(accountHash, storageHash)
 
 	// If the layer is being generated, ensure the requested hash has already been
 	// covered by the generator.
-	if dl.genMarker != nil && bytes.Compare(key, dl.genMarker) > 0 {
+	if dl.genMarker != nil && bytes.Compare(key[:], dl.genMarker) > 0 {
 		return nil, ErrNotCoveredYet
 	}
 	// If we're in the disk layer, all diff layers missed
 	snapshotDirtyStorageMissMeter.Mark(1)
 
 	// Try to retrieve the storage slot from the memory cache
-	if blob, found := dl.cache.HasGet(nil, key); found {
+	if blob, found := dl.cache.HasGet(nil, key[:]); found {
 		snapshotCleanStorageHitMeter.Mark(1)
 		snapshotCleanStorageReadMeter.Mark(int64(len(blob)))
 		return blob, nil
 	}
 	// Cache doesn't contain storage slot, pull from disk and cache for later
 	blob := rawdb.ReadStorageSnapshot(dl.diskdb, accountHash, storageHash)
-	dl.cache.Set(key, blob)
+	dl.cache.Set(key[:], blob)
 
 	snapshotCleanStorageMissMeter.Mark(1)
 	if n := len(blob); n > 0 {
