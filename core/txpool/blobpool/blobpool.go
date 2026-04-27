@@ -527,7 +527,10 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	// Since the user might have modified their pool's capacity, evict anything
 	// above the current allowance
 	for p.stored > p.config.Datacap {
-		p.drop()
+		id := p.drop()
+		if err := p.store.Delete(id); err != nil {
+			log.Error("Failed to drop evicted transaction", "id", id, "err", err)
+		}
 	}
 	// Update the metrics and return the constructed pool
 	datacapGauge.Update(int64(p.config.Datacap))
@@ -1770,7 +1773,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (toDelete 
 	// If the pool went over the allowed data limit, evict transactions until
 	// we're again below the threshold
 	for p.stored > p.config.Datacap {
-		p.drop()
+		toDelete = append(toDelete, p.drop())
 	}
 
 	addValidMeter.Mark(1)
@@ -1841,7 +1844,9 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (toDelete 
 // freshly added transaction overflows the pool and needs to evict something. The
 // method is also called on startup if the user resizes their storage, might be an
 // expensive run but it should be fine-ish.
-func (p *BlobPool) drop() {
+//
+// Returns the billy slot id that the caller must delete after releasing the lock.
+func (p *BlobPool) drop() uint64 {
 	// Peek at the account with the worse transaction set to evict from (Go's heap
 	// stores the minimum at index zero of the heap slice) and retrieve it's last
 	// transaction.
@@ -1882,13 +1887,10 @@ func (p *BlobPool) drop() {
 			heap.Fix(p.evict, 0)
 		}
 	}
-	// Remove the transaction from the data store
 	log.Debug("Evicting overflown blob transaction", "from", from, "evicted", drop.nonce, "id", drop.id)
 	dropOverflownMeter.Mark(1)
 
-	if err := p.store.Delete(drop.id); err != nil {
-		log.Error("Failed to drop evicted transaction", "id", drop.id, "err", err)
-	}
+	return drop.id
 }
 
 // Pending retrieves all currently processable transactions, grouped by origin
