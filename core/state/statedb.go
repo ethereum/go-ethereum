@@ -758,6 +758,18 @@ func (s *StateDB) GetRefund() uint64 {
 	return s.refund
 }
 
+const (
+	CostPerAccount = 112
+	CostPerSlot    = 32
+)
+
+// StateChangedBytes computes the state bytes created since the given snapshot,
+// excluding bytes already charged by subcalls. See journal.stateChangedBytes
+// for the detailed accounting.
+func (s *StateDB) StateChangedBytes(snapshotId int) int64 {
+	return s.journal.stateChangedBytes(snapshotId, s.stateObjects)
+}
+
 type removedAccountWithBalance struct {
 	address common.Address
 	balance *uint256.Int

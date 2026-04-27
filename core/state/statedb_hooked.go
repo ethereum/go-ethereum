@@ -288,3 +288,7 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.StateAccessList {
 	}
 	return s.inner.Finalise(deleteEmptyObjects)
 }
+
+func (s *hookedStateDB) StateChangedBytes(snapshotId int) int64 {
+	return s.inner.StateChangedBytes(snapshotId)
+}

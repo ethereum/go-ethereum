@@ -18,6 +18,7 @@ package core
 
 import (
 	"math/big"
+	"math/bits"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -68,19 +69,48 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	}
 
 	return vm.BlockContext{
-		CanTransfer: CanTransfer,
-		Transfer:    Transfer,
-		GetHash:     GetHashFn(header, chain),
-		Coinbase:    beneficiary,
-		BlockNumber: new(big.Int).Set(header.Number),
-		Time:        header.Time,
-		Difficulty:  new(big.Int).Set(header.Difficulty),
-		BaseFee:     baseFee,
-		BlobBaseFee: blobBaseFee,
-		GasLimit:    header.GasLimit,
-		Random:      random,
-		SlotNum:     slotNum,
+		CanTransfer:      CanTransfer,
+		Transfer:         Transfer,
+		GetHash:          GetHashFn(header, chain),
+		Coinbase:         beneficiary,
+		BlockNumber:      new(big.Int).Set(header.Number),
+		Time:             header.Time,
+		Difficulty:       new(big.Int).Set(header.Difficulty),
+		BaseFee:          baseFee,
+		BlobBaseFee:      blobBaseFee,
+		GasLimit:         header.GasLimit,
+		Random:           random,
+		SlotNum:          slotNum,
+		CostPerStateByte: CostPerStateByte(header, chain.Config()),
 	}
+}
+
+// CostPerStateByte computes the cost per one byte of state creation
+// after EIP-8037.
+func CostPerStateByte(header *types.Header, config *params.ChainConfig) uint64 {
+	if !config.IsAmsterdam(header.Number, header.Time) {
+		return 0
+	}
+	const (
+		blocksPerYear  uint64 = 2_628_000 // 7200 * 365
+		offset         uint64 = 9578
+		significantBts uint64 = 5
+	)
+	numerator := header.GasLimit * blocksPerYear
+	denominator := uint64(2) * params.TargetStateGrowthPerYear
+	raw := (numerator + denominator - 1) / denominator
+	shifted := raw + offset
+	// bit length of shifted
+	bitLen := uint64(64 - bits.LeadingZeros64(shifted))
+	var shift uint64
+	if bitLen > significantBts {
+		shift = bitLen - significantBts
+	}
+	quantized := (shifted >> shift) << shift
+	if quantized > offset {
+		return quantized - offset
+	}
+	return 1
 }
 
 // NewEVMTxContext creates a new transaction context for a single transaction.

@@ -55,12 +55,19 @@ type journal struct {
 
 	validRevisions []revision
 	nextRevisionId int
+
+	// stateBytesCharged caches the state bytes result per snapshot ID.
+	// When a call boundary computes its state bytes and charges gas,
+	// the result is stored here. The parent frame subtracts the sum
+	// of its subcalls' cached results to avoid double-counting.
+	stateBytesCharged map[int]int64
 }
 
 // newJournal creates a new initialized journal.
 func newJournal() *journal {
 	return &journal{
-		dirties: make(map[common.Address]int),
+		dirties:           make(map[common.Address]int),
+		stateBytesCharged: make(map[int]int64),
 	}
 }
 
@@ -71,6 +78,7 @@ func (j *journal) reset() {
 	j.entries = j.entries[:0]
 	j.validRevisions = j.validRevisions[:0]
 	clear(j.dirties)
+	clear(j.stateBytesCharged)
 	j.nextRevisionId = 0
 }
 
@@ -135,6 +143,101 @@ func (j *journal) length() int {
 	return len(j.entries)
 }
 
+// stateChangedBytes computes the state bytes created by the call frame
+// identified by snapshotId. Since subcalls always compute their results
+// before the parent (innermost-first), this only scans journal entries
+// between this snapshot and the next one — the frame's own entries.
+// Subcall results are summed from the cache and subtracted.
+//
+// The result is cached in stateBytesCharged[snapshotId] so the parent
+// frame can look it up instead of re-scanning.
+func (j *journal) stateChangedBytes(snapshotId int, stateObjects map[common.Address]*stateObject) int64 {
+	// TODO (MariusVanDerWijden): this is a bit slop-py needs to be cleaned up
+	// Resolve snapshot index.
+	idx := sort.Search(len(j.validRevisions), func(i int) bool {
+		return j.validRevisions[i].id >= snapshotId
+	})
+	if idx == len(j.validRevisions) || j.validRevisions[idx].id != snapshotId {
+		panic(fmt.Errorf("snapshot id %v not found for stateChangedBytes", snapshotId))
+	}
+	start := j.validRevisions[idx].journalIndex
+
+	// Our range is [start, end) where end is the next revision's start,
+	// or the end of the journal if we're the last revision.
+	end := len(j.entries)
+	if idx+1 < len(j.validRevisions) {
+		end = j.validRevisions[idx+1].journalIndex
+	}
+
+	// Walk only our own entries.
+	type slotKey struct {
+		addr common.Address
+		key  common.Hash
+	}
+	type slotInfo struct {
+		prev common.Hash // value before first write in this frame
+		orig common.Hash // committed/original value from trie
+	}
+	slots := make(map[slotKey]*slotInfo)
+	created := make(map[common.Address]bool)
+	codeChanged := make(map[common.Address]bool)
+
+	for i := start; i < end; i++ {
+		switch e := j.entries[i].(type) {
+		case createContractChange:
+			created[e.account] = true
+		case codeChange:
+			codeChanged[e.account] = true
+		case storageChange:
+			sk := slotKey{e.account, e.key}
+			if _, seen := slots[sk]; !seen {
+				slots[sk] = &slotInfo{prev: e.prevvalue, orig: e.origvalue}
+			}
+		}
+	}
+
+	var totalBytes int64
+	for range created {
+		totalBytes += CostPerAccount
+	}
+	for sk, si := range slots {
+		obj := stateObjects[sk.addr]
+		if obj == nil {
+			continue
+		}
+		cur := obj.dirtyStorage[sk.key]
+		prevZero := si.prev == (common.Hash{})
+		curZero := cur == (common.Hash{})
+		origZero := si.orig == (common.Hash{})
+
+		if prevZero && !curZero && origZero {
+			// Frame-entry zero, frame-exit non-zero, tx-entry zero:
+			// this frame created a new slot, charge.
+			totalBytes += CostPerSlot
+		} else if !prevZero && curZero && origZero {
+			// Only refund slots created and freed in this transaction
+			totalBytes -= CostPerSlot
+		}
+		// All other transitions are free:
+		// - prevZero && !curZero && !origZero: pre-existing slot was
+		//   cleared in earlier frame, re-set here — no charge.
+		// - X → Y (non-zero to non-zero): no charge.
+		// - zero → zero: no change.
+		// - !prevZero && curZero && !origZero: pre-exising slot was
+		// cleared now, don't refund to not enable gas tokens.
+	}
+	for addr := range codeChanged {
+		obj := stateObjects[addr]
+		if obj != nil {
+			totalBytes += int64(len(obj.code))
+		}
+	}
+
+	// Cache our result so the parent can look it up.
+	j.stateBytesCharged[snapshotId] = totalBytes
+	return totalBytes
+}
+
 // copy returns a deep-copied journal.
 func (j *journal) copy() *journal {
 	entries := make([]journalEntry, 0, j.length())
@@ -142,10 +245,11 @@ func (j *journal) copy() *journal {
 		entries = append(entries, j.entries[i].copy())
 	}
 	return &journal{
-		entries:        entries,
-		dirties:        maps.Clone(j.dirties),
-		validRevisions: slices.Clone(j.validRevisions),
-		nextRevisionId: j.nextRevisionId,
+		entries:           entries,
+		dirties:           maps.Clone(j.dirties),
+		validRevisions:    slices.Clone(j.validRevisions),
+		nextRevisionId:    j.nextRevisionId,
+		stateBytesCharged: maps.Clone(j.stateBytesCharged),
 	}
 }
 

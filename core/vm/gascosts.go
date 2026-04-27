@@ -18,17 +18,29 @@ package vm
 
 import "fmt"
 
+// GasUsed is the per-frame accumulator for gas consumption.
+// StateGas is signed, because it can be negative in a 0 -> x -> 0 scenario.
+type GasUsed struct {
+	RegularGas uint64
+	StateGas   int64
+}
+
+func (g *GasUsed) Add(costs GasCosts) {
+	g.RegularGas += costs.RegularGas
+	g.StateGas += costs.StateGas
+}
+
 // GasCosts denotes a vector of gas costs in the
 // multidimensional metering paradigm. It represents the cost
 // charged by an individual operation.
 type GasCosts struct {
 	RegularGas uint64
-	StateGas   uint64
+	StateGas   int64
 }
 
 // Sum returns the total gas (regular + state).
 func (g GasCosts) Sum() uint64 {
-	return g.RegularGas + g.StateGas
+	return g.RegularGas + uint64(g.StateGas)
 }
 
 // String returns a visual representation of the gas vector.
@@ -43,23 +55,30 @@ func (g GasCosts) String() string {
 type GasBudget struct {
 	RegularGas uint64 // The leftover gas for execution and state gas usage
 	StateGas   uint64 // The state gas reservoir
+
+	// Tracks the gas refunds in this call frame. Needed so we can
+	// revert the refunds if the call frame reverts.
+	StateGasRefund uint64
 }
 
-// NewGasBudget creates a GasBudget with the given initial regular gas allowance.
-func NewGasBudget(gas uint64) GasBudget {
+// NewGasBudgetReg creates a GasBudget with the given initial regular gas allowance.
+func NewGasBudgetReg(gas uint64) GasBudget {
 	return GasBudget{RegularGas: gas}
 }
 
-// Used returns the amount of regular gas consumed so far.
-func (g GasBudget) Used(initial GasBudget) uint64 {
-	return initial.RegularGas - g.RegularGas
+// NewGasBudget creates a GasBudget with the given regular and state gas allowances.
+func NewGasBudget(regular, state uint64) GasBudget {
+	return GasBudget{RegularGas: regular, StateGas: state}
 }
 
-// Exhaust sets all remaining gas to zero, preserving the initial amount
-// for usage tracking.
+// Used returns the total amount of gas consumed so far (regular + state).
+func (g GasBudget) Used(initial GasBudget) uint64 {
+	return (initial.RegularGas + initial.StateGas) - (g.RegularGas + g.StateGas)
+}
+
+// Exhaust burns the remaining regular gas on exceptional halt.
 func (g *GasBudget) Exhaust() {
 	g.RegularGas = 0
-	g.StateGas = 0
 }
 
 func (g *GasBudget) Copy() GasBudget {
@@ -72,26 +91,51 @@ func (g GasBudget) String() string {
 }
 
 // CanAfford reports whether the budget has sufficient gas to cover the cost.
+// When state gas exceeds the reservoir, the excess spills to regular gas.
 func (g GasBudget) CanAfford(cost GasCosts) bool {
-	return g.RegularGas >= cost.RegularGas
+	if g.RegularGas < cost.RegularGas {
+		return false
+	}
+	if cost.StateGas < 0 {
+		return true
+	}
+	if uint64(cost.StateGas) > g.StateGas {
+		spillover := uint64(cost.StateGas) - g.StateGas
+		if spillover > g.RegularGas-cost.RegularGas {
+			return false
+		}
+	}
+	return true
 }
 
 // Charge deducts the given gas cost from the budget. It returns the
-// pre-charge gas value and false if the budget does not have sufficient
-// gas to cover the cost.
+// pre-charge regular gas value and false if the budget does not have
+// sufficient gas to cover the cost.
 func (g *GasBudget) Charge(cost GasCosts) (uint64, bool) {
 	prior := g.RegularGas
-	if prior < cost.RegularGas {
+	if !g.CanAfford(cost) {
 		return prior, false
 	}
 	g.RegularGas -= cost.RegularGas
+	if cost.StateGas < 0 {
+		g.StateGas -= uint64(cost.StateGas)
+		return prior, true
+	}
+	if uint64(cost.StateGas) > g.StateGas {
+		spillover := uint64(cost.StateGas) - g.StateGas
+		g.StateGas = 0
+		g.RegularGas -= spillover
+	} else {
+		g.StateGas -= uint64(cost.StateGas)
+	}
 	return prior, true
 }
 
-// Refund adds the given gas budget back. It returns the pre-refund gas
+// Refund adds the given gas budget back. It returns the pre-refund regular gas
 // value and whether the budget was actually changed.
 func (g *GasBudget) Refund(other GasBudget) (uint64, bool) {
 	prior := g.RegularGas
 	g.RegularGas += other.RegularGas
-	return prior, g.RegularGas != prior
+	g.StateGas += other.StateGas
+	return prior, other.RegularGas != 0 || other.StateGas != 0
 }

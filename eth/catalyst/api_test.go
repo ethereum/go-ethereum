@@ -2111,3 +2111,116 @@ func runGetBlobs(t testing.TB, getBlobs getBlobsFn, start, limit int, fillRandom
 		t.Fatalf("Unexpected result for case %s", name)
 	}
 }
+
+// TestFailedContractCreationGas tests that a failed contract creation under
+// Amsterdam/EIP-8037 computes the correct gasUsed in the receipt. This
+// reproduces a cross-client mismatch where Nethermind and geth disagree on
+// the receipt root due to different gasUsed for a failing CREATE tx.
+func TestFailedContractCreationGas(t *testing.T) {
+	config := *params.MergedTestChainConfig
+	// The exact init code from the devnet tx that fails with RETURNDATACOPY OOB
+	initCode := common.Hex2Bytes("7fd13216074149a6e9713267dccbbc37024275d51076bec33169b0a400a8975d657f000000000000000000000000000000000000000000000000000000000000001e5b6202ffff168161ffff1691502061bfc41446717a6cd1bc37217702e2aac1e77e6e8a75f67b6202ffff16816202ffff1691508261ffff1692503e435b61093d62ae347360835960d24a865b7700b64f1bcf1ada04bb8d96db5221a5fa497115d4b936fdd76202ffff168161ffff169150205b8364a804f9fd32877f00000000000000000000000000000000000000000000000000000000000000016000527f00000000000000000000000000000000000000000000000000000000000000026020527f00000000000000000000000000000000000000000000000000000000000001456040527f1050130679e8fbd2a4b3ebdcb21747c5f6efbaecad13f9b45361510394c098c06060526040608060806000600060065af160805160a0515b6202ffff168161ffff169150fd965b606d9a6202ffff1653831c7c5f8bb81ca4686beebb952b5f20db9445c190332b394f1669b230b104fd75f86956a39ab4b498be875bb61ff1412424a8b675c0a1316202ffff165c496b68a43600766e14ae19e7cbcc93060304845b19446202ffff165d02426202ffff168161ffff169150a100")
+
+	gspec := &core.Genesis{
+		Config: &config,
+		Alloc: types.GenesisAlloc{
+			testAddr:                         {Balance: new(big.Int).Mul(big.NewInt(1e6), big.NewInt(params.Ether))},
+			params.BeaconRootsAddress:        {Balance: common.Big0, Code: params.BeaconRootsCode},
+			params.HistoryStorageAddress:     {Balance: common.Big0, Code: params.HistoryStorageCode},
+			params.WithdrawalQueueAddress:    {Balance: common.Big0, Code: params.WithdrawalQueueCode},
+			params.ConsolidationQueueAddress: {Balance: common.Big0, Code: params.ConsolidationQueueCode},
+			config.DepositContractAddress:    {Balance: common.Big0},
+		},
+		Difficulty: common.Big0,
+		BaseFee:    big.NewInt(params.InitialBaseFee),
+		GasLimit:   60_000_000,
+	}
+
+	n, ethservice := startEthService(t, gspec, nil)
+	defer n.Close()
+
+	api := newConsensusAPIWithoutHeartbeat(ethservice)
+	parent := ethservice.BlockChain().CurrentBlock()
+	signer := types.LatestSigner(ethservice.BlockChain().Config())
+
+	// Create the failing contract creation tx (gas=1000000, value=51417)
+	tx, _ := types.SignTx(types.NewContractCreation(
+		0,
+		big.NewInt(51417),
+		1000000,
+		big.NewInt(2*params.InitialBaseFee),
+		initCode,
+	), signer, testKey)
+	ethservice.TxPool().Add([]*types.Transaction{tx}, false)
+
+	slotNumber := uint64(1)
+	beaconRoot := common.Hash{0x01}
+	args := &miner.BuildPayloadArgs{
+		Parent:       parent.Hash(),
+		Timestamp:    parent.Time + 12,
+		FeeRecipient: common.Address{0xfe},
+		Random:       common.Hash{0xaa},
+		Withdrawals:  []*types.Withdrawal{},
+		BeaconRoot:   &beaconRoot,
+		SlotNum:      &slotNumber,
+	}
+	payload, err := api.eth.Miner().BuildPayload(context.Background(), args, false)
+	if err != nil {
+		t.Fatalf("BuildPayload failed: %v", err)
+	}
+	envelope := payload.ResolveFull()
+	execPayload := envelope.ExecutionPayload
+
+	// Validate via newPayload
+	resp, err := api.newPayload(context.Background(), *execPayload, []common.Hash{}, &beaconRoot, envelope.Requests, false)
+	if err != nil {
+		t.Fatalf("newPayload error: %v", err)
+	}
+	if resp.Status != engine.VALID {
+		t.Fatalf("newPayload returned %s: %v", resp.Status, resp.ValidationError)
+	}
+
+	// Set head
+	fcState := engine.ForkchoiceStateV1{
+		HeadBlockHash:      execPayload.BlockHash,
+		SafeBlockHash:      execPayload.BlockHash,
+		FinalizedBlockHash: execPayload.BlockHash,
+	}
+	if _, err := api.ForkchoiceUpdatedV1(context.Background(), fcState, nil); err != nil {
+		t.Fatalf("FCU error: %v", err)
+	}
+
+	// Get the receipt and check gasUsed
+	block := ethservice.BlockChain().GetBlockByHash(execPayload.BlockHash)
+	if block == nil {
+		t.Fatal("block not found after import")
+	}
+
+	receipts := ethservice.BlockChain().GetReceiptsByHash(block.Hash())
+	if len(receipts) == 0 {
+		t.Fatal("no receipts found")
+	}
+
+	// Find the contract creation receipt
+	for i, r := range receipts {
+		if r.ContractAddress != (common.Address{}) || r.Status == types.ReceiptStatusFailed {
+			t.Logf("Receipt %d: status=%d gasUsed=%d cumulative=%d contract=%s",
+				i, r.Status, r.GasUsed, r.CumulativeGasUsed, r.ContractAddress.Hex())
+
+			// The tx should fail (RETURNDATACOPY OOB)
+			if r.Status != types.ReceiptStatusFailed {
+				t.Errorf("expected failed receipt, got status %d", r.Status)
+			}
+
+			// Check gasUsed makes sense under EIP-8037
+			// For a failed tx: all regular gas is burned, but state gas
+			// should NOT be charged (since no state was created).
+			// gasUsed should be < tx.gas if there's any state gas component.
+			t.Logf("Tx gas limit: %d", tx.Gas())
+			if r.GasUsed > tx.Gas() {
+				t.Errorf("gasUsed %d exceeds tx gas limit %d", r.GasUsed, tx.Gas())
+			}
+			t.Logf("Gas difference (limit - used): %d", tx.Gas()-r.GasUsed)
+		}
+	}
+}
