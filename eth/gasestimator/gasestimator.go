@@ -244,7 +244,7 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 		evmContext.BlobBaseFee = new(big.Int)
 	}
 	evm := vm.NewEVM(evmContext, dirtyState, opts.Config, vm.Config{NoBaseFee: true})
-	defer evm.Free()
+	defer evm.Release()
 
 	// Monitor the outer context and interrupt the EVM upon cancellation. To avoid
 	// a dangling goroutine until the outer estimation finishes, create an internal

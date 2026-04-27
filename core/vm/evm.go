@@ -226,9 +226,9 @@ func (evm *EVM) Cancel() {
 	evm.abort.Store(true)
 }
 
-// Free returns some memory allocated by the EVM, should be called after the EVM was used
+// Release returns some memory allocated by the EVM, should be called after the EVM was used
 // for the last time. Not necessary, but an improvement.
-func (evm *EVM) Free() {
+func (evm *EVM) Release() {
 	returnStack(evm.arena)
 }
 

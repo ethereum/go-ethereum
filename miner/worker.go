@@ -84,7 +84,7 @@ func (env *environment) txFitsSize(tx *types.Transaction) bool {
 func (env *environment) discard() {
 	env.state.StopPrefetcher()
 	if env.evm != nil {
-		env.evm.Free()
+		env.evm.Release()
 	}
 }
 

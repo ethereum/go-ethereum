@@ -312,7 +312,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		tracingStateDB = state.NewHookedState(sim.state, hooks)
 	}
 	evm := vm.NewEVM(blockContext, tracingStateDB, sim.chainConfig, *vmConfig)
-	defer evm.Free()
+	defer evm.Release()
 	// It is possible to override precompiles with EVM bytecode, or
 	// move them to another address.
 	if precompiles != nil {
