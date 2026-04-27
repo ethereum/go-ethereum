@@ -130,14 +130,6 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	if err != nil {
 		return err
 	}
-	if gasCostPerStateByte != 0 {
-		// We require transactions to pay for 110% of intrinsic gas in order to
-		// prevent situations where a change in gas limit invalidates a lot
-		// of transactions in the txpool
-		if minGas := (intrGas.RegularGas * 10) / 9; tx.Gas() < minGas {
-			return fmt.Errorf("%w: gas %v, minimum needed %v", core.ErrIntrinsicGas, tx.Gas(), minGas)
-		}
-	}
 	if tx.Gas() < intrGas.RegularGas {
 		return fmt.Errorf("%w: gas %v, minimum needed %v", core.ErrIntrinsicGas, tx.Gas(), intrGas.RegularGas)
 	}
