@@ -18,11 +18,7 @@ package stateless
 
 import (
 	"encoding/json"
-	"maps"
-	"slices"
-	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -44,6 +40,7 @@ func init() {
 type WitnessStats struct {
 	accountTrie *trie.LevelStats
 	storageTrie *trie.LevelStats
+	prefixes    map[string]struct{}
 }
 
 // NewWitnessStats creates a new WitnessStats collector.
@@ -76,19 +73,23 @@ func (s *WitnessStats) init() {
 func (s *WitnessStats) Add(nodes map[string][]byte, owner common.Hash) {
 	s.init()
 
-	// Extract paths from the nodes map.
-	paths := slices.Collect(maps.Keys(nodes))
-	sort.Strings(paths)
-
 	ownerStat := s.accountTrie
 	if owner != (common.Hash{}) {
 		ownerStat = s.storageTrie
 	}
 
-	for i, path := range paths {
-		// If current path is a prefix of the next path, it's not a leaf.
-		// The last path is always a leaf.
-		if i == len(paths)-1 || !strings.HasPrefix(paths[i+1], paths[i]) {
+	if s.prefixes == nil {
+		s.prefixes = make(map[string]struct{}, len(nodes))
+	} else {
+		clear(s.prefixes)
+	}
+	for path := range nodes {
+		for i := 0; i < len(path); i++ {
+			s.prefixes[path[:i]] = struct{}{}
+		}
+	}
+	for path := range nodes {
+		if _, ok := s.prefixes[path]; !ok {
 			ownerStat.AddLeaf(len(path))
 		}
 	}
