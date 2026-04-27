@@ -16,6 +16,14 @@
 
 package state
 
+import (
+	"sync"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
+)
+
 // The EIP27928 reader utilizes a hierarchical architecture to optimize state
 // access during block execution:
 //
@@ -37,14 +45,7 @@ package state
 //   for the entire block.
 //
 // The architecture can be illustrated by the diagram below:
-
-//       [ Block Level Read List ]    <────────────────┐
-//                  ▲                                  │ ( Aggregate )
-//                  │                                  │
-//          ┌───────┴───────┐                  ┌───────┴───────┐
-//          │ readerTracker │                  │ readerTracker │  (State read tracking)
-//          └───────┬───────┘                  └───────┬───────┘
-//                  │                                  │
+//
 //   ┌──────────────┴──────────────┐    ┌──────────────┴──────────────┐
 //   │ ReaderWithBlockLevelAL      │    │ ReaderWithBlockLevelAL      │
 //   │ (Pre-state + Mutations)     │    │ (Pre-state + Mutations)     │
@@ -68,15 +69,6 @@ package state
 // Instead, it directly utilizes the readerTracker, wrapped around the
 // base reader, to construct the access list.
 
-import (
-	"maps"
-	"sync"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/types/bal"
-)
-
 type fetchTask struct {
 	addr  common.Address
 	slots []common.Hash
@@ -94,6 +86,7 @@ type prefetchStateReader struct {
 	closeOnce sync.Once
 }
 
+// nolint:unused
 func newPrefetchStateReader(reader StateReader, accessList map[common.Address][]common.Hash, nThreads int) *prefetchStateReader {
 	tasks := make([]*fetchTask, 0, len(accessList))
 	for addr, slots := range accessList {
@@ -251,76 +244,4 @@ func (r *ReaderWithBlockLevelAccessList) Code(addr common.Address, codeHash comm
 // address and hash.
 func (r *ReaderWithBlockLevelAccessList) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
 	panic("implement me")
-}
-
-// StorageAccessList represents a set of storage slots accessed within an account.
-type StorageAccessList map[common.Hash]struct{}
-
-// StateAccessList maps account addresses to their respective accessed storage slots.
-type StateAccessList map[common.Address]StorageAccessList
-
-// Merge merges the entries from the other StateAccessList into the receiver.
-func (s StateAccessList) Merge(other StateAccessList) {
-	for addr, otherSlots := range other {
-		slots, exists := s[addr]
-		if !exists {
-			s[addr] = otherSlots
-			continue
-		}
-		maps.Copy(slots, otherSlots)
-	}
-}
-
-// StateReaderTracker defines the capability to retrieve the access footprint
-// recorded during state reading operations.
-type StateReaderTracker interface {
-	GetStateAccessList() StateAccessList
-}
-
-type readerTracker struct {
-	Reader
-	access StateAccessList
-	lock   sync.RWMutex
-}
-
-func newReaderTracker(reader Reader) *readerTracker {
-	return &readerTracker{
-		Reader: reader,
-		access: make(StateAccessList),
-	}
-}
-
-// Account implements StateReader, tracking the accessed address locally.
-func (r *readerTracker) Account(addr common.Address) (*types.StateAccount, error) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
-	_, exists := r.access[addr]
-	if !exists {
-		r.access[addr] = make(StorageAccessList)
-	}
-	return r.Reader.Account(addr)
-}
-
-// Storage implements StateReader, tracking the accessed slot identifier locally.
-func (r *readerTracker) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
-	list, exists := r.access[addr]
-	if !exists {
-		list = make(StorageAccessList)
-		r.access[addr] = list
-	}
-	list[slot] = struct{}{}
-
-	return r.Reader.Storage(addr, slot)
-}
-
-// GetStateAccessList implements StateReaderTracker, returning the access footprint.
-func (r *readerTracker) GetStateAccessList() StateAccessList {
-	r.lock.RLock()
-	defer r.lock.RUnlock()
-
-	return r.access
 }

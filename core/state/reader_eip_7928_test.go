@@ -18,7 +18,6 @@ package state
 
 import (
 	"fmt"
-	"maps"
 	"math/rand"
 	"sync"
 	"testing"
@@ -141,61 +140,6 @@ func TestPrefetchReader(t *testing.T) {
 		pr.Wait()
 		if err := r.validate(s.total); err != nil {
 			t.Fatal(err)
-		}
-	}
-}
-
-func makeFakeSlots(n int) map[common.Hash]struct{} {
-	slots := make(map[common.Hash]struct{})
-	for i := 0; i < n; i++ {
-		slots[testrand.Hash()] = struct{}{}
-	}
-	return slots
-}
-
-type noopStateReader struct{}
-
-func (r *noopStateReader) Account(addr common.Address) (*types.StateAccount, error) { return nil, nil }
-func (r *noopStateReader) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
-	return common.Hash{}, nil
-}
-
-type noopCodeReader struct{}
-
-func (r *noopCodeReader) Has(addr common.Address, codeHash common.Hash) bool { return false }
-
-func (r *noopCodeReader) Code(addr common.Address, codeHash common.Hash) []byte {
-	return nil
-}
-
-func (r *noopCodeReader) CodeSize(addr common.Address, codeHash common.Hash) int {
-	return 0
-}
-
-func TestReaderWithTracker(t *testing.T) {
-	var r Reader = newReaderTracker(newReader(&noopCodeReader{}, &noopStateReader{}))
-
-	accesses := map[common.Address]map[common.Hash]struct{}{
-		testrand.Address(): makeFakeSlots(10),
-		testrand.Address(): makeFakeSlots(0),
-	}
-	for addr, slots := range accesses {
-		r.Account(addr)
-		for slot := range slots {
-			r.Storage(addr, slot)
-		}
-	}
-	got := r.(StateReaderTracker).GetStateAccessList()
-	if len(got) != len(accesses) {
-		t.Fatalf("Unexpected access list, want: %d, got: %d", len(accesses), len(got))
-	}
-	for addr, slots := range got {
-		entry, ok := accesses[addr]
-		if !ok {
-			t.Fatal("Unexpected access list")
-		}
-		if !maps.Equal(slots, entry) {
-			t.Fatal("Unexpected slots")
 		}
 	}
 }
