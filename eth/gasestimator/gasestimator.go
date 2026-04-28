@@ -63,10 +63,10 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	}
 
 	// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
-	if hi > params.MaxTxGas {
-		if opts.Config.IsOsaka(opts.Header.Number, opts.Header.Time) {
-			hi = params.MaxTxGas
-		}
+	isOsaka := opts.Config.IsOsaka(opts.Header.Number, opts.Header.Time)
+	isAmsterdam := opts.Config.IsAmsterdam(opts.Header.Number, opts.Header.Time)
+	if hi > params.MaxTxGas && isOsaka && !isAmsterdam {
+		hi = params.MaxTxGas
 	}
 
 	// Normalize the max fee per gas the call is willing to spend.
