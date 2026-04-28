@@ -127,7 +127,7 @@ func (t *BinaryTrie) ToDot() string {
 // groupDepth specifies the number of levels per serialized group (1-8).
 func NewBinaryTrie(root common.Hash, db database.NodeDatabase, groupDepth int) (*BinaryTrie, error) {
 	if groupDepth < 1 || groupDepth > MaxGroupDepth {
-		groupDepth = MaxGroupDepth // Default to 8
+		panic("invalid group depth size")
 	}
 	reader, err := trie.NewReader(root, common.Hash{}, db)
 	if err != nil {
