@@ -86,7 +86,7 @@ type backend interface {
 // relevant with trie nodes and node preimages.
 type Database struct {
 	disk      ethdb.Database
-	Config    *Config        // Configuration for trie database
+	config    *Config        // Configuration for trie database
 	preimages *preimageStore // The store for caching preimages
 	backend   backend        // The backend for managing trie nodes
 }
@@ -104,7 +104,7 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 	}
 	db := &Database{
 		disk:      diskdb,
-		Config:    config,
+		config:    config,
 		preimages: preimages,
 	}
 	if config.HashDB != nil && config.PathDB != nil {
@@ -196,7 +196,7 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize, common.Stora
 
 // Scheme returns the node scheme used in the database.
 func (db *Database) Scheme() string {
-	if db.Config.PathDB != nil {
+	if db.config.PathDB != nil {
 		return rawdb.PathScheme
 	}
 	return rawdb.HashScheme
@@ -379,7 +379,7 @@ func (db *Database) IndexProgress() (uint64, uint64, error) {
 
 // IsUBT returns the indicator if the database is holding a verkle tree.
 func (db *Database) IsUBT() bool {
-	return db.Config.IsUBT
+	return db.config.IsUBT
 }
 
 // Disk returns the underlying disk database.
@@ -394,4 +394,8 @@ func (db *Database) SnapshotCompleted() bool {
 		return false
 	}
 	return pdb.SnapshotCompleted()
+}
+
+func (db *Database) BinTrieGroupDepth() int {
+	return db.config.BinTrieGroupDepth
 }

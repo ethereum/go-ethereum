@@ -320,8 +320,9 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	config.NoAsyncFlush = true
 
 	triedb := triedb.NewDatabase(db, &triedb.Config{
-		IsUBT:  true,
-		PathDB: &config,
+		IsUBT:             true,
+		PathDB:            &config,
+		BinTrieGroupDepth: 8,
 	})
 	block := genesis.MustCommit(db, triedb)
 	if !bytes.Equal(block.Root().Bytes(), expected) {
