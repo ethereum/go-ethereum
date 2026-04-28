@@ -193,6 +193,7 @@ const (
 	AccountCreationSize       = 112
 	StorageCreationSize       = 32
 	AuthorizationCreationSize = 23
+	SystemMaxSstoresPerCall   = 16 // EIP-8037: upper bound on new SSTOREs per system call
 
 	GasBlockAccessListItem = 2000 // EIP-7928: gas cost per BAL item for gas limit check
 )

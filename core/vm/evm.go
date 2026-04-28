@@ -660,7 +660,15 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 	}
 
 	if !evm.chainRules.IsEIP4762 {
-		createDataGas := uint64(len(ret)) * params.CreateDataGas
+		var createDataGas uint64
+		if evm.chainRules.IsAmsterdam {
+			// EIP-8037: regular gas portion is the keccak hashing cost
+			// (6 × ⌈L/32⌉). The state-gas portion (L × CPSB) is charged
+			// at frame end via the journal's codeChange walker.
+			createDataGas = ((uint64(len(ret)) + 31) / 32) * params.Keccak256WordGas
+		} else {
+			createDataGas = uint64(len(ret)) * params.CreateDataGas
+		}
 		if !contract.UseGas(GasCosts{RegularGas: createDataGas}, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
 			return ret, ErrCodeStoreOutOfGas
 		}

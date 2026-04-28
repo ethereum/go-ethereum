@@ -769,10 +769,10 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 		return 0, err
 	}
 
-	// If the account already exists in state, refund the new account cost
-	// charged in the intrinsic calculation.
+	// If the account is not empty (per EIP-161: non-zero nonce, balance, or
+	// code) refund the new account cost charged in the intrinsic calculation.
 	var refund uint64
-	if st.state.Exist(authority) {
+	if !st.state.Empty(authority) {
 		if rules.IsAmsterdam {
 			// EIP-8037: refund account creation state gas to the reservoir
 			refund = params.AccountCreationSize * st.evm.Context.CostPerStateByte
