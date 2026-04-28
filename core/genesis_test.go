@@ -322,7 +322,7 @@ func TestBinaryGenesisCommit(t *testing.T) {
 	triedb := triedb.NewDatabase(db, &triedb.Config{
 		IsUBT:             true,
 		PathDB:            &config,
-		BinTrieGroupDepth: 8,
+		BinTrieGroupDepth: triedb.DefaultBinTrieGroupDepth,
 	})
 	block := genesis.MustCommit(db, triedb)
 	if !bytes.Equal(block.Root().Bytes(), expected) {

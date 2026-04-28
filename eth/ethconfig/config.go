@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
 
@@ -59,7 +60,7 @@ var Defaults = Config{
 	StateHistory:            pathdb.Defaults.StateHistory,
 	TrienodeHistory:         pathdb.Defaults.TrienodeHistory,
 	NodeFullValueCheckpoint: pathdb.Defaults.FullValueCheckpoint,
-	BinTrieGroupDepth:       8, // byte-aligned groups by default
+	BinTrieGroupDepth:       triedb.DefaultBinTrieGroupDepth,
 	DatabaseCache:           2048,
 	TrieCleanCache:          614,
 	TrieDirtyCache:          1024,

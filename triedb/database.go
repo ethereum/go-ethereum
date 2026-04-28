@@ -38,6 +38,8 @@ type Config struct {
 	PathDB            *pathdb.Config // Configs for experimental path-based scheme
 }
 
+const DefaultBinTrieGroupDepth = 5
+
 // HashDefaults represents a config for using hash-based scheme with
 // default settings.
 var HashDefaults = &Config{
@@ -51,7 +53,7 @@ var HashDefaults = &Config{
 var UBTDefaults = &Config{
 	Preimages:         false,
 	IsUBT:             true,
-	BinTrieGroupDepth: 8, // Default to byte-aligned groups
+	BinTrieGroupDepth: DefaultBinTrieGroupDepth,
 	PathDB:            pathdb.Defaults,
 }
 

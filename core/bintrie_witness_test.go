@@ -92,7 +92,7 @@ func TestProcessUBT(t *testing.T) {
 	// genesis := gspec.MustCommit(bcdb, triedb)
 	options := DefaultConfig().WithStateScheme(rawdb.PathScheme)
 	options.SnapshotLimit = 0
-	options.BinTrieGroupDepth = 8
+	options.BinTrieGroupDepth = triedb.DefaultBinTrieGroupDepth
 	blockchain, _ := NewBlockChain(bcdb, gspec, beacon.New(ethash.NewFaker()), options)
 	defer blockchain.Stop()
 
@@ -219,7 +219,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 	t.Run("UBT", func(t *testing.T) {
 		db := rawdb.NewMemoryDatabase()
 		cacheConfig := DefaultConfig().WithStateScheme(rawdb.PathScheme)
-		cacheConfig.BinTrieGroupDepth = 8
+		cacheConfig.BinTrieGroupDepth = triedb.DefaultBinTrieGroupDepth
 		cacheConfig.SnapshotLimit = 0
 		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
 		statedb, _ := state.New(types.EmptyBinaryHash, state.NewDatabase(triedb, nil))
