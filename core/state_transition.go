@@ -673,16 +673,11 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	returned := st.returnGas()
 	if rules.IsAmsterdam {
 		// EIP-8037: 2D gas accounting for Amsterdam.
-		// tx_regular = intrinsic_regular + exec_regular_gas_used
-		// tx_state = intrinsic_state (adjusted) + exec_state_gas_used
-		// execGasUsed.StateGas may be negative when an SSTORE 0→x→0 refund
-		// exceeded the intrinsic-charged state gas
-		txState := uint64(cost.StateGas)
-		if execGasUsed.StateGas > 0 {
-			txState += uint64(execGasUsed.StateGas)
-		}
-		txRegular := cost.RegularGas + execGasUsed.RegularGas
+		// tx_regular = initialBudget.RegularGas - gasRemaining.RegularGas
+		// tx_state = initialBudget.StateGas - gasRemaining.StateGas
+		txRegular := st.initialBudget.RegularGas - st.gasRemaining.RegularGas
 		txRegular = max(txRegular, floorDataGas)
+		txState := st.initialBudget.StateGas - st.gasRemaining.StateGas
 		if err := st.gp.ReturnGasAmsterdam(txRegular, txState, st.gasUsed()); err != nil {
 			return nil, err
 		}
