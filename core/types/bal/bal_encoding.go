@@ -162,11 +162,12 @@ func (e BlockAccessList) ValidateGasLimit(blockGasLimit uint64) error {
 // Hash computes the keccak256 hash of the access list
 func (e *BlockAccessList) Hash() common.Hash {
 	var enc bytes.Buffer
-	if err := e.EncodeRLP(&enc); err != nil {
-		// Errors here are related to BAL values exceeding maximum size defined
-		// by the spec. Return empty hash because these cases are not expected
-		// to be hit under reasonable conditions.
-		return common.Hash{}
+	err := e.EncodeRLP(&enc)
+	if err != nil {
+		// errors here are related to BAL values exceeding maximum size defined
+		// by the spec. Hard-fail because these cases are not expected to be hit
+		// under reasonable conditions.
+		panic(err)
 	}
 	/*
 		bal, err := json.MarshalIndent(e.StringableRepresentation(), "", "    ")
@@ -187,116 +188,6 @@ type encodingBalanceChange struct {
 type encodingAccountNonce struct {
 	TxIdx uint32 `json:"txIndex"`
 	Nonce uint64 `json:"nonce"`
-}
-
-// encodingStorageWrite is the encoding format of StorageWrites.
-type encodingStorageWrite struct {
-	TxIdx      uint32          `json:"txIndex"`
-	ValueAfter *EncodedStorage `json:"valueAfter"`
-}
-
-// EncodedStorage can represent either a storage key or value
-type EncodedStorage struct {
-	inner *uint256.Int
-}
-
-var _ rlp.Encoder = &EncodedStorage{}
-var _ rlp.Decoder = &EncodedStorage{}
-
-func (s *EncodedStorage) ToHash() common.Hash {
-	if s == nil {
-		return common.Hash{}
-	}
-	return s.inner.Bytes32()
-}
-
-func NewEncodedStorageFromHash(hash common.Hash) *EncodedStorage {
-	return &EncodedStorage{
-		new(uint256.Int).SetBytes(hash[:]),
-	}
-}
-
-func (s *EncodedStorage) UnmarshalJSON(b []byte) error {
-	var str string
-	if err := json.Unmarshal(b, &str); err != nil {
-		return err
-	}
-
-	str = strings.TrimLeft(str, "0x")
-	if len(str) == 0 {
-		return nil
-	}
-
-	if len(str)%2 == 1 {
-		str = "0" + str
-	}
-
-	val, err := hex.DecodeString(str)
-	if err != nil {
-		return err
-	}
-
-	if len(val) > 32 {
-		return fmt.Errorf("storage key/value cannot be greater than 32 bytes")
-	}
-
-	// TODO: check is s == nil ?? should be programmer error
-
-	*s = EncodedStorage{
-		inner: new(uint256.Int).SetBytes(val),
-	}
-	return nil
-}
-
-func (s EncodedStorage) MarshalJSON() ([]byte, error) {
-	return json.Marshal(s.inner.Hex())
-}
-
-func (s *EncodedStorage) EncodeRLP(_w io.Writer) error {
-	return s.inner.EncodeRLP(_w)
-}
-
-func (s *EncodedStorage) DecodeRLP(dec *rlp.Stream) error {
-	if s == nil {
-		*s = EncodedStorage{}
-	}
-	s.inner = uint256.NewInt(0)
-	return dec.ReadUint256(s.inner)
-}
-
-// encodingStorageWrite is the encoding format of SlotWrites.
-type encodingSlotWrites struct {
-	Slot     *EncodedStorage        `json:"slot"`
-	Accesses []encodingStorageWrite `json:"accesses"`
-}
-
-// validate returns an instance of the encoding-representation slot writes in
-// working representation.
-func (e *encodingSlotWrites) validate(blockTxCount int) error {
-	if e.Slot == nil {
-		return errors.New("nil slot key")
-	}
-	if !slices.IsSortedFunc(e.Accesses, func(a, b encodingStorageWrite) int {
-		return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
-	}) {
-		return errors.New("storage write tx indices not in order")
-	}
-	for i, access := range e.Accesses {
-		if access.ValueAfter == nil {
-			return errors.New("nil storage write post")
-		}
-		if i > 0 && e.Accesses[i-1].TxIdx == access.TxIdx {
-			return errors.New("duplicate storage write index")
-		}
-	}
-	// TODO: add test that covers there are actually storage modifications here
-	// if there aren't, it should be a bad block
-	if len(e.Accesses) == 0 {
-		return fmt.Errorf("empty storage writes")
-	} else if int(e.Accesses[len(e.Accesses)-1].TxIdx) >= blockTxCount+2 {
-		return fmt.Errorf("storage access reported index higher than allowed")
-	}
-	return nil
 }
 
 // encodingCodeChange contains the runtime bytecode deployed at an address
@@ -430,7 +321,7 @@ func (e *AccountAccess) Copy() AccountAccess {
 	res := AccountAccess{
 		Address:        e.Address,
 		StorageReads:   slices.Clone(e.StorageReads),
-		BalanceChanges: make([]encodingBalanceChange, 0, len(e.BalanceChanges)),
+		BalanceChanges: slices.Clone(e.BalanceChanges),
 		NonceChanges:   slices.Clone(e.NonceChanges),
 	}
 	for _, storageWrite := range e.StorageChanges {
@@ -476,7 +367,6 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 		indices := slices.Collect(maps.Keys(slotWrites))
 		slices.SortFunc(indices, cmp.Compare[uint32])
 		for _, index := range indices {
-			val := slotWrites[index]
 			obj.Accesses = append(obj.Accesses, encodingStorageWrite{
 				TxIdx:      index,
 				ValueAfter: NewEncodedStorageFromHash(slotWrites[index]),
@@ -536,7 +426,7 @@ func (c *ConstructionBlockAccessList) ToEncodingObj() *BlockAccessList {
 	}
 	slices.SortFunc(addresses, common.Address.Cmp)
 
-	res := make(BlockAccessList, 0, len(addresses))
+	var res BlockAccessList
 	for _, addr := range addresses {
 		res = append(res, c.list[addr].toEncodingObj(addr))
 	}
@@ -544,3 +434,113 @@ func (c *ConstructionBlockAccessList) ToEncodingObj() *BlockAccessList {
 }
 
 type ContractCode []byte
+
+// encodingStorageWrite is the encoding format of StorageWrites.
+type encodingStorageWrite struct {
+	TxIdx      uint32          `json:"txIndex"`
+	ValueAfter *EncodedStorage `json:"valueAfter"`
+}
+
+// EncodedStorage can represent either a storage key or value
+type EncodedStorage struct {
+	inner *uint256.Int
+}
+
+var _ rlp.Encoder = &EncodedStorage{}
+var _ rlp.Decoder = &EncodedStorage{}
+
+func (s *EncodedStorage) ToHash() common.Hash {
+	if s == nil {
+		return common.Hash{}
+	}
+	return s.inner.Bytes32()
+}
+
+func NewEncodedStorageFromHash(hash common.Hash) *EncodedStorage {
+	return &EncodedStorage{
+		new(uint256.Int).SetBytes(hash[:]),
+	}
+}
+
+func (s *EncodedStorage) UnmarshalJSON(b []byte) error {
+	var str string
+	if err := json.Unmarshal(b, &str); err != nil {
+		return err
+	}
+
+	str = strings.TrimLeft(str, "0x")
+	if len(str) == 0 {
+		return nil
+	}
+
+	if len(str)%2 == 1 {
+		str = "0" + str
+	}
+
+	val, err := hex.DecodeString(str)
+	if err != nil {
+		return err
+	}
+
+	if len(val) > 32 {
+		return fmt.Errorf("storage key/value cannot be greater than 32 bytes")
+	}
+
+	// TODO: check is s == nil ?? should be programmer error
+
+	*s = EncodedStorage{
+		inner: new(uint256.Int).SetBytes(val),
+	}
+	return nil
+}
+
+func (s EncodedStorage) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.inner.Hex())
+}
+
+func (s *EncodedStorage) EncodeRLP(_w io.Writer) error {
+	return s.inner.EncodeRLP(_w)
+}
+
+func (s *EncodedStorage) DecodeRLP(dec *rlp.Stream) error {
+	if s == nil {
+		*s = EncodedStorage{}
+	}
+	s.inner = uint256.NewInt(0)
+	return dec.ReadUint256(s.inner)
+}
+
+// encodingStorageWrite is the encoding format of SlotWrites.
+type encodingSlotWrites struct {
+	Slot     *EncodedStorage        `json:"slot"`
+	Accesses []encodingStorageWrite `json:"accesses"`
+}
+
+// validate returns an instance of the encoding-representation slot writes in
+// working representation.
+func (e *encodingSlotWrites) validate(blockTxCount int) error {
+	if e.Slot == nil {
+		return errors.New("nil slot key")
+	}
+	if !slices.IsSortedFunc(e.Accesses, func(a, b encodingStorageWrite) int {
+		return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
+	}) {
+		return errors.New("storage write tx indices not in order")
+	}
+	for i, access := range e.Accesses {
+		if access.ValueAfter == nil {
+			return errors.New("nil storage write post")
+		}
+		if i > 0 && e.Accesses[i-1].TxIdx == access.TxIdx {
+			return errors.New("duplicate storage write index")
+		}
+	}
+	// TODO: add test that covers there are actually storage modifications here
+	// if there aren't, it should be a bad block
+	if len(e.Accesses) == 0 {
+		return fmt.Errorf("empty storage writes")
+	} else if int(e.Accesses[len(e.Accesses)-1].TxIdx) >= blockTxCount+2 {
+		return fmt.Errorf("storage access reported index higher than allowed")
+	}
+	return nil
+}

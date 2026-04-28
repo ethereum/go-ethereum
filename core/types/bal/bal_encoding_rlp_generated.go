@@ -2,13 +2,10 @@
 
 package bal
 
-import (
-	"io"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/holiman/uint256"
-)
+import "github.com/ethereum/go-ethereum/common"
+import "github.com/ethereum/go-ethereum/rlp"
+import "github.com/holiman/uint256"
+import "io"
 
 func (obj *AccountAccess) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)

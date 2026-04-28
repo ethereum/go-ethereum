@@ -189,6 +189,12 @@ const (
 
 	MaxBlockSize = 8_388_608 // maximum size of an RLP-encoded block
 
+	TargetStateGrowthPerYear  = 100 * 1024 * 1024 * 1024 // 100GB
+	AccountCreationSize       = 112
+	StorageCreationSize       = 32
+	AuthorizationCreationSize = 23
+	SystemMaxSstoresPerCall   = 16 // EIP-8037: upper bound on new SSTOREs per system call
+
 	GasBlockAccessListItem = 2000 // EIP-7928: gas cost per BAL item for gas limit check
 )
 

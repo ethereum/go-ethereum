@@ -95,7 +95,7 @@ func TestBALEncoding(t *testing.T) {
 		t.Fatalf("encoding failed: %v\n", err)
 	}
 	var dec BlockAccessList
-	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 0)); err != nil {
+	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 10000000)); err != nil {
 		t.Fatalf("decoding failed: %v\n", err)
 	}
 	if dec.Hash() != bal.ToEncodingObj().Hash() {
@@ -114,11 +114,7 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 		storageReads  []common.Hash
 		balances      []encodingBalanceChange
 		nonces        []encodingAccountNonce
-		codes         []encodingCodeChange
 	)
-	randSlot := func() *uint256.Int {
-		return new(uint256.Int).SetBytes(testrand.Bytes(32))
-	}
 	for i := 0; i < 5; i++ {
 		slot := encodingSlotWrites{
 			Slot: NewEncodedStorageFromHash(testrand.Hash()),
@@ -143,7 +139,7 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 	}
 
 	for i := 0; i < 5; i++ {
-		storageReads = append(storageReads, randSlot())
+		storageReads = append(storageReads, testrand.Hash())
 	}
 	if sort {
 		slices.SortFunc(storageReads, func(a, b common.Hash) int {
@@ -204,7 +200,7 @@ func makeTestBAL(sort bool) BlockAccessList {
 			return bytes.Compare(a.Address[:], b.Address[:])
 		})
 	}
-	return &list
+	return list
 }
 
 func TestBlockAccessListCopy(t *testing.T) {
