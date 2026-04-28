@@ -27,9 +27,24 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// frameRange is a half-open interval [start, end) of journal entry indices,
+// used to record the slice of entries occupied by a closed child call frame.
+type frameRange struct {
+	start, end int
+}
+
 type revision struct {
 	id           int
 	journalIndex int
+	// closedChildren holds the [start, end) ranges of child call frames that
+	// have been closed under this revision via closeSnapshot. Together with
+	// journalIndex (this frame's own start) and the current journal length
+	// (this frame's tentative end) they describe the slice of entries that
+	// belong directly to this frame, with descendant frames' entries excluded.
+	//
+	// Invariant: ranges are appended in increasing order, are non-overlapping,
+	// and lie entirely within [journalIndex, len(entries)).
+	closedChildren []frameRange
 }
 
 // journalEntry is a modification entry in the state change journal that can be
@@ -86,7 +101,7 @@ func (j *journal) reset() {
 func (j *journal) snapshot() int {
 	id := j.nextRevisionId
 	j.nextRevisionId++
-	j.validRevisions = append(j.validRevisions, revision{id, j.length()})
+	j.validRevisions = append(j.validRevisions, revision{id: id, journalIndex: j.length()})
 	return id
 }
 
@@ -104,6 +119,64 @@ func (j *journal) revertToSnapshot(revid int, s *StateDB) {
 	// Replay the journal to undo changes and remove invalidated snapshots
 	j.revert(s, snapshot)
 	j.validRevisions = j.validRevisions[:idx]
+}
+
+// closeSnapshot marks the end of the call frame identified by revid without
+// reverting any state. The frame's entry range [snapshot_index, current_length)
+// is recorded on its parent revision so callers can later iterate the parent's
+// own entries while skipping over closed children (and, transitively, their
+// descendants — descendant ranges are absorbed into the closing child's range
+// when the descendant itself was closed earlier under that child).
+//
+// closeSnapshot must be invoked in LIFO order: revid must identify the topmost
+// snapshot. It panics otherwise. The corresponding revision is popped, so a
+// subsequent revertToSnapshot on the same id is no longer valid.
+func (j *journal) closeSnapshot(revid int) {
+	if len(j.validRevisions) == 0 {
+		panic(fmt.Errorf("revision id %v cannot be closed: no open snapshot", revid))
+	}
+	top := len(j.validRevisions) - 1
+	if j.validRevisions[top].id != revid {
+		panic(fmt.Errorf("revision id %v cannot be closed: top is %v",
+			revid, j.validRevisions[top].id))
+	}
+	closed := frameRange{
+		start: j.validRevisions[top].journalIndex,
+		end:   len(j.entries),
+	}
+	// Only propagate non-empty ranges, and only if there is a parent frame to
+	// receive them. The outermost frame has nothing to bubble up to.
+	if closed.start < closed.end && top > 0 {
+		parent := &j.validRevisions[top-1]
+		parent.closedChildren = append(parent.closedChildren, closed)
+	}
+	// Drop this revision's bookkeeping. The slice is reused by the parent so
+	// avoid pinning it via the popped tail.
+	j.validRevisions[top].closedChildren = nil
+	j.validRevisions = j.validRevisions[:top]
+}
+
+// frameEntries invokes visit for each entry that belongs directly to the
+// current (topmost) call frame, skipping entries that lie within any closed
+// child frame's range. Entries are visited in append order. If no frame is
+// open, frameEntries is a no-op.
+//
+// nolint:unused
+func (j *journal) frameEntries(visit func(entry journalEntry)) {
+	if len(j.validRevisions) == 0 {
+		return
+	}
+	rev := j.validRevisions[len(j.validRevisions)-1]
+	idx := rev.journalIndex
+	for _, child := range rev.closedChildren {
+		for ; idx < child.start; idx++ {
+			visit(j.entries[idx])
+		}
+		idx = child.end
+	}
+	for ; idx < len(j.entries); idx++ {
+		visit(j.entries[idx])
+	}
 }
 
 // append inserts a new modification entry to the end of the change journal.
@@ -244,10 +317,18 @@ func (j *journal) copy() *journal {
 	for i := 0; i < j.length(); i++ {
 		entries = append(entries, j.entries[i].copy())
 	}
+	revisions := make([]revision, len(j.validRevisions))
+	for i, r := range j.validRevisions {
+		revisions[i] = revision{
+			id:             r.id,
+			journalIndex:   r.journalIndex,
+			closedChildren: slices.Clone(r.closedChildren),
+		}
+	}
 	return &journal{
 		entries:           entries,
 		dirties:           maps.Clone(j.dirties),
-		validRevisions:    slices.Clone(j.validRevisions),
+		validRevisions:    revisions,
 		nextRevisionId:    j.nextRevisionId,
 		stateBytesCharged: maps.Clone(j.stateBytesCharged),
 	}

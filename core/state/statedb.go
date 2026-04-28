@@ -753,6 +753,15 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	s.journal.revertToSnapshot(revid, s)
 }
 
+// CloseSnapshot marks the call frame identified by revid as completed without
+// reverting any state. Its journal entry range is recorded on the parent
+// frame so the parent can later iterate its own entries while skipping over
+// closed children. revid must identify the topmost open snapshot (i.e. frames
+// must be closed in LIFO order). It panics otherwise.
+func (s *StateDB) CloseSnapshot(revid int) {
+	s.journal.closeSnapshot(revid)
+}
+
 // GetRefund returns the current value of the refund counter.
 func (s *StateDB) GetRefund() uint64 {
 	return s.refund

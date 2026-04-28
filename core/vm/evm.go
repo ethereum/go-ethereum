@@ -276,6 +276,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.IsZero() {
 			// Calling a non-existing account, don't do anything.
+			evm.StateDB.CloseSnapshot(snapshot)
 			return nil, gas, nil
 		}
 		evm.StateDB.CreateAccount(addr)
@@ -322,15 +323,18 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		// TODO: consider clearing up unused snapshots:
 		//} else {
 		//	evm.StateDB.DiscardSnapshot(snapshot)
-	} else if evm.chainRules.IsAmsterdam {
-		// Charge state costs
-		bytesCharged := evm.StateDB.StateChangedBytes(innerSnapshot)
-		stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
-		if !gas.CanAfford(stateGasCost) {
-			gas.Exhaust()
-			return ret, gas, ErrOutOfGas
+	} else {
+		evm.StateDB.CloseSnapshot(snapshot)
+		if evm.chainRules.IsAmsterdam {
+			// Charge state costs
+			bytesCharged := evm.StateDB.StateChangedBytes(innerSnapshot)
+			stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
+			if !gas.CanAfford(stateGasCost) {
+				gas.Exhaust()
+				return ret, gas, ErrOutOfGas
+			}
+			gas.Charge(stateGasCost)
 		}
-		gas.Charge(stateGasCost)
 	}
 	return ret, gas, err
 }
@@ -382,14 +386,17 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 			}
 			gas.Exhaust()
 		}
-	} else if evm.chainRules.IsAmsterdam {
-		bytesCharged := evm.StateDB.StateChangedBytes(snapshot)
-		stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
-		if !gas.CanAfford(stateGasCost) {
-			gas.Exhaust()
-			return ret, gas, ErrOutOfGas
+	} else {
+		evm.StateDB.CloseSnapshot(snapshot)
+		if evm.chainRules.IsAmsterdam {
+			bytesCharged := evm.StateDB.StateChangedBytes(snapshot)
+			stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
+			if !gas.CanAfford(stateGasCost) {
+				gas.Exhaust()
+				return ret, gas, ErrOutOfGas
+			}
+			gas.Charge(stateGasCost)
 		}
-		gas.Charge(stateGasCost)
 	}
 	return ret, gas, err
 }
@@ -434,15 +441,19 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 			}
 			gas.Exhaust()
 		}
-	} else if evm.chainRules.IsAmsterdam {
-		bytesCharged := evm.StateDB.StateChangedBytes(snapshot)
-		stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
-		if !gas.CanAfford(stateGasCost) {
-			gas.Exhaust()
-			return ret, gas, ErrOutOfGas
+	} else {
+		evm.StateDB.CloseSnapshot(snapshot)
+		if evm.chainRules.IsAmsterdam {
+			bytesCharged := evm.StateDB.StateChangedBytes(snapshot)
+			stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
+			if !gas.CanAfford(stateGasCost) {
+				gas.Exhaust()
+				return ret, gas, ErrOutOfGas
+			}
+			gas.Charge(stateGasCost)
 		}
-		gas.Charge(stateGasCost)
 	}
+
 	return ret, gas, err
 }
 
@@ -497,6 +508,8 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 			}
 			gas.Exhaust()
 		}
+	} else {
+		evm.StateDB.CloseSnapshot(snapshot)
 	}
 	return ret, gas, err
 }
@@ -607,15 +620,18 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		if err != ErrExecutionReverted {
 			contract.UseGas(GasCosts{RegularGas: contract.Gas.RegularGas}, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
 		}
-	} else if evm.chainRules.IsAmsterdam {
-		// Charge initcode's state changes to the created contract's gas.
-		bytesCharged := evm.StateDB.StateChangedBytes(initSnapshot)
-		stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
-		if !contract.Gas.CanAfford(stateGasCost) {
-			contract.Gas.Exhaust()
-			return ret, address, contract.Gas, ErrOutOfGas
+	} else {
+		evm.StateDB.CloseSnapshot(snapshot)
+		if evm.chainRules.IsAmsterdam {
+			// Charge initcode's state changes to the created contract's gas.
+			bytesCharged := evm.StateDB.StateChangedBytes(initSnapshot)
+			stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
+			if !contract.Gas.CanAfford(stateGasCost) {
+				contract.Gas.Exhaust()
+				return ret, address, contract.Gas, ErrOutOfGas
+			}
+			contract.Gas.Charge(stateGasCost)
 		}
-		contract.Gas.Charge(stateGasCost)
 	}
 	return ret, address, contract.Gas, err
 }
