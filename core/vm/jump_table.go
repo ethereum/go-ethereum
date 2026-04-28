@@ -97,6 +97,7 @@ func newAmsterdamInstructionSet() JumpTable {
 	instructionSet := newOsakaInstructionSet()
 	enable7843(&instructionSet) // EIP-7843 (SLOTNUM opcode)
 	enable8024(&instructionSet) // EIP-8024 (Backward compatible SWAPN, DUPN, EXCHANGE)
+	enable8037(&instructionSet) // EIP-8037 SSTORE repricing
 	return validate(instructionSet)
 }
 

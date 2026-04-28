@@ -81,7 +81,11 @@ func (tt *TransactionTest) Run() error {
 			return
 		}
 		// Intrinsic gas
+<<<<<<< HEAD
 		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules)
+=======
+		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules, 1)
+>>>>>>> eip-8037-rewrite
 		if err != nil {
 			return
 		}

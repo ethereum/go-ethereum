@@ -162,12 +162,11 @@ func (e BlockAccessList) ValidateGasLimit(blockGasLimit uint64) error {
 // Hash computes the keccak256 hash of the access list
 func (e *BlockAccessList) Hash() common.Hash {
 	var enc bytes.Buffer
-	err := e.EncodeRLP(&enc)
-	if err != nil {
-		// errors here are related to BAL values exceeding maximum size defined
-		// by the spec. Hard-fail because these cases are not expected to be hit
-		// under reasonable conditions.
-		panic(err)
+	if err := e.EncodeRLP(&enc); err != nil {
+		// Errors here are related to BAL values exceeding maximum size defined
+		// by the spec. Return empty hash because these cases are not expected
+		// to be hit under reasonable conditions.
+		return common.Hash{}
 	}
 	/*
 		bal, err := json.MarshalIndent(e.StringableRepresentation(), "", "    ")
@@ -431,7 +430,7 @@ func (e *AccountAccess) Copy() AccountAccess {
 	res := AccountAccess{
 		Address:        e.Address,
 		StorageReads:   slices.Clone(e.StorageReads),
-		BalanceChanges: slices.Clone(e.BalanceChanges),
+		BalanceChanges: make([]encodingBalanceChange, 0, len(e.BalanceChanges)),
 		NonceChanges:   slices.Clone(e.NonceChanges),
 	}
 	for _, storageWrite := range e.StorageChanges {
@@ -477,6 +476,7 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 		indices := slices.Collect(maps.Keys(slotWrites))
 		slices.SortFunc(indices, cmp.Compare[uint32])
 		for _, index := range indices {
+			val := slotWrites[index]
 			obj.Accesses = append(obj.Accesses, encodingStorageWrite{
 				TxIdx:      index,
 				ValueAfter: NewEncodedStorageFromHash(slotWrites[index]),
@@ -536,7 +536,7 @@ func (c *ConstructionBlockAccessList) ToEncodingObj() *BlockAccessList {
 	}
 	slices.SortFunc(addresses, common.Address.Cmp)
 
-	var res BlockAccessList
+	res := make(BlockAccessList, 0, len(addresses))
 	for _, addr := range addresses {
 		res = append(res, c.list[addr].toEncodingObj(addr))
 	}

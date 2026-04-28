@@ -39,6 +39,8 @@ func makeTestBAL(minSize int) *bal.BlockAccessList {
 		Address:      common.HexToAddress("0x01"),
 		StorageReads: make([]*bal.EncodedStorage, n),
 	}
+	// Use a full-width 32-byte value (top byte 0xff) so each slot still
+	// encodes to 33 RLP bytes regardless of the index.
 	for i := range access.StorageReads {
 		var slot common.Hash
 		binary.BigEndian.PutUint64(slot[24:], uint64(i))

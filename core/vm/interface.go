@@ -87,6 +87,12 @@ type StateDB interface {
 	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
 
 	RevertToSnapshot(int)
+
+	// CloseSnapshot marks the given snapshot's call frame as completed without
+	// reverting any state. The call frame's entry range is recorded on the
+	// parent frame so the parent can later iterate its own entries while
+	// skipping over closed children. Snapshots must be closed in LIFO order.
+	CloseSnapshot(int)
 	Snapshot() int
 
 	AddLog(*types.Log)
@@ -99,4 +105,15 @@ type StateDB interface {
 
 	// Finalise must be invoked at the end of a transaction
 	Finalise(bool) (*bal.StateAccessList, *bal.StateMutations)
+
+	// StateChangedBytes returns the number of state bytes created by the
+	// call frame identified by the given snapshot ID. When excludeSubcalls
+	// is true, cached subcall costs are not added to the total. Used by
+	// EIP-8037 for state gas metering.
+	StateChangedBytes(revid int, excludeSubcalls bool) int64
+
+	// SelfDestructRefundBytes returns the total state bytes to refund at
+	// tx-end for accounts that were both created and selfdestructed during
+	// this transaction (per EIP-6780).
+	SelfDestructRefundBytes() int64
 }

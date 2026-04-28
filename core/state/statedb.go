@@ -762,9 +762,85 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	s.journal.revertToSnapshot(revid, s)
 }
 
+// CloseSnapshot marks the call frame identified by revid as completed without
+// reverting any state. Its journal entry range is recorded on the parent
+// frame so the parent can later iterate its own entries while skipping over
+// closed children. revid must identify the topmost open snapshot (i.e. frames
+// must be closed in LIFO order). It panics otherwise.
+func (s *StateDB) CloseSnapshot(revid int) {
+	s.journal.closeSnapshot(revid)
+}
+
 // GetRefund returns the current value of the refund counter.
 func (s *StateDB) GetRefund() uint64 {
 	return s.refund
+}
+
+const (
+	CostPerAccount = 112
+	CostPerSlot    = 32
+)
+
+// StateChangedBytes computes the state bytes created by the call frame
+// identified by revid, excluding entries from closed child frames. When
+// excludeSubcalls is true, cached subcall costs are not added to the total.
+func (s *StateDB) StateChangedBytes(revid int, excludeSubcalls bool) int64 {
+	return s.journal.stateChangedBytes(revid, s.stateObjects, excludeSubcalls)
+}
+
+// SelfDestructRefundBytes computes the total state bytes to refund at tx-end
+// for accounts that were both created and selfdestructed during this
+// transaction.
+func (s *StateDB) SelfDestructRefundBytes() int64 {
+	// Collect addresses created and selfdestructed in this tx.
+	targets := make(map[common.Address]*stateObject)
+	for addr, obj := range s.stateObjects {
+		if s.IsNewContract(addr) && s.HasSelfDestructed(addr) {
+			targets[addr] = obj
+		}
+	}
+	if len(targets) == 0 {
+		return 0
+	}
+	// Account creation + code deposit refunds.
+	var bytes int64
+	for _, obj := range targets {
+		bytes += CostPerAccount + int64(len(obj.code))
+	}
+	// For storage slots: walk journal storage entries to find the tx-entry
+	// value of each slot. Count slots where tx-entry was zero and the final
+	// dirty value is non-zero (i.e. the slot was charged as new and not
+	// subsequently cleared).
+	type slotKey struct {
+		addr common.Address
+		key  common.Hash
+	}
+	originAtTxEntry := make(map[slotKey]common.Hash)
+	for _, e := range s.journal.entries {
+		sc, ok := e.(storageChange)
+		if !ok {
+			continue
+		}
+		if _, ok := targets[sc.account]; !ok {
+			continue
+		}
+		sk := slotKey{sc.account, sc.key}
+		if _, seen := originAtTxEntry[sk]; !seen {
+			originAtTxEntry[sk] = sc.origvalue
+		}
+	}
+	for sk, orig := range originAtTxEntry {
+		if orig != (common.Hash{}) {
+			continue
+		}
+		obj := targets[sk.addr]
+		cur, dirty := obj.dirtyStorage[sk.key]
+		if !dirty || cur == (common.Hash{}) {
+			continue
+		}
+		bytes += CostPerSlot
+	}
+	return bytes
 }
 
 type removedAccountWithBalance struct {

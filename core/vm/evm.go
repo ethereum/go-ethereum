@@ -58,15 +58,16 @@ type BlockContext struct {
 	GetHash GetHashFunc
 
 	// Block information
-	Coinbase    common.Address // Provides information for COINBASE
-	GasLimit    uint64         // Provides information for GASLIMIT
-	BlockNumber *big.Int       // Provides information for NUMBER
-	Time        uint64         // Provides information for TIME
-	Difficulty  *big.Int       // Provides information for DIFFICULTY
-	BaseFee     *big.Int       // Provides information for BASEFEE (0 if vm runs with NoBaseFee flag and 0 gas price)
-	BlobBaseFee *big.Int       // Provides information for BLOBBASEFEE (0 if vm runs with NoBaseFee flag and 0 blob gas price)
-	Random      *common.Hash   // Provides information for PREVRANDAO
-	SlotNum     uint64         // Provides information for SLOTNUM
+	Coinbase         common.Address // Provides information for COINBASE
+	GasLimit         uint64         // Provides information for GASLIMIT
+	BlockNumber      *big.Int       // Provides information for NUMBER
+	Time             uint64         // Provides information for TIME
+	Difficulty       *big.Int       // Provides information for DIFFICULTY
+	BaseFee          *big.Int       // Provides information for BASEFEE (0 if vm runs with NoBaseFee flag and 0 gas price)
+	BlobBaseFee      *big.Int       // Provides information for BLOBBASEFEE (0 if vm runs with NoBaseFee flag and 0 blob gas price)
+	Random           *common.Hash   // Provides information for PREVRANDAO
+	SlotNum          uint64         // Provides information for SLOTNUM
+	CostPerStateByte uint64         // EIP-8037: per-byte state creation cost
 }
 
 // TxContext provides the EVM with information about a transaction.
@@ -254,7 +255,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	if !syscall && !value.IsZero() && !evm.Context.CanTransfer(evm.StateDB, caller, value) {
 		return nil, gas, ErrInsufficientBalance
 	}
-	snapshot := evm.StateDB.Snapshot()
+	snapshot1 := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
 	if !evm.StateDB.Exist(addr) {
 		if !isPrecompile && evm.chainRules.IsEIP4762 && !isSystemCall(caller) {
@@ -267,7 +268,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			// Thus, only pay for the creation of the code hash leaf here.
 			wgas := evm.AccessEvents.CodeHashGas(addr, true, gas.RegularGas, false)
 			if _, ok := gas.Charge(GasCosts{RegularGas: wgas}); !ok {
-				evm.StateDB.RevertToSnapshot(snapshot)
+				evm.StateDB.RevertToSnapshot(snapshot1)
 				gas.Exhaust()
 				return nil, gas, ErrOutOfGas
 			}
@@ -275,6 +276,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.IsZero() {
 			// Calling a non-existing account, don't do anything.
+			evm.StateDB.CloseSnapshot(snapshot1)
 			return nil, gas, nil
 		}
 		evm.StateDB.CreateAccount(addr)
@@ -285,6 +287,9 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	if !syscall {
 		evm.Context.Transfer(evm.StateDB, caller, addr, value, &evm.chainRules)
 	}
+
+	// Second snapshot: callee execution frame.
+	snapshot2 := evm.StateDB.Snapshot()
 
 	if isPrecompile {
 		ret, gas, err = RunPrecompiledContract(evm.StateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules)
@@ -306,16 +311,31 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	// above we revert to the snapshot and consume any gas remaining. Additionally,
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil {
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.StateDB.RevertToSnapshot(snapshot1)
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
 			}
 			gas.Exhaust()
 		}
-		// TODO: consider clearing up unused snapshots:
-		//} else {
-		//	evm.StateDB.DiscardSnapshot(snapshot)
+	} else {
+		if evm.chainRules.IsAmsterdam {
+			// Charge callee's state changes to the callee's gas.
+			bytesCharged := evm.StateDB.StateChangedBytes(snapshot2, false)
+			stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
+			if !gas.CanAfford(stateGasCost) {
+				evm.StateDB.RevertToSnapshot(snapshot1)
+				gas.Exhaust()
+				return ret, gas, ErrOutOfGas
+			}
+			gas.Charge(stateGasCost)
+		}
+		evm.StateDB.CloseSnapshot(snapshot2)
+		if evm.chainRules.IsAmsterdam {
+			// Cache parents costs (excluding subcalls)
+			evm.StateDB.StateChangedBytes(snapshot1, true)
+		}
+		evm.StateDB.CloseSnapshot(snapshot1)
 	}
 	return ret, gas, err
 }
@@ -367,6 +387,17 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 			}
 			gas.Exhaust()
 		}
+	} else {
+		if evm.chainRules.IsAmsterdam {
+			bytesCharged := evm.StateDB.StateChangedBytes(snapshot, false)
+			stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
+			if !gas.CanAfford(stateGasCost) {
+				gas.Exhaust()
+				return ret, gas, ErrOutOfGas
+			}
+			gas.Charge(stateGasCost)
+		}
+		evm.StateDB.CloseSnapshot(snapshot)
 	}
 	return ret, gas, err
 }
@@ -411,7 +442,19 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 			}
 			gas.Exhaust()
 		}
+	} else {
+		if evm.chainRules.IsAmsterdam {
+			bytesCharged := evm.StateDB.StateChangedBytes(snapshot, false)
+			stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
+			if !gas.CanAfford(stateGasCost) {
+				gas.Exhaust()
+				return ret, gas, ErrOutOfGas
+			}
+			gas.Charge(stateGasCost)
+		}
+		evm.StateDB.CloseSnapshot(snapshot)
 	}
+
 	return ret, gas, err
 }
 
@@ -466,6 +509,8 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 			}
 			gas.Exhaust()
 		}
+	} else {
+		evm.StateDB.CloseSnapshot(snapshot)
 	}
 	return ret, gas, err
 }
@@ -528,7 +573,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	// Create a new account on the state only if the object was not present.
 	// It might be possible the contract code is deployed to a pre-existent
 	// account with non-zero balance.
-	snapshot := evm.StateDB.Snapshot()
+	snapshot1 := evm.StateDB.Snapshot()
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
 	}
@@ -555,6 +600,9 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	}
 	evm.Context.Transfer(evm.StateDB, caller, address, value, &evm.chainRules)
 
+	// Second snapshot: initcode execution frame.
+	snapshot2 := evm.StateDB.Snapshot()
+
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, address, value, gas, evm.jumpDests)
@@ -566,10 +614,29 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 
 	ret, err = evm.initNewContract(contract, address)
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
-		evm.StateDB.RevertToSnapshot(snapshot)
+		// Revert to snapshot1 to undo both account creation and initcode changes.
+		evm.StateDB.RevertToSnapshot(snapshot1)
 		if err != ErrExecutionReverted {
 			contract.UseGas(GasCosts{RegularGas: contract.Gas.RegularGas}, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
 		}
+	} else {
+		if evm.chainRules.IsAmsterdam {
+			// Charge initcode's state changes to the created contract's gas.
+			bytesCharged := evm.StateDB.StateChangedBytes(snapshot2, false)
+			stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
+			if !contract.Gas.CanAfford(stateGasCost) {
+				evm.StateDB.RevertToSnapshot(snapshot1)
+				contract.Gas.Exhaust()
+				return ret, address, contract.Gas, ErrOutOfGas
+			}
+			contract.Gas.Charge(stateGasCost)
+		}
+		evm.StateDB.CloseSnapshot(snapshot2)
+		if evm.chainRules.IsAmsterdam {
+			// Cache snapshot1's state bytes (exclude subcalls)
+			evm.StateDB.StateChangedBytes(snapshot1, true)
+		}
+		evm.StateDB.CloseSnapshot(snapshot1)
 	}
 	return ret, address, contract.Gas, err
 }
@@ -593,7 +660,15 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 	}
 
 	if !evm.chainRules.IsEIP4762 {
-		createDataGas := uint64(len(ret)) * params.CreateDataGas
+		var createDataGas uint64
+		if evm.chainRules.IsAmsterdam {
+			// EIP-8037: regular gas portion is the keccak hashing cost
+			// (6 × ⌈L/32⌉). The state-gas portion (L × CPSB) is charged
+			// at frame end via the journal's codeChange walker.
+			createDataGas = ((uint64(len(ret)) + 31) / 32) * params.Keccak256WordGas
+		} else {
+			createDataGas = uint64(len(ret)) * params.CreateDataGas
+		}
 		if !contract.UseGas(GasCosts{RegularGas: createDataGas}, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
 			return ret, ErrCodeStoreOutOfGas
 		}

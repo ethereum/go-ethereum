@@ -148,7 +148,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		cfg.Origin,
 		common.BytesToAddress([]byte("contract")),
 		input,
-		vm.NewGasBudget(cfg.GasLimit),
+		vm.NewGasBudgetReg(cfg.GasLimit),
 		uint256.MustFromBig(cfg.Value),
 	)
 	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxEnd != nil {
@@ -182,7 +182,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	code, address, leftOverGas, err := vmenv.Create(
 		cfg.Origin,
 		input,
-		vm.NewGasBudget(cfg.GasLimit),
+		vm.NewGasBudgetReg(cfg.GasLimit),
 		uint256.MustFromBig(cfg.Value),
 	)
 	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxEnd != nil {
@@ -217,7 +217,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 		cfg.Origin,
 		address,
 		input,
-		vm.NewGasBudget(cfg.GasLimit),
+		vm.NewGasBudgetReg(cfg.GasLimit),
 		uint256.MustFromBig(cfg.Value),
 	)
 	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxEnd != nil {

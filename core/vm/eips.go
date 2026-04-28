@@ -44,6 +44,7 @@ var activators = map[int]func(*JumpTable){
 	7939: enable7939,
 	8024: enable8024,
 	7843: enable7843,
+	8037: enable8037,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -167,6 +168,13 @@ func enable2929(jt *JumpTable) {
 func enable3529(jt *JumpTable) {
 	jt[SSTORE].dynamicGas = gasSStoreEIP3529
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP3529
+}
+
+// enable8037 enables EIP-8037 SSTORE repricing: the regular-gas portion of
+// new slot creation and same-tx 0→X→0 reset is reduced; the state-gas
+// portion is charged/refunded at frame-end via the journal.
+func enable8037(jt *JumpTable) {
+	jt[SSTORE].dynamicGas = gasSStoreEIP8037
 }
 
 // enable3198 applies EIP-3198 (BASEFEE Opcode)

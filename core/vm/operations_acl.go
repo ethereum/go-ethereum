@@ -222,7 +222,79 @@ var (
 	// gasSStoreEIP3529 implements gas cost for SSTORE according to EIP-3529
 	// Replace `SSTORE_CLEARS_SCHEDULE` with `SSTORE_RESET_GAS + ACCESS_LIST_STORAGE_KEY_COST` (4,800)
 	gasSStoreEIP3529 = makeGasSStoreFunc(params.SstoreClearsScheduleRefundEIP3529)
+
+	// gasSStoreEIP8037 implements gas cost for SSTORE under EIP-8037.
+	// New slot creation (orig=0, current=0, value!=0) is repriced from
+	// SstoreSetGas (20,000) to SstoreUpdateGas - ColdSloadCost (2,900); the
+	// state-gas portion (32 × CPSB) is charged at frame-end via the journal.
+	// Likewise the same-tx 0→X→0 reset refund is reduced from 19,900 to
+	// SstoreUpdateGas - ColdSloadCost - WarmStorageReadCost (2,800); the
+	// state-gas refund is also handled at frame-end.
+	gasSStoreEIP8037 = makeGasSStoreFuncAmsterdam(params.SstoreClearsScheduleRefundEIP3529)
 )
+
+// makeGasSStoreFuncAmsterdam returns the EIP-8037 SSTORE gas function. It is
+// identical to makeGasSStoreFunc except that the regular-gas portion of new
+// slot creation and same-tx 0→X→0 reset is reduced (the state-gas portion is
+// charged/refunded at frame-end via the journal).
+func makeGasSStoreFuncAmsterdam(clearingRefund uint64) gasFunc {
+	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+		if evm.readOnly {
+			return GasCosts{}, ErrWriteProtection
+		}
+		if contract.Gas.RegularGas <= params.SstoreSentryGasEIP2200 {
+			return GasCosts{}, errors.New("not enough gas for reentrancy sentry")
+		}
+		var (
+			y, x              = stack.Back(1), stack.peek()
+			slot              = common.Hash(x.Bytes32())
+			current, original = evm.StateDB.GetStateAndCommittedState(contract.Address(), slot)
+			cost              = uint64(0)
+		)
+		if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
+			cost = params.ColdSloadCostEIP2929
+			evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
+		}
+		value := common.Hash(y.Bytes32())
+
+		// EIP-8037: regular-gas portion of new slot creation is the storage
+		// update cost minus cold sload (2,900). State-gas portion is at
+		// frame-end.
+		sstoreNewSlotRegularGas := params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929
+
+		if current == value { // noop
+			return GasCosts{RegularGas: cost + params.WarmStorageReadCostEIP2929}, nil
+		}
+		if original == current {
+			if original == (common.Hash{}) { // create slot (2.1.1)
+				return GasCosts{RegularGas: cost + sstoreNewSlotRegularGas}, nil
+			}
+			if value == (common.Hash{}) { // delete pre-existing slot
+				evm.StateDB.AddRefund(clearingRefund)
+			}
+			return GasCosts{RegularGas: cost + (params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929)}, nil
+		}
+		if original != (common.Hash{}) {
+			if current == (common.Hash{}) { // recreate slot (2.2.1.1)
+				evm.StateDB.SubRefund(clearingRefund)
+			} else if value == (common.Hash{}) { // delete dirty (2.2.1.2)
+				evm.StateDB.AddRefund(clearingRefund)
+			}
+		}
+		if original == value {
+			if original == (common.Hash{}) { // 0→X→0: reset to original-zero
+				// EIP-8037: regular-gas refund is reduced because the
+				// original SET cost was already reduced to
+				// sstoreNewSlotRegularGas. State-gas refund (32 × CPSB)
+				// is applied at frame-end.
+				evm.StateDB.AddRefund(sstoreNewSlotRegularGas - params.WarmStorageReadCostEIP2929)
+			} else { // reset to original existing slot
+				evm.StateDB.AddRefund((params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929) - params.WarmStorageReadCostEIP2929)
+			}
+		}
+		return GasCosts{RegularGas: cost + params.WarmStorageReadCostEIP2929}, nil
+	}
+}
 
 // makeSelfdestructGasFn can create the selfdestruct dynamic gas function for EIP-2929 and EIP-3529
 func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
