@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -243,12 +244,53 @@ func Transition(ctx *cli.Context) error {
 		collector = make(Alloc)
 		s.DumpToCollector(collector, nil)
 	default:
-		btleaves = make(map[common.Hash]hexutil.Bytes)
-		if err := s.DumpBinTrieLeaves(btleaves); err != nil {
-			return err
+		udb, ok := s.Database().(*state.UBTDatabase)
+		if !ok {
+			return NewError(ErrorEVM, errors.New("expected UBTDatabase in binary trie mode"))
+		}
+		rec := udb.AllocRecorder()
+		if rec == nil {
+			return NewError(ErrorEVM, errors.New("UBT alloc recorder was not enabled"))
+		}
+		collector = Alloc(rec.Alloc())
+		if err := mergeUnmigratedBaseAlloc(udb, s.IntermediateRoot(false), collector); err != nil {
+			return NewError(ErrorEVM, fmt.Errorf("failed to merge base MPT alloc: %v", err))
 		}
 	}
 	return dispatchOutput(ctx, baseDir, result, collector, allocOutput, body, btleaves)
+}
+
+func mergeUnmigratedBaseAlloc(udb *state.UBTDatabase, currentRoot common.Hash, dst Alloc) error {
+	ts := overlay.LoadTransitionState(udb.TrieDB().Disk(), currentRoot, true)
+	if !ts.InTransition() {
+		return nil
+	}
+	if ts.BaseRoot == (common.Hash{}) || ts.BaseRoot == types.EmptyRootHash {
+		return nil
+	}
+	mptDB := state.NewMPTDatabase(udb.TrieDB(), nil)
+	sdb, err := state.New(ts.BaseRoot, mptDB)
+	if err != nil {
+		return fmt.Errorf("open base MPT at %x: %w", ts.BaseRoot, err)
+	}
+	if _, err := sdb.DumpToCollector(mergeAlloc(dst), nil); err != nil {
+		return fmt.Errorf("walk base MPT at %x: %w", ts.BaseRoot, err)
+	}
+	return nil
+}
+
+type mergeAlloc Alloc
+
+func (m mergeAlloc) OnRoot(common.Hash) {}
+
+func (m mergeAlloc) OnAccount(addr *common.Address, da state.DumpAccount) {
+	if addr == nil {
+		return
+	}
+	if _, exists := m[*addr]; exists {
+		return
+	}
+	m[*addr] = dumpAccountToTypesAccount(da)
 }
 
 // writeStreamedAlloc writes the post-state alloc to path one account at a

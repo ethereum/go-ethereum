@@ -396,6 +396,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool) *state.StateDB {
 	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true, IsUBT: isBintrie})
 	sdb := state.NewDatabase(tdb, nil)
+	if isBintrie {
+		sdb.(*state.UBTDatabase).EnableAllocRecording()
+	}
 
 	root := types.EmptyRootHash
 	if isBintrie {
@@ -435,6 +438,9 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool
 func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie bool) (*state.StateDB, error) {
 	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true, IsUBT: isBintrie})
 	sdb := state.NewDatabase(tdb, nil)
+	if isBintrie {
+		sdb.(*state.UBTDatabase).EnableAllocRecording()
+	}
 
 	root := types.EmptyRootHash
 	if isBintrie {
