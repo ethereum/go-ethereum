@@ -600,7 +600,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	)
 
 	// Take a snapshot for gas calculation
-	st.state.Snapshot()
+	outerSnapshot := st.state.Snapshot()
 
 	var execGasUsed vm.GasUsed
 	if contractCreation {
@@ -633,7 +633,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// EIP-8037: charge state gas for the outer call frame's own state changes.
 	if rules.IsAmsterdam {
 		if vmerr == nil {
-			outerBytes := st.state.StateChangedBytes()
+			outerBytes := st.state.StateChangedBytes(outerSnapshot, false)
 			st.gasRemaining.Charge(vm.GasCosts{StateGas: outerBytes * int64(st.evm.Context.CostPerStateByte)})
 		} else {
 			if execGasUsed.StateGas > 0 {

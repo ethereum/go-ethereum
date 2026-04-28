@@ -293,6 +293,6 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.StateAccessList {
 	return s.inner.Finalise(deleteEmptyObjects)
 }
 
-func (s *hookedStateDB) StateChangedBytes() int64 {
-	return s.inner.StateChangedBytes()
+func (s *hookedStateDB) StateChangedBytes(revid int, excludeSubcalls bool) int64 {
+	return s.inner.StateChangedBytes(revid, excludeSubcalls)
 }

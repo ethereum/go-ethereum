@@ -216,14 +216,23 @@ func (j *journal) length() int {
 	return len(j.entries)
 }
 
-// stateChangedBytes computes the state bytes created by the current (topmost)
-// call frame, walking only entries that belong directly to this frame and
-// skipping over closed child frame ranges.
-func (j *journal) stateChangedBytes(stateObjects map[common.Address]*stateObject) int64 {
-	if len(j.validRevisions) == 0 {
-		return 0
+// stateChangedBytes computes the state bytes created by the call frame
+// identified by revid, walking only entries that belong directly to this
+// frame and skipping over closed child frame ranges. The result is cached
+// in stateBytesCharged so that parent frames can look it up.
+//
+// When excludeSubcalls is true, cached subcall costs are not added to the
+// total. This is useful when subcalls have already been charged to their
+// own gas budgets and shouldn't bubble up to the ancestor frames.
+func (j *journal) stateChangedBytes(revid int, stateObjects map[common.Address]*stateObject, excludeSubcalls bool) int64 {
+	// Find the revision by ID.
+	idx := sort.Search(len(j.validRevisions), func(i int) bool {
+		return j.validRevisions[i].id >= revid
+	})
+	if idx == len(j.validRevisions) || j.validRevisions[idx].id != revid {
+		panic(fmt.Errorf("revision id %v not found for stateChangedBytes", revid))
 	}
-	rev := j.validRevisions[len(j.validRevisions)-1]
+	rev := j.validRevisions[idx]
 
 	type slotKey struct {
 		addr common.Address
@@ -253,17 +262,19 @@ func (j *journal) stateChangedBytes(stateObjects map[common.Address]*stateObject
 			}
 		}
 	}
-	idx := rev.journalIndex
+	pos := rev.journalIndex
 	for _, child := range rev.closedChildren {
-		for ; idx < child.start; idx++ {
-			visit(j.entries[idx])
+		for ; pos < child.start; pos++ {
+			visit(j.entries[pos])
 		}
-		// Add the cached cost for this subcall.
-		subcallBytes += j.stateBytesCharged[child.start]
-		idx = child.end
+		if !excludeSubcalls {
+			// Add the cached cost for this subcall.
+			subcallBytes += j.stateBytesCharged[child.start]
+		}
+		pos = child.end
 	}
-	for ; idx < len(j.entries); idx++ {
-		visit(j.entries[idx])
+	for ; pos < len(j.entries); pos++ {
+		visit(j.entries[pos])
 	}
 
 	var totalBytes int64

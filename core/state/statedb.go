@@ -772,10 +772,11 @@ const (
 	CostPerSlot    = 32
 )
 
-// StateChangedBytes computes the state bytes created by the current (topmost)
-// call frame, excluding entries from closed child frames.
-func (s *StateDB) StateChangedBytes() int64 {
-	return s.journal.stateChangedBytes(s.stateObjects)
+// StateChangedBytes computes the state bytes created by the call frame
+// identified by revid, excluding entries from closed child frames. When
+// excludeSubcalls is true, cached subcall costs are not added to the total.
+func (s *StateDB) StateChangedBytes(revid int, excludeSubcalls bool) int64 {
+	return s.journal.stateChangedBytes(revid, s.stateObjects, excludeSubcalls)
 }
 
 type removedAccountWithBalance struct {

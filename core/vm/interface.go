@@ -107,6 +107,8 @@ type StateDB interface {
 	Finalise(bool) *bal.StateAccessList
 
 	// StateChangedBytes returns the number of state bytes created by the
-	// current call frame. Used by EIP-8037 for state gas metering.
-	StateChangedBytes() int64
+	// call frame identified by the given snapshot ID. When excludeSubcalls
+	// is true, cached subcall costs are not added to the total. Used by
+	// EIP-8037 for state gas metering.
+	StateChangedBytes(revid int, excludeSubcalls bool) int64
 }
