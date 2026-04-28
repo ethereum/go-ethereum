@@ -147,6 +147,10 @@ func (s *hookedStateDB) RevertToSnapshot(i int) {
 	s.inner.RevertToSnapshot(i)
 }
 
+func (s *hookedStateDB) CloseSnapshot(i int) {
+	s.inner.CloseSnapshot(i)
+}
+
 func (s *hookedStateDB) Snapshot() int {
 	return s.inner.Snapshot()
 }

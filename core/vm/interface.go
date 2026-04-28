@@ -87,6 +87,12 @@ type StateDB interface {
 	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
 
 	RevertToSnapshot(int)
+
+	// CloseSnapshot marks the given snapshot's call frame as completed without
+	// reverting any state. The call frame's entry range is recorded on the
+	// parent frame so the parent can later iterate its own entries while
+	// skipping over closed children. Snapshots must be closed in LIFO order.
+	CloseSnapshot(int)
 	Snapshot() int
 
 	AddLog(*types.Log)
