@@ -24,9 +24,11 @@ import (
 // Recorder maintains the inverse of the binary-trie key transform: it captures
 // every mutation applied to a BinaryTrie keyed by the original address (and,
 // for storage, the original slot key) so the post-state can be rendered as a
+// types.GenesisAlloc.
 type Recorder struct {
 	accounts map[common.Address]*types.Account
 }
+
 // NewRecorder returns an empty Recorder.
 func NewRecorder() *Recorder {
 	return &Recorder{accounts: make(map[common.Address]*types.Account)}
