@@ -186,6 +186,10 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc, addressPosition int) g
 		// outside of this function, as part of the dynamic gas, and that will make it
 		// also become correctly reported to tracers.
 		contract.Gas.RegularGas += coldCost
+		// Also undo the RegularGasUsed bookkeeping so coldCost isn't
+		// double-counted (it will be re-added by the dynamicGas
+		// mechanism via the returned cost).
+		contract.Gas.RegularGasUsed -= coldCost
 
 		gas := gasCost.RegularGas
 		var overflow bool
@@ -318,8 +322,13 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 			}
 		}
 		// if empty and transfers value
-		if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
-			gas += params.CreateBySelfdestructGas
+		// EIP-8037: under Amsterdam the regular-gas portion of
+		// CreateBySelfdestructGas (25,000) is removed; account creation
+		// is charged via state gas at frame end.
+		if !evm.chainRules.IsAmsterdam {
+			if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
+				gas += params.CreateBySelfdestructGas
+			}
 		}
 		if refundsEnabled && !evm.StateDB.HasSelfDestructed(contract.Address()) {
 			evm.StateDB.AddRefund(params.SelfdestructRefundGas)
@@ -411,6 +420,10 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 		// part of the dynamic gas. This will ensure it is correctly reported to
 		// tracers.
 		contract.Gas.RegularGas += eip2929Cost + eip7702Cost
+		// Also undo the RegularGasUsed bookkeeping so eip2929/7702 costs aren't
+		// double-counted (they will be re-added by the dynamicGas mechanism via
+		// the returned cost).
+		contract.Gas.RegularGasUsed -= eip2929Cost + eip7702Cost
 
 		// Aggregate the gas costs from all components, including EIP-2929, EIP-7702,
 		// the CALL opcode itself, and the cost incurred by nested calls.

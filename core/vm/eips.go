@@ -173,8 +173,14 @@ func enable3529(jt *JumpTable) {
 // enable8037 enables EIP-8037 SSTORE repricing: the regular-gas portion of
 // new slot creation and same-tx 0→X→0 reset is reduced; the state-gas
 // portion is charged/refunded at frame-end via the journal.
+//
+// Also reprices CREATE/CREATE2 base regular gas from GAS_CREATE (32,000) to
+// CREATE_BASE_AMSTERDAM (9,000); the 112 × CPSB state-gas portion is charged
+// at frame end via the journal walker.
 func enable8037(jt *JumpTable) {
 	jt[SSTORE].dynamicGas = gasSStoreEIP8037
+	jt[CREATE].constantGas = params.CreateGasAmsterdam
+	jt[CREATE2].constantGas = params.CreateGasAmsterdam
 }
 
 // enable3198 applies EIP-3198 (BASEFEE Opcode)

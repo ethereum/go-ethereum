@@ -59,6 +59,13 @@ type GasBudget struct {
 	// Tracks the gas refunds in this call frame. Needed so we can
 	// revert the refunds if the call frame reverts.
 	StateGasRefund uint64
+
+	// EIP-8037 per-dimension usage trackers. RegularGasUsed is incremented
+	// only for regular-gas charges; StateGasUsed is incremented for the
+	// full state-gas portion of a charge regardless of whether it was
+	// satisfied from the reservoir or spilled into RegularGas.
+	RegularGasUsed uint64
+	StateGasUsed   int64
 }
 
 // NewGasBudgetReg creates a GasBudget with the given initial regular gas allowance.
@@ -76,13 +83,22 @@ func (g GasBudget) Used(initial GasBudget) uint64 {
 	return (initial.RegularGas + initial.StateGas) - (g.RegularGas + g.StateGas)
 }
 
-// Exhaust burns the remaining regular gas on exceptional halt.
+// Exhaust burns the remaining regular gas on exceptional halt. The full
+// remaining regular gas is moved to RegularGasUsed so the per-tx tally
+// reflects the burn (per spec process_message exceptional-halt branch).
 func (g *GasBudget) Exhaust() {
+	g.RegularGasUsed += g.RegularGas
 	g.RegularGas = 0
 }
 
 func (g *GasBudget) Copy() GasBudget {
-	return GasBudget{RegularGas: g.RegularGas, StateGas: g.StateGas}
+	return GasBudget{
+		RegularGas:     g.RegularGas,
+		StateGas:       g.StateGas,
+		StateGasRefund: g.StateGasRefund,
+		RegularGasUsed: g.RegularGasUsed,
+		StateGasUsed:   g.StateGasUsed,
+	}
 }
 
 // String returns a visual representation of the gas budget vector.
@@ -117,6 +133,8 @@ func (g *GasBudget) Charge(cost GasCosts) (uint64, bool) {
 		return prior, false
 	}
 	g.RegularGas -= cost.RegularGas
+	g.RegularGasUsed += cost.RegularGas
+	g.StateGasUsed += cost.StateGas
 	if cost.StateGas < 0 {
 		g.StateGas -= uint64(cost.StateGas)
 		return prior, true
@@ -132,10 +150,14 @@ func (g *GasBudget) Charge(cost GasCosts) (uint64, bool) {
 }
 
 // Refund adds the given gas budget back. It returns the pre-refund regular gas
-// value and whether the budget was actually changed.
+// value and whether the budget was actually changed. Used trackers from the
+// other budget are accumulated so child-frame state-gas usage propagates to
+// the caller.
 func (g *GasBudget) Refund(other GasBudget) (uint64, bool) {
 	prior := g.RegularGas
 	g.RegularGas += other.RegularGas
 	g.StateGas += other.StateGas
+	g.RegularGasUsed += other.RegularGasUsed
+	g.StateGasUsed += other.StateGasUsed
 	return prior, other.RegularGas != 0 || other.StateGas != 0
 }

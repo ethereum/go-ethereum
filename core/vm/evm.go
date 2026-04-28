@@ -18,7 +18,9 @@ package vm
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
+	"os"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -318,11 +320,31 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			}
 			gas.Exhaust()
 		}
+		// EIP-8037: on error, return the child's state-gas-used to its
+		// reservoir (state was rolled back, no state was grown), and reset
+		// state_gas_used to 0 so it isn't propagated to the parent.
+		if evm.chainRules.IsAmsterdam && gas.StateGasUsed > 0 {
+			gas.StateGas += uint64(gas.StateGasUsed)
+			gas.StateGasUsed = 0
+		}
 	} else {
 		if evm.chainRules.IsAmsterdam {
 			// Charge callee's state changes to the callee's gas.
+			// EIP-8037 spec: this_call_cost = growth_cost - already_paid,
+			// where already_paid is the sum of state_gas_used by successful
+			// descendants (tracked in gas.StateGasUsed).
+			if os.Getenv("DEBUG_8037") != "" {
+				fmt.Fprintf(os.Stderr, "Call to %v depth=%d: closing snapshot2=%d (gas before charge: %v, StateGasUsed=%d)\n",
+					addr, evm.depth, snapshot2, gas, gas.StateGasUsed)
+			}
 			bytesCharged := evm.StateDB.StateChangedBytes(snapshot2, false)
-			stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
+			alreadyPaid := gas.StateGasUsed
+			thisCallCost := bytesCharged*int64(evm.Context.CostPerStateByte) - alreadyPaid
+			stateGasCost := GasCosts{StateGas: thisCallCost}
+			if os.Getenv("DEBUG_8037") != "" {
+				fmt.Fprintf(os.Stderr, "  bytesCharged=%d, alreadyPaid=%d, thisCallCost=%d, canAfford=%v\n",
+					bytesCharged, alreadyPaid, thisCallCost, gas.CanAfford(stateGasCost))
+			}
 			if !gas.CanAfford(stateGasCost) {
 				evm.StateDB.RevertToSnapshot(snapshot1)
 				gas.Exhaust()
@@ -366,7 +388,10 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 	if !evm.Context.CanTransfer(evm.StateDB, caller, value) {
 		return nil, gas, ErrInsufficientBalance
 	}
-	var snapshot = evm.StateDB.Snapshot()
+	// EIP-8037: two-snapshot pattern (matches Call/DelegateCall) to avoid
+	// double counting subcall state-gas in the parent's frame computation.
+	snapshot1 := evm.StateDB.Snapshot()
+	snapshot2 := evm.StateDB.Snapshot()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -380,24 +405,45 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 		gas = contract.Gas
 	}
 	if err != nil {
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.StateDB.RevertToSnapshot(snapshot1)
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
 			}
 			gas.Exhaust()
 		}
+		// EIP-8037: on error, return state-gas-used to reservoir.
+		if evm.chainRules.IsAmsterdam && gas.StateGasUsed > 0 {
+			gas.StateGas += uint64(gas.StateGasUsed)
+			gas.StateGasUsed = 0
+		}
 	} else {
 		if evm.chainRules.IsAmsterdam {
-			bytesCharged := evm.StateDB.StateChangedBytes(snapshot, false)
-			stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
+			if os.Getenv("DEBUG_8037") != "" {
+				fmt.Fprintf(os.Stderr, "CallCode to %v depth=%d (gas before charge: %v, StateGasUsed=%d)\n",
+					addr, evm.depth, gas, gas.StateGasUsed)
+			}
+			bytesCharged := evm.StateDB.StateChangedBytes(snapshot2, false)
+			alreadyPaid := gas.StateGasUsed
+			thisCallCost := bytesCharged*int64(evm.Context.CostPerStateByte) - alreadyPaid
+			stateGasCost := GasCosts{StateGas: thisCallCost}
+			if os.Getenv("DEBUG_8037") != "" {
+				fmt.Fprintf(os.Stderr, "  bytesCharged=%d, alreadyPaid=%d, thisCallCost=%d, canAfford=%v\n",
+					bytesCharged, alreadyPaid, thisCallCost, gas.CanAfford(stateGasCost))
+			}
 			if !gas.CanAfford(stateGasCost) {
 				gas.Exhaust()
 				return ret, gas, ErrOutOfGas
 			}
 			gas.Charge(stateGasCost)
 		}
-		evm.StateDB.CloseSnapshot(snapshot)
+		evm.StateDB.CloseSnapshot(snapshot2)
+		if evm.chainRules.IsAmsterdam {
+			// Cache snapshot1's own bytes (no setup work for callcode),
+			// excluding the snapshot2 subcall which was already charged.
+			evm.StateDB.StateChangedBytes(snapshot1, true)
+		}
+		evm.StateDB.CloseSnapshot(snapshot1)
 	}
 	return ret, gas, err
 }
@@ -420,7 +466,11 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
 	}
-	var snapshot = evm.StateDB.Snapshot()
+	// EIP-8037: two-snapshot pattern (matches Call). snapshot1 covers
+	// any caller-frame setup (none for delegatecall, kept for symmetry);
+	// snapshot2 covers the callee execution.
+	snapshot1 := evm.StateDB.Snapshot()
+	snapshot2 := evm.StateDB.Snapshot()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -435,24 +485,45 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 		gas = contract.Gas
 	}
 	if err != nil {
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.StateDB.RevertToSnapshot(snapshot1)
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
 			}
 			gas.Exhaust()
 		}
+		// EIP-8037: on error, return state-gas-used to reservoir.
+		if evm.chainRules.IsAmsterdam && gas.StateGasUsed > 0 {
+			gas.StateGas += uint64(gas.StateGasUsed)
+			gas.StateGasUsed = 0
+		}
 	} else {
 		if evm.chainRules.IsAmsterdam {
-			bytesCharged := evm.StateDB.StateChangedBytes(snapshot, false)
-			stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
+			if os.Getenv("DEBUG_8037") != "" {
+				fmt.Fprintf(os.Stderr, "DelegateCall to %v depth=%d (gas before charge: %v, StateGasUsed=%d)\n",
+					addr, evm.depth, gas, gas.StateGasUsed)
+			}
+			bytesCharged := evm.StateDB.StateChangedBytes(snapshot2, false)
+			alreadyPaid := gas.StateGasUsed
+			thisCallCost := bytesCharged*int64(evm.Context.CostPerStateByte) - alreadyPaid
+			stateGasCost := GasCosts{StateGas: thisCallCost}
+			if os.Getenv("DEBUG_8037") != "" {
+				fmt.Fprintf(os.Stderr, "  bytesCharged=%d, alreadyPaid=%d, thisCallCost=%d, canAfford=%v\n",
+					bytesCharged, alreadyPaid, thisCallCost, gas.CanAfford(stateGasCost))
+			}
 			if !gas.CanAfford(stateGasCost) {
 				gas.Exhaust()
 				return ret, gas, ErrOutOfGas
 			}
 			gas.Charge(stateGasCost)
 		}
-		evm.StateDB.CloseSnapshot(snapshot)
+		evm.StateDB.CloseSnapshot(snapshot2)
+		if evm.chainRules.IsAmsterdam {
+			// Cache snapshot1's own bytes (= 0 for delegatecall, no setup),
+			// excluding the snapshot2 subcall which was already charged.
+			evm.StateDB.StateChangedBytes(snapshot1, true)
+		}
+		evm.StateDB.CloseSnapshot(snapshot1)
 	}
 
 	return ret, gas, err
@@ -508,6 +579,10 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 				evm.Config.Tracer.OnGasChange(gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
 			}
 			gas.Exhaust()
+		}
+		if evm.chainRules.IsAmsterdam && gas.StateGasUsed > 0 {
+			gas.StateGas += uint64(gas.StateGasUsed)
+			gas.StateGasUsed = 0
 		}
 	} else {
 		evm.StateDB.CloseSnapshot(snapshot)
@@ -619,11 +694,21 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		if err != ErrExecutionReverted {
 			contract.UseGas(GasCosts{RegularGas: contract.Gas.RegularGas}, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
 		}
+		// EIP-8037: on error, return the child contract's state-gas-used
+		// to its reservoir (state was rolled back). Don't propagate
+		// state_gas_used to the parent.
+		if evm.chainRules.IsAmsterdam && contract.Gas.StateGasUsed > 0 {
+			contract.Gas.StateGas += uint64(contract.Gas.StateGasUsed)
+			contract.Gas.StateGasUsed = 0
+		}
 	} else {
 		if evm.chainRules.IsAmsterdam {
 			// Charge initcode's state changes to the created contract's gas.
+			// EIP-8037 spec: this_call_cost = growth_cost - already_paid.
 			bytesCharged := evm.StateDB.StateChangedBytes(snapshot2, false)
-			stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
+			alreadyPaid := contract.Gas.StateGasUsed
+			thisCallCost := bytesCharged*int64(evm.Context.CostPerStateByte) - alreadyPaid
+			stateGasCost := GasCosts{StateGas: thisCallCost}
 			if !contract.Gas.CanAfford(stateGasCost) {
 				evm.StateDB.RevertToSnapshot(snapshot1)
 				contract.Gas.Exhaust()

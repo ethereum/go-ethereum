@@ -19,6 +19,7 @@ package state
 import (
 	"fmt"
 	"maps"
+	"os"
 	"slices"
 	"sort"
 
@@ -251,7 +252,7 @@ func (j *journal) stateChangedBytes(revid int, stateObjects map[common.Address]*
 	var subcallBytes int64
 	visit := func(e journalEntry) {
 		switch e := e.(type) {
-		case createContractChange:
+		case createObjectChange:
 			created[e.account] = true
 		case codeChange:
 			codeChanged[e.account] = true
@@ -262,19 +263,27 @@ func (j *journal) stateChangedBytes(revid int, stateObjects map[common.Address]*
 			}
 		}
 	}
-	pos := rev.journalIndex
-	for _, child := range rev.closedChildren {
-		for ; pos < child.start; pos++ {
+	if excludeSubcalls {
+		// Walk only this frame's own entries, skipping closed child ranges.
+		pos := rev.journalIndex
+		for _, child := range rev.closedChildren {
+			for ; pos < child.start; pos++ {
+				visit(j.entries[pos])
+			}
+			pos = child.end
+		}
+		for ; pos < len(j.entries); pos++ {
 			visit(j.entries[pos])
 		}
-		if !excludeSubcalls {
-			// Add the cached cost for this subcall.
-			subcallBytes += j.stateBytesCharged[child.start]
+	} else {
+		// Walk all entries (including subcall ranges) to compute the full
+		// diff for this frame. The caller is responsible for subtracting
+		// `already_paid` (= state_gas_used so far) before charging the
+		// difference, matching the spec's `this_call_cost = growth_cost -
+		// already_paid` formula.
+		for pos := rev.journalIndex; pos < len(j.entries); pos++ {
+			visit(j.entries[pos])
 		}
-		pos = child.end
-	}
-	for ; pos < len(j.entries); pos++ {
-		visit(j.entries[pos])
 	}
 
 	var totalBytes int64
@@ -319,6 +328,12 @@ func (j *journal) stateChangedBytes(revid int, stateObjects map[common.Address]*
 
 	// Cache so the parent can look up this frame's total cost.
 	j.stateBytesCharged[rev.journalIndex] = totalBytes
+	if os.Getenv("DEBUG_8037") != "" {
+		fmt.Fprintf(os.Stderr, "  scb(rev=%d,idx=%d,!s=%v): cre=%d sl=%d cc=%d sub=%d tot=%d cls=%v\n",
+			revid, rev.journalIndex, excludeSubcalls,
+			len(created), len(slots), len(codeChanged),
+			subcallBytes, totalBytes, rev.closedChildren)
+	}
 	return totalBytes
 }
 

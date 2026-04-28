@@ -430,16 +430,21 @@ func gasCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 		return GasCosts{}, ErrOutOfGas
 	}
 	// Stateful check
-	var stateGas uint64
-	if evm.chainRules.IsEIP158 {
-		if transfersValue && evm.StateDB.Empty(address) {
+	// EIP-8037: under Amsterdam the regular-gas portion of GAS_NEW_ACCOUNT
+	// is removed (covered by CALL_VALUE 9000); the state-gas portion of
+	// 112 × CPSB is charged at frame end via the journal walker.
+	if !evm.chainRules.IsAmsterdam {
+		var stateGas uint64
+		if evm.chainRules.IsEIP158 {
+			if transfersValue && evm.StateDB.Empty(address) {
+				stateGas += params.CallNewAccountGas
+			}
+		} else if !evm.StateDB.Exist(address) {
 			stateGas += params.CallNewAccountGas
 		}
-	} else if !evm.StateDB.Exist(address) {
-		stateGas += params.CallNewAccountGas
-	}
-	if gas, overflow = math.SafeAdd(gas, stateGas); overflow {
-		return GasCosts{}, ErrGasUintOverflow
+		if gas, overflow = math.SafeAdd(gas, stateGas); overflow {
+			return GasCosts{}, ErrGasUintOverflow
+		}
 	}
 	return GasCosts{RegularGas: gas}, nil
 }
@@ -489,13 +494,18 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		gas = params.SelfdestructGasEIP150
 		var address = common.Address(stack.Back(0).Bytes20())
 
-		if evm.chainRules.IsEIP158 {
-			// if empty and transfers value
-			if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
+		// EIP-8037: CreateBySelfdestructGas (25000 regular) is removed under
+		// Amsterdam — account creation is now charged via state gas at frame
+		// end via the journal walker.
+		if !evm.chainRules.IsAmsterdam {
+			if evm.chainRules.IsEIP158 {
+				// if empty and transfers value
+				if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
+					gas += params.CreateBySelfdestructGas
+				}
+			} else if !evm.StateDB.Exist(address) {
 				gas += params.CreateBySelfdestructGas
 			}
-		} else if !evm.StateDB.Exist(address) {
-			gas += params.CreateBySelfdestructGas
 		}
 	}
 

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -557,6 +558,13 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if !sufficient {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining.RegularGas, cost.RegularGas)
 	}
+	if rules.IsAmsterdam {
+		// EIP-8037: intrinsic state gas is deducted from the reservoir but
+		// does NOT count toward StateGasUsed (it is added back later via
+		// tx_state_gas = intrinsic_state + state_gas_used). Reset only the
+		// state-gas tracker; regular intrinsic stays accounted.
+		st.gasRemaining.StateGasUsed -= cost.StateGas
+	}
 	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
 		if rules.IsAmsterdam {
 			t.OnGasChange(msg.GasLimit, st.gasRemaining.RegularGas+st.gasRemaining.StateGas, tracing.GasChangeTxIntrinsicGas)
@@ -599,23 +607,31 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
 
-	// Take a snapshot for gas calculation
-	outerSnapshot := st.state.Snapshot()
-
-	var execGasUsed vm.GasUsed
-	if contractCreation {
-		ret, _, st.gasRemaining, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
-	} else {
+	if !contractCreation {
 		// Increment the nonce for the next transaction.
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
 
-		// Apply EIP-7702 authorizations.
+		// Apply EIP-7702 authorizations BEFORE the outer state-gas snapshot
+		// so that the authorization code-write does not appear in the diff
+		// (it's already paid for by the per-auth intrinsic state gas).
 		if msg.SetCodeAuthorizations != nil {
 			for _, auth := range msg.SetCodeAuthorizations {
 				// Note errors are ignored, we simply skip invalid authorizations here.
 				st.applyAuthorization(rules, &auth)
 			}
 		}
+	}
+
+	// Take a snapshot for gas calculation. For CREATE txs, the account
+	// creation in evm.Create() will be inside this snapshot and bubble up
+	// via cached child frames; we subtract the intrinsic-covered portion
+	// at frame end. For CALL txs, auths have already been applied so their
+	// code changes are not in the diff.
+	outerSnapshot := st.state.Snapshot()
+
+	if contractCreation {
+		ret, _, st.gasRemaining, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
+	} else {
 
 		// Perform convenience warming of sender's delegation target. Although the
 		// sender is already warmed in Prepare(..), it's possible a delegation to
@@ -636,12 +652,23 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			outerBytes := st.state.StateChangedBytes(outerSnapshot, false)
 			// Refund state gas for selfdestructed accounts.
 			outerBytes -= st.state.SelfDestructRefundBytes()
-			st.gasRemaining.Charge(vm.GasCosts{StateGas: outerBytes * int64(st.evm.Context.CostPerStateByte)})
-		} else {
-			if execGasUsed.StateGas > 0 {
-				st.gasRemaining.StateGas += uint64(execGasUsed.StateGas)
+			// For contract-creation txs the intrinsic already paid for the
+			// account creation; subtract it so we don't double-charge.
+			if contractCreation {
+				outerBytes -= int64(params.AccountCreationSize)
 			}
-			execGasUsed.StateGas = 0
+			// EIP-8037 spec: this_call_cost = growth_cost - already_paid.
+			alreadyPaid := st.gasRemaining.StateGasUsed
+			thisCallCost := outerBytes*int64(st.evm.Context.CostPerStateByte) - alreadyPaid
+			st.gasRemaining.Charge(vm.GasCosts{StateGas: thisCallCost})
+		} else {
+			// On top-level error, restore state-gas reservoir and reset
+			// the state-gas-used counter; state changes are reverted, no
+			// state was grown (matches execution-specs fork.py:1055).
+			if st.gasRemaining.StateGasUsed > 0 {
+				st.gasRemaining.StateGas += uint64(st.gasRemaining.StateGasUsed)
+			}
+			st.gasRemaining.StateGasUsed = 0
 		}
 	}
 
@@ -672,12 +699,20 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 	returned := st.returnGas()
 	if rules.IsAmsterdam {
-		// EIP-8037: 2D gas accounting for Amsterdam.
-		// tx_regular = initialBudget.RegularGas - gasRemaining.RegularGas
-		// tx_state = initialBudget.StateGas - gasRemaining.StateGas
-		txRegular := st.initialBudget.RegularGas - st.gasRemaining.RegularGas
+		// EIP-8037: tx_regular = intrinsic_regular + execution_regular_gas_used
+		// (RegularGasUsed already includes intrinsic since it stays counted).
+		// tx_state = intrinsic_state + execution_state_gas_used (StateGasUsed
+		// excludes intrinsic — it was undone after the intrinsic Charge).
+		txRegular := st.gasRemaining.RegularGasUsed
 		txRegular = max(txRegular, floorDataGas)
-		txState := st.initialBudget.StateGas - st.gasRemaining.StateGas
+		txState := uint64(int64(cost.StateGas) + st.gasRemaining.StateGasUsed)
+		if int64(cost.StateGas)+st.gasRemaining.StateGasUsed < 0 {
+			txState = 0
+		}
+		if os.Getenv("DEBUG_8037") != "" {
+			fmt.Fprintf(os.Stderr, "state_transition: txRegular=%d, txState=%d (cost.StateGas=%d, StateGasUsed=%d), gasUsed=%d\n",
+				txRegular, txState, cost.StateGas, st.gasRemaining.StateGasUsed, st.gasUsed())
+		}
 		if err := st.gp.ReturnGasAmsterdam(txRegular, txState, st.gasUsed()); err != nil {
 			return nil, err
 		}

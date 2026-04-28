@@ -196,6 +196,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			return nil, ErrOutOfGas
 		} else {
 			contract.Gas.RegularGas -= cost
+			contract.Gas.RegularGasUsed += cost
 		}
 
 		// All ops with a dynamic memory usage also has a dynamic gas cost.
@@ -229,6 +230,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 				return nil, ErrOutOfGas
 			} else {
 				contract.Gas.RegularGas -= dynamicCost.RegularGas
+				contract.Gas.RegularGasUsed += dynamicCost.RegularGas
 			}
 		}
 
