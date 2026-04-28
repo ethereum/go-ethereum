@@ -111,4 +111,9 @@ type StateDB interface {
 	// is true, cached subcall costs are not added to the total. Used by
 	// EIP-8037 for state gas metering.
 	StateChangedBytes(revid int, excludeSubcalls bool) int64
+
+	// SelfDestructRefundBytes returns the total state bytes to refund at
+	// tx-end for accounts that were both created and selfdestructed during
+	// this transaction (per EIP-6780).
+	SelfDestructRefundBytes() int64
 }

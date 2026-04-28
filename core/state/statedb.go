@@ -779,6 +779,61 @@ func (s *StateDB) StateChangedBytes(revid int, excludeSubcalls bool) int64 {
 	return s.journal.stateChangedBytes(revid, s.stateObjects, excludeSubcalls)
 }
 
+// SelfDestructRefundBytes computes the total state bytes to refund at tx-end
+// for accounts that were both created and selfdestructed during this
+// transaction.
+func (s *StateDB) SelfDestructRefundBytes() int64 {
+	// Collect addresses created and selfdestructed in this tx.
+	targets := make(map[common.Address]*stateObject)
+	for addr, obj := range s.stateObjects {
+		if s.IsNewContract(addr) && s.HasSelfDestructed(addr) {
+			targets[addr] = obj
+		}
+	}
+	if len(targets) == 0 {
+		return 0
+	}
+	// Account creation + code deposit refunds.
+	var bytes int64
+	for _, obj := range targets {
+		bytes += CostPerAccount + int64(len(obj.code))
+	}
+	// For storage slots: walk journal storage entries to find the tx-entry
+	// value of each slot. Count slots where tx-entry was zero and the final
+	// dirty value is non-zero (i.e. the slot was charged as new and not
+	// subsequently cleared).
+	type slotKey struct {
+		addr common.Address
+		key  common.Hash
+	}
+	originAtTxEntry := make(map[slotKey]common.Hash)
+	for _, e := range s.journal.entries {
+		sc, ok := e.(storageChange)
+		if !ok {
+			continue
+		}
+		if _, ok := targets[sc.account]; !ok {
+			continue
+		}
+		sk := slotKey{sc.account, sc.key}
+		if _, seen := originAtTxEntry[sk]; !seen {
+			originAtTxEntry[sk] = sc.origvalue
+		}
+	}
+	for sk, orig := range originAtTxEntry {
+		if orig != (common.Hash{}) {
+			continue
+		}
+		obj := targets[sk.addr]
+		cur, dirty := obj.dirtyStorage[sk.key]
+		if !dirty || cur == (common.Hash{}) {
+			continue
+		}
+		bytes += CostPerSlot
+	}
+	return bytes
+}
+
 type removedAccountWithBalance struct {
 	address common.Address
 	balance *uint256.Int

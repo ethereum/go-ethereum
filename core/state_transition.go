@@ -634,6 +634,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if rules.IsAmsterdam {
 		if vmerr == nil {
 			outerBytes := st.state.StateChangedBytes(outerSnapshot, false)
+			// Refund state gas for selfdestructed accounts.
+			outerBytes -= st.state.SelfDestructRefundBytes()
 			st.gasRemaining.Charge(vm.GasCosts{StateGas: outerBytes * int64(st.evm.Context.CostPerStateByte)})
 		} else {
 			if execGasUsed.StateGas > 0 {
