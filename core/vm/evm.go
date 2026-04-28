@@ -280,6 +280,11 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
+	if evm.chainRules.IsAmsterdam {
+		// Compute state changed bytes for account creation.
+		evm.StateDB.StateChangedBytes(snapshot)
+	}
+	innerSnapshot := evm.StateDB.Snapshot()
 	// Perform the value transfer only in non-syscall mode.
 	// Calling this is required even for zero-value transfers,
 	// to ensure the state clearing mechanism is applied.
@@ -319,7 +324,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	} else if evm.chainRules.IsAmsterdam {
 		// Charge state costs
-		bytesCharged := evm.StateDB.StateChangedBytes(snapshot)
+		bytesCharged := evm.StateDB.StateChangedBytes(innerSnapshot)
 		stateGasCost := GasCosts{StateGas: bytesCharged * int64(evm.Context.CostPerStateByte)}
 		if !gas.CanAfford(stateGasCost) {
 			gas.Exhaust()
