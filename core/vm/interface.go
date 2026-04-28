@@ -106,7 +106,7 @@ type StateDB interface {
 	// Finalise must be invoked at the end of a transaction
 	Finalise(bool) *bal.StateAccessList
 
-	// StateChangedBytes returns the number of state bytes created since the
-	// given snapshot. Used by EIP-8037 for state gas metering.
-	StateChangedBytes(snapshotId int) int64
+	// StateChangedBytes returns the number of state bytes created by the
+	// current call frame. Used by EIP-8037 for state gas metering.
+	StateChangedBytes() int64
 }

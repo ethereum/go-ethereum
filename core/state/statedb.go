@@ -772,11 +772,10 @@ const (
 	CostPerSlot    = 32
 )
 
-// StateChangedBytes computes the state bytes created since the given snapshot,
-// excluding bytes already charged by subcalls. See journal.stateChangedBytes
-// for the detailed accounting.
-func (s *StateDB) StateChangedBytes(snapshotId int) int64 {
-	return s.journal.stateChangedBytes(snapshotId, s.stateObjects)
+// StateChangedBytes computes the state bytes created by the current (topmost)
+// call frame, excluding entries from closed child frames.
+func (s *StateDB) StateChangedBytes() int64 {
+	return s.journal.stateChangedBytes(s.stateObjects)
 }
 
 type removedAccountWithBalance struct {

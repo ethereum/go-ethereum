@@ -216,33 +216,15 @@ func (j *journal) length() int {
 	return len(j.entries)
 }
 
-// stateChangedBytes computes the state bytes created by the call frame
-// identified by snapshotId. Since subcalls always compute their results
-// before the parent (innermost-first), this only scans journal entries
-// between this snapshot and the next one — the frame's own entries.
-// Subcall results are summed from the cache and subtracted.
-//
-// The result is cached in stateBytesCharged[snapshotId] so the parent
-// frame can look it up instead of re-scanning.
-func (j *journal) stateChangedBytes(snapshotId int, stateObjects map[common.Address]*stateObject) int64 {
-	// TODO (MariusVanDerWijden): this is a bit slop-py needs to be cleaned up
-	// Resolve snapshot index.
-	idx := sort.Search(len(j.validRevisions), func(i int) bool {
-		return j.validRevisions[i].id >= snapshotId
-	})
-	if idx == len(j.validRevisions) || j.validRevisions[idx].id != snapshotId {
-		panic(fmt.Errorf("snapshot id %v not found for stateChangedBytes", snapshotId))
+// stateChangedBytes computes the state bytes created by the current (topmost)
+// call frame, walking only entries that belong directly to this frame and
+// skipping over closed child frame ranges.
+func (j *journal) stateChangedBytes(stateObjects map[common.Address]*stateObject) int64 {
+	if len(j.validRevisions) == 0 {
+		return 0
 	}
-	start := j.validRevisions[idx].journalIndex
+	rev := j.validRevisions[len(j.validRevisions)-1]
 
-	// Our range is [start, end) where end is the next revision's start,
-	// or the end of the journal if we're the last revision.
-	end := len(j.entries)
-	if idx+1 < len(j.validRevisions) {
-		end = j.validRevisions[idx+1].journalIndex
-	}
-
-	// Walk only our own entries.
 	type slotKey struct {
 		addr common.Address
 		key  common.Hash
@@ -255,8 +237,11 @@ func (j *journal) stateChangedBytes(snapshotId int, stateObjects map[common.Addr
 	created := make(map[common.Address]bool)
 	codeChanged := make(map[common.Address]bool)
 
-	for i := start; i < end; i++ {
-		switch e := j.entries[i].(type) {
+	// Walk only this frame's own entries, skipping closed child ranges.
+	// Add cached subcall costs from closedChildren.
+	var subcallBytes int64
+	visit := func(e journalEntry) {
+		switch e := e.(type) {
 		case createContractChange:
 			created[e.account] = true
 		case codeChange:
@@ -267,6 +252,18 @@ func (j *journal) stateChangedBytes(snapshotId int, stateObjects map[common.Addr
 				slots[sk] = &slotInfo{prev: e.prevvalue, orig: e.origvalue}
 			}
 		}
+	}
+	idx := rev.journalIndex
+	for _, child := range rev.closedChildren {
+		for ; idx < child.start; idx++ {
+			visit(j.entries[idx])
+		}
+		// Add the cached cost for this subcall.
+		subcallBytes += j.stateBytesCharged[child.start]
+		idx = child.end
+	}
+	for ; idx < len(j.entries); idx++ {
+		visit(j.entries[idx])
 	}
 
 	var totalBytes int64
@@ -296,7 +293,7 @@ func (j *journal) stateChangedBytes(snapshotId int, stateObjects map[common.Addr
 		//   cleared in earlier frame, re-set here — no charge.
 		// - X → Y (non-zero to non-zero): no charge.
 		// - zero → zero: no change.
-		// - !prevZero && curZero && !origZero: pre-exising slot was
+		// - !prevZero && curZero && !origZero: pre-existing slot was
 		// cleared now, don't refund to not enable gas tokens.
 	}
 	for addr := range codeChanged {
@@ -306,8 +303,11 @@ func (j *journal) stateChangedBytes(snapshotId int, stateObjects map[common.Addr
 		}
 	}
 
-	// Cache our result so the parent can look it up.
-	j.stateBytesCharged[snapshotId] = totalBytes
+	// Add subcall costs to get the total for this frame (own + children).
+	totalBytes += subcallBytes
+
+	// Cache so the parent can look up this frame's total cost.
+	j.stateBytesCharged[rev.journalIndex] = totalBytes
 	return totalBytes
 }
 
