@@ -1315,6 +1315,27 @@ func TestCall(t *testing.T) {
 			},
 			expectErr: errors.New(`block override "withdrawals" is not supported for this RPC method`),
 		},
+		// Verify that an overridden basefee is honored when computing gasPrice
+		// from the 1559 fee fields. Returning GASPRICE opcode; expected value
+		// is min(MaxFeePerGas, MaxPriorityFeePerGas + overridden BaseFee).
+		//
+		// BaseFee override = 0xa (10); MaxFeePerGas = 0x64 (100);
+		// MaxPriorityFeePerGas = 0x2 (2); expected GASPRICE = 12.
+		{
+			name:        "basefee-override-used-in-gasprice",
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From: &accounts[0].addr,
+				// Contract: GASPRICE; PUSH1 0; MSTORE; PUSH1 32; PUSH1 0; RETURN
+				Input:                hex2Bytes("3a60005260206000f3"),
+				MaxFeePerGas:         (*hexutil.Big)(big.NewInt(100)),
+				MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(2)),
+			},
+			blockOverrides: override.BlockOverrides{
+				BaseFeePerGas: (*hexutil.Big)(big.NewInt(10)),
+			},
+			want: "0x000000000000000000000000000000000000000000000000000000000000000c",
+		},
 	}
 	for _, tc := range testSuite {
 		result, err := api.Call(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)

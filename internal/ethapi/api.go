@@ -734,6 +734,10 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 		if err := blockOverrides.Apply(&blockCtx); err != nil {
 			return nil, err
 		}
+		// Override the header so callers that compute gas price from 1559 fee
+		// fields see the overridden basefee. Otherwise GASPRICE/effectiveTip
+		// would be derived from the pre-override basefee.
+		header = blockOverrides.MakeHeader(header)
 	}
 	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
 	precompiles := vm.ActivePrecompiledContracts(rules)
