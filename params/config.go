@@ -468,6 +468,15 @@ type ChainConfig struct {
 	AmsterdamTime *uint64 `json:"amsterdamTime,omitempty"` // Amsterdam switch time (nil = no fork, 0 = already on amsterdam)
 	UBTTime       *uint64 `json:"ubtTime,omitempty"`       // UBT switch time (nil = no fork, 0 = already on UBT)
 
+	// UBTTransitionEndTime is the timestamp at which the MPT-to-binary
+	// transition tree is no longer applied. While UBT is active and the
+	// timestamp is below this value (or nil), state access is wrapped in a
+	// TransitionTrie that overlays the binary trie on the frozen MPT base.
+	// Once headers reach this time, the transition wrapper is dropped and
+	// state is read directly from the binary trie. nil = wrapper stays on
+	// indefinitely. Mirrors the threshold semantics of TerminalTotalDifficulty.
+	UBTTransitionEndTime *uint64 `json:"ubtTransitionEndTime,omitempty"`
+
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
 	TerminalTotalDifficulty *big.Int `json:"terminalTotalDifficulty,omitempty"`
@@ -598,6 +607,9 @@ func (c *ChainConfig) String() string {
 	if c.UBTTime != nil {
 		result += fmt.Sprintf(", UBTTime: %v", *c.UBTTime)
 	}
+	if c.UBTTransitionEndTime != nil {
+		result += fmt.Sprintf(", UBTTransitionEndTime: %v", *c.UBTTransitionEndTime)
+	}
 	result += "}"
 	return result
 }
@@ -692,6 +704,9 @@ func (c *ChainConfig) Description() string {
 	}
 	if c.UBTTime != nil {
 		banner += fmt.Sprintf(" - UBT:                         @%-10v blob: (%s)\n", *c.UBTTime, c.BlobScheduleConfig.UBT)
+	}
+	if c.UBTTransitionEndTime != nil {
+		banner += fmt.Sprintf(" - UBT transition tree ends:    @%-10v\n", *c.UBTTransitionEndTime)
 	}
 	banner += fmt.Sprintf("\nAll fork specifications can be found at https://ethereum.github.io/execution-specs/src/ethereum/forks/\n")
 	return banner
@@ -869,6 +884,17 @@ func (c *ChainConfig) IsAmsterdam(num *big.Int, time uint64) bool {
 // IsUBT returns whether time is either equal to the Verkle fork time or greater.
 func (c *ChainConfig) IsUBT(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.UBTTime, time)
+}
+
+// UBTTransitionActive reports whether state access at the given block number
+// and time should still be wrapped in a TransitionTrie (binary overlay on top
+// of the frozen MPT base). It is true when UBT is active and either no end
+// time is configured or the block is still before the configured end time.
+func (c *ChainConfig) UBTTransitionActive(num *big.Int, time uint64) bool {
+	if !c.IsUBT(num, time) {
+		return false
+	}
+	return c.UBTTransitionEndTime == nil || time < *c.UBTTransitionEndTime
 }
 
 // IsUBTGenesis checks whether the verkle fork is activated at the genesis block.

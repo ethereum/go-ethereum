@@ -276,10 +276,11 @@ func (e *GenesisMismatchError) Error() string {
 
 // ChainOverrides contains the changes to chain config.
 type ChainOverrides struct {
-	OverrideOsaka *uint64
-	OverrideBPO1  *uint64
-	OverrideBPO2  *uint64
-	OverrideUBT   *uint64
+	OverrideOsaka            *uint64
+	OverrideBPO1             *uint64
+	OverrideBPO2             *uint64
+	OverrideUBT              *uint64
+	OverrideUBTTransitionEnd *uint64
 }
 
 // apply applies the chain overrides on the supplied chain config.
@@ -298,6 +299,9 @@ func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 	}
 	if o.OverrideUBT != nil {
 		cfg.UBTTime = o.OverrideUBT
+	}
+	if o.OverrideUBTTransitionEnd != nil {
+		cfg.UBTTransitionEndTime = o.OverrideUBTTransitionEnd
 	}
 	return cfg.CheckConfigForkOrder()
 }
