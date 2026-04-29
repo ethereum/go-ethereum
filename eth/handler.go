@@ -558,7 +558,7 @@ func (h *handler) blockRangeLoop(st *blockRangeState) {
 	for {
 		select {
 		case ev := <-st.syncCh:
-			if ev.Type == downloader.SyncStarted && h.downloader.ConfigSyncMode() == ethconfig.SnapSync {
+			if ev.Type == downloader.SyncStarted && ev.Mode == ethconfig.SnapSync {
 				h.blockRangeWhileSnapSyncing(st)
 			}
 		case <-st.headCh:
