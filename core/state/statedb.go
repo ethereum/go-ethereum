@@ -810,10 +810,12 @@ func (s *StateDB) StateChangedBytes(revid int, excludeSubcalls bool) int64 {
 // for accounts that were both created and selfdestructed during this
 // transaction.
 func (s *StateDB) SelfDestructRefundBytes() int64 {
-	// Collect addresses created and selfdestructed in this tx.
+	// Read fields directly off the iterated obj. Routing through
+	// IsNewContract / HasSelfDestructed would call getStateObject for
+	// every cached entry, adding it to the EIP-7928 read list.
 	targets := make(map[common.Address]*stateObject)
 	for addr, obj := range s.stateObjects {
-		if s.IsNewContract(addr) && s.HasSelfDestructed(addr) {
+		if obj.newContract && obj.selfDestructed {
 			targets[addr] = obj
 		}
 	}
