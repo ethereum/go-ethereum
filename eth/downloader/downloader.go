@@ -97,11 +97,10 @@ type headerTask struct {
 }
 
 type Downloader struct {
-	mode  atomic.Uint32  // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
-	moder *syncModer     // Sync mode management, deliver the appropriate sync mode choice for each cycle
-	mux   *event.TypeMux // Event multiplexer to announce sync operation events
+	mode  atomic.Uint32 // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
+	moder *syncModer    // Sync mode management, deliver the appropriate sync mode choice for each cycle
 
-	// New event feed for downloader events (alongside the existing TypeMux)
+	// Event feed for downloader events
 	feed  event.FeedOf[SyncEvent]
 	scope event.SubscriptionScope
 
@@ -233,12 +232,11 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(stateDb ethdb.Database, mode ethconfig.SyncMode, mux *event.TypeMux, chain BlockChain, dropPeer peerDropFn, success func()) *Downloader {
+func New(stateDb ethdb.Database, chain BlockChain, mode ethconfig.SyncMode, dropPeer peerDropFn, success func()) *Downloader {
 	cutoffNumber, cutoffHash := chain.HistoryPruningCutoff()
 	dl := &Downloader{
 		stateDB:           stateDb,
 		moder:             newSyncModer(mode, chain, stateDb),
-		mux:               mux,
 		queue:             newQueue(blockCacheMaxItems, blockCacheInitialItems),
 		peers:             newPeerSet(),
 		blockchain:        chain,
@@ -439,16 +437,13 @@ func (d *Downloader) SubscribeSyncEvents(ch chan<- SyncEvent) event.Subscription
 // syncToHead starts a block synchronization based on the hash chain from
 // the specified head hash.
 func (d *Downloader) syncToHead() (err error) {
-	d.mux.Post(StartEvent{})
 	d.feed.Send(SyncEvent{Type: SyncStarted})
 	defer func() {
 		// reset on error
 		if err != nil {
-			d.mux.Post(FailedEvent{err})
 			d.feed.Send(SyncEvent{Type: SyncFailed, Err: err})
 		} else {
 			latest := d.blockchain.CurrentHeader()
-			d.mux.Post(DoneEvent{latest})
 			d.feed.Send(SyncEvent{Type: SyncCompleted, Latest: latest})
 		}
 	}()
