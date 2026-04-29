@@ -423,6 +423,9 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 		env.gasPool.Set(gp)
 		return nil, err
 	}
+	// On success, ApplyTransaction has already called StateDB.Finalise, which
+	// resets the journal and consumes any open snapshots. No CloseSnapshot
+	// here: the journal stack is empty by this point.
 	env.header.GasUsed = env.gasPool.Used()
 	return receipt, nil
 }

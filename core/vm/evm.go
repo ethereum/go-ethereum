@@ -561,6 +561,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		consumed, wanted := evm.AccessEvents.ContractCreateInitGas(address, gas.RegularGas)
 		if consumed < wanted {
 			gas.Exhaust()
+			evm.StateDB.CloseSnapshot(snapshot)
 			return nil, common.Address{}, gas, ErrOutOfGas
 		}
 		prior, _ := gas.Charge(GasCosts{RegularGas: consumed})

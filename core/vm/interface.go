@@ -77,23 +77,32 @@ type StateDB interface {
 
 	AddressInAccessList(addr common.Address) bool
 	SlotInAccessList(addr common.Address, slot common.Hash) (addressOk bool, slotOk bool)
+
 	// AddAddressToAccessList adds the given address to the access list. This operation is safe to perform
 	// even if the feature/fork is not active yet
 	AddAddressToAccessList(addr common.Address)
+
 	// AddSlotToAccessList adds the given (address,slot) to the access list. This operation is safe to perform
 	// even if the feature/fork is not active yet
 	AddSlotToAccessList(addr common.Address, slot common.Hash)
 
 	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
 
-	RevertToSnapshot(int)
+	// Snapshot creates a journal revision before entering a child call frame,
+	// or whenever state transitions need to be applied or merged atomically.
+	// Each snapshot must be either closed with CloseSnapshot or reverted
+	// using RevertToSnapshot.
+	Snapshot() int
 
 	// CloseSnapshot marks the given snapshot's call frame as completed without
 	// reverting any state. The call frame's entry range is recorded on the
 	// parent frame so the parent can later iterate its own entries while
 	// skipping over closed children. Snapshots must be closed in LIFO order.
 	CloseSnapshot(int)
-	Snapshot() int
+
+	// RevertToSnapshot rolls back all state changes within the current frame
+	// and discards the corresponding journal entries.
+	RevertToSnapshot(int)
 
 	AddLog(*types.Log)
 	LogsForBurnAccounts() []*types.Log

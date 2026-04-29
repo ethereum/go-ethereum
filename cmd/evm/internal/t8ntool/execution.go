@@ -282,6 +282,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			gaspool.Set(gp)
 			continue
 		}
+		// On success, ApplyTransactionWithEVM has already called
+		// StateDB.Finalise, which resets the journal and consumes any open
+		// snapshots. No CloseSnapshot here: the journal is empty by now.
 		if receipt.Logs == nil {
 			receipt.Logs = []*types.Log{}
 		}

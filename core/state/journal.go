@@ -152,8 +152,6 @@ func (j *journal) closeSnapshot(revid int) {
 // current (topmost) call frame, skipping entries that lie within any closed
 // child frame's range. Entries are visited in append order. If no frame is
 // open, frameEntries is a no-op.
-//
-// nolint:unused
 func (j *journal) frameEntries(visit func(entry journalEntry)) {
 	if len(j.validRevisions) == 0 {
 		return
