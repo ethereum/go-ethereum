@@ -1758,12 +1758,41 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			ctx.Set(CacheFlag.Name, strconv.Itoa(allowance))
 		}
 	}
-	// Ensure Go's GC ignores the database cache for trigger percentage
+	// Tune Go's GC to balance throughput against the database cache.
+	//
+	// The historical formula here was:
+	//   gogc = max(20, min(100, 100/(cache_GB)))
+	// which drove GOGC down to 20 at --cache >= 8 GiB. With GOGC=20, the GC
+	// fires every ~20% heap growth — and during block processing that
+	// burned ~20% of CPU on `runtime.scanobject`/`gcDrain`/`findObject`
+	// (confirmed by CPU profile of newPayload).
+	//
+	// Modern Go (1.19+) supports SetMemoryLimit, which lets the runtime
+	// keep GOGC at the default 100 (fewer/larger collections) while still
+	// guaranteeing memory stays below a soft cap. We size the cap so it's
+	// large enough that GOGC=100 governs steady-state behavior, but the
+	// limit kicks in if real memory pressure appears.
 	cache := ctx.Int(CacheFlag.Name)
-	gogc := max(20, min(100, 100/(float64(cache)/1024)))
-
-	log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
-	godebug.SetGCPercent(int(gogc))
+	var memLimit int64
+	if mem, memErr := gopsutil.VirtualMemory(); memErr == nil && mem.Total > 0 {
+		// Leave half the host memory for the OS / page cache / other
+		// processes; cap the rest at roughly 4× the configured DB cache
+		// to avoid runaway growth on machines with lots of RAM but a
+		// modest --cache.
+		halfHost := int64(mem.Total / 2)
+		fourCache := int64(cache) * 4 * 1024 * 1024
+		memLimit = min(halfHost, fourCache)
+	} else {
+		// Fallback when the host's total memory isn't reportable.
+		memLimit = int64(cache) * 4 * 1024 * 1024
+	}
+	if memLimit < int64(cache)*1024*1024*2 {
+		// Always allow at least 2× the cache so the cache itself fits.
+		memLimit = int64(cache) * 1024 * 1024 * 2
+	}
+	log.Debug("Setting Go memory limit", "MB", memLimit/1024/1024)
+	godebug.SetMemoryLimit(memLimit)
+	godebug.SetGCPercent(100)
 
 	if ctx.IsSet(SyncTargetFlag.Name) {
 		cfg.SyncMode = ethconfig.FullSync // dev sync target forces full sync
