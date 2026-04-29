@@ -82,6 +82,10 @@ const (
 	// beaconUpdateWarnFrequency is the frequency at which to warn the user that
 	// the beacon client is offline.
 	beaconUpdateWarnFrequency = 5 * time.Minute
+
+	// maxReorgDepth is the maximum number of blocks the client is willing to
+	// reorg. Reorg requests deeper than this will be rejected with -38006.
+	maxReorgDepth = 90000
 )
 
 type ConsensusAPI struct {
@@ -313,6 +317,10 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 	}
 	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) != update.HeadBlockHash {
 		// Block is not canonical, set head.
+		// Before reorging, check if the reorg depth exceeds our supported limit.
+		if err := api.checkReorgDepth(block); err != nil {
+			return engine.ForkChoiceResponse{}, err
+		}
 		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
 			return engine.ForkChoiceResponse{PayloadStatus: engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &latestValid}}, err
 		}
@@ -321,10 +329,20 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 		// generating the payload. It's a special corner case that a few slots are
 		// missing and we are requested to generate the payload in slot.
 	} else {
-		// If the head block is already in our canonical chain, the beacon client is
-		// probably resyncing. Ignore the update.
-		log.Info("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().Number)
-		return valid(nil), nil
+		// Block is canonical but not the current head. Per spec, the no-reorg
+		// skip is only valid when headBlockHash is an ancestor of the last
+		// known finalized block.
+		if api.isAncestorOfFinalized(block) {
+			log.Info("Ignoring beacon update to old head (ancestor of finalized)", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().Number)
+			return valid(nil), nil
+		}
+		// Head is canonical but beyond finalized - must reorg (set head).
+		if err := api.checkReorgDepth(block); err != nil {
+			return engine.ForkChoiceResponse{}, err
+		}
+		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
+			return engine.ForkChoiceResponse{PayloadStatus: engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &latestValid}}, err
+		}
 	}
 	api.eth.SetSynced()
 
@@ -386,6 +404,60 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 		return valid(&id), nil
 	}
 	return valid(nil), nil
+}
+
+// checkReorgDepth verifies that the reorg required to switch to the given block
+// does not exceed maxReorgDepth. It walks back from the target block until it
+// finds a canonical ancestor, then computes the depth as the number of canonical
+// blocks that would be unwound.
+func (api *ConsensusAPI) checkReorgDepth(target *types.Block) error {
+	currentHead := api.eth.BlockChain().CurrentBlock()
+	if currentHead == nil {
+		return nil
+	}
+
+	if target.NumberU64() >= currentHead.Number.Uint64() {
+		return nil
+	}
+	ancestor := target
+	for ancestor != nil && ancestor.NumberU64() > 0 {
+		if rawdb.ReadCanonicalHash(api.eth.ChainDb(), ancestor.NumberU64()) == ancestor.Hash() {
+			break
+		}
+		if currentHead.Number.Uint64()-ancestor.NumberU64() > maxReorgDepth {
+			return engine.TooDeepReorg.With(fmt.Errorf("reorg depth exceeds maximum supported depth %d", maxReorgDepth))
+		}
+		ancestor = api.eth.BlockChain().GetBlock(ancestor.ParentHash(), ancestor.NumberU64()-1)
+	}
+	if ancestor == nil {
+		return nil
+	}
+	depth := currentHead.Number.Uint64() - ancestor.NumberU64()
+	if depth > maxReorgDepth {
+		log.Warn("Reorg depth exceeds supported limit", "depth", depth, "max", maxReorgDepth, "target", target.Hash(), "ancestor", ancestor.Hash())
+		return engine.TooDeepReorg.With(fmt.Errorf("reorg depth %d exceeds maximum supported depth %d", depth, maxReorgDepth))
+	}
+	return nil
+}
+
+func (api *ConsensusAPI) isAncestorOfFinalized(block *types.Block) bool {
+	finalHeader := api.eth.BlockChain().CurrentFinalBlock()
+	if finalHeader == nil {
+		return false // no finalized block known
+	}
+	if block.Hash() == finalHeader.Hash() {
+		return false
+	}
+	if block.NumberU64() >= finalHeader.Number.Uint64() {
+		return false // block is at or beyond finalized
+	}
+
+	// Walk finalized ancestry back to block's height and check hash
+	cursor := api.eth.BlockChain().GetHeaderByHash(finalHeader.Hash())
+	for cursor != nil && cursor.Number.Uint64() > block.NumberU64() {
+		cursor = api.eth.BlockChain().GetHeaderByHash(cursor.ParentHash)
+	}
+	return cursor != nil && cursor.Hash() == block.Hash()
 }
 
 // ExchangeTransitionConfigurationV1 checks the given configuration against
