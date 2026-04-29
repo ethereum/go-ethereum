@@ -1363,15 +1363,21 @@ func (bc *BlockChain) Stop() {
 					recent := bc.GetBlockByNumber(number - offset)
 
 					log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
+					start := time.Now()
 					if err := triedb.Commit(recent.Root(), true); err != nil {
 						log.Error("Failed to commit recent state trie", "err", err)
+					} else {
+						log.Info("Written cached state to disk", "block", recent.Number(), "root", recent.Root(), "elapsed", common.PrettyDuration(time.Since(start)))
 					}
 				}
 			}
 			if snapBase != (common.Hash{}) {
 				log.Info("Writing snapshot state to disk", "root", snapBase)
+				start := time.Now()
 				if err := triedb.Commit(snapBase, true); err != nil {
 					log.Error("Failed to commit recent state trie", "err", err)
+				} else {
+					log.Info("Written snapshot state to disk", "root", snapBase, "elapsed", common.PrettyDuration(time.Since(start)))
 				}
 			}
 			for !bc.triegc.Empty() {
