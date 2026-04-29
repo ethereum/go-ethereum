@@ -254,6 +254,8 @@ func (j *journal) stateChangedBytes(revid int, stateObjects map[common.Address]*
 		switch e := e.(type) {
 		case createObjectChange:
 			created[e.account] = true
+		case createContractChange:
+			created[e.account] = true
 		case codeChange:
 			codeChanged[e.account] = true
 		case storageChange:
@@ -287,16 +289,31 @@ func (j *journal) stateChangedBytes(revid int, stateObjects map[common.Address]*
 	}
 
 	var totalBytes int64
-	// Per EIP-8037 spec compute_state_byte_diff: only count +112 for accounts
+	// Per EIP-8037 spec compute_state_byte_diff: count +112 for accounts that
+	// did not exist at tx-entry AND exist at frame exit. obj.newContract
+	// (mark_account_created in spec) makes the spec's
+	// account_existed_at_tx_entry return False even when the address had
+	// pre-tx state (e.g. a pre-funded EOA being CREATEd-on top of). For
+	// non-newContract entries, fall back to the trie-presence check via
+	// obj.origin.
 	for addr := range created {
 		obj := stateObjects[addr]
 		if obj == nil {
 			continue
 		}
-		if obj.origin != nil {
+		// Pre-existing accounts that aren't being newly contractified don't count.
+		// (Spec's account_existed_at_tx_entry returns true for these.)
+		if !obj.newContract && obj.origin != nil {
 			continue
 		}
+		// Empty accounts will be pruned at Finalise — don't count.
 		if obj.empty() {
+			continue
+		}
+		// Self-destructed accounts will be removed; if they pre-existed,
+		// the state has shrunk for the tx and the account is settled via
+		// the SELFDESTRUCT refund path, not the +112 here.
+		if obj.selfDestructed && obj.origin != nil {
 			continue
 		}
 		totalBytes += CostPerAccount
