@@ -172,6 +172,14 @@ func (b *BlockGen) GetBalance(addr common.Address) *uint256.Int {
 	return b.statedb.GetBalance(addr)
 }
 
+// GetState returns the storage slot value for the given address and key as
+// observed by the in-progress block generator. Useful in tests that need to
+// inspect system-contract slots written during block production (e.g. the
+// binary transition registry).
+func (b *BlockGen) GetState(addr common.Address, key common.Hash) common.Hash {
+	return b.statedb.GetState(addr, key)
+}
+
 // AddUncheckedTx forcefully adds a transaction to the block without any validation.
 //
 // AddUncheckedTx will cause consensus failures when used during real

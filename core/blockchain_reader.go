@@ -421,27 +421,13 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 
 // StateAt returns a new mutable state based on a particular point in time.
 func (bc *BlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
-	if bc.chainConfig.IsUBT(header.Number, header.Time) {
-		return state.New(header.Root, state.NewUBTDatabase(bc.triedb, bc.codedb))
-	}
-	return state.New(header.Root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
+	return state.New(header.Root, bc.stateDatabase(header.Root, header))
 }
 
 // StateAtForkBoundary returns a new mutable state based on the parent state
 // and the given header, handling the transition across the UBT fork.
 func (bc *BlockChain) StateAtForkBoundary(parent *types.Header, header *types.Header) (*state.StateDB, error) {
-	// The parent is already in the UBT fork.
-	if bc.chainConfig.IsUBT(parent.Number, parent.Time) {
-		return state.New(parent.Root, state.NewUBTDatabase(bc.triedb, bc.codedb))
-	}
-	// The current block is the first block in the UBT fork
-	// (i.e., the parent is the last MPT block).
-	if bc.chainConfig.IsUBT(header.Number, header.Time) {
-		// TODO(gballet): register chain context if needed
-		return state.New(parent.Root, state.NewUBTDatabase(bc.triedb, bc.codedb))
-	}
-	// Both the parent and current block are in the MPT fork.
-	return state.New(parent.Root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
+	return state.New(parent.Root, bc.stateDatabase(parent.Root, header))
 }
 
 // HistoricState returns a historic state specified by the given header.

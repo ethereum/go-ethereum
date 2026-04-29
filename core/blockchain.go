@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/history"
+	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -257,6 +258,13 @@ func (cfg BlockChainConfig) WithNoAsyncFlush(on bool) *BlockChainConfig {
 	return &cfg
 }
 
+// newBinaryTrieDB opens the sibling triedb that holds binary trie nodes
+// during the MPT-to-binary transition. It uses the same scheme and limits as
+// the main triedb but is forced into UBT mode.
+func newBinaryTrieDB(db ethdb.Database, cfg *BlockChainConfig) *triedb.Database {
+	return triedb.NewDatabase(db, cfg.triedbConfig(true))
+}
+
 // triedbConfig derives the configures for trie database.
 func (cfg *BlockChainConfig) triedbConfig(isUBT bool) *triedb.Config {
 	config := &triedb.Config{
@@ -323,6 +331,7 @@ type BlockChain struct {
 	lastWrite     uint64                           // Last block when the state was flushed
 	flushInterval atomic.Int64                     // Time interval (processing time) after which to flush a state
 	triedb        *triedb.Database                 // The database handler for maintaining trie nodes.
+	bintriedb     *triedb.Database                 // Sibling triedb for binary trie nodes during the MPT-to-binary transition; nil if no UBT fork is configured or the chain is binary at genesis.
 	codedb        *state.CodeDB                    // The database handler for maintaining contract codes.
 	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
 
@@ -382,15 +391,25 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	if err != nil {
 		return nil, err
 	}
-	triedb := triedb.NewDatabase(db, cfg.triedbConfig(enableVerkle))
+	mainTriedb := triedb.NewDatabase(db, cfg.triedbConfig(enableVerkle))
+
+	// Open a sibling binary trie database when the chain is configured for an
+	// MPT-to-binary transition (i.e. UBTTime is set and the chain did not start
+	// binary at genesis). The two databases run in parallel during the
+	// transition window: writes target the binary trie, reads fall through to
+	// the frozen MPT base resolved from the transition registry.
+	var bintriedb *triedb.Database
 
 	// Write the supplied genesis to the database if it has not been initialized
 	// yet. The corresponding chain config will be returned, either from the
 	// provided genesis or from the locally stored configuration if the genesis
 	// has already been initialized.
-	chainConfig, genesisHash, compatErr, err := SetupGenesisBlockWithOverride(db, triedb, genesis, cfg.Overrides, cfg.VmConfig.Tracer)
+	chainConfig, genesisHash, compatErr, err := SetupGenesisBlockWithOverride(db, mainTriedb, genesis, cfg.Overrides, cfg.VmConfig.Tracer)
 	if err != nil {
 		return nil, err
+	}
+	if !enableVerkle && chainConfig.UBTTime != nil {
+		bintriedb = newBinaryTrieDB(db, cfg)
 	}
 	log.Info("")
 	log.Info(strings.Repeat("-", 153))
@@ -404,7 +423,8 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		chainConfig:        chainConfig,
 		cfg:                cfg,
 		db:                 db,
-		triedb:             triedb,
+		triedb:             mainTriedb,
+		bintriedb:          bintriedb,
 		codedb:             state.NewCodeDB(db),
 		triegc:             prque.New[int64, common.Hash](nil),
 		chainmu:            syncx.NewClosableMutex(),
@@ -1349,6 +1369,11 @@ func (bc *BlockChain) Stop() {
 		if err := bc.triedb.Journal(bc.CurrentBlock().Root); err != nil {
 			log.Info("Failed to journal in-memory trie nodes", "err", err)
 		}
+		if bc.bintriedb != nil {
+			if err := bc.bintriedb.Journal(bc.CurrentBlock().Root); err != nil {
+				log.Info("Failed to journal in-memory binary trie nodes", "err", err)
+			}
+		}
 	} else {
 		// Ensure the state of a recent block is also stored to disk before exiting.
 		// We're writing three different states to catch different restart scenarios:
@@ -1389,6 +1414,11 @@ func (bc *BlockChain) Stop() {
 	// Close the trie database, release all the held resources as the last step.
 	if err := bc.triedb.Close(); err != nil {
 		log.Error("Failed to close trie database", "err", err)
+	}
+	if bc.bintriedb != nil {
+		if err := bc.bintriedb.Close(); err != nil {
+			log.Error("Failed to close binary trie database", "err", err)
+		}
 	}
 	log.Info("Blockchain stopped")
 }
@@ -2108,6 +2138,69 @@ type ExecuteConfig struct {
 	EnableWitnessStats bool
 }
 
+// stateDatabase returns the appropriate state.Database for executing a block
+// with the given header against the supplied parent root. The routing is:
+//
+//   - pre-UBT-fork blocks → MPTDatabase backed by bc.triedb.
+//   - first UBT block (parent is pre-UBT) → transition UBTDatabase, with the
+//     binary trie as primary store and the parent's MPT root as the frozen
+//     base. The MPT triedb is provided for read-through during the transition.
+//   - subsequent UBT blocks → if the registry still reports an active
+//     transition, a transition UBTDatabase is built; otherwise (transition
+//     ended, or chainConfig.UBTTransitionEndTime crossed) a plain UBTDatabase
+//     is returned with the transition wrap disabled.
+func (bc *BlockChain) stateDatabase(parentRoot common.Hash, header *types.Header) state.Database {
+	if !bc.chainConfig.IsUBT(header.Number, header.Time) {
+		return state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
+	}
+	// Past the configured transition end: pure binary, no wrap, no MPT base.
+	if !bc.chainConfig.UBTTransitionActive(header.Number, header.Time) {
+		return state.NewUBTDatabase(bc.bintriedbOrMain(), bc.codedb).WithTransitionTreeWrap(false)
+	}
+	// First UBT block: parent is pre-UBT; seed the transition with parent root.
+	parent := bc.GetHeaderByHash(header.ParentHash)
+	if parent != nil && !bc.chainConfig.IsUBT(parent.Number, parent.Time) {
+		return state.NewTransitionUBTDatabase(bc.bintriedbOrMain(), bc.triedb, bc.codedb, parentRoot)
+	}
+	// Subsequent UBT block while the transition is active: probe the registry
+	// to see whether a base root is still recorded.
+	return bc.probeTransitionDatabase(parentRoot)
+}
+
+// bintriedbOrMain returns bc.bintriedb when present, otherwise the main triedb.
+// Binary-at-genesis chains have no sibling binary triedb because the main
+// triedb is already in UBT mode.
+func (bc *BlockChain) bintriedbOrMain() *triedb.Database {
+	if bc.bintriedb != nil {
+		return bc.bintriedb
+	}
+	return bc.triedb
+}
+
+// probeTransitionDatabase reads the transition registry from the binary trie
+// at the given root and chooses between a transition-mode UBTDatabase (if
+// the registry still records a base root) and a plain UBTDatabase otherwise.
+func (bc *BlockChain) probeTransitionDatabase(root common.Hash) state.Database {
+	bindb := bc.bintriedbOrMain()
+	plain := state.NewUBTDatabase(bindb, bc.codedb)
+	reader, err := plain.StateReader(root)
+	if err != nil {
+		return plain
+	}
+	ts := overlay.LoadTransitionState(storageReaderFunc(reader.Storage), root)
+	if ts == nil || ts.Transitioned() || ts.BaseRoot == (common.Hash{}) {
+		return plain
+	}
+	return state.NewTransitionUBTDatabase(bindb, bc.triedb, bc.codedb, ts.BaseRoot)
+}
+
+// storageReaderFunc adapts a state-reader Storage method to overlay.StorageReader.
+type storageReaderFunc func(addr common.Address, slot common.Hash) (common.Hash, error)
+
+func (f storageReaderFunc) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
+	return f(addr, slot)
+}
+
 // ProcessBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
 func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, block *types.Block, config ExecuteConfig) (result *blockProcessingResult, blockEndErr error) {
@@ -2116,15 +2209,10 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		startTime = time.Now()
 		statedb   *state.StateDB
 		interrupt atomic.Bool
-		sdb       state.Database
 	)
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
-	if bc.chainConfig.IsUBT(block.Number(), block.Time()) {
-		sdb = state.NewUBTDatabase(bc.triedb, bc.codedb)
-	} else {
-		sdb = state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
-	}
+	sdb := bc.stateDatabase(parentRoot, block.Header())
 	// If prefetching is enabled, run that against the current state to pre-cache
 	// transactions and probabilistically some of the account/storage trie nodes.
 	//

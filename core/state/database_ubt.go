@@ -17,32 +17,76 @@
 package state
 
 import (
+	"errors"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
+	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
 // UBTDatabase is an implementation of Database interface for Unified Binary Trie.
-// It provides the same functionality as MPTDatabase but uses unified binary
-// trie for state hashing instead of Merkle Patricia Tries.
+//
+// In its plain form it uses a single binary trie database. During the
+// MPT-to-binary transition, an optional MPT trie database (mpttriedb) and a
+// frozen base root provide read-only access to pre-transition state. The
+// wrapInTransitionTrie flag controls whether reads at this database are
+// served via a TransitionTrie that overlays the binary trie on the MPT
+// base; it is normally driven by chainConfig.UBTTransitionActive.
 type UBTDatabase struct {
-	triedb *triedb.Database
-	codedb *CodeDB
+	triedb               *triedb.Database
+	mpttriedb            *triedb.Database
+	codedb               *CodeDB
+	baseRoot             common.Hash
+	wrapInTransitionTrie bool
 }
 
 // Type returns Binary, indicating this database is backed by a Universal Binary Trie.
 func (db *UBTDatabase) Type() DatabaseType { return TypeUBT }
 
 // NewUBTDatabase creates a state database with the Unified binary trie manner.
+// State access is wrapped in a TransitionTrie by default (which degenerates
+// to a passthrough when there is no MPT base) so callers that don't care
+// about the override get sensible defaults.
 func NewUBTDatabase(triedb *triedb.Database, codedb *CodeDB) *UBTDatabase {
 	if codedb == nil {
 		codedb = NewCodeDB(triedb.Disk())
 	}
 	return &UBTDatabase{
-		triedb: triedb,
-		codedb: codedb,
+		triedb:               triedb,
+		codedb:               codedb,
+		wrapInTransitionTrie: true,
 	}
+}
+
+// NewTransitionUBTDatabase creates a UBTDatabase for the active MPT-to-binary
+// transition window. The binary trie is the primary store; reads fall through
+// to the frozen MPT at baseRoot via the supplied mpttriedb, and writes go
+// only to the binary trie.
+func NewTransitionUBTDatabase(bintriedb, mpttriedb *triedb.Database, codedb *CodeDB, baseRoot common.Hash) *UBTDatabase {
+	if codedb == nil {
+		codedb = NewCodeDB(bintriedb.Disk())
+	}
+	return &UBTDatabase{
+		triedb:               bintriedb,
+		mpttriedb:            mpttriedb,
+		codedb:               codedb,
+		baseRoot:             baseRoot,
+		wrapInTransitionTrie: true,
+	}
+}
+
+// WithTransitionTreeWrap toggles whether reads at this database are wrapped
+// in a TransitionTrie. Setting it to false disables the wrap regardless of
+// the registry state and is intended for callers that have already crossed
+// the configured UBTTransitionEndTime.
+func (db *UBTDatabase) WithTransitionTreeWrap(wrap bool) *UBTDatabase {
+	db.wrapInTransitionTrie = wrap
+	return db
 }
 
 // StateReader returns a state reader associated with the specified state root.
@@ -60,10 +104,8 @@ func (db *UBTDatabase) StateReader(stateRoot common.Hash) (StateReader, error) {
 		}
 	}
 	// Configure the trie reader, which is expected to be available as the
-	// gatekeeper unless the state is corrupted. The transition tree wrap is
-	// kept on by default so the registry's BaseRoot (when populated) is
-	// honoured; the MPT triedb is plumbed through in a later commit.
-	tr, err := newUBTTrieReader(stateRoot, db.triedb, nil, true)
+	// gatekeeper unless the state is corrupted.
+	tr, err := newUBTTrieReader(stateRoot, db.triedb, db.mpttriedb, db.wrapInTransitionTrie)
 	if err != nil {
 		return nil, err
 	}
@@ -96,15 +138,36 @@ func (db *UBTDatabase) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Rea
 	return ra, rb, nil
 }
 
-// OpenTrie opens the main account trie at a specific root hash.
+// OpenTrie opens the main account trie at a specific root hash. During an
+// active transition, the binary trie is wrapped in a TransitionTrie so writes
+// land on the binary trie while reads fall through to the frozen MPT base.
 func (db *UBTDatabase) OpenTrie(root common.Hash) (Trie, error) {
-	return bintrie.NewBinaryTrie(root, db.triedb)
+	bt, err := bintrie.NewBinaryTrie(root, db.triedb)
+	if err != nil {
+		return nil, err
+	}
+	if db.mpttriedb == nil || db.baseRoot == (common.Hash{}) {
+		return transitiontrie.NewTransitionTrie(nil, bt, false), nil
+	}
+	base, err := trie.NewStateTrie(trie.StateTrieID(db.baseRoot), db.mpttriedb)
+	if err != nil {
+		return nil, err
+	}
+	return transitiontrie.NewTransitionTrie(base, bt, false), nil
 }
 
-// OpenStorageTrie opens the storage trie of an account. In binary trie mode,
-// all state objects share one unified trie, so the main trie is returned.
+// OpenStorageTrie opens the storage trie of an account. In binary trie mode
+// the unified trie carries all state, so the main trie is reused. During the
+// transition, an MPT storage trie is opened for accounts that have not yet
+// been migrated.
 func (db *UBTDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
-	return self, nil
+	if self != nil && self.IsUBT() {
+		return self, nil
+	}
+	if db.mpttriedb == nil {
+		return nil, errors.New("no MPT trie database available for storage trie outside the transition window")
+	}
+	return trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.mpttriedb)
 }
 
 // TrieDB retrieves any intermediate trie-node caching layer.
@@ -130,10 +193,17 @@ func (db *UBTDatabase) Commit(update *StateUpdate) error {
 			return err
 		}
 	}
+	// On the first transition block, the originRoot is the MPT base root,
+	// but the binary trie's parent state is empty. Substitute the empty
+	// binary hash so triedb.Update doesn't reject the mismatch.
+	originRoot := update.OriginRoot
+	if db.mpttriedb != nil && originRoot == db.baseRoot {
+		originRoot = types.EmptyBinaryHash
+	}
 	// Encode the state mutations in the UBT format
 	accounts, accountOrigin, storages, storageOrigin := update.EncodeUBTState()
 
-	return db.triedb.Update(update.Root, update.OriginRoot, update.BlockNumber, update.Nodes, &triedb.StateSet{
+	return db.triedb.Update(update.Root, originRoot, update.BlockNumber, update.Nodes, &triedb.StateSet{
 		Accounts:       accounts,
 		AccountsOrigin: accountOrigin,
 		Storages:       storages,
