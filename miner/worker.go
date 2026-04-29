@@ -83,6 +83,9 @@ func (env *environment) txFitsSize(tx *types.Transaction) bool {
 // discard terminates the background threads before discarding it.
 func (env *environment) discard() {
 	env.state.StopPrefetcher()
+	if env.evm != nil {
+		env.evm.Release()
+	}
 }
 
 const (
@@ -560,7 +563,7 @@ func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int3
 	if env.header.ExcessBlobGas != nil {
 		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(miner.chainConfig, env.header))
 	}
-	if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
+	if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) && !miner.chainConfig.IsAmsterdam(env.header.Number, env.header.Time) {
 		filter.GasLimitCap = params.MaxTxGas
 	}
 	filter.BlobTxs = false

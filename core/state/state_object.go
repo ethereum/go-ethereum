@@ -162,8 +162,11 @@ func (s *stateObject) getPrefetchedTrie() Trie {
 
 // GetState retrieves a value associated with the given storage key.
 func (s *stateObject) GetState(key common.Hash) common.Hash {
-	value, _ := s.getState(key)
-	return value
+	value, dirty := s.dirtyStorage[key]
+	if dirty {
+		return value
+	}
+	return s.GetCommittedState(key)
 }
 
 // getState retrieves a value associated with the given storage key, along with

@@ -37,7 +37,7 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		}
 		// Gas sentry honoured, do the actual gas calculation based on the stored value
 		var (
-			y, x              = stack.Back(1), stack.peek()
+			y, x              = stack.back(1), stack.peek()
 			slot              = common.Hash(x.Bytes32())
 			current, original = evm.StateDB.GetStateAndCommittedState(contract.Address(), slot)
 			cost              = uint64(0)
@@ -158,7 +158,7 @@ func gasEip2929AccountCheck(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 
 func makeCallVariantGasCallEIP2929(oldCalculator gasFunc, addressPosition int) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
-		addr := common.Address(stack.Back(addressPosition).Bytes20())
+		addr := common.Address(stack.back(addressPosition).Bytes20())
 		// Check slot presence in the access list
 		warmAccess := evm.StateDB.AddressInAccessList(addr)
 		// The WarmStorageReadCostEIP2929 (100) is already deducted in the form of a constant cost, so
@@ -269,7 +269,7 @@ func gasCallEIP7702(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 	// Although it's checked in `gasCall`, EIP-7702 loads the target's code before
 	// to determine if it is resolving a delegation. This could incorrectly record
 	// the target in the block access list (BAL) if the call later fails.
-	transfersValue := !stack.Back(2).IsZero()
+	transfersValue := !stack.back(2).IsZero()
 	if evm.readOnly && transfersValue {
 		return GasCosts{}, ErrWriteProtection
 	}
@@ -281,7 +281,7 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 		var (
 			eip2929Cost uint64
 			eip7702Cost uint64
-			addr        = common.Address(stack.Back(1).Bytes20())
+			addr        = common.Address(stack.back(1).Bytes20())
 		)
 		// Perform EIP-2929 checks (stateless), checking address presence
 		// in the accessList and charge the cold access accordingly.
@@ -330,7 +330,7 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 		}
 		// Calculate the gas budget for the nested call. The costs defined by
 		// EIP-2929 and EIP-7702 have already been applied.
-		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas.RegularGas, intrinsicCost.RegularGas, stack.Back(0))
+		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas.RegularGas, intrinsicCost.RegularGas, stack.back(0))
 		if err != nil {
 			return GasCosts{}, err
 		}

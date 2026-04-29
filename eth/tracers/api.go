@@ -379,6 +379,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			if api.backend.ChainConfig().IsPrague(next.Number(), next.Time()) {
 				core.ProcessParentBlockHash(next.ParentHash(), evm)
 			}
+			evm.Release()
 			// Clean out any pending release functions of trace state. Note this
 			// step must be done after constructing tracing state, because the
 			// tracing state of block next depends on the parent state and construction
@@ -524,6 +525,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
 	)
 	evm := vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
+	defer evm.Release()
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
@@ -584,6 +586,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 
 	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 	evm := vm.NewEVM(blockCtx, statedb, api.backend.ChainConfig(), vm.Config{})
+	defer evm.Release()
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
@@ -673,6 +676,7 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 	var failed error
 	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 	evm := vm.NewEVM(blockCtx, statedb, api.backend.ChainConfig(), vm.Config{})
+	defer evm.Release()
 
 txloop:
 	for i, tx := range txs {
@@ -758,6 +762,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	}
 
 	evm := vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
+	defer evm.Release()
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
@@ -805,6 +810,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
 		_, err = core.ApplyMessage(evm, msg, nil)
+		evm.Release()
 		if writer != nil {
 			writer.Flush()
 		}
@@ -817,7 +823,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		}
 		// Finalize the state so any modifications are written to the trie
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
+		statedb.Finalise(chainConfig.IsEIP158(block.Number()))
 
 		// If we've traced the transaction we were looking for, abort
 		if tx.Hash() == txHash {
@@ -999,6 +1005,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 	}
 	tracingStateDB := state.NewHookedState(statedb, tracer.Hooks)
 	evm := vm.NewEVM(vmctx, tracingStateDB, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks, NoBaseFee: true})
+	defer evm.Release()
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}

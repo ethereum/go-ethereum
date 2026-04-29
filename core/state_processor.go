@@ -88,6 +88,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	// Apply pre-execution system calls.
 	context = NewEVMBlockContext(header, p.chain, nil)
 	evm := vm.NewEVM(context, tracingStateDB, config, cfg)
+	defer evm.Release()
 
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, evm)

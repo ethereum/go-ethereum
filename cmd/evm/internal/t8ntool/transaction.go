@@ -185,7 +185,9 @@ func Transaction(ctx *cli.Context) error {
 			}
 		}
 
-		if chainConfig.IsOsaka(new(big.Int), 0) && tx.Gas() > params.MaxTxGas {
+		isOsaka := chainConfig.IsOsaka(new(big.Int), 0)
+		isAmsterdam := chainConfig.IsAmsterdam(new(big.Int), 0)
+		if isOsaka && !isAmsterdam && tx.Gas() > params.MaxTxGas {
 			r.Error = errors.New("gas limit exceeds maximum")
 		}
 		results = append(results, r)

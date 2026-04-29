@@ -775,6 +775,7 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 		blockContext.BlobBaseFee = new(big.Int)
 	}
 	evm := b.GetEVM(ctx, state, header, vmConfig, blockContext)
+	defer evm.Release()
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
@@ -1390,6 +1391,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 			evm.Context.BlobBaseFee = new(big.Int)
 		}
 		res, err := core.ApplyMessage(evm, msg, nil)
+		evm.Release()
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction(types.LegacyTxType).Hash(), err)
 		}
