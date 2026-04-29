@@ -332,6 +332,13 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 	if miner.chainConfig.IsPrague(header.Number, header.Time) {
 		core.ProcessParentBlockHash(header.ParentHash, env.evm)
 	}
+	// Deploy the binary transition registry on the first UBT block and seed
+	// it with the parent's MPT root. Subsequent blocks read the registry to
+	// reconstruct the transition state.
+	if miner.chainConfig.IsUBT(header.Number, header.Time) && !miner.chainConfig.IsUBT(parent.Number, parent.Time) {
+		core.InitializeBinaryTransitionRegistry(env.state)
+		core.WriteBinaryTransitionBaseRoot(env.state, parent.Root)
+	}
 	return env, nil
 }
 

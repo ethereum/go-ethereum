@@ -95,6 +95,17 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	if config.IsPrague(block.Number(), block.Time()) || config.IsUBT(block.Number(), block.Time()) {
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
+	// On the first block after the UBT activation, deploy the binary
+	// transition registry system contract and capture the frozen MPT base
+	// root in slot 5. The registry is what every subsequent block reads to
+	// reconstruct the transition state.
+	if config.IsUBT(block.Number(), block.Time()) {
+		parent := p.chain.GetHeaderByHash(block.ParentHash())
+		if parent != nil && !config.IsUBT(parent.Number, parent.Time) {
+			InitializeBinaryTransitionRegistry(statedb)
+			WriteBinaryTransitionBaseRoot(statedb, parent.Root)
+		}
+	}
 
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {

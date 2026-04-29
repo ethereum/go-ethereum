@@ -399,6 +399,13 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			ProcessParentBlockHash(b.header.ParentHash, evm)
 		}
 
+		// On the first UBT block, deploy the binary transition registry and
+		// record the parent's MPT root as the frozen base root.
+		if config.IsUBT(b.header.Number, b.header.Time) && !config.IsUBT(parent.Number(), parent.Time()) {
+			InitializeBinaryTransitionRegistry(statedb)
+			WriteBinaryTransitionBaseRoot(statedb, parent.Root())
+		}
+
 		// Execute any user modifications to the block
 		if gen != nil {
 			gen(i, b)
