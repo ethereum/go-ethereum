@@ -2111,3 +2111,87 @@ func runGetBlobs(t testing.TB, getBlobs getBlobsFn, start, limit int, fillRandom
 		t.Fatalf("Unexpected result for case %s", name)
 	}
 }
+
+func TestForkchoiceNoReorgSkip(t *testing.T) {
+	genesis, blocks := generateMergeChain(10, true)
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+	api := newConsensusAPIWithoutHeartbeat(ethservice)
+
+	// Build 5 more blocks, advancing the canonical head after each one.
+	parent := ethservice.BlockChain().CurrentBlock()
+	var newBlocks []*types.Block
+	for i := 0; i < 5; i++ {
+		payload := getNewPayload(t, api, parent, nil, nil)
+		if _, err := api.NewPayloadV1(context.Background(), *payload); err != nil {
+			t.Fatalf("NewPayload failed: %v", err)
+		}
+		block, _ := engine.ExecutableDataToBlock(*payload, nil, nil, nil)
+
+		// Advance canonical head after each block
+		fcState := engine.ForkchoiceStateV1{
+			HeadBlockHash:      block.Hash(),
+			SafeBlockHash:      block.Hash(),
+			FinalizedBlockHash: common.Hash{},
+		}
+		if _, err := api.ForkchoiceUpdatedV1(context.Background(), fcState, nil); err != nil {
+			t.Fatalf("FCU to advance head failed at block %d: %v", i, err)
+		}
+		newBlocks = append(newBlocks, block)
+		parent = block.Header()
+	}
+	// Canonical head is now newBlocks[4]. No finalized set yet.
+
+	// Explicitly set finalized to newBlocks[2].
+	// Head stays at newBlocks[4].
+	fcState := engine.ForkchoiceStateV1{
+		HeadBlockHash:      newBlocks[4].Hash(),
+		SafeBlockHash:      newBlocks[2].Hash(),
+		FinalizedBlockHash: newBlocks[2].Hash(),
+	}
+	if _, err := api.ForkchoiceUpdatedV1(context.Background(), fcState, nil); err != nil {
+		t.Fatalf("FCU to set finalized failed: %v", err)
+	}
+
+	// Case A: headBlockHash = newBlocks[0], which is BEFORE finalized (newBlocks[2]).
+	// isAncestorOfFinalized → true → skip fires → head stays at newBlocks[4].
+	fcState = engine.ForkchoiceStateV1{
+		HeadBlockHash:      newBlocks[0].Hash(),
+		SafeBlockHash:      common.Hash{},
+		FinalizedBlockHash: common.Hash{},
+	}
+	resp, err := api.ForkchoiceUpdatedV1(context.Background(), fcState, nil)
+	if err != nil {
+		t.Fatalf("FCU to ancestor of finalized should not error: %v", err)
+	}
+	if resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("expected VALID for ancestor of finalized, got %v", resp.PayloadStatus.Status)
+	}
+	if ethservice.BlockChain().CurrentBlock().Hash() != newBlocks[4].Hash() {
+		t.Fatal("head must NOT change — skip should have fired for ancestor of finalized")
+	}
+
+	// Case B: headBlockHash = newBlocks[3], which is AFTER finalized (newBlocks[2])
+	// but BEFORE current head (newBlocks[4]).
+	// isAncestorOfFinalized → false → skip must NOT fire → head moves to newBlocks[3].
+	fcState = engine.ForkchoiceStateV1{
+		HeadBlockHash:      newBlocks[3].Hash(),
+		SafeBlockHash:      common.Hash{},
+		FinalizedBlockHash: common.Hash{},
+	}
+	resp, err = api.ForkchoiceUpdatedV1(context.Background(), fcState, nil)
+	if err != nil {
+		t.Fatalf("FCU to block beyond finalized should not error: %v", err)
+	}
+	if resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("expected VALID, got %v", resp.PayloadStatus.Status)
+	}
+	if ethservice.BlockChain().CurrentBlock().Hash() != newBlocks[3].Hash() {
+		t.Fatal("head MUST change to newBlocks[3] — skip must not fire beyond finalized")
+	}
+	if ethservice.BlockChain().CurrentBlock().Number.Uint64() != newBlocks[3].NumberU64() {
+		t.Fatalf("expected head number %d, got %d",
+			newBlocks[3].NumberU64(),
+			ethservice.BlockChain().CurrentBlock().Number.Uint64())
+	}
+}
