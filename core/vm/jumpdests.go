@@ -16,7 +16,11 @@
 
 package vm
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"sync"
+
+	"github.com/ethereum/go-ethereum/common"
+)
 
 // JumpDestCache represents the cache of jumpdest analysis results.
 type JumpDestCache interface {
@@ -44,4 +48,27 @@ func (j mapJumpDests) Load(codeHash common.Hash) (BitVec, bool) {
 
 func (j mapJumpDests) Store(codeHash common.Hash, vec BitVec) {
 	j[codeHash] = vec
+}
+
+// globalJumpDestCache is a global cache of JUMPDEST bitmaps.
+var globalJumpDestCache sync.Map
+
+type globalJumpDests struct{}
+
+// newGlobalJumpDests returns a JumpDestCache backed by the process-global
+// sync.Map. All callers share the same backing map.
+func newGlobalJumpDests() JumpDestCache {
+	return globalJumpDests{}
+}
+
+func (globalJumpDests) Load(codeHash common.Hash) (BitVec, bool) {
+	v, ok := globalJumpDestCache.Load(codeHash)
+	if !ok {
+		return nil, false
+	}
+	return v.(BitVec), true
+}
+
+func (globalJumpDests) Store(codeHash common.Hash, vec BitVec) {
+	globalJumpDestCache.Store(codeHash, vec)
 }
