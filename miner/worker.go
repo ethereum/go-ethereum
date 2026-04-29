@@ -444,13 +444,21 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 // applyTransaction runs the transaction. If execution fails, state and gas pool are reverted.
 func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*types.Receipt, error) {
 	var (
-		snap = env.state.Snapshot()
-		gp   = env.gasPool.Snapshot()
+		snap     = env.state.Snapshot()
+		gp       = env.gasPool.Snapshot()
+		readSnap = env.state.SnapshotReadList()
 	)
 	txAccesses, txMutations, receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.Set(gp)
+		// EIP-7928 BAL: reads accumulated during a failed-Go-error tx
+		// (e.g. preCheck reads sender's nonce/balance/code before Prepare resets the
+		// per-tx read list) are not journaled and survive RevertToSnapshot. If left
+		// in place they leak into the live state-read list and ultimately into the
+		// BAL via engine.Finalize, producing a hash mismatch with validators that
+		// only re-execute the txs sealed in the block.
+		env.state.RestoreReadList(readSnap)
 		return nil, err
 	}
 	if env.accessList != nil {

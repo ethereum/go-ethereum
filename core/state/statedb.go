@@ -771,6 +771,24 @@ func (s *StateDB) CloseSnapshot(revid int) {
 	s.journal.closeSnapshot(revid)
 }
 
+// SnapshotReadList returns a deep copy of the current EIP-7928 state-read list.
+// Pair with RestoreReadList: callers that may discard a transaction attempt
+// (e.g. the miner reverting a failed tx via RevertToSnapshot) should restore
+// the read list as well, since reads are not journaled and would otherwise
+// leak into the next BAL emission via engine.Finalize.
+func (s *StateDB) SnapshotReadList() *bal.StateAccessList {
+	if s.stateReadList == nil {
+		return nil
+	}
+	return s.stateReadList.Copy()
+}
+
+// RestoreReadList replaces the current EIP-7928 state-read list with the given
+// snapshot. See SnapshotReadList for the motivation.
+func (s *StateDB) RestoreReadList(snap *bal.StateAccessList) {
+	s.stateReadList = snap
+}
+
 // GetRefund returns the current value of the refund counter.
 func (s *StateDB) GetRefund() uint64 {
 	return s.refund
