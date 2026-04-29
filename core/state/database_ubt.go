@@ -60,8 +60,10 @@ func (db *UBTDatabase) StateReader(stateRoot common.Hash) (StateReader, error) {
 		}
 	}
 	// Configure the trie reader, which is expected to be available as the
-	// gatekeeper unless the state is corrupted.
-	tr, err := newUBTTrieReader(stateRoot, db.triedb)
+	// gatekeeper unless the state is corrupted. The transition tree wrap is
+	// kept on by default so the registry's BaseRoot (when populated) is
+	// honoured; the MPT triedb is plumbed through in a later commit.
+	tr, err := newUBTTrieReader(stateRoot, db.triedb, nil, true)
 	if err != nil {
 		return nil, err
 	}

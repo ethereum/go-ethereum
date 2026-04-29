@@ -17,29 +17,42 @@
 package overlay
 
 import (
-	"bytes"
-	"encoding/gob"
-
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 )
 
-// TransitionState is a structure that holds the progress markers of the
-// translation process.
+// Storage slots used by the binary transition registry system contract at
+// params.BinaryTransitionRegistryAddress.
+var (
+	transitionStartedKey               = common.Hash{}
+	conversionProgressAddressKey       = common.BytesToHash([]byte{1})
+	conversionProgressSlotKey          = common.BytesToHash([]byte{2})
+	conversionProgressStorageProcessed = common.BytesToHash([]byte{3})
+	transitionEndedKey                 = common.BytesToHash([]byte{4})
+	baseRootKey                        = common.BytesToHash([]byte{5})
+)
+
+// StorageReader is a minimal interface for reading contract storage slots.
+// It is satisfied by *state.flatReader, allowing the transition state to be
+// loaded without a full state.StateDB.
+type StorageReader interface {
+	Storage(addr common.Address, slot common.Hash) (common.Hash, error)
+}
+
+// TransitionState holds the progress markers of the MPT-to-binary
+// translation process. It is reconstructed on demand from the storage of the
+// binary transition registry system contract.
 type TransitionState struct {
-	CurrentAccountAddress *common.Address // addresss of the last translated account
+	CurrentAccountAddress *common.Address // address of the last translated account
 	CurrentSlotHash       common.Hash     // hash of the last translated storage slot
-	CurrentPreimageOffset int64           // next byte to read from the preimage file
 	Started, Ended        bool
 
-	// Mark whether the storage for an account has been processed. This is useful if the
-	// maximum number of leaves of the conversion is reached before the whole storage is
-	// processed.
+	// StorageProcessed marks whether the storage of the current account has
+	// been fully processed. Useful when the maximum number of leaves of the
+	// conversion is reached before the storage is exhausted.
 	StorageProcessed bool
 
-	BaseRoot common.Hash // hash of the last read-only MPT base tree
+	BaseRoot common.Hash // frozen MPT base root captured at the fork block
 }
 
 // InTransition returns true if the translation process is in progress.
@@ -55,12 +68,11 @@ func (ts *TransitionState) Transitioned() bool {
 // Copy returns a deep copy of the TransitionState object.
 func (ts *TransitionState) Copy() *TransitionState {
 	ret := &TransitionState{
-		Started:               ts.Started,
-		Ended:                 ts.Ended,
-		CurrentSlotHash:       ts.CurrentSlotHash,
-		CurrentPreimageOffset: ts.CurrentPreimageOffset,
-		StorageProcessed:      ts.StorageProcessed,
-		BaseRoot:              ts.BaseRoot,
+		Started:          ts.Started,
+		Ended:            ts.Ended,
+		CurrentSlotHash:  ts.CurrentSlotHash,
+		StorageProcessed: ts.StorageProcessed,
+		BaseRoot:         ts.BaseRoot,
 	}
 	if ts.CurrentAccountAddress != nil {
 		addr := *ts.CurrentAccountAddress
@@ -69,38 +81,48 @@ func (ts *TransitionState) Copy() *TransitionState {
 	return ret
 }
 
-// LoadTransitionState retrieves the Verkle transition state associated with
-// the given state root hash from the database.
-func LoadTransitionState(db ethdb.KeyValueReader, root common.Hash, isUBT bool) *TransitionState {
-	var ts *TransitionState
+// IsTransitionActive checks whether the binary transition registry has been
+// initialised by reading slot 0 (started) from the system contract.
+func IsTransitionActive(reader StorageReader) bool {
+	val, err := reader.Storage(params.BinaryTransitionRegistryAddress, transitionStartedKey)
+	if err != nil {
+		return false
+	}
+	return val != (common.Hash{})
+}
 
-	data, _ := rawdb.ReadVerkleTransitionState(db, root)
-
-	// if a state could be read from the db, attempt to decode it
-	if len(data) > 0 {
-		var (
-			newts TransitionState
-			buf   = bytes.NewBuffer(data[:])
-			dec   = gob.NewDecoder(buf)
-		)
-		// Decode transition state
-		err := dec.Decode(&newts)
-		if err != nil {
-			log.Error("failed to decode transition state", "err", err)
-			return nil
-		}
-		ts = &newts
+// LoadTransitionState reads the full transition state from the binary
+// transition registry system contract storage. Returns nil when the
+// registry has not been initialised (i.e. the chain has not yet reached the
+// UBT fork block).
+//
+// The root parameter is unused; it is retained on the signature so callers
+// can express the state version they intend to read.
+func LoadTransitionState(reader StorageReader, root common.Hash) *TransitionState {
+	started, err := reader.Storage(params.BinaryTransitionRegistryAddress, transitionStartedKey)
+	if err != nil || started == (common.Hash{}) {
+		return nil
 	}
 
-	// Fallback that should only happen before the transition
-	if ts == nil {
-		// Initialize the first transition state, with the "ended"
-		// field set to true if the database was created
-		// as a verkle database.
-		log.Debug("no transition state found, starting fresh", "verkle", isUBT)
+	ended, _ := reader.Storage(params.BinaryTransitionRegistryAddress, transitionEndedKey)
+	baseRoot, _ := reader.Storage(params.BinaryTransitionRegistryAddress, baseRootKey)
 
-		// Start with a fresh state
-		ts = &TransitionState{Ended: isUBT}
+	var currentAddr *common.Address
+	addrVal, _ := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressAddressKey)
+	if addrVal != (common.Hash{}) {
+		addr := common.BytesToAddress(addrVal.Bytes())
+		currentAddr = &addr
 	}
-	return ts
+
+	slotHash, _ := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressSlotKey)
+	storageProcessed, _ := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressStorageProcessed)
+
+	return &TransitionState{
+		Started:               true,
+		Ended:                 ended != (common.Hash{}),
+		BaseRoot:              baseRoot,
+		CurrentAccountAddress: currentAddr,
+		CurrentSlotHash:       slotHash,
+		StorageProcessed:      storageProcessed != (common.Hash{}),
+	}
 }

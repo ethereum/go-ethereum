@@ -252,46 +252,53 @@ type ubtTrieReader struct {
 	lock sync.Mutex       // Lock for protecting concurrent read
 }
 
+// binTrieStorageReader adapts a *bintrie.BinaryTrie to overlay.StorageReader
+// so the transition state can be loaded directly from the binary trie at a
+// specific state root.
+type binTrieStorageReader struct {
+	tr *bintrie.BinaryTrie
+}
+
+func (r *binTrieStorageReader) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
+	val, err := r.tr.GetStorage(addr, slot.Bytes())
+	if err != nil {
+		return common.Hash{}, err
+	}
+	var out common.Hash
+	out.SetBytes(val)
+	return out, nil
+}
+
 // newUBTTrieReader constructs a Unified-binary-trie reader of the specific state.
 // An error will be returned if the associated trie specified by root is not existent.
-func newUBTTrieReader(root common.Hash, db *triedb.Database) (*ubtTrieReader, error) {
-	binTrie, binErr := bintrie.NewBinaryTrie(root, db)
-	if binErr != nil {
-		return nil, binErr
+//
+// When wrapInTransitionTrie is true, reads fall through to the frozen MPT
+// base whenever the transition registry has captured a non-zero base root
+// in slot 5 and an MPT triedb is available. When wrapInTransitionTrie is
+// false, the MPT base is never consulted regardless of registry state.
+//
+// Both branches still build a TransitionTrie because *bintrie.BinaryTrie
+// cannot satisfy the state.Trie interface directly (import cycle between
+// trie and trie/bintrie). When wrap is false the base argument is nil and
+// the wrapper degenerates to a passthrough.
+func newUBTTrieReader(root common.Hash, bindb *triedb.Database, mptdb *triedb.Database, wrapInTransitionTrie bool) (*ubtTrieReader, error) {
+	binTrie, err := bintrie.NewBinaryTrie(root, bindb)
+	if err != nil {
+		return nil, err
 	}
-	// Based on the transition status, determine if the overlay
-	// tree needs to be created, or if a single, target tree is
-	// to be picked.
-	var (
-		tr Trie
-		ts = overlay.LoadTransitionState(db.Disk(), root, true)
-	)
-	if ts.InTransition() {
-		mpt, err := trie.NewStateTrie(trie.StateTrieID(ts.BaseRoot), db)
-		if err != nil {
-			return nil, err
+	var base *trie.StateTrie
+	if wrapInTransitionTrie && mptdb != nil {
+		if ts := overlay.LoadTransitionState(&binTrieStorageReader{tr: binTrie}, root); ts != nil && ts.BaseRoot != (common.Hash{}) {
+			base, err = trie.NewStateTrie(trie.StateTrieID(ts.BaseRoot), mptdb)
+			if err != nil {
+				return nil, err
+			}
 		}
-		tr = transitiontrie.NewTransitionTrie(mpt, binTrie, false)
-	} else {
-		// HACK: Use TransitionTrie with nil base as a wrapper to make BinaryTrie
-		// satisfy the Trie interface. This works around the import cycle between
-		// trie and trie/bintrie packages.
-		//
-		// TODO: In future PRs, refactor the package structure to avoid this hack:
-		// - Option 1: Move common interfaces (Trie, NodeIterator) to a separate
-		//   package that both trie and trie/bintrie can import
-		// - Option 2: Create a factory function in the trie package that returns
-		//   BinaryTrie as a Trie interface without direct import
-		// - Option 3: Move BinaryTrie to the main trie package
-		//
-		// The current approach works but adds unnecessary overhead and complexity
-		// by using TransitionTrie when there's no actual transition happening.
-		tr = transitiontrie.NewTransitionTrie(nil, binTrie, false)
 	}
 	return &ubtTrieReader{
 		root: root,
-		db:   db,
-		tr:   tr,
+		db:   bindb,
+		tr:   transitiontrie.NewTransitionTrie(base, binTrie, false),
 	}, nil
 }
 
