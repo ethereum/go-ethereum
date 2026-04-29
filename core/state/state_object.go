@@ -233,7 +233,7 @@ func (s *stateObject) SetState(key, value common.Hash) common.Hash {
 		return prev
 	}
 	// New value is different, update and journal the change
-	s.db.journal.storageChange(s.address, key, prev, origin)
+	s.db.journal.storageChange(s.address, key, prev, value, origin)
 	s.setState(key, value, origin)
 	return prev
 }
@@ -588,7 +588,7 @@ func (s *stateObject) CodeSize() int {
 
 func (s *stateObject) SetCode(codeHash common.Hash, code []byte) (prev []byte) {
 	prev = slices.Clone(s.code)
-	s.db.journal.setCode(s.address, prev)
+	s.db.journal.setCode(s.address, prev, code)
 	s.setCode(codeHash, code)
 	return prev
 }

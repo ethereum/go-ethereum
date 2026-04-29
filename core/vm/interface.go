@@ -98,11 +98,19 @@ type StateDB interface {
 	// reverting any state. The call frame's entry range is recorded on the
 	// parent frame so the parent can later iterate its own entries while
 	// skipping over closed children. Snapshots must be closed in LIFO order.
-	CloseSnapshot(int)
+	//
+	// It returns the net state-creation bytes for this frame's own slot
+	// changes (descendant frames' contributions are excluded — they were
+	// reported when the descendants closed).
+	CloseSnapshot(int) int
 
 	// RevertToSnapshot rolls back all state changes within the current frame
 	// and discards the corresponding journal entries.
-	RevertToSnapshot(int)
+	//
+	// It returns the sum of state-creation bytes that successful child frames
+	// inside the reverted scope(s) had previously reported via CloseSnapshot,
+	// so the caller can undo any bookkeeping it performed at that time.
+	RevertToSnapshot(int) int
 
 	AddLog(*types.Log)
 	LogsForBurnAccounts() []*types.Log

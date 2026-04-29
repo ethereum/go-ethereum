@@ -27,6 +27,15 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// stateBytesPerSlot is the number of "state-creation bytes" billed for a slot
+// transitioning from zero to non-zero within a call frame, and refunded when
+// such a slot is cleared back to zero whose tx-original value was also zero.
+const stateBytesPerSlot = 64
+
+// stateBytesPerAccount is the per-account overhead billed when a brand-new
+// account is created in a call frame.
+const stateBytesPerAccount = 120
+
 // frameRange is a half-open interval [start, end) of journal entry indices,
 // used to record the slice of entries occupied by a closed child call frame.
 type frameRange struct {
@@ -45,6 +54,13 @@ type revision struct {
 	// Invariant: ranges are appended in increasing order, are non-overlapping,
 	// and lie entirely within [journalIndex, len(entries)).
 	closedChildren []frameRange
+	// childStateBytes is the sum of state-creation bytes that this frame's
+	// successful child frames (and their successful descendants, transitively)
+	// produced via closeSnapshot. It is propagated upwards each time a child
+	// closes, so that if THIS frame is later reverted, the caller can recover
+	// the total amount that was emitted for state changes which the revert is
+	// now throwing away.
+	childStateBytes int
 }
 
 // journalEntry is a modification entry in the state change journal that can be
@@ -98,7 +114,13 @@ func (j *journal) snapshot() int {
 }
 
 // revertToSnapshot reverts all state changes made since the given revision.
-func (j *journal) revertToSnapshot(revid int, s *StateDB) {
+//
+// It returns the sum of state-creation bytes that successful child frames
+// nested within the reverted scope(s) had previously emitted via
+// closeSnapshot. The caller can use this figure to undo whatever bookkeeping
+// (e.g. gas charging) it did at the time those bytes were reported, since the
+// state changes those bytes were paying for are now being thrown away.
+func (j *journal) revertToSnapshot(revid int, s *StateDB) int {
 	// Find the snapshot in the stack of valid snapshots.
 	idx := sort.Search(len(j.validRevisions), func(i int) bool {
 		return j.validRevisions[i].id >= revid
@@ -108,9 +130,20 @@ func (j *journal) revertToSnapshot(revid int, s *StateDB) {
 	}
 	snapshot := j.validRevisions[idx].journalIndex
 
+	// Sum the child-state-bytes carried by every revision being unwound. When
+	// revertToSnapshot tears down multiple stacked frames at once, each of
+	// them may itself have closed children whose bytes were inherited but
+	// never bubbled further up; collecting all of them here lets the caller
+	// undo the full subtree's emissions in one go.
+	var refund int
+	for i := idx; i < len(j.validRevisions); i++ {
+		refund += j.validRevisions[i].childStateBytes
+	}
+
 	// Replay the journal to undo changes and remove invalidated snapshots
 	j.revert(s, snapshot)
 	j.validRevisions = j.validRevisions[:idx]
+	return refund
 }
 
 // closeSnapshot marks the end of the call frame identified by revid without
@@ -123,7 +156,21 @@ func (j *journal) revertToSnapshot(revid int, s *StateDB) {
 // closeSnapshot must be invoked in LIFO order: revid must identify the topmost
 // snapshot. It panics otherwise. The corresponding revision is popped, so a
 // subsequent revertToSnapshot on the same id is no longer valid.
-func (j *journal) closeSnapshot(revid int) {
+//
+// It returns the net state-creation bytes attributable to THIS frame's own
+// storage changes (descendant frames' contributions are excluded — they were
+// already reported when the descendants closed). For each storage slot that
+// this frame touched directly:
+//   - if the slot is non-zero now and was zero when the frame first touched
+//     it, +stateBytesPerSlot is accumulated;
+//   - if the slot is zero now, was non-zero when the frame first touched it,
+//     and was zero at the start of the transaction, -stateBytesPerSlot is
+//     accumulated.
+//
+// The returned value is also folded into the parent's childStateBytes (along
+// with this frame's own childStateBytes) so a future revertToSnapshot on the
+// parent can recover the entire subtree's accumulated bytes.
+func (j *journal) closeSnapshot(revid int) int {
 	if len(j.validRevisions) == 0 {
 		panic(fmt.Errorf("revision id %v cannot be closed: no open snapshot", revid))
 	}
@@ -132,20 +179,101 @@ func (j *journal) closeSnapshot(revid int) {
 		panic(fmt.Errorf("revision id %v cannot be closed: top is %v",
 			revid, j.validRevisions[top].id))
 	}
+	rev := &j.validRevisions[top]
+
+	// Compute net state-creation bytes for THIS frame's own slot changes,
+	// skipping any entries that lie inside a closed child's range.
+	thisBytes := j.computeFrameStateBytes(rev)
+
+	// Record this frame's range and propagate accumulated bytes to the
+	// parent. The propagated total is "this frame's own bytes" + "this
+	// frame's already-accumulated child bytes": from the parent's vantage
+	// point the whole subtree is now a single closed child.
 	closed := frameRange{
-		start: j.validRevisions[top].journalIndex,
+		start: rev.journalIndex,
 		end:   len(j.entries),
 	}
-	// Only propagate non-empty ranges, and only if there is a parent frame to
-	// receive them. The outermost frame has nothing to bubble up to.
-	if closed.start < closed.end && top > 0 {
+	if top > 0 {
 		parent := &j.validRevisions[top-1]
-		parent.closedChildren = append(parent.closedChildren, closed)
+		if closed.start < closed.end {
+			parent.closedChildren = append(parent.closedChildren, closed)
+		}
+		parent.childStateBytes += thisBytes + rev.childStateBytes
 	}
 	// Drop this revision's bookkeeping. The slice is reused by the parent so
 	// avoid pinning it via the popped tail.
-	j.validRevisions[top].closedChildren = nil
+	rev.closedChildren = nil
+	rev.childStateBytes = 0
 	j.validRevisions = j.validRevisions[:top]
+	return thisBytes
+}
+
+// computeFrameStateBytes walks the entries that belong directly to rev (skipping
+// any closed-child ranges) and sums the per-step state-creation contribution of
+// each individual SSTORE.
+//
+// State-creation accounting is the per-step sum of three independent
+// contributions, each applied locally to its own journal entry:
+//
+//  1. storageChange (slot SSTORE):
+//     - origin != 0                  → 0  (rearranging pre-existing storage)
+//     - prev == 0 && new != 0        → +stateBytesPerSlot  (new slot created)
+//     - prev != 0 && new == 0        → -stateBytesPerSlot  (in-tx creation undone)
+//
+//  2. codeChange (SetCode on an account): a brand-new contract publishes its
+//     bytecode for the first time. Origin code is implicitly empty in this
+//     accounting — we treat the prev-empty/new-non-empty transition as the
+//     creation event and bill its byte size, with the inverse transition
+//     refunding it for symmetry.
+//     - len(prev) == 0 && len(new) > 0 → +len(new)  (code committed)
+//     - len(prev) > 0  && len(new) == 0 → -len(prev) (in-tx code committed then cleared)
+//
+//  3. createObjectChange (account materialised in state): each event adds
+//     +stateBytesPerAccount of per-account overhead.
+//
+// The per-step formulation composes naturally: a frame's bytes is the sum of
+// deltas of its own entries, and the sum of every frame's bytes across the
+// subtree equals the sum of deltas across all entries — i.e. the same number
+// you would get from a single whole-frame walk. Slots/code/accounts whose
+// intermediate values bounce across frame boundaries reconcile automatically
+// without any need to dedup by "first touch".
+func (j *journal) computeFrameStateBytes(rev *revision) int {
+	var total int
+	zero := common.Hash{}
+	visit := func(e journalEntry) {
+		switch ch := e.(type) {
+		case storageChange:
+			switch {
+			case ch.origvalue != zero:
+				// Slot was already populated at tx-start; any in-tx
+				// transition is rearranging existing storage.
+			case ch.prevvalue == zero && ch.newvalue != zero:
+				total += stateBytesPerSlot
+			case ch.prevvalue != zero && ch.newvalue == zero:
+				total -= stateBytesPerSlot
+			}
+		case codeChange:
+			switch {
+			case len(ch.prevCode) == 0 && len(ch.newCode) > 0:
+				total += len(ch.newCode)
+			case len(ch.prevCode) > 0 && len(ch.newCode) == 0:
+				total -= len(ch.prevCode)
+			}
+		case createObjectChange:
+			total += stateBytesPerAccount
+		}
+	}
+	idx := rev.journalIndex
+	for _, child := range rev.closedChildren {
+		for ; idx < child.start; idx++ {
+			visit(j.entries[idx])
+		}
+		idx = child.end
+	}
+	for ; idx < len(j.entries); idx++ {
+		visit(j.entries[idx])
+	}
+	return total
 }
 
 // frameEntries invokes visit for each entry that belongs directly to the
@@ -215,9 +343,10 @@ func (j *journal) copy() *journal {
 	revisions := make([]revision, len(j.validRevisions))
 	for i, r := range j.validRevisions {
 		revisions[i] = revision{
-			id:             r.id,
-			journalIndex:   r.journalIndex,
-			closedChildren: slices.Clone(r.closedChildren),
+			id:              r.id,
+			journalIndex:    r.journalIndex,
+			closedChildren:  slices.Clone(r.closedChildren),
+			childStateBytes: r.childStateBytes,
 		}
 	}
 	return &journal{
@@ -244,11 +373,12 @@ func (j *journal) destruct(addr common.Address) {
 	j.append(selfDestructChange{account: addr})
 }
 
-func (j *journal) storageChange(addr common.Address, key, prev, origin common.Hash) {
+func (j *journal) storageChange(addr common.Address, key, prev, newval, origin common.Hash) {
 	j.append(storageChange{
 		account:   addr,
 		key:       key,
 		prevvalue: prev,
+		newvalue:  newval,
 		origvalue: origin,
 	})
 }
@@ -272,10 +402,11 @@ func (j *journal) balanceChange(addr common.Address, previous *uint256.Int) {
 	})
 }
 
-func (j *journal) setCode(address common.Address, prevCode []byte) {
+func (j *journal) setCode(address common.Address, prevCode, newCode []byte) {
 	j.append(codeChange{
 		account:  address,
 		prevCode: prevCode,
+		newCode:  newCode,
 	})
 }
 
@@ -336,11 +467,13 @@ type (
 		account   common.Address
 		key       common.Hash
 		prevvalue common.Hash
+		newvalue  common.Hash
 		origvalue common.Hash
 	}
 	codeChange struct {
 		account  common.Address
 		prevCode []byte
+		newCode  []byte
 	}
 
 	// Changes to other state values.
@@ -472,6 +605,7 @@ func (ch codeChange) copy() journalEntry {
 	return codeChange{
 		account:  ch.account,
 		prevCode: ch.prevCode,
+		newCode:  ch.newCode,
 	}
 }
 
@@ -488,6 +622,7 @@ func (ch storageChange) copy() journalEntry {
 		account:   ch.account,
 		key:       ch.key,
 		prevvalue: ch.prevvalue,
+		newvalue:  ch.newvalue,
 		origvalue: ch.origvalue,
 	}
 }

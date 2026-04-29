@@ -749,8 +749,14 @@ func (s *StateDB) Snapshot() int {
 }
 
 // RevertToSnapshot reverts all state changes made since the given revision.
-func (s *StateDB) RevertToSnapshot(revid int) {
-	s.journal.revertToSnapshot(revid, s)
+//
+// It returns the sum of state-creation bytes that successful child frames
+// nested within the reverted scope(s) had previously emitted via
+// CloseSnapshot. The caller can use this figure to undo bookkeeping done at
+// the time those bytes were reported, since the state changes those bytes
+// were paying for are now being thrown away.
+func (s *StateDB) RevertToSnapshot(revid int) int {
+	return s.journal.revertToSnapshot(revid, s)
 }
 
 // CloseSnapshot marks the call frame identified by revid as completed without
@@ -758,8 +764,18 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 // frame so the parent can later iterate its own entries while skipping over
 // closed children. revid must identify the topmost open snapshot (i.e. frames
 // must be closed in LIFO order). It panics otherwise.
-func (s *StateDB) CloseSnapshot(revid int) {
-	s.journal.closeSnapshot(revid)
+//
+// It returns the net state-creation bytes attributable to this frame's own
+// storage changes (descendant frames' contributions are excluded — they were
+// already reported when the descendants closed). The contribution is summed
+// per individual SSTORE: each storage entry independently scores +1 slot for a
+// 0→non-zero transition and -1 for a non-zero→0 transition whose tx-original
+// was 0. Per-step accounting composes naturally — the sum across all frames
+// in a subtree equals the sum across all individual SSTORE deltas, so multiple
+// SSTOREs to the same slot at different nesting levels reconcile without any
+// "first touch" deduplication.
+func (s *StateDB) CloseSnapshot(revid int) int {
+	return s.journal.closeSnapshot(revid)
 }
 
 // GetRefund returns the current value of the refund counter.
