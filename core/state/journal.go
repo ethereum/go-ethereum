@@ -288,14 +288,12 @@ func (j *journal) stateChangedBytes(revid int, stateObjects map[common.Address]*
 
 	var totalBytes int64
 	// Per EIP-8037 spec compute_state_byte_diff: only count +112 for accounts
-	// that exist at frame exit. Per EIP-161, accounts that end up with
-	// nonce=0, balance=0, and empty code are considered non-existent and
-	// pruned — these don't count even though we created the object record
-	// (e.g. AddBalance(addr, 0) for a zero-value SELFDESTRUCT to a
-	// non-existent beneficiary).
 	for addr := range created {
 		obj := stateObjects[addr]
 		if obj == nil {
+			continue
+		}
+		if obj.origin != nil {
 			continue
 		}
 		if obj.empty() {

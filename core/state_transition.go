@@ -649,16 +649,20 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// EIP-8037: charge state gas for the outer call frame's own state changes.
 	if rules.IsAmsterdam {
 		if vmerr == nil {
-			outerBytes := st.state.StateChangedBytes(outerSnapshot, false)
-			// For contract-creation txs the intrinsic already paid for the
-			// account creation; subtract it so we don't double-charge.
+			// Only contract-creation txs need an outer charge: the intrinsic
+			// pre-paid for the +112 account creation, but inner evm.Create's
+			// frame-end excludes it (post-create diff snapshot), so the outer
+			// charge reconciles. CALL txs don't need any outer charge — the
+			// inner evm.Call's apply-frame already handles everything via its
+			// post-value-transfer diff snapshot, matching spec semantics for
+			// the outermost frame.
 			if contractCreation {
+				outerBytes := st.state.StateChangedBytes(outerSnapshot, false)
 				outerBytes -= int64(params.AccountCreationSize)
+				alreadyPaid := st.gasRemaining.StateGasUsed
+				thisCallCost := outerBytes*int64(st.evm.Context.CostPerStateByte) - alreadyPaid
+				st.gasRemaining.Charge(vm.GasCosts{StateGas: thisCallCost})
 			}
-			// EIP-8037 spec: this_call_cost = growth_cost - already_paid.
-			alreadyPaid := st.gasRemaining.StateGasUsed
-			thisCallCost := outerBytes*int64(st.evm.Context.CostPerStateByte) - alreadyPaid
-			st.gasRemaining.Charge(vm.GasCosts{StateGas: thisCallCost})
 
 			// EIP-8037 + EIP-6780: refund state gas for accounts created and
 			// selfdestructed in the same tx. Per spec interpreter.py:200-201,
