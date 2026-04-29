@@ -437,17 +437,17 @@ func (d *Downloader) SubscribeSyncEvents(ch chan<- SyncEvent) event.Subscription
 // syncToHead starts a block synchronization based on the hash chain from
 // the specified head hash.
 func (d *Downloader) syncToHead() (err error) {
-	d.feed.Send(SyncEvent{Type: SyncStarted})
+	mode := d.getMode()
+	d.feed.Send(SyncEvent{Type: SyncStarted, Mode: mode})
 	defer func() {
 		// reset on error
 		if err != nil {
-			d.feed.Send(SyncEvent{Type: SyncFailed, Err: err})
+			d.feed.Send(SyncEvent{Type: SyncFailed, Mode: mode, Err: err})
 		} else {
 			latest := d.blockchain.CurrentHeader()
-			d.feed.Send(SyncEvent{Type: SyncCompleted, Latest: latest})
+			d.feed.Send(SyncEvent{Type: SyncCompleted, Mode: mode, Latest: latest})
 		}
 	}()
-	mode := d.getMode()
 
 	log.Debug("Backfilling with the network", "mode", mode)
 	defer func(start time.Time) {

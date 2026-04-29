@@ -16,7 +16,10 @@
 
 package downloader
 
-import "github.com/ethereum/go-ethereum/core/types"
+import (
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
+)
 
 // SyncEventType represents the type of sync event
 type SyncEventType int
@@ -30,6 +33,7 @@ const (
 // SyncEvent represents a downloader synchronization event
 type SyncEvent struct {
 	Type   SyncEventType
+	Mode   ethconfig.SyncMode
 	Err    error         // Set when Type is SyncFailed
 	Latest *types.Header // Set when Type is SyncCompleted
 }
