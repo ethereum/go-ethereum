@@ -232,7 +232,7 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(stateDb ethdb.Database, chain BlockChain, mode ethconfig.SyncMode, dropPeer peerDropFn, success func()) *Downloader {
+func New(stateDb ethdb.Database, mode ethconfig.SyncMode, chain BlockChain, dropPeer peerDropFn, success func()) *Downloader {
 	cutoffNumber, cutoffHash := chain.HistoryPruningCutoff()
 	dl := &Downloader{
 		stateDB:           stateDb,

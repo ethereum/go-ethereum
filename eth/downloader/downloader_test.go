@@ -74,7 +74,7 @@ func newTesterWithNotification(t *testing.T, mode ethconfig.SyncMode, success fu
 		chain: chain,
 		peers: make(map[string]*downloadTesterPeer),
 	}
-	tester.downloader = New(db, tester.chain, mode, tester.dropPeer, success)
+	tester.downloader = New(db, mode, tester.chain, tester.dropPeer, success)
 	return tester
 }
 
