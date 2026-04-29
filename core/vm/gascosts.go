@@ -127,6 +127,12 @@ func (g GasBudget) CanAfford(cost GasCosts) bool {
 // Charge deducts the given gas cost from the budget. It returns the
 // pre-charge regular gas value and false if the budget does not have
 // sufficient gas to cover the cost.
+//
+// Per EIP-8037 spec apply_frame_state_gas: a negative state-gas cost
+// (refund from net state shrinkage) credits only the reservoir, not the
+// per-frame state_gas_used tracker. Otherwise the negative would
+// propagate to the parent's already_paid and cause the parent's
+// frame-end charge to be over-counted.
 func (g *GasBudget) Charge(cost GasCosts) (uint64, bool) {
 	prior := g.RegularGas
 	if !g.CanAfford(cost) {
@@ -134,11 +140,11 @@ func (g *GasBudget) Charge(cost GasCosts) (uint64, bool) {
 	}
 	g.RegularGas -= cost.RegularGas
 	g.RegularGasUsed += cost.RegularGas
-	g.StateGasUsed += cost.StateGas
 	if cost.StateGas < 0 {
 		g.StateGas -= uint64(cost.StateGas)
 		return prior, true
 	}
+	g.StateGasUsed += cost.StateGas
 	if uint64(cost.StateGas) > g.StateGas {
 		spillover := uint64(cost.StateGas) - g.StateGas
 		g.StateGas = 0

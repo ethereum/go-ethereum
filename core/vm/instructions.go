@@ -17,7 +17,9 @@
 package vm
 
 import (
+	"fmt"
 	"math"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -771,7 +773,15 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// reset parent's reservoir to zero. Leftover comes back via RefundGas.
 	childStateGas := scope.Contract.Gas.StateGas
 	scope.Contract.Gas.StateGas = 0
+	if os.Getenv("DEBUG_8037") != "" {
+		fmt.Fprintf(os.Stderr, "  opCall depth=%d childStateGas=%d gas=%d to=%v\n",
+			evm.depth, childStateGas, gas, toAddr)
+	}
 	ret, returnGas, err := evm.Call(scope.Contract.Address(), toAddr, args, NewGasBudget(gas, childStateGas), &value)
+	if os.Getenv("DEBUG_8037") != "" {
+		fmt.Fprintf(os.Stderr, "  opCall depth=%d returnGas=<%d,%d>su=%d err=%v\n",
+			evm.depth, returnGas.RegularGas, returnGas.StateGas, returnGas.StateGasUsed, err)
+	}
 
 	if err != nil {
 		temp.Clear()

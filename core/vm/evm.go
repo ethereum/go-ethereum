@@ -346,8 +346,16 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 					bytesCharged, alreadyPaid, thisCallCost, gas.CanAfford(stateGasCost))
 			}
 			if !gas.CanAfford(stateGasCost) {
+				// EIP-8037 spec apply_frame_state_gas OOG branch: roll back
+				// state, set OOG, preserve reservoir + remaining regular gas.
+				// Per incorporate_child_on_error: child's reservoir + max(0,
+				// state_gas_used) flows to caller's reservoir; state_gas_used
+				// is dropped. Convert here so RefundGas does the right thing.
 				evm.StateDB.RevertToSnapshot(snapshot1)
-				gas.Exhaust()
+				if gas.StateGasUsed > 0 {
+					gas.StateGas += uint64(gas.StateGasUsed)
+				}
+				gas.StateGasUsed = 0
 				return ret, gas, ErrOutOfGas
 			}
 			gas.Charge(stateGasCost)
@@ -432,7 +440,17 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 					bytesCharged, alreadyPaid, thisCallCost, gas.CanAfford(stateGasCost))
 			}
 			if !gas.CanAfford(stateGasCost) {
-				gas.Exhaust()
+				// EIP-8037 spec apply_frame_state_gas OOG branch: roll back
+				// state, set OOG, preserve reservoir and remaining regular
+				// gas. Per incorporate_child_on_error: child's reservoir
+				// AND max(0, state_gas_used) both flow to the caller's
+				// reservoir; state_gas_used itself is dropped (not
+				// propagated as credit). Convert here.
+				evm.StateDB.RevertToSnapshot(snapshot1)
+				if gas.StateGasUsed > 0 {
+					gas.StateGas += uint64(gas.StateGasUsed)
+				}
+				gas.StateGasUsed = 0
 				return ret, gas, ErrOutOfGas
 			}
 			gas.Charge(stateGasCost)
@@ -512,7 +530,17 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 					bytesCharged, alreadyPaid, thisCallCost, gas.CanAfford(stateGasCost))
 			}
 			if !gas.CanAfford(stateGasCost) {
-				gas.Exhaust()
+				// EIP-8037 spec apply_frame_state_gas OOG branch: roll back
+				// state, set OOG, preserve reservoir and remaining regular
+				// gas. Per incorporate_child_on_error: child's reservoir
+				// AND max(0, state_gas_used) both flow to the caller's
+				// reservoir; state_gas_used itself is dropped (not
+				// propagated as credit). Convert here.
+				evm.StateDB.RevertToSnapshot(snapshot1)
+				if gas.StateGasUsed > 0 {
+					gas.StateGas += uint64(gas.StateGasUsed)
+				}
+				gas.StateGasUsed = 0
 				return ret, gas, ErrOutOfGas
 			}
 			gas.Charge(stateGasCost)
@@ -710,8 +738,15 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 			thisCallCost := bytesCharged*int64(evm.Context.CostPerStateByte) - alreadyPaid
 			stateGasCost := GasCosts{StateGas: thisCallCost}
 			if !contract.Gas.CanAfford(stateGasCost) {
+				// EIP-8037 spec: state-gas OOG rolls back state, preserves
+				// reservoir+regular, converts max(0, state_gas_used) into
+				// reservoir credit (incorporate_child_on_error semantics),
+				// then drops state_gas_used.
 				evm.StateDB.RevertToSnapshot(snapshot1)
-				contract.Gas.Exhaust()
+				if contract.Gas.StateGasUsed > 0 {
+					contract.Gas.StateGas += uint64(contract.Gas.StateGasUsed)
+				}
+				contract.Gas.StateGasUsed = 0
 				return ret, address, contract.Gas, ErrOutOfGas
 			}
 			contract.Gas.Charge(stateGasCost)

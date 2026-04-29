@@ -650,8 +650,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if rules.IsAmsterdam {
 		if vmerr == nil {
 			outerBytes := st.state.StateChangedBytes(outerSnapshot, false)
-			// Refund state gas for selfdestructed accounts.
-			outerBytes -= st.state.SelfDestructRefundBytes()
 			// For contract-creation txs the intrinsic already paid for the
 			// account creation; subtract it so we don't double-charge.
 			if contractCreation {
@@ -661,6 +659,20 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			alreadyPaid := st.gasRemaining.StateGasUsed
 			thisCallCost := outerBytes*int64(st.evm.Context.CostPerStateByte) - alreadyPaid
 			st.gasRemaining.Charge(vm.GasCosts{StateGas: thisCallCost})
+
+			// EIP-8037 + EIP-6780: refund state gas for accounts created and
+			// selfdestructed in the same tx. Per spec interpreter.py:200-201,
+			// this runs at the top-level after the frame's apply_frame_state_gas:
+			// reservoir is credited and state_gas_used is decremented. The
+			// decrement may go negative when account-creation was paid via the
+			// intrinsic (CREATE tx) rather than execution state-gas; the
+			// negative offsets the intrinsic at tx-level state-gas accounting.
+			refundBytes := st.state.SelfDestructRefundBytes()
+			if refundBytes > 0 {
+				refundCost := refundBytes * int64(st.evm.Context.CostPerStateByte)
+				st.gasRemaining.StateGas += uint64(refundCost)
+				st.gasRemaining.StateGasUsed -= refundCost
+			}
 		} else {
 			// On top-level error, restore state-gas reservoir and reset
 			// the state-gas-used counter; state changes are reverted, no

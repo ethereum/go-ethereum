@@ -455,7 +455,7 @@ func downloadSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string
 
 func downloadBALSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string {
 	ext := ".tar.gz"
-	base := "fixtures_bal"
+	base := "fixtures_snobal-devnet-5"
 	archivePath := filepath.Join(cachedir, base+ext)
 	if err := csdb.DownloadFileFromKnownURL(archivePath); err != nil {
 		log.Fatal(err)
