@@ -153,11 +153,20 @@ func (api *EthereumAPI) BlobBaseFee(ctx context.Context) *hexutil.Big {
 // - highestBlock:  block number of the highest block header this node has received from peers
 // - pulledStates:  number of state entries processed until now
 // - knownStates:   number of known state entries that still need to be pulled
+//
+// Until the consensus layer has driven the node at least once via the Engine
+// API, the node has not actually learned about any new chain head and cannot
+// truthfully report itself as "synced". In that case Syncing returns the
+// progress object regardless of whether progress.Done() would be true.
 func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
 	progress := api.b.SyncProgress(ctx)
 
-	// Return not syncing if the synchronisation already completed
-	if progress.Done() {
+	// Return not syncing if the synchronisation already completed AND we have
+	// observed at least one Engine API call from the consensus layer. The CL
+	// gate prevents a freshly started node from being advertised as synced
+	// before any CL handshake has happened (a common operational footgun for
+	// load balancers and L2 stacks gating on eth_syncing).
+	if progress.Done() && api.b.ConsensusContacted() {
 		return false, nil
 	}
 	// Otherwise gather the block sync stats

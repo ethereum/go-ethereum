@@ -25,6 +25,7 @@ import (
 	"math/big"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -123,6 +124,26 @@ type Ethereum struct {
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
 	shutdownTracker *shutdowncheck.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
+
+	// clContacted records whether the consensus client has ever spoken to us
+	// via the Engine API. Until that happens, the node has not learned about
+	// any new head from the network and cannot truthfully report itself as
+	// "synced" — eth_syncing falls back to reporting an in-progress sync.
+	clContacted atomic.Bool
+}
+
+// MarkConsensusContacted records that the consensus layer has driven this node
+// at least once via the Engine API. The flag is sticky: once set, it stays set
+// for the lifetime of the process. eth_syncing uses it to avoid reporting a
+// freshly started node as "synced" before any CL handshake has occurred.
+func (s *Ethereum) MarkConsensusContacted() {
+	s.clContacted.Store(true)
+}
+
+// ConsensusContacted reports whether the consensus layer has ever driven this
+// node via the Engine API since process start.
+func (s *Ethereum) ConsensusContacted() bool {
+	return s.clContacted.Load()
 }
 
 // New creates a new Ethereum object (including the initialisation of the common Ethereum object),
