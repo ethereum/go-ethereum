@@ -17,10 +17,13 @@
 package vm
 
 import (
-	"sync"
-
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 )
+
+// globalJumpDestCacheSize caps the global cache. Worst case ~48MB (24KB code
+// → ~3KB bitmap × 16384 entries).
+const globalJumpDestCacheSize = 16384
 
 // JumpDestCache represents the cache of jumpdest analysis results.
 type JumpDestCache interface {
@@ -50,25 +53,18 @@ func (j mapJumpDests) Store(codeHash common.Hash, vec BitVec) {
 	j[codeHash] = vec
 }
 
-// globalJumpDestCache is a global cache of JUMPDEST bitmaps.
-var globalJumpDestCache sync.Map
+// globalJumpDests is a process-global LRU of JUMPDEST bitmaps, shared across
+// every EVM instance and keyed by the immutable contract code hash.
+var globalJumpDests = &lruJumpDests{cache: lru.NewCache[common.Hash, BitVec](globalJumpDestCacheSize)}
 
-type globalJumpDests struct{}
-
-// newGlobalJumpDests returns a JumpDestCache backed by the process-global
-// sync.Map. All callers share the same backing map.
-func newGlobalJumpDests() JumpDestCache {
-	return globalJumpDests{}
+type lruJumpDests struct {
+	cache *lru.Cache[common.Hash, BitVec]
 }
 
-func (globalJumpDests) Load(codeHash common.Hash) (BitVec, bool) {
-	v, ok := globalJumpDestCache.Load(codeHash)
-	if !ok {
-		return nil, false
-	}
-	return v.(BitVec), true
+func (j *lruJumpDests) Load(codeHash common.Hash) (BitVec, bool) {
+	return j.cache.Get(codeHash)
 }
 
-func (globalJumpDests) Store(codeHash common.Hash, vec BitVec) {
-	globalJumpDestCache.Store(codeHash, vec)
+func (j *lruJumpDests) Store(codeHash common.Hash, vec BitVec) {
+	j.cache.Add(codeHash, vec)
 }
