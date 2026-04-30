@@ -469,6 +469,15 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket) (
 			if accKey == nil {
 				return nodes, fmt.Errorf("%w: invalid account node request", errBadRequest)
 			}
+			// Skip structurally invalid paths (longer than maxTrieNodePathLength)
+			// without traversing the trie. compactToHex would otherwise allocate
+			// 2*len(accKey)+1 bytes for a key that cannot possibly match any node.
+			// A nil placeholder is appended to preserve positional alignment with
+			// the request, matching the existing behavior for non-existent nodes.
+			if len(accKey) > maxTrieNodePathLength {
+				nodes = append(nodes, nil)
+				break
+			}
 			blob, resolved, err := accTrie.GetNode(accKey)
 			loads += resolved // always account database reads, even for failures
 			if err != nil {
@@ -512,6 +521,17 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket) (
 				path, _, err := rlp.SplitString(innerIt.Value())
 				if err != nil {
 					return nil, fmt.Errorf("%w: invalid storage key: %v", errBadRequest, err)
+				}
+				// Skip structurally invalid paths (longer than maxTrieNodePathLength)
+				// without traversing the storage trie. See the account-path branch
+				// above for the rationale; we still append a nil placeholder so
+				// the response stays positionally aligned with the request.
+				if len(path) > maxTrieNodePathLength {
+					nodes = append(nodes, nil)
+					if bytes > req.Bytes || loads > maxTrieNodeLookups || time.Since(start) > maxTrieNodeTimeSpent {
+						break
+					}
+					continue
 				}
 				blob, resolved, err := stTrie.GetNode(path)
 				loads += resolved // always account database reads, even for failures

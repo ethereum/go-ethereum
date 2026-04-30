@@ -220,6 +220,71 @@ func TestServiceGetAccessListsQueryByteLimit(t *testing.T) {
 	}
 }
 
+// TestServiceGetTrieNodesQueryPathLength verifies that ServiceGetTrieNodesQuery
+// rejects structurally invalid (over-length) compact-encoded paths without
+// allocating in compactToHex or walking the trie. Trie keys are Keccak256
+// hashes, so the longest valid compact-encoded path is 33 bytes; anything
+// longer cannot match a node in any state trie. A peer sending such a path
+// (up to the 10MB request size cap) would otherwise force the server to
+// allocate 2*len(path)+1 nibbles per entry and start a doomed traversal.
+func TestServiceGetTrieNodesQueryPathLength(t *testing.T) {
+	t.Parallel()
+
+	bc, _, _ := getChainWithBALs(1, 100)
+	defer bc.Stop()
+
+	root := bc.CurrentBlock().Root
+
+	// One byte beyond the spec-aligned cap (33 bytes).
+	overlong := make([]byte, maxTrieNodePathLength+1)
+	for i := range overlong {
+		overlong[i] = byte(i)
+	}
+	// Far over the cap, exercising the worst-case allocation path.
+	gigantic := make([]byte, 1024)
+	for i := range gigantic {
+		gigantic[i] = byte(i)
+	}
+
+	tests := []struct {
+		name  string
+		paths []TrieNodePathSet
+	}{
+		{
+			name:  "account path one byte over limit",
+			paths: []TrieNodePathSet{{overlong}},
+		},
+		{
+			name:  "account path far over limit",
+			paths: []TrieNodePathSet{{gigantic}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			encPaths, err := rlp.EncodeToRawList(tt.paths)
+			if err != nil {
+				t.Fatalf("encode paths: %v", err)
+			}
+			req := &GetTrieNodesPacket{
+				ID:    1,
+				Root:  root,
+				Paths: encPaths,
+				Bytes: softResponseLimit,
+			}
+			nodes, err := ServiceGetTrieNodesQuery(bc, req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(nodes) != 1 {
+				t.Fatalf("expected 1 placeholder node, got %d", len(nodes))
+			}
+			if len(nodes[0]) != 0 {
+				t.Errorf("expected nil placeholder for oversized path, got %x", nodes[0])
+			}
+		})
+	}
+}
+
 // TestGetAccessListResponseDecoding verifies that an AccessListsPacket
 // round-trips through RLP encode/decode, preserving positional
 // correspondence and correctly representing absent BALs as empty strings.

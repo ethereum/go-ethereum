@@ -52,6 +52,14 @@ const (
 	// If we spend too much time, then it's a fairly high chance of timing out
 	// at the remote side, which means all the work is in vain.
 	maxTrieNodeTimeSpent = 5 * time.Second
+
+	// maxTrieNodePathLength is the longest a compact-encoded trie path can be
+	// while still addressing a node in any Ethereum state trie. Trie keys are
+	// Keccak256 hashes (32 bytes = 64 nibbles), and the compact encoding adds
+	// at most one prefix byte, giving 32+1 = 33 bytes. Anything longer is
+	// structurally invalid and cannot match a node, so the handler skips it
+	// without performing a trie traversal.
+	maxTrieNodePathLength = 33
 )
 
 // Handler is a callback to invoke from an outside runner after the boilerplate
