@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -555,13 +556,47 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 
 // StandardTraceBadBlockToFile dumps the structured logs created during the
 // execution of EVM against a block pulled from the pool of bad ones to the
-// local file system and returns a list of files to the caller.
+// local file system and returns a list of files to the caller. After Amsterdam,
+// the block (header + body + access list) is also RLP-dumped to a temporary
+// file to allow offline post-mortem of BAL mismatches.
 func (api *API) StandardTraceBadBlockToFile(ctx context.Context, hash common.Hash, config *StdTraceConfig) ([]string, error) {
 	block := rawdb.ReadBadBlock(api.backend.ChainDb(), hash)
 	if block == nil {
 		return nil, fmt.Errorf("bad block %#x not found", hash)
 	}
+	if api.backend.ChainConfig().IsAmsterdam(block.Number(), block.Time()) {
+		if name, err := dumpBadBlockWithBAL(block); err != nil {
+			log.Warn("Failed to dump bad block with BAL", "hash", block.Hash(), "err", err)
+		} else {
+			log.Info("Dumped bad block (header+body+BAL)", "hash", block.Hash(), "file", name)
+		}
+	}
 	return api.standardTraceBlockToFile(ctx, block, config)
+}
+
+// dumpBadBlockWithBAL writes an RLP encoding of the block header, body, and
+// (if attached) the block access list to a temporary file. This is intended
+// for post-mortem analysis of BAL mismatches.
+func dumpBadBlockWithBAL(block *types.Block) (string, error) {
+	prefix := fmt.Sprintf("badblock_%d_%#x-", block.NumberU64(), block.Hash().Bytes()[:4])
+	f, err := os.CreateTemp(os.TempDir(), prefix+"*.rlp")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	payload := struct {
+		Header     *types.Header
+		Body       *types.Body
+		AccessList *bal.BlockAccessList `rlp:"optional"`
+	}{
+		Header:     block.Header(),
+		Body:       block.Body(),
+		AccessList: block.AccessList(),
+	}
+	if err := rlp.Encode(f, &payload); err != nil {
+		return "", err
+	}
+	return f.Name(), nil
 }
 
 // traceBlock configures a new tracer according to the provided configuration, and

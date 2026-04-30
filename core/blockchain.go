@@ -2861,6 +2861,18 @@ func (bc *BlockChain) reportBadBlock(block *types.Block, res *ProcessResult, err
 	}
 	rawdb.WriteBadBlock(bc.db, block)
 	log.Error(summarizeBadBlock(block, receipts, bc.Config(), err))
+
+	// Post-Amsterdam, dump the remote and locally-computed BALs to aid diagnosis
+	// of any mismatch between what the network produced and what we computed.
+	if bc.Config().IsAmsterdam(block.Number(), block.Time()) {
+		if remote := block.AccessList(); remote != nil {
+			log.Error("Bad block: remote BAL", "number", block.Number(), "hash", block.Hash(), "bal", remote.JSONString())
+		}
+		if res != nil && res.AccessList != nil {
+			local := res.AccessList.ToEncodingObj()
+			log.Error("Bad block: local BAL", "number", block.Number(), "hash", block.Hash(), "bal", local.JSONString())
+		}
+	}
 }
 
 // logForkReadiness will write a log when a future fork is scheduled, but not
