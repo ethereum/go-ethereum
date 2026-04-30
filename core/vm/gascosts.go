@@ -18,17 +18,16 @@ package vm
 
 import "fmt"
 
-// GasCosts denotes a vector of gas costs in the
-// multidimensional metering paradigm. It represents the cost
-// charged by an individual operation.
+// GasCosts denotes a vector of gas costs in the multidimensional metering
+// paradigm. It represents the cost charged by an individual operation.
+//
+// StateGas is signed so an operation can express a state-gas refund
+// (negative cost) — e.g. an SSTORE that undoes an in-tx state creation.
+// Such a refund flows back into the StateGas reservoir of the GasBudget,
+// not into RegularGas.
 type GasCosts struct {
 	RegularGas uint64
-	StateGas   uint64
-}
-
-// Sum returns the total gas (regular + state).
-func (g GasCosts) Sum() uint64 {
-	return g.RegularGas + g.StateGas
+	StateGas   int64
 }
 
 // String returns a visual representation of the gas vector.

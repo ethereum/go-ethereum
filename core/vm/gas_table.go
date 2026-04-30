@@ -226,6 +226,52 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	return GasCosts{RegularGas: params.SloadGasEIP2200}, nil // dirty update (2.2)
 }
 
+// EIP-8037 constants. EIP-8037 only diverges from EIP-2200 on slots whose
+// tx-original is zero AND on writes that cross the zero/non-zero boundary
+// (i.e. a state creation or its in-tx undo). Everything else stays on the
+// EIP-2200 schedule.
+const (
+	stateBytesPerSlotEIP8037 = 64   // bytes attributed to one slot's state
+	costPerStateByteEIP8037  = 1157 // gas per state-creation byte
+	sstoreBaseGasEIP8037     = 2900 // regular gas baseline for the EIP-8037 transitions
+	stateGasEIP8037          = stateBytesPerSlotEIP8037 * costPerStateByteEIP8037
+)
+
+// gasSStoreEIP8037 prices SSTORE under EIP-8037.
+//
+// Two specific (original, current, value) shapes get the new pricing:
+//   - O == 0, C == 0, V != 0 — creating fresh state in this tx.
+//     Charge stateGasEIP8037 of state gas and sstoreBaseGasEIP8037 of regular gas.
+//   - O == 0, C != 0, V == 0 — undoing the in-tx creation.
+//     Refund stateGasEIP8037 of state gas (negative StateGas in the cost
+//     vector) and pay sstoreBaseGasEIP8037 of regular gas.
+//
+// Every other shape — including O != 0 of any kind, and O == 0 cases that
+// don't cross zero — defers to gasSStoreEIP2200 unchanged.
+func gasSStoreEIP8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+	if evm.readOnly {
+		return GasCosts{}, ErrWriteProtection
+	}
+	if contract.Gas.RegularGas <= params.SstoreSentryGasEIP2200 {
+		return GasCosts{}, errors.New("not enough gas for reentrancy sentry")
+	}
+	var (
+		zero              = common.Hash{}
+		y, x              = stack.back(1), stack.back(0)
+		current, original = evm.StateDB.GetStateAndCommittedState(contract.Address(), x.Bytes32())
+		value             = common.Hash(y.Bytes32())
+	)
+	if original == zero {
+		switch {
+		case current == zero && value != zero: // creation
+			return GasCosts{RegularGas: sstoreBaseGasEIP8037, StateGas: stateGasEIP8037}, nil
+		case current != zero && value == zero: // undo creation
+			return GasCosts{RegularGas: sstoreBaseGasEIP8037, StateGas: -stateGasEIP8037}, nil
+		}
+	}
+	return gasSStoreEIP2200(evm, contract, stack, mem, memorySize)
+}
+
 func makeGasLog(n uint64) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 		requestedSize, overflow := stack.back(1).Uint64WithOverflow()

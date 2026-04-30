@@ -43,6 +43,7 @@ var activators = map[int]func(*JumpTable){
 	7939: enable7939,
 	8024: enable8024,
 	7843: enable7843,
+	8037: enable8037,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -589,4 +590,10 @@ func enable7843(jt *JumpTable) {
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
 	}
+}
+
+// enable8037 applies EIP-8037: State Creation Gas Cost Increase
+func enable8037(jt *JumpTable) {
+	jt[SLOAD].constantGas = params.SloadGasEIP2200
+	jt[SSTORE].dynamicGas = gasSStoreEIP8037
 }
