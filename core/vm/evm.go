@@ -246,6 +246,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
 		}(gas)
 	}
+	initialStateGas := gas.StateGas
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, GasUsed{}, ErrDepth
@@ -322,8 +323,12 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
 			}
-			gasUsed.RegularGas += gas.RegularGas
-			gas.Exhaust()
+			if evm.chainRules.IsAmsterdam {
+				gas.HaltReset(&gasUsed, initialStateGas)
+			} else {
+				gasUsed.RegularGas += gas.RegularGas
+				gas.Exhaust()
+			}
 		}
 	}
 	return ret, gas, gasUsed, err
@@ -344,6 +349,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
 		}(gas)
 	}
+	initialStateGas := gas.StateGas
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, GasUsed{}, ErrDepth
@@ -379,8 +385,12 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
 			}
-			gasUsed.RegularGas += gas.RegularGas
-			gas.Exhaust()
+			if evm.chainRules.IsAmsterdam {
+				gas.HaltReset(&gasUsed, initialStateGas)
+			} else {
+				gasUsed.RegularGas += gas.RegularGas
+				gas.Exhaust()
+			}
 		}
 	}
 	return ret, gas, gasUsed, err
@@ -400,6 +410,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
 		}(gas)
 	}
+	initialStateGas := gas.StateGas
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, GasUsed{}, ErrDepth
@@ -429,8 +440,12 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
 			}
-			gasUsed.RegularGas += gas.RegularGas
-			gas.Exhaust()
+			if evm.chainRules.IsAmsterdam {
+				gas.HaltReset(&gasUsed, initialStateGas)
+			} else {
+				gasUsed.RegularGas += gas.RegularGas
+				gas.Exhaust()
+			}
 		}
 	}
 	return ret, gas, gasUsed, err
@@ -448,6 +463,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
 		}(gas)
 	}
+	initialStateGas := gas.StateGas
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, GasUsed{}, ErrDepth
@@ -478,8 +494,12 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
 			}
-			gasUsed.RegularGas += gas.RegularGas
-			gas.Exhaust()
+			if evm.chainRules.IsAmsterdam {
+				gas.HaltReset(&gasUsed, initialStateGas)
+			} else {
+				gasUsed.RegularGas += gas.RegularGas
+				gas.Exhaust()
+			}
 		}
 	}
 	return ret, gas, gasUsed, err
@@ -487,6 +507,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value *uint256.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, leftOverGas GasBudget, used GasUsed, err error) {
+	initialStateGas := gas.StateGas
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	var nonce uint64
@@ -596,6 +617,9 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			contract.UseGas(GasCosts{RegularGas: contract.Gas.RegularGas}, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
+			if evm.chainRules.IsAmsterdam {
+				contract.Gas.HaltReset(&contract.GasUsed, initialStateGas)
+			}
 		}
 	}
 	return ret, address, contract.Gas, contract.GasUsed, err

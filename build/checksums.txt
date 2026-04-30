@@ -5,10 +5,10 @@
 # https://github.com/ethereum/execution-spec-tests/releases/download/v5.1.0
 a3192784375acec7eaec492799d5c5d0c47a2909a3cc40178898e4ecd20cc416  fixtures_develop.tar.gz
 
-# version:spec-tests-bal v6.0.0
+# version:spec-tests-bal v1.0.0
 # https://github.com/ethereum/execution-spec-tests/releases
-# https://github.com/ethereum/execution-spec-tests/releases/download/bal%40v6.0.0
-683fe9a741480ca3a3b1eb98b6caaa72d461dede490358688f7194686edc2196 fixtures_bal.tar.gz
+# https://github.com/ethereum/execution-spec-tests/releases/download/snobal-devnet-6%40v1.0.0
+f7f29bd7a3dd90215dfe6b403f7deda1d1bac540c64f2c476e0f7fb35c9e3fa7 fixtures_snobal-devnet-6.tar.gz 
 
 # version:golang 1.25.9
 # https://go.dev/dl/

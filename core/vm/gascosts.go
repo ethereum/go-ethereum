@@ -80,6 +80,25 @@ func (g *GasBudget) Exhaust() {
 	g.RegularGas = 0
 }
 
+// HaltReset resets the frame to (0, initialStateGas) on exceptional halt:
+// regular gas is burned and the reservoir is restored to its value at frame
+// entry. Any state gas above R0 — either spill that drained the reservoir, or
+// state refunded above R0 by a child revert — is re-classified as regular and
+// added to gasUsed.RegularGas. gasUsed.StateGas is cleared so the parent's
+// reservoir is left unchanged when this frame's leftover propagates upward.
+func (g *GasBudget) HaltReset(gasUsed *GasUsed, initialStateGas uint64) {
+	gasUsed.RegularGas += g.RegularGas
+	if gasUsed.StateGas > int64(initialStateGas) {
+		gasUsed.RegularGas += uint64(gasUsed.StateGas) - initialStateGas
+	}
+	if g.StateGas > initialStateGas {
+		gasUsed.RegularGas += g.StateGas - initialStateGas
+	}
+	g.RegularGas = 0
+	g.StateGas = initialStateGas
+	gasUsed.StateGas = 0
+}
+
 func (g *GasBudget) Copy() GasBudget {
 	return GasBudget{RegularGas: g.RegularGas, StateGas: g.StateGas}
 }
