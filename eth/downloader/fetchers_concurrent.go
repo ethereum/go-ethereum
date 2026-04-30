@@ -339,9 +339,15 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			if !errors.Is(err, errStaleDelivery) {
 				queue.updateCapacity(peer, accepted, res.Time)
 			}
-			res.Done <- errorOfRequest(err)
+			res.Done <- validityErrorOfRequest(err)
 			res.Req.Close()
+
 			if errors.Is(err, errInvalidChain) {
+				// errInvalidChain is the signal that processing of items failed internally,
+				// even though the items were validly encoded.
+				//
+				// This can be due to invalid blocks, or a database error.
+				// The sync cycle should be aborted for such errors, so we return it here.
 				return err
 			}
 
@@ -354,7 +360,8 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 	}
 }
 
-func errorOfRequest(err error) error {
+// validityErrorOfRequest returns err if it is related to block validity, and nil otherwise.
+func validityErrorOfRequest(err error) error {
 	if errors.Is(err, errInvalidBody) || errors.Is(err, errInvalidReceipt) {
 		return err
 	}

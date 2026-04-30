@@ -122,7 +122,7 @@ func (dl *downloadTester) dropPeer(id string) {
 type downloadTesterPeer struct {
 	dl             *downloadTester
 	withholdBodies map[common.Hash]struct{}
-	corruptBodies  bool
+	corruptBodies  bool // if set, the peer serves incorrect blocks
 	id             string
 	chain          *core.BlockChain
 
