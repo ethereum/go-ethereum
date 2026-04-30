@@ -30,13 +30,6 @@ import (
 )
 
 // UBTDatabase is an implementation of Database interface for Unified Binary Trie.
-//
-// In its plain form it uses a single binary trie database. During the
-// MPT-to-binary transition, an optional MPT trie database (mpttriedb) and a
-// frozen base root provide read-only access to pre-transition state. The
-// wrapInTransitionTrie flag controls whether reads at this database are
-// served via a TransitionTrie that overlays the binary trie on the MPT
-// base; it is normally driven by chainConfig.UBTTransitionActive.
 type UBTDatabase struct {
 	triedb               *triedb.Database
 	mpttriedb            *triedb.Database
@@ -49,9 +42,6 @@ type UBTDatabase struct {
 func (db *UBTDatabase) Type() DatabaseType { return TypeUBT }
 
 // NewUBTDatabase creates a state database with the Unified binary trie manner.
-// State access is wrapped in a TransitionTrie by default (which degenerates
-// to a passthrough when there is no MPT base) so callers that don't care
-// about the override get sensible defaults.
 func NewUBTDatabase(triedb *triedb.Database, codedb *CodeDB) *UBTDatabase {
 	if codedb == nil {
 		codedb = NewCodeDB(triedb.Disk())

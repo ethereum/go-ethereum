@@ -33,8 +33,6 @@ var (
 )
 
 // StorageReader is a minimal interface for reading contract storage slots.
-// It is satisfied by *state.flatReader, allowing the transition state to be
-// loaded without a full state.StateDB.
 type StorageReader interface {
 	Storage(addr common.Address, slot common.Hash) (common.Hash, error)
 }
@@ -94,9 +92,6 @@ func IsTransitionActive(reader StorageReader) bool {
 // transition registry system contract storage. Returns nil when the
 // registry has not been initialised (i.e. the chain has not yet reached the
 // UBT fork block).
-//
-// The root parameter is unused; it is retained on the signature so callers
-// can express the state version they intend to read.
 func LoadTransitionState(reader StorageReader) (*TransitionState, error) {
 	started, err := reader.Storage(params.BinaryTransitionRegistryAddress, transitionStartedKey)
 	if err != nil {
