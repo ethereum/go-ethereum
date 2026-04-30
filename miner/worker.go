@@ -444,13 +444,15 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 // applyTransaction runs the transaction. If execution fails, state and gas pool are reverted.
 func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*types.Receipt, error) {
 	var (
-		snap = env.state.Snapshot()
-		gp   = env.gasPool.Snapshot()
+		snap     = env.state.Snapshot()
+		gp       = env.gasPool.Snapshot()
+		readSnap = env.state.SnapshotReadList()
 	)
 	txAccesses, txMutations, receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.Set(gp)
+		env.state.RestoreReadList(readSnap)
 		return nil, err
 	}
 	if env.accessList != nil {
