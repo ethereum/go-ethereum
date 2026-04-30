@@ -634,10 +634,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		execGasUsed.StateGas = 0
 	}
 
-	// Refund costs for selfdestructed accounts and slots.
 	if rules.IsAmsterdam && vmerr == nil {
 		cpsb := st.evm.Context.CostPerGasByte
-		stateGasUsed := int64(cost.StateGas) + execGasUsed.StateGas
 		var sdRefund uint64
 		for _, addr := range st.state.SameTxSelfDestructs() {
 			r := params.AccountCreationSize * cpsb
@@ -645,29 +643,14 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			r += uint64(st.state.GetCodeSize(addr)) * cpsb
 			sdRefund += r
 		}
-		if stateGasUsed < 0 {
+		if execGasUsed.StateGas <= 0 {
 			sdRefund = 0
-		} else if sdRefund > uint64(stateGasUsed) {
-			sdRefund = uint64(stateGasUsed)
+		} else if sdRefund > uint64(execGasUsed.StateGas) {
+			sdRefund = uint64(execGasUsed.StateGas)
 		}
 		if sdRefund > 0 {
 			st.gasRemaining.StateGas += sdRefund
-			if execGasUsed.StateGas >= int64(sdRefund) {
-				execGasUsed.StateGas -= int64(sdRefund)
-			} else {
-				var extra uint64
-				if execGasUsed.StateGas > 0 {
-					extra = sdRefund - uint64(execGasUsed.StateGas)
-				} else {
-					extra = sdRefund
-				}
-				execGasUsed.StateGas = 0
-				if cost.StateGas >= extra {
-					cost.StateGas -= extra
-				} else {
-					cost.StateGas = 0
-				}
-			}
+			execGasUsed.StateGas -= int64(sdRefund)
 		}
 	}
 
