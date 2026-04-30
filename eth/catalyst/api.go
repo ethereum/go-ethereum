@@ -630,7 +630,7 @@ func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) (engine.BlobAnd
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
-	available := api.eth.BlobTxPool().AvailableBlobs(hashes)
+	available := len(api.eth.BlobTxPool().AvailableBlobs(hashes))
 	getBlobsRequestedCounter.Inc(int64(len(hashes)))
 	getBlobsAvailableCounter.Inc(int64(available))
 
@@ -677,6 +677,10 @@ func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) (engine.BlobAnd
 		getBlobsRequestMiss.Inc(1)
 	}
 	return res, nil
+}
+
+func (api *ConsensusAPI) HasBlobs(hashes []common.Hash) ([]bool, error) {
+	return api.eth.BlobTxPool().AvailableBlobs(hashes), nil
 }
 
 // Helper for NewPayload* methods.

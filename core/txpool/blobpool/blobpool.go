@@ -1696,15 +1696,15 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 }
 
 // AvailableBlobs returns the number of blobs that are available in the subpool.
-func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) int {
-	available := 0
-	for _, vhash := range vhashes {
+func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) []bool {
+	available := make([]bool, len(vhashes))
+	for i, vhash := range vhashes {
 		// Retrieve the datastore item (in a short lock)
 		p.lock.RLock()
 		_, exists := p.lookup.storeidOfBlob(vhash)
 		p.lock.RUnlock()
 		if exists {
-			available++
+			available[i] = true
 		}
 	}
 	return available
