@@ -49,6 +49,11 @@ import (
 
 // Register adds the engine API and related APIs to the full node.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
+	// Mark the backend as expecting a consensus client. eth_syncing uses
+	// this to gate "synced" responses on a CL handshake: a node configured
+	// to take direction from a CL should not advertise itself as synced
+	// until that CL has actually driven it at least once.
+	backend.MarkConsensusExpected()
 	stack.RegisterAPIs([]rpc.API{
 		newTestingAPI(backend),
 		{

@@ -326,7 +326,7 @@ func (b *backendMock) ChainConfig() *params.ChainConfig { return b.config }
 func (b *backendMock) SyncProgress(ctx context.Context) ethereum.SyncProgress {
 	return ethereum.SyncProgress{}
 }
-func (b *backendMock) ConsensusContacted() bool { return true }
+func (b *backendMock) ConsensusReady() bool { return true }
 func (b *backendMock) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, []*big.Int, []float64, error) {
 	return nil, nil, nil, nil, nil, nil, nil
 }

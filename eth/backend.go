@@ -125,24 +125,40 @@ type Ethereum struct {
 
 	shutdownTracker *shutdowncheck.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
 
-	// clContacted records whether the consensus client has ever spoken to us
-	// via the Engine API. Until that happens, the node has not learned about
-	// any new head from the network and cannot truthfully report itself as
-	// "synced" — eth_syncing falls back to reporting an in-progress sync.
+	// clExpected is set when the Engine API is registered on this node
+	// (catalyst.Register). When unset (no Engine API attached, e.g. in
+	// tests, in --dev mode without catalyst, in light/legacy backends),
+	// the node cannot be paired with a consensus client and should not be
+	// gated on a CL handshake. clContacted records whether the consensus
+	// client has spoken to us via the Engine API at least once.
+	clExpected  atomic.Bool
 	clContacted atomic.Bool
+}
+
+// MarkConsensusExpected records that this node expects to be driven by a
+// consensus layer via the Engine API. It should be invoked once during node
+// setup, when the Engine API is registered.
+func (s *Ethereum) MarkConsensusExpected() {
+	s.clExpected.Store(true)
 }
 
 // MarkConsensusContacted records that the consensus layer has driven this node
 // at least once via the Engine API. The flag is sticky: once set, it stays set
-// for the lifetime of the process. eth_syncing uses it to avoid reporting a
-// freshly started node as "synced" before any CL handshake has occurred.
+// for the lifetime of the process.
 func (s *Ethereum) MarkConsensusContacted() {
 	s.clContacted.Store(true)
 }
 
-// ConsensusContacted reports whether the consensus layer has ever driven this
-// node via the Engine API since process start.
-func (s *Ethereum) ConsensusContacted() bool {
+// ConsensusReady reports whether the node's "synced" claim is meaningful right
+// now. If the node does not expect a consensus client (no Engine API), the
+// answer is always yes. If it does, the answer is yes only after the consensus
+// client has driven the node at least once. eth_syncing uses this to avoid
+// claiming "synced" before any CL handshake has occurred on freshly started
+// post-merge nodes.
+func (s *Ethereum) ConsensusReady() bool {
+	if !s.clExpected.Load() {
+		return true
+	}
 	return s.clContacted.Load()
 }
 

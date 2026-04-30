@@ -42,10 +42,13 @@ import (
 type Backend interface {
 	// General Ethereum API
 	SyncProgress(ctx context.Context) ethereum.SyncProgress
-	// ConsensusContacted reports whether the consensus layer has driven this
-	// node via the Engine API at least once since process start. eth_syncing
-	// uses it to avoid reporting "synced" before any CL handshake has happened.
-	ConsensusContacted() bool
+	// ConsensusReady reports whether the node's "synced" claim is currently
+	// meaningful. For backends that do not expect a consensus client (no
+	// Engine API attached) the answer is always true. For backends that do,
+	// the answer flips to true only after the consensus client has driven
+	// the node at least once. eth_syncing uses this to avoid reporting
+	// "synced" before any CL handshake has happened.
+	ConsensusReady() bool
 
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 	FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, []*big.Int, []float64, error)

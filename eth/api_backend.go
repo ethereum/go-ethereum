@@ -422,10 +422,10 @@ func (b *EthAPIBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress 
 	return prog
 }
 
-// ConsensusContacted reports whether the consensus layer has driven this node
-// via the Engine API at least once since process start.
-func (b *EthAPIBackend) ConsensusContacted() bool {
-	return b.eth.ConsensusContacted()
+// ConsensusReady reports whether the node's "synced" claim is currently
+// meaningful. See (*Ethereum).ConsensusReady for the gating rules.
+func (b *EthAPIBackend) ConsensusReady() bool {
+	return b.eth.ConsensusReady()
 }
 
 func (b *EthAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {

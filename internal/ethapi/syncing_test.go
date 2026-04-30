@@ -28,23 +28,24 @@ import (
 // testBackend setup just to flip a single bool.
 type syncingBackend struct {
 	Backend
-	progress  ethereum.SyncProgress
-	contacted bool
+	progress ethereum.SyncProgress
+	ready    bool
 }
 
 func (b *syncingBackend) SyncProgress(_ context.Context) ethereum.SyncProgress { return b.progress }
-func (b *syncingBackend) ConsensusContacted() bool                             { return b.contacted }
+func (b *syncingBackend) ConsensusReady() bool                                 { return b.ready }
 
-// TestSyncingReportsBeforeConsensusContact verifies that eth_syncing returns a
-// truthy progress object until the consensus layer has driven the node via the
-// Engine API at least once, even when the local downloader believes itself to
-// be done.
+// TestSyncingReportsBeforeConsensusContact verifies that on a CL-paired node
+// (ConsensusReady false), eth_syncing returns a truthy progress object even
+// when the local downloader believes itself to be done. This is the bug fix
+// for issue #33687: a freshly started node must not advertise itself as
+// "synced" before the consensus client has actually driven it.
 func TestSyncingReportsBeforeConsensusContact(t *testing.T) {
 	api := NewEthereumAPI(&syncingBackend{
 		// progress.Done() returns true on a zero-valued struct because all
 		// remaining counters are zero and CurrentBlock >= HighestBlock.
-		progress:  ethereum.SyncProgress{},
-		contacted: false,
+		progress: ethereum.SyncProgress{},
+		ready:    false,
 	})
 	res, err := api.Syncing(context.Background())
 	if err != nil {
@@ -56,12 +57,12 @@ func TestSyncingReportsBeforeConsensusContact(t *testing.T) {
 }
 
 // TestSyncingReportsFalseAfterConsensusContact verifies that once the
-// consensus layer has handshaken at least once and progress.Done() is true,
-// eth_syncing reports false.
+// consensus layer has handshaken at least once (or the backend does not
+// expect one) and progress.Done() is true, eth_syncing reports false.
 func TestSyncingReportsFalseAfterConsensusContact(t *testing.T) {
 	api := NewEthereumAPI(&syncingBackend{
-		progress:  ethereum.SyncProgress{},
-		contacted: true,
+		progress: ethereum.SyncProgress{},
+		ready:    true,
 	})
 	res, err := api.Syncing(context.Background())
 	if err != nil {
@@ -84,7 +85,7 @@ func TestSyncingReportsActiveSyncEvenWithoutConsensusContact(t *testing.T) {
 			CurrentBlock:  150,
 			HighestBlock:  200, // CurrentBlock < HighestBlock => Done()=false
 		},
-		contacted: false,
+		ready: false,
 	})
 	res, err := api.Syncing(context.Background())
 	if err != nil {
