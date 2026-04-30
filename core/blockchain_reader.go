@@ -421,13 +421,21 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 
 // StateAt returns a new mutable state based on a particular point in time.
 func (bc *BlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
-	return state.New(header.Root, bc.stateDatabase(header.Root, header))
+	db, err := bc.stateDatabase(header.Root, header)
+	if err != nil {
+		return nil, err
+	}
+	return state.New(header.Root, db)
 }
 
 // StateAtForkBoundary returns a new mutable state based on the parent state
 // and the given header, handling the transition across the UBT fork.
 func (bc *BlockChain) StateAtForkBoundary(parent *types.Header, header *types.Header) (*state.StateDB, error) {
-	return state.New(parent.Root, bc.stateDatabase(parent.Root, header))
+	db, err := bc.stateDatabase(parent.Root, header)
+	if err != nil {
+		return nil, err
+	}
+	return state.New(parent.Root, db)
 }
 
 // HistoricState returns a historic state specified by the given header.

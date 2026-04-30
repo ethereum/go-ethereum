@@ -2149,18 +2149,18 @@ type ExecuteConfig struct {
 //     transition, a transition UBTDatabase is built; otherwise (transition
 //     ended, or chainConfig.UBTTransitionEndTime crossed) a plain UBTDatabase
 //     is returned with the transition wrap disabled.
-func (bc *BlockChain) stateDatabase(parentRoot common.Hash, header *types.Header) state.Database {
+func (bc *BlockChain) stateDatabase(parentRoot common.Hash, header *types.Header) (state.Database, error) {
 	if !bc.chainConfig.IsUBT(header.Number, header.Time) {
-		return state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
+		return state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps), nil
 	}
 	// Past the configured transition end: pure binary, no wrap, no MPT base.
 	if !bc.chainConfig.UBTTransitionActive(header.Number, header.Time) {
-		return state.NewUBTDatabase(bc.bintriedbOrMain(), bc.codedb).WithTransitionTreeWrap(false)
+		return state.NewUBTDatabase(bc.bintriedbOrMain(), bc.codedb).WithTransitionTreeWrap(false), nil
 	}
 	// First UBT block: parent is pre-UBT; seed the transition with parent root.
 	parent := bc.GetHeaderByHash(header.ParentHash)
 	if parent != nil && !bc.chainConfig.IsUBT(parent.Number, parent.Time) {
-		return state.NewTransitionUBTDatabase(bc.bintriedbOrMain(), bc.triedb, bc.codedb, parentRoot)
+		return state.NewTransitionUBTDatabase(bc.bintriedbOrMain(), bc.triedb, bc.codedb, parentRoot), nil
 	}
 	// Subsequent UBT block while the transition is active: probe the registry
 	// to see whether a base root is still recorded.
@@ -2180,18 +2180,21 @@ func (bc *BlockChain) bintriedbOrMain() *triedb.Database {
 // probeTransitionDatabase reads the transition registry from the binary trie
 // at the given root and chooses between a transition-mode UBTDatabase (if
 // the registry still records a base root) and a plain UBTDatabase otherwise.
-func (bc *BlockChain) probeTransitionDatabase(root common.Hash) state.Database {
+func (bc *BlockChain) probeTransitionDatabase(root common.Hash) (state.Database, error) {
 	bindb := bc.bintriedbOrMain()
 	plain := state.NewUBTDatabase(bindb, bc.codedb)
 	reader, err := plain.StateReader(root)
 	if err != nil {
-		return plain
+		return nil, err
 	}
-	ts := overlay.LoadTransitionState(storageReaderFunc(reader.Storage), root)
+	ts, err := overlay.LoadTransitionState(storageReaderFunc(reader.Storage))
+	if err != nil {
+		return nil, err
+	}
 	if ts == nil || ts.Transitioned() || ts.BaseRoot == (common.Hash{}) {
-		return plain
+		return plain, nil
 	}
-	return state.NewTransitionUBTDatabase(bindb, bc.triedb, bc.codedb, ts.BaseRoot)
+	return state.NewTransitionUBTDatabase(bindb, bc.triedb, bc.codedb, ts.BaseRoot), nil
 }
 
 // storageReaderFunc adapts a state-reader Storage method to overlay.StorageReader.
@@ -2212,7 +2215,10 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	)
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
-	sdb := bc.stateDatabase(parentRoot, block.Header())
+	sdb, err := bc.stateDatabase(parentRoot, block.Header())
+	if err != nil {
+		return nil, err
+	}
 	// If prefetching is enabled, run that against the current state to pre-cache
 	// transactions and probabilistically some of the account/storage trie nodes.
 	//

@@ -457,4 +457,3 @@ func trienodeHistoryIndexBlockKey(addressHash common.Hash, path []byte, blockID 
 
 	return out
 }
-

@@ -288,7 +288,11 @@ func newUBTTrieReader(root common.Hash, bindb *triedb.Database, mptdb *triedb.Da
 	}
 	var base *trie.StateTrie
 	if wrapInTransitionTrie && mptdb != nil {
-		if ts := overlay.LoadTransitionState(&binTrieStorageReader{tr: binTrie}, root); ts != nil && ts.BaseRoot != (common.Hash{}) {
+		ts, err := overlay.LoadTransitionState(&binTrieStorageReader{tr: binTrie})
+		if err != nil {
+			return nil, err
+		}
+		if ts != nil && ts.BaseRoot != (common.Hash{}) {
 			base, err = trie.NewStateTrie(trie.StateTrieID(ts.BaseRoot), mptdb)
 			if err != nil {
 				return nil, err

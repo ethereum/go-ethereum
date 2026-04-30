@@ -138,9 +138,7 @@ func (db *UBTDatabase) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Rea
 	return ra, rb, nil
 }
 
-// OpenTrie opens the main account trie at a specific root hash. During an
-// active transition, the binary trie is wrapped in a TransitionTrie so writes
-// land on the binary trie while reads fall through to the frozen MPT base.
+// OpenTrie opens the main account trie at a specific root hash.
 func (db *UBTDatabase) OpenTrie(root common.Hash) (Trie, error) {
 	bt, err := bintrie.NewBinaryTrie(root, db.triedb)
 	if err != nil {
@@ -157,9 +155,7 @@ func (db *UBTDatabase) OpenTrie(root common.Hash) (Trie, error) {
 }
 
 // OpenStorageTrie opens the storage trie of an account. In binary trie mode
-// the unified trie carries all state, so the main trie is reused. During the
-// transition, an MPT storage trie is opened for accounts that have not yet
-// been migrated.
+// the unified trie carries all state, so the main trie is reused.
 func (db *UBTDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
 	if self != nil && self.IsUBT() {
 		return self, nil

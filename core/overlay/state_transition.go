@@ -39,9 +39,8 @@ type StorageReader interface {
 	Storage(addr common.Address, slot common.Hash) (common.Hash, error)
 }
 
-// TransitionState holds the progress markers of the MPT-to-binary
-// translation process. It is reconstructed on demand from the storage of the
-// binary transition registry system contract.
+// TransitionState is a structure that holds the progress markers of the
+// translation process.
 type TransitionState struct {
 	CurrentAccountAddress *common.Address // address of the last translated account
 	CurrentSlotHash       common.Hash     // hash of the last translated storage slot
@@ -98,10 +97,13 @@ func IsTransitionActive(reader StorageReader) bool {
 //
 // The root parameter is unused; it is retained on the signature so callers
 // can express the state version they intend to read.
-func LoadTransitionState(reader StorageReader, root common.Hash) *TransitionState {
+func LoadTransitionState(reader StorageReader) (*TransitionState, error) {
 	started, err := reader.Storage(params.BinaryTransitionRegistryAddress, transitionStartedKey)
-	if err != nil || started == (common.Hash{}) {
-		return nil
+	if err != nil {
+		return nil, err
+	}
+	if started == (common.Hash{}) {
+		return nil, nil
 	}
 
 	ended, _ := reader.Storage(params.BinaryTransitionRegistryAddress, transitionEndedKey)
@@ -114,8 +116,14 @@ func LoadTransitionState(reader StorageReader, root common.Hash) *TransitionStat
 		currentAddr = &addr
 	}
 
-	slotHash, _ := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressSlotKey)
-	storageProcessed, _ := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressStorageProcessed)
+	slotHash, err := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressSlotKey)
+	if err != nil {
+		return nil, err
+	}
+	storageProcessed, err := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressStorageProcessed)
+	if err != nil {
+		return nil, err
+	}
 
 	return &TransitionState{
 		Started:               true,
@@ -124,5 +132,5 @@ func LoadTransitionState(reader StorageReader, root common.Hash) *TransitionStat
 		CurrentAccountAddress: currentAddr,
 		CurrentSlotHash:       slotHash,
 		StorageProcessed:      storageProcessed != (common.Hash{}),
-	}
+	}, nil
 }

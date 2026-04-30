@@ -469,12 +469,8 @@ type ChainConfig struct {
 	UBTTime       *uint64 `json:"ubtTime,omitempty"`       // UBT switch time (nil = no fork, 0 = already on UBT)
 
 	// UBTTransitionEndTime is the timestamp at which the MPT-to-binary
-	// transition tree is no longer applied. While UBT is active and the
-	// timestamp is below this value (or nil), state access is wrapped in a
-	// TransitionTrie that overlays the binary trie on the frozen MPT base.
-	// Once headers reach this time, the transition wrapper is dropped and
-	// state is read directly from the binary trie. nil = wrapper stays on
-	// indefinitely. Mirrors the threshold semantics of TerminalTotalDifficulty.
+	// transition tree is no longer applied. Mirrors the threshold semantics
+	// of TerminalTotalDifficulty.
 	UBTTransitionEndTime *uint64 `json:"ubtTransitionEndTime,omitempty"`
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
@@ -897,16 +893,7 @@ func (c *ChainConfig) UBTTransitionActive(num *big.Int, time uint64) bool {
 	return c.UBTTransitionEndTime == nil || time < *c.UBTTransitionEndTime
 }
 
-// IsUBTGenesis checks whether the verkle fork is activated at the genesis block.
-//
-// Verkle mode is considered enabled if the verkle fork time is configured,
-// regardless of whether the local time has surpassed the fork activation time.
-// This is a temporary workaround for verkle devnet testing, where verkle is
-// activated at genesis, and the configured activation date has already passed.
-//
-// In production networks (mainnet and public testnets), verkle activation
-// always occurs after the genesis block, making this function irrelevant in
-// those cases.
+// IsUBTGenesis checks whether the UBT fork is activated at the genesis block.
 func (c *ChainConfig) IsUBTGenesis() bool {
 	return c.EnableUBTAtGenesis
 }
