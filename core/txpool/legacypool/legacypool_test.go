@@ -2627,6 +2627,82 @@ func BenchmarkPendingDemotion100(b *testing.B)   { benchmarkPendingDemotion(b, 1
 func BenchmarkPendingDemotion1000(b *testing.B)  { benchmarkPendingDemotion(b, 1000) }
 func BenchmarkPendingDemotion10000(b *testing.B) { benchmarkPendingDemotion(b, 10000) }
 
+// TestOsakaAmsterdamGasCapPurge verifies that the legacy pool does NOT purge
+// transactions with gas > MaxTxGas at the Osaka fork boundary when Amsterdam is
+// also active. Under EIP-8037 (Amsterdam), transactions can include state-gas
+// in addition to regular gas, so tx.Gas() is allowed to exceed MaxTxGas.
+//
+// The fix for this (#34841) added the IsAmsterdam guard in 4 of the 5 sites
+// (ValidateTransaction, preCheck, miner.fillTransactions, gasestimator, t8ntool),
+// but the legacypool.runReorg site was missed: it still purges on
+// IsOsaka(newHead) && !IsOsaka(oldHead) without checking IsAmsterdam.
+//
+// Failing without fix: the pre-injected high-gas transaction is removed after
+// the reorg into Osaka/Amsterdam, even though Amsterdam makes it legal.
+func TestOsakaAmsterdamGasCapPurge(t *testing.T) {
+	t.Parallel()
+
+	// Fork config: Osaka and Amsterdam activate at the same timestamp (1000).
+	// Before 1000 both are inactive; at/after 1000 both are active.
+	forkTime := uint64(1000)
+	config := *params.MergedTestChainConfig
+	config.OsakaTime = &forkTime
+	config.AmsterdamTime = &forkTime
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	// gasLimit must accommodate the high-gas tx.
+	blockchain := newTestBlockChain(&config, 50_000_000, statedb, new(event.Feed))
+
+	key, _ := crypto.GenerateKey()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	// Enough balance for gas*gasPrice + value with a 20M-gas tx.
+	statedb.AddBalance(addr, uint256.NewInt(1e18), tracing.BalanceChangeUnspecified)
+
+	pool := New(testTxPoolConfig, blockchain)
+	// Init pool at a pre-fork head (Time=0). At this time IsOsaka=false so
+	// tx.Gas() > MaxTxGas is NOT rejected by stateless validation.
+	preForkHead := &types.Header{
+		Number:     big.NewInt(0),
+		Difficulty: common.Big0,
+		GasLimit:   50_000_000,
+		BaseFee:    big.NewInt(1),
+		Time:       0,
+	}
+	if err := pool.Init(testTxPoolConfig.PriceLimit, preForkHead, newReserver()); err != nil {
+		t.Fatalf("pool init: %v", err)
+	}
+	defer pool.Close()
+	<-pool.initDoneCh
+
+	// Inject a transaction with gas above MaxTxGas. Valid under pre-Osaka rules.
+	highGasTx := pricedTransaction(0, params.MaxTxGas+100_000, big.NewInt(1), key)
+	if err := pool.addRemoteSync(highGasTx); err != nil {
+		t.Fatalf("failed to add high-gas tx: %v", err)
+	}
+	if pool.Status(highGasTx.Hash()) == txpool.TxStatusUnknown {
+		t.Fatalf("tx missing after add (pre-reorg)")
+	}
+
+	// Reorg: oldHead is still pre-fork (Time=0), newHead crosses into Osaka AND
+	// Amsterdam (Time=forkTime). Under the current buggy code this triggers the
+	// purge branch because IsOsaka(newHead) && !IsOsaka(oldHead), ignoring that
+	// Amsterdam is also active.
+	newHead := &types.Header{
+		Number:     big.NewInt(1),
+		Difficulty: common.Big0,
+		GasLimit:   50_000_000,
+		BaseFee:    big.NewInt(1),
+		Time:       forkTime,
+	}
+	<-pool.requestReset(preForkHead, newHead)
+
+	// With the fix: tx is kept because Amsterdam is active and tx.Gas() >
+	// MaxTxGas is legal. Without the fix: tx is purged.
+	if pool.Status(highGasTx.Hash()) == txpool.TxStatusUnknown {
+		t.Fatalf("high-gas tx was purged despite Amsterdam being active at newHead; runReorg is missing the !IsAmsterdam guard at legacypool.go:1227")
+	}
+}
+
 func benchmarkPendingDemotion(b *testing.B, size int) {
 	// Add a batch of transactions to a pool one by one
 	pool, key := setupPool()

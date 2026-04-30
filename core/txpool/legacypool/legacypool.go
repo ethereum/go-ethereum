@@ -1223,9 +1223,11 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 	if reset != nil {
 		if reset.newHead != nil && reset.oldHead != nil {
 			// Discard the transactions with the gas limit higher than the cap at the
-			// Osaka fork boundary.
+			// Osaka fork boundary. Amsterdam/EIP-8037 lifts the per-transaction gas
+			// cap, so skip this purge when Amsterdam is also active on the new head.
 			if pool.chainconfig.IsOsaka(reset.newHead.Number, reset.newHead.Time) &&
-				!pool.chainconfig.IsOsaka(reset.oldHead.Number, reset.oldHead.Time) {
+				!pool.chainconfig.IsOsaka(reset.oldHead.Number, reset.oldHead.Time) &&
+				!pool.chainconfig.IsAmsterdam(reset.newHead.Number, reset.newHead.Time) {
 				var hashes []common.Hash
 				pool.all.Range(func(hash common.Hash, tx *types.Transaction) bool {
 					if tx.Gas() > params.MaxTxGas {
