@@ -290,10 +290,7 @@ func TestInternalNodeCollectNodes(t *testing.T) {
 		collectedPaths = append(collectedPaths, pathCopy)
 	}
 
-	err := s.collectNodes(s.root, []byte{1}, flushFn, 8)
-	if err != nil {
-		t.Fatalf("Failed to collect nodes: %v", err)
-	}
+	s.collectNodes(s.root, []byte{1}, flushFn, 8)
 
 	// Should have collected 3 nodes: left stem, right stem, and the internal node itself
 	if len(collectedPaths) != 3 {
