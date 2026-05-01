@@ -402,7 +402,7 @@ func BenchmarkGetPayloadV5WithBlobs(b *testing.B) {
 						Withdrawals:           []*types.Withdrawal{},
 						BeaconRoot:            &beaconRoot,
 					}
-					resp, err := env.api.ForkchoiceUpdatedV3(fcState, payloadAttr)
+					resp, err := env.api.ForkchoiceUpdatedV3(context.Background(), fcState, payloadAttr)
 					if err != nil {
 						b.Fatalf("ForkchoiceUpdatedV3 failed: %v", err)
 					}
@@ -457,7 +457,7 @@ func BenchmarkNewPayloadV3WithBlobs(b *testing.B) {
 					Withdrawals:           []*types.Withdrawal{},
 					BeaconRoot:            &beaconRoot,
 				}
-				resp, err := env.api.ForkchoiceUpdatedV3(fcState, payloadAttr)
+				resp, err := env.api.ForkchoiceUpdatedV3(context.Background(), fcState, payloadAttr)
 				if err != nil {
 					b.Fatalf("ForkchoiceUpdatedV3 failed: %v", err)
 				}
@@ -534,7 +534,7 @@ func BenchmarkForkchoiceUpdatedWithBlobPayload(b *testing.B) {
 						Withdrawals:           []*types.Withdrawal{},
 						BeaconRoot:            &beaconRoot,
 					}
-					resp, err := env.api.ForkchoiceUpdatedV3(fcState, payloadAttr)
+					resp, err := env.api.ForkchoiceUpdatedV3(context.Background(), fcState, payloadAttr)
 					if err != nil {
 						b.Fatalf("ForkchoiceUpdatedV3 failed: %v", err)
 					}
@@ -582,7 +582,7 @@ func BenchmarkFullBlobWorkflowOsaka(b *testing.B) {
 						Withdrawals:           []*types.Withdrawal{},
 						BeaconRoot:            &beaconRoot,
 					}
-					resp, err := env.api.ForkchoiceUpdatedV3(fcState, payloadAttr)
+					resp, err := env.api.ForkchoiceUpdatedV3(context.Background(), fcState, payloadAttr)
 					if err != nil {
 						b.Fatalf("ForkchoiceUpdatedV3 failed: %v", err)
 					}
@@ -657,7 +657,7 @@ func BenchmarkGetPayloadV5RPCServerOnly(b *testing.B) {
 		Withdrawals:           []*types.Withdrawal{},
 		BeaconRoot:            &beaconRoot,
 	}
-	resp, err := env.api.ForkchoiceUpdatedV3(fcState, payloadAttr)
+	resp, err := env.api.ForkchoiceUpdatedV3(context.Background(), fcState, payloadAttr)
 	if err != nil {
 		b.Fatalf("ForkchoiceUpdatedV3 failed: %v", err)
 	}
