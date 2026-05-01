@@ -276,7 +276,7 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 	if data.BaseFeePerGas != nil && (data.BaseFeePerGas.Sign() == -1 || data.BaseFeePerGas.BitLen() > 256) {
 		return nil, fmt.Errorf("invalid baseFeePerGas: %v", data.BaseFeePerGas)
 	}
-	var blobHashes = make([]common.Hash, 0, len(txs))
+	var blobHashes = make([]common.Hash, 0, len(versionedHashes))
 	for _, tx := range txs {
 		blobHashes = append(blobHashes, tx.BlobHashes()...)
 	}
