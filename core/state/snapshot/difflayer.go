@@ -431,6 +431,10 @@ func (dl *diffLayer) AccountList() []common.Hash {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
+	if list := dl.accountList; list != nil {
+		return list
+	}
+
 	dl.accountList = slices.SortedFunc(maps.Keys(dl.accountData), common.Hash.Cmp)
 	dl.memory += uint64(len(dl.accountList) * common.HashLength)
 	return dl.accountList
