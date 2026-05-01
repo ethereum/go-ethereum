@@ -337,9 +337,6 @@ func checkAccumulator(e era.Era) error {
 	// accumulation across the entire set and are verified at the end.
 	for it.Next() {
 		// 1) next() walks the block index, so we're able to implicitly verify it.
-		if it.Error() != nil {
-			return fmt.Errorf("error reading block %d: %w", it.Number(), it.Error())
-		}
 		block, receipts, err := it.BlockAndReceipts()
 		if err != nil {
 			return fmt.Errorf("error reading block %d: %w", it.Number(), err)
