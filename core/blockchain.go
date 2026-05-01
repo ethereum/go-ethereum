@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/partial"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -231,6 +232,23 @@ type BlockChainConfig struct {
 	EnableWitnessStats      bool // Whether trie access statistics collection is enabled
 
 	BALExecutionMode bal.BALExecutionMode
+
+	// PartialStateEnabled enables partial statefulness mode where only configured
+	// contracts have their storage synced and tracked.
+	PartialStateEnabled bool
+
+	// PartialStateContracts is the list of contracts to track storage for
+	// when partial state mode is enabled.
+	PartialStateContracts []common.Address
+
+	// PartialStateBALRetention is the number of blocks to retain BAL history for.
+	// Default is 256 if not specified.
+	PartialStateBALRetention uint64
+
+	// PartialStateChainRetention is the number of recent blocks to retain
+	// bodies and receipts for. Older blocks only keep their headers. 0 means
+	// keep all chain history. Only applies when PartialStateEnabled is true.
+	PartialStateChainRetention uint64
 }
 
 // DefaultConfig returns the default config.
@@ -296,7 +314,8 @@ func (cfg *BlockChainConfig) triedbConfig(isVerkle bool) *triedb.Config {
 			FullValueCheckpoint: cfg.NodeFullValueCheckpoint,
 
 			// Testing configurations
-			NoAsyncFlush: cfg.TrieNoAsyncFlush,
+			NoAsyncFlush:    cfg.TrieNoAsyncFlush,
+			SnapshotNoBuild: cfg.SnapshotNoBuild,
 		}
 	}
 	return config
@@ -335,6 +354,7 @@ type BlockChain struct {
 	flushInterval atomic.Int64                     // Time interval (processing time) after which to flush a state
 	triedb        *triedb.Database                 // The database handler for maintaining trie nodes.
 	codedb        *state.CodeDB                    // The database handler for maintaining contract codes.
+	partialState  *partial.PartialState            // Partial state manager (nil if full node)
 	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
 
 	hc               *HeaderChain
@@ -434,6 +454,27 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		return nil, err
 	}
 	bc.flushInterval.Store(int64(cfg.TrieTimeLimit))
+	// Initialize partial state manager if enabled
+	if cfg.PartialStateEnabled {
+		balRetention := cfg.PartialStateBALRetention
+		if balRetention == 0 {
+			balRetention = 256 // Default retention
+		}
+		filter := partial.NewConfiguredFilter(cfg.PartialStateContracts)
+		bc.partialState = partial.NewPartialState(db, bc.triedb, filter, balRetention)
+		log.Info("Partial state mode enabled",
+			"contracts", len(cfg.PartialStateContracts),
+			"balRetention", balRetention)
+
+		// Set chain retention on the freezer so it enforces a rolling window
+		// of bodies/receipts, keeping only the most recent N blocks.
+		if cfg.PartialStateChainRetention > 0 {
+			if setter, ok := db.(interface{ SetChainRetention(uint64) }); ok {
+				setter.SetChainRetention(cfg.PartialStateChainRetention)
+			}
+		}
+	}
+
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(bc.hc)
@@ -838,6 +879,12 @@ func (bc *BlockChain) loadLastState() error {
 
 // initializeHistoryPruning sets bc.historyPrunePoint.
 func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
+	// Partial state mode manages its own chain retention via the freezer.
+	// The freezer tail may be at any position (HEAD - chainRetention),
+	// which won't match any known predefined prune point — that's expected.
+	if bc.cfg.PartialStateEnabled && bc.cfg.PartialStateChainRetention > 0 {
+		return nil
+	}
 	freezerTail, _ := bc.db.Tail()
 	policy := bc.cfg.HistoryPolicy
 
@@ -1315,6 +1362,79 @@ func (bc *BlockChain) SnapSyncComplete(hash common.Hash) error {
 	return nil
 }
 
+// AdvancePartialHead updates currentBlock to the given block hash without
+// re-executing blocks. It is used by partial state mode after receipt-importing
+// post-pivot blocks and re-syncing state at the new root.
+//
+// Unlike SnapSyncComplete, this does NOT rebuild snapshots (already done
+// during the initial pivot commit), but DOES re-enable the trie DB for the
+// new root (required for path-based trie to recognize the synced state).
+func (bc *BlockChain) AdvancePartialHead(hash common.Hash) error {
+	block := bc.GetBlockByHash(hash)
+	if block == nil {
+		return fmt.Errorf("non existent block [%x..]", hash[:4])
+	}
+	root := block.Root()
+
+	// Enable the trie database for the new root (required for path-based trie)
+	if bc.triedb.Scheme() == rawdb.PathScheme {
+		if err := bc.triedb.Enable(root); err != nil {
+			return err
+		}
+	}
+
+	if !bc.HasState(root) {
+		return fmt.Errorf("non existent state [%x..]", root[:4])
+	}
+	// Write canonical hashes for all blocks between the old head and the new head.
+	// During snap sync, InsertReceiptChain skips blocks that already have bodies
+	// (HasBlock returns true), so canonical hashes aren't written for post-pivot
+	// blocks. We backfill them here by walking backward from the new block via
+	// ParentHash() — this avoids relying on GetHeaderByNumber which itself
+	// depends on canonical hash mappings that don't exist yet.
+	batch := bc.db.NewBatch()
+	currentHead := bc.CurrentBlock()
+	// Include the pivot itself: WriteBlockWithoutState persisted its header+body
+	// via the Engine API newPayload path, and InsertReceiptChain.writeLive
+	// skipped writing its canonical-hash entry because HasBlock was already
+	// true. Without this explicit write, startup's freezer gap-check rejects
+	// the datadir because headerHashKey(pivot) is empty in leveldb.
+	rawdb.WriteCanonicalHash(batch, currentHead.Hash(), currentHead.Number.Uint64())
+	current := block.Header()
+	for current.Number.Uint64() > currentHead.Number.Uint64() {
+		rawdb.WriteCanonicalHash(batch, current.Hash(), current.Number.Uint64())
+		parent := bc.GetHeader(current.ParentHash, current.Number.Uint64()-1)
+		if parent == nil {
+			log.Warn("Missing parent during canonical hash backfill",
+				"number", current.Number.Uint64()-1, "target", block.NumberU64())
+			break
+		}
+		current = parent
+	}
+	rawdb.WriteHeadBlockHash(batch, block.Hash())
+	rawdb.WriteHeadHeaderHash(batch, block.Hash())
+	rawdb.WriteHeadFastBlockHash(batch, block.Hash())
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to persist partial state head markers", "err", err)
+	}
+	// Update all in-memory markers
+	bc.hc.SetCurrentHeader(block.Header())
+	bc.currentSnapBlock.Store(block.Header())
+	headFastBlockGauge.Update(int64(block.NumberU64()))
+	bc.currentBlock.Store(block.Header())
+	headBlockGauge.Update(int64(block.NumberU64()))
+
+	// Set the partial state root so ProcessBlockWithBAL chains from the correct root.
+	// After the second snap sync, the trie root matches the block's header root.
+	if bc.partialState != nil {
+		bc.partialState.SetRoot(root)
+		bc.partialState.SetLastProcessedBlock(block.NumberU64())
+	}
+
+	log.Info("Advanced partial state head", "number", block.Number(), "hash", hash)
+	return nil
+}
+
 // Reset purges the entire blockchain, restoring it to its genesis state.
 func (bc *BlockChain) Reset() error {
 	return bc.ResetWithGenesisBlock(bc.genesisBlock)
@@ -1733,10 +1853,10 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	return 0, nil
 }
 
-// writeBlockWithoutState writes only the block and its metadata to the database,
-// but does not write any state. This is used to construct competing side forks
-// up to the point where they exceed the canonical total difficulty.
-func (bc *BlockChain) writeBlockWithoutState(block *types.Block) (err error) {
+// WriteBlockWithoutState writes only the block and its metadata to the database,
+// but does not write any state. Used by the Engine API to persist blocks before
+// state is available (e.g., during partial state sync or when the parent is unknown).
+func (bc *BlockChain) WriteBlockWithoutState(block *types.Block) (err error) {
 	if bc.insertStopped() {
 		return errInsertionInterrupted
 	}
@@ -2544,7 +2664,7 @@ func (bc *BlockChain) insertSideChain(ctx context.Context, block *types.Block, i
 		}
 		if !bc.HasBlock(block.Hash(), block.NumberU64()) {
 			start := time.Now()
-			if err := bc.writeBlockWithoutState(block); err != nil {
+			if err := bc.WriteBlockWithoutState(block); err != nil {
 				return nil, it.index, err
 			}
 			log.Debug("Injected sidechain block", "number", block.Number(), "hash", block.Hash(),
@@ -2904,10 +3024,23 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 
 	// Re-execute the reorged chain in case the head state is missing.
 	if !bc.HasState(head.Root()) {
-		if latestValidHash, err := bc.recoverAncestors(context.Background(), head, false); err != nil {
-			return latestValidHash, err
+		// Partial state nodes can't re-execute blocks — they only apply BAL diffs.
+		// The computed root may differ from the header root when untracked contracts
+		// have unresolved storage roots. Check the partial state's tracked root too.
+		if bc.partialState != nil {
+			partialRoot := bc.partialState.Root()
+			if partialRoot == (common.Hash{}) || !bc.HasState(partialRoot) {
+				return common.Hash{}, fmt.Errorf("partial state: missing state for block %d root %x", head.NumberU64(), head.Root())
+			}
+			log.Debug("SetCanonical: using partial state root (differs from header)",
+				"block", head.NumberU64(), "headerRoot", head.Root(),
+				"partialRoot", partialRoot)
+		} else {
+			if latestValidHash, err := bc.recoverAncestors(context.Background(), head, false); err != nil {
+				return latestValidHash, err
+			}
+			log.Info("Recovered head state", "number", head.Number(), "hash", head.Hash())
 		}
-		log.Info("Recovered head state", "number", head.Number(), "hash", head.Hash())
 	}
 	// Run the reorg if necessary and set the given block as new head.
 	start := time.Now()
@@ -3094,6 +3227,14 @@ func (bc *BlockChain) InsertHeadersBeforeCutoff(headers []*types.Header) (int, e
 			return 0, err
 		}
 		log.Info("Wrote genesis to ancient store")
+	} else if first > frozen && frozen > 0 {
+		// Gap between the ancient store boundary and the incoming headers.
+		// This can happen when the sync restarts with a higher chain cutoff
+		// (cutoff = HEAD - retention) causing intermediate headers to be
+		// skipped. The headers are still valid in the active database; just
+		// skip the ancient-store write for this batch.
+		log.Debug("Skipping ancient header write due to gap", "first", first, "ancient", frozen)
+		return len(headers), nil
 	} else if frozen != first {
 		return 0, fmt.Errorf("headers are gapped with the ancient store, first: %d, ancient: %d", first, frozen)
 	}

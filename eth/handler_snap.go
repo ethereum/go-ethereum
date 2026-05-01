@@ -46,5 +46,12 @@ func (h *snapHandler) PeerInfo(id enode.ID) interface{} {
 // Handle is invoked from a peer's message handler when it receives a new remote
 // message that the handler couldn't consume and serve itself.
 func (h *snapHandler) Handle(peer *snap.Peer, packet snap.Packet) error {
+	// Check if this is a response to a one-off storage root query from partial state
+	if resp, ok := packet.(*snap.AccountRangePacket); ok {
+		if ch, loaded := (*handler)(h).pendingSnapQueries.LoadAndDelete(resp.ID); loaded {
+			ch.(chan *snap.AccountRangePacket) <- resp
+			return nil
+		}
+	}
 	return h.downloader.DeliverSnapPacket(peer, packet)
 }

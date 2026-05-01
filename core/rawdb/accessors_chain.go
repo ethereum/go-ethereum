@@ -200,6 +200,32 @@ func WriteLastPivotNumber(db ethdb.KeyValueWriter, pivot uint64) {
 	}
 }
 
+// ReadPartialSyncComplete reports whether the partial-state initial sync
+// completed successfully on this datadir. Returns false if the flag is
+// unset or absent (fresh database, non-partial-state node, or sync in
+// progress).
+func ReadPartialSyncComplete(db ethdb.KeyValueReader) bool {
+	data, _ := db.Get(partialSyncCompleteKey)
+	return len(data) > 0 && data[0] == 1
+}
+
+// WritePartialSyncComplete marks the partial-state initial sync as finished.
+// The downloader uses this on restart to skip redundant sync cycles.
+func WritePartialSyncComplete(db ethdb.KeyValueWriter) {
+	if err := db.Put(partialSyncCompleteKey, []byte{1}); err != nil {
+		log.Crit("Failed to store partial-sync-complete flag", "err", err)
+	}
+}
+
+// DeletePartialSyncComplete clears the partial-state sync completion flag.
+// Used when the node is reset to genesis or rewound behind the pivot so a
+// fresh partial sync can run.
+func DeletePartialSyncComplete(db ethdb.KeyValueWriter) {
+	if err := db.Delete(partialSyncCompleteKey); err != nil {
+		log.Crit("Failed to delete partial-sync-complete flag", "err", err)
+	}
+}
+
 // ReadTxIndexTail retrieves the number of oldest indexed block
 // whose transaction indices has been indexed.
 func ReadTxIndexTail(db ethdb.KeyValueReader) *uint64 {

@@ -104,6 +104,12 @@ var (
 	// snapSyncStatusFlagKey flags that status of snap sync.
 	snapSyncStatusFlagKey = []byte("SnapSyncStatus")
 
+	// partialSyncCompleteKey flags that the partial-state initial sync
+	// (snap sync + second state sync to HEAD + AdvancePartialHead) has
+	// finished successfully on this datadir. Consumed by the downloader
+	// so beaconBackfiller.resume() keeps short-circuiting across restarts.
+	partialSyncCompleteKey = []byte("PartialSyncComplete")
+
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
 	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
 	headerTDSuffix     = []byte("t") // headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td (deprecated)
@@ -168,6 +174,9 @@ var (
 
 	// Verkle transition information
 	VerkleTransitionStatePrefix = []byte("verkle-transition-state-")
+
+	// Partial statefulness - BAL (Block Access List) history for reorg handling
+	balHistoryPrefix = []byte("p") // balHistoryPrefix + num (uint64 big endian) -> RLP(bal.BlockAccessList)
 )
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary

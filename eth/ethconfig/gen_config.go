@@ -70,6 +70,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		TxSyncMaxTimeout        time.Duration `toml:",omitempty"`
 		RangeLimit              uint64        `toml:",omitempty"`
 		BALExecutionMode        bal.BALExecutionMode
+		PartialState            PartialStateConfig
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -124,6 +125,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.TxSyncMaxTimeout = c.TxSyncMaxTimeout
 	enc.RangeLimit = c.RangeLimit
 	enc.BALExecutionMode = c.BALExecutionMode
+	enc.PartialState = c.PartialState
 	return &enc, nil
 }
 
@@ -182,6 +184,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		TxSyncMaxTimeout        *time.Duration `toml:",omitempty"`
 		RangeLimit              *uint64        `toml:",omitempty"`
 		BALExecutionMode        *bal.BALExecutionMode
+		PartialState            *PartialStateConfig
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -342,6 +345,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.BALExecutionMode != nil {
 		c.BALExecutionMode = *dec.BALExecutionMode
+	}
+	if dec.PartialState != nil {
+		c.PartialState = *dec.PartialState
 	}
 	return nil
 }
