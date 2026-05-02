@@ -1577,10 +1577,10 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	return p.addLocked(tx, true)
 }
 
-// addLocked inserts a new blob transaction into the pool if it passes validation (both
+// addLockedInternal inserts a new blob transaction into the pool if it passes validation (both
 // consensus validity and pool restrictions). It must be called with the pool lock held.
 // Only for internal use.
-func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error) {
+func (p *BlobPool) addLockedInternal(tx *types.Transaction, checkGapped bool) (err error) {
 	// Ensure the transaction is valid from all perspectives
 	if err := p.validateTx(tx); err != nil {
 		log.Trace("Transaction validation failed", "hash", tx.Hash(), "err", err)
@@ -1593,21 +1593,6 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 			addStaleMeter.Mark(1)
 		case errors.Is(err, core.ErrNonceTooHigh):
 			addGappedMeter.Mark(1)
-			// Store the tx in memory, and revalidate later
-			from, _ := types.Sender(p.signer, tx)
-			allowance := p.gappedAllowance(from)
-			if allowance >= 1 && len(p.gapped) < maxGapped {
-				p.gapped[from] = append(p.gapped[from], tx)
-				p.gappedSource[tx.Hash()] = from
-				log.Trace("added tx to gapped blob queue", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
-				return nil
-			} else {
-				// if maxGapped is reached, it is better to give time to gapped
-				// transactions by keeping the old and dropping this one.
-				// Thus replacing a gapped transaction with another gapped transaction
-				// is discouraged.
-				log.Trace("no gapped blob queue allowance", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
-			}
 		case errors.Is(err, core.ErrInsufficientFunds):
 			addOverdraftedMeter.Mark(1)
 		case errors.Is(err, txpool.ErrAccountLimitExceeded):
@@ -1737,12 +1722,51 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 			heap.Fix(p.evict, p.evict.index[from])
 		}
 	}
+	return nil
+}
+
+// addLocked inserts a new blob transaction into the pool if it passes validation (both
+// consensus validity and pool restrictions). It handles gapped transactions, underpriced
+// transactions, pool limits, and notifications.
+// It must be called with the pool lock held. Only for internal use.
+func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error) {
+	// check for nonce gaps and add to gapped buffer if needed.
+	if err := p.addLockedInternal(tx, checkGapped); err != nil {
+		if errors.Is(err, core.ErrNonceTooHigh) {
+			addGappedMeter.Mark(1)
+			// Store the tx in memory, and revalidate later
+			from, _ := types.Sender(p.signer, tx) // already validated in addLockedInternal/ValidateTransactionWithState
+			allowance := p.gappedAllowance(from)
+			if allowance >= 1 && len(p.gapped) < maxGapped {
+				p.gapped[from] = append(p.gapped[from], tx)
+				p.gappedSource[tx.Hash()] = from
+				log.Trace("added tx to gapped blob queue", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
+				return nil
+			} else {
+				// if maxGapped is reached, it is better to give time to gapped
+				// transactions by keeping the old and dropping this one.
+				// Thus replacing a gapped transaction with another gapped transaction
+				// is discouraged.
+				log.Trace("no gapped blob queue allowance", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
+			}
+		}
+		return err
+	}
+
 	// If the pool went over the allowed data limit, evict transactions until
 	// we're again below the threshold
 	for p.stored > p.config.Datacap {
 		p.drop()
 	}
 	p.updateStorageMetrics()
+
+	// If we've just dropped the added transaction, it was clearly underpriced.
+	// We could also try to check for this before adding to the tx pool, but it is
+	// complex because of database internals (RLP encoding, billy shelves).
+	if !p.lookup.exists(tx.Hash()) {
+		addUnderpricedMeter.Mark(1)
+		return txpool.ErrUnderpriced
+	}
 
 	addValidMeter.Mark(1)
 
@@ -1757,6 +1781,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 	}
 
 	//check the gapped queue for this account and try to promote
+	from, _ := types.Sender(p.signer, tx) // already validated in addLockedInternal/ValidateTransactionWithState
 	if gtxs, ok := p.gapped[from]; checkGapped && ok && len(gtxs) > 0 {
 		// We have to add in nonce order, but we want to stable sort to cater for situations
 		// where transactions are replaced, keeping the original receive order for same nonce
