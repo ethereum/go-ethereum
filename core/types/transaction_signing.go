@@ -472,7 +472,7 @@ func decodeSignature(sig []byte) (r, s, v *big.Int, err error) {
 	}
 	r = new(big.Int).SetBytes(sig[:32])
 	s = new(big.Int).SetBytes(sig[32:64])
-	v = new(big.Int).SetBytes([]byte{sig[64] + 27})
+	v = big.NewInt(int64(sig[64] + 27))
 	return r, s, v, nil
 }
 
