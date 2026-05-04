@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -724,35 +723,6 @@ func (t *Tree) Rebuild(root common.Hash) {
 	log.Info("Rebuilding state snapshot")
 	t.layers = map[common.Hash]snapshot{
 		root: generateSnapshot(t.diskdb, t.triedb, t.config.CacheSize, root),
-	}
-}
-
-// InitFromSyncedState sets up the snapshot tree to use flat state that was
-// already downloaded by snap sync. Unlike Rebuild, it does NOT regenerate the
-// snapshot from the trie.
-func (t *Tree) InitFromSyncedState(root common.Hash) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
-	// Delete any recovery flag in the database.
-	rawdb.DeleteSnapshotRecoveryNumber(t.diskdb)
-	rawdb.DeleteSnapshotDisabled(t.diskdb)
-
-	// Write the new root.
-	rawdb.WriteSnapshotRoot(t.diskdb, root)
-
-	// Clear the journal.
-	journalProgress(t.diskdb, nil, nil)
-	log.Info("Setting up snapshot from synced state", "root", root)
-
-	// Replace t.layers with a single diskLayer pointing at the root.
-	t.layers = map[common.Hash]snapshot{
-		root: &diskLayer{
-			diskdb: t.diskdb,
-			triedb: t.triedb,
-			cache:  fastcache.New(t.config.CacheSize * 1024 * 1024),
-			root:   root,
-		},
 	}
 }
 

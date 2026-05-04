@@ -666,6 +666,41 @@ func testSync(t *testing.T, scheme string) {
 		t.Fatalf("sync failed: %v", err)
 	}
 	verifyTrie(scheme, syncer.db, sourceAccountTrie.Hash(), t)
+	verifyAdoptedSyncedState(scheme, syncer.db, sourceAccountTrie.Hash(), elems, t)
+}
+
+// verifyAdoptedSyncedState exercises the snap/2 completion contract end-to-end:
+// after a real sync, opening a fresh triedb and calling AdoptSyncedState must
+// (a) succeed and (b) leave flat-state reads serving immediately, with no
+// background regeneration gating them.
+func verifyAdoptedSyncedState(scheme string, db ethdb.KeyValueStore, root common.Hash, elems []*kv, t *testing.T) {
+	t.Helper()
+	if scheme != rawdb.PathScheme {
+		return
+	}
+	tdb := triedb.NewDatabase(rawdb.NewDatabase(db), newDbConfig(scheme))
+	defer tdb.Close()
+
+	if err := tdb.AdoptSyncedState(root); err != nil {
+		t.Fatalf("AdoptSyncedState failed: %v", err)
+	}
+	// Read one of the synced accounts via the public flat-state API. If this
+	// returned errNotCoveredYet we'd know AdoptSyncedState left a generator
+	// gating reads, exactly the bug we're trying to prevent.
+	sr, err := tdb.StateReader(root)
+	if err != nil {
+		t.Fatalf("StateReader: %v", err)
+	}
+	if len(elems) == 0 {
+		return
+	}
+	acc, err := sr.Account(common.BytesToHash(elems[0].k))
+	if err != nil {
+		t.Fatalf("flat-state read failed after AdoptSyncedState: %v", err)
+	}
+	if acc == nil {
+		t.Fatal("flat-state read returned nil account; sync did not populate the snapshot namespace")
+	}
 }
 
 // TestSyncTinyTriePanic tests a basic sync with one peer, and a tiny trie. This caused a

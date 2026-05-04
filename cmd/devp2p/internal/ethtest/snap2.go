@@ -337,6 +337,8 @@ func (s *Suite) snapGetAccessLists(t *utesting.T, tc *accessListsTest) error {
 	for _, p := range tc.mustBeEmptyAt {
 		mustEmpty[p] = struct{}{}
 	}
+	head := s.chain.Head().Header()
+	rules := s.chain.config.Rules(head.Number, true, head.Time)
 
 	for it.Next() {
 		raw := it.Value()
@@ -383,7 +385,7 @@ func (s *Suite) snapGetAccessLists(t *utesting.T, tc *accessListsTest) error {
 		if err := rlp.DecodeBytes(raw, &accessList); err != nil {
 			return fmt.Errorf("entry %d: invalid BAL RLP: %v", idx, err)
 		}
-		if err := accessList.Validate(); err != nil {
+		if err := accessList.Validate(rules); err != nil {
 			return fmt.Errorf("entry %d: BAL failed validation: %v", idx, err)
 		}
 		idx++

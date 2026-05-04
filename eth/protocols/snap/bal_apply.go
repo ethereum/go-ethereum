@@ -61,7 +61,7 @@ func (s *Syncer) applyAccessList(b *bal.BlockAccessList) error {
 	batch := s.db.NewBatch()
 
 	// Iterate over all accounts in the access list
-	for _, access := range b.Accesses {
+	for _, access := range *b {
 		addr := common.Address(access.Address)
 		accountHash := crypto.Keccak256Hash(addr[:])
 
@@ -91,8 +91,7 @@ func (s *Syncer) applyAccessList(b *bal.BlockAccessList) error {
 
 		// Apply balance change (last entry = post-block state)
 		if n := len(access.BalanceChanges); n > 0 {
-			raw := access.BalanceChanges[n-1].Balance
-			account.Balance = new(uint256.Int).SetBytes(raw[:])
+			account.Balance = new(uint256.Int).Set(access.BalanceChanges[n-1].Balance)
 		}
 
 		// Apply nonce change (last entry = post-block state)
@@ -116,11 +115,13 @@ func (s *Syncer) applyAccessList(b *bal.BlockAccessList) error {
 		for _, slotWrites := range access.StorageWrites {
 			if n := len(slotWrites.Accesses); n > 0 {
 				value := slotWrites.Accesses[n-1].ValueAfter
-				storageHash := crypto.Keccak256Hash(slotWrites.Slot[:])
-				if value == (common.Hash{}) {
+				slotKey := slotWrites.Slot.Bytes32()
+				storageHash := crypto.Keccak256Hash(slotKey[:])
+				if value.IsZero() {
 					rawdb.DeleteStorageSnapshot(batch, accountHash, storageHash)
 				} else {
-					rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, value[:])
+					valBytes := value.Bytes32()
+					rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, valBytes[:])
 				}
 			}
 		}

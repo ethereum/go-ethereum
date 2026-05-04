@@ -201,7 +201,7 @@ type BlockChain interface {
 	SnapSyncStart() error
 
 	// SnapSyncComplete directly commits the head block to a certain entity.
-	SnapSyncComplete(common.Hash) error
+	SnapSyncComplete(hash common.Hash, flatStateReady bool) error
 
 	// InsertHeadersBeforeCutoff inserts a batch of headers before the configured
 	// chain cutoff into the ancient store.
@@ -1062,7 +1062,9 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	if _, err := d.blockchain.InsertReceiptChain([]*types.Block{block}, []rlp.RawValue{result.Receipts}, d.ancientLimit); err != nil {
 		return err
 	}
-	if err := d.blockchain.SnapSyncComplete(block.Hash()); err != nil {
+
+	// TODO JR: This needs to pass trie for snap/2 and false for snap/1
+	if err := d.blockchain.SnapSyncComplete(block.Hash(), true); err != nil {
 		return err
 	}
 	d.committed.Store(true)
