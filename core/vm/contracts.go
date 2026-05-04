@@ -266,7 +266,6 @@ func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address comm
 	gasCost := p.RequiredGas(input)
 	prior, ok := gas.Charge(GasCosts{RegularGas: gasCost})
 	if !ok {
-		gas.Exhaust()
 		return nil, gas, ErrOutOfGas
 	}
 	if logger.HasGasHook() {
