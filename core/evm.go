@@ -68,19 +68,29 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	}
 
 	return vm.BlockContext{
-		CanTransfer: CanTransfer,
-		Transfer:    Transfer,
-		GetHash:     GetHashFn(header, chain),
-		Coinbase:    beneficiary,
-		BlockNumber: new(big.Int).Set(header.Number),
-		Time:        header.Time,
-		Difficulty:  new(big.Int).Set(header.Difficulty),
-		BaseFee:     baseFee,
-		BlobBaseFee: blobBaseFee,
-		GasLimit:    header.GasLimit,
-		Random:      random,
-		SlotNum:     slotNum,
+		CanTransfer:      CanTransfer,
+		Transfer:         Transfer,
+		GetHash:          GetHashFn(header, chain),
+		Coinbase:         beneficiary,
+		BlockNumber:      new(big.Int).Set(header.Number),
+		Time:             header.Time,
+		Difficulty:       new(big.Int).Set(header.Difficulty),
+		BaseFee:          baseFee,
+		BlobBaseFee:      blobBaseFee,
+		GasLimit:         header.GasLimit,
+		Random:           random,
+		SlotNum:          slotNum,
+		CostPerStateByte: CostPerStateByte(header, chain.Config()),
 	}
+}
+
+// CostPerStateByte computes the cost per one byte of state creation
+// after EIP-8037.
+func CostPerStateByte(header *types.Header, config *params.ChainConfig) uint64 {
+	if !config.IsAmsterdam(header.Number, header.Time) {
+		return 0
+	}
+	return params.CostPerStateByte
 }
 
 // NewEVMTxContext creates a new transaction context for a single transaction.

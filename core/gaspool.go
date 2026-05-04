@@ -27,6 +27,11 @@ type GasPool struct {
 	remaining      uint64
 	initial        uint64
 	cumulativeUsed uint64
+
+	// After 8037 Block gas used is
+	// max(cumulativeRegular, cumulativeState).
+	cumulativeRegular uint64
+	cumulativeState   uint64
 }
 
 // NewGasPool initializes the gasPool with the given amount.
@@ -44,6 +49,19 @@ func (gp *GasPool) SubGas(amount uint64) error {
 		return ErrGasLimitReached
 	}
 	gp.remaining -= amount
+	return nil
+}
+
+// CheckGasAmsterdam performs the EIP-8037 per-tx 2D block-inclusion check:
+// the worst-case regular contribution must fit in the regular dimension and
+// the worst-case state contribution must fit in the state dimension
+func (gp *GasPool) CheckGasAmsterdam(regularReservation, stateReservation uint64) error {
+	if gp.initial-gp.cumulativeRegular < regularReservation {
+		return ErrGasLimitReached
+	}
+	if gp.initial-gp.cumulativeState < stateReservation {
+		return ErrGasLimitReached
+	}
 	return nil
 }
 
@@ -68,20 +86,43 @@ func (gp *GasPool) ReturnGas(returned uint64, gasUsed uint64) error {
 	return nil
 }
 
+// ChargeGasAmsterdam calculates the new remaining gas in the pool after the
+// execution of a message. Previously we subtracted and re-added gas to the
+// gaspool. After Amsterdam we only check if we can include the transaction and charge the
+// gaspool at the end.
+func (gp *GasPool) ChargeGasAmsterdam(txRegular, txState, receiptGasUsed uint64) error {
+	gp.cumulativeRegular += txRegular
+	gp.cumulativeState += txState
+	gp.cumulativeUsed += receiptGasUsed
+
+	blockUsed := max(gp.cumulativeRegular, gp.cumulativeState)
+	if gp.initial < blockUsed {
+		return fmt.Errorf("%w: block gas overflow: initial %d, used %d (regular: %d, state: %d)",
+			ErrGasLimitReached, gp.initial, blockUsed, gp.cumulativeRegular, gp.cumulativeState)
+	}
+	// For tx inclusion, we only check if the regular dimension fits.
+	gp.remaining = gp.initial - gp.cumulativeRegular
+	return nil
+}
+
 // Gas returns the amount of gas remaining in the pool.
 func (gp *GasPool) Gas() uint64 {
 	return gp.remaining
 }
 
-// CumulativeUsed returns the amount of cumulative consumed gas (refunded included).
+// CumulativeUsed returns the cumulative gas consumed for receipt tracking.
 func (gp *GasPool) CumulativeUsed() uint64 {
 	return gp.cumulativeUsed
 }
 
 // Used returns the amount of consumed gas.
 func (gp *GasPool) Used() uint64 {
+	if gp.cumulativeRegular > 0 || gp.cumulativeState > 0 {
+		// After 8037 we return max(sum_regular, sum_state)
+		return max(gp.cumulativeRegular, gp.cumulativeState)
+	}
 	if gp.initial < gp.remaining {
-		panic("gas used underflow")
+		panic(fmt.Sprintf("gas used underflow: %v %v", gp.initial, gp.remaining))
 	}
 	return gp.initial - gp.remaining
 }
@@ -89,9 +130,11 @@ func (gp *GasPool) Used() uint64 {
 // Snapshot returns the deep-copied object as the snapshot.
 func (gp *GasPool) Snapshot() *GasPool {
 	return &GasPool{
-		initial:        gp.initial,
-		remaining:      gp.remaining,
-		cumulativeUsed: gp.cumulativeUsed,
+		initial:           gp.initial,
+		remaining:         gp.remaining,
+		cumulativeUsed:    gp.cumulativeUsed,
+		cumulativeRegular: gp.cumulativeRegular,
+		cumulativeState:   gp.cumulativeState,
 	}
 }
 
@@ -100,6 +143,8 @@ func (gp *GasPool) Set(other *GasPool) {
 	gp.initial = other.initial
 	gp.remaining = other.remaining
 	gp.cumulativeUsed = other.cumulativeUsed
+	gp.cumulativeRegular = other.cumulativeRegular
+	gp.cumulativeState = other.cumulativeState
 }
 
 func (gp *GasPool) String() string {

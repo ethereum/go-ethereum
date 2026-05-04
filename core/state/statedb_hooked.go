@@ -59,6 +59,14 @@ func (s *hookedStateDB) IsNewContract(addr common.Address) bool {
 	return s.inner.IsNewContract(addr)
 }
 
+func (s *hookedStateDB) SameTxSelfDestructs() []common.Address {
+	return s.inner.SameTxSelfDestructs()
+}
+
+func (s *hookedStateDB) NewStorageSlotCount(addr common.Address) int {
+	return s.inner.NewStorageSlotCount(addr)
+}
+
 func (s *hookedStateDB) GetBalance(addr common.Address) *uint256.Int {
 	return s.inner.GetBalance(addr)
 }
