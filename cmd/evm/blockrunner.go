@@ -71,7 +71,7 @@ func blockTestCmd(ctx *cli.Context) error {
 	for scanner.Scan() {
 		fname := scanner.Text()
 		if len(fname) == 0 {
-			return nil
+			continue
 		}
 		results, err := runBlockTest(ctx, fname)
 		if err != nil {

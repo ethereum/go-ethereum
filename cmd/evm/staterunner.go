@@ -84,7 +84,7 @@ func stateTestCmd(ctx *cli.Context) error {
 	for scanner.Scan() {
 		fname := scanner.Text()
 		if len(fname) == 0 {
-			return nil
+			continue
 		}
 		results, err := runStateTest(ctx, fname)
 		if err != nil {
