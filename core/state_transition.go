@@ -149,18 +149,41 @@ func FloorDataGas(rules params.Rules, data []byte, accessList types.AccessList) 
 	if rules.IsAmsterdam {
 		// EIP-7976 changes how calldata is priced.
 		// From 10/40 to 64/64 for zero/non-zero bytes.
-		tokens = uint64(len(data)) * params.TxTokenPerNonZeroByte
 		tokenCost = params.TxCostFloorPerToken7976
+		dataLen := uint64(len(data))
+		if math.MaxUint64/params.TxTokenPerNonZeroByte < dataLen {
+			return 0, ErrGasUintOverflow
+		}
+		tokens = dataLen * params.TxTokenPerNonZeroByte
+
 		// EIP-7981 adds additional tokens for every entry in the accesslist
-		tokens += uint64(len(accessList)) * common.AddressLength * params.TxTokenPerNonZeroByte
-		tokens += uint64(accessList.StorageKeys()) * common.HashLength * params.TxTokenPerNonZeroByte
+		const addressTokenCost = uint64(common.AddressLength) * params.TxTokenPerNonZeroByte
+		addresses := uint64(len(accessList))
+		if (math.MaxUint64-tokens)/addressTokenCost < addresses {
+			return 0, ErrGasUintOverflow
+		}
+		tokens += addresses * addressTokenCost
+
+		const storageKeyTokenCost = uint64(common.HashLength) * params.TxTokenPerNonZeroByte
+		storageKeys := uint64(accessList.StorageKeys())
+		if (math.MaxUint64-tokens)/storageKeyTokenCost < storageKeys {
+			return 0, ErrGasUintOverflow
+		}
+		tokens += storageKeys * storageKeyTokenCost
 	} else {
 		var (
 			z  = uint64(bytes.Count(data, []byte{0}))
 			nz = uint64(len(data)) - z
 		)
 		// Pre-Amsterdam
-		tokens = nz*params.TxTokenPerNonZeroByte + z
+		if math.MaxUint64/params.TxTokenPerNonZeroByte < nz {
+			return 0, ErrGasUintOverflow
+		}
+		tokens = nz * params.TxTokenPerNonZeroByte
+		if math.MaxUint64-tokens < z {
+			return 0, ErrGasUintOverflow
+		}
+		tokens += z
 		tokenCost = params.TxCostFloorPerToken
 	}
 
