@@ -327,6 +327,16 @@ func (db *Database) Enable(root common.Hash) error {
 	return pdb.Enable(root)
 }
 
+// AdoptSyncedState activates the database after a snap/2 sync and adopts the
+// flat state populated during sync as-is, skipping regeneration.
+func (db *Database) AdoptSyncedState(root common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.AdoptSyncedState(root)
+}
+
 // Journal commits an entire diff hierarchy to disk into a single journal entry.
 // This is meant to be used during shutdown to persist the snapshot without
 // flattening everything down (bad for reorgs). It's only supported by path-based
