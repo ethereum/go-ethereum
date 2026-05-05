@@ -147,28 +147,39 @@ type blobTxMeta struct {
 	evictionBlobFeeJumps float64      // Worse blob fee (converted to fee jumps) across all previous nonces
 }
 
-// newBlobTxMeta retrieves the indexed metadata fields from a blob transaction
-// and assembles a helper struct to track in memory.
-// Requires the transaction to have a sidecar (or that we introduce a special version tag for no-sidecar).
-func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transaction) *blobTxMeta {
-	if tx.BlobTxSidecar() == nil {
-		// This should never happen, as the pool only admits blob transactions with a sidecar
+// newBlobTxForPool decomposes a blob transaction into BlobTxForPool
+// type.
+func newBlobTxForPool(tx *types.Transaction) *types.BlobTxForPool {
+	sc := tx.BlobTxSidecar()
+	if sc == nil {
 		panic("missing blob tx sidecar")
 	}
+	return &types.BlobTxForPool{
+		Tx:          tx.WithoutBlobTxSidecar(),
+		Version:     sc.Version,
+		Commitments: sc.Commitments,
+		Proofs:      sc.Proofs,
+		Blobs:       sc.Blobs,
+	}
+}
+
+// newBlobTxMeta retrieves the indexed metadata fields from a pooled blob
+// transaction and assembles a helper struct to track in memory.
+func newBlobTxMeta(id uint64, size uint64, storageSize uint32, ptx *types.BlobTxForPool) *blobTxMeta {
 	meta := &blobTxMeta{
-		hash:        tx.Hash(),
-		vhashes:     tx.BlobHashes(),
-		version:     tx.BlobTxSidecar().Version,
+		hash:        ptx.Tx.Hash(),
+		vhashes:     ptx.Tx.BlobHashes(),
+		version:     ptx.Version,
 		id:          id,
 		storageSize: storageSize,
 		size:        size,
-		nonce:       tx.Nonce(),
-		costCap:     uint256.MustFromBig(tx.Cost()),
-		execTipCap:  uint256.MustFromBig(tx.GasTipCap()),
-		execFeeCap:  uint256.MustFromBig(tx.GasFeeCap()),
-		blobFeeCap:  uint256.MustFromBig(tx.BlobGasFeeCap()),
-		execGas:     tx.Gas(),
-		blobGas:     tx.BlobGas(),
+		nonce:       ptx.Tx.Nonce(),
+		costCap:     uint256.MustFromBig(ptx.Tx.Cost()),
+		execTipCap:  uint256.MustFromBig(ptx.Tx.GasTipCap()),
+		execFeeCap:  uint256.MustFromBig(ptx.Tx.GasFeeCap()),
+		blobFeeCap:  uint256.MustFromBig(ptx.Tx.BlobGasFeeCap()),
+		execGas:     ptx.Tx.Gas(),
+		blobGas:     ptx.Tx.BlobGas(),
 	}
 	meta.basefeeJumps = dynamicFeeJumps(meta.execFeeCap)
 	meta.blobfeeJumps = dynamicBlobFeeJumps(meta.blobFeeCap)
@@ -460,10 +471,20 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 		return err
 	}
 	// Index all transactions on disk and delete anything unprocessable
-	var fails []uint64
+	var (
+		fails      []uint64
+		convertTxs []*types.Transaction
+	)
 	index := func(id uint64, size uint32, blob []byte) {
-		if p.parseTransaction(id, size, blob) != nil {
+		legacy, err := p.parseTransaction(id, size, blob)
+		if err != nil {
 			fails = append(fails, id)
+		} else if legacy {
+			fails = append(fails, id)
+			tx := new(types.Transaction)
+			if err := rlp.DecodeBytes(blob, tx); err != nil {
+				convertTxs = append(convertTxs, tx)
+			}
 		}
 	}
 	store, err := billy.Open(billy.Options{Path: queuedir, Repair: true}, slotter, index)
@@ -471,6 +492,32 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 		return err
 	}
 	p.store = store
+
+	// Migrate legacy transactions (types.Transaction) to pooledBlobTx format.
+	if len(convertTxs) > 0 {
+		for _, tx := range convertTxs {
+			ptx := newBlobTxForPool(tx)
+			blob, err := rlp.EncodeToBytes(ptx)
+			if err != nil {
+				continue
+			}
+			id, err := p.store.Put(blob)
+			if err != nil {
+				continue
+			}
+			meta := newBlobTxMeta(id, ptx.TxSize(), p.store.Size(id), ptx)
+
+			sender, err := types.Sender(p.signer, ptx.Tx)
+			if err != nil {
+				fails = append(fails, id)
+				continue
+			}
+			if err := p.trackTransaction(meta, sender); err != nil {
+				fails = append(fails, id)
+				continue
+			}
+		}
+	}
 
 	if len(fails) > 0 {
 		log.Warn("Dropping invalidated blob transactions", "ids", fails)
@@ -483,6 +530,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 			}
 		}
 	}
+
 	// Sort the indexed transactions by nonce and delete anything gapped, create
 	// the eviction heap of anyone still standing
 	for addr := range p.index {
@@ -558,36 +606,38 @@ func (p *BlobPool) Close() error {
 
 // parseTransaction is a callback method on pool creation that gets called for
 // each transaction on disk to create the in-memory metadata index.
-// Announced state is not initialized here, it needs to be iniitalized seprately.
-func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
-	tx := new(types.Transaction)
-	if err := rlp.DecodeBytes(blob, tx); err != nil {
-		// This path is impossible unless the disk data representation changes
-		// across restarts. For that ever improbable case, recover gracefully
-		// by ignoring this data entry.
-		log.Error("Failed to decode blob pool entry", "id", id, "err", err)
-		return err
+// Return value `bool` is set to true when the entry has old Transaction type.
+func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) (bool, error) {
+	ptx := new(types.BlobTxForPool)
+	if err := rlp.DecodeBytes(blob, ptx); err != nil {
+		tx := new(types.Transaction)
+		if err := rlp.DecodeBytes(blob, tx); err != nil {
+			return false, err
+		}
+		if tx.BlobTxSidecar() == nil {
+			return false, errors.New("missing blob sidecar")
+		}
+		return true, nil
 	}
-	if tx.BlobTxSidecar() == nil {
-		log.Error("Missing sidecar in blob pool entry", "id", id, "hash", tx.Hash())
-		return errors.New("missing blob sidecar")
+	meta := newBlobTxMeta(id, ptx.TxSize(), size, ptx)
+	if p.lookup.exists(meta.hash) {
+		return false, errors.New("duplicate blob entry")
 	}
+	sender, err := types.Sender(p.signer, ptx.Tx)
+	if err != nil {
+		return false, err
+	}
+	return false, p.trackTransaction(meta, sender)
+}
 
-	meta := newBlobTxMeta(id, tx.Size(), size, tx)
+// trackTransaction registers a transaction's metadata in the pool's indices.
+func (p *BlobPool) trackTransaction(meta *blobTxMeta, sender common.Address) error {
 	if p.lookup.exists(meta.hash) {
 		// This path is only possible after a crash, where deleted items are not
 		// removed via the normal shutdown-startup procedure and thus may get
 		// partially resurrected.
-		log.Error("Rejecting duplicate blob pool entry", "id", id, "hash", tx.Hash())
-		return errors.New("duplicate blob entry")
-	}
-	sender, err := types.Sender(p.signer, tx)
-	if err != nil {
-		// This path is impossible unless the signature validity changes across
-		// restarts. For that ever improbable case, recover gracefully by ignoring
-		// this data entry.
-		log.Error("Failed to recover blob tx sender", "id", id, "hash", tx.Hash(), "err", err)
-		return err
+		log.Error("Rejecting duplicate blob pool entry", "id", meta.id, "hash", meta.hash)
+		return fmt.Errorf("duplicate blob entry %d, %s", meta.id, meta.hash)
 	}
 	if _, ok := p.index[sender]; !ok {
 		if err := p.reserver.Hold(sender); err != nil {
@@ -603,6 +653,9 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 	p.stored += uint64(meta.storageSize)
 	return nil
 }
+
+// recheck verifies the pool's content for a specific account and drops anything
+// that does not
 
 // recheck verifies the pool's content for a specific account and drops anything
 // that does not fit anymore (dangling or filled nonce, overdraft).
@@ -863,17 +916,17 @@ func (p *BlobPool) offload(addr common.Address, nonce uint64, id uint64, inclusi
 		log.Error("Blobs missing for included transaction", "from", addr, "nonce", nonce, "id", id, "err", err)
 		return
 	}
-	var tx types.Transaction
-	if err = rlp.DecodeBytes(data, &tx); err != nil {
+	ptx := new(types.BlobTxForPool)
+	if err := rlp.DecodeBytes(data, ptx); err != nil {
 		log.Error("Blobs corrupted for included transaction", "from", addr, "nonce", nonce, "id", id, "err", err)
 		return
 	}
-	block, ok := inclusions[tx.Hash()]
+	block, ok := inclusions[ptx.Tx.Hash()]
 	if !ok {
 		log.Warn("Blob transaction swapped out by signer", "from", addr, "nonce", nonce, "id", id)
 		return
 	}
-	if err := p.limbo.push(&tx, block); err != nil {
+	if err := p.limbo.push(ptx, block); err != nil {
 		log.Warn("Failed to offload blob tx into limbo", "err", err)
 		return
 	}
@@ -1108,7 +1161,7 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	// Retrieve the associated blob from the limbo. Without the blobs, we cannot
 	// add the transaction back into the pool as it is not mineable.
-	tx, err := p.limbo.pull(txhash)
+	ptx, err := p.limbo.pull(txhash)
 	if err != nil {
 		log.Error("Blobs unavailable, dropping reorged tx", "err", err)
 		return err
@@ -1124,30 +1177,29 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	// could theoretically halt a Geth node for ~1.2s by reorging per block. However,
 	// this attack is financially inefficient to execute.
 	head := p.head.Load()
-	if p.chain.Config().IsOsaka(head.Number, head.Time) && tx.BlobTxSidecar().Version == types.BlobSidecarVersion0 {
-		if err := tx.BlobTxSidecar().ToV1(); err != nil {
+	if p.chain.Config().IsOsaka(head.Number, head.Time) && ptx.Version == types.BlobSidecarVersion0 {
+		sc := ptx.Sidecar()
+		if err := sc.ToV1(); err != nil {
 			log.Error("Failed to convert the legacy sidecar", "err", err)
 			return err
 		}
-		log.Info("Legacy blob transaction is reorged", "hash", tx.Hash())
+		ptx.WithSidecar(sc)
+		log.Info("Legacy blob transaction is reorged", "hash", ptx.Tx.Hash())
 	}
-	// Serialize the transaction back into the primary datastore.
-	blob, err := rlp.EncodeToBytes(tx)
+	blob, err := rlp.EncodeToBytes(ptx)
 	if err != nil {
-		log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
+		log.Error("Failed to encode transaction for storage", "hash", ptx.Tx.Hash(), "err", err)
 		return err
 	}
 	id, err := p.store.Put(blob)
 	if err != nil {
-		log.Error("Failed to write transaction into storage", "hash", tx.Hash(), "err", err)
+		log.Error("Failed to write transaction into storage", "hash", ptx.Tx.Hash(), "err", err)
 		return err
 	}
-
-	// Update the indices and metrics
-	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), tx)
+	meta := newBlobTxMeta(id, ptx.TxSize(), p.store.Size(id), ptx)
 	if _, ok := p.index[addr]; !ok {
 		if err := p.reserver.Hold(addr); err != nil {
-			log.Warn("Failed to reserve account for blob pool", "tx", tx.Hash(), "from", addr, "err", err)
+			log.Warn("Failed to reserve account for blob pool", "tx", ptx.Tx.Hash(), "from", addr, "err", err)
 			return err
 		}
 		p.index[addr] = []*blobTxMeta{meta}
@@ -1404,20 +1456,27 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 	if len(data) == 0 {
 		return nil
 	}
-	item := new(types.Transaction)
-	if err := rlp.DecodeBytes(data, item); err != nil {
+	ptx := new(types.BlobTxForPool)
+	if err := rlp.DecodeBytes(data, ptx); err != nil {
 		id, _ := p.lookup.storeidOfTx(hash)
 
 		log.Error("Blobs corrupted for traced transaction",
 			"hash", hash, "id", id, "err", err)
 		return nil
 	}
-	return item
+	return ptx.ToTx()
 }
 
-// GetRLP returns a RLP-encoded transaction if it is contained in the pool.
+// GetRLP returns a RLP-encoded transaction for network if it is contained in the pool.
 func (p *BlobPool) GetRLP(hash common.Hash) []byte {
-	return p.getRLP(hash)
+	data := p.getRLP(hash)
+	rlp, err := types.EncodeForNetwork(data)
+	if err != nil {
+		log.Error("Failed to encode pooled tx into the network type", "hash", hash, "err", err)
+		return nil
+	}
+
+	return rlp
 }
 
 // GetMetadata returns the transaction type and transaction size with the
@@ -1486,18 +1545,14 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 		}
 
 		// Decode the blob transaction
-		tx := new(types.Transaction)
-		if err := rlp.DecodeBytes(data, tx); err != nil {
+		ptx := new(types.BlobTxForPool)
+		if err := rlp.DecodeBytes(data, ptx); err != nil {
 			log.Error("Blobs corrupted for traced transaction", "id", txID, "err", err)
 			continue
 		}
-		sidecar := tx.BlobTxSidecar()
-		if sidecar == nil {
-			log.Error("Blob tx without sidecar", "hash", tx.Hash(), "id", txID)
-			continue
-		}
+		sidecar := ptx.Sidecar()
 		// Traverse the blobs in the transaction
-		for i, hash := range tx.BlobHashes() {
+		for i, hash := range ptx.Tx.BlobHashes() {
 			list, ok := indices[hash]
 			if !ok {
 				continue // non-interesting blob
@@ -1641,7 +1696,8 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 	}
 	// Transaction permitted into the pool from a nonce and cost perspective,
 	// insert it into the database and update the indices
-	blob, err := rlp.EncodeToBytes(tx)
+	ptx := newBlobTxForPool(tx)
+	blob, err := rlp.EncodeToBytes(ptx)
 	if err != nil {
 		log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
 		return err
@@ -1650,7 +1706,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 	if err != nil {
 		return err
 	}
-	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), tx)
+	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), ptx)
 
 	var (
 		next   = p.state.GetNonce(from)

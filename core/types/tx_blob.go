@@ -176,6 +176,112 @@ func (sc *BlobTxSidecar) Copy() *BlobTxSidecar {
 	}
 }
 
+// BlobTxForPool is a type used for blob transaction in the blobpool.
+type BlobTxForPool struct {
+	Tx          *Transaction // tx without sidecar
+	Version     byte
+	Commitments []kzg4844.Commitment
+	Proofs      []kzg4844.Proof
+	Blobs       []kzg4844.Blob
+}
+
+// Sidecar returns BlobTxSidecar of ptx.
+func (ptx *BlobTxForPool) Sidecar() *BlobTxSidecar {
+	return NewBlobTxSidecar(ptx.Version, ptx.Blobs, ptx.Commitments, ptx.Proofs)
+}
+
+// WithSidecar copies the sidecar's fields into the flat fields.
+func (ptx *BlobTxForPool) WithSidecar(sc *BlobTxSidecar) {
+	ptx.Version = sc.Version
+	ptx.Commitments = sc.Commitments
+	ptx.Proofs = sc.Proofs
+	ptx.Blobs = sc.Blobs
+}
+
+// TxSize returns the transaction size on the network without
+// reconstructing the transaction.
+func (ptx *BlobTxForPool) TxSize() uint64 {
+	var blobs, commitments, proofs uint64
+	for i := range ptx.Blobs {
+		blobs += rlp.BytesSize(ptx.Blobs[i][:])
+	}
+	for i := range ptx.Commitments {
+		commitments += rlp.BytesSize(ptx.Commitments[i][:])
+	}
+	for i := range ptx.Proofs {
+		proofs += rlp.BytesSize(ptx.Proofs[i][:])
+	}
+	return ptx.Tx.Size() + rlp.ListSize(rlp.ListSize(blobs)+rlp.ListSize(commitments)+rlp.ListSize(proofs))
+}
+
+// ToTx reconstructs a full Transaction with the sidecar attached.
+func (ptx *BlobTxForPool) ToTx() *Transaction {
+	return ptx.Tx.WithBlobTxSidecar(ptx.Sidecar())
+}
+
+// EncodeForNetwork transforms stored BlobTxForPool RLP into the standard
+// network transaction encoding.
+//
+// Stored RLP:  [type_byte || tx_fields, version, [comms], [proofs], [blobs]]
+// V0:   type_byte || rlp([tx_fields, [blobs], [comms], [proofs]])
+// V1:   type_byte || rlp([tx_fields, version, [blobs], [comms], [proofs]])
+func EncodeForNetwork(storedRLP []byte) ([]byte, error) {
+	elems, err := rlp.SplitListValues(storedRLP)
+	if err != nil {
+		return nil, fmt.Errorf("invalid BlobTxForPool RLP: %w", err)
+	}
+	if len(elems) < 5 {
+		return nil, fmt.Errorf("BlobTxForPool has %d elements, need at least 5", len(elems))
+	}
+
+	// 1. Extract tx byte and other tx fields
+	txBytes, _, err := rlp.SplitString(elems[0])
+	if err != nil {
+		return nil, fmt.Errorf("invalid tx bytes: %w", err)
+	}
+	if len(txBytes) < 2 {
+		return nil, errors.New("tx bytes too short")
+	}
+	typeByte := txBytes[0]
+	txRLP := txBytes[1:]
+
+	// 2. Find the version of sidecar.
+	version, _, err := rlp.SplitString(elems[1])
+	if err != nil {
+		return nil, fmt.Errorf("invalid version: %w", err)
+	}
+	var versionByte byte
+	switch len(version) {
+	case 0:
+		versionByte = 0
+	case 1:
+		versionByte = version[0]
+	default:
+		return nil, fmt.Errorf("invalid version length: %d", len(version))
+	}
+	// 3. Extract sidecar elements.
+	commitmentsRLP := elems[2]
+	proofsRLP := elems[3]
+	blobsRLP := elems[4]
+
+	// 4. Reconstruct into the network format.
+	var outer [][]byte
+	if versionByte == BlobSidecarVersion0 {
+		outer = [][]byte{txRLP, blobsRLP, commitmentsRLP, proofsRLP}
+	} else {
+		outer = [][]byte{txRLP, elems[1], blobsRLP, commitmentsRLP, proofsRLP}
+	}
+	body, err := rlp.MergeListValues(outer)
+	if err != nil {
+		return nil, err
+	}
+	// Prepend type byte and wrap as an RLP string.
+	inner := make([]byte, 1+len(body))
+	inner[0] = typeByte
+	copy(inner[1:], body)
+	return rlp.EncodeToBytes(inner)
+}
+
 // blobTxWithBlobs represents blob tx with its corresponding sidecar.
 // This is an interface because sidecars are versioned.
 type blobTxWithBlobs interface {
