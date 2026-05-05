@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
@@ -104,18 +105,13 @@ func (e *BlockAccessList) Hash() common.Hash {
 	return crypto.Keccak256Hash(enc.Bytes())
 }
 
-// EncodedSize returns the size of the RLP-encoded block access list. It is
-// used by the downloader to estimate cache footprint of fetched results.
-// Returns 0 for a nil receiver to keep size accounting code branch-free.
 func (e *BlockAccessList) EncodedSize() int {
-	if e == nil {
-		return 0
+	b, err := rlp.EncodeToBytes(e)
+	if err != nil {
+		// TODO: proper to crit here?
+		log.Crit("failed to rlp encode access list", "err", err)
 	}
-	var enc bytes.Buffer
-	if err := e.EncodeRLP(&enc); err != nil {
-		return 0
-	}
-	return enc.Len()
+	return len(b)
 }
 
 // encodingBalanceChange is the encoding format of BalanceChange.
