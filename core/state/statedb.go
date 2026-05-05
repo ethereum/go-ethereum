@@ -574,7 +574,9 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", obj.Address(), err))
 	}
 	if obj.dirtyCode {
-		s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
+		if err := s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code); err != nil {
+			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", obj.Address(), err))
+		}
 	}
 }
 
