@@ -181,8 +181,7 @@ var (
 	ErrNoEventSignature = bind2.ErrNoEventSignature
 
 	// ErrEventSignatureMismatch is returned when a log's topic[0] does not match
-	// the expected event signature. Callers can use errors.Is to distinguish a
-	// signature mismatch from other unpacking failures.
+	// the expected event signature.
 	ErrEventSignatureMismatch = bind2.ErrEventSignatureMismatch
 )
 
