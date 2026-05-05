@@ -53,6 +53,9 @@ const (
 	// containing 200+ transactions nowadays, the practical limit will always
 	// be softResponseLimit.
 	maxReceiptsServe = 1024
+
+	// maxBALsServe is the maximum number of block access lists to serve.
+	maxBALsServe = 1024
 )
 
 // Handler is a callback to invoke from an outside runner after the boilerplate
@@ -197,6 +200,22 @@ var eth70 = map[uint64]msgHandler{
 	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
 }
 
+var eth71 = map[uint64]msgHandler{
+	TransactionsMsg:               handleTransactions,
+	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
+	GetBlockHeadersMsg:            handleGetBlockHeaders,
+	BlockHeadersMsg:               handleBlockHeaders,
+	GetBlockBodiesMsg:             handleGetBlockBodies,
+	BlockBodiesMsg:                handleBlockBodies,
+	GetReceiptsMsg:                handleGetReceipts70,
+	ReceiptsMsg:                   handleReceipts70,
+	GetPooledTransactionsMsg:      handleGetPooledTransactions,
+	PooledTransactionsMsg:         handlePooledTransactions,
+	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
+	GetBlockAccessListsMsg:        handleGetBlockAccessLists,
+	BlockAccessListsMsg:           handleBlockAccessLists,
+}
+
 // handleMessage is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.
 func handleMessage(backend Backend, peer *Peer) error {
@@ -216,6 +235,8 @@ func handleMessage(backend Backend, peer *Peer) error {
 		handlers = eth69
 	case ETH70:
 		handlers = eth70
+	case ETH71:
+		handlers = eth71
 	default:
 		return fmt.Errorf("unknown eth protocol version: %v", peer.version)
 	}

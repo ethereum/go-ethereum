@@ -663,3 +663,66 @@ func handleBlockRangeUpdate(backend Backend, msg Decoder, peer *Peer) error {
 	peer.lastRange.Store(&update)
 	return nil
 }
+
+// handleGetBlockAccessLists serves a GetBlockAccessLists request.
+func handleGetBlockAccessLists(backend Backend, msg Decoder, peer *Peer) error {
+	var query GetBlockAccessListsPacket
+	if err := msg.Decode(&query); err != nil {
+		return err
+	}
+	response := serviceGetBlockAccessListsQuery(backend.Chain(), query.GetBlockAccessListsRequest)
+	return peer.ReplyBlockAccessLists(query.RequestId, response)
+}
+
+// serviceGetBlockAccessListsQuery assembles the response to a BAL query.
+// Unavailable BALs are returned as empty list entries.
+func serviceGetBlockAccessListsQuery(chain *core.BlockChain, query GetBlockAccessListsRequest) rlp.RawList[RawBlockAccessList] {
+	var (
+		bytes int
+		bals  rlp.RawList[RawBlockAccessList]
+	)
+	for _, hash := range query {
+		if bytes >= softResponseLimit || bals.Len() >= maxBALsServe {
+			break
+		}
+		data := chain.GetAccessListRLP(hash)
+		if len(data) == 0 {
+			bals.AppendRaw([]byte{0xC0})
+			continue
+		}
+		bals.AppendRaw(data)
+		bytes += len(data)
+	}
+	return bals
+}
+
+// handleBlockAccessLists processes an incoming BlockAccessLists response,
+// validates it against the request tracker, and dispatches it to the waiting caller.
+func handleBlockAccessLists(backend Backend, msg Decoder, peer *Peer) error {
+	res := new(BlockAccessListPacket)
+	if err := msg.Decode(res); err != nil {
+		return err
+	}
+	tresp := tracker.Response{ID: res.RequestId, MsgCode: BlockAccessListsMsg, Size: res.List.Len()}
+	if err := peer.tracker.Fulfil(tresp); err != nil {
+		return fmt.Errorf("BlockAccessLists: %w", err)
+	}
+	bals, err := res.List.Items()
+	if err != nil {
+		return fmt.Errorf("BlockAccessLists: %w", err)
+	}
+
+	metadata := func() interface{} {
+		hashes := make([]common.Hash, len(bals))
+		for i := range bals {
+			hashes[i] = crypto.Keccak256Hash(bals[i].Bytes())
+		}
+		return hashes
+	}
+
+	return peer.dispatchResponse(&Response{
+		id:   res.RequestId,
+		code: BlockAccessListsMsg,
+		Res:  (*BlockAccessListResponse)(&bals),
+	}, metadata)
+}

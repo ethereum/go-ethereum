@@ -104,6 +104,20 @@ func (e *BlockAccessList) Hash() common.Hash {
 	return crypto.Keccak256Hash(enc.Bytes())
 }
 
+// EncodedSize returns the size of the RLP-encoded block access list. It is
+// used by the downloader to estimate cache footprint of fetched results.
+// Returns 0 for a nil receiver to keep size accounting code branch-free.
+func (e *BlockAccessList) EncodedSize() int {
+	if e == nil {
+		return 0
+	}
+	var enc bytes.Buffer
+	if err := e.EncodeRLP(&enc); err != nil {
+		return 0
+	}
+	return enc.Len()
+}
+
 // encodingBalanceChange is the encoding format of BalanceChange.
 type encodingBalanceChange struct {
 	TxIdx   uint32

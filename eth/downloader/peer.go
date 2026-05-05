@@ -61,6 +61,7 @@ type Peer interface {
 
 	RequestBodies([]common.Hash, chan *eth.Response) (*eth.Request, error)
 	RequestReceipts([]common.Hash, []uint64, []uint64, chan *eth.Response) (*eth.Request, error)
+	RequestBALs([]common.Hash, chan *eth.Response) (*eth.Request, error)
 }
 
 // newPeerConnection creates a new downloader peer.
@@ -100,6 +101,12 @@ func (p *peerConnection) UpdateReceiptRate(delivered int, elapsed time.Duration)
 	p.rates.Update(eth.ReceiptsMsg, elapsed, delivered)
 }
 
+// UpdateBALRate updates the peer's estimated bal retrieval throughput
+// with the current measurement.
+func (p *peerConnection) UpdateBALRate(delivered int, elapsed time.Duration) {
+	p.rates.Update(eth.ReceiptsMsg, elapsed, delivered)
+}
+
 // HeaderCapacity retrieves the peer's header download allowance based on its
 // previously discovered throughput.
 func (p *peerConnection) HeaderCapacity(targetRTT time.Duration) int {
@@ -126,6 +133,16 @@ func (p *peerConnection) ReceiptCapacity(targetRTT time.Duration) int {
 	cap := p.rates.Capacity(eth.ReceiptsMsg, targetRTT)
 	if cap > MaxReceiptFetch {
 		cap = MaxReceiptFetch
+	}
+	return cap
+}
+
+// BALCapacity retrieves the peers bal download allowance based on its
+// previously discovered throughput.
+func (p *peerConnection) BALCapacity(targetRTT time.Duration) int {
+	cap := p.rates.Capacity(eth.BlockAccessListsMsg, targetRTT)
+	if cap > MaxBALFetch {
+		cap = MaxBALFetch
 	}
 	return cap
 }
