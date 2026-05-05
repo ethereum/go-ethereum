@@ -447,6 +447,7 @@ func (t *UDPv4) loop() {
 		// Start the timer so it fires when the next pending reply has expired.
 		now := time.Now()
 		for p, el := range iterList[*replyMatcher](plist) {
+			nextTimeout = p
 			if dist := p.deadline.Sub(now); dist < 2*respTimeout {
 				timeout.Reset(dist)
 				return
@@ -454,7 +455,7 @@ func (t *UDPv4) loop() {
 			// Remove pending replies whose deadline is too far in the
 			// future. These can occur if the system clock jumped
 			// backwards after the deadline was assigned.
-			nextTimeout.errc <- errClockWarp
+			p.errc <- errClockWarp
 			plist.Remove(el)
 		}
 		nextTimeout = nil
