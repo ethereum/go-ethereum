@@ -82,6 +82,9 @@ const (
 	// beaconUpdateWarnFrequency is the frequency at which to warn the user that
 	// the beacon client is offline.
 	beaconUpdateWarnFrequency = 5 * time.Minute
+
+	// maxReorgDepth is the maximum reorg depth accepted via forkchoiceUpdated.
+	maxReorgDepth = 32
 )
 
 type ConsensusAPI struct {
@@ -322,15 +325,23 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 		// generating the payload. It's a special corner case that a few slots are
 		// missing and we are requested to generate the payload in slot.
 	} else {
-		// In EPBs we can reorg to a parent of the head within 32 blocks.
-		// Allow this once the client is synced.
-		if api.eth.Synced() && api.eth.BlockChain().CurrentBlock().Number.Uint64()-block.NumberU64() < 32 {
-			if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
-				return engine.ForkChoiceResponse{PayloadStatus: engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &latestValid}}, err
-			}
+		if finalized := api.eth.BlockChain().CurrentFinalBlock(); finalized != nil && block.NumberU64() <= finalized.Number.Uint64() {
+			log.Info("Skipping beacon update to finalized ancestor", "number", block.NumberU64(), "hash", update.HeadBlockHash)
+			return valid(nil), nil
 		}
-		log.Info("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().Number)
-		return valid(nil), nil
+		depth := api.eth.BlockChain().CurrentBlock().Number.Uint64() - block.NumberU64()
+		if depth >= maxReorgDepth {
+			log.Warn("Refusing too deep reorg", "depth", depth, "head", update.HeadBlockHash)
+			return engine.STATUS_INVALID, engine.TooDeepReorg.With(fmt.Errorf("reorg depth %d exceeds limit %d", depth, maxReorgDepth))
+		}
+		if !api.eth.Synced() {
+			log.Info("Ignoring beacon update to old head while syncing", "number", block.NumberU64(), "hash", update.HeadBlockHash)
+			return valid(nil), nil
+		}
+		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
+			log.Error("Error setting canonical", "number", block.NumberU64(), "hash", update.HeadBlockHash, "error", err)
+			return engine.ForkChoiceResponse{PayloadStatus: engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &latestValid}}, err
+		}
 	}
 	api.eth.SetSynced()
 
