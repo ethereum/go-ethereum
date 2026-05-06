@@ -18,8 +18,6 @@ package state
 
 import (
 	"fmt"
-	"time"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -239,26 +237,6 @@ func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reade
 	ra := newReader(db.codedb.Reader(), newStateReaderWithStats(sr))
 	rb := newReader(db.codedb.Reader(), newStateReaderWithStats(sr))
 	return ra, rb, nil
-}
-
-type ReaderEIP7928Metrics struct {
-	// the total amount of time it took to complete the scheduled workload
-	WallElapsed time.Duration
-	// the aggregated total time spent on state loading by all workers
-	TotalElapsed time.Duration
-	// the amount of accounts loaded
-	Accounts int
-	// the amount of storage slots loaded
-	Storages int
-	// number of accounts with code loaded
-	Codes int
-	// total amount of code bytes loaded
-	CodeBytes int
-}
-
-type ReaderEIP7928 interface {
-	Reader
-	Metrics() *ReaderEIP7928Metrics
 }
 
 // ReaderEIP7928 creates a state reader with the manner of Block-level accessList.

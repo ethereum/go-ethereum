@@ -38,9 +38,7 @@ type ExecuteStats struct {
 	StorageCommits time.Duration // Time spent on the storage trie commit
 	CodeReads      time.Duration // Time spent on the contract code read
 
-	// State-mutation counts. StorageUpdated/StorageDeleted are int64
-	// (snapshot from atomic.Int64 on StateDB).
-	state.StateCounts
+	// TODO: where is code bytes loaded metric?
 
 	Execution       time.Duration // Time spent on the EVM execution
 	Validation      time.Duration // Time spent on the block validation

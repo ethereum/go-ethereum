@@ -18,10 +18,6 @@ package state
 
 import (
 	"errors"
-	"sync"
-	"sync/atomic"
-	"time"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -32,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/database"
+	"sync"
+	"sync/atomic"
 )
 
 // ContractCodeReader defines the interface for accessing contract code.
@@ -563,14 +561,4 @@ func (r *reader) GetStats() ReaderStats {
 		CodeStats:  r.GetCodeStats(),
 		StateStats: r.GetStateStats(),
 	}
-}
-
-// PrefetchReadTimes forwards to the wrapped prefetcher, or returns zero.
-func (r *reader) PrefetchReadTimes() (account, storage time.Duration) {
-	if pr, ok := r.StateReader.(interface {
-		PrefetchReadTimes() (time.Duration, time.Duration)
-	}); ok {
-		return pr.PrefetchReadTimes()
-	}
-	return 0, 0
 }

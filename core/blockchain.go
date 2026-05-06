@@ -655,13 +655,6 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 	// AccountLoaded/StorageLoaded come from the BAL access list (deduplicated);
 	// per-StateDB sums would over-count addresses touched by multiple phases.
 	stats.StateCounts = res.Counts
-	stats.StateCounts.Add(stateTransition.WriteCounts())
-	if al := block.AccessList(); al != nil {
-		stats.StateCounts.AccountLoaded = al.UniqueAccountCount()
-		stats.StateCounts.StorageLoaded = al.UniqueStorageSlotCount()
-	}
-	stats.StateCounts.CodeLoaded = res.CodeLoaded
-	stats.StateCounts.CodeLoadBytes = res.CodeLoadBytes
 
 	stats.Execution = res.ExecTime
 	stats.ExecWall = res.ExecTime
@@ -674,19 +667,13 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 		stats.DatabaseCommit = m.TrieDBCommits
 		stats.Prefetch = m.StatePrefetch
 	}
-	// Sum-of-CPU-time across per-tx, BAL state-transition, and prefetcher paths.
-	var prefetchAccountReads, prefetchStorageReads time.Duration
-	if pr, ok := prefetchReader.(interface {
-		PrefetchReadTimes() (time.Duration, time.Duration)
-	}); ok {
-		prefetchAccountReads, prefetchStorageReads = pr.PrefetchReadTimes()
-	}
-	prefetchAccountReads, prefetchStorageReads = prefetchReader.(*.PrefetchReadTimes()
 
-	balAccountReads, balStorageReads := stateTransition.ReadTimes()
-	stats.AccountReads = res.Reads.Account + prefetchAccountReads + balAccountReads
-	stats.StorageReads = res.Reads.Storage + prefetchStorageReads + balStorageReads
-	stats.CodeReads = res.Reads.Code
+	stats.Prefetch = prefetchReader.(state.PrefetcherMetricer).Metrics().Elapsed
+	/*
+		stats.AccountReads = res.Reads.Account + prefetchAccountReads + balAccountReads
+		stats.StorageReads = res.Reads.Storage + prefetchStorageReads + balStorageReads
+		stats.CodeReads = res.Reads.Code
+	*/
 
 	if r, ok := prefetchReader.(state.ReaderStater); ok {
 		stats.StateReadCacheStats = r.GetStats()

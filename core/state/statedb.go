@@ -223,6 +223,10 @@ func (s *StateDB) WithReader(reader Reader) *StateDB {
 	return cpy
 }
 
+/*
+
+// TODO (jwasinger): add these back in a subsequent commit
+
 // ReadDurations groups the {Account, Storage, Code} state-read times.
 // Sum-of-CPU-time when aggregated across BAL phase statedbs.
 type ReadDurations struct {
@@ -237,60 +241,7 @@ func (r *ReadDurations) Add(other ReadDurations) {
 	r.Storage += other.Storage
 	r.Code += other.Code
 }
-
-// StateCounts is a plain-int snapshot of state-mutation counters. Atomic
-// fields on StateDB are Load()'d at the SnapshotCounts boundary.
-type StateCounts struct {
-	AccountLoaded   int   // accounts retrieved from the database during the state transition
-	AccountUpdated  int   // accounts updated during the state transition
-	AccountDeleted  int   // accounts deleted during the state transition
-	StorageLoaded   int   // storage slots retrieved from the database during the state transition
-	StorageUpdated  int64 // storage slots updated (snapshotted from atomic on StateDB)
-	StorageDeleted  int64 // storage slots deleted (snapshotted from atomic on StateDB)
-	CodeLoaded      int   // contract code reads
-	CodeLoadBytes   int   // total bytes of resolved code
-	CodeUpdated     int   // code writes (CREATE/CREATE2/EIP-7702)
-	CodeUpdateBytes int   // total bytes of persisted code written
-}
-
-// Add merges other into c.
-func (c *StateCounts) Add(other StateCounts) {
-	c.AccountLoaded += other.AccountLoaded
-	c.AccountUpdated += other.AccountUpdated
-	c.AccountDeleted += other.AccountDeleted
-	c.StorageLoaded += other.StorageLoaded
-	c.StorageUpdated += other.StorageUpdated
-	c.StorageDeleted += other.StorageDeleted
-	c.CodeLoaded += other.CodeLoaded
-	c.CodeLoadBytes += other.CodeLoadBytes
-	c.CodeUpdated += other.CodeUpdated
-	c.CodeUpdateBytes += other.CodeUpdateBytes
-}
-
-// SnapshotCounts returns a plain-int copy of the state-mutation counters.
-func (s *StateDB) SnapshotCounts() StateCounts {
-	return StateCounts{
-		AccountLoaded:   s.AccountLoaded,
-		AccountUpdated:  s.AccountUpdated,
-		AccountDeleted:  s.AccountDeleted,
-		StorageLoaded:   s.StorageLoaded,
-		StorageUpdated:  s.StorageUpdated.Load(),
-		StorageDeleted:  s.StorageDeleted.Load(),
-		CodeLoaded:      s.CodeLoaded,
-		CodeLoadBytes:   s.CodeLoadBytes,
-		CodeUpdated:     s.CodeUpdated,
-		CodeUpdateBytes: s.CodeUpdateBytes,
-	}
-}
-
-// SnapshotReads returns the {Account, Storage, Code} read durations.
-func (s *StateDB) SnapshotReads() ReadDurations {
-	return ReadDurations{
-		Account: s.AccountReads,
-		Storage: s.StorageReads,
-		Code:    s.CodeReads,
-	}
-}
+*/
 
 // SnapshotCodeLoads returns addresses whose code body was fetched, mapped to
 // byte length. Used to deduplicate code-load events across BAL phase StateDBs.

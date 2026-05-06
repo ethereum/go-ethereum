@@ -3,7 +3,6 @@ package state
 import (
 	"maps"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -41,17 +40,6 @@ type BALStateTransition struct {
 	tries     sync.Map //map[common.Address]Trie
 	deletions map[common.Address]struct{}
 
-	// Storage/read counters are atomic — written from per-address goroutines.
-	// account/code counters are plain int — written single-threaded.
-	accountDeleted  int
-	accountUpdated  int
-	storageDeleted  atomic.Int64
-	storageUpdated  atomic.Int64
-	codeUpdated     int
-	codeUpdateBytes int
-	accountReadNS   atomic.Int64
-	storageReadNS   atomic.Int64
-
 	stateUpdate *stateUpdate
 
 	metrics   BALStateTransitionMetrics
@@ -62,23 +50,6 @@ type BALStateTransition struct {
 
 func (s *BALStateTransition) Metrics() *BALStateTransitionMetrics {
 	return &s.metrics
-}
-
-// ReadTimes returns the accumulated state-read times.
-func (s *BALStateTransition) ReadTimes() (account, storage time.Duration) {
-	return time.Duration(s.accountReadNS.Load()), time.Duration(s.storageReadNS.Load())
-}
-
-// WriteCounts returns the state-mutation counts from the parallel state-root pass.
-func (s *BALStateTransition) WriteCounts() StateCounts {
-	return StateCounts{
-		AccountUpdated:  s.accountUpdated,
-		AccountDeleted:  s.accountDeleted,
-		StorageUpdated:  s.storageUpdated.Load(),
-		StorageDeleted:  s.storageDeleted.Load(),
-		CodeUpdated:     s.codeUpdated,
-		CodeUpdateBytes: s.codeUpdateBytes,
-	}
 }
 
 type BALStateTransitionMetrics struct {
@@ -223,9 +194,7 @@ func (s *BALStateTransition) commitAccount(addr common.Address) (*accountUpdate,
 	for key, value := range s.diffs[addr].StorageWrites {
 		hash := crypto.Keccak256Hash(key[:])
 		op.storages[hash] = encode(value)
-		storageReadStart := time.Now()
 		storage, err := s.reader.Storage(addr, key)
-		s.storageReadNS.Add(time.Since(storageReadStart).Nanoseconds())
 		if err != nil {
 			return nil, nil, err
 		}
@@ -365,10 +334,13 @@ func (s *BALStateTransition) CommitWithUpdate(block uint64, deleteEmptyObjects b
 		return common.Hash{}, nil, err
 	}
 
-	accountUpdatedMeter.Mark(int64(s.accountUpdated))
-	storageUpdatedMeter.Mark(s.storageUpdated.Load())
-	accountDeletedMeter.Mark(int64(s.accountDeleted))
-	storageDeletedMeter.Mark(s.storageDeleted.Load())
+	/*
+		TODO: derive these from the BAL
+		accountUpdatedMeter.Mark(int64(s.accountUpdated))
+		storageUpdatedMeter.Mark(s.storageUpdated.Load())
+		accountDeletedMeter.Mark(int64(s.accountDeleted))
+		storageDeletedMeter.Mark(s.storageDeleted.Load())
+	*/
 	accountTrieUpdatedMeter.Mark(int64(accountTrieNodesUpdated))
 	accountTrieDeletedMeter.Mark(int64(accountTrieNodesDeleted))
 	storageTriesUpdatedMeter.Mark(int64(storageTrieNodesUpdated))
@@ -421,9 +393,7 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 			defer wg.Done()
 
 			// 1 (c): update each mutated account, producing the post-block state object by applying the state mutations to the prestate (retrieved in 1a).
-			accountReadStart := time.Now()
 			acct, err := s.reader.Account(address)
-			s.accountReadNS.Add(time.Since(accountReadStart).Nanoseconds())
 			if err != nil {
 				s.setError(err)
 				return
@@ -450,12 +420,8 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 					if val != (common.Hash{}) {
 						updateKeys = append(updateKeys, key[:])
 						updateValues = append(updateValues, common.TrimLeftZeroes(val[:]))
-
-						s.storageUpdated.Add(1)
 					} else {
 						deleteKeys = append(deleteKeys, key[:])
-
-						s.storageDeleted.Add(1)
 					}
 				}
 				if err := tr.UpdateStorageBatch(address, updateKeys, updateValues); err != nil {
@@ -509,7 +475,6 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 				return common.Hash{}
 			}
 			s.deletions[mutatedAddr] = struct{}{}
-			s.accountDeleted++
 		} else {
 			acct, code := s.updateAccount(mutatedAddr)
 
@@ -520,15 +485,12 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 					s.setError(err)
 					return common.Hash{}
 				}
-				s.codeUpdated++
-				s.codeUpdateBytes += len(code)
 			}
 			if err := s.stateTrie.UpdateAccount(mutatedAddr, acct, len(code)); err != nil {
 				s.setError(err)
 				return common.Hash{}
 			}
 			s.postStates[mutatedAddr] = acct
-			s.accountUpdated++
 		}
 	}
 

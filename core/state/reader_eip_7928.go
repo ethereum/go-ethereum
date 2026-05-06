@@ -64,7 +64,6 @@ package state
 
 import (
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -88,10 +87,33 @@ type prefetchStateReader struct {
 	done      chan struct{}
 	term      chan struct{}
 	closeOnce sync.Once
+	start     time.Time
+	metrics   PrefetchMetrics
+}
 
-	// Atomic — process() runs across N goroutines.
-	accountReadNS atomic.Int64
-	storageReadNS atomic.Int64
+type PrefetchMetrics struct {
+	// the total amount of time it took to complete the scheduled workload
+	Elapsed time.Duration
+	// the aggregated total time spent on state loading by all workers
+	// TODO (jwasinger): add back in after i finish initial commit(s) with only the changes I think will be ultimately merged
+	// TotalElapsed time.Duration
+
+	/*
+	   		// TODO: source these from the other reader where they are implemented
+	   		// the amount of accounts loaded
+	   		Accounts int
+	   		// the amount of storage slots loaded
+	   		Storages int
+	   		// number of accounts with code loaded
+	   		Codes int
+	   		// total amount of code bytes loaded
+	   		CodeBytes int
+	   }
+	*/
+}
+
+type PrefetcherMetricer interface {
+	Metrics() PrefetchMetrics
 }
 
 func newPrefetchStateReader(reader StateReader, accessList bal.StorageKeys, nThreads int) *prefetchStateReader {
@@ -186,13 +208,9 @@ func (r *prefetchStateReader) process(start, limit int) {
 					return
 				default:
 					if j == 0 {
-						accountReadStart := time.Now()
 						r.StateReader.Account(t.addr)
-						r.accountReadNS.Add(time.Since(accountReadStart).Nanoseconds())
 					} else {
-						storageReadStart := time.Now()
 						r.StateReader.Storage(t.addr, t.slots[j-1])
-						r.storageReadNS.Add(time.Since(storageReadStart).Nanoseconds())
 					}
 				}
 			}
@@ -373,6 +391,9 @@ func (r *readerTracker) TouchStorage(addr common.Address, slot common.Hash) {
 	list[slot] = struct{}{}
 }
 
+/*
+// TODO: ensure these are accounted for
+
 // GetStateStats forwards stats from the wrapped reader; without this, BAL
 // blocks would emit zero cache hit/miss counts.
 func (r *prefetchStateReader) GetStateStats() StateReaderStats {
@@ -387,3 +408,4 @@ func (r *prefetchStateReader) GetStateStats() StateReaderStats {
 func (r *prefetchStateReader) PrefetchReadTimes() (account, storage time.Duration) {
 	return time.Duration(r.accountReadNS.Load()), time.Duration(r.storageReadNS.Load())
 }
+*/
