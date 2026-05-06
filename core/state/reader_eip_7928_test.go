@@ -209,10 +209,10 @@ func TestReaderWithTracker(t *testing.T) {
 // transactions read without hitting the reader, causing the BAL to be incomplete.
 func TestTrackerSurvivesStateDBCache(t *testing.T) {
 	var (
-		sdb            = NewDatabaseForTesting()
-		statedb, _     = New(types.EmptyRootHash, sdb)
-		addr           = common.HexToAddress("0xaaaa")
-		slot           = common.HexToHash("0x01")
+		sdb        = NewDatabaseForTesting()
+		statedb, _ = New(types.EmptyRootHash, sdb)
+		addr       = common.HexToAddress("0xaaaa")
+		slot       = common.HexToHash("0x01")
 	)
 	// Set up committed state with one account that has a storage slot.
 	statedb.SetBalance(addr, uint256.NewInt(1e18), tracing.BalanceChangeUnspecified)
@@ -261,64 +261,5 @@ func TestTrackerSurvivesStateDBCache(t *testing.T) {
 	}
 	if _, ok := reads[addr][slot]; !ok {
 		t.Fatal("slot must be tracked on cache hit (storage)")
-	}
-}
-
-// TestPrefetchStateReaderForwardsStats locks down that prefetchStateReader
-// exposes the underlying stateReaderWithStats counters via GetStateStats.
-func TestPrefetchStateReaderForwardsStats(t *testing.T) {
-	stub := newRefStateReader()
-	addr := testrand.Address()
-
-	cached := newStateReaderWithCache(stub)
-	withStats := newStateReaderWithStats(cached)
-	prefetch := newPrefetchStateReaderInternal(withStats, nil, 1)
-
-	if _, err := prefetch.Account(addr); err != nil {
-		t.Fatalf("Account: %v", err)
-	}
-	if _, err := prefetch.Account(addr); err != nil {
-		t.Fatalf("Account (second): %v", err)
-	}
-
-	stats := withStats.GetStateStats()
-	if stats.AccountCacheHit == 0 || stats.AccountCacheMiss == 0 {
-		t.Fatalf("inner stats not populated: %+v", stats)
-	}
-	gotStats := prefetch.GetStateStats()
-	if gotStats != stats {
-		t.Fatalf("forward mismatch: got %+v, want %+v", gotStats, stats)
-	}
-}
-
-// TestReaderForwardsPrefetchReadTimes locks down that *reader exposes the
-// inner prefetcher's read-time counters via PrefetchReadTimes.
-func TestReaderForwardsPrefetchReadTimes(t *testing.T) {
-	stub := newRefStateReader()
-	cached := newStateReaderWithCache(stub)
-	withStats := newStateReaderWithStats(cached)
-	prefetch := newPrefetchStateReaderInternal(withStats, nil, 1)
-
-	prefetch.accountReadNS.Store(123)
-	prefetch.storageReadNS.Store(456)
-
-	r := newReader(nil, prefetch)
-
-	a, s := r.PrefetchReadTimes()
-	if a != 123 {
-		t.Errorf("account: got %v, want 123", a)
-	}
-	if s != 456 {
-		t.Errorf("storage: got %v, want 456", s)
-	}
-}
-
-// TestReaderPrefetchReadTimesNonPrefetch verifies the zero fallback when the
-// wrapped reader doesn't expose PrefetchReadTimes.
-func TestReaderPrefetchReadTimesNonPrefetch(t *testing.T) {
-	r := newReader(nil, newRefStateReader())
-	a, s := r.PrefetchReadTimes()
-	if a != 0 || s != 0 {
-		t.Errorf("expected (0, 0), got (%v, %v)", a, s)
 	}
 }

@@ -341,7 +341,6 @@ func (p *ParallelStateProcessor) processBlockPreTx(block *types.Block, statedb *
 	if !accessList.MutationsAt(0).Eq(mutations) {
 		return nil, fmt.Errorf("invalid block access list: mismatch between local/remote access list mutations at idx 0")
 	}
-	// Snapshot pre-tx counts/reads/code-loads: sdb is local and otherwise discarded.
 	return reads, nil
 }
 

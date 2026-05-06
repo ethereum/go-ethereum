@@ -44,23 +44,6 @@ import (
 // BlockAccessList is the encoding format of AccessListBuilder.
 type BlockAccessList []AccountAccess
 
-// UniqueAccountCount returns the number of distinct account addresses in
-// the block access list.
-func (e BlockAccessList) UniqueAccountCount() int {
-	return len(e)
-}
-
-// UniqueStorageSlotCount returns the total number of distinct (address, slot)
-// pairs accessed across all accounts. Reads and writes are disjoint per
-// account by spec validation, so we can sum them directly.
-func (e BlockAccessList) UniqueStorageSlotCount() int {
-	var n int
-	for i := range e {
-		n += len(e[i].StorageReads) + len(e[i].StorageChanges)
-	}
-	return n
-}
-
 func (e BlockAccessList) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
 	l := w.List()

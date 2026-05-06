@@ -335,11 +335,13 @@ func (s *BALStateTransition) CommitWithUpdate(block uint64, deleteEmptyObjects b
 	}
 
 	/*
-		TODO: derive these from the BAL
-		accountUpdatedMeter.Mark(int64(s.accountUpdated))
-		storageUpdatedMeter.Mark(s.storageUpdated.Load())
-		accountDeletedMeter.Mark(int64(s.accountDeleted))
-		storageDeletedMeter.Mark(s.storageDeleted.Load())
+			TODO: derive these from the BAL
+			^ I think even then, there is a semantic difference with how these metrics were calculated previously
+		    I don't know if it makes sense to recompute those, or just derive new ones from the BAL
+			accountUpdatedMeter.Mark(int64(s.accountUpdated))
+			storageUpdatedMeter.Mark(s.storageUpdated.Load())
+			accountDeletedMeter.Mark(int64(s.accountDeleted))
+			storageDeletedMeter.Mark(s.storageDeleted.Load())
 	*/
 	accountTrieUpdatedMeter.Mark(int64(accountTrieNodesUpdated))
 	accountTrieDeletedMeter.Mark(int64(accountTrieNodesDeleted))

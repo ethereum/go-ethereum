@@ -656,7 +656,6 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 	writeTime := time.Since(writeStart)
 	var stats ExecuteStats
 
-	stats.Execution = res.ExecTime
 	stats.ExecWall = res.ExecTime
 	stats.PostProcess = res.PostProcessTime
 
@@ -669,11 +668,6 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 	}
 
 	stats.Prefetch = prefetchReader.(state.PrefetcherMetricer).Metrics().Elapsed
-	/*
-		stats.AccountReads = res.Reads.Account + prefetchAccountReads + balAccountReads
-		stats.StorageReads = res.Reads.Storage + prefetchStorageReads + balStorageReads
-		stats.CodeReads = res.Reads.Code
-	*/
 
 	if r, ok := prefetchReader.(state.ReaderStater); ok {
 		stats.StateReadCacheStats = r.GetStats()
@@ -2448,6 +2442,18 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	stats.StorageUpdates = statedb.StorageUpdates // Storage updates are complete(in validation)
 	stats.AccountHashes = statedb.AccountHashes   // Account hashes are complete(in validation)
 	stats.CodeReads = statedb.CodeReads
+
+	stats.AccountLoaded = statedb.AccountLoaded
+	stats.AccountUpdated = statedb.AccountUpdated
+	stats.AccountDeleted = statedb.AccountDeleted
+	stats.StorageLoaded = statedb.StorageLoaded
+	stats.StorageUpdated = int(statedb.StorageUpdated.Load())
+	stats.StorageDeleted = int(statedb.StorageDeleted.Load())
+
+	stats.CodeLoaded = statedb.CodeLoaded
+	stats.CodeLoadBytes = statedb.CodeLoadBytes
+	stats.CodeUpdated = statedb.CodeUpdated
+	stats.CodeUpdateBytes = statedb.CodeUpdateBytes
 
 	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // The time spent on EVM processing
 	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation

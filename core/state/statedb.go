@@ -223,44 +223,6 @@ func (s *StateDB) WithReader(reader Reader) *StateDB {
 	return cpy
 }
 
-/*
-
-// TODO (jwasinger): add these back in a subsequent commit
-
-// ReadDurations groups the {Account, Storage, Code} state-read times.
-// Sum-of-CPU-time when aggregated across BAL phase statedbs.
-type ReadDurations struct {
-	Account time.Duration
-	Storage time.Duration
-	Code    time.Duration
-}
-
-// Add merges other into r.
-func (r *ReadDurations) Add(other ReadDurations) {
-	r.Account += other.Account
-	r.Storage += other.Storage
-	r.Code += other.Code
-}
-*/
-
-// SnapshotCodeLoads returns addresses whose code body was fetched, mapped to
-// byte length. Used to deduplicate code-load events across BAL phase StateDBs.
-func (s *StateDB) SnapshotCodeLoads() map[common.Address]int {
-	if len(s.stateObjects) == 0 {
-		return nil
-	}
-	var m map[common.Address]int
-	for addr, obj := range s.stateObjects {
-		if l := len(obj.code); l > 0 {
-			if m == nil {
-				m = make(map[common.Address]int)
-			}
-			m[addr] = l
-		}
-	}
-	return m
-}
-
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
