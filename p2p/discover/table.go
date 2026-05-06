@@ -769,7 +769,7 @@ func (tab *Table) waitForNodes(ctx context.Context, n int) error {
 		}
 		if ch == nil {
 			// Init subscription.
-			ch = make(chan *enode.Node)
+			ch = make(chan *enode.Node, 1)
 			sub := tab.nodeFeed.Subscribe(ch)
 			defer sub.Unsubscribe()
 		}
