@@ -252,7 +252,7 @@ func (db *CachingDB) ReaderEIP7928(stateRoot common.Hash, accessList map[common.
 	pr := newPrefetchStateReader(r, accessList, threads)
 	if block {
 		if err := pr.Wait(); err != nil {
-			panic("wat do")
+			panic("unreachable")
 		}
 	}
 
