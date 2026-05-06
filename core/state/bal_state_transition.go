@@ -3,7 +3,6 @@ package state
 import (
 	"maps"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -41,11 +40,6 @@ type BALStateTransition struct {
 	tries     sync.Map //map[common.Address]Trie
 	deletions map[common.Address]struct{}
 
-	accountDeleted int64
-	accountUpdated int64
-	storageDeleted atomic.Int64
-	storageUpdated atomic.Int64
-
 	stateUpdate *stateUpdate
 
 	metrics   BALStateTransitionMetrics
@@ -60,11 +54,10 @@ func (s *BALStateTransition) Metrics() *BALStateTransitionMetrics {
 
 type BALStateTransitionMetrics struct {
 	// trie hashing metrics
-	AccountUpdate         time.Duration
-	StatePrefetch         time.Duration
-	StateUpdate           time.Duration
-	StateHash             time.Duration
-	OriginStorageLoadTime time.Duration
+	AccountUpdate time.Duration
+	StatePrefetch time.Duration
+	StateUpdate   time.Duration
+	StateHash     time.Duration
 
 	// commit metrics
 	AccountCommits  time.Duration
@@ -341,10 +334,15 @@ func (s *BALStateTransition) CommitWithUpdate(block uint64, deleteEmptyObjects b
 		return common.Hash{}, nil, err
 	}
 
-	accountUpdatedMeter.Mark(s.accountUpdated)
-	storageUpdatedMeter.Mark(s.storageUpdated.Load())
-	accountDeletedMeter.Mark(s.accountDeleted)
-	storageDeletedMeter.Mark(s.storageDeleted.Load())
+	/*
+			TODO: derive these from the BAL
+			^ I think even then, there is a semantic difference with how these metrics were calculated previously
+		    I don't know if it makes sense to recompute those, or just derive new ones from the BAL
+			accountUpdatedMeter.Mark(int64(s.accountUpdated))
+			storageUpdatedMeter.Mark(s.storageUpdated.Load())
+			accountDeletedMeter.Mark(int64(s.accountDeleted))
+			storageDeletedMeter.Mark(s.storageDeleted.Load())
+	*/
 	accountTrieUpdatedMeter.Mark(int64(accountTrieNodesUpdated))
 	accountTrieDeletedMeter.Mark(int64(accountTrieNodesDeleted))
 	storageTriesUpdatedMeter.Mark(int64(storageTrieNodesUpdated))
@@ -424,12 +422,8 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 					if val != (common.Hash{}) {
 						updateKeys = append(updateKeys, key[:])
 						updateValues = append(updateValues, common.TrimLeftZeroes(val[:]))
-
-						s.storageUpdated.Add(1)
 					} else {
 						deleteKeys = append(deleteKeys, key[:])
-
-						s.storageDeleted.Add(1)
 					}
 				}
 				if err := tr.UpdateStorageBatch(address, updateKeys, updateValues); err != nil {

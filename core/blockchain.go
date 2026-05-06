@@ -211,6 +211,10 @@ type BlockChainConfig struct {
 	Overrides  *ChainOverrides // Optional chain config overrides
 	VmConfig   vm.Config       // Config options for the EVM Interpreter
 
+	// BAL-related
+	PrefetchWorkers  int  // number of concurrent go-routines for BAL state prefetching
+	BlockingPrefetch bool // whether the prefetch should block further execution until it finishes
+
 	// TxLookupLimit specifies the maximum number of blocks from head for which
 	// transaction hashes will be indexed.
 	//
@@ -597,7 +601,7 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 	useAsyncReads := bc.cfg.BALExecutionMode != bal.BALExecutionNoBatchIO
 	al := block.AccessList() // TODO: make the return of this method not be a pointer
 	accessListReader := bal.NewAccessListReader(*al)
-	prefetchReader, err := sdb.ReaderEIP7928(parentRoot, accessListReader.StorageKeys(useAsyncReads), runtime.NumCPU())
+	prefetchReader, err := sdb.ReaderEIP7928(parentRoot, accessListReader.StorageKeys(useAsyncReads), bc.cfg.PrefetchWorkers, bc.cfg.BlockingPrefetch)
 	if err != nil {
 		return nil, err
 	}
@@ -652,34 +656,22 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 	writeTime := time.Since(writeStart)
 	var stats ExecuteStats
 
-	/*
-		// TODO: implement the gathering of this data
-			stats.AccountReads = statedb.AccountReads     // Account reads are complete(in processing)
-			stats.StorageReads = statedb.StorageReads     // Storage reads are complete(in processing)
-			stats.AccountUpdates = statedb.AccountUpdates // Account updates are complete(in validation)
-			stats.StorageUpdates = statedb.StorageUpdates // Storage updates are complete(in validation)
-			stats.AccountHashes = statedb.AccountHashes   // Account hashes are complete(in validation)
-			stats.CodeReads = statedb.CodeReads
+	stats.ExecWall = res.ExecTime
+	stats.PostProcess = res.PostProcessTime
 
-			stats.AccountLoaded = statedb.AccountLoaded
-			stats.AccountUpdated = statedb.AccountUpdated
-			stats.AccountDeleted = statedb.AccountDeleted
-			stats.StorageLoaded = statedb.StorageLoaded
-			stats.StorageUpdated = int(statedb.StorageUpdated.Load())
-			stats.StorageDeleted = int(statedb.StorageDeleted.Load())
-			stats.CodeLoaded = statedb.CodeLoaded
-			stats.CodeLoadBytes = statedb.CodeLoadBytes
+	if m := res.StateTransitionMetrics; m != nil {
+		stats.AccountHashes = m.AccountUpdate + m.StateUpdate + m.StateHash
+		stats.AccountCommits = m.AccountCommits
+		stats.StorageCommits = m.StorageCommits
+		stats.DatabaseCommit = m.TrieDBCommits
+		stats.Prefetch = m.StatePrefetch
+	}
 
-		stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // The time spent on EVM processing
-		stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation
-	*/
+	stats.Prefetch = prefetchReader.(state.PrefetcherMetricer).Metrics().Elapsed
 
-	// Update the metrics touched during block commit
-	stats.AccountCommits = stateTransition.Metrics().AccountCommits
-	stats.StorageCommits = stateTransition.Metrics().StorageCommits
-
-	// stats.StateReadCacheStats = whichReader.GetStats()
-	// ^ TODO fix this
+	if r, ok := prefetchReader.(state.ReaderStater); ok {
+		stats.StateReadCacheStats = r.GetStats()
+	}
 
 	elapsed := time.Since(startTime) + 1 // prevent zero division
 	stats.TotalTime = elapsed

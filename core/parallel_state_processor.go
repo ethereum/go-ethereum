@@ -23,6 +23,7 @@ type ProcessResultWithMetrics struct {
 	// the time it took to execute all txs in the block
 	ExecTime        time.Duration
 	PostProcessTime time.Duration
+	// TODO: have the prefetch metric in here as well?
 }
 
 // ParallelStateProcessor is used to execute and verify blocks containing
@@ -198,15 +199,14 @@ type txExecResult struct {
 
 // resultHandler polls until all transactions have finished executing and the
 // state root calculation is complete. The result is emitted on resCh.
-func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxReads bal.StateAccesses, statedb *state.StateDB, prefetchReader state.Reader, tExecStart time.Time, txResCh <-chan txExecResult, stateRootCalcResCh <-chan stateRootCalculationResult, resCh chan *ProcessResultWithMetrics) {
+func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxAccesses bal.StateAccesses, statedb *state.StateDB, prefetchReader state.Reader, tExecStart time.Time, txResCh <-chan txExecResult, stateRootCalcResCh <-chan stateRootCalculationResult, resCh chan *ProcessResultWithMetrics) {
 	// 1. if the block has transactions, receive the execution results from all of them and return an error on resCh if any txs err'd
 	// 2. once all txs are executed, compute the post-tx state transition and produce the ProcessResult sending it on resCh (or an error if the post-tx state didn't match what is reported in the BAL)
 	var results []txExecResult
 	var cumulativeStateGas, cumulativeRegularGas uint64
 	var execErr error
 	var numTxComplete int
-
-	accesses := preTxReads
+	accesses := preTxAccesses
 
 	if len(block.Transactions()) > 0 {
 	loop:
@@ -361,7 +361,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *st
 	)
 
 	startingState := statedb.Copy()
-	preReads, err := p.processBlockPreTx(block, statedb, balReader, cfg)
+	preTxReads, err := p.processBlockPreTx(block, statedb, balReader, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -371,7 +371,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *st
 
 	// execute transactions and state root calculation in parallel
 	tExecStart = time.Now()
-	go p.resultHandler(block, preReads, statedb, balReader, tExecStart, txResCh, rootCalcResultCh, resCh)
+	go p.resultHandler(block, preTxReads, statedb, balReader, tExecStart, txResCh, rootCalcResultCh, resCh)
 	var workers errgroup.Group
 	workers.SetLimit(runtime.NumCPU())
 	for i, t := range block.Transactions() {

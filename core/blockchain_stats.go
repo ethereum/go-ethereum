@@ -38,6 +38,7 @@ type ExecuteStats struct {
 	StorageCommits time.Duration // Time spent on the storage trie commit
 	CodeReads      time.Duration // Time spent on the contract code read
 
+	// TODO: code bytes loaded
 	AccountLoaded   int // Number of accounts loaded
 	AccountUpdated  int // Number of accounts updated
 	AccountDeleted  int // Number of accounts deleted
@@ -58,6 +59,11 @@ type ExecuteStats struct {
 	BlockWrite      time.Duration // Time spent on block write
 	TotalTime       time.Duration // The total time spent on block execution
 	MgasPerSecond   float64       // The million gas processed per second
+
+	// BAL parallel-path durations, surfaced under slowBlockLog.BAL.
+	ExecWall    time.Duration // Wall-clock parallel transaction execution
+	PostProcess time.Duration // Post-tx finalization (system contracts, requests)
+	Prefetch    time.Duration // BAL state prefetching
 
 	// Cache hit rates
 	StateReadCacheStats     state.ReaderStats
@@ -120,6 +126,8 @@ type slowBlockLog struct {
 	StateReads  slowBlockReads  `json:"state_reads"`
 	StateWrites slowBlockWrites `json:"state_writes"`
 	Cache       slowBlockCache  `json:"cache"`
+	// BAL is set only for blocks processed via the parallel BAL path.
+	BAL *slowBlockBAL `json:"bal,omitempty"`
 }
 
 type slowBlockInfo struct {
@@ -180,24 +188,30 @@ type slowBlockCodeCacheEntry struct {
 	MissBytes int64   `json:"miss_bytes"`
 }
 
+// slowBlockBAL holds parallel-execution timings that don't fit the sequential schema.
+type slowBlockBAL struct {
+	ExecWallMs       float64 `json:"exec_wall_ms"`
+	PostProcessMs    float64 `json:"post_process_ms"`
+	PrefetchMs       float64 `json:"prefetch_ms"`
+	StatePrefetchMs  float64 `json:"state_prefetch_ms"`
+	AccountUpdateMs  float64 `json:"account_update_ms"`
+	StateUpdateMs    float64 `json:"state_update_ms"`
+	StateHashMs      float64 `json:"state_hash_ms"`
+	AccountCommitMs  float64 `json:"account_commit_ms"`
+	StorageCommitMs  float64 `json:"storage_commit_ms"`
+	TrieDBCommitMs   float64 `json:"triedb_commit_ms"`
+	SnapshotCommitMs float64 `json:"snapshot_commit_ms"`
+}
+
 // durationToMs converts a time.Duration to milliseconds as a float64
 // with sub-millisecond precision for accurate cross-client metrics.
 func durationToMs(d time.Duration) float64 {
 	return float64(d.Nanoseconds()) / 1e6
 }
 
-// logSlow prints the detailed execution statistics in JSON format if the block
-// is regarded as slow. The JSON format is designed for cross-client compatibility
-// with other Ethereum execution clients.
-func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Duration) {
-	// Negative threshold means disabled (default when flag not set)
-	if slowBlockThreshold < 0 {
-		return
-	}
-	// Threshold of 0 logs all blocks; positive threshold filters
-	if slowBlockThreshold > 0 && s.TotalTime < slowBlockThreshold {
-		return
-	}
+// buildSlowBlockLog builds the slow-block JSON payload. Split out from logSlow
+// so the JSON shape is directly testable.
+func buildSlowBlockLog(s *ExecuteStats, block *types.Block) slowBlockLog {
 	logEntry := slowBlockLog{
 		Level: "warn",
 		Msg:   "Slow block",
@@ -226,8 +240,8 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Durat
 		StateWrites: slowBlockWrites{
 			Accounts:            s.AccountUpdated,
 			AccountsDeleted:     s.AccountDeleted,
-			StorageSlots:        s.StorageUpdated,
-			StorageSlotsDeleted: s.StorageDeleted,
+			StorageSlots:        int(s.StorageUpdated),
+			StorageSlotsDeleted: int(s.StorageDeleted),
 			Code:                s.CodeUpdated,
 			CodeBytes:           s.CodeUpdateBytes,
 		},
@@ -251,7 +265,37 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Durat
 			},
 		},
 	}
-	jsonBytes, err := json.Marshal(logEntry)
+	if m := s.balTransitionStats; m != nil {
+		logEntry.BAL = &slowBlockBAL{
+			ExecWallMs:       durationToMs(s.ExecWall),
+			PostProcessMs:    durationToMs(s.PostProcess),
+			PrefetchMs:       durationToMs(s.Prefetch),
+			StatePrefetchMs:  durationToMs(m.StatePrefetch),
+			AccountUpdateMs:  durationToMs(m.AccountUpdate),
+			StateUpdateMs:    durationToMs(m.StateUpdate),
+			StateHashMs:      durationToMs(m.StateHash),
+			AccountCommitMs:  durationToMs(m.AccountCommits),
+			StorageCommitMs:  durationToMs(m.StorageCommits),
+			TrieDBCommitMs:   durationToMs(m.TrieDBCommits),
+			SnapshotCommitMs: durationToMs(m.SnapshotCommits),
+		}
+	}
+	return logEntry
+}
+
+// logSlow prints the detailed execution statistics in JSON format if the block
+// is regarded as slow. The JSON format is designed for cross-client compatibility
+// with other Ethereum execution clients.
+func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Duration) {
+	// Negative threshold means disabled (default when flag not set)
+	if slowBlockThreshold < 0 {
+		return
+	}
+	// Threshold of 0 logs all blocks; positive threshold filters
+	if slowBlockThreshold > 0 && s.TotalTime < slowBlockThreshold {
+		return
+	}
+	jsonBytes, err := json.Marshal(buildSlowBlockLog(s, block))
 	if err != nil {
 		log.Error("Failed to marshal slow block log", "error", err)
 		return
@@ -260,40 +304,16 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Durat
 }
 
 func (s *ExecuteStats) reportBALMetrics() {
-	/*
-		if s.AccountLoaded != 0 {
-			accountReadTimer.Update(s.AccountReads)
-			accountReadSingleTimer.Update(s.AccountReads / time.Duration(s.AccountLoaded))
-		}
-		if s.StorageLoaded != 0 {
-			storageReadTimer.Update(s.StorageReads)
-			storageReadSingleTimer.Update(s.StorageReads / time.Duration(s.StorageLoaded))
-		}
-		if s.CodeLoaded != 0 {
-			codeReadTimer.Update(s.CodeReads)
-			codeReadSingleTimer.Update(s.CodeReads / time.Duration(s.CodeLoaded))
-			codeReadBytesTimer.Update(time.Duration(s.CodeLoadBytes))
-		}
-		// TODO: implement these ^
-	*/
-	//accountUpdateTimer.Update(s.AccountUpdates) // Account updates are complete(in validation)
-	//storageUpdateTimer.Update(s.StorageUpdates) // Storage updates are complete(in validation)
-	//accountHashTimer.Update(s.AccountHashes)    // Account hashes are complete(in validation)
-
 	accountCommitTimer.Update(s.AccountCommits) // Account commits are complete, we can mark them
 	storageCommitTimer.Update(s.StorageCommits) // Storage commits are complete, we can mark them
 
-	stateTriePrefetchTimer.Update(s.balTransitionStats.StatePrefetch)
-	accountTriesUpdateTimer.Update(s.balTransitionStats.AccountUpdate)
-	stateTrieUpdateTimer.Update(s.balTransitionStats.StateUpdate)
-	stateTrieHashTimer.Update(s.balTransitionStats.StateHash)
-	stateRootComputeTimer.Update(s.balTransitionStats.AccountUpdate + s.balTransitionStats.StateUpdate + s.balTransitionStats.StateHash)
-
-	//blockExecutionTimer.Update(s.Execution)                 // The time spent on EVM processing
-	// ^basically impossible to get this metric with parallel execution
-
-	//blockValidationTimer.Update(s.Validation)               // The time spent on block validation
-	//blockCrossValidationTimer.Update(s.CrossValidation)     // The time spent on stateless cross validation
+	if m := s.balTransitionStats; m != nil {
+		stateTriePrefetchTimer.Update(m.StatePrefetch)
+		accountTriesUpdateTimer.Update(m.AccountUpdate)
+		stateTrieUpdateTimer.Update(m.StateUpdate)
+		stateTrieHashTimer.Update(m.StateHash)
+		stateRootComputeTimer.Update(m.AccountUpdate + m.StateUpdate + m.StateHash)
+	}
 
 	blockWriteTimer.Update(s.BlockWrite)                    // The time spent on block write
 	blockInsertTimer.Update(s.TotalTime)                    // The total time spent on block execution

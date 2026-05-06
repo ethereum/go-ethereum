@@ -209,10 +209,10 @@ func TestReaderWithTracker(t *testing.T) {
 // transactions read without hitting the reader, causing the BAL to be incomplete.
 func TestTrackerSurvivesStateDBCache(t *testing.T) {
 	var (
-		sdb            = NewDatabaseForTesting()
-		statedb, _     = New(types.EmptyRootHash, sdb)
-		addr           = common.HexToAddress("0xaaaa")
-		slot           = common.HexToHash("0x01")
+		sdb        = NewDatabaseForTesting()
+		statedb, _ = New(types.EmptyRootHash, sdb)
+		addr       = common.HexToAddress("0xaaaa")
+		slot       = common.HexToHash("0x01")
 	)
 	// Set up committed state with one account that has a storage slot.
 	statedb.SetBalance(addr, uint256.NewInt(1e18), tracing.BalanceChangeUnspecified)

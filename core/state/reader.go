@@ -18,9 +18,6 @@ package state
 
 import (
 	"errors"
-	"sync"
-	"sync/atomic"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -31,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/database"
+	"sync"
+	"sync/atomic"
 )
 
 // ContractCodeReader defines the interface for accessing contract code.
@@ -530,6 +529,7 @@ func (r *stateReaderWithStats) GetStateStats() StateReaderStats {
 type reader struct {
 	ContractCodeReader
 	StateReader
+	PrefetcherMetricer
 }
 
 // newReader constructs a reader with the supplied code reader and state reader.
@@ -537,6 +537,14 @@ func newReader(codeReader ContractCodeReader, stateReader StateReader) *reader {
 	return &reader{
 		ContractCodeReader: codeReader,
 		StateReader:        stateReader,
+	}
+}
+
+func newReaderWithPrefetch(codeReader ContractCodeReader, stateReader StateReader, metricer PrefetcherMetricer) *reader {
+	return &reader{
+		ContractCodeReader: codeReader,
+		StateReader:        stateReader,
+		PrefetcherMetricer: metricer,
 	}
 }
 

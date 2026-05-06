@@ -18,7 +18,6 @@ package state
 
 import (
 	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -241,7 +240,7 @@ func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reade
 }
 
 // ReaderEIP7928 creates a state reader with the manner of Block-level accessList.
-func (db *CachingDB) ReaderEIP7928(stateRoot common.Hash, accessList map[common.Address][]common.Hash, threads int) (Reader, error) {
+func (db *CachingDB) ReaderEIP7928(stateRoot common.Hash, accessList map[common.Address][]common.Hash, threads int, block bool) (Reader, error) {
 	base, err := db.StateReader(stateRoot)
 	if err != nil {
 		return nil, err
@@ -251,8 +250,13 @@ func (db *CachingDB) ReaderEIP7928(stateRoot common.Hash, accessList map[common.
 
 	// Construct the state reader with background prefetching
 	pr := newPrefetchStateReader(r, accessList, threads)
+	if block {
+		if err := pr.Wait(); err != nil {
+			panic("unreachable")
+		}
+	}
 
-	return newReader(db.codedb.Reader(), pr), nil
+	return newReaderWithPrefetch(db.codedb.Reader(), pr, pr), nil
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
