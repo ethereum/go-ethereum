@@ -1502,13 +1502,13 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 			if !ok {
 				continue // non-interesting blob
 			}
-			// Mark hash as seen.
-			filled[hash] = struct{}{}
 			if sidecar.Version != version {
 				// Skip blobs with incompatible version. Note we still track the blob hash
 				// in `filled` here, ensuring that we do not resolve this tx another time.
 				continue
 			}
+			// Mark hash as seen.
+			filled[hash] = struct{}{}
 			// Get or convert the proof.
 			var pf []kzg4844.Proof
 			switch version {
