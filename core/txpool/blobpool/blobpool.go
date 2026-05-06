@@ -1517,7 +1517,8 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 			case types.BlobSidecarVersion1:
 				cellProofs, err := sidecar.CellProofsAt(i)
 				if err != nil {
-					return nil, nil, nil, err
+					log.Error("Failed to get cell proofs", "id", txID, "err", err)
+					continue
 				}
 				pf = cellProofs
 			}
