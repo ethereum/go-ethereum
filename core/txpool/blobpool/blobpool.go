@@ -594,6 +594,9 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	// Migrate legacy transactions (types.Transaction) to pooledBlobTx format.
 	if len(convertTxs) > 0 {
 		for _, tx := range convertTxs {
+			if tx.BlobTxSidecar() == nil {
+				continue
+			}
 			ptx := newBlobTxForPool(tx)
 			blob, err := rlp.EncodeToBytes(ptx)
 			if err != nil {
@@ -605,6 +608,8 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 			}
 			meta := newBlobTxMeta(id, ptx.TxSize(), p.store.Size(id), ptx)
 
+			// If the newly inserted transaction fails to be tracked,
+			// it should also be removed with those in `fails`
 			sender, err := types.Sender(p.signer, ptx.Tx)
 			if err != nil {
 				fails = append(fails, id)
@@ -708,14 +713,13 @@ func (p *BlobPool) Close() error {
 func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) (bool, error) {
 	var ptx blobTxForPool
 	if err := rlp.DecodeBytes(blob, &ptx); err != nil {
-		tx := new(types.Transaction)
-		if err := rlp.DecodeBytes(blob, tx); err != nil {
-			return false, err
+		kind, _, _, splitErr := rlp.Split(blob)
+		if splitErr == nil && kind == rlp.String {
+			// legacy transaction is an RLP string
+			// while blobTxForPool is encoded as an RLP list.
+			return true, nil
 		}
-		if tx.BlobTxSidecar() == nil {
-			return false, errors.New("missing blob sidecar")
-		}
-		return true, nil
+		return false, err
 	}
 	meta := newBlobTxMeta(id, ptx.TxSize(), size, &ptx)
 	if p.lookup.exists(meta.hash) {
