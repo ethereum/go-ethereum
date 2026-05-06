@@ -580,7 +580,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 		} else if legacy {
 			fails = append(fails, id)
 			tx := new(types.Transaction)
-			if err := rlp.DecodeBytes(blob, tx); err != nil {
+			if err := rlp.DecodeBytes(blob, tx); err == nil {
 				convertTxs = append(convertTxs, tx)
 			}
 		}
