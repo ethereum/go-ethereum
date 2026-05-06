@@ -235,7 +235,7 @@ func makeTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64,
 	return types.MustSignNewTx(key, types.LatestSigner(params.MainnetChainConfig), blobtx)
 }
 
-// encodeForPool encodes a blob transaction in the BlobTxForPool storage format.
+// encodeForPool encodes a blob transaction in the blobTxForPool storage format.
 func encodeForPool(tx *types.Transaction) []byte {
 	blob, _ := rlp.EncodeToBytes(newBlobTxForPool(tx))
 	return blob
@@ -2059,6 +2059,32 @@ func TestGetBlobs(t *testing.T) {
 		}
 	}
 	pool.Close()
+}
+
+// TestEncodeForNetwork verifies that encodeForNetwork produces output identical
+// to rlp.EncodeToBytes on the original transaction, for both V0 and V1 sidecars.
+func TestEncodeForNetwork(t *testing.T) {
+	t.Run("v0", func(t *testing.T) { testEncodeForNetwork(t, types.BlobSidecarVersion0) })
+	t.Run("v1", func(t *testing.T) { testEncodeForNetwork(t, types.BlobSidecarVersion1) })
+}
+
+func testEncodeForNetwork(t *testing.T, version byte) {
+	key, _ := crypto.GenerateKey()
+	tx := makeMultiBlobTx(0, 1, 1, 1, 1, 0, key, version)
+
+	wantRLP, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		t.Fatalf("failed to encode tx: %v", err)
+	}
+	storedRLP := encodeForPool(tx)
+
+	gotRLP, err := encodeForNetwork(storedRLP)
+	if err != nil {
+		t.Fatalf("encodeForNetwork failed: %v", err)
+	}
+	if !bytes.Equal(gotRLP, wantRLP) {
+		t.Fatalf("network encoding mismatch (version %d): got %d bytes, want %d bytes", version, len(gotRLP), len(wantRLP))
+	}
 }
 
 // fakeBilly is a billy.Database implementation which just drops data on the floor.

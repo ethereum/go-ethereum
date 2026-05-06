@@ -17,14 +17,12 @@
 package types
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
 
@@ -86,50 +84,6 @@ func createEmptyBlobTx(key *ecdsa.PrivateKey, withSidecar bool) *Transaction {
 	blobtx := createEmptyBlobTxInner(withSidecar)
 	signer := NewCancunSigner(blobtx.ChainID.ToBig())
 	return MustSignNewTx(key, signer, blobtx)
-}
-
-// TestEncodeForNetwork verifies that EncodeForNetwork produces output identical
-// to rlp.EncodeToBytes on the original transaction, for both V0 and V1 sidecars.
-func TestEncodeForNetwork(t *testing.T) {
-	t.Run("v0", func(t *testing.T) { testEncodeForNetwork(t, BlobSidecarVersion0) })
-	t.Run("v1", func(t *testing.T) { testEncodeForNetwork(t, BlobSidecarVersion1) })
-}
-
-func testEncodeForNetwork(t *testing.T, version byte) {
-	key, _ := crypto.GenerateKey()
-	tx := createEmptyBlobTx(key, true)
-	if version == BlobSidecarVersion1 {
-		if err := tx.BlobTxSidecar().ToV1(); err != nil {
-			t.Fatalf("failed to convert sidecar to v1: %v", err)
-		}
-	}
-
-	wantRLP, err := rlp.EncodeToBytes(tx)
-	if err != nil {
-		t.Fatalf("failed to encode tx: %v", err)
-	}
-
-	sc := tx.BlobTxSidecar()
-	ptx := &BlobTxForPool{
-		Tx:          tx.WithoutBlobTxSidecar(),
-		Version:     sc.Version,
-		Commitments: sc.Commitments,
-		Proofs:      sc.Proofs,
-		Blobs:       sc.Blobs,
-	}
-	storedRLP, err := rlp.EncodeToBytes(ptx)
-	if err != nil {
-		t.Fatalf("failed to encode BlobTxForPool: %v", err)
-	}
-
-	gotRLP, err := EncodeForNetwork(storedRLP)
-	if err != nil {
-		t.Fatalf("EncodeForNetwork failed: %v", err)
-	}
-
-	if !bytes.Equal(gotRLP, wantRLP) {
-		t.Fatalf("network encoding mismatch (version %d): got %d bytes, want %d bytes", version, len(gotRLP), len(wantRLP))
-	}
 }
 
 func createEmptyBlobTxInner(withSidecar bool) *BlobTx {

@@ -147,14 +147,57 @@ type blobTxMeta struct {
 	evictionBlobFeeJumps float64      // Worse blob fee (converted to fee jumps) across all previous nonces
 }
 
-// newBlobTxForPool decomposes a blob transaction into BlobTxForPool
-// type.
-func newBlobTxForPool(tx *types.Transaction) *types.BlobTxForPool {
+// blobTxForPool is the storage representation of a blob transaction in the
+// blobpool.
+type blobTxForPool struct {
+	Tx          *types.Transaction // tx without sidecar
+	Version     byte
+	Commitments []kzg4844.Commitment
+	Proofs      []kzg4844.Proof
+	Blobs       []kzg4844.Blob
+}
+
+// Sidecar returns BlobTxSidecar of ptx.
+func (ptx *blobTxForPool) Sidecar() *types.BlobTxSidecar {
+	return types.NewBlobTxSidecar(ptx.Version, ptx.Blobs, ptx.Commitments, ptx.Proofs)
+}
+
+// WithSidecar copies the sidecar's fields into the flat fields.
+func (ptx *blobTxForPool) WithSidecar(sc *types.BlobTxSidecar) {
+	ptx.Version = sc.Version
+	ptx.Commitments = sc.Commitments
+	ptx.Proofs = sc.Proofs
+	ptx.Blobs = sc.Blobs
+}
+
+// TxSize returns the transaction size on the network without
+// reconstructing the transaction.
+func (ptx *blobTxForPool) TxSize() uint64 {
+	var blobs, commitments, proofs uint64
+	for i := range ptx.Blobs {
+		blobs += rlp.BytesSize(ptx.Blobs[i][:])
+	}
+	for i := range ptx.Commitments {
+		commitments += rlp.BytesSize(ptx.Commitments[i][:])
+	}
+	for i := range ptx.Proofs {
+		proofs += rlp.BytesSize(ptx.Proofs[i][:])
+	}
+	return ptx.Tx.Size() + rlp.ListSize(rlp.ListSize(blobs)+rlp.ListSize(commitments)+rlp.ListSize(proofs))
+}
+
+// ToTx reconstructs a full Transaction with the sidecar attached.
+func (ptx *blobTxForPool) ToTx() *types.Transaction {
+	return ptx.Tx.WithBlobTxSidecar(ptx.Sidecar())
+}
+
+// newBlobTxForPool decomposes a blob transaction into blobTxForPool type.
+func newBlobTxForPool(tx *types.Transaction) *blobTxForPool {
 	sc := tx.BlobTxSidecar()
 	if sc == nil {
 		panic("missing blob tx sidecar")
 	}
-	return &types.BlobTxForPool{
+	return &blobTxForPool{
 		Tx:          tx.WithoutBlobTxSidecar(),
 		Version:     sc.Version,
 		Commitments: sc.Commitments,
@@ -163,9 +206,72 @@ func newBlobTxForPool(tx *types.Transaction) *types.BlobTxForPool {
 	}
 }
 
+// encodeForNetwork transforms stored blobTxForPool RLP into the standard
+// network transaction encoding. This is used for getRLP.
+//
+// Stored RLP:  [type_byte || tx_fields, version, [comms], [proofs], [blobs]]
+// V0:   type_byte || rlp([tx_fields, [blobs], [comms], [proofs]])
+// V1:   type_byte || rlp([tx_fields, version, [blobs], [comms], [proofs]])
+func encodeForNetwork(storedRLP []byte) ([]byte, error) {
+	elems, err := rlp.SplitListValues(storedRLP)
+	if err != nil {
+		return nil, fmt.Errorf("invalid blobTxForPool RLP: %w", err)
+	}
+	if len(elems) < 5 {
+		return nil, fmt.Errorf("blobTxForPool has %d elements, need at least 5", len(elems))
+	}
+
+	// 1. Extract tx byte and other tx fields
+	txBytes, _, err := rlp.SplitString(elems[0])
+	if err != nil {
+		return nil, fmt.Errorf("invalid tx bytes: %w", err)
+	}
+	if len(txBytes) < 2 {
+		return nil, errors.New("tx bytes too short")
+	}
+	typeByte := txBytes[0]
+	txRLP := txBytes[1:]
+
+	// 2. Find the version of sidecar.
+	version, _, err := rlp.SplitString(elems[1])
+	if err != nil {
+		return nil, fmt.Errorf("invalid version: %w", err)
+	}
+	var versionByte byte
+	switch len(version) {
+	case 0:
+		versionByte = 0
+	case 1:
+		versionByte = version[0]
+	default:
+		return nil, fmt.Errorf("invalid version length: %d", len(version))
+	}
+	// 3. Extract sidecar elements.
+	commitmentsRLP := elems[2]
+	proofsRLP := elems[3]
+	blobsRLP := elems[4]
+
+	// 4. Reconstruct into the network format.
+	var outer [][]byte
+	if versionByte == types.BlobSidecarVersion0 {
+		outer = [][]byte{txRLP, blobsRLP, commitmentsRLP, proofsRLP}
+	} else {
+		outer = [][]byte{txRLP, elems[1], blobsRLP, commitmentsRLP, proofsRLP}
+	}
+	body, err := rlp.MergeListValues(outer)
+	if err != nil {
+		return nil, err
+	}
+	// Prepend type byte and wrap as an RLP string.
+	inner := make([]byte, 1+len(body))
+	inner[0] = typeByte
+	copy(inner[1:], body)
+	return rlp.EncodeToBytes(inner)
+}
+
 // newBlobTxMeta retrieves the indexed metadata fields from a pooled blob
 // transaction and assembles a helper struct to track in memory.
-func newBlobTxMeta(id uint64, size uint64, storageSize uint32, ptx *types.BlobTxForPool) *blobTxMeta {
+func newBlobTxMeta(id uint64, size uint64, storageSize uint32, ptx *blobTxForPool) *blobTxMeta {
 	meta := &blobTxMeta{
 		hash:        ptx.Tx.Hash(),
 		vhashes:     ptx.Tx.BlobHashes(),
@@ -608,7 +714,7 @@ func (p *BlobPool) Close() error {
 // each transaction on disk to create the in-memory metadata index.
 // Return value `bool` is set to true when the entry has old Transaction type.
 func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) (bool, error) {
-	ptx := new(types.BlobTxForPool)
+	ptx := new(blobTxForPool)
 	if err := rlp.DecodeBytes(blob, ptx); err != nil {
 		tx := new(types.Transaction)
 		if err := rlp.DecodeBytes(blob, tx); err != nil {
@@ -916,7 +1022,7 @@ func (p *BlobPool) offload(addr common.Address, nonce uint64, id uint64, inclusi
 		log.Error("Blobs missing for included transaction", "from", addr, "nonce", nonce, "id", id, "err", err)
 		return
 	}
-	ptx := new(types.BlobTxForPool)
+	ptx := new(blobTxForPool)
 	if err := rlp.DecodeBytes(data, ptx); err != nil {
 		log.Error("Blobs corrupted for included transaction", "from", addr, "nonce", nonce, "id", id, "err", err)
 		return
@@ -1456,7 +1562,7 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 	if len(data) == 0 {
 		return nil
 	}
-	ptx := new(types.BlobTxForPool)
+	ptx := new(blobTxForPool)
 	if err := rlp.DecodeBytes(data, ptx); err != nil {
 		id, _ := p.lookup.storeidOfTx(hash)
 
@@ -1470,7 +1576,7 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 // GetRLP returns a RLP-encoded transaction for network if it is contained in the pool.
 func (p *BlobPool) GetRLP(hash common.Hash) []byte {
 	data := p.getRLP(hash)
-	rlp, err := types.EncodeForNetwork(data)
+	rlp, err := encodeForNetwork(data)
 	if err != nil {
 		log.Error("Failed to encode pooled tx into the network type", "hash", hash, "err", err)
 		return nil
@@ -1545,7 +1651,7 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 		}
 
 		// Decode the blob transaction
-		ptx := new(types.BlobTxForPool)
+		ptx := new(blobTxForPool)
 		if err := rlp.DecodeBytes(data, ptx); err != nil {
 			log.Error("Blobs corrupted for traced transaction", "id", txID, "err", err)
 			continue
