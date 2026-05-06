@@ -551,10 +551,6 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		roots = append(roots, statedb.IntermediateRoot(deleteEmptyObjects))
 		logs = append(logs, statedb.GetLogs(tx.Hash(), block.NumberU64(), block.Hash(), block.Time())...)
 	}
-	// TODO(rjl) it's a behavioral change, need to discuss with team
-	// Run post-execution system calls
-	// core.PostExecution(ctx, chainConfig, block.Number(), block.Time(), logs, evm)
-	// roots = append(roots, statedb.IntermediateRoot(deleteEmptyObjects))
 	return roots, nil
 }
 
