@@ -298,9 +298,10 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 
 		// we expect the first number to come in to be [from]. Therefore, setting
 		// nextNum to from means that the queue gap-evaluation will work correctly
-		nextNum     = from
-		queue       = prque.New[int64, *blockTxHashes](nil)
-		blocks, txs = 0, 0 // for stats reporting
+		nextNum          = from
+		queue            = prque.New[int64, *blockTxHashes](nil)
+		blocks, txs      = 0, 0 // for stats reporting
+		loggedFirstBanner = false
 	)
 	// Otherwise spin up the concurrent iterator and unindexer
 	for delivery := range hashesCh {
@@ -338,7 +339,12 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 			}
 			// If we've spent too much time already, notify the user of what we're doing
 			if time.Since(logged) > 8*time.Second {
-				log.Info("Unindexing transactions", "blocks", blocks, "txs", txs, "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
+				if !loggedFirstBanner {
+					log.Info("Unindexing transactions — this is normal maintenance and does not indicate data loss", "blocks", blocks, "txs", txs, "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
+					loggedFirstBanner = true
+				} else {
+					log.Debug("Unindexing transactions", "blocks", blocks, "txs", txs, "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
+				}
 				logged = time.Now()
 			}
 		}
