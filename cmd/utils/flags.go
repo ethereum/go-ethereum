@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	godebug "runtime/debug"
 	"strconv"
 	"strings"
@@ -711,6 +712,13 @@ var (
 		Usage:     `Hash of the block to full sync to (dev testing feature)`,
 		TakesFile: true,
 		Category:  flags.MiscCategory,
+	}
+
+	PrefetchWorkersFlag = &cli.UintFlag{
+		Name:     "bal.prefetchworkers",
+		Usage:    "The number of concurrent state loading tasks to perform when prefetching BAL state.  Default to the number of cpus",
+		Value:    uint(runtime.NumCPU()),
+		Category: flags.MiscCategory,
 	}
 
 	// RPC settings
@@ -2459,6 +2467,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		TrienodeHistory:         ctx.Int64(TrienodeHistoryFlag.Name),
 		NodeFullValueCheckpoint: uint32(ctx.Uint(TrienodeHistoryFullValueCheckpointFlag.Name)),
 
+		PrefetchWorkers: int(ctx.Uint(PrefetchWorkersFlag.Name)),
 		// Disable transaction indexing/unindexing.
 		TxLookupLimit: -1,
 

@@ -211,6 +211,8 @@ type BlockChainConfig struct {
 	Overrides  *ChainOverrides // Optional chain config overrides
 	VmConfig   vm.Config       // Config options for the EVM Interpreter
 
+	PrefetchWorkers int // number of concurrent go-routines for BAL state prefetching
+
 	// TxLookupLimit specifies the maximum number of blocks from head for which
 	// transaction hashes will be indexed.
 	//
@@ -597,7 +599,7 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 	useAsyncReads := bc.cfg.BALExecutionMode != bal.BALExecutionNoBatchIO
 	al := block.AccessList() // TODO: make the return of this method not be a pointer
 	accessListReader := bal.NewAccessListReader(*al)
-	prefetchReader, err := sdb.ReaderEIP7928(parentRoot, accessListReader.StorageKeys(useAsyncReads), runtime.NumCPU())
+	prefetchReader, err := sdb.ReaderEIP7928(parentRoot, accessListReader.StorageKeys(useAsyncReads), bc.cfg.PrefetchWorkers)
 	if err != nil {
 		return nil, err
 	}
