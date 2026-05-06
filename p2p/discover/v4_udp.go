@@ -555,8 +555,10 @@ func (t *UDPv4) readLoop(unhandled chan<- ReadPacket) {
 		if err := t.handlePacket(from, buf[:nbytes]); err != nil && unhandled == nil {
 			t.log.Debug("Bad discv4 packet", "addr", from, "err", err)
 		} else if err != nil && unhandled != nil {
+			packet := make([]byte, nbytes)
+			copy(packet, buf[:nbytes])
 			select {
-			case unhandled <- ReadPacket{buf[:nbytes], from}:
+			case unhandled <- ReadPacket{packet, from}:
 			default:
 			}
 		}
