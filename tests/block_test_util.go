@@ -162,6 +162,7 @@ func (t *BlockTest) createTestBlockChain(config *params.ChainConfig, snapshotter
 		},
 		StatelessSelfValidation: witness,
 		NoPrefetch:              true,
+		BlockingPrefetch:        true,
 		PrefetchWorkers:         100, // note: this is totally unrelated to NoPrefetch, just for BAL execution
 	}
 	if snapshotter {

@@ -721,6 +721,12 @@ var (
 		Category: flags.MiscCategory,
 	}
 
+	BlockingPrefetch = &cli.BoolFlag{
+		Name:     "bal.blockingprefetch",
+		Usage:    "only relevant when executing in parallel with a BAL: if true, the prefetcher will block tx/state-root calculation until all scheduled fetching tasks have completed.",
+		Category: flags.MiscCategory,
+	}
+
 	// RPC settings
 	IPCDisabledFlag = &cli.BoolFlag{
 		Name:     "ipcdisable",
@@ -2467,7 +2473,8 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		TrienodeHistory:         ctx.Int64(TrienodeHistoryFlag.Name),
 		NodeFullValueCheckpoint: uint32(ctx.Uint(TrienodeHistoryFullValueCheckpointFlag.Name)),
 
-		PrefetchWorkers: int(ctx.Uint(PrefetchWorkersFlag.Name)),
+		PrefetchWorkers:  int(ctx.Uint(PrefetchWorkersFlag.Name)),
+		BlockingPrefetch: ctx.Bool(BlockingPrefetch.Name),
 		// Disable transaction indexing/unindexing.
 		TxLookupLimit: -1,
 
