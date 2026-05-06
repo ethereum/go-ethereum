@@ -118,6 +118,7 @@ func newPrefetchStateReaderInternal(reader StateReader, tasks []*fetchTask, nThr
 		nThreads:    nThreads,
 		done:        make(chan struct{}),
 		term:        make(chan struct{}),
+		start:       time.Now(),
 	}
 	go r.prefetch()
 	return r
@@ -145,7 +146,10 @@ func (r *prefetchStateReader) Wait() error {
 }
 
 func (r *prefetchStateReader) prefetch() {
-	defer close(r.done)
+	defer func() {
+		r.metrics = PrefetchMetrics{time.Since(r.start)}
+		close(r.done)
+	}()
 
 	if len(r.tasks) == 0 {
 		return
