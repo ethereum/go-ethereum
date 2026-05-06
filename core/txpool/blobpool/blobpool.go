@@ -706,8 +706,8 @@ func (p *BlobPool) Close() error {
 // each transaction on disk to create the in-memory metadata index.
 // Return value `bool` is set to true when the entry has old Transaction type.
 func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) (bool, error) {
-	ptx := new(blobTxForPool)
-	if err := rlp.DecodeBytes(blob, ptx); err != nil {
+	var ptx blobTxForPool
+	if err := rlp.DecodeBytes(blob, &ptx); err != nil {
 		tx := new(types.Transaction)
 		if err := rlp.DecodeBytes(blob, tx); err != nil {
 			return false, err
@@ -717,7 +717,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) (bool, 
 		}
 		return true, nil
 	}
-	meta := newBlobTxMeta(id, ptx.TxSize(), size, ptx)
+	meta := newBlobTxMeta(id, ptx.TxSize(), size, &ptx)
 	if p.lookup.exists(meta.hash) {
 		return false, errors.New("duplicate blob entry")
 	}
@@ -1011,8 +1011,8 @@ func (p *BlobPool) offload(addr common.Address, nonce uint64, id uint64, inclusi
 		log.Error("Blobs missing for included transaction", "from", addr, "nonce", nonce, "id", id, "err", err)
 		return
 	}
-	ptx := new(blobTxForPool)
-	if err := rlp.DecodeBytes(data, ptx); err != nil {
+	var ptx blobTxForPool
+	if err := rlp.DecodeBytes(data, &ptx); err != nil {
 		log.Error("Blobs corrupted for included transaction", "from", addr, "nonce", nonce, "id", id, "err", err)
 		return
 	}
@@ -1021,7 +1021,7 @@ func (p *BlobPool) offload(addr common.Address, nonce uint64, id uint64, inclusi
 		log.Warn("Blob transaction swapped out by signer", "from", addr, "nonce", nonce, "id", id)
 		return
 	}
-	if err := p.limbo.push(ptx, block); err != nil {
+	if err := p.limbo.push(&ptx, block); err != nil {
 		log.Warn("Failed to offload blob tx into limbo", "err", err)
 		return
 	}
@@ -1551,8 +1551,8 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 	if len(data) == 0 {
 		return nil
 	}
-	ptx := new(blobTxForPool)
-	if err := rlp.DecodeBytes(data, ptx); err != nil {
+	var ptx blobTxForPool
+	if err := rlp.DecodeBytes(data, &ptx); err != nil {
 		id, _ := p.lookup.storeidOfTx(hash)
 
 		log.Error("Blobs corrupted for traced transaction",
@@ -1642,8 +1642,8 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 		}
 
 		// Decode the blob transaction
-		ptx := new(blobTxForPool)
-		if err := rlp.DecodeBytes(data, ptx); err != nil {
+		var ptx blobTxForPool
+		if err := rlp.DecodeBytes(data, &ptx); err != nil {
 			log.Error("Blobs corrupted for traced transaction", "id", txID, "err", err)
 			continue
 		}
