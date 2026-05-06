@@ -722,9 +722,6 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) (bool, 
 		return false, err
 	}
 	meta := newBlobTxMeta(id, ptx.TxSize(), size, &ptx)
-	if p.lookup.exists(meta.hash) {
-		return false, errors.New("duplicate blob entry")
-	}
 	sender, err := types.Sender(p.signer, ptx.Tx)
 	if err != nil {
 		return false, err
