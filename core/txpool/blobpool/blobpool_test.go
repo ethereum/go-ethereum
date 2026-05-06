@@ -1287,6 +1287,85 @@ func TestBillyMigration(t *testing.T) {
 	}
 }
 
+// TestLegacyTxConversion verifies that on Init, transactions stored in the
+// legacy *types.Transaction RLP format are detected and migrated into the new
+// blobTxForPool storage format, and that they remain retrievable via the pool
+// API after the conversion.
+func TestLegacyTxConversion(t *testing.T) {
+	storage := t.TempDir()
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	os.MkdirAll(filepath.Join(storage, limboedTransactionStore), 0700)
+
+	// Initialize the pending store with two blob transactions encoded in the
+	// legacy format.
+	queuedir := filepath.Join(storage, pendingTransactionStore)
+	store, err := billy.Open(billy.Options{Path: queuedir}, newSlotter(testMaxBlobsPerBlock), nil)
+	if err != nil {
+		t.Fatalf("failed to open billy: %v", err)
+	}
+
+	key1, _ := crypto.GenerateKey()
+	key2, _ := crypto.GenerateKey()
+	addr1 := crypto.PubkeyToAddress(key1.PublicKey)
+	addr2 := crypto.PubkeyToAddress(key2.PublicKey)
+
+	tx1 := makeMultiBlobTx(0, 1, 1000, 100, 2, 0, key1, types.BlobSidecarVersion0)
+	tx2 := makeMultiBlobTx(0, 1, 1000, 100, 2, 2, key2, types.BlobSidecarVersion0)
+
+	for _, tx := range []*types.Transaction{tx1, tx2} {
+		legacy, err := rlp.EncodeToBytes(tx)
+		if err != nil {
+			t.Fatalf("failed to legacy-encode tx: %v", err)
+		}
+		if _, err := store.Put(legacy); err != nil {
+			t.Fatalf("failed to put legacy blob: %v", err)
+		}
+	}
+	store.Close()
+
+	// Init should migrate the legacy entries into the new storage format.
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(0, true, false)
+
+	chain := &testBlockChain{
+		config:  params.MainnetChainConfig,
+		basefee: uint256.NewInt(params.InitialBaseFee),
+		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+	defer pool.Close()
+
+	// Both transactions should be retrievable.
+	for _, want := range []*types.Transaction{tx1, tx2} {
+		got := pool.Get(want.Hash())
+		if got == nil {
+			t.Fatalf("migrated tx %s not found in pool", want.Hash())
+		}
+		if got.BlobTxSidecar() == nil {
+			t.Fatalf("migrated tx %s lost its sidecar", want.Hash())
+		}
+		if got.Hash() != want.Hash() {
+			t.Fatalf("migrated tx hash mismatch: have %s, want %s", got.Hash(), want.Hash())
+		}
+	}
+
+	// Legacy formats should not exist on pool.store
+	pool.store.Iterate(func(id uint64, size uint32, blob []byte) {
+		var ptx blobTxForPool
+		if err := rlp.DecodeBytes(blob, &ptx); err != nil {
+			t.Errorf("entry %d not in new blobTxForPool format: %v", id, err)
+		}
+	})
+
+	verifyPoolInternals(t, pool)
+}
+
 // TestBlobCountLimit tests the blobpool enforced limits on the max blob count.
 func TestBlobCountLimit(t *testing.T) {
 	var (
