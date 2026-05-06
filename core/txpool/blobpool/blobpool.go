@@ -1573,7 +1573,8 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 	return ptx.ToTx()
 }
 
-// GetRLP returns a RLP-encoded transaction for network if it is contained in the pool.
+// GetRLP returns a RLP-encoded transaction for p2p messages, converted from
+// the pool's internal type, if it is contained in the pool.
 func (p *BlobPool) GetRLP(hash common.Hash) []byte {
 	data := p.getRLP(hash)
 	rlp, err := encodeForNetwork(data)
