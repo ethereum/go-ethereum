@@ -798,12 +798,6 @@ func TestAdoptSyncedState(t *testing.T) {
 			t.Fatalf("Generator marker should be empty, got %x", entry.Marker)
 		}
 	}
-	if rawdb.ReadSnapshotRecoveryNumber(tester.db.diskdb) != nil {
-		t.Fatal("Recovery flag should be cleared")
-	}
-	if rawdb.ReadSnapshotDisabled(tester.db.diskdb) {
-		t.Fatal("Disabled flag should be cleared")
-	}
 	if rawdb.ReadSnapSyncStatusFlag(tester.db.diskdb) != rawdb.StateSyncFinished {
 		t.Fatal("Sync-status flag should be StateSyncFinished")
 	}

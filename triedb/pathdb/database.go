@@ -439,12 +439,8 @@ func (db *Database) AdoptSyncedState(root common.Hash) error {
 	}
 
 	// Tell the snapshot subsystem the flat state is good by writing the new root
-	// and a "done" marker (nil journal) so the next boot doesn't try to
-	// rebuild it. Also clear any leftover recovery or disabled flags from a
-	// previous run.
+	// and a "done" marker (nil journal) so the next boot doesn't try to rebuild it.
 	batch := db.diskdb.NewBatch()
-	rawdb.DeleteSnapshotRecoveryNumber(batch)
-	rawdb.DeleteSnapshotDisabled(batch)
 	rawdb.WriteSnapshotRoot(batch, root)
 	journalProgress(batch, nil, nil)
 	if err := batch.Write(); err != nil {
