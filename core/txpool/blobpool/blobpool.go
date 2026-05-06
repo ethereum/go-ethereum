@@ -753,9 +753,6 @@ func (p *BlobPool) trackTransaction(meta *blobTxMeta, sender common.Address) err
 }
 
 // recheck verifies the pool's content for a specific account and drops anything
-// that does not
-
-// recheck verifies the pool's content for a specific account and drops anything
 // that does not fit anymore (dangling or filled nonce, overdraft).
 func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint64) {
 	// Sort the transactions belonging to the account so reinjects can be simpler
