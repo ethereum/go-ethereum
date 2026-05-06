@@ -38,7 +38,17 @@ type ExecuteStats struct {
 	StorageCommits time.Duration // Time spent on the storage trie commit
 	CodeReads      time.Duration // Time spent on the contract code read
 
-	// TODO: where is code bytes loaded metric?
+	// TODO: code bytes loaded
+	AccountLoaded   int // Number of accounts loaded
+	AccountUpdated  int // Number of accounts updated
+	AccountDeleted  int // Number of accounts deleted
+	StorageLoaded   int // Number of storage slots loaded
+	StorageUpdated  int // Number of storage slots updated
+	StorageDeleted  int // Number of storage slots deleted
+	CodeLoaded      int // Number of contract code loaded
+	CodeLoadBytes   int // Number of bytes read from contract code
+	CodeUpdated     int // Number of contract code written (CREATE/CREATE2 + EIP-7702)
+	CodeUpdateBytes int // Total bytes of code written
 
 	Execution       time.Duration // Time spent on the EVM execution
 	Validation      time.Duration // Time spent on the block validation

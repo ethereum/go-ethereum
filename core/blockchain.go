@@ -652,10 +652,6 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 	writeTime := time.Since(writeStart)
 	var stats ExecuteStats
 
-	// AccountLoaded/StorageLoaded come from the BAL access list (deduplicated);
-	// per-StateDB sums would over-count addresses touched by multiple phases.
-	stats.StateCounts = res.Counts
-
 	stats.Execution = res.ExecTime
 	stats.ExecWall = res.ExecTime
 	stats.PostProcess = res.PostProcessTime
@@ -2448,8 +2444,6 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	stats.StorageUpdates = statedb.StorageUpdates // Storage updates are complete(in validation)
 	stats.AccountHashes = statedb.AccountHashes   // Account hashes are complete(in validation)
 	stats.CodeReads = statedb.CodeReads
-
-	stats.StateCounts = statedb.SnapshotCounts()
 
 	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // The time spent on EVM processing
 	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation

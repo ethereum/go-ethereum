@@ -7,7 +7,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
@@ -24,16 +23,7 @@ type ProcessResultWithMetrics struct {
 	// the time it took to execute all txs in the block
 	ExecTime        time.Duration
 	PostProcessTime time.Duration
-	// Counts sums state-mutation counters across pre-tx, per-tx and post-tx
-	// StateDBs. AccountLoaded/StorageLoaded are NOT deduplicated here — the
-	// caller overrides them from block.AccessList().
-	Counts state.StateCounts
-	// Reads sums per-StateDB read times (sum-of-CPU-time, not wall-clock).
-	Reads state.ReadDurations
-	// CodeLoaded/CodeLoadBytes are deduplicated by contract address across
-	// all phase StateDBs.
-	CodeLoaded    int
-	CodeLoadBytes int
+	// TODO: have the prefetch metric in here as well?
 }
 
 // ParallelStateProcessor is used to execute and verify blocks containing
@@ -82,7 +72,7 @@ func validateStateAccesses(lastIdx int, accessList bal.AccessListReader, localAc
 // performs post-tx state transition (system contracts and withdrawals)
 // and calculates the ProcessResult, returning it to be sent on resCh
 // by resultHandler
-func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStart time.Time, accesses bal.StateAccesses, statedb *state.StateDB, prefetchReader state.Reader, results []txExecResult, aggCounts state.StateCounts, aggReads state.ReadDurations, aggCodeLoads map[common.Address]int) *ProcessResultWithMetrics {
+func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStart time.Time, accesses bal.StateAccesses, statedb *state.StateDB, prefetchReader state.Reader, results []txExecResult) *ProcessResultWithMetrics {
 	tExec := time.Since(tExecStart)
 	var requests [][]byte
 	tPostprocessStart := time.Now()
@@ -181,21 +171,6 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStar
 
 	tPostprocess := time.Since(tPostprocessStart)
 
-	// Fold post-tx counts/reads in: postTxState is local and otherwise discarded.
-	aggCounts.Add(postTxState.SnapshotCounts())
-	aggReads.Add(postTxState.SnapshotReads())
-	for addr, l := range postTxState.SnapshotCodeLoads() {
-		if _, ok := aggCodeLoads[addr]; !ok {
-			aggCodeLoads[addr] = l
-		}
-	}
-
-	codeLoaded := len(aggCodeLoads)
-	var codeLoadBytes int
-	for _, l := range aggCodeLoads {
-		codeLoadBytes += l
-	}
-
 	return &ProcessResultWithMetrics{
 		ProcessResult: &ProcessResult{
 			Receipts: allReceipts,
@@ -205,10 +180,6 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStar
 		},
 		PostProcessTime: tPostprocess,
 		ExecTime:        tExec,
-		Counts:          aggCounts,
-		Reads:           aggReads,
-		CodeLoaded:      codeLoaded,
-		CodeLoadBytes:   codeLoadBytes,
 	}
 }
 
@@ -224,31 +195,18 @@ type txExecResult struct {
 	txState   uint64
 
 	stateReads bal.StateAccesses
-
-	// Per-tx counts/reads/code-loads, aggregated single-threaded in resultHandler.
-	counts    state.StateCounts
-	reads     state.ReadDurations
-	codeLoads map[common.Address]int // addr → code len, deduped across phases
 }
 
 // resultHandler polls until all transactions have finished executing and the
 // state root calculation is complete. The result is emitted on resCh.
-func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxAccesses bal.StateAccesses, preCounts state.StateCounts, preReads state.ReadDurations, preCodeLoads map[common.Address]int, statedb *state.StateDB, prefetchReader state.Reader, tExecStart time.Time, txResCh <-chan txExecResult, stateRootCalcResCh <-chan stateRootCalculationResult, resCh chan *ProcessResultWithMetrics) {
+func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxAccesses bal.StateAccesses, statedb *state.StateDB, prefetchReader state.Reader, tExecStart time.Time, txResCh <-chan txExecResult, stateRootCalcResCh <-chan stateRootCalculationResult, resCh chan *ProcessResultWithMetrics) {
 	// 1. if the block has transactions, receive the execution results from all of them and return an error on resCh if any txs err'd
 	// 2. once all txs are executed, compute the post-tx state transition and produce the ProcessResult sending it on resCh (or an error if the post-tx state didn't match what is reported in the BAL)
 	var results []txExecResult
 	var cumulativeStateGas, cumulativeRegularGas uint64
 	var execErr error
 	var numTxComplete int
-
-	// Seed aggregates with the pre-tx contribution (BeaconRoot, ParentBlockHash).
 	accesses := preTxAccesses
-	aggCounts := preCounts
-	aggReads := preReads
-	aggCodeLoads := make(map[common.Address]int)
-	for addr, l := range preCodeLoads {
-		aggCodeLoads[addr] = l
-	}
 
 	if len(block.Transactions()) > 0 {
 	loop:
@@ -266,13 +224,6 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxAccesses
 						cumulativeStateGas += res.txState
 						results = append(results, res)
 						accesses.Merge(res.stateReads)
-						aggCounts.Add(res.counts)
-						aggReads.Add(res.reads)
-						for addr, l := range res.codeLoads {
-							if _, ok := aggCodeLoads[addr]; !ok {
-								aggCodeLoads[addr] = l
-							}
-						}
 					}
 				}
 				if numTxComplete == len(block.Transactions()) {
@@ -289,7 +240,7 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxAccesses
 		}
 	}
 
-	execResults := p.prepareExecResult(block, tExecStart, accesses, statedb, prefetchReader, results, aggCounts, aggReads, aggCodeLoads)
+	execResults := p.prepareExecResult(block, tExecStart, accesses, statedb, prefetchReader, results)
 	rootCalcRes := <-stateRootCalcResCh
 
 	if execResults.ProcessResult.Error != nil {
@@ -363,13 +314,10 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 		txRegular:  txRegular,
 		txState:    txState,
 		stateReads: db.Reader().(state.StateReaderTracker).GetStateAccessList(),
-		counts:     db.SnapshotCounts(),
-		reads:      db.SnapshotReads(),
-		codeLoads:  db.SnapshotCodeLoads(),
 	}
 }
 
-func (p *ParallelStateProcessor) processBlockPreTx(block *types.Block, statedb *state.StateDB, prefetchReader state.Reader, cfg vm.Config) (bal.StateAccesses, state.StateCounts, state.ReadDurations, map[common.Address]int, error) {
+func (p *ParallelStateProcessor) processBlockPreTx(block *types.Block, statedb *state.StateDB, prefetchReader state.Reader, cfg vm.Config) (bal.StateAccesses, error) {
 	var (
 		header = block.Header()
 	)
@@ -391,10 +339,10 @@ func (p *ParallelStateProcessor) processBlockPreTx(block *types.Block, statedb *
 	mutations.Merge(pbhMutations)
 	reads := readerWithTracker.(state.StateReaderTracker).GetStateAccessList()
 	if !accessList.MutationsAt(0).Eq(mutations) {
-		return nil, state.StateCounts{}, state.ReadDurations{}, nil, fmt.Errorf("invalid block access list: mismatch between local/remote access list mutations at idx 0")
+		return nil, fmt.Errorf("invalid block access list: mismatch between local/remote access list mutations at idx 0")
 	}
 	// Snapshot pre-tx counts/reads/code-loads: sdb is local and otherwise discarded.
-	return reads, sdb.SnapshotCounts(), sdb.SnapshotReads(), sdb.SnapshotCodeLoads(), nil
+	return reads, nil
 }
 
 // Process performs EVM execution and state root computation for a block which is known
@@ -414,7 +362,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *st
 	)
 
 	startingState := statedb.Copy()
-	preTxReads, preCounts, preReads, preCodeLoads, err := p.processBlockPreTx(block, statedb, balReader, cfg)
+	preTxReads, err := p.processBlockPreTx(block, statedb, balReader, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -424,7 +372,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *st
 
 	// execute transactions and state root calculation in parallel
 	tExecStart = time.Now()
-	go p.resultHandler(block, preTxReads, preCounts, preReads, preCodeLoads, statedb, balReader, tExecStart, txResCh, rootCalcResultCh, resCh)
+	go p.resultHandler(block, preTxReads, statedb, balReader, tExecStart, txResCh, rootCalcResultCh, resCh)
 	var workers errgroup.Group
 	workers.SetLimit(runtime.NumCPU())
 	for i, t := range block.Transactions() {
