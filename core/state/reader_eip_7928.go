@@ -139,6 +139,11 @@ func newPrefetchStateReaderInternal(reader StateReader, tasks []*fetchTask, nThr
 	return r
 }
 
+func (r *prefetchStateReader) Metrics() PrefetchMetrics {
+	// TODO (jwasinger) actually implement this
+	return PrefetchMetrics{}
+}
+
 func (r *prefetchStateReader) Close() {
 	r.closeOnce.Do(func() {
 		close(r.term)
