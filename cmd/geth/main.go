@@ -160,7 +160,7 @@ var (
 		utils.BeaconCheckpointFileFlag,
 		utils.LogSlowBlockFlag,
 		utils.PrefetchWorkersFlag,
-		utils.BlockingPrefetch,
+		utils.BlockingPrefetchFlag,
 	}, utils.NetworkFlags, utils.DatabaseFlags)
 
 	rpcFlags = []cli.Flag{

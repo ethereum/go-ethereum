@@ -213,6 +213,8 @@ type Config struct {
 	RangeLimit uint64 `toml:",omitempty"`
 
 	BALExecutionMode bal.BALExecutionMode
+	PrefetchWorkers  uint
+	BlockingPrefetch bool
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.
