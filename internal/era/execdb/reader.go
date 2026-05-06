@@ -39,10 +39,13 @@ type Era struct {
 	m metadata // metadata for the Era file
 }
 
-// Filename returns a recognizable filename for an EraE file.
+// Filename returns a recognizable filename for an Ere file.
 // The filename uses the last block hash to uniquely identify the epoch's content.
+//
+// Files produced by this builder do not include Proof entries, so the
+// "noproofs" profile postfix is appended per the Ere spec.
 func Filename(network string, epoch int, lastBlockHash common.Hash) string {
-	return fmt.Sprintf("%s-%05d-%s.erae", network, epoch, lastBlockHash.Hex()[2:10])
+	return fmt.Sprintf("%s-%05d-%s-noproofs.ere", network, epoch, lastBlockHash.Hex()[2:10])
 }
 
 // Open accesses the era file.
@@ -210,8 +213,8 @@ func (e *Era) InitialTD() (*big.Int, error) {
 	return new(big.Int).Sub(firstTD, header.Difficulty), nil
 }
 
-// Accumulator reads the accumulator entry in the EraE file if it exists.
-// Note that one premerge erae files will contain an accumulator entry.
+// Accumulator reads the accumulator entry in the Ere file if it exists.
+// Only pre-merge and merge-transition Ere files contain an accumulator entry.
 func (e *Era) Accumulator() (common.Hash, error) {
 	entry, err := e.s.Find(era.TypeAccumulator)
 	if err != nil {

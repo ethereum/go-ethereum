@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-func TestEraE(t *testing.T) {
+func TestEre(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -74,7 +74,7 @@ func TestEraE(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			f, err := os.CreateTemp(t.TempDir(), "erae-test")
+			f, err := os.CreateTemp(t.TempDir(), "ere-test")
 			if err != nil {
 				t.Fatalf("error creating temp file: %v", err)
 			}
@@ -295,7 +295,7 @@ func TestEraE(t *testing.T) {
 func TestInitialTD(t *testing.T) {
 	t.Parallel()
 
-	f, err := os.CreateTemp(t.TempDir(), "erae-initial-td-test")
+	f, err := os.CreateTemp(t.TempDir(), "ere-initial-td-test")
 	if err != nil {
 		t.Fatalf("error creating temp file: %v", err)
 	}
