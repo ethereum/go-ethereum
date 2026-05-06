@@ -14,16 +14,13 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// ProcessResultWithMetrics wraps ProcessResult with some metrics that are
-// emitted when executing blocks containing access lists.
+// ProcessResultWithMetrics wraps ProcessResult with timing breakdown for BAL block processing.
 type ProcessResultWithMetrics struct {
 	ProcessResult          *ProcessResult
 	PreProcessTime         time.Duration
 	StateTransitionMetrics *state.BALStateTransitionMetrics
-	// the time it took to execute all txs in the block
-	ExecTime        time.Duration
-	PostProcessTime time.Duration
-	// TODO: have the prefetch metric in here as well?
+	ExecTime               time.Duration
+	PostProcessTime        time.Duration
 }
 
 // ParallelStateProcessor is used to execute and verify blocks containing

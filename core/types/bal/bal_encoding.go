@@ -44,6 +44,49 @@ import (
 // BlockAccessList is the encoding format of AccessListBuilder.
 type BlockAccessList []AccountAccess
 
+// UniqueAccountCount returns the number of distinct account addresses in
+// the block access list.
+func (e BlockAccessList) UniqueAccountCount() int {
+	return len(e)
+}
+
+// UniqueStorageSlotCount returns the total number of distinct (address, slot)
+// pairs accessed across all accounts. Reads and writes are disjoint per
+// account by spec validation, so we can sum them directly.
+func (e BlockAccessList) UniqueStorageSlotCount() int {
+	var n int
+	for i := range e {
+		n += len(e[i].StorageReads) + len(e[i].StorageChanges)
+	}
+	return n
+}
+
+// WrittenCounts groups per-block aggregate write counts derived from the BAL.
+type WrittenCounts struct {
+	Accounts     int
+	StorageSlots int
+	Codes        int
+	CodeBytes    int
+}
+
+// WrittenCounts walks the BAL once and returns the aggregate write counts.
+func (e BlockAccessList) WrittenCounts() WrittenCounts {
+	var w WrittenCounts
+	for i := range e {
+		a := &e[i]
+		if len(a.StorageChanges) > 0 || len(a.BalanceChanges) > 0 ||
+			len(a.NonceChanges) > 0 || len(a.CodeChanges) > 0 {
+			w.Accounts++
+		}
+		w.StorageSlots += len(a.StorageChanges)
+		if n := len(a.CodeChanges); n > 0 {
+			w.Codes++
+			w.CodeBytes += len(a.CodeChanges[n-1].Code)
+		}
+	}
+	return w
+}
+
 func (e BlockAccessList) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
 	l := w.List()

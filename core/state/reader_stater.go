@@ -16,6 +16,25 @@
 
 package state
 
+import "time"
+
+// ReadDurations groups cumulative read durations by category.
+type ReadDurations struct {
+	Account time.Duration
+	Storage time.Duration
+	Code    time.Duration
+}
+
+// ReadTimer exposes a Reader's cumulative read durations.
+type ReadTimer interface {
+	ReadTimes() ReadDurations
+}
+
+// CodeLoadTracker exposes a Reader's deduplicated code-load count and bytes.
+type CodeLoadTracker interface {
+	CodeLoads() (count, bytes int)
+}
+
 // ContractCodeReaderStats aggregates statistics for the contract code reader.
 type ContractCodeReaderStats struct {
 	CacheHit       int64 // Number of cache hits

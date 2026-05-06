@@ -263,3 +263,31 @@ func TestTrackerSurvivesStateDBCache(t *testing.T) {
 		t.Fatal("slot must be tracked on cache hit (storage)")
 	}
 }
+
+// TestPrefetchStateReaderForwardsStats locks down that prefetchStateReader
+// exposes the underlying stateReaderWithStats counters via GetStateStats.
+func TestPrefetchStateReaderForwardsStats(t *testing.T) {
+	stub := newRefStateReader()
+	addr := testrand.Address()
+
+	cached := newStateReaderWithCache(stub)
+	withStats := newStateReaderWithStats(cached)
+	prefetch := newPrefetchStateReaderInternal(withStats, nil, 1)
+
+	if _, err := prefetch.Account(addr); err != nil {
+		t.Fatalf("Account: %v", err)
+	}
+	if _, err := prefetch.Account(addr); err != nil {
+		t.Fatalf("Account (second): %v", err)
+	}
+
+	stats := withStats.GetStateStats()
+	if stats.AccountCacheHit == 0 || stats.AccountCacheMiss == 0 {
+		t.Fatalf("inner stats not populated: %+v", stats)
+	}
+	gotStats := prefetch.GetStateStats()
+	if gotStats != stats {
+		t.Fatalf("forward mismatch: got %+v, want %+v", gotStats, stats)
+	}
+}
+

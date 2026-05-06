@@ -3,6 +3,7 @@ package state
 import (
 	"maps"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -15,30 +16,28 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// BALStateTransition is responsible for performing the state root update
-// and commit for EIP 7928 access-list-containing blocks.  An instance of
-// this object is only used for a single block.
+// BALStateTransition performs the state root update and commit for EIP-7928
+// access-list-containing blocks. One instance per block.
 type BALStateTransition struct {
 	accessList bal.AccessListReader
+	written    bal.WrittenCounts
 	db         Database
 	reader     Reader
 	stateTrie  Trie
 	parentRoot common.Hash
 
-	// the computed state root of the block
 	rootHash common.Hash
-	// the state modifications performed by the block
-	diffs bal.StateMutations
+	diffs    bal.StateMutations
 
-	// a map of common.Address -> *types.StateAccount containing the block
-	// prestate of all accounts that will be modified
-	prestates sync.Map
-
+	prestates  sync.Map
 	postStates map[common.Address]*types.StateAccount
-	// a map of common.Address -> Trie containing the account tries for all
-	// accounts with mutated storage
-	tries     sync.Map //map[common.Address]Trie
-	deletions map[common.Address]struct{}
+	tries      sync.Map
+	deletions  map[common.Address]struct{}
+
+	// Deletion counters; not derivable from the BAL alone (selfdestruct vs
+	// balance/nonce reset is indistinguishable without prestate).
+	accountDeleted int
+	storageDeleted atomic.Int64
 
 	stateUpdate *stateUpdate
 
@@ -50,6 +49,19 @@ type BALStateTransition struct {
 
 func (s *BALStateTransition) Metrics() *BALStateTransitionMetrics {
 	return &s.metrics
+}
+
+// DeletionCounts holds per-block deletion counters from the parallel root-pass.
+type DeletionCounts struct {
+	Accounts int
+	Storage  int
+}
+
+func (s *BALStateTransition) Deletions() DeletionCounts {
+	return DeletionCounts{
+		Accounts: s.accountDeleted,
+		Storage:  int(s.storageDeleted.Load()),
+	}
 }
 
 type BALStateTransitionMetrics struct {
@@ -75,6 +87,7 @@ func NewBALStateTransition(block *types.Block, prefetchReader Reader, db Databas
 
 	return &BALStateTransition{
 		accessList:  bal.NewAccessListReader(*block.AccessList()),
+		written:     block.AccessList().WrittenCounts(),
 		db:          db,
 		reader:      prefetchReader,
 		stateTrie:   stateTrie,
@@ -88,6 +101,11 @@ func NewBALStateTransition(block *types.Block, prefetchReader Reader, db Databas
 		stateUpdate: nil,
 		maxBALIdx:   len(block.Transactions()) + 1,
 	}, nil
+}
+
+// WrittenCounts returns the cached BAL write counts (computed once per block).
+func (s *BALStateTransition) WrittenCounts() bal.WrittenCounts {
+	return s.written
 }
 
 func (s *BALStateTransition) Error() error {
@@ -334,15 +352,11 @@ func (s *BALStateTransition) CommitWithUpdate(block uint64, deleteEmptyObjects b
 		return common.Hash{}, nil, err
 	}
 
-	/*
-			TODO: derive these from the BAL
-			^ I think even then, there is a semantic difference with how these metrics were calculated previously
-		    I don't know if it makes sense to recompute those, or just derive new ones from the BAL
-			accountUpdatedMeter.Mark(int64(s.accountUpdated))
-			storageUpdatedMeter.Mark(s.storageUpdated.Load())
-			accountDeletedMeter.Mark(int64(s.accountDeleted))
-			storageDeletedMeter.Mark(s.storageDeleted.Load())
-	*/
+	storageDeleted := s.storageDeleted.Load()
+	accountUpdatedMeter.Mark(int64(s.written.Accounts - s.accountDeleted))
+	storageUpdatedMeter.Mark(int64(s.written.StorageSlots) - storageDeleted)
+	accountDeletedMeter.Mark(int64(s.accountDeleted))
+	storageDeletedMeter.Mark(storageDeleted)
 	accountTrieUpdatedMeter.Mark(int64(accountTrieNodesUpdated))
 	accountTrieDeletedMeter.Mark(int64(accountTrieNodesDeleted))
 	storageTriesUpdatedMeter.Mark(int64(storageTrieNodesUpdated))
@@ -477,6 +491,7 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 				return common.Hash{}
 			}
 			s.deletions[mutatedAddr] = struct{}{}
+			s.accountDeleted++
 		} else {
 			acct, code := s.updateAccount(mutatedAddr)
 

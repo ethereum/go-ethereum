@@ -18,6 +18,10 @@ package state
 
 import (
 	"errors"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -28,8 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/database"
-	"sync"
-	"sync/atomic"
 )
 
 // ContractCodeReader defines the interface for accessing contract code.
@@ -525,14 +527,18 @@ func (r *stateReaderWithStats) GetStateStats() StateReaderStats {
 	}
 }
 
-// reader aggregates a code reader and a state reader into a single object.
 type reader struct {
 	ContractCodeReader
 	StateReader
 	PrefetcherMetricer
+
+	accountReadNS atomic.Int64
+	storageReadNS atomic.Int64
+	codeReadNS    atomic.Int64
+
+	codeLoaded sync.Map // common.Address → int (first-seen len(code))
 }
 
-// newReader constructs a reader with the supplied code reader and state reader.
 func newReader(codeReader ContractCodeReader, stateReader StateReader) *reader {
 	return &reader{
 		ContractCodeReader: codeReader,
@@ -546,6 +552,53 @@ func newReaderWithPrefetch(codeReader ContractCodeReader, stateReader StateReade
 		StateReader:        stateReader,
 		PrefetcherMetricer: metricer,
 	}
+}
+
+func (r *reader) Account(addr common.Address) (*types.StateAccount, error) {
+	defer func(start time.Time) { r.accountReadNS.Add(int64(time.Since(start))) }(time.Now())
+	return r.StateReader.Account(addr)
+}
+
+func (r *reader) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
+	defer func(start time.Time) { r.storageReadNS.Add(int64(time.Since(start))) }(time.Now())
+	return r.StateReader.Storage(addr, slot)
+}
+
+func (r *reader) Code(addr common.Address, codeHash common.Hash) []byte {
+	defer func(start time.Time) { r.codeReadNS.Add(int64(time.Since(start))) }(time.Now())
+	code := r.ContractCodeReader.Code(addr, codeHash)
+	if len(code) > 0 {
+		r.codeLoaded.LoadOrStore(addr, len(code))
+	}
+	return code
+}
+
+func (r *reader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+	defer func(start time.Time) { r.codeReadNS.Add(int64(time.Since(start))) }(time.Now())
+	size, err := r.ContractCodeReader.CodeSize(addr, codeHash)
+	if err == nil && size > 0 {
+		r.codeLoaded.LoadOrStore(addr, size)
+	}
+	return size, err
+}
+
+func (r *reader) ReadTimes() ReadDurations {
+	return ReadDurations{
+		Account: time.Duration(r.accountReadNS.Load()),
+		Storage: time.Duration(r.storageReadNS.Load()),
+		Code:    time.Duration(r.codeReadNS.Load()),
+	}
+}
+
+// CodeLoads returns the count of unique contracts whose code was fetched and
+// the sum of their first-seen byte lengths. Call after Reader use has quiesced.
+func (r *reader) CodeLoads() (count, bytes int) {
+	r.codeLoaded.Range(func(_, v any) bool {
+		count++
+		bytes += v.(int)
+		return true
+	})
+	return
 }
 
 // GetCodeStats returns the statistics of code access.
@@ -569,5 +622,22 @@ func (r *reader) GetStats() ReaderStats {
 	return ReaderStats{
 		CodeStats:  r.GetCodeStats(),
 		StateStats: r.GetStateStats(),
+	}
+}
+
+// PrefetchReadTimes forwards to the wrapped prefetcher, or returns zero.
+func (r *reader) PrefetchReadTimes() (account, storage time.Duration) {
+	if pr, ok := r.StateReader.(interface {
+		PrefetchReadTimes() (time.Duration, time.Duration)
+	}); ok {
+		return pr.PrefetchReadTimes()
+	}
+	return 0, 0
+}
+
+// WaitPrefetch blocks until the wrapped prefetcher drains; no-op otherwise.
+func (r *reader) WaitPrefetch() {
+	if pr, ok := r.StateReader.(interface{ Wait() error }); ok {
+		_ = pr.Wait()
 	}
 }
