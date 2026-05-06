@@ -75,12 +75,16 @@ func (s *journalMutationState) add(kind journalMutationKind) {
 	s.counts.add(kind)
 }
 
-// remove drops one occurrence of the given mutation kind. It returns two
-// booleans: kindEmpty is true when no entries of that kind remain for the
-// account, and stateEmpty is true when no entries of any kind remain.
-func (s *journalMutationState) remove(kind journalMutationKind) (kindEmpty bool, stateEmpty bool) {
-	kindEmpty = s.counts.remove(kind)
-	return kindEmpty, s.counts == (journalMutationCounts{})
+// remove drops one occurrence of the given mutation kind. It returns a flag
+// indicating whether no entries of any kind remain.
+func (s *journalMutationState) remove(kind journalMutationKind) bool {
+	if s.counts.remove(kind) {
+		// No entries of this kind remain for this account; drop the
+		// corresponding stashed original so the state mirrors the
+		// live mutation set.
+		s.clearKind(kind)
+	}
+	return s.counts == (journalMutationCounts{})
 }
 
 // clearKind drops the stashed original for the given mutation kind. It is
@@ -295,14 +299,7 @@ func (j *journal) revert(statedb *StateDB, snapshot int) {
 			if state == nil {
 				panic(fmt.Errorf("journal mutation tracking missing for %x", addr[:]))
 			}
-			kindEmpty, stateEmpty := state.remove(kind)
-			if kindEmpty {
-				// No entries of this kind remain for this account; drop the
-				// corresponding stashed original so the state mirrors the
-				// live mutation set.
-				state.clearKind(kind)
-			}
-			if stateEmpty {
+			if state.remove(kind) {
 				delete(j.mutations, addr)
 			}
 		}
