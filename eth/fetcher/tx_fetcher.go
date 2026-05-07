@@ -241,9 +241,12 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 	// because multiple concurrent notifies will still manage to pass it, but it's
 	// still valuable to check here because it runs concurrent  to the internal
 	// loop, so anything caught here is time saved internally.
+	// unknownHashes and unknownMetas are allocated lazily: announcements
+	// where every hash is already known (the steady-state case once a tx
+	// has been gossiped to us once) skip the 32B*len(hashes) allocation.
 	var (
-		unknownHashes = make([]common.Hash, 0, len(hashes))
-		unknownMetas  = make([]txMetadata, 0, len(hashes))
+		unknownHashes []common.Hash
+		unknownMetas  []txMetadata
 
 		duplicate   int64
 		onchain     int64
@@ -270,6 +273,10 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 			continue
 		}
 
+		if unknownHashes == nil {
+			unknownHashes = make([]common.Hash, 0, len(hashes)-i)
+			unknownMetas = make([]txMetadata, 0, len(hashes)-i)
+		}
 		unknownHashes = append(unknownHashes, hash)
 
 		// Transaction metadata has been available since eth68, and all
