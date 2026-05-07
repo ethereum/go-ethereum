@@ -61,6 +61,7 @@ var (
 			crawlTimeoutFlag,
 			crawlParallelismFlag,
 			crawlModeFlag,
+			crawlRandomWorkersFlag,
 		}),
 	}
 	discv5TestCommand = &cli.Command{
@@ -114,7 +115,7 @@ func discv5Crawl(ctx *cli.Context) error {
 	disc, config := startV5(ctx)
 	defer disc.Close()
 
-	iter, err := newDiscv5CrawlIterator(disc, config.Bootnodes, ctx.String(crawlModeFlag.Name), ctx.Int(crawlParallelismFlag.Name))
+	iter, err := newDiscv5CrawlIterator(disc, config.Bootnodes, ctx.String(crawlModeFlag.Name), ctx.Int(crawlParallelismFlag.Name), ctx.Int(crawlRandomWorkersFlag.Name))
 	if err != nil {
 		return err
 	}
@@ -128,14 +129,15 @@ func discv5Crawl(ctx *cli.Context) error {
 	return nil
 }
 
-func newDiscv5CrawlIterator(disc *discover.UDPv5, bootnodes []*enode.Node, mode string, parallel int) (enode.Iterator, error) {
+func newDiscv5CrawlIterator(disc *discover.UDPv5, bootnodes []*enode.Node, mode string, parallel, randomWorkers int) (enode.Iterator, error) {
 	switch mode {
 	case "", "lookup":
 		return disc.RandomNodes(), nil
 	case "fast":
 		return disc.CrawlIterator(discover.CrawlOptions{
-			Workers: parallel,
-			Seeds:   bootnodes,
+			Workers:       parallel,
+			RandomWorkers: randomWorkers,
+			Seeds:         bootnodes,
 		}), nil
 	default:
 		return nil, fmt.Errorf("unknown -%s value %q (want 'lookup' or 'fast')", crawlModeFlag.Name, mode)

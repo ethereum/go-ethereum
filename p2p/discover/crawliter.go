@@ -18,12 +18,44 @@ package discover
 
 import (
 	crand "crypto/rand"
+	"math/rand/v2"
 	"sync"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
+
+// CrawlIterator performs a breadth-first crawl of the discv4/discv5
+// FINDNODE-response graph. Each worker pops a peer from the work queue,
+// issues one FINDNODE call against it, and feeds any newly-seen peers
+// back into the queue (and the iterator's output buffer).
+//
+// BFS (FIFO queue) was chosen over DFS or target-directed lookup for two
+// reasons that align with the iterator's intended use case (survey-style
+// crawls — devp2p crawl, geth dial-candidate discovery):
+//
+//   - Coverage: BFS reaches every peer within N hops of the seeds in
+//     order, so a time-bounded run produces a representative sample of
+//     the reachable graph rather than a deep tendril through one
+//     sub-region.
+//   - Adversarial resilience: a peer returning malicious "neighbour"
+//     claims, dead-end peers, or eclipse-style sub-graphs cannot
+//     monopolise the worker pool, because pending work from other
+//     branches sits ahead of the attacker's responses in the queue.
+//     DFS would amplify each of these attacks.
+//
+// CrawlIterator is NOT a target-directed search. To find a specific node
+// (or the K closest to a known target), use the lookup-based iterator
+// returned by [UDPv4.RandomNodes] / [UDPv5.RandomNodes] instead — those
+// run an alpha-bounded Kademlia lookup, which is the right shape for
+// "find peer X" but the wrong shape for "survey the network".
+//
+// Pop policy can be tuned via [CrawlOptions.RandomWorkers]: any subset
+// of the worker pool can be configured to pop a uniform-random queue
+// item instead of the FIFO front, breaking strict ordering as a mild
+// anti-fingerprint defence. The remaining workers pop FIFO and preserve
+// the BFS character. See the field doc for details.
 
 // CrawlOptions configures a CrawlIterator.
 type CrawlOptions struct {
@@ -58,6 +90,23 @@ type CrawlOptions struct {
 	// once across a long crawl. Realistic bound is the reachable DHT size
 	// (~1M peers, ~50 MB).
 	OutputCap int
+
+	// RandomWorkers is the number of workers in the pool that pop a uniform-
+	// random queue item instead of the FIFO front. The remaining
+	// Workers - RandomWorkers workers behave as today, popping front. Total
+	// worker count is unchanged at Workers; only the BFS-vs-random split
+	// differs.
+	//
+	// Zero (the struct zero-value) selects the library default of
+	// Workers/4 rounded down. Pass a negative value (e.g. -1) to force
+	// pure BFS with zero random workers. A positive value > Workers is
+	// clamped to Workers (i.e. fully-random pop with no FIFO workers).
+	//
+	// The default Workers/4 mix preserves the BFS coverage character (cold
+	// start is dominated by the FIFO majority) while breaking strict FIFO
+	// ordering, a mild anti-fingerprint defence. See the file-level comment
+	// for details.
+	RandomWorkers int
 }
 
 func (o *CrawlOptions) withDefaults() {
@@ -72,6 +121,17 @@ func (o *CrawlOptions) withDefaults() {
 	}
 	if o.OutputCap <= 0 {
 		o.OutputCap = 16 * o.Workers
+	}
+	switch {
+	case o.RandomWorkers < 0:
+		// Negative means: explicit pure BFS, no random workers.
+		o.RandomWorkers = 0
+	case o.RandomWorkers == 0:
+		// Zero (struct zero-value) means: library default.
+		o.RandomWorkers = o.Workers / 4
+	case o.RandomWorkers > o.Workers:
+		// Clamp; can't have more random workers than total workers.
+		o.RandomWorkers = o.Workers
 	}
 }
 
@@ -166,10 +226,17 @@ func newCrawlIterator(opts CrawlOptions, queryFn func(*enode.Node, int) ([]*enod
 		it.inflight++
 	}
 
-	// Workers.
-	for i := 0; i < opts.Workers; i++ {
+	// Workers. The first (Workers - RandomWorkers) workers pop FIFO; the
+	// remaining RandomWorkers pop a uniform-random queue index. Both share
+	// the same queue, mutex, cond, and termination semantics.
+	fifoCount := opts.Workers - opts.RandomWorkers
+	for i := 0; i < fifoCount; i++ {
 		it.wg.Add(1)
-		go it.worker()
+		go it.worker(false)
+	}
+	for i := 0; i < opts.RandomWorkers; i++ {
+		it.wg.Add(1)
+		go it.worker(true)
 	}
 	return it
 }
@@ -207,8 +274,10 @@ func (it *crawlIterator) discover(n *enode.Node) {
 }
 
 // popWork blocks until either a peer is available to query, or the iterator
-// has nothing left to do. Returns (nil, false) on termination.
-func (it *crawlIterator) popWork() (*enode.Node, bool) {
+// has nothing left to do. Returns (nil, false) on termination. If random is
+// true, pops a uniform-random index via swap-and-pop; otherwise pops the
+// FIFO front. Both modes share the same termination semantics.
+func (it *crawlIterator) popWork(random bool) (*enode.Node, bool) {
 	it.mu.Lock()
 	defer it.mu.Unlock()
 	for {
@@ -216,6 +285,14 @@ func (it *crawlIterator) popWork() (*enode.Node, bool) {
 			return nil, false
 		}
 		if len(it.queue) > 0 {
+			if random {
+				i := rand.IntN(len(it.queue))
+				n := it.queue[i]
+				// Swap-and-pop: O(1) removal from middle.
+				it.queue[i] = it.queue[len(it.queue)-1]
+				it.queue = it.queue[:len(it.queue)-1]
+				return n, true
+			}
 			n := it.queue[0]
 			it.queue = it.queue[1:]
 			return n, true
@@ -243,10 +320,10 @@ func (it *crawlIterator) finishWork() {
 	}
 }
 
-func (it *crawlIterator) worker() {
+func (it *crawlIterator) worker(random bool) {
 	defer it.wg.Done()
 	for {
-		n, ok := it.popWork()
+		n, ok := it.popWork(random)
 		if !ok {
 			return
 		}

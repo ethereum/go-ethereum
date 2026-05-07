@@ -223,6 +223,69 @@ func TestCrawlIteratorOutputCap(t *testing.T) {
 	}
 }
 
+// TestCrawlIteratorRandomWorkers verifies that with a mixed FIFO + random
+// worker pool, the iterator still terminates and emits each node exactly
+// once on the synthetic graph from TestCrawlIteratorTerminates.
+func TestCrawlIteratorRandomWorkers(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		workers       int
+		randomWorkers int
+	}{
+		{"all-fifo", 4, -1},   // -1 → pure BFS
+		{"all-random", 4, 4},  // all workers random-pop
+		{"half-half", 8, 4},   // 4 FIFO + 4 random
+		{"default", 16, 0},    // 0 → library default = 4 random of 16
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			nodes := makeTestNodes(t, 50)
+			neighbours := make(map[enode.ID][]*enode.Node, len(nodes))
+			for i, n := range nodes {
+				var ns []*enode.Node
+				for k := 1; k <= 5; k++ {
+					ns = append(ns, nodes[(i+k)%len(nodes)])
+				}
+				neighbours[n.ID()] = ns
+			}
+			var calls atomic.Int64
+			queryFn := func(dst *enode.Node, _ int) ([]*enode.Node, error) {
+				calls.Add(1)
+				return neighbours[dst.ID()], nil
+			}
+			it := newCrawlIterator(CrawlOptions{
+				Workers:       tc.workers,
+				RandomWorkers: tc.randomWorkers,
+				Seeds:         []*enode.Node{nodes[0]},
+				Drange:        16,
+			}, queryFn)
+			seen := make(map[enode.ID]int)
+			done := make(chan struct{})
+			go func() {
+				for it.Next() {
+					seen[it.Node().ID()]++
+				}
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("iterator did not terminate within 5s")
+			}
+			if got := len(seen); got != len(nodes) {
+				t.Fatalf("emitted %d distinct nodes, want %d", got, len(nodes))
+			}
+			for id, c := range seen {
+				if c != 1 {
+					t.Errorf("node %x emitted %d times, want 1", id[:4], c)
+				}
+			}
+			if got, want := calls.Load(), int64(len(nodes)); got != want {
+				t.Errorf("queryFn invoked %d times, want %d", got, want)
+			}
+		})
+	}
+}
+
 // TestCrawlIteratorRotation verifies that the d argument passed to queryFn
 // rotates through 0..Drange-1.
 func TestCrawlIteratorRotation(t *testing.T) {
