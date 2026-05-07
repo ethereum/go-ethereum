@@ -358,15 +358,14 @@ func TestOpenRejectsNoreceiptsProfile(t *testing.T) {
 
 	dir := t.TempDir()
 
-	// Build a valid Ere file with default-profile contents, then rename it
-	// to claim a noreceipts profile in its filename.
-	src, err := os.CreateTemp(dir, "ere-src-*.ere")
+	// Build a valid Ere file with default-profile contents directly at the
+	// noreceipts path so Open() rejects it on the filename alone.
+	path := filepath.Join(dir, "mainnet-00000-deadbeef-noreceipts.ere")
+	f, err := os.Create(path)
 	if err != nil {
-		t.Fatalf("create temp file: %v", err)
+		t.Fatalf("create file: %v", err)
 	}
-	defer src.Close()
-
-	builder := NewBuilder(src)
+	builder := NewBuilder(f)
 	header := mustEncode(&types.Header{Number: big.NewInt(0), Difficulty: big.NewInt(1)})
 	body := mustEncode(&types.Body{})
 	receipts := mustEncode([]types.SlimReceipt{})
@@ -376,12 +375,10 @@ func TestOpenRejectsNoreceiptsProfile(t *testing.T) {
 	if _, err := builder.Finalize(); err != nil {
 		t.Fatalf("Finalize: %v", err)
 	}
-
-	renamed := filepath.Join(dir, "mainnet-00000-deadbeef-noreceipts.ere")
-	if err := os.Rename(src.Name(), renamed); err != nil {
-		t.Fatalf("rename: %v", err)
+	if err := f.Close(); err != nil {
+		t.Fatalf("close: %v", err)
 	}
-	if _, err := Open(renamed); err == nil {
+	if _, err := Open(path); err == nil {
 		t.Fatal("expected Open to reject noreceipts profile")
 	}
 }
