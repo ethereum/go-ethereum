@@ -339,7 +339,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		for _, receipt := range receipts {
 			allLogs = append(allLogs, receipt.Logs...)
 		}
-		if err := core.ParseDepositLogs(&requests, allLogs, chainConfig); err != nil {
+		if err := core.ParseDepositLogs(&requests, allLogs, chainConfig, vmContext.BlockNumber, vmContext.Time); err != nil {
 			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not parse requests logs: %v", err))
 		}
 		// EIP-7002

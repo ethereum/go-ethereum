@@ -398,7 +398,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if sim.chainConfig.IsPrague(header.Number, header.Time) {
 		requests = [][]byte{}
 		// EIP-6110
-		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig); err != nil {
+		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig, header.Number, header.Time); err != nil {
 			return nil, nil, nil, err
 		}
 		// EIP-7002
