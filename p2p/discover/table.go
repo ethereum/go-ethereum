@@ -797,15 +797,15 @@ func (tab *Table) waitForNodes(ctx context.Context, n int) error {
 			return nil
 		}
 		if notify == nil {
-			// Lazily init the subscription.
+			// Lazily init the subscription. Do this while holding the
+			// lock so we don't miss any events that change the node count.
 			sub := initsub()
 			defer sub.Unsubscribe()
 		}
 		tab.mutex.Unlock()
 
 		// Wait for table event.
-		_, ok := <-notify
-		if !ok {
+		if _, ok := <-notify; !ok {
 			break
 		}
 	}
