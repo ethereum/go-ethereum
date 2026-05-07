@@ -340,7 +340,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 			// If we've spent too much time already, notify the user of what we're doing
 			if time.Since(logged) > 8*time.Second {
 				if !loggedFirstBanner {
-					log.Info("Unindexing transactions — this is normal maintenance and does not indicate data loss", "blocks", blocks, "txs", txs, "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
+					log.Info("Removing old transaction ids from transaction lookup index", "blocks", blocks, "txs", txs, "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
 					loggedFirstBanner = true
 				} else {
 					log.Debug("Unindexing transactions", "blocks", blocks, "txs", txs, "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
