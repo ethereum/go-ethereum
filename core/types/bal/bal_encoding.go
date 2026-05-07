@@ -180,24 +180,24 @@ func (e *AccountAccess) validate(rules params.Rules) error {
 	}
 
 	// Check the balance changes are sorted in order
-	if !slices.IsSortedFunc(e.BalanceChanges, func(a, b encodingBalanceChange) int {
-		return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
-	}) {
-		return errors.New("balance changes not in ascending order by tx index")
+	for i := 1; i < len(e.BalanceChanges); i++ {
+		if e.BalanceChanges[i-1].TxIdx >= e.BalanceChanges[i].TxIdx {
+			return errors.New("balance changes not in ascending order by tx index")
+		}
 	}
 
 	// Check the nonce changes are sorted in order
-	if !slices.IsSortedFunc(e.NonceChanges, func(a, b encodingAccountNonce) int {
-		return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
-	}) {
-		return errors.New("nonce changes not in ascending order by tx index")
+	for i := 1; i < len(e.NonceChanges); i++ {
+		if e.NonceChanges[i-1].TxIdx >= e.NonceChanges[i].TxIdx {
+			return errors.New("nonce changes not in ascending order by tx index")
+		}
 	}
 
 	// Check the code changes are sorted in order
-	if !slices.IsSortedFunc(e.CodeChanges, func(a, b encodingCodeChange) int {
-		return cmp.Compare[uint32](a.TxIndex, b.TxIndex)
-	}) {
-		return errors.New("code changes not in ascending order by tx index")
+	for i := 1; i < len(e.CodeChanges); i++ {
+		if e.CodeChanges[i-1].TxIndex >= e.CodeChanges[i].TxIndex {
+			return errors.New("code changes not in ascending order by tx index")
+		}
 	}
 	for _, change := range e.CodeChanges {
 		var sizeLimit int

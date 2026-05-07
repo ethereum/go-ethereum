@@ -231,6 +231,71 @@ func TestBlockAccessListCopy(t *testing.T) {
 	}
 }
 
+// TestBlockAccessListValidateDuplicateBalanceTxIdxRejects verifies that adjacent
+// balance changes with equal tx indices are rejected. Ordering used to rely on
+// slices.IsSortedFunc, which treats equal consecutive keys as sorted; the
+// explicit loop requires strict ascent (no duplicates).
+func TestBlockAccessListValidateDuplicateBalanceTxIdxRejects(t *testing.T) {
+	list := BlockAccessList{
+		{
+			BalanceChanges: []encodingBalanceChange{
+				{TxIdx: 1, Balance: uint256.NewInt(1)},
+				{TxIdx: 1, Balance: uint256.NewInt(2)},
+			},
+		},
+	}
+	err := list.Validate(params.Rules{})
+	if err == nil {
+		t.Fatal("expected validation error for duplicate balance change tx indices")
+	}
+	want := "balance changes not in ascending order by tx index"
+	if got := err.Error(); got != want {
+		t.Fatalf("wrong error: got %q, want %q", got, want)
+	}
+}
+
+// TestBlockAccessListValidateDuplicateNonceTxIdxRejects is the nonce analogue of
+// TestBlockAccessListValidateDuplicateBalanceTxIdxRejects.
+func TestBlockAccessListValidateDuplicateNonceTxIdxRejects(t *testing.T) {
+	list := BlockAccessList{
+		{
+			NonceChanges: []encodingAccountNonce{
+				{TxIdx: 2, Nonce: 10},
+				{TxIdx: 2, Nonce: 11},
+			},
+		},
+	}
+	err := list.Validate(params.Rules{})
+	if err == nil {
+		t.Fatal("expected validation error for duplicate nonce change tx indices")
+	}
+	want := "nonce changes not in ascending order by tx index"
+	if got := err.Error(); got != want {
+		t.Fatalf("wrong error: got %q, want %q", got, want)
+	}
+}
+
+// TestBlockAccessListValidateDuplicateCodeTxIndexRejects is the code-change
+// analogue of TestBlockAccessListValidateDuplicateBalanceTxIdxRejects.
+func TestBlockAccessListValidateDuplicateCodeTxIndexRejects(t *testing.T) {
+	list := BlockAccessList{
+		{
+			CodeChanges: []encodingCodeChange{
+				{TxIndex: 3, Code: nil},
+				{TxIndex: 3, Code: []byte{0x00}},
+			},
+		},
+	}
+	err := list.Validate(params.Rules{})
+	if err == nil {
+		t.Fatal("expected validation error for duplicate code change tx indices")
+	}
+	want := "code changes not in ascending order by tx index"
+	if got := err.Error(); got != want {
+		t.Fatalf("wrong error: got %q, want %q", got, want)
+	}
+}
+
 func TestBlockAccessListValidation(t *testing.T) {
 	// Validate the block access list after RLP decoding
 	enc := makeTestBAL(true)
