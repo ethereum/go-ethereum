@@ -388,11 +388,11 @@ func (e *Era) indexOffset(n uint64, component componentType) (int64, error) {
 
 // metadata contains the information about the era file that is written into the file.
 type metadata struct {
-	start      uint64                 // start block number
-	count      uint64                 // number of blocks in the era
-	components uint64                 // number of slots per block in the index
-	layout     map[componentType]int  // component → slot index, derived from on-disk type tags
-	length     int64                  // length of the file in bytes
+	start      uint64                // start block number
+	count      uint64                // number of blocks in the era
+	components uint64                // number of slots per block in the index
+	layout     map[componentType]int // component → slot index, derived from on-disk type tags
+	length     int64                 // length of the file in bytes
 }
 
 // componentType identifies a kind of per-block entry (header, body, etc.).
