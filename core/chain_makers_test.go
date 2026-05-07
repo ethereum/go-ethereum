@@ -236,7 +236,7 @@ func TestGenerateBALChain(t *testing.T) {
 		// TODO: I think we can remove SetBeaconRoot entirely
 		// and provide a different mechanism to set it?
 
-		// gen.SetParentBeaconRoot(common.Hash{byte(i + 1)})
+		gen.SetParentBeaconRoot(common.Hash{byte(i + 1)})
 
 		if gspec.Config.IsAmsterdam(gen.header.Number, gen.header.Time) {
 			// TODO: parameterize the slot num
@@ -333,20 +333,17 @@ func TestGenerateBALChain(t *testing.T) {
 			withdrawalIndex += 1
 		}
 
-		// TODO: can we reinstate the following?
-		/*
-				// Verify parent beacon root.
-				want := common.Hash{byte(blocknum)}
-				if got := block.BeaconRoot(); *got != want {
-					t.Fatalf("block %d, wrong parent beacon root: got %s, want %s", i, got, want)
-				}
-			state, _ := blockchain.State()
-			idx := block.Time()%8191 + 8191
-			got := state.GetState(params.BeaconRootsAddress, common.BigToHash(new(big.Int).SetUint64(idx)))
-			if got != want {
-				t.Fatalf("block %d, wrong parent beacon root in state: got %s, want %s", i, got, want)
-			}
-		*/
+		// Verify parent beacon root.
+		want := common.Hash{byte(blocknum)}
+		if got := block.BeaconRoot(); *got != want {
+			t.Fatalf("block %d, wrong parent beacon root: got %s, want %s", i, got, want)
+		}
+		state, _ := blockchain.State()
+		idx := block.Time()%8191 + 8191
+		got := state.GetState(params.BeaconRootsAddress, common.BigToHash(new(big.Int).SetUint64(idx)))
+		if got != want {
+			t.Fatalf("block %d, wrong parent beacon root in state: got %s, want %s", i, got, want)
+		}
 	}
 }
 
