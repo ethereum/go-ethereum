@@ -810,5 +810,4 @@ func (tab *Table) waitForNodes(ctx context.Context, n int) error {
 		}
 	}
 	return notifyErr
-
 }
