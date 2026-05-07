@@ -1695,7 +1695,7 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 	return blobs, commitments, proofs, nil
 }
 
-// AvailableBlobs returns the number of blobs that are available in the subpool.
+// AvailableBlobs returns whether the blobs are available in the subpool.
 func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) []bool {
 	available := make([]bool, len(vhashes))
 	for i, vhash := range vhashes {
