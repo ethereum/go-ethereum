@@ -22,7 +22,9 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -48,14 +50,24 @@ func Filename(network string, epoch int, lastBlockHash common.Hash) string {
 	return fmt.Sprintf("%s-%05d-%s-noproofs.ere", network, epoch, lastBlockHash.Hex()[2:10])
 }
 
-// Open accesses the era file.
+// Open accesses the era file. The path is used to parse the profile postfix
+// (per the Ere spec filename convention); files written with the "noreceipts"
+// profile are rejected because the positional index reader assumes receipts
+// are present.
 func Open(path string) (*Era, error) {
+	if err := checkProfile(filepath.Base(path)); err != nil {
+		return nil, err
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	e := &Era{f: f, s: e2store.NewReader(f)}
 	if err := e.loadIndex(); err != nil {
+		f.Close()
+		return nil, err
+	}
+	if err := e.checkComponents(); err != nil {
 		f.Close()
 		return nil, err
 	}
@@ -72,14 +84,54 @@ func (e *Era) Close() error {
 	return err
 }
 
-// From returns an Era backed by f.
+// From returns an Era backed by f. Since no filename is available, the profile
+// cannot be inspected; the component count is still validated against the
+// supported layouts (header, body, receipts, [td]).
 func From(f era.ReadAtSeekCloser) (era.Era, error) {
 	e := &Era{f: f, s: e2store.NewReader(f)}
 	if err := e.loadIndex(); err != nil {
 		f.Close()
 		return nil, err
 	}
+	if err := e.checkComponents(); err != nil {
+		f.Close()
+		return nil, err
+	}
 	return e, nil
+}
+
+// checkProfile inspects the profile postfix(es) in an Ere filename and rejects
+// any combination this reader can't safely decode. The reader maps components
+// by fixed positions (header, body, receipts, td?, proof?), so a file written
+// with the "noreceipts" profile would silently shift TD into the receipts slot.
+//
+// The Ere format itself does not require a particular filename, so this check
+// is permissive about non-conforming names: validation only kicks in when a
+// profile postfix is actually present.
+func checkProfile(name string) error {
+	name = strings.TrimSuffix(name, ".ere")
+	parts := strings.Split(name, "-")
+	if len(parts) <= 3 {
+		return nil // no profile postfix to validate
+	}
+	for _, p := range parts[3:] {
+		if p == "noreceipts" {
+			return fmt.Errorf("Ere file %q uses the noreceipts profile, which is not supported", name)
+		}
+	}
+	return nil
+}
+
+// checkComponents verifies the file's component count matches what this reader
+// supports. The reader assumes the fixed positional layout
+// (header, body, receipts, td?, proof?), and the builder in this package only
+// produces files with 3 (post-merge) or 4 (pre-merge / transition) components.
+// Files with 2 (noreceipts) or 5 (proofs present) components are rejected.
+func (e *Era) checkComponents() error {
+	if e.m.components < 3 || e.m.components > 4 {
+		return fmt.Errorf("unsupported Ere component count %d (reader expects header, body, receipts, and optional total difficulty)", e.m.components)
+	}
+	return nil
 }
 
 // Start retrieves the starting block number.
@@ -213,8 +265,8 @@ func (e *Era) InitialTD() (*big.Int, error) {
 	return new(big.Int).Sub(firstTD, header.Difficulty), nil
 }
 
-// Accumulator reads the accumulator entry in the Ere file if it exists.
-// Only pre-merge and merge-transition Ere files contain an accumulator entry.
+// Accumulator reads the accumulator entry if present. Only pre-merge and
+// merge-transition Ere files contain one.
 func (e *Era) Accumulator() (common.Hash, error) {
 	entry, err := e.s.Find(era.TypeAccumulator)
 	if err != nil {
@@ -289,7 +341,12 @@ type metadata struct {
 // componentType represents the integer form of a specific type that can be present in the era file.
 type componentType int
 
-// header, body, receipts, td, and proof are the different types of components that can be present in the era file.
+// header, body, receipts, td, and proof are the different types of components
+// that can be present in the era file. The Ere spec defines receipts, td, and
+// proof as independently optional, but this reader maps components to their
+// position in the index using this fixed enum. That positional mapping is only
+// safe as long as receipts are present (no "noreceipts" profile) — Open() and
+// From() enforce this via checkProfile and checkComponents.
 const (
 	header componentType = iota
 	body

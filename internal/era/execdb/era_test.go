@@ -22,6 +22,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -164,6 +165,15 @@ func TestEre(t *testing.T) {
 			}
 			if e.Count() != uint64(totalBlocks) {
 				t.Fatalf("wrong block count: want %d, got %d", totalBlocks, e.Count())
+			}
+			// Verify component count: 4 when TD is stored (pre-merge or
+			// transition), 3 otherwise (pure post-merge).
+			wantComponents := uint64(3)
+			if tt.preMerge > 0 {
+				wantComponents = 4
+			}
+			if e.m.components != wantComponents {
+				t.Fatalf("wrong component count: want %d, got %d", wantComponents, e.m.components)
 			}
 
 			// Verify accumulator in file.
@@ -336,6 +346,43 @@ func TestInitialTD(t *testing.T) {
 	// Initial TD should be TD[0] - Difficulty[0] = 10 - 5 = 5.
 	if initialTD.Cmp(big.NewInt(5)) != 0 {
 		t.Fatalf("wrong initial TD: want 5, got %s", initialTD)
+	}
+}
+
+// TestOpenRejectsNoreceiptsProfile verifies that Open() refuses to decode an
+// Ere file whose filename declares the unsupported "noreceipts" profile. The
+// positional reader can't safely interpret such a file because TD would be
+// shifted into the receipts slot.
+func TestOpenRejectsNoreceiptsProfile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	// Build a valid Ere file with default-profile contents, then rename it
+	// to claim a noreceipts profile in its filename.
+	src, err := os.CreateTemp(dir, "ere-src-*.ere")
+	if err != nil {
+		t.Fatalf("create temp file: %v", err)
+	}
+	defer src.Close()
+
+	builder := NewBuilder(src)
+	header := mustEncode(&types.Header{Number: big.NewInt(0), Difficulty: big.NewInt(1)})
+	body := mustEncode(&types.Body{})
+	receipts := mustEncode([]types.SlimReceipt{})
+	if err := builder.AddRLP(header, body, receipts, 0, common.Hash{0}, big.NewInt(1), big.NewInt(1)); err != nil {
+		t.Fatalf("AddRLP: %v", err)
+	}
+	if _, err := builder.Finalize(); err != nil {
+		t.Fatalf("Finalize: %v", err)
+	}
+
+	renamed := filepath.Join(dir, "mainnet-00000-deadbeef-noreceipts.ere")
+	if err := os.Rename(src.Name(), renamed); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	if _, err := Open(renamed); err == nil {
+		t.Fatal("expected Open to reject noreceipts profile")
 	}
 }
 
