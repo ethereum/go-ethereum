@@ -195,7 +195,7 @@ type BlockChainConfig struct {
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 
-	// HistoryPolicy defines the chain history pruning intent.
+	// HistoryPolicy defines the chain history pruning intent from user.
 	HistoryPolicy history.HistoryPolicy
 
 	// Misc options
@@ -327,6 +327,7 @@ type BlockChain struct {
 	triedb        *triedb.Database                 // The database handler for maintaining trie nodes.
 	codedb        *state.CodeDB                    // The database handler for maintaining contract codes.
 	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
+	histPruner    *historyPruner                   // Rolling history pruner, might be nil if not enabled
 
 	hc               *HeaderChain
 	rmLogsFeed       event.Feed
@@ -562,6 +563,11 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		bc.txIndexer = newTxIndexer(uint64(bc.cfg.TxLookupLimit), bc)
 	}
 
+	// Start rolling history pruner if configured.
+	if bc.cfg.HistoryPolicy.Mode == history.KeepRecent && bc.cfg.HistoryPolicy.Window > 0 {
+		bc.histPruner = newHistoryPruner(bc.cfg.HistoryPolicy.Window, bc)
+	}
+
 	// Start state size tracker
 	if bc.cfg.StateSizeTracking {
 		stateSizer, err := state.NewSizeTracker(bc.db, bc.triedb)
@@ -714,47 +720,58 @@ func (bc *BlockChain) loadLastState() error {
 	return nil
 }
 
-// initializeHistoryPruning sets bc.historyPrunePoint.
+// initializeHistoryPruning sets bc.historyPrunePoint based on actual DB state.
 func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
-	freezerTail, _ := bc.db.Tail()
-	policy := bc.cfg.HistoryPolicy
-
+	var (
+		freezerTail, _ = bc.db.Tail()
+		policy         = bc.cfg.HistoryPolicy
+		target         uint64
+	)
+	// Compute the current prune target from the policy.
 	switch policy.Mode {
 	case history.KeepAll:
 		if freezerTail > 0 {
 			// Database was pruned externally. Record the actual state.
 			log.Warn("Chain history database is pruned", "tail", freezerTail, "mode", policy.Mode)
-			bc.historyPrunePoint.Store(&history.PrunePoint{
-				BlockNumber: freezerTail,
-				BlockHash:   bc.GetCanonicalHash(freezerTail),
-			})
+			bc.updateHistoryPrunePoint(freezerTail)
 		}
 		return nil
 
 	case history.KeepPostMerge, history.KeepPostPrague:
-		target := policy.Target
-		// Already at the target.
-		if freezerTail == target.BlockNumber {
-			bc.historyPrunePoint.Store(target)
+		target = policy.Target.BlockNumber
+
+	case history.KeepRecent:
+		head := bc.CurrentBlock()
+		if head == nil || head.Number.Uint64() <= policy.Window {
+			if freezerTail > 0 {
+				// Chain too short for pruning. Record actual DB state.
+				log.Warn("Chain too short for pruning", "tail", freezerTail, "window", policy.Window)
+				bc.updateHistoryPrunePoint(freezerTail)
+			}
 			return nil
 		}
-		// Database is pruned beyond the target.
-		if freezerTail > target.BlockNumber {
-			return fmt.Errorf("database pruned beyond requested history (tail=%d, target=%d)", freezerTail, target.BlockNumber)
-		}
-		// Database needs pruning (freezerTail < target).
-		if latest != 0 {
-			log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned to the target block.", policy.Mode.String()))
-			log.Error(fmt.Sprintf("Run 'geth prune-history --history.chain %s' to prune history.", policy.Mode.String()))
-			return errors.New("history pruning required")
-		}
-		// Fresh database (latest == 0), will sync from target point.
-		bc.historyPrunePoint.Store(target)
-		return nil
-
-	default:
-		return fmt.Errorf("invalid history mode: %d", policy.Mode)
+		target = head.Number.Uint64() - policy.Window
 	}
+
+	// Already at the target, just record the state.
+	if freezerTail == target {
+		bc.updateHistoryPrunePoint(freezerTail)
+		return nil
+	}
+	// Database is pruned beyond the target.
+	if freezerTail > target {
+		// For KeepRecent this is benign (e.g. window was expanded after
+		// previously running with a smaller one). Accept the actual tail.
+		if policy.Mode == history.KeepRecent {
+			bc.updateHistoryPrunePoint(freezerTail)
+			return nil
+		}
+		return fmt.Errorf("database pruned beyond requested history (tail=%d, target=%d)", freezerTail, target)
+	}
+	// Need to prune (freezerTail < target). Large-scale pruning is not
+	// performed at startup to avoid blocking the node for hours (tx index
+	// pruning is particularly slow).
+	return fmt.Errorf("history not pruned to target block %d (current tail %d), run 'geth prune-history' first", target, freezerTail)
 }
 
 // SetHead rewinds the local chain to a new head. Depending on whether the node
@@ -1308,6 +1325,10 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 func (bc *BlockChain) stopWithoutSaving() {
 	if !bc.stopping.CompareAndSwap(false, true) {
 		return
+	}
+	// Signal shutdown history pruner.
+	if bc.histPruner != nil {
+		bc.histPruner.close()
 	}
 	// Signal shutdown tx indexer.
 	if bc.txIndexer != nil {
