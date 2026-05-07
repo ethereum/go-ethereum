@@ -23,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-func TestNewAccessListTracer_ExcludedAddress(t *testing.T) {
+func TestNewAccessListTracerExcludedAddress(t *testing.T) {
 	excluded := common.HexToAddress("0x2222222222222222222222222222222222222222")
 	slot := common.HexToHash("0x01")
 	prelude := types.AccessList{{
