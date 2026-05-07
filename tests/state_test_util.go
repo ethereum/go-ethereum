@@ -489,6 +489,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 		BlobHashes:            tx.BlobVersionedHashes,
 		BlobGasFeeCap:         tx.BlobGasFeeCap,
 		SetCodeAuthorizations: authList,
+		Authorities:           types.DeriveAuthorities(authList),
 	}
 	return msg, nil
 }
