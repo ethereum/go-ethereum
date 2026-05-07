@@ -446,20 +446,20 @@ func TestDetectLayoutNoReceipts(t *testing.T) {
 		t.Fatalf("From: %v", err)
 	}
 	defer e.Close()
-	era := e.(*Era)
+	ere := e.(*Era)
 
-	if era.HasComponent(receipts) {
+	if ere.HasComponent(receipts) {
 		t.Errorf("receipts should not be reported as present in synthetic noreceipts file")
 	}
-	if !era.HasComponent(td) {
+	if !ere.HasComponent(td) {
 		t.Errorf("td should be reported as present")
 	}
-	if got, want := era.m.layout[td], 2; got != want {
+	if got, want := ere.m.layout[td], 2; got != want {
 		t.Errorf("td slot: want %d, got %d", want, got)
 	}
 
 	// Reading receipts must fail loudly, not silently decode TD bytes.
-	if _, err := era.GetRawReceiptsByNumber(0); err == nil {
+	if _, err := ere.GetRawReceiptsByNumber(0); err == nil {
 		t.Error("expected error when reading receipts from a noreceipts file")
 	}
 }
