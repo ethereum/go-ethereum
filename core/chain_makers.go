@@ -80,6 +80,11 @@ func (b *BlockGen) SetNonce(nonce types.BlockNonce) {
 	b.header.Nonce = nonce
 }
 
+// SetSlotNumber sets the slot number field of the generated block.
+func (b *BlockGen) SetSlotNumber(slot uint64) {
+	b.header.SlotNumber = &slot
+}
+
 // SetDifficulty sets the difficulty field of the generated block. This method is
 // useful for Clique tests where the difficulty does not depend on time. For the
 // ethash tests, please use OffsetTime, which implicitly recalculates the diff.
@@ -102,7 +107,11 @@ func (b *BlockGen) Difficulty() *big.Int {
 func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
 	b.header.ParentBeaconRoot = &root
 	blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
-	ProcessBeaconBlockRoot(root, vm.NewEVM(blockContext, b.statedb, b.cm.config, vm.Config{}))
+	reads, writes := ProcessBeaconBlockRoot(root, vm.NewEVM(blockContext, b.statedb, b.cm.config, vm.Config{}))
+	if b.accessList != nil {
+		b.accessList.AddBlockInitMutations(writes)
+		b.accessList.AddAccesses(reads)
+	}
 }
 
 // addTx adds a transaction to the generated block. If no coinbase has
