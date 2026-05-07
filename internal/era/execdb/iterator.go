@@ -192,7 +192,7 @@ func (it *RawIterator) Next() bool {
 	}
 
 	// Check if TD component is present in this file (pre-merge or merge-transition epoch).
-	if int(td) < int(it.e.m.components) {
+	if it.e.HasComponent(td) {
 		tdOffset, err := it.e.tdOff(it.next)
 		if err != nil {
 			it.setErr(err)

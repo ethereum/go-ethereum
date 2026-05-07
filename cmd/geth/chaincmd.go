@@ -528,7 +528,7 @@ func importHistory(ctx *cli.Context) error {
 
 	var (
 		format = ctx.String(utils.EraFormatFlag.Name)
-		from   func(era.ReadAtSeekCloser) (era.Era, error)
+		from   func(f era.ReadAtSeekCloser) (era.Era, error)
 	)
 	switch format {
 	case "era1", "era":

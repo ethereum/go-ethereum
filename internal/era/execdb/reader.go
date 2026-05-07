@@ -18,6 +18,7 @@ package execdb
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -50,10 +51,10 @@ func Filename(network string, epoch int, lastBlockHash common.Hash) string {
 	return fmt.Sprintf("%s-%05d-%s-noproofs.ere", network, epoch, lastBlockHash.Hex()[2:10])
 }
 
-// Open accesses the era file. The path is used to parse the profile postfix
-// (per the Ere spec filename convention); files written with the "noreceipts"
-// profile are rejected because the positional index reader assumes receipts
-// are present.
+// Open accesses the era file at the given path. The basename is used to parse
+// the profile postfix (per the Ere spec filename convention) as a defence-in-
+// depth check; structural safety is enforced by detectLayout, which reads the
+// e2store type tag at each index slot rather than trusting position.
 func Open(path string) (*Era, error) {
 	if err := checkProfile(filepath.Base(path)); err != nil {
 		return nil, err
@@ -62,12 +63,8 @@ func Open(path string) (*Era, error) {
 	if err != nil {
 		return nil, err
 	}
-	e := &Era{f: f, s: e2store.NewReader(f)}
-	if err := e.loadIndex(); err != nil {
-		f.Close()
-		return nil, err
-	}
-	if err := e.checkComponents(); err != nil {
+	e, err := from(f)
+	if err != nil {
 		f.Close()
 		return nil, err
 	}
@@ -84,26 +81,30 @@ func (e *Era) Close() error {
 	return err
 }
 
-// From returns an Era backed by f. Since no filename is available, the profile
-// cannot be inspected; the component count is still validated against the
-// supported layouts (header, body, receipts, [td]).
+// From returns an Era backed by f. Component layout is derived from the
+// e2store type tags stored in the file itself, so callers do not need to
+// supply a filename or profile.
 func From(f era.ReadAtSeekCloser) (era.Era, error) {
-	e := &Era{f: f, s: e2store.NewReader(f)}
-	if err := e.loadIndex(); err != nil {
-		f.Close()
-		return nil, err
-	}
-	if err := e.checkComponents(); err != nil {
+	e, err := from(f)
+	if err != nil {
 		f.Close()
 		return nil, err
 	}
 	return e, nil
 }
 
+func from(f era.ReadAtSeekCloser) (*Era, error) {
+	e := &Era{f: f, s: e2store.NewReader(f)}
+	if err := e.loadIndex(); err != nil {
+		return nil, err
+	}
+	return e, nil
+}
+
 // checkProfile inspects the profile postfix(es) in an Ere filename and rejects
-// any combination this reader can't safely decode. The reader maps components
-// by fixed positions (header, body, receipts, td?, proof?), so a file written
-// with the "noreceipts" profile would silently shift TD into the receipts slot.
+// any combination this reader doesn't support. This is a best-effort, defence-
+// in-depth check; the authoritative layout detection happens in detectLayout
+// from the on-disk type tags.
 //
 // The Ere format itself does not require a particular filename, so this check
 // is permissive about non-conforming names: validation only kicks in when a
@@ -118,18 +119,6 @@ func checkProfile(name string) error {
 		if p == "noreceipts" {
 			return fmt.Errorf("Ere file %q uses the noreceipts profile, which is not supported", name)
 		}
-	}
-	return nil
-}
-
-// checkComponents verifies the file's component count matches what this reader
-// supports. The reader assumes the fixed positional layout
-// (header, body, receipts, td?, proof?), and the builder in this package only
-// produces files with 3 (post-merge) or 4 (pre-merge / transition) components.
-// Files with 2 (noreceipts) or 5 (proofs present) components are rejected.
-func (e *Era) checkComponents() error {
-	if e.m.components < 3 || e.m.components > 4 {
-		return fmt.Errorf("unsupported Ere component count %d (reader expects header, body, receipts, and optional total difficulty)", e.m.components)
 	}
 	return nil
 }
@@ -240,12 +229,19 @@ func (e *Era) GetRawReceiptsByNumber(blockNum uint64) ([]byte, error) {
 	return io.ReadAll(r)
 }
 
+// HasComponent reports whether the given component is recorded in the file's
+// index, as detected from the on-disk e2store type tags.
+func (e *Era) HasComponent(c componentType) bool {
+	_, ok := e.m.layout[c]
+	return ok
+}
+
 // InitialTD returns initial total difficulty before the difficulty of the
 // first block of the Era is applied. Returns an error if TD is not available
 // (e.g., post-merge epoch).
 func (e *Era) InitialTD() (*big.Int, error) {
 	// Check if TD component exists.
-	if int(td) >= int(e.m.components) {
+	if !e.HasComponent(td) {
 		return nil, fmt.Errorf("total difficulty not available in this epoch")
 	}
 
@@ -275,7 +271,8 @@ func (e *Era) Accumulator() (common.Hash, error) {
 	return common.BytesToHash(entry.Value), nil
 }
 
-// loadIndex loads in the index table containing all offsets and caches it.
+// loadIndex loads in the index table trailer (start, count, component-count)
+// and then derives the component→slot layout from the on-disk type tags.
 func (e *Era) loadIndex() error {
 	var err error
 	e.m.length, err = e.f.Seek(0, io.SeekEnd)
@@ -296,30 +293,68 @@ func (e *Era) loadIndex() error {
 	if err != nil {
 		return err
 	}
-
 	e.m.start = binary.LittleEndian.Uint64(b[:8])
+
+	layout, err := e.detectLayout()
+	if err != nil {
+		return err
+	}
+	e.m.layout = layout
 	return nil
 }
 
-// headerOff, bodyOff, receiptOff, and tdOff return the offsets of the respective components for a given block number.
-func (e *Era) headerOff(num uint64) (int64, error)  { return e.indexOffset(num, header) }
-func (e *Era) bodyOff(num uint64) (int64, error)    { return e.indexOffset(num, body) }
-func (e *Era) receiptOff(num uint64) (int64, error) { return e.indexOffset(num, receipts) }
-func (e *Era) tdOff(num uint64) (int64, error)      { return e.indexOffset(num, td) }
-
-// indexOffset calculates offset to a certain component for a block number within a file.
-func (e *Era) indexOffset(n uint64, component componentType) (int64, error) {
-	if n < e.m.start || n >= e.m.start+e.m.count {
-		return 0, fmt.Errorf("block %d out of range [%d,%d)", n, e.m.start, e.m.start+e.m.count)
+// detectLayout reads the e2store type tag at each component slot of the first
+// block and builds a componentType→slot map. This makes the reader robust
+// against profile variations: receipts, td, and proof can appear in any
+// supported subset, and the slot positions are looked up by tag.
+func (e *Era) detectLayout() (map[componentType]int, error) {
+	if e.m.count == 0 {
+		return nil, errors.New("Ere file contains no blocks")
 	}
-	if int(component) >= int(e.m.components) {
-		return 0, fmt.Errorf("component %d not present", component)
+	tagToComponent := map[uint16]componentType{
+		era.TypeCompressedHeader:       header,
+		era.TypeCompressedBody:         body,
+		era.TypeCompressedSlimReceipts: receipts,
+		era.TypeTotalDifficulty:        td,
+		era.TypeProof:                  proof,
 	}
+	layout := make(map[componentType]int, e.m.components)
+	for slot := 0; slot < int(e.m.components); slot++ {
+		off, err := e.slotOffset(0, slot)
+		if err != nil {
+			return nil, fmt.Errorf("read slot %d offset: %w", slot, err)
+		}
+		typ, _, err := e.s.ReadMetadataAt(off)
+		if err != nil {
+			return nil, fmt.Errorf("read slot %d type tag: %w", slot, err)
+		}
+		comp, ok := tagToComponent[typ]
+		if !ok {
+			return nil, fmt.Errorf("unknown e2store type 0x%04x at index slot %d", typ, slot)
+		}
+		if existing, dup := layout[comp]; dup {
+			return nil, fmt.Errorf("duplicate component %d at slots %d and %d", comp, existing, slot)
+		}
+		layout[comp] = slot
+	}
+	if _, ok := layout[header]; !ok {
+		return nil, errors.New("Ere index has no header component")
+	}
+	if _, ok := layout[body]; !ok {
+		return nil, errors.New("Ere index has no body component")
+	}
+	return layout, nil
+}
 
-	payloadlen := 8 + 8*e.m.count*e.m.components + 16 // 8 for start block, 8 per property per block, 16 for the number of properties and the number of blocks
+// slotOffset returns the absolute file offset of the entry at the given slot
+// of the given block index (0 = first block in file). It does no validation
+// against the layout map and is intended for use by detectLayout and
+// indexOffset.
+func (e *Era) slotOffset(blockIdx uint64, slot int) (int64, error) {
+	payloadlen := 8 + 8*e.m.count*e.m.components + 16
 	indstart := e.m.length - int64(payloadlen) - 8
 
-	rec := (n-e.m.start)*e.m.components + uint64(component)
+	rec := blockIdx*e.m.components + uint64(slot)
 	pos := indstart + 8 + 8 + int64(rec*8)
 
 	var buf [8]byte
@@ -330,23 +365,43 @@ func (e *Era) indexOffset(n uint64, component componentType) (int64, error) {
 	return int64(rel) + indstart, nil
 }
 
-// metadata contains the information about the era file that is written into the file.
-type metadata struct {
-	start      uint64 // start block number
-	count      uint64 // number of blocks in the era
-	components uint64 // number of properties
-	length     int64  // length of the file in bytes
+// headerOff, bodyOff, receiptOff, and tdOff return the offsets of the respective components for a given block number.
+func (e *Era) headerOff(num uint64) (int64, error)  { return e.indexOffset(num, header) }
+func (e *Era) bodyOff(num uint64) (int64, error)    { return e.indexOffset(num, body) }
+func (e *Era) receiptOff(num uint64) (int64, error) { return e.indexOffset(num, receipts) }
+func (e *Era) tdOff(num uint64) (int64, error)      { return e.indexOffset(num, td) }
+
+// indexOffset calculates offset to a certain component for a block number
+// within a file. The slot is resolved through the layout map detected at
+// Open time, so files with optional components in any order are handled
+// safely regardless of the on-disk position.
+func (e *Era) indexOffset(n uint64, component componentType) (int64, error) {
+	if n < e.m.start || n >= e.m.start+e.m.count {
+		return 0, fmt.Errorf("block %d out of range [%d,%d)", n, e.m.start, e.m.start+e.m.count)
+	}
+	slot, ok := e.m.layout[component]
+	if !ok {
+		return 0, fmt.Errorf("component %d not present in this Ere file", component)
+	}
+	return e.slotOffset(n-e.m.start, slot)
 }
 
-// componentType represents the integer form of a specific type that can be present in the era file.
+// metadata contains the information about the era file that is written into the file.
+type metadata struct {
+	start      uint64                 // start block number
+	count      uint64                 // number of blocks in the era
+	components uint64                 // number of slots per block in the index
+	layout     map[componentType]int  // component → slot index, derived from on-disk type tags
+	length     int64                  // length of the file in bytes
+}
+
+// componentType identifies a kind of per-block entry (header, body, etc.).
 type componentType int
 
-// header, body, receipts, td, and proof are the different types of components
-// that can be present in the era file. The Ere spec defines receipts, td, and
-// proof as independently optional, but this reader maps components to their
-// position in the index using this fixed enum. That positional mapping is only
-// safe as long as receipts are present (no "noreceipts" profile) — Open() and
-// From() enforce this via checkProfile and checkComponents.
+// The Ere spec defines receipts, td, and proof as independently optional. The
+// reader resolves a component to its actual slot via the metadata.layout map,
+// which is built at Open time from the e2store type tag of each slot — so the
+// position of a component within the index is never assumed.
 const (
 	header componentType = iota
 	body

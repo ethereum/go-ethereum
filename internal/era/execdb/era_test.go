@@ -18,6 +18,7 @@ package execdb
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math/big"
@@ -28,7 +29,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/era"
+	"github.com/ethereum/go-ethereum/internal/era/e2store"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/golang/snappy"
 )
 
 func TestEre(t *testing.T) {
@@ -166,14 +170,17 @@ func TestEre(t *testing.T) {
 			if e.Count() != uint64(totalBlocks) {
 				t.Fatalf("wrong block count: want %d, got %d", totalBlocks, e.Count())
 			}
-			// Verify component count: 4 when TD is stored (pre-merge or
-			// transition), 3 otherwise (pure post-merge).
-			wantComponents := uint64(3)
-			if tt.preMerge > 0 {
-				wantComponents = 4
+			// Verify the layout detected from on-disk type tags. Header,
+			// body, and receipts are always present; TD is only present
+			// when the epoch contains pre-merge blocks.
+			if !e.HasComponent(header) || !e.HasComponent(body) || !e.HasComponent(receipts) {
+				t.Fatalf("missing required component in layout %v", e.m.layout)
 			}
-			if e.m.components != wantComponents {
-				t.Fatalf("wrong component count: want %d, got %d", wantComponents, e.m.components)
+			if got, want := e.HasComponent(td), tt.preMerge > 0; got != want {
+				t.Fatalf("td component presence mismatch: want %v, got %v", want, got)
+			}
+			if e.HasComponent(proof) {
+				t.Fatalf("proof component should not be present in layout %v", e.m.layout)
 			}
 
 			// Verify accumulator in file.
@@ -349,10 +356,118 @@ func TestInitialTD(t *testing.T) {
 	}
 }
 
+// TestDetectLayoutNoReceipts hand-builds an Ere file with the receipts slot
+// replaced by a TotalDifficulty entry (the on-disk shape a "noreceipts"
+// profile would take) and verifies the reader detects this from the e2store
+// type tags rather than misreading TD as receipts. This is the core safety
+// property of detectLayout — exercise it via From, where no filename is
+// available.
+func TestDetectLayoutNoReceipts(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "synthetic.ere")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	w := e2store.NewWriter(f)
+	written := uint64(0)
+	writeEntry := func(typ uint16, data []byte) {
+		n, err := w.Write(typ, data)
+		if err != nil {
+			t.Fatalf("write type 0x%04x: %v", typ, err)
+		}
+		written += uint64(n)
+	}
+
+	var snappyBuf bytes.Buffer
+	writeSnappy := func(typ uint16, data []byte) {
+		snappyBuf.Reset()
+		sw := snappy.NewBufferedWriter(&snappyBuf)
+		if _, err := sw.Write(data); err != nil {
+			t.Fatalf("snappy write: %v", err)
+		}
+		if err := sw.Flush(); err != nil {
+			t.Fatalf("snappy flush: %v", err)
+		}
+		writeEntry(typ, snappyBuf.Bytes())
+	}
+
+	// Version
+	writeEntry(era.TypeVersion, nil)
+
+	// Block 0 components in order: header, body, td (no receipts).
+	headerBytes := mustEncode(&types.Header{Number: big.NewInt(0), Difficulty: big.NewInt(1)})
+	bodyBytes := mustEncode(&types.Body{})
+	tdLE := make([]byte, 32) // uint256(1) little-endian
+	tdLE[0] = 1
+
+	headerOff := written
+	writeSnappy(era.TypeCompressedHeader, headerBytes)
+	bodyOff := written
+	writeSnappy(era.TypeCompressedBody, bodyBytes)
+	tdOff := written
+	writeEntry(era.TypeTotalDifficulty, tdLE)
+
+	// Build the DynamicBlockIndex with 3 components per block, 1 block, and
+	// the third slot pointing at the TD entry rather than at receipts.
+	base := int64(written)
+	relative := func(absolute uint64) uint64 { return uint64(int64(absolute) - base) }
+
+	var indexBuf bytes.Buffer
+	writeU64 := func(v uint64) {
+		if err := binary.Write(&indexBuf, binary.LittleEndian, v); err != nil {
+			t.Fatalf("index write: %v", err)
+		}
+	}
+	writeU64(0) // starting block number
+	writeU64(relative(headerOff))
+	writeU64(relative(bodyOff))
+	writeU64(relative(tdOff))
+	writeU64(3) // component count
+	writeU64(1) // block count
+	writeEntry(era.TypeDynamicBlockIndex, indexBuf.Bytes())
+
+	if err := f.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	// Open via From — no filename is consulted, so the layout map is the
+	// only line of defence.
+	g, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	t.Cleanup(func() { g.Close() })
+	e, err := From(g)
+	if err != nil {
+		t.Fatalf("From: %v", err)
+	}
+	defer e.Close()
+	era := e.(*Era)
+
+	if era.HasComponent(receipts) {
+		t.Errorf("receipts should not be reported as present in synthetic noreceipts file")
+	}
+	if !era.HasComponent(td) {
+		t.Errorf("td should be reported as present")
+	}
+	if got, want := era.m.layout[td], 2; got != want {
+		t.Errorf("td slot: want %d, got %d", want, got)
+	}
+
+	// Reading receipts must fail loudly, not silently decode TD bytes.
+	if _, err := era.GetRawReceiptsByNumber(0); err == nil {
+		t.Error("expected error when reading receipts from a noreceipts file")
+	}
+}
+
 // TestOpenRejectsNoreceiptsProfile verifies that Open() refuses to decode an
-// Ere file whose filename declares the unsupported "noreceipts" profile. The
-// positional reader can't safely interpret such a file because TD would be
-// shifted into the receipts slot.
+// Ere file whose filename declares the unsupported "noreceipts" profile. This
+// is the defence-in-depth filename check; structural safety is provided by
+// detectLayout (covered separately by TestDetectLayoutNoReceipts).
 func TestOpenRejectsNoreceiptsProfile(t *testing.T) {
 	t.Parallel()
 
