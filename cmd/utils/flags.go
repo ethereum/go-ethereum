@@ -850,6 +850,12 @@ var (
 		Value:    node.DefaultConfig.BatchResponseMaxSize,
 		Category: flags.APICategory,
 	}
+	HTTPBodyLimitFlag = &cli.IntFlag{
+		Name:     "http.bodylimit",
+		Usage:    "Maximum size of an HTTP RPC request body in bytes",
+		Value:    node.DefaultConfig.HTTPBodyLimit,
+		Category: flags.APICategory,
+	}
 
 	// Network Settings
 	MaxPeersFlag = &cli.IntFlag{
@@ -1349,6 +1355,10 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.IsSet(BatchResponseMaxSize.Name) {
 		cfg.BatchResponseMaxSize = ctx.Int(BatchResponseMaxSize.Name)
+	}
+
+	if ctx.IsSet(HTTPBodyLimitFlag.Name) {
+		cfg.HTTPBodyLimit = ctx.Int(HTTPBodyLimitFlag.Name)
 	}
 }
 

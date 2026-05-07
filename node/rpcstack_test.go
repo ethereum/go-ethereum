@@ -324,6 +324,20 @@ func baseRpcRequest(t *testing.T, url, bodyStr string, extraHeaders ...string) *
 	return resp
 }
 
+func TestHTTPBodyLimit(t *testing.T) {
+	body := `{"jsonrpc":"2.0","id":1,"method":"rpc_modules","params":[]}`
+	cfg := &httpConfig{
+		rpcEndpointConfig: rpcEndpointConfig{
+			httpBodyLimit: len(body) - 1,
+		},
+	}
+	srv := createAndStartServer(t, cfg, false, &wsConfig{}, nil)
+	defer srv.stop()
+
+	resp := baseRpcRequest(t, "http://"+srv.listenAddr(), body)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, resp.StatusCode)
+}
+
 type testClaim map[string]interface{}
 
 func (testClaim) Valid() error {

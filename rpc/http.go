@@ -36,8 +36,10 @@ import (
 )
 
 const (
-	defaultBodyLimit = 5 * 1024 * 1024
-	contentType      = "application/json"
+	// DefaultHTTPBodyLimit is the default maximum size of an HTTP request body.
+	DefaultHTTPBodyLimit = 5 * 1024 * 1024
+	defaultBodyLimit     = DefaultHTTPBodyLimit
+	contentType          = "application/json"
 )
 
 // https://www.jsonrpc.org/historical/json-rpc-over-http.html#id13

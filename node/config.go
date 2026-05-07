@@ -134,6 +134,9 @@ type Config struct {
 	// interface.
 	HTTPTimeouts rpc.HTTPTimeouts
 
+	// HTTPBodyLimit is the maximum size of an HTTP request body in bytes.
+	HTTPBodyLimit int `toml:",omitempty"`
+
 	// HTTPPathPrefix specifies a path prefix on which http-rpc is to be served.
 	HTTPPathPrefix string `toml:",omitempty"`
 

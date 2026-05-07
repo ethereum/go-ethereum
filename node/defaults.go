@@ -63,6 +63,7 @@ var DefaultConfig = Config{
 	HTTPModules:          []string{"net", "web3"},
 	HTTPVirtualHosts:     []string{"localhost"},
 	HTTPTimeouts:         rpc.DefaultHTTPTimeouts,
+	HTTPBodyLimit:        rpc.DefaultHTTPBodyLimit,
 	WSPort:               DefaultWSPort,
 	WSModules:            []string{"net", "web3"},
 	BatchRequestLimit:    1000,
