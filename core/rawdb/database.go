@@ -719,7 +719,7 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 	// more actionable message instead of the generic "<nil>".
 	ppDatabaseVersion := func(val *uint64) string {
 		if val == nil {
-			return "not set (new or uninitialized database)"
+			return "<nil>, database not initialized"
 		}
 		return fmt.Sprintf("%d (%#x)", *val, *val)
 	}
