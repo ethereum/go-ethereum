@@ -500,6 +500,7 @@ func (b testBackend) FeeHistory(ctx context.Context, blockCount uint64, lastBloc
 	return nil, nil, nil, nil, nil, nil, nil
 }
 func (b testBackend) BlobBaseFee(ctx context.Context) *big.Int { return new(big.Int) }
+func (b testBackend) BaseFee(ctx context.Context) *big.Int     { return new(big.Int) }
 func (b testBackend) ChainDb() ethdb.Database                  { return b.db }
 func (b testBackend) AccountManager() *accounts.Manager        { return b.accman }
 func (b testBackend) ExtRPCEnabled() bool                      { return false }
