@@ -21,7 +21,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
@@ -36,11 +35,13 @@ type CrawlOptions struct {
 	// terminates immediately. Callers should pass at least the bootnodes.
 	Seeds []*enode.Node
 
-	// Drange is the number of keyspace sub-regions to rotate the FINDNODE
-	// target through. Defaults to 16. Internally rounded up to the next power
-	// of two and capped at 256 (the keyspace top-byte width); on the discv4
-	// path this caps the prefix-bit grind cost, on the discv5 path it caps
-	// the rotation to valid distances [1, 256].
+	// Drange is the number of FINDNODE rotation slots per peer. Has effect
+	// only on the discv5 path, where each rotation slot d maps to the
+	// distance value 256-d (so Drange=16 covers distances 256, 255, ..., 241).
+	// On the discv4 path it has no effect: targets are random NodeIDs and
+	// the rotation counter is unused.
+	//
+	// Defaults to 16. Capped at 256.
 	Drange int
 
 	// OutputCap bounds the number of newly-discovered peers buffered for the
@@ -69,43 +70,27 @@ func (o *CrawlOptions) withDefaults() {
 	if o.Drange > 256 {
 		o.Drange = 256
 	}
-	// Round up to the next power of two so the prefix-bit width is
-	// well-defined and Drange divides the top byte of the keyspace evenly.
-	if o.Drange&(o.Drange-1) != 0 {
-		o.Drange = nextPowerOfTwo(o.Drange)
-	}
 	if o.OutputCap <= 0 {
 		o.OutputCap = 16 * o.Workers
 	}
 }
 
-// nextPowerOfTwo returns the smallest power of two >= n, for n in [1, 256].
-func nextPowerOfTwo(n int) int {
-	p := 1
-	for p < n {
-		p <<= 1
-	}
-	return p
-}
-
 // CrawlIterator returns an enode.Iterator that performs a breadth-first
-// crawl by issuing a single FINDNODE request per discovered peer, rotating
-// the request's target through Drange sub-regions of the keyspace so that
-// each peer is asked about a different slice. Compared to RandomNodes, this
-// avoids the alpha-bounded Kademlia lookup convergence loop and is the right
-// shape for breadth crawls (e.g. devp2p discv4 crawl).
+// crawl by issuing a single FINDNODE request per discovered peer, with a
+// fresh random target each call. Compared to RandomNodes, this avoids the
+// alpha-bounded Kademlia lookup convergence loop and is the right shape
+// for breadth crawls (e.g. devp2p discv4 crawl).
 //
 // Concurrency is bounded by opts.Workers; pacing is RTT-driven, not
 // rate-limited.
 func (t *UDPv4) CrawlIterator(opts CrawlOptions) enode.Iterator {
-	opts.withDefaults()
-	prefixBits := log2Pow2(opts.Drange)
-	queryFn := func(dst *enode.Node, d int) ([]*enode.Node, error) {
+	queryFn := func(dst *enode.Node, _ int) ([]*enode.Node, error) {
 		addr, ok := dst.UDPEndpoint()
 		if !ok {
 			return nil, errNoUDPEndpoint
 		}
-		target := randomTargetWithPrefix(uint8(d), prefixBits)
+		var target v4wire.Pubkey
+		crand.Read(target[:])
 		peers, err := t.findnode(dst.ID(), addr, target)
 		if err != nil {
 			t.log.Trace("FINDNODE failed", "id", dst.ID(), "err", err)
@@ -129,35 +114,6 @@ func (t *UDPv5) CrawlIterator(opts CrawlOptions) enode.Iterator {
 		return peers, err
 	}
 	return newCrawlIterator(opts, queryFn)
-}
-
-// log2Pow2 returns log2(n) for power-of-two n. The caller must ensure n is a
-// power of two; non-power-of-two inputs round down.
-func log2Pow2(n int) int {
-	bits := 0
-	for n > 1 {
-		n >>= 1
-		bits++
-	}
-	return bits
-}
-
-// randomTargetWithPrefix returns a v4wire.Pubkey whose Keccak256 hash has its
-// top `bits` bits equal to d. On average ~2^bits draws are needed.
-func randomTargetWithPrefix(d uint8, bits int) v4wire.Pubkey {
-	if bits == 0 {
-		var pk v4wire.Pubkey
-		crand.Read(pk[:])
-		return pk
-	}
-	for {
-		var pk v4wire.Pubkey
-		crand.Read(pk[:])
-		h := crypto.Keccak256(pk[:])
-		if (h[0] >> (8 - bits)) == d {
-			return pk
-		}
-	}
 }
 
 // crawlIterator is a breadth-first FINDNODE-driven iterator. It maintains a
