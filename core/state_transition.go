@@ -248,12 +248,14 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		return nil, fmt.Errorf("%w: address %v, maxFeePerGas bit length: %d", ErrFeeCapVeryHigh,
 			from.Hex(), tx.GasPrice().BitLen())
 	}
-	gasFeeCap, overflow := uint256.FromBig(tx.GasFeeCap())
+	txGasFeeCap := tx.GasFeeCap()
+	gasFeeCap, overflow := uint256.FromBig(txGasFeeCap)
 	if overflow {
 		return nil, fmt.Errorf("%w: address %v, maxFeePerGas bit length: %d", ErrFeeCapVeryHigh,
 			from.Hex(), tx.GasFeeCap().BitLen())
 	}
-	gasTipCap, overflow := uint256.FromBig(tx.GasTipCap())
+	txGasTipCap := tx.GasTipCap()
+	gasTipCap, overflow := uint256.FromBig(txGasTipCap)
 	if overflow {
 		return nil, fmt.Errorf("%w: address %v, maxPriorityFeePerGas bit length: %d", ErrTipVeryHigh,
 			from.Hex(), tx.GasTipCap().BitLen())
@@ -286,14 +288,13 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
-		baseFeeU256, overflow := uint256.FromBig(baseFee)
-		if overflow {
-			return nil, errors.New("baseFee exceeds 256 bits")
+		effectiveGasPrice := new(big.Int).Add(baseFee, txGasTipCap)
+		if effectiveGasPrice.Cmp(txGasFeeCap) > 0 {
+			effectiveGasPrice = txGasFeeCap
 		}
-		msg.GasPrice = new(uint256.Int).Add(msg.GasTipCap, baseFeeU256)
-		if msg.GasPrice.Cmp(msg.GasFeeCap) > 0 {
-			msg.GasPrice = msg.GasFeeCap
-		}
+		// EffectiveGasPrice is already capped by txGasFeeCap, therefore
+		// the overflow check is not required.
+		msg.GasPrice = uint256.MustFromBig(effectiveGasPrice)
 	}
 	return msg, nil
 }
@@ -366,7 +367,10 @@ func (st *stateTransition) to() common.Address {
 
 func (st *stateTransition) buyGas() error {
 	mgval := new(uint256.Int).SetUint64(st.msg.GasLimit)
-	mgval.Mul(mgval, st.msg.GasPrice)
+	_, overflow := mgval.MulOverflow(mgval, st.msg.GasPrice)
+	if overflow {
+		return errors.New("gas cost exceeds 256 bits")
+	}
 	balanceCheck := new(uint256.Int).Set(mgval)
 	if st.msg.GasFeeCap != nil {
 		balanceCheck.SetUint64(st.msg.GasLimit)
@@ -396,8 +400,18 @@ func (st *stateTransition) buyGas() error {
 				return fmt.Errorf("invalid blobBaseFee: %v", st.evm.Context.BlobBaseFee)
 			}
 			blobFee := new(uint256.Int).SetUint64(blobGas)
-			blobFee.Mul(blobFee, blobBaseFee)
-			mgval.Add(mgval, blobFee)
+
+			// In practice, overflow checking is unnecessary, as blobBaseFee cannot exceed
+			// BlobGasFeeCap. However, in eth_call it is still possible for users to specify
+			// an excessively large blob base fee and bypass the blob base fee validation.
+			_, overflow = blobFee.MulOverflow(blobFee, blobBaseFee)
+			if overflow {
+				return errors.New("blobFee exceeds 256 bits")
+			}
+			_, overflow = mgval.AddOverflow(mgval, blobFee)
+			if overflow {
+				return errors.New("gas cost exceeds 256 bits")
+			}
 		}
 	}
 	if have, want := st.state.GetBalance(st.msg.From), balanceCheck; have.Cmp(want) < 0 {
