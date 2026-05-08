@@ -16,8 +16,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// BALStateTransition performs the state root update and commit for EIP-7928
-// access-list-containing blocks. One instance per block.
+// BALStateTransition is responsible for performing the state root update
+// and commit for EIP 7928 access-list-containing blocks.  An instance of
+// this object is only used for a single block.
 type BALStateTransition struct {
 	accessList bal.AccessListReader
 	written    bal.WrittenCounts
@@ -26,13 +27,20 @@ type BALStateTransition struct {
 	stateTrie  Trie
 	parentRoot common.Hash
 
+	// the computed state root of the block
 	rootHash common.Hash
-	diffs    bal.StateMutations
+	// the state modifications performed by the block
+	diffs bal.StateMutations
 
-	prestates  sync.Map
+	// a map of common.Address -> *types.StateAccount containing the block
+	// prestate of all accounts that will be modified
+	prestates sync.Map
+
 	postStates map[common.Address]*types.StateAccount
-	tries      sync.Map
-	deletions  map[common.Address]struct{}
+	// a map of common.Address -> Trie containing the account tries for all
+	// accounts with mutated storage
+	tries     sync.Map //map[common.Address]Trie
+	deletions map[common.Address]struct{}
 
 	// Deletion counters; not derivable from the BAL alone (selfdestruct vs
 	// balance/nonce reset is indistinguishable without prestate).
