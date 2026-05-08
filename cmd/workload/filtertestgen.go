@@ -355,7 +355,9 @@ func (s *filterTestGen) writeQueries() {
 		exit(fmt.Errorf("Error creating filter test query file %s: %v", s.queryFile, err))
 		return
 	}
-	json.NewEncoder(file).Encode(&s.queries)
+	if err := json.NewEncoder(file).Encode(&s.queries); err != nil {
+		exit(fmt.Errorf("Error writing filter test query file %s: %v", s.queryFile, err))
+	}
 	file.Close()
 }
 

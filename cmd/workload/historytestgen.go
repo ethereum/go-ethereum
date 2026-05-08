@@ -150,5 +150,7 @@ func writeJSON(fileName string, value any) {
 	}
 	defer file.Close()
 
-	json.NewEncoder(file).Encode(value)
+	if err := json.NewEncoder(file).Encode(value); err != nil {
+		exit(fmt.Errorf("error writing %s: %v", fileName, err))
+	}
 }

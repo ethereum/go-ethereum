@@ -160,5 +160,7 @@ func writeErrors(errorFile string, errors []*filterQuery) {
 		return
 	}
 	defer file.Close()
-	json.NewEncoder(file).Encode(errors)
+	if err := json.NewEncoder(file).Encode(errors); err != nil {
+		exit(fmt.Errorf("Error writing filter error file %s: %v", errorFile, err))
+	}
 }
