@@ -222,7 +222,7 @@ func buildSlowBlockLog(s *ExecuteStats, block *types.Block) slowBlockLog {
 		},
 		Timing: slowBlockTime{
 			ExecutionMs: durationToMs(s.Execution),
-			StateReadMs: durationToMs(s.AccountReads + s.StorageReads + s.CodeReads),
+			StateReadMs: durationToMs(s.AccountReads + s.StorageReads + s.CodeReads + s.Prefetch),
 			StateHashMs: durationToMs(s.AccountHashes + s.AccountUpdates + s.StorageUpdates),
 			CommitMs:    durationToMs(max(s.AccountCommits, s.StorageCommits) + s.DatabaseCommit + s.BlockWrite),
 			TotalMs:     durationToMs(s.TotalTime),

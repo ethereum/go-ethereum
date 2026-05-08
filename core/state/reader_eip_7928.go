@@ -395,4 +395,3 @@ func (r *prefetchStateReader) GetStateStats() StateReaderStats {
 	}
 	return StateReaderStats{}
 }
-

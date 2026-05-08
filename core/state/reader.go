@@ -607,4 +607,3 @@ func (r *reader) GetStats() ReaderStats {
 		StateStats: r.GetStateStats(),
 	}
 }
-
