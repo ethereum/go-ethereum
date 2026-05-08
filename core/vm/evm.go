@@ -554,6 +554,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	if evm.chainRules.IsEIP4762 {
 		consumed, wanted := evm.AccessEvents.ContractCreateInitGas(address, gas.RegularGas)
 		if consumed < wanted {
+			evm.StateDB.RevertToSnapshot(snapshot)
 			gas.Exhaust()
 			return nil, common.Address{}, gas, ErrOutOfGas
 		}
