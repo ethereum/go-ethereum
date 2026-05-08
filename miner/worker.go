@@ -175,14 +175,23 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 			}
 		} else {
 			interrupt := new(atomic.Int32)
+			timeout := make(chan struct{})
 			timer := time.AfterFunc(miner.config.Recommit, func() {
 				interrupt.Store(commitInterruptTimeout)
+				work.evm.Cancel()
+				close(timeout)
 			})
-			defer timer.Stop()
 
 			err := miner.fillTransactions(ctx, interrupt, work)
+			if !timer.Stop() {
+				<-timeout
+				if err == nil {
+					err = errBlockInterruptedByTimeout
+				}
+			}
 			if errors.Is(err, errBlockInterruptedByTimeout) {
 				log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(miner.config.Recommit))
+				miner.resetWorkEVM(work)
 			}
 		}
 	}
@@ -366,6 +375,13 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	}, nil
 }
 
+func (miner *Miner) resetWorkEVM(env *environment) {
+	if env.evm != nil {
+		env.evm.Release()
+	}
+	env.evm = vm.NewEVM(core.NewEVMBlockContext(env.header, miner.chain, &env.coinbase), env.state, miner.chainConfig, vm.Config{})
+}
+
 func (miner *Miner) commitTransaction(ctx context.Context, env *environment, tx *types.Transaction) (err error) {
 	_, _, spanEnd := telemetry.StartSpan(ctx, "miner.commitTransaction")
 	defer spanEnd(&err)
@@ -418,6 +434,11 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 		gp   = env.gasPool.Snapshot()
 	)
 	receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx)
+	if env.evm.Cancelled() {
+		env.state.RevertToSnapshot(snap)
+		env.gasPool.Set(gp)
+		return nil, errBlockInterruptedByTimeout
+	}
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.Set(gp)
@@ -522,6 +543,9 @@ func (miner *Miner) commitTransactions(ctx context.Context, env *environment, pl
 
 		err := miner.commitTransaction(ctx, env, tx)
 		switch {
+		case errors.Is(err, errBlockInterruptedByTimeout):
+			return err
+
 		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
 			log.Trace("Skipping transaction with low nonce", "hash", ltx.Hash, "sender", from, "nonce", tx.Nonce())
