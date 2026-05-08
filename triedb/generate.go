@@ -146,6 +146,14 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 		// shared storage iterator. The inner loop terminates on Hold()
 		// (slot belongs to a later account) or exhaustion.
 		for iters.stor.Next() {
+			// Re-check cancel.
+			select {
+			case <-cancel:
+				return nil, ErrCancelled
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+			}
 			sk := iters.stor.Key()
 			storAcc := sk[len(rawdb.SnapshotStoragePrefix) : len(rawdb.SnapshotStoragePrefix)+common.HashLength]
 			cmp := bytes.Compare(storAcc, accountHash[:])
@@ -172,6 +180,15 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 			if err := stoTrie.Update(slotHash, iters.stor.Value()); err != nil {
 				return nil, fmt.Errorf("storage stack trie update for %x: %w", accountHash, err)
 			}
+
+			// Cap batch size and reopen iterators so pebble compactions don't stall.
+			if batch.ValueSize() > ethdb.IdealBatchSize {
+				if err := batch.Write(); err != nil {
+					return nil, fmt.Errorf("flush batch (storage): %w", err)
+				}
+				batch.Reset()
+				iters.reopen()
+			}
 		}
 		if err := iters.stor.Error(); err != nil {
 			return nil, fmt.Errorf("storage iterator: %w", err)
@@ -194,10 +211,7 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 			return nil, fmt.Errorf("account stack trie update for %x: %w", accountHash, err)
 		}
 
-		// Progress marker keeps the batch growing on a predictable
-		// rate. The size check drives flush + iterator reopen so
-		// pebble compactions aren't blocked by long-lived iterators.
-		rawdb.WriteGenerateTrieProgress(batch, partition, accountHash)
+		// Cap batch size and reopen iterators so pebble compactions don't stall.
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
 				return nil, fmt.Errorf("flush batch: %w", err)
@@ -216,9 +230,6 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 	// rootBlob at nil.
 	acctTrie.Hash()
 
-	// Clear the progress marker since it's no longer needed once the
-	// partition's batch is flushed.
-	rawdb.DeleteGenerateTrieProgress(batch, partition)
 	if err := batch.Write(); err != nil {
 		return nil, fmt.Errorf("final partition batch write: %w", err)
 	}
@@ -378,7 +389,7 @@ func assembleRoot(db ethdb.Database, scheme string, partitionBlobs [numPartition
 
 		// Remember that strip returns nil for the common case 1.
 		if strippedBlob != nil {
-			// Strip constructed a new node that is alonger extension or leaf
+			// Strip constructed a new node that is a longer extension or leaf
 			// partition (case 2/3). Persist it at path=[i] so path-scheme readers
 			// traversing slot i of the top branch can find it.
 			rawdb.WriteTrieNode(batch, common.Hash{}, []byte{byte(i)}, stripped, strippedBlob, scheme)

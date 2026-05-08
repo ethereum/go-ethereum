@@ -104,10 +104,6 @@ var (
 	// snapSyncStatusFlagKey flags that status of snap sync.
 	snapSyncStatusFlagKey = []byte("SnapSyncStatus")
 
-	// generateTrieProgressPrefix tracks the last account hash processed by each
-	// of triedb.GenerateTrie's 16 partitions.
-	generateTrieProgressPrefix = []byte("gtp") // generateTrieProgressPrefix + partition byte -> last account hash
-
 	// generateTriePartitionDonePrefix stores the subtree root hash of each
 	// triedb.GenerateTrie partition once it finishes.
 	generateTriePartitionDonePrefix = []byte("gtd") // generateTriePartitionDonePrefix + partition byte -> subtree root hash
@@ -472,11 +468,6 @@ func trienodeHistoryIndexBlockKey(addressHash common.Hash, path []byte, blockID 
 // transitionStateKey = transitionStatusKey + hash
 func transitionStateKey(hash common.Hash) []byte {
 	return append(VerkleTransitionStatePrefix, hash.Bytes()...)
-}
-
-// generateTrieProgressKey = generateTrieProgressPrefix + partition (single byte).
-func generateTrieProgressKey(partition byte) []byte {
-	return append(generateTrieProgressPrefix, partition)
 }
 
 // generateTriePartitionDoneKey = generateTriePartitionDonePrefix + partition (single byte).

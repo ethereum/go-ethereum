@@ -209,20 +209,6 @@ func WriteSnapshotSyncStatus(db ethdb.KeyValueWriter, status []byte) {
 	}
 }
 
-// WriteGenerateTrieProgress records a partition's current progress.
-func WriteGenerateTrieProgress(db ethdb.KeyValueWriter, partition byte, hash common.Hash) {
-	if err := db.Put(generateTrieProgressKey(partition), hash[:]); err != nil {
-		log.Crit("Failed to store generate-trie progress marker", "err", err)
-	}
-}
-
-// DeleteGenerateTrieProgress removes a partition's progress marker.
-func DeleteGenerateTrieProgress(db ethdb.KeyValueWriter, partition byte) {
-	if err := db.Delete(generateTrieProgressKey(partition)); err != nil {
-		log.Crit("Failed to remove generate-trie progress marker", "err", err)
-	}
-}
-
 // ReadGenerateTriePartitionDone returns the raw subtree root blob for a
 // partition that has previously completed.
 func ReadGenerateTriePartitionDone(db ethdb.KeyValueReader, partition byte) ([]byte, bool) {
