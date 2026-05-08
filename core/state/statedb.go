@@ -156,24 +156,33 @@ type StateDB struct {
 	// State witness if cross validation is needed
 	witness *stateless.Witness
 
-	// Per-block counters surfaced in ExecuteStats; read durations and code-loads
-	// are tracked on the reader (see ReadTimer, CodeLoadTracker).
+	// Measurements gathered during execution for debugging purposes
+	AccountReads   time.Duration
 	AccountHashes  time.Duration
 	AccountUpdates time.Duration
 	AccountCommits time.Duration
 
+	StorageReads    time.Duration
 	StorageUpdates  time.Duration
 	StorageCommits  time.Duration
 	DatabaseCommits time.Duration
+	CodeReads       time.Duration
 
-	AccountLoaded   int
-	AccountUpdated  int
-	AccountDeleted  int
-	StorageLoaded   int
-	StorageUpdated  atomic.Int64
-	StorageDeleted  atomic.Int64
-	CodeUpdated     int
-	CodeUpdateBytes int
+	AccountLoaded  int          // Number of accounts retrieved from the database during the state transition
+	AccountUpdated int          // Number of accounts updated during the state transition
+	AccountDeleted int          // Number of accounts deleted during the state transition
+	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
+	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
+	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
+
+	// CodeLoadBytes is the total number of bytes read from contract code.
+	// This value may be smaller than the actual number of bytes read, since
+	// some APIs (e.g. CodeSize) may load the entire code from either the
+	// cache or the database when the size is not available in the cache.
+	CodeLoaded      int // Number of contract code loaded during the state transition
+	CodeLoadBytes   int // Total bytes of resolved code
+	CodeUpdated     int // Number of contracts with code changes that persisted
+	CodeUpdateBytes int // Total bytes of persisted code written
 }
 
 // New creates a new state from a given trie.
@@ -626,11 +635,13 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 
 	s.AccountLoaded++
 
+	start := time.Now()
 	acct, err := s.reader.Account(addr)
 	if err != nil {
 		s.setError(fmt.Errorf("getStateObject (%x) error: %w", addr.Bytes(), err))
 		return nil
 	}
+	s.AccountReads += time.Since(start)
 
 	// Short circuit if the account is not found
 	if acct == nil {

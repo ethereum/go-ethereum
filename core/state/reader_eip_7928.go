@@ -383,10 +383,6 @@ func (r *readerTracker) TouchStorage(addr common.Address, slot common.Hash) {
 	list[slot] = struct{}{}
 }
 
-func (r *readerTracker) ReadTimes() ReadDurations {
-	return r.Reader.(ReadTimer).ReadTimes()
-}
-
 func (r *readerTracker) CodeLoads() (count, bytes int) {
 	return r.Reader.(CodeLoadTracker).CodeLoads()
 }

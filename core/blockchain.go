@@ -680,10 +680,6 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 		stats.DatabaseCommit = m.TrieDBCommits
 		stats.Prefetch = m.StatePrefetch
 	}
-	readerReads := prefetchReader.(state.ReadTimer).ReadTimes()
-	stats.AccountReads = readerReads.Account
-	stats.StorageReads = readerReads.Storage
-	stats.CodeReads = readerReads.Code
 	stats.Prefetch = prefetchReader.(state.PrefetcherMetricer).Metrics().Elapsed
 
 	stats.StateReadCacheStats = prefetchReader.(state.ReaderStater).GetStats()
@@ -2450,14 +2446,13 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		proctime = time.Since(startTime) // processing + validation + cross validation
 		stats    = &ExecuteStats{}
 	)
-	reads := statedb.Reader().(state.ReadTimer).ReadTimes()
-	codeLoaded, codeLoadBytes := statedb.Reader().(state.CodeLoadTracker).CodeLoads()
-	stats.AccountReads = reads.Account
-	stats.StorageReads = reads.Storage
-	stats.CodeReads = reads.Code
-	stats.AccountUpdates = statedb.AccountUpdates
-	stats.StorageUpdates = statedb.StorageUpdates
-	stats.AccountHashes = statedb.AccountHashes
+	// Update the metrics touched during block processing and validation
+	stats.AccountReads = statedb.AccountReads     // Account reads are complete (in processing)
+	stats.StorageReads = statedb.StorageReads     // Storage reads are complete (in processing)
+	stats.AccountUpdates = statedb.AccountUpdates // Account updates are complete (in validation)
+	stats.StorageUpdates = statedb.StorageUpdates // Storage updates are complete (in validation)
+	stats.AccountHashes = statedb.AccountHashes   // Account hashes are complete (in validation)
+	stats.CodeReads = statedb.CodeReads
 
 	stats.AccountLoaded = statedb.AccountLoaded
 	stats.AccountUpdated = statedb.AccountUpdated
@@ -2465,13 +2460,14 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	stats.StorageLoaded = statedb.StorageLoaded
 	stats.StorageUpdated = int(statedb.StorageUpdated.Load())
 	stats.StorageDeleted = int(statedb.StorageDeleted.Load())
-	stats.CodeLoaded = codeLoaded
-	stats.CodeLoadBytes = codeLoadBytes
+
+	stats.CodeLoaded = statedb.CodeLoaded
+	stats.CodeLoadBytes = statedb.CodeLoadBytes
 	stats.CodeUpdated = statedb.CodeUpdated
 	stats.CodeUpdateBytes = statedb.CodeUpdateBytes
 
-	stats.Execution = ptime - (reads.Account + reads.Storage + reads.Code)
-	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates)
+	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // EVM processing time
+	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // Block validation time
 	stats.CrossValidation = xvtime
 
 	// Write the block to the chain and get the status.
