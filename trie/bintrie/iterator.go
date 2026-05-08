@@ -201,7 +201,7 @@ func (it *binaryNodeIterator) Path() []byte {
 		}
 		path.AppendBit(&path, uint8(state.Index))
 	}
-	return path.ActiveBytes()
+	return path.KeyBytes()
 }
 
 func (it *binaryNodeIterator) NodeBlob() []byte {

@@ -321,8 +321,8 @@ func (t *BinaryTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 
 	var rootPath BitArray
 	t.store.collectNodes(t.store.root, rootPath, func(path BitArray, hash common.Hash, serialized []byte) {
-		var buf [32]byte
-		pathBytes := path.PutActiveBytes(&buf)
+		var buf [33]byte
+		pathBytes := path.PutKeyBytes(buf[:])
 		nodeset.AddNode(pathBytes, trienode.NewNodeWithPrev(hash, serialized, t.tracer.Get(pathBytes)))
 	}, t.groupDepth)
 	return t.Hash(), nodeset

@@ -29,7 +29,7 @@ func keyToPath(depth int, key []byte) ([]byte, error) {
 	keyLen := min(len(key), 31)
 	ba := new(BitArray).SetBytes(uint8(keyLen*8), key[:keyLen])
 	path := new(BitArray).MSBs(ba, uint8(depth+1))
-	return path.ActiveBytes(), nil
+	return path.KeyBytes(), nil
 }
 
 // Invariant: dirty=false implies mustRecompute=false. Every mutation that

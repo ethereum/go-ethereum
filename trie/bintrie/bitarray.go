@@ -294,26 +294,47 @@ func (b *BitArray) Set(x *BitArray) *BitArray {
 	return b
 }
 
-// ActiveBytes returns a slice containing only the bytes that are actually used by the bit array,
-// as specified by the length. The returned slice is in big-endian order.
+// KeyBytes returns the path-to-DB-key encoding: the active bytes in big-endian
+// order followed by a single trailing byte holding the bit-length. The trailing
+// length disambiguates paths whose active bytes coincide (e.g. 1-bit "1" and
+// 8-bit "00000001" both pack to integer value 1, but their key encodings are
+// [0x01, 0x01] and [0x01, 0x08] respectively).
+//
+// The empty path is encoded as no bytes: byteCount=0 is unique to len=0, so
+// no disambiguation byte is needed.
 //
 // Example:
 //
-//	len = 10, words = [0x3FF, 0, 0, 0] -> [0x03, 0xFF]
-func (b *BitArray) ActiveBytes() []byte {
+//	len = 10, words = [0x3FF, 0, 0, 0] -> [0x03, 0xFF, 0x0A]
+func (b *BitArray) KeyBytes() []byte {
+	if b.len == 0 {
+		return nil
+	}
+	bc := b.byteCount()
+	res := make([]byte, bc+1)
 	wordsBytes := b.Bytes()
-	return wordsBytes[32-b.byteCount():]
+	copy(res[:bc], wordsBytes[32-bc:])
+	res[bc] = b.len
+	return res
 }
 
-// PutActiveBytes writes the active bytes into dst (which must be at least 32 bytes)
-// and returns the populated sub-slice. No heap allocation occurs because the
-// backing array is owned by the caller.
-func (b *BitArray) PutActiveBytes(dst *[32]byte) []byte {
+// PutKeyBytes writes the key encoding (active bytes followed by length byte)
+// into dst and returns the populated sub-slice. The empty path returns dst[:0]
+// without touching dst. For non-empty paths dst must have len >= 33 (32 packed
+// bytes for 248 bits + 1 length byte).
+func (b *BitArray) PutKeyBytes(dst []byte) []byte {
+	if b.len == 0 {
+		return dst[:0]
+	}
+	_ = dst[32] // bounds check hint
 	binary.BigEndian.PutUint64(dst[0:8], b.words[3])
 	binary.BigEndian.PutUint64(dst[8:16], b.words[2])
 	binary.BigEndian.PutUint64(dst[16:24], b.words[1])
 	binary.BigEndian.PutUint64(dst[24:32], b.words[0])
-	return dst[32-b.byteCount():]
+	bc := b.byteCount()
+	copy(dst, dst[32-bc:32])
+	dst[bc] = b.len
+	return dst[:bc+1]
 }
 
 // bitFromLSB returns the bit value at position n, where n = 0 is LSB.
