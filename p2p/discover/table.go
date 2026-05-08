@@ -753,6 +753,11 @@ func (tab *Table) deleteNode(n *enode.Node) {
 
 // waitForNodes blocks until the table contains at least n nodes.
 func (tab *Table) waitForNodes(ctx context.Context, n int) error {
+	// done lets the forwarder goroutine exit when waitForNodes returns
+	// successfully (without ctx cancellation or table close).
+	done := make(chan struct{})
+	defer close(done)
+
 	// Set up a notification channel that gets unblocked when there was any activity on
 	// the table. Ultimately this reads from the table's nodeFeed, but can't use the feed
 	// directly on the same goroutine that takes Table.mutex, it would deadlock.
@@ -776,6 +781,8 @@ func (tab *Table) waitForNodes(ctx context.Context, n int) error {
 					return
 				case <-tab.closeReq:
 					notifyErr = errClosed
+					return
+				case <-done:
 					return
 				}
 			}
