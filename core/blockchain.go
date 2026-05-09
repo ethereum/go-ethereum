@@ -1186,6 +1186,7 @@ func (bc *BlockChain) SnapSyncComplete(hash common.Hash) error {
 	}
 
 	// If all checks out, manually set the head block.
+	rawdb.WriteHeadBlockHash(bc.db, hash)
 	bc.currentBlock.Store(block.Header())
 	headBlockGauge.Update(int64(block.NumberU64()))
 
