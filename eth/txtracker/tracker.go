@@ -60,6 +60,7 @@ type Chain interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	GetBlockByNumber(number uint64) *types.Block
 	GetBlock(hash common.Hash, number uint64) *types.Block
+	GetCanonicalHash(number uint64) common.Hash
 	CurrentFinalBlock() *types.Header
 }
 
@@ -227,11 +228,15 @@ func (t *Tracker) handleChainHead(ev core.ChainHeadEvent) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	// Count per-peer inclusions in this block for the inclusion EMA.
-	// Skip txs whose delivery arrived at or after this block's slot — those
-	// are likely post-slot re-broadcasts of an already-mined tx, not genuine
-	// relay work.
+	// Count per-peer inclusions in this block for the inclusion EMA, and
+	// record (BlockNum, BlockHash) on first inclusion so the iterate-t.txs
+	// finalization scan can find the entry later without re-reading the
+	// block. Skip txs whose delivery arrived at or after this block's slot
+	// — those are likely post-slot re-broadcasts of an already-mined tx,
+	// not genuine relay work.
 	blockTime := block.Time()
+	blockNum := block.Number().Uint64()
+	blockHash := block.Hash()
 	blockIncl := make(map[string]int)
 	for _, tx := range block.Transactions() {
 		ti, ok := t.txs[tx.Hash()]
@@ -239,6 +244,10 @@ func (t *Tracker) handleChainHead(ev core.ChainHeadEvent) {
 			continue
 		}
 		blockIncl[ti.Deliverer]++
+		if ti.BlockNum == 0 {
+			ti.BlockNum = blockNum
+			ti.BlockHash = blockHash
+		}
 	}
 	// Accumulate per-peer finalization credits over the newly-finalized
 	// range (possibly zero blocks). Only counts peers still tracked.
@@ -254,10 +263,21 @@ func (t *Tracker) handleChainHead(ev core.ChainHeadEvent) {
 }
 
 // collectFinalizationCredits accumulates per-peer finalization credits for
-// blocks newly finalized since lastFinalNum. Returns a (possibly empty) map
-// keyed by peer ID; advances lastFinalNum. Must be called with t.mu held.
-// Peers that have already been removed by NotifyPeerDrop are skipped so
-// dropped peers are not resurrected by old on-chain data.
+// blocks newly finalized since lastFinalNum, and advances lastFinalNum.
+// Returns a (possibly empty) credits map keyed by peer ID. Must be called
+// with t.mu held.
+//
+// The pivot here is to iterate t.txs (which we already maintain by hash
+// with BlockNum + BlockHash recorded at inclusion time) rather than
+// walking each newly-finalized block from disk. The walk over chain
+// blocks was the dominant cost during catch-up after a restart: every
+// block called GetBlockByNumber (cold-disk RLP-decode) and then per-tx
+// tx.Hash() and types.Sender() against fresh cache-cold *Transaction
+// instances. By inverting, the only chain query is one cheap canonical-
+// hash lookup per unique BlockNum that has tracked entries, used to
+// confirm the recorded BlockHash is still on the canonical chain (and
+// thus the tx really is finalized). No tx iteration, no hashing, no
+// sender derivation against cold blocks.
 func (t *Tracker) collectFinalizationCredits() map[string]int {
 	credits := make(map[string]int)
 	finalHeader := t.chain.CurrentFinalBlock()
@@ -268,23 +288,39 @@ func (t *Tracker) collectFinalizationCredits() map[string]int {
 	if finalNum <= t.lastFinalNum {
 		return credits
 	}
-	for num := t.lastFinalNum + 1; num <= finalNum; num++ {
-		block := t.chain.GetBlockByNumber(num)
-		if block == nil {
+
+	// Group entries by their recorded BlockNum so the canonical-hash
+	// lookup happens once per height, not once per tx. The BlockNum range
+	// check filters both "not yet seen on chain" (BlockNum == 0) and
+	// "already credited in a prior pass" (BlockNum <= lastFinalNum); no
+	// separate status bookkeeping is needed.
+	buckets := make(map[uint64][]*TxInfo)
+	for _, ti := range t.txs {
+		if ti.BlockNum <= t.lastFinalNum || ti.BlockNum > finalNum {
 			continue
 		}
-		blockTime := block.Time()
-		for _, tx := range block.Transactions() {
-			ti, ok := t.txs[tx.Hash()]
-			if !ok || ti.AddedAt >= blockTime {
-				continue // unknown, or post-slot re-broadcast
+		buckets[ti.BlockNum] = append(buckets[ti.BlockNum], ti)
+	}
+
+	for num, tis := range buckets {
+		canonHash := t.chain.GetCanonicalHash(num)
+		if canonHash == (common.Hash{}) {
+			continue
+		}
+		for _, ti := range tis {
+			// BlockHash was recorded when the entry was first seen
+			// on chain. If it doesn't match the canonical hash now,
+			// the entry's recorded inclusion is in an orphaned
+			// block; skip rather than misreport finality.
+			if ti.BlockHash != canonHash {
+				continue
 			}
-			if _, ok := t.peers[ti.Deliverer]; !ok {
-				continue // peer disconnected, skip credit
+			if ti.Deliverer != "" {
+				credits[ti.Deliverer]++
 			}
-			credits[ti.Deliverer]++
 		}
 	}
+
 	if total := sumCounts(credits); total > 0 {
 		log.Trace("Accumulated finalization credits",
 			"from", t.lastFinalNum+1, "to", finalNum, "txs", total)

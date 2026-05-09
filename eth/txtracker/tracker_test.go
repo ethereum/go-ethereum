@@ -70,6 +70,12 @@ func (c *mockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return c.blocksByHash[hash]
 }
 
+func (c *mockChain) GetCanonicalHash(number uint64) common.Hash {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.canonicalByNum[number]
+}
+
 func (c *mockChain) CurrentFinalBlock() *types.Header {
 	c.mu.Lock()
 	defer c.mu.Unlock()
