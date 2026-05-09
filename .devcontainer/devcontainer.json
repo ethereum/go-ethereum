@@ -1,0 +1,36 @@
+{def start_hunt():
+    print("--- Forest Ghost Mysteries: The Close Call ---")
+    print("You are deep in the Blackwood Forest with your thermal camera.")
+    print("Suddenly, the temperature drops and a faint whisper calls your name...")
+    
+    # First Choice
+    choice1 = input("\nDo you [RUN] back to the van or [INVESTIGATE] the sound? ").strip().upper()
+
+    if choice1 == "INVESTIGATE":
+        investigate_path()
+    elif choice1 == "RUN":
+        print("\nYou trip over a root in the dark! The ghost catches up. Game Over.")
+    else:
+        print("\nIndecision is fatal in the forest. The ghost disappears, and so do you.")
+
+def investigate_path():
+    print("\nYou shine your light toward an ancient oak tree.")
+    print("A shadowy figure emerges! It's a Ghost Attack!")
+    
+    # Second Choice
+    choice2 = input("\nDo you use your [SALT] circle or try to [TALK] to it? ").strip().upper()
+    
+    if choice2 == "SALT":
+        print("\nThe ghost recoils from the salt barrier! You survived the close call.")
+        print("CONGRATULATIONS, GHOST HUNTER!")
+    elif choice2 == "TALK":
+        print("\nThe ghost wasn't looking for a conversation. You've been haunted! Game Over.")
+    else:
+        print("\nYou froze in fear. The mystery of the forest remains unsolved.")
+
+# This line starts the game
+if __name__ == "__main__":
+    start_hunt()
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "features": {}
+}
