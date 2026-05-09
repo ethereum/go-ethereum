@@ -27,7 +27,6 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
-	"strings"
 	"syscall"
 	"time"
 
@@ -90,7 +89,7 @@ In other words, this command does the snapshot to trie conversion.
 			},
 			{
 				Name:      "generate-trie",
-				Usage:     "Benchmark triedb.GenerateTrie against a hardlinked checkpoint of the chaindata",
+				Usage:     "Benchmark triedb.GenerateTrie against a hard-linked checkpoint of the chaindata",
 				ArgsUsage: "[<root>]",
 				Action:    benchGenerateTrie,
 				Flags: slices.Concat(utils.NetworkFlags, utils.DatabaseFlags, []cli.Flag{
@@ -106,7 +105,7 @@ In other words, this command does the snapshot to trie conversion.
 				Description: `
 geth snapshot generate-trie [<root>]
 
-Takes a pebble checkpoint of the chaindata (hardlinked SST files, near-zero
+Takes a pebble checkpoint of the chaindata (hard-linked SST files, near-zero
 disk usage and near-instant) and runs triedb.GenerateTrie against the
 checkpoint. The source datadir is opened read-only for the checkpoint and
 never written to. The checkpoint is removed on exit unless --keep is set,
@@ -322,7 +321,7 @@ func verifyState(ctx *cli.Context) error {
 	}
 }
 
-// benchGenerateTrie runs triedb.GenerateTrie against a hardlinked checkpoint
+// benchGenerateTrie runs triedb.GenerateTrie against a hard-linked checkpoint
 // of the chaindata so the source datadir is never written to.
 func benchGenerateTrie(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
@@ -362,7 +361,7 @@ func benchGenerateTrie(ctx *cli.Context) error {
 		}
 	}
 
-	// Default checkpoint sits next to chaindata so hardlinks work.
+	// Default checkpoint sits next to chaindata so hard links work.
 	ckpt := ctx.String("checkpoint")
 	if ckpt == "" {
 		ts := time.Now().Format("20060102-150405")
@@ -373,11 +372,11 @@ func benchGenerateTrie(ctx *cli.Context) error {
 	}
 
 	log.Info("creating pebble checkpoint", "src", srcDir, "dst", ckpt)
-	cpStart := time.Now()
+	checkpointStart := time.Now()
 	if err := makeCheckpoint(srcDir, ckpt); err != nil {
 		return fmt.Errorf("checkpoint failed: %w", err)
 	}
-	log.Info("checkpoint created", "elapsed", time.Since(cpStart))
+	log.Info("checkpoint created", "elapsed", time.Since(checkpointStart))
 
 	// Clean up the checkpoint on exit, including Ctrl-C.
 	keep := ctx.Bool("keep")
@@ -404,7 +403,7 @@ func benchGenerateTrie(ctx *cli.Context) error {
 	}()
 
 	// Open the checkpoint writable. Reuse source ancient. Checkpoint only
-	// hardlinks the pebble SSTs (not the freezer), and GenerateTrie never
+	// hard-links the pebble SSTs (not the freezer), and GenerateTrie never
 	// writes to ancient, so sharing it is safe.
 	srcAncient := stack.ResolveAncient("chaindata", "")
 	kv, err := pebble.New(ckpt, 4096, 1024, "gentrie-bench", false)
@@ -428,35 +427,30 @@ func benchGenerateTrie(ctx *cli.Context) error {
 
 	log.Info("running GenerateTrie", "scheme", scheme, "root", root)
 	runStart := time.Now()
-	err = triedb.GenerateTrie(chaindb, scheme, root, cancelCh)
+	stats, err := triedb.GenerateTrie(chaindb, scheme, root, cancelCh)
 	elapsed := time.Since(runStart)
+
+	status := "root matched"
 	if err != nil {
-		// On a mid-snap-sync datadir the reconstructed root won't match the
-		// expected one. Treat that as a warning so the benchmark still
-		// reports wall time. Real errors (iterator, write failures) propagate.
-		if strings.Contains(err.Error(), "state root mismatch") {
-			log.Warn("root mismatch (expected on partial snapshot)", "err", err)
-		} else {
-			log.Error("GenerateTrie failed", "elapsed", elapsed, "err", err)
-			return err
-		}
+		status = fmt.Sprintf("failed (%s)", err)
+		log.Error("GenerateTrie failed", "elapsed", elapsed, "err", err)
 	}
 
 	fmt.Printf("\n=== generate-trie benchmark ===\n")
-	fmt.Printf("source:     %s (untouched)\n", srcDir)
-	fmt.Printf("checkpoint: %s\n", ckpt)
-	fmt.Printf("scheme:     %s\n", scheme)
-	fmt.Printf("root:       %s\n", root.Hex())
-	fmt.Printf("wall time:  %s\n", elapsed)
-	return nil
+	fmt.Printf("scheme:    %s\n", scheme)
+	fmt.Printf("root:      %s\n", root.Hex())
+	fmt.Printf("status:    %s\n", status)
+	fmt.Printf("accounts:  %d (%d updated)\n", stats.Scanned, stats.Updated)
+	fmt.Printf("wall time: %s\n", elapsed)
+	return err
 }
 
-// makeCheckpoint opens srcDir as a pebble database and writes a hardlinked
+// makeCheckpoint opens srcDir as a pebble database and writes a hard-linked
 // checkpoint to dstDir. Source is closed on return.
 //
 // Opens read-write so pebble can finalize its startup (WAL replay, fresh
 // OPTIONS file) before checkpointing. Read-only mode skips that step, and
-// Checkpoint then fails trying to hardlink the missing OPTIONS file. The
+// Checkpoint then fails trying to hard-link the missing OPTIONS file. The
 // read-write open does no more than a normal geth startup would.
 func makeCheckpoint(srcDir, dstDir string) error {
 	db, err := pebbleimpl.Open(srcDir, &pebbleimpl.Options{})

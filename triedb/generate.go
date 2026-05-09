@@ -19,6 +19,7 @@ package triedb
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	"sync/atomic"
@@ -41,9 +42,26 @@ import (
 // channel before completing.
 var ErrCancelled = internal.ErrCancelled
 
+// GenerateStats reports per-run counters from GenerateTrie. Scanned is
+// the number of accounts walked, Updated is how many had a stale Root
+// field that was rewritten to match the recomputed storage root.
+type GenerateStats struct {
+	Scanned int64
+	Updated int64
+}
+
 // numPartitions is the number of slices the account hash space is divided
 // into by GenerateTrie.
 const numPartitions = 16
+
+// Each partition covers 1/16 of the account hash space. We track progress
+// by interpreting the top 8 bytes of an account hash as a uint64, so each
+// partition spans 2^64 / 16 = 2^60. partitionFinished is stored in a
+// partition's position when it completes.
+const (
+	partitionRangeSize = uint64(1) << 60
+	partitionFinished  = ^uint64(0)
+)
 
 // rangeIterators bundles the per-partition account and storage iterators.
 type rangeIterators struct {
@@ -100,7 +118,7 @@ func reopenFlatIterator(db ethdb.Database, old *internal.HoldableIterator, prefi
 // both per-account storage subtries and the partition's slice of the
 // account trie. Returns the raw (unstripped) partition root blob, or
 // nil if the partition had no accounts at all.
-func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Database, scheme string, partition byte, rangeStart, rangeEnd common.Hash, scanned, updated *atomic.Int64) ([]byte, error) {
+func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Database, scheme string, partition byte, rangeStart, rangeEnd common.Hash, scanned, updated *atomic.Int64, pos *atomic.Uint64) ([]byte, error) {
 	iters := openRangeIterators(db, rangeStart)
 	defer iters.release()
 	batch := db.NewBatch()
@@ -133,6 +151,7 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 			break
 		}
 		scanned.Add(1)
+		pos.Store(binary.BigEndian.Uint64(accountHash[:8]))
 		account, err := types.FullAccount(iters.acct.Value())
 		if err != nil {
 			return nil, fmt.Errorf("decode account %x: %w", accountHash, err)
@@ -275,12 +294,17 @@ func hashRanges(total int) [][2]common.Hash {
 // previous run is skipped. Its subtree blob is read from the marker
 // and handed to assembleRoot directly. On a mid-run crash, only the
 // in-flight partition(s) are redone.
-func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-chan struct{}) error {
+func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-chan struct{}) (GenerateStats, error) {
 	start := time.Now()
 	var (
-		scanned atomic.Int64
-		updated atomic.Int64
+		scanned      atomic.Int64
+		updated      atomic.Int64
+		partitionPos [numPartitions]atomic.Uint64
 	)
+
+	progressDone := make(chan struct{})
+	go tickProgress(progressDone, start, &scanned, &updated, &partitionPos)
+	defer close(progressDone)
 
 	// partitionBlobs[i] holds the raw (unstripped) StackTrie root node
 	// blob for partition i, or nil if the partition is empty.
@@ -296,13 +320,17 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 		rangeStart, rangeEnd := r[0], r[1]
 		if blob, ok := rawdb.ReadGenerateTriePartitionDone(db, partition); ok {
 			partitionBlobs[partition] = blob
+			partitionPos[partition].Store(partitionFinished)
 			continue
 		}
 		eg.Go(func() error {
-			blob, err := generatePartition(ctx, cancel, db, scheme, partition, rangeStart, rangeEnd, &scanned, &updated)
+			partitionStart := time.Now()
+			blob, err := generatePartition(ctx, cancel, db, scheme, partition, rangeStart, rangeEnd, &scanned, &updated, &partitionPos[partition])
 			if err != nil {
 				return err
 			}
+			log.Info("Partition done", "partition", partition, "elapsed", common.PrettyDuration(time.Since(partitionStart)))
+			partitionPos[partition].Store(partitionFinished)
 			partitionBlobs[partition] = blob
 			// Record completion only after the partition's batch has
 			// flushed inside generatePartition, so this marker appears
@@ -311,8 +339,11 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 			return nil
 		})
 	}
+	stats := func() GenerateStats {
+		return GenerateStats{Scanned: scanned.Load(), Updated: updated.Load()}
+	}
 	if err := eg.Wait(); err != nil {
-		return err
+		return stats(), err
 	}
 
 	// Assemble the top-level root from the partition blobs, verify it
@@ -320,20 +351,21 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 	// success.
 	got, err := assembleRoot(db, scheme, partitionBlobs)
 	if err != nil {
-		return fmt.Errorf("assemble root: %w", err)
+		return stats(), fmt.Errorf("assemble root: %w", err)
 	}
 	if got != root {
-		return fmt.Errorf("state root mismatch: got %x, want %x", got, root)
+		return stats(), fmt.Errorf("state root mismatch: got %x, want %x", got, root)
 	}
 	batch := db.NewBatch()
 	for i := range numPartitions {
 		rawdb.DeleteGenerateTriePartitionDone(batch, byte(i))
 	}
 	if err := batch.Write(); err != nil {
-		return fmt.Errorf("clear partition markers: %w", err)
+		return stats(), fmt.Errorf("clear partition markers: %w", err)
 	}
-	log.Info("Generated state trie", "scanned", scanned.Load(), "updated", updated.Load(), "elapsed", common.PrettyDuration(time.Since(start)))
-	return nil
+	final := stats()
+	log.Info("Generated state trie", "scanned", final.Scanned, "updated", final.Updated, "elapsed", common.PrettyDuration(time.Since(start)))
+	return final, nil
 }
 
 // assembleRoot computes the canonical state root from the 16 raw
@@ -407,4 +439,57 @@ func assembleRoot(db ethdb.Database, scheme string, partitionBlobs [numPartition
 		return common.Hash{}, fmt.Errorf("write root branch: %w", err)
 	}
 	return rootHash, nil
+}
+
+// tickProgress logs an aggregate progress line every 30 seconds until done
+// is closed. Cheap: a handful of atomic loads and one log line per tick.
+func tickProgress(done <-chan struct{}, start time.Time, scanned, updated *atomic.Int64, positions *[numPartitions]atomic.Uint64) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+			elapsed := time.Since(start)
+			fraction := progressFraction(positions)
+			eta := "n/a"
+			if fraction > 0.005 {
+				eta = common.PrettyDuration(time.Duration(float64(elapsed) * (1.0/fraction - 1.0))).String()
+			}
+			s, u := scanned.Load(), updated.Load()
+			log.Info("Generating trie",
+				"progress", fmt.Sprintf("%.1f%%", fraction*100),
+				"eta", eta,
+				"scanned", s, "updated", u,
+				"elapsed", common.PrettyDuration(elapsed),
+				"acct/s", uint64(float64(s)/elapsed.Seconds()))
+		}
+	}
+}
+
+// progressFraction averages each partition's iterator position (as a fraction
+// of its hash range) into an overall completion estimate in [0, 1]. Keccak
+// hashes are uniform, so keyspace position is a good proxy for work done.
+func progressFraction(positions *[numPartitions]atomic.Uint64) float64 {
+	var total float64
+	for i := range numPartitions {
+		p := positions[i].Load()
+		switch {
+		case p == partitionFinished:
+			total += 1.0
+		case p == 0:
+			// not started yet
+		default:
+			rangeStart := uint64(i) * partitionRangeSize
+			if p > rangeStart {
+				rel := p - rangeStart
+				if rel > partitionRangeSize {
+					rel = partitionRangeSize
+				}
+				total += float64(rel) / float64(partitionRangeSize)
+			}
+		}
+	}
+	return total / float64(numPartitions)
 }

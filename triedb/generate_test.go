@@ -77,7 +77,7 @@ func computeStorageRootFromSlots(slots []testSlot) common.Hash {
 
 func TestGenerateTrieEmpty(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	if err := GenerateTrie(db, rawdb.HashScheme, types.EmptyRootHash, nil); err != nil {
+	if _, err := GenerateTrie(db, rawdb.HashScheme, types.EmptyRootHash, nil); err != nil {
 		t.Fatalf("GenerateTrie on empty state failed: %v", err)
 	}
 }
@@ -110,7 +110,7 @@ func TestGenerateTrieAccountsOnly(t *testing.T) {
 	}
 	root := buildExpectedRoot(t, accounts)
 
-	if err := GenerateTrie(db, rawdb.HashScheme, root, nil); err != nil {
+	if _, err := GenerateTrie(db, rawdb.HashScheme, root, nil); err != nil {
 		t.Fatalf("GenerateTrie failed: %v", err)
 	}
 }
@@ -157,7 +157,7 @@ func TestGenerateTrieWithStorage(t *testing.T) {
 	}
 	root := buildExpectedRoot(t, accounts)
 
-	if err := GenerateTrie(db, rawdb.HashScheme, root, nil); err != nil {
+	if _, err := GenerateTrie(db, rawdb.HashScheme, root, nil); err != nil {
 		t.Fatalf("GenerateTrie failed: %v", err)
 	}
 }
@@ -174,7 +174,7 @@ func TestGenerateTrieRootMismatch(t *testing.T) {
 	rawdb.WriteAccountSnapshot(db, common.HexToHash("0x01"), types.SlimAccountRLP(acct))
 
 	wrongRoot := common.HexToHash("0xdeadbeef")
-	err := GenerateTrie(db, rawdb.HashScheme, wrongRoot, nil)
+	_, err := GenerateTrie(db, rawdb.HashScheme, wrongRoot, nil)
 	if err == nil {
 		t.Fatal("expected error for root mismatch, got nil")
 	}
@@ -235,7 +235,7 @@ func TestGenerateTrieFixesStaleRoots(t *testing.T) {
 		rawdb.WriteAccountSnapshot(db, a.hash, types.SlimAccountRLP(onDisk))
 	}
 
-	if err := GenerateTrie(db, rawdb.HashScheme, expectedRoot, nil); err != nil {
+	if _, err := GenerateTrie(db, rawdb.HashScheme, expectedRoot, nil); err != nil {
 		t.Fatalf("GenerateTrie failed: %v", err)
 	}
 }
@@ -257,7 +257,7 @@ func TestGenerateTrieCancel(t *testing.T) {
 
 	cancel := make(chan struct{})
 	close(cancel)
-	if err := GenerateTrie(db, rawdb.HashScheme, common.Hash{}, cancel); err != ErrCancelled {
+	if _, err := GenerateTrie(db, rawdb.HashScheme, common.Hash{}, cancel); err != ErrCancelled {
 		t.Fatalf("expected ErrCancelled, got %v", err)
 	}
 }
@@ -299,7 +299,7 @@ func TestGenerateTrieOrphanStorage(t *testing.T) {
 
 	expectedRoot := buildExpectedRoot(t, []testAccount{acc})
 
-	if err := GenerateTrie(db, rawdb.HashScheme, expectedRoot, nil); err != nil {
+	if _, err := GenerateTrie(db, rawdb.HashScheme, expectedRoot, nil); err != nil {
 		t.Fatalf("GenerateTrie with orphan storage failed: %v", err)
 	}
 }
@@ -336,7 +336,8 @@ func TestGenerateTriePartialResume(t *testing.T) {
 	ranges := hashRanges(numPartitions)
 	blobs := make([][]byte, numPartitions)
 	for i, r := range ranges {
-		blob, err := generatePartition(context.Background(), nil, db, rawdb.HashScheme, byte(i), r[0], r[1], &scanned, &updated)
+		var pos atomic.Uint64
+		blob, err := generatePartition(context.Background(), nil, db, rawdb.HashScheme, byte(i), r[0], r[1], &scanned, &updated, &pos)
 		if err != nil {
 			t.Fatalf("pre-run partition %d: %v", i, err)
 		}
@@ -368,7 +369,7 @@ func TestGenerateTriePartialResume(t *testing.T) {
 	// Step 5: run GenerateTrie. Success implies resume actually consulted
 	// the markers — without it, even partitions would yield nil blobs and
 	// the root check inside GenerateTrie would fail.
-	if err := GenerateTrie(db, rawdb.HashScheme, expectedRoot, nil); err != nil {
+	if _, err := GenerateTrie(db, rawdb.HashScheme, expectedRoot, nil); err != nil {
 		t.Fatalf("partial-resume GenerateTrie failed: %v", err)
 	}
 
