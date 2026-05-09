@@ -88,7 +88,9 @@ func reopenFlatIterator(db ethdb.Database, old *internal.HoldableIterator, prefi
 		old.Release()
 		return internal.NewHoldableIterator(memorydb.New().NewIterator(nil, nil))
 	}
-	next := old.Key()
+	// pebble's Key() slice is invalidated by Release. Copy first so the new
+	// iterator's lower bound isn't seeded from freed memory.
+	next := common.CopyBytes(old.Key())
 	old.Release()
 	return openFlatIterator(db, prefix, next[len(prefix):], suffixLen)
 }
