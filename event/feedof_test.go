@@ -70,6 +70,28 @@ func TestFeedOf(t *testing.T) {
 	done.Wait()
 }
 
+// TestFeedOfSendNilAnySucceeds is a regression check: FeedOf[any].Send(nil) used to fail
+// (panic from Invalid reflect.Value on reflect.SelectCase, or silent non-delivery from
+// TrySend) because nil stored in interface{} does not satisfy reflect.ValueOf(value).Valid().
+// Send must succeed and deliver nil to every subscriber.
+func TestFeedOfSendNilAnySucceeds(t *testing.T) {
+	var feed FeedOf[any]
+	ch1 := make(chan any, 1)
+	ch2 := make(chan any, 1)
+	defer feed.Subscribe(ch1).Unsubscribe()
+	defer feed.Subscribe(ch2).Unsubscribe()
+
+	if nsent := feed.Send(nil); nsent != 2 {
+		t.Fatalf("Send(nil) nsent=%d, want 2 (failed delivery before reflect fix)", nsent)
+	}
+	for i, ch := range []chan any{ch1, ch2} {
+		got := <-ch
+		if got != nil {
+			t.Fatalf("subscriber %d: got %#v, want nil", i, got)
+		}
+	}
+}
+
 func TestFeedOfSubscribeSameChannel(t *testing.T) {
 	var (
 		feed FeedOf[int]
