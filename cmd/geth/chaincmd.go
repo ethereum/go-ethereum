@@ -325,7 +325,7 @@ func dumpGenesis(ctx *cli.Context) error {
 	var genesis *core.Genesis
 	if utils.IsNetworkPreset(ctx) {
 		genesis = utils.MakeGenesis(ctx)
-	} else if ctx.IsSet(utils.DeveloperFlag.Name) && !ctx.IsSet(utils.DataDirFlag.Name) {
+	} else if ctx.Bool(utils.DeveloperFlag.Name) && !ctx.IsSet(utils.DataDirFlag.Name) {
 		genesis = core.DeveloperGenesisBlock(11_500_000, nil)
 	}
 
