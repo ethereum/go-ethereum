@@ -75,6 +75,23 @@ func Env() Environment {
 			IsPullRequest: os.Getenv("TRAVIS_PULL_REQUEST") != "false",
 			IsCronJob:     os.Getenv("TRAVIS_EVENT_TYPE") == "cron",
 		}
+	case os.Getenv("CI") == "True" && os.Getenv("APPVEYOR") == "True":
+		commit := os.Getenv("APPVEYOR_PULL_REQUEST_HEAD_COMMIT")
+		if commit == "" {
+			commit = os.Getenv("APPVEYOR_REPO_COMMIT")
+		}
+		return Environment{
+			CI:            true,
+			Name:          "appveyor",
+			Repo:          os.Getenv("APPVEYOR_REPO_NAME"),
+			Commit:        commit,
+			Date:          getDate(commit),
+			Branch:        os.Getenv("APPVEYOR_REPO_BRANCH"),
+			Tag:           os.Getenv("APPVEYOR_REPO_TAG_NAME"),
+			Buildnum:      os.Getenv("APPVEYOR_BUILD_NUMBER"),
+			IsPullRequest: os.Getenv("APPVEYOR_PULL_REQUEST_NUMBER") != "",
+			IsCronJob:     os.Getenv("APPVEYOR_SCHEDULED_BUILD") == "True",
+		}
 	case os.Getenv("CI") == "true" && os.Getenv("GITHUB_ACTIONS") == "true":
 		commit := os.Getenv("GITHUB_SHA")
 		reftype := os.Getenv("GITHUB_REF_TYPE")
