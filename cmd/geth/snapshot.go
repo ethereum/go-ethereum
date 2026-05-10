@@ -22,9 +22,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sort"
 	"syscall"
@@ -101,17 +104,17 @@ In other words, this command does the snapshot to trie conversion.
 						Name:  "keep",
 						Usage: "Keep the checkpoint directory after the run (debugging)",
 					},
+					&cli.BoolFlag{
+						Name:  "pprof",
+						Usage: "Serve pprof profiles on localhost:6060 (block + mutex profiles enabled)",
+					},
 				}),
 				Description: `
 geth snapshot generate-trie [<root>]
 
-Takes a pebble checkpoint of the chaindata (hard-linked SST files, near-zero
-disk usage and near-instant) and runs triedb.GenerateTrie against the
-checkpoint. The source datadir is opened read-only for the checkpoint and
-never written to. The checkpoint is removed on exit unless --keep is set,
-including on Ctrl-C.
-
-If <root> is not given, the head block's root is used.
+Runs triedb.GenerateTrie against a hard-linked pebble checkpoint of the
+chaindata. Checkpoint is removed on exit unless --keep is set. Defaults 
+to the snapshot root if <root> is not given.
 `,
 			},
 			{
@@ -326,6 +329,17 @@ func verifyState(ctx *cli.Context) error {
 func benchGenerateTrie(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
+
+	if ctx.Bool("pprof") {
+		runtime.SetBlockProfileRate(1)
+		runtime.SetMutexProfileFraction(1)
+		go func() {
+			log.Info("pprof listening", "addr", ":6060")
+			if err := http.ListenAndServe(":6060", nil); err != nil {
+				log.Warn("pprof server stopped", "err", err)
+			}
+		}()
+	}
 
 	// Resolve source chaindata path (handles network-specific subdirs).
 	srcDir := stack.ResolvePath("chaindata")
