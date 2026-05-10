@@ -627,7 +627,9 @@ func (b *simBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types
 	if b.base.Hash() == hash {
 		return b.base, nil
 	}
-	if header, err := b.b.HeaderByHash(ctx, hash); err == nil {
+	if header, err := b.b.HeaderByHash(ctx, hash); err != nil {
+		return nil, err
+	} else if header != nil {
 		return header, nil
 	}
 	// Check simulated headers
