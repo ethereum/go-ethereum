@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"golang.org/x/net/proxy"
 )
 
 const (
@@ -63,11 +64,28 @@ type nodeResolver interface {
 
 // tcpDialer implements NodeDialer using real TCP connections.
 type tcpDialer struct {
-	d *net.Dialer
+	d        *net.Dialer
+	useProxy bool
 }
+
+// dialerWithContext is an interface implemented by proxy dialers that support context-aware dialing.
+// see proxy/direct#direct, proxy.SOCKS5() and internal/socks#Dialer.
+type dialerWithContext interface {
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+}
+
+var proxyDialer = proxy.FromEnvironment()
 
 func (t tcpDialer) Dial(ctx context.Context, dest *enode.Node) (net.Conn, error) {
 	addr, _ := dest.TCPEndpoint()
+	if t.useProxy {
+		log.Debug("Dialing peer via proxy", "direct", proxyDialer == proxy.Direct, "addr", addr.String())
+		if v, ok := proxyDialer.(dialerWithContext); ok {
+			return v.DialContext(ctx, "tcp", addr.String())
+		} else {
+			log.Warn("Proxy dialer does not support context, falling back to direct", "addr", addr.String())
+		}
+	}
 	return t.d.DialContext(ctx, "tcp", addr.String())
 }
 
