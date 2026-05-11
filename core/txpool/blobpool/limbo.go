@@ -215,8 +215,15 @@ func (l *limbo) update(txhash common.Hash, block uint64) {
 		return
 	}
 	// New entry created successfully, now drop the old one.
-	if err := l.dropStore(oldID, item); err != nil {
+	// Do not use dropStore here - it deletes l.index[txhash] which
+	// already points to newID after setAndIndex. Only clean store
+	// and groups entries, leaving the index mapping intact.
+	if err := l.store.Delete(oldID); err != nil {
 		log.Error("failed to drop old limboed blob slot", "id", oldID, "err", err)
+	}
+	delete(l.groups[item.Block], oldID)
+	if len(l.groups[item.Block]) == 0 {
+		delete(l.groups, item.Block)
 	}
 	log.Trace("Blob transaction updated in limbo", "tx", txhash, "old-block", item.Block, "new-block", block)
 }
@@ -235,8 +242,8 @@ func (l *limbo) peek(id uint64) (*limboBlob, error) {
 	return item, nil
 }
 
-// dropStore deletes a blob item from the store and indices.
-// Used by update to remove the old entry after successful setAndIndex.
+// dropStore deletes a blob item from the store and in-memory indices.
+// Used by getAndDrop/pull for full removal of a limbo entry.
 func (l *limbo) dropStore(id uint64, item *limboBlob) error {
 	if err := l.store.Delete(id); err != nil {
 		return err
