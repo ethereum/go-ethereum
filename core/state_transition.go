@@ -18,7 +18,6 @@ package core
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -369,7 +368,7 @@ func (st *stateTransition) buyGas() error {
 	mgval := new(uint256.Int).SetUint64(st.msg.GasLimit)
 	_, overflow := mgval.MulOverflow(mgval, st.msg.GasPrice)
 	if overflow {
-		return errors.New("gas cost exceeds 256 bits")
+		return fmt.Errorf("%w: address %v required balance exceeds 256 bits", ErrInsufficientFunds, st.msg.From.Hex())
 	}
 	balanceCheck := new(uint256.Int).Set(mgval)
 	if st.msg.GasFeeCap != nil {
@@ -406,11 +405,11 @@ func (st *stateTransition) buyGas() error {
 			// an excessively large blob base fee and bypass the blob base fee validation.
 			_, overflow = blobFee.MulOverflow(blobFee, blobBaseFee)
 			if overflow {
-				return errors.New("blobFee exceeds 256 bits")
+				return fmt.Errorf("%w: address %v required balance exceeds 256 bits", ErrInsufficientFunds, st.msg.From.Hex())
 			}
 			_, overflow = mgval.AddOverflow(mgval, blobFee)
 			if overflow {
-				return errors.New("gas cost exceeds 256 bits")
+				return fmt.Errorf("%w: address %v required balance exceeds 256 bits", ErrInsufficientFunds, st.msg.From.Hex())
 			}
 		}
 	}
