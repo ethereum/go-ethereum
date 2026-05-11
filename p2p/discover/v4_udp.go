@@ -355,7 +355,10 @@ func (t *UDPv4) findnode(toid enode.ID, toAddrPort netip.AddrPort, target v4wire
 
 // RequestENR sends ENRRequest to the given node and waits for a response.
 func (t *UDPv4) RequestENR(n *enode.Node) (*enode.Node, error) {
-	addr, _ := n.UDPEndpoint()
+	addr, ok := n.UDPEndpoint()
+	if !ok {
+		return nil, errNoUDPEndpoint
+	}
 	t.ensureBond(n.ID(), addr)
 
 	req := &v4wire.ENRRequest{
