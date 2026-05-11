@@ -372,9 +372,9 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			// as per EIP-4788.
 			context := core.NewEVMBlockContext(next.Header(), api.chainContext(ctx), nil)
 			evm := vm.NewEVM(context, statedb, api.backend.ChainConfig(), vm.Config{})
-			defer evm.Release()
 
 			core.PreExecution(ctx, next.BeaconRoot(), next.ParentHash(), api.backend.ChainConfig(), evm, next.Number(), next.Time())
+			evm.Release()
 			// Clean out any pending release functions of trace state. Note this
 			// step must be done after constructing tracing state, because the
 			// tracing state of block next depends on the parent state and construction
