@@ -34,8 +34,7 @@ const (
 	// shards and reduce mutex contention from the parallel prefetcher.
 	jumpDestBuckets = 8
 
-	// jumpDestBucketSize is the per-shard byte budget. Total cache size is
-	// jumpDestBuckets * jumpDestBucketSize.
+	// jumpDestBucketSize is the per-shard byte budget.
 	jumpDestBucketSize = 8 * 1024 * 1024
 )
 
