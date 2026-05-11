@@ -2680,6 +2680,67 @@ func TestSimulateV1TxSender(t *testing.T) {
 	require.Equal(t, sender2, summary[1].Transactions[0].From, "sender address mismatch")
 }
 
+// TestSimulateV1WithdrawalsByFork verifies that withdrawals and withdrawalsRoot
+// are only emitted in the simulated block result when the simulated block is
+// post-Shanghai. Pre-Shanghai blocks must omit both fields, otherwise the
+// header hash and size would not match a valid pre-Shanghai block.
+func TestSimulateV1WithdrawalsByFork(t *testing.T) {
+	t.Parallel()
+
+	run := func(t *testing.T, cfg *params.ChainConfig, blockTime *uint64, wantWithdrawals bool) {
+		t.Helper()
+		gspec := &core.Genesis{Config: cfg, Alloc: types.GenesisAlloc{}}
+		backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+
+		ctx := context.Background()
+		stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+		if err != nil {
+			t.Fatalf("failed to get state and header: %v", err)
+		}
+		sim := &simulator{
+			b:           backend,
+			state:       stateDB,
+			base:        baseHeader,
+			chainConfig: backend.ChainConfig(),
+			budget:      newGasBudget(0),
+		}
+
+		block := simBlock{}
+		if blockTime != nil {
+			t := hexutil.Uint64(*blockTime)
+			block.BlockOverrides = &override.BlockOverrides{Time: &t}
+		}
+		results, err := sim.execute(ctx, []simBlock{block})
+		if err != nil {
+			t.Fatalf("simulation execution failed: %v", err)
+		}
+		require.Len(t, results, 1)
+
+		enc, err := json.Marshal(results[0])
+		if err != nil {
+			t.Fatalf("failed to marshal result: %v", err)
+		}
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(enc, &raw); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+		_, hasWithdrawals := raw["withdrawals"]
+		_, hasWithdrawalsRoot := raw["withdrawalsRoot"]
+		if hasWithdrawals != wantWithdrawals || hasWithdrawalsRoot != wantWithdrawals {
+			t.Fatalf("unexpected withdrawals fields: withdrawals=%v withdrawalsRoot=%v want=%v\n%s", hasWithdrawals, hasWithdrawalsRoot, wantWithdrawals, enc)
+		}
+	}
+
+	t.Run("pre-shanghai", func(t *testing.T) {
+		// TestChainConfig has ShanghaiTime=nil, so all simulated blocks are pre-Shanghai.
+		run(t, params.TestChainConfig, nil, false)
+	})
+	t.Run("post-shanghai", func(t *testing.T) {
+		// MergedTestChainConfig has every fork active from genesis.
+		run(t, params.MergedTestChainConfig, nil, true)
+	})
+}
+
 func TestSignTransaction(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
