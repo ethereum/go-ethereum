@@ -144,7 +144,7 @@ func postExecution(ctx context.Context, config *params.ChainConfig, block *types
 	if config.IsPrague(block.Number(), block.Time()) {
 		requests = [][]byte{}
 		// EIP-6110
-		if err := ParseDepositLogs(&requests, allLogs, config); err != nil {
+		if err := ParseDepositLogs(&requests, allLogs, config, block.Number(), block.Time()); err != nil {
 			return requests, fmt.Errorf("failed to parse deposit logs: %w", err)
 		}
 		// EIP-7002
@@ -348,20 +348,46 @@ func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte
 	return nil
 }
 
-var depositTopic = common.HexToHash("0x649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5")
+// DepositTopic is the topic hash of the EIP-6110 DepositEvent.
+var DepositTopic = common.HexToHash("0x649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5")
+
+// IsDepositLog reports whether the log is an EIP-6110 deposit event emitted
+// by the given deposit contract address.
+func IsDepositLog(log *types.Log, depositContract common.Address) bool {
+	return log.Address == depositContract && len(log.Topics) > 0 && log.Topics[0] == DepositTopic
+}
+
+// CountDepositLogs returns the number of EIP-6110 deposit events present in
+// the given logs.
+func CountDepositLogs(logs []*types.Log, depositContract common.Address) int {
+	count := 0
+	for _, log := range logs {
+		if IsDepositLog(log, depositContract) {
+			count++
+		}
+	}
+	return count
+}
 
 // ParseDepositLogs extracts the EIP-6110 deposit values from logs emitted by
-// BeaconDepositContract.
-func ParseDepositLogs(requests *[][]byte, logs []*types.Log, config *params.ChainConfig) error {
+// BeaconDepositContract. From the Amsterdam fork onwards the number of
+// deposits per block is capped to params.MaxDepositRequestsPerBlock by
+// EIP-8254.
+func ParseDepositLogs(requests *[][]byte, logs []*types.Log, config *params.ChainConfig, blockNumber *big.Int, blockTime uint64) error {
 	deposits := make([]byte, 1) // note: first byte is 0x00 (== deposit request type)
+	count := 0
 	for _, log := range logs {
-		if log.Address == config.DepositContractAddress && len(log.Topics) > 0 && log.Topics[0] == depositTopic {
+		if IsDepositLog(log, config.DepositContractAddress) {
 			request, err := types.DepositLogToRequest(log.Data)
 			if err != nil {
 				return fmt.Errorf("unable to parse deposit data: %v", err)
 			}
 			deposits = append(deposits, request...)
+			count++
 		}
+	}
+	if config.IsAmsterdam(blockNumber, blockTime) && count > params.MaxDepositRequestsPerBlock {
+		return fmt.Errorf("too many deposit requests in block: have %d, max %d", count, params.MaxDepositRequestsPerBlock)
 	}
 	if len(deposits) > 1 {
 		*requests = append(*requests, deposits)

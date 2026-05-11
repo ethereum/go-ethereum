@@ -186,6 +186,8 @@ const (
 	HistoryServeWindow = 8191 // Number of blocks to serve historical block hashes for, EIP-2935.
 
 	MaxBlockSize = 8_388_608 // maximum size of an RLP-encoded block
+
+	MaxDepositRequestsPerBlock = 8192 // Maximum number of EIP-6110 deposit requests per block, EIP-8254.
 )
 
 // Bls12381G1MultiExpDiscountTable is the gas discount table for BLS12-381 G1 multi exponentiation operation

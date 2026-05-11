@@ -43,6 +43,10 @@ var (
 	errBlockInterruptedByNewHead  = errors.New("new head arrived while building block")
 	errBlockInterruptedByRecommit = errors.New("recommit interrupt while building block")
 	errBlockInterruptedByTimeout  = errors.New("timeout while building block")
+
+	// errDepositCapExceeded is returned when including a transaction would
+	// push the block over the EIP-8254 deposit-request cap.
+	errDepositCapExceeded = errors.New("deposit request cap exceeded")
 )
 
 // maxBlobsPerBlock returns the maximum number of blobs per block.
@@ -66,11 +70,12 @@ type environment struct {
 	coinbase common.Address
 	evm      *vm.EVM
 
-	header   *types.Header
-	txs      []*types.Transaction
-	receipts []*types.Receipt
-	sidecars []*types.BlobTxSidecar
-	blobs    int
+	header          *types.Header
+	txs             []*types.Transaction
+	receipts        []*types.Receipt
+	sidecars        []*types.BlobTxSidecar
+	blobs           int
+	depositRequests int // running count of EIP-6110 deposit requests, capped by EIP-8254
 
 	witness *stateless.Witness
 }
@@ -212,7 +217,7 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	if miner.chainConfig.IsPrague(work.header.Number, work.header.Time) {
 		requests = [][]byte{}
 		// EIP-6110 deposits
-		if err := core.ParseDepositLogs(&requests, allLogs, miner.chainConfig); err != nil {
+		if err := core.ParseDepositLogs(&requests, allLogs, miner.chainConfig, work.header.Number, work.header.Time); err != nil {
 			return &newPayloadResult{err: err}
 		}
 		// EIP-7002
@@ -372,8 +377,11 @@ func (miner *Miner) commitTransaction(ctx context.Context, env *environment, tx 
 	if tx.Type() == types.BlobTxType {
 		return miner.commitBlobTransaction(env, tx)
 	}
-	receipt, err := miner.applyTransaction(env, tx)
+	receipt, snap, gp, err := miner.applyTransaction(env, tx)
 	if err != nil {
+		return err
+	}
+	if err := miner.checkDepositCap(env, receipt, snap, gp); err != nil {
 		return err
 	}
 	env.txs = append(env.txs, tx)
@@ -396,8 +404,11 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 	if env.blobs+len(sc.Blobs) > maxBlobs {
 		return errors.New("max data blobs reached")
 	}
-	receipt, err := miner.applyTransaction(env, tx)
+	receipt, snap, gp, err := miner.applyTransaction(env, tx)
 	if err != nil {
+		return err
+	}
+	if err := miner.checkDepositCap(env, receipt, snap, gp); err != nil {
 		return err
 	}
 	txNoBlob := tx.WithoutBlobTxSidecar()
@@ -412,7 +423,9 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 }
 
 // applyTransaction runs the transaction. If execution fails, state and gas pool are reverted.
-func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*types.Receipt, error) {
+// On success the pre-execution snapshot/gas-pool checkpoint are returned so the
+// caller can revert if a post-execution constraint (e.g. EIP-8254 deposit cap) fails.
+func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*types.Receipt, int, *core.GasPool, error) {
 	var (
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Snapshot()
@@ -421,10 +434,32 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.Set(gp)
-		return nil, err
+		return nil, 0, nil, err
 	}
 	env.header.GasUsed = env.gasPool.Used()
-	return receipt, nil
+	return receipt, snap, gp, nil
+}
+
+// checkDepositCap enforces the EIP-8254 cap on deposit requests per block.
+// If including the receipt would push the running deposit count over
+// params.MaxDepositRequestsPerBlock, the state and gas pool are reverted to
+// the pre-execution checkpoint and errDepositCapExceeded is returned.
+func (miner *Miner) checkDepositCap(env *environment, receipt *types.Receipt, snap int, gp *core.GasPool) error {
+	if !miner.chainConfig.IsAmsterdam(env.header.Number, env.header.Time) {
+		return nil
+	}
+	added := core.CountDepositLogs(receipt.Logs, miner.chainConfig.DepositContractAddress)
+	if added == 0 {
+		return nil
+	}
+	if env.depositRequests+added > params.MaxDepositRequestsPerBlock {
+		env.state.RevertToSnapshot(snap)
+		env.gasPool.Set(gp)
+		env.header.GasUsed = env.gasPool.Used()
+		return errDepositCapExceeded
+	}
+	env.depositRequests += added
+	return nil
 }
 
 func (miner *Miner) commitTransactions(ctx context.Context, env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
@@ -522,6 +557,13 @@ func (miner *Miner) commitTransactions(ctx context.Context, env *environment, pl
 
 		err := miner.commitTransaction(ctx, env, tx)
 		switch {
+		case errors.Is(err, errDepositCapExceeded):
+			// EIP-8254: including this tx would push the block past the
+			// deposit-request cap. Skip this sender; subsequent senders may
+			// still produce non-deposit-bearing transactions that fit.
+			log.Trace("Skipping tx that would exceed deposit-request cap", "hash", ltx.Hash, "sender", from)
+			txs.Pop()
+
 		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
 			log.Trace("Skipping transaction with low nonce", "hash", ltx.Hash, "sender", from, "nonce", tx.Nonce())

@@ -322,7 +322,7 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 		for _, r := range b.receipts {
 			blockLogs = append(blockLogs, r.Logs...)
 		}
-		if err := ParseDepositLogs(&requests, blockLogs, b.cm.config); err != nil {
+		if err := ParseDepositLogs(&requests, blockLogs, b.cm.config, b.header.Number, b.header.Time); err != nil {
 			panic(fmt.Sprintf("failed to parse deposit log: %v", err))
 		}
 		// create EVM for system calls
