@@ -520,7 +520,6 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		vmctx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
 		evm                = vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
-		logs               []*types.Log
 	)
 	defer evm.Release()
 	// Run pre-execution system calls
@@ -545,7 +544,6 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		// Calling IntermediateRoot will internally call Finalize on the state
 		// so any modifications are written to the trie
 		roots = append(roots, statedb.IntermediateRoot(deleteEmptyObjects))
-		logs = append(logs, statedb.GetLogs(tx.Hash(), block.NumberU64(), block.Hash(), block.Time())...)
 	}
 	return roots, nil
 }
