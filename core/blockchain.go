@@ -324,7 +324,7 @@ type BlockChain struct {
 	flushInterval atomic.Int64                     // Time interval (processing time) after which to flush a state
 	triedb        *triedb.Database                 // The database handler for maintaining trie nodes.
 	codedb        *state.CodeDB                    // The database handler for maintaining contract codes.
-	jumpDest      *JumpDestCache                   // Shared JUMPDEST analysis cache for block processing
+	jumpDest      vm.JumpDestCache                 // Shared JUMPDEST analysis cache for block processing
 	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
 
 	hc               *HeaderChain

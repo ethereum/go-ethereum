@@ -38,19 +38,19 @@ const (
 	jumpDestBucketSize = 8 * 1024 * 1024
 )
 
-// JumpDestCache is a thread-safe, byte-bounded LRU of JUMPDEST analysis
+// shardedJumpDestCache is a thread-safe, byte-bounded LRU of JUMPDEST analysis
 // bitmaps, sharded into independent buckets to reduce lock contention. It is
 // owned by BlockChain and shared across block processing and prefetching,
 // keyed by the immutable contract code hash.
-type JumpDestCache struct {
+type shardedJumpDestCache struct {
 	buckets [jumpDestBuckets]struct {
 		dest *lru.SizeConstrainedCache[common.Hash, vm.BitVec]
 	}
 }
 
 // NewJumpDestCache constructs the analysis cache.
-func NewJumpDestCache() *JumpDestCache {
-	c := new(JumpDestCache)
+func NewJumpDestCache() vm.JumpDestCache {
+	c := new(shardedJumpDestCache)
 	for i := range c.buckets {
 		c.buckets[i].dest = lru.NewSizeConstrainedCache[common.Hash, vm.BitVec](jumpDestBucketSize)
 	}
@@ -58,7 +58,7 @@ func NewJumpDestCache() *JumpDestCache {
 }
 
 // Load retrieves the cached jumpdest analysis for the given code hash.
-func (c *JumpDestCache) Load(hash common.Hash) (vm.BitVec, bool) {
+func (c *shardedJumpDestCache) Load(hash common.Hash) (vm.BitVec, bool) {
 	bucket := &c.buckets[hash[0]&(jumpDestBuckets-1)]
 	v, ok := bucket.dest.Get(hash)
 	if ok {
@@ -70,7 +70,7 @@ func (c *JumpDestCache) Load(hash common.Hash) (vm.BitVec, bool) {
 }
 
 // Store saves the jumpdest analysis for the given code hash.
-func (c *JumpDestCache) Store(hash common.Hash, b vm.BitVec) {
+func (c *shardedJumpDestCache) Store(hash common.Hash, b vm.BitVec) {
 	bucket := &c.buckets[hash[0]&(jumpDestBuckets-1)]
 	bucket.dest.Add(hash, b)
 }

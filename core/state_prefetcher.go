@@ -49,7 +49,7 @@ func newStatePrefetcher(config *params.ChainConfig, chain *HeaderChain) *statePr
 // Prefetch processes the state changes according to the Ethereum rules by running
 // the transaction messages using the statedb, but any changes are discarded. The
 // only goal is to warm the state caches.
-func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, jumpDests *JumpDestCache, cfg vm.Config, interrupt *atomic.Bool) {
+func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, jumpDests vm.JumpDestCache, cfg vm.Config, interrupt *atomic.Bool) {
 	var (
 		fails   atomic.Int64
 		header  = block.Header()
