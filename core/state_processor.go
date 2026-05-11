@@ -132,7 +132,6 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent common.Ha
 	defer spanEnd(nil)
 
 	// EIP-4788
-	// TODO(rjl) it should be enforced if cancun is enabled
 	if beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
