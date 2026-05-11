@@ -545,7 +545,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// Check clause 6
 	value, overflow := uint256.FromBig(msg.Value)
 	if overflow {
-		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From.Hex())
+		return nil, types.ErrUint256Overflow
 	}
 	if !value.IsZero() && !st.evm.Context.CanTransfer(st.state, msg.From, value) {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From.Hex())
