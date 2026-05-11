@@ -274,8 +274,11 @@ func TestServerWebsocketReadLimit(t *testing.T) {
 				} else if !errors.Is(err, websocket.ErrReadLimit) &&
 					!strings.Contains(strings.ToLower(err.Error()), "1009") &&
 					!strings.Contains(strings.ToLower(err.Error()), "message too big") &&
-					!strings.Contains(strings.ToLower(err.Error()), "connection reset by peer") {
-					// Not the error we expect from exceeding the message size limit.
+					!strings.Contains(strings.ToLower(err.Error()), "connection reset by peer") &&
+					!strings.Contains(strings.ToLower(err.Error()), "forcibly closed") {
+					// On Windows the server-side close races the client read and the OS
+					// surfaces the reset as "wsarecv: An existing connection was forcibly
+					// closed by the remote host" instead of a websocket close frame.
 					t.Fatalf("unexpected error for read limit violation: %v", err)
 				}
 			} else {
