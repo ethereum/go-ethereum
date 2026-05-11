@@ -86,9 +86,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	)
 	defer evm.Release()
 	// Run the pre-execution system calls
-	if err := PreExecution(ctx, block.BeaconRoot(), block.ParentHash(), config, evm, block.Number(), block.Time()); err != nil {
-		return nil, err
-	}
+	PreExecution(ctx, block.BeaconRoot(), block.ParentHash(), config, evm, block.Number(), block.Time())
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
@@ -127,7 +125,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 }
 
 // PreExecution processes pre-execution system calls.
-func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent common.Hash, config *params.ChainConfig, evm *vm.EVM, number *big.Int, time uint64) error {
+func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent common.Hash, config *params.ChainConfig, evm *vm.EVM, number *big.Int, time uint64) {
 	_, _, spanEnd := telemetry.StartSpan(ctx, "core.preExecution")
 	defer spanEnd(nil)
 
@@ -139,7 +137,6 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent common.Ha
 	if config.IsPrague(number, time) || config.IsUBT(number, time) {
 		ProcessParentBlockHash(parent, evm)
 	}
-	return nil
 }
 
 // PostExecution processes post-execution system calls when Prague is enabled.
