@@ -463,8 +463,12 @@ func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]any
 	if opts == nil {
 		opts = new(FilterOpts)
 	}
+	ev, ok := c.abi.Events[name]
+	if !ok {
+		return nil, nil, fmt.Errorf("event %q not found in the ABI", name)
+	}
 	// Append the event selector to the query parameters and construct the topic set
-	query = append([][]any{{c.abi.Events[name].ID}}, query...)
+	query = append([][]any{{ev.ID}}, query...)
 	topics, err := abi.MakeTopics(query...)
 	if err != nil {
 		return nil, nil, err
@@ -508,8 +512,12 @@ func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]any) 
 	if opts == nil {
 		opts = new(WatchOpts)
 	}
+	ev, ok := c.abi.Events[name]
+	if !ok {
+		return nil, nil, fmt.Errorf("event %q not found in the ABI", name)
+	}
 	// Append the event selector to the query parameters and construct the topic set
-	query = append([][]any{{c.abi.Events[name].ID}}, query...)
+	query = append([][]any{{ev.ID}}, query...)
 
 	topics, err := abi.MakeTopics(query...)
 	if err != nil {
