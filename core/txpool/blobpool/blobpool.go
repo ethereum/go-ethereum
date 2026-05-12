@@ -570,19 +570,16 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	}
 	// Index all transactions on disk and delete anything unprocessable
 	var (
-		fails      []uint64
-		convertTxs []*types.Transaction
+		toDelete   []uint64
+		convertTxs []uint64
 	)
 	index := func(id uint64, size uint32, blob []byte) {
 		legacy, err := p.parseTransaction(id, size, blob)
 		if err != nil {
-			fails = append(fails, id)
+			toDelete = append(toDelete, id)
 		} else if legacy {
-			fails = append(fails, id)
-			tx := new(types.Transaction)
-			if err := rlp.DecodeBytes(blob, tx); err == nil {
-				convertTxs = append(convertTxs, tx)
-			}
+			toDelete = append(toDelete, id)
+			convertTxs = append(convertTxs, id)
 		}
 	}
 	store, err := billy.Open(billy.Options{Path: queuedir, Repair: true}, slotter, index)
@@ -593,11 +590,20 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 
 	// Migrate legacy transactions (types.Transaction) to pooledBlobTx format.
 	if len(convertTxs) > 0 {
-		for _, tx := range convertTxs {
+		for _, id := range convertTxs {
+			var tx types.Transaction
+			data, err := p.store.Get(id)
+			if err != nil {
+				continue
+			}
+			err = rlp.DecodeBytes(data, &tx)
+			if err != nil {
+				continue
+			}
 			if tx.BlobTxSidecar() == nil {
 				continue
 			}
-			ptx := newBlobTxForPool(tx)
+			ptx := newBlobTxForPool(&tx)
 			blob, err := rlp.EncodeToBytes(ptx)
 			if err != nil {
 				continue
@@ -609,24 +615,24 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 			meta := newBlobTxMeta(id, ptx.TxSize(), p.store.Size(id), ptx)
 
 			// If the newly inserted transaction fails to be tracked,
-			// it should also be removed with those in `fails`
+			// it should also be removed with those in `toDelete`
 			sender, err := types.Sender(p.signer, ptx.Tx)
 			if err != nil {
-				fails = append(fails, id)
+				toDelete = append(toDelete, id)
 				continue
 			}
 			if err := p.trackTransaction(meta, sender); err != nil {
-				fails = append(fails, id)
+				toDelete = append(toDelete, id)
 				continue
 			}
 		}
 	}
 
-	if len(fails) > 0 {
-		log.Warn("Dropping invalidated blob transactions", "ids", fails)
-		dropInvalidMeter.Mark(int64(len(fails)))
+	if len(toDelete) > 0 {
+		log.Warn("Dropping invalidated blob transactions", "ids", toDelete)
+		dropInvalidMeter.Mark(int64(len(toDelete)))
 
-		for _, id := range fails {
+		for _, id := range toDelete {
 			if err := p.store.Delete(id); err != nil {
 				p.Close()
 				return err
