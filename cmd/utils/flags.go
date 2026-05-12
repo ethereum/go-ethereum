@@ -1104,7 +1104,7 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 	RPCTelemetrySampleRatioFlag = &cli.Float64Flag{
 		Name:     "rpc.telemetry.sample-ratio",
 		Usage:    "Defines the sampling ratio for RPC telemetry (0.0 to 1.0)",
-		Value:    1.0,
+		Value:    node.DefaultConfig.OpenTelemetry.SampleRatio,
 		Category: flags.APICategory,
 	}
 	// Era flags are a group of flags related to the era archive format.
