@@ -135,6 +135,9 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config 
 		if args.BlobHashes != nil {
 			return errors.New(`missing "to" in blob transaction`)
 		}
+		if args.AuthorizationList != nil {
+			return errors.New(`missing "to" in set code transaction`)
+		}
 		if len(args.data()) == 0 {
 			return errors.New(`contract creation without any data provided`)
 		}
