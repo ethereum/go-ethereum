@@ -632,12 +632,7 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 }
 
 func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
-	// Transactions arrived, make sure we have a valid and fresh chain to handle them
-	if !backend.AcceptTxs() {
-		return nil
-	}
-
-	// Check against request and decode.
+	// always accept the response, even if we don't have a valid chain, to allow the peer to update its tracker and avoid timeouts
 	var resp PooledTransactionsPacket
 	if err := msg.Decode(&resp); err != nil {
 		return err
@@ -649,6 +644,10 @@ func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	if err := peer.tracker.Fulfil(tresp); err != nil {
 		return fmt.Errorf("PooledTransactions: %w", err)
+	}
+
+	if !backend.AcceptTxs() {
+		return nil
 	}
 
 	return backend.Handle(peer, &resp)
