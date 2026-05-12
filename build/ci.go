@@ -73,21 +73,9 @@ var (
 		"./cmd/keeper",
 	}
 
-	// Files that end up in the geth*.zip archive.
-	gethArchiveFiles = []string{
-		"COPYING",
-		executablePath("geth"),
-	}
-
-	// Files that end up in the geth-alltools*.zip archive.
-	allToolsArchiveFiles = []string{
-		"COPYING",
-		executablePath("abigen"),
-		executablePath("evm"),
-		executablePath("geth"),
-		executablePath("rlpdump"),
-		executablePath("clef"),
-	}
+	// Files that end up in the geth-alltools*.zip archive (and the NSIS installer
+	// dev-tools section). Order matches the historical layout produced by ci.go.
+	allToolsBinaries = []string{"abigen", "evm", "geth", "rlpdump", "clef"}
 
 	// Keeper build targets with their configurations
 	keeperTargets = []struct {
@@ -180,11 +168,33 @@ var (
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
 
-func executablePath(name string) string {
-	if runtime.GOOS == "windows" {
+// executablePath returns the path to a built binary in GOBIN, applying the
+// platform-specific extension for the given target OS.
+func executablePath(name, targetOS string) string {
+	if targetOS == "windows" {
 		name += ".exe"
 	}
 	return filepath.Join(GOBIN, name)
+}
+
+// gethArchiveFiles returns the file list for the geth-{platform}-{ver}.zip
+// archive, with binary paths resolved for the target OS.
+func gethArchiveFiles(targetOS string) []string {
+	return []string{
+		"COPYING",
+		executablePath("geth", targetOS),
+	}
+}
+
+// allToolsArchiveFiles returns the file list for the
+// geth-alltools-{platform}-{ver}.zip archive, with binary paths resolved for
+// the target OS.
+func allToolsArchiveFiles(targetOS string) []string {
+	files := []string{"COPYING"}
+	for _, name := range allToolsBinaries {
+		files = append(files, executablePath(name, targetOS))
+	}
+	return files
 }
 
 func main() {
@@ -233,6 +243,7 @@ func main() {
 func doInstall(cmdline []string) {
 	var (
 		dlgo       = flag.Bool("dlgo", false, "Download Go and build with it")
+		targetOS   = flag.String("os", runtime.GOOS, "Target OS to cross build for")
 		arch       = flag.String("arch", "", "Architecture to cross build for")
 		cc         = flag.String("cc", "", "C compiler to cross build with")
 		staticlink = flag.Bool("static", false, "Create statically-linked executable")
@@ -241,7 +252,7 @@ func doInstall(cmdline []string) {
 	env := build.Env()
 
 	// Configure the toolchain.
-	tc := build.GoToolchain{GOARCH: *arch, CC: *cc}
+	tc := build.GoToolchain{GOOS: *targetOS, GOARCH: *arch, CC: *cc}
 	if *dlgo {
 		csdb := download.MustLoadChecksums("build/checksums.txt")
 		tc.Root = build.DownloadGo(csdb)
@@ -255,7 +266,7 @@ func doInstall(cmdline []string) {
 	}
 
 	// Configure the build.
-	gobuild := tc.Go("build", buildFlags(env, *staticlink, buildTags)...)
+	gobuild := tc.Go("build", buildFlags(env, *staticlink, buildTags, *targetOS)...)
 
 	// Show packages during build.
 	gobuild.Args = append(gobuild.Args, "-v")
@@ -270,7 +281,7 @@ func doInstall(cmdline []string) {
 	// Do the build!
 	for _, pkg := range packages {
 		args := slices.Clone(gobuild.Args)
-		args = append(args, "-o", executablePath(path.Base(pkg)))
+		args = append(args, "-o", executablePath(path.Base(pkg), *targetOS))
 		args = append(args, pkg)
 		build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env})
 	}
@@ -297,7 +308,13 @@ func doInstallKeeper(cmdline []string) {
 		tc.GOARCH = target.GOARCH
 		tc.GOOS = target.GOOS
 		tc.CC = target.CC
-		gobuild := tc.Go("build", buildFlags(env, true, []string{target.Tags})...)
+		// An empty GOOS means "build for the host OS"; thread that through to
+		// buildFlags so platform-specific linker flags are picked correctly.
+		targetOS := target.GOOS
+		if targetOS == "" {
+			targetOS = runtime.GOOS
+		}
+		gobuild := tc.Go("build", buildFlags(env, true, []string{target.Tags}, targetOS)...)
 		gobuild.Dir = "./cmd/keeper"
 		gobuild.Args = append(gobuild.Args, "-v")
 
@@ -307,14 +324,15 @@ func doInstallKeeper(cmdline []string) {
 		outputName := fmt.Sprintf("keeper-%s", target.Name)
 
 		args := slices.Clone(gobuild.Args)
-		args = append(args, "-o", executablePath(outputName))
+		args = append(args, "-o", executablePath(outputName, targetOS))
 		args = append(args, ".")
 		build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env, Dir: gobuild.Dir})
 	}
 }
 
-// buildFlags returns the go tool flags for building.
-func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (flags []string) {
+// buildFlags returns the go tool flags for building. targetOS is the OS we
+// are producing binaries for.
+func buildFlags(env build.Environment, staticLinking bool, buildTags []string, targetOS string) (flags []string) {
 	var ld []string
 	// See https://github.com/golang/go/issues/33772#issuecomment-528176001
 	// We need to set --buildid to the linker here, and also pass --build-id to the
@@ -326,10 +344,10 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (
 	}
 	// Strip DWARF on darwin. This used to be required for certain things,
 	// and there is no downside to this, so we just keep doing it.
-	if runtime.GOOS == "darwin" {
+	if targetOS == "darwin" {
 		ld = append(ld, "-s")
 	}
-	if runtime.GOOS == "linux" {
+	if targetOS == "linux" {
 		// Enforce the stacksize to 8M, which is the case on most platforms apart from
 		// alpine Linux.
 		// See https://sourceware.org/binutils/docs-2.23.1/ld/Options.html#Options
@@ -682,12 +700,13 @@ func downloadProtoc(cachedir string) string {
 // Release Packaging
 func doArchive(cmdline []string) {
 	var (
-		arch    = flag.String("arch", runtime.GOARCH, "Architecture cross packaging")
-		atype   = flag.String("type", "zip", "Type of archive to write (zip|tar)")
-		signer  = flag.String("signer", "", `Environment variable holding the signing key (e.g. LINUX_SIGNING_KEY)`)
-		signify = flag.String("signify", "", `Environment variable holding the signify key (e.g. LINUX_SIGNIFY_KEY)`)
-		upload  = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
-		ext     string
+		targetOS = flag.String("os", runtime.GOOS, "Target OS the binaries were built for")
+		arch     = flag.String("arch", runtime.GOARCH, "Architecture cross packaging")
+		atype    = flag.String("type", "zip", "Type of archive to write (zip|tar)")
+		signer   = flag.String("signer", "", `Environment variable holding the signing key (e.g. LINUX_SIGNING_KEY)`)
+		signify  = flag.String("signify", "", `Environment variable holding the signify key (e.g. LINUX_SIGNIFY_KEY)`)
+		upload   = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
+		ext      string
 	)
 	flag.CommandLine.Parse(cmdline)
 	switch *atype {
@@ -701,15 +720,15 @@ func doArchive(cmdline []string) {
 
 	var (
 		env      = build.Env()
-		basegeth = archiveBasename(*arch, version.Archive(env.Commit))
+		basegeth = archiveBasename(*targetOS, *arch, version.Archive(env.Commit))
 		geth     = "geth-" + basegeth + ext
 		alltools = "geth-alltools-" + basegeth + ext
 	)
 	maybeSkipArchive(env)
-	if err := build.WriteArchive(geth, gethArchiveFiles); err != nil {
+	if err := build.WriteArchive(geth, gethArchiveFiles(*targetOS)); err != nil {
 		log.Fatal(err)
 	}
-	if err := build.WriteArchive(alltools, allToolsArchiveFiles); err != nil {
+	if err := build.WriteArchive(alltools, allToolsArchiveFiles(*targetOS)); err != nil {
 		log.Fatal(err)
 	}
 	for _, archive := range []string{geth, alltools} {
@@ -735,7 +754,11 @@ func doKeeperArchive(cmdline []string) {
 	maybeSkipArchive(env)
 	files := []string{"COPYING"}
 	for _, target := range keeperTargets {
-		files = append(files, executablePath(fmt.Sprintf("keeper-%s", target.Name)))
+		targetOS := target.GOOS
+		if targetOS == "" {
+			targetOS = runtime.GOOS
+		}
+		files = append(files, executablePath(fmt.Sprintf("keeper-%s", target.Name), targetOS))
 	}
 	if err := build.WriteArchive(keeper, files); err != nil {
 		log.Fatal(err)
@@ -745,8 +768,8 @@ func doKeeperArchive(cmdline []string) {
 	}
 }
 
-func archiveBasename(arch string, archiveVersion string) string {
-	platform := runtime.GOOS + "-" + arch
+func archiveBasename(targetOS, arch, archiveVersion string) string {
+	platform := targetOS + "-" + arch
 	if arch == "arm" {
 		platform += os.Getenv("GOARM")
 	}
@@ -1209,13 +1232,13 @@ func doWindowsInstaller(cmdline []string) {
 	env := build.Env()
 	maybeSkipArchive(env)
 
-	// Aggregate binaries that are included in the installer
+	// Aggregate binaries that are included in the installer.
 	var (
 		devTools []string
 		allTools []string
 		gethTool string
 	)
-	for _, file := range allToolsArchiveFiles {
+	for _, file := range allToolsArchiveFiles("windows") {
 		if file == "COPYING" { // license, copied later
 			continue
 		}
@@ -1252,16 +1275,24 @@ func doWindowsInstaller(cmdline []string) {
 	if env.Commit != "" {
 		ver[2] += "-" + env.Commit[:8]
 	}
-	installer, err := filepath.Abs("geth-" + archiveBasename(*arch, version.Archive(env.Commit)) + ".exe")
+	installer, err := filepath.Abs("geth-" + archiveBasename("windows", *arch, version.Archive(env.Commit)) + ".exe")
 	if err != nil {
 		log.Fatalf("Failed to convert installer file path: %v", err)
 	}
-	build.MustRunCommand("makensis.exe",
-		"/DOUTPUTFILE="+installer,
-		"/DMAJORVERSION="+ver[0],
-		"/DMINORVERSION="+ver[1],
-		"/DBUILDVERSION="+ver[2],
-		"/DARCH="+*arch,
+	// makensis on Windows is "makensis.exe" with /D-style defines; on Linux
+	// (and other Unixes) the binary is "makensis" and accepts -D.
+	makensisCmd := "makensis"
+	defineFlag := "-D"
+	if runtime.GOOS == "windows" {
+		makensisCmd = "makensis.exe"
+		defineFlag = "/D"
+	}
+	build.MustRunCommand(makensisCmd,
+		defineFlag+"OUTPUTFILE="+installer,
+		defineFlag+"MAJORVERSION="+ver[0],
+		defineFlag+"MINORVERSION="+ver[1],
+		defineFlag+"BUILDVERSION="+ver[2],
+		defineFlag+"ARCH="+*arch,
 		filepath.Join(*workdir, "geth.nsi"),
 	)
 	// Sign and publish installer.

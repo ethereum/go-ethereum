@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -37,32 +38,40 @@ type syncReq struct {
 	errc chan error
 }
 
+type Config struct {
+	TargetBlock    common.Hash // if set, sync is triggered at startup
+	ExitWhenSynced bool        // if true, the node shuts down after sync has finished
+}
+
 // Syncer is an auxiliary service that allows Geth to perform full sync
 // alone without consensus-layer attached. Users must specify a valid block hash
 // as the sync target.
 //
+// Additionally, the syncer can be used to monitor state synchronization.
+// It will exit once the specified target has been reached or when the
+// most recent chain head is caught up.
+//
 // This tool can be applied to different networks, no matter it's pre-merge or
 // post-merge, but only for full-sync.
 type Syncer struct {
-	stack          *node.Node
-	backend        *eth.Ethereum
-	target         common.Hash
-	request        chan *syncReq
-	closed         chan struct{}
-	wg             sync.WaitGroup
-	exitWhenSynced bool
+	stack   *node.Node
+	backend *eth.Ethereum
+	request chan *syncReq
+	closed  chan struct{}
+	wg      sync.WaitGroup
+
+	config Config
 }
 
 // Register registers the synchronization override service into the node
 // stack for launching and stopping the service controlled by node.
-func Register(stack *node.Node, backend *eth.Ethereum, target common.Hash, exitWhenSynced bool) (*Syncer, error) {
+func Register(stack *node.Node, backend *eth.Ethereum, cfg Config) (*Syncer, error) {
 	s := &Syncer{
-		stack:          stack,
-		backend:        backend,
-		target:         target,
-		request:        make(chan *syncReq),
-		closed:         make(chan struct{}),
-		exitWhenSynced: exitWhenSynced,
+		stack:   stack,
+		backend: backend,
+		request: make(chan *syncReq),
+		closed:  make(chan struct{}),
+		config:  cfg,
 	}
 	stack.RegisterAPIs(s.APIs())
 	stack.RegisterLifecycle(s)
@@ -88,9 +97,11 @@ func (s *Syncer) run() {
 
 	var (
 		target *types.Header
-		ticker = time.NewTicker(time.Second * 5)
+		syncCh = make(chan downloader.SyncEvent, 10)
 	)
-	defer ticker.Stop()
+	sub := s.backend.Downloader().SubscribeSyncEvents(syncCh)
+	defer sub.Unsubscribe()
+
 	for {
 		select {
 		case req := <-s.request:
@@ -137,35 +148,50 @@ func (s *Syncer) run() {
 				}
 			}
 
-		case <-ticker.C:
-			if target == nil {
+		case ev := <-syncCh:
+			if ev.Type == downloader.SyncStarted {
+				log.Debug("Synchronization started")
 				continue
+			}
+			if ev.Type == downloader.SyncFailed {
+				log.Debug("Synchronization failed", "err", ev.Err)
+				continue
+			}
+
+			head := s.backend.BlockChain().CurrentHeader()
+			if head != nil {
+				// Set the finalized and safe markers relative to the current head.
+				// The finalized marker is set two epochs behind the target,
+				// and the safe marker is set one epoch behind the target.
+				if header := s.backend.BlockChain().GetHeaderByNumber(head.Number.Uint64() - params.EpochLength*2); header != nil {
+					if final := s.backend.BlockChain().CurrentFinalBlock(); final == nil || final.Number.Cmp(header.Number) < 0 {
+						s.backend.BlockChain().SetFinalized(header)
+					}
+				}
+				if header := s.backend.BlockChain().GetHeaderByNumber(head.Number.Uint64() - params.EpochLength); header != nil {
+					if safe := s.backend.BlockChain().CurrentSafeBlock(); safe == nil || safe.Number.Cmp(header.Number) < 0 {
+						s.backend.BlockChain().SetSafe(header)
+					}
+				}
 			}
 
 			// Terminate the node if the target has been reached
-			if s.exitWhenSynced {
-				if block := s.backend.BlockChain().GetBlockByHash(target.Hash()); block != nil {
-					log.Info("Sync target reached", "number", block.NumberU64(), "hash", block.Hash())
-					go s.stack.Close() // async since we need to close ourselves
-					return
+			if s.config.ExitWhenSynced {
+				var synced bool
+				var block *types.Header
+				if target != nil {
+					tb := s.backend.BlockChain().GetBlockByHash(target.Hash())
+					synced = tb != nil
+					block = tb.Header()
+				} else {
+					timestamp := time.Unix(int64(ev.Latest.Time), 0)
+					synced = time.Since(timestamp) < 10*time.Minute
+					block = ev.Latest
 				}
-			}
 
-			// Set the finalized and safe markers relative to the current head.
-			// The finalized marker is set two epochs behind the target,
-			// and the safe marker is set one epoch behind the target.
-			head := s.backend.BlockChain().CurrentHeader()
-			if head == nil {
-				continue
-			}
-			if header := s.backend.BlockChain().GetHeaderByNumber(head.Number.Uint64() - params.EpochLength*2); header != nil {
-				if final := s.backend.BlockChain().CurrentFinalBlock(); final == nil || final.Number.Cmp(header.Number) < 0 {
-					s.backend.BlockChain().SetFinalized(header)
-				}
-			}
-			if header := s.backend.BlockChain().GetHeaderByNumber(head.Number.Uint64() - params.EpochLength); header != nil {
-				if safe := s.backend.BlockChain().CurrentSafeBlock(); safe == nil || safe.Number.Cmp(header.Number) < 0 {
-					s.backend.BlockChain().SetSafe(header)
+				if synced {
+					log.Info("Sync target reached", "number", block.Number.Uint64(), "hash", block.Hash())
+					go s.stack.Close() // async since we need to close ourselves
 				}
 			}
 
@@ -179,10 +205,10 @@ func (s *Syncer) run() {
 func (s *Syncer) Start() error {
 	s.wg.Add(1)
 	go s.run()
-	if s.target == (common.Hash{}) {
+	if s.config.TargetBlock == (common.Hash{}) {
 		return nil
 	}
-	return s.Sync(s.target)
+	return s.Sync(s.config.TargetBlock)
 }
 
 // Stop terminates the synchronization service and stop all background activities.

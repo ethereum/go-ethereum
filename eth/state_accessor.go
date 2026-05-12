@@ -248,13 +248,10 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
 	evm := vm.NewEVM(context, statedb, eth.blockchain.Config(), vm.Config{})
 	defer evm.Release()
-	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
-	}
-	// If prague hardfork, insert parent block hash in the state as per EIP-2935.
-	if eth.blockchain.Config().IsPrague(block.Number(), block.Time()) {
-		core.ProcessParentBlockHash(block.ParentHash(), evm)
-	}
+
+	// Run pre-execution system calls
+	core.PreExecution(ctx, block.BeaconRoot(), block.ParentHash(), eth.blockchain.Config(), evm, block.Number(), block.Time())
+
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, context, statedb, release, nil
 	}

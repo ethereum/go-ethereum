@@ -23,8 +23,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// TestSerializeDeserializeInternalNode tests flat 65-byte serialization and
-// deserialization of InternalNode through nodeStore.
+// TestSerializeDeserializeInternalNode tests grouped serialization and
+// deserialization of InternalNode through nodeStore at groupDepth=1.
 func TestSerializeDeserializeInternalNode(t *testing.T) {
 	leftHash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 	rightHash := common.HexToHash("0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321")
@@ -39,24 +39,32 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 	rootNode.right = rightRef
 	s.root = rootRef
 
-	// Serialize the node — flat 65-byte format
-	serialized := s.serializeNode(rootRef)
+	// Serialize the node — grouped format at groupDepth=1:
+	// [type(1)][groupDepth(1)][bitmap(1)][leftHash(32)][rightHash(32)] = 67 bytes
+	serialized := s.serializeNode(rootRef, 1)
 
-	// Check the serialized format: [type(1)][leftHash(32)][rightHash(32)]
 	if serialized[0] != nodeTypeInternal {
 		t.Errorf("Expected type byte to be %d, got %d", nodeTypeInternal, serialized[0])
 	}
+	if serialized[1] != 1 {
+		t.Errorf("Expected groupDepth byte to be 1, got %d", serialized[1])
+	}
 
-	expectedLen := NodeTypeBytes + 2*HashSize // 1 + 64 = 65
+	expectedLen := NodeTypeBytes + 1 + 1 + 2*HashSize // type + groupDepth + bitmap + 2 hashes = 67
 	if len(serialized) != expectedLen {
 		t.Errorf("Expected serialized length to be %d, got %d", expectedLen, len(serialized))
 	}
 
-	// Check that left and right hashes are embedded directly
-	if !bytes.Equal(serialized[NodeTypeBytes:NodeTypeBytes+HashSize], leftHash[:]) {
+	// Both children present at a 1-level group → bitmap byte = 0b11000000.
+	if serialized[2] != 0xc0 {
+		t.Errorf("Expected bitmap byte 0xc0, got 0x%02x", serialized[2])
+	}
+
+	hashesStart := NodeTypeBytes + 1 + 1
+	if !bytes.Equal(serialized[hashesStart:hashesStart+HashSize], leftHash[:]) {
 		t.Error("Left hash not found at expected position")
 	}
-	if !bytes.Equal(serialized[NodeTypeBytes+HashSize:], rightHash[:]) {
+	if !bytes.Equal(serialized[hashesStart+HashSize:], rightHash[:]) {
 		t.Error("Right hash not found at expected position")
 	}
 
@@ -116,7 +124,7 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 	}
 
 	// Serialize the node
-	serialized := s.serializeNode(ref)
+	serialized := s.serializeNode(ref, 8)
 
 	// Check the serialized format
 	if serialized[0] != nodeTypeStem {
@@ -195,8 +203,9 @@ func TestDeserializeInvalidType(t *testing.T) {
 // TestDeserializeInvalidLength tests deserialization with invalid data length.
 func TestDeserializeInvalidLength(t *testing.T) {
 	s := newNodeStore()
-	// InternalNode with valid type byte but wrong length (needs exactly 65 bytes)
-	invalidData := []byte{nodeTypeInternal, 0, 0, 0}
+	// InternalNode group header with groupDepth=1 (valid) and a 1-byte bitmap
+	// announcing two present hashes, but the hash payload is missing.
+	invalidData := []byte{nodeTypeInternal, 1, 0xc0}
 
 	_, err := s.deserializeNode(invalidData, 0)
 	if err == nil {
@@ -205,6 +214,21 @@ func TestDeserializeInvalidLength(t *testing.T) {
 
 	if err.Error() != "invalid serialized node length" {
 		t.Errorf("Expected 'invalid serialized node length' error, got: %v", err)
+	}
+}
+
+// TestDeserializeInvalidGroupDepth tests deserialization when the group depth
+// byte is out of the supported 1..MaxGroupDepth range.
+func TestDeserializeInvalidGroupDepth(t *testing.T) {
+	s := newNodeStore()
+	invalidData := []byte{nodeTypeInternal, 0, 0, 0}
+
+	_, err := s.deserializeNode(invalidData, 0)
+	if err == nil {
+		t.Fatal("Expected error for invalid group depth, got nil")
+	}
+	if err.Error() != "invalid group depth" {
+		t.Errorf("Expected 'invalid group depth' error, got: %v", err)
 	}
 }
 

@@ -87,7 +87,7 @@ func TestBintrieConvert(t *testing.T) {
 	})
 	defer destTriedb.Close()
 
-	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb)
+	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb, 8)
 	if err != nil {
 		t.Fatalf("failed to create binary trie: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestBintrieConvert(t *testing.T) {
 	}
 	t.Logf("Binary trie root: %x", currentRoot)
 
-	bt2, err := bintrie.NewBinaryTrie(currentRoot, destTriedb)
+	bt2, err := bintrie.NewBinaryTrie(currentRoot, destTriedb, 8)
 	if err != nil {
 		t.Fatalf("failed to reload binary trie: %v", err)
 	}
@@ -194,7 +194,7 @@ func TestBintrieConvertDeleteSource(t *testing.T) {
 		PathDB: pathdb.Defaults,
 	})
 
-	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb)
+	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb, 8)
 	if err != nil {
 		t.Fatalf("failed to create binary trie: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestBintrieConvertDeleteSource(t *testing.T) {
 	}
 	srcTriedb2.Close()
 
-	bt2, err := bintrie.NewBinaryTrie(newRoot, destTriedb)
+	bt2, err := bintrie.NewBinaryTrie(newRoot, destTriedb, 8)
 	if err != nil {
 		t.Fatalf("failed to reload binary trie after deletion: %v", err)
 	}

@@ -81,7 +81,7 @@ func (tt *TransactionTest) Run() error {
 			return
 		}
 		// Intrinsic gas
-		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
+		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai, rules.IsAmsterdam)
 		if err != nil {
 			return
 		}
@@ -92,7 +92,7 @@ func (tt *TransactionTest) Run() error {
 
 		if rules.IsPrague {
 			var floorDataGas uint64
-			floorDataGas, err = core.FloorDataGas(rules, tx.Data())
+			floorDataGas, err = core.FloorDataGas(rules, tx.Data(), tx.AccessList())
 			if err != nil {
 				return
 			}

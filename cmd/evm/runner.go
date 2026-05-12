@@ -321,7 +321,7 @@ func runCmd(ctx *cli.Context) error {
 			// don't mutate the state!
 			runtimeConfig.State = prestate.Copy()
 			output, _, gasLeft, err := runtime.Create(input, &runtimeConfig)
-			return output, gasLeft, err
+			return output, initialGas - gasLeft, err
 		}
 	} else {
 		if len(code) > 0 {

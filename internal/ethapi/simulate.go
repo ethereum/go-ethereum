@@ -318,12 +318,9 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
-	if sim.chainConfig.IsPrague(header.Number, header.Time) || sim.chainConfig.IsUBT(header.Number, header.Time) {
-		core.ProcessParentBlockHash(header.ParentHash, evm)
-	}
-	if header.ParentBeaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, evm)
-	}
+	// Run pre-execution system calls
+	core.PreExecution(ctx, header.ParentBeaconRoot, header.ParentHash, sim.chainConfig, evm, header.Number, header.Time)
+
 	var allLogs []*types.Log
 	for i, call := range block.Calls {
 		// Terminate if the context is cancelled
@@ -393,22 +390,10 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		header.BlobGasUsed = &blobGasUsed
 	}
 
-	// Process EIP-7685 requests
-	var requests [][]byte
-	if sim.chainConfig.IsPrague(header.Number, header.Time) {
-		requests = [][]byte{}
-		// EIP-6110
-		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig); err != nil {
-			return nil, nil, nil, err
-		}
-		// EIP-7002
-		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
-			return nil, nil, nil, err
-		}
-		// EIP-7251
-		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
-			return nil, nil, nil, err
-		}
+	// Run post-execution system calls
+	requests, err := core.PostExecution(ctx, sim.chainConfig, header.Number, header.Time, allLogs, evm)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
@@ -417,7 +402,12 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 
 	blockBody := &types.Body{
 		Transactions: txes,
-		Withdrawals:  *block.BlockOverrides.Withdrawals, // Withdrawal is also sanitized as non-nil
+	}
+	// Withdrawals are a post-Shanghai field. Attaching a non-nil withdrawals
+	// slice would cause types.NewBlock to populate WithdrawalsHash on the
+	// header and emit withdrawals fields for pre-Shanghai blocks.
+	if sim.chainConfig.IsShanghai(header.Number, header.Time) {
+		blockBody.Withdrawals = *block.BlockOverrides.Withdrawals
 	}
 	chainHeadReader := &simChainHeadReader{ctx, sim.b}
 

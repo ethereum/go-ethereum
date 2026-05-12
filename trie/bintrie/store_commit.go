@@ -107,18 +107,83 @@ func (s *nodeStore) hashInternal(idx uint32) common.Hash {
 	return node.hash
 }
 
-// SerializeNode serializes a node into the flat on-disk format.
-func (s *nodeStore) serializeNode(ref nodeRef) []byte {
+// serializeSubtree recursively collects child hashes from a subtree of InternalNodes.
+// It traverses up to `remainingDepth` levels, storing hashes of bottom-layer children.
+// position tracks the current index (0 to 2^groupDepth - 1) for bitmap placement.
+// hashes collects the hashes of present children, bitmap tracks which positions are present.
+func (s *nodeStore) serializeSubtree(ref nodeRef, remainingDepth int, position int, absoluteDepth int, bitmap []byte, hashes *[]common.Hash) {
+	if remainingDepth == 0 {
+		// Bottom layer: store hash if not empty
+		switch ref.Kind() {
+		case kindEmpty:
+			// Leave bitmap bit unset, don't add hash
+			return
+		default:
+			// StemNode, HashedNode, or InternalNode at boundary: store hash
+			bitmap[position/8] |= 1 << (7 - (position % 8))
+			*hashes = append(*hashes, s.computeHash(ref))
+		}
+		return
+	}
+
 	switch ref.Kind() {
 	case kindInternal:
+		leftPos := position * 2
+		rightPos := position*2 + 1
+		s.serializeSubtree(s.getInternal(ref.Index()).left, remainingDepth-1, leftPos, absoluteDepth+1, bitmap, hashes)
+		s.serializeSubtree(s.getInternal(ref.Index()).right, remainingDepth-1, rightPos, absoluteDepth+1, bitmap, hashes)
+	case kindEmpty:
+		return
+	default:
+		// StemNode or HashedNode encountered before reaching the group's bottom
+		// layer. Compute the leaf bitmap position where this node's hash will
+		// be stored.
+		leafPos := position
+		switch ref.Kind() {
+		case kindStem:
+			sn := s.getStem(ref.Index())
+			// Extend position using the stem's key bits so that
+			// GetValuesAtStem traversal (which follows key bits) finds the hash.
+			for d := 0; d < remainingDepth; d++ {
+				bit := sn.Stem[(absoluteDepth+d)/8] >> (7 - ((absoluteDepth + d) % 8)) & 1
+				leafPos = leafPos*2 + int(bit)
+			}
+		default:
+			// HashedNode or unknown: extend all-left (no key bits available).
+			// This matches the all-zero path that resolveNode would follow.
+			leafPos = position << remainingDepth
+		}
+		bitmap[leafPos/8] |= 1 << (7 - (leafPos % 8))
+		*hashes = append(*hashes, s.computeHash(ref))
+	}
+}
+
+// SerializeNode serializes a node into the flat on-disk format.
+func (s *nodeStore) serializeNode(ref nodeRef, groupDepth int) []byte {
+	switch ref.Kind() {
+	case kindInternal:
+		// InternalNode group: 1 byte type + 1 byte group depth + variable bitmap + N×32 byte hashes
+		bitmapSize := bitmapSizeForDepth(groupDepth)
+		bitmap := make([]byte, bitmapSize)
+		var hashes []common.Hash
+
 		node := s.getInternal(ref.Index())
-		var serialized [NodeTypeBytes + HashSize + HashSize]byte
+		s.serializeSubtree(ref, groupDepth, 0, int(node.depth), bitmap, &hashes)
+
+		// Build serialized output
+		serializedLen := NodeTypeBytes + 1 + bitmapSize + len(hashes)*HashSize
+		serialized := make([]byte, serializedLen)
 		serialized[0] = nodeTypeInternal
-		lh := s.computeHash(node.left)
-		rh := s.computeHash(node.right)
-		copy(serialized[NodeTypeBytes:NodeTypeBytes+HashSize], lh[:])
-		copy(serialized[NodeTypeBytes+HashSize:], rh[:])
-		return serialized[:]
+		serialized[1] = byte(groupDepth) // group depth => bitmap size for a sparse group
+		copy(serialized[2:2+bitmapSize], bitmap)
+
+		offset := NodeTypeBytes + 1 + bitmapSize
+		for _, h := range hashes {
+			copy(serialized[offset:offset+HashSize], h.Bytes())
+			offset += HashSize
+		}
+
+		return serialized
 
 	case kindStem:
 		sn := s.getStem(ref.Index())
@@ -163,6 +228,59 @@ func (s *nodeStore) deserializeNodeWithHash(serialized []byte, depth int, hn com
 	return s.decodeNode(serialized, depth, hn, false, false)
 }
 
+// deserializeSubtree reconstructs an InternalNode subtree from grouped serialization.
+// remainingDepth is how many more levels to build, position is current index in the bitmap,
+// nodeDepth is the actual trie depth for the node being created.
+// hashIdx tracks the current position in the hash data (incremented as hashes are consumed).
+func (s *nodeStore) deserializeSubtree(hn common.Hash, remainingDepth int, position int, nodeDepth int, bitmap []byte, hashData []byte, hashIdx *int, mustRecompute bool, dirty bool) (nodeRef, error) {
+	if remainingDepth == 0 {
+		// Bottom layer: check bitmap and return HashedNode or Empty
+		if bitmap[position/8]>>(7-(position%8))&1 == 1 {
+			if len(hashData) < (*hashIdx+1)*HashSize {
+				return emptyRef, errInvalidSerializedLength
+			}
+			hash := common.BytesToHash(hashData[*hashIdx*HashSize : (*hashIdx+1)*HashSize])
+			*hashIdx++
+			return s.newHashedRef(hash), nil
+		}
+		return emptyRef, nil
+	}
+
+	// Check if this entire subtree is empty by examining all relevant bitmap bits
+	leftPos := position * 2
+	rightPos := position*2 + 1
+
+	// note that the parent might not need root computations, but the children
+	// do, because their hash isn't saved. Hence `mustRecompute` is set to `true`.
+	left, err := s.deserializeSubtree(common.Hash{}, remainingDepth-1, leftPos, nodeDepth+1, bitmap, hashData, hashIdx, true, dirty)
+	if err != nil {
+		return emptyRef, err
+	}
+	right, err := s.deserializeSubtree(common.Hash{}, remainingDepth-1, rightPos, nodeDepth+1, bitmap, hashData, hashIdx, true, dirty)
+	if err != nil {
+		return emptyRef, err
+	}
+
+	// If both children are empty, return Empty
+	if left.IsEmpty() && right.IsEmpty() {
+		return emptyRef, nil
+	}
+
+	ref := s.newInternalRef(nodeDepth)
+	node := s.getInternal(ref.Index())
+	node.left = left
+	node.right = right
+	node.mustRecompute = mustRecompute
+	if !mustRecompute {
+		// mustRecompute will only be false for the root of the subtree,
+		// for which we already know the hash.
+		node.hash = hn
+		node.mustRecompute = false
+	}
+	node.dirty = dirty
+	return ref, nil
+}
+
 func (s *nodeStore) decodeNode(serialized []byte, depth int, hn common.Hash, mustRecompute, dirty bool) (nodeRef, error) {
 	if len(serialized) == 0 {
 		return emptyRef, nil
@@ -170,31 +288,23 @@ func (s *nodeStore) decodeNode(serialized []byte, depth int, hn common.Hash, mus
 
 	switch serialized[0] {
 	case nodeTypeInternal:
-		if len(serialized) != NodeTypeBytes+2*HashSize {
+		// Grouped format: 1 byte type + 1 byte group depth + variable bitmap + N×32 byte hashes
+		if len(serialized) < NodeTypeBytes+1 {
 			return emptyRef, errInvalidSerializedLength
 		}
-		var leftHash, rightHash common.Hash
-		copy(leftHash[:], serialized[NodeTypeBytes:NodeTypeBytes+HashSize])
-		copy(rightHash[:], serialized[NodeTypeBytes+HashSize:])
+		groupDepth := int(serialized[1])
+		if groupDepth < 1 || groupDepth > MaxGroupDepth {
+			return 0, errors.New("invalid group depth")
+		}
+		bitmapSize := bitmapSizeForDepth(groupDepth)
+		if len(serialized) < NodeTypeBytes+1+bitmapSize {
+			return 0, errInvalidSerializedLength
+		}
+		bitmap := serialized[2 : 2+bitmapSize]
+		hashData := serialized[2+bitmapSize:]
 
-		var leftRef, rightRef nodeRef
-		if leftHash != (common.Hash{}) {
-			leftRef = s.newHashedRef(leftHash)
-		}
-		if rightHash != (common.Hash{}) {
-			rightRef = s.newHashedRef(rightHash)
-		}
-
-		ref := s.newInternalRef(depth)
-		node := s.getInternal(ref.Index())
-		node.left = leftRef
-		node.right = rightRef
-		if !mustRecompute {
-			node.hash = hn
-			node.mustRecompute = false
-		}
-		node.dirty = dirty
-		return ref, nil
+		hashIdx := 0
+		return s.deserializeSubtree(hn, groupDepth, 0, depth, bitmap, hashData, &hashIdx, mustRecompute, dirty)
 
 	case nodeTypeStem:
 		if len(serialized) < NodeTypeBytes+StemSize+StemBitmapSize {
@@ -230,43 +340,110 @@ func (s *nodeStore) decodeNode(serialized []byte, depth int, hn common.Hash, mus
 // CollectNodes flushes every node that needs flushing via flushfn in post-order.
 // Invariant: any ancestor of a node that needs flushing is itself marked, so a
 // clean root means the whole subtree is clean.
-func (s *nodeStore) collectNodes(ref nodeRef, path []byte, flushfn nodeFlushFn) error {
+func (s *nodeStore) collectNodes(ref nodeRef, path []byte, flushfn nodeFlushFn, groupDepth int) {
 	switch ref.Kind() {
-	case kindEmpty:
-		return nil
 	case kindInternal:
 		node := s.getInternal(ref.Index())
 		if !node.dirty {
-			return nil
+			return
 		}
-		// Reuse path buffer across children: flushfn consumers
-		// (NodeSet.AddNode, tracer.Get) clone via string(path), so in-place
-		// mutation is safe.
-		path = append(path, 0)
-		if err := s.collectNodes(node.left, path, flushfn); err != nil {
-			return err
+		// Only flush at group boundaries (depth % groupDepth == 0)
+		if int(node.depth)%groupDepth == 0 {
+			// We're at a group boundary - first collect any nodes in deeper groups,
+			// then flush this group
+			s.collectChildGroups(node, path, flushfn, groupDepth, groupDepth-1)
+			flushfn(path, s.computeHash(ref), s.serializeNode(ref, groupDepth))
+			node.dirty = false
+			return
 		}
-		path[len(path)-1] = 1
-		if err := s.collectNodes(node.right, path, flushfn); err != nil {
-			return err
-		}
-		path = path[:len(path)-1]
-		flushfn(path, s.computeHash(ref), s.serializeNode(ref))
-		node.dirty = false
-		return nil
+		// Not at a group boundary - this shouldn't happen if we're called correctly from root
+		// but handle it by continuing to traverse
+		s.collectChildGroups(node, path, flushfn, groupDepth, groupDepth-(int(node.depth)%groupDepth)-1)
 	case kindStem:
 		sn := s.getStem(ref.Index())
 		if !sn.dirty {
-			return nil
+			return
 		}
-		flushfn(path, s.computeHash(ref), s.serializeNode(ref))
+		flushfn(path, s.computeHash(ref), s.serializeNode(ref, groupDepth))
 		sn.dirty = false
-		return nil
-	case kindHashed:
-		return nil // Already committed
+	case kindHashed, kindEmpty:
 	default:
-		return fmt.Errorf("CollectNodes: unexpected kind %d", ref.Kind())
+		panic(fmt.Sprintf("CollectNodes: unexpected kind %d", ref.Kind()))
 	}
+}
+
+// collectChildGroups traverses within a group to find and collect nodes in the next group.
+// remainingLevels is how many more levels below the current node until we reach the group boundary.
+// When remainingLevels=0, the current node's children are at the next group boundary.
+func (s *nodeStore) collectChildGroups(node *InternalNode, path []byte, flushfn nodeFlushFn, groupDepth int, remainingLevels int) error {
+	if remainingLevels == 0 {
+		// Current node is at depth (groupBoundary - 1), its children are at the next group boundary
+		if !node.left.IsEmpty() {
+			s.collectNodes(node.left, appendBit(path, 0), flushfn, groupDepth)
+		}
+		if !node.right.IsEmpty() {
+			s.collectNodes(node.right, appendBit(path, 1), flushfn, groupDepth)
+		}
+		return nil
+	}
+
+	if !node.left.IsEmpty() {
+		switch node.left.Kind() {
+		case kindInternal:
+			n := s.getInternal(node.left.Index())
+			if err := s.collectChildGroups(n, appendBit(path, 0), flushfn, groupDepth, remainingLevels-1); err != nil {
+				return err
+			}
+		default:
+			extPath := s.extendPathToGroupLeaf(appendBit(path, 0), node.left, remainingLevels)
+			s.collectNodes(node.left, extPath, flushfn, groupDepth)
+		}
+	}
+	if !node.right.IsEmpty() {
+		switch node.right.Kind() {
+		case kindInternal:
+			n := s.getInternal(node.right.Index())
+			if err := s.collectChildGroups(n, appendBit(path, 1), flushfn, groupDepth, remainingLevels-1); err != nil {
+				return err
+			}
+		default:
+			extPath := s.extendPathToGroupLeaf(appendBit(path, 1), node.right, remainingLevels)
+			s.collectNodes(node.right, extPath, flushfn, groupDepth)
+		}
+	}
+	return nil
+}
+
+// extendPathToGroupLeaf extends a storage path to the group's leaf boundary,
+// matching the projection done by serializeSubtree. For StemNodes, the path
+// is extended using the stem's key bits (same as serializeSubtree). For other
+// node types, the path is extended with all-zero (left) bits.
+func (s *nodeStore) extendPathToGroupLeaf(path []byte, node nodeRef, remainingLevels int) []byte {
+	if remainingLevels <= 0 {
+		return path
+	}
+	if node.Kind() == kindStem {
+		sn := s.getStem(node.Index())
+		for _ = range remainingLevels {
+			bit := sn.Stem[len(path)/8] >> (7 - (len(path) % 8)) & 1
+			path = appendBit(path, bit)
+		}
+	} else {
+		// HashedNode or other: all-left extension (matches serializeSubtree's
+		// position << remainingDepth behavior).
+		for _ = range remainingLevels {
+			path = appendBit(path, 0)
+		}
+	}
+	return path
+}
+
+// appendBit appends a bit to a path, returning a new slice
+func appendBit(path []byte, bit byte) []byte {
+	var p [256]byte
+	copy(p[:], path)
+	result := p[:len(path)]
+	return append(result, bit)
 }
 
 func (s *nodeStore) toDot(ref nodeRef, parent, path string) string {

@@ -67,7 +67,10 @@ type tcpDialer struct {
 }
 
 func (t tcpDialer) Dial(ctx context.Context, dest *enode.Node) (net.Conn, error) {
-	addr, _ := dest.TCPEndpoint()
+	addr, ok := dest.TCPEndpoint()
+	if !ok {
+		return nil, errNoPort
+	}
 	return t.d.DialContext(ctx, "tcp", addr.String())
 }
 

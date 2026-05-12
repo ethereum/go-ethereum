@@ -208,21 +208,9 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	}
 
 	// Collect consensus-layer requests if Prague is enabled.
-	var requests [][]byte
-	if miner.chainConfig.IsPrague(work.header.Number, work.header.Time) {
-		requests = [][]byte{}
-		// EIP-6110 deposits
-		if err := core.ParseDepositLogs(&requests, allLogs, miner.chainConfig); err != nil {
-			return &newPayloadResult{err: err}
-		}
-		// EIP-7002
-		if err := core.ProcessWithdrawalQueue(&requests, work.evm); err != nil {
-			return &newPayloadResult{err: err}
-		}
-		// EIP-7251 consolidations
-		if err := core.ProcessConsolidationQueue(&requests, work.evm); err != nil {
-			return &newPayloadResult{err: err}
-		}
+	requests, err := core.PostExecution(ctx, miner.chainConfig, work.header.Number, work.header.Time, allLogs, work.evm)
+	if err != nil {
+		return &newPayloadResult{err: err}
 	}
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
@@ -329,12 +317,8 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
 	}
-	if header.ParentBeaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, env.evm)
-	}
-	if miner.chainConfig.IsPrague(header.Number, header.Time) {
-		core.ProcessParentBlockHash(header.ParentHash, env.evm)
-	}
+	// Run pre-execution system calls
+	core.PreExecution(ctx, header.ParentBeaconRoot, header.ParentHash, miner.chainConfig, env.evm, header.Number, header.Time)
 	return env, nil
 }
 

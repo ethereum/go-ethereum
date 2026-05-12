@@ -18,6 +18,7 @@
 package locals
 
 import (
+	"cmp"
 	"slices"
 	"sync"
 	"time"
@@ -151,7 +152,7 @@ func (tracker *TxTracker) recheck(journalCheck bool) []*types.Transaction {
 		for _, list := range rejournal {
 			// cmp(a, b) should return a negative number when a < b,
 			slices.SortFunc(list, func(a, b *types.Transaction) int {
-				return int(a.Nonce() - b.Nonce())
+				return cmp.Compare(a.Nonce(), b.Nonce())
 			})
 		}
 		// Rejournal the tracker while holding the lock. No new transactions will

@@ -768,8 +768,9 @@ func TestGetStorageNonMembershipInternalRoot(t *testing.T) {
 // flushes only the root-to-leaf path.
 func TestCommitSkipCleanSubtrees(t *testing.T) {
 	tr := &BinaryTrie{
-		store:  newNodeStore(),
-		tracer: trie.NewPrevalueTracer(),
+		store:      newNodeStore(),
+		tracer:     trie.NewPrevalueTracer(),
+		groupDepth: 1,
 	}
 	const n = 200
 	key := func(i int) [HashSize]byte {

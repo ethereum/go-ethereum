@@ -145,7 +145,7 @@ jobs:
 
   windows:
     name: Windows Build
-    runs-on: "win-11"
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
 
@@ -155,57 +155,46 @@ jobs:
         go-version: 1.24
         cache: false
 
-    # Note: gcc.exe only works properly if the corresponding bin/ directory is
-    # contained in PATH.
+    - name: Install cross toolchain
+      run: |
+        apt-get update
+        apt-get -yq --no-install-suggests --no-install-recommends install \
+          gcc-mingw-w64-x86-64 gcc-mingw-w64-i686 nsis
 
     - name: "Build (amd64)"
-      shell: cmd
       run: |
-        set PATH=%GETH_MINGW%\bin;%PATH%
-        go run build/ci.go install -dlgo -arch amd64 -cc %GETH_MINGW%\bin\gcc.exe
-      env:
-        GETH_MINGW: 'C:\msys64\mingw64'
+        go run build/ci.go install -dlgo -os windows -arch amd64 -cc x86_64-w64-mingw32-gcc
 
     - name: "Create/upload archive (amd64)"
-      shell: cmd
       run: |
-        go run build/ci.go archive -arch amd64 -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+        go run build/ci.go archive -os windows -arch amd64 -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
       env:
         WINDOWS_SIGNING_KEY: ${{ secrets.WINDOWS_SIGNING_KEY }}
         AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
 
     - name: "Create/upload NSIS installer (amd64)"
-      shell: cmd
       run: |
-        set "PATH=C:\Program Files (x86)\NSIS;%PATH%"
         go run build/ci.go nsis -arch amd64 -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
-        del /Q build\bin\*
+        rm -f build/bin/*
       env:
         WINDOWS_SIGNING_KEY: ${{ secrets.WINDOWS_SIGNING_KEY }}
         AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
 
     - name: "Build (386)"
-      shell: cmd
       run: |
-        set PATH=%GETH_MINGW%\bin;%PATH%
-        go run build/ci.go install -dlgo -arch 386 -cc %GETH_MINGW%\bin\gcc.exe
-      env:
-        GETH_MINGW: 'C:\msys64\mingw32'
+        go run build/ci.go install -dlgo -os windows -arch 386 -cc i686-w64-mingw32-gcc
 
     - name: "Create/upload archive (386)"
-      shell: cmd
       run: |
-        go run build/ci.go archive -arch 386 -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+        go run build/ci.go archive -os windows -arch 386 -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
       env:
         WINDOWS_SIGNING_KEY: ${{ secrets.WINDOWS_SIGNING_KEY }}
         AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
 
     - name: "Create/upload NSIS installer (386)"
-      shell: cmd
       run: |
-        set "PATH=C:\Program Files (x86)\NSIS;%PATH%"
         go run build/ci.go nsis -arch 386 -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
-        del /Q build\bin\*
+        rm -f build/bin/*
       env:
         WINDOWS_SIGNING_KEY: ${{ secrets.WINDOWS_SIGNING_KEY }}
         AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
