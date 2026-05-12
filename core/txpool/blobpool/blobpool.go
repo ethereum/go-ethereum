@@ -719,10 +719,9 @@ func (p *BlobPool) Close() error {
 func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) (bool, error) {
 	var ptx blobTxForPool
 	if err := rlp.DecodeBytes(blob, &ptx); err != nil {
-		kind, _, _, splitErr := rlp.Split(blob)
-		if splitErr == nil && kind == rlp.String {
-			// legacy transaction is an RLP string
-			// while blobTxForPool is encoded as an RLP list.
+		kind, content, _, splitErr := rlp.Split(blob)
+		// check whether it is legacy tx type
+		if splitErr == nil && kind == rlp.String && len(content) > 1 && content[0] == 3 {
 			return true, nil
 		}
 		return false, err
