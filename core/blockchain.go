@@ -656,6 +656,20 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 	writeTime := time.Since(writeStart)
 	var stats ExecuteStats
 
+	wc := stateTransition.WrittenCounts()
+	d := stateTransition.Deletions()
+	codeLoaded, codeLoadBytes := prefetchReader.(state.CodeLoadTracker).CodeLoads()
+	stats.AccountLoaded = al.UniqueAccountCount()
+	stats.AccountUpdated = wc.Accounts - d.Accounts
+	stats.AccountDeleted = d.Accounts
+	stats.StorageLoaded = al.UniqueStorageSlotCount()
+	stats.StorageUpdated = wc.StorageSlots - d.Storage
+	stats.StorageDeleted = d.Storage
+	stats.CodeLoaded = codeLoaded
+	stats.CodeLoadBytes = codeLoadBytes
+	stats.CodeUpdated = wc.Codes
+	stats.CodeUpdateBytes = wc.CodeBytes
+
 	stats.ExecWall = res.ExecTime
 	stats.PostProcess = res.PostProcessTime
 
@@ -666,12 +680,9 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 		stats.DatabaseCommit = m.TrieDBCommits
 		stats.Prefetch = m.StatePrefetch
 	}
-
 	stats.Prefetch = prefetchReader.(state.PrefetcherMetricer).Metrics().Elapsed
 
-	if r, ok := prefetchReader.(state.ReaderStater); ok {
-		stats.StateReadCacheStats = r.GetStats()
-	}
+	stats.StateReadCacheStats = prefetchReader.(state.ReaderStater).GetStats()
 
 	elapsed := time.Since(startTime) + 1 // prevent zero division
 	stats.TotalTime = elapsed
@@ -2436,11 +2447,11 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		stats    = &ExecuteStats{}
 	)
 	// Update the metrics touched during block processing and validation
-	stats.AccountReads = statedb.AccountReads     // Account reads are complete(in processing)
-	stats.StorageReads = statedb.StorageReads     // Storage reads are complete(in processing)
-	stats.AccountUpdates = statedb.AccountUpdates // Account updates are complete(in validation)
-	stats.StorageUpdates = statedb.StorageUpdates // Storage updates are complete(in validation)
-	stats.AccountHashes = statedb.AccountHashes   // Account hashes are complete(in validation)
+	stats.AccountReads = statedb.AccountReads     // Account reads are complete (in processing)
+	stats.StorageReads = statedb.StorageReads     // Storage reads are complete (in processing)
+	stats.AccountUpdates = statedb.AccountUpdates // Account updates are complete (in validation)
+	stats.StorageUpdates = statedb.StorageUpdates // Storage updates are complete (in validation)
+	stats.AccountHashes = statedb.AccountHashes   // Account hashes are complete (in validation)
 	stats.CodeReads = statedb.CodeReads
 
 	stats.AccountLoaded = statedb.AccountLoaded
@@ -2455,9 +2466,9 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	stats.CodeUpdated = statedb.CodeUpdated
 	stats.CodeUpdateBytes = statedb.CodeUpdateBytes
 
-	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // The time spent on EVM processing
-	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation
-	stats.CrossValidation = xvtime                                                                       // The time spent on stateless cross validation
+	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // EVM processing time
+	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // Block validation time
+	stats.CrossValidation = xvtime
 
 	// Write the block to the chain and get the status.
 	var status WriteStatus

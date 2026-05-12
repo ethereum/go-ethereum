@@ -382,3 +382,16 @@ func (r *readerTracker) TouchStorage(addr common.Address, slot common.Hash) {
 	}
 	list[slot] = struct{}{}
 }
+
+func (r *readerTracker) CodeLoads() (count, bytes int) {
+	return r.Reader.(CodeLoadTracker).CodeLoads()
+}
+
+// GetStateStats forwards stats from the wrapped reader; without this, BAL
+// blocks would emit zero cache hit/miss counts.
+func (r *prefetchStateReader) GetStateStats() StateReaderStats {
+	if stater, ok := r.StateReader.(StateReaderStater); ok {
+		return stater.GetStateStats()
+	}
+	return StateReaderStats{}
+}

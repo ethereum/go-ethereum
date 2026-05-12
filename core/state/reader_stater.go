@@ -16,6 +16,11 @@
 
 package state
 
+// CodeLoadTracker exposes a Reader's deduplicated code-load count and bytes.
+type CodeLoadTracker interface {
+	CodeLoads() (count, bytes int)
+}
+
 // ContractCodeReaderStats aggregates statistics for the contract code reader.
 type ContractCodeReaderStats struct {
 	CacheHit       int64 // Number of cache hits

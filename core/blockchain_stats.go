@@ -38,17 +38,16 @@ type ExecuteStats struct {
 	StorageCommits time.Duration // Time spent on the storage trie commit
 	CodeReads      time.Duration // Time spent on the contract code read
 
-	// TODO: code bytes loaded
-	AccountLoaded   int // Number of accounts loaded
-	AccountUpdated  int // Number of accounts updated
-	AccountDeleted  int // Number of accounts deleted
-	StorageLoaded   int // Number of storage slots loaded
-	StorageUpdated  int // Number of storage slots updated
-	StorageDeleted  int // Number of storage slots deleted
-	CodeLoaded      int // Number of contract code loaded
-	CodeLoadBytes   int // Number of bytes read from contract code
-	CodeUpdated     int // Number of contract code written (CREATE/CREATE2 + EIP-7702)
-	CodeUpdateBytes int // Total bytes of code written
+	AccountLoaded   int
+	AccountUpdated  int
+	AccountDeleted  int
+	StorageLoaded   int
+	StorageUpdated  int
+	StorageDeleted  int
+	CodeLoaded      int
+	CodeLoadBytes   int
+	CodeUpdated     int
+	CodeUpdateBytes int
 
 	Execution       time.Duration // Time spent on the EVM execution
 	Validation      time.Duration // Time spent on the block validation
@@ -223,7 +222,7 @@ func buildSlowBlockLog(s *ExecuteStats, block *types.Block) slowBlockLog {
 		},
 		Timing: slowBlockTime{
 			ExecutionMs: durationToMs(s.Execution),
-			StateReadMs: durationToMs(s.AccountReads + s.StorageReads + s.CodeReads),
+			StateReadMs: durationToMs(s.AccountReads + s.StorageReads + s.CodeReads + s.Prefetch),
 			StateHashMs: durationToMs(s.AccountHashes + s.AccountUpdates + s.StorageUpdates),
 			CommitMs:    durationToMs(max(s.AccountCommits, s.StorageCommits) + s.DatabaseCommit + s.BlockWrite),
 			TotalMs:     durationToMs(s.TotalTime),
@@ -304,8 +303,8 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Durat
 }
 
 func (s *ExecuteStats) reportBALMetrics() {
-	accountCommitTimer.Update(s.AccountCommits) // Account commits are complete, we can mark them
-	storageCommitTimer.Update(s.StorageCommits) // Storage commits are complete, we can mark them
+	accountCommitTimer.Update(s.AccountCommits)
+	storageCommitTimer.Update(s.StorageCommits)
 
 	if m := s.balTransitionStats; m != nil {
 		stateTriePrefetchTimer.Update(m.StatePrefetch)
