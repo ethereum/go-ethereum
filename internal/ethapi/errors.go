@@ -102,6 +102,7 @@ func (e *invalidTxError) ErrorCode() int { return e.Code }
 const (
 	errCodeNonceTooHigh            = -38011
 	errCodeNonceTooLow             = -38010
+	errCodeBaseFeeTooLow           = -38012
 	errCodeIntrinsicGas            = -38013
 	errCodeInsufficientFunds       = -38014
 	errCodeBlockGasLimitReached    = -38015
@@ -134,7 +135,7 @@ func txValidationError(err error) *invalidTxError {
 	case errors.Is(err, core.ErrTipAboveFeeCap):
 		return &invalidTxError{Message: err.Error(), Code: errCodeInvalidParams}
 	case errors.Is(err, core.ErrFeeCapTooLow):
-		return &invalidTxError{Message: err.Error(), Code: errCodeInvalidParams}
+		return &invalidTxError{Message: err.Error(), Code: errCodeBaseFeeTooLow}
 	case errors.Is(err, core.ErrInsufficientFunds):
 		return &invalidTxError{Message: err.Error(), Code: errCodeInsufficientFunds}
 	case errors.Is(err, core.ErrIntrinsicGas):
