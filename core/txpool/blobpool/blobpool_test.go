@@ -2138,3 +2138,87 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 		}
 	}
 }
+
+func TestBlobpoolReinjectRestoresPayloadAcrossRestart(t *testing.T) {
+	storage := t.TempDir()
+
+	key, _ := crypto.GenerateKey()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	tx := makeMultiBlobTx(0, 1, 1000, 100, 1, 0, key, types.BlobSidecarVersion0)
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(0, true, false)
+
+	chain := &testBlockChain{
+		config:  params.MainnetChainConfig,
+		basefee: uint256.NewInt(1050),
+		blobfee: uint256.NewInt(105),
+		statedb: statedb,
+	}
+	currentHead := chain.CurrentBlock()
+
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, currentHead, newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+	if errs := pool.Add([]*types.Transaction{tx}, true); errs[0] != nil {
+		t.Fatalf("failed to add tx to pool: %v", errs[0])
+	}
+	wantRLP := pool.getRLP(tx.Hash())
+	if len(wantRLP) == 0 {
+		t.Fatalf("missing blob tx payload before offload")
+	}
+
+	includeHead := &types.Header{
+		Number:     big.NewInt(int64(currentHead.Number.Uint64() + 1)),
+		Difficulty: common.Big0,
+		BaseFee:    currentHead.BaseFee,
+	}
+	chain.blocks = map[uint64]*types.Block{
+		includeHead.Number.Uint64(): types.NewBlockWithHeader(includeHead).WithBody(types.Body{
+			Transactions: []*types.Transaction{tx},
+		}),
+	}
+	chain.statedb.SetNonce(addr, tx.Nonce()+1, tracing.NonceChangeUnspecified)
+	pool.Reset(currentHead, includeHead)
+
+	if got := pool.Get(tx.Hash()); got != nil {
+		t.Fatalf("got non-nil blob tx after offload")
+	}
+	if err := pool.Close(); err != nil {
+		t.Fatalf("failed to close pool: %v", err)
+	}
+
+	pool = New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, includeHead, newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+	if got := pool.Get(tx.Hash()); got != nil {
+		t.Fatalf("got non-nil blob tx after offload")
+	}
+
+	chain.statedb.SetNonce(addr, tx.Nonce(), tracing.NonceChangeUnspecified)
+	pool.Reset(includeHead, currentHead)
+
+	got := pool.Get(tx.Hash())
+	if got == nil {
+		t.Fatalf("got nil blob tx after offload")
+	}
+	if !bytes.Equal(pool.GetRLP(tx.Hash()), wantRLP) {
+		t.Fatalf("got blob tx after offload")
+	}
+	blobs, _, proofs, err := pool.GetBlobs(tx.BlobHashes(), types.BlobSidecarVersion0)
+	if err != nil {
+		t.Fatalf("failed to get blobs: %v", err)
+	}
+	if len(blobs) != 1 || blobs[0] == nil {
+		t.Fatalf("missing blob after reinjection")
+	}
+	if len(proofs) != 1 || len(proofs[0]) != 1 {
+		t.Fatalf("missing proof after reinjection")
+	}
+	verifyBlobRetrievals(t, pool)
+
+	pool.Close()
+}

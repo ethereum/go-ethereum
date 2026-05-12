@@ -18,6 +18,7 @@ package blobpool
 
 import (
 	"errors"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -31,38 +32,29 @@ import (
 // to which it belongs as well as the block number in which it was included for
 // finality eviction.
 type limboBlob struct {
-	TxHash common.Hash // Owner transaction's hash to support resurrecting reorged txs
-	Block  uint64      // Block in which the blob transaction was included
-	Tx     *types.Transaction
+	TxHash common.Hash        // Owner transaction's hash to support resurrecting reorged txs
+	Block  uint64             // Block in which the blob transaction was included
+	Tx     *types.Transaction `rlp:"nil"` // Optional full blob transaction (old storage style)
+	TxMeta *blobTxMeta        // the blob transaction metadata.
+	Raw    []byte             // Canonical raw blob transaction payload for reinjection
+	id     uint64             // the billy id of limboBlob
 }
 
 // limbo is a light, indexed database to temporarily store recently included
 // blobs until they are finalized. The purpose is to support small reorgs, which
 // would require pulling back up old blobs (which aren't part of the chain).
-//
-// TODO(karalabe): Currently updating the inclusion block of a blob needs a full db rewrite. Can we do without?
 type limbo struct {
-	store billy.Database // Persistent data store for limboed blobs
-
-	index  map[common.Hash]uint64            // Mappings from tx hashes to datastore ids
-	groups map[uint64]map[uint64]common.Hash // Set of txs included in past blocks
+	store billy.Database             // Persistent data store for limboed blobs
+	index map[common.Hash]*limboBlob // Mappings from tx hashes to datastore ids
 }
 
 // newLimbo opens and indexes a set of limboed blob transactions.
-func newLimbo(config *params.ChainConfig, datadir string) (*limbo, error) {
+func newLimbo(_ *params.ChainConfig, datadir string) (*limbo, error) {
 	l := &limbo{
-		index:  make(map[common.Hash]uint64),
-		groups: make(map[uint64]map[uint64]common.Hash),
+		index: make(map[common.Hash]*limboBlob),
 	}
 
-	// Create new slotter for pre-Osaka blob configuration.
-	slotter := newSlotter(params.BlobTxMaxBlobs)
-
-	// See if we need to migrate the limbo after fusaka.
-	slotter, err := tryMigrate(config, slotter, datadir)
-	if err != nil {
-		return nil, err
-	}
+	slotter := newLimboSlotter()
 
 	// Index all limboed blobs on disk and delete anything unprocessable
 	var fails []uint64
@@ -86,7 +78,44 @@ func newLimbo(config *params.ChainConfig, datadir string) (*limbo, error) {
 			}
 		}
 	}
+
 	return l, nil
+}
+
+// newLimboSlotter returns a shelf layout that can read the legacy limbo formats
+// and also store full blob transaction payloads for reinjection.
+func newLimboSlotter() billy.SlotSizeFn {
+	var (
+		sizes []uint32
+		seen  = make(map[uint32]struct{})
+	)
+	addSlotter := func(slotter billy.SlotSizeFn) {
+		for {
+			size, done := slotter()
+			if _, ok := seen[size]; !ok {
+				seen[size] = struct{}{}
+				sizes = append(sizes, size)
+			}
+			if done {
+				break
+			}
+		}
+	}
+	// Preserve compatibility with the metadata-only limbo format introduced on
+	// this branch while also supporting the legacy and restored full payloads.
+	sizes = append(sizes, 1024)
+	seen[1024] = struct{}{}
+
+	addSlotter(newSlotter(params.BlobTxMaxBlobs))
+	addSlotter(newSlotterEIP7594(params.BlobTxMaxBlobs))
+
+	sort.Slice(sizes, func(i, j int) bool { return sizes[i] < sizes[j] })
+	var idx int
+	return func() (size uint32, done bool) {
+		size = sizes[idx]
+		idx++
+		return size, idx == len(sizes)
+	}
 }
 
 // Close closes down the underlying persistent store.
@@ -112,12 +141,8 @@ func (l *limbo) parseBlob(id uint64, data []byte) error {
 		log.Error("Dropping duplicate blob limbo entry", "owner", item.TxHash, "id", id)
 		return errors.New("duplicate blob")
 	}
-	l.index[item.TxHash] = id
-
-	if _, ok := l.groups[item.Block]; !ok {
-		l.groups[item.Block] = make(map[uint64]common.Hash)
-	}
-	l.groups[item.Block][id] = item.TxHash
+	item.id = id
+	l.index[item.TxHash] = item
 
 	return nil
 }
@@ -130,31 +155,30 @@ func (l *limbo) finalize(final *types.Header) {
 		log.Warn("Nil finalized block cannot evict old blobs")
 		return
 	}
-	for block, ids := range l.groups {
-		if block > final.Number.Uint64() {
+	// Note: deleting keys from a map during range is explicitly safe in Go.
+	// Any key deleted mid-iteration may or may not be visited; entries missed
+	// here will be cleaned up on the next finalize call.
+	for _, item := range l.index {
+		if item.Block > final.Number.Uint64() {
 			continue
 		}
-		for id, owner := range ids {
-			if err := l.store.Delete(id); err != nil {
-				log.Error("Failed to drop finalized blob", "block", block, "id", id, "err", err)
-			}
-			delete(l.index, owner)
+		if err := l.drop(item.TxHash); err != nil {
+			log.Error("Failed to drop finalized blob", "block", item.Block, "id", item.id, "err", err)
 		}
-		delete(l.groups, block)
 	}
 }
 
 // push stores a new blob transaction into the limbo, waiting until finality for
 // it to be automatically evicted.
-func (l *limbo) push(tx *types.Transaction, block uint64) error {
+func (l *limbo) push(raw []byte, meta *blobTxMeta, block uint64) error {
 	// If the blobs are already tracked by the limbo, consider it a programming
 	// error. There's not much to do against it, but be loud.
-	if _, ok := l.index[tx.Hash()]; ok {
-		log.Error("Limbo cannot push already tracked blobs", "tx", tx.Hash())
+	if _, ok := l.index[meta.hash]; ok {
+		log.Error("Limbo cannot push already tracked blobs", "tx", meta.hash)
 		return errors.New("already tracked blob transaction")
 	}
-	if err := l.setAndIndex(tx, block); err != nil {
-		log.Error("Failed to set and index limboed blobs", "tx", tx.Hash(), "err", err)
+	if err := l.setAndIndex(raw, nil, meta, block); err != nil {
+		log.Error("Failed to set and index limboed blobs", "tx", meta.hash, "err", err)
 		return err
 	}
 	return nil
@@ -163,21 +187,19 @@ func (l *limbo) push(tx *types.Transaction, block uint64) error {
 // pull retrieves a previously pushed set of blobs back from the limbo, removing
 // it at the same time. This method should be used when a previously included blob
 // transaction gets reorged out.
-func (l *limbo) pull(tx common.Hash) (*types.Transaction, error) {
+func (l *limbo) pull(tx common.Hash) (*limboBlob, error) {
 	// If the blobs are not tracked by the limbo, there's not much to do. This
 	// can happen for example if a blob transaction is mined without pushing it
 	// into the network first.
-	id, ok := l.index[tx]
+	item, ok := l.index[tx]
 	if !ok {
 		log.Trace("Limbo cannot pull non-tracked blobs", "tx", tx)
 		return nil, errors.New("unseen blob transaction")
 	}
-	item, err := l.getAndDrop(id)
-	if err != nil {
-		log.Error("Failed to get and drop limboed blobs", "tx", tx, "id", id, "err", err)
+	if err := l.drop(item.TxHash); err != nil {
 		return nil, err
 	}
-	return item.Tx, nil
+	return item, nil
 }
 
 // update changes the block number under which a blob transaction is tracked. This
@@ -191,61 +213,59 @@ func (l *limbo) update(txhash common.Hash, block uint64) {
 	// If the blobs are not tracked by the limbo, there's not much to do. This
 	// can happen for example if a blob transaction is mined without pushing it
 	// into the network first.
-	id, ok := l.index[txhash]
+	item, ok := l.index[txhash]
 	if !ok {
 		log.Trace("Limbo cannot update non-tracked blobs", "tx", txhash)
 		return
 	}
 	// If there was no change in the blob's inclusion block, don't mess around
 	// with heavy database operations.
-	if _, ok := l.groups[block][id]; ok {
+	if item.Block == block {
 		log.Trace("Blob transaction unchanged in limbo", "tx", txhash, "block", block)
 		return
 	}
-	// Retrieve the old blobs from the data store and write them back with a new
-	// block number. IF anything fails, there's not much to do, go on.
-	item, err := l.getAndDrop(id)
-	if err != nil {
-		log.Error("Failed to get and drop limboed blobs", "tx", txhash, "id", id, "err", err)
+	if err := l.drop(txhash); err != nil {
+		log.Error("Failed to drop old limboed metadata", "tx", txhash, "err", err)
 		return
 	}
-	if err := l.setAndIndex(item.Tx, block); err != nil {
+	if err := l.setAndIndex(item.Raw, item.Tx, item.TxMeta, block); err != nil {
 		log.Error("Failed to set and index limboed blobs", "tx", txhash, "err", err)
 		return
 	}
 	log.Trace("Blob transaction updated in limbo", "tx", txhash, "old-block", item.Block, "new-block", block)
 }
 
-// getAndDrop retrieves a blob item from the limbo store and deletes it both from
-// the store and indices.
-func (l *limbo) getAndDrop(id uint64) (*limboBlob, error) {
-	data, err := l.store.Get(id)
-	if err != nil {
-		return nil, err
+// drop removes the blob metadata from the limbo.
+func (l *limbo) drop(txhash common.Hash) error {
+	if item, ok := l.index[txhash]; ok {
+		// Remove the blob metadata entry from the limbo store. If anything fails,
+		// there's not much to do besides logging the error and returning.
+		if err := l.store.Delete(item.id); err != nil {
+			log.Error("Failed to drop old limboed blobs", "tx", txhash, "err", err)
+			return err
+		}
+		delete(l.index, txhash)
 	}
-	item := new(limboBlob)
-	if err = rlp.DecodeBytes(data, item); err != nil {
-		return nil, err
-	}
-	delete(l.index, item.TxHash)
-	delete(l.groups[item.Block], id)
-	if len(l.groups[item.Block]) == 0 {
-		delete(l.groups, item.Block)
-	}
-	if err := l.store.Delete(id); err != nil {
-		return nil, err
-	}
-	return item, nil
+	return nil
 }
 
 // setAndIndex assembles a limbo blob database entry and stores it, also updating
 // the in-memory indices.
-func (l *limbo) setAndIndex(tx *types.Transaction, block uint64) error {
-	txhash := tx.Hash()
+func (l *limbo) setAndIndex(raw []byte, tx *types.Transaction, meta *blobTxMeta, block uint64) error {
+	var txhash common.Hash
+	switch {
+	case meta != nil:
+		txhash = meta.hash
+	case tx != nil:
+		txhash = tx.Hash()
+	default:
+		return errors.New("missing limbo payload")
+	}
 	item := &limboBlob{
 		TxHash: txhash,
 		Block:  block,
-		Tx:     tx,
+		Raw:    raw,
+		TxMeta: meta,
 	}
 	data, err := rlp.EncodeToBytes(item)
 	if err != nil {
@@ -255,10 +275,9 @@ func (l *limbo) setAndIndex(tx *types.Transaction, block uint64) error {
 	if err != nil {
 		return err
 	}
-	l.index[txhash] = id
-	if _, ok := l.groups[block]; !ok {
-		l.groups[block] = make(map[uint64]common.Hash)
-	}
-	l.groups[block][id] = txhash
+	// Set the in-memory index
+	item.id = id
+	l.index[txhash] = item
+
 	return nil
 }
