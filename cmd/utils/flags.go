@@ -58,6 +58,7 @@ import (
 	"github.com/ethereum/go-ethereum/graphql"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/ethereum/go-ethereum/internal/memlimit"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/exp"
@@ -74,7 +75,6 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	pcsclite "github.com/gballet/go-libpcsclite"
-	gopsutil "github.com/shirou/gopsutil/mem"
 	"github.com/urfave/cli/v2"
 )
 
@@ -1751,16 +1751,18 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setMiner(ctx, &cfg.Miner)
 	setRequiredBlocks(ctx, cfg)
 
-	// Cap the cache allowance and tune the garbage collector
-	mem, err := gopsutil.VirtualMemory()
-	if err == nil {
-		if 32<<(^uintptr(0)>>63) == 32 && mem.Total > 2*1024*1024*1024 {
-			log.Warn("Lowering memory allowance on 32bit arch", "available", mem.Total/1024/1024, "addressable", 2*1024)
-			mem.Total = 2 * 1024 * 1024 * 1024
+	// Cap the cache allowance and tune the garbage collector against
+	// the effective memory limit (cgroup-imposed when running in a
+	// container, total system memory otherwise).
+	total, source := memlimit.Limit()
+	if total > 0 {
+		if 32<<(^uintptr(0)>>63) == 32 && total > 2*1024*1024*1024 {
+			log.Warn("Lowering memory allowance on 32bit arch", "available", total/1024/1024, "addressable", 2*1024)
+			total = 2 * 1024 * 1024 * 1024
 		}
-		allowance := int(mem.Total / 1024 / 1024 / 3)
+		allowance := int(total / 1024 / 1024 / 3)
 		if cache := ctx.Int(CacheFlag.Name); cache > allowance {
-			log.Warn("Sanitizing cache to Go's GC limits", "provided", cache, "updated", allowance)
+			log.Warn("Sanitizing cache to Go's GC limits", "source", source, "provided", cache, "updated", allowance)
 			ctx.Set(CacheFlag.Name, strconv.Itoa(allowance))
 		}
 	}
@@ -1775,14 +1777,14 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.SyncMode = ethconfig.FullSync // dev sync target forces full sync
 	} else if ctx.IsSet(SyncModeFlag.Name) {
 		value := ctx.String(SyncModeFlag.Name)
-		if err = cfg.SyncMode.UnmarshalText([]byte(value)); err != nil {
+		if err := cfg.SyncMode.UnmarshalText([]byte(value)); err != nil {
 			Fatalf("--%v: %v", SyncModeFlag.Name, err)
 		}
 	}
 
 	if ctx.IsSet(ChainHistoryFlag.Name) {
 		value := ctx.String(ChainHistoryFlag.Name)
-		if err = cfg.HistoryMode.UnmarshalText([]byte(value)); err != nil {
+		if err := cfg.HistoryMode.UnmarshalText([]byte(value)); err != nil {
 			Fatalf("--%s: %v", ChainHistoryFlag.Name, err)
 		}
 	}
