@@ -720,11 +720,11 @@ func TestJournalMutationTracking(t *testing.T) {
 	state.SetState(addr, key, common.Hash{0x3})
 
 	want := journalMutationCounts{
-		create:  1,
-		balance: 1,
-		nonce:   1,
-		code:    1,
-		storage: 1,
+		journalMutationKindCreate:  1,
+		journalMutationKindBalance: 1,
+		journalMutationKindNonce:   1,
+		journalMutationKindCode:    1,
+		journalMutationKindStorage: 1,
 	}
 	checkCounts := func(got *journalMutationState, label string) {
 		t.Helper()

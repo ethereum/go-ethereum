@@ -35,24 +35,22 @@ type revision struct {
 type journalMutationKind uint8
 
 const (
-	journalMutationKindTouch journalMutationKind = iota + 1
+	// journalMutationKindNone is the zero value returned by mutation() for
+	// entries that don't carry a tracked account mutation. The accompanying
+	// bool is false in that case; callers must gate on it before using the
+	// kind.
+	journalMutationKindNone journalMutationKind = iota
+	journalMutationKindTouch
 	journalMutationKindCreate
 	journalMutationKindSelfDestruct
 	journalMutationKindBalance
 	journalMutationKindNonce
 	journalMutationKindCode
 	journalMutationKindStorage
+	journalMutationKindCount // sentinel, must stay last
 )
 
-type journalMutationCounts struct {
-	touch        int
-	create       int
-	selfDestruct int
-	balance      int
-	nonce        int
-	code         int
-	storage      int
-}
+type journalMutationCounts [journalMutationKindCount]int
 
 // journalMutationState tracks, per account, both the per-kind count of mutation
 // entries currently present in the journal and the pre-tx value of each
@@ -116,49 +114,12 @@ func (s *journalMutationState) copy() *journalMutationState {
 }
 
 func (c *journalMutationCounts) add(kind journalMutationKind) {
-	switch kind {
-	case journalMutationKindTouch:
-		c.touch++
-	case journalMutationKindCreate:
-		c.create++
-	case journalMutationKindSelfDestruct:
-		c.selfDestruct++
-	case journalMutationKindBalance:
-		c.balance++
-	case journalMutationKindNonce:
-		c.nonce++
-	case journalMutationKindCode:
-		c.code++
-	case journalMutationKindStorage:
-		c.storage++
-	}
+	c[kind]++
 }
 
 func (c *journalMutationCounts) remove(kind journalMutationKind) bool {
-	switch kind {
-	case journalMutationKindTouch:
-		c.touch--
-		return c.touch == 0
-	case journalMutationKindCreate:
-		c.create--
-		return c.create == 0
-	case journalMutationKindSelfDestruct:
-		c.selfDestruct--
-		return c.selfDestruct == 0
-	case journalMutationKindBalance:
-		c.balance--
-		return c.balance == 0
-	case journalMutationKindNonce:
-		c.nonce--
-		return c.nonce == 0
-	case journalMutationKindCode:
-		c.code--
-		return c.code == 0
-	case journalMutationKindStorage:
-		c.storage--
-		return c.storage == 0
-	}
-	return false
+	c[kind]--
+	return c[kind] == 0
 }
 
 // journalEntry is a modification entry in the state change journal that can be
@@ -335,23 +296,16 @@ func (j *journal) copy() *journal {
 	for i := 0; i < j.length(); i++ {
 		entries = append(entries, j.entries[i].copy())
 	}
+	mutations := make(map[common.Address]*journalMutationState, len(j.mutations))
+	for addr, state := range j.mutations {
+		mutations[addr] = state.copy()
+	}
 	return &journal{
 		entries:        entries,
-		mutations:      copyMutationStates(j.mutations),
+		mutations:      mutations,
 		validRevisions: slices.Clone(j.validRevisions),
 		nextRevisionId: j.nextRevisionId,
 	}
-}
-
-func copyMutationStates(src map[common.Address]*journalMutationState) map[common.Address]*journalMutationState {
-	if src == nil {
-		return nil
-	}
-	dst := make(map[common.Address]*journalMutationState, len(src))
-	for addr, state := range src {
-		dst[addr] = state.copy()
-	}
-	return dst
 }
 
 func (j *journal) logChange(txHash common.Hash) {
@@ -528,7 +482,7 @@ func (ch createContractChange) revert(s *StateDB) {
 }
 
 func (ch createContractChange) mutation() (common.Address, journalMutationKind, bool) {
-	return common.Address{}, 0, false
+	return common.Address{}, journalMutationKindNone, false
 }
 
 func (ch createContractChange) copy() journalEntry {
@@ -636,7 +590,7 @@ func (ch transientStorageChange) revert(s *StateDB) {
 }
 
 func (ch transientStorageChange) mutation() (common.Address, journalMutationKind, bool) {
-	return common.Address{}, 0, false
+	return common.Address{}, journalMutationKindNone, false
 }
 
 func (ch transientStorageChange) copy() journalEntry {
@@ -652,7 +606,7 @@ func (ch refundChange) revert(s *StateDB) {
 }
 
 func (ch refundChange) mutation() (common.Address, journalMutationKind, bool) {
-	return common.Address{}, 0, false
+	return common.Address{}, journalMutationKindNone, false
 }
 
 func (ch refundChange) copy() journalEntry {
@@ -672,7 +626,7 @@ func (ch addLogChange) revert(s *StateDB) {
 }
 
 func (ch addLogChange) mutation() (common.Address, journalMutationKind, bool) {
-	return common.Address{}, 0, false
+	return common.Address{}, journalMutationKindNone, false
 }
 
 func (ch addLogChange) copy() journalEntry {
@@ -695,7 +649,7 @@ func (ch accessListAddAccountChange) revert(s *StateDB) {
 }
 
 func (ch accessListAddAccountChange) mutation() (common.Address, journalMutationKind, bool) {
-	return common.Address{}, 0, false
+	return common.Address{}, journalMutationKindNone, false
 }
 
 func (ch accessListAddAccountChange) copy() journalEntry {
@@ -709,7 +663,7 @@ func (ch accessListAddSlotChange) revert(s *StateDB) {
 }
 
 func (ch accessListAddSlotChange) mutation() (common.Address, journalMutationKind, bool) {
-	return common.Address{}, 0, false
+	return common.Address{}, journalMutationKindNone, false
 }
 
 func (ch accessListAddSlotChange) copy() journalEntry {

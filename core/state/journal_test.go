@@ -75,17 +75,17 @@ func checkJournalInvariants(t *testing.T, j *journal) {
 			t.Fatalf("addr %x: counts=%+v want=%+v", addr, state.counts, *want)
 		}
 		// First-touch *Set flags must mirror the live per-kind counts.
-		if state.balanceSet != (want.balance > 0) {
+		if state.balanceSet != (want[journalMutationKindBalance] > 0) {
 			t.Fatalf("addr %x: balanceSet=%v want=%v (balance count=%d)",
-				addr, state.balanceSet, want.balance > 0, want.balance)
+				addr, state.balanceSet, want[journalMutationKindBalance] > 0, want[journalMutationKindBalance])
 		}
-		if state.nonceSet != (want.nonce > 0) {
+		if state.nonceSet != (want[journalMutationKindNonce] > 0) {
 			t.Fatalf("addr %x: nonceSet=%v want=%v (nonce count=%d)",
-				addr, state.nonceSet, want.nonce > 0, want.nonce)
+				addr, state.nonceSet, want[journalMutationKindNonce] > 0, want[journalMutationKindNonce])
 		}
-		if state.codeSet != (want.code > 0) {
+		if state.codeSet != (want[journalMutationKindCode] > 0) {
 			t.Fatalf("addr %x: codeSet=%v want=%v (code count=%d)",
-				addr, state.codeSet, want.code > 0, want.code)
+				addr, state.codeSet, want[journalMutationKindCode] > 0, want[journalMutationKindCode])
 		}
 	}
 }
