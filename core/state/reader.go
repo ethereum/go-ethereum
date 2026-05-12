@@ -549,14 +549,6 @@ func newReaderWithPrefetch(codeReader ContractCodeReader, stateReader StateReade
 	}
 }
 
-func (r *reader) Account(addr common.Address) (*types.StateAccount, error) {
-	return r.StateReader.Account(addr)
-}
-
-func (r *reader) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
-	return r.StateReader.Storage(addr, slot)
-}
-
 func (r *reader) Code(addr common.Address, codeHash common.Hash) []byte {
 	code := r.ContractCodeReader.Code(addr, codeHash)
 	if len(code) > 0 {
