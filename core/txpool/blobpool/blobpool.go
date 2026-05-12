@@ -162,8 +162,8 @@ func (ptx *blobTxForPool) Sidecar() *types.BlobTxSidecar {
 	return types.NewBlobTxSidecar(ptx.Version, ptx.Blobs, ptx.Commitments, ptx.Proofs)
 }
 
-// WithSidecar copies the sidecar's fields into the flat fields.
-func (ptx *blobTxForPool) WithSidecar(sc *types.BlobTxSidecar) {
+// ApplySidecar copies the sidecar's fields into the flat fields.
+func (ptx *blobTxForPool) ApplySidecar(sc *types.BlobTxSidecar) {
 	ptx.Version = sc.Version
 	ptx.Commitments = sc.Commitments
 	ptx.Proofs = sc.Proofs
@@ -1279,7 +1279,7 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 			log.Error("Failed to convert the legacy sidecar", "err", err)
 			return err
 		}
-		ptx.WithSidecar(sc)
+		ptx.ApplySidecar(sc)
 		log.Info("Legacy blob transaction is reorged", "hash", ptx.Tx.Hash())
 	}
 	blob, err := rlp.EncodeToBytes(ptx)
