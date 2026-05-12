@@ -116,6 +116,8 @@ const (
 	announceThreshold = -1
 )
 
+var errLegacyTx = errors.New("legacy transaction format")
+
 // blobTxMeta is the minimal subset of types.BlobTx necessary to validate and
 // schedule the blob transactions into the following blocks. Only ever add the
 // bare minimum needed fields to keep the size down (and thus number of entries
@@ -574,11 +576,11 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 		convertTxs []uint64
 	)
 	index := func(id uint64, size uint32, blob []byte) {
-		legacy, err := p.parseTransaction(id, size, blob)
+		err := p.parseTransaction(id, size, blob)
 		if err != nil {
 			toDelete = append(toDelete, id)
-		} else if legacy {
-			toDelete = append(toDelete, id)
+		}
+		if errors.Is(err, errLegacyTx) {
 			convertTxs = append(convertTxs, id)
 		}
 	}
@@ -716,22 +718,22 @@ func (p *BlobPool) Close() error {
 // parseTransaction is a callback method on pool creation that gets called for
 // each transaction on disk to create the in-memory metadata index.
 // Return value `bool` is set to true when the entry has old Transaction type.
-func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) (bool, error) {
+func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 	var ptx blobTxForPool
 	if err := rlp.DecodeBytes(blob, &ptx); err != nil {
 		kind, content, _, splitErr := rlp.Split(blob)
 		// check whether it is legacy tx type
 		if splitErr == nil && kind == rlp.String && len(content) > 1 && content[0] == 3 {
-			return true, nil
+			return errLegacyTx
 		}
-		return false, err
+		return err
 	}
 	meta := newBlobTxMeta(id, ptx.TxSize(), size, &ptx)
 	sender, err := types.Sender(p.signer, ptx.Tx)
 	if err != nil {
-		return false, err
+		return err
 	}
-	return false, p.trackTransaction(meta, sender)
+	return p.trackTransaction(meta, sender)
 }
 
 // trackTransaction registers a transaction's metadata in the pool's indices.
