@@ -526,6 +526,7 @@ func (r *stateReaderWithStats) GetStateStats() StateReaderStats {
 	}
 }
 
+// reader aggregates a code reader and a state reader into a single object.
 type reader struct {
 	ContractCodeReader
 	StateReader
@@ -534,6 +535,7 @@ type reader struct {
 	codeLoaded sync.Map // common.Address → int (first-seen len(code))
 }
 
+// newReader constructs a reader with the supplied code reader and state reader.
 func newReader(codeReader ContractCodeReader, stateReader StateReader) *reader {
 	return &reader{
 		ContractCodeReader: codeReader,
