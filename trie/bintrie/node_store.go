@@ -41,6 +41,16 @@ type nodeStore struct {
 	// stem-split keeps the old stem at a deeper position), so they don't
 	// have free lists.
 	freeHashed []uint32
+
+	// groupDepth, when > 0, makes hashInternal compute the same hash that
+	// would be produced by serializing the node to a group blob and
+	// recursively hashing the blob's bottom-layer leaves. This matches the
+	// hash a fresh reader would compute via deserializeSubtree, keeping the
+	// parent-stored child hash byte-equal to the child's read-back hash.
+	// When 0, hashInternal falls back to the natural-depth SHA256 recursion
+	// used by tests that construct nodeStore directly without going through
+	// NewBinaryTrie.
+	groupDepth int
 }
 
 func newNodeStore() *nodeStore {
