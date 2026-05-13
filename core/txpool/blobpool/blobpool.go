@@ -1576,8 +1576,7 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 func (p *BlobPool) GetRLP(hash common.Hash) []byte {
 	data := p.getRLP(hash)
 	if len(data) == 0 {
-		// Not in this pool. The TxPool aggregator probes every subpool, so
-		// this is the common case for any non-blob hash; do not log.
+		// Not in this pool, do not log.
 		return nil
 	}
 	rlp, err := encodeForNetwork(data)
