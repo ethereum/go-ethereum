@@ -119,7 +119,8 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	}
 	blockAccessList.Merge(bal)
 
-	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
+	// Finalize the block, applying any consensus engine specific extras
+	// (e.g. block rewards).
 	//
 	// TODO(rjl493456442) integrate it into the PostExecution.
 	p.chain.Engine().Finalize(p.chain, header, tracingStateDB, block.Body(), uint32(len(block.Transactions())+1), blockAccessList)
@@ -165,17 +166,19 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 	}
 	// Read requests if Prague is enabled.
 	if config.IsPrague(number, time) {
+		rules := config.Rules(number, true, time) // IsMerge is always true
+
 		requests = [][]byte{}
 		// EIP-6110
 		if err := ParseDepositLogs(&requests, allLogs, config); err != nil {
 			return nil, nil, fmt.Errorf("failed to parse deposit logs: %w", err)
 		}
 		// EIP-7002
-		if err := ProcessWithdrawalQueue(&requests, evm, blockAccessIndex, blockAccessList); err != nil {
+		if err := ProcessWithdrawalQueue(&requests, rules, evm, blockAccessIndex, blockAccessList); err != nil {
 			return nil, nil, fmt.Errorf("failed to process withdrawal queue: %w", err)
 		}
 		// EIP-7251
-		if err := ProcessConsolidationQueue(&requests, evm, blockAccessIndex, blockAccessList); err != nil {
+		if err := ProcessConsolidationQueue(&requests, rules, evm, blockAccessIndex, blockAccessList); err != nil {
 			return nil, nil, fmt.Errorf("failed to process consolidation queue: %w", err)
 		}
 	}
@@ -284,6 +287,7 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM, blockAccessList
 		Data:      beaconRoot[:],
 	}
 	evm.SetTxContext(NewEVMTxContext(msg))
+	evm.StateDB.Prepare(evm.GetRules(), common.Address{}, common.Address{}, nil, nil, nil)
 	evm.StateDB.SetTxContext(common.Hash{}, 0, 0)
 	evm.StateDB.AddAddressToAccessList(params.BeaconRootsAddress)
 	_, _, _ = evm.Call(msg.From, *msg.To, msg.Data, vm.NewGasBudget(30_000_000), common.U2560)
@@ -312,6 +316,7 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM, blockAccessList *
 		Data:      prevHash.Bytes(),
 	}
 	evm.SetTxContext(NewEVMTxContext(msg))
+	evm.StateDB.Prepare(evm.GetRules(), common.Address{}, common.Address{}, nil, nil, nil)
 	evm.StateDB.SetTxContext(common.Hash{}, 0, 0)
 	evm.StateDB.AddAddressToAccessList(params.HistoryStorageAddress)
 	_, _, err := evm.Call(msg.From, *msg.To, msg.Data, vm.NewGasBudget(30_000_000), common.U2560)
@@ -326,17 +331,17 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM, blockAccessList *
 
 // ProcessWithdrawalQueue calls the EIP-7002 withdrawal queue contract.
 // It returns the opaque request data returned by the contract.
-func ProcessWithdrawalQueue(requests *[][]byte, evm *vm.EVM, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
-	return processRequestsSystemCall(requests, evm, 0x01, params.WithdrawalQueueAddress, blockAccessIndex, blockAccessList)
+func ProcessWithdrawalQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
+	return processRequestsSystemCall(requests, rules, evm, 0x01, params.WithdrawalQueueAddress, blockAccessIndex, blockAccessList)
 }
 
 // ProcessConsolidationQueue calls the EIP-7251 consolidation queue contract.
 // It returns the opaque request data returned by the contract.
-func ProcessConsolidationQueue(requests *[][]byte, evm *vm.EVM, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
-	return processRequestsSystemCall(requests, evm, 0x02, params.ConsolidationQueueAddress, blockAccessIndex, blockAccessList)
+func ProcessConsolidationQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
+	return processRequestsSystemCall(requests, rules, evm, 0x02, params.ConsolidationQueueAddress, blockAccessIndex, blockAccessList)
 }
 
-func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte, addr common.Address, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
+func processRequestsSystemCall(requests *[][]byte, rules params.Rules, evm *vm.EVM, requestType byte, addr common.Address, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
 	if tracer := evm.Config.Tracer; tracer != nil {
 		onSystemCallStart(tracer, evm.GetVMContext())
 		if tracer.OnSystemCallEnd != nil {
@@ -352,6 +357,7 @@ func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte
 		To:        &addr,
 	}
 	evm.SetTxContext(NewEVMTxContext(msg))
+	evm.StateDB.Prepare(rules, common.Address{}, common.Address{}, nil, nil, nil)
 	evm.StateDB.SetTxContext(common.Hash{}, 0, blockAccessIndex)
 	evm.StateDB.AddAddressToAccessList(addr)
 	ret, _, err := evm.Call(msg.From, *msg.To, msg.Data, vm.NewGasBudget(30_000_000), common.U2560)
@@ -362,6 +368,8 @@ func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte
 	if err != nil {
 		return fmt.Errorf("system call failed to execute: %v", err)
 	}
+	blockAccessList.Merge(bal)
+
 	if len(ret) == 0 {
 		return nil // skip empty output
 	}
@@ -370,7 +378,6 @@ func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte
 	requestsData[0] = requestType
 	copy(requestsData[1:], ret)
 	*requests = append(*requests, requestsData)
-	blockAccessList.Merge(bal)
 	return nil
 }
 

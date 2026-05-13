@@ -18,6 +18,7 @@ package vm
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"sync/atomic"
 
@@ -144,6 +145,9 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
 		jumpDests:   newMapJumpDests(),
 		arena:       newArena(),
+	}
+	if !evm.chainRules.IsAmsterdam {
+		fmt.Println("DEBUG")
 	}
 	evm.precompiles = activePrecompiledContracts(evm.chainRules)
 
@@ -708,4 +712,9 @@ func (evm *EVM) GetVMContext() *tracing.VMContext {
 		BaseFee:     evm.Context.BaseFee,
 		StateDB:     evm.StateDB,
 	}
+}
+
+// GetRules returns the chain rules used throughout the EVM execution.
+func (evm *EVM) GetRules() params.Rules {
+	return evm.chainRules
 }
