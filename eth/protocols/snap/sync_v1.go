@@ -38,6 +38,48 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+const (
+	// trienodeHealRateMeasurementImpact is the impact a single measurement has on
+	// the local node's trienode processing capacity. A value closer to 0 reacts
+	// slower to sudden changes, but it is also more stable against temporary hiccups.
+	trienodeHealRateMeasurementImpact = 0.005
+
+	// minTrienodeHealThrottle is the minimum divisor for throttling trie node
+	// heal requests to avoid overloading the local node and excessively expanding
+	// the state trie breadth wise.
+	minTrienodeHealThrottle = 1
+
+	// maxTrienodeHealThrottle is the maximum divisor for throttling trie node
+	// heal requests to avoid overloading the local node and exessively expanding
+	// the state trie bedth wise.
+	maxTrienodeHealThrottle = maxTrieRequestCount
+
+	// trienodeHealThrottleIncrease is the multiplier for the throttle when the
+	// rate of arriving data is higher than the rate of processing it.
+	trienodeHealThrottleIncrease = 1.33
+
+	// trienodeHealThrottleDecrease is the divisor for the throttle when the
+	// rate of arriving data is lower than the rate of processing it.
+	trienodeHealThrottleDecrease = 1.25
+)
+
+// registerV1 wires the Syncer's version-specific hooks to the snap/1
+// implementation and allocates snap/1 specific state on the Syncer.
+func (s *Syncer) registerV1() {
+	// Dispatcher hooks used from shared code in sync.go.
+	s.syncFn = s.syncV1
+	s.revertVersionRequests = s.revertHealRequests
+	s.onBytecodesAfterSync = s.onHealByteCodes
+
+	// V1 specific state.
+	s.trienodeHealIdlers = make(map[string]struct{})
+	s.bytecodeHealIdlers = make(map[string]struct{})
+	s.trienodeHealReqs = make(map[uint64]*trienodeHealRequest)
+	s.bytecodeHealReqs = make(map[uint64]*bytecodeHealRequest)
+	s.trienodeHealThrottle = maxTrienodeHealThrottle
+	s.stateWriter = s.db.NewBatch()
+}
+
 // trienodeHealRequest tracks a pending state trie request to ensure responses
 // are to actual requests and to validate any security constraints.
 //
@@ -520,6 +562,32 @@ func (s *Syncer) revertBytecodeHealRequest(req *bytecodeHealRequest) {
 	}
 }
 
+// revertHealRequests reverts in-flight trie-node and bytecode heal requests
+// from the given peer. Installed as Syncer.revertVersionRequests by registerV1.
+func (s *Syncer) revertHealRequests(peer string) {
+	s.lock.Lock()
+	var trienodeHealReqs []*trienodeHealRequest
+	for _, req := range s.trienodeHealReqs {
+		if req.peer == peer {
+			trienodeHealReqs = append(trienodeHealReqs, req)
+		}
+	}
+	var bytecodeHealReqs []*bytecodeHealRequest
+	for _, req := range s.bytecodeHealReqs {
+		if req.peer == peer {
+			bytecodeHealReqs = append(bytecodeHealReqs, req)
+		}
+	}
+	s.lock.Unlock()
+
+	for _, req := range trienodeHealReqs {
+		s.revertTrienodeHealRequest(req)
+	}
+	for _, req := range bytecodeHealReqs {
+		s.revertBytecodeHealRequest(req)
+	}
+}
+
 // processTrienodeHealResponse integrates an already validated trienode response
 // into the healer tasks.
 func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
@@ -874,6 +942,17 @@ func (s *Syncer) onHealState(paths [][]byte, value []byte) error {
 	return nil
 }
 
+// reportV1 routes between the shared sync-phase logger and the v1 heal-phase
+// logger based on whether account tasks are still pending. Called from syncV1's
+// main loop.
+func (s *Syncer) reportV1(force bool) {
+	if len(s.tasks) > 0 {
+		s.reportSyncProgress(force)
+		return
+	}
+	s.reportHealProgress(force)
+}
+
 // reportHealProgress calculates various status reports and provides it to the user.
 func (s *Syncer) reportHealProgress(force bool) {
 	// Don't report all the events, just occasionally
@@ -1107,7 +1186,7 @@ func (s *Syncer) syncV1(root common.Hash, cancel chan struct{}) error {
 			s.stateWriter.Reset()
 		}
 	}()
-	defer s.report(true)
+	defer s.reportV1(true)
 	// commit any trie- and bytecode-healing data.
 	defer s.commitHealer(true)
 
@@ -1230,6 +1309,6 @@ func (s *Syncer) syncV1(root common.Hash, cancel chan struct{}) error {
 			s.processBytecodeHealResponse(res)
 		}
 		// Report stats if something meaningful happened
-		s.report(false)
+		s.reportV1(false)
 	}
 }
