@@ -914,15 +914,16 @@ func makeSidecar(data ...byte) *types.BlobTxSidecar {
 	return types.NewBlobTxSidecar(types.BlobSidecarVersion1, blobs, commitments, proofs)
 }
 
-func (s *Suite) makeBlobTxs(count, blobs int, discriminator byte) (txs types.Transactions) {
+func (s *Suite) makeBlobTxs(txCount, blobCount int, discriminator byte) (txs types.Transactions, blobs [][]kzg4844.Blob) {
 	from, nonce := s.chain.GetSender(5)
-	for i := 0; i < count; i++ {
+	for i := 0; i < txCount; i++ {
 		// Make blob data, max of 2 blobs per tx.
-		blobdata := make([]byte, min(blobs, 2))
+		blobdata := make([]byte, min(blobCount, 2))
 		for i := range blobdata {
 			blobdata[i] = discriminator
-			blobs -= 1
+			blobCount -= 1
 		}
+		sidecar := makeSidecar(blobdata...)
 		inner := &types.BlobTx{
 			ChainID:    uint256.MustFromBig(s.chain.config.ChainID),
 			Nonce:      nonce + uint64(i),
@@ -930,16 +931,17 @@ func (s *Suite) makeBlobTxs(count, blobs int, discriminator byte) (txs types.Tra
 			GasFeeCap:  uint256.MustFromBig(s.chain.Head().BaseFee()),
 			Gas:        100000,
 			BlobFeeCap: uint256.MustFromBig(eip4844.CalcBlobFee(s.chain.config, s.chain.Head().Header())),
-			BlobHashes: makeSidecar(blobdata...).BlobHashes(),
-			Sidecar:    makeSidecar(blobdata...),
+			BlobHashes: sidecar.BlobHashes(),
+			Sidecar:    sidecar,
 		}
 		tx, err := s.chain.SignTx(from, types.NewTx(inner))
 		if err != nil {
 			panic("blob tx signing failed")
 		}
-		txs = append(txs, tx)
+		blobs = append(blobs, sidecar.Blobs)
+		txs = append(txs, tx.WithoutBlob())
 	}
-	return txs
+	return txs, blobs
 }
 
 func (s *Suite) TestBlobViolations(t *utesting.T) {
@@ -950,8 +952,8 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 	}
 	// Create blob txs for each tests with unique tx hashes.
 	var (
-		t1 = s.makeBlobTxs(2, 3, 0x1)
-		t2 = s.makeBlobTxs(2, 3, 0x2)
+		t1, _ = s.makeBlobTxs(2, 3, 0x1)
+		t2, _ = s.makeBlobTxs(2, 3, 0x2)
 	)
 	for _, test := range []struct {
 		ann  eth.NewPooledTransactionHashesPacket72
@@ -1034,22 +1036,29 @@ func mangleSidecar(tx *types.Transaction) *types.Transaction {
 
 func (s *Suite) TestBlobTxWithoutSidecar(t *utesting.T) {
 	t.Log(`This test checks that a blob transaction first advertised/transmitted without blobs will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
-	tx := s.makeBlobTxs(1, 2, 42)[0].WithoutBlob()
-	badTx := tx.WithoutBlobTxSidecar()
-	s.testBadBlobTx(t, tx, badTx)
+	tx, _ := s.makeBlobTxs(1, 2, 42)
+	badTx := tx[0].WithoutBlobTxSidecar()
+	s.testBadBlobTx(t, tx[0], badTx)
 }
 
 func (s *Suite) TestBlobTxWithMismatchedSidecar(t *utesting.T) {
 	t.Log(`This test checks that a blob transaction first advertised/transmitted without blobs, whose commitment don't correspond to the blob_versioned_hashes in the transaction, will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
-	tx := s.makeBlobTxs(1, 2, 43)[0].WithoutBlob()
-	badTx := mangleSidecar(tx)
-	s.testBadBlobTx(t, tx, badTx)
+	tx, _ := s.makeBlobTxs(1, 2, 43)
+	badTx := mangleSidecar(tx[0])
+	s.testBadBlobTx(t, tx[0], badTx)
 }
 
 // readUntil reads eth protocol messages until a message of the target type is
 // received.  It returns an error if there is a disconnect, or if the context
 // is cancelled before a message of the desired type can be read.
 func readUntil[T any](ctx context.Context, conn *Conn) (*T, error) {
+	// First check the buffer for a previously-stashed match.
+	for i, msg := range conn.pending {
+		if t, ok := msg.(*T); ok {
+			conn.pending = append(conn.pending[:i], conn.pending[i+1:]...)
+			return t, nil
+		}
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -1063,11 +1072,10 @@ func readUntil[T any](ctx context.Context, conn *Conn) (*T, error) {
 			}
 			continue
 		}
-
-		switch res := received.(type) {
-		case *T:
-			return res, nil
+		if t, ok := received.(*T); ok {
+			return t, nil
 		}
+		conn.pending = append(conn.pending, received)
 	}
 }
 
@@ -1225,7 +1233,7 @@ partial fetch GetCells should never arrive. Any GetCells that does arrive must b
 		t.Fatalf("send fcu failed: %v", err)
 	}
 
-	txs := s.makeBlobTxs(4, 4, 0x30)
+	txs, _ := s.makeBlobTxs(4, 4, 0x30)
 
 	conn, err := s.dial()
 	if err != nil {
@@ -1278,15 +1286,7 @@ partial fetch GetCells should never arrive. Any GetCells that does arrive must b
 				t.Fatalf("received partial GetCells request with only %d cells from single peer announcement", req.Mask.OneCount())
 			}
 		case *eth.GetPooledTransactionsPacket:
-			var txsWithoutBlob []*types.Transaction
-			for _, h := range req.GetPooledTransactionsRequest {
-				for _, tx := range txs {
-					if tx.Hash() == h {
-						txsWithoutBlob = append(txsWithoutBlob, tx.WithoutBlob())
-					}
-				}
-			}
-			encTxs, _ := rlp.EncodeToRawList(txsWithoutBlob)
+			encTxs, _ := rlp.EncodeToRawList(txs)
 			conn.Write(ethProto, eth.PooledTransactionsMsg, eth.PooledTransactionsPacket{
 				RequestId: req.RequestId,
 				List:      encTxs,
@@ -1296,11 +1296,11 @@ partial fetch GetCells should never arrive. Any GetCells that does arrive must b
 }
 
 // buildCells extracts cells at mask indices from the original tx's blobs
-func buildCells(sidecar *types.BlobTxSidecar, mask types.CustodyBitmap) []kzg4844.Cell {
-	allCells, _ := kzg4844.ComputeCells(sidecar.Blobs)
+func buildCells(blobs []kzg4844.Blob, mask types.CustodyBitmap) []kzg4844.Cell {
+	allCells, _ := kzg4844.ComputeCells(blobs)
 	indices := mask.Indices()
-	result := make([]kzg4844.Cell, 0, len(sidecar.Blobs)*len(indices))
-	for b := 0; b < len(sidecar.Blobs); b++ {
+	result := make([]kzg4844.Cell, 0, len(blobs)*len(indices))
+	for b := 0; b < len(blobs); b++ {
 		for _, idx := range indices {
 			result = append(result, allCells[b*kzg4844.CellsPerBlob+int(idx)])
 		}
@@ -1342,16 +1342,16 @@ func readAnyFrom[T any](conns ...*Conn) (*T, *Conn, error) {
 }
 
 func (s *Suite) TestGetCells(t *utesting.T) {
-	t.Log(`This test checks that blob tx announcements trigger GetCells requests, 
+	t.Log(`This test checks that blob tx announcements trigger GetCells requests,
 and that providing valid cells causes the tx to enter the pool.`)
 
 	if err := s.engine.sendForkchoiceUpdated(); err != nil {
 		t.Fatalf("send fcu failed: %v", err)
 	}
 
-	tx := s.makeBlobTxs(1, 1, 0x31)[0]
-	sidecar := tx.BlobTxSidecar()
-	tx = tx.WithoutBlob()
+	txs, blobs := s.makeBlobTxs(1, 1, 0x31)
+	tx := txs[0]
+	blob := blobs[0]
 
 	// Two peers ensure GetCells arrives regardless of full/partial fetch path.
 	conn1, err := s.dial()
@@ -1406,7 +1406,7 @@ and that providing valid cells causes the tx to enter the pool.`)
 	}
 
 	// Respond with valid cells matching the requested mask.
-	cells := buildCells(sidecar, cellsReq.Mask)
+	cells := buildCells(blob, cellsReq.Mask)
 	cellsResp := eth.CellsPacket{
 		RequestId: cellsReq.RequestId,
 		CellsResponse: eth.CellsResponse{
@@ -1433,7 +1433,9 @@ while the other peer is not.`)
 		t.Fatalf("send fcu failed: %v", err)
 	}
 
-	tx := s.makeBlobTxs(1, 1, 0x32)[0].WithoutBlob()
+	txs, blobs := s.makeBlobTxs(1, 1, 0x32)
+	tx := txs[0]
+	blob := blobs[0]
 
 	conn1, err := s.dial()
 	if err != nil {
@@ -1482,7 +1484,7 @@ while the other peer is not.`)
 	}
 
 	// Respond with corrupted cells (all zero bytes).
-	blobCount := len(tx.BlobTxSidecar().Blobs)
+	blobCount := len(blob)
 	corrupted := make([]kzg4844.Cell, blobCount*cellsReq.Mask.OneCount())
 	badResp := eth.CellsPacket{
 		RequestId: cellsReq.RequestId,
