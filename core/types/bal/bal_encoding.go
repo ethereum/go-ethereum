@@ -78,14 +78,14 @@ func (e *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
 // Validate returns an error if the contents of the access list are not ordered
 // according to the spec or any code changes are contained which exceed protocol
 // max code size.
-func (e *BlockAccessList) Validate(blockGasLimit uint64) error {
+func (e *BlockAccessList) Validate(blockGasLimit uint64, blockTxCount int) error {
 	if !slices.IsSortedFunc(*e, func(a, b AccountAccess) int {
 		return bytes.Compare(a.Address[:], b.Address[:])
 	}) {
 		return errors.New("block access list accounts not in lexicographic order")
 	}
 	for _, entry := range *e {
-		if err := entry.validate(); err != nil {
+		if err := entry.validate(blockTxCount + 1); err != nil {
 			return err
 		}
 	}
@@ -154,15 +154,28 @@ type encodingSlotWrites struct {
 	Accesses []encodingStorageWrite
 }
 
-// validate returns an instance of the encoding-representation slot writes in
-// working representation.
-func (e *encodingSlotWrites) validate() error {
-	if slices.IsSortedFunc(e.Accesses, func(a, b encodingStorageWrite) int {
-		return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
-	}) {
-		return nil
+func isStrictlySortedFunc[S ~[]E, E any](x S, cmp func(a, b E) int) bool {
+	for i := 1; i < len(x); i++ {
+		if cmp(x[i-1], x[i]) >= 0 {
+			return false // includes both unsorted and duplicate
+		}
 	}
-	return errors.New("storage write tx indices not in order")
+	return true
+}
+
+// validate asserts that the encodingSlotWrites contain storage modfications
+// which are ordered ascending by transaction index and contain no duplicate
+// modifications for a given index.
+func (e *encodingSlotWrites) validate(maxBALIndex int) error {
+	if !isStrictlySortedFunc(e.Accesses, func(a, b encodingStorageWrite) int {
+		return cmp.Compare(a.TxIdx, b.TxIdx)
+	}) {
+		return errors.New("storage write indexes must be unique and sorted")
+	}
+	if len(e.Accesses) > 0 && int(e.Accesses[len(e.Accesses)-1].TxIdx) > maxBALIndex {
+		return fmt.Errorf("storage write index exceeds limit, index: %d, limit: %d", e.Accesses[len(e.Accesses)-1].TxIdx, maxBALIndex)
+	}
+	return nil
 }
 
 // encodingCodeChange contains the runtime bytecode deployed at an address
@@ -185,46 +198,83 @@ type AccountAccess struct {
 // validate converts the account accesses out of encoding format.
 // If any of the keys in the encoding object are not ordered according to the
 // spec, an error is returned.
-func (e *AccountAccess) validate() error {
-	// Check the storage write slots are sorted in order
-	if !slices.IsSortedFunc(e.StorageWrites, func(a, b encodingSlotWrites) int {
+func (e *AccountAccess) validate(maxBALIndex int) error {
+	// Check the storage writes are sorted in order, and unique by slot
+	if !isStrictlySortedFunc(e.StorageWrites, func(a, b encodingSlotWrites) int {
 		return a.Slot.Cmp(b.Slot)
 	}) {
-		return errors.New("storage writes slots not in lexicographic order")
+		return errors.New("storage write slots must be unique and sorted")
 	}
-	for _, write := range e.StorageWrites {
-		if err := write.validate(); err != nil {
+	// Check the validity of each storage slot's mutations
+	for _, slotWrites := range e.StorageWrites {
+		if err := slotWrites.validate(maxBALIndex); err != nil {
 			return err
 		}
 	}
 
-	// Check the storage read slots are sorted in order
-	if !slices.IsSortedFunc(e.StorageReads, func(a, b *uint256.Int) int {
+	// Check the storage read slots are sorted in order, and unique by slot
+	if !isStrictlySortedFunc(e.StorageReads, func(a, b *uint256.Int) int {
 		return a.Cmp(b)
 	}) {
-		return errors.New("storage read slots not in lexicographic order")
+		return errors.New("storage read slots must be unique and sorted")
 	}
 
-	// Check the balance changes are sorted in order
-	if !slices.IsSortedFunc(e.BalanceChanges, func(a, b encodingBalanceChange) int {
-		return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
-	}) {
-		return errors.New("balance changes not in ascending order by tx index")
+	// Check that the set of written storage slots does not intersect with the
+	// set of read slots.
+	var (
+		readKeys  = make(map[common.Hash]struct{}, len(e.StorageReads))
+		writeKeys = make(map[common.Hash]struct{}, len(e.StorageWrites))
+	)
+	for _, rk := range e.StorageReads {
+		readKey := common.BytesToHash(rk.Bytes())
+		readKeys[readKey] = struct{}{}
+	}
+	for _, write := range e.StorageWrites {
+		writeKey := common.BytesToHash(write.Slot.Bytes())
+		writeKeys[writeKey] = struct{}{}
+	}
+	for readKey := range readKeys {
+		if _, ok := writeKeys[readKey]; ok {
+			return errors.New("storage key reported in both read/write sets")
+		}
 	}
 
-	// Check the nonce changes are sorted in order
-	if !slices.IsSortedFunc(e.NonceChanges, func(a, b encodingAccountNonce) int {
-		return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
+	// Check the balance changes are sorted in order, and unique by tx index
+	if !isStrictlySortedFunc(e.BalanceChanges, func(a, b encodingBalanceChange) int {
+		return cmp.Compare(a.TxIdx, b.TxIdx)
 	}) {
-		return errors.New("nonce changes not in ascending order by tx index")
+		return errors.New("balance changes must be unique and sorted")
+	}
+	// check that the tx index is not greater than the max allowed for the block
+	if len(e.BalanceChanges) > 0 && int(e.BalanceChanges[len(e.BalanceChanges)-1].TxIdx) > maxBALIndex {
+		return fmt.Errorf("balance change index exceeds limit, index: %d, limit: %d", e.BalanceChanges[len(e.BalanceChanges)-1].TxIdx, maxBALIndex)
 	}
 
-	// Check the code changes are sorted in order
-	if !slices.IsSortedFunc(e.CodeChanges, func(a, b encodingCodeChange) int {
-		return cmp.Compare[uint32](a.TxIndex, b.TxIndex)
+	// Check the nonce changes are sorted in order, and unique by tx index
+	if !isStrictlySortedFunc(e.NonceChanges, func(a, b encodingAccountNonce) int {
+		return cmp.Compare(a.TxIdx, b.TxIdx)
 	}) {
-		return errors.New("code changes not in ascending order by tx index")
+		return errors.New("nonce changes must be unique and sorted")
 	}
+	// check that the tx index of the highest nonce change is not greater than
+	// the max allowed for the block
+	if len(e.NonceChanges) > 0 && int(e.NonceChanges[len(e.NonceChanges)-1].TxIdx) > maxBALIndex {
+		return fmt.Errorf("nonce change index exceeds limit, index: %d, limit: %d", e.NonceChanges[len(e.NonceChanges)-1].TxIdx, maxBALIndex)
+	}
+
+	// Check the code changes are sorted in order, and unique by tx index
+	if !isStrictlySortedFunc(e.CodeChanges, func(a, b encodingCodeChange) int {
+		return cmp.Compare(a.TxIndex, b.TxIndex)
+	}) {
+		return errors.New("code changes must be unique and sorted")
+	}
+	// check that the tx index of the highest code changeis not greater than the
+	// max allowed for the block
+	if len(e.CodeChanges) > 0 && int(e.CodeChanges[len(e.CodeChanges)-1].TxIndex) > maxBALIndex {
+		return fmt.Errorf("code change index exceeds limit, index: %d, limit: %d", e.CodeChanges[len(e.CodeChanges)-1].TxIndex, maxBALIndex)
+	}
+	// Check that none of the code changes report a new code which is larger
+	// than the max allowed by the protocol
 	for _, change := range e.CodeChanges {
 		if len(change.Code) > params.MaxCodeSizeAmsterdam {
 			return errors.New("code change contained oversized code")

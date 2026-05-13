@@ -125,7 +125,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 			computed := block.AccessList().Hash()
 			if *block.Header().BlockAccessListHash != computed {
 				return fmt.Errorf("access list hash mismatch, computed: %x, remote: %x", computed, *block.Header().BlockAccessListHash)
-			} else if err := block.AccessList().Validate(block.GasLimit()); err != nil {
+			} else if err := block.AccessList().Validate(block.GasLimit(), len(block.Transactions())); err != nil {
 				return fmt.Errorf("invalid block access list: %v", err)
 			}
 		}
@@ -195,7 +195,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		if local != remote {
 			return fmt.Errorf("access list hash mismatch, local: %x, remote: %x", local, remote)
 		}
-		if err := enc.Validate(block.GasLimit()); err != nil {
+		if err := enc.Validate(block.GasLimit(), len(block.Transactions())); err != nil {
 			return fmt.Errorf("invalid block access list: %v", err)
 		}
 	}
