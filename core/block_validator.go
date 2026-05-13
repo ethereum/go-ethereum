@@ -126,6 +126,8 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 				return fmt.Errorf("access list hash mismatch, computed: %x, remote: %x", computed, *block.Header().BlockAccessListHash)
 			} else if err := block.AccessList().Validate(); err != nil {
 				return fmt.Errorf("invalid block access list: %v", err)
+			} else if err := block.AccessList().ValidateSize(block.GasLimit()); err != nil {
+				return fmt.Errorf("invalid block access list: %v", err)
 			}
 		}
 	} else if block.Header().BlockAccessListHash != nil || block.AccessList() != nil {
@@ -183,9 +185,13 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Verify Block-level accessList once Amsterdam is enabled
 	if v.config.IsAmsterdam(block.Number(), block.Time()) {
-		local, remote := res.Bal.ToEncodingObj().Hash(), *block.Header().BlockAccessListHash
+		enc := res.Bal.ToEncodingObj()
+		local, remote := enc.Hash(), *block.Header().BlockAccessListHash
 		if local != remote {
 			return fmt.Errorf("access list hash mismatch, local: %x, remote: %x", local, remote)
+		}
+		if err := enc.ValidateSize(block.GasLimit()); err != nil {
+			return fmt.Errorf("invalid block access list: %v", err)
 		}
 	}
 	// Validate the state root against the received state root and throw

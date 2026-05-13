@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/internal/testrand"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
@@ -278,6 +279,78 @@ func TestBlockAccessListCopy(t *testing.T) {
 	}
 	if !reflect.DeepEqual(list, cpy) {
 		t.Fatal("block access mismatch")
+	}
+}
+
+func TestBlockAccessListItemCount(t *testing.T) {
+	empty := &BlockAccessList{}
+	if got := empty.ItemCount(); got != 0 {
+		t.Fatalf("empty BAL item count: got %d, want 0", got)
+	}
+
+	addr1 := [20]byte(testrand.Bytes(20))
+	addr2 := [20]byte(testrand.Bytes(20))
+	one := func() *uint256.Int { return new(uint256.Int).SetBytes(testrand.Bytes(32)) }
+	bal := &BlockAccessList{
+		AccountAccess{
+			Address: addr1,
+			StorageWrites: []encodingSlotWrites{
+				{Slot: one(), Accesses: []encodingStorageWrite{{TxIdx: 0, ValueAfter: one()}, {TxIdx: 1, ValueAfter: one()}}},
+				{Slot: one()},
+			},
+			StorageReads: []*uint256.Int{one()},
+		},
+		AccountAccess{Address: addr2}, // address-only, no slots
+	}
+	// 2 addresses + 2 write-slots + 1 read-slot = 5 items.
+	// (Multiple TxIdx writes to the same slot count as ONE item.)
+	if got := bal.ItemCount(); got != 5 {
+		t.Fatalf("item count: got %d, want 5", got)
+	}
+}
+
+func TestBlockAccessListValidateSize(t *testing.T) {
+	// Build a BAL with exactly 30 items: 3 addresses, each with 9 storage
+	// slots (some writes, some reads). 3 + 9*3 = 30.
+	one := func() *uint256.Int { return new(uint256.Int).SetBytes(testrand.Bytes(32)) }
+	bal := make(BlockAccessList, 3)
+	for i := range bal {
+		bal[i].Address = [20]byte(testrand.Bytes(20))
+		for j := 0; j < 5; j++ {
+			bal[i].StorageWrites = append(bal[i].StorageWrites, encodingSlotWrites{
+				Slot: one(), Accesses: []encodingStorageWrite{{TxIdx: 0, ValueAfter: one()}},
+			})
+		}
+		for j := 0; j < 4; j++ {
+			bal[i].StorageReads = append(bal[i].StorageReads, one())
+		}
+	}
+	if got := bal.ItemCount(); got != 30 {
+		t.Fatalf("setup: item count = %d, want 30", got)
+	}
+
+	// limit = blockGasLimit / BALItemCost.
+	// 30 items requires limit >= 30, i.e. gasLimit >= 30 * 2000 = 60_000.
+	tests := []struct {
+		name        string
+		gasLimit    uint64
+		expectError bool
+	}{
+		{"exactly at limit", 30 * params.BALItemCost, false},
+		{"well above limit", 60_000_000, false},
+		{"one below limit", 30*params.BALItemCost - 1, true},
+		{"zero gas limit", 0, true},
+	}
+	for _, tc := range tests {
+		err := bal.ValidateSize(tc.gasLimit)
+		if (err != nil) != tc.expectError {
+			t.Errorf("%s: got err=%v, expectError=%v", tc.name, err, tc.expectError)
+		}
+	}
+
+	// Empty BAL is always valid (even with 0 gas limit).
+	if err := (&BlockAccessList{}).ValidateSize(0); err != nil {
+		t.Fatalf("empty BAL must pass any limit: %v", err)
 	}
 }
 
