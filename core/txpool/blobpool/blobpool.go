@@ -1107,13 +1107,13 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 					log.Error("Blobs missing for announcable transaction", "from", addr, "nonce", meta.nonce, "id", meta.id, "err", err)
 					continue
 				}
-				var tx types.Transaction
-				if err = rlp.DecodeBytes(data, &tx); err != nil {
+				var ptx blobTxForPool
+				if err = rlp.DecodeBytes(data, &ptx); err != nil {
 					log.Error("Blobs corrupted for announcable transaction", "from", addr, "nonce", meta.nonce, "id", meta.id, "err", err)
 					continue
 				}
-				announcable = append(announcable, tx.WithoutBlobTxSidecar())
-				log.Trace("Blob transaction now announcable", "from", addr, "nonce", meta.nonce, "id", meta.id, "hash", tx.Hash())
+				announcable = append(announcable, ptx.Tx)
+				log.Trace("Blob transaction now announcable", "from", addr, "nonce", meta.nonce, "id", meta.id, "hash", ptx.Tx.Hash())
 			}
 		}
 	}
