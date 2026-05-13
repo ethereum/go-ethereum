@@ -111,6 +111,27 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 	}
 
+	// Block access list hash must be present in header after the
+	// Amsterdam hard fork.
+	if v.config.IsAmsterdam(block.Number(), block.Time()) {
+		if block.Header().BlockAccessListHash == nil {
+			return fmt.Errorf("block access list hash not set in header")
+		}
+		// If the block does not come with an access list, we compute the access list
+		// locally as part of execution and validate against the header's access list
+		// hash.
+		if block.AccessList() != nil {
+			computed := block.AccessList().Hash()
+			if *block.Header().BlockAccessListHash != computed {
+				return fmt.Errorf("access list hash mismatch, computed: %x, remote: %x", computed, *block.Header().BlockAccessListHash)
+			} else if err := block.AccessList().Validate(); err != nil {
+				return fmt.Errorf("invalid block access list: %v", err)
+			}
+		}
+	} else if block.Header().BlockAccessListHash != nil || block.AccessList() != nil {
+		return fmt.Errorf("block had access list before Amsterdam")
+	}
+
 	// Ancestor block must be known.
 	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
@@ -159,6 +180,13 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		}
 	} else if res.Requests != nil {
 		return errors.New("block has requests before prague fork")
+	}
+	// Verify Block-level accessList once Amsterdam is enabled
+	if v.config.IsAmsterdam(block.Number(), block.Time()) {
+		local, remote := res.Bal.ToEncodingObj().Hash(), *block.Header().BlockAccessListHash
+		if local != remote {
+			return fmt.Errorf("access list hash mismatch, local: %x, remote: %x", local, remote)
+		}
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.

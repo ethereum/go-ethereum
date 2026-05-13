@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
@@ -58,4 +59,5 @@ type ProcessResult struct {
 	Requests [][]byte
 	Logs     []*types.Log
 	GasUsed  uint64
+	Bal      *bal.ConstructionBlockAccessList
 }
