@@ -1575,12 +1575,16 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 // e.g. type_byte || [..., version, [blobs], [comms], [proofs]]
 func (p *BlobPool) GetRLP(hash common.Hash) []byte {
 	data := p.getRLP(hash)
+	if len(data) == 0 {
+		// Not in this pool. The TxPool aggregator probes every subpool, so
+		// this is the common case for any non-blob hash; do not log.
+		return nil
+	}
 	rlp, err := encodeForNetwork(data)
 	if err != nil {
 		log.Error("Failed to encode pooled tx into the network type", "hash", hash, "err", err)
 		return nil
 	}
-
 	return rlp
 }
 
