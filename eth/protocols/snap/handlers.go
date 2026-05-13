@@ -476,15 +476,15 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket) (
 			// the request, matching the existing behavior for non-existent nodes.
 			if len(accKey) > maxTrieNodePathLength {
 				nodes = append(nodes, nil)
-				break
+			} else {
+				blob, resolved, err := accTrie.GetNode(accKey)
+				loads += resolved // always account database reads, even for failures
+				if err != nil {
+					break
+				}
+				nodes = append(nodes, blob)
+				bytes += uint64(len(blob))
 			}
-			blob, resolved, err := accTrie.GetNode(accKey)
-			loads += resolved // always account database reads, even for failures
-			if err != nil {
-				break
-			}
-			nodes = append(nodes, blob)
-			bytes += uint64(len(blob))
 
 		default:
 			// Storage slots requested, open the storage trie and retrieve from there
@@ -528,18 +528,15 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket) (
 				// the response stays positionally aligned with the request.
 				if len(path) > maxTrieNodePathLength {
 					nodes = append(nodes, nil)
-					if bytes > req.Bytes || loads > maxTrieNodeLookups || time.Since(start) > maxTrieNodeTimeSpent {
+				} else {
+					blob, resolved, err := stTrie.GetNode(path)
+					loads += resolved // always account database reads, even for failures
+					if err != nil {
 						break
 					}
-					continue
+					nodes = append(nodes, blob)
+					bytes += uint64(len(blob))
 				}
-				blob, resolved, err := stTrie.GetNode(path)
-				loads += resolved // always account database reads, even for failures
-				if err != nil {
-					break
-				}
-				nodes = append(nodes, blob)
-				bytes += uint64(len(blob))
 
 				// Sanity check limits to avoid DoS on the store trie loads
 				if bytes > req.Bytes || loads > maxTrieNodeLookups || time.Since(start) > maxTrieNodeTimeSpent {

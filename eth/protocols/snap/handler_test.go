@@ -223,10 +223,12 @@ func TestServiceGetAccessListsQueryByteLimit(t *testing.T) {
 // TestServiceGetTrieNodesQueryPathLength verifies that ServiceGetTrieNodesQuery
 // rejects structurally invalid (over-length) compact-encoded paths without
 // allocating in compactToHex or walking the trie. Trie keys are Keccak256
-// hashes, so the longest valid compact-encoded path is 33 bytes; anything
-// longer cannot match a node in any state trie. A peer sending such a path
-// (up to the 10MB request size cap) would otherwise force the server to
-// allocate 2*len(path)+1 nibbles per entry and start a doomed traversal.
+// hashes; value nodes are always embedded in their parent and are never
+// addressed as standalone nodes, so the longest compact-encoded path that can
+// match a node is 32 bytes. Anything longer cannot match a node in any state
+// trie. A peer sending such a path (up to the 10MB request size cap) would
+// otherwise force the server to allocate 2*len(path)+1 nibbles per entry and
+// start a doomed traversal.
 func TestServiceGetTrieNodesQueryPathLength(t *testing.T) {
 	t.Parallel()
 
