@@ -132,7 +132,7 @@ func (c *Contract) UseGas(cost GasCosts, logger *tracing.Hooks, reason tracing.G
 		return false
 	}
 	if logger.HasGasHook() && reason != tracing.GasChangeIgnored {
-		logger.FireGasChange(prior.AsTracing(), c.Gas.AsTracing(), reason)
+		logger.EmitGasChange(prior.AsTracing(), c.Gas.AsTracing(), reason)
 	}
 	return true
 }
@@ -144,7 +144,7 @@ func (c *Contract) RefundGas(refund GasBudget, logger *tracing.Hooks, reason tra
 		return
 	}
 	if logger.HasGasHook() && reason != tracing.GasChangeIgnored {
-		logger.FireGasChange(prior.AsTracing(), c.Gas.AsTracing(), reason)
+		logger.EmitGasChange(prior.AsTracing(), c.Gas.AsTracing(), reason)
 	}
 }
 

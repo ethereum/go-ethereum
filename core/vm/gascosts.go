@@ -101,6 +101,6 @@ func (g *GasBudget) Refund(other GasBudget) (GasBudget, bool) {
 }
 
 // AsTracing converts the GasBudget into the tracing-facing Gas vector.
-func (g *GasBudget) AsTracing() tracing.Gas {
+func (g GasBudget) AsTracing() tracing.Gas {
 	return tracing.Gas{Regular: g.RegularGas, State: g.StateGas}
 }

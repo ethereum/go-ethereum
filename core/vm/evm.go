@@ -318,7 +318,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.FireGasChange(gas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallFailedExecution)
+				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallFailedExecution)
 			}
 			gas.Exhaust()
 		}
@@ -372,7 +372,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.FireGasChange(gas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallFailedExecution)
+				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallFailedExecution)
 			}
 			gas.Exhaust()
 		}
@@ -416,7 +416,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.FireGasChange(gas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallFailedExecution)
+				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallFailedExecution)
 			}
 			gas.Exhaust()
 		}
@@ -471,7 +471,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.FireGasChange(gas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallFailedExecution)
+				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallFailedExecution)
 			}
 			gas.Exhaust()
 		}
@@ -510,7 +510,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 			return nil, common.Address{}, gas, ErrOutOfGas
 		}
 		if evm.Config.Tracer.HasGasHook() {
-			evm.Config.Tracer.FireGasChange(prior.AsTracing(), gas.AsTracing(), tracing.GasChangeWitnessContractCollisionCheck)
+			evm.Config.Tracer.EmitGasChange(prior.AsTracing(), gas.AsTracing(), tracing.GasChangeWitnessContractCollisionCheck)
 		}
 	}
 
@@ -529,7 +529,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		(contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) || // non-empty code
 		isEIP7610RejectedAccount(evm.ChainConfig().ChainID, address, evm.chainRules.IsEIP158) {
 		if evm.Config.Tracer.HasGasHook() {
-			evm.Config.Tracer.FireGasChange(gas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallFailedExecution)
+			evm.Config.Tracer.EmitGasChange(gas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallFailedExecution)
 		}
 		gas.Exhaust()
 		return nil, common.Address{}, gas, ErrContractAddressCollision
@@ -559,7 +559,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		}
 		prior, _ := gas.Charge(GasCosts{RegularGas: consumed})
 		if evm.Config.Tracer.HasGasHook() {
-			evm.Config.Tracer.FireGasChange(prior.AsTracing(), gas.AsTracing(), tracing.GasChangeWitnessContractInit)
+			evm.Config.Tracer.EmitGasChange(prior.AsTracing(), gas.AsTracing(), tracing.GasChangeWitnessContractInit)
 		}
 	}
 	evm.Context.Transfer(evm.StateDB, caller, address, value, &evm.chainRules)
@@ -675,7 +675,7 @@ func (evm *EVM) captureBegin(depth int, typ OpCode, from common.Address, to comm
 	}
 	if tracer.HasGasHook() {
 		initial := NewGasBudget(startGas)
-		tracer.FireGasChange(tracing.Gas{}, initial.AsTracing(), tracing.GasChangeCallInitialBalance)
+		tracer.EmitGasChange(tracing.Gas{}, initial.AsTracing(), tracing.GasChangeCallInitialBalance)
 	}
 }
 
@@ -683,7 +683,7 @@ func (evm *EVM) captureEnd(depth int, startGas uint64, leftOverGas uint64, ret [
 	tracer := evm.Config.Tracer
 	if leftOverGas != 0 && tracer.HasGasHook() {
 		leftover := NewGasBudget(leftOverGas)
-		tracer.FireGasChange(leftover.AsTracing(), tracing.Gas{}, tracing.GasChangeCallLeftOverReturned)
+		tracer.EmitGasChange(leftover.AsTracing(), tracing.Gas{}, tracing.GasChangeCallLeftOverReturned)
 	}
 	var reverted bool
 	if err != nil {

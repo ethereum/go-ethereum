@@ -309,13 +309,13 @@ type Hooks struct {
 
 // HasGasHook reports whether any gas-change hook is registered. Call sites
 // should use this to short-circuit before constructing the Gas / GasBudget
-// arguments to FireGasChange when tracing is off — the dispatch is otherwise
+// arguments to EmitGasChange when tracing is off — the dispatch is otherwise
 // always paid the cost of evaluating those args.
 func (h *Hooks) HasGasHook() bool {
 	return h != nil && (h.OnGasChangeV2 != nil || h.OnGasChange != nil)
 }
 
-// FireGasChange dispatches a gas change event to the registered hooks. If the
+// EmitGasChange dispatches a gas change event to the registered hooks. If the
 // multi-dimensional OnGasChangeV2 hook is set it is invoked with the full Gas
 // vectors; otherwise the single-dimensional OnGasChange hook is invoked with
 // the regular-gas dimension only. The call is a no-op when the receiver is
@@ -323,7 +323,7 @@ func (h *Hooks) HasGasHook() bool {
 //
 // Call sites SHOULD use this helper instead of invoking the hooks directly so
 // that both variants stay consistent across the Amsterdam fork boundary.
-func (h *Hooks) FireGasChange(old, new Gas, reason GasChangeReason) {
+func (h *Hooks) EmitGasChange(old, new Gas, reason GasChangeReason) {
 	if h == nil || reason == GasChangeIgnored {
 		return
 	}

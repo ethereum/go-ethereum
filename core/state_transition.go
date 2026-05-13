@@ -423,7 +423,7 @@ func (st *stateTransition) buyGas() error {
 	if st.evm.Config.Tracer.HasGasHook() {
 		empty := vm.GasBudget{}
 		initial := vm.NewGasBudget(st.msg.GasLimit)
-		st.evm.Config.Tracer.FireGasChange(empty.AsTracing(), initial.AsTracing(), tracing.GasChangeTxInitialBalance)
+		st.evm.Config.Tracer.EmitGasChange(empty.AsTracing(), initial.AsTracing(), tracing.GasChangeTxInitialBalance)
 	}
 	st.gasRemaining = vm.NewGasBudget(st.msg.GasLimit)
 	st.initialBudget = st.gasRemaining.Copy()
@@ -569,7 +569,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining.RegularGas, cost.RegularGas)
 	}
 	if st.evm.Config.Tracer.HasGasHook() {
-		st.evm.Config.Tracer.FireGasChange(prior.AsTracing(), st.gasRemaining.AsTracing(), tracing.GasChangeTxIntrinsicGas)
+		st.evm.Config.Tracer.EmitGasChange(prior.AsTracing(), st.gasRemaining.AsTracing(), tracing.GasChangeTxIntrinsicGas)
 	}
 	// Gas limit suffices for the floor data cost (EIP-7623)
 	if rules.IsPrague {
@@ -654,7 +654,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		if used := st.gasUsed(); used < floorDataGas {
 			prior, _ := st.gasRemaining.Charge(vm.GasCosts{RegularGas: floorDataGas - used})
 			if st.evm.Config.Tracer.HasGasHook() {
-				st.evm.Config.Tracer.FireGasChange(prior.AsTracing(), st.gasRemaining.AsTracing(), tracing.GasChangeTxDataFloor)
+				st.evm.Config.Tracer.EmitGasChange(prior.AsTracing(), st.gasRemaining.AsTracing(), tracing.GasChangeTxDataFloor)
 			}
 		}
 		if peakGasUsed < floorDataGas {
@@ -786,7 +786,7 @@ func (st *stateTransition) calcRefund() vm.GasBudget {
 		after := st.gasRemaining
 		after.RegularGas += refund
 
-		st.evm.Config.Tracer.FireGasChange(st.gasRemaining.AsTracing(), after.AsTracing(), tracing.GasChangeTxRefunds)
+		st.evm.Config.Tracer.EmitGasChange(st.gasRemaining.AsTracing(), after.AsTracing(), tracing.GasChangeTxRefunds)
 	}
 	return vm.NewGasBudget(refund)
 }
@@ -801,7 +801,7 @@ func (st *stateTransition) returnGas() {
 	if st.gasRemaining.RegularGas > 0 && st.evm.Config.Tracer.HasGasHook() {
 		after := st.gasRemaining
 		after.RegularGas = 0
-		st.evm.Config.Tracer.FireGasChange(st.gasRemaining.AsTracing(), after.AsTracing(), tracing.GasChangeTxLeftOverReturned)
+		st.evm.Config.Tracer.EmitGasChange(st.gasRemaining.AsTracing(), after.AsTracing(), tracing.GasChangeTxLeftOverReturned)
 	}
 }
 

@@ -235,7 +235,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		// Do tracing before potential memory expansion
 		if debug {
 			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.FireGasChange(
+				evm.Config.Tracer.EmitGasChange(
 					tracing.Gas{Regular: gasCopy, State: contract.Gas.StateGas},
 					tracing.Gas{Regular: gasCopy - cost, State: contract.Gas.StateGas},
 					tracing.GasChangeCallOpCode,
