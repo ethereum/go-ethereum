@@ -39,6 +39,15 @@ import (
 )
 
 const (
+	// maxTrieRequestCount is the maximum number of trie node blobs to request in
+	// a single query. If this number is too low, we're not filling responses fully
+	// and waste round trip times. If it's too high, we're capping responses and
+	// waste bandwidth.
+	maxTrieRequestCount = maxRequestSize / 512
+
+	// batchSizeThreshold is the maximum size allowed for gentrie batch.
+	batchSizeThreshold = 8 * 1024 * 1024
+
 	// trienodeHealRateMeasurementImpact is the impact a single measurement has on
 	// the local node's trienode processing capacity. A value closer to 0 reacts
 	// slower to sudden changes, but it is also more stable against temporary hiccups.
