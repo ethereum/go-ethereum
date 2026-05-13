@@ -41,6 +41,7 @@ type diskLayer struct {
 	genMarker  []byte                    // Marker for the state that's indexed during initial layer generation
 	genPending chan struct{}             // Notification channel when generation is done (test synchronicity)
 	genAbort   chan chan *generatorStats // Notification channel to abort generating the snapshot in this layer
+	genStop    sync.Once                 // Guards stopGeneration so it can be called multiple times safely
 
 	lock sync.RWMutex
 }
@@ -184,17 +185,24 @@ func (dl *diskLayer) Update(blockHash common.Hash, accounts map[common.Hash][]by
 	return newDiffLayer(dl, blockHash, accounts, storage)
 }
 
-// stopGeneration aborts the state snapshot generation if it is currently running.
+// stopGeneration aborts the state snapshot generation if it is currently
+// running. It is safe to call multiple times: only the first call dispatches
+// an abort signal to the generator; subsequent calls are no-ops. Tree.Disable
+// and Tree.Rebuild both invoke this on every disk layer, so a layer that is
+// reached through both paths must not deadlock on the second send to the
+// unbuffered genAbort channel.
 func (dl *diskLayer) stopGeneration() {
-	dl.lock.RLock()
-	generating := dl.genMarker != nil
-	dl.lock.RUnlock()
-	if !generating {
-		return
-	}
-	if dl.genAbort != nil {
-		abort := make(chan *generatorStats)
-		dl.genAbort <- abort
-		<-abort
-	}
+	dl.genStop.Do(func() {
+		dl.lock.RLock()
+		generating := dl.genMarker != nil
+		dl.lock.RUnlock()
+		if !generating {
+			return
+		}
+		if dl.genAbort != nil {
+			abort := make(chan *generatorStats)
+			dl.genAbort <- abort
+			<-abort
+		}
+	})
 }

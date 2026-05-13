@@ -19,6 +19,7 @@ package snapshot
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -584,5 +585,55 @@ func TestDiskSeek(t *testing.T) {
 				t.Fatalf("test %d, item %d, value wrong, got %v exp %v", i, count, v, k)
 			}
 		}
+	}
+}
+
+// TestStopGenerationIdempotent verifies that stopGeneration can be invoked
+// multiple times on the same disk layer without deadlocking. Tree.Disable and
+// Tree.Rebuild both walk every disk layer and call this, so a layer that is
+// reachable from both paths must not hang on the second call's send to the
+// unbuffered genAbort channel after the generator goroutine has already exited.
+// Regression test for issue #33233.
+func TestStopGenerationIdempotent(t *testing.T) {
+	t.Parallel()
+
+	abortCh := make(chan chan *generatorStats)
+	dl := &diskLayer{
+		diskdb:    rawdb.NewMemoryDatabase(),
+		genMarker: []byte{}, // non-nil signals generation in progress
+		genAbort:  abortCh,
+	}
+
+	// Stand in for the generator goroutine: receive on genAbort exactly once,
+	// then exit. A second send by stopGeneration would deadlock the test.
+	generatorExited := make(chan struct{})
+	go func() {
+		defer close(generatorExited)
+		ack := <-abortCh
+		ack <- &generatorStats{}
+	}()
+
+	// First call drives the abort handshake.
+	dl.stopGeneration()
+
+	// Generator must have observed the first abort and exited.
+	select {
+	case <-generatorExited:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first stopGeneration never delivered abort to generator")
+	}
+
+	// Second call must return immediately. Run in a goroutine so the test
+	// fails with a clear message on regression instead of hanging until the
+	// outer test timeout fires.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		dl.stopGeneration()
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("second stopGeneration deadlocked sending to genAbort after the generator had exited")
 	}
 }

@@ -258,8 +258,6 @@ func (t *Tree) Disable() {
 	for _, layer := range t.layers {
 		switch layer := layer.(type) {
 		case *diskLayer:
-			// TODO this function will hang if it's called twice. Will
-			// fix it in the following PRs.
 			layer.stopGeneration()
 			layer.markStale()
 			layer.Release()
@@ -702,8 +700,6 @@ func (t *Tree) Rebuild(root common.Hash) {
 	for _, layer := range t.layers {
 		switch layer := layer.(type) {
 		case *diskLayer:
-			// TODO this function will hang if it's called twice. Will
-			// fix it in the following PRs.
 			layer.stopGeneration()
 			layer.markStale()
 			layer.Release()
