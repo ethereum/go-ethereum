@@ -164,31 +164,33 @@ type (
 	// FaultHook is invoked when an error occurs during the execution of an opcode.
 	FaultHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, depth int, err error)
 
-	// GasChangeHook is invoked when the regular gas dimension changes.
+	// GasChangeHook reports changes to the regular execution gas. Tracers
+	// that don't need visibility into the state-access gas dimension
+	// introduced by EIP-8037 (Amsterdam) can implement only this hook; it
+	// will continue to fire across the Amsterdam fork unchanged.
 	//
-	// This hook is the single-dimensional, pre-Amsterdam gas tracing hook. It
-	// remains the canonical hook for all forks prior to Amsterdam (where gas
-	// metering is single-dimensional) and continues to fire post-Amsterdam for
-	// any change that affects the regular gas dimension. Tracers that do not
-	// need visibility into the state-access gas dimension should keep using
-	// this hook; they require no changes to work across the Amsterdam fork.
+	// If both this hook and GasChangeHookV2 are implemented on the same
+	// tracer, only V2 will be invoked. Implement exactly one to avoid
+	// double-counting.
 	GasChangeHook = func(old, new uint64, reason GasChangeReason)
 
-	// GasChangeHookV2 is invoked when any gas dimension changes under the
-	// multi-dimensional gas metering introduced by EIP-8037 (Amsterdam).
+	// GasChangeHookV2 is invoked when any gas dimension changes. It is the
+	// multi-dimensional successor to GasChangeHook, exposing the state-access
+	// gas dimension introduced by EIP-8037 (Amsterdam) alongside the regular
+	// dimension.
 	//
 	// Compatibility:
 	//   - Post-Amsterdam: fires for changes to either the regular or the
 	//     state-access dimension. The non-changing dimension is passed through
 	//     unchanged in both `old` and `new` so consumers always observe the
 	//     complete gas vector.
-	//   - Pre-Amsterdam: the core does not emit state-gas changes and the
-	//     state dimension is always zero. Tracers that register only V2 will
-	//     still receive regular-gas changes with Gas{State: 0} and behave
-	//     identically to the V1 hook; there is no pre-Amsterdam-only code path
-	//     that V2 misses.
+	//   - Pre-Amsterdam: no state-access gas events occur, so the State field
+	//     of both `old` and `new` is always zero. Tracers that register only
+	//     V2 still receive every regular-gas change as Gas{State: 0} and
+	//     behave identically to a V1 tracer; there is no pre-Amsterdam event
+	//     a V2-only tracer misses.
 	//
-	// V1 and V2 coexist: when both are registered on a tracer, only V2 hook is
+	// V1 and V2 coexist: when both are registered on a tracer, only V2 is
 	// invoked. Tracers SHOULD register at most one of the two to avoid
 	// double-counting.
 	GasChangeHookV2 = func(old, new Gas, reason GasChangeReason)
