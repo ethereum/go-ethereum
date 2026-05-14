@@ -608,7 +608,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 	// Execute the preparatory steps for state transition which includes:
 	// - prepare accessList(post-berlin)
-	// - reset transient storage(eip 1153)
+	// - reset transient storage(EIP-1153)
+	// - enable block-level accessList construction (EIP-7928)
 	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 
 	var (
