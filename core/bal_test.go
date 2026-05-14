@@ -121,7 +121,7 @@ func hasStorageWrite(b *bal.BlockAccessList, addr common.Address, key common.Has
 		return false
 	}
 	want := new(uint256.Int).SetBytes(key[:])
-	for _, w := range aa.StorageWrites {
+	for _, w := range aa.StorageChanges {
 		if w.Slot.Cmp(want) == 0 {
 			return true
 		}
@@ -147,7 +147,7 @@ func assertAbsent(t *testing.T, b *bal.BlockAccessList, addr common.Address) {
 
 func assertEmpty(t *testing.T, aa *bal.AccountAccess) {
 	t.Helper()
-	if len(aa.StorageWrites) != 0 || len(aa.StorageReads) != 0 ||
+	if len(aa.StorageChanges) != 0 || len(aa.StorageReads) != 0 ||
 		len(aa.BalanceChanges) != 0 || len(aa.NonceChanges) != 0 || len(aa.CodeChanges) != 0 {
 		t.Fatalf("expected empty change set for %x, got %+v", aa.Address, aa)
 	}
@@ -181,14 +181,14 @@ func TestBALTxSenderAndRecipient(t *testing.T) {
 	})
 
 	sender := assertPresent(t, b, env.from)
-	if len(sender.NonceChanges) == 0 || sender.NonceChanges[0].Nonce != 1 {
+	if len(sender.NonceChanges) == 0 || sender.NonceChanges[0].PostNonce != 1 {
 		t.Fatalf("sender nonce not bumped: %+v", sender.NonceChanges)
 	}
 	if len(sender.BalanceChanges) == 0 {
 		t.Fatalf("sender missing balance change")
 	}
 	recipient := assertPresent(t, b, to)
-	if len(recipient.BalanceChanges) != 1 || recipient.BalanceChanges[0].Balance.Uint64() != 1000 {
+	if len(recipient.BalanceChanges) != 1 || recipient.BalanceChanges[0].PostBalance.Uint64() != 1000 {
 		t.Fatalf("recipient balance: %+v", recipient.BalanceChanges)
 	}
 }
@@ -236,7 +236,7 @@ func TestBALCoinbaseTipCapturesBalance(t *testing.T) {
 	})
 
 	cb := assertPresent(t, b, coinbase)
-	if len(cb.BalanceChanges) == 0 || cb.BalanceChanges[0].Balance.Sign() == 0 {
+	if len(cb.BalanceChanges) == 0 || cb.BalanceChanges[0].PostBalance.Sign() == 0 {
 		t.Fatalf("coinbase missing positive balance change: %+v", cb.BalanceChanges)
 	}
 }
@@ -264,7 +264,7 @@ func TestBALSystemAddressIncludedWhenTouched(t *testing.T) {
 	})
 
 	aa := assertPresent(t, b, sys)
-	if len(aa.BalanceChanges) != 1 || aa.BalanceChanges[0].Balance.Uint64() != 1000 {
+	if len(aa.BalanceChanges) != 1 || aa.BalanceChanges[0].PostBalance.Uint64() != 1000 {
 		t.Fatalf("system-address balance change missing: %+v", aa.BalanceChanges)
 	}
 }
@@ -319,7 +319,7 @@ func TestBALPrecompileValueTransferRecordsBalance(t *testing.T) {
 	})
 
 	aa := assertPresent(t, b, identity)
-	if len(aa.BalanceChanges) != 1 || aa.BalanceChanges[0].Balance.Uint64() != 5 {
+	if len(aa.BalanceChanges) != 1 || aa.BalanceChanges[0].PostBalance.Uint64() != 5 {
 		t.Fatalf("precompile balance change wrong: %+v", aa.BalanceChanges)
 	}
 }
@@ -537,7 +537,7 @@ func TestBALSenderRecordedOnRevert(t *testing.T) {
 	})
 
 	sender := assertPresent(t, b, env.from)
-	if len(sender.NonceChanges) == 0 || sender.NonceChanges[0].Nonce != 1 {
+	if len(sender.NonceChanges) == 0 || sender.NonceChanges[0].PostNonce != 1 {
 		t.Fatalf("sender nonce must be bumped even on revert: %+v", sender.NonceChanges)
 	}
 	if len(sender.BalanceChanges) == 0 {
@@ -667,10 +667,10 @@ func TestBALStorageWriteZeroIsAWrite(t *testing.T) {
 	if !hasStorageWrite(b, contract, slot) {
 		t.Fatalf("SSTORE to zero must record a write\n%s", b.PrettyPrint())
 	}
-	for _, w := range aa.StorageWrites {
+	for _, w := range aa.StorageChanges {
 		if w.Slot.Uint64() == 0x03 {
-			if len(w.Accesses) != 1 || !w.Accesses[0].ValueAfter.IsZero() {
-				t.Fatalf("expected post-value 0 for slot 0x03, got %+v", w.Accesses)
+			if len(w.SlotChanges) != 1 || !w.SlotChanges[0].PostValue.IsZero() {
+				t.Fatalf("expected post-value 0 for slot 0x03, got %+v", w.SlotChanges)
 			}
 		}
 	}
@@ -692,13 +692,13 @@ func TestBALCreateDeploysCode(t *testing.T) {
 
 	created := receipts[0].ContractAddress
 	aa := assertPresent(t, b, created)
-	if len(aa.NonceChanges) != 1 || aa.NonceChanges[0].Nonce != 1 {
+	if len(aa.NonceChanges) != 1 || aa.NonceChanges[0].PostNonce != 1 {
 		t.Fatalf("expected nonce 0→1, got %+v", aa.NonceChanges)
 	}
-	if len(aa.CodeChanges) != 1 || !bytes.Equal(aa.CodeChanges[0].Code, []byte{0x00}) {
+	if len(aa.CodeChanges) != 1 || !bytes.Equal(aa.CodeChanges[0].NewCode, []byte{0x00}) {
 		t.Fatalf("expected code [0x00], got %+v", aa.CodeChanges)
 	}
-	if len(aa.BalanceChanges) != 1 || aa.BalanceChanges[0].Balance.Uint64() != 7 {
+	if len(aa.BalanceChanges) != 1 || aa.BalanceChanges[0].PostBalance.Uint64() != 7 {
 		t.Fatalf("expected balance 7, got %+v", aa.BalanceChanges)
 	}
 }
@@ -716,7 +716,7 @@ func TestBALCreateEmptyRuntimeNoCodeEntry(t *testing.T) {
 
 	created := receipts[0].ContractAddress
 	aa := assertPresent(t, b, created)
-	if len(aa.NonceChanges) != 1 || aa.NonceChanges[0].Nonce != 1 {
+	if len(aa.NonceChanges) != 1 || aa.NonceChanges[0].PostNonce != 1 {
 		t.Fatalf("expected nonce 0→1, got %+v", aa.NonceChanges)
 	}
 	if len(aa.CodeChanges) != 0 {
@@ -849,7 +849,7 @@ func TestBALInEVMCreateDeploysContract(t *testing.T) {
 	// which is the factory's genesis nonce (1).
 	deployed := crypto.CreateAddress(factory, 1)
 	aa := assertPresent(t, b, deployed)
-	if len(aa.NonceChanges) != 1 || aa.NonceChanges[0].Nonce != 1 {
+	if len(aa.NonceChanges) != 1 || aa.NonceChanges[0].PostNonce != 1 {
 		t.Fatalf("deployed contract nonce: %+v", aa.NonceChanges)
 	}
 }
@@ -900,7 +900,7 @@ func TestBALSelfDestructBeneficiaryWithValueTransfer(t *testing.T) {
 	})
 
 	ben := assertPresent(t, b, beneficiary)
-	if len(ben.BalanceChanges) != 1 || ben.BalanceChanges[0].Balance.Uint64() != 100 {
+	if len(ben.BalanceChanges) != 1 || ben.BalanceChanges[0].PostBalance.Uint64() != 100 {
 		t.Fatalf("beneficiary balance must be credited with 100: %+v", ben.BalanceChanges)
 	}
 }
@@ -925,11 +925,11 @@ func TestBALSelfDestructPreExistingContract(t *testing.T) {
 	})
 
 	aa := assertPresent(t, b, suicidal)
-	if len(aa.BalanceChanges) != 1 || !aa.BalanceChanges[0].Balance.IsZero() {
+	if len(aa.BalanceChanges) != 1 || !aa.BalanceChanges[0].PostBalance.IsZero() {
 		t.Fatalf("suicidal contract balance should drop to 0: %+v", aa.BalanceChanges)
 	}
 	ben := assertPresent(t, b, beneficiary)
-	if len(ben.BalanceChanges) != 1 || ben.BalanceChanges[0].Balance.Uint64() != 50 {
+	if len(ben.BalanceChanges) != 1 || ben.BalanceChanges[0].PostBalance.Uint64() != 50 {
 		t.Fatalf("beneficiary should receive 50: %+v", ben.BalanceChanges)
 	}
 }
@@ -1041,7 +1041,7 @@ func TestBALWithdrawalNonZeroAmountRecordsBalance(t *testing.T) {
 	})
 
 	r := assertPresent(t, b, recipient)
-	if len(r.BalanceChanges) != 1 || r.BalanceChanges[0].Balance.Sign() == 0 {
+	if len(r.BalanceChanges) != 1 || r.BalanceChanges[0].PostBalance.Sign() == 0 {
 		t.Fatalf("withdrawal balance change missing: %+v", r.BalanceChanges)
 	}
 }
@@ -1266,7 +1266,7 @@ func TestBALAuthCodeRoundTripNoCodeEntry(t *testing.T) {
 	})
 
 	aa := assertPresent(t, b, authority)
-	if len(aa.NonceChanges) != 1 || aa.NonceChanges[0].Nonce != 2 {
+	if len(aa.NonceChanges) != 1 || aa.NonceChanges[0].PostNonce != 2 {
 		t.Fatalf("expected final nonce 2, got %+v", aa.NonceChanges)
 	}
 	if len(aa.CodeChanges) != 0 {
@@ -1310,10 +1310,10 @@ func TestBALAuthCodeOverwrittenFinalRecorded(t *testing.T) {
 		t.Fatalf("expected exactly 1 code change (final), got %+v", aa.CodeChanges)
 	}
 	want := types.AddressToDelegation(delegateB)
-	if !bytes.Equal(aa.CodeChanges[0].Code, want) {
-		t.Fatalf("final code mismatch: want %x, got %x", want, aa.CodeChanges[0].Code)
+	if !bytes.Equal(aa.CodeChanges[0].NewCode, want) {
+		t.Fatalf("final code mismatch: want %x, got %x", want, aa.CodeChanges[0].NewCode)
 	}
-	if len(aa.NonceChanges) != 1 || aa.NonceChanges[0].Nonce != 2 {
+	if len(aa.NonceChanges) != 1 || aa.NonceChanges[0].PostNonce != 2 {
 		t.Fatalf("expected final nonce 2, got %+v", aa.NonceChanges)
 	}
 }

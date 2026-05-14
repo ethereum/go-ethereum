@@ -76,6 +76,9 @@ type ExecutionResult struct {
 	CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
 	RequestsHash         *common.Hash          `json:"requestsHash,omitempty"`
 	Requests             [][]byte              `json:"requests"`
+
+	BlockAccessList     *bal.BlockAccessList `json:"blockAccessList,omitempty"`
+	BlockAccessListHash *common.Hash         `json:"blockAccessListHash,omitempty"`
 }
 
 type executionResultMarshaling struct {
@@ -153,8 +156,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		return h
 	}
 	var (
-		isEIP4762 = chainConfig.IsUBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
-		statedb   *state.StateDB
+		statedb *state.StateDB
+
+		isEIP4762   = chainConfig.IsUBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+		isAmsterdam = chainConfig.IsAmsterdam(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
 	)
 	if pre.AllocPath != "" {
 		var err error
@@ -299,9 +304,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		receipts = append(receipts, receipt)
 		blockAccessList.Merge(bal)
 	}
-
 	statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))
 
+	// TODO(rjl493456442) call engine.Finalize() instead
 	// Add mining reward? (-1 means rewards are disabled)
 	if miningReward >= 0 {
 		// Add mining reward. The mining reward may be `0`, which only makes a difference in the cases
@@ -330,10 +335,21 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	for _, w := range pre.Env.Withdrawals {
 		// Amount is in gwei, turn into wei
 		amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
-		statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
+		prev := statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
 
 		if isEIP4762 {
 			statedb.AccessEvents().AddAccount(w.Address, true, stdmath.MaxUint64)
+		}
+		if isAmsterdam {
+			if w.Amount == 0 {
+				// Zero amount withdrawal, account is accessed potential
+				// without state changes.
+				blockAccessList.AccountRead(w.Address)
+			} else {
+				// Non-zero amount withdrawal, account is accessed with
+				// a balance change.
+				blockAccessList.BalanceChange(uint32(len(receipts)+1), w.Address, new(uint256.Int).Add(&prev, uint256.MustFromBig(amount)))
+			}
 		}
 	}
 
@@ -378,6 +394,12 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		h := types.CalcRequestsHash(requests)
 		execRs.RequestsHash = &h
 		execRs.Requests = requests
+	}
+	if isAmsterdam {
+		bal := blockAccessList.ToEncodingObj()
+		balHash := bal.Hash()
+		execRs.BlockAccessListHash = &balHash
+		execRs.BlockAccessList = bal
 	}
 
 	// Re-create statedb instance with new root for MPT mode

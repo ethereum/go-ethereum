@@ -160,7 +160,7 @@ func TestConstructionBALMerge(t *testing.T) {
 
 func makeTestAccountAccess(sort bool) AccountAccess {
 	var (
-		storageWrites []encodingSlotWrites
+		storageWrites []encodingSlotChanges
 		storageReads  []*uint256.Int
 		balances      []encodingBalanceChange
 		nonces        []encodingAccountNonce
@@ -170,24 +170,24 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 		return new(uint256.Int).SetBytes(testrand.Bytes(32))
 	}
 	for i := 0; i < 5; i++ {
-		slot := encodingSlotWrites{
+		slot := encodingSlotChanges{
 			Slot: randSlot(),
 		}
 		for j := 0; j < 3; j++ {
-			slot.Accesses = append(slot.Accesses, encodingStorageWrite{
-				TxIdx:      uint32(2 * j),
-				ValueAfter: randSlot(),
+			slot.SlotChanges = append(slot.SlotChanges, encodingStorageWrite{
+				BlockAccessIndex: uint32(2 * j),
+				PostValue:        randSlot(),
 			})
 		}
 		if sort {
-			slices.SortFunc(slot.Accesses, func(a, b encodingStorageWrite) int {
-				return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
+			slices.SortFunc(slot.SlotChanges, func(a, b encodingStorageWrite) int {
+				return cmp.Compare(a.BlockAccessIndex, b.BlockAccessIndex)
 			})
 		}
 		storageWrites = append(storageWrites, slot)
 	}
 	if sort {
-		slices.SortFunc(storageWrites, func(a, b encodingSlotWrites) int {
+		slices.SortFunc(storageWrites, func(a, b encodingSlotChanges) int {
 			return a.Slot.Cmp(b.Slot)
 		})
 	}
@@ -203,43 +203,43 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 
 	for i := 0; i < 5; i++ {
 		balances = append(balances, encodingBalanceChange{
-			TxIdx:   uint32(2 * i),
-			Balance: new(uint256.Int).SetBytes(testrand.Bytes(16)),
+			BlockAccessIndex: uint32(2 * i),
+			PostBalance:      new(uint256.Int).SetBytes(testrand.Bytes(16)),
 		})
 	}
 	if sort {
 		slices.SortFunc(balances, func(a, b encodingBalanceChange) int {
-			return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
+			return cmp.Compare(a.BlockAccessIndex, b.BlockAccessIndex)
 		})
 	}
 
 	for i := 0; i < 5; i++ {
 		nonces = append(nonces, encodingAccountNonce{
-			TxIdx: uint32(2 * i),
-			Nonce: uint64(i + 100),
+			BlockAccessIndex: uint32(2 * i),
+			PostNonce:        uint64(i + 100),
 		})
 	}
 	if sort {
 		slices.SortFunc(nonces, func(a, b encodingAccountNonce) int {
-			return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
+			return cmp.Compare(a.BlockAccessIndex, b.BlockAccessIndex)
 		})
 	}
 
 	for i := 0; i < 5; i++ {
 		codes = append(codes, encodingCodeChange{
-			TxIndex: uint32(2 * i),
-			Code:    testrand.Bytes(256),
+			BlockAccessIndex: uint32(2 * i),
+			NewCode:          testrand.Bytes(256),
 		})
 	}
 	if sort {
 		slices.SortFunc(codes, func(a, b encodingCodeChange) int {
-			return cmp.Compare[uint32](a.TxIndex, b.TxIndex)
+			return cmp.Compare(a.BlockAccessIndex, b.BlockAccessIndex)
 		})
 	}
 
 	return AccountAccess{
-		Address:        [20]byte(testrand.Bytes(20)),
-		StorageWrites:  storageWrites,
+		Address:        common.Address(testrand.Bytes(20)),
+		StorageChanges: storageWrites,
 		StorageReads:   storageReads,
 		BalanceChanges: balances,
 		NonceChanges:   nonces,
@@ -289,14 +289,14 @@ func TestBlockAccessListItemCount(t *testing.T) {
 		t.Fatalf("empty BAL item count: got %d, want 0", got)
 	}
 
-	addr1 := [20]byte(testrand.Bytes(20))
-	addr2 := [20]byte(testrand.Bytes(20))
+	addr1 := common.Address(testrand.Bytes(20))
+	addr2 := common.Address(testrand.Bytes(20))
 	one := func() *uint256.Int { return new(uint256.Int).SetBytes(testrand.Bytes(32)) }
 	bal := &BlockAccessList{
 		AccountAccess{
 			Address: addr1,
-			StorageWrites: []encodingSlotWrites{
-				{Slot: one(), Accesses: []encodingStorageWrite{{TxIdx: 0, ValueAfter: one()}, {TxIdx: 1, ValueAfter: one()}}},
+			StorageChanges: []encodingSlotChanges{
+				{Slot: one(), SlotChanges: []encodingStorageWrite{{BlockAccessIndex: 0, PostValue: one()}, {BlockAccessIndex: 1, PostValue: one()}}},
 				{Slot: one()},
 			},
 			StorageReads: []*uint256.Int{one()},
@@ -316,10 +316,10 @@ func TestBlockAccessListValidateSize(t *testing.T) {
 	one := func() *uint256.Int { return new(uint256.Int).SetBytes(testrand.Bytes(32)) }
 	bal := make(BlockAccessList, 3)
 	for i := range bal {
-		bal[i].Address = [20]byte(testrand.Bytes(20))
+		bal[i].Address = common.Address(testrand.Bytes(20))
 		for j := 0; j < 5; j++ {
-			bal[i].StorageWrites = append(bal[i].StorageWrites, encodingSlotWrites{
-				Slot: one(), Accesses: []encodingStorageWrite{{TxIdx: 0, ValueAfter: one()}},
+			bal[i].StorageChanges = append(bal[i].StorageChanges, encodingSlotChanges{
+				Slot: one(), SlotChanges: []encodingStorageWrite{{BlockAccessIndex: 0, PostValue: one()}},
 			})
 		}
 		for j := 0; j < 4; j++ {

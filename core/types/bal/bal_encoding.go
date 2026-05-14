@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -99,7 +100,7 @@ func (e *BlockAccessList) Validate(blockGasLimit uint64, blockTxCount int) error
 func (e *BlockAccessList) itemCount() uint64 {
 	count := uint64(len(*e)) // distinct addresses
 	for i := range *e {
-		count += uint64(len((*e)[i].StorageWrites)) + uint64(len((*e)[i].StorageReads))
+		count += uint64(len((*e)[i].StorageChanges)) + uint64(len((*e)[i].StorageReads))
 	}
 	return count
 }
@@ -130,28 +131,38 @@ func (e *BlockAccessList) Hash() common.Hash {
 	return crypto.Keccak256Hash(enc.Bytes())
 }
 
-// encodingBalanceChange is the encoding format of BalanceChange.
-type encodingBalanceChange struct {
-	TxIdx   uint32
-	Balance *uint256.Int
-}
+// EIP-7928 encoding types. Field names and JSON keys mirror the
+// execution-spec-tests Pydantic models in
+// `src/ethereum_test_types/block_access_list/account_changes.py`. Hex
+// formatting on JSON output is supplied via the gencodec overrides
+// below.
 
-// encodingAccountNonce is the encoding format of NonceChange.
-type encodingAccountNonce struct {
-	TxIdx uint32
-	Nonce uint64
-}
+//go:generate go run github.com/fjl/gencodec -type encodingStorageWrite -field-override encodingStorageWriteMarshaling -out gen_encoding_storage_write_json.go
+//go:generate go run github.com/fjl/gencodec -type encodingSlotChanges -field-override encodingSlotChangesMarshaling -out gen_encoding_slot_changes_json.go
+//go:generate go run github.com/fjl/gencodec -type encodingBalanceChange -field-override encodingBalanceChangeMarshaling -out gen_encoding_balance_change_json.go
+//go:generate go run github.com/fjl/gencodec -type encodingAccountNonce -field-override encodingAccountNonceMarshaling -out gen_encoding_account_nonce_json.go
+//go:generate go run github.com/fjl/gencodec -type encodingCodeChange -field-override encodingCodeChangeMarshaling -out gen_encoding_code_change_json.go
+//go:generate go run github.com/fjl/gencodec -type AccountAccess -field-override accountAccessMarshaling -out gen_account_access_json.go
 
-// encodingStorageWrite is the encoding format of StorageWrites.
+// encodingStorageWrite is one transaction's write to a storage slot.
 type encodingStorageWrite struct {
-	TxIdx      uint32
-	ValueAfter *uint256.Int
+	BlockAccessIndex uint32       `json:"blockAccessIndex"`
+	PostValue        *uint256.Int `json:"postValue"`
 }
 
-// encodingStorageWrite is the encoding format of SlotWrites.
-type encodingSlotWrites struct {
-	Slot     *uint256.Int
-	Accesses []encodingStorageWrite
+type encodingStorageWriteMarshaling struct {
+	BlockAccessIndex hexutil.Uint64
+	PostValue        *hexutil.U256
+}
+
+// encodingSlotChanges aggregates all per-tx writes to a single storage slot.
+type encodingSlotChanges struct {
+	Slot        *uint256.Int           `json:"slot"`
+	SlotChanges []encodingStorageWrite `json:"slotChanges"`
+}
+
+type encodingSlotChangesMarshaling struct {
+	Slot *hexutil.U256
 }
 
 func isStrictlySortedFunc[S ~[]E, E any](x S, cmp func(a, b E) int) bool {
@@ -166,33 +177,63 @@ func isStrictlySortedFunc[S ~[]E, E any](x S, cmp func(a, b E) int) bool {
 // validate asserts that the encodingSlotWrites contain storage modfications
 // which are ordered ascending by transaction index and contain no duplicate
 // modifications for a given index.
-func (e *encodingSlotWrites) validate(maxBALIndex int) error {
-	if !isStrictlySortedFunc(e.Accesses, func(a, b encodingStorageWrite) int {
-		return cmp.Compare(a.TxIdx, b.TxIdx)
+func (e *encodingSlotChanges) validate(maxBALIndex int) error {
+	if !isStrictlySortedFunc(e.SlotChanges, func(a, b encodingStorageWrite) int {
+		return cmp.Compare(a.BlockAccessIndex, b.BlockAccessIndex)
 	}) {
 		return errors.New("storage write indexes must be unique and sorted")
 	}
-	if len(e.Accesses) > 0 && int(e.Accesses[len(e.Accesses)-1].TxIdx) > maxBALIndex {
-		return fmt.Errorf("storage write index exceeds limit, index: %d, limit: %d", e.Accesses[len(e.Accesses)-1].TxIdx, maxBALIndex)
+	if len(e.SlotChanges) > 0 && int(e.SlotChanges[len(e.SlotChanges)-1].BlockAccessIndex) > maxBALIndex {
+		return fmt.Errorf("storage write index exceeds limit, index: %d, limit: %d", e.SlotChanges[len(e.SlotChanges)-1].BlockAccessIndex, maxBALIndex)
 	}
 	return nil
 }
 
-// encodingCodeChange contains the runtime bytecode deployed at an address
-// and the transaction index where the deployment took place.
+// encodingBalanceChange is one transaction's post-state balance for an account.
+type encodingBalanceChange struct {
+	BlockAccessIndex uint32       `json:"blockAccessIndex"`
+	PostBalance      *uint256.Int `json:"postBalance"`
+}
+
+type encodingBalanceChangeMarshaling struct {
+	BlockAccessIndex hexutil.Uint64
+	PostBalance      *hexutil.U256
+}
+
+// encodingAccountNonce is one transaction's post-state nonce for an account.
+type encodingAccountNonce struct {
+	BlockAccessIndex uint32 `json:"blockAccessIndex"`
+	PostNonce        uint64 `json:"postNonce"`
+}
+
+type encodingAccountNonceMarshaling struct {
+	BlockAccessIndex hexutil.Uint64
+	PostNonce        hexutil.Uint64
+}
+
+// encodingCodeChange is one transaction's deployed runtime bytecode for an account.
 type encodingCodeChange struct {
-	TxIndex uint32
-	Code    []byte
+	BlockAccessIndex uint32 `json:"blockAccessIndex"`
+	NewCode          []byte `json:"newCode"`
+}
+
+type encodingCodeChangeMarshaling struct {
+	BlockAccessIndex hexutil.Uint64
+	NewCode          hexutil.Bytes
 }
 
 // AccountAccess is the encoding format of ConstructionAccountAccess.
 type AccountAccess struct {
-	Address        [20]byte                // 20-byte Ethereum address
-	StorageWrites  []encodingSlotWrites    // Storage changes (slot -> [tx_index -> new_value])
-	StorageReads   []*uint256.Int          // Read-only storage keys
-	BalanceChanges []encodingBalanceChange // Balance changes ([tx_index -> post_balance])
-	NonceChanges   []encodingAccountNonce  // Nonce changes ([tx_index -> new_nonce])
-	CodeChanges    []encodingCodeChange    // Code changes ([tx_index -> new_code])
+	Address        common.Address          `json:"address"`
+	StorageChanges []encodingSlotChanges   `json:"storageChanges"`
+	StorageReads   []*uint256.Int          `json:"storageReads"`
+	BalanceChanges []encodingBalanceChange `json:"balanceChanges"`
+	NonceChanges   []encodingAccountNonce  `json:"nonceChanges"`
+	CodeChanges    []encodingCodeChange    `json:"codeChanges"`
+}
+
+type accountAccessMarshaling struct {
+	StorageReads []*hexutil.U256
 }
 
 // validate converts the account accesses out of encoding format.
@@ -200,13 +241,13 @@ type AccountAccess struct {
 // spec, an error is returned.
 func (e *AccountAccess) validate(maxBALIndex int) error {
 	// Check the storage writes are sorted in order, and unique by slot
-	if !isStrictlySortedFunc(e.StorageWrites, func(a, b encodingSlotWrites) int {
+	if !isStrictlySortedFunc(e.StorageChanges, func(a, b encodingSlotChanges) int {
 		return a.Slot.Cmp(b.Slot)
 	}) {
 		return errors.New("storage write slots must be unique and sorted")
 	}
 	// Check the validity of each storage slot's mutations
-	for _, slotWrites := range e.StorageWrites {
+	for _, slotWrites := range e.StorageChanges {
 		if err := slotWrites.validate(maxBALIndex); err != nil {
 			return err
 		}
@@ -223,13 +264,13 @@ func (e *AccountAccess) validate(maxBALIndex int) error {
 	// set of read slots.
 	var (
 		readKeys  = make(map[common.Hash]struct{}, len(e.StorageReads))
-		writeKeys = make(map[common.Hash]struct{}, len(e.StorageWrites))
+		writeKeys = make(map[common.Hash]struct{}, len(e.StorageChanges))
 	)
 	for _, rk := range e.StorageReads {
 		readKey := common.BytesToHash(rk.Bytes())
 		readKeys[readKey] = struct{}{}
 	}
-	for _, write := range e.StorageWrites {
+	for _, write := range e.StorageChanges {
 		writeKey := common.BytesToHash(write.Slot.Bytes())
 		writeKeys[writeKey] = struct{}{}
 	}
@@ -241,42 +282,42 @@ func (e *AccountAccess) validate(maxBALIndex int) error {
 
 	// Check the balance changes are sorted in order, and unique by tx index
 	if !isStrictlySortedFunc(e.BalanceChanges, func(a, b encodingBalanceChange) int {
-		return cmp.Compare(a.TxIdx, b.TxIdx)
+		return cmp.Compare(a.BlockAccessIndex, b.BlockAccessIndex)
 	}) {
 		return errors.New("balance changes must be unique and sorted")
 	}
 	// check that the tx index is not greater than the max allowed for the block
-	if len(e.BalanceChanges) > 0 && int(e.BalanceChanges[len(e.BalanceChanges)-1].TxIdx) > maxBALIndex {
-		return fmt.Errorf("balance change index exceeds limit, index: %d, limit: %d", e.BalanceChanges[len(e.BalanceChanges)-1].TxIdx, maxBALIndex)
+	if len(e.BalanceChanges) > 0 && int(e.BalanceChanges[len(e.BalanceChanges)-1].BlockAccessIndex) > maxBALIndex {
+		return fmt.Errorf("balance change index exceeds limit, index: %d, limit: %d", e.BalanceChanges[len(e.BalanceChanges)-1].BlockAccessIndex, maxBALIndex)
 	}
 
 	// Check the nonce changes are sorted in order, and unique by tx index
 	if !isStrictlySortedFunc(e.NonceChanges, func(a, b encodingAccountNonce) int {
-		return cmp.Compare(a.TxIdx, b.TxIdx)
+		return cmp.Compare(a.BlockAccessIndex, b.BlockAccessIndex)
 	}) {
 		return errors.New("nonce changes must be unique and sorted")
 	}
 	// check that the tx index of the highest nonce change is not greater than
 	// the max allowed for the block
-	if len(e.NonceChanges) > 0 && int(e.NonceChanges[len(e.NonceChanges)-1].TxIdx) > maxBALIndex {
-		return fmt.Errorf("nonce change index exceeds limit, index: %d, limit: %d", e.NonceChanges[len(e.NonceChanges)-1].TxIdx, maxBALIndex)
+	if len(e.NonceChanges) > 0 && int(e.NonceChanges[len(e.NonceChanges)-1].BlockAccessIndex) > maxBALIndex {
+		return fmt.Errorf("nonce change index exceeds limit, index: %d, limit: %d", e.NonceChanges[len(e.NonceChanges)-1].BlockAccessIndex, maxBALIndex)
 	}
 
 	// Check the code changes are sorted in order, and unique by tx index
 	if !isStrictlySortedFunc(e.CodeChanges, func(a, b encodingCodeChange) int {
-		return cmp.Compare(a.TxIndex, b.TxIndex)
+		return cmp.Compare(a.BlockAccessIndex, b.BlockAccessIndex)
 	}) {
 		return errors.New("code changes must be unique and sorted")
 	}
 	// check that the tx index of the highest code changeis not greater than the
 	// max allowed for the block
-	if len(e.CodeChanges) > 0 && int(e.CodeChanges[len(e.CodeChanges)-1].TxIndex) > maxBALIndex {
-		return fmt.Errorf("code change index exceeds limit, index: %d, limit: %d", e.CodeChanges[len(e.CodeChanges)-1].TxIndex, maxBALIndex)
+	if len(e.CodeChanges) > 0 && int(e.CodeChanges[len(e.CodeChanges)-1].BlockAccessIndex) > maxBALIndex {
+		return fmt.Errorf("code change index exceeds limit, index: %d, limit: %d", e.CodeChanges[len(e.CodeChanges)-1].BlockAccessIndex, maxBALIndex)
 	}
 	// Check that none of the code changes report a new code which is larger
 	// than the max allowed by the protocol
 	for _, change := range e.CodeChanges {
-		if len(change.Code) > params.MaxCodeSizeAmsterdam {
+		if len(change.NewCode) > params.MaxCodeSizeAmsterdam {
 			return errors.New("code change contained oversized code")
 		}
 	}
@@ -290,7 +331,7 @@ func (e *AccountAccess) Copy() AccountAccess {
 		StorageReads:   make([]*uint256.Int, 0, len(e.StorageReads)),
 		BalanceChanges: make([]encodingBalanceChange, 0, len(e.BalanceChanges)),
 		NonceChanges:   slices.Clone(e.NonceChanges),
-		StorageWrites:  make([]encodingSlotWrites, 0, len(e.StorageWrites)),
+		StorageChanges: make([]encodingSlotChanges, 0, len(e.StorageChanges)),
 		CodeChanges:    make([]encodingCodeChange, 0, len(e.CodeChanges)),
 	}
 	for _, slot := range e.StorageReads {
@@ -298,27 +339,27 @@ func (e *AccountAccess) Copy() AccountAccess {
 	}
 	for _, change := range e.BalanceChanges {
 		res.BalanceChanges = append(res.BalanceChanges, encodingBalanceChange{
-			TxIdx:   change.TxIdx,
-			Balance: change.Balance.Clone(),
+			BlockAccessIndex: change.BlockAccessIndex,
+			PostBalance:      change.PostBalance.Clone(),
 		})
 	}
-	for _, storageWrite := range e.StorageWrites {
-		accesses := make([]encodingStorageWrite, 0, len(storageWrite.Accesses))
-		for _, w := range storageWrite.Accesses {
-			accesses = append(accesses, encodingStorageWrite{
-				TxIdx:      w.TxIdx,
-				ValueAfter: w.ValueAfter.Clone(),
+	for _, slot := range e.StorageChanges {
+		writes := make([]encodingStorageWrite, 0, len(slot.SlotChanges))
+		for _, w := range slot.SlotChanges {
+			writes = append(writes, encodingStorageWrite{
+				BlockAccessIndex: w.BlockAccessIndex,
+				PostValue:        w.PostValue.Clone(),
 			})
 		}
-		res.StorageWrites = append(res.StorageWrites, encodingSlotWrites{
-			Slot:     storageWrite.Slot.Clone(),
-			Accesses: accesses,
+		res.StorageChanges = append(res.StorageChanges, encodingSlotChanges{
+			Slot:        slot.Slot.Clone(),
+			SlotChanges: writes,
 		})
 	}
 	for _, codeChange := range e.CodeChanges {
 		res.CodeChanges = append(res.CodeChanges, encodingCodeChange{
-			TxIndex: codeChange.TxIndex,
-			Code:    bytes.Clone(codeChange.Code),
+			BlockAccessIndex: codeChange.BlockAccessIndex,
+			NewCode:          bytes.Clone(codeChange.NewCode),
 		})
 	}
 	return res
@@ -336,7 +377,7 @@ var _ rlp.Encoder = &ConstructionBlockAccessList{}
 func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAccess {
 	res := AccountAccess{
 		Address:        addr,
-		StorageWrites:  make([]encodingSlotWrites, 0, len(a.StorageWrites)),
+		StorageChanges: make([]encodingSlotChanges, 0, len(a.StorageWrites)),
 		StorageReads:   make([]*uint256.Int, 0, len(a.StorageReads)),
 		BalanceChanges: make([]encodingBalanceChange, 0, len(a.BalanceChanges)),
 		NonceChanges:   make([]encodingAccountNonce, 0, len(a.NonceChanges)),
@@ -347,22 +388,22 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 	writeSlots := slices.Collect(maps.Keys(a.StorageWrites))
 	slices.SortFunc(writeSlots, common.Hash.Cmp)
 	for _, slot := range writeSlots {
-		obj := encodingSlotWrites{
+		obj := encodingSlotChanges{
 			Slot: new(uint256.Int).SetBytes(slot[:]),
 		}
 		slotWrites := a.StorageWrites[slot]
-		obj.Accesses = make([]encodingStorageWrite, 0, len(slotWrites))
+		obj.SlotChanges = make([]encodingStorageWrite, 0, len(slotWrites))
 
 		indices := slices.Collect(maps.Keys(slotWrites))
-		slices.SortFunc(indices, cmp.Compare[uint32])
+		slices.SortFunc(indices, cmp.Compare)
 		for _, index := range indices {
 			val := slotWrites[index]
-			obj.Accesses = append(obj.Accesses, encodingStorageWrite{
-				TxIdx:      index,
-				ValueAfter: new(uint256.Int).SetBytes(val[:]),
+			obj.SlotChanges = append(obj.SlotChanges, encodingStorageWrite{
+				BlockAccessIndex: index,
+				PostValue:        new(uint256.Int).SetBytes(val[:]),
 			})
 		}
-		res.StorageWrites = append(res.StorageWrites, obj)
+		res.StorageChanges = append(res.StorageChanges, obj)
 	}
 
 	// Convert read slots
@@ -374,36 +415,36 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 
 	// Convert balance changes
 	balanceIndices := slices.Collect(maps.Keys(a.BalanceChanges))
-	slices.SortFunc(balanceIndices, cmp.Compare[uint32])
+	slices.SortFunc(balanceIndices, cmp.Compare)
 	for _, idx := range balanceIndices {
 		res.BalanceChanges = append(res.BalanceChanges, encodingBalanceChange{
-			TxIdx:   idx,
-			Balance: a.BalanceChanges[idx].Clone(),
+			BlockAccessIndex: idx,
+			PostBalance:      a.BalanceChanges[idx].Clone(),
 		})
 	}
 
 	// Convert nonce changes
 	nonceIndices := slices.Collect(maps.Keys(a.NonceChanges))
-	slices.SortFunc(nonceIndices, cmp.Compare[uint32])
+	slices.SortFunc(nonceIndices, cmp.Compare)
 	for _, idx := range nonceIndices {
 		res.NonceChanges = append(res.NonceChanges, encodingAccountNonce{
-			TxIdx: idx,
-			Nonce: a.NonceChanges[idx],
+			BlockAccessIndex: idx,
+			PostNonce:        a.NonceChanges[idx],
 		})
 	}
 
 	// Convert code change
 	codeIndices := slices.Collect(maps.Keys(a.CodeChange))
-	slices.SortFunc(codeIndices, cmp.Compare[uint32])
+	slices.SortFunc(codeIndices, cmp.Compare)
 	for _, idx := range codeIndices {
 		res.CodeChanges = append(res.CodeChanges, encodingCodeChange{
-			TxIndex: idx,
+			BlockAccessIndex: idx,
 
 			// TODO(rjl493456442) the contract code is not deep-copied.
 			// In theory the deep-copy is unnecessary, the semantics of
 			// the function should be probably changed that the returned
 			// AccessList is unsafe for modification.
-			Code: a.CodeChange[idx],
+			NewCode: a.CodeChange[idx],
 		})
 	}
 	return res
@@ -432,33 +473,28 @@ func (e *BlockAccessList) PrettyPrint() string {
 	}
 	for _, accountDiff := range *e {
 		printWithIndent(0, fmt.Sprintf("%x:", accountDiff.Address))
-
-		printWithIndent(1, "storage writes:")
-		for _, sWrite := range accountDiff.StorageWrites {
-			printWithIndent(2, fmt.Sprintf("%s:", sWrite.Slot.Hex()))
-			for _, access := range sWrite.Accesses {
-				printWithIndent(3, fmt.Sprintf("%d: %s", access.TxIdx, access.ValueAfter.Hex()))
+		printWithIndent(1, "storage changes:")
+		for _, slot := range accountDiff.StorageChanges {
+			printWithIndent(2, fmt.Sprintf("%s:", slot.Slot.Hex()))
+			for _, access := range slot.SlotChanges {
+				printWithIndent(3, fmt.Sprintf("%d: %s", access.BlockAccessIndex, access.PostValue.Hex()))
 			}
 		}
-
 		printWithIndent(1, "storage reads:")
 		for _, slot := range accountDiff.StorageReads {
 			printWithIndent(2, slot.Hex())
 		}
-
 		printWithIndent(1, "balance changes:")
 		for _, change := range accountDiff.BalanceChanges {
-			printWithIndent(2, fmt.Sprintf("%d: %s", change.TxIdx, change.Balance))
+			printWithIndent(2, fmt.Sprintf("%d: %s", change.BlockAccessIndex, change.PostBalance))
 		}
-
 		printWithIndent(1, "nonce changes:")
 		for _, change := range accountDiff.NonceChanges {
-			printWithIndent(2, fmt.Sprintf("%d: %d", change.TxIdx, change.Nonce))
+			printWithIndent(2, fmt.Sprintf("%d: %d", change.BlockAccessIndex, change.PostNonce))
 		}
-
 		printWithIndent(1, "code changes:")
 		for _, change := range accountDiff.CodeChanges {
-			printWithIndent(2, fmt.Sprintf("%d: %x", change.TxIndex, change.Code))
+			printWithIndent(2, fmt.Sprintf("%d: %x", change.BlockAccessIndex, change.NewCode))
 		}
 	}
 	return res.String()
