@@ -413,18 +413,15 @@ func onSystemCallStart(tracer *tracing.Hooks, ctx *tracing.VMContext) {
 // AssembleBlock finalizes the state and assembles the block with provided
 // body and receipts.
 func AssembleBlock(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, blockAccessList *bal.ConstructionBlockAccessList) *types.Block {
+	// Assign the post-transition state root
+	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+
+	// Assign the BlockAccessListHash if Amsterdam has been enabled
 	var bal *bal.BlockAccessList
 	if chain.Config().IsAmsterdam(header.Number, header.Time) {
 		bal = blockAccessList.ToEncodingObj()
-	}
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-	if bal != nil {
 		balHash := bal.Hash()
 		header.BlockAccessListHash = &balHash
 	}
-	block := types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
-	if bal != nil {
-		block = block.WithAccessListUnsafe(bal)
-	}
-	return block
+	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)).WithAccessListUnsafe(bal)
 }
