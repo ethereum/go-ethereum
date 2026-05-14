@@ -237,7 +237,13 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			resp := h.handleCallMsg(cp, msg)
 			callBuffer.pushResponse(resp)
 			if resp != nil && h.batchResponseMaxSize != 0 {
-				responseBytes += len(resp.Result)
+				// Account for both successful results and error payloads so
+				// that responses carrying large error.data (e.g. revert
+				// reasons returned via rpc.DataError) are subject to the
+				// same cap as oversized successful results. Pre-fix, only
+				// len(resp.Result) was counted and error responses with
+				// large Data could push the batch well past the limit.
+				responseBytes += responseSize(resp)
 				if responseBytes > h.batchResponseMaxSize {
 					err := &internalServerError{errcodeResponseTooLarge, errMsgResponseTooLarge}
 					callBuffer.respondWithError(cp.ctx, h.conn, err)
@@ -255,6 +261,28 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			n.activate()
 		}
 	})
+}
+
+// responseSize returns the number of bytes that should be charged against the
+// batch response size limit for a single response. Successful responses
+// contribute len(resp.Result); error responses contribute the marshalled size
+// of the error object (including any error.Data) so that large rpc.DataError
+// payloads cannot bypass the cap.
+func responseSize(resp *jsonrpcMessage) int {
+	if resp == nil {
+		return 0
+	}
+	if resp.Error == nil {
+		return len(resp.Result)
+	}
+	encoded, err := json.Marshal(resp.Error)
+	if err != nil {
+		// Marshalling jsonError cannot realistically fail, but if it ever
+		// does, fall back to a conservative non-zero estimate so the
+		// counter still advances and the limit is eventually tripped.
+		return len(resp.Error.Message)
+	}
+	return len(encoded)
 }
 
 func (h *handler) respondWithBatchTooLarge(cp *callProc, batch []*jsonrpcMessage) {

@@ -208,6 +208,56 @@ func TestServerBatchResponseSizeLimit(t *testing.T) {
 	}
 }
 
+// TestServerBatchResponseSizeLimitErrors is the regression test for #33814:
+// the batch response size counter previously only accounted for len(resp.Result),
+// so error responses (which set resp.Error and leave resp.Result nil) could be
+// returned without bound. Large rpc.DataError payloads in particular could blow
+// past the configured limit.
+//
+// The testService.ReturnError method returns an Error with code 444 and
+// "testError data" as Data, which marshals to roughly 60 bytes per response.
+// With a 100-byte cap, the first error is accepted but every subsequent error
+// must trip the response-too-large path.
+func TestServerBatchResponseSizeLimitErrors(t *testing.T) {
+	t.Parallel()
+
+	server := newTestServer()
+	defer server.Stop()
+	// Tight cap: a single marshalled testError is ~56 bytes, so the first
+	// response is accepted but every subsequent response must trip the cap.
+	server.SetBatchLimits(100, 50)
+
+	client := DialInProc(server)
+	defer client.Close()
+
+	var batch []BatchElem
+	for i := 0; i < 5; i++ {
+		batch = append(batch, BatchElem{
+			Method: "test_returnError",
+			Args:   []any{},
+			Result: new(any),
+		})
+	}
+	if err := client.BatchCall(batch); err != nil {
+		t.Fatal("error sending batch:", err)
+	}
+
+	// The first response is the genuine testError; the rest must be the
+	// internal response-too-large error.
+	if batch[0].Error == nil {
+		t.Fatalf("batch elem 0 expected testError, got nil")
+	}
+	for i := 1; i < len(batch); i++ {
+		re, ok := batch[i].Error.(Error)
+		if !ok {
+			t.Fatalf("batch elem %d expected Error, got %v (%T)", i, batch[i].Error, batch[i].Error)
+		}
+		if re.ErrorCode() != errcodeResponseTooLarge {
+			t.Errorf("batch elem %d wrong error code, have %d want %d", i, re.ErrorCode(), errcodeResponseTooLarge)
+		}
+	}
+}
+
 func TestServerWebsocketReadLimit(t *testing.T) {
 	t.Parallel()
 
