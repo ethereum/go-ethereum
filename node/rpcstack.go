@@ -473,7 +473,9 @@ func (h *virtualHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.next.ServeHTTP(w, r)
 		return
 	}
-	if _, exist := h.vhosts[host]; exist {
+	// Hostnames are case-insensitive per RFC 3986 section 3.2.2, and the
+	// configured allowlist is normalized to lower-case in newVHostHandler.
+	if _, exist := h.vhosts[strings.ToLower(host)]; exist {
 		h.next.ServeHTTP(w, r)
 		return
 	}

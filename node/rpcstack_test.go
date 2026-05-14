@@ -62,6 +62,13 @@ func TestVhosts(t *testing.T) {
 
 	resp2 := rpcRequest(t, url, testMethod, "host", "bad")
 	assert.Equal(t, resp2.StatusCode, http.StatusForbidden)
+
+	// Hostnames are case-insensitive per RFC 3986; mixed-case Host headers
+	// must match a lower-cased allowlist entry. Regression for #34692.
+	for _, mixed := range []string{"TEST", "TeSt", "Test:1234"} {
+		resp := rpcRequest(t, url, testMethod, "host", mixed)
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "host=%q should be accepted", mixed)
+	}
 }
 
 type originTest struct {
