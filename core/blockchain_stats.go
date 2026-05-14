@@ -96,6 +96,8 @@ func (s *ExecuteStats) reportMetrics() {
 	accountCacheMissPrefetchMeter.Mark(s.StatePrefetchCacheStats.StateStats.AccountCacheMiss)
 	storageCacheHitPrefetchMeter.Mark(s.StatePrefetchCacheStats.StateStats.StorageCacheHit)
 	storageCacheMissPrefetchMeter.Mark(s.StatePrefetchCacheStats.StateStats.StorageCacheMiss)
+	codeCacheHitPrefetchMeter.Mark(s.StatePrefetchCacheStats.CodeStats.CacheHit)
+	codeCacheMissPrefetchMeter.Mark(s.StatePrefetchCacheStats.CodeStats.CacheMiss)
 
 	accountCacheHitMeter.Mark(s.StateReadCacheStats.StateStats.AccountCacheHit)
 	accountCacheMissMeter.Mark(s.StateReadCacheStats.StateStats.AccountCacheMiss)
