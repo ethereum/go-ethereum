@@ -89,6 +89,13 @@ type fetchStatus struct {
 	blobCount  int                          // Number of blobs in this tx (set on first delivery)
 }
 
+type BlobFetcherFunctions struct {
+	HasPayload    func(common.Hash) bool
+	AddCells      func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error
+	FetchPayloads func(string, []common.Hash, *types.CustodyBitmap) error
+	DropPeer      func(string)
+}
+
 // BlobFetcher is responsible for managing type 3 transactions based on peer announcements.
 //
 // BlobFetcher manages three buffers:
@@ -128,11 +135,7 @@ type BlobFetcher struct {
 	// todo simplify
 	alternates map[common.Hash]map[string]*types.CustodyBitmap // In-flight transaction alternate origins (in case the peer is dropped)
 
-	// Callbacks
-	hasPayload    func(common.Hash) bool
-	addCells      func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error
-	fetchPayloads func(string, []common.Hash, *types.CustodyBitmap) error
-	dropPeer      func(string)
+	fn BlobFetcherFunctions // callbacks
 
 	step     chan struct{}    // Notification channel when the fetcher loop iterates
 	clock    mclock.Clock     // Monotonic clock or simulated clock for tests
@@ -140,33 +143,26 @@ type BlobFetcher struct {
 	rand     random           // Randomizer
 }
 
-func NewBlobFetcher(
-	hasPayload func(common.Hash) bool,
-	addCells func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error,
-	fetchPayloads func(string, []common.Hash, *types.CustodyBitmap) error, dropPeer func(string),
-	custody *types.CustodyBitmap, rand random) *BlobFetcher {
+func NewBlobFetcher(fn BlobFetcherFunctions, custody *types.CustodyBitmap, rand random) *BlobFetcher {
 	return &BlobFetcher{
-		notify:        make(chan *blobTxAnnounce),
-		cleanup:       make(chan *payloadDelivery),
-		drop:          make(chan *txDrop),
-		quit:          make(chan struct{}),
-		full:          make(map[common.Hash]struct{}),
-		partial:       make(map[common.Hash]struct{}),
-		waitlist:      make(map[common.Hash]map[string]struct{}),
-		waittime:      make(map[common.Hash]mclock.AbsTime),
-		waitslots:     make(map[string]map[common.Hash]struct{}),
-		announces:     make(map[string]map[common.Hash]*cellWithSeq),
-		fetches:       make(map[common.Hash]*fetchStatus),
-		requests:      make(map[string][]*cellRequest),
-		alternates:    make(map[common.Hash]map[string]*types.CustodyBitmap),
-		hasPayload:    hasPayload,
-		addCells:      addCells,
-		fetchPayloads: fetchPayloads,
-		dropPeer:      dropPeer,
-		custody:       custody,
-		clock:         mclock.System{},
-		realTime:      time.Now,
-		rand:          rand,
+		notify:     make(chan *blobTxAnnounce),
+		cleanup:    make(chan *payloadDelivery),
+		drop:       make(chan *txDrop),
+		quit:       make(chan struct{}),
+		full:       make(map[common.Hash]struct{}),
+		partial:    make(map[common.Hash]struct{}),
+		waitlist:   make(map[common.Hash]map[string]struct{}),
+		waittime:   make(map[common.Hash]mclock.AbsTime),
+		waitslots:  make(map[string]map[common.Hash]struct{}),
+		announces:  make(map[string]map[common.Hash]*cellWithSeq),
+		fetches:    make(map[common.Hash]*fetchStatus),
+		requests:   make(map[string][]*cellRequest),
+		alternates: make(map[common.Hash]map[string]*types.CustodyBitmap),
+		fn:         fn,
+		custody:    custody,
+		clock:      mclock.System{},
+		realTime:   time.Now,
+		rand:       rand,
 	}
 }
 
@@ -175,7 +171,7 @@ func (f *BlobFetcher) Notify(peer string, txs []common.Hash, cells types.Custody
 	blobAnnounceInMeter.Mark(int64(len(txs)))
 	anns := make([]common.Hash, 0)
 	for _, tx := range txs {
-		if f.hasPayload(tx) {
+		if f.fn.HasPayload(tx) {
 			continue
 		}
 		anns = append(anns, tx)
@@ -521,7 +517,7 @@ func (f *BlobFetcher) loop() {
 					blobFetcherFetchTime.Update(int64(time.Duration(f.clock.Now() - request.time)))
 					status := f.fetches[hash]
 					collectedCustody := types.NewCustodyBitmap(status.fetched)
-					f.addCells(hash, status.deliveries, &collectedCustody)
+					f.fn.AddCells(hash, status.deliveries, &collectedCustody)
 
 					for peer, txset := range f.announces {
 						delete(txset, hash)
@@ -770,7 +766,7 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 			go func(peer string, request []*cellRequest) {
 				for _, req := range request {
 					blobRequestOutMeter.Mark(int64(len(req.txs)))
-					if err := f.fetchPayloads(peer, req.txs, req.cells); err != nil {
+					if err := f.fn.FetchPayloads(peer, req.txs, req.cells); err != nil {
 						blobRequestFailMeter.Mark(int64(len(req.txs)))
 						f.Drop(peer)
 						break

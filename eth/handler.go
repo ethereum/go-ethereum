@@ -195,7 +195,8 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return p.RequestTxs(hashes)
 	}
-	// Construct the blob buffer for assembling blob txs from separate tx and cell deliveries
+
+	// Construct the blob buffer for assembling blob txs from separate tx and cell deliveries.
 	h.blobBuffer = blobpool.NewBlobBuffer(h.blobpool.AddPooledTx, h.removePeer)
 
 	addTxs := func(peer string, txs []*types.Transaction) []error {
@@ -233,24 +234,27 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	h.txFetcher = fetcher.NewTxFetcher(h.chain, validateMeta, addTxs, fetchTx, h.removePeer)
 
 	// Construct the blob fetcher for cell-based blob data availability
-	fetchPayloads := func(peer string, hashes []common.Hash, cells *types.CustodyBitmap) error {
-		p := h.peers.peer(peer)
-		if p == nil {
-			return errors.New("unknown peer")
-		}
-		return p.RequestPayload(hashes, cells)
+	blobCallbacks := fetcher.BlobFetcherFunctions{
+		FetchPayloads: func(peer string, hashes []common.Hash, cells *types.CustodyBitmap) error {
+			p := h.peers.peer(peer)
+			if p == nil {
+				return errors.New("unknown peer")
+			}
+			return p.RequestPayload(hashes, cells)
+		},
+		HasPayload: func(hash common.Hash) bool {
+			return h.blobpool.HasPayload(hash) || h.blobBuffer.HasCells(hash)
+		},
+		AddCells: func(hash common.Hash, deliveries map[string]*fetcher.PeerCellDelivery, custody *types.CustodyBitmap) error {
+			converted := make(map[string]*blobpool.PeerDelivery, len(deliveries))
+			for peer, d := range deliveries {
+				converted[peer] = &blobpool.PeerDelivery{Cells: d.Cells, Indices: d.Indices}
+			}
+			return h.blobBuffer.AddCells(hash, converted, custody)
+		},
+		DropPeer: h.removePeer,
 	}
-	hasPayload := func(hash common.Hash) bool {
-		return h.blobpool.HasPayload(hash) || h.blobBuffer.HasCells(hash)
-	}
-	addCells := func(hash common.Hash, deliveries map[string]*fetcher.PeerCellDelivery, custody *types.CustodyBitmap) error {
-		converted := make(map[string]*blobpool.PeerDelivery, len(deliveries))
-		for peer, d := range deliveries {
-			converted[peer] = &blobpool.PeerDelivery{Cells: d.Cells, Indices: d.Indices}
-		}
-		return h.blobBuffer.AddCells(hash, converted, custody)
-	}
-	h.blobFetcher = fetcher.NewBlobFetcher(hasPayload, addCells, fetchPayloads, h.removePeer, &config.Custody, nil)
+	h.blobFetcher = fetcher.NewBlobFetcher(blobCallbacks, &config.Custody, nil)
 	return h, nil
 }
 
