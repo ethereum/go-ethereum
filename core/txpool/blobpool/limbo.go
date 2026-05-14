@@ -202,15 +202,36 @@ func (l *limbo) update(txhash common.Hash, block uint64) {
 		return
 	}
 	// Retrieve the old blobs from the data store and write them back with a new
-	// block number. IF anything fails, there's not much to do, go on.
-	item, err := l.getAndDrop(id)
+	// block number. The new entry is written before the old one is dropped: blob
+	// sidecars are not stored in chain state, so the limbo is the only place
+	// from which a re-injection on a reorg-rollback can recover them. Dropping
+	// the existing entry first (as the previous implementation did) would lose
+	// the blob outright if the subsequent setAndIndex call failed.
+	data, err := l.store.Get(id)
 	if err != nil {
-		log.Error("Failed to get and drop limboed blobs", "tx", txhash, "id", id, "err", err)
+		log.Error("Failed to load limboed blobs", "tx", txhash, "id", id, "err", err)
+		return
+	}
+	item := new(limboBlob)
+	if err := rlp.DecodeBytes(data, item); err != nil {
+		log.Error("Failed to decode limboed blobs", "tx", txhash, "id", id, "err", err)
 		return
 	}
 	if err := l.setAndIndex(item.Ptx, block); err != nil {
 		log.Error("Failed to set and index limboed blobs", "tx", txhash, "err", err)
 		return
+	}
+	// The new entry is now durable in the store and indexed under the new
+	// block; setAndIndex has overwritten l.index[txhash] with the new id, so
+	// clean up the old store entry and group mapping. A failure to drop the
+	// old store id only leaks a billy slot - the blob is still preserved
+	// under the new id.
+	if err := l.store.Delete(id); err != nil {
+		log.Error("Failed to drop superseded limbo entry", "tx", txhash, "old-id", id, "err", err)
+	}
+	delete(l.groups[item.Block], id)
+	if len(l.groups[item.Block]) == 0 {
+		delete(l.groups, item.Block)
 	}
 	log.Trace("Blob transaction updated in limbo", "tx", txhash, "old-block", item.Block, "new-block", block)
 }
