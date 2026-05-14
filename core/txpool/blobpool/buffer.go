@@ -26,6 +26,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+var (
+	blobBufferTxFirstCounter    = metrics.NewRegisteredCounter("blobpool/buffer/txfirst", nil)
+	blobBufferCellsFirstCounter = metrics.NewRegisteredCounter("blobpool/buffer/cellsfirst", nil)
+	blobBufferTotalTx           = metrics.NewRegisteredGauge("blobpool/buffer/txcount", nil)
+	blobBufferTotalCells        = metrics.NewRegisteredGauge("blobpool/buffer/cellcount", nil)
 )
 
 const (
@@ -70,6 +78,9 @@ func NewBlobBuffer(addToPool func(*PooledBlobTx) error, dropPeer func(string)) *
 // AddTx buffers a blob transaction (without blobs) from an ETH/72 peer.
 // If cells are already buffered, verification and pool insertion are attempted.
 func (b *BlobBuffer) AddTx(tx *types.Transaction, peer string) error {
+	defer b.updateMetrics()()
+
+	// First remove any timed-out entries.
 	b.evict()
 
 	hash := tx.Hash()
@@ -98,6 +109,7 @@ func (b *BlobBuffer) AddTx(tx *types.Transaction, peer string) error {
 	if entry, ok := b.cells[hash]; ok {
 		return b.add(hash, tx, entry)
 	}
+	blobBufferTxFirstCounter.Inc(1)
 	b.txs[hash] = &txEntry{tx: tx, peer: peer, added: time.Now()}
 	return nil
 }
@@ -105,16 +117,20 @@ func (b *BlobBuffer) AddTx(tx *types.Transaction, peer string) error {
 // AddCells buffers per-peer cell deliveries from the blob fetcher.
 // If the transaction is already buffered, verification and pool insertion are attempted.
 func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDelivery, custody *types.CustodyBitmap) error {
+	defer b.updateMetrics()()
+
+	// First remove any timed-out entries.
 	b.evict()
+
 	b.cells[hash] = &cellEntry{
 		deliveries: deliveries,
 		custody:    custody,
 		added:      time.Now(),
 	}
-
 	if txe, ok := b.txs[hash]; ok {
 		return b.add(hash, txe.tx, b.cells[hash])
 	}
+	blobBufferCellsFirstCounter.Inc(1)
 	return nil
 }
 
@@ -180,6 +196,23 @@ func (b *BlobBuffer) evict() {
 	for hash, entry := range b.cells {
 		if now.Sub(entry.added) > bufferLifetime {
 			delete(b.cells, hash)
+		}
+	}
+}
+
+// updateMetrics updates the metrics gauges.
+// This should be called at the start of any operation that changes the buffer
+// content. The returned function is to be called at the end of the operation,
+// usually with defer.
+func (b *BlobBuffer) updateMetrics() func() {
+	preTxCount := len(b.txs)
+	preCellsCount := len(b.cells)
+	return func() {
+		if len(b.txs) != preTxCount {
+			blobBufferTotalTx.Update(int64(len(b.txs)))
+		}
+		if len(b.cells) != preCellsCount {
+			blobBufferTotalCells.Update(int64(len(b.cells)))
 		}
 	}
 }
