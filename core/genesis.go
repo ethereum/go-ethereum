@@ -555,6 +555,7 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 			if head.SlotNumber == nil {
 				head.SlotNumber = new(uint64)
 			}
+			head.BlockAccessListHash = &types.EmptyBlockAccessListHash
 		}
 	}
 	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals}, nil, trie.NewStackTrie(nil))

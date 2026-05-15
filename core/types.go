@@ -59,5 +59,8 @@ type ProcessResult struct {
 	Requests [][]byte
 	Logs     []*types.Log
 	GasUsed  uint64
-	Bal      *bal.ConstructionBlockAccessList
+
+	// BAL is only meaningful for post-Amsterdam blocks. Please ensure
+	// fork validation is performed before accessing it.
+	Bal *bal.ConstructionBlockAccessList
 }

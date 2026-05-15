@@ -416,12 +416,12 @@ func AssembleBlock(chain consensus.ChainHeaderReader, header *types.Header, stat
 	// Assign the post-transition state root
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
-	// Assign the BlockAccessListHash if Amsterdam has been enabled
-	var bal *bal.BlockAccessList
-	if chain.Config().IsAmsterdam(header.Number, header.Time) {
-		bal = blockAccessList.ToEncodingObj()
-		balHash := bal.Hash()
-		header.BlockAccessListHash = &balHash
+	if !chain.Config().IsAmsterdam(header.Number, header.Time) {
+		return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
 	}
+	// Assign the BlockAccessListHash if Amsterdam has been enabled
+	bal := blockAccessList.ToEncodingObj()
+	balHash := bal.Hash()
+	header.BlockAccessListHash = &balHash
 	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)).WithAccessListUnsafe(bal)
 }
