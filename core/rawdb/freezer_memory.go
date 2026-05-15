@@ -228,6 +228,7 @@ func (b *memoryBatch) commit(freezer *MemoryFreezer) (items uint64, writeSize in
 // interface and can be used along with ephemeral key-value store.
 type MemoryFreezer struct {
 	items      uint64                  // Number of items stored
+	tails      map[string]uint64       // Per-group tail cache; access serialized by lock
 	readonly   bool                    // Flag if the freezer is only for reading
 	lock       sync.RWMutex            // Lock to protect fields
 	tables     map[string]*memoryTable // Tables for storing everything
@@ -236,14 +237,21 @@ type MemoryFreezer struct {
 
 // NewMemoryFreezer initializes an in-memory freezer instance.
 func NewMemoryFreezer(readonly bool, tableName map[string]freezerTableConfig) *MemoryFreezer {
-	tables := make(map[string]*memoryTable)
+	var (
+		tables = make(map[string]*memoryTable)
+		tails  = make(map[string]uint64)
+	)
 	for name, cfg := range tableName {
 		tables[name] = newMemoryTable(name, cfg)
+		if cfg.tailGroup != "" {
+			tails[cfg.tailGroup] = 0
+		}
 	}
 	return &MemoryFreezer{
 		writeBatch: newMemoryBatch(),
 		readonly:   readonly,
 		tables:     tables,
+		tails:      tails,
 	}
 }
 
@@ -289,7 +297,7 @@ func (f *MemoryFreezer) Ancients() (uint64, error) {
 }
 
 // Tail returns the lowest accessible item index for the given tail group.
-// All tables sharing the group must agree on the tail; an empty group name
+// All tables sharing the group agree on the tail; an empty group name
 // refers to non-prunable tables and always returns 0.
 func (f *MemoryFreezer) Tail(group string) (uint64, error) {
 	f.lock.RLock()
@@ -298,22 +306,8 @@ func (f *MemoryFreezer) Tail(group string) (uint64, error) {
 	if group == "" {
 		return 0, nil
 	}
-	var (
-		tail  uint64
-		found bool
-	)
-	for _, table := range f.tables {
-		if table.config.tailGroup != group {
-			continue
-		}
-		if !found {
-			tail = table.offset
-			found = true
-		} else if table.offset != tail {
-			return 0, fmt.Errorf("inconsistent tail in group %q: %d vs %d", group, table.offset, tail)
-		}
-	}
-	if !found {
+	tail, ok := f.tails[group]
+	if !ok {
 		return 0, fmt.Errorf("unknown tail group: %q", group)
 	}
 	return tail, nil
@@ -409,21 +403,12 @@ func (f *MemoryFreezer) TruncateTail(group string, tail uint64) (uint64, error) 
 	if group == "" {
 		return 0, errors.New("empty tail group")
 	}
-	var (
-		prev  uint64
-		found bool
-	)
-	for _, table := range f.tables {
-		if table.config.tailGroup != group {
-			continue
-		}
-		if !found {
-			prev = table.offset
-			found = true
-		}
-	}
-	if !found {
+	prev, ok := f.tails[group]
+	if !ok {
 		return 0, fmt.Errorf("unknown tail group: %q", group)
+	}
+	if prev >= tail {
+		return prev, nil
 	}
 	for _, table := range f.tables {
 		if table.config.tailGroup != group {
@@ -433,6 +418,7 @@ func (f *MemoryFreezer) TruncateTail(group string, tail uint64) (uint64, error) 
 			return 0, err
 		}
 	}
+	f.tails[group] = tail
 	if f.items < tail {
 		f.items = tail
 	}
@@ -462,10 +448,15 @@ func (f *MemoryFreezer) Reset() error {
 	defer f.lock.Unlock()
 
 	tables := make(map[string]*memoryTable)
+	tails := make(map[string]uint64)
 	for name, table := range f.tables {
 		tables[name] = newMemoryTable(name, table.config)
+		if table.config.tailGroup != "" {
+			tails[table.config.tailGroup] = 0
+		}
 	}
 	f.tables = tables
+	f.tails = tails
 	f.items = 0
 	return nil
 }

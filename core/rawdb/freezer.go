@@ -329,6 +329,9 @@ func (f *Freezer) TruncateTail(group string, tail uint64) (uint64, error) {
 	defer f.writeLock.Unlock()
 
 	prev := cached.Load()
+	if prev >= tail {
+		return prev, nil
+	}
 	for _, table := range f.tables {
 		if table.config.tailGroup != group {
 			continue
@@ -337,9 +340,8 @@ func (f *Freezer) TruncateTail(group string, tail uint64) (uint64, error) {
 			return 0, err
 		}
 	}
-	if tail > prev {
-		cached.Store(tail)
-	}
+	cached.Store(tail)
+
 	// Update the head if the requested tail exceeds the current head.
 	if f.head.Load() < tail {
 		f.head.Store(tail)
