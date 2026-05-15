@@ -365,7 +365,11 @@ func (f *chainFreezer) Ancient(kind string, number uint64) ([]byte, error) {
 	if kind == ChainFreezerHeaderTable || kind == ChainFreezerHashTable {
 		return f.ancients.Ancient(kind, number)
 	}
-	tail, err := f.ancients.Tail(tableTailGroup(kind))
+	group, err := tableTailGroup(kind)
+	if err != nil {
+		return nil, err
+	}
+	tail, err := f.ancients.Tail(group)
 	if err != nil {
 		return nil, err
 	}
@@ -387,13 +391,11 @@ func (f *chainFreezer) Ancient(kind string, number uint64) ([]byte, error) {
 }
 
 // tableTailGroup returns the tail group identifier for a chain freezer table.
-// Unknown tables resolve to the default block-data group, since the chain
-// freezer's only prunable group today is bodies+receipts.
-func tableTailGroup(kind string) string {
+func tableTailGroup(kind string) (string, error) {
 	if cfg, ok := chainFreezerTableConfigs[kind]; ok {
-		return cfg.tailGroup
+		return cfg.tailGroup, nil
 	}
-	return ChainFreezerBlockDataGroup
+	return "", errUnknownTable
 }
 
 // ReadAncients executes an operation while preventing mutations to the freezer,

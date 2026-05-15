@@ -797,6 +797,13 @@ func WriteAncientHeaderChain(db ethdb.AncientWriter, headers []*types.Header) (i
 			if err := op.AppendRaw(ChainFreezerReceiptTable, num, nil); err != nil {
 				return fmt.Errorf("can't append block %d receipts: %v", num, err)
 			}
+			// The assumption is held that BAL of ancient block is no longer available
+			// (it may still reachable, but it's not worthwhile to even retrieve it
+			// from the network). A nil entry is stored in the BAL table as the absence
+			// placeholder.
+			if err := op.AppendRaw(ChainFreezerBALTable, num, nil); err != nil {
+				return fmt.Errorf("can't append block %d bals: %v", num, err)
+			}
 		}
 		return nil
 	})
