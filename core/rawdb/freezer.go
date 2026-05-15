@@ -59,7 +59,8 @@ const freezerTableSize = 2 * 1000 * 1000 * 1000
 // - The in-order data ensures that disk reads are always optimized.
 type Freezer struct {
 	datadir string
-	head    atomic.Uint64 // Number of items stored (including items removed from tail)
+	head    atomic.Uint64             // Number of items stored (including items removed from tail)
+	tails   map[string]*atomic.Uint64 // Per-group tail cache, keyed by tail group name
 
 	// This lock synchronizes writers and the truncate operation, as well as
 	// the "atomic" (batched) read operations.
@@ -117,6 +118,7 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		datadir:      datadir,
 		readonly:     readonly,
 		tables:       make(map[string]*freezerTable),
+		tails:        make(map[string]*atomic.Uint64),
 		instanceLock: lock,
 	}
 
@@ -216,32 +218,18 @@ func (f *Freezer) Ancients() (uint64, error) {
 }
 
 // Tail returns the lowest accessible item index for the given tail group.
-// All tables sharing this group must agree on the tail; an empty group name
-// refers to non-prunable tables and always returns 0.
+// All tables sharing this group agree on the tail; an empty group name
+// refers to non-prunable tables and always returns 0. Unknown groups return
+// an error.
 func (f *Freezer) Tail(group string) (uint64, error) {
 	if group == "" {
 		return 0, nil
 	}
-	var (
-		tail  uint64
-		found bool
-	)
-	for _, table := range f.tables {
-		if table.config.tailGroup != group {
-			continue
-		}
-		h := table.itemHidden.Load()
-		if !found {
-			tail = h
-			found = true
-		} else if h != tail {
-			return 0, fmt.Errorf("inconsistent tail in group %q: %d vs %d", group, h, tail)
-		}
-	}
-	if !found {
+	tail, ok := f.tails[group]
+	if !ok {
 		return 0, fmt.Errorf("unknown tail group: %q", group)
 	}
-	return tail, nil
+	return tail.Load(), nil
 }
 
 // AncientSize returns the ancient size of the specified category.
@@ -333,25 +321,14 @@ func (f *Freezer) TruncateTail(group string, tail uint64) (uint64, error) {
 	if group == "" {
 		return 0, errors.New("empty tail group")
 	}
+	cached, ok := f.tails[group]
+	if !ok {
+		return 0, fmt.Errorf("unknown tail group: %q", group)
+	}
 	f.writeLock.Lock()
 	defer f.writeLock.Unlock()
 
-	var (
-		prev  uint64
-		found bool
-	)
-	for _, table := range f.tables {
-		if table.config.tailGroup != group {
-			continue
-		}
-		if !found {
-			prev = table.itemHidden.Load()
-			found = true
-		}
-	}
-	if !found {
-		return 0, fmt.Errorf("unknown tail group: %q", group)
-	}
+	prev := cached.Load()
 	for _, table := range f.tables {
 		if table.config.tailGroup != group {
 			continue
@@ -359,6 +336,9 @@ func (f *Freezer) TruncateTail(group string, tail uint64) (uint64, error) {
 		if err := table.truncateTail(tail); err != nil {
 			return 0, err
 		}
+	}
+	if tail > prev {
+		cached.Store(tail)
 	}
 	// Update the head if the requested tail exceeds the current head.
 	if f.head.Load() < tail {
@@ -388,11 +368,12 @@ func (f *Freezer) validate() error {
 		return nil
 	}
 	var (
-		head       uint64
-		headSet    bool
-		groupTails = make(map[string]uint64)
+		head    uint64
+		headSet bool
+		tails   = make(map[string]uint64)
 	)
 	for kind, table := range f.tables {
+		// Validate the table head
 		items := table.items.Load()
 		if !headSet {
 			head = items
@@ -400,6 +381,7 @@ func (f *Freezer) validate() error {
 		} else if items != head {
 			return fmt.Errorf("freezer table %s has a differing head: %d != %d", kind, items, head)
 		}
+		// Validate the table tail
 		if table.config.tailGroup == "" {
 			if table.itemHidden.Load() != 0 {
 				return fmt.Errorf("non-prunable freezer table '%s' has a non-zero tail: %d", kind, table.itemHidden.Load())
@@ -407,15 +389,21 @@ func (f *Freezer) validate() error {
 			continue
 		}
 		hidden := table.itemHidden.Load()
-		if t, ok := groupTails[table.config.tailGroup]; ok {
+		if t, ok := tails[table.config.tailGroup]; ok {
 			if t != hidden {
 				return fmt.Errorf("freezer table %s has differing tail in group %q: %d != %d", kind, table.config.tailGroup, hidden, t)
 			}
 		} else {
-			groupTails[table.config.tailGroup] = hidden
+			tails[table.config.tailGroup] = hidden
 		}
 	}
 	f.head.Store(head)
+
+	for group, tail := range tails {
+		counter := new(atomic.Uint64)
+		counter.Store(tail)
+		f.tails[group] = counter
+	}
 	return nil
 }
 
@@ -463,7 +451,7 @@ func (f *Freezer) repair() error {
 	}
 	// Per-group tail alignment: take the maximum tail in each group and apply
 	// it to all members. Non-prunable tables must remain at tail 0.
-	groupTails := make(map[string]uint64)
+	tails := make(map[string]uint64)
 	for kind, table := range f.tables {
 		if table.config.tailGroup == "" {
 			if table.itemHidden.Load() != 0 {
@@ -472,18 +460,24 @@ func (f *Freezer) repair() error {
 			continue
 		}
 		hidden := table.itemHidden.Load()
-		if t, ok := groupTails[table.config.tailGroup]; !ok || hidden > t {
-			groupTails[table.config.tailGroup] = hidden
+		if t, ok := tails[table.config.tailGroup]; !ok || hidden > t {
+			tails[table.config.tailGroup] = hidden
 		}
 	}
 	for _, table := range f.tables {
 		if table.config.tailGroup == "" {
 			continue
 		}
-		if err := table.truncateTail(groupTails[table.config.tailGroup]); err != nil {
+		if err := table.truncateTail(tails[table.config.tailGroup]); err != nil {
 			return err
 		}
 	}
 	f.head.Store(head)
+
+	for group, tail := range tails {
+		counter := new(atomic.Uint64)
+		counter.Store(tail)
+		f.tails[group] = counter
+	}
 	return nil
 }

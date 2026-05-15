@@ -90,16 +90,17 @@ const (
 	stateHistoryStorageData  = "storage.data"
 )
 
-// StateHistoryTailGroup is the tail group shared by all state history tables.
-const StateHistoryTailGroup = "history"
+// DefaultHistoryGroup is the tail group shared by all state/trienode history
+// tables with tail pruning enabled.
+const DefaultHistoryGroup = "history"
 
 // stateFreezerTableConfigs configures the settings for tables in the state freezer.
 var stateFreezerTableConfigs = map[string]freezerTableConfig{
-	stateHistoryMeta:         {noSnappy: true, tailGroup: StateHistoryTailGroup},
-	stateHistoryAccountIndex: {noSnappy: false, tailGroup: StateHistoryTailGroup},
-	stateHistoryStorageIndex: {noSnappy: false, tailGroup: StateHistoryTailGroup},
-	stateHistoryAccountData:  {noSnappy: false, tailGroup: StateHistoryTailGroup},
-	stateHistoryStorageData:  {noSnappy: false, tailGroup: StateHistoryTailGroup},
+	stateHistoryMeta:         {noSnappy: true, tailGroup: DefaultHistoryGroup},
+	stateHistoryAccountIndex: {noSnappy: false, tailGroup: DefaultHistoryGroup},
+	stateHistoryStorageIndex: {noSnappy: false, tailGroup: DefaultHistoryGroup},
+	stateHistoryAccountData:  {noSnappy: false, tailGroup: DefaultHistoryGroup},
+	stateHistoryStorageData:  {noSnappy: false, tailGroup: DefaultHistoryGroup},
 }
 
 const (
@@ -108,18 +109,15 @@ const (
 	trienodeHistoryValueSectionTable = "trienode.value"
 )
 
-// TrienodeHistoryTailGroup is the tail group shared by all trienode history tables.
-const TrienodeHistoryTailGroup = "history"
-
 // trienodeFreezerTableConfigs configures the settings for tables in the trienode freezer.
 var trienodeFreezerTableConfigs = map[string]freezerTableConfig{
-	trienodeHistoryHeaderTable: {noSnappy: false, tailGroup: TrienodeHistoryTailGroup},
+	trienodeHistoryHeaderTable: {noSnappy: false, tailGroup: DefaultHistoryGroup},
 
 	// Disable snappy compression to allow efficient partial read.
-	trienodeHistoryKeySectionTable: {noSnappy: true, tailGroup: TrienodeHistoryTailGroup},
+	trienodeHistoryKeySectionTable: {noSnappy: true, tailGroup: DefaultHistoryGroup},
 
 	// Disable snappy compression to allow efficient partial read.
-	trienodeHistoryValueSectionTable: {noSnappy: true, tailGroup: TrienodeHistoryTailGroup},
+	trienodeHistoryValueSectionTable: {noSnappy: true, tailGroup: DefaultHistoryGroup},
 }
 
 // The list of identifiers of ancient stores.
