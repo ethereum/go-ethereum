@@ -777,6 +777,11 @@ func (db *closeTrackingDB) Close() error {
 	return db.Database.Close()
 }
 
+// Unwrap returns the underlying database.
+func (db *closeTrackingDB) Unwrap() ethdb.Database {
+	return db.Database
+}
+
 // wrapDatabase ensures the database will be auto-closed when Node is closed.
 func (n *Node) wrapDatabase(db ethdb.Database) ethdb.Database {
 	wrapper := &closeTrackingDB{db, n}

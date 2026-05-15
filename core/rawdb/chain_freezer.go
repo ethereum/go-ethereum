@@ -422,3 +422,7 @@ func (f *chainFreezer) TruncateTail(items uint64) (uint64, error) {
 func (f *chainFreezer) SyncAncient() error {
 	return f.ancients.SyncAncient()
 }
+
+func (f *chainFreezer) EraStore() *eradb.Store {
+	return f.eradb
+}

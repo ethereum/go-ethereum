@@ -156,10 +156,19 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 		bn = b.HistoryPruningCutoff()
 	}
 	block := b.eth.blockchain.GetBlockByNumber(bn)
-	if block == nil && bn < b.HistoryPruningCutoff() {
+	if block != nil {
+		return block, nil
+	}
+	// Block not found in the local database, try the ERA store as a fallback.
+	if eraStore := rawdb.EraStore(b.eth.chainDb); eraStore != nil {
+		if eraBlock, err := eraStore.GetBlockByNumber(bn); err == nil && eraBlock != nil {
+			return eraBlock, nil
+		}
+	}
+	if bn < b.HistoryPruningCutoff() {
 		return nil, &history.PrunedHistoryError{}
 	}
-	return block, nil
+	return nil, nil
 }
 
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {

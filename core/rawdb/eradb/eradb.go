@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common/lru"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/era/execdb"
 	"github.com/ethereum/go-ethereum/internal/era/onedb"
@@ -100,6 +101,21 @@ func (db *Store) Close() {
 	for db.lru.Len() > 0 || len(db.opening) > 0 {
 		db.cond.Wait()
 	}
+}
+
+// GetBlockByNumber returns the block for a given block number.
+func (db *Store) GetBlockByNumber(number uint64) (*types.Block, error) {
+	epoch := number / uint64(era.MaxSize)
+	entry := db.getEraByEpoch(epoch)
+	if entry.err != nil {
+		if errors.Is(entry.err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, entry.err
+	}
+	defer db.doneWithFile(epoch, entry)
+
+	return entry.file.GetBlockByNumber(number)
 }
 
 // GetRawBody returns the raw body for a given block number.
