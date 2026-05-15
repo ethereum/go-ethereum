@@ -774,7 +774,7 @@ func pruneHistory(ctx *cli.Context) error {
 	log.Info("Starting history pruning", "head", currentHeader.Number, "target", targetBlock, "targetHash", targetBlockHash.Hex())
 	start := time.Now()
 	sizeBefore := prunableFreezerSize(chaindb)
-	rawdb.PruneTransactionIndex(chaindb, targetBlock)
+	txIndexBytes := rawdb.PruneTransactionIndex(chaindb, targetBlock)
 	if _, err := chaindb.TruncateTail(rawdb.ChainFreezerBlockDataGroup, targetBlock); err != nil {
 		return fmt.Errorf("failed to truncate ancient data: %v", err)
 	}
@@ -783,6 +783,10 @@ func pruneHistory(ctx *cli.Context) error {
 	if sizeBefore > sizeAfter {
 		cleared = common.StorageSize(sizeBefore - sizeAfter)
 	}
+	// Include the tx index entries pruned from the KV store; without this the
+	// reported figure only covers the body/receipt freezer delta and ignores
+	// the index work above.
+	cleared += common.StorageSize(txIndexBytes)
 	log.Info("History pruning completed", "tail", targetBlock, "elapsed", common.PrettyDuration(time.Since(start)), "cleared", cleared)
 
 	// TODO(s1na): what if there is a crash between the two prune operations?
