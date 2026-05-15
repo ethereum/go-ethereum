@@ -45,9 +45,7 @@ const (
 // key-value database to flat files for saving space on live database.
 type chainFreezer struct {
 	ancients ethdb.AncientStore // Ancient store for storing cold chain segment
-
-	// Optional Era database used as a backup for the pruned chain.
-	eradb *eradb.Store
+	eradb    *eradb.Store       // Optional Era database used as a backup for the pruned chain
 
 	quit    chan struct{}
 	wg      sync.WaitGroup
@@ -327,6 +325,16 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			if len(receipts) == 0 {
 				return fmt.Errorf("block receipts missing, can't freeze block %d", number)
 			}
+			// An empty block access list is allowed and may occur in multiple
+			// scenarios, such as:
+			//   - pre-Amsterdam blocks
+			//   - post-Amsterdam blocks with the BAL absent (e.g. pruned by network)
+			//   - post-Amsterdam blocks with an explicitly empty BAL
+			//
+			// In these cases, a nil entry will be stored in the BAL table as the
+			// absence placeholder.
+			bals := ReadAccessListRLP(nfdb, hash, number)
+
 			// Write to the batch.
 			if err := op.AppendRaw(ChainFreezerHashTable, number, hash[:]); err != nil {
 				return fmt.Errorf("can't write hash to Freezer: %v", err)
@@ -339,6 +347,9 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			}
 			if err := op.AppendRaw(ChainFreezerReceiptTable, number, receipts); err != nil {
 				return fmt.Errorf("can't write receipts to Freezer: %v", err)
+			}
+			if err := op.AppendRaw(ChainFreezerBALTable, number, bals); err != nil {
+				return fmt.Errorf("can't write bals to Freezer: %v", err)
 			}
 			hashes = append(hashes, hash)
 		}

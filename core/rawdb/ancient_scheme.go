@@ -35,6 +35,10 @@ const (
 
 	// ChainFreezerReceiptTable indicates the name of the freezer receipts table.
 	ChainFreezerReceiptTable = "receipts"
+
+	// ChainFreezerBALTable indicates the name of the freezer block access list
+	// table introduced by EIP-7928.
+	ChainFreezerBALTable = "bals"
 )
 
 // Identifiers of tail groups used by the chain freezer.
@@ -43,6 +47,11 @@ const (
 	// receipt tables. The two tables are pruned together and therefore have
 	// the same tail position.
 	ChainFreezerBlockDataGroup = "blockdata"
+
+	// ChainFreezerBALGroup is the tail group for the block access list table.
+	// BAL is only populated after EIP-7928 activates, so it generally has a
+	// higher tail than the block-data group and is pruned independently.
+	ChainFreezerBALGroup = "bal"
 )
 
 // chainFreezerTableConfigs configures the settings for tables in the chain freezer.
@@ -54,6 +63,7 @@ var chainFreezerTableConfigs = map[string]freezerTableConfig{
 	ChainFreezerHashTable:    {noSnappy: true},
 	ChainFreezerBodiesTable:  {noSnappy: false, tailGroup: ChainFreezerBlockDataGroup},
 	ChainFreezerReceiptTable: {noSnappy: false, tailGroup: ChainFreezerBlockDataGroup},
+	ChainFreezerBALTable:     {noSnappy: false, tailGroup: ChainFreezerBALGroup},
 }
 
 // freezerTableConfig contains the settings for a freezer table.
