@@ -354,7 +354,7 @@ func (f *chainFreezer) Ancient(kind string, number uint64) ([]byte, error) {
 	if kind == ChainFreezerHeaderTable || kind == ChainFreezerHashTable {
 		return f.ancients.Ancient(kind, number)
 	}
-	tail, err := f.ancients.Tail()
+	tail, err := f.ancients.Tail(tableTailGroup(kind))
 	if err != nil {
 		return nil, err
 	}
@@ -375,6 +375,16 @@ func (f *chainFreezer) Ancient(kind string, number uint64) ([]byte, error) {
 	return nil, errUnknownTable
 }
 
+// tableTailGroup returns the tail group identifier for a chain freezer table.
+// Unknown tables resolve to the default block-data group, since the chain
+// freezer's only prunable group today is bodies+receipts.
+func tableTailGroup(kind string) string {
+	if cfg, ok := chainFreezerTableConfigs[kind]; ok {
+		return cfg.tailGroup
+	}
+	return ChainFreezerBlockDataGroup
+}
+
 // ReadAncients executes an operation while preventing mutations to the freezer,
 // i.e. if fn performs multiple reads, they will be consistent with each other.
 func (f *chainFreezer) ReadAncients(fn func(ethdb.AncientReaderOp) error) (err error) {
@@ -391,8 +401,8 @@ func (f *chainFreezer) Ancients() (uint64, error) {
 	return f.ancients.Ancients()
 }
 
-func (f *chainFreezer) Tail() (uint64, error) {
-	return f.ancients.Tail()
+func (f *chainFreezer) Tail(group string) (uint64, error) {
+	return f.ancients.Tail(group)
 }
 
 func (f *chainFreezer) AncientSize(kind string) (uint64, error) {
@@ -415,8 +425,8 @@ func (f *chainFreezer) TruncateHead(items uint64) (uint64, error) {
 	return f.ancients.TruncateHead(items)
 }
 
-func (f *chainFreezer) TruncateTail(items uint64) (uint64, error) {
-	return f.ancients.TruncateTail(items)
+func (f *chainFreezer) TruncateTail(group string, items uint64) (uint64, error) {
+	return f.ancients.TruncateTail(group, items)
 }
 
 func (f *chainFreezer) SyncAncient() error {

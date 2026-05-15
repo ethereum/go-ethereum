@@ -742,7 +742,7 @@ func pruneHistory(ctx *cli.Context) error {
 	)
 
 	// Check the current freezer tail to see if pruning is needed/possible.
-	freezerTail, _ := chaindb.Tail()
+	freezerTail, _ := chaindb.Tail(rawdb.ChainFreezerBlockDataGroup)
 	if freezerTail > 0 {
 		if freezerTail == targetBlock {
 			log.Info("Database already pruned to target block", "tail", freezerTail)
@@ -774,7 +774,7 @@ func pruneHistory(ctx *cli.Context) error {
 	log.Info("Starting history pruning", "head", currentHeader.Number, "target", targetBlock, "targetHash", targetBlockHash.Hex())
 	start := time.Now()
 	rawdb.PruneTransactionIndex(chaindb, targetBlock)
-	if _, err := chaindb.TruncateTail(targetBlock); err != nil {
+	if _, err := chaindb.TruncateTail(rawdb.ChainFreezerBlockDataGroup, targetBlock); err != nil {
 		return fmt.Errorf("failed to truncate ancient data: %v", err)
 	}
 	log.Info("History pruning completed", "tail", targetBlock, "elapsed", common.PrettyDuration(time.Since(start)))

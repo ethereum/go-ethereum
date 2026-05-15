@@ -228,7 +228,6 @@ func (b *memoryBatch) commit(freezer *MemoryFreezer) (items uint64, writeSize in
 // interface and can be used along with ephemeral key-value store.
 type MemoryFreezer struct {
 	items      uint64                  // Number of items stored
-	tail       uint64                  // Number of the first stored item in the freezer
 	readonly   bool                    // Flag if the freezer is only for reading
 	lock       sync.RWMutex            // Lock to protect fields
 	tables     map[string]*memoryTable // Tables for storing everything
@@ -289,13 +288,35 @@ func (f *MemoryFreezer) Ancients() (uint64, error) {
 	return f.items, nil
 }
 
-// Tail returns the number of first stored item in the freezer.
-// This number can also be interpreted as the total deleted item numbers.
-func (f *MemoryFreezer) Tail() (uint64, error) {
+// Tail returns the lowest accessible item index for the given tail group.
+// All tables sharing the group must agree on the tail; an empty group name
+// refers to non-prunable tables and always returns 0.
+func (f *MemoryFreezer) Tail(group string) (uint64, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
-	return f.tail, nil
+	if group == "" {
+		return 0, nil
+	}
+	var (
+		tail  uint64
+		found bool
+	)
+	for _, table := range f.tables {
+		if table.config.tailGroup != group {
+			continue
+		}
+		if !found {
+			tail = table.offset
+			found = true
+		} else if table.offset != tail {
+			return 0, fmt.Errorf("inconsistent tail in group %q: %d vs %d", group, table.offset, tail)
+		}
+	}
+	if !found {
+		return 0, fmt.Errorf("unknown tail group: %q", group)
+	}
+	return tail, nil
 }
 
 // AncientSize returns the ancient size of the specified category.
@@ -375,32 +396,47 @@ func (f *MemoryFreezer) TruncateHead(items uint64) (uint64, error) {
 	return old, nil
 }
 
-// TruncateTail discards all data below the provided threshold number.
-// Note this will only truncate 'prunable' tables. Block headers and canonical
-// hashes cannot be truncated at this time.
-func (f *MemoryFreezer) TruncateTail(tail uint64) (uint64, error) {
+// TruncateTail discards all data below the provided threshold across every
+// table that belongs to the named tail group. Tables already past the
+// threshold are left untouched. The previous tail of the group is returned.
+func (f *MemoryFreezer) TruncateTail(group string, tail uint64) (uint64, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
 	if f.readonly {
 		return 0, errReadOnly
 	}
-	old := f.tail
-	if old >= tail {
-		return old, nil
+	if group == "" {
+		return 0, errors.New("empty tail group")
 	}
+	var (
+		prev  uint64
+		found bool
+	)
 	for _, table := range f.tables {
-		if table.config.prunable {
-			if err := table.truncateTail(tail); err != nil {
-				return 0, err
-			}
+		if table.config.tailGroup != group {
+			continue
+		}
+		if !found {
+			prev = table.offset
+			found = true
 		}
 	}
-	f.tail = tail
+	if !found {
+		return 0, fmt.Errorf("unknown tail group: %q", group)
+	}
+	for _, table := range f.tables {
+		if table.config.tailGroup != group {
+			continue
+		}
+		if err := table.truncateTail(tail); err != nil {
+			return 0, err
+		}
+	}
 	if f.items < tail {
 		f.items = tail
 	}
-	return old, nil
+	return prev, nil
 }
 
 // SyncAncient flushes all data tables to disk.
@@ -430,7 +466,7 @@ func (f *MemoryFreezer) Reset() error {
 		tables[name] = newMemoryTable(name, table.config)
 	}
 	f.tables = tables
-	f.items, f.tail = 0, 0
+	f.items = 0
 	return nil
 }
 

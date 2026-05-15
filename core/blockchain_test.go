@@ -4386,7 +4386,7 @@ func testInsertChainWithCutoff(t *testing.T, cutoff uint64, ancientLimit uint64,
 		if header.Hash() != hash {
 			t.Errorf("block #%d: header mismatch: want: %v, got: %v", num, hash, header.Hash())
 		}
-		tail, err := db.Tail()
+		tail, err := db.Tail(rawdb.ChainFreezerBlockDataGroup)
 		if err != nil {
 			t.Fatalf("Failed to get chain tail, %v", err)
 		}

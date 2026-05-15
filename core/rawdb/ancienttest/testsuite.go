@@ -25,6 +25,11 @@ import (
 	"github.com/ethereum/go-ethereum/internal/testrand"
 )
 
+// TailGroup is the tail group used by tables created in this test suite. The
+// store factory passed to TestAncientSuite must wire its tables to this group
+// so that the suite can query the freezer's tail consistently.
+const TailGroup = "test"
+
 // TestAncientSuite runs a suite of tests against an ancient database
 // implementation.
 func TestAncientSuite(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
@@ -58,11 +63,11 @@ func basicRead(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	}); err != nil {
 		t.Fatalf("Failed to write ancient data %v", err)
 	}
-	db.TruncateTail(10)
+	db.TruncateTail(TailGroup, 10)
 	db.TruncateHead(90)
 
 	// Test basic tail and head retrievals
-	tail, err := db.Tail()
+	tail, err := db.Tail(TailGroup)
 	if err != nil || tail != 10 {
 		t.Fatal("Failed to retrieve tail")
 	}
@@ -123,7 +128,7 @@ func batchRead(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	}); err != nil {
 		t.Fatalf("Failed to write ancient data %v", err)
 	}
-	db.TruncateTail(10)
+	db.TruncateTail(TailGroup, 10)
 	db.TruncateHead(90)
 
 	// Test the items in range should be reachable
@@ -262,12 +267,12 @@ func basicWrite(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	}
 
 	// Write should work after truncating from tail but over the head
-	db.TruncateTail(200)
+	db.TruncateTail(TailGroup, 200)
 	head, err := db.Ancients()
 	if err != nil {
 		t.Fatalf("Failed to retrieve head ancients %v", err)
 	}
-	tail, err := db.Tail()
+	tail, err := db.Tail(TailGroup)
 	if err != nil {
 		t.Fatalf("Failed to retrieve tail ancients %v", err)
 	}
@@ -293,7 +298,7 @@ func basicWrite(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	if err != nil {
 		t.Fatalf("Failed to retrieve head ancients %v", err)
 	}
-	tail, err = db.Tail()
+	tail, err = db.Tail(TailGroup)
 	if err != nil {
 		t.Fatalf("Failed to retrieve tail ancients %v", err)
 	}
@@ -351,7 +356,7 @@ func TestResettableAncientSuite(t *testing.T, newFn func(kinds []string) ethdb.R
 		}); err != nil {
 			t.Fatalf("Failed to write ancient data %v", err)
 		}
-		db.TruncateTail(10)
+		db.TruncateTail(TailGroup, 10)
 		db.TruncateHead(90)
 
 		// Ancient write should work after resetting

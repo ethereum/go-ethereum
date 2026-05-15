@@ -67,13 +67,24 @@ func inspect(name string, order map[string]freezerTableConfig, reader ethdb.Anci
 		info.head = 0
 	}
 
-	// Retrieve the number of first stored item
-	tail, err := reader.Tail()
-	if err != nil {
-		return freezerInfo{}, err
+	// Retrieve the highest tail across all known tail groups. The inspected
+	// freezer info uses a single tail value for display, which corresponds to
+	// the most-pruned group.
+	groups := make(map[string]struct{})
+	for _, cfg := range order {
+		if cfg.tailGroup != "" {
+			groups[cfg.tailGroup] = struct{}{}
+		}
 	}
-	info.tail = tail
-
+	for g := range groups {
+		t, err := reader.Tail(g)
+		if err != nil {
+			return freezerInfo{}, err
+		}
+		if t > info.tail {
+			info.tail = t
+		}
+	}
 	if ancients == 0 {
 		info.count = 0
 	} else {

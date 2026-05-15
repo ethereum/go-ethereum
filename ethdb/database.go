@@ -128,9 +128,12 @@ type AncientReaderOp interface {
 	// Ancients returns the ancient item numbers in the ancient store.
 	Ancients() (uint64, error)
 
-	// Tail returns the number of first stored item in the ancient store.
-	// This number can also be interpreted as the total deleted items.
-	Tail() (uint64, error)
+	// Tail returns the lowest accessible item index for the given tail group.
+	// This number can also be interpreted as the total deleted items in the
+	// group. Tables sharing a group are pruned together and therefore agree
+	// on the value. An empty group name refers to non-prunable tables and
+	// always returns 0.
+	Tail(group string) (uint64, error)
 
 	// AncientSize returns the ancient size of the specified category.
 	AncientSize(kind string) (uint64, error)
@@ -159,14 +162,16 @@ type AncientWriter interface {
 	// After the truncation, the latest item can be accessed it item_n-1(start from 0).
 	TruncateHead(n uint64) (uint64, error)
 
-	// TruncateTail discards the first n ancient data from the ancient store. The already
-	// deleted items are ignored. After the truncation, the earliest item can be accessed
-	// is item_n(start from 0). The deleted items may not be removed from the ancient store
-	// immediately, but only when the accumulated deleted data reach the threshold then
-	// will be removed all together.
+	// TruncateTail discards the first n items from every table belonging to
+	// the named tail group. Already-deleted items are ignored. After the
+	// truncation, the earliest accessible item in the group is item_n
+	// (starting from 0). Deleted items may not be removed from disk
+	// immediately, but only once the accumulated deleted data reaches the
+	// threshold, at which point they are removed all together.
 	//
-	// Note that data marked as non-prunable will still be retained and remain accessible.
-	TruncateTail(n uint64) (uint64, error)
+	// The previous tail of the group is returned. Tables outside the group
+	// (including non-prunable ones) are untouched.
+	TruncateTail(group string, n uint64) (uint64, error)
 }
 
 // AncientWriteOp is given to the function argument of ModifyAncients.

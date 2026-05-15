@@ -398,8 +398,8 @@ func TestFreezerSuite(t *testing.T) {
 		tables := make(map[string]freezerTableConfig)
 		for _, kind := range kinds {
 			tables[kind] = freezerTableConfig{
-				noSnappy: true,
-				prunable: true,
+				noSnappy:  true,
+				tailGroup: ancienttest.TailGroup,
 			}
 		}
 		f, _ := newFreezerForTesting(t, tables)
@@ -409,8 +409,8 @@ func TestFreezerSuite(t *testing.T) {
 		tables := make(map[string]freezerTableConfig)
 		for _, kind := range kinds {
 			tables[kind] = freezerTableConfig{
-				noSnappy: true,
-				prunable: true,
+				noSnappy:  true,
+				tailGroup: ancienttest.TailGroup,
 			}
 		}
 		f, _ := newResettableFreezer(t.TempDir(), "", false, 2048, tables)
