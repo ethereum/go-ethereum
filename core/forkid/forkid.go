@@ -270,20 +270,9 @@ func gatherForks(config *params.ChainConfig, genesis uint64) ([]uint64, []uint64
 	}
 	slices.Sort(forksByBlock)
 	slices.Sort(forksByTime)
+	slices.Compact(forksByBlock)
+	slices.Compact(forksByTime)
 
-	// Deduplicate fork identifiers applying multiple forks
-	for i := 1; i < len(forksByBlock); i++ {
-		if forksByBlock[i] == forksByBlock[i-1] {
-			forksByBlock = append(forksByBlock[:i], forksByBlock[i+1:]...)
-			i--
-		}
-	}
-	for i := 1; i < len(forksByTime); i++ {
-		if forksByTime[i] == forksByTime[i-1] {
-			forksByTime = append(forksByTime[:i], forksByTime[i+1:]...)
-			i--
-		}
-	}
 	// Skip any forks in block 0, that's the genesis ruleset
 	if len(forksByBlock) > 0 && forksByBlock[0] == 0 {
 		forksByBlock = forksByBlock[1:]
