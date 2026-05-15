@@ -171,7 +171,10 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 			// Recreate the iterator after every batch commit in order
 			// to allow the underlying compactor to delete the entries.
 			if batch.ValueSize() >= ethdb.IdealBatchSize {
-				batch.Write()
+				if err := batch.Write(); err != nil {
+					iter.Release()
+					return err
+				}
 				batch.Reset()
 
 				iter.Release()
@@ -180,7 +183,10 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 		}
 	}
 	if batch.ValueSize() > 0 {
-		batch.Write()
+		if err := batch.Write(); err != nil {
+			iter.Release()
+			return err
+		}
 		batch.Reset()
 	}
 	iter.Release()
