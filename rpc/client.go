@@ -397,6 +397,9 @@ func (c *Client) BatchCall(b []BatchElem) error {
 //
 // Note that batch calls may not be executed atomically on the server side.
 func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
+	if len(b) == 0 {
+		return &invalidRequestError{"empty batch"}
+	}
 	var (
 		msgs = make([]*jsonrpcMessage, len(b))
 		byID = make(map[string]int, len(b))
