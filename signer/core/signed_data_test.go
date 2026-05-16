@@ -246,6 +246,40 @@ func TestSignData(t *testing.T) {
 	} else if have := signature; !bytes.Equal(have, want) {
 		t.Fatalf("want %x, have %x", want, have)
 	}
+
+	// EIP-4361 SIWE message — valid, no HTTP context so no domain check runs.
+	siweMsg := "example.com wants you to sign in with your Ethereum account:\n" +
+		"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n" +
+		"\n" +
+		"\n" +
+		"URI: https://example.com/login\n" +
+		"Version: 1\n" +
+		"Chain ID: 1\n" +
+		"Nonce: 32891757\n" +
+		"Issued At: 2021-09-30T16:25:24Z"
+	control.approveCh <- "Y"
+	control.inputCh <- "a_long_password"
+	signature, err = api.SignData(t.Context(), apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(siweMsg)))
+	if err != nil {
+		t.Fatalf("SIWE sign: unexpected error: %v", err)
+	}
+	if len(signature) != 65 {
+		t.Errorf("SIWE sign: expected 65-byte signature, got %d", len(signature))
+	}
+
+	// Malformed SIWE (contains the trigger phrase but fails parsing) — treated as
+	// raw text/plain with a WARN callInfo entry;
+	badSiweMsg := "example.com wants you to sign in with your Ethereum account:\nbad message"
+	control.approveCh <- "Y"
+	control.inputCh <- "a_long_password"
+	signature, err = api.SignData(t.Context(), apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(badSiweMsg)))
+	if err != nil {
+		t.Fatalf("malformed SIWE sign: unexpected error: %v", err)
+	}
+	if len(signature) != 65 {
+		t.Errorf("malformed SIWE sign: expected 65-byte signature, got %d", len(signature))
+	}
+
 }
 
 func TestDomainChainId(t *testing.T) {

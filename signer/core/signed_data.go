@@ -180,15 +180,39 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		if err != nil {
 			return nil, useEthereumV, err
 		}
-		sighash, msg := accounts.TextAndHash(textData)
-		messages := []*apitypes.NameValueType{
-			{
+
+		// EIP-4361 SIWE validation
+		messages, callInfo := validateSIWEMessage(string(textData), MetadataFromContext(ctx))
+
+		// In rejectMode (i.e. not --advanced), a CRIT callInfo entry means the
+		// request must be rejected outright rather than shown to the user.
+		// WARN entries (e.g. missing Origin header) still surface to the user.
+		if api.rejectMode {
+			for _, info := range callInfo {
+				if info.Typ == apitypes.CRIT {
+					return nil, useEthereumV, errors.New(info.Message)
+				}
+			}
+		}
+
+		// if SIWE parsing didn't give us structured messages fall back to raw message
+		if messages == nil {
+			_, msg := accounts.TextAndHash(textData)
+			messages = []*apitypes.NameValueType{{
 				Name:  "message",
 				Typ:   accounts.MimetypeTextPlain,
 				Value: msg,
-			},
+			}}
 		}
-		req = &SignDataRequest{ContentType: mediaType, Rawdata: []byte(msg), Messages: messages, Hash: sighash}
+
+		sighash, msg := accounts.TextAndHash(textData)
+		req = &SignDataRequest{
+			ContentType: mediaType,
+			Rawdata:     []byte(msg),
+			Messages:    messages,
+			Callinfo:    callInfo,
+			Hash:        sighash,
+		}
 	}
 	req.Address = addr
 	req.Meta = MetadataFromContext(ctx)
