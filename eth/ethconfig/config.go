@@ -198,9 +198,6 @@ type Config struct {
 	// send-transaction variants. The unit is ether.
 	RPCTxFeeCap float64
 
-	// OverrideOsaka (TODO: remove after the fork)
-	OverrideOsaka *uint64 `toml:",omitempty"`
-
 	// OverrideBPO1 (TODO: remove after the fork)
 	OverrideBPO1 *uint64 `toml:",omitempty"`
 
