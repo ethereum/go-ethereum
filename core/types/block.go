@@ -413,8 +413,21 @@ func (b *Block) BaseFee() *big.Int {
 	return new(big.Int).Set(b.header.BaseFee)
 }
 
-func (b *Block) BeaconRoot() *common.Hash   { return b.header.ParentBeaconRoot }
-func (b *Block) RequestsHash() *common.Hash { return b.header.RequestsHash }
+func (b *Block) BeaconRoot() *common.Hash {
+	if b.header.ParentBeaconRoot == nil {
+		return nil
+	}
+	root := *b.header.ParentBeaconRoot
+	return &root
+}
+
+func (b *Block) RequestsHash() *common.Hash {
+	if b.header.RequestsHash == nil {
+		return nil
+	}
+	hash := *b.header.RequestsHash
+	return &hash
+}
 
 func (b *Block) ExcessBlobGas() *uint64 {
 	var excessBlobGas *uint64
