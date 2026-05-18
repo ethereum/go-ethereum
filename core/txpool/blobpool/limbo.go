@@ -36,6 +36,12 @@ type limboBlob struct {
 	Ptx    *blobTxForPool
 }
 
+type legacyLimboBlob struct {
+	TxHash common.Hash // Owner transaction's hash to support resurrecting reorged txs
+	Block  uint64      // Block in which the blob transaction was included
+	Tx     *types.Transaction
+}
+
 // limbo is a light, indexed database to temporarily store recently included
 // blobs until they are finalized. The purpose is to support small reorgs, which
 // would require pulling back up old blobs (which aren't part of the chain).
@@ -97,8 +103,8 @@ func (l *limbo) Close() error {
 // parseBlob is a callback method on limbo creation that gets called for each
 // limboed blob on disk to create the in-memory metadata index.
 func (l *limbo) parseBlob(id uint64, data []byte) error {
-	item := new(limboBlob)
-	if err := rlp.DecodeBytes(data, item); err != nil {
+	item, err := decodeLimboBlob(data)
+	if err != nil {
 		// This path is impossible unless the disk data representation changes
 		// across restarts. For that ever improbable case, recover gracefully
 		// by ignoring this data entry.
@@ -120,6 +126,42 @@ func (l *limbo) parseBlob(id uint64, data []byte) error {
 	l.groups[item.Block][id] = item.TxHash
 
 	return nil
+}
+
+func decodeLimboBlob(data []byte) (*limboBlob, error) {
+	item := new(limboBlob)
+	err := rlp.DecodeBytes(data, item)
+	if err == nil {
+		return validateLimboBlob(item)
+	}
+	legacy := new(legacyLimboBlob)
+	if legacyErr := rlp.DecodeBytes(data, legacy); legacyErr != nil {
+		return nil, errors.Join(err, legacyErr)
+	}
+	if legacy.Tx == nil {
+		return nil, errors.New("missing limbo transaction")
+	}
+	if legacy.Tx.Hash() != legacy.TxHash {
+		return nil, errors.New("limbo transaction hash mismatch")
+	}
+	if legacy.Tx.BlobTxSidecar() == nil {
+		return nil, errors.New("missing limbo blob sidecar")
+	}
+	return &limboBlob{
+		TxHash: legacy.TxHash,
+		Block:  legacy.Block,
+		Ptx:    newBlobTxForPool(legacy.Tx),
+	}, nil
+}
+
+func validateLimboBlob(item *limboBlob) (*limboBlob, error) {
+	if item.Ptx == nil || item.Ptx.Tx == nil {
+		return nil, errors.New("missing limbo transaction")
+	}
+	if item.Ptx.Tx.Hash() != item.TxHash {
+		return nil, errors.New("limbo transaction hash mismatch")
+	}
+	return item, nil
 }
 
 // finalize evicts all blobs belonging to a recently finalized block or older.
@@ -222,8 +264,8 @@ func (l *limbo) getAndDrop(id uint64) (*limboBlob, error) {
 	if err != nil {
 		return nil, err
 	}
-	item := new(limboBlob)
-	if err = rlp.DecodeBytes(data, item); err != nil {
+	item, err := decodeLimboBlob(data)
+	if err != nil {
 		return nil, err
 	}
 	delete(l.index, item.TxHash)
