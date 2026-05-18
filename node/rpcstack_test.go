@@ -60,6 +60,9 @@ func TestVhosts(t *testing.T) {
 	resp := rpcRequest(t, url, testMethod, "host", "test")
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 
+	respUpper := rpcRequest(t, url, testMethod, "host", "TeSt:1234")
+	assert.Equal(t, respUpper.StatusCode, http.StatusOK)
+
 	resp2 := rpcRequest(t, url, testMethod, "host", "bad")
 	assert.Equal(t, resp2.StatusCode, http.StatusForbidden)
 }

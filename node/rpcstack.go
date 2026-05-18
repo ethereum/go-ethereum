@@ -463,6 +463,7 @@ func (h *virtualHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Either invalid (too many colons) or no port specified
 		host = r.Host
 	}
+	host = strings.ToLower(host)
 	if ipAddr := net.ParseIP(host); ipAddr != nil {
 		// It's an IP address, we can serve that
 		h.next.ServeHTTP(w, r)
