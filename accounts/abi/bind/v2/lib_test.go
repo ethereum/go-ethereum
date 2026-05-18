@@ -379,16 +379,16 @@ func TestEventUnpackEmptyTopics(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error when unpacking event with empty topics, got nil")
 		}
-		if err.Error() != "event signature mismatch" {
-			t.Fatalf("expected 'event signature mismatch' error, got: %v", err)
+		if err != bind.ErrNoEventSignature {
+			t.Fatalf("expected 'no event signature' error, got: %v", err)
 		}
 
 		_, err = c.UnpackBasic2Event(log)
 		if err == nil {
 			t.Fatal("expected error when unpacking event with empty topics, got nil")
 		}
-		if err.Error() != "event signature mismatch" {
-			t.Fatalf("expected 'event signature mismatch' error, got: %v", err)
+		if err != bind.ErrNoEventSignature {
+			t.Fatalf("expected 'no event signature' error, got: %v", err)
 		}
 	}
 }

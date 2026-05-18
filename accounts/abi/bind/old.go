@@ -176,6 +176,13 @@ var (
 	// ErrNoCodeAfterDeploy is returned by WaitDeployed if contract creation leaves
 	// an empty contract behind.
 	ErrNoCodeAfterDeploy = bind2.ErrNoCodeAfterDeploy
+
+	// ErrNoEventSignature is returned when a log entry has no topics.
+	ErrNoEventSignature = bind2.ErrNoEventSignature
+
+	// ErrEventSignatureMismatch is returned when a log's topic[0] does not match
+	// the expected event signature.
+	ErrEventSignatureMismatch = bind2.ErrEventSignatureMismatch
 )
 
 // ContractCaller defines the methods needed to allow operating with a contract on a read

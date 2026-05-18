@@ -345,10 +345,12 @@ loop:
 			if have, want := msg.ForkID, chain.ForkID(); !reflect.DeepEqual(have, want) {
 				return fmt.Errorf("wrong fork ID in status: have %v, want %v", have, want)
 			}
-			if have, want := msg.ProtocolVersion, c.ourHighestProtoVersion; have != uint32(want) {
-				return fmt.Errorf("wrong protocol version: have %v, want %v", have, want)
+			for _, cap := range c.caps {
+				if cap.Name == "eth" && cap.Version == uint(msg.ProtocolVersion) {
+					break loop
+				}
 			}
-			break loop
+			return fmt.Errorf("wrong protocol version: have %v, want %v", msg.ProtocolVersion, c.caps)
 		case discMsg:
 			var msg []p2p.DiscReason
 			if rlp.DecodeBytes(data, &msg); len(msg) == 0 {

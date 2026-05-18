@@ -50,11 +50,14 @@ type BlockChain interface {
 	// CurrentBlock returns the current head of the chain.
 	CurrentBlock() *types.Header
 
+	// Genesis returns the genesis block of the chain.
+	Genesis() *types.Block
+
 	// SubscribeChainHeadEvent subscribes to new blocks being added to the chain.
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 
-	// StateAt returns a state database for a given root hash (generally the head).
-	StateAt(root common.Hash) (*state.StateDB, error)
+	// StateAt returns a state database for a given chain header (generally the head).
+	StateAt(header *types.Header) (*state.StateDB, error)
 }
 
 // TxPool is an aggregator for various transaction specific pools, collectively
@@ -87,9 +90,9 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 	// Initialize the state with head block, or fallback to empty one in
 	// case the head state is not available (might occur when node is not
 	// fully synced).
-	statedb, err := chain.StateAt(head.Root)
+	statedb, err := chain.StateAt(head)
 	if err != nil {
-		statedb, err = chain.StateAt(types.EmptyRootHash)
+		statedb, err = chain.StateAt(chain.Genesis().Header())
 	}
 	if err != nil {
 		return nil, err
@@ -185,7 +188,7 @@ func (p *TxPool) loop(head *types.Header) {
 			case resetBusy <- struct{}{}:
 				// Updates the statedb with the new chain head. The head state may be
 				// unavailable if the initial state sync has not yet completed.
-				if statedb, err := p.chain.StateAt(newHead.Root); err != nil {
+				if statedb, err := p.chain.StateAt(newHead); err != nil {
 					log.Error("Failed to reset txpool state", "err", err)
 				} else {
 					p.stateLock.Lock()
@@ -274,9 +277,9 @@ func (p *TxPool) Has(hash common.Hash) bool {
 }
 
 // Get returns a transaction if it is contained in the pool, or nil otherwise.
-func (p *TxPool) Get(hash common.Hash, includeBlob bool) *types.Transaction {
+func (p *TxPool) Get(hash common.Hash) *types.Transaction {
 	for _, subpool := range p.subpools {
-		if tx := subpool.Get(hash, includeBlob); tx != nil {
+		if tx := subpool.Get(hash); tx != nil {
 			return tx
 		}
 	}
@@ -284,9 +287,9 @@ func (p *TxPool) Get(hash common.Hash, includeBlob bool) *types.Transaction {
 }
 
 // GetRLP returns a RLP-encoded transaction if it is contained in the pool.
-func (p *TxPool) GetRLP(hash common.Hash, includeBlob bool) []byte {
+func (p *TxPool) GetRLP(hash common.Hash, version uint) []byte {
 	for _, subpool := range p.subpools {
-		encoded := subpool.GetRLP(hash, includeBlob)
+		encoded := subpool.GetRLP(hash, version)
 		if len(encoded) != 0 {
 			return encoded
 		}

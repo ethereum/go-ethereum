@@ -57,6 +57,10 @@ const estimateGasErrorRatio = 0.015
 // be requested in a single eth_getStorageValues call.
 const maxGetStorageSlots = 1024
 
+// maxGetProofKeys is the maximum number of storage keys that can be
+// requested in a single eth_getProof call.
+const maxGetProofKeys = 1024
+
 var errBlobTxNotSupported = errors.New("signing blob transactions not supported")
 var errSubClosed = errors.New("chain subscription closed")
 
@@ -176,6 +180,7 @@ func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
 		"txIndexFinishedBlocks":  hexutil.Uint64(progress.TxIndexFinishedBlocks),
 		"txIndexRemainingBlocks": hexutil.Uint64(progress.TxIndexRemainingBlocks),
 		"stateIndexRemaining":    hexutil.Uint64(progress.StateIndexRemaining),
+		"trienodeIndexRemaining": hexutil.Uint64(progress.TrienodeIndexRemaining),
 	}, nil
 }
 
@@ -362,6 +367,9 @@ func (n *proofList) Delete(key []byte) error {
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
 func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
+	if len(storageKeys) > maxGetProofKeys {
+		return nil, &invalidParamsError{fmt.Sprintf("too many storage keys requested (max %d, got %d)", maxGetProofKeys, len(storageKeys))}
+	}
 	var (
 		keys         = make([]common.Hash, len(storageKeys))
 		keyLengths   = make([]int, len(storageKeys))
@@ -393,6 +401,9 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 		}
 		// Create the proofs for the storageKeys.
 		for i, key := range keys {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			// Output key encoding is a bit special: if the input was a 32-byte hash, it is
 			// returned as such. Otherwise, we apply the QUANTITY encoding mandated by the
 			// JSON-RPC spec for getProof. This behavior exists to preserve backwards
@@ -723,6 +734,10 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 		if err := blockOverrides.Apply(&blockCtx); err != nil {
 			return nil, err
 		}
+		// Override the header so callers that compute gas price from 1559 fee
+		// fields see the overridden basefee. Otherwise GASPRICE/effectiveTip
+		// would be derived from the pre-override basefee.
+		header = blockOverrides.MakeHeader(header)
 	}
 	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
 	precompiles := vm.ActivePrecompiledContracts(rules)
@@ -764,6 +779,7 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 		blockContext.BlobBaseFee = new(big.Int)
 	}
 	evm := b.GetEVM(ctx, state, header, vmConfig, blockContext)
+	defer evm.Release()
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
@@ -841,6 +857,16 @@ func (api *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrO
 	} else if len(opts.BlockStateCalls) > maxSimulateBlocks {
 		return nil, &clientLimitExceededError{message: "too many blocks"}
 	}
+	var totalCalls int
+	for _, block := range opts.BlockStateCalls {
+		if len(block.Calls) > maxSimulateCallsPerBlock {
+			return nil, &clientLimitExceededError{message: fmt.Sprintf("too many calls in block: %d > %d", len(block.Calls), maxSimulateCallsPerBlock)}
+		}
+		totalCalls += len(block.Calls)
+		if totalCalls > maxSimulateTotalCalls {
+			return nil, &clientLimitExceededError{message: fmt.Sprintf("too many calls: %d > %d", totalCalls, maxSimulateTotalCalls)}
+		}
+	}
 	if blockNrOrHash == nil {
 		n := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		blockNrOrHash = &n
@@ -877,6 +903,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		if err := blockOverrides.Apply(&blockCtx); err != nil {
 			return 0, err
 		}
+		header = blockOverrides.MakeHeader(header)
 	}
 	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
 	precompiles := vm.ActivePrecompiledContracts(rules)
@@ -884,13 +911,17 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		return 0, err
 	}
 	// Construct the gas estimator option from the user input
+	var blobBaseFee *big.Int
+	if blockOverrides != nil && blockOverrides.BlobBaseFee != nil {
+		blobBaseFee = blockOverrides.BlobBaseFee.ToInt()
+	}
 	opts := &gasestimator.Options{
-		Config:         b.ChainConfig(),
-		Chain:          NewChainContext(ctx, b),
-		Header:         header,
-		BlockOverrides: blockOverrides,
-		State:          state,
-		ErrorRatio:     estimateGasErrorRatio,
+		Config:      b.ChainConfig(),
+		Chain:       NewChainContext(ctx, b),
+		Header:      header,
+		State:       state,
+		BlobBaseFee: blobBaseFee,
+		ErrorRatio:  estimateGasErrorRatio,
 	}
 	// Set any required transaction default, but make sure the gas cap itself is not messed with
 	// if it was not specified in the original argument list.
@@ -964,6 +995,9 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	}
 	if head.RequestsHash != nil {
 		result["requestsHash"] = head.RequestsHash
+	}
+	if head.BlockAccessListHash != nil {
+		result["balHash"] = head.BlockAccessListHash
 	}
 	if head.SlotNumber != nil {
 		result["slotNumber"] = hexutil.Uint64(*head.SlotNumber)
@@ -1364,6 +1398,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 			evm.Context.BlobBaseFee = new(big.Int)
 		}
 		res, err := core.ApplyMessage(evm, msg, nil)
+		evm.Release()
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction(types.LegacyTxType).Hash(), err)
 		}

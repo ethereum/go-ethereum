@@ -55,7 +55,7 @@ func (ltx *LazyTransaction) Resolve() *types.Transaction {
 	if ltx.Tx != nil {
 		return ltx.Tx
 	}
-	return ltx.Pool.Get(ltx.Hash, true)
+	return ltx.Pool.Get(ltx.Hash)
 }
 
 // LazyResolver is a minimal interface needed for a transaction pool to satisfy
@@ -63,7 +63,7 @@ func (ltx *LazyTransaction) Resolve() *types.Transaction {
 // pool being injected into the lazy transaction.
 type LazyResolver interface {
 	// Get returns a transaction if it is contained in the pool, or nil otherwise.
-	Get(hash common.Hash, includeBlob bool) *types.Transaction
+	Get(hash common.Hash) *types.Transaction
 }
 
 // PendingFilter is a collection of filter rules to allow retrieving a subset
@@ -130,11 +130,10 @@ type SubPool interface {
 	Has(hash common.Hash) bool
 
 	// Get returns a transaction if it is contained in the pool, or nil otherwise.
-	Get(hash common.Hash, includeBlob bool) *types.Transaction
+	Get(hash common.Hash) *types.Transaction
 
 	// GetRLP returns a RLP-encoded transaction if it is contained in the pool.
-	// If includeBlob is false, blob data is stripped from blob transactions (ETH/72).
-	GetRLP(hash common.Hash, includeBlob bool) []byte
+	GetRLP(hash common.Hash, version uint) []byte
 
 	// GetMetadata returns the transaction type and transaction size with the
 	// given transaction hash.

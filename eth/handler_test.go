@@ -94,7 +94,7 @@ func (p *testTxPool) HasPayload(hash common.Hash) bool {
 
 // Get retrieves the transaction from local txpool with given
 // tx hash.
-func (p *testTxPool) Get(hash common.Hash, includeBlob bool) *types.Transaction {
+func (p *testTxPool) Get(hash common.Hash) *types.Transaction {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	return p.txPool[hash]
@@ -102,7 +102,7 @@ func (p *testTxPool) Get(hash common.Hash, includeBlob bool) *types.Transaction 
 
 // Get retrieves the transaction from local txpool with given
 // tx hash.
-func (p *testTxPool) GetRLP(hash common.Hash, includeBlob bool) []byte {
+func (p *testTxPool) GetRLP(hash common.Hash, _ uint) []byte {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -253,12 +253,12 @@ func (p *testTxPool) AddCells(hash common.Hash, cells []kzg4844.Cell, mask types
 	p.custody[hash] = mask
 }
 
-func (p *testTxPool) AddPooledTx(pooledTx *blobpool.PooledBlobTx) error {
+func (p *testTxPool) AddPooledTx(pooledTx *blobpool.BlobTxForPool) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	hash := pooledTx.Transaction.Hash()
-	p.cellPool[hash] = pooledTx.Sidecar.Cells
-	p.txPool[hash] = pooledTx.Transaction
+	hash := pooledTx.Tx.Hash()
+	p.cellPool[hash] = pooledTx.Cells
+	p.txPool[hash] = pooledTx.Tx
 	return nil
 }
 
@@ -417,7 +417,7 @@ func createTestPeers(rand *rand.Rand, n int) []*ethPeer {
 		var id enode.ID
 		rand.Read(id[:])
 		p2pPeer := p2p.NewPeer(id, "test", nil)
-		ep := eth.NewPeer(eth.ETH69, p2pPeer, nil, nil, nil)
+		ep := eth.NewPeer(eth.ETH69, p2pPeer, nil, nil, nil, nil)
 		peers[i] = &ethPeer{Peer: ep}
 	}
 	return peers

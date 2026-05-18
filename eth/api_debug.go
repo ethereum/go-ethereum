@@ -82,7 +82,7 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 	if header == nil {
 		return state.Dump{}, fmt.Errorf("block #%d not found", blockNr)
 	}
-	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
+	stateDb, err := api.eth.BlockChain().StateAt(header)
 	if err != nil {
 		return state.Dump{}, err
 	}
@@ -167,7 +167,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 			if header == nil {
 				return state.Dump{}, fmt.Errorf("block #%d not found", number)
 			}
-			stateDb, err = api.eth.BlockChain().StateAt(header.Root)
+			stateDb, err = api.eth.BlockChain().StateAt(header)
 			if err != nil {
 				return state.Dump{}, err
 			}
@@ -177,7 +177,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 		if block == nil {
 			return state.Dump{}, fmt.Errorf("block %s not found", hash.Hex())
 		}
-		stateDb, err = api.eth.BlockChain().StateAt(block.Root())
+		stateDb, err = api.eth.BlockChain().StateAt(block.Header())
 		if err != nil {
 			return state.Dump{}, err
 		}
@@ -222,7 +222,7 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 	if block == nil {
 		return StorageRangeResult{}, fmt.Errorf("block %v not found", blockNrOrHash)
 	}
-	_, _, statedb, release, err := api.eth.stateAtTransaction(ctx, block, txIndex, 0)
+	_, _, statedb, release, err := api.eth.stateAtTransaction(ctx, block, txIndex)
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
@@ -236,6 +236,8 @@ func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Add
 	if storageRoot == types.EmptyRootHash || storageRoot == (common.Hash{}) {
 		return StorageRangeResult{}, nil // empty storage
 	}
+	// TODO(rjl493456442) it's problematic for traversing the state with in-memory
+	// state mutations, specifically txIndex != 0.
 	id := trie.StorageTrieID(root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
 	tr, err := trie.NewStateTrie(id, statedb.Database().TrieDB())
 	if err != nil {

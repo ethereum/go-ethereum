@@ -75,7 +75,7 @@ type environment struct {
 	witness *stateless.Witness
 }
 
-// txFits reports whether the transaction fits into the block size limit.
+// txFitsSize reports whether the transaction fits into the block size limit.
 func (env *environment) txFitsSize(tx *types.Transaction) bool {
 	return env.size+tx.Size() < params.MaxBlockSize-maxBlockSizeBufferZone
 }
@@ -83,6 +83,9 @@ func (env *environment) txFitsSize(tx *types.Transaction) bool {
 // discard terminates the background threads before discarding it.
 func (env *environment) discard() {
 	env.state.StopPrefetcher()
+	if env.evm != nil {
+		env.evm.Release()
+	}
 }
 
 const (
@@ -164,7 +167,7 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 		// otherwise, fill the block with the current transactions from the txpool
 		if genParam.forceOverrides && len(genParam.overrideTxs) > 0 {
 			for _, tx := range genParam.overrideTxs {
-				work.state.SetTxContext(tx.Hash(), work.tcount)
+				work.state.SetTxContext(tx.Hash(), work.tcount, uint32(work.tcount+1))
 				if err := miner.commitTransaction(ctx, work, tx); err != nil {
 					// all passed transactions HAVE to be valid at this point
 					return &newPayloadResult{err: err}
@@ -183,7 +186,21 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 			}
 		}
 	}
-	body := types.Body{Transactions: work.txs, Withdrawals: genParam.withdrawals}
+	// Construct the block body, the withdrawal list should never be null
+	// if Shanghai has been activated.
+	body := types.Body{
+		Transactions: work.txs,
+		Withdrawals:  genParam.withdrawals,
+	}
+	if !miner.chainConfig.IsShanghai(work.header.Number, work.header.Time) {
+		if body.Withdrawals != nil {
+			return &newPayloadResult{err: errors.New("unexpected withdrawals before shanghai")}
+		}
+	} else {
+		if body.Withdrawals == nil {
+			body.Withdrawals = make([]*types.Withdrawal, 0)
+		}
+	}
 
 	allLogs := make([]*types.Log, 0)
 	for _, r := range work.receipts {
@@ -191,31 +208,19 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	}
 
 	// Collect consensus-layer requests if Prague is enabled.
-	var requests [][]byte
-	if miner.chainConfig.IsPrague(work.header.Number, work.header.Time) {
-		requests = [][]byte{}
-		// EIP-6110 deposits
-		if err := core.ParseDepositLogs(&requests, allLogs, miner.chainConfig); err != nil {
-			return &newPayloadResult{err: err}
-		}
-		// EIP-7002
-		if err := core.ProcessWithdrawalQueue(&requests, work.evm); err != nil {
-			return &newPayloadResult{err: err}
-		}
-		// EIP-7251 consolidations
-		if err := core.ProcessConsolidationQueue(&requests, work.evm); err != nil {
-			return &newPayloadResult{err: err}
-		}
+	requests, err := core.PostExecution(ctx, miner.chainConfig, work.header.Number, work.header.Time, allLogs, work.evm, uint32(work.tcount+1))
+	if err != nil {
+		return &newPayloadResult{err: err}
 	}
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
 		work.header.RequestsHash = &reqHash
 	}
+	// Assemble the block for delivery.
+	_, _, assembleSpanEnd := telemetry.StartSpan(ctx, "miner.AssembleBlock")
+	block := core.AssembleBlock(miner.engine, miner.chain, work.header, work.state, &body, work.receipts)
+	assembleSpanEnd(nil)
 
-	block, err := miner.engine.FinalizeAndAssemble(ctx, miner.chain, work.header, work.state, &body, work.receipts)
-	if err != nil {
-		return &newPayloadResult{err: err}
-	}
 	return &newPayloadResult{
 		block:    block,
 		fees:     totalFees(block, work.receipts),
@@ -312,30 +317,26 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
 	}
-	if header.ParentBeaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, env.evm)
-	}
-	if miner.chainConfig.IsPrague(header.Number, header.Time) {
-		core.ProcessParentBlockHash(header.ParentHash, env.evm)
-	}
+	// Run pre-execution system calls
+	core.PreExecution(ctx, header.ParentBeaconRoot, header.ParentHash, miner.chainConfig, env.evm, header.Number, header.Time)
 	return env, nil
 }
 
 // makeEnv creates a new environment for the sealing block.
 func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase common.Address, witness bool) (*environment, error) {
 	// Retrieve the parent state to execute on top.
-	state, err := miner.chain.StateAt(parent.Root)
+	state, err := miner.chain.StateAtForkBoundary(parent, header)
 	if err != nil {
 		return nil, err
 	}
 	var bundle *stateless.Witness
 	if witness {
-		bundle, err = stateless.NewWitness(header, miner.chain)
+		bundle, err = stateless.NewWitness(header, miner.chain, false)
 		if err != nil {
 			return nil, err
 		}
 	}
-	state.StartPrefetcher("miner", bundle, nil)
+	state.StartPrefetcher("miner", bundle)
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
 		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),
@@ -413,6 +414,7 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 func (miner *Miner) commitTransactions(ctx context.Context, env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
 	ctx, _, spanEnd := telemetry.StartSpan(ctx, "miner.commitTransactions")
 	defer spanEnd(nil)
+
 	isCancun := miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
 	for {
 		// Check interruption signal and abort building if it's fired.
@@ -500,7 +502,7 @@ func (miner *Miner) commitTransactions(ctx context.Context, env *environment, pl
 			continue
 		}
 		// Start executing the transaction
-		env.state.SetTxContext(tx.Hash(), env.tcount)
+		env.state.SetTxContext(tx.Hash(), env.tcount, uint32(env.tcount+1))
 
 		err := miner.commitTransaction(ctx, env, tx)
 		switch {
@@ -529,6 +531,7 @@ func (miner *Miner) commitTransactions(ctx context.Context, env *environment, pl
 func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int32, env *environment) (err error) {
 	ctx, span, spanEnd := telemetry.StartSpan(ctx, "miner.fillTransactions")
 	defer spanEnd(&err)
+
 	miner.confMu.RLock()
 	tip := miner.config.GasPrice
 	prio := miner.prio
@@ -544,7 +547,7 @@ func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int3
 	if env.header.ExcessBlobGas != nil {
 		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(miner.chainConfig, env.header))
 	}
-	if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
+	if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) && !miner.chainConfig.IsAmsterdam(env.header.Number, env.header.Time) {
 		filter.GasLimitCap = params.MaxTxGas
 	}
 	filter.BlobTxs = false
@@ -598,10 +601,14 @@ func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int3
 
 // totalFees computes total consumed miner fees in Wei. Block transactions and receipts have to have the same order.
 func totalFees(block *types.Block, receipts []*types.Receipt) *big.Int {
+	baseFee := block.BaseFee()
 	feesWei := new(big.Int)
+	var gasUsed, product big.Int
 	for i, tx := range block.Transactions() {
-		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
-		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
+		minerFee, _ := tx.EffectiveGasTip(baseFee)
+		gasUsed.SetUint64(receipts[i].GasUsed)
+		product.Mul(&gasUsed, minerFee)
+		feesWei.Add(feesWei, &product)
 	}
 	return feesWei
 }

@@ -19,6 +19,8 @@ package types
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 //go:generate go run ../../rlp/rlpgen -type Log -out gen_log_rlp.go
@@ -61,4 +63,33 @@ type logMarshaling struct {
 	TxIndex        hexutil.Uint
 	BlockTimestamp hexutil.Uint64
 	Index          hexutil.Uint
+}
+
+// EthTransferLog creates and ETH transfer log according to EIP-7708.
+// Specification: https://eips.ethereum.org/EIPS/eip-7708
+func EthTransferLog(from, to common.Address, amount *uint256.Int) *Log {
+	amount32 := amount.Bytes32()
+	return &Log{
+		Address: params.SystemAddress,
+		Topics: []common.Hash{
+			params.EthTransferLogEvent,
+			common.BytesToHash(from.Bytes()),
+			common.BytesToHash(to.Bytes()),
+		},
+		Data: amount32[:],
+	}
+}
+
+// EthBurnLog creates an ETH burn log according to EIP-7708.
+// Specification: https://eips.ethereum.org/EIPS/eip-7708
+func EthBurnLog(from common.Address, amount *uint256.Int) *Log {
+	amount32 := amount.Bytes32()
+	return &Log{
+		Address: params.SystemAddress,
+		Topics: []common.Hash{
+			params.EthBurnLogEvent,
+			common.BytesToHash(from.Bytes()),
+		},
+		Data: amount32[:],
+	}
 }

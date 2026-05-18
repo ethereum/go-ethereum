@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/transitiontrie"
@@ -154,7 +153,7 @@ func (s *stateObject) getTrie() (Trie, error) {
 func (s *stateObject) getPrefetchedTrie() Trie {
 	// If there's nothing to meaningfully return, let the user figure it out by
 	// pulling the trie from disk.
-	if (s.data.Root == types.EmptyRootHash && !s.db.db.TrieDB().IsVerkle()) || s.db.prefetcher == nil {
+	if (s.data.Root == types.EmptyRootHash && s.db.db.Type().Is(TypeMPT)) || s.db.prefetcher == nil {
 		return nil
 	}
 	// Attempt to retrieve the trie from the prefetcher
@@ -163,8 +162,11 @@ func (s *stateObject) getPrefetchedTrie() Trie {
 
 // GetState retrieves a value associated with the given storage key.
 func (s *stateObject) GetState(key common.Hash) common.Hash {
-	value, _ := s.getState(key)
-	return value
+	value, dirty := s.dirtyStorage[key]
+	if dirty {
+		return value
+	}
+	return s.GetCommittedState(key)
 }
 
 // getState retrieves a value associated with the given storage key, along with
@@ -181,6 +183,10 @@ func (s *stateObject) getState(key common.Hash) (common.Hash, common.Hash) {
 // GetCommittedState retrieves the value associated with the specific key
 // without any mutations caused in the current execution.
 func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
+	// Record slot access regardless of whether the storage slot exists.
+	if s.db.stateAccessList != nil {
+		s.db.stateAccessList.StorageRead(s.address, key)
+	}
 	// If we have a pending write or clean cached, return that
 	if value, pending := s.pendingStorage[key]; pending {
 		return value
@@ -195,19 +201,6 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	//      have been handles via pendingStorage above.
 	//   2) we don't have new values, and can deliver empty response back
 	if _, destructed := s.db.stateObjectsDestruct[s.address]; destructed {
-		// Invoke the reader regardless and discard the returned value.
-		// The returned value may not be empty, as it could belong to a
-		// self-destructed contract.
-		//
-		// The read operation is still essential for correctly building
-		// the block-level access list.
-		//
-		// TODO(rjl493456442) the reader interface can be extended with
-		// Touch, recording the read access without the actual disk load.
-		_, err := s.db.reader.Storage(s.address, key)
-		if err != nil {
-			s.db.setError(err)
-		}
 		s.originStorage[key] = common.Hash{} // track the empty slot as origin value
 		return common.Hash{}
 	}
@@ -282,6 +275,13 @@ func (s *stateObject) finalise() {
 		// map as the dirty slot might have been committed already (before the
 		// byzantium fork) and entry is necessary to modify the value back.
 		s.pendingStorage[key] = value
+
+		// Aggregate storage writes into the block-level access list.
+		// All slots in the dirtyStorage set must have post-transaction
+		// values that differ from their pre-transaction values.
+		if s.db.stateAccessList != nil {
+			s.db.stateAccessList.StorageWrite(s.db.blockAccessIndex, s.address, key, value)
+		}
 	}
 	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
 		if err := s.db.prefetcher.prefetch(s.addrHash(), s.data.Root, s.address, nil, slotsToPrefetch, false); err != nil {
@@ -398,17 +398,8 @@ func (s *stateObject) updateRoot() {
 }
 
 // commitStorage overwrites the clean storage with the storage changes and
-// fulfills the storage diffs into the given accountUpdate struct.
-func (s *stateObject) commitStorage(op *accountUpdate) {
-	var (
-		encode = func(val common.Hash) []byte {
-			if val == (common.Hash{}) {
-				return nil
-			}
-			blob, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(val[:]))
-			return blob
-		}
-	)
+// fulfills the storage diffs into the given AccountUpdate struct.
+func (s *stateObject) commitStorage(op *AccountUpdate) {
 	for key, val := range s.pendingStorage {
 		// Skip the noop storage changes, it might be possible the value
 		// of tracked slot is same in originStorage and pendingStorage
@@ -418,20 +409,20 @@ func (s *stateObject) commitStorage(op *accountUpdate) {
 			continue
 		}
 		hash := crypto.Keccak256Hash(key[:])
-		if op.storages == nil {
-			op.storages = make(map[common.Hash][]byte)
+		if op.Storages == nil {
+			op.Storages = make(map[common.Hash]common.Hash)
 		}
-		op.storages[hash] = encode(val)
+		op.Storages[hash] = val
 
-		if op.storagesOriginByKey == nil {
-			op.storagesOriginByKey = make(map[common.Hash][]byte)
+		if op.StoragesOriginByKey == nil {
+			op.StoragesOriginByKey = make(map[common.Hash]common.Hash)
 		}
-		if op.storagesOriginByHash == nil {
-			op.storagesOriginByHash = make(map[common.Hash][]byte)
+		if op.StoragesOriginByHash == nil {
+			op.StoragesOriginByHash = make(map[common.Hash]common.Hash)
 		}
-		origin := encode(s.originStorage[key])
-		op.storagesOriginByKey[key] = origin
-		op.storagesOriginByHash[hash] = origin
+		origin := s.originStorage[key]
+		op.StoragesOriginByKey[key] = origin
+		op.StoragesOriginByHash[hash] = origin
 
 		// Overwrite the clean value of storage slots
 		s.originStorage[key] = val
@@ -444,32 +435,32 @@ func (s *stateObject) commitStorage(op *accountUpdate) {
 //
 // Note, commit may run concurrently across all the state objects. Do not assume
 // thread-safe access to the statedb.
-func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
-	// commit the account metadata changes
-	op := &accountUpdate{
-		address: s.address,
-		data:    types.SlimAccountRLP(s.data),
-	}
-	if s.origin != nil {
-		op.origin = types.SlimAccountRLP(*s.origin)
+func (s *stateObject) commit() (*AccountUpdate, *trienode.NodeSet, error) {
+	// commit the account metadata changes, the data must be deep-copied
+	// to prevent accidental mutations later on (in practice the stateDB
+	// won't be modified after commit). The origin is safe to use directly.
+	op := &AccountUpdate{
+		Address: s.address,
+		Data:    s.data.Copy(),
+		Origin:  s.origin,
 	}
 	// commit the contract code if it's modified
 	if s.dirtyCode {
-		op.code = &contractCode{
-			hash: common.BytesToHash(s.CodeHash()),
-			blob: s.code,
+		op.Code = &ContractCode{
+			Hash: common.BytesToHash(s.CodeHash()),
+			Blob: s.code,
 		}
 		s.dirtyCode = false // reset the dirty flag
 
 		if s.origin == nil {
-			op.code.originHash = types.EmptyCodeHash
+			op.Code.OriginHash = types.EmptyCodeHash
 		} else {
-			op.code.originHash = common.BytesToHash(s.origin.CodeHash)
+			op.Code.OriginHash = common.BytesToHash(s.origin.CodeHash)
 		}
 	}
 	// Commit storage changes and the associated storage trie
 	s.commitStorage(op)
-	if len(op.storages) == 0 {
+	if len(op.Storages) == 0 {
 		// nothing changed, don't bother to commit the trie
 		s.origin = s.data.Copy()
 		return op, nil, nil
@@ -478,12 +469,13 @@ func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
 	// The main account trie commit in stateDB.commit() already calls
 	// CollectNodes on this trie, so calling Commit here again would
 	// redundantly traverse and serialize the entire tree per dirty account.
-	if s.db.GetTrie().IsVerkle() {
+	if s.db.GetTrie().IsUBT() {
 		s.origin = s.data.Copy()
 		return op, nil, nil
 	}
-	root, nodes := s.trie.Commit(false)
-	s.data.Root = root
+	// The storage trie root is omitted, as it has already been updated in the
+	// previous updateRoot step.
+	_, nodes := s.trie.Commit(false)
 	s.origin = s.data.Copy()
 	return op, nodes, nil
 }

@@ -350,6 +350,7 @@ func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*
 		random:            args.Random,
 		withdrawals:       args.Withdrawals,
 		beaconRoot:        args.BeaconRoot,
+		slotNum:           args.SlotNum,
 		noTxs:             empty,
 		forceOverrides:    true,
 		overrideExtraData: extraData,
@@ -359,5 +360,5 @@ func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*
 	if res.err != nil {
 		return nil, res.err
 	}
-	return engine.BlockToExecutableData(res.block, new(big.Int), res.sidecars, res.requests), nil
+	return engine.BlockToExecutableData(res.block, res.fees, res.sidecars, res.requests), nil
 }

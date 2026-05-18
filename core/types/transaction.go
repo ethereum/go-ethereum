@@ -510,6 +510,7 @@ func (tx *Transaction) WithoutBlobTxSidecar() *Transaction {
 	return cpy
 }
 
+// todo: remove
 // WithoutBlob returns a copy of tx with the blob data removed from the sidecar,
 // keeping commitments, proofs and other metadata intact.
 func (tx *Transaction) WithoutBlob() *Transaction {

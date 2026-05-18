@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func FuzzPrecompiledContracts(f *testing.F) {
@@ -36,7 +37,7 @@ func FuzzPrecompiledContracts(f *testing.F) {
 			return
 		}
 		inWant := string(input)
-		RunPrecompiledContract(nil, p, a, input, gas, nil)
+		RunPrecompiledContract(nil, p, a, input, NewGasBudget(gas), nil, params.Rules{})
 		if inHave := string(input); inWant != inHave {
 			t.Errorf("Precompiled %v modified input data", a)
 		}

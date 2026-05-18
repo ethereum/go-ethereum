@@ -191,6 +191,7 @@ func ckzgVerifyCellProofBatch(blobs []Blob, commitments []Commitment, cellProofs
 	return nil
 }
 
+// ckzgVerifyCells verifies that the cell data corresponds to the provided commitments.
 func ckzgVerifyCells(cells []Cell, commitments []Commitment, cellProofs []Proof, cellIndices []uint64) error {
 	ckzgIniter.Do(ckzgInit)
 	var (
@@ -212,8 +213,7 @@ func ckzgVerifyCells(cells []Cell, commitments []Commitment, cellProofs []Proof,
 			commits = append(commits, (ckzg4844.Bytes48)(commitment))
 		}
 	}
-	blobCounts := len(cellProofs) / len(cellIndices)
-	for j := 0; j < blobCounts; j++ {
+	for j := 0; j < len(commitments); j++ {
 		indices = append(indices, cellIndices...)
 	}
 
@@ -227,6 +227,7 @@ func ckzgVerifyCells(cells []Cell, commitments []Commitment, cellProofs []Proof,
 	return nil
 }
 
+// ckzgComputeCells computes cells from blobs.
 func ckzgComputeCells(blobs []Blob) ([]Cell, error) {
 	ckzgIniter.Do(ckzgInit)
 	cells := make([]Cell, 0, ckzg4844.CellsPerExtBlob*len(blobs))
@@ -243,6 +244,7 @@ func ckzgComputeCells(blobs []Blob) ([]Cell, error) {
 	return cells, nil
 }
 
+// ckzgRecoverBlobs recovers blobs from cells and cell indices.
 func ckzgRecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 	ckzgIniter.Do(ckzgInit)
 
@@ -267,7 +269,7 @@ func ckzgRecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 		}
 
 		var blob Blob
-		for i, cell := range extCells[:64] {
+		for i, cell := range extCells[:DataPerBlob] {
 			copy(blob[i*len(cell):], cell[:])
 		}
 		blobs = append(blobs, blob)

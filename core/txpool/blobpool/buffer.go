@@ -62,11 +62,11 @@ type BlobBuffer struct {
 	txs   map[common.Hash]*txEntry
 	cells map[common.Hash]*cellEntry
 
-	addToPool func(*PooledBlobTx) error
+	addToPool func(*BlobTxForPool) error
 	dropPeer  func(string)
 }
 
-func NewBlobBuffer(addToPool func(*PooledBlobTx) error, dropPeer func(string)) *BlobBuffer {
+func NewBlobBuffer(addToPool func(*BlobTxForPool) error, dropPeer func(string)) *BlobBuffer {
 	return &BlobBuffer{
 		txs:       make(map[common.Hash]*txEntry),
 		cells:     make(map[common.Hash]*cellEntry),
@@ -134,6 +134,7 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 	return nil
 }
 
+// todo returning error here is strange
 // add verifies cells per-peer, sorts them, and adds to the pool.
 func (b *BlobBuffer) add(hash common.Hash, tx *types.Transaction, cells *cellEntry) error {
 	sidecar := tx.BlobTxSidecar()
@@ -148,18 +149,13 @@ func (b *BlobBuffer) add(hash common.Hash, tx *types.Transaction, cells *cellEnt
 	blobCount := len(tx.BlobHashes())
 	sorted, custody := sortCells(cells, blobCount)
 
-	cellSidecar := &types.BlobTxCellSidecar{
+	pooledTx := &BlobTxForPool{
+		Tx:          tx.WithoutBlobTxSidecar(),
 		Version:     sidecar.Version,
-		Cells:       sorted,
 		Commitments: sidecar.Commitments,
 		Proofs:      sidecar.Proofs,
+		Cells:       sorted,
 		Custody:     *custody,
-	}
-	pooledTx := &PooledBlobTx{
-		Transaction:     tx.WithoutBlobTxSidecar(),
-		Sidecar:         cellSidecar,
-		Size:            tx.Size(),
-		SizeWithoutBlob: tx.WithoutBlob().Size(),
 	}
 	err := b.addToPool(pooledTx)
 	delete(b.cells, hash)

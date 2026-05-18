@@ -208,8 +208,35 @@ func IsValidVersionedHash(h []byte) bool {
 	return len(h) == 32 && h[0] == 0x01
 }
 
-// VerifyCells verifies a batch of proofs corresponding to the cells and commitments.
+// VerifyCells verifies a batch of proofs corresponding to the cells and blob commitments.
+//
+// For this function, it is sufficient to only provide some of the cells.
+//
+// The `cellIndices` specify which of the 128 cells of each blob are given.
+// Indices must be given in ascending order.
+//
+// Note the list of indices is shared among all blobs, i.e. for a given list of indices
+// [1, 2, 13], the cells slice must contain cells [1, 2, 13] of each blob.
+// Thus, `len(cells)` must be a multiple of `len(cellIndices)`.
+//
+// One proof must be given for each cell. As such, `len(proofs)` must equal `len(cells)`.
 func VerifyCells(cells []Cell, commitments []Commitment, proofs []Proof, cellIndices []uint64) error {
+	// commitments/proofs/cells validation
+	switch {
+	case len(commitments) == 0:
+		return errors.New("no commitments")
+	case len(proofs)%len(commitments) != 0:
+		return errors.New("len(proofs) must be a multiple of len(commitments)")
+	case len(cells) != len(proofs):
+		return errors.New("mismatched len(cellProofs) and len(cells)")
+	}
+	if err := validateCellIndices(cells, cellIndices); err != nil {
+		return err
+	}
+	if len(cells)/len(cellIndices) != len(commitments) {
+		return errors.New("invalid number of cells for blob count")
+	}
+
 	if useCKZG.Load() {
 		return ckzgVerifyCells(cells, commitments, proofs, cellIndices)
 	}
@@ -225,9 +252,30 @@ func ComputeCells(blobs []Blob) ([]Cell, error) {
 }
 
 // RecoverBlobs recovers blobs from the given cells and cell indices.
+// In order to successfully recover, at least DataPerBlob (64) cells must be provided.
+//
+// For the layout of cells and cellIndices, please see [VerifyCells].
 func RecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
+	if err := validateCellIndices(cells, cellIndices); err != nil {
+		return nil, err
+	}
 	if useCKZG.Load() {
 		return ckzgRecoverBlobs(cells, cellIndices)
 	}
 	return gokzgRecoverBlobs(cells, cellIndices)
+}
+
+func validateCellIndices(cells []Cell, cellIndices []uint64) error {
+	switch {
+	case len(cellIndices) == 0:
+		return errors.New("no cellIndices given")
+	case len(cellIndices) > len(cells):
+		return errors.New("less cells than cellIndices")
+	case len(cellIndices) > CellsPerBlob:
+		return errors.New("too many cellIndices")
+	case len(cells)%len(cellIndices) != 0:
+		return errors.New("len(cells) must be a multiple of len(cellIndices)")
+	}
+	// The library checks the canonical ordering of indices, so we don't have to do it here.
+	return nil
 }

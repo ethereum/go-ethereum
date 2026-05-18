@@ -116,6 +116,8 @@ const (
 	announceThreshold = -1
 )
 
+var errLegacyTx = errors.New("legacy transaction format")
+
 // blobTxMeta is the minimal subset of types.BlobTx necessary to validate and
 // schedule the blob transactions into the following blocks. Only ever add the
 // bare minimum needed fields to keep the size down (and thus number of entries
@@ -150,72 +152,217 @@ type blobTxMeta struct {
 	evictionBlobFeeJumps float64      // Worse blob fee (converted to fee jumps) across all previous nonces
 }
 
-// newBlobTxMeta retrieves the indexed metadata fields from a pooled blob transaction
-// and assembles a helper struct to track in memory.
-func newBlobTxMeta(id uint64, size uint64, storageSize uint32, pooledTx *PooledBlobTx) *blobTxMeta {
-	var version byte
-	if pooledTx.Sidecar != nil {
-		version = pooledTx.Sidecar.Version
+// BlobTxForPool is the storage representation of a blob transaction in the
+// blobpool.
+type BlobTxForPool struct {
+	Tx          *types.Transaction // tx without sidecar
+	Version     byte
+	Commitments []kzg4844.Commitment
+	Proofs      []kzg4844.Proof
+	Cells       []kzg4844.Cell
+	Custody     types.CustodyBitmap
+}
+
+// Sidecar returns BlobTxSidecar of pooled transaction. Since this function
+// recovers the blob field in sidecar, it is expansive and needs to be
+// avoided if possible. Returns error if recovery fails (e.g. insufficient cells).
+func (ptx *BlobTxForPool) sidecar() (*types.BlobTxSidecar, error) {
+	blobs, err := kzg4844.RecoverBlobs(ptx.Cells, ptx.Custody.Indices())
+	if err != nil {
+		return nil, err
 	}
+	return types.NewBlobTxSidecar(ptx.Version, blobs, ptx.Commitments, ptx.Proofs), nil
+}
+
+func (ptx *BlobTxForPool) toV1() error {
+	// todo: If we have a function to compute proofs from cells,
+	// we can avoid blob recovery here
+	blobs, err := kzg4844.RecoverBlobs(ptx.Cells, ptx.Custody.Indices())
+	if err != nil {
+		return err
+	}
+	proofs := make([]kzg4844.Proof, 0)
+	for _, blob := range blobs {
+		proof, err := kzg4844.ComputeCellProofs(&blob)
+		if err != nil {
+			return err
+		}
+		proofs = append(proofs, proof...)
+	}
+	ptx.Proofs = proofs
+	ptx.Version = types.BlobSidecarVersion1
+	return nil
+}
+
+// TxSize returns the transaction size on the network without
+// reconstructing the transaction.
+func (ptx *BlobTxForPool) txSize() uint64 {
+	var commitments, proofs uint64
+	for i := range ptx.Commitments {
+		commitments += rlp.BytesSize(ptx.Commitments[i][:])
+	}
+	for i := range ptx.Proofs {
+		proofs += rlp.BytesSize(ptx.Proofs[i][:])
+	}
+	var blob kzg4844.Blob
+	blobs := uint64(len(ptx.Commitments)) * rlp.BytesSize(blob[:])
+	return ptx.Tx.Size() + rlp.ListSize(rlp.ListSize(blobs)+rlp.ListSize(commitments)+rlp.ListSize(proofs))
+}
+
+func (ptx *BlobTxForPool) txSizeWithoutBlob() uint64 {
+	var commitments, proofs uint64
+	for i := range ptx.Commitments {
+		commitments += rlp.BytesSize(ptx.Commitments[i][:])
+	}
+	for i := range ptx.Proofs {
+		proofs += rlp.BytesSize(ptx.Proofs[i][:])
+	}
+	return ptx.Tx.Size() + rlp.ListSize(rlp.ListSize(0)+rlp.ListSize(commitments)+rlp.ListSize(proofs))
+}
+
+// ToTx reconstructs a full Transaction with the sidecar attached.
+func (ptx *BlobTxForPool) toTx() (*types.Transaction, error) {
+	sc, err := ptx.sidecar()
+	if err != nil {
+		return nil, err
+	}
+	return ptx.Tx.WithBlobTxSidecar(sc), nil
+}
+
+// newBlobTxForPool decomposes a blob transaction into blobTxForPool type.
+func newBlobTxForPool(tx *types.Transaction) (*BlobTxForPool, error) {
+	sc := tx.BlobTxSidecar()
+	if sc == nil {
+		return nil, errors.New("missing blob tx sidecar")
+	}
+	cells, err := kzg4844.ComputeCells(sc.Blobs)
+	if err != nil {
+		return nil, err
+	}
+	return &BlobTxForPool{
+		Tx:          tx.WithoutBlobTxSidecar(),
+		Version:     sc.Version,
+		Commitments: sc.Commitments,
+		Proofs:      sc.Proofs,
+		Cells:       cells,
+		Custody:     *types.CustodyBitmapAll,
+	}, nil
+}
+
+// encodeForNetwork transforms stored BlobTxForPool RLP into the network
+// transaction encoding for the given eth protocol version. Used for getRLP.
+//
+// Stored RLP: [type_byte || tx_fields, version, [comms], [proofs], [cells], custody]
+//
+// eth/69, eth/70: [blobs] is recovered from stored cells via kzg.
+//
+//	V0: type_byte || rlp([tx_fields, [blobs], [comms], [proofs]])
+//	V1: type_byte || rlp([tx_fields, version, [blobs], [comms], [proofs]])
+//
+// eth/72: [blobs] is replaced by an empty list (cells are fetched separately
+//
+//	      via GetCells).
+//	V0: type_byte || rlp([tx_fields, [], [comms], [proofs]])
+//	V1: type_byte || rlp([tx_fields, version, [], [comms], [proofs]])
+func encodeForNetwork(storedRLP []byte, version uint) ([]byte, error) {
+	elems, err := rlp.SplitListValues(storedRLP)
+	if err != nil {
+		return nil, fmt.Errorf("invalid BlobTxForPool RLP: %w", err)
+	}
+	if len(elems) < 6 {
+		return nil, fmt.Errorf("BlobTxForPool has %d elements, need at least 6", len(elems))
+	}
+
+	// 1. Extract tx byte and other tx fields
+	txBytes, _, err := rlp.SplitString(elems[0])
+	if err != nil {
+		return nil, fmt.Errorf("invalid tx bytes: %w", err)
+	}
+	if len(txBytes) < 2 {
+		return nil, errors.New("tx bytes too short")
+	}
+	typeByte := txBytes[0]
+	txRLP := txBytes[1:]
+
+	// 2. Find the version of sidecar.
+	sidecarVersion, _, err := rlp.SplitUint64(elems[1])
+	if err != nil || sidecarVersion > 255 {
+		return nil, fmt.Errorf("invalid version: %w", err)
+	}
+	sidecarVersionByte := byte(sidecarVersion)
+
+	// 3. Extract sidecar elements.
+	commitmentsRLP := elems[2]
+	proofsRLP := elems[3]
+
+	// 4. Build the [blobs] field for the wire format.
+	var blobsField []byte
+	// todo: should we use eth.ETH72 here
+	if version >= 72 {
+		// eth/72 omits the blob payload; peers fetch cells separately via GetCells.
+		blobsField = []byte{0xc0} // RLP-encoded empty list
+	} else {
+		// eth/69, eth/70 need actual blobs: recover them from stored cells.
+		var cells []kzg4844.Cell
+		if err := rlp.DecodeBytes(elems[4], &cells); err != nil {
+			return nil, fmt.Errorf("invalid cells RLP: %w", err)
+		}
+		var custody types.CustodyBitmap
+		if err := rlp.DecodeBytes(elems[5], &custody); err != nil {
+			return nil, fmt.Errorf("invalid custody RLP: %w", err)
+		}
+		blobs, err := kzg4844.RecoverBlobs(cells, custody.Indices())
+		if err != nil {
+			return nil, fmt.Errorf("failed to recover blobs: %w", err)
+		}
+		blobsField, err = rlp.EncodeToBytes(blobs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode blobs: %w", err)
+		}
+	}
+
+	// 5. Reconstruct into the network format.
+	var outer [][]byte
+	if sidecarVersionByte == types.BlobSidecarVersion0 {
+		outer = [][]byte{txRLP, blobsField, commitmentsRLP, proofsRLP}
+	} else {
+		outer = [][]byte{txRLP, elems[1], blobsField, commitmentsRLP, proofsRLP}
+	}
+	body, err := rlp.MergeListValues(outer)
+	if err != nil {
+		return nil, err
+	}
+	// Prepend type byte and wrap as an RLP string.
+	inner := make([]byte, 1+len(body))
+	inner[0] = typeByte
+	copy(inner[1:], body)
+	return rlp.EncodeToBytes(inner)
+}
+
+// newBlobTxMeta retrieves the indexed metadata fields from a pooled blob
+// transaction and assembles a helper struct to track in memory.
+func newBlobTxMeta(id uint64, storageSize uint32, ptx *BlobTxForPool) *blobTxMeta {
 	meta := &blobTxMeta{
-		hash:            pooledTx.Transaction.Hash(),
-		vhashes:         pooledTx.Transaction.BlobHashes(),
-		version:         version,
+		hash:            ptx.Tx.Hash(),
+		vhashes:         ptx.Tx.BlobHashes(),
+		version:         ptx.Version,
 		id:              id,
 		storageSize:     storageSize,
-		size:            size,
-		sizeWithoutBlob: pooledTx.SizeWithoutBlob,
-		nonce:           pooledTx.Transaction.Nonce(),
-		costCap:         uint256.MustFromBig(pooledTx.Transaction.Cost()),
-		execTipCap:      uint256.MustFromBig(pooledTx.Transaction.GasTipCap()),
-		execFeeCap:      uint256.MustFromBig(pooledTx.Transaction.GasFeeCap()),
-		blobFeeCap:      uint256.MustFromBig(pooledTx.Transaction.BlobGasFeeCap()),
-		execGas:         pooledTx.Transaction.Gas(),
-		blobGas:         pooledTx.Transaction.BlobGas(),
-		custody:         &pooledTx.Sidecar.Custody,
+		size:            ptx.txSize(),
+		sizeWithoutBlob: ptx.txSizeWithoutBlob(),
+		nonce:           ptx.Tx.Nonce(),
+		costCap:         uint256.MustFromBig(ptx.Tx.Cost()),
+		execTipCap:      uint256.MustFromBig(ptx.Tx.GasTipCap()),
+		execFeeCap:      uint256.MustFromBig(ptx.Tx.GasFeeCap()),
+		blobFeeCap:      uint256.MustFromBig(ptx.Tx.BlobGasFeeCap()),
+		execGas:         ptx.Tx.Gas(),
+		blobGas:         ptx.Tx.BlobGas(),
+		custody:         &ptx.Custody,
 	}
 	meta.basefeeJumps = dynamicFeeJumps(meta.execFeeCap)
 	meta.blobfeeJumps = dynamicBlobFeeJumps(meta.blobFeeCap)
 
 	return meta
-}
-
-type PooledBlobTx struct {
-	Transaction     *types.Transaction
-	Sidecar         *types.BlobTxCellSidecar
-	Size            uint64 // original transaction size (including blobs)
-	SizeWithoutBlob uint64 // transaction size with commitments/proofs but without blob data
-}
-
-// newPooledBlobTx creates pooledBlobTx struct.
-func newPooledBlobTx(tx *types.Transaction) (*PooledBlobTx, error) {
-	if tx.BlobTxSidecar() == nil {
-		return nil, errors.New("missing blob sidecar")
-	}
-	sidecar, err := tx.BlobTxSidecar().ToBlobTxCellSidecar()
-	if err != nil {
-		return nil, err
-	}
-	return &PooledBlobTx{
-		Transaction:     tx.WithoutBlobTxSidecar(),
-		Sidecar:         sidecar,
-		Size:            tx.Size(),
-		SizeWithoutBlob: tx.WithoutBlob().Size(),
-	}, nil
-}
-
-// convert recovers blobs from cell sidecar and returns a full transaction with blob sidecar.
-func (ptx *PooledBlobTx) convert() (*types.Transaction, error) {
-	if ptx.Sidecar == nil {
-		return nil, errors.New("cell sidecar missing")
-	}
-	cellSidecar := ptx.Sidecar
-	blobs, err := kzg4844.RecoverBlobs(cellSidecar.Cells, cellSidecar.Custody.Indices())
-	if err != nil {
-		return nil, err
-	}
-	sidecar := types.NewBlobTxSidecar(cellSidecar.Version, blobs, cellSidecar.Commitments, cellSidecar.Proofs)
-	return ptx.Transaction.WithBlobTxSidecar(sidecar), nil
 }
 
 // BlobPool is the transaction pool dedicated to EIP-4844 blob transactions.
@@ -409,8 +556,8 @@ type BlobPool struct {
 	stored uint64         // Useful data size of all transactions on disk
 	limbo  *limbo         // Persistent data store for the non-finalized blobs
 
-	gapped       map[common.Address][]*PooledBlobTx // Transactions that are currently gapped (nonce too high)
-	gappedSource map[common.Hash]common.Address     // Source of gapped transactions to allow rechecking on inclusion
+	gapped       map[common.Address][]*BlobTxForPool // Transactions that are currently gapped (nonce too high)
+	gappedSource map[common.Hash]common.Address      // Source of gapped transactions to allow rechecking on inclusion
 
 	signer types.Signer // Transaction signer to use for sender recovery
 	chain  BlockChain   // Chain object to access the state through
@@ -445,7 +592,7 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 		lookup:         newLookup(),
 		index:          make(map[common.Address][]*blobTxMeta),
 		spent:          make(map[common.Address]*uint256.Int),
-		gapped:         make(map[common.Address][]*PooledBlobTx),
+		gapped:         make(map[common.Address][]*BlobTxForPool),
 		gappedSource:   make(map[common.Hash]common.Address),
 	}
 }
@@ -460,6 +607,7 @@ func (p *BlobPool) FilterType(kind byte) bool {
 	return kind == types.BlobTxType
 }
 
+// Init sets the gas price needed to keep a transaction in the pool and the chain
 // head to allow balance / nonce checks. The transaction journal will be loaded
 // from disk and filtered based on the provided starting settings.
 func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reserver) error {
@@ -482,9 +630,9 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	// Initialize the state with head block, or fallback to empty one in
 	// case the head state is not available (might occur when node is not
 	// fully synced).
-	state, err := p.chain.StateAt(head.Root)
+	state, err := p.chain.StateAt(head)
 	if err != nil {
-		state, err = p.chain.StateAt(types.EmptyRootHash)
+		state, err = p.chain.StateAt(p.chain.Genesis().Header())
 	}
 	if err != nil {
 		return err
@@ -501,14 +649,17 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 		return err
 	}
 	// Index all transactions on disk and delete anything unprocessable
-	var fails []uint64
-	var convertTxs []*types.Transaction
+	var (
+		toDelete   []uint64
+		convertTxs []uint64
+	)
 	index := func(id uint64, size uint32, blob []byte) {
-		if tx, err := p.parseTransaction(id, size, blob); err != nil {
-			fails = append(fails, id)
-		} else if tx != nil {
-			fails = append(fails, id)
-			convertTxs = append(convertTxs, tx)
+		err := p.parseTransaction(id, size, blob)
+		if err != nil {
+			toDelete = append(toDelete, id)
+		}
+		if errors.Is(err, errLegacyTx) {
+			convertTxs = append(convertTxs, id)
 		}
 	}
 	store, err := billy.Open(billy.Options{Path: queuedir, Repair: true}, slotter, index)
@@ -518,19 +669,29 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	p.store = store
 
 	// Migrate legacy transactions (types.Transaction) to pooledBlobTx format.
-	// Legacy entries are deleted (via fails) and re-stored as pooledBlobTx.
 	if len(convertTxs) > 0 {
-		log.Trace("Convert plain transaction to pooled transaction", "len", len(convertTxs))
-		for _, tx := range convertTxs {
+		for _, id := range convertTxs {
+			var tx types.Transaction
+			data, err := p.store.Get(id)
+			if err != nil {
+				continue
+			}
+			err = rlp.DecodeBytes(data, &tx)
+			if err != nil {
+				continue
+			}
+			if tx.BlobTxSidecar() == nil {
+				continue
+			}
+			ptx, err := newBlobTxForPool(&tx)
 			// Note that we skip errors here.
 			// Just like parseTransaction failure does not abort the blobpool creation,
 			// conversion process also cannot abort the entire process.
-			pooledTx, err := newPooledBlobTx(tx)
 			if err != nil {
 				log.Error("Failed to convert legacy tx to pooledBlobTx", "hash", tx.Hash(), "err", err)
 				continue
 			}
-			blob, err := rlp.EncodeToBytes(pooledTx)
+			blob, err := rlp.EncodeToBytes(ptx)
 			if err != nil {
 				continue
 			}
@@ -538,30 +699,34 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 			if err != nil {
 				continue
 			}
-			meta := newBlobTxMeta(id, pooledTx.Size, p.store.Size(id), pooledTx)
+			meta := newBlobTxMeta(id, p.store.Size(id), ptx)
 
-			sender, err := types.Sender(p.signer, pooledTx.Transaction)
+			// If the newly inserted transaction fails to be tracked,
+			// it should also be removed with those in `toDelete`
+			sender, err := types.Sender(p.signer, ptx.Tx)
 			if err != nil {
-				fails = append(fails, id)
+				toDelete = append(toDelete, id)
 				continue
 			}
 			if err := p.trackTransaction(meta, sender); err != nil {
-				fails = append(fails, id)
+				toDelete = append(toDelete, id)
 				continue
 			}
 		}
 	}
-	if len(fails) > 0 {
-		log.Warn("Dropping invalidated blob transactions", "ids", fails)
-		dropInvalidMeter.Mark(int64(len(fails)))
 
-		for _, id := range fails {
+	if len(toDelete) > 0 {
+		log.Warn("Dropping invalidated blob transactions", "ids", toDelete)
+		dropInvalidMeter.Mark(int64(len(toDelete)))
+
+		for _, id := range toDelete {
 			if err := p.store.Delete(id); err != nil {
 				p.Close()
 				return err
 			}
 		}
 	}
+
 	// Sort the indexed transactions by nonce and delete anything gapped, create
 	// the eviction heap of anyone still standing
 	for addr := range p.index {
@@ -642,39 +807,27 @@ func (p *BlobPool) Close() error {
 // If a legacy types.Transaction is found on disk, it is returned for migration
 // in Init (the old ID will be deleted and a new pooledBlobTx written).
 // If a pooledBlobTx is found, it is indexed directly and nil is returned.
-func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) (*types.Transaction, error) {
-	tx := new(types.Transaction)
-	pooledTx := new(PooledBlobTx)
-
-	if err := rlp.DecodeBytes(blob, pooledTx); err != nil {
-		// This path is impossible unless the disk data representation changes
-		// across restarts. For that ever improbable case, recover gracefully
-		// by ignoring this data entry.
-		if err := rlp.DecodeBytes(blob, tx); err != nil {
-			log.Error("Failed to decode blob pool entry", "id", id, "err", err)
-			return nil, err
+func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
+	var ptx BlobTxForPool
+	if err := rlp.DecodeBytes(blob, &ptx); err != nil {
+		kind, content, _, splitErr := rlp.Split(blob)
+		// check whether it is legacy tx type
+		if splitErr == nil && kind == rlp.String && len(content) > 1 && content[0] == 3 {
+			return errLegacyTx
 		}
-		if tx.BlobTxSidecar() == nil {
-			log.Error("Missing sidecar in blob pool entry", "id", id, "hash", tx.Hash())
-			return nil, errors.New("missing blob sidecar")
-		}
-		return tx, nil
+		log.Error("Failed to decode blob pool entry", "id", id, "err", err)
+		return err
 	}
-	if pooledTx.Sidecar == nil {
-		log.Error("Missing sidecar in blob pool entry", "id", id, "hash", pooledTx.Transaction.Hash())
-		return nil, errors.New("missing blob sidecar")
-	}
-	meta := newBlobTxMeta(id, pooledTx.Size, size, pooledTx)
-
-	sender, err := types.Sender(p.signer, pooledTx.Transaction)
+	meta := newBlobTxMeta(id, size, &ptx)
+	sender, err := types.Sender(p.signer, ptx.Tx)
 	if err != nil {
 		// This path is impossible unless the signature validity changes across
 		// restarts. For that ever improbable case, recover gracefully by ignoring
 		// this data entry.
-		log.Error("Failed to recover blob tx sender", "id", id, "hash", pooledTx.Transaction.Hash(), "err", err)
-		return nil, err
+		log.Error("Failed to recover blob tx sender", "id", id, "hash", ptx.Tx.Hash(), "err", err)
+		return err
 	}
-	return nil, p.trackTransaction(meta, sender)
+	return p.trackTransaction(meta, sender)
 }
 
 // trackTransaction registers a transaction's metadata in the pool's indices.
@@ -960,17 +1113,17 @@ func (p *BlobPool) offload(addr common.Address, nonce uint64, id uint64, inclusi
 		log.Error("Blobs missing for included transaction", "from", addr, "nonce", nonce, "id", id, "err", err)
 		return
 	}
-	var pooledTx PooledBlobTx
-	if err = rlp.DecodeBytes(data, &pooledTx); err != nil {
+	var ptx BlobTxForPool
+	if err := rlp.DecodeBytes(data, &ptx); err != nil {
 		log.Error("Blobs corrupted for included transaction", "from", addr, "nonce", nonce, "id", id, "err", err)
 		return
 	}
-	block, ok := inclusions[pooledTx.Transaction.Hash()]
+	block, ok := inclusions[ptx.Tx.Hash()]
 	if !ok {
 		log.Warn("Blob transaction swapped out by signer", "from", addr, "nonce", nonce, "id", id)
 		return
 	}
-	if err := p.limbo.push(&pooledTx, block); err != nil {
+	if err := p.limbo.push(&ptx, block); err != nil {
 		log.Warn("Failed to offload blob tx into limbo", "err", err)
 		return
 	}
@@ -991,7 +1144,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	// Handle reorg buffer timeouts evicting old gapped transactions
 	p.evictGapped()
 
-	statedb, err := p.chain.StateAt(newHead.Root)
+	statedb, err := p.chain.StateAt(newHead)
 	if err != nil {
 		log.Error("Failed to reset blobpool state", "err", err)
 		return
@@ -1048,13 +1201,13 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 					log.Error("Blobs missing for announcable transaction", "from", addr, "nonce", meta.nonce, "id", meta.id, "err", err)
 					continue
 				}
-				var pooledTx PooledBlobTx
-				if err = rlp.DecodeBytes(data, &pooledTx); err != nil {
+				var ptx BlobTxForPool
+				if err = rlp.DecodeBytes(data, &ptx); err != nil {
 					log.Error("Blobs corrupted for announcable transaction", "from", addr, "nonce", meta.nonce, "id", meta.id, "err", err)
 					continue
 				}
-				announcable = append(announcable, pooledTx.Transaction)
-				log.Trace("Blob transaction now announcable", "from", addr, "nonce", meta.nonce, "id", meta.id, "hash", pooledTx.Transaction.Hash())
+				announcable = append(announcable, ptx.Tx)
+				log.Trace("Blob transaction now announcable", "from", addr, "nonce", meta.nonce, "id", meta.id, "hash", ptx.Tx.Hash())
 			}
 		}
 	}
@@ -1205,7 +1358,7 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	// Retrieve the associated blob from the limbo. Without the blobs, we cannot
 	// add the transaction back into the pool as it is not mineable.
-	tx, err := p.limbo.pull(txhash)
+	ptx, err := p.limbo.pull(txhash)
 	if err != nil {
 		log.Error("Blobs unavailable, dropping reorged tx", "err", err)
 		return err
@@ -1213,23 +1366,35 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	// TODO: seems like an easy optimization here would be getting the serialized tx
 	// from limbo instead of re-serializing it here.
 
-	// Serialize the transaction back into the primary datastore.
-	blob, err := rlp.EncodeToBytes(tx)
+	// Converts reorged-out legacy blob transactions to the new format to prevent
+	// them from becoming stuck in the pool until eviction.
+	//
+	// Performance note: Conversion takes ~140ms (Mac M1 Pro). Since a maximum of
+	// 9 legacy blob transactions are allowed in a block pre-Osaka, an adversary
+	// could theoretically halt a Geth node for ~1.2s by reorging per block. However,
+	// this attack is financially inefficient to execute.
+	head := p.head.Load()
+	if p.chain.Config().IsOsaka(head.Number, head.Time) && ptx.Version == types.BlobSidecarVersion0 {
+		if err := ptx.toV1(); err != nil {
+			log.Error("Failed to convert the legacy sidecar", "err", err)
+			return err
+		}
+		log.Info("Legacy blob transaction is reorged", "hash", ptx.Tx.Hash())
+	}
+	blob, err := rlp.EncodeToBytes(ptx)
 	if err != nil {
-		log.Error("Failed to encode transaction for storage", "hash", tx.Transaction.Hash(), "err", err)
+		log.Error("Failed to encode transaction for storage", "hash", ptx.Tx.Hash(), "err", err)
 		return err
 	}
 	id, err := p.store.Put(blob)
 	if err != nil {
-		log.Error("Failed to write transaction into storage", "hash", tx.Transaction.Hash(), "err", err)
+		log.Error("Failed to write transaction into storage", "hash", ptx.Tx.Hash(), "err", err)
 		return err
 	}
-
-	// Update the indices and metrics
-	meta := newBlobTxMeta(id, tx.Size, p.store.Size(id), tx)
+	meta := newBlobTxMeta(id, p.store.Size(id), ptx)
 	if _, ok := p.index[addr]; !ok {
 		if err := p.reserver.Hold(addr); err != nil {
-			log.Warn("Failed to reserve account for blob pool", "tx", tx.Transaction.Hash(), "from", addr, "err", err)
+			log.Warn("Failed to reserve account for blob pool", "tx", ptx.Tx.Hash(), "from", addr, "err", err)
 			return err
 		}
 		p.index[addr] = []*blobTxMeta{meta}
@@ -1360,16 +1525,20 @@ func (p *BlobPool) checkDelegationLimit(tx *types.Transaction) error {
 
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
+//
 // This function assumes the static validation has been performed already and
 // only runs the stateful checks with lock protection.
 func (p *BlobPool) validateTx(tx *types.Transaction) error {
-	if err := p.ValidateTxBasics(tx); err != nil {
-		return err
-	}
+	// Ensure the transaction adheres to the stateful pool filters (nonce, balance)
 	stateOpts := &txpool.ValidationOptionsWithState{
 		State: p.state,
 
 		FirstNonceGap: func(addr common.Address) uint64 {
+			// Nonce gaps are permitted in the blob pool, but only as part of the
+			// in-memory 'gapped' buffer. We expose the gap here to validateTx,
+			// then handle the error by adding to the buffer. The first gap will
+			// be the next nonce shifted by however many transactions we already
+			// have pooled.
 			return p.state.GetNonce(addr) + uint64(len(p.index[addr]))
 		},
 		UsedAndLeftSlots: func(addr common.Address) (int, int) {
@@ -1399,48 +1568,43 @@ func (p *BlobPool) validateTx(tx *types.Transaction) error {
 	if err := p.checkDelegationLimit(tx); err != nil {
 		return err
 	}
+	// If the transaction replaces an existing one, ensure that price bumps are
+	// adhered to.
 	var (
-		from, _ = types.Sender(p.signer, tx)
+		from, _ = types.Sender(p.signer, tx) // already validated above
 		next    = p.state.GetNonce(from)
 	)
-	var prev *blobTxMeta
-	nonce := tx.Nonce()
+	if uint64(len(p.index[from])) > tx.Nonce()-next {
+		prev := p.index[from][int(tx.Nonce()-next)]
+		// Ensure the transaction is different than the one tracked locally
+		if prev.hash == tx.Hash() {
+			return txpool.ErrAlreadyKnown
+		}
+		// Account can support the replacement, but the price bump must also be met
+		switch {
+		case tx.GasFeeCapIntCmp(prev.execFeeCap.ToBig()) <= 0:
+			return fmt.Errorf("%w: new tx gas fee cap %v <= %v queued", txpool.ErrReplaceUnderpriced, tx.GasFeeCap(), prev.execFeeCap)
+		case tx.GasTipCapIntCmp(prev.execTipCap.ToBig()) <= 0:
+			return fmt.Errorf("%w: new tx gas tip cap %v <= %v queued", txpool.ErrReplaceUnderpriced, tx.GasTipCap(), prev.execTipCap)
+		case tx.BlobGasFeeCapIntCmp(prev.blobFeeCap.ToBig()) <= 0:
+			return fmt.Errorf("%w: new tx blob gas fee cap %v <= %v queued", txpool.ErrReplaceUnderpriced, tx.BlobGasFeeCap(), prev.blobFeeCap)
+		}
+		var (
+			multiplier = uint256.NewInt(100 + p.config.PriceBump)
+			onehundred = uint256.NewInt(100)
 
-	if nonce < next+uint64(len(p.index[from])) {
-		prev = p.index[from][nonce-next]
-	}
-	if prev == nil {
-		return nil
-	}
-	// Ensure the transaction is different than the one tracked locally
-	if prev.hash == tx.Hash() {
-		return txpool.ErrAlreadyKnown
-	}
-	// Account can support the replacement, but the price bump must also be met
-	switch {
-	case tx.GasFeeCapIntCmp(prev.execFeeCap.ToBig()) <= 0:
-		return fmt.Errorf("%w: new tx gas fee cap %v <= %v queued", txpool.ErrReplaceUnderpriced, tx.GasFeeCap(), prev.execFeeCap)
-	case tx.GasTipCapIntCmp(prev.execTipCap.ToBig()) <= 0:
-		return fmt.Errorf("%w: new tx gas tip cap %v <= %v queued", txpool.ErrReplaceUnderpriced, tx.GasTipCap(), prev.execTipCap)
-	case tx.BlobGasFeeCapIntCmp(prev.blobFeeCap.ToBig()) <= 0:
-		return fmt.Errorf("%w: new tx blob gas fee cap %v <= %v queued", txpool.ErrReplaceUnderpriced, tx.BlobGasFeeCap(), prev.blobFeeCap)
-	}
-
-	var (
-		multiplier = uint256.NewInt(100 + p.config.PriceBump)
-		onehundred = uint256.NewInt(100)
-
-		minGasFeeCap     = new(uint256.Int).Div(new(uint256.Int).Mul(multiplier, prev.execFeeCap), onehundred)
-		minGasTipCap     = new(uint256.Int).Div(new(uint256.Int).Mul(multiplier, prev.execTipCap), onehundred)
-		minBlobGasFeeCap = new(uint256.Int).Div(new(uint256.Int).Mul(multiplier, prev.blobFeeCap), onehundred)
-	)
-	switch {
-	case tx.GasFeeCapIntCmp(minGasFeeCap.ToBig()) < 0:
-		return fmt.Errorf("%w: new tx gas fee cap %v < %v queued + %d%% replacement penalty", txpool.ErrReplaceUnderpriced, tx.GasFeeCap(), prev.execFeeCap, p.config.PriceBump)
-	case tx.GasTipCapIntCmp(minGasTipCap.ToBig()) < 0:
-		return fmt.Errorf("%w: new tx gas tip cap %v < %v queued + %d%% replacement penalty", txpool.ErrReplaceUnderpriced, tx.GasTipCap(), prev.execTipCap, p.config.PriceBump)
-	case tx.BlobGasFeeCapIntCmp(minBlobGasFeeCap.ToBig()) < 0:
-		return fmt.Errorf("%w: new tx blob gas fee cap %v < %v queued + %d%% replacement penalty", txpool.ErrReplaceUnderpriced, tx.BlobGasFeeCap(), prev.blobFeeCap, p.config.PriceBump)
+			minGasFeeCap     = new(uint256.Int).Div(new(uint256.Int).Mul(multiplier, prev.execFeeCap), onehundred)
+			minGasTipCap     = new(uint256.Int).Div(new(uint256.Int).Mul(multiplier, prev.execTipCap), onehundred)
+			minBlobGasFeeCap = new(uint256.Int).Div(new(uint256.Int).Mul(multiplier, prev.blobFeeCap), onehundred)
+		)
+		switch {
+		case tx.GasFeeCapIntCmp(minGasFeeCap.ToBig()) < 0:
+			return fmt.Errorf("%w: new tx gas fee cap %v < %v queued + %d%% replacement penalty", txpool.ErrReplaceUnderpriced, tx.GasFeeCap(), prev.execFeeCap, p.config.PriceBump)
+		case tx.GasTipCapIntCmp(minGasTipCap.ToBig()) < 0:
+			return fmt.Errorf("%w: new tx gas tip cap %v < %v queued + %d%% replacement penalty", txpool.ErrReplaceUnderpriced, tx.GasTipCap(), prev.execTipCap, p.config.PriceBump)
+		case tx.BlobGasFeeCapIntCmp(minBlobGasFeeCap.ToBig()) < 0:
+			return fmt.Errorf("%w: new tx blob gas fee cap %v < %v queued + %d%% replacement penalty", txpool.ErrReplaceUnderpriced, tx.BlobGasFeeCap(), prev.blobFeeCap, p.config.PriceBump)
+		}
 	}
 	return nil
 }
@@ -1451,20 +1615,9 @@ func (p *BlobPool) Has(hash common.Hash) bool {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	if p.lookup.exists(hash) {
-		return true
-	}
-
 	poolHas := p.lookup.exists(hash)
 	_, gapped := p.gappedSource[hash]
 	return poolHas || gapped
-}
-
-func (p *BlobPool) HasPayload(hash common.Hash) bool {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	return p.lookup.exists(hash)
 }
 
 // getRLP returns the raw RLP-encoded pooledBlobTx data from the store.
@@ -1494,31 +1647,21 @@ func (p *BlobPool) getRLP(hash common.Hash) []byte {
 }
 
 // Get returns a transaction if it is contained in the pool, or nil otherwise.
-// TODO: We could do the following (especially beneficial for GetRLP):
-// 1) Make Get and GetRLP return blob transactions without blobs (not without sidecars).
-// 2) Store transactions (without blobs) and cells separately:
-//   - (1) Store them separately on disk, tracking both IDs.
-//   - (2) Keep transactions in memory and store cells on disk.
-//
-// However, this approach does not fit well with eth72 peers, since blobs
-// must be included in that case. It may require decoding and re-encoding,
-// as well as double disk I/O each time.
-func (p *BlobPool) Get(hash common.Hash, includeBlob bool) *types.Transaction {
+// Note that this function always try to recover full blobs
+func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 	data := p.getRLP(hash)
 	if len(data) == 0 {
 		return nil
 	}
-	var pooledTx PooledBlobTx
-	if err := rlp.DecodeBytes(data, &pooledTx); err != nil {
-		log.Error("Blobs corrupted for traced transaction", "hash", hash, "err", err)
+	var ptx BlobTxForPool
+	if err := rlp.DecodeBytes(data, &ptx); err != nil {
+		id, _ := p.lookup.storeidOfTx(hash)
+		log.Error("Blobs corrupted for traced transaction", "hash", hash, "id", id, "err", err)
 		return nil
 	}
-	if !includeBlob {
-		return pooledTx.Transaction
-	}
-	tx, err := pooledTx.convert()
+	tx, err := ptx.toTx()
 	if err != nil {
-		log.Error("Failed to convert transaction in blobpool", "hash", hash, "err", err)
+		log.Error("Failed to recover transaction in blobpool", "hash", hash, "err", err)
 		return nil
 	}
 	return tx
@@ -1529,30 +1672,18 @@ func (p *BlobPool) Get(hash common.Hash, includeBlob bool) *types.Transaction {
 // types.Transaction RLP. This requires an additional decode-encode step, which is inefficient
 // and contradicts the original purpose of this function.
 // Possible improvements: Drop eth70 and store the cell and transaction separately.
-func (p *BlobPool) GetRLP(hash common.Hash, includeBlob bool) []byte {
+func (p *BlobPool) GetRLP(hash common.Hash, version uint) []byte {
 	data := p.getRLP(hash)
 	if len(data) == 0 {
+		// Not in this pool, do not log.
 		return nil
 	}
-	var pooledTx PooledBlobTx
-	if err := rlp.DecodeBytes(data, &pooledTx); err != nil {
-		log.Error("Failed to decode transaction in blobpool", "hash", hash, "err", err)
-		return nil
-	}
-	tx, err := pooledTx.convert()
+	rlp, err := encodeForNetwork(data, version)
 	if err != nil {
-		log.Error("Failed to convert transaction in blobpool", "hash", hash, "err", err)
+		log.Error("Failed to encode pooled tx into the network type", "hash", hash, "err", err)
 		return nil
 	}
-	if !includeBlob {
-		tx = tx.WithoutBlob()
-	}
-	encoded, err := rlp.EncodeToBytes(tx)
-	if err != nil {
-		log.Error("Failed to encode transaction in blobpool", "hash", hash, "err", err)
-		return nil
-	}
-	return encoded
+	return rlp
 }
 
 // GetMetadata returns the transaction type and transaction size with the
@@ -1622,22 +1753,18 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 		}
 
 		// Decode the blob transaction
-		var pooledTx PooledBlobTx
-		if err := rlp.DecodeBytes(data, &pooledTx); err != nil {
+		var ptx BlobTxForPool
+		if err := rlp.DecodeBytes(data, &ptx); err != nil {
 			log.Error("Blobs corrupted for traced transaction", "id", txID, "err", err)
 			continue
 		}
-		tx, err := pooledTx.convert()
+		sidecar, err := ptx.sidecar()
 		if err != nil {
-			return nil, nil, nil, err
-		}
-		sidecar := tx.BlobTxSidecar()
-		if sidecar == nil {
-			log.Error("Blob tx without sidecar", "hash", tx.Hash(), "id", txID)
+			log.Error("Failed to recover sidecar in blobpool", "id", txID, "err", err)
 			continue
 		}
 		// Traverse the blobs in the transaction
-		for i, hash := range tx.BlobHashes() {
+		for i, hash := range ptx.Tx.BlobHashes() {
 			list, ok := indices[hash]
 			if !ok {
 				continue // non-interesting blob
@@ -1657,7 +1784,8 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 			case types.BlobSidecarVersion1:
 				cellProofs, err := sidecar.CellProofsAt(i)
 				if err != nil {
-					return nil, nil, nil, err
+					log.Error("Failed to get cell proofs", "id", txID, "err", err)
+					continue
 				}
 				pf = cellProofs
 			}
@@ -1712,17 +1840,13 @@ func (p *BlobPool) GetBlobCells(vhashes []common.Hash, mask types.CustodyBitmap)
 		if err != nil {
 			continue
 		}
-		var pooledTx PooledBlobTx
-		if err := rlp.DecodeBytes(data, &pooledTx); err != nil {
+		var ptx BlobTxForPool
+		if err := rlp.DecodeBytes(data, &ptx); err != nil {
 			continue
 		}
-		sidecar := pooledTx.Sidecar
-		if sidecar == nil {
-			continue
-		}
-		tx := pooledTx.Transaction
-		cellsPerBlob := sidecar.Custody.OneCount()
-		storedIndices := sidecar.Custody.Indices()
+		tx := ptx.Tx
+		cellsPerBlob := ptx.Custody.OneCount()
+		storedIndices := ptx.Custody.Indices()
 
 		for blobIdx, hash := range tx.BlobHashes() {
 			indices, ok := vindex[hash]
@@ -1743,11 +1867,11 @@ func (p *BlobPool) GetBlobCells(vhashes []common.Hash, mask types.CustodyBitmap)
 					}
 				}
 				if pos >= 0 {
-					cell := sidecar.Cells[blobIdx*cellsPerBlob+pos]
+					cell := ptx.Cells[blobIdx*cellsPerBlob+pos]
 					blobCells[i] = &cell
 					proofIdx := blobIdx*kzg4844.CellProofsPerBlob + int(cellIdx)
-					if proofIdx < len(sidecar.Proofs) {
-						proof := sidecar.Proofs[proofIdx]
+					if proofIdx < len(ptx.Proofs) {
+						proof := ptx.Proofs[proofIdx]
 						blobProofs[i] = &proof
 					}
 				}
@@ -1783,19 +1907,19 @@ func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 		if errs[i] = p.ValidateTxBasics(tx); errs[i] != nil {
 			continue
 		}
-		pooledTx, err := newPooledBlobTx(tx)
+		ptx, err := newBlobTxForPool(tx)
 		if err != nil {
 			errs[i] = err
 			continue
 		}
-		errs[i] = p.AddPooledTx(pooledTx)
+		errs[i] = p.AddPooledTx(ptx)
 	}
 	return errs
 }
 
 // add inserts a new blob transaction into the pool if it passes validation (both
 // consensus validity and pool restrictions).
-func (p *BlobPool) AddPooledTx(pooledTx *PooledBlobTx) (err error) {
+func (p *BlobPool) AddPooledTx(ptx *BlobTxForPool) (err error) {
 	// The blob pool blocks on adding a transaction. This is because blob txs are
 	// only even pulled from the network, so this method will act as the overload
 	// protection for fetches.
@@ -1808,15 +1932,22 @@ func (p *BlobPool) AddPooledTx(pooledTx *PooledBlobTx) (err error) {
 		addtimeHist.Update(time.Since(start).Nanoseconds())
 	}(time.Now())
 
-	return p.addLocked(pooledTx, true)
+	return p.addLocked(ptx, true)
 }
 
 // addLocked inserts a new blob transaction into the pool if it passes validation (both
 // consensus validity and pool restrictions). It must be called with the pool lock held.
 // Only for internal use.
-func (p *BlobPool) addLocked(pooledTx *PooledBlobTx, checkGapped bool) (err error) {
-	tx := pooledTx.Transaction
-	cellSidecar := pooledTx.Sidecar
+func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
+	tx := ptx.Tx
+	//todo: remove this type and also ToBlobTxCellSidecar function
+	cellSidecar := &types.BlobTxCellSidecar{
+		Version:     ptx.Version,
+		Cells:       ptx.Cells,
+		Commitments: ptx.Commitments,
+		Proofs:      ptx.Proofs,
+		Custody:     ptx.Custody,
+	}
 
 	// Ensure the transaction is valid from all perspectives
 	if err := p.validateTx(tx); err != nil {
@@ -1830,12 +1961,13 @@ func (p *BlobPool) addLocked(pooledTx *PooledBlobTx, checkGapped bool) (err erro
 			addStaleMeter.Mark(1)
 		case errors.Is(err, core.ErrNonceTooHigh):
 			addGappedMeter.Mark(1)
-			// Store the tx in memory as pooledBlobTx, and revalidate later
+			// Store the tx in memory, and revalidate later
 			from, _ := types.Sender(p.signer, tx)
 			allowance := p.gappedAllowance(from)
-			if allowance >= 1 && len(p.gapped) < maxGapped {
-				p.gapped[from] = append(p.gapped[from], pooledTx)
+			if allowance >= 1 && len(p.gappedSource) < maxGapped {
+				p.gapped[from] = append(p.gapped[from], ptx)
 				p.gappedSource[tx.Hash()] = from
+				gappedGauge.Update(int64(len(p.gappedSource)))
 				log.Trace("added tx to gapped blob queue", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
 				return nil
 			} else {
@@ -1843,6 +1975,7 @@ func (p *BlobPool) addLocked(pooledTx *PooledBlobTx, checkGapped bool) (err erro
 				// transactions by keeping the old and dropping this one.
 				// Thus replacing a gapped transaction with another gapped transaction
 				// is discouraged.
+				addGappedFullMeter.Mark(1)
 				log.Trace("no gapped blob queue allowance", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
 			}
 		case errors.Is(err, core.ErrInsufficientFunds):
@@ -1870,7 +2003,6 @@ func (p *BlobPool) addLocked(pooledTx *PooledBlobTx, checkGapped bool) (err erro
 			addNonExclusiveMeter.Mark(1)
 			return err
 		}
-		//todo release when evicted from the buffer
 		defer func() {
 			// If the transaction is rejected by some post-validation check, remove
 			// the lock on the reservation set.
@@ -1885,7 +2017,7 @@ func (p *BlobPool) addLocked(pooledTx *PooledBlobTx, checkGapped bool) (err erro
 	}
 	// Transaction permitted into the pool from a nonce and cost perspective,
 	// insert it into the database and update the indices
-	blob, err := rlp.EncodeToBytes(pooledTx)
+	blob, err := rlp.EncodeToBytes(ptx)
 	if err != nil {
 		log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
 		return err
@@ -1894,7 +2026,7 @@ func (p *BlobPool) addLocked(pooledTx *PooledBlobTx, checkGapped bool) (err erro
 	if err != nil {
 		return err
 	}
-	meta := newBlobTxMeta(id, pooledTx.Size, p.store.Size(id), pooledTx)
+	meta := newBlobTxMeta(id, p.store.Size(id), ptx)
 
 	var (
 		next   = p.state.GetNonce(from)
@@ -2005,13 +2137,13 @@ func (p *BlobPool) addLocked(pooledTx *PooledBlobTx, checkGapped bool) (err erro
 		// We have to add in nonce order, but we want to stable sort to cater for situations
 		// where transactions are replaced, keeping the original receive order for same nonce
 		sort.SliceStable(gtxs, func(i, j int) bool {
-			return gtxs[i].Transaction.Nonce() < gtxs[j].Transaction.Nonce()
+			return gtxs[i].Tx.Nonce() < gtxs[j].Tx.Nonce()
 		})
 		for len(gtxs) > 0 {
 			stateNonce := p.state.GetNonce(from)
 			firstgap := stateNonce + uint64(len(p.index[from]))
 
-			if gtxs[0].Transaction.Nonce() > firstgap {
+			if gtxs[0].Tx.Nonce() > firstgap {
 				// Anything beyond the first gap is not addable yet
 				break
 			}
@@ -2022,22 +2154,23 @@ func (p *BlobPool) addLocked(pooledTx *PooledBlobTx, checkGapped bool) (err erro
 			ptx := gtxs[0]
 			gtxs[0] = nil
 			gtxs = gtxs[1:]
-			delete(p.gappedSource, ptx.Transaction.Hash())
+			delete(p.gappedSource, ptx.Tx.Hash())
 
-			if ptx.Transaction.Nonce() < stateNonce {
+			if ptx.Tx.Nonce() < stateNonce {
 				// Stale, drop it. Eventually we could add to limbo here if hash matches.
-				log.Trace("Gapped blob transaction became stale", "hash", ptx.Transaction.Hash(), "from", from, "nonce", ptx.Transaction.Nonce(), "state", stateNonce, "qlen", len(p.gapped[from]))
+				log.Trace("Gapped blob transaction became stale", "hash", ptx.Tx.Hash(), "from", from, "nonce", ptx.Tx.Nonce(), "state", stateNonce, "qlen", len(p.gapped[from]))
 				continue
 			}
 
-			if ptx.Transaction.Nonce() <= firstgap {
+			if ptx.Tx.Nonce() <= firstgap {
 				// If we hit the pending range, including the first gap, add it and continue to try to add more.
 				// We do not recurse here, but continue to loop instead.
 				// We are under lock, so we can add the transaction directly.
 				if err := p.addLocked(ptx, false); err == nil {
-					log.Trace("Gapped blob transaction added to pool", "hash", ptx.Transaction.Hash(), "from", from, "nonce", ptx.Transaction.Nonce(), "qlen", len(p.gapped[from]))
+					gappedPromotedMeter.Mark(1)
+					log.Trace("Gapped blob transaction added to pool", "hash", ptx.Tx.Hash(), "from", from, "nonce", ptx.Tx.Nonce(), "qlen", len(p.gapped[from]))
 				} else {
-					log.Trace("Gapped blob transaction not accepted", "hash", ptx.Transaction.Hash(), "from", from, "nonce", ptx.Transaction.Nonce(), "err", err)
+					log.Trace("Gapped blob transaction not accepted", "hash", ptx.Tx.Hash(), "from", from, "nonce", ptx.Tx.Nonce(), "err", err)
 				}
 			}
 		}
@@ -2046,6 +2179,7 @@ func (p *BlobPool) addLocked(pooledTx *PooledBlobTx, checkGapped bool) (err erro
 		} else {
 			p.gapped[from] = gtxs
 		}
+		gappedGauge.Update(int64(len(p.gappedSource)))
 	}
 	return nil
 }
@@ -2308,17 +2442,18 @@ func (p *BlobPool) evictGapped() {
 		// and we overwrite the slice for this account after filtering.
 		keep := txs[:0]
 		for i, gtx := range txs {
-			if gtx.Transaction.Time().Before(cutoff) || gtx.Transaction.Nonce() < nonce {
+			if gtx.Tx.Time().Before(cutoff) || gtx.Tx.Nonce() < nonce {
 				// Evict old or stale transactions
 				// Should we add stale to limbo here if it would belong?
-				delete(p.gappedSource, gtx.Transaction.Hash())
+				delete(p.gappedSource, gtx.Tx.Hash())
 				txs[i] = nil // Explicitly nil out evicted element
 			} else {
 				keep = append(keep, gtx)
 			}
 		}
-		if len(keep) < len(txs) {
-			log.Trace("Evicting old gapped blob transactions", "count", len(txs)-len(keep), "from", from)
+		if evicted := len(txs) - len(keep); evicted > 0 {
+			gappedEvictedMeter.Mark(int64(evicted))
+			log.Trace("Evicting old gapped blob transactions", "count", evicted, "from", from)
 		}
 		if len(keep) == 0 {
 			delete(p.gapped, from)
@@ -2326,6 +2461,7 @@ func (p *BlobPool) evictGapped() {
 			p.gapped[from] = keep
 		}
 	}
+	gappedGauge.Update(int64(len(p.gappedSource)))
 }
 
 // isAnnouncable checks whether a transaction is announcable based on its
@@ -2428,7 +2564,7 @@ func (p *BlobPool) Clear() {
 
 	// Reset counters and the gapped buffer
 	p.stored = 0
-	p.gapped = make(map[common.Address][]*PooledBlobTx)
+	p.gapped = make(map[common.Address][]*BlobTxForPool)
 	p.gappedSource = make(map[common.Hash]common.Address)
 
 	var (

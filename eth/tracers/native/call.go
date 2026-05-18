@@ -116,8 +116,8 @@ type callTracer struct {
 	config    callTracerConfig
 	gasLimit  uint64
 	depth     int
-	interrupt atomic.Bool // Atomic flag to signal execution interruption
-	reason    error       // Textual reason for the interruption
+	interrupt atomic.Bool           // Atomic flag to signal execution interruption
+	reason    atomic.Pointer[error] // Reason for the interruption, populated by Stop
 }
 
 type callTracerConfig struct {
@@ -268,12 +268,15 @@ func (t *callTracer) GetResult() (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return res, t.reason
+	if p := t.reason.Load(); p != nil {
+		return res, *p
+	}
+	return res, nil
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
 func (t *callTracer) Stop(err error) {
-	t.reason = err
+	t.reason.Store(&err)
 	t.interrupt.Store(true)
 }
 

@@ -299,7 +299,7 @@ func TestEth2NewBlock(t *testing.T) {
 	ethservice.BlockChain().SubscribeRemovedLogsEvent(rmLogsCh)
 
 	for i := 0; i < 10; i++ {
-		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
+		statedb, _ := ethservice.BlockChain().StateAt(parent.Header())
 		nonce := statedb.GetNonce(testAddr)
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		ethservice.TxPool().Add([]*types.Transaction{tx}, true)
@@ -478,7 +478,7 @@ func TestFullAPI(t *testing.T) {
 	)
 
 	callback := func(parent *types.Header) {
-		statedb, _ := ethservice.BlockChain().StateAt(parent.Root)
+		statedb, _ := ethservice.BlockChain().StateAt(parent)
 		nonce := statedb.GetNonce(testAddr)
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		ethservice.TxPool().Add([]*types.Transaction{tx}, false)
@@ -604,7 +604,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 		logCode = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
 	)
 	for i := 0; i < 10; i++ {
-		statedb, _ := ethservice.BlockChain().StateAt(parent.Root)
+		statedb, _ := ethservice.BlockChain().StateAt(parent)
 		tx := types.MustSignNewTx(testKey, signer, &types.LegacyTx{
 			Nonce:    statedb.GetNonce(testAddr),
 			Value:    new(big.Int),
@@ -1263,7 +1263,7 @@ func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 	// Each block, this callback will include two txs that generate body values like logs and requests.
 	callback := func(parent *types.Header) {
 		var (
-			statedb, _ = ethservice.BlockChain().StateAt(parent.Root)
+			statedb, _ = ethservice.BlockChain().StateAt(parent)
 			// Create tx to trigger log generator.
 			tx1, _ = types.SignTx(types.NewContractCreation(statedb.GetNonce(testAddr), new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 			// Create tx to trigger deposit generator.

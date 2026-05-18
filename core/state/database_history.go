@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -224,6 +223,12 @@ type HistoricDB struct {
 	codedb *CodeDB
 }
 
+// Type returns the trie type of the underlying database.
+func (db *HistoricDB) Type() DatabaseType {
+	// TODO(rjl493456442) support UBT in the future
+	return TypeMPT
+}
+
 // NewHistoricDatabase creates a historic state database.
 func NewHistoricDatabase(triedb *triedb.Database, codedb *CodeDB) *HistoricDB {
 	return &HistoricDB{
@@ -289,14 +294,15 @@ func (db *HistoricDB) TrieDB() *triedb.Database {
 	return db.triedb
 }
 
-// Snapshot returns the underlying state snapshot.
-func (db *HistoricDB) Snapshot() *snapshot.Tree {
-	return nil
-}
-
 // Commit flushes all pending writes and finalizes the state transition,
 // committing the changes to the underlying storage. It returns an error
 // if the commit fails.
-func (db *HistoricDB) Commit(update *stateUpdate) error {
+func (db *HistoricDB) Commit(update *StateUpdate) error {
 	return errors.New("not implemented")
+}
+
+// Iteratee returns a state iteratee associated with the specified state root,
+// through which the account iterator and storage iterator can be created.
+func (db *HistoricDB) Iteratee(root common.Hash) (Iteratee, error) {
+	return nil, errors.New("not implemented")
 }

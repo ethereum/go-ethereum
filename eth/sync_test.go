@@ -50,8 +50,8 @@ func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 	defer emptyPipeEth.Close()
 	defer fullPipeEth.Close()
 
-	emptyPeerEth := eth.NewPeer(ethVer, p2p.NewPeer(enode.ID{1}, "", caps), emptyPipeEth, empty.txpool, empty.blobpool)
-	fullPeerEth := eth.NewPeer(ethVer, p2p.NewPeer(enode.ID{2}, "", caps), fullPipeEth, full.txpool, full.blobpool)
+	emptyPeerEth := eth.NewPeer(ethVer, p2p.NewPeer(enode.ID{1}, "", caps), emptyPipeEth, empty.txpool, empty.blobpool, nil)
+	fullPeerEth := eth.NewPeer(ethVer, p2p.NewPeer(enode.ID{2}, "", caps), fullPipeEth, full.txpool, full.blobpool, nil)
 	defer emptyPeerEth.Close()
 	defer fullPeerEth.Close()
 

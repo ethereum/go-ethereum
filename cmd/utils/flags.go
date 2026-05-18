@@ -218,6 +218,10 @@ var (
 		Usage: "Max number of elements (0 = no limit)",
 		Value: 0,
 	}
+	AccountFlag = &cli.StringFlag{
+		Name:  "account",
+		Usage: "Specifies the account address or hash to traverse a single storage trie",
+	}
 	OutputFileFlag = &cli.StringFlag{
 		Name:  "output",
 		Usage: "Writes the result in json to the output",
@@ -260,9 +264,9 @@ var (
 		Usage:    "Manually specify the bpo2 fork timestamp, overriding the bundled setting",
 		Category: flags.EthCategory,
 	}
-	OverrideVerkle = &cli.Uint64Flag{
-		Name:     "override.verkle",
-		Usage:    "Manually specify the Verkle fork timestamp, overriding the bundled setting",
+	OverrideUBT = &cli.Uint64Flag{
+		Name:     "override.ubt",
+		Usage:    "Manually specify the UBT fork timestamp, overriding the bundled setting",
 		Category: flags.EthCategory,
 	}
 	OverrideGenesisFlag = &cli.StringFlag{
@@ -291,6 +295,12 @@ var (
 		Name:     "state.size-tracking",
 		Usage:    "Enable state size tracking, retrieve state size with debug_stateSize.",
 		Value:    ethconfig.Defaults.EnableStateSizeTracking,
+		Category: flags.StateCategory,
+	}
+	BinTrieGroupDepthFlag = &cli.IntFlag{
+		Name:     "bintrie.groupdepth",
+		Usage:    "Number of levels per serialized group in binary trie (1-8, default 5). Lower values create smaller groups with more nodes.",
+		Value:    5,
 		Category: flags.StateCategory,
 	}
 	StateHistoryFlag = &cli.Uint64Flag{
@@ -1063,19 +1073,19 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 
 	RPCTelemetryEndpointFlag = &cli.StringFlag{
 		Name:     "rpc.telemetry.endpoint",
-		Usage:    "Defines where RPC telemetry is sent (e.g., http://localhost:4318)",
+		Usage:    "Defines where RPC telemetry is sent (e.g., http://localhost:4318 or grpc://localhost:4317)",
 		Category: flags.APICategory,
 	}
 
 	RPCTelemetryUserFlag = &cli.StringFlag{
 		Name:     "rpc.telemetry.username",
-		Usage:    "HTTP Basic Auth username for OpenTelemetry",
+		Usage:    "Basic Auth username for OpenTelemetry",
 		Category: flags.APICategory,
 	}
 
 	RPCTelemetryPasswordFlag = &cli.StringFlag{
 		Name:     "rpc.telemetry.password",
-		Usage:    "HTTP Basic Auth password for OpenTelemetry",
+		Usage:    "Basic Auth password for OpenTelemetry",
 		Category: flags.APICategory,
 	}
 
@@ -1094,7 +1104,7 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 	RPCTelemetrySampleRatioFlag = &cli.Float64Flag{
 		Name:     "rpc.telemetry.sample-ratio",
 		Usage:    "Defines the sampling ratio for RPC telemetry (0.0 to 1.0)",
-		Value:    1.0,
+		Value:    node.DefaultConfig.OpenTelemetry.SampleRatio,
 		Category: flags.APICategory,
 	}
 	// Era flags are a group of flags related to the era archive format.
@@ -1580,7 +1590,9 @@ func setOpenTelemetry(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(RPCTelemetryTagsFlag.Name) {
 		tcfg.Tags = ctx.String(RPCTelemetryTagsFlag.Name)
 	}
-	tcfg.SampleRatio = ctx.Float64(RPCTelemetrySampleRatioFlag.Name)
+	if ctx.IsSet(RPCTelemetrySampleRatioFlag.Name) {
+		tcfg.SampleRatio = ctx.Float64(RPCTelemetrySampleRatioFlag.Name)
+	}
 
 	if tcfg.Endpoint != "" && !tcfg.Enabled {
 		log.Warn(fmt.Sprintf("OpenTelemetry endpoint configured but telemetry is not enabled, use --%s to enable.", RPCTelemetryFlag.Name))
@@ -1811,6 +1823,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(TrienodeHistoryFullValueCheckpointFlag.Name) {
 		cfg.NodeFullValueCheckpoint = uint32(ctx.Uint(TrienodeHistoryFullValueCheckpointFlag.Name))
 	}
+	if ctx.IsSet(BinTrieGroupDepthFlag.Name) {
+		cfg.BinTrieGroupDepth = ctx.Int(BinTrieGroupDepthFlag.Name)
+	}
 	if ctx.IsSet(StateSchemeFlag.Name) {
 		cfg.StateScheme = ctx.String(StateSchemeFlag.Name)
 	}
@@ -1893,7 +1908,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.StatelessSelfValidation = ctx.Bool(VMStatelessSelfValidationFlag.Name)
 	}
 	// Auto-enable StatelessSelfValidation when witness stats are enabled
-	if ctx.Bool(VMWitnessStatsFlag.Name) {
+	if cfg.EnableWitnessStats {
 		cfg.StatelessSelfValidation = true
 	}
 
@@ -2222,13 +2237,13 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 }
 
 // RegisterSyncOverrideService adds the synchronization override service into node.
-func RegisterSyncOverrideService(stack *node.Node, eth *eth.Ethereum, target common.Hash, exitWhenSynced bool) {
-	if target != (common.Hash{}) {
-		log.Info("Registered sync override service", "hash", target, "exitWhenSynced", exitWhenSynced)
+func RegisterSyncOverrideService(stack *node.Node, eth *eth.Ethereum, config syncer.Config) {
+	if config.TargetBlock != (common.Hash{}) {
+		log.Info("Registered sync override service", "hash", config.TargetBlock, "exitWhenSynced", config.ExitWhenSynced)
 	} else {
 		log.Info("Registered sync override service")
 	}
-	syncer.Register(stack, eth, target, exitWhenSynced)
+	syncer.Register(stack, eth, config)
 }
 
 // SetupMetrics configures the metrics system.
@@ -2427,6 +2442,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		StateHistory:            ctx.Uint64(StateHistoryFlag.Name),
 		TrienodeHistory:         ctx.Int64(TrienodeHistoryFlag.Name),
 		NodeFullValueCheckpoint: uint32(ctx.Uint(TrienodeHistoryFullValueCheckpointFlag.Name)),
+		BinTrieGroupDepth:       ctx.Int(BinTrieGroupDepthFlag.Name),
 
 		// Disable transaction indexing/unindexing.
 		TxLookupLimit: -1,
@@ -2510,10 +2526,10 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 }
 
 // MakeTrieDatabase constructs a trie database based on the configured scheme.
-func MakeTrieDatabase(ctx *cli.Context, stack *node.Node, disk ethdb.Database, preimage bool, readOnly bool, isVerkle bool) *triedb.Database {
+func MakeTrieDatabase(ctx *cli.Context, stack *node.Node, disk ethdb.Database, preimage bool, readOnly bool, isUBT bool) *triedb.Database {
 	config := &triedb.Config{
 		Preimages: preimage,
-		IsVerkle:  isVerkle,
+		IsUBT:     isUBT,
 	}
 	scheme, err := rawdb.ParseStateScheme(ctx.String(StateSchemeFlag.Name), disk)
 	if err != nil {

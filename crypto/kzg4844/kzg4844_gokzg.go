@@ -18,7 +18,6 @@ package kzg4844
 
 import (
 	"encoding/json"
-	"errors"
 	"sync"
 
 	gokzg4844 "github.com/crate-crypto/go-eth-kzg"
@@ -153,6 +152,7 @@ func gokzgVerifyCellProofBatch(blobs []Blob, commitments []Commitment, cellProof
 // gokzgVerifyCells verifies that the cell data corresponds to the provided commitment.
 func gokzgVerifyCells(cells []Cell, commitments []Commitment, cellProofs []Proof, cellIndices []uint64) error {
 	gokzgIniter.Do(gokzgInit)
+
 	var (
 		proofs   = make([]gokzg4844.KZGProof, len(cellProofs))
 		commits  = make([]gokzg4844.KZGCommitment, 0, len(cellProofs))
@@ -165,9 +165,6 @@ func gokzgVerifyCells(cells []Cell, commitments []Commitment, cellProofs []Proof
 		gc := gokzg4844.Cell(cells[i])
 		kzgcells = append(kzgcells, &gc)
 	}
-	if len(cellProofs)%len(commitments) != 0 {
-		return errors.New("wrong cell proofs and commitments length")
-	}
 	cellCounts := len(cellProofs) / len(commitments)
 	// Blow up the commitments to be the same length as the proofs
 	for _, commitment := range commitments {
@@ -175,8 +172,7 @@ func gokzgVerifyCells(cells []Cell, commitments []Commitment, cellProofs []Proof
 			commits = append(commits, gokzg4844.KZGCommitment(commitment))
 		}
 	}
-	blobCounts := len(cellProofs) / len(cellIndices)
-	for j := 0; j < blobCounts; j++ {
+	for j := 0; j < len(commitments); j++ {
 		indices = append(indices, cellIndices...)
 	}
 
@@ -206,10 +202,6 @@ func gokzgComputeCells(blobs []Blob) ([]Cell, error) {
 func gokzgRecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 	gokzgIniter.Do(gokzgInit)
 
-	if len(cellIndices) == 0 || len(cells)%len(cellIndices) != 0 {
-		return []Blob{}, errors.New("cells with wrong length")
-	}
-
 	blobCount := len(cells) / len(cellIndices)
 	blobs := make([]Blob, 0, blobCount)
 
@@ -228,7 +220,7 @@ func gokzgRecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 		}
 
 		var blob Blob
-		for i, cell := range extCells[:64] {
+		for i, cell := range extCells[:DataPerBlob] {
 			copy(blob[i*len(cell):], cell[:])
 		}
 		blobs = append(blobs, blob)

@@ -113,7 +113,7 @@ func (hub *Hub) readPairings() error {
 }
 
 func (hub *Hub) writePairings() error {
-	pairingFile, err := os.OpenFile(filepath.Join(hub.datadir, "smartcards.json"), os.O_RDWR|os.O_CREATE, 0755)
+	pairingFile, err := os.OpenFile(filepath.Join(hub.datadir, "smartcards.json"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
 		return err
 	}
@@ -129,11 +129,8 @@ func (hub *Hub) writePairings() error {
 		return err
 	}
 
-	if _, err := pairingFile.Write(pairingData); err != nil {
-		return err
-	}
-
-	return nil
+	_, err = pairingFile.Write(pairingData)
+	return err
 }
 
 func (hub *Hub) pairing(wallet *Wallet) *smartcardPairing {

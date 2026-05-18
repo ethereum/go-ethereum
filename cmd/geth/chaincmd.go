@@ -64,7 +64,7 @@ var (
 			utils.OverrideOsaka,
 			utils.OverrideBPO1,
 			utils.OverrideBPO2,
-			utils.OverrideVerkle,
+			utils.OverrideUBT,
 		}, utils.DatabaseFlags),
 		Description: `
 The init command initializes a new genesis block and definition for the network.
@@ -297,15 +297,15 @@ func initGenesis(ctx *cli.Context) error {
 		v := ctx.Uint64(utils.OverrideBPO2.Name)
 		overrides.OverrideBPO2 = &v
 	}
-	if ctx.IsSet(utils.OverrideVerkle.Name) {
-		v := ctx.Uint64(utils.OverrideVerkle.Name)
-		overrides.OverrideVerkle = &v
+	if ctx.IsSet(utils.OverrideUBT.Name) {
+		v := ctx.Uint64(utils.OverrideUBT.Name)
+		overrides.OverrideUBT = &v
 	}
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, false)
 	defer chaindb.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
+	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsUBT())
 	defer triedb.Close()
 
 	_, hash, compatErr, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides, nil)
@@ -325,7 +325,7 @@ func dumpGenesis(ctx *cli.Context) error {
 	var genesis *core.Genesis
 	if utils.IsNetworkPreset(ctx) {
 		genesis = utils.MakeGenesis(ctx)
-	} else if ctx.IsSet(utils.DeveloperFlag.Name) && !ctx.IsSet(utils.DataDirFlag.Name) {
+	} else if ctx.Bool(utils.DeveloperFlag.Name) && !ctx.IsSet(utils.DataDirFlag.Name) {
 		genesis = core.DeveloperGenesisBlock(11_500_000, nil)
 	}
 
@@ -731,13 +731,16 @@ func pruneHistory(ctx *cli.Context) error {
 
 	// Determine the prune point based on the history mode.
 	genesisHash := chain.Genesis().Hash()
-	prunePoint := history.GetPrunePoint(genesisHash, mode)
-	if prunePoint == nil {
+	policy, err := history.NewPolicy(mode, genesisHash)
+	if err != nil {
+		return err
+	}
+	if policy.Target == nil {
 		return fmt.Errorf("prune point for %q not found for this network", mode.String())
 	}
 	var (
-		targetBlock     = prunePoint.BlockNumber
-		targetBlockHash = prunePoint.BlockHash
+		targetBlock     = policy.Target.BlockNumber
+		targetBlockHash = policy.Target.BlockHash
 	)
 
 	// Check the current freezer tail to see if pruning is needed/possible.

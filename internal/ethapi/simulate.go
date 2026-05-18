@@ -44,6 +44,14 @@ const (
 	// in a single request.
 	maxSimulateBlocks = 256
 
+	// maxSimulateCallsPerBlock is the maximum number of calls allowed in a
+	// single simulated block.
+	maxSimulateCallsPerBlock = 5000
+
+	// maxSimulateTotalCalls is the maximum total number of calls allowed
+	// across all simulated blocks in a single request.
+	maxSimulateTotalCalls = 10000
+
 	// timestampIncrement is the default increment between block timestamps.
 	timestampIncrement = 12
 )
@@ -304,17 +312,15 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		tracingStateDB = state.NewHookedState(sim.state, hooks)
 	}
 	evm := vm.NewEVM(blockContext, tracingStateDB, sim.chainConfig, *vmConfig)
+	defer evm.Release()
 	// It is possible to override precompiles with EVM bytecode, or
 	// move them to another address.
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
-	if sim.chainConfig.IsPrague(header.Number, header.Time) || sim.chainConfig.IsVerkle(header.Number, header.Time) {
-		core.ProcessParentBlockHash(header.ParentHash, evm)
-	}
-	if header.ParentBeaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, evm)
-	}
+	// Run pre-execution system calls
+	core.PreExecution(ctx, header.ParentBeaconRoot, header.ParentHash, sim.chainConfig, evm, header.Number, header.Time)
+
 	var allLogs []*types.Log
 	for i, call := range block.Calls {
 		// Terminate if the context is cancelled
@@ -334,7 +340,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		tracer.reset(txHash, uint(i))
 
 		// EoA check is always skipped, even in validation mode.
-		sim.state.SetTxContext(txHash, i)
+		sim.state.SetTxContext(txHash, i, uint32(i+1))
 		msg := call.ToMessage(header.BaseFee, !sim.validate)
 		result, err := applyMessageWithEVM(ctx, evm, msg, timeout, gp)
 		if err != nil {
@@ -385,21 +391,9 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	}
 
 	// Process EIP-7685 requests
-	var requests [][]byte
-	if sim.chainConfig.IsPrague(header.Number, header.Time) {
-		requests = [][]byte{}
-		// EIP-6110
-		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig); err != nil {
-			return nil, nil, nil, err
-		}
-		// EIP-7002
-		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
-			return nil, nil, nil, err
-		}
-		// EIP-7251
-		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
-			return nil, nil, nil, err
-		}
+	requests, err := core.PostExecution(ctx, sim.chainConfig, header.Number, header.Time, allLogs, evm, uint32(len(block.Calls)+1))
+	if err != nil {
+		return nil, nil, nil, err
 	}
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
@@ -408,13 +402,18 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 
 	blockBody := &types.Body{
 		Transactions: txes,
-		Withdrawals:  *block.BlockOverrides.Withdrawals,
+	}
+	// Withdrawals are a post-Shanghai field. Attaching a non-nil withdrawals
+	// slice would cause types.NewBlock to populate WithdrawalsHash on the
+	// header and emit withdrawals fields for pre-Shanghai blocks.
+	if sim.chainConfig.IsShanghai(header.Number, header.Time) {
+		blockBody.Withdrawals = *block.BlockOverrides.Withdrawals
 	}
 	chainHeadReader := &simChainHeadReader{ctx, sim.b}
-	b, err := sim.b.Engine().FinalizeAndAssemble(ctx, chainHeadReader, header, sim.state, blockBody, receipts)
-	if err != nil {
-		return nil, nil, nil, err
-	}
+
+	// Assemble the block
+	b := core.AssembleBlock(sim.b.Engine(), chainHeadReader, header, sim.state, blockBody, receipts)
+
 	repairLogs(callResults, b.Hash())
 	return b, callResults, senders, nil
 }

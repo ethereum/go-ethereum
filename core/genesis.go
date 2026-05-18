@@ -129,22 +129,23 @@ func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 }
 
 // hashAlloc computes the state root according to the genesis specification.
-func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
+func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
 	// If a genesis-time verkle trie is requested, create a trie config
 	// with the verkle trie enabled so that the tree can be initialized
 	// as such.
 	var config *triedb.Config
-	if isVerkle {
+	if isUBT {
 		config = &triedb.Config{
-			PathDB:   pathdb.Defaults,
-			IsVerkle: true,
+			PathDB:            pathdb.Defaults,
+			IsUBT:             true,
+			BinTrieGroupDepth: triedb.UBTDefaults.BinTrieGroupDepth,
 		}
 	}
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
 	emptyRoot := types.EmptyRootHash
-	if isVerkle {
-		emptyRoot = types.EmptyVerkleHash
+	if isUBT {
+		emptyRoot = types.EmptyBinaryHash
 	}
 	db := rawdb.NewMemoryDatabase()
 	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb.NewDatabase(db, config), nil))
@@ -168,8 +169,8 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 // generated states will be persisted into the given database.
 func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database, tracer *tracing.Hooks) (common.Hash, error) {
 	emptyRoot := types.EmptyRootHash
-	if triedb.IsVerkle() {
-		emptyRoot = types.EmptyVerkleHash
+	if triedb.IsUBT() {
+		emptyRoot = types.EmptyBinaryHash
 	}
 	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb, nil))
 	if err != nil {
@@ -276,10 +277,10 @@ func (e *GenesisMismatchError) Error() string {
 
 // ChainOverrides contains the changes to chain config.
 type ChainOverrides struct {
-	OverrideOsaka  *uint64
-	OverrideBPO1   *uint64
-	OverrideBPO2   *uint64
-	OverrideVerkle *uint64
+	OverrideOsaka *uint64
+	OverrideBPO1  *uint64
+	OverrideBPO2  *uint64
+	OverrideUBT   *uint64
 }
 
 // apply applies the chain overrides on the supplied chain config.
@@ -296,8 +297,8 @@ func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 	if o.OverrideBPO2 != nil {
 		cfg.BPO2Time = o.OverrideBPO2
 	}
-	if o.OverrideVerkle != nil {
-		cfg.VerkleTime = o.OverrideVerkle
+	if o.OverrideUBT != nil {
+		cfg.UBTTime = o.OverrideUBT
 	}
 	return cfg.CheckConfigForkOrder()
 }
@@ -469,15 +470,15 @@ func (g *Genesis) chainConfigOrDefault(ghash common.Hash, stored *params.ChainCo
 	}
 }
 
-// IsVerkle indicates whether the state is already stored in a verkle
+// IsUBT indicates whether the state is already stored in a verkle
 // tree at genesis time.
-func (g *Genesis) IsVerkle() bool {
-	return g.Config.IsVerkleGenesis()
+func (g *Genesis) IsUBT() bool {
+	return g.Config.IsUBTGenesis()
 }
 
 // ToBlock returns the genesis block according to genesis specification.
 func (g *Genesis) ToBlock() *types.Block {
-	root, err := hashAlloc(&g.Alloc, g.IsVerkle())
+	root, err := hashAlloc(&g.Alloc, g.IsUBT())
 	if err != nil {
 		panic(err)
 	}
@@ -609,24 +610,24 @@ func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.
 	return block
 }
 
-// EnableVerkleAtGenesis indicates whether the verkle fork should be activated
+// EnableUBTAtGenesis indicates whether the verkle fork should be activated
 // at genesis. This is a temporary solution only for verkle devnet testing, where
 // verkle fork is activated at genesis, and the configured activation date has
 // already passed.
 //
 // In production networks (mainnet and public testnets), verkle activation always
 // occurs after the genesis block, making this function irrelevant in those cases.
-func EnableVerkleAtGenesis(db ethdb.Database, genesis *Genesis) (bool, error) {
+func EnableUBTAtGenesis(db ethdb.Database, genesis *Genesis) (bool, error) {
 	if genesis != nil {
 		if genesis.Config == nil {
 			return false, errGenesisNoConfig
 		}
-		return genesis.Config.EnableVerkleAtGenesis, nil
+		return genesis.Config.EnableUBTAtGenesis, nil
 	}
 	if ghash := rawdb.ReadCanonicalHash(db, 0); ghash != (common.Hash{}) {
 		chainCfg := rawdb.ReadChainConfig(db, ghash)
 		if chainCfg != nil {
-			return chainCfg.EnableVerkleAtGenesis, nil
+			return chainCfg.EnableUBTAtGenesis, nil
 		}
 	}
 	return false, nil
