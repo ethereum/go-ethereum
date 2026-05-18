@@ -469,6 +469,12 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket) (
 			if accKey == nil {
 				return nodes, fmt.Errorf("%w: invalid account node request", errBadRequest)
 			}
+			if len(accKey) > maxCompactTriePathLen {
+				// Structurally invalid path; avoid expensive trie traversal. The missing
+				// node is represented by a nil blob, which hashes to the empty trie node.
+				nodes = append(nodes, nil)
+				break
+			}
 			blob, resolved, err := accTrie.GetNode(accKey)
 			loads += resolved // always account database reads, even for failures
 			if err != nil {
@@ -512,6 +518,10 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket) (
 				path, _, err := rlp.SplitString(innerIt.Value())
 				if err != nil {
 					return nil, fmt.Errorf("%w: invalid storage key: %v", errBadRequest, err)
+				}
+				if len(path) > maxCompactTriePathLen {
+					nodes = append(nodes, nil)
+					continue
 				}
 				blob, resolved, err := stTrie.GetNode(path)
 				loads += resolved // always account database reads, even for failures

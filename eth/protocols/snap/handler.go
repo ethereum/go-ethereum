@@ -44,6 +44,10 @@ const (
 	// number is there to limit the number of disk lookups.
 	maxTrieNodeLookups = 1024
 
+	// maxCompactTriePathLen is the maximum length of a compact-encoded trie node path.
+	// Trie keys are at most 32 bytes (64 nibbles); compact encoding adds at most one flag byte.
+	maxCompactTriePathLen = 33
+
 	// maxAccessListLookups is the maximum number of BALs to server. This number
 	// is there to limit the number of disk lookups.
 	maxAccessListLookups = 1024
