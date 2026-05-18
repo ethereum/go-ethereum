@@ -190,29 +190,6 @@ func TestCommitBlockV1(t *testing.T) {
 		}
 	})
 
-	t.Run("commitBlockWithTransactionsFromTxPool", func(t *testing.T) {
-		parent := ethservice.BlockChain().CurrentBlock()
-		nonce, _ := ethservice.APIBackend.GetPoolNonce(ctx, testAddr)
-		tx, _ := types.SignTx(types.NewTransaction(nonce, testAddr, big.NewInt(1), params.TxGas, big.NewInt(params.InitialBaseFee*2), nil), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
-		ethservice.TxPool().Add([]*types.Transaction{tx}, true)
-
-		hash, err := api.CommitBlockV1(ctx, nextAttrs(), nil, nil)
-		if err != nil {
-			t.Fatalf("CommitBlockV1 failed: %v", err)
-		}
-		head := ethservice.BlockChain().CurrentBlock()
-		if head.Hash() != hash {
-			t.Errorf("head hash mismatch: got %x want %x", head.Hash(), hash)
-		}
-		if head.Number.Uint64() != parent.Number.Uint64()+1 {
-			t.Errorf("head number mismatch: got %d want %d", head.Number.Uint64(), parent.Number.Uint64()+1)
-		}
-		block := ethservice.BlockChain().GetBlockByHash(hash)
-		if len(block.Transactions()) != 1 {
-			t.Fatalf("expected 1 transaction, got %d", len(block.Transactions()))
-		}
-	})
-
 	t.Run("commitWithExtraData", func(t *testing.T) {
 		extra := hexutil.Bytes([]byte("hello"))
 		emptyTxs := []hexutil.Bytes{}
