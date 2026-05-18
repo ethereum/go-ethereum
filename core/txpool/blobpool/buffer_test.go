@@ -43,6 +43,7 @@ func makePeerDelivery(t *testing.T, blobOffset, blobCount int, indices []uint64)
 func newTestBuffer(t *testing.T) *BlobBuffer {
 	t.Helper()
 	return NewBlobBuffer(
+		func(tx *types.Transaction) error { return nil },
 		func(ptx *BlobTxForPool) error { return nil },
 		func(peer string) {},
 	)
@@ -180,6 +181,7 @@ func TestBadCell(t *testing.T) {
 
 	var dropped []string
 	buf := NewBlobBuffer(
+		func(tx *types.Transaction) error { return nil },
 		func(ptx *BlobTxForPool) error { return nil },
 		func(peer string) { dropped = append(dropped, peer) },
 	)
@@ -220,6 +222,7 @@ func TestBadTx(t *testing.T) {
 
 	var dropped []string
 	buf := NewBlobBuffer(
+		func(tx *types.Transaction) error { return nil },
 		func(ptx *BlobTxForPool) error { return nil },
 		func(peer string) { dropped = append(dropped, peer) },
 	)

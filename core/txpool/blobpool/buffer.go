@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
+// todo: per-peer size limit
 var (
 	blobBufferTxFirstCounter    = metrics.NewRegisteredCounter("blobpool/buffer/txfirst", nil)
 	blobBufferCellsFirstCounter = metrics.NewRegisteredCounter("blobpool/buffer/cellsfirst", nil)
@@ -47,7 +48,9 @@ type PeerDelivery struct {
 }
 
 type txEntry struct {
-	tx    *types.Transaction
+	tx *types.Transaction
+	// Technically it is not required to store peer information to drop properly.
+	// This is mainly for per peer size limit check.
 	peer  string
 	added time.Time
 }
@@ -62,16 +65,18 @@ type BlobBuffer struct {
 	txs   map[common.Hash]*txEntry
 	cells map[common.Hash]*cellEntry
 
-	addToPool func(*BlobTxForPool) error
-	dropPeer  func(string)
+	addToPool  func(*BlobTxForPool) error
+	validateTx func(*types.Transaction) error
+	dropPeer   func(string)
 }
 
-func NewBlobBuffer(addToPool func(*BlobTxForPool) error, dropPeer func(string)) *BlobBuffer {
+func NewBlobBuffer(validateTx func(*types.Transaction) error, addToPool func(*BlobTxForPool) error, dropPeer func(string)) *BlobBuffer {
 	return &BlobBuffer{
-		txs:       make(map[common.Hash]*txEntry),
-		cells:     make(map[common.Hash]*cellEntry),
-		addToPool: addToPool,
-		dropPeer:  dropPeer,
+		txs:        make(map[common.Hash]*txEntry),
+		cells:      make(map[common.Hash]*cellEntry),
+		validateTx: validateTx,
+		addToPool:  addToPool,
+		dropPeer:   dropPeer,
 	}
 }
 
@@ -88,6 +93,12 @@ func (b *BlobBuffer) AddTx(tx *types.Transaction, peer string) error {
 	if sidecar == nil {
 		return fmt.Errorf("blob transaction without sidecar")
 	}
+	// tx validation
+	if err := b.validateTx(tx); err != nil {
+		log.Warn("Transaction validation failed, dropping peer", "peer", peer, "err", err)
+		b.dropPeer(peer)
+		return err
+	}
 	// vhash check
 	if err := sidecar.ValidateBlobCommitmentHashes(tx.BlobHashes()); err != nil {
 		log.Warn("Commitment hash mismatch, dropping peer", "peer", peer, "err", err)
@@ -99,13 +110,6 @@ func (b *BlobBuffer) AddTx(tx *types.Transaction, peer string) error {
 		b.dropPeer(peer)
 		return fmt.Errorf("insufficient proofs in sidecar")
 	}
-	// todo: I also considered performing additional validation for the metrics of the
-	// tx_fetcher. This could be used to avoid sending GetCells requests when the
-	// nonce is too low or the transaction is underpriced. However, doing so would
-	// require taking buffered transactions into account as well, and would require
-	// allowing the buffer to be part of the fetcher’s scheduling logic.
-	// Therefore, I will leave this as a TODO for now.
-
 	if entry, ok := b.cells[hash]; ok {
 		return b.add(hash, tx, entry)
 	}

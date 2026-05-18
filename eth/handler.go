@@ -107,6 +107,7 @@ type blobPool interface {
 	GetBlobCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*kzg4844.Cell, [][]*kzg4844.Proof, error)
 	GetCustody(hash common.Hash) *types.CustodyBitmap
 	AddPooledTx(pooledTx *blobpool.BlobTxForPool) error
+	ValidateTxBasics(pooledTx *types.Transaction) error
 }
 
 // handlerConfig is the collection of initialization parameters to create a full
@@ -189,7 +190,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 
 	// Construct the blob buffer for assembling blob txs from separate tx and cell deliveries.
-	h.blobBuffer = blobpool.NewBlobBuffer(h.blobpool.AddPooledTx, h.removePeer)
+	h.blobBuffer = blobpool.NewBlobBuffer(h.blobpool.ValidateTxBasics, h.blobpool.AddPooledTx, h.removePeer)
 
 	addTxs := func(peer string, txs []*types.Transaction) []error {
 		errs := make([]error, len(txs))

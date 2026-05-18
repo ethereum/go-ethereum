@@ -1485,7 +1485,7 @@ func (p *BlobPool) ValidateTxBasics(tx *types.Transaction) error {
 		Accept:       1 << types.BlobTxType,
 		MaxSize:      txMaxSize,
 		MinTip:       p.gasTip.Load().ToBig(),
-		MaxBlobCount: maxBlobsPerTx,
+		MaxBlobCount: maxBlobsPerTx, //todo this field is currently not being used
 	}
 	return txpool.ValidateTransaction(tx, p.head.Load(), p.signer, opts)
 }

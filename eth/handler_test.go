@@ -271,6 +271,10 @@ func (p *testTxPool) FilterType(kind byte) bool {
 	return false
 }
 
+func (p *testTxPool) ValidateTxBasics(_ *types.Transaction) error {
+	return nil
+}
+
 // testHandler is a live implementation of the Ethereum protocol handler, just
 // preinitialized with some sane testing defaults and the transaction pool mocked
 // out.
