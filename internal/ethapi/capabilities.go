@@ -76,41 +76,36 @@ type Capabilities struct {
 
 // CapabilityHead is the current canonical head as reported by the node.
 type CapabilityHead struct {
-	BlockNumber hexutil.Uint64 `json:"blockNumber"`
-	BlockHash   common.Hash    `json:"blockHash"`
+	Number hexutil.Uint64 `json:"number"`
+	Hash   common.Hash    `json:"hash"`
 }
 
 // CapabilityResource describes the availability of a single data resource.
 type CapabilityResource struct {
-	Disabled       bool           `json:"disabled"`
-	OldestBlock    hexutil.Uint64 `json:"oldestBlock"`
-	DeleteStrategy DeleteStrategy `json:"deleteStrategy"`
+	Disabled       bool            `json:"disabled"`
+	OldestBlock    *hexutil.Uint64 `json:"oldestBlock,omitempty"`
+	DeleteStrategy *DeleteStrategy `json:"deleteStrategy,omitempty"`
 }
 
 // DeleteStrategy describes how data of a resource is removed over time.
 //
-// Two strategies are defined by the spec:
-//
-//   - "none":   data is never deleted; the resource is permanently
-//     retained from oldestBlock onwards.
-//   - "window": data is retained for a sliding window of the most recent
-//     RetentionBlocks blocks.
-//
-// RetentionBlocks is omitted from the JSON output for the "none" strategy.
+// The spec currently defines one strategy: "window", meaning data is retained
+// for a sliding window of the most recent RetentionBlocks blocks. Resources
+// without sliding deletion omit deleteStrategy.
 type DeleteStrategy struct {
 	Type            string  `json:"type"`
 	RetentionBlocks *uint64 `json:"retentionBlocks,omitempty"`
 }
 
-// strategyNone returns a DeleteStrategy with type "none".
-func strategyNone() DeleteStrategy {
-	return DeleteStrategy{Type: "none"}
-}
-
 // strategyWindow returns a DeleteStrategy with type "window" and the given
 // retention block count.
-func strategyWindow(retention uint64) DeleteStrategy {
-	return DeleteStrategy{Type: "window", RetentionBlocks: &retention}
+func strategyWindow(retention uint64) *DeleteStrategy {
+	return &DeleteStrategy{Type: "window", RetentionBlocks: &retention}
+}
+
+func capabilityOldestBlock(number uint64) *hexutil.Uint64 {
+	oldest := hexutil.Uint64(number)
+	return &oldest
 }
 
 // Capabilities implements the eth_capabilities RPC method as defined in
@@ -149,28 +144,28 @@ func buildCapabilities(headNum uint64, headHash common.Hash, cutoff uint64, ret 
 	}
 
 	// resource builds a CapabilityResource for a window-style resource.
-	// A window of zero is reported as deleteStrategy "none".
+	// Disabled resources intentionally omit oldestBlock and deleteStrategy,
+	// because those fields would otherwise look like usable history ranges.
 	resource := func(disabled bool, window uint64, floor uint64) CapabilityResource {
-		ds := strategyNone()
+		if disabled {
+			return CapabilityResource{Disabled: true}
+		}
+		res := CapabilityResource{
+			OldestBlock: capabilityOldestBlock(windowOldest(window, floor)),
+		}
 		if window != 0 {
-			ds = strategyWindow(window)
+			res.DeleteStrategy = strategyWindow(window)
 		}
-		return CapabilityResource{
-			Disabled:       disabled,
-			OldestBlock:    hexutil.Uint64(windowOldest(window, floor)),
-			DeleteStrategy: ds,
-		}
+		return res
 	}
 
 	// Bodies and receipts share the same retention model in
 	// geth: they are either kept in full ("all") or pruned to a fixed
-	// boundary ("postmerge"). In neither case is there a sliding
-	// deletion window, so the strategy is always "none" and the oldest
-	// block equals the history pruning cutoff.
+	// boundary ("postmerge"). In neither case is there a sliding deletion
+	// window, so deleteStrategy is omitted and oldestBlock equals the history
+	// pruning cutoff.
 	blocks := CapabilityResource{
-		Disabled:       false,
-		OldestBlock:    hexutil.Uint64(cutoff),
-		DeleteStrategy: strategyNone(),
+		OldestBlock: capabilityOldestBlock(cutoff),
 	}
 	receipts := blocks
 
@@ -210,8 +205,8 @@ func buildCapabilities(headNum uint64, headHash common.Hash, cutoff uint64, ret 
 
 	return &Capabilities{
 		Head: CapabilityHead{
-			BlockNumber: hexutil.Uint64(headNum),
-			BlockHash:   headHash,
+			Number: hexutil.Uint64(headNum),
+			Hash:   headHash,
 		},
 		State:       state,
 		Tx:          tx,

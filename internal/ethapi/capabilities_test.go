@@ -33,10 +33,6 @@ func TestBuildCapabilities(t *testing.T) {
 	)
 	headHash := common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
 
-	// retentionWindow is a small helper for asserting on
-	// CapabilityResource fields.
-	retentionWindow := func(n uint64) *uint64 { return &n }
-
 	tests := []struct {
 		name     string
 		headNum  uint64
@@ -53,12 +49,12 @@ func TestBuildCapabilities(t *testing.T) {
 				StateScheme:  rawdb.PathScheme,
 			},
 			expected: map[string]CapabilityResource{
-				"blocks":      {OldestBlock: 0, DeleteStrategy: DeleteStrategy{Type: "none"}},
-				"receipts":    {OldestBlock: 0, DeleteStrategy: DeleteStrategy{Type: "none"}},
-				"tx":          {OldestBlock: 0, DeleteStrategy: DeleteStrategy{Type: "none"}},
-				"logs":        {OldestBlock: 0, DeleteStrategy: DeleteStrategy{Type: "none"}},
-				"state":       {OldestBlock: 0, DeleteStrategy: DeleteStrategy{Type: "none"}},
-				"stateproofs": {OldestBlock: 0, DeleteStrategy: DeleteStrategy{Type: "none"}},
+				"blocks":      {OldestBlock: hexUintPtr(0)},
+				"receipts":    {OldestBlock: hexUintPtr(0)},
+				"tx":          {OldestBlock: hexUintPtr(0)},
+				"logs":        {OldestBlock: hexUintPtr(0)},
+				"state":       {OldestBlock: hexUintPtr(0)},
+				"stateproofs": {OldestBlock: hexUintPtr(0)},
 			},
 		},
 		{
@@ -71,8 +67,8 @@ func TestBuildCapabilities(t *testing.T) {
 			expected: map[string]CapabilityResource{
 				// blocks/receipts honor the absolute cutoff with no
 				// sliding window.
-				"blocks":   {OldestBlock: hexUint(postmerge), DeleteStrategy: DeleteStrategy{Type: "none"}},
-				"receipts": {OldestBlock: hexUint(postmerge), DeleteStrategy: DeleteStrategy{Type: "none"}},
+				"blocks":   {OldestBlock: hexUintPtr(postmerge)},
+				"receipts": {OldestBlock: hexUintPtr(postmerge)},
 			},
 		},
 		{
@@ -86,12 +82,12 @@ func TestBuildCapabilities(t *testing.T) {
 			},
 			expected: map[string]CapabilityResource{
 				"tx": {
-					OldestBlock:    hexUint(5_000_000 - 2_350_000 + 1),
-					DeleteStrategy: DeleteStrategy{Type: "window", RetentionBlocks: retentionWindow(2_350_000)},
+					OldestBlock:    hexUintPtr(5_000_000 - 2_350_000 + 1),
+					DeleteStrategy: windowStrategy(2_350_000),
 				},
 				"logs": {
-					OldestBlock:    hexUint(5_000_000 - 2_350_000 + 1),
-					DeleteStrategy: DeleteStrategy{Type: "window", RetentionBlocks: retentionWindow(2_350_000)},
+					OldestBlock:    hexUintPtr(5_000_000 - 2_350_000 + 1),
+					DeleteStrategy: windowStrategy(2_350_000),
 				},
 			},
 		},
@@ -105,8 +101,8 @@ func TestBuildCapabilities(t *testing.T) {
 			},
 			expected: map[string]CapabilityResource{
 				"tx": {
-					OldestBlock:    0,
-					DeleteStrategy: DeleteStrategy{Type: "window", RetentionBlocks: retentionWindow(2_350_000)},
+					OldestBlock:    hexUintPtr(0),
+					DeleteStrategy: windowStrategy(2_350_000),
 				},
 			},
 		},
@@ -120,8 +116,8 @@ func TestBuildCapabilities(t *testing.T) {
 			},
 			expected: map[string]CapabilityResource{
 				"tx": {
-					OldestBlock:    hexUint(4_000_000),
-					DeleteStrategy: DeleteStrategy{Type: "window", RetentionBlocks: retentionWindow(2_350_000)},
+					OldestBlock:    hexUintPtr(4_000_000),
+					DeleteStrategy: windowStrategy(2_350_000),
 				},
 			},
 		},
@@ -137,12 +133,12 @@ func TestBuildCapabilities(t *testing.T) {
 			},
 			expected: map[string]CapabilityResource{
 				"state": {
-					OldestBlock:    hexUint(5_000_000 - 90_000 + 1),
-					DeleteStrategy: DeleteStrategy{Type: "window", RetentionBlocks: retentionWindow(90_000)},
+					OldestBlock:    hexUintPtr(5_000_000 - 90_000 + 1),
+					DeleteStrategy: windowStrategy(90_000),
 				},
 				"stateproofs": {
-					OldestBlock:    hexUint(5_000_000 - 100_000 + 1),
-					DeleteStrategy: DeleteStrategy{Type: "window", RetentionBlocks: retentionWindow(100_000)},
+					OldestBlock:    hexUintPtr(5_000_000 - 100_000 + 1),
+					DeleteStrategy: windowStrategy(100_000),
 				},
 			},
 		},
@@ -157,9 +153,7 @@ func TestBuildCapabilities(t *testing.T) {
 			},
 			expected: map[string]CapabilityResource{
 				"logs": {
-					Disabled:       true,
-					OldestBlock:    hexUint(5_000_000 - 2_350_000 + 1),
-					DeleteStrategy: DeleteStrategy{Type: "window", RetentionBlocks: retentionWindow(2_350_000)},
+					Disabled: true,
 				},
 			},
 		},
@@ -175,12 +169,12 @@ func TestBuildCapabilities(t *testing.T) {
 			},
 			expected: map[string]CapabilityResource{
 				"state": {
-					OldestBlock:    hexUint(5_000_000 - 90_000 + 1),
-					DeleteStrategy: DeleteStrategy{Type: "window", RetentionBlocks: retentionWindow(90_000)},
+					OldestBlock:    hexUintPtr(5_000_000 - 90_000 + 1),
+					DeleteStrategy: windowStrategy(90_000),
 				},
 				"stateproofs": {
-					OldestBlock:    hexUint(5_000_000 - 50_000 + 1),
-					DeleteStrategy: DeleteStrategy{Type: "window", RetentionBlocks: retentionWindow(50_000)},
+					OldestBlock:    hexUintPtr(5_000_000 - 50_000 + 1),
+					DeleteStrategy: windowStrategy(50_000),
 				},
 			},
 		},
@@ -196,12 +190,12 @@ func TestBuildCapabilities(t *testing.T) {
 			},
 			expected: map[string]CapabilityResource{
 				"state": {
-					OldestBlock:    hexUint(5_000_000 - 90_000 + 1),
-					DeleteStrategy: DeleteStrategy{Type: "window", RetentionBlocks: retentionWindow(90_000)},
+					OldestBlock:    hexUintPtr(5_000_000 - 90_000 + 1),
+					DeleteStrategy: windowStrategy(90_000),
 				},
 				"stateproofs": {
-					OldestBlock:    hexUint(5_000_000 - corestate.TriesInMemory + 1),
-					DeleteStrategy: DeleteStrategy{Type: "window", RetentionBlocks: retentionWindow(corestate.TriesInMemory)},
+					OldestBlock:    hexUintPtr(5_000_000 - corestate.TriesInMemory + 1),
+					DeleteStrategy: windowStrategy(corestate.TriesInMemory),
 				},
 			},
 		},
@@ -215,8 +209,8 @@ func TestBuildCapabilities(t *testing.T) {
 				StateHistory: 90_000,
 			},
 			expected: map[string]CapabilityResource{
-				"state":       {OldestBlock: 0, DeleteStrategy: DeleteStrategy{Type: "none"}},
-				"stateproofs": {OldestBlock: 0, DeleteStrategy: DeleteStrategy{Type: "none"}},
+				"state":       {OldestBlock: hexUintPtr(0)},
+				"stateproofs": {OldestBlock: hexUintPtr(0)},
 			},
 		},
 		{
@@ -229,12 +223,12 @@ func TestBuildCapabilities(t *testing.T) {
 			},
 			expected: map[string]CapabilityResource{
 				"state": {
-					OldestBlock:    hexUint(5_000_000 - corestate.TriesInMemory + 1),
-					DeleteStrategy: DeleteStrategy{Type: "window", RetentionBlocks: retentionWindow(corestate.TriesInMemory)},
+					OldestBlock:    hexUintPtr(5_000_000 - corestate.TriesInMemory + 1),
+					DeleteStrategy: windowStrategy(corestate.TriesInMemory),
 				},
 				"stateproofs": {
-					OldestBlock:    hexUint(5_000_000 - corestate.TriesInMemory + 1),
-					DeleteStrategy: DeleteStrategy{Type: "window", RetentionBlocks: retentionWindow(corestate.TriesInMemory)},
+					OldestBlock:    hexUintPtr(5_000_000 - corestate.TriesInMemory + 1),
+					DeleteStrategy: windowStrategy(corestate.TriesInMemory),
 				},
 			},
 		},
@@ -248,12 +242,12 @@ func TestBuildCapabilities(t *testing.T) {
 			},
 			expected: map[string]CapabilityResource{
 				"state": {
-					OldestBlock:    hexUint(5_000_000 - corestate.TriesInMemory + 1),
-					DeleteStrategy: DeleteStrategy{Type: "window", RetentionBlocks: retentionWindow(corestate.TriesInMemory)},
+					OldestBlock:    hexUintPtr(5_000_000 - corestate.TriesInMemory + 1),
+					DeleteStrategy: windowStrategy(corestate.TriesInMemory),
 				},
 				"stateproofs": {
-					OldestBlock:    hexUint(5_000_000 - corestate.TriesInMemory + 1),
-					DeleteStrategy: DeleteStrategy{Type: "window", RetentionBlocks: retentionWindow(corestate.TriesInMemory)},
+					OldestBlock:    hexUintPtr(5_000_000 - corestate.TriesInMemory + 1),
+					DeleteStrategy: windowStrategy(corestate.TriesInMemory),
 				},
 			},
 		},
@@ -264,11 +258,11 @@ func TestBuildCapabilities(t *testing.T) {
 			caps := buildCapabilities(tt.headNum, headHash, tt.cutoff, tt.ret)
 
 			// Head is always present.
-			if uint64(caps.Head.BlockNumber) != tt.headNum {
-				t.Errorf("head.blockNumber = %d, want %d", uint64(caps.Head.BlockNumber), tt.headNum)
+			if uint64(caps.Head.Number) != tt.headNum {
+				t.Errorf("head.number = %d, want %d", uint64(caps.Head.Number), tt.headNum)
 			}
-			if caps.Head.BlockHash != headHash {
-				t.Errorf("head.blockHash = %x, want %x", caps.Head.BlockHash, headHash)
+			if caps.Head.Hash != headHash {
+				t.Errorf("head.hash = %x, want %x", caps.Head.Hash, headHash)
 			}
 
 			actual := map[string]CapabilityResource{
@@ -284,23 +278,38 @@ func TestBuildCapabilities(t *testing.T) {
 				if got.Disabled != want.Disabled {
 					t.Errorf("%s.disabled = %v, want %v", name, got.Disabled, want.Disabled)
 				}
-				if got.OldestBlock != want.OldestBlock {
-					t.Errorf("%s.oldestBlock = %d, want %d", name, uint64(got.OldestBlock), uint64(want.OldestBlock))
-				}
-				if got.DeleteStrategy.Type != want.DeleteStrategy.Type {
-					t.Errorf("%s.deleteStrategy.type = %q, want %q", name, got.DeleteStrategy.Type, want.DeleteStrategy.Type)
+				switch {
+				case want.OldestBlock == nil && got.OldestBlock != nil:
+					t.Errorf("%s.oldestBlock = %d, want absent", name, uint64(*got.OldestBlock))
+				case want.OldestBlock != nil && got.OldestBlock == nil:
+					t.Errorf("%s.oldestBlock absent, want %d", name, uint64(*want.OldestBlock))
+				case want.OldestBlock != nil && got.OldestBlock != nil:
+					if *got.OldestBlock != *want.OldestBlock {
+						t.Errorf("%s.oldestBlock = %d, want %d",
+							name, uint64(*got.OldestBlock), uint64(*want.OldestBlock))
+					}
 				}
 				switch {
-				case want.DeleteStrategy.RetentionBlocks == nil && got.DeleteStrategy.RetentionBlocks != nil:
-					t.Errorf("%s.deleteStrategy.retentionBlocks = %d, want absent",
-						name, *got.DeleteStrategy.RetentionBlocks)
-				case want.DeleteStrategy.RetentionBlocks != nil && got.DeleteStrategy.RetentionBlocks == nil:
-					t.Errorf("%s.deleteStrategy.retentionBlocks absent, want %d",
-						name, *want.DeleteStrategy.RetentionBlocks)
-				case want.DeleteStrategy.RetentionBlocks != nil && got.DeleteStrategy.RetentionBlocks != nil:
-					if *got.DeleteStrategy.RetentionBlocks != *want.DeleteStrategy.RetentionBlocks {
-						t.Errorf("%s.deleteStrategy.retentionBlocks = %d, want %d",
-							name, *got.DeleteStrategy.RetentionBlocks, *want.DeleteStrategy.RetentionBlocks)
+				case want.DeleteStrategy == nil && got.DeleteStrategy != nil:
+					t.Errorf("%s.deleteStrategy = %#v, want absent", name, got.DeleteStrategy)
+				case want.DeleteStrategy != nil && got.DeleteStrategy == nil:
+					t.Errorf("%s.deleteStrategy absent, want %#v", name, want.DeleteStrategy)
+				case want.DeleteStrategy != nil && got.DeleteStrategy != nil:
+					if got.DeleteStrategy.Type != want.DeleteStrategy.Type {
+						t.Errorf("%s.deleteStrategy.type = %q, want %q", name, got.DeleteStrategy.Type, want.DeleteStrategy.Type)
+					}
+					switch {
+					case want.DeleteStrategy.RetentionBlocks == nil && got.DeleteStrategy.RetentionBlocks != nil:
+						t.Errorf("%s.deleteStrategy.retentionBlocks = %d, want absent",
+							name, *got.DeleteStrategy.RetentionBlocks)
+					case want.DeleteStrategy.RetentionBlocks != nil && got.DeleteStrategy.RetentionBlocks == nil:
+						t.Errorf("%s.deleteStrategy.retentionBlocks absent, want %d",
+							name, *want.DeleteStrategy.RetentionBlocks)
+					case want.DeleteStrategy.RetentionBlocks != nil && got.DeleteStrategy.RetentionBlocks != nil:
+						if *got.DeleteStrategy.RetentionBlocks != *want.DeleteStrategy.RetentionBlocks {
+							t.Errorf("%s.deleteStrategy.retentionBlocks = %d, want %d",
+								name, *got.DeleteStrategy.RetentionBlocks, *want.DeleteStrategy.RetentionBlocks)
+						}
 					}
 				}
 			}
@@ -310,18 +319,20 @@ func TestBuildCapabilities(t *testing.T) {
 
 // TestCapabilitiesJSONShape verifies that the marshalled JSON conforms to
 // the schema defined in https://github.com/ethereum/execution-apis/pull/755:
-// "none" strategies must omit retentionBlocks, oldestBlock must be a hex
-// quantity, retentionBlocks must be a decimal integer.
+// head fields are named number/hash, resources without a sliding window omit
+// deleteStrategy, disabled resources omit range fields, and retentionBlocks is
+// a decimal integer.
 func TestCapabilitiesJSONShape(t *testing.T) {
 	caps := buildCapabilities(
 		5_000_000,
 		common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3"),
 		0,
 		HistoryRetention{
-			StateScheme:     rawdb.PathScheme,
-			TxIndexHistory:  2_350_000,
-			LogIndexHistory: 2_350_000,
-			StateHistory:    90_000,
+			StateScheme:      rawdb.PathScheme,
+			TxIndexHistory:   2_350_000,
+			LogIndexHistory:  2_350_000,
+			LogIndexDisabled: true,
+			StateHistory:     90_000,
 		},
 	)
 
@@ -344,23 +355,40 @@ func TestCapabilitiesJSONShape(t *testing.T) {
 		}
 	}
 
-	// head.blockNumber must be a hex string ("0x..."), blockHash must be a 0x hash.
+	// head.number must be a hex string ("0x..."), hash must be a 0x hash.
 	head := generic["head"].(map[string]any)
-	if bn, ok := head["blockNumber"].(string); !ok || len(bn) < 3 || bn[:2] != "0x" {
-		t.Errorf("head.blockNumber not hex string: %v", head["blockNumber"])
+	if number, ok := head["number"].(string); !ok || len(number) < 3 || number[:2] != "0x" {
+		t.Errorf("head.number not hex string: %v", head["number"])
 	}
-	if bh, ok := head["blockHash"].(string); !ok || len(bh) != 66 {
-		t.Errorf("head.blockHash not 32-byte hex string: %v", head["blockHash"])
+	if hash, ok := head["hash"].(string); !ok || len(hash) != 66 {
+		t.Errorf("head.hash not 32-byte hex string: %v", head["hash"])
+	}
+	if _, present := head["blockNumber"]; present {
+		t.Errorf("head must not include blockNumber")
+	}
+	if _, present := head["blockHash"]; present {
+		t.Errorf("head must not include blockHash")
 	}
 
-	// blocks.deleteStrategy is "none" → must NOT contain retentionBlocks.
+	// blocks have a fixed oldest block but no deletion strategy.
 	blocks := generic["blocks"].(map[string]any)
-	bds := blocks["deleteStrategy"].(map[string]any)
-	if bds["type"] != "none" {
-		t.Errorf("blocks.deleteStrategy.type = %v, want none", bds["type"])
+	if ob, ok := blocks["oldestBlock"].(string); !ok || len(ob) < 3 || ob[:2] != "0x" {
+		t.Errorf("blocks.oldestBlock not hex string: %v", blocks["oldestBlock"])
 	}
-	if _, present := bds["retentionBlocks"]; present {
-		t.Errorf("blocks.deleteStrategy must not include retentionBlocks for type=none")
+	if _, present := blocks["deleteStrategy"]; present {
+		t.Errorf("blocks must not include deleteStrategy without sliding deletion")
+	}
+
+	// Disabled resources must not advertise an availability range.
+	logs := generic["logs"].(map[string]any)
+	if logs["disabled"] != true {
+		t.Errorf("logs.disabled = %v, want true", logs["disabled"])
+	}
+	if _, present := logs["oldestBlock"]; present {
+		t.Errorf("disabled logs must not include oldestBlock")
+	}
+	if _, present := logs["deleteStrategy"]; present {
+		t.Errorf("disabled logs must not include deleteStrategy")
 	}
 
 	// tx.deleteStrategy is "window" → must contain retentionBlocks as a
@@ -385,5 +413,12 @@ func TestCapabilitiesJSONShape(t *testing.T) {
 	}
 }
 
-// hexUint is a small helper to keep the test tables compact.
-func hexUint(n uint64) hexutil.Uint64 { return hexutil.Uint64(n) }
+// hexUintPtr and windowStrategy keep the test tables compact.
+func hexUintPtr(n uint64) *hexutil.Uint64 {
+	v := hexutil.Uint64(n)
+	return &v
+}
+
+func windowStrategy(n uint64) *DeleteStrategy {
+	return &DeleteStrategy{Type: "window", RetentionBlocks: &n}
+}
