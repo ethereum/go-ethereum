@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -82,25 +83,25 @@ type payloadAttributesMarshaling struct {
 
 // ExecutableData is the data necessary to execute an EL payload.
 type ExecutableData struct {
-	ParentHash          common.Hash         `json:"parentHash"    gencodec:"required"`
-	FeeRecipient        common.Address      `json:"feeRecipient"  gencodec:"required"`
-	StateRoot           common.Hash         `json:"stateRoot"     gencodec:"required"`
-	ReceiptsRoot        common.Hash         `json:"receiptsRoot"  gencodec:"required"`
-	LogsBloom           []byte              `json:"logsBloom"     gencodec:"required"`
-	Random              common.Hash         `json:"prevRandao"    gencodec:"required"`
-	Number              uint64              `json:"blockNumber"   gencodec:"required"`
-	GasLimit            uint64              `json:"gasLimit"      gencodec:"required"`
-	GasUsed             uint64              `json:"gasUsed"       gencodec:"required"`
-	Timestamp           uint64              `json:"timestamp"     gencodec:"required"`
-	ExtraData           []byte              `json:"extraData"     gencodec:"required"`
-	BaseFeePerGas       *big.Int            `json:"baseFeePerGas" gencodec:"required"`
-	BlockHash           common.Hash         `json:"blockHash"     gencodec:"required"`
-	Transactions        [][]byte            `json:"transactions"  gencodec:"required"`
-	Withdrawals         []*types.Withdrawal `json:"withdrawals"`
-	BlobGasUsed         *uint64             `json:"blobGasUsed"`
-	ExcessBlobGas       *uint64             `json:"excessBlobGas"`
-	SlotNumber          *uint64             `json:"slotNumber,omitempty"`
-	BlockAccessListHash *common.Hash        `json:"blockAccessListHash,omitempty"`
+	ParentHash      common.Hash          `json:"parentHash"    gencodec:"required"`
+	FeeRecipient    common.Address       `json:"feeRecipient"  gencodec:"required"`
+	StateRoot       common.Hash          `json:"stateRoot"     gencodec:"required"`
+	ReceiptsRoot    common.Hash          `json:"receiptsRoot"  gencodec:"required"`
+	LogsBloom       []byte               `json:"logsBloom"     gencodec:"required"`
+	Random          common.Hash          `json:"prevRandao"    gencodec:"required"`
+	Number          uint64               `json:"blockNumber"   gencodec:"required"`
+	GasLimit        uint64               `json:"gasLimit"      gencodec:"required"`
+	GasUsed         uint64               `json:"gasUsed"       gencodec:"required"`
+	Timestamp       uint64               `json:"timestamp"     gencodec:"required"`
+	ExtraData       []byte               `json:"extraData"     gencodec:"required"`
+	BaseFeePerGas   *big.Int             `json:"baseFeePerGas" gencodec:"required"`
+	BlockHash       common.Hash          `json:"blockHash"     gencodec:"required"`
+	Transactions    [][]byte             `json:"transactions"  gencodec:"required"`
+	Withdrawals     []*types.Withdrawal  `json:"withdrawals"`
+	BlobGasUsed     *uint64              `json:"blobGasUsed"`
+	ExcessBlobGas   *uint64              `json:"excessBlobGas"`
+	SlotNumber      *uint64              `json:"slotNumber,omitempty"`
+	BlockAccessList *bal.BlockAccessList `json:"blockAccessList,omitempty"`
 }
 
 // JSON type overrides for executableData.
@@ -304,6 +305,16 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		requestsHash = &h
 	}
 
+	// If Amsterdam is enabled, data.BlockAccessList is always non-nil,
+	// even for empty blocks with no state transitions.
+	//
+	// If Amsterdam is not enabled yet, blockAccessListHash is expected
+	// to be nil.
+	var blockAccessListHash *common.Hash
+	if data.BlockAccessList != nil {
+		hash := data.BlockAccessList.Hash()
+		blockAccessListHash = &hash
+	}
 	header := &types.Header{
 		ParentHash:          data.ParentHash,
 		UncleHash:           types.EmptyUncleHash,
@@ -326,36 +337,34 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		ParentBeaconRoot:    beaconRoot,
 		RequestsHash:        requestsHash,
 		SlotNumber:          data.SlotNumber,
-		BlockAccessListHash: data.BlockAccessListHash,
+		BlockAccessListHash: blockAccessListHash,
 	}
-	return types.NewBlockWithHeader(header).
-			WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}),
-		nil
+	return types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}), nil
 }
 
 // BlockToExecutableData constructs the ExecutableData structure by filling the
 // fields from the given block. It assumes the given block is post-merge block.
 func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.BlobTxSidecar, requests [][]byte) *ExecutionPayloadEnvelope {
 	data := &ExecutableData{
-		BlockHash:           block.Hash(),
-		ParentHash:          block.ParentHash(),
-		FeeRecipient:        block.Coinbase(),
-		StateRoot:           block.Root(),
-		Number:              block.NumberU64(),
-		GasLimit:            block.GasLimit(),
-		GasUsed:             block.GasUsed(),
-		BaseFeePerGas:       block.BaseFee(),
-		Timestamp:           block.Time(),
-		ReceiptsRoot:        block.ReceiptHash(),
-		LogsBloom:           block.Bloom().Bytes(),
-		Transactions:        encodeTransactions(block.Transactions()),
-		Random:              block.MixDigest(),
-		ExtraData:           block.Extra(),
-		Withdrawals:         block.Withdrawals(),
-		BlobGasUsed:         block.BlobGasUsed(),
-		ExcessBlobGas:       block.ExcessBlobGas(),
-		SlotNumber:          block.SlotNumber(),
-		BlockAccessListHash: block.BlockAccessListHash(),
+		BlockHash:       block.Hash(),
+		ParentHash:      block.ParentHash(),
+		FeeRecipient:    block.Coinbase(),
+		StateRoot:       block.Root(),
+		Number:          block.NumberU64(),
+		GasLimit:        block.GasLimit(),
+		GasUsed:         block.GasUsed(),
+		BaseFeePerGas:   block.BaseFee(),
+		Timestamp:       block.Time(),
+		ReceiptsRoot:    block.ReceiptHash(),
+		LogsBloom:       block.Bloom().Bytes(),
+		Transactions:    encodeTransactions(block.Transactions()),
+		Random:          block.MixDigest(),
+		ExtraData:       block.Extra(),
+		Withdrawals:     block.Withdrawals(),
+		BlobGasUsed:     block.BlobGasUsed(),
+		ExcessBlobGas:   block.ExcessBlobGas(),
+		SlotNumber:      block.SlotNumber(),
+		BlockAccessList: block.AccessList(),
 	}
 
 	// Add blobs.

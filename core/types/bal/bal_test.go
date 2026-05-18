@@ -284,7 +284,7 @@ func TestBlockAccessListCopy(t *testing.T) {
 
 func TestBlockAccessListItemCount(t *testing.T) {
 	empty := &BlockAccessList{}
-	if got := empty.ItemCount(); got != 0 {
+	if got := empty.itemCount(); got != 0 {
 		t.Fatalf("empty BAL item count: got %d, want 0", got)
 	}
 
@@ -304,7 +304,7 @@ func TestBlockAccessListItemCount(t *testing.T) {
 	}
 	// 2 addresses + 2 write-slots + 1 read-slot = 5 items.
 	// (Multiple TxIdx writes to the same slot count as ONE item.)
-	if got := bal.ItemCount(); got != 5 {
+	if got := bal.itemCount(); got != 5 {
 		t.Fatalf("item count: got %d, want 5", got)
 	}
 }
@@ -325,7 +325,7 @@ func TestBlockAccessListValidateSize(t *testing.T) {
 			bal[i].StorageReads = append(bal[i].StorageReads, one())
 		}
 	}
-	if got := bal.ItemCount(); got != 30 {
+	if got := bal.itemCount(); got != 30 {
 		t.Fatalf("setup: item count = %d, want 30", got)
 	}
 

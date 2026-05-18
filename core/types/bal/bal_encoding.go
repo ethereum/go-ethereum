@@ -92,11 +92,11 @@ func (e *BlockAccessList) Validate() error {
 	return nil
 }
 
-// ItemCount returns the number of items in the BAL for EIP-7928 size-constraint
+// itemCount returns the number of items in the BAL for EIP-7928 size-constraint
 // purposes: the count of distinct addresses plus every storage key (writes +
 // reads) carried by those accounts. A storage slot is counted once regardless
 // of how many transactions wrote to it.
-func (e *BlockAccessList) ItemCount() uint64 {
+func (e *BlockAccessList) itemCount() uint64 {
 	count := uint64(len(*e)) // distinct addresses
 	for i := range *e {
 		count += uint64(len((*e)[i].StorageWrites)) + uint64(len((*e)[i].StorageReads))
@@ -107,9 +107,9 @@ func (e *BlockAccessList) ItemCount() uint64 {
 // ValidateSize returns an error if the BAL violates the EIP-7928 size
 // constraint for the given block gas limit:
 //
-//	ItemCount() <= blockGasLimit / params.BALItemCost
+//	itemCount() <= blockGasLimit / params.BALItemCost
 func (e *BlockAccessList) ValidateSize(blockGasLimit uint64) error {
-	items := e.ItemCount()
+	items := e.itemCount()
 	limit := blockGasLimit / params.BALItemCost
 	if items > limit {
 		return fmt.Errorf("block access list exceeds size constraint: items=%d, limit=%d (block gas limit %d / %d)",
