@@ -687,7 +687,9 @@ func serviceGetBlockAccessListsQuery(chain *core.BlockChain, query GetBlockAcces
 		}
 		data := chain.GetAccessListRLP(hash)
 		if len(data) == 0 {
-			bals.AppendRaw([]byte{0xC0})
+			// The signal for missing BAL is the empty string, because
+			// an empty list is also a valid BAL.
+			bals.AppendRaw(rlp.EmptyString)
 			continue
 		}
 		bals.AppendRaw(data)
