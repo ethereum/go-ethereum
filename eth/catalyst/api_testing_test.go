@@ -119,3 +119,113 @@ func TestBuildBlockV1(t *testing.T) {
 		}
 	})
 }
+
+func TestCommitBlockV1(t *testing.T) {
+	genesis, blocks := generateMergeChain(5, true)
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+
+	api := &testingAPI{eth: ethservice}
+	ctx := context.Background()
+
+	nextAttrs := func() engine.PayloadAttributes {
+		head := ethservice.BlockChain().CurrentBlock()
+		return engine.PayloadAttributes{
+			Timestamp:             head.Time + 1,
+			Random:                crypto.Keccak256Hash([]byte("commit-test")),
+			SuggestedFeeRecipient: head.Coinbase,
+		}
+	}
+
+	t.Run("commitEmptyBlock", func(t *testing.T) {
+		parent := ethservice.BlockChain().CurrentBlock()
+		emptyTxs := []hexutil.Bytes{}
+		hash, err := api.CommitBlockV1(ctx, nextAttrs(), &emptyTxs, nil)
+		if err != nil {
+			t.Fatalf("CommitBlockV1 failed: %v", err)
+		}
+		head := ethservice.BlockChain().CurrentBlock()
+		if head.Hash() != hash {
+			t.Errorf("head hash mismatch: got %x want %x", head.Hash(), hash)
+		}
+		if head.Number.Uint64() != parent.Number.Uint64()+1 {
+			t.Errorf("head number mismatch: got %d want %d", head.Number.Uint64(), parent.Number.Uint64()+1)
+		}
+		block := ethservice.BlockChain().GetBlockByHash(hash)
+		if block == nil {
+			t.Fatal("committed block not found in chain")
+		}
+		if len(block.Transactions()) != 0 {
+			t.Errorf("expected empty block, got %d transactions", len(block.Transactions()))
+		}
+	})
+
+	t.Run("commitBlockWithTransactions", func(t *testing.T) {
+		parent := ethservice.BlockChain().CurrentBlock()
+		nonce, _ := ethservice.APIBackend.GetPoolNonce(ctx, testAddr)
+		tx, _ := types.SignTx(types.NewTransaction(nonce, testAddr, big.NewInt(1), params.TxGas, big.NewInt(params.InitialBaseFee*2), nil), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
+		enc, _ := tx.MarshalBinary()
+		txs := []hexutil.Bytes{enc}
+
+		hash, err := api.CommitBlockV1(ctx, nextAttrs(), &txs, nil)
+		if err != nil {
+			t.Fatalf("CommitBlockV1 failed: %v", err)
+		}
+		head := ethservice.BlockChain().CurrentBlock()
+		if head.Hash() != hash {
+			t.Errorf("head hash mismatch: got %x want %x", head.Hash(), hash)
+		}
+		if head.Number.Uint64() != parent.Number.Uint64()+1 {
+			t.Errorf("head number mismatch: got %d want %d", head.Number.Uint64(), parent.Number.Uint64()+1)
+		}
+		block := ethservice.BlockChain().GetBlockByHash(hash)
+		if block == nil {
+			t.Fatal("committed block not found in chain")
+		}
+		if len(block.Transactions()) != 1 {
+			t.Fatalf("expected 1 transaction, got %d", len(block.Transactions()))
+		}
+		if block.Transactions()[0].Hash() != tx.Hash() {
+			t.Errorf("transaction hash mismatch: got %x want %x", block.Transactions()[0].Hash(), tx.Hash())
+		}
+	})
+
+	t.Run("commitBlockWithTransactionsFromTxPool", func(t *testing.T) {
+		parent := ethservice.BlockChain().CurrentBlock()
+		nonce, _ := ethservice.APIBackend.GetPoolNonce(ctx, testAddr)
+		tx, _ := types.SignTx(types.NewTransaction(nonce, testAddr, big.NewInt(1), params.TxGas, big.NewInt(params.InitialBaseFee*2), nil), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
+		ethservice.TxPool().Add([]*types.Transaction{tx}, true)
+
+		hash, err := api.CommitBlockV1(ctx, nextAttrs(), nil, nil)
+		if err != nil {
+			t.Fatalf("CommitBlockV1 failed: %v", err)
+		}
+		head := ethservice.BlockChain().CurrentBlock()
+		if head.Hash() != hash {
+			t.Errorf("head hash mismatch: got %x want %x", head.Hash(), hash)
+		}
+		if head.Number.Uint64() != parent.Number.Uint64()+1 {
+			t.Errorf("head number mismatch: got %d want %d", head.Number.Uint64(), parent.Number.Uint64()+1)
+		}
+		block := ethservice.BlockChain().GetBlockByHash(hash)
+		if len(block.Transactions()) != 1 {
+			t.Fatalf("expected 1 transaction, got %d", len(block.Transactions()))
+		}
+	})
+
+	t.Run("commitWithExtraData", func(t *testing.T) {
+		extra := hexutil.Bytes([]byte("hello"))
+		emptyTxs := []hexutil.Bytes{}
+		hash, err := api.CommitBlockV1(ctx, nextAttrs(), &emptyTxs, &extra)
+		if err != nil {
+			t.Fatalf("CommitBlockV1 failed: %v", err)
+		}
+		block := ethservice.BlockChain().GetBlockByHash(hash)
+		if block == nil {
+			t.Fatal("committed block not found in chain")
+		}
+		if string(block.Extra()) != "hello" {
+			t.Errorf("extraData mismatch: got %q want %q", block.Extra(), "hello")
+		}
+	})
+}
