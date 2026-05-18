@@ -256,6 +256,40 @@ func TestSetFeeDefaults(t *testing.T) {
 	}
 }
 
+func TestTransactionArgsRejectUnsupportedTypeInCallDefaults(t *testing.T) {
+	t.Parallel()
+
+	badType := hexutil.Uint64(0x5)
+	args := &TransactionArgs{Type: &badType}
+	err := args.CallDefaults(0, big.NewInt(1), big.NewInt(1))
+	if err == nil {
+		t.Fatal("expected error for unsupported transaction type")
+	}
+	if err.Error() != "unsupported transaction type: 5" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestTransactionArgsRejectUnsupportedTypeInSetDefaults(t *testing.T) {
+	t.Parallel()
+
+	badType := hexutil.Uint64(0x5)
+	gas := hexutil.Uint64(21000)
+	to := common.Address{0x1}
+	args := &TransactionArgs{
+		To:   &to,
+		Gas:  &gas,
+		Type: &badType,
+	}
+	err := args.setDefaults(context.Background(), newBackendMock(), sidecarConfig{})
+	if err == nil {
+		t.Fatal("expected error for unsupported transaction type")
+	}
+	if err.Error() != "unsupported transaction type: 5" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 type backendMock struct {
 	current *types.Header
 	config  *params.ChainConfig

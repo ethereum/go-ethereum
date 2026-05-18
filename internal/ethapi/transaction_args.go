@@ -42,6 +42,7 @@ import (
 type TransactionArgs struct {
 	From                 *common.Address `json:"from"`
 	To                   *common.Address `json:"to"`
+	Type                 *hexutil.Uint64 `json:"type,omitempty"`
 	Gas                  *hexutil.Uint64 `json:"gas"`
 	GasPrice             *hexutil.Big    `json:"gasPrice"`
 	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
@@ -101,6 +102,9 @@ type sidecarConfig struct {
 
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config sidecarConfig) error {
+	if err := args.validateTxType(); err != nil {
+		return err
+	}
 	if err := args.setBlobTxSidecar(ctx, config); err != nil {
 		return err
 	}
@@ -390,6 +394,9 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config sideca
 // CallDefaults sanitizes the transaction arguments, often filling in zero values,
 // for the purpose of eth_call class of RPC methods.
 func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int, chainID *big.Int) error {
+	if err := args.validateTxType(); err != nil {
+		return err
+	}
 	// Reject invalid combinations of pre- and post-1559 fee styles
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -438,6 +445,18 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 	}
 
 	return nil
+}
+
+func (args *TransactionArgs) validateTxType() error {
+	if args.Type == nil {
+		return nil
+	}
+	switch uint64(*args.Type) {
+	case types.LegacyTxType, types.AccessListTxType, types.DynamicFeeTxType, types.BlobTxType, types.SetCodeTxType:
+		return nil
+	default:
+		return fmt.Errorf("unsupported transaction type: %d", uint64(*args.Type))
+	}
 }
 
 // ToMessage converts the transaction arguments to the Message type used by the
