@@ -125,16 +125,17 @@ func (s SizeStats) add(diff SizeStats) SizeStats {
 }
 
 // calSizeStats measures the state size changes of the provided state update.
-func calSizeStats(update *stateUpdate) (SizeStats, error) {
+func calSizeStats(update *StateUpdate) (SizeStats, error) {
 	stats := SizeStats{
-		BlockNumber: update.blockNumber,
-		StateRoot:   update.root,
+		BlockNumber: update.BlockNumber,
+		StateRoot:   update.Root,
 	}
+	accounts, accountOrigin, storages, storageOrigin := update.EncodeMPTState()
 
 	// Measure the account changes
-	for addr, oldValue := range update.accountsOrigin {
+	for addr, oldValue := range accountOrigin {
 		addrHash := crypto.Keccak256Hash(addr.Bytes())
-		newValue, exists := update.accounts[addrHash]
+		newValue, exists := accounts[addrHash]
 		if !exists {
 			return SizeStats{}, fmt.Errorf("account %x not found", addr)
 		}
@@ -156,9 +157,9 @@ func calSizeStats(update *stateUpdate) (SizeStats, error) {
 	}
 
 	// Measure storage changes
-	for addr, slots := range update.storagesOrigin {
+	for addr, slots := range storageOrigin {
 		addrHash := crypto.Keccak256Hash(addr.Bytes())
-		subset, exists := update.storages[addrHash]
+		subset, exists := storages[addrHash]
 		if !exists {
 			return SizeStats{}, fmt.Errorf("storage %x not found", addr)
 		}
@@ -167,7 +168,7 @@ func calSizeStats(update *stateUpdate) (SizeStats, error) {
 				exists   bool
 				newValue []byte
 			)
-			if update.rawStorageKey {
+			if update.StorageKeyType == StorageKeyPlain {
 				newValue, exists = subset[crypto.Keccak256Hash(key.Bytes())]
 			} else {
 				newValue, exists = subset[key]
@@ -194,7 +195,7 @@ func calSizeStats(update *stateUpdate) (SizeStats, error) {
 	}
 
 	// Measure trienode changes
-	for owner, subset := range update.nodes.Sets {
+	for owner, subset := range update.Nodes.Sets {
 		var (
 			keyPrefix int64
 			isAccount = owner == (common.Hash{})
@@ -244,13 +245,13 @@ func calSizeStats(update *stateUpdate) (SizeStats, error) {
 	}
 
 	codeExists := make(map[common.Hash]struct{})
-	for _, code := range update.codes {
-		if _, ok := codeExists[code.hash]; ok || code.duplicate {
+	for _, code := range update.Codes {
+		if _, ok := codeExists[code.Hash]; ok || code.Duplicate {
 			continue
 		}
 		stats.ContractCodes += 1
-		stats.ContractCodeBytes += codeKeySize + int64(len(code.blob))
-		codeExists[code.hash] = struct{}{}
+		stats.ContractCodeBytes += codeKeySize + int64(len(code.Blob))
+		codeExists[code.Hash] = struct{}{}
 	}
 	return stats, nil
 }
@@ -267,7 +268,7 @@ type SizeTracker struct {
 	triedb   *triedb.Database
 	abort    chan struct{}
 	aborted  chan struct{}
-	updateCh chan *stateUpdate
+	updateCh chan *StateUpdate
 	queryCh  chan *stateSizeQuery
 }
 
@@ -281,7 +282,7 @@ func NewSizeTracker(db ethdb.KeyValueStore, triedb *triedb.Database) (*SizeTrack
 		triedb:   triedb,
 		abort:    make(chan struct{}),
 		aborted:  make(chan struct{}),
-		updateCh: make(chan *stateUpdate),
+		updateCh: make(chan *StateUpdate),
 		queryCh:  make(chan *stateSizeQuery),
 	}
 	go t.run()
@@ -328,9 +329,9 @@ func (t *SizeTracker) run() {
 	for {
 		select {
 		case u := <-t.updateCh:
-			base, found := stats[u.originRoot]
+			base, found := stats[u.OriginRoot]
 			if !found {
-				log.Debug("Ignored the state size without parent", "parent", u.originRoot, "root", u.root, "number", u.blockNumber)
+				log.Debug("Ignored the state size without parent", "parent", u.OriginRoot, "root", u.Root, "number", u.BlockNumber)
 				continue
 			}
 			diff, err := calSizeStats(u)
@@ -338,15 +339,15 @@ func (t *SizeTracker) run() {
 				continue
 			}
 			stat := base.add(diff)
-			stats[u.root] = stat
-			last = u.root
+			stats[u.Root] = stat
+			last = u.Root
 
 			// Publish statistics to metric system
 			stat.publish()
 
 			// Evict the stale statistics
-			heap.Push(&h, stats[u.root])
-			for len(h) > 0 && u.blockNumber-h[0].BlockNumber > statEvictThreshold {
+			heap.Push(&h, stats[u.Root])
+			for len(h) > 0 && u.BlockNumber-h[0].BlockNumber > statEvictThreshold {
 				delete(stats, h[0].StateRoot)
 				heap.Pop(&h)
 			}
@@ -402,7 +403,7 @@ wait:
 	}
 
 	var (
-		updates  = make(map[common.Hash]*stateUpdate)
+		updates  = make(map[common.Hash]*StateUpdate)
 		children = make(map[common.Hash][]common.Hash)
 		done     chan buildResult
 	)
@@ -410,9 +411,9 @@ wait:
 	for {
 		select {
 		case u := <-t.updateCh:
-			updates[u.root] = u
-			children[u.originRoot] = append(children[u.originRoot], u.root)
-			log.Debug("Received state update", "root", u.root, "blockNumber", u.blockNumber)
+			updates[u.Root] = u
+			children[u.OriginRoot] = append(children[u.OriginRoot], u.Root)
+			log.Debug("Received state update", "root", u.Root, "blockNumber", u.BlockNumber)
 
 		case r := <-t.queryCh:
 			r.err = errors.New("state size is not initialized yet")
@@ -432,8 +433,8 @@ wait:
 				continue
 			}
 			done = make(chan buildResult)
-			go t.build(entry.root, entry.blockNumber, done)
-			log.Info("Measuring persistent state size", "root", root.Hex(), "number", entry.blockNumber)
+			go t.build(entry.Root, entry.BlockNumber, done)
+			log.Info("Measuring persistent state size", "root", root.Hex(), "number", entry.BlockNumber)
 
 		case result := <-done:
 			if result.err != nil {
@@ -646,8 +647,8 @@ func (t *SizeTracker) iterateTableParallel(closed chan struct{}, prefix []byte, 
 // Notify is an async method used to send the state update to the size tracker.
 // It ignores empty updates (where no state changes occurred).
 // If the channel is full, it drops the update to avoid blocking.
-func (t *SizeTracker) Notify(update *stateUpdate) {
-	if update == nil || update.empty() {
+func (t *SizeTracker) Notify(update *StateUpdate) {
+	if update == nil || update.Empty() {
 		return
 	}
 	select {

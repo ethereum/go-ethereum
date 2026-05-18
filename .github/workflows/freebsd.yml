@@ -1,0 +1,29 @@
+on:
+  push:
+    branches:
+      - freebsd-github-action
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: FreeBSD-build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        submodules: false
+
+    - name: Test in FreeBSD
+      id: test
+      uses: vmactions/freebsd-vm@v1
+      with:
+        release: "15.0"
+        usesh: true
+        prepare: |
+          pkg install -y go
+        run: |
+          freebsd-version
+          uname -a
+          go version
+          go run ./build/ci.go test -p 8

@@ -100,13 +100,9 @@ func merkleNodeHasher(blob []byte) (common.Hash, error) {
 // binaryNodeHasher computes the hash of the given verkle node.
 func binaryNodeHasher(blob []byte) (common.Hash, error) {
 	if len(blob) == 0 {
-		return types.EmptyVerkleHash, nil
+		return types.EmptyBinaryHash, nil
 	}
-	n, err := bintrie.DeserializeNode(blob, 0)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	return n.Hash(), nil
+	return bintrie.DeserializeAndHash(blob, 0)
 }
 
 // Database is a multiple-layered structure for maintaining in-memory states
@@ -127,7 +123,7 @@ type Database struct {
 	// the shutdown to reject all following unexpected mutations.
 	readOnly bool       // Flag if database is opened in read only mode
 	waitSync bool       // Flag if database is deactivated due to initial state sync
-	isVerkle bool       // Flag if database is used for verkle tree
+	isUBT    bool       // Flag if database is used for verkle tree
 	hasher   nodeHasher // Trie node hasher
 
 	config *Config        // Configuration for database
@@ -146,7 +142,7 @@ type Database struct {
 // New attempts to load an already existing layer from a persistent key-value
 // store (with a number of memory layers from a journal). If the journal is not
 // matched with the base persistent layer, all the recorded diff layers are discarded.
-func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
+func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 	if config == nil {
 		config = Defaults
 	}
@@ -154,7 +150,7 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 
 	db := &Database{
 		readOnly: config.ReadOnly,
-		isVerkle: isVerkle,
+		isUBT:    isUBT,
 		config:   config,
 		diskdb:   diskdb,
 		hasher:   merkleNodeHasher,
@@ -164,7 +160,7 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	// important to note that the introduction of a prefix won't lead to
 	// substantial storage overhead, as the underlying database will efficiently
 	// compress the shared key prefix.
-	if isVerkle {
+	if isUBT {
 		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.VerklePrefix))
 		db.hasher = binaryNodeHasher
 	}
@@ -174,7 +170,7 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 
 	// Repair the history, which might not be aligned with the persistent
 	// state in the key-value store due to an unclean shutdown.
-	states, trienodes, err := repairHistory(db.diskdb, isVerkle, db.config.ReadOnly, db.tree.bottom().stateID(), db.config.TrienodeHistory >= 0)
+	states, trienodes, err := repairHistory(db.diskdb, isUBT, db.config.ReadOnly, db.tree.bottom().stateID(), db.config.TrienodeHistory >= 0)
 	if err != nil {
 		log.Crit("Failed to repair history", "err", err)
 	}
@@ -196,7 +192,7 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	db.setHistoryIndexer()
 
 	fields := config.fields()
-	if db.isVerkle {
+	if db.isUBT {
 		fields = append(fields, "verkle", true)
 	}
 	log.Info("Initialized path database", fields...)
@@ -265,7 +261,7 @@ func (db *Database) setStateGenerator() error {
 	// - the database is opened in read only mode
 	// - the snapshot build is explicitly disabled
 	// - the database is opened in verkle tree mode
-	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isVerkle
+	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isUBT
 
 	// Construct the generator and link it to the disk layer, ensuring that the
 	// generation progress is resolved to prevent accessing uncovered states
@@ -369,16 +365,9 @@ func (db *Database) Disable() error {
 	return nil
 }
 
-// Enable activates database and resets the state tree with the provided persistent
-// state root once the state sync is finished.
-func (db *Database) Enable(root common.Hash) error {
-	db.lock.Lock()
-	defer db.lock.Unlock()
-
-	// Short circuit if the database is in read only mode.
-	if db.readOnly {
-		return errDatabaseReadOnly
-	}
+// resetForReactivation performs the pathdb-side bookkeeping shared by both
+// Enable and AdoptSyncedState.
+func (db *Database) resetForReactivation(root common.Hash) error {
 	// Ensure the provided state root matches the stored one.
 	stored, err := db.hasher(rawdb.ReadAccountTrieNode(db.diskdb, nil))
 	if err != nil {
@@ -387,28 +376,41 @@ func (db *Database) Enable(root common.Hash) error {
 	if stored != root {
 		return fmt.Errorf("state root mismatch: stored %x, synced %x", stored, root)
 	}
-	// Drop the stale state journal in persistent database and
-	// reset the persistent state id back to zero.
+	// Drop the stale state journal marker and reset the persistent state id
+	// back to zero.
 	batch := db.diskdb.NewBatch()
 	rawdb.DeleteSnapshotRoot(batch)
 	rawdb.WritePersistentStateID(batch, 0)
 	if err := batch.Write(); err != nil {
 		return err
 	}
-	// Clean up all state histories in freezer. Theoretically
-	// all root->id mappings should be removed as well. Since
-	// mappings can be huge and might take a while to clear
-	// them, just leave them in disk and wait for overwriting.
+	// Clean up all state histories in the freezer. Theoretically all root->id
+	// mappings should be removed as well; since those can be huge, leave them
+	// on disk and let them be overwritten.
 	purgeHistory(db.stateFreezer, db.diskdb, typeStateHistory)
 	purgeHistory(db.trienodeFreezer, db.diskdb, typeTrienodeHistory)
 
-	// Re-enable the database as the final step.
+	// Re-enable the database as the final bookkeeping step.
 	db.waitSync = false
 	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncFinished)
+	return nil
+}
 
-	// Re-construct a new disk layer backed by persistent state
-	// and schedule the state snapshot generation if it's permitted.
-	db.tree.init(generateSnapshot(db, root, db.isVerkle || db.config.SnapshotNoBuild))
+// Enable activates the database after a snap/1 sync and schedules background
+// regeneration of the snapshot from the trie.
+func (db *Database) Enable(root common.Hash) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	if db.readOnly {
+		return errDatabaseReadOnly
+	}
+	if err := db.resetForReactivation(root); err != nil {
+		return err
+	}
+	// Re-construct a new disk layer backed by persistent state and schedule
+	// the state snapshot generation if it's permitted.
+	db.tree.init(generateSnapshot(db, root, db.isUBT || db.config.SnapshotNoBuild))
 
 	// After snap sync, the state of the database may have changed completely.
 	// To ensure the history indexer always matches the current state, we must:
@@ -417,6 +419,43 @@ func (db *Database) Enable(root common.Hash) error {
 	db.setHistoryIndexer()
 
 	log.Info("Rebuilt trie database", "root", root)
+	return nil
+}
+
+// AdoptSyncedState reactivates the database after a snap/2 sync. The syncer
+// already wrote a consistent flat state, so we take it as-is instead of
+// rebuilding it from the trie. The new disk layer has no generator attached,
+// and a "done" marker is written so future boots know the snapshot is
+// already complete.
+func (db *Database) AdoptSyncedState(root common.Hash) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	if db.readOnly {
+		return errDatabaseReadOnly
+	}
+	if err := db.resetForReactivation(root); err != nil {
+		return err
+	}
+
+	// Tell the snapshot subsystem the flat state is good by writing the new root
+	// and a "done" marker (nil journal) so the next boot doesn't try to rebuild it.
+	batch := db.diskdb.NewBatch()
+	rawdb.WriteSnapshotRoot(batch, root)
+	journalProgress(batch, nil, nil)
+	if err := batch.Write(); err != nil {
+		return err
+	}
+
+	// New disk layer, no generator attached. Nothing to rebuild, and reads
+	// can serve the flat state right away without waiting on a generator to
+	// scan past every key.
+	dl := newDiskLayer(root, 0, db, nil, nil, newBuffer(db.config.WriteBufferSize, nil, nil, 0), nil)
+	db.tree.init(dl)
+
+	db.setHistoryIndexer()
+
+	log.Info("Adopted synced state", "root", root)
 	return nil
 }
 
@@ -586,7 +625,7 @@ func (db *Database) journalPath() string {
 		return ""
 	}
 	var fname string
-	if db.isVerkle {
+	if db.isUBT {
 		fname = fmt.Sprintf("verkle.journal")
 	} else {
 		fname = fmt.Sprintf("merkle.journal")

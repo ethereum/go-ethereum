@@ -170,9 +170,10 @@ type BlockChainConfig struct {
 	TrieNoAsyncFlush     bool          // Whether the asynchronous buffer flushing is disallowed
 	TrieJournalDirectory string        // Directory path to the journal used for persisting trie data across node restarts
 
-	Preimages   bool   // Whether to store preimage of trie key to the disk
-	StateScheme string // Scheme used to store ethereum states and merkle tree nodes on top
-	ArchiveMode bool   // Whether to enable the archive mode
+	Preimages         bool   // Whether to store preimage of trie key to the disk
+	StateScheme       string // Scheme used to store ethereum states and merkle tree nodes on top
+	ArchiveMode       bool   // Whether to enable the archive mode
+	BinTrieGroupDepth int    // Number of levels per serialized group in binary trie (1-8)
 
 	// Number of blocks from the chain head for which state histories are retained.
 	// If set to 0, all state histories across the entire chain will be retained;
@@ -258,10 +259,11 @@ func (cfg BlockChainConfig) WithNoAsyncFlush(on bool) *BlockChainConfig {
 }
 
 // triedbConfig derives the configures for trie database.
-func (cfg *BlockChainConfig) triedbConfig(isVerkle bool) *triedb.Config {
+func (cfg *BlockChainConfig) triedbConfig(isUBT bool) *triedb.Config {
 	config := &triedb.Config{
-		Preimages: cfg.Preimages,
-		IsVerkle:  isVerkle,
+		Preimages:         cfg.Preimages,
+		IsUBT:             isUBT,
+		BinTrieGroupDepth: cfg.BinTrieGroupDepth,
 	}
 	if cfg.StateScheme == rawdb.HashScheme {
 		config.HashDB = &hashdb.Config{
@@ -378,7 +380,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 
 	// Open trie database with provided config
-	enableVerkle, err := EnableVerkleAtGenesis(db, genesis)
+	enableVerkle, err := EnableUBTAtGenesis(db, genesis)
 	if err != nil {
 		return nil, err
 	}
@@ -1188,6 +1190,7 @@ func (bc *BlockChain) SnapSyncComplete(hash common.Hash) error {
 	}
 
 	// If all checks out, manually set the head block.
+	rawdb.WriteHeadBlockHash(bc.db, hash)
 	bc.currentBlock.Store(block.Header())
 	headBlockGauge.Update(int64(block.NumberU64()))
 
@@ -2120,11 +2123,29 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		startTime = time.Now()
 		statedb   *state.StateDB
 		interrupt atomic.Bool
-		sdb       = state.NewDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
+		sdb       state.Database
 	)
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
-	if bc.cfg.NoPrefetch {
+	if bc.chainConfig.IsUBT(block.Number(), block.Time()) {
+		sdb = state.NewUBTDatabase(bc.triedb, bc.codedb)
+	} else {
+		sdb = state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
+	}
+	// If prefetching is enabled, run that against the current state to pre-cache
+	// transactions and probabilistically some of the account/storage trie nodes.
+	//
+	// Note: the main processor and prefetcher share the same reader with a local
+	// cache for mitigating the overhead of state access.
+	type prewarmReader interface {
+		// ReadersWithCacheStats creates a pair of state readers that share the
+		// same underlying state reader and internal state cache, while maintaining
+		// separate statistics respectively.
+		ReadersWithCacheStats(stateRoot common.Hash) (state.Reader, state.Reader, error)
+	}
+	warmer, ok := sdb.(prewarmReader)
+
+	if bc.cfg.NoPrefetch || !ok {
 		statedb, err = state.New(parentRoot, sdb)
 		if err != nil {
 			return nil, err
@@ -2135,7 +2156,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		//
 		// Note: the main processor and prefetcher share the same reader with a local
 		// cache for mitigating the overhead of state access.
-		prefetch, process, err := sdb.ReadersWithCacheStats(parentRoot)
+		prefetch, process, err := warmer.ReadersWithCacheStats(parentRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -2580,8 +2601,13 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 		blockReorgAddMeter.Mark(int64(len(newChain)))
 	} else {
 		// len(newChain) == 0 && len(oldChain) > 0
-		// rewind the canonical chain to a lower point.
-		log.Error("Impossible reorg, please file an issue", "oldnum", oldHead.Number, "oldhash", oldHead.Hash(), "oldblocks", len(oldChain), "newnum", newHead.Number, "newhash", newHead.Hash(), "newblocks", len(newChain))
+		// Rewind the canonical chain to a lower point. In EPBs we can reorg to
+		// a parent of the head within 32 blocks.
+		if len(oldChain) > 32 {
+			log.Error("Impossible reorg, please file an issue", "oldnum", oldHead.Number, "oldhash", oldHead.Hash(), "oldblocks", len(oldChain))
+		} else {
+			log.Info("Shorten chain", "del", len(oldChain), "number", oldHead.Number, "hash", oldHead.Hash())
+		}
 	}
 	// Acquire the tx-lookup lock before mutation. This step is essential
 	// as the txlookups should be changed atomically, and all subsequent

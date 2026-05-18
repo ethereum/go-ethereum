@@ -72,8 +72,11 @@ func (EventCheckerDynamic) ContractEventName() string {
 // Solidity: event dynamic(string indexed idxStr, bytes indexed idxDat, string str, bytes dat)
 func (eventChecker *EventChecker) UnpackDynamicEvent(log *types.Log) (*EventCheckerDynamic, error) {
 	event := "dynamic"
-	if len(log.Topics) == 0 || log.Topics[0] != eventChecker.abi.Events[event].ID {
-		return nil, errors.New("event signature mismatch")
+	if len(log.Topics) == 0 {
+		return nil, bind.ErrNoEventSignature
+	}
+	if log.Topics[0] != eventChecker.abi.Events[event].ID {
+		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(EventCheckerDynamic)
 	if len(log.Data) > 0 {
@@ -112,8 +115,11 @@ func (EventCheckerEmpty) ContractEventName() string {
 // Solidity: event empty()
 func (eventChecker *EventChecker) UnpackEmptyEvent(log *types.Log) (*EventCheckerEmpty, error) {
 	event := "empty"
-	if len(log.Topics) == 0 || log.Topics[0] != eventChecker.abi.Events[event].ID {
-		return nil, errors.New("event signature mismatch")
+	if len(log.Topics) == 0 {
+		return nil, bind.ErrNoEventSignature
+	}
+	if log.Topics[0] != eventChecker.abi.Events[event].ID {
+		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(EventCheckerEmpty)
 	if len(log.Data) > 0 {
@@ -154,8 +160,11 @@ func (EventCheckerIndexed) ContractEventName() string {
 // Solidity: event indexed(address indexed addr, int256 indexed num)
 func (eventChecker *EventChecker) UnpackIndexedEvent(log *types.Log) (*EventCheckerIndexed, error) {
 	event := "indexed"
-	if len(log.Topics) == 0 || log.Topics[0] != eventChecker.abi.Events[event].ID {
-		return nil, errors.New("event signature mismatch")
+	if len(log.Topics) == 0 {
+		return nil, bind.ErrNoEventSignature
+	}
+	if log.Topics[0] != eventChecker.abi.Events[event].ID {
+		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(EventCheckerIndexed)
 	if len(log.Data) > 0 {
@@ -196,8 +205,11 @@ func (EventCheckerMixed) ContractEventName() string {
 // Solidity: event mixed(address indexed addr, int256 num)
 func (eventChecker *EventChecker) UnpackMixedEvent(log *types.Log) (*EventCheckerMixed, error) {
 	event := "mixed"
-	if len(log.Topics) == 0 || log.Topics[0] != eventChecker.abi.Events[event].ID {
-		return nil, errors.New("event signature mismatch")
+	if len(log.Topics) == 0 {
+		return nil, bind.ErrNoEventSignature
+	}
+	if log.Topics[0] != eventChecker.abi.Events[event].ID {
+		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(EventCheckerMixed)
 	if len(log.Data) > 0 {
@@ -238,8 +250,11 @@ func (EventCheckerUnnamed) ContractEventName() string {
 // Solidity: event unnamed(uint256 indexed arg0, uint256 indexed arg1)
 func (eventChecker *EventChecker) UnpackUnnamedEvent(log *types.Log) (*EventCheckerUnnamed, error) {
 	event := "unnamed"
-	if len(log.Topics) == 0 || log.Topics[0] != eventChecker.abi.Events[event].ID {
-		return nil, errors.New("event signature mismatch")
+	if len(log.Topics) == 0 {
+		return nil, bind.ErrNoEventSignature
+	}
+	if log.Topics[0] != eventChecker.abi.Events[event].ID {
+		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(EventCheckerUnnamed)
 	if len(log.Data) > 0 {

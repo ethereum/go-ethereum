@@ -47,6 +47,7 @@ func newNoopTracer(_ json.RawMessage) (*tracing.Hooks, error) {
 		OnOpcode:         t.OnOpcode,
 		OnFault:          t.OnFault,
 		OnGasChange:      t.OnGasChange,
+		OnGasChangeV2:    t.OnGasChangeV2,
 		OnBlockchainInit: t.OnBlockchainInit,
 		OnBlockStart:     t.OnBlockStart,
 		OnBlockEnd:       t.OnBlockEnd,
@@ -112,4 +113,7 @@ func (t *noop) OnLog(l *types.Log) {
 func (t *noop) OnBlockHashRead(number uint64, hash common.Hash) {}
 
 func (t *noop) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {
+}
+
+func (t *noop) OnGasChangeV2(old, new tracing.Gas, reason tracing.GasChangeReason) {
 }

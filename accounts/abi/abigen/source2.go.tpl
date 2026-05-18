@@ -183,8 +183,11 @@ var (
 		// Solidity: {{.Original.String}}
 		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Event(log *types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
 			event := "{{.Original.Name}}"
-			if len(log.Topics) == 0 || log.Topics[0] != {{ decapitalise $contract.Type}}.abi.Events[event].ID {
-				return nil, errors.New("event signature mismatch")
+			if len(log.Topics) == 0 {
+				return nil, bind.ErrNoEventSignature
+			}
+			if log.Topics[0] != {{ decapitalise $contract.Type}}.abi.Events[event].ID {
+				return nil, bind.ErrEventSignatureMismatch
 			}
 			out := new({{$contract.Type}}{{.Normalized.Name}})
 			if len(log.Data) > 0 {

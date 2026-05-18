@@ -114,8 +114,11 @@ func (OverloadBar) ContractEventName() string {
 // Solidity: event bar(uint256 i)
 func (overload *Overload) UnpackBarEvent(log *types.Log) (*OverloadBar, error) {
 	event := "bar"
-	if len(log.Topics) == 0 || log.Topics[0] != overload.abi.Events[event].ID {
-		return nil, errors.New("event signature mismatch")
+	if len(log.Topics) == 0 {
+		return nil, bind.ErrNoEventSignature
+	}
+	if log.Topics[0] != overload.abi.Events[event].ID {
+		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(OverloadBar)
 	if len(log.Data) > 0 {
@@ -156,8 +159,11 @@ func (OverloadBar0) ContractEventName() string {
 // Solidity: event bar(uint256 i, uint256 j)
 func (overload *Overload) UnpackBar0Event(log *types.Log) (*OverloadBar0, error) {
 	event := "bar0"
-	if len(log.Topics) == 0 || log.Topics[0] != overload.abi.Events[event].ID {
-		return nil, errors.New("event signature mismatch")
+	if len(log.Topics) == 0 {
+		return nil, bind.ErrNoEventSignature
+	}
+	if log.Topics[0] != overload.abi.Events[event].ID {
+		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(OverloadBar0)
 	if len(log.Data) > 0 {

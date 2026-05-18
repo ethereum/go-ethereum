@@ -17,9 +17,11 @@
 package discover
 
 import (
+	"container/list"
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"encoding/binary"
+	"iter"
 	"math/rand"
 	"net"
 	"net/netip"
@@ -142,4 +144,17 @@ func (r *reseedingRandom) Shuffle(n int, swap func(i, j int)) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.cur.Shuffle(n, swap)
+}
+
+// iterList iterates over the elements of the given list.
+func iterList[T any](l *list.List) iter.Seq2[T, *list.Element] {
+	return func(yield func(T, *list.Element) bool) {
+		for el := l.Front(); el != nil; {
+			next := el.Next()
+			if !yield(el.Value.(T), el) {
+				return
+			}
+			el = next
+		}
+	}
 }

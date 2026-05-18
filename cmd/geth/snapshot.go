@@ -18,15 +18,18 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"slices"
+	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
@@ -168,6 +171,22 @@ block is used.
 				Description: `
 The export-preimages command exports hash preimages to a flat file, in exactly
 the expected order for the overlay tree migration.
+`,
+			},
+			{
+				Name:    "list-eip-7610-accounts",
+				Aliases: []string{"eip7610"},
+				Usage:   "list EIP7610 eligible accounts",
+				Action:  listEIP7610EligibleAccounts,
+				Flags:   slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
+				Description: `
+geth snapshot list-eip-7610-accounts
+traverses the post–EIP-161 state and returns all accounts that are eligible
+under EIP-7610: accounts with zero nonce, empty runtime code, and non-empty
+storage. The traversal will be aborted immediately if the state is prior to
+EIP-161.
+
+The exported accounts are identified by their address.
 `,
 			},
 		},
@@ -799,5 +818,94 @@ func checkAccount(ctx *cli.Context) error {
 		return err
 	}
 	log.Info("Checked the snapshot journalled storage", "time", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+// listEIP7610EligibleAccounts traverses the post–EIP-161 state and returns all
+// accounts that are eligible under EIP-7610: accounts with zero nonce, empty
+// runtime code, and non-empty storage.
+//
+// Such accounts could only have been created before EIP-161, since after that
+// all newly created contracts are initialized with a nonce of one.
+//
+// This helper should be generally applicable to all networks, including the
+// Ethereum mainnet. For most networks where EIP-161 was enabled from genesis,
+// the resulting set is expected to be empty. Otherwise, network operators are
+// responsible for generating the eligible account set themselves.
+//
+// Notably, the exported accounts are identified by their address.
+func listEIP7610EligibleAccounts(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	defer chaindb.Close()
+
+	headBlock := rawdb.ReadHeadBlock(chaindb)
+	if headBlock == nil {
+		log.Error("Failed to load head block")
+		return nil
+	}
+	config, _, err := core.LoadChainConfig(chaindb, utils.MakeGenesis(ctx))
+	if err != nil {
+		log.Error("Failed to load chain config", "err", err)
+		return err
+	}
+	if !config.IsEIP158(headBlock.Number()) {
+		log.Info("Local head is prior to EIP-161", "head", headBlock.Number(), "eip-161", *config.EIP158Block)
+		return nil
+	}
+	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, false, true, false)
+	defer triedb.Close()
+
+	if triedb.Scheme() != rawdb.PathScheme {
+		log.Error("Hash scheme is not supported")
+		return nil
+	}
+	iter, err := triedb.AccountIterator(headBlock.Root(), common.Hash{})
+	if err != nil {
+		log.Error("Failed to get account iterator", "err", err)
+		return err
+	}
+	var (
+		start    = time.Now()
+		accounts []common.Address
+	)
+	for iter.Next() {
+		blob := iter.Account()
+		if blob == nil {
+			log.Error("Failed to get account blob")
+			return nil
+		}
+		var account types.SlimAccount
+		if err := rlp.DecodeBytes(blob, &account); err != nil {
+			log.Error("Failed to decode", "err", err)
+			return err
+		}
+		// EIP-7610 account eligibility:
+		// - account.nonce == 0
+		// - account.runtime_code == empty
+		// - account.storage != empty
+		if len(account.CodeHash) == 0 && account.Nonce == 0 && len(account.Root) != 0 {
+			preimage := rawdb.ReadPreimage(chaindb, iter.Hash())
+			if preimage == nil {
+				log.Error("Failed to read preimage", "hash", iter.Hash().Hex())
+				return nil
+			}
+			accounts = append(accounts, common.BytesToAddress(preimage))
+		}
+	}
+	if len(accounts) == 0 {
+		log.Info("Traversed state", "eligible", len(accounts), "elapsed", common.PrettyDuration(time.Since(start)))
+	} else {
+		sort.Slice(accounts, func(i, j int) bool {
+			return accounts[i].Cmp(accounts[j]) < 0
+		})
+		buf := make([]byte, len(accounts)*common.AddressLength)
+		for i, h := range accounts {
+			copy(buf[i*common.AddressLength:], h[:])
+		}
+		log.Info("Traversed state", "eligible", len(accounts), "elapsed", common.PrettyDuration(time.Since(start)), "output", hex.EncodeToString(buf))
+	}
 	return nil
 }

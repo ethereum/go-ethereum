@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 )
@@ -57,9 +58,9 @@ type AccountIterator interface {
 	// An error will be returned if the preimage is not available.
 	Address() (common.Address, error)
 
-	// Account returns the RLP encoded account the iterator is currently at.
+	// Account returns the account the iterator is currently at.
 	// An error will be retained if the iterator becomes invalid.
-	Account() []byte
+	Account() *types.StateAccount
 }
 
 // StorageIterator is an iterator to step over the specific storage in the
@@ -73,7 +74,7 @@ type StorageIterator interface {
 
 	// Slot returns the storage slot the iterator is currently at. An error will
 	// be retained if the iterator becomes invalid.
-	Slot() []byte
+	Slot() common.Hash
 }
 
 // Iteratee wraps the NewIterator methods for traversing the accounts and
@@ -131,10 +132,7 @@ func (ai *flatAccountIterator) Next() bool {
 // Error returns any failure that occurred during iteration, which might have
 // caused a premature iteration exit.
 func (ai *flatAccountIterator) Error() error {
-	if ai.err != nil {
-		return ai.err
-	}
-	return ai.it.Error()
+	return errors.Join(ai.err, ai.it.Error())
 }
 
 // Hash returns the hash of the account or storage slot the iterator is
@@ -165,8 +163,8 @@ func (ai *flatAccountIterator) Address() (common.Address, error) {
 // Account returns the account data the iterator is currently at. The account
 // data is encoded as slim format from the underlying iterator, the conversion
 // is required.
-func (ai *flatAccountIterator) Account() []byte {
-	data, err := types.FullAccountRLP(ai.it.Account())
+func (ai *flatAccountIterator) Account() *types.StateAccount {
+	data, err := types.FullAccount(ai.it.Account())
 	if err != nil {
 		ai.err = err
 		return nil
@@ -176,6 +174,7 @@ func (ai *flatAccountIterator) Account() []byte {
 
 // flatStorageIterator is a wrapper around the underlying flat state iterator.
 type flatStorageIterator struct {
+	err      error
 	it       snapshot.StorageIterator
 	preimage PreimageReader
 }
@@ -190,13 +189,16 @@ func newFlatStorageIterator(it snapshot.StorageIterator, preimage PreimageReader
 // is exhausted or if an error occurs. Any error encountered is retained and
 // can be retrieved via Error().
 func (si *flatStorageIterator) Next() bool {
+	if si.err != nil {
+		return false
+	}
 	return si.it.Next()
 }
 
 // Error returns any failure that occurred during iteration, which might have
 // caused a premature iteration exit.
 func (si *flatStorageIterator) Error() error {
-	return si.it.Error()
+	return errors.Join(si.err, si.it.Error())
 }
 
 // Hash returns the hash of the account or storage slot the iterator is
@@ -225,14 +227,24 @@ func (si *flatStorageIterator) Key() (common.Hash, error) {
 }
 
 // Slot returns the storage slot data the iterator is currently at.
-func (si *flatStorageIterator) Slot() []byte {
-	return si.it.Slot()
+func (si *flatStorageIterator) Slot() common.Hash {
+	// Perform the rlp-decode as the slot value is RLP-encoded
+	blob := si.it.Slot()
+	_, content, _, err := rlp.Split(blob)
+	if err != nil {
+		si.err = err
+		return common.Hash{}
+	}
+	var value common.Hash
+	value.SetBytes(content)
+	return value
 }
 
 // merkleIterator implements the Iterator interface, providing functions to traverse
 // the accounts or storages with the manner of Merkle-Patricia-Trie.
 type merkleIterator struct {
 	tr      Trie
+	err     error
 	it      *trie.Iterator
 	account bool
 }
@@ -254,13 +266,16 @@ func newMerkleTrieIterator(tr Trie, start common.Hash, account bool) (*merkleIte
 // is exhausted or if an error occurs. Any error encountered is retained and
 // can be retrieved via Error().
 func (ti *merkleIterator) Next() bool {
+	if ti.err != nil {
+		return false
+	}
 	return ti.it.Next()
 }
 
 // Error returns any failure that occurred during iteration, which might have
 // caused a premature iteration exit.
 func (ti *merkleIterator) Error() error {
-	return ti.it.Err
+	return errors.Join(ti.err, ti.it.Err)
 }
 
 // Hash returns the hash of the account or storage slot the iterator is
@@ -287,11 +302,16 @@ func (ti *merkleIterator) Address() (common.Address, error) {
 }
 
 // Account returns the account data the iterator is currently at.
-func (ti *merkleIterator) Account() []byte {
+func (ti *merkleIterator) Account() *types.StateAccount {
 	if !ti.account {
 		return nil
 	}
-	return ti.it.Value
+	var account types.StateAccount
+	if err := rlp.DecodeBytes(ti.it.Value, &account); err != nil {
+		ti.err = err
+		return nil
+	}
+	return &account
 }
 
 // Key returns the raw storage slot key the iterator is currently at.
@@ -308,11 +328,19 @@ func (ti *merkleIterator) Key() (common.Hash, error) {
 }
 
 // Slot returns the storage slot the iterator is currently at.
-func (ti *merkleIterator) Slot() []byte {
+func (ti *merkleIterator) Slot() common.Hash {
 	if ti.account {
-		return nil
+		return common.Hash{}
 	}
-	return ti.it.Value
+	// Perform the rlp-decode as the slot value is RLP-encoded
+	_, content, _, err := rlp.Split(ti.it.Value)
+	if err != nil {
+		ti.err = err
+		return common.Hash{}
+	}
+	var value common.Hash
+	value.SetBytes(content)
+	return value
 }
 
 // stateIteratee implements Iteratee interface, providing the state traversal
@@ -430,6 +458,6 @@ func (e exhaustedIterator) Key() (common.Hash, error) {
 	return common.Hash{}, nil
 }
 
-func (e exhaustedIterator) Slot() []byte {
-	return nil
+func (e exhaustedIterator) Slot() common.Hash {
+	return common.Hash{}
 }

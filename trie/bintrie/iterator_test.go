@@ -27,14 +27,13 @@ import (
 // makeTrie creates a BinaryTrie populated with the given key-value pairs.
 func makeTrie(t *testing.T, entries [][2]common.Hash) *BinaryTrie {
 	t.Helper()
+	store := newNodeStore()
 	tr := &BinaryTrie{
-		root:   NewBinaryNode(),
+		store:  store,
 		tracer: trie.NewPrevalueTracer(),
 	}
 	for _, kv := range entries {
-		var err error
-		tr.root, err = tr.root.Insert(kv[0][:], kv[1][:], nil, 0)
-		if err != nil {
+		if err := store.Insert(kv[0][:], kv[1][:], nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -64,7 +63,7 @@ func countLeaves(t *testing.T, tr *BinaryTrie) int {
 // no nodes and reports no error.
 func TestIteratorEmptyTrie(t *testing.T) {
 	tr := &BinaryTrie{
-		root:   Empty{},
+		store:  newNodeStore(),
 		tracer: trie.NewPrevalueTracer(),
 	}
 	it, err := newBinaryNodeIterator(tr, nil)
@@ -145,8 +144,8 @@ func TestIteratorEmptyNodeBacktrack(t *testing.T) {
 		{common.HexToHash("8000000000000000000000000000000000000000000000000000000000000001"), oneKey},
 	})
 
-	if _, ok := tr.root.(*InternalNode); !ok {
-		t.Fatalf("expected InternalNode root, got %T", tr.root)
+	if tr.store.root.Kind() != kindInternal {
+		t.Fatalf("expected InternalNode root, got kind %d", tr.store.root.Kind())
 	}
 	if leaves := countLeaves(t, tr); leaves != 2 {
 		t.Fatalf("expected 2 leaves, got %d (Empty backtrack bug?)", leaves)
@@ -162,18 +161,31 @@ func TestIteratorHashedNodeNilData(t *testing.T) {
 		{common.HexToHash("8000000000000000000000000000000000000000000000000000000000000001"), oneKey},
 	})
 
-	root, ok := tr.root.(*InternalNode)
-	if !ok {
-		t.Fatalf("expected InternalNode root, got %T", tr.root)
+	root := tr.store.root
+	if root.Kind() != kindInternal {
+		t.Fatalf("expected InternalNode root, got kind %d", root.Kind())
 	}
+	rootNode := tr.store.getInternal(root.Index())
 
 	// Replace right child with a zero-hash HashedNode. nodeResolver
 	// short-circuits on common.Hash{} and returns (nil, nil), which
 	// triggers the nil-data guard in the iterator.
-	root.right = HashedNode(common.Hash{})
+	rootNode.right = tr.store.newHashedRef(common.Hash{})
 
 	// Should not panic; the zero-hash right child should be treated as Empty.
-	if leaves := countLeaves(t, tr); leaves != 1 {
+	// Since the hashed node can't be resolved (nil data -> empty deserialization),
+	// only the left leaf should be counted.
+	it, err := newBinaryNodeIterator(tr, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaves := 0
+	for it.Next(true) {
+		if it.Leaf() {
+			leaves++
+		}
+	}
+	if leaves != 1 {
 		t.Fatalf("expected 1 leaf (zero-hash right node skipped), got %d", leaves)
 	}
 }

@@ -25,13 +25,13 @@ import (
 )
 
 // ConstructionAccountAccess contains post-block account state for mutations as well as
-// all storage keys that were read during execution.  It is used when building block
+// all storage keys that were read during execution. It is used when building block
 // access list during execution.
 type ConstructionAccountAccess struct {
 	// StorageWrites is the post-state values of an account's storage slots
 	// that were modified in a block, keyed by the slot key and the tx index
 	// where the modification occurred.
-	StorageWrites map[common.Hash]map[uint16]common.Hash `json:"storageWrites,omitempty"`
+	StorageWrites map[common.Hash]map[uint32]common.Hash `json:"storageWrites,omitempty"`
 
 	// StorageReads is the set of slot keys that were accessed during block
 	// execution.
@@ -42,25 +42,25 @@ type ConstructionAccountAccess struct {
 
 	// BalanceChanges contains the post-transaction balances of an account,
 	// keyed by transaction indices where it was changed.
-	BalanceChanges map[uint16]*uint256.Int `json:"balanceChanges,omitempty"`
+	BalanceChanges map[uint32]*uint256.Int `json:"balanceChanges,omitempty"`
 
 	// NonceChanges contains the post-state nonce values of an account keyed
 	// by tx index.
-	NonceChanges map[uint16]uint64 `json:"nonceChanges,omitempty"`
+	NonceChanges map[uint32]uint64 `json:"nonceChanges,omitempty"`
 
 	// CodeChange contains the post-state contract code of an account keyed
 	// by tx index.
-	CodeChange map[uint16][]byte `json:"codeChange,omitempty"`
+	CodeChange map[uint32][]byte `json:"codeChange,omitempty"`
 }
 
 // NewConstructionAccountAccess initializes the account access object.
 func NewConstructionAccountAccess() *ConstructionAccountAccess {
 	return &ConstructionAccountAccess{
-		StorageWrites:  make(map[common.Hash]map[uint16]common.Hash),
+		StorageWrites:  make(map[common.Hash]map[uint32]common.Hash),
 		StorageReads:   make(map[common.Hash]struct{}),
-		BalanceChanges: make(map[uint16]*uint256.Int),
-		NonceChanges:   make(map[uint16]uint64),
-		CodeChange:     make(map[uint16][]byte),
+		BalanceChanges: make(map[uint32]*uint256.Int),
+		NonceChanges:   make(map[uint32]uint64),
+		CodeChange:     make(map[uint32][]byte),
 	}
 }
 
@@ -71,8 +71,8 @@ type ConstructionBlockAccessList struct {
 }
 
 // NewConstructionBlockAccessList instantiates an empty access list.
-func NewConstructionBlockAccessList() ConstructionBlockAccessList {
-	return ConstructionBlockAccessList{
+func NewConstructionBlockAccessList() *ConstructionBlockAccessList {
+	return &ConstructionBlockAccessList{
 		Accounts: make(map[common.Address]*ConstructionAccountAccess),
 	}
 }
@@ -97,12 +97,12 @@ func (b *ConstructionBlockAccessList) StorageRead(address common.Address, key co
 
 // StorageWrite records the post-transaction value of a mutated storage slot.
 // The storage slot is removed from the list of read slots.
-func (b *ConstructionBlockAccessList) StorageWrite(txIdx uint16, address common.Address, key, value common.Hash) {
+func (b *ConstructionBlockAccessList) StorageWrite(txIdx uint32, address common.Address, key, value common.Hash) {
 	if _, ok := b.Accounts[address]; !ok {
 		b.Accounts[address] = NewConstructionAccountAccess()
 	}
 	if _, ok := b.Accounts[address].StorageWrites[key]; !ok {
-		b.Accounts[address].StorageWrites[key] = make(map[uint16]common.Hash)
+		b.Accounts[address].StorageWrites[key] = make(map[uint32]common.Hash)
 	}
 	b.Accounts[address].StorageWrites[key][txIdx] = value
 
@@ -110,7 +110,7 @@ func (b *ConstructionBlockAccessList) StorageWrite(txIdx uint16, address common.
 }
 
 // CodeChange records the code of a newly-created contract.
-func (b *ConstructionBlockAccessList) CodeChange(address common.Address, txIndex uint16, code []byte) {
+func (b *ConstructionBlockAccessList) CodeChange(address common.Address, txIndex uint32, code []byte) {
 	if _, ok := b.Accounts[address]; !ok {
 		b.Accounts[address] = NewConstructionAccountAccess()
 	}
@@ -120,7 +120,7 @@ func (b *ConstructionBlockAccessList) CodeChange(address common.Address, txIndex
 
 // NonceChange records tx post-state nonce of any contract-like accounts whose
 // nonce was incremented.
-func (b *ConstructionBlockAccessList) NonceChange(address common.Address, txIdx uint16, postNonce uint64) {
+func (b *ConstructionBlockAccessList) NonceChange(address common.Address, txIdx uint32, postNonce uint64) {
 	if _, ok := b.Accounts[address]; !ok {
 		b.Accounts[address] = NewConstructionAccountAccess()
 	}
@@ -129,7 +129,7 @@ func (b *ConstructionBlockAccessList) NonceChange(address common.Address, txIdx 
 
 // BalanceChange records the post-transaction balance of an account whose
 // balance changed.
-func (b *ConstructionBlockAccessList) BalanceChange(txIdx uint16, address common.Address, balance *uint256.Int) {
+func (b *ConstructionBlockAccessList) BalanceChange(txIdx uint32, address common.Address, balance *uint256.Int) {
 	if _, ok := b.Accounts[address]; !ok {
 		b.Accounts[address] = NewConstructionAccountAccess()
 	}
@@ -148,26 +148,26 @@ func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 	for addr, aa := range b.Accounts {
 		var aaCopy ConstructionAccountAccess
 
-		slotWrites := make(map[common.Hash]map[uint16]common.Hash, len(aa.StorageWrites))
+		slotWrites := make(map[common.Hash]map[uint32]common.Hash, len(aa.StorageWrites))
 		for key, m := range aa.StorageWrites {
 			slotWrites[key] = maps.Clone(m)
 		}
 		aaCopy.StorageWrites = slotWrites
 		aaCopy.StorageReads = maps.Clone(aa.StorageReads)
 
-		balances := make(map[uint16]*uint256.Int, len(aa.BalanceChanges))
+		balances := make(map[uint32]*uint256.Int, len(aa.BalanceChanges))
 		for index, balance := range aa.BalanceChanges {
 			balances[index] = balance.Clone()
 		}
 		aaCopy.BalanceChanges = balances
 		aaCopy.NonceChanges = maps.Clone(aa.NonceChanges)
 
-		codes := make(map[uint16][]byte, len(aa.CodeChange))
+		codes := make(map[uint32][]byte, len(aa.CodeChange))
 		for index, code := range aa.CodeChange {
 			codes[index] = bytes.Clone(code)
 		}
 		aaCopy.CodeChange = codes
 		res.Accounts[addr] = &aaCopy
 	}
-	return &res
+	return res
 }

@@ -82,6 +82,9 @@ const (
 	// beaconUpdateWarnFrequency is the frequency at which to warn the user that
 	// the beacon client is offline.
 	beaconUpdateWarnFrequency = 5 * time.Minute
+
+	// maxReorgDepth is the maximum reorg depth accepted via forkchoiceUpdated.
+	maxReorgDepth = 32
 )
 
 type ConsensusAPI struct {
@@ -237,6 +240,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV4(ctx context.Context, update engine.
 func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes, payloadVersion engine.PayloadVersion, payloadWitness bool) (result engine.ForkChoiceResponse, err error) {
 	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.forkchoiceUpdated")
 	defer spanEnd(&err)
+
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()
 
@@ -321,10 +325,23 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 		// generating the payload. It's a special corner case that a few slots are
 		// missing and we are requested to generate the payload in slot.
 	} else {
-		// If the head block is already in our canonical chain, the beacon client is
-		// probably resyncing. Ignore the update.
-		log.Info("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().Number)
-		return valid(nil), nil
+		if finalized := api.eth.BlockChain().CurrentFinalBlock(); finalized != nil && block.NumberU64() <= finalized.Number.Uint64() {
+			log.Info("Skipping beacon update to finalized ancestor", "number", block.NumberU64(), "hash", update.HeadBlockHash)
+			return valid(nil), nil
+		}
+		depth := api.eth.BlockChain().CurrentBlock().Number.Uint64() - block.NumberU64()
+		if depth >= maxReorgDepth {
+			log.Warn("Refusing too deep reorg", "depth", depth, "head", update.HeadBlockHash)
+			return engine.STATUS_INVALID, engine.TooDeepReorg.With(fmt.Errorf("reorg depth %d exceeds limit %d", depth, maxReorgDepth))
+		}
+		if !api.eth.Synced() {
+			log.Info("Ignoring beacon update to old head while syncing", "number", block.NumberU64(), "hash", update.HeadBlockHash)
+			return valid(nil), nil
+		}
+		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
+			log.Error("Error setting canonical", "number", block.NumberU64(), "hash", update.HeadBlockHash, "error", err)
+			return engine.ForkChoiceResponse{PayloadStatus: engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &latestValid}}, err
+		}
 	}
 	api.eth.SetSynced()
 
@@ -629,6 +646,7 @@ func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) ([]*engine.Blob
 		return nil, engine.InvalidParams.With(err)
 	}
 	// Validate the blobs from the pool and assemble the response
+	filled := 0
 	res := make([]*engine.BlobAndProofV2, len(hashes))
 	for i := range blobs {
 		// The blob has been evicted since the last AvailableBlobs call.
@@ -649,10 +667,11 @@ func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) ([]*engine.Blob
 			Blob:       blobs[i][:],
 			CellProofs: cellProofs,
 		}
+		filled++
 	}
-	if len(res) == len(hashes) {
+	if filled == len(hashes) {
 		getBlobsRequestCompleteHit.Inc(1)
-	} else if len(res) > 0 {
+	} else if filled > 0 {
 		getBlobsRequestPartialHit.Inc(1)
 	} else {
 		getBlobsRequestMiss.Inc(1)

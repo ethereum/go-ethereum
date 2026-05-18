@@ -97,3 +97,44 @@ jobs:
 
       - name: Run tests
         run: go run build/ci.go test -p 8
+
+  windows:
+    name: Windows ${{ matrix.arch }}
+    needs: lint
+    runs-on: [self-hosted, windows, x64]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            mingw: 'C:\msys64\mingw64'
+            test: true
+          - arch: '386'
+            mingw: 'C:\msys64\mingw32'
+            test: false
+    env:
+      GETH_MINGW: ${{ matrix.mingw }}
+      GETH_CC: ${{ matrix.mingw }}\bin\gcc.exe
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: Build
+        shell: cmd
+        run: |
+          set PATH=%GETH_MINGW%\bin;%PATH%
+          go run build/ci.go install -arch ${{ matrix.arch }} -cc %GETH_CC%
+
+      - name: Run tests
+        if: matrix.test
+        shell: cmd
+        run: |
+          set PATH=%GETH_MINGW%\bin;%PATH%
+          go run build/ci.go test -arch ${{ matrix.arch }} -cc %GETH_CC% -short -p 8

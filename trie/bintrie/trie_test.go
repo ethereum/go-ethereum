@@ -37,147 +37,130 @@ var (
 )
 
 func TestSingleEntry(t *testing.T) {
-	tree := NewBinaryNode()
-	tree, err := tree.Insert(zeroKey[:], oneKey[:], nil, 0)
-	if err != nil {
+	s := newNodeStore()
+	if err := s.Insert(zeroKey[:], oneKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	if tree.GetHeight() != 1 {
+	if s.getHeight(s.root) != 1 {
 		t.Fatal("invalid depth")
 	}
 	expected := common.HexToHash("aab1060e04cb4f5dc6f697ae93156a95714debbf77d54238766adc5709282b6f")
-	got := tree.Hash()
+	got := s.Hash()
 	if got != expected {
 		t.Fatalf("invalid tree root, got %x, want %x", got, expected)
 	}
 }
 
 func TestTwoEntriesDiffFirstBit(t *testing.T) {
-	var err error
-	tree := NewBinaryNode()
-	tree, err = tree.Insert(zeroKey[:], oneKey[:], nil, 0)
-	if err != nil {
+	s := newNodeStore()
+	if err := s.Insert(zeroKey[:], oneKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	tree, err = tree.Insert(common.HexToHash("8000000000000000000000000000000000000000000000000000000000000000").Bytes(), twoKey[:], nil, 0)
-	if err != nil {
+	if err := s.Insert(common.HexToHash("8000000000000000000000000000000000000000000000000000000000000000").Bytes(), twoKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	if tree.GetHeight() != 2 {
+	if s.getHeight(s.root) != 2 {
 		t.Fatal("invalid height")
 	}
-	if tree.Hash() != common.HexToHash("dfc69c94013a8b3c65395625a719a87534a7cfd38719251ad8c8ea7fe79f065e") {
+	if s.Hash() != common.HexToHash("dfc69c94013a8b3c65395625a719a87534a7cfd38719251ad8c8ea7fe79f065e") {
 		t.Fatal("invalid tree root")
 	}
 }
 
 func TestOneStemColocatedValues(t *testing.T) {
-	var err error
-	tree := NewBinaryNode()
-	tree, err = tree.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000003").Bytes(), oneKey[:], nil, 0)
-	if err != nil {
+	s := newNodeStore()
+	if err := s.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000003").Bytes(), oneKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	tree, err = tree.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000004").Bytes(), twoKey[:], nil, 0)
-	if err != nil {
+	if err := s.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000004").Bytes(), twoKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	tree, err = tree.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000009").Bytes(), threeKey[:], nil, 0)
-	if err != nil {
+	if err := s.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000009").Bytes(), threeKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	tree, err = tree.Insert(common.HexToHash("00000000000000000000000000000000000000000000000000000000000000FF").Bytes(), fourKey[:], nil, 0)
-	if err != nil {
+	if err := s.Insert(common.HexToHash("00000000000000000000000000000000000000000000000000000000000000FF").Bytes(), fourKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	if tree.GetHeight() != 1 {
+	if s.getHeight(s.root) != 1 {
 		t.Fatal("invalid height")
 	}
 }
 
 func TestTwoStemColocatedValues(t *testing.T) {
-	var err error
-	tree := NewBinaryNode()
+	s := newNodeStore()
 	// stem: 0...0
-	tree, err = tree.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000003").Bytes(), oneKey[:], nil, 0)
-	if err != nil {
+	if err := s.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000003").Bytes(), oneKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	tree, err = tree.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000004").Bytes(), twoKey[:], nil, 0)
-	if err != nil {
+	if err := s.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000004").Bytes(), twoKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
 	// stem: 10...0
-	tree, err = tree.Insert(common.HexToHash("8000000000000000000000000000000000000000000000000000000000000003").Bytes(), oneKey[:], nil, 0)
-	if err != nil {
+	if err := s.Insert(common.HexToHash("8000000000000000000000000000000000000000000000000000000000000003").Bytes(), oneKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	tree, err = tree.Insert(common.HexToHash("8000000000000000000000000000000000000000000000000000000000000004").Bytes(), twoKey[:], nil, 0)
-	if err != nil {
+	if err := s.Insert(common.HexToHash("8000000000000000000000000000000000000000000000000000000000000004").Bytes(), twoKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	if tree.GetHeight() != 2 {
+	if s.getHeight(s.root) != 2 {
 		t.Fatal("invalid height")
 	}
 }
 
 func TestTwoKeysMatchFirst42Bits(t *testing.T) {
-	var err error
-	tree := NewBinaryNode()
+	s := newNodeStore()
 	// key1 and key 2 have the same prefix of 42 bits (b0*42+b1+b1) and differ after.
 	key1 := common.HexToHash("0000000000C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0").Bytes()
 	key2 := common.HexToHash("0000000000E00000000000000000000000000000000000000000000000000000").Bytes()
-	tree, err = tree.Insert(key1, oneKey[:], nil, 0)
-	if err != nil {
+	if err := s.Insert(key1, oneKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	tree, err = tree.Insert(key2, twoKey[:], nil, 0)
-	if err != nil {
+	if err := s.Insert(key2, twoKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	if tree.GetHeight() != 1+42+1 {
+	if s.getHeight(s.root) != 1+42+1 {
 		t.Fatal("invalid height")
 	}
 }
+
 func TestInsertDuplicateKey(t *testing.T) {
-	var err error
-	tree := NewBinaryNode()
-	tree, err = tree.Insert(oneKey[:], oneKey[:], nil, 0)
-	if err != nil {
+	s := newNodeStore()
+	if err := s.Insert(oneKey[:], oneKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	tree, err = tree.Insert(oneKey[:], twoKey[:], nil, 0)
-	if err != nil {
+	if err := s.Insert(oneKey[:], twoKey[:], nil); err != nil {
 		t.Fatal(err)
 	}
-	if tree.GetHeight() != 1 {
+	if s.getHeight(s.root) != 1 {
 		t.Fatal("invalid height")
 	}
 	// Verify that the value is updated
-	if !bytes.Equal(tree.(*StemNode).Values[1], twoKey[:]) {
-		t.Fatal("invalid height")
+	v, err := s.Get(oneKey[:], nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(v, twoKey[:]) {
+		t.Fatal("value not updated")
 	}
 }
+
 func TestLargeNumberOfEntries(t *testing.T) {
-	var err error
-	tree := NewBinaryNode()
+	s := newNodeStore()
 	for i := range StemNodeWidth {
 		var key [HashSize]byte
 		key[0] = byte(i)
-		tree, err = tree.Insert(key[:], ffKey[:], nil, 0)
-		if err != nil {
+		if err := s.Insert(key[:], ffKey[:], nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	height := tree.GetHeight()
+	height := s.getHeight(s.root)
 	if height != 1+8 {
 		t.Fatalf("invalid height, wanted %d, got %d", 1+8, height)
 	}
 }
 
 func TestMerkleizeMultipleEntries(t *testing.T) {
-	var err error
-	tree := NewBinaryNode()
+	s := newNodeStore()
 	keys := [][]byte{
 		zeroKey[:],
 		common.HexToHash("8000000000000000000000000000000000000000000000000000000000000000").Bytes(),
@@ -187,12 +170,11 @@ func TestMerkleizeMultipleEntries(t *testing.T) {
 	for i, key := range keys {
 		var v [HashSize]byte
 		binary.LittleEndian.PutUint64(v[:8], uint64(i))
-		tree, err = tree.Insert(key, v[:], nil, 0)
-		if err != nil {
+		if err := s.Insert(key, v[:], nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	got := tree.Hash()
+	got := s.Hash()
 	expected := common.HexToHash("9317155862f7a3867660ddd0966ff799a3d16aa4df1e70a7516eaa4a675191b5")
 	if got != expected {
 		t.Fatalf("invalid root, expected=%x, got = %x", expected, got)
@@ -206,7 +188,7 @@ func TestMerkleizeMultipleEntries(t *testing.T) {
 func TestStorageRoundTrip(t *testing.T) {
 	tracer := trie.NewPrevalueTracer()
 	tr := &BinaryTrie{
-		root:   NewBinaryNode(),
+		store:  newNodeStore(),
 		tracer: tracer,
 	}
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
@@ -274,7 +256,7 @@ func TestStorageRoundTrip(t *testing.T) {
 func newEmptyTestTrie(t *testing.T) *BinaryTrie {
 	t.Helper()
 	return &BinaryTrie{
-		root:   NewBinaryNode(),
+		store:  newNodeStore(),
 		tracer: trie.NewPrevalueTracer(),
 	}
 }
@@ -599,7 +581,7 @@ func TestBinaryTrieWitness(t *testing.T) {
 	tracer := trie.NewPrevalueTracer()
 
 	tr := &BinaryTrie{
-		root:   NewBinaryNode(),
+		store:  newNodeStore(),
 		tracer: tracer,
 	}
 	if w := tr.Witness(); len(w) != 0 {
@@ -626,7 +608,7 @@ func TestBinaryTrieWitness(t *testing.T) {
 func testAccount(t *testing.T, addr common.Address, nonce uint64, balance uint64) *BinaryTrie {
 	t.Helper()
 	tr := &BinaryTrie{
-		root:   NewBinaryNode(),
+		store:  newNodeStore(),
 		tracer: trie.NewPrevalueTracer(),
 	}
 	acc := &types.StateAccount{
@@ -649,8 +631,8 @@ func TestGetAccountNonMembershipStemRoot(t *testing.T) {
 	tr := testAccount(t, addr, 42, 100)
 
 	// Verify root is a StemNode (single stem inserted).
-	if _, ok := tr.root.(*StemNode); !ok {
-		t.Fatalf("expected StemNode root, got %T", tr.root)
+	if tr.store.root.Kind() != kindStem {
+		t.Fatalf("expected StemNode root, got kind %d", tr.store.root.Kind())
 	}
 
 	// Query a completely different address — must return nil.
@@ -680,7 +662,7 @@ func TestGetAccountNonMembershipStemRoot(t *testing.T) {
 // address returns nil when the trie root is an InternalNode (multi-account trie).
 func TestGetAccountNonMembershipInternalRoot(t *testing.T) {
 	tr := &BinaryTrie{
-		root:   NewBinaryNode(),
+		store:  newNodeStore(),
 		tracer: trie.NewPrevalueTracer(),
 	}
 
@@ -700,8 +682,8 @@ func TestGetAccountNonMembershipInternalRoot(t *testing.T) {
 	}
 
 	// Verify root is an InternalNode.
-	if _, ok := tr.root.(*InternalNode); !ok {
-		t.Fatalf("expected InternalNode root, got %T", tr.root)
+	if tr.store.root.Kind() != kindInternal {
+		t.Fatalf("expected InternalNode root, got kind %d", tr.store.root.Kind())
 	}
 
 	// Query a non-existent address — must return nil.
@@ -723,8 +705,8 @@ func TestGetStorageNonMembershipStemRoot(t *testing.T) {
 	tr := testAccount(t, addr, 1, 100)
 
 	// Verify root is a StemNode.
-	if _, ok := tr.root.(*StemNode); !ok {
-		t.Fatalf("expected StemNode root, got %T", tr.root)
+	if tr.store.root.Kind() != kindStem {
+		t.Fatalf("expected StemNode root, got kind %d", tr.store.root.Kind())
 	}
 
 	// Query storage for a different address — must return nil, not panic.
@@ -743,7 +725,7 @@ func TestGetStorageNonMembershipStemRoot(t *testing.T) {
 // non-existent address returns nil when the root is an InternalNode.
 func TestGetStorageNonMembershipInternalRoot(t *testing.T) {
 	tr := &BinaryTrie{
-		root:   NewBinaryNode(),
+		store:  newNodeStore(),
 		tracer: trie.NewPrevalueTracer(),
 	}
 
@@ -765,8 +747,8 @@ func TestGetStorageNonMembershipInternalRoot(t *testing.T) {
 		t.Fatalf("UpdateStorage error: %v", err)
 	}
 
-	if _, ok := tr.root.(*InternalNode); !ok {
-		t.Fatalf("expected InternalNode root, got %T", tr.root)
+	if tr.store.root.Kind() != kindInternal {
+		t.Fatalf("expected InternalNode root, got kind %d", tr.store.root.Kind())
 	}
 
 	// Query storage for a non-existent address — must return nil.
@@ -777,5 +759,103 @@ func TestGetStorageNonMembershipInternalRoot(t *testing.T) {
 	}
 	if len(got) > 0 && !bytes.Equal(got, zero[:]) {
 		t.Fatalf("expected nil/zero for non-existent storage, got %x", got)
+	}
+}
+
+// TestCommitSkipCleanSubtrees verifies that CollectNodes short-circuits on
+// clean subtrees. First Commit flushes every resolved node; a follow-up
+// Commit with no modifications flushes nothing; a single-leaf modification
+// flushes only the root-to-leaf path.
+func TestCommitSkipCleanSubtrees(t *testing.T) {
+	tr := &BinaryTrie{
+		store:      newNodeStore(),
+		tracer:     trie.NewPrevalueTracer(),
+		groupDepth: 1,
+	}
+	const n = 200
+	key := func(i int) [HashSize]byte {
+		var k [HashSize]byte
+		binary.BigEndian.PutUint64(k[:8], uint64(i+1)*0x9e3779b97f4a7c15)
+		binary.BigEndian.PutUint64(k[8:16], uint64(i+1)*0xc2b2ae3d27d4eb4f)
+		binary.BigEndian.PutUint64(k[16:24], uint64(i+1)*0x165667b19e3779f9)
+		binary.BigEndian.PutUint64(k[24:32], uint64(i+1)*0x85ebca77c2b2ae63)
+		return k
+	}
+	for i := range n {
+		k := key(i)
+		var v [HashSize]byte
+		binary.BigEndian.PutUint64(v[24:], uint64(i+1))
+		if err := tr.store.Insert(k[:], v[:], nil); err != nil {
+			t.Fatalf("Insert %d: %v", i, err)
+		}
+	}
+
+	_, ns1 := tr.Commit(false)
+	if len(ns1.Nodes) == 0 {
+		t.Fatal("first Commit produced empty NodeSet")
+	}
+
+	_, nsNoop := tr.Commit(false)
+	if len(nsNoop.Nodes) != 0 {
+		t.Fatalf("no-op Commit: expected empty NodeSet, got %d", len(nsNoop.Nodes))
+	}
+
+	// Modify a single leaf — only the root-to-leaf path should flush.
+	k := key(n / 2)
+	var newVal [HashSize]byte
+	newVal[0] = 0xff
+	if err := tr.store.Insert(k[:], newVal[:], nil); err != nil {
+		t.Fatalf("Insert (modify): %v", err)
+	}
+	_, ns2 := tr.Commit(false)
+	if len(ns2.Nodes) == 0 {
+		t.Fatal("modified Commit produced empty NodeSet")
+	}
+	if len(ns2.Nodes) > 32 {
+		t.Fatalf("modified Commit: expected ≤32 nodes (path+stem), got %d", len(ns2.Nodes))
+	}
+	if len(ns2.Nodes) >= len(ns1.Nodes) {
+		t.Fatalf("expected second NodeSet (%d) to be smaller than first (%d)", len(ns2.Nodes), len(ns1.Nodes))
+	}
+}
+
+// BenchmarkCollectNodesSparseWrite measures Commit cost when one leaf
+// changes per block — the common case for state updates. After warm-up
+// (populate + initial Commit), each iteration modifies a single leaf and
+// re-Commits. Matches the shape of the same-named benchmark on master so
+// the two trees can be benchstat'd directly.
+func BenchmarkCollectNodesSparseWrite(b *testing.B) {
+	const n = 10_000
+	tr := &BinaryTrie{
+		store:  newNodeStore(),
+		tracer: trie.NewPrevalueTracer(),
+	}
+	keys := make([][HashSize]byte, n)
+	for i := range n {
+		binary.BigEndian.PutUint64(keys[i][:8], uint64(i+1)*0x9e3779b97f4a7c15)
+		binary.BigEndian.PutUint64(keys[i][8:16], uint64(i+1)*0xc2b2ae3d27d4eb4f)
+		binary.BigEndian.PutUint64(keys[i][16:24], uint64(i+1)*0x165667b19e3779f9)
+		binary.BigEndian.PutUint64(keys[i][24:32], uint64(i+1)*0x85ebca77c2b2ae63)
+		var v [HashSize]byte
+		binary.BigEndian.PutUint64(v[24:], uint64(i+1))
+		if err := tr.store.Insert(keys[i][:], v[:], nil); err != nil {
+			b.Fatalf("warmup Insert %d: %v", i, err)
+		}
+	}
+	_, _ = tr.Commit(false) // warmup flush
+
+	var newVal [HashSize]byte
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		idx := i % n
+		binary.BigEndian.PutUint64(newVal[24:], uint64(i+1))
+		if err := tr.store.Insert(keys[idx][:], newVal[:], nil); err != nil {
+			b.Fatalf("iter %d Insert: %v", i, err)
+		}
+		_, ns := tr.Commit(false)
+		if len(ns.Nodes) == 0 {
+			b.Fatalf("iter %d: empty NodeSet", i)
+		}
 	}
 }

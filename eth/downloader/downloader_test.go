@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -75,7 +74,7 @@ func newTesterWithNotification(t *testing.T, mode ethconfig.SyncMode, success fu
 		chain: chain,
 		peers: make(map[string]*downloadTesterPeer),
 	}
-	tester.downloader = New(db, mode, new(event.TypeMux), tester.chain, tester.dropPeer, success)
+	tester.downloader = New(db, mode, tester.chain, tester.dropPeer, success)
 	return tester
 }
 
@@ -96,6 +95,7 @@ func (dl *downloadTester) newPeer(id string, version uint, blocks []*types.Block
 		id:             id,
 		chain:          newTestBlockchain(blocks),
 		withholdBodies: make(map[common.Hash]struct{}),
+		dropped:        make(chan error, 1),
 	}
 	dl.peers[id] = peer
 
@@ -121,8 +121,11 @@ func (dl *downloadTester) dropPeer(id string) {
 type downloadTesterPeer struct {
 	dl             *downloadTester
 	withholdBodies map[common.Hash]struct{}
+	corruptBodies  bool // if set, the peer serves incorrect blocks
 	id             string
 	chain          *core.BlockChain
+
+	dropped chan error // signaled when res.Done receives an error
 }
 
 func unmarshalRlpHeaders(rlpdata []rlp.RawValue) []*types.Header {
@@ -236,6 +239,11 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 		txsHashes[i] = hash
 		uncleHashes[i] = types.CalcUncleHash(body.Uncles)
 	}
+	if dlp.corruptBodies {
+		for i := range txsHashes {
+			txsHashes[i] = common.Hash{0xff}
+		}
+	}
 	req := &eth.Request{
 		Peer: dlp.id,
 	}
@@ -248,10 +256,16 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 			WithdrawalRoots:  withdrawalHashes,
 		},
 		Time: 1,
-		Done: make(chan error, 1), // Ignore the returned status
+		Done: make(chan error),
 	}
 	go func() {
 		sink <- res
+		if err := <-res.Done; err != nil {
+			select {
+			case dlp.dropped <- err:
+			default:
+			}
+		}
 	}()
 	return req, nil
 }
@@ -702,5 +716,23 @@ func testSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 		})
 	case <-time.NewTimer(time.Second * 3).C:
 		t.Fatalf("Failed to sync chain in three seconds")
+	}
+}
+
+func TestInvalidBodyPeerDrop(t *testing.T) {
+	tester := newTester(t, FullSync)
+	defer tester.terminate()
+
+	chain := testChainBase.shorten(blockCacheMaxItems - 15)
+	peer := tester.newPeer("corrupt", eth.ETH69, chain.blocks[1:])
+	peer.corruptBodies = true
+
+	if err := tester.downloader.BeaconSync(chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
+		t.Fatalf("failed to beacon-sync chain: %v", err)
+	}
+	select {
+	case <-peer.dropped:
+	case <-time.After(1 * time.Minute):
+		t.Fatal("peer was not dropped")
 	}
 }

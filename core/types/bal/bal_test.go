@@ -25,22 +25,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/internal/testrand"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
-
-func equalBALs(a *BlockAccessList, b *BlockAccessList) bool {
-	if !reflect.DeepEqual(a, b) {
-		return false
-	}
-	return true
-}
 
 func makeTestConstructionBAL() *ConstructionBlockAccessList {
 	return &ConstructionBlockAccessList{
 		map[common.Address]*ConstructionAccountAccess{
 			common.BytesToAddress([]byte{0xff, 0xff}): {
-				StorageWrites: map[common.Hash]map[uint16]common.Hash{
+				StorageWrites: map[common.Hash]map[uint32]common.Hash{
 					common.BytesToHash([]byte{0x01}): {
 						1: common.BytesToHash([]byte{1, 2, 3, 4}),
 						2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
@@ -52,20 +46,20 @@ func makeTestConstructionBAL() *ConstructionBlockAccessList {
 				StorageReads: map[common.Hash]struct{}{
 					common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7}): {},
 				},
-				BalanceChanges: map[uint16]*uint256.Int{
+				BalanceChanges: map[uint32]*uint256.Int{
 					1: uint256.NewInt(100),
 					2: uint256.NewInt(500),
 				},
-				NonceChanges: map[uint16]uint64{
+				NonceChanges: map[uint32]uint64{
 					1: 2,
 					2: 6,
 				},
-				CodeChange: map[uint16][]byte{
+				CodeChange: map[uint32][]byte{
 					0: common.Hex2Bytes("deadbeef"),
 				},
 			},
 			common.BytesToAddress([]byte{0xff, 0xff, 0xff}): {
-				StorageWrites: map[common.Hash]map[uint16]common.Hash{
+				StorageWrites: map[common.Hash]map[uint32]common.Hash{
 					common.BytesToHash([]byte{0x01}): {
 						2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
 						3: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}),
@@ -77,14 +71,14 @@ func makeTestConstructionBAL() *ConstructionBlockAccessList {
 				StorageReads: map[common.Hash]struct{}{
 					common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}): {},
 				},
-				BalanceChanges: map[uint16]*uint256.Int{
+				BalanceChanges: map[uint32]*uint256.Int{
 					2: uint256.NewInt(100),
 					3: uint256.NewInt(500),
 				},
-				NonceChanges: map[uint16]uint64{
+				NonceChanges: map[uint32]uint64{
 					1: 2,
 				},
-				CodeChange: map[uint16][]byte{
+				CodeChange: map[uint32][]byte{
 					0: common.Hex2Bytes("deadbeef"),
 				},
 			},
@@ -101,13 +95,13 @@ func TestBALEncoding(t *testing.T) {
 		t.Fatalf("encoding failed: %v\n", err)
 	}
 	var dec BlockAccessList
-	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 10000000)); err != nil {
+	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 0)); err != nil {
 		t.Fatalf("decoding failed: %v\n", err)
 	}
 	if dec.Hash() != bal.toEncodingObj().Hash() {
 		t.Fatalf("encoded block hash doesn't match decoded")
 	}
-	if !equalBALs(bal.toEncodingObj(), &dec) {
+	if !reflect.DeepEqual(bal.toEncodingObj(), &dec) {
 		t.Fatal("decoded BAL doesn't match")
 	}
 }
@@ -115,63 +109,79 @@ func TestBALEncoding(t *testing.T) {
 func makeTestAccountAccess(sort bool) AccountAccess {
 	var (
 		storageWrites []encodingSlotWrites
-		storageReads  [][32]byte
+		storageReads  []*uint256.Int
 		balances      []encodingBalanceChange
 		nonces        []encodingAccountNonce
+		codes         []encodingCodeChange
 	)
+	randSlot := func() *uint256.Int {
+		return new(uint256.Int).SetBytes(testrand.Bytes(32))
+	}
 	for i := 0; i < 5; i++ {
 		slot := encodingSlotWrites{
-			Slot: testrand.Hash(),
+			Slot: randSlot(),
 		}
 		for j := 0; j < 3; j++ {
 			slot.Accesses = append(slot.Accesses, encodingStorageWrite{
-				TxIdx:      uint16(2 * j),
-				ValueAfter: testrand.Hash(),
+				TxIdx:      uint32(2 * j),
+				ValueAfter: randSlot(),
 			})
 		}
 		if sort {
 			slices.SortFunc(slot.Accesses, func(a, b encodingStorageWrite) int {
-				return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
+				return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
 			})
 		}
 		storageWrites = append(storageWrites, slot)
 	}
 	if sort {
 		slices.SortFunc(storageWrites, func(a, b encodingSlotWrites) int {
-			return bytes.Compare(a.Slot[:], b.Slot[:])
+			return a.Slot.Cmp(b.Slot)
 		})
 	}
 
 	for i := 0; i < 5; i++ {
-		storageReads = append(storageReads, testrand.Hash())
+		storageReads = append(storageReads, randSlot())
 	}
 	if sort {
-		slices.SortFunc(storageReads, func(a, b [32]byte) int {
-			return bytes.Compare(a[:], b[:])
+		slices.SortFunc(storageReads, func(a, b *uint256.Int) int {
+			return a.Cmp(b)
 		})
 	}
 
 	for i := 0; i < 5; i++ {
 		balances = append(balances, encodingBalanceChange{
-			TxIdx:   uint16(2 * i),
-			Balance: [16]byte(testrand.Bytes(16)),
+			TxIdx:   uint32(2 * i),
+			Balance: new(uint256.Int).SetBytes(testrand.Bytes(16)),
 		})
 	}
 	if sort {
 		slices.SortFunc(balances, func(a, b encodingBalanceChange) int {
-			return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
+			return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
 		})
 	}
 
 	for i := 0; i < 5; i++ {
 		nonces = append(nonces, encodingAccountNonce{
-			TxIdx: uint16(2 * i),
+			TxIdx: uint32(2 * i),
 			Nonce: uint64(i + 100),
 		})
 	}
 	if sort {
 		slices.SortFunc(nonces, func(a, b encodingAccountNonce) int {
-			return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
+			return cmp.Compare[uint32](a.TxIdx, b.TxIdx)
+		})
+	}
+
+	for i := 0; i < 5; i++ {
+		codes = append(codes, encodingCodeChange{
+			TxIndex: uint32(2 * i),
+			Code:    testrand.Bytes(256),
+		})
+	}
+	if sort {
+		slices.SortFunc(codes, func(a, b encodingCodeChange) int {
+			return cmp.Compare[uint32](a.TxIndex, b.TxIndex)
 		})
 	}
 
@@ -181,26 +191,21 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 		StorageReads:   storageReads,
 		BalanceChanges: balances,
 		NonceChanges:   nonces,
-		CodeChanges: []encodingCodeChange{
-			{
-				TxIndex: 100,
-				Code:    testrand.Bytes(256),
-			},
-		},
+		CodeChanges:    codes,
 	}
 }
 
 func makeTestBAL(sort bool) *BlockAccessList {
-	list := &BlockAccessList{}
+	list := make(BlockAccessList, 0, 5)
 	for i := 0; i < 5; i++ {
-		list.Accesses = append(list.Accesses, makeTestAccountAccess(sort))
+		list = append(list, makeTestAccountAccess(sort))
 	}
 	if sort {
-		slices.SortFunc(list.Accesses, func(a, b AccountAccess) int {
+		slices.SortFunc(list, func(a, b AccountAccess) int {
 			return bytes.Compare(a.Address[:], b.Address[:])
 		})
 	}
-	return list
+	return &list
 }
 
 func TestBlockAccessListCopy(t *testing.T) {
@@ -216,9 +221,9 @@ func TestBlockAccessListCopy(t *testing.T) {
 	}
 
 	// Make sure the mutations on copy won't affect the origin
-	for _, aa := range cpyCpy.Accesses {
+	for _, aa := range *cpyCpy {
 		for i := 0; i < len(aa.StorageReads); i++ {
-			aa.StorageReads[i] = [32]byte(testrand.Bytes(32))
+			aa.StorageReads[i] = new(uint256.Int).SetBytes(testrand.Bytes(32))
 		}
 	}
 	if !reflect.DeepEqual(list, cpy) {
@@ -229,7 +234,7 @@ func TestBlockAccessListCopy(t *testing.T) {
 func TestBlockAccessListValidation(t *testing.T) {
 	// Validate the block access list after RLP decoding
 	enc := makeTestBAL(true)
-	if err := enc.Validate(); err != nil {
+	if err := enc.Validate(params.Rules{}); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 	var buf bytes.Buffer
@@ -241,14 +246,14 @@ func TestBlockAccessListValidation(t *testing.T) {
 	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 0)); err != nil {
 		t.Fatalf("Unexpected RLP-decode error: %v", err)
 	}
-	if err := dec.Validate(); err != nil {
+	if err := dec.Validate(params.Rules{}); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 
 	// Validate the derived block access list
 	cBAL := makeTestConstructionBAL()
 	listB := cBAL.toEncodingObj()
-	if err := listB.Validate(); err != nil {
+	if err := listB.Validate(params.Rules{}); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 }

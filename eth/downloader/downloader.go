@@ -97,9 +97,12 @@ type headerTask struct {
 }
 
 type Downloader struct {
-	mode  atomic.Uint32  // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
-	moder *syncModer     // Sync mode management, deliver the appropriate sync mode choice for each cycle
-	mux   *event.TypeMux // Event multiplexer to announce sync operation events
+	mode  atomic.Uint32 // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
+	moder *syncModer    // Sync mode management, deliver the appropriate sync mode choice for each cycle
+
+	// Event feed for downloader events
+	feed  event.FeedOf[SyncEvent]
+	scope event.SubscriptionScope
 
 	queue *queue   // Scheduler for selecting the hashes to download
 	peers *peerSet // Set of active peers from which download can proceed
@@ -229,12 +232,11 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(stateDb ethdb.Database, mode ethconfig.SyncMode, mux *event.TypeMux, chain BlockChain, dropPeer peerDropFn, success func()) *Downloader {
+func New(stateDb ethdb.Database, mode ethconfig.SyncMode, chain BlockChain, dropPeer peerDropFn, success func()) *Downloader {
 	cutoffNumber, cutoffHash := chain.HistoryPruningCutoff()
 	dl := &Downloader{
 		stateDB:           stateDb,
 		moder:             newSyncModer(mode, chain, stateDb),
-		mux:               mux,
 		queue:             newQueue(blockCacheMaxItems, blockCacheInitialItems),
 		peers:             newPeerSet(),
 		blockchain:        chain,
@@ -427,20 +429,25 @@ func (d *Downloader) ConfigSyncMode() SyncMode {
 	return d.moder.get(false)
 }
 
+// SubscribeSyncEvents creates a subscription for downloader sync events
+func (d *Downloader) SubscribeSyncEvents(ch chan<- SyncEvent) event.Subscription {
+	return d.scope.Track(d.feed.Subscribe(ch))
+}
+
 // syncToHead starts a block synchronization based on the hash chain from
 // the specified head hash.
 func (d *Downloader) syncToHead() (err error) {
-	d.mux.Post(StartEvent{})
+	mode := d.getMode()
+	d.feed.Send(SyncEvent{Type: SyncStarted, Mode: mode})
 	defer func() {
 		// reset on error
 		if err != nil {
-			d.mux.Post(FailedEvent{err})
+			d.feed.Send(SyncEvent{Type: SyncFailed, Mode: mode, Err: err})
 		} else {
 			latest := d.blockchain.CurrentHeader()
-			d.mux.Post(DoneEvent{latest})
+			d.feed.Send(SyncEvent{Type: SyncCompleted, Mode: mode, Latest: latest})
 		}
 	}()
-	mode := d.getMode()
 
 	log.Debug("Backfilling with the network", "mode", mode)
 	defer func(start time.Time) {
@@ -662,6 +669,9 @@ func (d *Downloader) Cancel() {
 // Terminate interrupts the downloader, canceling all pending operations.
 // The downloader cannot be reused after calling Terminate.
 func (d *Downloader) Terminate() {
+	// Unsubscribe all subscriptions registered from downloader
+	d.scope.Close()
+
 	// Close the termination channel (make sure double close is allowed)
 	d.quitLock.Lock()
 	select {

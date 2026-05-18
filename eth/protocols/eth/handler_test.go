@@ -424,16 +424,20 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 		{0, []common.Hash{backend.chain.CurrentBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
 		{0, []common.Hash{{}}, []bool{false}, 0},                                 // A non existent block should not be returned
 
-		// Existing and non-existing blocks interleaved should not cause problems
+		// Existing blocks followed by a non-existing one should stop at the gap
+		{0, []common.Hash{
+			backend.chain.GetBlockByNumber(1).Hash(),
+			backend.chain.GetBlockByNumber(10).Hash(),
+			backend.chain.GetBlockByNumber(100).Hash(),
+			{},
+		}, []bool{true, true, true, false}, 3},
+
+		// A non-existing block at the start should return nothing
 		{0, []common.Hash{
 			{},
 			backend.chain.GetBlockByNumber(1).Hash(),
-			{},
 			backend.chain.GetBlockByNumber(10).Hash(),
-			{},
-			backend.chain.GetBlockByNumber(100).Hash(),
-			{},
-		}, []bool{false, true, false, true, false, true, false}, 3},
+		}, []bool{false, true, true}, 0},
 	}
 	// Run each of the tests and verify the results against the chain
 	for i, tt := range tests {

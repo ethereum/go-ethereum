@@ -96,6 +96,7 @@ const (
 	TxDataNonZeroGasEIP2028   uint64 = 16    // Per byte of non zero data attached to a transaction after EIP 2028 (part in Istanbul)
 	TxTokenPerNonZeroByte     uint64 = 4     // Token cost per non-zero byte as specified by EIP-7623.
 	TxCostFloorPerToken       uint64 = 10    // Cost floor per byte of data as specified by EIP-7623.
+	TxCostFloorPerToken7976   uint64 = 16    // Cost floor per byte of data as specified by EIP-7976.
 	TxAccessListAddressGas    uint64 = 2400  // Per address specified in EIP 2930 access list
 	TxAccessListStorageKeyGas uint64 = 1900  // Per storage key specified in EIP 2930 access list
 	TxAuthTupleGas            uint64 = 12500 // Per auth tuple code specified in EIP-7702

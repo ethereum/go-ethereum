@@ -129,11 +129,14 @@ type BlockChain interface {
 	// CurrentBlock returns the current head of the chain.
 	CurrentBlock() *types.Header
 
+	// Genesis returns the genesis block of the chain.
+	Genesis() *types.Block
+
 	// GetBlock retrieves a specific block, used during pool resets.
 	GetBlock(hash common.Hash, number uint64) *types.Block
 
-	// StateAt returns a state database for a given root hash (generally the head).
-	StateAt(root common.Hash) (*state.StateDB, error)
+	// StateAt returns a state database for a given chain header (generally the head).
+	StateAt(header *types.Header) (*state.StateDB, error)
 }
 
 // Config are the configuration parameters of the transaction pool.
@@ -317,9 +320,9 @@ func (pool *LegacyPool) Init(gasTip uint64, head *types.Header, reserver txpool.
 	// Initialize the state with head block, or fallback to empty one in
 	// case the head state is not available (might occur when node is not
 	// fully synced).
-	statedb, err := pool.chain.StateAt(head.Root)
+	statedb, err := pool.chain.StateAt(head)
 	if err != nil {
-		statedb, err = pool.chain.StateAt(types.EmptyRootHash)
+		statedb, err = pool.chain.StateAt(pool.chain.Genesis().Header())
 	}
 	if err != nil {
 		return err
@@ -464,8 +467,8 @@ func (pool *LegacyPool) stats() (int, int) {
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and sorted by nonce.
 func (pool *LegacyPool) Content() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
 
 	pending := make(map[common.Address][]*types.Transaction, len(pool.pending))
 	for addr, list := range pool.pending {
@@ -500,8 +503,8 @@ func (pool *LegacyPool) Pending(filter txpool.PendingFilter) (map[common.Address
 	if filter.BlobTxs {
 		return nil, 0
 	}
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
 
 	var count int
 	pending := make(map[common.Address][]*txpool.LazyTransaction, len(pool.pending))
@@ -1219,8 +1222,10 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 	pool.mu.Lock()
 	if reset != nil {
 		if reset.newHead != nil && reset.oldHead != nil {
-			// Discard the transactions with the gas limit higher than the cap.
-			if pool.chainconfig.IsOsaka(reset.newHead.Number, reset.newHead.Time) && !pool.chainconfig.IsOsaka(reset.oldHead.Number, reset.oldHead.Time) {
+			// Discard the transactions with the gas limit higher than the cap at the
+			// Osaka fork boundary.
+			if pool.chainconfig.IsOsaka(reset.newHead.Number, reset.newHead.Time) &&
+				!pool.chainconfig.IsOsaka(reset.oldHead.Number, reset.oldHead.Time) {
 				var hashes []common.Hash
 				pool.all.Range(func(hash common.Hash, tx *types.Transaction) bool {
 					if tx.Gas() > params.MaxTxGas {
@@ -1379,7 +1384,7 @@ func (pool *LegacyPool) reset(oldHead, newHead *types.Header) {
 	if newHead == nil {
 		newHead = pool.chain.CurrentBlock() // Special case during testing
 	}
-	statedb, err := pool.chain.StateAt(newHead.Root)
+	statedb, err := pool.chain.StateAt(newHead)
 	if err != nil {
 		log.Error("Failed to reset txpool state", "err", err)
 		return

@@ -572,7 +572,7 @@ func (b testBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.Bloc
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
-	stateDb, err := b.chain.StateAt(header.Root)
+	stateDb, err := b.chain.StateAt(header)
 	return stateDb, header, err
 }
 func (b testBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
@@ -1314,6 +1314,27 @@ func TestCall(t *testing.T) {
 				Withdrawals: &types.Withdrawals{},
 			},
 			expectErr: errors.New(`block override "withdrawals" is not supported for this RPC method`),
+		},
+		// Verify that an overridden basefee is honored when computing gasPrice
+		// from the 1559 fee fields. Returning GASPRICE opcode; expected value
+		// is min(MaxFeePerGas, MaxPriorityFeePerGas + overridden BaseFee).
+		//
+		// BaseFee override = 0xa (10); MaxFeePerGas = 0x64 (100);
+		// MaxPriorityFeePerGas = 0x2 (2); expected GASPRICE = 12.
+		{
+			name:        "basefee-override-used-in-gasprice",
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From: &accounts[0].addr,
+				// Contract: GASPRICE; PUSH1 0; MSTORE; PUSH1 32; PUSH1 0; RETURN
+				Input:                hex2Bytes("3a60005260206000f3"),
+				MaxFeePerGas:         (*hexutil.Big)(big.NewInt(100)),
+				MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(2)),
+			},
+			blockOverrides: override.BlockOverrides{
+				BaseFeePerGas: (*hexutil.Big)(big.NewInt(10)),
+			},
+			want: "0x000000000000000000000000000000000000000000000000000000000000000c",
 		},
 	}
 	for _, tc := range testSuite {
@@ -2657,6 +2678,67 @@ func TestSimulateV1TxSender(t *testing.T) {
 	require.Equal(t, sender3, summary[0].Transactions[2].From, "sender address mismatch")
 	require.Len(t, summary[1].Transactions, 1, "expected 1 transaction in simulated block")
 	require.Equal(t, sender2, summary[1].Transactions[0].From, "sender address mismatch")
+}
+
+// TestSimulateV1WithdrawalsByFork verifies that withdrawals and withdrawalsRoot
+// are only emitted in the simulated block result when the simulated block is
+// post-Shanghai. Pre-Shanghai blocks must omit both fields, otherwise the
+// header hash and size would not match a valid pre-Shanghai block.
+func TestSimulateV1WithdrawalsByFork(t *testing.T) {
+	t.Parallel()
+
+	run := func(t *testing.T, cfg *params.ChainConfig, blockTime *uint64, wantWithdrawals bool) {
+		t.Helper()
+		gspec := &core.Genesis{Config: cfg, Alloc: types.GenesisAlloc{}}
+		backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+
+		ctx := context.Background()
+		stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+		if err != nil {
+			t.Fatalf("failed to get state and header: %v", err)
+		}
+		sim := &simulator{
+			b:           backend,
+			state:       stateDB,
+			base:        baseHeader,
+			chainConfig: backend.ChainConfig(),
+			budget:      newGasBudget(0),
+		}
+
+		block := simBlock{}
+		if blockTime != nil {
+			t := hexutil.Uint64(*blockTime)
+			block.BlockOverrides = &override.BlockOverrides{Time: &t}
+		}
+		results, err := sim.execute(ctx, []simBlock{block})
+		if err != nil {
+			t.Fatalf("simulation execution failed: %v", err)
+		}
+		require.Len(t, results, 1)
+
+		enc, err := json.Marshal(results[0])
+		if err != nil {
+			t.Fatalf("failed to marshal result: %v", err)
+		}
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(enc, &raw); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+		_, hasWithdrawals := raw["withdrawals"]
+		_, hasWithdrawalsRoot := raw["withdrawalsRoot"]
+		if hasWithdrawals != wantWithdrawals || hasWithdrawalsRoot != wantWithdrawals {
+			t.Fatalf("unexpected withdrawals fields: withdrawals=%v withdrawalsRoot=%v want=%v\n%s", hasWithdrawals, hasWithdrawalsRoot, wantWithdrawals, enc)
+		}
+	}
+
+	t.Run("pre-shanghai", func(t *testing.T) {
+		// TestChainConfig has ShanghaiTime=nil, so all simulated blocks are pre-Shanghai.
+		run(t, params.TestChainConfig, nil, false)
+	})
+	t.Run("post-shanghai", func(t *testing.T) {
+		// MergedTestChainConfig has every fork active from genesis.
+		run(t, params.MergedTestChainConfig, nil, true)
+	})
 }
 
 func TestSignTransaction(t *testing.T) {

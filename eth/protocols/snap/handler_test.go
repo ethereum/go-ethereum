@@ -31,18 +31,24 @@ import (
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 )
 
 func makeTestBAL(minSize int) *bal.BlockAccessList {
 	n := minSize/33 + 1 // 33 bytes per storage read slot in RLP
 	access := bal.AccountAccess{
 		Address:      common.HexToAddress("0x01"),
-		StorageReads: make([][32]byte, n),
+		StorageReads: make([]*uint256.Int, n),
 	}
+	// Use a full-width 32-byte value (top byte 0xff) so each slot still
+	// encodes to 33 RLP bytes regardless of the index.
 	for i := range access.StorageReads {
-		binary.BigEndian.PutUint64(access.StorageReads[i][24:], uint64(i))
+		var b [32]byte
+		b[0] = 0xff
+		binary.BigEndian.PutUint64(b[24:], uint64(i))
+		access.StorageReads[i] = new(uint256.Int).SetBytes(b[:])
 	}
-	return &bal.BlockAccessList{Accesses: []bal.AccountAccess{access}}
+	return &bal.BlockAccessList{access}
 }
 
 // getChainWithBALs creates a minimal test chain with BALs stored for each block.

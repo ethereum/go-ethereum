@@ -116,8 +116,8 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 	var (
 		op          OpCode     // current opcode
 		jumpTable   *JumpTable = evm.table
-		mem                    = NewMemory() // bound memory
-		stack                  = newstack()  // local stack
+		mem                    = NewMemory()       // bound memory
+		stack                  = evm.arena.stack() // local stack
 		callContext            = &ScopeContext{
 			Memory:   mem,
 			Stack:    stack,
@@ -140,7 +140,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 	// so that it gets executed _after_: the OnOpcode needs the stacks before
 	// they are returned to the pools
 	defer func() {
-		returnStack(stack)
+		stack.release()
 		mem.Free()
 	}()
 	contract.Input = input
@@ -174,7 +174,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			// associated costs.
 			contractAddr := contract.Address()
 			consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.RegularGas)
-			contract.UseGas(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
+			contract.UseGas(GasCosts{RegularGas: consumed}, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
 			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
@@ -234,8 +234,12 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 
 		// Do tracing before potential memory expansion
 		if debug {
-			if evm.Config.Tracer.OnGasChange != nil {
-				evm.Config.Tracer.OnGasChange(gasCopy, gasCopy-cost, tracing.GasChangeCallOpCode)
+			if evm.Config.Tracer.HasGasHook() {
+				evm.Config.Tracer.EmitGasChange(
+					tracing.Gas{Regular: gasCopy, State: contract.Gas.StateGas},
+					tracing.Gas{Regular: gasCopy - cost, State: contract.Gas.StateGas},
+					tracing.GasChangeCallOpCode,
+				)
 			}
 			if evm.Config.Tracer.OnOpcode != nil {
 				evm.Config.Tracer.OnOpcode(pc, byte(op), gasCopy, cost, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))

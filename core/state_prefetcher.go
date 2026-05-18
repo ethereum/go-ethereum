@@ -93,6 +93,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 			}
 			// Execute the message to preload the implicit touched states
 			evm := vm.NewEVM(NewEVMBlockContext(header, p.chain, nil), stateCpy, p.config, cfg)
+			defer evm.Release()
 
 			// Convert the transaction into an executable message and pre-cache its sender
 			msg, err := TransactionToMessage(tx, signer, header.BaseFee)
@@ -103,7 +104,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 			// Disable the nonce check
 			msg.SkipNonceChecks = true
 
-			stateCpy.SetTxContext(tx.Hash(), i)
+			stateCpy.SetTxContext(tx.Hash(), i, uint32(i+1))
 
 			// We attempt to apply a transaction. The goal is not to execute
 			// the transaction successfully, rather to warm up touched data slots.

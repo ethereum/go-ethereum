@@ -606,8 +606,11 @@ func (DAOChangeOfRules) ContractEventName() string {
 // Solidity: event ChangeOfRules(uint256 minimumQuorum, uint256 debatingPeriodInMinutes, int256 majorityMargin)
 func (dAO *DAO) UnpackChangeOfRulesEvent(log *types.Log) (*DAOChangeOfRules, error) {
 	event := "ChangeOfRules"
-	if len(log.Topics) == 0 || log.Topics[0] != dAO.abi.Events[event].ID {
-		return nil, errors.New("event signature mismatch")
+	if len(log.Topics) == 0 {
+		return nil, bind.ErrNoEventSignature
+	}
+	if log.Topics[0] != dAO.abi.Events[event].ID {
+		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(DAOChangeOfRules)
 	if len(log.Data) > 0 {
@@ -648,8 +651,11 @@ func (DAOMembershipChanged) ContractEventName() string {
 // Solidity: event MembershipChanged(address member, bool isMember)
 func (dAO *DAO) UnpackMembershipChangedEvent(log *types.Log) (*DAOMembershipChanged, error) {
 	event := "MembershipChanged"
-	if len(log.Topics) == 0 || log.Topics[0] != dAO.abi.Events[event].ID {
-		return nil, errors.New("event signature mismatch")
+	if len(log.Topics) == 0 {
+		return nil, bind.ErrNoEventSignature
+	}
+	if log.Topics[0] != dAO.abi.Events[event].ID {
+		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(DAOMembershipChanged)
 	if len(log.Data) > 0 {
@@ -692,8 +698,11 @@ func (DAOProposalAdded) ContractEventName() string {
 // Solidity: event ProposalAdded(uint256 proposalID, address recipient, uint256 amount, string description)
 func (dAO *DAO) UnpackProposalAddedEvent(log *types.Log) (*DAOProposalAdded, error) {
 	event := "ProposalAdded"
-	if len(log.Topics) == 0 || log.Topics[0] != dAO.abi.Events[event].ID {
-		return nil, errors.New("event signature mismatch")
+	if len(log.Topics) == 0 {
+		return nil, bind.ErrNoEventSignature
+	}
+	if log.Topics[0] != dAO.abi.Events[event].ID {
+		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(DAOProposalAdded)
 	if len(log.Data) > 0 {
@@ -736,8 +745,11 @@ func (DAOProposalTallied) ContractEventName() string {
 // Solidity: event ProposalTallied(uint256 proposalID, int256 result, uint256 quorum, bool active)
 func (dAO *DAO) UnpackProposalTalliedEvent(log *types.Log) (*DAOProposalTallied, error) {
 	event := "ProposalTallied"
-	if len(log.Topics) == 0 || log.Topics[0] != dAO.abi.Events[event].ID {
-		return nil, errors.New("event signature mismatch")
+	if len(log.Topics) == 0 {
+		return nil, bind.ErrNoEventSignature
+	}
+	if log.Topics[0] != dAO.abi.Events[event].ID {
+		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(DAOProposalTallied)
 	if len(log.Data) > 0 {
@@ -780,8 +792,11 @@ func (DAOVoted) ContractEventName() string {
 // Solidity: event Voted(uint256 proposalID, bool position, address voter, string justification)
 func (dAO *DAO) UnpackVotedEvent(log *types.Log) (*DAOVoted, error) {
 	event := "Voted"
-	if len(log.Topics) == 0 || log.Topics[0] != dAO.abi.Events[event].ID {
-		return nil, errors.New("event signature mismatch")
+	if len(log.Topics) == 0 {
+		return nil, bind.ErrNoEventSignature
+	}
+	if log.Topics[0] != dAO.abi.Events[event].ID {
+		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(DAOVoted)
 	if len(log.Data) > 0 {

@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -45,7 +44,7 @@ func TestExhaustedIterator(t *testing.T) {
 	if key, err := it.Key(); key != (common.Hash{}) || err != nil {
 		t.Fatalf("Key() = %x, %v; want zero, nil", key, err)
 	}
-	if slot := it.Slot(); slot != nil {
+	if slot := it.Slot(); slot != (common.Hash{}) {
 		t.Fatalf("Slot() = %x, want nil", slot)
 	}
 	it.Release()
@@ -95,20 +94,16 @@ func testAccountIterator(t *testing.T, scheme string) {
 		hashes = append(hashes, hash)
 
 		// Decode and verify account data.
-		blob := acctIt.Account()
-		if blob == nil {
+		got := acctIt.Account()
+		if got == nil {
 			t.Fatalf("(%s) nil account at %x", scheme, hash)
 		}
-		var decoded types.StateAccount
-		if err := rlp.DecodeBytes(blob, &decoded); err != nil {
-			t.Fatalf("(%s) bad RLP at %x: %v", scheme, hash, err)
-		}
 		acc := addrByHash[hash]
-		if decoded.Nonce != acc.nonce {
-			t.Fatalf("(%s) nonce %x: got %d, want %d", scheme, hash, decoded.Nonce, acc.nonce)
+		if got.Nonce != acc.nonce {
+			t.Fatalf("(%s) nonce %x: got %d, want %d", scheme, hash, got.Nonce, acc.nonce)
 		}
-		if decoded.Balance.Cmp(acc.balance) != 0 {
-			t.Fatalf("(%s) balance %x: got %v, want %v", scheme, hash, decoded.Balance, acc.balance)
+		if got.Balance.Cmp(acc.balance) != 0 {
+			t.Fatalf("(%s) balance %x: got %v, want %v", scheme, hash, got.Balance, acc.balance)
 		}
 		// Verify address preimage resolution.
 		addr, err := acctIt.Address()
@@ -183,7 +178,7 @@ func testStorageIterator(t *testing.T, scheme string) {
 				t.Fatalf("(%s) storage hashes not ascending for %x", scheme, acc.address)
 			}
 			prevHash = hash
-			if storageIt.Slot() == nil {
+			if storageIt.Slot() == (common.Hash{}) {
 				t.Fatalf("(%s) nil slot at %x", scheme, hash)
 			}
 			// Check key preimage resolution on first slot.

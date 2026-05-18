@@ -20,13 +20,9 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/transitiontrie"
@@ -34,8 +30,27 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
+// DatabaseType represents the type of trie backing the state database.
+type DatabaseType int
+
+const (
+	// TypeMPT indicates a Merkle Patricia Trie (MPT) backed database.
+	TypeMPT DatabaseType = iota
+
+	// TypeUBT indicates a Unified Binary Trie (UBT) backed database.
+	TypeUBT
+)
+
+// Is returns the flag indicating the database type equals to the given one.
+func (typ DatabaseType) Is(t DatabaseType) bool {
+	return typ == t
+}
+
 // Database wraps access to tries and contract code.
 type Database interface {
+	// Type returns the trie type backing this database (MPT or UBT).
+	Type() DatabaseType
+
 	// Reader returns a state reader associated with the specified state root.
 	Reader(root common.Hash) (Reader, error)
 
@@ -55,7 +70,7 @@ type Database interface {
 	// Commit flushes all pending writes and finalizes the state transition,
 	// committing the changes to the underlying storage. It returns an error
 	// if the commit fails.
-	Commit(update *stateUpdate) error
+	Commit(update *StateUpdate) error
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -139,182 +154,25 @@ type Trie interface {
 	// with the node that proves the absence of the key.
 	Prove(key []byte, proofDb ethdb.KeyValueWriter) error
 
-	// IsVerkle returns true if the trie is verkle-tree based
-	IsVerkle() bool
-}
-
-// CachingDB is an implementation of Database interface. It leverages both trie and
-// state snapshot to provide functionalities for state access. It's meant to be a
-// long-live object and has a few caches inside for sharing between blocks.
-type CachingDB struct {
-	triedb *triedb.Database
-	codedb *CodeDB
-	snap   *snapshot.Tree
+	// IsUBT returns true if the trie is unified binary trie based.
+	IsUBT() bool
 }
 
 // NewDatabase creates a state database with the provided data sources.
-func NewDatabase(triedb *triedb.Database, codedb *CodeDB) *CachingDB {
-	if codedb == nil {
-		codedb = NewCodeDB(triedb.Disk())
+//
+// Deprecated, please use NewMPTDatabase or NewUBTDatabase directly.
+func NewDatabase(tdb *triedb.Database, codedb *CodeDB) Database {
+	if tdb.IsUBT() {
+		return NewUBTDatabase(tdb, codedb)
 	}
-	return &CachingDB{
-		triedb: triedb,
-		codedb: codedb,
-	}
+	return NewMPTDatabase(tdb, codedb)
 }
 
 // NewDatabaseForTesting is similar to NewDatabase, but it initializes the caching
 // db by using an ephemeral memory db with default config for testing.
-func NewDatabaseForTesting() *CachingDB {
+func NewDatabaseForTesting() Database {
 	db := rawdb.NewMemoryDatabase()
 	return NewDatabase(triedb.NewDatabase(db, nil), NewCodeDB(db))
-}
-
-// WithSnapshot configures the provided contract code cache. Note that this
-// registration must be performed before the cachingDB is used.
-func (db *CachingDB) WithSnapshot(snapshot *snapshot.Tree) *CachingDB {
-	db.snap = snapshot
-	return db
-}
-
-// StateReader returns a state reader associated with the specified state root.
-func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
-	var readers []StateReader
-
-	// Configure the state reader using the standalone snapshot in hash mode.
-	// This reader offers improved performance but is optional and only
-	// partially useful if the snapshot is not fully generated.
-	if db.TrieDB().Scheme() == rawdb.HashScheme && db.snap != nil {
-		snap := db.snap.Snapshot(stateRoot)
-		if snap != nil {
-			readers = append(readers, newFlatReader(snap))
-		}
-	}
-	// Configure the state reader using the path database in path mode.
-	// This reader offers improved performance but is optional and only
-	// partially useful if the snapshot data in path database is not
-	// fully generated.
-	if db.TrieDB().Scheme() == rawdb.PathScheme {
-		reader, err := db.triedb.StateReader(stateRoot)
-		if err == nil {
-			readers = append(readers, newFlatReader(reader))
-		}
-	}
-	// Configure the trie reader, which is expected to be available as the
-	// gatekeeper unless the state is corrupted.
-	tr, err := newTrieReader(stateRoot, db.triedb)
-	if err != nil {
-		return nil, err
-	}
-	readers = append(readers, tr)
-
-	return newMultiStateReader(readers...)
-}
-
-// Reader implements Database, returning a reader associated with the specified
-// state root.
-func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
-	sr, err := db.StateReader(stateRoot)
-	if err != nil {
-		return nil, err
-	}
-	return newReader(db.codedb.Reader(), sr), nil
-}
-
-// ReadersWithCacheStats creates a pair of state readers that share the same
-// underlying state reader and internal state cache, while maintaining separate
-// statistics respectively.
-func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reader, error) {
-	r, err := db.StateReader(stateRoot)
-	if err != nil {
-		return nil, nil, err
-	}
-	sr := newStateReaderWithCache(r)
-	ra := newReader(db.codedb.Reader(), newStateReaderWithStats(sr))
-	rb := newReader(db.codedb.Reader(), newStateReaderWithStats(sr))
-	return ra, rb, nil
-}
-
-// OpenTrie opens the main account trie at a specific root hash.
-func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	if db.triedb.IsVerkle() {
-		ts := overlay.LoadTransitionState(db.TrieDB().Disk(), root, db.triedb.IsVerkle())
-		if ts.InTransition() {
-			panic("state tree transition isn't supported yet")
-		}
-		if ts.Transitioned() {
-			// Use BinaryTrie instead of VerkleTrie when IsVerkle is set
-			// (IsVerkle actually means Binary Trie mode in this codebase)
-			return bintrie.NewBinaryTrie(root, db.triedb)
-		}
-	}
-	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
-	if err != nil {
-		return nil, err
-	}
-	return tr, nil
-}
-
-// OpenStorageTrie opens the storage trie of an account.
-func (db *CachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
-	if db.triedb.IsVerkle() {
-		return self, nil
-	}
-	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)
-	if err != nil {
-		return nil, err
-	}
-	return tr, nil
-}
-
-// TrieDB retrieves any intermediate trie-node caching layer.
-func (db *CachingDB) TrieDB() *triedb.Database {
-	return db.triedb
-}
-
-// Snapshot returns the underlying state snapshot.
-func (db *CachingDB) Snapshot() *snapshot.Tree {
-	return db.snap
-}
-
-// Commit flushes all pending writes and finalizes the state transition,
-// committing the changes to the underlying storage. It returns an error
-// if the commit fails.
-func (db *CachingDB) Commit(update *stateUpdate) error {
-	// Short circuit if nothing to commit
-	if update.empty() {
-		return nil
-	}
-	// Commit dirty contract code if any exists
-	if len(update.codes) > 0 {
-		batch := db.codedb.NewBatchWithSize(len(update.codes))
-		for _, code := range update.codes {
-			batch.Put(code.hash, code.blob)
-		}
-		if err := batch.Commit(); err != nil {
-			return err
-		}
-	}
-	// If snapshotting is enabled, update the snapshot tree with this new version
-	if db.snap != nil && db.snap.Snapshot(update.originRoot) != nil {
-		if err := db.snap.Update(update.root, update.originRoot, update.accounts, update.storages); err != nil {
-			log.Warn("Failed to update snapshot tree", "from", update.originRoot, "to", update.root, "err", err)
-		}
-		// Keep 128 diff layers in the memory, persistent layer is 129th.
-		// - head layer is paired with HEAD state
-		// - head-1 layer is paired with HEAD-1 state
-		// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
-		if err := db.snap.Cap(update.root, TriesInMemory); err != nil {
-			log.Warn("Failed to cap snapshot tree", "root", update.root, "layers", TriesInMemory, "err", err)
-		}
-	}
-	return db.triedb.Update(update.root, update.originRoot, update.blockNumber, update.nodes, update.stateSet())
-}
-
-// Iteratee returns a state iteratee associated with the specified state root,
-// through which the account iterator and storage iterator can be created.
-func (db *CachingDB) Iteratee(root common.Hash) (Iteratee, error) {
-	return newStateIteratee(!db.triedb.IsVerkle(), root, db.triedb, db.snap)
 }
 
 // mustCopyTrie returns a deep-copied trie.
@@ -323,6 +181,8 @@ func mustCopyTrie(t Trie) Trie {
 	case *trie.StateTrie:
 		return t.Copy()
 	case *transitiontrie.TransitionTrie:
+		return t.Copy()
+	case *bintrie.BinaryTrie:
 		return t.Copy()
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))

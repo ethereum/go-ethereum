@@ -121,7 +121,7 @@ func (tx *LegacyTx) encode(*bytes.Buffer) error {
 }
 
 func (tx *LegacyTx) decode([]byte) error {
-	panic("decode called on LegacyTx)")
+	panic("decode called on LegacyTx")
 }
 
 // OBS: This is the post-EIP155 hash, the pre-EIP155 does not contain a chainID.
