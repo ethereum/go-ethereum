@@ -103,7 +103,7 @@ func TestBasics(t *testing.T) {
 	if !q.Idle() {
 		t.Errorf("new queue should be idle")
 	}
-	q.Prepare(1, SnapSync, false)
+	q.Prepare(1, SnapSync)
 	if res := q.Results(false); len(res) != 0 {
 		t.Fatal("new queue should have 0 results")
 	}
@@ -200,7 +200,7 @@ func TestEmptyBlocks(t *testing.T) {
 
 	q := newQueue(10, 10)
 
-	q.Prepare(1, SnapSync, false)
+	q.Prepare(1, SnapSync)
 
 	// Schedule a batch of headers
 	headers := emptyChain.headers()
@@ -279,7 +279,7 @@ func XTestDelivery(t *testing.T) {
 	}
 	q := newQueue(10, 10)
 	var wg sync.WaitGroup
-	q.Prepare(1, SnapSync, false)
+	q.Prepare(1, SnapSync)
 	wg.Add(1)
 	go func() {
 		// deliver headers

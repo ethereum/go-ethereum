@@ -212,10 +212,6 @@ func (p *skeletonTestPeer) RequestReceipts([]common.Hash, []uint64, []uint64, ch
 	panic("skeleton sync must not request receipts")
 }
 
-func (p *skeletonTestPeer) RequestBALs([]common.Hash, chan *eth.Response) (*eth.Request, error) {
-	panic("skeleton sync must not request block access lists")
-}
-
 // Tests various sync initializations based on previous leftovers in the database
 // and announced heads.
 func TestSkeletonSyncInit(t *testing.T) {

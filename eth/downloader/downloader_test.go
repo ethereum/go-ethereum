@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
@@ -298,36 +297,6 @@ func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash, gasUsed []u
 		Meta: hashes,
 		Time: 1,
 		Done: make(chan error, 1), // Ignore the returned status
-	}
-	go func() {
-		sink <- res
-	}()
-	return res.Req, nil
-}
-
-// RequestBALs constructs a getBlockAccessLists method associated with a
-// particular peer in the download tester. The returned function can be used to
-// retrieve batches of block access lists from the particularly requested peer.
-func (dlp *downloadTesterPeer) RequestBALs(hashes []common.Hash, sink chan *eth.Response) (*eth.Request, error) {
-	bals := make(eth.BlockAccessListResponse, 0, len(hashes))
-	respHashes := make([]common.Hash, 0, len(hashes))
-	for _, hash := range hashes {
-		var entry eth.RawBlockAccessList
-		data := dlp.chain.GetAccessListRLP(hash)
-		if len(data) == 0 {
-			_ = entry.AppendRaw([]byte{0xC0})
-		} else if err := rlp.DecodeBytes(data, &entry); err != nil {
-			return nil, err
-		}
-		bals = append(bals, entry)
-		respHashes = append(respHashes, crypto.Keccak256Hash(entry.Bytes()))
-	}
-	res := &eth.Response{
-		Req:  &eth.Request{Peer: dlp.id},
-		Res:  &bals,
-		Meta: respHashes,
-		Time: 1,
-		Done: make(chan error, 1),
 	}
 	go func() {
 		sink <- res
