@@ -290,6 +290,45 @@ func TestTransactionArgsRejectUnsupportedTypeInSetDefaults(t *testing.T) {
 	}
 }
 
+func TestTransactionArgsRejectTypeMismatchInCallDefaults(t *testing.T) {
+	t.Parallel()
+
+	requestedLegacy := hexutil.Uint64(types.LegacyTxType)
+	args := &TransactionArgs{
+		Type:        &requestedLegacy,
+		MaxFeePerGas: (*hexutil.Big)(big.NewInt(2)),
+	}
+	err := args.CallDefaults(0, big.NewInt(1), big.NewInt(1))
+	if err == nil {
+		t.Fatal("expected type mismatch error")
+	}
+	if err.Error() != "transaction type mismatch (requested=0 inferred=2)" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestTransactionArgsRejectTypeMismatchInSetDefaults(t *testing.T) {
+	t.Parallel()
+
+	requestedDynamic := hexutil.Uint64(types.DynamicFeeTxType)
+	gas := hexutil.Uint64(21000)
+	gasPrice := (*hexutil.Big)(big.NewInt(1))
+	to := common.Address{0x1}
+	args := &TransactionArgs{
+		To:       &to,
+		Gas:      &gas,
+		GasPrice: gasPrice,
+		Type:     &requestedDynamic,
+	}
+	err := args.setDefaults(context.Background(), newBackendMock(), sidecarConfig{})
+	if err == nil {
+		t.Fatal("expected type mismatch error")
+	}
+	if err.Error() != "transaction type mismatch (requested=2 inferred=0)" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 type backendMock struct {
 	current *types.Header
 	config  *params.ChainConfig

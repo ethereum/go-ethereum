@@ -102,7 +102,7 @@ type sidecarConfig struct {
 
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config sidecarConfig) error {
-	if err := args.validateTxType(); err != nil {
+	if err := args.validateTxTypeSupported(); err != nil {
 		return err
 	}
 	if err := args.setBlobTxSidecar(ctx, config); err != nil {
@@ -179,6 +179,9 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config 
 		}
 	} else {
 		args.ChainID = (*hexutil.Big)(want)
+	}
+	if err := args.validateTxTypeMatch(types.LegacyTxType); err != nil {
+		return err
 	}
 	return nil
 }
@@ -394,7 +397,7 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config sideca
 // CallDefaults sanitizes the transaction arguments, often filling in zero values,
 // for the purpose of eth_call class of RPC methods.
 func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int, chainID *big.Int) error {
-	if err := args.validateTxType(); err != nil {
+	if err := args.validateTxTypeSupported(); err != nil {
 		return err
 	}
 	// Reject invalid combinations of pre- and post-1559 fee styles
@@ -443,11 +446,14 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 	if args.BlobFeeCap == nil && args.BlobHashes != nil {
 		args.BlobFeeCap = new(hexutil.Big)
 	}
+	if err := args.validateTxTypeMatch(types.LegacyTxType); err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func (args *TransactionArgs) validateTxType() error {
+func (args *TransactionArgs) validateTxTypeSupported() error {
 	if args.Type == nil {
 		return nil
 	}
@@ -457,6 +463,21 @@ func (args *TransactionArgs) validateTxType() error {
 	default:
 		return fmt.Errorf("unsupported transaction type: %d", uint64(*args.Type))
 	}
+}
+
+func (args *TransactionArgs) validateTxTypeMatch(defaultType int) error {
+	if args.Type == nil {
+		return nil
+	}
+	// Blob txs cannot be contract creations. ToTransaction assumes this invariant.
+	if args.BlobHashes != nil && args.To == nil {
+		return errors.New(`missing "to" in blob transaction`)
+	}
+	inferred := args.ToTransaction(defaultType).Type()
+	if uint64(*args.Type) != uint64(inferred) {
+		return fmt.Errorf("transaction type mismatch (requested=%d inferred=%d)", uint64(*args.Type), inferred)
+	}
+	return nil
 }
 
 // ToMessage converts the transaction arguments to the Message type used by the
