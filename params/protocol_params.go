@@ -199,10 +199,11 @@ const (
 	// don't consume block gas.
 	BALItemCost uint64 = 2000
 
-	AccountCreationSize       = 112
-	StorageCreationSize       = 32
+	AccountCreationSize       = 120
+	StorageCreationSize       = 64
 	AuthorizationCreationSize = 23
-	CostPerStateByte          = 1174
+	CostPerStateByte          = 1530
+	SystemMaxSStoresPerCall   = 16
 )
 
 // Bls12381G1MultiExpDiscountTable is the gas discount table for BLS12-381 G1 multi exponentiation operation

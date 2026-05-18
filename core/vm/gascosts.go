@@ -55,7 +55,7 @@ func (g GasCosts) String() string {
 //     in lockstep.
 //
 //   - At frame exit: Preserved / ExitSuccess / ExitRevert / ExitHalt /
-//     ExitFromErr produce a new GasBudget in "leftover" form that packages
+//     Exit produce a new GasBudget in "leftover" form that packages
 //     the result for the caller.
 //
 //   - At absorption: the caller's Absorb method merges the child's leftover
@@ -263,7 +263,7 @@ func (g GasBudget) ExitHalt(initialStateGas uint64) GasBudget {
 	}
 }
 
-// ExitFromErr dispatches on err to the appropriate exit-form constructor
+// Exit dispatches on err to the appropriate exit-form constructor
 // for the post-evm.Run path:
 //
 //   - err == nil                  → ExitSuccess
@@ -272,7 +272,7 @@ func (g GasBudget) ExitHalt(initialStateGas uint64) GasBudget {
 //
 // Soft validation failures (occurring BEFORE evm.Run) should call Preserved
 // directly instead of going through this dispatcher.
-func (g GasBudget) ExitFromErr(err error, initialStateGas uint64) GasBudget {
+func (g GasBudget) Exit(err error, initialStateGas uint64) GasBudget {
 	switch {
 	case err == nil:
 		return g.ExitSuccess()

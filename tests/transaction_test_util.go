@@ -81,7 +81,7 @@ func (tt *TransactionTest) Run() error {
 			return
 		}
 		// Intrinsic cost
-		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules, 0)
+		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules, params.CostPerStateByte)
 		if err != nil {
 			return
 		}

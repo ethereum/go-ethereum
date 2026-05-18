@@ -42,9 +42,9 @@ func NewGasPool(amount uint64) *GasPool {
 	}
 }
 
-// SubGas deducts the given amount from the pool if enough gas is
+// CheckGasLegacy deducts the given amount from the pool if enough gas is
 // available and returns an error otherwise.
-func (gp *GasPool) SubGas(amount uint64) error {
+func (gp *GasPool) CheckGasLegacy(amount uint64) error {
 	if gp.remaining < amount {
 		return ErrGasLimitReached
 	}
@@ -65,31 +65,24 @@ func (gp *GasPool) CheckGasAmsterdam(regularReservation, stateReservation uint64
 	return nil
 }
 
-// ReturnGas adds the refunded gas back to the pool and updates
+// ChargeGasLegacy adds the refunded gas back to the pool and updates
 // the cumulative gas usage accordingly.
-func (gp *GasPool) ReturnGas(returned uint64, gasUsed uint64) error {
+func (gp *GasPool) ChargeGasLegacy(returned uint64, gasUsed uint64) error {
 	if gp.remaining > math.MaxUint64-returned {
 		return fmt.Errorf("%w: remaining: %d, returned: %d", ErrGasLimitOverflow, gp.remaining, returned)
 	}
-	// The returned gas calculation differs across forks.
-	//
-	// - Pre-Amsterdam:
-	//   returned = purchased - remaining (refund included)
-	//
-	// - Post-Amsterdam:
-	//   returned = purchased - gasUsed (refund excluded)
+	// returned = purchased - remaining (refund included)
 	gp.remaining += returned
 
 	// gasUsed = max(txGasUsed - gasRefund, calldataFloorGasCost)
-	// regardless of Amsterdam is activated or not.
 	gp.cumulativeUsed += gasUsed
 	return nil
 }
 
 // ChargeGasAmsterdam calculates the new remaining gas in the pool after the
 // execution of a message. Previously we subtracted and re-added gas to the
-// gaspool. After Amsterdam we only check if we can include the transaction and charge the
-// gaspool at the end.
+// gaspool. After Amsterdam we only check if we can include the transaction
+// and charge the gaspool at the end.
 func (gp *GasPool) ChargeGasAmsterdam(txRegular, txState, receiptGasUsed uint64) error {
 	gp.cumulativeRegular += txRegular
 	gp.cumulativeState += txState
