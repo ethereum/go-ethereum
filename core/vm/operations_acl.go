@@ -267,7 +267,7 @@ var (
 	gasStaticCallEIP7702   = makeCallVariantGasCallEIP7702(gasStaticCallIntrinsic)
 	gasCallCodeEIP7702     = makeCallVariantGasCallEIP7702(gasCallCodeIntrinsic)
 
-	innerGasCallEIP8037 = makeCallVariantGasCallEIP8037(gasCallIntrinsic8037, gasCall8037)
+	innerGasCallEIP8037 = makeCallVariantGasCallEIP8037(regularGasCall8037, stateGasCall8037)
 )
 
 func gasCallEIP7702(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
@@ -381,7 +381,7 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc intrinsicGasFunc) gasFunc {
 // It extends the EIP-7702 pattern with state gas handling and GasUsed tracking.
 // intrinsicFunc computes the regular gas (memory + transfer, no new account creation).
 // stateGasFunc computes the state gas (new account creation as state gas).
-func makeCallVariantGasCallEIP8037(intrinsicFunc intrinsicGasFunc, stateGasFunc gasFunc) gasFunc {
+func makeCallVariantGasCallEIP8037(regularFunc regularGasFunc, stateGasFunc stateGasFunc) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 		var (
 			eip2929Cost uint64
@@ -397,8 +397,8 @@ func makeCallVariantGasCallEIP8037(intrinsicFunc intrinsicGasFunc, stateGasFunc 
 			}
 		}
 
-		// Compute intrinsic cost (memory + transfer, no new account creation).
-		intrinsicCost, err := intrinsicFunc(evm, contract, stack, mem, memorySize)
+		// Compute regular cost (memory + transfer, no new account creation).
+		regularCost, err := regularFunc(evm, contract, stack, mem, memorySize)
 		if err != nil {
 			return GasCosts{}, err
 		}
@@ -406,7 +406,7 @@ func makeCallVariantGasCallEIP8037(intrinsicFunc intrinsicGasFunc, stateGasFunc 
 		// Charge intrinsic cost directly (regular gas). This must happen
 		// BEFORE state gas to prevent reservoir inflation, and also serves
 		// as the OOG guard before stateful operations.
-		if !contract.chargeRegular(intrinsicCost, evm.Config.Tracer, tracing.GasChangeCallOpCode) {
+		if !contract.chargeRegular(regularCost, evm.Config.Tracer, tracing.GasChangeCallOpCode) {
 			return GasCosts{}, ErrOutOfGas
 		}
 
@@ -424,13 +424,12 @@ func makeCallVariantGasCallEIP8037(intrinsicFunc intrinsicGasFunc, stateGasFunc 
 		}
 
 		// Compute and charge state gas (new account creation) AFTER regular gas.
-		stateGas, err := stateGasFunc(evm, contract, stack, mem, memorySize)
+		stateGas, err := stateGasFunc(evm, contract, stack)
 		if err != nil {
 			return GasCosts{}, err
 		}
-		if stateGas.StateGas > 0 {
-			// Charge updates contract.Gas.UsedStateGas in lockstep.
-			if _, ok := contract.Gas.Charge(GasCosts{StateGas: stateGas.StateGas}); !ok {
+		if stateGas > 0 {
+			if _, ok := contract.Gas.ChargeState(stateGas); !ok {
 				return GasCosts{}, ErrOutOfGas
 			}
 		}
@@ -443,8 +442,8 @@ func makeCallVariantGasCallEIP8037(intrinsicFunc intrinsicGasFunc, stateGasFunc 
 
 		// Temporarily undo direct regular charges for tracer reporting.
 		// The interpreter will charge the returned totalCost.
-		contract.Gas.RegularGas += eip2929Cost + eip7702Cost + intrinsicCost
-		contract.Gas.UsedRegularGas -= eip2929Cost + eip7702Cost + intrinsicCost
+		contract.Gas.RegularGas += eip2929Cost + eip7702Cost + regularCost
+		contract.Gas.UsedRegularGas -= eip2929Cost + eip7702Cost + regularCost
 
 		// Aggregate total cost.
 		var (
@@ -454,7 +453,7 @@ func makeCallVariantGasCallEIP8037(intrinsicFunc intrinsicGasFunc, stateGasFunc 
 		if totalCost, overflow = math.SafeAdd(eip2929Cost, eip7702Cost); overflow {
 			return GasCosts{}, ErrGasUintOverflow
 		}
-		if totalCost, overflow = math.SafeAdd(totalCost, intrinsicCost); overflow {
+		if totalCost, overflow = math.SafeAdd(totalCost, regularCost); overflow {
 			return GasCosts{}, ErrGasUintOverflow
 		}
 		if totalCost, overflow = math.SafeAdd(totalCost, evm.callGasTemp); overflow {

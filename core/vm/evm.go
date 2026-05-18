@@ -299,11 +299,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	}
 
 	if isPrecompile {
-		var stateDB StateDB
-		if evm.chainRules.IsAmsterdam {
-			stateDB = evm.StateDB
-		}
-		ret, gas, err = RunPrecompiledContract(stateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules)
+		ret, gas, err = RunPrecompiledContract(evm.StateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		code := evm.resolveCode(addr)
@@ -318,18 +314,20 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			gas = contract.Gas
 		}
 	}
-	// When an error was returned by the EVM or when setting the creation code
-	// above we revert to the snapshot. gasFromExec below handles the
-	// regular-gas burn on halt.
+
+	// Calculate the remaining gas at the end of frame
+	exitGas := gas.Exit(err, initialStateGas)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
+
+		// Drain the leftover regular gas if unexceptional halt occurs
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallFailedExecution)
+				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
 			}
 		}
 	}
-	return ret, gas.ExitFromErr(err, initialStateGas), err
+	return ret, exitGas, err
 }
 
 // CallCode executes the contract associated with the addr with the given input
@@ -361,11 +359,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		var stateDB StateDB
-		if evm.chainRules.IsAmsterdam {
-			stateDB = evm.StateDB
-		}
-		ret, gas, err = RunPrecompiledContract(stateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules)
+		ret, gas, err = RunPrecompiledContract(evm.StateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
@@ -374,15 +368,20 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 		ret, err = evm.Run(contract, input, false)
 		gas = contract.Gas
 	}
+
+	// Calculate the remaining gas at the end of frame
+	exitGas := gas.Exit(err, initialStateGas)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
+
+		// Drain the leftover regular gas if unexceptional halt occurs
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallFailedExecution)
+				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
 			}
 		}
 	}
-	return ret, gas.ExitFromErr(err, initialStateGas), err
+	return ret, exitGas, err
 }
 
 // DelegateCall executes the contract associated with the addr with the given input
@@ -409,26 +408,27 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		var stateDB StateDB
-		if evm.chainRules.IsAmsterdam {
-			stateDB = evm.StateDB
-		}
-		ret, gas, err = RunPrecompiledContract(stateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules)
+		ret, gas, err = RunPrecompiledContract(evm.StateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules)
 	} else {
 		contract := NewContract(originCaller, caller, value, gas, evm.jumpDests)
 		contract.SetCallCode(evm.resolveCodeHash(addr), evm.resolveCode(addr))
 		ret, err = evm.Run(contract, input, false)
 		gas = contract.Gas
 	}
+
+	// Calculate the remaining gas at the end of frame
+	exitGas := gas.Exit(err, initialStateGas)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
+
+		// Drain the leftover regular gas if unexceptional halt occurs
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallFailedExecution)
+				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
 			}
 		}
 	}
-	return ret, gas.ExitFromErr(err, initialStateGas), err
+	return ret, exitGas, err
 }
 
 // StaticCall executes the contract associated with the addr with the given input
@@ -463,26 +463,25 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	evm.StateDB.AddBalance(addr, new(uint256.Int), tracing.BalanceChangeTouchAccount)
 
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		var stateDB StateDB
-		if evm.chainRules.IsAmsterdam {
-			stateDB = evm.StateDB
-		}
-		ret, gas, err = RunPrecompiledContract(stateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules)
+		ret, gas, err = RunPrecompiledContract(evm.StateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules)
 	} else {
 		contract := NewContract(caller, addr, new(uint256.Int), gas, evm.jumpDests)
 		contract.SetCallCode(evm.resolveCodeHash(addr), evm.resolveCode(addr))
 		ret, err = evm.Run(contract, input, true)
 		gas = contract.Gas
 	}
+
+	// Calculate the remaining gas at the end of frame
+	exitGas := gas.Exit(err, initialStateGas)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallFailedExecution)
+				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
 			}
 		}
 	}
-	return ret, gas.ExitFromErr(err, initialStateGas), err
+	return ret, exitGas, err
 }
 
 // create creates a new contract using code as deployment code.
@@ -593,12 +592,14 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	// state and gas is preserved (i.e., treated as success).
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
+
+		exit := contract.Gas.Exit(err, initialStateGas)
 		if err != ErrExecutionReverted {
-			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
-				evm.Config.Tracer.OnGasChange(contract.Gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
+			if evm.Config.Tracer.HasGasHook() {
+				evm.Config.Tracer.EmitGasChange(contract.Gas.AsTracing(), exit.AsTracing(), tracing.GasChangeCallFailedExecution)
 			}
 		}
-		return ret, address, contract.Gas.ExitFromErr(err, initialStateGas), err
+		return ret, address, exit, err
 	}
 	// Either success, or pre-Homestead ErrCodeStoreOutOfGas (gas preserved).
 	// Both packaged as a success-form GasBudget.

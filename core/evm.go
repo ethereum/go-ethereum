@@ -80,17 +80,8 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		GasLimit:         header.GasLimit,
 		Random:           random,
 		SlotNum:          slotNum,
-		CostPerStateByte: CostPerStateByte(header, chain.Config()),
+		CostPerStateByte: params.CostPerStateByte,
 	}
-}
-
-// CostPerStateByte computes the cost per one byte of state creation
-// after EIP-8037.
-func CostPerStateByte(header *types.Header, config *params.ChainConfig) uint64 {
-	if !config.IsAmsterdam(header.Number, header.Time) {
-		return 0
-	}
-	return params.CostPerStateByte
 }
 
 // NewEVMTxContext creates a new transaction context for a single transaction.
