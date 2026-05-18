@@ -18,8 +18,11 @@
 package utils
 
 import (
+	"flag"
 	"reflect"
 	"testing"
+
+	"github.com/urfave/cli/v2"
 )
 
 func Test_SplitTagsFlag(t *testing.T) {
@@ -63,4 +66,53 @@ func Test_SplitTagsFlag(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIsNetworkPresetUsesFlagValue(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{
+			name: "unset",
+			want: false,
+		},
+		{
+			name: "enabled",
+			args: []string{"--sepolia"},
+			want: true,
+		},
+		{
+			name: "explicit false",
+			args: []string{"--sepolia=false"},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := newTestContext(t, tt.args, NetworkFlags...)
+			if got := IsNetworkPreset(ctx); got != tt.want {
+				t.Fatalf("IsNetworkPreset() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func newTestContext(t *testing.T, args []string, flags ...cli.Flag) *cli.Context {
+	t.Helper()
+
+	set := flag.NewFlagSet("test", flag.ContinueOnError)
+	for _, f := range flags {
+		if err := f.Apply(set); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := set.Parse(args); err != nil {
+		t.Fatal(err)
+	}
+	return cli.NewContext(nil, set, nil)
 }
