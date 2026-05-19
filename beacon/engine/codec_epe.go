@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	jsonw "github.com/fjl/jsonw"
 )
 
@@ -66,7 +65,7 @@ func (e ExecutionPayloadEnvelope) MarshalJSON() ([]byte, error) {
 		b.Key("executionPayload")
 		b.RawValue(payload)
 		b.Key("blockValue")
-		b.MustValue((*hexutil.Big)(e.BlockValue))
+		b.HexBigInt(e.BlockValue)
 		b.Key("blobsBundle")
 		marshalBlobsBundle(&b, e.BlobsBundle)
 		b.Key("executionRequests")
