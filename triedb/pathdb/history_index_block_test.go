@@ -222,18 +222,18 @@ func testBlockWriterDelete(t *testing.T, bitmapSize int) {
 		}
 		newMax := uint64(i - 1)
 		if bw.desc.max != newMax {
-			t.Fatalf("Maxmium element is not matched, want: %d, got: %d", newMax, bw.desc.max)
+			t.Fatalf("Maximum element is not matched, want: %d, got: %d", newMax, bw.desc.max)
 		}
 	}
 }
 
-func TestBlcokWriterDeleteWithData(t *testing.T) {
-	testBlcokWriterDeleteWithData(t, 0)
-	testBlcokWriterDeleteWithData(t, 2)
-	testBlcokWriterDeleteWithData(t, 34)
+func TestBlockWriterDeleteWithData(t *testing.T) {
+	testBlockWriterDeleteWithData(t, 0)
+	testBlockWriterDeleteWithData(t, 2)
+	testBlockWriterDeleteWithData(t, 34)
 }
 
-func testBlcokWriterDeleteWithData(t *testing.T, bitmapSize int) {
+func testBlockWriterDeleteWithData(t *testing.T, bitmapSize int) {
 	elements := []uint64{
 		1, 5, 10, 11, 20,
 	}

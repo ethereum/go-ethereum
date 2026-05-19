@@ -63,7 +63,7 @@ func newDiffAccountIterator(seek common.Hash, accountList []common.Hash, fn load
 	index := sort.Search(len(accountList), func(i int) bool {
 		return bytes.Compare(seek[:], accountList[i][:]) <= 0
 	})
-	// Assemble and returned the already seeked iterator
+	// Assemble and returned the already sought iterator
 	return &diffAccountIterator{
 		keys:   accountList[index:],
 		loadFn: fn,
@@ -206,7 +206,7 @@ func newDiffStorageIterator(account common.Hash, seek common.Hash, storageList [
 	index := sort.Search(len(storageList), func(i int) bool {
 		return bytes.Compare(seek[:], storageList[i][:]) <= 0
 	})
-	// Assemble and returned the already seeked iterator
+	// Assemble and returned the already sought iterator
 	return &diffStorageIterator{
 		account: account,
 		keys:    storageList[index:],

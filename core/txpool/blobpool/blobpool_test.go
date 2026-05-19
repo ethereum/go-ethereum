@@ -242,7 +242,7 @@ func encodeForPool(tx *types.Transaction) []byte {
 	return blob
 }
 
-// makeMultiBlobTx is a utility method to construct a ramdom blob tx with
+// makeMultiBlobTx is a utility method to construct a random blob tx with
 // certain number of blobs in its sidecar.
 func makeMultiBlobTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64, blobCount int, blobOffset int, key *ecdsa.PrivateKey, version byte) *types.Transaction {
 	var (
@@ -559,7 +559,7 @@ func TestOpenDrops(t *testing.T) {
 		id, _ := store.Put(blob)
 		dangling[id] = struct{}{}
 	}
-	// Insert a sequence of transactions with already passed nonces to veirfy
+	// Insert a sequence of transactions with already passed nonces to verify
 	// that the entire set will get dropped (case 4).
 	var (
 		filler, _ = crypto.GenerateKey()

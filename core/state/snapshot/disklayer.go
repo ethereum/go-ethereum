@@ -144,7 +144,7 @@ func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	if n := len(blob); n > 0 {
 		snapshotCleanAccountWriteMeter.Mark(int64(n))
 	} else {
-		snapshotCleanAccountInexMeter.Mark(1)
+		snapshotCleanAccountIndexMeter.Mark(1)
 	}
 	return blob, nil
 }
@@ -184,7 +184,7 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	if n := len(blob); n > 0 {
 		snapshotCleanStorageWriteMeter.Mark(int64(n))
 	} else {
-		snapshotCleanStorageInexMeter.Mark(1)
+		snapshotCleanStorageIndexMeter.Mark(1)
 	}
 	return blob, nil
 }

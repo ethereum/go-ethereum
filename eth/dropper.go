@@ -53,7 +53,7 @@ var (
 //   - during sync the Downloader handles peer connections, so dropper is disabled
 //   - if not syncing and the peer count is close to the limit, it drops peers
 //     randomly every peerDropInterval to make space for new peers
-//   - peers are dropped separately from the inboud pool and from the dialed pool
+//   - peers are dropped separately from the inbound pool and from the dialed pool
 type dropper struct {
 	maxDialPeers    int // maximum number of dialed peers
 	maxInboundPeers int // maximum number of inbound peers

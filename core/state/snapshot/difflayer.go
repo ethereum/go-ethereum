@@ -280,7 +280,7 @@ func (dl *diffLayer) accountRLP(hash common.Hash, depth int) ([]byte, error) {
 		if n := len(data); n > 0 {
 			snapshotDirtyAccountReadMeter.Mark(int64(n))
 		} else {
-			snapshotDirtyAccountInexMeter.Mark(1)
+			snapshotDirtyAccountIndexMeter.Mark(1)
 		}
 		snapshotBloomAccountTrueHitMeter.Mark(1)
 		return data, nil
@@ -345,7 +345,7 @@ func (dl *diffLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 			if n := len(data); n > 0 {
 				snapshotDirtyStorageReadMeter.Mark(int64(n))
 			} else {
-				snapshotDirtyStorageInexMeter.Mark(1)
+				snapshotDirtyStorageIndexMeter.Mark(1)
 			}
 			snapshotBloomStorageTrueHitMeter.Mark(1)
 			return data, nil
