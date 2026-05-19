@@ -126,11 +126,12 @@ func errorMessage(err error) *jsonrpcMessage {
 		Code:    errcodeDefault,
 		Message: err.Error(),
 	}}
-	ec, ok := err.(Error)
-	if ok {
-		msg.Error.Code = ec.ErrorCode()
+	var rpcError Error
+	if errors.As(err, &rpcError) {
+		msg.Error.Code = rpcError.ErrorCode()
 	}
-	de, ok := err.(DataError)
+	// Type assert on rpcError to ensure that both code and data come from the same error object.
+	de, ok := rpcError.(DataError)
 	if ok {
 		msg.Error.Data = de.ErrorData()
 	}
