@@ -440,12 +440,14 @@ func (f *FilterMaps) tailPartialBlocks() uint64 {
 	end, _, err := f.getLastBlockOfMap(f.indexedRange.maps.First() - f.mapsPerEpoch + f.indexedRange.tailPartialEpoch - 1)
 	if err != nil {
 		log.Error("Error fetching last block of map", "mapIndex", f.indexedRange.maps.First()-f.mapsPerEpoch+f.indexedRange.tailPartialEpoch-1, "error", err)
+		return 0
 	}
 	var start uint64
 	if f.indexedRange.maps.First()-f.mapsPerEpoch > 0 {
 		start, _, err = f.getLastBlockOfMap(f.indexedRange.maps.First() - f.mapsPerEpoch - 1)
 		if err != nil {
 			log.Error("Error fetching last block of map", "mapIndex", f.indexedRange.maps.First()-f.mapsPerEpoch-1, "error", err)
+			return 0
 		}
 	}
 	return end - start
