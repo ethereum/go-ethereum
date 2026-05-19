@@ -78,7 +78,7 @@ func (e *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
 // Validate returns an error if the contents of the access list are not ordered
 // according to the spec or any code changes are contained which exceed protocol
 // max code size.
-func (e *BlockAccessList) Validate() error {
+func (e *BlockAccessList) Validate(blockGasLimit uint64) error {
 	if !slices.IsSortedFunc(*e, func(a, b AccountAccess) int {
 		return bytes.Compare(a.Address[:], b.Address[:])
 	}) {
@@ -89,7 +89,7 @@ func (e *BlockAccessList) Validate() error {
 			return err
 		}
 	}
-	return nil
+	return e.ValidateSize(blockGasLimit)
 }
 
 // itemCount returns the number of items in the BAL for EIP-7928 size-constraint

@@ -115,23 +115,22 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// Amsterdam hard fork.
 	if v.config.IsAmsterdam(block.Number(), block.Time()) {
 		if block.Header().BlockAccessListHash == nil {
-			return fmt.Errorf("block access list hash not set in header")
+			return errors.New("block access list hash not set in header")
 		}
-		// If the block does not come with an access list, we compute the access list
-		// locally as part of execution and validate against the header's access list
-		// hash.
+		// If the block does not include an access list, compute it locally during
+		// execution and validate it against the access list hash in the header.
+		//
+		// If the block includes an attached access list, validate it directly here.
 		if block.AccessList() != nil {
 			computed := block.AccessList().Hash()
 			if *block.Header().BlockAccessListHash != computed {
 				return fmt.Errorf("access list hash mismatch, computed: %x, remote: %x", computed, *block.Header().BlockAccessListHash)
-			} else if err := block.AccessList().Validate(); err != nil {
-				return fmt.Errorf("invalid block access list: %v", err)
-			} else if err := block.AccessList().ValidateSize(block.GasLimit()); err != nil {
+			} else if err := block.AccessList().Validate(block.GasLimit()); err != nil {
 				return fmt.Errorf("invalid block access list: %v", err)
 			}
 		}
 	} else if block.Header().BlockAccessListHash != nil || block.AccessList() != nil {
-		return fmt.Errorf("block had access list before Amsterdam")
+		return errors.New("block had access list before Amsterdam")
 	}
 
 	// Ancestor block must be known.
@@ -185,12 +184,18 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Verify Block-level accessList once Amsterdam is enabled
 	if v.config.IsAmsterdam(block.Number(), block.Time()) {
+		if res.Bal == nil {
+			return errors.New("block access list is not available in amsterdam")
+		}
+		if block.Header().BlockAccessListHash == nil {
+			return errors.New("block access list hash not set in header")
+		}
 		enc := res.Bal.ToEncodingObj()
 		local, remote := enc.Hash(), *block.Header().BlockAccessListHash
 		if local != remote {
 			return fmt.Errorf("access list hash mismatch, local: %x, remote: %x", local, remote)
 		}
-		if err := enc.ValidateSize(block.GasLimit()); err != nil {
+		if err := enc.Validate(block.GasLimit()); err != nil {
 			return fmt.Errorf("invalid block access list: %v", err)
 		}
 	}
