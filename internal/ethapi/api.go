@@ -2013,7 +2013,7 @@ func (api *DebugAPI) GetRawHeader(ctx context.Context, blockNrOrHash rpc.BlockNu
 	}
 	header, _ := api.b.HeaderByHash(ctx, hash)
 	if header == nil {
-		return nil, fmt.Errorf("header #%d not found", hash)
+		return nil, fmt.Errorf("header %s not found", hash.Hex())
 	}
 	return rlp.EncodeToBytes(header)
 }
@@ -2032,7 +2032,7 @@ func (api *DebugAPI) GetRawBlock(ctx context.Context, blockNrOrHash rpc.BlockNum
 	}
 	block, _ := api.b.BlockByHash(ctx, hash)
 	if block == nil {
-		return nil, fmt.Errorf("block #%d not found", hash)
+		return nil, fmt.Errorf("block %s not found", hash.Hex())
 	}
 	return rlp.EncodeToBytes(block)
 }
