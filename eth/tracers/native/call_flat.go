@@ -187,9 +187,14 @@ func (t *flatCallTracer) OnExit(depth int, output []byte, gasUsed uint64, err er
 	if t.config.IncludePrecompiles {
 		return
 	}
+	// call has been nested in parent
+	parentStack := t.tracer.callstack[len(t.tracer.callstack)-1]
+	if len(parentStack.Calls) == 0 {
+		return
+	}
+
 	var (
-		// call has been nested in parent
-		parent = t.tracer.callstack[len(t.tracer.callstack)-1]
+		parent = &parentStack
 		call   = parent.Calls[len(parent.Calls)-1]
 		typ    = call.Type
 		to     = call.To
