@@ -73,11 +73,7 @@ func (e ExecutionPayloadEnvelope) MarshalJSON() ([]byte, error) {
 		if e.Requests == nil {
 			b.Null()
 		} else {
-			b.Array(func() {
-				for _, r := range e.Requests {
-					b.HexBytes(r)
-				}
-			})
+			appendHexBytesArray(&b, e.Requests)
 		}
 		b.Key("shouldOverrideBuilder")
 		b.Bool(e.Override)
