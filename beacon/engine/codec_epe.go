@@ -82,7 +82,6 @@ func (e ExecutionPayloadEnvelope) MarshalJSON() ([]byte, error) {
 			b.RawValue(witness)
 		}
 	})
-
 	return b.Output(), nil
 }
 
