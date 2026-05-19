@@ -78,16 +78,42 @@ func (e *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
 // Validate returns an error if the contents of the access list are not ordered
 // according to the spec or any code changes are contained which exceed protocol
 // max code size.
-func (e *BlockAccessList) Validate(rules params.Rules) error {
+func (e *BlockAccessList) Validate(blockGasLimit uint64) error {
 	if !slices.IsSortedFunc(*e, func(a, b AccountAccess) int {
 		return bytes.Compare(a.Address[:], b.Address[:])
 	}) {
 		return errors.New("block access list accounts not in lexicographic order")
 	}
 	for _, entry := range *e {
-		if err := entry.validate(rules); err != nil {
+		if err := entry.validate(); err != nil {
 			return err
 		}
+	}
+	return e.ValidateSize(blockGasLimit)
+}
+
+// itemCount returns the number of items in the BAL for EIP-7928 size-constraint
+// purposes: the count of distinct addresses plus every storage key (writes +
+// reads) carried by those accounts. A storage slot is counted once regardless
+// of how many transactions wrote to it.
+func (e *BlockAccessList) itemCount() uint64 {
+	count := uint64(len(*e)) // distinct addresses
+	for i := range *e {
+		count += uint64(len((*e)[i].StorageWrites)) + uint64(len((*e)[i].StorageReads))
+	}
+	return count
+}
+
+// ValidateSize returns an error if the BAL violates the EIP-7928 size
+// constraint for the given block gas limit:
+//
+//	itemCount() <= blockGasLimit / params.BALItemCost
+func (e *BlockAccessList) ValidateSize(blockGasLimit uint64) error {
+	items := e.itemCount()
+	limit := blockGasLimit / params.BALItemCost
+	if items > limit {
+		return fmt.Errorf("block access list exceeds size constraint: items=%d, limit=%d (block gas limit %d / %d)",
+			items, limit, blockGasLimit, params.BALItemCost)
 	}
 	return nil
 }
@@ -159,7 +185,7 @@ type AccountAccess struct {
 // validate converts the account accesses out of encoding format.
 // If any of the keys in the encoding object are not ordered according to the
 // spec, an error is returned.
-func (e *AccountAccess) validate(rules params.Rules) error {
+func (e *AccountAccess) validate() error {
 	// Check the storage write slots are sorted in order
 	if !slices.IsSortedFunc(e.StorageWrites, func(a, b encodingSlotWrites) int {
 		return a.Slot.Cmp(b.Slot)
@@ -200,14 +226,7 @@ func (e *AccountAccess) validate(rules params.Rules) error {
 		return errors.New("code changes not in ascending order by tx index")
 	}
 	for _, change := range e.CodeChanges {
-		var sizeLimit int
-		switch {
-		case rules.IsAmsterdam:
-			sizeLimit = params.MaxCodeSizeAmsterdam
-		default:
-			sizeLimit = params.MaxCodeSize
-		}
-		if len(change.Code) > sizeLimit {
+		if len(change.Code) > params.MaxCodeSizeAmsterdam {
 			return errors.New("code change contained oversized code")
 		}
 	}
@@ -257,7 +276,7 @@ func (e *AccountAccess) Copy() AccountAccess {
 
 // EncodeRLP returns the RLP-encoded access list
 func (b *ConstructionBlockAccessList) EncodeRLP(wr io.Writer) error {
-	return b.toEncodingObj().EncodeRLP(wr)
+	return b.ToEncodingObj().EncodeRLP(wr)
 }
 
 var _ rlp.Encoder = &ConstructionBlockAccessList{}
@@ -340,9 +359,9 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 	return res
 }
 
-// toEncodingObj returns an instance of the access list expressed as the type
+// ToEncodingObj returns an instance of the access list expressed as the type
 // which is used as input for the encoding/decoding.
-func (b *ConstructionBlockAccessList) toEncodingObj() *BlockAccessList {
+func (b *ConstructionBlockAccessList) ToEncodingObj() *BlockAccessList {
 	var addresses []common.Address
 	for addr := range b.Accounts {
 		addresses = append(addresses, addr)
