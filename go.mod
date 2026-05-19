@@ -83,7 +83,7 @@ require (
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
-	github.com/fjl/jsonw v0.0.0-20260519133611-b234a3a62a01 // indirect
+	github.com/fjl/jsonw v0.0.0-20260519153618-cb1f61b11f55 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.7 // indirect
