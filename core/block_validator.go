@@ -53,16 +53,19 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	if v.config.IsOsaka(block.Number(), block.Time()) && block.Size() > params.MaxBlockSize {
 		return ErrBlockOversized
 	}
-	// Check whether the block is already imported.
-	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
-		return ErrKnownBlock
-	}
-
 	// Header validity is known at this point. Here we verify that uncles, transactions
 	// and withdrawals given in the block body match the header.
 	header := block.Header()
-	if err := v.bc.engine.VerifyUncles(v.bc, block); err != nil {
-		return err
+
+	// Chain-dependent checks: skip in stateless mode (no blockchain available).
+	if v.bc != nil {
+		// Check whether the block is already imported.
+		if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
+			return ErrKnownBlock
+		}
+		if err := v.bc.engine.VerifyUncles(v.bc, block); err != nil {
+			return err
+		}
 	}
 	if hash := types.CalcUncleHash(block.Uncles()); hash != header.UncleHash {
 		return fmt.Errorf("uncle root hash mismatch (header value %x, calculated %x)", header.UncleHash, hash)
@@ -111,12 +114,14 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 	}
 
-	// Ancestor block must be known.
-	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
-		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
-			return consensus.ErrUnknownAncestor
+	// Ancestor block must be known (skip in stateless mode).
+	if v.bc != nil {
+		if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
+			if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
+				return consensus.ErrUnknownAncestor
+			}
+			return consensus.ErrPrunedAncestor
 		}
-		return consensus.ErrPrunedAncestor
 	}
 	return nil
 }

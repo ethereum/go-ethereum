@@ -18,6 +18,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -27,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -42,15 +42,7 @@ import (
 //   - It cannot be placed outside of core, because it needs to construct a dud headerchain
 //
 // TODO(karalabe): Would be nice to resolve both issues above somehow and move it.
-func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig vm.Config, block *types.Block, witness *stateless.Witness) (common.Hash, common.Hash, error) {
-	// Sanity check if the supplied block accidentally contains a set root or
-	// receipt hash. If so, be very loud, but still continue.
-	if block.Root() != (common.Hash{}) {
-		log.Error("stateless runner received state root it's expected to calculate (faulty consensus client)", "block", block.Number())
-	}
-	if block.ReceiptHash() != (common.Hash{}) {
-		log.Error("stateless runner received receipt root it's expected to calculate (faulty consensus client)", "block", block.Number())
-	}
+func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig vm.Config, block *types.Block, witness *stateless.Witness, validateHeader bool) (common.Hash, common.Hash, error) {
 	// Create and populate the state database to serve as the stateless backend
 	memdb := witness.MakeHashDB()
 	db, err := state.New(witness.Root(), state.NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), state.NewCodeDB(memdb)))
@@ -67,12 +59,23 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 	processor := NewStateProcessor(chain)
 	validator := NewBlockValidator(config, nil) // No chain, we only validate the state, not the block
 
+	if validateHeader {
+		if err := beacon.New(ethash.NewFaker()).VerifyHeader(chain, block.Header()); err != nil {
+			return common.Hash{}, common.Hash{}, fmt.Errorf("error verifying header in stateless validation: %w", err)
+		}
+
+		validator := NewBlockValidator(config, nil)
+		if err := validator.ValidateBody(block); err != nil {
+			return common.Hash{}, common.Hash{}, fmt.Errorf("error validating body in stateless validation: %w", err)
+		}
+	}
+
 	// Run the stateless blocks processing and self-validate certain fields
 	res, err := processor.Process(ctx, block, db, vmconfig)
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
-	if err = validator.ValidateState(block, db, res, true); err != nil {
+	if err = validator.ValidateState(block, db, res, validateHeader); err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
 	// Almost everything validated, but receipt and state root needs to be returned
