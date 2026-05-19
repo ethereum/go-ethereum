@@ -125,41 +125,20 @@ type Ethereum struct {
 
 	shutdownTracker *shutdowncheck.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
 
-	// clExpected is set when the Engine API is registered on this node
-	// (catalyst.Register). When unset (no Engine API attached, e.g. in
-	// tests, in --dev mode without catalyst, in light/legacy backends),
-	// the node cannot be paired with a consensus client and should not be
-	// gated on a CL handshake. clContacted records whether the consensus
-	// client has spoken to us via the Engine API at least once.
-	clExpected  atomic.Bool
-	clContacted atomic.Bool
+	clExpected  atomic.Bool // Set when catalyst.Register attaches the Engine API
+	clContacted atomic.Bool // Set on first Engine API call (newPayload / FCU)
 }
 
-// MarkConsensusExpected records that this node expects to be driven by a
-// consensus layer via the Engine API. It should be invoked once during node
-// setup, when the Engine API is registered.
-func (s *Ethereum) MarkConsensusExpected() {
-	s.clExpected.Store(true)
-}
+// MarkCLExpected and MarkCLContacted are setters for the two clXxx flags;
+// catalyst calls them from its package and so cannot reach the fields directly.
+func (s *Ethereum) MarkCLExpected()  { s.clExpected.Store(true) }
+func (s *Ethereum) MarkCLContacted() { s.clContacted.Store(true) }
 
-// MarkConsensusContacted records that the consensus layer has driven this node
-// at least once via the Engine API. The flag is sticky: once set, it stays set
-// for the lifetime of the process.
-func (s *Ethereum) MarkConsensusContacted() {
-	s.clContacted.Store(true)
-}
-
-// ConsensusReady reports whether the node's "synced" claim is meaningful right
-// now. If the node does not expect a consensus client (no Engine API), the
-// answer is always yes. If it does, the answer is yes only after the consensus
-// client has driven the node at least once. eth_syncing uses this to avoid
-// claiming "synced" before any CL handshake has occurred on freshly started
-// post-merge nodes.
+// ConsensusReady reports whether eth_syncing should be allowed to return false.
+// On nodes without an Engine API, always true. On nodes that expect a CL, true
+// only after the CL has driven the node at least once.
 func (s *Ethereum) ConsensusReady() bool {
-	if !s.clExpected.Load() {
-		return true
-	}
-	return s.clContacted.Load()
+	return !s.clExpected.Load() || s.clContacted.Load()
 }
 
 // New creates a new Ethereum object (including the initialisation of the common Ethereum object),

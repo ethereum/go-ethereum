@@ -42,12 +42,6 @@ import (
 type Backend interface {
 	// General Ethereum API
 	SyncProgress(ctx context.Context) ethereum.SyncProgress
-	// ConsensusReady reports whether the node's "synced" claim is currently
-	// meaningful. For backends that do not expect a consensus client (no
-	// Engine API attached) the answer is always true. For backends that do,
-	// the answer flips to true only after the consensus client has driven
-	// the node at least once. eth_syncing uses this to avoid reporting
-	// "synced" before any CL handshake has happened.
 	ConsensusReady() bool
 
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)

@@ -23,9 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum"
 )
 
-// syncingBackend is a minimal Backend embedding that only implements the two
-// methods Syncing calls. Embedding the interface avoids pulling in the full
-// testBackend setup just to flip a single bool.
 type syncingBackend struct {
 	Backend
 	progress ethereum.SyncProgress
@@ -35,18 +32,9 @@ type syncingBackend struct {
 func (b *syncingBackend) SyncProgress(_ context.Context) ethereum.SyncProgress { return b.progress }
 func (b *syncingBackend) ConsensusReady() bool                                 { return b.ready }
 
-// TestSyncingReportsBeforeConsensusContact verifies that on a CL-paired node
-// (ConsensusReady false), eth_syncing returns a truthy progress object even
-// when the local downloader believes itself to be done. This is the bug fix
-// for issue #33687: a freshly started node must not advertise itself as
-// "synced" before the consensus client has actually driven it.
-func TestSyncingReportsBeforeConsensusContact(t *testing.T) {
-	api := NewEthereumAPI(&syncingBackend{
-		// progress.Done() returns true on a zero-valued struct because all
-		// remaining counters are zero and CurrentBlock >= HighestBlock.
-		progress: ethereum.SyncProgress{},
-		ready:    false,
-	})
+// Issue #33687: a Done downloader but no CL handshake yet must report syncing.
+func TestSyncingBeforeCLContact(t *testing.T) {
+	api := NewEthereumAPI(&syncingBackend{progress: ethereum.SyncProgress{}, ready: false})
 	res, err := api.Syncing(context.Background())
 	if err != nil {
 		t.Fatalf("Syncing returned error: %v", err)
@@ -56,34 +44,24 @@ func TestSyncingReportsBeforeConsensusContact(t *testing.T) {
 	}
 }
 
-// TestSyncingReportsFalseAfterConsensusContact verifies that once the
-// consensus layer has handshaken at least once (or the backend does not
-// expect one) and progress.Done() is true, eth_syncing reports false.
-func TestSyncingReportsFalseAfterConsensusContact(t *testing.T) {
-	api := NewEthereumAPI(&syncingBackend{
-		progress: ethereum.SyncProgress{},
-		ready:    true,
-	})
+func TestSyncingAfterCLContact(t *testing.T) {
+	api := NewEthereumAPI(&syncingBackend{progress: ethereum.SyncProgress{}, ready: true})
 	res, err := api.Syncing(context.Background())
 	if err != nil {
 		t.Fatalf("Syncing returned error: %v", err)
 	}
-	v, ok := res.(bool)
-	if !ok || v {
+	if v, ok := res.(bool); !ok || v {
 		t.Fatalf("expected false after CL handshake when sync is done, got %v", res)
 	}
 }
 
-// TestSyncingReportsActiveSyncEvenWithoutConsensusContact verifies that when
-// the downloader is actively syncing, eth_syncing returns the progress map
-// regardless of the CL gate. This preserves the legacy semantics for the case
-// the issue thread did not affect.
-func TestSyncingReportsActiveSyncEvenWithoutConsensusContact(t *testing.T) {
+// Active sync stays truthy regardless of the CL gate.
+func TestSyncingActiveSyncIgnoresCLGate(t *testing.T) {
 	api := NewEthereumAPI(&syncingBackend{
 		progress: ethereum.SyncProgress{
 			StartingBlock: 100,
 			CurrentBlock:  150,
-			HighestBlock:  200, // CurrentBlock < HighestBlock => Done()=false
+			HighestBlock:  200,
 		},
 		ready: false,
 	})

@@ -153,19 +153,12 @@ func (api *EthereumAPI) BlobBaseFee(ctx context.Context) *hexutil.Big {
 // - highestBlock:  block number of the highest block header this node has received from peers
 // - pulledStates:  number of state entries processed until now
 // - knownStates:   number of known state entries that still need to be pulled
-//
-// On post-merge nodes paired with a consensus client, Syncing also waits for
-// the consensus client to drive the node at least once before reporting
-// "false". This avoids advertising a freshly started node as synced before any
-// CL handshake has happened — see (*Ethereum).ConsensusReady. Backends without
-// an Engine API (tests, --dev mode without catalyst, light clients) report
-// ready immediately, preserving legacy behavior.
 func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
 	progress := api.b.SyncProgress(ctx)
 
-	// Return not syncing if the synchronisation already completed AND, for
-	// backends that expect one, the consensus client has driven the node at
-	// least once.
+	// Don't claim "synced" until the CL has driven us at least once (post-merge
+	// nodes with Engine API attached). Backends without a CL report ready
+	// immediately via ConsensusReady. Refs #33687.
 	if progress.Done() && api.b.ConsensusReady() {
 		return false, nil
 	}

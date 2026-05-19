@@ -49,11 +49,7 @@ import (
 
 // Register adds the engine API and related APIs to the full node.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
-	// Mark the backend as expecting a consensus client. eth_syncing uses
-	// this to gate "synced" responses on a CL handshake: a node configured
-	// to take direction from a CL should not advertise itself as synced
-	// until that CL has actually driven it at least once.
-	backend.MarkConsensusExpected()
+	backend.MarkCLExpected()
 	stack.RegisterAPIs([]rpc.API{
 		newTestingAPI(backend),
 		{
@@ -256,9 +252,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline
 	api.lastForkchoiceUpdate.Store(time.Now().Unix())
-	// Record that the consensus layer has driven us at least once. eth_syncing
-	// uses this to avoid claiming "synced" before any CL handshake has occurred.
-	api.eth.MarkConsensusContacted()
+	api.eth.MarkCLContacted()
 
 	// Check whether we have the block yet in our database or not. If not, we'll
 	// need to either trigger a sync, or to reject this forkchoice update for a
@@ -854,9 +848,7 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline
 	api.lastNewPayloadUpdate.Store(time.Now().Unix())
-	// Record that the consensus layer has driven us at least once. eth_syncing
-	// uses this to avoid claiming "synced" before any CL handshake has occurred.
-	api.eth.MarkConsensusContacted()
+	api.eth.MarkCLContacted()
 
 	// If we already have the block locally, ignore the entire execution and just
 	// return a fake success.

@@ -422,8 +422,6 @@ func (b *EthAPIBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress 
 	return prog
 }
 
-// ConsensusReady reports whether the node's "synced" claim is currently
-// meaningful. See (*Ethereum).ConsensusReady for the gating rules.
 func (b *EthAPIBackend) ConsensusReady() bool {
 	return b.eth.ConsensusReady()
 }
