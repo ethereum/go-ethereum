@@ -513,7 +513,7 @@ func (sim *simulator) sanitizeChain(blocks []simBlock) ([]simBlock, error) {
 			block.BlockOverrides.Time = (*hexutil.Uint64)(&t)
 		} else {
 			t = uint64(*block.BlockOverrides.Time)
-			if t <= prevTimestamp {
+			if t < prevTimestamp {
 				return nil, &invalidBlockTimestampError{fmt.Sprintf("block timestamps must be in order: %d <= %d", t, prevTimestamp)}
 			}
 		}
