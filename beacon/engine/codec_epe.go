@@ -64,18 +64,23 @@ func (e ExecutionPayloadEnvelope) MarshalJSON() ([]byte, error) {
 	b.Object(func() {
 		b.Key("executionPayload")
 		b.RawValue(payload)
+
 		b.Key("blockValue")
 		b.HexBigInt(e.BlockValue)
+
 		b.Key("blobsBundle")
 		marshalBlobsBundle(&b, e.BlobsBundle)
+
 		b.Key("executionRequests")
 		if e.Requests == nil {
 			b.Null()
 		} else {
 			appendHexBytesArray(&b, e.Requests)
 		}
+
 		b.Key("shouldOverrideBuilder")
 		b.Bool(e.Override)
+
 		if e.Witness != nil {
 			b.Key("witness")
 			b.RawValue(witness)
