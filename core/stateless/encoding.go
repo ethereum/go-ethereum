@@ -17,8 +17,10 @@
 package stateless
 
 import (
+	"bytes"
 	"errors"
 	"io"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -28,16 +30,25 @@ import (
 // ToExtWitness converts our internal witness representation to the consensus one.
 func (w *Witness) ToExtWitness() *ExtWitness {
 	ext := &ExtWitness{
-		Headers: w.Headers,
+		Headers: slices.Clone(w.Headers),
 	}
+	slices.Reverse(ext.Headers)
+
 	ext.Codes = make([]hexutil.Bytes, 0, len(w.Codes))
 	for code := range w.Codes {
 		ext.Codes = append(ext.Codes, []byte(code))
 	}
+	slices.SortFunc(ext.Codes, func(a, b hexutil.Bytes) int {
+		return bytes.Compare(a, b)
+	})
+
 	ext.State = make([]hexutil.Bytes, 0, len(w.State))
 	for node := range w.State {
 		ext.State = append(ext.State, []byte(node))
 	}
+	slices.SortFunc(ext.State, func(a, b hexutil.Bytes) int {
+		return bytes.Compare(a, b)
+	})
 	return ext
 }
 
@@ -46,7 +57,10 @@ func (w *Witness) FromExtWitness(ext *ExtWitness) error {
 	if len(ext.Headers) == 0 {
 		return errors.New("witness must contain at least one header")
 	}
-	w.Headers = ext.Headers
+	w.Headers = slices.Clone(ext.Headers)
+	if headersAscending(w.Headers) {
+		slices.Reverse(w.Headers)
+	}
 
 	w.Codes = make(map[string]struct{}, len(ext.Codes))
 	for _, code := range ext.Codes {
@@ -57,6 +71,20 @@ func (w *Witness) FromExtWitness(ext *ExtWitness) error {
 		w.State[string(node)] = struct{}{}
 	}
 	return nil
+}
+
+// headersAscending reports whether headers are in the external witness order,
+// oldest ancestor first and parent last. The internal witness keeps headers in
+// the opposite order so Root can retrieve the parent root from Headers[0].
+func headersAscending(headers []*types.Header) bool {
+	if len(headers) < 2 {
+		return false
+	}
+	first, last := headers[0], headers[len(headers)-1]
+	if first == nil || last == nil || first.Number == nil || last.Number == nil {
+		return false
+	}
+	return first.Number.Cmp(last.Number) < 0
 }
 
 // EncodeRLP serializes a witness as RLP.
