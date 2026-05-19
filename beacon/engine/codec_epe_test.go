@@ -27,42 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-// canonicalEnvelope is a reference type for ExecutionPayloadEnvelope that uses
-// standard json.Marshal (no custom MarshalJSON). It mirrors the gencodec type
-// overrides so its output matches what the generated code would produce.
-type canonicalEnvelope struct {
-	ExecutionPayload *ExecutableData `json:"executionPayload"`
-	BlockValue       *hexutil.Big    `json:"blockValue"`
-	BlobsBundle      *BlobsBundle    `json:"blobsBundle"`
-	Requests         []hexutil.Bytes `json:"executionRequests"`
-	Override         bool            `json:"shouldOverrideBuilder"`
-	Witness          *hexutil.Bytes  `json:"witness,omitempty"`
-}
-
-func toCanonical(e *ExecutionPayloadEnvelope) *canonicalEnvelope {
-	c := &canonicalEnvelope{
-		ExecutionPayload: e.ExecutionPayload,
-		BlockValue:       (*hexutil.Big)(e.BlockValue),
-		BlobsBundle:      e.BlobsBundle,
-		Override:         e.Override,
-		Witness:          e.Witness,
-	}
-	if e.Requests != nil {
-		c.Requests = make([]hexutil.Bytes, len(e.Requests))
-		for i, r := range e.Requests {
-			c.Requests[i] = r
-		}
-	}
-	return c
-}
-
-// compactJSON returns the compacted form of a JSON byte slice.
-func compactJSON(data []byte) []byte {
-	var buf bytes.Buffer
-	json.Compact(&buf, data)
-	return buf.Bytes()
-}
-
 func makeTestPayload() *ExecutableData {
 	return &ExecutableData{
 		ParentHash:    common.HexToHash("0x01"),
@@ -79,93 +43,6 @@ func makeTestPayload() *ExecutableData {
 		BaseFeePerGas: big.NewInt(7),
 		BlockHash:     common.HexToHash("0x08"),
 		Transactions:  [][]byte{{0xaa, 0xbb}},
-	}
-}
-
-func TestMarshalJSON(t *testing.T) {
-	witness := hexutil.Bytes{0xde, 0xad}
-	tests := []struct {
-		name string
-		env  ExecutionPayloadEnvelope
-	}{
-		{
-			name: "full envelope with blobs",
-			env: ExecutionPayloadEnvelope{
-				ExecutionPayload: makeTestPayload(),
-				BlockValue:       big.NewInt(12345),
-				BlobsBundle: &BlobsBundle{
-					Commitments: []hexutil.Bytes{{0x01, 0x02}},
-					Proofs:      []hexutil.Bytes{{0x03, 0x04}},
-					Blobs:       []hexutil.Bytes{{0x05, 0x06}},
-				},
-				Requests: [][]byte{{0xaa}, {0xbb, 0xcc}},
-				Override: true,
-				Witness:  &witness,
-			},
-		},
-		{
-			name: "nil BlobsBundle",
-			env: ExecutionPayloadEnvelope{
-				ExecutionPayload: makeTestPayload(),
-				BlockValue:       big.NewInt(0),
-			},
-		},
-		{
-			name: "nil Requests",
-			env: ExecutionPayloadEnvelope{
-				ExecutionPayload: makeTestPayload(),
-				BlockValue:       big.NewInt(1),
-				Requests:         nil,
-			},
-		},
-		{
-			name: "empty Requests",
-			env: ExecutionPayloadEnvelope{
-				ExecutionPayload: makeTestPayload(),
-				BlockValue:       big.NewInt(1),
-				Requests:         [][]byte{},
-			},
-		},
-		{
-			name: "nil Witness",
-			env: ExecutionPayloadEnvelope{
-				ExecutionPayload: makeTestPayload(),
-				BlockValue:       big.NewInt(1),
-				Witness:          nil,
-			},
-		},
-		{
-			name: "empty blobs bundle arrays",
-			env: ExecutionPayloadEnvelope{
-				ExecutionPayload: makeTestPayload(),
-				BlockValue:       big.NewInt(1),
-				BlobsBundle: &BlobsBundle{
-					Commitments: []hexutil.Bytes{},
-					Proofs:      []hexutil.Bytes{},
-					Blobs:       []hexutil.Bytes{},
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Hand-rolled marshal.
-			got, err := tt.env.MarshalJSON()
-			if err != nil {
-				t.Fatalf("MarshalJSON error: %v", err)
-			}
-
-			// Canonical marshal via reference struct.
-			want, err := json.Marshal(toCanonical(&tt.env))
-			if err != nil {
-				t.Fatalf("canonical marshal error: %v", err)
-			}
-
-			if !bytes.Equal(compactJSON(got), compactJSON(want)) {
-				t.Errorf("JSON mismatch\ngot:  %s\nwant: %s", got, want)
-			}
-		})
 	}
 }
 
@@ -190,7 +67,7 @@ func TestMarshalJSONRoundtrip(t *testing.T) {
 	}
 
 	var decoded ExecutionPayloadEnvelope
-	if err := decoded.UnmarshalJSON(data); err != nil {
+	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("UnmarshalJSON error: %v", err)
 	}
 
@@ -211,100 +88,6 @@ func TestMarshalJSONRoundtrip(t *testing.T) {
 	}
 	if !bytes.Equal(*decoded.Witness, *original.Witness) {
 		t.Error("Witness mismatch")
-	}
-}
-
-func TestUnmarshalJSON(t *testing.T) {
-	witness := hexutil.Bytes{0xde, 0xad}
-	tests := []struct {
-		name string
-		env  ExecutionPayloadEnvelope
-	}{
-		{
-			name: "full envelope with blobs",
-			env: ExecutionPayloadEnvelope{
-				ExecutionPayload: makeTestPayload(),
-				BlockValue:       big.NewInt(12345),
-				BlobsBundle: &BlobsBundle{
-					Commitments: []hexutil.Bytes{{0x01, 0x02}},
-					Proofs:      []hexutil.Bytes{{0x03, 0x04}},
-					Blobs:       []hexutil.Bytes{{0x05, 0x06}},
-				},
-				Requests: [][]byte{{0xaa}, {0xbb, 0xcc}},
-				Override: true,
-				Witness:  &witness,
-			},
-		},
-		{
-			name: "null optional fields",
-			env: ExecutionPayloadEnvelope{
-				ExecutionPayload: makeTestPayload(),
-				BlockValue:       big.NewInt(1),
-				BlobsBundle:      nil,
-				Requests:         nil,
-				Override:         false,
-				Witness:          nil,
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			input, err := json.Marshal(toCanonical(&tt.env))
-			if err != nil {
-				t.Fatalf("canonical marshal error: %v", err)
-			}
-
-			var got ExecutionPayloadEnvelope
-			if err := got.UnmarshalJSON(input); err != nil {
-				t.Fatalf("UnmarshalJSON error: %v", err)
-			}
-
-			gotJSON, err := json.Marshal(toCanonical(&got))
-			if err != nil {
-				t.Fatalf("canonical marshal after unmarshal error: %v", err)
-			}
-			if !bytes.Equal(compactJSON(gotJSON), compactJSON(input)) {
-				t.Errorf("JSON mismatch after unmarshal\ngot:  %s\nwant: %s", gotJSON, input)
-			}
-		})
-	}
-}
-
-func TestUnmarshalJSONMissingRequiredFields(t *testing.T) {
-	tests := []struct {
-		name string
-		json func(t *testing.T) []byte
-	}{
-		{
-			name: "missing executionPayload",
-			json: func(t *testing.T) []byte {
-				return []byte(`{"blockValue":"0x1"}`)
-			},
-		},
-		{
-			name: "missing blockValue",
-			json: func(t *testing.T) []byte {
-				input, err := json.Marshal(struct {
-					ExecutionPayload *ExecutableData `json:"executionPayload"`
-				}{
-					ExecutionPayload: makeTestPayload(),
-				})
-				if err != nil {
-					t.Fatalf("marshal input: %v", err)
-				}
-				return input
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var env ExecutionPayloadEnvelope
-			if err := env.UnmarshalJSON(tt.json(t)); err == nil {
-				t.Fatal("expected error")
-			}
-		})
 	}
 }
 

@@ -19,61 +19,25 @@ package engine
 import (
 	"encoding/json"
 	"errors"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	jsonw "github.com/fjl/jsonw"
 )
 
-// estimateBlobsBundleSize returns a rough estimate of the JSON size for a BlobsBundle.
-func estimateBlobsBundleSize(b *BlobsBundle) int {
-	size := 80 // JSON structure overhead
-	for _, blob := range b.Blobs {
-		size += len(blob)*2 + 6
-	}
-	for _, c := range b.Commitments {
-		size += len(c)*2 + 6
-	}
-	for _, p := range b.Proofs {
-		size += len(p)*2 + 6
-	}
-	return size
-}
-
 // marshalBlobsBundle writes BlobsBundle as JSON and appends it to buf.
-func marshalBlobsBundle(buf []byte, b *BlobsBundle) []byte {
-	buf = append(buf, `{"commitments":`...)
-	buf = marshalHexBytesArray(buf, b.Commitments)
-
-	buf = append(buf, `,"proofs":`...)
-	buf = marshalHexBytesArray(buf, b.Proofs)
-
-	buf = append(buf, `,"blobs":`...)
-	buf = marshalHexBytesArray(buf, b.Blobs)
-
-	buf = append(buf, '}')
-	return buf
-}
-
-func unmarshalBlobsBundle(input []byte) (*BlobsBundle, error) {
-	if isJSONNull(input) {
-		return nil, nil
+func marshalBlobsBundle(b *jsonw.Buffer, bundle *BlobsBundle) {
+	if bundle == nil {
+		b.Null()
+		return
 	}
-	var bundle BlobsBundle
-	if err := decodeJSONObject(input, func(key string, value json.RawMessage) error {
-		var err error
-		switch key {
-		case "commitments":
-			bundle.Commitments, err = unmarshalHexBytesArray(value)
-		case "proofs":
-			bundle.Proofs, err = unmarshalHexBytesArray(value)
-		case "blobs":
-			bundle.Blobs, err = unmarshalHexBytesArray(value)
-		}
-		return err
-	}); err != nil {
-		return nil, err
-	}
-	return &bundle, nil
+	b.Object(func() {
+		b.Key("commitments")
+		appendHexBytesArray(b, bundle.Commitments)
+		b.Key("proofs")
+		appendHexBytesArray(b, bundle.Proofs)
+		b.Key("blobs")
+		appendHexBytesArray(b, bundle.Blobs)
+	})
 }
 
 // MarshalJSON implements json.Marshaler.
@@ -82,38 +46,12 @@ func (e ExecutionPayloadEnvelope) MarshalJSON() ([]byte, error) {
 		return nil, errors.New("missing required field 'executionPayload' for ExecutionPayloadEnvelope")
 	}
 
-	// Marshal the execution payload using its gencodec MarshalJSON.
+	// Pre-marshal the execution payload using its gencodec MarshalJSON.
 	payload, err := e.ExecutionPayload.MarshalJSON()
 	if err != nil {
 		return nil, err
 	}
-
-	// Marshal the block value.
-	blockValue, err := json.Marshal((*hexutil.Big)(e.BlockValue))
-	if err != nil {
-		return nil, err
-	}
-
-	// Marshal the execution requests.
-	var requests []byte
-	if e.Requests != nil {
-		hexRequests := make([]hexutil.Bytes, len(e.Requests))
-		for i, req := range e.Requests {
-			hexRequests[i] = req
-		}
-		requests, err = json.Marshal(hexRequests)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Marshal the override.
-	override, err := json.Marshal(e.Override)
-	if err != nil {
-		return nil, err
-	}
-
-	// Marshal the witness.
+	// Pre-marshal the witness.
 	var witness []byte
 	if e.Witness != nil {
 		witness, err = json.Marshal(e.Witness)
@@ -122,131 +60,40 @@ func (e ExecutionPayloadEnvelope) MarshalJSON() ([]byte, error) {
 		}
 	}
 
-	// Estimate buffer size.
-	size := len(payload) + len(blockValue) + len(requests) + len(override) + len(witness)
-	if e.BlobsBundle != nil {
-		size += estimateBlobsBundleSize(e.BlobsBundle)
-	}
-	size += 256 // JSON bloat (keys, braces, commas, etc. and room for growth)
-	buf := make([]byte, 0, size)
-
 	// Write the execution payload to the buffer
-	buf = append(buf, `{"executionPayload":`...)
-	buf = append(buf, payload...)
+	var b jsonw.Buffer
+	b.Object(func() {
+		b.Key("executionPayload")
+		b.RawValue(payload)
+		b.Key("blockValue")
+		b.MustValue((*hexutil.Big)(e.BlockValue))
+		b.Key("blobsBundle")
+		marshalBlobsBundle(&b, e.BlobsBundle)
+		b.Key("executionRequests")
+		if e.Requests == nil {
+			b.Null()
+		} else {
+			b.Array(func() {
+				for _, r := range e.Requests {
+					b.HexBytes(r)
+				}
+			})
+		}
+		b.Key("shouldOverrideBuilder")
+		b.Bool(e.Override)
+		if e.Witness != nil {
+			b.Key("witness")
+			b.RawValue(witness)
+		}
+	})
 
-	// Write the block value to the buffer
-	buf = append(buf, `,"blockValue":`...)
-	buf = append(buf, blockValue...)
-
-	// Write the blobs bundle to the buffer
-	buf = append(buf, `,"blobsBundle":`...)
-	if e.BlobsBundle != nil {
-		buf = marshalBlobsBundle(buf, e.BlobsBundle)
-	} else {
-		buf = append(buf, "null"...)
-	}
-
-	// Write the execution requests to the buffer
-	buf = append(buf, `,"executionRequests":`...)
-	if requests != nil {
-		buf = append(buf, requests...)
-	} else {
-		buf = append(buf, "null"...)
-	}
-
-	// Write the override to the buffer
-	buf = append(buf, `,"shouldOverrideBuilder":`...)
-	buf = append(buf, override...)
-
-	// Write the witness to the buffer if present
-	if witness != nil {
-		buf = append(buf, `,"witness":`...)
-		buf = append(buf, witness...)
-	}
-
-	// Close the envelope
-	buf = append(buf, '}')
-	return buf, nil
+	return b.Output(), nil
 }
 
-// UnmarshalJSON implements json.Unmarshaler.
-func (e *ExecutionPayloadEnvelope) UnmarshalJSON(input []byte) error {
-	var (
-		payloadSeen    bool
-		blockValueSeen bool
-	)
-	*e = ExecutionPayloadEnvelope{}
-	if err := decodeJSONObject(input, func(key string, value json.RawMessage) error {
-		switch key {
-		case "executionPayload":
-			payloadSeen = true
-			if isJSONNull(value) {
-				e.ExecutionPayload = nil
-				return nil
-			}
-			var payload ExecutableData
-			if err := payload.UnmarshalJSON(value); err != nil {
-				return err
-			}
-			e.ExecutionPayload = &payload
-		case "blockValue":
-			blockValueSeen = true
-			if isJSONNull(value) {
-				e.BlockValue = nil
-				return nil
-			}
-			var blockValue hexutil.Big
-			if err := blockValue.UnmarshalJSON(value); err != nil {
-				return err
-			}
-			e.BlockValue = (*big.Int)(&blockValue)
-		case "blobsBundle":
-			bundle, err := unmarshalBlobsBundle(value)
-			if err != nil {
-				return err
-			}
-			e.BlobsBundle = bundle
-		case "executionRequests":
-			requests, err := unmarshalHexBytesArray(value)
-			if err != nil {
-				return err
-			}
-			if requests == nil {
-				e.Requests = nil
-				return nil
-			}
-			e.Requests = make([][]byte, len(requests))
-			for i, req := range requests {
-				e.Requests[i] = req
-			}
-		case "shouldOverrideBuilder":
-			if isJSONNull(value) {
-				e.Override = false
-				return nil
-			}
-			if err := json.Unmarshal(value, &e.Override); err != nil {
-				return err
-			}
-		case "witness":
-			if isJSONNull(value) {
-				e.Witness = nil
-				return nil
-			}
-			var witness hexutil.Bytes
-			if err := witness.UnmarshalJSON(value); err != nil {
-				return err
-			}
-			e.Witness = &witness
+func appendHexBytesArray[T ~[]byte](b *jsonw.Buffer, slice []T) {
+	b.Array(func() {
+		for _, elem := range slice {
+			b.HexBytes(elem)
 		}
-		return nil
-	}); err != nil {
-		return err
-	}
-	if !payloadSeen || e.ExecutionPayload == nil {
-		return errors.New("missing required field 'executionPayload' for ExecutionPayloadEnvelope")
-	}
-	if !blockValueSeen || e.BlockValue == nil {
-		return errors.New("missing required field 'blockValue' for ExecutionPayloadEnvelope")
-	}
-	return nil
+	})
 }

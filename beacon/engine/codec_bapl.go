@@ -16,166 +16,54 @@
 
 package engine
 
-import "encoding/json"
-
-// estimateBlobAndProofV1Size returns a rough estimate of the JSON size for a BlobAndProofV1.
-func estimateBlobAndProofV1Size(item *BlobAndProofV1) int {
-	if item == nil {
-		return 4
-	}
-	return len(item.Blob)*2 + len(item.Proof)*2 + 30
-}
-
-// marshalBlobAndProofV1 writes a BlobAndProofV1 as JSON and appends it to buf.
-func marshalBlobAndProofV1(buf []byte, item *BlobAndProofV1) []byte {
-	if item == nil {
-		return append(buf, "null"...)
-	}
-	buf = append(buf, `{"blob":`...)
-	buf = writeHexBytes(buf, item.Blob)
-
-	buf = append(buf, `,"proof":`...)
-	buf = writeHexBytes(buf, item.Proof)
-
-	buf = append(buf, '}')
-	return buf
-}
-
-// estimateBlobAndProofV2Size returns a rough estimate of the JSON size for a BlobAndProofV2.
-func estimateBlobAndProofV2Size(item *BlobAndProofV2) int {
-	if item == nil {
-		return 4
-	}
-	size := len(item.Blob)*2 + 30
-	for _, proof := range item.CellProofs {
-		size += len(proof)*2 + 6
-	}
-	return size
-}
-
-// marshalBlobAndProofV2 writes a BlobAndProofV2 as JSON and appends it to buf.
-func marshalBlobAndProofV2(buf []byte, item *BlobAndProofV2) []byte {
-	if item == nil {
-		return append(buf, "null"...)
-	}
-	buf = append(buf, `{"blob":`...)
-	buf = writeHexBytes(buf, item.Blob)
-
-	buf = append(buf, `,"proofs":`...)
-	buf = marshalHexBytesArray(buf, item.CellProofs)
-
-	buf = append(buf, '}')
-	return buf
-}
+import (
+	jsonw "github.com/fjl/jsonw"
+)
 
 // MarshalJSON implements json.Marshaler.
 func (list BlobAndProofListV1) MarshalJSON() ([]byte, error) {
-	// Estimate buffer size.
-	size := 2
-	for _, item := range list {
-		size += estimateBlobAndProofV1Size(item) + 1
-	}
-	buf := make([]byte, 0, size)
-
-	// Write the array elements to the buffer.
-	buf = append(buf, '[')
-	for i, item := range list {
-		if i > 0 {
-			buf = append(buf, ',')
+	var b jsonw.Buffer
+	b.Array(func() {
+		for _, item := range list {
+			marshalBlobAndProofV1(&b, item)
 		}
-		buf = marshalBlobAndProofV1(buf, item)
-	}
-	buf = append(buf, ']')
-	return buf, nil
+	})
+	return b.Output(), nil
 }
 
-// UnmarshalJSON implements json.Unmarshaler.
-func (list *BlobAndProofListV1) UnmarshalJSON(input []byte) error {
-	if isJSONNull(input) {
-		*list = nil
-		return nil
+func marshalBlobAndProofV1(b *jsonw.Buffer, item *BlobAndProofV1) {
+	if item == nil {
+		b.Null()
+	} else {
+		b.Object(func() {
+			b.Key("blob")
+			b.HexBytes(item.Blob)
+			b.Key("proof")
+			b.HexBytes(item.Proof)
+		})
 	}
-	items := make(BlobAndProofListV1, 0)
-	if err := decodeJSONArray(input, func(value json.RawMessage) error {
-		if isJSONNull(value) {
-			items = append(items, nil)
-			return nil
-		}
-		item := new(BlobAndProofV1)
-		if err := decodeJSONObject(value, func(key string, value json.RawMessage) error {
-			switch key {
-			case "blob":
-				return item.Blob.UnmarshalJSON(value)
-			case "proof":
-				return item.Proof.UnmarshalJSON(value)
-			}
-			return nil
-		}); err != nil {
-			return err
-		}
-		items = append(items, item)
-		return nil
-	}); err != nil {
-		return err
-	}
-	*list = items
-	return nil
 }
 
 // MarshalJSON implements json.Marshaler.
 func (list BlobAndProofListV2) MarshalJSON() ([]byte, error) {
-	// Estimate buffer size.
-	size := 2
-	for _, item := range list {
-		size += estimateBlobAndProofV2Size(item) + 1
-	}
-	buf := make([]byte, 0, size)
-
-	// Write the array elements to the buffer.
-	buf = append(buf, '[')
-	for i, item := range list {
-		if i > 0 {
-			buf = append(buf, ',')
+	var b jsonw.Buffer
+	b.Array(func() {
+		for _, item := range list {
+			marshalBlobAndProofV2(&b, item)
 		}
-		buf = marshalBlobAndProofV2(buf, item)
-	}
-	buf = append(buf, ']')
-	return buf, nil
+	})
+	return b.Output(), nil
 }
 
-// UnmarshalJSON implements json.Unmarshaler.
-func (list *BlobAndProofListV2) UnmarshalJSON(input []byte) error {
-	if isJSONNull(input) {
-		*list = nil
-		return nil
+func marshalBlobAndProofV2(b *jsonw.Buffer, item *BlobAndProofV2) {
+	if item == nil {
+		b.Null()
+	} else {
+		b.Object(func() {
+			b.Key("blob")
+			b.HexBytes(item.Blob)
+			b.Key("proofs")
+			appendHexBytesArray(b, item.CellProofs)
+		})
 	}
-	items := make(BlobAndProofListV2, 0)
-	if err := decodeJSONArray(input, func(value json.RawMessage) error {
-		if isJSONNull(value) {
-			items = append(items, nil)
-			return nil
-		}
-		item := new(BlobAndProofV2)
-		if err := decodeJSONObject(value, func(key string, value json.RawMessage) error {
-			switch key {
-			case "blob":
-				return item.Blob.UnmarshalJSON(value)
-			case "proofs":
-				proofs, err := unmarshalHexBytesArray(value)
-				if err != nil {
-					return err
-				}
-				item.CellProofs = proofs
-			}
-			return nil
-		}); err != nil {
-			return err
-		}
-		items = append(items, item)
-		return nil
-	}); err != nil {
-		return err
-	}
-	*list = items
-	return nil
 }
