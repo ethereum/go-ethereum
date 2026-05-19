@@ -28,7 +28,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
@@ -103,15 +102,6 @@ func (e *BlockAccessList) Hash() common.Hash {
 		return common.Hash{}
 	}
 	return crypto.Keccak256Hash(enc.Bytes())
-}
-
-func (e *BlockAccessList) EncodedSize() int {
-	b, err := rlp.EncodeToBytes(e)
-	if err != nil {
-		// TODO: proper to crit here?
-		log.Crit("failed to rlp encode access list", "err", err)
-	}
-	return len(b)
 }
 
 // encodingBalanceChange is the encoding format of BalanceChange.
