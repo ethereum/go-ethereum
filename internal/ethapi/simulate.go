@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/params"
@@ -292,9 +293,10 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		gp          = core.NewGasPool(blockContext.GasLimit)
 		blobGasUsed uint64
 
-		txes        = make([]*types.Transaction, len(block.Calls))
-		callResults = make([]simCallResult, len(block.Calls))
-		receipts    = make([]*types.Receipt, len(block.Calls))
+		txes            = make([]*types.Transaction, len(block.Calls))
+		callResults     = make([]simCallResult, len(block.Calls))
+		receipts        = make([]*types.Receipt, len(block.Calls))
+		blockAccessList = bal.NewConstructionBlockAccessList()
 
 		// Block hash will be repaired after execution.
 		tracer   = newTracer(sim.traceTransfers, blockContext.BlockNumber.Uint64(), blockContext.Time, common.Hash{}, common.Hash{}, 0)
@@ -313,17 +315,15 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	}
 	evm := vm.NewEVM(blockContext, tracingStateDB, sim.chainConfig, *vmConfig)
 	defer evm.Release()
+
 	// It is possible to override precompiles with EVM bytecode, or
 	// move them to another address.
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
-	if sim.chainConfig.IsPrague(header.Number, header.Time) || sim.chainConfig.IsUBT(header.Number, header.Time) {
-		core.ProcessParentBlockHash(header.ParentHash, evm)
-	}
-	if header.ParentBeaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, evm)
-	}
+	// Run pre-execution system calls
+	blockAccessList.Merge(core.PreExecution(ctx, header.ParentBeaconRoot, header.ParentHash, sim.chainConfig, evm, header.Number, header.Time))
+
 	var allLogs []*types.Log
 	for i, call := range block.Calls {
 		// Terminate if the context is cancelled
@@ -343,7 +343,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		tracer.reset(txHash, uint(i))
 
 		// EoA check is always skipped, even in validation mode.
-		sim.state.SetTxContext(txHash, i)
+		sim.state.SetTxContext(txHash, i, uint32(i+1))
 		msg := call.ToMessage(header.BaseFee, !sim.validate)
 		result, err := applyMessageWithEVM(ctx, evm, msg, timeout, gp)
 		if err != nil {
@@ -353,7 +353,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		// Update the state with pending changes.
 		var root []byte
 		if sim.chainConfig.IsByzantium(blockContext.BlockNumber) {
-			tracingStateDB.Finalise(true)
+			blockAccessList.Merge(tracingStateDB.Finalise(true))
 		} else {
 			root = sim.state.IntermediateRoot(sim.chainConfig.IsEIP158(blockContext.BlockNumber)).Bytes()
 		}
@@ -394,35 +394,32 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	}
 
 	// Process EIP-7685 requests
-	var requests [][]byte
-	if sim.chainConfig.IsPrague(header.Number, header.Time) {
-		requests = [][]byte{}
-		// EIP-6110
-		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig); err != nil {
-			return nil, nil, nil, err
-		}
-		// EIP-7002
-		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
-			return nil, nil, nil, err
-		}
-		// EIP-7251
-		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
-			return nil, nil, nil, err
-		}
+	requests, bal, err := core.PostExecution(ctx, sim.chainConfig, header.Number, header.Time, allLogs, evm, uint32(len(block.Calls)+1))
+	if err != nil {
+		return nil, nil, nil, err
 	}
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
 		header.RequestsHash = &reqHash
 	}
+	blockAccessList.Merge(bal)
 
 	blockBody := &types.Body{
 		Transactions: txes,
-		Withdrawals:  *block.BlockOverrides.Withdrawals, // Withdrawal is also sanitized as non-nil
+	}
+	// Withdrawals are a post-Shanghai field. Attaching a non-nil withdrawals
+	// slice would cause types.NewBlock to populate WithdrawalsHash on the
+	// header and emit withdrawals fields for pre-Shanghai blocks.
+	if sim.chainConfig.IsShanghai(header.Number, header.Time) {
+		blockBody.Withdrawals = *block.BlockOverrides.Withdrawals
 	}
 	chainHeadReader := &simChainHeadReader{ctx, sim.b}
 
+	// Apply the consensus-specific post-transaction changes
+	sim.b.Engine().Finalize(chainHeadReader, header, sim.state, blockBody, uint32(len(block.Calls)+1), blockAccessList)
+
 	// Assemble the block
-	b := core.AssembleBlock(sim.b.Engine(), chainHeadReader, header, sim.state, blockBody, receipts)
+	b := core.AssembleBlock(chainHeadReader, header, sim.state, blockBody, receipts, blockAccessList)
 
 	repairLogs(callResults, b.Hash())
 	return b, callResults, senders, nil

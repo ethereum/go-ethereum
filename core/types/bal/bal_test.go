@@ -19,6 +19,7 @@ package bal
 import (
 	"bytes"
 	"cmp"
+	"math"
 	"reflect"
 	"slices"
 	"testing"
@@ -98,11 +99,62 @@ func TestBALEncoding(t *testing.T) {
 	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 0)); err != nil {
 		t.Fatalf("decoding failed: %v\n", err)
 	}
-	if dec.Hash() != bal.toEncodingObj().Hash() {
+	if dec.Hash() != bal.ToEncodingObj().Hash() {
 		t.Fatalf("encoded block hash doesn't match decoded")
 	}
-	if !reflect.DeepEqual(bal.toEncodingObj(), &dec) {
+	if !reflect.DeepEqual(bal.ToEncodingObj(), &dec) {
 		t.Fatal("decoded BAL doesn't match")
+	}
+}
+
+func TestConstructionBALMerge(t *testing.T) {
+	var (
+		addrA = common.BytesToAddress([]byte{0xAA})
+		addrB = common.BytesToAddress([]byte{0xBB})
+		slot1 = common.BytesToHash([]byte{0x01})
+		slot2 = common.BytesToHash([]byte{0x02})
+		slot3 = common.BytesToHash([]byte{0x03})
+	)
+	a := NewConstructionBlockAccessList()
+	a.StorageWrite(1, addrA, slot1, common.BytesToHash([]byte{0x11}))
+	a.StorageRead(addrA, slot2) // demoted by other's write below
+	a.BalanceChange(1, addrA, uint256.NewInt(100))
+	a.NonceChange(addrA, 1, 7)
+
+	b := NewConstructionBlockAccessList()
+	b.StorageWrite(2, addrA, slot1, common.BytesToHash([]byte{0x22})) // same slot, disjoint txIdx
+	b.StorageWrite(2, addrA, slot2, common.BytesToHash([]byte{0x33}))
+	b.StorageRead(addrA, slot3)
+	b.BalanceChange(2, addrA, uint256.NewInt(200))
+	b.NonceChange(addrA, 2, 8)
+	b.CodeChange(addrB, 2, []byte{0xde, 0xad}) // account only in other
+
+	a.Merge(b)
+
+	accA := a.Accounts[addrA]
+	wantWrites := map[common.Hash]map[uint32]common.Hash{
+		slot1: {1: common.BytesToHash([]byte{0x11}), 2: common.BytesToHash([]byte{0x22})},
+		slot2: {2: common.BytesToHash([]byte{0x33})},
+	}
+	if !reflect.DeepEqual(accA.StorageWrites, wantWrites) {
+		t.Fatalf("storage writes mismatch: got %v, want %v", accA.StorageWrites, wantWrites)
+	}
+	wantReads := map[common.Hash]struct{}{slot3: {}}
+	if !reflect.DeepEqual(accA.StorageReads, wantReads) {
+		t.Fatalf("storage reads mismatch: got %v, want %v", accA.StorageReads, wantReads)
+	}
+	if accA.BalanceChanges[1].Uint64() != 100 || accA.BalanceChanges[2].Uint64() != 200 {
+		t.Fatalf("balance changes mismatch: %v", accA.BalanceChanges)
+	}
+	if accA.NonceChanges[1] != 7 || accA.NonceChanges[2] != 8 {
+		t.Fatalf("nonce changes mismatch: %v", accA.NonceChanges)
+	}
+	accB, ok := a.Accounts[addrB]
+	if !ok {
+		t.Fatal("account only present in other was not adopted")
+	}
+	if !bytes.Equal(accB.CodeChange[2], []byte{0xde, 0xad}) {
+		t.Fatalf("code change for adopted account missing: %x", accB.CodeChange[2])
 	}
 }
 
@@ -231,10 +283,82 @@ func TestBlockAccessListCopy(t *testing.T) {
 	}
 }
 
+func TestBlockAccessListItemCount(t *testing.T) {
+	empty := &BlockAccessList{}
+	if got := empty.itemCount(); got != 0 {
+		t.Fatalf("empty BAL item count: got %d, want 0", got)
+	}
+
+	addr1 := [20]byte(testrand.Bytes(20))
+	addr2 := [20]byte(testrand.Bytes(20))
+	one := func() *uint256.Int { return new(uint256.Int).SetBytes(testrand.Bytes(32)) }
+	bal := &BlockAccessList{
+		AccountAccess{
+			Address: addr1,
+			StorageWrites: []encodingSlotWrites{
+				{Slot: one(), Accesses: []encodingStorageWrite{{TxIdx: 0, ValueAfter: one()}, {TxIdx: 1, ValueAfter: one()}}},
+				{Slot: one()},
+			},
+			StorageReads: []*uint256.Int{one()},
+		},
+		AccountAccess{Address: addr2}, // address-only, no slots
+	}
+	// 2 addresses + 2 write-slots + 1 read-slot = 5 items.
+	// (Multiple TxIdx writes to the same slot count as ONE item.)
+	if got := bal.itemCount(); got != 5 {
+		t.Fatalf("item count: got %d, want 5", got)
+	}
+}
+
+func TestBlockAccessListValidateSize(t *testing.T) {
+	// Build a BAL with exactly 30 items: 3 addresses, each with 9 storage
+	// slots (some writes, some reads). 3 + 9*3 = 30.
+	one := func() *uint256.Int { return new(uint256.Int).SetBytes(testrand.Bytes(32)) }
+	bal := make(BlockAccessList, 3)
+	for i := range bal {
+		bal[i].Address = [20]byte(testrand.Bytes(20))
+		for j := 0; j < 5; j++ {
+			bal[i].StorageWrites = append(bal[i].StorageWrites, encodingSlotWrites{
+				Slot: one(), Accesses: []encodingStorageWrite{{TxIdx: 0, ValueAfter: one()}},
+			})
+		}
+		for j := 0; j < 4; j++ {
+			bal[i].StorageReads = append(bal[i].StorageReads, one())
+		}
+	}
+	if got := bal.itemCount(); got != 30 {
+		t.Fatalf("setup: item count = %d, want 30", got)
+	}
+
+	// limit = blockGasLimit / BALItemCost.
+	// 30 items requires limit >= 30, i.e. gasLimit >= 30 * 2000 = 60_000.
+	tests := []struct {
+		name        string
+		gasLimit    uint64
+		expectError bool
+	}{
+		{"exactly at limit", 30 * params.BALItemCost, false},
+		{"well above limit", 60_000_000, false},
+		{"one below limit", 30*params.BALItemCost - 1, true},
+		{"zero gas limit", 0, true},
+	}
+	for _, tc := range tests {
+		err := bal.ValidateSize(tc.gasLimit)
+		if (err != nil) != tc.expectError {
+			t.Errorf("%s: got err=%v, expectError=%v", tc.name, err, tc.expectError)
+		}
+	}
+
+	// Empty BAL is always valid (even with 0 gas limit).
+	if err := (&BlockAccessList{}).ValidateSize(0); err != nil {
+		t.Fatalf("empty BAL must pass any limit: %v", err)
+	}
+}
+
 func TestBlockAccessListValidation(t *testing.T) {
 	// Validate the block access list after RLP decoding
 	enc := makeTestBAL(true)
-	if err := enc.Validate(params.Rules{}); err != nil {
+	if err := enc.Validate(math.MaxUint64); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 	var buf bytes.Buffer
@@ -246,14 +370,14 @@ func TestBlockAccessListValidation(t *testing.T) {
 	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 0)); err != nil {
 		t.Fatalf("Unexpected RLP-decode error: %v", err)
 	}
-	if err := dec.Validate(params.Rules{}); err != nil {
+	if err := dec.Validate(math.MaxUint64); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 
 	// Validate the derived block access list
 	cBAL := makeTestConstructionBAL()
-	listB := cBAL.toEncodingObj()
-	if err := listB.Validate(params.Rules{}); err != nil {
+	listB := cBAL.ToEncodingObj()
+	if err := listB.Validate(math.MaxUint64); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 }

@@ -320,10 +320,7 @@ func TestStemNodeCollectNodes(t *testing.T) {
 		collectedPaths = append(collectedPaths, pathCopy)
 	}
 
-	err := s.collectNodes(s.root, []byte{0, 1, 0}, flushFn)
-	if err != nil {
-		t.Fatalf("Failed to collect nodes: %v", err)
-	}
+	s.collectNodes(s.root, []byte{0, 1, 0}, flushFn, 8)
 
 	// Should have collected one node (itself)
 	if len(collectedPaths) != 1 {

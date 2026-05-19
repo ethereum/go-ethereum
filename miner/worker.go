@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
@@ -71,6 +72,7 @@ type environment struct {
 	receipts []*types.Receipt
 	sidecars []*types.BlobTxSidecar
 	blobs    int
+	bal      *bal.ConstructionBlockAccessList
 
 	witness *stateless.Witness
 }
@@ -167,7 +169,7 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 		// otherwise, fill the block with the current transactions from the txpool
 		if genParam.forceOverrides && len(genParam.overrideTxs) > 0 {
 			for _, tx := range genParam.overrideTxs {
-				work.state.SetTxContext(tx.Hash(), work.tcount)
+				work.state.SetTxContext(tx.Hash(), work.tcount, uint32(work.tcount+1))
 				if err := miner.commitTransaction(ctx, work, tx); err != nil {
 					// all passed transactions HAVE to be valid at this point
 					return &newPayloadResult{err: err}
@@ -208,29 +210,22 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	}
 
 	// Collect consensus-layer requests if Prague is enabled.
-	var requests [][]byte
-	if miner.chainConfig.IsPrague(work.header.Number, work.header.Time) {
-		requests = [][]byte{}
-		// EIP-6110 deposits
-		if err := core.ParseDepositLogs(&requests, allLogs, miner.chainConfig); err != nil {
-			return &newPayloadResult{err: err}
-		}
-		// EIP-7002
-		if err := core.ProcessWithdrawalQueue(&requests, work.evm); err != nil {
-			return &newPayloadResult{err: err}
-		}
-		// EIP-7251 consolidations
-		if err := core.ProcessConsolidationQueue(&requests, work.evm); err != nil {
-			return &newPayloadResult{err: err}
-		}
+	requests, bal, err := core.PostExecution(ctx, miner.chainConfig, work.header.Number, work.header.Time, allLogs, work.evm, uint32(work.tcount+1))
+	if err != nil {
+		return &newPayloadResult{err: err}
 	}
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
 		work.header.RequestsHash = &reqHash
 	}
+	work.bal.Merge(bal)
+
+	// Apply the consensus-specific post-transaction changes
+	miner.engine.Finalize(miner.chain, work.header, work.state, &body, uint32(work.tcount+1), work.bal)
+
 	// Assemble the block for delivery.
 	_, _, assembleSpanEnd := telemetry.StartSpan(ctx, "miner.AssembleBlock")
-	block := core.AssembleBlock(miner.engine, miner.chain, work.header, work.state, &body, work.receipts)
+	block := core.AssembleBlock(miner.chain, work.header, work.state, &body, work.receipts, work.bal)
 	assembleSpanEnd(nil)
 
 	return &newPayloadResult{
@@ -329,12 +324,8 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
 	}
-	if header.ParentBeaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, env.evm)
-	}
-	if miner.chainConfig.IsPrague(header.Number, header.Time) {
-		core.ProcessParentBlockHash(header.ParentHash, env.evm)
-	}
+	// Run pre-execution system calls
+	env.bal.Merge(core.PreExecution(ctx, header.ParentBeaconRoot, header.ParentHash, miner.chainConfig, env.evm, header.Number, header.Time))
 	return env, nil
 }
 
@@ -353,6 +344,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 		}
 	}
 	state.StartPrefetcher("miner", bundle)
+
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
 		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),
@@ -361,6 +353,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 		coinbase: coinbase,
 		gasPool:  core.NewGasPool(header.GasLimit),
 		header:   header,
+		bal:      bal.NewConstructionBlockAccessList(),
 		witness:  state.Witness(),
 		evm:      vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{}),
 	}, nil
@@ -372,7 +365,7 @@ func (miner *Miner) commitTransaction(ctx context.Context, env *environment, tx 
 	if tx.Type() == types.BlobTxType {
 		return miner.commitBlobTransaction(env, tx)
 	}
-	receipt, err := miner.applyTransaction(env, tx)
+	receipt, bal, err := miner.applyTransaction(env, tx)
 	if err != nil {
 		return err
 	}
@@ -380,6 +373,7 @@ func (miner *Miner) commitTransaction(ctx context.Context, env *environment, tx 
 	env.receipts = append(env.receipts, receipt)
 	env.size += tx.Size()
 	env.tcount++
+	env.bal.Merge(bal)
 	return nil
 }
 
@@ -396,7 +390,7 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 	if env.blobs+len(sc.Blobs) > maxBlobs {
 		return errors.New("max data blobs reached")
 	}
-	receipt, err := miner.applyTransaction(env, tx)
+	receipt, bal, err := miner.applyTransaction(env, tx)
 	if err != nil {
 		return err
 	}
@@ -408,23 +402,24 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 	env.size += txNoBlob.Size()
 	*env.header.BlobGasUsed += receipt.BlobGasUsed
 	env.tcount++
+	env.bal.Merge(bal)
 	return nil
 }
 
 // applyTransaction runs the transaction. If execution fails, state and gas pool are reverted.
-func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*types.Receipt, error) {
+func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*types.Receipt, *bal.ConstructionBlockAccessList, error) {
 	var (
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Snapshot()
 	)
-	receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx)
+	receipt, bal, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.Set(gp)
-		return nil, err
+		return nil, nil, err
 	}
 	env.header.GasUsed = env.gasPool.Used()
-	return receipt, nil
+	return receipt, bal, nil
 }
 
 func (miner *Miner) commitTransactions(ctx context.Context, env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
@@ -518,7 +513,7 @@ func (miner *Miner) commitTransactions(ctx context.Context, env *environment, pl
 			continue
 		}
 		// Start executing the transaction
-		env.state.SetTxContext(tx.Hash(), env.tcount)
+		env.state.SetTxContext(tx.Hash(), env.tcount, uint32(env.tcount+1))
 
 		err := miner.commitTransaction(ctx, env, tx)
 		switch {
@@ -617,10 +612,14 @@ func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int3
 
 // totalFees computes total consumed miner fees in Wei. Block transactions and receipts have to have the same order.
 func totalFees(block *types.Block, receipts []*types.Receipt) *big.Int {
+	baseFee := block.BaseFee()
 	feesWei := new(big.Int)
+	var gasUsed, product big.Int
 	for i, tx := range block.Transactions() {
-		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
-		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
+		minerFee, _ := tx.EffectiveGasTip(baseFee)
+		gasUsed.SetUint64(receipts[i].GasUsed)
+		product.Mul(&gasUsed, minerFee)
+		feesWei.Add(feesWei, &product)
 	}
 	return feesWei
 }

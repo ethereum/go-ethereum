@@ -365,16 +365,9 @@ func (db *Database) Disable() error {
 	return nil
 }
 
-// Enable activates database and resets the state tree with the provided persistent
-// state root once the state sync is finished.
-func (db *Database) Enable(root common.Hash) error {
-	db.lock.Lock()
-	defer db.lock.Unlock()
-
-	// Short circuit if the database is in read only mode.
-	if db.readOnly {
-		return errDatabaseReadOnly
-	}
+// resetForReactivation performs the pathdb-side bookkeeping shared by both
+// Enable and AdoptSyncedState.
+func (db *Database) resetForReactivation(root common.Hash) error {
 	// Ensure the provided state root matches the stored one.
 	stored, err := db.hasher(rawdb.ReadAccountTrieNode(db.diskdb, nil))
 	if err != nil {
@@ -383,27 +376,40 @@ func (db *Database) Enable(root common.Hash) error {
 	if stored != root {
 		return fmt.Errorf("state root mismatch: stored %x, synced %x", stored, root)
 	}
-	// Drop the stale state journal in persistent database and
-	// reset the persistent state id back to zero.
+	// Drop the stale state journal marker and reset the persistent state id
+	// back to zero.
 	batch := db.diskdb.NewBatch()
 	rawdb.DeleteSnapshotRoot(batch)
 	rawdb.WritePersistentStateID(batch, 0)
 	if err := batch.Write(); err != nil {
 		return err
 	}
-	// Clean up all state histories in freezer. Theoretically
-	// all root->id mappings should be removed as well. Since
-	// mappings can be huge and might take a while to clear
-	// them, just leave them in disk and wait for overwriting.
+	// Clean up all state histories in the freezer. Theoretically all root->id
+	// mappings should be removed as well; since those can be huge, leave them
+	// on disk and let them be overwritten.
 	purgeHistory(db.stateFreezer, db.diskdb, typeStateHistory)
 	purgeHistory(db.trienodeFreezer, db.diskdb, typeTrienodeHistory)
 
-	// Re-enable the database as the final step.
+	// Re-enable the database as the final bookkeeping step.
 	db.waitSync = false
 	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncFinished)
+	return nil
+}
 
-	// Re-construct a new disk layer backed by persistent state
-	// and schedule the state snapshot generation if it's permitted.
+// Enable activates the database after a snap/1 sync and schedules background
+// regeneration of the snapshot from the trie.
+func (db *Database) Enable(root common.Hash) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	if db.readOnly {
+		return errDatabaseReadOnly
+	}
+	if err := db.resetForReactivation(root); err != nil {
+		return err
+	}
+	// Re-construct a new disk layer backed by persistent state and schedule
+	// the state snapshot generation if it's permitted.
 	db.tree.init(generateSnapshot(db, root, db.isUBT || db.config.SnapshotNoBuild))
 
 	// After snap sync, the state of the database may have changed completely.
@@ -413,6 +419,43 @@ func (db *Database) Enable(root common.Hash) error {
 	db.setHistoryIndexer()
 
 	log.Info("Rebuilt trie database", "root", root)
+	return nil
+}
+
+// AdoptSyncedState reactivates the database after a snap/2 sync. The syncer
+// already wrote a consistent flat state, so we take it as-is instead of
+// rebuilding it from the trie. The new disk layer has no generator attached,
+// and a "done" marker is written so future boots know the snapshot is
+// already complete.
+func (db *Database) AdoptSyncedState(root common.Hash) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	if db.readOnly {
+		return errDatabaseReadOnly
+	}
+	if err := db.resetForReactivation(root); err != nil {
+		return err
+	}
+
+	// Tell the snapshot subsystem the flat state is good by writing the new root
+	// and a "done" marker (nil journal) so the next boot doesn't try to rebuild it.
+	batch := db.diskdb.NewBatch()
+	rawdb.WriteSnapshotRoot(batch, root)
+	journalProgress(batch, nil, nil)
+	if err := batch.Write(); err != nil {
+		return err
+	}
+
+	// New disk layer, no generator attached. Nothing to rebuild, and reads
+	// can serve the flat state right away without waiting on a generator to
+	// scan past every key.
+	dl := newDiskLayer(root, 0, db, nil, nil, newBuffer(db.config.WriteBufferSize, nil, nil, 0), nil)
+	db.tree.init(dl)
+
+	db.setHistoryIndexer()
+
+	log.Info("Adopted synced state", "root", root)
 	return nil
 }
 

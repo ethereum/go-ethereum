@@ -689,9 +689,9 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 		i++
 	}
 
-	for _, header := range request.Headers[:i] {
+	for k, header := range request.Headers[:i] {
 		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil && !stale {
-			reconstruct(accepted, res)
+			reconstruct(k, res)
 			accepted++
 		} else {
 			// Between here and above, some other peer filled this result,

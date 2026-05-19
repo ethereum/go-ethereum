@@ -233,7 +233,10 @@ func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return res, t.tracer.reason
+	if p := t.tracer.reason.Load(); p != nil {
+		return res, *p
+	}
+	return res, nil
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.

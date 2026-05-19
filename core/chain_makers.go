@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
@@ -49,6 +51,7 @@ type BlockGen struct {
 	receipts    []*types.Receipt
 	uncles      []*types.Header
 	withdrawals []*types.Withdrawal
+	bal         *bal.ConstructionBlockAccessList
 
 	engine consensus.Engine
 }
@@ -98,7 +101,7 @@ func (b *BlockGen) Difficulty() *big.Int {
 func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
 	b.header.ParentBeaconRoot = &root
 	blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
-	ProcessBeaconBlockRoot(root, vm.NewEVM(blockContext, b.statedb, b.cm.config, vm.Config{}))
+	ProcessBeaconBlockRoot(root, vm.NewEVM(blockContext, b.statedb, b.cm.config, vm.Config{}), b.bal)
 }
 
 // addTx adds a transaction to the generated block. If no coinbase has
@@ -116,8 +119,8 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 		blockContext = NewEVMBlockContext(b.header, bc, &b.header.Coinbase)
 		evm          = vm.NewEVM(blockContext, b.statedb, b.cm.config, vmConfig)
 	)
-	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx)
+	b.statedb.SetTxContext(tx.Hash(), len(b.txs), uint32(len(b.txs)+1))
+	receipt, bal, err := ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx)
 	if err != nil {
 		panic(err)
 	}
@@ -133,6 +136,7 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 	if b.header.BlobGasUsed != nil {
 		*b.header.BlobGasUsed += receipt.BlobGasUsed
 	}
+	b.bal.Merge(bal)
 }
 
 // AddTx adds a transaction to the generated block. If no coinbase has
@@ -303,10 +307,11 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 
 // ConsensusLayerRequests returns the EIP-7685 requests which have accumulated so far.
 func (b *BlockGen) ConsensusLayerRequests() [][]byte {
-	return b.collectRequests(true)
+	requests, _ := b.collectRequests(true)
+	return requests
 }
 
-func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
+func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte, bal *bal.ConstructionBlockAccessList) {
 	statedb := b.statedb
 	if readonly {
 		// The system contracts clear themselves on a system-initiated read.
@@ -314,30 +319,19 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 		// off the statedb before executing the system calls.
 		statedb = statedb.Copy()
 	}
-
-	if b.cm.config.IsPrague(b.header.Number, b.header.Time) {
-		requests = [][]byte{}
-		// EIP-6110 deposits
-		var blockLogs []*types.Log
-		for _, r := range b.receipts {
-			blockLogs = append(blockLogs, r.Logs...)
-		}
-		if err := ParseDepositLogs(&requests, blockLogs, b.cm.config); err != nil {
-			panic(fmt.Sprintf("failed to parse deposit log: %v", err))
-		}
-		// create EVM for system calls
-		blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
-		evm := vm.NewEVM(blockContext, statedb, b.cm.config, vm.Config{})
-		// EIP-7002
-		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
-			panic(fmt.Sprintf("could not process withdrawal requests: %v", err))
-		}
-		// EIP-7251
-		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
-			panic(fmt.Sprintf("could not process consolidation requests: %v", err))
-		}
+	var blockLogs []*types.Log
+	for _, r := range b.receipts {
+		blockLogs = append(blockLogs, r.Logs...)
 	}
-	return requests
+	// TODO use the shared EVM throughout the entire generation cycle
+	blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
+	evm := vm.NewEVM(blockContext, statedb, b.cm.config, vm.Config{})
+
+	requests, bal, err := PostExecution(context.Background(), b.cm.config, b.header.Number, b.header.Time, blockLogs, evm, uint32(len(b.txs)+1))
+	if err != nil {
+		panic(fmt.Sprintf("failed to run post-execution: %v", err))
+	}
+	return requests, bal
 }
 
 // GenerateChain creates a chain of n blocks. The first block's
@@ -364,6 +358,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	genblock := func(i int, parent *types.Block, triedb *triedb.Database, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, cm: cm, parent: parent, statedb: statedb, engine: engine}
 		b.header = cm.makeHeader(parent, statedb, b.engine)
+		b.bal = bal.NewConstructionBlockAccessList()
 
 		// Set the difficulty for clique block. The chain maker doesn't have access
 		// to a chain, so the difficulty will be left unset (nil). Set it here to the
@@ -396,7 +391,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
 			blockContext.Random = &common.Hash{} // enable post-merge instruction set
 			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
-			ProcessParentBlockHash(b.header.ParentHash, evm)
+			ProcessParentBlockHash(b.header.ParentHash, evm, b.bal)
 		}
 
 		// Execute any user modifications to the block
@@ -404,11 +399,12 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			gen(i, b)
 		}
 
-		requests := b.collectRequests(false)
+		requests, bal := b.collectRequests(false)
 		if requests != nil {
 			reqHash := types.CalcRequestsHash(requests)
 			b.header.RequestsHash = &reqHash
 		}
+		b.bal.Merge(bal)
 
 		body := types.Body{
 			Transactions: b.txs,
@@ -424,8 +420,11 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 				body.Withdrawals = make([]*types.Withdrawal, 0)
 			}
 		}
+		// Apply the consensus-specific post-transaction changes
+		b.engine.Finalize(cm, b.header, statedb, &body, uint32(len(b.txs)+1), b.bal)
+
 		// Assemble the block for delivery.
-		block := AssembleBlock(b.engine, cm, b.header, statedb, &body, b.receipts)
+		block := AssembleBlock(cm, b.header, statedb, &body, b.receipts, b.bal)
 
 		// Write state changes to db
 		root, err := statedb.Commit(b.header.Number.Uint64(), config.IsEIP158(b.header.Number), config.IsCancun(b.header.Number, b.header.Time))

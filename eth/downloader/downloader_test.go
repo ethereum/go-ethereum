@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -75,7 +74,7 @@ func newTesterWithNotification(t *testing.T, mode ethconfig.SyncMode, success fu
 		chain: chain,
 		peers: make(map[string]*downloadTesterPeer),
 	}
-	tester.downloader = New(db, mode, new(event.TypeMux), tester.chain, tester.dropPeer, success)
+	tester.downloader = New(db, mode, tester.chain, tester.dropPeer, success)
 	return tester
 }
 

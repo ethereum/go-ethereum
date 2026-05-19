@@ -235,6 +235,12 @@ func makeTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64,
 	return types.MustSignNewTx(key, types.LatestSigner(params.MainnetChainConfig), blobtx)
 }
 
+// encodeForPool encodes a blob transaction in the blobTxForPool storage format.
+func encodeForPool(tx *types.Transaction) []byte {
+	blob, _ := rlp.EncodeToBytes(newBlobTxForPool(tx))
+	return blob
+}
+
 // makeMultiBlobTx is a utility method to construct a ramdom blob tx with
 // certain number of blobs in its sidecar.
 func makeMultiBlobTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64, blobCount int, blobOffset int, key *ecdsa.PrivateKey, version byte) *types.Transaction {
@@ -530,7 +536,7 @@ func TestOpenDrops(t *testing.T) {
 	)
 	for _, nonce := range []uint64{0, 1, 3, 4, 6, 7} { // first gap at #2, another at #5
 		tx := makeTx(nonce, 1, 1, 1, gapper)
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 
 		id, _ := store.Put(blob)
 		if nonce < 2 {
@@ -547,7 +553,7 @@ func TestOpenDrops(t *testing.T) {
 	)
 	for _, nonce := range []uint64{1, 2, 3} { // first gap at #0, all set dangling
 		tx := makeTx(nonce, 1, 1, 1, dangler)
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 
 		id, _ := store.Put(blob)
 		dangling[id] = struct{}{}
@@ -560,7 +566,7 @@ func TestOpenDrops(t *testing.T) {
 	)
 	for _, nonce := range []uint64{0, 1, 2} { // account nonce at 3, all set filled
 		tx := makeTx(nonce, 1, 1, 1, filler)
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 
 		id, _ := store.Put(blob)
 		filled[id] = struct{}{}
@@ -573,7 +579,7 @@ func TestOpenDrops(t *testing.T) {
 	)
 	for _, nonce := range []uint64{0, 1, 2, 3} { // account nonce at 2, half filled
 		tx := makeTx(nonce, 1, 1, 1, overlapper)
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 
 		id, _ := store.Put(blob)
 		if nonce >= 2 {
@@ -595,7 +601,7 @@ func TestOpenDrops(t *testing.T) {
 		} else {
 			tx = makeTx(uint64(i), 1, 1, 1, underpayer)
 		}
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 
 		id, _ := store.Put(blob)
 		underpaid[id] = struct{}{}
@@ -614,7 +620,7 @@ func TestOpenDrops(t *testing.T) {
 		} else {
 			tx = makeTx(uint64(i), 1, 1, 1, outpricer)
 		}
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 
 		id, _ := store.Put(blob)
 		if i < 2 {
@@ -636,7 +642,7 @@ func TestOpenDrops(t *testing.T) {
 		} else {
 			tx = makeTx(nonce, 1, 1, 1, exceeder)
 		}
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 
 		id, _ := store.Put(blob)
 		exceeded[id] = struct{}{}
@@ -654,7 +660,7 @@ func TestOpenDrops(t *testing.T) {
 		} else {
 			tx = makeTx(nonce, 1, 1, 1, overdrafter)
 		}
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 
 		id, _ := store.Put(blob)
 		if nonce < 1 {
@@ -670,7 +676,7 @@ func TestOpenDrops(t *testing.T) {
 		overcapped    = make(map[uint64]struct{})
 	)
 	for nonce := uint64(0); nonce < maxTxsPerAccount+3; nonce++ {
-		blob, _ := rlp.EncodeToBytes(makeTx(nonce, 1, 1, 1, overcapper))
+		blob := encodeForPool(makeTx(nonce, 1, 1, 1, overcapper))
 
 		id, _ := store.Put(blob)
 		if nonce < maxTxsPerAccount {
@@ -686,7 +692,7 @@ func TestOpenDrops(t *testing.T) {
 		duplicated    = make(map[uint64]struct{})
 	)
 	for _, nonce := range []uint64{0, 1, 2} {
-		blob, _ := rlp.EncodeToBytes(makeTx(nonce, 1, 1, 1, duplicater))
+		blob := encodeForPool(makeTx(nonce, 1, 1, 1, duplicater))
 
 		for i := 0; i < int(nonce)+1; i++ {
 			id, _ := store.Put(blob)
@@ -705,7 +711,7 @@ func TestOpenDrops(t *testing.T) {
 	)
 	for _, nonce := range []uint64{0, 1, 2} {
 		for i := 0; i < int(nonce)+1; i++ {
-			blob, _ := rlp.EncodeToBytes(makeTx(nonce, 1, uint64(i)+1 /* unique hashes */, 1, repeater))
+			blob := encodeForPool(makeTx(nonce, 1, uint64(i)+1 /* unique hashes */, 1, repeater))
 
 			id, _ := store.Put(blob)
 			if i == 0 {
@@ -842,7 +848,7 @@ func TestOpenIndex(t *testing.T) {
 	)
 	for _, i := range []int{5, 3, 4, 2, 0, 1} { // Randomize the tx insertion order to force sorting on load
 		tx := makeTx(uint64(i), txExecTipCaps[i], txExecFeeCaps[i], txBlobFeeCaps[i], key)
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 		store.Put(blob)
 	}
 	store.Close()
@@ -934,9 +940,9 @@ func TestOpenHeap(t *testing.T) {
 		tx2 = makeTx(0, 1, 800, 70, key2)
 		tx3 = makeTx(0, 1, 1500, 110, key3)
 
-		blob1, _ = rlp.EncodeToBytes(tx1)
-		blob2, _ = rlp.EncodeToBytes(tx2)
-		blob3, _ = rlp.EncodeToBytes(tx3)
+		blob1 = encodeForPool(tx1)
+		blob2 = encodeForPool(tx2)
+		blob3 = encodeForPool(tx3)
 
 		heapOrder = []common.Address{addr2, addr1, addr3}
 		heapIndex = map[common.Address]int{addr2: 0, addr1: 1, addr3: 2}
@@ -1009,9 +1015,9 @@ func TestOpenCap(t *testing.T) {
 		tx2 = makeTx(0, 1, 800, 70, key2)
 		tx3 = makeTx(0, 1, 1500, 110, key3)
 
-		blob1, _ = rlp.EncodeToBytes(tx1)
-		blob2, _ = rlp.EncodeToBytes(tx2)
-		blob3, _ = rlp.EncodeToBytes(tx3)
+		blob1 = encodeForPool(tx1)
+		blob2 = encodeForPool(tx2)
+		blob3 = encodeForPool(tx3)
 
 		keep = []common.Address{addr1, addr3}
 		drop = []common.Address{addr2}
@@ -1098,8 +1104,8 @@ func TestChangingSlotterSize(t *testing.T) {
 		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 0, key2, types.BlobSidecarVersion0)
 		tx3 = makeMultiBlobTx(0, 1, 800, 110, 24, 0, key3, types.BlobSidecarVersion0)
 
-		blob1, _ = rlp.EncodeToBytes(tx1)
-		blob2, _ = rlp.EncodeToBytes(tx2)
+		blob1 = encodeForPool(tx1)
+		blob2 = encodeForPool(tx2)
 	)
 
 	// Write the two safely sized txs to store. note: although the store is
@@ -1201,8 +1207,8 @@ func TestBillyMigration(t *testing.T) {
 		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 0, key2, types.BlobSidecarVersion0)
 		tx3 = makeMultiBlobTx(0, 1, 800, 110, 24, 0, key3, types.BlobSidecarVersion0)
 
-		blob1, _ = rlp.EncodeToBytes(tx1)
-		blob2, _ = rlp.EncodeToBytes(tx2)
+		blob1 = encodeForPool(tx1)
+		blob2 = encodeForPool(tx2)
 	)
 
 	// Write the two safely sized txs to store. note: although the store is
@@ -1279,6 +1285,85 @@ func TestBillyMigration(t *testing.T) {
 
 		pool.Close()
 	}
+}
+
+// TestLegacyTxConversion verifies that on Init, transactions stored in the
+// legacy *types.Transaction RLP format are detected and migrated into the new
+// blobTxForPool storage format, and that they remain retrievable via the pool
+// API after the conversion.
+func TestLegacyTxConversion(t *testing.T) {
+	storage := t.TempDir()
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	os.MkdirAll(filepath.Join(storage, limboedTransactionStore), 0700)
+
+	// Initialize the pending store with two blob transactions encoded in the
+	// legacy format.
+	queuedir := filepath.Join(storage, pendingTransactionStore)
+	store, err := billy.Open(billy.Options{Path: queuedir}, newSlotter(testMaxBlobsPerBlock), nil)
+	if err != nil {
+		t.Fatalf("failed to open billy: %v", err)
+	}
+
+	key1, _ := crypto.GenerateKey()
+	key2, _ := crypto.GenerateKey()
+	addr1 := crypto.PubkeyToAddress(key1.PublicKey)
+	addr2 := crypto.PubkeyToAddress(key2.PublicKey)
+
+	tx1 := makeMultiBlobTx(0, 1, 1000, 100, 2, 0, key1, types.BlobSidecarVersion0)
+	tx2 := makeMultiBlobTx(0, 1, 1000, 100, 2, 2, key2, types.BlobSidecarVersion0)
+
+	for _, tx := range []*types.Transaction{tx1, tx2} {
+		legacy, err := rlp.EncodeToBytes(tx)
+		if err != nil {
+			t.Fatalf("failed to legacy-encode tx: %v", err)
+		}
+		if _, err := store.Put(legacy); err != nil {
+			t.Fatalf("failed to put legacy blob: %v", err)
+		}
+	}
+	store.Close()
+
+	// Init should migrate the legacy entries into the new storage format.
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(0, true, false)
+
+	chain := &testBlockChain{
+		config:  params.MainnetChainConfig,
+		basefee: uint256.NewInt(params.InitialBaseFee),
+		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+	defer pool.Close()
+
+	// Both transactions should be retrievable.
+	for _, want := range []*types.Transaction{tx1, tx2} {
+		got := pool.Get(want.Hash())
+		if got == nil {
+			t.Fatalf("migrated tx %s not found in pool", want.Hash())
+		}
+		if got.BlobTxSidecar() == nil {
+			t.Fatalf("migrated tx %s lost its sidecar", want.Hash())
+		}
+		if got.Hash() != want.Hash() {
+			t.Fatalf("migrated tx hash mismatch: have %s, want %s", got.Hash(), want.Hash())
+		}
+	}
+
+	// Legacy formats should not exist on pool.store
+	pool.store.Iterate(func(id uint64, size uint32, blob []byte) {
+		var ptx blobTxForPool
+		if err := rlp.DecodeBytes(blob, &ptx); err != nil {
+			t.Errorf("entry %d not in new blobTxForPool format: %v", id, err)
+		}
+	})
+
+	verifyPoolInternals(t, pool)
 }
 
 // TestBlobCountLimit tests the blobpool enforced limits on the max blob count.
@@ -1746,7 +1831,7 @@ func TestAdd(t *testing.T) {
 			// Sign the seed transactions and store them in the data store
 			for _, tx := range seed.txs {
 				signed := types.MustSignNewTx(keys[acc], types.LatestSigner(params.MainnetChainConfig), tx)
-				blob, _ := rlp.EncodeToBytes(signed)
+				blob := encodeForPool(signed)
 				store.Put(blob)
 			}
 		}
@@ -1853,9 +1938,9 @@ func TestGetBlobs(t *testing.T) {
 		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 6, key2, types.BlobSidecarVersion1)   // [6, 12)
 		tx3 = makeMultiBlobTx(0, 1, 800, 110, 6, 12, key3, types.BlobSidecarVersion0) // [12, 18)
 
-		blob1, _ = rlp.EncodeToBytes(tx1)
-		blob2, _ = rlp.EncodeToBytes(tx2)
-		blob3, _ = rlp.EncodeToBytes(tx3)
+		blob1 = encodeForPool(tx1)
+		blob2 = encodeForPool(tx2)
+		blob3 = encodeForPool(tx3)
 	)
 
 	// Write the two safely sized txs to store. note: although the store is
@@ -2053,6 +2138,32 @@ func TestGetBlobs(t *testing.T) {
 		}
 	}
 	pool.Close()
+}
+
+// TestEncodeForNetwork verifies that encodeForNetwork produces output identical
+// to rlp.EncodeToBytes on the original transaction, for both V0 and V1 sidecars.
+func TestEncodeForNetwork(t *testing.T) {
+	t.Run("v0", func(t *testing.T) { testEncodeForNetwork(t, types.BlobSidecarVersion0) })
+	t.Run("v1", func(t *testing.T) { testEncodeForNetwork(t, types.BlobSidecarVersion1) })
+}
+
+func testEncodeForNetwork(t *testing.T, version byte) {
+	key, _ := crypto.GenerateKey()
+	tx := makeMultiBlobTx(0, 1, 1, 1, 1, 0, key, version)
+
+	wantRLP, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		t.Fatalf("failed to encode tx: %v", err)
+	}
+	storedRLP := encodeForPool(tx)
+
+	gotRLP, err := encodeForNetwork(storedRLP)
+	if err != nil {
+		t.Fatalf("encodeForNetwork failed: %v", err)
+	}
+	if !bytes.Equal(gotRLP, wantRLP) {
+		t.Fatalf("network encoding mismatch (version %d): got %d bytes, want %d bytes", version, len(gotRLP), len(wantRLP))
+	}
 }
 
 // fakeBilly is a billy.Database implementation which just drops data on the floor.

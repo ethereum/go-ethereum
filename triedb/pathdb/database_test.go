@@ -748,6 +748,84 @@ func TestDisable(t *testing.T) {
 	}
 }
 
+// TestAdoptSyncedState verifies that AdoptSyncedState rejects a wrong root,
+// writes the on-disk markers that say the snapshot is already complete,
+// leaves a single fresh disk layer with no generator attached, and clears
+// out stale state histories.
+func TestAdoptSyncedState(t *testing.T) {
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	tester := newTester(t, &testerConfig{layers: 12})
+	defer tester.release()
+
+	// Push everything down to disk so the trie root is the persistent root.
+	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
+		t.Fatalf("Failed to commit, err: %v", err)
+	}
+	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
+
+	// Mimic the snap-syncing state.
+	if err := tester.db.Disable(); err != nil {
+		t.Fatalf("Failed to disable database: %v", err)
+	}
+	// Mismatched root must be rejected.
+	if err := tester.db.AdoptSyncedState(types.EmptyRootHash); err == nil {
+		t.Fatal("Mismatched root should be rejected")
+	}
+	if err := tester.db.AdoptSyncedState(stored); err != nil {
+		t.Fatalf("AdoptSyncedState failed: %v", err)
+	}
+
+	// On-disk markers reflect a completed snapshot.
+	if got := rawdb.ReadSnapshotRoot(tester.db.diskdb); got != stored {
+		t.Fatalf("SnapshotRoot mismatch: got %x want %x", got, stored)
+	}
+	if blob := rawdb.ReadSnapshotGenerator(tester.db.diskdb); len(blob) == 0 {
+		t.Fatal("Generator journal not written")
+	} else {
+		var entry journalGenerator
+		if err := rlp.DecodeBytes(blob, &entry); err != nil {
+			t.Fatalf("Failed to decode generator journal: %v", err)
+		}
+		if !entry.Done {
+			t.Fatal("Generator journal should be marked Done")
+		}
+		// RLP turns a nil slice into an empty one on decode, so check length.
+		if len(entry.Marker) != 0 {
+			t.Fatalf("Generator marker should be empty, got %x", entry.Marker)
+		}
+	}
+	if rawdb.ReadSnapSyncStatusFlag(tester.db.diskdb) != rawdb.StateSyncFinished {
+		t.Fatal("Sync-status flag should be StateSyncFinished")
+	}
+	if tester.db.waitSync {
+		t.Fatal("waitSync should be false after adopt")
+	}
+
+	// State histories are purged.
+	if n, err := tester.db.stateFreezer.Ancients(); err != nil || n != 0 {
+		t.Fatalf("State histories not purged: count=%d err=%v", n, err)
+	}
+
+	// Layer tree has a single disk layer with no generator attached.
+	if got := tester.db.tree.len(); got != 1 {
+		t.Fatalf("Expected single layer, got %d", got)
+	}
+	dl := tester.db.tree.bottom()
+	if dl.rootHash() != stored {
+		t.Fatalf("Disk layer root mismatch: got %x want %x", dl.rootHash(), stored)
+	}
+	if dl.generator != nil {
+		t.Fatal("Disk layer should have no generator after adopt")
+	}
+	if dl.genMarker() != nil {
+		t.Fatal("genMarker should be nil after adopt")
+	}
+}
+
 func TestCommit(t *testing.T) {
 	// Redefine the diff layer depth allowance for faster testing.
 	maxDiffLayers = 4

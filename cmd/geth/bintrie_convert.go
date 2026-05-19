@@ -151,7 +151,7 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	})
 	defer destTriedb.Close()
 
-	binTrie, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb)
+	binTrie, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb, ctx.Int(utils.BinTrieGroupDepthFlag.Name))
 	if err != nil {
 		return fmt.Errorf("failed to create binary trie: %w", err)
 	}
@@ -319,7 +319,7 @@ func commitBinaryTrie(bt *bintrie.BinaryTrie, currentRoot common.Hash, destDB *t
 	runtime.GC()
 	debug.FreeOSMemory()
 
-	bt, err := bintrie.NewBinaryTrie(newRoot, destDB)
+	bt, err := bintrie.NewBinaryTrie(newRoot, destDB, bt.GroupDepth())
 	if err != nil {
 		return nil, common.Hash{}, fmt.Errorf("failed to reload binary trie: %w", err)
 	}

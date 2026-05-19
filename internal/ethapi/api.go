@@ -146,6 +146,11 @@ func (api *EthereumAPI) BlobBaseFee(ctx context.Context) *hexutil.Big {
 	return (*hexutil.Big)(api.b.BlobBaseFee(ctx))
 }
 
+// BaseFee returns the base fee for the next block.
+func (api *EthereumAPI) BaseFee(ctx context.Context) *hexutil.Big {
+	return (*hexutil.Big)(api.b.BaseFee(ctx))
+}
+
 // Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not
 // yet received the latest block headers from its peers. In case it is synchronizing:
 // - startingBlock: block number this node started to synchronize from
@@ -734,6 +739,10 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 		if err := blockOverrides.Apply(&blockCtx); err != nil {
 			return nil, err
 		}
+		// Override the header so callers that compute gas price from 1559 fee
+		// fields see the overridden basefee. Otherwise GASPRICE/effectiveTip
+		// would be derived from the pre-override basefee.
+		header = blockOverrides.MakeHeader(header)
 	}
 	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
 	precompiles := vm.ActivePrecompiledContracts(rules)
@@ -991,6 +1000,9 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	}
 	if head.RequestsHash != nil {
 		result["requestsHash"] = head.RequestsHash
+	}
+	if head.BlockAccessListHash != nil {
+		result["balHash"] = head.BlockAccessListHash
 	}
 	if head.SlotNumber != nil {
 		result["slotNumber"] = hexutil.Uint64(*head.SlotNumber)
@@ -2119,8 +2131,7 @@ func (api *DebugAPI) SetHead(number hexutil.Uint64) error {
 	if header.Number.Uint64() <= uint64(number) {
 		return errors.New("not allowed to rewind to a future block")
 	}
-	api.b.SetHead(uint64(number))
-	return nil
+	return api.b.SetHead(uint64(number))
 }
 
 // NetAPI offers network related RPC methods

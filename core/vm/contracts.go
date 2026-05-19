@@ -269,8 +269,8 @@ func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address comm
 		gas.Exhaust()
 		return nil, gas, ErrOutOfGas
 	}
-	if logger != nil && logger.OnGasChange != nil {
-		logger.OnGasChange(prior, gas.RegularGas, tracing.GasChangeCallPrecompiledContract)
+	if logger.HasGasHook() {
+		logger.EmitGasChange(prior.AsTracing(), gas.AsTracing(), tracing.GasChangeCallPrecompiledContract)
 	}
 	// Touch the precompile for block-level accessList recording once Amsterdam
 	// fork is activated.

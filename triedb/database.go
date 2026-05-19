@@ -31,11 +31,14 @@ import (
 
 // Config defines all necessary options for database.
 type Config struct {
-	Preimages bool           // Flag whether the preimage of node key is recorded
-	IsUBT     bool           // Flag whether the db is holding a verkle tree
-	HashDB    *hashdb.Config // Configs for hash-based scheme
-	PathDB    *pathdb.Config // Configs for experimental path-based scheme
+	Preimages         bool           // Flag whether the preimage of node key is recorded
+	IsUBT             bool           // Flag whether the db is holding a unified binary tree
+	BinTrieGroupDepth int            // Number of levels per serialized group in binary trie (1-8, default 8)
+	HashDB            *hashdb.Config // Configs for hash-based scheme
+	PathDB            *pathdb.Config // Configs for experimental path-based scheme
 }
+
+const DefaultBinTrieGroupDepth = 5
 
 // HashDefaults represents a config for using hash-based scheme with
 // default settings.
@@ -45,12 +48,13 @@ var HashDefaults = &Config{
 	HashDB:    hashdb.Defaults,
 }
 
-// UBTDefaults represents a config for holding verkle trie data
+// UBTDefaults represents a config for holding unified binary trie data
 // using path-based scheme with default settings.
 var UBTDefaults = &Config{
-	Preimages: false,
-	IsUBT:     true,
-	PathDB:    pathdb.Defaults,
+	Preimages:         false,
+	IsUBT:             true,
+	BinTrieGroupDepth: DefaultBinTrieGroupDepth,
+	PathDB:            pathdb.Defaults,
 }
 
 // backend defines the methods needed to access/update trie nodes in different
@@ -323,6 +327,16 @@ func (db *Database) Enable(root common.Hash) error {
 	return pdb.Enable(root)
 }
 
+// AdoptSyncedState activates the database after a snap/2 sync and adopts the
+// flat state populated during sync as-is, skipping regeneration.
+func (db *Database) AdoptSyncedState(root common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.AdoptSyncedState(root)
+}
+
 // Journal commits an entire diff hierarchy to disk into a single journal entry.
 // This is meant to be used during shutdown to persist the snapshot without
 // flattening everything down (bad for reorgs). It's only supported by path-based
@@ -392,4 +406,8 @@ func (db *Database) SnapshotCompleted() bool {
 		return false
 	}
 	return pdb.SnapshotCompleted()
+}
+
+func (db *Database) BinTrieGroupDepth() int {
+	return db.config.BinTrieGroupDepth
 }

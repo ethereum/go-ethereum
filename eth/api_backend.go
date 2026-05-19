@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
@@ -61,9 +62,9 @@ func (b *EthAPIBackend) CurrentBlock() *types.Header {
 	return b.eth.blockchain.CurrentBlock()
 }
 
-func (b *EthAPIBackend) SetHead(number uint64) {
+func (b *EthAPIBackend) SetHead(number uint64) error {
 	b.eth.handler.downloader.Cancel()
-	b.eth.blockchain.SetHead(number)
+	return b.eth.blockchain.SetHead(number)
 }
 
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
@@ -428,6 +429,13 @@ func (b *EthAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) 
 
 func (b *EthAPIBackend) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (firstBlock *big.Int, reward [][]*big.Int, baseFee []*big.Int, gasUsedRatio []float64, baseFeePerBlobGas []*big.Int, blobGasUsedRatio []float64, err error) {
 	return b.gpo.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
+}
+
+func (b *EthAPIBackend) BaseFee(ctx context.Context) *big.Int {
+	if b.ChainConfig().IsLondon(b.CurrentHeader().Number) {
+		return eip1559.CalcBaseFee(b.ChainConfig(), b.CurrentHeader())
+	}
+	return nil
 }
 
 func (b *EthAPIBackend) BlobBaseFee(ctx context.Context) *big.Int {

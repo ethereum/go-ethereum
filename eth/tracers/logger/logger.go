@@ -229,9 +229,9 @@ type StructLogger struct {
 	logs       []json.RawMessage // buffer of json-encoded logs
 	resultSize int
 
-	interrupt atomic.Bool // Atomic flag to signal execution interruption
-	reason    error       // Textual reason for the interruption
-	skip      bool        // skip processing hooks.
+	interrupt atomic.Bool           // Atomic flag to signal execution interruption
+	reason    atomic.Pointer[error] // Reason for the interruption, populated by Stop
+	skip      bool                  // skip processing hooks.
 }
 
 // NewStreamingStructLogger returns a new streaming logger.
@@ -357,8 +357,8 @@ func (l *StructLogger) OnExit(depth int, output []byte, gasUsed uint64, err erro
 
 func (l *StructLogger) GetResult() (json.RawMessage, error) {
 	// Tracing aborted
-	if l.reason != nil {
-		return nil, l.reason
+	if p := l.reason.Load(); p != nil {
+		return nil, *p
 	}
 	failed := l.err != nil
 	returnData := common.CopyBytes(l.output)
@@ -376,7 +376,7 @@ func (l *StructLogger) GetResult() (json.RawMessage, error) {
 
 // Stop terminates execution of the tracer at the first opportune moment.
 func (l *StructLogger) Stop(err error) {
-	l.reason = err
+	l.reason.Store(&err)
 	l.interrupt.Store(true)
 }
 

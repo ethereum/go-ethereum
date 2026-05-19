@@ -446,27 +446,27 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 // Assumes that fields are not nil, i.e. setDefaults or CallDefaults has been called.
 func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck bool) *core.Message {
 	var (
-		gasPrice  *big.Int
-		gasFeeCap *big.Int
-		gasTipCap *big.Int
+		gasPrice  *uint256.Int
+		gasFeeCap *uint256.Int
+		gasTipCap *uint256.Int
 	)
 	if baseFee == nil {
-		gasPrice = args.GasPrice.ToInt()
+		gasPrice, _ = args.GasPrice.ToUint256()
 		gasFeeCap, gasTipCap = gasPrice, gasPrice
 	} else {
 		// A basefee is provided, necessitating 1559-type execution
 		if args.GasPrice != nil {
 			// User specified the legacy gas field, convert to 1559 gas typing
-			gasPrice = args.GasPrice.ToInt()
+			gasPrice, _ = args.GasPrice.ToUint256()
 			gasFeeCap, gasTipCap = gasPrice, gasPrice
 		} else {
 			// User specified 1559 gas fields (or none), use those
-			gasFeeCap = args.MaxFeePerGas.ToInt()
-			gasTipCap = args.MaxPriorityFeePerGas.ToInt()
+			gasFeeCap, _ = args.MaxFeePerGas.ToUint256()
+			gasTipCap, _ = args.MaxPriorityFeePerGas.ToUint256()
 			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
-			gasPrice = new(big.Int)
+			gasPrice = uint256.NewInt(0)
 			if gasFeeCap.BitLen() > 0 || gasTipCap.BitLen() > 0 {
-				gasPrice = gasPrice.Add(gasTipCap, baseFee)
+				gasPrice = gasPrice.Add(gasTipCap, uint256.MustFromBig(baseFee))
 				if gasPrice.Cmp(gasFeeCap) > 0 {
 					gasPrice = gasFeeCap
 				}
@@ -477,10 +477,12 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck bool) *c
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
+	value, _ := args.Value.ToUint256()
+	blobFeeCap, _ := args.BlobFeeCap.ToUint256()
 	return &core.Message{
 		From:                  args.from(),
 		To:                    args.To,
-		Value:                 (*big.Int)(args.Value),
+		Value:                 value,
 		Nonce:                 uint64(*args.Nonce),
 		GasLimit:              uint64(*args.Gas),
 		GasPrice:              gasPrice,
@@ -488,7 +490,7 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck bool) *c
 		GasTipCap:             gasTipCap,
 		Data:                  args.data(),
 		AccessList:            accessList,
-		BlobGasFeeCap:         (*big.Int)(args.BlobFeeCap),
+		BlobGasFeeCap:         blobFeeCap,
 		BlobHashes:            args.BlobHashes,
 		SetCodeAuthorizations: args.AuthorizationList,
 		SkipNonceChecks:       skipNonceCheck,

@@ -161,7 +161,19 @@ func loadGenerator(db ethdb.KeyValueReader, hash nodeHasher) (*journalGenerator,
 // loadLayers loads a pre-existing state layer backed by a key-value store.
 func (db *Database) loadLayers() layer {
 	// Retrieve the root node of persistent state.
-	root, err := db.hasher(rawdb.ReadAccountTrieNode(db.diskdb, nil))
+	var (
+		root common.Hash
+		err  error
+	)
+	if db.isUBT {
+		root = rawdb.ReadSnapshotRoot(db.diskdb)
+		if root == (common.Hash{}) {
+			root = types.EmptyBinaryHash
+		}
+	} else {
+		blob := rawdb.ReadAccountTrieNode(db.diskdb, nil)
+		root, err = db.hasher(blob)
+	}
 	if err != nil {
 		log.Crit("Failed to compute node hash", "err", err)
 	}

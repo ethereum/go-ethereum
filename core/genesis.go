@@ -136,8 +136,9 @@ func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
 	var config *triedb.Config
 	if isUBT {
 		config = &triedb.Config{
-			PathDB: pathdb.Defaults,
-			IsUBT:  true,
+			PathDB:            pathdb.Defaults,
+			IsUBT:             true,
+			BinTrieGroupDepth: triedb.UBTDefaults.BinTrieGroupDepth,
 		}
 	}
 	// Create an ephemeral in-memory database for computing hash,
@@ -554,6 +555,7 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 			if head.SlotNumber == nil {
 				head.SlotNumber = new(uint64)
 			}
+			head.BlockAccessListHash = &types.EmptyBlockAccessListHash
 		}
 	}
 	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals}, nil, trie.NewStackTrie(nil))

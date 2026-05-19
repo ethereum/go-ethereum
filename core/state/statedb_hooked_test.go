@@ -82,7 +82,7 @@ func TestBurn(t *testing.T) {
 // TestHooks is a basic sanity-check of all hooks
 func TestHooks(t *testing.T) {
 	inner, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
-	inner.SetTxContext(common.Hash{0x11}, 100) // For the log
+	inner.SetTxContext(common.Hash{0x11}, 100, 101) // For the log
 	var result []string
 	var wants = []string{
 		"0xaa00000000000000000000000000000000000000.balance: 0->100 (Unspecified)",

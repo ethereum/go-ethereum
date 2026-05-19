@@ -248,13 +248,10 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
 	evm := vm.NewEVM(context, statedb, eth.blockchain.Config(), vm.Config{})
 	defer evm.Release()
-	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
-	}
-	// If prague hardfork, insert parent block hash in the state as per EIP-2935.
-	if eth.blockchain.Config().IsPrague(block.Number(), block.Time()) {
-		core.ProcessParentBlockHash(block.ParentHash(), evm)
-	}
+
+	// Run pre-execution system calls
+	core.PreExecution(ctx, block.BeaconRoot(), block.ParentHash(), eth.blockchain.Config(), evm, block.Number(), block.Time())
+
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, context, statedb, release, nil
 	}
@@ -268,7 +265,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
 
 		// Not yet the searched for transaction, execute on top of the current state
-		statedb.SetTxContext(tx.Hash(), idx)
+		statedb.SetTxContext(tx.Hash(), idx, uint32(idx+1))
 		if _, err := core.ApplyMessage(evm, msg, nil); err != nil {
 			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}

@@ -662,24 +662,28 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		return fmt.Errorf("got GetLogs(common.Hash{}) == %v, want GetLogs(common.Hash{}) == %v",
 			state.GetLogs(common.Hash{}, 0, common.Hash{}, 0), checkstate.GetLogs(common.Hash{}, 0, common.Hash{}, 0))
 	}
-	if !maps.Equal(state.journal.dirties, checkstate.journal.dirties) {
-		getKeys := func(dirty map[common.Address]int) string {
-			var keys []common.Address
-			out := new(strings.Builder)
-			for key := range dirty {
-				keys = append(keys, key)
-			}
-			slices.SortFunc(keys, common.Address.Cmp)
-			for i, key := range keys {
-				fmt.Fprintf(out, "  %d. %v\n", i, key)
-			}
-			return out.String()
-		}
-		have := getKeys(state.journal.dirties)
-		want := getKeys(checkstate.journal.dirties)
-		return fmt.Errorf("dirty-journal set mismatch.\nhave:\n%v\nwant:\n%v\n", have, want)
+	if !equalMutationSets(state.journal.mutations, checkstate.journal.mutations) {
+		return fmt.Errorf("journal mutation set mismatch.\nhave:\n%v\nwant:\n%v\n", state.journal.mutations, checkstate.journal.mutations)
 	}
 	return nil
+}
+
+// equalMutationSets checks that two journal mutation maps have the same set of
+// addresses and, for each address, the same per-kind counts. The stashed
+// original values are ignored because comparing them across two independent
+// state databases (with distinct pointer identities) isn't the point of this
+// check — we only care that the two journals agree on what was touched.
+func equalMutationSets(a, b map[common.Address]*journalMutationState) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for addr, sa := range a {
+		sb, ok := b[addr]
+		if !ok || sa.counts != sb.counts {
+			return false
+		}
+	}
+	return true
 }
 
 func TestTouchDelete(t *testing.T) {
@@ -691,12 +695,54 @@ func TestTouchDelete(t *testing.T) {
 	snapshot := s.state.Snapshot()
 	s.state.AddBalance(common.Address{}, new(uint256.Int), tracing.BalanceChangeUnspecified)
 
-	if len(s.state.journal.dirties) != 1 {
-		t.Fatal("expected one dirty state object")
+	if len(s.state.journal.mutations) != 1 {
+		t.Fatal("expected one mutated state object")
 	}
 	s.state.RevertToSnapshot(snapshot)
-	if len(s.state.journal.dirties) != 0 {
-		t.Fatal("expected no dirty state object")
+	if len(s.state.journal.mutations) != 0 {
+		t.Fatal("expected no journal mutations")
+	}
+}
+
+func TestJournalMutationTracking(t *testing.T) {
+	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	addr := common.HexToAddress("0x01")
+	key := common.HexToHash("0x02")
+
+	if _, ok := state.journal.mutations[addr]; ok {
+		t.Fatal("unexpected initial mutation entry")
+	}
+	snapshot := state.Snapshot()
+
+	state.SetBalance(addr, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+	state.SetNonce(addr, 2, tracing.NonceChangeUnspecified)
+	state.SetCode(addr, []byte{0x1}, tracing.CodeChangeUnspecified)
+	state.SetState(addr, key, common.Hash{0x3})
+
+	want := journalMutationCounts{
+		journalMutationKindCreate:  1,
+		journalMutationKindBalance: 1,
+		journalMutationKindNonce:   1,
+		journalMutationKindCode:    1,
+		journalMutationKindStorage: 1,
+	}
+	checkCounts := func(got *journalMutationState, label string) {
+		t.Helper()
+		if got == nil {
+			t.Fatalf("%s: missing mutation entry for %x", label, addr)
+		}
+		if got.counts != want {
+			t.Fatalf("%s: counts=%+v, want=%+v", label, got.counts, want)
+		}
+	}
+	checkCounts(state.journal.mutations[addr], "state")
+
+	copy := state.Copy()
+	checkCounts(copy.journal.mutations[addr], "copy")
+
+	state.RevertToSnapshot(snapshot)
+	if _, ok := state.journal.mutations[addr]; ok {
+		t.Fatalf("unexpected mutation entry after revert")
 	}
 }
 

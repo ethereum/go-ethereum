@@ -16,7 +16,11 @@
 
 package vm
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/core/tracing"
+)
 
 // GasCosts denotes a vector of gas costs in the
 // multidimensional metering paradigm. It represents the cost
@@ -77,21 +81,26 @@ func (g GasBudget) CanAfford(cost GasCosts) bool {
 }
 
 // Charge deducts the given gas cost from the budget. It returns the
-// pre-charge gas value and false if the budget does not have sufficient
+// pre-charge budget and false if the budget does not have sufficient
 // gas to cover the cost.
-func (g *GasBudget) Charge(cost GasCosts) (uint64, bool) {
-	prior := g.RegularGas
-	if prior < cost.RegularGas {
+func (g *GasBudget) Charge(cost GasCosts) (GasBudget, bool) {
+	prior := *g
+	if g.RegularGas < cost.RegularGas {
 		return prior, false
 	}
 	g.RegularGas -= cost.RegularGas
 	return prior, true
 }
 
-// Refund adds the given gas budget back. It returns the pre-refund gas
-// value and whether the budget was actually changed.
-func (g *GasBudget) Refund(other GasBudget) (uint64, bool) {
-	prior := g.RegularGas
+// Refund adds the given gas budget back. It returns the pre-refund budget
+// and whether the budget was actually changed.
+func (g *GasBudget) Refund(other GasBudget) (GasBudget, bool) {
+	prior := *g
 	g.RegularGas += other.RegularGas
-	return prior, g.RegularGas != prior
+	return prior, g.RegularGas != prior.RegularGas
+}
+
+// AsTracing converts the GasBudget into the tracing-facing Gas vector.
+func (g GasBudget) AsTracing() tracing.Gas {
+	return tracing.Gas{Regular: g.RegularGas, State: g.StateGas}
 }
