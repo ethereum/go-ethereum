@@ -296,6 +296,7 @@ func (bc *BlockChain) GetReceiptsRLP(hash common.Hash) rlp.RawValue {
 	return rawdb.ReadReceiptsRLP(bc.db, hash, number)
 }
 
+// GetAccessListRLP retrieves the block access list of a block in RLP encoding.
 func (bc *BlockChain) GetAccessListRLP(hash common.Hash) rlp.RawValue {
 	number, ok := rawdb.ReadHeaderNumber(bc.db, hash)
 	if !ok {
