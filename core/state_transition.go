@@ -744,12 +744,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
 
 		// Apply EIP-7702 authorizations.
-		if msg.SetCodeAuthorizations != nil {
-			for _, auth := range msg.SetCodeAuthorizations {
-				// Note errors are ignored, we simply skip invalid authorizations here.
-				st.applyAuthorization(rules, &auth)
-			}
-		}
+		st.applyAuthorizations(rules, msg.SetCodeAuthorizations)
 
 		// Perform convenience warming of sender's delegation target. Although the
 		// sender is already warmed in Prepare(..), it's possible a delegation to
@@ -902,8 +897,48 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 	return authority, nil
 }
 
+// applyAuthorizations applies every EIP-7702 code delegation in the tx and,
+// under EIP-8037, reconciles the per-authority creation budget so that the
+// total AuthorizationCreationSize state gas charged matches the net change
+// in on-disk delegation bytes.
+//
+// Invalid authorizations are silently skipped (their auth-base intrinsic
+// state gas remains charged, matching the pre-existing behavior).
+func (st *stateTransition) applyAuthorizations(rules params.Rules, auths []types.SetCodeAuthorization) {
+	if len(auths) == 0 {
+		return
+	}
+	// Under EIP-8037 each authority can be billed at most one
+	// AuthorizationCreationSize. applyAuthorization records authorities it
+	// has billed; we reconcile after the loop by refunding any creation that
+	// was billed but whose final delegation state in this tx ended up empty
+	// (e.g., 0→a→0).
+	var billed map[common.Address]struct{}
+	if rules.IsAmsterdam {
+		billed = make(map[common.Address]struct{})
+	}
+	for _, auth := range auths {
+		// Errors are ignored — invalid authorizations are simply skipped.
+		st.applyAuthorization(rules, &auth, billed)
+	}
+	// End-of-loop reconciliation: a billed creation whose authority is no
+	// longer delegated wrote zero net bytes to disk, so the auth-base
+	// intrinsic state gas should not be retained.
+	for authority := range billed {
+		if _, isDelegated := types.ParseDelegation(st.state.GetCode(authority)); !isDelegated {
+			st.gasRemaining.RefundState(params.AuthorizationCreationSize * st.evm.Context.CostPerStateByte)
+		}
+	}
+}
+
 // applyAuthorization applies an EIP-7702 code delegation to the state.
-func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization) error {
+//
+// authBilledCreations, when non-nil, tracks the set of authorities for which
+// this tx has been billed one AuthorizationCreationSize charge (the per-
+// authority "first creation" budget). The caller is expected to do an
+// end-of-loop pass over this set and refund any entry whose final delegation
+// state ended up empty.
+func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization, authBilledCreations map[common.Address]struct{}) error {
 	authority, err := st.validateAuthorization(auth)
 	if err != nil {
 		return err
@@ -920,14 +955,34 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 	}
 	prevDelegation, isDelegated := types.ParseDelegation(st.state.GetCode(authority))
 	if rules.IsAmsterdam {
-		// EIP-8037: also refund the auth-base state gas when no new delegation
-		// indicator bytes are written. Two cases:
-		//   - the authority already has a delegation (overwrite in place); or
-		//   - the auth is no-op (auth.Address == 0).
-		// In both cases the 23 delegation bytes are reused, so the auth-base
-		// portion of the intrinsic state gas is refilled.
-		if isDelegated || auth.Address == (common.Address{}) {
+		// EIP-8037: refund the auth-base state gas unless this auth is the
+		// first one in this tx to write delegation bytes to an authority
+		// whose committed code was empty. Refund when ANY of:
+		//
+		//   - the authority was already delegated at the start of the tx
+		//     (the 23 bytes are already accounted for in committed state,
+		//     and any auth against it just re-writes them);
+		//
+		//   - the auth is no-op / clearing (auth.Address == 0) — no bytes
+		//     are written in this step at all;
+		//
+		//   - we have already billed a creation for this authority in
+		//     this tx (per-authority creation budget is 1).
+		//
+		// Modeling it this way mirrors the SSTORE "reset to original"
+		// pattern (EIP-2200 / EIP-3529) and avoids both the undercount in
+		// a→0→b (committed had delegation, second auth missed the refund)
+		// and the overcount in 0→a→0→c (each later auth was previously
+		// billed as a fresh creation). The remaining 0→a→0 case — a
+		// creation is billed and then undone within the same auth list —
+		// is handled by the caller's end-of-loop adjustment over
+		// authBilledCreations.
+		_, committedDelegated := types.ParseDelegation(st.state.GetCommittedCode(authority))
+		_, alreadyBilled := authBilledCreations[authority]
+		if committedDelegated || alreadyBilled || auth.Address == (common.Address{}) {
 			st.gasRemaining.RefundState(params.AuthorizationCreationSize * st.evm.Context.CostPerStateByte)
+		} else {
+			authBilledCreations[authority] = struct{}{}
 		}
 	}
 

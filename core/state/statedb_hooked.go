@@ -75,6 +75,10 @@ func (s *hookedStateDB) GetCode(addr common.Address) []byte {
 	return s.inner.GetCode(addr)
 }
 
+func (s *hookedStateDB) GetCommittedCode(addr common.Address) []byte {
+	return s.inner.GetCommittedCode(addr)
+}
+
 func (s *hookedStateDB) GetCodeSize(addr common.Address) int {
 	return s.inner.GetCodeSize(addr)
 }
