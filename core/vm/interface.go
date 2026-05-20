@@ -42,6 +42,11 @@ type StateDB interface {
 	GetCodeHash(common.Address) common.Hash
 	GetCode(common.Address) []byte
 
+	// GetCommittedCode returns the contract code at the start of the current
+	// execution, ignoring any in-progress SetCode mutations. Returns nil when
+	// the account had no code prior to this execution.
+	GetCommittedCode(common.Address) []byte
+
 	// SetCode sets the new code for the address, and returns the previous code, if any.
 	SetCode(common.Address, []byte, tracing.CodeChangeReason) []byte
 	GetCodeSize(common.Address) int
