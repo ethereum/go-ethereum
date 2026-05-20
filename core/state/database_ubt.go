@@ -80,6 +80,10 @@ func (db *UBTDatabase) Reader(stateRoot common.Hash) (Reader, error) {
 	return newReader(db.codedb.Reader(), sr), nil
 }
 
+func (db *UBTDatabase) ReaderEIP7928(stateRoot common.Hash, accessList map[common.Address][]common.Hash, threads int, block bool) (Reader, error) {
+	panic("not implemented")
+}
+
 // ReadersWithCacheStats creates a pair of state readers that share the same
 // underlying state reader and internal state cache, while maintaining separate
 // statistics respectively.

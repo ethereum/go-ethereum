@@ -395,7 +395,7 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 		obj.SlotChanges = make([]encodingStorageWrite, 0, len(slotWrites))
 
 		indices := slices.Collect(maps.Keys(slotWrites))
-		slices.SortFunc(indices, cmp.Compare)
+		slices.Sort(indices)
 		for _, index := range indices {
 			val := slotWrites[index]
 			obj.SlotChanges = append(obj.SlotChanges, encodingStorageWrite{
@@ -415,7 +415,7 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 
 	// Convert balance changes
 	balanceIndices := slices.Collect(maps.Keys(a.BalanceChanges))
-	slices.SortFunc(balanceIndices, cmp.Compare)
+	slices.Sort(balanceIndices)
 	for _, idx := range balanceIndices {
 		res.BalanceChanges = append(res.BalanceChanges, encodingBalanceChange{
 			BlockAccessIndex: idx,
@@ -425,7 +425,7 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 
 	// Convert nonce changes
 	nonceIndices := slices.Collect(maps.Keys(a.NonceChanges))
-	slices.SortFunc(nonceIndices, cmp.Compare)
+	slices.Sort(nonceIndices)
 	for _, idx := range nonceIndices {
 		res.NonceChanges = append(res.NonceChanges, encodingAccountNonce{
 			BlockAccessIndex: idx,
@@ -435,7 +435,7 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 
 	// Convert code change
 	codeIndices := slices.Collect(maps.Keys(a.CodeChange))
-	slices.SortFunc(codeIndices, cmp.Compare)
+	slices.Sort(codeIndices)
 	for _, idx := range codeIndices {
 		res.CodeChanges = append(res.CodeChanges, encodingCodeChange{
 			BlockAccessIndex: idx,

@@ -223,6 +223,10 @@ type HistoricDB struct {
 	codedb *CodeDB
 }
 
+func (db *HistoricDB) ReaderEIP7928(stateRoot common.Hash, accessList map[common.Address][]common.Hash, threads int, block bool) (Reader, error) {
+	panic("not implemented")
+}
+
 // Type returns the trie type of the underlying database.
 func (db *HistoricDB) Type() DatabaseType {
 	// TODO(rjl493456442) support UBT in the future

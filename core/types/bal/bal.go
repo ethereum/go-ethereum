@@ -18,6 +18,7 @@ package bal
 
 import (
 	"bytes"
+	"encoding/json"
 	"maps"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -222,4 +223,192 @@ func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 		res.Accounts[addr] = &aaCopy
 	}
 	return res
+}
+
+type StorageMutations map[common.Hash]common.Hash
+
+// AccountMutations contains mutations that were made to an account across
+// one or more access list indices.
+type AccountMutations struct {
+	Balance       *uint256.Int     `json:"Balance,omitempty"`
+	Nonce         *uint64          `json:"Nonce,omitempty"`
+	Code          []byte           `json:"Code,omitempty"`
+	StorageWrites StorageMutations `json:"StorageWrites,omitempty"`
+}
+
+// String returns a human-readable JSON representation of the account mutations.
+func (a *AccountMutations) String() string {
+	var res bytes.Buffer
+	enc := json.NewEncoder(&res)
+	enc.SetIndent("", "    ")
+	enc.Encode(a)
+	return res.String()
+}
+
+// Copy returns a deep-copy of the instance.
+func (a *AccountMutations) Copy() *AccountMutations {
+	res := &AccountMutations{
+		nil,
+		nil,
+		nil,
+		nil,
+	}
+	if a.Nonce != nil {
+		res.Nonce = new(uint64)
+		*res.Nonce = *a.Nonce
+	}
+	if a.Code != nil {
+		res.Code = bytes.Clone(a.Code)
+	}
+	if a.Balance != nil {
+		res.Balance = new(uint256.Int).Set(a.Balance)
+	}
+	if a.StorageWrites != nil {
+		res.StorageWrites = maps.Clone(a.StorageWrites)
+	}
+	return res
+}
+
+// Eq returns whether the calling instance is equal to the provided one.
+func (a *AccountMutations) Eq(other *AccountMutations) bool {
+	if a.Balance != nil || other.Balance != nil {
+		if a.Balance == nil || other.Balance == nil {
+			return false
+		}
+
+		if !a.Balance.Eq(other.Balance) {
+			return false
+		}
+	}
+
+	if (len(a.Code) != 0 || len(other.Code) != 0) && !bytes.Equal(a.Code, other.Code) {
+		return false
+	}
+
+	if a.Nonce != nil || other.Nonce != nil {
+		if a.Nonce == nil || other.Nonce == nil {
+			return false
+		}
+
+		if *a.Nonce != *other.Nonce {
+			return false
+		}
+	}
+
+	if a.StorageWrites != nil || other.StorageWrites != nil {
+		if !maps.Equal(a.StorageWrites, other.StorageWrites) {
+			return false
+		}
+	}
+	return true
+}
+
+type BALExecutionMode int
+
+const (
+	BALExecutionOptimized BALExecutionMode = iota
+	BALExecutionNoBatchIO
+	BALExecutionSequential
+)
+
+// WrittenCounts groups per-block aggregate write counts derived from the BAL.
+type WrittenCounts struct {
+	Accounts     int
+	StorageSlots int
+	Codes        int
+	CodeBytes    int
+}
+
+// WrittenCounts walks the BAL once and returns the aggregate write counts.
+func (e BlockAccessList) WrittenCounts() WrittenCounts {
+	var w WrittenCounts
+	for i := range e {
+		a := &e[i]
+		if len(a.StorageChanges) > 0 || len(a.BalanceChanges) > 0 ||
+			len(a.NonceChanges) > 0 || len(a.CodeChanges) > 0 {
+			w.Accounts++
+		}
+		w.StorageSlots += len(a.StorageChanges)
+		if n := len(a.CodeChanges); n > 0 {
+			w.Codes++
+			w.CodeBytes += len(a.CodeChanges[n-1].NewCode)
+		}
+	}
+	return w
+}
+
+type StateMutations map[common.Address]AccountMutations
+
+func (s StateMutations) String() string {
+	b, _ := json.MarshalIndent(s, "", "    ")
+	return string(b)
+}
+
+// Merge merges the state changes present in next into the caller.  After,
+// the state of the caller is the aggregate diff through next.
+func (s StateMutations) Merge(next StateMutations) {
+	for account, diff := range next {
+		if mut, ok := s[account]; ok {
+			if diff.Balance != nil {
+				mut.Balance = diff.Balance
+			}
+			if diff.Code != nil {
+				mut.Code = diff.Code
+			}
+			if diff.Nonce != nil {
+				mut.Nonce = diff.Nonce
+			}
+			if len(diff.StorageWrites) > 0 {
+				if mut.StorageWrites == nil {
+					mut.StorageWrites = maps.Clone(diff.StorageWrites)
+				} else {
+					for key, val := range diff.StorageWrites {
+						mut.StorageWrites[key] = val
+					}
+				}
+			}
+			s[account] = mut
+		} else {
+			s[account] = *diff.Copy()
+		}
+	}
+}
+
+func (s StateMutations) Eq(other StateMutations) bool {
+	if len(s) != len(other) {
+		return false
+	}
+
+	for addr, mut := range s {
+		otherMut, ok := other[addr]
+		if !ok {
+			return false
+		}
+
+		if !mut.Eq(&otherMut) {
+			return false
+		}
+	}
+
+	return true
+}
+
+type StorageKeySet map[common.Hash]struct{}
+type StateAccesses map[common.Address]StorageKeySet
+
+func (s StateAccesses) Eq(other StateAccesses) bool {
+	if len(s) != len(other) {
+		return false
+	}
+
+	for addr, set := range s {
+		otherSet, ok := other[addr]
+		if !ok {
+			return false
+		}
+		if !maps.Equal(set, otherSet) {
+			return false
+		}
+	}
+	return true
 }

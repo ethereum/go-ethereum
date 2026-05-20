@@ -18,6 +18,7 @@ package core
 
 import (
 	"context"
+	"github.com/ethereum/go-ethereum/common"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/core/state"
@@ -34,7 +35,7 @@ type Validator interface {
 	ValidateBody(block *types.Block) error
 
 	// ValidateState validates the given statedb and optionally the process result.
-	ValidateState(block *types.Block, state *state.StateDB, res *ProcessResult, stateless bool) error
+	ValidateState(block *types.Block, state StateRootSource, res *ProcessResult, stateless bool) error
 }
 
 // Prefetcher is an interface for pre-caching transaction signatures and state.
@@ -63,4 +64,12 @@ type ProcessResult struct {
 	// BAL is only meaningful for post-Amsterdam blocks. Please ensure
 	// fork validation is performed before accessing it.
 	Bal *bal.ConstructionBlockAccessList
+
+	Error error
+}
+
+type Committer interface {
+	Commit(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, error)
+	CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, *state.StateUpdate, error)
+	Preimages() map[common.Hash][]byte
 }
