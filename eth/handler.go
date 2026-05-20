@@ -139,7 +139,6 @@ type handler struct {
 	downloader     *downloader.Downloader
 	txFetcher      *fetcher.TxFetcher
 	blobFetcher    *fetcher.BlobFetcher
-	blobBuffer     *blobpool.BlobBuffer
 	peers          *peerSet
 	txBroadcastKey [16]byte
 
@@ -190,33 +189,13 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 
 	// Construct the blob buffer for assembling blob txs from separate tx and cell deliveries.
-	h.blobBuffer = blobpool.NewBlobBuffer(h.blobpool.ValidateTxBasics, h.blobpool.AddPooledTx, h.removePeer)
+	blobBuffer := blobpool.NewBlobBuffer(h.blobpool.ValidateTxBasics, h.blobpool.AddPooledTx, h.removePeer)
 
-	addTxs := func(peer string, txs []*types.Transaction) []error {
-		errs := make([]error, len(txs))
-		p := h.peers.peer(peer)
-		isETH72 := p != nil && p.Version() >= eth.ETH72
-
-		var poolTxs []*types.Transaction
-		var index []int
-		for i, tx := range txs {
-			if isETH72 && tx.Type() == types.BlobTxType {
-				errs[i] = h.blobBuffer.AddTx(tx, peer)
-			} else {
-				poolTxs = append(poolTxs, tx)
-				index = append(index, i)
-			}
-		}
-		if len(poolTxs) > 0 {
-			poolErrs := h.txpool.Add(poolTxs, false)
-			for j, idx := range index {
-				errs[idx] = poolErrs[j]
-			}
-		}
-		return errs
+	addTxs := func(txs []*types.Transaction) []error {
+		return h.txpool.Add(txs, false)
 	}
 	validateMeta := func(tx common.Hash, kind byte) error {
-		if h.txpool.Has(tx) || h.blobBuffer.HasTx(tx) {
+		if h.txpool.Has(tx) || blobBuffer.HasTx(tx) {
 			return txpool.ErrAlreadyKnown
 		}
 		if !h.txpool.FilterType(kind) {
@@ -224,7 +203,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return nil
 	}
-	h.txFetcher = fetcher.NewTxFetcher(h.chain, validateMeta, addTxs, fetchTx, h.removePeer)
+	h.txFetcher = fetcher.NewTxFetcher(h.chain, validateMeta, addTxs, fetchTx, h.removePeer, blobBuffer)
 
 	// Construct the blob fetcher for cell-based blob data availability
 	blobCallbacks := fetcher.BlobFetcherFunctions{
@@ -236,14 +215,14 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			return p.RequestPayload(hashes, cells)
 		},
 		HasPayload: func(hash common.Hash) bool {
-			return h.blobpool.Has(hash) || h.blobBuffer.HasCells(hash)
+			return h.blobpool.Has(hash) || blobBuffer.HasCells(hash)
 		},
-		AddCells: func(hash common.Hash, deliveries map[string]*fetcher.PeerCellDelivery, custody *types.CustodyBitmap) error {
+		AddCells: func(hash common.Hash, deliveries map[string]*fetcher.PeerCellDelivery, custody *types.CustodyBitmap) {
 			converted := make(map[string]*blobpool.PeerDelivery, len(deliveries))
 			for peer, d := range deliveries {
 				converted[peer] = &blobpool.PeerDelivery{Cells: d.Cells, Indices: d.Indices}
 			}
-			return h.blobBuffer.AddCells(hash, converted, custody)
+			blobBuffer.AddCells(hash, converted, custody)
 		},
 		DropPeer: h.removePeer,
 	}

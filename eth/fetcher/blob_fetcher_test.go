@@ -47,9 +47,14 @@ func makeTestCellSidecar(blobCount int) *types.BlobTxCellSidecar {
 		proofs = append(proofs, cellProofs...)
 	}
 
-	sidecar, _ := types.NewBlobTxSidecar(types.BlobSidecarVersion1, blobs, commitments, proofs).ToBlobTxCellSidecar()
-
-	return sidecar
+	cells, _ := kzg4844.ComputeCells(blobs)
+	return &types.BlobTxCellSidecar{
+		Version:     types.BlobSidecarVersion1,
+		Cells:       cells,
+		Commitments: commitments,
+		Proofs:      proofs,
+		Custody:     *types.CustodyBitmapAll,
+	}
 }
 
 func selectCells(cells []kzg4844.Cell, custody *types.CustodyBitmap) []kzg4844.Cell {
@@ -149,9 +154,7 @@ func TestBlobFetcherFullFetch(t *testing.T) {
 			return NewBlobFetcher(
 				BlobFetcherFunctions{
 					HasPayload: func(common.Hash) bool { return false },
-					AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error {
-						return nil
-					},
+					AddCells:   func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) {},
 					FetchPayloads: func(string, []common.Hash, *types.CustodyBitmap) error {
 						return nil
 					},
@@ -241,10 +244,8 @@ func TestBlobFetcherPartialFetch(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				BlobFetcherFunctions{
-					HasPayload: func(common.Hash) bool { return false },
-					AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error {
-						return nil
-					},
+					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) {},
+
 					FetchPayloads: func(string, []common.Hash, *types.CustodyBitmap) error {
 						return nil
 					},
@@ -338,10 +339,8 @@ func TestBlobFetcherFullDelivery(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				BlobFetcherFunctions{
-					HasPayload: func(common.Hash) bool { return false },
-					AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error {
-						return nil
-					},
+					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) {},
+
 					FetchPayloads: func(string, []common.Hash, *types.CustodyBitmap) error {
 						return nil
 					},
@@ -388,10 +387,8 @@ func TestBlobFetcherPartialDelivery(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				BlobFetcherFunctions{
-					HasPayload: func(common.Hash) bool { return false },
-					AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error {
-						return nil
-					},
+					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) {},
+
 					FetchPayloads: func(string, []common.Hash, *types.CustodyBitmap) error {
 						return nil
 					},
@@ -526,10 +523,8 @@ func TestBlobFetcherAvailabilityTimeout(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				BlobFetcherFunctions{
-					HasPayload: func(common.Hash) bool { return false },
-					AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error {
-						return nil
-					},
+					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) {},
+
 					FetchPayloads: func(string, []common.Hash, *types.CustodyBitmap) error {
 						return nil
 					},
@@ -570,10 +565,8 @@ func TestBlobFetcherPeerDrop(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				BlobFetcherFunctions{
-					HasPayload: func(common.Hash) bool { return false },
-					AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error {
-						return nil
-					},
+					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) {},
+
 					FetchPayloads: func(string, []common.Hash, *types.CustodyBitmap) error {
 						return nil
 					},
@@ -649,10 +642,8 @@ func TestBlobFetcherFetchTimeout(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				BlobFetcherFunctions{
-					HasPayload: func(common.Hash) bool { return false },
-					AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error {
-						return nil
-					},
+					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) {},
+
 					FetchPayloads: func(string, []common.Hash, *types.CustodyBitmap) error {
 						return nil
 					},
@@ -1040,7 +1031,7 @@ func TestMultiBlobDeliveryVerification(t *testing.T) {
 			return NewBlobFetcher(
 				BlobFetcherFunctions{
 					HasPayload: func(common.Hash) bool { return false },
-					AddCells: func(h common.Hash, deliveries map[string]*PeerCellDelivery, custody *types.CustodyBitmap) error {
+					AddCells: func(h common.Hash, deliveries map[string]*PeerCellDelivery, custody *types.CustodyBitmap) {
 						// Verify each peer's delivered cells pass KZG cell proof verification
 						for _, d := range deliveries {
 							var cellProofs []kzg4844.Proof
@@ -1050,11 +1041,7 @@ func TestMultiBlobDeliveryVerification(t *testing.T) {
 								}
 							}
 							verifyErr = kzg4844.VerifyCells(d.Cells, sidecar.Commitments, cellProofs, d.Indices)
-							if verifyErr != nil {
-								return verifyErr
-							}
 						}
-						return nil
 					},
 					FetchPayloads: func(string, []common.Hash, *types.CustodyBitmap) error {
 						return nil

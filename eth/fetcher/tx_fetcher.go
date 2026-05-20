@@ -29,8 +29,11 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 const (
@@ -180,10 +183,12 @@ type TxFetcher struct {
 	alternates map[common.Hash]map[string]struct{} // In-flight transaction alternate origins if retrieval fails
 
 	// Callbacks
-	validateMeta func(common.Hash, byte) error              // Validate a tx metadata based on the local txpool
-	addTxs       func(string, []*types.Transaction) []error // Insert a batch of transactions into local txpool
-	fetchTxs     func(string, []common.Hash) error          // Retrieves a set of txs from a remote peer
-	dropPeer     func(string)                               // Drops a peer in case of announcement violation
+	validateMeta func(common.Hash, byte) error      // Validate a tx metadata based on the local txpool
+	addTxs       func([]*types.Transaction) []error // Insert a batch of transactions into local txpool
+	fetchTxs     func(string, []common.Hash) error  // Retrieves a set of txs from a remote peer
+	dropPeer     func(string)                       // Drops a peer in case of announcement violation
+
+	buffer *blobpool.BlobBuffer
 
 	step     chan struct{}    // Notification channel when the fetcher loop iterates
 	clock    mclock.Clock     // Monotonic clock or simulated clock for tests
@@ -194,16 +199,17 @@ type TxFetcher struct {
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
 // based on hash announcements.
 // Chain can be nil to disable on-chain checks.
-func NewTxFetcher(chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func(string, []*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string)) *TxFetcher {
-	return NewTxFetcherForTests(chain, validateMeta, addTxs, fetchTxs, dropPeer, mclock.System{}, time.Now, nil)
+func NewTxFetcher(chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error,
+	dropPeer func(string), buffer *blobpool.BlobBuffer) *TxFetcher {
+	return NewTxFetcherForTests(chain, validateMeta, addTxs, fetchTxs, dropPeer, buffer, mclock.System{}, time.Now, nil)
 }
 
 // NewTxFetcherForTests is a testing method to mock out the realtime clock with
 // a simulated version and the internal randomness with a deterministic one.
 // Chain can be nil to disable on-chain checks.
 func NewTxFetcherForTests(
-	chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func(string, []*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string),
-	clock mclock.Clock, realTime func() time.Time, rand *mrand.Rand) *TxFetcher {
+	chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string),
+	buffer *blobpool.BlobBuffer, clock mclock.Clock, realTime func() time.Time, rand *mrand.Rand) *TxFetcher {
 	return &TxFetcher{
 		notify:         make(chan *txAnnounce),
 		cleanup:        make(chan *txDelivery),
@@ -224,6 +230,7 @@ func NewTxFetcherForTests(
 		addTxs:         addTxs,
 		fetchTxs:       fetchTxs,
 		dropPeer:       dropPeer,
+		buffer:         buffer,
 		clock:          clock,
 		realTime:       realTime,
 		rand:           rand,
@@ -312,26 +319,36 @@ func (f *TxFetcher) isKnownUnderpriced(hash common.Hash) bool {
 	return ok
 }
 
+type deliveryMetrics struct {
+	inMeter          *metrics.Meter
+	knownMeter       *metrics.Meter
+	underpricedMeter *metrics.Meter
+	otherRejectMeter *metrics.Meter
+}
+
 // Enqueue imports a batch of received transaction into the transaction pool
 // and the fetcher. This method may be called by both transaction broadcasts and
 // direct request replies. The differentiation is important so the fetcher can
 // re-schedule missing transactions as soon as possible.
-func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) error {
-	var (
-		inMeter          = txReplyInMeter
-		knownMeter       = txReplyKnownMeter
-		underpricedMeter = txReplyUnderpricedMeter
-		otherRejectMeter = txReplyOtherRejectMeter
-		violation        error
-	)
+func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction, direct bool) error {
+	var violation error
+
+	metrics := deliveryMetrics{
+		inMeter:          txReplyInMeter,
+		knownMeter:       txReplyKnownMeter,
+		underpricedMeter: txReplyUnderpricedMeter,
+		otherRejectMeter: txReplyOtherRejectMeter,
+	}
 	if !direct {
-		inMeter = txBroadcastInMeter
-		knownMeter = txBroadcastKnownMeter
-		underpricedMeter = txBroadcastUnderpricedMeter
-		otherRejectMeter = txBroadcastOtherRejectMeter
+		metrics = deliveryMetrics{
+			inMeter:          txBroadcastInMeter,
+			knownMeter:       txBroadcastKnownMeter,
+			underpricedMeter: txBroadcastUnderpricedMeter,
+			otherRejectMeter: txBroadcastOtherRejectMeter,
+		}
 	}
 	// Keep track of all the propagated transactions
-	inMeter.Mark(int64(len(txs)))
+	metrics.inMeter.Mark(int64(len(txs)))
 
 	// Push all the transactions into the pool, tracking underpriced ones to avoid
 	// re-requesting them and dropping the peer in case of malicious transfers.
@@ -345,38 +362,35 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		if end > len(txs) {
 			end = len(txs)
 		}
-		var (
-			duplicate   int64
-			underpriced int64
-			otherreject int64
-		)
 		batch := txs[i:end]
-
-		for j, err := range f.addTxs(peer, batch) {
-			// Track the transaction hash if the price is too low for us.
-			// Avoid re-request this transaction when we receive another
-			// announcement.
-			if errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) || errors.Is(err, txpool.ErrTxGasPriceTooLow) {
-				f.underpriced.Add(batch[j].Hash(), batch[j].Time())
+		var (
+			poolTxs []*types.Transaction
+			blobTxs []*types.Transaction
+		)
+		if version >= eth.ETH72 {
+			for _, tx := range batch {
+				if tx.Type() == types.BlobTxType {
+					blobTxs = append(blobTxs, tx)
+				} else {
+					poolTxs = append(poolTxs, tx)
+				}
 			}
-			// Track a few interesting failure types
-			switch {
-			case err == nil: // Noop, but need to handle to not count these
+		} else {
+			poolTxs = batch
+		}
+		batch = append(poolTxs, blobTxs...)
+		errs := append(f.addTxs(poolTxs), f.buffer.AddTx(blobTxs, peer)...)
 
-			case errors.Is(err, txpool.ErrAlreadyKnown):
-				duplicate++
-
-			case errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) || errors.Is(err, txpool.ErrTxGasPriceTooLow):
-				underpriced++
-
-			case errors.Is(err, txpool.ErrKZGVerificationError) || errors.Is(err, txpool.ErrSidecarFormatError):
+		hashes := make([]common.Hash, len(batch))
+		for j := range batch {
+			hashes[j] = batch[j].Hash()
+		}
+		for j, err := range errs {
+			if errors.Is(err, txpool.ErrKZGVerificationError) || errors.Is(err, txpool.ErrSidecarFormatError) {
 				// KZG verification failed, terminate transaction processing immediately.
 				// Since KZG verification is computationally expensive, this acts as a
 				// defensive measure against potential DoS attacks.
 				violation = err
-
-			default:
-				otherreject++
 			}
 			added = append(added, batch[j].Hash())
 			metas = append(metas, txMetadata{
@@ -389,15 +403,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 				break
 			}
 		}
-		knownMeter.Mark(duplicate)
-		underpricedMeter.Mark(underpriced)
-		otherRejectMeter.Mark(otherreject)
-
-		// If 'other reject' is >25% of the deliveries in any batch, sleep a bit.
-		if otherreject > int64((len(batch)+3)/4) {
-			log.Debug("Peer delivering stale or invalid transactions", "peer", peer, "rejected", otherreject)
-			time.Sleep(200 * time.Millisecond)
-		}
+		f.handleAddErrors(hashes, errs, metrics)
 		// If we encountered a protocol violation, disconnect this peer.
 		if violation != nil {
 			break
@@ -408,6 +414,42 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		return nil
 	case <-f.quit:
 		return errTerminated
+	}
+}
+
+func (f *TxFetcher) handleAddErrors(txs []common.Hash, errs []error, metrics deliveryMetrics) {
+	var (
+		duplicate   int64
+		underpriced int64
+		otherreject int64
+	)
+	for i, err := range errs {
+		// Track a few interesting failure types
+		switch {
+		case err == nil: // Noop, but need to handle to not count these
+
+		case errors.Is(err, txpool.ErrAlreadyKnown):
+			duplicate++
+
+		// Track the transaction hash if the price is too low for us.
+		// Avoid re-request this transaction when we receive another
+		// announcement.
+		case errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) || errors.Is(err, txpool.ErrTxGasPriceTooLow):
+			f.underpriced.Add(txs[i], f.realTime())
+			underpriced++
+
+		default:
+			otherreject++
+		}
+	}
+	metrics.knownMeter.Mark(duplicate)
+	metrics.underpricedMeter.Mark(underpriced)
+	metrics.otherRejectMeter.Mark(otherreject)
+
+	// If 'other reject' is >25% of the deliveries in any batch, sleep a bit.
+	if otherreject > int64((len(txs)+3)/4) {
+		log.Debug("Peer delivering stale or invalid transactions", "rejected", otherreject)
+		time.Sleep(200 * time.Millisecond)
 	}
 }
 
@@ -456,6 +498,14 @@ func (f *TxFetcher) loop() {
 	}
 
 	for {
+		txs, errs := f.buffer.Flush()
+		f.handleAddErrors(txs, errs, deliveryMetrics{
+			inMeter:          txReplyInMeter,
+			knownMeter:       txReplyKnownMeter,
+			underpricedMeter: txReplyUnderpricedMeter,
+			otherRejectMeter: txReplyOtherRejectMeter,
+		})
+
 		select {
 		case ann := <-f.notify:
 			// Drop part of the new announcements if there are too many accumulated.

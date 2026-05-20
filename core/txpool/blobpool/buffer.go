@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
@@ -68,6 +69,8 @@ type BlobBuffer struct {
 	addToPool  func(*BlobTxForPool) error
 	validateTx func(*types.Transaction) error
 	dropPeer   func(string)
+
+	completed []*BlobTxForPool
 }
 
 func NewBlobBuffer(validateTx func(*types.Transaction) error, addToPool func(*BlobTxForPool) error, dropPeer func(string)) *BlobBuffer {
@@ -80,47 +83,56 @@ func NewBlobBuffer(validateTx func(*types.Transaction) error, addToPool func(*Bl
 	}
 }
 
+// Flush adds all completed entries to the pool and returns the hashes
+// and errors for any that failed add.
+func (b *BlobBuffer) Flush() ([]common.Hash, []error) {
+	var errs []error
+	var txs []common.Hash
+	for _, ptx := range b.completed {
+		if err := b.addToPool(ptx); err != nil {
+			errs = append(errs, err)
+			txs = append(txs, ptx.Tx.Hash())
+		}
+	}
+
+	return txs, errs
+}
+
 // AddTx buffers a blob transaction (without blobs) from an ETH/72 peer.
 // If cells are already buffered, verification and pool insertion are attempted.
-func (b *BlobBuffer) AddTx(tx *types.Transaction, peer string) error {
+func (b *BlobBuffer) AddTx(txs []*types.Transaction, peer string) []error {
 	defer b.updateMetrics()()
 
 	// First remove any timed-out entries.
 	b.evict()
 
-	hash := tx.Hash()
-	sidecar := tx.BlobTxSidecar()
-	if sidecar == nil {
-		return fmt.Errorf("blob transaction without sidecar")
+	errs := make([]error, len(txs))
+	for i, tx := range txs {
+		hash := tx.Hash()
+		sidecar := tx.BlobTxSidecar()
+		if sidecar == nil {
+			errs[i] = fmt.Errorf("blob transaction without sidecar")
+			continue
+		}
+		// tx validation (basic w/o lock)
+		// error will be handled by tx fetcher
+		if err := b.validateTx(tx); err != nil {
+			errs[i] = err
+			continue
+		}
+		if entry, ok := b.cells[hash]; ok {
+			b.add(hash, tx, entry)
+			continue
+		}
+		blobBufferTxFirstCounter.Inc(1)
+		b.txs[hash] = &txEntry{tx: tx, peer: peer, added: time.Now()}
 	}
-	// tx validation
-	if err := b.validateTx(tx); err != nil {
-		log.Warn("Transaction validation failed, dropping peer", "peer", peer, "err", err)
-		b.dropPeer(peer)
-		return err
-	}
-	// vhash check
-	if err := sidecar.ValidateBlobCommitmentHashes(tx.BlobHashes()); err != nil {
-		log.Warn("Commitment hash mismatch, dropping peer", "peer", peer, "err", err)
-		b.dropPeer(peer)
-		return err
-	}
-	// proof count check
-	if len(sidecar.Proofs) < len(sidecar.Commitments)*kzg4844.CellProofsPerBlob {
-		b.dropPeer(peer)
-		return fmt.Errorf("insufficient proofs in sidecar")
-	}
-	if entry, ok := b.cells[hash]; ok {
-		return b.add(hash, tx, entry)
-	}
-	blobBufferTxFirstCounter.Inc(1)
-	b.txs[hash] = &txEntry{tx: tx, peer: peer, added: time.Now()}
-	return nil
+	return errs
 }
 
 // AddCells buffers per-peer cell deliveries from the blob fetcher.
 // If the transaction is already buffered, verification and pool insertion are attempted.
-func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDelivery, custody *types.CustodyBitmap) error {
+func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDelivery, custody *types.CustodyBitmap) {
 	defer b.updateMetrics()()
 
 	// First remove any timed-out entries.
@@ -132,15 +144,13 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 		added:      time.Now(),
 	}
 	if txe, ok := b.txs[hash]; ok {
-		return b.add(hash, txe.tx, b.cells[hash])
+		b.add(hash, txe.tx, b.cells[hash])
 	}
 	blobBufferCellsFirstCounter.Inc(1)
-	return nil
 }
 
-// todo: this is very strange
 // add verifies cells per-peer, sorts them, and adds to the pool.
-func (b *BlobBuffer) add(hash common.Hash, tx *types.Transaction, cells *cellEntry) error {
+func (b *BlobBuffer) add(hash common.Hash, tx *types.Transaction, cells *cellEntry) {
 	sidecar := tx.BlobTxSidecar()
 
 	// Per-peer cell verification
@@ -148,7 +158,6 @@ func (b *BlobBuffer) add(hash common.Hash, tx *types.Transaction, cells *cellEnt
 		b.dropPeers(badPeers)
 		delete(b.cells, hash)
 		delete(b.txs, hash)
-		return fmt.Errorf("cell verification failed")
 	}
 	blobCount := len(tx.BlobHashes())
 	sorted, custody := sortCells(cells, blobCount)
@@ -165,10 +174,9 @@ func (b *BlobBuffer) add(hash common.Hash, tx *types.Transaction, cells *cellEnt
 		CellSidecar: &cellSidecar,
 	}
 
-	err := b.addToPool(pooledTx)
+	b.completed = append(b.completed, pooledTx)
 	delete(b.cells, hash)
 	delete(b.txs, hash)
-	return err
 }
 
 func (b *BlobBuffer) HasTx(hash common.Hash) bool {
@@ -221,39 +229,25 @@ func (b *BlobBuffer) updateMetrics() func() {
 	}
 }
 
-// verifyCells verifies each peer's cells against the sidecar.
+// verifyCells verifies each peer's cells against the sidecar by treating each
+// per-peer delivery as a mini BlobTxCellSidecar and reusing txpool.ValidateCells.
 // Returns the list of peers whose cells failed verification.
 func (b *BlobBuffer) verifyCells(entry *cellEntry, sidecar *types.BlobTxSidecar) []string {
 	var badPeers []string
 	for peer, delivery := range entry.deliveries {
-		if err := verifyPeerCells(delivery, sidecar); err != nil {
+		perPeer := &types.BlobTxCellSidecar{
+			Version:     sidecar.Version,
+			Cells:       delivery.Cells,
+			Commitments: sidecar.Commitments,
+			Proofs:      sidecar.Proofs,
+			Custody:     types.NewCustodyBitmap(delivery.Indices),
+		}
+		if err := txpool.ValidateCells(perPeer); err != nil {
 			log.Debug("Cell verification failed", "peer", peer, "err", err)
 			badPeers = append(badPeers, peer)
 		}
 	}
 	return badPeers
-}
-
-// verifyPeerCells verifies a single peer's cells against the sidecar proofs.
-// delivery.Cells is blob-major: [blob0_cell0..blob0_cellN, blob1_cell0..blob1_cellN, ...]
-func verifyPeerCells(delivery *PeerDelivery, sidecar *types.BlobTxSidecar) error {
-	cellsPerBlob := len(delivery.Indices)
-	blobCount := len(delivery.Cells) / cellsPerBlob
-	if blobCount == 0 || blobCount != len(sidecar.Commitments) {
-		return fmt.Errorf("blob count mismatch: delivery %d, commitments %d", blobCount, len(sidecar.Commitments))
-	}
-	// Extract proofs corresponding to this peer's cell indices
-	var proofs []kzg4844.Proof
-	for blobIdx := 0; blobIdx < blobCount; blobIdx++ {
-		for _, cellIdx := range delivery.Indices {
-			proofIdx := blobIdx*kzg4844.CellProofsPerBlob + int(cellIdx)
-			if proofIdx >= len(sidecar.Proofs) {
-				return fmt.Errorf("proof index out of range: %d", proofIdx)
-			}
-			proofs = append(proofs, sidecar.Proofs[proofIdx])
-		}
-	}
-	return kzg4844.VerifyCells(delivery.Cells, sidecar.Commitments, proofs, delivery.Indices)
 }
 
 // sortCells merges all per-peer deliveries into a single flat cell array

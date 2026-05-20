@@ -81,7 +81,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		if err := handleTransactions(peer, txs, true); err != nil {
 			return fmt.Errorf("Transactions: %v", err)
 		}
-		return h.txFetcher.Enqueue(peer.ID(), txs, false)
+		return h.txFetcher.Enqueue(peer.ID(), peer.Version(), txs, false)
 
 	case *eth.PooledTransactionsPacket:
 		txs, err := packet.List.Items()
@@ -91,7 +91,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		if err := handleTransactions(peer, txs, false); err != nil {
 			return fmt.Errorf("PooledTransactions: %v", err)
 		}
-		return h.txFetcher.Enqueue(peer.ID(), txs, true)
+		return h.txFetcher.Enqueue(peer.ID(), peer.Version(), txs, true)
 
 	case *eth.CellsResponse:
 		return h.blobFetcher.Enqueue(peer.ID(), packet.Hashes, packet.Cells, packet.Mask)

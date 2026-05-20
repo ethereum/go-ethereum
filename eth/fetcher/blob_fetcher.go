@@ -91,7 +91,7 @@ type fetchStatus struct {
 
 type BlobFetcherFunctions struct {
 	HasPayload    func(common.Hash) bool
-	AddCells      func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) error
+	AddCells      func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap)
 	FetchPayloads func(string, []common.Hash, *types.CustodyBitmap) error
 	DropPeer      func(string)
 }

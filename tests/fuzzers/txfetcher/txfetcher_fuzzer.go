@@ -25,22 +25,28 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/fetcher"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 )
 
 var (
-	peers []string
-	txs   []*types.Transaction
+	peers         []string
+	peerVersions  map[string]uint
+	txs           []*types.Transaction
 )
 
 func init() {
 	// Random is nice, but we need it deterministic
 	rand := rand.New(rand.NewSource(0x3a29))
 
+	supportedVersions := []uint{eth.ETH69, eth.ETH70, eth.ETH72}
 	peers = make([]string, 10)
+	peerVersions = make(map[string]uint, len(peers))
 	for i := 0; i < len(peers); i++ {
 		peers[i] = fmt.Sprintf("Peer #%d", i)
+		peerVersions[peers[i]] = supportedVersions[i%len(supportedVersions)]
 	}
 	txs = make([]*types.Transaction, 65536) // We need to bump enough to hit all the limits
 	for i := 0; i < len(txs); i++ {
@@ -80,11 +86,16 @@ func fuzz(input []byte) int {
 	f := fetcher.NewTxFetcherForTests(
 		nil,
 		func(common.Hash, byte) error { return nil },
-		func(_ string, txs []*types.Transaction) []error {
+		func(txs []*types.Transaction) []error {
 			return make([]error, len(txs))
 		},
 		func(string, []common.Hash) error { return nil },
 		nil,
+		blobpool.NewBlobBuffer(
+			func(*types.Transaction) error { return nil },
+			func(*blobpool.BlobTxForPool) error { return nil },
+			func(string) {},
+		),
 		clock,
 		func() time.Time {
 			nanoTime := int64(clock.Now())
@@ -180,7 +191,7 @@ func fuzz(input []byte) int {
 			if verbose {
 				fmt.Println("Enqueue", peer, deliverIdxs, direct)
 			}
-			if err := f.Enqueue(peer, deliveries, direct); err != nil {
+			if err := f.Enqueue(peer, peerVersions[peer], deliveries, direct); err != nil {
 				panic(err)
 			}
 
