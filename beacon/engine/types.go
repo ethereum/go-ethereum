@@ -60,7 +60,7 @@ var (
 	PayloadV4 PayloadVersion = 0x4
 )
 
-//go:generate go run github.com/fjl/gencodec -type PayloadAttributes -field-override payloadAttributesMarshaling -out gen_blockparams.go
+//go:generate go run github.com/fjl/gencodec -type PayloadAttributes -field-override payloadAttributesMarshaling -out pa_codec.go
 
 // PayloadAttributes describes the environment context in which a block should
 // be built.
@@ -79,7 +79,7 @@ type payloadAttributesMarshaling struct {
 	SlotNumber *hexutil.Uint64
 }
 
-//go:generate go run github.com/fjl/gencodec -type ExecutableData -field-override executableDataMarshaling -out gen_ed.go
+//go:generate go run github.com/fjl/gencodec -type ExecutableData -field-override executableDataMarshaling -out ed_codec.go
 
 // ExecutableData is the data necessary to execute an EL payload.
 type ExecutableData struct {
@@ -127,7 +127,7 @@ type StatelessPayloadStatusV1 struct {
 	ValidationError *string     `json:"validationError"`
 }
 
-//go:generate go run github.com/fjl/gencodec -enc=false -type ExecutionPayloadEnvelope -field-override executionPayloadEnvelopeMarshaling -out gen_epe.go
+//go:generate go run github.com/fjl/gencodec -enc=false -type ExecutionPayloadEnvelope -field-override executionPayloadEnvelopeMarshaling -out epe_decode.go
 
 type ExecutionPayloadEnvelope struct {
 	ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
