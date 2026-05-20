@@ -18,8 +18,12 @@
 package utils
 
 import (
+	"flag"
 	"reflect"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/urfave/cli/v2"
 )
 
 func Test_SplitTagsFlag(t *testing.T) {
@@ -63,4 +67,42 @@ func Test_SplitTagsFlag(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSetEthConfigAllowsDisablingStateSizeTracking(t *testing.T) {
+	ctx := newTestFlagContext(t, []cli.Flag{
+		CacheFlag,
+		CacheDatabaseFlag,
+		CacheGCFlag,
+		CacheSnapshotFlag,
+		CacheTrieFlag,
+		CryptoKZGFlag,
+		FDLimitFlag,
+		GCModeFlag,
+		SnapshotFlag,
+		StateSizeTrackingFlag,
+	}, "--state.size-tracking=false")
+
+	cfg := ethconfig.Defaults
+	cfg.EnableStateSizeTracking = true
+	SetEthConfig(ctx, nil, &cfg)
+
+	if cfg.EnableStateSizeTracking {
+		t.Fatal("state size tracking should be disabled by explicit CLI flag")
+	}
+}
+
+func newTestFlagContext(t *testing.T, flags []cli.Flag, args ...string) *cli.Context {
+	t.Helper()
+
+	set := flag.NewFlagSet(t.Name(), flag.ContinueOnError)
+	for _, flag := range flags {
+		if err := flag.Apply(set); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := set.Parse(args); err != nil {
+		t.Fatal(err)
+	}
+	return cli.NewContext(cli.NewApp(), set, nil)
 }

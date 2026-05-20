@@ -1936,8 +1936,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
 	}
-	if ctx.Bool(StateSizeTrackingFlag.Name) {
-		cfg.EnableStateSizeTracking = true
+	if ctx.IsSet(StateSizeTrackingFlag.Name) {
+		cfg.EnableStateSizeTracking = ctx.Bool(StateSizeTrackingFlag.Name)
 	}
 	// Override any default configs for hard coded networks.
 	switch {
