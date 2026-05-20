@@ -2,6 +2,7 @@
 
 package bal
 
+import "github.com/ethereum/go-ethereum/common"
 import "github.com/ethereum/go-ethereum/rlp"
 import "github.com/holiman/uint256"
 import "io"
@@ -11,7 +12,7 @@ func (obj *AccountAccess) EncodeRLP(_w io.Writer) error {
 	_tmp0 := w.List()
 	w.WriteBytes(obj.Address[:])
 	_tmp1 := w.List()
-	for _, _tmp2 := range obj.StorageWrites {
+	for _, _tmp2 := range obj.StorageChanges {
 		_tmp3 := w.List()
 		if _tmp2.Slot == nil {
 			w.Write(rlp.EmptyString)
@@ -19,13 +20,13 @@ func (obj *AccountAccess) EncodeRLP(_w io.Writer) error {
 			w.WriteUint256(_tmp2.Slot)
 		}
 		_tmp4 := w.List()
-		for _, _tmp5 := range _tmp2.Accesses {
+		for _, _tmp5 := range _tmp2.SlotChanges {
 			_tmp6 := w.List()
-			w.WriteUint64(uint64(_tmp5.TxIdx))
-			if _tmp5.ValueAfter == nil {
+			w.WriteUint64(uint64(_tmp5.BlockAccessIndex))
+			if _tmp5.PostValue == nil {
 				w.Write(rlp.EmptyString)
 			} else {
-				w.WriteUint256(_tmp5.ValueAfter)
+				w.WriteUint256(_tmp5.PostValue)
 			}
 			w.ListEnd(_tmp6)
 		}
@@ -45,11 +46,11 @@ func (obj *AccountAccess) EncodeRLP(_w io.Writer) error {
 	_tmp9 := w.List()
 	for _, _tmp10 := range obj.BalanceChanges {
 		_tmp11 := w.List()
-		w.WriteUint64(uint64(_tmp10.TxIdx))
-		if _tmp10.Balance == nil {
+		w.WriteUint64(uint64(_tmp10.BlockAccessIndex))
+		if _tmp10.PostBalance == nil {
 			w.Write(rlp.EmptyString)
 		} else {
-			w.WriteUint256(_tmp10.Balance)
+			w.WriteUint256(_tmp10.PostBalance)
 		}
 		w.ListEnd(_tmp11)
 	}
@@ -57,16 +58,16 @@ func (obj *AccountAccess) EncodeRLP(_w io.Writer) error {
 	_tmp12 := w.List()
 	for _, _tmp13 := range obj.NonceChanges {
 		_tmp14 := w.List()
-		w.WriteUint64(uint64(_tmp13.TxIdx))
-		w.WriteUint64(_tmp13.Nonce)
+		w.WriteUint64(uint64(_tmp13.BlockAccessIndex))
+		w.WriteUint64(_tmp13.PostNonce)
 		w.ListEnd(_tmp14)
 	}
 	w.ListEnd(_tmp12)
 	_tmp15 := w.List()
 	for _, _tmp16 := range obj.CodeChanges {
 		_tmp17 := w.List()
-		w.WriteUint64(uint64(_tmp16.TxIndex))
-		w.WriteBytes(_tmp16.Code)
+		w.WriteUint64(uint64(_tmp16.BlockAccessIndex))
+		w.WriteBytes(_tmp16.NewCode)
 		w.ListEnd(_tmp17)
 	}
 	w.ListEnd(_tmp15)
@@ -81,18 +82,18 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 			return err
 		}
 		// Address:
-		var _tmp1 [20]byte
+		var _tmp1 common.Address
 		if err := dec.ReadBytes(_tmp1[:]); err != nil {
 			return err
 		}
 		_tmp0.Address = _tmp1
-		// StorageWrites:
-		var _tmp2 []encodingSlotWrites
+		// StorageChanges:
+		var _tmp2 []encodingSlotChanges
 		if _, err := dec.List(); err != nil {
 			return err
 		}
 		for dec.MoreDataInList() {
-			var _tmp3 encodingSlotWrites
+			var _tmp3 encodingSlotChanges
 			{
 				if _, err := dec.List(); err != nil {
 					return err
@@ -103,7 +104,7 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 					return err
 				}
 				_tmp3.Slot = &_tmp4
-				// Accesses:
+				// SlotChanges:
 				var _tmp5 []encodingStorageWrite
 				if _, err := dec.List(); err != nil {
 					return err
@@ -114,18 +115,18 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 						if _, err := dec.List(); err != nil {
 							return err
 						}
-						// TxIdx:
+						// BlockAccessIndex:
 						_tmp7, err := dec.Uint32()
 						if err != nil {
 							return err
 						}
-						_tmp6.TxIdx = _tmp7
-						// ValueAfter:
+						_tmp6.BlockAccessIndex = _tmp7
+						// PostValue:
 						var _tmp8 uint256.Int
 						if err := dec.ReadUint256(&_tmp8); err != nil {
 							return err
 						}
-						_tmp6.ValueAfter = &_tmp8
+						_tmp6.PostValue = &_tmp8
 						if err := dec.ListEnd(); err != nil {
 							return err
 						}
@@ -135,7 +136,7 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 				if err := dec.ListEnd(); err != nil {
 					return err
 				}
-				_tmp3.Accesses = _tmp5
+				_tmp3.SlotChanges = _tmp5
 				if err := dec.ListEnd(); err != nil {
 					return err
 				}
@@ -145,7 +146,7 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 		if err := dec.ListEnd(); err != nil {
 			return err
 		}
-		_tmp0.StorageWrites = _tmp2
+		_tmp0.StorageChanges = _tmp2
 		// StorageReads:
 		var _tmp9 []*uint256.Int
 		if _, err := dec.List(); err != nil {
@@ -173,18 +174,18 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 				if _, err := dec.List(); err != nil {
 					return err
 				}
-				// TxIdx:
+				// BlockAccessIndex:
 				_tmp13, err := dec.Uint32()
 				if err != nil {
 					return err
 				}
-				_tmp12.TxIdx = _tmp13
-				// Balance:
+				_tmp12.BlockAccessIndex = _tmp13
+				// PostBalance:
 				var _tmp14 uint256.Int
 				if err := dec.ReadUint256(&_tmp14); err != nil {
 					return err
 				}
-				_tmp12.Balance = &_tmp14
+				_tmp12.PostBalance = &_tmp14
 				if err := dec.ListEnd(); err != nil {
 					return err
 				}
@@ -206,18 +207,18 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 				if _, err := dec.List(); err != nil {
 					return err
 				}
-				// TxIdx:
+				// BlockAccessIndex:
 				_tmp17, err := dec.Uint32()
 				if err != nil {
 					return err
 				}
-				_tmp16.TxIdx = _tmp17
-				// Nonce:
+				_tmp16.BlockAccessIndex = _tmp17
+				// PostNonce:
 				_tmp18, err := dec.Uint64()
 				if err != nil {
 					return err
 				}
-				_tmp16.Nonce = _tmp18
+				_tmp16.PostNonce = _tmp18
 				if err := dec.ListEnd(); err != nil {
 					return err
 				}
@@ -239,18 +240,18 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 				if _, err := dec.List(); err != nil {
 					return err
 				}
-				// TxIndex:
+				// BlockAccessIndex:
 				_tmp21, err := dec.Uint32()
 				if err != nil {
 					return err
 				}
-				_tmp20.TxIndex = _tmp21
-				// Code:
+				_tmp20.BlockAccessIndex = _tmp21
+				// NewCode:
 				_tmp22, err := dec.Bytes()
 				if err != nil {
 					return err
 				}
-				_tmp20.Code = _tmp22
+				_tmp20.NewCode = _tmp22
 				if err := dec.ListEnd(); err != nil {
 					return err
 				}
