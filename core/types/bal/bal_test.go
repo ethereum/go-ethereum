@@ -19,7 +19,6 @@ package bal
 import (
 	"bytes"
 	"cmp"
-	"github.com/ethereum/go-ethereum/params"
 	"math"
 	"reflect"
 	"slices"
@@ -27,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/internal/testrand"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
