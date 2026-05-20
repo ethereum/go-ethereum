@@ -26,6 +26,7 @@ require (
 	github.com/ethereum/hid v1.0.1-0.20260421154323-c2ab8d9bf68a
 	github.com/fatih/color v1.16.0
 	github.com/ferranbt/fastssz v0.1.4
+	github.com/fjl/jsonw v0.1.0
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff
 	github.com/gofrs/flock v0.12.1
@@ -121,7 +122,7 @@ require (
 	github.com/deepmap/oapi-codegen v1.6.0 // indirect
 	github.com/dlclark/regexp2 v1.7.0 // indirect
 	github.com/emicklei/dot v1.6.2 // indirect
-	github.com/fjl/gencodec v0.1.0 // indirect
+	github.com/fjl/gencodec v0.1.2 // indirect
 	github.com/garslo/gogen v0.0.0-20170306192744-1d203ffc1f61 // indirect
 	github.com/getsentry/sentry-go v0.27.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
