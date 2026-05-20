@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	jsonw "github.com/fjl/jsonw"
+	"github.com/fjl/jsonw"
 )
 
 // marshalBlobsBundle writes BlobsBundle as JSON and appends it to buf.

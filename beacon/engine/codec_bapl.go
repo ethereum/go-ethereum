@@ -17,7 +17,7 @@
 package engine
 
 import (
-	jsonw "github.com/fjl/jsonw"
+	"github.com/fjl/jsonw"
 )
 
 // MarshalJSON implements json.Marshaler.
