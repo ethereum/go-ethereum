@@ -77,8 +77,8 @@ type Freezer struct {
 // data according to the given parameters.
 //
 // The 'tables' argument defines the freezer tables and their configuration.
-// Each value is a freezerTableConfig specifying whether snappy compression is
-// disabled (noSnappy) and whether the table is prunable (prunable).
+// Each value is a freezerTableConfig describing whether Snappy compression
+// is disabled (noSnappy) and which tail group the table belongs to.
 func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]freezerTableConfig) (*Freezer, error) {
 	// Create the initial freezer object
 	var (

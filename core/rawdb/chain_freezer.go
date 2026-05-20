@@ -386,6 +386,8 @@ func (f *chainFreezer) Ancient(kind string, number uint64) ([]byte, error) {
 		return f.eradb.GetRawBody(number)
 	case ChainFreezerReceiptTable:
 		return f.eradb.GetRawReceipts(number)
+	case ChainFreezerBALTable:
+		return nil, errOutOfBounds
 	}
 	return nil, errUnknownTable
 }
