@@ -257,7 +257,7 @@ func newBlobTxForPool(tx *types.Transaction) (*BlobTxForPool, error) {
 // encodeForNetwork transforms stored BlobTxForPool RLP into the network
 // transaction encoding for the given eth protocol version. Used for getRLP.
 //
-// Stored RLP: [type_byte || tx_fields, version, [comms], [proofs], [cells], custody]
+// Stored RLP: [type_byte || tx_fields, [version, [cells], [comms], [proofs], custody]]
 //
 // eth/69, eth/70: [blobs] is recovered from stored cells via kzg.
 //
@@ -274,8 +274,8 @@ func encodeForNetwork(storedRLP []byte, version uint) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid BlobTxForPool RLP: %w", err)
 	}
-	if len(elems) < 6 {
-		return nil, fmt.Errorf("BlobTxForPool has %d elements, need at least 6", len(elems))
+	if len(elems) < 2 {
+		return nil, fmt.Errorf("BlobTxForPool has %d elements, need at least 2", len(elems))
 	}
 
 	// 1. Extract tx byte and other tx fields
@@ -289,18 +289,27 @@ func encodeForNetwork(storedRLP []byte, version uint) ([]byte, error) {
 	typeByte := txBytes[0]
 	txRLP := txBytes[1:]
 
-	// 2. Find the version of sidecar.
-	sidecarVersion, _, err := rlp.SplitUint64(elems[1])
+	// 2. Split the nested CellSidecar list.
+	sidecarElems, err := rlp.SplitListValues(elems[1])
+	if err != nil {
+		return nil, fmt.Errorf("invalid CellSidecar RLP: %w", err)
+	}
+	if len(sidecarElems) < 5 {
+		return nil, fmt.Errorf("CellSidecar has %d elements, need at least 5", len(sidecarElems))
+	}
+
+	// 3. Find the version of sidecar.
+	sidecarVersion, _, err := rlp.SplitUint64(sidecarElems[0])
 	if err != nil || sidecarVersion > 255 {
 		return nil, fmt.Errorf("invalid version: %w", err)
 	}
 	sidecarVersionByte := byte(sidecarVersion)
 
-	// 3. Extract sidecar elements.
-	commitmentsRLP := elems[2]
-	proofsRLP := elems[3]
+	// 4. Extract sidecar elements.
+	commitmentsRLP := sidecarElems[2]
+	proofsRLP := sidecarElems[3]
 
-	// 4. Build the [blobs] field for the wire format.
+	// 5. Build the [blobs] field for the wire format.
 	var blobsField []byte
 	// todo: should we use eth.ETH72 here
 	if version >= 72 {
@@ -309,11 +318,11 @@ func encodeForNetwork(storedRLP []byte, version uint) ([]byte, error) {
 	} else {
 		// eth/69, eth/70 need actual blobs: recover them from stored cells.
 		var cells []kzg4844.Cell
-		if err := rlp.DecodeBytes(elems[4], &cells); err != nil {
+		if err := rlp.DecodeBytes(sidecarElems[1], &cells); err != nil {
 			return nil, fmt.Errorf("invalid cells RLP: %w", err)
 		}
 		var custody types.CustodyBitmap
-		if err := rlp.DecodeBytes(elems[5], &custody); err != nil {
+		if err := rlp.DecodeBytes(sidecarElems[4], &custody); err != nil {
 			return nil, fmt.Errorf("invalid custody RLP: %w", err)
 		}
 		blobs, err := kzg4844.RecoverBlobs(cells, custody.Indices())
@@ -326,12 +335,12 @@ func encodeForNetwork(storedRLP []byte, version uint) ([]byte, error) {
 		}
 	}
 
-	// 5. Reconstruct into the network format.
+	// 6. Reconstruct into the network format.
 	var outer [][]byte
 	if sidecarVersionByte == types.BlobSidecarVersion0 {
 		outer = [][]byte{txRLP, blobsField, commitmentsRLP, proofsRLP}
 	} else {
-		outer = [][]byte{txRLP, elems[1], blobsField, commitmentsRLP, proofsRLP}
+		outer = [][]byte{txRLP, sidecarElems[0], blobsField, commitmentsRLP, proofsRLP}
 	}
 	body, err := rlp.MergeListValues(outer)
 	if err != nil {
