@@ -2307,6 +2307,12 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation
 	stats.CrossValidation = xvtime                                                                       // The time spent on stateless cross validation
 
+	// Attach the computed block access list so it gets persisted alongside the
+	// block. The validator has already verified the hash matches the header.
+	if res.Bal != nil && block.AccessList() == nil {
+		block = block.WithAccessListUnsafe(res.Bal.ToEncodingObj())
+	}
+
 	// Write the block to the chain and get the status.
 	var status WriteStatus
 	if config.WriteState {
