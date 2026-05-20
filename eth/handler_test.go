@@ -257,7 +257,7 @@ func (p *testTxPool) AddPooledTx(pooledTx *blobpool.BlobTxForPool) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	hash := pooledTx.Tx.Hash()
-	p.cellPool[hash] = pooledTx.Cells
+	p.cellPool[hash] = pooledTx.CellSidecar.Cells
 	p.txPool[hash] = pooledTx.Tx
 	return nil
 }

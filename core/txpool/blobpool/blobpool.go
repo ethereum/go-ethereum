@@ -156,28 +156,26 @@ type blobTxMeta struct {
 // blobpool.
 type BlobTxForPool struct {
 	Tx          *types.Transaction // tx without sidecar
-	Version     byte
-	Commitments []kzg4844.Commitment
-	Proofs      []kzg4844.Proof
-	Cells       []kzg4844.Cell
-	Custody     types.CustodyBitmap
+	CellSidecar *types.BlobTxCellSidecar
 }
 
 // Sidecar returns BlobTxSidecar of pooled transaction. Since this function
 // recovers the blob field in sidecar, it is expansive and needs to be
 // avoided if possible. Returns error if recovery fails (e.g. insufficient cells).
 func (ptx *BlobTxForPool) sidecar() (*types.BlobTxSidecar, error) {
-	blobs, err := kzg4844.RecoverBlobs(ptx.Cells, ptx.Custody.Indices())
+	sidecar := ptx.CellSidecar
+	blobs, err := kzg4844.RecoverBlobs(sidecar.Cells, sidecar.Custody.Indices())
 	if err != nil {
 		return nil, err
 	}
-	return types.NewBlobTxSidecar(ptx.Version, blobs, ptx.Commitments, ptx.Proofs), nil
+	return types.NewBlobTxSidecar(sidecar.Version, blobs, sidecar.Commitments, sidecar.Proofs), nil
 }
 
 func (ptx *BlobTxForPool) toV1() error {
 	// todo: If we have a function to compute proofs from cells,
 	// we can avoid blob recovery here
-	blobs, err := kzg4844.RecoverBlobs(ptx.Cells, ptx.Custody.Indices())
+	sidecar := ptx.CellSidecar
+	blobs, err := kzg4844.RecoverBlobs(sidecar.Cells, sidecar.Custody.Indices())
 	if err != nil {
 		return err
 	}
@@ -189,33 +187,37 @@ func (ptx *BlobTxForPool) toV1() error {
 		}
 		proofs = append(proofs, proof...)
 	}
-	ptx.Proofs = proofs
-	ptx.Version = types.BlobSidecarVersion1
+	sidecar.Proofs = proofs
+	sidecar.Version = types.BlobSidecarVersion1
 	return nil
 }
 
 // TxSize returns the transaction size on the network without
 // reconstructing the transaction.
 func (ptx *BlobTxForPool) txSize() uint64 {
+	sidecar := ptx.CellSidecar
+
 	var commitments, proofs uint64
-	for i := range ptx.Commitments {
-		commitments += rlp.BytesSize(ptx.Commitments[i][:])
+	for i := range sidecar.Commitments {
+		commitments += rlp.BytesSize(sidecar.Commitments[i][:])
 	}
-	for i := range ptx.Proofs {
-		proofs += rlp.BytesSize(ptx.Proofs[i][:])
+	for i := range sidecar.Proofs {
+		proofs += rlp.BytesSize(sidecar.Proofs[i][:])
 	}
 	var blob kzg4844.Blob
-	blobs := uint64(len(ptx.Commitments)) * rlp.BytesSize(blob[:])
+	blobs := uint64(len(sidecar.Commitments)) * rlp.BytesSize(blob[:])
 	return ptx.Tx.Size() + rlp.ListSize(rlp.ListSize(blobs)+rlp.ListSize(commitments)+rlp.ListSize(proofs))
 }
 
 func (ptx *BlobTxForPool) txSizeWithoutBlob() uint64 {
+	sidecar := ptx.CellSidecar
+
 	var commitments, proofs uint64
-	for i := range ptx.Commitments {
-		commitments += rlp.BytesSize(ptx.Commitments[i][:])
+	for i := range sidecar.Commitments {
+		commitments += rlp.BytesSize(sidecar.Commitments[i][:])
 	}
-	for i := range ptx.Proofs {
-		proofs += rlp.BytesSize(ptx.Proofs[i][:])
+	for i := range sidecar.Proofs {
+		proofs += rlp.BytesSize(sidecar.Proofs[i][:])
 	}
 	return ptx.Tx.Size() + rlp.ListSize(rlp.ListSize(0)+rlp.ListSize(commitments)+rlp.ListSize(proofs))
 }
@@ -239,13 +241,16 @@ func newBlobTxForPool(tx *types.Transaction) (*BlobTxForPool, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &BlobTxForPool{
-		Tx:          tx.WithoutBlobTxSidecar(),
+	sidecar := types.BlobTxCellSidecar{
 		Version:     sc.Version,
 		Commitments: sc.Commitments,
 		Proofs:      sc.Proofs,
 		Cells:       cells,
 		Custody:     *types.CustodyBitmapAll,
+	}
+	return &BlobTxForPool{
+		Tx:          tx.WithoutBlobTxSidecar(),
+		CellSidecar: &sidecar,
 	}, nil
 }
 
@@ -345,7 +350,7 @@ func newBlobTxMeta(id uint64, storageSize uint32, ptx *BlobTxForPool) *blobTxMet
 	meta := &blobTxMeta{
 		hash:            ptx.Tx.Hash(),
 		vhashes:         ptx.Tx.BlobHashes(),
-		version:         ptx.Version,
+		version:         ptx.CellSidecar.Version,
 		id:              id,
 		storageSize:     storageSize,
 		size:            ptx.txSize(),
@@ -357,7 +362,7 @@ func newBlobTxMeta(id uint64, storageSize uint32, ptx *BlobTxForPool) *blobTxMet
 		blobFeeCap:      uint256.MustFromBig(ptx.Tx.BlobGasFeeCap()),
 		execGas:         ptx.Tx.Gas(),
 		blobGas:         ptx.Tx.BlobGas(),
-		custody:         &ptx.Custody,
+		custody:         &ptx.CellSidecar.Custody,
 	}
 	meta.basefeeJumps = dynamicFeeJumps(meta.execFeeCap)
 	meta.blobfeeJumps = dynamicBlobFeeJumps(meta.blobFeeCap)
@@ -1374,7 +1379,7 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	// could theoretically halt a Geth node for ~1.2s by reorging per block. However,
 	// this attack is financially inefficient to execute.
 	head := p.head.Load()
-	if p.chain.Config().IsOsaka(head.Number, head.Time) && ptx.Version == types.BlobSidecarVersion0 {
+	if p.chain.Config().IsOsaka(head.Number, head.Time) && ptx.CellSidecar.Version == types.BlobSidecarVersion0 {
 		if err := ptx.toV1(); err != nil {
 			log.Error("Failed to convert the legacy sidecar", "err", err)
 			return err
@@ -1845,8 +1850,8 @@ func (p *BlobPool) GetBlobCells(vhashes []common.Hash, mask types.CustodyBitmap)
 			continue
 		}
 		tx := ptx.Tx
-		cellsPerBlob := ptx.Custody.OneCount()
-		storedIndices := ptx.Custody.Indices()
+		cellsPerBlob := ptx.CellSidecar.Custody.OneCount()
+		storedIndices := ptx.CellSidecar.Custody.Indices()
 
 		for blobIdx, hash := range tx.BlobHashes() {
 			indices, ok := vindex[hash]
@@ -1867,11 +1872,11 @@ func (p *BlobPool) GetBlobCells(vhashes []common.Hash, mask types.CustodyBitmap)
 					}
 				}
 				if pos >= 0 {
-					cell := ptx.Cells[blobIdx*cellsPerBlob+pos]
+					cell := ptx.CellSidecar.Cells[blobIdx*cellsPerBlob+pos]
 					blobCells[i] = &cell
 					proofIdx := blobIdx*kzg4844.CellProofsPerBlob + int(cellIdx)
-					if proofIdx < len(ptx.Proofs) {
-						proof := ptx.Proofs[proofIdx]
+					if proofIdx < len(ptx.CellSidecar.Proofs) {
+						proof := ptx.CellSidecar.Proofs[proofIdx]
 						blobProofs[i] = &proof
 					}
 				}
@@ -1940,14 +1945,6 @@ func (p *BlobPool) AddPooledTx(ptx *BlobTxForPool) (err error) {
 // Only for internal use.
 func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 	tx := ptx.Tx
-	//todo: remove this type and also ToBlobTxCellSidecar function
-	cellSidecar := &types.BlobTxCellSidecar{
-		Version:     ptx.Version,
-		Cells:       ptx.Cells,
-		Commitments: ptx.Commitments,
-		Proofs:      ptx.Proofs,
-		Custody:     ptx.Custody,
-	}
 
 	// Ensure the transaction is valid from all perspectives
 	if err := p.validateTx(tx); err != nil {
@@ -1989,10 +1986,7 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 		}
 		return err
 	}
-	if err := txpool.ValidateBlobSidecar(tx, cellSidecar, p.head.Load(), &txpool.ValidationOptions{
-		Config:       p.chain.Config(),
-		MaxBlobCount: maxBlobsPerTx,
-	}); err != nil {
+	if err := txpool.ValidateCells(ptx.CellSidecar); err != nil {
 		return err
 	}
 	// If the address is not yet known, request exclusivity to track the account

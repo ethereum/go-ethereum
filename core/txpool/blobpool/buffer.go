@@ -138,7 +138,7 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 	return nil
 }
 
-// todo returning error here is strange
+// todo: this is very strange
 // add verifies cells per-peer, sorts them, and adds to the pool.
 func (b *BlobBuffer) add(hash common.Hash, tx *types.Transaction, cells *cellEntry) error {
 	sidecar := tx.BlobTxSidecar()
@@ -153,14 +153,18 @@ func (b *BlobBuffer) add(hash common.Hash, tx *types.Transaction, cells *cellEnt
 	blobCount := len(tx.BlobHashes())
 	sorted, custody := sortCells(cells, blobCount)
 
-	pooledTx := &BlobTxForPool{
-		Tx:          tx.WithoutBlobTxSidecar(),
+	cellSidecar := types.BlobTxCellSidecar{
 		Version:     sidecar.Version,
 		Commitments: sidecar.Commitments,
 		Proofs:      sidecar.Proofs,
 		Cells:       sorted,
 		Custody:     *custody,
 	}
+	pooledTx := &BlobTxForPool{
+		Tx:          tx.WithoutBlobTxSidecar(),
+		CellSidecar: &cellSidecar,
+	}
+
 	err := b.addToPool(pooledTx)
 	delete(b.cells, hash)
 	delete(b.txs, hash)

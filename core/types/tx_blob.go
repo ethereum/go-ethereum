@@ -176,35 +176,12 @@ func (sc *BlobTxSidecar) Copy() *BlobTxSidecar {
 	}
 }
 
-func (sc *BlobTxSidecar) ToBlobTxCellSidecar() (*BlobTxCellSidecar, error) {
-	cells, err := kzg4844.ComputeCells(sc.Blobs)
-	if err != nil {
-		return nil, err
-	}
-	return &BlobTxCellSidecar{
-		Version:     sc.Version,
-		Cells:       cells,
-		Commitments: sc.Commitments,
-		Proofs:      sc.Proofs,
-		Custody:     *CustodyBitmapAll,
-	}, nil
-}
-
 type BlobTxCellSidecar struct {
 	Version     byte
 	Cells       []kzg4844.Cell
 	Commitments []kzg4844.Commitment
 	Proofs      []kzg4844.Proof
 	Custody     CustodyBitmap
-}
-
-// ValidateBlobCommitmentHashes checks whether the given hashes correspond to the
-// commitments in the sidecar
-func (c *BlobTxCellSidecar) ValidateBlobCommitmentHashes(hashes []common.Hash) error {
-	sc := BlobTxSidecar{
-		Commitments: c.Commitments,
-	}
-	return sc.ValidateBlobCommitmentHashes(hashes)
 }
 
 // blobTxWithBlobs represents blob tx with its corresponding sidecar.
