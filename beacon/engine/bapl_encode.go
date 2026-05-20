@@ -22,6 +22,9 @@ import (
 
 // MarshalJSON implements json.Marshaler.
 func (list BlobAndProofListV1) MarshalJSON() ([]byte, error) {
+	if list == nil {
+		return []byte("null"), nil
+	}
 	var b jsonw.Buffer
 	b.Array(func() {
 		for _, item := range list {
@@ -46,6 +49,9 @@ func marshalBlobAndProofV1(b *jsonw.Buffer, item *BlobAndProofV1) {
 
 // MarshalJSON implements json.Marshaler.
 func (list BlobAndProofListV2) MarshalJSON() ([]byte, error) {
+	if list == nil {
+		return []byte("null"), nil
+	}
 	var b jsonw.Buffer
 	b.Array(func() {
 		for _, item := range list {
