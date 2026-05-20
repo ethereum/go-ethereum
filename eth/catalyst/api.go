@@ -646,7 +646,7 @@ func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) (engine.BlobAnd
 		return nil, engine.InvalidParams.With(err)
 	}
 	// Validate the blobs from the pool and assemble the response
-  filled := 0
+	filled := 0
 	res := make(engine.BlobAndProofListV2, len(hashes))
 	for i := range blobs {
 		// The blob has been evicted since the last AvailableBlobs call.
