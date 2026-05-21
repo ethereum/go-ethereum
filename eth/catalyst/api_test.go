@@ -1987,7 +1987,7 @@ func TestGetBlobsV1(t *testing.T) {
 			vhashes = append(vhashes, testrand.Hash())
 			expect = append(expect, nil)
 		}
-		result, err := api.GetBlobsV1(vhashes)
+		result, err := api.GetBlobsV1(context.Background(), vhashes)
 		if err != nil {
 			t.Errorf("Unexpected error for case %d, %v", i, err)
 		}
@@ -2009,7 +2009,7 @@ func TestGetBlobsV1AfterOsakaFork(t *testing.T) {
 
 	var engineErr *engine.EngineAPIError
 	api := newConsensusAPIWithoutHeartbeat(ethServ)
-	_, err := api.GetBlobsV1([]common.Hash{testrand.Hash()})
+	_, err := api.GetBlobsV1(context.Background(), []common.Hash{testrand.Hash()})
 	if !errors.As(err, &engineErr) {
 		t.Fatalf("Unexpected error: %T", err)
 	} else {
@@ -2073,7 +2073,7 @@ func BenchmarkGetBlobsV2(b *testing.B) {
 	}
 }
 
-type getBlobsFn func(hashes []common.Hash) (engine.BlobAndProofListV2, error)
+type getBlobsFn func(ctx context.Context, hashes []common.Hash) (engine.BlobAndProofListV2, error)
 
 func runGetBlobs(t testing.TB, getBlobs getBlobsFn, start, limit int, fillRandom bool, expectPartialResponse bool, name string) {
 	// Fill the request for retrieving blobs
@@ -2096,7 +2096,7 @@ func runGetBlobs(t testing.TB, getBlobs getBlobsFn, start, limit int, fillRandom
 	if fillRandom {
 		vhashes = append(vhashes, testrand.Hash())
 	}
-	result, err := getBlobs(vhashes)
+	result, err := getBlobs(context.Background(), vhashes)
 	if err != nil {
 		t.Errorf("Unexpected error for case %s, %v", name, err)
 	}
