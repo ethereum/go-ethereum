@@ -95,6 +95,7 @@ var (
 		utils.BinTrieGroupDepthFlag,
 		utils.LightKDFFlag,
 		utils.EthRequiredBlocksFlag,
+		utils.BALExecutionModeFlag,
 		utils.LegacyWhitelistFlag, // deprecated
 		utils.CacheFlag,
 		utils.CacheDatabaseFlag,

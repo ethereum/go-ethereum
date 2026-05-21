@@ -243,6 +243,11 @@ var (
 		Usage:    "Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)",
 		Category: flags.EthCategory,
 	}
+	BALExecutionModeFlag = &cli.StringFlag{
+		Name:     "bal.executionmode",
+		Usage:    "EIP-7928 block-access-list execution mode (no-op placeholder)",
+		Category: flags.EthCategory,
+	}
 	BloomFilterSizeFlag = &cli.Uint64Flag{
 		Name:     "bloomfilter.size",
 		Usage:    "Megabytes of memory allocated to bloom-filter for pruning",
