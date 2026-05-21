@@ -293,18 +293,21 @@ func (g GasBudget) Exit(err error) GasBudget {
 }
 
 // Absorb merges a sub-call's leftover GasBudget into this (caller's) running
-// budget. The caller's UsedRegularGas is reclaimed by the unused forwarded
-// regular gas (which was pre-charged in full at call entry); the state
-// reservoir is overwritten with the child's leftover; and the child's signed
-// net state-gas usage is added to the caller's accumulator.
+// budget. Additionally, it does an EIP-8037 spillover correction:
+// state-gas that spilled into the regular pool inside the child frame is
+// excluded from the UsedRegularGas.
 //
-// Invariant maintained by all callers: at the moment of this call, the
-// caller's UsedRegularGas already accounts for the FULL forwarded regular
-// gas (as if the child had consumed all of it). On halt, child.RegularGas
-// is 0 so the reclaim is a no-op.
-func (g *GasBudget) Absorb(child GasBudget) {
+//	spillover = forwarded - child.RegularGas - child.UsedRegularGas
+//
+// forwarded is the regular-gas amount that was passed to the child at call
+// entry (i.e., the regular initial of the child's GasBudget).
+func (g *GasBudget) Absorb(child GasBudget, forwarded uint64) {
+	spillover := forwarded - child.RegularGas - child.UsedRegularGas
+
 	g.UsedRegularGas -= child.RegularGas
 	g.RegularGas += child.RegularGas
 	g.StateGas = child.StateGas
 	g.UsedStateGas += child.UsedStateGas
+
+	g.UsedRegularGas -= spillover
 }

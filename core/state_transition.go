@@ -737,8 +737,12 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	)
 	if contractCreation {
 		var result vm.GasBudget
+		// Capture the forwarded regular-gas amount BEFORE ForwardAll consumes
+		// it, so Absorb can back out state-gas spillover from
+		// UsedRegularGas per EIP-8037 (EELS semantics).
+		forwardedR := st.gasRemaining.RegularGas
 		ret, _, result, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining.ForwardAll(), value)
-		st.gasRemaining.Absorb(result)
+		st.gasRemaining.Absorb(result, forwardedR)
 	} else {
 		// Increment the nonce for the next transaction.
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
@@ -756,8 +760,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 		// Execute the transaction's call.
 		var result vm.GasBudget
+		forwardedR := st.gasRemaining.RegularGas
 		ret, result, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining.ForwardAll(), value)
-		st.gasRemaining.Absorb(result)
+		st.gasRemaining.Absorb(result, forwardedR)
 	}
 	// If this was a failed contract creation, refund the account creation costs.
 	if rules.IsAmsterdam {
