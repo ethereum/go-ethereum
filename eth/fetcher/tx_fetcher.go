@@ -403,7 +403,13 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 				break
 			}
 		}
-		f.handleAddErrors(hashes, errs, metrics)
+		otherreject := f.handleAddErrors(hashes, errs, metrics)
+		// If 'other reject' is >25% of the deliveries in any batch, sleep a bit
+		// to throttle the misbehaving peer.
+		if otherreject > int64((len(hashes)+3)/4) {
+			log.Debug("Peer delivering stale or invalid transactions", "rejected", otherreject)
+			time.Sleep(200 * time.Millisecond)
+		}
 		// If we encountered a protocol violation, disconnect this peer.
 		if violation != nil {
 			break
@@ -417,11 +423,10 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 	}
 }
 
-func (f *TxFetcher) handleAddErrors(txs []common.Hash, errs []error, metrics deliveryMetrics) {
+func (f *TxFetcher) handleAddErrors(txs []common.Hash, errs []error, metrics deliveryMetrics) (otherreject int64) {
 	var (
 		duplicate   int64
 		underpriced int64
-		otherreject int64
 	)
 	for i, err := range errs {
 		// Track a few interesting failure types
@@ -445,12 +450,7 @@ func (f *TxFetcher) handleAddErrors(txs []common.Hash, errs []error, metrics del
 	metrics.knownMeter.Mark(duplicate)
 	metrics.underpricedMeter.Mark(underpriced)
 	metrics.otherRejectMeter.Mark(otherreject)
-
-	// If 'other reject' is >25% of the deliveries in any batch, sleep a bit.
-	if otherreject > int64((len(txs)+3)/4) {
-		log.Debug("Peer delivering stale or invalid transactions", "rejected", otherreject)
-		time.Sleep(200 * time.Millisecond)
-	}
+	return otherreject
 }
 
 // Drop should be called when a peer disconnects. It cleans up all the internal
