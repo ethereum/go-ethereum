@@ -935,7 +935,7 @@ func (st *stateTransition) applyAuthorizations(rules params.Rules, auths []types
 // (auth.Address == 0) for an authority in this set refunds the prior bill
 // and removes the entry, since the net delegation bytes written by the
 // chain are zero.
-func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization, authBilledCreations map[common.Address]struct{}) error {
+func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization, authBilled map[common.Address]struct{}) error {
 	authority, err := st.validateAuthorization(auth)
 	if err != nil {
 		return err
@@ -957,7 +957,7 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 		// Refill the auth-base for the current authorization if ANY of:
 		//
 		//   - the authority was already delegated at the start of the tx
-		//     (the 23 bytes are already accounted for in committed state),
+		//     (the 23 bytes are already accounted for in pre-tx state),
 		//
 		//   - a prior auth in this tx has already billed the auth-base for
 		//     this authority (per-tx per-authority creation budget is 1),
@@ -975,19 +975,19 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 		// auths writes zero net delegation bytes, so the earlier bill is no
 		// longer justified.
 		var (
-			clearing              = auth.Address == (common.Address{})
-			_, committedDelegated = types.ParseDelegation(st.state.GetCommittedCode(authority))
-			_, alreadyBilled      = authBilledCreations[authority]
+			clearing     = auth.Address == (common.Address{})
+			_, delegated = types.ParseDelegation(st.state.GetCode(authority))
+			_, billed    = authBilled[authority]
 		)
-		if committedDelegated || alreadyBilled || clearing {
+		if delegated || billed || clearing {
 			st.gasRemaining.RefundState(params.AuthorizationCreationSize * st.evm.Context.CostPerStateByte)
 		} else {
-			authBilledCreations[authority] = struct{}{}
+			authBilled[authority] = struct{}{}
 		}
 		// Refund that prior bill and drop the mark
-		if clearing && alreadyBilled {
+		if clearing && billed {
 			st.gasRemaining.RefundState(params.AuthorizationCreationSize * st.evm.Context.CostPerStateByte)
-			delete(authBilledCreations, authority)
+			delete(authBilled, authority)
 		}
 	}
 

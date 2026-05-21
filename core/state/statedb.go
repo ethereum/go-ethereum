@@ -397,18 +397,6 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 	return common.Hash{}
 }
 
-// GetCommittedCode returns the contract code committed at the start of the
-// current execution, ignoring any in-progress SetCode mutations. Returns
-// nil when the account had no code (or did not exist) prior to this
-// execution.
-func (s *StateDB) GetCommittedCode(addr common.Address) []byte {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.GetCommittedCode()
-	}
-	return nil
-}
-
 // GetState retrieves the value associated with the specific key.
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
