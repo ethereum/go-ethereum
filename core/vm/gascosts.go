@@ -251,13 +251,22 @@ func (g GasBudget) ExitRevert() GasBudget {
 }
 
 // ExitHalt produces the leftover form for an exceptional halt. Remaining
-// regular gas is accounted as burned; the reservoir resets to initialStateGas
-// (the value the caller held at the call site). UsedStateGas is zeroed
-// because state-gas effects do not persist on halt.
-func (g GasBudget) ExitHalt(initialStateGas uint64) GasBudget {
+// regular gas is burned into UsedRegularGas; the state dimension follows the
+// same revert-style formula as ExitRevert because the spec routes both halt
+// and revert through incorporate_child_on_error:
+//
+//	parent.state_gas_left = parent + child.state_gas_used + child.state_gas_left
+//
+// which in our model means returning `StateGas + UsedStateGas` to the parent
+// and zeroing the per-frame counter.
+func (g GasBudget) ExitHalt() GasBudget {
+	reservoir := int64(g.StateGas) + g.UsedStateGas
+	if reservoir < 0 {
+		reservoir = 0
+	}
 	return GasBudget{
 		RegularGas:     0,
-		StateGas:       initialStateGas,
+		StateGas:       uint64(reservoir),
 		UsedRegularGas: g.UsedRegularGas + g.RegularGas,
 		UsedStateGas:   0,
 	}
@@ -272,14 +281,14 @@ func (g GasBudget) ExitHalt(initialStateGas uint64) GasBudget {
 //
 // Soft validation failures (occurring BEFORE evm.Run) should call Preserved
 // directly instead of going through this dispatcher.
-func (g GasBudget) Exit(err error, initialStateGas uint64) GasBudget {
+func (g GasBudget) Exit(err error) GasBudget {
 	switch {
 	case err == nil:
 		return g.ExitSuccess()
 	case err == ErrExecutionReverted:
 		return g.ExitRevert()
 	default:
-		return g.ExitHalt(initialStateGas)
+		return g.ExitHalt()
 	}
 }
 
