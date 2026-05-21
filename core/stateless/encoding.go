@@ -58,9 +58,11 @@ func (w *Witness) FromExtWitness(ext *ExtWitness) error {
 		return errors.New("witness must contain at least one header")
 	}
 	w.Headers = slices.Clone(ext.Headers)
-	if headersAscending(w.Headers) {
-		slices.Reverse(w.Headers)
-	}
+	// don't trust the input and sort headers in reverse order
+	// this is only useful for calling `Root`
+	slices.SortFunc(w.Headers, func(a, b *types.Header) int {
+		return b.Number.Cmp(a.Number)
+	})
 
 	w.Codes = make(map[string]struct{}, len(ext.Codes))
 	for _, code := range ext.Codes {
@@ -71,20 +73,6 @@ func (w *Witness) FromExtWitness(ext *ExtWitness) error {
 		w.State[string(node)] = struct{}{}
 	}
 	return nil
-}
-
-// headersAscending reports whether headers are in the external witness order,
-// oldest ancestor first and parent last. The internal witness keeps headers in
-// the opposite order so Root can retrieve the parent root from Headers[0].
-func headersAscending(headers []*types.Header) bool {
-	if len(headers) < 2 {
-		return false
-	}
-	first, last := headers[0], headers[len(headers)-1]
-	if first == nil || last == nil || first.Number == nil || last.Number == nil {
-		return false
-	}
-	return first.Number.Cmp(last.Number) < 0
 }
 
 // EncodeRLP serializes a witness as RLP.

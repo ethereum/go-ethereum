@@ -65,7 +65,11 @@ func TestWitnessFromExtWitnessNormalizesHeaderOrder(t *testing.T) {
 			headers: []*types.Header{testHeader(1), testHeader(2), testHeader(3)},
 		},
 		{
-			name:    "legacy internal ordered",
+			name:    "not ordered",
+			headers: []*types.Header{testHeader(2), testHeader(3), testHeader(1)},
+		},
+		{
+			name:    "internal ordered",
 			headers: []*types.Header{testHeader(3), testHeader(2), testHeader(1)},
 		},
 	}
