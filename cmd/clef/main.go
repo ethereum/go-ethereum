@@ -407,7 +407,7 @@ func initInternalApi(c *cli.Context) (*core.UIServerAPI, core.UIClientAPI, error
 		ksLoc                     = c.String(keystoreFlag.Name)
 		lightKdf                  = c.Bool(utils.LightKDFFlag.Name)
 	)
-	am := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
+	am := core.StartClefAccountManager(ksLoc, lightKdf, "")
 	api := core.NewSignerAPI(am, 0, ui, nil, false, pwStorage)
 	internalApi := core.NewUIServerAPI(api)
 	return internalApi, ui, nil
