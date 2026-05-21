@@ -17,7 +17,9 @@
 package engine
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/ethereum/go-ethereum/rlp"
 	"math/big"
 	"slices"
 
@@ -104,19 +106,36 @@ type ExecutableData struct {
 	BlockAccessList *bal.BlockAccessList `json:"blockAccessList,omitempty"`
 }
 
+type hexBlockAccessList bal.BlockAccessList
+
+func (h *hexBlockAccessList) MarshalJSON() ([]byte, error) {
+	return rlp.EncodeToBytes(bal.BlockAccessList(*h))
+}
+
+func (h *hexBlockAccessList) UnmarshalJSON(inp []byte) error {
+	if *h == nil {
+		*h = make(hexBlockAccessList, 0)
+	}
+	if err := rlp.Decode(bytes.NewReader(inp), *h); err != nil {
+		return err
+	}
+	return nil
+}
+
 // JSON type overrides for executableData.
 type executableDataMarshaling struct {
-	Number        hexutil.Uint64
-	GasLimit      hexutil.Uint64
-	GasUsed       hexutil.Uint64
-	Timestamp     hexutil.Uint64
-	BaseFeePerGas *hexutil.Big
-	ExtraData     hexutil.Bytes
-	LogsBloom     hexutil.Bytes
-	Transactions  []hexutil.Bytes
-	BlobGasUsed   *hexutil.Uint64
-	ExcessBlobGas *hexutil.Uint64
-	SlotNumber    *hexutil.Uint64
+	Number          hexutil.Uint64
+	GasLimit        hexutil.Uint64
+	GasUsed         hexutil.Uint64
+	Timestamp       hexutil.Uint64
+	BaseFeePerGas   *hexutil.Big
+	ExtraData       hexutil.Bytes
+	LogsBloom       hexutil.Bytes
+	Transactions    []hexutil.Bytes
+	BlobGasUsed     *hexutil.Uint64
+	ExcessBlobGas   *hexutil.Uint64
+	SlotNumber      *hexutil.Uint64
+	BlockAccessList *hexBlockAccessList
 }
 
 // StatelessPayloadStatusV1 is the result of a stateless payload execution.
