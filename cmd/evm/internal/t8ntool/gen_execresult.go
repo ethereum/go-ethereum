@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 )
 
 var _ = (*executionResultMarshaling)(nil)
@@ -33,7 +32,7 @@ func (e ExecutionResult) MarshalJSON() ([]byte, error) {
 		CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
 		RequestsHash         *common.Hash          `json:"requestsHash,omitempty"`
 		Requests             []hexutil.Bytes       `json:"requests"`
-		BlockAccessList      *bal.BlockAccessList  `json:"blockAccessList,omitempty"`
+		BlockAccessList      hexutil.Bytes         `json:"blockAccessList,omitempty"`
 		BlockAccessListHash  *common.Hash          `json:"blockAccessListHash,omitempty"`
 	}
 	var enc ExecutionResult
@@ -80,7 +79,7 @@ func (e *ExecutionResult) UnmarshalJSON(input []byte) error {
 		CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
 		RequestsHash         *common.Hash          `json:"requestsHash,omitempty"`
 		Requests             []hexutil.Bytes       `json:"requests"`
-		BlockAccessList      *bal.BlockAccessList  `json:"blockAccessList,omitempty"`
+		BlockAccessList      *hexutil.Bytes        `json:"blockAccessList,omitempty"`
 		BlockAccessListHash  *common.Hash          `json:"blockAccessListHash,omitempty"`
 	}
 	var dec ExecutionResult
@@ -138,7 +137,7 @@ func (e *ExecutionResult) UnmarshalJSON(input []byte) error {
 		}
 	}
 	if dec.BlockAccessList != nil {
-		e.BlockAccessList = dec.BlockAccessList
+		e.BlockAccessList = *dec.BlockAccessList
 	}
 	if dec.BlockAccessListHash != nil {
 		e.BlockAccessListHash = dec.BlockAccessListHash
