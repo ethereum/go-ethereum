@@ -1,9 +1,14 @@
 # This file contains sha256 checksums of optional build dependencies.
 
 # version:spec-tests tests@v20.0.0
-# https://github.com/ethereum/execution-specs/releases
+# https://github.com/ethereum/execution-spec-tests/releases
 # https://github.com/ethereum/execution-specs/releases/download/tests%40v20.0.0
 b183702a5b447b465873865357ced9eb342315922e52e31b714e2de115dd0bb4  fixtures.tar.gz
+
+# version:spec-tests-bal glamsterdam-devnet@v7.1.0
+# https://github.com/ethereum/execution-specs/releases
+# https://github.com/ethereum/execution-specs/releases/download/tests-glamsterdam-devnet%40v7.1.0
+ba833a4c0a956bcc7d00118cd9aa817b8715ea4357ded9d3393d37ba89b182a9  fixtures_glamsterdam-devnet.tar.gz
 
 # version:golang 1.25.12
 # https://go.dev/dl/
