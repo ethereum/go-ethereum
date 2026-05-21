@@ -84,17 +84,15 @@ func NewBlobBuffer(validateTx func(*types.Transaction) error, addToPool func(*Bl
 }
 
 // Flush adds all completed entries to the pool and returns the hashes
-// and errors for any that failed add.
+// and corresponding errors (nil on success) for each attempted insert.
 func (b *BlobBuffer) Flush() ([]common.Hash, []error) {
-	var errs []error
-	var txs []common.Hash
-	for _, ptx := range b.completed {
-		if err := b.addToPool(ptx); err != nil {
-			errs = append(errs, err)
-			txs = append(txs, ptx.Tx.Hash())
-		}
+	txs := make([]common.Hash, len(b.completed))
+	errs := make([]error, len(b.completed))
+	for i, ptx := range b.completed {
+		txs[i] = ptx.Tx.Hash()
+		errs[i] = b.addToPool(ptx)
 	}
-
+	b.completed = nil
 	return txs, errs
 }
 
