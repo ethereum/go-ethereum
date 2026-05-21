@@ -22,6 +22,7 @@ import (
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -2105,6 +2106,13 @@ func runGetBlobs(t testing.TB, getBlobs getBlobsFn, start, limit int, fillRandom
 		} else {
 			// Nil is expected if getBlobs can not return a partial response
 			expect = nil
+			enc, err := json.Marshal(result)
+			if err != nil {
+				t.Fatalf("Failed to encode result for case %s: %v", name, err)
+			}
+			if string(enc) != "null" {
+				t.Fatalf("Unexpected JSON result for case %s: got %s, want null", name, enc)
+			}
 		}
 	}
 	if !reflect.DeepEqual(result, expect) {
