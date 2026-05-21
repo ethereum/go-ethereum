@@ -82,8 +82,17 @@ func TestBlockchain(t *testing.T) {
 
 // TestExecutionSpecBlocktests runs the test fixtures from execution-spec-tests.
 func TestExecutionSpecBlocktests(t *testing.T) {
-	if !common.FileExist(executionSpecBlockchainTestDir) {
-		t.Skipf("directory %s does not exist", executionSpecBlockchainTestDir)
+	testExecutionSpecBlocktests(t, executionSpecBlockchainTestDir)
+}
+
+// TestExecutionSpecBlocktestsBAL runs the BAL release test fixtures from execution-spec-tests.
+func TestExecutionSpecBlocktestsBAL(t *testing.T) {
+	testExecutionSpecBlocktests(t, executionSpecBALBlockchainTestDir)
+}
+
+func testExecutionSpecBlocktests(t *testing.T, testDir string) {
+	if !common.FileExist(testDir) {
+		t.Skipf("directory %s does not exist", testDir)
 	}
 	bt := new(testMatcher)
 
@@ -96,7 +105,7 @@ func TestExecutionSpecBlocktests(t *testing.T) {
 	bt.skipLoad(`.*eip7610_create_collision/revert_in_create/.*`)
 	bt.skipLoad(`.*stRandom2/random_statetest642/.*`)
 
-	bt.walk(t, executionSpecBlockchainTestDir, func(t *testing.T, name string, test *BlockTest) {
+	bt.walk(t, testDir, func(t *testing.T, name string, test *BlockTest) {
 		execBlockTest(t, bt, test)
 	})
 }
