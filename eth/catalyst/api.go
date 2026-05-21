@@ -679,8 +679,9 @@ func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) (engine.BlobAnd
 	return res, nil
 }
 
-func (api *ConsensusAPI) HasBlobs(hashes []common.Hash) ([]bool, error) {
-	return api.eth.BlobTxPool().AvailableBlobs(hashes), nil
+// HasBlobs reports availability for the requested blob-versioned-hashes.
+func (api *ConsensusAPI) HasBlobs(hashes []common.Hash) []bool {
+	return api.eth.BlobTxPool().AvailableBlobs(hashes)
 }
 
 // Helper for NewPayload* methods.
