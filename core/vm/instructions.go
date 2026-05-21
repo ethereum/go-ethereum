@@ -743,6 +743,12 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if !value.IsZero() {
 		gas += params.CallStipend
 	}
+	// Escrow pattern (spec: escrow_subcall_regular_gas): undo the full
+	// forwarded gas — including the value-transfer stipend — from
+	// UsedRegularGas. The stipend is a free loan to the child and must
+	// not count toward the caller's regular gas usage; the child's own
+	// opcode charges are re-added via Absorb on return.
+	scope.Contract.Gas.UsedRegularGas -= gas
 
 	// Regular gas for the forward was already pre-deducted by the dynamic
 	// gas table (see makeCallVariantGasCallEIP*); only the state reservoir
@@ -762,18 +768,10 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	}
 	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
-	// If the call frame reverts or halts exceptionally, the charged state-gas
-	// is refilled back to the state reservoir in Amsterdam.
-	//
-	// The state-gas should only be refunded if the state creation doesn't
-	// happens, such as ErrDepth, ErrInsufficientBalance.
-	//
-	// TODO(rjl) it's so ugly, please rework it.
-	if evm.chainRules.IsAmsterdam && err != nil {
-		if (err == ErrDepth || err == ErrInsufficientBalance) && !value.IsZero() && evm.StateDB.Empty(toAddr) {
-			scope.Contract.refundState(params.AccountCreationSize*evm.Context.CostPerStateByte, evm.Config.Tracer, tracing.GasChangeStateGasRefund)
-		}
-	}
+	// EIP-8037: CALL does not refund the new-account state_gas on
+	// ErrDepth/ErrInsufficientBalance — the spec only reclaims the forwarded
+	// reservoir; the state_gas charged for new account creation stays in
+	// state_gas_used (see Amsterdam spec call() / generic_call()).
 
 	evm.returnData = ret
 	return ret, nil
@@ -794,6 +792,9 @@ func opCallCode(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if !value.IsZero() {
 		gas += params.CallStipend
 	}
+	// Escrow pattern: undo the full forwarded gas (including stipend) from
+	// UsedRegularGas; the child's own opcode charges come back via Absorb.
+	scope.Contract.Gas.UsedRegularGas -= gas
 
 	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
 	ret, result, err := evm.CallCode(scope.Contract.Address(), toAddr, args, childBudget, &value)
@@ -825,6 +826,8 @@ func opDelegateCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
+	// Undo the forwarded gas from UsedRegularGas to prevent double-charging.
+	scope.Contract.Gas.UsedRegularGas -= gas
 	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
 	ret, result, err := evm.DelegateCall(scope.Contract.Caller(), scope.Contract.Address(), toAddr, args, childBudget, scope.Contract.value)
 	if err != nil {
@@ -854,6 +857,8 @@ func opStaticCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
+	// Undo the forwarded gas from UsedRegularGas to prevent double-charging.
+	scope.Contract.Gas.UsedRegularGas -= gas
 	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
 	ret, result, err := evm.StaticCall(scope.Contract.Address(), toAddr, args, childBudget)
 	if err != nil {
