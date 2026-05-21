@@ -17,6 +17,7 @@
 package engine
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"slices"
@@ -24,8 +25,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/types/bal"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -101,7 +103,7 @@ type ExecutableData struct {
 	BlobGasUsed     *uint64              `json:"blobGasUsed"`
 	ExcessBlobGas   *uint64              `json:"excessBlobGas"`
 	SlotNumber      *uint64              `json:"slotNumber,omitempty"`
-	BlockAccessList *bal.BlockAccessList `json:"blockAccessList,omitempty"`
+	BlockAccessList hexutil.Bytes        `json:"blockAccessList,omitempty"`
 }
 
 // JSON type overrides for executableData.
@@ -314,13 +316,14 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 	}
 
 	// If Amsterdam is enabled, data.BlockAccessList is always non-nil,
-	// even for empty blocks with no state transitions.
+	// even for empty blocks with no state transitions. The wire format is
+	// the RLP-encoded access list; the header hash is keccak256(rlp).
 	//
 	// If Amsterdam is not enabled yet, blockAccessListHash is expected
 	// to be nil.
 	var blockAccessListHash *common.Hash
 	if data.BlockAccessList != nil {
-		hash := data.BlockAccessList.Hash()
+		hash := crypto.Keccak256Hash(data.BlockAccessList)
 		blockAccessListHash = &hash
 	}
 	header := &types.Header{
@@ -372,7 +375,14 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		BlobGasUsed:     block.BlobGasUsed(),
 		ExcessBlobGas:   block.ExcessBlobGas(),
 		SlotNumber:      block.SlotNumber(),
-		BlockAccessList: block.AccessList(),
+	}
+	// Per Engine API spec (Amsterdam): blockAccessList is the RLP-encoded
+	// access list, serialized as a hex string. Encode it to bytes here.
+	if al := block.AccessList(); al != nil {
+		var buf bytes.Buffer
+		if err := rlp.Encode(&buf, al); err == nil {
+			data.BlockAccessList = buf.Bytes()
+		}
 	}
 
 	// Add blobs.
