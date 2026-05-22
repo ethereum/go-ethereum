@@ -355,7 +355,7 @@ func handleBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
 	if err := peer.tracker.Fulfil(tresp); err != nil {
 		return fmt.Errorf("BlockHeaders: %w", err)
 	}
-	headers, err := res.List.Items()
+	headers, err := decodeBlockHeaders(&res.List)
 	if err != nil {
 		return fmt.Errorf("BlockHeaders: %w", err)
 	}
@@ -372,6 +372,19 @@ func handleBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
 		code: BlockHeadersMsg,
 		Res:  (*BlockHeadersRequest)(&headers),
 	}, metadata)
+}
+
+func decodeBlockHeaders(list *rlp.RawList[*types.Header]) ([]*types.Header, error) {
+	headers := make([]*types.Header, 0, list.Len())
+	it := list.ContentIterator()
+	for it.Next() {
+		header := new(types.Header)
+		if err := types.DecodeHeader(it.Value(), header); err != nil {
+			return headers, err
+		}
+		headers = append(headers, header)
+	}
+	return headers, nil
 }
 
 func handleBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
