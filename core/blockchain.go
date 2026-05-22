@@ -84,11 +84,15 @@ var (
 	accountCacheMissMeter = metrics.NewRegisteredMeter("chain/account/reads/cache/process/miss", nil)
 	storageCacheHitMeter  = metrics.NewRegisteredMeter("chain/storage/reads/cache/process/hit", nil)
 	storageCacheMissMeter = metrics.NewRegisteredMeter("chain/storage/reads/cache/process/miss", nil)
+	codeCacheHitMeter     = metrics.NewRegisteredMeter("chain/code/reads/cache/process/hit", nil)
+	codeCacheMissMeter    = metrics.NewRegisteredMeter("chain/code/reads/cache/process/miss", nil)
 
 	accountCacheHitPrefetchMeter  = metrics.NewRegisteredMeter("chain/account/reads/cache/prefetch/hit", nil)
 	accountCacheMissPrefetchMeter = metrics.NewRegisteredMeter("chain/account/reads/cache/prefetch/miss", nil)
 	storageCacheHitPrefetchMeter  = metrics.NewRegisteredMeter("chain/storage/reads/cache/prefetch/hit", nil)
 	storageCacheMissPrefetchMeter = metrics.NewRegisteredMeter("chain/storage/reads/cache/prefetch/miss", nil)
+	codeCacheHitPrefetchMeter     = metrics.NewRegisteredMeter("chain/code/reads/cache/prefetch/hit", nil)
+	codeCacheMissPrefetchMeter    = metrics.NewRegisteredMeter("chain/code/reads/cache/prefetch/miss", nil)
 
 	accountReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/account/single/reads", nil)
 	storageReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/storage/single/reads", nil)
