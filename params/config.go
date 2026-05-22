@@ -17,12 +17,14 @@
 package params
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params/forks"
 )
 
@@ -69,7 +71,6 @@ var (
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
-			Osaka:  DefaultOsakaBlobConfig,
 			BPO1:   DefaultBPO1BlobConfig,
 			BPO2:   DefaultBPO2BlobConfig,
 		},
@@ -105,7 +106,6 @@ var (
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
-			Osaka:  DefaultOsakaBlobConfig,
 			BPO1:   DefaultBPO1BlobConfig,
 			BPO2:   DefaultBPO2BlobConfig,
 		},
@@ -141,7 +141,6 @@ var (
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
-			Osaka:  DefaultOsakaBlobConfig,
 			BPO1:   DefaultBPO1BlobConfig,
 			BPO2:   DefaultBPO2BlobConfig,
 		},
@@ -177,7 +176,6 @@ var (
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
-			Osaka:  DefaultOsakaBlobConfig,
 			BPO1:   DefaultBPO1BlobConfig,
 			BPO2:   DefaultBPO2BlobConfig,
 		},
@@ -235,7 +233,6 @@ var (
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
-			Osaka:  DefaultOsakaBlobConfig,
 		},
 	}
 
@@ -330,7 +327,6 @@ var (
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
-			Osaka:  DefaultOsakaBlobConfig,
 		},
 	}
 
@@ -379,12 +375,6 @@ var (
 		Max:            9,
 		UpdateFraction: 5007716,
 	}
-	// DefaultOsakaBlobConfig is the default blob configuration for the Osaka fork.
-	DefaultOsakaBlobConfig = &BlobConfig{
-		Target:         6,
-		Max:            9,
-		UpdateFraction: 5007716,
-	}
 	// DefaultBPO1BlobConfig is the default blob configuration for the BPO1 fork.
 	DefaultBPO1BlobConfig = &BlobConfig{
 		Target:         10,
@@ -413,7 +403,6 @@ var (
 	DefaultBlobSchedule = &BlobScheduleConfig{
 		Cancun: DefaultCancunBlobConfig,
 		Prague: DefaultPragueBlobConfig,
-		Osaka:  DefaultOsakaBlobConfig,
 	}
 )
 
@@ -670,7 +659,7 @@ func (c *ChainConfig) Description() string {
 		banner += fmt.Sprintf(" - Prague:                      @%-10v blob: (%s)\n", *c.PragueTime, c.BlobScheduleConfig.Prague)
 	}
 	if c.OsakaTime != nil {
-		banner += fmt.Sprintf(" - Osaka:                       @%-10v blob: (%s)\n", *c.OsakaTime, c.BlobScheduleConfig.Osaka)
+		banner += fmt.Sprintf(" - Osaka:                       @%-10v\n", *c.OsakaTime)
 	}
 	if c.BPO1Time != nil {
 		banner += fmt.Sprintf(" - BPO1:                        @%-10v blob: (%s)\n", *c.BPO1Time, c.BlobScheduleConfig.BPO1)
@@ -688,10 +677,10 @@ func (c *ChainConfig) Description() string {
 		banner += fmt.Sprintf(" - BPO5:                        @%-10v blob: (%s)\n", *c.BPO5Time, c.BlobScheduleConfig.BPO5)
 	}
 	if c.AmsterdamTime != nil {
-		banner += fmt.Sprintf(" - Amsterdam:									 @%-10v blob: (%s)\n", *c.AmsterdamTime, c.BlobScheduleConfig.Amsterdam)
+		banner += fmt.Sprintf(" - Amsterdam:                   @%-10v\n", *c.AmsterdamTime)
 	}
 	if c.UBTTime != nil {
-		banner += fmt.Sprintf(" - UBT:                         @%-10v blob: (%s)\n", *c.UBTTime, c.BlobScheduleConfig.UBT)
+		banner += fmt.Sprintf(" - UBT:                         @%-10v\n", *c.UBTTime)
 	}
 	banner += fmt.Sprintf("\nAll fork specifications can be found at https://ethereum.github.io/execution-specs/src/ethereum/forks/\n")
 	return banner
@@ -713,17 +702,45 @@ func (bc *BlobConfig) String() string {
 }
 
 // BlobScheduleConfig determines target and max number of blobs allow per fork.
+//
+// From Prague onward, the blob schedule is updated only at BPO (Blob Parameter-Only)
+// forks. Named forks such as Osaka or Amsterdam inherit the most recently configured
+// BPO entry and must not declare their own BlobConfig. Re-declared named-fork keys
+// in JSON (osaka, amsterdam, ubt) are loudly warned about and ignored.
 type BlobScheduleConfig struct {
-	Cancun    *BlobConfig `json:"cancun,omitempty"`
-	Prague    *BlobConfig `json:"prague,omitempty"`
-	Osaka     *BlobConfig `json:"osaka,omitempty"`
-	BPO1      *BlobConfig `json:"bpo1,omitempty"`
-	BPO2      *BlobConfig `json:"bpo2,omitempty"`
-	BPO3      *BlobConfig `json:"bpo3,omitempty"`
-	BPO4      *BlobConfig `json:"bpo4,omitempty"`
-	BPO5      *BlobConfig `json:"bpo5,omitempty"`
-	Amsterdam *BlobConfig `json:"amsterdam,omitempty"`
-	UBT       *BlobConfig `json:"ubt,omitempty"`
+	Cancun *BlobConfig `json:"cancun,omitempty"`
+	Prague *BlobConfig `json:"prague,omitempty"`
+	BPO1   *BlobConfig `json:"bpo1,omitempty"`
+	BPO2   *BlobConfig `json:"bpo2,omitempty"`
+	BPO3   *BlobConfig `json:"bpo3,omitempty"`
+	BPO4   *BlobConfig `json:"bpo4,omitempty"`
+	BPO5   *BlobConfig `json:"bpo5,omitempty"`
+}
+
+// deprecatedBlobScheduleKeys lists named-fork keys that used to be valid blob
+// schedule entries. They are accepted but ignored at unmarshal time.
+var deprecatedBlobScheduleKeys = []string{"osaka", "amsterdam", "ubt"}
+
+// UnmarshalJSON implements json.Unmarshaler. Unknown keys named after forks
+// that no longer carry their own blob schedule (osaka, amsterdam, ubt) trigger
+// a loud warning but do not abort loading — the blob schedule for those forks
+// inherits from the most recent preceding BPO entry.
+func (b *BlobScheduleConfig) UnmarshalJSON(data []byte) error {
+	type plain BlobScheduleConfig
+	if err := json.Unmarshal(data, (*plain)(b)); err != nil {
+		return err
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	for _, k := range deprecatedBlobScheduleKeys {
+		if _, ok := raw[k]; ok {
+			log.Warn("ignoring blobSchedule entry for named fork; inherit from prior BPO",
+				"fork", k)
+		}
+	}
+	return nil
 }
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
@@ -1000,13 +1017,11 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	}{
 		{name: "cancun", timestamp: c.CancunTime, config: bsc.Cancun},
 		{name: "prague", timestamp: c.PragueTime, config: bsc.Prague},
-		{name: "osaka", timestamp: c.OsakaTime, config: bsc.Osaka},
 		{name: "bpo1", timestamp: c.BPO1Time, config: bsc.BPO1},
 		{name: "bpo2", timestamp: c.BPO2Time, config: bsc.BPO2},
 		{name: "bpo3", timestamp: c.BPO3Time, config: bsc.BPO3},
 		{name: "bpo4", timestamp: c.BPO4Time, config: bsc.BPO4},
 		{name: "bpo5", timestamp: c.BPO5Time, config: bsc.BPO5},
-		{name: "amsterdam", timestamp: c.AmsterdamTime, config: bsc.Amsterdam},
 	} {
 		if cur.config != nil {
 			if err := cur.config.validate(); err != nil {
@@ -1169,28 +1184,33 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	}
 }
 
-// BlobConfig returns the blob config associated with the provided fork.
+// BlobConfig returns the blob config active at the provided fork. Since named
+// forks (Osaka, Amsterdam, ...) no longer carry their own blob schedule, the
+// lookup walks down from fork through the BPO chain to Prague/Cancun and returns
+// the first non-nil entry.
 func (c *ChainConfig) BlobConfig(fork forks.Fork) *BlobConfig {
-	switch fork {
-	case forks.BPO5:
-		return c.BlobScheduleConfig.BPO5
-	case forks.BPO4:
-		return c.BlobScheduleConfig.BPO4
-	case forks.BPO3:
-		return c.BlobScheduleConfig.BPO3
-	case forks.BPO2:
-		return c.BlobScheduleConfig.BPO2
-	case forks.BPO1:
-		return c.BlobScheduleConfig.BPO1
-	case forks.Osaka:
-		return c.BlobScheduleConfig.Osaka
-	case forks.Prague:
-		return c.BlobScheduleConfig.Prague
-	case forks.Cancun:
-		return c.BlobScheduleConfig.Cancun
-	default:
+	if c.BlobScheduleConfig == nil {
 		return nil
 	}
+	bsc := c.BlobScheduleConfig
+	chain := []struct {
+		at  forks.Fork
+		cfg *BlobConfig
+	}{
+		{forks.BPO5, bsc.BPO5},
+		{forks.BPO4, bsc.BPO4},
+		{forks.BPO3, bsc.BPO3},
+		{forks.BPO2, bsc.BPO2},
+		{forks.BPO1, bsc.BPO1},
+		{forks.Prague, bsc.Prague},
+		{forks.Cancun, bsc.Cancun},
+	}
+	for _, e := range chain {
+		if e.at <= fork && e.cfg != nil {
+			return e.cfg
+		}
+	}
+	return nil
 }
 
 // ActiveSystemContracts returns the currently active system contracts at the

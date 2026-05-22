@@ -78,11 +78,7 @@ func testEthTransferLogs(t *testing.T, value uint64) {
 		engine     = beacon.New(ethash.NewFaker())
 	)
 
-	//TODO remove this hacky config initialization when final Amsterdam config is available
 	config.AmsterdamTime = new(uint64)
-	blobConfig := *config.BlobScheduleConfig
-	blobConfig.Amsterdam = blobConfig.Osaka
-	config.BlobScheduleConfig = &blobConfig
 
 	gspec := &Genesis{
 		Config: &config,

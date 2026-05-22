@@ -42,9 +42,6 @@ import (
 func balChainConfig() *params.ChainConfig {
 	cfg := *params.MergedTestChainConfig
 	cfg.AmsterdamTime = new(uint64)
-	blob := *cfg.BlobScheduleConfig
-	blob.Amsterdam = blob.Osaka
-	cfg.BlobScheduleConfig = &blob
 	return &cfg
 }
 

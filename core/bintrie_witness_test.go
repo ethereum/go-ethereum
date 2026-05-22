@@ -55,8 +55,9 @@ var (
 		UBTTime:                 u64(0),
 		TerminalTotalDifficulty: common.Big0,
 		EnableUBTAtGenesis:      true,
+		// UBT inherits its blob schedule; nothing to declare here.
 		BlobScheduleConfig: &params.BlobScheduleConfig{
-			UBT: params.DefaultPragueBlobConfig,
+			Prague: params.DefaultPragueBlobConfig,
 		},
 	}
 )
