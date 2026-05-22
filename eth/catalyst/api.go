@@ -630,7 +630,12 @@ func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) (engine.BlobAnd
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
-	available := len(api.eth.BlobTxPool().AvailableBlobs(hashes))
+	available := 0
+	for _, ok := range api.eth.BlobTxPool().AvailableBlobs(hashes) {
+		if ok {
+			available++
+		}
+	}
 	getBlobsRequestedCounter.Inc(int64(len(hashes)))
 	getBlobsAvailableCounter.Inc(int64(available))
 
