@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
-// todo: per-peer size limit
 var (
 	blobBufferTxFirstCounter    = metrics.NewRegisteredCounter("blobpool/buffer/txfirst", nil)
 	blobBufferCellsFirstCounter = metrics.NewRegisteredCounter("blobpool/buffer/cellsfirst", nil)

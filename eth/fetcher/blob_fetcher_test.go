@@ -330,9 +330,6 @@ func TestBlobFetcherPartialFetch(t *testing.T) {
 	})
 }
 
-// todo wait timeout
-// todo drop
-
 // TestBlobFetcherFullDelivery tests cell delivery and fetch completion logic (full fetch)
 func TestBlobFetcherFullDelivery(t *testing.T) {
 	testBlobFetcher(t, blobFetcherTest{
@@ -809,7 +806,6 @@ func testBlobFetcher(t *testing.T, tt blobFetcherTest) {
 			}
 
 		case isBlobScheduled:
-			// todo fetches
 			// Check tracking (announces) - bidirectional verification
 			for peer, announces := range step.announces {
 				peerAnnounces := fetcher.announces[peer]

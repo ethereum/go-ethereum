@@ -28,8 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 )
 
-// todo remove partial / full
-
 type random interface {
 	Intn(n int) int
 }
@@ -39,8 +37,6 @@ type random interface {
 // For availability checks, it fetches cells from each blob in the transaction
 // according to the custody cell indices provided by the consensus client
 // connected to this execution client.
-
-// todo
 var blobFetchTimeout = 5 * time.Second
 var blobAvailabilityTimeout = 2 * time.Second
 
@@ -138,9 +134,8 @@ type BlobFetcher struct {
 
 	// Buffer 2
 	// Stage 3: Transactions whose payloads/cells are currently being fetched (full fetch + partial fetch)
-	fetches  map[common.Hash]*fetchStatus // Hash -> Bitmap, in-flight transaction cells
-	requests map[string][]*cellRequest    // In-flight transaction retrievals
-	// todo simplify
+	fetches    map[common.Hash]*fetchStatus                    // Hash -> Bitmap, in-flight transaction cells
+	requests   map[string][]*cellRequest                       // In-flight transaction retrievals
 	alternates map[common.Hash]map[string]*types.CustodyBitmap // In-flight transaction alternate origins (in case the peer is dropped)
 
 	fn BlobFetcherFunctions // callbacks
