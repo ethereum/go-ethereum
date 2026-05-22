@@ -642,6 +642,14 @@ func PutStream(stream *Stream) {
 	streamPool.Put(stream)
 }
 
+// ResetBytes resets the stream to decode from b, reusing the inline slice
+// reader. This allows decoding a batch of values with one pooled stream
+// instead of doing a pool round-trip per value.
+func (s *Stream) ResetBytes(b []byte) {
+	s.sliceRdr = b
+	s.Reset(&s.sliceRdr, uint64(len(b)))
+}
+
 // NewListStream creates a new stream that pretends to be positioned
 // at an encoded list of the given length.
 func NewListStream(r io.Reader, len uint64) *Stream {

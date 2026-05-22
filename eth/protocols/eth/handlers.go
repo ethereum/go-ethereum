@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -374,15 +375,31 @@ func handleBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
 	}, metadata)
 }
 
+type headerAlloc struct {
+	header     types.Header
+	difficulty big.Int
+	number     big.Int
+}
+
 func decodeBlockHeaders(list *rlp.RawList[*types.Header]) ([]*types.Header, error) {
 	headers := make([]*types.Header, 0, list.Len())
+	stream := rlp.NewBytesStream(nil)
+	defer rlp.PutStream(stream)
+
 	it := list.ContentIterator()
 	for it.Next() {
-		header := new(types.Header)
-		if err := types.DecodeHeader(it.Value(), header); err != nil {
+		a := new(headerAlloc)
+		a.header.Difficulty = &a.difficulty
+		a.header.Number = &a.number
+
+		stream.ResetBytes(it.Value())
+		if err := a.header.DecodeRLP(stream); err != nil {
 			return headers, err
 		}
-		headers = append(headers, header)
+		if stream.Remaining() != 0 {
+			return headers, rlp.ErrMoreThanOneValue
+		}
+		headers = append(headers, &a.header)
 	}
 	return headers, nil
 }
