@@ -58,6 +58,7 @@ var (
 		Action: discv5Crawl,
 		Flags: slices.Concat(discoveryNodeFlags, []cli.Flag{
 			crawlTimeoutFlag,
+			crawlParallelismFlag,
 		}),
 	}
 	discv5TestCommand = &cli.Command{
