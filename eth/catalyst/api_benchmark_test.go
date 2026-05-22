@@ -302,7 +302,7 @@ func BenchmarkGetBlobsV1(b *testing.B) {
 
 				b.ResetTimer()
 				for b.Loop() {
-					result, err := env.api.GetBlobsV1(env.vhashes)
+					result, err := env.api.GetBlobsV1(context.Background(), env.vhashes)
 					if err != nil {
 						b.Fatalf("GetBlobsV1 failed: %v", err)
 					}
@@ -329,7 +329,7 @@ func BenchmarkGetBlobsV2Extended(b *testing.B) {
 
 				b.ResetTimer()
 				for b.Loop() {
-					result, err := env.api.GetBlobsV2(env.vhashes)
+					result, err := env.api.GetBlobsV2(context.Background(), env.vhashes)
 					if err != nil {
 						b.Fatalf("GetBlobsV2 failed: %v", err)
 					}
@@ -356,7 +356,7 @@ func BenchmarkGetBlobsV3(b *testing.B) {
 
 				b.ResetTimer()
 				for b.Loop() {
-					result, err := env.api.GetBlobsV3(env.vhashes)
+					result, err := env.api.GetBlobsV3(context.Background(), env.vhashes)
 					if err != nil {
 						b.Fatalf("GetBlobsV3 failed: %v", err)
 					}
@@ -708,7 +708,7 @@ func BenchmarkGetBlobsV3RPCServerOnly(b *testing.B) {
 	rpcServer.RegisterName("engine", env.api)
 
 	// Verify the blobs are available via the direct API first.
-	result, err := env.api.GetBlobsV3(env.vhashes)
+	result, err := env.api.GetBlobsV3(context.Background(), env.vhashes)
 	if err != nil {
 		b.Fatalf("GetBlobsV3 failed: %v", err)
 	}
