@@ -234,6 +234,8 @@ func (t *muxTracer) GetResult() (json.RawMessage, error) {
 // Stop terminates execution of the tracer at the first opportune moment.
 func (t *muxTracer) Stop(err error) {
 	for _, t := range t.tracers {
-		t.Stop(err)
+		if t.Stop != nil {
+			t.Stop(err)
+		}
 	}
 }
