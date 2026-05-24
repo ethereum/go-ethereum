@@ -19,6 +19,8 @@ package telemetry
 import (
 	"context"
 	"fmt"
+	"runtime"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -84,8 +86,28 @@ func StartServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, othe
 			others...,
 		)
 	)
-	ctx, _, end := startSpan(ctx, tracer, trace.SpanKindServer, name, attributes...)
-	return ctx, end
+	var ms0 runtime.MemStats
+	runtime.ReadMemStats(&ms0)
+	startNs := time.Now().UnixNano()
+
+	ctx, span, end := startSpan(ctx, tracer, trace.SpanKindServer, name, attributes...)
+	return ctx, func(err *error) {
+		var ms1 runtime.MemStats
+		runtime.ReadMemStats(&ms1)
+		var lastGCAgoNs int64 = -1
+		if ms0.LastGC > 0 {
+			lastGCAgoNs = startNs - int64(ms0.LastGC)
+		}
+		span.SetAttributes(
+			attribute.Int64("runtime.last_gc_ago_ns", lastGCAgoNs),
+			attribute.Int64("runtime.heap_alloc_at_start_bytes", int64(ms0.HeapAlloc)),
+			attribute.Int64("runtime.next_gc_at_start_bytes", int64(ms0.NextGC)),
+			attribute.Int64("runtime.gc.count", int64(ms1.NumGC-ms0.NumGC)),
+			attribute.Int64("runtime.gc.pause_ns", int64(ms1.PauseTotalNs-ms0.PauseTotalNs)),
+			attribute.Int64("runtime.alloc_bytes", int64(ms1.TotalAlloc-ms0.TotalAlloc)),
+		)
+		end(err)
+	}
 }
 
 // startSpan creates a span with the given kind.
