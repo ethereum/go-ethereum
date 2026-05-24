@@ -33,6 +33,7 @@ import (
 func CheckDanglingStorage(chaindb ethdb.KeyValueStore) error {
 	if err := checkDanglingDiskStorage(chaindb); err != nil {
 		log.Error("Database check error", "err", err)
+		return err
 	}
 	return checkDanglingMemStorage(chaindb)
 }
