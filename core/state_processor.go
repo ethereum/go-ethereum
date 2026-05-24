@@ -178,7 +178,7 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 			return nil, nil, fmt.Errorf("failed to process withdrawal queue: %w", err)
 		}
 		// EIP-7251
-		if err := ProcessConsolidationQueue(&requests, rules, evm, blockAccessIndex, blockAccessList); err != nil {
+		if err := ProcessConsolidationQueue(&requests, rules, evm, blockAccessIndex+1, blockAccessList); err != nil {
 			return nil, nil, fmt.Errorf("failed to process consolidation queue: %w", err)
 		}
 	}
