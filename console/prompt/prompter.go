@@ -143,10 +143,13 @@ func (p *terminalPrompter) PromptPassword(prompt string) (passwd string, err err
 // choice to be made, returning that choice.
 func (p *terminalPrompter) PromptConfirm(prompt string) (bool, error) {
 	input, err := p.PromptInput(prompt + " [y/n] ")
+	if err != nil {
+		return false, err
+	}
 	if len(input) > 0 && strings.EqualFold(input[:1], "y") {
 		return true, nil
 	}
-	return false, err
+	return false, nil
 }
 
 // SetHistory sets the input scrollback history that the prompter will allow
