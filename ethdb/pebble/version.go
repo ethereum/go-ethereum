@@ -36,22 +36,31 @@ const formatMinV2 = pebblev2.FormatFlushableIngest
 // without opening it.
 func PeekFormatVersion(file string) (bool, uint64, error) {
 	desc, err := pebblev2.Peek(file, v2vfs.Default)
-	if err != nil {
-		// Pebble v2 Peek may fail on very old databases that don't have
-		// the format version marker. Try v1 Peek as fallback.
-		desc1, err1 := pebblev1.Peek(file, v1vfs.Default)
-		if err1 != nil {
-			return false, 0, err // Return original v2 error
-		}
-		if !desc1.Exists {
-			return false, 0, nil
-		}
-		return true, uint64(desc1.FormatMajorVersion), nil
+	if err == nil && desc.Exists {
+		return true, uint64(desc.FormatMajorVersion), nil
 	}
-	if !desc.Exists {
+	// Pebble v2 dropped support for the legacy FormatMostCompatible layout,
+	// which relies on the CURRENT file rather than a manifest marker.
+	//
+	// Databases created by older Geth (which never set FormatMajorVersion
+	// and therefore default to FormatMostCompatible) are not recognized by
+	// v2's Peek: it reports Exists=false with a nil error instead of failing.
+	// It may also fail outright on some old databases. In both cases fall
+	// back to v1's Peek, which still understands the CURRENT-file layout.
+	desc1, err1 := pebblev1.Peek(file, v1vfs.Default)
+	if err1 != nil {
+		// Surface the v2 error if there was one, otherwise the v1 error.
+		// Such as the folder is not existent, fs.ErrNotExist.
+		if err != nil {
+			return false, 0, err
+		}
+		return false, 0, err1
+	}
+	if !desc1.Exists {
+		// Neither version found a database; treat as a new/empty directory.
 		return false, 0, nil
 	}
-	return true, uint64(desc.FormatMajorVersion), nil
+	return true, uint64(desc1.FormatMajorVersion), nil
 }
 
 // NeedsV1 returns true if the database at the given path requires pebble v1
