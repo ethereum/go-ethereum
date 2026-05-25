@@ -26,13 +26,13 @@ import (
 )
 
 // StartHTTPEndpoint starts the HTTP RPC endpoint.
-func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.Handler) (*http.Server, net.Addr, error) {
+func StartHTTPEndpoint(endpoint string, protocol string, timeouts rpc.HTTPTimeouts, handler http.Handler) (*http.Server, net.Addr, error) {
 	// start the HTTP listener
 	var (
 		listener net.Listener
 		err      error
 	)
-	if listener, err = net.Listen("tcp", endpoint); err != nil {
+	if listener, err = net.Listen(protocol, endpoint); err != nil {
 		return nil, nil, err
 	}
 	// make sure timeout values are meaningful

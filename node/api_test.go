@@ -69,7 +69,7 @@ func TestStartRPC(t *testing.T) {
 			name: "rpc enabled through API",
 			cfg:  Config{},
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				_, err := api.StartHTTP(sp("127.0.0.1"), ip(0), nil, nil, nil)
+				_, err := api.StartHTTP(sp("tcp"), sp("127.0.0.1"), ip(0), nil, nil, nil)
 				assert.NoError(t, err)
 			},
 			wantReachable: true,
@@ -90,14 +90,14 @@ func TestStartRPC(t *testing.T) {
 				port := listener.Addr().(*net.TCPAddr).Port
 
 				// Now try to start RPC on that port. This should fail.
-				_, err = api.StartHTTP(sp("127.0.0.1"), ip(port), nil, nil, nil)
+				_, err = api.StartHTTP(sp("tcp"), sp("127.0.0.1"), ip(port), nil, nil, nil)
 				if err == nil {
 					t.Fatal("StartHTTP should have failed on port", port)
 				}
 
 				// Try again after unblocking the port. It should work this time.
 				listener.Close()
-				_, err = api.StartHTTP(sp("127.0.0.1"), ip(port), nil, nil, nil)
+				_, err = api.StartHTTP(sp("tcp"), sp("127.0.0.1"), ip(port), nil, nil, nil)
 				assert.NoError(t, err)
 			},
 			wantReachable: true,
@@ -144,7 +144,7 @@ func TestStartRPC(t *testing.T) {
 			name: "ws enabled through API",
 			cfg:  Config{},
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				_, err := api.StartWS(sp("127.0.0.1"), ip(0), nil, nil)
+				_, err := api.StartWS(sp("tcp"), sp("127.0.0.1"), ip(0), nil, nil)
 				assert.NoError(t, err)
 			},
 			wantReachable: true,
@@ -184,7 +184,7 @@ func TestStartRPC(t *testing.T) {
 			cfg:  Config{HTTPHost: "127.0.0.1"},
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
 				wsport := n.http.port
-				_, err := api.StartWS(sp("127.0.0.1"), ip(wsport), nil, nil)
+				_, err := api.StartWS(sp("tcp"), sp("127.0.0.1"), ip(wsport), nil, nil)
 				assert.NoError(t, err)
 			},
 			wantReachable: true,
@@ -197,7 +197,7 @@ func TestStartRPC(t *testing.T) {
 			cfg:  Config{HTTPHost: "127.0.0.1"},
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
 				wsport := n.http.port
-				_, err := api.StartWS(sp("127.0.0.1"), ip(wsport), nil, nil)
+				_, err := api.StartWS(sp("tcp"), sp("127.0.0.1"), ip(wsport), nil, nil)
 				assert.NoError(t, err)
 
 				_, err = api.StopWS()
@@ -211,11 +211,11 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "rpc stopped with ws enabled",
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				_, err := api.StartHTTP(sp("127.0.0.1"), ip(0), nil, nil, nil)
+				_, err := api.StartHTTP(sp("tcp"), sp("127.0.0.1"), ip(0), nil, nil, nil)
 				assert.NoError(t, err)
 
 				wsport := n.http.port
-				_, err = api.StartWS(sp("127.0.0.1"), ip(wsport), nil, nil)
+				_, err = api.StartWS(sp("tcp"), sp("127.0.0.1"), ip(wsport), nil, nil)
 				assert.NoError(t, err)
 
 				_, err = api.StopHTTP()
@@ -229,11 +229,11 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "rpc enabled after ws",
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				_, err := api.StartWS(sp("127.0.0.1"), ip(0), nil, nil)
+				_, err := api.StartWS(sp("tcp"), sp("127.0.0.1"), ip(0), nil, nil)
 				assert.NoError(t, err)
 
 				wsport := n.http.port
-				_, err = api.StartHTTP(sp("127.0.0.1"), ip(wsport), nil, nil, nil)
+				_, err = api.StartHTTP(sp("tcp"), sp("127.0.0.1"), ip(wsport), nil, nil, nil)
 				assert.NoError(t, err)
 			},
 			wantReachable: true,
