@@ -800,10 +800,16 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		_, err = core.ApplyMessage(evm, msg, nil)
 		evm.Release()
 		if writer != nil {
-			writer.Flush()
+			if ferr := writer.Flush(); ferr != nil && err == nil {
+				err = ferr
+				log.Warn("Failed to flush trace to disk", "file", dump.Name(), "err", err)
+			}
 		}
 		if dump != nil {
-			dump.Close()
+			if cerr := dump.Close(); cerr != nil && err == nil {
+				err = cerr
+				log.Warn("Failed to close trace file", "file", dump.Name(), "err", err)
+			}
 			log.Info("Wrote standard trace", "file", dump.Name())
 		}
 		if err != nil {
