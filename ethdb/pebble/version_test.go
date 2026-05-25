@@ -20,9 +20,9 @@ import (
 	"testing"
 
 	pebblev1 "github.com/cockroachdb/pebble"
-	v1vfs "github.com/cockroachdb/pebble/vfs"
 	pebblev2 "github.com/cockroachdb/pebble/v2"
 	v2vfs "github.com/cockroachdb/pebble/v2/vfs"
+	v1vfs "github.com/cockroachdb/pebble/vfs"
 )
 
 // TestPeekFormatVersionLegacyV1 verifies that PeekFormatVersion correctly
