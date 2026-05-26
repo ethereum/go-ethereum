@@ -242,7 +242,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			if msg == nil {
 				break
 			}
-			resp, spanEnd := h.handleCallMsg(cp, msg)
+			resp, _, spanEnd := h.handleCallMsg(cp, msg)
 			if spanEnd != nil {
 				spanEnds = append(spanEnds, spanEnd)
 			}
@@ -261,9 +261,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		}
 
 		h.addSubscriptions(cp.notifiers)
-		_, _, spanEnd := telemetry.StartSpanWithTracer(cp.ctx, h.tracer(), "rpc.writeJSONBatch")
 		callBuffer.write(cp.ctx, h.conn)
-		spanEnd(nil)
 		for _, n := range cp.notifiers {
 			n.activate()
 		}
@@ -316,7 +314,7 @@ func (h *handler) handleNonBatchCall(cp *callProc, msg *jsonrpcMessage) {
 		})
 	}
 
-	answer, spanEnd := h.handleCallMsg(cp, msg)
+	answer, spanCtx, spanEnd := h.handleCallMsg(cp, msg)
 	if spanEnd != nil {
 		defer spanEnd(nil) // don't propagate errors to parent spans
 	}
@@ -326,9 +324,13 @@ func (h *handler) handleNonBatchCall(cp *callProc, msg *jsonrpcMessage) {
 	h.addSubscriptions(cp.notifiers)
 	if answer != nil {
 		responded.Do(func() {
-			_, _, spanEnd := telemetry.StartSpanWithTracer(cp.ctx, h.tracer(), "rpc.writeJSON")
-			err := h.conn.writeJSON(cp.ctx, answer, false)
-			spanEnd(&err)
+			writeCtx := cp.ctx
+			if spanCtx != nil {
+				writeCtx = spanCtx
+			}
+			_, _, writeSpanEnd := telemetry.StartSpanWithTracer(writeCtx, h.tracer(), "rpc.writeJSON")
+			err := h.conn.writeJSON(writeCtx, answer, false)
+			writeSpanEnd(&err)
 		})
 	}
 	for _, n := range cp.notifiers {
@@ -486,16 +488,16 @@ func (h *handler) handleSubscriptionResult(msg *jsonrpcMessage) {
 }
 
 // handleCallMsg executes a call message and returns the answer.
-func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) (*jsonrpcMessage, func(*error)) {
+func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) (*jsonrpcMessage, context.Context, func(*error)) {
 	start := time.Now()
 	switch {
 	case msg.isNotification():
-		_, spanEnd := h.handleCall(ctx, msg)
+		_, spanCtx, spanEnd := h.handleCall(ctx, msg)
 		h.log.Debug("Served "+msg.Method, "duration", time.Since(start))
-		return nil, spanEnd
+		return nil, spanCtx, spanEnd
 
 	case msg.isCall():
-		resp, spanEnd := h.handleCall(ctx, msg)
+		resp, spanCtx, spanEnd := h.handleCall(ctx, msg)
 		var logctx []any
 		logctx = append(logctx, "reqid", idForLog{msg.ID}, "duration", time.Since(start))
 		if resp.Error != nil {
@@ -508,49 +510,37 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) (*jsonrpcMes
 		} else {
 			h.log.Debug("Served "+msg.Method, logctx...)
 		}
-		return resp, spanEnd
+		return resp, spanCtx, spanEnd
 
 	case msg.hasValidID():
-		return msg.errorResponse(&invalidRequestError{"invalid request"}), nil
+		return msg.errorResponse(&invalidRequestError{"invalid request"}), nil, nil
 
 	default:
-		return errorMessage(&invalidRequestError{"invalid request"}), nil
+		return errorMessage(&invalidRequestError{"invalid request"}), nil, nil
 	}
 }
 
 // handleCall processes method calls.
-<<<<<<< HEAD
-func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage {
+func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) (*jsonrpcMessage, context.Context, func(*error)) {
 	// Check method name length
 	if len(msg.Method) > maxMethodNameLength {
-		return msg.errorResponse(&invalidRequestError{fmt.Sprintf("method name too long: %d > %d", len(msg.Method), maxMethodNameLength)})
+		return msg.errorResponse(&invalidRequestError{fmt.Sprintf("method name too long: %d > %d", len(msg.Method), maxMethodNameLength)}), nil, nil
 	}
-=======
-func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) (*jsonrpcMessage, func(*error)) {
->>>>>>> 597bd1975 (rpc: extend ServerSpan to cover writeJSON)
 	if msg.isSubscribe() {
-		return h.handleSubscribe(cp, msg), nil
+		return h.handleSubscribe(cp, msg), nil, nil
 	}
 	if msg.isUnsubscribe() {
 		args, err := parsePositionalArguments(msg.Params, h.unsubscribeCb.argTypes)
 		if err != nil {
-			return msg.errorResponse(&invalidParamsError{err.Error()}), nil
+			return msg.errorResponse(&invalidParamsError{err.Error()}), nil, nil
 		}
-		return h.runMethod(cp.ctx, msg, h.unsubscribeCb, args), nil
+		return h.runMethod(cp.ctx, msg, h.unsubscribeCb, args), nil, nil
 	}
-<<<<<<< HEAD
-=======
-
-	// Check method name length
-	if len(msg.Method) > maxMethodNameLength {
-		return msg.errorResponse(&invalidRequestError{fmt.Sprintf("method name too long: %d > %d", len(msg.Method), maxMethodNameLength)}), nil
-	}
->>>>>>> 597bd1975 (rpc: extend ServerSpan to cover writeJSON)
 	callb, service, method := h.reg.callback(msg.Method)
 
 	// If the method is not found, return an error.
 	if callb == nil {
-		return msg.errorResponse(&methodNotFoundError{method: msg.Method}), nil
+		return msg.errorResponse(&methodNotFoundError{method: msg.Method}), nil, nil
 	}
 
 	// Start the SERVER span. The caller closes it after writing the response.
@@ -568,7 +558,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) (*jsonrpcMessage
 	args, pErr := parsePositionalArguments(msg.Params, callb.argTypes)
 	pSpanEnd(&pErr)
 	if pErr != nil {
-		return msg.errorResponse(&invalidParamsError{pErr.Error()}), spanEnd
+		return msg.errorResponse(&invalidParamsError{pErr.Error()}), ctx, spanEnd
 	}
 	start := time.Now()
 
@@ -590,7 +580,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) (*jsonrpcMessage
 	}
 	rpcServingTimer.UpdateSince(start)
 	updateServeTimeHistogram(msg.Method, answer.Error == nil, time.Since(start))
-	return answer, spanEnd
+	return answer, ctx, spanEnd
 }
 
 // handleSubscribe processes *_subscribe method calls.
