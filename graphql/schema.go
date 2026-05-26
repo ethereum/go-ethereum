@@ -342,6 +342,36 @@ const schema string = `
         currentBlock: Long!
         # HighestBlock is the latest known block number.
         highestBlock: Long!
+        # SyncedAccounts is the number of accounts downloaded.
+        syncedAccounts: Long!
+        # SyncedAccountBytes is the number of account trie bytes persisted to disk.
+        syncedAccountBytes: Long!
+        # SyncedBytecodes is the number of bytecodes downloaded.
+        syncedBytecodes: Long!
+        # SyncedBytecodeBytes is the number of bytecode bytes downloaded.
+        syncedBytecodeBytes: Long!
+        # SyncedStorage is the number of storage slots downloaded.
+        syncedStorage: Long!
+        # SyncedStorageBytes is the number of storage trie bytes persisted to disk.
+        syncedStorageBytes: Long!
+        # HealedTrienodes is the number of state trie nodes downloaded.
+        healedTrienodes: Long!
+        # HealedTrienodeBytes is the number of state trie bytes persisted to disk.
+        healedTrienodeBytes: Long!
+        # HealedBytecodes is the number of bytecodes downloaded.
+        healedBytecodes: Long!
+        # HealedBytecodeBytes is the number of bytecodes persisted to disk.
+        healedBytecodeBytes: Long!
+        # HealingTrienodes is the number of state trie nodes pending.
+        healingTrienodes: Long!
+        # HealingBytecode is the number of bytecodes pending.
+        healingBytecode: Long!
+        # TxIndexFinishedBlocks is the number of blocks whose transactions are indexed.
+        txIndexFinishedBlocks: Long!
+        # TxIndexRemainingBlocks is the number of blocks whose transactions are not indexed yet.
+        txIndexRemainingBlocks: Long!
+        # StateIndexRemaining is the number of blocks whose state histories are not indexed yet.
+        stateIndexRemaining: Long!
     }
 
     # Pending represents the current pending state.
