@@ -49,6 +49,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/shutdowncheck"
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -109,6 +110,14 @@ type Ethereum struct {
 
 	filterMaps      *filtermaps.FilterMaps
 	closeFilterMaps chan chan struct{}
+
+	// Chain event subscriptions driving updateFilterMapsHeads. They are
+	// established in New (before any Stop can close the BlockChain
+	// SubscriptionScope) and consumed by the goroutine started in Start.
+	fmHeadEventCh  chan core.ChainEvent
+	fmHeadSub      event.Subscription
+	fmBlockProcCh  chan bool
+	fmBlockProcSub event.Subscription
 
 	APIBackend *EthAPIBackend
 
@@ -199,6 +208,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		p2pServer:       stack.Server(),
 		discmix:         enode.NewFairMix(discmixTimeout),
 		shutdownTracker: shutdowncheck.NewShutdownTracker(chainDb),
+		fmHeadEventCh:   make(chan core.ChainEvent, 10),
+		fmBlockProcCh:   make(chan bool, 10),
 	}
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
 	var dbVer = "<nil>"
@@ -304,6 +315,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	eth.filterMaps = filterMaps
 	eth.closeFilterMaps = make(chan chan struct{})
+
+	eth.fmHeadSub = eth.blockchain.SubscribeChainEvent(eth.fmHeadEventCh)
+	eth.fmBlockProcSub = eth.blockchain.SubscribeBlockProcessingEvent(eth.fmBlockProcCh)
 
 	// TxPool
 	if config.TxPool.Journal != "" {
@@ -473,13 +487,11 @@ func (s *Ethereum) newChainView(head *types.Header) *filtermaps.ChainView {
 }
 
 func (s *Ethereum) updateFilterMapsHeads() {
-	headEventCh := make(chan core.ChainEvent, 10)
-	blockProcCh := make(chan bool, 10)
-	sub := s.blockchain.SubscribeChainEvent(headEventCh)
-	sub2 := s.blockchain.SubscribeBlockProcessingEvent(blockProcCh)
+	headEventCh := s.fmHeadEventCh
+	blockProcCh := s.fmBlockProcCh
 	defer func() {
-		sub.Unsubscribe()
-		sub2.Unsubscribe()
+		s.fmHeadSub.Unsubscribe()
+		s.fmBlockProcSub.Unsubscribe()
 		for {
 			select {
 			case <-headEventCh:
