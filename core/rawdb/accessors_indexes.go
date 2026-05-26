@@ -134,6 +134,33 @@ func DeleteAllTxLookupEntries(db ethdb.KeyValueStore, condition func(common.Hash
 	}
 }
 
+// WriteTxSenderNonceIndex stores the mapping of sender+nonce to tx hash.
+func WriteTxSenderNonceEntry(db ethdb.KeyValueWriter, sender common.Address, nonce uint64, hash common.Hash) {
+	if err := db.Put(txSenderNonceKey(sender, nonce), hash.Bytes()); err != nil {
+		log.Crit("Failed to store sender nonce index", "err", err)
+	}
+}
+
+// WriteTxSenderNonceIndexByBlock stores a sender+nonce to transaction hash mapping
+// for every transaction in a block, enabling sender and nonce based transaction lookups.
+func WriteTxSenderNonceEntryByBlock(db ethdb.KeyValueWriter, block *types.Block, signer types.Signer) {
+	for _, tx := range block.Transactions() {
+		if sender, err := types.Sender(signer, tx); err == nil {
+			WriteTxSenderNonceEntry(db, sender, tx.Nonce(), tx.Hash())
+		}
+	}
+}
+
+// ReadTxSenderNonceIndex retrieves the hash for a specific sender and nonce.
+func ReadTxSenderNonceEntry(db ethdb.KeyValueReader, sender common.Address, nonce uint64) *common.Hash {
+	data, _ := db.Get(txSenderNonceKey(sender, nonce))
+	if len(data) == 0 {
+		return nil
+	}
+	hash := common.BytesToHash(data)
+	return &hash
+}
+
 // findTxInBlockBody traverses the given RLP-encoded block body, searching for
 // the transaction specified by its hash.
 func findTxInBlockBody(blockbody rlp.RawValue, target common.Hash) (*types.Transaction, uint64, error) {
