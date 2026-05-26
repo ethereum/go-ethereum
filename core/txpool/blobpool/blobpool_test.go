@@ -18,6 +18,7 @@ package blobpool
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"errors"
@@ -440,11 +441,11 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 			hashes = append(hashes, tx.vhashes...)
 		}
 	}
-	blobs1, _, proofs1, err := pool.GetBlobs(hashes, types.BlobSidecarVersion0)
+	blobs1, _, proofs1, err := pool.GetBlobs(context.Background(), hashes, types.BlobSidecarVersion0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	blobs2, _, proofs2, err := pool.GetBlobs(hashes, types.BlobSidecarVersion1)
+	blobs2, _, proofs2, err := pool.GetBlobs(context.Background(), hashes, types.BlobSidecarVersion1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2087,7 +2088,7 @@ func TestGetBlobs(t *testing.T) {
 			filled[len(vhashes)] = struct{}{}
 			vhashes = append(vhashes, testrand.Hash())
 		}
-		blobs, _, proofs, err := pool.GetBlobs(vhashes, c.version)
+		blobs, _, proofs, err := pool.GetBlobs(context.Background(), vhashes, c.version)
 		if err != nil {
 			t.Errorf("Unexpected error for case %d, %v", i, err)
 		}

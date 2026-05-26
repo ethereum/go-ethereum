@@ -251,6 +251,36 @@ func (p *Peer) ReplyReceiptsRLP70(id uint64, receipts rlp.RawList[*ReceiptList],
 	})
 }
 
+// ReplyBlockAccessLists is the response to GetBlockAccessLists (EIP-8159).
+func (p *Peer) ReplyBlockAccessLists(id uint64, list rlp.RawList[RawBlockAccessList]) error {
+	return p2p.Send(p.rw, BlockAccessListsMsg, &BlockAccessListPacket{
+		RequestId: id,
+		List:      list,
+	})
+}
+
+// RequestBALs fetches block access lists for the given block hashes (EIP-8159)
+func (p *Peer) RequestBALs(hashes []common.Hash, sink chan *Response) (*Request, error) {
+	p.Log().Debug("Fetching block access lists", "count", len(hashes))
+	id := rand.Uint64()
+
+	req := &Request{
+		id:       id,
+		sink:     sink,
+		code:     GetBlockAccessListsMsg,
+		want:     BlockAccessListsMsg,
+		numItems: len(hashes),
+		data: &GetBlockAccessListsPacket{
+			RequestId:                  id,
+			GetBlockAccessListsRequest: hashes,
+		},
+	}
+	if err := p.dispatchRequest(req); err != nil {
+		return nil, err
+	}
+	return req, nil
+}
+
 // RequestOneHeader is a wrapper around the header query functions to fetch a
 // single header. It is used solely by the fetcher.
 func (p *Peer) RequestOneHeader(hash common.Hash, sink chan *Response) (*Request, error) {

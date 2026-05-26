@@ -71,8 +71,8 @@ type ConstructionBlockAccessList struct {
 }
 
 // NewConstructionBlockAccessList instantiates an empty access list.
-func NewConstructionBlockAccessList() ConstructionBlockAccessList {
-	return ConstructionBlockAccessList{
+func NewConstructionBlockAccessList() *ConstructionBlockAccessList {
+	return &ConstructionBlockAccessList{
 		Accounts: make(map[common.Address]*ConstructionAccountAccess),
 	}
 }
@@ -138,8 +138,60 @@ func (b *ConstructionBlockAccessList) BalanceChange(txIdx uint32, address common
 
 // PrettyPrint returns a human-readable representation of the access list
 func (b *ConstructionBlockAccessList) PrettyPrint() string {
-	enc := b.toEncodingObj()
+	enc := b.ToEncodingObj()
 	return enc.PrettyPrint()
+}
+
+// Merge applies other on top of the local block access list. For colliding
+// entries (a (slot, txIdx) write or a txIdx-keyed balance/nonce/code change),
+// the value from other wins, matching the semantics of applying the local
+// effects first and then other's. Storage reads are unioned; any slot
+// written by either side is dropped from StorageReads.
+//
+// Typically each list covers its own tx index, so txIdx-level collisions are
+// not expected; the exception is pre/post-transition system calls, which
+// share a single tx index. In that case callers must pass block-accessList
+// in order strictly.
+//
+// other is referenced (not deep copied), after the call both lists share
+// inner maps and other must not be mutated.
+func (b *ConstructionBlockAccessList) Merge(other *ConstructionBlockAccessList) {
+	if other == nil {
+		return
+	}
+	for addr, otherAcc := range other.Accounts {
+		acc, ok := b.Accounts[addr]
+		if !ok {
+			b.Accounts[addr] = otherAcc
+			continue
+		}
+		for key, writes := range otherAcc.StorageWrites {
+			existing, ok := acc.StorageWrites[key]
+			if !ok {
+				acc.StorageWrites[key] = writes
+			} else {
+				for txIdx, value := range writes {
+					existing[txIdx] = value
+				}
+			}
+			delete(acc.StorageReads, key)
+		}
+		for key := range otherAcc.StorageReads {
+			if _, ok := acc.StorageWrites[key]; ok {
+				continue
+			}
+			acc.StorageReads[key] = struct{}{}
+		}
+		for txIdx, balance := range otherAcc.BalanceChanges {
+			acc.BalanceChanges[txIdx] = balance
+		}
+		for txIdx, nonce := range otherAcc.NonceChanges {
+			acc.NonceChanges[txIdx] = nonce
+		}
+		for txIdx, code := range otherAcc.CodeChange {
+			acc.CodeChange[txIdx] = code
+		}
+	}
 }
 
 // Copy returns a deep copy of the access list.
@@ -169,5 +221,5 @@ func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 		aaCopy.CodeChange = codes
 		res.Accounts[addr] = &aaCopy
 	}
-	return &res
+	return res
 }

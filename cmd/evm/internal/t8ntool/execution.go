@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -75,6 +76,9 @@ type ExecutionResult struct {
 	CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
 	RequestsHash         *common.Hash          `json:"requestsHash,omitempty"`
 	Requests             [][]byte              `json:"requests"`
+
+	BlockAccessList     hexutil.Bytes `json:"blockAccessList,omitempty"`
+	BlockAccessListHash *common.Hash  `json:"blockAccessListHash,omitempty"`
 }
 
 type executionResultMarshaling struct {
@@ -152,8 +156,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		return h
 	}
 	var (
-		isEIP4762 = chainConfig.IsUBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
-		statedb   *state.StateDB
+		statedb *state.StateDB
+
+		isEIP4762   = chainConfig.IsUBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+		isAmsterdam = chainConfig.IsAmsterdam(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
 	)
 	if pre.AllocPath != "" {
 		var err error
@@ -172,6 +178,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		includedTxs types.Transactions
 		blobGasUsed = uint64(0)
 		receipts    = make(types.Receipts, 0)
+
+		// TODO return blockAccessList as a part of result
+		blockAccessList = bal.NewConstructionBlockAccessList()
 	)
 	vmContext := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
@@ -182,6 +191,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		Difficulty:  pre.Env.Difficulty,
 		GasLimit:    pre.Env.GasLimit,
 		GetHash:     getHash,
+	}
+	if pre.Env.SlotNumber != nil {
+		vmContext.SlotNum = *pre.Env.SlotNumber
 	}
 	// If currentBaseFee is defined, add it to the vmContext.
 	if pre.Env.BaseFee != nil {
@@ -231,14 +243,14 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	}
 	evm := vm.NewEVM(vmContext, statedb, chainConfig, vmConfig)
 	if beaconRoot := pre.Env.ParentBeaconBlockRoot; beaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
+		core.ProcessBeaconBlockRoot(*beaconRoot, evm, blockAccessList)
 	}
 	if pre.Env.BlockHashes != nil && chainConfig.IsPrague(new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp) {
 		var (
 			prevNumber = pre.Env.Number - 1
 			prevHash   = pre.Env.BlockHashes[math.HexOrDecimal64(prevNumber)]
 		)
-		core.ProcessParentBlockHash(prevHash, evm)
+		core.ProcessParentBlockHash(prevHash, evm, blockAccessList)
 	}
 	for i := 0; txIt.Next(); i++ {
 		tx, err := txIt.Tx()
@@ -270,12 +282,13 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 				continue
 			}
 		}
-		statedb.SetTxContext(tx.Hash(), len(receipts))
+		statedb.SetTxContext(tx.Hash(), len(receipts), uint32(len(receipts)+1))
+
 		var (
 			snapshot = statedb.Snapshot()
 			gp       = gaspool.Snapshot()
 		)
-		receipt, err := core.ApplyTransactionWithEVM(msg, gaspool, statedb, vmContext.BlockNumber, blockHash, pre.Env.Timestamp, tx, evm)
+		receipt, bal, err := core.ApplyTransactionWithEVM(msg, gaspool, statedb, vmContext.BlockNumber, blockHash, pre.Env.Timestamp, tx, evm)
 		if err != nil {
 			statedb.RevertToSnapshot(snapshot)
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From, "error", err)
@@ -292,10 +305,11 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		}
 		blobGasUsed += txBlobGas
 		receipts = append(receipts, receipt)
+		blockAccessList.Merge(bal)
 	}
-
 	statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))
 
+	// TODO(rjl493456442) call engine.Finalize() instead
 	// Add mining reward? (-1 means rewards are disabled)
 	if miningReward >= 0 {
 		// Add mining reward. The mining reward may be `0`, which only makes a difference in the cases
@@ -324,10 +338,21 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	for _, w := range pre.Env.Withdrawals {
 		// Amount is in gwei, turn into wei
 		amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
-		statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
+		prev := statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
 
 		if isEIP4762 {
 			statedb.AccessEvents().AddAccount(w.Address, true, stdmath.MaxUint64)
+		}
+		if isAmsterdam {
+			if w.Amount == 0 {
+				// Zero amount withdrawal, account is accessed potential
+				// without state changes.
+				blockAccessList.AccountRead(w.Address)
+			} else {
+				// Non-zero amount withdrawal, account is accessed with
+				// a balance change.
+				blockAccessList.BalanceChange(uint32(len(receipts)+1), w.Address, new(uint256.Int).Add(&prev, uint256.MustFromBig(amount)))
+			}
 		}
 	}
 
@@ -336,10 +361,12 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	for _, receipt := range receipts {
 		allLogs = append(allLogs, receipt.Logs...)
 	}
-	requests, err := core.PostExecution(context.Background(), chainConfig, vmContext.BlockNumber, vmContext.Time, allLogs, evm)
+	requests, bal, err := core.PostExecution(context.Background(), chainConfig, vmContext.BlockNumber, vmContext.Time, allLogs, evm, uint32(len(receipts)+1))
 	if err != nil {
 		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("failed to process post-execution: %v", err))
 	}
+	blockAccessList.Merge(bal)
+
 	// Commit block
 	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber), chainConfig.IsCancun(vmContext.BlockNumber, vmContext.Time))
 	if err != nil {
@@ -370,6 +397,16 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		h := types.CalcRequestsHash(requests)
 		execRs.RequestsHash = &h
 		execRs.Requests = requests
+	}
+	if isAmsterdam {
+		encoded := blockAccessList.ToEncodingObj()
+		balRLP, err := rlp.EncodeToBytes(encoded)
+		if err != nil {
+			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not encode BAL: %v", err))
+		}
+		balHash := encoded.Hash()
+		execRs.BlockAccessListHash = &balHash
+		execRs.BlockAccessList = balRLP
 	}
 
 	// Re-create statedb instance with new root for MPT mode

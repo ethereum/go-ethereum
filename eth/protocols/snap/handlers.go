@@ -308,11 +308,11 @@ func handleStorageRanges(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode.
 	slotLists, err := res.Slots.Items()
 	if err != nil {
-		return fmt.Errorf("AccountRange: invalid accounts list: %v", err)
+		return fmt.Errorf("StorageRanges: invalid storages list: %v", err)
 	}
 	proof, err := res.Proof.Items()
 	if err != nil {
-		return fmt.Errorf("AccountRange: invalid proof: %v", err)
+		return fmt.Errorf("StorageRanges: invalid proof: %v", err)
 	}
 
 	// Ensure the ranges are monotonically increasing

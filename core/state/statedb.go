@@ -18,6 +18,7 @@
 package state
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"maps"
@@ -128,7 +129,10 @@ type StateDB struct {
 	accessEvents *AccessEvents
 
 	// Per-transaction state access footprint for EIP-7928
-	stateReadList *bal.StateAccessList
+	stateAccessList *bal.ConstructionBlockAccessList
+
+	// Block access index (0 for pre-execution, 1..n for transactions, n+1 for post-execution)
+	blockAccessIndex uint32
 
 	// Transient storage
 	transientStorage transientStorage
@@ -589,8 +593,9 @@ func (s *StateDB) deleteStateObject(addr common.Address) {
 // the object is not found or was deleted in this execution context.
 func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	// Record state access regardless of whether the account exists.
-	s.stateReadList.AddAccount(addr)
-
+	if s.stateAccessList != nil {
+		s.stateAccessList.AccountRead(addr)
+	}
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
 		return obj
@@ -693,6 +698,7 @@ func (s *StateDB) Copy() *StateDB {
 		refund:               s.refund,
 		thash:                s.thash,
 		txIndex:              s.txIndex,
+		blockAccessIndex:     s.blockAccessIndex,
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
 		preimages:            maps.Clone(s.preimages),
@@ -716,9 +722,6 @@ func (s *StateDB) Copy() *StateDB {
 	if s.accessEvents != nil {
 		state.accessEvents = s.accessEvents.Copy()
 	}
-	if s.stateReadList != nil {
-		state.stateReadList = s.stateReadList.Copy()
-	}
 	// Deep copy cached state objects.
 	for addr, obj := range s.stateObjects {
 		state.stateObjects[addr] = obj.deepCopy(state)
@@ -739,6 +742,9 @@ func (s *StateDB) Copy() *StateDB {
 			*cpy[i] = *l
 		}
 		state.logs[hash] = cpy
+	}
+	if s.stateAccessList != nil {
+		state.stateAccessList = s.stateAccessList.Copy()
 	}
 	return state
 }
@@ -775,7 +781,7 @@ type removedAccountWithBalance struct {
 // before the Finalise.
 func (s *StateDB) LogsForBurnAccounts() []*types.Log {
 	var list []removedAccountWithBalance
-	for addr := range s.journal.dirties {
+	for addr := range s.journal.mutations {
 		if obj, exist := s.stateObjects[addr]; exist && obj.selfDestructed && !obj.Balance().IsZero() {
 			list = append(list, removedAccountWithBalance{
 				address: obj.address,
@@ -799,17 +805,20 @@ func (s *StateDB) LogsForBurnAccounts() []*types.Log {
 // Finalise finalises the state by removing the destructed objects and clears
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
-func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.StateAccessList {
-	addressesToPrefetch := make([]common.Address, 0, len(s.journal.dirties))
-	for addr := range s.journal.dirties {
+func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccessList {
+	addressesToPrefetch := make([]common.Address, 0, len(s.journal.mutations))
+	for addr, state := range s.journal.mutations {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
-			// ripeMD is 'touched' at block 1714175, in tx 0x1237f737031e40bcde4a8b7e717b2d15e3ecadfe49bb1bbc71ee9deb09c6fcf2
-			// That tx goes out of gas, and although the notion of 'touched' does not exist there, the
-			// touch-event will still be recorded in the journal. Since ripeMD is a special snowflake,
-			// it will persist in the journal even though the journal is reverted. In this special circumstance,
-			// it may exist in `s.journal.dirties` but not in `s.stateObjects`.
-			// Thus, we can safely ignore it here
+			// RIPEMD160 (0x03) gets an extra dirty marker for a historical
+			// mainnet consensus exception (at block 1714175, in tx
+			// 0x1237f737031e40bcde4a8b7e717b2d15e3ecadfe49bb1bbc71ee9deb09c6fcf2)
+			// around empty-account touch/revert handling.
+			//
+			// That marker survives journal revert, so the account may remain in
+			// s.journal.mutations even though its state object was rolled
+			// back and no longer exists. In that case there is nothing to
+			// finalise or delete, so ignore it here.
 			continue
 		}
 		if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
@@ -822,7 +831,43 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.StateAccessList {
 			if _, ok := s.stateObjectsDestruct[obj.address]; !ok {
 				s.stateObjectsDestruct[obj.address] = obj
 			}
+			// Aggregate the account mutation into the block-level accessList
+			// if Amsterdam has been activated.
+			if s.stateAccessList != nil {
+				// Notably, if the account is deleted during the transaction,
+				// its pre-transaction nonce, code, and storage must be empty.
+				//
+				// EIP-6780 restricts self-destruct to contracts deployed within
+				// the same transaction, while EIP-7610 rejects deployments to
+				// destinations with non-empty storage, non-zero nonce and non-empty
+				// code.
+				//
+				// Therefore, when an account is deleted, its pre-transaction nonce
+				// code and storage is guaranteed to be empty, leaving nothing to
+				// clean up here.
+				balance := uint256.NewInt(0)
+				if state.balanceSet && balance.Cmp(state.balance) != 0 {
+					s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
+				}
+			}
 		} else {
+			// Aggregate the account mutation into the block-level accessList
+			// if Amsterdam has been activated.
+			if s.stateAccessList != nil {
+				balance := obj.Balance()
+				if state.balanceSet && balance.Cmp(state.balance) != 0 {
+					s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
+				}
+				nonce := obj.Nonce()
+				if state.nonceSet && nonce != state.nonce {
+					s.stateAccessList.NonceChange(addr, s.blockAccessIndex, nonce)
+				}
+				if state.codeSet {
+					if code := obj.Code(); !bytes.Equal(code, state.code) {
+						s.stateAccessList.CodeChange(addr, s.blockAccessIndex, code)
+					}
+				}
+			}
 			obj.finalise()
 			s.markUpdate(addr)
 		}
@@ -839,7 +884,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.StateAccessList {
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
 
-	return s.stateReadList
+	return s.stateAccessList
 }
 
 // IntermediateRoot computes the current root hash of the state trie.
@@ -1052,9 +1097,10 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 // SetTxContext sets the current transaction hash and index which are
 // used when the EVM emits new state logs. It should be invoked before
 // transaction execution.
-func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
+func (s *StateDB) SetTxContext(thash common.Hash, ti int, blockAccessIndex uint32) {
 	s.thash = thash
 	s.txIndex = ti
+	s.blockAccessIndex = blockAccessIndex
 }
 
 func (s *StateDB) clearJournalAndRefund() {
@@ -1435,7 +1481,7 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 	s.transientStorage = newTransientStorage()
 
 	if rules.IsAmsterdam {
-		s.stateReadList = bal.NewStateAccessList()
+		s.stateAccessList = bal.NewConstructionBlockAccessList()
 	}
 }
 

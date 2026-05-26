@@ -1104,7 +1104,7 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 	RPCTelemetrySampleRatioFlag = &cli.Float64Flag{
 		Name:     "rpc.telemetry.sample-ratio",
 		Usage:    "Defines the sampling ratio for RPC telemetry (0.0 to 1.0)",
-		Value:    1.0,
+		Value:    node.DefaultConfig.OpenTelemetry.SampleRatio,
 		Category: flags.APICategory,
 	}
 	// Era flags are a group of flags related to the era archive format.
@@ -1936,8 +1936,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
 	}
-	if ctx.Bool(StateSizeTrackingFlag.Name) {
-		cfg.EnableStateSizeTracking = true
+	if ctx.IsSet(StateSizeTrackingFlag.Name) {
+		cfg.EnableStateSizeTracking = ctx.Bool(StateSizeTrackingFlag.Name)
 	}
 	// Override any default configs for hard coded networks.
 	switch {

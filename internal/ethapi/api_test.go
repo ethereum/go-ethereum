@@ -500,6 +500,7 @@ func (b testBackend) FeeHistory(ctx context.Context, blockCount uint64, lastBloc
 	return nil, nil, nil, nil, nil, nil, nil
 }
 func (b testBackend) BlobBaseFee(ctx context.Context) *big.Int { return new(big.Int) }
+func (b testBackend) BaseFee(ctx context.Context) *big.Int     { return new(big.Int) }
 func (b testBackend) ChainDb() ethdb.Database                  { return b.db }
 func (b testBackend) AccountManager() *accounts.Manager        { return b.accman }
 func (b testBackend) ExtRPCEnabled() bool                      { return false }
@@ -507,7 +508,7 @@ func (b testBackend) RPCGasCap() uint64                        { return 10000000
 func (b testBackend) RPCEVMTimeout() time.Duration             { return time.Second }
 func (b testBackend) RPCTxFeeCap() float64                     { return 0 }
 func (b testBackend) UnprotectedAllowed() bool                 { return false }
-func (b testBackend) SetHead(number uint64)                    {}
+func (b testBackend) SetHead(number uint64) error              { return nil }
 func (b testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	if number == rpc.LatestBlockNumber {
 		return b.chain.CurrentBlock(), nil
