@@ -236,6 +236,7 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 		args.AccessList = &accessList
 	}
 	if tx.Type() == types.BlobTxType {
+		args.BlobFeeCap = (*hexutil.Big)(tx.BlobGasFeeCap())
 		args.BlobHashes = tx.BlobHashes()
 		sidecar := tx.BlobTxSidecar()
 		if sidecar == nil {
@@ -244,6 +245,12 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 		args.Blobs = sidecar.Blobs
 		args.Commitments = sidecar.Commitments
 		args.Proofs = sidecar.Proofs
+	}
+	if tx.Type() == types.SetCodeTxType {
+		args.AuthorizationList = tx.SetCodeAuthorizations()
+		if args.AuthorizationList == nil {
+			args.AuthorizationList = []types.SetCodeAuthorization{}
+		}
 	}
 
 	var res signTransactionResult

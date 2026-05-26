@@ -112,6 +112,9 @@ type SendTxArgs struct {
 	Blobs       []kzg4844.Blob       `json:"blobs,omitempty"`
 	Commitments []kzg4844.Commitment `json:"commitments,omitempty"`
 	Proofs      []kzg4844.Proof      `json:"proofs,omitempty"`
+
+	// For SetCodeTxType
+	AuthorizationList []types.SetCodeAuthorization `json:"authorizationList"`
 }
 
 func (args SendTxArgs) String() string {
@@ -146,6 +149,27 @@ func (args *SendTxArgs) ToTransaction() (*types.Transaction, error) {
 	}
 	var data types.TxData
 	switch {
+	case args.AuthorizationList != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		if to == nil {
+			return nil, errors.New("transaction recipient must be set for setcode transactions")
+		}
+		data = &types.SetCodeTx{
+			To:         *to,
+			ChainID:    uint256.MustFromBig((*big.Int)(args.ChainID)),
+			Nonce:      uint64(args.Nonce),
+			Gas:        uint64(args.Gas),
+			GasFeeCap:  uint256.MustFromBig((*big.Int)(args.MaxFeePerGas)),
+			GasTipCap:  uint256.MustFromBig((*big.Int)(args.MaxPriorityFeePerGas)),
+			Value:      uint256.MustFromBig((*big.Int)(&args.Value)),
+			Data:       args.data(),
+			AccessList: al,
+			AuthList:   args.AuthorizationList,
+		}
+
 	case args.BlobHashes != nil:
 		al := types.AccessList{}
 		if args.AccessList != nil {

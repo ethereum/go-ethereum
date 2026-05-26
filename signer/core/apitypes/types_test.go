@@ -20,9 +20,11 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/holiman/uint256"
@@ -138,6 +140,63 @@ func TestBlobTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("tx %v", string(data))
+}
+
+func TestSetCodeTxArgs(t *testing.T) {
+	t.Parallel()
+
+	to := common.NewMixedcaseAddress(common.HexToAddress("0x0000000000000000000000000000000000000001"))
+	input := hexutil.Bytes{0x01}
+	value := hexutil.Big(*big.NewInt(7))
+	auth := types.SetCodeAuthorization{
+		ChainID: *uint256.NewInt(1),
+		Address: common.HexToAddress("0x0000000000000000000000000000000000000002"),
+		Nonce:   3,
+		V:       1,
+		R:       *uint256.NewInt(4),
+		S:       *uint256.NewInt(5),
+	}
+	args := SendTxArgs{
+		From:                 common.NewMixedcaseAddress(common.HexToAddress("0x0000000000000000000000000000000000000003")),
+		To:                   &to,
+		Gas:                  hexutil.Uint64(21000),
+		MaxFeePerGas:         (*hexutil.Big)(big.NewInt(11)),
+		MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(2)),
+		Value:                value,
+		Nonce:                hexutil.Uint64(1),
+		Input:                &input,
+		ChainID:              (*hexutil.Big)(big.NewInt(1)),
+		AuthorizationList:    []types.SetCodeAuthorization{auth},
+	}
+	tx, err := args.ToTransaction()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have := tx.Type(); have != types.SetCodeTxType {
+		t.Fatalf("have type %d, want %d", have, types.SetCodeTxType)
+	}
+	auths := tx.SetCodeAuthorizations()
+	if len(auths) != 1 || auths[0] != auth {
+		t.Fatalf("have authorizations %#v, want %#v", auths, []types.SetCodeAuthorization{auth})
+	}
+
+	blobHashes := []common.Hash{{0x01}}
+	args.BlobHashes = blobHashes
+	roundtrip, err := json.Marshal(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded SendTxArgs
+	if err := json.Unmarshal(roundtrip, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	tx, err = decoded.ToTransaction()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have := tx.Type(); have != types.SetCodeTxType {
+		t.Fatalf("after JSON roundtrip have type %d, want %d", have, types.SetCodeTxType)
+	}
 }
 
 func TestType_IsArray(t *testing.T) {
