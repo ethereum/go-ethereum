@@ -93,14 +93,15 @@ type CapabilityResource struct {
 // for a sliding window of the most recent RetentionBlocks blocks. Resources
 // without sliding deletion omit deleteStrategy.
 type DeleteStrategy struct {
-	Type            string  `json:"type"`
-	RetentionBlocks *uint64 `json:"retentionBlocks,omitempty"`
+	Type            string          `json:"type"`
+	RetentionBlocks *hexutil.Uint64 `json:"retentionBlocks,omitempty"`
 }
 
 // strategyWindow returns a DeleteStrategy with type "window" and the given
 // retention block count.
 func strategyWindow(retention uint64) *DeleteStrategy {
-	return &DeleteStrategy{Type: "window", RetentionBlocks: &retention}
+	blocks := hexutil.Uint64(retention)
+	return &DeleteStrategy{Type: "window", RetentionBlocks: &blocks}
 }
 
 func capabilityOldestBlock(number uint64) *hexutil.Uint64 {

@@ -321,7 +321,7 @@ func TestBuildCapabilities(t *testing.T) {
 // the schema defined in https://github.com/ethereum/execution-apis/pull/755:
 // head fields are named number/hash, resources without a sliding window omit
 // deleteStrategy, disabled resources omit range fields, and retentionBlocks is
-// a decimal integer.
+// a hex quantity.
 func TestCapabilitiesJSONShape(t *testing.T) {
 	caps := buildCapabilities(
 		5_000_000,
@@ -392,19 +392,14 @@ func TestCapabilitiesJSONShape(t *testing.T) {
 	}
 
 	// tx.deleteStrategy is "window" → must contain retentionBlocks as a
-	// decimal number, not a hex string.
+	// hex quantity, not a decimal JSON number.
 	tx := generic["tx"].(map[string]any)
 	tds := tx["deleteStrategy"].(map[string]any)
 	if tds["type"] != "window" {
 		t.Errorf("tx.deleteStrategy.type = %v, want window", tds["type"])
 	}
-	rb, ok := tds["retentionBlocks"].(float64)
-	if !ok {
-		t.Fatalf("tx.deleteStrategy.retentionBlocks not a JSON number: %T %v",
-			tds["retentionBlocks"], tds["retentionBlocks"])
-	}
-	if uint64(rb) != 2_350_000 {
-		t.Errorf("tx.deleteStrategy.retentionBlocks = %v, want 2350000", rb)
+	if rb, ok := tds["retentionBlocks"].(string); !ok || rb != "0x23dbb0" {
+		t.Errorf("tx.deleteStrategy.retentionBlocks = %v, want 0x23dbb0", tds["retentionBlocks"])
 	}
 
 	// tx.oldestBlock must be a hex string.
@@ -420,5 +415,6 @@ func hexUintPtr(n uint64) *hexutil.Uint64 {
 }
 
 func windowStrategy(n uint64) *DeleteStrategy {
-	return &DeleteStrategy{Type: "window", RetentionBlocks: &n}
+	blocks := hexutil.Uint64(n)
+	return &DeleteStrategy{Type: "window", RetentionBlocks: &blocks}
 }
