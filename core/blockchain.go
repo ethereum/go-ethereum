@@ -433,6 +433,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(bc.hc)
+	bc.parallelProcessor = NewParallelStateProcessor(bc.hc, bc.GetVMConfig())
 
 	genesisHeader := bc.GetHeaderByNumber(0)
 	if genesisHeader == nil {
