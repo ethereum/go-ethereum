@@ -411,4 +411,5 @@ func (b *backendMock) Engine() consensus.Engine { return nil }
 func (b *backendMock) CurrentView() *filtermaps.ChainView           { return nil }
 func (b *backendMock) NewMatcherBackend() filtermaps.MatcherBackend { return nil }
 
-func (b *backendMock) HistoryPruningCutoff() uint64 { return 0 }
+func (b *backendMock) HistoryPruningCutoff() uint64       { return 0 }
+func (b *backendMock) HistoryRetention() HistoryRetention { return HistoryRetention{} }
