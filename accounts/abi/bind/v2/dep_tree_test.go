@@ -158,10 +158,10 @@ func testLinkCase(tcInput linkTestCaseInput) error {
 		overrideAddrs  = make(map[rune]common.Address)
 	)
 	// generate deterministic addresses for the override set.
-	rand.Seed(42)
+	rng := rand.New(rand.NewSource(42))
 	for contract := range tcInput.overrides {
 		var addr common.Address
-		rand.Read(addr[:])
+		rng.Read(addr[:])
 		overrideAddrs[contract] = addr
 		overridesAddrs[addr] = struct{}{}
 	}

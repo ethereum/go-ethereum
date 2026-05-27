@@ -65,6 +65,21 @@ func TestDefaults(t *testing.T) {
 	if cfg.BlockNumber == nil {
 		t.Error("expected block number to be non nil")
 	}
+	if cfg.Random == nil {
+		t.Error("expected Random to be non nil")
+	}
+}
+
+func TestDefaultsPreserveRandom(t *testing.T) {
+	h := common.HexToHash("0x01")
+	cfg := &Config{Random: &h}
+	setDefaults(cfg)
+	if cfg.Random == nil {
+		t.Fatal("expected Random to remain non-nil")
+	}
+	if *cfg.Random != h {
+		t.Fatalf("expected Random to be preserved, got %x, want %x", *cfg.Random, h)
+	}
 }
 
 func TestEVM(t *testing.T) {
@@ -150,8 +165,7 @@ func BenchmarkCall(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for j := 0; j < 400; j++ {
 			Execute(code, cpurchase, nil)
 			Execute(code, creceived, nil)
@@ -190,11 +204,9 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 		EVMConfig: vm.Config{},
 	}
 	// Warm up the intpools and stuff
-	bench.ResetTimer()
-	for i := 0; i < bench.N; i++ {
+	for bench.Loop() {
 		Call(receiver, []byte{}, &runtimeConfig)
 	}
-	bench.StopTimer()
 }
 
 func BenchmarkEVM_CREATE_500(bench *testing.B) {
@@ -233,8 +245,7 @@ func BenchmarkEVM_SWAP1(b *testing.B) {
 	b.Run("10k", func(b *testing.B) {
 		contractCode := swapContract(10_000)
 		state.SetCode(contractAddr, contractCode, tracing.CodeChangeUnspecified)
-
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, _, err := Call(contractAddr, []byte{}, &Config{State: state})
 			if err != nil {
 				b.Fatal(err)
@@ -264,8 +275,7 @@ func BenchmarkEVM_RETURN(b *testing.B) {
 
 			contractCode := returnContract(n)
 			state.SetCode(contractAddr, contractCode, tracing.CodeChangeUnspecified)
-
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				ret, _, err := Call(contractAddr, []byte{}, &Config{State: state})
 				if err != nil {
 					b.Fatal(err)
@@ -314,6 +324,18 @@ func (d *dummyChain) GetHeader(h common.Hash, n uint64) *types.Header {
 }
 
 func (d *dummyChain) Config() *params.ChainConfig {
+	return nil
+}
+
+func (d *dummyChain) CurrentHeader() *types.Header {
+	return nil
+}
+
+func (d *dummyChain) GetHeaderByNumber(n uint64) *types.Header {
+	return d.GetHeader(common.Hash{}, n)
+}
+
+func (d *dummyChain) GetHeaderByHash(h common.Hash) *types.Header {
 	return nil
 }
 
@@ -432,7 +454,7 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 
 	b.Run(name, func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			Call(destination, nil, cfg)
 		}
 	})
@@ -936,4 +958,64 @@ func TestDelegatedAccountAccessCost(t *testing.T) {
 			t.Fatalf("testcase %d, gas report wrong, step %d, have %d want %d", i, tc.step, have, want)
 		}
 	}
+}
+
+func TestManyLargeStacks(t *testing.T) {
+	// This piece of code will push 512 items to the stack, and then call itself
+	// recursively.
+	code := make([]byte, 10)
+	for i := range code {
+		code[i] = byte(vm.PUSH0)
+	}
+	code = append(code, []byte{
+		byte(vm.ADDRESS), // address to call
+		byte(vm.GAS),
+		byte(vm.CALL),
+	}...)
+
+	main := common.HexToAddress("0xbb")
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.SetCode(main, code, tracing.CodeChangeUnspecified)
+
+	//tracer := logger.NewJSONLogger(nil, os.Stdout)
+	var tracer *tracing.Hooks
+	_, _, err := Call(main, nil, &Config{
+		GasLimit: 10_000_000,
+		State:    statedb,
+		EVMConfig: vm.Config{
+			Tracer: tracer,
+		}})
+	if err != nil {
+		t.Fatal("didn't expect error", err)
+	}
+}
+
+func BenchmarkLargeDeepStacks(b *testing.B) {
+	// This piece of code will push 512 items to the stack, and then call itself
+	// recursively.
+	code := make([]byte, 512)
+	for i := range code {
+		code[i] = byte(vm.PUSH0)
+	}
+	code = append(code, []byte{
+		byte(vm.ADDRESS), // address to call
+		byte(vm.GAS),
+		byte(vm.CALL),
+	}...)
+	benchmarkNonModifyingCode(10_000_000, code, "deep-large-stacks-10M", "", b)
+}
+
+func BenchmarkShortDeepStacks(b *testing.B) {
+	// This piece of code will push a few items to the stack, and then call itself
+	// recursively.
+	code := make([]byte, 8)
+	for i := range code {
+		code[i] = byte(vm.PUSH0)
+	}
+	code = append(code, []byte{
+		byte(vm.ADDRESS), // address to call
+		byte(vm.GAS),
+		byte(vm.CALL),
+	}...)
+	benchmarkNonModifyingCode(10_000_000, code, "deep-short-stacks-10M", "", b)
 }

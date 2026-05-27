@@ -97,6 +97,7 @@ type btHeader struct {
 	BlobGasUsed           *uint64
 	ExcessBlobGas         *uint64
 	ParentBeaconBlockRoot *common.Hash
+	SlotNumber            *uint64
 }
 
 type btHeaderMarshaling struct {
@@ -109,6 +110,7 @@ type btHeaderMarshaling struct {
 	BaseFeePerGas *math.HexOrDecimal256
 	BlobGasUsed   *math.HexOrDecimal64
 	ExcessBlobGas *math.HexOrDecimal64
+	SlotNumber    *math.HexOrDecimal64
 }
 
 func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *tracing.Hooks, postCheck func(error, *core.BlockChain)) (result error) {
@@ -116,27 +118,29 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
 	}
+
 	// import pre accounts & construct test genesis block & state root
+	// Commit genesis state
 	var (
+		gspec = t.genesis(config)
 		db    = rawdb.NewMemoryDatabase()
 		tconf = &triedb.Config{
 			Preimages: true,
+			IsUBT:     gspec.Config.UBTTime != nil && *gspec.Config.UBTTime <= gspec.Timestamp,
 		}
 	)
-	if scheme == rawdb.PathScheme {
+	if scheme == rawdb.PathScheme || tconf.IsUBT {
 		tconf.PathDB = pathdb.Defaults
 	} else {
 		tconf.HashDB = hashdb.Defaults
 	}
-	// Commit genesis state
-	gspec := t.genesis(config)
 
 	// if ttd is not specified, set an arbitrary huge value
 	if gspec.Config.TerminalTotalDifficulty == nil {
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(stdmath.MaxInt64)
 	}
 	triedb := triedb.NewDatabase(db, tconf)
-	gblock, err := gspec.Commit(db, triedb)
+	gblock, err := gspec.Commit(db, triedb, nil)
 	if err != nil {
 		return err
 	}
@@ -157,9 +161,9 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 		Preimages:      true,
 		TxLookupLimit:  -1, // disable tx indexing
 		VmConfig: vm.Config{
-			Tracer:                  tracer,
-			StatelessSelfValidation: witness,
+			Tracer: tracer,
 		},
+		StatelessSelfValidation: witness,
 	}
 	if snapshotter {
 		options.SnapshotLimit = 1
@@ -200,6 +204,11 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 		}
 	}
 	return t.validateImportedHeaders(chain, validBlocks)
+}
+
+// Network returns the network/fork name for this test.
+func (t *BlockTest) Network() string {
+	return t.json.Network
 }
 
 func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
@@ -259,7 +268,7 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 		}
 		if b.BlockHeader == nil {
 			if data, err := json.MarshalIndent(cb.Header(), "", "  "); err == nil {
-				fmt.Fprintf(os.Stderr, "block (index %d) insertion should have failed due to: %v:\n%v\n",
+				fmt.Fprintf(os.Stdout, "block (index %d) insertion should have failed due to: %v:\n%v\n",
 					bi, b.ExpectException, string(data))
 			}
 			return nil, fmt.Errorf("block (index %d) insertion should have failed due to: %v",
@@ -335,6 +344,9 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	}
 	if !reflect.DeepEqual(h.ParentBeaconBlockRoot, h2.ParentBeaconRoot) {
 		return fmt.Errorf("parentBeaconBlockRoot: want: %v have: %v", h.ParentBeaconBlockRoot, h2.ParentBeaconRoot)
+	}
+	if !reflect.DeepEqual(h.SlotNumber, h2.SlotNumber) {
+		return fmt.Errorf("slotNumber: want: %v have: %v", h.SlotNumber, h2.SlotNumber)
 	}
 	return nil
 }

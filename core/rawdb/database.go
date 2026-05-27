@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/internal/tablewriter"
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/sync/errgroup"
 )
@@ -97,6 +98,12 @@ func (db *nofreezedb) Ancient(kind string, number uint64) ([]byte, error) {
 
 // AncientRange returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) AncientRange(kind string, start, max, maxByteSize uint64) ([][]byte, error) {
+	return nil, errNotSupported
+}
+
+// AncientBytes retrieves the value segment of the element specified by the id
+// and value offsets.
+func (db *nofreezedb) AncientBytes(kind string, id, offset, length uint64) ([]byte, error) {
 	return nil, errNotSupported
 }
 
@@ -171,7 +178,7 @@ func resolveChainFreezerDir(ancient string) string {
 	// - chain freezer exists in legacy location (root ancient folder)
 	freezer := filepath.Join(ancient, ChainFreezerName)
 	if !common.FileExist(freezer) {
-		if !common.FileExist(ancient) {
+		if !common.FileExist(ancient) || !common.IsNonEmptyDir(ancient) {
 			// The entire ancient store is not initialized, still use the sub
 			// folder for initialization.
 		} else {
@@ -324,6 +331,7 @@ func Open(db ethdb.KeyValueStore, opts OpenOptions) (ethdb.Database, error) {
 		}()
 	}
 	return &freezerdb{
+		readOnly:      opts.ReadOnly,
 		ancientRoot:   opts.Ancient,
 		KeyValueStore: db,
 		chainFreezer:  frdb,
@@ -405,6 +413,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		tds                stat
 		numHashPairings    stat
 		hashNumPairings    stat
+		blockAccessList    stat
 		legacyTries        stat
 		stateLookups       stat
 		accountTries       stat
@@ -422,7 +431,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		filterMapBlockLV   stat
 
 		// Path-mode archive data
-		stateIndex stat
+		stateIndex    stat
+		trienodeIndex stat
 
 		// Verkle statistics
 		verkleTries        stat
@@ -469,12 +479,15 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				bodies.add(size)
 			case bytes.HasPrefix(key, blockReceiptsPrefix) && len(key) == (len(blockReceiptsPrefix)+8+common.HashLength):
 				receipts.add(size)
-			case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerTDSuffix):
+			case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerTDSuffix) && len(key) == (len(headerPrefix)+8+common.HashLength+len(headerTDSuffix)):
 				tds.add(size)
-			case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerHashSuffix):
+			case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerHashSuffix) && len(key) == (len(headerPrefix)+8+len(headerHashSuffix)):
 				numHashPairings.add(size)
 			case bytes.HasPrefix(key, headerNumberPrefix) && len(key) == (len(headerNumberPrefix)+common.HashLength):
 				hashNumPairings.add(size)
+			case bytes.HasPrefix(key, accessListPrefix) && len(key) == len(accessListPrefix)+8+common.HashLength:
+				blockAccessList.add(size)
+
 			case IsLegacyTrieNode(key, it.Value()):
 				legacyTries.add(size)
 			case bytes.HasPrefix(key, stateIDPrefix) && len(key) == len(stateIDPrefix)+common.HashLength:
@@ -517,8 +530,19 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				bloomBits.add(size)
 
 			// Path-based historic state indexes
-			case bytes.HasPrefix(key, StateHistoryIndexPrefix) && len(key) >= len(StateHistoryIndexPrefix)+common.HashLength:
+			case bytes.HasPrefix(key, StateHistoryAccountMetadataPrefix) && len(key) == len(StateHistoryAccountMetadataPrefix)+common.HashLength:
 				stateIndex.add(size)
+			case bytes.HasPrefix(key, StateHistoryStorageMetadataPrefix) && len(key) == len(StateHistoryStorageMetadataPrefix)+2*common.HashLength:
+				stateIndex.add(size)
+			case bytes.HasPrefix(key, StateHistoryAccountBlockPrefix) && len(key) == len(StateHistoryAccountBlockPrefix)+common.HashLength+4:
+				stateIndex.add(size)
+			case bytes.HasPrefix(key, StateHistoryStorageBlockPrefix) && len(key) == len(StateHistoryStorageBlockPrefix)+2*common.HashLength+4:
+				stateIndex.add(size)
+
+			case bytes.HasPrefix(key, TrienodeHistoryMetadataPrefix) && len(key) >= len(TrienodeHistoryMetadataPrefix)+common.HashLength:
+				trienodeIndex.add(size)
+			case bytes.HasPrefix(key, TrienodeHistoryBlockPrefix) && len(key) >= len(TrienodeHistoryBlockPrefix)+common.HashLength+4:
+				trienodeIndex.add(size)
 
 			// Verkle trie data is detected, determine the sub-category
 			case bytes.HasPrefix(key, VerklePrefix):
@@ -605,6 +629,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Difficulties (deprecated)", tds.sizeString(), tds.countString()},
 		{"Key-Value store", "Block number->hash", numHashPairings.sizeString(), numHashPairings.countString()},
 		{"Key-Value store", "Block hash->number", hashNumPairings.sizeString(), hashNumPairings.countString()},
+		{"Key-Value store", "Block accessList", blockAccessList.sizeString(), blockAccessList.countString()},
 		{"Key-Value store", "Transaction index", txLookups.sizeString(), txLookups.countString()},
 		{"Key-Value store", "Log index filter-map rows", filterMapRows.sizeString(), filterMapRows.countString()},
 		{"Key-Value store", "Log index last-block-of-map", filterMapLastBlock.sizeString(), filterMapLastBlock.countString()},
@@ -615,12 +640,13 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Path trie state lookups", stateLookups.sizeString(), stateLookups.countString()},
 		{"Key-Value store", "Path trie account nodes", accountTries.sizeString(), accountTries.countString()},
 		{"Key-Value store", "Path trie storage nodes", storageTries.sizeString(), storageTries.countString()},
-		{"Key-Value store", "Path state history indexes", stateIndex.sizeString(), stateIndex.countString()},
 		{"Key-Value store", "Verkle trie nodes", verkleTries.sizeString(), verkleTries.countString()},
 		{"Key-Value store", "Verkle trie state lookups", verkleStateLookups.sizeString(), verkleStateLookups.countString()},
 		{"Key-Value store", "Trie preimages", preimages.sizeString(), preimages.countString()},
 		{"Key-Value store", "Account snapshot", accountSnaps.sizeString(), accountSnaps.countString()},
 		{"Key-Value store", "Storage snapshot", storageSnaps.sizeString(), storageSnaps.countString()},
+		{"Key-Value store", "Historical state index", stateIndex.sizeString(), stateIndex.countString()},
+		{"Key-Value store", "Historical trie index", trienodeIndex.sizeString(), trienodeIndex.countString()},
 		{"Key-Value store", "Beacon sync headers", beaconHeaders.sizeString(), beaconHeaders.countString()},
 		{"Key-Value store", "Clique snapshots", cliqueSnaps.sizeString(), cliqueSnaps.countString()},
 		{"Key-Value store", "Singleton metadata", metadata.sizeString(), metadata.countString()},
@@ -637,13 +663,13 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				fmt.Sprintf("Ancient store (%s)", strings.Title(ancient.name)),
 				strings.Title(table.name),
 				table.size.String(),
-				fmt.Sprintf("%d", ancient.count()),
+				fmt.Sprintf("%d", ancient.count),
 			})
 		}
 		total.Add(uint64(ancient.size()))
 	}
 
-	table := newTableWriter(os.Stdout)
+	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Database", "Category", "Size", "Items"})
 	table.SetFooter([]string{"", "Total", common.StorageSize(total.Load()).String(), fmt.Sprintf("%d", count.Load())})
 	table.AppendBulk(stats)
@@ -665,7 +691,7 @@ var knownMetadataKeys = [][]byte{
 	snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
 	uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
 	persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
-	filterMapsRangeKey, headStateHistoryIndexKey, VerkleTransitionStatePrefix,
+	filterMapsRangeKey, headStateHistoryIndexKey, headTrienodeHistoryIndexKey, VerkleTransitionStatePrefix,
 }
 
 // printChainMetadata prints out chain metadata to stderr.

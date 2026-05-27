@@ -29,19 +29,25 @@ import (
 )
 
 func TestIndexReaderBasic(t *testing.T) {
+	testIndexReaderBasic(t, 0)
+	testIndexReaderBasic(t, 2)
+	testIndexReaderBasic(t, 34)
+}
+
+func testIndexReaderBasic(t *testing.T, bitmapSize int) {
 	elements := []uint64{
 		1, 5, 10, 11, 20,
 	}
 	db := rawdb.NewMemoryDatabase()
-	bw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
+	bw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), 0, bitmapSize)
 	for i := 0; i < len(elements); i++ {
-		bw.append(elements[i])
+		bw.append(elements[i], randomExt(bitmapSize, 5))
 	}
 	batch := db.NewBatch()
 	bw.finish(batch)
 	batch.Write()
 
-	br, err := newIndexReader(db, newAccountIdent(common.Hash{0xa}))
+	br, err := newIndexReader(db, newAccountIdent(common.Hash{0xa}), bitmapSize)
 	if err != nil {
 		t.Fatalf("Failed to construct the index reader, %v", err)
 	}
@@ -68,22 +74,28 @@ func TestIndexReaderBasic(t *testing.T) {
 }
 
 func TestIndexReaderLarge(t *testing.T) {
+	testIndexReaderLarge(t, 0)
+	testIndexReaderLarge(t, 2)
+	testIndexReaderLarge(t, 34)
+}
+
+func testIndexReaderLarge(t *testing.T, bitmapSize int) {
 	var elements []uint64
-	for i := 0; i < 10*indexBlockEntriesCap; i++ {
+	for i := 0; i < 10*4096; i++ {
 		elements = append(elements, rand.Uint64())
 	}
 	slices.Sort(elements)
 
 	db := rawdb.NewMemoryDatabase()
-	bw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
+	bw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), 0, bitmapSize)
 	for i := 0; i < len(elements); i++ {
-		bw.append(elements[i])
+		bw.append(elements[i], randomExt(bitmapSize, 5))
 	}
 	batch := db.NewBatch()
 	bw.finish(batch)
 	batch.Write()
 
-	br, err := newIndexReader(db, newAccountIdent(common.Hash{0xa}))
+	br, err := newIndexReader(db, newAccountIdent(common.Hash{0xa}), bitmapSize)
 	if err != nil {
 		t.Fatalf("Failed to construct the index reader, %v", err)
 	}
@@ -107,7 +119,7 @@ func TestIndexReaderLarge(t *testing.T) {
 }
 
 func TestEmptyIndexReader(t *testing.T) {
-	br, err := newIndexReader(rawdb.NewMemoryDatabase(), newAccountIdent(common.Hash{0xa}))
+	br, err := newIndexReader(rawdb.NewMemoryDatabase(), newAccountIdent(common.Hash{0xa}), 0)
 	if err != nil {
 		t.Fatalf("Failed to construct the index reader, %v", err)
 	}
@@ -121,57 +133,150 @@ func TestEmptyIndexReader(t *testing.T) {
 }
 
 func TestIndexWriterBasic(t *testing.T) {
+	testIndexWriterBasic(t, 0)
+	testIndexWriterBasic(t, 2)
+	testIndexWriterBasic(t, 34)
+}
+
+func testIndexWriterBasic(t *testing.T, bitmapSize int) {
 	db := rawdb.NewMemoryDatabase()
-	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
-	iw.append(2)
-	if err := iw.append(1); err == nil {
+	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), 0, bitmapSize)
+	iw.append(2, randomExt(bitmapSize, 5))
+	if err := iw.append(1, randomExt(bitmapSize, 5)); err == nil {
 		t.Fatal("out-of-order insertion is not expected")
 	}
+	var maxElem uint64
 	for i := 0; i < 10; i++ {
-		iw.append(uint64(i + 3))
+		iw.append(uint64(i+3), randomExt(bitmapSize, 5))
+		maxElem = uint64(i + 3)
 	}
 	batch := db.NewBatch()
 	iw.finish(batch)
 	batch.Write()
 
-	iw, err := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
+	iw, err := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), maxElem, bitmapSize)
 	if err != nil {
 		t.Fatalf("Failed to construct the block writer, %v", err)
 	}
 	for i := 0; i < 10; i++ {
-		if err := iw.append(uint64(i + 100)); err != nil {
+		if err := iw.append(uint64(i+100), randomExt(bitmapSize, 5)); err != nil {
 			t.Fatalf("Failed to append item, %v", err)
 		}
 	}
 	iw.finish(db.NewBatch())
 }
 
-func TestIndexWriterDelete(t *testing.T) {
+func TestIndexWriterWithLimit(t *testing.T) {
+	testIndexWriterWithLimit(t, 0)
+	testIndexWriterWithLimit(t, 2)
+	testIndexWriterWithLimit(t, 34)
+}
+
+func testIndexWriterWithLimit(t *testing.T, bitmapSize int) {
 	db := rawdb.NewMemoryDatabase()
-	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
-	for i := 0; i < indexBlockEntriesCap*4; i++ {
-		iw.append(uint64(i + 1))
+	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), 0, bitmapSize)
+
+	// 200 iterations (with around 50 bytes extension) is enough to cross
+	// the block boundary (4096 bytes)
+	for i := 0; i < 200; i++ {
+		iw.append(uint64(i+1), randomExt(bitmapSize, 50))
+	}
+	batch := db.NewBatch()
+	iw.finish(batch)
+	batch.Write()
+
+	for i := 0; i < 200; i++ {
+		limit := uint64(i + 1)
+		iw, err := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), limit, bitmapSize)
+		if err != nil {
+			t.Fatalf("Failed to construct the index writer, %v", err)
+		}
+		if iw.lastID != limit {
+			t.Fatalf("Test %d, unexpected max value, got %d, want %d", i, iw.lastID, limit)
+		}
+		// Re-fill the elements
+		var maxElem uint64
+		for elem := limit + 1; elem < 500; elem++ {
+			if err := iw.append(elem, randomExt(bitmapSize, 5)); err != nil {
+				t.Fatalf("Failed to append value %d: %v", elem, err)
+			}
+			maxElem = elem
+		}
+		if iw.lastID != maxElem {
+			t.Fatalf("Test %d, unexpected max value, got %d, want %d", i, iw.lastID, maxElem)
+		}
+	}
+}
+
+func TestIndexDeleterBasic(t *testing.T) {
+	testIndexDeleterBasic(t, 0)
+	testIndexDeleterBasic(t, 2)
+	testIndexDeleterBasic(t, 34)
+}
+
+func testIndexDeleterBasic(t *testing.T, bitmapSize int) {
+	db := rawdb.NewMemoryDatabase()
+	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), 0, bitmapSize)
+
+	// 200 iterations (with around 50 bytes extension) is enough to cross
+	// the block boundary (4096 bytes)
+	var maxElem uint64
+	for i := 0; i < 200; i++ {
+		iw.append(uint64(i+1), randomExt(bitmapSize, 50))
+		maxElem = uint64(i + 1)
 	}
 	batch := db.NewBatch()
 	iw.finish(batch)
 	batch.Write()
 
 	// Delete unknown id, the request should be rejected
-	id, _ := newIndexDeleter(db, newAccountIdent(common.Hash{0xa}))
-	if err := id.pop(indexBlockEntriesCap * 5); err == nil {
+	id, _ := newIndexDeleter(db, newAccountIdent(common.Hash{0xa}), maxElem, bitmapSize)
+	if err := id.pop(500); err == nil {
 		t.Fatal("Expect error to occur for unknown id")
 	}
-	for i := indexBlockEntriesCap * 4; i >= 1; i-- {
+	for i := 200; i >= 1; i-- {
 		if err := id.pop(uint64(i)); err != nil {
 			t.Fatalf("Unexpected error for element popping, %v", err)
 		}
 		if id.lastID != uint64(i-1) {
 			t.Fatalf("Unexpected lastID, want: %d, got: %d", uint64(i-1), iw.lastID)
 		}
-		if rand.Intn(10) == 0 {
-			batch := db.NewBatch()
-			id.finish(batch)
-			batch.Write()
+	}
+}
+
+func TestIndexDeleterWithLimit(t *testing.T) {
+	testIndexDeleterWithLimit(t, 0)
+	testIndexDeleterWithLimit(t, 2)
+	testIndexDeleterWithLimit(t, 34)
+}
+
+func testIndexDeleterWithLimit(t *testing.T, bitmapSize int) {
+	db := rawdb.NewMemoryDatabase()
+	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), 0, bitmapSize)
+
+	// 200 iterations (with around 50 bytes extension) is enough to cross
+	// the block boundary (4096 bytes)
+	for i := 0; i < 200; i++ {
+		iw.append(uint64(i+1), randomExt(bitmapSize, 50))
+	}
+	batch := db.NewBatch()
+	iw.finish(batch)
+	batch.Write()
+
+	for i := 0; i < 200; i++ {
+		limit := uint64(i + 1)
+		id, err := newIndexDeleter(db, newAccountIdent(common.Hash{0xa}), limit, bitmapSize)
+		if err != nil {
+			t.Fatalf("Failed to construct the index writer, %v", err)
+		}
+		if id.lastID != limit {
+			t.Fatalf("Test %d, unexpected max value, got %d, want %d", i, iw.lastID, limit)
+		}
+		// Keep removing elements
+		for elem := id.lastID; elem > 0; elem-- {
+			if err := id.pop(elem); err != nil {
+				t.Fatalf("Failed to pop value %d: %v", elem, err)
+			}
 		}
 	}
 }
@@ -212,7 +317,7 @@ func TestBatchIndexerWrite(t *testing.T) {
 		}
 	}
 	for addrHash, indexes := range accounts {
-		ir, _ := newIndexReader(db, newAccountIdent(addrHash))
+		ir, _ := newIndexReader(db, newAccountIdent(addrHash), 0)
 		for i := 0; i < len(indexes)-1; i++ {
 			n, err := ir.readGreaterThan(indexes[i])
 			if err != nil {
@@ -232,7 +337,7 @@ func TestBatchIndexerWrite(t *testing.T) {
 	}
 	for addrHash, slots := range storages {
 		for slotHash, indexes := range slots {
-			ir, _ := newIndexReader(db, newStorageIdent(addrHash, slotHash))
+			ir, _ := newIndexReader(db, newStorageIdent(addrHash, slotHash), 0)
 			for i := 0; i < len(indexes)-1; i++ {
 				n, err := ir.readGreaterThan(indexes[i])
 				if err != nil {

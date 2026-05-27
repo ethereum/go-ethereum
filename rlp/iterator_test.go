@@ -17,6 +17,7 @@
 package rlp
 
 import (
+	"io"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -38,13 +39,24 @@ func TestIterator(t *testing.T) {
 		t.Fatal("expected two elems, got zero")
 	}
 	txs := it.Value()
+	if offset := it.Offset(); offset != 3 {
+		t.Fatal("wrong offset", offset, "want 3")
+	}
+
 	// Check that uncles exist
 	if !it.Next() {
 		t.Fatal("expected two elems, got one")
 	}
+	if offset := it.Offset(); offset != 219 {
+		t.Fatal("wrong offset", offset, "want 219")
+	}
+
 	txit, err := NewListIterator(txs)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if c := txit.Count(); c != 2 {
+		t.Fatal("wrong Count:", c)
 	}
 	var i = 0
 	for txit.Next() {
@@ -56,4 +68,66 @@ func TestIterator(t *testing.T) {
 	if exp := 2; i != exp {
 		t.Errorf("count wrong, expected %d got %d", i, exp)
 	}
+}
+
+func TestIteratorErrors(t *testing.T) {
+	tests := []struct {
+		input     []byte
+		wantCount int // expected Count before iterating
+		wantErr   error
+	}{
+		// Second item string header claims 3 bytes content, but only 2 remain.
+		{unhex("C4 01 83AABB"), 2, ErrValueTooLarge},
+		// Second item truncated: B9 requires 2 size bytes, none available.
+		{unhex("C2 01 B9"), 2, io.ErrUnexpectedEOF},
+		// 0x05 should be encoded directly, not as 81 05.
+		{unhex("C3 01 8105"), 2, ErrCanonSize},
+		// Long-form string header B8 used for 1-byte content (< 56).
+		{unhex("C4 01 B801AA"), 2, ErrCanonSize},
+		// Long-form list header F8 used for 1-byte content (< 56).
+		{unhex("C4 01 F80101"), 2, ErrCanonSize},
+	}
+	for _, tt := range tests {
+		it, err := NewListIterator(tt.input)
+		if err != nil {
+			t.Fatal("NewListIterator error:", err)
+		}
+		if c := it.Count(); c != tt.wantCount {
+			t.Fatalf("%x: Count = %d, want %d", tt.input, c, tt.wantCount)
+		}
+		n := 0
+		for it.Next() {
+			if it.Err() != nil {
+				break
+			}
+			n++
+		}
+		if wantN := tt.wantCount - 1; n != wantN {
+			t.Fatalf("%x: got %d valid items, want %d", tt.input, n, wantN)
+		}
+		if it.Err() != tt.wantErr {
+			t.Fatalf("%x: got error %v, want %v", tt.input, it.Err(), tt.wantErr)
+		}
+		if it.Next() {
+			t.Fatalf("%x: Next returned true after error", tt.input)
+		}
+	}
+}
+
+func FuzzIteratorCount(f *testing.F) {
+	examples := [][]byte{unhex("010203"), unhex("018142"), unhex("01830202")}
+	for _, e := range examples {
+		f.Add(e)
+	}
+	f.Fuzz(func(t *testing.T, in []byte) {
+		it := newIterator(in, 0)
+		count := it.Count()
+		i := 0
+		for it.Next() {
+			i++
+		}
+		if i != count {
+			t.Fatalf("%x: count %d not equal to %d iterations", in, count, i)
+		}
+	})
 }

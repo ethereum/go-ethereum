@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net"
@@ -29,6 +30,31 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/urfave/cli/v2"
 )
+
+// decodeRLPxDisconnect parses a disconnect message payload. Per the RLPx spec
+// the payload is a list containing a single reason, but some implementations
+// (including older geth) sent the reason as a bare byte. Accept both forms.
+func decodeRLPxDisconnect(data []byte) (p2p.DiscReason, error) {
+	s := rlp.NewStream(bytes.NewReader(data), uint64(len(data)))
+	k, _, err := s.Kind()
+	if err != nil {
+		return 0, err
+	}
+	var reason p2p.DiscReason
+	if k == rlp.List {
+		if _, err := s.List(); err != nil {
+			return 0, err
+		}
+		if err := s.Decode(&reason); err != nil {
+			return 0, err
+		}
+		return reason, nil
+	}
+	if err := s.Decode(&reason); err != nil {
+		return 0, err
+	}
+	return reason, nil
+}
 
 var (
 	rlpxCommand = &cli.Command{
@@ -103,11 +129,15 @@ func rlpxPing(ctx *cli.Context) error {
 		}
 		fmt.Printf("%+v\n", h)
 	case 1:
-		var msg []p2p.DiscReason
-		if rlp.DecodeBytes(data, &msg); len(msg) == 0 {
-			return errors.New("invalid disconnect message")
+		// The disconnect message is specified as a list containing the reason,
+		// but some implementations (including older geth) send the reason as a
+		// single byte. Handle both forms, and on failure include the raw payload
+		// so the operator can see what was actually sent.
+		reason, decErr := decodeRLPxDisconnect(data)
+		if decErr != nil {
+			return fmt.Errorf("invalid disconnect message: %v (raw=0x%x)", decErr, data)
 		}
-		return fmt.Errorf("received disconnect message: %v", msg[0])
+		return fmt.Errorf("received disconnect message: %v", reason)
 	default:
 		return fmt.Errorf("invalid message code %d, expected handshake (code zero) or disconnect (code one)", code)
 	}
@@ -143,9 +173,6 @@ type testParams struct {
 
 func cliTestParams(ctx *cli.Context) *testParams {
 	nodeStr := ctx.String(testNodeFlag.Name)
-	if nodeStr == "" {
-		exit(fmt.Errorf("missing -%s", testNodeFlag.Name))
-	}
 	node, err := parseNode(nodeStr)
 	if err != nil {
 		exit(err)
@@ -155,15 +182,6 @@ func cliTestParams(ctx *cli.Context) *testParams {
 		engineAPI: ctx.String(testNodeEngineFlag.Name),
 		jwt:       ctx.String(testNodeJWTFlag.Name),
 		chainDir:  ctx.String(testChainDirFlag.Name),
-	}
-	if p.engineAPI == "" {
-		exit(fmt.Errorf("missing -%s", testNodeEngineFlag.Name))
-	}
-	if p.jwt == "" {
-		exit(fmt.Errorf("missing -%s", testNodeJWTFlag.Name))
-	}
-	if p.chainDir == "" {
-		exit(fmt.Errorf("missing -%s", testChainDirFlag.Name))
 	}
 	return &p
 }

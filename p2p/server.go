@@ -490,6 +490,11 @@ func (srv *Server) setupDiscovery() error {
 		}
 		srv.discv5, err = discover.ListenV5(sconn, srv.localnode, cfg)
 		if err != nil {
+			// Clean up v4 if v5 setup fails.
+			if srv.discv4 != nil {
+				srv.discv4.Close()
+				srv.discv4 = nil
+			}
 			return err
 		}
 	}
@@ -681,8 +686,11 @@ running:
 				// Ensure that the trusted flag is set before checking against MaxPeers.
 				c.flags |= trustedConn
 			}
-			// TODO: track in-progress inbound node IDs (pre-Peer) to avoid dialing them.
-			c.cont <- srv.postHandshakeChecks(peers, inboundCount, c)
+			err := srv.postHandshakeChecks(peers, inboundCount, c)
+			if err == nil && c.flags&inboundConn != 0 {
+				srv.dialsched.inboundPending(c.node.ID())
+			}
+			c.cont <- err
 
 		case c := <-srv.checkpointAddPeer:
 			// At this point the connection is past the protocol handshake.
@@ -813,7 +821,9 @@ func (srv *Server) listenLoop() {
 				time.Sleep(time.Millisecond * 200)
 				continue
 			} else if err != nil {
-				srv.log.Debug("Read error", "err", err)
+				if !errors.Is(err, net.ErrClosed) {
+					srv.log.Debug("Read error", "err", err)
+				}
 				slots <- struct{}{}
 				return
 			}
@@ -863,6 +873,11 @@ func (srv *Server) checkInboundConn(remoteIP netip.Addr) error {
 // or the handshakes have failed.
 func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) error {
 	c := &conn{fd: fd, flags: flags, cont: make(chan error)}
+	defer func() {
+		if c.is(inboundConn) && c.node != nil {
+			srv.dialsched.inboundCompleted(c.node.ID())
+		}
+	}()
 	if dialDest == nil {
 		c.transport = srv.newTransport(fd, nil)
 	} else {

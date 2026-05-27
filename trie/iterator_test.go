@@ -1005,9 +1005,9 @@ func TestPrefixIteratorEdgeCases(t *testing.T) {
 				count++
 			}
 		}
-		// Should find at least the allFF key itself
+		// Should find exactly the two keys with the all-0xff prefix
 		if count != 2 {
-			t.Errorf("Expected at least 1 result for all-0xff prefix, got %d", count)
+			t.Errorf("Expected 2 results for all-0xff prefix, got %d", count)
 		}
 	})
 

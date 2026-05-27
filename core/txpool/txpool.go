@@ -50,11 +50,14 @@ type BlockChain interface {
 	// CurrentBlock returns the current head of the chain.
 	CurrentBlock() *types.Header
 
+	// Genesis returns the genesis block of the chain.
+	Genesis() *types.Block
+
 	// SubscribeChainHeadEvent subscribes to new blocks being added to the chain.
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 
-	// StateAt returns a state database for a given root hash (generally the head).
-	StateAt(root common.Hash) (*state.StateDB, error)
+	// StateAt returns a state database for a given chain header (generally the head).
+	StateAt(header *types.Header) (*state.StateDB, error)
 }
 
 // TxPool is an aggregator for various transaction specific pools, collectively
@@ -65,7 +68,6 @@ type BlockChain interface {
 type TxPool struct {
 	subpools []SubPool // List of subpools for specialized transaction handling
 	chain    BlockChain
-	signer   types.Signer
 
 	stateLock sync.RWMutex   // The lock for protecting state instance
 	state     *state.StateDB // Current state at the blockchain head
@@ -88,9 +90,9 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 	// Initialize the state with head block, or fallback to empty one in
 	// case the head state is not available (might occur when node is not
 	// fully synced).
-	statedb, err := chain.StateAt(head.Root)
+	statedb, err := chain.StateAt(head)
 	if err != nil {
-		statedb, err = chain.StateAt(types.EmptyRootHash)
+		statedb, err = chain.StateAt(chain.Genesis().Header())
 	}
 	if err != nil {
 		return nil, err
@@ -98,7 +100,6 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 	pool := &TxPool{
 		subpools: subpools,
 		chain:    chain,
-		signer:   types.LatestSigner(chain.Config()),
 		state:    statedb,
 		quit:     make(chan chan error),
 		term:     make(chan struct{}),
@@ -187,7 +188,7 @@ func (p *TxPool) loop(head *types.Header) {
 			case resetBusy <- struct{}{}:
 				// Updates the statedb with the new chain head. The head state may be
 				// unavailable if the initial state sync has not yet completed.
-				if statedb, err := p.chain.StateAt(newHead.Root); err != nil {
+				if statedb, err := p.chain.StateAt(newHead); err != nil {
 					log.Error("Failed to reset txpool state", "err", err)
 				} else {
 					p.stateLock.Lock()
@@ -361,14 +362,17 @@ func (p *TxPool) Add(txs []*types.Transaction, sync bool) []error {
 //
 // The transactions can also be pre-filtered by the dynamic fee components to
 // reduce allocations and load on downstream subsystems.
-func (p *TxPool) Pending(filter PendingFilter) map[common.Address][]*LazyTransaction {
+func (p *TxPool) Pending(filter PendingFilter) (map[common.Address][]*LazyTransaction, int) {
+	var count int
 	txs := make(map[common.Address][]*LazyTransaction)
 	for _, subpool := range p.subpools {
-		for addr, set := range subpool.Pending(filter) {
-			txs[addr] = set
+		set, n := subpool.Pending(filter)
+		for addr, list := range set {
+			txs[addr] = list
 		}
+		count += n
 	}
-	return txs
+	return txs, count
 }
 
 // SubscribeTransactions registers a subscription for new transaction events,
@@ -490,4 +494,15 @@ func (p *TxPool) Clear() {
 	for _, subpool := range p.subpools {
 		subpool.Clear()
 	}
+}
+
+// FilterType returns whether a transaction with the given type is supported
+// (can be added) by the pool.
+func (p *TxPool) FilterType(kind byte) bool {
+	for _, subpool := range p.subpools {
+		if subpool.FilterType(kind) {
+			return true
+		}
+	}
+	return false
 }

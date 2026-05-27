@@ -81,6 +81,7 @@ var (
 	TooLargeRequest          = &EngineAPIError{code: -38004, msg: "Too large request"}
 	InvalidParams            = &EngineAPIError{code: -32602, msg: "Invalid parameters"}
 	UnsupportedFork          = &EngineAPIError{code: -38005, msg: "Unsupported fork"}
+	TooDeepReorg             = &EngineAPIError{code: -38006, msg: "Too deep reorg"}
 
 	STATUS_INVALID         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: INVALID}, PayloadID: nil}
 	STATUS_SYNCING         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: SYNCING}, PayloadID: nil}

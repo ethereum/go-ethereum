@@ -47,7 +47,7 @@ func TestStoreCapture(t *testing.T) {
 	var (
 		logger   = NewStructLogger(nil)
 		evm      = vm.NewEVM(vm.BlockContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: logger.Hooks()})
-		contract = vm.NewContract(common.Address{}, common.Address{}, new(uint256.Int), 100000, nil)
+		contract = vm.NewContract(common.Address{}, common.Address{}, new(uint256.Int), vm.NewGasBudget(100000), nil)
 	)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x0, byte(vm.SSTORE)}
 	var index common.Hash
@@ -92,6 +92,49 @@ func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 			}
 			if have, want := string(blob), tt.want; have != want {
 				t.Fatalf("mismatched results\n\thave: %v\n\twant: %v", have, want)
+			}
+		})
+	}
+}
+
+func TestStructLogLegacyJSONSpecFormatting(t *testing.T) {
+	tests := []struct {
+		name string
+		log  *StructLog
+		want string
+	}{
+		{
+			name: "omits empty error and pads memory/storage",
+			log: &StructLog{
+				Pc:         7,
+				Op:         vm.SSTORE,
+				Gas:        100,
+				GasCost:    20,
+				Memory:     []byte{0xaa, 0xbb},
+				Storage:    map[common.Hash]common.Hash{common.BigToHash(big.NewInt(1)): common.BigToHash(big.NewInt(2))},
+				Depth:      1,
+				ReturnData: []byte{0x12, 0x34},
+			},
+			want: `{"pc":7,"op":"SSTORE","gas":100,"gasCost":20,"depth":1,"returnData":"0x1234","memory":["0xaabb000000000000000000000000000000000000000000000000000000000000"],"storage":{"0x0000000000000000000000000000000000000000000000000000000000000001":"0x0000000000000000000000000000000000000000000000000000000000000002"}}`,
+		},
+		{
+			name: "includes error only when present",
+			log: &StructLog{
+				Pc:      1,
+				Op:      vm.STOP,
+				Gas:     2,
+				GasCost: 3,
+				Depth:   1,
+				Err:     errors.New("boom"),
+			},
+			want: `{"pc":1,"op":"STOP","gas":2,"gasCost":3,"depth":1,"error":"boom"}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			have := string(tt.log.toLegacyJSON())
+			if have != tt.want {
+				t.Fatalf("mismatched results\n\thave: %v\n\twant: %v", have, tt.want)
 			}
 		})
 	}

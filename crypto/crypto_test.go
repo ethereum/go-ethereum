@@ -60,7 +60,7 @@ func TestToECDSAErrors(t *testing.T) {
 
 func BenchmarkSha3(b *testing.B) {
 	a := []byte("hello world")
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		Keccak256(a)
 	}
 }
@@ -293,7 +293,7 @@ func TestPythonIntegration(t *testing.T) {
 	sig0, _ := Sign(msg0, k0)
 
 	msg1 := common.FromHex("00000000000000000000000000000000")
-	sig1, _ := Sign(msg0, k0)
+	sig1, _ := Sign(msg1, k0)
 
 	t.Logf("msg: %x, privkey: %s sig: %x\n", msg0, kh, sig0)
 	t.Logf("msg: %x, privkey: %s sig: %x\n", msg1, kh, sig1)
@@ -310,7 +310,7 @@ func BenchmarkKeccak256Hash(b *testing.B) {
 	rand.Read(input[:])
 
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		Keccak256Hash(input[:])
 	}
 }
@@ -329,7 +329,7 @@ func BenchmarkHashData(b *testing.B) {
 	rand.Read(input[:])
 
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		HashData(buffer, input[:])
 	}
 }

@@ -182,13 +182,14 @@ func (s *filterTestSuite) loadQueries() error {
 
 // filterQuery is a single query for testing.
 type filterQuery struct {
-	FromBlock  int64            `json:"fromBlock"`
-	ToBlock    int64            `json:"toBlock"`
-	Address    []common.Address `json:"address"`
-	Topics     [][]common.Hash  `json:"topics"`
-	ResultHash *common.Hash     `json:"resultHash,omitempty"`
-	results    []types.Log
-	Err        error `json:"error,omitempty"`
+	FromBlock     int64 `json:"fromBlock"`
+	ToBlock       int64 `json:"toBlock"`
+	lastBlockHash common.Hash
+	Address       []common.Address `json:"address"`
+	Topics        [][]common.Hash  `json:"topics"`
+	ResultHash    *common.Hash     `json:"resultHash,omitempty"`
+	results       []types.Log
+	Err           error `json:"error,omitempty"`
 }
 
 func (fq *filterQuery) isWildcard() bool {

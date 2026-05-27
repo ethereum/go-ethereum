@@ -283,11 +283,11 @@ func (h *stateHistory) typ() historyType {
 
 // forEach implements the history interface, returning an iterator to traverse the
 // state entries in the history.
-func (h *stateHistory) forEach() iter.Seq[stateIdent] {
-	return func(yield func(stateIdent) bool) {
+func (h *stateHistory) forEach() iter.Seq[indexElem] {
+	return func(yield func(indexElem) bool) {
 		for _, addr := range h.accountList {
 			addrHash := crypto.Keccak256Hash(addr.Bytes())
-			if !yield(newAccountIdent(addrHash)) {
+			if !yield(accountIndexElem{addrHash}) {
 				return
 			}
 			for _, slotKey := range h.storageList[addr] {
@@ -298,7 +298,7 @@ func (h *stateHistory) forEach() iter.Seq[stateIdent] {
 				if h.meta.version != stateHistoryV0 {
 					slotHash = crypto.Keccak256Hash(slotKey.Bytes())
 				}
-				if !yield(newStorageIdent(addrHash, slotHash)) {
+				if !yield(storageIndexElem{addrHash, slotHash}) {
 					return
 				}
 			}
@@ -605,9 +605,9 @@ func writeStateHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
 	if err := rawdb.WriteStateHistory(writer, dl.stateID(), history.meta.encode(), accountIndex, storageIndex, accountData, storageData); err != nil {
 		return err
 	}
-	historyDataBytesMeter.Mark(int64(dataSize))
-	historyIndexBytesMeter.Mark(int64(indexSize))
-	historyBuildTimeMeter.UpdateSince(start)
+	stateHistoryDataBytesMeter.Mark(int64(dataSize))
+	stateHistoryIndexBytesMeter.Mark(int64(indexSize))
+	stateHistoryBuildTimeMeter.UpdateSince(start)
 	log.Debug("Stored state history", "id", dl.stateID(), "block", dl.block, "data", dataSize, "index", indexSize, "elapsed", common.PrettyDuration(time.Since(start)))
 
 	return nil

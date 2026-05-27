@@ -46,6 +46,27 @@ func DeleteStateHistoryIndexMetadata(db ethdb.KeyValueWriter) {
 	}
 }
 
+// ReadTrienodeHistoryIndexMetadata retrieves the metadata of trienode history index.
+func ReadTrienodeHistoryIndexMetadata(db ethdb.KeyValueReader) []byte {
+	data, _ := db.Get(headTrienodeHistoryIndexKey)
+	return data
+}
+
+// WriteTrienodeHistoryIndexMetadata stores the metadata of trienode history index
+// into database.
+func WriteTrienodeHistoryIndexMetadata(db ethdb.KeyValueWriter, blob []byte) {
+	if err := db.Put(headTrienodeHistoryIndexKey, blob); err != nil {
+		log.Crit("Failed to store the metadata of trienode history index", "err", err)
+	}
+}
+
+// DeleteTrienodeHistoryIndexMetadata removes the metadata of trienode history index.
+func DeleteTrienodeHistoryIndexMetadata(db ethdb.KeyValueWriter) {
+	if err := db.Delete(headTrienodeHistoryIndexKey); err != nil {
+		log.Crit("Failed to delete the metadata of trienode history index", "err", err)
+	}
+}
+
 // ReadAccountHistoryIndex retrieves the account history index with the provided
 // account address.
 func ReadAccountHistoryIndex(db ethdb.KeyValueReader, addressHash common.Hash) []byte {
@@ -92,6 +113,30 @@ func WriteStorageHistoryIndex(db ethdb.KeyValueWriter, addressHash common.Hash, 
 func DeleteStorageHistoryIndex(db ethdb.KeyValueWriter, addressHash common.Hash, storageHash common.Hash) {
 	if err := db.Delete(storageHistoryIndexKey(addressHash, storageHash)); err != nil {
 		log.Crit("Failed to delete storage history index", "err", err)
+	}
+}
+
+// ReadTrienodeHistoryIndex retrieves the trienode history index with the provided
+// account address and storage key hash.
+func ReadTrienodeHistoryIndex(db ethdb.KeyValueReader, addressHash common.Hash, path []byte) []byte {
+	data, err := db.Get(trienodeHistoryIndexKey(addressHash, path))
+	if err != nil || len(data) == 0 {
+		return nil
+	}
+	return data
+}
+
+// WriteTrienodeHistoryIndex writes the provided trienode history index into database.
+func WriteTrienodeHistoryIndex(db ethdb.KeyValueWriter, addressHash common.Hash, path []byte, data []byte) {
+	if err := db.Put(trienodeHistoryIndexKey(addressHash, path), data); err != nil {
+		log.Crit("Failed to store trienode history index", "err", err)
+	}
+}
+
+// DeleteTrienodeHistoryIndex deletes the specified trienode index from the database.
+func DeleteTrienodeHistoryIndex(db ethdb.KeyValueWriter, addressHash common.Hash, path []byte) {
+	if err := db.Delete(trienodeHistoryIndexKey(addressHash, path)); err != nil {
+		log.Crit("Failed to delete trienode history index", "err", err)
 	}
 }
 
@@ -143,6 +188,30 @@ func DeleteStorageHistoryIndexBlock(db ethdb.KeyValueWriter, addressHash common.
 	}
 }
 
+// ReadTrienodeHistoryIndexBlock retrieves the index block with the provided state
+// identifier along with the block id.
+func ReadTrienodeHistoryIndexBlock(db ethdb.KeyValueReader, addressHash common.Hash, path []byte, blockID uint32) []byte {
+	data, err := db.Get(trienodeHistoryIndexBlockKey(addressHash, path, blockID))
+	if err != nil || len(data) == 0 {
+		return nil
+	}
+	return data
+}
+
+// WriteTrienodeHistoryIndexBlock writes the provided index block into database.
+func WriteTrienodeHistoryIndexBlock(db ethdb.KeyValueWriter, addressHash common.Hash, path []byte, id uint32, data []byte) {
+	if err := db.Put(trienodeHistoryIndexBlockKey(addressHash, path, id), data); err != nil {
+		log.Crit("Failed to store trienode index block", "err", err)
+	}
+}
+
+// DeleteTrienodeHistoryIndexBlock deletes the specified index block from the database.
+func DeleteTrienodeHistoryIndexBlock(db ethdb.KeyValueWriter, addressHash common.Hash, path []byte, id uint32) {
+	if err := db.Delete(trienodeHistoryIndexBlockKey(addressHash, path, id)); err != nil {
+		log.Crit("Failed to delete trienode index block", "err", err)
+	}
+}
+
 // increaseKey increase the input key by one bit. Return nil if the entire
 // addition operation overflows.
 func increaseKey(key []byte) []byte {
@@ -155,14 +224,26 @@ func increaseKey(key []byte) []byte {
 	return nil
 }
 
-// DeleteStateHistoryIndex completely removes all history indexing data, including
+// DeleteStateHistoryIndexes completely removes all history indexing data, including
 // indexes for accounts and storages.
-//
-// Note, this method assumes the storage space with prefix `StateHistoryIndexPrefix`
-// is exclusively occupied by the history indexing data!
-func DeleteStateHistoryIndex(db ethdb.KeyValueRangeDeleter) {
-	start := StateHistoryIndexPrefix
-	limit := increaseKey(bytes.Clone(StateHistoryIndexPrefix))
+func DeleteStateHistoryIndexes(db ethdb.KeyValueRangeDeleter) {
+	DeleteHistoryByRange(db, StateHistoryAccountMetadataPrefix)
+	DeleteHistoryByRange(db, StateHistoryStorageMetadataPrefix)
+	DeleteHistoryByRange(db, StateHistoryAccountBlockPrefix)
+	DeleteHistoryByRange(db, StateHistoryStorageBlockPrefix)
+}
+
+// DeleteTrienodeHistoryIndexes completely removes all trienode history indexing data.
+func DeleteTrienodeHistoryIndexes(db ethdb.KeyValueRangeDeleter) {
+	DeleteHistoryByRange(db, TrienodeHistoryMetadataPrefix)
+	DeleteHistoryByRange(db, TrienodeHistoryBlockPrefix)
+}
+
+// DeleteHistoryByRange completely removes all database entries with the specific prefix.
+// Note, this method assumes the space with the given prefix is exclusively occupied!
+func DeleteHistoryByRange(db ethdb.KeyValueRangeDeleter, prefix []byte) {
+	start := prefix
+	limit := increaseKey(bytes.Clone(prefix))
 
 	// Try to remove the data in the range by a loop, as the leveldb
 	// doesn't support the native range deletion.

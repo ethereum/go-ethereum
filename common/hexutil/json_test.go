@@ -408,7 +408,6 @@ func TestUnmarshalFixedUnprefixedText(t *testing.T) {
 		{input: "0x2", wantErr: ErrOddLength},
 		{input: "2", wantErr: ErrOddLength},
 		{input: "4444", wantErr: errors.New("hex string has length 4, want 8 for x")},
-		{input: "4444", wantErr: errors.New("hex string has length 4, want 8 for x")},
 		// check that output is not modified for partially correct input
 		{input: "444444gg", wantErr: ErrSyntax, want: []byte{0, 0, 0, 0}},
 		{input: "0x444444gg", wantErr: ErrSyntax, want: []byte{0, 0, 0, 0}},

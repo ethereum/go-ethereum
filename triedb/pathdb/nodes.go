@@ -14,12 +14,14 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// nolint:unused
 package pathdb
 
 import (
 	"bytes"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"maps"
 
@@ -30,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
@@ -423,4 +426,266 @@ func (s *nodeSetWithOrigin) decode(r *rlp.Stream) error {
 	}
 	s.computeSize()
 	return nil
+}
+
+// encodeNodeCompressed encodes the trie node differences between two consecutive
+// versions into byte stream. The format is as below:
+//
+// - metadata byte layout (1 byte):
+//
+//	┌──── Bits (from MSB to LSB) ───┐
+//	│ 7 │ 6 │ 5 │ 4 │ 3 │ 2 │ 1 │ 0 │
+//	└───────────────────────────────┘
+//	  │   │   │   │   │   │   │   └─ FlagA: set if value is encoded in compressed format
+//	  │   │   │   │   │   │   └───── FlagB: set if no extended bitmap is present after the metadata byte
+//	  │   │   │   │   │   └───────── FlagC: bitmap for node (only used when flagB == 1)
+//	  │   │   │   │   └───────────── FlagD: bitmap for node (only used when flagB == 1)
+//	  │   │   │   └───────────────── FlagE: reserved (marks the presence of the 16th child in a full node)
+//	  │   │   └───────────────────── FlagF: reserved
+//	  │   └───────────────────────── FlagG: reserved
+//	  └───────────────────────────── FlagH: reserved
+//
+// Note:
+// - If flagB is 1, the node refers to a shortNode;
+//   - flagC indicates whether the key of the shortNode is recorded.
+//   - flagD indicates whether the value of the shortNode is recorded.
+//
+// - If flagB is 0, the node refers to a fullNode;
+//   - each bit in extended bitmap indicates whether the corresponding
+//     child have been modified.
+//
+// Example:
+//
+// 0b_0000_1011
+//
+// Bit0=1, Bit1=1 -> node in compressed format, no extended bitmap
+// Bit2=0, Bit3=1 -> the key of a short node is not stored; its value is stored.
+//
+// - 2 bytes extended bitmap (only if the flagB in metadata is 0), each bit
+// represents a corresponding child;
+//
+// - concatenation of original value of modified children along with its size;
+func encodeNodeCompressed(addExtension bool, elements [][]byte, indices []int) []byte {
+	var (
+		enc  []byte
+		flag = byte(1) // The compression format indicator
+	)
+	// Pre-allocate the byte slice for the node encoder
+	size := 1
+	if addExtension {
+		size += 2
+	}
+	for _, element := range elements {
+		size += len(element) + 1
+	}
+	enc = make([]byte, 0, size)
+
+	if !addExtension {
+		flag |= 2 // The embedded bitmap indicator
+
+		// Embedded bitmap
+		for _, pos := range indices {
+			flag |= 1 << (pos + 2)
+		}
+		enc = append(enc, flag)
+	} else {
+		// Extended bitmap
+		bitmap := make([]byte, 2) // bitmaps for at most 16 children
+		for _, pos := range indices {
+			// Children[16] is only theoretically possible in the Merkle-Patricia-trie,
+			// in practice this field is never used in the Ethereum case. If it occurs,
+			// use the FlagE for marking the presence.
+			if pos >= 16 {
+				log.Warn("Unexpected 16th child encountered in a full node")
+				flag |= 1 << 4 // Use the reserved flagE
+				continue
+			}
+			setBit(bitmap, pos)
+		}
+		enc = append(enc, flag)
+		enc = append(enc, bitmap...)
+	}
+	for _, element := range elements {
+		enc = append(enc, byte(len(element))) // 1 byte is sufficient for element size
+		enc = append(enc, element...)
+	}
+	return enc
+}
+
+// encodeNodeFull encodes the full trie node value into byte stream. The format is
+// as below:
+//
+// - metadata byte layout (1 byte): 0b0
+// - node value
+//
+// TODO(rjl493456442) it's not allocation efficient, please improve it.
+func encodeNodeFull(value []byte) []byte {
+	enc := make([]byte, len(value)+1)
+	copy(enc[1:], value)
+	return enc
+}
+
+// decodeNodeCompressed decodes the byte stream of compressed trie node
+// back to the original elements and their indices.
+//
+// It assumes the byte stream contains a compressed format node.
+func decodeNodeCompressed(data []byte) ([][]byte, []int, error) {
+	if len(data) < 1 {
+		return nil, nil, errors.New("invalid data: too short")
+	}
+	flag := data[0]
+	if flag&byte(1) == 0 {
+		return nil, nil, errors.New("invalid data: full node value")
+	}
+	noExtend := flag&byte(2) != 0
+
+	// Reconstruct indices from bitmap
+	var indices []int
+	if noExtend {
+		if flag&byte(4) != 0 { // flagC
+			indices = append(indices, 0)
+		}
+		if flag&byte(8) != 0 { // flagD
+			indices = append(indices, 1)
+		}
+		data = data[1:]
+	} else {
+		if len(data) < 3 {
+			return nil, nil, errors.New("invalid data: too short")
+		}
+		bitmap := data[1:3]
+		indices = bitPosTwoBytes(bitmap)
+		if flag&byte(16) != 0 { // flagE
+			indices = append(indices, 16)
+			log.Info("Unexpected 16th child encountered in a full node")
+		}
+		data = data[3:]
+	}
+	// Reconstruct elements
+	elements := make([][]byte, 0, len(indices))
+	for i := 0; i < len(indices); i++ {
+		if len(data) == 0 {
+			return nil, nil, errors.New("invalid data: missing size byte")
+		}
+		// Read element size
+		size := int(data[0])
+		data = data[1:]
+
+		// Check if we have enough data for the element
+		if len(data) < size {
+			return nil, nil, fmt.Errorf("invalid data: expected %d bytes, got %d", size, len(data))
+		}
+		// Extract element
+		if size == 0 {
+			elements = append(elements, nil)
+
+			// The zero-size element is practically unexpected, for node deletion
+			// the rlp.EmptyString is still expected. Log loudly for the potential
+			// programming error.
+			log.Error("Empty element from compressed node, please open an issue", "raw", data)
+		} else {
+			element := make([]byte, size)
+			copy(element, data[:size])
+			data = data[size:]
+			elements = append(elements, element)
+		}
+	}
+	// Check if all data is consumed
+	if len(data) != 0 {
+		return nil, nil, errors.New("invalid data: trailing bytes")
+	}
+	return elements, indices, nil
+}
+
+// decodeNodeFull decodes the byte stream of full value trie node.
+func decodeNodeFull(data []byte) (bool, []byte, error) {
+	if len(data) < 1 {
+		return false, nil, errors.New("invalid data: too short")
+	}
+	flag := data[0]
+	if flag != byte(0) {
+		return false, nil, nil
+	}
+	return true, data[1:], nil
+}
+
+// encodeNodeHistory encodes the history of a node. Typically, the original values
+// of dirty nodes serve as the history, but this can lead to significant storage
+// overhead.
+//
+// For full nodes, which often see only a few modified children during state
+// transitions, recording the entire child set (up to 16 children at 32 bytes
+// each) is inefficient. For short nodes, which often see only the value is
+// modified during the state transition, recording the key part is also unnecessary.
+// To compress size, we instead record the diff of the node, rather than the
+// full value. It's vital to compress the overall trienode history.
+//
+// However, recovering a node from a series of diffs requires applying multiple
+// history records, which is computationally and IO intensive. To mitigate this, we
+// periodically record the full value of a node as a checkpoint. The frequency of
+// these checkpoints is a tradeoff between the compression rate and read overhead.
+func (s *nodeSetWithOrigin) encodeNodeHistory(root common.Hash, rate uint32) (map[common.Hash]map[string][]byte, error) {
+	var (
+		// the set of all encoded node history elements
+		nodes = make(map[common.Hash]map[string][]byte)
+
+		// encodeFullValue determines whether a node should be encoded
+		// in full format with a pseudo-random probabilistic algorithm.
+		encodeFullValue = func(owner common.Hash, path string) bool {
+			// For trie nodes at the first two levels of the account trie, it is very
+			// likely that all children are modified within a single state transition.
+			// In such cases, do not use diff mode.
+			if owner == (common.Hash{}) && len(path) < 2 {
+				return true
+			}
+			h := fnv.New32a()
+			h.Write(root.Bytes())
+			h.Write(owner.Bytes())
+			h.Write([]byte(path))
+			return h.Sum32()%rate == 0
+		}
+	)
+	for owner, origins := range s.nodeOrigin {
+		var posts map[string]*trienode.Node
+		if owner == (common.Hash{}) {
+			posts = s.nodeSet.accountNodes
+		} else {
+			posts = s.nodeSet.storageNodes[owner]
+		}
+		nodes[owner] = make(map[string][]byte)
+
+		for path, oldvalue := range origins {
+			n, exists := posts[path]
+			if !exists {
+				// something not expected
+				return nil, fmt.Errorf("node with origin is not found, %x-%v", owner, []byte(path))
+			}
+			encodeFull := encodeFullValue(owner, path)
+			if !encodeFull {
+				// TODO(rjl493456442) the diff-mode reencoding can take non-trivial
+				// time, like 1-2ms per block, is there any way to mitigate the overhead?
+
+				// Partial encoding is required, try to find the node diffs and
+				// fallback to the full-value encoding if fails.
+				//
+				// The partial encoding will be failed in these certain cases:
+				// - the node is deleted or was not-existent;
+				// - the node type has been changed (e.g, from short to full)
+				nElem, indices, diffs, err := trie.NodeDifference(oldvalue, n.Blob)
+				if err != nil {
+					encodeFull = true // fallback to the full node encoding
+				} else {
+					// Encode the node difference as the history element
+					addExt := nElem != 2 // fullNode
+					blob := encodeNodeCompressed(addExt, diffs, indices)
+					nodes[owner][path] = blob
+				}
+			}
+			if encodeFull {
+				// Encode the entire original value as the history element
+				nodes[owner][path] = encodeNodeFull(oldvalue)
+			}
+		}
+	}
+	return nodes, nil
 }

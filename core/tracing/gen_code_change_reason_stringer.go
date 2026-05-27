@@ -22,8 +22,9 @@ const _CodeChangeReason_name = "UnspecifiedContractCreationGenesisAuthorizationA
 var _CodeChangeReason_index = [...]uint8{0, 11, 27, 34, 47, 65, 77, 83}
 
 func (i CodeChangeReason) String() string {
-	if i >= CodeChangeReason(len(_CodeChangeReason_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_CodeChangeReason_index)-1 {
 		return "CodeChangeReason(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _CodeChangeReason_name[_CodeChangeReason_index[i]:_CodeChangeReason_index[i+1]]
+	return _CodeChangeReason_name[_CodeChangeReason_index[idx]:_CodeChangeReason_index[idx+1]]
 }

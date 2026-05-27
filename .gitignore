@@ -56,3 +56,4 @@ cmd/evm/evm
 cmd/geth/geth
 cmd/rlpdump/rlpdump
 cmd/workload/workload
+cmd/keeper/keeper

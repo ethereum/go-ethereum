@@ -121,7 +121,7 @@ with our test chain. The chain files are located in `./cmd/devp2p/internal/ethte
         --nat=none                     \
         --networkid 3503995874084926   \
         --verbosity 5                  \
-        --authrpc.jwtsecret 0x7365637265747365637265747365637265747365637265747365637265747365
+        --authrpc.jwtsecret jwt.secret
 
 Note that the tests also require access to the engine API.
 The test suite can now be executed using the devp2p tool.
@@ -130,7 +130,7 @@ The test suite can now be executed using the devp2p tool.
         --chain internal/ethtest/testdata   \
         --node enode://....                 \
         --engineapi http://127.0.0.1:8551   \
-        --jwtsecret 0x7365637265747365637265747365637265747365637265747365637265747365
+        --jwtsecret $(cat jwt.secret)
 
 Repeat the above process (re-initialising the node) in order to run the Eth Protocol test suite again.
 

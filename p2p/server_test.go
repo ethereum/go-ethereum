@@ -579,6 +579,33 @@ func TestServerInboundThrottle(t *testing.T) {
 	}
 }
 
+func TestServerDiscoveryV5FailureRollsBackV4(t *testing.T) {
+	badBootstrap := enode.NewV4(&newkey().PublicKey, net.ParseIP("127.0.0.1"), 30303, 0) // invalid V5 of a V4 node
+	srv := &Server{
+		Config: Config{
+			PrivateKey:       newkey(),
+			ListenAddr:       "",
+			DiscAddr:         "127.0.0.1:0",
+			MaxPeers:         5,
+			DiscoveryV4:      true,
+			DiscoveryV5:      true,
+			BootstrapNodesV5: []*enode.Node{badBootstrap},
+			Logger:           testlog.Logger(t, log.LvlTrace),
+		},
+	}
+	err := srv.Start()
+	if err == nil {
+		t.Fatal("expected discovery v5 startup failure")
+	}
+	if !strings.Contains(err.Error(), "bad bootstrap node") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if srv.DiscoveryV4() != nil {
+		t.Fatal("discovery v4 not cleaned after failure")
+	}
+	srv.Stop()
+}
+
 func listenFakeAddr(network, laddr string, remoteAddr net.Addr) (net.Listener, error) {
 	l, err := net.Listen(network, laddr)
 	if err == nil {

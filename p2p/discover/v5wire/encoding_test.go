@@ -269,6 +269,35 @@ func TestHandshake_BadHandshakeAttack(t *testing.T) {
 	net.nodeB.expectDecodeErr(t, errUnexpectedHandshake, findnode)
 }
 
+func TestEncodeWhoareyouResend(t *testing.T) {
+	t.Parallel()
+	net := newHandshakeTest()
+	defer net.close()
+
+	// A -> B   WHOAREYOU
+	challenge := &Whoareyou{
+		Nonce:     Nonce{1, 2, 3, 4},
+		IDNonce:   testIDnonce,
+		RecordSeq: 0,
+	}
+	enc, _ := net.nodeA.encode(t, net.nodeB, challenge)
+	net.nodeB.expectDecode(t, WhoareyouPacket, enc)
+	whoareyou1 := bytes.Clone(enc)
+
+	if len(challenge.ChallengeData) == 0 {
+		t.Fatal("ChallengeData not assigned by encode")
+	}
+
+	// A -> B   WHOAREYOU
+	// Send the same challenge again. This should produce exactly
+	// the same bytes as the first send.
+	enc, _ = net.nodeA.encode(t, net.nodeB, challenge)
+	whoareyou2 := bytes.Clone(enc)
+	if !bytes.Equal(whoareyou2, whoareyou1) {
+		t.Fatal("re-encoded challenge not equal to first")
+	}
+}
+
 // This test checks some malformed packets.
 func TestDecodeErrorsV5(t *testing.T) {
 	t.Parallel()
@@ -477,10 +506,9 @@ func BenchmarkV5_DecodeHandshakePingSecp256k1(b *testing.B) {
 		b.Fatal("can't encode handshake packet")
 	}
 	challenge.Node = nil // force ENR signature verification in decoder
-	b.ResetTimer()
 
 	input := make([]byte, len(enc))
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		copy(input, enc)
 		net.nodeB.c.sc.storeSentHandshake(idA, "", challenge)
 		_, _, _, err := net.nodeB.c.Decode(input, "")
@@ -507,10 +535,9 @@ func BenchmarkV5_DecodePing(b *testing.B) {
 	if err != nil {
 		b.Fatalf("can't encode: %v", err)
 	}
-	b.ResetTimer()
 
 	input := make([]byte, len(enc))
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		copy(input, enc)
 		_, _, packet, _ := net.nodeB.c.Decode(input, addrB)
 		if _, ok := packet.(*Ping); !ok {

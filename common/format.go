@@ -69,7 +69,7 @@ func (t PrettyAge) String() string {
 	result, prec := "", 0
 
 	for _, unit := range ageUnits {
-		if diff > unit.Size {
+		if diff >= unit.Size {
 			result = fmt.Sprintf("%s%d%s", result, diff/unit.Size, unit.Symbol)
 			diff %= unit.Size
 

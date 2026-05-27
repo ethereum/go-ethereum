@@ -213,7 +213,7 @@ func init() {
 
 func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 	switch {
-	case rules.IsVerkle:
+	case rules.IsUBT:
 		return PrecompiledContractsVerkle
 	case rules.IsOsaka:
 		return PrecompiledContractsOsaka
@@ -260,19 +260,25 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
 // It returns
 // - the returned bytes,
-// - the _remaining_ gas,
+// - the remaining gas budget,
 // - any error that occurred
-func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64, logger *tracing.Hooks) (ret []byte, remainingGas uint64, err error) {
+func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address common.Address, input []byte, gas GasBudget, logger *tracing.Hooks, rules params.Rules) (ret []byte, remaining GasBudget, err error) {
 	gasCost := p.RequiredGas(input)
-	if suppliedGas < gasCost {
-		return nil, 0, ErrOutOfGas
+	prior, ok := gas.Charge(GasCosts{RegularGas: gasCost})
+	if !ok {
+		gas.Exhaust()
+		return nil, gas, ErrOutOfGas
 	}
-	if logger != nil && logger.OnGasChange != nil {
-		logger.OnGasChange(suppliedGas, suppliedGas-gasCost, tracing.GasChangeCallPrecompiledContract)
+	if logger.HasGasHook() {
+		logger.EmitGasChange(prior.AsTracing(), gas.AsTracing(), tracing.GasChangeCallPrecompiledContract)
 	}
-	suppliedGas -= gasCost
+	// Touch the precompile for block-level accessList recording once Amsterdam
+	// fork is activated.
+	if rules.IsAmsterdam {
+		stateDB.Touch(address)
+	}
 	output, err := p.Run(input)
-	return output, suppliedGas, err
+	return output, gas, err
 }
 
 // ecrecover implemented as a native contract.
@@ -299,11 +305,11 @@ func (c *ecrecover) Run(input []byte) ([]byte, error) {
 	}
 	// We must make sure not to modify the 'input', so placing the 'v' along with
 	// the signature needs to be done on a new allocation
-	sig := make([]byte, 65)
-	copy(sig, input[64:128])
+	var sig [65]byte
+	copy(sig[:], input[64:128])
 	sig[64] = v
 	// v needs to be at the end for libsecp256k1
-	pubKey, err := crypto.Ecrecover(input[:32], sig)
+	pubKey, err := crypto.Ecrecover(input[:32], sig[:])
 	// make sure the public key is a valid one
 	if err != nil {
 		return nil, nil
@@ -591,7 +597,6 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		if expLen > 32 {
 			expHead.SetBytes(getData(input, baseLen, 32))
 		} else {
-			// TODO: Check that if expLen < baseLen, then getData will return an empty slice
 			expHead.SetBytes(getData(input, baseLen, expLen))
 		}
 	}

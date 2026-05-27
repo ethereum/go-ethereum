@@ -80,8 +80,12 @@ func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block
 	return types.NewBlock(bc.CurrentBlock(), nil, nil, trie.NewStackTrie(nil))
 }
 
-func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
+func (bc *testBlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
 	return bc.statedb, nil
+}
+
+func (bc *testBlockChain) Genesis() *types.Block {
+	return types.NewBlock(bc.CurrentBlock(), nil, nil, trie.NewStackTrie(nil))
 }
 
 func (bc *testBlockChain) HasState(root common.Hash) bool {
@@ -155,7 +159,7 @@ func createMiner(t *testing.T) *Miner {
 	if err != nil {
 		t.Fatalf("can't create new chain %v", err)
 	}
-	statedb, _ := state.New(bc.Genesis().Root(), bc.StateCache())
+	statedb, _ := state.New(bc.Genesis().Root(), state.NewDatabase(bc.TrieDB(), bc.CodeDB()))
 	blockchain := &testBlockChain{bc.Genesis().Root(), chainConfig, statedb, 10000000, new(event.Feed)}
 
 	pool := legacypool.New(testTxPoolConfig, blockchain)

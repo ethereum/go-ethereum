@@ -48,7 +48,9 @@ func init() {
 		historyGenerateCommand,
 		filterGenerateCommand,
 		traceGenerateCommand,
+		proofGenerateCommand,
 		filterPerfCommand,
+		filterFuzzCommand,
 	}
 }
 

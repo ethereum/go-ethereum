@@ -135,8 +135,8 @@ type opcodeWithPartialStack struct {
 type erc7562Tracer struct {
 	config    erc7562TracerConfig
 	gasLimit  uint64
-	interrupt atomic.Bool // Atomic flag to signal execution interruption
-	reason    error       // Textual reason for the interruption
+	interrupt atomic.Bool           // Atomic flag to signal execution interruption
+	reason    atomic.Pointer[error] // Reason for the interruption, populated by Stop
 	env       *tracing.VMContext
 
 	ignoredOpcodes       map[vm.OpCode]struct{}
@@ -317,7 +317,10 @@ func (t *erc7562Tracer) OnLog(log1 *types.Log) {
 // error arising from the encoding or forceful termination (via `Stop`).
 func (t *erc7562Tracer) GetResult() (json.RawMessage, error) {
 	if t.interrupt.Load() {
-		return nil, t.reason
+		if p := t.reason.Load(); p != nil {
+			return nil, *p
+		}
+		return nil, nil
 	}
 	if len(t.callstackWithOpcodes) != 1 {
 		return nil, errors.New("incorrect number of top-level calls")
@@ -337,12 +340,15 @@ func (t *erc7562Tracer) GetResult() (json.RawMessage, error) {
 		return nil, err
 	}
 
-	return enc, t.reason
+	if p := t.reason.Load(); p != nil {
+		return enc, *p
+	}
+	return enc, nil
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
 func (t *erc7562Tracer) Stop(err error) {
-	t.reason = err
+	t.reason.Store(&err)
 	t.interrupt.Store(true)
 }
 
@@ -513,7 +519,7 @@ func defaultIgnoredOpcodes() []hexutil.Uint64 {
 	ignored := make([]hexutil.Uint64, 0, 64)
 
 	// Allow all PUSHx, DUPx and SWAPx opcodes as they have sequential codes
-	for op := vm.PUSH0; op < vm.SWAP16; op++ {
+	for op := vm.PUSH0; op <= vm.SWAP16; op++ {
 		ignored = append(ignored, hexutil.Uint64(op))
 	}
 

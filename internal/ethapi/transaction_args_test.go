@@ -318,6 +318,7 @@ func (b *backendMock) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(42), nil
 }
 func (b *backendMock) BlobBaseFee(ctx context.Context) *big.Int { return big.NewInt(42) }
+func (b *backendMock) BaseFee(ctx context.Context) *big.Int     { return big.NewInt(42) }
 
 func (b *backendMock) CurrentHeader() *types.Header     { return b.current }
 func (b *backendMock) ChainConfig() *params.ChainConfig { return b.config }
@@ -336,7 +337,7 @@ func (b *backendMock) RPCGasCap() uint64                 { return 0 }
 func (b *backendMock) RPCEVMTimeout() time.Duration      { return time.Second }
 func (b *backendMock) RPCTxFeeCap() float64              { return 0 }
 func (b *backendMock) UnprotectedAllowed() bool          { return false }
-func (b *backendMock) SetHead(number uint64)             {}
+func (b *backendMock) SetHead(number uint64) error       { return nil }
 func (b *backendMock) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	return nil, nil
 }
@@ -410,4 +411,5 @@ func (b *backendMock) Engine() consensus.Engine { return nil }
 func (b *backendMock) CurrentView() *filtermaps.ChainView           { return nil }
 func (b *backendMock) NewMatcherBackend() filtermaps.MatcherBackend { return nil }
 
-func (b *backendMock) HistoryPruningCutoff() uint64 { return 0 }
+func (b *backendMock) HistoryPruningCutoff() uint64       { return 0 }
+func (b *backendMock) HistoryRetention() HistoryRetention { return HistoryRetention{} }

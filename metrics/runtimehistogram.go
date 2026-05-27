@@ -8,8 +8,10 @@ import (
 )
 
 func getOrRegisterRuntimeHistogram(name string, scale float64, r Registry) *runtimeHistogram {
-	constructor := func() Histogram { return newRuntimeHistogram(scale) }
-	return getOrRegister(name, constructor, r).(*runtimeHistogram)
+	if r == nil {
+		r = DefaultRegistry
+	}
+	return r.GetOrRegister(name, func() any { return newRuntimeHistogram(scale) }).(*runtimeHistogram)
 }
 
 // runtimeHistogram wraps a runtime/metrics histogram.
@@ -204,7 +206,7 @@ func (h *runtimeHistogramSnapshot) Percentiles(ps []float64) []float64 {
 	thresholds := make([]float64, len(ps))
 	indexes := make([]int, len(ps))
 	for i, percentile := range ps {
-		thresholds[i] = count * math.Max(0, math.Min(1.0, percentile))
+		thresholds[i] = count * max(0, min(1.0, percentile))
 		indexes[i] = i
 	}
 	sort.Sort(floatsAscendingKeepingIndex{thresholds, indexes})

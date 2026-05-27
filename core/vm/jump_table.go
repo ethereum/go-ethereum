@@ -24,7 +24,7 @@ import (
 
 type (
 	executionFunc func(pc *uint64, evm *EVM, callContext *ScopeContext) ([]byte, error)
-	gasFunc       func(*EVM, *Contract, *Stack, *Memory, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
+	gasFunc       func(*EVM, *Contract, *Stack, *Memory, uint64) (GasCosts, error) // last parameter is the requested memory size as a uint64
 	// memorySizeFunc returns the required size, and whether the operation overflowed a uint64
 	memorySizeFunc func(*Stack) (size uint64, overflow bool)
 )
@@ -63,6 +63,7 @@ var (
 	verkleInstructionSet           = newVerkleInstructionSet()
 	pragueInstructionSet           = newPragueInstructionSet()
 	osakaInstructionSet            = newOsakaInstructionSet()
+	amsterdamInstructionSet        = newAmsterdamInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -89,6 +90,13 @@ func validate(jt JumpTable) JumpTable {
 func newVerkleInstructionSet() JumpTable {
 	instructionSet := newShanghaiInstructionSet()
 	enable4762(&instructionSet)
+	return validate(instructionSet)
+}
+
+func newAmsterdamInstructionSet() JumpTable {
+	instructionSet := newOsakaInstructionSet()
+	enable7843(&instructionSet) // EIP-7843 (SLOTNUM opcode)
+	enable8024(&instructionSet) // EIP-8024 (Backward compatible SWAPN, DUPN, EXCHANGE)
 	return validate(instructionSet)
 }
 

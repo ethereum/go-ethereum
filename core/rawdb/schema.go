@@ -80,6 +80,10 @@ var (
 	// been indexed.
 	headStateHistoryIndexKey = []byte("LastStateHistoryIndex")
 
+	// headTrienodeHistoryIndexKey tracks the ID of the latest state history that has
+	// been indexed.
+	headTrienodeHistoryIndexKey = []byte("LastTrienodeHistoryIndex")
+
 	// txIndexTailKey tracks the oldest block whose transactions have been indexed.
 	txIndexTailKey = []byte("TransactionIndexTail")
 
@@ -108,6 +112,7 @@ var (
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
+	accessListPrefix    = []byte("j") // accessListPrefix + num (uint64 big endian) + hash -> block access list
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
 	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
@@ -125,8 +130,10 @@ var (
 	StateHistoryIndexPrefix           = []byte("m")   // The global prefix of state history index data
 	StateHistoryAccountMetadataPrefix = []byte("ma")  // StateHistoryAccountMetadataPrefix + account address hash => account metadata
 	StateHistoryStorageMetadataPrefix = []byte("ms")  // StateHistoryStorageMetadataPrefix + account address hash + storage slot hash => slot metadata
+	TrienodeHistoryMetadataPrefix     = []byte("mt")  // TrienodeHistoryMetadataPrefix + account address hash + trienode path => trienode metadata
 	StateHistoryAccountBlockPrefix    = []byte("mba") // StateHistoryAccountBlockPrefix + account address hash + blockID => account block
 	StateHistoryStorageBlockPrefix    = []byte("mbs") // StateHistoryStorageBlockPrefix + account address hash + storage slot hash + blockID => slot block
+	TrienodeHistoryBlockPrefix        = []byte("mbt") // TrienodeHistoryBlockPrefix + account address hash + trienode path + blockID => trienode block
 
 	// VerklePrefix is the database prefix for Verkle trie data, which includes:
 	// (a) Trie nodes
@@ -206,6 +213,11 @@ func blockBodyKey(number uint64, hash common.Hash) []byte {
 // blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
 func blockReceiptsKey(number uint64, hash common.Hash) []byte {
 	return append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+}
+
+// accessListKey = accessListPrefix + num (uint64 big endian) + hash
+func accessListKey(number uint64, hash common.Hash) []byte {
+	return append(append(accessListPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
 // txLookupKey = txLookupPrefix + hash
@@ -395,27 +407,34 @@ func storageHistoryIndexKey(addressHash common.Hash, storageHash common.Hash) []
 	return out
 }
 
+// trienodeHistoryIndexKey = TrienodeHistoryMetadataPrefix + addressHash + trienode path
+func trienodeHistoryIndexKey(addressHash common.Hash, path []byte) []byte {
+	totalLen := len(TrienodeHistoryMetadataPrefix) + common.HashLength + len(path)
+	out := make([]byte, totalLen)
+
+	off := 0
+	off += copy(out[off:], TrienodeHistoryMetadataPrefix)
+	off += copy(out[off:], addressHash.Bytes())
+	copy(out[off:], path)
+
+	return out
+}
+
 // accountHistoryIndexBlockKey = StateHistoryAccountBlockPrefix + addressHash + blockID
 func accountHistoryIndexBlockKey(addressHash common.Hash, blockID uint32) []byte {
-	var buf4 [4]byte
-	binary.BigEndian.PutUint32(buf4[:], blockID)
-
 	totalLen := len(StateHistoryAccountBlockPrefix) + common.HashLength + 4
 	out := make([]byte, totalLen)
 
 	off := 0
 	off += copy(out[off:], StateHistoryAccountBlockPrefix)
 	off += copy(out[off:], addressHash.Bytes())
-	copy(out[off:], buf4[:])
+	binary.BigEndian.PutUint32(out[off:], blockID)
 
 	return out
 }
 
 // storageHistoryIndexBlockKey = StateHistoryStorageBlockPrefix + addressHash + storageHash + blockID
 func storageHistoryIndexBlockKey(addressHash common.Hash, storageHash common.Hash, blockID uint32) []byte {
-	var buf4 [4]byte
-	binary.BigEndian.PutUint32(buf4[:], blockID)
-
 	totalLen := len(StateHistoryStorageBlockPrefix) + 2*common.HashLength + 4
 	out := make([]byte, totalLen)
 
@@ -423,7 +442,21 @@ func storageHistoryIndexBlockKey(addressHash common.Hash, storageHash common.Has
 	off += copy(out[off:], StateHistoryStorageBlockPrefix)
 	off += copy(out[off:], addressHash.Bytes())
 	off += copy(out[off:], storageHash.Bytes())
-	copy(out[off:], buf4[:])
+	binary.BigEndian.PutUint32(out[off:], blockID)
+
+	return out
+}
+
+// trienodeHistoryIndexBlockKey = TrienodeHistoryBlockPrefix + addressHash + trienode path + blockID
+func trienodeHistoryIndexBlockKey(addressHash common.Hash, path []byte, blockID uint32) []byte {
+	totalLen := len(TrienodeHistoryBlockPrefix) + common.HashLength + len(path) + 4
+	out := make([]byte, totalLen)
+
+	off := 0
+	off += copy(out[off:], TrienodeHistoryBlockPrefix)
+	off += copy(out[off:], addressHash.Bytes())
+	off += copy(out[off:], path)
+	binary.BigEndian.PutUint32(out[off:], blockID)
 
 	return out
 }

@@ -16,118 +16,43 @@
 
 package bintrie
 
-import (
-	"errors"
-
-	"github.com/ethereum/go-ethereum/common"
-)
-
-type (
-	NodeFlushFn    func([]byte, BinaryNode)
-	NodeResolverFn func([]byte, common.Hash) ([]byte, error)
-)
+import "github.com/ethereum/go-ethereum/common"
 
 // zero is the zero value for a 32-byte array.
 var zero [32]byte
 
 const (
-	NodeWidth = 256 // Number of child per leaf node
-	StemSize  = 31  // Number of bytes to travel before reaching a group of leaves
+	StemNodeWidth  = 256 // Number of children per leaf node
+	StemSize       = 31  // Number of bytes to travel before reaching a group of leaves
+	NodeTypeBytes  = 1   // Size of node type prefix in serialization
+	HashSize       = 32  // Size of a hash in bytes
+	StemBitmapSize = 32  // Size of the bitmap in a stem node (256 values = 32 bytes)
+
+	MaxGroupDepth = 8
 )
 
+// bitmapSizeForDepth returns the bitmap size in bytes for a given group depth.
+// For depths 1-3, returns 1 byte. For depths 4-8, returns 2^(depth-3) bytes.
+func bitmapSizeForDepth(groupDepth int) int {
+	if groupDepth <= 3 {
+		return 1
+	}
+	return 1 << (groupDepth - 3)
+}
+
 const (
-	nodeTypeStem = iota + 1 // Stem node, contains a stem and a bitmap of values
+	nodeTypeStem = iota + 1
 	nodeTypeInternal
 )
 
-// BinaryNode is an interface for a binary trie node.
-type BinaryNode interface {
-	Get([]byte, NodeResolverFn) ([]byte, error)
-	Insert([]byte, []byte, NodeResolverFn, int) (BinaryNode, error)
-	Copy() BinaryNode
-	Hash() common.Hash
-	GetValuesAtStem([]byte, NodeResolverFn) ([][]byte, error)
-	InsertValuesAtStem([]byte, [][]byte, NodeResolverFn, int) (BinaryNode, error)
-	CollectNodes([]byte, NodeFlushFn) error
-
-	toDot(parent, path string) string
-	GetHeight() int
-}
-
-// SerializeNode serializes a binary trie node into a byte slice.
-func SerializeNode(node BinaryNode) []byte {
-	switch n := (node).(type) {
-	case *InternalNode:
-		var serialized [65]byte
-		serialized[0] = nodeTypeInternal
-		copy(serialized[1:33], n.left.Hash().Bytes())
-		copy(serialized[33:65], n.right.Hash().Bytes())
-		return serialized[:]
-	case *StemNode:
-		var serialized [32 + 32 + 256*32]byte
-		serialized[0] = nodeTypeStem
-		copy(serialized[1:32], node.(*StemNode).Stem)
-		bitmap := serialized[32:64]
-		offset := 64
-		for i, v := range node.(*StemNode).Values {
-			if v != nil {
-				bitmap[i/8] |= 1 << (7 - (i % 8))
-				copy(serialized[offset:offset+32], v)
-				offset += 32
-			}
-		}
-		return serialized[:]
-	default:
-		panic("invalid node type")
+// DeserializeAndHash deserializes a node from bytes and returns its hash.
+// This is a convenience function for external callers that need to compute
+// the hash of a serialized node without maintaining a nodeStore.
+func DeserializeAndHash(blob []byte, depth int) (common.Hash, error) {
+	s := newNodeStore()
+	ref, err := s.deserializeNode(blob, depth)
+	if err != nil {
+		return common.Hash{}, err
 	}
-}
-
-var invalidSerializedLength = errors.New("invalid serialized node length")
-
-// DeserializeNode deserializes a binary trie node from a byte slice.
-func DeserializeNode(serialized []byte, depth int) (BinaryNode, error) {
-	if len(serialized) == 0 {
-		return Empty{}, nil
-	}
-
-	switch serialized[0] {
-	case nodeTypeInternal:
-		if len(serialized) != 65 {
-			return nil, invalidSerializedLength
-		}
-		return &InternalNode{
-			depth: depth,
-			left:  HashedNode(common.BytesToHash(serialized[1:33])),
-			right: HashedNode(common.BytesToHash(serialized[33:65])),
-		}, nil
-	case nodeTypeStem:
-		if len(serialized) < 64 {
-			return nil, invalidSerializedLength
-		}
-		var values [256][]byte
-		bitmap := serialized[32:64]
-		offset := 64
-
-		for i := range 256 {
-			if bitmap[i/8]>>(7-(i%8))&1 == 1 {
-				if len(serialized) < offset+32 {
-					return nil, invalidSerializedLength
-				}
-				values[i] = serialized[offset : offset+32]
-				offset += 32
-			}
-		}
-		return &StemNode{
-			Stem:   serialized[1:32],
-			Values: values[:],
-			depth:  depth,
-		}, nil
-	default:
-		return nil, errors.New("invalid node type")
-	}
-}
-
-// ToDot converts the binary trie to a DOT language representation. Useful for debugging.
-func ToDot(root BinaryNode) string {
-	return root.toDot("", "")
+	return s.computeHash(ref), nil
 }

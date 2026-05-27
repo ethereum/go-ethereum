@@ -126,6 +126,15 @@ func (f *resettableFreezer) AncientRange(kind string, start, count, maxBytes uin
 	return f.freezer.AncientRange(kind, start, count, maxBytes)
 }
 
+// AncientBytes retrieves the value segment of the element specified by the id
+// and value offsets.
+func (f *resettableFreezer) AncientBytes(kind string, id, offset, length uint64) ([]byte, error) {
+	f.lock.RLock()
+	defer f.lock.RUnlock()
+
+	return f.freezer.AncientBytes(kind, id, offset, length)
+}
+
 // Ancients returns the length of the frozen items.
 func (f *resettableFreezer) Ancients() (uint64, error) {
 	f.lock.RLock()
@@ -212,12 +221,11 @@ func cleanup(path string) error {
 	if err != nil {
 		return err
 	}
+	defer dir.Close()
+
 	names, err := dir.Readdirnames(0)
 	if err != nil {
 		return err
-	}
-	if cerr := dir.Close(); cerr != nil {
-		return cerr
 	}
 	for _, name := range names {
 		if name == filepath.Base(path)+tmpSuffix {

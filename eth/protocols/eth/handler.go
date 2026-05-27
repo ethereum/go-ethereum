@@ -35,6 +35,10 @@ const (
 	// softResponseLimit is the target maximum size of replies to data retrievals.
 	softResponseLimit = 2 * 1024 * 1024
 
+	// maxPacketSize is the devp2p message size limit commonly enforced by clients.
+	// Any packet exceeding this limit must be rejected.
+	maxPacketSize = 10 * 1024 * 1024
+
 	// maxHeadersServe is the maximum number of block headers to serve. This number
 	// is there to limit the number of disk lookups.
 	maxHeadersServe = 1024
@@ -49,6 +53,9 @@ const (
 	// containing 200+ transactions nowadays, the practical limit will always
 	// be softResponseLimit.
 	maxReceiptsServe = 1024
+
+	// maxBALsServe is the maximum number of block access lists to serve.
+	maxBALsServe = 1024
 )
 
 // Handler is a callback to invoke from an outside runner after the boilerplate
@@ -106,7 +113,7 @@ func MakeProtocols(backend Backend, network uint64, disc enode.Iterator) []p2p.P
 			Version: version,
 			Length:  protocolLengths[version],
 			Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-				peer := NewPeer(version, p, rw, backend.TxPool())
+				peer := NewPeer(version, p, rw, backend.TxPool(), backend.Chain().Config())
 				defer peer.Close()
 
 				return backend.RunPeer(peer, func(peer *Peer) error {
@@ -163,22 +170,6 @@ func Handle(backend Backend, peer *Peer) error {
 type msgHandler func(backend Backend, msg Decoder, peer *Peer) error
 type Decoder interface {
 	Decode(val interface{}) error
-	Time() time.Time
-}
-
-var eth68 = map[uint64]msgHandler{
-	NewBlockHashesMsg:             handleNewBlockhashes,
-	NewBlockMsg:                   handleNewBlock,
-	TransactionsMsg:               handleTransactions,
-	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
-	GetBlockHeadersMsg:            handleGetBlockHeaders,
-	BlockHeadersMsg:               handleBlockHeaders,
-	GetBlockBodiesMsg:             handleGetBlockBodies,
-	BlockBodiesMsg:                handleBlockBodies,
-	GetReceiptsMsg:                handleGetReceipts68,
-	ReceiptsMsg:                   handleReceipts[*ReceiptList68],
-	GetPooledTransactionsMsg:      handleGetPooledTransactions,
-	PooledTransactionsMsg:         handlePooledTransactions,
 }
 
 var eth69 = map[uint64]msgHandler{
@@ -189,10 +180,40 @@ var eth69 = map[uint64]msgHandler{
 	GetBlockBodiesMsg:             handleGetBlockBodies,
 	BlockBodiesMsg:                handleBlockBodies,
 	GetReceiptsMsg:                handleGetReceipts69,
-	ReceiptsMsg:                   handleReceipts[*ReceiptList69],
+	ReceiptsMsg:                   handleReceipts69,
 	GetPooledTransactionsMsg:      handleGetPooledTransactions,
 	PooledTransactionsMsg:         handlePooledTransactions,
 	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
+}
+
+var eth70 = map[uint64]msgHandler{
+	TransactionsMsg:               handleTransactions,
+	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
+	GetBlockHeadersMsg:            handleGetBlockHeaders,
+	BlockHeadersMsg:               handleBlockHeaders,
+	GetBlockBodiesMsg:             handleGetBlockBodies,
+	BlockBodiesMsg:                handleBlockBodies,
+	GetReceiptsMsg:                handleGetReceipts70,
+	ReceiptsMsg:                   handleReceipts70,
+	GetPooledTransactionsMsg:      handleGetPooledTransactions,
+	PooledTransactionsMsg:         handlePooledTransactions,
+	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
+}
+
+var eth71 = map[uint64]msgHandler{
+	TransactionsMsg:               handleTransactions,
+	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
+	GetBlockHeadersMsg:            handleGetBlockHeaders,
+	BlockHeadersMsg:               handleBlockHeaders,
+	GetBlockBodiesMsg:             handleGetBlockBodies,
+	BlockBodiesMsg:                handleBlockBodies,
+	GetReceiptsMsg:                handleGetReceipts70,
+	ReceiptsMsg:                   handleReceipts70,
+	GetPooledTransactionsMsg:      handleGetPooledTransactions,
+	PooledTransactionsMsg:         handlePooledTransactions,
+	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
+	GetBlockAccessListsMsg:        handleGetBlockAccessLists,
+	BlockAccessListsMsg:           handleBlockAccessLists,
 }
 
 // handleMessage is invoked whenever an inbound message is received from a remote
@@ -209,11 +230,14 @@ func handleMessage(backend Backend, peer *Peer) error {
 	defer msg.Discard()
 
 	var handlers map[uint64]msgHandler
-	if peer.version == ETH68 {
-		handlers = eth68
-	} else if peer.version == ETH69 {
+	switch peer.version {
+	case ETH69:
 		handlers = eth69
-	} else {
+	case ETH70:
+		handlers = eth70
+	case ETH71:
+		handlers = eth71
+	default:
 		return fmt.Errorf("unknown eth protocol version: %v", peer.version)
 	}
 

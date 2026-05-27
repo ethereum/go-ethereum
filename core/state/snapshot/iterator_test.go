@@ -342,7 +342,7 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 		if i%8 == 0 {
 			e[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 4, i)
 		}
-		if i > 50 || i < 85 {
+		if i > 50 && i < 85 {
 			f[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 5, i)
 		}
 		if i%64 == 0 {
@@ -441,7 +441,7 @@ func TestStorageIteratorTraversalValues(t *testing.T) {
 		if i%8 == 0 {
 			e[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 4, i)
 		}
-		if i > 50 || i < 85 {
+		if i > 50 && i < 85 {
 			f[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 5, i)
 		}
 		if i%64 == 0 {
@@ -928,7 +928,7 @@ func BenchmarkAccountIteratorTraversal(b *testing.B) {
 	head.(*diffLayer).newBinaryAccountIterator(common.Hash{})
 
 	b.Run("binary iterator keys", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			got := 0
 			it := head.(*diffLayer).newBinaryAccountIterator(common.Hash{})
 			for it.Next() {
@@ -940,7 +940,7 @@ func BenchmarkAccountIteratorTraversal(b *testing.B) {
 		}
 	})
 	b.Run("binary iterator values", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			got := 0
 			it := head.(*diffLayer).newBinaryAccountIterator(common.Hash{})
 			for it.Next() {
@@ -953,7 +953,7 @@ func BenchmarkAccountIteratorTraversal(b *testing.B) {
 		}
 	})
 	b.Run("fast iterator keys", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			it, _ := snaps.AccountIterator(common.HexToHash("0x65"), common.Hash{})
 			defer it.Release()
 
@@ -967,7 +967,7 @@ func BenchmarkAccountIteratorTraversal(b *testing.B) {
 		}
 	})
 	b.Run("fast iterator values", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			it, _ := snaps.AccountIterator(common.HexToHash("0x65"), common.Hash{})
 			defer it.Release()
 
@@ -1025,7 +1025,7 @@ func BenchmarkAccountIteratorLargeBaselayer(b *testing.B) {
 	head.(*diffLayer).newBinaryAccountIterator(common.Hash{})
 
 	b.Run("binary iterator (keys)", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			got := 0
 			it := head.(*diffLayer).newBinaryAccountIterator(common.Hash{})
 			for it.Next() {
@@ -1037,7 +1037,7 @@ func BenchmarkAccountIteratorLargeBaselayer(b *testing.B) {
 		}
 	})
 	b.Run("binary iterator (values)", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			got := 0
 			it := head.(*diffLayer).newBinaryAccountIterator(common.Hash{})
 			for it.Next() {
@@ -1051,7 +1051,7 @@ func BenchmarkAccountIteratorLargeBaselayer(b *testing.B) {
 		}
 	})
 	b.Run("fast iterator (keys)", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			it, _ := snaps.AccountIterator(common.HexToHash("0x65"), common.Hash{})
 			defer it.Release()
 
@@ -1065,7 +1065,7 @@ func BenchmarkAccountIteratorLargeBaselayer(b *testing.B) {
 		}
 	})
 	b.Run("fast iterator (values)", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			it, _ := snaps.AccountIterator(common.HexToHash("0x65"), common.Hash{})
 			defer it.Release()
 

@@ -92,14 +92,14 @@ func (r *serviceRegistry) registerName(name string, rcvr interface{}) error {
 }
 
 // callback returns the callback corresponding to the given RPC method name.
-func (r *serviceRegistry) callback(method string) *callback {
+func (r *serviceRegistry) callback(method string) (cb *callback, service, methodName string) {
 	before, after, found := strings.Cut(method, serviceMethodSeparator)
 	if !found {
-		return nil
+		return nil, "", ""
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.services[before].callbacks[after]
+	return r.services[before].callbacks[after], before, after
 }
 
 // subscription returns a subscription callback in the given service.

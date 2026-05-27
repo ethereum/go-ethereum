@@ -323,25 +323,32 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			delete(pending, res.Req.Peer)
 			delete(stales, res.Req.Peer)
 
-			// Signal the dispatcher that the round trip is done. We'll drop the
-			// peer if the data turns out to be junk.
-			res.Done <- nil
-			res.Req.Close()
-
 			// If the peer was previously banned and failed to deliver its pack
 			// in a reasonable time frame, ignore its message.
-			if peer := d.peers.Peer(res.Req.Peer); peer != nil {
-				// Deliver the received chunk of data and check chain validity
-				accepted, err := queue.deliver(peer, res)
-				if errors.Is(err, errInvalidChain) {
-					return err
-				}
-				// Unless a peer delivered something completely else than requested (usually
-				// caused by a timed out request which came through in the end), set it to
-				// idle. If the delivery's stale, the peer should have already been idled.
-				if !errors.Is(err, errStaleDelivery) {
-					queue.updateCapacity(peer, accepted, res.Time)
-				}
+			peer := d.peers.Peer(res.Req.Peer)
+			if peer == nil {
+				res.Done <- nil
+				res.Req.Close()
+				continue
+			}
+			// Deliver the received chunk of data and check chain validity
+			accepted, err := queue.deliver(peer, res)
+			// Unless a peer delivered something completely else than requested (usually
+			// caused by a timed out request which came through in the end), set it to
+			// idle. If the delivery's stale, the peer should have already been idled.
+			if !errors.Is(err, errStaleDelivery) {
+				queue.updateCapacity(peer, accepted, res.Time)
+			}
+			res.Done <- validityErrorOfRequest(err)
+			res.Req.Close()
+
+			if errors.Is(err, errInvalidChain) {
+				// errInvalidChain is the signal that processing of items failed internally,
+				// even though the items were validly encoded.
+				//
+				// This can be due to invalid blocks, or a database error.
+				// The sync cycle should be aborted for such errors, so we return it here.
+				return err
 			}
 
 		case cont := <-queue.waker():
@@ -351,4 +358,12 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			}
 		}
 	}
+}
+
+// validityErrorOfRequest returns err if it is related to block validity, and nil otherwise.
+func validityErrorOfRequest(err error) error {
+	if errors.Is(err, errInvalidBody) || errors.Is(err, errInvalidReceipt) {
+		return err
+	}
+	return nil
 }

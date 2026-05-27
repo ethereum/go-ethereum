@@ -184,7 +184,7 @@ func (w *ledgerDriver) SignTypedMessage(path accounts.DerivationPath, domainHash
 		return nil, accounts.ErrWalletClosed
 	}
 	// Ensure the wallet is capable of signing the given transaction
-	if w.version[0] < 1 && w.version[1] < 5 {
+	if w.version[0] < 1 || (w.version[0] == 1 && w.version[1] < 5) {
 		//lint:ignore ST1005 brand name displayed on the console
 		return nil, fmt.Errorf("Ledger version >= 1.5.0 required for EIP-712 signing (found version v%d.%d.%d)", w.version[0], w.version[1], w.version[2])
 	}
@@ -334,26 +334,41 @@ func (w *ledgerDriver) ledgerSign(derivationPath []uint32, tx *types.Transaction
 		err   error
 	)
 	if chainID == nil {
-		if txrlp, err = rlp.EncodeToBytes([]interface{}{tx.Nonce(), tx.GasPrice(), tx.Gas(), tx.To(), tx.Value(), tx.Data()}); err != nil {
+		if txrlp, err = rlp.EncodeToBytes([]any{tx.Nonce(), tx.GasPrice(), tx.Gas(), tx.To(), tx.Value(), tx.Data()}); err != nil {
 			return common.Address{}, nil, err
 		}
 	} else {
-		if tx.Type() == types.DynamicFeeTxType {
-			if txrlp, err = rlp.EncodeToBytes([]interface{}{chainID, tx.Nonce(), tx.GasTipCap(), tx.GasFeeCap(), tx.Gas(), tx.To(), tx.Value(), tx.Data(), tx.AccessList()}); err != nil {
+		switch tx.Type() {
+		case types.SetCodeTxType:
+			if txrlp, err = rlp.EncodeToBytes([]any{chainID, tx.Nonce(), tx.GasTipCap(), tx.GasFeeCap(), tx.Gas(), tx.To(), tx.Value(), tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations()}); err != nil {
 				return common.Address{}, nil, err
 			}
 			// append type to transaction
 			txrlp = append([]byte{tx.Type()}, txrlp...)
-		} else if tx.Type() == types.AccessListTxType {
-			if txrlp, err = rlp.EncodeToBytes([]interface{}{chainID, tx.Nonce(), tx.GasPrice(), tx.Gas(), tx.To(), tx.Value(), tx.Data(), tx.AccessList()}); err != nil {
+		case types.BlobTxType:
+			if txrlp, err = rlp.EncodeToBytes([]any{chainID, tx.Nonce(), tx.GasTipCap(), tx.GasFeeCap(), tx.Gas(), tx.To(), tx.Value(), tx.Data(), tx.AccessList(), tx.BlobGasFeeCap(), tx.BlobHashes()}); err != nil {
 				return common.Address{}, nil, err
 			}
 			// append type to transaction
 			txrlp = append([]byte{tx.Type()}, txrlp...)
-		} else if tx.Type() == types.LegacyTxType {
-			if txrlp, err = rlp.EncodeToBytes([]interface{}{tx.Nonce(), tx.GasPrice(), tx.Gas(), tx.To(), tx.Value(), tx.Data(), chainID, big.NewInt(0), big.NewInt(0)}); err != nil {
+		case types.DynamicFeeTxType:
+			if txrlp, err = rlp.EncodeToBytes([]any{chainID, tx.Nonce(), tx.GasTipCap(), tx.GasFeeCap(), tx.Gas(), tx.To(), tx.Value(), tx.Data(), tx.AccessList()}); err != nil {
 				return common.Address{}, nil, err
 			}
+			// append type to transaction
+			txrlp = append([]byte{tx.Type()}, txrlp...)
+		case types.AccessListTxType:
+			if txrlp, err = rlp.EncodeToBytes([]any{chainID, tx.Nonce(), tx.GasPrice(), tx.Gas(), tx.To(), tx.Value(), tx.Data(), tx.AccessList()}); err != nil {
+				return common.Address{}, nil, err
+			}
+			// append type to transaction
+			txrlp = append([]byte{tx.Type()}, txrlp...)
+		case types.LegacyTxType:
+			if txrlp, err = rlp.EncodeToBytes([]any{tx.Nonce(), tx.GasPrice(), tx.Gas(), tx.To(), tx.Value(), tx.Data(), chainID, big.NewInt(0), big.NewInt(0)}); err != nil {
+				return common.Address{}, nil, err
+			}
+		default:
+			return common.Address{}, nil, fmt.Errorf("unsupported transaction type: %d", tx.Type())
 		}
 	}
 	payload := append(path, txrlp...)

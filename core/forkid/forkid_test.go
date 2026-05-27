@@ -76,10 +76,16 @@ func TestCreation(t *testing.T) {
 				{20000000, 1681338454, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 1681338455}}, // Last Gray Glacier block
 				{20000000, 1681338455, ID{Hash: checksumToBytes(0xdce96c2d), Next: 1710338135}}, // First Shanghai block
 				{30000000, 1710338134, ID{Hash: checksumToBytes(0xdce96c2d), Next: 1710338135}}, // Last Shanghai block
-				{40000000, 1710338135, ID{Hash: checksumToBytes(0x9f3d2254), Next: 1746612311}}, // First Cancun block
+				{30000000, 1710338135, ID{Hash: checksumToBytes(0x9f3d2254), Next: 1746612311}}, // First Cancun block
 				{30000000, 1746022486, ID{Hash: checksumToBytes(0x9f3d2254), Next: 1746612311}}, // Last Cancun block
-				{30000000, 1746612311, ID{Hash: checksumToBytes(0xc376cf8b), Next: 0}},          // First Prague block
-				{50000000, 2000000000, ID{Hash: checksumToBytes(0xc376cf8b), Next: 0}},          // Future Prague block
+				{30000000, 1746612311, ID{Hash: checksumToBytes(0xc376cf8b), Next: 1764798551}}, // First Prague block
+				{30000000, 1764798550, ID{Hash: checksumToBytes(0xc376cf8b), Next: 1764798551}}, // Last Prague block
+				{30000000, 1764798551, ID{Hash: checksumToBytes(0x5167e2a6), Next: 1765290071}}, // First Osaka block
+				{30000000, 1765290070, ID{Hash: checksumToBytes(0x5167e2a6), Next: 1765290071}}, // Last Osaka block
+				{30000000, 1765290071, ID{Hash: checksumToBytes(0xcba2a1c0), Next: 1767747671}}, // First BPO1 block
+				{30000000, 1767747670, ID{Hash: checksumToBytes(0xcba2a1c0), Next: 1767747671}}, // Last BPO1 block
+				{30000000, 1767747671, ID{Hash: checksumToBytes(0x07c9462e), Next: 0}},          // First BPO2 block
+				{50000000, 2000000000, ID{Hash: checksumToBytes(0x07c9462e), Next: 0}},          // Future BPO2 block
 			},
 		},
 		// Sepolia test cases
@@ -95,8 +101,14 @@ func TestCreation(t *testing.T) {
 				{1735372, 1706655071, ID{Hash: checksumToBytes(0xf7f9bc08), Next: 1706655072}}, // Last Shanghai block
 				{1735372, 1706655072, ID{Hash: checksumToBytes(0x88cf81d9), Next: 1741159776}}, // First Cancun block
 				{1735372, 1741159775, ID{Hash: checksumToBytes(0x88cf81d9), Next: 1741159776}}, // Last Cancun block
-				{1735372, 1741159776, ID{Hash: checksumToBytes(0xed88b5fd), Next: 0}},          // First Prague block
-				{1735372, 2741159776, ID{Hash: checksumToBytes(0xed88b5fd), Next: 0}},          // Future Prague block
+				{1735372, 1741159776, ID{Hash: checksumToBytes(0xed88b5fd), Next: 1760427360}}, // First Prague block
+				{1735372, 1760427359, ID{Hash: checksumToBytes(0xed88b5fd), Next: 1760427360}}, // Last Prague block
+				{1735372, 1760427360, ID{Hash: checksumToBytes(0xe2ae4999), Next: 1761017184}}, // First Osaka block
+				{1735372, 1761017183, ID{Hash: checksumToBytes(0xe2ae4999), Next: 1761017184}}, // Last Osaka block
+				{1735372, 1761017184, ID{Hash: checksumToBytes(0x56078a1e), Next: 1761607008}}, // First BPO1 block
+				{1735372, 1761607007, ID{Hash: checksumToBytes(0x56078a1e), Next: 1761607008}}, // Last BPO1 block
+				{1735372, 1761607008, ID{Hash: checksumToBytes(0x268956b6), Next: 0}},          // First BPO2 block
+				{1735372, 2000000000, ID{Hash: checksumToBytes(0x268956b6), Next: 0}},          // Future BPO2 block
 			},
 		},
 		// Holesky test cases
@@ -110,8 +122,14 @@ func TestCreation(t *testing.T) {
 				{123, 1707305663, ID{Hash: checksumToBytes(0xfd4f016b), Next: 1707305664}}, // Last Shanghai block
 				{123, 1707305664, ID{Hash: checksumToBytes(0x9b192ad0), Next: 1740434112}}, // First Cancun block
 				{123, 1740434111, ID{Hash: checksumToBytes(0x9b192ad0), Next: 1740434112}}, // Last Cancun block
-				{123, 1740434112, ID{Hash: checksumToBytes(0xdfbd9bed), Next: 0}},          // First Prague block
-				{123, 2740434112, ID{Hash: checksumToBytes(0xdfbd9bed), Next: 0}},          // Future Prague block
+				{123, 1740434112, ID{Hash: checksumToBytes(0xdfbd9bed), Next: 1759308480}}, // First Prague block
+				{123, 1759308479, ID{Hash: checksumToBytes(0xdfbd9bed), Next: 1759308480}}, // Last Prague block
+				{123, 1759308480, ID{Hash: checksumToBytes(0x783def52), Next: 1759800000}}, // First Osaka block
+				{123, 1759799999, ID{Hash: checksumToBytes(0x783def52), Next: 1759800000}}, // Last Osaka block
+				{123, 1759800000, ID{Hash: checksumToBytes(0xa280a45c), Next: 1760389824}}, // First BPO1 block
+				{123, 1760389823, ID{Hash: checksumToBytes(0xa280a45c), Next: 1760389824}}, // Last BPO1 block
+				{123, 1760389824, ID{Hash: checksumToBytes(0x9bc6cb31), Next: 0}},          // First BPO2 block
+				{123, 2000000000, ID{Hash: checksumToBytes(0x9bc6cb31), Next: 0}},          // Future BPO1 block
 			},
 		},
 		// Hoodi test cases
@@ -121,8 +139,14 @@ func TestCreation(t *testing.T) {
 			[]testcase{
 				{0, 0, ID{Hash: checksumToBytes(0xbef71d30), Next: 1742999832}},            // Unsynced, last Frontier, Homestead, Tangerine, Spurious, Byzantium, Constantinople, Petersburg, Istanbul, Berlin, London, Paris, Shanghai, Cancun block
 				{123, 1742999831, ID{Hash: checksumToBytes(0xbef71d30), Next: 1742999832}}, // Last Cancun block
-				{123, 1742999832, ID{Hash: checksumToBytes(0x0929e24e), Next: 0}},          // First Prague block
-				{123, 2740434112, ID{Hash: checksumToBytes(0x0929e24e), Next: 0}},          // Future Prague block
+				{123, 1742999832, ID{Hash: checksumToBytes(0x0929e24e), Next: 1761677592}}, // First Prague block
+				{123, 1761677591, ID{Hash: checksumToBytes(0x0929e24e), Next: 1761677592}}, // Last Prague block
+				{123, 1761677592, ID{Hash: checksumToBytes(0xe7e0e7ff), Next: 1762365720}}, // First Osaka block
+				{123, 1762365719, ID{Hash: checksumToBytes(0xe7e0e7ff), Next: 1762365720}}, // Last Osaka block
+				{123, 1762365720, ID{Hash: checksumToBytes(0x3893353e), Next: 1762955544}}, // First BPO1 block
+				{123, 1762955543, ID{Hash: checksumToBytes(0x3893353e), Next: 1762955544}}, // Last BPO1 block
+				{123, 1762955544, ID{Hash: checksumToBytes(0x23aa1351), Next: 0}},          // First BPO2 block
+				{123, 2000000000, ID{Hash: checksumToBytes(0x23aa1351), Next: 0}},          // Future BPO2 block
 			},
 		},
 	}
@@ -144,6 +168,9 @@ func TestValidation(t *testing.T) {
 	legacyConfig.ShanghaiTime = nil
 	legacyConfig.CancunTime = nil
 	legacyConfig.PragueTime = nil
+	legacyConfig.OsakaTime = nil
+	legacyConfig.BPO1Time = nil
+	legacyConfig.BPO2Time = nil
 
 	tests := []struct {
 		config *params.ChainConfig
@@ -343,11 +370,11 @@ func TestValidation(t *testing.T) {
 		// Local is mainnet Shanghai, remote is random Shanghai.
 		{params.MainnetChainConfig, 20000000, 1681338455, ID{Hash: checksumToBytes(0x12345678), Next: 0}, ErrLocalIncompatibleOrStale},
 
-		// Local is mainnet Prague, far in the future. Remote announces Gopherium (non existing fork)
+		// Local is mainnet BPO2, far in the future. Remote announces Gopherium (non existing fork)
 		// at some future timestamp 8888888888, for itself, but past block for local. Local is incompatible.
 		//
 		// This case detects non-upgraded nodes with majority hash power (typical Ropsten mess).
-		{params.MainnetChainConfig, 88888888, 8888888888, ID{Hash: checksumToBytes(0xc376cf8b), Next: 8888888888}, ErrLocalIncompatibleOrStale},
+		{params.MainnetChainConfig, 88888888, 8888888888, ID{Hash: checksumToBytes(0x07c9462e), Next: 8888888888}, ErrLocalIncompatibleOrStale},
 
 		// Local is mainnet Shanghai. Remote is also in Shanghai, but announces Gopherium (non existing
 		// fork) at timestamp 1668000000, before Cancun. Local is incompatible.

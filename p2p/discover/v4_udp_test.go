@@ -575,6 +575,13 @@ func startLocalhostV4(t *testing.T, cfg Config) *UDPv4 {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// Wait for bootstrap to complete.
+	select {
+	case <-udp.tab.initDone:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timed out waiting for table initialization")
+	}
 	return udp
 }
 

@@ -17,10 +17,12 @@
 package core
 
 import (
+	"context"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
@@ -40,7 +42,7 @@ type Prefetcher interface {
 	// Prefetch processes the state changes according to the Ethereum rules by running
 	// the transaction messages using the statedb, but any changes are discarded. The
 	// only goal is to pre-cache transaction signatures and state trie nodes.
-	Prefetch(block *types.Block, statedb *state.StateDB, cfg vm.Config, interrupt *atomic.Bool)
+	Prefetch(block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, cfg vm.Config, interrupt *atomic.Bool)
 }
 
 // Processor is an interface for processing blocks using a given initial state.
@@ -48,7 +50,7 @@ type Processor interface {
 	// Process processes the state changes according to the Ethereum rules by running
 	// the transaction messages using the statedb and applying any rewards to both
 	// the processor (coinbase) and any included uncles.
-	Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*ProcessResult, error)
+	Process(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, cfg vm.Config) (*ProcessResult, error)
 }
 
 // ProcessResult contains the values computed by Process.
@@ -57,4 +59,8 @@ type ProcessResult struct {
 	Requests [][]byte
 	Logs     []*types.Log
 	GasUsed  uint64
+
+	// BAL is only meaningful for post-Amsterdam blocks. Please ensure
+	// fork validation is performed before accessing it.
+	Bal *bal.ConstructionBlockAccessList
 }

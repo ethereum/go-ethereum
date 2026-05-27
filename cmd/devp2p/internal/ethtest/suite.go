@@ -34,6 +34,8 @@ import (
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
 )
 
@@ -82,6 +84,7 @@ func (s *Suite) EthTests() []utesting.Test {
 		// get history
 		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
 		{Name: "GetReceipts", Fn: s.TestGetReceipts},
+		{Name: "GetLargeReceipts", Fn: s.TestGetLargeReceipts},
 		// test transactions
 		{Name: "LargeTxRequest", Fn: s.TestLargeTxRequest, Slow: true},
 		{Name: "Transaction", Fn: s.TestTransaction},
@@ -151,7 +154,11 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("failed to get headers for given request: %v", err)
 	}
-	if !headersMatch(expected, headers.BlockHeadersRequest) {
+	received, err := headers.List.Items()
+	if err != nil {
+		t.Fatalf("invalid headers received: %v", err)
+	}
+	if !headersMatch(expected, received) {
 		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers)
 	}
 }
@@ -196,6 +203,7 @@ to check if the node disconnects after receiving multiple invalid requests.`)
 func (s *Suite) TestSimultaneousRequests(t *utesting.T) {
 	t.Log(`This test requests blocks headers from the node, performing two requests
 concurrently, with different request IDs.`)
+
 	conn, err := s.dialAndPeer(nil)
 	if err != nil {
 		t.Fatalf("peering failed: %v", err)
@@ -235,37 +243,30 @@ concurrently, with different request IDs.`)
 	}
 
 	// Wait for responses.
-	headers1 := new(eth.BlockHeadersPacket)
-	if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &headers1); err != nil {
-		t.Fatalf("error reading block headers msg: %v", err)
-	}
-	if got, want := headers1.RequestId, req1.RequestId; got != want {
-		t.Fatalf("unexpected request id in response: got %d, want %d", got, want)
-	}
-	headers2 := new(eth.BlockHeadersPacket)
-	if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &headers2); err != nil {
-		t.Fatalf("error reading block headers msg: %v", err)
-	}
-	if got, want := headers2.RequestId, req2.RequestId; got != want {
-		t.Fatalf("unexpected request id in response: got %d, want %d", got, want)
+	// Note they can arrive in either order.
+	resp, err := collectHeaderResponses(conn, 2, func(msg *eth.BlockHeadersPacket) uint64 {
+		if msg.RequestId != 111 && msg.RequestId != 222 {
+			t.Fatalf("response with unknown request ID: %v", msg.RequestId)
+		}
+		return msg.RequestId
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	// Check received headers for accuracy.
-	if expected, err := s.chain.GetHeaders(req1); err != nil {
-		t.Fatalf("failed to get expected headers for request 1: %v", err)
-	} else if !headersMatch(expected, headers1.BlockHeadersRequest) {
-		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers1)
+	// Check if headers match.
+	if err := s.checkHeadersAgainstChain(req1, resp[111]); err != nil {
+		t.Fatal(err)
 	}
-	if expected, err := s.chain.GetHeaders(req2); err != nil {
-		t.Fatalf("failed to get expected headers for request 2: %v", err)
-	} else if !headersMatch(expected, headers2.BlockHeadersRequest) {
-		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers2)
+	if err := s.checkHeadersAgainstChain(req2, resp[222]); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func (s *Suite) TestSameRequestID(t *utesting.T) {
 	t.Log(`This test requests block headers, performing two concurrent requests with the
 same request ID. The node should handle the request by responding to both requests.`)
+
 	conn, err := s.dialAndPeer(nil)
 	if err != nil {
 		t.Fatalf("peering failed: %v", err)
@@ -289,7 +290,7 @@ same request ID. The node should handle the request by responding to both reques
 			Origin: eth.HashOrNumber{
 				Number: 33,
 			},
-			Amount: 2,
+			Amount: 3,
 		},
 	}
 
@@ -301,33 +302,59 @@ same request ID. The node should handle the request by responding to both reques
 		t.Fatalf("failed to write to connection: %v", err)
 	}
 
-	// Wait for the responses.
-	headers1 := new(eth.BlockHeadersPacket)
-	if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &headers1); err != nil {
-		t.Fatalf("error reading from connection: %v", err)
-	}
-	if got, want := headers1.RequestId, request1.RequestId; got != want {
-		t.Fatalf("unexpected request id: got %d, want %d", got, want)
-	}
-	headers2 := new(eth.BlockHeadersPacket)
-	if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &headers2); err != nil {
-		t.Fatalf("error reading from connection: %v", err)
-	}
-	if got, want := headers2.RequestId, request2.RequestId; got != want {
-		t.Fatalf("unexpected request id: got %d, want %d", got, want)
+	// Wait for the responses. They can arrive in either order, and we can't tell them
+	// apart by their request ID, so use the number of headers instead.
+	resp, err := collectHeaderResponses(conn, 2, func(msg *eth.BlockHeadersPacket) uint64 {
+		id := uint64(msg.List.Len())
+		if id != 2 && id != 3 {
+			t.Fatalf("invalid number of headers in response: %d", id)
+		}
+		return id
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// Check if headers match.
-	if expected, err := s.chain.GetHeaders(request1); err != nil {
-		t.Fatalf("failed to get expected block headers: %v", err)
-	} else if !headersMatch(expected, headers1.BlockHeadersRequest) {
-		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers1)
+	if err := s.checkHeadersAgainstChain(request1, resp[2]); err != nil {
+		t.Fatal(err)
 	}
-	if expected, err := s.chain.GetHeaders(request2); err != nil {
-		t.Fatalf("failed to get expected block headers: %v", err)
-	} else if !headersMatch(expected, headers2.BlockHeadersRequest) {
-		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers2)
+	if err := s.checkHeadersAgainstChain(request2, resp[3]); err != nil {
+		t.Fatal(err)
 	}
+}
+
+func (s *Suite) checkHeadersAgainstChain(req *eth.GetBlockHeadersPacket, resp *eth.BlockHeadersPacket) error {
+	received2, err := resp.List.Items()
+	if err != nil {
+		return fmt.Errorf("invalid headers in response with request ID %v (%d items): %v", resp.RequestId, resp.List.Len(), err)
+	}
+	if expected, err := s.chain.GetHeaders(req); err != nil {
+		return fmt.Errorf("test chain failed to get expected headers for request: %v", err)
+	} else if !headersMatch(expected, received2) {
+		return fmt.Errorf("header mismatch for request ID %v (%d items): \nexpected %v \ngot %v", resp.RequestId, resp.List.Len(), expected, resp)
+	}
+	return nil
+}
+
+// collectResponses waits for n messages of type T on the given connection.
+// The messsages are collected according to the 'identity' function.
+//
+// This function is written in a generic way to handle
+func collectHeaderResponses(conn *Conn, n int, identity func(*eth.BlockHeadersPacket) uint64) (map[uint64]*eth.BlockHeadersPacket, error) {
+	resp := make(map[uint64]*eth.BlockHeadersPacket, n)
+	for range n {
+		r := new(eth.BlockHeadersPacket)
+		if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, r); err != nil {
+			return resp, fmt.Errorf("read error: %v", err)
+		}
+		id := identity(r)
+		if resp[id] != nil {
+			return resp, fmt.Errorf("duplicate response %v", r)
+		}
+		resp[id] = r
+	}
+	return resp, nil
 }
 
 func (s *Suite) TestZeroRequestID(t *utesting.T) {
@@ -356,10 +383,8 @@ and expects a response.`)
 	if got, want := headers.RequestId, req.RequestId; got != want {
 		t.Fatalf("unexpected request id")
 	}
-	if expected, err := s.chain.GetHeaders(req); err != nil {
-		t.Fatalf("failed to get expected block headers: %v", err)
-	} else if !headersMatch(expected, headers.BlockHeadersRequest) {
-		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers)
+	if err := s.checkHeadersAgainstChain(req, headers); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -390,9 +415,8 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 	if got, want := resp.RequestId, req.RequestId; got != want {
 		t.Fatalf("unexpected request id in respond", got, want)
 	}
-	bodies := resp.BlockBodiesResponse
-	if len(bodies) != len(req.GetBlockBodiesRequest) {
-		t.Fatalf("wrong bodies in response: expected %d bodies, got %d", len(req.GetBlockBodiesRequest), len(bodies))
+	if resp.List.Len() != len(req.GetBlockBodiesRequest) {
+		t.Fatalf("wrong bodies in response: expected %d bodies, got %d", len(req.GetBlockBodiesRequest), resp.List.Len())
 	}
 }
 
@@ -407,6 +431,9 @@ func (s *Suite) TestGetReceipts(t *utesting.T) {
 	// Find some blocks containing receipts.
 	var hashes = make([]common.Hash, 0, 3)
 	for i := range s.chain.Len() {
+		if s.chain.txInfo.LargeReceiptBlock != nil && uint64(i) == *s.chain.txInfo.LargeReceiptBlock {
+			continue
+		}
 		block := s.chain.GetBlock(i)
 		if len(block.Transactions()) > 0 {
 			hashes = append(hashes, block.Hash())
@@ -415,25 +442,121 @@ func (s *Suite) TestGetReceipts(t *utesting.T) {
 			break
 		}
 	}
+	if conn.negotiatedProtoVersion < eth.ETH70 {
+		// Create block bodies request.
+		req := &eth.GetReceiptsPacket69{
+			RequestId:          66,
+			GetReceiptsRequest: (eth.GetReceiptsRequest)(hashes),
+		}
+		if err := conn.Write(ethProto, eth.GetReceiptsMsg, req); err != nil {
+			t.Fatalf("could not write to connection: %v", err)
+		}
+		// Wait for response.
+		resp := new(eth.ReceiptsPacket69)
+		if err := conn.ReadMsg(ethProto, eth.ReceiptsMsg, &resp); err != nil {
+			t.Fatalf("error reading block receipts msg: %v", err)
+		}
+		if got, want := resp.RequestId, req.RequestId; got != want {
+			t.Fatalf("unexpected request id in respond", got, want)
+		}
+		if resp.List.Len() != len(req.GetReceiptsRequest) {
+			t.Fatalf("wrong receipts in response: expected %d receipts, got %d", len(req.GetReceiptsRequest), resp.List.Len())
+		}
+	} else {
+		// Create block bodies request.
+		req := &eth.GetReceiptsPacket70{
+			RequestId:              66,
+			FirstBlockReceiptIndex: 0,
+			GetReceiptsRequest:     (eth.GetReceiptsRequest)(hashes),
+		}
+		if err := conn.Write(ethProto, eth.GetReceiptsMsg, req); err != nil {
+			t.Fatalf("could not write to connection: %v", err)
+		}
+		// Wait for response.
+		resp := new(eth.ReceiptsPacket70)
+		if err := conn.ReadMsg(ethProto, eth.ReceiptsMsg, &resp); err != nil {
+			t.Fatalf("error reading block receipts msg: %v", err)
+		}
+		if got, want := resp.RequestId, req.RequestId; got != want {
+			t.Fatalf("unexpected request id in respond", got, want)
+		}
+		if resp.List.Len() != len(req.GetReceiptsRequest) {
+			t.Fatalf("wrong receipts in response: expected %d receipts, got %d", len(req.GetReceiptsRequest), resp.List.Len())
+		}
+	}
+}
 
-	// Create block bodies request.
-	req := &eth.GetReceiptsPacket{
-		RequestId:          66,
-		GetReceiptsRequest: (eth.GetReceiptsRequest)(hashes),
+func (s *Suite) TestGetLargeReceipts(t *utesting.T) {
+	t.Log(`This test sends GetReceipts requests to the node for large receipt (>10MiB) in the test chain.
+	This test is meaningful only if the client supports protocol version ETH70 or higher 
+	and LargeReceiptBlock is configured in txInfo.json.`)
+	conn, err := s.dialAndPeer(nil)
+	if err != nil {
+		t.Fatalf("peering failed: %v", err)
 	}
-	if err := conn.Write(ethProto, eth.GetReceiptsMsg, req); err != nil {
-		t.Fatalf("could not write to connection: %v", err)
+	defer conn.Close()
+
+	if conn.negotiatedProtoVersion < eth.ETH70 || s.chain.txInfo.LargeReceiptBlock == nil {
+		return
 	}
-	// Wait for response.
-	resp := new(eth.ReceiptsPacket[*eth.ReceiptList69])
-	if err := conn.ReadMsg(ethProto, eth.ReceiptsMsg, &resp); err != nil {
-		t.Fatalf("error reading block bodies msg: %v", err)
+
+	// Find block with large receipt.
+	// Place the large receipt block hash in the middle of the query
+	start := max(int(*s.chain.txInfo.LargeReceiptBlock)-2, 0)
+	end := min(*s.chain.txInfo.LargeReceiptBlock+2, uint64(len(s.chain.blocks)))
+
+	var blocks []common.Hash
+	var receiptHashes []common.Hash
+	var receipts []*eth.ReceiptList
+
+	for i := uint64(start); i < end; i++ {
+		block := s.chain.GetBlock(int(i))
+		blocks = append(blocks, block.Hash())
+		receiptHashes = append(receiptHashes, block.Header().ReceiptHash)
+		receipts = append(receipts, &eth.ReceiptList{})
 	}
-	if got, want := resp.RequestId, req.RequestId; got != want {
-		t.Fatalf("unexpected request id in respond", got, want)
+
+	incomplete := false
+	lastBlock := 0
+
+	for incomplete || lastBlock != len(blocks)-1 {
+		// Create get receipt request.
+		req := &eth.GetReceiptsPacket70{
+			RequestId:              66,
+			FirstBlockReceiptIndex: uint64(receipts[lastBlock].Derivable().Len()),
+			GetReceiptsRequest:     blocks[lastBlock:],
+		}
+		if err := conn.Write(ethProto, eth.GetReceiptsMsg, req); err != nil {
+			t.Fatalf("could not write to connection: %v", err)
+		}
+		// Wait for response.
+		resp := new(eth.ReceiptsPacket70)
+		if err := conn.ReadMsg(ethProto, eth.ReceiptsMsg, &resp); err != nil {
+			t.Fatalf("error reading block receipts msg: %v", err)
+		}
+		if got, want := resp.RequestId, req.RequestId; got != want {
+			t.Fatalf("unexpected request id in respond, want: %d, got: %d", got, want)
+		}
+
+		receiptLists, _ := resp.List.Items()
+		for i, rc := range receiptLists {
+			receipts[lastBlock+i].Append(rc)
+		}
+		lastBlock += len(receiptLists) - 1
+
+		incomplete = resp.LastBlockIncomplete
 	}
-	if len(resp.List) != len(req.GetReceiptsRequest) {
-		t.Fatalf("wrong bodies in response: expected %d bodies, got %d", len(req.GetReceiptsRequest), len(resp.List))
+
+	hasher := trie.NewStackTrie(nil)
+	hashes := make([]common.Hash, len(receipts))
+	for i := range receipts {
+		hashes[i] = types.DeriveSha(receipts[i].Derivable(), hasher)
+	}
+
+	for i, hash := range hashes {
+		if receiptHashes[i] != hash {
+			t.Fatalf("wrong receipt root: want %x, got %x", receiptHashes[i], hash)
+		}
 	}
 }
 
@@ -787,7 +910,11 @@ on another peer connection using GetPooledTransactions.`)
 	if got, want := msg.RequestId, req.RequestId; got != want {
 		t.Fatalf("unexpected request id in response: got %d, want %d", got, want)
 	}
-	for _, got := range msg.PooledTransactionsResponse {
+	responseTxs, err := msg.List.Items()
+	if err != nil {
+		t.Fatalf("invalid transactions in response: %v", err)
+	}
+	for _, got := range responseTxs {
 		if _, exists := set[got.Hash()]; !exists {
 			t.Fatalf("unexpected tx received: %v", got.Hash())
 		}
@@ -887,7 +1014,7 @@ func (s *Suite) makeBlobTxs(count, blobs int, discriminator byte) (txs types.Tra
 	from, nonce := s.chain.GetSender(5)
 	for i := 0; i < count; i++ {
 		// Make blob data, max of 2 blobs per tx.
-		blobdata := make([]byte, blobs%3)
+		blobdata := make([]byte, min(blobs, 2))
 		for i := range blobdata {
 			blobdata[i] = discriminator
 			blobs -= 1
@@ -959,7 +1086,9 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 		if err := conn.ReadMsg(ethProto, eth.GetPooledTransactionsMsg, req); err != nil {
 			t.Fatalf("reading pooled tx request failed: %v", err)
 		}
-		resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, PooledTransactionsResponse: test.resp}
+
+		encTxs, _ := rlp.EncodeToRawList(test.resp)
+		resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, List: encTxs}
 		if err := conn.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
 			t.Fatalf("writing pooled tx response failed: %v", err)
 		}
@@ -1087,7 +1216,8 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 		// the good peer is connected, and has announced the tx.
 		// proceed to send the incorrect one from the bad peer.
 
-		resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, PooledTransactionsResponse: eth.PooledTransactionsResponse(types.Transactions{badTx})}
+		encTxs, _ := rlp.EncodeToRawList([]*types.Transaction{badTx})
+		resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, List: encTxs}
 		if err := conn.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
 			errc <- fmt.Errorf("writing pooled tx response failed: %v", err)
 			return
@@ -1147,7 +1277,8 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			return
 		}
 
-		resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, PooledTransactionsResponse: eth.PooledTransactionsResponse(types.Transactions{tx})}
+		encTxs, _ := rlp.EncodeToRawList([]*types.Transaction{tx})
+		resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, List: encTxs}
 		if err := conn.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
 			errc <- fmt.Errorf("writing pooled tx response failed: %v", err)
 			return

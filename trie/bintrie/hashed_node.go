@@ -16,51 +16,10 @@
 
 package bintrie
 
-import (
-	"errors"
-	"fmt"
+import "github.com/ethereum/go-ethereum/common"
 
-	"github.com/ethereum/go-ethereum/common"
-)
-
+// HashedNode is an unresolved node — only its hash is known.
 type HashedNode common.Hash
 
-func (h HashedNode) Get(_ []byte, _ NodeResolverFn) ([]byte, error) {
-	panic("not implemented") // TODO: Implement
-}
-
-func (h HashedNode) Insert(key []byte, value []byte, resolver NodeResolverFn, depth int) (BinaryNode, error) {
-	return nil, errors.New("insert not implemented for hashed node")
-}
-
-func (h HashedNode) Copy() BinaryNode {
-	nh := common.Hash(h)
-	return HashedNode(nh)
-}
-
-func (h HashedNode) Hash() common.Hash {
-	return common.Hash(h)
-}
-
-func (h HashedNode) GetValuesAtStem(_ []byte, _ NodeResolverFn) ([][]byte, error) {
-	return nil, errors.New("attempted to get values from an unresolved node")
-}
-
-func (h HashedNode) InsertValuesAtStem(key []byte, values [][]byte, resolver NodeResolverFn, depth int) (BinaryNode, error) {
-	return nil, errors.New("insertValuesAtStem not implemented for hashed node")
-}
-
-func (h HashedNode) toDot(parent string, path string) string {
-	me := fmt.Sprintf("hash%s", path)
-	ret := fmt.Sprintf("%s [label=\"%x\"]\n", me, h)
-	ret = fmt.Sprintf("%s %s -> %s\n", ret, parent, me)
-	return ret
-}
-
-func (h HashedNode) CollectNodes([]byte, NodeFlushFn) error {
-	return errors.New("collectNodes not implemented for hashed node")
-}
-
-func (h HashedNode) GetHeight() int {
-	panic("tried to get the height of a hashed node, this is a bug")
-}
+// Hash returns the node's hash.
+func (h HashedNode) Hash() common.Hash { return common.Hash(h) }

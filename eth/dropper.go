@@ -145,6 +145,9 @@ func randomDuration(min, max time.Duration) time.Duration {
 	if min > max {
 		panic("min duration must be less than or equal to max duration")
 	}
+	if min == max {
+		return min
+	}
 	return time.Duration(mrand.Int63n(int64(max-min)) + int64(min))
 }
 

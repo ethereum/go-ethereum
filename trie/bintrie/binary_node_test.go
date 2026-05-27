@@ -23,79 +23,108 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// TestSerializeDeserializeInternalNode tests serialization and deserialization of InternalNode
+// TestSerializeDeserializeInternalNode tests grouped serialization and
+// deserialization of InternalNode through nodeStore at groupDepth=1.
 func TestSerializeDeserializeInternalNode(t *testing.T) {
-	// Create an internal node with two hashed children
 	leftHash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 	rightHash := common.HexToHash("0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321")
 
-	node := &InternalNode{
-		depth: 5,
-		left:  HashedNode(leftHash),
-		right: HashedNode(rightHash),
-	}
+	s := newNodeStore()
+	leftRef := s.newHashedRef(leftHash)
+	rightRef := s.newHashedRef(rightHash)
 
-	// Serialize the node
-	serialized := SerializeNode(node)
+	rootRef := s.newInternalRef(0)
+	rootNode := s.getInternal(rootRef.Index())
+	rootNode.left = leftRef
+	rootNode.right = rightRef
+	s.root = rootRef
 
-	// Check the serialized format
+	// Serialize the node — grouped format at groupDepth=1:
+	// [type(1)][groupDepth(1)][bitmap(1)][leftHash(32)][rightHash(32)] = 67 bytes
+	serialized := s.serializeNode(rootRef, 1)
+
 	if serialized[0] != nodeTypeInternal {
 		t.Errorf("Expected type byte to be %d, got %d", nodeTypeInternal, serialized[0])
 	}
-
-	if len(serialized) != 65 {
-		t.Errorf("Expected serialized length to be 65, got %d", len(serialized))
+	if serialized[1] != 1 {
+		t.Errorf("Expected groupDepth byte to be 1, got %d", serialized[1])
 	}
 
-	// Deserialize the node
-	deserialized, err := DeserializeNode(serialized, 5)
+	expectedLen := NodeTypeBytes + 1 + 1 + 2*HashSize // type + groupDepth + bitmap + 2 hashes = 67
+	if len(serialized) != expectedLen {
+		t.Errorf("Expected serialized length to be %d, got %d", expectedLen, len(serialized))
+	}
+
+	// Both children present at a 1-level group → bitmap byte = 0b11000000.
+	if serialized[2] != 0xc0 {
+		t.Errorf("Expected bitmap byte 0xc0, got 0x%02x", serialized[2])
+	}
+
+	hashesStart := NodeTypeBytes + 1 + 1
+	if !bytes.Equal(serialized[hashesStart:hashesStart+HashSize], leftHash[:]) {
+		t.Error("Left hash not found at expected position")
+	}
+	if !bytes.Equal(serialized[hashesStart+HashSize:], rightHash[:]) {
+		t.Error("Right hash not found at expected position")
+	}
+
+	// Deserialize into a new store
+	ds := newNodeStore()
+	deserialized, err := ds.deserializeNode(serialized, 0)
 	if err != nil {
 		t.Fatalf("Failed to deserialize node: %v", err)
 	}
 
-	// Check that it's an internal node
-	internalNode, ok := deserialized.(*InternalNode)
-	if !ok {
-		t.Fatalf("Expected InternalNode, got %T", deserialized)
+	// Root should be an InternalNode
+	if deserialized.Kind() != kindInternal {
+		t.Fatalf("Expected kindInternal, got kind %d", deserialized.Kind())
 	}
 
-	// Check the depth
-	if internalNode.depth != 5 {
-		t.Errorf("Expected depth 5, got %d", internalNode.depth)
+	internalNode := ds.getInternal(deserialized.Index())
+	if internalNode.depth != 0 {
+		t.Errorf("Expected depth 0, got %d", internalNode.depth)
 	}
 
-	// Check the left and right hashes
-	if internalNode.left.Hash() != leftHash {
-		t.Errorf("Left hash mismatch: expected %x, got %x", leftHash, internalNode.left.Hash())
+	// Left child should be a HashedNode with the correct hash
+	if internalNode.left.Kind() != kindHashed {
+		t.Fatalf("Expected left child to be kindHashed, got %d", internalNode.left.Kind())
+	}
+	if ds.computeHash(internalNode.left) != leftHash {
+		t.Errorf("Left hash mismatch: expected %x, got %x", leftHash, ds.computeHash(internalNode.left))
 	}
 
-	if internalNode.right.Hash() != rightHash {
-		t.Errorf("Right hash mismatch: expected %x, got %x", rightHash, internalNode.right.Hash())
+	// Right child should be a HashedNode with the correct hash
+	if internalNode.right.Kind() != kindHashed {
+		t.Fatalf("Expected right child to be kindHashed, got %d", internalNode.right.Kind())
+	}
+	if ds.computeHash(internalNode.right) != rightHash {
+		t.Errorf("Right hash mismatch: expected %x, got %x", rightHash, ds.computeHash(internalNode.right))
 	}
 }
 
-// TestSerializeDeserializeStemNode tests serialization and deserialization of StemNode
+// TestSerializeDeserializeStemNode tests serialization and deserialization of StemNode through nodeStore.
 func TestSerializeDeserializeStemNode(t *testing.T) {
-	// Create a stem node with some values
-	stem := make([]byte, 31)
+	stem := make([]byte, StemSize)
 	for i := range stem {
 		stem[i] = byte(i)
 	}
 
-	var values [256][]byte
-	// Add some values at different indices
+	var values [StemNodeWidth][]byte
 	values[0] = common.HexToHash("0x0101010101010101010101010101010101010101010101010101010101010101").Bytes()
 	values[10] = common.HexToHash("0x0202020202020202020202020202020202020202020202020202020202020202").Bytes()
 	values[255] = common.HexToHash("0x0303030303030303030303030303030303030303030303030303030303030303").Bytes()
 
-	node := &StemNode{
-		Stem:   stem,
-		Values: values[:],
-		depth:  10,
+	s := newNodeStore()
+	ref := s.newStemRef(stem, 10)
+	sn := s.getStem(ref.Index())
+	for i, v := range values {
+		if v != nil {
+			sn.setValue(byte(i), v)
+		}
 	}
 
 	// Serialize the node
-	serialized := SerializeNode(node)
+	serialized := s.serializeNode(ref, 8)
 
 	// Check the serialized format
 	if serialized[0] != nodeTypeStem {
@@ -103,80 +132,82 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 	}
 
 	// Check the stem is correctly serialized
-	if !bytes.Equal(serialized[1:32], stem) {
+	if !bytes.Equal(serialized[1:1+StemSize], stem) {
 		t.Errorf("Stem mismatch in serialized data")
 	}
 
-	// Deserialize the node
-	deserialized, err := DeserializeNode(serialized, 10)
+	// Deserialize into a new store
+	ds := newNodeStore()
+	deserializedRef, err := ds.deserializeNode(serialized, 10)
 	if err != nil {
 		t.Fatalf("Failed to deserialize node: %v", err)
 	}
 
-	// Check that it's a stem node
-	stemNode, ok := deserialized.(*StemNode)
-	if !ok {
-		t.Fatalf("Expected StemNode, got %T", deserialized)
+	if deserializedRef.Kind() != kindStem {
+		t.Fatalf("Expected kindStem, got kind %d", deserializedRef.Kind())
 	}
 
+	stemNode := ds.getStem(deserializedRef.Index())
+
 	// Check the stem
-	if !bytes.Equal(stemNode.Stem, stem) {
+	if !bytes.Equal(stemNode.Stem[:], stem) {
 		t.Errorf("Stem mismatch after deserialization")
 	}
 
 	// Check the values
-	if !bytes.Equal(stemNode.Values[0], values[0]) {
+	if !bytes.Equal(stemNode.getValue(0), values[0]) {
 		t.Errorf("Value at index 0 mismatch")
 	}
-	if !bytes.Equal(stemNode.Values[10], values[10]) {
+	if !bytes.Equal(stemNode.getValue(10), values[10]) {
 		t.Errorf("Value at index 10 mismatch")
 	}
-	if !bytes.Equal(stemNode.Values[255], values[255]) {
+	if !bytes.Equal(stemNode.getValue(255), values[255]) {
 		t.Errorf("Value at index 255 mismatch")
 	}
 
 	// Check that other values are nil
-	for i := range NodeWidth {
+	for i := range StemNodeWidth {
 		if i == 0 || i == 10 || i == 255 {
 			continue
 		}
-		if stemNode.Values[i] != nil {
-			t.Errorf("Expected nil value at index %d, got %x", i, stemNode.Values[i])
+		if stemNode.hasValue(byte(i)) {
+			t.Errorf("Expected no value at index %d, got %x", i, stemNode.getValue(byte(i)))
 		}
 	}
 }
 
-// TestDeserializeEmptyNode tests deserialization of empty node
+// TestDeserializeEmptyNode tests deserialization of empty node.
 func TestDeserializeEmptyNode(t *testing.T) {
-	// Empty byte slice should deserialize to Empty node
-	deserialized, err := DeserializeNode([]byte{}, 0)
+	s := newNodeStore()
+	deserialized, err := s.deserializeNode([]byte{}, 0)
 	if err != nil {
 		t.Fatalf("Failed to deserialize empty node: %v", err)
 	}
 
-	_, ok := deserialized.(Empty)
-	if !ok {
-		t.Fatalf("Expected Empty node, got %T", deserialized)
+	if !deserialized.IsEmpty() {
+		t.Fatalf("Expected emptyRef, got kind %d", deserialized.Kind())
 	}
 }
 
-// TestDeserializeInvalidType tests deserialization with invalid type byte
+// TestDeserializeInvalidType tests deserialization with invalid type byte.
 func TestDeserializeInvalidType(t *testing.T) {
-	// Create invalid serialized data with unknown type byte
+	s := newNodeStore()
 	invalidData := []byte{99, 0, 0, 0} // Type byte 99 is invalid
 
-	_, err := DeserializeNode(invalidData, 0)
+	_, err := s.deserializeNode(invalidData, 0)
 	if err == nil {
 		t.Fatal("Expected error for invalid type byte, got nil")
 	}
 }
 
-// TestDeserializeInvalidLength tests deserialization with invalid data length
+// TestDeserializeInvalidLength tests deserialization with invalid data length.
 func TestDeserializeInvalidLength(t *testing.T) {
-	// InternalNode with type byte 1 but wrong length
-	invalidData := []byte{nodeTypeInternal, 0, 0} // Too short for internal node
+	s := newNodeStore()
+	// InternalNode group header with groupDepth=1 (valid) and a 1-byte bitmap
+	// announcing two present hashes, but the hash payload is missing.
+	invalidData := []byte{nodeTypeInternal, 1, 0xc0}
 
-	_, err := DeserializeNode(invalidData, 0)
+	_, err := s.deserializeNode(invalidData, 0)
 	if err == nil {
 		t.Fatal("Expected error for invalid data length, got nil")
 	}
@@ -186,7 +217,22 @@ func TestDeserializeInvalidLength(t *testing.T) {
 	}
 }
 
-// TestKeyToPath tests the keyToPath function
+// TestDeserializeInvalidGroupDepth tests deserialization when the group depth
+// byte is out of the supported 1..MaxGroupDepth range.
+func TestDeserializeInvalidGroupDepth(t *testing.T) {
+	s := newNodeStore()
+	invalidData := []byte{nodeTypeInternal, 0, 0, 0}
+
+	_, err := s.deserializeNode(invalidData, 0)
+	if err == nil {
+		t.Fatal("Expected error for invalid group depth, got nil")
+	}
+	if err.Error() != "invalid group depth" {
+		t.Errorf("Expected 'invalid group depth' error, got: %v", err)
+	}
+}
+
+// TestKeyToPath tests the keyToPath function.
 func TestKeyToPath(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -218,15 +264,15 @@ func TestKeyToPath(t *testing.T) {
 		},
 		{
 			name:     "max valid depth",
-			depth:    31 * 8,
-			key:      make([]byte, 32),
-			expected: make([]byte, 31*8+1),
+			depth:    StemSize*8 - 1,
+			key:      make([]byte, HashSize),
+			expected: make([]byte, StemSize*8),
 			wantErr:  false,
 		},
 		{
 			name:    "depth too large",
-			depth:   31*8 + 1,
-			key:     make([]byte, 32),
+			depth:   StemSize * 8,
+			key:     make([]byte, HashSize),
 			wantErr: true,
 		},
 	}

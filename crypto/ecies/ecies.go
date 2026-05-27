@@ -124,6 +124,9 @@ func (prv *PrivateKey) GenerateShared(pub *PublicKey, skLen, macLen int) (sk []b
 	if prv.PublicKey.Curve != pub.Curve {
 		return nil, ErrInvalidCurve
 	}
+	if pub.X == nil || pub.Y == nil || !pub.Curve.IsOnCurve(pub.X, pub.Y) {
+		return nil, ErrInvalidPublicKey
+	}
 	if skLen+macLen > MaxSharedKeyLength(pub) {
 		return nil, ErrSharedKeyTooBig
 	}
@@ -290,7 +293,7 @@ func (prv *PrivateKey) Decrypt(c, s1, s2 []byte) (m []byte, err error) {
 	switch c[0] {
 	case 2, 3, 4:
 		rLen = (prv.PublicKey.Curve.Params().BitSize + 7) / 4
-		if len(c) < (rLen + hLen + 1) {
+		if len(c) < (rLen + hLen + params.BlockSize) {
 			return nil, ErrInvalidMessage
 		}
 	default:

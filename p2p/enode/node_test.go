@@ -368,6 +368,16 @@ func TestID_distcmpEqual(t *testing.T) {
 	}
 }
 
+func BenchmarkDistCmp(b *testing.B) {
+	base := ID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	aID := ID{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
+	bID := ID{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 1}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = DistCmp(base, aID, bID)
+	}
+}
+
 func TestID_logdist(t *testing.T) {
 	logdistBig := func(a, b ID) int {
 		abig, bbig := new(big.Int).SetBytes(a[:]), new(big.Int).SetBytes(b[:])
@@ -375,6 +385,28 @@ func TestID_logdist(t *testing.T) {
 	}
 	if err := quick.CheckEqual(LogDist, logdistBig, nil); err != nil {
 		t.Error(err)
+	}
+}
+
+func makeIDs() (ID, ID) {
+	var a, b ID
+	size := len(a)
+	// last byte differs
+	for i := 0; i < size-1; i++ {
+		a[i] = 0xAA
+		b[i] = 0xAA
+	}
+	a[size-1] = 0xAA
+	b[size-1] = 0xAB
+	return a, b
+}
+
+// Benchmark LogDist
+func BenchmarkLogDist(b *testing.B) {
+	aID, bID := makeIDs() // 256-bit ID
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = LogDist(aID, bID)
 	}
 }
 

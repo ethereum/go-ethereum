@@ -34,10 +34,15 @@ import (
 
 const (
 	// The batch size for reading state histories
-	historyReadBatch = 1000
+	historyReadBatch  = 1000
+	historyIndexBatch = 8 * 1024 * 1024 // The number of state history indexes for constructing or deleting as batch
 
-	stateIndexV0      = uint8(0)     // initial version of state index structure
-	stateIndexVersion = stateIndexV0 // the current state index version
+	stateHistoryIndexV0         = uint8(0)               // initial version of state index structure
+	stateHistoryIndexVersion    = stateHistoryIndexV0    // the current state index version
+	trienodeHistoryIndexV0      = uint8(0)               // initial version of trienode index structure
+	trienodeHistoryIndexVersion = trienodeHistoryIndexV0 // the current trienode index version
+
+	indexerProcessBatchInSync = 100000 // threshold for history batch indexing when node is in sync stage.
 )
 
 // indexVersion returns the latest index version for the given history type.
@@ -45,7 +50,9 @@ const (
 func indexVersion(typ historyType) uint8 {
 	switch typ {
 	case typeStateHistory:
-		return stateIndexVersion
+		return stateHistoryIndexVersion
+	case typeTrienodeHistory:
+		return trienodeHistoryIndexVersion
 	default:
 		panic(fmt.Errorf("unknown history type: %d", typ))
 	}
@@ -63,6 +70,8 @@ func loadIndexMetadata(db ethdb.KeyValueReader, typ historyType) *indexMetadata 
 	switch typ {
 	case typeStateHistory:
 		blob = rawdb.ReadStateHistoryIndexMetadata(db)
+	case typeTrienodeHistory:
+		blob = rawdb.ReadTrienodeHistoryIndexMetadata(db)
 	default:
 		panic(fmt.Errorf("unknown history type %d", typ))
 	}
@@ -90,6 +99,8 @@ func storeIndexMetadata(db ethdb.KeyValueWriter, typ historyType, last uint64) {
 	switch typ {
 	case typeStateHistory:
 		rawdb.WriteStateHistoryIndexMetadata(db, blob)
+	case typeTrienodeHistory:
+		rawdb.WriteTrienodeHistoryIndexMetadata(db, blob)
 	default:
 		panic(fmt.Errorf("unknown history type %d", typ))
 	}
@@ -101,6 +112,8 @@ func deleteIndexMetadata(db ethdb.KeyValueWriter, typ historyType) {
 	switch typ {
 	case typeStateHistory:
 		rawdb.DeleteStateHistoryIndexMetadata(db)
+	case typeTrienodeHistory:
+		rawdb.DeleteTrienodeHistoryIndexMetadata(db)
 	default:
 		panic(fmt.Errorf("unknown history type %d", typ))
 	}
@@ -110,18 +123,20 @@ func deleteIndexMetadata(db ethdb.KeyValueWriter, typ historyType) {
 // batchIndexer is responsible for performing batch indexing or unindexing
 // of historical data (e.g., state or trie node changes) atomically.
 type batchIndexer struct {
-	index   map[stateIdent][]uint64 // List of history IDs for tracked state entry
-	pending int                     // Number of entries processed in the current batch.
-	delete  bool                    // Operation mode: true for unindex, false for index.
-	lastID  uint64                  // ID of the most recently processed history.
-	typ     historyType             // Type of history being processed (e.g., state or trienode).
-	db      ethdb.KeyValueStore     // Key-value database used to store or delete index data.
+	index   map[stateIdent][]uint64   // List of history IDs for tracked state entry
+	ext     map[stateIdent][][]uint16 // List of extension for each state element
+	pending int                       // Number of entries processed in the current batch.
+	delete  bool                      // Operation mode: true for unindex, false for index.
+	lastID  uint64                    // ID of the most recently processed history.
+	typ     historyType               // Type of history being processed (e.g., state or trienode).
+	db      ethdb.KeyValueStore       // Key-value database used to store or delete index data.
 }
 
 // newBatchIndexer constructs the batch indexer with the supplied mode.
 func newBatchIndexer(db ethdb.KeyValueStore, delete bool, typ historyType) *batchIndexer {
 	return &batchIndexer{
 		index:  make(map[stateIdent][]uint64),
+		ext:    make(map[stateIdent][][]uint16),
 		delete: delete,
 		typ:    typ,
 		db:     db,
@@ -131,8 +146,10 @@ func newBatchIndexer(db ethdb.KeyValueStore, delete bool, typ historyType) *batc
 // process traverses the state entries within the provided history and tracks the mutation
 // records for them.
 func (b *batchIndexer) process(h history, id uint64) error {
-	for ident := range h.forEach() {
-		b.index[ident] = append(b.index[ident], id)
+	for elem := range h.forEach() {
+		key := elem.key()
+		b.index[key] = append(b.index[key], id)
+		b.ext[key] = append(b.ext[key], elem.ext())
 		b.pending++
 	}
 	b.lastID = id
@@ -150,30 +167,52 @@ func (b *batchIndexer) finish(force bool) error {
 		return nil
 	}
 	var (
-		batch   = b.db.NewBatch()
-		batchMu sync.RWMutex
-		start   = time.Now()
-		eg      errgroup.Group
+		start = time.Now()
+		eg    errgroup.Group
+
+		batch     = b.db.NewBatchWithSize(ethdb.IdealBatchSize)
+		batchSize int
+		batchMu   sync.RWMutex
+
+		writeBatch = func(fn func(batch ethdb.Batch)) error {
+			batchMu.Lock()
+			defer batchMu.Unlock()
+
+			fn(batch)
+			if batch.ValueSize() >= ethdb.IdealBatchSize {
+				batchSize += batch.ValueSize()
+				if err := batch.Write(); err != nil {
+					return err
+				}
+				batch.Reset()
+			}
+			return nil
+		}
 	)
 	eg.SetLimit(runtime.NumCPU())
 
+	var indexed uint64
+	if metadata := loadIndexMetadata(b.db, b.typ); metadata != nil {
+		indexed = metadata.Last
+	}
 	for ident, list := range b.index {
+		ext := b.ext[ident]
 		eg.Go(func() error {
 			if !b.delete {
-				iw, err := newIndexWriter(b.db, ident)
+				iw, err := newIndexWriter(b.db, ident, indexed, ident.bloomSize())
 				if err != nil {
 					return err
 				}
-				for _, n := range list {
-					if err := iw.append(n); err != nil {
+				for i, n := range list {
+					if err := iw.append(n, ext[i]); err != nil {
 						return err
 					}
 				}
-				batchMu.Lock()
-				iw.finish(batch)
-				batchMu.Unlock()
+				return writeBatch(func(batch ethdb.Batch) {
+					iw.finish(batch)
+				})
 			} else {
-				id, err := newIndexDeleter(b.db, ident)
+				id, err := newIndexDeleter(b.db, ident, indexed, ident.bloomSize())
 				if err != nil {
 					return err
 				}
@@ -182,11 +221,10 @@ func (b *batchIndexer) finish(force bool) error {
 						return err
 					}
 				}
-				batchMu.Lock()
-				id.finish(batch)
-				batchMu.Unlock()
+				return writeBatch(func(batch ethdb.Batch) {
+					id.finish(batch)
+				})
 			}
-			return nil
 		})
 	}
 	if err := eg.Wait(); err != nil {
@@ -202,12 +240,16 @@ func (b *batchIndexer) finish(force bool) error {
 			storeIndexMetadata(batch, b.typ, b.lastID-1)
 		}
 	}
+	batchSize += batch.ValueSize()
+
 	if err := batch.Write(); err != nil {
 		return err
 	}
-	log.Debug("Committed batch indexer", "type", b.typ, "entries", len(b.index), "records", b.pending, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("Committed batch indexer", "type", b.typ, "entries", len(b.index), "records", b.pending, "size", common.StorageSize(batchSize), "elapsed", common.PrettyDuration(time.Since(start)))
+
 	b.pending = 0
-	b.index = make(map[stateIdent][]uint64)
+	clear(b.index)
+	clear(b.ext)
 	return nil
 }
 
@@ -215,7 +257,11 @@ func (b *batchIndexer) finish(force bool) error {
 func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader, typ historyType) error {
 	start := time.Now()
 	defer func() {
-		indexHistoryTimer.UpdateSince(start)
+		if typ == typeStateHistory {
+			stateIndexHistoryTimer.UpdateSince(start)
+		} else if typ == typeTrienodeHistory {
+			trienodeIndexHistoryTimer.UpdateSince(start)
+		}
 	}()
 
 	metadata := loadIndexMetadata(db, typ)
@@ -234,7 +280,7 @@ func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancient
 	if typ == typeStateHistory {
 		h, err = readStateHistory(freezer, historyID)
 	} else {
-		// h, err = readTrienodeHistory(freezer, historyID)
+		h, err = readTrienodeHistory(freezer, historyID)
 	}
 	if err != nil {
 		return err
@@ -253,7 +299,11 @@ func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancient
 func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader, typ historyType) error {
 	start := time.Now()
 	defer func() {
-		unindexHistoryTimer.UpdateSince(start)
+		if typ == typeStateHistory {
+			stateUnindexHistoryTimer.UpdateSince(start)
+		} else if typ == typeTrienodeHistory {
+			trienodeUnindexHistoryTimer.UpdateSince(start)
+		}
 	}()
 
 	metadata := loadIndexMetadata(db, typ)
@@ -272,7 +322,7 @@ func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancie
 	if typ == typeStateHistory {
 		h, err = readStateHistory(freezer, historyID)
 	} else {
-		// h, err = readTrienodeHistory(freezer, historyID)
+		h, err = readTrienodeHistory(freezer, historyID)
 	}
 	if err != nil {
 		return err
@@ -301,7 +351,8 @@ type interruptSignal struct {
 // If a state history is removed due to a rollback, the associated indexes should
 // be unmarked accordingly.
 type indexIniter struct {
-	disk      ethdb.KeyValueStore
+	state     *initerState
+	disk      ethdb.Database
 	freezer   ethdb.AncientStore
 	interrupt chan *interruptSignal
 	done      chan struct{}
@@ -316,8 +367,9 @@ type indexIniter struct {
 	wg sync.WaitGroup
 }
 
-func newIndexIniter(disk ethdb.KeyValueStore, freezer ethdb.AncientStore, typ historyType, lastID uint64) *indexIniter {
+func newIndexIniter(disk ethdb.Database, freezer ethdb.AncientStore, typ historyType, lastID uint64, noWait bool) *indexIniter {
 	initer := &indexIniter{
+		state:     newIniterState(disk, noWait),
 		disk:      disk,
 		freezer:   freezer,
 		interrupt: make(chan *interruptSignal),
@@ -337,12 +389,7 @@ func newIndexIniter(disk ethdb.KeyValueStore, freezer ethdb.AncientStore, typ hi
 
 	// Launch background indexer
 	initer.wg.Add(1)
-	if recover {
-		log.Info("History indexer is recovering", "history", lastID, "indexed", metadata.Last)
-		go initer.recover(lastID)
-	} else {
-		go initer.run(lastID)
-	}
+	go initer.run(recover)
 	return initer
 }
 
@@ -352,6 +399,7 @@ func (i *indexIniter) close() {
 		return
 	default:
 		close(i.closed)
+		i.state.close()
 		i.wg.Wait()
 	}
 }
@@ -383,85 +431,109 @@ func (i *indexIniter) remain() uint64 {
 	}
 }
 
-func (i *indexIniter) run(lastID uint64) {
+func (i *indexIniter) run(recover bool) {
 	defer i.wg.Done()
 
 	// Launch background indexing thread
 	var (
-		done      = make(chan struct{})
-		interrupt = new(atomic.Int32)
+		done      chan struct{}
+		interrupt *atomic.Int32
 
-		// checkDone indicates whether all requested state histories
-		// have been fully indexed.
+		// checkDone reports whether indexing has completed for all histories.
 		checkDone = func() bool {
 			metadata := loadIndexMetadata(i.disk, i.typ)
-			return metadata != nil && metadata.Last == lastID
+			return metadata != nil && metadata.Last == i.last.Load()
 		}
+		// canExit reports whether the initial indexing phase has completed.
+		canExit = func() bool {
+			return !i.state.is(stateSyncing) && checkDone()
+		}
+		heartBeat = time.NewTimer(0)
 	)
-	go i.index(done, interrupt, lastID)
+	defer heartBeat.Stop()
 
+	if recover {
+		if aborted := i.recover(); aborted {
+			return
+		}
+	}
 	for {
 		select {
 		case signal := <-i.interrupt:
-			// The indexing limit can only be extended or shortened continuously.
 			newLastID := signal.newLastID
-			if newLastID != lastID+1 && newLastID != lastID-1 {
-				signal.result <- fmt.Errorf("invalid history id, last: %d, got: %d", lastID, newLastID)
+			oldLastID := i.last.Load()
+
+			// The indexing limit can only be extended or shortened continuously.
+			if newLastID != oldLastID+1 && newLastID != oldLastID-1 {
+				signal.result <- fmt.Errorf("invalid history id, last: %d, got: %d", oldLastID, newLastID)
 				continue
 			}
 			i.last.Store(newLastID) // update indexing range
 
 			// The index limit is extended by one, update the limit without
 			// interrupting the current background process.
-			if newLastID == lastID+1 {
-				lastID = newLastID
+			if newLastID == oldLastID+1 {
 				signal.result <- nil
-				i.log.Debug("Extended history range", "last", lastID)
+				i.log.Debug("Extended history range", "last", newLastID)
 				continue
 			}
-			// The index limit is shortened by one, interrupt the current background
-			// process and relaunch with new target.
-			interrupt.Store(1)
-			<-done
-
+			// The index limit is shortened, interrupt the current background
+			// process if it's active and update the target.
+			if done != nil {
+				interrupt.Store(1)
+				<-done
+				done, interrupt = nil, nil
+			}
 			// If all state histories, including the one to be reverted, have
 			// been fully indexed, unindex it here and shut down the initializer.
 			if checkDone() {
-				i.log.Info("Truncate the extra history", "id", lastID)
-				if err := unindexSingle(lastID, i.disk, i.freezer, i.typ); err != nil {
+				i.log.Info("Truncate the extra history", "id", oldLastID)
+				if err := unindexSingle(oldLastID, i.disk, i.freezer, i.typ); err != nil {
 					signal.result <- err
 					return
 				}
 				close(i.done)
 				signal.result <- nil
-				i.log.Info("Histories have been fully indexed", "last", lastID-1)
+				i.log.Info("Histories have been fully indexed", "last", i.last.Load())
 				return
 			}
-			// Adjust the indexing target and relaunch the process
-			lastID = newLastID
+			// Adjust the indexing target
 			signal.result <- nil
-
-			done, interrupt = make(chan struct{}), new(atomic.Int32)
-			go i.index(done, interrupt, lastID)
-			i.log.Debug("Shortened history range", "last", lastID)
+			i.log.Debug("Shortened history range", "last", newLastID)
 
 		case <-done:
-			if checkDone() {
+			done, interrupt = nil, nil
+
+			if canExit() {
 				close(i.done)
-				i.log.Info("Histories have been fully indexed", "last", lastID)
 				return
 			}
-			// Relaunch the background runner if some tasks are left
+
+		case <-heartBeat.C:
+			heartBeat.Reset(time.Second * 15)
+
+			// Short circuit if the indexer is still busy
+			if done != nil {
+				continue
+			}
+			if canExit() {
+				close(i.done)
+				return
+			}
+			// The local chain is still in the syncing phase. Only start the indexing
+			// when a sufficient amount of histories has accumulated. Batch indexing
+			// is more efficient than processing items individually.
+			if i.state.is(stateSyncing) && i.last.Load()-i.indexed.Load() < indexerProcessBatchInSync {
+				continue
+			}
 			done, interrupt = make(chan struct{}), new(atomic.Int32)
-			go i.index(done, interrupt, lastID)
+			go i.index(done, interrupt, i.last.Load())
 
 		case <-i.closed:
-			interrupt.Store(1)
-			i.log.Info("Waiting background history index initer to exit")
-			<-done
-
-			if checkDone() {
-				close(i.done)
+			if done != nil {
+				interrupt.Store(1)
+				i.log.Info("Waiting background history index initer to exit")
+				<-done
 			}
 			return
 		}
@@ -523,7 +595,7 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 		}
 		return
 	}
-	i.log.Info("Start history indexing", "beginID", beginID, "lastID", lastID)
+	i.log.Debug("Start history indexing", "beginID", beginID, "lastID", lastID)
 
 	var (
 		current = beginID
@@ -546,13 +618,13 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 				return
 			}
 		} else {
-			// histories, err = readTrienodeHistories(i.freezer, current, count)
-			// if err != nil {
-			//	// The history read might fall if the history is truncated from
-			//	// head due to revert operation.
-			//	i.log.Error("Failed to read history for indexing", "current", current, "count", count, "err", err)
-			//	return
-			// }
+			histories, err = readTrienodeHistories(i.freezer, current, count)
+			if err != nil {
+				// The history read might fall if the history is truncated from
+				// head due to revert operation.
+				i.log.Error("Failed to read history for indexing", "current", current, "count", count, "err", err)
+				return
+			}
 		}
 		for _, h := range histories {
 			if err := batch.process(h, current); err != nil {
@@ -570,7 +642,7 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 					done = current - beginID
 				)
 				eta := common.CalculateETA(done, left, time.Since(start))
-				i.log.Info("Indexing state history", "processed", done, "left", left, "elapsed", common.PrettyDuration(time.Since(start)), "eta", common.PrettyDuration(eta))
+				i.log.Debug("Indexing history", "processed", done, "left", left, "elapsed", common.PrettyDuration(time.Since(start)), "eta", common.PrettyDuration(eta))
 			}
 		}
 		i.indexed.Store(current - 1) // update indexing progress
@@ -581,7 +653,7 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 				if err := batch.finish(true); err != nil {
 					i.log.Error("Failed to flush index", "err", err)
 				}
-				log.Info("State indexing interrupted")
+				log.Debug("State indexing interrupted")
 				return
 			}
 		}
@@ -589,7 +661,7 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 	if err := batch.finish(true); err != nil {
 		i.log.Error("Failed to flush index", "err", err)
 	}
-	i.log.Info("Indexed history", "from", beginID, "to", lastID, "elapsed", common.PrettyDuration(time.Since(start)))
+	i.log.Debug("Indexed history", "from", beginID, "to", lastID, "elapsed", common.PrettyDuration(time.Since(start)))
 }
 
 // recover handles unclean shutdown recovery. After an unclean shutdown, any
@@ -602,35 +674,35 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 // by chain recovery, under the assumption that the recovered histories will be
 // identical to the lost ones. Fork-awareness should be added in the future to
 // correctly handle histories affected by reorgs.
-func (i *indexIniter) recover(lastID uint64) {
-	defer i.wg.Done()
+func (i *indexIniter) recover() bool {
+	log.Info("History indexer is recovering", "last", i.last.Load(), "indexed", i.indexed.Load())
 
 	for {
 		select {
 		case signal := <-i.interrupt:
 			newLastID := signal.newLastID
-			if newLastID != lastID+1 && newLastID != lastID-1 {
-				signal.result <- fmt.Errorf("invalid history id, last: %d, got: %d", lastID, newLastID)
+			oldLastID := i.last.Load()
+
+			// The indexing limit can only be extended or shortened continuously.
+			if newLastID != oldLastID+1 && newLastID != oldLastID-1 {
+				signal.result <- fmt.Errorf("invalid history id, last: %d, got: %d", oldLastID, newLastID)
 				continue
 			}
-
 			// Update the last indexed flag
-			lastID = newLastID
 			signal.result <- nil
 			i.last.Store(newLastID)
-			i.log.Debug("Updated history index flag", "last", lastID)
+			i.log.Debug("Updated history index flag", "last", newLastID)
 
 			// Terminate the recovery routine once the histories are fully aligned
 			// with the index data, indicating that index initialization is complete.
 			metadata := loadIndexMetadata(i.disk, i.typ)
-			if metadata != nil && metadata.Last == lastID {
-				close(i.done)
-				i.log.Info("History indexer is recovered", "last", lastID)
-				return
+			if metadata != nil && metadata.Last == newLastID {
+				i.log.Info("History indexer is recovered", "last", newLastID)
+				return false
 			}
 
 		case <-i.closed:
-			return
+			return true
 		}
 	}
 }
@@ -647,6 +719,7 @@ func (i *indexIniter) recover(lastID uint64) {
 // state history.
 type historyIndexer struct {
 	initer  *indexIniter
+	pruner  *indexPruner
 	typ     historyType
 	disk    ethdb.KeyValueStore
 	freezer ethdb.AncientStore
@@ -657,6 +730,8 @@ func checkVersion(disk ethdb.KeyValueStore, typ historyType) {
 	var blob []byte
 	if typ == typeStateHistory {
 		blob = rawdb.ReadStateHistoryIndexMetadata(disk)
+	} else if typ == typeTrienodeHistory {
+		blob = rawdb.ReadTrienodeHistoryIndexMetadata(disk)
 	} else {
 		panic(fmt.Errorf("unknown history type: %v", typ))
 	}
@@ -666,32 +741,41 @@ func checkVersion(disk ethdb.KeyValueStore, typ historyType) {
 		return
 	}
 	// Short circuit if the metadata is found and the version is matched
+	ver := stateHistoryIndexVersion
+	if typ == typeTrienodeHistory {
+		ver = trienodeHistoryIndexVersion
+	}
 	var m indexMetadata
 	err := rlp.DecodeBytes(blob, &m)
-	if err == nil && m.Version == stateIndexVersion {
+	if err == nil && m.Version == ver {
 		return
 	}
 	// Version is not matched, prune the existing data and re-index from scratch
+	batch := disk.NewBatch()
+	if typ == typeStateHistory {
+		rawdb.DeleteStateHistoryIndexMetadata(batch)
+		rawdb.DeleteStateHistoryIndexes(batch)
+	} else {
+		rawdb.DeleteTrienodeHistoryIndexMetadata(batch)
+		rawdb.DeleteTrienodeHistoryIndexes(batch)
+	}
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to purge history index", "type", typ, "err", err)
+	}
 	version := "unknown"
 	if err == nil {
 		version = fmt.Sprintf("%d", m.Version)
 	}
-
-	batch := disk.NewBatch()
-	rawdb.DeleteStateHistoryIndexMetadata(batch)
-	rawdb.DeleteStateHistoryIndex(batch)
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to purge state history index", "err", err)
-	}
-	log.Info("Cleaned up obsolete state history index", "version", version, "want", stateIndexVersion)
+	log.Info("Cleaned up obsolete history index", "type", typ, "version", version, "want", version)
 }
 
 // newHistoryIndexer constructs the history indexer and launches the background
 // initer to complete the indexing of any remaining state histories.
-func newHistoryIndexer(disk ethdb.KeyValueStore, freezer ethdb.AncientStore, lastHistoryID uint64, typ historyType) *historyIndexer {
+func newHistoryIndexer(disk ethdb.Database, freezer ethdb.AncientStore, lastHistoryID uint64, typ historyType, noWait bool) *historyIndexer {
 	checkVersion(disk, typ)
 	return &historyIndexer{
-		initer:  newIndexIniter(disk, freezer, typ, lastHistoryID),
+		initer:  newIndexIniter(disk, freezer, typ, lastHistoryID, noWait),
+		pruner:  newIndexPruner(disk, typ),
 		typ:     typ,
 		disk:    disk,
 		freezer: freezer,
@@ -700,6 +784,7 @@ func newHistoryIndexer(disk ethdb.KeyValueStore, freezer ethdb.AncientStore, las
 
 func (i *historyIndexer) close() {
 	i.initer.close()
+	i.pruner.close()
 }
 
 // inited returns a flag indicating whether the existing state histories
@@ -720,6 +805,8 @@ func (i *historyIndexer) extend(historyID uint64) error {
 	case <-i.initer.closed:
 		return errors.New("indexer is closed")
 	case <-i.initer.done:
+		i.pruner.pause()
+		defer i.pruner.resume()
 		return indexSingle(historyID, i.disk, i.freezer, i.typ)
 	case i.initer.interrupt <- signal:
 		return <-signal.result
@@ -737,9 +824,24 @@ func (i *historyIndexer) shorten(historyID uint64) error {
 	case <-i.initer.closed:
 		return errors.New("indexer is closed")
 	case <-i.initer.done:
+		i.pruner.pause()
+		defer i.pruner.resume()
 		return unindexSingle(historyID, i.disk, i.freezer, i.typ)
 	case i.initer.interrupt <- signal:
 		return <-signal.result
+	}
+}
+
+// prune signals the pruner that the history tail has advanced to the given ID,
+// so that stale index blocks referencing pruned histories can be removed.
+func (i *historyIndexer) prune(newTail uint64) {
+	select {
+	case <-i.initer.closed:
+		log.Debug("Ignored the pruning signal", "reason", "closed")
+	case <-i.initer.done:
+		i.pruner.prune(newTail)
+	default:
+		log.Debug("Ignored the pruning signal", "reason", "busy")
 	}
 }
 

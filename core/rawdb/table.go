@@ -62,6 +62,12 @@ func (t *table) AncientRange(kind string, start, count, maxBytes uint64) ([][]by
 	return t.db.AncientRange(kind, start, count, maxBytes)
 }
 
+// AncientBytes is a noop passthrough that just forwards the request to the underlying
+// database.
+func (t *table) AncientBytes(kind string, id, offset, length uint64) ([]byte, error) {
+	return t.db.AncientBytes(kind, id, offset, length)
+}
+
 // Ancients is a noop passthrough that just forwards the request to the underlying
 // database.
 func (t *table) Ancients() (uint64, error) {
@@ -245,6 +251,11 @@ func (b *tableBatch) Write() error {
 // Reset resets the batch for reuse.
 func (b *tableBatch) Reset() {
 	b.batch.Reset()
+}
+
+// Close closes the batch and releases all associated resources.
+func (b *tableBatch) Close() {
+	b.batch.Close()
 }
 
 // tableReplayer is a wrapper around a batch replayer which truncates

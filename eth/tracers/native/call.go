@@ -42,6 +42,7 @@ type callLog struct {
 	Address common.Address `json:"address"`
 	Topics  []common.Hash  `json:"topics"`
 	Data    hexutil.Bytes  `json:"data"`
+	Index   hexutil.Uint   `json:"index"`
 	// Position of the log relative to subcalls within the same trace
 	// See https://github.com/ethereum/go-ethereum/pull/28389 for details
 	Position hexutil.Uint `json:"position"`
@@ -115,8 +116,8 @@ type callTracer struct {
 	config    callTracerConfig
 	gasLimit  uint64
 	depth     int
-	interrupt atomic.Bool // Atomic flag to signal execution interruption
-	reason    error       // Textual reason for the interruption
+	interrupt atomic.Bool           // Atomic flag to signal execution interruption
+	reason    atomic.Pointer[error] // Reason for the interruption, populated by Stop
 }
 
 type callTracerConfig struct {
@@ -250,6 +251,7 @@ func (t *callTracer) OnLog(log *types.Log) {
 		Address:  log.Address,
 		Topics:   log.Topics,
 		Data:     log.Data,
+		Index:    hexutil.Uint(log.Index),
 		Position: hexutil.Uint(len(t.callstack[len(t.callstack)-1].Calls)),
 	}
 	t.callstack[len(t.callstack)-1].Logs = append(t.callstack[len(t.callstack)-1].Logs, l)
@@ -266,12 +268,15 @@ func (t *callTracer) GetResult() (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return res, t.reason
+	if p := t.reason.Load(); p != nil {
+		return res, *p
+	}
+	return res, nil
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
 func (t *callTracer) Stop(err error) {
-	t.reason = err
+	t.reason.Store(&err)
 	t.interrupt.Store(true)
 }
 

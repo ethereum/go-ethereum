@@ -68,6 +68,43 @@ func TestListAddVeryExpensive(t *testing.T) {
 	}
 }
 
+// TestPriceHeapCmp tests that the price heap comparison function works as intended.
+// It also tests combinations where the basefee is higher than the gas fee cap, which
+// are useful to sort in the mempool to support basefee changes.
+func TestPriceHeapCmp(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	txs := []*types.Transaction{
+		// nonce, gaslimit, gasfee, gastip
+		dynamicFeeTx(0, 1000, big.NewInt(2), big.NewInt(1), key),
+		dynamicFeeTx(0, 1000, big.NewInt(1), big.NewInt(2), key),
+		dynamicFeeTx(0, 1000, big.NewInt(1), big.NewInt(1), key),
+		dynamicFeeTx(0, 1000, big.NewInt(1), big.NewInt(0), key),
+	}
+
+	// create priceHeap
+	ph := &priceHeap{}
+
+	// now set the basefee on the heap
+	for _, basefee := range []uint64{0, 1, 2, 3} {
+		ph.baseFee = uint256.NewInt(basefee)
+
+		for i := 0; i < len(txs); i++ {
+			for j := 0; j < len(txs); j++ {
+				switch {
+				case i == j:
+					if c := ph.cmp(txs[i], txs[j]); c != 0 {
+						t.Errorf("tx %d should be equal priority to tx %d with basefee %d (cmp=%d)", i, j, basefee, c)
+					}
+				case i < j:
+					if c := ph.cmp(txs[i], txs[j]); c != 1 {
+						t.Errorf("tx %d vs tx %d comparison inconsistent with basefee %d (cmp=%d)", i, j, basefee, c)
+					}
+				}
+			}
+		}
+	}
+}
+
 func BenchmarkListAdd(b *testing.B) {
 	// Generate a list of transactions to insert
 	key, _ := crypto.GenerateKey()

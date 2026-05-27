@@ -89,7 +89,7 @@ func genValueTx(nbytes int) func(int, *BlockGen) {
 	data := make([]byte, nbytes)
 	return func(i int, gen *BlockGen) {
 		toaddr := common.Address{}
-		gas, _ := IntrinsicGas(data, nil, nil, false, false, false, false)
+		cost, _ := IntrinsicGas(data, nil, nil, false, false, false, false, false)
 		signer := gen.Signer()
 		gasPrice := big.NewInt(0)
 		if gen.header.BaseFee != nil {
@@ -99,7 +99,7 @@ func genValueTx(nbytes int) func(int, *BlockGen) {
 			Nonce:    gen.TxNonce(benchRootAddr),
 			To:       &toaddr,
 			Value:    big.NewInt(1),
-			Gas:      gas,
+			Gas:      cost.RegularGas,
 			Data:     data,
 			GasPrice: gasPrice,
 		})
@@ -301,7 +301,7 @@ func makeChainForBench(db ethdb.Database, genesis *Genesis, full bool, count uin
 
 func benchWriteChain(b *testing.B, full bool, count uint64) {
 	genesis := &Genesis{Config: params.AllEthashProtocolChanges}
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		pdb, err := pebble.New(b.TempDir(), 1024, 128, "", false)
 		if err != nil {
 			b.Fatalf("error opening database: %v", err)
@@ -326,9 +326,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 	db.Close()
 	options := DefaultConfig().WithArchive(true)
 	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		pdb, err = pebble.New(dir, 1024, 128, "", false)
 		if err != nil {
 			b.Fatalf("error opening database: %v", err)

@@ -90,6 +90,9 @@ type httpServer struct {
 	port     int
 
 	handlerNames map[string]string
+
+	// disableHTTP2 disables HTTP/2 support on this server when set to true.
+	disableHTTP2 bool
 }
 
 const (
@@ -138,6 +141,11 @@ func (h *httpServer) start() error {
 
 	// Initialize the server.
 	h.server = &http.Server{Handler: h}
+	h.server.Protocols = new(http.Protocols)
+	h.server.Protocols.SetHTTP1(true)
+	if !h.disableHTTP2 {
+		h.server.Protocols.SetUnencryptedHTTP2(true)
+	}
 	if h.timeouts != (rpc.HTTPTimeouts{}) {
 		CheckTimeouts(&h.timeouts)
 		h.server.ReadTimeout = h.timeouts.ReadTimeout
@@ -455,6 +463,7 @@ func (h *virtualHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Either invalid (too many colons) or no port specified
 		host = r.Host
 	}
+	host = strings.ToLower(host)
 	if ipAddr := net.ParseIP(host); ipAddr != nil {
 		// It's an IP address, we can serve that
 		h.next.ServeHTTP(w, r)
@@ -500,7 +509,7 @@ func (w *gzipResponseWriter) init() {
 	hdr := w.resp.Header()
 	length := hdr.Get("content-length")
 	if len(length) > 0 {
-		if n, err := strconv.ParseUint(length, 10, 64); err != nil {
+		if n, err := strconv.ParseUint(length, 10, 64); err == nil {
 			w.hasLength = true
 			w.contentLength = n
 		}

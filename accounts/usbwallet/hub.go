@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/karalabe/hid"
+	"github.com/ethereum/hid"
 )
 
 // LedgerScheme is the protocol scheme prefixing account and wallet URLs.
@@ -42,6 +42,14 @@ const refreshCycle = time.Second
 // refreshThrottling is the minimum time between wallet refreshes to avoid USB
 // trashing.
 const refreshThrottling = 500 * time.Millisecond
+
+const (
+	// deviceUsagePage identifies Ledger devices by HID usage page (0xffa0) on Windows and macOS.
+	// See: https://github.com/LedgerHQ/ledger-live/blob/05a2980e838955a11a1418da638ef8ac3df4fb74/libs/ledgerjs/packages/hw-transport-node-hid-noevents/src/TransportNodeHid.ts
+	deviceUsagePage = 0xffa0
+	// deviceInterface identifies Ledger devices by USB interface number (0) on Linux.
+	deviceInterface = 0
+)
 
 // Hub is a accounts.Backend that can find and handle generic USB hardware wallets.
 type Hub struct {
@@ -82,6 +90,7 @@ func NewLedgerHub() (*Hub, error) {
 		0x0005, /* Ledger Nano S Plus */
 		0x0006, /* Ledger Nano FTS */
 		0x0007, /* Ledger Flex */
+		0x0008, /* Ledger Nano Gen5 */
 
 		0x0000, /* WebUSB Ledger Blue */
 		0x1000, /* WebUSB Ledger Nano S */
@@ -89,7 +98,8 @@ func NewLedgerHub() (*Hub, error) {
 		0x5000, /* WebUSB Ledger Nano S Plus */
 		0x6000, /* WebUSB Ledger Nano FTS */
 		0x7000, /* WebUSB Ledger Flex */
-	}, 0xffa0, 0, newLedgerDriver)
+		0x8000, /* WebUSB Ledger Nano Gen5 */
+	}, deviceUsagePage, deviceInterface, newLedgerDriver)
 }
 
 // NewTrezorHubWithHID creates a new hardware wallet manager for Trezor devices.

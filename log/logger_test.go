@@ -33,6 +33,64 @@ func TestLoggingWithVmodule(t *testing.T) {
 	}
 }
 
+// TestLoggingWithVmoduleDowngrade checks that vmodule can be downgraded.
+func TestLoggingWithVmoduleDowngrade(t *testing.T) {
+	out := new(bytes.Buffer)
+	glog := NewGlogHandler(NewTerminalHandlerWithLevel(out, LevelTrace, false))
+	glog.Verbosity(LevelTrace) // Allow all logs globally
+	logger := NewLogger(glog)
+
+	// This should appear (global level allows it)
+	logger.Info("before vmodule downgrade, this should be logged")
+	if !bytes.Contains(out.Bytes(), []byte("before vmodule downgrade")) {
+		t.Fatal("expected 'before vmodule downgrade' to be logged")
+	}
+	out.Reset()
+
+	// Downgrade this file to only allow Warn and above
+	glog.Vmodule("logger_test.go=2")
+
+	// Info should now be filtered out
+	logger.Info("after vmodule downgrade, this should be filtered")
+	if bytes.Contains(out.Bytes(), []byte("after vmodule downgrade, this should be filtered")) {
+		t.Fatal("expected 'after vmodule downgrade, this should be filtered' to NOT be logged after vmodule downgrade")
+	}
+
+	// Warn should still appear
+	logger.Warn("after vmodule downgrade, this should be logged")
+	if !bytes.Contains(out.Bytes(), []byte("after vmodule downgrade, this should be logged")) {
+		t.Fatal("expected 'should appear' to be logged")
+	}
+}
+
+// TestWithAttrsVerbosityChange checks that verbosity changes affect child loggers.
+func TestWithAttrsVerbosityChange(t *testing.T) {
+	out := new(bytes.Buffer)
+	glog := NewGlogHandler(NewTerminalHandlerWithLevel(out, LevelTrace, false))
+	glog.Verbosity(LevelInfo)
+
+	// Create a child logger with an extra attribute.
+	child := slog.New(glog.WithAttrs([]slog.Attr{slog.String("peer", "foo")}))
+
+	// Debug should be filtered at Info level.
+	child.Debug("this should be filtered")
+	if bytes.Contains(out.Bytes(), []byte("this should be filtered")) {
+		t.Fatal("expected debug message to be filtered at Info level")
+	}
+
+	// Change verbosity on the parent to allow Debug.
+	glog.Verbosity(LevelDebug)
+
+	// Child should pick up the new level and include its attributes.
+	child.Debug("this should be logged")
+	if !bytes.Contains(out.Bytes(), []byte("this should be logged")) {
+		t.Fatal("expected child logger to pick up verbosity change")
+	}
+	if !bytes.Contains(out.Bytes(), []byte("peer=foo")) {
+		t.Fatal("expected child logger to include WithAttrs attributes")
+	}
+}
+
 func TestTerminalHandlerWithAttrs(t *testing.T) {
 	out := new(bytes.Buffer)
 	glog := NewGlogHandler(NewTerminalHandlerWithLevel(out, LevelTrace, false).WithAttrs([]slog.Attr{slog.String("baz", "bat")}))
@@ -70,9 +128,10 @@ func TestJSONHandler(t *testing.T) {
 
 func BenchmarkTraceLogging(b *testing.B) {
 	SetDefault(NewLogger(NewTerminalHandler(io.Discard, true)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	i := 0
+	for b.Loop() {
 		Trace("a message", "v", i)
+		i++
 	}
 }
 
@@ -99,8 +158,8 @@ func benchmarkLogger(b *testing.B, l Logger) {
 		err    = errors.New("oh nooes it's crap")
 	)
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	i := 0
+	for b.Loop() {
 		l.Info("This is a message",
 			"foo", int16(i),
 			"bytes", bb,
@@ -109,8 +168,8 @@ func benchmarkLogger(b *testing.B, l Logger) {
 			"bigint", bigint,
 			"nilbig", nilbig,
 			"err", err)
+		i++
 	}
-	b.StopTimer()
 }
 
 func TestLoggerOutput(t *testing.T) {
@@ -161,18 +220,18 @@ const termTimeFormat = "01-02|15:04:05.000"
 func BenchmarkAppendFormat(b *testing.B) {
 	var now = time.Now()
 	b.Run("fmt time.Format", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			fmt.Fprintf(io.Discard, "%s", now.Format(termTimeFormat))
 		}
 	})
 	b.Run("time.AppendFormat", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			now.AppendFormat(nil, termTimeFormat)
 		}
 	})
 	var buf = new(bytes.Buffer)
 	b.Run("time.Custom", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			writeTimeTermFormat(buf, now)
 			buf.Reset()
 		}

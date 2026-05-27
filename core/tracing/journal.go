@@ -155,10 +155,18 @@ func (j *journal) OnBalanceChange(addr common.Address, prev, new *big.Int, reaso
 }
 
 func (j *journal) OnNonceChangeV2(addr common.Address, prev, new uint64, reason NonceChangeReason) {
-	// When a contract is created, the nonce of the creator is incremented.
-	// This change is not reverted when the creation fails.
-	if reason != NonceChangeContractCreator {
-		j.entries = append(j.entries, nonceChange{addr: addr, prev: prev, new: new})
+	j.entries = append(j.entries, nonceChange{addr: addr, prev: prev, new: new})
+	if reason == NonceChangeContractCreator {
+		// When a contract is created via CREATE/CREATE2, the creator's nonce is
+		// incremented. The EVM does not revert this when the CREATE frame itself
+		// fails (the nonce change happens before the EVM snapshot). However, if
+		// a parent frame reverts, the nonce must be reverted along with everything
+		// else.
+		//
+		// To achieve this, advance the current frame's revision point past this
+		// entry. The CREATE frame's revert won't touch it (it's below the revision),
+		// but a parent frame's revert will (it's above the parent's revision).
+		j.revisions[len(j.revisions)-1] = len(j.entries)
 	}
 	if j.hooks.OnNonceChangeV2 != nil {
 		j.hooks.OnNonceChangeV2(addr, prev, new, reason)

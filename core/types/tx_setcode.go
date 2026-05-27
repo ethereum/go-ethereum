@@ -94,7 +94,10 @@ func SignSetCode(prv *ecdsa.PrivateKey, auth SetCodeAuthorization) (SetCodeAutho
 	if err != nil {
 		return SetCodeAuthorization{}, err
 	}
-	r, s, _ := decodeSignature(sig)
+	r, s, _, err := decodeSignature(sig)
+	if err != nil {
+		return SetCodeAuthorization{}, err
+	}
 	return SetCodeAuthorization{
 		ChainID: auth.ChainID,
 		Address: auth.Address,

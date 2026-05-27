@@ -126,7 +126,7 @@ func benchRLP(b *testing.B, encode bool) {
 			b.Run(tc.name, func(b *testing.B) {
 				b.ReportAllocs()
 				var null = &devnull{}
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					rlp.Encode(null, tc.obj)
 				}
 				b.SetBytes(int64(null.len / b.N))
@@ -136,7 +136,7 @@ func benchRLP(b *testing.B, encode bool) {
 			// Test decoding
 			b.Run(tc.name, func(b *testing.B) {
 				b.ReportAllocs()
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					if err := rlp.DecodeBytes(data, tc.obj); err != nil {
 						b.Fatal(err)
 					}

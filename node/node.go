@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -44,7 +43,6 @@ import (
 
 // Node is a container on which services can be registered.
 type Node struct {
-	eventmux      *event.TypeMux
 	config        *Config
 	accman        *accounts.Manager
 	log           log.Logger
@@ -108,7 +106,6 @@ func New(conf *Config) (*Node, error) {
 	node := &Node{
 		config:        conf,
 		inprocHandler: server,
-		eventmux:      new(event.TypeMux),
 		log:           conf.Logger,
 		stop:          make(chan struct{}),
 		server:        &p2p.Server{Config: conf.P2P},
@@ -152,8 +149,10 @@ func New(conf *Config) (*Node, error) {
 	// Configure RPC servers.
 	node.http = newHTTPServer(node.log, conf.HTTPTimeouts)
 	node.httpAuth = newHTTPServer(node.log, conf.HTTPTimeouts)
+	node.httpAuth.disableHTTP2 = true // Engine API does not need HTTP/2
 	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
 	node.wsAuth = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
+	node.wsAuth.disableHTTP2 = true
 	node.ipc = newIPCServer(node.log, conf.IPCEndpoint())
 
 	return node, nil
@@ -688,12 +687,6 @@ func (n *Node) WSAuthEndpoint() string {
 		return "ws://" + n.httpAuth.listenAddr() + n.httpAuth.wsConfig.prefix
 	}
 	return "ws://" + n.wsAuth.listenAddr() + n.wsAuth.wsConfig.prefix
-}
-
-// EventMux retrieves the event multiplexer used by all the network services in
-// the current protocol stack.
-func (n *Node) EventMux() *event.TypeMux {
-	return n.eventmux
 }
 
 // OpenDatabaseWithOptions opens an existing database with the given name (or creates one if no
