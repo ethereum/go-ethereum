@@ -134,7 +134,9 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStar
 		blockAccessList.Merge(res.blockAccessList)
 	}
 
+	// TODO: do we move validation to ValidateState?
 	if block.AccessList().Hash() != blockAccessList.ToEncodingObj().Hash() {
+		// TODO: expose json string method on encoding block access list and log it here
 		return &ProcessResultWithMetrics{
 			ProcessResult: &ProcessResult{Error: fmt.Errorf("invalid block access list: mismatch between local and remote block access list")},
 		}
@@ -285,6 +287,8 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 	}
 	// TODO: make precompiled addresses be resolvable from chain config + block
 	db.Prepare(evm.GetRules(), sender, block.Coinbase(), tx.To(), vm.PrecompiledAddressesCancun, tx.AccessList())
+
+	db.SetTxContext(tx.Hash(), balIdx-1, uint32(balIdx))
 
 	receipt, txBAL, err := ApplyTransactionWithEVM(msg, gp, db, block.Number(), block.Hash(), context.Time, tx, evm)
 	if err != nil {
