@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -171,6 +172,7 @@ func (ptx *BlobTxForPool) sidecar() (*types.BlobTxSidecar, error) {
 	return types.NewBlobTxSidecar(sidecar.Version, blobs, sidecar.Commitments, sidecar.Proofs), nil
 }
 
+// todo: Is this function required (i.e. can the V0 blob transaction be reorged)
 func (ptx *BlobTxForPool) toV1() error {
 	// todo: If we have a function to compute proofs from cells,
 	// we can avoid blob recovery here
@@ -311,8 +313,7 @@ func encodeForNetwork(storedRLP []byte, version uint) ([]byte, error) {
 
 	// 5. Build the [blobs] field for the wire format.
 	var blobsField []byte
-	// todo: should we use eth.ETH72 here
-	if version >= 72 {
+	if version >= eth.ETH72 {
 		// eth/72 omits the blob payload; peers fetch cells separately via GetCells.
 		blobsField = []byte{0xc0} // RLP-encoded empty list
 	} else {
