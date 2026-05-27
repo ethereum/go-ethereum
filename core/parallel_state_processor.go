@@ -72,7 +72,6 @@ func validateStateAccesses(lastIdx int, accessList bal.AccessListReader, localAc
 // by resultHandler
 func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStart time.Time, preTxBal *bal.ConstructionBlockAccessList, statedb *state.StateDB, results []txExecResult) *ProcessResultWithMetrics {
 	tExec := time.Since(tExecStart)
-	var requests [][]byte
 	tPostprocessStart := time.Now()
 	header := block.Header()
 
@@ -119,12 +118,14 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStar
 		}
 	}
 
-	_, postBal, err := PostExecution(context.Background(), p.chainConfig(), block.Number(), block.Time(), allLogs, evm, uint32(len(block.Transactions())+1))
+	requests, postBal, err := PostExecution(context.Background(), p.chainConfig(), block.Number(), block.Time(), allLogs, evm, uint32(len(block.Transactions())+1))
 	if err != nil {
 		return &ProcessResultWithMetrics{
 			ProcessResult: &ProcessResult{Error: err},
 		}
 	}
+
+	p.chain.Engine().Finalize(p.chain, block.Header(), evm.StateDB, block.Body(), uint32(len(block.Transactions()))+1, postBal)
 
 	blockAccessList := bal.NewConstructionBlockAccessList()
 	blockAccessList.Merge(preTxBal)
