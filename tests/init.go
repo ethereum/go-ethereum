@@ -808,3 +808,5 @@ type UnsupportedForkError struct {
 func (e UnsupportedForkError) Error() string {
 	return fmt.Sprintf("unsupported fork %q", e.Name)
 }
+
+var _ error = (*UnsupportedForkError)(nil)

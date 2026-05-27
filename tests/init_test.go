@@ -291,3 +291,44 @@ func TestMatcherRunonlylist(t *testing.T) {
 		}
 	})
 }
+
+func TestAvailableForks(t *testing.T) {
+	t.Parallel()
+	forks := AvailableForks()
+	if len(forks) == 0 {
+		t.Fatal("no forks available")
+	}
+	if len(forks) != len(Forks) {
+		t.Fatalf("mismatch: AvailableForks returned %d forks, but Forks has %d", len(forks), len(Forks))
+	}
+	seen := make(map[string]struct{}, len(forks))
+	for _, name := range forks {
+		if _, ok := seen[name]; ok {
+			t.Fatalf("duplicate fork name: %s", name)
+		}
+		seen[name] = struct{}{}
+		if _, ok := Forks[name]; !ok {
+			t.Fatalf("fork %s in AvailableForks but not in Forks", name)
+		}
+	}
+	if !sort.IsSorted(sort.StringSlice(forks)) {
+		t.Fatal("AvailableForks is not sorted")
+	}
+	for name, cfg := range Forks {
+		if cfg == nil {
+			t.Fatalf("fork %s has nil config", name)
+		}
+		if cfg.ChainID == nil {
+			t.Fatalf("fork %s has nil ChainID", name)
+		}
+	}
+}
+
+func TestUnsupportedForkError(t *testing.T) {
+	t.Parallel()
+	var err error = UnsupportedForkError{Name: "TestFork"}
+	want := `unsupported fork "TestFork"`
+	if err.Error() != want {
+		t.Fatalf("unexpected error message: got %q, want %q", err.Error(), want)
+	}
+}
