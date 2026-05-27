@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -30,6 +31,41 @@ import (
 // (e.g. "3a" -> 0x3a000...0). The first nibble is prefixHex[0].
 func mkKey(prefixHex string) []byte {
 	return common.HexToHash(prefixHex + strings.Repeat("0", 64-len(prefixHex))).Bytes()
+}
+
+// sortedPairs turns key prefixes into 32-byte (key, value) slices sorted by key,
+// as StackTrie requires. Values are distinct and 32 bytes long.
+func sortedPairs(prefixes []string) (keys, vals [][]byte) {
+	type kv struct{ k, v []byte }
+	ps := make([]kv, len(prefixes))
+	for i, p := range prefixes {
+		ps[i] = kv{mkKey(p), bytes.Repeat([]byte{byte(i + 1)}, 32)}
+	}
+	sort.Slice(ps, func(i, j int) bool { return bytes.Compare(ps[i].k, ps[j].k) < 0 })
+	for _, p := range ps {
+		keys = append(keys, p.k)
+		vals = append(vals, p.v)
+	}
+	return keys, vals
+}
+
+// partitionRoot builds partition n over the given keys and returns its subtree
+// root blob (the node emitted at path [n]).
+func partitionRoot(t *testing.T, n byte, keys, vals [][]byte) []byte {
+	t.Helper()
+	var root []byte
+	pst := NewPartialStackTrie(n, func(path []byte, _ common.Hash, blob []byte) {
+		if len(path) == 1 {
+			root = common.CopyBytes(blob)
+		}
+	})
+	for i := range keys {
+		if err := pst.Update(keys[i], vals[i]); err != nil {
+			t.Fatalf("partition update: %v", err)
+		}
+	}
+	pst.Hash()
+	return root
 }
 
 type nodeRec struct {
@@ -96,19 +132,13 @@ func TestPartialStackTrieMatchesFullSubtree(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Partition-n (key, value) pairs, sorted ascending as StackTrie requires.
-			type kv struct{ k, v []byte }
-			pairs := make([]kv, len(tc.keys))
-			for i, p := range tc.keys {
-				pairs[i] = kv{mkKey(p), bytes.Repeat([]byte{byte(i + 1)}, 32)}
-			}
-			sort.Slice(pairs, func(i, j int) bool { return bytes.Compare(pairs[i].k, pairs[j].k) < 0 })
+			keys, vals := sortedPairs(tc.keys)
 
 			// Reference: full trie over the partition-n keys plus the other-partition key.
 			full := collect(func(onNode OnTrieNode) {
 				st := NewStackTrie(onNode)
-				for _, p := range pairs {
-					if err := st.Update(p.k, p.v); err != nil {
+				for i := range keys {
+					if err := st.Update(keys[i], vals[i]); err != nil {
 						t.Fatalf("full update: %v", err)
 					}
 				}
@@ -122,8 +152,8 @@ func TestPartialStackTrieMatchesFullSubtree(t *testing.T) {
 			var partRoot common.Hash
 			part := collect(func(onNode OnTrieNode) {
 				pst := NewPartialStackTrie(n, onNode)
-				for _, p := range pairs {
-					if err := pst.Update(p.k, p.v); err != nil {
+				for i := range keys {
+					if err := pst.Update(keys[i], vals[i]); err != nil {
 						t.Fatalf("partial update: %v", err)
 					}
 				}
@@ -173,5 +203,82 @@ func TestPartialStackTrieWrongNibble(t *testing.T) {
 	pst := NewPartialStackTrie(3, nil)
 	if err := pst.Update(mkKey("4abc"), []byte{0x01}); err == nil {
 		t.Fatal("expected error for key outside the partition, got nil")
+	}
+}
+
+// TestMountPartitionRoot checks that folding the leading nibble back into a
+// single partition's subtree root reproduces the canonical trie root, for every
+// root shape (leaf, extension, branch). The branch case is the one not reachable
+// through the triedb single-partition tests.
+func TestMountPartitionRoot(t *testing.T) {
+	const n = byte(3)
+	cases := []struct {
+		name string
+		keys []string
+	}{
+		{"leaf", []string{"3abc"}},
+		{"extension", []string{"3110", "3115", "311a"}},
+		{"branch", []string{"30", "37", "3a"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			keys, vals := sortedPairs(tc.keys)
+
+			// Canonical root: a plain trie over the same keys. They all share
+			// nibble n, so there is no top-level branch to collapse.
+			ref := NewStackTrie(nil)
+			for i := range keys {
+				if err := ref.Update(keys[i], vals[i]); err != nil {
+					t.Fatalf("ref update: %v", err)
+				}
+			}
+			want := ref.Hash()
+
+			got, blob, err := MountPartitionRoot(partitionRoot(t, n, keys, vals), n)
+			if err != nil {
+				t.Fatalf("MountPartitionRoot: %v", err)
+			}
+			if got != want {
+				t.Fatalf("mounted root %x, want %x", got, want)
+			}
+			if crypto.Keccak256Hash(blob) != got {
+				t.Fatalf("returned blob does not hash to the returned root")
+			}
+		})
+	}
+}
+
+// TestAssembleBranch checks that packing partition subtree-root hashes into a
+// top-level branch reproduces the canonical root of the union of those keys.
+func TestAssembleBranch(t *testing.T) {
+	keys3, vals3 := sortedPairs([]string{"30", "37", "3a"})
+	keys7, vals7 := sortedPairs([]string{"71", "75"})
+
+	// Canonical root over both partitions (all "3..." sort before all "7...").
+	ref := NewStackTrie(nil)
+	for i := range keys3 {
+		if err := ref.Update(keys3[i], vals3[i]); err != nil {
+			t.Fatalf("ref update: %v", err)
+		}
+	}
+	for i := range keys7 {
+		if err := ref.Update(keys7[i], vals7[i]); err != nil {
+			t.Fatalf("ref update: %v", err)
+		}
+	}
+	want := ref.Hash()
+
+	var children [17][]byte
+	children[3] = crypto.Keccak256(partitionRoot(t, 3, keys3, vals3))
+	children[7] = crypto.Keccak256(partitionRoot(t, 7, keys7, vals7))
+	blob, got, err := AssembleBranch(children)
+	if err != nil {
+		t.Fatalf("AssembleBranch: %v", err)
+	}
+	if got != want {
+		t.Fatalf("assembled root %x, want %x", got, want)
+	}
+	if crypto.Keccak256Hash(blob) != got {
+		t.Fatalf("returned blob does not hash to the returned root")
 	}
 }
