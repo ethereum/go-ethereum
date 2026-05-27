@@ -205,10 +205,10 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	h.startCallProc(func(cp *callProc) {
 		cp.isBatch = true
 		var (
-			timer      *time.Timer
-			cancel     context.CancelFunc
-			callBuffer = &batchCallBuffer{calls: calls, resp: make([]*jsonrpcMessage, 0, len(calls))}
-			spanEnds   []func(*error)
+			timer          *time.Timer
+			cancel         context.CancelFunc
+			callBuffer     = &batchCallBuffer{calls: calls, resp: make([]*jsonrpcMessage, 0, len(calls))}
+			serverSpanEnds []func(*error)
 		)
 
 		cp.ctx, cancel = context.WithCancel(cp.ctx)
@@ -216,7 +216,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 
 		// End all per-call ServerSpans after callBuffer.write completes.
 		defer func() {
-			for _, end := range spanEnds {
+			for _, end := range serverSpanEnds {
 				end(nil) // don't propagate errors to parent spans
 			}
 		}()
@@ -242,9 +242,9 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			if msg == nil {
 				break
 			}
-			resp, _, spanEnd := h.handleCallMsg(cp, msg)
-			if spanEnd != nil {
-				spanEnds = append(spanEnds, spanEnd)
+			resp, _, serverSpanEnd := h.handleCallMsg(cp, msg)
+			if serverSpanEnd != nil {
+				serverSpanEnds = append(serverSpanEnds, serverSpanEnd)
 			}
 			callBuffer.pushResponse(resp)
 			if resp != nil && h.batchResponseMaxSize != 0 {
@@ -314,9 +314,9 @@ func (h *handler) handleNonBatchCall(cp *callProc, msg *jsonrpcMessage) {
 		})
 	}
 
-	answer, spanCtx, spanEnd := h.handleCallMsg(cp, msg)
-	if spanEnd != nil {
-		defer spanEnd(nil) // don't propagate errors to parent spans
+	answer, serverCtx, serverSpanEnd := h.handleCallMsg(cp, msg)
+	if serverSpanEnd != nil {
+		defer serverSpanEnd(nil) // don't propagate errors to parent spans
 	}
 	if timer != nil {
 		timer.Stop()
@@ -325,8 +325,8 @@ func (h *handler) handleNonBatchCall(cp *callProc, msg *jsonrpcMessage) {
 	if answer != nil {
 		responded.Do(func() {
 			writeCtx := cp.ctx
-			if spanCtx != nil {
-				writeCtx = spanCtx
+			if serverCtx != nil {
+				writeCtx = serverCtx
 			}
 			writeCtx, _, writeSpanEnd := telemetry.StartSpanWithTracer(writeCtx, h.tracer(), "rpc.writeJSON")
 			err := h.conn.writeJSON(writeCtx, answer, false)
@@ -492,12 +492,12 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) (*jsonrpcMes
 	start := time.Now()
 	switch {
 	case msg.isNotification():
-		_, spanCtx, spanEnd := h.handleCall(ctx, msg)
+		_, serverCtx, serverSpanEnd := h.handleCall(ctx, msg)
 		h.log.Debug("Served "+msg.Method, "duration", time.Since(start))
-		return nil, spanCtx, spanEnd
+		return nil, serverCtx, serverSpanEnd
 
 	case msg.isCall():
-		resp, spanCtx, spanEnd := h.handleCall(ctx, msg)
+		resp, serverCtx, serverSpanEnd := h.handleCall(ctx, msg)
 		var logctx []any
 		logctx = append(logctx, "reqid", idForLog{msg.ID}, "duration", time.Since(start))
 		if resp.Error != nil {
@@ -510,7 +510,7 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) (*jsonrpcMes
 		} else {
 			h.log.Debug("Served "+msg.Method, logctx...)
 		}
-		return resp, spanCtx, spanEnd
+		return resp, serverCtx, serverSpanEnd
 
 	case msg.hasValidID():
 		return msg.errorResponse(&invalidRequestError{"invalid request"}), nil, nil
@@ -550,20 +550,20 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) (*jsonrpcMessage
 		Method:    method,
 		RequestID: string(msg.ID),
 	}
-	ctx, spanEnd := telemetry.StartServerSpan(cp.ctx, h.tracer(), rpcInfo,
+	serverCtx, serverSpanEnd := telemetry.StartServerSpan(cp.ctx, h.tracer(), rpcInfo,
 		telemetry.BoolAttribute("rpc.batch", cp.isBatch))
 
 	// Start tracing span before parsing arguments.
-	_, _, pSpanEnd := telemetry.StartSpanWithTracer(ctx, h.tracer(), "rpc.parsePositionalArguments")
+	_, _, pSpanEnd := telemetry.StartSpanWithTracer(serverCtx, h.tracer(), "rpc.parsePositionalArguments")
 	args, pErr := parsePositionalArguments(msg.Params, callb.argTypes)
 	pSpanEnd(&pErr)
 	if pErr != nil {
-		return msg.errorResponse(&invalidParamsError{pErr.Error()}), ctx, spanEnd
+		return msg.errorResponse(&invalidParamsError{pErr.Error()}), serverCtx, serverSpanEnd
 	}
 	start := time.Now()
 
 	// Start tracing span before running the method.
-	rctx, _, rSpanEnd := telemetry.StartSpanWithTracer(ctx, h.tracer(), "rpc.runMethod")
+	rctx, _, rSpanEnd := telemetry.StartSpanWithTracer(serverCtx, h.tracer(), "rpc.runMethod")
 	answer := h.runMethod(rctx, msg, callb, args)
 	var rErr error
 	if answer.Error != nil {
@@ -580,7 +580,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) (*jsonrpcMessage
 	}
 	rpcServingTimer.UpdateSince(start)
 	updateServeTimeHistogram(msg.Method, answer.Error == nil, time.Since(start))
-	return answer, ctx, spanEnd
+	return answer, serverCtx, serverSpanEnd
 }
 
 // handleSubscribe processes *_subscribe method calls.
