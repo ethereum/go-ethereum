@@ -118,20 +118,25 @@ func reopenFlatIterator(db ethdb.Database, old *internal.HoldableIterator, prefi
 // both per-account storage subtries and the partition's slice of the
 // account trie. Returns the raw (unstripped) partition root blob, or
 // nil if the partition had no accounts at all.
-func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Database, scheme string, rangeStart, rangeEnd common.Hash, scanned, updated *atomic.Int64, pos *atomic.Uint64) ([]byte, error) {
+func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Database, scheme string, partition byte, rangeStart, rangeEnd common.Hash, scanned, updated *atomic.Int64, pos *atomic.Uint64) ([]byte, error) {
 	iters := openRangeIterators(db, rangeStart)
 	defer iters.release()
 
 	batch := db.NewBatchWithSize(ethdb.IdealBatchSize)
 
-	// Account-trie StackTrie for this partition. Persist every node except
-	// the root. assembleRoot() may need to strip the leading-nibble extension
-	// off the root, so we capture its bytes and return them instead.
-	var rootBlob []byte
-	acctTrie := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
-		if len(path) == 0 {
-			rootBlob = common.CopyBytes(blob)
-			return
+	// Account-trie builder for this partition. It is fed account keys with
+	// their leading nibble stripped and emits nodes at their absolute path
+	// (prefixed with the partition nibble), so they line up with the full
+	// trie without any post-hoc surgery.
+	//
+	// The subtree root is the only node emitted at path [partition]; we both
+	// persist it (so the top-level branch can reference it) and capture its
+	// bytes for assembleRoot, which needs them to either reference it or,
+	// in the single-partition case, fold the leading nibble back in.
+	var root []byte
+	acctTrie := trie.NewPartialStackTrie(partition, func(path []byte, hash common.Hash, blob []byte) {
+		if len(path) == 1 {
+			root = common.CopyBytes(blob)
 		}
 		rawdb.WriteTrieNode(batch, common.Hash{}, path, hash, blob, scheme)
 	})
@@ -253,16 +258,15 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 		return nil, fmt.Errorf("account iterator: %w", err)
 	}
 
-	// Finalize the partition's account trie. For a non-empty partition
-	// this triggers the path=[] onTrieNode callback, populating
-	// rootBlob. An empty partition never emits any node and leaves
-	// rootBlob at nil.
+	// Finalize the partition's account trie. For a non-empty partition this
+	// emits the subtree root at path [partition], populating rootBlob. An empty
+	// partition never emits any node and leaves rootBlob at nil.
 	acctTrie.Hash()
 
 	if err := batch.Write(); err != nil {
 		return nil, fmt.Errorf("final partition batch write: %w", err)
 	}
-	return rootBlob, nil
+	return root, nil
 }
 
 // hashRanges returns hash pairs [start, end] that evenly partition the
@@ -303,20 +307,19 @@ func hashRanges(total int) [][2]common.Hash {
 // and handed to assembleRoot directly. On a mid-run crash, only the
 // in-flight partition(s) are redone.
 func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-chan struct{}) (GenerateStats, error) {
-	start := time.Now()
 	var (
+		start        = time.Now()
 		scanned      atomic.Int64
 		updated      atomic.Int64
-		partitionPos [numPartitions]atomic.Uint64
+		progress     [numPartitions]atomic.Uint64
+		progressDone = make(chan struct{})
+
+		// partitionBlobs[i] holds the root node for partition i, or nil if
+		// the partition is empty.
+		partitionBlobs [numPartitions][]byte
 	)
-
-	progressDone := make(chan struct{})
-	go tickProgress(progressDone, start, &scanned, &updated, &partitionPos)
+	go tickProgress(progressDone, start, &scanned, &updated, &progress)
 	defer close(progressDone)
-
-	// partitionBlobs[i] holds the raw (unstripped) StackTrie root node
-	// blob for partition i, or nil if the partition is empty.
-	var partitionBlobs [numPartitions][]byte
 
 	// For each partition, either skip (prior done marker found) or run
 	// it. Prior runs can leave the partition's raw root blob in the done
@@ -330,18 +333,18 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 		rangeStart, rangeEnd := r[0], r[1]
 		if blob, ok := rawdb.ReadGenerateTriePartitionDone(db, partition); ok {
 			partitionBlobs[partition] = blob
-			partitionPos[partition].Store(partitionFinished)
+			progress[partition].Store(partitionFinished)
 			continue
 		}
 		eg.Go(func() error {
 			start := time.Now()
-			blob, err := generatePartition(ctx, cancel, db, scheme, rangeStart, rangeEnd, &scanned, &updated, &partitionPos[partition])
+			blob, err := generatePartition(ctx, cancel, db, scheme, partition, rangeStart, rangeEnd, &scanned, &updated, &progress[partition])
 			if err != nil {
 				return err
 			}
 			log.Info("Partition done", "partition", partition, "elapsed", common.PrettyDuration(time.Since(start)))
 
-			partitionPos[partition].Store(partitionFinished)
+			progress[partition].Store(partitionFinished)
 			partitionBlobs[partition] = blob
 
 			// Record completion only after the partition's batch has
@@ -351,11 +354,10 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 			return nil
 		})
 	}
-	stats := func() GenerateStats {
-		return GenerateStats{Scanned: scanned.Load(), Updated: updated.Load()}
-	}
+
+	// Wait until all the partitions are fully generated
 	if err := eg.Wait(); err != nil {
-		return stats(), err
+		return GenerateStats{}, err
 	}
 
 	// Assemble the top-level root from the partition blobs, verify it
@@ -363,45 +365,48 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 	// success.
 	got, err := assembleRoot(db, scheme, partitionBlobs)
 	if err != nil {
-		return stats(), fmt.Errorf("assemble root: %w", err)
+		return GenerateStats{}, fmt.Errorf("assemble root: %w", err)
 	}
 	if got != root {
-		return stats(), fmt.Errorf("state root mismatch: got %x, want %x", got, root)
+		return GenerateStats{}, fmt.Errorf("state root mismatch: got %x, want %x", got, root)
 	}
+
+	// Clear the partition progress marker, ending the generation process.
 	batch := db.NewBatch()
 	for i := range numPartitions {
 		rawdb.DeleteGenerateTriePartitionDone(batch, byte(i))
 	}
 	if err := batch.Write(); err != nil {
-		return stats(), fmt.Errorf("clear partition markers: %w", err)
+		return GenerateStats{}, fmt.Errorf("clear partition markers: %w", err)
 	}
-	final := stats()
-	log.Info("Generated state trie", "scanned", final.Scanned, "updated", final.Updated, "elapsed", common.PrettyDuration(time.Since(start)))
-	return final, nil
+	log.Info("Generated state trie", "scanned", scanned.Load(), "updated", updated.Load(), "elapsed", common.PrettyDuration(time.Since(start)))
+	return GenerateStats{
+		Scanned: scanned.Load(),
+		Updated: updated.Load(),
+	}, nil
 }
 
-// assembleRoot computes the canonical state root from the 16 raw
-// partition root blobs and persists any newly-constructed nodes.
-// The decision about whether to strip each partition's leading-nibble
-// extension depends on how many partitions ended up populated:
+// assembleRoot computes the canonical state root from the 16 partition subtree
+// root blobs and persists the top-level node. Each partition was built with its
+// leading nibble stripped, so its root blob is already the exact node the parent
+// branch mounts in that slot, and the partition has already written it (and all
+// its descendants) at their absolute paths. What's left depends on how many
+// partitions ended up populated:
 //
-//   - 0 populated: the state is empty, the root is types.EmptyRootHash,
+//   - 0 populated: the state is empty, the root is types.EmptyRootHash and
 //     nothing is written.
 //
-//   - 1 populated: the state's canonical root is that partition's
-//     subtree directly, with its leading nibble still included. We
-//     need to persist the partition's raw root node since generatePartition
-//     deliberately didn't write it at path=[].
+//   - 1 populated: there is no top-level branch; the canonical root is that
+//     lone partition's subtree with its leading nibble folded back in (see
+//     trie.MountPartitionRoot). Only the new root node is written.
 //
-//   - 2+ populated: strip each partition so the leading-nibble extension
-//     isn't double-traversed by the top-level branch, then pack the 16
-//     stripped references into a fullNode, encode, hash, and persist that
-//     branch as the state root.
+//   - 2+ populated: the canonical root is a 17-slot branch mounting each
+//     partition's subtree root by hash. The subtree roots are already on disk,
+//     so we only encode, hash, and persist the branch itself.
 func assembleRoot(db ethdb.Database, scheme string, partitionBlobs [numPartitions][]byte) (common.Hash, error) {
 	var (
 		populated int
 		onlySlot  int
-		batch     = db.NewBatch()
 	)
 	for i := range numPartitions {
 		if partitionBlobs[i] != nil {
@@ -412,53 +417,36 @@ func assembleRoot(db ethdb.Database, scheme string, partitionBlobs [numPartition
 	if populated == 0 {
 		return types.EmptyRootHash, nil
 	}
-
 	if populated == 1 {
-		// Persist the partition's raw root at path=[] (path scheme) or
-		// at its hash (hash scheme). That node is the state root.
-		blob := partitionBlobs[onlySlot]
-		rootHash := crypto.Keccak256Hash(blob)
-		rawdb.WriteTrieNode(batch, common.Hash{}, nil, rootHash, blob, scheme)
-		if err := batch.Write(); err != nil {
-			return common.Hash{}, fmt.Errorf("write single-partition root: %w", err)
+		// Fold the leading nibble back into the lone partition's subtree root.
+		rootHash, rootBlob, err := trie.MountPartitionRoot(partitionBlobs[onlySlot], byte(onlySlot))
+		if err != nil {
+			return common.Hash{}, fmt.Errorf("mount partition %d: %w", onlySlot, err)
 		}
+		rawdb.WriteTrieNode(db, common.Hash{}, nil, rootHash, rootBlob, scheme)
 		return rootHash, nil
 	}
-
-	// populated >= 2: strip each partition and assemble a 17-slot branch.
+	// populated >= 2: mount each partition's subtree root (already persisted at
+	// path [i]) into a 17-slot branch by hash. Account-trie subtree roots are
+	// always >= 32 bytes, so they are hash-referenced rather than inlined.
 	var children [17][]byte
 	for i := range numPartitions {
 		if partitionBlobs[i] == nil {
 			continue
 		}
-		stripped, strippedBlob, err := trie.StripPartitionRoot(partitionBlobs[i], byte(i))
-		if err != nil {
-			return common.Hash{}, fmt.Errorf("strip partition %d: %w", i, err)
-		}
-
-		// Remember that strip returns nil for the common case 1.
-		if strippedBlob != nil {
-			// Strip constructed a new node that is a longer extension or leaf
-			// partition (case 2/3). Persist it at path=[i] so path-scheme readers
-			// traversing slot i of the top branch can find it.
-			rawdb.WriteTrieNode(batch, common.Hash{}, []byte{byte(i)}, stripped, strippedBlob, scheme)
-		}
-		children[i] = stripped.Bytes()
+		children[i] = crypto.Keccak256(partitionBlobs[i])
 	}
 	rootBlob, rootHash, err := trie.AssembleBranch(children)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	rawdb.WriteTrieNode(batch, common.Hash{}, nil, rootHash, rootBlob, scheme)
-	if err := batch.Write(); err != nil {
-		return common.Hash{}, fmt.Errorf("write root branch: %w", err)
-	}
+	rawdb.WriteTrieNode(db, common.Hash{}, nil, rootHash, rootBlob, scheme)
 	return rootHash, nil
 }
 
 // tickProgress logs an aggregate progress line every 30 seconds until done
 // is closed. Cheap: a handful of atomic loads and one log line per tick.
-func tickProgress(done <-chan struct{}, start time.Time, scanned, updated *atomic.Int64, positions *[numPartitions]atomic.Uint64) {
+func tickProgress(done <-chan struct{}, start time.Time, scanned, updated *atomic.Int64, progress *[numPartitions]atomic.Uint64) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -467,18 +455,16 @@ func tickProgress(done <-chan struct{}, start time.Time, scanned, updated *atomi
 			return
 		case <-ticker.C:
 			elapsed := time.Since(start)
-			fraction := progressFraction(positions)
+			fraction := progressFraction(progress)
 			eta := "n/a"
 			if fraction > 0.005 {
 				eta = common.PrettyDuration(time.Duration(float64(elapsed) * (1.0/fraction - 1.0))).String()
 			}
-			s, u := scanned.Load(), updated.Load()
 			log.Info("Generating trie",
-				"progress", fmt.Sprintf("%.1f%%", fraction*100),
-				"eta", eta,
-				"scanned", s, "updated", u,
+				"progress", fmt.Sprintf("%.1f%%", fraction*100), "eta", eta,
+				"scanned", scanned.Load(), "updated", updated.Load(),
 				"elapsed", common.PrettyDuration(elapsed),
-				"acct/s", uint64(float64(s)/elapsed.Seconds()))
+				"acct/s", uint64(float64(scanned.Load())/elapsed.Seconds()))
 		}
 	}
 }
@@ -486,10 +472,10 @@ func tickProgress(done <-chan struct{}, start time.Time, scanned, updated *atomi
 // progressFraction averages each partition's iterator position (as a fraction
 // of its hash range) into an overall completion estimate in [0, 1]. Keccak
 // hashes are uniform, so keyspace position is a good proxy for work done.
-func progressFraction(positions *[numPartitions]atomic.Uint64) float64 {
+func progressFraction(progress *[numPartitions]atomic.Uint64) float64 {
 	var total float64
 	for i := range numPartitions {
-		p := positions[i].Load()
+		p := progress[i].Load()
 		switch {
 		case p == partitionFinished:
 			total += 1.0

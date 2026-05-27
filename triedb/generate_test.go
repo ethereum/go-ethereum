@@ -337,7 +337,7 @@ func TestGenerateTriePartialResume(t *testing.T) {
 	blobs := make([][]byte, numPartitions)
 	for i, r := range ranges {
 		var pos atomic.Uint64
-		blob, err := generatePartition(context.Background(), nil, db, rawdb.HashScheme, r[0], r[1], &scanned, &updated, &pos)
+		blob, err := generatePartition(context.Background(), nil, db, rawdb.HashScheme, byte(i), r[0], r[1], &scanned, &updated, &pos)
 		if err != nil {
 			t.Fatalf("pre-run partition %d: %v", i, err)
 		}
