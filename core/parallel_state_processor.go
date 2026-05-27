@@ -126,7 +126,7 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStar
 		}
 	}
 
-	blockAccessList := new(bal.ConstructionBlockAccessList)
+	blockAccessList := bal.NewConstructionBlockAccessList()
 	blockAccessList.Merge(preTxBal)
 	blockAccessList.Merge(postBal)
 
