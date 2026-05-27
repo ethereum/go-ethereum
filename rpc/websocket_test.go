@@ -432,10 +432,10 @@ func TestWebsocketMethodNameLengthLimit(t *testing.T) {
 			isSubscription: true,
 		},
 		{
-			name:           "subscription name too long",
+			name:           "method name too long subscribe",
 			method:         string(make([]byte, maxMethodNameLength+1)) + "_subscribe",
 			params:         []interface{}{"newHeads"},
-			expectedError:  "subscription name too long",
+			expectedError:  "method name too long",
 			isSubscription: true,
 		},
 	}
