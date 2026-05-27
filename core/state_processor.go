@@ -63,7 +63,7 @@ func (p *StateProcessor) chainConfig() *params.ChainConfig {
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(ctx context.Context, block *types.Block, statedb *state.StateDB, cfg vm.Config) (*ProcessResult, error) {
+func (p *StateProcessor) Process(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, cfg vm.Config) (*ProcessResult, error) {
 	var (
 		config      = p.chainConfig()
 		receipts    = make(types.Receipts, 0, len(block.Transactions()))
@@ -88,6 +88,9 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		blockAccessList = bal.NewConstructionBlockAccessList()
 	)
 	defer evm.Release()
+	if jumpDestCache != nil {
+		evm.SetJumpDestCache(jumpDestCache)
+	}
 
 	// Run the pre-execution system calls
 	blockAccessList.Merge(PreExecution(ctx, block.BeaconRoot(), block.ParentHash(), config, evm, block.Number(), block.Time()))
