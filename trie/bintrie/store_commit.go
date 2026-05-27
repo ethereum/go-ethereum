@@ -59,27 +59,9 @@ var parallelHashDepth = min(bits.Len(uint(runtime.NumCPU())), 8)
 // goroutine while the right subtree is hashed inline, then the two digests
 // are combined. Below that threshold the goroutine spawn cost outweighs the
 // hashing work, so deeper nodes hash both children sequentially.
-//
-// At a group boundary (depth % groupDepth == 0, with groupDepth > 0) the
-// hash is computed from the group's bottom-layer slot hashes via the same
-// serialize-then-recursive-hash that a fresh reader applies after reading
-// the node's blob from disk. This guarantees the parent's stored child
-// hash equals the child's read-back hash byte-for-byte, regardless of
-// whether the in-memory subtree placed its stems at natural depth (via
-// UpdateStem split) or extended depth (via deserializeSubtree).
 func (s *nodeStore) hashInternal(idx uint32) common.Hash {
 	node := s.getInternal(idx)
 	if !node.mustRecompute {
-		return node.hash
-	}
-
-	if s.groupDepth > 0 && int(node.depth)%s.groupDepth == 0 {
-		bitmapSize := bitmapSizeForDepth(s.groupDepth)
-		bitmap := make([]byte, bitmapSize)
-		var hashes []common.Hash
-		s.serializeSubtree(makeRef(kindInternal, idx), s.groupDepth, 0, int(node.depth), bitmap, &hashes)
-		node.hash = groupedRecursiveHash(s.groupDepth, bitmap, hashes)
-		node.mustRecompute = false
 		return node.hash
 	}
 
@@ -123,43 +105,6 @@ func (s *nodeStore) hashInternal(idx uint32) common.Hash {
 	node.hash = sha256.Sum256(input[:])
 	node.mustRecompute = false
 	return node.hash
-}
-
-// groupedRecursiveHash computes the recursive SHA256 hash of a group-blob
-// subtree, given the bitmap and present-hash list produced by serializeSubtree.
-//
-// The output is byte-equal to what hashInternal would compute on a tree
-// produced by deserializeSubtree reading the same (bitmap, hashes) — i.e.,
-// it's the hash the fresh-reader path produces. Use this from hashInternal
-// at group-boundary depths so the parent's stored child hash matches the
-// child's read-back hash regardless of in-memory stem placement.
-func groupedRecursiveHash(groupDepth int, bitmap []byte, hashes []common.Hash) common.Hash {
-	nSlots := 1 << groupDepth
-	leaves := make([]common.Hash, nSlots)
-	hashIdx := 0
-	for i := 0; i < nSlots; i++ {
-		if bitmap[i/8]>>(7-(i%8))&1 == 1 {
-			leaves[i] = hashes[hashIdx]
-			hashIdx++
-		}
-	}
-	level := leaves
-	var zero common.Hash
-	for len(level) > 1 {
-		next := make([]common.Hash, len(level)/2)
-		for i := 0; i < len(next); i++ {
-			l, r := level[2*i], level[2*i+1]
-			if l == zero && r == zero {
-				continue
-			}
-			var buf [64]byte
-			copy(buf[:32], l[:])
-			copy(buf[32:], r[:])
-			next[i] = sha256.Sum256(buf[:])
-		}
-		level = next
-	}
-	return level[0]
 }
 
 // serializeSubtree recursively collects child hashes from a subtree of InternalNodes.
