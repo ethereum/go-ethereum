@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	stunV2 "github.com/pion/stun/v2"
+	stunV3 "github.com/pion/stun/v3"
 )
 
 //go:embed stun-list.txt
@@ -107,24 +107,24 @@ func (s *stun) randomServers(n int) []string {
 func (s *stun) externalIP(server string) (net.IP, error) {
 	_, _, err := net.SplitHostPort(server)
 	if err != nil {
-		server += fmt.Sprintf(":%d", stunV2.DefaultPort)
+		server += fmt.Sprintf(":%d", stunV3.DefaultPort)
 	}
 
 	log.Trace("Attempting STUN binding request", "server", server)
-	conn, err := stunV2.Dial("udp4", server)
+	conn, err := stunV3.Dial("udp4", server)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
-	message, err := stunV2.Build(stunV2.TransactionID, stunV2.BindingRequest)
+	message, err := stunV3.Build(stunV3.TransactionID, stunV3.BindingRequest)
 	if err != nil {
 		return nil, err
 	}
 
 	var responseError error
-	var mappedAddr stunV2.XORMappedAddress
-	err = conn.Do(message, func(event stunV2.Event) {
+	var mappedAddr stunV3.XORMappedAddress
+	err = conn.Do(message, func(event stunV3.Event) {
 		if event.Error != nil {
 			responseError = event.Error
 			return
