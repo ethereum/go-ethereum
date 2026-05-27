@@ -279,7 +279,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			return nil, nil, nil, err
 		}
 		var (
-			tx     = call.ToTransaction(types.DynamicFeeTxType)
+			tx, _  = call.ToTransaction(types.DynamicFeeTxType)
 			txHash = tx.Hash()
 		)
 		txes[i] = tx
