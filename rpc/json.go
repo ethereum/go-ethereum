@@ -205,9 +205,9 @@ type jsonCodec struct {
 	conn        deadlineCloser
 }
 
-type encodeMsgFunc = func(msg *jsonrpcMessage, isError bool) error
+type encodeMsgFunc = func(ctx context.Context, msg *jsonrpcMessage, isError bool) error
 
-type encodeBatchFunc = func(msgs []*jsonrpcMessage, isError bool) error
+type encodeBatchFunc = func(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error
 
 type decodeFunc = func(v interface{}) error
 
@@ -234,13 +234,13 @@ func NewCodec(conn Conn) ServerCodec {
 	dec := json.NewDecoder(conn)
 	dec.UseNumber()
 	var buf []byte
-	encodeMsg := func(msg *jsonrpcMessage, isError bool) error {
+	encodeMsg := func(ctx context.Context, msg *jsonrpcMessage, isError bool) error {
 		buf = appendMessage(buf[:0], msg)
 		buf = append(buf, '\n')
 		_, err := conn.Write(buf)
 		return err
 	}
-	encodeBatch := func(msgs []*jsonrpcMessage, isError bool) error {
+	encodeBatch := func(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error {
 		buf = appendBatch(buf[:0], msgs)
 		buf = append(buf, '\n')
 		_, err := conn.Write(buf)
@@ -325,7 +325,7 @@ func (c *jsonCodec) writeJSON(ctx context.Context, msg *jsonrpcMessage, isError 
 		deadline = time.Now().Add(defaultWriteTimeout)
 	}
 	c.conn.SetWriteDeadline(deadline)
-	return c.encodeMsg(msg, isError)
+	return c.encodeMsg(ctx, msg, isError)
 }
 
 func (c *jsonCodec) writeJSONBatch(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error {
@@ -337,7 +337,7 @@ func (c *jsonCodec) writeJSONBatch(ctx context.Context, msgs []*jsonrpcMessage, 
 		deadline = time.Now().Add(defaultWriteTimeout)
 	}
 	c.conn.SetWriteDeadline(deadline)
-	return c.encodeBatch(msgs, isError)
+	return c.encodeBatch(ctx, msgs, isError)
 }
 
 func (c *jsonCodec) close() {

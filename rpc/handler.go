@@ -328,7 +328,7 @@ func (h *handler) handleNonBatchCall(cp *callProc, msg *jsonrpcMessage) {
 			if spanCtx != nil {
 				writeCtx = spanCtx
 			}
-			_, _, writeSpanEnd := telemetry.StartSpanWithTracer(writeCtx, h.tracer(), "rpc.writeJSON")
+			writeCtx, _, writeSpanEnd := telemetry.StartSpanWithTracer(writeCtx, h.tracer(), "rpc.writeJSON")
 			err := h.conn.writeJSON(writeCtx, answer, false)
 			writeSpanEnd(&err)
 		})

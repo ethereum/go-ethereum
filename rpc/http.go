@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 )
@@ -269,13 +270,13 @@ func (s *Server) newHTTPServerConn(r *http.Request, w http.ResponseWriter) Serve
 	conn := &httpServerConn{Reader: body, Writer: w, r: r}
 
 	var buf []byte
-	encodeMsg := func(msg *jsonrpcMessage, isError bool) error {
+	encodeMsg := func(ctx context.Context, msg *jsonrpcMessage, isError bool) error {
 		buf = appendMessage(buf[:0], msg)
-		return httpWriteResult(w, buf, isError)
+		return httpWriteResult(ctx, w, buf, isError)
 	}
-	encodeBatch := func(msgs []*jsonrpcMessage, isError bool) error {
+	encodeBatch := func(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error {
 		buf = appendBatch(buf[:0], msgs)
-		return httpWriteResult(w, buf, isError)
+		return httpWriteResult(ctx, w, buf, isError)
 	}
 
 	dec := json.NewDecoder(conn)
@@ -287,9 +288,12 @@ func (s *Server) newHTTPServerConn(r *http.Request, w http.ResponseWriter) Serve
 // httpWriteResult writes pre-encoded response data over HTTP.
 // For error responses, it sets Content-Length and flushes to ensure the response
 // is fully written before any HTTP server write timeout occurs.
-func httpWriteResult(w http.ResponseWriter, data []byte, isError bool) error {
+func httpWriteResult(ctx context.Context, w http.ResponseWriter, data []byte, isError bool) (err error) {
+	_, _, spanEnd := telemetry.StartSpanWithTracer(ctx, telemetry.TracerFromContext(ctx), "rpc.httpWriteResult")
+	defer spanEnd(&err)
+
 	if !isError {
-		_, err := w.Write(data)
+		_, err = w.Write(data)
 		return err
 	}
 
@@ -308,7 +312,7 @@ func httpWriteResult(w http.ResponseWriter, data []byte, isError bool) error {
 	// the final chunk is missing.
 	w.Header().Set("transfer-encoding", "identity")
 
-	_, err := w.Write(data)
+	_, err = w.Write(data)
 	if f, ok := w.(http.Flusher); ok {
 		f.Flush()
 	}

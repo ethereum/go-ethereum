@@ -60,6 +60,13 @@ func StartSpanWithTracer(ctx context.Context, tracer trace.Tracer, name string, 
 	return startSpan(ctx, tracer, trace.SpanKindInternal, name, attributes...)
 }
 
+// TracerFromContext returns a Tracer from the TracerProvider associated with the
+// parent span in ctx. If ctx has no parent span, the returned tracer comes from
+// the no-op provider, so spans created with it will not be exported.
+func TracerFromContext(ctx context.Context) trace.Tracer {
+	return trace.SpanFromContext(ctx).TracerProvider().Tracer("")
+}
+
 // RPCInfo contains information about the RPC request.
 type RPCInfo struct {
 	System    string

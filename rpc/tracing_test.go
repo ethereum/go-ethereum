@@ -105,14 +105,29 @@ func TestTracingHTTP(t *testing.T) {
 		t.Fatal("no spans were emitted")
 	}
 	var rpcSpan *tracetest.SpanStub
+	var writeJSONSpan *tracetest.SpanStub
+	var httpWriteSpan *tracetest.SpanStub
 	for i := range spans {
-		if spans[i].Name == "jsonrpc.test/echo" {
+		switch spans[i].Name {
+		case "jsonrpc.test/echo":
 			rpcSpan = &spans[i]
-			break
+		case "rpc.writeJSON":
+			writeJSONSpan = &spans[i]
+		case "rpc.httpWriteResult":
+			httpWriteSpan = &spans[i]
 		}
 	}
 	if rpcSpan == nil {
 		t.Fatalf("jsonrpc.test/echo span not found")
+	}
+	if writeJSONSpan == nil {
+		t.Fatalf("rpc.writeJSON span not found")
+	}
+	if httpWriteSpan == nil {
+		t.Fatalf("rpc.httpWriteResult span not found")
+	}
+	if got, want := httpWriteSpan.Parent.SpanID(), writeJSONSpan.SpanContext.SpanID(); got != want {
+		t.Errorf("rpc.httpWriteResult parent: got %s, want rpc.writeJSON (%s)", got, want)
 	}
 
 	// Verify span attributes.
