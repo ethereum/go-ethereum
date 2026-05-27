@@ -74,24 +74,6 @@ type TransactionArgs struct {
 	AuthorizationList []types.SetCodeAuthorization `json:"authorizationList"`
 }
 
-func (args *TransactionArgs) inferTxType(defaultType int) int {
-	usedType := types.LegacyTxType
-	switch {
-	case args.AuthorizationList != nil || defaultType == types.SetCodeTxType:
-		usedType = types.SetCodeTxType
-	case args.BlobHashes != nil || defaultType == types.BlobTxType:
-		usedType = types.BlobTxType
-	case args.MaxFeePerGas != nil || defaultType == types.DynamicFeeTxType:
-		usedType = types.DynamicFeeTxType
-	case args.AccessList != nil || defaultType == types.AccessListTxType:
-		usedType = types.AccessListTxType
-	}
-	if args.GasPrice != nil {
-		usedType = types.LegacyTxType
-	}
-	return usedType
-}
-
 // from retrieves the transaction sender address.
 func (args *TransactionArgs) from() common.Address {
 	if args.From == nil {
@@ -195,32 +177,6 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config 
 		}
 	} else {
 		args.ChainID = (*hexutil.Big)(want)
-	}
-
-	// Validate explicit transaction type if provided
-	if args.Type != nil {
-		requested := int(*args.Type)
-
-		// Validate supported types
-		switch requested {
-		case types.LegacyTxType,
-			types.AccessListTxType,
-			types.DynamicFeeTxType,
-			types.BlobTxType,
-			types.SetCodeTxType:
-			// ok
-		default:
-			return fmt.Errorf("unsupported transaction type: %d", requested)
-		}
-
-		inferred := args.inferTxType(types.LegacyTxType)
-
-		if requested != inferred {
-			return fmt.Errorf(
-				"transaction type mismatch (requested=%d inferred=%d)",
-				requested, inferred,
-			)
-		}
 	}
 	return nil
 }
@@ -544,7 +500,7 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck bool) *c
 
 // ToTransaction converts the arguments to a transaction.
 // This assumes that setDefaults has been called.
-func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
+func (args *TransactionArgs) ToTransaction(defaultType int) (*types.Transaction, error) {
 	usedType := types.LegacyTxType
 	switch {
 	case args.AuthorizationList != nil || defaultType == types.SetCodeTxType:
@@ -559,6 +515,9 @@ func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 	// Make it possible to default to newer tx, but use legacy if gasprice is provided
 	if args.GasPrice != nil {
 		usedType = types.LegacyTxType
+	}
+	if usedType != int(*args.Type) {
+		return nil, fmt.Errorf("wrong tx type used, requested: %v, used: %v", args.Type, usedType)
 	}
 	var data types.TxData
 	switch usedType {
@@ -649,7 +608,7 @@ func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 			Data:     args.data(),
 		}
 	}
-	return types.NewTx(data)
+	return types.NewTx(data), nil
 }
 
 // IsEIP4844 returns an indicator if the args contains EIP4844 fields.
