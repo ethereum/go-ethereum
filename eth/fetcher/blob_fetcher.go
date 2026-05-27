@@ -111,11 +111,12 @@ type BlobFetcherFunctions struct {
 //   - Transactions to be fetched are moved to "fetching"
 //     if a payload/cell announcement is received during fetch, the peer is recorded as an alternate source.
 type BlobFetcher struct {
-	notify  chan *blobTxAnnounce
-	cleanup chan *payloadDelivery
-	drop    chan *txDrop
-	quit    chan struct{}
-	custody *types.CustodyBitmap
+	notify    chan *blobTxAnnounce
+	cleanup   chan *payloadDelivery
+	drop      chan *txDrop
+	custodyCh chan types.CustodyBitmap
+	quit      chan struct{}
+	custody   *types.CustodyBitmap
 
 	txSeq uint64 // To make transactions fetched in arrival order
 
@@ -160,6 +161,7 @@ func NewBlobFetcher(fn BlobFetcherFunctions, custody *types.CustodyBitmap, rand 
 		notify:     make(chan *blobTxAnnounce),
 		cleanup:    make(chan *payloadDelivery),
 		drop:       make(chan *txDrop),
+		custodyCh:  make(chan types.CustodyBitmap),
 		quit:       make(chan struct{}),
 		full:       make(map[common.Hash]struct{}),
 		partial:    make(map[common.Hash]struct{}),
@@ -221,9 +223,14 @@ func (f *BlobFetcher) Drop(peer string) error {
 	}
 }
 
+// UpdateCustody hands a new custody bitmap to the fetcher loop. The actual
+// swap happens inside the loop so f.custody is never read and written
+// concurrently.
 func (f *BlobFetcher) UpdateCustody(cells types.CustodyBitmap) {
-	// todo use lock or process inside of loop
-	f.custody = &cells
+	select {
+	case f.custodyCh <- cells:
+	case <-f.quit:
+	}
 }
 
 func (f *BlobFetcher) Start() {
@@ -631,6 +638,9 @@ func (f *BlobFetcher) loop() {
 				f.scheduleFetches(timeoutTimer, timeoutTrigger, nil)
 				f.rescheduleTimeout(timeoutTimer, timeoutTrigger)
 			}
+
+		case cells := <-f.custodyCh:
+			f.custody = &cells
 
 		case <-f.quit:
 			return
