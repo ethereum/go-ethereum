@@ -375,8 +375,18 @@ func (f *Freezer) validate() error {
 		tails   = make(map[string]uint64)
 	)
 	for kind, table := range f.tables {
-		// Validate the table head
+		// A freshly added table is empty and has not yet been aligned to the
+		// common head, skip the error here.
+		//
+		// Tradeoff:
+		// It loosens corruption detection slightly: a table that lost its data
+		// and now reports items == 0 would be treated as "freshly added" rather
+		// than flagged. It's the tradeoff we accept.
 		items := table.items.Load()
+		if items == 0 {
+			continue
+		}
+		// Validate the table head
 		if !headSet {
 			head = items
 			headSet = true
