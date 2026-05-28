@@ -1580,6 +1580,15 @@ func (p *BlobPool) getRLP(hash common.Hash) []byte {
 
 // Get returns a transaction if it is contained in the pool, or nil otherwise.
 func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
+	// try to get it from cache first
+	id, ok := p.lookup.storeidOfTx(hash)
+	if !ok {
+		return nil
+	}
+	if tx := p.cache.get(id); tx != nil {
+		return tx.ToTx()
+	}
+
 	data := p.getRLP(hash)
 	if len(data) == 0 {
 		return nil
