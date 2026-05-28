@@ -111,7 +111,7 @@ type BinaryTrie struct {
 	reader     *trie.Reader
 	tracer     *trie.PrevalueTracer
 	groupDepth int // Number of levels per serialized group (1-8, default 8)
-        recorder   *Recorder
+	recorder   *Recorder
 }
 
 func (t *BinaryTrie) GroupDepth() int {
@@ -380,7 +380,7 @@ func (t *BinaryTrie) Copy() *BinaryTrie {
 		reader:     t.reader,
 		tracer:     t.tracer.Copy(),
 		groupDepth: t.groupDepth,
-                recorder:   t.recorder,
+		recorder:   t.recorder,
 	}
 }
 
