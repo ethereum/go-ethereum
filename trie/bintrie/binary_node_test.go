@@ -40,7 +40,9 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 	s.root = rootRef
 
 	// Serialize the node — grouped format at groupDepth=1:
-	// [type(1)][groupDepth(1)][bitmap(1)][leftHash(32)][rightHash(32)] = 67 bytes
+	// [type(1)][groupDepth(1)][bitmap(1)][depths(2)][leftHash(32)][rightHash(32)] = 69 bytes.
+	// Both children are at depthOffset=groupDepth=1 (the bottom of the
+	// 1-level group), so the depths section is [0x01, 0x01].
 	serialized := s.serializeNode(rootRef, 1)
 
 	if serialized[0] != nodeTypeInternal {
@@ -50,7 +52,7 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 		t.Errorf("Expected groupDepth byte to be 1, got %d", serialized[1])
 	}
 
-	expectedLen := NodeTypeBytes + 1 + 1 + 2*HashSize // type + groupDepth + bitmap + 2 hashes = 67
+	expectedLen := NodeTypeBytes + 1 + 1 + 2 + 2*HashSize // type + groupDepth + bitmap + 2 depths + 2 hashes = 69
 	if len(serialized) != expectedLen {
 		t.Errorf("Expected serialized length to be %d, got %d", expectedLen, len(serialized))
 	}
@@ -60,7 +62,12 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 		t.Errorf("Expected bitmap byte 0xc0, got 0x%02x", serialized[2])
 	}
 
-	hashesStart := NodeTypeBytes + 1 + 1
+	depthsStart := NodeTypeBytes + 1 + 1
+	if serialized[depthsStart] != 1 || serialized[depthsStart+1] != 1 {
+		t.Errorf("Expected depth bytes [1,1], got [%d,%d]", serialized[depthsStart], serialized[depthsStart+1])
+	}
+
+	hashesStart := depthsStart + 2
 	if !bytes.Equal(serialized[hashesStart:hashesStart+HashSize], leftHash[:]) {
 		t.Error("Left hash not found at expected position")
 	}
