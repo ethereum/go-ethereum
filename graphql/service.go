@@ -148,7 +148,7 @@ func newHandler(stack *node.Node, backend ethapi.Backend, filterSystem *filters.
 		return nil, err
 	}
 	h := handler{Schema: s}
-	handler := node.NewHTTPHandlerStack(h, cors, vhosts, nil)
+	handler := node.NewHTTPHandlerStack(h, cors, vhosts, nil, false)
 
 	stack.RegisterHandler("GraphQL UI", "/graphql/ui", GraphiQL{})
 	stack.RegisterHandler("GraphQL UI", "/graphql/ui/", GraphiQL{})

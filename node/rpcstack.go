@@ -42,6 +42,7 @@ type httpConfig struct {
 	CorsAllowedOrigins []string
 	Vhosts             []string
 	prefix             string // path prefix on which to mount http handler
+	disableGzip        bool
 	rpcEndpointConfig
 }
 
@@ -320,7 +321,7 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 	}
 	h.httpConfig = config
 	h.httpHandler.Store(&rpcHandler{
-		Handler: NewHTTPHandlerStack(srv, config.CorsAllowedOrigins, config.Vhosts, config.jwtSecret),
+		Handler: NewHTTPHandlerStack(srv, config.CorsAllowedOrigins, config.Vhosts, config.jwtSecret, config.disableGzip),
 		prefix:  config.prefix,
 		server:  srv,
 	})
@@ -402,12 +403,15 @@ func isWebsocket(r *http.Request) bool {
 }
 
 // NewHTTPHandlerStack returns wrapped http-related handlers
-func NewHTTPHandlerStack(srv http.Handler, cors []string, vhosts []string, jwtSecret []byte) http.Handler {
+func NewHTTPHandlerStack(srv http.Handler, cors []string, vhosts []string, jwtSecret []byte, disableGzip bool) http.Handler {
 	// Wrap the CORS-handler within a host-handler
 	handler := newCorsHandler(srv, cors)
 	handler = newVHostHandler(vhosts, handler)
 	if len(jwtSecret) != 0 {
 		handler = newJWTHandler(jwtSecret, handler)
+	}
+	if disableGzip {
+		return handler
 	}
 	return newGzipHandler(handler)
 }
