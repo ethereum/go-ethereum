@@ -238,8 +238,11 @@ func encodeForNetwork(storedRLP []byte) ([]byte, error) {
 
 	// 2. Find the version of sidecar.
 	version, _, err := rlp.SplitUint64(elems[1])
-	if err != nil || version > 255 {
+	if err != nil {
 		return nil, fmt.Errorf("invalid version: %w", err)
+	}
+	if version > 255 {
+		return nil, fmt.Errorf("version %d exceeds byte range", version)
 	}
 	versionByte := byte(version)
 	// 3. Extract sidecar elements.
