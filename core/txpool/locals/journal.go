@@ -21,6 +21,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -43,9 +44,39 @@ func (*devNull) Close() error                      { return nil }
 
 // journal is a rotating log of transactions with the aim of storing locally
 // created transactions to allow non-executed ones to survive node restarts.
+//
+// writer is shared between the tracker loop goroutine (load / setupWriter /
+// rotate / close) and any goroutine that calls TxTracker.Track / TrackAll
+// (which reaches journal.insert). TxTracker.mu does not cover loop-side
+// writer mutations — see #34983 for the race report from `go test -race`.
+// A small dedicated mutex guards every read / write of the writer pointer.
+// We deliberately drop the lock before doing the actual rlp.Encode in
+// insert so that a concurrent close / rotate is not blocked by an in-flight
+// write — Write on a closed file simply returns an error, which insert
+// propagates back to the caller (already ignored at the call site in
+// TrackAll).
 type journal struct {
-	path   string         // Filesystem path to store the transactions at
+	path string // Filesystem path to store the transactions at
+
+	mu     sync.Mutex
 	writer io.WriteCloser // Output stream to write new transactions into
+}
+
+// getWriter returns the current journal writer under the writer mutex.
+func (journal *journal) getWriter() io.WriteCloser {
+	journal.mu.Lock()
+	defer journal.mu.Unlock()
+	return journal.writer
+}
+
+// setWriter atomically swaps the writer pointer and returns the previous
+// value so the caller can close it after releasing the lock.
+func (journal *journal) setWriter(w io.WriteCloser) io.WriteCloser {
+	journal.mu.Lock()
+	defer journal.mu.Unlock()
+	prev := journal.writer
+	journal.writer = w
+	return prev
 }
 
 // newTxJournal creates a new transaction journal to
@@ -69,9 +100,12 @@ func (journal *journal) load(add func([]*types.Transaction) []error) error {
 	}
 	defer input.Close()
 
-	// Temporarily discard any journal additions (don't double add on load)
-	journal.writer = new(devNull)
-	defer func() { journal.writer = nil }()
+	// Temporarily discard any journal additions (don't double add on load).
+	// The add callback below dispatches to TxTracker.TrackAll → insert, which
+	// reads journal.writer under journal.mu; setWriter publishes the devNull
+	// atomically so those reads observe a consistent value.
+	journal.setWriter(new(devNull))
+	defer journal.setWriter(nil)
 
 	// Inject all transactions from the journal into the pool
 	stream := rlp.NewStream(input, 0)
@@ -118,44 +152,47 @@ func (journal *journal) load(add func([]*types.Transaction) []error) error {
 }
 
 func (journal *journal) setupWriter() error {
-	if journal.writer != nil {
-		if err := journal.writer.Close(); err != nil {
+	// Close any previously-installed writer; clear the slot first so concurrent
+	// inserts can see the transition without racing on the close.
+	if prev := journal.setWriter(nil); prev != nil {
+		if err := prev.Close(); err != nil {
 			return err
 		}
-		journal.writer = nil
 	}
 
-	// Re-open the journal file for appending
-	// Use O_APPEND to ensure we always write to the end of the file
+	// Re-open the journal file for appending.
+	// Use O_APPEND to ensure we always write to the end of the file.
 	sink, err := os.OpenFile(journal.path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		return err
 	}
-	journal.writer = sink
+	journal.setWriter(sink)
 
 	return nil
 }
 
 // insert adds the specified transaction to the local disk journal.
 func (journal *journal) insert(tx *types.Transaction) error {
-	if journal.writer == nil {
+	// Snapshot the writer under the mutex, then release before doing the
+	// actual rlp.Encode so a concurrent close / rotate is not blocked by an
+	// in-flight write. Write on a closed file returns an error which we
+	// propagate; the existing call site in TrackAll already ignores it.
+	w := journal.getWriter()
+	if w == nil {
 		return errNoActiveJournal
 	}
-	if err := rlp.Encode(journal.writer, tx); err != nil {
-		return err
-	}
-	return nil
+	return rlp.Encode(w, tx)
 }
 
 // rotate regenerates the transaction journal based on the current contents of
 // the transaction pool.
 func (journal *journal) rotate(all map[common.Address]types.Transactions) error {
-	// Close the current journal (if any is open)
-	if journal.writer != nil {
-		if err := journal.writer.Close(); err != nil {
+	// Close the current journal (if any is open). Clear the slot first so
+	// concurrent inserts observe the transition before the file is closed.
+	if prev := journal.setWriter(nil); prev != nil {
+		if err := prev.Close(); err != nil {
 			return err
 		}
-		journal.writer = nil
 	}
 	// Generate a new journal with the contents of the current pool
 	replacement, err := os.OpenFile(journal.path+".new", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
@@ -182,7 +219,7 @@ func (journal *journal) rotate(all map[common.Address]types.Transactions) error 
 	if err != nil {
 		return err
 	}
-	journal.writer = sink
+	journal.setWriter(sink)
 
 	logger := log.Info
 	if len(all) == 0 {
@@ -195,10 +232,8 @@ func (journal *journal) rotate(all map[common.Address]types.Transactions) error 
 
 // close flushes the transaction journal contents to disk and closes the file.
 func (journal *journal) close() error {
-	var err error
-	if journal.writer != nil {
-		err = journal.writer.Close()
-		journal.writer = nil
+	if prev := journal.setWriter(nil); prev != nil {
+		return prev.Close()
 	}
-	return err
+	return nil
 }

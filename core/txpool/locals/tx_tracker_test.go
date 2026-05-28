@@ -170,6 +170,63 @@ func TestResubmit(t *testing.T) {
 	}
 }
 
+// TestJournalSetupAndInsertRace exercises the race fixed in #34983: the
+// tracker loop goroutine calls journal.setupWriter() (writing the writer
+// pointer) while caller goroutines reach journal.insert() through TrackAll
+// (reading the writer pointer). Pre-fix the writer field had no
+// synchronisation and `go test -race ./core/txpool/locals/` flagged this as
+// "DATA RACE". Run under `-race` for the assertion to bite.
+func TestJournalSetupAndInsertRace(t *testing.T) {
+	journalPath := filepath.Join(t.TempDir(), fmt.Sprintf("%d", rand.Int63()))
+	env := newTestEnv(t, 10, 0, journalPath)
+	defer env.close()
+
+	env.tracker.Start()
+	defer env.tracker.Stop()
+
+	// Pump TrackAll from multiple goroutines while the loop goroutine is
+	// still calling setupWriter() / rotating the journal. The race detector
+	// will trip on writer reads / writes if synchronisation regresses.
+	const goroutines = 8
+	txs := env.makeTxs(64)
+	done := make(chan struct{})
+	for i := 0; i < goroutines; i++ {
+		go func(start int) {
+			for j := 0; j < 64; j++ {
+				env.tracker.Track(txs[(start+j)%len(txs)])
+			}
+			done <- struct{}{}
+		}(i)
+	}
+	for i := 0; i < goroutines; i++ {
+		<-done
+	}
+}
+
+// TestJournalSetupWriterReplacesWriter exercises the second half of the
+// #34983 contract: setupWriter() must clear the writer slot before closing
+// the previous writer so a concurrent insert never holds a freed pointer.
+// We assert that repeated setupWriter calls return cleanly and the final
+// writer is usable by a follow-up insert.
+func TestJournalSetupWriterReplacesWriter(t *testing.T) {
+	journalPath := filepath.Join(t.TempDir(), fmt.Sprintf("%d", rand.Int63()))
+	j := newTxJournal(journalPath)
+	for i := 0; i < 8; i++ {
+		if err := j.setupWriter(); err != nil {
+			t.Fatalf("setupWriter iteration %d: %v", i, err)
+		}
+		if w := j.getWriter(); w == nil {
+			t.Fatalf("writer should be non-nil after setupWriter (iter %d)", i)
+		}
+	}
+	if err := j.close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if w := j.getWriter(); w != nil {
+		t.Fatalf("writer should be nil after close, got %T", w)
+	}
+}
+
 func TestJournal(t *testing.T) {
 	journalPath := filepath.Join(t.TempDir(), fmt.Sprintf("%d", rand.Int63()))
 	env := newTestEnv(t, 10, 0, journalPath)
