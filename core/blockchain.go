@@ -1078,6 +1078,13 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	}
 	// Rewind the header chain, deleting all block bodies until then
 	delFn := func(db ethdb.KeyValueWriter, hash common.Hash, num uint64) {
+		// Read the body before deleting it so we can also drop the
+		// per-transaction tx-lookup entries for this block. ReadBody
+		// transparently handles both kv-store and ancient-store sources,
+		// so this works regardless of which branch handles body removal
+		// below. (#33744)
+		body := rawdb.ReadBody(bc.db, hash, num)
+
 		// Ignore the error here since light client won't hit this path
 		frozen, _ := bc.db.Ancients()
 		if num+1 <= frozen {
@@ -1094,7 +1101,19 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			rawdb.DeleteBody(db, hash, num)
 			rawdb.DeleteReceipts(db, hash, num)
 		}
-		// Todo(rjl493456442) txlookup, log index, etc
+		// Drop the tx-lookup entries for every transaction this block
+		// contained. These live in the key-value store regardless of
+		// whether the block body itself moved to the ancient store, so
+		// without this step `eth_getTransactionByHash` (and friends) on
+		// a rewound chain would still resolve a hash to a ghost block
+		// position. (#33744)
+		if body != nil {
+			hashes := make([]common.Hash, len(body.Transactions))
+			for i, tx := range body.Transactions {
+				hashes[i] = tx.Hash()
+			}
+			rawdb.DeleteTxLookupEntries(db, hashes)
+		}
 	}
 	// If SetHead was only called as a chain reparation method, try to skip
 	// touching the header chain altogether, unless the freezer is broken
