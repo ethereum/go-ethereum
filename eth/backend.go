@@ -111,9 +111,8 @@ type Ethereum struct {
 	filterMaps      *filtermaps.FilterMaps
 	closeFilterMaps chan chan struct{}
 
-	// Chain event subscriptions driving updateFilterMapsHeads. They are
-	// established in New (before any Stop can close the BlockChain
-	// SubscriptionScope) and consumed by the goroutine started in Start.
+	// Chain event subscriptions driving updateFilterMapsHeads. The
+	// subscriptions are registered and consumed in Start.
 	fmHeadEventCh  chan core.ChainEvent
 	fmHeadSub      event.Subscription
 	fmBlockProcCh  chan bool
@@ -316,9 +315,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.filterMaps = filterMaps
 	eth.closeFilterMaps = make(chan chan struct{})
 
-	eth.fmHeadSub = eth.blockchain.SubscribeChainEvent(eth.fmHeadEventCh)
-	eth.fmBlockProcSub = eth.blockchain.SubscribeBlockProcessingEvent(eth.fmBlockProcCh)
-
 	// TxPool
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
@@ -472,6 +468,10 @@ func (s *Ethereum) Start() error {
 
 	// Start the connection manager
 	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() })
+
+	// Subscribe to chain events for the filterMaps head updater.
+	s.fmHeadSub = s.blockchain.SubscribeChainEvent(s.fmHeadEventCh)
+	s.fmBlockProcSub = s.blockchain.SubscribeBlockProcessingEvent(s.fmBlockProcCh)
 
 	// start log indexer
 	s.filterMaps.Start()
