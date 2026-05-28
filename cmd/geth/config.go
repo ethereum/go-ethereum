@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"os"
 	"reflect"
 	"runtime"
@@ -239,6 +240,20 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	if ctx.IsSet(utils.OverrideUBT.Name) {
 		v := ctx.Uint64(utils.OverrideUBT.Name)
 		cfg.Eth.OverrideUBT = &v
+	}
+
+	if ctx.IsSet(utils.BALExecutionModeFlag.Name) {
+		val := ctx.String(utils.BALExecutionModeFlag.Name)
+		switch val {
+		case utils.BalExecutionModeOptimized:
+			cfg.Eth.BALExecutionMode = bal.BALExecutionOptimized
+		case utils.BalExecutionModeNoBatchIO:
+			cfg.Eth.BALExecutionMode = bal.BALExecutionNoBatchIO
+		case utils.BalExecutionModeSequential:
+			cfg.Eth.BALExecutionMode = bal.BALExecutionSequential
+		default:
+			utils.Fatalf("invalid option for --bal.executionmode: %s.  acceptable values are full|nobatchio|sequential", val)
+		}
 	}
 
 	// Start metrics export if enabled.
