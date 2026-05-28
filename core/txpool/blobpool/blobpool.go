@@ -40,7 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -494,6 +493,7 @@ type BlobPool struct {
 	index  map[common.Address][]*blobTxMeta // Blob transactions grouped by accounts, sorted by nonce
 	spent  map[common.Address]*uint256.Int  // Expenditure tracking for individual accounts
 	evict  *evictHeap                       // Heap of cheapest accounts for eviction when full
+	cache  *cache                           // Decoded sidecar cache for high-priority inclusion candidates
 
 	discoverFeed event.Feed // Event feed to send out new tx events on pool discovery (reorg excluded)
 	insertFeed   event.Feed // Event feed to send out new tx events on pool inclusion (reorg included)
@@ -591,6 +591,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 		return err
 	}
 	p.store = store
+	p.cache = newCache(store, eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
 
 	// Migrate legacy transactions (types.Transaction) to pooledBlobTx format.
 	if len(convertTxs) > 0 {
@@ -812,6 +813,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			log.Trace("Dropping filled blob transactions", "from", addr, "filled", nonces, "ids", ids)
 			dropFilledMeter.Mark(int64(len(ids)))
 		}
+		p.cache.update(nil, ids)
 		for _, id := range ids {
 			if err := p.store.Delete(id); err != nil {
 				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
@@ -843,6 +845,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		log.Trace("Dropping overlapped blob transactions", "from", addr, "overlapped", nonces, "ids", ids, "left", len(txs))
 		dropOverlappedMeter.Mark(int64(len(ids)))
 
+		p.cache.update(nil, ids)
 		for _, id := range ids {
 			if err := p.store.Delete(id); err != nil {
 				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
@@ -890,6 +893,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			p.stored -= uint64(txs[i].storageSize)
 			p.lookup.untrack(txs[i])
 
+			p.cache.update(nil, []uint64{id})
 			if err := p.store.Delete(id); err != nil {
 				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
 			}
@@ -917,6 +921,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		log.Error("Dropping gapped blob transactions", "from", addr, "missing", txs[i-1].nonce+1, "drop", nonces, "ids", ids)
 		dropGappedMeter.Mark(int64(len(ids)))
 
+		p.cache.update(nil, ids)
 		for _, id := range ids {
 			if err := p.store.Delete(id); err != nil {
 				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
@@ -963,6 +968,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		log.Warn("Dropping overdrafted blob transactions", "from", addr, "balance", balance, "spent", spent, "drop", nonces, "ids", ids)
 		dropOverdraftedMeter.Mark(int64(len(ids)))
 
+		p.cache.update(nil, ids)
 		for _, id := range ids {
 			if err := p.store.Delete(id); err != nil {
 				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
@@ -995,6 +1001,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		log.Warn("Dropping overcapped blob transactions", "from", addr, "kept", len(txs), "drop", nonces, "ids", ids)
 		dropOvercappedMeter.Mark(int64(len(ids)))
 
+		p.cache.update(nil, ids)
 		for _, id := range ids {
 			if err := p.store.Delete(id); err != nil {
 				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
@@ -1127,6 +1134,38 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	basefeeGauge.Update(int64(basefee.Uint64()))
 	blobfeeGauge.Update(int64(blobfee.Uint64()))
 	p.updateStorageMetrics()
+
+	wanted := selectTxs(p.index, eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
+	p.cache.reset(wanted)
+}
+
+// selectTxs returns the storage ids of the k blob transactions most likely to
+// be included in upcoming blocks, sorted by execution tip cap.
+func selectTxs(index map[common.Address][]*blobTxMeta, k int) []uint64 {
+	if k <= 0 {
+		return nil
+	}
+	type candidate struct {
+		id  uint64
+		tip *uint256.Int
+	}
+	var candidates []candidate
+	for _, txs := range index {
+		for _, tx := range txs {
+			candidates = append(candidates, candidate{tx.id, tx.execTipCap})
+		}
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].tip.Gt(candidates[j].tip)
+	})
+	if len(candidates) > k {
+		candidates = candidates[:k]
+	}
+	ids := make([]uint64, len(candidates))
+	for i, c := range candidates {
+		ids[i] = c.id
+	}
+	return ids
 }
 
 // reorg assembles all the transactors and missing transactions between an old
@@ -1370,6 +1409,7 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 					log.Warn("Dropping underpriced blob transaction", "from", addr, "rejected", tx.nonce, "tip", tx.execTipCap, "want", tip, "drop", nonces, "ids", ids)
 					dropUnderpricedMeter.Mark(int64(len(ids)))
 
+					p.cache.update(nil, ids)
 					for _, id := range ids {
 						if err := p.store.Delete(id); err != nil {
 							log.Error("Failed to delete dropped transaction", "id", id, "err", err)
@@ -1623,9 +1663,6 @@ func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 // blob proofs (version 0) or the cell proofs (version 1). Proofs conversion is
 // CPU intensive and prohibited in the blobpool explicitly.
 func (p *BlobPool) GetBlobs(ctx context.Context, vhashes []common.Hash, version byte) (_ []*kzg4844.Blob, _ []kzg4844.Commitment, _ [][]kzg4844.Proof, err error) {
-	_, _, spanEnd := telemetry.StartSpan(ctx, "blobpool.GetBlobs")
-	defer spanEnd(&err)
-
 	var (
 		blobs       = make([]*kzg4844.Blob, len(vhashes))
 		commitments = make([]kzg4844.Commitment, len(vhashes))
@@ -1633,6 +1670,9 @@ func (p *BlobPool) GetBlobs(ctx context.Context, vhashes []common.Hash, version 
 
 		indices = make(map[common.Hash][]int)
 		filled  = make(map[common.Hash]struct{})
+
+		cacheHits int64
+		cacheMiss int64
 	)
 	for i, h := range vhashes {
 		indices[h] = append(indices[h], i)
@@ -1651,17 +1691,26 @@ func (p *BlobPool) GetBlobs(ctx context.Context, vhashes []common.Hash, version 
 		if !exists {
 			continue
 		}
-		data, err := p.store.Get(txID)
-		if err != nil {
-			log.Error("Tracked blob transaction missing from store", "id", txID, "err", err)
-			continue
-		}
 
-		// Decode the blob transaction
-		var ptx blobTxForPool
-		if err := rlp.DecodeBytes(data, &ptx); err != nil {
-			log.Error("Blobs corrupted for traced transaction", "id", txID, "err", err)
-			continue
+		var ptx *blobTxForPool
+		if cached := p.cache.get(txID); cached != nil {
+			ptx = cached
+			cacheHits++
+		} else {
+			cacheMiss++
+			data, err := p.store.Get(txID)
+			if err != nil {
+				log.Error("Tracked blob transaction missing from store", "id", txID, "err", err)
+				continue
+			}
+
+			var decoded blobTxForPool
+			err = rlp.DecodeBytes(data, &decoded)
+			if err != nil {
+				log.Error("Blobs corrupted for traced transaction", "id", txID, "err", err)
+				continue
+			}
+			ptx = &decoded
 		}
 		sidecar := ptx.Sidecar()
 		// Traverse the blobs in the transaction
@@ -1697,6 +1746,8 @@ func (p *BlobPool) GetBlobs(ctx context.Context, vhashes []common.Hash, version 
 			}
 		}
 	}
+	cacheHitMeter.Mark(cacheHits)
+	cacheMissMeter.Mark(cacheMiss)
 	return blobs, commitments, proofs, nil
 }
 
@@ -1835,6 +1886,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 		dropReplacedMeter.Mark(1)
 
 		prev := p.index[from][offset]
+		p.cache.update(nil, []uint64{prev.id})
 		if err := p.store.Delete(prev.id); err != nil {
 			// Shitty situation, but try to recover gracefully instead of going boom
 			log.Error("Failed to delete replaced transaction", "id", prev.id, "err", err)
@@ -1911,6 +1963,8 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 		p.drop()
 	}
 	p.updateStorageMetrics()
+
+	p.cache.update([]*addedTx{{id: meta.id, ptx: ptx}}, nil)
 
 	addValidMeter.Mark(1)
 
@@ -2025,6 +2079,7 @@ func (p *BlobPool) drop() {
 	log.Debug("Evicting overflown blob transaction", "from", from, "evicted", drop.nonce, "id", drop.id)
 	dropOverflownMeter.Mark(1)
 
+	p.cache.update(nil, []uint64{drop.id})
 	if err := p.store.Delete(drop.id); err != nil {
 		log.Error("Failed to drop evicted transaction", "id", drop.id, "err", err)
 	}
@@ -2316,18 +2371,22 @@ func (p *BlobPool) Clear() {
 	// manually iterating and deleting every entry is super sub-optimal
 	// However, Clear is not currently used in production so
 	// performance is not critical at the moment.
+	var toDelete []uint64
 	for hash := range p.lookup.txIndex {
 		id, _ := p.lookup.storeidOfTx(hash)
+		toDelete = append(toDelete, id)
 		if err := p.store.Delete(id); err != nil {
 			log.Warn("failed to delete blob tx from backing store", "err", err)
 		}
 	}
 	for hash := range p.lookup.blobIndex {
 		id, _ := p.lookup.storeidOfBlob(hash)
+		toDelete = append(toDelete, id)
 		if err := p.store.Delete(id); err != nil {
 			log.Warn("failed to delete blob from backing store", "err", err)
 		}
 	}
+	p.cache.update(nil, toDelete)
 
 	// unreserve each tracked account.  Ideally, we could just clear the
 	// reservation map in the parent txpool context.  However, if we clear in
