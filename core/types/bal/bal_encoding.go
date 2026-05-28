@@ -240,6 +240,11 @@ type accountAccessMarshaling struct {
 // If any of the keys in the encoding object are not ordered according to the
 // spec, an error is returned.
 func (e *AccountAccess) validate(maxBALIndex int) error {
+	for i := range e.StorageChanges {
+		if e.StorageChanges[i].Slot == nil {
+			return errors.New("storage change slot cannot be null")
+		}
+	}
 	// Check the storage writes are sorted in order, and unique by slot
 	if !isStrictlySortedFunc(e.StorageChanges, func(a, b encodingSlotChanges) int {
 		return a.Slot.Cmp(b.Slot)
