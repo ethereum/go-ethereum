@@ -48,6 +48,7 @@ var ErrCancelled = internal.ErrCancelled
 type GenerateStats struct {
 	Scanned int64
 	Updated int64
+	Deleted int64
 }
 
 // numPartitions is the number of slices the account hash space is divided
@@ -118,7 +119,7 @@ func reopenFlatIterator(db ethdb.Database, old *internal.HoldableIterator, prefi
 // both per-account storage subtries and the partition's slice of the
 // account trie. Returns the raw (unstripped) partition root blob, or
 // nil if the partition had no accounts at all.
-func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Database, scheme string, partition byte, rangeStart, rangeEnd common.Hash, scanned, updated *atomic.Int64, pos *atomic.Uint64) ([]byte, error) {
+func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Database, scheme string, partition byte, rangeStart, rangeEnd common.Hash, scanned, updated, deleted *atomic.Int64, pos *atomic.Uint64) ([]byte, error) {
 	iters := openRangeIterators(db, rangeStart)
 	defer iters.release()
 
@@ -189,13 +190,17 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 				storageAccount = sk[len(rawdb.SnapshotStoragePrefix) : len(rawdb.SnapshotStoragePrefix)+common.HashLength]
 				cmp            = bytes.Compare(storageAccount, accountHash[:])
 			)
-			// The slot belongs to an account whose hash is smaller than the one currently
-			// being processed. This should be theoretically impossible, so log it loudly.
+			// The slot belongs to an account whose hash is smaller than the one
+			// currently being processed. This should be theoretically impossible,
+			// so log it loudly and delete the dangling entry from the flat state.
 			if cmp < 0 {
 				if !bytes.Equal(lastDanglingAccount, storageAccount) {
 					copy(lastDanglingAccount, storageAccount)
-					log.Error("Unexpected storage entries for dangling storageAccount", "expected", accountHash, "got", storageAccount)
+					log.Error("Unexpected storage entries for dangling account", "expected", accountHash, "got", common.BytesToHash(storageAccount))
 				}
+				deleted.Add(1)
+				slotHash := sk[len(rawdb.SnapshotStoragePrefix)+common.HashLength:]
+				rawdb.DeleteStorageSnapshot(batch, common.BytesToHash(storageAccount), common.BytesToHash(slotHash))
 				continue
 			}
 
@@ -258,6 +263,44 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 		return nil, fmt.Errorf("account iterator: %w", err)
 	}
 
+	// The account iterator is exhausted (or has advanced past this partition),
+	// but the storage iterator may still hold slots whose account hash falls
+	// within this partition's range. Those slots belong to no existing account
+	// and should be cleared.
+	lastDanglingTail := make([]byte, common.HashLength)
+	for iters.stor.Next() {
+		select {
+		case <-cancel:
+			return nil, ErrCancelled
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+		sk := iters.stor.Key()
+		acct := sk[len(rawdb.SnapshotStoragePrefix) : len(rawdb.SnapshotStoragePrefix)+common.HashLength]
+		if bytes.Compare(acct, rangeEnd[:]) > 0 {
+			break
+		}
+		if !bytes.Equal(lastDanglingTail, acct) {
+			copy(lastDanglingTail, acct)
+			log.Error("Unexpected storage entries for dangling account", "addrhash", common.BytesToHash(acct))
+		}
+		deleted.Add(1)
+		slotHash := sk[len(rawdb.SnapshotStoragePrefix)+common.HashLength:]
+		rawdb.DeleteStorageSnapshot(batch, common.BytesToHash(acct), common.BytesToHash(slotHash))
+
+		if batch.ValueSize() > ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				return nil, fmt.Errorf("flush batch (dangling): %w", err)
+			}
+			batch.Reset()
+			iters.reopen()
+		}
+	}
+	if err := iters.stor.Error(); err != nil {
+		return nil, fmt.Errorf("storage iterator (dangling): %w", err)
+	}
+
 	// Finalize the partition's account trie. For a non-empty partition this
 	// emits the subtree root at path [partition], populating rootBlob. An empty
 	// partition never emits any node and leaves rootBlob at nil.
@@ -311,6 +354,7 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 		start        = time.Now()
 		scanned      atomic.Int64
 		updated      atomic.Int64
+		deleted      atomic.Int64
 		progress     [numPartitions]atomic.Uint64
 		progressDone = make(chan struct{})
 
@@ -338,7 +382,7 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 		}
 		eg.Go(func() error {
 			start := time.Now()
-			blob, err := generatePartition(ctx, cancel, db, scheme, partition, rangeStart, rangeEnd, &scanned, &updated, &progress[partition])
+			blob, err := generatePartition(ctx, cancel, db, scheme, partition, rangeStart, rangeEnd, &scanned, &updated, &deleted, &progress[partition])
 			if err != nil {
 				return err
 			}
@@ -379,10 +423,11 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 	if err := batch.Write(); err != nil {
 		return GenerateStats{}, fmt.Errorf("clear partition markers: %w", err)
 	}
-	log.Info("Generated state trie", "scanned", scanned.Load(), "updated", updated.Load(), "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Generated state trie", "scanned", scanned.Load(), "updated", updated.Load(), "dangling-slots", deleted.Load(), "elapsed", common.PrettyDuration(time.Since(start)))
 	return GenerateStats{
 		Scanned: scanned.Load(),
 		Updated: updated.Load(),
+		Deleted: deleted.Load(),
 	}, nil
 }
 

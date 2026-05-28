@@ -19,6 +19,7 @@ package triedb
 import (
 	"bytes"
 	"context"
+	"math/big"
 	"sort"
 	"sync/atomic"
 	"testing"
@@ -262,45 +263,99 @@ func TestGenerateTrieCancel(t *testing.T) {
 	}
 }
 
-// TestGenerateTrieOrphanStorage exercises the orphan-slot skip path: flat
-// storage entries for an accountHash that has no corresponding account
-// snapshot. updateStorageRoots must skip these without including them in
-// any account's storage root.
+// TestGenerateTrieOrphanStorage exercises dangling-slot cleanup: flat storage
+// entries for an accountHash that has no corresponding account snapshot must
+// be deleted, regardless of whether they sit before, between, or after the
+// live accounts within a partition. The state root must match and the
+// Deleted counter must reflect every dangling entry.
 func TestGenerateTrieOrphanStorage(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 
-	// One legitimate account with storage.
-	liveAccountHash := crypto.Keccak256Hash(common.HexToAddress("0x01").Bytes())
-	slots := []testSlot{
-		{hash: common.HexToHash("0xaa"), value: []byte{0x01}},
-	}
-	for _, s := range slots {
-		rawdb.WriteStorageSnapshot(db, liveAccountHash, s.hash, s.value)
-	}
-	acc := testAccount{
-		hash: liveAccountHash,
-		account: types.StateAccount{
-			Nonce:    1,
-			Balance:  uint256.NewInt(1),
-			Root:     computeStorageRootFromSlots(slots),
-			CodeHash: types.EmptyCodeHash.Bytes(),
+	// Two legitimate accounts in the same partition (first nibble 0x5) so
+	// orphans can be placed before, between, and after them in the shared
+	// per-partition storage iterator.
+	liveA := common.HexToHash("0x5300000000000000000000000000000000000000000000000000000000000000")
+	liveB := common.HexToHash("0x5900000000000000000000000000000000000000000000000000000000000000")
+	slotsA := []testSlot{{hash: common.HexToHash("0xaa"), value: []byte{0xa1}}}
+	slotsB := []testSlot{{hash: common.HexToHash("0xbb"), value: []byte{0xb1}}}
+
+	accounts := []testAccount{
+		{
+			hash: liveA,
+			account: types.StateAccount{
+				Nonce:    1,
+				Balance:  uint256.NewInt(1),
+				Root:     computeStorageRootFromSlots(slotsA),
+				CodeHash: types.EmptyCodeHash.Bytes(),
+			},
+			storage: slotsA,
 		},
-		storage: slots,
+		{
+			hash: liveB,
+			account: types.StateAccount{
+				Nonce:    2,
+				Balance:  uint256.NewInt(2),
+				Root:     computeStorageRootFromSlots(slotsB),
+				CodeHash: types.EmptyCodeHash.Bytes(),
+			},
+			storage: slotsB,
+		},
 	}
-	rawdb.WriteAccountSnapshot(db, acc.hash, types.SlimAccountRLP(acc.account))
+	for _, a := range accounts {
+		rawdb.WriteAccountSnapshot(db, a.hash, types.SlimAccountRLP(a.account))
+		for _, s := range a.storage {
+			rawdb.WriteStorageSnapshot(db, a.hash, s.hash, s.value)
+		}
+	}
 
-	// Orphan storage: entries for an accountHash smaller than liveAccountHash,
-	// with no account snapshot behind them. Must be ordered before liveAccountHash
-	// so the storage iterator encounters them first.
-	var orphanAccountHash common.Hash
-	copy(orphanAccountHash[:], liveAccountHash[:])
-	orphanAccountHash[0] = 0x00 // guarantees cmp < 0 against liveAccountHash
-	rawdb.WriteStorageSnapshot(db, orphanAccountHash, common.HexToHash("0xbb"), []byte{0x02})
+	// Dangling slots at three positions within partition 5:
+	//   before liveA, between liveA and liveB, after liveB.
+	orphans := []struct {
+		account common.Hash
+		slots   []testSlot
+	}{
+		{
+			account: common.HexToHash("0x5000000000000000000000000000000000000000000000000000000000000000"),
+			slots: []testSlot{
+				{hash: common.HexToHash("0x11"), value: []byte{0x01}},
+				{hash: common.HexToHash("0x22"), value: []byte{0x02}},
+			},
+		},
+		{
+			account: common.HexToHash("0x5600000000000000000000000000000000000000000000000000000000000000"),
+			slots:   []testSlot{{hash: common.HexToHash("0x33"), value: []byte{0x03}}},
+		},
+		{
+			account: common.HexToHash("0x5d00000000000000000000000000000000000000000000000000000000000000"),
+			slots: []testSlot{
+				{hash: common.HexToHash("0x44"), value: []byte{0x04}},
+				{hash: common.HexToHash("0x55"), value: []byte{0x05}},
+			},
+		},
+	}
+	var totalOrphans int64
+	for _, o := range orphans {
+		for _, s := range o.slots {
+			rawdb.WriteStorageSnapshot(db, o.account, s.hash, s.value)
+			totalOrphans++
+		}
+	}
 
-	expectedRoot := buildExpectedRoot(t, []testAccount{acc})
+	expectedRoot := buildExpectedRoot(t, accounts)
 
-	if _, err := GenerateTrie(db, rawdb.HashScheme, expectedRoot, nil); err != nil {
+	stats, err := GenerateTrie(db, rawdb.HashScheme, expectedRoot, nil)
+	if err != nil {
 		t.Fatalf("GenerateTrie with orphan storage failed: %v", err)
+	}
+	if stats.Deleted != totalOrphans {
+		t.Errorf("Deleted counter = %d, want %d", stats.Deleted, totalOrphans)
+	}
+	for _, o := range orphans {
+		for _, s := range o.slots {
+			if v := rawdb.ReadStorageSnapshot(db, o.account, s.hash); v != nil {
+				t.Errorf("dangling slot %x/%x not cleared, got %x", o.account, s.hash, v)
+			}
+		}
 	}
 }
 
@@ -332,12 +387,16 @@ func TestGenerateTriePartialResume(t *testing.T) {
 
 	// Step 2: run every partition once to populate trie nodes on disk
 	// and capture each partition's raw root blob.
-	var scanned, updated atomic.Int64
+	var (
+		scanned atomic.Int64
+		updated atomic.Int64
+		deleted atomic.Int64
+	)
 	ranges := hashRanges(numPartitions)
 	blobs := make([][]byte, numPartitions)
 	for i, r := range ranges {
 		var pos atomic.Uint64
-		blob, err := generatePartition(context.Background(), nil, db, rawdb.HashScheme, byte(i), r[0], r[1], &scanned, &updated, &pos)
+		blob, err := generatePartition(context.Background(), nil, db, rawdb.HashScheme, byte(i), r[0], r[1], &scanned, &updated, &deleted, &pos)
 		if err != nil {
 			t.Fatalf("pre-run partition %d: %v", i, err)
 		}
@@ -355,14 +414,14 @@ func TestGenerateTriePartialResume(t *testing.T) {
 	// lives in an even partition. After this, rerunning generatePartition
 	// for an even partition would find no accounts and produce a nil
 	// blob — so a correct final root requires the resume path.
-	deleted := 0
+	numDeleted := 0
 	for _, a := range accounts {
 		if (a.hash[0]>>4)%2 == 0 {
 			rawdb.DeleteAccountSnapshot(db, a.hash)
-			deleted++
+			numDeleted++
 		}
 	}
-	if deleted == 0 {
+	if numDeleted == 0 {
 		t.Fatal("test setup failure: no accounts fell in even partitions")
 	}
 
@@ -377,6 +436,35 @@ func TestGenerateTriePartialResume(t *testing.T) {
 	for i := 0; i < numPartitions; i++ {
 		if _, ok := rawdb.ReadGenerateTriePartitionDone(db, byte(i)); ok {
 			t.Errorf("partition %d marker not cleared after successful resume", i)
+		}
+	}
+}
+
+// TestHashRanges checks that hashRanges fully and contiguously covers the
+// 256-bit hash space, with the last range absorbing the rounding remainder.
+func TestHashRanges(t *testing.T) {
+	for _, total := range []int{1, 2, 16, 256} {
+		ranges := hashRanges(total)
+		if len(ranges) != total {
+			t.Fatalf("total=%d: got %d ranges, want %d", total, len(ranges), total)
+		}
+		if ranges[0][0] != (common.Hash{}) {
+			t.Errorf("total=%d: first range starts at %x, want zero", total, ranges[0][0])
+		}
+		if ranges[total-1][1] != common.MaxHash {
+			t.Errorf("total=%d: last range ends at %x, want MaxHash", total, ranges[total-1][1])
+		}
+		for i, r := range ranges {
+			if r[0].Big().Cmp(r[1].Big()) > 0 {
+				t.Errorf("total=%d: range %d malformed: start %x > end %x", total, i, r[0], r[1])
+			}
+			if i == 0 {
+				continue
+			}
+			gap := new(big.Int).Sub(r[0].Big(), ranges[i-1][1].Big())
+			if gap.Cmp(common.Big1) != 0 {
+				t.Errorf("total=%d: range %d not contiguous with %d (gap=%s)", total, i, i-1, gap)
+			}
 		}
 	}
 }
