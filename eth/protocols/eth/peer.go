@@ -159,11 +159,13 @@ func (p *Peer) MarkTransaction(hash common.Hash) {
 // The reasons this is public is to allow packages using this protocol to write
 // tests that directly send messages without having to do the async queueing.
 func (p *Peer) SendTransactions(txs types.Transactions) error {
-	// Mark all the transactions as known, but ensure we don't overflow our limits
+	if err := p2p.Send(p.rw, TransactionsMsg, txs); err != nil {
+		return err
+	}
 	for _, tx := range txs {
 		p.knownTxs.Add(tx.Hash())
 	}
-	return p2p.Send(p.rw, TransactionsMsg, txs)
+	return nil
 }
 
 // AsyncSendTransactions queues a list of transactions (by hash) to eventually
