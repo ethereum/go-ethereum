@@ -61,8 +61,8 @@ const (
 	errcodeDefault          = -32000
 	errcodeTimeout          = -32002
 	errcodeResponseTooLarge = -32003
+	errcodeMarshalError     = -32004
 	errcodePanic            = -32603
-	errcodeMarshalError     = -32603
 
 	legacyErrcodeNotificationsUnsupported = -32001
 )
