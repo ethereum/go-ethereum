@@ -418,9 +418,24 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	return statedb, execRs, body, nil
 }
 
+// newPrestateTrieDBConfig returns the triedb config used to construct the
+// prestate. UBT mode requires the path-based backend; the legacy hash-based
+// backend cannot decode UBT-encoded nodes.
+func newPrestateTrieDBConfig(isBintrie bool) *triedb.Config {
+	if isBintrie {
+		cfg := *triedb.UBTDefaults
+		cfg.Preimages = true
+		return &cfg
+	}
+	return &triedb.Config{Preimages: true}
+}
+
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool) *state.StateDB {
-	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true, IsUBT: isBintrie})
+	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(isBintrie))
 	sdb := state.NewDatabase(tdb, nil)
+	if isBintrie {
+		sdb.(*state.UBTDatabase).EnableAllocRecording()
+	}
 
 	root := types.EmptyRootHash
 	if isBintrie {
@@ -458,8 +473,11 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool
 // MakePreStateStreaming is like MakePreState, but decodes the alloc from disk
 // one account at a time so the full map is never held in memory.
 func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie bool) (*state.StateDB, error) {
-	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true, IsUBT: isBintrie})
+	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(isBintrie))
 	sdb := state.NewDatabase(tdb, nil)
+	if isBintrie {
+		sdb.(*state.UBTDatabase).EnableAllocRecording()
+	}
 
 	root := types.EmptyRootHash
 	if isBintrie {
