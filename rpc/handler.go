@@ -169,7 +169,9 @@ func (b *batchCallBuffer) doWrite(ctx context.Context, conn jsonWriter, isErrorR
 	}
 	b.wrote = true // can only write once
 	if len(b.resp) > 0 {
-		conn.writeJSONBatch(ctx, b.resp, isErrorResponse)
+		spanCtx, _, spanEnd := telemetry.StartSpanWithTracer(ctx, telemetry.TracerFromContext(ctx), "rpc.writeJSONBatch")
+		err := conn.writeJSONBatch(spanCtx, b.resp, isErrorResponse)
+		spanEnd(&err)
 	}
 }
 
@@ -205,21 +207,18 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	h.startCallProc(func(cp *callProc) {
 		cp.isBatch = true
 		var (
-			timer          *time.Timer
-			cancel         context.CancelFunc
-			callBuffer     = &batchCallBuffer{calls: calls, resp: make([]*jsonrpcMessage, 0, len(calls))}
-			serverSpanEnds []func(*error)
+			timer      *time.Timer
+			cancel     context.CancelFunc
+			callBuffer = &batchCallBuffer{calls: calls, resp: make([]*jsonrpcMessage, 0, len(calls))}
 		)
 
 		cp.ctx, cancel = context.WithCancel(cp.ctx)
 		defer cancel()
 
-		// End all per-call ServerSpans after callBuffer.write completes.
-		defer func() {
-			for _, end := range serverSpanEnds {
-				end(nil) // don't propagate errors to parent spans
-			}
-		}()
+		// Top-level batch SERVER span.
+		var batchSpanEnd func(*error)
+		cp.ctx, batchSpanEnd = telemetry.StartBatchServerSpan(cp.ctx, h.tracer(), "jsonrpc", len(calls))
+		defer batchSpanEnd(nil)
 
 		// Cancel the request context after timeout and send an error response. Since the
 		// currently-running method might not return immediately on timeout, we must wait
@@ -242,10 +241,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			if msg == nil {
 				break
 			}
-			resp, _, serverSpanEnd := h.handleCallMsg(cp, msg)
-			if serverSpanEnd != nil {
-				serverSpanEnds = append(serverSpanEnds, serverSpanEnd)
-			}
+			resp, _, _ := h.handleCallMsg(cp, msg)
 			callBuffer.pushResponse(resp)
 			if resp != nil && h.batchResponseMaxSize != 0 {
 				responseBytes += len(resp.Result) + len(resp.Error)
@@ -543,21 +539,34 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) (*jsonrpcMessage
 		return msg.errorResponse(&methodNotFoundError{method: msg.Method}), nil, nil
 	}
 
-	// Start the SERVER span. The caller closes it after writing the response.
+	// Inside a batch, the top-level batch SERVER span is the parent. Per-call
+	// spans are INTERNAL children and self-managed. Outside a batch, this is
+	// the SERVER span and the caller defers spanEnd past the response write.
 	rpcInfo := telemetry.RPCInfo{
 		System:    "jsonrpc",
 		Service:   service,
 		Method:    method,
 		RequestID: string(msg.ID),
 	}
-	serverCtx, serverSpanEnd := telemetry.StartServerSpan(cp.ctx, h.tracer(), rpcInfo,
-		telemetry.BoolAttribute("rpc.batch", cp.isBatch))
+	var (
+		serverCtx     context.Context
+		serverSpanEnd func(*error)
+	)
+	if cp.isBatch {
+		serverCtx, serverSpanEnd = telemetry.StartRPCCallSpan(cp.ctx, h.tracer(), rpcInfo)
+		defer serverSpanEnd(nil)
+	} else {
+		serverCtx, serverSpanEnd = telemetry.StartServerSpan(cp.ctx, h.tracer(), rpcInfo)
+	}
 
 	// Start tracing span before parsing arguments.
 	_, _, pSpanEnd := telemetry.StartSpanWithTracer(serverCtx, h.tracer(), "rpc.parsePositionalArguments")
 	args, pErr := parsePositionalArguments(msg.Params, callb.argTypes)
 	pSpanEnd(&pErr)
 	if pErr != nil {
+		if cp.isBatch {
+			return msg.errorResponse(&invalidParamsError{pErr.Error()}), nil, nil
+		}
 		return msg.errorResponse(&invalidParamsError{pErr.Error()}), serverCtx, serverSpanEnd
 	}
 	start := time.Now()
@@ -580,6 +589,9 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) (*jsonrpcMessage
 	}
 	rpcServingTimer.UpdateSince(start)
 	updateServeTimeHistogram(msg.Method, answer.Error == nil, time.Since(start))
+	if cp.isBatch {
+		return answer, nil, nil
+	}
 	return answer, serverCtx, serverSpanEnd
 }
 

@@ -19,6 +19,7 @@ package rpc
 import (
 	"context"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"go.opentelemetry.io/otel"
@@ -27,6 +28,7 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // attributeMap converts a slice of attributes to a map.
@@ -229,7 +231,11 @@ func TestTracingBatchHTTP(t *testing.T) {
 		t.Fatalf("batch RPC call failed: %v", err)
 	}
 
-	// Flush and verify we emitted spans for each batch element.
+	// Flush and verify the batch trace shape:
+	//   jsonrpc.batch (SERVER, rpc.batch.size=N)
+	//     - jsonrpc.test/echo (INTERNAL, x N)
+	//     - rpc.writeJSONBatch (INTERNAL)
+	//          - rpc.httpWriteResult (INTERNAL)
 	if err := tracer.ForceFlush(context.Background()); err != nil {
 		t.Fatalf("failed to flush: %v", err)
 	}
@@ -237,20 +243,68 @@ func TestTracingBatchHTTP(t *testing.T) {
 	if len(spans) == 0 {
 		t.Fatal("no spans were emitted")
 	}
-	var found int
+	var (
+		batchSpan          *tracetest.SpanStub
+		callSpans          []*tracetest.SpanStub
+		writeJSONBatchSpan *tracetest.SpanStub
+		httpWriteSpan      *tracetest.SpanStub
+	)
 	for i := range spans {
-		if spans[i].Name == "jsonrpc.test/echo" {
-			attrs := attributeMap(spans[i].Attributes)
-			if attrs["rpc.system"] == "jsonrpc" &&
-				attrs["rpc.service"] == "test" &&
-				attrs["rpc.method"] == "echo" &&
-				attrs["rpc.batch"] == "true" {
-				found++
-			}
+		switch spans[i].Name {
+		case "jsonrpc.batch":
+			batchSpan = &spans[i]
+		case "jsonrpc.test/echo":
+			callSpans = append(callSpans, &spans[i])
+		case "rpc.writeJSONBatch":
+			writeJSONBatchSpan = &spans[i]
+		case "rpc.httpWriteResult":
+			httpWriteSpan = &spans[i]
 		}
 	}
-	if found != len(batch) {
-		t.Fatalf("expected %d matching batch spans, got %d", len(batch), found)
+	if batchSpan == nil {
+		t.Fatal("jsonrpc.batch span not found")
+	}
+	if got, want := len(callSpans), len(batch); got != want {
+		t.Fatalf("got %d per-call spans, want %d", got, want)
+	}
+	if writeJSONBatchSpan == nil {
+		t.Fatal("rpc.writeJSONBatch span not found")
+	}
+	if httpWriteSpan == nil {
+		t.Fatal("rpc.httpWriteResult span not found")
+	}
+
+	// Batch span: SERVER kind, rpc.batch.size=N.
+	if batchSpan.SpanKind != trace.SpanKindServer {
+		t.Errorf("jsonrpc.batch: got kind %v, want SERVER", batchSpan.SpanKind)
+	}
+	batchAttrs := attributeMap(batchSpan.Attributes)
+	if got, want := batchAttrs["rpc.batch.size"], strconv.Itoa(len(batch)); got != want {
+		t.Errorf("jsonrpc.batch rpc.batch.size: got %q, want %q", got, want)
+	}
+
+	// Per-call spans: INTERNAL kind, parented to the batch span, carry rpc.* attrs.
+	for _, s := range callSpans {
+		if s.SpanKind != trace.SpanKindInternal {
+			t.Errorf("jsonrpc.test/echo: got kind %v, want INTERNAL", s.SpanKind)
+		}
+		if got, want := s.Parent.SpanID(), batchSpan.SpanContext.SpanID(); got != want {
+			t.Errorf("jsonrpc.test/echo parent: got %s, want %s (batch)", got, want)
+		}
+		attrs := attributeMap(s.Attributes)
+		if attrs["rpc.system"] != "jsonrpc" || attrs["rpc.service"] != "test" || attrs["rpc.method"] != "echo" {
+			t.Errorf("jsonrpc.test/echo attrs missing rpc.system/service/method: %v", attrs)
+		}
+	}
+
+	// writeJSONBatch parented to the batch span.
+	if got, want := writeJSONBatchSpan.Parent.SpanID(), batchSpan.SpanContext.SpanID(); got != want {
+		t.Errorf("rpc.writeJSONBatch parent: got %s, want %s (batch)", got, want)
+	}
+
+	// httpWriteResult parented to writeJSONBatch.
+	if got, want := httpWriteSpan.Parent.SpanID(), writeJSONBatchSpan.SpanContext.SpanID(); got != want {
+		t.Errorf("rpc.httpWriteResult parent: got %s, want %s (rpc.writeJSONBatch)", got, want)
 	}
 }
 

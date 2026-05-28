@@ -40,6 +40,11 @@ func Int64Attribute(key string, val int64) Attribute {
 	return attribute.Int64(key, val)
 }
 
+// IntAttribute creates an attribute with an int value.
+func IntAttribute(key string, val int) Attribute {
+	return attribute.Int(key, val)
+}
+
 // BoolAttribute creates an attribute with a bool value.
 func BoolAttribute(key string, val bool) Attribute {
 	return attribute.Bool(key, val)
@@ -92,6 +97,37 @@ func StartServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, othe
 		)
 	)
 	ctx, _, end := startSpan(ctx, tracer, trace.SpanKindServer, name, attributes...)
+	return ctx, end
+}
+
+// StartBatchServerSpan creates a SpanKind=SERVER span representing a batched
+// RPC request. The span name is "$system.batch" (e.g. "jsonrpc.batch") and
+// per-call spans are nested under it. batchSize is exposed as rpc.batch.size.
+func StartBatchServerSpan(ctx context.Context, tracer trace.Tracer, system string, batchSize int, others ...Attribute) (context.Context, func(*error)) {
+	attributes := append([]Attribute{
+		semconv.RPCSystemKey.String(system),
+		IntAttribute("rpc.batch.size", batchSize),
+	}, others...)
+	ctx, _, end := startSpan(ctx, tracer, trace.SpanKindServer, system+".batch", attributes...)
+	return ctx, end
+}
+
+// StartRPCCallSpan creates a SpanKind=INTERNAL span for an individual RPC call,
+// carrying the same name and attributes as StartServerSpan. Used for per-call
+// spans inside a batch (which nest under the batch's SERVER span).
+func StartRPCCallSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, others ...Attribute) (context.Context, func(*error)) {
+	var (
+		name       = fmt.Sprintf("%s.%s/%s", rpc.System, rpc.Service, rpc.Method)
+		attributes = append([]Attribute{
+			semconv.RPCSystemKey.String(rpc.System),
+			semconv.RPCServiceKey.String(rpc.Service),
+			semconv.RPCMethodKey.String(rpc.Method),
+			semconv.RPCJSONRPCRequestID(rpc.RequestID),
+		},
+			others...,
+		)
+	)
+	ctx, _, end := startSpan(ctx, tracer, trace.SpanKindInternal, name, attributes...)
 	return ctx, end
 }
 
