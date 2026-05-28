@@ -34,6 +34,21 @@ func (bitCurve *BitCurve) ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, 
 	copy(padded[32-len(scalar):], scalar)
 	scalar = padded
 
+	// --- FEATURE ADDITION: Short-circuit validation ---
+	// If the scalar is all zeros, multiplying results in the point at infinity.
+	// Returning early saves CGo overhead and ensures strict curve safety.
+	isZero := true
+	for _, b := range scalar {
+		if b != 0 {
+			isZero = false
+			break
+		}
+	}
+	if isZero {
+		return nil, nil
+	}
+	// --------------------------------------------------
+
 	// Do the multiplication in C, updating point.
 	point := make([]byte, 64)
 	math.ReadBits(Bx, point[:32])
@@ -46,8 +61,15 @@ func (bitCurve *BitCurve) ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, 
 	// Unpack the result and clear temporaries.
 	x := new(big.Int).SetBytes(point[:32])
 	y := new(big.Int).SetBytes(point[32:])
-	clear(point)
-	clear(scalar)
+	
+	// Explicitly sanitize sensitive memory buffers
+	for i := range point {
+		point[i] = 0
+	}
+	for i := range scalar {
+		scalar[i] = 0
+	}
+
 	if res != 1 {
 		return nil, nil
 	}
