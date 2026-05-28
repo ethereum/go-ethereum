@@ -104,7 +104,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		statedb.SetTxContext(tx.Hash(), i, uint32(i+1))
 		_, _, spanEnd := telemetry.StartSpan(ctx, "core.ApplyTransactionWithEVM",
 			telemetry.StringAttribute("tx.hash", tx.Hash().Hex()),
-			telemetry.Int64Attribute("tx.index", int64(i)),
+			telemetry.IntAttribute("tx.index", i),
 		)
 		receipt, bal, err := ApplyTransactionWithEVM(msg, gp, statedb, blockNumber, blockHash, context.Time, tx, evm)
 		if err != nil {
