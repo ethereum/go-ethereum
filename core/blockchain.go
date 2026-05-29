@@ -2309,7 +2309,9 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 
 	// Attach the computed block access list so it gets persisted alongside the
 	// block. The validator has already verified the hash matches the header.
-	if res.Bal != nil && block.AccessList() == nil {
+	// BAL is only meaningful from Amsterdam onward; skip pre-Amsterdam blocks
+	// to avoid persisting and serving empty BALs over the network.
+	if res.Bal != nil && block.AccessList() == nil && bc.chainConfig.IsAmsterdam(block.Number(), block.Time()) {
 		block = block.WithAccessListUnsafe(res.Bal.ToEncodingObj())
 	}
 

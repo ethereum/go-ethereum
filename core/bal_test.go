@@ -283,7 +283,7 @@ func TestBALPrecompileInvokedFromContractIncluded(t *testing.T) {
 
 	env := newBALTestEnv(types.GenesisAlloc{caller: {Code: code, Balance: common.Big0}})
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &caller, big.NewInt(0), 100_000, 0, nil))
+		g.AddTx(env.tx(0, &caller, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	aa := assertPresent(t, b, identity)
@@ -334,7 +334,7 @@ func TestBALBalanceProbeOnNonExistent(t *testing.T) {
 
 	env := newBALTestEnv(types.GenesisAlloc{caller: {Code: code, Balance: common.Big0}})
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &caller, big.NewInt(0), 100_000, 0, nil))
+		g.AddTx(env.tx(0, &caller, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	assertEmpty(t, assertPresent(t, b, probe))
@@ -350,7 +350,7 @@ func TestBALExtCodeSizeProbeOnNonExistent(t *testing.T) {
 
 	env := newBALTestEnv(types.GenesisAlloc{caller: {Code: code, Balance: common.Big0}})
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &caller, big.NewInt(0), 100_000, 0, nil))
+		g.AddTx(env.tx(0, &caller, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	assertEmpty(t, assertPresent(t, b, probe))
@@ -366,7 +366,7 @@ func TestBALExtCodeHashProbeOnNonExistent(t *testing.T) {
 
 	env := newBALTestEnv(types.GenesisAlloc{caller: {Code: code, Balance: common.Big0}})
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &caller, big.NewInt(0), 100_000, 0, nil))
+		g.AddTx(env.tx(0, &caller, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	assertEmpty(t, assertPresent(t, b, probe))
@@ -385,7 +385,7 @@ func TestBALExtCodeCopyProbeOnNonExistent(t *testing.T) {
 
 	env := newBALTestEnv(types.GenesisAlloc{caller: {Code: code, Balance: common.Big0}})
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &caller, big.NewInt(0), 100_000, 0, nil))
+		g.AddTx(env.tx(0, &caller, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	assertEmpty(t, assertPresent(t, b, probe))
@@ -447,7 +447,7 @@ func TestBALCallTargetWithEmptyChangeSet(t *testing.T) {
 	})
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &target, big.NewInt(0), 100_000, 0, nil))
+		g.AddTx(env.tx(0, &target, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	assertEmpty(t, assertPresent(t, b, target))
@@ -465,7 +465,7 @@ func TestBALCallCodeTargetIncluded(t *testing.T) {
 	})
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &caller, big.NewInt(0), 200_000, 0, nil))
+		g.AddTx(env.tx(0, &caller, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	assertPresent(t, b, caller)
@@ -483,7 +483,7 @@ func TestBALDelegateCallTargetIncluded(t *testing.T) {
 	})
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &caller, big.NewInt(0), 200_000, 0, nil))
+		g.AddTx(env.tx(0, &caller, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	assertPresent(t, b, caller)
@@ -501,7 +501,7 @@ func TestBALStaticCallTargetIncluded(t *testing.T) {
 	})
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &caller, big.NewInt(0), 200_000, 0, nil))
+		g.AddTx(env.tx(0, &caller, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	assertPresent(t, b, caller)
@@ -519,7 +519,7 @@ func TestBALRevertedTxStillIncluded(t *testing.T) {
 	env := newBALTestEnv(types.GenesisAlloc{reverter: {Code: revertCode, Balance: common.Big0}})
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &reverter, big.NewInt(0), 100_000, 0, nil))
+		g.AddTx(env.tx(0, &reverter, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	assertEmpty(t, assertPresent(t, b, reverter))
@@ -533,7 +533,7 @@ func TestBALSenderRecordedOnRevert(t *testing.T) {
 	env := newBALTestEnv(types.GenesisAlloc{reverter: {Code: revertCode, Balance: common.Big0}})
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &reverter, big.NewInt(0), 100_000, 0, nil))
+		g.AddTx(env.tx(0, &reverter, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	sender := assertPresent(t, b, env.from)
@@ -557,7 +557,7 @@ func TestBALStorageWriteRecorded(t *testing.T) {
 	env := newBALTestEnv(types.GenesisAlloc{contract: {Code: code, Balance: common.Big0}})
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &contract, big.NewInt(0), 100_000, 0, nil))
+		g.AddTx(env.tx(0, &contract, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	aa := assertPresent(t, b, contract)
@@ -578,7 +578,7 @@ func TestBALStorageSloadOnly(t *testing.T) {
 	env := newBALTestEnv(types.GenesisAlloc{contract: {Code: code, Balance: common.Big0}})
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &contract, big.NewInt(0), 100_000, 0, nil))
+		g.AddTx(env.tx(0, &contract, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	aa := assertPresent(t, b, contract)
@@ -604,7 +604,7 @@ func TestBALStorageReadThenWriteOnlyInWrites(t *testing.T) {
 	env := newBALTestEnv(types.GenesisAlloc{contract: {Code: code, Balance: common.Big0}})
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &contract, big.NewInt(0), 100_000, 0, nil))
+		g.AddTx(env.tx(0, &contract, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	aa := assertPresent(t, b, contract)
@@ -632,7 +632,7 @@ func TestBALNoOpSSTOREDemotesToRead(t *testing.T) {
 	})
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &contract, big.NewInt(0), 100_000, 0, nil))
+		g.AddTx(env.tx(0, &contract, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	aa := assertPresent(t, b, contract)
@@ -660,7 +660,7 @@ func TestBALStorageWriteZeroIsAWrite(t *testing.T) {
 	})
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &contract, big.NewInt(0), 100_000, 0, nil))
+		g.AddTx(env.tx(0, &contract, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	aa := assertPresent(t, b, contract)
@@ -687,7 +687,7 @@ func TestBALCreateDeploysCode(t *testing.T) {
 	init := []byte{0x60, 0x00, 0x60, 0x00, 0x53, 0x60, 0x01, 0x60, 0x00, 0xf3}
 
 	b, receipts := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, nil, big.NewInt(7), 200_000, 0, init))
+		g.AddTx(env.tx(0, nil, big.NewInt(7), 1_000_000, 0, init))
 	})
 
 	created := receipts[0].ContractAddress
@@ -711,7 +711,7 @@ func TestBALCreateEmptyRuntimeNoCodeEntry(t *testing.T) {
 	init := []byte{0x60, 0x00, 0x60, 0x00, 0xf3}
 
 	b, receipts := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, nil, big.NewInt(0), 200_000, 0, init))
+		g.AddTx(env.tx(0, nil, big.NewInt(0), 1_000_000, 0, init))
 	})
 
 	created := receipts[0].ContractAddress
@@ -732,7 +732,7 @@ func TestBALCreateInitRevertEmptyChangeSet(t *testing.T) {
 	init := []byte{0x60, 0x00, 0x60, 0x00, 0xfd}
 
 	b, receipts := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, nil, big.NewInt(0), 200_000, 0, init))
+		g.AddTx(env.tx(0, nil, big.NewInt(0), 1_000_000, 0, init))
 	})
 
 	created := receipts[0].ContractAddress
@@ -743,11 +743,13 @@ func TestBALCreateInitRevertEmptyChangeSet(t *testing.T) {
 // the deployed address in the BAL with an empty change set.
 func TestBALCreateInitOOGEmptyChangeSet(t *testing.T) {
 	env := newBALTestEnv(nil)
-	// Infinite loop: JUMPDEST PUSH1 0 JUMP — burns gas until OOG.
+	// Infinite loop: JUMPDEST PUSH1 0 JUMP — burns gas until OOG. The
+	// gas budget must cover EIP-8037 intrinsic state gas (account creation)
+	// so the tx is accepted; OOG must happen inside the init code.
 	init := []byte{0x5b, 0x60, 0x00, 0x56}
 
 	b, receipts := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, nil, big.NewInt(0), 60_000, 0, init))
+		g.AddTx(env.tx(0, nil, big.NewInt(0), 220_000, 0, init))
 	})
 
 	created := receipts[0].ContractAddress
@@ -771,7 +773,7 @@ func TestBALCreateAddressCollisionStillIncluded(t *testing.T) {
 	// Init code doesn't matter — execution never starts.
 	init := []byte{0x60, 0x00, 0x60, 0x00, 0xf3}
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, nil, big.NewInt(0), 200_000, 0, init))
+		g.AddTx(env.tx(0, nil, big.NewInt(0), 1_000_000, 0, init))
 	})
 
 	aa := assertPresent(t, b, collide)
@@ -799,7 +801,7 @@ func TestBALInEVMCreatePreAccessAbortDestinationExcluded(t *testing.T) {
 	})
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &factory, big.NewInt(0), 200_000, 0, nil))
+		g.AddTx(env.tx(0, &factory, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	// The address that WOULD have been deployed had the create succeeded.
@@ -842,7 +844,7 @@ func TestBALInEVMCreateDeploysContract(t *testing.T) {
 	env := newBALTestEnv(types.GenesisAlloc{factory: {Code: code, Balance: common.Big0, Nonce: 1}})
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &factory, big.NewInt(0), 300_000, 0, nil))
+		g.AddTx(env.tx(0, &factory, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	// Deployed address depends on the factory's nonce at the moment of CREATE,
@@ -870,7 +872,7 @@ func TestBALSelfDestructBeneficiaryWithZeroBalance(t *testing.T) {
 	init = append(init, 0xff)
 
 	b, receipts := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, nil, big.NewInt(0), 200_000, 0, init))
+		g.AddTx(env.tx(0, nil, big.NewInt(0), 1_000_000, 0, init))
 	})
 
 	created := receipts[0].ContractAddress
@@ -896,7 +898,7 @@ func TestBALSelfDestructBeneficiaryWithValueTransfer(t *testing.T) {
 	init = append(init, 0xff)
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, nil, big.NewInt(100), 200_000, 0, init))
+		g.AddTx(env.tx(0, nil, big.NewInt(100), 1_000_000, 0, init))
 	})
 
 	ben := assertPresent(t, b, beneficiary)
@@ -921,7 +923,7 @@ func TestBALSelfDestructPreExistingContract(t *testing.T) {
 	})
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &suicidal, big.NewInt(0), 200_000, 0, nil))
+		g.AddTx(env.tx(0, &suicidal, big.NewInt(0), 1_000_000, 0, nil))
 	})
 
 	aa := assertPresent(t, b, suicidal)
@@ -966,7 +968,7 @@ func TestBALMidTxBalanceRoundTrip(t *testing.T) {
 	env := newBALTestEnv(types.GenesisAlloc{bouncer: {Code: code, Balance: common.Big0}})
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &bouncer, big.NewInt(1234), 200_000, 0, nil))
+		g.AddTx(env.tx(0, &bouncer, big.NewInt(1234), 1_000_000, 0, nil))
 	})
 
 	aa := assertPresent(t, b, bouncer)
@@ -1072,7 +1074,7 @@ func TestBALAuthorityIncludedOnSetCodeTx(t *testing.T) {
 			Nonce:     0,
 			To:        env.from,
 			Value:     new(uint256.Int),
-			Gas:       200_000,
+			Gas:       1_000_000,
 			GasFeeCap: uint256.NewInt(uint64(newGwei(10).Int64())),
 			GasTipCap: new(uint256.Int),
 			AuthList:  []types.SetCodeAuthorization{auth},
@@ -1112,7 +1114,7 @@ func TestBALDelegationTargetNotIncludedOnAuthOnly(t *testing.T) {
 			Nonce:     0,
 			To:        env.from, // tx.to is an EOA with no code: delegate is never called
 			Value:     new(uint256.Int),
-			Gas:       200_000,
+			Gas:       1_000_000,
 			GasFeeCap: uint256.NewInt(uint64(newGwei(10).Int64())),
 			GasTipCap: new(uint256.Int),
 			AuthList:  []types.SetCodeAuthorization{auth},
@@ -1131,7 +1133,7 @@ func (e *balTestEnv) newSetCodeTx(t *testing.T, nonce uint64, to common.Address,
 		Nonce:     nonce,
 		To:        to,
 		Value:     new(uint256.Int),
-		Gas:       400_000,
+		Gas:       1_000_000,
 		GasFeeCap: uint256.NewInt(uint64(newGwei(10).Int64())),
 		GasTipCap: new(uint256.Int),
 		AuthList:  auths,
