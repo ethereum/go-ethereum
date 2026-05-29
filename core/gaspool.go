@@ -28,8 +28,7 @@ type GasPool struct {
 	initial        uint64
 	cumulativeUsed uint64
 
-	// After 8037 Block gas used is
-	// max(cumulativeRegular, cumulativeState).
+	// After 8037 Block gas used is max(cumulativeRegular, cumulativeState).
 	cumulativeRegular uint64
 	cumulativeState   uint64
 }
@@ -110,10 +109,11 @@ func (gp *GasPool) CumulativeUsed() uint64 {
 
 // Used returns the amount of consumed gas.
 func (gp *GasPool) Used() uint64 {
+	// After 8037, return max(sum_regular, sum_state)
 	if gp.cumulativeRegular > 0 || gp.cumulativeState > 0 {
-		// After 8037 we return max(sum_regular, sum_state)
 		return max(gp.cumulativeRegular, gp.cumulativeState)
 	}
+	// Before 8037, return initial-remaining
 	if gp.initial < gp.remaining {
 		panic(fmt.Sprintf("gas used underflow: %v %v", gp.initial, gp.remaining))
 	}

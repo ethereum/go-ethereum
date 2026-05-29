@@ -76,16 +76,8 @@ func NewGasBudget(regular, state uint64) GasBudget {
 // Used returns the total scalar gas consumed relative to an initial budget
 // (= (initial.regular + initial.state) − (current.regular + current.state)).
 // This is the payment scalar (EIP-8037's tx_gas_used_before_refund).
-//
-// TODO(rjl493456442) the total used gas can be calculated via g.UsedRegularGas
-// and g.UsedStateGas.
 func (g GasBudget) Used(initial GasBudget) uint64 {
 	return (initial.RegularGas + initial.StateGas) - (g.RegularGas + g.StateGas)
-}
-
-// Copy returns a deep copy of the budget.
-func (g GasBudget) Copy() GasBudget {
-	return g
 }
 
 // String returns a visual representation of the budget.
@@ -163,12 +155,6 @@ func (g *GasBudget) IsZero() bool {
 func (g *GasBudget) RefundState(s uint64) {
 	g.StateGas += s
 	g.UsedStateGas -= int64(s)
-}
-
-// RefundRegular applies an inline regular-gas refund.
-func (g *GasBudget) RefundRegular(s uint64) {
-	g.RegularGas += s
-	g.UsedRegularGas -= s
 }
 
 // Forward drains `regular` regular gas and the entire state reservoir from
