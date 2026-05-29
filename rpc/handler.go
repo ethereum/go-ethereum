@@ -552,9 +552,8 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 
 	ctx := cp.ctx
 	if cp.isBatch {
-		// Inside a batch, the top-level batch SERVER span is the parent. Per-call
-		// spans are INTERNAL children, and the call span lifetime does not extend
-		// beyond this function, i.e. serverSpanEnd is not returned.
+		// Inside a batch, the top-level batch SERVER span is set up by the parent.
+		// Call spans are SpanKind=INTERNAL children.
 		rpcInfo := telemetry.RPCInfo{System: "jsonrpc", Service: service, Method: method, RequestID: string(msg.ID)}
 		var spanEnd func(*error)
 		ctx, spanEnd = telemetry.StartBatchCallSpan(cp.ctx, h.tracer(), rpcInfo)
