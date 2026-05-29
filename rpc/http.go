@@ -272,11 +272,11 @@ func (s *Server) newHTTPServerConn(r *http.Request, w http.ResponseWriter) Serve
 	var buf []byte
 	encodeMsg := func(ctx context.Context, msg *jsonrpcMessage, isError bool) error {
 		buf = appendMessage(buf[:0], msg)
-		return httpWriteResult(ctx, w, buf, isError)
+		return httpWrite(ctx, w, buf, isError)
 	}
 	encodeBatch := func(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error {
 		buf = appendBatch(buf[:0], msgs)
-		return httpWriteResult(ctx, w, buf, isError)
+		return httpWrite(ctx, w, buf, isError)
 	}
 
 	dec := json.NewDecoder(conn)
@@ -285,11 +285,11 @@ func (s *Server) newHTTPServerConn(r *http.Request, w http.ResponseWriter) Serve
 	return NewFuncCodec(conn, encodeMsg, encodeBatch, dec.Decode)
 }
 
-// httpWriteResult writes pre-encoded response data over HTTP.
+// httpWrite writes pre-encoded response data over HTTP.
 // For error responses, it sets Content-Length and flushes to ensure the response
 // is fully written before any HTTP server write timeout occurs.
-func httpWriteResult(ctx context.Context, w http.ResponseWriter, data []byte, isError bool) (err error) {
-	_, _, spanEnd := telemetry.StartSpanWithTracer(ctx, telemetry.TracerFromContext(ctx), "rpc.httpWriteResult")
+func httpWrite(ctx context.Context, w http.ResponseWriter, data []byte, isError bool) (err error) {
+	_, _, spanEnd := telemetry.StartSpanWithTracer(ctx, telemetry.TracerFromContext(ctx), "rpc.httpWrite")
 	defer spanEnd(&err)
 
 	if !isError {
