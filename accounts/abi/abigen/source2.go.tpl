@@ -241,7 +241,7 @@ var (
 		// Solidity: {{.Original.String}}
 		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Error(raw []byte) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
 			out := new({{$contract.Type}}{{.Normalized.Name}})
-			if err := {{ decapitalise $contract.Type}}.abi.UnpackIntoInterface(out, "{{.Normalized.Name}}", raw); err != nil {
+			if err := {{ decapitalise $contract.Type}}.abi.UnpackIntoInterface(out, "{{.Origin.Name}}", raw); err != nil {
 				return nil, err
 			}
 			return out, nil
