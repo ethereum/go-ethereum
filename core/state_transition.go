@@ -446,10 +446,22 @@ func (st *stateTransition) buyGas() error {
 	if have, want := st.state.GetBalance(st.msg.From), balanceCheck; have.Cmp(want) < 0 {
 		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
 	}
+	isAmsterdam := st.evm.ChainConfig().IsAmsterdam(st.evm.Context.BlockNumber, st.evm.Context.Time)
+
+	// Reserve the gas budget in the block gas pool
+	var err error
+	if isAmsterdam {
+		err = st.gp.CheckGasAmsterdam(min(st.msg.GasLimit, params.MaxTxGas), st.msg.GasLimit)
+	} else {
+		err = st.gp.CheckGasLegacy(st.msg.GasLimit)
+	}
+	if err != nil {
+		return err
+	}
 
 	// After Amsterdam we limit the regular gas to 16M, the data gas to the transaction limit
 	limit := st.msg.GasLimit
-	if st.evm.ChainConfig().IsAmsterdam(st.evm.Context.BlockNumber, st.evm.Context.Time) {
+	if isAmsterdam {
 		limit = min(st.msg.GasLimit, params.MaxTxGas)
 	}
 	st.initialBudget = vm.NewGasBudget(limit, st.msg.GasLimit-limit)
@@ -584,24 +596,8 @@ func (st *stateTransition) preCheck() error {
 func (st *stateTransition) reserveBlockGasBudget(rules params.Rules, gasLimit uint64, intrinsicCost vm.GasCosts) error {
 	var err error
 	if rules.IsAmsterdam {
-		// EIP-8037 per-tx 2D block-inclusion check. For each dimension,
-		// the worst-case contribution is tx.gas minus the other
-		// dimension's intrinsic (capped at MaxTxGas for the regular
-		// dimension).
-		regularReservation := gasLimit
-		if regularReservation > intrinsicCost.StateGas {
-			regularReservation -= intrinsicCost.StateGas
-		} else {
-			regularReservation = 0
-		}
-		regularReservation = min(regularReservation, params.MaxTxGas)
-
+		regularReservation := min(gasLimit, params.MaxTxGas)
 		stateReservation := gasLimit
-		if stateReservation > intrinsicCost.RegularGas {
-			stateReservation -= intrinsicCost.RegularGas
-		} else {
-			stateReservation = 0
-		}
 		err = st.gp.CheckGasAmsterdam(regularReservation, stateReservation)
 	} else {
 		err = st.gp.CheckGasLegacy(gasLimit)
@@ -624,19 +620,16 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// The state-transition pipeline below runs in stages. Each stage may
 	// abort with a consensus error before the EVM is invoked:
 	//
-	//   1. preCheck:   nonce, fee-cap, blob and EIP-7702 structural
-	//                  checks; ends by calling buyGas to debit the
-	//                  sender and seed the two-dimensional gas budget
-	//                  (EIP-8037).
-	//   2. Intrinsic:  charges the intrinsic regular + state cost from
-	//                  the running budget with overflow detection.
-	//   3. Block pool: per-dimension inclusion reservation against the
-	//                  block gas pool (two-dimensional after Amsterdam,
-	//                  EIP-8037).
-	//   4. Floor pre:  EIP-7623 calldata floor must fit in the gas allowance.
-	//   5. Top-call:   run the top-most call, ensuring sender can cover
-	//                  the value transfer of the top call frame; init-code
-	//                  size respects the cap.
+	//   1. preCheck:    nonce, fee-cap, blob and EIP-7702 structural
+	//                   checks; reserve gas budget in the block gas pool,
+	//                   ends by calling buyGas to debit the sender and
+	//                   seed the two-dimensional gas budget (EIP-8037).
+	//   2. Intrinsic:   charges the intrinsic regular + state cost from
+	//                   the running budget with overflow detection.
+	//   3. Floor check: EIP-7623 calldata floor must fit in the gas allowance.
+	//   4. Top-call:    run the top-most call, ensuring sender can cover
+	//                   the value transfer of the top call frame; init-code
+	//                   size respects the cap.
 	//
 	// After the EVM has run, the result path applies EIP-8037 state-gas
 	// refunds, the EIP-3529 regular-refund cap, and the EIP-7623 scalar
@@ -671,14 +664,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		st.evm.Config.Tracer.EmitGasChange(prior.AsTracing(), st.gasRemaining.AsTracing(), tracing.GasChangeTxIntrinsicGas)
 	}
 
-	// Stage 3: reserve this tx's share of the block gas pool. Under
-	// Amsterdam this is a two-dimensional per-tx inclusion check; before
-	// Amsterdam it is a single scalar subtraction.
-	if err := st.reserveBlockGasBudget(rules, msg.GasLimit, cost); err != nil {
-		return nil, err
-	}
-
-	// Stage 4: validate the EIP-7623 calldata floor against the gas limit.
+	// Stage 3: validate the EIP-7623 calldata floor against the gas limit.
 	// The floor inflates the total gas usage at tx end, so the gas limit
 	// must be sufficient to cover that.
 	if rules.IsPrague {
@@ -708,7 +694,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 	}
 
-	// Stage 5: top-call affordability, the sender must still be able
+	// Stage 4: top-call affordability, the sender must still be able
 	// to cover the value transfer of the top frame after gas pre-pay.
 	value := msg.Value
 	if value == nil {
@@ -740,9 +726,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// Capture the forwarded regular-gas amount BEFORE ForwardAll consumes
 		// it, so Absorb can back out state-gas spillover from
 		// UsedRegularGas per EIP-8037 (EELS semantics).
-		forwardedR := st.gasRemaining.RegularGas
+		forwarded := st.gasRemaining.RegularGas
 		ret, _, result, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining.ForwardAll(), value)
-		st.gasRemaining.Absorb(result, forwardedR)
+		st.gasRemaining.Absorb(result, forwarded)
 	} else {
 		// Increment the nonce for the next transaction.
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
@@ -760,16 +746,14 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 		// Execute the transaction's call.
 		var result vm.GasBudget
-		forwardedR := st.gasRemaining.RegularGas
+		forwarded := st.gasRemaining.RegularGas
 		ret, result, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining.ForwardAll(), value)
-		st.gasRemaining.Absorb(result, forwardedR)
+		st.gasRemaining.Absorb(result, forwarded)
 	}
 	// If this was a failed contract creation, refund the account creation costs.
-	if rules.IsAmsterdam {
-		if vmerr != nil && contractCreation {
-			refund := params.AccountCreationSize * st.evm.Context.CostPerStateByte
-			st.gasRemaining.RefundState(refund)
-		}
+	if rules.IsAmsterdam && vmerr != nil && contractCreation {
+		refund := params.AccountCreationSize * st.evm.Context.CostPerStateByte
+		st.gasRemaining.RefundState(refund)
 	}
 
 	// Record the gas used excluding gas refunds. This value represents the actual
