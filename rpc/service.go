@@ -96,14 +96,14 @@ func serviceAndMethod(name string) (service, method string, ok bool) {
 }
 
 // callback returns the callback corresponding to the given RPC method name.
-func (r *serviceRegistry) callback(name string) (cb *callback, service, method string) {
+func (r *serviceRegistry) callback(name string) (cb *callback) {
 	s, m, found := serviceAndMethod(name)
 	if !found {
-		return nil, "", ""
+		return nil
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.services[s].callbacks[m], s, m
+	return r.services[s].callbacks[m]
 }
 
 // subscription returns a subscription callback in the given service.

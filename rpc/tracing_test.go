@@ -18,8 +18,11 @@ package rpc
 
 import (
 	"context"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	"go.opentelemetry.io/otel"
@@ -184,13 +187,13 @@ func TestTracingHTTPErrorRecording(t *testing.T) {
 	}
 	spans := exporter.GetSpans()
 
-	// Only the runMethod span should have error status.
+	// The runMethod span and the SERVER span should both have error status.
 	if len(spans) == 0 {
 		t.Fatal("no spans were emitted")
 	}
 	for _, span := range spans {
 		switch span.Name {
-		case "rpc.runMethod":
+		case "rpc.runMethod", "jsonrpc.test/returnError":
 			if span.Status.Code != codes.Error {
 				t.Errorf("expected %s span status Error, got %v", span.Name, span.Status.Code)
 			}
@@ -333,5 +336,198 @@ func TestTracingSubscribeUnsubscribe(t *testing.T) {
 	spans := exporter.GetSpans()
 	if len(spans) != 0 {
 		t.Errorf("expected no spans for subscribe/unsubscribe, got %d", len(spans))
+	}
+}
+
+// postJSONRPC sends a raw JSON body to the given test server and discards the
+// response body. Used to send messages the typed RPC client can't construct,
+// like notifications (no "id" field).
+func postJSONRPC(t *testing.T, url, body string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+}
+
+// TestTracingHTTPNotification verifies that a JSON-RPC notification emits the
+// SERVER span (with error captured when applicable) but no rpc.writeJSON span,
+// since notifications do not get a response written.
+func TestTracingHTTPNotification(t *testing.T) {
+	t.Parallel()
+	server, tracer, exporter := newTracingServer(t)
+	httpsrv := httptest.NewServer(server)
+	t.Cleanup(httpsrv.Close)
+
+	// Successful notification (no "id"): should produce a SERVER span without error,
+	// and no rpc.writeJSON span.
+	postJSONRPC(t, httpsrv.URL, `{"jsonrpc":"2.0","method":"test_echo","params":["hi",1,{"S":"x"}]}`)
+
+	// Notification with unknown method: SERVER span should be present with error status.
+	postJSONRPC(t, httpsrv.URL, `{"jsonrpc":"2.0","method":"test_doesNotExist"}`)
+
+	if err := tracer.ForceFlush(context.Background()); err != nil {
+		t.Fatalf("failed to flush: %v", err)
+	}
+	spans := exporter.GetSpans()
+
+	var (
+		echoSpan       *tracetest.SpanStub
+		unknownSpan    *tracetest.SpanStub
+		writeJSONFound bool
+	)
+	for i := range spans {
+		switch spans[i].Name {
+		case "jsonrpc.test/echo":
+			echoSpan = &spans[i]
+		case "jsonrpc.test/doesNotExist":
+			unknownSpan = &spans[i]
+		case "rpc.writeJSON":
+			writeJSONFound = true
+		}
+	}
+	if echoSpan == nil {
+		t.Fatal("jsonrpc.test/echo span not found for successful notification")
+	}
+	if echoSpan.Status.Code == codes.Error {
+		t.Errorf("successful notification: expected no error status, got %v", echoSpan.Status)
+	}
+	if unknownSpan == nil {
+		t.Fatal("jsonrpc.test/doesNotExist span not found for unknown-method notification")
+	}
+	if unknownSpan.Status.Code != codes.Error {
+		t.Errorf("unknown-method notification: expected error status, got %v", unknownSpan.Status.Code)
+	}
+	if writeJSONFound {
+		t.Error("notifications should not produce an rpc.writeJSON span")
+	}
+}
+
+// TestTracingBatchHTTPErrorCapture verifies that errors on individual calls
+// inside a batch are recorded on the per-call INTERNAL span, including the
+// pre-dispatch cases (method not found / invalid params) where runMethod
+// never runs.
+func TestTracingBatchHTTPErrorCapture(t *testing.T) {
+	t.Parallel()
+	server, tracer, exporter := newTracingServer(t)
+	httpsrv := httptest.NewServer(server)
+	t.Cleanup(httpsrv.Close)
+
+	// A batch with: one valid call, one unknown method, one method that
+	// returns an error from its handler.
+	body := `[
+		{"jsonrpc":"2.0","id":1,"method":"test_echo","params":["x",1,{"S":"a"}]},
+		{"jsonrpc":"2.0","id":2,"method":"test_doesNotExist"},
+		{"jsonrpc":"2.0","id":3,"method":"test_returnError"}
+	]`
+	postJSONRPC(t, httpsrv.URL, body)
+
+	if err := tracer.ForceFlush(context.Background()); err != nil {
+		t.Fatalf("failed to flush: %v", err)
+	}
+	spans := exporter.GetSpans()
+
+	byName := make(map[string]*tracetest.SpanStub)
+	for i := range spans {
+		byName[spans[i].Name] = &spans[i]
+	}
+
+	if byName["jsonrpc.batch"] == nil {
+		t.Fatal("jsonrpc.batch span not found")
+	}
+	if echo := byName["jsonrpc.test/echo"]; echo == nil {
+		t.Fatal("jsonrpc.test/echo span not found")
+	} else if echo.Status.Code == codes.Error {
+		t.Errorf("test/echo: unexpected error status %v", echo.Status)
+	}
+	if missing := byName["jsonrpc.test/doesNotExist"]; missing == nil {
+		t.Fatal("jsonrpc.test/doesNotExist span not found (method-not-found should still get a per-call span)")
+	} else if missing.Status.Code != codes.Error {
+		t.Errorf("test/doesNotExist: expected error status, got %v", missing.Status.Code)
+	}
+	if ret := byName["jsonrpc.test/returnError"]; ret == nil {
+		t.Fatal("jsonrpc.test/returnError span not found")
+	} else if ret.Status.Code != codes.Error {
+		t.Errorf("test/returnError: expected error status, got %v", ret.Status.Code)
+	}
+}
+
+// TestTracingBatchHTTPEmpty verifies that an empty batch still emits a
+// SERVER span, with rpc.batch.size=0 and error status.
+func TestTracingBatchHTTPEmpty(t *testing.T) {
+	t.Parallel()
+	server, tracer, exporter := newTracingServer(t)
+	httpsrv := httptest.NewServer(server)
+	t.Cleanup(httpsrv.Close)
+
+	postJSONRPC(t, httpsrv.URL, `[]`)
+
+	if err := tracer.ForceFlush(context.Background()); err != nil {
+		t.Fatalf("failed to flush: %v", err)
+	}
+	spans := exporter.GetSpans()
+
+	var batchSpan *tracetest.SpanStub
+	for i := range spans {
+		if spans[i].Name == "jsonrpc.batch" {
+			batchSpan = &spans[i]
+		}
+	}
+	if batchSpan == nil {
+		t.Fatal("jsonrpc.batch span not found for empty batch")
+	}
+	if batchSpan.Status.Code != codes.Error {
+		t.Errorf("empty batch: expected error status, got %v", batchSpan.Status.Code)
+	}
+	attrs := attributeMap(batchSpan.Attributes)
+	if got, want := attrs["rpc.batch.size"], "0"; got != want {
+		t.Errorf("empty batch rpc.batch.size: got %q, want %q", got, want)
+	}
+}
+
+// TestTracingBatchHTTPTooLarge verifies that a batch exceeding the server's
+// item limit emits a SERVER span with rpc.batch.size=N and error status.
+func TestTracingBatchHTTPTooLarge(t *testing.T) {
+	t.Parallel()
+	server, tracer, exporter := newTracingServer(t)
+	server.SetBatchLimits(2, 100000) // limit to 2 items
+	httpsrv := httptest.NewServer(server)
+	t.Cleanup(httpsrv.Close)
+
+	// 3 items > limit of 2.
+	body := `[
+		{"jsonrpc":"2.0","id":1,"method":"test_echo","params":["a",1,{"S":"x"}]},
+		{"jsonrpc":"2.0","id":2,"method":"test_echo","params":["b",2,{"S":"y"}]},
+		{"jsonrpc":"2.0","id":3,"method":"test_echo","params":["c",3,{"S":"z"}]}
+	]`
+	postJSONRPC(t, httpsrv.URL, body)
+
+	if err := tracer.ForceFlush(context.Background()); err != nil {
+		t.Fatalf("failed to flush: %v", err)
+	}
+	spans := exporter.GetSpans()
+
+	var batchSpan *tracetest.SpanStub
+	for i := range spans {
+		if spans[i].Name == "jsonrpc.batch" {
+			batchSpan = &spans[i]
+		}
+	}
+	if batchSpan == nil {
+		t.Fatal("jsonrpc.batch span not found for too-large batch")
+	}
+	if batchSpan.Status.Code != codes.Error {
+		t.Errorf("batch-too-large: expected error status, got %v", batchSpan.Status.Code)
+	}
+	attrs := attributeMap(batchSpan.Attributes)
+	if got, want := attrs["rpc.batch.size"], "3"; got != want {
+		t.Errorf("batch-too-large rpc.batch.size: got %q, want %q", got, want)
 	}
 }
