@@ -288,7 +288,11 @@ func (s *Server) newHTTPServerConn(r *http.Request, w http.ResponseWriter) Serve
 // For error responses, it sets Content-Length and flushes to ensure the response
 // is fully written before any HTTP server write timeout occurs.
 func httpWriteResult(w http.ResponseWriter, data []byte, isError bool) error {
+	w.Header().Set("content-length", strconv.Itoa(len(data)))
+
 	if !isError {
+		// Normal path, just send the response and let the HTTP server decide
+		// when to flush.
 		_, err := w.Write(data)
 		return err
 	}
@@ -296,18 +300,15 @@ func httpWriteResult(w http.ResponseWriter, data []byte, isError bool) error {
 	// It's an error response and requires special treatment.
 	//
 	// In case of a timeout error, the response must be written before the HTTP
-	// server's write timeout occurs. So we need to flush the response. The
-	// Content-Length header also needs to be set to ensure the client knows
-	// when it has the full response.
-	w.Header().Set("content-length", strconv.Itoa(len(data)))
-
+	// server's write timeout occurs. So we need to flush the response.
+	//
 	// If this request is wrapped in a handler that might remove Content-Length (such
 	// as the automatic gzip we do in package node), we need to ensure the HTTP server
 	// doesn't perform chunked encoding. In case WriteTimeout is reached, the chunked
 	// encoding might not be finished correctly, and some clients do not like it when
-	// the final chunk is missing.
+	// the final chunk is missing. To do this, we set TE = identity, which is a signal
+	// recognized by outer handlers to avoid compression.
 	w.Header().Set("transfer-encoding", "identity")
-
 	_, err := w.Write(data)
 	if f, ok := w.(http.Flusher); ok {
 		f.Flush()
