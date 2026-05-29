@@ -539,24 +539,23 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) (*jsonrpcMessage
 		return msg.errorResponse(&methodNotFoundError{method: msg.Method}), nil, nil
 	}
 
-	// Inside a batch, the top-level batch SERVER span is the parent. Per-call
-	// spans are INTERNAL children and self-managed. Outside a batch, this is
-	// the SERVER span and the caller defers spanEnd past the response write.
-	rpcInfo := telemetry.RPCInfo{
-		System:    "jsonrpc",
-		Service:   service,
-		Method:    method,
-		RequestID: string(msg.ID),
-	}
 	var (
 		serverCtx     context.Context
 		serverSpanEnd func(*error)
 	)
+	rpcInfo := telemetry.RPCInfo{System: "jsonrpc", Service: service, Method: method, RequestID: string(msg.ID)}
 	if cp.isBatch {
-		serverCtx, serverSpanEnd = telemetry.StartRPCCallSpan(cp.ctx, h.tracer(), rpcInfo)
-		defer serverSpanEnd(nil)
+		// Inside a batch, the top-level batch SERVER span is the parent. Per-call
+		// spans are INTERNAL children, and the call span lifetime does not extend
+		// beyond this function, i.e. serverSpanEnd is not returned.
+		var spanEnd func(*error)
+		serverCtx, spanEnd = telemetry.StartBatchCallSpan(cp.ctx, h.tracer(), rpcInfo)
+		defer spanEnd(nil)
 	} else {
-		serverCtx, serverSpanEnd = telemetry.StartServerSpan(cp.ctx, h.tracer(), rpcInfo)
+		// Outside a batch, this is the SERVER span and we have to return the spanEnd function
+		// so that the caller can end it later after writing the response.
+		// response write.
+		serverCtx, serverSpanEnd = telemetry.StartCallServerSpan(cp.ctx, h.tracer(), rpcInfo)
 	}
 
 	// Start tracing span before parsing arguments.
@@ -589,9 +588,6 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) (*jsonrpcMessage
 	}
 	rpcServingTimer.UpdateSince(start)
 	updateServeTimeHistogram(msg.Method, answer.Error == nil, time.Since(start))
-	if cp.isBatch {
-		return answer, nil, nil
-	}
 	return answer, serverCtx, serverSpanEnd
 }
 
