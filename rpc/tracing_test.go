@@ -115,7 +115,7 @@ func TestTracingHTTP(t *testing.T) {
 			rpcSpan = &spans[i]
 		case "rpc.writeJSON":
 			writeJSONSpan = &spans[i]
-		case "rpc.httpWriteResult":
+		case "rpc.httpWrite":
 			httpWriteSpan = &spans[i]
 		}
 	}
@@ -126,10 +126,10 @@ func TestTracingHTTP(t *testing.T) {
 		t.Fatalf("rpc.writeJSON span not found")
 	}
 	if httpWriteSpan == nil {
-		t.Fatalf("rpc.httpWriteResult span not found")
+		t.Fatalf("rpc.httpWrite span not found")
 	}
 	if got, want := httpWriteSpan.Parent.SpanID(), writeJSONSpan.SpanContext.SpanID(); got != want {
-		t.Errorf("rpc.httpWriteResult parent: got %s, want rpc.writeJSON (%s)", got, want)
+		t.Errorf("rpc.httpWrite parent: got %s, want rpc.writeJSON (%s)", got, want)
 	}
 
 	// Verify span attributes.
@@ -257,7 +257,7 @@ func TestTracingBatchHTTP(t *testing.T) {
 			callSpans = append(callSpans, &spans[i])
 		case "rpc.writeJSONBatch":
 			writeJSONBatchSpan = &spans[i]
-		case "rpc.httpWriteResult":
+		case "rpc.httpWrite":
 			httpWriteSpan = &spans[i]
 		}
 	}
@@ -271,7 +271,7 @@ func TestTracingBatchHTTP(t *testing.T) {
 		t.Fatal("rpc.writeJSONBatch span not found")
 	}
 	if httpWriteSpan == nil {
-		t.Fatal("rpc.httpWriteResult span not found")
+		t.Fatal("rpc.httpWrite span not found")
 	}
 
 	// Batch span: SERVER kind, rpc.batch.size=N.
