@@ -151,7 +151,10 @@ func (e *Era) GetTD(blockNum uint64) (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-	buf, _ := io.ReadAll(r)
+	buf, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
 	slices.Reverse(buf)
 	td := new(big.Int).SetBytes(buf)
 	return td, nil
