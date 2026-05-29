@@ -289,11 +289,11 @@ func (s *Server) newHTTPServerConn(r *http.Request, w http.ResponseWriter) Serve
 func httpWrite(ctx context.Context, w http.ResponseWriter, data []byte, isError bool) (err error) {
 	_, _, spanEnd := telemetry.StartSpanWithTracer(ctx, telemetry.TracerFromContext(ctx), "rpc.httpWrite")
 	defer spanEnd(&err)
-  
- 	w.Header().Set("content-length", strconv.Itoa(len(data)))
+
+	w.Header().Set("content-length", strconv.Itoa(len(data)))
 
 	if !isError {
- 		// Normal path, just send the response and let the HTTP server decide
+		// Normal path, just send the response and let the HTTP server decide
 		// when to flush.
 		_, err = w.Write(data)
 		return err
@@ -311,7 +311,7 @@ func httpWrite(ctx context.Context, w http.ResponseWriter, data []byte, isError 
 	// the final chunk is missing. To do this, we set TE = identity, which is a signal
 	// recognized by outer handlers to avoid compression.
 	w.Header().Set("transfer-encoding", "identity")
-	_, err := w.Write(data)
+	_, err = w.Write(data)
 	if f, ok := w.(http.Flusher); ok {
 		f.Flush()
 	}
