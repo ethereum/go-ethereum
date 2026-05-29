@@ -221,16 +221,6 @@ func (s *nodeStore) deserializeNodeWithHash(serialized []byte, depth int, hn com
 }
 
 // deserializeSubtree reconstructs an InternalNode subtree from grouped serialization.
-	if remainingDepth == 0 {
-		// Bottom layer: check bitmap and return HashedNode or Empty
-		if bitmap[position/8]>>(7-(position%8))&1 == 1 {
-			if len(hashData) < (*hashIdx+1)*HashSize {
-				return emptyRef, errInvalidSerializedLength
-			}
-			hash := common.BytesToHash(hashData[*hashIdx*HashSize : (*hashIdx+1)*HashSize])
-			*hashIdx++
-			return s.newHashedRef(hash), nil
-		}
 func (s *nodeStore) deserializeSubtree(hn common.Hash, groupDepth int, nodeDepth int, bitmap []byte, depths []byte, hashData []byte, mustRecompute bool, dirty bool) (nodeRef, error) {
 	k := len(depths)
 	if len(hashData) != k*HashSize {
@@ -240,19 +230,6 @@ func (s *nodeStore) deserializeSubtree(hn common.Hash, groupDepth int, nodeDepth
 		return emptyRef, nil
 	}
 
-	// Check if this entire subtree is empty by examining all relevant bitmap bits
-	leftPos := position * 2
-	rightPos := position*2 + 1
-
-	// note that the parent might not need root computations, but the children
-	// do, because their hash isn't saved. Hence `mustRecompute` is set to `true`.
-	left, err := s.deserializeSubtree(common.Hash{}, remainingDepth-1, leftPos, nodeDepth+1, bitmap, hashData, hashIdx, true, dirty)
-	if err != nil {
-		return emptyRef, err
-	}
-	right, err := s.deserializeSubtree(common.Hash{}, remainingDepth-1, rightPos, nodeDepth+1, bitmap, hashData, hashIdx, true, dirty)
-	if err != nil {
-		return emptyRef, err
 	rootRef := s.newInternalRef(nodeDepth)
 	rootNode := s.getInternal(rootRef.Index())
 	rootNode.mustRecompute = mustRecompute
