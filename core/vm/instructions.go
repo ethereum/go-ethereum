@@ -675,9 +675,13 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	}
 	scope.Stack.push(&stackvalue)
 
+	// Refund the leftover gas back to current frame
 	scope.Contract.refundGas(result, forward, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+
+	// If the creation frame reverts or halts exceptionally, the charged state-gas
+	// is refilled back to the state reservoir in Amsterdam.
 	if evm.chainRules.IsAmsterdam && suberr != nil {
-		scope.Contract.Gas.RefundState(params.AccountCreationSize * evm.Context.CostPerStateByte)
+		scope.Contract.refundState(params.AccountCreationSize*evm.Context.CostPerStateByte, evm.Config.Tracer, tracing.GasChangeStateGasRefund)
 	}
 	if suberr == ErrExecutionReverted {
 		evm.returnData = res // set REVERT data to return data buffer
@@ -710,6 +714,8 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		stackvalue.SetBytes(addr.Bytes())
 	}
 	scope.Stack.push(&stackvalue)
+
+	// Refund the leftover gas back to current frame
 	scope.Contract.refundGas(result, forward, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	// If the creation frame reverts or halts exceptionally, the charged state-gas
@@ -764,17 +770,9 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 	// If the call frame reverts or halts exceptionally, the charged state-gas
 	// is refilled back to the state reservoir in Amsterdam.
-	//
-	// The state-gas should only be refunded if the state creation doesn't
-	// happens, such as ErrDepth, ErrInsufficientBalance.
-	//
-	// TODO(rjl) it's so ugly, please rework it.
-	if evm.chainRules.IsAmsterdam && err != nil {
-		if (err == ErrDepth || err == ErrInsufficientBalance) && !value.IsZero() && evm.StateDB.Empty(toAddr) {
-			scope.Contract.refundState(params.AccountCreationSize*evm.Context.CostPerStateByte, evm.Config.Tracer, tracing.GasChangeStateGasRefund)
-		}
+	if evm.chainRules.IsAmsterdam && err != nil && !value.IsZero() && evm.StateDB.Empty(toAddr) {
+		scope.Contract.refundState(params.AccountCreationSize*evm.Context.CostPerStateByte, evm.Config.Tracer, tracing.GasChangeStateGasRefund)
 	}
-
 	evm.returnData = ret
 	return ret, nil
 }

@@ -92,7 +92,8 @@ func (gp *GasPool) ChargeGasAmsterdam(txRegular, txState, receiptGasUsed uint64)
 		return fmt.Errorf("%w: block gas overflow: initial %d, used %d (regular: %d, state: %d)",
 			ErrGasLimitReached, gp.initial, blockUsed, gp.cumulativeRegular, gp.cumulativeState)
 	}
-	// For tx inclusion, we only check if the regular dimension fits.
+	// TODO(rjl, marius), the semantics of this counter is slightly different
+	// in the context of Amsterdam, the API Gas() should be reworked.
 	gp.remaining = gp.initial - gp.cumulativeRegular
 	return nil
 }

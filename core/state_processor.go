@@ -280,15 +280,26 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM, blockAccessList
 			defer tracer.OnSystemCallEnd()
 		}
 	}
-	// SYSTEM_MAX_SSTORES_PER_CALL = 16 is the upper bound on the number of
-	// new storage slots a single system call is expected to write.
-	//
-	// This value matches MAX_WITHDRAWAL_REQUESTS_PER_BLOCK (EIP-7002), the
-	// largest per-block bound across the existing system contracts.
-	stateBudget := params.SystemMaxSStoresPerCall * evm.Context.CostPerStateByte * params.StorageCreationSize
+	var (
+		gasLimit  uint64
+		gasBudget vm.GasBudget
+	)
+	if !evm.GetRules().IsAmsterdam {
+		gasLimit = 30_000_000
+		gasBudget = vm.NewGasBudget(gasLimit, 0)
+	} else {
+		// SYSTEM_MAX_SSTORES_PER_CALL = 16 is the upper bound on the number of
+		// new storage slots a single system call is expected to write.
+		//
+		// This value matches MAX_WITHDRAWAL_REQUESTS_PER_BLOCK (EIP-7002), the
+		// largest per-block bound across the existing system contracts.
+		stateBudget := params.SystemMaxSStoresPerCall * evm.Context.CostPerStateByte * params.StorageCreationSize
+		gasLimit = 30_000_000 + stateBudget
+		gasBudget = vm.NewGasBudget(gasLimit, stateBudget)
+	}
 	msg := &Message{
 		From:      params.SystemAddress,
-		GasLimit:  30_000_000 + stateBudget,
+		GasLimit:  gasLimit,
 		GasPrice:  uint256.NewInt(0),
 		GasFeeCap: uint256.NewInt(0),
 		GasTipCap: uint256.NewInt(0),
@@ -299,7 +310,7 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM, blockAccessList
 	evm.StateDB.Prepare(evm.GetRules(), common.Address{}, common.Address{}, nil, nil, nil)
 	evm.StateDB.SetTxContext(common.Hash{}, 0, 0)
 	evm.StateDB.AddAddressToAccessList(params.BeaconRootsAddress)
-	_, _, _ = evm.Call(msg.From, *msg.To, msg.Data, vm.NewGasBudget(30_000_000, stateBudget), common.U2560)
+	_, _, _ = evm.Call(msg.From, *msg.To, msg.Data, gasBudget, common.U2560)
 	if evm.StateDB.AccessEvents() != nil {
 		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
 	}
@@ -315,15 +326,26 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM, blockAccessList *
 			defer tracer.OnSystemCallEnd()
 		}
 	}
-	// SYSTEM_MAX_SSTORES_PER_CALL = 16 is the upper bound on the number of
-	// new storage slots a single system call is expected to write.
-	//
-	// This value matches MAX_WITHDRAWAL_REQUESTS_PER_BLOCK (EIP-7002), the
-	// largest per-block bound across the existing system contracts.
-	stateBudget := params.SystemMaxSStoresPerCall * evm.Context.CostPerStateByte * params.StorageCreationSize
+	var (
+		gasLimit  uint64
+		gasBudget vm.GasBudget
+	)
+	if !evm.GetRules().IsAmsterdam {
+		gasLimit = 30_000_000
+		gasBudget = vm.NewGasBudget(gasLimit, 0)
+	} else {
+		// SYSTEM_MAX_SSTORES_PER_CALL = 16 is the upper bound on the number of
+		// new storage slots a single system call is expected to write.
+		//
+		// This value matches MAX_WITHDRAWAL_REQUESTS_PER_BLOCK (EIP-7002), the
+		// largest per-block bound across the existing system contracts.
+		stateBudget := params.SystemMaxSStoresPerCall * evm.Context.CostPerStateByte * params.StorageCreationSize
+		gasLimit = 30_000_000 + stateBudget
+		gasBudget = vm.NewGasBudget(gasLimit, stateBudget)
+	}
 	msg := &Message{
 		From:      params.SystemAddress,
-		GasLimit:  30_000_000 + stateBudget,
+		GasLimit:  gasLimit,
 		GasPrice:  uint256.NewInt(0),
 		GasFeeCap: uint256.NewInt(0),
 		GasTipCap: uint256.NewInt(0),
@@ -334,7 +356,7 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM, blockAccessList *
 	evm.StateDB.Prepare(evm.GetRules(), common.Address{}, common.Address{}, nil, nil, nil)
 	evm.StateDB.SetTxContext(common.Hash{}, 0, 0)
 	evm.StateDB.AddAddressToAccessList(params.HistoryStorageAddress)
-	_, _, err := evm.Call(msg.From, *msg.To, msg.Data, vm.NewGasBudget(30_000_000, stateBudget), common.U2560)
+	_, _, err := evm.Call(msg.From, *msg.To, msg.Data, gasBudget, common.U2560)
 	if err != nil {
 		panic(err)
 	}
@@ -363,15 +385,26 @@ func processRequestsSystemCall(requests *[][]byte, rules params.Rules, evm *vm.E
 			defer tracer.OnSystemCallEnd()
 		}
 	}
-	// SYSTEM_MAX_SSTORES_PER_CALL = 16 is the upper bound on the number of
-	// new storage slots a single system call is expected to write.
-	//
-	// This value matches MAX_WITHDRAWAL_REQUESTS_PER_BLOCK (EIP-7002), the
-	// largest per-block bound across the existing system contracts.
-	stateBudget := params.SystemMaxSStoresPerCall * evm.Context.CostPerStateByte * params.StorageCreationSize
+	var (
+		gasLimit  uint64
+		gasBudget vm.GasBudget
+	)
+	if !rules.IsAmsterdam {
+		gasLimit = 30_000_000
+		gasBudget = vm.NewGasBudget(gasLimit, 0)
+	} else {
+		// SYSTEM_MAX_SSTORES_PER_CALL = 16 is the upper bound on the number of
+		// new storage slots a single system call is expected to write.
+		//
+		// This value matches MAX_WITHDRAWAL_REQUESTS_PER_BLOCK (EIP-7002), the
+		// largest per-block bound across the existing system contracts.
+		stateBudget := params.SystemMaxSStoresPerCall * evm.Context.CostPerStateByte * params.StorageCreationSize
+		gasLimit = 30_000_000 + stateBudget
+		gasBudget = vm.NewGasBudget(gasLimit, stateBudget)
+	}
 	msg := &Message{
 		From:      params.SystemAddress,
-		GasLimit:  30_000_000 + stateBudget,
+		GasLimit:  gasLimit,
 		GasPrice:  uint256.NewInt(0),
 		GasFeeCap: uint256.NewInt(0),
 		GasTipCap: uint256.NewInt(0),
@@ -381,7 +414,7 @@ func processRequestsSystemCall(requests *[][]byte, rules params.Rules, evm *vm.E
 	evm.StateDB.Prepare(rules, common.Address{}, common.Address{}, nil, nil, nil)
 	evm.StateDB.SetTxContext(common.Hash{}, 0, blockAccessIndex)
 	evm.StateDB.AddAddressToAccessList(addr)
-	ret, _, err := evm.Call(msg.From, *msg.To, msg.Data, vm.NewGasBudget(30_000_000, stateBudget), common.U2560)
+	ret, _, err := evm.Call(msg.From, *msg.To, msg.Data, gasBudget, common.U2560)
 	if evm.StateDB.AccessEvents() != nil {
 		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
 	}

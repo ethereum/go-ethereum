@@ -460,32 +460,6 @@ func gasCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	return gas, nil
 }
 
-// regularGasCall8037 is the intrinsic gas calculator for CALL in Amsterdam.
-// It computes memory expansion + value transfer gas but excludes new account
-// creation, which is handled as state gas by the wrapper.
-func regularGasCall8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	var (
-		gas            uint64
-		transfersValue = !stack.back(2).IsZero()
-	)
-	if evm.readOnly && transfersValue {
-		return 0, ErrWriteProtection
-	}
-	memoryGas, err := memoryGasCost(mem, memorySize)
-	if err != nil {
-		return 0, err
-	}
-	var transferGas uint64
-	if transfersValue && !evm.chainRules.IsEIP4762 {
-		transferGas = params.CallValueTransferGas
-	}
-	var overflow bool
-	if gas, overflow = math.SafeAdd(memoryGas, transferGas); overflow {
-		return 0, ErrGasUintOverflow
-	}
-	return gas, nil
-}
-
 func gasCallCodeIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	memoryGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
@@ -531,10 +505,6 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	// EIP150 homestead gas reprice fork:
 	if evm.chainRules.IsEIP150 {
 		gas = params.SelfdestructGasEIP150
-		if gas > contract.Gas.RegularGas {
-			return GasCosts{RegularGas: gas}, nil
-		}
-
 		var address = common.Address(stack.back(0).Bytes20())
 		if evm.chainRules.IsEIP158 {
 			// if empty and transfers value
@@ -605,6 +575,32 @@ func gasCreate2Eip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	}, nil
 }
 
+// regularGasCall8037 is the intrinsic gas calculator for CALL in Amsterdam.
+// It computes memory expansion + value transfer gas but excludes new account
+// creation, which is handled as state gas by the wrapper.
+func regularGasCall8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	var (
+		gas            uint64
+		transfersValue = !stack.back(2).IsZero()
+	)
+	if evm.readOnly && transfersValue {
+		return 0, ErrWriteProtection
+	}
+	memoryGas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	var transferGas uint64
+	if transfersValue && !evm.chainRules.IsEIP4762 {
+		transferGas = params.CallValueTransferGas
+	}
+	var overflow bool
+	if gas, overflow = math.SafeAdd(memoryGas, transferGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	return gas, nil
+}
+
 // stateGasCall8037 is the stateful gas calculator for CALL in Amsterdam (EIP-8037).
 // It only returns the state-dependent gas (account creation as state gas).
 // Memory gas, transfer gas, and callGas are handled by gasCallStateless and
@@ -642,9 +638,9 @@ func gasSelfdestruct8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory
 	}
 	// Check we have enough regular gas before we add the address to the BAL
 	if contract.Gas.RegularGas < gas.RegularGas {
-		return gas, nil
+		return gas, ErrOutOfGas
 	}
-	// if empty and transfers value
+	// If empty and transfers value
 	if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
 		gas.StateGas += params.AccountCreationSize * evm.Context.CostPerStateByte
 	}

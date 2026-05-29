@@ -572,30 +572,6 @@ func (s *stateObject) Code() []byte {
 	return code
 }
 
-// GetCommittedCode returns the contract code committed at the start of the
-// current execution, ignoring any intra-execution SetCode modifications.
-// Used by EIP-7702 authorization application to make refund decisions
-// relative to the originally-committed delegation, matching the spirit of
-// GetCommittedState for storage slots.
-func (s *stateObject) GetCommittedCode() []byte {
-	// The account did not exist at the start of the current execution.
-	if s.origin == nil {
-		return nil
-	}
-	hash := common.BytesToHash(s.origin.CodeHash)
-	if hash == types.EmptyCodeHash {
-		return nil
-	}
-	// If the code has not been touched in this execution, the live cache
-	// already holds the committed code.
-	if !s.dirtyCode {
-		return s.Code()
-	}
-	// Code was modified within the current execution. Reach for the on-disk
-	// blob keyed by the origin hash.
-	return s.db.reader.Code(s.address, hash)
-}
-
 // CodeSize returns the size of the contract code associated with this object,
 // or zero if none. This method is an almost mirror of Code, but uses a cache
 // inside the database to avoid loading codes seen recently.

@@ -790,6 +790,10 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 	}
 	txStateGas := uint64(st.gasRemaining.UsedStateGas)
 
+	// EIP-8037:
+	// tx_gas_used_before_refund = tx.gas - tx_output.gas_left - tx_output.state_gas_reservoir
+	// tx_state_gas = intrinsic_state_gas + tx_output.execution_state_gas_used
+	// tx_regular_gas = tx_gas_used_before_refund - tx_state_gas
 	gasLeft := st.gasRemaining.RegularGas + st.gasRemaining.StateGas
 	gasUsedBeforeRefund := st.msg.GasLimit - gasLeft
 
@@ -804,15 +808,16 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 		st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Regular: gasLeft}, tracing.Gas{Regular: gasLeft + refund}, tracing.GasChangeTxRefunds)
 	}
 	gasLeft += refund
-	gasUsed = st.msg.GasLimit - gasLeft
+	gasUsed = gasUsedBeforeRefund - refund
 
 	// EIP-7623: tx_gas_used = max(tx_gas_used_after_refund, calldata_floor).
 	peakUsed = gasUsedBeforeRefund
 	if rules.IsPrague && gasUsed < floorDataGas {
+		diff := floorDataGas - gasUsed
 		if st.evm.Config.Tracer.HasGasHook() {
-			st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Regular: gasLeft}, tracing.Gas{Regular: gasLeft - (floorDataGas - gasUsed)}, tracing.GasChangeTxDataFloor)
+			st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Regular: gasLeft}, tracing.Gas{Regular: gasLeft - diff}, tracing.GasChangeTxDataFloor)
 		}
-		gasLeft -= floorDataGas - gasUsed
+		gasLeft -= diff
 		gasUsed = floorDataGas
 		peakUsed = max(peakUsed, floorDataGas)
 	}
@@ -831,6 +836,10 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 	if gasLeft > 0 {
 		refund := new(uint256.Int).Mul(uint256.NewInt(gasLeft), st.msg.GasPrice)
 		st.state.AddBalance(st.msg.From, refund, tracing.BalanceIncreaseGasReturn)
+
+		if st.evm.Config.Tracer.HasGasHook() {
+			st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Regular: gasLeft}, tracing.Gas{}, tracing.GasChangeTxLeftOverReturned)
+		}
 	}
 	return gasUsed, peakUsed, nil
 }

@@ -54,9 +54,8 @@ func (g GasCosts) String() string {
 //     and RefundRegular mutate the running balance and the usage accumulators
 //     in lockstep.
 //
-//   - At frame exit: Preserved / ExitSuccess / ExitRevert / ExitHalt /
-//     Exit produce a new GasBudget in "leftover" form that packages
-//     the result for the caller.
+//   - At frame exit: ExitSuccess / ExitRevert / ExitHalt produce a new
+//     GasBudget in "leftover" form that packages the result for the caller.
 //
 //   - At absorption: the caller's Absorb method merges the child's leftover
 //     budget into its own running budget.
@@ -190,21 +189,9 @@ func (g *GasBudget) ForwardAll() GasBudget {
 
 // ============================================================================
 // Exit-form constructors. These take a post-execution running budget and
-// produce a new GasBudget in "leftover form" — the value the caller should
+// produce a new GasBudget in "leftover form", the value the caller should
 // absorb to update its own state.
 // ============================================================================
-
-// Preserved produces a leftover form with the running balance preserved and
-// usage zeroed. Use this for pre-execution validation failures (depth,
-// balance, EIP-158 zero-value-to-nonexistent) where no execution actually
-// occurred.
-func (g GasBudget) Preserved() GasBudget {
-	return GasBudget{
-		RegularGas: g.RegularGas,
-		StateGas:   g.StateGas,
-		// UsedRegularGas / UsedStateGas stay at zero.
-	}
-}
 
 // ExitSuccess produces the leftover form for a successful frame. Inline
 // state-gas refunds have already been folded into StateGas / UsedStateGas

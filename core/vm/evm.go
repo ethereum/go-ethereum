@@ -257,13 +257,13 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, gas.Preserved(), ErrDepth
+		return nil, gas, ErrDepth
 	}
 	syscall := isSystemCall(caller)
 
 	// Fail if we're trying to transfer more than the available balance.
 	if !syscall && !value.IsZero() && !evm.Context.CanTransfer(evm.StateDB, caller, value) {
-		return nil, gas.Preserved(), ErrInsufficientBalance
+		return nil, gas, ErrInsufficientBalance
 	}
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
@@ -285,7 +285,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.IsZero() {
 			// Calling a non-existing account, don't do anything.
-			return nil, gas.Preserved(), nil
+			return nil, gas, nil
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
@@ -345,11 +345,11 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, gas.Preserved(), ErrDepth
+		return nil, gas, ErrDepth
 	}
 	// Fail if we're trying to transfer more than the available balance
 	if !evm.Context.CanTransfer(evm.StateDB, caller, value) {
-		return nil, gas.Preserved(), ErrInsufficientBalance
+		return nil, gas, ErrInsufficientBalance
 	}
 	var snapshot = evm.StateDB.Snapshot()
 
@@ -396,7 +396,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, gas.Preserved(), ErrDepth
+		return nil, gas, ErrDepth
 	}
 	var snapshot = evm.StateDB.Snapshot()
 
@@ -439,7 +439,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, gas.Preserved(), ErrDepth
+		return nil, gas, ErrDepth
 	}
 	// We take a snapshot here. This is a bit counter-intuitive, and could probably be skipped.
 	// However, even a staticcall is considered a 'touch'. On mainnet, static calls were introduced
@@ -491,9 +491,6 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 			err = ErrNonceUintOverflow
 		}
 	}
-	if err == nil {
-		evm.StateDB.SetNonce(caller, nonce+1, tracing.NonceChangeContractCreator)
-	}
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, typ, caller, address, code, gas, value.ToBig())
 		defer func(startGas GasBudget) {
@@ -501,8 +498,10 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		}(gas)
 	}
 	if err != nil {
-		return nil, common.Address{}, gas.Preserved(), err
+		return nil, common.Address{}, gas, err
 	}
+	// Increment the caller's nonce after passing all validations
+	evm.StateDB.SetNonce(caller, nonce+1, tracing.NonceChangeContractCreator)
 
 	// Charge the contract creation init gas in verkle mode
 	if evm.chainRules.IsEIP4762 {
@@ -642,7 +641,6 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 			return ret, err
 		}
 	}
-
 	if len(ret) > 0 {
 		evm.StateDB.SetCode(address, ret, tracing.CodeChangeContractCreation)
 	}

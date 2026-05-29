@@ -145,10 +145,8 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		}
 		// In Amsterdam, the transaction gas limit is allowed to exceed
 		// params.MaxTxGas, but the calldata floor cost is capped by it.
-		if rules.IsAmsterdam {
-			if max(intrGas.RegularGas, floorDataGas) > params.MaxTxGas {
-				return fmt.Errorf("%w: regular intrisic cost %v, floor: %v", core.ErrFloorDataGas, intrGas.RegularGas, floorDataGas)
-			}
+		if rules.IsAmsterdam && max(intrGas.RegularGas, floorDataGas) > params.MaxTxGas {
+			return fmt.Errorf("%w: regular intrisic cost %v, floor: %v", core.ErrFloorDataGas, intrGas.RegularGas, floorDataGas)
 		}
 	}
 	// Ensure the gasprice is high enough to cover the requirement of the calling pool

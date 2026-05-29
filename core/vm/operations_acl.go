@@ -245,10 +245,6 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 				return GasCosts{}, ErrOutOfGas
 			}
 		}
-		if gas > contract.Gas.RegularGas {
-			return GasCosts{RegularGas: gas}, nil
-		}
-
 		// if empty and transfers value
 		if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
 			gas += params.CreateBySelfdestructGas
@@ -266,8 +262,7 @@ var (
 	gasDelegateCallEIP7702 = makeCallVariantGasCallEIP7702(gasDelegateCallIntrinsic)
 	gasStaticCallEIP7702   = makeCallVariantGasCallEIP7702(gasStaticCallIntrinsic)
 	gasCallCodeEIP7702     = makeCallVariantGasCallEIP7702(gasCallCodeIntrinsic)
-
-	innerGasCallEIP8037 = makeCallVariantGasCallEIP8037(regularGasCall8037, stateGasCall8037)
+	innerGasCallEIP8037    = makeCallVariantGasCallEIP8037(regularGasCall8037, stateGasCall8037)
 )
 
 func gasCallEIP7702(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
