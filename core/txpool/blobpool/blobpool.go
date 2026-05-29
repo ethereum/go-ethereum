@@ -2268,7 +2268,11 @@ func (p *BlobPool) Stats() (int, int) {
 	for _, txs := range p.index {
 		pending += len(txs)
 	}
-	return pending, 0 // No non-executable txs in the blob pool
+	var queue int
+	for _, txs := range p.gapped {
+		queue += len(txs)
+	}
+	return pending, queue
 }
 
 // Content retrieves the data content of the transaction pool, returning all the
