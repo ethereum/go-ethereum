@@ -110,6 +110,16 @@ func (w *ledgerDriver) offline() bool {
 	return w.version == [3]byte{0, 0, 0}
 }
 
+func ledgerVersionLessThan(version [3]byte, major, minor, patch byte) bool {
+	if version[0] != major {
+		return version[0] < major
+	}
+	if version[1] != minor {
+		return version[1] < minor
+	}
+	return version[2] < patch
+}
+
 // Open implements usbwallet.driver, attempting to initialize the connection to the
 // Ledger hardware wallet. The Ledger does not require a user passphrase, so that
 // parameter is silently discarded.
@@ -166,7 +176,19 @@ func (w *ledgerDriver) SignTx(path accounts.DerivationPath, tx *types.Transactio
 		return common.Address{}, nil, accounts.ErrWalletClosed
 	}
 	// Ensure the wallet is capable of signing the given transaction
-	if chainID != nil && (w.version[0] < 1 || (w.version[0] == 1 && w.version[1] == 0 && w.version[2] < 3)) {
+	switch tx.Type() {
+	case types.AccessListTxType, types.DynamicFeeTxType:
+		if ledgerVersionLessThan(w.version, 1, 9, 0) {
+			//lint:ignore ST1005 brand name displayed on the console
+			return common.Address{}, nil, fmt.Errorf("Ledger version >= 1.9.0 required for EIP-2930/EIP-1559 signing (found version v%d.%d.%d)", w.version[0], w.version[1], w.version[2])
+		}
+	case types.SetCodeTxType:
+		if ledgerVersionLessThan(w.version, 1, 17, 0) {
+			//lint:ignore ST1005 brand name displayed on the console
+			return common.Address{}, nil, fmt.Errorf("Ledger version >= 1.17.0 required for EIP-7702 signing (found version v%d.%d.%d)", w.version[0], w.version[1], w.version[2])
+		}
+	}
+	if chainID != nil && ledgerVersionLessThan(w.version, 1, 0, 3) {
 		//lint:ignore ST1005 brand name displayed on the console
 		return common.Address{}, nil, fmt.Errorf("Ledger v%d.%d.%d doesn't support signing this transaction, please update to v1.0.3 at least", w.version[0], w.version[1], w.version[2])
 	}
@@ -184,7 +206,7 @@ func (w *ledgerDriver) SignTypedMessage(path accounts.DerivationPath, domainHash
 		return nil, accounts.ErrWalletClosed
 	}
 	// Ensure the wallet is capable of signing the given transaction
-	if w.version[0] < 1 || (w.version[0] == 1 && w.version[1] < 5) {
+	if ledgerVersionLessThan(w.version, 1, 5, 0) {
 		//lint:ignore ST1005 brand name displayed on the console
 		return nil, fmt.Errorf("Ledger version >= 1.5.0 required for EIP-712 signing (found version v%d.%d.%d)", w.version[0], w.version[1], w.version[2])
 	}
