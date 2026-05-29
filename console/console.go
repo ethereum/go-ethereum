@@ -279,7 +279,7 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 	// Chunk data to relevant part for autocompletion
 	// E.g. in case of nested lines eth.getBalance(eth.coinb<tab><tab>
 	start := pos - 1
-	for ; start > 0; start-- {
+	for ; start >= 0; start-- {
 		// Skip all methods and namespaces (i.e. including the dot)
 		c := line[start]
 		if c == '.' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
