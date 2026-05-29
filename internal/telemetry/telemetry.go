@@ -80,7 +80,7 @@ type RPCInfo struct {
 	RequestID string
 }
 
-// StartCallServerSpan creates a SpanKind=SERVER span at the JSON-RPC boundary.
+// StartCallServerSpan creates a SpanKind=SERVER span for a JSON-RPC call.
 // The span name is formatted as $rpcSystem.$rpcService/$rpcMethod
 // (e.g. "jsonrpc.engine/newPayloadV4") which follows the Open Telemetry
 // semantic convensions: https://opentelemetry.io/docs/specs/semconv/rpc/rpc-spans/#span-name.
@@ -100,9 +100,9 @@ func StartCallServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, 
 	return ctx, end
 }
 
-// StartBatchServerSpan creates a SpanKind=SERVER span representing a batched
-// RPC request. The span name is "$system.batch" (e.g. "jsonrpc.batch") and
-// per-call spans are nested under it. batchSize is exposed as rpc.batch.size.
+// StartBatchServerSpan creates a SpanKind=SERVER span representing a batched request.
+// The span name is "$system.batch" (e.g. "jsonrpc.batch") and per-call spans are nested under it.
+// batchSize is exposed as rpc.batch.size.
 func StartBatchServerSpan(ctx context.Context, tracer trace.Tracer, system string, batchSize int, others ...Attribute) (context.Context, func(*error)) {
 	attributes := append([]Attribute{
 		semconv.RPCSystemKey.String(system),
@@ -112,9 +112,8 @@ func StartBatchServerSpan(ctx context.Context, tracer trace.Tracer, system strin
 	return ctx, end
 }
 
-// StartBatchCallSpan creates a SpanKind=INTERNAL span for an individual RPC call,
-// carrying the same name and attributes as StartServerSpan. Used for per-call
-// spans inside a batch (which nest under the batch's SERVER span).
+// StartBatchCallSpan creates a SpanKind=INTERNAL span for an individual RPC call as part of a batch.
+// This carries the same name and attributes as StartCallServerSpan.
 func StartBatchCallSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, others ...Attribute) (context.Context, func(*error)) {
 	var (
 		name       = fmt.Sprintf("%s.%s/%s", rpc.System, rpc.Service, rpc.Method)
