@@ -110,20 +110,29 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 			// even if the chain is updated during search.
 			return math.MaxUint64, nil
 		case rpc.FinalizedBlockNumber.Int64():
-			hdr, _ := f.sys.backend.HeaderByNumber(ctx, rpc.FinalizedBlockNumber)
+			hdr, err := f.sys.backend.HeaderByNumber(ctx, rpc.FinalizedBlockNumber)
+			if err != nil {
+				return 0, err
+			}
 			if hdr == nil {
 				return 0, errors.New("finalized header not found")
 			}
 			return hdr.Number.Uint64(), nil
 		case rpc.SafeBlockNumber.Int64():
-			hdr, _ := f.sys.backend.HeaderByNumber(ctx, rpc.SafeBlockNumber)
+			hdr, err := f.sys.backend.HeaderByNumber(ctx, rpc.SafeBlockNumber)
+			if err != nil {
+				return 0, err
+			}
 			if hdr == nil {
 				return 0, errors.New("safe header not found")
 			}
 			return hdr.Number.Uint64(), nil
 		case rpc.EarliestBlockNumber.Int64():
 			earliest := f.sys.backend.HistoryPruningCutoff()
-			hdr, _ := f.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(earliest))
+			hdr, err := f.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(earliest))
+			if err != nil {
+				return 0, err
+			}
 			if hdr == nil {
 				return 0, errors.New("earliest header not found")
 			}
