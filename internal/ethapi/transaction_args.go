@@ -526,7 +526,7 @@ func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 		if args.AccessList != nil {
 			al = *args.AccessList
 		}
-		authList := []types.SetCodeAuthorization{}
+		var authList []types.SetCodeAuthorization
 		if args.AuthorizationList != nil {
 			authList = args.AuthorizationList
 		}
