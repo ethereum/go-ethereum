@@ -142,10 +142,7 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent common.Ha
 	_, _, spanEnd := telemetry.StartSpan(ctx, "core.preExecution")
 	defer spanEnd(nil)
 
-	var blockAccessList *bal.ConstructionBlockAccessList
-	if config.IsAmsterdam(number, time) {
-		blockAccessList = bal.NewConstructionBlockAccessList()
-	}
+	blockAccessList := bal.NewConstructionBlockAccessList()
 	// EIP-4788
 	if beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, evm, blockAccessList)
