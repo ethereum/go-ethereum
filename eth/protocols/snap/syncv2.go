@@ -67,8 +67,7 @@ type accountRequestV2 struct {
 }
 
 // accountResponseV2 is an already Merkle-verified remote response to an account
-// range request. It contains the subtrie for the requested account range and
-// the database that's going to be filled with the internal nodes on commit.
+// range request.
 type accountResponseV2 struct {
 	task *accountTaskV2 // Task which this request is filling
 
@@ -141,8 +140,7 @@ type storageRequestV2 struct {
 }
 
 // storageResponseV2 is an already Merkle-verified remote response to a storage
-// range request. It contains the subtries for the requested storage ranges and
-// the databases that's going to be filled with the internal nodes on commit.
+// range request.
 type storageResponseV2 struct {
 	mainTask *accountTaskV2 // Task which this response belongs to
 	subTask  *storageTaskV2 // Task which this response is filling
@@ -159,10 +157,15 @@ type storageResponseV2 struct {
 // accountTaskV2 represents the sync task for a chunk of the account snapshot.
 type accountTaskV2 struct {
 	// These fields get serialized to key-value store on shutdown
-	Next             common.Hash                      // Next account to sync in this interval
-	Last             common.Hash                      // Last account to sync in this interval
-	SubTasks         map[common.Hash][]*storageTaskV2 // Storage intervals needing fetching for large contracts
-	StorageCompleted []common.Hash                    // Accounts with completed storage in this cycle
+	Next     common.Hash                      // Next account to sync in this interval
+	Last     common.Hash                      // Last account to sync in this interval
+	SubTasks map[common.Hash][]*storageTaskV2 // Storage intervals needing fetching for large contracts
+
+	// Pending accounts whose storage has already been fully committed in
+	// this cycle, but which cannot advance Next yet because account commits
+	// must be sequential. Persisting them across cycle switches avoids
+	// refetching their storage.
+	StorageCompleted []common.Hash
 
 	// These fields are internals used during runtime
 	req  *accountRequestV2  // Pending request to fill this task
@@ -251,10 +254,11 @@ type SyncPeerV2 interface {
 	Log() log.Logger
 }
 
-// SyncerV2 is an Ethereum account and storage trie syncer based on snapshots and
-// the  snap protocol. It's purpose is to download all the accounts and storage
-// slots from remote peers and reassemble chunks of the state trie, on top of
-// which a state sync can be run to fix any gaps / overlaps.
+// SyncerV2 is an Ethereum account and storage state syncer based on the snap
+// protocol. It's purpose is to download all the accounts and storage slots
+// from remote peers, fixing the state inconsistencies between multiple sync
+// targets with BALs(block level accessList) and ultimately reassemble the state
+// trie (both account trie and storage tries) locally.
 //
 // Every network request has a variety of failure events:
 //   - The peer disconnects after task assignment, failing to send the request
@@ -266,10 +270,9 @@ type SyncerV2 struct {
 	db     ethdb.KeyValueStore // Database to store the trie nodes into (and dedup)
 	scheme string              // Node scheme used in node database
 
-	root    common.Hash      // Current state trie root being synced
-	tasks   []*accountTaskV2 // Current account task set being synced
-	snapped bool             // Flag to signal that snap phase is done
-	update  chan struct{}    // Notification channel for possible sync progression
+	root   common.Hash      // Current state trie root being synced
+	tasks  []*accountTaskV2 // Current account task set being synced
+	update chan struct{}    // Notification channel for possible sync progression
 
 	peers    map[string]SyncPeerV2 // Currently active peers to download from
 	peerJoin *event.Feed           // Event feed to react to peers joining
@@ -518,8 +521,6 @@ func (s *SyncerV2) loadSyncStatus() {
 			s.lock.Lock()
 			defer s.lock.Unlock()
 
-			s.snapped = len(s.tasks) == 0
-
 			s.accountSynced = progress.AccountSynced
 			s.accountBytes = progress.AccountBytes
 			s.bytecodeSynced = progress.BytecodeSynced
@@ -615,10 +616,6 @@ func (s *SyncerV2) cleanAccountTasks() {
 	}
 	// If everything was just finalized just, generate the account trie and start heal
 	if len(s.tasks) == 0 {
-		s.lock.Lock()
-		s.snapped = true
-		s.lock.Unlock()
-
 		// Push the final sync report
 		s.reportSyncProgressV2(true)
 	}
@@ -1283,15 +1280,12 @@ func (s *SyncerV2) processAccountResponse(res *accountResponseV2) {
 		// The hash of last delivered account in the response
 		last := res.hashes[len(res.hashes)-1]
 		for hash := range res.task.SubTasks {
-			// TODO(rjl493456442) degrade the log level before merging.
 			if hash.Cmp(last) > 0 {
-				log.Info("Keeping suspended storage retrieval", "account", hash)
+				log.Debug("Keeping suspended storage retrieval", "account", hash)
 				continue
 			}
-			// TODO(rjl493456442) degrade the log level before merging.
-			// It should never happen in ethereum.
 			if _, ok := resumed[hash]; !ok {
-				log.Error("Aborting suspended storage retrieval", "account", hash)
+				log.Warn("Aborting suspended storage retrieval", "account", hash)
 				delete(res.task.SubTasks, hash)
 				largeStorageDiscardGauge.Inc(1)
 			}
@@ -1480,8 +1474,8 @@ func (s *SyncerV2) processStorageResponse(res *storageResponseV2) {
 		// reconstructed later.
 		slots += len(res.hashes[i])
 
-		// Persist the received storage segments. These flat state maybe
-		// outdated during the sync, but it will be fixed by the BAL-healing.
+		// Persist the received storage segments. These flat state may be outdated
+		// during the sync, but it will be fixed by the BAL-healing.
 		for j := 0; j < len(res.hashes[i]); j++ {
 			rawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j])
 		}
@@ -1663,21 +1657,8 @@ func (s *SyncerV2) OnAccounts(peer SyncPeerV2, id uint64, hashes []common.Hash, 
 }
 
 // OnByteCodes is a callback method to invoke when a batch of contract
-// bytes codes are received from a remote peer.
-func (s *SyncerV2) OnByteCodes(peer SyncPeerV2, id uint64, bytecodes [][]byte) error {
-	s.lock.RLock()
-	syncing := !s.snapped
-	s.lock.RUnlock()
-
-	if syncing {
-		return s.onByteCodes(peer, id, bytecodes)
-	}
-	return errors.New("state downloading phase is finished")
-}
-
-// onByteCodes is a callback method to invoke when a batch of contract
 // bytes codes are received from a remote peer in the syncing phase.
-func (s *SyncerV2) onByteCodes(peer SyncPeerV2, id uint64, bytecodes [][]byte) error {
+func (s *SyncerV2) OnByteCodes(peer SyncPeerV2, id uint64, bytecodes [][]byte) error {
 	var size common.StorageSize
 	for _, code := range bytecodes {
 		size += common.StorageSize(len(code))
