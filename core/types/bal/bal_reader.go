@@ -232,3 +232,18 @@ func (a AccessListReader) Contains(bal *ConstructionBlockAccessList, balIdx uint
 	}
 	return true
 }
+
+// AllDestructions returns all accounts that experienced a destruction, regardless of whether
+// they were later resurrected and exist after the block.  It excludes ephemeral contracts from
+// the result.
+func (a AccessListReader) AllDestructions() (res []common.Address) {
+	for addr, access := range a {
+		for _, nonce := range access.NonceChanges {
+			if nonce.PostNonce == 0 {
+				res = append(res, addr)
+				break
+			}
+		}
+	}
+	return res
+}
