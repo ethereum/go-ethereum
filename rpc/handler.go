@@ -244,6 +244,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			if msg == nil {
 				break
 			}
+
 			// Per-call INTERNAL span as a child of the batch SERVER span.
 			var callSpanEnd func(*error)
 			cp.ctx, callSpanEnd = telemetry.StartBatchCallSpan(batchCtx, h.tracer(), rpcInfoFromMessage(msg))
@@ -253,6 +254,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 				callErr = errors.New(resp.decodeError().Message)
 			}
 			callSpanEnd(&callErr)
+
 			// Notifications don't get a response written into the batch reply.
 			if msg.isNotification() {
 				resp = nil
