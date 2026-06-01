@@ -772,10 +772,13 @@ type closeTrackingDB struct {
 }
 
 func (db *closeTrackingDB) Close() error {
-	db.n.lock.Lock()
-	delete(db.n.databases, db)
-	db.n.lock.Unlock()
-	return db.Database.Close()
+	err := db.Database.Close()
+	if err == nil {
+		db.n.lock.Lock()
+		delete(db.n.databases, db)
+		db.n.lock.Unlock()
+	}
+	return err
 }
 
 // wrapDatabase ensures the database will be auto-closed when Node is closed.
