@@ -28,8 +28,8 @@ func TestMemoryFreezer(t *testing.T) {
 		tables := make(map[string]freezerTableConfig)
 		for _, kind := range kinds {
 			tables[kind] = freezerTableConfig{
-				noSnappy: true,
-				prunable: true,
+				noSnappy:  true,
+				tailGroup: ancienttest.TailGroup,
 			}
 		}
 		return NewMemoryFreezer(false, tables)
@@ -38,8 +38,8 @@ func TestMemoryFreezer(t *testing.T) {
 		tables := make(map[string]freezerTableConfig)
 		for _, kind := range kinds {
 			tables[kind] = freezerTableConfig{
-				noSnappy: true,
-				prunable: true,
+				noSnappy:  true,
+				tailGroup: ancienttest.TailGroup,
 			}
 		}
 		return NewMemoryFreezer(false, tables)

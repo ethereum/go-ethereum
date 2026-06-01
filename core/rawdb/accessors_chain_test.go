@@ -926,6 +926,47 @@ func makeTestBAL(t *testing.T) (rlp.RawValue, *bal.BlockAccessList) {
 	return encoded, &decoded
 }
 
+// TestWriteAncientBlocksNilBAL ensures that freezing a block with no block
+// access list produces an empty entry in the BAL ancient table and that
+// ReadAccessList returns nil afterwards (i.e. the empty entry is not surfaced
+// as a malformed BAL).
+func TestWriteAncientBlocksNilBAL(t *testing.T) {
+	db, err := Open(NewMemoryDatabase(), OpenOptions{Ancient: t.TempDir()})
+	if err != nil {
+		t.Fatalf("failed to create database with ancient backend: %v", err)
+	}
+	defer db.Close()
+
+	block := types.NewBlockWithHeader(&types.Header{
+		Number:      big.NewInt(0),
+		Extra:       []byte("nil-bal block"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
+	})
+	if block.AccessList() != nil {
+		t.Fatalf("test precondition: block must have nil access list")
+	}
+	if _, err := WriteAncientBlocks(db, []*types.Block{block}, types.EncodeBlockReceiptLists([]types.Receipts{nil})); err != nil {
+		t.Fatalf("WriteAncientBlocks failed: %v", err)
+	}
+	hash, number := block.Hash(), block.NumberU64()
+
+	// The BAL ancient entry should exist as an empty blob.
+	if blob := ReadAccessListRLP(db, hash, number); len(blob) != 0 {
+		t.Fatalf("ReadAccessListRLP: got %x, want empty", blob)
+	}
+	// ReadAccessList must surface nil rather than attempting to RLP-decode
+	// the empty payload.
+	if b := ReadAccessList(db, hash, number); b != nil {
+		t.Fatalf("ReadAccessList: got %v, want nil", b)
+	}
+	// HasAccessList only consults the KV store and there's nothing there.
+	if HasAccessList(db, hash, number) {
+		t.Fatal("HasAccessList returned true for absent BAL")
+	}
+}
+
 // TestBALStorage tests write/read/delete of BALs in the KV store.
 func TestBALStorage(t *testing.T) {
 	db := NewMemoryDatabase()

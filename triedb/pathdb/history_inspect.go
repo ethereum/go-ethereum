@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -37,7 +38,7 @@ type HistoryStats struct {
 // sanitizeRange limits the given range to fit within the local history store.
 func sanitizeRange(start, end uint64, freezer ethdb.AncientReader) (uint64, uint64, error) {
 	// Load the id of the first history object in local store.
-	tail, err := freezer.Tail()
+	tail, err := freezer.Tail(rawdb.DefaultHistoryGroup)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -132,7 +133,7 @@ func storageHistory(freezer ethdb.AncientReader, address common.Address, slot co
 // historyRange returns the block number range of local state histories.
 func historyRange(freezer ethdb.AncientReader) (uint64, uint64, error) {
 	// Load the id of the first history object in local store.
-	tail, err := freezer.Tail()
+	tail, err := freezer.Tail(rawdb.DefaultHistoryGroup)
 	if err != nil {
 		return 0, 0, err
 	}

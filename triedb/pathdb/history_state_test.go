@@ -237,7 +237,7 @@ func TestTruncateOutOfRange(t *testing.T) {
 
 	// Ensure of-out-range truncations are rejected correctly.
 	head, _ := freezer.Ancients()
-	tail, _ := freezer.Tail()
+	tail, _ := freezer.Tail(rawdb.DefaultHistoryGroup)
 
 	cases := []struct {
 		mode   int

@@ -143,12 +143,12 @@ func (f *resettableFreezer) Ancients() (uint64, error) {
 	return f.freezer.Ancients()
 }
 
-// Tail returns the number of first stored item in the freezer.
-func (f *resettableFreezer) Tail() (uint64, error) {
+// Tail returns the lowest accessible item index for the given tail group.
+func (f *resettableFreezer) Tail(group string) (uint64, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
-	return f.freezer.Tail()
+	return f.freezer.Tail(group)
 }
 
 // AncientSize returns the ancient size of the specified category.
@@ -185,13 +185,13 @@ func (f *resettableFreezer) TruncateHead(items uint64) (uint64, error) {
 	return f.freezer.TruncateHead(items)
 }
 
-// TruncateTail discards any recent data below the provided threshold number.
-// It returns the previous value
-func (f *resettableFreezer) TruncateTail(tail uint64) (uint64, error) {
+// TruncateTail discards data below the provided threshold for the named tail
+// group. It returns the previous tail of the group.
+func (f *resettableFreezer) TruncateTail(group string, tail uint64) (uint64, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
-	return f.freezer.TruncateTail(tail)
+	return f.freezer.TruncateTail(group, tail)
 }
 
 // SyncAncient flushes all data tables to disk.
