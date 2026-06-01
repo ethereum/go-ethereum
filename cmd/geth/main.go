@@ -96,6 +96,8 @@ var (
 		utils.LightKDFFlag,
 		utils.EthRequiredBlocksFlag,
 		utils.BALExecutionModeFlag,
+		utils.PrefetchWorkersFlag,
+		utils.BlockingPrefetchFlag,
 		utils.LegacyWhitelistFlag, // deprecated
 		utils.CacheFlag,
 		utils.CacheDatabaseFlag,
