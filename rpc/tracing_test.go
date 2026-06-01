@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -529,5 +530,44 @@ func TestTracingBatchHTTPTooLarge(t *testing.T) {
 	attrs := attributeMap(batchSpan.Attributes)
 	if got, want := attrs["rpc.batch.size"], "3"; got != want {
 		t.Errorf("batch-too-large rpc.batch.size: got %q, want %q", got, want)
+	}
+}
+
+// TestTracingHTTPTimeout verifies that when a non-batch call exceeds the HTTP
+// server's WriteTimeout, the SERVER span ends with error status (carrying the
+// timeout error message).
+func TestTracingHTTPTimeout(t *testing.T) {
+	t.Parallel()
+	server, tracer, exporter := newTracingServer(t)
+
+	// Configure a short WriteTimeout so the internal request timer fires
+	// quickly. ContextRequestTimeout subtracts 100ms from WriteTimeout, so
+	// 250ms here gives ~150ms before the timeout response is sent.
+	httpsrv := httptest.NewUnstartedServer(server)
+	httpsrv.Config.WriteTimeout = 250 * time.Millisecond
+	httpsrv.Start()
+	t.Cleanup(httpsrv.Close)
+
+	// test_block waits on ctx.Done() and returns an error. The internal
+	// timer cancels ctx, so test_block unblocks shortly after the timeout
+	// response goes out.
+	postJSONRPC(t, httpsrv.URL, `{"jsonrpc":"2.0","id":1,"method":"test_block"}`)
+
+	if err := tracer.ForceFlush(context.Background()); err != nil {
+		t.Fatalf("failed to flush: %v", err)
+	}
+	spans := exporter.GetSpans()
+
+	var serverSpan *tracetest.SpanStub
+	for i := range spans {
+		if spans[i].Name == "jsonrpc.test/block" {
+			serverSpan = &spans[i]
+		}
+	}
+	if serverSpan == nil {
+		t.Fatal("jsonrpc.test/block span not found")
+	}
+	if serverSpan.Status.Code != codes.Error {
+		t.Errorf("timeout: expected SERVER span error status, got %v (%q)", serverSpan.Status.Code, serverSpan.Status.Description)
 	}
 }
