@@ -138,6 +138,9 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config 
 		if len(args.data()) == 0 {
 			return errors.New(`contract creation without any data provided`)
 		}
+		if len(args.AuthorizationList) > 0 {
+			return errors.New(`authorizationList provided for contract creation, but "to" field is missing`)
+		}
 	}
 
 	if args.Gas == nil {
