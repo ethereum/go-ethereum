@@ -31,19 +31,10 @@ package state
 //   This layer provides a "unified view" by merging the pre-transition state
 //   with mutated states from preceding transactions in the block.
 //
-// - Tracking Layer: Finally, the readerTracker wraps the execution reader to
-//   capture all state accesses made during a specific transaction. These individual
-//   access are subsequently merged to construct a comprehensive access list
-//   for the entire block.
-//
 // The architecture can be illustrated by the diagram below:
 
 //       [ Block Level Access List ]  <────────────────┐
 //                  ▲                                  │ (Merge)
-//                  │                                  │
-//          ┌───────┴───────┐                  ┌───────┴───────┐
-//          │ readerTracker │                  │ readerTracker │  (Access Tracking)
-//          └───────┬───────┘                  └───────┬───────┘
 //                  │                                  │
 //   ┌──────────────┴──────────────┐    ┌──────────────┴──────────────┐
 //   │ ReaderWithBlockLevelAL      │    │ ReaderWithBlockLevelAL      │  (Unified View)
@@ -96,6 +87,8 @@ type PrefetchMetrics struct {
 	Elapsed time.Duration
 }
 
+// PrefetcherMetricer is an object that can expose metrics related to the state
+// prefetching.
 type PrefetcherMetricer interface {
 	Metrics() PrefetchMetrics
 }

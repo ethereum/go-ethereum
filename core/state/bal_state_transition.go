@@ -58,7 +58,7 @@ func (s *BALStateTransition) Metrics() *BALStateTransitionMetrics {
 	return &s.metrics
 }
 
-// DeletionCounts holds per-block deletion counters from the parallel root-pass.
+// DeletionCounts holds per-block deletion counters for accounts/storage
 type DeletionCounts struct {
 	Accounts int
 	Storage  int
@@ -125,9 +125,6 @@ func (s *BALStateTransition) setError(err error) {
 	}
 }
 
-// TODO: refresh my knowledge of the storage-clearing EIP and ensure that my assumptions around
-// an empty account which contains storage are valid here.
-//
 // isAccountDeleted checks whether the state account was deleted in this block.  Post selfdestruct-removal,
 // deletions can only occur if an account which has a balance becomes the target of a CREATE2 initcode
 // which calls SENDALL, clearing the account and marking it for deletion.
@@ -367,6 +364,7 @@ func (s *BALStateTransition) CommitWithUpdate(block uint64, deleteEmptyObjects b
 	if err := s.db.Commit(update); err != nil {
 		return common.Hash{}, nil, err
 	}
+	// TODO: fix the following metrics:
 	/*
 		snapshotCommits, trieDBCommits, err := flushStateUpdate(s.db, block, ret)
 		if err != nil {
@@ -378,6 +376,7 @@ func (s *BALStateTransition) CommitWithUpdate(block uint64, deleteEmptyObjects b
 	*/
 	return root, update, nil
 }
+
 func (s *BALStateTransition) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, error) {
 	hash, _, err := s.CommitWithUpdate(block, deleteEmptyObjects, noStorageWiping)
 	return hash, err
@@ -392,9 +391,9 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 
 	// State root calculation proceeds as follows:
 
-	// 1 (b): load the origin storage values for all slots which were modified during the block (this is needed for computing the stateUpdate)
-	// 1 (c): update each mutated account, producing the post-block state object by applying the state mutations to the prestate (retrieved in 1a).
-	// 1 (d): prefetch the intermediate trie nodes of the mutated state set from the account trie.
+	// 1 (a): load the origin storage values for all slots which were modified during the block (this is needed for computing the stateUpdate)
+	// 1 (b): update each mutated account, producing the post-block state object by applying the state mutations to the prestate (retrieved in 1a).
+	// 1 (c): prefetch the intermediate trie nodes of the mutated state set from the account trie.
 	//
 	// 2: compute the post-state root of the account trie
 	//
@@ -413,7 +412,7 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 		go func() {
 			defer wg.Done()
 
-			// 1 (c): update each mutated account, producing the post-block state object by applying the state mutations to the prestate (retrieved in 1a).
+			// 1 (b): update each mutated account, producing the post-block state object by applying the state mutations to the prestate (retrieved in 1a).
 			acct, err := s.reader.Account(address)
 			if err != nil {
 				s.setError(err)
@@ -446,7 +445,6 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 					}
 				}
 
-				// TODO: implement this
 				if err := tr.UpdateStorageBatch(address, updateKeys, updateValues); err != nil {
 					s.setError(err)
 					return
@@ -467,7 +465,7 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 	}
 
 	wg.Add(1)
-	// 1 (d): prefetch the intermediate trie nodes of the mutated state set from the account trie.
+	// 1 (c): prefetch the intermediate trie nodes of the mutated state set from the account trie.
 	go func() {
 		defer wg.Done()
 		prefetchStart := time.Now()

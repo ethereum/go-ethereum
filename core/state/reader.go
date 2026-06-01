@@ -561,7 +561,6 @@ type reader struct {
 	ContractCodeReader
 	StateReader
 	PrefetcherMetricer
-	codeLoaded sync.Map // common.Address → int (first-seen len(code))
 }
 
 // newReader constructs a reader with the supplied code reader and state reader.

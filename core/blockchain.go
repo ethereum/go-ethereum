@@ -2130,7 +2130,7 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 	useAsyncReads := bc.cfg.BALExecutionMode != bal.BALExecutionNoBatchIO
 	al := block.AccessList() // TODO: make the return of this method not be a pointer
 	accessListReader := bal.NewAccessListReader(*al)
-	prefetchReader, err := sdb.ReaderEIP7928(parentRoot, accessListReader.StorageKeys(useAsyncReads), bc.cfg.PrefetchWorkers, bc.cfg.BlockingPrefetch)
+	prefetchReader, err := sdb.ReaderWithPrefetch(parentRoot, accessListReader.StorageKeys(useAsyncReads), bc.cfg.PrefetchWorkers, bc.cfg.BlockingPrefetch)
 	if err != nil {
 		return nil, err
 	}

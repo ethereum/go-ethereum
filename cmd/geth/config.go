@@ -255,6 +255,14 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 			utils.Fatalf("invalid option for --bal.executionmode: %s.  acceptable values are full|nobatchio|sequential", val)
 		}
 	}
+	cfg.Eth.BlockingPrefetch = ctx.Bool(utils.BlockingPrefetchFlag.Name)
+
+	prefetchWorkers := ctx.Uint(utils.PrefetchWorkersFlag.Name)
+	if ctx.IsSet(utils.PrefetchWorkersFlag.Name) && prefetchWorkers == 0 {
+		prefetchWorkers = uint(runtime.NumCPU())
+		log.Warn(fmt.Sprintf("invalid value for --bal.prefetchworkers. got 0.  sanitizing to %d", prefetchWorkers))
+	}
+	cfg.Eth.PrefetchWorkers = prefetchWorkers
 
 	// Start metrics export if enabled.
 	utils.SetupMetrics(&cfg.Metrics)

@@ -186,7 +186,7 @@ func (db *MPTDatabase) Iteratee(root common.Hash) (Iteratee, error) {
 	return newStateIteratee(true, root, db.triedb, db.snap)
 }
 
-func (db *MPTDatabase) ReaderEIP7928(stateRoot common.Hash, accessList map[common.Address][]common.Hash, threads int, block bool) (Reader, error) {
+func (db *MPTDatabase) ReaderWithPrefetch(stateRoot common.Hash, accessList map[common.Address][]common.Hash, threads int, block bool) (Reader, error) {
 	base, err := db.StateReader(stateRoot)
 	if err != nil {
 		return nil, err
@@ -198,7 +198,7 @@ func (db *MPTDatabase) ReaderEIP7928(stateRoot common.Hash, accessList map[commo
 	pr := newPrefetchStateReader(r, accessList, threads)
 	if block {
 		if err := pr.Wait(); err != nil {
-			panic("unreachable")
+			panic("this should unreachable")
 		}
 	}
 

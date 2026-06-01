@@ -16,20 +16,15 @@
 
 package state
 
-// TODO: add back tests from bal-devnet-3 branch
-/*
 import (
 	"fmt"
-	"maps"
 	"math/rand"
 	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/testrand"
-	"github.com/holiman/uint256"
 )
 
 type countingStateReader struct {
@@ -148,148 +143,3 @@ func TestPrefetchReader(t *testing.T) {
 		}
 	}
 }
-
-func makeFakeSlots(n int) map[common.Hash]struct{} {
-	slots := make(map[common.Hash]struct{})
-	for i := 0; i < n; i++ {
-		slots[testrand.Hash()] = struct{}{}
-	}
-	return slots
-}
-
-type noopStateReader struct{}
-
-func (r *noopStateReader) Account(addr common.Address) (*types.StateAccount, error) { return nil, nil }
-func (r *noopStateReader) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
-	return common.Hash{}, nil
-}
-
-type noopCodeReader struct{}
-
-func (r *noopCodeReader) Has(addr common.Address, codeHash common.Hash) bool { return false }
-
-func (r *noopCodeReader) Code(addr common.Address, codeHash common.Hash) []byte {
-	return nil
-}
-
-func (r *noopCodeReader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	return 0, nil
-}
-
-func TestReaderWithTracker(t *testing.T) {
-	var r Reader = newReaderTracker(newReader(&noopCodeReader{}, &noopStateReader{}))
-
-	accesses := map[common.Address]map[common.Hash]struct{}{
-		testrand.Address(): makeFakeSlots(10),
-		testrand.Address(): makeFakeSlots(0),
-	}
-	for addr, slots := range accesses {
-		r.Account(addr)
-		for slot := range slots {
-			r.Storage(addr, slot)
-		}
-	}
-	got := r.(StateReaderTracker).GetStateAccessList()
-	if len(got) != len(accesses) {
-		t.Fatalf("Unexpected access list, want: %d, got: %d", len(accesses), len(got))
-	}
-	for addr, slots := range got {
-		entry, ok := accesses[addr]
-		if !ok {
-			t.Fatal("Unexpected access list")
-		}
-		if !maps.Equal(slots, entry) {
-			t.Fatal("Unexpected slots")
-		}
-	}
-}
-
-// TestTrackerSurvivesStateDBCache verifies that the BAL reader tracker records
-// account and storage accesses even when the StateDB serves them from its
-// in-memory cache (stateObjects / originStorage). This is a regression test
-// for a bug where a reverted transaction left cached entries that subsequent
-// transactions read without hitting the reader, causing the BAL to be incomplete.
-func TestTrackerSurvivesStateDBCache(t *testing.T) {
-	var (
-		sdb        = NewDatabaseForTesting()
-		statedb, _ = New(types.EmptyRootHash, sdb)
-		addr       = common.HexToAddress("0xaaaa")
-		slot       = common.HexToHash("0x01")
-	)
-	// Set up committed state with one account that has a storage slot.
-	statedb.SetBalance(addr, uint256.NewInt(1e18), tracing.BalanceChangeUnspecified)
-	statedb.SetNonce(addr, 5, tracing.NonceChangeUnspecified)
-	statedb.SetState(addr, slot, common.HexToHash("0x42"))
-	root, _ := statedb.Commit(0, false, false)
-	sdb.TrieDB().Commit(root, false)
-
-	// Create a fresh StateDB with a reader tracker (as the miner does).
-	var (
-		reader, _ = sdb.Reader(root)
-		tracked   = NewReaderWithTracker(reader)
-		live, _   = NewWithReader(root, sdb, tracked)
-		tracker   = live.Reader().(StateReaderTracker)
-	)
-
-	// Simulate a failed transaction: read account and storage, then revert.
-	snap := live.Snapshot()
-	live.GetNonce(addr)
-	live.GetState(addr, slot)
-
-	reads := tracker.GetStateAccessList()
-	if _, ok := reads[addr]; !ok {
-		t.Fatal("addr should be tracked after first read")
-	}
-	if _, ok := reads[addr][slot]; !ok {
-		t.Fatal("slot should be tracked after first read")
-	}
-
-	tracker.Clear()
-	live.RevertToSnapshot(snap)
-
-	reads = tracker.GetStateAccessList()
-	if len(reads) != 0 {
-		t.Fatal("tracker should be empty after Clear")
-	}
-
-	// Simulate the next transaction reading the same account and slot.
-	// Both hit the stateObjects/originStorage caches.
-	live.GetNonce(addr)
-	live.GetState(addr, slot)
-
-	reads = tracker.GetStateAccessList()
-	if _, ok := reads[addr]; !ok {
-		t.Fatal("addr must be tracked on cache hit (account)")
-	}
-	if _, ok := reads[addr][slot]; !ok {
-		t.Fatal("slot must be tracked on cache hit (storage)")
-	}
-}
-
-// TestPrefetchStateReaderForwardsStats locks down that prefetchStateReader
-// exposes the underlying stateReaderWithStats counters via GetStateStats.
-func TestPrefetchStateReaderForwardsStats(t *testing.T) {
-	stub := newRefStateReader()
-	addr := testrand.Address()
-
-	cached := newStateReaderWithCache(stub)
-	withStats := newStateReaderWithStats(cached)
-	prefetch := newPrefetchStateReaderInternal(withStats, nil, 1)
-
-	if _, err := prefetch.Account(addr); err != nil {
-		t.Fatalf("Account: %v", err)
-	}
-	if _, err := prefetch.Account(addr); err != nil {
-		t.Fatalf("Account (second): %v", err)
-	}
-
-	stats := withStats.GetStateStats()
-	if stats.AccountCacheHit == 0 || stats.AccountCacheMiss == 0 {
-		t.Fatalf("inner stats not populated: %+v", stats)
-	}
-	gotStats := prefetch.GetStateStats()
-	if gotStats != stats {
-		t.Fatalf("forward mismatch: got %+v, want %+v", gotStats, stats)
-	}
-}
-*/

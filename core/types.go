@@ -18,7 +18,6 @@ package core
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/common"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/core/state"
@@ -66,10 +65,4 @@ type ProcessResult struct {
 	Bal *bal.ConstructionBlockAccessList
 
 	Error error
-}
-
-type Committer interface {
-	Commit(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, error)
-	CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, *state.StateUpdate, error)
-	Preimages() map[common.Hash][]byte
 }
