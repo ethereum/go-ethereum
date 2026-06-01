@@ -251,7 +251,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			resp := h.handleCallMsg(cp, msg)
 			var callErr error
 			if resp != nil && resp.Error != nil {
-				callErr = errors.New(resp.decodeError().Message)
+				callErr = resp.decodeError()
 			}
 			callSpanEnd(&callErr)
 
@@ -345,7 +345,7 @@ func (h *handler) handleNonBatchCall(cp *callProc, msg *jsonrpcMessage) {
 	if answer != nil {
 		responded.Do(func() {
 			if answer.Error != nil {
-				responseError = errors.New(answer.decodeError().Message)
+				responseError = answer.decodeError()
 			}
 			// Notifications don't get a response written, but their errors are
 			// still recorded on the SERVER span via responseError above.
@@ -586,7 +586,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	answer := h.runMethod(rctx, msg, callb, args)
 	var rErr error
 	if answer.Error != nil {
-		rErr = errors.New(answer.decodeError().Message)
+		rErr = answer.decodeError()
 	}
 	rSpanEnd(&rErr)
 
@@ -671,7 +671,7 @@ func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *cal
 	_, _, spanEnd := telemetry.StartSpanWithTracer(ctx, h.tracer(), "rpc.encodeJSONResponse", attributes...)
 	response := msg.response(result)
 	if response.Error != nil {
-		err = errors.New(response.decodeError().Message)
+		err = response.decodeError()
 	}
 	spanEnd(&err)
 	return response
