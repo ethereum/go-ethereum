@@ -185,3 +185,22 @@ func (db *MPTDatabase) Commit(update *StateUpdate) error {
 func (db *MPTDatabase) Iteratee(root common.Hash) (Iteratee, error) {
 	return newStateIteratee(true, root, db.triedb, db.snap)
 }
+
+func (db *MPTDatabase) ReaderWithPrefetch(stateRoot common.Hash, accessList map[common.Address][]common.Hash, threads int, block bool) (Reader, error) {
+	base, err := db.StateReader(stateRoot)
+	if err != nil {
+		return nil, err
+	}
+	// Construct the state reader with native cache and associated statistics
+	r := newStateReaderWithStats(newStateReaderWithCache(base))
+
+	// Construct the state reader with background prefetching
+	pr := newPrefetchStateReader(r, accessList, threads)
+	if block {
+		if err := pr.Wait(); err != nil {
+			panic("this should unreachable")
+		}
+	}
+
+	return newReaderWithPrefetch(db.codedb.Reader(), pr, pr), nil
+}

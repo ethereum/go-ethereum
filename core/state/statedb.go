@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"iter"
 	"maps"
 	"slices"
 	"sort"
@@ -180,6 +181,13 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		return nil, err
 	}
 	return NewWithReader(root, db, reader)
+}
+
+// WithReader returns a copy of the statedb instance with the specified reader.
+func (s *StateDB) WithReader(reader Reader) *StateDB {
+	cpy := s.Copy()
+	cpy.reader = reader
+	return cpy
 }
 
 // NewWithReader creates a new state for the specified state root. Unlike New,
@@ -1122,12 +1130,15 @@ func (s *StateDB) clearJournalAndRefund() {
 
 // deleteStorage is designed to delete the storage trie of a designated account.
 func (s *StateDB) deleteStorage(addrHash common.Hash, root common.Hash) (map[common.Hash]common.Hash, map[common.Hash]common.Hash, *trienode.NodeSet, error) {
+	return deleteStorage(s.db, s.originalRoot, addrHash, root)
+}
+func deleteStorage(db Database, originalRoot common.Hash, addrHash common.Hash, root common.Hash) (map[common.Hash]common.Hash, map[common.Hash]common.Hash, *trienode.NodeSet, error) {
 	var (
 		nodes          = trienode.NewNodeSet(addrHash)     // the set for trie node mutations (value is nil)
 		storages       = make(map[common.Hash]common.Hash) // the set for storage mutations (value is nil)
 		storageOrigins = make(map[common.Hash]common.Hash) // the set for tracking the original value of slot
 	)
-	iteratee, err := s.db.Iteratee(s.originalRoot)
+	iteratee, err := db.Iteratee(originalRoot)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -1555,4 +1566,73 @@ func (s *StateDB) Witness() *stateless.Witness {
 
 func (s *StateDB) AccessEvents() *AccessEvents {
 	return s.accessEvents
+}
+
+// handleDestruction processes all destruction markers and deletes the account
+// and associated storage slots if necessary. There are four potential scenarios
+// as following:
+//
+//	(a) the account was not existent and be marked as destructed
+//	(b) the account was not existent and be marked as destructed,
+//	    however, it's resurrected later in the same block.
+//	(c) the account was existent and be marked as destructed
+//	(d) the account was existent and be marked as destructed,
+//	    however it's resurrected later in the same block.
+//
+// In case (a), nothing needs be deleted, nil to nil transition can be ignored.
+// In case (b), nothing needs be deleted, nil is used as the original value for
+// newly created account and storages
+// In case (c), **original** account along with its storages should be deleted,
+// with their values be tracked as original value.
+// In case (d), **original** account along with its storages should be deleted,
+// with their values be tracked as original value.
+func handleDestruction(db Database, trie Trie, root common.Hash, noStorageWiping bool, destructions iter.Seq[common.Address], prestates map[common.Address]*types.StateAccount) (map[common.Hash]*AccountDelete, []*trienode.NodeSet, error) {
+	var (
+		nodes   []*trienode.NodeSet
+		deletes = make(map[common.Hash]*AccountDelete)
+	)
+	for addr := range destructions {
+		prestate := prestates[addr]
+		// The account was non-existent, and it's marked as destructed in the scope
+		// of block. It can be either case (a) or (b) and will be interpreted as
+		// null->null state transition.
+		// - for (a), skip it without doing anything
+		// - for (b), the resurrected account with nil as original will be handled afterwards
+		if prestate == nil {
+			continue
+		}
+		// The account was existent, it can be either case (c) or (d).
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		op := &AccountDelete{
+			Address: addr,
+			Origin:  prestate,
+		}
+		deletes[addrHash] = op
+
+		// Short circuit if the origin storage was empty.
+		if prestate.Root == types.EmptyRootHash || db.TrieDB().IsUBT() {
+			continue
+		}
+		if noStorageWiping {
+			return nil, nil, fmt.Errorf("unexpected storage wiping, %x", addr)
+		}
+		// Remove storage slots belonging to the account.
+		storages, storagesOrigin, set, err := deleteStorage(db, prestate.Root, addrHash, root)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to delete storage, err: %w", err)
+		}
+		op.Storages = storages
+		op.StoragesOrigin = storagesOrigin
+
+		// Aggregate the associated trie node changes.
+		nodes = append(nodes, set)
+	}
+	return deletes, nodes, nil
+}
+
+// TODO: find better location for this
+type Committer interface {
+	Commit(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, error)
+	CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, *StateUpdate, error)
+	Preimages() map[common.Hash][]byte
 }

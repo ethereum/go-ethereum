@@ -327,7 +327,7 @@ func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, err
 	return newStateTransition(evm, msg, gp).execute()
 }
 
-// stateTransition represents a state transition.
+// StateTransition represents a state transition.
 //
 // == The State Transitioning Model
 //
@@ -349,7 +349,7 @@ func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, err
 //
 //  5. Run Script section
 //  6. Derive new state root
-type stateTransition struct {
+type StateTransition struct {
 	gp            *GasPool
 	msg           *Message
 	initialBudget vm.GasBudget
@@ -359,8 +359,8 @@ type stateTransition struct {
 }
 
 // newStateTransition initialises and returns a new state transition object.
-func newStateTransition(evm *vm.EVM, msg *Message, gp *GasPool) *stateTransition {
-	return &stateTransition{
+func newStateTransition(evm *vm.EVM, msg *Message, gp *GasPool) *StateTransition {
+	return &StateTransition{
 		gp:    gp,
 		evm:   evm,
 		msg:   msg,
@@ -369,7 +369,7 @@ func newStateTransition(evm *vm.EVM, msg *Message, gp *GasPool) *stateTransition
 }
 
 // to returns the recipient of the message.
-func (st *stateTransition) to() common.Address {
+func (st *StateTransition) to() common.Address {
 	if st.msg == nil || st.msg.To == nil /* contract creation */ {
 		return common.Address{}
 	}
@@ -394,7 +394,7 @@ func (st *stateTransition) to() common.Address {
 //   - Amsterdam+ (EIP-8037): two-dimensional budget. Regular gas is
 //     capped at `MaxTxGas` (EIP-7825, 16_777_216); any excess from
 //     `msg.GasLimit` above that cap becomes the state-gas reservoir.
-func (st *stateTransition) buyGas() error {
+func (st *StateTransition) buyGas() error {
 	mgval := new(uint256.Int).SetUint64(st.msg.GasLimit)
 	_, overflow := mgval.MulOverflow(mgval, st.msg.GasPrice)
 	if overflow {
@@ -482,7 +482,7 @@ func (st *stateTransition) buyGas() error {
 //
 // The SkipNonceChecks / SkipTransactionChecks / NoBaseFee flags bypass
 // subsets of these checks for simulation paths (eth_call, eth_estimateGas).
-func (st *stateTransition) preCheck() error {
+func (st *StateTransition) preCheck() error {
 	// Only check transactions that are not fake
 	msg := st.msg
 	if !msg.SkipNonceChecks {
@@ -581,7 +581,7 @@ func (st *stateTransition) preCheck() error {
 
 // reserveBlockGasBudget checks if the remaining gas budget in the block pool is
 // sufficient for including this transaction.
-func (st *stateTransition) reserveBlockGasBudget(rules params.Rules, gasLimit uint64, intrinsicCost vm.GasCosts) error {
+func (st *StateTransition) reserveBlockGasBudget(rules params.Rules, gasLimit uint64, intrinsicCost vm.GasCosts) error {
 	var err error
 	if rules.IsAmsterdam {
 		// EIP-8037 per-tx 2D block-inclusion check. For each dimension,
@@ -620,7 +620,7 @@ func (st *stateTransition) reserveBlockGasBudget(rules params.Rules, gasLimit ui
 //
 // If a consensus error is encountered, it is returned directly with a
 // nil EVM execution result.
-func (st *stateTransition) execute() (*ExecutionResult, error) {
+func (st *StateTransition) execute() (*ExecutionResult, error) {
 	// The state-transition pipeline below runs in stages. Each stage may
 	// abort with a consensus error before the EVM is invoked:
 	//
@@ -867,7 +867,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 }
 
 // validateAuthorization validates an EIP-7702 authorization against the state.
-func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorization) (authority common.Address, err error) {
+func (st *StateTransition) validateAuthorization(auth *types.SetCodeAuthorization) (authority common.Address, err error) {
 	// Verify chain ID is null or equal to current chain ID.
 	if !auth.ChainID.IsZero() && auth.ChainID.CmpBig(st.evm.ChainConfig().ChainID) != 0 {
 		return authority, ErrAuthorizationWrongChainID
@@ -904,7 +904,7 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 //
 // Invalid authorizations are silently skipped (their auth-base intrinsic
 // state gas remains charged, matching the pre-existing behavior).
-func (st *stateTransition) applyAuthorizations(rules params.Rules, auths []types.SetCodeAuthorization) {
+func (st *StateTransition) applyAuthorizations(rules params.Rules, auths []types.SetCodeAuthorization) {
 	if len(auths) == 0 {
 		return
 	}
@@ -938,7 +938,7 @@ func (st *stateTransition) applyAuthorizations(rules params.Rules, auths []types
 // authority "first creation" budget). The caller is expected to do an
 // end-of-loop pass over this set and refund any entry whose final delegation
 // state ended up empty.
-func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization, authBilledCreations map[common.Address]struct{}) error {
+func (st *StateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization, authBilledCreations map[common.Address]struct{}) error {
 	authority, err := st.validateAuthorization(auth)
 	if err != nil {
 		return err
@@ -1004,7 +1004,7 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 }
 
 // calcRefund computes refund counter, capped to a refund quotient.
-func (st *stateTransition) calcRefund() uint64 {
+func (st *StateTransition) calcRefund() uint64 {
 	var refund uint64
 	if !st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
 		// Before EIP-3529: refunds were capped to gasUsed / 2
@@ -1026,7 +1026,7 @@ func (st *stateTransition) calcRefund() uint64 {
 }
 
 // returnGas returns ETH for remaining gas, exchanged at the original rate.
-func (st *stateTransition) returnGas() uint64 {
+func (st *StateTransition) returnGas() uint64 {
 	gas := st.gasRemaining.RegularGas + st.gasRemaining.StateGas
 	remaining := uint256.NewInt(gas)
 	remaining.Mul(remaining, st.msg.GasPrice)
@@ -1039,11 +1039,11 @@ func (st *stateTransition) returnGas() uint64 {
 }
 
 // gasUsed returns the amount of gas used up by the state transition.
-func (st *stateTransition) gasUsed() uint64 {
+func (st *StateTransition) gasUsed() uint64 {
 	return st.gasRemaining.Used(st.initialBudget)
 }
 
 // blobGasUsed returns the amount of blob gas used by the message.
-func (st *stateTransition) blobGasUsed() uint64 {
+func (st *StateTransition) blobGasUsed() uint64 {
 	return uint64(len(st.msg.BlobHashes) * params.BlobTxBlobGasPerBlob)
 }

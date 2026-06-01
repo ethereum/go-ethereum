@@ -34,7 +34,7 @@ type Validator interface {
 	ValidateBody(block *types.Block) error
 
 	// ValidateState validates the given statedb and optionally the process result.
-	ValidateState(block *types.Block, state *state.StateDB, res *ProcessResult, stateless bool) error
+	ValidateState(block *types.Block, state StateRootSource, res *ProcessResult, stateless bool) error
 }
 
 // Prefetcher is an interface for pre-caching transaction signatures and state.
@@ -63,4 +63,6 @@ type ProcessResult struct {
 	// BAL is only meaningful for post-Amsterdam blocks. Please ensure
 	// fork validation is performed before accessing it.
 	Bal *bal.ConstructionBlockAccessList
+
+	Error error
 }
