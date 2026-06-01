@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -64,6 +65,9 @@ type txIndexer struct {
 	db     ethdb.Database
 	term   chan chan struct{}
 	closed chan struct{}
+
+	headCh  chan ChainHeadEvent
+	headSub event.Subscription
 }
 
 // newTxIndexer initializes the transaction indexer.
@@ -75,7 +79,9 @@ func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
 		db:     chain.db,
 		term:   make(chan chan struct{}),
 		closed: make(chan struct{}),
+		headCh: make(chan ChainHeadEvent),
 	}
+	indexer.headSub = chain.SubscribeChainHeadEvent(indexer.headCh)
 	indexer.head.Store(indexer.resolveHead())
 	indexer.tail.Store(rawdb.ReadTxIndexTail(chain.db))
 
@@ -228,15 +234,14 @@ func (indexer *txIndexer) resolveHead() uint64 {
 // on the received chain event.
 func (indexer *txIndexer) loop(chain *BlockChain) {
 	defer close(indexer.closed)
+	defer indexer.headSub.Unsubscribe()
 
 	// Listening to chain events and manipulate the transaction indexes.
 	var (
 		stop   chan struct{} // Non-nil if background routine is active
 		done   chan struct{} // Non-nil if background routine is active
-		headCh = make(chan ChainHeadEvent)
-		sub    = chain.SubscribeChainHeadEvent(headCh)
+		headCh = indexer.headCh
 	)
-	defer sub.Unsubscribe()
 
 	// Validate the transaction indexes and repair if necessary
 	head := indexer.head.Load()
