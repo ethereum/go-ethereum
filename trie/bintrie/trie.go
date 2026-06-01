@@ -451,3 +451,11 @@ func (t *BinaryTrie) PrefetchStorage(addr common.Address, keys [][]byte) error {
 func (t *BinaryTrie) Witness() map[string][]byte {
 	return t.tracer.Values()
 }
+
+func (t *BinaryTrie) UpdateStorageBatch(_ common.Address, keys [][]byte, values [][]byte) error {
+	panic("not implemented")
+}
+
+func (t *BinaryTrie) UpdateAccountBatch(addresses []common.Address, accounts []*types.StateAccount, _ []int) error {
+	panic("not implemented")
+}
