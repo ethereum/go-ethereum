@@ -202,8 +202,8 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 
 		switch {
 		case len(msgs) == 0:
-			spanErr = errors.New("empty batch")
-			resp := errorMessage(&invalidRequestError{"empty batch"})
+			spanErr = &invalidRequestError{"empty batch"}
+			resp := errorMessage(spanErr)
 			h.conn.writeJSON(cp.ctx, resp, true)
 			return
 		case h.batchRequestLimit != 0 && len(msgs) > h.batchRequestLimit:
