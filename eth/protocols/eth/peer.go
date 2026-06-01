@@ -209,14 +209,15 @@ func (p *Peer) AsyncSendPooledTransactionHashes(hashes []common.Hash) {
 
 // ReplyPooledTransactionsRLP is the response to RequestTxs.
 func (p *Peer) ReplyPooledTransactionsRLP(id uint64, hashes []common.Hash, txs []rlp.RawValue) error {
-	// Mark all the transactions as known, but ensure we don't overflow our limits
-	p.knownTxs.Add(hashes...)
-
 	// Not packed into PooledTransactionsResponse to avoid RLP decoding
-	return p2p.Send(p.rw, PooledTransactionsMsg, &PooledTransactionsRLPPacket{
+	if err := p2p.Send(p.rw, PooledTransactionsMsg, &PooledTransactionsRLPPacket{
 		RequestId:                     id,
 		PooledTransactionsRLPResponse: txs,
-	})
+	}); err != nil {
+		return err
+	}
+	p.knownTxs.Add(hashes...)
+	return nil
 }
 
 // ReplyBlockHeadersRLP is the response to GetBlockHeaders.
