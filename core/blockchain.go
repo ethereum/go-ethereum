@@ -2129,13 +2129,16 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 
 	useAsyncReads := bc.cfg.BALExecutionMode != bal.BALExecutionNoBatchIO
 	al := block.AccessList()
-	accessListReader := bal.NewAccessListReader(*al)
-	prefetchReader, err := sdb.ReaderWithPrefetch(parentRoot, accessListReader.StorageKeys(useAsyncReads), bc.cfg.PrefetchWorkers, bc.cfg.BlockingPrefetch)
+	// Preprocess the access list once for the whole block; the resulting
+	// structure is read-only and shared by the prefetch reader, the state
+	// transition and every per-transaction execution reader.
+	prepared := bal.NewPreparedAccessList(*al)
+	prefetchReader, err := sdb.ReaderWithPrefetch(parentRoot, prepared.StorageKeys(useAsyncReads), bc.cfg.PrefetchWorkers, bc.cfg.BlockingPrefetch)
 	if err != nil {
 		return nil, err
 	}
 
-	stateTransition, err := state.NewBALStateTransition(block, prefetchReader, sdb, parentRoot)
+	stateTransition, err := state.NewBALStateTransition(block, prefetchReader, sdb, parentRoot, prepared)
 	if err != nil {
 		return nil, err
 	}
