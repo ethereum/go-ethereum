@@ -137,7 +137,7 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	defer func() {
 		if result != nil && result.err == nil {
 			span.SetAttributes(
-				telemetry.Int64Attribute("txs.count", int64(len(result.block.Transactions()))),
+				telemetry.IntAttribute("txs.count", len(result.block.Transactions())),
 				telemetry.Int64Attribute("gas.used", int64(result.block.GasUsed())),
 				telemetry.StringAttribute("fees", result.fees.String()),
 			)
@@ -572,8 +572,8 @@ func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int3
 	}
 	pendingBlobTxs, blobTxCount := miner.txpool.Pending(filter)
 	span.SetAttributes(
-		telemetry.Int64Attribute("pending.plain.count", int64(plainTxCount)),
-		telemetry.Int64Attribute("pending.blob.count", int64(blobTxCount)),
+		telemetry.IntAttribute("pending.plain.count", plainTxCount),
+		telemetry.IntAttribute("pending.blob.count", blobTxCount),
 	)
 
 	// Split the pending transactions into locals and remotes.

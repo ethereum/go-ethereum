@@ -40,6 +40,11 @@ func Int64Attribute(key string, val int64) Attribute {
 	return attribute.Int64(key, val)
 }
 
+// IntAttribute creates an attribute with an int value.
+func IntAttribute(key string, val int) Attribute {
+	return attribute.Int(key, val)
+}
+
 // BoolAttribute creates an attribute with a bool value.
 func BoolAttribute(key string, val bool) Attribute {
 	return attribute.Bool(key, val)
@@ -60,6 +65,13 @@ func StartSpanWithTracer(ctx context.Context, tracer trace.Tracer, name string, 
 	return startSpan(ctx, tracer, trace.SpanKindInternal, name, attributes...)
 }
 
+// TracerFromContext returns a Tracer from the TracerProvider associated with the
+// parent span in ctx. If ctx has no parent span, the returned tracer comes from
+// the no-op provider, so spans created with it will not be exported.
+func TracerFromContext(ctx context.Context) trace.Tracer {
+	return trace.SpanFromContext(ctx).TracerProvider().Tracer("")
+}
+
 // RPCInfo contains information about the RPC request.
 type RPCInfo struct {
 	System    string
@@ -68,11 +80,11 @@ type RPCInfo struct {
 	RequestID string
 }
 
-// StartServerSpan creates a SpanKind=SERVER span at the JSON-RPC boundary.
+// StartCallServerSpan creates a SpanKind=SERVER span for a JSON-RPC call.
 // The span name is formatted as $rpcSystem.$rpcService/$rpcMethod
 // (e.g. "jsonrpc.engine/newPayloadV4") which follows the Open Telemetry
 // semantic convensions: https://opentelemetry.io/docs/specs/semconv/rpc/rpc-spans/#span-name.
-func StartServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, others ...Attribute) (context.Context, func(*error)) {
+func StartCallServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, others ...Attribute) (context.Context, func(*error)) {
 	var (
 		name       = fmt.Sprintf("%s.%s/%s", rpc.System, rpc.Service, rpc.Method)
 		attributes = append([]Attribute{
@@ -85,6 +97,36 @@ func StartServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, othe
 		)
 	)
 	ctx, _, end := startSpan(ctx, tracer, trace.SpanKindServer, name, attributes...)
+	return ctx, end
+}
+
+// StartBatchServerSpan creates a SpanKind=SERVER span representing a batched request.
+// The span name is "$system.batch" (e.g. "jsonrpc.batch") and per-call spans are nested under it.
+// batchSize is exposed as rpc.batch.size.
+func StartBatchServerSpan(ctx context.Context, tracer trace.Tracer, system string, batchSize int, others ...Attribute) (context.Context, func(*error)) {
+	attributes := append([]Attribute{
+		semconv.RPCSystemKey.String(system),
+		IntAttribute("rpc.batch.size", batchSize),
+	}, others...)
+	ctx, _, end := startSpan(ctx, tracer, trace.SpanKindServer, system+".batch", attributes...)
+	return ctx, end
+}
+
+// StartBatchCallSpan creates a SpanKind=INTERNAL span for an individual RPC call as part of a batch.
+// This carries the same name and attributes as StartCallServerSpan.
+func StartBatchCallSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, others ...Attribute) (context.Context, func(*error)) {
+	var (
+		name       = fmt.Sprintf("%s.%s/%s", rpc.System, rpc.Service, rpc.Method)
+		attributes = append([]Attribute{
+			semconv.RPCSystemKey.String(rpc.System),
+			semconv.RPCServiceKey.String(rpc.Service),
+			semconv.RPCMethodKey.String(rpc.Method),
+			semconv.RPCJSONRPCRequestID(rpc.RequestID),
+		},
+			others...,
+		)
+	)
+	ctx, _, end := startSpan(ctx, tracer, trace.SpanKindInternal, name, attributes...)
 	return ctx, end
 }
 
