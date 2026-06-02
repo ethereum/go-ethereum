@@ -44,7 +44,8 @@ var ErrCancelled = internal.ErrCancelled
 
 // GenerateStats reports per-run counters from GenerateTrie. Scanned is
 // the number of accounts walked, Updated is how many had a stale Root
-// field that was rewritten to match the recomputed storage root.
+// field that was rewritten to match the recomputed storage root, and
+// Deleted is the number of dangling storage slots removed.
 type GenerateStats struct {
 	Scanned int64
 	Updated int64
@@ -443,7 +444,9 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 //
 //   - 1 populated: there is no top-level branch; the canonical root is that
 //     lone partition's subtree with its leading nibble folded back in (see
-//     trie.MountPartitionRoot). Only the new root node is written.
+//     trie.MountPartitionRoot). The new root node is written. If the fold
+//     orphaned the old subtree root the partition left at [n], that node is
+//     also deleted.
 //
 //   - 2+ populated: the canonical root is a 17-slot branch mounting each
 //     partition's subtree root by hash. The subtree roots are already on disk,
