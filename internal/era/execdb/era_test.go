@@ -356,9 +356,8 @@ func TestInitialTD(t *testing.T) {
 	}
 }
 
-// TestDetectLayoutNoReceipts builds an Ere file with a TD entry in the receipts
-// slot (the shape of a "noreceipts" profile) and checks that the reader rejects
-// it, since receipts are required.
+// TestDetectLayoutNoReceipts builds an Ere file with no receipts component and
+// checks that block data can still be read, while receipt access fails clearly.
 func TestDetectLayoutNoReceipts(t *testing.T) {
 	t.Parallel()
 
@@ -435,8 +434,34 @@ func TestDetectLayoutNoReceipts(t *testing.T) {
 		t.Fatalf("reopen: %v", err)
 	}
 	t.Cleanup(func() { g.Close() })
-	if _, err := From(g); err == nil {
-		t.Fatal("expected From to reject a file with no receipts component")
+	e, err := From(g)
+	if err != nil {
+		t.Fatalf("From rejected file with no receipts component: %v", err)
+	}
+
+	blk, err := e.GetBlockByNumber(0)
+	if err != nil {
+		t.Fatalf("GetBlockByNumber failed: %v", err)
+	}
+	if blk.NumberU64() != 0 {
+		t.Fatalf("wrong block number: got %d", blk.NumberU64())
+	}
+	if _, err := e.GetRawReceiptsByNumber(0); err == nil {
+		t.Fatal("expected GetRawReceiptsByNumber to fail")
+	}
+
+	it, err := e.Iterator()
+	if err != nil {
+		t.Fatalf("Iterator failed: %v", err)
+	}
+	if !it.Next() {
+		t.Fatalf("expected iterator to advance, err %v", it.Error())
+	}
+	if _, err := it.Block(); err != nil {
+		t.Fatalf("iterator Block failed: %v", err)
+	}
+	if _, err := it.Receipts(); err == nil {
+		t.Fatal("expected iterator Receipts to fail")
 	}
 }
 

@@ -310,9 +310,6 @@ func (e *Era) detectLayout() (map[componentType]int, error) {
 	if _, ok := layout[body]; !ok {
 		return nil, errors.New("Ere index has no body component")
 	}
-	if _, ok := layout[receipts]; !ok {
-		return nil, errors.New("Ere index has no receipts component")
-	}
 	return layout, nil
 }
 

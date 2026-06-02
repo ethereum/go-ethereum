@@ -86,7 +86,7 @@ func (it *Iterator) Receipts() (types.Receipts, error) {
 		return nil, err
 	}
 	if it.inner.Receipts == nil {
-		return nil, errors.New("receipts must be non‑nil")
+		return nil, errors.New("receipts not found")
 	}
 	var rs []*types.SlimReceipt
 	if err := rlp.Decode(it.inner.Receipts, &rs); err != nil {
@@ -180,15 +180,19 @@ func (it *RawIterator) Next() bool {
 		return false
 	}
 
-	receiptsOffset, err := it.e.receiptOff(it.next)
-	if err != nil {
-		it.setErr(err)
-		return false
-	}
-	it.Receipts, _, err = newSnappyReader(it.e.s, era.TypeCompressedSlimReceipts, receiptsOffset)
-	if err != nil {
-		it.setErr(err)
-		return false
+	if it.e.HasComponent(receipts) {
+		receiptsOffset, err := it.e.receiptOff(it.next)
+		if err != nil {
+			it.setErr(err)
+			return false
+		}
+		it.Receipts, _, err = newSnappyReader(it.e.s, era.TypeCompressedSlimReceipts, receiptsOffset)
+		if err != nil {
+			it.setErr(err)
+			return false
+		}
+	} else {
+		it.Receipts = nil
 	}
 
 	// Check if TD component is present in this file (pre-merge or merge-transition epoch).
