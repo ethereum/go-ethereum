@@ -93,6 +93,20 @@ func (r *rangeIterators) release() {
 	r.stor.Release()
 }
 
+// flushIfFull writes and resets the batch once it grows past IdealBatchSize,
+// then reopens the iterators.
+func (r *rangeIterators) flushIfFull(batch ethdb.Batch, where string) error {
+	if batch.ValueSize() <= ethdb.IdealBatchSize {
+		return nil
+	}
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("flush batch (%s): %w", where, err)
+	}
+	batch.Reset()
+	r.reopen()
+	return nil
+}
+
 // openFlatIterator opens a length-filtered HoldableIterator over a snapshot
 // prefix, seeked to the given start key (relative to the prefix).
 func openFlatIterator(db ethdb.Database, prefix, start []byte, suffixLen int) *internal.HoldableIterator {
@@ -201,6 +215,9 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 				deleted.Add(1)
 				slotHash := sk[len(rawdb.SnapshotStoragePrefix)+common.HashLength:]
 				rawdb.DeleteStorageSnapshot(batch, common.BytesToHash(storageAccount), common.BytesToHash(slotHash))
+				if err := iters.flushIfFull(batch, "dangling"); err != nil {
+					return nil, err
+				}
 				continue
 			}
 
@@ -219,14 +236,8 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 			if err := storageTrie.Update(slotHash, iters.stor.Value()); err != nil {
 				return nil, fmt.Errorf("storage stack trie update for %x: %w", accountHash, err)
 			}
-
-			// Cap batch size and reopen iterators so pebble compactions don't stall.
-			if batch.ValueSize() > ethdb.IdealBatchSize {
-				if err := batch.Write(); err != nil {
-					return nil, fmt.Errorf("flush batch (storage): %w", err)
-				}
-				batch.Reset()
-				iters.reopen()
+			if err := iters.flushIfFull(batch, "storage"); err != nil {
+				return nil, err
 			}
 		}
 		if err := iters.stor.Error(); err != nil {
@@ -249,14 +260,8 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 		if err := acctTrie.Update(accountHash[:], fullAccount); err != nil {
 			return nil, fmt.Errorf("account stack trie update for %x: %w", accountHash, err)
 		}
-
-		// Cap batch size and reopen iterators so pebble compactions don't stall.
-		if batch.ValueSize() > ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				return nil, fmt.Errorf("flush batch: %w", err)
-			}
-			batch.Reset()
-			iters.reopen()
+		if err := iters.flushIfFull(batch, "account"); err != nil {
+			return nil, err
 		}
 	}
 	if err := iters.acct.Error(); err != nil {
@@ -288,13 +293,8 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 		deleted.Add(1)
 		slotHash := sk[len(rawdb.SnapshotStoragePrefix)+common.HashLength:]
 		rawdb.DeleteStorageSnapshot(batch, common.BytesToHash(acct), common.BytesToHash(slotHash))
-
-		if batch.ValueSize() > ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				return nil, fmt.Errorf("flush batch (dangling): %w", err)
-			}
-			batch.Reset()
-			iters.reopen()
+		if err := iters.flushIfFull(batch, "dangling tail"); err != nil {
+			return nil, err
 		}
 	}
 	if err := iters.stor.Error(); err != nil {

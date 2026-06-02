@@ -650,3 +650,143 @@ func assertSameNodeSet(t *testing.T, label string, got, want map[string]struct{}
 		}
 	}
 }
+
+// peakBatch records the largest ValueSize the batch reaches before any flush.
+type peakBatch struct {
+	ethdb.Batch
+	peak *int
+}
+
+func (b *peakBatch) Write() error {
+	if s := b.ValueSize(); s > *b.peak {
+		*b.peak = s
+	}
+	return b.Batch.Write()
+}
+
+// peakBatchDB hands out peakBatch batches so a test can observe how large the
+// write batch grows between flushes.
+type peakBatchDB struct {
+	ethdb.Database
+	peak *int
+}
+
+func (d peakBatchDB) NewBatch() ethdb.Batch {
+	return &peakBatch{Batch: d.Database.NewBatch(), peak: d.peak}
+}
+
+func (d peakBatchDB) NewBatchWithSize(size int) ethdb.Batch {
+	return &peakBatch{Batch: d.Database.NewBatchWithSize(size), peak: d.peak}
+}
+
+// TestGenerateTrieBatchFlush drives each of generatePartition's batch-flush
+// sites past IdealBatchSize and checks the write batch stays bounded (so the
+// flush fired) without dropping or skipping any entry.
+func TestGenerateTrieBatchFlush(t *testing.T) {
+	// h builds a unique partition-0 hash (leading nibble 0) from an int, used
+	// for both account hashes and storage slot hashes.
+	h := func(i int) common.Hash {
+		return common.BytesToHash([]byte{0x00, byte(i >> 16), byte(i >> 8), byte(i)})
+	}
+	acct := func(root common.Hash) types.StateAccount {
+		return types.StateAccount{Nonce: 1, Balance: uint256.NewInt(1), Root: root, CodeHash: types.EmptyCodeHash.Bytes()}
+	}
+	// Each fixture writes this many entries into partition 0, enough that one
+	// flush site overflows IdealBatchSize several times over.
+	const n = 5000
+
+	cases := []struct {
+		name        string
+		build       func(db ethdb.Database)
+		wantScanned int64
+		wantDeleted int64
+	}{
+		{
+			// Dangling account (no snapshot) sorting before a live account, so its
+			// slots are deleted inline (cmp < 0) while the live account is built.
+			name: "inline dangling deletes",
+			build: func(db ethdb.Database) {
+				for i := 0; i < n; i++ {
+					rawdb.WriteStorageSnapshot(db, h(1), h(i), []byte{0x01})
+				}
+				rawdb.WriteAccountSnapshot(db, h(0xffffff), types.SlimAccountRLP(acct(types.EmptyRootHash)))
+			},
+			wantScanned: 1,
+			wantDeleted: n,
+		},
+		{
+			// Dangling account with no live account at all, so every slot is
+			// cleared by the tail loop after the account iterator is exhausted.
+			name: "tail dangling deletes",
+			build: func(db ethdb.Database) {
+				for i := 0; i < n; i++ {
+					rawdb.WriteStorageSnapshot(db, h(1), h(i), []byte{0x01})
+				}
+			},
+			wantScanned: 0,
+			wantDeleted: n,
+		},
+		{
+			// One account whose storage trie alone overflows the batch, so the
+			// cmp == 0 storage path flushes mid-build. updated stays 0 only if
+			// every slot survived the flush and iterator reopen.
+			name: "single account, large storage",
+			build: func(db ethdb.Database) {
+				slots := make([]testSlot, n)
+				for i := range slots {
+					slots[i] = testSlot{hash: h(i), value: bytes.Repeat([]byte{byte(i)}, 32)}
+				}
+				rawdb.WriteAccountSnapshot(db, h(7), types.SlimAccountRLP(acct(computeStorageRootFromSlots(slots))))
+				for _, s := range slots {
+					rawdb.WriteStorageSnapshot(db, h(7), s.hash, s.value)
+				}
+			},
+			wantScanned: 1,
+			wantDeleted: 0,
+		},
+		{
+			// Many empty-storage accounts so the account trie alone overflows the
+			// batch, exercising the per-account flush. A skipped account would not
+			// be counted in scanned.
+			name: "many accounts",
+			build: func(db ethdb.Database) {
+				for i := 0; i < n; i++ {
+					rawdb.WriteAccountSnapshot(db, h(i), types.SlimAccountRLP(acct(types.EmptyRootHash)))
+				}
+			},
+			wantScanned: n,
+			wantDeleted: 0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := rawdb.NewMemoryDatabase()
+			tc.build(db)
+
+			peak := 0
+			var scanned, updated, deleted atomic.Int64
+			var pos atomic.Uint64
+			ranges := hashRanges(numPartitions)
+			if _, err := generatePartition(context.Background(), nil, peakBatchDB{Database: db, peak: &peak},
+				rawdb.HashScheme, 0, ranges[0][0], ranges[0][1], &scanned, &updated, &deleted, &pos); err != nil {
+				t.Fatalf("generatePartition: %v", err)
+			}
+
+			if scanned.Load() != tc.wantScanned {
+				t.Errorf("scanned = %d, want %d (an account was skipped?)", scanned.Load(), tc.wantScanned)
+			}
+			if deleted.Load() != tc.wantDeleted {
+				t.Errorf("deleted = %d, want %d", deleted.Load(), tc.wantDeleted)
+			}
+			if updated.Load() != 0 {
+				t.Errorf("updated = %d, want 0 (a storage slot was dropped across a flush?)", updated.Load())
+			}
+			// The batch must have stayed bounded. Without this site's flush its
+			// full write set (far larger than IdealBatchSize) buffers into one batch.
+			if peak > 2*ethdb.IdealBatchSize {
+				t.Errorf("peak batch size %d exceeded 2*IdealBatchSize (%d); flush did not fire", peak, 2*ethdb.IdealBatchSize)
+			}
+		})
+	}
+}
