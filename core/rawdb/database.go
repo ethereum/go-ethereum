@@ -113,7 +113,7 @@ func (db *nofreezedb) Ancients() (uint64, error) {
 }
 
 // Tail returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) Tail() (uint64, error) {
+func (db *nofreezedb) Tail(group string) (uint64, error) {
 	return 0, errNotSupported
 }
 
@@ -133,7 +133,7 @@ func (db *nofreezedb) TruncateHead(items uint64) (uint64, error) {
 }
 
 // TruncateTail returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) TruncateTail(items uint64) (uint64, error) {
+func (db *nofreezedb) TruncateTail(group string, items uint64) (uint64, error) {
 	return 0, errNotSupported
 }
 
@@ -413,6 +413,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		tds                stat
 		numHashPairings    stat
 		hashNumPairings    stat
+		blockAccessList    stat
 		legacyTries        stat
 		stateLookups       stat
 		accountTries       stat
@@ -484,6 +485,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				numHashPairings.add(size)
 			case bytes.HasPrefix(key, headerNumberPrefix) && len(key) == (len(headerNumberPrefix)+common.HashLength):
 				hashNumPairings.add(size)
+			case bytes.HasPrefix(key, accessListPrefix) && len(key) == len(accessListPrefix)+8+common.HashLength:
+				blockAccessList.add(size)
+
 			case IsLegacyTrieNode(key, it.Value()):
 				legacyTries.add(size)
 			case bytes.HasPrefix(key, stateIDPrefix) && len(key) == len(stateIDPrefix)+common.HashLength:
@@ -625,6 +629,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Difficulties (deprecated)", tds.sizeString(), tds.countString()},
 		{"Key-Value store", "Block number->hash", numHashPairings.sizeString(), numHashPairings.countString()},
 		{"Key-Value store", "Block hash->number", hashNumPairings.sizeString(), hashNumPairings.countString()},
+		{"Key-Value store", "Block accessList", blockAccessList.sizeString(), blockAccessList.countString()},
 		{"Key-Value store", "Transaction index", txLookups.sizeString(), txLookups.countString()},
 		{"Key-Value store", "Log index filter-map rows", filterMapRows.sizeString(), filterMapRows.countString()},
 		{"Key-Value store", "Log index last-block-of-map", filterMapLastBlock.sizeString(), filterMapLastBlock.countString()},
@@ -653,12 +658,12 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		return err
 	}
 	for _, ancient := range ancients {
-		for _, table := range ancient.sizes {
+		for _, table := range ancient.tables {
 			stats = append(stats, []string{
 				fmt.Sprintf("Ancient store (%s)", strings.Title(ancient.name)),
 				strings.Title(table.name),
 				table.size.String(),
-				fmt.Sprintf("%d", ancient.count),
+				fmt.Sprintf("%d", table.count),
 			})
 		}
 		total.Add(uint64(ancient.size()))

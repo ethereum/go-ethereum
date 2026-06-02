@@ -26,13 +26,7 @@ func atomicRename(src, dest string) error {
 	if err := os.Rename(src, dest); err != nil {
 		return err
 	}
-	dir, err := os.Open(filepath.Dir(src))
-	if err != nil {
-		return err
-	}
-	defer dir.Close()
-
-	return dir.Sync()
+	return syncDir(filepath.Dir(src))
 }
 
 // copyFrom copies data from 'srcPath' at offset 'offset' into 'destPath'.
@@ -81,6 +75,11 @@ func copyFrom(srcPath, destPath string, offset uint64, before func(f *os.File) e
 	// src may be same as dest, so needs to be closed before
 	// we do the final move.
 	src.Close()
+
+	// Permanently persist the content into disk
+	if err := f.Sync(); err != nil {
+		return err
+	}
 
 	if err := f.Close(); err != nil {
 		return err
@@ -135,6 +134,7 @@ func openFreezerFileForAppend(filename string) (*os.File, error) {
 	}
 	// Seek to end for append
 	if _, err = file.Seek(0, io.SeekEnd); err != nil {
+		file.Close()
 		return nil, err
 	}
 	return file, nil

@@ -37,11 +37,15 @@ func (nilHeadSubChain) Config() *params.ChainConfig { return params.TestChainCon
 
 func (nilHeadSubChain) CurrentBlock() *types.Header { return &types.Header{Root: types.EmptyRootHash} }
 
+func (nilHeadSubChain) Genesis() *types.Block {
+	return types.NewBlockWithHeader(&types.Header{Root: types.EmptyRootHash})
+}
+
 func (nilHeadSubChain) SubscribeChainHeadEvent(chan<- core.ChainHeadEvent) event.Subscription {
 	return nil
 }
 
-func (nilHeadSubChain) StateAt(common.Hash) (*state.StateDB, error) {
+func (nilHeadSubChain) StateAt(*types.Header) (*state.StateDB, error) {
 	return state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 }
 
@@ -151,6 +155,11 @@ func TestTxPoolCloseUnsubscribesHeadSubscription(t *testing.T) {
 	}
 	if err := pool.Close(); err != nil {
 		t.Fatalf("unexpected close error: %v", err)
+	}
+	select {
+	case <-pool.term:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for txpool loop termination")
 	}
 	if !chain.sub.isClosed() {
 		t.Fatal("expected head subscription to be unsubscribed on close")

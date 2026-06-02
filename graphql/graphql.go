@@ -929,7 +929,7 @@ func (b *Block) RawHeader(ctx context.Context) (hexutil.Bytes, error) {
 
 func (b *Block) Raw(ctx context.Context) (hexutil.Bytes, error) {
 	block, err := b.resolve(ctx)
-	if err != nil {
+	if err != nil || block == nil {
 		return hexutil.Bytes{}, err
 	}
 	return rlp.EncodeToBytes(block)
@@ -1433,7 +1433,7 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 	if args.Filter.ToBlock != nil {
 		end = int64(*args.Filter.ToBlock)
 	}
-	if begin > 0 && end > 0 && begin > end {
+	if begin >= 0 && end >= 0 && begin > end {
 		return nil, errInvalidBlockRange
 	}
 	var addresses []common.Address
@@ -1530,6 +1530,9 @@ func (s *SyncState) TxIndexRemainingBlocks() hexutil.Uint64 {
 }
 func (s *SyncState) StateIndexRemaining() hexutil.Uint64 {
 	return hexutil.Uint64(s.progress.StateIndexRemaining)
+}
+func (s *SyncState) TrienodeIndexRemaining() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.TrienodeIndexRemaining)
 }
 
 // Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not

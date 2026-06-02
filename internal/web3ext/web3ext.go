@@ -612,6 +612,11 @@ web3._extend({
 			name: 'config',
 			call: 'eth_config',
 			params: 0,
+		}),
+		new web3._extend.Method({
+			name: 'capabilities',
+			call: 'eth_capabilities',
+			params: 0,
 		})
 	],
 	properties: [

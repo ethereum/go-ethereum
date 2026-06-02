@@ -17,7 +17,10 @@
 package stateless
 
 import (
+	"bytes"
+	"errors"
 	"io"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -27,22 +30,39 @@ import (
 // ToExtWitness converts our internal witness representation to the consensus one.
 func (w *Witness) ToExtWitness() *ExtWitness {
 	ext := &ExtWitness{
-		Headers: w.Headers,
+		Headers: slices.Clone(w.Headers),
 	}
+	slices.Reverse(ext.Headers)
+
 	ext.Codes = make([]hexutil.Bytes, 0, len(w.Codes))
 	for code := range w.Codes {
 		ext.Codes = append(ext.Codes, []byte(code))
 	}
+	slices.SortFunc(ext.Codes, func(a, b hexutil.Bytes) int {
+		return bytes.Compare(a, b)
+	})
+
 	ext.State = make([]hexutil.Bytes, 0, len(w.State))
 	for node := range w.State {
 		ext.State = append(ext.State, []byte(node))
 	}
+	slices.SortFunc(ext.State, func(a, b hexutil.Bytes) int {
+		return bytes.Compare(a, b)
+	})
 	return ext
 }
 
 // FromExtWitness converts the consensus witness format into our internal one.
 func (w *Witness) FromExtWitness(ext *ExtWitness) error {
-	w.Headers = ext.Headers
+	if len(ext.Headers) == 0 {
+		return errors.New("witness must contain at least one header")
+	}
+	w.Headers = slices.Clone(ext.Headers)
+	// don't trust the input and sort headers in reverse order
+	// this is only useful for calling `Root`
+	slices.SortFunc(w.Headers, func(a, b *types.Header) int {
+		return b.Number.Cmp(a.Number)
+	})
 
 	w.Codes = make(map[string]struct{}, len(ext.Codes))
 	for _, code := range ext.Codes {

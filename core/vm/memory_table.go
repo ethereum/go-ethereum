@@ -17,59 +17,59 @@
 package vm
 
 func memoryKeccak256(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(0), stack.Back(1))
+	return calcMemSize64(stack.back(0), stack.back(1))
 }
 
 func memoryCallDataCopy(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(0), stack.Back(2))
+	return calcMemSize64(stack.back(0), stack.back(2))
 }
 
 func memoryReturnDataCopy(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(0), stack.Back(2))
+	return calcMemSize64(stack.back(0), stack.back(2))
 }
 
 func memoryCodeCopy(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(0), stack.Back(2))
+	return calcMemSize64(stack.back(0), stack.back(2))
 }
 
 func memoryExtCodeCopy(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(1), stack.Back(3))
+	return calcMemSize64(stack.back(1), stack.back(3))
 }
 
 func memoryMLoad(stack *Stack) (uint64, bool) {
-	return calcMemSize64WithUint(stack.Back(0), 32)
+	return calcMemSize64WithUint(stack.back(0), 32)
 }
 
 func memoryMStore8(stack *Stack) (uint64, bool) {
-	return calcMemSize64WithUint(stack.Back(0), 1)
+	return calcMemSize64WithUint(stack.back(0), 1)
 }
 
 func memoryMStore(stack *Stack) (uint64, bool) {
-	return calcMemSize64WithUint(stack.Back(0), 32)
+	return calcMemSize64WithUint(stack.back(0), 32)
 }
 
 func memoryMcopy(stack *Stack) (uint64, bool) {
-	mStart := stack.Back(0) // stack[0]: dest
-	if stack.Back(1).Gt(mStart) {
-		mStart = stack.Back(1) // stack[1]: source
+	mStart := stack.back(0) // stack[0]: dest
+	if stack.back(1).Gt(mStart) {
+		mStart = stack.back(1) // stack[1]: source
 	}
-	return calcMemSize64(mStart, stack.Back(2)) // stack[2]: length
+	return calcMemSize64(mStart, stack.back(2)) // stack[2]: length
 }
 
 func memoryCreate(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(1), stack.Back(2))
+	return calcMemSize64(stack.back(1), stack.back(2))
 }
 
 func memoryCreate2(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(1), stack.Back(2))
+	return calcMemSize64(stack.back(1), stack.back(2))
 }
 
 func memoryCall(stack *Stack) (uint64, bool) {
-	x, overflow := calcMemSize64(stack.Back(5), stack.Back(6))
+	x, overflow := calcMemSize64(stack.back(5), stack.back(6))
 	if overflow {
 		return 0, true
 	}
-	y, overflow := calcMemSize64(stack.Back(3), stack.Back(4))
+	y, overflow := calcMemSize64(stack.back(3), stack.back(4))
 	if overflow {
 		return 0, true
 	}
@@ -80,11 +80,11 @@ func memoryCall(stack *Stack) (uint64, bool) {
 }
 
 func memoryDelegateCall(stack *Stack) (uint64, bool) {
-	x, overflow := calcMemSize64(stack.Back(4), stack.Back(5))
+	x, overflow := calcMemSize64(stack.back(4), stack.back(5))
 	if overflow {
 		return 0, true
 	}
-	y, overflow := calcMemSize64(stack.Back(2), stack.Back(3))
+	y, overflow := calcMemSize64(stack.back(2), stack.back(3))
 	if overflow {
 		return 0, true
 	}
@@ -95,11 +95,11 @@ func memoryDelegateCall(stack *Stack) (uint64, bool) {
 }
 
 func memoryStaticCall(stack *Stack) (uint64, bool) {
-	x, overflow := calcMemSize64(stack.Back(4), stack.Back(5))
+	x, overflow := calcMemSize64(stack.back(4), stack.back(5))
 	if overflow {
 		return 0, true
 	}
-	y, overflow := calcMemSize64(stack.Back(2), stack.Back(3))
+	y, overflow := calcMemSize64(stack.back(2), stack.back(3))
 	if overflow {
 		return 0, true
 	}
@@ -110,13 +110,13 @@ func memoryStaticCall(stack *Stack) (uint64, bool) {
 }
 
 func memoryReturn(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(0), stack.Back(1))
+	return calcMemSize64(stack.back(0), stack.back(1))
 }
 
 func memoryRevert(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(0), stack.Back(1))
+	return calcMemSize64(stack.back(0), stack.back(1))
 }
 
 func memoryLog(stack *Stack) (uint64, bool) {
-	return calcMemSize64(stack.Back(0), stack.Back(1))
+	return calcMemSize64(stack.back(0), stack.back(1))
 }

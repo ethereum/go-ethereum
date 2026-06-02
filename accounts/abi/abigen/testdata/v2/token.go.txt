@@ -386,8 +386,11 @@ func (TokenTransfer) ContractEventName() string {
 // Solidity: event Transfer(address indexed from, address indexed to, uint256 value)
 func (token *Token) UnpackTransferEvent(log *types.Log) (*TokenTransfer, error) {
 	event := "Transfer"
-	if len(log.Topics) == 0 || log.Topics[0] != token.abi.Events[event].ID {
-		return nil, errors.New("event signature mismatch")
+	if len(log.Topics) == 0 {
+		return nil, bind.ErrNoEventSignature
+	}
+	if log.Topics[0] != token.abi.Events[event].ID {
+		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(TokenTransfer)
 	if len(log.Data) > 0 {

@@ -17,6 +17,7 @@
 package discover
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"math/rand"
@@ -487,6 +488,105 @@ func quickcfg() *quick.Config {
 	return &quick.Config{
 		MaxCount: 5000,
 		Rand:     rand.New(rand.NewSource(time.Now().Unix())),
+	}
+}
+
+func TestSetFallbackNodes_DNSHostname(t *testing.T) {
+	// Create a node with a DNS hostname but no IP, simulating an enode URL
+	// like enode://<key>@localhost:30303.
+	key := newkey()
+	node := enode.NewV4(&key.PublicKey, nil, 30303, 30303).WithHostname("localhost")
+
+	// Verify the node has a hostname but no valid IP.
+	if node.Hostname() != "localhost" {
+		t.Fatal("expected hostname to be set")
+	}
+	if node.IPAddr().IsValid() {
+		t.Fatal("expected no IP address")
+	}
+
+	// Create a table and set the hostname node as a bootnode.
+	// This should resolve the hostname to an IP address.
+	db, _ := enode.OpenDB(t.TempDir() + "/node.db")
+	defer db.Close()
+
+	cfg := Config{Log: testlog.Logger(t, log.LvlTrace)}
+	cfg = cfg.withDefaults()
+	tab := &Table{
+		cfg:             cfg,
+		log:             cfg.Log,
+		refreshReq:      make(chan chan struct{}),
+		revalResponseCh: make(chan revalidationResponse),
+		addNodeCh:       make(chan addNodeOp),
+		addNodeHandled:  make(chan bool),
+		trackRequestCh:  make(chan trackRequestOp),
+		initDone:        make(chan struct{}),
+		closeReq:        make(chan struct{}),
+		closed:          make(chan struct{}),
+		ips:             netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit},
+	}
+	for i := range tab.buckets {
+		tab.buckets[i] = &bucket{
+			index: i,
+			ips:   netutil.DistinctNetSet{Subnet: bucketSubnet, Limit: bucketIPLimit},
+		}
+	}
+
+	err := tab.setFallbackNodes([]*enode.Node{node})
+	if err != nil {
+		t.Fatalf("setFallbackNodes failed: %v", err)
+	}
+	if len(tab.nursery) != 1 {
+		t.Fatalf("expected 1 nursery node, got %d", len(tab.nursery))
+	}
+
+	// The resolved node should have a valid IP and retain the hostname.
+	resolved := tab.nursery[0]
+	if !resolved.IPAddr().IsValid() {
+		t.Fatal("expected resolved node to have a valid IP")
+	}
+	if resolved.Hostname() != "localhost" {
+		t.Errorf("expected hostname to be preserved, got %q", resolved.Hostname())
+	}
+	t.Logf("resolved localhost to %v", resolved.IPAddr())
+}
+
+// This test checks that waitForNodes does not block addFoundNode.
+// See https://github.com/ethereum/go-ethereum/issues/34881.
+func TestTable_waitForNodesLocking(t *testing.T) {
+	transport := newPingRecorder()
+	tab, db := newTestTable(transport, Config{})
+	defer db.Close()
+	defer tab.close()
+	<-tab.initDone
+
+	// waitForNodes will never reach this count, so it stays subscribed
+	// to nodeFeed and looping for the duration of the test.
+	waitCtx, cancelWait := context.WithCancel(context.Background())
+	defer cancelWait()
+	waitDone := make(chan struct{})
+	go func() {
+		defer close(waitDone)
+		tab.waitForNodes(waitCtx, 1<<20)
+	}()
+
+	// Call addFoundNode in loop to send to the feed.
+	addDone := make(chan struct{})
+	go func() {
+		defer close(addDone)
+		for i := range 10000 {
+			d := 240 + (i % 17)
+			n := nodeAtDistance(tab.self().ID(), d, intIP(i))
+			tab.addFoundNode(n, true)
+		}
+	}()
+
+	select {
+	case <-addDone:
+		cancelWait()
+		<-waitDone
+	case <-time.After(10 * time.Second):
+		t.Fatal("deadlock detected: add loop did not finish within 10s")
 	}
 }
 

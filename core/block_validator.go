@@ -111,6 +111,28 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 	}
 
+	// Block access list hash must be present in header after the
+	// Amsterdam hard fork.
+	if v.config.IsAmsterdam(block.Number(), block.Time()) {
+		if block.Header().BlockAccessListHash == nil {
+			return errors.New("block access list hash not set in header")
+		}
+		// If the block does not include an access list, compute it locally during
+		// execution and validate it against the access list hash in the header.
+		//
+		// If the block includes an attached access list, validate it directly here.
+		if block.AccessList() != nil {
+			computed := block.AccessList().Hash()
+			if *block.Header().BlockAccessListHash != computed {
+				return fmt.Errorf("access list hash mismatch, computed: %x, remote: %x", computed, *block.Header().BlockAccessListHash)
+			} else if err := block.AccessList().Validate(block.GasLimit(), len(block.Transactions())); err != nil {
+				return fmt.Errorf("invalid block access list: %v", err)
+			}
+		}
+	} else if block.Header().BlockAccessListHash != nil || block.AccessList() != nil {
+		return errors.New("block had access list before Amsterdam")
+	}
+
 	// Ancestor block must be known.
 	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
@@ -159,6 +181,23 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		}
 	} else if res.Requests != nil {
 		return errors.New("block has requests before prague fork")
+	}
+	// Verify Block-level accessList once Amsterdam is enabled
+	if v.config.IsAmsterdam(block.Number(), block.Time()) {
+		if res.Bal == nil {
+			return errors.New("block access list is not available in amsterdam")
+		}
+		if block.Header().BlockAccessListHash == nil {
+			return errors.New("block access list hash not set in header")
+		}
+		enc := res.Bal.ToEncodingObj()
+		local, remote := enc.Hash(), *block.Header().BlockAccessListHash
+		if local != remote {
+			return fmt.Errorf("access list hash mismatch, local: %x, remote: %x", local, remote)
+		}
+		if err := enc.Validate(block.GasLimit(), len(block.Transactions())); err != nil {
+			return fmt.Errorf("invalid block access list: %v", err)
+		}
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.

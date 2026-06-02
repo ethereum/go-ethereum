@@ -41,12 +41,19 @@ type GoToolchain struct {
 func (g *GoToolchain) Go(command string, args ...string) *exec.Cmd {
 	tool := g.goTool(command, args...)
 
-	// Configure environment for cross build.
-	if g.GOARCH != "" && g.GOARCH != runtime.GOARCH {
+	// Configure environment for cross build. Force CGO_ENABLED=1 whenever
+	// either GOOS or GOARCH differs from the host: Go's default is
+	// CGO_ENABLED=0 for any cross-compile, but geth's release builds rely
+	// on cgo (c-kzg-4844, secp256k1) regardless of which axis is crossing.
+	crossArch := g.GOARCH != "" && g.GOARCH != runtime.GOARCH
+	crossOS := g.GOOS != "" && g.GOOS != runtime.GOOS
+	if crossArch || crossOS {
 		tool.Env = append(tool.Env, "CGO_ENABLED=1")
+	}
+	if crossArch {
 		tool.Env = append(tool.Env, "GOARCH="+g.GOARCH)
 	}
-	if g.GOOS != "" && g.GOOS != runtime.GOOS {
+	if crossOS {
 		tool.Env = append(tool.Env, "GOOS="+g.GOOS)
 	}
 	// Configure C compiler.

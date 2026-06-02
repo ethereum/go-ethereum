@@ -22,6 +22,7 @@ import (
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -299,7 +300,7 @@ func TestEth2NewBlock(t *testing.T) {
 	ethservice.BlockChain().SubscribeRemovedLogsEvent(rmLogsCh)
 
 	for i := 0; i < 10; i++ {
-		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
+		statedb, _ := ethservice.BlockChain().StateAt(parent.Header())
 		nonce := statedb.GetNonce(testAddr)
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		ethservice.TxPool().Add([]*types.Transaction{tx}, true)
@@ -478,7 +479,7 @@ func TestFullAPI(t *testing.T) {
 	)
 
 	callback := func(parent *types.Header) {
-		statedb, _ := ethservice.BlockChain().StateAt(parent.Root)
+		statedb, _ := ethservice.BlockChain().StateAt(parent)
 		nonce := statedb.GetNonce(testAddr)
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		ethservice.TxPool().Add([]*types.Transaction{tx}, false)
@@ -604,7 +605,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 		logCode = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
 	)
 	for i := 0; i < 10; i++ {
-		statedb, _ := ethservice.BlockChain().StateAt(parent.Root)
+		statedb, _ := ethservice.BlockChain().StateAt(parent)
 		tx := types.MustSignNewTx(testKey, signer, &types.LegacyTx{
 			Nonce:    statedb.GetNonce(testAddr),
 			Value:    new(big.Int),
@@ -1263,7 +1264,7 @@ func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 	// Each block, this callback will include two txs that generate body values like logs and requests.
 	callback := func(parent *types.Header) {
 		var (
-			statedb, _ = ethservice.BlockChain().StateAt(parent.Root)
+			statedb, _ = ethservice.BlockChain().StateAt(parent)
 			// Create tx to trigger log generator.
 			tx1, _ = types.SignTx(types.NewContractCreation(statedb.GetNonce(testAddr), new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 			// Create tx to trigger deposit generator.
@@ -1961,7 +1962,7 @@ func TestGetBlobsV1(t *testing.T) {
 		// Fill the request for retrieving blobs
 		var (
 			vhashes []common.Hash
-			expect  []*engine.BlobAndProofV1
+			expect  engine.BlobAndProofListV1
 		)
 		// fill missing blob at the beginning
 		if suite.fillRandom {
@@ -1986,7 +1987,7 @@ func TestGetBlobsV1(t *testing.T) {
 			vhashes = append(vhashes, testrand.Hash())
 			expect = append(expect, nil)
 		}
-		result, err := api.GetBlobsV1(vhashes)
+		result, err := api.GetBlobsV1(context.Background(), vhashes)
 		if err != nil {
 			t.Errorf("Unexpected error for case %d, %v", i, err)
 		}
@@ -2008,7 +2009,7 @@ func TestGetBlobsV1AfterOsakaFork(t *testing.T) {
 
 	var engineErr *engine.EngineAPIError
 	api := newConsensusAPIWithoutHeartbeat(ethServ)
-	_, err := api.GetBlobsV1([]common.Hash{testrand.Hash()})
+	_, err := api.GetBlobsV1(context.Background(), []common.Hash{testrand.Hash()})
 	if !errors.As(err, &engineErr) {
 		t.Fatalf("Unexpected error: %T", err)
 	} else {
@@ -2072,13 +2073,13 @@ func BenchmarkGetBlobsV2(b *testing.B) {
 	}
 }
 
-type getBlobsFn func(hashes []common.Hash) ([]*engine.BlobAndProofV2, error)
+type getBlobsFn func(ctx context.Context, hashes []common.Hash) (engine.BlobAndProofListV2, error)
 
 func runGetBlobs(t testing.TB, getBlobs getBlobsFn, start, limit int, fillRandom bool, expectPartialResponse bool, name string) {
 	// Fill the request for retrieving blobs
 	var (
 		vhashes []common.Hash
-		expect  []*engine.BlobAndProofV2
+		expect  engine.BlobAndProofListV2
 	)
 	for j := start; j < limit; j++ {
 		vhashes = append(vhashes, testBlobVHashes[j])
@@ -2095,7 +2096,7 @@ func runGetBlobs(t testing.TB, getBlobs getBlobsFn, start, limit int, fillRandom
 	if fillRandom {
 		vhashes = append(vhashes, testrand.Hash())
 	}
-	result, err := getBlobs(vhashes)
+	result, err := getBlobs(context.Background(), vhashes)
 	if err != nil {
 		t.Errorf("Unexpected error for case %s, %v", name, err)
 	}
@@ -2105,6 +2106,13 @@ func runGetBlobs(t testing.TB, getBlobs getBlobsFn, start, limit int, fillRandom
 		} else {
 			// Nil is expected if getBlobs can not return a partial response
 			expect = nil
+			enc, err := json.Marshal(result)
+			if err != nil {
+				t.Fatalf("Failed to encode result for case %s: %v", name, err)
+			}
+			if string(enc) != "null" {
+				t.Fatalf("Unexpected JSON result for case %s: got %s, want null", name, enc)
+			}
 		}
 	}
 	if !reflect.DeepEqual(result, expect) {

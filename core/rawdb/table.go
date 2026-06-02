@@ -76,8 +76,8 @@ func (t *table) Ancients() (uint64, error) {
 
 // Tail is a noop passthrough that just forwards the request to the underlying
 // database.
-func (t *table) Tail() (uint64, error) {
-	return t.db.Tail()
+func (t *table) Tail(group string) (uint64, error) {
+	return t.db.Tail(group)
 }
 
 // AncientSize is a noop passthrough that just forwards the request to the underlying
@@ -103,8 +103,8 @@ func (t *table) TruncateHead(items uint64) (uint64, error) {
 
 // TruncateTail is a noop passthrough that just forwards the request to the underlying
 // database.
-func (t *table) TruncateTail(items uint64) (uint64, error) {
-	return t.db.TruncateTail(items)
+func (t *table) TruncateTail(group string, items uint64) (uint64, error) {
+	return t.db.TruncateTail(group, items)
 }
 
 // SyncAncient is a noop passthrough that just forwards the request to the underlying

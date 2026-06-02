@@ -470,7 +470,7 @@ func checkStateAvail(state stateIdent, exptyp historyType, freezer ethdb.Ancient
 		return 0, fmt.Errorf("unsupported history type: %d, want: %v", toHistoryType(state.typ), exptyp)
 	}
 	// firstID = tail+1
-	tail, err := freezer.Tail()
+	tail, err := freezer.Tail(rawdb.DefaultHistoryGroup)
 	if err != nil {
 		return 0, err
 	}

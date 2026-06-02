@@ -160,7 +160,7 @@ func TestSizeTracker(t *testing.T) {
 		}
 		tracker.Notify(ret)
 
-		if err := tdb.Commit(ret.root, false); err != nil {
+		if err := tdb.Commit(ret.Root, false); err != nil {
 			t.Fatalf("Failed to commit trie at block %d: %v", blockNum, err)
 		}
 
@@ -169,7 +169,7 @@ func TestSizeTracker(t *testing.T) {
 			t.Fatalf("Failed to calculate size stats for block %d: %v", blockNum, err)
 		}
 		trackedUpdates = append(trackedUpdates, diff)
-		currentRoot = ret.root
+		currentRoot = ret.Root
 	}
 	finalRoot := rawdb.ReadSnapshotRoot(db)
 

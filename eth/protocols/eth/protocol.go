@@ -24,12 +24,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Constants to match up protocol versions and messages
 const (
 	ETH69 = 69
+	ETH70 = 70
+	ETH71 = 71
 )
 
 // ProtocolName is the official short name of the `eth` protocol used during
@@ -38,11 +41,11 @@ const ProtocolName = "eth"
 
 // ProtocolVersions are the supported versions of the `eth` protocol (first
 // is primary).
-var ProtocolVersions = []uint{ETH69}
+var ProtocolVersions = []uint{ETH71, ETH70, ETH69}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH69: 18}
+var protocolLengths = map[uint]uint64{ETH71: 20, ETH69: 18, ETH70: 18}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
@@ -65,6 +68,8 @@ const (
 	GetReceiptsMsg                = 0x0f
 	ReceiptsMsg                   = 0x10
 	BlockRangeUpdateMsg           = 0x11
+	GetBlockAccessListsMsg        = 0x12
+	BlockAccessListsMsg           = 0x13
 )
 
 var (
@@ -211,20 +216,34 @@ type BlockBody struct {
 // GetReceiptsRequest represents a block receipts query.
 type GetReceiptsRequest []common.Hash
 
-// GetReceiptsPacket represents a block receipts query with request ID wrapping.
-type GetReceiptsPacket struct {
+// GetReceiptsPacket69 represents a block receipts query with request ID wrapping.
+type GetReceiptsPacket69 struct {
 	RequestId uint64
+	GetReceiptsRequest
+}
+
+// GetReceiptsPacket70 represents a block receipts query with request ID and
+// FirstBlockReceiptIndex wrapping.
+type GetReceiptsPacket70 struct {
+	RequestId              uint64
+	FirstBlockReceiptIndex uint64
 	GetReceiptsRequest
 }
 
 // ReceiptsResponse is the network packet for block receipts distribution.
 type ReceiptsResponse []types.Receipts
 
-// ReceiptsPacket is the network packet for block receipts distribution with
+// ReceiptsPacket69 is the network packet for block receipts distribution with
 // request ID wrapping.
-type ReceiptsPacket struct {
+type ReceiptsPacket69 struct {
 	RequestId uint64
 	List      rlp.RawList[*ReceiptList]
+}
+
+type ReceiptsPacket70 struct {
+	RequestId           uint64
+	LastBlockIncomplete bool
+	List                rlp.RawList[*ReceiptList]
 }
 
 // ReceiptsRLPResponse is used for receipts, when we already have it encoded
@@ -273,6 +292,24 @@ type BlockRangeUpdatePacket struct {
 	LatestBlockHash common.Hash
 }
 
+type GetBlockAccessListsRequest []common.Hash
+
+type GetBlockAccessListsPacket struct {
+	RequestId uint64
+	GetBlockAccessListsRequest
+}
+
+type RawBlockAccessList struct {
+	rlp.RawList[bal.AccountAccess]
+}
+
+type BlockAccessListResponse []RawBlockAccessList
+
+type BlockAccessListPacket struct {
+	RequestId uint64
+	List      rlp.RawList[RawBlockAccessList]
+}
+
 func (*StatusPacket) Name() string { return "Status" }
 func (*StatusPacket) Kind() byte   { return StatusMsg }
 
@@ -311,3 +348,9 @@ func (*ReceiptsRLPResponse) Kind() byte   { return ReceiptsMsg }
 
 func (*BlockRangeUpdatePacket) Name() string { return "BlockRangeUpdate" }
 func (*BlockRangeUpdatePacket) Kind() byte   { return BlockRangeUpdateMsg }
+
+func (*GetBlockAccessListsRequest) Name() string { return "GetBlockAccessLists" }
+func (*GetBlockAccessListsRequest) Kind() byte   { return GetBlockAccessListsMsg }
+
+func (*BlockAccessListResponse) Name() string { return "BlockAccessLists" }
+func (*BlockAccessListResponse) Kind() byte   { return BlockAccessListsMsg }

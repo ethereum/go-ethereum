@@ -296,6 +296,15 @@ func (bc *BlockChain) GetReceiptsRLP(hash common.Hash) rlp.RawValue {
 	return rawdb.ReadReceiptsRLP(bc.db, hash, number)
 }
 
+// GetAccessListRLP retrieves the block access list of a block in RLP encoding.
+func (bc *BlockChain) GetAccessListRLP(hash common.Hash) rlp.RawValue {
+	number, ok := rawdb.ReadHeaderNumber(bc.db, hash)
+	if !ok {
+		return nil
+	}
+	return rawdb.ReadAccessListRLP(bc.db, hash, number)
+}
+
 // GetUnclesInChain retrieves all the uncles from a given block backwards until
 // a specific distance is reached.
 func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
@@ -408,19 +417,42 @@ func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) []byte {
 
 // State returns a new mutable state based on the current HEAD block.
 func (bc *BlockChain) State() (*state.StateDB, error) {
-	return bc.StateAt(bc.CurrentBlock().Root)
+	return bc.StateAt(bc.CurrentBlock())
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
-func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, state.NewDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
+func (bc *BlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
+	if bc.chainConfig.IsUBT(header.Number, header.Time) {
+		return state.New(header.Root, state.NewUBTDatabase(bc.triedb, bc.codedb))
+	}
+	return state.New(header.Root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
 }
 
-// HistoricState returns a historic state specified by the given root.
+// StateAtForkBoundary returns a new mutable state based on the parent state
+// and the given header, handling the transition across the UBT fork.
+func (bc *BlockChain) StateAtForkBoundary(parent *types.Header, header *types.Header) (*state.StateDB, error) {
+	// The parent is already in the UBT fork.
+	if bc.chainConfig.IsUBT(parent.Number, parent.Time) {
+		return state.New(parent.Root, state.NewUBTDatabase(bc.triedb, bc.codedb))
+	}
+	// The current block is the first block in the UBT fork
+	// (i.e., the parent is the last MPT block).
+	if bc.chainConfig.IsUBT(header.Number, header.Time) {
+		// TODO(gballet): register chain context if needed
+		return state.New(parent.Root, state.NewUBTDatabase(bc.triedb, bc.codedb))
+	}
+	// Both the parent and current block are in the MPT fork.
+	return state.New(parent.Root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
+}
+
+// HistoricState returns a historic state specified by the given header.
 // Live states are not available and won't be served, please use `State`
 // or `StateAt` instead.
-func (bc *BlockChain) HistoricState(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, state.NewHistoricDatabase(bc.triedb, bc.codedb))
+func (bc *BlockChain) HistoricState(header *types.Header) (*state.StateDB, error) {
+	if bc.chainConfig.IsUBT(header.Number, header.Time) {
+		return nil, errors.New("historical state over ubt is not yet supported")
+	}
+	return state.New(header.Root, state.NewHistoricDatabase(bc.triedb, bc.codedb))
 }
 
 // Config retrieves the chain's fork configuration.
@@ -468,7 +500,7 @@ func (bc *BlockChain) TxIndexProgress() (TxIndexProgress, error) {
 }
 
 // StateIndexProgress returns the historical state indexing progress.
-func (bc *BlockChain) StateIndexProgress() (uint64, error) {
+func (bc *BlockChain) StateIndexProgress() (uint64, uint64, error) {
 	return bc.triedb.IndexProgress()
 }
 

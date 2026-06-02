@@ -17,9 +17,12 @@
 package t8ntool
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	stdmath "math"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -32,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -47,6 +51,9 @@ type Prestate struct {
 	Env        stEnv                         `json:"env"`
 	Pre        types.GenesisAlloc            `json:"pre"`
 	TreeLeaves map[common.Hash]hexutil.Bytes `json:"vkt,omitempty"`
+	// AllocPath, when non-empty, causes Apply to stream the alloc from disk
+	// instead of reading Pre, so the full map never materializes in memory.
+	AllocPath string `json:"-"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type ExecutionResult -field-override executionResultMarshaling -out gen_execresult.go
@@ -69,6 +76,9 @@ type ExecutionResult struct {
 	CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
 	RequestsHash         *common.Hash          `json:"requestsHash,omitempty"`
 	Requests             [][]byte              `json:"requests"`
+
+	BlockAccessList     hexutil.Bytes `json:"blockAccessList,omitempty"`
+	BlockAccessListHash *common.Hash  `json:"blockAccessListHash,omitempty"`
 }
 
 type executionResultMarshaling struct {
@@ -146,8 +156,21 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		return h
 	}
 	var (
-		isEIP4762   = chainConfig.IsVerkle(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
-		statedb     = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isEIP4762)
+		statedb *state.StateDB
+
+		isEIP4762   = chainConfig.IsUBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+		isAmsterdam = chainConfig.IsAmsterdam(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+	)
+	if pre.AllocPath != "" {
+		var err error
+		statedb, err = MakePreStateStreaming(rawdb.NewMemoryDatabase(), pre.AllocPath, isEIP4762)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	} else {
+		statedb = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isEIP4762)
+	}
+	var (
 		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp)
 		gaspool     = core.NewGasPool(pre.Env.GasLimit)
 		blockHash   = common.Hash{0x13, 0x37}
@@ -155,6 +178,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		includedTxs types.Transactions
 		blobGasUsed = uint64(0)
 		receipts    = make(types.Receipts, 0)
+
+		// TODO return blockAccessList as a part of result
+		blockAccessList = bal.NewConstructionBlockAccessList()
 	)
 	vmContext := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
@@ -165,6 +191,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		Difficulty:  pre.Env.Difficulty,
 		GasLimit:    pre.Env.GasLimit,
 		GetHash:     getHash,
+	}
+	if pre.Env.SlotNumber != nil {
+		vmContext.SlotNum = *pre.Env.SlotNumber
 	}
 	// If currentBaseFee is defined, add it to the vmContext.
 	if pre.Env.BaseFee != nil {
@@ -214,14 +243,14 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	}
 	evm := vm.NewEVM(vmContext, statedb, chainConfig, vmConfig)
 	if beaconRoot := pre.Env.ParentBeaconBlockRoot; beaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
+		core.ProcessBeaconBlockRoot(*beaconRoot, evm, blockAccessList)
 	}
 	if pre.Env.BlockHashes != nil && chainConfig.IsPrague(new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp) {
 		var (
 			prevNumber = pre.Env.Number - 1
 			prevHash   = pre.Env.BlockHashes[math.HexOrDecimal64(prevNumber)]
 		)
-		core.ProcessParentBlockHash(prevHash, evm)
+		core.ProcessParentBlockHash(prevHash, evm, blockAccessList)
 	}
 	for i := 0; txIt.Next(); i++ {
 		tx, err := txIt.Tx()
@@ -253,12 +282,13 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 				continue
 			}
 		}
-		statedb.SetTxContext(tx.Hash(), len(receipts))
+		statedb.SetTxContext(tx.Hash(), len(receipts), uint32(len(receipts)+1))
+
 		var (
 			snapshot = statedb.Snapshot()
 			gp       = gaspool.Snapshot()
 		)
-		receipt, err := core.ApplyTransactionWithEVM(msg, gaspool, statedb, vmContext.BlockNumber, blockHash, pre.Env.Timestamp, tx, evm)
+		receipt, bal, err := core.ApplyTransactionWithEVM(msg, gaspool, statedb, vmContext.BlockNumber, blockHash, pre.Env.Timestamp, tx, evm)
 		if err != nil {
 			statedb.RevertToSnapshot(snapshot)
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From, "error", err)
@@ -275,10 +305,11 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		}
 		blobGasUsed += txBlobGas
 		receipts = append(receipts, receipt)
+		blockAccessList.Merge(bal)
 	}
-
 	statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))
 
+	// TODO(rjl493456442) call engine.Finalize() instead
 	// Add mining reward? (-1 means rewards are disabled)
 	if miningReward >= 0 {
 		// Add mining reward. The mining reward may be `0`, which only makes a difference in the cases
@@ -307,34 +338,34 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	for _, w := range pre.Env.Withdrawals {
 		// Amount is in gwei, turn into wei
 		amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
-		statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
+		prev := statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
 
 		if isEIP4762 {
 			statedb.AccessEvents().AddAccount(w.Address, true, stdmath.MaxUint64)
 		}
+		if isAmsterdam {
+			if w.Amount == 0 {
+				// Zero amount withdrawal, account is accessed potential
+				// without state changes.
+				blockAccessList.AccountRead(w.Address)
+			} else {
+				// Non-zero amount withdrawal, account is accessed with
+				// a balance change.
+				blockAccessList.BalanceChange(uint32(len(receipts)+1), w.Address, new(uint256.Int).Add(&prev, uint256.MustFromBig(amount)))
+			}
+		}
 	}
 
 	// Gather the execution-layer triggered requests.
-	var requests [][]byte
-	if chainConfig.IsPrague(vmContext.BlockNumber, vmContext.Time) {
-		requests = [][]byte{}
-		// EIP-6110
-		var allLogs []*types.Log
-		for _, receipt := range receipts {
-			allLogs = append(allLogs, receipt.Logs...)
-		}
-		if err := core.ParseDepositLogs(&requests, allLogs, chainConfig); err != nil {
-			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not parse requests logs: %v", err))
-		}
-		// EIP-7002
-		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
-			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not process withdrawal requests: %v", err))
-		}
-		// EIP-7251
-		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
-			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not process consolidation requests: %v", err))
-		}
+	var allLogs []*types.Log
+	for _, receipt := range receipts {
+		allLogs = append(allLogs, receipt.Logs...)
 	}
+	requests, bal, err := core.PostExecution(context.Background(), chainConfig, vmContext.BlockNumber, vmContext.Time, allLogs, evm, uint32(len(receipts)+1))
+	if err != nil {
+		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("failed to process post-execution: %v", err))
+	}
+	blockAccessList.Merge(bal)
 
 	// Commit block
 	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber), chainConfig.IsCancun(vmContext.BlockNumber, vmContext.Time))
@@ -367,6 +398,16 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		execRs.RequestsHash = &h
 		execRs.Requests = requests
 	}
+	if isAmsterdam {
+		encoded := blockAccessList.ToEncodingObj()
+		balRLP, err := rlp.EncodeToBytes(encoded)
+		if err != nil {
+			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not encode BAL: %v", err))
+		}
+		balHash := encoded.Hash()
+		execRs.BlockAccessListHash = &balHash
+		execRs.BlockAccessList = balRLP
+	}
 
 	// Re-create statedb instance with new root for MPT mode
 	statedb, err = state.New(root, statedb.Database())
@@ -377,9 +418,24 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	return statedb, execRs, body, nil
 }
 
+// newPrestateTrieDBConfig returns the triedb config used to construct the
+// prestate. UBT mode requires the path-based backend; the legacy hash-based
+// backend cannot decode UBT-encoded nodes.
+func newPrestateTrieDBConfig(isBintrie bool) *triedb.Config {
+	if isBintrie {
+		cfg := *triedb.UBTDefaults
+		cfg.Preimages = true
+		return &cfg
+	}
+	return &triedb.Config{Preimages: true}
+}
+
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool) *state.StateDB {
-	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true, IsVerkle: isBintrie})
+	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(isBintrie))
 	sdb := state.NewDatabase(tdb, nil)
+	if isBintrie {
+		sdb.(*state.UBTDatabase).EnableAllocRecording()
+	}
 
 	root := types.EmptyRootHash
 	if isBintrie {
@@ -412,6 +468,79 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool
 		panic(fmt.Errorf("failed to reopen state after commit: %v", err))
 	}
 	return statedb
+}
+
+// MakePreStateStreaming is like MakePreState, but decodes the alloc from disk
+// one account at a time so the full map is never held in memory.
+func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie bool) (*state.StateDB, error) {
+	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(isBintrie))
+	sdb := state.NewDatabase(tdb, nil)
+	if isBintrie {
+		sdb.(*state.UBTDatabase).EnableAllocRecording()
+	}
+
+	root := types.EmptyRootHash
+	if isBintrie {
+		root = types.EmptyBinaryHash
+	}
+	statedb, err := state.New(root, sdb)
+	if err != nil {
+		return nil, NewError(ErrorEVM, fmt.Errorf("failed to create initial statedb: %v", err))
+	}
+
+	f, err := os.Open(allocPath)
+	if err != nil {
+		return nil, NewError(ErrorIO, fmt.Errorf("failed reading alloc file: %v", err))
+	}
+	defer f.Close()
+
+	dec := json.NewDecoder(f)
+	tok, err := dec.Token()
+	if err != nil {
+		return nil, NewError(ErrorJson, fmt.Errorf("failed reading alloc opening token: %v", err))
+	}
+	if d, ok := tok.(json.Delim); !ok || d != '{' {
+		return nil, NewError(ErrorJson, fmt.Errorf("expected alloc object, got %v", tok))
+	}
+	for dec.More() {
+		keyTok, err := dec.Token()
+		if err != nil {
+			return nil, NewError(ErrorJson, fmt.Errorf("failed reading alloc key: %v", err))
+		}
+		keyStr, ok := keyTok.(string)
+		if !ok {
+			return nil, NewError(ErrorJson, fmt.Errorf("alloc key not a string: %v", keyTok))
+		}
+		addr := common.HexToAddress(keyStr)
+		var acct types.Account
+		if err := dec.Decode(&acct); err != nil {
+			return nil, NewError(ErrorJson, fmt.Errorf("failed decoding account %s: %v", keyStr, err))
+		}
+		statedb.SetCode(addr, acct.Code, tracing.CodeChangeUnspecified)
+		statedb.SetNonce(addr, acct.Nonce, tracing.NonceChangeGenesis)
+		if acct.Balance != nil {
+			statedb.SetBalance(addr, uint256.MustFromBig(acct.Balance), tracing.BalanceIncreaseGenesisBalance)
+		}
+		for k, v := range acct.Storage {
+			statedb.SetState(addr, k, v)
+		}
+	}
+	if _, err := dec.Token(); err != nil {
+		return nil, NewError(ErrorJson, fmt.Errorf("failed reading alloc closing token: %v", err))
+	}
+
+	root, err = statedb.Commit(0, false, false)
+	if err != nil {
+		return nil, NewError(ErrorEVM, fmt.Errorf("failed to commit initial state: %v", err))
+	}
+	if isBintrie {
+		return statedb, nil
+	}
+	statedb, err = state.New(root, sdb)
+	if err != nil {
+		return nil, NewError(ErrorEVM, fmt.Errorf("failed to reopen state after commit: %v", err))
+	}
+	return statedb, nil
 }
 
 func rlpHash(x any) (h common.Hash) {

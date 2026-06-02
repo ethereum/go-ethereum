@@ -166,8 +166,11 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, exe
 				if haveGasUsed != gasUsed {
 					panic(fmt.Sprintf("gas differs, have %v want %v", haveGasUsed, gasUsed))
 				}
-				if haveErr != err {
-					panic(fmt.Sprintf("err differs, have %v want %v", haveErr, err))
+				if (haveErr == nil) != (err == nil) {
+					panic(fmt.Sprintf("err differs in nil-ness, have %v want %v", haveErr, err))
+				}
+				if haveErr != nil && err != nil && haveErr.Error() != err.Error() {
+					panic(fmt.Sprintf("err differs, have %q want %q", haveErr.Error(), err.Error()))
 				}
 			}
 		})
@@ -318,7 +321,7 @@ func runCmd(ctx *cli.Context) error {
 			// don't mutate the state!
 			runtimeConfig.State = prestate.Copy()
 			output, _, gasLeft, err := runtime.Create(input, &runtimeConfig)
-			return output, gasLeft, err
+			return output, initialGas - gasLeft, err
 		}
 	} else {
 		if len(code) > 0 {

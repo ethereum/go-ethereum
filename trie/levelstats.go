@@ -36,6 +36,18 @@ func NewLevelStats() *LevelStats {
 	return &LevelStats{}
 }
 
+// Copy returns a deep copy of the statistics.
+func (s *LevelStats) Copy() *LevelStats {
+	cpy := NewLevelStats()
+	for i := range s.level {
+		cpy.level[i].short.Store(s.level[i].short.Load())
+		cpy.level[i].full.Store(s.level[i].full.Load())
+		cpy.level[i].value.Store(s.level[i].value.Load())
+		cpy.level[i].size.Store(s.level[i].size.Load())
+	}
+	return cpy
+}
+
 // MaxDepth iterates each level and finds the deepest level with at least one
 // trie node.
 func (s *LevelStats) MaxDepth() int {

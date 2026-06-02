@@ -19,6 +19,7 @@ package filters
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"strings"
 	"testing"
@@ -634,7 +635,19 @@ func TestRangeLimit(t *testing.T) {
 	// Set rangeLimit to 5, but request a range of 9 (end - begin = 9, from 0 to 9)
 	filter := sys.NewRangeFilter(0, 9, nil, nil, 5)
 	_, err = filter.Logs(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "exceed maximum block range") {
-		t.Fatalf("expected range limit error, got %v", err)
+	if err == nil {
+		t.Fatal("expected range limit error, got nil")
+	}
+
+	var re rpc.Error
+	if errors.As(err, &re) {
+		if re.ErrorCode() != -32602 {
+			t.Fatalf("expected error code -32602, got %d", re.ErrorCode())
+		}
+		if re.Error() != "exceed maximum block range 5" {
+			t.Fatalf("expected error message 'exceed maximum block range 5', got %q", re.Error())
+		}
+	} else {
+		t.Fatalf("expected rpc error, got %v", err)
 	}
 }

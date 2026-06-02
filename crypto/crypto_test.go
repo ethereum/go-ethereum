@@ -293,7 +293,7 @@ func TestPythonIntegration(t *testing.T) {
 	sig0, _ := Sign(msg0, k0)
 
 	msg1 := common.FromHex("00000000000000000000000000000000")
-	sig1, _ := Sign(msg0, k0)
+	sig1, _ := Sign(msg1, k0)
 
 	t.Logf("msg: %x, privkey: %s sig: %x\n", msg0, kh, sig0)
 	t.Logf("msg: %x, privkey: %s sig: %x\n", msg1, kh, sig1)

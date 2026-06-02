@@ -208,6 +208,48 @@ func TestServerBatchResponseSizeLimit(t *testing.T) {
 	}
 }
 
+// TestServerBatchResponseSizeLimit_errorResponses verifies that error responses
+// are counted toward BatchResponseMaxSize.
+func TestServerBatchResponseSizeLimit_errorResponses(t *testing.T) {
+	t.Parallel()
+
+	server := newTestServer()
+	defer server.Stop()
+	// Each error response for test_returnError is ~58 bytes of JSON in the Error field.
+	// Set limit to 100 so 1 response fits (58 bytes) but the 2nd (116 bytes) exceeds it.
+	server.SetBatchLimits(100, 100)
+	var (
+		batch  []BatchElem
+		client = DialInProc(server)
+	)
+	for i := 0; i < 5; i++ {
+		batch = append(batch, BatchElem{
+			Method: "test_returnError",
+			Result: new(int),
+		})
+	}
+	if err := client.BatchCall(batch); err != nil {
+		t.Fatal("error sending batch:", err)
+	}
+	for i := range batch {
+		re, ok := batch[i].Error.(Error)
+		if !ok {
+			t.Fatalf("batch elem %d has wrong error type: %v", i, batch[i].Error)
+		}
+		if i < 2 {
+			// First two: elem 0 fits under limit, elem 1 pushes over but is already processed.
+			if re.ErrorCode() != 444 {
+				t.Errorf("batch elem %d wrong error code, have %d want 444", i, re.ErrorCode())
+			}
+		} else {
+			// Remaining should be the response-too-large error.
+			if re.ErrorCode() != errcodeResponseTooLarge {
+				t.Errorf("batch elem %d wrong error code, have %d want %d", i, re.ErrorCode(), errcodeResponseTooLarge)
+			}
+		}
+	}
+}
+
 func TestServerWebsocketReadLimit(t *testing.T) {
 	t.Parallel()
 

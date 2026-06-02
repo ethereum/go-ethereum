@@ -54,6 +54,13 @@ func NewWitnessStats() *WitnessStats {
 	}
 }
 
+func (s *WitnessStats) copy() *WitnessStats {
+	return &WitnessStats{
+		accountTrie: s.accountTrie.Copy(),
+		storageTrie: s.storageTrie.Copy(),
+	}
+}
+
 func (s *WitnessStats) init() {
 	if s.accountTrie == nil {
 		s.accountTrie = trie.NewLevelStats()

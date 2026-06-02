@@ -50,11 +50,14 @@ type BlockChain interface {
 	// CurrentBlock returns the current head of the chain.
 	CurrentBlock() *types.Header
 
+	// Genesis returns the genesis block of the chain.
+	Genesis() *types.Block
+
 	// SubscribeChainHeadEvent subscribes to new blocks being added to the chain.
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 
-	// StateAt returns a state database for a given root hash (generally the head).
-	StateAt(root common.Hash) (*state.StateDB, error)
+	// StateAt returns a state database for a given chain header (generally the head).
+	StateAt(header *types.Header) (*state.StateDB, error)
 }
 
 // TxPool is an aggregator for various transaction specific pools, collectively
@@ -68,12 +71,13 @@ type TxPool struct {
 
 	stateLock sync.RWMutex   // The lock for protecting state instance
 	state     *state.StateDB // Current state at the blockchain head
-	headCh    chan core.ChainHeadEvent
-	headSub   event.Subscription
 
 	subs event.SubscriptionScope // Subscription scope to unsubscribe all on shutdown
 	quit chan chan error         // Quit channel to tear down the head updater
 	term chan struct{}           // Termination channel to detect a closed pool
+
+	newHeadCh  chan core.ChainHeadEvent
+	newHeadSub event.Subscription
 
 	sync chan chan error // Testing / simulator channel to block until internal reset is done
 }
@@ -89,31 +93,31 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 	// Initialize the state with head block, or fallback to empty one in
 	// case the head state is not available (might occur when node is not
 	// fully synced).
-	statedb, err := chain.StateAt(head.Root)
+	statedb, err := chain.StateAt(head)
 	if err != nil {
-		statedb, err = chain.StateAt(types.EmptyRootHash)
+		statedb, err = chain.StateAt(chain.Genesis().Header())
 	}
 	if err != nil {
 		return nil, err
 	}
 	pool := &TxPool{
-		subpools: subpools,
-		chain:    chain,
-		state:    statedb,
-		headCh:   make(chan core.ChainHeadEvent),
-		quit:     make(chan chan error),
-		term:     make(chan struct{}),
-		sync:     make(chan chan error),
+		subpools:  subpools,
+		chain:     chain,
+		state:     statedb,
+		quit:      make(chan chan error),
+		term:      make(chan struct{}),
+		sync:      make(chan chan error),
+		newHeadCh: make(chan core.ChainHeadEvent),
 	}
-	pool.headSub = chain.SubscribeChainHeadEvent(pool.headCh)
+	pool.newHeadSub = chain.SubscribeChainHeadEvent(pool.newHeadCh)
 	reserver := NewReservationTracker()
 	for i, subpool := range subpools {
 		if err := subpool.Init(gasTip, head, reserver.NewHandle(i)); err != nil {
 			for j := i - 1; j >= 0; j-- {
 				subpools[j].Close()
 			}
-			if pool.headSub != nil {
-				pool.headSub.Unsubscribe()
+			if pool.newHeadSub != nil {
+				pool.newHeadSub.Unsubscribe()
 			}
 			return nil, err
 		}
@@ -126,9 +130,6 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 func (p *TxPool) Close() error {
 	var errs []error
 
-	if p.headSub != nil {
-		p.headSub.Unsubscribe()
-	}
 	// Terminate the reset loop and wait for it to finish
 	errc := make(chan error)
 	p.quit <- errc
@@ -156,6 +157,11 @@ func (p *TxPool) Close() error {
 func (p *TxPool) loop(head *types.Header) {
 	// Close the termination marker when the pool stops
 	defer close(p.term)
+
+	newHeadCh := p.newHeadCh
+	if p.newHeadSub != nil {
+		defer p.newHeadSub.Unsubscribe()
+	}
 
 	// Track the previous and current head to feed to an idle reset
 	var (
@@ -188,7 +194,7 @@ func (p *TxPool) loop(head *types.Header) {
 			case resetBusy <- struct{}{}:
 				// Updates the statedb with the new chain head. The head state may be
 				// unavailable if the initial state sync has not yet completed.
-				if statedb, err := p.chain.StateAt(newHead.Root); err != nil {
+				if statedb, err := p.chain.StateAt(newHead); err != nil {
 					log.Error("Failed to reset txpool state", "err", err)
 				} else {
 					p.stateLock.Lock()
@@ -222,7 +228,7 @@ func (p *TxPool) loop(head *types.Header) {
 		}
 		// Wait for the next chain head event or a previous reset finish
 		select {
-		case event := <-p.headCh:
+		case event := <-newHeadCh:
 			// Chain moved forward, store the head for later consumption
 			newHead = event.Header
 
