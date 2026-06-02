@@ -73,9 +73,7 @@ func (e *Era) Close() error {
 	return err
 }
 
-// From returns an Era backed by f. Component layout is derived from the
-// e2store type tags stored in the file itself, so callers do not need to
-// supply a filename or profile.
+// From returns an Era backed by f.
 func From(f era.ReadAtSeekCloser) (era.Era, error) {
 	e, err := from(f)
 	if err != nil {
@@ -274,9 +272,8 @@ func (e *Era) loadIndex() error {
 }
 
 // detectLayout reads the e2store type tag at each component slot of the first
-// block and builds a componentType→slot map. This makes the reader robust
-// against profile variations: td and proof can appear in any supported subset,
-// and the slot positions are looked up by tag.
+// block and builds a componentType→slot map, so components are looked up by tag
+// rather than by a fixed position.
 func (e *Era) detectLayout() (map[componentType]int, error) {
 	if e.m.count == 0 {
 		return nil, errors.New("Ere file contains no blocks")
@@ -320,9 +317,7 @@ func (e *Era) detectLayout() (map[componentType]int, error) {
 }
 
 // slotOffset returns the absolute file offset of the entry at the given slot
-// of the given block index (0 = first block in file). It does no validation
-// against the layout map and is intended for use by detectLayout and
-// indexOffset.
+// of the given block index (0 = first block in file).
 func (e *Era) slotOffset(blockIdx uint64, slot int) (int64, error) {
 	payloadlen := 8 + 8*e.m.count*e.m.components + 16
 	indstart := e.m.length - int64(payloadlen) - 8
@@ -345,9 +340,7 @@ func (e *Era) receiptOff(num uint64) (int64, error) { return e.indexOffset(num, 
 func (e *Era) tdOff(num uint64) (int64, error)      { return e.indexOffset(num, td) }
 
 // indexOffset calculates offset to a certain component for a block number
-// within a file. The slot is resolved through the layout map detected at
-// Open time, so files with optional components in any order are handled
-// safely regardless of the on-disk position.
+// within a file.
 func (e *Era) indexOffset(n uint64, component componentType) (int64, error) {
 	if n < e.m.start || n >= e.m.start+e.m.count {
 		return 0, fmt.Errorf("block %d out of range [%d,%d)", n, e.m.start, e.m.start+e.m.count)
@@ -371,10 +364,7 @@ type metadata struct {
 // componentType identifies a kind of per-block entry (header, body, etc.).
 type componentType int
 
-// The Ere spec defines td and proof as independently optional. The
-// reader resolves a component to its actual slot via the metadata.layout map,
-// which is built at Open time from the e2store type tag of each slot — so the
-// position of a component within the index is never assumed.
+// td and proof are independently optional per the Ere spec.
 const (
 	header componentType = iota
 	body

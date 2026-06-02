@@ -356,11 +356,9 @@ func TestInitialTD(t *testing.T) {
 	}
 }
 
-// TestDetectLayoutNoReceipts hand-builds an Ere file whose third slot holds a
-// TotalDifficulty entry instead of receipts (the on-disk shape of a "noreceipts"
-// profile) and verifies the reader rejects it. Receipts are required, and
-// detectLayout enforces that from the e2store type tags rather than trusting
-// slot position or the filename.
+// TestDetectLayoutNoReceipts builds an Ere file with a TD entry in the receipts
+// slot (the shape of a "noreceipts" profile) and checks that the reader rejects
+// it, since receipts are required.
 func TestDetectLayoutNoReceipts(t *testing.T) {
 	t.Parallel()
 
@@ -394,7 +392,6 @@ func TestDetectLayoutNoReceipts(t *testing.T) {
 		writeEntry(typ, snappyBuf.Bytes())
 	}
 
-	// Version
 	writeEntry(era.TypeVersion, nil)
 
 	// Block 0 components in order: header, body, td (no receipts).
@@ -433,8 +430,6 @@ func TestDetectLayoutNoReceipts(t *testing.T) {
 		t.Fatalf("close: %v", err)
 	}
 
-	// The receipts component is required, so opening the file must fail at
-	// layout detection rather than misreading the TD slot as receipts.
 	g, err := os.Open(path)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
