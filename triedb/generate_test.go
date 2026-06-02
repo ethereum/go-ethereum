@@ -118,8 +118,6 @@ func TestGenerateTrieAccountsOnly(t *testing.T) {
 }
 
 func TestGenerateTrieWithStorage(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-
 	slots := []testSlot{
 		{hash: common.HexToHash("0xaa"), value: []byte{0x01, 0x02, 0x03}},
 		{hash: common.HexToHash("0xbb"), value: []byte{0x04, 0x05, 0x06}},
@@ -147,20 +145,24 @@ func TestGenerateTrieWithStorage(t *testing.T) {
 			},
 		},
 	}
-	// Write account snapshots
-	for _, a := range accounts {
-		rawdb.WriteAccountSnapshot(db, a.hash, types.SlimAccountRLP(a.account))
-	}
-	// Write storage snapshots
-	for _, a := range accounts {
-		for _, s := range a.storage {
-			rawdb.WriteStorageSnapshot(db, a.hash, s.hash, s.value)
-		}
-	}
 	root := buildExpectedRoot(t, accounts)
 
-	if _, err := GenerateTrie(db, rawdb.HashScheme, root, nil); err != nil {
-		t.Fatalf("GenerateTrie failed: %v", err)
+	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+		t.Run(scheme, func(t *testing.T) {
+			db := rawdb.NewMemoryDatabase()
+			for _, a := range accounts {
+				rawdb.WriteAccountSnapshot(db, a.hash, types.SlimAccountRLP(a.account))
+				for _, s := range a.storage {
+					rawdb.WriteStorageSnapshot(db, a.hash, s.hash, s.value)
+				}
+			}
+			if _, err := GenerateTrie(db, scheme, root, nil); err != nil {
+				t.Fatalf("GenerateTrie failed: %v", err)
+			}
+			if scheme == rawdb.PathScheme {
+				assertCanonicalNodes(t, db, accounts)
+			}
+		})
 	}
 }
 
@@ -186,8 +188,6 @@ func TestGenerateTrieRootMismatch(t *testing.T) {
 // empty, and correct account roots, then checks that GenerateTrie produces
 // the expected state root.
 func TestGenerateTrieFixesStaleRoots(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-
 	const n = 300
 	accounts := make([]testAccount, 0, n)
 	for i := 0; i < n; i++ {
@@ -216,29 +216,39 @@ func TestGenerateTrieFixesStaleRoots(t *testing.T) {
 	// Expected state root with all Roots correct.
 	expectedRoot := buildExpectedRoot(t, accounts)
 
-	// Write flat state. Storage-bearing accounts rotate through three on-disk
-	// Root states that GenerateTrie's pre-pass must all bring into alignment:
-	//   - stale non-empty Root
-	//   - stale empty Root
-	//   - correct Root
-	for i, a := range accounts {
-		for _, s := range a.storage {
-			rawdb.WriteStorageSnapshot(db, a.hash, s.hash, s.value)
-		}
-		onDisk := a.account
-		if len(a.storage) > 0 {
-			switch i % 3 {
-			case 0:
-				onDisk.Root = common.BytesToHash([]byte{byte(i), 0xde, 0xad})
-			case 1:
-				onDisk.Root = types.EmptyRootHash
-			}
-		}
-		rawdb.WriteAccountSnapshot(db, a.hash, types.SlimAccountRLP(onDisk))
-	}
+	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+		t.Run(scheme, func(t *testing.T) {
+			db := rawdb.NewMemoryDatabase()
 
-	if _, err := GenerateTrie(db, rawdb.HashScheme, expectedRoot, nil); err != nil {
-		t.Fatalf("GenerateTrie failed: %v", err)
+			// Write flat state. Storage-bearing accounts rotate through three
+			// on-disk Root states that GenerateTrie's pre-pass must all bring
+			// into alignment:
+			//   - stale non-empty Root
+			//   - stale empty Root
+			//   - correct Root
+			for i, a := range accounts {
+				for _, s := range a.storage {
+					rawdb.WriteStorageSnapshot(db, a.hash, s.hash, s.value)
+				}
+				onDisk := a.account
+				if len(a.storage) > 0 {
+					switch i % 3 {
+					case 0:
+						onDisk.Root = common.BytesToHash([]byte{byte(i), 0xde, 0xad})
+					case 1:
+						onDisk.Root = types.EmptyRootHash
+					}
+				}
+				rawdb.WriteAccountSnapshot(db, a.hash, types.SlimAccountRLP(onDisk))
+			}
+
+			if _, err := GenerateTrie(db, scheme, expectedRoot, nil); err != nil {
+				t.Fatalf("GenerateTrie failed: %v", err)
+			}
+			if scheme == rawdb.PathScheme {
+				assertCanonicalNodes(t, db, accounts)
+			}
+		})
 	}
 }
 
@@ -363,16 +373,14 @@ func TestGenerateTrieOrphanStorage(t *testing.T) {
 // TestGenerateTriePartialResume proves that the resume path actually
 // fires when a partition's done marker is present.
 func TestGenerateTriePartialResume(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-
-	// Build flat state. Empty storage keeps the test focused on the
+	// Build the account set. Empty storage keeps the test focused on the
 	// account-trie resume path.
 	const n = 200
 	accounts := make([]testAccount, 0, n)
 	for i := 0; i < n; i++ {
 		addr := common.BytesToAddress([]byte{byte(i >> 8), byte(i)})
 		hash := crypto.Keccak256Hash(addr[:])
-		acc := testAccount{
+		accounts = append(accounts, testAccount{
 			hash: hash,
 			account: types.StateAccount{
 				Nonce:    uint64(i),
@@ -380,64 +388,76 @@ func TestGenerateTriePartialResume(t *testing.T) {
 				Root:     types.EmptyRootHash,
 				CodeHash: types.EmptyCodeHash.Bytes(),
 			},
-		}
-		rawdb.WriteAccountSnapshot(db, acc.hash, types.SlimAccountRLP(acc.account))
-		accounts = append(accounts, acc)
+		})
 	}
 	expectedRoot := buildExpectedRoot(t, accounts)
 
-	// Step 2: run every partition once to populate trie nodes on disk
-	// and capture each partition's raw root blob.
-	var (
-		scanned atomic.Int64
-		updated atomic.Int64
-		deleted atomic.Int64
-	)
-	ranges := hashRanges(numPartitions)
-	blobs := make([][]byte, numPartitions)
-	for i, r := range ranges {
-		var pos atomic.Uint64
-		blob, err := generatePartition(context.Background(), nil, db, rawdb.HashScheme, byte(i), r[0], r[1], &scanned, &updated, &deleted, &pos)
-		if err != nil {
-			t.Fatalf("pre-run partition %d: %v", i, err)
-		}
-		blobs[i] = blob
-	}
+	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+		t.Run(scheme, func(t *testing.T) {
+			db := rawdb.NewMemoryDatabase()
 
-	// Step 3: pre-seed done markers for even partitions only.
-	for i := 0; i < numPartitions; i++ {
-		if i%2 == 0 {
-			rawdb.WriteGenerateTriePartitionDone(db, byte(i), blobs[i])
-		}
-	}
+			// Step 1: write the account snapshots for this run.
+			for _, a := range accounts {
+				rawdb.WriteAccountSnapshot(db, a.hash, types.SlimAccountRLP(a.account))
+			}
 
-	// Step 4: delete flat-state account snapshots for every account that
-	// lives in an even partition. After this, rerunning generatePartition
-	// for an even partition would find no accounts and produce a nil
-	// blob — so a correct final root requires the resume path.
-	numDeleted := 0
-	for _, a := range accounts {
-		if (a.hash[0]>>4)%2 == 0 {
-			rawdb.DeleteAccountSnapshot(db, a.hash)
-			numDeleted++
-		}
-	}
-	if numDeleted == 0 {
-		t.Fatal("test setup failure: no accounts fell in even partitions")
-	}
+			// Step 2: run every partition once to populate trie nodes on disk
+			// and capture each partition's raw root blob.
+			var (
+				scanned atomic.Int64
+				updated atomic.Int64
+				deleted atomic.Int64
+			)
+			ranges := hashRanges(numPartitions)
+			blobs := make([][]byte, numPartitions)
+			for i, r := range ranges {
+				var pos atomic.Uint64
+				blob, err := generatePartition(context.Background(), nil, db, scheme, byte(i), r[0], r[1], &scanned, &updated, &deleted, &pos)
+				if err != nil {
+					t.Fatalf("pre-run partition %d: %v", i, err)
+				}
+				blobs[i] = blob
+			}
 
-	// Step 5: run GenerateTrie. Success implies resume actually consulted
-	// the markers — without it, even partitions would yield nil blobs and
-	// the root check inside GenerateTrie would fail.
-	if _, err := GenerateTrie(db, rawdb.HashScheme, expectedRoot, nil); err != nil {
-		t.Fatalf("partial-resume GenerateTrie failed: %v", err)
-	}
+			// Step 3: pre-seed done markers for even partitions only.
+			for i := 0; i < numPartitions; i++ {
+				if i%2 == 0 {
+					rawdb.WriteGenerateTriePartitionDone(db, byte(i), blobs[i])
+				}
+			}
 
-	// All markers cleared on success.
-	for i := 0; i < numPartitions; i++ {
-		if _, ok := rawdb.ReadGenerateTriePartitionDone(db, byte(i)); ok {
-			t.Errorf("partition %d marker not cleared after successful resume", i)
-		}
+			// Step 4: delete flat-state account snapshots for every account that
+			// lives in an even partition. After this, rerunning generatePartition for
+			// an even partition would find no accounts and produce a nil blob,
+			// so a correct final root requires the resume path.
+			numDeleted := 0
+			for _, a := range accounts {
+				if (a.hash[0]>>4)%2 == 0 {
+					rawdb.DeleteAccountSnapshot(db, a.hash)
+					numDeleted++
+				}
+			}
+			if numDeleted == 0 {
+				t.Fatal("test setup failure: no accounts fell in even partitions")
+			}
+
+			// Step 5: run GenerateTrie. Success implies resume actually consulted
+			// the markers. Without it, even partitions would yield nil blobs and
+			// the root check inside GenerateTrie would fail.
+			if _, err := GenerateTrie(db, scheme, expectedRoot, nil); err != nil {
+				t.Fatalf("partial-resume GenerateTrie failed: %v", err)
+			}
+
+			// All markers cleared on success.
+			for i := 0; i < numPartitions; i++ {
+				if _, ok := rawdb.ReadGenerateTriePartitionDone(db, byte(i)); ok {
+					t.Errorf("partition %d marker not cleared after successful resume", i)
+				}
+			}
+			if scheme == rawdb.PathScheme {
+				assertCanonicalNodes(t, db, accounts)
+			}
+		})
 	}
 }
 
@@ -490,33 +510,37 @@ func TestGenerateTriePathSchemeNodeSet(t *testing.T) {
 
 	cases := []struct {
 		name     string
-		desc     string
 		accounts []testAccount
 	}{
 		{
+			// One populated partition whose subtree root is a leaf. The node the
+			// partition wrote at [5] is left unreferenced, so GenerateTrie has to
+			// delete it.
 			name:     "single account, leaf root",
-			desc:     "single populated partition, leaf subtree root: node at [5] is orphaned and must be deleted",
 			accounts: []testAccount{mkAccount("0x5a00000000000000000000000000000000000000000000000000000000000000")},
 		},
 		{
+			// One populated partition whose subtree root is an extension. Like the
+			// leaf case, the node at [5] is left unreferenced and must be deleted.
 			name: "two accounts sharing two nibbles, extension root",
-			desc: "single populated partition, extension subtree root: node at [5] is orphaned and must be deleted",
 			accounts: []testAccount{
 				mkAccount("0x5300000000000000000000000000000000000000000000000000000000000000"),
 				mkAccount("0x5320000000000000000000000000000000000000000000000000000000000000"),
 			},
 		},
 		{
+			// One populated partition whose subtree root is a branch. Here [5] stays
+			// referenced by the new root, so nothing is orphaned.
 			name: "two accounts diverging at second nibble, branch root",
-			desc: "single populated partition, branch subtree root: [5] stays referenced, no orphan",
 			accounts: []testAccount{
 				mkAccount("0x5a00000000000000000000000000000000000000000000000000000000000000"),
 				mkAccount("0x5f00000000000000000000000000000000000000000000000000000000000000"),
 			},
 		},
 		{
+			// Several populated partitions. Every [i] stays referenced by the top
+			// branch, so nothing is orphaned.
 			name: "accounts across multiple partitions",
-			desc: "multiple populated partitions: every [i] referenced by the top branch, no orphan",
 			accounts: []testAccount{
 				mkAccount("0x1000000000000000000000000000000000000000000000000000000000000000"),
 				mkAccount("0x5a00000000000000000000000000000000000000000000000000000000000000"),
@@ -537,58 +561,92 @@ func TestGenerateTriePathSchemeNodeSet(t *testing.T) {
 			if _, err := GenerateTrie(db, rawdb.PathScheme, root, nil); err != nil {
 				t.Fatalf("GenerateTrie (path scheme) failed: %v", err)
 			}
-
-			want := canonicalAccountNodePaths(t, tc.accounts)
-			got := diskAccountNodePaths(db)
-
-			for p := range got {
-				if _, ok := want[p]; !ok {
-					t.Errorf("extra account-trie node on disk at path %x [%s]", p, tc.desc)
-				}
-			}
-			for p := range want {
-				if _, ok := got[p]; !ok {
-					t.Errorf("missing canonical account-trie node at path %x [%s]", p, tc.desc)
-				}
-			}
+			assertCanonicalNodes(t, db, tc.accounts)
 		})
 	}
 }
 
-// canonicalAccountNodePaths builds a StackTrie from the accounts and returns
-// the set of node paths it emits.
-func canonicalAccountNodePaths(t *testing.T, accounts []testAccount) map[string]struct{} {
+// assertCanonicalNodes checks that the trie nodes persisted under the path
+// scheme exactly match the canonical set: the account-trie nodes a StackTrie
+// over the accounts emits, plus, per account with slots, the storage-trie nodes
+// a StackTrie over those slots emits. accounts must carry their final Root
+// values (post storage-root reconciliation).
+func assertCanonicalNodes(t *testing.T, db ethdb.Database, accounts []testAccount) {
 	t.Helper()
+
 	sorted := make([]testAccount, len(accounts))
 	copy(sorted, accounts)
 	sort.Slice(sorted, func(i, j int) bool {
 		return bytes.Compare(sorted[i].hash[:], sorted[j].hash[:]) < 0
 	})
-	paths := make(map[string]struct{})
-	st := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
-		paths[string(path)] = struct{}{}
+
+	// Canonical account-trie node paths.
+	wantAccount := make(map[string]struct{})
+	acct := trie.NewStackTrie(func(path []byte, _ common.Hash, _ []byte) {
+		wantAccount[string(path)] = struct{}{}
 	})
 	for i := range sorted {
 		data, err := rlp.EncodeToBytes(&sorted[i].account)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := st.Update(sorted[i].hash[:], data); err != nil {
+		if err := acct.Update(sorted[i].hash[:], data); err != nil {
 			t.Fatal(err)
 		}
 	}
-	st.Hash() // flush to emit the root node at path nil
-	return paths
+	acct.Hash()
+
+	// Canonical storage-trie node keys (accountHash ++ path), one StackTrie per
+	// account that has slots.
+	wantStorage := make(map[string]struct{})
+	for _, a := range accounts {
+		if len(a.storage) == 0 {
+			continue
+		}
+		slots := make([]testSlot, len(a.storage))
+		copy(slots, a.storage)
+		sort.Slice(slots, func(i, j int) bool {
+			return bytes.Compare(slots[i].hash[:], slots[j].hash[:]) < 0
+		})
+		owner := a.hash
+		st := trie.NewStackTrie(func(path []byte, _ common.Hash, _ []byte) {
+			wantStorage[string(owner[:])+string(path)] = struct{}{}
+		})
+		for _, s := range slots {
+			if err := st.Update(s.hash[:], s.value); err != nil {
+				t.Fatal(err)
+			}
+		}
+		st.Hash()
+	}
+
+	assertSameNodeSet(t, "account", diskNodeKeys(db, rawdb.TrieNodeAccountPrefix), wantAccount)
+	assertSameNodeSet(t, "storage", diskNodeKeys(db, rawdb.TrieNodeStoragePrefix), wantStorage)
 }
 
-// diskAccountNodePaths returns the set of account-trie node paths persisted
-// under the path scheme (keyed TrieNodeAccountPrefix + hexPath).
-func diskAccountNodePaths(db ethdb.Database) map[string]struct{} {
-	paths := make(map[string]struct{})
-	it := db.NewIterator(rawdb.TrieNodeAccountPrefix, nil)
+// diskNodeKeys returns the set of path-scheme node keys with the given prefix
+// stripped (account: hexPath; storage: accountHash ++ hexPath).
+func diskNodeKeys(db ethdb.Database, prefix []byte) map[string]struct{} {
+	keys := make(map[string]struct{})
+	it := db.NewIterator(prefix, nil)
 	defer it.Release()
 	for it.Next() {
-		paths[string(it.Key()[len(rawdb.TrieNodeAccountPrefix):])] = struct{}{}
+		keys[string(it.Key()[len(prefix):])] = struct{}{}
 	}
-	return paths
+	return keys
+}
+
+// assertSameNodeSet fails if got and want differ, reporting each offending key.
+func assertSameNodeSet(t *testing.T, label string, got, want map[string]struct{}) {
+	t.Helper()
+	for k := range got {
+		if _, ok := want[k]; !ok {
+			t.Errorf("%s-trie: extra node on disk at %x", label, k)
+		}
+	}
+	for k := range want {
+		if _, ok := got[k]; !ok {
+			t.Errorf("%s-trie: missing node on disk at %x", label, k)
+		}
+	}
 }
