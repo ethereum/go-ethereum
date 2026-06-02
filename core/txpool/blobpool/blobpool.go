@@ -166,14 +166,6 @@ func (ptx *blobTxForPool) Sidecar() *types.BlobTxSidecar {
 	return types.NewBlobTxSidecar(ptx.Version, ptx.Blobs, ptx.Commitments, ptx.Proofs)
 }
 
-// ApplySidecar copies the sidecar's fields into the flat fields.
-func (ptx *blobTxForPool) ApplySidecar(sc *types.BlobTxSidecar) {
-	ptx.Version = sc.Version
-	ptx.Commitments = sc.Commitments
-	ptx.Proofs = sc.Proofs
-	ptx.Blobs = sc.Blobs
-}
-
 // TxSize returns the transaction size on the network without
 // reconstructing the transaction.
 func (ptx *blobTxForPool) TxSize() uint64 {
@@ -1274,22 +1266,13 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	// TODO: seems like an easy optimization here would be getting the serialized tx
 	// from limbo instead of re-serializing it here.
 
-	// Converts reorged-out legacy blob transactions to the new format to prevent
-	// them from becoming stuck in the pool until eviction.
-	//
-	// Performance note: Conversion takes ~140ms (Mac M1 Pro). Since a maximum of
-	// 9 legacy blob transactions are allowed in a block pre-Osaka, an adversary
-	// could theoretically halt a Geth node for ~1.2s by reorging per block. However,
-	// this attack is financially inefficient to execute.
+	// Post-Osaka, legacy (v0) blob sidecars are no longer accepted into the pool.
+	// A reorged-out legacy blob transaction can therefore not be re-added, so drop
+	// it on the floor instead of putting it back.
 	head := p.head.Load()
 	if p.chain.Config().IsOsaka(head.Number, head.Time) && ptx.Version == types.BlobSidecarVersion0 {
-		sc := ptx.Sidecar()
-		if err := sc.ToV1(); err != nil {
-			log.Error("Failed to convert the legacy sidecar", "err", err)
-			return err
-		}
-		ptx.ApplySidecar(sc)
-		log.Info("Legacy blob transaction is reorged", "hash", ptx.Tx.Hash())
+		log.Debug("Dropping reorged legacy blob transaction", "hash", txhash)
+		return errors.New("legacy blob sidecar unsupported post-osaka")
 	}
 	blob, err := rlp.EncodeToBytes(ptx)
 	if err != nil {
