@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
@@ -467,4 +468,127 @@ func TestHashRanges(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestGenerateTriePathSchemeNodeSet runs GenerateTrie on the path scheme and
+// checks the persisted account-trie node set against a canonical StackTrie. A
+// root-only check can't see the single-partition orphan, but a node-set diff can.
+func TestGenerateTriePathSchemeNodeSet(t *testing.T) {
+	mkAccount := func(hashHex string) testAccount {
+		// Empty storage and no code, so the account trie is the only trie built
+		// and the canonical reference is a plain StackTrie over the accounts.
+		return testAccount{
+			hash: common.HexToHash(hashHex),
+			account: types.StateAccount{
+				Nonce:    1,
+				Balance:  uint256.NewInt(1),
+				Root:     types.EmptyRootHash,
+				CodeHash: types.EmptyCodeHash.Bytes(),
+			},
+		}
+	}
+
+	cases := []struct {
+		name     string
+		desc     string
+		accounts []testAccount
+	}{
+		{
+			name:     "single account, leaf root",
+			desc:     "single populated partition, leaf subtree root: node at [5] is orphaned and must be deleted",
+			accounts: []testAccount{mkAccount("0x5a00000000000000000000000000000000000000000000000000000000000000")},
+		},
+		{
+			name: "two accounts sharing two nibbles, extension root",
+			desc: "single populated partition, extension subtree root: node at [5] is orphaned and must be deleted",
+			accounts: []testAccount{
+				mkAccount("0x5300000000000000000000000000000000000000000000000000000000000000"),
+				mkAccount("0x5320000000000000000000000000000000000000000000000000000000000000"),
+			},
+		},
+		{
+			name: "two accounts diverging at second nibble, branch root",
+			desc: "single populated partition, branch subtree root: [5] stays referenced, no orphan",
+			accounts: []testAccount{
+				mkAccount("0x5a00000000000000000000000000000000000000000000000000000000000000"),
+				mkAccount("0x5f00000000000000000000000000000000000000000000000000000000000000"),
+			},
+		},
+		{
+			name: "accounts across multiple partitions",
+			desc: "multiple populated partitions: every [i] referenced by the top branch, no orphan",
+			accounts: []testAccount{
+				mkAccount("0x1000000000000000000000000000000000000000000000000000000000000000"),
+				mkAccount("0x5a00000000000000000000000000000000000000000000000000000000000000"),
+				mkAccount("0x5f00000000000000000000000000000000000000000000000000000000000000"),
+				mkAccount("0xc000000000000000000000000000000000000000000000000000000000000000"),
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := rawdb.NewMemoryDatabase()
+			for _, a := range tc.accounts {
+				rawdb.WriteAccountSnapshot(db, a.hash, types.SlimAccountRLP(a.account))
+			}
+			root := buildExpectedRoot(t, tc.accounts)
+
+			if _, err := GenerateTrie(db, rawdb.PathScheme, root, nil); err != nil {
+				t.Fatalf("GenerateTrie (path scheme) failed: %v", err)
+			}
+
+			want := canonicalAccountNodePaths(t, tc.accounts)
+			got := diskAccountNodePaths(db)
+
+			for p := range got {
+				if _, ok := want[p]; !ok {
+					t.Errorf("extra account-trie node on disk at path %x [%s]", p, tc.desc)
+				}
+			}
+			for p := range want {
+				if _, ok := got[p]; !ok {
+					t.Errorf("missing canonical account-trie node at path %x [%s]", p, tc.desc)
+				}
+			}
+		})
+	}
+}
+
+// canonicalAccountNodePaths builds a StackTrie from the accounts and returns
+// the set of node paths it emits.
+func canonicalAccountNodePaths(t *testing.T, accounts []testAccount) map[string]struct{} {
+	t.Helper()
+	sorted := make([]testAccount, len(accounts))
+	copy(sorted, accounts)
+	sort.Slice(sorted, func(i, j int) bool {
+		return bytes.Compare(sorted[i].hash[:], sorted[j].hash[:]) < 0
+	})
+	paths := make(map[string]struct{})
+	st := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
+		paths[string(path)] = struct{}{}
+	})
+	for i := range sorted {
+		data, err := rlp.EncodeToBytes(&sorted[i].account)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := st.Update(sorted[i].hash[:], data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st.Hash() // flush to emit the root node at path nil
+	return paths
+}
+
+// diskAccountNodePaths returns the set of account-trie node paths persisted
+// under the path scheme (keyed TrieNodeAccountPrefix + hexPath).
+func diskAccountNodePaths(db ethdb.Database) map[string]struct{} {
+	paths := make(map[string]struct{})
+	it := db.NewIterator(rawdb.TrieNodeAccountPrefix, nil)
+	defer it.Release()
+	for it.Next() {
+		paths[string(it.Key()[len(rawdb.TrieNodeAccountPrefix):])] = struct{}{}
+	}
+	return paths
 }

@@ -213,12 +213,13 @@ func TestPartialStackTrieWrongNibble(t *testing.T) {
 func TestMountPartitionRoot(t *testing.T) {
 	const n = byte(3)
 	cases := []struct {
-		name string
-		keys []string
+		name         string
+		keys         []string
+		wantOrphaned bool
 	}{
-		{"leaf", []string{"3abc"}},
-		{"extension", []string{"3110", "3115", "311a"}},
-		{"branch", []string{"30", "37", "3a"}},
+		{"leaf", []string{"3abc"}, true},
+		{"extension", []string{"3110", "3115", "311a"}, true},
+		{"branch", []string{"30", "37", "3a"}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -234,9 +235,12 @@ func TestMountPartitionRoot(t *testing.T) {
 			}
 			want := ref.Hash()
 
-			got, blob, err := MountPartitionRoot(partitionRoot(t, n, keys, vals), n)
+			got, blob, isOrphaned, err := MountPartitionRoot(partitionRoot(t, n, keys, vals), n)
 			if err != nil {
 				t.Fatalf("MountPartitionRoot: %v", err)
+			}
+			if isOrphaned != tc.wantOrphaned {
+				t.Fatalf("isOrphaned = %v, want %v", isOrphaned, tc.wantOrphaned)
 			}
 			if got != want {
 				t.Fatalf("mounted root %x, want %x", got, want)

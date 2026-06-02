@@ -352,10 +352,14 @@ func (err *decodeError) Error() string {
 //   - a short node (extension or leaf): its hex key is extended from [k...] to
 //     [n, k...], preserving the leaf terminator if present, and the child/value
 //     element is reused verbatim.
-func MountPartitionRoot(blob []byte, n byte) (hash common.Hash, writeBlob []byte, err error) {
+//
+// isOrphaned reports whether a short node was folded. When true, the node the
+// caller persisted at path [n] is no longer referenced by the returned root and
+// should be deleted. It is false for the branch case, where [n] stays referenced.
+func MountPartitionRoot(blob []byte, n byte) (hash common.Hash, writeBlob []byte, isOrphaned bool, err error) {
 	elems, err := decodeNodeElements(blob)
 	if err != nil {
-		return common.Hash{}, nil, fmt.Errorf("decode partition root: %w", err)
+		return common.Hash{}, nil, false, fmt.Errorf("decode partition root: %w", err)
 	}
 	switch len(elems) {
 	case 17:
@@ -363,38 +367,38 @@ func MountPartitionRoot(blob []byte, n byte) (hash common.Hash, writeBlob []byte
 		// referencing the branch by its 32-byte hash.
 		keyRLP, err := rlp.EncodeToBytes(hexToCompact([]byte{n}))
 		if err != nil {
-			return common.Hash{}, nil, fmt.Errorf("encode extension key: %w", err)
+			return common.Hash{}, nil, false, fmt.Errorf("encode extension key: %w", err)
 		}
 		childRLP, err := rlp.EncodeToBytes(crypto.Keccak256(blob))
 		if err != nil {
-			return common.Hash{}, nil, fmt.Errorf("encode child ref: %w", err)
+			return common.Hash{}, nil, false, fmt.Errorf("encode child ref: %w", err)
 		}
 		writeBlob, err = encodeNodeElements([][]byte{keyRLP, childRLP})
 		if err != nil {
-			return common.Hash{}, nil, fmt.Errorf("encode extension node: %w", err)
+			return common.Hash{}, nil, false, fmt.Errorf("encode extension node: %w", err)
 		}
-		return crypto.Keccak256Hash(writeBlob), writeBlob, nil
+		return crypto.Keccak256Hash(writeBlob), writeBlob, false, nil
 
 	case 2:
 		// Short node (extension/leaf): prepend n to its hex key. compactToHex
 		// retains the leaf terminator, so hexToCompact restores the right type.
 		compactKey, _, err := rlp.SplitString(elems[0])
 		if err != nil {
-			return common.Hash{}, nil, fmt.Errorf("parse compact key: %w", err)
+			return common.Hash{}, nil, false, fmt.Errorf("parse compact key: %w", err)
 		}
 		hex := append([]byte{n}, compactToHex(compactKey)...)
 		keyRLP, err := rlp.EncodeToBytes(hexToCompact(hex))
 		if err != nil {
-			return common.Hash{}, nil, fmt.Errorf("encode mounted key: %w", err)
+			return common.Hash{}, nil, false, fmt.Errorf("encode mounted key: %w", err)
 		}
 		writeBlob, err = encodeNodeElements([][]byte{keyRLP, elems[1]})
 		if err != nil {
-			return common.Hash{}, nil, fmt.Errorf("encode mounted node: %w", err)
+			return common.Hash{}, nil, false, fmt.Errorf("encode mounted node: %w", err)
 		}
-		return crypto.Keccak256Hash(writeBlob), writeBlob, nil
+		return crypto.Keccak256Hash(writeBlob), writeBlob, true, nil
 
 	default:
-		return common.Hash{}, nil, fmt.Errorf("unexpected partition root element count: %d", len(elems))
+		return common.Hash{}, nil, false, fmt.Errorf("unexpected partition root element count: %d", len(elems))
 	}
 }
 

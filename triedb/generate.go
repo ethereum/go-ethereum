@@ -451,36 +451,47 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 func assembleRoot(db ethdb.Database, scheme string, partitionBlobs [numPartitions][]byte) (common.Hash, error) {
 	var (
 		populated int
-		onlySlot  int
+		partition int // last populated index, read only when populated == 1
+		children  [17][]byte
 	)
+
+	// Loop through all partitions and count how many are populated, while
+	// pre-filling the branch children array for the common 2+ case.
 	for i := range numPartitions {
 		if partitionBlobs[i] != nil {
 			populated++
-			onlySlot = i
+			partition = i
+			children[i] = crypto.Keccak256(partitionBlobs[i])
 		}
 	}
+
+	// No populated partitions: the state is empty.
 	if populated == 0 {
 		return types.EmptyRootHash, nil
 	}
+
+	// One populated partition: no top-level branch, so fold its leading nibble
+	// back into the subtree root.
 	if populated == 1 {
-		// Fold the leading nibble back into the lone partition's subtree root.
-		rootHash, rootBlob, err := trie.MountPartitionRoot(partitionBlobs[onlySlot], byte(onlySlot))
+		rootHash, rootBlob, isOrphaned, err := trie.MountPartitionRoot(partitionBlobs[partition], byte(partition))
 		if err != nil {
-			return common.Hash{}, fmt.Errorf("mount partition %d: %w", onlySlot, err)
+			return common.Hash{}, fmt.Errorf("mount partition %d: %w", partition, err)
 		}
 		rawdb.WriteTrieNode(db, common.Hash{}, nil, rootHash, rootBlob, scheme)
+		if isOrphaned {
+			// The folded root at nil does not reference [partition], so the copy
+			// generatePartition wrote there is now unreferenced. Delete it so the
+			// on-disk node set matches the canonical trie.
+			staleHash := crypto.Keccak256Hash(partitionBlobs[partition])
+			rawdb.DeleteTrieNode(db, common.Hash{}, []byte{byte(partition)}, staleHash, scheme)
+		}
 		return rootHash, nil
 	}
+
 	// populated >= 2: mount each partition's subtree root (already persisted at
-	// path [i]) into a 17-slot branch by hash. Account-trie subtree roots are
-	// always >= 32 bytes, so they are hash-referenced rather than inlined.
-	var children [17][]byte
-	for i := range numPartitions {
-		if partitionBlobs[i] == nil {
-			continue
-		}
-		children[i] = crypto.Keccak256(partitionBlobs[i])
-	}
+	// path [i]) into a 17-slot branch by hash, using the children array filled
+	// above. Those hash references are valid because account-trie subtree roots
+	// are always >= 32 bytes.
 	rootBlob, rootHash, err := trie.AssembleBranch(children)
 	if err != nil {
 		return common.Hash{}, err
