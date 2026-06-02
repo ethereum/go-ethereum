@@ -23,9 +23,7 @@ import (
 	"io"
 	"math/big"
 	"os"
-	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -51,14 +49,8 @@ func Filename(network string, epoch int, lastBlockHash common.Hash) string {
 	return fmt.Sprintf("%s-%05d-%s-noproofs.ere", network, epoch, lastBlockHash.Hex()[2:10])
 }
 
-// Open accesses the era file at the given path. The basename is used to parse
-// the profile postfix (per the Ere spec filename convention) as a defence-in-
-// depth check; structural safety is enforced by detectLayout, which reads the
-// e2store type tag at each index slot rather than trusting position.
+// Open accesses the era file.
 func Open(path string) (*Era, error) {
-	if err := checkProfile(filepath.Base(path)); err != nil {
-		return nil, err
-	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -99,28 +91,6 @@ func from(f era.ReadAtSeekCloser) (*Era, error) {
 		return nil, err
 	}
 	return e, nil
-}
-
-// checkProfile inspects the profile postfix(es) in an Ere filename and rejects
-// any combination this reader doesn't support. This is a best-effort, defence-
-// in-depth check; the authoritative layout detection happens in detectLayout
-// from the on-disk type tags.
-//
-// The Ere format itself does not require a particular filename, so this check
-// is permissive about non-conforming names: validation only kicks in when a
-// profile postfix is actually present.
-func checkProfile(name string) error {
-	name = strings.TrimSuffix(name, ".ere")
-	parts := strings.Split(name, "-")
-	if len(parts) <= 3 {
-		return nil // no profile postfix to validate
-	}
-	for _, p := range parts[3:] {
-		if p == "noreceipts" {
-			return fmt.Errorf("Ere file %q uses the noreceipts profile, which is not supported", name)
-		}
-	}
-	return nil
 }
 
 // Start retrieves the starting block number.
@@ -305,8 +275,8 @@ func (e *Era) loadIndex() error {
 
 // detectLayout reads the e2store type tag at each component slot of the first
 // block and builds a componentType→slot map. This makes the reader robust
-// against profile variations: receipts, td, and proof can appear in any
-// supported subset, and the slot positions are looked up by tag.
+// against profile variations: td and proof can appear in any supported subset,
+// and the slot positions are looked up by tag.
 func (e *Era) detectLayout() (map[componentType]int, error) {
 	if e.m.count == 0 {
 		return nil, errors.New("Ere file contains no blocks")
@@ -342,6 +312,9 @@ func (e *Era) detectLayout() (map[componentType]int, error) {
 	}
 	if _, ok := layout[body]; !ok {
 		return nil, errors.New("Ere index has no body component")
+	}
+	if _, ok := layout[receipts]; !ok {
+		return nil, errors.New("Ere index has no receipts component")
 	}
 	return layout, nil
 }
@@ -398,7 +371,7 @@ type metadata struct {
 // componentType identifies a kind of per-block entry (header, body, etc.).
 type componentType int
 
-// The Ere spec defines receipts, td, and proof as independently optional. The
+// The Ere spec defines td and proof as independently optional. The
 // reader resolves a component to its actual slot via the metadata.layout map,
 // which is built at Open time from the e2store type tag of each slot — so the
 // position of a component within the index is never assumed.

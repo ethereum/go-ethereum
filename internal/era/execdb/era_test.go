@@ -356,12 +356,11 @@ func TestInitialTD(t *testing.T) {
 	}
 }
 
-// TestDetectLayoutNoReceipts hand-builds an Ere file with the receipts slot
-// replaced by a TotalDifficulty entry (the on-disk shape a "noreceipts"
-// profile would take) and verifies the reader detects this from the e2store
-// type tags rather than misreading TD as receipts. This is the core safety
-// property of detectLayout — exercise it via From, where no filename is
-// available.
+// TestDetectLayoutNoReceipts hand-builds an Ere file whose third slot holds a
+// TotalDifficulty entry instead of receipts (the on-disk shape of a "noreceipts"
+// profile) and verifies the reader rejects it. Receipts are required, and
+// detectLayout enforces that from the e2store type tags rather than trusting
+// slot position or the filename.
 func TestDetectLayoutNoReceipts(t *testing.T) {
 	t.Parallel()
 
@@ -434,67 +433,15 @@ func TestDetectLayoutNoReceipts(t *testing.T) {
 		t.Fatalf("close: %v", err)
 	}
 
-	// Open via From — no filename is consulted, so the layout map is the
-	// only line of defence.
+	// The receipts component is required, so opening the file must fail at
+	// layout detection rather than misreading the TD slot as receipts.
 	g, err := os.Open(path)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
 	t.Cleanup(func() { g.Close() })
-	e, err := From(g)
-	if err != nil {
-		t.Fatalf("From: %v", err)
-	}
-	defer e.Close()
-	ere := e.(*Era)
-
-	if ere.HasComponent(receipts) {
-		t.Errorf("receipts should not be reported as present in synthetic noreceipts file")
-	}
-	if !ere.HasComponent(td) {
-		t.Errorf("td should be reported as present")
-	}
-	if got, want := ere.m.layout[td], 2; got != want {
-		t.Errorf("td slot: want %d, got %d", want, got)
-	}
-
-	// Reading receipts must fail loudly, not silently decode TD bytes.
-	if _, err := ere.GetRawReceiptsByNumber(0); err == nil {
-		t.Error("expected error when reading receipts from a noreceipts file")
-	}
-}
-
-// TestOpenRejectsNoreceiptsProfile verifies that Open() refuses to decode an
-// Ere file whose filename declares the unsupported "noreceipts" profile. This
-// is the defence-in-depth filename check; structural safety is provided by
-// detectLayout (covered separately by TestDetectLayoutNoReceipts).
-func TestOpenRejectsNoreceiptsProfile(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-
-	// Build a valid Ere file with default-profile contents directly at the
-	// noreceipts path so Open() rejects it on the filename alone.
-	path := filepath.Join(dir, "mainnet-00000-deadbeef-noreceipts.ere")
-	f, err := os.Create(path)
-	if err != nil {
-		t.Fatalf("create file: %v", err)
-	}
-	builder := NewBuilder(f)
-	header := mustEncode(&types.Header{Number: big.NewInt(0), Difficulty: big.NewInt(1)})
-	body := mustEncode(&types.Body{})
-	receipts := mustEncode([]types.SlimReceipt{})
-	if err := builder.AddRLP(header, body, receipts, 0, common.Hash{0}, big.NewInt(1), big.NewInt(1)); err != nil {
-		t.Fatalf("AddRLP: %v", err)
-	}
-	if _, err := builder.Finalize(); err != nil {
-		t.Fatalf("Finalize: %v", err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatalf("close: %v", err)
-	}
-	if _, err := Open(path); err == nil {
-		t.Fatal("expected Open to reject noreceipts profile")
+	if _, err := From(g); err == nil {
+		t.Fatal("expected From to reject a file with no receipts component")
 	}
 }
 
