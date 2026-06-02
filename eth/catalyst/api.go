@@ -804,10 +804,12 @@ func (api *ConsensusAPI) NewPayloadV5(ctx context.Context, params engine.Executa
 		return invalidStatus, paramsErr("nil beaconRoot post-cancun")
 	case executionRequests == nil:
 		return invalidStatus, paramsErr("nil executionRequests post-prague")
-	case params.SlotNumber == nil:
-		return invalidStatus, paramsErr("nil slotnumber post-amsterdam")
 	case !api.checkFork(params.Timestamp, forks.Amsterdam):
 		return invalidStatus, unsupportedForkErr("newPayloadV5 must only be called for amsterdam payloads")
+	case params.SlotNumber == nil:
+		return invalidStatus, paramsErr("nil slotnumber post-amsterdam")
+	case params.BlockAccessList == nil:
+		return invalidStatus, paramsErr("nil block access list post-amsterdam")
 	}
 	requests := convertRequests(executionRequests)
 	if err := validateRequests(requests); err != nil {
