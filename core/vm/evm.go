@@ -602,7 +602,6 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 	if err != nil {
 		return ret, err
 	}
-
 	// Check prefix before gas calculation.
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
 	if len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
@@ -623,11 +622,12 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
 			return ret, err
 		}
-		// Charge regular gas (hash cost) before state gas (code-deposit cost).
+		// Charge regular gas (hash cost) before state gas.
 		regularCost := toWordSize(uint64(len(ret))) * params.Keccak256WordGas
 		if !contract.chargeRegular(regularCost, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
 			return ret, ErrCodeStoreOutOfGas
 		}
+		// Charge state gas (code-deposit) afterwards.
 		stateCost := uint64(len(ret)) * evm.Context.CostPerStateByte
 		if !contract.chargeState(stateCost, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
 			return ret, ErrCodeStoreOutOfGas

@@ -651,8 +651,32 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		value        = scope.Stack.pop()
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
-		forward      = scope.Contract.Gas.RegularGas
 	)
+	// Derive the deployment address once and reuse it for both the state-gas
+	// decision below and the creation itself (passed to evm.create), so it is
+	// never computed twice.
+	address := crypto.CreateAddress(scope.Contract.Address(), evm.StateDB.GetNonce(scope.Contract.Address()))
+
+	// EIP-8037: account creation is metered as state gas, charged in this
+	// (parent) frame before any gas is forwarded to the creation frame. The
+	// charge is keyed on the destination balance alone: a balance-holding
+	// account already occupies a state leaf (a valid EIP-684 target), so
+	// deploying into it adds no leaf and is not charged. A destination that is
+	// ineligible for deployment (non-zero nonce or non-empty code) is still
+	// charged here so the forwarded gas budget is computed consistently; the
+	// creation then fails with a collision and the charge is refilled below.
+	// The charged amount is remembered so the refill is symmetric: nothing is
+	// refilled if nothing was charged.
+	var stateGas uint64
+	if evm.chainRules.IsAmsterdam && evm.StateDB.GetBalance(address).Sign() == 0 {
+		stateGas = params.AccountCreationSize * evm.Context.CostPerStateByte
+		if !scope.Contract.chargeState(stateGas, evm.Config.Tracer, tracing.GasChangeCallContractCreation) {
+			return nil, ErrOutOfGas
+		}
+	}
+
+	// Apply EIP-150 to the regular gas left after the state charge.
+	forward := scope.Contract.Gas.RegularGas
 	if evm.chainRules.IsEIP150 {
 		forward -= forward / 64
 	}
@@ -661,7 +685,7 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	stackvalue := size
 
 	child := scope.Contract.forwardGas(forward, evm.Config.Tracer, tracing.GasChangeCallContractCreation)
-	res, addr, result, suberr := evm.Create(scope.Contract.Address(), input, child, &value)
+	res, addr, result, suberr := evm.create(scope.Contract.Address(), input, child, &value, address, CREATE)
 	// Push item on the stack based on the returned error. If the ruleset is
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
@@ -678,10 +702,11 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Refund the leftover gas back to current frame
 	scope.Contract.refundGas(result, forward, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
-	// If the creation frame reverts or halts exceptionally, the charged state-gas
-	// is refilled back to the state reservoir in Amsterdam.
+	// If the creation frame reverts or halts, refill exactly the account-creation
+	// state gas charged above (zero if the target already existed) back to the
+	// state reservoir.
 	if evm.chainRules.IsAmsterdam && suberr != nil {
-		scope.Contract.refundState(params.AccountCreationSize*evm.Context.CostPerStateByte, evm.Config.Tracer, tracing.GasChangeStateGasRefund)
+		scope.Contract.refundState(stateGas, evm.Config.Tracer, tracing.GasChangeStateGasRefund)
 	}
 	if suberr == ErrExecutionReverted {
 		evm.returnData = res // set REVERT data to return data buffer
@@ -697,16 +722,33 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		salt         = scope.Stack.pop()
 		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
-		forward      = scope.Contract.Gas.RegularGas
 	)
+	// Derive the CREATE2 deployment address once, from the init code already
+	// read above, and reuse it for both the state-gas decision and the creation
+	// itself (passed to evm.create), avoiding a second init-code hash.
+	inithash := crypto.Keccak256Hash(input)
+	address := crypto.CreateAddress2(scope.Contract.Address(), salt.Bytes32(), inithash[:])
 
-	// Apply EIP150
+	// EIP-8037: account-creation state gas, keyed on the destination balance
+	// and charged in this (parent) frame before forwarding, with the charged
+	// amount remembered for a symmetric refill on failure. See opCreate for the
+	// full rationale (balance-only key, EIP-684 targets, collision refill).
+	var stateGas uint64
+	if evm.chainRules.IsAmsterdam && evm.StateDB.GetBalance(address).Sign() == 0 {
+		stateGas = params.AccountCreationSize * evm.Context.CostPerStateByte
+		if !scope.Contract.chargeState(stateGas, evm.Config.Tracer, tracing.GasChangeCallContractCreation2) {
+			return nil, ErrOutOfGas
+		}
+	}
+
+	// Apply EIP-150 to the regular gas left after the state charge.
+	forward := scope.Contract.Gas.RegularGas
 	forward -= forward / 64
 
 	// reuse size int for stackvalue
 	stackvalue := size
 	child := scope.Contract.forwardGas(forward, evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
-	res, addr, result, suberr := evm.Create2(scope.Contract.Address(), input, child, &endowment, &salt)
+	res, addr, result, suberr := evm.create(scope.Contract.Address(), input, child, &endowment, address, CREATE2)
 	// Push item on the stack based on the returned error.
 	if suberr != nil {
 		stackvalue.Clear()
@@ -718,10 +760,10 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Refund the leftover gas back to current frame
 	scope.Contract.refundGas(result, forward, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
-	// If the creation frame reverts or halts exceptionally, the charged state-gas
-	// is refilled back to the state reservoir in Amsterdam.
+	// If the creation frame reverts or halts, refill exactly the account-creation
+	// state gas charged above (zero if the target already existed).
 	if evm.chainRules.IsAmsterdam && suberr != nil {
-		scope.Contract.refundState(params.AccountCreationSize*evm.Context.CostPerStateByte, evm.Config.Tracer, tracing.GasChangeStateGasRefund)
+		scope.Contract.refundState(stateGas, evm.Config.Tracer, tracing.GasChangeStateGasRefund)
 	}
 	if suberr == ErrExecutionReverted {
 		evm.returnData = res // set REVERT data to return data buffer
