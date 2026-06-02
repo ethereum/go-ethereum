@@ -470,6 +470,10 @@ func TestTracingBatchHTTPEmpty(t *testing.T) {
 
 	postJSONRPC(t, httpsrv.URL, `[]`)
 
+	// Wait for the in-flight request to finish so the deferred spanEnd fires
+	// before GetSpans is called.
+	httpsrv.Close()
+
 	if err := tracer.ForceFlush(context.Background()); err != nil {
 		t.Fatalf("failed to flush: %v", err)
 	}
@@ -509,6 +513,10 @@ func TestTracingBatchHTTPTooLarge(t *testing.T) {
 		{"jsonrpc":"2.0","id":3,"method":"test_echo","params":["c",3,{"S":"z"}]}
 	]`
 	postJSONRPC(t, httpsrv.URL, body)
+
+	// Wait for the in-flight request to finish so the deferred spanEnd fires
+	// before GetSpans is called.
+	httpsrv.Close()
 
 	if err := tracer.ForceFlush(context.Background()); err != nil {
 		t.Fatalf("failed to flush: %v", err)
@@ -552,6 +560,10 @@ func TestTracingHTTPTimeout(t *testing.T) {
 	// timer cancels ctx, so test_block unblocks shortly after the timeout
 	// response goes out.
 	postJSONRPC(t, httpsrv.URL, `{"jsonrpc":"2.0","id":1,"method":"test_block"}`)
+
+	// Wait for the in-flight request to finish so the deferred spanEnd fires
+	// before GetSpans is called.
+	httpsrv.Close()
 
 	if err := tracer.ForceFlush(context.Background()); err != nil {
 		t.Fatalf("failed to flush: %v", err)
