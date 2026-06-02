@@ -45,7 +45,7 @@ func newSTUN(serverAddr string) (Interface, error) {
 	if serverAddr == "" {
 		s.serverList = strings.Split(stunDefaultServers, "\n")
 	} else {
-		_, err := net.ResolveUDPAddr("udp4", serverAddr)
+		_, err := net.ResolveUDPAddr("udp", serverAddr)
 		if err != nil {
 			return nil, err
 		}
@@ -111,7 +111,7 @@ func (s *stun) externalIP(server string) (net.IP, error) {
 	}
 
 	log.Trace("Attempting STUN binding request", "server", server)
-	conn, err := stunV3.Dial("udp4", server)
+	conn, err := stunV3.Dial("udp", server)
 	if err != nil {
 		return nil, err
 	}
