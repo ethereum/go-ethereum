@@ -210,18 +210,32 @@ func (r *prefetchStateReader) process(start, limit int) {
 // ReaderWithBlockLevelAccessList provides state access that reflects the
 // pre-transition state combined with the mutations made by transactions
 // prior to TxIndex.
+//
+// It is a cheap, per-transaction view over a shared, read-only
+// bal.PreparedAccessList: constructing one is O(1) and every lookup is an
+// allocation-free binary search.
 type ReaderWithBlockLevelAccessList struct {
 	Reader
-	AccessList bal.AccessListReader
-	TxIndex    int
+	prepared *bal.PreparedAccessList
+	TxIndex  int
 }
 
-func NewReaderWithBlockLevelAccessList(base Reader, accessList bal.BlockAccessList, txIndex int) *ReaderWithBlockLevelAccessList {
+// NewReaderWithPreparedAccessList wraps a base reader with a shared, already
+// preprocessed access list. This is the cheap constructor used on the hot path:
+// the prepared list is built once per block and borrowed by every per-tx reader.
+func NewReaderWithPreparedAccessList(base Reader, prepared *bal.PreparedAccessList, txIndex int) *ReaderWithBlockLevelAccessList {
 	return &ReaderWithBlockLevelAccessList{
-		Reader:     base,
-		AccessList: bal.NewAccessListReader(accessList),
-		TxIndex:    txIndex,
+		Reader:   base,
+		prepared: prepared,
+		TxIndex:  txIndex,
 	}
+}
+
+// NewReaderWithBlockLevelAccessList wraps a base reader with a raw access list,
+// preprocessing it on the spot. Prefer NewReaderWithPreparedAccessList when the
+// prepared list can be built once and shared across multiple readers.
+func NewReaderWithBlockLevelAccessList(base Reader, accessList bal.BlockAccessList, txIndex int) *ReaderWithBlockLevelAccessList {
+	return NewReaderWithPreparedAccessList(base, bal.NewPreparedAccessList(accessList), txIndex)
 }
 
 // Account implements Reader, returning the account with the specific address.
@@ -231,9 +245,11 @@ func (r *ReaderWithBlockLevelAccessList) Account(addr common.Address) (acct *typ
 		return nil, err
 	}
 
-	mut := r.AccessList.AccountMutations(addr, r.TxIndex)
-	if mut == nil {
-		return
+	balance := r.prepared.Balance(addr, r.TxIndex)
+	code := r.prepared.Code(addr, r.TxIndex)
+	nonce, hasNonce := r.prepared.Nonce(addr, r.TxIndex)
+	if balance == nil && code == nil && !hasNonce {
+		return acct, nil
 	}
 
 	if acct == nil {
@@ -244,15 +260,18 @@ func (r *ReaderWithBlockLevelAccessList) Account(addr common.Address) (acct *typ
 		acct = acct.Copy()
 	}
 
-	if mut.Balance != nil {
-		acct.Balance = mut.Balance
+	// balance and code alias the shared access list; this is safe because the
+	// EVM never mutates them in place (it replaces the pointer/slice wholesale,
+	// and the journal clones before stashing).
+	if balance != nil {
+		acct.Balance = balance
 	}
-	if mut.Code != nil {
-		codeHash := crypto.Keccak256Hash(mut.Code)
+	if code != nil {
+		codeHash := crypto.Keccak256Hash(code)
 		acct.CodeHash = codeHash[:]
 	}
-	if mut.Nonce != nil {
-		acct.Nonce = *mut.Nonce
+	if hasNonce {
+		acct.Nonce = nonce
 	}
 	return
 }
@@ -260,9 +279,8 @@ func (r *ReaderWithBlockLevelAccessList) Account(addr common.Address) (acct *typ
 // Storage implements Reader, returning the storage slot with the specific
 // address and slot key.
 func (r *ReaderWithBlockLevelAccessList) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
-	val := r.AccessList.Storage(addr, slot, r.TxIndex)
-	if val != nil {
-		return *val, nil
+	if val, ok := r.prepared.StorageAt(addr, slot, r.TxIndex); ok {
+		return val, nil
 	}
 	return r.Reader.Storage(addr, slot)
 }
@@ -270,9 +288,8 @@ func (r *ReaderWithBlockLevelAccessList) Storage(addr common.Address, slot commo
 // Has implements Reader, returning the flag indicating whether the contract
 // code with specified address and hash exists or not.
 func (r *ReaderWithBlockLevelAccessList) Has(addr common.Address, codeHash common.Hash) bool {
-	mut := r.AccessList.AccountMutations(addr, r.TxIndex)
-	if mut != nil && mut.Code != nil {
-		return crypto.Keccak256Hash(mut.Code) == codeHash
+	if code := r.prepared.Code(addr, r.TxIndex); code != nil {
+		return crypto.Keccak256Hash(code) == codeHash
 	}
 	return r.Reader.Has(addr, codeHash)
 }
@@ -280,10 +297,8 @@ func (r *ReaderWithBlockLevelAccessList) Has(addr common.Address, codeHash commo
 // Code implements Reader, returning the contract code with specified address
 // and hash.
 func (r *ReaderWithBlockLevelAccessList) Code(addr common.Address, codeHash common.Hash) []byte {
-	mut := r.AccessList.AccountMutations(addr, r.TxIndex)
-	if mut != nil && mut.Code != nil && crypto.Keccak256Hash(mut.Code) == codeHash {
-		// TODO: need to copy here?
-		return mut.Code
+	if code := r.prepared.Code(addr, r.TxIndex); code != nil && crypto.Keccak256Hash(code) == codeHash {
+		return code
 	}
 	return r.Reader.Code(addr, codeHash)
 }
@@ -291,9 +306,8 @@ func (r *ReaderWithBlockLevelAccessList) Code(addr common.Address, codeHash comm
 // CodeSize implements Reader, returning the contract code size with specified
 // address and hash.
 func (r *ReaderWithBlockLevelAccessList) CodeSize(addr common.Address, codeHash common.Hash) int {
-	mut := r.AccessList.AccountMutations(addr, r.TxIndex)
-	if mut != nil && mut.Code != nil && crypto.Keccak256Hash(mut.Code) == codeHash {
-		return len(mut.Code)
+	if code := r.prepared.Code(addr, r.TxIndex); code != nil && crypto.Keccak256Hash(code) == codeHash {
+		return len(code)
 	}
 	return r.Reader.CodeSize(addr, codeHash)
 }

@@ -19,7 +19,7 @@ import (
 // and commit for EIP 7928 access-list-containing blocks.  An instance of
 // this object is only used for a single block.
 type BALStateTransition struct {
-	accessList bal.AccessListReader
+	accessList *bal.PreparedAccessList
 	written    bal.WrittenCounts
 	db         Database
 	reader     Reader
@@ -86,14 +86,14 @@ type BALStateTransitionMetrics struct {
 	TotalCommitTime time.Duration
 }
 
-func NewBALStateTransition(block *types.Block, prefetchReader Reader, db Database, parentRoot common.Hash) (*BALStateTransition, error) {
+func NewBALStateTransition(block *types.Block, prefetchReader Reader, db Database, parentRoot common.Hash, prepared *bal.PreparedAccessList) (*BALStateTransition, error) {
 	stateTrie, err := db.OpenTrie(parentRoot)
 	if err != nil {
 		return nil, err
 	}
 
 	return &BALStateTransition{
-		accessList:  bal.NewAccessListReader(*block.AccessList()),
+		accessList:  prepared,
 		written:     block.AccessList().WrittenCounts(),
 		db:          db,
 		reader:      prefetchReader,
@@ -113,6 +113,13 @@ func NewBALStateTransition(block *types.Block, prefetchReader Reader, db Databas
 // WrittenCounts returns the cached BAL write counts (computed once per block).
 func (s *BALStateTransition) WrittenCounts() bal.WrittenCounts {
 	return s.written
+}
+
+// PreparedAccessList returns the shared, read-only preprocessed access list for
+// the block. It is built once per block and reused by the parallel execution
+// readers so the preprocessing is not repeated per transaction.
+func (s *BALStateTransition) PreparedAccessList() *bal.PreparedAccessList {
+	return s.accessList
 }
 
 func (s *BALStateTransition) Error() error {
