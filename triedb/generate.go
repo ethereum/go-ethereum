@@ -117,7 +117,7 @@ func reopenFlatIterator(db ethdb.Database, old *internal.HoldableIterator, prefi
 // generatePartition walks accounts whose first nibble equals `partition`,
 // reconciling each account's Root with its flat storage and building
 // both per-account storage subtries and the partition's slice of the
-// account trie. Returns the raw (unstripped) partition root blob, or
+// account trie. Returns the partition's stripped subtree root blob, or
 // nil if the partition had no accounts at all.
 func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Database, scheme string, partition byte, rangeStart, rangeEnd common.Hash, scanned, updated, deleted *atomic.Int64, pos *atomic.Uint64) ([]byte, error) {
 	iters := openRangeIterators(db, rangeStart)
