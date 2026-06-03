@@ -526,15 +526,15 @@ func importHistory(ctx *cli.Context) error {
 
 	var (
 		format = ctx.String(utils.EraFormatFlag.Name)
-		from   func(era.ReadAtSeekCloser) (era.Era, error)
+		from   func(f era.ReadAtSeekCloser) (era.Era, error)
 	)
 	switch format {
 	case "era1", "era":
 		from = onedb.From
-	case "erae":
+	case "ere":
 		from = execdb.From
 	default:
-		return fmt.Errorf("unknown --era.format %q (expected 'era1' or 'erae')", format)
+		return fmt.Errorf("unknown --era.format %q (expected 'era1' or 'ere')", format)
 	}
 	if err := utils.ImportHistory(chain, dir, network, from); err != nil {
 		return err
@@ -580,11 +580,11 @@ func exportHistory(ctx *cli.Context) error {
 	case "era1", "era":
 		newBuilder = func(w io.Writer) era.Builder { return onedb.NewBuilder(w) }
 		filename = func(network string, epoch int, root common.Hash) string { return onedb.Filename(network, epoch, root) }
-	case "erae":
+	case "ere":
 		newBuilder = func(w io.Writer) era.Builder { return execdb.NewBuilder(w) }
 		filename = func(network string, epoch int, root common.Hash) string { return execdb.Filename(network, epoch, root) }
 	default:
-		return fmt.Errorf("unknown archive format %q (use 'era1' or 'erae')", format)
+		return fmt.Errorf("unknown archive format %q (use 'era1' or 'ere')", format)
 	}
 	if err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), newBuilder, filename); err != nil {
 		utils.Fatalf("Export error: %v\n", err)

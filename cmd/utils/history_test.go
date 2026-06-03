@@ -53,7 +53,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 		from     func(f era.ReadAtSeekCloser) (era.Era, error)
 	}{
 		{"era1", onedb.NewBuilder, onedb.Filename, onedb.From},
-		{"erae", execdb.NewBuilder, execdb.Filename, execdb.From},
+		{"ere", execdb.NewBuilder, execdb.Filename, execdb.From},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var (

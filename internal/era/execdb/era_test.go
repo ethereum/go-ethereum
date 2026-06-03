@@ -18,19 +18,24 @@ package execdb
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math/big"
 	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/era"
+	"github.com/ethereum/go-ethereum/internal/era/e2store"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/golang/snappy"
 )
 
-func TestEraE(t *testing.T) {
+func TestEre(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -74,7 +79,7 @@ func TestEraE(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			f, err := os.CreateTemp(t.TempDir(), "erae-test")
+			f, err := os.CreateTemp(t.TempDir(), "ere-test")
 			if err != nil {
 				t.Fatalf("error creating temp file: %v", err)
 			}
@@ -164,6 +169,18 @@ func TestEraE(t *testing.T) {
 			}
 			if e.Count() != uint64(totalBlocks) {
 				t.Fatalf("wrong block count: want %d, got %d", totalBlocks, e.Count())
+			}
+			// Verify the layout detected from on-disk type tags. Header,
+			// body, and receipts are always present; TD is only present
+			// when the epoch contains pre-merge blocks.
+			if !e.HasComponent(header) || !e.HasComponent(body) || !e.HasComponent(receipts) {
+				t.Fatalf("missing required component in layout %v", e.m.layout)
+			}
+			if got, want := e.HasComponent(td), tt.preMerge > 0; got != want {
+				t.Fatalf("td component presence mismatch: want %v, got %v", want, got)
+			}
+			if e.HasComponent(proof) {
+				t.Fatalf("proof component should not be present in layout %v", e.m.layout)
 			}
 
 			// Verify accumulator in file.
@@ -295,7 +312,7 @@ func TestEraE(t *testing.T) {
 func TestInitialTD(t *testing.T) {
 	t.Parallel()
 
-	f, err := os.CreateTemp(t.TempDir(), "erae-initial-td-test")
+	f, err := os.CreateTemp(t.TempDir(), "ere-initial-td-test")
 	if err != nil {
 		t.Fatalf("error creating temp file: %v", err)
 	}
@@ -336,6 +353,115 @@ func TestInitialTD(t *testing.T) {
 	// Initial TD should be TD[0] - Difficulty[0] = 10 - 5 = 5.
 	if initialTD.Cmp(big.NewInt(5)) != 0 {
 		t.Fatalf("wrong initial TD: want 5, got %s", initialTD)
+	}
+}
+
+// TestDetectLayoutNoReceipts builds an Ere file with no receipts component and
+// checks that block data can still be read, while receipt access fails clearly.
+func TestDetectLayoutNoReceipts(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "synthetic.ere")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	w := e2store.NewWriter(f)
+	written := uint64(0)
+	writeEntry := func(typ uint16, data []byte) {
+		n, err := w.Write(typ, data)
+		if err != nil {
+			t.Fatalf("write type 0x%04x: %v", typ, err)
+		}
+		written += uint64(n)
+	}
+
+	var snappyBuf bytes.Buffer
+	writeSnappy := func(typ uint16, data []byte) {
+		snappyBuf.Reset()
+		sw := snappy.NewBufferedWriter(&snappyBuf)
+		if _, err := sw.Write(data); err != nil {
+			t.Fatalf("snappy write: %v", err)
+		}
+		if err := sw.Flush(); err != nil {
+			t.Fatalf("snappy flush: %v", err)
+		}
+		writeEntry(typ, snappyBuf.Bytes())
+	}
+
+	writeEntry(era.TypeVersion, nil)
+
+	// Block 0 components in order: header, body, td (no receipts).
+	headerBytes := mustEncode(&types.Header{Number: big.NewInt(0), Difficulty: big.NewInt(1)})
+	bodyBytes := mustEncode(&types.Body{})
+	tdLE := make([]byte, 32) // uint256(1) little-endian
+	tdLE[0] = 1
+
+	headerOff := written
+	writeSnappy(era.TypeCompressedHeader, headerBytes)
+	bodyOff := written
+	writeSnappy(era.TypeCompressedBody, bodyBytes)
+	tdOff := written
+	writeEntry(era.TypeTotalDifficulty, tdLE)
+
+	// Build the DynamicBlockIndex with 3 components per block, 1 block, and
+	// the third slot pointing at the TD entry rather than at receipts.
+	base := int64(written)
+	relative := func(absolute uint64) uint64 { return uint64(int64(absolute) - base) }
+
+	var indexBuf bytes.Buffer
+	writeU64 := func(v uint64) {
+		if err := binary.Write(&indexBuf, binary.LittleEndian, v); err != nil {
+			t.Fatalf("index write: %v", err)
+		}
+	}
+	writeU64(0) // starting block number
+	writeU64(relative(headerOff))
+	writeU64(relative(bodyOff))
+	writeU64(relative(tdOff))
+	writeU64(3) // component count
+	writeU64(1) // block count
+	writeEntry(era.TypeDynamicBlockIndex, indexBuf.Bytes())
+
+	if err := f.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	g, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	t.Cleanup(func() { g.Close() })
+	e, err := From(g)
+	if err != nil {
+		t.Fatalf("From rejected file with no receipts component: %v", err)
+	}
+
+	blk, err := e.GetBlockByNumber(0)
+	if err != nil {
+		t.Fatalf("GetBlockByNumber failed: %v", err)
+	}
+	if blk.NumberU64() != 0 {
+		t.Fatalf("wrong block number: got %d", blk.NumberU64())
+	}
+	if _, err := e.GetRawReceiptsByNumber(0); err == nil {
+		t.Fatal("expected GetRawReceiptsByNumber to fail")
+	}
+
+	it, err := e.Iterator()
+	if err != nil {
+		t.Fatalf("Iterator failed: %v", err)
+	}
+	if !it.Next() {
+		t.Fatalf("expected iterator to advance, err %v", it.Error())
+	}
+	if _, err := it.Block(); err != nil {
+		t.Fatalf("iterator Block failed: %v", err)
+	}
+	if _, err := it.Receipts(); err == nil {
+		t.Fatal("expected iterator Receipts to fail")
 	}
 }
 
