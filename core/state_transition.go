@@ -689,6 +689,12 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		forwarded := st.gasRemaining.RegularGas
 		ret, _, result, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining.ForwardAll(), value)
 		st.gasRemaining.Absorb(result, forwarded)
+
+		// If this was a failed contract creation, refund the account creation costs.
+		if rules.IsAmsterdam && vmerr != nil {
+			refund := params.AccountCreationSize * st.evm.Context.CostPerStateByte
+			st.gasRemaining.RefundState(refund)
+		}
 	} else {
 		// Increment the nonce for the next transaction.
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
@@ -709,11 +715,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		forwarded := st.gasRemaining.RegularGas
 		ret, result, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining.ForwardAll(), value)
 		st.gasRemaining.Absorb(result, forwarded)
-	}
-	// If this was a failed contract creation, refund the account creation costs.
-	if rules.IsAmsterdam && vmerr != nil && contractCreation {
-		refund := params.AccountCreationSize * st.evm.Context.CostPerStateByte
-		st.gasRemaining.RefundState(refund)
 	}
 
 	// Settle down the gas usage and refund the ETH back if any remaining
