@@ -246,7 +246,7 @@ func readList(filename string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return strings.Split(string(b), "\n"), nil
+	return strings.Split(strings.TrimRight(string(b), "\n"), "\n"), nil
 }
 
 // ImportHistory imports Era1 files containing historical block information,
