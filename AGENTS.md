@@ -4,6 +4,7 @@
 
 - **Keep changes minimal and focused.** Only modify code directly related to the task at hand. Do not refactor unrelated code, rename existing variables or functions for style, or bundle unrelated fixes into the same commit or PR.
 - **Do not add, remove, or update dependencies** unless the task explicitly requires it.
+- **Use the QuarkChain copyright header for new code files.** When adding a new code file, put `// Copyright 2026-2027, QuarkChain.` on the first line instead of copying go-ethereum's copyright header.
 
 ## Pre-Commit Checklist
 
