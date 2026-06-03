@@ -288,6 +288,18 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			return nil, gas, nil
 		}
 		evm.StateDB.CreateAccount(addr)
+
+		// Charge the state gas for account creation
+		if evm.chainRules.IsAmsterdam {
+			prev, ok := gas.ChargeState(params.AccountCreationSize * evm.Context.CostPerStateByte)
+			if !ok {
+				evm.StateDB.RevertToSnapshot(snapshot)
+				return nil, gas.ExitHalt(), ErrOutOfGas
+			}
+			if evm.Config.Tracer.HasGasHook() {
+				evm.Config.Tracer.EmitGasChange(prev.AsTracing(), gas.AsTracing(), tracing.GasChangeAccountCreation)
+			}
+		}
 	}
 	// Perform the value transfer only in non-syscall mode.
 	// Calling this is required even for zero-value transfers,
@@ -543,6 +555,17 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	snapshot := evm.StateDB.Snapshot()
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
+
+		// Charge the state gas for account creation
+		if evm.chainRules.IsAmsterdam {
+			prev, ok := gas.ChargeState(params.AccountCreationSize * evm.Context.CostPerStateByte)
+			if !ok {
+				return nil, common.Address{}, gas.ExitHalt(), ErrOutOfGas
+			}
+			if evm.Config.Tracer.HasGasHook() {
+				evm.Config.Tracer.EmitGasChange(prev.AsTracing(), gas.AsTracing(), tracing.GasChangeAccountCreation)
+			}
+		}
 	}
 	// CreateContract means that regardless of whether the account previously existed
 	// in the state trie or not, it _now_ becomes created as a _contract_ account.
