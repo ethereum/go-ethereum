@@ -824,7 +824,9 @@ func opCallCode(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if !value.IsZero() {
 		gas += params.CallStipend
 	}
-
+	// Regular gas for the forward was already pre-deducted by the dynamic
+	// gas table, only the state reservoir needs to be handed off to the
+	// child here.
 	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
 	ret, result, err := evm.CallCode(scope.Contract.Address(), toAddr, args, childBudget, &value)
 	if err != nil {
@@ -855,6 +857,9 @@ func opDelegateCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
+	// Regular gas for the forward was already pre-deducted by the dynamic
+	// gas table, only the state reservoir needs to be handed off to the
+	// child here.
 	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
 	ret, result, err := evm.DelegateCall(scope.Contract.Caller(), scope.Contract.Address(), toAddr, args, childBudget, scope.Contract.value)
 	if err != nil {
@@ -884,6 +889,9 @@ func opStaticCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
+	// Regular gas for the forward was already pre-deducted by the dynamic
+	// gas table, only the state reservoir needs to be handed off to the
+	// child here.
 	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
 	ret, result, err := evm.StaticCall(scope.Contract.Address(), toAddr, args, childBudget)
 	if err != nil {

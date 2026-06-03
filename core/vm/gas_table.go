@@ -616,17 +616,12 @@ func stateGasCall8037(evm *EVM, contract *Contract, stack *Stack) (uint64, error
 	// TODO(rjl, marius), can EIP8037 implicitly means the EIP158 is also activated?
 	// It's technically possible to skip the EIP158 but very unlikely in practice.
 	if evm.chainRules.IsEIP158 {
-		// Important: account emptiness is tested by StateDB.Empty rather than !StateDB.Exist.
-		// They differ for exactly one state: a leaf that already exists in the trie but is
-		// empty (nonce==0, balance==0, empty code). Per EIP-161 such an account is not part
-		// of the persistent state and is cleared at the end of the tx. It can appear mid-tx,
-		// e.g. when SELFDESTRUCT sends a zero balance to a fresh address and touches it.
+		// Important: use StateDB.Empty instead of !StateDB.Exist. An account may exist
+		// in the current state yet still be considered non-existent by EIP-161 if its
+		// nonce, balance, and code are all zero. Such accounts can appear temporarily
+		// during execution (e.g. via SELFDESTRUCT) and are removed at tx end.
 		//
-		// Transferring value to such an account makes it non-empty and therefore permanent,
-		// a genuine state growth that must be paid for. Using !Exist would skip the charge
-		// here (free state growth) and would also diverge from the regular gas
-		// CallNewAccountGas path, which tests Empty too. EIP-8037 defines an existent account
-		// via EIP-161 (nonzero nonce, balance, or code), so Empty is the predicate to use.
+		// Funding such an account makes it permanent state growth and must be charged.
 		if transfersValue && evm.StateDB.Empty(address) {
 			gas += params.AccountCreationSize * evm.Context.CostPerStateByte
 		}
@@ -653,17 +648,12 @@ func gasSelfdestruct8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory
 	if contract.Gas.RegularGas < gas.RegularGas {
 		return gas, ErrOutOfGas
 	}
-	// Important: account emptiness is tested by StateDB.Empty rather than !StateDB.Exist.
-	// They differ for exactly one state: a leaf that already exists in the trie but is
-	// empty (nonce==0, balance==0, empty code). Per EIP-161 such an account is not part
-	// of the persistent state and is cleared at the end of the tx. It can appear mid-tx,
-	// e.g. when SELFDESTRUCT sends a zero balance to a fresh address and touches it.
+	// Important: use StateDB.Empty instead of !StateDB.Exist. An account may exist
+	// in the current state yet still be considered non-existent by EIP-161 if its
+	// nonce, balance, and code are all zero. Such accounts can appear temporarily
+	// during execution (e.g. via SELFDESTRUCT) and are removed at tx end.
 	//
-	// Transferring value to such an account makes it non-empty and therefore permanent,
-	// a genuine state growth that must be paid for. Using !Exist would skip the charge
-	// here (free state growth) and would also diverge from the regular gas
-	// CallNewAccountGas path, which tests Empty too. EIP-8037 defines an existent account
-	// via EIP-161 (nonzero nonce, balance, or code), so Empty is the predicate to use.
+	// Funding such an account makes it permanent state growth and must be charged.
 	if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
 		gas.StateGas += params.AccountCreationSize * evm.Context.CostPerStateByte
 	}

@@ -200,19 +200,19 @@ func (g GasBudget) ExitSuccess() GasBudget {
 	return g
 }
 
-// ExitRevert produces the leftover form for a REVERT exit. Per EIP-8037,
-// the gross state-gas charged in the failing subtree is refunded to the
-// caller's reservoir via the signed-counter formula
+// ExitRevert produces the leftover for a REVERT exit. Per EIP-8037, all state
+// gas charged by the reverted frame is refunded to the caller's reservoir:
 //
 //	leftover.StateGas = StateGas + UsedStateGas
 //
-// and UsedStateGas is zeroed because the state effect is routed through
+// UsedStateGas is reset since the frame's state changes are discarded.
 // StateGas. UsedRegularGas is unchanged.
 func (g GasBudget) ExitRevert() GasBudget {
 	reservoir := int64(g.StateGas) + g.UsedStateGas
 	if reservoir < 0 {
-		// Defensive: invariant guarantees non-negativity. Clamping prevents
-		// a hypothetical bug from sign-extending to a huge uint64.
+		// Reservoir should never be negative. By construction it equals
+		// the initial state-gas allocation plus any spillover to regular
+		// gas.
 		reservoir = 0
 	}
 	return GasBudget{
@@ -223,18 +223,19 @@ func (g GasBudget) ExitRevert() GasBudget {
 	}
 }
 
-// ExitHalt produces the leftover form for an exceptional halt. Remaining
-// regular gas is burned into UsedRegularGas; the state dimension follows the
-// same revert-style formula as ExitRevert because the spec routes both halt
-// and revert through incorporate_child_on_error:
+// ExitHalt produces the leftover for an exceptional halt. Remaining regular
+// gas is burned. State gas is returned to the parent using the same rule as
+// ExitRevert:
 //
-//	parent.state_gas_left = parent + child.state_gas_used + child.state_gas_left
+//	leftover.StateGas = StateGas + UsedStateGas
 //
-// which in our model means returning `StateGas + UsedStateGas` to the parent
-// and zeroing the per-frame counter.
+// UsedStateGas is reset since the frame's state changes are discarded.
 func (g GasBudget) ExitHalt() GasBudget {
 	reservoir := int64(g.StateGas) + g.UsedStateGas
 	if reservoir < 0 {
+		// Reservoir should never be negative. By construction it equals
+		// the initial state-gas allocation plus any spillover to regular
+		// gas.
 		reservoir = 0
 	}
 	return GasBudget{

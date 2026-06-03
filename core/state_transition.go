@@ -663,13 +663,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From.Hex())
 	}
 
-	// Check whether the init code size has been exceeded.
-	if contractCreation {
-		if err := vm.CheckMaxInitCodeSize(&rules, uint64(len(msg.Data))); err != nil {
-			return nil, err
-		}
-	}
-
 	// Execute the preparatory steps for state transition which includes:
 	// - prepare accessList(post-berlin)
 	// - reset transient storage(EIP-1153)
@@ -678,19 +671,26 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 	// Execute the top-most frame
 	var (
-		ret   []byte
-		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
-	)
-	if contractCreation {
-		var result vm.GasBudget
+		ret    []byte
+		vmerr  error // vm errors do not effect consensus and are therefore not assigned to err
+		result vm.GasBudget
+
 		// Capture the forwarded regular-gas amount BEFORE ForwardAll consumes
 		// it, so Absorb can back out state-gas spillover from UsedRegularGas
 		// per EIP-8037.
-		forwarded := st.gasRemaining.RegularGas
+		forwarded = st.gasRemaining.RegularGas
+	)
+	if contractCreation {
+		// Check whether the init code size has been exceeded.
+		if err := vm.CheckMaxInitCodeSize(&rules, uint64(len(msg.Data))); err != nil {
+			return nil, err
+		}
+		// Execute the transaction's creation.
 		ret, _, result, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining.ForwardAll(), value)
 		st.gasRemaining.Absorb(result, forwarded)
 
-		// If this was a failed contract creation, refund the account creation costs.
+		// If this was a failed contract creation, refund the pre-charged account
+		// creation costs in IntrinsicGas.
 		if rules.IsAmsterdam && vmerr != nil {
 			refund := params.AccountCreationSize * st.evm.Context.CostPerStateByte
 			st.gasRemaining.RefundState(refund)
@@ -711,8 +711,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			st.state.AddAddressToAccessList(addr)
 		}
 		// Execute the transaction's call.
-		var result vm.GasBudget
-		forwarded := st.gasRemaining.RegularGas
 		ret, result, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining.ForwardAll(), value)
 		st.gasRemaining.Absorb(result, forwarded)
 	}
