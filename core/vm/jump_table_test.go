@@ -17,8 +17,11 @@
 package vm
 
 import (
+	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,4 +35,26 @@ func TestJumpTableCopy(t *testing.T) {
 	deepCopy[SLOAD].constantGas = 100
 	require.Equal(t, uint64(100), deepCopy[SLOAD].constantGas)
 	require.Equal(t, uint64(0), tbl[SLOAD].constantGas)
+}
+
+func TestQuarkChainHistoryInstructionSet(t *testing.T) {
+	random := common.HexToHash("0xffff")
+	evm := NewEVM(BlockContext{
+		BlockNumber: big.NewInt(0),
+		Difficulty:  big.NewInt(7),
+		Random:      &random,
+	}, nil, params.QuarkChainHistoryChainConfig, Config{})
+	defer evm.Release()
+
+	require.True(t, evm.chainRules.IsQuarkChainHistory)
+	require.False(t, evm.chainRules.IsMerge)
+	require.True(t, evm.table[CHAINID].undefined)
+	require.True(t, evm.table[PUSH0].undefined)
+
+	stack := newStackForTesting()
+	pc := uint64(0)
+	_, err := evm.table[DIFFICULTY].execute(&pc, evm, &ScopeContext{Stack: stack})
+	require.NoError(t, err)
+	actual := stack.pop()
+	require.Equal(t, uint64(7), actual.Uint64())
 }

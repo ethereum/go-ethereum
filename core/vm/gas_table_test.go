@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMemoryGasCost(t *testing.T) {
@@ -109,6 +110,30 @@ func TestEIP2200(t *testing.T) {
 			t.Errorf("test %d: gas refund mismatch: have %v, want %v", i, refund, tt.refund)
 		}
 	}
+}
+
+func TestQuarkChainHistorySStoreGas(t *testing.T) {
+	address := common.BytesToAddress([]byte("contract"))
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.CreateAccount(address)
+	statedb.SetCode(address, hexutil.MustDecode("0x60016000556000600055"), tracing.CodeChangeUnspecified)
+	statedb.Finalise(true)
+
+	vmctx := BlockContext{
+		CanTransfer: func(StateDB, common.Address, *uint256.Int) bool { return true },
+		Transfer:    func(StateDB, common.Address, common.Address, *uint256.Int, *params.Rules) {},
+		BlockNumber: big.NewInt(0),
+		Difficulty:  big.NewInt(1),
+	}
+	evm := NewEVM(vmctx, statedb, params.QuarkChainHistoryChainConfig, Config{})
+	defer evm.Release()
+
+	initialGas := NewGasBudget(math.MaxUint64)
+	_, leftOver, err := evm.Call(common.Address{}, address, nil, initialGas.Copy(), new(uint256.Int))
+	require.NoError(t, err)
+	require.Equal(t, uint64(25012), leftOver.Used(initialGas))
+	require.Equal(t, uint64(15000), evm.StateDB.GetRefund())
 }
 
 var createGasTests = []struct {

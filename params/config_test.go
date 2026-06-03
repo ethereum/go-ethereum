@@ -139,6 +139,34 @@ func TestConfigRules(t *testing.T) {
 	}
 }
 
+func TestQuarkChainHistoryRules(t *testing.T) {
+	rules := QuarkChainHistoryChainConfig.Rules(big.NewInt(0), true, math.MaxUint64)
+	require.True(t, rules.IsQuarkChainHistory)
+	require.True(t, rules.IsHomestead)
+	require.True(t, rules.IsEIP150)
+	require.True(t, rules.IsEIP155)
+	require.True(t, rules.IsEIP158)
+	require.True(t, rules.IsByzantium)
+	require.True(t, rules.IsConstantinople)
+
+	require.False(t, rules.IsPetersburg)
+	require.False(t, rules.IsIstanbul)
+	require.False(t, rules.IsBerlin)
+	require.False(t, rules.IsLondon)
+	require.False(t, rules.IsMerge)
+	require.False(t, rules.IsShanghai)
+	require.False(t, rules.IsCancun)
+	require.False(t, rules.IsPrague)
+	require.False(t, rules.IsOsaka)
+	require.False(t, rules.IsAmsterdam)
+	require.False(t, rules.IsUBT)
+	require.False(t, rules.IsEIP2929)
+	require.False(t, rules.IsEIP4762)
+
+	require.False(t, QuarkChainHistoryChainConfig.IsPetersburg(big.NewInt(0)))
+	require.False(t, QuarkChainHistoryChainConfig.IsPostMerge(0, math.MaxUint64))
+}
+
 func TestTimestampCompatError(t *testing.T) {
 	require.Equal(t, new(ConfigCompatError).Error(), "")
 

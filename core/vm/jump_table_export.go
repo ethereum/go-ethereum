@@ -26,6 +26,8 @@ import (
 // the rules.
 func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
 	switch {
+	case rules.IsQuarkChainHistory:
+		return newQuarkChainHistoryInstructionSet(), nil
 	case rules.IsUBT:
 		return newCancunInstructionSet(), errors.New("verkle-fork not defined yet")
 	case rules.IsAmsterdam:

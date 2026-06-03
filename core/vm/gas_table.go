@@ -167,6 +167,25 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 	return GasCosts{RegularGas: params.NetSstoreDirtyGas}, nil
 }
 
+func gasSStoreQuarkChainHistory(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+	if evm.readOnly {
+		return GasCosts{}, ErrWriteProtection
+	}
+	var (
+		y, x    = stack.back(1), stack.back(0)
+		current = evm.StateDB.GetState(contract.Address(), x.Bytes32())
+	)
+	switch {
+	case current == (common.Hash{}) && y.Sign() != 0:
+		return GasCosts{RegularGas: params.SstoreSetGas}, nil
+	case current != (common.Hash{}) && y.Sign() == 0:
+		evm.StateDB.AddRefund(params.SstoreRefundGas)
+		return GasCosts{RegularGas: params.SstoreClearGas}, nil
+	default:
+		return GasCosts{RegularGas: params.SstoreResetGas}, nil
+	}
+}
+
 // Here come the EIP2200 rules:
 //
 //	(0.) If *gasleft* is less than or equal to 2300, fail the current call.
