@@ -106,10 +106,14 @@ func TestHistoryImportAndExport(t *testing.T) {
 			}
 
 			// Read checksums.
-			b, err := os.ReadFile(filepath.Join(dir, "checksums.txt"))
+			checksumsFile := filepath.Join(dir, "checksums.txt")
+			b, err := os.ReadFile(checksumsFile)
 			if err != nil {
 				t.Fatalf("failed to read checksums: %v", err)
 			}
+
+			// Add a trailing newline to ensure checksum handling is defensive.
+			_ = os.WriteFile(checksumsFile, append(b, '\n'), 0644)
 			checksums := strings.Split(string(b), "\n")
 
 			// Verify each Era.
