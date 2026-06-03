@@ -480,15 +480,16 @@ func assembleRoot(db ethdb.Database, scheme string, partitionBlobs [numPartition
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("mount partition %d: %w", partition, err)
 		}
-		rawdb.WriteTrieNode(db, common.Hash{}, nil, rootHash, rootBlob, scheme)
+		batch := db.NewBatch()
+		rawdb.WriteTrieNode(batch, common.Hash{}, nil, rootHash, rootBlob, scheme)
 		if isOrphaned {
 			// The folded root at nil does not reference [partition], so the copy
 			// generatePartition wrote there is now unreferenced. Delete it so the
 			// on-disk node set matches the canonical trie.
 			staleHash := crypto.Keccak256Hash(partitionBlobs[partition])
-			rawdb.DeleteTrieNode(db, common.Hash{}, []byte{byte(partition)}, staleHash, scheme)
+			rawdb.DeleteTrieNode(batch, common.Hash{}, []byte{byte(partition)}, staleHash, scheme)
 		}
-		return rootHash, nil
+		return rootHash, batch.Write()
 	}
 
 	// populated >= 2: mount each partition's subtree root (already persisted at
