@@ -149,7 +149,7 @@ func TestQuarkChainHistoryRules(t *testing.T) {
 	require.True(t, rules.IsByzantium)
 	require.True(t, rules.IsConstantinople)
 
-	require.False(t, rules.IsPetersburg)
+	require.True(t, rules.IsPetersburg)
 	require.False(t, rules.IsIstanbul)
 	require.False(t, rules.IsBerlin)
 	require.False(t, rules.IsLondon)
@@ -163,7 +163,7 @@ func TestQuarkChainHistoryRules(t *testing.T) {
 	require.False(t, rules.IsEIP2929)
 	require.False(t, rules.IsEIP4762)
 
-	require.False(t, QuarkChainHistoryChainConfig.IsPetersburg(big.NewInt(0)))
+	require.True(t, QuarkChainHistoryChainConfig.IsPetersburg(big.NewInt(0)))
 	require.False(t, QuarkChainHistoryChainConfig.IsPostMerge(0, math.MaxUint64))
 }
 

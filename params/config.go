@@ -270,8 +270,6 @@ var (
 	}
 
 	// QuarkChainHistoryChainConfig matches goquarkchain's historical EVM baseline.
-	// It is an execution compatibility mode only; it does not implement
-	// goquarkchain's shard consensus, transaction envelope, or multi-token state.
 	QuarkChainHistoryChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(1),
 		HomesteadBlock:      big.NewInt(0),
@@ -282,6 +280,7 @@ var (
 		EIP158Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
 		QuarkChainHistory:   true,
 	}
 
@@ -796,9 +795,6 @@ func (c *ChainConfig) IsMuirGlacier(num *big.Int) bool {
 // - equal to or greater than the PetersburgBlock fork block,
 // - OR is nil, and Constantinople is active
 func (c *ChainConfig) IsPetersburg(num *big.Int) bool {
-	if c.QuarkChainHistory {
-		return false
-	}
 	return isBlockForked(c.PetersburgBlock, num) || c.PetersburgBlock == nil && isBlockForked(c.ConstantinopleBlock, num)
 }
 
@@ -1426,6 +1422,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 			IsEIP158:            c.IsEIP158(num),
 			IsByzantium:         c.IsByzantium(num),
 			IsConstantinople:    c.IsConstantinople(num),
+			IsPetersburg:        c.IsPetersburg(num),
 			IsQuarkChainHistory: true,
 		}
 	}
