@@ -4264,10 +4264,7 @@ func TestGetStorageValues(t *testing.T) {
 }
 
 // TestStateMethodsDefaultToLatest verifies that the state-reading methods
-// default the optional block parameter to "latest" when it is omitted by the
-// caller, matching the behavior mandated by execution-apis (the Block param is
-// marked required:false, default 'latest'). It exercises the full JSON-RPC
-// stack so that parameter omission is validated, not just the default helper.
+// default the optional block parameter to "latest".
 func TestStateMethodsDefaultToLatest(t *testing.T) {
 	t.Parallel()
 	var (
