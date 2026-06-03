@@ -375,10 +375,10 @@ type healTask struct {
 	codeTasks map[common.Hash]struct{} // Set of byte code tasks currently queued for retrieval, indexed by code hash
 }
 
-// SyncProgress is a database entry to allow suspending and resuming a snapshot state
+// syncProgress is a database entry to allow suspending and resuming a snapshot state
 // sync. Opposed to full and fast sync, there is no way to restart a suspended
 // snap sync without prior knowledge of the suspension point.
-type SyncProgress struct {
+type syncProgress struct {
 	Tasks []*accountTask // The suspended account tasks (contract tasks within)
 
 	// Status report during syncing phase
@@ -396,9 +396,9 @@ type SyncProgress struct {
 	BytecodeHealBytes  common.StorageSize // Number of bytecodes persisted to disk
 }
 
-// SyncPending is analogous to SyncProgress, but it's used to report on pending
+// syncPending is analogous to syncProgress, but it's used to report on pending
 // ephemeral sync progress that doesn't get persisted into the database.
-type SyncPending struct {
+type syncPending struct {
 	TrienodeHeal uint64 // Number of state trie nodes pending
 	BytecodeHeal uint64 // Number of bytecodes pending
 }
@@ -430,7 +430,7 @@ type SyncPeer interface {
 	Log() log.Logger
 }
 
-// Syncer is an Ethereum account and storage trie syncer based on snapshots and
+// syncer is an Ethereum account and storage trie syncer based on snapshots and
 // the  snap protocol. It's purpose is to download all the accounts and storage
 // slots from remote peers and reassemble chunks of the state trie, on top of
 // which a state sync can be run to fix any gaps / overlaps.
@@ -441,7 +441,7 @@ type SyncPeer interface {
 //   - The peer remains connected, but does not deliver a response in time
 //   - The peer delivers a stale response after a previous timeout
 //   - The peer delivers a refusal to serve the requested state
-type Syncer struct {
+type syncer struct {
 	db     ethdb.KeyValueStore // Database to store the trie nodes into (and dedup)
 	scheme string              // Node scheme used in node database
 
@@ -473,7 +473,7 @@ type Syncer struct {
 	storageSynced  uint64             // Number of storage slots downloaded
 	storageBytes   common.StorageSize // Number of storage trie bytes persisted to disk
 
-	extProgress *SyncProgress // progress that can be exposed to external caller.
+	extProgress *syncProgress // progress that can be exposed to external caller.
 
 	// Request tracking during healing phase
 	trienodeHealIdlers map[string]struct{} // Peers that aren't serving trie node requests
@@ -511,10 +511,10 @@ type Syncer struct {
 	lock sync.RWMutex   // Protects fields that can change outside of sync (peers, reqs, root)
 }
 
-// NewSyncer creates a new snapshot syncer to download the Ethereum state over the
-// snap protocol.
-func NewSyncer(db ethdb.KeyValueStore, scheme string) *Syncer {
-	return &Syncer{
+// newSyncer creates the snap/1 state syncer. It is unexported; callers outside
+// the package obtain a Syncer through NewV1Syncer.
+func newSyncer(db ethdb.KeyValueStore, scheme string) *syncer {
+	return &syncer{
 		db:     db,
 		scheme: scheme,
 
@@ -540,12 +540,12 @@ func NewSyncer(db ethdb.KeyValueStore, scheme string) *Syncer {
 		trienodeHealThrottle: maxTrienodeHealThrottle, // Tune downward instead of insta-filling with junk
 		stateWriter:          db.NewBatch(),
 
-		extProgress: new(SyncProgress),
+		extProgress: new(syncProgress),
 	}
 }
 
 // Register injects a new data source into the syncer's peerset.
-func (s *Syncer) Register(peer SyncPeer) error {
+func (s *syncer) Register(peer SyncPeer) error {
 	// Make sure the peer is not registered yet
 	id := peer.ID()
 
@@ -573,7 +573,7 @@ func (s *Syncer) Register(peer SyncPeer) error {
 }
 
 // Unregister injects a new data source into the syncer's peerset.
-func (s *Syncer) Unregister(id string) error {
+func (s *syncer) Unregister(id string) error {
 	// Remove all traces of the peer from the registry
 	s.lock.Lock()
 	if _, ok := s.peers[id]; !ok {
@@ -604,7 +604,7 @@ func (s *Syncer) Unregister(id string) error {
 // with the given root and reconstruct the nodes based on the snapshot leaves.
 // Previously downloaded segments will not be redownloaded of fixed, rather any
 // errors will be healed after the leaves are fully accumulated.
-func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
+func (s *syncer) Sync(root common.Hash, cancel chan struct{}) error {
 	// Move the trie root from any previous value, revert stateless markers for
 	// any peers and initialize the syncer if it was not yet run
 	s.lock.Lock()
@@ -719,7 +719,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		}
 		// Update sync progress
 		s.lock.Lock()
-		s.extProgress = &SyncProgress{
+		s.extProgress = &syncProgress{
 			AccountSynced:      s.accountSynced,
 			AccountBytes:       s.accountBytes,
 			BytecodeSynced:     s.bytecodeSynced,
@@ -772,8 +772,8 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 
 // loadSyncStatus retrieves a previously aborted sync status from the database,
 // or generates a fresh one if none is available.
-func (s *Syncer) loadSyncStatus() {
-	var progress SyncProgress
+func (s *syncer) loadSyncStatus() {
+	var progress syncProgress
 
 	if status := rawdb.ReadSnapshotSyncStatus(s.db); status != nil {
 		if err := json.Unmarshal(status, &progress); err != nil {
@@ -891,7 +891,7 @@ func (s *Syncer) loadSyncStatus() {
 }
 
 // saveSyncStatus marshals the remaining sync tasks into leveldb.
-func (s *Syncer) saveSyncStatus() {
+func (s *syncer) saveSyncStatus() {
 	// Serialize any partial progress to disk before spinning down
 	for _, task := range s.tasks {
 		// Claim the right boundary as incomplete before flushing the
@@ -921,7 +921,7 @@ func (s *Syncer) saveSyncStatus() {
 		}
 	}
 	// Store the actual progress markers
-	progress := &SyncProgress{
+	progress := &syncProgress{
 		Tasks:              s.tasks,
 		AccountSynced:      s.accountSynced,
 		AccountBytes:       s.accountBytes,
@@ -942,10 +942,10 @@ func (s *Syncer) saveSyncStatus() {
 }
 
 // Progress returns the snap sync status statistics.
-func (s *Syncer) Progress() (*SyncProgress, *SyncPending) {
+func (s *syncer) Progress() (*syncProgress, *syncPending) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	pending := new(SyncPending)
+	pending := new(syncPending)
 	if s.healer != nil {
 		pending.TrienodeHeal = uint64(len(s.healer.trieTasks))
 		pending.BytecodeHeal = uint64(len(s.healer.codeTasks))
@@ -955,7 +955,7 @@ func (s *Syncer) Progress() (*SyncProgress, *SyncPending) {
 
 // cleanAccountTasks removes account range retrieval tasks that have already been
 // completed.
-func (s *Syncer) cleanAccountTasks() {
+func (s *syncer) cleanAccountTasks() {
 	// If the sync was already done before, don't even bother
 	if len(s.tasks) == 0 {
 		return
@@ -980,7 +980,7 @@ func (s *Syncer) cleanAccountTasks() {
 
 // cleanStorageTasks iterates over all the account tasks and storage sub-tasks
 // within, cleaning any that have been completed.
-func (s *Syncer) cleanStorageTasks() {
+func (s *syncer) cleanStorageTasks() {
 	for _, task := range s.tasks {
 		for account, subtasks := range task.SubTasks {
 			// Remove storage range retrieval tasks that completed
@@ -1017,7 +1017,7 @@ func (s *Syncer) cleanStorageTasks() {
 
 // assignAccountTasks attempts to match idle peers to pending account range
 // retrievals.
-func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *accountRequest, cancel chan struct{}) {
+func (s *syncer) assignAccountTasks(success chan *accountResponse, fail chan *accountRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -1114,7 +1114,7 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 }
 
 // assignBytecodeTasks attempts to match idle peers to pending code retrievals.
-func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *bytecodeRequest, cancel chan struct{}) {
+func (s *syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *bytecodeRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -1217,7 +1217,7 @@ func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *
 
 // assignStorageTasks attempts to match idle peers to pending storage range
 // retrievals.
-func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *storageRequest, cancel chan struct{}) {
+func (s *syncer) assignStorageTasks(success chan *storageResponse, fail chan *storageRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -1374,7 +1374,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 
 // assignTrienodeHealTasks attempts to match idle peers to trie node requests to
 // heal any trie errors caused by the snap sync's chunked retrieval model.
-func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fail chan *trienodeHealRequest, cancel chan struct{}) {
+func (s *syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fail chan *trienodeHealRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -1502,7 +1502,7 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 
 // assignBytecodeHealTasks attempts to match idle peers to bytecode requests to
 // heal any trie errors caused by the snap sync's chunked retrieval model.
-func (s *Syncer) assignBytecodeHealTasks(success chan *bytecodeHealResponse, fail chan *bytecodeHealRequest, cancel chan struct{}) {
+func (s *syncer) assignBytecodeHealTasks(success chan *bytecodeHealResponse, fail chan *bytecodeHealRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -1618,7 +1618,7 @@ func (s *Syncer) assignBytecodeHealTasks(success chan *bytecodeHealResponse, fai
 
 // revertRequests locates all the currently pending requests from a particular
 // peer and reverts them, rescheduling for others to fulfill.
-func (s *Syncer) revertRequests(peer string) {
+func (s *syncer) revertRequests(peer string) {
 	// Gather the requests first, revertals need the lock too
 	s.lock.Lock()
 	var accountReqs []*accountRequest
@@ -1673,7 +1673,7 @@ func (s *Syncer) revertRequests(peer string) {
 
 // scheduleRevertAccountRequest asks the event loop to clean up an account range
 // request and return all failed retrieval tasks to the scheduler for reassignment.
-func (s *Syncer) scheduleRevertAccountRequest(req *accountRequest) {
+func (s *syncer) scheduleRevertAccountRequest(req *accountRequest) {
 	select {
 	case req.revert <- req:
 		// Sync event loop notified
@@ -1689,7 +1689,7 @@ func (s *Syncer) scheduleRevertAccountRequest(req *accountRequest) {
 //
 // Note, this needs to run on the event runloop thread to reschedule to idle peers.
 // On peer threads, use scheduleRevertAccountRequest.
-func (s *Syncer) revertAccountRequest(req *accountRequest) {
+func (s *syncer) revertAccountRequest(req *accountRequest) {
 	log.Debug("Reverting account request", "peer", req.peer, "reqid", req.id)
 	select {
 	case <-req.stale:
@@ -1718,7 +1718,7 @@ func (s *Syncer) revertAccountRequest(req *accountRequest) {
 
 // scheduleRevertBytecodeRequest asks the event loop to clean up a bytecode request
 // and return all failed retrieval tasks to the scheduler for reassignment.
-func (s *Syncer) scheduleRevertBytecodeRequest(req *bytecodeRequest) {
+func (s *syncer) scheduleRevertBytecodeRequest(req *bytecodeRequest) {
 	select {
 	case req.revert <- req:
 		// Sync event loop notified
@@ -1734,7 +1734,7 @@ func (s *Syncer) scheduleRevertBytecodeRequest(req *bytecodeRequest) {
 //
 // Note, this needs to run on the event runloop thread to reschedule to idle peers.
 // On peer threads, use scheduleRevertBytecodeRequest.
-func (s *Syncer) revertBytecodeRequest(req *bytecodeRequest) {
+func (s *syncer) revertBytecodeRequest(req *bytecodeRequest) {
 	log.Debug("Reverting bytecode request", "peer", req.peer)
 	select {
 	case <-req.stale:
@@ -1763,7 +1763,7 @@ func (s *Syncer) revertBytecodeRequest(req *bytecodeRequest) {
 
 // scheduleRevertStorageRequest asks the event loop to clean up a storage range
 // request and return all failed retrieval tasks to the scheduler for reassignment.
-func (s *Syncer) scheduleRevertStorageRequest(req *storageRequest) {
+func (s *syncer) scheduleRevertStorageRequest(req *storageRequest) {
 	select {
 	case req.revert <- req:
 		// Sync event loop notified
@@ -1779,7 +1779,7 @@ func (s *Syncer) scheduleRevertStorageRequest(req *storageRequest) {
 //
 // Note, this needs to run on the event runloop thread to reschedule to idle peers.
 // On peer threads, use scheduleRevertStorageRequest.
-func (s *Syncer) revertStorageRequest(req *storageRequest) {
+func (s *syncer) revertStorageRequest(req *storageRequest) {
 	log.Debug("Reverting storage request", "peer", req.peer)
 	select {
 	case <-req.stale:
@@ -1812,7 +1812,7 @@ func (s *Syncer) revertStorageRequest(req *storageRequest) {
 
 // scheduleRevertTrienodeHealRequest asks the event loop to clean up a trienode heal
 // request and return all failed retrieval tasks to the scheduler for reassignment.
-func (s *Syncer) scheduleRevertTrienodeHealRequest(req *trienodeHealRequest) {
+func (s *syncer) scheduleRevertTrienodeHealRequest(req *trienodeHealRequest) {
 	select {
 	case req.revert <- req:
 		// Sync event loop notified
@@ -1828,7 +1828,7 @@ func (s *Syncer) scheduleRevertTrienodeHealRequest(req *trienodeHealRequest) {
 //
 // Note, this needs to run on the event runloop thread to reschedule to idle peers.
 // On peer threads, use scheduleRevertTrienodeHealRequest.
-func (s *Syncer) revertTrienodeHealRequest(req *trienodeHealRequest) {
+func (s *syncer) revertTrienodeHealRequest(req *trienodeHealRequest) {
 	log.Debug("Reverting trienode heal request", "peer", req.peer)
 	select {
 	case <-req.stale:
@@ -1857,7 +1857,7 @@ func (s *Syncer) revertTrienodeHealRequest(req *trienodeHealRequest) {
 
 // scheduleRevertBytecodeHealRequest asks the event loop to clean up a bytecode heal
 // request and return all failed retrieval tasks to the scheduler for reassignment.
-func (s *Syncer) scheduleRevertBytecodeHealRequest(req *bytecodeHealRequest) {
+func (s *syncer) scheduleRevertBytecodeHealRequest(req *bytecodeHealRequest) {
 	select {
 	case req.revert <- req:
 		// Sync event loop notified
@@ -1873,7 +1873,7 @@ func (s *Syncer) scheduleRevertBytecodeHealRequest(req *bytecodeHealRequest) {
 //
 // Note, this needs to run on the event runloop thread to reschedule to idle peers.
 // On peer threads, use scheduleRevertBytecodeHealRequest.
-func (s *Syncer) revertBytecodeHealRequest(req *bytecodeHealRequest) {
+func (s *syncer) revertBytecodeHealRequest(req *bytecodeHealRequest) {
 	log.Debug("Reverting bytecode heal request", "peer", req.peer)
 	select {
 	case <-req.stale:
@@ -1902,7 +1902,7 @@ func (s *Syncer) revertBytecodeHealRequest(req *bytecodeHealRequest) {
 
 // processAccountResponse integrates an already validated account range response
 // into the account tasks.
-func (s *Syncer) processAccountResponse(res *accountResponse) {
+func (s *syncer) processAccountResponse(res *accountResponse) {
 	// Switch the task from pending to filling
 	res.task.req = nil
 	res.task.res = res
@@ -2024,7 +2024,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 
 // processBytecodeResponse integrates an already validated bytecode response
 // into the account tasks.
-func (s *Syncer) processBytecodeResponse(res *bytecodeResponse) {
+func (s *syncer) processBytecodeResponse(res *bytecodeResponse) {
 	batch := s.db.NewBatch()
 
 	var codes uint64
@@ -2068,7 +2068,7 @@ func (s *Syncer) processBytecodeResponse(res *bytecodeResponse) {
 
 // processStorageResponse integrates an already validated storage response
 // into the account tasks.
-func (s *Syncer) processStorageResponse(res *storageResponse) {
+func (s *syncer) processStorageResponse(res *storageResponse) {
 	// Switch the subtask from pending to idle
 	if res.subTask != nil {
 		res.subTask.req = nil
@@ -2308,7 +2308,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 
 // processTrienodeHealResponse integrates an already validated trienode response
 // into the healer tasks.
-func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
+func (s *syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
 	var (
 		start = time.Now()
 		fills int
@@ -2385,7 +2385,7 @@ func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
 	}
 }
 
-func (s *Syncer) commitHealer(force bool) {
+func (s *syncer) commitHealer(force bool) {
 	if !force && s.healer.scheduler.MemSize() < ethdb.IdealBatchSize {
 		return
 	}
@@ -2401,7 +2401,7 @@ func (s *Syncer) commitHealer(force bool) {
 
 // processBytecodeHealResponse integrates an already validated bytecode response
 // into the healer tasks.
-func (s *Syncer) processBytecodeHealResponse(res *bytecodeHealResponse) {
+func (s *syncer) processBytecodeHealResponse(res *bytecodeHealResponse) {
 	for i, hash := range res.hashes {
 		node := res.codes[i]
 
@@ -2431,7 +2431,7 @@ func (s *Syncer) processBytecodeHealResponse(res *bytecodeHealResponse) {
 // forwardAccountTask takes a filled account task and persists anything available
 // into the database, after which it forwards the next account marker so that the
 // task's next chunk may be filled.
-func (s *Syncer) forwardAccountTask(task *accountTask) {
+func (s *syncer) forwardAccountTask(task *accountTask) {
 	// Remove any pending delivery
 	res := task.res
 	if res == nil {
@@ -2521,7 +2521,7 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 
 // OnAccounts is a callback method to invoke when a range of accounts are
 // received from a remote peer.
-func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, accounts [][]byte, proof [][]byte) error {
+func (s *syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, accounts [][]byte, proof [][]byte) error {
 	size := common.StorageSize(len(hashes) * common.HashLength)
 	for _, account := range accounts {
 		size += common.StorageSize(len(account))
@@ -2621,7 +2621,7 @@ func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 
 // OnByteCodes is a callback method to invoke when a batch of contract
 // bytes codes are received from a remote peer.
-func (s *Syncer) OnByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error {
+func (s *syncer) OnByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error {
 	s.lock.RLock()
 	syncing := !s.snapped
 	s.lock.RUnlock()
@@ -2634,7 +2634,7 @@ func (s *Syncer) OnByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error
 
 // onByteCodes is a callback method to invoke when a batch of contract
 // bytes codes are received from a remote peer in the syncing phase.
-func (s *Syncer) onByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error {
+func (s *syncer) onByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error {
 	var size common.StorageSize
 	for _, code := range bytecodes {
 		size += common.StorageSize(len(code))
@@ -2732,7 +2732,7 @@ func (s *Syncer) onByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error
 
 // OnStorage is a callback method to invoke when ranges of storage slots
 // are received from a remote peer.
-func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slots [][][]byte, proof [][]byte) error {
+func (s *syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slots [][][]byte, proof [][]byte) error {
 	// Gather some trace stats to aid in debugging issues
 	var (
 		hashCount int
@@ -2881,7 +2881,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 
 // OnTrieNodes is a callback method to invoke when a batch of trie nodes
 // are received from a remote peer.
-func (s *Syncer) OnTrieNodes(peer SyncPeer, id uint64, trienodes [][]byte) error {
+func (s *syncer) OnTrieNodes(peer SyncPeer, id uint64, trienodes [][]byte) error {
 	var size common.StorageSize
 	for _, node := range trienodes {
 		size += common.StorageSize(len(node))
@@ -2988,7 +2988,7 @@ func (s *Syncer) OnTrieNodes(peer SyncPeer, id uint64, trienodes [][]byte) error
 
 // onHealByteCodes is a callback method to invoke when a batch of contract
 // bytes codes are received from a remote peer in the healing phase.
-func (s *Syncer) onHealByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error {
+func (s *syncer) onHealByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error {
 	var size common.StorageSize
 	for _, code := range bytecodes {
 		size += common.StorageSize(len(code))
@@ -3088,7 +3088,7 @@ func (s *Syncer) onHealByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) e
 // or storage slot) is downloaded during the healing stage. The flat states
 // can be persisted blindly and can be fixed later in the generation stage.
 // Note it's not concurrent safe, please handle the concurrent issue outside.
-func (s *Syncer) onHealState(paths [][]byte, value []byte) error {
+func (s *syncer) onHealState(paths [][]byte, value []byte) error {
 	if len(paths) == 1 {
 		var account types.StateAccount
 		if err := rlp.DecodeBytes(value, &account); err != nil {
@@ -3115,7 +3115,7 @@ func (s *Syncer) onHealState(paths [][]byte, value []byte) error {
 var hashSpace = new(big.Int).Exp(common.Big2, common.Big256, nil)
 
 // report calculates various status reports and provides it to the user.
-func (s *Syncer) report(force bool) {
+func (s *syncer) report(force bool) {
 	if len(s.tasks) > 0 {
 		s.reportSyncProgress(force)
 		return
@@ -3124,7 +3124,7 @@ func (s *Syncer) report(force bool) {
 }
 
 // reportSyncProgress calculates various status reports and provides it to the user.
-func (s *Syncer) reportSyncProgress(force bool) {
+func (s *syncer) reportSyncProgress(force bool) {
 	// Don't report all the events, just occasionally
 	if !force && time.Since(s.logTime) < 8*time.Second {
 		return
@@ -3170,7 +3170,7 @@ func (s *Syncer) reportSyncProgress(force bool) {
 }
 
 // reportHealProgress calculates various status reports and provides it to the user.
-func (s *Syncer) reportHealProgress(force bool) {
+func (s *syncer) reportHealProgress(force bool) {
 	// Don't report all the events, just occasionally
 	if !force && time.Since(s.logTime) < 8*time.Second {
 		return

@@ -352,6 +352,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		Sync:           config.SyncMode,
 		BloomCache:     uint64(cacheLimit),
 		RequiredBlocks: config.RequiredBlocks,
+		SnapV2:         config.SnapV2,
 	}); err != nil {
 		return nil, err
 	}
@@ -448,7 +449,7 @@ func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruni
 func (s *Ethereum) Protocols() []p2p.Protocol {
 	protos := eth.MakeProtocols((*ethHandler)(s.handler), s.networkID, s.discmix)
 	if s.config.SnapshotCache > 0 {
-		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler))...)
+		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler), s.config.SnapV2)...)
 	}
 	return protos
 }

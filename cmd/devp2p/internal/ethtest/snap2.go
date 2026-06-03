@@ -337,8 +337,7 @@ func (s *Suite) snapGetAccessLists(t *utesting.T, tc *accessListsTest) error {
 	for _, p := range tc.mustBeEmptyAt {
 		mustEmpty[p] = struct{}{}
 	}
-	head := s.chain.Head().Header()
-	rules := s.chain.config.Rules(head.Number, true, head.Time)
+	headBlock := s.chain.Head()
 
 	for it.Next() {
 		raw := it.Value()
@@ -385,7 +384,14 @@ func (s *Suite) snapGetAccessLists(t *utesting.T, tc *accessListsTest) error {
 		if err := rlp.DecodeBytes(raw, &accessList); err != nil {
 			return fmt.Errorf("entry %d: invalid BAL RLP: %v", idx, err)
 		}
-		if err := accessList.Validate(rules); err != nil {
+		// Validate against the block's gas limit and tx count (for size and
+		// per-entry access-index bounds), falling back to the chain head for a
+		// block we don't know locally.
+		gasLimit, txCount := headBlock.GasLimit(), len(headBlock.Transactions())
+		if known {
+			gasLimit, txCount = block.GasLimit(), len(block.Transactions())
+		}
+		if err := accessList.Validate(gasLimit, txCount); err != nil {
 			return fmt.Errorf("entry %d: BAL failed validation: %v", idx, err)
 		}
 		idx++

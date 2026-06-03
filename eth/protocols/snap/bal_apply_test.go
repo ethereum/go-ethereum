@@ -54,7 +54,7 @@ func TestAccessListVerification(t *testing.T) {
 	addr := common.HexToAddress("0x01")
 	cb.BalanceChange(0, addr, uint256.NewInt(100))
 
-	b := buildTestBAL(t, &cb)
+	b := buildTestBAL(t, cb)
 	correctHash := b.Hash()
 
 	// Valid: hash matches header
@@ -88,7 +88,7 @@ func TestAccessListVerification(t *testing.T) {
 func TestAccessListApplication(t *testing.T) {
 	t.Parallel()
 	db := rawdb.NewMemoryDatabase()
-	syncer := NewSyncer(db, rawdb.HashScheme)
+	syncer := newSyncerV2(db, rawdb.HashScheme)
 	addr := common.HexToAddress("0x01")
 	accountHash := crypto.Keccak256Hash(addr[:])
 
@@ -113,7 +113,7 @@ func TestAccessListApplication(t *testing.T) {
 	cb.NonceChange(addr, 0, 6)
 	cb.CodeChange(addr, 0, []byte{0x60, 0x00}) // PUSH1 0x00
 	cb.StorageWrite(0, addr, rawSlot, common.HexToHash("0x02"))
-	b := buildTestBAL(t, &cb)
+	b := buildTestBAL(t, cb)
 	if err := syncer.applyAccessList(b); err != nil {
 		t.Fatalf("applyAccessList failed: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestAccessListApplication(t *testing.T) {
 func TestAccessListApplicationMultiTx(t *testing.T) {
 	t.Parallel()
 	db := rawdb.NewMemoryDatabase()
-	syncer := NewSyncer(db, rawdb.HashScheme)
+	syncer := newSyncerV2(db, rawdb.HashScheme)
 	addr := common.HexToAddress("0x02")
 	accountHash := crypto.Keccak256Hash(addr[:])
 
@@ -182,7 +182,7 @@ func TestAccessListApplicationMultiTx(t *testing.T) {
 	cb.NonceChange(addr, 0, 1)                      // tx 0
 	cb.NonceChange(addr, 3, 2)                      // tx 3
 	cb.NonceChange(addr, 7, 3)                      // tx 7 (final)
-	b := buildTestBAL(t, &cb)
+	b := buildTestBAL(t, cb)
 	if err := syncer.applyAccessList(b); err != nil {
 		t.Fatalf("applyAccessList failed: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestAccessListApplicationMultiTx(t *testing.T) {
 func TestAccessListApplicationZeroStorage(t *testing.T) {
 	t.Parallel()
 	db := rawdb.NewMemoryDatabase()
-	syncer := NewSyncer(db, rawdb.HashScheme)
+	syncer := newSyncerV2(db, rawdb.HashScheme)
 	addr := common.HexToAddress("0x06")
 	accountHash := crypto.Keccak256Hash(addr[:])
 
@@ -226,7 +226,7 @@ func TestAccessListApplicationZeroStorage(t *testing.T) {
 	// BAL writes the slot to zero (deletion).
 	cb := bal.NewConstructionBlockAccessList()
 	cb.StorageWrite(0, addr, rawSlot, common.Hash{})
-	b := buildTestBAL(t, &cb)
+	b := buildTestBAL(t, cb)
 	if err := syncer.applyAccessList(b); err != nil {
 		t.Fatalf("applyAccessList failed: %v", err)
 	}
@@ -242,7 +242,7 @@ func TestAccessListApplicationNewAccount(t *testing.T) {
 	t.Parallel()
 
 	db := rawdb.NewMemoryDatabase()
-	syncer := NewSyncer(db, rawdb.HashScheme)
+	syncer := newSyncerV2(db, rawdb.HashScheme)
 
 	addr := common.HexToAddress("0x03")
 	accountHash := crypto.Keccak256Hash(addr[:])
@@ -258,7 +258,7 @@ func TestAccessListApplicationNewAccount(t *testing.T) {
 	cb.NonceChange(addr, 0, 1)
 	rawSlot := common.HexToHash("0xbb")
 	cb.StorageWrite(0, addr, rawSlot, common.HexToHash("0xff"))
-	b := buildTestBAL(t, &cb)
+	b := buildTestBAL(t, cb)
 	if err := syncer.applyAccessList(b); err != nil {
 		t.Fatalf("applyAccessList failed: %v", err)
 	}
@@ -296,7 +296,7 @@ func TestAccessListApplicationNewAccount(t *testing.T) {
 func TestAccessListApplicationSkipsUnfetched(t *testing.T) {
 	t.Parallel()
 	db := rawdb.NewMemoryDatabase()
-	syncer := NewSyncer(db, rawdb.HashScheme)
+	syncer := newSyncerV2(db, rawdb.HashScheme)
 
 	// Pick two addresses and order them by hash.
 	addrA := common.HexToAddress("0x01")
@@ -313,17 +313,17 @@ func TestAccessListApplicationSkipsUnfetched(t *testing.T) {
 	// One remaining task covering [unfetchedHash, MaxHash]: the fetched hash
 	// is below Next so isFetched returns true; the unfetched hash equals Next
 	// so isFetched returns false.
-	syncer.tasks = []*accountTask{{
+	syncer.tasks = []*accountTaskV2{{
 		Next:           unfetchedHash,
 		Last:           common.MaxHash,
-		SubTasks:       make(map[common.Hash][]*storageTask),
+		SubTasks:       make(map[common.Hash][]*storageTaskV2),
 		stateCompleted: make(map[common.Hash]struct{}),
 	}}
 
 	cb := bal.NewConstructionBlockAccessList()
 	cb.BalanceChange(0, fetchedAddr, uint256.NewInt(100))
 	cb.BalanceChange(0, unfetchedAddr, uint256.NewInt(200))
-	b := buildTestBAL(t, &cb)
+	b := buildTestBAL(t, cb)
 
 	if err := syncer.applyAccessList(b); err != nil {
 		t.Fatalf("applyAccessList failed: %v", err)
@@ -344,7 +344,7 @@ func TestAccessListApplicationSkipsUnfetched(t *testing.T) {
 func TestAccessListApplicationSkipsUnfetchedStorage(t *testing.T) {
 	t.Parallel()
 	db := rawdb.NewMemoryDatabase()
-	syncer := NewSyncer(db, rawdb.HashScheme)
+	syncer := newSyncerV2(db, rawdb.HashScheme)
 
 	addrA := common.HexToAddress("0x01")
 	addrB := common.HexToAddress("0x02")
@@ -356,10 +356,10 @@ func TestAccessListApplicationSkipsUnfetchedStorage(t *testing.T) {
 		unfetchedAddr, unfetchedHash = addrA, hashA
 	}
 
-	syncer.tasks = []*accountTask{{
+	syncer.tasks = []*accountTaskV2{{
 		Next:           unfetchedHash,
 		Last:           common.MaxHash,
-		SubTasks:       make(map[common.Hash][]*storageTask),
+		SubTasks:       make(map[common.Hash][]*storageTaskV2),
 		stateCompleted: make(map[common.Hash]struct{}),
 	}}
 
@@ -370,7 +370,7 @@ func TestAccessListApplicationSkipsUnfetchedStorage(t *testing.T) {
 	cb := bal.NewConstructionBlockAccessList()
 	cb.BalanceChange(0, unfetchedAddr, uint256.NewInt(0)) // empty mutation
 	cb.StorageWrite(0, unfetchedAddr, rawSlot, common.HexToHash("0xff"))
-	b := buildTestBAL(t, &cb)
+	b := buildTestBAL(t, cb)
 
 	if err := syncer.applyAccessList(b); err != nil {
 		t.Fatalf("applyAccessList failed: %v", err)
@@ -395,7 +395,7 @@ func TestAccessListApplicationSkipsUnfetchedStorage(t *testing.T) {
 func TestAccessListApplicationSameTxCreateDestroy(t *testing.T) {
 	t.Parallel()
 	db := rawdb.NewMemoryDatabase()
-	syncer := NewSyncer(db, rawdb.HashScheme)
+	syncer := newSyncerV2(db, rawdb.HashScheme)
 	addr := common.HexToAddress("0x04")
 	accountHash := crypto.Keccak256Hash(addr[:])
 
@@ -408,7 +408,7 @@ func TestAccessListApplicationSameTxCreateDestroy(t *testing.T) {
 	// with a balance change to zero and nothing else.
 	cb := bal.NewConstructionBlockAccessList()
 	cb.BalanceChange(0, addr, uint256.NewInt(0))
-	b := buildTestBAL(t, &cb)
+	b := buildTestBAL(t, cb)
 	if err := syncer.applyAccessList(b); err != nil {
 		t.Fatalf("applyAccessList failed: %v", err)
 	}
@@ -434,7 +434,7 @@ func TestAccessListApplicationSameTxCreateDestroy(t *testing.T) {
 func TestAccessListApplicationDestroyExisting(t *testing.T) {
 	t.Parallel()
 	db := rawdb.NewMemoryDatabase()
-	syncer := NewSyncer(db, rawdb.HashScheme)
+	syncer := newSyncerV2(db, rawdb.HashScheme)
 	addr := common.HexToAddress("0x05")
 	accountHash := crypto.Keccak256Hash(addr[:])
 
@@ -451,7 +451,7 @@ func TestAccessListApplicationDestroyExisting(t *testing.T) {
 	// the account ends up fully empty after applying.
 	cb := bal.NewConstructionBlockAccessList()
 	cb.BalanceChange(0, addr, uint256.NewInt(0))
-	b := buildTestBAL(t, &cb)
+	b := buildTestBAL(t, cb)
 	if err := syncer.applyAccessList(b); err != nil {
 		t.Fatalf("applyAccessList failed: %v", err)
 	}

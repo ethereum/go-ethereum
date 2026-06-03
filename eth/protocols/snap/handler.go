@@ -79,10 +79,16 @@ type Backend interface {
 	Handle(peer *Peer, packet Packet) error
 }
 
-// MakeProtocols constructs the P2P protocol definitions for `snap`.
-func MakeProtocols(backend Backend) []p2p.Protocol {
-	protocols := make([]p2p.Protocol, len(ProtocolVersions))
-	for i, version := range ProtocolVersions {
+// MakeProtocols constructs the P2P protocol definitions for `snap`. When snapV2
+// is set, the snap/2 version is advertised in addition to the default versions;
+// otherwise only the default (snap/1) versions are offered on the wire.
+func MakeProtocols(backend Backend, snapV2 bool) []p2p.Protocol {
+	versions := ProtocolVersions
+	if snapV2 {
+		versions = append([]uint{SNAP2}, versions...)
+	}
+	protocols := make([]p2p.Protocol, len(versions))
+	for i, version := range versions {
 		protocols[i] = p2p.Protocol{
 			Name:    ProtocolName,
 			Version: version,
@@ -132,7 +138,6 @@ var snap1 = map[uint64]msgHandler{
 	TrieNodesMsg:        handleTrieNodes,
 }
 
-// nolint:unused
 var snap2 = map[uint64]msgHandler{
 	GetAccountRangeMsg:  handleGetAccountRange,
 	AccountRangeMsg:     handleAccountRange,
@@ -162,8 +167,8 @@ func HandleMessage(backend Backend, peer *Peer) error {
 	switch peer.version {
 	case SNAP1:
 		handlers = snap1
-	//case SNAP2:
-	//	handlers = snap2
+	case SNAP2:
+		handlers = snap2
 	default:
 		return fmt.Errorf("unknown eth protocol version: %v", peer.version)
 	}

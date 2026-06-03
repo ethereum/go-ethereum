@@ -297,6 +297,12 @@ var (
 		Value:    ethconfig.Defaults.EnableStateSizeTracking,
 		Category: flags.StateCategory,
 	}
+	SnapV2Flag = &cli.BoolFlag{
+		Name:     "snap.v2",
+		Usage:    "Enable the experimental snap/2 (EIP-8189, BAL-based) sync protocol (advertises and syncs via snap/2; not safe on public networks)",
+		Value:    ethconfig.Defaults.SnapV2,
+		Category: flags.StateCategory,
+	}
 	BinTrieGroupDepthFlag = &cli.IntFlag{
 		Name:     "bintrie.groupdepth",
 		Usage:    "Number of levels per serialized group in binary trie (1-8, default 5). Lower values create smaller groups with more nodes.",
@@ -1904,6 +1910,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(StateSizeTrackingFlag.Name) {
 		cfg.EnableStateSizeTracking = ctx.Bool(StateSizeTrackingFlag.Name)
+	}
+	if ctx.IsSet(SnapV2Flag.Name) {
+		cfg.SnapV2 = ctx.Bool(SnapV2Flag.Name)
 	}
 	// Override any default configs for hard coded networks.
 	switch {

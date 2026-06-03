@@ -104,7 +104,7 @@ func newStateSync(d *Downloader, pivot *types.Header) *stateSync {
 // finish.
 func (s *stateSync) run() {
 	close(s.started)
-	s.err = s.d.SnapSyncer.Sync(s.pivot, s.cancel)
+	s.err = s.d.snapSyncer.Sync(s.pivot, s.cancel)
 	close(s.done)
 }
 

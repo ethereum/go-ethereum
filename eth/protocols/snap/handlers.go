@@ -553,7 +553,6 @@ func handleTrieNodes(backend Backend, msg Decoder, peer *Peer) error {
 	return backend.Handle(peer, &TrieNodesPacket{res.ID, nodes})
 }
 
-// nolint:unused
 func handleGetAccessLists(backend Backend, msg Decoder, peer *Peer) error {
 	var req GetAccessListsPacket
 	if err := msg.Decode(&req); err != nil {
@@ -599,7 +598,6 @@ func ServiceGetAccessListsQuery(chain *core.BlockChain, req *GetAccessListsPacke
 	return response
 }
 
-// nolint:unused
 func handleAccessLists(backend Backend, msg Decoder, peer *Peer) error {
 	res := new(AccessListsPacket)
 	if err := msg.Decode(res); err != nil {

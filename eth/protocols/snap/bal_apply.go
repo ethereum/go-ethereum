@@ -42,7 +42,7 @@ func verifyAccessList(b *bal.BlockAccessList, header *types.Header) error {
 }
 
 // isFetched tell us if accountHash has been downloaded.
-func (s *Syncer) isFetched(accountHash common.Hash) bool {
+func (s *syncerV2) isFetched(accountHash common.Hash) bool {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	for _, task := range s.tasks {
@@ -57,12 +57,12 @@ func (s *Syncer) isFetched(accountHash common.Hash) bool {
 // in the database. For each account, it applies the post-block values (highest
 // TxIdx entry) for balance, nonce, code, and storage. The storageRoot field is
 // intentionally left stale. It will be recomputed during the trie rebuild.
-func (s *Syncer) applyAccessList(b *bal.BlockAccessList) error {
+func (s *syncerV2) applyAccessList(b *bal.BlockAccessList) error {
 	batch := s.db.NewBatch()
 
 	// Iterate over all accounts in the access list
 	for _, access := range *b {
-		addr := common.Address(access.Address)
+		addr := access.Address
 		accountHash := crypto.Keccak256Hash(addr[:])
 
 		// Skip accounts whose hash range hasn't been downloaded yet.
@@ -91,17 +91,17 @@ func (s *Syncer) applyAccessList(b *bal.BlockAccessList) error {
 
 		// Apply balance change (last entry = post-block state)
 		if n := len(access.BalanceChanges); n > 0 {
-			account.Balance = new(uint256.Int).Set(access.BalanceChanges[n-1].Balance)
+			account.Balance = new(uint256.Int).Set(access.BalanceChanges[n-1].PostBalance)
 		}
 
 		// Apply nonce change (last entry = post-block state)
 		if n := len(access.NonceChanges); n > 0 {
-			account.Nonce = access.NonceChanges[n-1].Nonce
+			account.Nonce = access.NonceChanges[n-1].PostNonce
 		}
 
 		// Apply code change (last entry = post-block state)
 		if n := len(access.CodeChanges); n > 0 {
-			code := access.CodeChanges[n-1].Code
+			code := access.CodeChanges[n-1].NewCode
 			if len(code) > 0 {
 				codeHash := crypto.Keccak256(code)
 				rawdb.WriteCode(batch, common.BytesToHash(codeHash), code)
@@ -112,9 +112,9 @@ func (s *Syncer) applyAccessList(b *bal.BlockAccessList) error {
 		}
 
 		// Apply storage writes (last entry per slot = post-block state).
-		for _, slotWrites := range access.StorageWrites {
-			if n := len(slotWrites.Accesses); n > 0 {
-				value := slotWrites.Accesses[n-1].ValueAfter
+		for _, slotWrites := range access.StorageChanges {
+			if n := len(slotWrites.SlotChanges); n > 0 {
+				value := slotWrites.SlotChanges[n-1].PostValue
 				slotKey := slotWrites.Slot.Bytes32()
 				storageHash := crypto.Keccak256Hash(slotKey[:])
 				if value.IsZero() {

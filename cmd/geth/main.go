@@ -204,6 +204,7 @@ var (
 		utils.MetricsInfluxDBBucketFlag,
 		utils.MetricsInfluxDBOrganizationFlag,
 		utils.StateSizeTrackingFlag,
+		utils.SnapV2Flag,
 	}
 )
 

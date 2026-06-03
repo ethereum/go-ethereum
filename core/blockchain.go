@@ -1164,7 +1164,7 @@ func (bc *BlockChain) SnapSyncStart() error {
 // given hash, regardless of the chain contents prior to snap sync. It is
 // invoked once snap sync completes and assumes that SnapSyncStart was called
 // previously.
-func (bc *BlockChain) SnapSyncComplete(hash common.Hash, flatStateReady bool) error {
+func (bc *BlockChain) SnapSyncComplete(hash common.Hash, isSnapV2 bool) error {
 	// Make sure that both the block as well at its state trie exists
 	block := bc.GetBlockByHash(hash)
 	if block == nil {
@@ -1180,7 +1180,7 @@ func (bc *BlockChain) SnapSyncComplete(hash common.Hash, flatStateReady bool) er
 	// flat state and skips that work.
 	root := block.Root()
 	if bc.triedb.Scheme() == rawdb.PathScheme {
-		if flatStateReady {
+		if isSnapV2 {
 			if err := bc.triedb.AdoptSyncedState(root); err != nil {
 				return err
 			}
@@ -1196,7 +1196,7 @@ func (bc *BlockChain) SnapSyncComplete(hash common.Hash, flatStateReady bool) er
 
 	// The legacy snapshot tree needs to be wiped and rebuilt from the trie
 	// after a snap/1 sync.
-	if !flatStateReady && bc.snaps != nil {
+	if !isSnapV2 && bc.snaps != nil {
 		bc.snaps.Rebuild(root)
 	}
 

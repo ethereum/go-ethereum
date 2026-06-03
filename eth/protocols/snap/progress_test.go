@@ -26,6 +26,136 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+// Legacy sync progress definitions
+type legacyStorageTask struct {
+	Next common.Hash // Next account to sync in this interval
+	Last common.Hash // Last account to sync in this interval
+}
+
+type legacyAccountTask struct {
+	Next     common.Hash                          // Next account to sync in this interval
+	Last     common.Hash                          // Last account to sync in this interval
+	SubTasks map[common.Hash][]*legacyStorageTask // Storage intervals needing fetching for large contracts
+}
+
+type legacyProgress struct {
+	Tasks []*legacyAccountTask // The suspended account tasks (contract tasks within)
+}
+
+func compareProgress(a legacyProgress, b syncProgress) bool {
+	if len(a.Tasks) != len(b.Tasks) {
+		return false
+	}
+	for i := 0; i < len(a.Tasks); i++ {
+		if a.Tasks[i].Next != b.Tasks[i].Next {
+			return false
+		}
+		if a.Tasks[i].Last != b.Tasks[i].Last {
+			return false
+		}
+		// new fields are not checked here
+
+		if len(a.Tasks[i].SubTasks) != len(b.Tasks[i].SubTasks) {
+			return false
+		}
+		for addrHash, subTasksA := range a.Tasks[i].SubTasks {
+			subTasksB, ok := b.Tasks[i].SubTasks[addrHash]
+			if !ok || len(subTasksB) != len(subTasksA) {
+				return false
+			}
+			for j := 0; j < len(subTasksA); j++ {
+				if subTasksA[j].Next != subTasksB[j].Next {
+					return false
+				}
+				if subTasksA[j].Last != subTasksB[j].Last {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+func makeLegacyProgress() legacyProgress {
+	return legacyProgress{
+		Tasks: []*legacyAccountTask{
+			{
+				Next: common.Hash{},
+				Last: common.Hash{0x77},
+				SubTasks: map[common.Hash][]*legacyStorageTask{
+					{0x1}: {
+						{
+							Next: common.Hash{},
+							Last: common.Hash{0xff},
+						},
+					},
+				},
+			},
+			{
+				Next: common.Hash{0x88},
+				Last: common.Hash{0xff},
+			},
+		},
+	}
+}
+
+func convertLegacy(legacy legacyProgress) syncProgress {
+	var progress syncProgress
+	for i, task := range legacy.Tasks {
+		subTasks := make(map[common.Hash][]*storageTask)
+		for owner, list := range task.SubTasks {
+			var cpy []*storageTask
+			for i := 0; i < len(list); i++ {
+				cpy = append(cpy, &storageTask{
+					Next: list[i].Next,
+					Last: list[i].Last,
+				})
+			}
+			subTasks[owner] = cpy
+		}
+		accountTask := &accountTask{
+			Next:     task.Next,
+			Last:     task.Last,
+			SubTasks: subTasks,
+		}
+		if i == 0 {
+			accountTask.StorageCompleted = []common.Hash{{0xaa}, {0xbb}} // fulfill new fields
+		}
+		progress.Tasks = append(progress.Tasks, accountTask)
+	}
+	return progress
+}
+
+func TestSyncProgressCompatibility(t *testing.T) {
+	// Decode serialized bytes of legacy progress, backward compatibility
+	legacy := makeLegacyProgress()
+	blob, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatalf("Failed to marshal progress %v", err)
+	}
+	var dec syncProgress
+	if err := json.Unmarshal(blob, &dec); err != nil {
+		t.Fatalf("Failed to unmarshal progress %v", err)
+	}
+	if !compareProgress(legacy, dec) {
+		t.Fatal("sync progress is not backward compatible")
+	}
+
+	// Decode serialized bytes of new format progress
+	progress := convertLegacy(legacy)
+	blob, err = json.Marshal(progress)
+	if err != nil {
+		t.Fatalf("Failed to marshal progress %v", err)
+	}
+	var legacyDec legacyProgress
+	if err := json.Unmarshal(blob, &legacyDec); err != nil {
+		t.Fatalf("Failed to unmarshal progress %v", err)
+	}
+	if !compareProgress(legacyDec, progress) {
+		t.Fatal("sync progress is not forward compatible")
+	}
+}
+
 // TestSyncProgressV1Discarded verifies that a persisted blob written in the
 // old unversioned format (raw JSON, no version prefix) is detected and
 // discarded on load, that the syncer falls through to a fresh start, and
@@ -53,7 +183,7 @@ func TestSyncProgressV1Discarded(t *testing.T) {
 	orphanStorageSlot := common.HexToHash("0xabcd")
 	rawdb.WriteStorageSnapshot(db, orphanStorageAccount, orphanStorageSlot, []byte{0xff, 0xff})
 
-	syncer := NewSyncer(db, rawdb.HashScheme)
+	syncer := newSyncerV2(db, rawdb.HashScheme)
 	syncer.loadSyncStatus()
 
 	if syncer.previousPivot != nil {
@@ -76,7 +206,7 @@ func TestSyncProgressV1Discarded(t *testing.T) {
 func TestSyncProgressV2RoundTrip(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 
-	saver := NewSyncer(db, rawdb.HashScheme)
+	saver := newSyncerV2(db, rawdb.HashScheme)
 	saver.pivot = &types.Header{Number: new(big.Int).SetUint64(123), Difficulty: common.Big0}
 	saver.accountSynced = 1
 	saver.accountBytes = 2
@@ -91,7 +221,7 @@ func TestSyncProgressV2RoundTrip(t *testing.T) {
 		t.Fatalf("expected version byte %d at offset 0, got blob %x", syncProgressVersion, raw)
 	}
 
-	loader := NewSyncer(db, rawdb.HashScheme)
+	loader := newSyncerV2(db, rawdb.HashScheme)
 	loader.loadSyncStatus()
 	for _, c := range []struct {
 		name string
@@ -125,7 +255,7 @@ func TestSyncProgressCorruptPayload(t *testing.T) {
 	orphanAccountHash := common.HexToHash("0xdeadbeef")
 	rawdb.WriteAccountSnapshot(db, orphanAccountHash, []byte{0xde, 0xad})
 
-	syncer := NewSyncer(db, rawdb.HashScheme)
+	syncer := newSyncerV2(db, rawdb.HashScheme)
 	syncer.loadSyncStatus()
 
 	if syncer.previousPivot != nil {

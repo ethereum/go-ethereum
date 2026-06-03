@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/tracker"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Peer is a collection of relevant information we have about a `snap` peer.
@@ -150,6 +151,29 @@ func (p *Peer) RequestByteCodes(id uint64, hashes []common.Hash, bytes int) erro
 		ID:     id,
 		Hashes: hashes,
 		Bytes:  uint64(bytes),
+	})
+}
+
+// RequestTrieNodes fetches a batch of account or storage trie nodes rooted in
+// a specific state trie, or off of a specific account.
+func (p *Peer) RequestTrieNodes(id uint64, root common.Hash, count int, paths []TrieNodePathSet, bytes int) error {
+	p.logger.Trace("Fetching set of trie nodes", "reqid", id, "root", root, "pathsets", len(paths), "bytes", common.StorageSize(bytes))
+
+	err := p.tracker.Track(tracker.Request{
+		ReqCode:  GetTrieNodesMsg,
+		RespCode: TrieNodesMsg,
+		ID:       id,
+		Size:     count, // TrieNodes is limited by number of items.
+	})
+	if err != nil {
+		return err
+	}
+	encPaths, _ := rlp.EncodeToRawList(paths)
+	return p2p.Send(p.rw, GetTrieNodesMsg, &GetTrieNodesPacket{
+		ID:    id,
+		Root:  root,
+		Paths: encPaths,
+		Bytes: uint64(bytes),
 	})
 }
 
