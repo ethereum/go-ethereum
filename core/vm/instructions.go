@@ -658,17 +658,9 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	address := crypto.CreateAddress(scope.Contract.Address(), evm.StateDB.GetNonce(scope.Contract.Address()))
 
 	// EIP-8037: account creation is metered as state gas, charged in this
-	// (parent) frame before any gas is forwarded to the creation frame. The
-	// charge is keyed on the destination balance alone: a balance-holding
-	// account already occupies a state leaf (a valid EIP-684 target), so
-	// deploying into it adds no leaf and is not charged. A destination that is
-	// ineligible for deployment (non-zero nonce or non-empty code) is still
-	// charged here so the forwarded gas budget is computed consistently; the
-	// creation then fails with a collision and the charge is refilled below.
-	// The charged amount is remembered so the refill is symmetric: nothing is
-	// refilled if nothing was charged.
+	// (parent) frame before any gas is forwarded to the creation frame.
 	var stateGas uint64
-	if evm.chainRules.IsAmsterdam && evm.StateDB.GetBalance(address).Sign() == 0 {
+	if evm.chainRules.IsAmsterdam && evm.StateDB.Empty(address) {
 		stateGas = params.AccountCreationSize * evm.Context.CostPerStateByte
 		if !scope.Contract.chargeState(stateGas, evm.Config.Tracer, tracing.GasChangeCallContractCreation) {
 			return nil, ErrOutOfGas
@@ -729,12 +721,10 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	inithash := crypto.Keccak256Hash(input)
 	address := crypto.CreateAddress2(scope.Contract.Address(), salt.Bytes32(), inithash[:])
 
-	// EIP-8037: account-creation state gas, keyed on the destination balance
-	// and charged in this (parent) frame before forwarding, with the charged
-	// amount remembered for a symmetric refill on failure. See opCreate for the
-	// full rationale (balance-only key, EIP-684 targets, collision refill).
+	// EIP-8037: account creation is metered as state gas, charged in this
+	// (parent) frame before any gas is forwarded to the creation frame.
 	var stateGas uint64
-	if evm.chainRules.IsAmsterdam && evm.StateDB.GetBalance(address).Sign() == 0 {
+	if evm.chainRules.IsAmsterdam && evm.StateDB.Empty(address) {
 		stateGas = params.AccountCreationSize * evm.Context.CostPerStateByte
 		if !scope.Contract.chargeState(stateGas, evm.Config.Tracer, tracing.GasChangeCallContractCreation2) {
 			return nil, ErrOutOfGas
