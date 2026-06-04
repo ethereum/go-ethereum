@@ -18,16 +18,20 @@ package blobpool
 
 import (
 	"context"
-	"sort"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/txorder"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/holiman/uint256"
 )
 
 type cacheMode int
@@ -242,13 +246,13 @@ func (c *Cache) loop() {
 				}
 				continue
 			}
-			want := selectTxs(c.blobpool.indexSnapshot(), c.capacity)
+			want := c.selectKTxs()
 			c.update(want)
 			c.resetTimer(topKTimer, topKTrigger, topKTimeout)
 
 		case <-hbTrigger:
 			c.switchMode(topKMode)
-			want := selectTxs(c.blobpool.indexSnapshot(), c.capacity)
+			want := c.selectKTxs()
 			c.update(want)
 			c.resetTimer(topKTimer, topKTrigger, topKTimeout)
 
@@ -260,7 +264,7 @@ func (c *Cache) loop() {
 				continue
 			}
 			c.switchMode(topKMode)
-			want := selectTxs(c.blobpool.indexSnapshot(), c.capacity)
+			want := c.selectKTxs()
 			c.update(want)
 			c.resetTimer(topKTimer, topKTrigger, topKTimeout)
 		case <-c.quit:
@@ -370,6 +374,49 @@ func (c *Cache) update(want []common.Hash) {
 	}()
 }
 
+func (c *Cache) selectKTxs() []common.Hash {
+	p := c.blobpool
+	head := p.head.Load()
+	if head == nil {
+		return nil
+	}
+	config := p.chain.Config()
+	baseFee := eip1559.CalcBaseFee(config, head)
+
+	filter := txpool.PendingFilter{
+		BlobTxs: true,
+		BaseFee: uint256.MustFromBig(baseFee),
+	}
+	if head.ExcessBlobGas != nil {
+		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(config, head))
+	}
+	if config.IsOsaka(head.Number, head.Time) {
+		filter.BlobVersion = types.BlobSidecarVersion1
+	} else {
+		filter.BlobVersion = types.BlobSidecarVersion0
+	}
+	pending, _ := p.Pending(filter)
+	vhashesOf := p.vhashesByTx()
+
+	order := txorder.NewTransactionsByPriceAndNonce(p.signer, pending, baseFee)
+
+	var (
+		vhashes []common.Hash
+		blobs   uint
+	)
+	for blobs < c.capacity {
+		tx, _ := order.Peek()
+		if tx == nil {
+			break
+		}
+		vh := vhashesOf[tx.Hash]
+		vhashes = append(vhashes, vh...)
+		blobs += uint(len(vh))
+		order.Shift()
+	}
+	return vhashes
+}
+
 func (c *Cache) resetTimer(timer *mclock.Timer, trigger chan struct{}, interval time.Duration) {
 	if *timer != nil {
 		(*timer).Stop()
@@ -377,24 +424,4 @@ func (c *Cache) resetTimer(timer *mclock.Timer, trigger chan struct{}, interval 
 	*timer = c.clock.AfterFunc(interval, func() {
 		trigger <- struct{}{}
 	})
-}
-
-// selectTxs returns the versioned hashes of the k blob transactions most
-// likely to be included in upcoming blocks, sorted by execution tip cap and
-// flattened across each picked tx's blobs.
-func selectTxs(snapshot []txDigest, k uint) []common.Hash {
-	if k <= 0 {
-		return nil
-	}
-	sort.Slice(snapshot, func(i, j int) bool {
-		return snapshot[i].tip.Gt(snapshot[j].tip)
-	})
-	if len(snapshot) > int(k) {
-		snapshot = snapshot[:k]
-	}
-	var vhashes []common.Hash
-	for _, d := range snapshot {
-		vhashes = append(vhashes, d.vhashes...)
-	}
-	return vhashes
 }

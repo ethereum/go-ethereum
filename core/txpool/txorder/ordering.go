@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package miner
+package txorder
 
 import (
 	"container/heap"
@@ -83,10 +83,10 @@ func (s *txByPriceAndTime) Pop() interface{} {
 	return x
 }
 
-// transactionsByPriceAndNonce represents a set of transactions that can return
+// TransactionsByPriceAndNonce represents a set of transactions that can return
 // transactions in a profit-maximizing sorted order, while supporting removing
 // entire batches of transactions for non-executable accounts.
-type transactionsByPriceAndNonce struct {
+type TransactionsByPriceAndNonce struct {
 	txs     map[common.Address][]*txpool.LazyTransaction // Per account nonce-sorted list of transactions
 	heads   txByPriceAndTime                             // Next transaction for each unique account (price heap)
 	signer  types.Signer                                 // Signer for the set of transactions
@@ -98,7 +98,7 @@ type transactionsByPriceAndNonce struct {
 //
 // Note, the input map is reowned so the caller should not interact any more with
 // if after providing it to the constructor.
-func newTransactionsByPriceAndNonce(signer types.Signer, txs map[common.Address][]*txpool.LazyTransaction, baseFee *big.Int) *transactionsByPriceAndNonce {
+func NewTransactionsByPriceAndNonce(signer types.Signer, txs map[common.Address][]*txpool.LazyTransaction, baseFee *big.Int) *TransactionsByPriceAndNonce {
 	// Convert the basefee from header format to uint256 format
 	var baseFeeUint *uint256.Int
 	if baseFee != nil {
@@ -118,7 +118,7 @@ func newTransactionsByPriceAndNonce(signer types.Signer, txs map[common.Address]
 	heap.Init(&heads)
 
 	// Assemble and return the transaction set
-	return &transactionsByPriceAndNonce{
+	return &TransactionsByPriceAndNonce{
 		txs:     txs,
 		heads:   heads,
 		signer:  signer,
@@ -127,7 +127,7 @@ func newTransactionsByPriceAndNonce(signer types.Signer, txs map[common.Address]
 }
 
 // Peek returns the next transaction by price.
-func (t *transactionsByPriceAndNonce) Peek() (*txpool.LazyTransaction, *uint256.Int) {
+func (t *TransactionsByPriceAndNonce) Peek() (*txpool.LazyTransaction, *uint256.Int) {
 	if len(t.heads) == 0 {
 		return nil, nil
 	}
@@ -135,7 +135,7 @@ func (t *transactionsByPriceAndNonce) Peek() (*txpool.LazyTransaction, *uint256.
 }
 
 // Shift replaces the current best head with the next one from the same account.
-func (t *transactionsByPriceAndNonce) Shift() {
+func (t *TransactionsByPriceAndNonce) Shift() {
 	acc := t.heads[0].from
 	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {
 		if wrapped, err := newTxWithMinerFee(txs[0], acc, t.baseFee); err == nil {
@@ -150,17 +150,17 @@ func (t *transactionsByPriceAndNonce) Shift() {
 // Pop removes the best transaction, *not* replacing it with the next one from
 // the same account. This should be used when a transaction cannot be executed
 // and hence all subsequent ones should be discarded from the same account.
-func (t *transactionsByPriceAndNonce) Pop() {
+func (t *TransactionsByPriceAndNonce) Pop() {
 	heap.Pop(&t.heads)
 }
 
 // Empty returns if the price heap is empty. It can be used to check it simpler
 // than calling peek and checking for nil return.
-func (t *transactionsByPriceAndNonce) Empty() bool {
+func (t *TransactionsByPriceAndNonce) Empty() bool {
 	return len(t.heads) == 0
 }
 
 // Clear removes the entire content of the heap.
-func (t *transactionsByPriceAndNonce) Clear() {
+func (t *TransactionsByPriceAndNonce) Clear() {
 	t.heads, t.txs = nil, nil
 }
