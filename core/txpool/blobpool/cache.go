@@ -157,6 +157,7 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 
 		indices = make(map[common.Hash][]int)
 		filled  = make(map[common.Hash]struct{})
+		misses  []common.Hash
 
 		cacheHits int64
 		cacheMiss int64
@@ -167,66 +168,43 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 
 	for _, vhash := range vhashes {
 		if _, ok := filled[vhash]; ok {
-			// Skip vhash that was already resolved in a previous iteration
 			continue
 		}
+		filled[vhash] = struct{}{}
+
 		c.mu.Lock()
 		cached := c.entries[vhash]
 		c.mu.Unlock()
 
-		if cached != nil {
-			cacheHits++
-			filled[vhash] = struct{}{}
-			if cached.version != version {
+		if cached == nil {
+			cacheMiss++
+			misses = append(misses, vhash)
+			continue
+		}
+		cacheHits++
+		if cached.version != version {
+			continue
+		}
+		for _, index := range indices[vhash] {
+			blobs[index] = cached.blob
+			commitments[index] = cached.commitment
+			proofs[index] = cached.proofs
+		}
+	}
+
+	if len(misses) > 0 {
+		mb, mc, mp, err := c.blobpool.GetBlobs(misses, version)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		for j, vhash := range misses {
+			if mb[j] == nil {
 				continue
 			}
 			for _, index := range indices[vhash] {
-				blobs[index] = cached.blob
-				commitments[index] = cached.commitment
-				proofs[index] = cached.proofs
-			}
-			continue
-		}
-
-		cacheMiss++
-		ptx := c.blobpool.getByVhash(vhash)
-		if ptx == nil {
-			continue
-		}
-		sidecar := ptx.Sidecar()
-		if sidecar == nil {
-			continue
-		}
-
-		for i, hash := range sidecar.BlobHashes() {
-			list, ok := indices[hash]
-			if !ok {
-				continue
-			}
-			// Mark hash as seen.
-			filled[hash] = struct{}{}
-			if sidecar.Version != version {
-				// Skip blobs with incompatible version. Note we still track the blob hash
-				// in `filled` here, ensuring that we do not resolve this tx another time.
-				continue
-			}
-			// Get or convert the proof.
-			var pf []kzg4844.Proof
-			switch version {
-			case types.BlobSidecarVersion0:
-				pf = []kzg4844.Proof{sidecar.Proofs[i]}
-			case types.BlobSidecarVersion1:
-				cellProofs, err := sidecar.CellProofsAt(i)
-				if err != nil {
-					log.Error("Failed to get cell proofs", "txhash", ptx.Tx.Hash(), "err", err)
-					continue
-				}
-				pf = cellProofs
-			}
-			for _, index := range list {
-				blobs[index] = &sidecar.Blobs[i]
-				commitments[index] = sidecar.Commitments[i]
-				proofs[index] = pf
+				blobs[index] = mb[j]
+				commitments[index] = mc[j]
+				proofs[index] = mp[j]
 			}
 		}
 	}

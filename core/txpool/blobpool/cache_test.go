@@ -46,7 +46,6 @@ type testCache struct {
 	*Cache
 	clock   *mclock.Simulated
 	iterCh  chan struct{}
-	txs     []common.Hash
 	vhashes [][]common.Hash // vhashes in the pool
 	offset  int             // next blob index to use when injecting more txs
 }
@@ -65,10 +64,9 @@ func newTestCache(t *testing.T, txConfig []txSpec, capacity uint) *testCache {
 	}
 
 	var (
-		addrs    = make([]common.Address, 0, len(txConfig))
-		vhashes  = make([][]common.Hash, 0, len(txConfig))
-		txHashes = make([]common.Hash, 0, len(txConfig))
-		offset   int
+		addrs   = make([]common.Address, 0, len(txConfig))
+		vhashes = make([][]common.Hash, 0, len(txConfig))
+		offset  int
 	)
 	for _, s := range txConfig {
 		key, _ := crypto.GenerateKey()
@@ -78,7 +76,6 @@ func newTestCache(t *testing.T, txConfig []txSpec, capacity uint) *testCache {
 		}
 		addrs = append(addrs, crypto.PubkeyToAddress(key.PublicKey))
 		vhashes = append(vhashes, tx.BlobHashes())
-		txHashes = append(txHashes, tx.Hash())
 		offset += s.blobs
 	}
 	store.Close()
@@ -129,7 +126,6 @@ func newTestCache(t *testing.T, txConfig []txSpec, capacity uint) *testCache {
 		Cache:   cache,
 		clock:   clock,
 		iterCh:  iterCh,
-		txs:     txHashes,
 		vhashes: vhashes,
 		offset:  offset,
 	}
@@ -141,8 +137,8 @@ func newTestCache(t *testing.T, txConfig []txSpec, capacity uint) *testCache {
 }
 
 // inject adds a tx with the given spec directly to the pool's index and store,
-// bypassing the normal Add path. Returns the new tx hash.
-func (tc *testCache) inject(t *testing.T, spec txSpec) common.Hash {
+// bypassing the normal Add path. Returns the tx's blob versioned hashes.
+func (tc *testCache) inject(t *testing.T, spec txSpec) []common.Hash {
 	t.Helper()
 	key, _ := crypto.GenerateKey()
 	tx := makeMultiBlobTx(0, spec.tip, 1_000_000, 1_000_000, spec.blobs, tc.offset, key, types.BlobSidecarVersion1)
@@ -162,7 +158,7 @@ func (tc *testCache) inject(t *testing.T, spec txSpec) common.Hash {
 	tc.blobpool.index[addr] = append(tc.blobpool.index[addr], meta)
 	tc.blobpool.lookup.track(meta)
 
-	return tx.Hash()
+	return tx.BlobHashes()
 }
 
 // wait advances simulated time by d (if > 0) and then blocks until the cache
@@ -210,23 +206,6 @@ func (tc *testCache) expectEntries(t *testing.T, want ...common.Hash) {
 	}
 }
 
-func (tc *testCache) expectMapped(t *testing.T, want ...common.Hash) {
-	t.Helper()
-	wantSet := make(map[common.Hash]struct{}, len(want))
-	for _, w := range want {
-		wantSet[w] = struct{}{}
-	}
-	tc.mu.Lock()
-	have := make(map[common.Hash]struct{}, len(tc.txHashOf))
-	for k := range tc.txHashOf {
-		have[k] = struct{}{}
-	}
-	tc.mu.Unlock()
-	if !reflect.DeepEqual(have, wantSet) {
-		t.Errorf("txHashOf keys: got %s, want %s", hashSet(have), hashSet(wantSet))
-	}
-}
-
 func hashSet(m map[common.Hash]struct{}) []string {
 	out := make([]string, 0, len(m))
 	for h := range m {
@@ -254,8 +233,7 @@ func TestCacheHasBlobsLoadsClaimedSet(t *testing.T) {
 	tc.wait(t, 0)
 
 	tc.expectMode(t, hasBlobsMode)
-	tc.expectEntries(t, tc.txs[1])
-	tc.expectMapped(t, tc.vhashes[1][0], tc.vhashes[1][1])
+	tc.expectEntries(t, tc.vhashes[1]...)
 }
 
 // TestCacheTopK exercises the periodic topK signal: after the initial topK
@@ -269,7 +247,7 @@ func TestCacheTopK(t *testing.T) {
 	}, 1)
 
 	tc.expectMode(t, topKMode)
-	tc.expectEntries(t, tc.txs[2])
+	tc.expectEntries(t, tc.vhashes[2]...)
 }
 
 // TestCacheHbTimerFallsBackToTopK checks the idle-timeout transition: after a
@@ -284,11 +262,11 @@ func TestCacheHbTimerFallsBackToTopK(t *testing.T) {
 	tc.HasBlobs(context.Background(), tc.vhashes[0])
 	tc.wait(t, 0)
 	tc.expectMode(t, hasBlobsMode)
-	tc.expectEntries(t, tc.txs[0])
+	tc.expectEntries(t, tc.vhashes[0]...)
 
 	tc.wait(t, hasBlobsTimeout)
 	tc.expectMode(t, topKMode)
-	tc.expectEntries(t, tc.txs[1])
+	tc.expectEntries(t, tc.vhashes[1]...)
 }
 
 // TestCacheGetBlobsExitsHasBlobsMode checks that a GetBlobs call while in
@@ -302,12 +280,12 @@ func TestCacheGetBlobsExitsHasBlobsMode(t *testing.T) {
 	tc.HasBlobs(context.Background(), tc.vhashes[0])
 	tc.wait(t, 0)
 	tc.expectMode(t, hasBlobsMode)
-	tc.expectEntries(t, tc.txs[0])
+	tc.expectEntries(t, tc.vhashes[0]...)
 
 	tc.GetBlobs(context.Background(), tc.vhashes[0], types.BlobSidecarVersion1)
 	tc.wait(t, 0)
 	tc.expectMode(t, topKMode)
-	tc.expectEntries(t, tc.txs[1])
+	tc.expectEntries(t, tc.vhashes[1]...)
 }
 
 // TestCacheTopKResetOnHasBlobs walks the cache through topK → hasBlobs → topK
@@ -318,16 +296,16 @@ func TestCacheTopKResetOnHasBlobs(t *testing.T) {
 		{blobs: 1, tip: 300},
 	}, 1)
 	tc.expectMode(t, topKMode)
-	tc.expectEntries(t, tc.txs[1])
+	tc.expectEntries(t, tc.vhashes[1]...)
 
 	tc.HasBlobs(context.Background(), tc.vhashes[0])
 	tc.wait(t, 0)
 	tc.expectMode(t, hasBlobsMode)
-	tc.expectEntries(t, tc.txs[0])
+	tc.expectEntries(t, tc.vhashes[0]...)
 
 	tc.wait(t, hasBlobsTimeout)
 	tc.expectMode(t, topKMode)
-	tc.expectEntries(t, tc.txs[1])
+	tc.expectEntries(t, tc.vhashes[1]...)
 }
 
 // TestCacheTopKRefresh verifies that when a more profitable tx appears in the
@@ -340,11 +318,11 @@ func TestCacheTopKRefresh(t *testing.T) {
 		{blobs: 1, tip: 300},
 	}, 1)
 	tc.expectMode(t, topKMode)
-	tc.expectEntries(t, tc.txs[2])
+	tc.expectEntries(t, tc.vhashes[2]...)
 
 	better := tc.inject(t, txSpec{blobs: 1, tip: 400})
 
 	tc.wait(t, topKTimeout)
 	tc.expectMode(t, topKMode)
-	tc.expectEntries(t, better)
+	tc.expectEntries(t, better...)
 }
