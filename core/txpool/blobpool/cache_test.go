@@ -17,154 +17,334 @@
 package blobpool
 
 import (
+	"context"
+	"math/big"
 	"os"
 	"path/filepath"
-	"slices"
+	"reflect"
+	"sort"
 	"testing"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/billy"
+	"github.com/holiman/uint256"
 )
 
-func newTestStore(t *testing.T) billy.Database {
-	t.Helper()
-	dir := filepath.Join(t.TempDir(), "store")
-	if err := os.MkdirAll(dir, 0700); err != nil {
+type txSpec struct {
+	blobs int
+	tip   uint64
+}
+
+type testCache struct {
+	*Cache
+	clock   *mclock.Simulated
+	iterCh  chan struct{}
+	txs     []common.Hash
+	vhashes [][]common.Hash // vhashes in the pool
+	offset  int             // next blob index to use when injecting more txs
+}
+
+// newTestCache creates a cache for test, with a pool that contains transactions
+// specified in txConfig. The returned cache is in topKMode with the initial
+// topK fetch already settled.
+func newTestCache(t *testing.T, txConfig []txSpec, capacity uint) *testCache {
+	storage := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	store, err := billy.Open(billy.Options{Path: dir}, newSlotter(testMaxBlobsPerBlock), nil)
+	store, err := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(params.BlobTxMaxBlobs), nil)
 	if err != nil {
 		t.Fatalf("billy open: %v", err)
 	}
-	return store
+
+	var (
+		addrs    = make([]common.Address, 0, len(txConfig))
+		vhashes  = make([][]common.Hash, 0, len(txConfig))
+		txHashes = make([]common.Hash, 0, len(txConfig))
+		offset   int
+	)
+	for _, s := range txConfig {
+		key, _ := crypto.GenerateKey()
+		tx := makeMultiBlobTx(0, s.tip, 1_000_000, 1_000_000, s.blobs, offset, key, types.BlobSidecarVersion1)
+		if _, err := store.Put(encodeForPool(tx)); err != nil {
+			t.Fatalf("store put: %v", err)
+		}
+		addrs = append(addrs, crypto.PubkeyToAddress(key.PublicKey))
+		vhashes = append(vhashes, tx.BlobHashes())
+		txHashes = append(txHashes, tx.Hash())
+		offset += s.blobs
+	}
+	store.Close()
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	for _, a := range addrs {
+		statedb.AddBalance(a, uint256.NewInt(1_000_000_000_000), tracing.BalanceChangeUnspecified)
+	}
+	statedb.Commit(0, true, false)
+
+	cancunTime := uint64(0)
+	config := &params.ChainConfig{
+		ChainID:     big.NewInt(1),
+		LondonBlock: big.NewInt(0),
+		BerlinBlock: big.NewInt(0),
+		CancunTime:  &cancunTime,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: &params.BlobConfig{
+				Target:         12,
+				Max:            24,
+				UpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
+			},
+		},
+	}
+	chain := &testBlockChain{
+		config:  config,
+		basefee: uint256.NewInt(1),
+		blobfee: uint256.NewInt(1),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("init pool: %v", err)
+	}
+	t.Cleanup(func() { pool.Close() })
+
+	clock := &mclock.Simulated{}
+	iterCh := make(chan struct{}, 256)
+	step := func() {
+		select {
+		case iterCh <- struct{}{}:
+		default:
+		}
+	}
+	cache := NewCacheForTest(pool, capacity, clock, step)
+
+	tc := &testCache{
+		Cache:   cache,
+		clock:   clock,
+		iterCh:  iterCh,
+		txs:     txHashes,
+		vhashes: vhashes,
+		offset:  offset,
+	}
+	// Block until the loop has armed its initial topK timer, then fire it so the
+	// returned cache is already in a stable topKMode-loaded state.
+	clock.WaitForTimers(1)
+	tc.wait(t, topKTimeout)
+	return tc
 }
 
-// putTx stores a blob transaction in the given store and returns its metadata
-// and blobTxForPool.
-func putTx(t *testing.T, store billy.Database, nonce, tip uint64) (*blobTxMeta, *blobTxForPool) {
+// inject adds a tx with the given spec directly to the pool's index and store,
+// bypassing the normal Add path. Returns the new tx hash.
+func (tc *testCache) inject(t *testing.T, spec txSpec) common.Hash {
 	t.Helper()
-	key, err := crypto.GenerateKey()
-	if err != nil {
-		t.Fatalf("generate key: %v", err)
-	}
-	tx := makeTx(nonce, tip, tip, 1, key)
+	key, _ := crypto.GenerateKey()
+	tx := makeMultiBlobTx(0, spec.tip, 1_000_000, 1_000_000, spec.blobs, tc.offset, key, types.BlobSidecarVersion1)
+	tc.offset += spec.blobs
+
 	ptx := newBlobTxForPool(tx)
-	id, err := store.Put(encodeForPool(tx))
+
+	tc.blobpool.lock.Lock()
+	defer tc.blobpool.lock.Unlock()
+
+	id, err := tc.blobpool.store.Put(encodeForPool(tx))
 	if err != nil {
 		t.Fatalf("store put: %v", err)
 	}
-	return newBlobTxMeta(id, ptx.TxSize(), store.Size(id), ptx), ptx
+	meta := newBlobTxMeta(id, ptx.TxSize(), tc.blobpool.store.Size(id), ptx)
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	tc.blobpool.index[addr] = append(tc.blobpool.index[addr], meta)
+	tc.blobpool.lookup.track(meta)
+
+	return tx.Hash()
 }
 
-func TestCacheRefreshLoadsAndEvicts(t *testing.T) {
-	store := newTestStore(t)
-	m1, _ := putTx(t, store, 1, 10)
-	m2, _ := putTx(t, store, 2, 10)
-	m3, _ := putTx(t, store, 3, 10)
-	id1, id2, id3 := m1.id, m2.id, m3.id
-
-	c := newCache(store, 8)
-	c.reset([]uint64{id1, id2})
-
-	// cache should have id1, id2 entries
-	want := []uint64{id1, id2}
-	missing, redundant := checkCacheContents(want, c)
-	if len(missing) != 0 || len(redundant) != 0 {
-		t.Fatalf("cache contents mismatch: want=%v missing=%v redundant=%v",
-			want, missing, redundant)
+// wait advances simulated time by d (if > 0) and then blocks until the cache
+// loop and any inflight fetch goroutines have settled.
+func (tc *testCache) wait(t *testing.T, d time.Duration) {
+	t.Helper()
+	if d > 0 {
+		tc.clock.Run(d)
 	}
-
-	c.reset([]uint64{id2, id3})
-
-	// cache should have id2, id3 entries
-	// since the capacity is biggere than 3, it should
-	// also still hold id1.
-	want = []uint64{id2, id3}
-	missing, redundant = checkCacheContents(want, c)
-	if len(missing) != 0 || len(redundant) != 0 {
-		t.Fatalf("cache contents mismatch: want=%v missing=%v redundant=%v",
-			want, missing, redundant)
-	}
-}
-
-func TestCacheUpdate(t *testing.T) {
-	store := newTestStore(t)
-
-	// three txs with increasing tips
-	m1, p1 := putTx(t, store, 1, 10)
-	m2, p2 := putTx(t, store, 2, 20)
-	m3, p3 := putTx(t, store, 3, 30)
-	id1, id2, id3 := m1.id, m2.id, m3.id
-
-	c := newCache(store, 2)
-	// case 1: add two transactions should succeed
-	c.update([]*addedTx{{id: m1.id, ptx: p1}}, nil)
-	c.update([]*addedTx{{id: m2.id, ptx: p2}}, nil)
-	want := []uint64{id1, id2}
-	missing, redundant := checkCacheContents(want, c)
-	if len(missing) != 0 || len(redundant) != 0 {
-		t.Fatalf("cache contents mismatch: want=%v missing=%v redundant=%v",
-			want, missing, redundant)
-	}
-
-	// case 2: adding a tx with higher tip (id3) should evict
-	// the least profitable tx (id1)
-	c.update([]*addedTx{{id: m3.id, ptx: p3}}, nil)
-	want = []uint64{id2, id3}
-	missing, redundant = checkCacheContents(want, c)
-	if len(missing) != 0 || len(redundant) != 0 {
-		t.Fatalf("cache contents mismatch: want=%v missing=%v redundant=%v",
-			want, missing, redundant)
-	}
-
-	// case 3: adding a tx with lower tip (id1) should be rejected
-	c.update([]*addedTx{{id: m1.id, ptx: p1}}, nil)
-	want = []uint64{id2, id3}
-	missing, redundant = checkCacheContents(want, c)
-	if len(missing) != 0 || len(redundant) != 0 {
-		t.Fatalf("cache contents mismatch: want=%v missing=%v redundant=%v",
-			want, missing, redundant)
-	}
-}
-
-func TestCacheDrop(t *testing.T) {
-	store := newTestStore(t)
-
-	m1, p1 := putTx(t, store, 1, 10)
-	id1 := m1.id
-
-	c := newCache(store, 4)
-	c.update([]*addedTx{{id: m1.id, ptx: p1}}, nil)
-	want := []uint64{m1.id}
-	missing, redundant := checkCacheContents(want, c)
-	if len(missing) != 0 || len(redundant) != 0 {
-		t.Fatalf("cache contents mismatch: want=%v missing=%v redundant=%v",
-			want, missing, redundant)
-	}
-
-	c.update(nil, []uint64{id1})
-	want = []uint64{}
-	missing, redundant = checkCacheContents(want, c)
-	if len(missing) != 0 || len(redundant) != 0 {
-		t.Fatalf("cache contents mismatch: want=%v missing=%v redundant=%v",
-			want, missing, redundant)
-	}
-
-	// Should be okay to call drop for non-cached id
-	c.update(nil, []uint64{99999})
-}
-
-// checkCacheContents checks whether the cache has exact content as `want`
-func checkCacheContents(want []uint64, c *cache) (missing []uint64, redundant []uint64) {
-	for _, wantId := range want {
-		if c.get(wantId) == nil {
-			missing = append(missing, wantId)
+	for {
+		select {
+		case <-tc.iterCh:
+			tc.inflight.Wait()
+		case <-time.After(50 * time.Millisecond):
+			tc.inflight.Wait()
+			return
 		}
 	}
-	for _, e := range c.entries {
-		if !slices.Contains(want, e.txID) {
-			redundant = append(redundant, e.txID)
-		}
+}
+
+func (tc *testCache) expectMode(t *testing.T, want cacheMode) {
+	t.Helper()
+	tc.mu.Lock()
+	have := tc.mode
+	tc.mu.Unlock()
+	if have != want {
+		t.Errorf("mode: got %d, want %d", have, want)
 	}
-	return missing, redundant
+}
+
+func (tc *testCache) expectEntries(t *testing.T, want ...common.Hash) {
+	t.Helper()
+	wantSet := make(map[common.Hash]struct{}, len(want))
+	for _, w := range want {
+		wantSet[w] = struct{}{}
+	}
+	tc.mu.Lock()
+	have := make(map[common.Hash]struct{}, len(tc.entries))
+	for k := range tc.entries {
+		have[k] = struct{}{}
+	}
+	tc.mu.Unlock()
+	if !reflect.DeepEqual(have, wantSet) {
+		t.Errorf("entries: got %s, want %s", hashSet(have), hashSet(wantSet))
+	}
+}
+
+func (tc *testCache) expectMapped(t *testing.T, want ...common.Hash) {
+	t.Helper()
+	wantSet := make(map[common.Hash]struct{}, len(want))
+	for _, w := range want {
+		wantSet[w] = struct{}{}
+	}
+	tc.mu.Lock()
+	have := make(map[common.Hash]struct{}, len(tc.txHashOf))
+	for k := range tc.txHashOf {
+		have[k] = struct{}{}
+	}
+	tc.mu.Unlock()
+	if !reflect.DeepEqual(have, wantSet) {
+		t.Errorf("txHashOf keys: got %s, want %s", hashSet(have), hashSet(wantSet))
+	}
+}
+
+func hashSet(m map[common.Hash]struct{}) []string {
+	out := make([]string, 0, len(m))
+	for h := range m {
+		out = append(out, h.Hex()[:10])
+	}
+	sort.Strings(out)
+	return out
+}
+
+// TestCacheHasBlobsLoadsClaimedSet checks that a HasBlobs request switches the
+// cache into hasBlobsMode and loads exactly the txs whose vhashes the cache
+// claimed available, regardless of whether the claim came from the cache
+// itself or from the pool fallback.
+func TestCacheHasBlobsLoadsClaimedSet(t *testing.T) {
+	tc := newTestCache(t, []txSpec{
+		{blobs: 2, tip: 100},
+		{blobs: 2, tip: 200},
+		{blobs: 2, tip: 300},
+	}, 1)
+
+	available := tc.HasBlobs(context.Background(), tc.vhashes[1])
+	if !available[0] {
+		t.Fatalf("expected vhash to be reported available")
+	}
+	tc.wait(t, 0)
+
+	tc.expectMode(t, hasBlobsMode)
+	tc.expectEntries(t, tc.txs[1])
+	tc.expectMapped(t, tc.vhashes[1][0], tc.vhashes[1][1])
+}
+
+// TestCacheTopK exercises the periodic topK signal: after the initial topK
+// settles in newTestCache, the cache is in topKMode with entries equal to the
+// top-by-tip txs.
+func TestCacheTopK(t *testing.T) {
+	tc := newTestCache(t, []txSpec{
+		{blobs: 1, tip: 100},
+		{blobs: 1, tip: 200},
+		{blobs: 1, tip: 300},
+	}, 1)
+
+	tc.expectMode(t, topKMode)
+	tc.expectEntries(t, tc.txs[2])
+}
+
+// TestCacheHbTimerFallsBackToTopK checks the idle-timeout transition: after a
+// HasBlobs request, an elapsing hasBlobsTimeout flips the cache back to
+// topKMode and replaces the entries with the topK set.
+func TestCacheHbTimerFallsBackToTopK(t *testing.T) {
+	tc := newTestCache(t, []txSpec{
+		{blobs: 1, tip: 100},
+		{blobs: 1, tip: 300},
+	}, 1)
+
+	tc.HasBlobs(context.Background(), tc.vhashes[0])
+	tc.wait(t, 0)
+	tc.expectMode(t, hasBlobsMode)
+	tc.expectEntries(t, tc.txs[0])
+
+	tc.wait(t, hasBlobsTimeout)
+	tc.expectMode(t, topKMode)
+	tc.expectEntries(t, tc.txs[1])
+}
+
+// TestCacheGetBlobsExitsHasBlobsMode checks that a GetBlobs call while in
+// hasBlobsMode flips the cache back to topKMode and reloads the topK set.
+func TestCacheGetBlobsExitsHasBlobsMode(t *testing.T) {
+	tc := newTestCache(t, []txSpec{
+		{blobs: 1, tip: 100},
+		{blobs: 1, tip: 300},
+	}, 1)
+
+	tc.HasBlobs(context.Background(), tc.vhashes[0])
+	tc.wait(t, 0)
+	tc.expectMode(t, hasBlobsMode)
+	tc.expectEntries(t, tc.txs[0])
+
+	tc.GetBlobs(context.Background(), tc.vhashes[0], types.BlobSidecarVersion1)
+	tc.wait(t, 0)
+	tc.expectMode(t, topKMode)
+	tc.expectEntries(t, tc.txs[1])
+}
+
+// TestCacheTopKResetOnHasBlobs walks the cache through topK → hasBlobs → topK
+// transitions and checks that the entries follow the active mode at each step.
+func TestCacheTopKResetOnHasBlobs(t *testing.T) {
+	tc := newTestCache(t, []txSpec{
+		{blobs: 1, tip: 100},
+		{blobs: 1, tip: 300},
+	}, 1)
+	tc.expectMode(t, topKMode)
+	tc.expectEntries(t, tc.txs[1])
+
+	tc.HasBlobs(context.Background(), tc.vhashes[0])
+	tc.wait(t, 0)
+	tc.expectMode(t, hasBlobsMode)
+	tc.expectEntries(t, tc.txs[0])
+
+	tc.wait(t, hasBlobsTimeout)
+	tc.expectMode(t, topKMode)
+	tc.expectEntries(t, tc.txs[1])
+}
+
+// TestCacheTopKRefresh verifies that when a more profitable tx appears in the
+// pool while the cache is in topKMode, the next topK tick replaces the cached
+// entry with the better one.
+func TestCacheTopKRefresh(t *testing.T) {
+	tc := newTestCache(t, []txSpec{
+		{blobs: 1, tip: 100},
+		{blobs: 1, tip: 200},
+		{blobs: 1, tip: 300},
+	}, 1)
+	tc.expectMode(t, topKMode)
+	tc.expectEntries(t, tc.txs[2])
+
+	better := tc.inject(t, txSpec{blobs: 1, tip: 400})
+
+	tc.wait(t, topKTimeout)
+	tc.expectMode(t, topKMode)
+	tc.expectEntries(t, better)
 }

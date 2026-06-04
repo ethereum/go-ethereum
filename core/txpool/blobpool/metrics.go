@@ -108,10 +108,4 @@ var (
 	gappedGauge         = metrics.NewRegisteredGauge("blobpool/gapped/count", nil)    // Current gapped queue size
 	gappedPromotedMeter = metrics.NewRegisteredMeter("blobpool/gapped/promoted", nil) // Gapped txs successfully promoted to pool
 	gappedEvictedMeter  = metrics.NewRegisteredMeter("blobpool/gapped/evicted", nil)  // Gapped txs evicted due to timeout/stale
-
-	// GetBlobs cache metrics. Hit counts both cache match and successful vhash
-	// containment check; miss covers no entry and stale entry (containment fail).
-	cacheHitMeter     = metrics.NewRegisteredMeter("blobpool/cache/hit", nil)
-	cacheMissMeter    = metrics.NewRegisteredMeter("blobpool/cache/miss", nil)
-	cacheEntriesGauge = metrics.NewRegisteredGauge("blobpool/cache/entries", nil)
 )
