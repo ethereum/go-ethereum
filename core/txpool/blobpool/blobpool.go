@@ -1120,24 +1120,17 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 
 }
 
-type txDigest struct {
-	vhashes []common.Hash
-	tip     *uint256.Int
-}
-
-// indexSnapshot returns a copy of the minimal tx data the cache needs to
-// perform selection
-func (p *BlobPool) indexSnapshot() []txDigest {
+func (p *BlobPool) vhashesByTx() map[common.Hash][]common.Hash {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	snapshot := make([]txDigest, 0, len(p.index))
+	out := make(map[common.Hash][]common.Hash)
 	for _, txs := range p.index {
 		for _, tx := range txs {
-			snapshot = append(snapshot, txDigest{tx.vhashes, tx.execTipCap})
+			out[tx.hash] = tx.vhashes
 		}
 	}
-	return snapshot
+	return out
 }
 
 // getByVhash reads and decodes the blob transaction which has the given

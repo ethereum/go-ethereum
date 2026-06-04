@@ -92,8 +92,14 @@ func newTestCache(t *testing.T, txConfig []txSpec, capacity uint) *testCache {
 		LondonBlock: big.NewInt(0),
 		BerlinBlock: big.NewInt(0),
 		CancunTime:  &cancunTime,
+		OsakaTime:   &cancunTime,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: &params.BlobConfig{
+				Target:         12,
+				Max:            24,
+				UpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
+			},
+			Osaka: &params.BlobConfig{
 				Target:         12,
 				Max:            24,
 				UpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
