@@ -358,6 +358,7 @@ func (c *Cache) update(want []common.Hash) {
 			for _, v := range sidecar.BlobHashes() {
 				c.txHashOf[v] = txhash
 			}
+			cacheBlobsGauge.Inc(int64(len(sidecar.Commitments)))
 			c.mu.Unlock()
 		}
 	}()
