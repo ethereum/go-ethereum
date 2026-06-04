@@ -28,7 +28,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // handler handles JSON-RPC messages. There is one handler per connection. Note that
@@ -65,6 +68,7 @@ type handler struct {
 	allowSubscribe       bool
 	batchRequestLimit    int
 	batchResponseMaxSize int
+	tracerProvider       trace.TracerProvider
 
 	subLock    sync.Mutex
 	serverSubs map[ID]*Subscription
@@ -73,9 +77,10 @@ type handler struct {
 type callProc struct {
 	ctx       context.Context
 	notifiers []*Notifier
+	isBatch   bool
 }
 
-func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry, batchRequestLimit, batchResponseMaxSize int) *handler {
+func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry, batchRequestLimit, batchResponseMaxSize int, tracerProvider trace.TracerProvider) *handler {
 	rootCtx, cancelRoot := context.WithCancel(connCtx)
 	h := &handler{
 		reg:                  reg,
@@ -90,6 +95,7 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 		log:                  log.Root(),
 		batchRequestLimit:    batchRequestLimit,
 		batchResponseMaxSize: batchResponseMaxSize,
+		tracerProvider:       tracerProvider,
 	}
 	if conn.remoteAddr() != "" {
 		h.log = h.log.New("conn", conn.remoteAddr())
@@ -163,40 +169,50 @@ func (b *batchCallBuffer) doWrite(ctx context.Context, conn jsonWriter, isErrorR
 	}
 	b.wrote = true // can only write once
 	if len(b.resp) > 0 {
-		conn.writeJSON(ctx, b.resp, isErrorResponse)
+		spanCtx, _, spanEnd := telemetry.StartSpanWithTracer(ctx, telemetry.TracerFromContext(ctx), "rpc.writeJSONBatch")
+		err := conn.writeJSONBatch(spanCtx, b.resp, isErrorResponse)
+		spanEnd(&err)
 	}
 }
 
 // handleBatch executes all messages in a batch and returns the responses.
 func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
-	// Emit error response for empty batches:
-	if len(msgs) == 0 {
-		h.startCallProc(func(cp *callProc) {
-			resp := errorMessage(&invalidRequestError{"empty batch"})
-			h.conn.writeJSON(cp.ctx, resp, true)
+	// For valid batches, filter response messages and subscription notifications
+	// out of msgs here.
+	var calls []*jsonrpcMessage
+	valid := len(msgs) > 0 && (h.batchRequestLimit == 0 || len(msgs) <= h.batchRequestLimit)
+	if valid {
+		calls = make([]*jsonrpcMessage, 0, len(msgs))
+		h.handleResponses(msgs, func(msg *jsonrpcMessage) {
+			calls = append(calls, msg)
 		})
-		return
-	}
-	// Apply limit on total number of requests.
-	if h.batchRequestLimit != 0 && len(msgs) > h.batchRequestLimit {
-		h.startCallProc(func(cp *callProc) {
-			h.respondWithBatchTooLarge(cp, msgs)
-		})
-		return
-	}
-
-	// Handle non-call messages first.
-	// Here we need to find the requestOp that sent the request batch.
-	calls := make([]*jsonrpcMessage, 0, len(msgs))
-	h.handleResponses(msgs, func(msg *jsonrpcMessage) {
-		calls = append(calls, msg)
-	})
-	if len(calls) == 0 {
-		return
+		if len(calls) == 0 {
+			// Batch was entirely responses to our own requests; nothing to dispatch.
+			return
+		}
 	}
 
 	// Process calls on a goroutine because they may block indefinitely:
 	h.startCallProc(func(cp *callProc) {
+		// Top-level batch SERVER span.
+		var batchSpanEnd func(*error)
+		cp.ctx, batchSpanEnd = telemetry.StartBatchServerSpan(cp.ctx, h.tracer(), "jsonrpc", len(msgs))
+		var spanErr error
+		defer batchSpanEnd(&spanErr)
+
+		switch {
+		case len(msgs) == 0:
+			spanErr = &invalidRequestError{"empty batch"}
+			resp := errorMessage(spanErr)
+			h.conn.writeJSON(cp.ctx, resp, true)
+			return
+		case h.batchRequestLimit != 0 && len(msgs) > h.batchRequestLimit:
+			spanErr = errors.New(errMsgBatchTooLarge)
+			h.respondWithBatchTooLarge(cp, msgs)
+			return
+		}
+
+		cp.isBatch = true
 		var (
 			timer      *time.Timer
 			cancel     context.CancelFunc
@@ -205,35 +221,50 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 
 		cp.ctx, cancel = context.WithCancel(cp.ctx)
 		defer cancel()
+		batchCtx := cp.ctx
 
 		// Cancel the request context after timeout and send an error response. Since the
 		// currently-running method might not return immediately on timeout, we must wait
 		// for the timeout concurrently with processing the request.
-		if timeout, ok := ContextRequestTimeout(cp.ctx); ok {
+		if timeout, ok := ContextRequestTimeout(batchCtx); ok {
 			timer = time.AfterFunc(timeout, func() {
 				cancel()
 				err := &internalServerError{errcodeTimeout, errMsgTimeout}
-				callBuffer.respondWithError(cp.ctx, h.conn, err)
+				callBuffer.respondWithError(batchCtx, h.conn, err)
 			})
 		}
 
 		responseBytes := 0
 		for {
 			// No need to handle rest of calls if timed out.
-			if cp.ctx.Err() != nil {
+			if batchCtx.Err() != nil {
 				break
 			}
 			msg := callBuffer.nextCall()
 			if msg == nil {
 				break
 			}
+
+			// Per-call INTERNAL span as a child of the batch SERVER span.
+			var callSpanEnd func(*error)
+			cp.ctx, callSpanEnd = telemetry.StartBatchCallSpan(batchCtx, h.tracer(), rpcInfoFromMessage(msg))
 			resp := h.handleCallMsg(cp, msg)
+			var callErr error
+			if resp != nil && resp.Error != nil {
+				callErr = resp.decodeError()
+			}
+			callSpanEnd(&callErr)
+
+			// Notifications don't get a response written into the batch reply.
+			if msg.isNotification() {
+				resp = nil
+			}
 			callBuffer.pushResponse(resp)
 			if resp != nil && h.batchResponseMaxSize != 0 {
-				responseBytes += len(resp.Result)
+				responseBytes += len(resp.Result) + len(resp.Error)
 				if responseBytes > h.batchResponseMaxSize {
 					err := &internalServerError{errcodeResponseTooLarge, errMsgResponseTooLarge}
-					callBuffer.respondWithError(cp.ctx, h.conn, err)
+					callBuffer.respondWithError(batchCtx, h.conn, err)
 					break
 				}
 			}
@@ -243,7 +274,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		}
 
 		h.addSubscriptions(cp.notifiers)
-		callBuffer.write(cp.ctx, h.conn)
+		callBuffer.write(batchCtx, h.conn)
 		for _, n := range cp.notifiers {
 			n.activate()
 		}
@@ -261,7 +292,7 @@ func (h *handler) respondWithBatchTooLarge(cp *callProc, batch []*jsonrpcMessage
 			break
 		}
 	}
-	h.conn.writeJSON(cp.ctx, []*jsonrpcMessage{resp}, true)
+	h.conn.writeJSONBatch(cp.ctx, []*jsonrpcMessage{resp}, true)
 }
 
 // handleMsg handles a single non-batch message.
@@ -276,22 +307,32 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 
 func (h *handler) handleNonBatchCall(cp *callProc, msg *jsonrpcMessage) {
 	var (
-		responded sync.Once
-		timer     *time.Timer
-		cancel    context.CancelFunc
+		responded     sync.Once
+		timer         *time.Timer
+		cancel        context.CancelFunc
+		responseError error
 	)
-	cp.ctx, cancel = context.WithCancel(cp.ctx)
-	defer cancel()
+
+	// Set up the SERVER span for tracing.
+	var serverSpanEnd func(*error)
+	cp.ctx, serverSpanEnd = telemetry.StartCallServerSpan(cp.ctx, h.tracer(), rpcInfoFromMessage(msg))
+	defer serverSpanEnd(&responseError)
 
 	// Cancel the request context after timeout and send an error response. Since the
 	// running method might not return immediately on timeout, we must wait for the
 	// timeout concurrently with processing the request.
+	outerCtx := cp.ctx
+	cp.ctx, cancel = context.WithCancel(cp.ctx)
+	defer cancel()
 	if timeout, ok := ContextRequestTimeout(cp.ctx); ok {
 		timer = time.AfterFunc(timeout, func() {
 			cancel()
 			responded.Do(func() {
+				responseError = errors.New(errMsgTimeout)
+				writeCtx, _, writeSpanEnd := telemetry.StartSpanWithTracer(outerCtx, h.tracer(), "rpc.writeJSON")
 				resp := msg.errorResponse(&internalServerError{errcodeTimeout, errMsgTimeout})
-				h.conn.writeJSON(cp.ctx, resp, true)
+				err := h.conn.writeJSON(writeCtx, resp, true)
+				writeSpanEnd(&err)
 			})
 		})
 	}
@@ -303,9 +344,22 @@ func (h *handler) handleNonBatchCall(cp *callProc, msg *jsonrpcMessage) {
 	h.addSubscriptions(cp.notifiers)
 	if answer != nil {
 		responded.Do(func() {
-			h.conn.writeJSON(cp.ctx, answer, false)
+			if answer.Error != nil {
+				responseError = answer.decodeError()
+			}
+			// Notifications don't get a response written, but their errors are
+			// still recorded on the SERVER span via responseError above.
+			if msg.isNotification() {
+				return
+			}
+			writeCtx, _, writeSpanEnd := telemetry.StartSpanWithTracer(outerCtx, h.tracer(), "rpc.writeJSON")
+			err := h.conn.writeJSON(writeCtx, answer, false)
+			writeSpanEnd(&err)
 		})
 	}
+
+	// Enable notification sending of subscriptions, since the response with
+	// subscription ID has now been sent.
 	for _, n := range cp.notifiers {
 		n.activate()
 	}
@@ -408,7 +462,7 @@ func (h *handler) handleResponses(batch []*jsonrpcMessage, handleCall func(*json
 		// the op.resp channel.
 		if op.sub != nil {
 			if msg.Error != nil {
-				op.err = msg.Error
+				op.err = msg.decodeError()
 			} else {
 				op.err = json.Unmarshal(msg.Result, &op.sub.subid)
 				if op.err == nil {
@@ -465,18 +519,21 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 	start := time.Now()
 	switch {
 	case msg.isNotification():
-		h.handleCall(ctx, msg)
+		// Notifications don't get a response written to the client, but the
+		// answer is returned so the caller can record errors on the SERVER span.
+		resp := h.handleCall(ctx, msg)
 		h.log.Debug("Served "+msg.Method, "duration", time.Since(start))
-		return nil
+		return resp
 
 	case msg.isCall():
 		resp := h.handleCall(ctx, msg)
 		var logctx []any
 		logctx = append(logctx, "reqid", idForLog{msg.ID}, "duration", time.Since(start))
 		if resp.Error != nil {
-			logctx = append(logctx, "err", resp.Error.Message)
-			if resp.Error.Data != nil {
-				logctx = append(logctx, "errdata", formatErrorData(resp.Error.Data))
+			je := resp.decodeError()
+			logctx = append(logctx, "err", je.Message)
+			if je.Data != nil {
+				logctx = append(logctx, "errdata", formatErrorData(je.Data))
 			}
 			h.log.Warn("Served "+msg.Method, logctx...)
 		} else {
@@ -494,43 +551,54 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 
 // handleCall processes method calls.
 func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage {
+	// Check method name length
+	if len(msg.Method) > maxMethodNameLength {
+		return msg.errorResponse(&invalidRequestError{fmt.Sprintf("method name too long: %d > %d", len(msg.Method), maxMethodNameLength)})
+	}
 	if msg.isSubscribe() {
 		return h.handleSubscribe(cp, msg)
 	}
-	var callb *callback
 	if msg.isUnsubscribe() {
-		callb = h.unsubscribeCb
-	} else {
-		// Check method name length
-		if len(msg.Method) > maxMethodNameLength {
-			return msg.errorResponse(&invalidRequestError{fmt.Sprintf("method name too long: %d > %d", len(msg.Method), maxMethodNameLength)})
+		args, err := parsePositionalArguments(msg.Params, h.unsubscribeCb.argTypes)
+		if err != nil {
+			return msg.errorResponse(&invalidParamsError{err.Error()})
 		}
-		callb = h.reg.callback(msg.Method)
+		return h.runMethod(cp.ctx, msg, h.unsubscribeCb, args)
 	}
+	callb := h.reg.callback(msg.Method)
+
+	// If the method is not found, return an error.
 	if callb == nil {
 		return msg.errorResponse(&methodNotFoundError{method: msg.Method})
 	}
 
-	args, err := parsePositionalArguments(msg.Params, callb.argTypes)
-	if err != nil {
-		return msg.errorResponse(&invalidParamsError{err.Error()})
+	// Start tracing span before parsing arguments.
+	_, _, pSpanEnd := telemetry.StartSpanWithTracer(cp.ctx, h.tracer(), "rpc.parsePositionalArguments")
+	args, pErr := parsePositionalArguments(msg.Params, callb.argTypes)
+	pSpanEnd(&pErr)
+	if pErr != nil {
+		return msg.errorResponse(&invalidParamsError{pErr.Error()})
 	}
 	start := time.Now()
-	answer := h.runMethod(cp.ctx, msg, callb, args)
+
+	// Start tracing span before running the method.
+	rctx, _, rSpanEnd := telemetry.StartSpanWithTracer(cp.ctx, h.tracer(), "rpc.runMethod")
+	answer := h.runMethod(rctx, msg, callb, args)
+	var rErr error
+	if answer.Error != nil {
+		rErr = answer.decodeError()
+	}
+	rSpanEnd(&rErr)
 
 	// Collect the statistics for RPC calls if metrics is enabled.
-	// We only care about pure rpc call. Filter out subscription.
-	if callb != h.unsubscribeCb {
-		rpcRequestGauge.Inc(1)
-		if answer.Error != nil {
-			failedRequestGauge.Inc(1)
-		} else {
-			successfulRequestGauge.Inc(1)
-		}
-		rpcServingTimer.UpdateSince(start)
-		updateServeTimeHistogram(msg.Method, answer.Error == nil, time.Since(start))
+	rpcRequestGauge.Inc(1)
+	if answer.Error != nil {
+		failedRequestGauge.Inc(1)
+	} else {
+		successfulRequestGauge.Inc(1)
 	}
-
+	rpcServingTimer.UpdateSince(start)
+	updateServeTimeHistogram(msg.Method, answer.Error == nil, time.Since(start))
 	return answer
 }
 
@@ -568,17 +636,45 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 	n := &Notifier{h: h, namespace: namespace}
 	cp.notifiers = append(cp.notifiers, n)
 	ctx := context.WithValue(cp.ctx, notifierKey{}, n)
-
 	return h.runMethod(ctx, msg, callb, args)
 }
 
+// rpcInfoFromMessage builds the RPCInfo for a SERVER/INTERNAL RPC span from a
+// JSON-RPC message.
+func rpcInfoFromMessage(msg *jsonrpcMessage) telemetry.RPCInfo {
+	info := telemetry.RPCInfo{System: "jsonrpc", RequestID: string(msg.ID)}
+	if service, method, ok := serviceAndMethod(msg.Method); ok {
+		info.Service, info.Method = service, method
+	} else {
+		info.Method = msg.Method
+	}
+	return info
+}
+
+// tracer returns the OpenTelemetry Tracer for RPC call tracing.
+func (h *handler) tracer() trace.Tracer {
+	if h.tracerProvider == nil {
+		// Default to global TracerProvider if none is set.
+		// Note: If no TracerProvider is set, the default is a no-op TracerProvider.
+		// See https://pkg.go.dev/go.opentelemetry.io/otel#GetTracerProvider
+		return otel.Tracer("")
+	}
+	return h.tracerProvider.Tracer("")
+}
+
 // runMethod runs the Go callback for an RPC method.
-func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value) *jsonrpcMessage {
+func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value, attributes ...telemetry.Attribute) *jsonrpcMessage {
 	result, err := callb.call(ctx, msg.Method, args)
 	if err != nil {
 		return msg.errorResponse(err)
 	}
-	return msg.response(result)
+	_, _, spanEnd := telemetry.StartSpanWithTracer(ctx, h.tracer(), "rpc.encodeJSONResponse", attributes...)
+	response := msg.response(result)
+	if response.Error != nil {
+		err = response.decodeError()
+	}
+	spanEnd(&err)
+	return response
 }
 
 // unsubscribe is the callback function for all *_unsubscribe calls.
@@ -612,8 +708,11 @@ type limitedBuffer struct {
 }
 
 func (buf *limitedBuffer) Write(data []byte) (int, error) {
-	avail := max(buf.limit, len(buf.output))
-	if len(data) < avail {
+	avail := buf.limit - len(buf.output)
+	if avail <= 0 {
+		return 0, errTruncatedOutput
+	}
+	if len(data) <= avail {
 		buf.output = append(buf.output, data...)
 		return len(data), nil
 	}

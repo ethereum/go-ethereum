@@ -29,11 +29,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -559,63 +558,54 @@ func (q *queue) expire(peer string, pendPool map[string]*fetchRequest, taskQueue
 // DeliverBodies injects a block body retrieval response into the results queue.
 // The method returns the number of blocks bodies accepted from the delivery and
 // also wakes any threads waiting for data delivery.
-func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListHashes []common.Hash,
-	uncleLists [][]*types.Header, uncleListHashes []common.Hash,
-	withdrawalLists [][]*types.Withdrawal, withdrawalListHashes []common.Hash,
-) (int, error) {
+func (q *queue) DeliverBodies(id string, hashes eth.BlockBodyHashes, bodies []eth.BlockBody) (int, error) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
+	var txLists [][]*types.Transaction
+	var uncleLists [][]*types.Header
+	var withdrawalLists [][]*types.Withdrawal
+
 	validate := func(index int, header *types.Header) error {
-		if txListHashes[index] != header.TxHash {
+		if hashes.TransactionRoots[index] != header.TxHash {
 			return errInvalidBody
 		}
-		if uncleListHashes[index] != header.UncleHash {
+		if hashes.UncleHashes[index] != header.UncleHash {
 			return errInvalidBody
 		}
 		if header.WithdrawalsHash == nil {
 			// nil hash means that withdrawals should not be present in body
-			if withdrawalLists[index] != nil {
+			if bodies[index].Withdrawals != nil {
 				return errInvalidBody
 			}
 		} else { // non-nil hash: body must have withdrawals
-			if withdrawalLists[index] == nil {
+			if bodies[index].Withdrawals == nil {
 				return errInvalidBody
 			}
-			if withdrawalListHashes[index] != *header.WithdrawalsHash {
+			if hashes.WithdrawalRoots[index] != *header.WithdrawalsHash {
 				return errInvalidBody
 			}
 		}
-		// Blocks must have a number of blobs corresponding to the header gas usage,
-		// and zero before the Cancun hardfork.
-		var blobs int
-		for _, tx := range txLists[index] {
-			// Count the number of blobs to validate against the header's blobGasUsed
-			blobs += len(tx.BlobHashes())
 
-			// Validate the data blobs individually too
-			if tx.Type() == types.BlobTxType {
-				if len(tx.BlobHashes()) == 0 {
-					return errInvalidBody
-				}
-				for _, hash := range tx.BlobHashes() {
-					if !kzg4844.IsValidVersionedHash(hash[:]) {
-						return errInvalidBody
-					}
-				}
-				if tx.BlobTxSidecar() != nil {
-					return errInvalidBody
-				}
-			}
+		// decode
+		txs, err := bodies[index].Transactions.Items()
+		if err != nil {
+			return fmt.Errorf("%w: bad transactions: %v", errInvalidBody, err)
 		}
-		if header.BlobGasUsed != nil {
-			if want := *header.BlobGasUsed / params.BlobTxBlobGasPerBlob; uint64(blobs) != want { // div because the header is surely good vs the body might be bloated
-				return errInvalidBody
+		txLists = append(txLists, txs)
+		uncles, err := bodies[index].Uncles.Items()
+		if err != nil {
+			return fmt.Errorf("%w: bad uncles: %v", errInvalidBody, err)
+		}
+		uncleLists = append(uncleLists, uncles)
+		if bodies[index].Withdrawals != nil {
+			withdrawals, err := bodies[index].Withdrawals.Items()
+			if err != nil {
+				return fmt.Errorf("%w: bad withdrawals: %v", errInvalidBody, err)
 			}
+			withdrawalLists = append(withdrawalLists, withdrawals)
 		} else {
-			if blobs != 0 {
-				return errInvalidBody
-			}
+			withdrawalLists = append(withdrawalLists, nil)
 		}
 		return nil
 	}
@@ -626,8 +616,9 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 		result.Withdrawals = withdrawalLists[index]
 		result.SetBodyDone()
 	}
+	nresults := len(hashes.TransactionRoots)
 	return q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool,
-		bodyReqTimer, bodyInMeter, bodyDropMeter, len(txLists), validate, reconstruct)
+		bodyReqTimer, bodyInMeter, bodyDropMeter, nresults, validate, reconstruct)
 }
 
 // DeliverReceipts injects a receipt retrieval response into the results queue.
@@ -680,10 +671,10 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	}
 	// Assemble each of the results with their headers and retrieved data parts
 	var (
-		accepted int
-		failure  error
-		i        int
-		hashes   []common.Hash
+		accepted   int
+		failure    error
+		i          int
+		foundStale bool
 	)
 	for _, header := range request.Headers {
 		// Short circuit assembly if no more fetch results are found
@@ -695,42 +686,41 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 			failure = err
 			break
 		}
-		hashes = append(hashes, header.Hash())
 		i++
 	}
 
-	for _, header := range request.Headers[:i] {
+	for k, header := range request.Headers[:i] {
 		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil && !stale {
-			reconstruct(accepted, res)
+			reconstruct(k, res)
+			accepted++
 		} else {
-			// else: between here and above, some other peer filled this result,
+			// Between here and above, some other peer filled this result,
 			// or it was indeed a no-op. This should not happen, but if it does it's
 			// not something to panic about
 			log.Error("Delivery stale", "stale", stale, "number", header.Number.Uint64(), "err", err)
-			failure = errStaleDelivery
+			foundStale = true
 		}
 		// Clean up a successful fetch
-		delete(taskPool, hashes[accepted])
-		accepted++
+		delete(taskPool, header.Hash())
 	}
 	resDropMeter.Mark(int64(results - accepted))
 
 	// Return all failed or missing fetches to the queue
-	for _, header := range request.Headers[accepted:] {
+	for _, header := range request.Headers[i:] {
 		taskQueue.Push(header, -int64(header.Number.Uint64()))
 	}
 	// Wake up Results
 	if accepted > 0 {
 		q.active.Signal()
 	}
-	if failure == nil {
-		return accepted, nil
+	if failure != nil {
+		return accepted, failure
 	}
 	// If none of the data was good, it's a stale delivery
-	if accepted > 0 {
-		return accepted, fmt.Errorf("partial failure: %v", failure)
+	if foundStale {
+		return accepted, errStaleDelivery
 	}
-	return accepted, fmt.Errorf("%w: %v", failure, errStaleDelivery)
+	return accepted, nil
 }
 
 // Prepare configures the result cache to allow accepting and caching inbound

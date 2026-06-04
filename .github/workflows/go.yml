@@ -7,6 +7,11 @@ on:
       - master
   workflow_dispatch:
 
+# Free runner capacity by cancelling superseded PR runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   lint:
     name: Lint
@@ -69,8 +74,8 @@ jobs:
 
       - name: Install cross toolchain
         run: |
-          apt-get update
-          apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib
+          sudo apt-get update
+          sudo apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib
 
       - name: Build
         run: go run build/ci.go test -arch 386 -short -p 8
@@ -97,3 +102,44 @@ jobs:
 
       - name: Run tests
         run: go run build/ci.go test -p 8
+
+  windows:
+    name: Windows ${{ matrix.arch }}
+    needs: lint
+    runs-on: [self-hosted, windows, x64]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            mingw: 'C:\msys64\mingw64'
+            test: true
+          - arch: '386'
+            mingw: 'C:\msys64\mingw32'
+            test: false
+    env:
+      GETH_MINGW: ${{ matrix.mingw }}
+      GETH_CC: ${{ matrix.mingw }}\bin\gcc.exe
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: Build
+        shell: cmd
+        run: |
+          set PATH=%GETH_MINGW%\bin;%PATH%
+          go run build/ci.go install -arch ${{ matrix.arch }} -cc %GETH_CC%
+
+      - name: Run tests
+        if: matrix.test
+        shell: cmd
+        run: |
+          set PATH=%GETH_MINGW%\bin;%PATH%
+          go run build/ci.go test -arch ${{ matrix.arch }} -cc %GETH_CC% -short -p 8

@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -161,6 +162,12 @@ func TestGethClient(t *testing.T) {
 		}, {
 			"TestCallContractWithBlockOverrides",
 			func(t *testing.T) { testCallContractWithBlockOverrides(t, client) },
+		}, {
+			"TestTraceTransactionWithCallTracer",
+			func(t *testing.T) { testTraceTransactionWithCallTracer(t, client, txHashes) },
+		}, {
+			"TestTraceCallWithCallTracer",
+			func(t *testing.T) { testTraceCallWithCallTracer(t, client) },
 		},
 		// The testaccesslist is a bit time-sensitive: the newTestBackend imports
 		// one block. The `testAccessList` fails if the miner has not yet created a
@@ -618,5 +625,62 @@ func testCallContractWithBlockOverrides(t *testing.T, client *rpc.Client) {
 	}
 	if !bytes.Equal(res, common.FromHex("0x1111111111111111111111111111111111111111")) {
 		t.Fatalf("unexpected result: %x", res)
+	}
+}
+
+func testTraceTransactionWithCallTracer(t *testing.T, client *rpc.Client, txHashes []common.Hash) {
+	ec := New(client)
+	for _, txHash := range txHashes {
+		// With nil config (defaults).
+		result, err := ec.TraceTransactionWithCallTracer(context.Background(), txHash, nil)
+		if err != nil {
+			t.Fatalf("nil config: %v", err)
+		}
+		if result.Type != "CALL" {
+			t.Fatalf("unexpected type: %s", result.Type)
+		}
+		if result.From == (common.Address{}) {
+			t.Fatal("from is zero")
+		}
+		if result.Gas == 0 {
+			t.Fatal("gas is zero")
+		}
+
+		// With explicit config.
+		result, err = ec.TraceTransactionWithCallTracer(context.Background(), txHash,
+			&CallTracerConfig{},
+		)
+		if err != nil {
+			t.Fatalf("explicit config: %v", err)
+		}
+		if result.Type != "CALL" {
+			t.Fatalf("unexpected type: %s", result.Type)
+		}
+	}
+}
+
+func testTraceCallWithCallTracer(t *testing.T, client *rpc.Client) {
+	ec := New(client)
+	msg := ethereum.CallMsg{
+		From:     testAddr,
+		To:       &common.Address{},
+		Gas:      21000,
+		GasPrice: big.NewInt(1000000000),
+		Value:    big.NewInt(1),
+	}
+	result, err := ec.TraceCallWithCallTracer(context.Background(), msg,
+		rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber), nil, nil, nil,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Type != "CALL" {
+		t.Fatalf("unexpected type: %s", result.Type)
+	}
+	if result.From == (common.Address{}) {
+		t.Fatal("from is zero")
+	}
+	if result.Gas == 0 {
+		t.Fatal("gas is zero")
 	}
 }

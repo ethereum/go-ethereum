@@ -44,15 +44,17 @@ type Filter struct {
 	begin, end int64        // Range interval if filtering multiple blocks
 
 	rangeLogsTestHook chan rangeLogsTestEvent
+	rangeLimit        uint64
 }
 
 // NewRangeFilter creates a new filter which uses a bloom filter on blocks to
 // figure out whether a particular block is interesting or not.
-func (sys *FilterSystem) NewRangeFilter(begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
+func (sys *FilterSystem) NewRangeFilter(begin, end int64, addresses []common.Address, topics [][]common.Hash, rangeLimit uint64) *Filter {
 	// Create a generic filter and convert it into a range filter
 	filter := newFilter(sys, addresses, topics)
 	filter.begin = begin
 	filter.end = end
+	filter.rangeLimit = rangeLimit
 
 	return filter
 }
@@ -142,6 +144,9 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	end, err := resolveSpecial(f.end)
 	if err != nil {
 		return nil, err
+	}
+	if f.rangeLimit != 0 && (end-begin) > f.rangeLimit {
+		return nil, invalidParamsErr("exceed maximum block range %d", f.rangeLimit)
 	}
 	return f.rangeLogs(ctx, begin, end)
 }
@@ -384,7 +389,7 @@ func (f *Filter) rangeLogs(ctx context.Context, firstBlock, lastBlock uint64) ([
 	}
 
 	if firstBlock > lastBlock {
-		return nil, nil
+		return nil, errInvalidBlockRange
 	}
 	mb := f.sys.backend.NewMatcherBackend()
 	defer mb.Close()
@@ -494,7 +499,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 
 // filterLogs creates a slice of logs matching the given criteria.
 func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
-	var check = func(log *types.Log) bool {
+	check := func(log *types.Log) bool {
 		if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > log.BlockNumber {
 			return false
 		}

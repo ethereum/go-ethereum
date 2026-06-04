@@ -44,6 +44,7 @@ type Config struct {
 	LogCacheSize  int           // maximum number of cached blocks (default: 32)
 	Timeout       time.Duration // how long filters stay active (default: 5min)
 	LogQueryLimit int           // maximum number of addresses allowed in filter criteria (default: 1000)
+	RangeLimit    uint64        // maximum block range allowed in filter criteria (default: 0)
 }
 
 func (cfg Config) withDefaults() Config {

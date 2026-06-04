@@ -293,11 +293,17 @@ type websocketCodec struct {
 
 func newWebsocketCodec(conn *websocket.Conn, host string, req http.Header, readLimit int64) ServerCodec {
 	conn.SetReadLimit(readLimit)
-	encode := func(v interface{}, isErrorResponse bool) error {
-		return conn.WriteJSON(v)
+	var buf []byte
+	encodeMsg := func(ctx context.Context, msg *jsonrpcMessage, isError bool) error {
+		buf = appendMessage(buf[:0], msg)
+		return conn.WriteMessage(websocket.TextMessage, buf)
+	}
+	encodeBatch := func(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error {
+		buf = appendBatch(buf[:0], msgs)
+		return conn.WriteMessage(websocket.TextMessage, buf)
 	}
 	wc := &websocketCodec{
-		jsonCodec:    NewFuncCodec(conn, encode, conn.ReadJSON).(*jsonCodec),
+		jsonCodec:    NewFuncCodec(conn, encodeMsg, encodeBatch, conn.ReadJSON).(*jsonCodec),
 		conn:         conn,
 		pingReset:    make(chan struct{}, 1),
 		pongReceived: make(chan struct{}),
@@ -324,6 +330,16 @@ func newWebsocketCodec(conn *websocket.Conn, host string, req http.Header, readL
 }
 
 func (wc *websocketCodec) close() {
+	// Send a WebSocket Close frame before closing the underlying connection,
+	// so the server sees a clean 1000 (normal closure) instead of 1006 (abnormal).
+	wc.jsonCodec.encMu.Lock()
+	wc.conn.WriteControl(
+		websocket.CloseMessage,
+		websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
+		time.Now().Add(wsPingWriteTimeout),
+	)
+	wc.jsonCodec.encMu.Unlock()
+
 	wc.jsonCodec.close()
 	wc.wg.Wait()
 }
@@ -332,8 +348,15 @@ func (wc *websocketCodec) peerInfo() PeerInfo {
 	return wc.info
 }
 
-func (wc *websocketCodec) writeJSON(ctx context.Context, v interface{}, isError bool) error {
-	err := wc.jsonCodec.writeJSON(ctx, v, isError)
+func (wc *websocketCodec) writeJSON(ctx context.Context, msg *jsonrpcMessage, isError bool) error {
+	return wc.writeAndResetPing(wc.jsonCodec.writeJSON(ctx, msg, isError))
+}
+
+func (wc *websocketCodec) writeJSONBatch(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error {
+	return wc.writeAndResetPing(wc.jsonCodec.writeJSONBatch(ctx, msgs, isError))
+}
+
+func (wc *websocketCodec) writeAndResetPing(err error) error {
 	if err == nil {
 		// Notify pingLoop to delay the next idle ping.
 		select {

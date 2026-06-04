@@ -27,10 +27,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/crypto/sha3"
+	"github.com/holiman/uint256"
 )
 
 // Tests block header storage and retrieval operations.
@@ -52,10 +54,7 @@ func TestHeaderStorage(t *testing.T) {
 	if entry := ReadHeaderRLP(db, header.Hash(), header.Number.Uint64()); entry == nil {
 		t.Fatalf("Stored header RLP not found")
 	} else {
-		hasher := sha3.NewLegacyKeccak256()
-		hasher.Write(entry)
-
-		if hash := common.BytesToHash(hasher.Sum(nil)); hash != header.Hash() {
+		if hash := crypto.Keccak256Hash(entry); hash != header.Hash() {
 			t.Fatalf("Retrieved RLP header mismatch: have %v, want %v", entry, header)
 		}
 	}
@@ -72,8 +71,7 @@ func TestBodyStorage(t *testing.T) {
 
 	// Create a test body to move around the database and make sure it's really new
 	body := &types.Body{Uncles: []*types.Header{{Extra: []byte("test header")}}}
-
-	hasher := sha3.NewLegacyKeccak256()
+	hasher := keccak.NewLegacyKeccak256()
 	rlp.Encode(hasher, body)
 	hash := common.BytesToHash(hasher.Sum(nil))
 
@@ -90,10 +88,7 @@ func TestBodyStorage(t *testing.T) {
 	if entry := ReadBodyRLP(db, hash, 0); entry == nil {
 		t.Fatalf("Stored body RLP not found")
 	} else {
-		hasher := sha3.NewLegacyKeccak256()
-		hasher.Write(entry)
-
-		if calc := common.BytesToHash(hasher.Sum(nil)); calc != hash {
+		if calc := crypto.Keccak256Hash(entry); calc != hash {
 			t.Fatalf("Retrieved RLP body mismatch: have %v, want %v", entry, body)
 		}
 	}
@@ -905,4 +900,120 @@ func TestHeadersRLPStorage(t *testing.T) {
 	checkSequence(0, 1)    // Only genesis
 	checkSequence(1, 1)    // Only block 1
 	checkSequence(1, 2)    // Genesis + block 1
+}
+
+func makeTestBAL(t *testing.T) (rlp.RawValue, *bal.BlockAccessList) {
+	t.Helper()
+
+	cb := bal.NewConstructionBlockAccessList()
+	addr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	cb.AccountRead(addr)
+	cb.StorageRead(addr, common.BytesToHash([]byte{0x01}))
+	cb.StorageWrite(0, addr, common.BytesToHash([]byte{0x02}), common.BytesToHash([]byte{0xaa}))
+	cb.BalanceChange(0, addr, uint256.NewInt(100))
+	cb.NonceChange(addr, 0, 1)
+
+	var buf bytes.Buffer
+	if err := cb.EncodeRLP(&buf); err != nil {
+		t.Fatalf("failed to encode BAL: %v", err)
+	}
+	encoded := buf.Bytes()
+
+	var decoded bal.BlockAccessList
+	if err := rlp.DecodeBytes(encoded, &decoded); err != nil {
+		t.Fatalf("failed to decode BAL: %v", err)
+	}
+	return encoded, &decoded
+}
+
+// TestWriteAncientBlocksNilBAL ensures that freezing a block with no block
+// access list produces an empty entry in the BAL ancient table and that
+// ReadAccessList returns nil afterwards (i.e. the empty entry is not surfaced
+// as a malformed BAL).
+func TestWriteAncientBlocksNilBAL(t *testing.T) {
+	db, err := Open(NewMemoryDatabase(), OpenOptions{Ancient: t.TempDir()})
+	if err != nil {
+		t.Fatalf("failed to create database with ancient backend: %v", err)
+	}
+	defer db.Close()
+
+	block := types.NewBlockWithHeader(&types.Header{
+		Number:      big.NewInt(0),
+		Extra:       []byte("nil-bal block"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
+	})
+	if block.AccessList() != nil {
+		t.Fatalf("test precondition: block must have nil access list")
+	}
+	if _, err := WriteAncientBlocks(db, []*types.Block{block}, types.EncodeBlockReceiptLists([]types.Receipts{nil})); err != nil {
+		t.Fatalf("WriteAncientBlocks failed: %v", err)
+	}
+	hash, number := block.Hash(), block.NumberU64()
+
+	// The BAL ancient entry should exist as an empty blob.
+	if blob := ReadAccessListRLP(db, hash, number); len(blob) != 0 {
+		t.Fatalf("ReadAccessListRLP: got %x, want empty", blob)
+	}
+	// ReadAccessList must surface nil rather than attempting to RLP-decode
+	// the empty payload.
+	if b := ReadAccessList(db, hash, number); b != nil {
+		t.Fatalf("ReadAccessList: got %v, want nil", b)
+	}
+	// HasAccessList only consults the KV store and there's nothing there.
+	if HasAccessList(db, hash, number) {
+		t.Fatal("HasAccessList returned true for absent BAL")
+	}
+}
+
+// TestBALStorage tests write/read/delete of BALs in the KV store.
+func TestBALStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	hash := common.BytesToHash([]byte{0x03, 0x14})
+	number := uint64(42)
+
+	// Check that no BAL exists in a new database.
+	if HasAccessList(db, hash, number) {
+		t.Fatal("BAL found in new database")
+	}
+	if b := ReadAccessList(db, hash, number); b != nil {
+		t.Fatalf("non existent BAL returned: %v", b)
+	}
+
+	// Write a BAL and verify it can be read back.
+	encoded, testBAL := makeTestBAL(t)
+	WriteAccessList(db, hash, number, testBAL)
+
+	if !HasAccessList(db, hash, number) {
+		t.Fatal("HasAccessList returned false after write")
+	}
+	if blob := ReadAccessListRLP(db, hash, number); len(blob) == 0 {
+		t.Fatal("ReadAccessListRLP returned empty after write")
+	}
+	if b := ReadAccessList(db, hash, number); b == nil {
+		t.Fatal("ReadAccessList returned nil after write")
+	} else if b.Hash() != testBAL.Hash() {
+		t.Fatalf("BAL hash mismatch: got %x, want %x", b.Hash(), testBAL.Hash())
+	}
+
+	// Also test WriteAccessListRLP with pre-encoded data.
+	hash2 := common.BytesToHash([]byte{0x03, 0x15})
+	WriteAccessListRLP(db, hash2, number, encoded)
+	if b := ReadAccessList(db, hash2, number); b == nil {
+		t.Fatal("ReadAccessList returned nil after WriteAccessListRLP")
+	} else if b.Hash() != testBAL.Hash() {
+		t.Fatalf("BAL hash mismatch after WriteAccessListRLP: got %x, want %x", b.Hash(), testBAL.Hash())
+	}
+
+	// Delete the BAL and verify it's gone.
+	DeleteAccessList(db, hash, number)
+
+	if HasAccessList(db, hash, number) {
+		t.Fatal("HasAccessList returned true after delete")
+	}
+	if b := ReadAccessList(db, hash, number); b != nil {
+		t.Fatalf("deleted BAL returned: %v", b)
+	}
 }

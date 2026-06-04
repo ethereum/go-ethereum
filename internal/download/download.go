@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"iter"
@@ -180,12 +181,13 @@ func (db *ChecksumDB) DownloadFile(url, dstPath string) error {
 		return fmt.Errorf("no known hash for file %q", basename)
 	}
 	// Shortcut if already downloaded.
-	if verifyHash(dstPath, hash) == nil {
+	if err := verifyHash(dstPath, hash); err == nil {
 		fmt.Printf("%s is up-to-date\n", dstPath)
 		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		fmt.Printf("%s is stale\n", dstPath)
 	}
 
-	fmt.Printf("%s is stale\n", dstPath)
 	fmt.Printf("downloading from %s\n", url)
 	resp, err := http.Get(url)
 	if err != nil {
@@ -205,10 +207,16 @@ func (db *ChecksumDB) DownloadFile(url, dstPath string) error {
 	if err != nil {
 		return err
 	}
-	dst := newDownloadWriter(fd, resp.ContentLength)
-	_, err = io.Copy(dst, resp.Body)
-	dst.Close()
-	if err != nil {
+	var dst io.WriteCloser = fd
+	if resp.ContentLength > 0 {
+		dst = newDownloadWriter(fd, resp.ContentLength)
+	}
+	if _, err = io.Copy(dst, resp.Body); err != nil {
+		dst.Close()
+		os.Remove(tmpfile)
+		return err
+	}
+	if err = dst.Close(); err != nil {
 		os.Remove(tmpfile)
 		return err
 	}

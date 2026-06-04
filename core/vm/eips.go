@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/holiman/uint256"
 )
 
 var activators = map[int]func(*JumpTable){
@@ -43,6 +42,7 @@ var activators = map[int]func(*JumpTable){
 	7702: enable7702,
 	7939: enable7939,
 	8024: enable8024,
+	7843: enable7843,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -91,8 +91,7 @@ func enable1884(jt *JumpTable) {
 }
 
 func opSelfBalance(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	balance := evm.StateDB.GetBalance(scope.Contract.Address())
-	scope.Stack.push(balance)
+	scope.Stack.get().Set(evm.StateDB.GetBalance(scope.Contract.Address()))
 	return nil, nil
 }
 
@@ -110,8 +109,7 @@ func enable1344(jt *JumpTable) {
 
 // opChainID implements CHAINID opcode
 func opChainID(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	chainId, _ := uint256.FromBig(evm.chainConfig.ChainID)
-	scope.Stack.push(chainId)
+	scope.Stack.get().SetFromBig(evm.chainConfig.ChainID)
 	return nil, nil
 }
 
@@ -221,8 +219,7 @@ func opTstore(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 // opBaseFee implements BASEFEE opcode
 func opBaseFee(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	baseFee, _ := uint256.FromBig(evm.Context.BaseFee)
-	scope.Stack.push(baseFee)
+	scope.Stack.get().SetFromBig(evm.Context.BaseFee)
 	return nil, nil
 }
 
@@ -239,7 +236,7 @@ func enable3855(jt *JumpTable) {
 
 // opPush0 implements the PUSH0 opcode
 func opPush0(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int))
+	scope.Stack.get().Clear()
 	return nil, nil
 }
 
@@ -290,8 +287,7 @@ func opBlobHash(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 // opBlobBaseFee implements BLOBBASEFEE opcode
 func opBlobBaseFee(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	blobBaseFee, _ := uint256.FromBig(evm.Context.BlobBaseFee)
-	scope.Stack.push(blobBaseFee)
+	scope.Stack.get().SetFromBig(evm.Context.BlobBaseFee)
 	return nil, nil
 }
 
@@ -380,8 +376,8 @@ func opExtCodeCopyEIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, er
 	addr := common.Address(a.Bytes20())
 	code := evm.StateDB.GetCode(addr)
 	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
-	consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(code)), false, scope.Contract.Gas)
-	scope.Contract.UseGas(consumed, evm.Config.Tracer, tracing.GasChangeUnspecified)
+	consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(code)), false, scope.Contract.Gas.RegularGas)
+	scope.Contract.UseGas(GasCosts{RegularGas: consumed}, evm.Config.Tracer, tracing.GasChangeUnspecified)
 	if consumed < wanted {
 		return nil, ErrOutOfGas
 	}
@@ -396,24 +392,24 @@ func opExtCodeCopyEIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, er
 func opPush1EIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	var (
 		codeLen = uint64(len(scope.Contract.Code))
-		integer = new(uint256.Int)
+		elem    = scope.Stack.get()
 	)
 	*pc += 1
 	if *pc < codeLen {
-		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Code[*pc])))
+		elem.SetUint64(uint64(scope.Contract.Code[*pc]))
 
 		if !scope.Contract.IsDeployment && !scope.Contract.IsSystemCall && *pc%31 == 0 {
 			// touch next chunk if PUSH1 is at the boundary. if so, *pc has
 			// advanced past this boundary.
 			contractAddr := scope.Contract.Address()
-			consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(contractAddr, *pc+1, uint64(1), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas)
-			scope.Contract.UseGas(wanted, evm.Config.Tracer, tracing.GasChangeUnspecified)
+			consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(contractAddr, *pc+1, uint64(1), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas.RegularGas)
+			scope.Contract.UseGas(GasCosts{RegularGas: wanted}, evm.Config.Tracer, tracing.GasChangeUnspecified)
 			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
 		}
 	} else {
-		scope.Stack.push(integer.Clear())
+		elem.Clear()
 	}
 	return nil, nil
 }
@@ -425,17 +421,16 @@ func makePushEIP4762(size uint64, pushByteSize int) executionFunc {
 			start   = min(codeLen, int(*pc+1))
 			end     = min(codeLen, start+pushByteSize)
 		)
-		scope.Stack.push(new(uint256.Int).SetBytes(
+		scope.Stack.get().SetBytes(
 			common.RightPadBytes(
 				scope.Contract.Code[start:end],
 				pushByteSize,
-			)),
-		)
+			))
 
 		if !scope.Contract.IsDeployment && !scope.Contract.IsSystemCall {
 			contractAddr := scope.Contract.Address()
-			consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(contractAddr, uint64(start), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas)
-			scope.Contract.UseGas(consumed, evm.Config.Tracer, tracing.GasChangeUnspecified)
+			consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(contractAddr, uint64(start), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas.RegularGas)
+			scope.Contract.UseGas(GasCosts{RegularGas: consumed}, evm.Config.Tracer, tracing.GasChangeUnspecified)
 			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
@@ -578,4 +573,20 @@ func enable7702(jt *JumpTable) {
 	jt[CALLCODE].dynamicGas = gasCallCodeEIP7702
 	jt[STATICCALL].dynamicGas = gasStaticCallEIP7702
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7702
+}
+
+// opSlotNum enables the SLOTNUM opcode
+func opSlotNum(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.get().SetUint64(evm.Context.SlotNum)
+	return nil, nil
+}
+
+// enable7843 enables the SLOTNUM opcode as specified in EIP-7843.
+func enable7843(jt *JumpTable) {
+	jt[SLOTNUM] = &operation{
+		execute:     opSlotNum,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
 }

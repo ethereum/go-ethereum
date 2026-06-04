@@ -92,7 +92,7 @@ func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 	// The journal is not matched with persistent state, discard them.
 	// It can happen that geth crashes without persisting the journal.
 	if !bytes.Equal(root.Bytes(), diskRoot.Bytes()) {
-		return nil, fmt.Errorf("%w want %x got %x", errUnmatchedJournal, root, diskRoot)
+		return nil, fmt.Errorf("%w want %x got %x", errUnmatchedJournal, diskRoot, root)
 	}
 	// Load the disk layer from the journal
 	base, err := db.loadDiskLayer(r)
@@ -161,7 +161,19 @@ func loadGenerator(db ethdb.KeyValueReader, hash nodeHasher) (*journalGenerator,
 // loadLayers loads a pre-existing state layer backed by a key-value store.
 func (db *Database) loadLayers() layer {
 	// Retrieve the root node of persistent state.
-	root, err := db.hasher(rawdb.ReadAccountTrieNode(db.diskdb, nil))
+	var (
+		root common.Hash
+		err  error
+	)
+	if db.isUBT {
+		root = rawdb.ReadSnapshotRoot(db.diskdb)
+		if root == (common.Hash{}) {
+			root = types.EmptyBinaryHash
+		}
+	} else {
+		blob := rawdb.ReadAccountTrieNode(db.diskdb, nil)
+		root, err = db.hasher(blob)
+	}
 	if err != nil {
 		log.Crit("Failed to compute node hash", "err", err)
 	}
@@ -338,10 +350,8 @@ func (db *Database) Journal(root common.Hash) error {
 	// but the ancient store is not properly closed, resulting in recent writes
 	// being lost. After a restart, the ancient store would then be misaligned
 	// with the disk layer, causing data corruption.
-	if db.stateFreezer != nil {
-		if err := db.stateFreezer.SyncAncient(); err != nil {
-			return err
-		}
+	if err := syncHistory(db.stateFreezer, db.trienodeFreezer); err != nil {
+		return err
 	}
 	// Store the journal into the database and return
 	var (

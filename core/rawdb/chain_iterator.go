@@ -87,6 +87,7 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 type blockTxHashes struct {
 	number uint64
 	hashes []common.Hash
+	err    error
 }
 
 // iterateTransactions iterates over all transactions in the (canon) block
@@ -144,17 +145,22 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 		}()
 		for data := range rlpCh {
 			var body types.Body
+			var result *blockTxHashes
 			if err := rlp.DecodeBytes(data.rlp, &body); err != nil {
 				log.Warn("Failed to decode block body", "block", data.number, "error", err)
-				return
-			}
-			var hashes []common.Hash
-			for _, tx := range body.Transactions {
-				hashes = append(hashes, tx.Hash())
-			}
-			result := &blockTxHashes{
-				hashes: hashes,
-				number: data.number,
+				result = &blockTxHashes{
+					number: data.number,
+					err:    err,
+				}
+			} else {
+				hashes := make([]common.Hash, len(body.Transactions))
+				for i, tx := range body.Transactions {
+					hashes[i] = tx.Hash()
+				}
+				result = &blockTxHashes{
+					hashes: hashes,
+					number: data.number,
+				}
 			}
 			// Feed the block to the aggregator, or abort on interrupt
 			select {
@@ -214,6 +220,10 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 			// Next block available, pop it off and index it
 			delivery := queue.PopItem()
 			lastNum = delivery.number
+			if delivery.err != nil {
+				log.Warn("Skipping tx indexing for block with missing/corrupt body", "block", delivery.number, "error", delivery.err)
+				continue
+			}
 			WriteTxLookupEntries(batch, delivery.number, delivery.hashes)
 			blocks++
 			txs += len(delivery.hashes)
@@ -307,6 +317,10 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 			}
 			delivery := queue.PopItem()
 			nextNum = delivery.number + 1
+			if delivery.err != nil {
+				log.Warn("Skipping tx unindexing for block with missing/corrupt body", "block", delivery.number, "error", delivery.err)
+				continue
+			}
 			DeleteTxLookupEntries(batch, delivery.hashes)
 			txs += len(delivery.hashes)
 			blocks++
@@ -343,9 +357,9 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 	}
 	select {
 	case <-interrupt:
-		logger("Transaction unindexing interrupted", "blocks", blocks, "txs", txs, "tail", to, "elapsed", common.PrettyDuration(time.Since(start)))
+		logger("Transaction unindexing interrupted", "blocks", blocks, "txs", txs, "tail", nextNum, "elapsed", common.PrettyDuration(time.Since(start)))
 	default:
-		logger("Unindexed transactions", "blocks", blocks, "txs", txs, "tail", to, "elapsed", common.PrettyDuration(time.Since(start)))
+		logger("Unindexed transactions", "blocks", blocks, "txs", txs, "tail", nextNum, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
 }
 

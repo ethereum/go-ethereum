@@ -104,6 +104,10 @@ var (
 	// snapSyncStatusFlagKey flags that status of snap sync.
 	snapSyncStatusFlagKey = []byte("SnapSyncStatus")
 
+	// generateTriePartitionDonePrefix stores the subtree root hash of each
+	// triedb.GenerateTrie partition once it finishes.
+	generateTriePartitionDonePrefix = []byte("gtd") // generateTriePartitionDonePrefix + partition byte -> subtree root hash
+
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
 	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
 	headerTDSuffix     = []byte("t") // headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td (deprecated)
@@ -112,6 +116,7 @@ var (
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
+	accessListPrefix    = []byte("j") // accessListPrefix + num (uint64 big endian) + hash -> block access list
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
 	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
@@ -212,6 +217,11 @@ func blockBodyKey(number uint64, hash common.Hash) []byte {
 // blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
 func blockReceiptsKey(number uint64, hash common.Hash) []byte {
 	return append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+}
+
+// accessListKey = accessListPrefix + num (uint64 big endian) + hash
+func accessListKey(number uint64, hash common.Hash) []byte {
+	return append(append(accessListPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
 // txLookupKey = txLookupPrefix + hash
@@ -458,4 +468,9 @@ func trienodeHistoryIndexBlockKey(addressHash common.Hash, path []byte, blockID 
 // transitionStateKey = transitionStatusKey + hash
 func transitionStateKey(hash common.Hash) []byte {
 	return append(VerkleTransitionStatePrefix, hash.Bytes()...)
+}
+
+// generateTriePartitionDoneKey = generateTriePartitionDonePrefix + partition (single byte).
+func generateTriePartitionDoneKey(partition byte) []byte {
+	return append(generateTriePartitionDonePrefix, partition)
 }

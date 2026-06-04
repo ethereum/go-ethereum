@@ -127,14 +127,16 @@ func (tc *conn) nextReqID() []byte {
 // The request is retried if a handshake is requested.
 func (tc *conn) reqresp(c net.PacketConn, req v5wire.Packet) v5wire.Packet {
 	reqnonce := tc.write(c, req, nil)
-	switch resp := tc.read(c).(type) {
+	resp, from := tc.readFrom(c)
+	switch resp := resp.(type) {
 	case *v5wire.Whoareyou:
 		if resp.Nonce != reqnonce {
 			return readErrorf("wrong nonce %x in WHOAREYOU (want %x)", resp.Nonce[:], reqnonce[:])
 		}
 		resp.Node = tc.remote
-		tc.write(c, req, resp)
-		return tc.read(c)
+		tc.writeTo(c, req, resp, from)
+		resp2, _ := tc.readFrom(c)
+		return resp2
 	default:
 		return resp
 	}
@@ -150,21 +152,24 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 		results  []*enode.Node
 	)
 	for n := 1; n > 0; {
-		switch resp := tc.read(c).(type) {
+		resp, from := tc.readFrom(c)
+		switch resp := resp.(type) {
 		case *v5wire.Whoareyou:
 			// Handle handshake.
 			if resp.Nonce == reqnonce {
 				resp.Node = tc.remote
-				tc.write(c, findnode, resp)
+				tc.writeTo(c, findnode, resp, from)
 			} else {
 				return nil, fmt.Errorf("unexpected WHOAREYOU (nonce %x), waiting for NODES", resp.Nonce[:])
 			}
 		case *v5wire.Ping:
 			// Handle ping from remote.
-			tc.write(c, &v5wire.Pong{
+			tc.writeTo(c, &v5wire.Pong{
 				ReqID:  resp.ReqID,
 				ENRSeq: tc.localNode.Seq(),
-			}, nil)
+				ToIP:   from.IP,
+				ToPort: uint16(from.Port),
+			}, nil, from)
 		case *v5wire.Nodes:
 			// Got NODES! Check request ID.
 			if !bytes.Equal(resp.ReqID, findnode.ReqID) {
@@ -200,11 +205,16 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 
 // write sends a packet on the given connection.
 func (tc *conn) write(c net.PacketConn, p v5wire.Packet, challenge *v5wire.Whoareyou) v5wire.Nonce {
+	return tc.writeTo(c, p, challenge, tc.remoteAddr)
+}
+
+// writeTo sends a packet on the given connection to the given UDP address.
+func (tc *conn) writeTo(c net.PacketConn, p v5wire.Packet, challenge *v5wire.Whoareyou, to *net.UDPAddr) v5wire.Nonce {
 	packet, nonce, err := tc.codec.Encode(tc.remote.ID(), tc.remoteAddr.String(), p, challenge)
 	if err != nil {
 		panic(fmt.Errorf("can't encode %v packet: %v", p.Name(), err))
 	}
-	if _, err := c.WriteTo(packet, tc.remoteAddr); err != nil {
+	if _, err := c.WriteTo(packet, to); err != nil {
 		tc.logf("Can't send %s: %v", p.Name(), err)
 	} else {
 		tc.logf(">> %s", p.Name())
@@ -214,20 +224,30 @@ func (tc *conn) write(c net.PacketConn, p v5wire.Packet, challenge *v5wire.Whoar
 
 // read waits for an incoming packet on the given connection.
 func (tc *conn) read(c net.PacketConn) v5wire.Packet {
+	p, _ := tc.readFrom(c)
+	return p
+}
+
+// readFrom waits for an incoming packet and returns its source address.
+func (tc *conn) readFrom(c net.PacketConn) (v5wire.Packet, *net.UDPAddr) {
 	buf := make([]byte, 1280)
 	if err := c.SetReadDeadline(time.Now().Add(waitTime)); err != nil {
-		return &readError{err}
+		return &readError{err}, nil
 	}
-	n, fromAddr, err := c.ReadFrom(buf)
+	n, from, err := c.ReadFrom(buf)
 	if err != nil {
-		return &readError{err}
+		return &readError{err}, nil
 	}
-	_, _, p, err := tc.codec.Decode(buf[:n], fromAddr.String())
+	udpFrom, _ := from.(*net.UDPAddr)
+	// Use tc.remoteAddr for codec/session lookup because the fixture keys sessions
+	// by the advertised endpoint, but return the actual UDP source so responses can
+	// comply with the spec and go back to the request envelope address.
+	_, _, p, err := tc.codec.Decode(buf[:n], tc.remoteAddr.String())
 	if err != nil {
-		return &readError{err}
+		return &readError{err}, udpFrom
 	}
 	tc.logf("<< %s", p.Name())
-	return p
+	return p, udpFrom
 }
 
 // logf prints to the test log.

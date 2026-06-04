@@ -18,24 +18,36 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
+	"os/signal"
+	"path/filepath"
+	"runtime"
 	"slices"
+	"sort"
+	"syscall"
 	"time"
 
+	pebbleimpl "github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/urfave/cli/v2"
 )
 
@@ -79,6 +91,33 @@ In other words, this command does the snapshot to trie conversion.
 `,
 			},
 			{
+				Name:      "generate-trie",
+				Usage:     "Benchmark triedb.GenerateTrie against a hard-linked checkpoint of the chaindata",
+				ArgsUsage: "[<root>]",
+				Action:    benchGenerateTrie,
+				Flags: slices.Concat(utils.NetworkFlags, utils.DatabaseFlags, []cli.Flag{
+					&cli.StringFlag{
+						Name:  "checkpoint",
+						Usage: "Directory for the pebble checkpoint (default: <chaindata-parent>/.gentrie-bench-<ts>)",
+					},
+					&cli.BoolFlag{
+						Name:  "keep",
+						Usage: "Keep the checkpoint directory after the run (debugging)",
+					},
+					&cli.BoolFlag{
+						Name:  "pprof",
+						Usage: "Serve pprof profiles on localhost:6060 (block + mutex profiles enabled)",
+					},
+				}),
+				Description: `
+geth snapshot generate-trie [<root>]
+
+Runs triedb.GenerateTrie against a hard-linked pebble checkpoint of the
+chaindata. Checkpoint is removed on exit unless --keep is set. Defaults 
+to the snapshot root if <root> is not given.
+`,
+			},
+			{
 				Name:      "check-dangling-storage",
 				Usage:     "Check that there is no 'dangling' snap storage",
 				ArgsUsage: "<root>",
@@ -105,7 +144,9 @@ information about the specified address.
 				Usage:     "Traverse the state with given root hash and perform quick verification",
 				ArgsUsage: "<root>",
 				Action:    traverseState,
-				Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
+				Flags: slices.Concat([]cli.Flag{
+					utils.AccountFlag,
+				}, utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
 geth snapshot traverse-state <state-root>
 will traverse the whole state from the given state root and will abort if any
@@ -113,6 +154,8 @@ referenced trie node or contract code is missing. This command can be used for
 state integrity verification. The default checking target is the HEAD state.
 
 It's also usable without snapshot enabled.
+
+If --account is specified, only the storage trie of that account is traversed.
 `,
 			},
 			{
@@ -120,7 +163,9 @@ It's also usable without snapshot enabled.
 				Usage:     "Traverse the state with given root hash and perform detailed verification",
 				ArgsUsage: "<root>",
 				Action:    traverseRawState,
-				Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
+				Flags: slices.Concat([]cli.Flag{
+					utils.AccountFlag,
+				}, utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
 geth snapshot traverse-rawstate <state-root>
 will traverse the whole state from the given root and will abort if any referenced
@@ -129,6 +174,8 @@ verification. The default checking target is the HEAD state. It's basically iden
 to traverse-state, but the check granularity is smaller.
 
 It's also usable without snapshot enabled.
+
+If --account is specified, only the storage trie of that account is traversed.
 `,
 			},
 			{
@@ -159,6 +206,22 @@ block is used.
 				Description: `
 The export-preimages command exports hash preimages to a flat file, in exactly
 the expected order for the overlay tree migration.
+`,
+			},
+			{
+				Name:    "list-eip-7610-accounts",
+				Aliases: []string{"eip7610"},
+				Usage:   "list EIP7610 eligible accounts",
+				Action:  listEIP7610EligibleAccounts,
+				Flags:   slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
+				Description: `
+geth snapshot list-eip-7610-accounts
+traverses the post–EIP-161 state and returns all accounts that are eligible
+under EIP-7610: accounts with zero nonce, empty runtime code, and non-empty
+storage. The traversal will be aborted immediately if the state is prior to
+EIP-161.
+
+The exported accounts are identified by their address.
 `,
 			},
 		},
@@ -261,6 +324,157 @@ func verifyState(ctx *cli.Context) error {
 	}
 }
 
+// benchGenerateTrie runs triedb.GenerateTrie against a hard-linked checkpoint
+// of the chaindata so the source datadir is never written to.
+func benchGenerateTrie(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	if ctx.Bool("pprof") {
+		runtime.SetBlockProfileRate(1)
+		runtime.SetMutexProfileFraction(1)
+		go func() {
+			log.Info("pprof listening", "addr", ":6060")
+			if err := http.ListenAndServe(":6060", nil); err != nil {
+				log.Warn("pprof server stopped", "err", err)
+			}
+		}()
+	}
+
+	// Resolve source chaindata path (handles network-specific subdirs).
+	srcDir := stack.ResolvePath("chaindata")
+	if fi, err := os.Stat(srcDir); err != nil {
+		return fmt.Errorf("chaindata not found at %s: %w", srcDir, err)
+	} else if !fi.IsDir() {
+		return fmt.Errorf("%s is not a directory", srcDir)
+	}
+
+	// Default to snapshot root, not head: that's what GenerateTrie actually
+	// reconstructs from flat state. On a fully-synced node they match.
+	var root common.Hash
+	if ctx.NArg() == 1 {
+		r, err := parseRoot(ctx.Args().First())
+		if err != nil {
+			return fmt.Errorf("parse root: %w", err)
+		}
+		root = r
+	} else {
+		chaindb := utils.MakeChainDatabase(ctx, stack, true)
+		snapRoot := rawdb.ReadSnapshotRoot(chaindb)
+		head := rawdb.ReadHeadBlock(chaindb)
+		chaindb.Close()
+		switch {
+		case snapRoot != (common.Hash{}):
+			root = snapRoot
+			log.Info("using snapshot root", "root", root)
+		case head != nil:
+			root = head.Root()
+			log.Info("using head block root", "number", head.Number(), "root", root)
+		default:
+			return errors.New("no snapshot or head block found; pass <root> explicitly")
+		}
+	}
+
+	// Default checkpoint sits next to chaindata so hard links work.
+	ckpt := ctx.String("checkpoint")
+	if ckpt == "" {
+		ts := time.Now().Format("20060102-150405")
+		ckpt = filepath.Join(filepath.Dir(srcDir), fmt.Sprintf(".gentrie-bench-%s", ts))
+	}
+	if _, err := os.Stat(ckpt); err == nil {
+		return fmt.Errorf("checkpoint dir %s already exists; remove it or pass --checkpoint to a fresh path", ckpt)
+	}
+
+	log.Info("creating pebble checkpoint", "src", srcDir, "dst", ckpt)
+	checkpointStart := time.Now()
+	if err := makeCheckpoint(srcDir, ckpt); err != nil {
+		return fmt.Errorf("checkpoint failed: %w", err)
+	}
+	log.Info("checkpoint created", "elapsed", time.Since(checkpointStart))
+
+	// Clean up the checkpoint on exit, including Ctrl-C.
+	keep := ctx.Bool("keep")
+	cleanup := func() {
+		if keep {
+			log.Info("keeping checkpoint", "path", ckpt)
+			return
+		}
+		log.Info("removing checkpoint", "path", ckpt)
+		if err := os.RemoveAll(ckpt); err != nil {
+			log.Error("failed to remove checkpoint", "err", err)
+		}
+	}
+	defer cleanup()
+
+	cancelCh := make(chan struct{})
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+	go func() {
+		<-sigCh
+		log.Warn("interrupt received; cancelling GenerateTrie")
+		close(cancelCh)
+	}()
+
+	// Open the checkpoint writable. Reuse source ancient. Checkpoint only
+	// hard-links the pebble SSTs (not the freezer), and GenerateTrie never
+	// writes to ancient, so sharing it is safe.
+	srcAncient := stack.ResolveAncient("chaindata", "")
+	kv, err := pebble.New(ckpt, 4096, 1024, "gentrie-bench", false)
+	if err != nil {
+		return fmt.Errorf("open checkpoint: %w", err)
+	}
+	chaindb, err := rawdb.Open(kv, rawdb.OpenOptions{
+		Ancient:          srcAncient,
+		MetricsNamespace: "gentrie-bench",
+	})
+	if err != nil {
+		kv.Close()
+		return fmt.Errorf("rawdb.Open checkpoint: %w", err)
+	}
+	defer chaindb.Close()
+
+	// Pick up the trie scheme already in use (path or hash).
+	triedbInst := utils.MakeTrieDatabase(ctx, stack, chaindb, false, true, false)
+	scheme := triedbInst.Scheme()
+	triedbInst.Close()
+
+	log.Info("running GenerateTrie", "scheme", scheme, "root", root)
+	runStart := time.Now()
+	stats, err := triedb.GenerateTrie(chaindb, scheme, root, cancelCh)
+	elapsed := time.Since(runStart)
+
+	status := "root matched"
+	if err != nil {
+		status = fmt.Sprintf("failed (%s)", err)
+		log.Error("GenerateTrie failed", "elapsed", elapsed, "err", err)
+	}
+
+	fmt.Printf("\n=== generate-trie benchmark ===\n")
+	fmt.Printf("scheme:    %s\n", scheme)
+	fmt.Printf("root:      %s\n", root.Hex())
+	fmt.Printf("status:    %s\n", status)
+	fmt.Printf("accounts:  %d (%d updated)\n", stats.Scanned, stats.Updated)
+	fmt.Printf("wall time: %s\n", elapsed)
+	return err
+}
+
+// makeCheckpoint opens srcDir as a pebble database and writes a hard-linked
+// checkpoint to dstDir. Source is closed on return.
+//
+// Opens read-write so pebble can finalize its startup (WAL replay, fresh
+// OPTIONS file) before checkpointing. Read-only mode skips that step, and
+// Checkpoint then fails trying to hard-link the missing OPTIONS file. The
+// read-write open does no more than a normal geth startup would.
+func makeCheckpoint(srcDir, dstDir string) error {
+	db, err := pebbleimpl.Open(srcDir, &pebbleimpl.Options{})
+	if err != nil {
+		return fmt.Errorf("open source pebble: %w", err)
+	}
+	defer db.Close()
+	return db.Checkpoint(dstDir)
+}
+
 // checkDanglingStorage iterates the snap storage data, and verifies that all
 // storage also has corresponding account data.
 func checkDanglingStorage(ctx *cli.Context) error {
@@ -270,6 +484,120 @@ func checkDanglingStorage(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 	return snapshot.CheckDanglingStorage(db)
+}
+
+// parseAccount parses the account flag value as either an address (20 bytes)
+// or an account hash (32 bytes) and returns the hashed account key.
+func parseAccount(input string) (common.Hash, error) {
+	switch len(input) {
+	case 40, 42: // address
+		return crypto.Keccak256Hash(common.HexToAddress(input).Bytes()), nil
+	case 64, 66: // hash
+		return common.HexToHash(input), nil
+	default:
+		return common.Hash{}, errors.New("malformed account address or hash")
+	}
+}
+
+// lookupAccount resolves the account from the state trie using the given
+// account hash.
+func lookupAccount(accountHash common.Hash, tr *trie.Trie) (*types.StateAccount, error) {
+	accData, err := tr.Get(accountHash.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get account %s: %w", accountHash, err)
+	}
+	if accData == nil {
+		return nil, fmt.Errorf("account not found: %s", accountHash)
+	}
+	var acc types.StateAccount
+	if err := rlp.DecodeBytes(accData, &acc); err != nil {
+		return nil, fmt.Errorf("invalid account data %s: %w", accountHash, err)
+	}
+	return &acc, nil
+}
+
+func traverseStorage(id *trie.ID, db *triedb.Database, report bool, detail bool) error {
+	tr, err := trie.NewStateTrie(id, db)
+	if err != nil {
+		log.Error("Failed to open storage trie", "account", id.Owner, "root", id.Root, "err", err)
+		return err
+	}
+	var (
+		slots      int
+		nodes      int
+		lastReport time.Time
+		start      = time.Now()
+	)
+	it, err := tr.NodeIterator(nil)
+	if err != nil {
+		log.Error("Failed to open storage iterator", "account", id.Owner, "root", id.Root, "err", err)
+		return err
+	}
+	logger := log.Debug
+	if report {
+		logger = log.Info
+	}
+	logger("Start traversing storage trie", "account", id.Owner, "storageRoot", id.Root)
+
+	if !detail {
+		iter := trie.NewIterator(it)
+		for iter.Next() {
+			slots += 1
+			if time.Since(lastReport) > time.Second*8 {
+				logger("Traversing storage", "account", id.Owner, "slots", slots, "elapsed", common.PrettyDuration(time.Since(start)))
+				lastReport = time.Now()
+			}
+		}
+		if iter.Err != nil {
+			log.Error("Failed to traverse storage trie", "root", id.Root, "err", iter.Err)
+			return iter.Err
+		}
+		logger("Storage is complete", "account", id.Owner, "slots", slots, "elapsed", common.PrettyDuration(time.Since(start)))
+	} else {
+		reader, err := db.NodeReader(id.StateRoot)
+		if err != nil {
+			log.Error("Failed to open state reader", "err", err)
+			return err
+		}
+		var (
+			buffer = make([]byte, 32)
+			hasher = crypto.NewKeccakState()
+		)
+		for it.Next(true) {
+			nodes += 1
+			node := it.Hash()
+
+			// Check the presence for non-empty hash node(embedded node doesn't
+			// have their own hash).
+			if node != (common.Hash{}) {
+				blob, _ := reader.Node(id.Owner, it.Path(), node)
+				if len(blob) == 0 {
+					log.Error("Missing trie node(storage)", "hash", node)
+					return errors.New("missing storage")
+				}
+				hasher.Reset()
+				hasher.Write(blob)
+				hasher.Read(buffer)
+				if !bytes.Equal(buffer, node.Bytes()) {
+					log.Error("Invalid trie node(storage)", "hash", node.Hex(), "value", blob)
+					return errors.New("invalid storage node")
+				}
+			}
+			if it.Leaf() {
+				slots += 1
+			}
+			if time.Since(lastReport) > time.Second*8 {
+				logger("Traversing storage", "account", id.Owner, "nodes", nodes, "slots", slots, "elapsed", common.PrettyDuration(time.Since(start)))
+				lastReport = time.Now()
+			}
+		}
+		if err := it.Error(); err != nil {
+			log.Error("Failed to traverse storage trie", "root", id.Root, "err", err)
+			return err
+		}
+		logger("Storage is complete", "account", id.Owner, "nodes", nodes, "slots", slots, "elapsed", common.PrettyDuration(time.Since(start)))
+	}
+	return nil
 }
 
 // traverseState is a helper function used for pruning verification.
@@ -309,6 +637,30 @@ func traverseState(ctx *cli.Context) error {
 		root = headBlock.Root()
 		log.Info("Start traversing the state", "root", root, "number", headBlock.NumberU64())
 	}
+	// If --account is specified, only traverse the storage trie of that account.
+	if accountStr := ctx.String(utils.AccountFlag.Name); accountStr != "" {
+		accountHash, err := parseAccount(accountStr)
+		if err != nil {
+			log.Error("Failed to parse account", "err", err)
+			return err
+		}
+		// Use raw trie since the account key is already hashed.
+		t, err := trie.New(trie.StateTrieID(root), triedb)
+		if err != nil {
+			log.Error("Failed to open state trie", "root", root, "err", err)
+			return err
+		}
+		acc, err := lookupAccount(accountHash, t)
+		if err != nil {
+			log.Error("Failed to look up account", "hash", accountHash, "err", err)
+			return err
+		}
+		if acc.Root == types.EmptyRootHash {
+			log.Info("Account has no storage", "hash", accountHash)
+			return nil
+		}
+		return traverseStorage(trie.StorageTrieID(root, accountHash, acc.Root), triedb, true, false)
+	}
 	t, err := trie.NewStateTrie(trie.StateTrieID(root), triedb)
 	if err != nil {
 		log.Error("Failed to open trie", "root", root, "err", err)
@@ -335,29 +687,9 @@ func traverseState(ctx *cli.Context) error {
 			return err
 		}
 		if acc.Root != types.EmptyRootHash {
-			id := trie.StorageTrieID(root, common.BytesToHash(accIter.Key), acc.Root)
-			storageTrie, err := trie.NewStateTrie(id, triedb)
+			err := traverseStorage(trie.StorageTrieID(root, common.BytesToHash(accIter.Key), acc.Root), triedb, false, false)
 			if err != nil {
-				log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
 				return err
-			}
-			storageIt, err := storageTrie.NodeIterator(nil)
-			if err != nil {
-				log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
-				return err
-			}
-			storageIter := trie.NewIterator(storageIt)
-			for storageIter.Next() {
-				slots += 1
-
-				if time.Since(lastReport) > time.Second*8 {
-					log.Info("Traversing state", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
-					lastReport = time.Now()
-				}
-			}
-			if storageIter.Err != nil {
-				log.Error("Failed to traverse storage trie", "root", acc.Root, "err", storageIter.Err)
-				return storageIter.Err
 			}
 		}
 		if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
@@ -418,6 +750,30 @@ func traverseRawState(ctx *cli.Context) error {
 		root = headBlock.Root()
 		log.Info("Start traversing the state", "root", root, "number", headBlock.NumberU64())
 	}
+	// If --account is specified, only traverse the storage trie of that account.
+	if accountStr := ctx.String(utils.AccountFlag.Name); accountStr != "" {
+		accountHash, err := parseAccount(accountStr)
+		if err != nil {
+			log.Error("Failed to parse account", "err", err)
+			return err
+		}
+		// Use raw trie since the account key is already hashed.
+		t, err := trie.New(trie.StateTrieID(root), triedb)
+		if err != nil {
+			log.Error("Failed to open state trie", "root", root, "err", err)
+			return err
+		}
+		acc, err := lookupAccount(accountHash, t)
+		if err != nil {
+			log.Error("Failed to look up account", "hash", accountHash, "err", err)
+			return err
+		}
+		if acc.Root == types.EmptyRootHash {
+			log.Info("Account has no storage", "hash", accountHash)
+			return nil
+		}
+		return traverseStorage(trie.StorageTrieID(root, accountHash, acc.Root), triedb, true, true)
+	}
 	t, err := trie.NewStateTrie(trie.StateTrieID(root), triedb)
 	if err != nil {
 		log.Error("Failed to open trie", "root", root, "err", err)
@@ -473,49 +829,9 @@ func traverseRawState(ctx *cli.Context) error {
 				return errors.New("invalid account")
 			}
 			if acc.Root != types.EmptyRootHash {
-				id := trie.StorageTrieID(root, common.BytesToHash(accIter.LeafKey()), acc.Root)
-				storageTrie, err := trie.NewStateTrie(id, triedb)
+				err := traverseStorage(trie.StorageTrieID(root, common.BytesToHash(accIter.LeafKey()), acc.Root), triedb, false, true)
 				if err != nil {
-					log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
-					return errors.New("missing storage trie")
-				}
-				storageIter, err := storageTrie.NodeIterator(nil)
-				if err != nil {
-					log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
 					return err
-				}
-				for storageIter.Next(true) {
-					nodes += 1
-					node := storageIter.Hash()
-
-					// Check the presence for non-empty hash node(embedded node doesn't
-					// have their own hash).
-					if node != (common.Hash{}) {
-						blob, _ := reader.Node(common.BytesToHash(accIter.LeafKey()), storageIter.Path(), node)
-						if len(blob) == 0 {
-							log.Error("Missing trie node(storage)", "hash", node)
-							return errors.New("missing storage")
-						}
-						hasher.Reset()
-						hasher.Write(blob)
-						hasher.Read(got)
-						if !bytes.Equal(got, node.Bytes()) {
-							log.Error("Invalid trie node(storage)", "hash", node.Hex(), "value", blob)
-							return errors.New("invalid storage node")
-						}
-					}
-					// Bump the counter if it's leaf node.
-					if storageIter.Leaf() {
-						slots += 1
-					}
-					if time.Since(lastReport) > time.Second*8 {
-						log.Info("Traversing state", "nodes", nodes, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
-						lastReport = time.Now()
-					}
-				}
-				if storageIter.Error() != nil {
-					log.Error("Failed to traverse storage trie", "root", acc.Root, "err", storageIter.Error())
-					return storageIter.Error()
 				}
 			}
 			if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
@@ -688,5 +1004,94 @@ func checkAccount(ctx *cli.Context) error {
 		return err
 	}
 	log.Info("Checked the snapshot journalled storage", "time", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+// listEIP7610EligibleAccounts traverses the post–EIP-161 state and returns all
+// accounts that are eligible under EIP-7610: accounts with zero nonce, empty
+// runtime code, and non-empty storage.
+//
+// Such accounts could only have been created before EIP-161, since after that
+// all newly created contracts are initialized with a nonce of one.
+//
+// This helper should be generally applicable to all networks, including the
+// Ethereum mainnet. For most networks where EIP-161 was enabled from genesis,
+// the resulting set is expected to be empty. Otherwise, network operators are
+// responsible for generating the eligible account set themselves.
+//
+// Notably, the exported accounts are identified by their address.
+func listEIP7610EligibleAccounts(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	defer chaindb.Close()
+
+	headBlock := rawdb.ReadHeadBlock(chaindb)
+	if headBlock == nil {
+		log.Error("Failed to load head block")
+		return nil
+	}
+	config, _, err := core.LoadChainConfig(chaindb, utils.MakeGenesis(ctx))
+	if err != nil {
+		log.Error("Failed to load chain config", "err", err)
+		return err
+	}
+	if !config.IsEIP158(headBlock.Number()) {
+		log.Info("Local head is prior to EIP-161", "head", headBlock.Number(), "eip-161", *config.EIP158Block)
+		return nil
+	}
+	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, false, true, false)
+	defer triedb.Close()
+
+	if triedb.Scheme() != rawdb.PathScheme {
+		log.Error("Hash scheme is not supported")
+		return nil
+	}
+	iter, err := triedb.AccountIterator(headBlock.Root(), common.Hash{})
+	if err != nil {
+		log.Error("Failed to get account iterator", "err", err)
+		return err
+	}
+	var (
+		start    = time.Now()
+		accounts []common.Address
+	)
+	for iter.Next() {
+		blob := iter.Account()
+		if blob == nil {
+			log.Error("Failed to get account blob")
+			return nil
+		}
+		var account types.SlimAccount
+		if err := rlp.DecodeBytes(blob, &account); err != nil {
+			log.Error("Failed to decode", "err", err)
+			return err
+		}
+		// EIP-7610 account eligibility:
+		// - account.nonce == 0
+		// - account.runtime_code == empty
+		// - account.storage != empty
+		if len(account.CodeHash) == 0 && account.Nonce == 0 && len(account.Root) != 0 {
+			preimage := rawdb.ReadPreimage(chaindb, iter.Hash())
+			if preimage == nil {
+				log.Error("Failed to read preimage", "hash", iter.Hash().Hex())
+				return nil
+			}
+			accounts = append(accounts, common.BytesToAddress(preimage))
+		}
+	}
+	if len(accounts) == 0 {
+		log.Info("Traversed state", "eligible", len(accounts), "elapsed", common.PrettyDuration(time.Since(start)))
+	} else {
+		sort.Slice(accounts, func(i, j int) bool {
+			return accounts[i].Cmp(accounts[j]) < 0
+		})
+		buf := make([]byte, len(accounts)*common.AddressLength)
+		for i, h := range accounts {
+			copy(buf[i*common.AddressLength:], h[:])
+		}
+		log.Info("Traversed state", "eligible", len(accounts), "elapsed", common.PrettyDuration(time.Since(start)), "output", hex.EncodeToString(buf))
+	}
 	return nil
 }

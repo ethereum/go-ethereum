@@ -97,9 +97,15 @@ var (
 	addUnderpricedMeter  = metrics.NewRegisteredMeter("blobpool/add/underpriced", nil)  // Gas tip too low, neutral
 	addStaleMeter        = metrics.NewRegisteredMeter("blobpool/add/stale", nil)        // Nonce already filled, reject, bad-ish
 	addGappedMeter       = metrics.NewRegisteredMeter("blobpool/add/gapped", nil)       // Nonce gapped, reject, bad-ish
+	addGappedFullMeter   = metrics.NewRegisteredMeter("blobpool/add/gappedfull", nil)   // Gapped queue full, reject, neutral
 	addOverdraftedMeter  = metrics.NewRegisteredMeter("blobpool/add/overdrafted", nil)  // Balance exceeded, reject, neutral
 	addOvercappedMeter   = metrics.NewRegisteredMeter("blobpool/add/overcapped", nil)   // Per-account cap exceeded, reject, neutral
 	addNoreplaceMeter    = metrics.NewRegisteredMeter("blobpool/add/noreplace", nil)    // Replacement fees or tips too low, neutral
 	addNonExclusiveMeter = metrics.NewRegisteredMeter("blobpool/add/nonexclusive", nil) // Plain transaction from same account exists, reject, neutral
 	addValidMeter        = metrics.NewRegisteredMeter("blobpool/add/valid", nil)        // Valid transaction, add, neutral
+
+	// Gapped queue metrics for observability
+	gappedGauge         = metrics.NewRegisteredGauge("blobpool/gapped/count", nil)    // Current gapped queue size
+	gappedPromotedMeter = metrics.NewRegisteredMeter("blobpool/gapped/promoted", nil) // Gapped txs successfully promoted to pool
+	gappedEvictedMeter  = metrics.NewRegisteredMeter("blobpool/gapped/evicted", nil)  // Gapped txs evicted due to timeout/stale
 )

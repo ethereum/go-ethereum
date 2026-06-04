@@ -200,3 +200,28 @@ func Benchmark_modernSigner_Equal(b *testing.B) {
 		}
 	}
 }
+
+func TestSignatureValuesError(t *testing.T) {
+	// 1. Setup a valid transaction
+	tx := NewTransaction(0, common.Address{}, big.NewInt(0), 0, big.NewInt(0), nil)
+	signer := HomesteadSigner{}
+
+	// 2. Call WithSignature with invalid length sig (not 65 bytes)
+	invalidSig := make([]byte, 64)
+
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("Panicked for invalid signature length, expected error: %v", r)
+			}
+		}()
+		_, err := tx.WithSignature(signer, invalidSig)
+		if err == nil {
+			t.Fatal("Expected error for invalid signature length, got nil")
+		} else {
+			// This is just a sanity check to ensure we got an error,
+			// the exact error message is verified in unit tests elsewhere if needed.
+			t.Logf("Got expected error: %v", err)
+		}
+	}()
+}

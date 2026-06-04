@@ -128,10 +128,11 @@ func (p *testTxPool) Add(txs []*types.Transaction, sync bool) []error {
 }
 
 // Pending returns all the transactions known to the pool
-func (p *testTxPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
+func (p *testTxPool) Pending(filter txpool.PendingFilter) (map[common.Address][]*txpool.LazyTransaction, int) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
+	var count int
 	batches := make(map[common.Address][]*types.Transaction)
 	for _, tx := range p.pool {
 		from, _ := types.Sender(types.HomesteadSigner{}, tx)
@@ -152,9 +153,10 @@ func (p *testTxPool) Pending(filter txpool.PendingFilter) map[common.Address][]*
 				Gas:       tx.Gas(),
 				BlobGas:   tx.BlobGas(),
 			})
+			count++
 		}
 	}
-	return pending
+	return pending, count
 }
 
 // SubscribeTransactions should return an event subscription of NewTxsEvent and
@@ -315,7 +317,7 @@ func createTestPeers(rand *rand.Rand, n int) []*ethPeer {
 		var id enode.ID
 		rand.Read(id[:])
 		p2pPeer := p2p.NewPeer(id, "test", nil)
-		ep := eth.NewPeer(eth.ETH69, p2pPeer, nil, nil)
+		ep := eth.NewPeer(eth.ETH69, p2pPeer, nil, nil, nil)
 		peers[i] = &ethPeer{Peer: ep}
 	}
 	return peers

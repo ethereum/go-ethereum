@@ -115,7 +115,7 @@ var (
 		Name:     "trace.noreturndata",
 		Aliases:  []string{"noreturndata"},
 		Value:    true,
-		Usage:    "enable return data output",
+		Usage:    "disable return data output",
 		Category: traceCategory,
 	}
 
@@ -161,6 +161,7 @@ var (
 			t8ntool.ForknameFlag,
 			t8ntool.ChainIDFlag,
 			t8ntool.RewardFlag,
+			t8ntool.OpcodeCountFlag,
 		},
 	}
 

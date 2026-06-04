@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -174,7 +175,9 @@ func WriteFinalizedBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
 }
 
 // ReadLastPivotNumber retrieves the number of the last pivot block. If the node
-// full synced, the last pivot will always be nil.
+// has never attempted snap sync, the last pivot will always be nil. The marker
+// is written during snap sync and never cleared, so that a rollback past the
+// pivot can re-enable snap sync.
 func ReadLastPivotNumber(db ethdb.KeyValueReader) *uint64 {
 	data, _ := db.Get(lastPivotKey)
 	if len(data) == 0 {
@@ -605,6 +608,64 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
+// HasAccessList verifies the existence of a block access list for a block.
+func HasAccessList(db ethdb.Reader, hash common.Hash, number uint64) bool {
+	has, _ := db.Has(accessListKey(number, hash))
+	return has
+}
+
+// ReadAccessListRLP retrieves the RLP-encoded block access list for a block.
+func ReadAccessListRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+	var data []byte
+	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+		data, _ = reader.Ancient(ChainFreezerBALTable, number)
+		if len(data) > 0 {
+			return nil
+		}
+		// Block is not in ancients, read from key-value store by hash and number.
+		data, _ = db.Get(accessListKey(number, hash))
+		return nil
+	})
+	return data
+}
+
+// ReadAccessList retrieves and decodes the block access list for a block.
+func ReadAccessList(db ethdb.Reader, hash common.Hash, number uint64) *bal.BlockAccessList {
+	data := ReadAccessListRLP(db, hash, number)
+	if len(data) == 0 {
+		return nil
+	}
+	b := new(bal.BlockAccessList)
+	if err := rlp.DecodeBytes(data, b); err != nil {
+		log.Error("Invalid BAL RLP", "hash", hash, "err", err)
+		return nil
+	}
+	return b
+}
+
+// WriteAccessList RLP-encodes and stores a block access list in the active KV store.
+func WriteAccessList(db ethdb.KeyValueWriter, hash common.Hash, number uint64, b *bal.BlockAccessList) {
+	bytes, err := rlp.EncodeToBytes(b)
+	if err != nil {
+		log.Crit("Failed to encode BAL", "err", err)
+	}
+	WriteAccessListRLP(db, hash, number, bytes)
+}
+
+// WriteAccessListRLP stores a pre-encoded block access list in the active KV store.
+func WriteAccessListRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, encoded rlp.RawValue) {
+	if err := db.Put(accessListKey(number, hash), encoded); err != nil {
+		log.Crit("Failed to store BAL", "err", err)
+	}
+}
+
+// DeleteAccessList removes a block access list from the active KV store.
+func DeleteAccessList(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	if err := db.Delete(accessListKey(number, hash)); err != nil {
+		log.Crit("Failed to delete BAL", "err", err)
+	}
+}
+
 // ReceiptLogs is a barebone version of ReceiptForStorage which only keeps
 // the list of logs. When decoding a stored receipt into this object we
 // avoid creating the bloom filter.
@@ -659,13 +720,25 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 	if body == nil {
 		return nil
 	}
-	return types.NewBlockWithHeader(header).WithBody(*body)
+	block := types.NewBlockWithHeader(header).WithBody(*body)
+
+	// Best-effort assembly of the block access list from the database.
+	if header.BlockAccessListHash != nil {
+		al := ReadAccessList(db, hash, number)
+		block = block.WithAccessListUnsafe(al)
+	}
+	return block
 }
 
 // WriteBlock serializes a block into the database, header and body separately.
 func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
-	WriteBody(db, block.Hash(), block.NumberU64(), block.Body())
+	hash, number := block.Hash(), block.NumberU64()
+	WriteBody(db, hash, number, block.Body())
 	WriteHeader(db, block.Header())
+
+	if accessList := block.AccessList(); accessList != nil {
+		WriteAccessList(db, hash, number, accessList)
+	}
 }
 
 // WriteAncientBlocks writes entire block data into ancient store and returns the total written size.
@@ -695,6 +768,13 @@ func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *type
 	if err := op.Append(ChainFreezerReceiptTable, num, receipts); err != nil {
 		return fmt.Errorf("can't append block %d receipts: %v", num, err)
 	}
+	// The assumption is held that BAL of ancient block is no longer available
+	// (it may still reachable, but it's not worthwhile to even retrieve it
+	// from the network). A nil entry is stored in the BAL table as the absence
+	// placeholder.
+	if err := op.AppendRaw(ChainFreezerBALTable, num, nil); err != nil {
+		return fmt.Errorf("can't append block %d bals: %v", num, err)
+	}
 	return nil
 }
 
@@ -717,6 +797,13 @@ func WriteAncientHeaderChain(db ethdb.AncientWriter, headers []*types.Header) (i
 			if err := op.AppendRaw(ChainFreezerReceiptTable, num, nil); err != nil {
 				return fmt.Errorf("can't append block %d receipts: %v", num, err)
 			}
+			// The assumption is held that BAL of ancient block is no longer available
+			// (it may still reachable, but it's not worthwhile to even retrieve it
+			// from the network). A nil entry is stored in the BAL table as the absence
+			// placeholder.
+			if err := op.AppendRaw(ChainFreezerBALTable, num, nil); err != nil {
+				return fmt.Errorf("can't append block %d bals: %v", num, err)
+			}
 		}
 		return nil
 	})
@@ -727,6 +814,7 @@ func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
 	DeleteHeader(db, hash, number)
 	DeleteBody(db, hash, number)
+	DeleteAccessList(db, hash, number)
 }
 
 // DeleteBlockWithoutNumber removes all block data associated with a hash, except
@@ -735,6 +823,7 @@ func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number 
 	DeleteReceipts(db, hash, number)
 	deleteHeaderWithoutNumber(db, hash, number)
 	DeleteBody(db, hash, number)
+	DeleteAccessList(db, hash, number)
 }
 
 const badBlockToKeep = 10

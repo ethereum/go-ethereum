@@ -92,12 +92,16 @@ func newLookup(head layer, descendant func(state common.Hash, ancestor common.Ha
 // stateID or is a descendant of it.
 //
 // If found, the account data corresponding to the supplied stateID resides
-// in that layer. Otherwise, two scenarios are possible:
+// in the layer identified by the returned hash (ok=true). Otherwise,
+// (common.Hash{}, false) is returned to signal that the supplied stateID is
+// stale.
 //
-// (a) the account remains unmodified from the current disk layer up to the state
-// layer specified by the stateID: fallback to the disk layer for data retrieval,
-// (b) or the layer specified by the stateID is stale: reject the data retrieval.
-func (l *lookup) accountTip(accountHash common.Hash, stateID common.Hash, base common.Hash) common.Hash {
+// Note the returned hash may itself be common.Hash{} when the disk layer's
+// root is zero — as is the case for a fresh verkle/bintrie database whose
+// empty trie hashes to EmptyVerkleHash. Callers must therefore consult the
+// boolean rather than comparing the returned hash against common.Hash{}
+// directly.
+func (l *lookup) accountTip(accountHash common.Hash, stateID common.Hash, base common.Hash) (common.Hash, bool) {
 	// Traverse the mutation history from latest to oldest one. Several
 	// scenarios are possible:
 	//
@@ -123,31 +127,26 @@ func (l *lookup) accountTip(accountHash common.Hash, stateID common.Hash, base c
 		// containing the modified data. Otherwise, the current state may be ahead
 		// of the requested one or belong to a different branch.
 		if list[i] == stateID || l.descendant(stateID, list[i]) {
-			return list[i]
+			return list[i], true
 		}
 	}
 	// No layer matching the stateID or its descendants was found. Use the
 	// current disk layer as a fallback.
 	if base == stateID || l.descendant(stateID, base) {
-		return base
+		return base, true
 	}
 	// The layer associated with 'stateID' is not the descendant of the current
 	// disk layer, it's already stale, return nothing.
-	return common.Hash{}
+	return common.Hash{}, false
 }
 
 // storageTip traverses the layer list associated with the given account and
 // slot hash in reverse order to locate the first entry that either matches
 // the specified stateID or is a descendant of it.
 //
-// If found, the storage data corresponding to the supplied stateID resides
-// in that layer. Otherwise, two scenarios are possible:
-//
-// (a) the storage slot remains unmodified from the current disk layer up to
-// the state layer specified by the stateID: fallback to the disk layer for
-// data retrieval, (b) or the layer specified by the stateID is stale: reject
-// the data retrieval.
-func (l *lookup) storageTip(accountHash common.Hash, slotHash common.Hash, stateID common.Hash, base common.Hash) common.Hash {
+// See accountTip for the returned-hash / ok convention — the same
+// bintrie-zero-root caveat applies here.
+func (l *lookup) storageTip(accountHash common.Hash, slotHash common.Hash, stateID common.Hash, base common.Hash) (common.Hash, bool) {
 	list := l.storages[storageKey(accountHash, slotHash)]
 	for i := len(list) - 1; i >= 0; i-- {
 		// If the current state matches the stateID, or the requested state is a
@@ -155,17 +154,17 @@ func (l *lookup) storageTip(accountHash common.Hash, slotHash common.Hash, state
 		// containing the modified data. Otherwise, the current state may be ahead
 		// of the requested one or belong to a different branch.
 		if list[i] == stateID || l.descendant(stateID, list[i]) {
-			return list[i]
+			return list[i], true
 		}
 	}
 	// No layer matching the stateID or its descendants was found. Use the
 	// current disk layer as a fallback.
 	if base == stateID || l.descendant(stateID, base) {
-		return base
+		return base, true
 	}
 	// The layer associated with 'stateID' is not the descendant of the current
 	// disk layer, it's already stale, return nothing.
-	return common.Hash{}
+	return common.Hash{}, false
 }
 
 // addLayer traverses the state data retained in the specified diff layer and

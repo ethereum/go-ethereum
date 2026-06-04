@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
 	"github.com/ethereum/go-ethereum/core/txpool"
@@ -104,12 +105,18 @@ type Ethereum struct {
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
 
-	eventMux       *event.TypeMux
 	engine         consensus.Engine
 	accountManager *accounts.Manager
 
 	filterMaps      *filtermaps.FilterMaps
 	closeFilterMaps chan chan struct{}
+
+	// Chain event subscriptions driving updateFilterMapsHeads. The
+	// subscriptions are registered and consumed in Start.
+	fmHeadEventCh  chan core.ChainEvent
+	fmHeadSub      event.Subscription
+	fmBlockProcCh  chan bool
+	fmBlockProcSub event.Subscription
 
 	APIBackend *EthAPIBackend
 
@@ -175,7 +182,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Here we determine genesis hash and active ChainConfig.
 	// We need these to figure out the consensus parameters and to set up history pruning.
-	chainConfig, _, err := core.LoadChainConfig(chainDb, config.Genesis)
+	chainConfig, genesisHash, err := core.LoadChainConfig(chainDb, config.Genesis)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +200,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth := &Ethereum{
 		config:          config,
 		chainDb:         chainDb,
-		eventMux:        stack.EventMux(),
 		accountManager:  stack.AccountManager(),
 		engine:          engine,
 		networkID:       networkID,
@@ -201,6 +207,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		p2pServer:       stack.Server(),
 		discmix:         enode.NewFairMix(discmixTimeout),
 		shutdownTracker: shutdowncheck.NewShutdownTracker(chainDb),
+		fmHeadEventCh:   make(chan core.ChainEvent, 10),
+		fmBlockProcCh:   make(chan bool, 10),
 	}
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
 	var dbVer = "<nil>"
@@ -220,23 +228,28 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			rawdb.WriteDatabaseVersion(chainDb, core.BlockChainVersion)
 		}
 	}
+	histPolicy, err := history.NewPolicy(config.HistoryMode, genesisHash)
+	if err != nil {
+		return nil, err
+	}
 	var (
 		options = &core.BlockChainConfig{
-			TrieCleanLimit:   config.TrieCleanCache,
-			NoPrefetch:       config.NoPrefetch,
-			TrieDirtyLimit:   config.TrieDirtyCache,
-			ArchiveMode:      config.NoPruning,
-			TrieTimeLimit:    config.TrieTimeout,
-			SnapshotLimit:    config.SnapshotCache,
-			Preimages:        config.Preimages,
-			StateHistory:     config.StateHistory,
-			StateScheme:      scheme,
-			ChainHistoryMode: config.HistoryMode,
-			TxLookupLimit:    int64(min(config.TransactionHistory, math.MaxInt64)),
+			TrieCleanLimit:          config.TrieCleanCache,
+			NoPrefetch:              config.NoPrefetch,
+			TrieDirtyLimit:          config.TrieDirtyCache,
+			ArchiveMode:             config.NoPruning,
+			TrieTimeLimit:           config.TrieTimeout,
+			SnapshotLimit:           config.SnapshotCache,
+			Preimages:               config.Preimages,
+			StateHistory:            config.StateHistory,
+			TrienodeHistory:         config.TrienodeHistory,
+			NodeFullValueCheckpoint: config.NodeFullValueCheckpoint,
+			BinTrieGroupDepth:       config.BinTrieGroupDepth,
+			StateScheme:             scheme,
+			HistoryPolicy:           histPolicy,
+			TxLookupLimit:           int64(min(config.TransactionHistory, math.MaxInt64)),
 			VmConfig: vm.Config{
 				EnablePreimageRecording: config.EnablePreimageRecording,
-				EnableWitnessStats:      config.EnableWitnessStats,
-				StatelessSelfValidation: config.StatelessSelfValidation,
 			},
 			// Enables file journaling for the trie database. The journal files will be stored
 			// within the data directory. The corresponding paths will be either:
@@ -245,6 +258,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			TrieJournalDirectory: stack.ResolvePath("triedb"),
 			StateSizeTracking:    config.EnableStateSizeTracking,
 			SlowBlockThreshold:   config.SlowBlockThreshold,
+
+			StatelessSelfValidation: config.StatelessSelfValidation,
+			EnableWitnessStats:      config.EnableWitnessStats,
 		}
 	)
 	if config.VMTrace != "" {
@@ -269,8 +285,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if config.OverrideBPO2 != nil {
 		overrides.OverrideBPO2 = config.OverrideBPO2
 	}
-	if config.OverrideVerkle != nil {
-		overrides.OverrideVerkle = config.OverrideVerkle
+	if config.OverrideUBT != nil {
+		overrides.OverrideUBT = config.OverrideUBT
 	}
 	options.Overrides = &overrides
 
@@ -335,7 +351,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		Network:        networkID,
 		Sync:           config.SyncMode,
 		BloomCache:     uint64(cacheLimit),
-		EventMux:       eth.eventMux,
 		RequiredBlocks: config.RequiredBlocks,
 	}); err != nil {
 		return nil, err
@@ -396,7 +411,7 @@ func (s *Ethereum) APIs() []rpc.API {
 			Service:   NewMinerAPI(s),
 		}, {
 			Namespace: "eth",
-			Service:   downloader.NewDownloaderAPI(s.handler.downloader, s.blockchain, s.eventMux),
+			Service:   downloader.NewDownloaderAPI(s.handler.downloader, s.blockchain),
 		}, {
 			Namespace: "admin",
 			Service:   NewAdminAPI(s),
@@ -454,6 +469,10 @@ func (s *Ethereum) Start() error {
 	// Start the connection manager
 	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() })
 
+	// Subscribe to chain events for the filterMaps head updater.
+	s.fmHeadSub = s.blockchain.SubscribeChainEvent(s.fmHeadEventCh)
+	s.fmBlockProcSub = s.blockchain.SubscribeBlockProcessingEvent(s.fmBlockProcCh)
+
 	// start log indexer
 	s.filterMaps.Start()
 	go s.updateFilterMapsHeads()
@@ -468,13 +487,11 @@ func (s *Ethereum) newChainView(head *types.Header) *filtermaps.ChainView {
 }
 
 func (s *Ethereum) updateFilterMapsHeads() {
-	headEventCh := make(chan core.ChainEvent, 10)
-	blockProcCh := make(chan bool, 10)
-	sub := s.blockchain.SubscribeChainEvent(headEventCh)
-	sub2 := s.blockchain.SubscribeBlockProcessingEvent(blockProcCh)
+	headEventCh := s.fmHeadEventCh
+	blockProcCh := s.fmBlockProcCh
 	defer func() {
-		sub.Unsubscribe()
-		sub2.Unsubscribe()
+		s.fmHeadSub.Unsubscribe()
+		s.fmBlockProcSub.Unsubscribe()
 		for {
 			select {
 			case <-headEventCh:
@@ -493,6 +510,9 @@ func (s *Ethereum) updateFilterMapsHeads() {
 		if head == nil || newHead.Hash() != head.Hash() {
 			head = newHead
 			chainView := s.newChainView(head)
+			if chainView == nil {
+				return
+			}
 			historyCutoff, _ := s.blockchain.HistoryPruningCutoff()
 			var finalBlock uint64
 			if fb := s.blockchain.CurrentFinalBlock(); fb != nil {
@@ -588,7 +608,6 @@ func (s *Ethereum) Stop() error {
 	s.shutdownTracker.Stop()
 
 	s.chainDb.Close()
-	s.eventMux.Stop()
 
 	return nil
 }

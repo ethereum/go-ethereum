@@ -208,6 +208,48 @@ func TestServerBatchResponseSizeLimit(t *testing.T) {
 	}
 }
 
+// TestServerBatchResponseSizeLimit_errorResponses verifies that error responses
+// are counted toward BatchResponseMaxSize.
+func TestServerBatchResponseSizeLimit_errorResponses(t *testing.T) {
+	t.Parallel()
+
+	server := newTestServer()
+	defer server.Stop()
+	// Each error response for test_returnError is ~58 bytes of JSON in the Error field.
+	// Set limit to 100 so 1 response fits (58 bytes) but the 2nd (116 bytes) exceeds it.
+	server.SetBatchLimits(100, 100)
+	var (
+		batch  []BatchElem
+		client = DialInProc(server)
+	)
+	for i := 0; i < 5; i++ {
+		batch = append(batch, BatchElem{
+			Method: "test_returnError",
+			Result: new(int),
+		})
+	}
+	if err := client.BatchCall(batch); err != nil {
+		t.Fatal("error sending batch:", err)
+	}
+	for i := range batch {
+		re, ok := batch[i].Error.(Error)
+		if !ok {
+			t.Fatalf("batch elem %d has wrong error type: %v", i, batch[i].Error)
+		}
+		if i < 2 {
+			// First two: elem 0 fits under limit, elem 1 pushes over but is already processed.
+			if re.ErrorCode() != 444 {
+				t.Errorf("batch elem %d wrong error code, have %d want 444", i, re.ErrorCode())
+			}
+		} else {
+			// Remaining should be the response-too-large error.
+			if re.ErrorCode() != errcodeResponseTooLarge {
+				t.Errorf("batch elem %d wrong error code, have %d want %d", i, re.ErrorCode(), errcodeResponseTooLarge)
+			}
+		}
+	}
+}
+
 func TestServerWebsocketReadLimit(t *testing.T) {
 	t.Parallel()
 
@@ -265,7 +307,7 @@ func TestServerWebsocketReadLimit(t *testing.T) {
 					t.Fatalf("expected error for request size %d with limit %d, but got none", tc.testSize, tc.readLimit)
 				}
 				// Be tolerant about the exact error surfaced by gorilla/websocket.
-				// Prefer a CloseError with code 1009, but accept ErrReadLimit or an error string containing 1009/message too big.
+				// The error text can vary across platforms when the close races the read.
 				var cerr *websocket.CloseError
 				if errors.As(err, &cerr) {
 					if cerr.Code != websocket.CloseMessageTooBig {
@@ -274,7 +316,8 @@ func TestServerWebsocketReadLimit(t *testing.T) {
 				} else if !errors.Is(err, websocket.ErrReadLimit) &&
 					!strings.Contains(strings.ToLower(err.Error()), "1009") &&
 					!strings.Contains(strings.ToLower(err.Error()), "message too big") &&
-					!strings.Contains(strings.ToLower(err.Error()), "connection reset by peer") {
+					!strings.Contains(strings.ToLower(err.Error()), "connection reset by peer") &&
+					!strings.Contains(strings.ToLower(err.Error()), "forcibly closed") {
 					// Not the error we expect from exceeding the message size limit.
 					t.Fatalf("unexpected error for read limit violation: %v", err)
 				}

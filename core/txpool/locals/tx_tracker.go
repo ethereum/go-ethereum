@@ -18,6 +18,7 @@
 package locals
 
 import (
+	"cmp"
 	"slices"
 	"sync"
 	"time"
@@ -151,7 +152,7 @@ func (tracker *TxTracker) recheck(journalCheck bool) []*types.Transaction {
 		for _, list := range rejournal {
 			// cmp(a, b) should return a negative number when a < b,
 			slices.SortFunc(list, func(a, b *types.Transaction) int {
-				return int(a.Nonce() - b.Nonce())
+				return cmp.Compare(a.Nonce(), b.Nonce())
 			})
 		}
 		// Rejournal the tracker while holding the lock. No new transactions will
@@ -172,6 +173,17 @@ func (tracker *TxTracker) recheck(journalCheck bool) []*types.Transaction {
 // Start is called after all services have been constructed and the networking
 // layer was also initialized to spawn any goroutines required by the service.
 func (tracker *TxTracker) Start() error {
+	if tracker.journal != nil {
+		tracker.journal.load(func(transactions []*types.Transaction) []error {
+			tracker.TrackAll(transactions)
+			return nil
+		})
+		// Setup the writer for the upcoming transactions
+		if err := tracker.journal.setupWriter(); err != nil {
+			log.Error("Failed to setup the journal writer", "err", err)
+			return err
+		}
+	}
 	tracker.wg.Add(1)
 	go tracker.loop()
 	return nil
@@ -183,25 +195,19 @@ func (tracker *TxTracker) Start() error {
 func (tracker *TxTracker) Stop() error {
 	close(tracker.shutdownCh)
 	tracker.wg.Wait()
-	return nil
+
+	tracker.mu.Lock()
+	var err error
+	if tracker.journal != nil {
+		err = tracker.journal.close()
+	}
+	tracker.mu.Unlock()
+	return err
 }
 
 func (tracker *TxTracker) loop() {
 	defer tracker.wg.Done()
 
-	if tracker.journal != nil {
-		tracker.journal.load(func(transactions []*types.Transaction) []error {
-			tracker.TrackAll(transactions)
-			return nil
-		})
-
-		// Setup the writer for the upcoming transactions
-		if err := tracker.journal.setupWriter(); err != nil {
-			log.Error("Failed to setup the journal writer", "err", err)
-			return
-		}
-		defer tracker.journal.close()
-	}
 	var (
 		lastJournal = time.Now()
 		timer       = time.NewTimer(10 * time.Second) // Do initial check after 10 seconds, do rechecks more seldom.

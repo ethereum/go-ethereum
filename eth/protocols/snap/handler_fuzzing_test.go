@@ -60,6 +60,12 @@ func FuzzTrieNodes(f *testing.F) {
 	})
 }
 
+func FuzzAccessLists(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		doFuzz(data, &GetAccessListsPacket{}, GetAccessListsMsg)
+	})
+}
+
 func doFuzz(input []byte, obj interface{}, code int) {
 	bc := getChain()
 	defer bc.Stop()

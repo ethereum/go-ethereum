@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 )
 
@@ -75,6 +76,56 @@ type BlockEvent struct {
 	Safe      *types.Header
 }
 
+// StateUpdate represents the state mutations resulting from block execution.
+// It provides access to account changes, storage changes, and contract code
+// deployments with both previous and new values.
+type StateUpdate struct {
+	OriginRoot  common.Hash // State root before the update
+	Root        common.Hash // State root after the update
+	BlockNumber uint64
+
+	// AccountChanges contains all account state changes keyed by address.
+	AccountChanges map[common.Address]*AccountChange
+
+	// StorageChanges contains all storage slot changes keyed by address and storage slot key.
+	StorageChanges map[common.Address]map[common.Hash]*StorageChange
+
+	// CodeChanges contains all contract code changes keyed by address.
+	CodeChanges map[common.Address]*CodeChange
+
+	// TrieChanges contains trie node mutations keyed by address hash and trie node path.
+	TrieChanges map[common.Hash]map[string]*TrieNodeChange
+}
+
+// AccountChange represents a change to an account's state.
+type AccountChange struct {
+	Prev *types.StateAccount // nil if account was created
+	New  *types.StateAccount // nil if account was deleted
+}
+
+// StorageChange represents a change to a storage slot.
+type StorageChange struct {
+	Prev common.Hash // previous value (zero if slot was created)
+	New  common.Hash // new value (zero if slot was deleted)
+}
+
+type ContractCode struct {
+	Hash   common.Hash
+	Code   []byte
+	Exists bool // true if the code was existent
+}
+
+// CodeChange represents a change in contract code of an account.
+type CodeChange struct {
+	Prev *ContractCode // nil if no code existed before
+	New  *ContractCode
+}
+
+type TrieNodeChange struct {
+	Prev *trienode.Node
+	New  *trienode.Node
+}
+
 type (
 	/*
 		- VM events -
@@ -113,8 +164,36 @@ type (
 	// FaultHook is invoked when an error occurs during the execution of an opcode.
 	FaultHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, depth int, err error)
 
-	// GasChangeHook is invoked when the gas changes.
+	// GasChangeHook reports changes to the regular execution gas. Tracers
+	// that don't need visibility into the state-access gas dimension
+	// introduced by EIP-8037 (Amsterdam) can implement only this hook; it
+	// will continue to fire across the Amsterdam fork unchanged.
+	//
+	// If both this hook and GasChangeHookV2 are implemented on the same
+	// tracer, only V2 will be invoked. Implement exactly one to avoid
+	// double-counting.
 	GasChangeHook = func(old, new uint64, reason GasChangeReason)
+
+	// GasChangeHookV2 is invoked when any gas dimension changes. It is the
+	// multi-dimensional successor to GasChangeHook, exposing the state-access
+	// gas dimension introduced by EIP-8037 (Amsterdam) alongside the regular
+	// dimension.
+	//
+	// Compatibility:
+	//   - Post-Amsterdam: fires for changes to either the regular or the
+	//     state-access dimension. The non-changing dimension is passed through
+	//     unchanged in both `old` and `new` so consumers always observe the
+	//     complete gas vector.
+	//   - Pre-Amsterdam: no state-access gas events occur, so the State field
+	//     of both `old` and `new` is always zero. Tracers that register only
+	//     V2 still receive every regular-gas change as Gas{State: 0} and
+	//     behave identically to a V1 tracer; there is no pre-Amsterdam event
+	//     a V2-only tracer misses.
+	//
+	// V1 and V2 coexist: when both are registered on a tracer, only V2 is
+	// invoked. Tracers SHOULD register at most one of the two to avoid
+	// double-counting.
+	GasChangeHookV2 = func(old, new Gas, reason GasChangeReason)
 
 	/*
 		- Chain events -
@@ -161,6 +240,11 @@ type (
 	// beacon block root.
 	OnSystemCallEndHook = func()
 
+	// StateUpdateHook is called after state is committed for a block.
+	// It provides access to the complete state mutations including account changes,
+	// storage changes, trie node mutations, and contract code deployments.
+	StateUpdateHook = func(update *StateUpdate)
+
 	/*
 		- State events -
 	*/
@@ -192,13 +276,14 @@ type (
 
 type Hooks struct {
 	// VM events
-	OnTxStart   TxStartHook
-	OnTxEnd     TxEndHook
-	OnEnter     EnterHook
-	OnExit      ExitHook
-	OnOpcode    OpcodeHook
-	OnFault     FaultHook
-	OnGasChange GasChangeHook
+	OnTxStart     TxStartHook
+	OnTxEnd       TxEndHook
+	OnEnter       EnterHook
+	OnExit        ExitHook
+	OnOpcode      OpcodeHook
+	OnFault       FaultHook
+	OnGasChange   GasChangeHook
+	OnGasChangeV2 GasChangeHookV2
 	// Chain events
 	OnBlockchainInit    BlockchainInitHook
 	OnClose             CloseHook
@@ -209,6 +294,7 @@ type Hooks struct {
 	OnSystemCallStart   OnSystemCallStartHook
 	OnSystemCallStartV2 OnSystemCallStartHookV2
 	OnSystemCallEnd     OnSystemCallEndHook
+	OnStateUpdate       StateUpdateHook
 	// State events
 	OnBalanceChange BalanceChangeHook
 	OnNonceChange   NonceChangeHook
@@ -219,6 +305,35 @@ type Hooks struct {
 	OnLog           LogHook
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
+}
+
+// HasGasHook reports whether any gas-change hook is registered. Call sites
+// should use this to short-circuit before constructing the Gas / GasBudget
+// arguments to EmitGasChange when tracing is off — the dispatch is otherwise
+// always paid the cost of evaluating those args.
+func (h *Hooks) HasGasHook() bool {
+	return h != nil && (h.OnGasChangeV2 != nil || h.OnGasChange != nil)
+}
+
+// EmitGasChange dispatches a gas change event to the registered hooks. If the
+// multi-dimensional OnGasChangeV2 hook is set it is invoked with the full Gas
+// vectors; otherwise the single-dimensional OnGasChange hook is invoked with
+// the regular-gas dimension only. The call is a no-op when the receiver is
+// nil, when neither hook is registered, or when the reason is GasChangeIgnored.
+//
+// Call sites SHOULD use this helper instead of invoking the hooks directly so
+// that both variants stay consistent across the Amsterdam fork boundary.
+func (h *Hooks) EmitGasChange(old, new Gas, reason GasChangeReason) {
+	if h == nil || reason == GasChangeIgnored {
+		return
+	}
+	if h.OnGasChangeV2 != nil {
+		h.OnGasChangeV2(old, new, reason)
+		return
+	}
+	if h.OnGasChange != nil {
+		h.OnGasChange(old.Regular, new.Regular, reason)
+	}
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful
@@ -276,6 +391,19 @@ const (
 	BalanceChangeRevert BalanceChangeReason = 15
 )
 
+// Gas represents a multi-dimensional gas budget introduced by EIP-8037.
+// It carries the regular execution gas and the state-access gas, which are
+// metered independently from the Amsterdam fork onwards.
+//
+// Before Amsterdam, gas metering is single-dimensional and only the Regular
+// field is meaningful; State is always zero. The struct is shaped so that
+// pre-Amsterdam call sites can populate it as Gas{Regular: g} without loss
+// of fidelity relative to the legacy single-uint64 hook.
+type Gas struct {
+	Regular uint64 // Regular is the budget for ordinary execution gas.
+	State   uint64 // State is the budget dedicated to state-access gas (zero pre-Amsterdam).
+}
+
 // GasChangeReason is used to indicate the reason for a gas change, useful
 // for tracing and reporting.
 //
@@ -301,7 +429,7 @@ const (
 	// this generates an increase in gas. There is at most one of such gas change per transaction.
 	GasChangeTxRefunds GasChangeReason = 3
 	// GasChangeTxLeftOverReturned is the amount of gas left over at the end of transaction's execution that will be returned
-	// to the chain. This change will always be a negative change as we "drain" left over gas towards 0. If there was no gas
+	// to the account. This change will always be a negative change as we "drain" left over gas towards 0. If there was no gas
 	// left at the end of execution, no such even will be emitted. The returned gas's value in Wei is returned to caller.
 	// There is at most one of such gas change per transaction.
 	GasChangeTxLeftOverReturned GasChangeReason = 4
@@ -369,12 +497,15 @@ const (
 	// NonceChangeNewContract is the nonce change of a newly created contract.
 	NonceChangeNewContract NonceChangeReason = 4
 
-	// NonceChangeTransaction is the nonce change due to a EIP-7702 authorization.
+	// NonceChangeAuthorization is the nonce change due to a EIP-7702 authorization.
 	NonceChangeAuthorization NonceChangeReason = 5
 
 	// NonceChangeRevert is emitted when the nonce is reverted back to a previous value due to call failure.
 	// It is only emitted when the tracer has opted in to use the journaling wrapper (WrapWithJournal).
 	NonceChangeRevert NonceChangeReason = 6
+
+	// NonceChangeSelfdestruct is emitted when the nonce is reset to zero due to a self-destruct
+	NonceChangeSelfdestruct NonceChangeReason = 7
 )
 
 // CodeChangeReason is used to indicate the reason for a code change.

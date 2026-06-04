@@ -86,9 +86,3 @@ func protoOffset(proto Proto) uint64 {
 		panic("unhandled protocol")
 	}
 }
-
-// msgTypePtr is the constraint for protocol message types.
-type msgTypePtr[U any] interface {
-	*U
-	Kind() byte
-}

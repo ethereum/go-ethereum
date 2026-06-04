@@ -56,6 +56,9 @@ type header struct {
 	BlobGasUsed           *uint64           `json:"blobGasUsed"   rlp:"optional"`
 	ExcessBlobGas         *uint64           `json:"excessBlobGas"   rlp:"optional"`
 	ParentBeaconBlockRoot *common.Hash      `json:"parentBeaconBlockRoot" rlp:"optional"`
+	RequestsHash          *common.Hash      `json:"requestsHash" rlp:"optional"`
+	BlockAccessListHash   *common.Hash      `json:"blockAccessListHash" rlp:"optional"`
+	SlotNumber            *uint64           `json:"slotNumber" rlp:"optional"`
 }
 
 type headerMarshaling struct {
@@ -68,6 +71,7 @@ type headerMarshaling struct {
 	BaseFee       *math.HexOrDecimal256
 	BlobGasUsed   *math.HexOrDecimal64
 	ExcessBlobGas *math.HexOrDecimal64
+	SlotNumber    *math.HexOrDecimal64
 }
 
 type bbInput struct {
@@ -117,25 +121,28 @@ func (c *cliqueInput) UnmarshalJSON(input []byte) error {
 // ToBlock converts i into a *types.Block
 func (i *bbInput) ToBlock() *types.Block {
 	header := &types.Header{
-		ParentHash:       i.Header.ParentHash,
-		UncleHash:        types.EmptyUncleHash,
-		Coinbase:         common.Address{},
-		Root:             i.Header.Root,
-		TxHash:           types.EmptyTxsHash,
-		ReceiptHash:      types.EmptyReceiptsHash,
-		Bloom:            i.Header.Bloom,
-		Difficulty:       common.Big0,
-		Number:           i.Header.Number,
-		GasLimit:         i.Header.GasLimit,
-		GasUsed:          i.Header.GasUsed,
-		Time:             i.Header.Time,
-		Extra:            i.Header.Extra,
-		MixDigest:        i.Header.MixDigest,
-		BaseFee:          i.Header.BaseFee,
-		WithdrawalsHash:  i.Header.WithdrawalsHash,
-		BlobGasUsed:      i.Header.BlobGasUsed,
-		ExcessBlobGas:    i.Header.ExcessBlobGas,
-		ParentBeaconRoot: i.Header.ParentBeaconBlockRoot,
+		ParentHash:          i.Header.ParentHash,
+		UncleHash:           types.EmptyUncleHash,
+		Coinbase:            common.Address{},
+		Root:                i.Header.Root,
+		TxHash:              types.EmptyTxsHash,
+		ReceiptHash:         types.EmptyReceiptsHash,
+		Bloom:               i.Header.Bloom,
+		Difficulty:          common.Big0,
+		Number:              i.Header.Number,
+		GasLimit:            i.Header.GasLimit,
+		GasUsed:             i.Header.GasUsed,
+		Time:                i.Header.Time,
+		Extra:               i.Header.Extra,
+		MixDigest:           i.Header.MixDigest,
+		BaseFee:             i.Header.BaseFee,
+		WithdrawalsHash:     i.Header.WithdrawalsHash,
+		BlobGasUsed:         i.Header.BlobGasUsed,
+		ExcessBlobGas:       i.Header.ExcessBlobGas,
+		ParentBeaconRoot:    i.Header.ParentBeaconBlockRoot,
+		RequestsHash:        i.Header.RequestsHash,
+		BlockAccessListHash: i.Header.BlockAccessListHash,
+		SlotNumber:          i.Header.SlotNumber,
 	}
 
 	// Fill optional values.

@@ -46,7 +46,7 @@ type vmContext struct {
 }
 
 func testCtx() *vmContext {
-	return &vmContext{blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1), BaseFee: big.NewInt(0)}, txCtx: vm.TxContext{GasPrice: big.NewInt(100000)}}
+	return &vmContext{blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1), BaseFee: big.NewInt(0)}, txCtx: vm.TxContext{GasPrice: uint256.NewInt(100000)}}
 }
 
 func runTrace(tracer *tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainConfig, contractCode []byte) (json.RawMessage, error) {
@@ -55,7 +55,7 @@ func runTrace(tracer *tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCo
 		gasLimit uint64 = 31000
 		startGas uint64 = 10000
 		value           = uint256.NewInt(0)
-		contract        = vm.NewContract(common.Address{}, common.Address{}, value, startGas, nil)
+		contract        = vm.NewContract(common.Address{}, common.Address{}, value, vm.NewGasBudget(startGas), nil)
 	)
 	evm.SetTxContext(vmctx.txCtx)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
@@ -63,12 +63,12 @@ func runTrace(tracer *tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCo
 		contract.Code = contractCode
 	}
 
-	tracer.OnTxStart(evm.GetVMContext(), types.NewTx(&types.LegacyTx{Gas: gasLimit, GasPrice: vmctx.txCtx.GasPrice}), contract.Caller())
+	tracer.OnTxStart(evm.GetVMContext(), types.NewTx(&types.LegacyTx{Gas: gasLimit, GasPrice: vmctx.txCtx.GasPrice.ToBig()}), contract.Caller())
 	tracer.OnEnter(0, byte(vm.CALL), contract.Caller(), contract.Address(), []byte{}, startGas, value.ToBig())
 	ret, err := evm.Run(contract, []byte{}, false)
-	tracer.OnExit(0, ret, startGas-contract.Gas, err, true)
+	tracer.OnExit(0, ret, startGas-contract.Gas.RegularGas, err, true)
 	// Rest gas assumes no refund
-	tracer.OnTxEnd(&types.Receipt{GasUsed: gasLimit - contract.Gas}, nil)
+	tracer.OnTxEnd(&types.Receipt{GasUsed: gasLimit - contract.Gas.RegularGas}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -183,10 +183,10 @@ func TestHaltBetweenSteps(t *testing.T) {
 		t.Fatal(err)
 	}
 	scope := &vm.ScopeContext{
-		Contract: vm.NewContract(common.Address{}, common.Address{}, uint256.NewInt(0), 0, nil),
+		Contract: vm.NewContract(common.Address{}, common.Address{}, uint256.NewInt(0), vm.GasBudget{}, nil),
 	}
 	evm := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, &dummyStatedb{}, chainConfig, vm.Config{Tracer: tracer.Hooks})
-	evm.SetTxContext(vm.TxContext{GasPrice: big.NewInt(1)})
+	evm.SetTxContext(vm.TxContext{GasPrice: uint256.NewInt(1)})
 	tracer.OnTxStart(evm.GetVMContext(), types.NewTx(&types.LegacyTx{}), common.Address{})
 	tracer.OnEnter(0, byte(vm.CALL), common.Address{}, common.Address{}, []byte{}, 0, big.NewInt(0))
 	tracer.OnOpcode(0, 0, 0, 0, scope, nil, 0, nil)
@@ -210,7 +210,7 @@ func TestNoStepExec(t *testing.T) {
 			t.Fatal(err)
 		}
 		evm := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, &dummyStatedb{}, chainConfig, vm.Config{Tracer: tracer.Hooks})
-		evm.SetTxContext(vm.TxContext{GasPrice: big.NewInt(100)})
+		evm.SetTxContext(vm.TxContext{GasPrice: uint256.NewInt(100)})
 		tracer.OnTxStart(evm.GetVMContext(), types.NewTx(&types.LegacyTx{}), common.Address{})
 		tracer.OnEnter(0, byte(vm.CALL), common.Address{}, common.Address{}, []byte{}, 1000, big.NewInt(0))
 		tracer.OnExit(0, nil, 0, nil, false)
@@ -240,7 +240,7 @@ func TestIsPrecompile(t *testing.T) {
 	chaincfg.ByzantiumBlock = big.NewInt(100)
 	chaincfg.IstanbulBlock = big.NewInt(200)
 	chaincfg.BerlinBlock = big.NewInt(300)
-	txCtx := vm.TxContext{GasPrice: big.NewInt(100000)}
+	txCtx := vm.TxContext{GasPrice: uint256.NewInt(100000)}
 	tracer, err := newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil, nil, chaincfg)
 	if err != nil {
 		t.Fatal(err)
@@ -281,7 +281,7 @@ func TestEnterExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	scope := &vm.ScopeContext{
-		Contract: vm.NewContract(common.Address{}, common.Address{}, uint256.NewInt(0), 0, nil),
+		Contract: vm.NewContract(common.Address{}, common.Address{}, uint256.NewInt(0), vm.GasBudget{}, nil),
 	}
 	tracer.OnEnter(1, byte(vm.CALL), scope.Contract.Caller(), scope.Contract.Address(), []byte{}, 1000, new(big.Int))
 	tracer.OnExit(1, []byte{}, 400, nil, false)
