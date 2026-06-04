@@ -1170,6 +1170,61 @@ func (p *BlobPool) getByVhash(vhash common.Hash) *blobTxForPool {
 	return &ptx
 }
 
+func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blob, []kzg4844.Commitment, [][]kzg4844.Proof, error) {
+	var (
+		blobs       = make([]*kzg4844.Blob, len(vhashes))
+		commitments = make([]kzg4844.Commitment, len(vhashes))
+		proofs      = make([][]kzg4844.Proof, len(vhashes))
+
+		indices = make(map[common.Hash][]int)
+		filled  = make(map[common.Hash]struct{})
+	)
+	for i, h := range vhashes {
+		indices[h] = append(indices[h], i)
+	}
+	for _, vhash := range vhashes {
+		if _, ok := filled[vhash]; ok {
+			continue
+		}
+		ptx := p.getByVhash(vhash)
+		if ptx == nil {
+			continue
+		}
+		sidecar := ptx.Sidecar()
+		if sidecar == nil {
+			continue
+		}
+		for i, hash := range sidecar.BlobHashes() {
+			list, ok := indices[hash]
+			if !ok {
+				continue
+			}
+			filled[hash] = struct{}{}
+			if sidecar.Version != version {
+				continue
+			}
+			var pf []kzg4844.Proof
+			switch version {
+			case types.BlobSidecarVersion0:
+				pf = []kzg4844.Proof{sidecar.Proofs[i]}
+			case types.BlobSidecarVersion1:
+				cellProofs, err := sidecar.CellProofsAt(i)
+				if err != nil {
+					log.Error("Failed to get cell proofs", "txhash", ptx.Tx.Hash(), "err", err)
+					continue
+				}
+				pf = cellProofs
+			}
+			for _, index := range list {
+				blobs[index] = &sidecar.Blobs[i]
+				commitments[index] = sidecar.Commitments[i]
+				proofs[index] = pf
+			}
+		}
+	}
+	return blobs, commitments, proofs, nil
+}
+
 // reorg assembles all the transactors and missing transactions between an old
 // and new head to figure out which account's tx set needs to be rechecked and
 // which transactions need to be requeued.
