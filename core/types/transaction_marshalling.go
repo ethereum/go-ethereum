@@ -477,6 +477,9 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.AuthorizationList == nil {
 			return errors.New("missing required field 'authorizationList' in transaction")
 		}
+		if len(dec.AuthorizationList) == 0 {
+			return errors.New("'authorizationList' must contain at least one authorization")
+		}
 		itx.AuthList = dec.AuthorizationList
 
 		// signature R
