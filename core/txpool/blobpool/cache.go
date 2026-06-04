@@ -48,11 +48,17 @@ var (
 	cacheBlobsGauge = metrics.NewRegisteredGauge("blobpool/cache/blobs", nil)
 )
 
+type cachedBlob struct {
+	blob       *kzg4844.Blob
+	commitment kzg4844.Commitment
+	proofs     []kzg4844.Proof
+	version    byte
+}
+
 type Cache struct {
 	mu sync.Mutex
 
-	txHashOf map[common.Hash]common.Hash          // vhash -> txhash
-	entries  map[common.Hash]*types.BlobTxSidecar // txhash -> sidecar
+	entries  map[common.Hash]*cachedBlob // vhash -> blob, commitment, proofs
 	capacity uint
 
 	blobpool *BlobPool
@@ -78,8 +84,7 @@ func NewCache(p *BlobPool, cap uint) *Cache {
 
 func NewCacheForTest(p *BlobPool, cap uint, clock mclock.Clock, step func()) *Cache {
 	c := &Cache{
-		entries:  make(map[common.Hash]*types.BlobTxSidecar, cap),
-		txHashOf: make(map[common.Hash]common.Hash),
+		entries:  make(map[common.Hash]*cachedBlob, cap),
 		capacity: cap,
 		blobpool: p,
 		hasBlobs: make(chan []common.Hash, 1),
@@ -116,7 +121,7 @@ func (c *Cache) HasBlobs(ctx context.Context, vhashes []common.Hash) []bool {
 
 	c.mu.Lock()
 	for i, vhash := range vhashes {
-		if _, ok := c.txHashOf[vhash]; ok {
+		if _, ok := c.entries[vhash]; ok {
 			available[i] = true
 			needPin = append(needPin, vhash)
 		} else {
@@ -166,18 +171,29 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 			continue
 		}
 		c.mu.Lock()
-		txhash := c.txHashOf[vhash]
-		sidecar := c.entries[txhash]
+		cached := c.entries[vhash]
 		c.mu.Unlock()
 
-		if sidecar != nil {
+		if cached != nil {
 			cacheHits++
-		} else {
-			cacheMiss++
-			if ptx := c.blobpool.getByVhash(vhash); ptx != nil {
-				sidecar = ptx.Sidecar()
+			filled[vhash] = struct{}{}
+			if cached.version != version {
+				continue
 			}
+			for _, index := range indices[vhash] {
+				blobs[index] = cached.blob
+				commitments[index] = cached.commitment
+				proofs[index] = cached.proofs
+			}
+			continue
 		}
+
+		cacheMiss++
+		ptx := c.blobpool.getByVhash(vhash)
+		if ptx == nil {
+			continue
+		}
+		sidecar := ptx.Sidecar()
 		if sidecar == nil {
 			continue
 		}
@@ -202,7 +218,7 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 			case types.BlobSidecarVersion1:
 				cellProofs, err := sidecar.CellProofsAt(i)
 				if err != nil {
-					log.Error("Failed to get cell proofs", "txhash", txhash, "err", err)
+					log.Error("Failed to get cell proofs", "txhash", ptx.Tx.Hash(), "err", err)
 					continue
 				}
 				pf = cellProofs
@@ -305,27 +321,18 @@ func (c *Cache) update(want []common.Hash) {
 	c.cancelInflights = cancel
 
 	var missing []common.Hash
-	overlap := make(map[common.Hash]struct{})
 	for vh := range wantSet {
-		if txhash, ok := c.txHashOf[vh]; ok {
-			overlap[txhash] = struct{}{}
-		} else {
+		if _, ok := c.entries[vh]; !ok {
 			missing = append(missing, vh)
 		}
 	}
 
-	// Delete non-overlapping entries
-	for txhash, sc := range c.entries {
-		if _, ok := overlap[txhash]; ok {
+	for vh := range c.entries {
+		if _, ok := wantSet[vh]; ok {
 			continue
 		}
-		delete(c.entries, txhash)
-		if sc != nil {
-			for _, vh := range sc.BlobHashes() {
-				delete(c.txHashOf, vh)
-			}
-			cacheBlobsGauge.Dec(int64(len(sc.Commitments)))
-		}
+		delete(c.entries, vh)
+		cacheBlobsGauge.Dec(1)
 	}
 	c.mu.Unlock()
 
@@ -339,7 +346,7 @@ func (c *Cache) update(want []common.Hash) {
 			default:
 			}
 			c.mu.Lock()
-			_, loaded := c.txHashOf[vh]
+			_, loaded := c.entries[vh]
 			c.mu.Unlock()
 			if loaded {
 				continue
@@ -352,13 +359,34 @@ func (c *Cache) update(want []common.Hash) {
 			if sidecar == nil {
 				continue
 			}
-			txhash := ptx.Tx.Hash()
 			c.mu.Lock()
-			c.entries[txhash] = sidecar
-			for _, v := range sidecar.BlobHashes() {
-				c.txHashOf[v] = txhash
+			for i, v := range sidecar.BlobHashes() {
+				if _, ok := wantSet[v]; !ok {
+					continue
+				}
+				if _, ok := c.entries[v]; ok {
+					continue
+				}
+				var pf []kzg4844.Proof
+				switch sidecar.Version {
+				case types.BlobSidecarVersion0:
+					pf = []kzg4844.Proof{sidecar.Proofs[i]}
+				case types.BlobSidecarVersion1:
+					cellProofs, err := sidecar.CellProofsAt(i)
+					if err != nil {
+						log.Error("Failed to get cell proofs", "txhash", ptx.Tx.Hash(), "err", err)
+						continue
+					}
+					pf = cellProofs
+				}
+				c.entries[v] = &cachedBlob{
+					blob:       &sidecar.Blobs[i],
+					commitment: sidecar.Commitments[i],
+					proofs:     pf,
+					version:    sidecar.Version,
+				}
+				cacheBlobsGauge.Inc(1)
 			}
-			cacheBlobsGauge.Inc(int64(len(sidecar.Commitments)))
 			c.mu.Unlock()
 		}
 	}()
