@@ -153,6 +153,14 @@ func assertEmpty(t *testing.T, aa *bal.AccountAccess) {
 	}
 }
 
+// txGasNewAccount covers the base tx cost plus the EIP-8037 account-creation
+// state-gas charge (STATE_BYTES_PER_NEW_ACCOUNT × CPSB ≈ 183,600) that is
+// incurred when value is transferred to a non-existent account under Amsterdam.
+// params.TxGas (21,000) alone is insufficient: the transfer would run out of
+// gas, the credit would revert, and the recipient would never get a balance
+// change recorded in the BAL.
+const txGasNewAccount = 250_000
+
 // --- tx builders ---
 
 func (e *balTestEnv) tx(nonce uint64, to *common.Address, value *big.Int, gas uint64, tipGwei int64, data []byte) *types.Transaction {
@@ -177,7 +185,7 @@ func TestBALTxSenderAndRecipient(t *testing.T) {
 	env := newBALTestEnv(nil)
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &to, big.NewInt(1000), params.TxGas, 0, nil))
+		g.AddTx(env.tx(0, &to, big.NewInt(1000), txGasNewAccount, 0, nil))
 	})
 
 	sender := assertPresent(t, b, env.from)
@@ -260,7 +268,7 @@ func TestBALSystemAddressIncludedWhenTouched(t *testing.T) {
 	env := newBALTestEnv(nil)
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &sys, big.NewInt(1000), params.TxGas, 0, nil))
+		g.AddTx(env.tx(0, &sys, big.NewInt(1000), txGasNewAccount, 0, nil))
 	})
 
 	aa := assertPresent(t, b, sys)
@@ -315,7 +323,7 @@ func TestBALPrecompileValueTransferRecordsBalance(t *testing.T) {
 	env := newBALTestEnv(nil)
 
 	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &identity, big.NewInt(5), 50_000, 0, nil))
+		g.AddTx(env.tx(0, &identity, big.NewInt(5), txGasNewAccount, 0, nil))
 	})
 
 	aa := assertPresent(t, b, identity)
