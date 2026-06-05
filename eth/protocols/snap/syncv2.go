@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2026 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -94,8 +94,7 @@ type accountRequestV2 struct {
 }
 
 // accountResponseV2 is an already Merkle-verified remote response to an account
-// range request. It contains the subtrie for the requested account range and
-// the database that's going to be filled with the internal nodes on commit.
+// range request.
 type accountResponseV2 struct {
 	task *accountTaskV2 // Task which this request is filling
 
@@ -168,8 +167,7 @@ type storageRequestV2 struct {
 }
 
 // storageResponseV2 is an already Merkle-verified remote response to a storage
-// range request. It contains the subtries for the requested storage ranges and
-// the databases that's going to be filled with the internal nodes on commit.
+// range request.
 type storageResponseV2 struct {
 	mainTask *accountTaskV2 // Task which this response belongs to
 	subTask  *storageTaskV2 // Task which this response is filling
@@ -207,13 +205,11 @@ type accountTaskV2 struct {
 	Last     common.Hash                      // Last account to sync in this interval
 	SubTasks map[common.Hash][]*storageTaskV2 // Storage intervals needing fetching for large contracts
 
-	// This is a list of account hashes whose storage are already completed
-	// in this cycle. This field is newly introduced in v1.14 and will be
-	// empty if the task is resolved from legacy progress data. Furthermore,
-	// this additional field will be ignored by legacy Geth. The only side
-	// effect is that these contracts might be resynced in the new cycle,
-	// retaining the legacy behavior.
-	StorageCompleted []common.Hash `json:",omitempty"`
+	// Pending accounts whose storage has already been fully committed in
+	// this cycle, but which cannot advance Next yet because account commits
+	// must be sequential. Persisting them across cycle switches avoids
+	// refetching their storage.
+	StorageCompleted []common.Hash
 
 	// These fields are internals used during runtime
 	req  *accountRequestV2  // Pending request to fill this task
@@ -222,7 +218,6 @@ type accountTaskV2 struct {
 
 	needCode  []bool // Flags whether the filling accounts need code retrieval
 	needState []bool // Flags whether the filling accounts need storage retrieval
-	needHeal  []bool // Flags whether the filling accounts's state was chunked and need healing
 
 	codeTasks      map[common.Hash]struct{}    // Code hashes that need retrieval
 	stateTasks     map[common.Hash]common.Hash // Account hashes->roots that need full state retrieval
@@ -262,8 +257,7 @@ type storageTaskV2 struct {
 	// These fields are internals used during runtime
 	root common.Hash       // Storage root hash for this instance
 	req  *storageRequestV2 // Pending request to fill this task
-
-	done bool // Flag whether the task can be removed
+	done bool              // Flag whether the task can be removed
 }
 
 // syncProgressV2 is a database entry to allow suspending and resuming a snapshot state
@@ -602,7 +596,6 @@ func (s *syncerV2) downloadState(cancel chan struct{}) error {
 			StorageBytes:   s.storageBytes,
 		}
 		s.lock.Unlock()
-
 		// Wait for something to happen
 		select {
 		case <-s.update:
@@ -1708,8 +1701,6 @@ func (s *syncerV2) processAccountResponse(res *accountResponseV2) {
 	// filling before the entire account range can be persisted.
 	res.task.needCode = make([]bool, len(res.accounts))
 	res.task.needState = make([]bool, len(res.accounts))
-	res.task.needHeal = make([]bool, len(res.accounts))
-
 	res.task.codeTasks = make(map[common.Hash]struct{})
 	res.task.stateTasks = make(map[common.Hash]common.Hash)
 
@@ -1736,11 +1727,6 @@ func (s *syncerV2) processAccountResponse(res *accountResponseV2) {
 				if _, ok := res.task.SubTasks[res.hashes[i]]; ok {
 					panic(fmt.Errorf("unexpected leftover storage tasks, owner: %x", res.hashes[i]))
 				}
-				// Mark the healing tag if storage root node is inconsistent, or
-				// it's non-existent due to storage chunking.
-				if !rawdb.HasTrieNode(s.db, res.hashes[i], nil, account.Root, s.scheme) {
-					res.task.needHeal[i] = true
-				}
 			} else {
 				// If there was a previous large state retrieval in progress,
 				// don't restart it from scratch. This happens if a sync cycle
@@ -1751,7 +1737,6 @@ func (s *syncerV2) processAccountResponse(res *accountResponseV2) {
 					for _, subtask := range subtasks {
 						subtask.root = account.Root
 					}
-					res.task.needHeal[i] = true
 					resumed[res.hashes[i]] = struct{}{}
 					largeStorageResumedGauge.Inc(1)
 				} else {
@@ -1777,15 +1762,12 @@ func (s *syncerV2) processAccountResponse(res *accountResponseV2) {
 		// The hash of last delivered account in the response
 		last := res.hashes[len(res.hashes)-1]
 		for hash := range res.task.SubTasks {
-			// TODO(rjl493456442) degrade the log level before merging.
 			if hash.Cmp(last) > 0 {
-				log.Info("Keeping suspended storage retrieval", "account", hash)
+				log.Debug("Keeping suspended storage retrieval", "account", hash)
 				continue
 			}
-			// TODO(rjl493456442) degrade the log level before merging.
-			// It should never happen in ethereum.
 			if _, ok := resumed[hash]; !ok {
-				log.Error("Aborting suspended storage retrieval", "account", hash)
+				log.Warn("Aborting suspended storage retrieval", "account", hash)
 				delete(res.task.SubTasks, hash)
 				largeStorageDiscardGauge.Inc(1)
 			}
@@ -1887,11 +1869,6 @@ func (s *syncerV2) processStorageResponse(res *storageResponseV2) {
 				res.mainTask.stateCompleted[account] = struct{}{} // mark it as completed
 				smallStorageGauge.Inc(1)
 			}
-			// If the last contract was chunked, mark it as needing healing
-			// to avoid writing it out to disk prematurely.
-			if res.subTask == nil && !res.mainTask.needHeal[j] && i == len(res.hashes)-1 && res.cont {
-				res.mainTask.needHeal[j] = true
-			}
 			// If the last contract was chunked, we need to switch to large
 			// contract handling mode
 			if res.subTask == nil && i == len(res.hashes)-1 && res.cont {
@@ -1980,9 +1957,8 @@ func (s *syncerV2) processStorageResponse(res *storageResponseV2) {
 		// reconstructed later.
 		slots += len(res.hashes[i])
 
-		// Persist the received storage segments. These flat state maybe
-		// outdated during the sync, but it can be fixed later during the
-		// trie rebuild.
+		// Persist the received storage segments. These flat state may be outdated
+		// during the sync, but it will be fixed by the BAL-healing.
 		for j := 0; j < len(res.hashes[i]); j++ {
 			rawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j])
 		}
@@ -2164,14 +2140,8 @@ func (s *syncerV2) OnAccounts(peer SyncPeerV2, id uint64, hashes []common.Hash, 
 }
 
 // OnByteCodes is a callback method to invoke when a batch of contract
-// bytes codes are received from a remote peer.
-func (s *syncerV2) OnByteCodes(peer SyncPeerV2, id uint64, bytecodes [][]byte) error {
-	return s.onByteCodes(peer, id, bytecodes)
-}
-
-// onByteCodes is a callback method to invoke when a batch of contract
 // bytes codes are received from a remote peer in the syncing phase.
-func (s *syncerV2) onByteCodes(peer SyncPeerV2, id uint64, bytecodes [][]byte) error {
+func (s *syncerV2) OnByteCodes(peer SyncPeerV2, id uint64, bytecodes [][]byte) error {
 	var size common.StorageSize
 	for _, code := range bytecodes {
 		size += common.StorageSize(len(code))
