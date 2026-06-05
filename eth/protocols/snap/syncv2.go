@@ -986,17 +986,53 @@ func (s *syncerV2) loadSyncStatus() {
 	s.resetSyncState()
 }
 
+// increaseKey increase the input key by one bit. Return nil if the entire
+// addition operation overflows.
+func increaseKey(key []byte) []byte {
+	for i := len(key) - 1; i >= 0; i-- {
+		key[i]++
+		if key[i] != 0x0 {
+			return key
+		}
+	}
+	return nil
+}
+
+// DeleteHistoryByRange completely removes all database entries with the specific
+// prefix. Note, this method assumes the space with the given prefix is exclusively
+// occupied!
+func deleteRange(batch ethdb.Batch, prefix []byte) {
+	start := prefix
+	limit := increaseKey(bytes.Clone(prefix))
+
+	// Try to remove the data in the range by a loop, as the leveldb
+	// doesn't support the native range deletion.
+	for {
+		err := batch.DeleteRange(start, limit)
+		if err == nil {
+			return
+		}
+		// An unclean shutdown may leave the on-disk state partially wiped and
+		// therefore inconsistent. This is a tradeoff of the current LevelDB-based
+		// approach.
+		if errors.Is(err, ethdb.ErrTooManyKeys) {
+			batch.Write()
+			batch.Reset()
+			continue
+		}
+		log.Crit("Failed to delete state entries", "err", err)
+	}
+}
+
 // resetSyncState wipes all persisted snap-sync data (sync status, account
 // and storage snapshots) and re-initializes in-memory state with a fresh
 // chunking of the account hash range.
 func (s *syncerV2) resetSyncState() {
-	rawdb.DeleteSnapshotSyncStatus(s.db)
-	if err := s.db.DeleteRange(rawdb.SnapshotAccountPrefix, []byte{rawdb.SnapshotAccountPrefix[0] + 1}); err != nil {
-		log.Crit("Failed to wipe account snapshot range", "err", err)
-	}
-	if err := s.db.DeleteRange(rawdb.SnapshotStoragePrefix, []byte{rawdb.SnapshotStoragePrefix[0] + 1}); err != nil {
-		log.Crit("Failed to wipe storage snapshot range", "err", err)
-	}
+	batch := s.db.NewBatch()
+	rawdb.DeleteSnapshotSyncStatus(batch)
+	deleteRange(batch, rawdb.SnapshotAccountPrefix)
+	deleteRange(batch, rawdb.SnapshotStoragePrefix)
+	batch.Write()
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
