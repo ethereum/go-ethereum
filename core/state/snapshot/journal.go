@@ -211,7 +211,7 @@ func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 		return common.Hash{}, ErrSnapshotStale
 	}
 	// Ensure the generator marker is written even if none was ran this cycle
-	journalProgress(dl.diskdb, dl.genMarker, nil)
+	journalProgress(dl.diskdb, dl.genMarker, dl.genStats)
 
 	log.Debug("Journalled disk layer", "root", dl.root)
 	return dl.root, nil
