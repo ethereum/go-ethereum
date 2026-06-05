@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool/txorder"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/holiman/uint256"
@@ -136,7 +137,7 @@ func (c *Cache) HasBlobs(ctx context.Context, vhashes []common.Hash) []bool {
 	c.mu.Unlock()
 
 	if len(missVhashes) > 0 {
-		pooled := c.blobpool.AvailableBlobs(missVhashes)
+		pooled := c.blobpool.availableBlobs(missVhashes)
 		for j, ok := range pooled {
 			if ok {
 				available[missIdx[j]] = true
@@ -154,6 +155,8 @@ func (c *Cache) HasBlobs(ctx context.Context, vhashes []common.Hash) []bool {
 }
 
 func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byte) (_ []*kzg4844.Blob, _ []kzg4844.Commitment, _ [][]kzg4844.Proof, err error) {
+	_, span, spanEnd := telemetry.StartSpan(ctx, "blobpool.GetBlobs")
+	defer spanEnd(&err)
 	var (
 		blobs       = make([]*kzg4844.Blob, len(vhashes))
 		commitments = make([]kzg4844.Commitment, len(vhashes))
@@ -163,8 +166,8 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 		filled  = make(map[common.Hash]struct{})
 		misses  []common.Hash
 
-		cacheHits int64
-		cacheMiss int64
+		cacheHits int
+		cacheMiss int
 	)
 	for i, h := range vhashes {
 		indices[h] = append(indices[h], i)
@@ -197,7 +200,7 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 	}
 
 	if len(misses) > 0 {
-		mb, mc, mp, err := c.blobpool.GetBlobs(ctx, misses, version)
+		mb, mc, mp, err := c.blobpool.getBlobs(misses, version)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -212,8 +215,12 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 			}
 		}
 	}
-	cacheHitMeter.Mark(cacheHits)
-	cacheMissMeter.Mark(cacheMiss)
+	cacheHitMeter.Mark(int64(cacheHits))
+	cacheMissMeter.Mark(int64(cacheMiss))
+	span.SetAttributes(
+		telemetry.IntAttribute("cache.hit", cacheHits),
+		telemetry.IntAttribute("cache.miss", cacheMiss),
+	)
 
 	select {
 	case c.getBlobs <- struct{}{}:
