@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/holiman/uint256"
 )
 
@@ -45,6 +46,7 @@ func verifyAccessList(b *bal.BlockAccessList, header *types.Header) error {
 func (s *syncerV2) isFetched(accountHash common.Hash) bool {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
+
 	for _, task := range s.tasks {
 		if bytes.Compare(accountHash[:], task.Last[:]) <= 0 {
 			return bytes.Compare(accountHash[:], task.Next[:]) < 0
@@ -57,9 +59,7 @@ func (s *syncerV2) isFetched(accountHash common.Hash) bool {
 // in the database. For each account, it applies the post-block values (highest
 // TxIdx entry) for balance, nonce, code, and storage. The storageRoot field is
 // intentionally left stale. It will be recomputed during the trie rebuild.
-func (s *syncerV2) applyAccessList(b *bal.BlockAccessList) error {
-	batch := s.db.NewBatch()
-
+func (s *syncerV2) applyAccessList(b *bal.BlockAccessList, batch ethdb.Batch) error {
 	// Iterate over all accounts in the access list
 	for _, access := range *b {
 		addr := access.Address
@@ -131,22 +131,19 @@ func (s *syncerV2) applyAccessList(b *bal.BlockAccessList) error {
 			bytes.Equal(account.CodeHash, types.EmptyCodeHash[:])
 		switch {
 		case isEmpty && isNew:
-			// This handles the case where an account is created and
-			// self-destructed in the same transaction. The BAL will
-			// include it with a balance change to zero, but the account
-			// should not exist in state.
-			continue
+			// This covers cases where an account is created and destroyed within the
+			// same transaction, or where its net state change across the block is zero.
+			// The empty -> empty transition should be excluded from account update.
 		case isEmpty && !isNew:
 			// Existing account got fully drained (e.g., pre-funded
 			// address that gets deployed to with init code that
 			// self-destructs). Delete the entry so the trie rebuild
 			// doesn't pick it up as an empty leaf.
 			rawdb.DeleteAccountSnapshot(batch, accountHash)
-			continue
+		default:
+			// Write the updated account (storageRoot intentionally left stale)
+			rawdb.WriteAccountSnapshot(batch, accountHash, types.SlimAccountRLP(account))
 		}
-
-		// Write the updated account (storageRoot intentionally left stale)
-		rawdb.WriteAccountSnapshot(batch, accountHash, types.SlimAccountRLP(account))
 	}
-	return batch.Write()
+	return nil
 }
