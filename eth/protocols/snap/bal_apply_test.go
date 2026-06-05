@@ -45,6 +45,20 @@ func buildTestBAL(t *testing.T, cb *bal.ConstructionBlockAccessList) *bal.BlockA
 	return &b
 }
 
+// applyBAL applies b to the syncer's flat state and commits it, mirroring the
+// per-block batch flow used during catch-up: applyAccessList writes into a batch
+// that the caller commits.
+func applyBAL(t *testing.T, s *syncerV2, b *bal.BlockAccessList) {
+	t.Helper()
+	batch := s.db.NewBatch()
+	if err := s.applyAccessList(b, batch); err != nil {
+		t.Fatalf("applyAccessList failed: %v", err)
+	}
+	if err := batch.Write(); err != nil {
+		t.Fatalf("failed to commit BAL batch: %v", err)
+	}
+}
+
 // TestAccessListVerification checks that verifyAccessList accepts valid BALs
 // and rejects tampered ones.
 func TestAccessListVerification(t *testing.T) {
@@ -114,9 +128,7 @@ func TestAccessListApplication(t *testing.T) {
 	cb.CodeChange(addr, 0, []byte{0x60, 0x00}) // PUSH1 0x00
 	cb.StorageWrite(0, addr, rawSlot, common.HexToHash("0x02"))
 	b := buildTestBAL(t, cb)
-	if err := syncer.applyAccessList(b); err != nil {
-		t.Fatalf("applyAccessList failed: %v", err)
-	}
+	applyBAL(t, syncer, b)
 
 	// Verify account fields updated
 	data := rawdb.ReadAccountSnapshot(db, accountHash)
@@ -183,9 +195,7 @@ func TestAccessListApplicationMultiTx(t *testing.T) {
 	cb.NonceChange(addr, 3, 2)                      // tx 3
 	cb.NonceChange(addr, 7, 3)                      // tx 7 (final)
 	b := buildTestBAL(t, cb)
-	if err := syncer.applyAccessList(b); err != nil {
-		t.Fatalf("applyAccessList failed: %v", err)
-	}
+	applyBAL(t, syncer, b)
 	data := rawdb.ReadAccountSnapshot(db, accountHash)
 	updated, err := types.FullAccount(data)
 	if err != nil {
@@ -227,9 +237,7 @@ func TestAccessListApplicationZeroStorage(t *testing.T) {
 	cb := bal.NewConstructionBlockAccessList()
 	cb.StorageWrite(0, addr, rawSlot, common.Hash{})
 	b := buildTestBAL(t, cb)
-	if err := syncer.applyAccessList(b); err != nil {
-		t.Fatalf("applyAccessList failed: %v", err)
-	}
+	applyBAL(t, syncer, b)
 
 	if val := rawdb.ReadStorageSnapshot(db, accountHash, slotHash); len(val) != 0 {
 		t.Errorf("zeroed slot should have been deleted, got %x", val)
@@ -259,9 +267,7 @@ func TestAccessListApplicationNewAccount(t *testing.T) {
 	rawSlot := common.HexToHash("0xbb")
 	cb.StorageWrite(0, addr, rawSlot, common.HexToHash("0xff"))
 	b := buildTestBAL(t, cb)
-	if err := syncer.applyAccessList(b); err != nil {
-		t.Fatalf("applyAccessList failed: %v", err)
-	}
+	applyBAL(t, syncer, b)
 
 	// Verify account was created
 	data := rawdb.ReadAccountSnapshot(db, accountHash)
@@ -325,9 +331,7 @@ func TestAccessListApplicationSkipsUnfetched(t *testing.T) {
 	cb.BalanceChange(0, unfetchedAddr, uint256.NewInt(200))
 	b := buildTestBAL(t, cb)
 
-	if err := syncer.applyAccessList(b); err != nil {
-		t.Fatalf("applyAccessList failed: %v", err)
-	}
+	applyBAL(t, syncer, b)
 
 	// The fetched account should have been written.
 	if data := rawdb.ReadAccountSnapshot(db, fetchedHash); len(data) == 0 {
@@ -372,9 +376,7 @@ func TestAccessListApplicationSkipsUnfetchedStorage(t *testing.T) {
 	cb.StorageWrite(0, unfetchedAddr, rawSlot, common.HexToHash("0xff"))
 	b := buildTestBAL(t, cb)
 
-	if err := syncer.applyAccessList(b); err != nil {
-		t.Fatalf("applyAccessList failed: %v", err)
-	}
+	applyBAL(t, syncer, b)
 
 	if data := rawdb.ReadAccountSnapshot(db, unfetchedHash); len(data) != 0 {
 		t.Errorf("unfetched account should not be written, got %x", data)
@@ -409,9 +411,7 @@ func TestAccessListApplicationSameTxCreateDestroy(t *testing.T) {
 	cb := bal.NewConstructionBlockAccessList()
 	cb.BalanceChange(0, addr, uint256.NewInt(0))
 	b := buildTestBAL(t, cb)
-	if err := syncer.applyAccessList(b); err != nil {
-		t.Fatalf("applyAccessList failed: %v", err)
-	}
+	applyBAL(t, syncer, b)
 
 	// Check if applyAccessList created an account.
 	data := rawdb.ReadAccountSnapshot(db, accountHash)
@@ -452,9 +452,7 @@ func TestAccessListApplicationDestroyExisting(t *testing.T) {
 	cb := bal.NewConstructionBlockAccessList()
 	cb.BalanceChange(0, addr, uint256.NewInt(0))
 	b := buildTestBAL(t, cb)
-	if err := syncer.applyAccessList(b); err != nil {
-		t.Fatalf("applyAccessList failed: %v", err)
-	}
+	applyBAL(t, syncer, b)
 
 	if data := rawdb.ReadAccountSnapshot(db, accountHash); len(data) != 0 {
 		account, _ := types.FullAccount(data)
