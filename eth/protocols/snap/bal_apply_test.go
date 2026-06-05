@@ -155,10 +155,13 @@ func TestAccessListApplication(t *testing.T) {
 		t.Errorf("code wrong: got %x, want 6000", code)
 	}
 
-	// Verify storage updated
+	// Verify storage updated. Slots are stored in the canonical snapshot
+	// encoding (RLP of the value with leading zeros trimmed), the same form
+	// the download path writes and the trie rebuild consumes.
 	storageVal := rawdb.ReadStorageSnapshot(db, accountHash, slotHash)
-	if !bytes.Equal(storageVal, common.HexToHash("0x02").Bytes()) {
-		t.Errorf("storage wrong: got %x, want %x", storageVal, common.HexToHash("0x02").Bytes())
+	wantStorage, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(common.HexToHash("0x02").Bytes()))
+	if !bytes.Equal(storageVal, wantStorage) {
+		t.Errorf("storage wrong: got %x, want %x", storageVal, wantStorage)
 	}
 
 	// Verify storageRoot left stale (unchanged from original)
@@ -288,11 +291,13 @@ func TestAccessListApplicationNewAccount(t *testing.T) {
 		t.Errorf("root should be empty for new account: got %v", account.Root)
 	}
 
-	// Verify storage was written under keccak256(rawSlot)
+	// Verify storage was written under keccak256(rawSlot) in the canonical
+	// snapshot encoding (RLP of the value with leading zeros trimmed).
 	slotHash := crypto.Keccak256Hash(rawSlot[:])
 	storageVal := rawdb.ReadStorageSnapshot(db, accountHash, slotHash)
-	if !bytes.Equal(storageVal, common.HexToHash("0xff").Bytes()) {
-		t.Errorf("storage wrong: got %x, want %x", storageVal, common.HexToHash("0xff").Bytes())
+	wantStorage, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(common.HexToHash("0xff").Bytes()))
+	if !bytes.Equal(storageVal, wantStorage) {
+		t.Errorf("storage wrong: got %x, want %x", storageVal, wantStorage)
 	}
 }
 

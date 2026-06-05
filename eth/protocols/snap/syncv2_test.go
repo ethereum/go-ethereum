@@ -1550,12 +1550,14 @@ func TestSyncPersistsPivotDuringDownload(t *testing.T) {
 func TestPivotMovement(t *testing.T) {
 	t.Parallel()
 	testPivotMovement(t, rawdb.HashScheme, 1)
+	testPivotMovement(t, rawdb.PathScheme, 1)
 }
 
 // TestPivotMovementRepeated verifies that multiple pivot moves work correctly.
 func TestPivotMovementRepeated(t *testing.T) {
 	t.Parallel()
 	testPivotMovement(t, rawdb.HashScheme, 2)
+	testPivotMovement(t, rawdb.PathScheme, 2)
 }
 
 func testPivotMovement(t *testing.T, scheme string, pivotMoves int) {
@@ -1705,8 +1707,12 @@ func testPivotMovement(t *testing.T, scheme string, pivotMoves int) {
 // so a follow-up Sync can resume from there rather than reapplying everything.
 func TestCatchUpPersistsIncrementally(t *testing.T) {
 	t.Parallel()
+	testCatchUpPersistsIncrementally(t, rawdb.HashScheme)
+	testCatchUpPersistsIncrementally(t, rawdb.PathScheme)
+}
 
-	nodeScheme, sourceAccountTrie, elems, addrs := makeAccountTrieWithAddresses(100, rawdb.HashScheme)
+func testCatchUpPersistsIncrementally(t *testing.T, scheme string) {
+	nodeScheme, sourceAccountTrie, elems, addrs := makeAccountTrieWithAddresses(100, scheme)
 	rootA := sourceAccountTrie.Hash()
 	numA := uint64(100)
 
@@ -2452,4 +2458,265 @@ func TestCatchUpRetriesOnBadBAL(t *testing.T) {
 	if honestStateless {
 		t.Error("expected honest peer to remain in good standing")
 	}
+}
+
+// makeStorageTrieFromSlots builds a storage trie for owner from raw slot
+// key->value pairs, using the exact on-disk encoding the flat snapshot and the
+// trie rebuild expect: each leaf is keyed by keccak256(slotKey) and its value is
+// rlp(TrimLeftZeroes(value)). Zero-valued slots are skipped (an unset slot has
+// no leaf). It returns the storage root, the dirty node set, and the sorted
+// snapshot leaves (which a test peer serves verbatim).
+func makeStorageTrieFromSlots(db *triedb.Database, owner common.Hash, slots map[common.Hash]common.Hash) (common.Hash, *trienode.NodeSet, []*kv) {
+	st, _ := trie.New(trie.StorageTrieID(types.EmptyRootHash, owner, types.EmptyRootHash), db)
+	var entries []*kv
+	for rawKey, value := range slots {
+		if value == (common.Hash{}) {
+			continue // unset slot: no leaf
+		}
+		slotHash := crypto.Keccak256Hash(rawKey[:])
+		enc, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
+		st.MustUpdate(slotHash[:], enc)
+		entries = append(entries, &kv{slotHash[:], enc})
+	}
+	slices.SortFunc(entries, (*kv).cmp)
+	root, nodes := st.Commit(false)
+	return root, nodes, entries
+}
+
+// makeStateWithStorageContract builds an account trie holding the given
+// storage-less accounts plus a single contract account whose storage trie is
+// built from slots. Everything is committed into a fresh triedb so the tries
+// can be served by a test peer. It returns the recreated account trie, the
+// sorted account leaves, the recreated contract storage trie, the sorted
+// storage leaves, and the resulting state root.
+func makeStateWithStorageContract(scheme string, plain []*kv, contractAddr common.Address, contract types.StateAccount, slots map[common.Hash]common.Hash) (*trie.Trie, []*kv, *trie.Trie, []*kv, common.Hash) {
+	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))
+	accTrie := trie.NewEmpty(db)
+	merged := trienode.NewMergedNodeSet()
+
+	// Contract storage trie.
+	contractHash := crypto.Keccak256Hash(contractAddr[:])
+	stRoot, stNodes, stEntries := makeStorageTrieFromSlots(db, contractHash, slots)
+	if stNodes != nil {
+		merged.Merge(stNodes)
+	}
+
+	// Contract account leaf carries the (live) storage root.
+	contract.Root = stRoot
+	cval, _ := rlp.EncodeToBytes(&contract)
+	accTrie.MustUpdate(contractHash[:], cval)
+	accEntries := []*kv{{contractHash[:], cval}}
+
+	// Storage-less filler accounts.
+	for _, e := range plain {
+		accTrie.MustUpdate(e.k, e.v)
+		accEntries = append(accEntries, &kv{e.k, e.v})
+	}
+	slices.SortFunc(accEntries, (*kv).cmp)
+
+	// Commit account + storage nodes together, then re-open for serving.
+	root, set := accTrie.Commit(true)
+	merged.Merge(set)
+	db.Update(root, types.EmptyRootHash, 0, merged, triedb.NewStateSet())
+
+	accTrie, _ = trie.New(trie.StateTrieID(root), db)
+	stTrie, _ := trie.New(trie.StorageTrieID(root, contractHash, stRoot), db)
+	return accTrie, accEntries, stTrie, stEntries, root
+}
+
+// TestCatchUpAppliesStorageBALs exercises the snap/2 catch-up path with a BAL
+// that mutates storage slots (not just balances): a non-zero write to a fresh
+// slot, an overwrite of an existing slot, a write of zero (deletion), and a
+// multi-tx write where the post-block value wins.
+//
+// It fully syncs pivot A (flat-state download + trie rebuild), then moves the
+// pivot to A+1. The move triggers catchUp, which fetches the A+1 BAL, applies
+// the storage diffs to the flat state, and rebuilds the trie. The rebuild
+// verifies the recomputed root against the pivot's expected post-catch-up root,
+// so a successful Sync proves the storage mutations were applied in the exact
+// encoding the trie rebuild consumes. verifyTrie re-walks the result as an
+// independent confirmation.
+func TestCatchUpAppliesStorageBALs(t *testing.T) {
+	t.Parallel()
+	testCatchUpAppliesStorageBALs(t, rawdb.HashScheme)
+	testCatchUpAppliesStorageBALs(t, rawdb.PathScheme)
+}
+
+func testCatchUpAppliesStorageBALs(t *testing.T, scheme string) {
+	// The contract whose storage the A+1 BAL mutates.
+	contractAddr := common.HexToAddress("0x00000000000000000000000000000000c0ffee01")
+	contractHash := crypto.Keccak256Hash(contractAddr[:])
+
+	// Raw storage slot keys.
+	var (
+		slotKeep    = common.HexToHash("0x01") // untouched by the BAL
+		slotOver    = common.HexToHash("0x02") // overwritten with a new non-zero value
+		slotZero    = common.HexToHash("0x03") // written to zero (deletion)
+		slotNew     = common.HexToHash("0x04") // unset in A, written non-zero in A+1
+		slotMultiTx = common.HexToHash("0x05") // written several times within the block
+	)
+	// Slot values. Multi-byte values force RLP length prefixes, so the encoding
+	// differs sharply from the raw 32-byte form and a format mismatch surfaces.
+	var (
+		vKeep       = common.HexToHash("0x1111")
+		vOver0      = common.HexToHash("0x2222")
+		vOver1      = common.HexToHash("0x22220000aaaa")
+		vZero0      = common.HexToHash("0x3333")
+		vNew        = common.HexToHash("0x4444")
+		vMulti0     = common.HexToHash("0x5555")
+		vMultiMid   = common.HexToHash("0x5556")
+		vMultiFinal = common.HexToHash("0x55570000bbbb")
+	)
+	// Storage at pivot A.
+	slotsA := map[common.Hash]common.Hash{
+		slotKeep:    vKeep,
+		slotOver:    vOver0,
+		slotZero:    vZero0,
+		slotMultiTx: vMulti0,
+	}
+	// Expected storage at pivot A+1 after applying the BAL writes below.
+	slotsB := map[common.Hash]common.Hash{
+		slotKeep:    vKeep,       // unchanged
+		slotOver:    vOver1,      // overwritten
+		slotNew:     vNew,        // newly written
+		slotMultiTx: vMultiFinal, // post-block (highest-tx) value wins
+		// slotZero deleted
+	}
+	contractTmpl := types.StateAccount{
+		Nonce:    7,
+		Balance:  uint256.NewInt(123456),
+		CodeHash: types.EmptyCodeHash[:],
+	}
+
+	// Storage-less filler accounts, identical in A and A+1.
+	_, _, plain, _ := makeAccountTrieWithAddresses(20, scheme)
+
+	// Build the state at pivot A (served by the seed peer) and the expected
+	// state at pivot A+1 (only its root is needed).
+	accTrieA, accElemsA, stTrieA, stElemsA, rootA := makeStateWithStorageContract(scheme, plain, contractAddr, contractTmpl, slotsA)
+	_, _, _, _, rootB := makeStateWithStorageContract(scheme, plain, contractAddr, contractTmpl, slotsB)
+	if rootA == rootB {
+		t.Fatal("test bug: pivot A and A+1 must have different state roots")
+	}
+
+	// Build the A+1 BAL describing the storage mutations.
+	cb := bal.NewConstructionBlockAccessList()
+	cb.StorageWrite(0, contractAddr, slotOver, vOver1)         // overwrite
+	cb.StorageWrite(0, contractAddr, slotZero, common.Hash{})  // write zero -> delete
+	cb.StorageWrite(0, contractAddr, slotNew, vNew)            // new non-zero
+	cb.StorageWrite(0, contractAddr, slotMultiTx, vMultiMid)   // tx 0
+	cb.StorageWrite(2, contractAddr, slotMultiTx, vMultiFinal) // tx 2 (post-block)
+	var balBuf bytes.Buffer
+	if err := cb.EncodeRLP(&balBuf); err != nil {
+		t.Fatal(err)
+	}
+	var decodedBAL bal.BlockAccessList
+	if err := rlp.DecodeBytes(balBuf.Bytes(), &decodedBAL); err != nil {
+		t.Fatal(err)
+	}
+	balHash := decodedBAL.Hash()
+
+	// Chain headers. The pivot-A header is the same object passed to the first
+	// Sync, so the follow-up Sync's reorg check sees A as still-canonical and
+	// runs catchUp instead of resetting. The A+1 header carries the BAL hash
+	// (verified during catch-up) and the expected post-catch-up state root
+	// (verified by the trie rebuild).
+	db := rawdb.NewMemoryDatabase()
+	numA := uint64(128)
+	emptyH := common.Hash{}
+	zero := uint64(0)
+	hdrA := &types.Header{
+		Number: new(big.Int).SetUint64(numA), Root: rootA, Difficulty: common.Big0,
+		BaseFee: common.Big0, WithdrawalsHash: &emptyH,
+		BlobGasUsed: &zero, ExcessBlobGas: &zero,
+		ParentBeaconRoot: &emptyH, RequestsHash: &emptyH,
+	}
+	rawdb.WriteHeader(db, hdrA)
+	rawdb.WriteCanonicalHash(db, hdrA.Hash(), numA)
+
+	hdrB := &types.Header{
+		Number: new(big.Int).SetUint64(numA + 1), Root: rootB, Difficulty: common.Big0,
+		BaseFee: common.Big0, WithdrawalsHash: &emptyH,
+		BlobGasUsed: &zero, ExcessBlobGas: &zero,
+		ParentBeaconRoot: &emptyH, RequestsHash: &emptyH,
+		BlockAccessListHash: &balHash,
+	}
+	rawdb.WriteHeader(db, hdrB)
+	rawdb.WriteCanonicalHash(db, hdrB.Hash(), numA+1)
+
+	// Sync 1: full flat-state download + trie rebuild against pivot A.
+	{
+		var (
+			once   sync.Once
+			cancel = make(chan struct{})
+			term   = func() { once.Do(func() { close(cancel) }) }
+		)
+		syncer := newSyncerV2(db, scheme)
+		src := newTestPeerV2("seed", t, term)
+		src.accountTrie = accTrieA.Copy()
+		src.accountValues = accElemsA
+		src.setStorageTries(map[common.Hash]*trie.Trie{contractHash: stTrieA})
+		src.storageValues = map[common.Hash][]*kv{contractHash: stElemsA}
+		syncer.Register(src)
+		src.remote = syncer
+		done := checkStall(t, term)
+		if err := syncer.Sync(hdrA, cancel); err != nil {
+			t.Fatalf("pivot A sync failed: %v", err)
+		}
+		close(done)
+	}
+	// Sanity: the rebuilt trie for pivot A is complete and matches rootA. This
+	// also confirms the test fixture itself is internally consistent.
+	verifyTrie(scheme, db, rootA, t)
+
+	// Sync 2: the pivot moves to A+1, exercising the BAL catch-up path.
+	{
+		var (
+			once   sync.Once
+			cancel = make(chan struct{})
+			term   = func() { once.Do(func() { close(cancel) }) }
+		)
+		syncer := newSyncerV2(db, scheme)
+		src := newTestPeerV2("catchup", t, term)
+		// Pivot A is fully synced, so no download tasks remain; the peer only
+		// needs to serve the A+1 BAL. The trie data is provided defensively in
+		// case a stray account request is issued.
+		src.accountTrie = accTrieA.Copy()
+		src.accountValues = accElemsA
+		src.accessLists = map[common.Hash]rlp.RawValue{hdrB.Hash(): balBuf.Bytes()}
+		syncer.Register(src)
+		src.remote = syncer
+		done := checkStall(t, term)
+		if err := syncer.Sync(hdrB, cancel); err != nil {
+			t.Fatalf("pivot A+1 catch-up sync failed: %v", err)
+		}
+		close(done)
+	}
+
+	// A successful Sync already means GenerateTrie reproduced rootB from the
+	// BAL-updated flat state (it errors on root mismatch). Re-walk the trie as
+	// an independent confirmation that rootB is fully materialized.
+	verifyTrie(scheme, db, rootB, t)
+
+	// Spot-check each storage mutation landed in the flat snapshot in the
+	// canonical encoding.
+	checkSlot := func(raw common.Hash, want common.Hash, present bool) {
+		t.Helper()
+		got := rawdb.ReadStorageSnapshot(db, contractHash, crypto.Keccak256Hash(raw[:]))
+		if !present {
+			if len(got) != 0 {
+				t.Errorf("slot %x: expected deletion, got %x", raw, got)
+			}
+			return
+		}
+		wantEnc, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(want[:]))
+		if !bytes.Equal(got, wantEnc) {
+			t.Errorf("slot %x: got %x, want %x", raw, got, wantEnc)
+		}
+	}
+	checkSlot(slotKeep, vKeep, true)
+	checkSlot(slotOver, vOver1, true)
+	checkSlot(slotZero, common.Hash{}, false)
+	checkSlot(slotNew, vNew, true)
+	checkSlot(slotMultiTx, vMultiFinal, true)
 }

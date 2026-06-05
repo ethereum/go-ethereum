@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
 
@@ -120,8 +121,12 @@ func (s *syncerV2) applyAccessList(b *bal.BlockAccessList, batch ethdb.Batch) er
 				if value.IsZero() {
 					rawdb.DeleteStorageSnapshot(batch, accountHash, storageHash)
 				} else {
-					valBytes := value.Bytes32()
-					rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, valBytes[:])
+					// Store the slot in the same encoding the snapshot and the
+					// trie rebuild use: RLP of the minimal big-endian value
+					// (leading zeros trimmed), matching core/state's snapshot
+					// writes.
+					blob, _ := rlp.EncodeToBytes(value.Bytes())
+					rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, blob)
 				}
 			}
 		}
