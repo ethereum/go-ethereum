@@ -42,7 +42,7 @@ const (
 )
 
 const (
-	topKTimeout     = 1 * time.Second
+	topKTimeout     = 4 * time.Second
 	hasBlobsTimeout = 1 * time.Second
 )
 
@@ -197,7 +197,7 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 	}
 
 	if len(misses) > 0 {
-		mb, mc, mp, err := c.blobpool.GetBlobs(misses, version)
+		mb, mc, mp, err := c.blobpool.GetBlobs(ctx, misses, version)
 		if err != nil {
 			return nil, nil, nil, err
 		}
