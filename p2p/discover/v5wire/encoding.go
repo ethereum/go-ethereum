@@ -314,7 +314,9 @@ func (c *Codec) encodeRandom(toID enode.ID) (Header, []byte, error) {
 
 	// Fill message ciphertext buffer with random bytes.
 	c.msgctbuf = append(c.msgctbuf[:0], make([]byte, randomPacketMsgSize)...)
-	crand.Read(c.msgctbuf)
+	if _, err := crand.Read(c.msgctbuf); err != nil {
+		return head, nil, fmt.Errorf("can't get random data: %v", err)
+	}
 	return head, c.msgctbuf, nil
 }
 
