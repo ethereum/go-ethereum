@@ -526,7 +526,7 @@ func (w *Wallet) selfDerive() {
 				paths = append(paths, path)
 
 				// Display a log message to the user for new (or previously empty accounts)
-				if _, known := pairing.Accounts[nextAddrs[i]]; !known || !empty || nextAddrs[i] != w.deriveNextAddrs[i] {
+				if _, known := pairing.Accounts[nextAddrs[i]]; !known || (!empty && nextAddrs[i] != w.deriveNextAddrs[i]) {
 					w.log.Info("Smartcard wallet discovered new account", "address", nextAddrs[i], "path", path, "balance", balance, "nonce", nonce)
 				}
 				pairing.Accounts[nextAddrs[i]] = path
