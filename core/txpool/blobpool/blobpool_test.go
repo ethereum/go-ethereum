@@ -18,14 +18,17 @@ package blobpool
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math"
 	"math/big"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sync"
 	"testing"
@@ -40,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -421,56 +425,59 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 	verifyBlobRetrievals(t, pool)
 }
 
-// verifyBlobRetrievals checks that every blob tracked by the pool's index can
-// be resolved from disk through getByVhash and that the resulting sidecar
-// matches the expected blob and native-version proofs.
+// verifyBlobRetrievals attempts to retrieve all testing blobs and checks that
+// whatever is in the pool, it can be retrieved correctly.
 func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
-	known := make(map[common.Hash]struct{})
+	// Collect all the blobs tracked by the pool
+	var (
+		hashes []common.Hash
+		known  = make(map[common.Hash]struct{})
+	)
 	for _, txs := range pool.index {
 		for _, tx := range txs {
 			for _, vhash := range tx.vhashes {
 				known[vhash] = struct{}{}
 			}
+			hashes = append(hashes, tx.vhashes...)
 		}
 	}
-	for hash := range known {
-		ptx := pool.getByVhash(hash)
-		if ptx == nil {
-			t.Errorf("tracked blob retrieval failed: %x", hash)
+	blobs1, _, proofs1, err := pool.GetBlobs(context.Background(), hashes, types.BlobSidecarVersion0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blobs2, _, proofs2, err := pool.GetBlobs(context.Background(), hashes, types.BlobSidecarVersion1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Cross validate what we received vs what we wanted
+	if len(blobs1) != len(hashes) || len(proofs1) != len(hashes) {
+		t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want %d", len(blobs1), len(proofs1), len(hashes))
+		return
+	}
+	if len(blobs2) != len(hashes) || len(proofs2) != len(hashes) {
+		t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want blobs %d, want proofs: %d", len(blobs2), len(proofs2), len(hashes), len(hashes))
+		return
+	}
+	for i, hash := range hashes {
+		// If an item is missing from both, but shouldn't, error
+		if (blobs1[i] == nil || proofs1[i] == nil) && (blobs2[i] == nil || proofs2[i] == nil) {
+			t.Errorf("tracked blob retrieval failed: item %d, hash %x", i, hash)
 			continue
 		}
-		sidecar := ptx.Sidecar()
-		pos := -1
-		for i, vh := range sidecar.BlobHashes() {
-			if vh == hash {
-				pos = i
-				break
-			}
-		}
-		if pos < 0 {
-			t.Errorf("hash %x not present in retrieved sidecar", hash)
-			continue
-		}
+		// Item retrieved, make sure it matches the expectation
 		index := testBlobIndices[hash]
-		if sidecar.Blobs[pos] != *testBlobs[index] {
-			t.Errorf("retrieved blob mismatch: hash %x", hash)
+		if blobs1[i] != nil && (*blobs1[i] != *testBlobs[index] || proofs1[i][0] != testBlobProofs[index]) {
+			t.Errorf("retrieved blob or proof mismatch: item %d, hash %x", i, hash)
 			continue
 		}
-		switch sidecar.Version {
-		case types.BlobSidecarVersion0:
-			if sidecar.Proofs[pos] != testBlobProofs[index] {
-				t.Errorf("v0 proof mismatch: hash %x", hash)
-			}
-		case types.BlobSidecarVersion1:
-			cells, err := sidecar.CellProofsAt(pos)
-			if err != nil {
-				t.Errorf("cell proofs error for %x: %v", hash, err)
-				continue
-			}
-			if !slices.Equal(cells, testBlobCellProofs[index]) {
-				t.Errorf("v1 cell proofs mismatch: hash %x", hash)
-			}
+		if blobs2[i] != nil && (*blobs2[i] != *testBlobs[index] || !slices.Equal(proofs2[i], testBlobCellProofs[index])) {
+			t.Errorf("retrieved blob or proof mismatch: item %d, hash %x", i, hash)
+			continue
 		}
+		delete(known, hash)
+	}
+	for hash := range known {
+		t.Errorf("indexed blob #%x missing from retrieval", hash)
 	}
 }
 
@@ -1907,6 +1914,231 @@ func TestAdd(t *testing.T) {
 		// Close down the test
 		pool.Close()
 	}
+}
+
+func TestGetBlobs(t *testing.T) {
+	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
+
+	// Create a temporary folder for the persistent backend
+	storage := t.TempDir()
+
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(params.BlobTxMaxBlobs), nil)
+
+	// Create transactions from a few accounts.
+	var (
+		key1, _ = crypto.GenerateKey()
+		key2, _ = crypto.GenerateKey()
+		key3, _ = crypto.GenerateKey()
+
+		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
+		addr3 = crypto.PubkeyToAddress(key3.PublicKey)
+
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1, types.BlobSidecarVersion0) // [0, 6)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 6, key2, types.BlobSidecarVersion1)   // [6, 12)
+		tx3 = makeMultiBlobTx(0, 1, 800, 110, 6, 12, key3, types.BlobSidecarVersion0) // [12, 18)
+
+		blob1 = encodeForPool(tx1)
+		blob2 = encodeForPool(tx2)
+		blob3 = encodeForPool(tx3)
+	)
+
+	// Write the two safely sized txs to store. note: although the store is
+	// configured for a blob count of 6, it can also support around ~1mb of call
+	// data - all this to say that we aren't using the the absolute largest shelf
+	// available.
+	store.Put(blob1)
+	store.Put(blob2)
+	store.Put(blob3)
+	store.Close()
+
+	// Mimic a blobpool with max blob count of 6 upgrading to a max blob count of 24.
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(0, true, false)
+
+	// Make custom chain config where the max blob count changes based on the loop variable.
+	cancunTime := uint64(0)
+	config := &params.ChainConfig{
+		ChainID:     big.NewInt(1),
+		LondonBlock: big.NewInt(0),
+		BerlinBlock: big.NewInt(0),
+		CancunTime:  &cancunTime,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: &params.BlobConfig{
+				Target:         12,
+				Max:            24,
+				UpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
+			},
+		},
+	}
+	chain := &testBlockChain{
+		config:  config,
+		basefee: uint256.NewInt(1050),
+		blobfee: uint256.NewInt(105),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+
+	// Verify the regular three txs are always available.
+	if got := pool.Get(tx1.Hash()); got == nil {
+		t.Errorf("expected tx %s from %s in pool", tx1.Hash(), addr1)
+	}
+	if got := pool.Get(tx2.Hash()); got == nil {
+		t.Errorf("expected tx %s from %s in pool", tx2.Hash(), addr2)
+	}
+	if got := pool.Get(tx3.Hash()); got == nil {
+		t.Errorf("expected tx %s from %s in pool", tx3.Hash(), addr3)
+	}
+
+	cases := []struct {
+		start      int
+		limit      int
+		fillRandom bool // Whether to randomly fill some of the requested blobs with unknowns
+		version    byte // Blob sidecar version to request
+	}{
+		{
+			start: 0, limit: 6,
+			version: types.BlobSidecarVersion0,
+		},
+		{
+			start: 0, limit: 6,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 0, limit: 6, fillRandom: true,
+			version: types.BlobSidecarVersion0,
+		},
+		{
+			start: 0, limit: 6, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 3, limit: 9,
+			version: types.BlobSidecarVersion0,
+		},
+		{
+			start: 3, limit: 9,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 3, limit: 9, fillRandom: true,
+			version: types.BlobSidecarVersion0,
+		},
+		{
+			start: 3, limit: 9, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 3, limit: 15,
+			version: types.BlobSidecarVersion0,
+		},
+		{
+			start: 3, limit: 15,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 3, limit: 15, fillRandom: true,
+			version: types.BlobSidecarVersion0,
+		},
+		{
+			start: 3, limit: 15, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 0, limit: 18,
+			version: types.BlobSidecarVersion0,
+		},
+		{
+			start: 0, limit: 18,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 0, limit: 18, fillRandom: true,
+			version: types.BlobSidecarVersion0,
+		},
+		{
+			start: 0, limit: 18, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+		},
+	}
+	for i, c := range cases {
+		var (
+			vhashes []common.Hash
+			filled  = make(map[int]struct{})
+		)
+		if c.fillRandom {
+			filled[len(vhashes)] = struct{}{}
+			vhashes = append(vhashes, testrand.Hash())
+		}
+		for j := c.start; j < c.limit; j++ {
+			vhashes = append(vhashes, testBlobVHashes[j])
+			if c.fillRandom && rand.Intn(2) == 0 {
+				filled[len(vhashes)] = struct{}{}
+				vhashes = append(vhashes, testrand.Hash())
+			}
+		}
+		if c.fillRandom {
+			filled[len(vhashes)] = struct{}{}
+			vhashes = append(vhashes, testrand.Hash())
+		}
+		blobs, _, proofs, err := pool.GetBlobs(context.Background(), vhashes, c.version)
+		if err != nil {
+			t.Errorf("Unexpected error for case %d, %v", i, err)
+		}
+
+		// Cross validate what we received vs what we wanted
+		length := c.limit - c.start
+		wantLen := length + len(filled)
+		if len(blobs) != wantLen || len(proofs) != wantLen {
+			t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want %d", len(blobs), len(proofs), wantLen)
+			continue
+		}
+
+		var unknown int
+		for j := 0; j < len(blobs); j++ {
+			testBlobIndex := c.start + j - unknown
+			if _, exist := filled[j]; exist {
+				if blobs[j] != nil || proofs[j] != nil {
+					t.Errorf("Unexpected blob and proof, item %d", j)
+				}
+				unknown++
+				continue
+			}
+			// If an item is missing, but shouldn't, error
+			if blobs[j] == nil || proofs[j] == nil {
+				// This is only an error if there was no version mismatch
+				if (c.version == types.BlobSidecarVersion1 && 6 <= testBlobIndex && testBlobIndex < 12) ||
+					(c.version == types.BlobSidecarVersion0 && (testBlobIndex < 6 || 12 <= testBlobIndex)) {
+					t.Errorf("tracked blob retrieval failed: item %d, hash %x", j, vhashes[j])
+				}
+				continue
+			}
+			// Item retrieved, make sure the blob matches the expectation
+			if *blobs[j] != *testBlobs[testBlobIndex] {
+				t.Errorf("retrieved blob mismatch: item %d, hash %x", j, vhashes[j])
+				continue
+			}
+			// Item retrieved, make sure the proof matches the expectation
+			if c.version == types.BlobSidecarVersion0 {
+				if proofs[j][0] != testBlobProofs[testBlobIndex] {
+					t.Errorf("retrieved proof mismatch: item %d, hash %x", j, vhashes[j])
+				}
+			} else {
+				want, _ := kzg4844.ComputeCellProofs(blobs[j])
+				if !reflect.DeepEqual(want, proofs[j]) {
+					t.Errorf("retrieved proof mismatch: item %d, hash %x", j, vhashes[j])
+				}
+			}
+		}
+	}
+	pool.Close()
 }
 
 // TestEncodeForNetwork verifies that encodeForNetwork produces output identical
