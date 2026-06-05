@@ -17,6 +17,8 @@
 package eradb
 
 import (
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -46,6 +48,32 @@ func TestEraDatabase(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, receipts, "receipts not found")
 	assert.Equal(t, 3, len(receipts), "receipts length mismatch")
+}
+
+func TestEraStoreRejectsNoReceiptsProfile(t *testing.T) {
+	dir := t.TempDir()
+	stubName := "mainnet-00000-deadbeef-noreceipts.ere"
+	stubPath := filepath.Join(dir, stubName)
+
+	// Write a non-empty stub so the glob finds the file. Contents don't matter
+	// because the noreceipts check fires before execdb.Open is called.
+	err := os.WriteFile(stubPath, []byte("stub"), 0644)
+	require.NoError(t, err)
+
+	db, err := New(dir)
+	require.NoError(t, err)
+	defer db.Close()
+
+	// Any block in epoch 0 should trigger the same rejection.
+	const block = uint64(0)
+
+	_, err = db.GetRawBody(block)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "era store does not support noreceipts profile")
+
+	_, err = db.GetRawReceipts(block)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "era store does not support noreceipts profile")
 }
 
 func TestEraDatabaseConcurrentOpen(t *testing.T) {
