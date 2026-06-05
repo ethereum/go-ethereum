@@ -19,6 +19,7 @@ package blobpool
 
 import (
 	"container/heap"
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -39,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -1574,9 +1576,6 @@ func (p *BlobPool) getRLP(hash common.Hash) []byte {
 
 // Get returns a transaction if it is contained in the pool, or nil otherwise.
 func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
-	if _, ok := p.lookup.storeidOfTx(hash); !ok {
-		return nil
-	}
 	data := p.getRLP(hash)
 	if len(data) == 0 {
 		return nil
@@ -1628,7 +1627,24 @@ func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 	}
 }
 
-func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blob, []kzg4844.Commitment, [][]kzg4844.Proof, error) {
+// GetBlobs returns a number of blobs and proofs for the given versioned hashes.
+// Blobpool must place responses in the order given in the request, using null
+// for any missing blobs.
+//
+// For instance, if the request is [A_versioned_hash, B_versioned_hash,
+// C_versioned_hash] and blobpool has data for blobs A and C, but doesn't have
+// data for B, the response MUST be [A, null, C].
+//
+// This is a utility method for the engine API, enabling consensus clients to
+// retrieve blobs from the pools directly instead of the network.
+//
+// The version argument specifies the type of proofs to return, either the
+// blob proofs (version 0) or the cell proofs (version 1). Proofs conversion is
+// CPU intensive and prohibited in the blobpool explicitly.
+func (p *BlobPool) GetBlobs(ctx context.Context, vhashes []common.Hash, version byte) (_ []*kzg4844.Blob, _ []kzg4844.Commitment, _ [][]kzg4844.Proof, err error) {
+	_, _, spanEnd := telemetry.StartSpan(ctx, "blobpool.GetBlobs")
+	defer spanEnd(&err)
+
 	var (
 		blobs       = make([]*kzg4844.Blob, len(vhashes))
 		commitments = make([]kzg4844.Commitment, len(vhashes))
@@ -1640,27 +1656,47 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 	for i, h := range vhashes {
 		indices[h] = append(indices[h], i)
 	}
+
 	for _, vhash := range vhashes {
 		if _, ok := filled[vhash]; ok {
+			// Skip vhash that was already resolved in a previous iteration
 			continue
 		}
-		ptx := p.getByVhash(vhash)
-		if ptx == nil {
+
+		// Retrieve the corresponding blob tx with the vhash.
+		p.lock.RLock()
+		txID, exists := p.lookup.storeidOfBlob(vhash)
+		p.lock.RUnlock()
+		if !exists {
+			continue
+		}
+		data, err := p.store.Get(txID)
+		if err != nil {
+			log.Error("Tracked blob transaction missing from store", "id", txID, "err", err)
+			continue
+		}
+
+		// Decode the blob transaction
+		var ptx blobTxForPool
+		if err := rlp.DecodeBytes(data, &ptx); err != nil {
+			log.Error("Blobs corrupted for traced transaction", "id", txID, "err", err)
 			continue
 		}
 		sidecar := ptx.Sidecar()
-		if sidecar == nil {
-			continue
-		}
-		for i, hash := range sidecar.BlobHashes() {
+		// Traverse the blobs in the transaction
+		for i, hash := range ptx.Tx.BlobHashes() {
 			list, ok := indices[hash]
 			if !ok {
-				continue
+				continue // non-interesting blob
 			}
+			// Mark hash as seen.
 			filled[hash] = struct{}{}
 			if sidecar.Version != version {
+				// Skip blobs with incompatible version. Note we still track the blob hash
+				// in `filled` here, ensuring that we do not resolve this tx another time.
 				continue
 			}
+			// Get or convert the proof.
 			var pf []kzg4844.Proof
 			switch version {
 			case types.BlobSidecarVersion0:
@@ -1668,7 +1704,7 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 			case types.BlobSidecarVersion1:
 				cellProofs, err := sidecar.CellProofsAt(i)
 				if err != nil {
-					log.Error("Failed to get cell proofs", "txhash", ptx.Tx.Hash(), "err", err)
+					log.Error("Failed to get cell proofs", "id", txID, "err", err)
 					continue
 				}
 				pf = cellProofs
