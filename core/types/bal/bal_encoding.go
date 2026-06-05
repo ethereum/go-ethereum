@@ -178,6 +178,11 @@ func isStrictlySortedFunc[S ~[]E, E any](x S, cmp func(a, b E) int) bool {
 // which are ordered ascending by transaction index and contain no duplicate
 // modifications for a given index.
 func (e *encodingSlotChanges) validate(maxBALIndex int) error {
+	// Each SlotChanges entry MUST contain at least one StorageChange.
+	if len(e.SlotChanges) == 0 {
+		return errors.New("empty slot changes")
+	}
+	// Each storage key MUST appear at most once in storage_changes per account.
 	if !isStrictlySortedFunc(e.SlotChanges, func(a, b encodingStorageWrite) int {
 		return cmp.Compare(a.BlockAccessIndex, b.BlockAccessIndex)
 	}) {
