@@ -23,6 +23,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -132,7 +133,7 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 			code: 400,
 		},
 		{
-			body: `{"query": "{bleh{number}}","variables": null}"`,
+			body: `{"query": "{bleh{number}}","variables": null}`,
 			want: `{"errors":[{"message":"Cannot query field \"bleh\" on type \"Query\".","locations":[{"line":1,"column":2}]}]}`,
 			code: 400,
 		},
@@ -172,6 +173,35 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 		if ctype := resp.Header.Get("Content-Type"); ctype != "application/json" {
 			t.Errorf("testcase %d \nwrong Content-Type, have: %v, want: %v", i, ctype, "application/json")
 		}
+	}
+}
+
+func TestGraphQLHTTPBodyLimit(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "should reject oversized request body if query field exceeds limit",
+			body: `{"query":"` + strings.Repeat("a", maxRequestBodySize) + `"}`,
+		},
+		{
+			name: "should reject oversized request body if trailing data exceeds limit",
+			body: `{"query":"{block{number}}"}` + strings.Repeat(" ", maxRequestBodySize),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/graphql", strings.NewReader(test.body))
+			w := httptest.NewRecorder()
+
+			handler{}.ServeHTTP(w, req)
+
+			if w.Code != http.StatusRequestEntityTooLarge {
+				t.Fatalf("got status %d, want %d", w.Code, http.StatusRequestEntityTooLarge)
+			}
+		})
 	}
 }
 

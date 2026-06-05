@@ -19,6 +19,7 @@ package blobpool
 
 import (
 	"container/heap"
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -39,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -162,14 +164,6 @@ type blobTxForPool struct {
 // Sidecar returns BlobTxSidecar of ptx.
 func (ptx *blobTxForPool) Sidecar() *types.BlobTxSidecar {
 	return types.NewBlobTxSidecar(ptx.Version, ptx.Blobs, ptx.Commitments, ptx.Proofs)
-}
-
-// ApplySidecar copies the sidecar's fields into the flat fields.
-func (ptx *blobTxForPool) ApplySidecar(sc *types.BlobTxSidecar) {
-	ptx.Version = sc.Version
-	ptx.Commitments = sc.Commitments
-	ptx.Proofs = sc.Proofs
-	ptx.Blobs = sc.Blobs
 }
 
 // TxSize returns the transaction size on the network without
@@ -1107,13 +1101,13 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 					log.Error("Blobs missing for announcable transaction", "from", addr, "nonce", meta.nonce, "id", meta.id, "err", err)
 					continue
 				}
-				var tx types.Transaction
-				if err = rlp.DecodeBytes(data, &tx); err != nil {
+				var ptx blobTxForPool
+				if err = rlp.DecodeBytes(data, &ptx); err != nil {
 					log.Error("Blobs corrupted for announcable transaction", "from", addr, "nonce", meta.nonce, "id", meta.id, "err", err)
 					continue
 				}
-				announcable = append(announcable, tx.WithoutBlobTxSidecar())
-				log.Trace("Blob transaction now announcable", "from", addr, "nonce", meta.nonce, "id", meta.id, "hash", tx.Hash())
+				announcable = append(announcable, ptx.Tx)
+				log.Trace("Blob transaction now announcable", "from", addr, "nonce", meta.nonce, "id", meta.id, "hash", ptx.Tx.Hash())
 			}
 		}
 	}
@@ -1272,22 +1266,13 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	// TODO: seems like an easy optimization here would be getting the serialized tx
 	// from limbo instead of re-serializing it here.
 
-	// Converts reorged-out legacy blob transactions to the new format to prevent
-	// them from becoming stuck in the pool until eviction.
-	//
-	// Performance note: Conversion takes ~140ms (Mac M1 Pro). Since a maximum of
-	// 9 legacy blob transactions are allowed in a block pre-Osaka, an adversary
-	// could theoretically halt a Geth node for ~1.2s by reorging per block. However,
-	// this attack is financially inefficient to execute.
+	// Post-Osaka, legacy (v0) blob sidecars are no longer accepted into the pool.
+	// A reorged-out legacy blob transaction can therefore not be re-added, so drop
+	// it on the floor instead of putting it back.
 	head := p.head.Load()
 	if p.chain.Config().IsOsaka(head.Number, head.Time) && ptx.Version == types.BlobSidecarVersion0 {
-		sc := ptx.Sidecar()
-		if err := sc.ToV1(); err != nil {
-			log.Error("Failed to convert the legacy sidecar", "err", err)
-			return err
-		}
-		ptx.ApplySidecar(sc)
-		log.Info("Legacy blob transaction is reorged", "hash", ptx.Tx.Hash())
+		log.Debug("Dropping reorged legacy blob transaction", "hash", txhash)
+		return errors.New("legacy blob sidecar unsupported post-osaka")
 	}
 	blob, err := rlp.EncodeToBytes(ptx)
 	if err != nil {
@@ -1575,12 +1560,15 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 // e.g. type_byte || [..., version, [blobs], [comms], [proofs]]
 func (p *BlobPool) GetRLP(hash common.Hash) []byte {
 	data := p.getRLP(hash)
+	if len(data) == 0 {
+		// Not in this pool, do not log.
+		return nil
+	}
 	rlp, err := encodeForNetwork(data)
 	if err != nil {
 		log.Error("Failed to encode pooled tx into the network type", "hash", hash, "err", err)
 		return nil
 	}
-
 	return rlp
 }
 
@@ -1617,7 +1605,10 @@ func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 // The version argument specifies the type of proofs to return, either the
 // blob proofs (version 0) or the cell proofs (version 1). Proofs conversion is
 // CPU intensive and prohibited in the blobpool explicitly.
-func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blob, []kzg4844.Commitment, [][]kzg4844.Proof, error) {
+func (p *BlobPool) GetBlobs(ctx context.Context, vhashes []common.Hash, version byte) (_ []*kzg4844.Blob, _ []kzg4844.Commitment, _ [][]kzg4844.Proof, err error) {
+	_, _, spanEnd := telemetry.StartSpan(ctx, "blobpool.GetBlobs")
+	defer spanEnd(&err)
+
 	var (
 		blobs       = make([]*kzg4844.Blob, len(vhashes))
 		commitments = make([]kzg4844.Commitment, len(vhashes))
@@ -1692,18 +1683,14 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 	return blobs, commitments, proofs, nil
 }
 
-// AvailableBlobs returns the number of blobs that are available in the subpool.
-func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) int {
-	available := 0
-	for _, vhash := range vhashes {
-		// Retrieve the datastore item (in a short lock)
-		p.lock.RLock()
-		_, exists := p.lookup.storeidOfBlob(vhash)
-		p.lock.RUnlock()
-		if exists {
-			available++
-		}
+// AvailableBlobs returns whether the blobs are available in the subpool.
+func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) []bool {
+	available := make([]bool, len(vhashes))
+	p.lock.RLock()
+	for i, vhash := range vhashes {
+		_, available[i] = p.lookup.storeidOfBlob(vhash)
 	}
+	p.lock.RUnlock()
 	return available
 }
 
@@ -2264,7 +2251,11 @@ func (p *BlobPool) Stats() (int, int) {
 	for _, txs := range p.index {
 		pending += len(txs)
 	}
-	return pending, 0 // No non-executable txs in the blob pool
+	var queue int
+	for _, txs := range p.gapped {
+		queue += len(txs)
+	}
+	return pending, queue
 }
 
 // Content retrieves the data content of the transaction pool, returning all the

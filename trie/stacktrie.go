@@ -85,6 +85,14 @@ func (t *StackTrie) Update(key, value []byte) error {
 	}
 	t.grow(key)
 	k := writeHexKey(t.kBuf, key)
+	return t.update(k, value)
+}
+
+// update inserts a (hex-key, value) pair into the stack trie. The key must be
+// in hex (nibble) form without the terminator flag, and the value must be
+// non-empty. It is shared by Update and the partition builder, which feeds a
+// key with its leading nibble stripped.
+func (t *StackTrie) update(k, value []byte) error {
 	if bytes.Compare(t.last, k) >= 0 {
 		return errors.New("non-ascending key order")
 	}

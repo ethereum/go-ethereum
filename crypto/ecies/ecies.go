@@ -254,8 +254,11 @@ func Encrypt(rand io.Reader, pub *PublicKey, m, s1, s2 []byte) (ct []byte, err e
 	Ke, Km := deriveKeys(hash, z, s1, params.KeyLen)
 
 	em, err := symEncrypt(rand, params, Ke, m)
-	if err != nil || len(em) <= params.BlockSize {
+	if err != nil {
 		return nil, err
+	}
+	if len(em) <= params.BlockSize {
+		return nil, ErrInvalidMessage
 	}
 
 	d := messageTag(params.Hash, Km, em, s2)

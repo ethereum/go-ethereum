@@ -273,7 +273,7 @@ func truncateFromHead(store ethdb.AncientStore, typ historyType, nhead uint64) (
 	if err != nil {
 		return 0, err
 	}
-	otail, err := store.Tail()
+	otail, err := store.Tail(rawdb.DefaultHistoryGroup)
 	if err != nil {
 		return 0, err
 	}
@@ -303,7 +303,7 @@ func truncateFromTail(store ethdb.AncientStore, typ historyType, ntail uint64) (
 	if err != nil {
 		return 0, err
 	}
-	otail, err := store.Tail()
+	otail, err := store.Tail(rawdb.DefaultHistoryGroup)
 	if err != nil {
 		return 0, err
 	}
@@ -315,7 +315,7 @@ func truncateFromTail(store ethdb.AncientStore, typ historyType, ntail uint64) (
 	if otail == ntail {
 		return 0, nil
 	}
-	otail, err = store.TruncateTail(ntail)
+	otail, err = store.TruncateTail(rawdb.DefaultHistoryGroup, ntail)
 	if err != nil {
 		return 0, err
 	}
@@ -430,7 +430,7 @@ func repairHistory(db ethdb.Database, isUBT bool, readOnly bool, stateID uint64,
 			truncTo = min(truncTo, thead)
 		} else {
 			if thead == 0 {
-				_, err = trienodes.TruncateTail(stateID)
+				_, err = trienodes.TruncateTail(rawdb.DefaultHistoryGroup, stateID)
 				if err != nil {
 					return nil, nil, err
 				}

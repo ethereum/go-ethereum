@@ -464,7 +464,7 @@ func (t *UDPv5) waitForNodes(c *callV5, distances []uint) ([]*enode.Node, error)
 			if total == -1 {
 				total = min(int(response.RespCount), totalNodesResponseLimit)
 			}
-			if received++; received == total {
+			if received++; received >= total {
 				return nodes, nil
 			}
 		case err := <-c.err:

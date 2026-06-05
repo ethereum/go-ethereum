@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -202,7 +203,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 			}
 			vmContext := NewEVMBlockContext(header, nil, new(common.Address))
 			evm := vm.NewEVM(vmContext, statedb, chainConfig, vm.Config{})
-			ProcessParentBlockHash(header.ParentHash, evm)
+			ProcessParentBlockHash(header.ParentHash, evm, bal.NewConstructionBlockAccessList())
 		}
 		// Read block hashes for block 0 .. num-1
 		for i := 0; i < num; i++ {

@@ -16,40 +16,44 @@
 
 package execdb
 
-// EraE file format specification.
+// Ere file format specification.
+//
+// See https://github.com/eth-clients/e2store-format-specs/blob/main/formats/ere.md.
 //
 // The format can be summarized with the following expression:
 //
-//	eraE := Version | CompressedHeader* | CompressedBody* | CompressedSlimReceipts* | TotalDifficulty* | other-entries* | Accumulator? | ComponentIndex
+//	ere := Version | CompressedHeader+ | CompressedBody+ | CompressedSlimReceipts* | Proof* | TotalDifficulty* | other-entries* | Accumulator? | DynamicBlockIndex
 //
 // Each basic element is its own e2store entry:
 //
-//	Version              = { type: 0x3265, data: nil }
-//	CompressedHeader     = { type: 0x03,   data: snappyFramed(rlp(header)) }
-//	CompressedBody       = { type: 0x04,   data: snappyFramed(rlp(body)) }
-//	CompressedSlimReceipts = { type: 0x0a, data: snappyFramed(rlp([tx-type, post-state-or-status, cumulative-gas, logs])) }
-//	TotalDifficulty      = { type: 0x06,   data: uint256 (header.total_difficulty) }
-//	AccumulatorRoot      = { type: 0x07,   data: hash_tree_root(List(HeaderRecord, 8192)) }
-//	ComponentIndex       = { type: 0x3267, data: component-index }
+//	Version                = { type: [0x65, 0x32], data: nil }
+//	CompressedHeader       = { type: [0x03, 0x00], data: snappyFramed(rlp(header)) }
+//	CompressedBody         = { type: [0x04, 0x00], data: snappyFramed(rlp(body)) }
+//	CompressedSlimReceipts = { type: [0x0a, 0x00], data: snappyFramed(rlp([tx-type, post-state-or-status, cumulative-gas, logs])) }
+//	TotalDifficulty        = { type: [0x06, 0x00], data: uint256(header.total_difficulty) }
+//	Proof                  = { type: [0x0b, 0x00], data: snappyFramed(rlp([proof-type, ssz(proof)])) }
+//	AccumulatorRoot        = { type: [0x07, 0x00], data: hash_tree_root(List(HeaderRecord, 8192)) }
+//	DynamicBlockIndex      = { type: [0x67, 0x32], data: block-index }
 //
 // Notes:
 //   - TotalDifficulty is present for pre-merge and merge transition epochs.
 //     For pure post-merge epochs, TotalDifficulty is omitted entirely.
 //   - In merge transition epochs, post-merge blocks store the final total
 //     difficulty (the TD at which the merge occurred).
-//   - AccumulatorRoot is only written for pre-merge epochs.
+//   - AccumulatorRoot is only written for pre-merge or transition epochs.
 //   - HeaderRecord is defined in the Portal Network specification.
-//   - Proofs (type 0x09) are defined in the spec but not yet supported in this implementation.
+//   - Proof entries are recommended by the spec but not produced by this
+//     implementation; files written here use the "noproofs" profile postfix.
 //
-// ComponentIndex stores relative offsets to each block's components:
+// DynamicBlockIndex stores relative offsets to each block's components:
 //
-//	component-index := starting-number | indexes | indexes | ... | component-count | count
-//	indexes := header-offset | body-offset | receipts-offset | td-offset?
+//	block-index := starting-number | indexes | indexes | ... | component-count | count
+//	indexes     := header-index | body-index | receipts-index? | difficulty-index? | proof-index?
 //
 // All values are little-endian uint64.
 //
 // Due to the accumulator size limit of 8192, the maximum number of blocks in an
-// EraE file is also 8192.
+// Ere file is also 8192.
 
 import (
 	"bytes"
@@ -67,7 +71,7 @@ import (
 	"github.com/golang/snappy"
 )
 
-// Builder is used to build an EraE e2store file. It collects block entries and
+// Builder is used to build an Ere e2store file. It collects block entries and
 // writes them to the underlying e2store.Writer.
 type Builder struct {
 	w *e2store.Writer
@@ -326,7 +330,7 @@ func (b *Builder) writeIndex(o *offsets) error {
 	write(uint64(componentCount))
 	write(uint64(count))
 
-	n, err := b.w.Write(era.TypeComponentIndex, buf.Bytes())
+	n, err := b.w.Write(era.TypeDynamicBlockIndex, buf.Bytes())
 	b.written += uint64(n)
 	return err
 }

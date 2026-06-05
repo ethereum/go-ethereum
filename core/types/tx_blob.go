@@ -89,7 +89,7 @@ func NewBlobTxSidecar(version byte, blobs []kzg4844.Blob, commitments []kzg4844.
 func (sc *BlobTxSidecar) BlobHashes() []common.Hash {
 	hasher := sha256.New()
 	h := make([]common.Hash, len(sc.Commitments))
-	for i := range sc.Blobs {
+	for i := range sc.Commitments {
 		h[i] = kzg4844.CalcBlobHashV1(hasher, &sc.Commitments[i])
 	}
 	return h

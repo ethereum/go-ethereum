@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package eradb implements a history backend using era1 and erae files.
+// Package eradb implements a history backend using era1 and ere files.
 package eradb
 
 import (
@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -38,7 +39,7 @@ const openFileLimit = 64
 
 var errClosed = errors.New("era store is closed")
 
-// Store manages read access to a directory of era1 and erae files.
+// Store manages read access to a directory of era1 and ere files.
 // The getter methods are thread-safe.
 type Store struct {
 	datadir string
@@ -54,7 +55,7 @@ type Store struct {
 type fileCacheEntry struct {
 	refcount int           // reference count. This is protected by Store.mu!
 	opened   chan struct{} // signals opening of file has completed
-	file     era.Era       // the file (era1 or erae)
+	file     era.Era       // the file (era1 or ere)
 	err      error         // error from opening the file
 }
 
@@ -302,8 +303,8 @@ func (db *Store) fileFailedToOpen(epoch uint64, entry *fileCacheEntry, err error
 
 func (db *Store) openEraFile(epoch uint64) (era.Era, error) {
 	// File name scheme is <network>-<epoch>-<root>.<ext>
-	// Try era1 first, then erae.
-	for _, ext := range []string{"era1", "erae"} {
+	// Try era1 first, then ere.
+	for _, ext := range []string{"era1", "ere"} {
 		glob := fmt.Sprintf("*-%05d-*.%s", epoch, ext)
 		matches, err := filepath.Glob(filepath.Join(db.datadir, glob))
 		if err != nil {
@@ -320,7 +321,12 @@ func (db *Store) openEraFile(epoch uint64) (era.Era, error) {
 		switch ext {
 		case "era1":
 			e, err = onedb.Open(filename)
-		case "erae":
+		case "ere":
+			// The era store serves receipts via RPC. Reject noreceipts
+			// profiles to avoid silently returning empty receipt data.
+			if strings.Contains(filepath.Base(filename), "-noreceipts") {
+				return nil, fmt.Errorf("era store does not support noreceipts profile: %s", filepath.Base(filename))
+			}
 			e, err = execdb.Open(filename)
 		}
 		if err != nil {
@@ -365,9 +371,9 @@ func (entry *fileCacheEntry) derefAndClose(epoch uint64) (closed bool) {
 
 	closeErr := entry.file.Close()
 	if closeErr == nil {
-		log.Debug("Closed era1 file", "epoch", epoch)
+		log.Debug("Closed era file", "epoch", epoch)
 	} else {
-		log.Warn("Error closing era1 file", "epoch", epoch, "err", closeErr)
+		log.Warn("Error closing era file", "epoch", epoch, "err", closeErr)
 	}
 	return true
 }

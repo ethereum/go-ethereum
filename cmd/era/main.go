@@ -183,11 +183,11 @@ func open(ctx *cli.Context, epoch uint64) (era.Era, error) {
 	return openByPath(path)
 }
 
-// openByPath tries to open a single file as either eraE or era1 based on extension,
+// openByPath tries to open a single file as either Ere or Era1 based on extension,
 // falling back to the other reader if needed.
 func openByPath(path string) (era.Era, error) {
 	switch strings.ToLower(filepath.Ext(path)) {
-	case ".erae":
+	case ".ere":
 		if e, err := execdb.Open(path); err != nil {
 			return nil, err
 		} else {
@@ -229,7 +229,7 @@ func verify(ctx *cli.Context) error {
 
 	// Build the verification list respecting the rule:
 	// era1: must have accumulator, always verify
-	// erae: verify only if accumulator exists (pre-merge)
+	// ere:  verify only if accumulator exists (pre-merge / transition)
 
 	// Build list of files to verify.
 	verify := make([]string, 0, len(entries))
@@ -251,15 +251,15 @@ func verify(ctx *cli.Context) error {
 			}
 			verify = append(verify, path)
 
-		case ".erae":
+		case ".ere":
 			e, err := execdb.Open(path)
 			if err != nil {
-				return fmt.Errorf("error opening erae file %s: %w", name, err)
+				return fmt.Errorf("error opening ere file %s: %w", name, err)
 			}
 			_, accErr := e.Accumulator()
 			e.Close()
 			if accErr == nil {
-				verify = append(verify, path) // pre-merge only
+				verify = append(verify, path) // pre-merge / transition only
 			}
 		default:
 			return fmt.Errorf("unsupported era file: %s", name)

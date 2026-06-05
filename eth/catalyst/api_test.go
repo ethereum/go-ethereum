@@ -22,6 +22,7 @@ import (
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -1961,7 +1962,7 @@ func TestGetBlobsV1(t *testing.T) {
 		// Fill the request for retrieving blobs
 		var (
 			vhashes []common.Hash
-			expect  []*engine.BlobAndProofV1
+			expect  engine.BlobAndProofListV1
 		)
 		// fill missing blob at the beginning
 		if suite.fillRandom {
@@ -1986,7 +1987,7 @@ func TestGetBlobsV1(t *testing.T) {
 			vhashes = append(vhashes, testrand.Hash())
 			expect = append(expect, nil)
 		}
-		result, err := api.GetBlobsV1(vhashes)
+		result, err := api.GetBlobsV1(context.Background(), vhashes)
 		if err != nil {
 			t.Errorf("Unexpected error for case %d, %v", i, err)
 		}
@@ -2008,7 +2009,7 @@ func TestGetBlobsV1AfterOsakaFork(t *testing.T) {
 
 	var engineErr *engine.EngineAPIError
 	api := newConsensusAPIWithoutHeartbeat(ethServ)
-	_, err := api.GetBlobsV1([]common.Hash{testrand.Hash()})
+	_, err := api.GetBlobsV1(context.Background(), []common.Hash{testrand.Hash()})
 	if !errors.As(err, &engineErr) {
 		t.Fatalf("Unexpected error: %T", err)
 	} else {
@@ -2072,13 +2073,13 @@ func BenchmarkGetBlobsV2(b *testing.B) {
 	}
 }
 
-type getBlobsFn func(hashes []common.Hash) ([]*engine.BlobAndProofV2, error)
+type getBlobsFn func(ctx context.Context, hashes []common.Hash) (engine.BlobAndProofListV2, error)
 
 func runGetBlobs(t testing.TB, getBlobs getBlobsFn, start, limit int, fillRandom bool, expectPartialResponse bool, name string) {
 	// Fill the request for retrieving blobs
 	var (
 		vhashes []common.Hash
-		expect  []*engine.BlobAndProofV2
+		expect  engine.BlobAndProofListV2
 	)
 	for j := start; j < limit; j++ {
 		vhashes = append(vhashes, testBlobVHashes[j])
@@ -2095,7 +2096,7 @@ func runGetBlobs(t testing.TB, getBlobs getBlobsFn, start, limit int, fillRandom
 	if fillRandom {
 		vhashes = append(vhashes, testrand.Hash())
 	}
-	result, err := getBlobs(vhashes)
+	result, err := getBlobs(context.Background(), vhashes)
 	if err != nil {
 		t.Errorf("Unexpected error for case %s, %v", name, err)
 	}
@@ -2105,6 +2106,13 @@ func runGetBlobs(t testing.TB, getBlobs getBlobsFn, start, limit int, fillRandom
 		} else {
 			// Nil is expected if getBlobs can not return a partial response
 			expect = nil
+			enc, err := json.Marshal(result)
+			if err != nil {
+				t.Fatalf("Failed to encode result for case %s: %v", name, err)
+			}
+			if string(enc) != "null" {
+				t.Fatalf("Unexpected JSON result for case %s: got %s, want null", name, enc)
+			}
 		}
 	}
 	if !reflect.DeepEqual(result, expect) {

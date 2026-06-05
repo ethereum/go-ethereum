@@ -709,3 +709,8 @@ func (evm *EVM) GetVMContext() *tracing.VMContext {
 		StateDB:     evm.StateDB,
 	}
 }
+
+// GetRules returns the chain rules used throughout the EVM execution.
+func (evm *EVM) GetRules() params.Rules {
+	return evm.chainRules
+}

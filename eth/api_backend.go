@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
@@ -40,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -61,9 +63,9 @@ func (b *EthAPIBackend) CurrentBlock() *types.Header {
 	return b.eth.blockchain.CurrentBlock()
 }
 
-func (b *EthAPIBackend) SetHead(number uint64) {
+func (b *EthAPIBackend) SetHead(number uint64) error {
 	b.eth.handler.downloader.Cancel()
-	b.eth.blockchain.SetHead(number)
+	return b.eth.blockchain.SetHead(number)
 }
 
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
@@ -287,6 +289,19 @@ func (b *EthAPIBackend) HistoryPruningCutoff() uint64 {
 	return bn
 }
 
+func (b *EthAPIBackend) HistoryRetention() ethapi.HistoryRetention {
+	cfg := b.eth.config
+	return ethapi.HistoryRetention{
+		TxIndexHistory:   cfg.TransactionHistory,
+		LogIndexHistory:  cfg.LogHistory,
+		LogIndexDisabled: cfg.LogNoHistory,
+		StateHistory:     cfg.StateHistory,
+		TrienodeHistory:  cfg.TrienodeHistory,
+		StateArchive:     cfg.NoPruning,
+		StateScheme:      b.eth.blockchain.TrieDB().Scheme(),
+	}
+}
+
 func (b *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	return b.eth.blockchain.GetReceiptsByHash(hash), nil
 }
@@ -437,6 +452,15 @@ func (b *EthAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) 
 
 func (b *EthAPIBackend) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (firstBlock *big.Int, reward [][]*big.Int, baseFee []*big.Int, gasUsedRatio []float64, baseFeePerBlobGas []*big.Int, blobGasUsedRatio []float64, err error) {
 	return b.gpo.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
+}
+
+func (b *EthAPIBackend) BaseFee(ctx context.Context) *big.Int {
+	header := b.CurrentHeader()
+	next := new(big.Int).Add(header.Number, common.Big1)
+	if b.ChainConfig().IsLondon(next) {
+		return eip1559.CalcBaseFee(b.ChainConfig(), header)
+	}
+	return nil
 }
 
 func (b *EthAPIBackend) BlobBaseFee(ctx context.Context) *big.Int {

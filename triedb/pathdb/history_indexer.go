@@ -542,7 +542,7 @@ func (i *indexIniter) run(recover bool) {
 
 // next returns the ID of the next state history to be indexed.
 func (i *indexIniter) next() (uint64, error) {
-	tail, err := i.freezer.Tail()
+	tail, err := i.freezer.Tail(rawdb.DefaultHistoryGroup)
 	if err != nil {
 		return 0, err
 	}

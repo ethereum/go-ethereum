@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 )
@@ -57,8 +58,12 @@ type httpConn struct {
 // and some methods don't work. The panic() stubs here exist to ensure
 // this special treatment is correct.
 
-func (hc *httpConn) writeJSON(context.Context, interface{}, bool) error {
+func (hc *httpConn) writeJSON(context.Context, *jsonrpcMessage, bool) error {
 	panic("writeJSON called on httpConn")
+}
+
+func (hc *httpConn) writeJSONBatch(context.Context, []*jsonrpcMessage, bool) error {
+	panic("writeJSONBatch called on httpConn")
 }
 
 func (hc *httpConn) peerInfo() PeerInfo {
@@ -179,9 +184,9 @@ func cleanlyCloseBody(body io.ReadCloser) error {
 	return body.Close()
 }
 
-func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) error {
+func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg *jsonrpcMessage) error {
 	hc := c.writeConn.(*httpConn)
-	respBody, err := hc.doRequest(ctx, msg)
+	respBody, err := hc.doRequest(ctx, appendMessage(nil, msg))
 	if err != nil {
 		return err
 	}
@@ -198,7 +203,7 @@ func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) e
 
 func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonrpcMessage) error {
 	hc := c.writeConn.(*httpConn)
-	respBody, err := hc.doRequest(ctx, msgs)
+	respBody, err := hc.doRequest(ctx, appendBatch(nil, msgs))
 	if err != nil {
 		return err
 	}
@@ -212,11 +217,7 @@ func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonr
 	return nil
 }
 
-func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadCloser, error) {
-	body, err := json.Marshal(msg)
-	if err != nil {
-		return nil, err
-	}
+func (hc *httpConn) doRequest(ctx context.Context, body []byte) (io.ReadCloser, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, hc.url, io.NopCloser(bytes.NewReader(body)))
 	if err != nil {
 		return nil, err
@@ -268,41 +269,53 @@ func (s *Server) newHTTPServerConn(r *http.Request, w http.ResponseWriter) Serve
 	body := io.LimitReader(r.Body, int64(s.httpBodyLimit))
 	conn := &httpServerConn{Reader: body, Writer: w, r: r}
 
-	encoder := func(v any, isErrorResponse bool) error {
-		if !isErrorResponse {
-			return json.NewEncoder(conn).Encode(v)
-		}
-
-		// It's an error response and requires special treatment.
-		//
-		// In case of a timeout error, the response must be written before the HTTP
-		// server's write timeout occurs. So we need to flush the response. The
-		// Content-Length header also needs to be set to ensure the client knows
-		// when it has the full response.
-		encdata, err := json.Marshal(v)
-		if err != nil {
-			return err
-		}
-		w.Header().Set("content-length", strconv.Itoa(len(encdata)))
-
-		// If this request is wrapped in a handler that might remove Content-Length (such
-		// as the automatic gzip we do in package node), we need to ensure the HTTP server
-		// doesn't perform chunked encoding. In case WriteTimeout is reached, the chunked
-		// encoding might not be finished correctly, and some clients do not like it when
-		// the final chunk is missing.
-		w.Header().Set("transfer-encoding", "identity")
-
-		_, err = w.Write(encdata)
-		if f, ok := w.(http.Flusher); ok {
-			f.Flush()
-		}
-		return err
+	var buf []byte
+	encodeMsg := func(ctx context.Context, msg *jsonrpcMessage, isError bool) error {
+		buf = appendMessage(buf[:0], msg)
+		return httpWrite(ctx, w, buf, isError)
+	}
+	encodeBatch := func(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error {
+		buf = appendBatch(buf[:0], msgs)
+		return httpWrite(ctx, w, buf, isError)
 	}
 
 	dec := json.NewDecoder(conn)
 	dec.UseNumber()
 
-	return NewFuncCodec(conn, encoder, dec.Decode)
+	return NewFuncCodec(conn, encodeMsg, encodeBatch, dec.Decode)
+}
+
+// httpWrite writes pre-encoded response data over HTTP.
+func httpWrite(ctx context.Context, w http.ResponseWriter, data []byte, isError bool) (err error) {
+	_, _, spanEnd := telemetry.StartSpanWithTracer(ctx, telemetry.TracerFromContext(ctx), "rpc.httpWrite")
+	defer spanEnd(&err)
+
+	w.Header().Set("content-length", strconv.Itoa(len(data)))
+
+	if !isError {
+		// Normal path, just send the response and let the HTTP server decide
+		// when to flush.
+		_, err = w.Write(data)
+		return err
+	}
+
+	// It's an error response and requires special treatment.
+	//
+	// In case of a timeout error, the response must be written before the HTTP
+	// server's write timeout occurs. So we need to flush the response.
+	//
+	// If this request is wrapped in a handler that might remove Content-Length (such
+	// as the automatic gzip we do in package node), we need to ensure the HTTP server
+	// doesn't perform chunked encoding. In case WriteTimeout is reached, the chunked
+	// encoding might not be finished correctly, and some clients do not like it when
+	// the final chunk is missing. To do this, we set TE = identity, which is a signal
+	// recognized by outer handlers to avoid compression.
+	w.Header().Set("transfer-encoding", "identity")
+	_, err = w.Write(data)
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	return err
 }
 
 // Close does nothing and always returns nil.
