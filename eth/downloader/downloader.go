@@ -964,7 +964,7 @@ func (d *Downloader) processSnapSyncContent() error {
 
 		if oldPivot == nil { // no results piling up, we can move the pivot
 			if !d.committed.Load() { // not yet passed the pivot, we can move the pivot
-				if pivot.Hash() != sync.pivot.Hash() { // pivot position changed, we can move the pivot
+				if pivot.Root != sync.pivot.Root { // pivot state root changed, we can move the pivot
 					sync.Cancel()
 					sync = d.syncState(pivot)
 					go closeOnErr(sync)
