@@ -295,7 +295,7 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 	}
 	for i := 0; i < len(blobHashes); i++ {
 		if blobHashes[i] != versionedHashes[i] {
-			return nil, fmt.Errorf("invalid versionedHash at %v: %v blobHashes: %v", i, versionedHashes, blobHashes)
+			return nil, fmt.Errorf("invalid versionedHash at %v: %v blobHash: %v", i, versionedHashes[i], blobHashes[i])
 		}
 	}
 	// Only set withdrawalsRoot if it is non-nil. This allows CLs to use
