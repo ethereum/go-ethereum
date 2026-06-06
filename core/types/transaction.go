@@ -361,8 +361,9 @@ func (tx *Transaction) GasTipCapIntCmp(other *big.Int) int {
 // returns ErrGasFeeCapTooLow, and value is undefined.
 func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
 	dst := new(uint256.Int)
-	base := new(uint256.Int)
+	var base *uint256.Int
 	if baseFee != nil {
+		base = new(uint256.Int)
 		if base.SetFromBig(baseFee) {
 			return nil, ErrUint256Overflow
 		}
