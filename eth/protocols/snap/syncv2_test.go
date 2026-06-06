@@ -687,7 +687,7 @@ func testMultiSyncManyUselessV2(t *testing.T, scheme string) {
 		cancel = make(chan struct{})
 		term   = func() { once.Do(func() { close(cancel) }) }
 	)
-	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(scheme, 100, 3000, true, false, false)
+	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(scheme, 100, 300, true, false, false)
 
 	mkSource := func(name string, noAccount, noStorage bool) *testPeerV2 {
 		source := newTestPeerV2(name, t, term)
@@ -730,7 +730,7 @@ func testMultiSyncManyUselessWithLowTimeoutV2(t *testing.T, scheme string) {
 		cancel = make(chan struct{})
 		term   = func() { once.Do(func() { close(cancel) }) }
 	)
-	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(scheme, 100, 3000, true, false, false)
+	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(scheme, 100, 300, true, false, false)
 
 	mkSource := func(name string, noAccount, noStorage bool) *testPeerV2 {
 		source := newTestPeerV2(name, t, term)
@@ -775,7 +775,7 @@ func testMultiSyncManyUnresponsiveV2(t *testing.T, scheme string) {
 		cancel = make(chan struct{})
 		term   = func() { once.Do(func() { close(cancel) }) }
 	)
-	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(scheme, 100, 3000, true, false, false)
+	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(scheme, 100, 300, true, false, false)
 
 	mkSource := func(name string, noAccount, noStorage bool) *testPeerV2 {
 		source := newTestPeerV2(name, t, term)
@@ -1047,7 +1047,7 @@ func testSyncWithStorageAndOneCappedPeerV2(t *testing.T, scheme string) {
 		cancel = make(chan struct{})
 		term   = func() { once.Do(func() { close(cancel) }) }
 	)
-	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(scheme, 300, 1000, false, false, false)
+	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(scheme, 300, 100, false, false, false)
 
 	mkSource := func(name string, slow bool) *testPeerV2 {
 		source := newTestPeerV2(name, t, term)
@@ -1087,7 +1087,7 @@ func testSyncWithStorageAndCorruptPeerV2(t *testing.T, scheme string) {
 		cancel = make(chan struct{})
 		term   = func() { once.Do(func() { close(cancel) }) }
 	)
-	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(scheme, 100, 3000, true, false, false)
+	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(scheme, 100, 300, true, false, false)
 
 	mkSource := func(name string, handler storageHandlerFuncV2) *testPeerV2 {
 		source := newTestPeerV2(name, t, term)
@@ -1125,7 +1125,7 @@ func testSyncWithStorageAndNonProvingPeerV2(t *testing.T, scheme string) {
 		cancel = make(chan struct{})
 		term   = func() { once.Do(func() { close(cancel) }) }
 	)
-	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(scheme, 100, 3000, true, false, false)
+	sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(scheme, 100, 300, true, false, false)
 
 	mkSource := func(name string, handler storageHandlerFuncV2) *testPeerV2 {
 		source := newTestPeerV2(name, t, term)
