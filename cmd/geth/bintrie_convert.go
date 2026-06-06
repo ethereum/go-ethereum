@@ -63,6 +63,7 @@ var (
 				Flags: slices.Concat([]cli.Flag{
 					deleteSourceFlag,
 					memoryLimitFlag,
+					utils.BinTrieGroupDepthFlag,
 				}, utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
 geth bintrie convert [--delete-source] [--memory-limit MB] [state-root]
