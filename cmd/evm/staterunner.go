@@ -118,8 +118,8 @@ func runStateTest(ctx *cli.Context, fname string) ([]testResult, error) {
 		if !re.MatchString(key) {
 			continue
 		}
-		for i, st := range test.Subtests() {
-			if idx := ctx.Int(idxFlag.Name); idx != -1 && idx != i {
+		for _, st := range test.Subtests() {
+			if idx := ctx.Int(idxFlag.Name); idx != -1 && idx != st.Index {
 				// If specific index requested, skip all tests that do not match.
 				continue
 			}
