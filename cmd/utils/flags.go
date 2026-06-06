@@ -1617,7 +1617,7 @@ func setTxPool(ctx *cli.Context, cfg *legacypool.Config) {
 			if trimmed := strings.TrimSpace(account); !common.IsHexAddress(trimmed) {
 				Fatalf("Invalid account in --txpool.locals: %s", trimmed)
 			} else {
-				cfg.Locals = append(cfg.Locals, common.HexToAddress(account))
+				cfg.Locals = append(cfg.Locals, common.HexToAddress(trimmed))
 			}
 		}
 	}
