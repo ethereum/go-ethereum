@@ -109,6 +109,27 @@ func TestTxArgs(t *testing.T) {
 	*/
 }
 
+func TestTxArgsSetCodeTx(t *testing.T) {
+	data := []byte(`{"from":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","authorizationList":[{"chainId":"0x7","address":"0x0000000000000000000000000000000000000001","nonce":"0x1","yParity":"0x0","r":"0x1","s":"0x2"}],"accessList":[],"chainId":"0x7","gas":"0x124f8","input":"0x","maxFeePerGas":"0x6fc23ac00","maxPriorityFeePerGas":"0x3b9aca00","nonce":"0x0","to":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","value":"0x0"}`)
+
+	var txArgs SendTxArgs
+	if err := json.Unmarshal(data, &txArgs); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := txArgs.ToTransaction()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have := tx.Type(); have != types.SetCodeTxType {
+		t.Fatalf("have tx type %d, want %d", have, types.SetCodeTxType)
+	}
+	if have := tx.SetCodeAuthorizations(); len(have) != 1 {
+		t.Fatalf("have %d authorizations, want 1", len(have))
+	} else if have[0] != txArgs.AuthorizationList[0] {
+		t.Fatalf("authorization mismatch: have %#v, want %#v", have[0], txArgs.AuthorizationList[0])
+	}
+}
+
 func TestBlobTxs(t *testing.T) {
 	blob := kzg4844.Blob{0x1}
 	commitment, err := kzg4844.BlobToCommitment(&blob)
