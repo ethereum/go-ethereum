@@ -360,12 +360,12 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string, t
 		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitCommit="+env.Commit)
 		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitDate="+env.Date)
 	}
+	switch targetOS {
 	// Strip DWARF on darwin. This used to be required for certain things,
 	// and there is no downside to this, so we just keep doing it.
-	if targetOS == "darwin" {
+	case "darwin":
 		ld = append(ld, "-s")
-	}
-	if targetOS == "linux" {
+	case "linux":
 		// Enforce the stacksize to 8M, which is the case on most platforms apart from
 		// alpine Linux.
 		// See https://sourceware.org/binutils/docs-2.23.1/ld/Options.html#Options
@@ -380,6 +380,8 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string, t
 			buildTags = append(buildTags, "osusergo", "netgo")
 		}
 		ld = append(ld, "-extldflags", "'"+strings.Join(extld, " ")+"'")
+	case "tamago":
+		ld = append(ld, "-T", "0x80010000", "-R", "0x1000")
 	}
 	// TODO(gballet): revisit after the input api has been defined
 	if runtime.GOARCH == "wasm" {
