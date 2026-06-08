@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"strconv"
 	"sync"
@@ -35,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/engineapi"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -49,14 +51,20 @@ import (
 
 // Register adds the engine API and related APIs to the full node.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
+	api := NewConsensusAPI(backend)
 	stack.RegisterAPIs([]rpc.API{
 		newTestingAPI(backend),
 		{
 			Namespace:     "engine",
-			Service:       NewConsensusAPI(backend),
+			Service:       api,
 			Authenticated: true,
 		},
 	})
+	// Mount the REST + SSZ Engine API (execution-apis #793) under
+	// /engine/v2/ on the authenticated HTTP server. The router shares
+	// catalyst's business logic via the restBackend adapter.
+	stack.RegisterAuthHandler("engine-rest", engineapi.BasePath+"/",
+		http.StripPrefix(engineapi.BasePath, engineapi.NewRouter(newRESTBackend(api))))
 	return nil
 }
 

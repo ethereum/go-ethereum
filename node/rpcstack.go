@@ -93,6 +93,11 @@ type httpServer struct {
 
 	// disableHTTP2 disables HTTP/2 support on this server when set to true.
 	disableHTTP2 bool
+
+	// authSecret, when set, causes the server to apply JWT authentication
+	// to mux-routed handlers. Used by the auth server to protect REST
+	// endpoints registered via Node.RegisterAuthHandler.
+	authSecret []byte
 }
 
 const (
@@ -221,7 +226,11 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// These are made available when RPC is enabled.
 		muxHandler, pattern := h.mux.Handler(r)
 		if pattern != "" {
-			muxHandler.ServeHTTP(w, r)
+			if len(h.authSecret) != 0 {
+				newJWTHandler(h.authSecret, muxHandler).ServeHTTP(w, r)
+			} else {
+				muxHandler.ServeHTTP(w, r)
+			}
 			return
 		}
 

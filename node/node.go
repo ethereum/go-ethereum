@@ -148,8 +148,9 @@ func New(conf *Config) (*Node, error) {
 
 	// Configure RPC servers.
 	node.http = newHTTPServer(node.log, conf.HTTPTimeouts)
+	// The REST + SSZ Engine API (execution-apis #793) requires HTTP/2,
+	// so the authenticated HTTP server speaks h2c alongside HTTP/1.1.
 	node.httpAuth = newHTTPServer(node.log, conf.HTTPTimeouts)
-	node.httpAuth.disableHTTP2 = true // Engine API does not need HTTP/2
 	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
 	node.wsAuth = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
 	node.wsAuth.disableHTTP2 = true
@@ -434,6 +435,7 @@ func (n *Node) startRPC() error {
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
 			return err
 		}
+		server.authSecret = secret
 		sharedConfig := rpcEndpointConfig{
 			jwtSecret:              secret,
 			batchItemLimit:         engineAPIBatchItemLimit,
@@ -603,6 +605,20 @@ func (n *Node) RegisterHandler(name, path string, handler http.Handler) {
 
 	n.http.mux.Handle(path, handler)
 	n.http.handlerNames[path] = name
+}
+
+// RegisterAuthHandler mounts a handler on the authenticated HTTP server's mux.
+// JWT auth is applied to it via the same middleware that protects the
+// JSON-RPC engine namespace. Used by the REST + SSZ Engine API.
+func (n *Node) RegisterAuthHandler(name, path string, handler http.Handler) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	if n.state != initializingState {
+		panic("can't register HTTP handler on running/stopped node")
+	}
+	n.httpAuth.mux.Handle(path, handler)
+	n.httpAuth.handlerNames[path] = name
 }
 
 // Attach creates an RPC client attached to an in-process API handler.

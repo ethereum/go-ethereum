@@ -1,0 +1,373 @@
+// Copyright 2026 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package engineapi
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/beacon/engine"
+	sszt "github.com/ethereum/go-ethereum/beacon/engine/ssz"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params/forks"
+	"github.com/holiman/uint256"
+	"github.com/karalabe/ssz"
+)
+
+// stubBackend captures requests to verify the router routes correctly.
+type stubBackend struct {
+	fcuStatus engine.PayloadStatusV1
+	fcuID     *engine.PayloadID
+	npStatus  engine.PayloadStatusV1
+	npErr     error
+
+	lastFCUState  engine.ForkchoiceStateV1
+	lastFCUAttrs  *engine.PayloadAttributes
+	lastNPData    engine.ExecutableData
+	lastNPHashes  []common.Hash
+	lastNPRequest [][]byte
+
+	envelope *engine.ExecutionPayloadEnvelope
+	getErr   error
+
+	bodies     []*types.Body
+	bodyTimes  []uint64
+	v1Blobs    []*engine.BlobAndProofV1
+	v2Blobs    []*engine.BlobAndProofV2
+	forkAtTime func(uint64) forks.Fork
+}
+
+func (s *stubBackend) ForkchoiceUpdated(_ context.Context, state engine.ForkchoiceStateV1, attrs *engine.PayloadAttributes, _ engine.PayloadVersion) (engine.ForkChoiceResponse, error) {
+	s.lastFCUState = state
+	s.lastFCUAttrs = attrs
+	return engine.ForkChoiceResponse{PayloadStatus: s.fcuStatus, PayloadID: s.fcuID}, nil
+}
+
+func (s *stubBackend) NewPayload(_ context.Context, data engine.ExecutableData, hashes []common.Hash, _ *common.Hash, requests [][]byte) (engine.PayloadStatusV1, error) {
+	s.lastNPData = data
+	s.lastNPHashes = hashes
+	s.lastNPRequest = requests
+	return s.npStatus, s.npErr
+}
+
+func (s *stubBackend) GetPayload(engine.PayloadID, []forks.Fork) (*engine.ExecutionPayloadEnvelope, error) {
+	return s.envelope, s.getErr
+}
+
+func (s *stubBackend) GetBlobs([]common.Hash, bool) ([]*engine.BlobAndProofV2, []*engine.BlobAndProofV1, error) {
+	return s.v2Blobs, s.v1Blobs, nil
+}
+
+func (s *stubBackend) BodiesByHash(hashes []common.Hash) ([]*types.Body, []uint64) {
+	return s.bodies, s.bodyTimes
+}
+
+func (s *stubBackend) BodiesByRange(from, count uint64) ([]*types.Body, []uint64) {
+	return s.bodies, s.bodyTimes
+}
+
+func (s *stubBackend) ForkFromTimestamp(ts uint64) forks.Fork {
+	if s.forkAtTime != nil {
+		return s.forkAtTime(ts)
+	}
+	return forks.Amsterdam
+}
+
+func (s *stubBackend) ClientVersion() engine.ClientVersionV1 {
+	return engine.ClientVersionV1{Code: "GE", Name: "geth", Version: "test", Commit: "0xdeadbeef"}
+}
+
+func newTestServer(t *testing.T, b Backend) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.StripPrefix(BasePath, NewRouter(b)))
+}
+
+func sszPost(t *testing.T, srv *httptest.Server, path string, body ssz.Object) *http.Response {
+	t.Helper()
+	buf := make([]byte, ssz.Size(body))
+	if err := ssz.EncodeToBytes(buf, body); err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+BasePath+path, bytes.NewReader(buf))
+	req.Header.Set("Content-Type", sszContentType)
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatalf("post %s: %v", path, err)
+	}
+	return resp
+}
+
+func decodeSSZ[T ssz.Object](t *testing.T, resp *http.Response, obj T) {
+	t.Helper()
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if err := ssz.DecodeFromBytes(body, obj); err != nil {
+		t.Fatalf("decode response: %v\nbody: %x", err, body)
+	}
+}
+
+func TestRouterNewPayload(t *testing.T) {
+	id := engine.PayloadID{1, 2, 3}
+	b := &stubBackend{
+		npStatus: engine.PayloadStatusV1{Status: engine.VALID, LatestValidHash: &common.Hash{0xaa}},
+		fcuID:    &id,
+	}
+	srv := newTestServer(t, b)
+	defer srv.Close()
+
+	env := &sszt.ExecutionPayloadEnvelopeAmsterdam{
+		Payload: &sszt.ExecutionPayloadAmsterdam{
+			BaseFeePerGas: uint256.NewInt(7e9),
+			LogsBloom:     [256]byte{},
+		},
+		ParentBeaconBlockRoot: common.Hash{0x55},
+	}
+	resp := sszPost(t, srv, "/amsterdam/payloads", env)
+	if resp.StatusCode != 200 {
+		t.Fatalf("want 200, got %d", resp.StatusCode)
+	}
+	got := new(sszt.PayloadStatus)
+	decodeSSZ(t, resp, got)
+	if got.Status != sszt.StatusValid {
+		t.Errorf("status=%d want VALID(%d)", got.Status, sszt.StatusValid)
+	}
+	if len(got.LatestValidHash) != 1 || got.LatestValidHash[0] != (common.Hash{0xaa}) {
+		t.Errorf("LatestValidHash=%v", got.LatestValidHash)
+	}
+}
+
+func TestRouterForkchoice(t *testing.T) {
+	id := engine.PayloadID{9, 9, 9}
+	b := &stubBackend{
+		fcuStatus: engine.PayloadStatusV1{Status: engine.VALID},
+		fcuID:     &id,
+	}
+	srv := newTestServer(t, b)
+	defer srv.Close()
+
+	fcu := &sszt.ForkchoiceUpdateAmsterdam{
+		ForkchoiceState: &sszt.ForkchoiceState{HeadBlockHash: common.Hash{0xaa}},
+	}
+	resp := sszPost(t, srv, "/amsterdam/forkchoice", fcu)
+	if resp.StatusCode != 200 {
+		t.Fatalf("want 200, got %d", resp.StatusCode)
+	}
+	got := new(sszt.ForkchoiceUpdateResponseAmsterdam)
+	decodeSSZ(t, resp, got)
+	if got.PayloadStatus == nil || got.PayloadStatus.Status != sszt.StatusValid {
+		t.Errorf("status: %#v", got.PayloadStatus)
+	}
+	if len(got.PayloadID) != 1 || got.PayloadID[0] != [8]byte(id) {
+		t.Errorf("PayloadID=%v want %v", got.PayloadID, id)
+	}
+}
+
+func TestRouterUnsupportedFork(t *testing.T) {
+	srv := newTestServer(t, &stubBackend{})
+	defer srv.Close()
+
+	// Bogus fork in URL.
+	resp, err := srv.Client().Post(srv.URL+BasePath+"/bogus/payloads", sszContentType, bytes.NewReader(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 400 {
+		t.Fatalf("want 400, got %d", resp.StatusCode)
+	}
+
+	// Real fork but not Amsterdam.
+	resp, err = srv.Client().Post(srv.URL+BasePath+"/cancun/payloads", sszContentType, bytes.NewReader(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 400 {
+		t.Fatalf("want 400 for cancun, got %d", resp.StatusCode)
+	}
+}
+
+func TestRouterUnsupportedMediaType(t *testing.T) {
+	srv := newTestServer(t, &stubBackend{})
+	defer srv.Close()
+	resp, err := srv.Client().Post(srv.URL+BasePath+"/amsterdam/payloads", "application/json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 415 {
+		t.Fatalf("want 415, got %d", resp.StatusCode)
+	}
+}
+
+func TestRouterCapabilities(t *testing.T) {
+	srv := newTestServer(t, &stubBackend{})
+	defer srv.Close()
+	resp, err := srv.Client().Get(srv.URL + BasePath + "/capabilities")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("want 200, got %d", resp.StatusCode)
+	}
+	var c capabilitiesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&c); err != nil {
+		t.Fatal(err)
+	}
+	if len(c.SupportedForks) == 0 || c.SupportedForks[0] != "amsterdam" {
+		t.Errorf("supported forks: %v", c.SupportedForks)
+	}
+	if got := c.Limits["blobs.max_versioned_hashes"]; got != sszt.MaxBlobsRequest {
+		t.Errorf("blobs limit: %d", got)
+	}
+}
+
+func TestRouterIdentity(t *testing.T) {
+	srv := newTestServer(t, &stubBackend{})
+	defer srv.Close()
+	resp, err := srv.Client().Get(srv.URL + BasePath + "/identity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("want 200, got %d", resp.StatusCode)
+	}
+	var body struct {
+		Versions []engine.ClientVersionV1 `json:"versions"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Versions) != 1 || body.Versions[0].Code != "GE" {
+		t.Errorf("identity: %#v", body)
+	}
+}
+
+func TestRouterTrailingSlash404(t *testing.T) {
+	srv := newTestServer(t, &stubBackend{})
+	defer srv.Close()
+	resp, err := srv.Client().Get(srv.URL + BasePath + "/capabilities/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 404 {
+		t.Fatalf("want 404 for trailing slash, got %d", resp.StatusCode)
+	}
+}
+
+func TestRouterSSZDecodeError(t *testing.T) {
+	srv := newTestServer(t, &stubBackend{})
+	defer srv.Close()
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+BasePath+"/amsterdam/payloads", bytes.NewReader([]byte{0xff}))
+	req.Header.Set("Content-Type", sszContentType)
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 400 {
+		t.Fatalf("want 400 ssz-decode-error, got %d", resp.StatusCode)
+	}
+	var p problem
+	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+		t.Fatal(err)
+	}
+	if p.Type != ErrSSZDecode {
+		t.Errorf("type=%s want %s", p.Type, ErrSSZDecode)
+	}
+}
+
+func TestRouterBlobsV2AllOrNothing(t *testing.T) {
+	// One requested hash, but backend returns a nil entry -> /v2 should 204.
+	b := &stubBackend{v2Blobs: []*engine.BlobAndProofV2{nil}}
+	srv := newTestServer(t, b)
+	defer srv.Close()
+	req := &sszt.BlobsVersionedHashesRequest{VersionedHashes: []common.Hash{{0x01}}}
+	resp := sszPost(t, srv, "/blobs/v2", req)
+	defer resp.Body.Close()
+	if resp.StatusCode != 204 {
+		t.Fatalf("want 204, got %d", resp.StatusCode)
+	}
+}
+
+func TestRouterBlobsV3PartialOK(t *testing.T) {
+	b := &stubBackend{v2Blobs: []*engine.BlobAndProofV2{nil, {Blob: make([]byte, sszt.BytesPerBlob)}}}
+	srv := newTestServer(t, b)
+	defer srv.Close()
+	req := &sszt.BlobsVersionedHashesRequest{VersionedHashes: []common.Hash{{0x01}, {0x02}}}
+	resp := sszPost(t, srv, "/blobs/v3", req)
+	if resp.StatusCode != 200 {
+		t.Fatalf("want 200, got %d", resp.StatusCode)
+	}
+	got := new(sszt.BlobsV2Response)
+	decodeSSZ(t, resp, got)
+	if len(got.Entries) != 2 {
+		t.Fatalf("entries=%d", len(got.Entries))
+	}
+	if got.Entries[0].Available {
+		t.Error("entry 0 should be unavailable")
+	}
+	if !got.Entries[1].Available {
+		t.Error("entry 1 should be available")
+	}
+}
+
+func TestRouterGetPayloadCacheControl(t *testing.T) {
+	env := &engine.ExecutionPayloadEnvelope{
+		ExecutionPayload: &engine.ExecutableData{LogsBloom: make([]byte, 256)},
+		BlockValue:       uint256.NewInt(0).ToBig(),
+	}
+	srv := newTestServer(t, &stubBackend{envelope: env})
+	defer srv.Close()
+	resp, err := srv.Client().Get(srv.URL + BasePath + "/amsterdam/payloads/0x0102030405060708")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("want 200, got %d", resp.StatusCode)
+	}
+	if cc := resp.Header.Get("Cache-Control"); cc != "no-store" {
+		t.Errorf("Cache-Control=%q want no-store", cc)
+	}
+}
+
+func TestRouterGetPayloadUnknown(t *testing.T) {
+	srv := newTestServer(t, &stubBackend{getErr: engine.UnknownPayload})
+	defer srv.Close()
+	resp, err := srv.Client().Get(srv.URL + BasePath + "/amsterdam/payloads/0x0102030405060708")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 404 {
+		t.Fatalf("want 404, got %d", resp.StatusCode)
+	}
+}
