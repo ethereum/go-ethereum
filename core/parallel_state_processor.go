@@ -44,7 +44,7 @@ func NewParallelStateProcessor(chain *HeaderChain, vmConfig *vm.Config) Parallel
 // performs post-tx state transition (system contracts and withdrawals)
 // and calculates the ProcessResult, returning it to be sent on resCh
 // by resultHandler
-func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStart time.Time, preTxBal *bal.ConstructionBlockAccessList, prepared *bal.PreparedAccessList, statedb *state.StateDB, results []txExecResult) *ProcessResultWithMetrics {
+func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStart time.Time, preTxBal *bal.ConstructionBlockAccessList, prepared *bal.AccessListReader, statedb *state.StateDB, results []txExecResult) *ProcessResultWithMetrics {
 	tExec := time.Since(tExecStart)
 	tPostprocessStart := time.Now()
 	header := block.Header()
@@ -148,7 +148,7 @@ type txExecResult struct {
 
 // resultHandler polls until all transactions have finished executing and the
 // state root calculation is complete. The result is emitted on resCh.
-func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxBAL *bal.ConstructionBlockAccessList, prepared *bal.PreparedAccessList, statedb *state.StateDB, tExecStart time.Time, txResCh <-chan txExecResult, stateRootCalcResCh <-chan stateRootCalculationResult, resCh chan *ProcessResultWithMetrics) {
+func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxBAL *bal.ConstructionBlockAccessList, prepared *bal.AccessListReader, statedb *state.StateDB, tExecStart time.Time, txResCh <-chan txExecResult, stateRootCalcResCh <-chan stateRootCalculationResult, resCh chan *ProcessResultWithMetrics) {
 	// 1. if the block has transactions, receive the execution results from all of them and return an error on resCh if any txs err'd
 	// 2. once all txs are executed, compute the post-tx state transition and produce the ProcessResult sending it on resCh (or an error if the post-tx state didn't match what is reported in the BAL)
 	var results []txExecResult

@@ -212,18 +212,18 @@ func (r *prefetchStateReader) process(start, limit int) {
 // prior to TxIndex.
 //
 // It is a cheap, per-transaction view over a shared, read-only
-// bal.PreparedAccessList: constructing one is O(1) and every lookup is an
+// bal.AccessListReader: constructing one is O(1) and every lookup is an
 // allocation-free binary search.
 type ReaderWithBlockLevelAccessList struct {
 	Reader
-	prepared *bal.PreparedAccessList
+	prepared *bal.AccessListReader
 	TxIndex  int
 }
 
 // NewReaderWithPreparedAccessList wraps a base reader with a shared, already
 // preprocessed access list. This is the cheap constructor used on the hot path:
 // the prepared list is built once per block and borrowed by every per-tx reader.
-func NewReaderWithPreparedAccessList(base Reader, prepared *bal.PreparedAccessList, txIndex int) *ReaderWithBlockLevelAccessList {
+func NewReaderWithPreparedAccessList(base Reader, prepared *bal.AccessListReader, txIndex int) *ReaderWithBlockLevelAccessList {
 	return &ReaderWithBlockLevelAccessList{
 		Reader:   base,
 		prepared: prepared,
@@ -235,7 +235,7 @@ func NewReaderWithPreparedAccessList(base Reader, prepared *bal.PreparedAccessLi
 // preprocessing it on the spot. Prefer NewReaderWithPreparedAccessList when the
 // prepared list can be built once and shared across multiple readers.
 func NewReaderWithBlockLevelAccessList(base Reader, accessList bal.BlockAccessList, txIndex int) *ReaderWithBlockLevelAccessList {
-	return NewReaderWithPreparedAccessList(base, bal.NewPreparedAccessList(accessList), txIndex)
+	return NewReaderWithPreparedAccessList(base, bal.NewAccessListReader(accessList), txIndex)
 }
 
 // Account implements Reader, returning the account with the specific address.

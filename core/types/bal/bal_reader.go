@@ -7,67 +7,39 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// PreparedAccessList is an immutable, per-block preprocessed view of a
-// BlockAccessList optimized for repeated point-in-time reads.
-//
-// It is built once per block (NewPreparedAccessList) before parallel
-// transaction execution begins. The change slices it holds are the
-// already-sorted slices decoded from the BlockAccessList, borrowed by
-// reference (never copied, never mutated). After construction the structure
-// is read-only and therefore safe for concurrent use by all per-transaction
-// readers without any synchronization.
-//
-// Each lookup binary-searches the relevant change slice for the last mutation
-// strictly before the queried block-access index, which is O(log K) and
-// allocation-free, in contrast to the previous map-backed reader that
-// re-walked every change array from index 0 and re-allocated an aggregate
-// mutation object on every call.
-type PreparedAccessList struct {
+// AccessListReader enables efficient state diff lookups from a block access
+// list during block execution.
+type AccessListReader struct {
 	accounts map[common.Address]*preparedAccount
 }
 
 type preparedAccount struct {
-	// The following slices are borrowed directly from the decoded
-	// AccountAccess. They are validated to be strictly sorted ascending by
-	// BlockAccessIndex (see bal_encoding.go), which is exactly the key we
-	// binary-search on.
-	balances []encodingBalanceChange
-	nonces   []encodingAccountNonce
-	codes    []encodingCodeChange
-	storage  map[common.Hash]*preparedSlot
-
-	// access is retained to back the once-per-block aggregate helpers
-	// (StorageKeys, AllDestructions) without re-deriving anything.
-	access *AccountAccess
+	storage map[common.Hash]preparedSlot
+	AccountAccess
 }
 
 type preparedSlot struct {
 	changes []encodingStorageWrite // borrowed, sorted asc by BlockAccessIndex
 }
 
-// NewPreparedAccessList preprocesses a BlockAccessList into a PreparedAccessList.
-// It performs a single linear pass and borrows the underlying change slices by
-// reference; the provided list must not be mutated afterwards.
-func NewPreparedAccessList(list BlockAccessList) *PreparedAccessList {
+// NewAccessListReader instantiates an access list reader.
+func NewAccessListReader(list BlockAccessList) *AccessListReader {
 	accounts := make(map[common.Address]*preparedAccount, len(list))
 	for i := range list {
-		a := &list[i] // index; do not range-copy the AccountAccess
+		a := list[i] // index; do not range-copy the AccountAccess
 		pa := &preparedAccount{
-			balances: a.BalanceChanges,
-			nonces:   a.NonceChanges,
-			codes:    a.CodeChanges,
-			access:   a,
+			AccountAccess: a,
 		}
 		if len(a.StorageChanges) > 0 {
-			pa.storage = make(map[common.Hash]*preparedSlot, len(a.StorageChanges))
+			pa.storage = make(map[common.Hash]preparedSlot, len(a.StorageChanges))
 			for j := range a.StorageChanges {
 				sc := &a.StorageChanges[j]
-				pa.storage[sc.Slot.Bytes32()] = &preparedSlot{changes: sc.SlotChanges}
+				pa.storage[sc.Slot.Bytes32()] = preparedSlot{changes: sc.SlotChanges}
 			}
 		}
 		accounts[a.Address] = pa
 	}
-	return &PreparedAccessList{accounts: accounts}
+	return &AccessListReader{accounts: accounts}
 }
 
 // lastBefore returns the position of the last element in a slice of n elements
@@ -82,57 +54,57 @@ func lastBefore(n int, idx uint32, keyAt func(k int) uint32) int {
 // Balance returns the post-balance in effect immediately before the given block
 // access index, or nil if the account's balance was not changed before idx.
 // The returned pointer aliases the access list and must not be mutated.
-func (p *PreparedAccessList) Balance(addr common.Address, idx int) *uint256.Int {
+func (p *AccessListReader) Balance(addr common.Address, idx int) *uint256.Int {
 	a := p.accounts[addr]
 	if a == nil {
 		return nil
 	}
-	k := lastBefore(len(a.balances), uint32(idx), func(i int) uint32 { return a.balances[i].BlockAccessIndex })
+	k := lastBefore(len(a.BalanceChanges), uint32(idx), func(i int) uint32 { return a.BalanceChanges[i].BlockAccessIndex })
 	if k < 0 {
 		return nil
 	}
-	return a.balances[k].PostBalance
+	return a.BalanceChanges[k].PostBalance
 }
 
 // Nonce returns the post-nonce in effect immediately before the given block
 // access index. The boolean is false if the nonce was not changed before idx.
-func (p *PreparedAccessList) Nonce(addr common.Address, idx int) (uint64, bool) {
+func (p *AccessListReader) Nonce(addr common.Address, idx int) (uint64, bool) {
 	a := p.accounts[addr]
 	if a == nil {
 		return 0, false
 	}
-	k := lastBefore(len(a.nonces), uint32(idx), func(i int) uint32 { return a.nonces[i].BlockAccessIndex })
+	k := lastBefore(len(a.NonceChanges), uint32(idx), func(i int) uint32 { return a.NonceChanges[i].BlockAccessIndex })
 	if k < 0 {
 		return 0, false
 	}
-	return a.nonces[k].PostNonce, true
+	return a.NonceChanges[k].PostNonce, true
 }
 
 // Code returns the contract code in effect immediately before the given block
 // access index, or nil if the code was not changed before idx. The returned
 // slice aliases the access list and must not be mutated.
-func (p *PreparedAccessList) Code(addr common.Address, idx int) []byte {
+func (p *AccessListReader) Code(addr common.Address, idx int) []byte {
 	a := p.accounts[addr]
 	if a == nil {
 		return nil
 	}
-	k := lastBefore(len(a.codes), uint32(idx), func(i int) uint32 { return a.codes[i].BlockAccessIndex })
+	k := lastBefore(len(a.CodeChanges), uint32(idx), func(i int) uint32 { return a.CodeChanges[i].BlockAccessIndex })
 	if k < 0 {
 		return nil
 	}
-	return a.codes[k].NewCode
+	return a.CodeChanges[k].NewCode
 }
 
 // StorageAt returns the post-value of a storage slot immediately before the
 // given block access index. The boolean is false if the slot was not written
 // before idx.
-func (p *PreparedAccessList) StorageAt(addr common.Address, slot common.Hash, idx int) (common.Hash, bool) {
+func (p *AccessListReader) StorageAt(addr common.Address, slot common.Hash, idx int) (common.Hash, bool) {
 	a := p.accounts[addr]
 	if a == nil {
 		return common.Hash{}, false
 	}
-	s := a.storage[slot]
-	if s == nil {
+	s, ok := a.storage[slot]
+	if !ok {
 		return common.Hash{}, false
 	}
 	k := lastBefore(len(s.changes), uint32(idx), func(i int) uint32 { return s.changes[i].BlockAccessIndex })
@@ -145,7 +117,7 @@ func (p *PreparedAccessList) StorageAt(addr common.Address, slot common.Hash, id
 // AccountMutations returns the aggregate mutation for an account up until (and
 // not including) the given block access list index, or nil if the account was
 // not mutated before idx.
-func (p *PreparedAccessList) AccountMutations(addr common.Address, idx int) *AccountMutations {
+func (p *AccessListReader) AccountMutations(addr common.Address, idx int) *AccountMutations {
 	a := p.accounts[addr]
 	if a == nil {
 		return nil
@@ -181,17 +153,16 @@ type StorageKeys map[common.Address][]common.Hash
 
 // StorageKeys returns the set of accounts and storage keys mutated in the access
 // list. If reads is set, the un-mutated accounts/keys are included in the result.
-func (p *PreparedAccessList) StorageKeys(reads bool) (keys StorageKeys) {
+func (p *AccessListReader) StorageKeys(reads bool) (keys StorageKeys) {
 	keys = make(StorageKeys)
 	for addr, a := range p.accounts {
-		acct := a.access
-		for _, storageChange := range acct.StorageChanges {
+		for _, storageChange := range a.StorageChanges {
 			keys[addr] = append(keys[addr], storageChange.Slot.Bytes32())
 		}
-		if !(reads && len(acct.StorageReads) > 0) {
+		if !(reads && len(a.StorageReads) > 0) {
 			continue
 		}
-		for _, storageRead := range acct.StorageReads {
+		for _, storageRead := range a.StorageReads {
 			keys[addr] = append(keys[addr], storageRead.Bytes32())
 		}
 	}
@@ -199,7 +170,7 @@ func (p *PreparedAccessList) StorageKeys(reads bool) (keys StorageKeys) {
 }
 
 // Mutations returns the aggregate state mutations from bal indices [0, idx).
-func (p *PreparedAccessList) Mutations(idx int) *StateMutations {
+func (p *AccessListReader) Mutations(idx int) *StateMutations {
 	res := make(StateMutations)
 	for addr := range p.accounts {
 		if mut := p.AccountMutations(addr, idx); mut != nil {
@@ -212,9 +183,9 @@ func (p *PreparedAccessList) Mutations(idx int) *StateMutations {
 // AllDestructions returns all accounts that experienced a destruction, regardless
 // of whether they were later resurrected and exist after the block. It excludes
 // ephemeral contracts from the result.
-func (p *PreparedAccessList) AllDestructions() (res []common.Address) {
+func (p *AccessListReader) AllDestructions() (res []common.Address) {
 	for addr, a := range p.accounts {
-		for _, nonce := range a.access.NonceChanges {
+		for _, nonce := range a.NonceChanges {
 			if nonce.PostNonce == 0 {
 				res = append(res, addr)
 				break
