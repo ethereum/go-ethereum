@@ -211,7 +211,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			ws.ServeHTTP(w, r)
 			return
 		}
-		http.Error(w, "404 not found", http.StatusNotFound)
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 
