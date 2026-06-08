@@ -189,9 +189,12 @@ func (p *Peer) AsyncSendTransactions(hashes []common.Hash) {
 // directly as the queueing (memory) and transmission (bandwidth) costs should
 // not be managed directly.
 func (p *Peer) sendPooledTransactionHashes(hashes []common.Hash, types []byte, sizes []uint32) error {
+	if err := p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket{Types: types, Sizes: sizes, Hashes: hashes}); err != nil {
+		return err
+	}
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	p.knownTxs.Add(hashes...)
-	return p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket{Types: types, Sizes: sizes, Hashes: hashes})
+	return nil
 }
 
 // AsyncSendPooledTransactionHashes queues a list of transactions hashes to eventually
