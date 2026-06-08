@@ -116,7 +116,7 @@ func NewCache(p *BlobPool) *Cache {
 // It allows injecting a clock and a step hook.
 func NewCacheForTest(p *BlobPool, clock mclock.Clock, step func()) *Cache {
 	c := &Cache{
-		entries: make(map[common.Hash]*cachedBlob),
+		entries:  make(map[common.Hash]*cachedBlob),
 		blobpool: p,
 		hasBlobs: make(chan []common.Hash, 1),
 		getBlobs: make(chan struct{}, 1),

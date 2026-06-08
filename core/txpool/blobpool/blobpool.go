@@ -1117,7 +1117,6 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	basefeeGauge.Update(int64(basefee.Uint64()))
 	blobfeeGauge.Update(int64(blobfee.Uint64()))
 	p.updateStorageMetrics()
-
 }
 
 // vhashesByTx returns a snapshot of the mapping between transaction hash and
