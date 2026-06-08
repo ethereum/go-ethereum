@@ -1120,6 +1120,8 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 
 }
 
+// vhashesByTx returns a snapshot of the mapping between transaction hash and
+// versioned hashes.
 func (p *BlobPool) vhashesByTx() map[common.Hash][]common.Hash {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
@@ -1625,20 +1627,9 @@ func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 	}
 }
 
-// GetBlobs returns a number of blobs and proofs for the given versioned hashes.
+// getBlobs returns a number of blobs and proofs for the given versioned hashes.
 // Blobpool must place responses in the order given in the request, using null
 // for any missing blobs.
-//
-// For instance, if the request is [A_versioned_hash, B_versioned_hash,
-// C_versioned_hash] and blobpool has data for blobs A and C, but doesn't have
-// data for B, the response MUST be [A, null, C].
-//
-// This is a utility method for the engine API, enabling consensus clients to
-// retrieve blobs from the pools directly instead of the network.
-//
-// The version argument specifies the type of proofs to return, either the
-// blob proofs (version 0) or the cell proofs (version 1). Proofs conversion is
-// CPU intensive and prohibited in the blobpool explicitly.
 func (p *BlobPool) getBlobs(vhashes []common.Hash, version byte) (_ []*kzg4844.Blob, _ []kzg4844.Commitment, _ [][]kzg4844.Proof, err error) {
 	var (
 		blobs       = make([]*kzg4844.Blob, len(vhashes))
@@ -1714,7 +1705,7 @@ func (p *BlobPool) getBlobs(vhashes []common.Hash, version byte) (_ []*kzg4844.B
 	return blobs, commitments, proofs, nil
 }
 
-// AvailableBlobs returns whether the blobs are available in the subpool.
+// availableBlobs returns whether the blobs are available in the subpool.
 func (p *BlobPool) availableBlobs(vhashes []common.Hash) []bool {
 	available := make([]bool, len(vhashes))
 	p.lock.RLock()

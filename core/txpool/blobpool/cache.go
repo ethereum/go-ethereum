@@ -38,7 +38,11 @@ import (
 type cacheMode int
 
 const (
+	// In hasBlobsMode, the cache keeps the blobs that it reported
+	// as available in a HasBlobs response.
 	hasBlobsMode cacheMode = iota
+	// In topKMode, the cache fills itself with the blobs of the top K
+	// most profitable transactions.
 	topKMode
 )
 
@@ -48,6 +52,11 @@ const (
 )
 
 var (
+	// Cache tracks 3 metrics: cache hit, cache miss, and the number of blobs
+	// it contains. Note that cache miss includes the blobs that we are actually
+	// missing on the lower level (in this case, the blobpool). The amount that
+	// we failed to predict) can be calculated with the telemetry span
+	// (blobs.filled - cache.hit).
 	cacheHitMeter   = metrics.NewRegisteredMeter("blobpool/cache/hit", nil)
 	cacheMissMeter  = metrics.NewRegisteredMeter("blobpool/cache/miss", nil)
 	cacheBlobsGauge = metrics.NewRegisteredGauge("blobpool/cache/blobs", nil)
@@ -60,20 +69,35 @@ type cachedBlob struct {
 	version    byte
 }
 
+// Cache holds the blobs that are likely to be requested by the GetBlobs engine API.
+//
+// Currently it operates in two modes
+//   - HasBlobsMode is triggered by the HasBlobs engine API. This stage ends
+//     when `hasBlobsTimeout` elapses or the GetBlobs engine API consumes
+//     the result.
+//     (Note: the cache is not guaranteed to always hold such blobs, since the
+//     blobpool might drop the transaction in the window between the engine API
+//     response and the cache update.)
+//   - TopKMode is the cache's default mode. Every `topKTimeout`, the cache selects
+//     the blobs of the top K most profitable transactions, unless it is in the other mode.
+//     Whenever HasBlobsMode is canceled, it falls back to TopKMode.
+//
+// Whenever the mode is changed, the goroutines (for cache update) started by
+// each mode should be canceled to prevent redundant computation.
 type Cache struct {
 	mu sync.Mutex
 
-	entries  map[common.Hash]*cachedBlob // vhash -> blob, commitment, proofs
+	entries  map[common.Hash]*cachedBlob // Mapping from vhash to cachedBlob
 	capacity uint
 
 	blobpool *BlobPool
 
-	hasBlobs chan []common.Hash // list of tx hashes that needs to be cached
+	hasBlobs chan []common.Hash // List of tx hashes that need to be pinned
 	getBlobs chan struct{}
 
 	mode cacheMode
 
-	cancelInflights context.CancelFunc
+	cancelInflights context.CancelFunc // Cancel the in-flight conversion/decode goroutines
 	inflight        sync.WaitGroup
 
 	clock mclock.Clock
@@ -83,10 +107,13 @@ type Cache struct {
 	quit chan struct{}
 }
 
+// NewCache creates a blob cache backed by the given blobpool.
 func NewCache(p *BlobPool, cap uint) *Cache {
 	return NewCacheForTest(p, cap, mclock.System{}, nil)
 }
 
+// NewCacheForTest creates a blob cache for test.
+// It allows injecting a clock and a step hook.
 func NewCacheForTest(p *BlobPool, cap uint, clock mclock.Clock, step func()) *Cache {
 	c := &Cache{
 		entries:  make(map[common.Hash]*cachedBlob, cap),
@@ -107,6 +134,7 @@ func NewCacheForTest(p *BlobPool, cap uint, clock mclock.Clock, step func()) *Ca
 	return c
 }
 
+// Stop cancels any in-flight work and terminates the cache loop.
 func (c *Cache) Stop() {
 	c.mu.Lock()
 	if c.cancelInflights != nil {
@@ -116,14 +144,17 @@ func (c *Cache) Stop() {
 	close(c.quit)
 }
 
+// HasBlobs reports whether the blob is available (in the cache or the
+// blobpool) and asks the loop to pin the ones it found.
 func (c *Cache) HasBlobs(ctx context.Context, vhashes []common.Hash) []bool {
 	var (
 		missIdx     []int
 		missVhashes []common.Hash
-		needPin     []common.Hash
+		needPin     []common.Hash // available vhashes
 	)
 	available := make([]bool, len(vhashes))
 
+	// First check cache and pass missing ones to blobpool.
 	c.mu.Lock()
 	for i, vhash := range vhashes {
 		if _, ok := c.entries[vhash]; ok {
@@ -138,6 +169,7 @@ func (c *Cache) HasBlobs(ctx context.Context, vhashes []common.Hash) []bool {
 
 	if len(missVhashes) > 0 {
 		pooled := c.blobpool.availableBlobs(missVhashes)
+		// Merge two results
 		for j, ok := range pooled {
 			if ok {
 				available[missIdx[j]] = true
@@ -148,12 +180,29 @@ func (c *Cache) HasBlobs(ctx context.Context, vhashes []common.Hash) []bool {
 
 	select {
 	case c.hasBlobs <- needPin:
+		// Note that we also send the ones we already have in cache,
+		// since it can be dropped from the cache before this signal is processed.
 		return available
 	case <-c.quit:
 		return nil
 	}
 }
 
+// GetBlobs returns the blobs and proofs for the given versioned hashes, serving
+// them from the cache when possible and falling back to the blobpool for misses.
+// Responses are placed in the order given in the request, using null for any
+// missing blob.
+//
+// For instance, if the request is [A_versioned_hash, B_versioned_hash,
+// C_versioned_hash] and blobpool has data for blobs A and C, but doesn't have
+// data for B, the response MUST be [A, null, C].
+//
+// This is a utility method for the engine API, enabling consensus clients to
+// retrieve blobs from the pools directly instead of the network.
+//
+// The version argument specifies the type of proofs to return, either the
+// blob proofs (version 0) or the cell proofs (version 1). Proofs conversion is
+// CPU intensive and prohibited explicitly.
 func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byte) (_ []*kzg4844.Blob, _ []kzg4844.Commitment, _ [][]kzg4844.Proof, err error) {
 	_, span, spanEnd := telemetry.StartSpan(ctx, "blobpool.GetBlobs")
 	defer spanEnd(&err)
@@ -242,11 +291,13 @@ func (c *Cache) loop() {
 	for {
 		select {
 		case want := <-c.hasBlobs:
+			// switch to hasBlobs
 			c.switchMode(hasBlobsMode)
 			c.update(want)
 			c.resetTimer(hbTimer, hbTrigger, hasBlobsTimeout)
 
 		case <-topKTrigger:
+			// switch to topK
 			if c.mode != topKMode {
 				if c.step != nil {
 					c.step()
@@ -258,12 +309,14 @@ func (c *Cache) loop() {
 			c.resetTimer(topKTimer, topKTrigger, topKTimeout)
 
 		case <-hbTrigger:
+			// hasBlobs mode is over - switch to topK
 			c.switchMode(topKMode)
 			want := c.selectKTxs()
 			c.update(want)
 			c.resetTimer(topKTimer, topKTrigger, topKTimeout)
 
 		case <-c.getBlobs:
+			// hasBlobs mode is over -  switch to topK
 			if c.mode != hasBlobsMode {
 				if c.step != nil {
 					c.step()
@@ -284,6 +337,8 @@ func (c *Cache) loop() {
 	}
 }
 
+// switchMode sets the cache mode and cancels any in-flight update from the
+// previous mode.
 func (c *Cache) switchMode(mode cacheMode) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -296,6 +351,9 @@ func (c *Cache) switchMode(mode cacheMode) {
 	}
 }
 
+// update updates the cache to hold the wanted vhashes. It evicts entries that
+// are no longer wanted and loads the missing ones from the blobpool in the
+// background.
 func (c *Cache) update(want []common.Hash) {
 	wantSet := make(map[common.Hash]struct{}, len(want))
 	for _, vh := range want {
@@ -381,6 +439,8 @@ func (c *Cache) update(want []common.Hash) {
 	}()
 }
 
+// selectKTxs returns the vhashes of the top K most profitable pending blob
+// transactions, up to the cache capacity.
 func (c *Cache) selectKTxs() []common.Hash {
 	p := c.blobpool
 	head := p.head.Load()
@@ -424,6 +484,8 @@ func (c *Cache) selectKTxs() []common.Hash {
 	return vhashes
 }
 
+// resetTimer sets the given timer to fire on the trigger channel after the
+// interval.
 func (c *Cache) resetTimer(timer *mclock.Timer, trigger chan struct{}, interval time.Duration) {
 	if *timer != nil {
 		(*timer).Stop()
