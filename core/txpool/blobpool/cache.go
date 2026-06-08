@@ -87,8 +87,7 @@ type cachedBlob struct {
 type Cache struct {
 	mu sync.Mutex
 
-	entries  map[common.Hash]*cachedBlob // Mapping from vhash to cachedBlob
-	capacity uint
+	entries map[common.Hash]*cachedBlob // Mapping from vhash to cachedBlob
 
 	blobpool *BlobPool
 
@@ -98,7 +97,8 @@ type Cache struct {
 	mode cacheMode
 
 	cancelInflights context.CancelFunc // Cancel the in-flight conversion/decode goroutines
-	inflight        sync.WaitGroup
+	inflight        sync.WaitGroup     // Tracks the in-flight conversion/decode goroutines
+	wg              sync.WaitGroup     // Tracks the loop goroutine
 
 	clock mclock.Clock
 
@@ -108,16 +108,15 @@ type Cache struct {
 }
 
 // NewCache creates a blob cache backed by the given blobpool.
-func NewCache(p *BlobPool, cap uint) *Cache {
-	return NewCacheForTest(p, cap, mclock.System{}, nil)
+func NewCache(p *BlobPool) *Cache {
+	return NewCacheForTest(p, mclock.System{}, nil)
 }
 
 // NewCacheForTest creates a blob cache for test.
 // It allows injecting a clock and a step hook.
-func NewCacheForTest(p *BlobPool, cap uint, clock mclock.Clock, step func()) *Cache {
+func NewCacheForTest(p *BlobPool, clock mclock.Clock, step func()) *Cache {
 	c := &Cache{
-		entries:  make(map[common.Hash]*cachedBlob, cap),
-		capacity: cap,
+		entries: make(map[common.Hash]*cachedBlob),
 		blobpool: p,
 		hasBlobs: make(chan []common.Hash, 1),
 		getBlobs: make(chan struct{}, 1),
@@ -130,18 +129,16 @@ func NewCacheForTest(p *BlobPool, cap uint, clock mclock.Clock, step func()) *Ca
 		quit: make(chan struct{}),
 	}
 
+	c.wg.Add(1)
 	go c.loop()
 	return c
 }
 
-// Stop cancels any in-flight work and terminates the cache loop.
+// Stop terminates the cache loop and blocks until it and any in-flight work
+// have stopped.
 func (c *Cache) Stop() {
-	c.mu.Lock()
-	if c.cancelInflights != nil {
-		c.cancelInflights()
-	}
-	c.mu.Unlock()
 	close(c.quit)
+	c.wg.Wait()
 }
 
 // HasBlobs reports whether the blob is available (in the cache or the
@@ -222,15 +219,14 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 		indices[h] = append(indices[h], i)
 	}
 
+	c.mu.Lock()
 	for _, vhash := range vhashes {
 		if _, ok := filled[vhash]; ok {
 			continue
 		}
 		filled[vhash] = struct{}{}
 
-		c.mu.Lock()
 		cached := c.entries[vhash]
-		c.mu.Unlock()
 
 		if cached == nil {
 			cacheMiss++
@@ -247,6 +243,7 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 			proofs[index] = cached.proofs
 		}
 	}
+	c.mu.Unlock()
 
 	if len(misses) > 0 {
 		mb, mc, mp, err := c.blobpool.getBlobs(misses, version)
@@ -280,6 +277,7 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 }
 
 func (c *Cache) loop() {
+	defer c.wg.Done()
 	var (
 		topKTimer   = new(mclock.Timer)
 		topKTrigger = make(chan struct{}, 1)
@@ -299,35 +297,35 @@ func (c *Cache) loop() {
 		case <-topKTrigger:
 			// switch to topK
 			if c.mode != topKMode {
-				if c.step != nil {
-					c.step()
-				}
 				continue
 			}
-			want := c.selectKTxs()
+			want := c.selectTopTxs()
 			c.update(want)
 			c.resetTimer(topKTimer, topKTrigger, topKTimeout)
 
 		case <-hbTrigger:
 			// hasBlobs mode is over - switch to topK
 			c.switchMode(topKMode)
-			want := c.selectKTxs()
+			want := c.selectTopTxs()
 			c.update(want)
 			c.resetTimer(topKTimer, topKTrigger, topKTimeout)
 
 		case <-c.getBlobs:
 			// hasBlobs mode is over -  switch to topK
 			if c.mode != hasBlobsMode {
-				if c.step != nil {
-					c.step()
-				}
 				continue
 			}
 			c.switchMode(topKMode)
-			want := c.selectKTxs()
+			want := c.selectTopTxs()
 			c.update(want)
 			c.resetTimer(topKTimer, topKTrigger, topKTimeout)
 		case <-c.quit:
+			c.mu.Lock()
+			if c.cancelInflights != nil {
+				c.cancelInflights()
+			}
+			c.mu.Unlock()
+			c.inflight.Wait()
 			return
 		}
 
@@ -340,9 +338,6 @@ func (c *Cache) loop() {
 // switchMode sets the cache mode and cancels any in-flight update from the
 // previous mode.
 func (c *Cache) switchMode(mode cacheMode) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	c.mode = mode
 
 	if c.cancelInflights != nil {
@@ -406,12 +401,10 @@ func (c *Cache) update(want []common.Hash) {
 			if sidecar == nil {
 				continue
 			}
+
 			c.mu.Lock()
 			for i, v := range sidecar.BlobHashes() {
 				if _, ok := wantSet[v]; !ok {
-					continue
-				}
-				if _, ok := c.entries[v]; ok {
 					continue
 				}
 				var pf []kzg4844.Proof
@@ -439,9 +432,9 @@ func (c *Cache) update(want []common.Hash) {
 	}()
 }
 
-// selectKTxs returns the vhashes of the top K most profitable pending blob
-// transactions, up to the cache capacity.
-func (c *Cache) selectKTxs() []common.Hash {
+// selectTopTxs returns the vhashes of the top K most profitable pending blob
+// transactions, up to the active fork's maxBlobsPerBlock.
+func (c *Cache) selectTopTxs() []common.Hash {
 	p := c.blobpool
 	head := p.head.Load()
 	if head == nil {
@@ -467,18 +460,24 @@ func (c *Cache) selectKTxs() []common.Hash {
 
 	order := txorder.NewTransactionsByPriceAndNonce(p.signer, pending, baseFee)
 
+	// Bound the selection by the active fork's blob limit so the cache follows
+	// BPO changes to maxBlobsPerBlock.
+	target := uint(eip4844.MaxBlobsPerBlock(config, head.Time))
+
 	var (
 		vhashes []common.Hash
 		blobs   uint
 	)
-	for blobs < c.capacity {
+	for blobs < target {
 		tx, _ := order.Peek()
 		if tx == nil {
 			break
 		}
-		vh := vhashesOf[tx.Hash]
-		vhashes = append(vhashes, vh...)
-		blobs += uint(len(vh))
+		vh, ok := vhashesOf[tx.Hash]
+		if ok {
+			vhashes = append(vhashes, vh...)
+			blobs += uint(len(vh))
+		}
 		order.Shift()
 	}
 	return vhashes

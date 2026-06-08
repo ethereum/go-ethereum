@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/history"
@@ -327,7 +326,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		config.BlobPool.Datadir = stack.ResolvePath(config.BlobPool.Datadir)
 	}
 	eth.blobTxPool = blobpool.New(config.BlobPool, eth.blockchain, legacyPool.HasPendingAuth)
-	eth.blobCache = blobpool.NewCache(eth.blobTxPool, uint(eip4844.LatestMaxBlobsPerBlock(eth.blockchain.Config())))
+	eth.blobCache = blobpool.NewCache(eth.blobTxPool)
 
 	eth.txPool, err = txpool.New(config.TxPool.PriceLimit, eth.blockchain, []txpool.SubPool{legacyPool, eth.blobTxPool})
 	if err != nil {

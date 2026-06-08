@@ -53,7 +53,7 @@ type testCache struct {
 // newTestCache creates a cache for test, with a pool that contains transactions
 // specified in txConfig. The returned cache is in topKMode with the initial
 // topK fetch already settled.
-func newTestCache(t *testing.T, txConfig []txSpec, capacity uint) *testCache {
+func newTestCache(t *testing.T, txConfig []txSpec) *testCache {
 	storage := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -94,14 +94,9 @@ func newTestCache(t *testing.T, txConfig []txSpec, capacity uint) *testCache {
 		CancunTime:  &cancunTime,
 		OsakaTime:   &cancunTime,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
-			Cancun: &params.BlobConfig{
-				Target:         12,
-				Max:            24,
-				UpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
-			},
 			Osaka: &params.BlobConfig{
-				Target:         12,
-				Max:            24,
+				Target:         1,
+				Max:            1,
 				UpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
 			},
 		},
@@ -126,7 +121,7 @@ func newTestCache(t *testing.T, txConfig []txSpec, capacity uint) *testCache {
 		default:
 		}
 	}
-	cache := NewCacheForTest(pool, capacity, clock, step)
+	cache := NewCacheForTest(pool, clock, step)
 
 	tc := &testCache{
 		Cache:   cache,
@@ -230,7 +225,7 @@ func TestCacheHasBlobsLoadsClaimedSet(t *testing.T) {
 		{blobs: 2, tip: 100},
 		{blobs: 2, tip: 200},
 		{blobs: 2, tip: 300},
-	}, 1)
+	})
 
 	available := tc.HasBlobs(context.Background(), tc.vhashes[1])
 	if !available[0] {
@@ -250,7 +245,7 @@ func TestCacheTopK(t *testing.T) {
 		{blobs: 1, tip: 100},
 		{blobs: 1, tip: 200},
 		{blobs: 1, tip: 300},
-	}, 1)
+	})
 
 	tc.expectMode(t, topKMode)
 	tc.expectEntries(t, tc.vhashes[2]...)
@@ -263,7 +258,7 @@ func TestCacheHbTimerFallsBackToTopK(t *testing.T) {
 	tc := newTestCache(t, []txSpec{
 		{blobs: 1, tip: 100},
 		{blobs: 1, tip: 300},
-	}, 1)
+	})
 
 	tc.HasBlobs(context.Background(), tc.vhashes[0])
 	tc.wait(t, 0)
@@ -281,7 +276,7 @@ func TestCacheGetBlobsExitsHasBlobsMode(t *testing.T) {
 	tc := newTestCache(t, []txSpec{
 		{blobs: 1, tip: 100},
 		{blobs: 1, tip: 300},
-	}, 1)
+	})
 
 	tc.HasBlobs(context.Background(), tc.vhashes[0])
 	tc.wait(t, 0)
@@ -300,7 +295,7 @@ func TestCacheTopKResetOnHasBlobs(t *testing.T) {
 	tc := newTestCache(t, []txSpec{
 		{blobs: 1, tip: 100},
 		{blobs: 1, tip: 300},
-	}, 1)
+	})
 	tc.expectMode(t, topKMode)
 	tc.expectEntries(t, tc.vhashes[1]...)
 
@@ -322,7 +317,7 @@ func TestCacheTopKRefresh(t *testing.T) {
 		{blobs: 1, tip: 100},
 		{blobs: 1, tip: 200},
 		{blobs: 1, tip: 300},
-	}, 1)
+	})
 	tc.expectMode(t, topKMode)
 	tc.expectEntries(t, tc.vhashes[2]...)
 
