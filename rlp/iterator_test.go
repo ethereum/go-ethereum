@@ -66,7 +66,7 @@ func TestIterator(t *testing.T) {
 		i++
 	}
 	if exp := 2; i != exp {
-		t.Errorf("count wrong, expected %d got %d", i, exp)
+		t.Errorf("count wrong, expected %d got %d", exp, i)
 	}
 }
 
