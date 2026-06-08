@@ -297,10 +297,7 @@ func doInstallKeeper(cmdline []string) {
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
 
-	var (
-		csdb       *download.ChecksumDB
-		tamagoRoot string
-	)
+	var csdb *download.ChecksumDB
 	tc := build.GoToolchain{}
 	if *dlgo {
 		csdb = download.MustLoadChecksums("build/checksums.txt")
@@ -310,7 +307,7 @@ func doInstallKeeper(cmdline []string) {
 		log.Printf("Building keeper-%s", target.Name)
 
 		// Configure the toolchain.
-		if target.Name == "tamago" {
+		if target.GOOS == "tamago" {
 			if runtime.GOOS != "linux" {
 				log.Printf("Skipping keeper-%s (tamago builds are only supported on linux hosts)", target.Name)
 				continue
@@ -320,10 +317,7 @@ func doInstallKeeper(cmdline []string) {
 				continue
 			}
 
-			if tamagoRoot == "" {
-				tamagoRoot = downloadTamago(csdb)
-			}
-			tc.Root = tamagoRoot
+			tc.Root = downloadTamago(csdb)
 		} else if *dlgo {
 			tc.Root = build.DownloadGo(csdb)
 		}
@@ -520,7 +514,7 @@ func downloadTamago(csdb *download.ChecksumDB) string {
 	if err := build.ExtractArchive(dst, toolRoot); err != nil {
 		log.Fatal(err)
 	}
-	goroot, err := filepath.Abs(filepath.Join(toolRoot, "go"))
+	goroot, err := filepath.Abs(filepath.Join(toolRoot, "usr/local/tamago-go"))
 	if err != nil {
 		log.Fatal(err)
 	}
