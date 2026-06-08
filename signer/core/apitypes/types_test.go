@@ -216,7 +216,7 @@ func TestType_TypeName(t *testing.T) {
 		},
 	} {
 		if tc.Input.typeName() != tc.Expected {
-			t.Errorf("test %d: expected typeName value of '%v' but got '%v'", i, tc.Expected, tc.Input)
+			t.Errorf("test %d: expected typeName value of '%v' but got '%v'", i, tc.Expected, tc.Input.typeName())
 		}
 	}
 }
