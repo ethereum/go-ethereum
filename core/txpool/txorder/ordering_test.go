@@ -119,7 +119,7 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 		for j, txj := range txs[i+1:] {
 			fromj, _ := types.Sender(signer, txj)
 			if fromi == fromj && txi.Nonce() > txj.Nonce() {
-				t.Errorf("invalid nonce ordering: tx #%d (A=%x N=%v) < tx #%d (A=%x N=%v)", i, fromi[:4], txi.Nonce(), i+j, fromj[:4], txj.Nonce())
+				t.Errorf("invalid nonce ordering: tx #%d (A=%x N=%v) < tx #%d (A=%x N=%v)", i, fromi[:4], txi.Nonce(), i+1+j, fromj[:4], txj.Nonce())
 			}
 		}
 		// If the next tx has different from account, the price must be lower than the current one
