@@ -2147,7 +2147,7 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 	// Preprocess the access list once for the whole block; the resulting
 	// structure is read-only and shared by the prefetch reader, the state
 	// transition and every per-transaction execution reader.
-	prepared := bal.NewPreparedAccessList(*al)
+	prepared := bal.NewAccessListReader(*al)
 	prefetchReader, err := sdb.ReaderWithPrefetch(parentRoot, prepared.StorageKeys(useAsyncReads), bc.cfg.PrefetchWorkers, bc.cfg.BlockingPrefetch)
 	if err != nil {
 		return nil, err
