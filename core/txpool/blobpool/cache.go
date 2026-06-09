@@ -209,7 +209,6 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 		proofs      = make([][]kzg4844.Proof, len(vhashes))
 
 		indices = make(map[common.Hash][]int)
-		filled  = make(map[common.Hash]struct{})
 		misses  []common.Hash
 
 		cacheHits int
@@ -220,24 +219,19 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 	}
 
 	c.mu.Lock()
-	for _, vhash := range vhashes {
-		if _, ok := filled[vhash]; ok {
-			continue
-		}
-		filled[vhash] = struct{}{}
+	for vhash, idxs := range indices {
+		n := len(idxs)
 
 		cached := c.entries[vhash]
-
-		if cached == nil {
-			cacheMiss++
-			misses = append(misses, vhash)
+		if cached == nil || cached.version != version {
+			cacheMiss += n
+			if cached == nil {
+				misses = append(misses, vhash)
+			}
 			continue
 		}
-		cacheHits++
-		if cached.version != version {
-			continue
-		}
-		for _, index := range indices[vhash] {
+		cacheHits += n
+		for _, index := range idxs {
 			blobs[index] = cached.blob
 			commitments[index] = cached.commitment
 			proofs[index] = cached.proofs
