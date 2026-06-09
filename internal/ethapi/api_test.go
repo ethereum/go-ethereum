@@ -4175,9 +4175,6 @@ func TestSendRawTransactionSync_Timeout(t *testing.T) {
 	}
 }
 
-// TestSendRawTransaction_InvalidParams_OnMalformedRLP verifies that malformed-RLP
-// inputs are reported with JSON-RPC error code -32602 (InvalidParams), not the
-// default -32000. Aligns with JSON-RPC 2.0 spec and the Reth/Besu implementations.
 func TestSendRawTransaction_InvalidParams_OnMalformedRLP(t *testing.T) {
 	t.Parallel()
 	genesis := &core.Genesis{
