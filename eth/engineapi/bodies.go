@@ -23,16 +23,17 @@ import (
 	sszt "github.com/ethereum/go-ethereum/beacon/engine/ssz"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params/forks"
+	"github.com/karalabe/ssz"
 )
 
 // handleBodiesByHash implements POST /engine/v2/{fork}/bodies/hash.
 func (rt *Router) handleBodiesByHash(w http.ResponseWriter, r *http.Request, fork forks.Fork) {
-	if fork != forks.Amsterdam {
-		writeProblem(w, http.StatusBadRequest, ErrUnsupportedFork, "")
+	sf, ok := resolveFork(w, fork, forks.Paris)
+	if !ok {
 		return
 	}
 	req := new(sszt.BodiesByHashRequest)
-	if !readSSZRequest(w, r, req, maxPayloadBytes) {
+	if !readSSZRequest(w, r, req, sf, maxPayloadBytes) {
 		return
 	}
 	if len(req.BlockHashes) > sszt.MaxBodiesRequest {
@@ -40,13 +41,13 @@ func (rt *Router) handleBodiesByHash(w http.ResponseWriter, r *http.Request, for
 		return
 	}
 	bodies, timestamps := rt.backend.BodiesByHash(req.BlockHashes)
-	writeSSZResponse(w, buildBodiesResponseAmsterdam(rt.backend, fork, bodies, timestamps))
+	writeSSZResponse(w, buildBodiesResponse(rt.backend, fork, sf, bodies, timestamps), sf)
 }
 
 // handleBodiesByRange implements GET /engine/v2/{fork}/bodies?from=&count=.
 func (rt *Router) handleBodiesByRange(w http.ResponseWriter, r *http.Request, fork forks.Fork) {
-	if fork != forks.Amsterdam {
-		writeProblem(w, http.StatusBadRequest, ErrUnsupportedFork, "")
+	sf, ok := resolveFork(w, fork, forks.Paris)
+	if !ok {
 		return
 	}
 	q := r.URL.Query()
@@ -65,43 +66,49 @@ func (rt *Router) handleBodiesByRange(w http.ResponseWriter, r *http.Request, fo
 		return
 	}
 	bodies, timestamps := rt.backend.BodiesByRange(from, count)
-	writeSSZResponse(w, buildBodiesResponseAmsterdam(rt.backend, fork, bodies, timestamps))
+	writeSSZResponse(w, buildBodiesResponse(rt.backend, fork, sf, bodies, timestamps), sf)
 }
 
-// buildBodiesResponseAmsterdam assembles a BodiesResponseAmsterdam, marking
-// out-of-era blocks as available=false per the URL fork window.
-func buildBodiesResponseAmsterdam(b Backend, fork forks.Fork, bodies []*types.Body, ts []uint64) *sszt.BodiesResponseAmsterdam {
-	out := &sszt.BodiesResponseAmsterdam{
-		Entries: make([]*sszt.BodyEntryAmsterdam, len(bodies)),
+// buildBodiesResponse assembles a BodiesResponse for the given fork, marking
+// out-of-era blocks as available=false per the URL fork window. The body shape
+// is fork-driven by the codec; bodyToSSZ populates the superset and the codec
+// emits only the fork's active fields.
+func buildBodiesResponse(b Backend, fork forks.Fork, sf ssz.Fork, bodies []*types.Body, ts []uint64) *sszt.BodiesResponse {
+	out := &sszt.BodiesResponse{
+		Entries: make([]*sszt.BodyEntry, len(bodies)),
 	}
 	for i, body := range bodies {
-		entry := &sszt.BodyEntryAmsterdam{Body: new(sszt.ExecutionPayloadBodyAmsterdam)}
+		entry := &sszt.BodyEntry{Body: new(sszt.ExecutionPayloadBody)}
 		if body != nil && b.ForkFromTimestamp(ts[i]) == fork {
 			entry.Available = true
-			entry.Body = bodyToAmsterdamSSZ(body)
+			entry.Body = bodyToSSZ(body, sf)
 		}
 		out.Entries[i] = entry
 	}
 	return out
 }
 
-// bodyToAmsterdamSSZ flattens a *types.Body into the Amsterdam body shape.
-func bodyToAmsterdamSSZ(body *types.Body) *sszt.ExecutionPayloadBodyAmsterdam {
-	out := &sszt.ExecutionPayloadBodyAmsterdam{
+// bodyToSSZ flattens a *types.Body into the monolithic body shape. Withdrawals
+// are only attached from Shanghai on, matching the fork's wire shape.
+func bodyToSSZ(body *types.Body, sf ssz.Fork) *sszt.ExecutionPayloadBody {
+	out := &sszt.ExecutionPayloadBody{
 		Transactions: make([][]byte, len(body.Transactions)),
-		Withdrawals:  make([]*sszt.Withdrawal, len(body.Withdrawals)),
 	}
 	for i, tx := range body.Transactions {
 		out.Transactions[i], _ = tx.MarshalBinary()
 	}
-	for i, w := range body.Withdrawals {
-		out.Withdrawals[i] = &sszt.Withdrawal{
-			Index:          w.Index,
-			ValidatorIndex: w.Validator,
-			Address:        w.Address,
-			Amount:         w.Amount,
+	if sf >= ssz.ForkShapella {
+		out.Withdrawals = make([]*sszt.Withdrawal, len(body.Withdrawals))
+		for i, w := range body.Withdrawals {
+			out.Withdrawals[i] = &sszt.Withdrawal{
+				Index:          w.Index,
+				ValidatorIndex: w.Validator,
+				Address:        w.Address,
+				Amount:         w.Amount,
+			}
 		}
 	}
-	// BlockAccessList is not yet on types.Body; once wired through, copy here.
+	// BlockAccessList is not yet on types.Body; once wired through, copy here
+	// (gated by sf >= forkAmsterdam).
 	return out
 }

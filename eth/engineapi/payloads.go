@@ -27,15 +27,21 @@ import (
 
 // handleNewPayload implements POST /engine/v2/{fork}/payloads.
 func (rt *Router) handleNewPayload(w http.ResponseWriter, r *http.Request, fork forks.Fork) {
-	if fork != forks.Amsterdam {
-		writeProblem(w, http.StatusBadRequest, ErrUnsupportedFork, "")
+	// The execution-apis spec currently only defines the payload envelope for
+	// Amsterdam; the inner payload shape is fork-driven by the codec.
+	sf, ok := resolveFork(w, fork, forks.Amsterdam)
+	if !ok {
 		return
 	}
 	env := new(sszt.ExecutionPayloadEnvelopeAmsterdam)
-	if !readSSZRequest(w, r, env, maxPayloadBytes) {
+	if !readSSZRequest(w, r, env, sf, maxPayloadBytes) {
 		return
 	}
-	data := sszt.ExecutionPayloadAmsterdamToEngine(env.Payload)
+	if err := env.Payload.Validate(sf); err != nil {
+		writeProblem(w, http.StatusUnprocessableEntity, ErrInvalidBody, err.Error())
+		return
+	}
+	data := sszt.ExecutionPayloadToEngine(env.Payload)
 
 	// The spec drops expectedBlobVersionedHashes; we recompute them from the
 	// payload's transactions before passing to the EL.
@@ -50,7 +56,7 @@ func (rt *Router) handleNewPayload(w http.ResponseWriter, r *http.Request, fork 
 		mapBackendErr(w, err)
 		return
 	}
-	writeSSZResponse(w, sszt.PayloadStatusFromV1(&status))
+	writeSSZResponse(w, sszt.PayloadStatusFromV1(&status), sf)
 }
 
 // versionedHashesFromTxs extracts the blob versioned-hash list from the

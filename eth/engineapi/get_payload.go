@@ -24,12 +24,13 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/holiman/uint256"
+	"github.com/karalabe/ssz"
 )
 
 // handleGetPayload implements GET /engine/v2/{fork}/payloads/{payloadId}.
 func (rt *Router) handleGetPayload(w http.ResponseWriter, r *http.Request, fork forks.Fork, idHex string) {
-	if fork != forks.Amsterdam {
-		writeProblem(w, http.StatusBadRequest, ErrUnsupportedFork, "")
+	sf, ok := resolveFork(w, fork, forks.Amsterdam)
+	if !ok {
 		return
 	}
 	raw, err := hexutil.Decode(idHex)
@@ -46,17 +47,17 @@ func (rt *Router) handleGetPayload(w http.ResponseWriter, r *http.Request, fork 
 		return
 	}
 
-	out := buildBuiltPayloadAmsterdam(env)
+	out := buildBuiltPayloadAmsterdam(env, sf)
 	w.Header().Set("Cache-Control", "no-store")
-	writeSSZResponse(w, out)
+	writeSSZResponse(w, out, sf)
 }
 
 // buildBuiltPayloadAmsterdam packages an engine.ExecutionPayloadEnvelope into
 // the SSZ BuiltPayload shape. BlockValue/BlobsBundle/Requests come straight
 // across; the inner payload goes through the SSZ converter.
-func buildBuiltPayloadAmsterdam(env *engine.ExecutionPayloadEnvelope) *sszt.BuiltPayloadAmsterdam {
+func buildBuiltPayloadAmsterdam(env *engine.ExecutionPayloadEnvelope, sf ssz.Fork) *sszt.BuiltPayloadAmsterdam {
 	out := &sszt.BuiltPayloadAmsterdam{
-		Payload:               sszt.ExecutionPayloadAmsterdamFromEngine(env.ExecutionPayload),
+		Payload:               sszt.ExecutionPayloadFromEngine(env.ExecutionPayload, sf),
 		BlockValue:            new(uint256.Int),
 		ExecutionRequests:     env.Requests,
 		ShouldOverrideBuilder: env.Override,

@@ -77,8 +77,30 @@ func TestPayloadStatusRoundtrip(t *testing.T) {
 	encDec(t, &PayloadStatus{Status: StatusSyncing}, func() *PayloadStatus { return new(PayloadStatus) })
 }
 
+// encDecOnFork is the fork-aware sibling of encDec for monolith types.
+func encDecOnFork[T ssz.Object](t *testing.T, obj T, fork ssz.Fork, newEmpty func() T) {
+	t.Helper()
+	size := ssz.SizeOnFork(obj, fork)
+	buf := make([]byte, size)
+	if err := ssz.EncodeToBytesOnFork(buf, obj, fork); err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	got := newEmpty()
+	if err := ssz.DecodeFromBytesOnFork(buf, got, fork); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	rebuf := make([]byte, ssz.SizeOnFork(got, fork))
+	if err := ssz.EncodeToBytesOnFork(rebuf, got, fork); err != nil {
+		t.Fatalf("re-encode: %v", err)
+	}
+	if !reflect.DeepEqual(buf, rebuf) {
+		t.Fatalf("round-trip mismatch\nwant bytes: %x\n got bytes: %x", buf, rebuf)
+	}
+}
+
 func TestExecutionPayloadAmsterdamRoundtrip(t *testing.T) {
-	p := &ExecutionPayloadAmsterdam{
+	blob, excess, slot := uint64(131072), uint64(0), uint64(200)
+	p := &ExecutionPayload{
 		ParentHash:      common.Hash{0x11},
 		FeeRecipient:    common.Address{0x22},
 		StateRoot:       common.Hash{0x33},
@@ -93,26 +115,28 @@ func TestExecutionPayloadAmsterdamRoundtrip(t *testing.T) {
 		BlockHash:       common.Hash{0x66},
 		Transactions:    [][]byte{{0x02, 0x03}, {0x04}},
 		Withdrawals:     []*Withdrawal{{Index: 1, ValidatorIndex: 2, Amount: 3}},
-		BlobGasUsed:     131072,
-		ExcessBlobGas:   0,
+		BlobGasUsed:     &blob,
+		ExcessBlobGas:   &excess,
 		BlockAccessList: []byte{0xde, 0xad, 0xbe, 0xef},
-		SlotNumber:      200,
+		SlotNumber:      &slot,
 	}
-	encDec(t, p, func() *ExecutionPayloadAmsterdam { return new(ExecutionPayloadAmsterdam) })
+	encDecOnFork(t, p, forkAmsterdam, func() *ExecutionPayload { return new(ExecutionPayload) })
 }
 
 func TestForkchoiceUpdateAmsterdamRoundtrip(t *testing.T) {
 	// With payload_attributes and custody_columns present.
 	bits := &Bitvector128{Bytes: make([]byte, CellsPerExtBlob/8)}
 	bits.Bytes[0] = 0x01
-	attrs := &PayloadAttributesAmsterdam{
+	root := common.Hash{0x77}
+	slot, tgl := uint64(42), uint64(30000000)
+	attrs := &PayloadAttributes{
 		Timestamp:             1700000000,
 		PrevRandao:            common.Hash{0x55},
 		SuggestedFeeRecipient: common.Address{0x66},
 		Withdrawals:           []*Withdrawal{},
-		ParentBeaconBlockRoot: common.Hash{0x77},
-		SlotNumber:            42,
-		TargetGasLimit:        30000000,
+		ParentBeaconBlockRoot: &root,
+		SlotNumber:            &slot,
+		TargetGasLimit:        &tgl,
 	}
 	fcu := &ForkchoiceUpdateAmsterdam{
 		ForkchoiceState: &ForkchoiceState{
@@ -120,10 +144,10 @@ func TestForkchoiceUpdateAmsterdamRoundtrip(t *testing.T) {
 			SafeBlockHash:      common.Hash{0xbb},
 			FinalizedBlockHash: common.Hash{0xcc},
 		},
-		PayloadAttributes: []*PayloadAttributesAmsterdam{attrs},
+		PayloadAttributes: []*PayloadAttributes{attrs},
 		CustodyColumns:    []*Bitvector128{bits},
 	}
-	encDec(t, fcu, func() *ForkchoiceUpdateAmsterdam { return new(ForkchoiceUpdateAmsterdam) })
+	encDecOnFork(t, fcu, forkAmsterdam, func() *ForkchoiceUpdateAmsterdam { return new(ForkchoiceUpdateAmsterdam) })
 
 	// Without optionals.
 	bare := &ForkchoiceUpdateAmsterdam{
@@ -131,5 +155,5 @@ func TestForkchoiceUpdateAmsterdamRoundtrip(t *testing.T) {
 			HeadBlockHash: common.Hash{0xdd},
 		},
 	}
-	encDec(t, bare, func() *ForkchoiceUpdateAmsterdam { return new(ForkchoiceUpdateAmsterdam) })
+	encDecOnFork(t, bare, forkAmsterdam, func() *ForkchoiceUpdateAmsterdam { return new(ForkchoiceUpdateAmsterdam) })
 }

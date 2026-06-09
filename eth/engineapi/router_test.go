@@ -103,10 +103,10 @@ func newTestServer(t *testing.T, b Backend) *httptest.Server {
 	return httptest.NewServer(http.StripPrefix(BasePath, NewRouter(b)))
 }
 
-func sszPost(t *testing.T, srv *httptest.Server, path string, body ssz.Object) *http.Response {
+func sszPost(t *testing.T, srv *httptest.Server, path string, body ssz.Object, fork ssz.Fork) *http.Response {
 	t.Helper()
-	buf := make([]byte, ssz.Size(body))
-	if err := ssz.EncodeToBytes(buf, body); err != nil {
+	buf := make([]byte, ssz.SizeOnFork(body, fork))
+	if err := ssz.EncodeToBytesOnFork(buf, body, fork); err != nil {
 		t.Fatalf("encode: %v", err)
 	}
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+BasePath+path, bytes.NewReader(buf))
@@ -118,14 +118,14 @@ func sszPost(t *testing.T, srv *httptest.Server, path string, body ssz.Object) *
 	return resp
 }
 
-func decodeSSZ[T ssz.Object](t *testing.T, resp *http.Response, obj T) {
+func decodeSSZ[T ssz.Object](t *testing.T, resp *http.Response, obj T, fork ssz.Fork) {
 	t.Helper()
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read body: %v", err)
 	}
-	if err := ssz.DecodeFromBytes(body, obj); err != nil {
+	if err := ssz.DecodeFromBytesOnFork(body, obj, fork); err != nil {
 		t.Fatalf("decode response: %v\nbody: %x", err, body)
 	}
 }
@@ -139,19 +139,24 @@ func TestRouterNewPayload(t *testing.T) {
 	srv := newTestServer(t, b)
 	defer srv.Close()
 
+	amsterdam, _ := sszt.ForkFor(forks.Amsterdam)
+	blob, excess, slot := uint64(0), uint64(0), uint64(0)
 	env := &sszt.ExecutionPayloadEnvelopeAmsterdam{
-		Payload: &sszt.ExecutionPayloadAmsterdam{
+		Payload: &sszt.ExecutionPayload{
 			BaseFeePerGas: uint256.NewInt(7e9),
 			LogsBloom:     [256]byte{},
+			BlobGasUsed:   &blob,
+			ExcessBlobGas: &excess,
+			SlotNumber:    &slot,
 		},
 		ParentBeaconBlockRoot: common.Hash{0x55},
 	}
-	resp := sszPost(t, srv, "/amsterdam/payloads", env)
+	resp := sszPost(t, srv, "/amsterdam/payloads", env, amsterdam)
 	if resp.StatusCode != 200 {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
 	}
 	got := new(sszt.PayloadStatus)
-	decodeSSZ(t, resp, got)
+	decodeSSZ(t, resp, got, amsterdam)
 	if got.Status != sszt.StatusValid {
 		t.Errorf("status=%d want VALID(%d)", got.Status, sszt.StatusValid)
 	}
@@ -169,15 +174,16 @@ func TestRouterForkchoice(t *testing.T) {
 	srv := newTestServer(t, b)
 	defer srv.Close()
 
+	amsterdam, _ := sszt.ForkFor(forks.Amsterdam)
 	fcu := &sszt.ForkchoiceUpdateAmsterdam{
 		ForkchoiceState: &sszt.ForkchoiceState{HeadBlockHash: common.Hash{0xaa}},
 	}
-	resp := sszPost(t, srv, "/amsterdam/forkchoice", fcu)
+	resp := sszPost(t, srv, "/amsterdam/forkchoice", fcu, amsterdam)
 	if resp.StatusCode != 200 {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
 	}
 	got := new(sszt.ForkchoiceUpdateResponseAmsterdam)
-	decodeSSZ(t, resp, got)
+	decodeSSZ(t, resp, got, amsterdam)
 	if got.PayloadStatus == nil || got.PayloadStatus.Status != sszt.StatusValid {
 		t.Errorf("status: %#v", got.PayloadStatus)
 	}
@@ -310,7 +316,7 @@ func TestRouterBlobsV2AllOrNothing(t *testing.T) {
 	srv := newTestServer(t, b)
 	defer srv.Close()
 	req := &sszt.BlobsVersionedHashesRequest{VersionedHashes: []common.Hash{{0x01}}}
-	resp := sszPost(t, srv, "/blobs/v2", req)
+	resp := sszPost(t, srv, "/blobs/v2", req, ssz.ForkUnknown)
 	defer resp.Body.Close()
 	if resp.StatusCode != 204 {
 		t.Fatalf("want 204, got %d", resp.StatusCode)
@@ -322,12 +328,12 @@ func TestRouterBlobsV3PartialOK(t *testing.T) {
 	srv := newTestServer(t, b)
 	defer srv.Close()
 	req := &sszt.BlobsVersionedHashesRequest{VersionedHashes: []common.Hash{{0x01}, {0x02}}}
-	resp := sszPost(t, srv, "/blobs/v3", req)
+	resp := sszPost(t, srv, "/blobs/v3", req, ssz.ForkUnknown)
 	if resp.StatusCode != 200 {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
 	}
 	got := new(sszt.BlobsV2Response)
-	decodeSSZ(t, resp, got)
+	decodeSSZ(t, resp, got, ssz.ForkUnknown)
 	if len(got.Entries) != 2 {
 		t.Fatalf("entries=%d", len(got.Entries))
 	}

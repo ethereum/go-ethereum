@@ -17,6 +17,8 @@
 package ssz
 
 import (
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/karalabe/ssz"
 )
@@ -40,13 +42,70 @@ func (r *BodiesByHashRequest) DefineSSZ(c *ssz.Codec) {
 	ssz.DefineSliceOfStaticBytesContent(c, &r.BlockHashes, MaxBodiesRequest)
 }
 
-// BodyEntryAmsterdam is the per-block entry returned by /amsterdam/bodies/...
-type BodyEntryAmsterdam struct {
-	Available bool
-	Body      *ExecutionPayloadBodyAmsterdam
+// ExecutionPayloadBody is the monolithic body shape returned by /{fork}/bodies.
+//
+// Field groups:
+//   - base (Paris): Transactions
+//   - withdrawals (Shanghai): Withdrawals
+//   - bal (Amsterdam): BlockAccessList
+type ExecutionPayloadBody struct {
+	Transactions    [][]byte
+	Withdrawals     []*Withdrawal // Shanghai+
+	BlockAccessList []byte        // Amsterdam+
 }
 
-func (e *BodyEntryAmsterdam) SizeSSZ(siz *ssz.Sizer, fixed bool) uint32 {
+func (b *ExecutionPayloadBody) SizeSSZ(siz *ssz.Sizer, fixed bool) uint32 {
+	var size uint32 = 4 // transactions offset
+	if siz.Fork() >= ssz.ForkShapella {
+		size += 4 // withdrawals offset
+	}
+	if siz.Fork() >= forkAmsterdam {
+		size += 4 // block_access_list offset
+	}
+	if fixed {
+		return size
+	}
+	size += ssz.SizeSliceOfDynamicBytes(siz, b.Transactions)
+	if siz.Fork() >= ssz.ForkShapella {
+		size += ssz.SizeSliceOfStaticObjects(siz, b.Withdrawals)
+	}
+	if siz.Fork() >= forkAmsterdam {
+		size += ssz.SizeDynamicBytes(siz, b.BlockAccessList)
+	}
+	return size
+}
+
+func (b *ExecutionPayloadBody) DefineSSZ(c *ssz.Codec) {
+	// offset phase
+	ssz.DefineSliceOfDynamicBytesOffset(c, &b.Transactions, MaxTxsPerPayload, MaxBytesPerTx)
+	ssz.DefineSliceOfStaticObjectsOffsetOnFork(c, &b.Withdrawals, MaxWithdrawalsPerPayload, fromShanghai)
+	ssz.DefineDynamicBytesOffsetOnFork(c, &b.BlockAccessList, MaxBalBytes, fromAmsterdam)
+
+	// content phase
+	ssz.DefineSliceOfDynamicBytesContent(c, &b.Transactions, MaxTxsPerPayload, MaxBytesPerTx)
+	ssz.DefineSliceOfStaticObjectsContentOnFork(c, &b.Withdrawals, MaxWithdrawalsPerPayload, fromShanghai)
+	ssz.DefineDynamicBytesContentOnFork(c, &b.BlockAccessList, MaxBalBytes, fromAmsterdam)
+}
+
+// Validate enforces that fields absent for the given fork are empty.
+func (b *ExecutionPayloadBody) Validate(fork ssz.Fork) error {
+	if fork < ssz.ForkShapella && len(b.Withdrawals) > 0 {
+		return fmt.Errorf("withdrawals set but fork %d predates Shanghai", fork)
+	}
+	if fork < forkAmsterdam && len(b.BlockAccessList) > 0 {
+		return fmt.Errorf("block_access_list set but fork %d predates Amsterdam", fork)
+	}
+	return nil
+}
+
+// BodyEntry is the per-block entry returned by /{fork}/bodies/... The Body's
+// wire shape follows the codec fork, so this single type spans all forks.
+type BodyEntry struct {
+	Available bool
+	Body      *ExecutionPayloadBody
+}
+
+func (e *BodyEntry) SizeSSZ(siz *ssz.Sizer, fixed bool) uint32 {
 	size := uint32(1 + 4) // bool + offset
 	if fixed {
 		return size
@@ -55,19 +114,19 @@ func (e *BodyEntryAmsterdam) SizeSSZ(siz *ssz.Sizer, fixed bool) uint32 {
 	return size
 }
 
-func (e *BodyEntryAmsterdam) DefineSSZ(c *ssz.Codec) {
+func (e *BodyEntry) DefineSSZ(c *ssz.Codec) {
 	ssz.DefineBool(c, &e.Available)
 	ssz.DefineDynamicObjectOffset(c, &e.Body)
 
 	ssz.DefineDynamicObjectContent(c, &e.Body)
 }
 
-// BodiesResponseAmsterdam is the SSZ response of /amsterdam/bodies/...
-type BodiesResponseAmsterdam struct {
-	Entries []*BodyEntryAmsterdam
+// BodiesResponse is the SSZ response of /{fork}/bodies/...
+type BodiesResponse struct {
+	Entries []*BodyEntry
 }
 
-func (r *BodiesResponseAmsterdam) SizeSSZ(siz *ssz.Sizer, fixed bool) uint32 {
+func (r *BodiesResponse) SizeSSZ(siz *ssz.Sizer, fixed bool) uint32 {
 	size := uint32(4)
 	if fixed {
 		return size
@@ -76,87 +135,7 @@ func (r *BodiesResponseAmsterdam) SizeSSZ(siz *ssz.Sizer, fixed bool) uint32 {
 	return size
 }
 
-func (r *BodiesResponseAmsterdam) DefineSSZ(c *ssz.Codec) {
-	ssz.DefineSliceOfDynamicObjectsOffset(c, &r.Entries, MaxBodiesRequest)
-	ssz.DefineSliceOfDynamicObjectsContent(c, &r.Entries, MaxBodiesRequest)
-}
-
-// BodyEntryCancun is the /cancun/bodies/... entry (Shanghai-shape body).
-type BodyEntryCancun struct {
-	Available bool
-	Body      *ExecutionPayloadBodyCancun
-}
-
-func (e *BodyEntryCancun) SizeSSZ(siz *ssz.Sizer, fixed bool) uint32 {
-	size := uint32(1 + 4)
-	if fixed {
-		return size
-	}
-	size += ssz.SizeDynamicObject(siz, e.Body)
-	return size
-}
-
-func (e *BodyEntryCancun) DefineSSZ(c *ssz.Codec) {
-	ssz.DefineBool(c, &e.Available)
-	ssz.DefineDynamicObjectOffset(c, &e.Body)
-
-	ssz.DefineDynamicObjectContent(c, &e.Body)
-}
-
-type BodiesResponseCancun struct {
-	Entries []*BodyEntryCancun
-}
-
-func (r *BodiesResponseCancun) SizeSSZ(siz *ssz.Sizer, fixed bool) uint32 {
-	size := uint32(4)
-	if fixed {
-		return size
-	}
-	size += ssz.SizeSliceOfDynamicObjects(siz, r.Entries)
-	return size
-}
-
-func (r *BodiesResponseCancun) DefineSSZ(c *ssz.Codec) {
-	ssz.DefineSliceOfDynamicObjectsOffset(c, &r.Entries, MaxBodiesRequest)
-	ssz.DefineSliceOfDynamicObjectsContent(c, &r.Entries, MaxBodiesRequest)
-}
-
-// BodyEntryParis is the /paris/bodies/... entry (transactions only).
-type BodyEntryParis struct {
-	Available bool
-	Body      *ExecutionPayloadBodyParis
-}
-
-func (e *BodyEntryParis) SizeSSZ(siz *ssz.Sizer, fixed bool) uint32 {
-	size := uint32(1 + 4)
-	if fixed {
-		return size
-	}
-	size += ssz.SizeDynamicObject(siz, e.Body)
-	return size
-}
-
-func (e *BodyEntryParis) DefineSSZ(c *ssz.Codec) {
-	ssz.DefineBool(c, &e.Available)
-	ssz.DefineDynamicObjectOffset(c, &e.Body)
-
-	ssz.DefineDynamicObjectContent(c, &e.Body)
-}
-
-type BodiesResponseParis struct {
-	Entries []*BodyEntryParis
-}
-
-func (r *BodiesResponseParis) SizeSSZ(siz *ssz.Sizer, fixed bool) uint32 {
-	size := uint32(4)
-	if fixed {
-		return size
-	}
-	size += ssz.SizeSliceOfDynamicObjects(siz, r.Entries)
-	return size
-}
-
-func (r *BodiesResponseParis) DefineSSZ(c *ssz.Codec) {
+func (r *BodiesResponse) DefineSSZ(c *ssz.Codec) {
 	ssz.DefineSliceOfDynamicObjectsOffset(c, &r.Entries, MaxBodiesRequest)
 	ssz.DefineSliceOfDynamicObjectsContent(c, &r.Entries, MaxBodiesRequest)
 }

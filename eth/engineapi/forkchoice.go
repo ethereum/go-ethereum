@@ -26,12 +26,14 @@ import (
 
 // handleForkchoice implements POST /engine/v2/{fork}/forkchoice.
 func (rt *Router) handleForkchoice(w http.ResponseWriter, r *http.Request, fork forks.Fork) {
-	if fork != forks.Amsterdam {
-		writeProblem(w, http.StatusBadRequest, ErrUnsupportedFork, "")
+	// The execution-apis spec currently only defines the forkchoice envelope
+	// for Amsterdam; the inner attributes shape is fork-driven by the codec.
+	sf, ok := resolveFork(w, fork, forks.Amsterdam)
+	if !ok {
 		return
 	}
 	fcu := new(sszt.ForkchoiceUpdateAmsterdam)
-	if !readSSZRequest(w, r, fcu, maxPayloadBytes) {
+	if !readSSZRequest(w, r, fcu, sf, maxPayloadBytes) {
 		return
 	}
 	if err := fcu.Validate(); err != nil {
@@ -41,17 +43,21 @@ func (rt *Router) handleForkchoice(w http.ResponseWriter, r *http.Request, fork 
 	state := sszt.ForkchoiceStateToV1(fcu.ForkchoiceState)
 	var attrs *engine.PayloadAttributes
 	if len(fcu.PayloadAttributes) == 1 {
-		ssz := fcu.PayloadAttributes[0]
+		attr := fcu.PayloadAttributes[0]
+		if err := attr.Validate(sf); err != nil {
+			writeProblem(w, http.StatusBadRequest, ErrInvalidAttributes, err.Error())
+			return
+		}
 		// If PayloadAttributes is present the URL fork MUST match the fork
 		// the new payload would belong to. Today only Amsterdam URL exists
 		// in this implementation so the timestamp check is implicit; we
 		// keep an explicit guard for future fork URLs.
-		if rt.backend.ForkFromTimestamp(ssz.Timestamp) != fork {
+		if rt.backend.ForkFromTimestamp(attr.Timestamp) != fork {
 			writeProblem(w, http.StatusBadRequest, ErrUnsupportedFork,
 				"payload_attributes timestamp does not match URL fork")
 			return
 		}
-		attrs = sszt.PayloadAttributesAmsterdamToEngine(ssz)
+		attrs = sszt.PayloadAttributesToEngine(attr)
 		// target_gas_limit and custody_columns are not yet plumbed into
 		// the JSON-RPC engine API. Custody is parsed-but-stubbed per
 		// agreed scope; target_gas_limit will be picked up when the
@@ -73,5 +79,5 @@ func (rt *Router) handleForkchoice(w http.ResponseWriter, r *http.Request, fork 
 	if resp.PayloadID != nil {
 		out.PayloadID = [][8]byte{[8]byte(*resp.PayloadID)}
 	}
-	writeSSZResponse(w, out)
+	writeSSZResponse(w, out, sf)
 }

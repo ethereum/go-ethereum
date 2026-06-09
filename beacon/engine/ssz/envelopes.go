@@ -25,7 +25,7 @@ import (
 // ExecutionPayloadEnvelopeAmsterdam is the request body of
 // POST /amsterdam/payloads.
 type ExecutionPayloadEnvelopeAmsterdam struct {
-	Payload               *ExecutionPayloadAmsterdam
+	Payload               *ExecutionPayload
 	ParentBeaconBlockRoot common.Hash
 	ExecutionRequests     [][]byte
 }
@@ -82,7 +82,7 @@ func (b *BlobsBundleV2) DefineSSZ(c *ssz.Codec) {
 
 // BuiltPayloadAmsterdam is the response of GET /amsterdam/payloads/{id}.
 type BuiltPayloadAmsterdam struct {
-	Payload               *ExecutionPayloadAmsterdam
+	Payload               *ExecutionPayload
 	BlockValue            *uint256.Int
 	BlobsBundle           *BlobsBundleV2
 	ExecutionRequests     [][]byte
@@ -120,7 +120,7 @@ func (p *BuiltPayloadAmsterdam) DefineSSZ(c *ssz.Codec) {
 // length 0 or 1 of the 16-byte Bitvector wrapper.
 type ForkchoiceUpdateAmsterdam struct {
 	ForkchoiceState   *ForkchoiceState
-	PayloadAttributes []*PayloadAttributesAmsterdam
+	PayloadAttributes []*PayloadAttributes
 	CustodyColumns    []*Bitvector128
 }
 

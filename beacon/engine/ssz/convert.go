@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
+	"github.com/karalabe/ssz"
 )
 
 // statusToEnum maps the JSON-RPC PayloadStatusV1.Status string to the SSZ
@@ -127,46 +128,68 @@ func withdrawalsToTypes(ws []*Withdrawal) []*types.Withdrawal {
 	return out
 }
 
-// PayloadAttributesAmsterdamFromEngine converts a JSON-RPC engine.PayloadAttributes
-// into its Amsterdam SSZ form. The caller is responsible for ensuring the
-// attributes carry every Amsterdam-required field.
-func PayloadAttributesAmsterdamFromEngine(a *engine.PayloadAttributes) *PayloadAttributesAmsterdam {
-	out := &PayloadAttributesAmsterdam{
+// PayloadAttributesFromEngine converts a JSON-RPC engine.PayloadAttributes into
+// the monolithic SSZ form for the given fork. Only the fields the fork's wire
+// shape carries are populated; the caller should pass the same fork to the
+// codec. target_gas_limit has no representation in engine.PayloadAttributes
+// today, so it is left nil for Amsterdam unless explicitly populated by the
+// caller afterwards.
+func PayloadAttributesFromEngine(a *engine.PayloadAttributes, fork ssz.Fork) *PayloadAttributes {
+	out := &PayloadAttributes{
 		Timestamp:             a.Timestamp,
 		PrevRandao:            a.Random,
 		SuggestedFeeRecipient: a.SuggestedFeeRecipient,
-		Withdrawals:           withdrawalsFromTypes(a.Withdrawals),
 	}
-	if a.BeaconRoot != nil {
-		out.ParentBeaconBlockRoot = *a.BeaconRoot
+	if fork >= ssz.ForkShapella {
+		out.Withdrawals = withdrawalsFromTypes(a.Withdrawals)
 	}
-	if a.SlotNumber != nil {
-		out.SlotNumber = *a.SlotNumber
+	if fork >= ssz.ForkDencun {
+		root := common.Hash{}
+		if a.BeaconRoot != nil {
+			root = *a.BeaconRoot
+		}
+		out.ParentBeaconBlockRoot = &root
+	}
+	if fork >= forkAmsterdam {
+		slot := uint64(0)
+		if a.SlotNumber != nil {
+			slot = *a.SlotNumber
+		}
+		out.SlotNumber = &slot
+		// target_gas_limit not carried by engine.PayloadAttributes; default 0.
+		tgl := uint64(0)
+		out.TargetGasLimit = &tgl
 	}
 	return out
 }
 
-// PayloadAttributesAmsterdamToEngine is the inverse of the From helper. The
-// target_gas_limit field has no representation in engine.PayloadAttributes
-// today and is dropped on the way down; the caller can fish it out of the SSZ
-// struct directly.
-func PayloadAttributesAmsterdamToEngine(a *PayloadAttributesAmsterdam) *engine.PayloadAttributes {
-	root := a.ParentBeaconBlockRoot
-	slot := a.SlotNumber
-	return &engine.PayloadAttributes{
+// PayloadAttributesToEngine is the inverse of PayloadAttributesFromEngine. The
+// target_gas_limit field has no representation in engine.PayloadAttributes and
+// is dropped; the caller can read it from the SSZ struct directly.
+func PayloadAttributesToEngine(a *PayloadAttributes) *engine.PayloadAttributes {
+	out := &engine.PayloadAttributes{
 		Timestamp:             a.Timestamp,
 		Random:                a.PrevRandao,
 		SuggestedFeeRecipient: a.SuggestedFeeRecipient,
 		Withdrawals:           withdrawalsToTypes(a.Withdrawals),
-		BeaconRoot:            &root,
-		SlotNumber:            &slot,
 	}
+	if a.ParentBeaconBlockRoot != nil {
+		root := *a.ParentBeaconBlockRoot
+		out.BeaconRoot = &root
+	}
+	if a.SlotNumber != nil {
+		slot := *a.SlotNumber
+		out.SlotNumber = &slot
+	}
+	return out
 }
 
-// ExecutionPayloadAmsterdamFromEngine converts an ExecutableData into the SSZ
-// Amsterdam payload shape. The block_access_list and slot_number fields are
-// expected to be present; missing values yield empty/zero defaults.
-func ExecutionPayloadAmsterdamFromEngine(d *engine.ExecutableData) *ExecutionPayloadAmsterdam {
+// ExecutionPayloadFromEngine converts an ExecutableData into the monolithic SSZ
+// payload for the given fork. Only the fork's active fields are populated so
+// the codec (driven by the same fork) and Validate(fork) stay consistent.
+// BlockAccessList is not yet wired through ExecutableData; the caller sets it
+// separately for Amsterdam.
+func ExecutionPayloadFromEngine(d *engine.ExecutableData, fork ssz.Fork) *ExecutionPayload {
 	var bloom [256]byte
 	copy(bloom[:], d.LogsBloom)
 	var fee *uint256.Int
@@ -174,7 +197,7 @@ func ExecutionPayloadAmsterdamFromEngine(d *engine.ExecutableData) *ExecutionPay
 		fee = new(uint256.Int)
 		fee.SetFromBig(d.BaseFeePerGas)
 	}
-	out := &ExecutionPayloadAmsterdam{
+	out := &ExecutionPayload{
 		ParentHash:    d.ParentHash,
 		FeeRecipient:  d.FeeRecipient,
 		StateRoot:     d.StateRoot,
@@ -189,48 +212,66 @@ func ExecutionPayloadAmsterdamFromEngine(d *engine.ExecutableData) *ExecutionPay
 		BaseFeePerGas: fee,
 		BlockHash:     d.BlockHash,
 		Transactions:  d.Transactions,
-		Withdrawals:   withdrawalsFromTypes(d.Withdrawals),
 	}
-	if d.BlobGasUsed != nil {
-		out.BlobGasUsed = *d.BlobGasUsed
+	if fork >= ssz.ForkShapella {
+		out.Withdrawals = withdrawalsFromTypes(d.Withdrawals)
 	}
-	if d.ExcessBlobGas != nil {
-		out.ExcessBlobGas = *d.ExcessBlobGas
+	if fork >= ssz.ForkDencun {
+		blobGas := uint64(0)
+		if d.BlobGasUsed != nil {
+			blobGas = *d.BlobGasUsed
+		}
+		excess := uint64(0)
+		if d.ExcessBlobGas != nil {
+			excess = *d.ExcessBlobGas
+		}
+		out.BlobGasUsed = &blobGas
+		out.ExcessBlobGas = &excess
 	}
-	if d.SlotNumber != nil {
-		out.SlotNumber = *d.SlotNumber
+	if fork >= forkAmsterdam {
+		slot := uint64(0)
+		if d.SlotNumber != nil {
+			slot = *d.SlotNumber
+		}
+		out.SlotNumber = &slot
 	}
-	// BlockAccessList is not yet wired through ExecutableData; the caller
-	// passes it as a separate field on the envelope when constructing the
-	// final wire form.
 	return out
 }
 
-// ExecutionPayloadAmsterdamToEngine is the inverse helper. The caller is
-// responsible for the BAL payload that ExecutableData doesn't yet carry.
-func ExecutionPayloadAmsterdamToEngine(p *ExecutionPayloadAmsterdam) *engine.ExecutableData {
+// ExecutionPayloadToEngine is the inverse helper. The caller is responsible for
+// the BAL payload that ExecutableData doesn't yet carry.
+func ExecutionPayloadToEngine(p *ExecutionPayload) *engine.ExecutableData {
 	bloom := append([]byte(nil), p.LogsBloom[:]...)
 	out := &engine.ExecutableData{
-		ParentHash:    p.ParentHash,
-		FeeRecipient:  p.FeeRecipient,
-		StateRoot:     p.StateRoot,
-		ReceiptsRoot:  p.ReceiptsRoot,
-		LogsBloom:     bloom,
-		Random:        p.PrevRandao,
-		Number:        p.BlockNumber,
-		GasLimit:      p.GasLimit,
-		GasUsed:       p.GasUsed,
-		Timestamp:     p.Timestamp,
-		ExtraData:     append([]byte(nil), p.ExtraData...),
-		BlockHash:     p.BlockHash,
-		Transactions:  p.Transactions,
-		Withdrawals:   withdrawalsToTypes(p.Withdrawals),
-		BlobGasUsed:   &p.BlobGasUsed,
-		ExcessBlobGas: &p.ExcessBlobGas,
-		SlotNumber:    &p.SlotNumber,
+		ParentHash:   p.ParentHash,
+		FeeRecipient: p.FeeRecipient,
+		StateRoot:    p.StateRoot,
+		ReceiptsRoot: p.ReceiptsRoot,
+		LogsBloom:    bloom,
+		Random:       p.PrevRandao,
+		Number:       p.BlockNumber,
+		GasLimit:     p.GasLimit,
+		GasUsed:      p.GasUsed,
+		Timestamp:    p.Timestamp,
+		ExtraData:    append([]byte(nil), p.ExtraData...),
+		BlockHash:    p.BlockHash,
+		Transactions: p.Transactions,
+		Withdrawals:  withdrawalsToTypes(p.Withdrawals),
 	}
 	if p.BaseFeePerGas != nil {
 		out.BaseFeePerGas = p.BaseFeePerGas.ToBig()
+	}
+	if p.BlobGasUsed != nil {
+		blobGas := *p.BlobGasUsed
+		out.BlobGasUsed = &blobGas
+	}
+	if p.ExcessBlobGas != nil {
+		excess := *p.ExcessBlobGas
+		out.ExcessBlobGas = &excess
+	}
+	if p.SlotNumber != nil {
+		slot := *p.SlotNumber
+		out.SlotNumber = &slot
 	}
 	return out
 }

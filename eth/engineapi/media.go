@@ -34,9 +34,10 @@ const (
 )
 
 // readSSZRequest enforces the SSZ content-type and Content-Length cap, then
-// decodes the request body into obj. Writes the appropriate problem response
-// on failure and returns false; the caller should return immediately.
-func readSSZRequest(w http.ResponseWriter, r *http.Request, obj ssz.Object, max int64) bool {
+// decodes the request body into obj for the given fork. Writes the appropriate
+// problem response on failure and returns false; the caller should return
+// immediately.
+func readSSZRequest(w http.ResponseWriter, r *http.Request, obj ssz.Object, fork ssz.Fork, max int64) bool {
 	if !strings.EqualFold(r.Header.Get("Content-Type"), sszContentType) {
 		writeProblem(w, http.StatusUnsupportedMediaType, ErrUnsupportedMedia, "expected "+sszContentType)
 		return false
@@ -54,18 +55,18 @@ func readSSZRequest(w http.ResponseWriter, r *http.Request, obj ssz.Object, max 
 		writeProblem(w, http.StatusRequestEntityTooLarge, ErrRequestTooLarge, "")
 		return false
 	}
-	if err := ssz.DecodeFromBytes(body, obj); err != nil {
+	if err := ssz.DecodeFromBytesOnFork(body, obj, fork); err != nil {
 		writeProblem(w, http.StatusBadRequest, ErrSSZDecode, "")
 		return false
 	}
 	return true
 }
 
-// writeSSZResponse encodes obj into the response body. On encode failure it
-// writes an internal-error problem and returns false.
-func writeSSZResponse(w http.ResponseWriter, obj ssz.Object) bool {
-	buf := make([]byte, ssz.Size(obj))
-	if err := ssz.EncodeToBytes(buf, obj); err != nil {
+// writeSSZResponse encodes obj into the response body for the given fork. On
+// encode failure it writes an internal-error problem and returns false.
+func writeSSZResponse(w http.ResponseWriter, obj ssz.Object, fork ssz.Fork) bool {
+	buf := make([]byte, ssz.SizeOnFork(obj, fork))
+	if err := ssz.EncodeToBytesOnFork(buf, obj, fork); err != nil {
 		writeProblem(w, http.StatusInternalServerError, ErrInternal, err.Error())
 		return false
 	}

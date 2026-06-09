@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	sszt "github.com/ethereum/go-ethereum/beacon/engine/ssz"
+	"github.com/karalabe/ssz"
 )
 
 // handleBlobs dispatches POST /engine/v2/blobs/v{1,2,3,4}.
@@ -46,7 +47,7 @@ func (rt *Router) handleBlobs(w http.ResponseWriter, r *http.Request, suffix str
 
 func (rt *Router) handleBlobsV1(w http.ResponseWriter, r *http.Request) {
 	req := new(sszt.BlobsVersionedHashesRequest)
-	if !readSSZRequest(w, r, req, maxPayloadBytes) {
+	if !readSSZRequest(w, r, req, ssz.ForkUnknown, maxPayloadBytes) {
 		return
 	}
 	if len(req.VersionedHashes) > sszt.MaxBlobsRequest {
@@ -69,14 +70,14 @@ func (rt *Router) handleBlobsV1(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Entries[i] = e
 	}
-	writeSSZResponse(w, resp)
+	writeSSZResponse(w, resp, ssz.ForkUnknown)
 }
 
 // handleBlobsV2 serves both /v2 (all-or-nothing) and /v3 (partial). The
 // allowPartial flag selects between them.
 func (rt *Router) handleBlobsV2(w http.ResponseWriter, r *http.Request, allowPartial bool) {
 	req := new(sszt.BlobsVersionedHashesRequest)
-	if !readSSZRequest(w, r, req, maxPayloadBytes) {
+	if !readSSZRequest(w, r, req, ssz.ForkUnknown, maxPayloadBytes) {
 		return
 	}
 	if len(req.VersionedHashes) > sszt.MaxBlobsRequest {
@@ -106,7 +107,7 @@ func (rt *Router) handleBlobsV2(w http.ResponseWriter, r *http.Request, allowPar
 		}
 		resp.Entries[i] = e
 	}
-	writeSSZResponse(w, resp)
+	writeSSZResponse(w, resp, ssz.ForkUnknown)
 }
 
 // handleBlobsV4 implements POST /engine/v2/blobs/v4 (cell-range selection).
@@ -115,7 +116,7 @@ func (rt *Router) handleBlobsV2(w http.ResponseWriter, r *http.Request, allowPar
 // request body and the indices_bitarray length to keep the wire contract live.
 func (rt *Router) handleBlobsV4(w http.ResponseWriter, r *http.Request) {
 	req := new(sszt.BlobsV4Request)
-	if !readSSZRequest(w, r, req, maxPayloadBytes) {
+	if !readSSZRequest(w, r, req, ssz.ForkUnknown, maxPayloadBytes) {
 		return
 	}
 	if req.IndicesBitarray == nil || len(req.IndicesBitarray.Bytes) != sszt.CellsPerExtBlob/8 {
