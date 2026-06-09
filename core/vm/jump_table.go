@@ -28,9 +28,6 @@ type (
 	intrinsicGasFunc func(*EVM, *Contract, *Stack, *Memory, uint64) (uint64, error)   // last parameter is the requested memory size as a uint64
 	// memorySizeFunc returns the required size, and whether the operation overflowed a uint64
 	memorySizeFunc func(*Stack) (size uint64, overflow bool)
-
-	regularGasFunc func(*EVM, *Contract, *Stack, *Memory, uint64) (uint64, error)
-	stateGasFunc   func(*EVM, *Contract, *Stack) (uint64, error)
 )
 
 type operation struct {

@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // GasCosts denotes a vector of gas costs in the multidimensional metering
@@ -206,7 +207,6 @@ func (g GasBudget) ExitSuccess() GasBudget {
 //	leftover.StateGas = StateGas + UsedStateGas
 //
 // UsedStateGas is reset since the frame's state changes are discarded.
-// StateGas. UsedRegularGas is unchanged.
 func (g GasBudget) ExitRevert() GasBudget {
 	reservoir := int64(g.StateGas) + g.UsedStateGas
 	if reservoir < 0 {
@@ -214,6 +214,7 @@ func (g GasBudget) ExitRevert() GasBudget {
 		// the initial state-gas allocation plus any spillover to regular
 		// gas.
 		reservoir = 0
+		log.Warn("Negative reservoir at revert", "remaining", g.StateGas, "used", g.UsedStateGas)
 	}
 	return GasBudget{
 		RegularGas:     g.RegularGas,
@@ -223,25 +224,30 @@ func (g GasBudget) ExitRevert() GasBudget {
 	}
 }
 
-// ExitHalt produces the leftover for an exceptional halt. Remaining regular
-// gas is burned. State gas is returned to the parent using the same rule as
-// ExitRevert:
+// ExitHalt produces the leftover for an exceptional halt.
 //
-//	leftover.StateGas = StateGas + UsedStateGas
-//
-// UsedStateGas is reset since the frame's state changes are discarded.
-func (g GasBudget) ExitHalt() GasBudget {
+// - state_gas_reservoir is reset back to its value at the start of the child frame
+// - the gas_left initially given to the child is consumed (set to zero)
+func (g GasBudget) ExitHalt(initStateReservoir uint64) GasBudget {
 	reservoir := int64(g.StateGas) + g.UsedStateGas
 	if reservoir < 0 {
 		// Reservoir should never be negative. By construction it equals
 		// the initial state-gas allocation plus any spillover to regular
 		// gas.
 		reservoir = 0
+		log.Warn("Negative reservoir at halt", "remaining", g.StateGas, "used", g.UsedStateGas)
+	}
+	// The portion of state gas charged from regular gas is also burned
+	// together with the regular gas, rather than being returned to the
+	// parent's state-gas reservoir.
+	var spilled uint64
+	if uint64(reservoir) > initStateReservoir {
+		spilled = uint64(reservoir) - initStateReservoir
 	}
 	return GasBudget{
 		RegularGas:     0,
-		StateGas:       uint64(reservoir),
-		UsedRegularGas: g.UsedRegularGas + g.RegularGas,
+		StateGas:       initStateReservoir,
+		UsedRegularGas: g.UsedRegularGas + g.RegularGas + spilled,
 		UsedStateGas:   0,
 	}
 }
@@ -255,14 +261,14 @@ func (g GasBudget) ExitHalt() GasBudget {
 //
 // Soft validation failures (occurring BEFORE evm.Run) should call Preserved
 // directly instead of going through this dispatcher.
-func (g GasBudget) Exit(err error) GasBudget {
+func (g GasBudget) Exit(err error, initStateReservoir uint64) GasBudget {
 	switch {
 	case err == nil:
 		return g.ExitSuccess()
 	case err == ErrExecutionReverted:
 		return g.ExitRevert()
 	default:
-		return g.ExitHalt()
+		return g.ExitHalt(initStateReservoir)
 	}
 }
 
