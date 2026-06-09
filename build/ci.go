@@ -848,9 +848,9 @@ func doDockerBuildx(cmdline []string) {
 	pass := getenvBase64("DOCKER_HUB_PASSWORD")
 
 	if len(user) > 0 && len(pass) > 0 {
-		author := exec.Command("docker", "login", "-u", string(user), "--password-stdin")
-		author.Stdin = bytes.NewReader(pass)
-		build.MustRun(author)
+		auther := exec.Command("docker", "login", "-u", string(user), "--password-stdin")
+		auther.Stdin = bytes.NewReader(pass)
+		build.MustRun(auther)
 	}
 	// Retrieve the version infos to build and push to the following paths:
 	//  - ethereum/client-go:latest                            - Pushes to the master branch, Geth only
