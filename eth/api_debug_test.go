@@ -29,8 +29,10 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -334,4 +336,54 @@ func TestGetModifiedAccounts(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestGetFilterMapsProgress(t *testing.T) {
+	t.Parallel()
+
+	genesis := &core.Genesis{
+		Config:  params.TestChainConfig,
+		BaseFee: big.NewInt(params.InitialBaseFee),
+	}
+	blockChain := newTestBlockChain(t, 3, genesis, nil)
+	defer blockChain.Stop()
+
+	head := blockChain.CurrentBlock()
+	view := filtermaps.NewChainView(blockChain, head.Number.Uint64(), head.Hash())
+	fm, err := filtermaps.NewFilterMaps(rawdb.NewMemoryDatabase(), view, 0, 0, filtermaps.DefaultParams, filtermaps.Config{})
+	if err != nil {
+		t.Fatalf("failed to create filtermaps: %v", err)
+	}
+	fm.Start()
+	defer fm.Stop()
+	fm.WaitIdle()
+
+	api := NewDebugAPI(&Ethereum{blockchain: blockChain, filterMaps: fm})
+	got, err := api.GetFilterMapsProgress()
+	if err != nil {
+		t.Fatalf("GetFilterMapsProgress returned error: %v", err)
+	}
+	progress := fm.IndexProgress()
+	want := &filterMapsProgressResult{
+		Disabled:         progress.Disabled,
+		Initialized:      progress.Initialized,
+		HeadIndexed:      progress.HeadIndexed,
+		TailBlock:        hexutil.Uint64(progress.TailBlock),
+		HeadBlock:        hexutil.Uint64(progress.HeadBlock),
+		MapsFirst:        hexutil.Uint64(progress.MapsFirst),
+		MapsAfterLast:    hexutil.Uint64(progress.MapsAfterLast),
+		TailPartialEpoch: hexutil.Uint64(progress.TailPartialEpoch),
+	}
+	if *got != *want {
+		t.Fatalf("wrong progress result: got %#v want %#v", *got, *want)
+	}
+}
+
+func TestGetFilterMapsProgressUnavailable(t *testing.T) {
+	t.Parallel()
+
+	api := NewDebugAPI(&Ethereum{})
+	if _, err := api.GetFilterMapsProgress(); err == nil {
+		t.Fatal("expected error for uninitialized filtermaps")
+	}
 }
