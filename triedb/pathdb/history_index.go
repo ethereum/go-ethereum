@@ -124,6 +124,20 @@ func (r *indexReader) refresh() error {
 	return nil
 }
 
+// blockReader returns a cached block reader for the given block id, loading it
+// from disk on first access.
+func (r *indexReader) blockReader(id uint32) (*blockReader, error) {
+	if br, ok := r.readers[id]; ok {
+		return br, nil
+	}
+	br, err := newBlockReader(readStateIndexBlock(r.state, r.db, id), r.bitmapSize != 0)
+	if err != nil {
+		return nil, err
+	}
+	r.readers[id] = br
+	return br, nil
+}
+
 // readGreaterThan locates the first element that is greater than the specified
 // id. If no such element is found, MaxUint64 is returned.
 func (r *indexReader) readGreaterThan(id uint64) (uint64, error) {
