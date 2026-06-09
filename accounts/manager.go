@@ -256,7 +256,7 @@ func merge(slice []Wallet, wallets ...Wallet) []Wallet {
 func drop(slice []Wallet, wallets ...Wallet) []Wallet {
 	for _, wallet := range wallets {
 		n := sort.Search(len(slice), func(i int) bool { return slice[i].URL().Cmp(wallet.URL()) >= 0 })
-		if n == len(slice) {
+		if n == len(slice) || slice[n].URL().Cmp(wallet.URL()) != 0 {
 			// Wallet not found, may happen during startup
 			continue
 		}
