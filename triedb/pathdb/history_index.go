@@ -124,6 +124,37 @@ func (r *indexReader) refresh() error {
 	return nil
 }
 
+// count returns the total number of indexed entries across all descriptor
+// blocks.
+func (r *indexReader) count() int {
+	var n int
+	for _, d := range r.descList {
+		n += int(d.entries)
+	}
+	return n
+}
+
+// at returns the i-th indexed history id in ascending order. The caller must
+// guarantee 0 <= i < r.count().
+func (r *indexReader) at(i int) (uint64, error) {
+	if i < 0 {
+		return 0, fmt.Errorf("negative ordinal %d", i)
+	}
+	remaining := i
+	for _, desc := range r.descList {
+		n := int(desc.entries)
+		if remaining < n {
+			br, err := r.blockReader(desc.id)
+			if err != nil {
+				return 0, err
+			}
+			return br.readAt(remaining, n)
+		}
+		remaining -= n
+	}
+	return 0, fmt.Errorf("ordinal out of range, i: %d, total: %d", i, r.count())
+}
+
 // blockReader returns a cached block reader for the given block id, loading it
 // from disk on first access.
 func (r *indexReader) blockReader(id uint32) (*blockReader, error) {
