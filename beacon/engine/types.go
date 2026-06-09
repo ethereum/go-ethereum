@@ -158,8 +158,8 @@ type BlobAndProofV2 struct {
 }
 
 type BlobCellsAndProofsV1 struct {
-	BlobCells []hexutil.Bytes `json:"blob_cells"`
-	Proofs    []hexutil.Bytes `json:"proofs"`
+	BlobCells []*hexutil.Bytes `json:"blob_cells"`
+	Proofs    []*hexutil.Bytes `json:"proofs"`
 }
 
 // JSON type overrides for ExecutionPayloadEnvelope.

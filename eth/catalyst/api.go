@@ -709,16 +709,18 @@ func (api *ConsensusAPI) GetBlobsV4(hashes []common.Hash, indicesBitarray types.
 			continue
 		}
 		hitCount++
-		blobCells := make([]hexutil.Bytes, len(cells[i]))
+		blobCells := make([]*hexutil.Bytes, len(cells[i]))
 		for j, cell := range cells[i] {
 			if cell != nil {
-				blobCells[j] = cell[:]
+				b := hexutil.Bytes(cell[:])
+				blobCells[j] = &b
 			}
 		}
-		blobProofs := make([]hexutil.Bytes, len(proofs[i]))
+		blobProofs := make([]*hexutil.Bytes, len(proofs[i]))
 		for j, proof := range proofs[i] {
 			if proof != nil {
-				blobProofs[j] = proof[:]
+				b := hexutil.Bytes(proof[:])
+				blobProofs[j] = &b
 			}
 		}
 		res[i] = &engine.BlobCellsAndProofsV1{
