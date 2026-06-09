@@ -399,7 +399,7 @@ func TestDebugAPI_ClearTxpool(t *testing.T) {
 
 	// Verify the pool is empty after clear
 	pool.Sync()
-	pending := pool.Pending(txpool.PendingFilter{})
+	pending, _ := pool.Pending(txpool.PendingFilter{})
 	if len(pending) > 0 {
 		t.Errorf("Expected empty pool after clear, but found %d accounts with pending transactions", len(pending))
 	}
