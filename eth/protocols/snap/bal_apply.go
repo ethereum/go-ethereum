@@ -43,7 +43,7 @@ func verifyAccessList(b *bal.BlockAccessList, header *types.Header) error {
 	return nil
 }
 
-// isFetched tell us if accountHash has been downloaded.
+// isFetched tells us if accountHash has been downloaded.
 func (s *syncerV2) isFetched(accountHash common.Hash) bool {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
@@ -56,6 +56,40 @@ func (s *syncerV2) isFetched(accountHash common.Hash) bool {
 	return true
 }
 
+// isStorageFetched reports whether the specified storage slot has already
+// been downloaded in a previous cycle.
+func (s *syncerV2) isStorageFetched(accountHash, storageHash common.Hash) bool {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	for _, task := range s.tasks {
+		if bytes.Compare(accountHash[:], task.Last[:]) > 0 {
+			continue
+		}
+		// The account falls within a completed account range.
+		if bytes.Compare(accountHash[:], task.Next[:]) < 0 {
+			return true
+		}
+		// All storage for this account has been synchronized.
+		if _, ok := task.stateCompleted[accountHash]; ok {
+			return true
+		}
+		// No storage sync task exists for this account yet.
+		subtasks, ok := task.SubTasks[accountHash]
+		if !ok {
+			return false
+		}
+		// Check whether the slot falls within a completed storage subrange.
+		for _, sub := range subtasks {
+			if bytes.Compare(storageHash[:], sub.Last[:]) <= 0 {
+				return bytes.Compare(storageHash[:], sub.Next[:]) < 0
+			}
+		}
+		return true // All storage subranges for this slot have been completed.
+	}
+	return true // The account belongs to a completed account range.
+}
+
 // applyAccessList applies a single block's access list diffs to the flat state
 // in the database. For each account, it applies the post-block values (highest
 // TxIdx entry) for balance, nonce, code, and storage. The storageRoot field is
@@ -66,11 +100,30 @@ func (s *syncerV2) applyAccessList(b *bal.BlockAccessList, batch ethdb.Batch) er
 		addr := access.Address
 		accountHash := crypto.Keccak256Hash(addr[:])
 
-		// Skip accounts whose hash range hasn't been downloaded yet.
+		for _, slotWrites := range access.StorageChanges {
+			if n := len(slotWrites.SlotChanges); n > 0 {
+				value := slotWrites.SlotChanges[n-1].PostValue
+				slotKey := slotWrites.Slot.Bytes32()
+				storageHash := crypto.Keccak256Hash(slotKey[:])
+
+				if !s.isStorageFetched(accountHash, storageHash) {
+					continue
+				}
+				if value.IsZero() {
+					rawdb.DeleteStorageSnapshot(batch, accountHash, storageHash)
+				} else {
+					// Store the slot in the same encoding the snapshot and the
+					// trie rebuild use: RLP of the minimal big-endian value
+					// (leading zeros trimmed), matching core/state's snapshot
+					// writes.
+					blob, _ := rlp.EncodeToBytes(value.Bytes())
+					rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, blob)
+				}
+			}
+		}
 		if !s.isFetched(accountHash) {
 			continue
 		}
-
 		// Read the existing account from flat state (may not exist yet)
 		var (
 			account types.StateAccount
@@ -109,25 +162,6 @@ func (s *syncerV2) applyAccessList(b *bal.BlockAccessList, batch ethdb.Batch) er
 				account.CodeHash = codeHash
 			} else {
 				account.CodeHash = types.EmptyCodeHash[:]
-			}
-		}
-
-		// Apply storage writes (last entry per slot = post-block state).
-		for _, slotWrites := range access.StorageChanges {
-			if n := len(slotWrites.SlotChanges); n > 0 {
-				value := slotWrites.SlotChanges[n-1].PostValue
-				slotKey := slotWrites.Slot.Bytes32()
-				storageHash := crypto.Keccak256Hash(slotKey[:])
-				if value.IsZero() {
-					rawdb.DeleteStorageSnapshot(batch, accountHash, storageHash)
-				} else {
-					// Store the slot in the same encoding the snapshot and the
-					// trie rebuild use: RLP of the minimal big-endian value
-					// (leading zeros trimmed), matching core/state's snapshot
-					// writes.
-					blob, _ := rlp.EncodeToBytes(value.Bytes())
-					rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, blob)
-				}
 			}
 		}
 

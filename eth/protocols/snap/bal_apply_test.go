@@ -391,6 +391,129 @@ func TestAccessListApplicationSkipsUnfetchedStorage(t *testing.T) {
 	}
 }
 
+// TestAccessListApplicationPartialStorage verifies that for a large contract
+// whose account hasn't been committed yet but whose storage is partially downloaded,
+// applyAccessList rolls forward the slots below the active subtask frontier
+// while skipping the ones above it and the account-level fields.
+func TestAccessListApplicationPartialStorage(t *testing.T) {
+	t.Parallel()
+	db := rawdb.NewMemoryDatabase()
+	syncer := newSyncerV2(db, rawdb.HashScheme)
+
+	addr := common.HexToAddress("0xc0")
+	accountHash := crypto.Keccak256Hash(addr[:])
+
+	// Two slots, ordered by their storage hash. The subtask frontier sits at
+	// the higher one so the lower slot is fetched and the higher is not.
+	loRaw := common.HexToHash("0xaa")
+	hiRaw := common.HexToHash("0xbb")
+	loHash := crypto.Keccak256Hash(loRaw[:])
+	hiHash := crypto.Keccak256Hash(hiRaw[:])
+	if bytes.Compare(loHash[:], hiHash[:]) > 0 {
+		loRaw, hiRaw = hiRaw, loRaw
+		loHash, hiHash = hiHash, loHash
+	}
+
+	// The account sits exactly at Next (held back behind storage retrieval), so
+	// isFetched returns false. Its subtask has fetched everything below hiHash.
+	syncer.tasks = []*accountTaskV2{{
+		Next: accountHash,
+		Last: common.MaxHash,
+		SubTasks: map[common.Hash][]*storageTaskV2{
+			accountHash: {{
+				Next: hiHash,
+				Last: common.MaxHash,
+			}},
+		},
+		stateCompleted: make(map[common.Hash]struct{}),
+	}}
+
+	cb := bal.NewConstructionBlockAccessList()
+	cb.BalanceChange(0, addr, uint256.NewInt(500)) // account update must be skipped
+	cb.StorageWrite(0, addr, loRaw, common.HexToHash("0x11"))
+	cb.StorageWrite(0, addr, hiRaw, common.HexToHash("0x22"))
+	b := buildTestBAL(t, cb)
+
+	applyBAL(t, syncer, b)
+
+	// Account must not be written: it's still being filled.
+	if data := rawdb.ReadAccountSnapshot(db, accountHash); len(data) != 0 {
+		t.Errorf("account below Next should not be written, got %x", data)
+	}
+	// Slot below the frontier must be rolled forward.
+	wantLo, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(common.HexToHash("0x11").Bytes()))
+	if val := rawdb.ReadStorageSnapshot(db, accountHash, loHash); !bytes.Equal(val, wantLo) {
+		t.Errorf("fetched slot wrong: got %x, want %x", val, wantLo)
+	}
+	// Slot above the frontier must be skipped.
+	if val := rawdb.ReadStorageSnapshot(db, accountHash, hiHash); len(val) != 0 {
+		t.Errorf("unfetched slot should not be written, got %x", val)
+	}
+}
+
+func TestIsStorageFetched(t *testing.T) {
+	t.Parallel()
+	db := rawdb.NewMemoryDatabase()
+	syncer := newSyncerV2(db, rawdb.HashScheme)
+
+	var (
+		fetchedAcct = common.HexToHash("0x10") // below Next
+		fillingAcct = common.HexToHash("0x40") // == Next
+		beyondAcct  = common.HexToHash("0x90") // above Last
+	)
+	prunedHiAcct := common.HexToHash("0x70") // in [Next, Last], still filling
+	completeAcct := common.HexToHash("0x71") // in [Next, Last], storage is complete
+
+	syncer.tasks = []*accountTaskV2{{
+		Next: fillingAcct,
+		Last: common.HexToHash("0x80"),
+		SubTasks: map[common.Hash][]*storageTaskV2{
+			fillingAcct: {{
+				Next: common.HexToHash("0x50"),
+				Last: common.MaxHash,
+			}},
+			prunedHiAcct: {{
+				Next: common.HexToHash("0x30"),
+				Last: common.HexToHash("0x60"),
+			}},
+		},
+		stateCompleted: map[common.Hash]struct{}{
+			completeAcct: {},
+		},
+	}}
+
+	noSubAcct := common.HexToHash("0x60") // in [Next,Last] but no subtasks yet
+	tests := []struct {
+		name    string
+		account common.Hash
+		slot    common.Hash
+		want    bool
+	}{
+		{"account fully synced", fetchedAcct, common.HexToHash("0xff"), true},
+		{"storage fully synced", completeAcct, common.HexToHash("0xff"), true},
+
+		{"account before all tasks", common.HexToHash("0x01"), common.HexToHash("0xff"), true},
+		{"account beyond all tasks", beyondAcct, common.HexToHash("0xff"), true},
+
+		{"slot below storage frontier", fillingAcct, common.HexToHash("0x20"), true},
+		{"slot at storage frontier", fillingAcct, common.HexToHash("0x50"), false},
+		{"slot above storage frontier", fillingAcct, common.HexToHash("0x70"), false},
+		{"account filling, no subtasks", noSubAcct, common.HexToHash("0x01"), false},
+
+		{"slot in pruned low range", prunedHiAcct, common.HexToHash("0x10"), true},
+		{"slot at remaining frontier", prunedHiAcct, common.HexToHash("0x30"), false},
+		{"slot within remaining range", prunedHiAcct, common.HexToHash("0x50"), false},
+		{"slot in pruned high range", prunedHiAcct, common.HexToHash("0x90"), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := syncer.isStorageFetched(tt.account, tt.slot); got != tt.want {
+				t.Errorf("isStorageFetched(%v, %v) = %v, want %v", tt.account, tt.slot, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestAccessListApplicationSameTxCreateDestroy tests the edge case where an
 // account is created and self-destructed in the same transaction during the
 // pivot gap. Per EIP-7928, such accounts appear in the BAL with a balance
