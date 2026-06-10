@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -44,6 +45,13 @@ var (
 	MaxBlockFetch   = 128 // Number of blocks to be fetched per retrieval request
 	MaxHeaderFetch  = 192 // Number of block headers to be fetched per retrieval request
 	MaxReceiptFetch = 256 // Number of transaction receipts to allow fetching per request
+	MaxBALFetch     = 128 // Number of block access lists to allow fetching per request
+
+	// balAvailabilityWindow is the number of blocks behind the sync target for
+	// which block access lists (EIP-7928, served over ETH71) are expected to be
+	// retrievable from the network. Access lists for blocks older than this are
+	// considered unavailable and are never requested.
+	balAvailabilityWindow uint64 = 3533 * 16
 
 	maxQueuedHeaders           = 32 * 1024                        // [eth/62] Maximum number of headers to queue for import (DOS protection)
 	maxHeadersProcess          = 2048                             // Number of header download results to import at once into the chain
@@ -65,6 +73,7 @@ var (
 	errInvalidChain            = errors.New("retrieved hash chain is invalid")
 	errInvalidBody             = errors.New("retrieved block body is invalid")
 	errInvalidReceipt          = errors.New("retrieved receipt is invalid")
+	errInvalidBAL              = errors.New("retrieved block access list is invalid")
 	errCancelStateFetch        = errors.New("state data download canceled (requested)")
 	errCancelContentProcessing = errors.New("content processing canceled (requested)")
 	errCanceled                = errors.New("syncing canceled (requested)")
@@ -156,6 +165,7 @@ type Downloader struct {
 	// Testing hooks
 	bodyFetchHook    func([]*types.Header) // Method to call upon starting a block body fetch
 	receiptFetchHook func([]*types.Header) // Method to call upon starting a receipt fetch
+	balFetchHook     func([]*types.Header) // Method to call upon starting a block access list fetch
 	chainInsertHook  func([]*fetchResult)  // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
 
 	// Progress reporting metrics
@@ -388,7 +398,7 @@ func (d *Downloader) synchronise(beaconPing chan struct{}) (err error) {
 	d.queue.Reset(blockCacheMaxItems, blockCacheInitialItems)
 	d.peers.Reset()
 
-	for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh} {
+	for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh, d.queue.balWakeCh} {
 		select {
 		case <-ch:
 		default:
@@ -589,13 +599,27 @@ func (d *Downloader) syncToHead() (err error) {
 		}
 	}
 	// Initiate the sync using a concurrent header and content retrieval algorithm
-	d.queue.Prepare(chainOffset, mode)
+	//
+	// Block access lists (EIP-7928) are only served by peers for a limited window
+	// of recent blocks. Compute the lowest block number for which they are still
+	// expected to be available, relative to the known head of the chain, so that
+	// older ones are never scheduled for retrieval. This applies to both full and
+	// snap sync.
+	var balCutoff uint64
+	if height > balAvailabilityWindow {
+		balCutoff = height - balAvailabilityWindow
+	}
+	if balCutoff < chainOffset {
+		balCutoff = chainOffset
+	}
+	d.queue.Prepare(chainOffset, mode, balCutoff)
 
 	// In beacon mode, headers are served by the skeleton syncer
 	fetchers := []func() error{
 		func() error { return d.fetchHeaders(origin + 1) },   // Headers are always retrieved
 		func() error { return d.fetchBodies(chainOffset) },   // Bodies are retrieved during normal and snap sync
 		func() error { return d.fetchReceipts(chainOffset) }, // Receipts are retrieved during snap sync
+		func() error { return d.fetchBALs(chainOffset) },     // Access lists are retrieved during snap sync (ETH71)
 		func() error { return d.processHeaders(origin + 1) },
 	}
 	if mode == ethconfig.SnapSync {
@@ -710,6 +734,17 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 	return err
 }
 
+// fetchBALs iteratively downloads the scheduled block access lists, taking any
+// available peers, reserving a chunk of access lists for each, waiting for
+// delivery and also periodically checking for timeouts.
+func (d *Downloader) fetchBALs(from uint64) error {
+	log.Debug("Downloading block access lists", "origin", from)
+	err := d.concurrentFetch((*balQueue)(d))
+
+	log.Debug("Block access list download terminated", "err", err)
+	return err
+}
+
 // processHeaders takes batches of retrieved headers from an input channel and
 // keeps processing and scheduling them into the header chain and downloader's
 // queue until the stream ends or a failure occurs.
@@ -729,7 +764,7 @@ func (d *Downloader) processHeaders(origin uint64) error {
 			// Terminate header processing if we synced up
 			if task == nil || len(task.headers) == 0 {
 				// Notify everyone that headers are fully processed
-				for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh} {
+				for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh, d.queue.balWakeCh} {
 					select {
 					case ch <- false:
 					case <-d.cancelCh:
@@ -772,7 +807,7 @@ func (d *Downloader) processHeaders(origin uint64) error {
 					log.Debug("Inserted headers before cutoff", "number", chunkHeaders[cutoff-1].Number, "hash", chunkHashes[cutoff-1])
 				}
 				// If we've reached the allowed number of pending headers, stall a bit
-				for d.queue.PendingBodies() >= maxQueuedHeaders || d.queue.PendingReceipts() >= maxQueuedHeaders {
+				for d.queue.PendingBodies() >= maxQueuedHeaders || d.queue.PendingReceipts() >= maxQueuedHeaders || d.queue.PendingBALs() >= maxQueuedHeaders {
 					timer.Reset(time.Second)
 					select {
 					case <-d.cancelCh:
@@ -808,7 +843,7 @@ func (d *Downloader) processHeaders(origin uint64) error {
 
 			// Signal the downloader of the availability of new tasks
 			if scheduled {
-				for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh} {
+				for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh, d.queue.balWakeCh} {
 					select {
 					case ch <- true:
 					default:
@@ -853,7 +888,19 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	)
 	blocks := make([]*types.Block, len(results))
 	for i, result := range results {
-		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.body())
+		block := types.NewBlockWithHeader(result.Header).WithBody(result.body())
+		// If we downloaded the block access list (EIP-7928), attach it so the
+		// importer can take the access-list-guided execution path and persist it
+		// alongside the block. It was already validated against the header's
+		// BlockAccessListHash on delivery.
+		if len(result.AccessList) > 0 {
+			al := new(bal.BlockAccessList)
+			if err := rlp.DecodeBytes(result.AccessList, al); err != nil {
+				return fmt.Errorf("%w: invalid downloaded access list for block %d: %v", errInvalidChain, result.Header.Number, err)
+			}
+			block = block.WithAccessListUnsafe(al)
+		}
+		blocks[i] = block
 	}
 	// Downloaded blocks are always regarded as trusted after the
 	// transition. Because the downloaded chain is guided by the
@@ -1059,7 +1106,22 @@ func (d *Downloader) commitSnapSyncData(results []*fetchResult, stateSync *state
 		log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
 		return fmt.Errorf("%w: %v", errInvalidChain, err)
 	}
+	d.writeAccessLists(results)
 	return nil
+}
+
+// writeAccessLists persists any downloaded block access lists (EIP-7928)
+// contained in the given results directly to the key-value store. This is used
+// for snap-imported blocks, which are not executed and therefore do not get
+// their access list written via block processing. Results without an access
+// list (pre-fork blocks or blocks outside the availability window) are skipped.
+func (d *Downloader) writeAccessLists(results []*fetchResult) {
+	for _, result := range results {
+		if len(result.AccessList) == 0 {
+			continue
+		}
+		rawdb.WriteAccessListRLP(d.stateDB, result.Header.Hash(), result.Header.Number.Uint64(), result.AccessList)
+	}
 }
 
 func (d *Downloader) commitPivotBlock(result *fetchResult) error {
@@ -1070,6 +1132,7 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	if _, err := d.blockchain.InsertReceiptChain([]*types.Block{block}, []rlp.RawValue{result.Receipts}, d.ancientLimit); err != nil {
 		return err
 	}
+	d.writeAccessLists([]*fetchResult{result})
 	if err := d.blockchain.SnapSyncComplete(block.Hash()); err != nil {
 		return err
 	}

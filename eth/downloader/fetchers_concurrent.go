@@ -362,7 +362,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 
 // validityErrorOfRequest returns err if it is related to block validity, and nil otherwise.
 func validityErrorOfRequest(err error) error {
-	if errors.Is(err, errInvalidBody) || errors.Is(err, errInvalidReceipt) {
+	if errors.Is(err, errInvalidBody) || errors.Is(err, errInvalidReceipt) || errors.Is(err, errInvalidBAL) {
 		return err
 	}
 	return nil

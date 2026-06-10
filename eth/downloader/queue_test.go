@@ -30,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -103,7 +105,7 @@ func TestBasics(t *testing.T) {
 	if !q.Idle() {
 		t.Errorf("new queue should be idle")
 	}
-	q.Prepare(1, SnapSync)
+	q.Prepare(1, SnapSync, 0)
 	if res := q.Results(false); len(res) != 0 {
 		t.Fatal("new queue should have 0 results")
 	}
@@ -200,7 +202,7 @@ func TestEmptyBlocks(t *testing.T) {
 
 	q := newQueue(10, 10)
 
-	q.Prepare(1, SnapSync)
+	q.Prepare(1, SnapSync, 0)
 
 	// Schedule a batch of headers
 	headers := emptyChain.headers()
@@ -279,7 +281,7 @@ func XTestDelivery(t *testing.T) {
 	}
 	q := newQueue(10, 10)
 	var wg sync.WaitGroup
-	q.Prepare(1, SnapSync)
+	q.Prepare(1, SnapSync, 0)
 	wg.Add(1)
 	go func() {
 		// deliver headers
@@ -479,4 +481,201 @@ func (n *network) headers(from int) []*types.Header {
 		}
 	}
 	return hdrs
+}
+
+// makeBALHeaders builds a linked chain of n empty (no txs/uncles/receipts)
+// headers, each carrying a block access list hash, starting at block number 1.
+// It returns the headers along with the canonical RLP encoding of each block's
+// access list, so tests can serve and validate deliveries.
+func makeBALHeaders(n int) ([]*types.Header, []common.Hash, []eth.RawBlockAccessList) {
+	var (
+		headers = make([]*types.Header, n)
+		hashes  = make([]common.Hash, n)
+		raws    = make([]eth.RawBlockAccessList, n)
+		parent  common.Hash
+	)
+	for i := 0; i < n; i++ {
+		// Build a small, deterministic access list for this block and derive its
+		// canonical encoding + hash exactly as the protocol layer would.
+		list := bal.BlockAccessList{
+			{Address: common.Address{byte(i + 1)}},
+		}
+		enc, err := rlp.EncodeToBytes(list)
+		if err != nil {
+			panic(err)
+		}
+		var raw eth.RawBlockAccessList
+		if err := rlp.DecodeBytes(enc, &raw); err != nil {
+			panic(err)
+		}
+		balHash := crypto.Keccak256Hash(raw.Bytes())
+
+		h := &types.Header{
+			Number:              big.NewInt(int64(i + 1)),
+			Difficulty:          big.NewInt(1),
+			ParentHash:          parent,
+			TxHash:              types.EmptyTxsHash,
+			UncleHash:           types.EmptyUncleHash,
+			ReceiptHash:         types.EmptyReceiptsHash,
+			BlockAccessListHash: &balHash,
+		}
+		headers[i] = h
+		hashes[i] = h.Hash()
+		raws[i] = raw
+		parent = hashes[i]
+	}
+	return headers, hashes, raws
+}
+
+// TestQueueAccessListCutoff verifies that block access lists are scheduled for
+// retrieval in both full and snap sync, but only for blocks at or above the
+// configured availability cutoff.
+func TestQueueAccessListCutoff(t *testing.T) {
+	headers, hashes, _ := makeBALHeaders(10)
+
+	// Access lists are scheduled in both full and snap sync, subject to the
+	// availability cutoff. With a cutoff of 4, only blocks 4..10 (7 blocks) are
+	// eligible.
+	for _, mode := range []SyncMode{FullSync, SnapSync} {
+		q := newQueue(64, 64)
+		q.Prepare(1, mode, 4)
+		q.Schedule(headers, hashes, 1)
+		if got, want := q.PendingBALs(), 7; got != want {
+			t.Fatalf("%v: wrong scheduled access list count: got %d, want %d", mode, got, want)
+		}
+		// Bodies are scheduled for every header regardless of the BAL cutoff.
+		if got, want := q.PendingBodies(), len(headers); got != want {
+			t.Fatalf("%v: wrong pending body count: got %d, want %d", mode, got, want)
+		}
+	}
+
+	// A cutoff at or below the first block leaves every access list eligible.
+	q := newQueue(64, 64)
+	q.Prepare(1, FullSync, 0)
+	q.Schedule(headers, hashes, 1)
+	if got, want := q.PendingBALs(), len(headers); got != want {
+		t.Fatalf("no cutoff: wrong scheduled access list count: got %d, want %d", got, want)
+	}
+}
+
+// TestQueueAccessListDelivery verifies the full schedule -> reserve -> deliver
+// lifecycle of the block access list queue in full sync, including hash
+// validation and that delivered access lists surface on the assembled results.
+func TestQueueAccessListDelivery(t *testing.T) {
+	headers, hashes, raws := makeBALHeaders(8)
+
+	q := newQueue(64, 64)
+	q.Prepare(1, FullSync, 0) // cutoff 0: everything is in-window
+	q.Schedule(headers, hashes, 1)
+
+	if got, want := q.PendingBALs(), len(headers); got != want {
+		t.Fatalf("wrong pending access list count: got %d, want %d", got, want)
+	}
+
+	// Reserve the access lists for a peer.
+	peer := dummyPeer("peer-bal")
+	req, _, throttle := q.ReserveBALs(peer, len(headers))
+	if throttle {
+		t.Fatal("unexpected throttle reserving access lists")
+	}
+	if req == nil {
+		t.Fatal("expected a reservation, got nil")
+	}
+	if got, want := len(req.Headers), len(headers); got != want {
+		t.Fatalf("reserved wrong number of headers: got %d, want %d", got, want)
+	}
+	if !q.InFlightBALs() {
+		t.Fatal("expected access list requests in flight")
+	}
+
+	// Assemble the response in the order the headers were reserved.
+	var (
+		respBALs   = make([]eth.RawBlockAccessList, len(req.Headers))
+		respHashes = make([]common.Hash, len(req.Headers))
+	)
+	byHash := make(map[common.Hash]int)
+	for i, h := range headers {
+		byHash[h.Hash()] = i
+	}
+	for i, h := range req.Headers {
+		idx := byHash[h.Hash()]
+		respBALs[i] = raws[idx]
+		respHashes[i] = crypto.Keccak256Hash(raws[idx].Bytes())
+	}
+
+	accepted, err := q.DeliverBALs(peer.id, respBALs, respHashes)
+	if err != nil {
+		t.Fatalf("failed to deliver access lists: %v", err)
+	}
+	if got, want := accepted, len(headers); got != want {
+		t.Fatalf("wrong accepted count: got %d, want %d", got, want)
+	}
+	if q.PendingBALs() != 0 {
+		t.Fatalf("expected no pending access lists after delivery, got %d", q.PendingBALs())
+	}
+
+	// The headers are otherwise empty, so the results should now be complete and
+	// each carry its downloaded access list.
+	results := q.Results(false)
+	if got, want := len(results), len(headers); got != want {
+		t.Fatalf("wrong number of results: got %d, want %d", got, want)
+	}
+	for i, res := range results {
+		if len(res.AccessList) == 0 {
+			t.Fatalf("result %d missing access list", i)
+		}
+		idx := byHash[res.Header.Hash()]
+		want := raws[idx].Bytes()
+		if !bytesEqual(res.AccessList, want) {
+			t.Fatalf("result %d access list mismatch", i)
+		}
+	}
+}
+
+// TestQueueAccessListBadDelivery verifies that an access list whose hash does
+// not match the header's advertised BlockAccessListHash is rejected.
+func TestQueueAccessListBadDelivery(t *testing.T) {
+	headers, hashes, raws := makeBALHeaders(4)
+
+	q := newQueue(64, 64)
+	q.Prepare(1, SnapSync, 0)
+	q.Schedule(headers, hashes, 1)
+
+	peer := dummyPeer("peer-bal-bad")
+	req, _, _ := q.ReserveBALs(peer, len(headers))
+	if req == nil {
+		t.Fatal("expected a reservation, got nil")
+	}
+
+	respBALs := make([]eth.RawBlockAccessList, len(req.Headers))
+	respHashes := make([]common.Hash, len(req.Headers))
+	byHash := make(map[common.Hash]int)
+	for i, h := range headers {
+		byHash[h.Hash()] = i
+	}
+	for i, h := range req.Headers {
+		idx := byHash[h.Hash()]
+		respBALs[i] = raws[idx]
+		// Corrupt the very first delivered hash so validation must fail.
+		if i == 0 {
+			respHashes[i] = common.Hash{0xde, 0xad}
+		} else {
+			respHashes[i] = crypto.Keccak256Hash(raws[idx].Bytes())
+		}
+	}
+	if _, err := q.DeliverBALs(peer.id, respBALs, respHashes); err != errInvalidBAL {
+		t.Fatalf("expected errInvalidBAL, got %v", err)
+	}
+}
+
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
