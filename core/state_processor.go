@@ -280,7 +280,7 @@ func systemCallGasBudget(evm *vm.EVM) (gasLimit uint64, gasBudget vm.GasBudget) 
 		// SYSTEM_MAX_SSTORES_PER_CALL = 16 is the upper bound on the number of
 		// new storage slots a single system call is expected to write.
 		stateBudget := params.SystemMaxSStoresPerCall * evm.Context.CostPerStateByte * params.StorageCreationSize
-		gasLimit = 30_000_000 + stateBudget
+		gasLimit = 30_000_000
 		gasBudget = vm.NewGasBudget(gasLimit, stateBudget)
 	}
 	return gasLimit, gasBudget

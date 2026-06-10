@@ -83,15 +83,16 @@ func (gp *GasPool) ChargeGasLegacy(returned uint64, gasUsed uint64) error {
 // gaspool. After Amsterdam we only check if we can include the transaction
 // and charge the gaspool at the end.
 func (gp *GasPool) ChargeGasAmsterdam(txRegular, txState, receiptGasUsed uint64) error {
-	gp.cumulativeRegular += txRegular
-	gp.cumulativeState += txState
-	gp.cumulativeUsed += receiptGasUsed
-
-	blockUsed := max(gp.cumulativeRegular, gp.cumulativeState)
+	cumulativeRegular := gp.cumulativeRegular + txRegular
+	cumulativeState := gp.cumulativeState + txState
+	blockUsed := max(cumulativeRegular, cumulativeState)
 	if gp.initial < blockUsed {
 		return fmt.Errorf("%w: block gas overflow: initial %d, used %d (regular: %d, state: %d)",
-			ErrGasLimitReached, gp.initial, blockUsed, gp.cumulativeRegular, gp.cumulativeState)
+			ErrGasLimitReached, gp.initial, blockUsed, cumulativeRegular, cumulativeState)
 	}
+	gp.cumulativeRegular = cumulativeRegular
+	gp.cumulativeState = cumulativeState
+	gp.cumulativeUsed += receiptGasUsed
 	// TODO(rjl, marius), the semantics of this counter is slightly different
 	// in the context of Amsterdam, the API Gas() should be reworked.
 	gp.remaining = gp.initial - gp.cumulativeRegular
