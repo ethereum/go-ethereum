@@ -92,6 +92,9 @@ func (ctx *ScopeContext) ContractCode() []byte {
 // It's important to note that any errors returned by the interpreter should be
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
+//
+// Run sets up the per-call scope and picks the interpreter loop. Without a
+// tracer it runs the generated execUntraced, otherwise execTraced.
 func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
 	evm.depth++
@@ -112,17 +115,48 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 	if len(contract.Code) == 0 {
 		return nil, nil
 	}
+	contract.Input = input
 
+	mem := NewMemory()         // bound memory
+	stack := evm.arena.stack() // local stack
+	scope := &ScopeContext{
+		Memory:   mem,
+		Stack:    stack,
+		Contract: contract,
+	}
+
+	// The exit hooks in execTraced still need the stack and memory, so this
+	// teardown must run after them. Defers in execTraced fire before this one,
+	// so the ordering holds.
+	defer func() {
+		stack.release()
+		mem.Free()
+	}()
+
+	// The generated fast path bakes its fork gates at generate time, so it
+	// cannot see table changes made by ExtraEips. Those configs run the table
+	// loop, as do tracing and the differential test via forceTableLoop.
+	if evm.forceTableLoop || len(evm.Config.ExtraEips) > 0 || evm.Config.Tracer != nil {
+		return evm.execTraced(scope)
+	}
+	return evm.execUntraced(scope)
+}
+
+// execTraced is the old table-walking interpreter loop. It dispatches every
+// opcode through the per-fork operation table and emits the tracing hooks
+// exactly as before. It stays hand-written so trace output does not change.
+//
+// The differential test also runs this loop without a tracer and compares it
+// against the generated execUntraced, which keeps the two from drifting
+// apart.
+func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 	var (
 		op          OpCode     // current opcode
 		jumpTable   *JumpTable = evm.table
-		mem                    = NewMemory()       // bound memory
-		stack                  = evm.arena.stack() // local stack
-		callContext            = &ScopeContext{
-			Memory:   mem,
-			Stack:    stack,
-			Contract: contract,
-		}
+		mem                    = scope.Memory
+		stack                  = scope.Stack
+		contract               = scope.Contract
+		callContext            = scope
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC
 		// to be uint256. Practically much less so feasible.
@@ -136,15 +170,6 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		debug     = evm.Config.Tracer != nil
 		isEIP4762 = evm.chainRules.IsEIP4762
 	)
-	// Don't move this deferred function, it's placed before the OnOpcode-deferred method,
-	// so that it gets executed _after_: the OnOpcode needs the stacks before
-	// they are returned to the pools
-	defer func() {
-		stack.release()
-		mem.Free()
-	}()
-	contract.Input = input
-
 	if debug {
 		defer func() { // this deferred method handles exit-with-error
 			if err == nil {
