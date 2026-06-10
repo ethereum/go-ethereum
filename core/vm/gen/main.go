@@ -217,7 +217,7 @@ func (g *generator) deriveMeta(forks []vm.GenFork) {
 	// gas / stack bounds across all forks where it appears (that is what makes
 	// it safe to bake as a constant). Bail loudly otherwise.
 	for code, handler := range inlineHandler {
-		g.checkStable(byte(code), handler, forks)
+		g.checkStable(code, handler, forks)
 	}
 	for code := 0x62; code <= 0x7f; code++ { // PUSH3-32
 		g.checkStable(byte(code), "makePush", forks)
