@@ -187,7 +187,7 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 				dirtyStateHitDepthHist.Update(int64(depth))
 
 				if len(blob) == 0 {
-					stateAccountIndexMeter.Mark(1)
+					stateAccountInexMeter.Mark(1)
 				} else {
 					stateAccountExistMeter.Mark(1)
 				}
@@ -210,7 +210,7 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 			cleanStateReadMeter.Mark(int64(len(blob)))
 
 			if len(blob) == 0 {
-				stateAccountIndexMeter.Mark(1)
+				stateAccountInexMeter.Mark(1)
 			} else {
 				stateAccountExistMeter.Mark(1)
 			}
@@ -231,8 +231,8 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 		cleanStateWriteMeter.Mark(int64(len(blob)))
 	}
 	if len(blob) == 0 {
-		stateAccountIndexMeter.Mark(1)
-		stateAccountIndexDiskMeter.Mark(1)
+		stateAccountInexMeter.Mark(1)
+		stateAccountInexDiskMeter.Mark(1)
 	} else {
 		stateAccountExistMeter.Mark(1)
 		stateAccountExistDiskMeter.Mark(1)
@@ -264,7 +264,7 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 				dirtyStateHitDepthHist.Update(int64(depth))
 
 				if len(blob) == 0 {
-					stateStorageIndexMeter.Mark(1)
+					stateStorageInexMeter.Mark(1)
 				} else {
 					stateStorageExistMeter.Mark(1)
 				}
@@ -288,7 +288,7 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 			cleanStateReadMeter.Mark(int64(len(blob)))
 
 			if len(blob) == 0 {
-				stateStorageIndexMeter.Mark(1)
+				stateStorageInexMeter.Mark(1)
 			} else {
 				stateStorageExistMeter.Mark(1)
 			}
@@ -309,8 +309,8 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 		cleanStateWriteMeter.Mark(int64(len(blob)))
 	}
 	if len(blob) == 0 {
-		stateStorageIndexMeter.Mark(1)
-		stateStorageIndexDiskMeter.Mark(1)
+		stateStorageInexMeter.Mark(1)
+		stateStorageInexDiskMeter.Mark(1)
 	} else {
 		stateStorageExistMeter.Mark(1)
 		stateStorageExistDiskMeter.Mark(1)

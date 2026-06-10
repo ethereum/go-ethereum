@@ -35,10 +35,10 @@ var (
 	dirtyNodeWriteMeter   = metrics.NewRegisteredMeter("pathdb/dirty/node/write", nil)
 	dirtyNodeHitDepthHist = metrics.NewRegisteredHistogram("pathdb/dirty/node/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
 
-	stateAccountIndexMeter     = metrics.NewRegisteredMeter("pathdb/state/account/inex/total", nil)
-	stateStorageIndexMeter     = metrics.NewRegisteredMeter("pathdb/state/storage/inex/total", nil)
-	stateAccountIndexDiskMeter = metrics.NewRegisteredMeter("pathdb/state/account/inex/disk", nil)
-	stateStorageIndexDiskMeter = metrics.NewRegisteredMeter("pathdb/state/storage/inex/disk", nil)
+	stateAccountInexMeter     = metrics.NewRegisteredMeter("pathdb/state/account/inex/total", nil)
+	stateStorageInexMeter     = metrics.NewRegisteredMeter("pathdb/state/storage/inex/total", nil)
+	stateAccountInexDiskMeter = metrics.NewRegisteredMeter("pathdb/state/account/inex/disk", nil)
+	stateStorageInexDiskMeter = metrics.NewRegisteredMeter("pathdb/state/storage/inex/disk", nil)
 
 	stateAccountExistMeter     = metrics.NewRegisteredMeter("pathdb/state/account/exist/total", nil)
 	stateStorageExistMeter     = metrics.NewRegisteredMeter("pathdb/state/storage/exist/total", nil)
@@ -69,9 +69,9 @@ var (
 	gcStorageMeter       = metrics.NewRegisteredMeter("pathdb/gc/storage/count", nil)
 	gcStorageBytesMeter  = metrics.NewRegisteredMeter("pathdb/gc/storage/bytes", nil)
 
-	stateHistoryBuildTimeMeter  = metrics.NewRegisteredResettingTimer("pathdb/history/state/time", nil)
-	stateHistoryDataBytesMeter  = metrics.NewRegisteredMeter("pathdb/history/state/bytes/data", nil)
-	stateHistoryIndexBytesMeter = metrics.NewRegisteredMeter("pathdb/history/state/bytes/index", nil)
+	stateHistoryBuildTimeMeter = metrics.NewRegisteredResettingTimer("pathdb/history/state/time", nil)
+	stateHistoryDataBytesMeter = metrics.NewRegisteredMeter("pathdb/history/state/bytes/data", nil)
+	stateHistoryInexBytesMeter = metrics.NewRegisteredMeter("pathdb/history/state/bytes/index", nil)
 
 	trienodeHistoryBuildTimeMeter  = metrics.NewRegisteredResettingTimer("pathdb/history/trienode/time", nil)
 	trienodeHistoryDataBytesMeter  = metrics.NewRegisteredMeter("pathdb/history/trienode/bytes/data", nil)
