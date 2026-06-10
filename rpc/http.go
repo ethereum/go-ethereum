@@ -52,6 +52,7 @@ type httpConn struct {
 	mu        sync.Mutex // protects headers
 	headers   http.Header
 	auth      HTTPAuth
+	tmprop    propagation.TextMapPropagator
 }
 
 // httpConn implements ServerCodec, but it is treated specially by Client
@@ -230,6 +231,9 @@ func (hc *httpConn) doRequest(ctx context.Context, body []byte) (io.ReadCloser, 
 	req.Header = hc.headers.Clone()
 	hc.mu.Unlock()
 	setHeaders(req.Header, headersFromContext(ctx))
+	if hc.tmprop != nil {
+		hc.tmprop.Inject(ctx, propagation.HeaderCarrier(req.Header))
+	}
 
 	if hc.auth != nil {
 		if err := hc.auth(req.Header); err != nil {

@@ -20,6 +20,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // ClientOption is a configuration option for the RPC client.
@@ -32,6 +33,7 @@ type clientConfig struct {
 	httpClient  *http.Client
 	httpHeaders http.Header
 	httpAuth    HTTPAuth
+	tmprop      propagation.TextMapPropagator
 
 	// WebSocket options
 	wsDialer           *websocket.Dialer
@@ -92,6 +94,19 @@ func WithHeaders(headers http.Header) ClientOption {
 		for k, vs := range headers {
 			cfg.httpHeaders[k] = vs
 		}
+	})
+}
+
+// WithTextMapPropagator configures OpenTelemetry trace propagation.
+// Note, by default, trace context is NOT propagated by rpc.Client.
+// To enable propagation via the `traceparent` header, you must explicitly
+// enable it by setting a propagator, e.g.
+//
+//	prop := propagation.TraceContext{}
+//	c, err := rpc.DialOptions(ctx, "http://", rpc.WithTextMapPropagator(prop))
+func WithTextMapPropagator(tmp propagation.TextMapPropagator) ClientOption {
+	return optionFunc(func(cfg *clientConfig) {
+		cfg.tmprop = tmp
 	})
 }
 
