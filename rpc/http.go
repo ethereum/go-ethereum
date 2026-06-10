@@ -169,6 +169,7 @@ func newClientTransportHTTP(endpoint string, cfg *clientConfig) reconnectFunc {
 		headers: headers,
 		url:     endpoint,
 		auth:    cfg.httpAuth,
+		tmprop:  cfg.tmprop,
 		closeCh: make(chan interface{}),
 	}
 
