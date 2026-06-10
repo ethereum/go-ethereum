@@ -330,7 +330,6 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 
-		// Drain the leftover regular gas if unexceptional halt occurs
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
 				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
@@ -382,7 +381,6 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 
-		// Drain the leftover regular gas if unexceptional halt occurs
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
 				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
@@ -427,7 +425,6 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 
-		// Drain the leftover regular gas if unexceptional halt occurs
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
 				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)

@@ -466,14 +466,11 @@ func gasCallCodeIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memor
 		return 0, err
 	}
 	var (
-		gas            uint64
-		overflow       bool
-		transfersValue = !stack.back(2).IsZero()
+		gas      uint64
+		overflow bool
 	)
-	if transfersValue {
-		if !evm.chainRules.IsEIP4762 {
-			gas += params.CallValueTransferGas
-		}
+	if stack.back(2).Sign() != 0 && !evm.chainRules.IsEIP4762 {
+		gas += params.CallValueTransferGas
 	}
 	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
 		return 0, ErrGasUintOverflow

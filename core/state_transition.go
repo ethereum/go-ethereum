@@ -636,7 +636,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// Make sure the transaction has sufficient gas allowance to
 		// pay the floor cost.
 		if msg.GasLimit < floorDataGas {
-			return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, msg.GasLimit, floorDataGas)
+			return nil, fmt.Errorf("%w: have %d, want %d", ErrFloorDataGas, msg.GasLimit, floorDataGas)
 		}
 		// In Amsterdam, the transaction gas limit is allowed to exceed
 		// params.MaxTxGas, but the calldata floor cost is capped by it.
