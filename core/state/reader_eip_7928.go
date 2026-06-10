@@ -220,10 +220,10 @@ type ReaderWithBlockLevelAccessList struct {
 	TxIndex  int
 }
 
-// NewReaderWithPreparedAccessList wraps a base reader with a shared, already
+// NewReaderWithAccessList wraps a base reader with a shared, already
 // preprocessed access list. This is the cheap constructor used on the hot path:
 // the prepared list is built once per block and borrowed by every per-tx reader.
-func NewReaderWithPreparedAccessList(base Reader, prepared *bal.AccessListReader, txIndex int) *ReaderWithBlockLevelAccessList {
+func NewReaderWithAccessList(base Reader, prepared *bal.AccessListReader, txIndex int) *ReaderWithBlockLevelAccessList {
 	return &ReaderWithBlockLevelAccessList{
 		Reader:   base,
 		prepared: prepared,
@@ -232,10 +232,10 @@ func NewReaderWithPreparedAccessList(base Reader, prepared *bal.AccessListReader
 }
 
 // NewReaderWithBlockLevelAccessList wraps a base reader with a raw access list,
-// preprocessing it on the spot. Prefer NewReaderWithPreparedAccessList when the
+// preprocessing it on the spot. Prefer NewReaderWithAccessList when the
 // prepared list can be built once and shared across multiple readers.
 func NewReaderWithBlockLevelAccessList(base Reader, accessList bal.BlockAccessList, txIndex int) *ReaderWithBlockLevelAccessList {
-	return NewReaderWithPreparedAccessList(base, bal.NewAccessListReader(accessList), txIndex)
+	return NewReaderWithAccessList(base, bal.NewAccessListReader(accessList), txIndex)
 }
 
 // Account implements Reader, returning the account with the specific address.
