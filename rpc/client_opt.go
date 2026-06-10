@@ -105,6 +105,9 @@ func WithHeaders(headers http.Header) ClientOption {
 //	prop := propagation.TraceContext{}
 //	c, err := rpc.DialOptions(ctx, "http://", rpc.WithTextMapPropagator(prop))
 func WithTextMapPropagator(tmp propagation.TextMapPropagator) ClientOption {
+	if tmp == nil {
+		panic("nil TextMapPropagator configured")
+	}
 	return optionFunc(func(cfg *clientConfig) {
 		cfg.tmprop = tmp
 	})
