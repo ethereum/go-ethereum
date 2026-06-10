@@ -131,6 +131,11 @@ type EVM struct {
 	returnData []byte // Last CALL's return data for subsequent reuse
 
 	arena *stackArena
+
+	// forceTableLoop is a test-only switch. The differential test sets it so
+	// that Run uses the table loop (execTraced) for the whole call tree, which
+	// lets the test compare it against the generated dispatch.
+	forceTableLoop bool
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
