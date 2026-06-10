@@ -44,12 +44,6 @@ func NewParallelStateProcessor(chain *HeaderChain, vmConfig *vm.Config) *Paralle
 	}
 }
 
-// newEVMContext builds the block context used for every EVM created while
-// processing the block.
-func (p *ParallelStateProcessor) newEVMContext(header *types.Header) vm.BlockContext {
-	return NewEVMBlockContext(header, p.chain, nil)
-}
-
 // execVMConfig returns the subset of the configured VM options that is safe to
 // reuse across the parallel per-transaction and post-transaction executions.
 // Only the fields explicitly copied here are propagated (mirroring the original
@@ -67,7 +61,7 @@ func (p *ParallelStateProcessor) execVMConfig() vm.Config {
 // performs post-tx state transition (system contracts and withdrawals)
 // and calculates the ProcessResult, returning it to be sent on resCh
 // by resultHandler
-func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStart time.Time, preTxBAL *bal.ConstructionBlockAccessList, prepared *bal.PreparedAccessList, statedb *state.StateDB, results []txExecResult) *ProcessResultWithMetrics {
+func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStart time.Time, preTxBAL *bal.ConstructionBlockAccessList, accessList *bal.AccessListReader, statedb *state.StateDB, results []txExecResult) *ProcessResultWithMetrics {
 	tExec := time.Since(tExecStart)
 	tPostprocessStart := time.Now()
 	header := block.Header()
@@ -75,9 +69,9 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStar
 	// The post-execution changes are recorded at the BAL index immediately
 	// following the last transaction.
 	lastBALIdx := len(block.Transactions()) + 1
-	postTxState := statedb.WithReader(state.NewReaderWithPreparedAccessList(statedb.Reader(), prepared, lastBALIdx))
+	postTxState := statedb.WithReader(state.NewReaderWithAccessList(statedb.Reader(), accessList, lastBALIdx))
 
-	evm := vm.NewEVM(p.newEVMContext(header), postTxState, p.chainConfig(), p.execVMConfig())
+	evm := vm.NewEVM(NewEVMBlockContext(header, p.chain, nil), postTxState, p.chainConfig(), p.execVMConfig())
 
 	// 1. order the receipts by tx index
 	// 2. correctly calculate the cumulative gas used per receipt, returning bad block error if it goes over the allowed
@@ -158,7 +152,7 @@ type txExecResult struct {
 
 // resultHandler polls until all transactions have finished executing and the
 // state root calculation is complete. The result is emitted on resCh.
-func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxBAL *bal.ConstructionBlockAccessList, prepared *bal.PreparedAccessList, statedb *state.StateDB, tExecStart time.Time, txResCh <-chan txExecResult, stateRootCalcResCh <-chan stateRootCalculationResult, resCh chan *ProcessResultWithMetrics) {
+func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxBAL *bal.ConstructionBlockAccessList, prepared *bal.AccessListReader, statedb *state.StateDB, tExecStart time.Time, txResCh <-chan txExecResult, stateRootCalcResCh <-chan stateRootCalculationResult, resCh chan *ProcessResultWithMetrics) {
 	// 1. if the block has transactions, receive the execution results from all of them and return an error on resCh if any txs err'd
 	// 2. once all txs are executed, compute the post-tx state transition and produce the ProcessResult sending it on resCh (or an error if the post-tx state didn't match what is reported in the BAL)
 	var (
@@ -235,7 +229,7 @@ func (p *ParallelStateProcessor) calcAndVerifyRoot(block *types.Block, stateTran
 // execTx executes a single transaction returning a result which includes state accessed/modified.
 func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transaction, balIdx int, db *state.StateDB, signer types.Signer) *txExecResult {
 	header := block.Header()
-	evmContext := p.newEVMContext(header)
+	evmContext := NewEVMBlockContext(header, p.chain, nil)
 	evm := vm.NewEVM(evmContext, db, p.chainConfig(), p.execVMConfig())
 
 	msg, err := TransactionToMessage(tx, signer, header.BaseFee)
@@ -268,7 +262,7 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 
 func (p *ParallelStateProcessor) processBlockPreTx(block *types.Block, statedb *state.StateDB, cfg vm.Config) *bal.ConstructionBlockAccessList {
 	header := block.Header()
-	evm := vm.NewEVM(p.newEVMContext(header), statedb, p.chainConfig(), cfg)
+	evm := vm.NewEVM(NewEVMBlockContext(header, p.chain, nil), statedb, p.chainConfig(), cfg)
 	return PreExecution(context.Background(), block.BeaconRoot(), block.ParentHash(), p.chainConfig(), evm, block.Number(), block.Time())
 }
 
@@ -306,7 +300,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *st
 		balIdx := i + 1
 		prestate := startingState.Copy()
 		workers.Go(func() error {
-			prestate = prestate.WithReader(state.NewReaderWithPreparedAccessList(statedb.Reader(), prepared, balIdx))
+			prestate = prestate.WithReader(state.NewReaderWithAccessList(statedb.Reader(), prepared, balIdx))
 			txResCh <- *p.execTx(block, tx, balIdx, prestate, signer)
 			return nil
 		})
