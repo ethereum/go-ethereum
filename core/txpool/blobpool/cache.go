@@ -401,6 +401,9 @@ func (c *Cache) update(want []common.Hash) {
 				if _, ok := wantSet[v]; !ok {
 					continue
 				}
+				if _, exists := c.entries[v]; exists {
+					continue
+				}
 				var pf []kzg4844.Proof
 				switch sidecar.Version {
 				case types.BlobSidecarVersion0:
