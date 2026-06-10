@@ -280,7 +280,7 @@ func (dl *diffLayer) accountRLP(hash common.Hash, depth int) ([]byte, error) {
 		if n := len(data); n > 0 {
 			snapshotDirtyAccountReadMeter.Mark(int64(n))
 		} else {
-			snapshotDirtyAccountIndexMeter.Mark(1)
+			snapshotDirtyAccountInexMeter.Mark(1)
 		}
 		snapshotBloomAccountTrueHitMeter.Mark(1)
 		return data, nil
