@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// Type constants for the e2store entries in the Era1 and EraE formats.
+// Type constants for the e2store entries in the Era1 and Ere formats.
 var (
 	TypeVersion                uint16 = 0x3265
 	TypeCompressedHeader       uint16 = 0x03
@@ -40,10 +40,9 @@ var (
 	TypeCompressedSlimReceipts uint16 = 0x0a // uses eth/69 encoding
 	TypeProof                  uint16 = 0x0b
 	TypeBlockIndex             uint16 = 0x3266
-	TypeComponentIndex         uint16 = 0x3267
+	TypeDynamicBlockIndex      uint16 = 0x3267
 
 	MaxSize = 8192
-	// headerSize uint64 = 8
 )
 
 type ReadAtSeekCloser interface {
@@ -93,7 +92,7 @@ type Builder interface {
 
 	// Finalize writes all collected entries and returns the epoch identifier.
 	// For Era1 (onedb): returns the accumulator root.
-	// For EraE (execdb): returns the last block hash.
+	// For Ere (execdb): returns the last block hash.
 	Finalize() (common.Hash, error)
 
 	// Accumulator returns the accumulator root after Finalize has been called.
@@ -115,7 +114,7 @@ type Era interface {
 }
 
 // ReadDir reads all the era files in a directory for a given network.
-// Format: <network>-<epoch>-<hexroot>.erae or <network>-<epoch>-<hexroot>.era1
+// Format: <network>-<epoch>-<hexroot>(-<profile>)*.ere or <network>-<epoch>-<hexroot>.era1
 func ReadDir(dir, network string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 
@@ -129,14 +128,16 @@ func ReadDir(dir, network string) ([]string, error) {
 	)
 	for _, entry := range entries {
 		ext := path.Ext(entry.Name())
-		if ext != ".erae" && ext != ".era1" {
+		if ext != ".ere" && ext != ".era1" {
 			continue
 		}
 		if dirType == "" {
 			dirType = ext
 		}
 		parts := strings.Split(entry.Name(), "-")
-		if len(parts) != 3 || parts[0] != network {
+		// Ere files may carry an optional profile postfix (e.g. "-noproofs"),
+		// so the filename has at least 3 dash-separated parts.
+		if len(parts) < 3 || parts[0] != network {
 			// Invalid era filename, skip.
 			continue
 		}

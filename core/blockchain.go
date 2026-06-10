@@ -330,6 +330,7 @@ type BlockChain struct {
 	flushInterval atomic.Int64                     // Time interval (processing time) after which to flush a state
 	triedb        *triedb.Database                 // The database handler for maintaining trie nodes.
 	codedb        *state.CodeDB                    // The database handler for maintaining contract codes.
+	jumpDestCache vm.JumpDestCache                 // Shared JUMPDEST analysis cache for block processing
 	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
 
 	hc               *HeaderChain
@@ -412,6 +413,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		db:                 db,
 		triedb:             triedb,
 		codedb:             state.NewCodeDB(db),
+		jumpDestCache:      NewJumpDestCache(),
 		triegc:             prque.New[int64, common.Hash](nil),
 		chainmu:            syncx.NewClosableMutex(),
 		bodyCache:          lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
@@ -720,7 +722,7 @@ func (bc *BlockChain) loadLastState() error {
 
 // initializeHistoryPruning sets bc.historyPrunePoint.
 func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
-	freezerTail, _ := bc.db.Tail()
+	freezerTail, _ := bc.db.Tail(rawdb.ChainFreezerBlockDataGroup)
 	policy := bc.cfg.HistoryPolicy
 
 	switch policy.Mode {
@@ -2183,7 +2185,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 			// Disable tracing for prefetcher executions.
 			vmCfg := bc.cfg.VmConfig
 			vmCfg.Tracer = nil
-			bc.prefetcher.Prefetch(block, throwaway, vmCfg, &interrupt)
+			bc.prefetcher.Prefetch(block, throwaway, bc.jumpDestCache, vmCfg, &interrupt)
 
 			blockPrefetchExecuteTimer.Update(time.Since(start))
 			if interrupt.Load() {
@@ -2229,7 +2231,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	// Process block using the parent state as reference point
 	pstart := time.Now()
 	pctx, _, spanEnd := telemetry.StartSpan(ctx, "bc.processor.Process")
-	res, err := bc.processor.Process(pctx, block, statedb, bc.cfg.VmConfig)
+	res, err := bc.processor.Process(pctx, block, statedb, bc.jumpDestCache, bc.cfg.VmConfig)
 	spanEnd(&err)
 	if err != nil {
 		bc.reportBadBlock(block, res, err)
@@ -2965,7 +2967,7 @@ func (bc *BlockChain) InsertHeadersBeforeCutoff(headers []*types.Header) (int, e
 	}
 	// Truncate the useless chain segment (zero bodies and receipts) in the
 	// ancient store.
-	if _, err := bc.db.TruncateTail(last.Number.Uint64() + 1); err != nil {
+	if _, err := bc.db.TruncateTail(rawdb.ChainFreezerBlockDataGroup, last.Number.Uint64()+1); err != nil {
 		return 0, err
 	}
 	// Last step update all in-memory markers

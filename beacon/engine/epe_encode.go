@@ -66,7 +66,11 @@ func (e ExecutionPayloadEnvelope) MarshalJSON() ([]byte, error) {
 		b.RawValue(payload)
 
 		b.Key("blockValue")
-		b.HexBigInt(e.BlockValue)
+		if e.BlockValue != nil {
+			b.HexBigInt(e.BlockValue)
+		} else {
+			b.Null()
+		}
 
 		b.Key("blobsBundle")
 		marshalBlobsBundle(&b, e.BlobsBundle)

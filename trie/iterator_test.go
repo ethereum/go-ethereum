@@ -1128,7 +1128,7 @@ func TestPrefixIteratorWithDescend(t *testing.T) {
 
 		// Count nodes at each level
 		nodesVisited := 0
-		leafsFound := make(map[string]bool)
+		leavesFound := make(map[string]bool)
 
 		// First call with descend=true to enter the "a" subtree
 		if !iter.Next(true) {
@@ -1141,20 +1141,20 @@ func TestPrefixIteratorWithDescend(t *testing.T) {
 		for i := 0; iter.Next(descendPattern[i%len(descendPattern)]); i++ {
 			nodesVisited++
 			if iter.Leaf() {
-				leafsFound[string(iter.LeafKey())] = true
+				leavesFound[string(iter.LeafKey())] = true
 			}
 		}
 
 		// We should still respect the prefix boundary even when skipping
 		prefix := []byte("a")
-		for key := range leafsFound {
+		for key := range leavesFound {
 			if !bytes.HasPrefix([]byte(key), prefix) {
 				t.Errorf("Found key outside prefix when using descend=false: %s", key)
 			}
 		}
 
 		// Should not have found "b" even if we skip some subtrees
-		if leafsFound["b"] {
+		if leavesFound["b"] {
 			t.Error("Iterator leaked outside prefix boundary with descend=false")
 		}
 	})

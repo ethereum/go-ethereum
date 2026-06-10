@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package pathdb
+package internal
 
 import (
 	"bytes"
@@ -39,7 +39,7 @@ func TestIteratorHold(t *testing.T) {
 		}
 	}
 	// Iterate over the database with the given configs and verify the results
-	it, idx := newHoldableIterator(db.NewIterator(nil, nil)), 0
+	it, idx := NewHoldableIterator(db.NewIterator(nil, nil)), 0
 
 	// Nothing should be affected for calling Discard on non-initialized iterator
 	it.Hold()
@@ -108,20 +108,20 @@ func TestReopenIterator(t *testing.T) {
 		}
 		db = rawdb.NewMemoryDatabase()
 
-		reopen = func(db ethdb.KeyValueStore, iter *holdableIterator) *holdableIterator {
+		reopen = func(db ethdb.KeyValueStore, iter *HoldableIterator) *HoldableIterator {
 			if !iter.Next() {
 				iter.Release()
-				return newHoldableIterator(memorydb.New().NewIterator(nil, nil))
+				return NewHoldableIterator(memorydb.New().NewIterator(nil, nil))
 			}
 			next := iter.Key()
 			iter.Release()
-			return newHoldableIterator(db.NewIterator(rawdb.SnapshotAccountPrefix, next[1:]))
+			return NewHoldableIterator(db.NewIterator(rawdb.SnapshotAccountPrefix, next[1:]))
 		}
 	)
 	for key, val := range content {
 		rawdb.WriteAccountSnapshot(db, key, []byte(val))
 	}
-	checkVal := func(it *holdableIterator, index int) {
+	checkVal := func(it *HoldableIterator, index int) {
 		if !bytes.Equal(it.Key(), append(rawdb.SnapshotAccountPrefix, order[index].Bytes()...)) {
 			t.Fatalf("Unexpected data entry key, want %v got %v", order[index], it.Key())
 		}
@@ -131,7 +131,7 @@ func TestReopenIterator(t *testing.T) {
 	}
 	// Iterate over the database with the given configs and verify the results
 	dbIter := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
-	iter, idx := newHoldableIterator(rawdb.NewKeyLengthIterator(dbIter, 1+common.HashLength)), -1
+	iter, idx := NewHoldableIterator(rawdb.NewKeyLengthIterator(dbIter, 1+common.HashLength)), -1
 
 	idx++
 	iter.Next()

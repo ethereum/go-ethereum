@@ -159,11 +159,13 @@ func (p *Peer) MarkTransaction(hash common.Hash) {
 // The reasons this is public is to allow packages using this protocol to write
 // tests that directly send messages without having to do the async queueing.
 func (p *Peer) SendTransactions(txs types.Transactions) error {
-	// Mark all the transactions as known, but ensure we don't overflow our limits
+	if err := p2p.Send(p.rw, TransactionsMsg, txs); err != nil {
+		return err
+	}
 	for _, tx := range txs {
 		p.knownTxs.Add(tx.Hash())
 	}
-	return p2p.Send(p.rw, TransactionsMsg, txs)
+	return nil
 }
 
 // AsyncSendTransactions queues a list of transactions (by hash) to eventually
@@ -209,14 +211,15 @@ func (p *Peer) AsyncSendPooledTransactionHashes(hashes []common.Hash) {
 
 // ReplyPooledTransactionsRLP is the response to RequestTxs.
 func (p *Peer) ReplyPooledTransactionsRLP(id uint64, hashes []common.Hash, txs []rlp.RawValue) error {
-	// Mark all the transactions as known, but ensure we don't overflow our limits
-	p.knownTxs.Add(hashes...)
-
 	// Not packed into PooledTransactionsResponse to avoid RLP decoding
-	return p2p.Send(p.rw, PooledTransactionsMsg, &PooledTransactionsRLPPacket{
+	if err := p2p.Send(p.rw, PooledTransactionsMsg, &PooledTransactionsRLPPacket{
 		RequestId:                     id,
 		PooledTransactionsRLPResponse: txs,
-	})
+	}); err != nil {
+		return err
+	}
+	p.knownTxs.Add(hashes...)
+	return nil
 }
 
 // ReplyBlockHeadersRLP is the response to GetBlockHeaders.

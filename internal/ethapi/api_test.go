@@ -708,6 +708,9 @@ func (b testBackend) HistoryPruningCutoff() uint64 {
 	bn, _ := b.chain.HistoryPruningCutoff()
 	return bn
 }
+func (b testBackend) HistoryRetention() HistoryRetention {
+	return HistoryRetention{StateScheme: b.chain.TrieDB().Scheme()}
+}
 
 func TestEstimateGas(t *testing.T) {
 	t.Parallel()
@@ -4213,7 +4216,7 @@ func TestGetStorageValues(t *testing.T) {
 	result, err := api.GetStorageValues(context.Background(), map[common.Address][]common.Hash{
 		addr1: {slot0, slot1},
 		addr2: {slot2},
-	}, latest)
+	}, &latest)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -4233,7 +4236,7 @@ func TestGetStorageValues(t *testing.T) {
 	// Missing slot returns zero.
 	result, err = api.GetStorageValues(context.Background(), map[common.Address][]common.Hash{
 		addr1: {common.HexToHash("0xff")},
-	}, latest)
+	}, &latest)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -4242,7 +4245,7 @@ func TestGetStorageValues(t *testing.T) {
 	}
 
 	// Empty request returns error.
-	_, err = api.GetStorageValues(context.Background(), map[common.Address][]common.Hash{}, latest)
+	_, err = api.GetStorageValues(context.Background(), map[common.Address][]common.Hash{}, &latest)
 	if err == nil {
 		t.Fatal("expected error for empty request")
 	}
@@ -4254,8 +4257,85 @@ func TestGetStorageValues(t *testing.T) {
 	}
 	_, err = api.GetStorageValues(context.Background(), map[common.Address][]common.Hash{
 		addr1: tooMany,
-	}, latest)
+	}, &latest)
 	if err == nil {
 		t.Fatal("expected error for exceeding slot limit")
 	}
+}
+
+// TestStateMethodsDefaultToLatest verifies that the state-reading methods
+// default the optional block parameter to "latest".
+func TestStateMethodsDefaultToLatest(t *testing.T) {
+	t.Parallel()
+	var (
+		accounts = newAccounts(2)
+		slot     = common.HexToHash("0x01")
+		val      = common.HexToHash("0x42")
+		code     = []byte{0x60, 0x00, 0x60, 0x00}
+		genesis  = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+				accounts[1].addr: {
+					Balance: big.NewInt(2 * params.Ether),
+					Nonce:   7,
+					Code:    code,
+					Storage: map[common.Hash]common.Hash{slot: val},
+				},
+			},
+		}
+		acc = accounts[1].addr
+		ctx = context.Background()
+	)
+	backend := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	srv := rpc.NewServer()
+	if err := srv.RegisterName("eth", NewBlockChainAPI(backend)); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.RegisterName("eth", NewTransactionAPI(backend, new(AddrLocker))); err != nil {
+		t.Fatal(err)
+	}
+	client := rpc.DialInProc(srv)
+	defer client.Close()
+
+	// call invokes method twice: once omitting the block param and once passing
+	// "latest" explicitly. Both must succeed and return identical results.
+	call := func(name string, dst func() any, explicit []any, omitted []any) {
+		t.Helper()
+		gotOmitted := dst()
+		if err := client.CallContext(ctx, gotOmitted, name, omitted...); err != nil {
+			t.Fatalf("%s with omitted block: unexpected error: %v", name, err)
+		}
+		gotLatest := dst()
+		if err := client.CallContext(ctx, gotLatest, name, explicit...); err != nil {
+			t.Fatalf("%s with explicit latest: unexpected error: %v", name, err)
+		}
+		o, _ := json.Marshal(gotOmitted)
+		l, _ := json.Marshal(gotLatest)
+		if !bytes.Equal(o, l) {
+			t.Errorf("%s: omitted-block result %s != latest result %s", name, o, l)
+		}
+	}
+
+	call("eth_getBalance",
+		func() any { return new(hexutil.Big) },
+		[]any{acc, "latest"}, []any{acc})
+	call("eth_getCode",
+		func() any { return new(hexutil.Bytes) },
+		[]any{acc, "latest"}, []any{acc})
+	call("eth_getTransactionCount",
+		func() any { return new(hexutil.Uint64) },
+		[]any{acc, "latest"}, []any{acc})
+	call("eth_getStorageAt",
+		func() any { return new(hexutil.Bytes) },
+		[]any{acc, slot, "latest"}, []any{acc, slot})
+	call("eth_getProof",
+		func() any { return new(AccountResult) },
+		[]any{acc, []string{slot.Hex()}, "latest"}, []any{acc, []string{slot.Hex()}})
+	call("eth_getStorageValues",
+		func() any { return new(map[common.Address][]hexutil.Bytes) },
+		[]any{map[common.Address][]common.Hash{acc: {slot}}, "latest"},
+		[]any{map[common.Address][]common.Hash{acc: {slot}}})
 }

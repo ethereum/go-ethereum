@@ -109,7 +109,7 @@ const (
 
 	// notifyThreshold is the eviction priority threshold above which a transaction
 	// is considered close enough to being includable to be announced to peers.
-	// Setting this to zero will disable announcements for anyting not immediately
+	// Setting this to zero will disable announcements for anything not immediately
 	// includable. Setting it to -1 allows transactions that are close to being
 	// includable, maybe already in the next block if fees go down, to be announced.
 
@@ -164,14 +164,6 @@ type blobTxForPool struct {
 // Sidecar returns BlobTxSidecar of ptx.
 func (ptx *blobTxForPool) Sidecar() *types.BlobTxSidecar {
 	return types.NewBlobTxSidecar(ptx.Version, ptx.Blobs, ptx.Commitments, ptx.Proofs)
-}
-
-// ApplySidecar copies the sidecar's fields into the flat fields.
-func (ptx *blobTxForPool) ApplySidecar(sc *types.BlobTxSidecar) {
-	ptx.Version = sc.Version
-	ptx.Commitments = sc.Commitments
-	ptx.Proofs = sc.Proofs
-	ptx.Blobs = sc.Blobs
 }
 
 // TxSize returns the transaction size on the network without
@@ -1274,22 +1266,13 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	// TODO: seems like an easy optimization here would be getting the serialized tx
 	// from limbo instead of re-serializing it here.
 
-	// Converts reorged-out legacy blob transactions to the new format to prevent
-	// them from becoming stuck in the pool until eviction.
-	//
-	// Performance note: Conversion takes ~140ms (Mac M1 Pro). Since a maximum of
-	// 9 legacy blob transactions are allowed in a block pre-Osaka, an adversary
-	// could theoretically halt a Geth node for ~1.2s by reorging per block. However,
-	// this attack is financially inefficient to execute.
+	// Post-Osaka, legacy (v0) blob sidecars are no longer accepted into the pool.
+	// A reorged-out legacy blob transaction can therefore not be re-added, so drop
+	// it on the floor instead of putting it back.
 	head := p.head.Load()
 	if p.chain.Config().IsOsaka(head.Number, head.Time) && ptx.Version == types.BlobSidecarVersion0 {
-		sc := ptx.Sidecar()
-		if err := sc.ToV1(); err != nil {
-			log.Error("Failed to convert the legacy sidecar", "err", err)
-			return err
-		}
-		ptx.ApplySidecar(sc)
-		log.Info("Legacy blob transaction is reorged", "hash", ptx.Tx.Hash())
+		log.Debug("Dropping reorged legacy blob transaction", "hash", txhash)
+		return errors.New("legacy blob sidecar unsupported post-osaka")
 	}
 	blob, err := rlp.EncodeToBytes(ptx)
 	if err != nil {
@@ -1914,7 +1897,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 
 	addValidMeter.Mark(1)
 
-	// Transaction was addded successfully, but we only announce if it is (close to being)
+	// Transaction was added successfully, but we only announce if it is (close to being)
 	// includable and the previous one was already announced.
 	if p.isAnnouncable(meta) && (meta.nonce == next || (len(txs) > 1 && txs[offset-1].announced)) {
 		meta.announced = true
@@ -2268,7 +2251,11 @@ func (p *BlobPool) Stats() (int, int) {
 	for _, txs := range p.index {
 		pending += len(txs)
 	}
-	return pending, 0 // No non-executable txs in the blob pool
+	var queue int
+	for _, txs := range p.gapped {
+		queue += len(txs)
+	}
+	return pending, queue
 }
 
 // Content retrieves the data content of the transaction pool, returning all the

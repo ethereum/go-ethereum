@@ -556,12 +556,12 @@ func (api *ConsensusAPI) GetBlobsV1(ctx context.Context, hashes []common.Hash) (
 	var (
 		filled int
 		attrs  = []telemetry.Attribute{
-			telemetry.Int64Attribute("blobs.requested", int64(len(hashes))),
+			telemetry.IntAttribute("blobs.requested", len(hashes)),
 		}
 	)
 	ctx, span, spanEnd := telemetry.StartSpan(ctx, "engine.getBlobsV1", attrs...)
 	defer func() {
-		span.SetAttributes(telemetry.Int64Attribute("blobs.filled", int64(filled)))
+		span.SetAttributes(telemetry.IntAttribute("blobs.filled", filled))
 		spanEnd(&err)
 	}()
 
@@ -643,12 +643,12 @@ func (api *ConsensusAPI) getBlobs(ctx context.Context, hashes []common.Hash, v2 
 	var (
 		filled int
 		attrs  = []telemetry.Attribute{
-			telemetry.Int64Attribute("blobs.requested", int64(len(hashes))),
+			telemetry.IntAttribute("blobs.requested", len(hashes)),
 		}
 	)
 	ctx, span, spanEnd := telemetry.StartSpan(ctx, "engine.getBlobs", attrs...)
 	defer func() {
-		span.SetAttributes(telemetry.Int64Attribute("blobs.filled", int64(filled)))
+		span.SetAttributes(telemetry.IntAttribute("blobs.filled", filled))
 		spanEnd(&err)
 	}()
 
@@ -833,7 +833,7 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 	var attrs = []telemetry.Attribute{
 		telemetry.Int64Attribute("block.number", int64(params.Number)),
 		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
-		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
+		telemetry.IntAttribute("tx.count", len(params.Transactions)),
 	}
 	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayload", attrs...)
 	defer spanEnd(&err)
@@ -911,7 +911,11 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 	// into the database directly will conflict with the assumptions of snap sync
 	// that it has an empty db that it can fill itself.
 	if api.eth.Downloader().ConfigSyncMode() == ethconfig.SnapSync {
-		return api.delayPayloadImport(block), nil
+		// If the client is started at genesis of a test network with snap sync
+		// enabled, just try to import the block since there is nothing to sync.
+		if block.NumberU64() != 1 {
+			return api.delayPayloadImport(block), nil
+		}
 	}
 	if !api.eth.BlockChain().HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		api.remoteBlocks.put(block.Hash(), block.Header())

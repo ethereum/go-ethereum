@@ -182,7 +182,7 @@ func TestRegistryUnregister(t *testing.T) {
 	r.Unregister("bar")
 	r.Unregister("baz")
 	if len(arbiter.meters) != l {
-		t.Errorf("arbiter.meters: %d != %d\n", l+2, len(arbiter.meters))
+		t.Errorf("arbiter.meters: %d != %d\n", l, len(arbiter.meters))
 	}
 }
 

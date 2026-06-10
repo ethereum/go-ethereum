@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -279,6 +280,19 @@ func (b *EthAPIBackend) HistoryPruningCutoff() uint64 {
 	return bn
 }
 
+func (b *EthAPIBackend) HistoryRetention() ethapi.HistoryRetention {
+	cfg := b.eth.config
+	return ethapi.HistoryRetention{
+		TxIndexHistory:   cfg.TransactionHistory,
+		LogIndexHistory:  cfg.LogHistory,
+		LogIndexDisabled: cfg.LogNoHistory,
+		StateHistory:     cfg.StateHistory,
+		TrienodeHistory:  cfg.TrienodeHistory,
+		StateArchive:     cfg.NoPruning,
+		StateScheme:      b.eth.blockchain.TrieDB().Scheme(),
+	}
+}
+
 func (b *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	return b.eth.blockchain.GetReceiptsByHash(hash), nil
 }
@@ -432,8 +446,10 @@ func (b *EthAPIBackend) FeeHistory(ctx context.Context, blockCount uint64, lastB
 }
 
 func (b *EthAPIBackend) BaseFee(ctx context.Context) *big.Int {
-	if b.ChainConfig().IsLondon(b.CurrentHeader().Number) {
-		return eip1559.CalcBaseFee(b.ChainConfig(), b.CurrentHeader())
+	header := b.CurrentHeader()
+	next := new(big.Int).Add(header.Number, common.Big1)
+	if b.ChainConfig().IsLondon(next) {
+		return eip1559.CalcBaseFee(b.ChainConfig(), header)
 	}
 	return nil
 }

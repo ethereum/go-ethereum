@@ -76,6 +76,9 @@ type TxPool struct {
 	quit chan chan error         // Quit channel to tear down the head updater
 	term chan struct{}           // Termination channel to detect a closed pool
 
+	newHeadCh  chan core.ChainHeadEvent
+	newHeadSub event.Subscription
+
 	sync chan chan error // Testing / simulator channel to block until internal reset is done
 }
 
@@ -98,13 +101,15 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 		return nil, err
 	}
 	pool := &TxPool{
-		subpools: subpools,
-		chain:    chain,
-		state:    statedb,
-		quit:     make(chan chan error),
-		term:     make(chan struct{}),
-		sync:     make(chan chan error),
+		subpools:  subpools,
+		chain:     chain,
+		state:     statedb,
+		quit:      make(chan chan error),
+		term:      make(chan struct{}),
+		sync:      make(chan chan error),
+		newHeadCh: make(chan core.ChainHeadEvent),
 	}
+	pool.newHeadSub = chain.SubscribeChainHeadEvent(pool.newHeadCh)
 	reserver := NewReservationTracker()
 	for i, subpool := range subpools {
 		if err := subpool.Init(gasTip, head, reserver.NewHandle(i)); err != nil {
@@ -150,12 +155,8 @@ func (p *TxPool) loop(head *types.Header) {
 	// Close the termination marker when the pool stops
 	defer close(p.term)
 
-	// Subscribe to chain head events to trigger subpool resets
-	var (
-		newHeadCh  = make(chan core.ChainHeadEvent)
-		newHeadSub = p.chain.SubscribeChainHeadEvent(newHeadCh)
-	)
-	defer newHeadSub.Unsubscribe()
+	newHeadCh := p.newHeadCh
+	defer p.newHeadSub.Unsubscribe()
 
 	// Track the previous and current head to feed to an idle reset
 	var (

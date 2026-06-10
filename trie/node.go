@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -334,4 +335,80 @@ func wrapError(err error, ctx string) error {
 
 func (err *decodeError) Error() string {
 	return fmt.Sprintf("%v (decode path: %s)", err.what, strings.Join(err.stack, "<-"))
+}
+
+// MountPartitionRoot folds the leading nibble n back into the root of a
+// partition subtree that was built with that nibble stripped (see
+// PartialStackTrie). It returns the node, and its hash, that becomes the
+// canonical trie root when partition n turns out to be the only populated
+// partition, so the top-level branch collapses into the subtree itself.
+//
+// The subtree root blob is one of:
+//
+//   - a branch: the canonical root is a freshly constructed extension carrying
+//     the single nibble n and pointing at the branch by hash. The branch stays
+//     at the path the partition already wrote it to ([n]).
+//
+//   - a short node (extension or leaf): its hex key is extended from [k...] to
+//     [n, k...], preserving the leaf terminator if present, and the child/value
+//     element is reused verbatim.
+//
+// isOrphaned reports whether a short node was folded. When true, the node the
+// caller persisted at path [n] is no longer referenced by the returned root and
+// should be deleted. It is false for the branch case, where [n] stays referenced.
+func MountPartitionRoot(blob []byte, n byte) (hash common.Hash, writeBlob []byte, isOrphaned bool, err error) {
+	elems, err := decodeNodeElements(blob)
+	if err != nil {
+		return common.Hash{}, nil, false, fmt.Errorf("decode partition root: %w", err)
+	}
+	switch len(elems) {
+	case 17:
+		// Branch root: wrap it in an extension carrying the single nibble n,
+		// referencing the branch by its 32-byte hash.
+		keyRLP, err := rlp.EncodeToBytes(hexToCompact([]byte{n}))
+		if err != nil {
+			return common.Hash{}, nil, false, fmt.Errorf("encode extension key: %w", err)
+		}
+		childRLP, err := rlp.EncodeToBytes(crypto.Keccak256(blob))
+		if err != nil {
+			return common.Hash{}, nil, false, fmt.Errorf("encode child ref: %w", err)
+		}
+		writeBlob, err = encodeNodeElements([][]byte{keyRLP, childRLP})
+		if err != nil {
+			return common.Hash{}, nil, false, fmt.Errorf("encode extension node: %w", err)
+		}
+		return crypto.Keccak256Hash(writeBlob), writeBlob, false, nil
+
+	case 2:
+		// Short node (extension/leaf): prepend n to its hex key. compactToHex
+		// retains the leaf terminator, so hexToCompact restores the right type.
+		compactKey, _, err := rlp.SplitString(elems[0])
+		if err != nil {
+			return common.Hash{}, nil, false, fmt.Errorf("parse compact key: %w", err)
+		}
+		hex := append([]byte{n}, compactToHex(compactKey)...)
+		keyRLP, err := rlp.EncodeToBytes(hexToCompact(hex))
+		if err != nil {
+			return common.Hash{}, nil, false, fmt.Errorf("encode mounted key: %w", err)
+		}
+		writeBlob, err = encodeNodeElements([][]byte{keyRLP, elems[1]})
+		if err != nil {
+			return common.Hash{}, nil, false, fmt.Errorf("encode mounted node: %w", err)
+		}
+		return crypto.Keccak256Hash(writeBlob), writeBlob, true, nil
+
+	default:
+		return common.Hash{}, nil, false, fmt.Errorf("unexpected partition root element count: %d", len(elems))
+	}
+}
+
+// AssembleBranch constructs a fullNode (17-slot branch) from the given
+// children and returns its RLP encoding and 32-byte hash.
+func AssembleBranch(children [17][]byte) ([]byte, common.Hash, error) {
+	fn := &fullnodeEncoder{Children: children}
+	w := rlp.NewEncoderBuffer(nil)
+	fn.encode(w)
+	blob := w.ToBytes()
+	w.Flush()
+	return blob, crypto.Keccak256Hash(blob), nil
 }

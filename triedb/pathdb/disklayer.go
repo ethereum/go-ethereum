@@ -378,7 +378,7 @@ func (dl *diskLayer) writeHistory(typ historyType, diff *diffLayer) (bool, error
 	if limit == 0 {
 		return false, nil
 	}
-	tail, err := freezer.Tail()
+	tail, err := freezer.Tail(rawdb.DefaultHistoryGroup)
 	if err != nil {
 		return false, err
 	} // firstID = tail+1

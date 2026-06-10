@@ -239,7 +239,7 @@ func testIndexDeleterBasic(t *testing.T, bitmapSize int) {
 			t.Fatalf("Unexpected error for element popping, %v", err)
 		}
 		if id.lastID != uint64(i-1) {
-			t.Fatalf("Unexpected lastID, want: %d, got: %d", uint64(i-1), iw.lastID)
+			t.Fatalf("Unexpected lastID, want: %d, got: %d", uint64(i-1), id.lastID)
 		}
 	}
 }

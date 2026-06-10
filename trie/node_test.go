@@ -283,7 +283,7 @@ func TestNodeDifference(t *testing.T) {
 			t.Fatalf("Expect error, got nil %d", i)
 		}
 		if !test.expErr && err != nil {
-			t.Fatalf("Unexpect error, %v", err)
+			t.Fatalf("Unexpected error, %v", err)
 		}
 		if err == nil {
 			if !slices.Equal(indices, test.expIndices) {
@@ -342,7 +342,7 @@ func TestReassembleFullNode(t *testing.T) {
 	fn.encode(buf2)
 	enc2 := buf2.ToBytes()
 	if !reflect.DeepEqual(enc2, reassembled) {
-		t.Fatalf("Unexpeted reassembled node")
+		t.Fatalf("Unexpected reassembled node")
 	}
 }
 
@@ -374,7 +374,7 @@ func TestReassembleShortNode(t *testing.T) {
 	ln.encode(buf2)
 	enc2 := buf2.ToBytes()
 	if !reflect.DeepEqual(enc2, reassembled) {
-		t.Fatalf("Unexpeted reassembled node")
+		t.Fatalf("Unexpected reassembled node")
 	}
 }
 

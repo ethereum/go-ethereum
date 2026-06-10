@@ -21,6 +21,7 @@ package internal
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 	"runtime"
@@ -35,6 +36,10 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
+
+// ErrCancelled is returned by GenerateTrieRoot when the cancel channel is
+// closed mid-run.
+var ErrCancelled = errors.New("cancelled")
 
 // Iterator is an iterator to step over all the accounts or the specific
 // storage in a snapshot which may or may not be composed of multiple layers.
@@ -228,7 +233,7 @@ func RunReport(stats *GenerateStats, stop chan bool) {
 // GenerateTrieRoot generates the trie hash based on the snapshot iterator.
 // It can be used for generating account trie, storage trie or even the
 // whole state which connects the accounts and the corresponding storages.
-func GenerateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, account common.Hash, generatorFn TrieGeneratorFn, leafCallback LeafCallbackFn, stats *GenerateStats, report bool) (common.Hash, error) {
+func GenerateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, account common.Hash, generatorFn TrieGeneratorFn, leafCallback LeafCallbackFn, stats *GenerateStats, report bool, cancel <-chan struct{}) (common.Hash, error) {
 	var (
 		in      = make(chan TrieKV)         // chan to pass leaves
 		out     = make(chan common.Hash, 1) // chan to collect result
@@ -279,6 +284,14 @@ func GenerateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, accou
 	)
 	// Start to feed leaves
 	for it.Next() {
+		// Top-of-loop cancel check. Cheap non-blocking peek so a closed
+		// cancel channel is observed without waiting for the blocking
+		// operations below.
+		select {
+		case <-cancel:
+			return stop(ErrCancelled)
+		default:
+		}
 		if account == (common.Hash{}) {
 			var (
 				err      error
@@ -291,8 +304,14 @@ func GenerateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, accou
 				}
 			} else {
 				// Wait until the semaphore allows us to continue, aborting if
-				// a sub-task failed
-				if err := <-results; err != nil {
+				// a sub-task failed or the caller cancelled.
+				var err error
+				select {
+				case err = <-results:
+				case <-cancel:
+					return stop(ErrCancelled)
+				}
+				if err != nil {
 					results <- nil // stop will drain the results, add a noop back for this error we just consumed
 					return stop(err)
 				}
@@ -322,7 +341,13 @@ func GenerateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, accou
 		} else {
 			leaf = TrieKV{it.Hash(), common.CopyBytes(it.(StorageIterator).Slot())}
 		}
-		in <- leaf
+		// Escape on cancel so we don't deadlock if the generator goroutine is slow
+		// and the caller gave up.
+		select {
+		case in <- leaf:
+		case <-cancel:
+			return stop(ErrCancelled)
+		}
 
 		// Accumulate the generation statistic if it's required.
 		processed++
