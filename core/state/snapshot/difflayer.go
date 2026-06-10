@@ -345,7 +345,7 @@ func (dl *diffLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 			if n := len(data); n > 0 {
 				snapshotDirtyStorageReadMeter.Mark(int64(n))
 			} else {
-				snapshotDirtyStorageIndexMeter.Mark(1)
+				snapshotDirtyStorageInexMeter.Mark(1)
 			}
 			snapshotBloomStorageTrueHitMeter.Mark(1)
 			return data, nil
