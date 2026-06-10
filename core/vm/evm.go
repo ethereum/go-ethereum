@@ -552,7 +552,9 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
 	}
-	if evm.chainRules.IsAmsterdam {
+	if evm.chainRules.IsAmsterdam && evm.depth > 0 {
+		// Only charge state gas if we are not doing a create transaction.
+		// Prevents double charging with IntrinsicGas.
 		prev, ok := gas.ChargeState(params.AccountCreationSize * evm.Context.CostPerStateByte)
 		if !ok {
 			return nil, common.Address{}, gas.ExitHalt(reservoir), ErrOutOfGas

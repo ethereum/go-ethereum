@@ -688,6 +688,12 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// Execute the transaction's creation.
 		ret, _, result, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining.ForwardAll(), value)
 		st.gasRemaining.Absorb(result, forwarded)
+
+		// If the contract creation failed, refund the account-creation state
+		// gas pre-charged in IntrinsicGas.
+		if rules.IsAmsterdam && vmerr != nil {
+			st.gasRemaining.RefundState(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
+		}
 	} else {
 		// Increment the nonce for the next transaction.
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
