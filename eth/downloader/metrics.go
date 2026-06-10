@@ -37,5 +37,10 @@ var (
 	receiptDropMeter    = metrics.NewRegisteredMeter("eth/downloader/receipts/drop", nil)
 	receiptTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/receipts/timeout", nil)
 
+	balInMeter      = metrics.NewRegisteredMeter("eth/downloader/bal/in", nil)
+	balReqTimer     = metrics.NewRegisteredTimer("eth/downloader/bal/req", nil)
+	balDropMeter    = metrics.NewRegisteredMeter("eth/downloader/bal/drop", nil)
+	balTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/bal/timeout", nil)
+
 	throttleCounter = metrics.NewRegisteredCounter("eth/downloader/throttle", nil)
 )
