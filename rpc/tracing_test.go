@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -538,6 +539,76 @@ func TestTracingBatchHTTPTooLarge(t *testing.T) {
 	attrs := attributeMap(batchSpan.Attributes)
 	if got, want := attrs["rpc.batch.size"], "3"; got != want {
 		t.Errorf("batch-too-large rpc.batch.size: got %q, want %q", got, want)
+	}
+}
+
+// newHeaderRecordingServer creates an HTTP test server that responds to any
+// JSON-RPC call and records the traceparent header of incoming requests.
+func newHeaderRecordingServer(t *testing.T, headerCh chan<- string) *httptest.Server {
+	t.Helper()
+	httpsrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		headerCh <- r.Header.Get("traceparent")
+		var msg jsonrpcMessage
+		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
+			t.Errorf("invalid request body: %v", err)
+		}
+		resp := jsonrpcMessage{Version: vsn, ID: msg.ID, Result: []byte("null")}
+		w.Header().Set("Content-Type", contentType)
+		json.NewEncoder(w).Encode(&resp)
+	}))
+	t.Cleanup(httpsrv.Close)
+	return httpsrv
+}
+
+// TestTracingClientPropagation verifies that the client injects the W3C
+// traceparent header into outgoing HTTP requests when configured with the
+// WithTextMapPropagator option.
+func TestTracingClientPropagation(t *testing.T) {
+	t.Parallel()
+
+	headerCh := make(chan string, 1)
+	httpsrv := newHeaderRecordingServer(t, headerCh)
+
+	client, err := DialOptions(context.Background(), httpsrv.URL, WithTextMapPropagator(propagation.TraceContext{}))
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	t.Cleanup(client.Close)
+
+	// Build a context carrying a sampled remote span context.
+	const (
+		traceID = "4bf92f3577b34da6a3ce929d0e0e4736"
+		spanID  = "00f067aa0ba902b7"
+	)
+	tid, err := trace.TraceIDFromHex(traceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sid, err := trace.SpanIDFromHex(spanID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    tid,
+		SpanID:     sid,
+		TraceFlags: trace.FlagsSampled,
+	})
+	ctx := trace.ContextWithSpanContext(context.Background(), sc)
+
+	if err := client.CallContext(ctx, nil, "test_foo"); err != nil {
+		t.Fatalf("RPC call failed: %v", err)
+	}
+	want := "00-" + traceID + "-" + spanID + "-01"
+	if got := <-headerCh; got != want {
+		t.Errorf("traceparent header: got %q, want %q", got, want)
+	}
+
+	// A call without a span context in ctx must not produce a traceparent header.
+	if err := client.CallContext(context.Background(), nil, "test_foo"); err != nil {
+		t.Fatalf("RPC call failed: %v", err)
+	}
+	if got := <-headerCh; got != "" {
+		t.Errorf("traceparent header without span context: got %q, want none", got)
 	}
 }
 
