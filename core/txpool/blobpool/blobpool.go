@@ -109,7 +109,7 @@ const (
 
 	// notifyThreshold is the eviction priority threshold above which a transaction
 	// is considered close enough to being includable to be announced to peers.
-	// Setting this to zero will disable announcements for anyting not immediately
+	// Setting this to zero will disable announcements for anything not immediately
 	// includable. Setting it to -1 allows transactions that are close to being
 	// includable, maybe already in the next block if fees go down, to be announced.
 
@@ -1897,7 +1897,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 
 	addValidMeter.Mark(1)
 
-	// Transaction was addded successfully, but we only announce if it is (close to being)
+	// Transaction was added successfully, but we only announce if it is (close to being)
 	// includable and the previous one was already announced.
 	if p.isAnnouncable(meta) && (meta.nonce == next || (len(txs) > 1 && txs[offset-1].announced)) {
 		meta.announced = true

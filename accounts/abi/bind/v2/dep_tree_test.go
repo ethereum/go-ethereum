@@ -329,7 +329,7 @@ func TestContractLinking(t *testing.T) {
 			map[rune]struct{}{},
 		},
 		// two contracts ('a' and 'f') share some dependencies.  contract 'a' is marked as an override.  expect that any of
-		// its depdencies that aren't shared with 'f' are not deployed.
+		// its dependencies that aren't shared with 'f' are not deployed.
 		linkTestCaseInput{map[rune][]rune{
 			'a': {'b', 'c', 'd', 'e'},
 			'f': {'g', 'c', 'd', 'h'}},

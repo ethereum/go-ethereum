@@ -722,7 +722,7 @@ func testGenerateWithExtraBeforeAndAfter(t *testing.T, scheme string) {
 	}
 }
 
-// TestGenerateWithMalformedSnapdata tests what happes if we have some junk
+// TestGenerateWithMalformedSnapdata tests what happens if we have some junk
 // in the snapshot database, which cannot be parsed back to an account
 func TestGenerateWithMalformedSnapdata(t *testing.T) {
 	testGenerateWithMalformedSnapdata(t, rawdb.HashScheme)
