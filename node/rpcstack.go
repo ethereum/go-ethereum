@@ -209,7 +209,9 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if ws != nil && isWebsocket(r) {
 		if checkPath(r, ws.prefix) {
 			ws.ServeHTTP(w, r)
+			return
 		}
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 
