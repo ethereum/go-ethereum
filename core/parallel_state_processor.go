@@ -24,8 +24,7 @@ type ProcessResultWithMetrics struct {
 	PostProcessTime        time.Duration
 }
 
-// errResult wraps an error in a ProcessResultWithMetrics so it can be sent on a
-// result channel.
+// errResult wraps an error into a new ProcessResultWithMetrics instance
 func errResult(err error) *ProcessResultWithMetrics {
 	return &ProcessResultWithMetrics{ProcessResult: &ProcessResult{Error: err}}
 }
