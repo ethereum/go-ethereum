@@ -69,9 +69,9 @@ var (
 	gcStorageMeter       = metrics.NewRegisteredMeter("pathdb/gc/storage/count", nil)
 	gcStorageBytesMeter  = metrics.NewRegisteredMeter("pathdb/gc/storage/bytes", nil)
 
-	stateHistoryBuildTimeMeter = metrics.NewRegisteredResettingTimer("pathdb/history/state/time", nil)
-	stateHistoryDataBytesMeter = metrics.NewRegisteredMeter("pathdb/history/state/bytes/data", nil)
-	stateHistoryInexBytesMeter = metrics.NewRegisteredMeter("pathdb/history/state/bytes/index", nil)
+	stateHistoryBuildTimeMeter  = metrics.NewRegisteredResettingTimer("pathdb/history/state/time", nil)
+	stateHistoryDataBytesMeter  = metrics.NewRegisteredMeter("pathdb/history/state/bytes/data", nil)
+	stateHistoryIndexBytesMeter = metrics.NewRegisteredMeter("pathdb/history/state/bytes/index", nil)
 
 	trienodeHistoryBuildTimeMeter  = metrics.NewRegisteredResettingTimer("pathdb/history/trienode/time", nil)
 	trienodeHistoryDataBytesMeter  = metrics.NewRegisteredMeter("pathdb/history/trienode/bytes/data", nil)
