@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"math/rand"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -97,7 +98,7 @@ func newTestTxFetcher() *TxFetcher {
 			return make([]error, len(txs))
 		},
 		func(string, []common.Hash) error { return nil },
-		nil,
+		nil, nil, nil,
 	)
 }
 
@@ -2203,6 +2204,8 @@ func TestTransactionForgotten(t *testing.T) {
 		},
 		func(string, []common.Hash) error { return nil },
 		func(string) {},
+		nil,
+		nil,
 		mockClock,
 		mockTime,
 		rand.New(rand.NewSource(0)), // Use fixed seed for deterministic behavior
@@ -2282,4 +2285,104 @@ func TestTransactionForgotten(t *testing.T) {
 	if size := fetcher.underpriced.Len(); size != 1 {
 		t.Errorf("wrong final underpriced cache size: got %d, want 1", size)
 	}
+}
+
+// resultRecorder is a thread-safe recorder for onRequestResult callbacks.
+type resultRecorder struct {
+	mu      sync.Mutex
+	samples []resultSample
+}
+
+type resultSample struct {
+	peer    string
+	latency time.Duration
+	timeout bool
+}
+
+func (r *resultRecorder) record(peer string, latency time.Duration, timeout bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.samples = append(r.samples, resultSample{peer, latency, timeout})
+}
+
+func (r *resultRecorder) snapshot() []resultSample {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]resultSample, len(r.samples))
+	copy(out, r.samples)
+	return out
+}
+
+// TestTransactionFetcherRequestResultOnDelivery asserts that an in-time
+// direct delivery fires the onRequestResult callback with timeout=false.
+func TestTransactionFetcherRequestResultOnDelivery(t *testing.T) {
+	rec := &resultRecorder{}
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: func() *TxFetcher {
+			f := newTestTxFetcher()
+			f.onRequestResult = rec.record
+			return f
+		},
+		steps: []interface{}{
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doWait{time: 200 * time.Millisecond, step: false},
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true},
+			doFunc(func() {
+				samples := rec.snapshot()
+				if len(samples) != 1 {
+					t.Fatalf("expected 1 sample, got %d (%v)", len(samples), samples)
+				}
+				if samples[0].peer != "A" {
+					t.Errorf("peer mismatch: got %q, want A", samples[0].peer)
+				}
+				if samples[0].latency != 200*time.Millisecond {
+					t.Errorf("latency mismatch: got %v, want 200ms", samples[0].latency)
+				}
+				if samples[0].timeout {
+					t.Error("expected timeout=false for delivery")
+				}
+			}),
+		},
+	})
+}
+
+// TestTransactionFetcherRequestResultOnTimeout asserts that a timed-out
+// request fires onRequestResult with timeout=true and the timeout value,
+// and a subsequent (late) delivery does not fire a duplicate sample.
+func TestTransactionFetcherRequestResultOnTimeout(t *testing.T) {
+	rec := &resultRecorder{}
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: func() *TxFetcher {
+			f := newTestTxFetcher()
+			f.onRequestResult = rec.record
+			return f
+		},
+		steps: []interface{}{
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doWait{time: txFetchTimeout, step: true},
+			doFunc(func() {
+				samples := rec.snapshot()
+				if len(samples) != 1 {
+					t.Fatalf("expected 1 timeout sample, got %d (%v)", len(samples), samples)
+				}
+				if samples[0].peer != "A" {
+					t.Errorf("peer mismatch: got %q, want A", samples[0].peer)
+				}
+				if samples[0].latency != txFetchTimeout {
+					t.Errorf("latency mismatch: got %v, want %v", samples[0].latency, txFetchTimeout)
+				}
+				if !samples[0].timeout {
+					t.Error("expected timeout=true for timed-out request")
+				}
+			}),
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true},
+			doFunc(func() {
+				if len(rec.snapshot()) != 1 {
+					t.Fatalf("late delivery double-counted: got %d samples, want 1", len(rec.snapshot()))
+				}
+			}),
+		},
+	})
 }
