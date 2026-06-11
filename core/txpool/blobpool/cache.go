@@ -81,7 +81,6 @@ type Cache struct {
 	blobpool *BlobPool
 
 	hasBlobs chan []common.Hash // List of tx hashes that need to be pinned
-	getBlobs chan struct{}
 
 	cancelInflights context.CancelFunc // Cancel the in-flight conversion/decode goroutines
 	inflight        sync.WaitGroup     // Tracks the in-flight conversion/decode goroutines
@@ -108,7 +107,6 @@ func NewCacheForTest(p *BlobPool, clock mclock.Clock, step func()) *Cache {
 		entries:     make(map[common.Hash]*cachedBlob),
 		blobpool:    p,
 		hasBlobs:    make(chan []common.Hash, 1),
-		getBlobs:    make(chan struct{}, 1),
 		clock:       clock,
 		step:        step,
 		quit:        make(chan struct{}),
