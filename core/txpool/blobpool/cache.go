@@ -80,8 +80,6 @@ type Cache struct {
 
 	blobpool *BlobPool
 
-	hasBlobs chan []common.Hash // List of tx hashes that need to be pinned
-
 	cancelInflights context.CancelFunc // Cancel the in-flight conversion/decode goroutines
 	inflight        sync.WaitGroup     // Tracks the in-flight conversion/decode goroutines
 	wg              sync.WaitGroup     // Tracks the loop goroutine
@@ -90,9 +88,11 @@ type Cache struct {
 
 	step func() // test hook fired after each loop iteration
 
+	// channels into loop
 	quit        chan struct{}
 	topkRequest chan struct{}
 	topkTimer   mclock.Timer
+	hasBlobsCh  chan []common.Hash // list of tx hashes that should be pinned
 }
 
 // NewCache creates a blob cache backed by the given blobpool.
@@ -106,7 +106,7 @@ func NewCacheForTest(p *BlobPool, clock mclock.Clock, step func()) *Cache {
 	c := &Cache{
 		entries:     make(map[common.Hash]*cachedBlob),
 		blobpool:    p,
-		hasBlobs:    make(chan []common.Hash, 1),
+		hasBlobsCh:  make(chan []common.Hash, 1),
 		clock:       clock,
 		step:        step,
 		quit:        make(chan struct{}),
@@ -160,7 +160,7 @@ func (c *Cache) HasBlobs(ctx context.Context, vhashes []common.Hash) []bool {
 	}
 
 	select {
-	case c.hasBlobs <- needPin:
+	case c.hasBlobsCh <- needPin:
 		// Note that we also send the ones we already have in cache,
 		// since it can be dropped from the cache before this signal is processed.
 		return available
@@ -255,10 +255,9 @@ func (c *Cache) loop() {
 	c.triggerTopK()
 	for {
 		select {
-		case want := <-c.hasBlobs:
+		case want := <-c.hasBlobsCh:
 			// HasBlobs request was received.
-			// Update the cache once with the requested blobs,
-			// then go back to regular topK updates.
+			// Update the cache once with the requested blobs, then reschedule topK.
 			c.update(want)
 			c.triggerTopKAfter(hasBlobsTimeout)
 
