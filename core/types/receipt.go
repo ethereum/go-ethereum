@@ -308,6 +308,10 @@ func (r *Receipt) DeriveFields(signer Signer, context DeriveReceiptContext) {
 		r.Logs[j].TxHash = r.TxHash
 		r.Logs[j].TxIndex = context.TxIndex
 		r.Logs[j].Index = logIndex
+		// A canonically-included log is by definition not removed; reset the
+		// transient Removed flag so a reused log object can't carry a stale
+		// reorg marking into a canonical receipt.
+		r.Logs[j].Removed = false
 		logIndex++
 	}
 	// Also derive the Bloom if not derived yet
