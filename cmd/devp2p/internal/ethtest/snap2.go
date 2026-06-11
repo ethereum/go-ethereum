@@ -69,16 +69,6 @@ type accessListsTest struct {
 	minEntries int
 	maxEntries int
 
-	// expectAllEmpty is set for requests where every entry in the response is
-	// expected to be the RLP empty string (e.g. random/unknown hashes, or
-	// pre-Amsterdam blocks for which BALs are not available).
-	expectAllEmpty bool
-
-	// mustBeEmptyAt lists positions (zero-based indices into hashes) that MUST
-	// be returned as the RLP empty string. Used to assert that unknown hashes
-	// in mixed requests do not receive fabricated BAL data.
-	mustBeEmptyAt []int
-
 	desc string
 }
 
@@ -116,20 +106,18 @@ func (s *Suite) TestSnap2GetBlockAccessLists(t *utesting.T) {
 		{
 			desc: `An empty request. The server must respond with an empty list and must
 not disconnect.`,
-			nBytes:         softResponseLimitSnap,
-			hashes:         nil,
-			minEntries:     0,
-			maxEntries:     0,
-			expectAllEmpty: true,
+			nBytes:     softResponseLimitSnap,
+			hashes:     nil,
+			minEntries: 0,
+			maxEntries: 0,
 		},
 		{
 			desc: `A request for a single random/unknown block hash. Per the spec the
 server must respond and include an RLP empty string (0x80) at that position.`,
-			nBytes:         softResponseLimitSnap,
-			hashes:         []common.Hash{unknown},
-			minEntries:     1,
-			maxEntries:     1,
-			expectAllEmpty: true,
+			nBytes:     softResponseLimitSnap,
+			hashes:     []common.Hash{unknown},
+			minEntries: 1,
+			maxEntries: 1,
 		},
 		{
 			desc: `A request for multiple random/unknown block hashes. The server must
@@ -140,9 +128,8 @@ preserve request order and return an RLP empty string for each position.`,
 				common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001"),
 				common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000002"),
 			},
-			minEntries:     3,
-			maxEntries:     3,
-			expectAllEmpty: true,
+			minEntries: 3,
+			maxEntries: 3,
 		},
 		{
 			desc: `A request for the chain head. The server must respond. If the node is
@@ -171,8 +158,6 @@ corresponding to unknown hashes.`,
 			// under the byte limit, so truncation is not expected.
 			minEntries: 4,
 			maxEntries: 4,
-			// Positions 1 and 3 are unknown hashes and MUST be empty.
-			mustBeEmptyAt: []int{1, 3},
 		},
 		{
 			desc: `A request spanning the most recent canonical window. Implementations
@@ -332,19 +317,13 @@ func (s *Suite) snapGetAccessLists(t *utesting.T, tc *accessListsTest) error {
 		idx int
 		it  = res.AccessLists.ContentIterator()
 	)
-	// Build a set of positions that MUST be empty (for per-position checks).
-	mustEmpty := make(map[int]struct{}, len(tc.mustBeEmptyAt))
-	for _, p := range tc.mustBeEmptyAt {
-		mustEmpty[p] = struct{}{}
-	}
-	headBlock := s.chain.Head()
-
 	for it.Next() {
 		raw := it.Value()
+		block := blocks[idx]
 
 		// Empty entry: per spec, indicates BAL is unavailable for that block.
 		if bytes.Equal(raw, rlp.EmptyString) {
-			if !tc.expectAllEmpty && blocks[idx] != nil && blocks[idx].Header().BlockAccessListHash != nil {
+			if block != nil && block.Header().BlockAccessListHash != nil {
 				// Not a failure — the server is allowed to legitimately not
 				// have the BAL. But we log it so the test output is diagnosable.
 				t.Logf("    entry %d: server returned empty for known post-Amsterdam block %x", idx, tc.hashes[idx])
@@ -353,13 +332,15 @@ func (s *Suite) snapGetAccessLists(t *utesting.T, tc *accessListsTest) error {
 			continue
 		}
 
-		// Non-empty entry. If the requester asked for a block we do not know
-		// about, receiving data here is a protocol violation.
-		if tc.expectAllEmpty {
-			return fmt.Errorf("entry %d: expected empty entry, got %d bytes of BAL data", idx, len(raw))
+		// Non-empty entry. A BAL is only legitimate for a block we know
+		// locally whose header commits to one; for any other hash the only
+		// valid response is the RLP empty string, so receiving data here
+		// means the server fabricated it.
+		if block == nil {
+			return fmt.Errorf("entry %d: server returned BAL data for unknown hash %x", idx, tc.hashes[idx])
 		}
-		if _, required := mustEmpty[idx]; required {
-			return fmt.Errorf("entry %d: position must be empty (unknown hash), got %d bytes of BAL data", idx, len(raw))
+		if block.Header().BlockAccessListHash == nil {
+			return fmt.Errorf("entry %d: server returned BAL data for a block with no expected BAL (hash %x)", idx, tc.hashes[idx])
 		}
 
 		// Per EIP-8189: compute keccak256(rlp.encode(bal)) against the raw
@@ -367,31 +348,20 @@ func (s *Suite) snapGetAccessLists(t *utesting.T, tc *accessListsTest) error {
 		// commitment. Hashing raw bytes (rather than re-encoding after a
 		// decode round-trip) catches peers that send non-canonical BAL
 		// encodings.
-		block, known := blocks[idx]
-		if known && block.Header().BlockAccessListHash != nil {
-			have := crypto.Keccak256Hash(raw)
-			want := *block.Header().BlockAccessListHash
-			if have != want {
-				return fmt.Errorf("entry %d: BAL hash mismatch: have %x, want %x", idx, have, want)
-			}
+		have := crypto.Keccak256Hash(raw)
+		want := *block.Header().BlockAccessListHash
+		if have != want {
+			return fmt.Errorf("entry %d: BAL hash mismatch: have %x, want %x", idx, have, want)
 		}
 
-		// Also decode and validate the BAL's internal structure: ordering of
-		// accounts/slots/changes, code-size limits, etc. This catches
-		// malformed responses even when we can't compare to a header hash
-		// (e.g. requested hash is for a block we don't know locally).
+		// Decode and validate the BAL's internal structure: ordering of
+		// accounts/slots/changes, code-size limits, and per-entry access-index
+		// bounds, against the known block.
 		var accessList bal.BlockAccessList
 		if err := rlp.DecodeBytes(raw, &accessList); err != nil {
 			return fmt.Errorf("entry %d: invalid BAL RLP: %v", idx, err)
 		}
-		// Validate against the block's gas limit and tx count (for size and
-		// per-entry access-index bounds), falling back to the chain head for a
-		// block we don't know locally.
-		gasLimit, txCount := headBlock.GasLimit(), len(headBlock.Transactions())
-		if known {
-			gasLimit, txCount = block.GasLimit(), len(block.Transactions())
-		}
-		if err := accessList.Validate(gasLimit, txCount); err != nil {
+		if err := accessList.Validate(block.GasLimit(), len(block.Transactions())); err != nil {
 			return fmt.Errorf("entry %d: BAL failed validation: %v", idx, err)
 		}
 		idx++
