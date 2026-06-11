@@ -403,7 +403,7 @@ func opPush1EIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 			// advanced past this boundary.
 			contractAddr := scope.Contract.Address()
 			consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(contractAddr, *pc+1, uint64(1), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas.RegularGas)
-			scope.Contract.UseGas(GasCosts{RegularGas: wanted}, evm.Config.Tracer, tracing.GasChangeUnspecified)
+			scope.Contract.UseGas(GasCosts{RegularGas: consumed}, evm.Config.Tracer, tracing.GasChangeUnspecified)
 			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
