@@ -28,7 +28,7 @@ COUNT="${2:-10}"
 # pattern, so the loops run as their own invocation anyway).
 BENCHES=(
 	'^BenchmarkSnailtracer$:20x'
-	'^BenchmarkTenThousandHashes$:200x'
+	'^BenchmarkTenThousandHashes$:100x'
 	'^BenchmarkERC20Transfer$:100x'
 	'^BenchmarkERC20Mint$:150x'
 	'^BenchmarkERC20ApprovalTransfer$:120x'
