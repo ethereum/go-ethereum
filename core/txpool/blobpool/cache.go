@@ -424,9 +424,15 @@ func (c *Cache) selectTopTxs() []common.Hash {
 	return vhashes
 }
 
+// triggerTopKAfter makes a topK selection happen after the given interval.
 func (c *Cache) triggerTopKAfter(interval time.Duration) {
 	if c.topkTimer != nil {
 		c.topkTimer.Stop()
+	}
+	// drain current request to avoid triggering before the interval
+	select {
+	case <-c.topkRequest:
+	default:
 	}
 	c.topkTimer = c.clock.AfterFunc(interval, c.triggerTopK)
 }
