@@ -121,6 +121,54 @@ func (s *Stack) len() int {
 	return s.size
 }
 
+// drop removes the top element without reading it.
+func (s *Stack) drop() {
+	s.inner.top--
+	s.size--
+}
+
+// popPtr removes the top element and returns a pointer to it. The pointer
+// stays valid only until the next push or sub call.
+func (s *Stack) popPtr() *uint256.Int {
+	s.inner.top--
+	s.size--
+	return &s.inner.data[s.inner.top]
+}
+
+// popPtr2 removes the top two elements and returns pointers to them. The
+// pointers stay valid only until the next push or sub call.
+func (s *Stack) popPtr2() (top, second *uint256.Int) {
+	s.inner.top -= 2
+	s.size -= 2
+	return &s.inner.data[s.inner.top+1], &s.inner.data[s.inner.top]
+}
+
+// popPtr3 removes the top three elements and returns pointers to them. The
+// pointers stay valid only until the next push or sub call.
+func (s *Stack) popPtr3() (top, second, third *uint256.Int) {
+	s.inner.top -= 3
+	s.size -= 3
+	return &s.inner.data[s.inner.top+2], &s.inner.data[s.inner.top+1], &s.inner.data[s.inner.top]
+}
+
+// popPtrPeek removes the top element and returns pointers to it and to the new
+// top, the usual operand and write target of a binary operation. The first
+// pointer stays valid only until the next push or sub call.
+func (s *Stack) popPtrPeek() (top, rest *uint256.Int) {
+	s.inner.top--
+	s.size--
+	return &s.inner.data[s.inner.top], &s.inner.data[s.inner.top-1]
+}
+
+// popPtr2Peek removes the top two elements and returns pointers to them and to
+// the new top, for three operand operations. The first two pointers stay
+// valid only until the next push or sub call.
+func (s *Stack) popPtr2Peek() (top, second, rest *uint256.Int) {
+	s.inner.top -= 2
+	s.size -= 2
+	return &s.inner.data[s.inner.top+1], &s.inner.data[s.inner.top], &s.inner.data[s.inner.top-1]
+}
+
 func (s *Stack) swap1() {
 	s.inner.data[s.bottom+s.size-2], s.inner.data[s.bottom+s.size-1] = s.inner.data[s.bottom+s.size-1], s.inner.data[s.bottom+s.size-2]
 }
