@@ -18,11 +18,8 @@
 
 package memlimit
 
-// platformLimit on non-Linux returns ok=false; the caller falls back
-// to total system memory. macOS has no equivalent kernel feature, and
-// Windows job objects are not yet probed here. Docker Desktop on macOS
-// and Windows runs containers inside a Linux VM, where the cgroup path
-// in probe_linux.go applies as usual.
+// platformLimit reports no platform-specific limit on non-Linux
+// systems; the caller falls back to total system memory.
 func platformLimit() (uint64, Source, bool) {
 	return 0, "", false
 }

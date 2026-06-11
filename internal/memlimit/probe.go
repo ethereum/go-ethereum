@@ -14,15 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package memlimit detects the effective memory limit visible to the
-// current process.
-//
-// On Linux, /proc/meminfo always reports the host's RAM, even inside
-// a container, so it cannot be used as a budget on its own. Limit
-// consults the kernel-enforced cgroup limit first (v2 memory.max or
-// v1 memory.limit_in_bytes), walking parent cgroups if a leaf node
-// reports no limit. If no container-style limit is in effect, or on
-// platforms without cgroups, it falls back to total system memory.
+// Package memlimit detects the effective memory limit of the current
+// process. On Linux it consults the cgroup limit first (v2 memory.max
+// or v1 memory.limit_in_bytes), since /proc/meminfo reports host RAM
+// even inside a container. When no cgroup limit is in effect, or on
+// other platforms, it falls back to total system memory.
 package memlimit
 
 import (
@@ -40,9 +36,7 @@ const (
 )
 
 // Limit returns the memory limit visible to this process in bytes and
-// the source that produced it. The returned value is the tightest
-// budget detectable, falling back to system total memory if no
-// container-style limit is in effect.
+// the source that produced it.
 func Limit() (bytes uint64, source Source) {
 	if v, src, ok := platformLimit(); ok {
 		return v, src

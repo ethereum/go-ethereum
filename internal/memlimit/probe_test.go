@@ -18,10 +18,8 @@ package memlimit
 
 import "testing"
 
-// TestLimitSmoke asserts that Limit() returns a non-zero value on
-// any host the test suite could plausibly run on. This catches
-// regressions in the gopsutil fallback path that the OS-specific
-// tests (which use a fake reader) would miss.
+// TestLimitSmoke asserts that Limit() returns a non-zero value,
+// exercising the real probe and the gopsutil fallback.
 func TestLimitSmoke(t *testing.T) {
 	bytes, src := Limit()
 	if bytes == 0 {

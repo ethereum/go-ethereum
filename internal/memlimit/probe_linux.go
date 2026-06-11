@@ -25,48 +25,28 @@ import (
 	"strings"
 )
 
-// cgroupV1UnlimitedThreshold separates real limits from the kernel's
-// "no limit" sentinel. The cgroup v1 memory controller stores limits
-// in pages and returns LONG_MAX/PAGE_SIZE*PAGE_SIZE for unlimited,
-// so the exact sentinel depends on the kernel's page size (4 KiB on
-// most architectures, 16 KiB and 64 KiB also seen on arm64 and
-// ppc64le). Treating any value above 1<<62 as unlimited covers every
-// page size while staying well above any plausible real limit.
+// cgroupV1UnlimitedThreshold detects the v1 "no limit" sentinel, which
+// is LONG_MAX rounded down to the kernel page size. Anything above 1<<62
+// is treated as unlimited regardless of page size.
 const cgroupV1UnlimitedThreshold = uint64(1) << 62
 
-// fileReader reads the contents of a path. Injected for testing; the
-// production reader is os.ReadFile.
+// fileReader abstracts os.ReadFile for testing.
 type fileReader func(path string) ([]byte, error)
 
 func platformLimit() (uint64, Source, bool) {
-	return detectLinuxLimit(os.ReadFile)
-}
-
-func detectLinuxLimit(read fileReader) (uint64, Source, bool) {
-	if v, ok := cgroupV2Limit(read); ok {
+	if v, ok := cgroupV2Limit(os.ReadFile); ok {
 		return v, SourceCgroupV2, true
 	}
-	if v, ok := cgroupV1Limit(read); ok {
+	if v, ok := cgroupV1Limit(os.ReadFile); ok {
 		return v, SourceCgroupV1, true
 	}
 	return 0, "", false
 }
 
 // cgroupV2Limit reads the cgroup v2 memory.max for the current process.
-//
-// Two paths are considered, in order:
-//
-//  1. /sys/fs/cgroup/memory.max: what a process running in its own
-//     cgroup namespace (Docker default since 20.10, all modern k8s)
-//     sees as its effective root. This catches the common case
-//     without parsing /proc/self/cgroup.
-//
-//  2. /sys/fs/cgroup<path>/memory.max where <path> comes from
-//     /proc/self/cgroup. This handles bare-metal Linux where the
-//     limit is set on a systemd slice or other ancestor cgroup.
-//
-// In both cases we walk up parent cgroups whenever a node reports
-// "max", because the limit may be set on an ancestor.
+// It probes /sys/fs/cgroup directly first (the effective root inside a
+// cgroup-namespaced container), then the path from /proc/self/cgroup
+// for the bare-metal case where the limit sits on a systemd slice.
 func cgroupV2Limit(read fileReader) (uint64, bool) {
 	if v, ok := readCgroupV2At("/sys/fs/cgroup", "/", read); ok {
 		return v, true
@@ -78,12 +58,10 @@ func cgroupV2Limit(read fileReader) (uint64, bool) {
 	return readCgroupV2At("/sys/fs/cgroup", procPath, read)
 }
 
-// readCgroupV2At reads memory.max under root+rel, walking up through
-// parents until a numeric value is found or the path bottoms out at
-// the cgroup root. Returns the first non-"max" value encountered.
+// readCgroupV2At reads memory.max under root+rel, walking up parents
+// until a numeric value is found or the path bottoms out.
 func readCgroupV2At(root, rel string, read fileReader) (uint64, bool) {
-	// Detect that v2 is mounted at root by checking for any of the v2
-	// hallmark files. cgroup.controllers exists only on v2.
+	// cgroup.controllers exists only on v2; if absent, v2 is not mounted here.
 	if _, err := read(path.Join(root, "cgroup.controllers")); err != nil {
 		return 0, false
 	}
@@ -92,10 +70,8 @@ func readCgroupV2At(root, rel string, read fileReader) (uint64, bool) {
 		if err == nil {
 			s := strings.TrimSpace(string(raw))
 			if s != "max" {
-				// A numeric zero is degenerate (the kernel would
-				// kill anything that allocates) but legal to write;
-				// treat it the same as v1 treats a zero leaf, walking
-				// up looking for a meaningful ancestor limit.
+				// Zero is legal to write but degenerate; treat it like
+				// "max" and keep walking up.
 				if n, err := strconv.ParseUint(s, 10, 64); err == nil && n != 0 {
 					return n, true
 				}
@@ -108,9 +84,8 @@ func readCgroupV2At(root, rel string, read fileReader) (uint64, bool) {
 	}
 }
 
-// readProcSelfCgroupV2 returns the cgroup path for the current process
-// from a v2-format /proc/self/cgroup line ("0::<path>"). Returns ok=false
-// for v1-only systems or parse failure.
+// readProcSelfCgroupV2 returns the cgroup path from the v2 line
+// ("0::<path>") of /proc/self/cgroup.
 func readProcSelfCgroupV2(read fileReader) (string, bool) {
 	raw, err := read("/proc/self/cgroup")
 	if err != nil {
@@ -126,15 +101,14 @@ func readProcSelfCgroupV2(read fileReader) (string, bool) {
 }
 
 // cgroupV1Limit reads memory.limit_in_bytes from the v1 memory
-// controller for this process. Walks parent cgroups when a node
-// reports the unlimited sentinel.
+// controller, walking up parents when a node reports the unlimited
+// sentinel.
 func cgroupV1Limit(read fileReader) (uint64, bool) {
 	rel, ok := readProcSelfCgroupV1Memory(read)
 	if !ok {
 		return 0, false
 	}
 	root := "/sys/fs/cgroup/memory"
-	// Sanity-check that v1 is mounted; if not, give up.
 	if _, err := read(path.Join(root, "memory.limit_in_bytes")); err != nil {
 		return 0, false
 	}
