@@ -8,15 +8,24 @@
 # contract's pragma: 0.8.17 for the ERC-20/hashing contracts, 0.4.26 for the
 # legacy SnailTracer.
 #
+# TenThousandHashes is compiled from the vendored TenThousandHashes.sol in
+# this directory rather than the upstream file. Upstream discards the hash
+# result, so the optimizer deletes the keccak256 and the benchmark degenerates
+# into a bare counter loop. The vendored copy chains the hash through a
+# returned accumulator, which keeps all 20000 hashes in the bytecode. See the
+# comment in that file.
+#
 # Usage: core/vm/runtime/testdata/evm-bench/gen.sh
 set -euo pipefail
 
 TD="$(cd "$(dirname "$0")/.." && pwd)"   # .../core/vm/runtime/testdata
+HERE="$(cd "$(dirname "$0")" && pwd)"    # .../testdata/evm-bench
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 git clone --depth 1 https://github.com/ziyadedher/evm-bench "$WORK/evm-bench" >/dev/null 2>&1
 B="$WORK/evm-bench/benchmarks"
+cp "$HERE/TenThousandHashes.sol" "$B/ten-thousand-hashes/TenThousandHashes.sol"
 
 # ERC-20 (transfer/mint/approval) + ten-thousand-hashes: pragma ^0.8.17. These
 # set up all their state inside Benchmark(), so the runtime bytecode is callable
