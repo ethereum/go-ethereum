@@ -60,19 +60,13 @@ type cachedBlob struct {
 
 // Cache holds the blobs that are likely to be requested by the GetBlobs engine API.
 //
-// Currently it operates in two modes
-//   - HasBlobsMode is triggered by the HasBlobs engine API. This stage ends
-//     when `hasBlobsTimeout` elapses or the GetBlobs engine API consumes
-//     the result.
-//     (Note: the cache is not guaranteed to always hold such blobs, since the
-//     blobpool might drop the transaction in the window between the engine API
-//     response and the cache update.)
-//   - TopKMode is the cache's default mode. Every `topKTimeout`, the cache selects
-//     the blobs of the top K most profitable transactions, unless it is in the other mode.
-//     Whenever HasBlobsMode is canceled, it falls back to TopKMode.
+// Every `topKTimeout`, the cache selects the blobs of the top K most profitable
+// transactions, and preloads them into the cache.
 //
-// Whenever the mode is changed, the goroutines (for cache update) started by
-// each mode should be canceled to prevent redundant computation.
+// For HasBlobs requests, it also causes the blobs requested by the CL to be loaded.
+// (Note: the cache is not guaranteed to always hold such blobs, since the blobpool might
+// drop the transaction in the window between the engine API response and the cache
+// update.)
 type Cache struct {
 	mu sync.Mutex
 
