@@ -551,16 +551,17 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	snapshot := evm.StateDB.Snapshot()
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
-	}
-	if evm.chainRules.IsAmsterdam && evm.depth > 0 {
-		// Only charge state gas if we are not doing a create transaction.
-		// Prevents double charging with IntrinsicGas.
-		prev, ok := gas.ChargeState(params.AccountCreationSize * evm.Context.CostPerStateByte)
-		if !ok {
-			return nil, common.Address{}, gas.ExitHalt(reservoir), ErrOutOfGas
-		}
-		if evm.Config.Tracer.HasGasHook() {
-			evm.Config.Tracer.EmitGasChange(prev.AsTracing(), gas.AsTracing(), tracing.GasChangeAccountCreation)
+
+		if evm.chainRules.IsAmsterdam && evm.depth > 0 {
+			// Only charge state gas if we are not doing a create transaction.
+			// Prevents double charging with IntrinsicGas.
+			prev, ok := gas.ChargeState(params.AccountCreationSize * evm.Context.CostPerStateByte)
+			if !ok {
+				return nil, common.Address{}, gas.ExitHalt(reservoir), ErrOutOfGas
+			}
+			if evm.Config.Tracer.HasGasHook() {
+				evm.Config.Tracer.EmitGasChange(prev.AsTracing(), gas.AsTracing(), tracing.GasChangeAccountCreation)
+			}
 		}
 	}
 	// CreateContract means that regardless of whether the account previously existed
