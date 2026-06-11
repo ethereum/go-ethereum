@@ -268,6 +268,9 @@ func (c *Cache) loop() {
 
 		case <-c.quit:
 			c.cancelUpdate()
+			if c.topkTimer != nil {
+				c.topkTimer.Stop()
+			}
 			c.inflight.Wait()
 			return
 		}
