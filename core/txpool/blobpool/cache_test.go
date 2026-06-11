@@ -121,7 +121,7 @@ func newTestCache(t *testing.T, txConfig []txSpec) *testCache {
 		default:
 		}
 	}
-	cache := NewCacheForTest(pool, clock, step)
+	cache := newCache(pool, clock, step)
 
 	tc := &testCache{
 		Cache:   cache,

@@ -89,12 +89,12 @@ type Cache struct {
 
 // NewCache creates a blob cache backed by the given blobpool.
 func NewCache(p *BlobPool) *Cache {
-	return NewCacheForTest(p, mclock.System{}, nil)
+	return newCache(p, mclock.System{}, nil)
 }
 
-// NewCacheForTest creates a blob cache for test.
+// newCache creates a blob cache for testing purposes.
 // It allows injecting a clock and a step hook.
-func NewCacheForTest(p *BlobPool, clock mclock.Clock, step func()) *Cache {
+func newCache(p *BlobPool, clock mclock.Clock, step func()) *Cache {
 	c := &Cache{
 		entries:     make(map[common.Hash]*cachedBlob),
 		blobpool:    p,
