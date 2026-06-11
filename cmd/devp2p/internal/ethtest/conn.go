@@ -84,6 +84,19 @@ func (s *Suite) dialSnap() (*Conn, error) {
 	return conn, nil
 }
 
+// dialSnap2 creates a connection advertising snap/2 as the only snap capability.
+// This is used by the snap/2 (EIP-8189) test suite to force the peer to
+// negotiate snap/2 rather than falling back to snap/1.
+func (s *Suite) dialSnap2() (*Conn, error) {
+	conn, err := s.dial()
+	if err != nil {
+		return nil, fmt.Errorf("dial failed: %v", err)
+	}
+	conn.caps = append(conn.caps, p2p.Cap{Name: "snap", Version: 2})
+	conn.ourHighestSnapProtoVersion = 2
+	return conn, nil
+}
+
 // Conn represents an individual connection with a peer
 type Conn struct {
 	*rlpx.Conn
@@ -183,7 +196,10 @@ func (c *Conn) ReadEth() (any, error) {
 	}
 }
 
-// ReadSnap reads a snap/1 response with the given id from the connection.
+// ReadSnap reads a snap protocol response from the connection. It decodes
+// the full message catalog of both snap/1 and snap/2. The caller is
+// expected to only receive codes that were actually valid on the
+// negotiated protocol version.
 func (c *Conn) ReadSnap() (any, error) {
 	c.SetReadDeadline(time.Now().Add(timeout))
 	for {
@@ -215,6 +231,10 @@ func (c *Conn) ReadSnap() (any, error) {
 			msg = new(snap.GetTrieNodesPacket)
 		case snap.TrieNodesMsg:
 			msg = new(snap.TrieNodesPacket)
+		case snap.GetAccessListsMsg:
+			msg = new(snap.GetAccessListsPacket)
+		case snap.AccessListsMsg:
+			msg = new(snap.AccessListsPacket)
 		default:
 			panic(fmt.Errorf("unhandled snap code: %d", code))
 		}

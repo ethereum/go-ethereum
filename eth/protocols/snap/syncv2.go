@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"math/rand"
 	"sort"
@@ -30,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -38,7 +40,33 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-ethereum/triedb"
 )
+
+const (
+	// maxAccessListRequestCount is the maximum number of block BALs to
+	// request in a single query. BALs average ~72 KiB compressed (per EIP-7928),
+	// and EIP-8189 recommends a 2 MiB response soft limit, so we target ~28
+	// blocks per request to avoid server-side truncation.
+	//
+	// NOTE: If the gas limit is raised significantly, this number may need to be adjusted
+	// to avoid server-side truncation and re-requesting. It is currently based on
+	// the assumption that the gas limit is 60M.
+	maxAccessListRequestCount = 28
+
+	// syncProgressVersion is the version byte prepended to the JSON-encoded
+	// syncProgressV2 when persisted. On load, a mismatching version byte causes
+	// the persisted progress to be discarded and sync to start fresh.
+	syncProgressVersion byte = 2
+)
+
+// minRequestSize, maxRequestSize, maxCodeRequestCount, accountConcurrency and
+// storageConcurrency are shared with the snap/1 syncer; see sync.go.
+
+// errAccessListPeersExhausted is returned from fetchAccessLists when every
+// connected peer has been marked stateless for BAL requests and there
+// are still hashes left to fetch.
+var errAccessListPeersExhausted = errors.New("all peers exhausted for BAL requests")
 
 // accountRequestV2 tracks a pending account range request to ensure responses are
 // to actual requests and to validate any security constraints.
@@ -154,6 +182,23 @@ type storageResponseV2 struct {
 	cont bool // Whether the last storage range has a continuation
 }
 
+type accessListRequest struct {
+	peer    string                   // Peer to which this request is assigned
+	id      uint64                   // Request ID of this request
+	hashes  []common.Hash            // Block hashes corresponding to requested BALs
+	time    time.Time                // Timestamp when the request was sent
+	timeout *time.Timer              // Timer to track the delivery timeout
+	deliver chan *accessListResponse // Channel to deliver successful response on
+	revert  chan *accessListRequest  // Channel to deliver request failure on
+	cancel  chan struct{}            // Channel to track sync cancellation
+	stale   chan struct{}            // Channel to signal the request was dropped
+}
+
+type accessListResponse struct {
+	req         *accessListRequest
+	accessLists []rlp.RawValue
+}
+
 // accountTaskV2 represents the sync task for a chunk of the account snapshot.
 type accountTaskV2 struct {
 	// These fields get serialized to key-value store on shutdown
@@ -216,11 +261,13 @@ type storageTaskV2 struct {
 	done bool              // Flag whether the task can be removed
 }
 
-// SyncProgressV2 is a database entry to allow suspending and resuming a snapshot state
+// syncProgressV2 is a database entry to allow suspending and resuming a snapshot state
 // sync. Opposed to full and fast sync, there is no way to restart a suspended
 // snap sync without prior knowledge of the suspension point.
-type SyncProgressV2 struct {
-	Tasks []*accountTaskV2 // The suspended account tasks (contract tasks within)
+type syncProgressV2 struct {
+	Pivot    *types.Header    // Pivot header being synced (for pivot move and reorg detection)
+	Tasks    []*accountTaskV2 // The suspended account tasks (contract tasks within)
+	Complete bool             // True once sync ran to completion for Pivot
 
 	// Status report during syncing phase
 	AccountSynced  uint64             // Number of accounts downloaded
@@ -250,15 +297,23 @@ type SyncPeerV2 interface {
 	// RequestByteCodes fetches a batch of bytecodes by hash.
 	RequestByteCodes(id uint64, hashes []common.Hash, bytes int) error
 
+	// RequestTrieNodes fetches a batch of account or storage trie nodes rooted in
+	// a specific state trie. snap/2 never issues these requests itself, but the
+	// method is retained so a single peer type can serve both the snap/1 and
+	// snap/2 syncers (e.g. via the downloader's syncer abstraction).
+	RequestTrieNodes(id uint64, root common.Hash, count int, paths []TrieNodePathSet, bytes int) error
+
+	// RequestAccessLists fetches a batch of BALs by block hash.
+	RequestAccessLists(id uint64, hashes []common.Hash, bytes int) error
+
 	// Log retrieves the peer's own contextual logger.
 	Log() log.Logger
 }
 
-// SyncerV2 is an Ethereum account and storage state syncer based on the snap
-// protocol. It's purpose is to download all the accounts and storage slots
-// from remote peers, fixing the state inconsistencies between multiple sync
-// targets with BALs(block level accessList) and ultimately reassemble the state
-// trie (both account trie and storage tries) locally.
+// syncerV2 is an Ethereum account and storage trie syncer based on the snap
+// protocol. It downloads all accounts, storage slots, and bytecodes from
+// remote peers as flat state, applies BAL diffs on pivot moves,
+// and triggers a final trie rebuild once flat state is consistent.
 //
 // Every network request has a variety of failure events:
 //   - The peer disconnects after task assignment, failing to send the request
@@ -266,28 +321,35 @@ type SyncPeerV2 interface {
 //   - The peer remains connected, but does not deliver a response in time
 //   - The peer delivers a stale response after a previous timeout
 //   - The peer delivers a refusal to serve the requested state
-type SyncerV2 struct {
-	db     ethdb.KeyValueStore // Database to store the trie nodes into (and dedup)
-	scheme string              // Node scheme used in node database
+type syncerV2 struct {
+	db     ethdb.Database // Database to store the trie nodes into (and dedup)
+	scheme string         // Node scheme used in node database
 
-	root   common.Hash      // Current state trie root being synced
-	tasks  []*accountTaskV2 // Current account task set being synced
-	update chan struct{}    // Notification channel for possible sync progression
+	pivot         *types.Header    // Current pivot header being synced (lock needed)
+	previousPivot *types.Header    // Pivot from previous sync run (for pivot move detection)
+	complete      bool             // Whether the persisted progress was a completed sync
+	tasks         []*accountTaskV2 // Current account task set being synced
+	update        chan struct{}    // Notification channel for possible sync progression
 
 	peers    map[string]SyncPeerV2 // Currently active peers to download from
 	peerJoin *event.Feed           // Event feed to react to peers joining
 	peerDrop *event.Feed           // Event feed to react to peers dropping
 	rates    *msgrate.Trackers     // Message throughput rates for peers
 
-	// Request tracking during syncing phase
-	statelessPeers map[string]struct{} // Peers that failed to deliver state data
-	accountIdlers  map[string]struct{} // Peers that aren't serving account requests
-	bytecodeIdlers map[string]struct{} // Peers that aren't serving bytecode requests
-	storageIdlers  map[string]struct{} // Peers that aren't serving storage requests
+	// Request tracking during syncing phase.
+	//
+	// These fields should be protected by lock.
+	statelessPeers   map[string]struct{} // Peers that failed to deliver state data
+	accountIdlers    map[string]struct{} // Peers that aren't serving account requests
+	bytecodeIdlers   map[string]struct{} // Peers that aren't serving bytecode requests
+	storageIdlers    map[string]struct{} // Peers that aren't serving storage requests
+	accessListIdlers map[string]struct{} // Peers that aren't serving BAL requests
 
-	accountReqs  map[uint64]*accountRequestV2  // Account requests currently running
-	bytecodeReqs map[uint64]*bytecodeRequestV2 // Bytecode requests currently running
-	storageReqs  map[uint64]*storageRequestV2  // Storage requests currently running
+	// These fields should be protected by lock.
+	accountReqs    map[uint64]*accountRequestV2  // Account requests currently running
+	bytecodeReqs   map[uint64]*bytecodeRequestV2 // Bytecode requests currently running
+	storageReqs    map[uint64]*storageRequestV2  // Storage requests currently running
+	accessListReqs map[uint64]*accessListRequest // BAL requests currently running
 
 	accountSynced  uint64             // Number of accounts downloaded
 	accountBytes   common.StorageSize // Number of account trie bytes persisted to disk
@@ -296,19 +358,19 @@ type SyncerV2 struct {
 	storageSynced  uint64             // Number of storage slots downloaded
 	storageBytes   common.StorageSize // Number of storage trie bytes persisted to disk
 
-	extProgress *SyncProgressV2 // progress that can be exposed to external caller.
+	extProgress *syncProgressV2 // progress that can be exposed to external caller.
 
 	startTime time.Time // Time instance when snapshot sync started
 	logTime   time.Time // Time instance when status was last reported
 
 	pend sync.WaitGroup // Tracks network request goroutines for graceful shutdown
-	lock sync.RWMutex   // Protects fields that can change outside of sync (peers, reqs, root)
+	lock sync.RWMutex   // Protects fields that can change outside of sync (peers, reqs, pivot)
 }
 
-// NewSyncerV2 creates a new snapshot syncer to download the Ethereum state over the
+// newSyncerV2 creates a new snapshot syncer to download the Ethereum state over the
 // snap protocol.
-func NewSyncerV2(db ethdb.KeyValueStore, scheme string) *SyncerV2 {
-	return &SyncerV2{
+func newSyncerV2(db ethdb.Database, scheme string) *syncerV2 {
+	return &syncerV2{
 		db:     db,
 		scheme: scheme,
 
@@ -318,20 +380,23 @@ func NewSyncerV2(db ethdb.KeyValueStore, scheme string) *SyncerV2 {
 		rates:    msgrate.NewTrackers(log.New("proto", "snap")),
 		update:   make(chan struct{}, 1),
 
-		accountIdlers:  make(map[string]struct{}),
-		storageIdlers:  make(map[string]struct{}),
-		bytecodeIdlers: make(map[string]struct{}),
+		statelessPeers:   make(map[string]struct{}),
+		accountIdlers:    make(map[string]struct{}),
+		storageIdlers:    make(map[string]struct{}),
+		bytecodeIdlers:   make(map[string]struct{}),
+		accessListIdlers: make(map[string]struct{}),
 
-		accountReqs:  make(map[uint64]*accountRequestV2),
-		storageReqs:  make(map[uint64]*storageRequestV2),
-		bytecodeReqs: make(map[uint64]*bytecodeRequestV2),
+		accountReqs:    make(map[uint64]*accountRequestV2),
+		storageReqs:    make(map[uint64]*storageRequestV2),
+		bytecodeReqs:   make(map[uint64]*bytecodeRequestV2),
+		accessListReqs: make(map[uint64]*accessListRequest),
 
-		extProgress: new(SyncProgressV2),
+		extProgress: new(syncProgressV2),
 	}
 }
 
 // Register injects a new data source into the syncer's peerset.
-func (s *SyncerV2) Register(peer SyncPeerV2) error {
+func (s *syncerV2) Register(peer SyncPeerV2) error {
 	// Make sure the peer is not registered yet
 	id := peer.ID()
 
@@ -349,6 +414,7 @@ func (s *SyncerV2) Register(peer SyncPeerV2) error {
 	s.accountIdlers[id] = struct{}{}
 	s.storageIdlers[id] = struct{}{}
 	s.bytecodeIdlers[id] = struct{}{}
+	s.accessListIdlers[id] = struct{}{}
 	s.lock.Unlock()
 
 	// Notify any active syncs that a new peer can be assigned data
@@ -357,7 +423,7 @@ func (s *SyncerV2) Register(peer SyncPeerV2) error {
 }
 
 // Unregister injects a new data source into the syncer's peerset.
-func (s *SyncerV2) Unregister(id string) error {
+func (s *syncerV2) Unregister(id string) error {
 	// Remove all traces of the peer from the registry
 	s.lock.Lock()
 	if _, ok := s.peers[id]; !ok {
@@ -375,6 +441,7 @@ func (s *SyncerV2) Unregister(id string) error {
 	delete(s.accountIdlers, id)
 	delete(s.storageIdlers, id)
 	delete(s.bytecodeIdlers, id)
+	delete(s.accessListIdlers, id)
 	s.lock.Unlock()
 
 	// Notify any active syncs that pending requests need to be reverted
@@ -383,58 +450,124 @@ func (s *SyncerV2) Unregister(id string) error {
 }
 
 // Sync starts (or resumes a previous) sync cycle to iterate over a state trie
-// with the given root and reconstruct the nodes based on the snapshot leaves.
-// Previously downloaded segments will not be redownloaded of fixed, rather any
-// errors will be healed after the leaves are fully accumulated.
-func (s *SyncerV2) Sync(root common.Hash, cancel chan struct{}) error {
-	// Move the trie root from any previous value, revert stateless markers for
-	// any peers and initialize the syncer if it was not yet run
+// with the given pivot header and reconstruct the nodes based on the snapshot
+// leaves.
+func (s *syncerV2) Sync(pivot *types.Header, cancel chan struct{}) error {
+	if pivot == nil {
+		return errors.New("snap sync: pivot header is nil")
+	}
 	s.lock.Lock()
-	s.root = root
+	s.pivot = pivot
+	s.previousPivot = nil // loadSyncStatus overwrites when resuming from persisted progress
 	s.statelessPeers = make(map[string]struct{})
 	s.lock.Unlock()
-
 	if s.startTime.IsZero() {
 		s.startTime = time.Now()
 	}
-	// Retrieve the previous sync status from LevelDB and abort if already synced
+	root := pivot.Root
+
+	// Retrieve the previous sync status from DB. If there's no persisted
+	// status, sync is either fresh or already complete.
 	s.loadSyncStatus()
-	if len(s.tasks) == 0 {
-		log.Debug("Snapshot sync already completed")
+
+	// isPivotChanged is true when we have prior progress against a different
+	// pivot. That means we need to roll forward via catchUp, or wipe and
+	// restart if the prior pivot was reorged out.
+	isPivotChanged := s.previousPivot != nil && s.previousPivot.Hash() != s.pivot.Hash()
+
+	// Skip if we've already finished syncing this pivot.
+	if !isPivotChanged && s.complete {
+		log.Info("Snap sync already complete for this pivot", "root", root)
 		return nil
 	}
-	defer func() { // Persist any progress, independent of failure
-		for _, task := range s.tasks {
-			s.forwardAccountTask(task)
-		}
-		s.cleanAccountTasks()
-		s.saveSyncStatus()
-	}()
 
-	log.Debug("Starting snapshot sync cycle", "root", root)
-	defer s.report(true)
+	// We're committing to running this sync. Clear the complete flag so a
+	// mid-run save (on cancel or error) doesn't persist a stale Complete=true
+	// status from a prior pivot.
+	s.lock.Lock()
+	s.complete = false
+	s.lock.Unlock()
 
-	// Whether sync completed or not, disregard any future packets
 	defer func() {
+		// Whether sync completed or not, disregard any future packets
 		log.Debug("Terminating snapshot sync cycle", "root", root)
 		s.lock.Lock()
 		s.accountReqs = make(map[uint64]*accountRequestV2)
 		s.storageReqs = make(map[uint64]*storageRequestV2)
 		s.bytecodeReqs = make(map[uint64]*bytecodeRequestV2)
+		s.accessListReqs = make(map[uint64]*accessListRequest)
 		s.lock.Unlock()
+
+		// Persist final task state.
+		for _, task := range s.tasks {
+			s.forwardAccountTask(task)
+		}
+		s.cleanAccountTasks()
+		s.saveSyncStatus()
+
+		// Log final progress.
+		s.report(true)
 	}()
-	// Keep scheduling sync tasks
+
+	log.Debug("Starting snapshot sync cycle", "root", root)
+
+	// If we resumed against a different pivot, decide whether the persisted
+	// progress is still usable. If yes, roll forward via BAL catch-up. If not,
+	// wipe everything and restart fresh.
+	if isPivotChanged {
+		if isPivotReorged(s.db, s.previousPivot, s.pivot) {
+			log.Warn("Persisted progress unusable, restarting snap sync from scratch",
+				"number", s.previousPivot.Number, "oldHash", s.previousPivot.Hash())
+			s.resetSyncState()
+		} else if err := s.catchUp(cancel); err != nil {
+			return err
+		}
+	}
+
+	// Pin previousPivot to the current pivot before downloadState runs.
+	// This is what saveSyncStatus persists. If the download is interrupted
+	// and the next Sync gets a different pivot, this is how isPivotReorged
+	// recognizes the partial flat state belongs to the old pivot. Without
+	// it, isPivotReorged sees nil, skips the reorg branch, and downloadState
+	// would resume from the persisted task markers but mix the old pivot's
+	// already-downloaded accounts with the new pivot's data.
+	s.lock.Lock()
+	s.previousPivot = s.pivot
+	s.lock.Unlock()
+
+	log.Info("Starting state download", "root", root)
+	if err := s.downloadState(cancel); err != nil {
+		return err
+	}
+	log.Info("State download complete", "root", root)
+
+	log.Info("Starting trie generation", "root", root)
+	if _, err := triedb.GenerateTrie(s.db, s.scheme, root, cancel); err != nil {
+		return err
+	}
+	log.Info("Trie generation complete", "root", root)
+
+	// Mark sync complete. The deferred saveSyncStatus persists this with
+	// Complete=true so a follow-up Sync call for the same pivot can skip
+	// the work entirely.
+	s.lock.Lock()
+	s.complete = true
+	s.lock.Unlock()
+	return nil
+}
+
+// download runs the bulk flat-state download. It fetches
+// account ranges, storage slots, and bytecodes, writing flat state to disk.
+func (s *syncerV2) downloadState(cancel chan struct{}) error {
+	// Subscribe to peer events
 	peerJoin := make(chan string, 16)
 	peerJoinSub := s.peerJoin.Subscribe(peerJoin)
 	defer peerJoinSub.Unsubscribe()
-
 	peerDrop := make(chan string, 16)
 	peerDropSub := s.peerDrop.Subscribe(peerDrop)
 	defer peerDropSub.Unsubscribe()
 
-	// Create a set of unique channels for this sync cycle. We need these to be
-	// ephemeral so a data race doesn't accidentally deliver something stale on
-	// a persistent channel across syncs (yup, this happened)
+	// Create ephemeral channels for this download cycle
 	var (
 		accountReqFails  = make(chan *accountRequestV2)
 		storageReqFails  = make(chan *storageRequestV2)
@@ -444,12 +577,13 @@ func (s *SyncerV2) Sync(root common.Hash, cancel chan struct{}) error {
 		bytecodeResps    = make(chan *bytecodeResponseV2)
 	)
 	for {
-		// Remove all completed tasks and terminate sync if everything's done
+		// Remove all completed tasks and terminate if everything's done
 		s.cleanStorageTasks()
 		s.cleanAccountTasks()
 		if len(s.tasks) == 0 {
 			return nil
 		}
+
 		// Assign all the data retrieval tasks to any free peers
 		s.assignAccountTasks(accountResps, accountReqFails, cancel)
 		s.assignBytecodeTasks(bytecodeResps, bytecodeReqFails, cancel)
@@ -457,7 +591,7 @@ func (s *SyncerV2) Sync(root common.Hash, cancel chan struct{}) error {
 
 		// Update sync progress
 		s.lock.Lock()
-		s.extProgress = &SyncProgressV2{
+		s.extProgress = &syncProgressV2{
 			AccountSynced:  s.accountSynced,
 			AccountBytes:   s.accountBytes,
 			BytecodeSynced: s.bytecodeSynced,
@@ -473,7 +607,7 @@ func (s *SyncerV2) Sync(root common.Hash, cancel chan struct{}) error {
 		case <-peerJoin:
 			// A new peer joined, try to schedule it new tasks
 		case id := <-peerDrop:
-			s.revertRequests(id)
+			s.revertStateRequests(id)
 		case <-cancel:
 			return ErrCancelled
 
@@ -491,25 +625,325 @@ func (s *SyncerV2) Sync(root common.Hash, cancel chan struct{}) error {
 		case res := <-storageResps:
 			s.processStorageResponse(res)
 		}
+
 		// Report stats if something meaningful happened
 		s.report(false)
 	}
 }
 
-// loadSyncStatus retrieves a previously aborted sync status from the database,
-// or generates a fresh one if none is available.
-func (s *SyncerV2) loadSyncStatus() {
-	var progress SyncProgressV2
+// isPivotReorged reports whether the previous pivot is no longer usable
+// as a starting point for forward catch-up. Either it was reorged out
+// of the canonical chain, or the new pivot doesn't advance past it.
+func isPivotReorged(db ethdb.Database, prev, curr *types.Header) bool {
+	// If the new pivot is at or below the old one, there's nothing for
+	// catchUp to roll forward.
+	if curr.Number.Cmp(prev.Number) <= 0 {
+		return true
+	}
+	// If there's no canonical hash at the old pivot's height, something
+	// is wrong. Headers up to the new pivot should already be indexed,
+	// so a missing entry at an earlier block means the chain state is
+	// broken. The most common cause is a chain rewind across the
+	// snap-synced pivot, which resets head to genesis and deletes
+	// canonical entries above it (see rewindPathHead in core/blockchain.go).
+	// Bail and let the fresh sync recover.
+	canonical := rawdb.ReadCanonicalHash(db, prev.Number.Uint64())
+	if canonical == (common.Hash{}) {
+		return true
+	}
 
-	if status := rawdb.ReadSnapshotSyncStatus(s.db); status != nil {
-		if err := json.Unmarshal(status, &progress); err != nil {
+	// If canonical at the old pivot's height has a different hash, the
+	// old pivot was reorged out.
+	return canonical != prev.Hash()
+}
+
+// catchUp runs the BAL catch-up. When the pivot has moved, it fetches BALs
+// for the gap blocks, verifies them against block headers, and applies the
+// diffs to roll flat state forward.
+func (s *syncerV2) catchUp(cancel chan struct{}) error {
+	s.lock.RLock()
+	from := s.previousPivot.Number.Uint64() + 1
+	to := s.pivot.Number.Uint64()
+	s.lock.RUnlock()
+	log.Info("Starting BAL catch-up", "from", from, "to", to, "blocks", to-from+1)
+
+	// Collect block hashes and headers for the gap range.
+	var (
+		hashes  = make([]common.Hash, 0, to-from+1)
+		headers = make(map[common.Hash]*types.Header, to-from+1)
+	)
+	for num := from; num <= to; num++ {
+		hash := rawdb.ReadCanonicalHash(s.db, num)
+		if hash == (common.Hash{}) {
+			return fmt.Errorf("missing canonical hash for block %d during catch-up", num)
+		}
+		header := rawdb.ReadHeader(s.db, hash, num)
+		if header == nil {
+			return fmt.Errorf("missing header for block %d (hash %v) during catch-up", num, hash)
+		}
+		hashes = append(hashes, hash)
+		headers[hash] = header
+	}
+
+	// Fetch BALs from peers
+	rawBALs, err := s.fetchAccessLists(hashes, headers, cancel)
+	if err != nil {
+		return err
+	}
+
+	// Apply each BAL in block order. BALs are already verified by fetchAccessLists.
+	for i, raw := range rawBALs {
+		select {
+		case <-cancel:
+			return ErrCancelled
+		default:
+		}
+		num := from + uint64(i)
+		hash := hashes[i]
+
+		// Decode the raw RLP into a BAL.
+		var (
+			b     bal.BlockAccessList
+			batch = s.db.NewBatch()
+		)
+		if err := rlp.DecodeBytes(raw, &b); err != nil {
+			return fmt.Errorf("failed to decode BAL for block %d: %v", num, err)
+		}
+
+		// applyAccessList failures are persistent. If a block's apply fails
+		// here, the next Sync will resume from this block and hit the same
+		// failure. Auto-recovery isn't implemented yet.
+		if err := s.applyAccessList(&b, batch); err != nil {
+			return fmt.Errorf("BAL application failed for block %d: %v", num, err)
+		}
+
+		// Persist incremental progress so a crash mid-catchUp can resume
+		// from the next unapplied block.
+		s.lock.Lock()
+		s.previousPivot = headers[hash]
+		s.lock.Unlock()
+		s.saveSyncStatusWithDB(batch)
+
+		// Commit the state transition alongside the sync progress atomically.
+		if err := batch.Write(); err != nil {
+			return err
+		}
+	}
+	log.Info("BAL catch-up complete", "blocks", len(rawBALs))
+	return nil
+}
+
+// fetchAccessLists fetches BALs for the given block hashes from
+// remote peers. It runs its own event loop to assign requests
+// to idle peers and process responses asynchronously. Each BAL is verified
+// against its header before being accepted. Results are returned in the
+// same order as the input hashes.
+func (s *syncerV2) fetchAccessLists(hashes []common.Hash, headers map[common.Hash]*types.Header, cancel chan struct{}) ([]rlp.RawValue, error) {
+	log.Debug("Fetching BALs for catch-up", "blocks", len(hashes))
+
+	// Subscribe to peer events
+	peerJoin := make(chan string, 16)
+	peerJoinSub := s.peerJoin.Subscribe(peerJoin)
+	defer peerJoinSub.Unsubscribe()
+	peerDrop := make(chan string, 16)
+	peerDropSub := s.peerDrop.Subscribe(peerDrop)
+	defer peerDropSub.Unsubscribe()
+
+	// pending = hashes not yet assigned to a peer, fetched = collected results.
+	pending := make(map[common.Hash]struct{}, len(hashes))
+	for _, h := range hashes {
+		pending[h] = struct{}{}
+	}
+	fetched := make(map[common.Hash]rlp.RawValue, len(hashes))
+
+	var (
+		accessListReqFails = make(chan *accessListRequest)
+		accessListResps    = make(chan *accessListResponse)
+		lastStallLog       = time.Now()
+	)
+	for len(fetched) < len(hashes) {
+		// Assign BAL retrieval tasks to idle peers
+		s.assignAccessListTasks(pending, accessListResps, accessListReqFails, cancel)
+
+		// If every peer is now stateless and nothing is in flight, no event
+		// short of cancel or a new peer joining can move us forward. Surface
+		// this so the caller can return and let a higher-level retry happen
+		// against a fresh peer set.
+		//
+		// TODO(rjl, jonny) add a time allowance before returning the error.
+		if s.accessListPeersExhausted() {
+			log.Warn("BAL peers exhausted, stopping catch-up early", "fetched", len(fetched), "remaining", len(pending))
+			return nil, errAccessListPeersExhausted
+		}
+
+		// Periodic visibility while stalled with peers connected but idle.
+		if len(pending) > 0 && time.Since(lastStallLog) > 30*time.Second {
+			lastStallLog = time.Now()
+			log.Warn("BAL catch-up stalled, awaiting peers", "fetched", len(fetched), "remaining", len(pending))
+		}
+
+		// Wait for something to happen
+		select {
+		case <-s.update:
+			// Something happened (new peer, delivery, timeout), recheck
+		case <-peerJoin:
+			// A new peer joined, try to assign it work
+		case id := <-peerDrop:
+			s.revertBALRequests(id, pending)
+		case <-cancel:
+			return nil, ErrCancelled
+		case req := <-accessListReqFails:
+			s.revertAccessListRequest(req, pending)
+		case res := <-accessListResps:
+			s.processAccessListResponse(res, headers, pending, fetched)
+		}
+	}
+	// Assemble results in input order
+	results := make([]rlp.RawValue, len(hashes))
+	for i, h := range hashes {
+		results[i] = fetched[h]
+	}
+	return results, nil
+}
+
+// assignAccessListTasks attempts to assign BAL fetch requests to idle
+// peers for any hashes still in pending.
+func (s *syncerV2) assignAccessListTasks(pending map[common.Hash]struct{}, success chan *accessListResponse, fail chan *accessListRequest, cancel chan struct{}) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	// Iterate over pending hashes and assign to idle peers
+	idlers := s.sortIdlePeers(s.accessListIdlers, AccessListsMsg)
+	for len(idlers.ids) > 0 && len(pending) > 0 {
+		var (
+			idle = idlers.ids[0]
+			peer = s.peers[idle]
+			cap  = idlers.caps[0]
+		)
+		idlers.ids, idlers.caps = idlers.ids[1:], idlers.caps[1:]
+
+		// Generate a unique request ID
+		var reqid uint64
+		for {
+			reqid = uint64(rand.Int63())
+			if reqid == 0 {
+				continue
+			}
+			if _, ok := s.accessListReqs[reqid]; ok {
+				continue
+			}
+			break
+		}
+
+		// Collect hashes to fetch, capped by peer capacity and the
+		// EIP-8189 2 MiB response soft limit (~72 KiB/BAL -> 28 blocks).
+		if cap > maxAccessListRequestCount {
+			cap = maxAccessListRequestCount
+		}
+		batch := make([]common.Hash, 0, cap)
+		for h := range pending {
+			delete(pending, h)
+
+			batch = append(batch, h)
+			if len(batch) >= cap {
+				break
+			}
+		}
+		req := &accessListRequest{
+			peer:    idle,
+			id:      reqid,
+			hashes:  batch,
+			time:    time.Now(),
+			deliver: success,
+			revert:  fail,
+			cancel:  cancel,
+			stale:   make(chan struct{}),
+		}
+		req.timeout = time.AfterFunc(s.rates.TargetTimeout(), func() {
+			peer.Log().Debug("BAL request timed out", "reqid", reqid)
+			s.rates.Update(idle, AccessListsMsg, 0, 0)
+			s.scheduleRevertAccessListRequest(req)
+		})
+		s.accessListReqs[reqid] = req
+		delete(s.accessListIdlers, idle)
+
+		s.pend.Add(1)
+		go func() {
+			defer s.pend.Done()
+
+			// Attempt to send the remote request and revert if it fails
+			if err := peer.RequestAccessLists(reqid, batch, softResponseLimit); err != nil {
+				log.Debug("Failed to request BALs", "err", err)
+				s.scheduleRevertAccessListRequest(req)
+			}
+		}()
+	}
+}
+
+// processAccessListResponse handles a successful BAL response. It
+// verifies each non-empty BAL against the corresponding block header and
+// stores the verified ones in fetched.
+func (s *syncerV2) processAccessListResponse(res *accessListResponse, headers map[common.Hash]*types.Header, pending map[common.Hash]struct{}, fetched map[common.Hash]rlp.RawValue) {
+	var (
+		stateless bool
+		valid     = make(map[common.Hash]rlp.RawValue)
+	)
+	// Each response entry corresponds to the requested hash at the same index.
+	for i, raw := range res.accessLists {
+		h := res.req.hashes[i]
+
+		// Peer doesn't have this BAL. Add it back to pending for retry.
+		if bytes.Equal(raw, rlp.EmptyString) {
+			continue
+		}
+		var b bal.BlockAccessList
+		if err := rlp.DecodeBytes(raw, &b); err != nil {
+			log.Warn("Peer sent unparseable BAL", "peer", res.req.peer, "block", h, "err", err)
+			stateless = true
+			continue
+		}
+		if err := verifyAccessList(&b, headers[h]); err != nil {
+			log.Warn("Peer sent invalid BAL", "peer", res.req.peer, "block", h, "err", err)
+			stateless = true
+			continue
+		}
+		valid[h] = raw
+	}
+	if stateless {
+		s.lock.Lock()
+		s.statelessPeers[res.req.peer] = struct{}{}
+		s.lock.Unlock()
+	}
+	// Re-add hashes that were not served back or invalid to pending
+	for i := 0; i < len(res.req.hashes); i++ {
+		if _, ok := valid[res.req.hashes[i]]; ok {
+			continue
+		}
+		pending[res.req.hashes[i]] = struct{}{}
+	}
+	maps.Copy(fetched, valid)
+}
+
+// loadSyncStatus retrieves a previously aborted sync status from the database,
+// or generates a fresh one if none is available. The persisted blob is framed
+// as `[version byte | JSON payload]`; a missing or mismatching version byte
+// causes the progress to be discarded and sync to start fresh.
+func (s *syncerV2) loadSyncStatus() {
+	var progress syncProgressV2
+
+	if raw := rawdb.ReadSnapshotSyncStatus(s.db); len(raw) > 0 {
+		if raw[0] != syncProgressVersion {
+			log.Info("Discarding old-format sync progress", "version", raw[0], "expected", syncProgressVersion)
+		} else if err := json.Unmarshal(raw[1:], &progress); err != nil {
 			log.Error("Failed to decode snap sync status", "err", err)
 		} else {
+			s.lock.Lock()
+			defer s.lock.Unlock()
+
 			for _, task := range progress.Tasks {
 				log.Debug("Scheduled account sync task", "from", task.Next, "last", task.Last)
 			}
 			s.tasks = progress.Tasks
-
 			for _, task := range s.tasks {
 				// Restore the completed storages
 				task.stateCompleted = make(map[common.Hash]struct{})
@@ -518,9 +952,8 @@ func (s *SyncerV2) loadSyncStatus() {
 				}
 				task.StorageCompleted = nil
 			}
-			s.lock.Lock()
-			defer s.lock.Unlock()
-
+			s.previousPivot = progress.Pivot
+			s.complete = progress.Complete
 			s.accountSynced = progress.AccountSynced
 			s.accountBytes = progress.AccountBytes
 			s.bytecodeSynced = progress.BytecodeSynced
@@ -531,9 +964,63 @@ func (s *SyncerV2) loadSyncStatus() {
 		}
 	}
 	// Either we've failed to decode the previous state, or there was none.
-	// Start a fresh sync by chunking up the account range and scheduling
-	// them for retrieval.
+	s.resetSyncState()
+}
+
+// increaseKey increase the input key by one bit. Return nil if the entire
+// addition operation overflows.
+func increaseKey(key []byte) []byte {
+	for i := len(key) - 1; i >= 0; i-- {
+		key[i]++
+		if key[i] != 0x0 {
+			return key
+		}
+	}
+	return nil
+}
+
+// DeleteHistoryByRange completely removes all database entries with the specific
+// prefix. Note, this method assumes the space with the given prefix is exclusively
+// occupied!
+func deleteRange(batch ethdb.Batch, prefix []byte) {
+	start := prefix
+	limit := increaseKey(bytes.Clone(prefix))
+
+	// Try to remove the data in the range by a loop, as the leveldb
+	// doesn't support the native range deletion.
+	for {
+		err := batch.DeleteRange(start, limit)
+		if err == nil {
+			return
+		}
+		// An unclean shutdown may leave the on-disk state partially wiped and
+		// therefore inconsistent. This is a tradeoff of the current LevelDB-based
+		// approach.
+		if errors.Is(err, ethdb.ErrTooManyKeys) {
+			batch.Write()
+			batch.Reset()
+			continue
+		}
+		log.Crit("Failed to delete state entries", "err", err)
+	}
+}
+
+// resetSyncState wipes all persisted snap-sync data (sync status, account
+// and storage snapshots) and re-initializes in-memory state with a fresh
+// chunking of the account hash range.
+func (s *syncerV2) resetSyncState() {
+	batch := s.db.NewBatch()
+	rawdb.DeleteSnapshotSyncStatus(batch)
+	deleteRange(batch, rawdb.SnapshotAccountPrefix)
+	deleteRange(batch, rawdb.SnapshotStoragePrefix)
+	batch.Write()
+
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	s.tasks = nil
+	s.previousPivot = nil
+	s.complete = false
 	s.accountSynced, s.accountBytes = 0, 0
 	s.bytecodeSynced, s.bytecodeBytes = 0, 0
 	s.storageSynced, s.storageBytes = 0, 0
@@ -562,8 +1049,13 @@ func (s *SyncerV2) loadSyncStatus() {
 	}
 }
 
-// saveSyncStatus marshals the remaining sync tasks into leveldb.
-func (s *SyncerV2) saveSyncStatus() {
+// saveSyncStatus marshals the remaining sync tasks into db.
+func (s *syncerV2) saveSyncStatus() {
+	s.saveSyncStatusWithDB(s.db)
+}
+
+// saveSyncStatusWithDB marshals the remaining sync tasks into the given database.
+func (s *syncerV2) saveSyncStatusWithDB(db ethdb.KeyValueWriter) {
 	// Serialize any partial progress to disk before spinning down
 	for _, task := range s.tasks {
 		// Save the account hashes of completed storage.
@@ -575,9 +1067,11 @@ func (s *SyncerV2) saveSyncStatus() {
 			log.Debug("Leftover completed storages", "number", len(task.StorageCompleted), "next", task.Next, "last", task.Last)
 		}
 	}
-	// Store the actual progress markers
-	progress := &SyncProgressV2{
+	// Store the actual progress markers.
+	progress := &syncProgressV2{
+		Pivot:          s.previousPivot,
 		Tasks:          s.tasks,
+		Complete:       s.complete,
 		AccountSynced:  s.accountSynced,
 		AccountBytes:   s.accountBytes,
 		BytecodeSynced: s.bytecodeSynced,
@@ -585,24 +1079,25 @@ func (s *SyncerV2) saveSyncStatus() {
 		StorageSynced:  s.storageSynced,
 		StorageBytes:   s.storageBytes,
 	}
-	status, err := json.Marshal(progress)
+	blob, err := json.Marshal(progress)
 	if err != nil {
 		panic(err) // This can only fail during implementation
 	}
-	rawdb.WriteSnapshotSyncStatus(s.db, status)
+	// Prepend the version byte so future format changes can be detected on load.
+	status := append([]byte{syncProgressVersion}, blob...)
+	rawdb.WriteSnapshotSyncStatus(db, status)
 }
 
 // Progress returns the snap sync status statistics.
-func (s *SyncerV2) Progress() *SyncProgressV2 {
+func (s *syncerV2) Progress() *syncProgressV2 {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-
 	return s.extProgress
 }
 
 // cleanAccountTasks removes account range retrieval tasks that have already been
 // completed.
-func (s *SyncerV2) cleanAccountTasks() {
+func (s *syncerV2) cleanAccountTasks() {
 	// If the sync was already done before, don't even bother
 	if len(s.tasks) == 0 {
 		return
@@ -614,16 +1109,15 @@ func (s *SyncerV2) cleanAccountTasks() {
 			i--
 		}
 	}
-	// If everything was just finalized just, generate the account trie and start heal
+	// If everything was just finalized, push the final sync report
 	if len(s.tasks) == 0 {
-		// Push the final sync report
 		s.reportSyncProgressV2(true)
 	}
 }
 
 // cleanStorageTasks iterates over all the account tasks and storage sub-tasks
 // within, cleaning any that have been completed.
-func (s *SyncerV2) cleanStorageTasks() {
+func (s *syncerV2) cleanStorageTasks() {
 	for _, task := range s.tasks {
 		for account, subtasks := range task.SubTasks {
 			// Remove storage range retrieval tasks that completed
@@ -646,7 +1140,8 @@ func (s *SyncerV2) cleanStorageTasks() {
 			delete(task.SubTasks, account)
 			task.pend--
 
-			// Mark the state as complete to prevent resyncing
+			// Mark the state as complete to prevent resyncing, regardless
+			// if state healing is necessary.
 			task.stateCompleted[account] = struct{}{}
 
 			// If this was the last pending task, forward the account task
@@ -659,28 +1154,15 @@ func (s *SyncerV2) cleanStorageTasks() {
 
 // assignAccountTasks attempts to match idle peers to pending account range
 // retrievals.
-func (s *SyncerV2) assignAccountTasks(success chan *accountResponseV2, fail chan *accountRequestV2, cancel chan struct{}) {
+func (s *syncerV2) assignAccountTasks(success chan *accountResponseV2, fail chan *accountRequestV2, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	// Sort the peers by download capacity to use faster ones if many available
-	idlers := &capacitySort{
-		ids:  make([]string, 0, len(s.accountIdlers)),
-		caps: make([]int, 0, len(s.accountIdlers)),
-	}
-	targetTTL := s.rates.TargetTimeout()
-	for id := range s.accountIdlers {
-		if _, ok := s.statelessPeers[id]; ok {
-			continue
-		}
-		idlers.ids = append(idlers.ids, id)
-		idlers.caps = append(idlers.caps, s.rates.Capacity(id, AccountRangeMsg, targetTTL))
-	}
+	idlers := s.sortIdlePeers(s.accountIdlers, AccountRangeMsg)
 	if len(idlers.ids) == 0 {
 		return
 	}
-	sort.Sort(sort.Reverse(idlers))
-
 	// Iterate over all the tasks and try to find a pending one
 	for _, task := range s.tasks {
 		// Skip any tasks already filling
@@ -748,7 +1230,7 @@ func (s *SyncerV2) assignAccountTasks(success chan *accountResponseV2, fail chan
 				peer.Log().Debug("Failed to request account range", "err", err)
 				s.scheduleRevertAccountRequest(req)
 			}
-		}(s.root)
+		}(s.pivot.Root)
 
 		// Inject the request into the task to block further assignments
 		task.req = req
@@ -756,28 +1238,14 @@ func (s *SyncerV2) assignAccountTasks(success chan *accountResponseV2, fail chan
 }
 
 // assignBytecodeTasks attempts to match idle peers to pending code retrievals.
-func (s *SyncerV2) assignBytecodeTasks(success chan *bytecodeResponseV2, fail chan *bytecodeRequestV2, cancel chan struct{}) {
+func (s *syncerV2) assignBytecodeTasks(success chan *bytecodeResponseV2, fail chan *bytecodeRequestV2, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	// Sort the peers by download capacity to use faster ones if many available
-	idlers := &capacitySort{
-		ids:  make([]string, 0, len(s.bytecodeIdlers)),
-		caps: make([]int, 0, len(s.bytecodeIdlers)),
-	}
-	targetTTL := s.rates.TargetTimeout()
-	for id := range s.bytecodeIdlers {
-		if _, ok := s.statelessPeers[id]; ok {
-			continue
-		}
-		idlers.ids = append(idlers.ids, id)
-		idlers.caps = append(idlers.caps, s.rates.Capacity(id, ByteCodesMsg, targetTTL))
-	}
+	idlers := s.sortIdlePeers(s.bytecodeIdlers, ByteCodesMsg)
 	if len(idlers.ids) == 0 {
 		return
 	}
-	sort.Sort(sort.Reverse(idlers))
-
 	// Iterate over all the tasks and try to find a pending one
 	for _, task := range s.tasks {
 		// Skip any tasks not in the bytecode retrieval phase
@@ -859,28 +1327,14 @@ func (s *SyncerV2) assignBytecodeTasks(success chan *bytecodeResponseV2, fail ch
 
 // assignStorageTasks attempts to match idle peers to pending storage range
 // retrievals.
-func (s *SyncerV2) assignStorageTasks(success chan *storageResponseV2, fail chan *storageRequestV2, cancel chan struct{}) {
+func (s *syncerV2) assignStorageTasks(success chan *storageResponseV2, fail chan *storageRequestV2, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	// Sort the peers by download capacity to use faster ones if many available
-	idlers := &capacitySort{
-		ids:  make([]string, 0, len(s.storageIdlers)),
-		caps: make([]int, 0, len(s.storageIdlers)),
-	}
-	targetTTL := s.rates.TargetTimeout()
-	for id := range s.storageIdlers {
-		if _, ok := s.statelessPeers[id]; ok {
-			continue
-		}
-		idlers.ids = append(idlers.ids, id)
-		idlers.caps = append(idlers.caps, s.rates.Capacity(id, StorageRangesMsg, targetTTL))
-	}
+	idlers := s.sortIdlePeers(s.storageIdlers, StorageRangesMsg)
 	if len(idlers.ids) == 0 {
 		return
 	}
-	sort.Sort(sort.Reverse(idlers))
-
 	// Iterate over all the tasks and try to find a pending one
 	for _, task := range s.tasks {
 		// Skip any tasks not in the storage retrieval phase
@@ -1005,7 +1459,7 @@ func (s *SyncerV2) assignStorageTasks(success chan *storageResponseV2, fail chan
 				log.Debug("Failed to request storage", "err", err)
 				s.scheduleRevertStorageRequest(req)
 			}
-		}(s.root)
+		}(s.pivot.Root)
 
 		// Inject the request into the subtask to block further assignments
 		if subtask != nil {
@@ -1014,9 +1468,9 @@ func (s *SyncerV2) assignStorageTasks(success chan *storageResponseV2, fail chan
 	}
 }
 
-// revertRequests locates all the currently pending requests from a particular
-// peer and reverts them, rescheduling for others to fulfill.
-func (s *SyncerV2) revertRequests(peer string) {
+// revertStateRequests locates all the currently pending state requests from a
+// particular peer and reverts them, rescheduling for others to fulfill.
+func (s *syncerV2) revertStateRequests(peer string) {
 	// Gather the requests first, revertals need the lock too
 	s.lock.Lock()
 	var accountReqs []*accountRequestV2
@@ -1051,9 +1505,28 @@ func (s *SyncerV2) revertRequests(peer string) {
 	}
 }
 
+// revertBALRequests locates all the currently pending bal requests from a
+// particular peer and reverts them, rescheduling for others to fulfill.
+func (s *syncerV2) revertBALRequests(peer string, pending map[common.Hash]struct{}) {
+	// Gather the requests first, revertals need the lock too
+	s.lock.Lock()
+	var accessListReqs []*accessListRequest
+	for _, req := range s.accessListReqs {
+		if req.peer == peer {
+			accessListReqs = append(accessListReqs, req)
+		}
+	}
+	s.lock.Unlock()
+
+	// Revert all the requests matching the peer
+	for _, req := range accessListReqs {
+		s.revertAccessListRequest(req, pending)
+	}
+}
+
 // scheduleRevertAccountRequest asks the event loop to clean up an account range
 // request and return all failed retrieval tasks to the scheduler for reassignment.
-func (s *SyncerV2) scheduleRevertAccountRequest(req *accountRequestV2) {
+func (s *syncerV2) scheduleRevertAccountRequest(req *accountRequestV2) {
 	select {
 	case req.revert <- req:
 		// Sync event loop notified
@@ -1069,7 +1542,7 @@ func (s *SyncerV2) scheduleRevertAccountRequest(req *accountRequestV2) {
 //
 // Note, this needs to run on the event runloop thread to reschedule to idle peers.
 // On peer threads, use scheduleRevertAccountRequest.
-func (s *SyncerV2) revertAccountRequest(req *accountRequestV2) {
+func (s *syncerV2) revertAccountRequest(req *accountRequestV2) {
 	log.Debug("Reverting account request", "peer", req.peer, "reqid", req.id)
 	select {
 	case <-req.stale:
@@ -1098,7 +1571,7 @@ func (s *SyncerV2) revertAccountRequest(req *accountRequestV2) {
 
 // scheduleRevertBytecodeRequest asks the event loop to clean up a bytecode request
 // and return all failed retrieval tasks to the scheduler for reassignment.
-func (s *SyncerV2) scheduleRevertBytecodeRequest(req *bytecodeRequestV2) {
+func (s *syncerV2) scheduleRevertBytecodeRequest(req *bytecodeRequestV2) {
 	select {
 	case req.revert <- req:
 		// Sync event loop notified
@@ -1114,7 +1587,7 @@ func (s *SyncerV2) scheduleRevertBytecodeRequest(req *bytecodeRequestV2) {
 //
 // Note, this needs to run on the event runloop thread to reschedule to idle peers.
 // On peer threads, use scheduleRevertBytecodeRequest.
-func (s *SyncerV2) revertBytecodeRequest(req *bytecodeRequestV2) {
+func (s *syncerV2) revertBytecodeRequest(req *bytecodeRequestV2) {
 	log.Debug("Reverting bytecode request", "peer", req.peer)
 	select {
 	case <-req.stale:
@@ -1143,7 +1616,7 @@ func (s *SyncerV2) revertBytecodeRequest(req *bytecodeRequestV2) {
 
 // scheduleRevertStorageRequest asks the event loop to clean up a storage range
 // request and return all failed retrieval tasks to the scheduler for reassignment.
-func (s *SyncerV2) scheduleRevertStorageRequest(req *storageRequestV2) {
+func (s *syncerV2) scheduleRevertStorageRequest(req *storageRequestV2) {
 	select {
 	case req.revert <- req:
 		// Sync event loop notified
@@ -1159,7 +1632,7 @@ func (s *SyncerV2) scheduleRevertStorageRequest(req *storageRequestV2) {
 //
 // Note, this needs to run on the event runloop thread to reschedule to idle peers.
 // On peer threads, use scheduleRevertStorageRequest.
-func (s *SyncerV2) revertStorageRequest(req *storageRequestV2) {
+func (s *syncerV2) revertStorageRequest(req *storageRequestV2) {
 	log.Debug("Reverting storage request", "peer", req.peer)
 	select {
 	case <-req.stale:
@@ -1190,9 +1663,52 @@ func (s *SyncerV2) revertStorageRequest(req *storageRequestV2) {
 	}
 }
 
+// scheduleRevertAccessListRequest asks the event loop to clean up an access
+// list request and return all failed retrieval tasks for reassignment.
+//
+// Note, this needs to run on the event runloop thread to reschedule to idle
+// peers. On peer threads, use scheduleRevertAccessListRequest.
+func (s *syncerV2) scheduleRevertAccessListRequest(req *accessListRequest) {
+	select {
+	case req.revert <- req:
+		// Sync event loop notified
+	case <-req.cancel:
+		// Sync cycle got cancelled
+	case <-req.stale:
+		// Request already reverted
+	}
+}
+
+// revertAccessListRequest cleans up an BAL request and returns all
+// failed retrieval tasks to the scheduler for reassignment.
+func (s *syncerV2) revertAccessListRequest(req *accessListRequest, pending map[common.Hash]struct{}) {
+	log.Debug("Reverting BAL request", "peer", req.peer)
+	select {
+	case <-req.stale:
+		log.Trace("BAL request already reverted", "peer", req.peer, "reqid", req.id)
+		return
+	default:
+	}
+	close(req.stale)
+
+	// Remove the request from the tracked set and restore the peer to the
+	// idle pool so it can be reassigned work (skip if peer already left).
+	s.lock.Lock()
+	delete(s.accessListReqs, req.id)
+	if _, ok := s.peers[req.peer]; ok {
+		s.accessListIdlers[req.peer] = struct{}{}
+	}
+	s.lock.Unlock()
+
+	req.timeout.Stop()
+	for _, h := range req.hashes {
+		pending[h] = struct{}{}
+	}
+}
+
 // processAccountResponse integrates an already validated account range response
 // into the account tasks.
-func (s *SyncerV2) processAccountResponse(res *accountResponseV2) {
+func (s *syncerV2) processAccountResponse(res *accountResponseV2) {
 	// Switch the task from pending to filling
 	res.task.req = nil
 	res.task.res = res
@@ -1303,7 +1819,7 @@ func (s *SyncerV2) processAccountResponse(res *accountResponseV2) {
 
 // processBytecodeResponse integrates an already validated bytecode response
 // into the account tasks.
-func (s *SyncerV2) processBytecodeResponse(res *bytecodeResponseV2) {
+func (s *syncerV2) processBytecodeResponse(res *bytecodeResponseV2) {
 	batch := s.db.NewBatch()
 
 	var codes uint64
@@ -1347,7 +1863,7 @@ func (s *SyncerV2) processBytecodeResponse(res *bytecodeResponseV2) {
 
 // processStorageResponse integrates an already validated storage response
 // into the account tasks.
-func (s *SyncerV2) processStorageResponse(res *storageResponseV2) {
+func (s *syncerV2) processStorageResponse(res *storageResponseV2) {
 	// Switch the subtask from pending to idle
 	if res.subTask != nil {
 		res.subTask.req = nil
@@ -1421,6 +1937,7 @@ func (s *SyncerV2) processStorageResponse(res *storageResponseV2) {
 					} else {
 						largeStorageGauge.Inc(1)
 					}
+					// Our first task is the one that was just filled by this response.
 					tasks = append(tasks, &storageTaskV2{
 						Next: common.Hash{},
 						Last: r.End(),
@@ -1501,7 +2018,7 @@ func (s *SyncerV2) processStorageResponse(res *storageResponseV2) {
 // forwardAccountTask takes a filled account task and persists anything available
 // into the database, after which it forwards the next account marker so that the
 // task's next chunk may be filled.
-func (s *SyncerV2) forwardAccountTask(task *accountTaskV2) {
+func (s *syncerV2) forwardAccountTask(task *accountTaskV2) {
 	// Remove any pending delivery
 	res := task.res
 	if res == nil {
@@ -1511,7 +2028,7 @@ func (s *SyncerV2) forwardAccountTask(task *accountTaskV2) {
 
 	// Persist the received account segments. These flat state maybe
 	// outdated during the sync, but it can be fixed later during the
-	// snapshot generation.
+	// trie rebuild.
 	oldAccountBytes := s.accountBytes
 
 	batch := ethdb.HookedBatch{
@@ -1533,7 +2050,7 @@ func (s *SyncerV2) forwardAccountTask(task *accountTaskV2) {
 	}
 	s.accountSynced += uint64(len(res.accounts))
 
-	// Task filling persisted, push it the chunk marker forward to the first
+	// Task filling persisted, push the chunk marker forward to the first
 	// account still missing data.
 	for i, hash := range res.hashes {
 		if task.needCode[i] || task.needState[i] {
@@ -1558,7 +2075,7 @@ func (s *SyncerV2) forwardAccountTask(task *accountTaskV2) {
 
 // OnAccounts is a callback method to invoke when a range of accounts are
 // received from a remote peer.
-func (s *SyncerV2) OnAccounts(peer SyncPeerV2, id uint64, hashes []common.Hash, accounts [][]byte, proof [][]byte) error {
+func (s *syncerV2) OnAccounts(peer SyncPeerV2, id uint64, hashes []common.Hash, accounts [][]byte, proof [][]byte) error {
 	size := common.StorageSize(len(hashes) * common.HashLength)
 	for _, account := range accounts {
 		size += common.StorageSize(len(account))
@@ -1607,7 +2124,7 @@ func (s *SyncerV2) OnAccounts(peer SyncPeerV2, id uint64, hashes []common.Hash, 
 	// retrieved was either already pruned remotely, or the peer is not yet
 	// synced to our head.
 	if len(hashes) == 0 && len(accounts) == 0 && len(proof) == 0 {
-		logger.Debug("Peer rejected account range request", "root", s.root)
+		logger.Debug("Peer rejected account range request", "root", s.pivot.Root)
 		s.statelessPeers[peer.ID()] = struct{}{}
 		s.lock.Unlock()
 
@@ -1615,7 +2132,7 @@ func (s *SyncerV2) OnAccounts(peer SyncPeerV2, id uint64, hashes []common.Hash, 
 		s.scheduleRevertAccountRequest(req)
 		return nil
 	}
-	root := s.root
+	root := s.pivot.Root
 	s.lock.Unlock()
 
 	// Reconstruct a partial trie from the response and verify it
@@ -1658,7 +2175,7 @@ func (s *SyncerV2) OnAccounts(peer SyncPeerV2, id uint64, hashes []common.Hash, 
 
 // OnByteCodes is a callback method to invoke when a batch of contract
 // bytes codes are received from a remote peer in the syncing phase.
-func (s *SyncerV2) OnByteCodes(peer SyncPeerV2, id uint64, bytecodes [][]byte) error {
+func (s *syncerV2) OnByteCodes(peer SyncPeerV2, id uint64, bytecodes [][]byte) error {
 	var size common.StorageSize
 	for _, code := range bytecodes {
 		size += common.StorageSize(len(code))
@@ -1756,7 +2273,7 @@ func (s *SyncerV2) OnByteCodes(peer SyncPeerV2, id uint64, bytecodes [][]byte) e
 
 // OnStorage is a callback method to invoke when ranges of storage slots
 // are received from a remote peer.
-func (s *SyncerV2) OnStorage(peer SyncPeerV2, id uint64, hashes [][]common.Hash, slots [][][]byte, proof [][]byte) error {
+func (s *syncerV2) OnStorage(peer SyncPeerV2, id uint64, hashes [][]common.Hash, slots [][][]byte, proof [][]byte) error {
 	// Gather some trace stats to aid in debugging issues
 	var (
 		hashCount int
@@ -1903,16 +2420,96 @@ func (s *SyncerV2) OnStorage(peer SyncPeerV2, id uint64, hashes [][]common.Hash,
 	return nil
 }
 
-// report calculates various status reports and provides it to the user.
-func (s *SyncerV2) report(force bool) {
-	if len(s.tasks) > 0 {
-		s.reportSyncProgressV2(force)
-		return
+// OnAccessLists is a callback method to invoke when a batch of BALs
+// are received from a remote peer.
+func (s *syncerV2) OnAccessLists(peer SyncPeerV2, id uint64, accessLists rlp.RawList[rlp.RawValue]) error {
+	// Convert RawList to slice of raw values
+	bals, err := accessLists.Items()
+	if err != nil {
+		return err
 	}
+
+	// Calculate total size of returned data
+	var size common.StorageSize
+	for _, bal := range bals {
+		size += common.StorageSize(len(bal))
+	}
+	logger := peer.Log().New("reqid", id)
+	logger.Trace("Delivering set of BALs", "count", len(bals), "bytes", size)
+
+	// Whether or not the response is valid, we can mark the peer as idle and
+	// notify the scheduler to assign a new task. If the response is invalid,
+	// we'll drop the peer in a bit.
+	defer func() {
+		s.lock.Lock()
+		defer s.lock.Unlock()
+		if _, ok := s.peers[peer.ID()]; ok {
+			s.accessListIdlers[peer.ID()] = struct{}{}
+		}
+		select {
+		case s.update <- struct{}{}:
+		default:
+		}
+	}()
+	s.lock.Lock()
+
+	// Ensure the response is for a valid request
+	req, ok := s.accessListReqs[id]
+	if !ok {
+		// Request stale, perhaps the peer timed out but came through in the end
+		logger.Warn("Unexpected BAL packet")
+		s.lock.Unlock()
+		return nil
+	}
+	delete(s.accessListReqs, id)
+	s.rates.Update(peer.ID(), AccessListsMsg, time.Since(req.time), len(bals))
+
+	// Clean up the request timeout timer
+	if !req.timeout.Stop() {
+		// The timeout is already triggered, and this request will be reverted+rescheduled
+		s.lock.Unlock()
+		return nil
+	}
+
+	// Response is valid, but check if peer is signalling that it does not have
+	// the requested data.
+	if len(bals) == 0 {
+		logger.Debug("Peer rejected BAL request")
+		s.statelessPeers[peer.ID()] = struct{}{}
+		s.lock.Unlock()
+
+		// Signal this request as failed, and ready for rescheduling
+		s.scheduleRevertAccessListRequest(req)
+		return nil
+	}
+	if len(bals) > len(req.hashes) {
+		s.lock.Unlock()
+		s.scheduleRevertAccessListRequest(req)
+		logger.Warn("Peer sent more BALs than requested", "count", len(bals), "requested", len(req.hashes))
+		return errors.New("more BALs than requested")
+	}
+	s.lock.Unlock()
+
+	// Response validated, send it to the scheduler for filling.
+	response := &accessListResponse{
+		req:         req,
+		accessLists: bals,
+	}
+	select {
+	case req.deliver <- response:
+	case <-req.cancel:
+	case <-req.stale:
+	}
+	return nil
+}
+
+// report calculates various status reports and provides it to the user.
+func (s *syncerV2) report(force bool) {
+	s.reportSyncProgressV2(force)
 }
 
 // reportSyncProgressV2 calculates various status reports and provides it to the user.
-func (s *SyncerV2) reportSyncProgressV2(force bool) {
+func (s *syncerV2) reportSyncProgressV2(force bool) {
 	// Don't report all the events, just occasionally
 	if !force && time.Since(s.logTime) < 8*time.Second {
 		return
@@ -1935,7 +2532,6 @@ func (s *SyncerV2) reportSyncProgressV2(force bool) {
 		new(big.Int).Mul(new(big.Int).SetUint64(uint64(synced)), hashSpace),
 		accountFills,
 	).Uint64())
-
 	// Don't report anything until we have a meaningful progress
 	if estBytes < 1.0 {
 		return
@@ -1956,4 +2552,47 @@ func (s *SyncerV2) reportSyncProgressV2(force bool) {
 	)
 	log.Info("Syncing: state download in progress", "synced", progress, "state", synced,
 		"accounts", accounts, "slots", storage, "codes", bytecode, "eta", common.PrettyDuration(estTime-elapsed))
+}
+
+// accessListPeersExhausted reports whether forward progress on BAL fetches is
+// impossible: at least one peer is connected, every connected peer is marked
+// stateless, and no BAL requests are in flight.
+func (s *syncerV2) accessListPeersExhausted() bool {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	if len(s.peers) == 0 {
+		return false
+	}
+	if len(s.accessListReqs) > 0 {
+		return false
+	}
+	for id := range s.peers {
+		if _, ok := s.statelessPeers[id]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// sortIdlePeers builds a list of idle peers sorted by download capacity
+// (highest first), filtering out stateless peers. Must be called with s.lock held.
+func (s *syncerV2) sortIdlePeers(idlerSet map[string]struct{}, msgCode uint64) *capacitySort {
+	idlers := &capacitySort{
+		ids:  make([]string, 0, len(idlerSet)),
+		caps: make([]int, 0, len(idlerSet)),
+	}
+	targetTTL := s.rates.TargetTimeout()
+	for id := range idlerSet {
+		if _, ok := s.statelessPeers[id]; ok {
+			continue
+		}
+		idlers.ids = append(idlers.ids, id)
+		idlers.caps = append(idlers.caps, s.rates.Capacity(id, msgCode, targetTTL))
+	}
+	if len(idlers.ids) == 0 {
+		return idlers
+	}
+	sort.Sort(sort.Reverse(idlers))
+	return idlers
 }

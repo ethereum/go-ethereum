@@ -52,8 +52,14 @@ func newTester(t *testing.T, mode ethconfig.SyncMode) *downloadTester {
 	return newTesterWithNotification(t, mode, nil)
 }
 
-// newTesterWithNotification creates a new downloader test mocker.
+// newTesterWithNotification creates a new downloader test mocker (snap/1).
 func newTesterWithNotification(t *testing.T, mode ethconfig.SyncMode, success func()) *downloadTester {
+	return newTesterWithSnap(t, mode, success, false)
+}
+
+// newTesterWithSnap is like newTesterWithNotification but selects the snap/2
+// state syncer when snapV2 is set.
+func newTesterWithSnap(t *testing.T, mode ethconfig.SyncMode, success func(), snapV2 bool) *downloadTester {
 	db, err := rawdb.Open(rawdb.NewMemoryDatabase(), rawdb.OpenOptions{})
 	if err != nil {
 		panic(err)
@@ -74,7 +80,7 @@ func newTesterWithNotification(t *testing.T, mode ethconfig.SyncMode, success fu
 		chain: chain,
 		peers: make(map[string]*downloadTesterPeer),
 	}
-	tester.downloader = New(db, mode, tester.chain, tester.dropPeer, success)
+	tester.downloader = New(db, mode, tester.chain, tester.dropPeer, success, snapV2)
 	return tester
 }
 
@@ -102,7 +108,7 @@ func (dl *downloadTester) newPeer(id string, version uint, blocks []*types.Block
 	if err := dl.downloader.RegisterPeer(id, version, peer); err != nil {
 		panic(err)
 	}
-	if err := dl.downloader.SnapSyncer.Register(peer); err != nil {
+	if err := dl.downloader.snapSyncer.Register(peer); err != nil {
 		panic(err)
 	}
 	return peer
@@ -114,7 +120,7 @@ func (dl *downloadTester) dropPeer(id string) {
 	defer dl.lock.Unlock()
 
 	delete(dl.peers, id)
-	dl.downloader.SnapSyncer.Unregister(id)
+	dl.downloader.snapSyncer.Unregister(id)
 	dl.downloader.UnregisterPeer(id)
 }
 
@@ -329,7 +335,7 @@ func (dlp *downloadTesterPeer) RequestAccountRange(id uint64, root, origin, limi
 	}
 	hashes, accounts, _ := res.Unpack()
 
-	go dlp.dl.downloader.SnapSyncer.OnAccounts(dlp, id, hashes, accounts, proofs)
+	go dlp.dl.downloader.snapSyncer.OnAccounts(dlp, id, hashes, accounts, proofs)
 	return nil
 }
 
@@ -356,7 +362,7 @@ func (dlp *downloadTesterPeer) RequestStorageRanges(id uint64, root common.Hash,
 	}
 	hashes, slots := res.Unpack()
 
-	go dlp.dl.downloader.SnapSyncer.OnStorage(dlp, id, hashes, slots, proofs)
+	go dlp.dl.downloader.snapSyncer.OnStorage(dlp, id, hashes, slots, proofs)
 	return nil
 }
 
@@ -368,11 +374,12 @@ func (dlp *downloadTesterPeer) RequestByteCodes(id uint64, hashes []common.Hash,
 		Bytes:  uint64(bytes),
 	}
 	codes := snap.ServiceGetByteCodesQuery(dlp.chain, req)
-	go dlp.dl.downloader.SnapSyncer.OnByteCodes(dlp, id, codes)
+	go dlp.dl.downloader.snapSyncer.OnByteCodes(dlp, id, codes)
 	return nil
 }
 
-// RequestTrieNodes fetches a batch of account or storage trie nodes.
+// RequestTrieNodes fetches a batch of trie nodes (snap/1 healing). snap/2 never
+// issues these, but the method is required to satisfy snap.SyncPeerV2.
 func (dlp *downloadTesterPeer) RequestTrieNodes(id uint64, root common.Hash, count int, paths []snap.TrieNodePathSet, bytes int) error {
 	encPaths, err := rlp.EncodeToRawList(paths)
 	if err != nil {
@@ -385,7 +392,19 @@ func (dlp *downloadTesterPeer) RequestTrieNodes(id uint64, root common.Hash, cou
 		Bytes: uint64(bytes),
 	}
 	nodes, _ := snap.ServiceGetTrieNodesQuery(dlp.chain, req)
-	go dlp.dl.downloader.SnapSyncer.OnTrieNodes(dlp, id, nodes)
+	go dlp.dl.downloader.snapSyncer.OnTrieNodes(dlp, id, nodes)
+	return nil
+}
+
+// RequestAccessLists fetches a batch of BALs by block hash.
+func (dlp *downloadTesterPeer) RequestAccessLists(id uint64, hashes []common.Hash, bytes int) error {
+	req := &snap.GetAccessListsPacket{
+		ID:     id,
+		Hashes: hashes,
+		Bytes:  uint64(bytes),
+	}
+	als := snap.ServiceGetAccessListsQuery(dlp.chain, req)
+	go dlp.dl.downloader.snapSyncer.OnAccessLists(dlp, id, als)
 	return nil
 }
 
@@ -412,14 +431,15 @@ func assertOwnChain(t *testing.T, tester *downloadTester, length int) {
 	}
 }
 
-func TestCanonicalSynchronisationFull(t *testing.T) { testCanonSync(t, eth.ETH69, FullSync) }
-func TestCanonicalSynchronisationSnap(t *testing.T) { testCanonSync(t, eth.ETH69, SnapSync) }
+func TestCanonicalSynchronisationFull(t *testing.T)   { testCanonSync(t, eth.ETH69, FullSync, false) }
+func TestCanonicalSynchronisationSnap(t *testing.T)   { testCanonSync(t, eth.ETH69, SnapSync, false) }
+func TestCanonicalSynchronisationSnapV2(t *testing.T) { testCanonSync(t, eth.ETH69, SnapSync, true) }
 
-func testCanonSync(t *testing.T, protocol uint, mode SyncMode) {
+func testCanonSync(t *testing.T, protocol uint, mode SyncMode, snapV2 bool) {
 	success := make(chan struct{})
-	tester := newTesterWithNotification(t, mode, func() {
+	tester := newTesterWithSnap(t, mode, func() {
 		close(success)
-	})
+	}, snapV2)
 	defer tester.terminate()
 
 	// Create a small enough block chain to download

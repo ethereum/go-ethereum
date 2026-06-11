@@ -250,3 +250,10 @@ func DeleteGenerateTriePartitionDone(db ethdb.KeyValueWriter, partition byte) {
 		log.Crit("Failed to remove generate-trie done marker", "err", err)
 	}
 }
+
+// DeleteSnapshotSyncStatus removes the serialized sync status from the database.
+func DeleteSnapshotSyncStatus(db ethdb.KeyValueWriter) {
+	if err := db.Delete(snapshotSyncStatusKey); err != nil {
+		log.Crit("Failed to remove snapshot sync status", "err", err)
+	}
+}

@@ -129,7 +129,7 @@ type (
 type testPeer struct {
 	id            string
 	test          *testing.T
-	remote        *Syncer
+	remote        *syncer
 	logger        log.Logger
 	accountTrie   *trie.Trie
 	accountValues []*kv
@@ -623,9 +623,9 @@ func testSyncBloatedProof(t *testing.T, scheme string) {
 	}
 }
 
-func setupSyncer(scheme string, peers ...*testPeer) *Syncer {
+func setupSyncer(scheme string, peers ...*testPeer) *syncer {
 	stateDb := rawdb.NewMemoryDatabase()
-	syncer := NewSyncer(stateDb, scheme)
+	syncer := newSyncer(stateDb, scheme)
 	for _, peer := range peers {
 		syncer.Register(peer)
 		peer.remote = syncer
