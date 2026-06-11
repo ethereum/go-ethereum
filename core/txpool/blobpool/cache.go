@@ -68,25 +68,23 @@ type cachedBlob struct {
 // drop the transaction in the window between the engine API response and the cache
 // update.)
 type Cache struct {
-	mu sync.Mutex
-
-	entries map[common.Hash]*cachedBlob // Mapping from vhash to cachedBlob
-
 	blobpool *BlobPool
+	clock    mclock.Clock
 
-	cancelInflights context.CancelFunc // Cancel the in-flight conversion/decode goroutines
-	inflight        sync.WaitGroup     // Tracks the in-flight conversion/decode goroutines
-	wg              sync.WaitGroup     // Tracks the loop goroutine
-
-	clock mclock.Clock
-
-	step func() // test hook fired after each loop iteration
+	mu      sync.Mutex
+	entries map[common.Hash]*cachedBlob
 
 	// channels into loop
 	quit        chan struct{}
 	topkRequest chan struct{}
 	topkTimer   mclock.Timer
 	hasBlobsCh  chan []common.Hash // list of tx hashes that should be pinned
+
+	step func() // test hook fired after each loop iteration
+
+	cancelInflights context.CancelFunc // cancels the conversion/decode goroutines
+	inflight        sync.WaitGroup     // tracks all in-flight conversion/decode goroutines
+	wg              sync.WaitGroup     // tracks the loop goroutine
 }
 
 // NewCache creates a blob cache backed by the given blobpool.
