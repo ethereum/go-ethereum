@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/txorder"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -422,7 +423,7 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 	return receipt, bal, nil
 }
 
-func (miner *Miner) commitTransactions(ctx context.Context, env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
+func (miner *Miner) commitTransactions(ctx context.Context, env *environment, plainTxs, blobTxs *txorder.TransactionsByPriceAndNonce, interrupt *atomic.Int32) error {
 	ctx, _, spanEnd := telemetry.StartSpan(ctx, "miner.commitTransactions")
 	defer spanEnd(nil)
 
@@ -449,7 +450,7 @@ func (miner *Miner) commitTransactions(ctx context.Context, env *environment, pl
 		// Retrieve the next transaction and abort if all done.
 		var (
 			ltx *txpool.LazyTransaction
-			txs *transactionsByPriceAndNonce
+			txs *txorder.TransactionsByPriceAndNonce
 		)
 		pltx, ptip := plainTxs.Peek()
 		bltx, btip := blobTxs.Peek()
@@ -592,16 +593,16 @@ func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int3
 	}
 	// Fill the block with all available pending transactions.
 	if len(prioPlainTxs) > 0 || len(prioBlobTxs) > 0 {
-		plainTxs := newTransactionsByPriceAndNonce(env.signer, prioPlainTxs, env.header.BaseFee)
-		blobTxs := newTransactionsByPriceAndNonce(env.signer, prioBlobTxs, env.header.BaseFee)
+		plainTxs := txorder.NewTransactionsByPriceAndNonce(env.signer, prioPlainTxs, env.header.BaseFee)
+		blobTxs := txorder.NewTransactionsByPriceAndNonce(env.signer, prioBlobTxs, env.header.BaseFee)
 
 		if err := miner.commitTransactions(ctx, env, plainTxs, blobTxs, interrupt); err != nil {
 			return err
 		}
 	}
 	if len(normalPlainTxs) > 0 || len(normalBlobTxs) > 0 {
-		plainTxs := newTransactionsByPriceAndNonce(env.signer, normalPlainTxs, env.header.BaseFee)
-		blobTxs := newTransactionsByPriceAndNonce(env.signer, normalBlobTxs, env.header.BaseFee)
+		plainTxs := txorder.NewTransactionsByPriceAndNonce(env.signer, normalPlainTxs, env.header.BaseFee)
+		blobTxs := txorder.NewTransactionsByPriceAndNonce(env.signer, normalBlobTxs, env.header.BaseFee)
 
 		if err := miner.commitTransactions(ctx, env, plainTxs, blobTxs, interrupt); err != nil {
 			return err

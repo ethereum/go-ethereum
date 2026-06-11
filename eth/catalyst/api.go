@@ -574,7 +574,7 @@ func (api *ConsensusAPI) GetBlobsV1(ctx context.Context, hashes []common.Hash) (
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
-	blobs, _, proofs, err := api.eth.BlobTxPool().GetBlobs(ctx, hashes, types.BlobSidecarVersion0)
+	blobs, _, proofs, err := api.eth.BlobCache().GetBlobs(ctx, hashes, types.BlobSidecarVersion0)
 	if err != nil {
 		return nil, engine.InvalidParams.With(err)
 	}
@@ -656,7 +656,7 @@ func (api *ConsensusAPI) getBlobs(ctx context.Context, hashes []common.Hash, v2 
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
 	available := 0
-	for _, ok := range api.eth.BlobTxPool().AvailableBlobs(hashes) {
+	for _, ok := range api.eth.BlobCache().HasBlobs(ctx, hashes) {
 		if ok {
 			available++
 		}
@@ -671,7 +671,7 @@ func (api *ConsensusAPI) getBlobs(ctx context.Context, hashes []common.Hash, v2 
 	}
 	// Retrieve blobs from the pool. This operation is expensive and may involve
 	// heavy disk I/O.
-	blobs, _, proofs, err := api.eth.BlobTxPool().GetBlobs(ctx, hashes, types.BlobSidecarVersion1)
+	blobs, _, proofs, err := api.eth.BlobCache().GetBlobs(ctx, hashes, types.BlobSidecarVersion1)
 	if err != nil {
 		return nil, engine.InvalidParams.With(err)
 	}
@@ -710,7 +710,7 @@ func (api *ConsensusAPI) getBlobs(ctx context.Context, hashes []common.Hash, v2 
 
 // HasBlobs reports availability for the requested blob-versioned-hashes.
 func (api *ConsensusAPI) HasBlobs(hashes []common.Hash) []bool {
-	return api.eth.BlobTxPool().AvailableBlobs(hashes)
+	return api.eth.BlobCache().HasBlobs(context.Background(), hashes)
 }
 
 // Helper for NewPayload* methods.

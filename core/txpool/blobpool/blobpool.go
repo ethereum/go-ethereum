@@ -19,7 +19,6 @@ package blobpool
 
 import (
 	"container/heap"
-	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -40,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -1121,6 +1119,43 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	p.updateStorageMetrics()
 }
 
+// vhashesByTx returns a snapshot of the mapping between transaction hash and
+// versioned hashes.
+func (p *BlobPool) vhashesByTx() map[common.Hash][]common.Hash {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	out := make(map[common.Hash][]common.Hash)
+	for _, txs := range p.index {
+		for _, tx := range txs {
+			out[tx.hash] = tx.vhashes
+		}
+	}
+	return out
+}
+
+// getByVhash reads and decodes the blob transaction which has the given
+// versioned hash. Returns nil if unavailable.
+func (p *BlobPool) getByVhash(vhash common.Hash) *blobTxForPool {
+	p.lock.RLock()
+	txID, exists := p.lookup.storeidOfBlob(vhash)
+	p.lock.RUnlock()
+	if !exists {
+		return nil
+	}
+	data, err := p.store.Get(txID)
+	if err != nil {
+		log.Error("Tracked blob transaction missing from store", "id", txID, "err", err)
+		return nil
+	}
+	var ptx blobTxForPool
+	if err := rlp.DecodeBytes(data, &ptx); err != nil {
+		log.Error("Blobs corrupted for tracked transaction", "id", txID, "err", err)
+		return nil
+	}
+	return &ptx
+}
+
 // reorg assembles all the transactors and missing transactions between an old
 // and new head to figure out which account's tx set needs to be rechecked and
 // which transactions need to be requeued.
@@ -1591,24 +1626,10 @@ func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 	}
 }
 
-// GetBlobs returns a number of blobs and proofs for the given versioned hashes.
+// getBlobs returns a number of blobs and proofs for the given versioned hashes.
 // Blobpool must place responses in the order given in the request, using null
 // for any missing blobs.
-//
-// For instance, if the request is [A_versioned_hash, B_versioned_hash,
-// C_versioned_hash] and blobpool has data for blobs A and C, but doesn't have
-// data for B, the response MUST be [A, null, C].
-//
-// This is a utility method for the engine API, enabling consensus clients to
-// retrieve blobs from the pools directly instead of the network.
-//
-// The version argument specifies the type of proofs to return, either the
-// blob proofs (version 0) or the cell proofs (version 1). Proofs conversion is
-// CPU intensive and prohibited in the blobpool explicitly.
-func (p *BlobPool) GetBlobs(ctx context.Context, vhashes []common.Hash, version byte) (_ []*kzg4844.Blob, _ []kzg4844.Commitment, _ [][]kzg4844.Proof, err error) {
-	_, _, spanEnd := telemetry.StartSpan(ctx, "blobpool.GetBlobs")
-	defer spanEnd(&err)
-
+func (p *BlobPool) getBlobs(vhashes []common.Hash, version byte) (_ []*kzg4844.Blob, _ []kzg4844.Commitment, _ [][]kzg4844.Proof, err error) {
 	var (
 		blobs       = make([]*kzg4844.Blob, len(vhashes))
 		commitments = make([]kzg4844.Commitment, len(vhashes))
@@ -1683,8 +1704,8 @@ func (p *BlobPool) GetBlobs(ctx context.Context, vhashes []common.Hash, version 
 	return blobs, commitments, proofs, nil
 }
 
-// AvailableBlobs returns whether the blobs are available in the subpool.
-func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) []bool {
+// availableBlobs returns whether the blobs are available in the subpool.
+func (p *BlobPool) availableBlobs(vhashes []common.Hash) []bool {
 	available := make([]bool, len(vhashes))
 	p.lock.RLock()
 	for i, vhash := range vhashes {
