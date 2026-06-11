@@ -51,8 +51,8 @@ type testCache struct {
 }
 
 // newTestCache creates a cache for test, with a pool that contains transactions
-// specified in txConfig. The returned cache is in topKMode with the initial
-// topK fetch already settled.
+// specified in txConfig. The returned cache has the initial topK fetch already
+// settled.
 func newTestCache(t *testing.T, txConfig []txSpec) *testCache {
 	storage := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700); err != nil {
@@ -130,10 +130,11 @@ func newTestCache(t *testing.T, txConfig []txSpec) *testCache {
 		vhashes: vhashes,
 		offset:  offset,
 	}
-	// Block until the loop has armed its initial topK timer, then fire it so the
-	// returned cache is already in a stable topKMode-loaded state.
+	// The loop performs the initial topK update immediately on startup and then
+	// arms the topK timer. Wait for the timer so we know the initial update has
+	// been issued, then let it settle.
 	clock.WaitForTimers(1)
-	tc.wait(t, topKTimeout)
+	tc.wait(t, 0)
 	return tc
 }
 
@@ -180,16 +181,6 @@ func (tc *testCache) wait(t *testing.T, d time.Duration) {
 	}
 }
 
-func (tc *testCache) expectMode(t *testing.T, want cacheMode) {
-	t.Helper()
-	tc.mu.Lock()
-	have := tc.mode
-	tc.mu.Unlock()
-	if have != want {
-		t.Errorf("mode: got %d, want %d", have, want)
-	}
-}
-
 func (tc *testCache) expectEntries(t *testing.T, want ...common.Hash) {
 	t.Helper()
 	wantSet := make(map[common.Hash]struct{}, len(want))
@@ -216,10 +207,9 @@ func hashSet(m map[common.Hash]struct{}) []string {
 	return out
 }
 
-// TestCacheHasBlobsLoadsClaimedSet checks that a HasBlobs request switches the
-// cache into hasBlobsMode and loads exactly the txs whose vhashes the cache
-// claimed available, regardless of whether the claim came from the cache
-// itself or from the pool fallback.
+// TestCacheHasBlobsLoadsClaimedSet checks that a HasBlobs request loads
+// exactly the txs whose vhashes the cache claimed available, regardless of
+// whether the claim came from the cache itself or from the pool fallback.
 func TestCacheHasBlobsLoadsClaimedSet(t *testing.T) {
 	tc := newTestCache(t, []txSpec{
 		{blobs: 2, tip: 100},
@@ -233,13 +223,11 @@ func TestCacheHasBlobsLoadsClaimedSet(t *testing.T) {
 	}
 	tc.wait(t, 0)
 
-	tc.expectMode(t, hasBlobsMode)
 	tc.expectEntries(t, tc.vhashes[1]...)
 }
 
-// TestCacheTopK exercises the periodic topK signal: after the initial topK
-// settles in newTestCache, the cache is in topKMode with entries equal to the
-// top-by-tip txs.
+// TestCacheTopK exercises the initial topK update: after it settles in
+// newTestCache, the cache entries equal the top-by-tip txs.
 func TestCacheTopK(t *testing.T) {
 	tc := newTestCache(t, []txSpec{
 		{blobs: 1, tip: 100},
@@ -247,13 +235,12 @@ func TestCacheTopK(t *testing.T) {
 		{blobs: 1, tip: 300},
 	})
 
-	tc.expectMode(t, topKMode)
 	tc.expectEntries(t, tc.vhashes[2]...)
 }
 
-// TestCacheHbTimerFallsBackToTopK checks the idle-timeout transition: after a
-// HasBlobs request, an elapsing hasBlobsTimeout flips the cache back to
-// topKMode and replaces the entries with the topK set.
+// TestCacheHbTimerFallsBackToTopK checks the fallback after a HasBlobs
+// request: when hasBlobsTimeout elapses, a topK update replaces the entries
+// with the topK set.
 func TestCacheHbTimerFallsBackToTopK(t *testing.T) {
 	tc := newTestCache(t, []txSpec{
 		{blobs: 1, tip: 100},
@@ -262,68 +249,49 @@ func TestCacheHbTimerFallsBackToTopK(t *testing.T) {
 
 	tc.HasBlobs(context.Background(), tc.vhashes[0])
 	tc.wait(t, 0)
-	tc.expectMode(t, hasBlobsMode)
 	tc.expectEntries(t, tc.vhashes[0]...)
 
 	tc.wait(t, hasBlobsTimeout)
-	tc.expectMode(t, topKMode)
 	tc.expectEntries(t, tc.vhashes[1]...)
 }
 
-// TestCacheGetBlobsExitsHasBlobsMode checks that a GetBlobs call while in
-// hasBlobsMode flips the cache back to topKMode and reloads the topK set.
-func TestCacheGetBlobsExitsHasBlobsMode(t *testing.T) {
+// TestCacheGetBlobs checks that GetBlobs returns the requested blobs and does
+// not disturb the cached entries.
+func TestCacheGetBlobs(t *testing.T) {
 	tc := newTestCache(t, []txSpec{
 		{blobs: 1, tip: 100},
 		{blobs: 1, tip: 300},
 	})
-
-	tc.HasBlobs(context.Background(), tc.vhashes[0])
-	tc.wait(t, 0)
-	tc.expectMode(t, hasBlobsMode)
-	tc.expectEntries(t, tc.vhashes[0]...)
-
-	tc.GetBlobs(context.Background(), tc.vhashes[0], types.BlobSidecarVersion1)
-	tc.wait(t, 0)
-	tc.expectMode(t, topKMode)
-	tc.expectEntries(t, tc.vhashes[1]...)
-}
-
-// TestCacheTopKResetOnHasBlobs walks the cache through topK → hasBlobs → topK
-// transitions and checks that the entries follow the active mode at each step.
-func TestCacheTopKResetOnHasBlobs(t *testing.T) {
-	tc := newTestCache(t, []txSpec{
-		{blobs: 1, tip: 100},
-		{blobs: 1, tip: 300},
-	})
-	tc.expectMode(t, topKMode)
 	tc.expectEntries(t, tc.vhashes[1]...)
 
-	tc.HasBlobs(context.Background(), tc.vhashes[0])
+	blobs, _, proofs, err := tc.GetBlobs(context.Background(), tc.vhashes[1], types.BlobSidecarVersion1)
+	if err != nil {
+		t.Fatalf("GetBlobs: %v", err)
+	}
+	for i := range blobs {
+		if blobs[i] == nil {
+			t.Errorf("blob %d missing in GetBlobs response", i)
+		}
+		if len(proofs[i]) == 0 {
+			t.Errorf("proofs %d missing in GetBlobs response", i)
+		}
+	}
 	tc.wait(t, 0)
-	tc.expectMode(t, hasBlobsMode)
-	tc.expectEntries(t, tc.vhashes[0]...)
-
-	tc.wait(t, hasBlobsTimeout)
-	tc.expectMode(t, topKMode)
 	tc.expectEntries(t, tc.vhashes[1]...)
 }
 
 // TestCacheTopKRefresh verifies that when a more profitable tx appears in the
-// pool while the cache is in topKMode, the next topK tick replaces the cached
-// entry with the better one.
+// pool, the next topK tick replaces the cached entry with the better one.
 func TestCacheTopKRefresh(t *testing.T) {
 	tc := newTestCache(t, []txSpec{
 		{blobs: 1, tip: 100},
 		{blobs: 1, tip: 200},
 		{blobs: 1, tip: 300},
 	})
-	tc.expectMode(t, topKMode)
 	tc.expectEntries(t, tc.vhashes[2]...)
 
 	better := tc.inject(t, txSpec{blobs: 1, tip: 400})
 
 	tc.wait(t, topKTimeout)
-	tc.expectMode(t, topKMode)
 	tc.expectEntries(t, better...)
 }
