@@ -35,17 +35,6 @@ import (
 	"github.com/holiman/uint256"
 )
 
-type cacheMode int
-
-const (
-	// In hasBlobsMode, the cache keeps the blobs that it reported
-	// as available in a HasBlobs response.
-	hasBlobsMode cacheMode = iota
-	// In topKMode, the cache fills itself with the blobs of the top K
-	// most profitable transactions.
-	topKMode
-)
-
 const (
 	topKTimeout     = 4 * time.Second
 	hasBlobsTimeout = 1 * time.Second
@@ -94,8 +83,6 @@ type Cache struct {
 	hasBlobs chan []common.Hash // List of tx hashes that need to be pinned
 	getBlobs chan struct{}
 
-	mode cacheMode
-
 	cancelInflights context.CancelFunc // Cancel the in-flight conversion/decode goroutines
 	inflight        sync.WaitGroup     // Tracks the in-flight conversion/decode goroutines
 	wg              sync.WaitGroup     // Tracks the loop goroutine
@@ -104,7 +91,9 @@ type Cache struct {
 
 	step func() // test hook fired after each loop iteration
 
-	quit chan struct{}
+	quit        chan struct{}
+	topkRequest chan struct{}
+	topkTimer   mclock.Timer
 }
 
 // NewCache creates a blob cache backed by the given blobpool.
@@ -116,17 +105,14 @@ func NewCache(p *BlobPool) *Cache {
 // It allows injecting a clock and a step hook.
 func NewCacheForTest(p *BlobPool, clock mclock.Clock, step func()) *Cache {
 	c := &Cache{
-		entries:  make(map[common.Hash]*cachedBlob),
-		blobpool: p,
-		hasBlobs: make(chan []common.Hash, 1),
-		getBlobs: make(chan struct{}, 1),
-
-		mode:  topKMode,
-		clock: clock,
-
-		step: step,
-
-		quit: make(chan struct{}),
+		entries:     make(map[common.Hash]*cachedBlob),
+		blobpool:    p,
+		hasBlobs:    make(chan []common.Hash, 1),
+		getBlobs:    make(chan struct{}, 1),
+		clock:       clock,
+		step:        step,
+		quit:        make(chan struct{}),
+		topkRequest: make(chan struct{}, 1),
 	}
 
 	c.wg.Add(1)
@@ -262,63 +248,29 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 		telemetry.IntAttribute("cache.miss", cacheMiss),
 	)
 
-	select {
-	case c.getBlobs <- struct{}{}:
-		return blobs, commitments, proofs, nil
-	case <-c.quit:
-		return nil, nil, nil, nil
-	}
+	return blobs, commitments, proofs, nil
 }
 
 func (c *Cache) loop() {
 	defer c.wg.Done()
-	var (
-		topKTimer   = new(mclock.Timer)
-		topKTrigger = make(chan struct{}, 1)
-		hbTimer     = new(mclock.Timer)
-		hbTrigger   = make(chan struct{}, 1)
-	)
-	c.resetTimer(topKTimer, topKTrigger, topKTimeout)
 
+	c.triggerTopK()
 	for {
 		select {
 		case want := <-c.hasBlobs:
-			// switch to hasBlobs
-			c.switchMode(hasBlobsMode)
+			// HasBlobs request was received.
+			// Update the cache once with the requested blobs,
+			// then go back to regular topK updates.
 			c.update(want)
-			c.resetTimer(hbTimer, hbTrigger, hasBlobsTimeout)
+			c.triggerTopKAfter(hasBlobsTimeout)
 
-		case <-topKTrigger:
-			// switch to topK
-			if c.mode != topKMode {
-				continue
-			}
+		case <-c.topkRequest:
 			want := c.selectTopTxs()
 			c.update(want)
-			c.resetTimer(topKTimer, topKTrigger, topKTimeout)
+			c.triggerTopKAfter(topKTimeout)
 
-		case <-hbTrigger:
-			// hasBlobs mode is over - switch to topK
-			c.switchMode(topKMode)
-			want := c.selectTopTxs()
-			c.update(want)
-			c.resetTimer(topKTimer, topKTrigger, topKTimeout)
-
-		case <-c.getBlobs:
-			// hasBlobs mode is over -  switch to topK
-			if c.mode != hasBlobsMode {
-				continue
-			}
-			c.switchMode(topKMode)
-			want := c.selectTopTxs()
-			c.update(want)
-			c.resetTimer(topKTimer, topKTrigger, topKTimeout)
 		case <-c.quit:
-			c.mu.Lock()
-			if c.cancelInflights != nil {
-				c.cancelInflights()
-			}
-			c.mu.Unlock()
+			c.cancelUpdate()
 			c.inflight.Wait()
 			return
 		}
@@ -329,11 +281,8 @@ func (c *Cache) loop() {
 	}
 }
 
-// switchMode sets the cache mode and cancels any in-flight update from the
-// previous mode.
-func (c *Cache) switchMode(mode cacheMode) {
-	c.mode = mode
-
+// cancelUpdate stops the current update.
+func (c *Cache) cancelUpdate() {
 	if c.cancelInflights != nil {
 		c.cancelInflights()
 		c.cancelInflights = nil
@@ -349,20 +298,18 @@ func (c *Cache) update(want []common.Hash) {
 		wantSet[vh] = struct{}{}
 	}
 
-	c.mu.Lock()
-	if c.cancelInflights != nil {
-		c.cancelInflights()
-	}
+	// Cancel the current updates.
+	c.cancelUpdate()
 	ctx, cancel := context.WithCancel(context.Background())
 	c.cancelInflights = cancel
 
+	c.mu.Lock()
 	var missing []common.Hash
 	for vh := range wantSet {
 		if _, ok := c.entries[vh]; !ok {
 			missing = append(missing, vh)
 		}
 	}
-
 	for vh := range c.entries {
 		if _, ok := wantSet[vh]; ok {
 			continue
@@ -402,7 +349,7 @@ func (c *Cache) update(want []common.Hash) {
 					continue
 				}
 				if _, exists := c.entries[v]; exists {
-					continue
+					continue // recompute only new entries
 				}
 				var pf []kzg4844.Proof
 				switch sidecar.Version {
@@ -480,13 +427,18 @@ func (c *Cache) selectTopTxs() []common.Hash {
 	return vhashes
 }
 
-// resetTimer sets the given timer to fire on the trigger channel after the
-// interval.
-func (c *Cache) resetTimer(timer *mclock.Timer, trigger chan struct{}, interval time.Duration) {
-	if *timer != nil {
-		(*timer).Stop()
+func (c *Cache) triggerTopKAfter(interval time.Duration) {
+	if c.topkTimer != nil {
+		c.topkTimer.Stop()
 	}
-	*timer = c.clock.AfterFunc(interval, func() {
-		trigger <- struct{}{}
-	})
+	c.topkTimer = c.clock.AfterFunc(interval, c.triggerTopK)
+}
+
+// triggerTopK causes another topK selection to happen.
+// Note this is safe to call from anywhere, even outside of the loop goroutine.
+func (c *Cache) triggerTopK() {
+	select {
+	case c.topkRequest <- struct{}{}:
+	default:
+	}
 }
