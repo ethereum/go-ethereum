@@ -297,9 +297,11 @@ func (d *Downloader) fetchHeaders(from uint64) error {
 			return err
 		}
 		// If the pivot became stale (older than 2*64-8 (bit of wiggle room)),
-		// move it ahead to HEAD-64
+		// move it ahead to HEAD-64. Skip the move while the snap syncer is
+		// building the trie locally, the generation targets the pivot root
+		// and moving the pivot would cancel it.
 		d.pivotLock.Lock()
-		if d.pivotHeader != nil {
+		if d.pivotHeader != nil && !d.snapSyncer.GeneratingTrie() {
 			if head.Number.Uint64() > d.pivotHeader.Number.Uint64()+2*uint64(fsMinFullBlocks)-8 {
 				// Retrieve the next pivot header, either from skeleton chain
 				// or the filled chain

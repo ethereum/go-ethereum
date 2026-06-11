@@ -26,6 +26,7 @@ import (
 	"math/rand"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -313,7 +314,7 @@ type SyncPeerV2 interface {
 // syncerV2 is an Ethereum account and storage trie syncer based on the snap
 // protocol. It downloads all accounts, storage slots, and bytecodes from
 // remote peers as flat state, applies BAL diffs on pivot moves,
-// and triggers a final trie rebuild once flat state is consistent.
+// and triggers a final trie generation once flat state is consistent.
 //
 // Every network request has a variety of failure events:
 //   - The peer disconnects after task assignment, failing to send the request
@@ -325,11 +326,12 @@ type syncerV2 struct {
 	db     ethdb.Database // Database to store the trie nodes into (and dedup)
 	scheme string         // Node scheme used in node database
 
-	pivot         *types.Header    // Current pivot header being synced (lock needed)
-	previousPivot *types.Header    // Pivot from previous sync run (for pivot move detection)
-	complete      bool             // Whether the persisted progress was a completed sync
-	tasks         []*accountTaskV2 // Current account task set being synced
-	update        chan struct{}    // Notification channel for possible sync progression
+	pivot          *types.Header    // Current pivot header being synced (lock needed)
+	previousPivot  *types.Header    // Pivot from previous sync run (for pivot move detection)
+	complete       bool             // Whether the persisted progress was a completed sync
+	tasks          []*accountTaskV2 // Current account task set being synced
+	update         chan struct{}    // Notification channel for possible sync progression
+	generatingTrie atomic.Bool      // Whether the download is done and trie generation is running
 
 	peers    map[string]SyncPeerV2 // Currently active peers to download from
 	peerJoin *event.Feed           // Event feed to react to peers joining
@@ -541,6 +543,11 @@ func (s *syncerV2) Sync(pivot *types.Header, cancel chan struct{}) error {
 	}
 	log.Info("State download complete", "root", root)
 
+	// This flag is set so the downloader stops moving the pivot while
+	// GenerateTrie() runs. The flag stays set until the pivot block is
+	// committed.
+	s.generatingTrie.Store(true)
+
 	log.Info("Starting trie generation", "root", root)
 	if _, err := triedb.GenerateTrie(s.db, s.scheme, root, cancel); err != nil {
 		return err
@@ -554,6 +561,13 @@ func (s *syncerV2) Sync(pivot *types.Header, cancel chan struct{}) error {
 	s.complete = true
 	s.lock.Unlock()
 	return nil
+}
+
+// GeneratingTrie reports whether the flat state download has finished and
+// local trie generation is pending or running. The downloader keeps the
+// pivot frozen while this is set.
+func (s *syncerV2) GeneratingTrie() bool {
+	return s.generatingTrie.Load()
 }
 
 // download runs the bulk flat-state download. It fetches
@@ -1021,6 +1035,7 @@ func (s *syncerV2) resetSyncState() {
 	s.tasks = nil
 	s.previousPivot = nil
 	s.complete = false
+	s.generatingTrie.Store(false)
 	s.accountSynced, s.accountBytes = 0, 0
 	s.bytecodeSynced, s.bytecodeBytes = 0, 0
 	s.storageSynced, s.storageBytes = 0, 0
@@ -2028,7 +2043,7 @@ func (s *syncerV2) forwardAccountTask(task *accountTaskV2) {
 
 	// Persist the received account segments. These flat state maybe
 	// outdated during the sync, but it can be fixed later during the
-	// trie rebuild.
+	// trie generation.
 	oldAccountBytes := s.accountBytes
 
 	batch := ethdb.HookedBatch{

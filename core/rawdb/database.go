@@ -563,8 +563,6 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				}
 
 			// Metadata keys
-			case bytes.HasPrefix(key, generateTriePartitionDonePrefix) && len(key) == len(generateTriePartitionDonePrefix)+1:
-				metadata.add(size)
 			case slices.ContainsFunc(knownMetadataKeys, func(x []byte) bool { return bytes.Equal(x, key) }):
 				metadata.add(size)
 

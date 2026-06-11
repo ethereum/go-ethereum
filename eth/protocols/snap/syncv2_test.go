@@ -547,6 +547,53 @@ func testSyncV2(t *testing.T, scheme string) {
 	verifyAdoptedSyncedState(scheme, syncer.db, sourceAccountTrie.Hash(), elems, t)
 }
 
+// TestSyncV2GeneratingTrieFlag checks the pivot freeze signal around the sync
+// lifecycle. The flag must be unset while flat state is downloading, set once
+// the download completes, stay set after the sync returns so the pivot stays
+// frozen until the pivot block is committed, and clear on a state reset.
+func TestSyncV2GeneratingTrieFlag(t *testing.T) {
+	t.Parallel()
+	testSyncV2GeneratingTrieFlag(t, rawdb.HashScheme)
+	testSyncV2GeneratingTrieFlag(t, rawdb.PathScheme)
+}
+
+func testSyncV2GeneratingTrieFlag(t *testing.T, scheme string) {
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() { once.Do(func() { close(cancel) }) }
+	)
+	nodeScheme, sourceAccountTrie, elems := makeAccountTrieNoStorage(100, scheme)
+
+	source := newTestPeerV2("source", t, term)
+	source.accountTrie = sourceAccountTrie.Copy()
+	source.accountValues = elems
+
+	syncer := setupSyncerV2(nodeScheme, source)
+
+	// The handler runs while account ranges are still being served, so it
+	// can observe the flag mid download.
+	source.accountRequestV2Handler = func(p *testPeerV2, requestId uint64, root common.Hash, origin common.Hash, limit common.Hash, cap int) error {
+		if syncer.GeneratingTrie() {
+			t.Error("GeneratingTrie set during flat state download")
+		}
+		return defaultAccountRequestHandlerV2(p, requestId, root, origin, limit, cap)
+	}
+	if syncer.GeneratingTrie() {
+		t.Fatal("GeneratingTrie set before sync started")
+	}
+	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
+		t.Fatalf("sync failed: %v", err)
+	}
+	if !syncer.GeneratingTrie() {
+		t.Fatal("GeneratingTrie not set after download completed")
+	}
+	syncer.resetSyncState()
+	if syncer.GeneratingTrie() {
+		t.Fatal("GeneratingTrie still set after state reset")
+	}
+}
+
 // verifyAdoptedSyncedState exercises the snap/2 completion contract end-to-end:
 // after a real sync, opening a fresh triedb and calling AdoptSyncedState must
 // (a) succeed and (b) leave flat-state reads serving immediately, with no
@@ -1922,17 +1969,17 @@ func TestSyncSkipsIfAlreadyComplete(t *testing.T) {
 	}
 }
 
-// TestInterruptedRebuildRecovery verifies that if sync is interrupted after
-// download completes but before trie rebuild finishes, the next Sync() call
-// re-runs the download (which completes immediately) and rebuild.
-func TestInterruptedRebuildRecovery(t *testing.T) {
+// TestInterruptedGenerationRecovery verifies that if sync is interrupted after
+// download completes but before trie generation finishes, the next Sync() call
+// re-runs the download (which completes immediately) and generation.
+func TestInterruptedGenerationRecovery(t *testing.T) {
 	t.Parallel()
 
 	nodeScheme, sourceAccountTrie, elems := makeAccountTrieNoStorage(100, rawdb.HashScheme)
 	root := sourceAccountTrie.Hash()
 
 	// First run: complete download, save status, simulate interruption
-	// before rebuild by calling downloadState() directly
+	// before generation by calling downloadState() directly
 	var (
 		once1   sync.Once
 		cancel1 = make(chan struct{})
@@ -1960,11 +2007,11 @@ func TestInterruptedRebuildRecovery(t *testing.T) {
 	syncer1.cleanAccountTasks()
 	syncer1.saveSyncStatus()
 
-	// Status should exist (rebuild hasn't run yet)
+	// Status should exist (generation hasn't run yet)
 	if rawdb.ReadSnapshotSyncStatus(db) == nil {
 		t.Fatal("sync status should exist after download")
 	}
-	// Second run: full Sync should detect tasks are done, run rebuild
+	// Second run: full Sync should detect tasks are done, run generation
 	var (
 		once2   sync.Once
 		cancel2 = make(chan struct{})
@@ -1980,11 +2027,11 @@ func TestInterruptedRebuildRecovery(t *testing.T) {
 	if err := syncer2.Sync(mkPivot(0, root), cancel2); err != nil {
 		t.Fatalf("resumed sync failed: %v", err)
 	}
-	// After rebuild completes, status should be marked Complete=true.
+	// After generation completes, status should be marked Complete=true.
 	loader := newSyncerV2(db, nodeScheme)
 	loader.loadSyncStatus()
 	if !loader.complete {
-		t.Fatal("sync status should be marked Complete=true after rebuild completes")
+		t.Fatal("sync status should be marked Complete=true after generation completes")
 	}
 }
 
@@ -2462,7 +2509,7 @@ func TestCatchUpRetriesOnBadBAL(t *testing.T) {
 
 // makeStorageTrieFromSlots builds a storage trie for owner from raw slot
 // key->value pairs, using the exact on-disk encoding the flat snapshot and the
-// trie rebuild expect: each leaf is keyed by keccak256(slotKey) and its value is
+// trie generation expect: each leaf is keyed by keccak256(slotKey) and its value is
 // rlp(TrimLeftZeroes(value)). Zero-valued slots are skipped (an unset slot has
 // no leaf). It returns the storage root, the dirty node set, and the sorted
 // snapshot leaves (which a test peer serves verbatim).
@@ -2529,12 +2576,12 @@ func makeStateWithStorageContract(scheme string, plain []*kv, contractAddr commo
 // slot, an overwrite of an existing slot, a write of zero (deletion), and a
 // multi-tx write where the post-block value wins.
 //
-// It fully syncs pivot A (flat-state download + trie rebuild), then moves the
+// It fully syncs pivot A (flat-state download + trie generation), then moves the
 // pivot to A+1. The move triggers catchUp, which fetches the A+1 BAL, applies
-// the storage diffs to the flat state, and rebuilds the trie. The rebuild
+// the storage diffs to the flat state, and generates the trie. The generation
 // verifies the recomputed root against the pivot's expected post-catch-up root,
 // so a successful Sync proves the storage mutations were applied in the exact
-// encoding the trie rebuild consumes. verifyTrie re-walks the result as an
+// encoding the trie generation consumes. verifyTrie re-walks the result as an
 // independent confirmation.
 func TestCatchUpAppliesStorageBALs(t *testing.T) {
 	t.Parallel()
@@ -2620,7 +2667,7 @@ func testCatchUpAppliesStorageBALs(t *testing.T, scheme string) {
 	// Sync, so the follow-up Sync's reorg check sees A as still-canonical and
 	// runs catchUp instead of resetting. The A+1 header carries the BAL hash
 	// (verified during catch-up) and the expected post-catch-up state root
-	// (verified by the trie rebuild).
+	// (verified by the trie generation).
 	db := rawdb.NewMemoryDatabase()
 	numA := uint64(128)
 	emptyH := common.Hash{}
@@ -2644,7 +2691,7 @@ func testCatchUpAppliesStorageBALs(t *testing.T, scheme string) {
 	rawdb.WriteHeader(db, hdrB)
 	rawdb.WriteCanonicalHash(db, hdrB.Hash(), numA+1)
 
-	// Sync 1: full flat-state download + trie rebuild against pivot A.
+	// Sync 1: full flat-state download + trie generation against pivot A.
 	{
 		var (
 			once   sync.Once

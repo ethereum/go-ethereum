@@ -921,7 +921,9 @@ func (d *Downloader) processSnapSyncContent() error {
 	// the results in the meantime.
 	//
 	// Note, there's no issue with memory piling up since after 64 blocks the
-	// pivot will forcefully move so these accumulators will be dropped.
+	// pivot will forcefully move so these accumulators will be dropped. The
+	// exception is snap/2 trie generation, where the pivot is frozen on
+	// purpose and results accumulate until the generation finishes.
 	var (
 		oldPivot *fetchResult   // Locked in pivot block, might change eventually
 		oldTail  []*fetchResult // Downloaded content after the pivot
@@ -978,11 +980,15 @@ func (d *Downloader) processSnapSyncContent() error {
 			return err
 		}
 		if P != nil {
-			// If new pivot block found, cancel old state retrieval and restart
+			// If new pivot block found, cancel old state retrieval and restart.
+			// Skip the restart if the running sync already targets the pivot's
+			// root, snap/2 would otherwise redo GenerateTrie() from scratch.
 			if oldPivot != P {
-				sync.Cancel()
-				sync = d.syncState(P.Header)
-				go closeOnErr(sync)
+				if sync.pivot.Root != P.Header.Root {
+					sync.Cancel()
+					sync = d.syncState(P.Header)
+					go closeOnErr(sync)
+				}
 				oldPivot = P
 			}
 			// Wait for completion, occasionally checking for pivot staleness

@@ -60,6 +60,10 @@ type Syncer interface {
 
 	// Version is the snap protocol version this syncer implements.
 	Version() uint
+
+	// GeneratingTrie reports whether the flat state download has finished
+	// and the syncer is building the trie locally.
+	GeneratingTrie() bool
 }
 
 // NewV1Syncer returns a Syncer backed by the snap/1 state syncer.
@@ -121,6 +125,10 @@ func (syncerV1Adapter) OnAccessLists(SyncPeerV2, uint64, rlp.RawList[rlp.RawValu
 
 // Version is SNAP1
 func (syncerV1Adapter) Version() uint { return SNAP1 }
+
+// GeneratingTrie always returns false. The snap/1 syncer heals toward
+// moving pivots and never needs the pivot frozen.
+func (syncerV1Adapter) GeneratingTrie() bool { return false }
 
 // syncerV2Adapter adapts the snap/2 *syncerV2 to Syncer. Its peer-facing methods
 // already take SyncPeerV2 and its Sync already takes a header, so only Progress

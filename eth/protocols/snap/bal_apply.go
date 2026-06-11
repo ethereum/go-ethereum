@@ -93,7 +93,7 @@ func (s *syncerV2) isStorageFetched(accountHash, storageHash common.Hash) bool {
 // applyAccessList applies a single block's access list diffs to the flat state
 // in the database. For each account, it applies the post-block values (highest
 // TxIdx entry) for balance, nonce, code, and storage. The storageRoot field is
-// intentionally left stale. It will be recomputed during the trie rebuild.
+// intentionally left stale. It will be recomputed during the trie generation.
 func (s *syncerV2) applyAccessList(b *bal.BlockAccessList, batch ethdb.Batch) error {
 	// Iterate over all accounts in the access list
 	for _, access := range *b {
@@ -113,7 +113,7 @@ func (s *syncerV2) applyAccessList(b *bal.BlockAccessList, batch ethdb.Batch) er
 					rawdb.DeleteStorageSnapshot(batch, accountHash, storageHash)
 				} else {
 					// Store the slot in the same encoding the snapshot and the
-					// trie rebuild use: RLP of the minimal big-endian value
+					// trie generation use: RLP of the minimal big-endian value
 					// (leading zeros trimmed), matching core/state's snapshot
 					// writes.
 					blob, _ := rlp.EncodeToBytes(value.Bytes())
@@ -176,7 +176,7 @@ func (s *syncerV2) applyAccessList(b *bal.BlockAccessList, batch ethdb.Batch) er
 		case isEmpty && !isNew:
 			// Existing account got fully drained (e.g., pre-funded
 			// address that gets deployed to with init code that
-			// self-destructs). Delete the entry so the trie rebuild
+			// self-destructs). Delete the entry so the trie generation
 			// doesn't pick it up as an empty leaf.
 			rawdb.DeleteAccountSnapshot(batch, accountHash)
 		default:
