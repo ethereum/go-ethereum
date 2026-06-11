@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # A/B benchmark of the codegen interpreter vs a baseline: runs the evm-bench
-# contract workloads (core/vm/runtime/evm_bench_test.go) plus the synthetic
-# dispatch loops (BenchmarkSimpleLoop/loop*) on the current working tree and on
-# a baseline ref, then benchstats them.
+# contract workloads (core/vm/runtime/evm_bench_test.go) plus the block import
+# benchmark (core/bench_test.go, BenchmarkInsertChain_evmWorkload, a local
+# stand-in for sync throughput) on the current working tree and on a baseline
+# ref, then benchstats them.
 #
 # The baseline is checked out in a throwaway git worktree and this suite is
 # copied into it, so the comparison works whether or not the interpreter changes
@@ -22,26 +23,25 @@ COUNT="${2:-10}"
 # so one-time costs (map growth, pool warmup) amortize over a different N and
 # B/op picks up phantom deltas, and GC pacing can do the same to sec/op. Fixed
 # N makes both sides do identical work. The counts target roughly one second
-# per count on a fast box. Each entry is pattern:iterations, and SimpleLoop
-# needs the /^loop element to select only its loop variants (go test splits
-# -bench on / and benchmarks without sub-benchmarks cannot match a two-element
-# pattern, so the loops run as their own invocation anyway).
+# per count on a fast box. Each entry is package:pattern:iterations.
 BENCHES=(
-	'^BenchmarkSnailtracer$:20x'
-	'^BenchmarkTenThousandHashes$:100x'
-	'^BenchmarkERC20Transfer$:100x'
-	'^BenchmarkERC20Mint$:150x'
-	'^BenchmarkERC20ApprovalTransfer$:120x'
-	'^BenchmarkSimpleLoop$/^loop:7x'
+	'./core/vm/runtime/:^BenchmarkSnailtracer$:20x'
+	'./core/vm/runtime/:^BenchmarkTenThousandHashes$:100x'
+	'./core/vm/runtime/:^BenchmarkERC20Transfer$:100x'
+	'./core/vm/runtime/:^BenchmarkERC20Mint$:150x'
+	'./core/vm/runtime/:^BenchmarkERC20ApprovalTransfer$:120x'
+	'./core/:^BenchmarkInsertChain_evmWorkload_memdb$:10x'
+	'./core/:^BenchmarkInsertChain_evmWorkload_diskdb$:10x'
 )
 NEW="$(mktemp)"; OLD="$(mktemp)"
 
 run_suite() { # run_suite <dir> <outfile>
-	local dir="$1" out="$2" entry pat n
+	local dir="$1" out="$2" entry pkg pat n
 	for entry in "${BENCHES[@]}"; do
-		pat="${entry%:*}"
+		pkg="${entry%%:*}"
+		pat="${entry#*:}"; pat="${pat%:*}"
 		n="${entry##*:}"
-		( cd "$dir" && go test ./core/vm/runtime/ -run '^$' -bench "$pat" -benchmem -benchtime "$n" -count="$COUNT" ) | tee -a "$out"
+		( cd "$dir" && go test "$pkg" -run '^$' -bench "$pat" -benchmem -benchtime "$n" -count="$COUNT" ) | tee -a "$out"
 	done
 }
 
@@ -52,6 +52,7 @@ echo "==> baseline: $BASEREF (throwaway worktree, suite copied in)"
 WT="$(mktemp -d)"
 git worktree add --quiet --detach "$WT" "$BASEREF"
 cp core/vm/runtime/evm_bench_test.go "$WT/core/vm/runtime/"
+cp core/bench_test.go "$WT/core/bench_test.go"
 mkdir -p "$WT/core/vm/runtime/testdata"
 cp core/vm/runtime/testdata/*.hex "$WT/core/vm/runtime/testdata/"
 run_suite "$WT" "$OLD"
