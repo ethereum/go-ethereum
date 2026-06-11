@@ -32,7 +32,13 @@ core/vm/runtime/testdata/evm-bench/compare.sh HEAD~1 8   # vs another ref, count
 
 `compare.sh` benches the current working tree and a baseline ref (checked out in
 a throwaway worktree with this suite copied in, so it works whether or not the
-interpreter change is committed) and runs `benchstat`.
+interpreter change is committed) and runs `benchstat`. Besides the contract
+workloads it runs both `BenchmarkInsertChain_evmWorkload` variants from
+`core/bench_test.go`, which push blocks carrying these contracts through the
+full block import path (state in memory and on disk) and report Mgas/s, as a
+local stand-in for sync throughput. The synthetic dispatch loops (`BenchmarkSimpleLoop/loop*` in
+`core/vm/runtime/runtime_test.go`) are not part of the A/B suite, but can
+still be run manually to isolate dispatch overhead.
 
 ## Regenerating the bytecode
 
