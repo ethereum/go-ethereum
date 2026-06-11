@@ -2027,6 +2027,11 @@ func TestInterruptedGenerationRecovery(t *testing.T) {
 	if err := syncer2.Sync(mkPivot(0, root), cancel2); err != nil {
 		t.Fatalf("resumed sync failed: %v", err)
 	}
+	// The resumed run re-arms the pivot freeze once its no-op download
+	// completes, the downloader relies on it until the pivot block commits.
+	if !syncer2.GeneratingTrie() {
+		t.Fatal("GeneratingTrie not set after resumed sync")
+	}
 	// After generation completes, status should be marked Complete=true.
 	loader := newSyncerV2(db, nodeScheme)
 	loader.loadSyncStatus()
@@ -2712,7 +2717,7 @@ func testCatchUpAppliesStorageBALs(t *testing.T, scheme string) {
 		}
 		close(done)
 	}
-	// Sanity: the rebuilt trie for pivot A is complete and matches rootA. This
+	// Sanity: the generated trie for pivot A is complete and matches rootA. This
 	// also confirms the test fixture itself is internally consistent.
 	verifyTrie(scheme, db, rootA, t)
 
@@ -2736,6 +2741,11 @@ func testCatchUpAppliesStorageBALs(t *testing.T, scheme string) {
 		done := checkStall(t, term)
 		if err := syncer.Sync(hdrB, cancel); err != nil {
 			t.Fatalf("pivot A+1 catch-up sync failed: %v", err)
+		}
+		// The freeze flag must re-arm on a pivot-moved cycle too, the
+		// downloader relies on it from download completion until commit.
+		if !syncer.GeneratingTrie() {
+			t.Fatal("GeneratingTrie not set after catch-up sync")
 		}
 		close(done)
 	}
