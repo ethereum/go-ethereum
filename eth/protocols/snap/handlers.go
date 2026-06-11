@@ -189,7 +189,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 	for _, account := range req.Accounts {
 		// If we've exceeded the requested data limit, abort without opening
 		// a new storage range (that we'd need to prove due to exceeded size)
-		if size >= req.Bytes {
+		if size > req.Bytes {
 			break
 		}
 		// The first account might start from a different origin and end sooner
