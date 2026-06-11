@@ -18,7 +18,12 @@ package core
 
 import (
 	"crypto/ecdsa"
+	"encoding/binary"
+	"encoding/hex"
 	"math/big"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -67,6 +72,12 @@ func BenchmarkInsertChain_ring1000_memdb(b *testing.B) {
 }
 func BenchmarkInsertChain_ring1000_diskdb(b *testing.B) {
 	benchInsertChain(b, true, genTxRing(1000))
+}
+func BenchmarkInsertChain_evmWorkload_memdb(b *testing.B) {
+	benchInsertChainEVM(b, false)
+}
+func BenchmarkInsertChain_evmWorkload_diskdb(b *testing.B) {
+	benchInsertChainEVM(b, true)
 }
 
 var (
@@ -206,6 +217,110 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	if i, err := chainman.InsertChain(chain); err != nil {
 		b.Fatalf("insert error (block %d): %v\n", i, err)
 	}
+}
+
+// The evmWorkload addresses hold the evm-bench contracts (see
+// core/vm/runtime/testdata), installed through the genesis alloc. Their
+// runtime bytecode sets up all state inside Benchmark(), so no constructor
+// runs.
+var benchWorkloadAddrs = []common.Address{
+	common.HexToAddress("0x00000000000000000000000000000000000e0001"), // ERC20Transfer
+	common.HexToAddress("0x00000000000000000000000000000000000e0002"), // ERC20Mint
+	common.HexToAddress("0x00000000000000000000000000000000000e0003"), // ERC20ApprovalTransfer
+	common.HexToAddress("0x00000000000000000000000000000000000e0004"), // TenThousandHashes
+}
+
+func benchWorkloadCode(tb testing.TB) [][]byte {
+	files := []string{"erc20transfer.hex", "erc20mint.hex", "erc20approval.hex", "tenthousandhashes.hex"}
+	codes := make([][]byte, len(files))
+	for i, name := range files {
+		raw, err := os.ReadFile(filepath.Join("vm", "runtime", "testdata", name))
+		if err != nil {
+			tb.Fatal(err)
+		}
+		code, err := hex.DecodeString(strings.TrimSpace(string(raw)))
+		if err != nil {
+			tb.Fatal(err)
+		}
+		codes[i] = code
+	}
+	return codes
+}
+
+// benchInsertChainEVM measures InsertChain over blocks dominated by real
+// contract execution, as a coarse local surrogate for sync throughput: the
+// timed path is full block processing, including sender recovery, EVM
+// execution, state updates, receipts, bloom filters and the state root.
+// Every block invokes the four evm-bench workloads (ERC-20 transfer, mint
+// and approval loops plus a keccak loop) and sends ten value transfers to
+// fresh accounts so the state grows as it would during sync. Reports Mgas/s
+// alongside the standard timings.
+func benchInsertChainEVM(b *testing.B, disk bool) {
+	var db ethdb.Database
+	if !disk {
+		db = rawdb.NewMemoryDatabase()
+	} else {
+		pdb, err := pebble.New(b.TempDir(), 128, 128, "", false)
+		if err != nil {
+			b.Fatalf("cannot create temporary database: %v", err)
+		}
+		db = rawdb.NewDatabase(pdb)
+		defer db.Close()
+	}
+	alloc := types.GenesisAlloc{benchRootAddr: {Balance: benchRootFunds}}
+	for i, code := range benchWorkloadCode(b) {
+		alloc[benchWorkloadAddrs[i]] = types.Account{Code: code, Balance: new(big.Int)}
+	}
+	gspec := &Genesis{
+		Config:   params.TestChainConfig,
+		Alloc:    alloc,
+		GasLimit: 150_000_000,
+	}
+	selector := []byte{0x30, 0x62, 0x7b, 0x7c} // Benchmark()
+	_, chain, _ := GenerateChainWithGenesis(gspec, ethash.NewFaker(), b.N, func(i int, gen *BlockGen) {
+		signer := gen.Signer()
+		gasPrice := big.NewInt(0)
+		if gen.header.BaseFee != nil {
+			gasPrice = gen.header.BaseFee
+		}
+		for _, addr := range benchWorkloadAddrs {
+			to := addr
+			tx, _ := types.SignNewTx(benchRootKey, signer, &types.LegacyTx{
+				Nonce:    gen.TxNonce(benchRootAddr),
+				To:       &to,
+				Gas:      30_000_000,
+				Data:     selector,
+				GasPrice: gasPrice,
+			})
+			gen.AddTx(tx)
+		}
+		for j := 0; j < 10; j++ {
+			var to common.Address
+			binary.BigEndian.PutUint64(to[4:12], uint64(i+1))
+			binary.BigEndian.PutUint64(to[12:20], uint64(j+1))
+			tx, _ := types.SignNewTx(benchRootKey, signer, &types.LegacyTx{
+				Nonce:    gen.TxNonce(benchRootAddr),
+				To:       &to,
+				Value:    big.NewInt(1),
+				Gas:      params.TxGas,
+				GasPrice: gasPrice,
+			})
+			gen.AddTx(tx)
+		}
+	})
+	var totalGas uint64
+	for _, block := range chain {
+		totalGas += block.GasUsed()
+	}
+	chainman, _ := NewBlockChain(db, gspec, ethash.NewFaker(), nil)
+	defer chainman.Stop()
+	b.ReportAllocs()
+	b.ResetTimer()
+	if i, err := chainman.InsertChain(chain); err != nil {
+		b.Fatalf("insert error (block %d): %v\n", i, err)
+	}
+	b.StopTimer()
+	b.ReportMetric(float64(totalGas)/1e6/b.Elapsed().Seconds(), "Mgas/s")
 }
 
 func BenchmarkChainRead_header_10k(b *testing.B) {
