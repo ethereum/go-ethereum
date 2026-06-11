@@ -339,10 +339,9 @@ func (payload *Payload) updateSpanForDelivery(bSpan trace.Span) {
 	)
 }
 
-// buildTestingBlock runs generateWork with the override flags used by the testing_
-// namespace, producing a block whose contents are dictated by the caller rather than
-// drawn from the local txpool.
-func (miner *Miner) buildTestingBlock(args *BuildPayloadArgs, transactions []*types.Transaction, empty bool, extraData []byte) (*newPayloadResult, error) {
+// BuildTestingPayload is for testing_buildBlockV*. It creates a block with the exact content given
+// by the parameters instead of using the locally available transactions.
+func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*types.Transaction, empty bool, extraData []byte) (*types.Block, *engine.ExecutionPayloadEnvelope, error) {
 	fullParams := &generateParams{
 		timestamp:         args.Timestamp,
 		forceTime:         true,
@@ -359,28 +358,7 @@ func (miner *Miner) buildTestingBlock(args *BuildPayloadArgs, transactions []*ty
 	}
 	res := miner.generateWork(context.Background(), fullParams, false)
 	if res.err != nil {
-		return nil, res.err
+		return nil, nil, res.err
 	}
-	return res, nil
-}
-
-// BuildTestingPayload is for testing_buildBlockV*. It creates a block with the exact content given
-// by the parameters instead of using the locally available transactions.
-func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*types.Transaction, empty bool, extraData []byte) (*engine.ExecutionPayloadEnvelope, error) {
-	res, err := miner.buildTestingBlock(args, transactions, empty, extraData)
-	if err != nil {
-		return nil, err
-	}
-	return engine.BlockToExecutableData(res.block, res.fees, res.sidecars, res.requests), nil
-}
-
-// CommitTestingBlock is for testing_commitBlockV*. Like BuildTestingPayload it generates
-// a block from the caller-supplied parameters, but returns the raw block so the caller
-// can insert and canonicalize it without an ExecutableData round-trip.
-func (miner *Miner) CommitTestingBlock(args *BuildPayloadArgs, transactions []*types.Transaction, empty bool, extraData []byte) (*types.Block, error) {
-	res, err := miner.buildTestingBlock(args, transactions, empty, extraData)
-	if err != nil {
-		return nil, err
-	}
-	return res.block, nil
+	return res.block, engine.BlockToExecutableData(res.block, res.fees, res.sidecars, res.requests), nil
 }
