@@ -97,16 +97,6 @@ func TestTxArgs(t *testing.T) {
 			t.Errorf("test %d: have %v, want %v", i, have, want)
 		}
 	}
-	/*
-		End to end testing:
-
-			$ go run ./cmd/clef --advanced --suppress-bootwarn
-
-			$ go run ./cmd/geth --nodiscover --maxpeers 0 --signer /home/user/.clef/clef.ipc console
-
-				> tx={"from":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","to":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","gas":"0x124f8","maxFeePerGas":"0x6fc23ac00","maxPriorityFeePerGas":"0x3b9aca00","value":"0x0","nonce":"0x0","input":"0x","accessList":[],"maxFeePerBlobGas":"0x3b9aca00","blobVersionedHashes":["0x010657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c444014"]}
-				> eth.signTransaction(tx)
-	*/
 }
 
 func TestBlobTxs(t *testing.T) {
@@ -226,7 +216,7 @@ func TestType_TypeName(t *testing.T) {
 		},
 	} {
 		if tc.Input.typeName() != tc.Expected {
-			t.Errorf("test %d: expected typeName value of '%v' but got '%v'", i, tc.Expected, tc.Input)
+			t.Errorf("test %d: expected typeName value of '%v' but got '%v'", i, tc.Expected, tc.Input.typeName())
 		}
 	}
 }

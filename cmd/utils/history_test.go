@@ -53,7 +53,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 		from     func(f era.ReadAtSeekCloser) (era.Era, error)
 	}{
 		{"era1", onedb.NewBuilder, onedb.Filename, onedb.From},
-		{"erae", execdb.NewBuilder, execdb.Filename, execdb.From},
+		{"ere", execdb.NewBuilder, execdb.Filename, execdb.From},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var (
@@ -106,10 +106,14 @@ func TestHistoryImportAndExport(t *testing.T) {
 			}
 
 			// Read checksums.
-			b, err := os.ReadFile(filepath.Join(dir, "checksums.txt"))
+			checksumsFile := filepath.Join(dir, "checksums.txt")
+			b, err := os.ReadFile(checksumsFile)
 			if err != nil {
 				t.Fatalf("failed to read checksums: %v", err)
 			}
+
+			// Add a trailing newline to ensure checksum handling is defensive.
+			_ = os.WriteFile(checksumsFile, append(b, '\n'), 0644)
 			checksums := strings.Split(string(b), "\n")
 
 			// Verify each Era.

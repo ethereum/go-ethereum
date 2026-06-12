@@ -54,6 +54,9 @@ const (
 	// containing 200+ transactions nowadays, the practical limit will always
 	// be softResponseLimit.
 	maxReceiptsServe = 1024
+
+	// maxBALsServe is the maximum number of block access lists to serve.
+	maxBALsServe = 1024
 )
 
 // Handler is a callback to invoke from an outside runner after the boilerplate
@@ -213,6 +216,22 @@ var eth70 = map[uint64]msgHandler{
 	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
 }
 
+var eth71 = map[uint64]msgHandler{
+	TransactionsMsg:               handleTransactions,
+	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
+	GetBlockHeadersMsg:            handleGetBlockHeaders,
+	BlockHeadersMsg:               handleBlockHeaders,
+	GetBlockBodiesMsg:             handleGetBlockBodies,
+	BlockBodiesMsg:                handleBlockBodies,
+	GetReceiptsMsg:                handleGetReceipts70,
+	ReceiptsMsg:                   handleReceipts70,
+	GetPooledTransactionsMsg:      handleGetPooledTransactions,
+	PooledTransactionsMsg:         handlePooledTransactions,
+	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
+	GetBlockAccessListsMsg:        handleGetBlockAccessLists,
+	BlockAccessListsMsg:           handleBlockAccessLists,
+}
+
 var eth72 = map[uint64]msgHandler{
 	TransactionsMsg:               handleTransactions,
 	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes71,
@@ -225,6 +244,8 @@ var eth72 = map[uint64]msgHandler{
 	GetPooledTransactionsMsg:      handleGetPooledTransactions,
 	PooledTransactionsMsg:         handlePooledTransactions,
 	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
+	GetBlockAccessListsMsg:        handleGetBlockAccessLists,
+	BlockAccessListsMsg:           handleBlockAccessLists,
 	GetCellsMsg:                   handleGetCells,
 	CellsMsg:                      handleCells,
 }
@@ -248,6 +269,8 @@ func handleMessage(backend Backend, peer *Peer) error {
 		handlers = eth69
 	case ETH70:
 		handlers = eth70
+	case ETH71:
+		handlers = eth71
 	case ETH72:
 		handlers = eth72
 	default:

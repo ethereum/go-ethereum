@@ -75,7 +75,7 @@ var (
 
 	// Files that end up in the geth-alltools*.zip archive (and the NSIS installer
 	// dev-tools section). Order matches the historical layout produced by ci.go.
-	allToolsBinaries = []string{"abigen", "evm", "geth", "rlpdump", "clef"}
+	allToolsBinaries = []string{"abigen", "evm", "geth", "rlpdump"}
 
 	// Keeper build targets with their configurations
 	keeperTargets = []struct {
@@ -134,10 +134,6 @@ var (
 		{
 			BinaryName:  "rlpdump",
 			Description: "Developer utility tool that prints RLP structures.",
-		},
-		{
-			BinaryName:  "clef",
-			Description: "Ethereum account management tool.",
 		},
 	}
 

@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -709,6 +710,67 @@ func testGetBlockPartialReceipts(t *testing.T, protocol int) {
 		List:                rawPartialReceipt,
 	}); err != nil {
 		t.Errorf("receipts mismatch: %v", err)
+	}
+}
+
+// makeTestBAL creates a BAL with a given address access and balance change,
+// and returns its RLP encoding. This is used for injection into the chain DB via
+// rawdb.WriteAccessListRLP.
+// TODO: Should be deleted when bal is integrated with chain maker.
+func makeTestBAL(t *testing.T, addr common.Address) rlp.RawValue {
+	cb := bal.NewConstructionBlockAccessList()
+	cb.AccountRead(addr)
+	cb.BalanceChange(0, addr, uint256.NewInt(1))
+	var buf bytes.Buffer
+	if err := cb.EncodeRLP(&buf); err != nil {
+		t.Fatalf("failed to encode BAL: %v", err)
+	}
+	return buf.Bytes()
+}
+
+// TestGetBlockAccessLists checks serving part of bal exchange
+func TestGetBlockAccessLists(t *testing.T) { testGetBlockAccessLists(t, ETH71) }
+
+func testGetBlockAccessLists(t *testing.T, protocol uint) {
+	t.Parallel()
+
+	backend := newTestBackend(5)
+	defer backend.close()
+
+	peer, _ := newTestPeer("peer", protocol, backend)
+	defer peer.close()
+
+	bal1 := makeTestBAL(t, common.Address{0x11})
+	bal2 := makeTestBAL(t, common.Address{0x22})
+
+	var (
+		hashes []common.Hash
+		expect rlp.RawList[RawBlockAccessList]
+	)
+	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
+		block := backend.chain.GetBlockByNumber(i)
+		hashes = append(hashes, block.Hash())
+		switch i {
+		case 1:
+			rawdb.WriteAccessListRLP(backend.db, block.Hash(), i, bal1)
+			expect.AppendRaw(bal1)
+		case 3:
+			rawdb.WriteAccessListRLP(backend.db, block.Hash(), i, bal2)
+			expect.AppendRaw(bal2)
+		default:
+			expect.AppendRaw(rlp.EmptyString)
+		}
+	}
+
+	p2p.Send(peer.app, GetBlockAccessListsMsg, &GetBlockAccessListsPacket{
+		RequestId:                  123,
+		GetBlockAccessListsRequest: hashes,
+	})
+	if err := p2p.ExpectMsg(peer.app, BlockAccessListsMsg, &BlockAccessListPacket{
+		RequestId: 123,
+		List:      expect,
+	}); err != nil {
+		t.Errorf("BAL response mismatch: %v", err)
 	}
 }
 

@@ -160,7 +160,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 		if err != nil {
 			return err
 		}
-		res, err := blockchain.processor.Process(context.Background(), block, statedb, vm.Config{})
+		res, err := blockchain.processor.Process(context.Background(), block, statedb, nil, vm.Config{})
 		if err != nil {
 			blockchain.reportBadBlock(block, res, err)
 			return err
@@ -4386,7 +4386,7 @@ func testInsertChainWithCutoff(t *testing.T, cutoff uint64, ancientLimit uint64,
 		if header.Hash() != hash {
 			t.Errorf("block #%d: header mismatch: want: %v, got: %v", num, hash, header.Hash())
 		}
-		tail, err := db.Tail()
+		tail, err := db.Tail(rawdb.ChainFreezerBlockDataGroup)
 		if err != nil {
 			t.Fatalf("Failed to get chain tail, %v", err)
 		}
@@ -4412,9 +4412,9 @@ func testInsertChainWithCutoff(t *testing.T, cutoff uint64, ancientLimit uint64,
 			if receipts == nil || len(receipts) != 1 {
 				t.Fatalf("Missed block receipts: %d, cutoff: %d", num, cutoffBlock.NumberU64())
 			}
-			for indx, receipt := range receipts {
-				receiptByLookup, err := chain.GetCanonicalReceipt(body.Transactions[indx], receipt.BlockHash,
-					receipt.BlockNumber.Uint64(), uint64(indx))
+			for index, receipt := range receipts {
+				receiptByLookup, err := chain.GetCanonicalReceipt(body.Transactions[index], receipt.BlockHash,
+					receipt.BlockNumber.Uint64(), uint64(index))
 				assert.NoError(t, err)
 				assert.Equal(t, receipt, receiptByLookup)
 			}

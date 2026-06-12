@@ -19,6 +19,8 @@ package graphql
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"sync"
@@ -35,18 +37,31 @@ import (
 // maxQueryDepth limits the maximum field nesting depth allowed in GraphQL queries.
 const maxQueryDepth = 20
 
+// maxRequestBodySize limits the size of incoming GraphQL request bodies.
+const maxRequestBodySize = 5 * 1024 * 1024
+
 type handler struct {
 	Schema *graphql.Schema
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
+
 	var params struct {
 		Query         string                 `json:"query"`
 		OperationName string                 `json:"operationName"`
 		Variables     map[string]interface{} `json:"variables"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&params); err != nil {
+		writeRequestError(w, err)
+		return
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			err = errors.New("unexpected content after JSON value")
+		}
+		writeRequestError(w, err)
 		return
 	}
 
@@ -108,6 +123,15 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func writeRequestError(w http.ResponseWriter, err error) {
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+		return
+	}
+	http.Error(w, err.Error(), http.StatusBadRequest)
+}
+
 // New constructs a new GraphQL service instance.
 func New(stack *node.Node, backend ethapi.Backend, filterSystem *filters.FilterSystem, cors, vhosts []string) error {
 	_, err := newHandler(stack, backend, filterSystem, cors, vhosts)
@@ -124,7 +148,7 @@ func newHandler(stack *node.Node, backend ethapi.Backend, filterSystem *filters.
 		return nil, err
 	}
 	h := handler{Schema: s}
-	handler := node.NewHTTPHandlerStack(h, cors, vhosts, nil)
+	handler := node.NewHTTPHandlerStack(h, cors, vhosts, nil, false)
 
 	stack.RegisterHandler("GraphQL UI", "/graphql/ui", GraphiQL{})
 	stack.RegisterHandler("GraphQL UI", "/graphql/ui/", GraphiQL{})

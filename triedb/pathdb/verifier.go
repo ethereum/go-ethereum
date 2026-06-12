@@ -52,12 +52,12 @@ func (db *Database) VerifyState(root common.Hash) error {
 		}
 		defer storageIt.Release()
 
-		hash, err := internal.GenerateTrieRoot(nil, "", storageIt, accountHash, stackTrieHasher, nil, stat, false)
+		hash, err := internal.GenerateTrieRoot(nil, "", storageIt, accountHash, stackTrieHasher, nil, stat, false, nil)
 		if err != nil {
 			return common.Hash{}, err
 		}
 		return hash, nil
-	}, internal.NewGenerateStats(), true)
+	}, internal.NewGenerateStats(), true, nil)
 
 	if err != nil {
 		return err

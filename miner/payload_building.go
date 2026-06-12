@@ -217,7 +217,7 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 
 func (miner *Miner) runBuildIteration(ctx context.Context, start time.Time, iteration int, payload *Payload, params *generateParams, witness bool) {
 	ctx, span, spanEnd := telemetry.StartSpan(ctx, "miner.buildIteration",
-		telemetry.Int64Attribute("iteration", int64(iteration)),
+		telemetry.IntAttribute("iteration", iteration),
 	)
 	var err error
 	defer spanEnd(&err)
@@ -271,7 +271,7 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 			telemetry.Int64Attribute("block.number", int64(empty.block.NumberU64())),
 		)
 		defer func() {
-			bSpan.SetAttributes(telemetry.Int64Attribute("iterations.total", int64(iteration)))
+			bSpan.SetAttributes(telemetry.IntAttribute("iterations.total", iteration))
 			bSpanEnd(nil)
 		}()
 

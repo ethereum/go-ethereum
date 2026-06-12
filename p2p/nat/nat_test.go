@@ -73,6 +73,7 @@ func TestParseStun(t *testing.T) {
 	}{
 		{"stun", &stun{serverList: strings.Split(stunDefaultServers, "\n")}},
 		{"stun:1.2.3.4:1234", &stun{serverList: []string{"1.2.3.4:1234"}}},
+		{"stun:[2001:db8::1]:3478", &stun{serverList: []string{"[2001:db8::1]:3478"}}},
 	}
 
 	for _, tc := range testcases {

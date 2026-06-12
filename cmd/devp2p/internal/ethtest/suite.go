@@ -109,6 +109,16 @@ func (s *Suite) SnapTests() []utesting.Test {
 	}
 }
 
+// Snap2Tests returns the list of tests for the snap/2 protocol (EIP-8189).
+// These tests require the peer to advertise and negotiate snap/2.
+func (s *Suite) Snap2Tests() []utesting.Test {
+	return []utesting.Test{
+		{Name: "Status", Fn: s.TestSnap2Status},
+		{Name: "GetBlockAccessLists", Fn: s.TestSnap2GetBlockAccessLists},
+		{Name: "TrieNodesRemoved", Fn: s.TestSnap2TrieNodesRemoved},
+	}
+}
+
 func (s *Suite) TestStatus(t *utesting.T) {
 	t.Log(`This test is just a sanity check. It performs an eth protocol handshake.`)
 	conn, err := s.dialAndPeer(nil)
@@ -341,7 +351,7 @@ func (s *Suite) checkHeadersAgainstChain(req *eth.GetBlockHeadersPacket, resp *e
 }
 
 // collectResponses waits for n messages of type T on the given connection.
-// The messsages are collected according to the 'identity' function.
+// The messages are collected according to the 'identity' function.
 //
 // This function is written in a generic way to handle
 func collectHeaderResponses(conn *Conn, n int, identity func(*eth.BlockHeadersPacket) uint64) (map[uint64]*eth.BlockHeadersPacket, error) {
@@ -538,7 +548,7 @@ func (s *Suite) TestGetLargeReceipts(t *utesting.T) {
 			t.Fatalf("error reading block receipts msg: %v", err)
 		}
 		if got, want := resp.RequestId, req.RequestId; got != want {
-			t.Fatalf("unexpected request id in respond, want: %d, got: %d", got, want)
+			t.Fatalf("unexpected request id in respond, want: %d, got: %d", want, got)
 		}
 
 		receiptLists, _ := resp.List.Items()
@@ -668,7 +678,7 @@ func (s *Suite) TestBlockRangeUpdateInvalid(t *utesting.T) {
 
 func (s *Suite) TestBlockRangeUpdateFuture(t *utesting.T) {
 	t.Log(`This test sends a BlockRangeUpdate that is beyond the chain head.
-The node should accept the update and should not disonnect.`)
+The node should accept the update and should not disconnect.`)
 	conn, err := s.dialAndPeer(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -704,7 +714,7 @@ The node should accept the update and should not disonnect.`)
 
 func (s *Suite) TestBlockRangeUpdateHistoryExp(t *utesting.T) {
 	t.Log(`This test sends a BlockRangeUpdate announcing incomplete (expired) history.
-The node should accept the update and should not disonnect.`)
+The node should accept the update and should not disconnect.`)
 	conn, err := s.dialAndPeer(nil)
 	if err != nil {
 		t.Fatal(err)

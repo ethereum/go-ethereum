@@ -22,7 +22,7 @@ import (
 )
 
 type txMetadata struct {
-	id              uint64 // the billy id of transction
+	id              uint64 // the billy id of transaction
 	size            uint64 // the RLP encoded size of transaction (blobs are included)
 	sizeWithoutBlob uint64 // the RLP encoded size without blob data (for ETH/72 announcements)
 	custody         types.CustodyBitmap

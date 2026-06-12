@@ -614,9 +614,18 @@ func HasAccessList(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	return has
 }
 
-// ReadAccessListRLP retrieves the RLP-encoded block access list for a block from KV.
+// ReadAccessListRLP retrieves the RLP-encoded block access list for a block.
 func ReadAccessListRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
-	data, _ := db.Get(accessListKey(number, hash))
+	var data []byte
+	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+		data, _ = reader.Ancient(ChainFreezerBALTable, number)
+		if len(data) > 0 {
+			return nil
+		}
+		// Block is not in ancients, read from key-value store by hash and number.
+		data, _ = db.Get(accessListKey(number, hash))
+		return nil
+	})
 	return data
 }
 
@@ -759,6 +768,13 @@ func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *type
 	if err := op.Append(ChainFreezerReceiptTable, num, receipts); err != nil {
 		return fmt.Errorf("can't append block %d receipts: %v", num, err)
 	}
+	// The assumption is held that BAL of ancient block is no longer available
+	// (it may still reachable, but it's not worthwhile to even retrieve it
+	// from the network). A nil entry is stored in the BAL table as the absence
+	// placeholder.
+	if err := op.AppendRaw(ChainFreezerBALTable, num, nil); err != nil {
+		return fmt.Errorf("can't append block %d bals: %v", num, err)
+	}
 	return nil
 }
 
@@ -781,6 +797,13 @@ func WriteAncientHeaderChain(db ethdb.AncientWriter, headers []*types.Header) (i
 			if err := op.AppendRaw(ChainFreezerReceiptTable, num, nil); err != nil {
 				return fmt.Errorf("can't append block %d receipts: %v", num, err)
 			}
+			// The assumption is held that BAL of ancient block is no longer available
+			// (it may still reachable, but it's not worthwhile to even retrieve it
+			// from the network). A nil entry is stored in the BAL table as the absence
+			// placeholder.
+			if err := op.AppendRaw(ChainFreezerBALTable, num, nil); err != nil {
+				return fmt.Errorf("can't append block %d bals: %v", num, err)
+			}
 		}
 		return nil
 	})
@@ -791,6 +814,7 @@ func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
 	DeleteHeader(db, hash, number)
 	DeleteBody(db, hash, number)
+	DeleteAccessList(db, hash, number)
 }
 
 // DeleteBlockWithoutNumber removes all block data associated with a hash, except
@@ -799,6 +823,7 @@ func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number 
 	DeleteReceipts(db, hash, number)
 	deleteHeaderWithoutNumber(db, hash, number)
 	DeleteBody(db, hash, number)
+	DeleteAccessList(db, hash, number)
 }
 
 const badBlockToKeep = 10

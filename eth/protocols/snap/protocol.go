@@ -28,20 +28,22 @@ import (
 // Constants to match up protocol versions and messages
 const (
 	SNAP1 = 1
-	//SNAP2 = 2
+	SNAP2 = 2
 )
 
 // ProtocolName is the official short name of the `snap` protocol used during
 // devp2p capability negotiation.
 const ProtocolName = "snap"
 
-// ProtocolVersions are the supported versions of the `snap` protocol (first
-// is primary).
+// ProtocolVersions are the supported versions of the `snap` protocol advertised
+// by default (first is primary). snap/2 is not safe to advertise unconditionally
+// yet, so it is gated behind a feature flag and appended in MakeProtocols rather
+// than listed here.
 var ProtocolVersions = []uint{SNAP1}
 
-// protocolLengths are the number of implemented message corresponding to
-// different protocol versions.
-var protocolLengths = map[uint]uint64{ /*SNAP2: 10,*/ SNAP1: 8}
+// protocolLengths are the number of implemented messages corresponding to
+// different protocol versions. snap/2 adds GetAccessLists/AccessLists (0x08/0x09).
+var protocolLengths = map[uint]uint64{SNAP2: 10, SNAP1: 8}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024

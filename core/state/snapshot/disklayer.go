@@ -38,9 +38,17 @@ type diskLayer struct {
 	root  common.Hash // Root hash of the base snapshot
 	stale bool        // Signals that the layer became stale (state progressed)
 
-	genMarker  []byte                    // Marker for the state that's indexed during initial layer generation
-	genPending chan struct{}             // Notification channel when generation is done (test synchronicity)
-	genAbort   chan chan *generatorStats // Notification channel to abort generating the snapshot in this layer
+	genMarker  []byte        // Marker for the state that's indexed during initial layer generation
+	genPending chan struct{} // Notification channel when generation is done (test synchronicity)
+
+	// Generator lifecycle management:
+	// - [cancel] is closed to request termination (broadcast).
+	// - [done] is closed by the generator goroutine on exit.
+	cancel     chan struct{}
+	done       chan struct{}
+	cancelOnce sync.Once
+
+	genStats *generatorStats // Stats for snapshot generation (generation aborted/finished if non-nil)
 
 	lock sync.RWMutex
 }
@@ -49,6 +57,10 @@ type diskLayer struct {
 // Reset() in order to not leak memory.
 // OBS: It does not invoke Close on the diskdb
 func (dl *diskLayer) Release() error {
+	// Stop any ongoing snapshot generation to prevent it from accessing
+	// the database after it's closed during shutdown
+	dl.stopGeneration()
+
 	if dl.cache != nil {
 		dl.cache.Reset()
 	}
@@ -184,17 +196,27 @@ func (dl *diskLayer) Update(blockHash common.Hash, accounts map[common.Hash][]by
 	return newDiffLayer(dl, blockHash, accounts, storage)
 }
 
-// stopGeneration aborts the state snapshot generation if it is currently running.
+// stopGeneration requests cancellation of any running snapshot generation and
+// blocks until the generator goroutine (if running) has fully terminated.
+//
+// Concurrency guarantees:
+//   - Thread-safe: May be called concurrently from multiple goroutines
+//   - Idempotent: Safe to call multiple times; subsequent calls have no effect
+//   - Blocking: Returns only after the generator goroutine (if any) has exited
+//   - Safe to call at any time, including when no generation is running
+//
+// After return, it is **guaranteed** that:
+//   - The generator goroutine has terminated
+//   - It is safe to proceed with cleanup operations (e.g. closing databases)
 func (dl *diskLayer) stopGeneration() {
-	dl.lock.RLock()
-	generating := dl.genMarker != nil
-	dl.lock.RUnlock()
-	if !generating {
+	cancel := dl.cancel
+	done := dl.done
+	if cancel == nil || done == nil {
 		return
 	}
-	if dl.genAbort != nil {
-		abort := make(chan *generatorStats)
-		dl.genAbort <- abort
-		<-abort
-	}
+
+	dl.cancelOnce.Do(func() {
+		close(cancel)
+	})
+	<-done
 }

@@ -184,6 +184,11 @@ type Config struct {
 	// Enables tracking of state size
 	EnableStateSizeTracking bool
 
+	// SnapV2 enables the experimental snap/2 (EIP-8189, BAL-based) sync protocol:
+	// the node advertises snap/2 on the wire and uses the snap/2 state syncer.
+	// It is not safe to enable on public networks yet.
+	SnapV2 bool
+
 	// Enables VM tracing
 	VMTrace           string
 	VMTraceJsonConfig string

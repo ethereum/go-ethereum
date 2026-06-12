@@ -104,6 +104,10 @@ var (
 	// snapSyncStatusFlagKey flags that status of snap sync.
 	snapSyncStatusFlagKey = []byte("SnapSyncStatus")
 
+	// generateTriePartitionDonePrefix stores the subtree root hash of each
+	// triedb.GenerateTrie partition once it finishes.
+	generateTriePartitionDonePrefix = []byte("gtd") // generateTriePartitionDonePrefix + partition byte -> subtree root hash
+
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
 	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
 	headerTDSuffix     = []byte("t") // headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td (deprecated)
@@ -464,4 +468,9 @@ func trienodeHistoryIndexBlockKey(addressHash common.Hash, path []byte, blockID 
 // transitionStateKey = transitionStatusKey + hash
 func transitionStateKey(hash common.Hash) []byte {
 	return append(VerkleTransitionStatePrefix, hash.Bytes()...)
+}
+
+// generateTriePartitionDoneKey = generateTriePartitionDonePrefix + partition (single byte).
+func generateTriePartitionDoneKey(partition byte) []byte {
+	return append(generateTriePartitionDonePrefix, partition)
 }
