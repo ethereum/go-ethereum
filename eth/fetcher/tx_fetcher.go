@@ -379,6 +379,8 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 			poolTxs = batch
 		}
 		batch = append(poolTxs, blobTxs...)
+
+		// Add regular tx to pool, blob tx to buffer.
 		errs := append(f.addTxs(poolTxs), f.buffer.AddTx(blobTxs, peer)...)
 
 		hashes := make([]common.Hash, len(batch))
