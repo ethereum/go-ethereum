@@ -286,10 +286,9 @@ func (tab *Table) refresh() <-chan struct{} {
 // findnodeByID returns the n nodes in the table that are closest to the given id.
 // This is used by the FINDNODE/v4 handler.
 //
-// The preferLive parameter says whether the caller wants liveness-checked results. If
-// preferLive is true and the table contains any verified nodes, the result will not
-// contain unverified nodes. However, if there are no verified nodes at all, the result
-// will contain unverified nodes.
+// The preferLive parameter says whether the caller wants liveness-checked results. When
+// preferLive is true, only validated-live entries are returned and unverified nodes are
+// never mixed in; the result may be shorter than nresults or empty.
 func (tab *Table) findnodeByID(target enode.ID, nresults int, preferLive bool) *nodesByDistance {
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
@@ -308,7 +307,7 @@ func (tab *Table) findnodeByID(target enode.ID, nresults int, preferLive bool) *
 		}
 	}
 
-	if preferLive && len(liveNodes.entries) > 0 {
+	if preferLive {
 		return liveNodes
 	}
 	return nodes
