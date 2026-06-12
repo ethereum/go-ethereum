@@ -325,10 +325,9 @@ func TestAccessListApplicationSkipsUnfetched(t *testing.T) {
 	// is below Next so isFetched returns true; the unfetched hash equals Next
 	// so isFetched returns false.
 	syncer.tasks = []*accountTaskV2{{
-		Next:           unfetchedHash,
-		Last:           common.MaxHash,
-		SubTasks:       make(map[common.Hash][]*storageTaskV2),
-		stateCompleted: make(map[common.Hash]struct{}),
+		Next:     unfetchedHash,
+		Last:     common.MaxHash,
+		SubTasks: make(map[common.Hash][]*storageTaskV2),
 	}}
 
 	cb := bal.NewConstructionBlockAccessList()
@@ -366,10 +365,9 @@ func TestAccessListApplicationSkipsUnfetchedStorage(t *testing.T) {
 	}
 
 	syncer.tasks = []*accountTaskV2{{
-		Next:           unfetchedHash,
-		Last:           common.MaxHash,
-		SubTasks:       make(map[common.Hash][]*storageTaskV2),
-		stateCompleted: make(map[common.Hash]struct{}),
+		Next:     unfetchedHash,
+		Last:     common.MaxHash,
+		SubTasks: make(map[common.Hash][]*storageTaskV2),
 	}}
 
 	// BAL touches an unfetched account with a storage write AND an empty
@@ -425,7 +423,6 @@ func TestAccessListApplicationPartialStorage(t *testing.T) {
 				Last: common.MaxHash,
 			}},
 		},
-		stateCompleted: make(map[common.Hash]struct{}),
 	}}
 
 	cb := bal.NewConstructionBlockAccessList()
