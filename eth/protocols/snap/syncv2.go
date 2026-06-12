@@ -262,13 +262,34 @@ type storageTaskV2 struct {
 	done bool              // Flag whether the task can be removed
 }
 
+// syncPhase tracks how far a snap/2 sync has progressed for the journaled
+// pivot. The phases are strictly ordered: each one implies all previous
+// ones have finished.
+type syncPhase uint8
+
+const (
+	// phaseDownload covers the flat state (account, storage, bytecode)
+	// download. The requests target the pivot root, which remote peers
+	// only serve while it is recent, so the pivot must keep tracking the
+	// chain head (see FrozenPivot).
+	phaseDownload syncPhase = iota
+
+	// phaseGenerate covers the local trie generation after the download
+	// has completed. It targets the exact pivot root it was started with,
+	// so pivot updates are refused from here on.
+	phaseGenerate
+
+	// phaseComplete means the sync ran to completion for the pivot.
+	phaseComplete
+)
+
 // syncProgressV2 is a database entry to allow suspending and resuming a snapshot state
 // sync. Opposed to full and fast sync, there is no way to restart a suspended
 // snap sync without prior knowledge of the suspension point.
 type syncProgressV2 struct {
-	Pivot    *types.Header    // Pivot header being synced (for pivot move and reorg detection)
-	Tasks    []*accountTaskV2 // The suspended account tasks (contract tasks within)
-	Complete bool             // True once sync ran to completion for Pivot
+	Pivot *types.Header    // Pivot header being synced (for pivot move and reorg detection)
+	Tasks []*accountTaskV2 // The suspended account tasks (contract tasks within)
+	Phase syncPhase        // Phase is how far the sync has progressed for Pivot
 
 	// Status report during syncing phase
 	AccountSynced  uint64             // Number of accounts downloaded
@@ -326,12 +347,11 @@ type syncerV2 struct {
 	db     ethdb.Database // Database to store the trie nodes into (and dedup)
 	scheme string         // Node scheme used in node database
 
-	pivot          *types.Header    // Current pivot header being synced (lock needed)
-	previousPivot  *types.Header    // Pivot from previous sync run (for pivot move detection)
-	complete       bool             // Whether the persisted progress was a completed sync
-	tasks          []*accountTaskV2 // Current account task set being synced
-	update         chan struct{}    // Notification channel for possible sync progression
-	generatingTrie atomic.Bool      // Whether the download is done and trie generation is running
+	pivot         *types.Header    // Current pivot header being synced (lock needed)
+	previousPivot *types.Header    // Pivot from previous sync run (for pivot move detection)
+	phase         atomic.Uint32    // Current syncPhase; atomic so phase transitions are visible across goroutines
+	tasks         []*accountTaskV2 // Current account task set being synced
+	update        chan struct{}    // Notification channel for possible sync progression
 
 	peers    map[string]SyncPeerV2 // Currently active peers to download from
 	peerJoin *event.Feed           // Event feed to react to peers joining
@@ -372,7 +392,7 @@ type syncerV2 struct {
 // newSyncerV2 creates a new snapshot syncer to download the Ethereum state over the
 // snap protocol.
 func newSyncerV2(db ethdb.Database, scheme string) *syncerV2 {
-	return &syncerV2{
+	s := &syncerV2{
 		db:     db,
 		scheme: scheme,
 
@@ -395,6 +415,17 @@ func newSyncerV2(db ethdb.Database, scheme string) *syncerV2 {
 
 		extProgress: new(syncProgressV2),
 	}
+	return s
+}
+
+// getPhase returns the current sync phase.
+func (s *syncerV2) getPhase() syncPhase {
+	return syncPhase(s.phase.Load())
+}
+
+// setPhase moves the sync to the given phase.
+func (s *syncerV2) setPhase(phase syncPhase) {
+	s.phase.Store(uint32(phase))
 }
 
 // Register injects a new data source into the syncer's peerset.
@@ -478,17 +509,18 @@ func (s *syncerV2) Sync(pivot *types.Header, cancel chan struct{}) error {
 	isPivotChanged := s.previousPivot != nil && s.previousPivot.Hash() != s.pivot.Hash()
 
 	// Skip if we've already finished syncing this pivot.
-	if !isPivotChanged && s.complete {
+	if !isPivotChanged && s.getPhase() == phaseComplete {
 		log.Info("Snap sync already complete for this pivot", "root", root)
 		return nil
 	}
 
-	// We're committing to running this sync. Clear the complete flag so a
-	// mid-run save (on cancel or error) doesn't persist a stale Complete=true
-	// status from a prior pivot.
-	s.lock.Lock()
-	s.complete = false
-	s.lock.Unlock()
+	// We're committing to running this sync. Demote a completed phase so a
+	// mid-run save (on cancel or error) doesn't persist a stale complete
+	// status from a prior pivot. The download remains done, only the trie
+	// generation must be redone against the new pivot.
+	if s.getPhase() == phaseComplete {
+		s.setPhase(phaseGenerate)
+	}
 
 	defer func() {
 		// Whether sync completed or not, disregard any future packets
@@ -518,11 +550,20 @@ func (s *syncerV2) Sync(pivot *types.Header, cancel chan struct{}) error {
 	// wipe everything and restart fresh.
 	if isPivotChanged {
 		if isPivotReorged(s.db, s.previousPivot, s.pivot) {
-			log.Warn("Persisted progress unusable, restarting snap sync from scratch",
-				"number", s.previousPivot.Number, "oldHash", s.previousPivot.Hash())
+			log.Warn("Restarting snap sync from scratch", "oldnumber", s.previousPivot.Number, "oldHash", s.previousPivot.Hash())
 			s.resetSyncState()
-		} else if err := s.catchUp(cancel); err != nil {
-			return err
+		} else {
+			// A canonical pivot move past a frozen pivot should be impossible:
+			// the downloader both refuses moves (FrozenPivot) and resumes new
+			// cycles against the frozen header itself. Reaching this branch
+			// frozen indicates a bug on the downloader side; roll the flat
+			// state forward defensively and regenerate.
+			if s.getPhase() >= phaseGenerate {
+				log.Warn("Frozen pivot moved unexpectedly, rolling forward", "frozen", s.previousPivot.Number, "new", s.pivot.Number)
+			}
+			if err := s.catchUp(cancel); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -543,31 +584,51 @@ func (s *syncerV2) Sync(pivot *types.Header, cancel chan struct{}) error {
 	}
 	log.Info("State download complete", "root", root)
 
-	// This flag is set so the downloader stops moving the pivot while
-	// GenerateTrie() runs. The flag stays set until the pivot block is
-	// committed.
-	s.generatingTrie.Store(true)
+	// Entering the generation phase makes the downloader stop moving the
+	// pivot (see FrozenPivot) until the pivot block is committed. The phase
+	// is persisted right away so the freeze also holds across a restart,
+	// before the generation has had a chance to finish.
+	if s.getPhase() < phaseGenerate {
+		s.setPhase(phaseGenerate)
+		s.saveSyncStatus()
+	}
 
 	log.Info("Starting trie generation", "root", root)
+	batch := s.db.NewBatch()
+	s.resetTrienodes(batch)
+	if err := batch.Write(); err != nil {
+		return err
+	}
 	if _, err := triedb.GenerateTrie(s.db, s.scheme, root, cancel); err != nil {
 		return err
 	}
 	log.Info("Trie generation complete", "root", root)
 
-	// Mark sync complete. The deferred saveSyncStatus persists this with
-	// Complete=true so a follow-up Sync call for the same pivot can skip
-	// the work entirely.
-	s.lock.Lock()
-	s.complete = true
-	s.lock.Unlock()
+	// Mark sync complete. The deferred saveSyncStatus persists this so a
+	// follow-up Sync call for the same pivot can skip the work entirely.
+	s.setPhase(phaseComplete)
 	return nil
 }
 
-// GeneratingTrie reports whether the flat state download has finished and
-// local trie generation is pending or running. The downloader keeps the
-// pivot frozen while this is set.
-func (s *syncerV2) GeneratingTrie() bool {
-	return s.generatingTrie.Load()
+// FrozenPivot returns the pivot header the sync is bound to, or nil while
+// the pivot may still move freely. The pivot freezes once the state
+// download completes. The remaining work (trie generation) and the pivot
+// commit is purely local and targets the exact pivot root the download
+// finished with, so from that point on the downloader must neither move the
+// pivot nor start a new cycle against a different one.
+func (s *syncerV2) FrozenPivot() *types.Header {
+	raw := rawdb.ReadSnapshotSyncStatus(s.db)
+	if len(raw) == 0 || raw[0] != syncProgressVersion {
+		return nil
+	}
+	var progress syncProgressV2
+	if err := json.Unmarshal(raw[1:], &progress); err != nil {
+		return nil
+	}
+	if progress.Phase < phaseGenerate || progress.Pivot == nil {
+		return nil
+	}
+	return progress.Pivot
 }
 
 // download runs the bulk flat-state download. It fetches
@@ -967,7 +1028,7 @@ func (s *syncerV2) loadSyncStatus() {
 				task.StorageCompleted = nil
 			}
 			s.previousPivot = progress.Pivot
-			s.complete = progress.Complete
+			s.setPhase(progress.Phase)
 			s.accountSynced = progress.AccountSynced
 			s.accountBytes = progress.AccountBytes
 			s.bytecodeSynced = progress.BytecodeSynced
@@ -1019,6 +1080,16 @@ func deleteRange(batch ethdb.Batch, prefix []byte) {
 	}
 }
 
+// resetTrienodes wipes all persisted trienodes if the path scheme is used.
+// It's a defensive operation, ensuring all the leftover trie nodes are cleared
+// before the new generation cycle.
+func (s *syncerV2) resetTrienodes(batch ethdb.Batch) {
+	if s.scheme == rawdb.PathScheme {
+		deleteRange(batch, rawdb.TrieNodeAccountPrefix)
+		deleteRange(batch, rawdb.TrieNodeStoragePrefix)
+	}
+}
+
 // resetSyncState wipes all persisted snap-sync data (sync status, account
 // and storage snapshots) and re-initializes in-memory state with a fresh
 // chunking of the account hash range.
@@ -1027,6 +1098,7 @@ func (s *syncerV2) resetSyncState() {
 	rawdb.DeleteSnapshotSyncStatus(batch)
 	deleteRange(batch, rawdb.SnapshotAccountPrefix)
 	deleteRange(batch, rawdb.SnapshotStoragePrefix)
+	s.resetTrienodes(batch)
 	batch.Write()
 
 	s.lock.Lock()
@@ -1034,8 +1106,7 @@ func (s *syncerV2) resetSyncState() {
 
 	s.tasks = nil
 	s.previousPivot = nil
-	s.complete = false
-	s.generatingTrie.Store(false)
+	s.setPhase(phaseDownload)
 	s.accountSynced, s.accountBytes = 0, 0
 	s.bytecodeSynced, s.bytecodeBytes = 0, 0
 	s.storageSynced, s.storageBytes = 0, 0
@@ -1086,7 +1157,7 @@ func (s *syncerV2) saveSyncStatusWithDB(db ethdb.KeyValueWriter) {
 	progress := &syncProgressV2{
 		Pivot:          s.previousPivot,
 		Tasks:          s.tasks,
-		Complete:       s.complete,
+		Phase:          s.getPhase(),
 		AccountSynced:  s.accountSynced,
 		AccountBytes:   s.accountBytes,
 		BytecodeSynced: s.bytecodeSynced,

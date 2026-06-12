@@ -496,6 +496,18 @@ func (d *Downloader) syncToHead() (err error) {
 	if mode == ethconfig.SnapSync && pivot == nil {
 		pivot = d.blockchain.CurrentBlock()
 	}
+	// If the snap syncer froze its pivot in a previous cycle, resume against
+	// the frozen header instead of a fresh one.
+	if mode == ethconfig.SnapSync && pivot != nil {
+		if frozen := d.snapSyncer.FrozenPivot(); frozen != nil {
+			if rawdb.ReadCanonicalHash(d.stateDB, frozen.Number.Uint64()) == frozen.Hash() {
+				log.Info("Resuming snap sync against frozen pivot", "number", frozen.Number, "hash", frozen.Hash())
+				pivot = frozen
+			} else {
+				log.Warn("Frozen pivot is no longer canonical", "number", frozen.Number, "hash", frozen.Hash())
+			}
+		}
+	}
 	height := latest.Number.Uint64()
 
 	// In beacon mode, use the skeleton chain for the ancestor lookup
@@ -981,9 +993,9 @@ func (d *Downloader) processSnapSyncContent() error {
 		}
 		if P != nil {
 			// If new pivot block found, cancel old state retrieval and restart.
-			// Skip the restart if the running sync already targets the pivot's
-			// root, snap/2 would otherwise redo GenerateTrie() from scratch.
 			if oldPivot != P {
+				// Skip the restart if the running sync already targets the
+				// pivot's root (e.g, no pivot block movement yet).
 				if sync.pivot.Root != P.Header.Root {
 					sync.Cancel()
 					sync = d.syncState(P.Header)

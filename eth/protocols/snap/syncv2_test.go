@@ -547,17 +547,18 @@ func testSyncV2(t *testing.T, scheme string) {
 	verifyAdoptedSyncedState(scheme, syncer.db, sourceAccountTrie.Hash(), elems, t)
 }
 
-// TestSyncV2GeneratingTrieFlag checks the pivot freeze signal around the sync
-// lifecycle. The flag must be unset while flat state is downloading, set once
-// the download completes, stay set after the sync returns so the pivot stays
-// frozen until the pivot block is committed, and clear on a state reset.
-func TestSyncV2GeneratingTrieFlag(t *testing.T) {
+// TestSyncV2FrozenPivot checks the pivot freeze signal around the sync
+// lifecycle. The pivot is unfrozen while flat state is downloading, frozen
+// once the download completes, stays frozen after the sync returns so the
+// downloader resumes against it until the pivot block is committed, and
+// unfreezes again after a state reset.
+func TestSyncV2FrozenPivot(t *testing.T) {
 	t.Parallel()
-	testSyncV2GeneratingTrieFlag(t, rawdb.HashScheme)
-	testSyncV2GeneratingTrieFlag(t, rawdb.PathScheme)
+	testSyncV2FrozenPivot(t, rawdb.HashScheme)
+	testSyncV2FrozenPivot(t, rawdb.PathScheme)
 }
 
-func testSyncV2GeneratingTrieFlag(t *testing.T, scheme string) {
+func testSyncV2FrozenPivot(t *testing.T, scheme string) {
 	var (
 		once   sync.Once
 		cancel = make(chan struct{})
@@ -570,27 +571,38 @@ func testSyncV2GeneratingTrieFlag(t *testing.T, scheme string) {
 	source.accountValues = elems
 
 	syncer := setupSyncerV2(nodeScheme, source)
+	pivot := mkPivot(0, sourceAccountTrie.Hash())
 
 	// The handler runs while account ranges are still being served, so it
-	// can observe the flag mid download.
+	// can observe the signal mid download.
 	source.accountRequestV2Handler = func(p *testPeerV2, requestId uint64, root common.Hash, origin common.Hash, limit common.Hash, cap int) error {
-		if syncer.GeneratingTrie() {
-			t.Error("GeneratingTrie set during flat state download")
+		if syncer.FrozenPivot() != nil {
+			t.Error("pivot frozen during flat state download")
 		}
 		return defaultAccountRequestHandlerV2(p, requestId, root, origin, limit, cap)
 	}
-	if syncer.GeneratingTrie() {
-		t.Fatal("GeneratingTrie set before sync started")
+	if syncer.FrozenPivot() != nil {
+		t.Fatal("pivot frozen before sync started")
 	}
-	if err := syncer.Sync(mkPivot(0, sourceAccountTrie.Hash()), cancel); err != nil {
+	if err := syncer.Sync(pivot, cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
-	if !syncer.GeneratingTrie() {
-		t.Fatal("GeneratingTrie not set after download completed")
+	if frozen := syncer.FrozenPivot(); frozen == nil || frozen.Hash() != pivot.Hash() {
+		t.Fatal("pivot not frozen at the synced header after download completed")
+	}
+	// A restart must not lose the freeze: a fresh syncer instance on the same
+	// database derives it from the persisted journal, before any Sync call.
+	restarted := newSyncerV2(syncer.db, nodeScheme)
+	if frozen := restarted.FrozenPivot(); frozen == nil || frozen.Hash() != pivot.Hash() {
+		t.Fatal("pivot freeze lost after restart")
 	}
 	syncer.resetSyncState()
-	if syncer.GeneratingTrie() {
-		t.Fatal("GeneratingTrie still set after state reset")
+	if syncer.FrozenPivot() != nil {
+		t.Fatal("pivot still frozen after state reset")
+	}
+	// The reset deletes the journal, so a restarted instance is unfrozen too.
+	if restarted := newSyncerV2(syncer.db, nodeScheme); restarted.FrozenPivot() != nil {
+		t.Fatal("pivot still frozen after restart following a state reset")
 	}
 }
 
@@ -1438,12 +1450,12 @@ func TestSyncDetectsPivotReorged(t *testing.T) {
 	if err := syncer.Sync(newPivot, cancel); err != nil {
 		t.Fatalf("sync failed (reorg detection likely broken): %v", err)
 	}
-	// After successful completion, status should be marked Complete=true
+	// After successful completion, status should reach the complete phase
 	// against the new (canonical) pivot.
 	loader := newSyncerV2(db, nodeScheme)
 	loader.loadSyncStatus()
-	if !loader.complete {
-		t.Fatal("sync status should be marked Complete=true after successful completion")
+	if loader.getPhase() != phaseComplete {
+		t.Fatal("sync status should reach the complete phase after successful completion")
 	}
 	if loader.previousPivot == nil || loader.previousPivot.Hash() != newPivot.Hash() {
 		t.Fatalf("expected persisted pivot to match new pivot")
@@ -1888,7 +1900,7 @@ func testCatchUpPersistsIncrementally(t *testing.T, scheme string) {
 }
 
 // TestSyncStatusMarkedCompleteAfterCompletion verifies that after a full sync
-// completes, the persisted sync status has Complete=true. This lets a
+// completes, the persisted sync status reaches the complete phase. This lets a
 // subsequent Sync call distinguish "already done" from "fresh node" and skip.
 func TestSyncStatusMarkedCompleteAfterCompletion(t *testing.T) {
 	t.Parallel()
@@ -1917,11 +1929,11 @@ func testSyncStatusMarkedCompleteAfterCompletion(t *testing.T, scheme string) {
 	}
 
 	// After successful sync, persisted status should be present with
-	// Complete=true and the pivot we synced to.
+	// the complete phase and the pivot we synced to.
 	loader := newSyncerV2(syncer.db, nodeScheme)
 	loader.loadSyncStatus()
-	if !loader.complete {
-		t.Fatal("expected persisted status to have Complete=true after successful sync")
+	if loader.getPhase() != phaseComplete {
+		t.Fatal("expected persisted status to reach the complete phase after successful sync")
 	}
 	if loader.previousPivot == nil || loader.previousPivot.Hash() != pivot.Hash() {
 		t.Fatalf("expected persisted pivot to match synced pivot")
@@ -1953,7 +1965,7 @@ func TestSyncSkipsIfAlreadyComplete(t *testing.T) {
 		t.Fatalf("first sync failed: %v", err)
 	}
 
-	// Wipe the flat state. The persisted status (with Complete=true) stays.
+	// Wipe the flat state. The persisted status (in the complete phase) stays.
 	if err := syncer.db.DeleteRange(rawdb.SnapshotAccountPrefix, []byte{rawdb.SnapshotAccountPrefix[0] + 1}); err != nil {
 		t.Fatalf("failed to wipe account snapshot: %v", err)
 	}
@@ -2029,14 +2041,14 @@ func TestInterruptedGenerationRecovery(t *testing.T) {
 	}
 	// The resumed run re-arms the pivot freeze once its no-op download
 	// completes, the downloader relies on it until the pivot block commits.
-	if !syncer2.GeneratingTrie() {
-		t.Fatal("GeneratingTrie not set after resumed sync")
+	if syncer2.FrozenPivot() == nil {
+		t.Fatal("pivot not frozen after resumed sync")
 	}
-	// After generation completes, status should be marked Complete=true.
+	// After generation completes, status should reach the complete phase.
 	loader := newSyncerV2(db, nodeScheme)
 	loader.loadSyncStatus()
-	if !loader.complete {
-		t.Fatal("sync status should be marked Complete=true after generation completes")
+	if loader.getPhase() != phaseComplete {
+		t.Fatal("sync status should reach the complete phase after generation completes")
 	}
 }
 
@@ -2742,10 +2754,11 @@ func testCatchUpAppliesStorageBALs(t *testing.T, scheme string) {
 		if err := syncer.Sync(hdrB, cancel); err != nil {
 			t.Fatalf("pivot A+1 catch-up sync failed: %v", err)
 		}
-		// The freeze flag must re-arm on a pivot-moved cycle too, the
-		// downloader relies on it from download completion until commit.
-		if !syncer.GeneratingTrie() {
-			t.Fatal("GeneratingTrie not set after catch-up sync")
+		// The freeze must re-arm on a pivot-moved cycle too, the downloader
+		// relies on it from download completion until commit, and it must
+		// point at the new pivot the catch-up rolled forward to.
+		if frozen := syncer.FrozenPivot(); frozen == nil || frozen.Hash() != hdrB.Hash() {
+			t.Fatal("pivot not frozen at the new header after catch-up sync")
 		}
 		close(done)
 	}

@@ -58,12 +58,12 @@ type Syncer interface {
 	OnTrieNodes(peer SyncPeerV2, id uint64, trienodes [][]byte) error
 	OnAccessLists(peer SyncPeerV2, id uint64, lists rlp.RawList[rlp.RawValue]) error
 
+	// FrozenPivot returns the pivot header the syncer is bound to, or nil if
+	// the pivot may still be chosen and moved freely.
+	FrozenPivot() *types.Header
+
 	// Version is the snap protocol version this syncer implements.
 	Version() uint
-
-	// GeneratingTrie reports whether the flat state download has finished
-	// and the syncer is building the trie locally.
-	GeneratingTrie() bool
 }
 
 // NewV1Syncer returns a Syncer backed by the snap/1 state syncer.
@@ -126,9 +126,10 @@ func (syncerV1Adapter) OnAccessLists(SyncPeerV2, uint64, rlp.RawList[rlp.RawValu
 // Version is SNAP1
 func (syncerV1Adapter) Version() uint { return SNAP1 }
 
-// GeneratingTrie always returns false. The snap/1 syncer heals toward
-// moving pivots and never needs the pivot frozen.
-func (syncerV1Adapter) GeneratingTrie() bool { return false }
+// FrozenPivot is always nil for snap/1: the sync target must keep tracking
+// the chain head, ensuring the state is available in the network, so the
+// pivot is never frozen.
+func (syncerV1Adapter) FrozenPivot() *types.Header { return nil }
 
 // syncerV2Adapter adapts the snap/2 *syncerV2 to Syncer. Its peer-facing methods
 // already take SyncPeerV2 and its Sync already takes a header, so only Progress
