@@ -137,7 +137,7 @@ func (b *BlobBuffer) AddTx(txs []*types.Transaction, peer string) []error {
 			continue
 		}
 		if entry, ok := b.cells[hash]; ok {
-			b.add(hash, tx, entry)
+			b.storeCompleted(hash, tx, entry)
 			continue
 		}
 		blobBufferTxFirstCounter.Inc(1)
@@ -162,13 +162,14 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 		added:      time.Now(),
 	}
 	if txe, ok := b.txs[hash]; ok {
-		b.add(hash, txe.tx, b.cells[hash])
+		b.storeCompleted(hash, txe.tx, b.cells[hash])
 	}
 	blobBufferCellsFirstCounter.Inc(1)
 }
 
-// add verifies cells per-peer, sorts them, and adds to the pool.
-func (b *BlobBuffer) add(hash common.Hash, tx *types.Transaction, cells *cellEntry) {
+// storeCompleted verifies cells per-peer, sorts them, and schedules them for
+// addition into the pool. The actual addition happens in Flush().
+func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cells *cellEntry) {
 	sidecar := tx.BlobTxSidecar()
 
 	// Per-peer cell verification
