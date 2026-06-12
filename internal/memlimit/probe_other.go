@@ -21,5 +21,5 @@ package memlimit
 // platformLimit reports no platform-specific limit on non-Linux
 // systems; the caller falls back to total system memory.
 func platformLimit() (uint64, Source, bool) {
-	return 0, "", false
+	return 0, SourceUnknown, false
 }

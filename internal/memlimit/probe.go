@@ -15,10 +15,8 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package memlimit detects the effective memory limit of the current
-// process. On Linux it consults the cgroup limit first (v2 memory.max
-// or v1 memory.limit_in_bytes), since /proc/meminfo reports host RAM
-// even inside a container. When no cgroup limit is in effect, or on
-// other platforms, it falls back to total system memory.
+// process. On Linux the cgroup limit is consulted first, with total
+// system memory as the fallback on all platforms.
 package memlimit
 
 import (
@@ -26,14 +24,27 @@ import (
 )
 
 // Source identifies which mechanism produced the limit value.
-type Source string
+type Source int
 
 const (
-	SourceCgroupV2 Source = "cgroup-v2"
-	SourceCgroupV1 Source = "cgroup-v1"
-	SourceSystem   Source = "system"
-	SourceUnknown  Source = "unknown"
+	SourceUnknown Source = iota
+	SourceCgroupV2
+	SourceCgroupV1
+	SourceSystem
 )
+
+func (s Source) String() string {
+	switch s {
+	case SourceCgroupV2:
+		return "cgroup-v2"
+	case SourceCgroupV1:
+		return "cgroup-v1"
+	case SourceSystem:
+		return "system"
+	default:
+		return "unknown"
+	}
+}
 
 // Limit returns the memory limit visible to this process in bytes and
 // the source that produced it.

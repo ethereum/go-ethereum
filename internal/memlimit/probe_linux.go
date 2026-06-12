@@ -33,6 +33,10 @@ const cgroupV1UnlimitedThreshold = uint64(1) << 62
 // fileReader abstracts os.ReadFile for testing.
 type fileReader func(path string) ([]byte, error)
 
+// platformLimit returns the cgroup limit (v2 memory.max or v1
+// memory.limit_in_bytes) of the current process. The cgroup limit is
+// the authoritative budget in a container, where /proc/meminfo
+// reports the host's RAM.
 func platformLimit() (uint64, Source, bool) {
 	if v, ok := cgroupV2Limit(os.ReadFile); ok {
 		return v, SourceCgroupV2, true
@@ -40,7 +44,7 @@ func platformLimit() (uint64, Source, bool) {
 	if v, ok := cgroupV1Limit(os.ReadFile); ok {
 		return v, SourceCgroupV1, true
 	}
-	return 0, "", false
+	return 0, SourceUnknown, false
 }
 
 // cgroupV2Limit reads the cgroup v2 memory.max for the current process.
