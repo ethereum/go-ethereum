@@ -190,7 +190,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 
 	// Construct the blob buffer for assembling blob txs from separate tx and cell deliveries.
-	blobBuffer := blobpool.NewBlobBuffer(h.blobpool.ValidateTxBasics, h.blobpool.AddPooledTx, h.removePeer)
+	blobBuffer := blobpool.NewBlobBuffer(blobpool.BlobBufferFunctions{
+		ValidateTx: h.blobpool.ValidateTxBasics,
+		AddToPool:  h.blobpool.AddPooledTx,
+		DropPeer:   h.removePeer,
+	})
 
 	addTxs := func(txs []*types.Transaction) []error {
 		return h.txpool.Add(txs, false)

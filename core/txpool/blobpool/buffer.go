@@ -69,21 +69,22 @@ type BlobBuffer struct {
 	txs   map[common.Hash]*txEntry
 	cells map[common.Hash]*cellEntry
 
-	addToPool  func(*BlobTxForPool) error
-	validateTx func(*types.Transaction) error
-	dropPeer   func(string)
-
 	completed      []*BlobTxForPool
 	completedCount atomic.Int32
+	cb             BlobBufferFunctions
 }
 
-func NewBlobBuffer(validateTx func(*types.Transaction) error, addToPool func(*BlobTxForPool) error, dropPeer func(string)) *BlobBuffer {
+type BlobBufferFunctions struct {
+	ValidateTx func(*types.Transaction) error
+	AddToPool  func(*BlobTxForPool) error
+	DropPeer   func(string)
+}
+
+func NewBlobBuffer(cb BlobBufferFunctions) *BlobBuffer {
 	return &BlobBuffer{
-		txs:        make(map[common.Hash]*txEntry),
-		cells:      make(map[common.Hash]*cellEntry),
-		validateTx: validateTx,
-		addToPool:  addToPool,
-		dropPeer:   dropPeer,
+		txs:   make(map[common.Hash]*txEntry),
+		cells: make(map[common.Hash]*cellEntry),
+		cb:    cb,
 	}
 }
 
@@ -102,7 +103,7 @@ func (b *BlobBuffer) Flush() ([]common.Hash, []error) {
 	errs := make([]error, len(b.completed))
 	for i, ptx := range b.completed {
 		txs[i] = ptx.Tx.Hash()
-		errs[i] = b.addToPool(ptx)
+		errs[i] = b.cb.AddToPool(ptx)
 	}
 	b.completed = nil
 	b.completedCount.Store(0)
@@ -129,7 +130,7 @@ func (b *BlobBuffer) AddTx(txs []*types.Transaction, peer string) []error {
 		}
 		// tx validation (basic w/o lock)
 		// error will be handled by tx fetcher
-		if err := b.validateTx(tx); err != nil {
+		if err := b.cb.ValidateTx(tx); err != nil {
 			errs[i] = err
 			continue
 		}
@@ -210,11 +211,11 @@ func (b *BlobBuffer) HasCells(hash common.Hash) bool {
 }
 
 func (b *BlobBuffer) dropPeers(peers []string) {
-	if b.dropPeer == nil {
+	if b.cb.DropPeer == nil {
 		return
 	}
 	for _, p := range peers {
-		b.dropPeer(p)
+		b.cb.DropPeer(p)
 	}
 }
 

@@ -39,11 +39,11 @@ func makePeerDelivery(t *testing.T, blobOffset, blobCount int, indices []uint64)
 
 func newTestBuffer(t *testing.T) *BlobBuffer {
 	t.Helper()
-	return NewBlobBuffer(
-		func(tx *types.Transaction) error { return nil },
-		func(ptx *BlobTxForPool) error { return nil },
-		func(peer string) {},
-	)
+	return NewBlobBuffer(BlobBufferFunctions{
+		ValidateTx: func(tx *types.Transaction) error { return nil },
+		AddToPool:  func(ptx *BlobTxForPool) error { return nil },
+		DropPeer:   func(peer string) {},
+	})
 }
 
 func TestSortCells(t *testing.T) {
@@ -171,11 +171,11 @@ func TestBadCell(t *testing.T) {
 	blobCount := 1
 
 	var dropped []string
-	buf := NewBlobBuffer(
-		func(tx *types.Transaction) error { return nil },
-		func(ptx *BlobTxForPool) error { return nil },
-		func(peer string) { dropped = append(dropped, peer) },
-	)
+	buf := NewBlobBuffer(BlobBufferFunctions{
+		ValidateTx: func(tx *types.Transaction) error { return nil },
+		AddToPool:  func(ptx *BlobTxForPool) error { return nil },
+		DropPeer:   func(peer string) { dropped = append(dropped, peer) },
+	})
 
 	tx := makeV1Tx(t, 0, blobCount, 0, key)
 	hash := tx.Hash()
