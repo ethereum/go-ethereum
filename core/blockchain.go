@@ -1194,10 +1194,13 @@ func (bc *BlockChain) SnapSyncComplete(hash common.Hash, isSnapV2 bool) error {
 		return fmt.Errorf("non existent state [%x..]", root[:4])
 	}
 
-	// The legacy snapshot tree needs to be wiped and rebuilt from the trie
-	// after a snap/1 sync.
-	if !isSnapV2 && bc.snaps != nil {
-		bc.snaps.Rebuild(root)
+	// The legacy snapshot tree (hash scheme only) was persistently disabled
+	// before the sync, re-enables it explicitly.
+	//
+	// For snap/2 the downloaded flat state is already complete and root-verified,
+	// so the background generation is unnecessary.
+	if bc.snaps != nil {
+		bc.snaps.Rebuild(root, !isSnapV2)
 	}
 
 	// If all checks out, manually set the head block.

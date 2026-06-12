@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -213,7 +214,7 @@ func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, roo
 	if err != nil {
 		log.Warn("Failed to load snapshot", "err", err)
 		if !config.NoBuild {
-			snap.Rebuild(root)
+			snap.Rebuild(root, true)
 			return snap, nil
 		}
 		return nil, err // Bail out the error, don't rebuild automatically.
@@ -683,10 +684,12 @@ func (t *Tree) Journal(root common.Hash) (common.Hash, error) {
 	return base, nil
 }
 
-// Rebuild wipes all available snapshot data from the persistent database and
-// discard all caches and diff layers. Afterwards, it starts a new snapshot
-// generator with the given root hash.
-func (t *Tree) Rebuild(root common.Hash) {
+// Rebuild discards all caches and diff layers and re-enables the snapshot
+// feature. With generate set, it starts a new snapshot generator with the
+// given root hash, wiping and regenerating the persistent flat state in the
+// background. Without it, the on-disk flat state is adopted as the fully
+// generated disk layer directly.
+func (t *Tree) Rebuild(root common.Hash, generate bool) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -714,6 +717,26 @@ func (t *Tree) Rebuild(root common.Hash) {
 		default:
 			panic(fmt.Sprintf("unknown layer type: %T", layer))
 		}
+	}
+	// Adopt the existing flat state as the generated disk layer if
+	// regeneration was not requested.
+	if !generate {
+		batch := t.diskdb.NewBatch()
+		rawdb.WriteSnapshotRoot(batch, root)
+		journalProgress(batch, nil, nil)
+		if err := batch.Write(); err != nil {
+			log.Crit("Failed to write snapshot completion marker", "err", err)
+		}
+		log.Info("Adopted state snapshot", "root", root)
+		t.layers = map[common.Hash]snapshot{
+			root: &diskLayer{
+				diskdb: t.diskdb,
+				triedb: t.triedb,
+				cache:  fastcache.New(t.config.CacheSize * 1024 * 1024),
+				root:   root,
+			},
+		}
+		return
 	}
 	// Start generating a new snapshot from scratch on a background thread. The
 	// generator will run a wiper first if there's not one running right now.
