@@ -80,8 +80,9 @@ type PendingFilter struct {
 
 	// When BlobTxs true, return only blob transactions (block blob-space filling)
 	// when false, return only non-blob txs (peer-join announces, block space filling)
-	BlobTxs     bool
-	BlobVersion byte // Blob tx version to include. 0 means pre-Osaka, 1 means Osaka and later
+	BlobTxs      bool
+	PartialCells bool
+	BlobVersion  byte // Blob tx version to include. 0 means pre-Osaka, 1 means Osaka and later
 }
 
 // TxMetadata denotes the metadata of a transaction.

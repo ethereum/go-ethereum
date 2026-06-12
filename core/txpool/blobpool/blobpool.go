@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -291,7 +290,8 @@ func encodeForNetwork(storedRLP []byte, version uint) ([]byte, error) {
 
 	// 5. Build the [blobs] field for the wire format.
 	var blobsField []byte
-	if version >= eth.ETH72 {
+	// todo - Didn't use eth.ETH72 due to circular import error in test
+	if version >= 72 {
 		// eth/72 omits the blob payload; peers fetch cells separately via GetCells.
 		blobsField = []byte{0xc0} // RLP-encoded empty list
 	} else {
@@ -2241,6 +2241,8 @@ func (p *BlobPool) drop() {
 //
 // The transactions can also be pre-filtered by the dynamic fee components to
 // reduce allocations and load on downstream subsystems.
+// The transactions without enough cells to recover thier blobs would be skipped
+// in the response.
 func (p *BlobPool) Pending(filter txpool.PendingFilter) (map[common.Address][]*txpool.LazyTransaction, int) {
 	// If only plain transactions are requested, this pool is unsuitable as it
 	// contains none, don't even bother.
@@ -2295,7 +2297,7 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) (map[common.Address][]*t
 				}
 			}
 			// Skip transactions without enough cells to recover blobs
-			if tx.custody != nil && tx.custody.OneCount() < kzg4844.DataPerBlob {
+			if !filter.PartialCells && tx.custody != nil && tx.custody.OneCount() < kzg4844.DataPerBlob {
 				break // not enough cells to build a full payload, discard rest of txs from the account
 			}
 			// Transaction was accepted according to the filter, append to the pending list

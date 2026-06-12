@@ -724,7 +724,7 @@ func (api *ConsensusAPI) GetBlobsV4(hashes []common.Hash, indicesBitarray types.
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
-	cells, proofs, err := api.eth.BlobTxPool().GetBlobCells(hashes, indicesBitarray)
+	cells, proofs, err := api.eth.BlobCache().GetCells(hashes, indicesBitarray)
 	if err != nil {
 		return nil, engine.InvalidParams.With(err)
 	}
@@ -1195,17 +1195,30 @@ func (api *ConsensusAPI) checkFork(timestamp uint64, forks ...forks.Fork) bool {
 }
 
 // ExchangeCapabilities returns the current methods provided by this node.
-func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
+func (api *ConsensusAPI) ExchangeCapabilities(caps []string) []string {
 	valueT := reflect.TypeOf(api)
-	caps := make([]string, 0, valueT.NumMethod())
+
+	for _, cap := range caps {
+		if cap == "engine_getBlobsV4" {
+			// If the CL supports getBlobsV4, we call EnableCell() on the
+			// blob cache to skip the blob recovery process. This is a
+			// one-directional toggle, which assumes that once the CL
+			// supports getBlobsV4, it will not fall back to getBlobsV3
+			// again.
+			api.eth.BlobCache().EnableCell()
+			break
+		}
+	}
+
+	ourCaps := make([]string, 0, valueT.NumMethod())
 	for i := 0; i < valueT.NumMethod(); i++ {
 		name := []rune(valueT.Method(i).Name)
 		if string(name) == "ExchangeCapabilities" {
 			continue
 		}
-		caps = append(caps, "engine_"+string(unicode.ToLower(name[0]))+string(name[1:]))
+		ourCaps = append(ourCaps, "engine_"+string(unicode.ToLower(name[0]))+string(name[1:]))
 	}
-	return caps
+	return ourCaps
 }
 
 // GetClientVersionV1 exchanges client version data of this node.
