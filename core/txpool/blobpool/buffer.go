@@ -91,11 +91,13 @@ func NewBlobBuffer(cb BlobBufferFunctions) *BlobBuffer {
 // Flush adds all completed entries to the pool and returns the hashes
 // and corresponding errors (nil on success) for each attempted insert.
 func (b *BlobBuffer) Flush() ([]common.Hash, []error) {
-	// Read the count first and return early
-	// todo: increase threshold ?
+	// Read the count first and return early if there is nothing to do.
+	// Flush is called very frequently from the blob fetcher so this
+	// optimization is warranted.
 	if b.completedCount.Load() == 0 {
 		return nil, nil
 	}
+
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
