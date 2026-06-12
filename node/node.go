@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie/archive"
 	"github.com/gofrs/flock"
 )
 
@@ -85,6 +86,7 @@ func New(conf *Config) (*Node, error) {
 			return nil, err
 		}
 		conf.DataDir = absdatadir
+		archive.ArchiveDataDir = absdatadir
 	}
 	if conf.Logger == nil {
 		conf.Logger = log.New()
