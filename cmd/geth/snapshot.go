@@ -796,8 +796,8 @@ func traverseRawState(ctx *cli.Context) error {
 	}
 	reader, err := triedb.NodeReader(root)
 	if err != nil {
-		log.Error("State is non-existent", "root", root)
-		return nil
+		log.Error("State is non-existent", "root", root, "err", err)
+		return err
 	}
 	for accIter.Next(true) {
 		nodes += 1
