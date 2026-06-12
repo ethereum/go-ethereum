@@ -125,7 +125,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	}
 	// Ensure the transaction has more gas than the bare minimum needed to cover
 	// the transaction metadata
-	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, true, rules.IsIstanbul, rules.IsShanghai, rules.IsAmsterdam)
+	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules, params.CostPerStateByte)
 	if err != nil {
 		return err
 	}
@@ -138,8 +138,15 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		if err != nil {
 			return err
 		}
+		// Make sure the transaction has sufficient gas allowance to
+		// pay the floor cost.
 		if tx.Gas() < floorDataGas {
 			return fmt.Errorf("%w: gas %v, minimum needed %v", core.ErrFloorDataGas, tx.Gas(), floorDataGas)
+		}
+		// In Amsterdam, the transaction gas limit is allowed to exceed
+		// params.MaxTxGas, but the calldata floor cost is capped by it.
+		if rules.IsAmsterdam && max(intrGas.RegularGas, floorDataGas) > params.MaxTxGas {
+			return fmt.Errorf("%w: regular intrisic cost %v, floor: %v", core.ErrFloorDataGas, intrGas.RegularGas, floorDataGas)
 		}
 	}
 	// Ensure the gasprice is high enough to cover the requirement of the calling pool

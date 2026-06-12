@@ -43,6 +43,7 @@ var activators = map[int]func(*JumpTable){
 	7939: enable7939,
 	8024: enable8024,
 	7843: enable7843,
+	8037: enable8037,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -377,7 +378,7 @@ func opExtCodeCopyEIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, er
 	code := evm.StateDB.GetCode(addr)
 	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
 	consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(code)), false, scope.Contract.Gas.RegularGas)
-	scope.Contract.UseGas(GasCosts{RegularGas: consumed}, evm.Config.Tracer, tracing.GasChangeUnspecified)
+	scope.Contract.chargeRegular(consumed, evm.Config.Tracer, tracing.GasChangeUnspecified)
 	if consumed < wanted {
 		return nil, ErrOutOfGas
 	}
@@ -403,7 +404,7 @@ func opPush1EIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 			// advanced past this boundary.
 			contractAddr := scope.Contract.Address()
 			consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(contractAddr, *pc+1, uint64(1), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas.RegularGas)
-			scope.Contract.UseGas(GasCosts{RegularGas: wanted}, evm.Config.Tracer, tracing.GasChangeUnspecified)
+			scope.Contract.chargeRegular(wanted, evm.Config.Tracer, tracing.GasChangeUnspecified)
 			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
@@ -430,7 +431,7 @@ func makePushEIP4762(size uint64, pushByteSize int) executionFunc {
 		if !scope.Contract.IsDeployment && !scope.Contract.IsSystemCall {
 			contractAddr := scope.Contract.Address()
 			consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(contractAddr, uint64(start), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas.RegularGas)
-			scope.Contract.UseGas(GasCosts{RegularGas: consumed}, evm.Config.Tracer, tracing.GasChangeUnspecified)
+			scope.Contract.chargeRegular(consumed, evm.Config.Tracer, tracing.GasChangeUnspecified)
 			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
@@ -589,4 +590,12 @@ func enable7843(jt *JumpTable) {
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
 	}
+}
+
+// enable8037 enables the multidimensional-metering as specified in EIP-8037.
+func enable8037(jt *JumpTable) {
+	jt[CREATE].constantGas = params.CreateGasAmsterdam
+	jt[CREATE2].constantGas = params.CreateGasAmsterdam
+	jt[SELFDESTRUCT].dynamicGas = gasSelfdestruct8037
+	jt[SSTORE].dynamicGas = gasSStore8037
 }

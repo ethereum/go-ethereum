@@ -472,6 +472,10 @@ const (
 	// transaction data. This change will always be a negative change.
 	GasChangeTxDataFloor GasChangeReason = 19
 
+	// GasChangeAccountCreation represents the state gas charging for account
+	// creation inside the call/create frame.
+	GasChangeAccountCreation GasChangeReason = 20
+
 	// GasChangeIgnored is a special value that can be used to indicate that the gas change should be ignored as
 	// it will be "manually" tracked by a direct emit of the gas change event.
 	GasChangeIgnored GasChangeReason = 0xFF

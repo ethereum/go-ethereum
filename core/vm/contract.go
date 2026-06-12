@@ -42,6 +42,8 @@ type Contract struct {
 	IsDeployment bool
 	IsSystemCall bool
 
+	// Gas carries the unified gas state for this frame: running balance,
+	// reservoir, and per-frame usage accumulators. See GasBudget.
 	Gas   GasBudget
 	value *uint256.Int
 }
@@ -113,7 +115,6 @@ func (c *Contract) GetOp(n uint64) OpCode {
 	if n < uint64(len(c.Code)) {
 		return OpCode(c.Code[n])
 	}
-
 	return STOP
 }
 
@@ -125,9 +126,10 @@ func (c *Contract) Caller() common.Address {
 	return c.caller
 }
 
-// UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(cost GasCosts, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
-	prior, ok := c.Gas.Charge(cost)
+// chargeRegular deducts regular gas only, with tracer integration.
+// Returns false on OOG. Delegates the arithmetic to GasBudget.ChargeRegular.
+func (c *Contract) chargeRegular(r uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) bool {
+	prior, ok := c.Gas.ChargeRegular(r)
 	if !ok {
 		return false
 	}
@@ -137,15 +139,44 @@ func (c *Contract) UseGas(cost GasCosts, logger *tracing.Hooks, reason tracing.G
 	return true
 }
 
-// RefundGas refunds the leftover gas budget back to the contract.
-func (c *Contract) RefundGas(refund GasBudget, logger *tracing.Hooks, reason tracing.GasChangeReason) {
-	prior, changed := c.Gas.Refund(refund)
-	if !changed {
-		return
+// chargeState deducts state gas (spilling into regular when the reservoir is
+// exhausted), with tracer integration. Returns false on OOG.
+func (c *Contract) chargeState(s uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) bool {
+	prior, ok := c.Gas.ChargeState(s)
+	if !ok {
+		return false
 	}
 	if logger.HasGasHook() && reason != tracing.GasChangeIgnored {
 		logger.EmitGasChange(prior.AsTracing(), c.Gas.AsTracing(), reason)
 	}
+	return true
+}
+
+// refundGas absorbs a sub-call's leftover GasBudget into this contract's gas state.
+func (c *Contract) refundGas(child GasBudget, forwarded uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) {
+	prior := c.Gas
+	c.Gas.Absorb(child, forwarded)
+	if logger.HasGasHook() && reason != tracing.GasChangeIgnored {
+		logger.EmitGasChange(prior.AsTracing(), c.Gas.AsTracing(), reason)
+	}
+}
+
+// forwardGas drains `regular` regular gas and the entire state reservoir
+// from this contract's running budget and returns the initial GasBudget for
+// a child frame. The caller's UsedRegularGas is bumped by the forwarded
+// amount so that the absorb-on-return path correctly reclaims the unused
+// portion. Thin wrapper around GasBudget.Forward with tracer integration.
+//
+// Caller must ensure `regular` is no larger than the running balance (the
+// opcode's dynamic gas table is expected to validate that before invoking
+// the opcode handler).
+func (c *Contract) forwardGas(regular uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) GasBudget {
+	prior := c.Gas
+	child := c.Gas.Forward(regular)
+	if logger.HasGasHook() && reason != tracing.GasChangeIgnored {
+		logger.EmitGasChange(prior.AsTracing(), c.Gas.AsTracing(), reason)
+	}
+	return child
 }
 
 // Address returns the contracts address

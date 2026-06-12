@@ -80,8 +80,8 @@ func (tt *TransactionTest) Run() error {
 		if err != nil {
 			return
 		}
-		// Intrinsic gas
-		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai, rules.IsAmsterdam)
+		// Intrinsic cost
+		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules, params.CostPerStateByte)
 		if err != nil {
 			return
 		}
