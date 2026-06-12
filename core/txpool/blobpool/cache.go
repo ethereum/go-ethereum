@@ -81,11 +81,11 @@ type Cache struct {
 	needCell bool
 
 	// channels into loop
-	quit         chan struct{}
-	topkRequest  chan struct{}
-	topkTimer    mclock.Timer
-	hasBlobsCh   chan []common.Hash // list of tx hashes that should be pinned
-	enableCellCh chan struct{}      // signals the loop to switch to cell mode
+	quit        chan struct{}
+	topkRequest chan struct{}
+	topkTimer   mclock.Timer
+	hasBlobsCh  chan []common.Hash // list of tx hashes that should be pinned
+	cellModeCh  chan bool          // signals the loop to switch cell mode on/offo
 
 	step func() // test hook fired after each loop iteration
 
@@ -103,14 +103,14 @@ func NewCache(p *BlobPool) *Cache {
 // It allows injecting a clock and a step hook.
 func newCache(p *BlobPool, clock mclock.Clock, step func()) *Cache {
 	c := &Cache{
-		entries:      make(map[common.Hash]*cachedBlob),
-		blobpool:     p,
-		hasBlobsCh:   make(chan []common.Hash, 1),
-		clock:        clock,
-		step:         step,
-		quit:         make(chan struct{}),
-		topkRequest:  make(chan struct{}, 1),
-		enableCellCh: make(chan struct{}, 1),
+		entries:     make(map[common.Hash]*cachedBlob),
+		blobpool:    p,
+		hasBlobsCh:  make(chan []common.Hash, 1),
+		clock:       clock,
+		step:        step,
+		quit:        make(chan struct{}),
+		topkRequest: make(chan struct{}, 1),
+		cellModeCh:  make(chan bool, 1),
 	}
 
 	c.wg.Add(1)
@@ -311,9 +311,9 @@ func (c *Cache) GetCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*
 // blobs. This means we can also cache cells that lack enough blobs to
 // recover. It signals the loop to switch to cell mode and re-select
 // transactions from this wider pool.
-func (c *Cache) EnableCell() {
+func (c *Cache) SetCellMode(on bool) {
 	select {
-	case c.enableCellCh <- struct{}{}:
+	case c.cellModeCh <- on:
 	case <-c.quit:
 	}
 }
@@ -335,13 +335,11 @@ func (c *Cache) loop() {
 			c.update(want)
 			c.triggerTopKAfter(topKTimeout)
 
-		case <-c.enableCellCh:
-			// CL supports cell-based blob retrieval; switch to cell mode and
-			// re-select immediately over the now-wider pool. needCell is only
-			// touched here in the loop, so a fresh selection and update observe
-			// a consistent value.
-			if !c.needCell {
-				c.needCell = true
+		case on := <-c.cellModeCh:
+			// This runs when the CL signals (non-)support for cell proofs. Enable/disable
+			// cell mode and re-select immediately to force an update.
+			if c.needCell != on {
+				c.needCell = on
 				c.triggerTopK()
 			}
 
