@@ -1385,9 +1385,9 @@ func TestIsPivotReorged(t *testing.T) {
 // canonical header at block 100 has a different hash. Sync is then called with
 // a new pivot at the same height.
 //
-// If isPivotReorged works, loadSyncStatus restores previousPivot, the check
-// flags it as reorged, resetSyncState clears previousPivot, catchUp is
-// skipped, and the fresh download proceeds to completion.
+// If isPivotReorged works, loadSyncStatus restores the persisted pivot, the
+// check flags it as reorged, resetSyncState clears it, catchUp is skipped,
+// and the fresh download proceeds to completion.
 //
 // If detection doesn't fire, the pivot-move check would call catchUp with
 // from = 101 and to = 100 — the inverted-range guard surfaces that as an
@@ -1406,10 +1406,8 @@ func TestSyncDetectsPivotReorged(t *testing.T) {
 	// and non-zero counter so the reset path has something to clean up.
 	orphanPivot := mkPivot(100, common.HexToHash("0xdead"))
 	seed := newSyncerV2(db, nodeScheme)
-	// previousPivot reflects where flat state matches and it is what
-	// saveSyncStatus persists. Set it to simulate a prior sync reaching
-	// orphanPivot.
-	seed.previousPivot = orphanPivot
+	// pivot reflects where flat state matches and it is what saveSyncStatus
+	// persists. Set it to simulate a prior sync reaching orphanPivot.
 	seed.pivot = orphanPivot
 	seed.accountSynced = 42
 	seed.tasks = []*accountTaskV2{{
@@ -1457,7 +1455,7 @@ func TestSyncDetectsPivotReorged(t *testing.T) {
 	if loader.getPhase() != phaseComplete {
 		t.Fatal("sync status should reach the complete phase after successful completion")
 	}
-	if loader.previousPivot == nil || loader.previousPivot.Hash() != newPivot.Hash() {
+	if loader.pivot == nil || loader.pivot.Hash() != newPivot.Hash() {
 		t.Fatalf("expected persisted pivot to match new pivot")
 	}
 	if data := rawdb.ReadAccountSnapshot(db, orphanAccountHash); len(data) != 0 {
@@ -1504,9 +1502,8 @@ func testInterruptedDownloadRecovery(t *testing.T, scheme string) {
 	syncer1.Register(src1)
 	src1.remote = syncer1
 	pivot := mkPivot(0, root)
-	syncer1.pivot = pivot
-	syncer1.previousPivot = pivot // Sync sets this before downloadState
 	syncer1.loadSyncStatus()
+	syncer1.pivot = pivot // Sync pins this before downloadState
 	syncer1.downloadState(cancel1)
 
 	// Save progress
@@ -1542,9 +1539,8 @@ func testInterruptedDownloadRecovery(t *testing.T, scheme string) {
 	syncer2.Register(src2)
 	src2.remote = syncer2
 	pivot2 := mkPivot(0, root)
-	syncer2.pivot = pivot2
-	syncer2.previousPivot = pivot2 // Sync sets this before downloadState
 	syncer2.loadSyncStatus()
+	syncer2.pivot = pivot2 // Sync pins this before downloadState
 	if err := syncer2.downloadState(cancel2); err != nil {
 		t.Fatalf("resumed download failed: %v", err)
 	}
@@ -1558,10 +1554,10 @@ func testInterruptedDownloadRecovery(t *testing.T, scheme string) {
 }
 
 // TestSyncPersistsPivotDuringDownload verifies that after a fresh Sync is
-// interrupted mid-download, the persisted previousPivot equals the current
-// pivot (not nil). Without this, a follow-up Sync at a different pivot
-// would not see that the partial flat state belongs to the old pivot, and
-// would mix old-pivot accounts with new-pivot data.
+// interrupted mid-download, the persisted pivot equals the current pivot
+// (not nil). Without this, a follow-up Sync at a different pivot would not
+// see that the partial flat state belongs to the old pivot, and would mix
+// old-pivot accounts with new-pivot data.
 func TestSyncPersistsPivotDuringDownload(t *testing.T) {
 	t.Parallel()
 	nodeScheme, sourceAccountTrie, elems := makeAccountTrieNoStorage(100, rawdb.HashScheme)
@@ -1591,15 +1587,15 @@ func TestSyncPersistsPivotDuringDownload(t *testing.T) {
 	// Sync should be interrupted by the cancel after a couple of responses.
 	_ = syncer.Sync(pivot, cancel)
 
-	// Persisted previousPivot must equal the pivot, so a follow-up Sync at a
-	// different pivot can recognize the partial flat state belongs to this one.
+	// Persisted pivot must equal the pivot, so a follow-up Sync at a different
+	// pivot can recognize the partial flat state belongs to this one.
 	loader := newSyncerV2(db, nodeScheme)
 	loader.loadSyncStatus()
-	if loader.previousPivot == nil {
-		t.Fatal("expected persisted previousPivot to be set after interrupted download, got nil")
+	if loader.pivot == nil {
+		t.Fatal("expected persisted pivot to be set after interrupted download, got nil")
 	}
-	if loader.previousPivot.Hash() != pivot.Hash() {
-		t.Errorf("persisted previousPivot mismatch: got %v, want %v", loader.previousPivot.Hash(), pivot.Hash())
+	if loader.pivot.Hash() != pivot.Hash() {
+		t.Errorf("persisted pivot mismatch: got %v, want %v", loader.pivot.Hash(), pivot.Hash())
 	}
 }
 
@@ -1761,7 +1757,7 @@ func testPivotMovement(t *testing.T, scheme string, pivotMoves int) {
 }
 
 // TestCatchUpPersistsIncrementally verifies that catchUp updates and persists
-// previousPivot after each successfully applied BAL. If a later block in the
+// the pivot after each successfully applied BAL. If a later block in the
 // gap fails to apply, the persisted state reflects the last successful block,
 // so a follow-up Sync can resume from there rather than reapplying everything.
 func TestCatchUpPersistsIncrementally(t *testing.T) {
@@ -1835,7 +1831,7 @@ func testCatchUpPersistsIncrementally(t *testing.T, scheme string) {
 		blocks[i] = balBlock{header: header, bal: buf.Bytes()}
 	}
 
-	// First sync: complete sync to A so persisted state has previousPivot=A,
+	// First sync: complete sync to A so persisted state has pivot=A,
 	// flat state covers all accounts.
 	{
 		var (
@@ -1885,17 +1881,17 @@ func testCatchUpPersistsIncrementally(t *testing.T, scheme string) {
 		t.Fatal("expected Sync to fail when applyAccessList hits corrupt flat state")
 	}
 
-	// Persisted previousPivot should now reflect the last successfully applied
+	// Persisted pivot should now reflect the last successfully applied
 	// block (A+2). Without per-iteration saves, it would still be at A.
 	loader := newSyncerV2(db, nodeScheme)
 	loader.loadSyncStatus()
-	if loader.previousPivot == nil {
-		t.Fatal("expected persisted previousPivot to be set after partial catchUp")
+	if loader.pivot == nil {
+		t.Fatal("expected persisted pivot to be set after partial catchUp")
 	}
 	wantHash := blocks[1].header.Hash()
-	if loader.previousPivot.Hash() != wantHash {
-		t.Errorf("persisted previousPivot mismatch after partial catchUp: got %v, want %v (block A+2)",
-			loader.previousPivot.Hash(), wantHash)
+	if loader.pivot.Hash() != wantHash {
+		t.Errorf("persisted pivot mismatch after partial catchUp: got %v, want %v (block A+2)",
+			loader.pivot.Hash(), wantHash)
 	}
 }
 
@@ -1935,7 +1931,7 @@ func testSyncStatusMarkedCompleteAfterCompletion(t *testing.T, scheme string) {
 	if loader.getPhase() != phaseComplete {
 		t.Fatal("expected persisted status to reach the complete phase after successful sync")
 	}
-	if loader.previousPivot == nil || loader.previousPivot.Hash() != pivot.Hash() {
+	if loader.pivot == nil || loader.pivot.Hash() != pivot.Hash() {
 		t.Fatalf("expected persisted pivot to match synced pivot")
 	}
 }
@@ -2005,9 +2001,8 @@ func TestInterruptedGenerationRecovery(t *testing.T) {
 	syncer1.Register(src1)
 	src1.remote = syncer1
 	pivot := mkPivot(0, root)
-	syncer1.pivot = pivot
-	syncer1.previousPivot = pivot // Sync sets this before downloadState
 	syncer1.loadSyncStatus()
+	syncer1.pivot = pivot // Sync pins this before downloadState
 
 	if err := syncer1.downloadState(cancel1); err != nil {
 		t.Fatalf("download failed: %v", err)

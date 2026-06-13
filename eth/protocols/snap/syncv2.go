@@ -344,14 +344,12 @@ type SyncPeerV2 interface {
 //   - The peer delivers a stale response after a previous timeout
 //   - The peer delivers a refusal to serve the requested state
 type syncerV2 struct {
-	db     ethdb.Database // Database to store the trie nodes into (and dedup)
-	scheme string         // Node scheme used in node database
-
-	pivot         *types.Header    // Current pivot header being synced (lock needed)
-	previousPivot *types.Header    // Pivot from previous sync run (for pivot move detection)
-	phase         atomic.Uint32    // Current syncPhase; atomic so phase transitions are visible across goroutines
-	tasks         []*accountTaskV2 // Current account task set being synced
-	update        chan struct{}    // Notification channel for possible sync progression
+	db     ethdb.Database   // Database to store the trie nodes into (and dedup)
+	scheme string           // Node scheme used in node database
+	pivot  *types.Header    // Current pivot header being synced (lock needed)
+	phase  atomic.Uint32    // Current syncPhase; atomic so phase transitions are visible across goroutines
+	tasks  []*accountTaskV2 // Current account task set being synced
+	update chan struct{}    // Notification channel for possible sync progression
 
 	peers    map[string]SyncPeerV2 // Currently active peers to download from
 	peerJoin *event.Feed           // Event feed to react to peers joining
@@ -414,6 +412,13 @@ func newSyncerV2(db ethdb.Database, scheme string) *syncerV2 {
 		accessListReqs: make(map[uint64]*accessListRequest),
 
 		extProgress: new(syncProgressV2),
+	}
+	if raw := rawdb.ReadSnapshotSyncStatus(db); len(raw) > 0 && raw[0] == syncProgressVersion {
+		var progress syncProgressV2
+		if err := json.Unmarshal(raw[1:], &progress); err == nil {
+			s.pivot = progress.Pivot
+			s.setPhase(progress.Phase)
+		}
 	}
 	return s
 }
@@ -485,19 +490,17 @@ func (s *syncerV2) Unregister(id string) error {
 // Sync starts (or resumes a previous) sync cycle to iterate over a state trie
 // with the given pivot header and reconstruct the nodes based on the snapshot
 // leaves.
-func (s *syncerV2) Sync(pivot *types.Header, cancel chan struct{}) error {
-	if pivot == nil {
+func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
+	if target == nil {
 		return errors.New("snap sync: pivot header is nil")
 	}
 	s.lock.Lock()
-	s.pivot = pivot
-	s.previousPivot = nil // loadSyncStatus overwrites when resuming from persisted progress
 	s.statelessPeers = make(map[string]struct{})
 	s.lock.Unlock()
 	if s.startTime.IsZero() {
 		s.startTime = time.Now()
 	}
-	root := pivot.Root
+	root := target.Root
 
 	// Retrieve the previous sync status from DB. If there's no persisted
 	// status, sync is either fresh or already complete.
@@ -506,7 +509,10 @@ func (s *syncerV2) Sync(pivot *types.Header, cancel chan struct{}) error {
 	// isPivotChanged is true when we have prior progress against a different
 	// pivot. That means we need to roll forward via catchUp, or wipe and
 	// restart if the prior pivot was reorged out.
-	isPivotChanged := s.previousPivot != nil && s.previousPivot.Hash() != s.pivot.Hash()
+	s.lock.RLock()
+	prevPivot := s.pivot
+	s.lock.RUnlock()
+	isPivotChanged := prevPivot != nil && prevPivot.Hash() != target.Hash()
 
 	// Skip if we've already finished syncing this pivot.
 	if !isPivotChanged && s.getPhase() == phaseComplete {
@@ -549,8 +555,8 @@ func (s *syncerV2) Sync(pivot *types.Header, cancel chan struct{}) error {
 	// progress is still usable. If yes, roll forward via BAL catch-up. If not,
 	// wipe everything and restart fresh.
 	if isPivotChanged {
-		if isPivotReorged(s.db, s.previousPivot, s.pivot) {
-			log.Warn("Restarting snap sync from scratch", "oldnumber", s.previousPivot.Number, "oldHash", s.previousPivot.Hash())
+		if isPivotReorged(s.db, prevPivot, target) {
+			log.Warn("Restarting snap sync from scratch", "oldnumber", prevPivot.Number, "oldHash", prevPivot.Hash())
 			s.resetSyncState()
 		} else {
 			// A canonical pivot move past a frozen pivot should be impossible:
@@ -559,23 +565,15 @@ func (s *syncerV2) Sync(pivot *types.Header, cancel chan struct{}) error {
 			// frozen indicates a bug on the downloader side; roll the flat
 			// state forward defensively and regenerate.
 			if s.getPhase() >= phaseGenerate {
-				log.Warn("Frozen pivot moved unexpectedly, rolling forward", "frozen", s.previousPivot.Number, "new", s.pivot.Number)
+				log.Warn("Frozen pivot moved unexpectedly, rolling forward", "frozen", prevPivot.Number, "new", target.Number)
 			}
-			if err := s.catchUp(cancel); err != nil {
+			if err := s.catchUp(target, cancel); err != nil {
 				return err
 			}
 		}
 	}
-
-	// Pin previousPivot to the current pivot before downloadState runs.
-	// This is what saveSyncStatus persists. If the download is interrupted
-	// and the next Sync gets a different pivot, this is how isPivotReorged
-	// recognizes the partial flat state belongs to the old pivot. Without
-	// it, isPivotReorged sees nil, skips the reorg branch, and downloadState
-	// would resume from the persisted task markers but mix the old pivot's
-	// already-downloaded accounts with the new pivot's data.
 	s.lock.Lock()
-	s.previousPivot = s.pivot
+	s.pivot = target
 	s.lock.Unlock()
 
 	log.Info("Starting state download", "root", root)
@@ -617,18 +615,12 @@ func (s *syncerV2) Sync(pivot *types.Header, cancel chan struct{}) error {
 // finished with, so from that point on the downloader must neither move the
 // pivot nor start a new cycle against a different one.
 func (s *syncerV2) FrozenPivot() *types.Header {
-	raw := rawdb.ReadSnapshotSyncStatus(s.db)
-	if len(raw) == 0 || raw[0] != syncProgressVersion {
+	if s.getPhase() < phaseGenerate {
 		return nil
 	}
-	var progress syncProgressV2
-	if err := json.Unmarshal(raw[1:], &progress); err != nil {
-		return nil
-	}
-	if progress.Phase < phaseGenerate || progress.Pivot == nil {
-		return nil
-	}
-	return progress.Pivot
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	return s.pivot
 }
 
 // download runs the bulk flat-state download. It fetches
@@ -735,10 +727,10 @@ func isPivotReorged(db ethdb.Database, prev, curr *types.Header) bool {
 // catchUp runs the BAL catch-up. When the pivot has moved, it fetches BALs
 // for the gap blocks, verifies them against block headers, and applies the
 // diffs to roll flat state forward.
-func (s *syncerV2) catchUp(cancel chan struct{}) error {
+func (s *syncerV2) catchUp(target *types.Header, cancel chan struct{}) error {
 	s.lock.RLock()
-	from := s.previousPivot.Number.Uint64() + 1
-	to := s.pivot.Number.Uint64()
+	from := s.pivot.Number.Uint64() + 1
+	to := target.Number.Uint64()
 	s.lock.RUnlock()
 	log.Info("Starting BAL catch-up", "from", from, "to", to, "blocks", to-from+1)
 
@@ -795,7 +787,7 @@ func (s *syncerV2) catchUp(cancel chan struct{}) error {
 		// Persist incremental progress so a crash mid-catchUp can resume
 		// from the next unapplied block.
 		s.lock.Lock()
-		s.previousPivot = headers[hash]
+		s.pivot = headers[hash]
 		s.lock.Unlock()
 		s.saveSyncStatusWithDB(batch)
 
@@ -1027,7 +1019,7 @@ func (s *syncerV2) loadSyncStatus() {
 				}
 				task.StorageCompleted = nil
 			}
-			s.previousPivot = progress.Pivot
+			s.pivot = progress.Pivot
 			s.setPhase(progress.Phase)
 			s.accountSynced = progress.AccountSynced
 			s.accountBytes = progress.AccountBytes
@@ -1105,7 +1097,7 @@ func (s *syncerV2) resetSyncState() {
 	defer s.lock.Unlock()
 
 	s.tasks = nil
-	s.previousPivot = nil
+	s.pivot = nil
 	s.setPhase(phaseDownload)
 	s.accountSynced, s.accountBytes = 0, 0
 	s.bytecodeSynced, s.bytecodeBytes = 0, 0
@@ -1155,7 +1147,7 @@ func (s *syncerV2) saveSyncStatusWithDB(db ethdb.KeyValueWriter) {
 	}
 	// Store the actual progress markers.
 	progress := &syncProgressV2{
-		Pivot:          s.previousPivot,
+		Pivot:          s.pivot,
 		Tasks:          s.tasks,
 		Phase:          s.getPhase(),
 		AccountSynced:  s.accountSynced,
