@@ -237,6 +237,7 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 	}
 	if tx.Type() == types.BlobTxType {
 		args.BlobHashes = tx.BlobHashes()
+		args.BlobFeeCap = (*hexutil.Big)(tx.BlobGasFeeCap())
 		sidecar := tx.BlobTxSidecar()
 		if sidecar == nil {
 			return nil, errors.New("blobs must be present for signing")
