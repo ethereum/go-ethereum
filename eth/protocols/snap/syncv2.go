@@ -775,7 +775,7 @@ func (s *syncerV2) fetchAccessLists(hashes []common.Hash, headers map[common.Has
 			return nil, err
 		}
 		// Assign BAL retrieval tasks to idle peers
-		s.assignAccessListTasks(pending, accessListResps, accessListReqFails, cancel)
+		s.assignAccessListTasks(pending, refused, accessListResps, accessListReqFails, cancel)
 
 		// Periodic visibility while stalled with peers connected but idle.
 		if len(pending) > 0 && time.Since(lastStallLog) > 30*time.Second {
@@ -814,8 +814,9 @@ func (s *syncerV2) fetchAccessLists(hashes []common.Hash, headers map[common.Has
 }
 
 // assignAccessListTasks attempts to assign BAL fetch requests to idle
-// peers for any hashes still in pending.
-func (s *syncerV2) assignAccessListTasks(pending map[common.Hash]struct{}, success chan *accessListResponse, fail chan *accessListRequest, cancel chan struct{}) {
+// peers for any hashes still in pending. Hashes a peer has already refused
+// (recorded in refused) are not assigned back to that same peer.
+func (s *syncerV2) assignAccessListTasks(pending map[common.Hash]struct{}, refused map[common.Hash]map[string]struct{}, success chan *accessListResponse, fail chan *accessListRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -829,6 +830,33 @@ func (s *syncerV2) assignAccessListTasks(pending map[common.Hash]struct{}, succe
 		)
 		idlers.ids, idlers.caps = idlers.ids[1:], idlers.caps[1:]
 
+		// Collect hashes to fetch, capped by peer capacity and the
+		// EIP-8189 2 MiB response soft limit (~72 KiB/BAL -> 28 blocks).
+		if cap > maxAccessListRequestCount {
+			cap = maxAccessListRequestCount
+		}
+		batch := make([]common.Hash, 0, cap)
+		for h := range pending {
+			// Skip hashes this peer has already refused; another peer
+			// must serve them.
+			if set := refused[h]; set != nil {
+				if _, ok := set[idle]; ok {
+					continue
+				}
+			}
+			delete(pending, h)
+
+			batch = append(batch, h)
+			if len(batch) >= cap {
+				break
+			}
+		}
+		// The peer has already refused every pending hash; leave them in
+		// pending for another peer and move on without a wasted request.
+		if len(batch) == 0 {
+			continue
+		}
+
 		// Generate a unique request ID
 		var reqid uint64
 		for {
@@ -840,21 +868,6 @@ func (s *syncerV2) assignAccessListTasks(pending map[common.Hash]struct{}, succe
 				continue
 			}
 			break
-		}
-
-		// Collect hashes to fetch, capped by peer capacity and the
-		// EIP-8189 2 MiB response soft limit (~72 KiB/BAL -> 28 blocks).
-		if cap > maxAccessListRequestCount {
-			cap = maxAccessListRequestCount
-		}
-		batch := make([]common.Hash, 0, cap)
-		for h := range pending {
-			delete(pending, h)
-
-			batch = append(batch, h)
-			if len(batch) >= cap {
-				break
-			}
 		}
 		req := &accessListRequest{
 			peer:    idle,
