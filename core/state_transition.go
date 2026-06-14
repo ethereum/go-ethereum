@@ -916,9 +916,9 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 //     once, and only when the account did not exist before the tx
 //
 //   - the delegation-indicator portion (AuthorizationCreationSize × CPSB) is
-//     charged at most once, and only when the authority ends the tx delegated
-//     having started it undelegated.
-func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization, delegates map[common.Address]bool) error {
+//     refunded when this auth writes no new indicator bytes (the authority is
+//     already delegated, or the auth clears the delegation).
+func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization) error {
 	authority, err := st.validateAuthorization(auth)
 	if err != nil {
 		// EIP-8037 (spec apply_authorization): an invalid authorization is
@@ -936,29 +936,20 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 			st.state.AddRefund(params.CallNewAccountGas - params.TxAuthTupleGas)
 		}
 	} else {
+		// EIP-8037 (spec apply_authorization): refund the per-auth intrinsic
+		// state charge for state that does not actually get newly created.
+		//
+		//   - NEW_ACCOUNT is refunded when the authority account already exists
+		//     (account_exists), since no new account is created.
 		if st.state.Exist(authority) {
 			st.gasRemaining.RefundState(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
 		}
-		authBase := params.AuthorizationCreationSize * st.evm.Context.CostPerStateByte
-
-		preDelegated, ok := delegates[authority]
-		if !ok {
-			preDelegated = curDelegated
-			delegates[authority] = preDelegated
-		}
-		if auth.Address == (common.Address{}) {
-			// Clearing writes no indicator, refill this auth's state charge.
-			st.gasRemaining.RefundState(authBase)
-
-			// The indicator was created by an earlier auth within the same
-			// transaction, refill the state charge as it's no longer justified.
-			if curDelegated && !preDelegated {
-				st.gasRemaining.RefundState(authBase)
-			}
-		} else if curDelegated || preDelegated {
-			// The 23-byte slot is already occupied, overwriting it writes no
-			// new bytes, refill the state charge.
-			st.gasRemaining.RefundState(authBase)
+		//   - AUTH_BASE is refunded when no new delegation-indicator bytes are
+		//     written: either the authority already carries code/delegation
+		//     (code_hash != EMPTY, i.e. curDelegated) or this auth clears the
+		//     delegation (auth.address == 0). Exactly one refund per auth.
+		if curDelegated || auth.Address == (common.Address{}) {
+			st.gasRemaining.RefundState(params.AuthorizationCreationSize * st.evm.Context.CostPerStateByte)
 		}
 	}
 
@@ -981,9 +972,8 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 
 // applyAuthorizations applies an EIP-7702 code delegation to the state.
 func (st *stateTransition) applyAuthorizations(rules params.Rules, auths []types.SetCodeAuthorization) {
-	preDelegated := make(map[common.Address]bool)
 	for _, auth := range auths {
-		st.applyAuthorization(rules, &auth, preDelegated)
+		st.applyAuthorization(rules, &auth)
 	}
 }
 
