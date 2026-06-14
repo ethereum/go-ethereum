@@ -349,12 +349,12 @@ func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, err
 //  5. Run Script section
 //  6. Derive new state root
 type stateTransition struct {
-	gp           *GasPool
-	msg          *Message
-	gasRemaining vm.GasBudget
+	gp            *GasPool
+	msg           *Message
+	gasRemaining  vm.GasBudget
 	initReservoir uint64 // initial state-gas reservoir carved out of GasLimit (EIP-8037)
-	state        vm.StateDB
-	evm          *vm.EVM
+	state         vm.StateDB
+	evm           *vm.EVM
 }
 
 // newStateTransition initialises and returns a new state transition object.
@@ -393,7 +393,7 @@ func (st *stateTransition) to() common.Address {
 //   - Amsterdam+ (EIP-8037): two-dimensional budget. Regular gas is
 //     capped at `MaxTxGas` (EIP-7825, 16_777_216); any excess from
 //     `msg.GasLimit` above that cap becomes the state-gas reservoir.
-func (st *stateTransition) buyGas() error {
+func (st *stateTransition) buyGas(intrinsic vm.GasCosts) error {
 	mgval := new(uint256.Int).SetUint64(st.msg.GasLimit)
 	_, overflow := mgval.MulOverflow(mgval, st.msg.GasPrice)
 	if overflow {
@@ -447,10 +447,20 @@ func (st *stateTransition) buyGas() error {
 	}
 	isAmsterdam := st.evm.ChainConfig().IsAmsterdam(st.evm.Context.BlockNumber, st.evm.Context.Time)
 
-	// Reserve the gas budget in the block gas pool
+	// Reserve the gas budget in the block gas pool. This block-inclusion check
+	// must run before the sender's balance is debited below, so it cannot be
+	// deferred past buyGas.
 	var err error
 	if isAmsterdam {
-		err = st.gp.CheckGasAmsterdam(min(st.msg.GasLimit, params.MaxTxGas), st.msg.GasLimit)
+		// EIP-8037 per-tx 2D block-inclusion check (fork.py): the worst-case
+		// regular contribution is min(MaxTxGas, tx.gas - intrinsic.state) and
+		// the worst-case state contribution is tx.gas - intrinsic.regular.
+		// Each dimension subtracts the other's intrinsic counterpart. The
+		// intrinsic gas is computed once by execute() and passed in, so it is
+		// shared with the charge below rather than recomputed.
+		regularReservation := min(st.msg.GasLimit-min(st.msg.GasLimit, intrinsic.StateGas), params.MaxTxGas)
+		stateReservation := st.msg.GasLimit - min(st.msg.GasLimit, intrinsic.RegularGas)
+		err = st.gp.CheckGasAmsterdam(regularReservation, stateReservation)
 	} else {
 		err = st.gp.CheckGasLegacy(st.msg.GasLimit)
 	}
@@ -493,7 +503,7 @@ func (st *stateTransition) buyGas() error {
 //
 // The SkipNonceChecks / SkipTransactionChecks / NoBaseFee flags bypass
 // subsets of these checks for simulation paths (eth_call, eth_estimateGas).
-func (st *stateTransition) preCheck() error {
+func (st *stateTransition) preCheck(intrinsic vm.GasCosts) error {
 	// Only check transactions that are not fake
 	msg := st.msg
 	if !msg.SkipNonceChecks {
@@ -587,7 +597,7 @@ func (st *stateTransition) preCheck() error {
 			return fmt.Errorf("%w (sender %v)", ErrEmptyAuthList, msg.From)
 		}
 	}
-	return st.buyGas()
+	return st.buyGas(intrinsic)
 }
 
 // execute transitions the state by applying the current message and
@@ -602,14 +612,10 @@ func (st *stateTransition) preCheck() error {
 // If a consensus error is encountered, it is returned directly with a
 // nil EVM execution result.
 func (st *stateTransition) execute() (*ExecutionResult, error) {
-	// Validate the message and pre-pay gas.
-	if err := st.preCheck(); err != nil {
-		return nil, err
-	}
-
-	// Charge intrinsic gas (with overflow detection inside IntrinsicGas).
-	// Under Amsterdam the cost is two-dimensional and Charge debits both
-	// regular and state in one step.
+	// Compute the intrinsic gas once up front. It is a pure function of the
+	// message and rules (no state access), and is needed both by the EIP-8037
+	// block-inclusion check in preCheck/buyGas and by the intrinsic charge
+	// below, so it is computed here and threaded through.
 	var (
 		msg              = st.msg
 		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil, st.evm.Context.Time)
@@ -620,6 +626,14 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Validate the message and pre-pay gas.
+	if err := st.preCheck(cost); err != nil {
+		return nil, err
+	}
+
+	// Charge intrinsic gas. Under Amsterdam the cost is two-dimensional and
+	// Charge debits both regular and state in one step.
 	prior, sufficient := st.gasRemaining.Charge(cost)
 	if !sufficient {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining.RegularGas, cost.RegularGas)
@@ -842,7 +856,7 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 		// block_gas_used, so the block must never count fewer regular units
 		// than the floor the sender was charged.
 		blockRegularGas := max(txRegularGas, floorDataGas)
-			if err = st.gp.ChargeGasAmsterdam(blockRegularGas, txStateGas, gasUsed); err != nil {
+		if err = st.gp.ChargeGasAmsterdam(blockRegularGas, txStateGas, gasUsed); err != nil {
 			return 0, 0, err
 		}
 	} else {
