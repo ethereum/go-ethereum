@@ -506,12 +506,16 @@ func gasCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	if evm.chainRules.IsAmsterdam {
 		// EIP-8037: the cost of creating a new account via a value-bearing
 		// CALL is metered as state gas (NEW_ACCOUNT * CostPerStateByte),
-		// not the legacy regular CallNewAccountGas. Charge it directly here
-		// so it drains the state reservoir (spilling into regular gas only
-		// when the reservoir is exhausted), mirroring the spec's inline
-		// charge_state_gas call in system.call.
+		// not the legacy regular CallNewAccountGas. It drains the state
+		// reservoir, spilling into regular gas only when the reservoir is
+		// exhausted, mirroring the spec's inline charge_state_gas in
+		// system.call.
 		if transfersValue && evm.StateDB.Empty(address) {
 			stateGas := params.AccountCreationSize * evm.Context.CostPerStateByte
+			regularAfterCall := contract.Gas.RegularGas - gas
+			if stateGas > contract.Gas.StateGas && stateGas-contract.Gas.StateGas > regularAfterCall {
+				return 0, ErrOutOfGas
+			}
 			if !contract.chargeState(stateGas, evm.Config.Tracer, tracing.GasChangeAccountCreation) {
 				return 0, ErrOutOfGas
 			}
