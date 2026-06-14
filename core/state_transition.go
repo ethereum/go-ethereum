@@ -352,6 +352,7 @@ type stateTransition struct {
 	gp           *GasPool
 	msg          *Message
 	gasRemaining vm.GasBudget
+	initReservoir uint64 // initial state-gas reservoir carved out of GasLimit (EIP-8037)
 	state        vm.StateDB
 	evm          *vm.EVM
 }
@@ -462,7 +463,8 @@ func (st *stateTransition) buyGas() error {
 	if isAmsterdam {
 		limit = min(st.msg.GasLimit, params.MaxTxGas)
 	}
-	st.gasRemaining = vm.NewGasBudget(limit, st.msg.GasLimit-limit)
+	st.initReservoir = st.msg.GasLimit - limit
+	st.gasRemaining = vm.NewGasBudget(limit, st.initReservoir)
 
 	if st.evm.Config.Tracer.HasGasHook() {
 		st.evm.Config.Tracer.EmitGasChange(tracing.Gas{}, st.gasRemaining.AsTracing(), tracing.GasChangeTxInitialBalance)
@@ -683,12 +685,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// Execute the transaction's creation.
 		ret, _, result, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining.ForwardAll(), value)
 		st.gasRemaining.Absorb(result)
-
-		// If the contract creation failed, refund the account-creation state
-		// gas pre-charged in IntrinsicGas.
-		if rules.IsAmsterdam && vmerr != nil {
-			st.gasRemaining.RefundState(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
-		}
 	} else {
 		// Increment the nonce for the next transaction.
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
@@ -707,6 +703,29 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// Execute the transaction's call.
 		ret, result, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining.ForwardAll(), value)
 		st.gasRemaining.Absorb(result)
+	}
+
+	// EIP-8037 (fork.py:1086): on any transaction error, the state gas
+	// consumed during *execution* is discarded — those state changes are
+	// reverted, so the charge is restored to the reservoir and not counted
+	// toward block_state_gas_used. The intrinsic state gas (CREATE new-account
+	// and EIP-7702 authorization charges) is tracked separately by the spec and
+	// is NOT discarded here; the CREATE new-account portion is refunded above
+	// via its dedicated RefundState. The frame-level Exit forms already refund
+	// state gas on a reverting/halting sub-call, but a top-level frame that
+	// ends in a code-deposit halt (or any other tx-level vmerr) can leave
+	// accumulated execution UsedStateGas that must be discarded here.
+	if rules.IsAmsterdam && vmerr != nil {
+		executionStateGas := st.gasRemaining.UsedStateGas - int64(cost.StateGas)
+		if executionStateGas > 0 {
+			st.gasRemaining.RefundState(uint64(executionStateGas))
+		}
+		// Additionally, a failed CREATE transaction refunds the intrinsic
+		// account-creation state gas pre-charged in IntrinsicGas (fork.py:1093:
+		// when tx.to is Bytes0 the NEW_ACCOUNT charge is added to state_refund).
+		if contractCreation {
+			st.gasRemaining.RefundState(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
+		}
 	}
 
 	// Settle down the gas usage and refund the ETH back if any remaining
@@ -781,6 +800,7 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 	if st.gasRemaining.UsedStateGas < 0 {
 		return 0, 0, fmt.Errorf("negative topmost frame state gas usage, %d", st.gasRemaining.UsedStateGas)
 	}
+
 	txStateGas := uint64(st.gasRemaining.UsedStateGas)
 
 	// EIP-8037:

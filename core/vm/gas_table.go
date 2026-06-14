@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -502,6 +503,21 @@ func gasCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 		return 0, ErrOutOfGas
 	}
 	// Stateful check
+	if evm.chainRules.IsAmsterdam {
+		// EIP-8037: the cost of creating a new account via a value-bearing
+		// CALL is metered as state gas (NEW_ACCOUNT * CostPerStateByte),
+		// not the legacy regular CallNewAccountGas. Charge it directly here
+		// so it drains the state reservoir (spilling into regular gas only
+		// when the reservoir is exhausted), mirroring the spec's inline
+		// charge_state_gas call in system.call.
+		if transfersValue && evm.StateDB.Empty(address) {
+			stateGas := params.AccountCreationSize * evm.Context.CostPerStateByte
+			if !contract.chargeState(stateGas, evm.Config.Tracer, tracing.GasChangeAccountCreation) {
+				return 0, ErrOutOfGas
+			}
+		}
+		return gas, nil
+	}
 	var stateGas uint64
 	if evm.chainRules.IsEIP158 {
 		if transfersValue && evm.StateDB.Empty(address) {

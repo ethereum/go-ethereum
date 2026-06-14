@@ -295,7 +295,14 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
-	if evm.chainRules.IsAmsterdam && !value.IsZero() && evm.StateDB.Empty(addr) {
+	// EIP-8037: a value-bearing CALL to an empty account pays NEW_ACCOUNT state
+	// gas. For nested calls this is charged on the caller frame by the dynamic
+	// gas table (gasCallIntrinsic), matching the spec's inline charge_state_gas
+	// in system.call. Only the top-most call (depth 0) — which is dispatched
+	// straight to evm.Call without passing through that gas table — needs the
+	// charge applied here, against the forwarded budget. Charging in both places
+	// would double-count the new account.
+	if evm.depth == 0 && evm.chainRules.IsAmsterdam && !value.IsZero() && evm.StateDB.Empty(addr) {
 		prev, ok := gas.ChargeState(params.AccountCreationSize * evm.Context.CostPerStateByte)
 		if !ok {
 			evm.StateDB.RevertToSnapshot(snapshot)
@@ -597,14 +604,23 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	contract.SetCallCode(common.Hash{}, code)
 	contract.IsDeployment = true
 
-	ret, err = evm.initNewContract(contract, address)
+	var depositHalt bool
+	ret, depositHalt, err = evm.initNewContract(contract, address)
 
 	// Special case: ErrCodeStoreOutOfGas pre-Homestead does NOT roll back
 	// state and gas is preserved (i.e., treated as success).
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 
-		exit := contract.Gas.Exit(err)
+		// EIP-8037: a code-deposit halt (initcode body succeeded, deposit step
+		// failed) keeps the state gas the body consumed for discard at the tx
+		// level, rather than refunding the reservoir like a mid-execution halt.
+		var exit GasBudget
+		if depositHalt && evm.chainRules.IsAmsterdam {
+			exit = contract.Gas.ExitCodeDepositHalt()
+		} else {
+			exit = contract.Gas.Exit(err)
+		}
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
 				evm.Config.Tracer.EmitGasChange(contract.Gas.AsTracing(), exit.AsTracing(), tracing.GasChangeCallFailedExecution)
@@ -619,54 +635,60 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 
 // initNewContract runs a new contract's creation code, performs checks on the
 // resulting code that is to be deployed, and consumes necessary gas.
-func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]byte, error) {
-	ret, err := evm.Run(contract, nil, false)
+//
+// The returned depositHalt flag is true when the initcode body itself ran to
+// completion successfully but a subsequent code-deposit check failed (oversized
+// code, 0xEF prefix, or insufficient gas for the hash/deposit charge). Under
+// EIP-8037 this halt is metered differently from a mid-execution halt: the
+// state gas consumed by the (successful) body is kept rather than refunded.
+func (evm *EVM) initNewContract(contract *Contract, address common.Address) (ret []byte, depositHalt bool, err error) {
+	ret, err = evm.Run(contract, nil, false)
 	if err != nil {
-		return ret, err
+		return ret, false, err
 	}
 	// Check prefix before gas calculation.
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
 	if len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
-		return ret, ErrInvalidCode
+		return ret, true, ErrInvalidCode
 	}
 	if evm.chainRules.IsEIP4762 {
 		consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true, contract.Gas.RegularGas)
 		contract.chargeRegular(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
 		if len(ret) > 0 && (consumed < wanted) {
-			return ret, ErrCodeStoreOutOfGas
+			return ret, true, ErrCodeStoreOutOfGas
 		}
 		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
-			return ret, err
+			return ret, true, err
 		}
 	} else if evm.chainRules.IsAmsterdam {
 		// Check max code size BEFORE charging gas so over-max code
 		// does not consume state gas (which would inflate tx_state).
 		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
-			return ret, err
+			return ret, true, err
 		}
 		// Charge regular gas (hash cost) before state gas.
 		regularCost := toWordSize(uint64(len(ret))) * params.Keccak256WordGas
 		if !contract.chargeRegular(regularCost, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
-			return ret, ErrCodeStoreOutOfGas
+			return ret, true, ErrCodeStoreOutOfGas
 		}
 		// Charge state gas (code-deposit) afterwards.
 		stateCost := uint64(len(ret)) * evm.Context.CostPerStateByte
 		if !contract.chargeState(stateCost, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
-			return ret, ErrCodeStoreOutOfGas
+			return ret, true, ErrCodeStoreOutOfGas
 		}
 	} else {
 		createDataCost := uint64(len(ret)) * params.CreateDataGas
 		if !contract.chargeRegular(createDataCost, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
-			return ret, ErrCodeStoreOutOfGas
+			return ret, true, ErrCodeStoreOutOfGas
 		}
 		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
-			return ret, err
+			return ret, true, err
 		}
 	}
 	if len(ret) > 0 {
 		evm.StateDB.SetCode(address, ret, tracing.CodeChangeContractCreation)
 	}
-	return ret, nil
+	return ret, false, nil
 }
 
 // Create creates a new contract using code as deployment code.

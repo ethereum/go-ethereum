@@ -247,6 +247,26 @@ func (g GasBudget) ExitHalt() GasBudget {
 	}
 }
 
+// ExitCodeDepositHalt produces the leftover for a CREATE/CREATE2 frame whose
+// initcode body ran to completion but then failed during the code-deposit step
+// (oversized code, 0xEF prefix, or insufficient gas for the hash/deposit
+// charge). Per the spec's process_create_message exception handler, this path
+// differs from a mid-execution ExceptionalHalt: only the remaining regular gas
+// is burned, while the state gas the (successful) body consumed is KEPT in
+// UsedStateGas rather than refunded to the reservoir. The state changes are
+// reverted by the caller, but the state-gas accounting is propagated upward so
+// the top-level tx settlement can discard it as the state dimension (rather
+// than folding it back into the combined balance, which would wrongly deflate
+// the regular dimension).
+func (g GasBudget) ExitCodeDepositHalt() GasBudget {
+	return GasBudget{
+		RegularGas:     0,
+		StateGas:       g.StateGas,
+		UsedRegularGas: g.UsedRegularGas + g.RegularGas,
+		UsedStateGas:   g.UsedStateGas,
+	}
+}
+
 // Exit dispatches on err to the appropriate exit-form constructor
 // for the post-evm.Run path:
 //
