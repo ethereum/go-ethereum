@@ -155,7 +155,8 @@ func (s *Suite) sendInvalidTxs(t *utesting.T, txs []*types.Transaction) error {
 
 		switch msg := msg.(type) {
 		case *eth.TransactionsPacket:
-			for _, tx := range txs {
+			received, _ := msg.Items()
+			for _, tx := range received {
 				if _, ok := invalids[tx.Hash()]; ok {
 					return fmt.Errorf("received bad tx: %s", tx.Hash())
 				}
