@@ -907,9 +907,12 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization, delegates map[common.Address]bool) error {
 	authority, err := st.validateAuthorization(auth)
 	if err != nil {
-		if rules.IsAmsterdam {
-			st.gasRemaining.RefundState((params.AccountCreationSize + params.AuthorizationCreationSize) * st.evm.Context.CostPerStateByte)
-		}
+		// EIP-8037 (spec apply_authorization): an invalid authorization is
+		// skipped without any state-gas refund. The per-auth intrinsic state
+		// charge ((NEW_ACCOUNT + AUTH_BASE) * CPSB) was levied for every
+		// authorization in the list regardless of validity, and only a
+		// successfully-applied authorization that avoids creating new state
+		// earns a refund below. Invalid auths therefore pay in full.
 		return err
 	}
 	prevDelegation, curDelegated := types.ParseDelegation(st.state.GetCode(authority))
