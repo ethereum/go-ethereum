@@ -674,11 +674,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		ret    []byte
 		vmerr  error // vm errors do not effect consensus and are therefore not assigned to err
 		result vm.GasBudget
-
-		// Capture the forwarded regular-gas amount BEFORE ForwardAll consumes
-		// it, so Absorb can back out state-gas spillover from UsedRegularGas
-		// per EIP-8037.
-		forwarded = st.gasRemaining.RegularGas
 	)
 	if contractCreation {
 		// Check whether the init code size has been exceeded.
@@ -687,7 +682,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 		// Execute the transaction's creation.
 		ret, _, result, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining.ForwardAll(), value)
-		st.gasRemaining.Absorb(result, forwarded)
+		st.gasRemaining.Absorb(result)
 
 		// If the contract creation failed, refund the account-creation state
 		// gas pre-charged in IntrinsicGas.
@@ -711,7 +706,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 		// Execute the transaction's call.
 		ret, result, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining.ForwardAll(), value)
-		st.gasRemaining.Absorb(result, forwarded)
+		st.gasRemaining.Absorb(result)
 	}
 
 	// Settle down the gas usage and refund the ETH back if any remaining
@@ -821,7 +816,13 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 	}
 
 	if rules.IsAmsterdam {
-		if err = st.gp.ChargeGasAmsterdam(txRegularGas, txStateGas, gasUsed); err != nil {
+		// EIP-7623/7976: the calldata floor applies to the block-level regular
+		// gas dimension as well, mirroring its effect on the receipt gas. The
+		// spec accumulates max(tx_regular_gas, calldata_floor) into
+		// block_gas_used, so the block must never count fewer regular units
+		// than the floor the sender was charged.
+		blockRegularGas := max(txRegularGas, floorDataGas)
+			if err = st.gp.ChargeGasAmsterdam(blockRegularGas, txStateGas, gasUsed); err != nil {
 			return 0, 0, err
 		}
 	} else {

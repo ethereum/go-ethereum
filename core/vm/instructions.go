@@ -677,7 +677,14 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(&stackvalue)
 
 	// Refund the leftover gas back to current frame
-	scope.Contract.refundGas(result, forward, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+
+	// EIP-8037: no account was created on any failure path, so refund the
+	// account-creation state gas charged before the opcode ran (gasCreateEip8037)
+	// back to the reservoir.
+	if evm.chainRules.IsAmsterdam && suberr != nil {
+		scope.Contract.Gas.RefundState(params.AccountCreationSize * evm.Context.CostPerStateByte)
+	}
 
 	if suberr == ErrExecutionReverted {
 		evm.returnData = res // set REVERT data to return data buffer
@@ -711,7 +718,14 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(&stackvalue)
 
 	// Refund the leftover gas back to current frame
-	scope.Contract.refundGas(result, forward, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+
+	// EIP-8037: no account was created on any failure path, so refund the
+	// account-creation state gas charged before the opcode ran (gasCreate2Eip8037)
+	// back to the reservoir.
+	if evm.chainRules.IsAmsterdam && suberr != nil {
+		scope.Contract.Gas.RefundState(params.AccountCreationSize * evm.Context.CostPerStateByte)
+	}
 
 	if suberr == ErrExecutionReverted {
 		evm.returnData = res // set REVERT data to return data buffer
@@ -756,7 +770,7 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if err == nil || err == ErrExecutionReverted {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	scope.Contract.refundGas(result, gas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	evm.returnData = ret
 	return ret, nil
@@ -792,7 +806,7 @@ func opCallCode(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	scope.Contract.refundGas(result, gas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	evm.returnData = ret
 	return ret, nil
@@ -824,7 +838,7 @@ func opDelegateCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if err == nil || err == ErrExecutionReverted {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	scope.Contract.refundGas(result, gas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	evm.returnData = ret
 	return ret, nil
@@ -857,7 +871,7 @@ func opStaticCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	scope.Contract.refundGas(result, gas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	evm.returnData = ret
 	return ret, nil

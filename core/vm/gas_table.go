@@ -367,6 +367,62 @@ func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	return GasCosts{RegularGas: gas}, nil
 }
 
+// gasCreateEip8037 is the CREATE gas calculator for Amsterdam. It charges the
+// account-creation cost as state gas (EIP-8037) here, before the opcode runs,
+// so the 63/64 gas-forwarding split sees the post-charge regular gas. The
+// charge is refunded to the reservoir in opCreate on any failure path that
+// does not create an account.
+func gasCreateEip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+	if evm.readOnly {
+		return GasCosts{}, ErrWriteProtection
+	}
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return GasCosts{}, err
+	}
+	size, overflow := stack.back(2).Uint64WithOverflow()
+	if overflow {
+		return GasCosts{}, ErrGasUintOverflow
+	}
+	if err := CheckMaxInitCodeSize(&evm.chainRules, size); err != nil {
+		return GasCosts{}, err
+	}
+	// Since size <= MaxInitCodeSizeAmsterdam, these multiplications cannot overflow.
+	wordGas := params.InitCodeWordGas * ((size + 31) / 32)
+	stateGas := params.AccountCreationSize * evm.Context.CostPerStateByte
+	return GasCosts{
+		RegularGas: gas + wordGas,
+		StateGas:   stateGas,
+	}, nil
+}
+
+// gasCreate2Eip8037 is the CREATE2 gas calculator for Amsterdam. See
+// gasCreateEip8037; CREATE2 additionally charges Keccak256WordGas for hashing
+// the init code.
+func gasCreate2Eip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+	if evm.readOnly {
+		return GasCosts{}, ErrWriteProtection
+	}
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return GasCosts{}, err
+	}
+	size, overflow := stack.back(2).Uint64WithOverflow()
+	if overflow {
+		return GasCosts{}, ErrGasUintOverflow
+	}
+	if err := CheckMaxInitCodeSize(&evm.chainRules, size); err != nil {
+		return GasCosts{}, err
+	}
+	// Since size <= MaxInitCodeSizeAmsterdam, these multiplications cannot overflow.
+	wordGas := (params.InitCodeWordGas + params.Keccak256WordGas) * ((size + 31) / 32)
+	stateGas := params.AccountCreationSize * evm.Context.CostPerStateByte
+	return GasCosts{
+		RegularGas: gas + wordGas,
+		StateGas:   stateGas,
+	}, nil
+}
+
 func gasExpFrontier(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 	expByteLen := uint64((stack.back(1).BitLen() + 7) / 8)
 
