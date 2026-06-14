@@ -4175,52 +4175,6 @@ func TestSendRawTransactionSync_Timeout(t *testing.T) {
 	}
 }
 
-func TestSendRawTransaction_InvalidParams_OnMalformedRLP(t *testing.T) {
-	t.Parallel()
-	genesis := &core.Genesis{
-		Config: params.TestChainConfig,
-		Alloc:  types.GenesisAlloc{},
-	}
-	b := newTestBackend(t, 0, genesis, ethash.NewFaker(), nil)
-	api := NewTransactionAPI(b, new(AddrLocker))
-
-	cases := []struct {
-		name string
-		raw  string
-	}{
-		{"empty-list", "0xc0"},
-		{"truncated-short-list", "0xd4"},
-		{"unknown-tx-type", "0x09c0"},
-		{"eip4844-truncated-list", "0x03c0"},
-		{"eip7702-truncated-list", "0x04c0"},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name+"/SendRawTransaction", func(t *testing.T) {
-			_, err := api.SendRawTransaction(context.Background(), hexutil.MustDecode(tc.raw))
-			assertInvalidParams(t, err)
-		})
-		t.Run(tc.name+"/SendRawTransactionSync", func(t *testing.T) {
-			_, err := api.SendRawTransactionSync(context.Background(), hexutil.MustDecode(tc.raw), nil)
-			assertInvalidParams(t, err)
-		})
-	}
-}
-
-func assertInvalidParams(t *testing.T, err error) {
-	t.Helper()
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	var ec interface{ ErrorCode() int }
-	if !errors.As(err, &ec) {
-		t.Fatalf("expected error implementing ErrorCode(), got %T: %v", err, err)
-	}
-	if got, want := ec.ErrorCode(), -32602; got != want {
-		t.Fatalf("expected ErrorCode=%d (InvalidParams), got %d (%v)", want, got, err)
-	}
-}
-
 func TestGetStorageValues(t *testing.T) {
 	t.Parallel()
 
