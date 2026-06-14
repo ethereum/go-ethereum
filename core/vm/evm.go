@@ -295,23 +295,6 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
-	// EIP-8037: a value-bearing CALL to an empty account pays NEW_ACCOUNT state
-	// gas. For nested calls this is charged on the caller frame by the dynamic
-	// gas table (gasCallIntrinsic), matching the spec's inline charge_state_gas
-	// in system.call. Only the top-most call (depth 0) — which is dispatched
-	// straight to evm.Call without passing through that gas table — needs the
-	// charge applied here, against the forwarded budget. Charging in both places
-	// would double-count the new account.
-	if evm.depth == 0 && evm.chainRules.IsAmsterdam && !value.IsZero() && evm.StateDB.Empty(addr) {
-		prev, ok := gas.ChargeState(params.AccountCreationSize * evm.Context.CostPerStateByte)
-		if !ok {
-			evm.StateDB.RevertToSnapshot(snapshot)
-			return nil, gas.ExitHalt(), ErrOutOfGas
-		}
-		if evm.Config.Tracer.HasGasHook() {
-			evm.Config.Tracer.EmitGasChange(prev.AsTracing(), gas.AsTracing(), tracing.GasChangeAccountCreation)
-		}
-	}
 	// Perform the value transfer only in non-syscall mode.
 	// Calling this is required even for zero-value transfers,
 	// to ensure the state clearing mechanism is applied.
