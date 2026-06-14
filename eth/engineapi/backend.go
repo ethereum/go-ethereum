@@ -56,8 +56,12 @@ type Backend interface {
 	// router can enforce the URL fork's era window.
 	BodiesByHash(hashes []common.Hash) ([]*types.Body, []uint64)
 
-	// BodiesByRange returns block bodies for [from, from+count). Same shape
-	// as BodiesByHash.
+	// BodiesByRange returns block bodies for [from, from+count), but the
+	// result MUST be truncated at the latest known block: blocks past head are
+	// omitted, not padded with nil. The spec's "no trailing nulls" rule means a
+	// range response has length min(count, head-from+1) for from <= head, and
+	// is empty for from > head. In-range-but-pruned blocks are still returned as
+	// nil entries (-> available=false); only past-head blocks are dropped.
 	BodiesByRange(from, count uint64) ([]*types.Body, []uint64)
 
 	// ForkFromTimestamp returns the fork active at timestamp ts.

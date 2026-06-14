@@ -22,23 +22,28 @@ package ssz
 
 // MAX_* constants from refactor-ssz.md.
 const (
-	MaxBytesPerTx               = 1 << 30   // 1 GiB, EIP-4844
-	MaxTxsPerPayload            = 1 << 20   // 1,048,576, Bellatrix
-	MaxWithdrawalsPerPayload    = 16        // Capella
-	MaxExtraDataBytes           = 32        // Bellatrix
-	MaxBlobCommitmentsPerBlock  = 1 << 12   // 4,096, Deneb
-	FieldElementsPerBlob        = 4096      // EIP-4844
-	BytesPerFieldElement        = 32        // EIP-4844
-	BytesPerBlob                = FieldElementsPerBlob * BytesPerFieldElement
-	CellsPerExtBlob             = 128       // EIP-7594
-	BytesPerCell                = BytesPerBlob / CellsPerExtBlob
-	MaxBalBytes                 = MaxBytesPerTx // EIP-7928 placeholder
-	MaxExecutionRequestsPerPayload = 1 << 8 // 256, EIP-7685
-	MaxBytesPerExecutionRequest = MaxBytesPerTx // placeholder
-	MaxVersionedHashesPerRequest = 128       // Osaka
-	MaxBlobsRequest             = MaxVersionedHashesPerRequest
-	MaxBodiesRequest            = 128        // see spec open question; capabilities example uses 128
-	MaxErrorBytes               = 1024
+	MaxBytesPerTx              = 1 << 30 // 1 GiB, EIP-4844
+	MaxTxsPerPayload           = 1 << 20 // 1,048,576, Bellatrix
+	MaxWithdrawalsPerPayload   = 16      // Capella
+	MaxExtraDataBytes          = 32      // Bellatrix
+	MaxBlobCommitmentsPerBlock = 1 << 12 // 4,096, Deneb
+	FieldElementsPerBlob       = 4096    // EIP-4844
+	BytesPerFieldElement       = 32      // EIP-4844
+	BytesPerBlob               = FieldElementsPerBlob * BytesPerFieldElement
+	CellsPerExtBlob            = 128 // EIP-7594
+	FieldElementsPerCell       = 64  // EIP-7594
+	// A cell spans FIELD_ELEMENTS_PER_CELL field elements of the *extended*
+	// blob, so BytesPerCell = 64 * 32 = 2048. (Not BytesPerBlob/CellsPerExtBlob,
+	// which divides the original-blob byte count over the extended-blob cell
+	// count and halves the true size — see execution-apis refactor-ssz.md.)
+	BytesPerCell                   = FieldElementsPerCell * BytesPerFieldElement
+	MaxBalBytes                    = MaxBytesPerTx // EIP-7928 placeholder
+	MaxExecutionRequestsPerPayload = 1 << 8        // 256, EIP-7685
+	MaxBytesPerExecutionRequest    = MaxBytesPerTx // placeholder
+	MaxVersionedHashesPerRequest   = 128           // Osaka
+	MaxBlobsRequest                = MaxVersionedHashesPerRequest
+	MaxBodiesRequest               = 1 << 5 // 32, Shanghai
+	MaxErrorBytes                  = 1024
 )
 
 // Status enum values for PayloadStatus.

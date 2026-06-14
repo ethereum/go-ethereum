@@ -23,19 +23,19 @@ import (
 
 // Error type URIs from refactor.md § Error model.
 const (
-	ErrParseError          = "/engine-api/errors/parse-error"
-	ErrInvalidRequest      = "/engine-api/errors/invalid-request"
-	ErrSSZDecode           = "/engine-api/errors/ssz-decode-error"
-	ErrUnsupportedFork     = "/engine-api/errors/unsupported-fork"
-	ErrMethodNotFound      = "/engine-api/errors/method-not-found"
-	ErrUnknownPayload      = "/engine-api/errors/unknown-payload"
-	ErrInvalidForkchoice   = "/engine-api/errors/invalid-forkchoice"
-	ErrReorgTooDeep        = "/engine-api/errors/reorg-too-deep"
-	ErrRequestTooLarge     = "/engine-api/errors/request-too-large"
-	ErrUnsupportedMedia    = "/engine-api/errors/unsupported-media-type"
-	ErrInvalidBody         = "/engine-api/errors/invalid-body"
-	ErrInvalidAttributes   = "/engine-api/errors/invalid-attributes"
-	ErrInternal            = "/engine-api/errors/internal"
+	ErrParseError        = "/engine-api/errors/parse-error"
+	ErrInvalidRequest    = "/engine-api/errors/invalid-request"
+	ErrSSZDecode         = "/engine-api/errors/ssz-decode-error"
+	ErrUnsupportedFork   = "/engine-api/errors/unsupported-fork"
+	ErrMethodNotFound    = "/engine-api/errors/method-not-found"
+	ErrUnknownPayload    = "/engine-api/errors/unknown-payload"
+	ErrInvalidForkchoice = "/engine-api/errors/invalid-forkchoice"
+	ErrReorgTooDeep      = "/engine-api/errors/reorg-too-deep"
+	ErrRequestTooLarge   = "/engine-api/errors/request-too-large"
+	ErrUnsupportedMedia  = "/engine-api/errors/unsupported-media-type"
+	ErrInvalidBody       = "/engine-api/errors/invalid-body"
+	ErrInvalidAttributes = "/engine-api/errors/invalid-attributes"
+	ErrInternal          = "/engine-api/errors/internal"
 )
 
 const problemJSONContentType = "application/problem+json"
