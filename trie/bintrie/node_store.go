@@ -41,10 +41,15 @@ type nodeStore struct {
 	// stem-split keeps the old stem at a deeper position), so they don't
 	// have free lists.
 	freeHashed []uint32
+
+	// orphans holds on-disk paths whose committed blob has been abandoned by a
+	// stem depth-promotion since the last commit. Commit emits a deletion for
+	// each (unless a freshly flushed node reoccupies the path), then clears it.
+	orphans map[string]struct{}
 }
 
 func newNodeStore() *nodeStore {
-	return &nodeStore{root: emptyRef}
+	return &nodeStore{root: emptyRef, orphans: make(map[string]struct{})}
 }
 
 func (s *nodeStore) allocInternal() uint32 {
@@ -178,6 +183,10 @@ func (s *nodeStore) Copy() *nodeStore {
 	if len(s.freeHashed) > 0 {
 		ns.freeHashed = make([]uint32, len(s.freeHashed))
 		copy(ns.freeHashed, s.freeHashed)
+	}
+	ns.orphans = make(map[string]struct{}, len(s.orphans))
+	for path := range s.orphans {
+		ns.orphans[path] = struct{}{}
 	}
 
 	return ns

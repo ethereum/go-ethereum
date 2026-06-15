@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 // TestRootHashMatchesReadBackHash pins the round-trip invariant: the root
@@ -292,6 +293,103 @@ func TestRoundTripPersistence(t *testing.T) {
 			//    same root, independent of in-memory layout choices.
 			if got := readerStore.Hash(); got != rootHash {
 				t.Fatalf("post-reload root hash: got %x, want %x", got, rootHash)
+			}
+		})
+	}
+}
+
+// TestNoOrphanBlobAfterStemPromotion targets gballet's store_ops.go review
+// concern: when a second commit promotes an existing stem deeper, the stem's
+// blob moves to a new path, and Commit emits only AddNode entries (never
+// deletes). If a stem's old path were not reoccupied by the new ancestor node,
+// the prior commit's blob would linger as an unreachable orphan.
+//
+// The test applies two commit deltas to a single backing map, then walks the
+// trie from the new root and asserts every persisted blob is reachable — i.e.
+// no orphan survives. The first batch establishes stems at group boundaries;
+// the second batch shares prefixes with the first to force promotions.
+func TestNoOrphanBlobAfterStemPromotion(t *testing.T) {
+	for _, groupDepth := range []int{1, 2, 3, 5} {
+		t.Run(fmt.Sprintf("groupDepth=%d", groupDepth), func(t *testing.T) {
+			tr := &BinaryTrie{
+				store:      newNodeStore(),
+				tracer:     trie.NewPrevalueTracer(),
+				groupDepth: groupDepth,
+			}
+			db := make(map[string][]byte)
+			apply := func(ns *trienode.NodeSet) {
+				for path, node := range ns.Nodes {
+					if node.IsDeleted() {
+						delete(db, path)
+						continue
+					}
+					db[path] = node.Blob
+				}
+			}
+
+			const n = 24
+			keys := make([][HashSize]byte, n)
+			values := make([][HashSize]byte, n)
+			for i := range n {
+				binary.BigEndian.PutUint64(keys[i][:8], uint64(i+1)*0x9e3779b97f4a7c15)
+				binary.BigEndian.PutUint64(keys[i][8:16], uint64(i+1)*0xc2b2ae3d27d4eb4f)
+				binary.BigEndian.PutUint64(values[i][:8], uint64(i+1))
+			}
+
+			// Commit 1: first half.
+			for i := 0; i < n/2; i++ {
+				if err := tr.store.Insert(keys[i][:], values[i][:], nil); err != nil {
+					t.Fatalf("insert %d: %v", i, err)
+				}
+			}
+			_, ns1 := tr.Commit(false)
+			apply(ns1)
+
+			// Commit 2: second half (shares prefixes, forces promotions).
+			for i := n / 2; i < n; i++ {
+				if err := tr.store.Insert(keys[i][:], values[i][:], nil); err != nil {
+					t.Fatalf("insert %d: %v", i, err)
+				}
+			}
+			rootHash, ns2 := tr.Commit(false)
+			apply(ns2)
+
+			// Walk from the new root, recording every blob the reader resolves.
+			resolved := make(map[string]bool)
+			resolver := func(path []byte, _ common.Hash) ([]byte, error) {
+				resolved[string(path)] = true
+				blob, ok := db[string(path)]
+				if !ok {
+					return nil, fmt.Errorf("missing blob at path %x", path)
+				}
+				return blob, nil
+			}
+			reader := newNodeStore()
+			rootRef, err := reader.deserializeNodeWithHash(db[""], 0, rootHash)
+			if err != nil {
+				t.Fatalf("deserialize root: %v", err)
+			}
+			reader.root = rootRef
+
+			for i := range n {
+				got, err := reader.Get(keys[i][:], resolver)
+				if err != nil {
+					t.Fatalf("Get key %d: %v", i, err)
+				}
+				if !bytes.Equal(got, values[i][:]) {
+					t.Fatalf("Get key %d: got %x, want %x", i, got, values[i][:])
+				}
+			}
+
+			// Every persisted blob must be reachable; the root ("") is seeded.
+			reachable := map[string]bool{"": true}
+			for path := range resolved {
+				reachable[path] = true
+			}
+			for path := range db {
+				if !reachable[path] {
+					t.Errorf("orphan blob at path %x is unreachable from the new root", []byte(path))
+				}
 			}
 		})
 	}

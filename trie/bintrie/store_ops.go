@@ -262,11 +262,21 @@ func (s *nodeStore) splitStemValuesInsert(existingRef nodeRef, newStem []byte, v
 	bitStem := existing.Stem[existing.depth/8] >> (7 - (existing.depth % 8)) & 1
 	nRef := s.newInternalRef(int(existing.depth))
 	nNode := s.getInternal(nRef.Index())
+	// A clean stem was flushed by a previous commit at its current natural-depth
+	// path. Promoting its depth moves it to a deeper path, so the old blob must
+	// be deleted at commit time; record it. A dirty stem has no committed blob
+	// at the old path, so there is nothing to delete. The path is reoccupied by
+	// the new ancestor node only when the old depth is a group boundary, which
+	// Commit detects and skips.
+	if !existing.dirty {
+		var buf [33]byte
+		oldPath := new(BitArray).SetBytes(existing.depth, existing.Stem[:]).PutKeyBytes(buf[:])
+		s.orphans[string(oldPath)] = struct{}{}
+	}
 	existing.depth++
-	// The existing stem's on-disk path follows its natural depth. Promoting
-	// the depth lengthens that path by one bit, so the stem must be re-flushed
-	// at the new path; otherwise the old blob (at the prior path) is shadowed
-	// by the new ancestor internal blob and the stem's data has no on-disk home.
+	// The existing stem's on-disk path follows its natural depth. Promoting the
+	// depth lengthens that path by one bit, so the stem must be re-flushed at the
+	// new path.
 	existing.dirty = true
 
 	bitKey := newStem[nNode.depth/8] >> (7 - (nNode.depth % 8)) & 1
