@@ -662,7 +662,7 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	stackvalue := size
 
 	child := scope.Contract.forwardGas(forward, evm.Config.Tracer, tracing.GasChangeCallContractCreation)
-	res, addr, result, suberr := evm.Create(scope.Contract.Address(), input, child, &value)
+	res, addr, result, creation, suberr := evm.Create(scope.Contract.Address(), input, child, &value)
 	// Push item on the stack based on the returned error. If the ruleset is
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
@@ -679,6 +679,10 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Refund the leftover gas back to current frame
 	scope.Contract.refundGas(result, forward, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
+	// Refund the state gas of account-creation if creation doesn't happen
+	if evm.GetRules().IsAmsterdam && !creation {
+		scope.Contract.refundState(params.AccountCreationSize*evm.Context.CostPerStateByte, evm.Config.Tracer, tracing.GasChangeRefundAccountCreation)
+	}
 	if suberr == ErrExecutionReverted {
 		evm.returnData = res // set REVERT data to return data buffer
 		return res, nil
@@ -701,7 +705,7 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// reuse size int for stackvalue
 	stackvalue := size
 	child := scope.Contract.forwardGas(forward, evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
-	res, addr, result, suberr := evm.Create2(scope.Contract.Address(), input, child, &endowment, &salt)
+	res, addr, result, creation, suberr := evm.Create2(scope.Contract.Address(), input, child, &endowment, &salt)
 	// Push item on the stack based on the returned error.
 	if suberr != nil {
 		stackvalue.Clear()
@@ -713,6 +717,10 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Refund the leftover gas back to current frame
 	scope.Contract.refundGas(result, forward, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
+	// Refund the state gas of account-creation if creation doesn't happen
+	if evm.GetRules().IsAmsterdam && !creation {
+		scope.Contract.refundState(params.AccountCreationSize*evm.Context.CostPerStateByte, evm.Config.Tracer, tracing.GasChangeRefundAccountCreation)
+	}
 	if suberr == ErrExecutionReverted {
 		evm.returnData = res // set REVERT data to return data buffer
 		return res, nil
@@ -758,6 +766,11 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	}
 	scope.Contract.refundGas(result, gas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
+	// If the call frame reverts or halts exceptionally, the charged state-gas
+	// is refilled back to the state reservoir in Amsterdam.
+	if evm.chainRules.IsAmsterdam && err != nil && !value.IsZero() && evm.StateDB.Empty(toAddr) {
+		scope.Contract.refundState(params.AccountCreationSize*evm.Context.CostPerStateByte, evm.Config.Tracer, tracing.GasChangeRefundAccountCreation)
+	}
 	evm.returnData = ret
 	return ret, nil
 }

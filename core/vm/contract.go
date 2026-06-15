@@ -152,6 +152,16 @@ func (c *Contract) chargeState(s uint64, logger *tracing.Hooks, reason tracing.G
 	return true
 }
 
+// refundState refunds the pre-charged state gas back to state reservoir.
+func (c *Contract) refundState(s uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) {
+	prior := c.Gas
+	c.Gas.RefundState(s)
+
+	if s != 0 && logger.HasGasHook() && reason != tracing.GasChangeIgnored {
+		logger.EmitGasChange(prior.AsTracing(), c.Gas.AsTracing(), reason)
+	}
+}
+
 // refundGas absorbs a sub-call's leftover GasBudget into this contract's gas state.
 func (c *Contract) refundGas(child GasBudget, forwarded uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) {
 	prior := c.Gas

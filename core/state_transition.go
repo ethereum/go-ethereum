@@ -686,12 +686,13 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			return nil, err
 		}
 		// Execute the transaction's creation.
-		ret, _, result, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining.ForwardAll(), value)
+		var creation bool
+		ret, _, result, creation, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining.ForwardAll(), value)
 		st.gasRemaining.Absorb(result, forwarded)
 
-		// If the contract creation failed, refund the account-creation state
-		// gas pre-charged in IntrinsicGas.
-		if rules.IsAmsterdam && vmerr != nil {
+		// If the contract creation failed, or the destination was pre-existing,
+		// refund the account-creation state gas pre-charged in IntrinsicGas.
+		if rules.IsAmsterdam && !creation {
 			st.gasRemaining.RefundState(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
 		}
 	} else {

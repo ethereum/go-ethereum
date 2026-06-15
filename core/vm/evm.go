@@ -289,16 +289,6 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
-	if evm.chainRules.IsAmsterdam && !value.IsZero() && evm.StateDB.Empty(addr) {
-		prev, ok := gas.ChargeState(params.AccountCreationSize * evm.Context.CostPerStateByte)
-		if !ok {
-			evm.StateDB.RevertToSnapshot(snapshot)
-			return nil, gas.ExitHalt(reservoir), ErrOutOfGas
-		}
-		if evm.Config.Tracer.HasGasHook() {
-			evm.Config.Tracer.EmitGasChange(prev.AsTracing(), gas.AsTracing(), tracing.GasChangeAccountCreation)
-		}
-	}
 	// Perform the value transfer only in non-syscall mode.
 	// Calling this is required even for zero-value transfers,
 	// to ensure the state clearing mechanism is applied.
@@ -484,7 +474,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 }
 
 // create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value *uint256.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, result GasBudget, err error) {
+func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value *uint256.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, result GasBudget, creation bool, err error) {
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	var nonce uint64
@@ -505,7 +495,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		}(gas)
 	}
 	if err != nil {
-		return nil, common.Address{}, gas, err
+		return nil, common.Address{}, gas, false, err
 	}
 	// Increment the caller's nonce after passing all validations
 	evm.StateDB.SetNonce(caller, nonce+1, tracing.NonceChangeContractCreator)
@@ -516,7 +506,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		statelessGas := evm.AccessEvents.ContractCreatePreCheckGas(address, gas.RegularGas)
 		prior, ok := gas.Charge(GasCosts{RegularGas: statelessGas})
 		if !ok {
-			return nil, common.Address{}, gas.ExitHalt(reservoir), ErrOutOfGas
+			return nil, common.Address{}, gas.ExitHalt(reservoir), false, ErrOutOfGas
 		}
 		if evm.Config.Tracer.HasGasHook() {
 			evm.Config.Tracer.EmitGasChange(prior.AsTracing(), gas.AsTracing(), tracing.GasChangeWitnessContractCollisionCheck)
@@ -543,7 +533,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		}
 		// EIP-8037 collision rule: the state reservoir is fully preserved on
 		// address collision while regular gas is burnt.
-		return nil, common.Address{}, halt, ErrContractAddressCollision
+		return nil, common.Address{}, halt, false, ErrContractAddressCollision
 	}
 	// Create a new account on the state only if the object was not present.
 	// It might be possible the contract code is deployed to a pre-existent
@@ -551,18 +541,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	snapshot := evm.StateDB.Snapshot()
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
-
-		if evm.chainRules.IsAmsterdam && evm.depth > 0 {
-			// Only charge state gas if we are not doing a create transaction.
-			// Prevents double charging with IntrinsicGas.
-			prev, ok := gas.ChargeState(params.AccountCreationSize * evm.Context.CostPerStateByte)
-			if !ok {
-				return nil, common.Address{}, gas.ExitHalt(reservoir), ErrOutOfGas
-			}
-			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(prev.AsTracing(), gas.AsTracing(), tracing.GasChangeAccountCreation)
-			}
-		}
+		creation = true
 	}
 	// CreateContract means that regardless of whether the account previously existed
 	// in the state trie or not, it _now_ becomes created as a _contract_ account.
@@ -577,7 +556,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	if evm.chainRules.IsEIP4762 {
 		consumed, wanted := evm.AccessEvents.ContractCreateInitGas(address, gas.RegularGas)
 		if consumed < wanted {
-			return nil, common.Address{}, gas.ExitHalt(reservoir), ErrOutOfGas
+			return nil, common.Address{}, gas.ExitHalt(reservoir), false, ErrOutOfGas
 		}
 		prior, _ := gas.Charge(GasCosts{RegularGas: consumed})
 		if evm.Config.Tracer.HasGasHook() {
@@ -608,11 +587,11 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 				evm.Config.Tracer.EmitGasChange(contract.Gas.AsTracing(), exit.AsTracing(), tracing.GasChangeCallFailedExecution)
 			}
 		}
-		return ret, address, exit, err
+		return ret, address, exit, false, err
 	}
 	// Either success, or pre-Homestead ErrCodeStoreOutOfGas (gas preserved).
 	// Both packaged as a success-form GasBudget.
-	return ret, address, contract.Gas.ExitSuccess(), err
+	return ret, address, contract.Gas.ExitSuccess(), creation, err
 }
 
 // initNewContract runs a new contract's creation code, performs checks on the
@@ -668,7 +647,7 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 }
 
 // Create creates a new contract using code as deployment code.
-func (evm *EVM) Create(caller common.Address, code []byte, gas GasBudget, value *uint256.Int) (ret []byte, contractAddr common.Address, result GasBudget, err error) {
+func (evm *EVM) Create(caller common.Address, code []byte, gas GasBudget, value *uint256.Int) (ret []byte, contractAddr common.Address, result GasBudget, creation bool, err error) {
 	contractAddr = crypto.CreateAddress(caller, evm.StateDB.GetNonce(caller))
 	return evm.create(caller, code, gas, value, contractAddr, CREATE)
 }
@@ -677,7 +656,7 @@ func (evm *EVM) Create(caller common.Address, code []byte, gas GasBudget, value 
 //
 // The different between Create2 with Create is Create2 uses keccak256(0xff ++ msg.sender ++ salt ++ keccak256(init_code))[12:]
 // instead of the usual sender-and-nonce-hash as the address where the contract is initialized at.
-func (evm *EVM) Create2(caller common.Address, code []byte, gas GasBudget, endowment *uint256.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, result GasBudget, err error) {
+func (evm *EVM) Create2(caller common.Address, code []byte, gas GasBudget, endowment *uint256.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, result GasBudget, creation bool, err error) {
 	inithash := crypto.Keccak256Hash(code)
 	contractAddr = crypto.CreateAddress2(caller, salt.Bytes32(), inithash[:])
 	return evm.create(caller, code, gas, endowment, contractAddr, CREATE2)
