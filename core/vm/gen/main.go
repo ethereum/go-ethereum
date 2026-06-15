@@ -115,7 +115,15 @@ type generator struct {
 	buf      *bytes.Buffer
 }
 
-func (g *generator) p(format string, args ...any) { fmt.Fprintf(g.buf, format, args...) }
+// p formats and appends generated Go, like fmt.Fprintf. A template can start on
+// the line after p( and be indented to match its structure. p drops the leading
+// newline and the indent before the closing backtick, and gofmt tidies the rest.
+// Double any percent meant for the generated code (%%w, %%v) so Fprintf emits it
+// literally.
+func (g *generator) p(format string, args ...any) {
+	format = strings.TrimRight(strings.TrimPrefix(format, "\n"), " \t")
+	fmt.Fprintf(g.buf, format, args...)
+}
 
 // ---------------------------------------------------------------------------
 // Handler parsing + body splicing
@@ -254,11 +262,25 @@ func (g *generator) emitStackChecks(m opMeta) {
 	over := m.maxStack < stackLimit
 	switch {
 	case under && over:
-		g.p("if sLen := stack.len(); sLen < %d {\nreturn nil, &ErrStackUnderflow{stackLen: sLen, required: %d}\n} else if sLen > %d {\nreturn nil, &ErrStackOverflow{stackLen: sLen, limit: %d}\n}\n", m.minStack, m.minStack, m.maxStack, m.maxStack)
+		g.p(`
+			if sLen := stack.len(); sLen < %d {
+				return nil, &ErrStackUnderflow{stackLen: sLen, required: %d}
+			} else if sLen > %d {
+				return nil, &ErrStackOverflow{stackLen: sLen, limit: %d}
+			}
+		`, m.minStack, m.minStack, m.maxStack, m.maxStack)
 	case under:
-		g.p("if sLen := stack.len(); sLen < %d {\nreturn nil, &ErrStackUnderflow{stackLen: sLen, required: %d}\n}\n", m.minStack, m.minStack)
+		g.p(`
+			if sLen := stack.len(); sLen < %d {
+				return nil, &ErrStackUnderflow{stackLen: sLen, required: %d}
+			}
+		`, m.minStack, m.minStack)
 	case over:
-		g.p("if sLen := stack.len(); sLen > %d {\nreturn nil, &ErrStackOverflow{stackLen: sLen, limit: %d}\n}\n", m.maxStack, m.maxStack)
+		g.p(`
+			if sLen := stack.len(); sLen > %d {
+				return nil, &ErrStackOverflow{stackLen: sLen, limit: %d}
+			}
+		`, m.maxStack, m.maxStack)
 	}
 }
 
@@ -266,7 +288,12 @@ func (g *generator) emitGasCheck(m opMeta) {
 	if m.constGas == 0 {
 		return
 	}
-	g.p("if contract.Gas.RegularGas < %d {\nreturn nil, ErrOutOfGas\n}\ncontract.Gas.RegularGas -= %d\n", m.constGas, m.constGas)
+	g.p(`
+		if contract.Gas.RegularGas < %d {
+			return nil, ErrOutOfGas
+		}
+		contract.Gas.RegularGas -= %d
+	`, m.constGas, m.constGas)
 }
 
 // emitWork emits the stack/gas guards and the opcode body (the portion that runs
@@ -280,14 +307,27 @@ func (g *generator) emitWork(code byte) {
 	// code-chunk gas on the immediate bytes. Defer to the table handler there.
 	// The baked static gas and stack guard above already match.
 	if code >= 0x60 && code <= 0x7f {
-		g.p("if isEIP4762 {\nres, err = table[op].execute(&pc, evm, scope)\nif err != nil {\nbreak mainLoop\n}\npc++\ncontinue mainLoop\n}\n")
+		g.p(`
+			if isEIP4762 {
+				res, err = table[op].execute(&pc, evm, scope)
+				if err != nil {
+					break mainLoop
+				}
+				pc++
+				continue mainLoop
+			}
+		`)
 	}
 
 	switch {
 	case code >= 0x62 && code <= 0x7f: // PUSH3-PUSH32: inline makePush(n,n)
 		g.emitPushFixed(int(code) - 0x5f)
 	case code >= 0x80 && code <= 0x8f: // DUP1-DUP16: inline makeDup(n)
-		g.p("scope.Stack.dup(%d)\npc++\ncontinue mainLoop\n", int(code)-0x7f)
+		g.p(`
+			scope.Stack.dup(%d)
+			pc++
+			continue mainLoop
+		`, int(code)-0x7f)
 	default:
 		g.p("%s", g.inlineBody(inlineHandler[code]))
 	}
@@ -295,13 +335,19 @@ func (g *generator) emitWork(code byte) {
 
 // emitPushFixed inlines makePush(n, n) for PUSH<n> (n = 3..32).
 func (g *generator) emitPushFixed(n int) {
-	g.p("codeLen := len(scope.Contract.Code)\n")
-	g.p("start := min(codeLen, int(pc+1))\n")
-	g.p("end := min(codeLen, start+%d)\n", n)
-	g.p("a := scope.Stack.get()\n")
-	g.p("a.SetBytes(scope.Contract.Code[start:end])\n")
-	g.p("if missing := %d - (end - start); missing > 0 {\na.Lsh(a, uint(8*missing))\n}\n", n)
-	g.p("pc += %d\npc++\ncontinue mainLoop\n", n)
+	g.p(`
+		codeLen := len(scope.Contract.Code)
+		start := min(codeLen, int(pc+1))
+		end := min(codeLen, start+%d)
+		a := scope.Stack.get()
+		a.SetBytes(scope.Contract.Code[start:end])
+		if missing := %d - (end - start); missing > 0 {
+			a.Lsh(a, uint(8*missing))
+		}
+		pc += %d
+		pc++
+		continue mainLoop
+	`, n, n, n)
 }
 
 func (g *generator) emitInlineCase(code byte) {
@@ -316,7 +362,10 @@ func (g *generator) emitInlineCase(code byte) {
 	g.p("if rules.%s {\n", m.introF)
 	g.emitWork(code)
 	g.p("}\n")
-	g.p("res, err = opUndefined(&pc, evm, scope)\nbreak mainLoop\n")
+	g.p(`
+		res, err = opUndefined(&pc, evm, scope)
+		break mainLoop
+	`)
 }
 
 // emitDirectCold emits a cold opcode case identical to the default case, except
@@ -329,67 +378,90 @@ func (g *generator) emitDirectCold(code byte) {
 	g.p("case %s:\n", m.name)
 	g.emitStackChecks(m)
 	g.emitGasCheck(m)
-	g.p("var memorySize uint64\n{\n")
-	g.p("memSize, overflow := %s(stack)\n", fns[2])
-	g.p("if overflow {\nreturn nil, ErrGasUintOverflow\n}\n")
-	g.p("if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {\nreturn nil, ErrGasUintOverflow\n}\n}\n")
-	g.p("var dynamicCost GasCosts\n")
-	g.p("dynamicCost, err = %s(evm, contract, stack, mem, memorySize)\n", fns[1])
-	// WriteString: keep %w/%v literal (not generator format verbs).
-	g.buf.WriteString("if err != nil {\nreturn nil, fmt.Errorf(\"%w: %v\", ErrOutOfGas, err)\n}\n")
-	g.p("if contract.Gas.RegularGas < dynamicCost.RegularGas {\nreturn nil, ErrOutOfGas\n}\n")
-	g.p("contract.Gas.RegularGas -= dynamicCost.RegularGas\n")
-	g.p("if memorySize > 0 {\nmem.Resize(memorySize)\n}\n")
-	g.p("res, err = %s(&pc, evm, scope)\n", fns[0])
-	g.p("if err != nil {\nbreak mainLoop\n}\npc++\ncontinue mainLoop\n")
+	// The three %s are the memory-size, dynamic-gas and handler names, in the
+	// order fns[2], fns[1], fns[0]. The doubled %%w and %%v are not generator
+	// verbs: Fprintf collapses each %% to a single %, so the generated code ends
+	// up with a literal fmt.Errorf("%w: %v", ...).
+	g.p(`
+		var memorySize uint64
+		{
+			memSize, overflow := %s(stack)
+			if overflow {
+				return nil, ErrGasUintOverflow
+			}
+			if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
+				return nil, ErrGasUintOverflow
+			}
+		}
+		var dynamicCost GasCosts
+		dynamicCost, err = %s(evm, contract, stack, mem, memorySize)
+		if err != nil {
+			return nil, fmt.Errorf("%%w: %%v", ErrOutOfGas, err)
+		}
+		if contract.Gas.RegularGas < dynamicCost.RegularGas {
+			return nil, ErrOutOfGas
+		}
+		contract.Gas.RegularGas -= dynamicCost.RegularGas
+		if memorySize > 0 {
+			mem.Resize(memorySize)
+		}
+		res, err = %s(&pc, evm, scope)
+		if err != nil {
+			break mainLoop
+		}
+		pc++
+		continue mainLoop
+	`, fns[2], fns[1], fns[0])
 }
 
 func (g *generator) emitDefault() {
-	// WriteString, not p(): this template contains %w/%v that must reach the
-	// output verbatim (they are not generator format verbs).
-	g.buf.WriteString(`default:
-operation := table[op]
-if sLen := stack.len(); sLen < operation.minStack {
-return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
-} else if sLen > operation.maxStack {
-return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
-}
-cost := operation.constantGas
-if contract.Gas.RegularGas < cost {
-return nil, ErrOutOfGas
-}
-contract.Gas.RegularGas -= cost
-var memorySize uint64
-if operation.dynamicGas != nil {
-if operation.memorySize != nil {
-memSize, overflow := operation.memorySize(stack)
-if overflow {
-return nil, ErrGasUintOverflow
-}
-if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
-return nil, ErrGasUintOverflow
-}
-}
-var dynamicCost GasCosts
-dynamicCost, err = operation.dynamicGas(evm, contract, stack, mem, memorySize)
-if err != nil {
-return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
-}
-if contract.Gas.RegularGas < dynamicCost.RegularGas {
-return nil, ErrOutOfGas
-}
-contract.Gas.RegularGas -= dynamicCost.RegularGas
-}
-if memorySize > 0 {
-mem.Resize(memorySize)
-}
-res, err = operation.execute(&pc, evm, scope)
-if err != nil {
-break mainLoop
-}
-pc++
-continue mainLoop
-`)
+	// The doubled %%w and %%v below are not generator verbs: Fprintf collapses
+	// each %% to a single %, leaving a literal fmt.Errorf("%w: %v", ...) in the
+	// generated default case.
+	g.p(`
+		default:
+			operation := table[op]
+			if sLen := stack.len(); sLen < operation.minStack {
+				return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
+			} else if sLen > operation.maxStack {
+				return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
+			}
+			cost := operation.constantGas
+			if contract.Gas.RegularGas < cost {
+				return nil, ErrOutOfGas
+			}
+			contract.Gas.RegularGas -= cost
+			var memorySize uint64
+			if operation.dynamicGas != nil {
+				if operation.memorySize != nil {
+					memSize, overflow := operation.memorySize(stack)
+					if overflow {
+						return nil, ErrGasUintOverflow
+					}
+					if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
+						return nil, ErrGasUintOverflow
+					}
+				}
+				var dynamicCost GasCosts
+				dynamicCost, err = operation.dynamicGas(evm, contract, stack, mem, memorySize)
+				if err != nil {
+					return nil, fmt.Errorf("%%w: %%v", ErrOutOfGas, err)
+				}
+				if contract.Gas.RegularGas < dynamicCost.RegularGas {
+					return nil, ErrOutOfGas
+				}
+				contract.Gas.RegularGas -= dynamicCost.RegularGas
+			}
+			if memorySize > 0 {
+				mem.Resize(memorySize)
+			}
+			res, err = operation.execute(&pc, evm, scope)
+			if err != nil {
+				break mainLoop
+			}
+			pc++
+			continue mainLoop
+	`)
 }
 
 // ---------------------------------------------------------------------------
@@ -397,48 +469,55 @@ continue mainLoop
 // ---------------------------------------------------------------------------
 
 func (g *generator) emitFile() {
-	g.p("// Code generated by core/vm/gen; DO NOT EDIT.\n\n")
-	g.p("package vm\n\n")
-	g.p("import (\n")
-	g.p("\t\"fmt\"\n\n")
-	g.p("\t\"github.com/ethereum/go-ethereum/common/math\"\n")
-	g.p("\t\"github.com/ethereum/go-ethereum/core/tracing\"\n")
-	g.p(")\n\n")
+	g.p(`
+		// Code generated by core/vm/gen; DO NOT EDIT.
 
-	g.buf.WriteString(`// execUntraced is the generated, tracing-free interpreter fast path. Hot,
-// fork-stable opcodes are inlined with their static gas and stack bounds baked
-// in. Fork-invariant cold ops (KECCAK256/MLOAD/MSTORE/MSTORE8) call their
-// handler and gas functions directly by name. Everything fork-varying is
-// dispatched through the active per-fork table in the default case. EVM.Run
-// selects this path when no tracer is configured.
-func (evm *EVM) execUntraced(scope *ScopeContext) (ret []byte, err error) {
-var (
-contract  = scope.Contract
-mem       = scope.Memory
-stack     = scope.Stack
-table     = evm.table
-rules     = evm.chainRules
-isEIP4762 = rules.IsEIP4762
-pc        = uint64(0)
-res       []byte
-)
-_ = mem
-_ = rules
-_ = isEIP4762
-_ = table
-mainLoop:
-for {
-if isEIP4762 && !contract.IsDeployment && !contract.IsSystemCall {
-contractAddr := contract.Address()
-consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.RegularGas)
-contract.UseGas(GasCosts{RegularGas: consumed}, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
-if consumed < wanted {
-return nil, ErrOutOfGas
-}
-}
-op := contract.GetOp(pc)
-switch op {
-`)
+		package vm
+
+		import (
+			"fmt"
+
+			"github.com/ethereum/go-ethereum/common/math"
+			"github.com/ethereum/go-ethereum/core/tracing"
+		)
+
+	`)
+
+	g.p(`
+		// execUntraced is the generated, tracing-free interpreter fast path. Hot,
+		// fork-stable opcodes are inlined with their static gas and stack bounds baked
+		// in. Fork-invariant cold ops (KECCAK256/MLOAD/MSTORE/MSTORE8) call their
+		// handler and gas functions directly by name. Everything fork-varying is
+		// dispatched through the active per-fork table in the default case. EVM.Run
+		// selects this path when no tracer is configured.
+		func (evm *EVM) execUntraced(scope *ScopeContext) (ret []byte, err error) {
+			var (
+				contract  = scope.Contract
+				mem       = scope.Memory
+				stack     = scope.Stack
+				table     = evm.table
+				rules     = evm.chainRules
+				isEIP4762 = rules.IsEIP4762
+				pc        = uint64(0)
+				res       []byte
+			)
+			_ = mem
+			_ = rules
+			_ = isEIP4762
+			_ = table
+		mainLoop:
+			for {
+				if isEIP4762 && !contract.IsDeployment && !contract.IsSystemCall {
+					contractAddr := contract.Address()
+					consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.RegularGas)
+					contract.UseGas(GasCosts{RegularGas: consumed}, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
+					if consumed < wanted {
+						return nil, ErrOutOfGas
+					}
+				}
+				op := contract.GetOp(pc)
+				switch op {
+	`)
 	// Inlined hot cases, in opcode order for readability.
 	for code := 0; code < 256; code++ {
 		b := byte(code)
