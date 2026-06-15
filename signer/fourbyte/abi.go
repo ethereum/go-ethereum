@@ -128,9 +128,9 @@ func parseCallData(calldata []byte, unescapedAbidata string) (*decodedCallData, 
 		return nil, err
 	}
 	if !bytes.Equal(encoded, argdata) {
-		was := common.Bytes2Hex(encoded)
-		exp := common.Bytes2Hex(argdata)
-		return nil, fmt.Errorf("WARNING: Supplied data is stuffed with extra data. \nWant %s\nHave %s\nfor method %v", exp, was, method.Sig)
+		have := common.Bytes2Hex(argdata)
+		want := common.Bytes2Hex(encoded)
+		return nil, fmt.Errorf("WARNING: Supplied data is stuffed with extra data. \nWant %s\nHave %s\nfor method %v", want, have, method.Sig)
 	}
 	return &decoded, nil
 }
