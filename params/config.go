@@ -17,14 +17,12 @@
 package params
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params/forks"
 )
 
@@ -705,8 +703,7 @@ func (bc *BlobConfig) String() string {
 //
 // From Prague onward, the blob schedule is updated only at BPO (Blob Parameter-Only)
 // forks. Named forks such as Osaka or Amsterdam inherit the most recently configured
-// BPO entry and must not declare their own BlobConfig. Re-declared named-fork keys
-// in JSON (osaka, amsterdam, ubt) are loudly warned about and ignored.
+// BPO entry and must not declare their own BlobConfig.
 type BlobScheduleConfig struct {
 	Cancun *BlobConfig `json:"cancun,omitempty"`
 	Prague *BlobConfig `json:"prague,omitempty"`
@@ -715,32 +712,6 @@ type BlobScheduleConfig struct {
 	BPO3   *BlobConfig `json:"bpo3,omitempty"`
 	BPO4   *BlobConfig `json:"bpo4,omitempty"`
 	BPO5   *BlobConfig `json:"bpo5,omitempty"`
-}
-
-// deprecatedBlobScheduleKeys lists named-fork keys that used to be valid blob
-// schedule entries. They are accepted but ignored at unmarshal time.
-var deprecatedBlobScheduleKeys = []string{"osaka", "amsterdam", "ubt"}
-
-// UnmarshalJSON implements json.Unmarshaler. Unknown keys named after forks
-// that no longer carry their own blob schedule (osaka, amsterdam, ubt) trigger
-// a loud warning but do not abort loading — the blob schedule for those forks
-// inherits from the most recent preceding BPO entry.
-func (b *BlobScheduleConfig) UnmarshalJSON(data []byte) error {
-	type plain BlobScheduleConfig
-	if err := json.Unmarshal(data, (*plain)(b)); err != nil {
-		return err
-	}
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	for _, k := range deprecatedBlobScheduleKeys {
-		if _, ok := raw[k]; ok {
-			log.Warn("ignoring blobSchedule entry for named fork; inherit from prior BPO",
-				"fork", k)
-		}
-	}
-	return nil
 }
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
