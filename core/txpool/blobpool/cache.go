@@ -247,7 +247,7 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 }
 
 // GetCells returns cells for the given versioned blob hashes, filtered
-// by the requested cell indices(mask). Each entry in the result
+// by the requested cell indices (mask). Each entry in the result
 // corresponds to one vhash. Nil entries mean the cell was not available.
 // If the cell is not available in cache, it falls back to the blobpool.
 func (c *Cache) GetCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*kzg4844.Cell, [][]*kzg4844.Proof, error) {

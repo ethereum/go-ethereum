@@ -238,7 +238,7 @@ func NewTxFetcherForTests(
 }
 
 // Notify announces the fetcher of the potential availability of a new batch of
-// transactions in the network.
+// transactions in the network. It returns array of hashes decided to be fetched.
 func (f *TxFetcher) Notify(peer string, kinds []byte, sizes []uint32, hashes []common.Hash) ([]common.Hash, error) {
 	// Keep track of all the announced transactions
 	txAnnounceInMeter.Mark(int64(len(hashes)))

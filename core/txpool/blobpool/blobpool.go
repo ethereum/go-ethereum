@@ -1822,7 +1822,7 @@ func (p *BlobPool) GetBlobHashes(txHash common.Hash) []common.Hash {
 	return vhashes
 }
 
-// GetBlobCells returns cells for the given versioned blob hashes. Nil entires
+// GetBlobCells returns cells for the given versioned blob hashes. Nil entries
 // mean that the cell was not available.
 func (p *BlobPool) GetBlobCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*kzg4844.Cell, [][]*kzg4844.Proof, error) {
 	var (

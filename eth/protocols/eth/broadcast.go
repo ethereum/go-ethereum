@@ -121,12 +121,16 @@ func (p *Peer) announceTransactions() {
 				if meta := p.txpool.GetMetadata(queue[count]); meta != nil {
 					custody := p.blobpool.GetCustody(queue[count])
 					if custody != nil {
-						// blob tx
+						// Blob txs should be batched into the same announcement
+						// if they share the same custody.
 						if mask.OneCount() == 0 {
+							// This is the first blob tx in this batch, so use its
+							// custody as a mask in this batch.
 							mask = *custody
 						} else {
 							if mask != *custody {
-								// group by mask
+								// Leave this in the queue so that it can be included
+								// in a later announcement.
 								continue
 							}
 						}
