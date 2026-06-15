@@ -519,6 +519,117 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	return GasCosts{RegularGas: gas}, nil
 }
 
+func gasCreateEip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+	if evm.readOnly {
+		return GasCosts{}, ErrWriteProtection
+	}
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return GasCosts{}, err
+	}
+	size, overflow := stack.back(2).Uint64WithOverflow()
+	if overflow {
+		return GasCosts{}, ErrGasUintOverflow
+	}
+	if err := CheckMaxInitCodeSize(&evm.chainRules, size); err != nil {
+		return GasCosts{}, err
+	}
+	// Since size <= MaxInitCodeSizeAmsterdam, these multiplications cannot overflow
+	words := (size + 31) / 32
+	wordGas := params.InitCodeWordGas * words
+
+	// Unconditionally pre-charge the account creation and refunds if the creation
+	// doesn't happen after the create-frame.
+	return GasCosts{
+		RegularGas: gas + wordGas,
+		StateGas:   params.AccountCreationSize * evm.Context.CostPerStateByte,
+	}, nil
+}
+
+func gasCreate2Eip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+	if evm.readOnly {
+		return GasCosts{}, ErrWriteProtection
+	}
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return GasCosts{}, err
+	}
+	size, overflow := stack.back(2).Uint64WithOverflow()
+	if overflow {
+		return GasCosts{}, ErrGasUintOverflow
+	}
+	if err := CheckMaxInitCodeSize(&evm.chainRules, size); err != nil {
+		return GasCosts{}, err
+	}
+	// Since size <= MaxInitCodeSizeAmsterdam, these multiplications cannot overflow
+	words := (size + 31) / 32
+
+	// CREATE2 charges both InitCodeWordGas (EIP-3860) and Keccak256WordGas
+	// (for address hashing).
+	wordGas := (params.InitCodeWordGas + params.Keccak256WordGas) * words
+
+	// Unconditionally pre-charge the account creation and refunds if the creation
+	// doesn't happen after the create-frame.
+	return GasCosts{
+		RegularGas: gas + wordGas,
+		StateGas:   params.AccountCreationSize * evm.Context.CostPerStateByte,
+	}, nil
+}
+
+// regularGasCall8037 is the intrinsic gas calculator for CALL in Amsterdam.
+// It computes memory expansion + value transfer gas but excludes new account
+// creation, which is handled as state gas by the wrapper.
+func regularGasCall8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	var (
+		gas            uint64
+		transfersValue = !stack.back(2).IsZero()
+	)
+	if evm.readOnly && transfersValue {
+		return 0, ErrWriteProtection
+	}
+	memoryGas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	var transferGas uint64
+	if transfersValue && !evm.chainRules.IsEIP4762 {
+		transferGas = params.CallValueTransferGas
+	}
+	var overflow bool
+	if gas, overflow = math.SafeAdd(memoryGas, transferGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	return gas, nil
+}
+
+// stateGasCall8037 is the stateful gas calculator for CALL in Amsterdam (EIP-8037).
+// It only returns the state-dependent gas (account creation as state gas).
+// Memory gas, transfer gas, and callGas are handled by gasCallStateless and
+// makeCallVariantGasCall.
+func stateGasCall8037(evm *EVM, contract *Contract, stack *Stack) (uint64, error) {
+	var (
+		gas            uint64
+		transfersValue = !stack.back(2).IsZero()
+		address        = common.Address(stack.back(1).Bytes20())
+	)
+	// TODO(rjl, marius), can EIP8037 implicitly means the EIP158 is also activated?
+	// It's technically possible to skip the EIP158 but very unlikely in practice.
+	if evm.chainRules.IsEIP158 {
+		// Important: use StateDB.Empty instead of !StateDB.Exist. An account may exist
+		// in the current state yet still be considered non-existent by EIP-161 if its
+		// nonce, balance, and code are all zero. Such accounts can appear temporarily
+		// during execution (e.g. via SELFDESTRUCT) and are removed at tx end.
+		//
+		// Funding such an account makes it permanent state growth and must be charged.
+		if transfersValue && evm.StateDB.Empty(address) {
+			gas += params.AccountCreationSize * evm.Context.CostPerStateByte
+		}
+	} else if !evm.StateDB.Exist(address) {
+		gas += params.AccountCreationSize * evm.Context.CostPerStateByte
+	}
+	return gas, nil
+}
+
 func gasSelfdestruct8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 	if evm.readOnly {
 		return GasCosts{}, ErrWriteProtection

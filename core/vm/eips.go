@@ -587,7 +587,10 @@ func enable7843(jt *JumpTable) {
 // enable8037 enables the multidimensional-metering as specified in EIP-8037.
 func enable8037(jt *JumpTable) {
 	jt[CREATE].constantGas = params.CreateGasAmsterdam
+	jt[CREATE].dynamicGas = gasCreateEip8037
 	jt[CREATE2].constantGas = params.CreateGasAmsterdam
+	jt[CREATE2].dynamicGas = gasCreate2Eip8037
+	jt[CALL].dynamicGas = gasCallEIP8037
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestruct8037
 	jt[SSTORE].dynamicGas = gasSStore8037
 }
