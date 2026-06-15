@@ -746,20 +746,20 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 	if len(actives) == 0 {
 		return
 	}
-	// For each active peer, try to schedule some payload fetches
-	idle := len(f.requests) == 0
 
+	wasIdle := len(f.requests) == 0
+
+	// For each active peer, try to schedule some payload fetches.
 	f.forEachPeer(actives, func(peer string) {
 		if len(f.announces[peer]) == 0 || len(f.requests[peer]) != 0 {
 			return // continue
 		}
 		var (
-			hashes    = make([]common.Hash, 0, maxTxRetrievals)
-			custodies = make([]types.CustodyBitmap, 0, maxTxRetrievals)
+			hashes    []common.Hash
+			custodies []types.CustodyBitmap
 		)
 		f.forEachAnnounce(f.announces[peer], func(hash common.Hash, cells types.CustodyBitmap) bool {
 			var unfetched types.CustodyBitmap
-
 			if f.fetches[hash] == nil {
 				// tx is not being fetched
 				unfetched = cells
@@ -795,6 +795,7 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 
 			return len(hashes) < maxPayloadRetrievals
 		})
+
 		// If any hashes were allocated, request them from the peer
 		if len(hashes) > 0 {
 			// Group hashes by custody bitmap
@@ -817,7 +818,7 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 				request = append(request, cr)
 			}
 			f.requests[peer] = request
-			go func(peer string, request []*cellRequest) {
+			go func() {
 				for _, req := range request {
 					blobRequestOutMeter.Mark(int64(len(req.txs)))
 					if err := f.fn.FetchPayloads(peer, req.txs, req.cells); err != nil {
@@ -826,11 +827,12 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 						break
 					}
 				}
-			}(peer, request)
+			}()
 		}
 	})
+
 	// If a new request was fired, schedule a timeout timer
-	if idle && len(f.requests) > 0 {
+	if wasIdle && len(f.requests) > 0 {
 		f.rescheduleTimeout(timer, timeout)
 	}
 }

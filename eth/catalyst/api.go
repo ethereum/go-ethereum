@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -1198,17 +1199,13 @@ func (api *ConsensusAPI) checkFork(timestamp uint64, forks ...forks.Fork) bool {
 func (api *ConsensusAPI) ExchangeCapabilities(caps []string) []string {
 	valueT := reflect.TypeOf(api)
 
-	for _, cap := range caps {
-		if cap == "engine_getBlobsV4" {
-			// If the CL supports getBlobsV4, we call EnableCell() on the
-			// blob cache to skip the blob recovery process. This is a
-			// one-directional toggle, which assumes that once the CL
-			// supports getBlobsV4, it will not fall back to getBlobsV3
-			// again.
-			api.eth.BlobCache().EnableCell()
-			break
-		}
-	}
+	// If the CL supports getBlobsV4, we call EnableCell() on the
+	// blob cache to skip the blob recovery process. This is a
+	// one-directional toggle, which assumes that once the CL
+	// supports getBlobsV4, it will not fall back to getBlobsV3
+	// again.
+	cellmode := slices.Contains(caps, "engine_getBlobsV4")
+	api.eth.BlobCache().SetCellMode(cellmode)
 
 	ourCaps := make([]string, 0, valueT.NumMethod())
 	for i := 0; i < valueT.NumMethod(); i++ {
