@@ -2292,7 +2292,7 @@ func TestGetCells(t *testing.T) {
 		{
 			name:        "Get cells with all indices",
 			hash:        tx1.Hash(),
-			mask:        *types.CustodyBitmapAll,
+			mask:        types.CustodyBitmapAll,
 			expectedLen: 384,
 			shouldFail:  false,
 		},

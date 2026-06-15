@@ -53,11 +53,11 @@ func makeTestCellSidecar(blobCount int) *types.BlobTxCellSidecar {
 		Cells:       cells,
 		Commitments: commitments,
 		Proofs:      proofs,
-		Custody:     *types.CustodyBitmapAll,
+		Custody:     types.CustodyBitmapAll,
 	}
 }
 
-func selectCells(cells []kzg4844.Cell, custody *types.CustodyBitmap) []kzg4844.Cell {
+func selectCells(cells []kzg4844.Cell, custody types.CustodyBitmap) []kzg4844.Cell {
 	custodyIndices := custody.Indices()
 	result := make([]kzg4844.Cell, 0)
 
@@ -82,8 +82,8 @@ var (
 
 	custody = types.NewCustodyBitmap([]uint64{0, 1, 2, 3, 4, 5, 6, 7})
 
-	fullCustody      = *types.CustodyBitmapAll
-	halfCustody      = *types.CustodyBitmapData
+	fullCustody      = types.CustodyBitmapAll
+	halfCustody      = types.CustodyBitmapData
 	frontCustody     = types.NewCustodyBitmap([]uint64{0, 1, 2, 3, 8, 9, 10, 11})
 	backCustody      = types.NewCustodyBitmap([]uint64{4, 5, 6, 7, 8, 9, 10, 11})
 	differentCustody = types.NewCustodyBitmap([]uint64{8, 9, 10, 11, 12, 13, 14, 15})
@@ -154,13 +154,13 @@ func TestBlobFetcherFullFetch(t *testing.T) {
 			return NewBlobFetcher(
 				BlobFetcherFunctions{
 					HasPayload: func(common.Hash) bool { return false },
-					AddCells:   func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) {},
-					FetchPayloads: func(string, []common.Hash, *types.CustodyBitmap) error {
+					AddCells:   func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error {
 						return nil
 					},
 					DropPeer: func(string) {},
 				},
-				&custody,
+				custody,
 				&mockRand{value: 5}, // Force full requests (5 < fetchProbability)
 			)
 		},
@@ -244,14 +244,14 @@ func TestBlobFetcherPartialFetch(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				BlobFetcherFunctions{
-					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) {},
+					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
 
-					FetchPayloads: func(string, []common.Hash, *types.CustodyBitmap) error {
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error {
 						return nil
 					},
 					DropPeer: func(string) {},
 				},
-				&custody,
+				custody,
 				&mockRand{value: 60}, // Force partial requests (20 >= 15)
 			)
 		},
@@ -293,7 +293,7 @@ func TestBlobFetcherPartialFetch(t *testing.T) {
 			isBlobScheduled{
 				announces: map[string][]blobAnnounce{
 					"A": {{hash: testBlobTxHashes[0], custody: custody}},
-					"B": {{hash: testBlobTxHashes[0], custody: *frontCustody.Intersection(&custody)}},
+					"B": {{hash: testBlobTxHashes[0], custody: frontCustody.Intersection(custody)}},
 					"C": {{hash: testBlobTxHashes[0], custody: custody}},
 				},
 				fetching: map[string][]blobAnnounce{
@@ -306,7 +306,7 @@ func TestBlobFetcherPartialFetch(t *testing.T) {
 			isBlobScheduled{
 				announces: map[string][]blobAnnounce{
 					"A": {{hash: testBlobTxHashes[0], custody: custody}},
-					"B": {{hash: testBlobTxHashes[0], custody: *frontCustody.Intersection(&custody)}},
+					"B": {{hash: testBlobTxHashes[0], custody: frontCustody.Intersection(custody)}},
 					"C": {{hash: testBlobTxHashes[0], custody: custody}},
 				},
 				fetching: map[string][]blobAnnounce{
@@ -319,7 +319,7 @@ func TestBlobFetcherPartialFetch(t *testing.T) {
 			isBlobScheduled{
 				announces: map[string][]blobAnnounce{
 					"A": {{hash: testBlobTxHashes[0], custody: custody}},
-					"B": {{hash: testBlobTxHashes[0], custody: *frontCustody.Intersection(&custody)}},
+					"B": {{hash: testBlobTxHashes[0], custody: frontCustody.Intersection(custody)}},
 					"C": {{hash: testBlobTxHashes[0], custody: custody}},
 				},
 				fetching: map[string][]blobAnnounce{
@@ -336,14 +336,14 @@ func TestBlobFetcherFullDelivery(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				BlobFetcherFunctions{
-					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) {},
+					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
 
-					FetchPayloads: func(string, []common.Hash, *types.CustodyBitmap) error {
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error {
 						return nil
 					},
 					DropPeer: func(string) {},
 				},
-				&custody,
+				custody,
 				&mockRand{value: 5}, // Force full requests for simplicity
 			)
 		},
@@ -370,7 +370,7 @@ func TestBlobFetcherFullDelivery(t *testing.T) {
 			},
 
 			// All alternates should be clean up on delivery
-			doBlobEnqueue{peer: "A", hashes: []common.Hash{testBlobTxHashes[0]}, cells: [][]kzg4844.Cell{selectCells(testBlobSidecars[0].Cells, &halfCustody)}, custody: halfCustody},
+			doBlobEnqueue{peer: "A", hashes: []common.Hash{testBlobTxHashes[0]}, cells: [][]kzg4844.Cell{selectCells(testBlobSidecars[0].Cells, halfCustody)}, custody: halfCustody},
 			isBlobScheduled{announces: nil, fetching: nil},
 			isFetching{hashes: nil}, // fetches should be empty after completion
 			isCompleted{testBlobTxHashes[0]},
@@ -384,14 +384,14 @@ func TestBlobFetcherPartialDelivery(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				BlobFetcherFunctions{
-					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) {},
+					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
 
-					FetchPayloads: func(string, []common.Hash, *types.CustodyBitmap) error {
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error {
 						return nil
 					},
 					DropPeer: func(string) {},
 				},
-				&custody,
+				custody,
 				&mockRand{value: 60},
 			)
 		},
@@ -425,8 +425,8 @@ func TestBlobFetcherPartialDelivery(t *testing.T) {
 				announces: map[string][]blobAnnounce{
 					"A": {{hash: testBlobTxHashes[0], custody: custody}},
 					"B": {{hash: testBlobTxHashes[0], custody: custody}},
-					"C": {{hash: testBlobTxHashes[0], custody: *frontCustody.Intersection(&custody)}},
-					"D": {{hash: testBlobTxHashes[0], custody: *backCustody.Intersection(&custody)}},
+					"C": {{hash: testBlobTxHashes[0], custody: frontCustody.Intersection(custody)}},
+					"D": {{hash: testBlobTxHashes[0], custody: backCustody.Intersection(custody)}},
 				},
 				fetching: map[string][]blobAnnounce{
 					"A": {{hash: testBlobTxHashes[0], custody: custody}},
@@ -438,12 +438,12 @@ func TestBlobFetcherPartialDelivery(t *testing.T) {
 			doDrop("B"),
 			isBlobScheduled{
 				announces: map[string][]blobAnnounce{
-					"C": {{hash: testBlobTxHashes[0], custody: *frontCustody.Intersection(&custody)}},
-					"D": {{hash: testBlobTxHashes[0], custody: *backCustody.Intersection(&custody)}},
+					"C": {{hash: testBlobTxHashes[0], custody: frontCustody.Intersection(custody)}},
+					"D": {{hash: testBlobTxHashes[0], custody: backCustody.Intersection(custody)}},
 				},
 				fetching: map[string][]blobAnnounce{
-					"C": {{hash: testBlobTxHashes[0], custody: *frontCustody.Intersection(&custody)}},
-					"D": {{hash: testBlobTxHashes[0], custody: *backCustody.Intersection(&custody)}},
+					"C": {{hash: testBlobTxHashes[0], custody: frontCustody.Intersection(custody)}},
+					"D": {{hash: testBlobTxHashes[0], custody: backCustody.Intersection(custody)}},
 				},
 			},
 
@@ -451,22 +451,22 @@ func TestBlobFetcherPartialDelivery(t *testing.T) {
 			doBlobEnqueue{
 				peer:    "C",
 				hashes:  []common.Hash{testBlobTxHashes[0]},
-				cells:   [][]kzg4844.Cell{selectCells(testBlobSidecars[0].Cells, frontCustody.Intersection(&custody))},
-				custody: *frontCustody.Intersection(&custody),
+				cells:   [][]kzg4844.Cell{selectCells(testBlobSidecars[0].Cells, frontCustody.Intersection(custody))},
+				custody: frontCustody.Intersection(custody),
 			},
 			isBlobScheduled{
 				announces: map[string][]blobAnnounce{
-					"D": {{hash: testBlobTxHashes[0], custody: *backCustody.Intersection(&custody)}},
+					"D": {{hash: testBlobTxHashes[0], custody: backCustody.Intersection(custody)}},
 				},
 				fetching: map[string][]blobAnnounce{
-					"D": {{hash: testBlobTxHashes[0], custody: *backCustody.Intersection(&custody)}},
+					"D": {{hash: testBlobTxHashes[0], custody: backCustody.Intersection(custody)}},
 				},
 			},
 			isFetching{
 				hashes: map[common.Hash]fetchInfo{
 					testBlobTxHashes[0]: {
 						fetching: &custody,
-						fetched:  frontCustody.Intersection(&custody).Indices(),
+						fetched:  frontCustody.Intersection(custody).Indices(),
 					},
 				},
 			},
@@ -475,11 +475,11 @@ func TestBlobFetcherPartialDelivery(t *testing.T) {
 			doBlobNotify{peer: "E", hashes: []common.Hash{testBlobTxHashes[0]}, custody: custody},
 			isBlobScheduled{
 				announces: map[string][]blobAnnounce{
-					"D": {{hash: testBlobTxHashes[0], custody: *backCustody.Intersection(&custody)}},
+					"D": {{hash: testBlobTxHashes[0], custody: backCustody.Intersection(custody)}},
 					"E": {{hash: testBlobTxHashes[0], custody: custody}},
 				},
 				fetching: map[string][]blobAnnounce{
-					"D": {{hash: testBlobTxHashes[0], custody: *backCustody.Intersection(&custody)}},
+					"D": {{hash: testBlobTxHashes[0], custody: backCustody.Intersection(custody)}},
 				},
 			},
 
@@ -490,14 +490,14 @@ func TestBlobFetcherPartialDelivery(t *testing.T) {
 					"E": {{hash: testBlobTxHashes[0], custody: custody}},
 				},
 				fetching: map[string][]blobAnnounce{
-					"E": {{hash: testBlobTxHashes[0], custody: *backCustody.Intersection(&custody)}},
+					"E": {{hash: testBlobTxHashes[0], custody: backCustody.Intersection(custody)}},
 				},
 			},
 			isFetching{
 				hashes: map[common.Hash]fetchInfo{
 					testBlobTxHashes[0]: {
 						fetching: &custody,
-						fetched:  frontCustody.Intersection(&custody).Indices(),
+						fetched:  frontCustody.Intersection(custody).Indices(),
 					},
 				},
 			},
@@ -506,8 +506,8 @@ func TestBlobFetcherPartialDelivery(t *testing.T) {
 			doBlobEnqueue{
 				peer:    "E",
 				hashes:  []common.Hash{testBlobTxHashes[0]},
-				cells:   [][]kzg4844.Cell{selectCells(testBlobSidecars[0].Cells, backCustody.Intersection(&custody))},
-				custody: *backCustody.Intersection(&custody),
+				cells:   [][]kzg4844.Cell{selectCells(testBlobSidecars[0].Cells, backCustody.Intersection(custody))},
+				custody: backCustody.Intersection(custody),
 			},
 			isCompleted{testBlobTxHashes[0]},
 		},
@@ -520,14 +520,14 @@ func TestBlobFetcherAvailabilityTimeout(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				BlobFetcherFunctions{
-					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) {},
+					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
 
-					FetchPayloads: func(string, []common.Hash, *types.CustodyBitmap) error {
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error {
 						return nil
 					},
 					DropPeer: func(string) {},
 				},
-				&custody,
+				custody,
 				&mockRand{value: 60},
 			)
 		},
@@ -562,14 +562,14 @@ func TestBlobFetcherPeerDrop(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				BlobFetcherFunctions{
-					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) {},
+					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
 
-					FetchPayloads: func(string, []common.Hash, *types.CustodyBitmap) error {
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error {
 						return nil
 					},
 					DropPeer: func(string) {},
 				},
-				&custody,
+				custody,
 				&mockRand{value: 5},
 			)
 		},
@@ -639,14 +639,14 @@ func TestBlobFetcherFetchTimeout(t *testing.T) {
 		init: func() *BlobFetcher {
 			return NewBlobFetcher(
 				BlobFetcherFunctions{
-					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap) {},
+					HasPayload: func(common.Hash) bool { return false }, AddCells: func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
 
-					FetchPayloads: func(string, []common.Hash, *types.CustodyBitmap) error {
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error {
 						return nil
 					},
 					DropPeer: func(string) {},
 				},
-				&custody,
+				custody,
 				&mockRand{value: 5},
 			)
 		},
@@ -817,7 +817,7 @@ func testBlobFetcher(t *testing.T, tt blobFetcherTest) {
 				for _, ann := range announces {
 					if cellWithSeq, ok := peerAnnounces[ann.hash]; !ok {
 						t.Errorf("step %d, peer %s: hash %x missing from announces", i, peer, ann.hash)
-					} else if *cellWithSeq.cells != ann.custody {
+					} else if cellWithSeq.cells != ann.custody {
 						t.Errorf("step %d, peer %s, hash %x: custody mismatch in announces", i, peer, ann.hash)
 					}
 				}
@@ -854,7 +854,7 @@ func testBlobFetcher(t *testing.T, tt blobFetcherTest) {
 					found := false
 					for _, cellReq := range peerRequests {
 						for _, hash := range cellReq.txs {
-							if hash == req.hash && *cellReq.cells == req.custody {
+							if hash == req.hash && cellReq.cells == req.custody {
 								found = true
 								break
 							}
@@ -872,7 +872,7 @@ func testBlobFetcher(t *testing.T, tt blobFetcherTest) {
 					for _, hash := range cellReq.txs {
 						found := false
 						for _, req := range requests {
-							if req.hash == hash && *cellReq.cells == req.custody {
+							if req.hash == hash && cellReq.cells == req.custody {
 								found = true
 								break
 							}
@@ -906,7 +906,7 @@ func testBlobFetcher(t *testing.T, tt blobFetcherTest) {
 						if cellWithSeq := peerAnnounces[hash]; cellWithSeq != nil {
 							if altCustody, ok := alternates[peer]; !ok {
 								t.Errorf("step %d, hash %x: peer %s missing from alternates", i, hash, peer)
-							} else if *altCustody != *cellWithSeq.cells {
+							} else if altCustody != cellWithSeq.cells {
 								t.Errorf("step %d, hash %x, peer %s: custody bitmap mismatch in alternates", i, hash, peer)
 							}
 						}
@@ -916,7 +916,7 @@ func testBlobFetcher(t *testing.T, tt blobFetcherTest) {
 					for peer, altCustody := range alternates {
 						if fetcher.announces[peer] == nil || fetcher.announces[peer][hash] == nil {
 							t.Errorf("step %d, hash %x: peer %s extra in alternates", i, hash, peer)
-						} else if cellWithSeq := fetcher.announces[peer][hash]; *cellWithSeq.cells != *altCustody {
+						} else if cellWithSeq := fetcher.announces[peer][hash]; cellWithSeq.cells != altCustody {
 							t.Errorf("step %d, hash %x, peer %s: custody bitmap mismatch between announces and alternates", i, hash, peer)
 						}
 					}
@@ -931,9 +931,7 @@ func testBlobFetcher(t *testing.T, tt blobFetcherTest) {
 				} else {
 					// Check fetching bitmap
 					if expected.fetching != nil {
-						if fetchStatus.fetching == nil {
-							t.Errorf("step %d, hash %x: fetching bitmap is nil", i, hash)
-						} else if *fetchStatus.fetching != *expected.fetching {
+						if fetchStatus.fetching != *expected.fetching {
 							t.Errorf("step %d, hash %x: fetching bitmap mismatch", i, hash)
 						}
 					}
@@ -1027,7 +1025,7 @@ func TestMultiBlobDeliveryVerification(t *testing.T) {
 			return NewBlobFetcher(
 				BlobFetcherFunctions{
 					HasPayload: func(common.Hash) bool { return false },
-					AddCells: func(h common.Hash, deliveries map[string]*PeerCellDelivery, custody *types.CustodyBitmap) {
+					AddCells: func(h common.Hash, deliveries map[string]*PeerCellDelivery, custody types.CustodyBitmap) {
 						// Verify each peer's delivered cells pass KZG cell proof verification
 						for _, d := range deliveries {
 							var cellProofs []kzg4844.Proof
@@ -1039,12 +1037,12 @@ func TestMultiBlobDeliveryVerification(t *testing.T) {
 							verifyErr = kzg4844.VerifyCells(d.Cells, sidecar.Commitments, cellProofs, d.Indices)
 						}
 					},
-					FetchPayloads: func(string, []common.Hash, *types.CustodyBitmap) error {
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error {
 						return nil
 					},
 					DropPeer: func(string) {},
 				},
-				&custody,
+				custody,
 				&mockRand{value: 60}, // Force partial requests (60 >= fetchProbability)
 			)
 		},
@@ -1065,15 +1063,15 @@ func TestMultiBlobDeliveryVerification(t *testing.T) {
 			doBlobEnqueue{
 				peer:    "D",
 				hashes:  []common.Hash{testBlobTxHashes[0]},
-				cells:   [][]kzg4844.Cell{selectMultiBlobCells(sidecar, *backCustody.Intersection(&custody))},
-				custody: *backCustody.Intersection(&custody),
+				cells:   [][]kzg4844.Cell{selectMultiBlobCells(sidecar, backCustody.Intersection(custody))},
+				custody: backCustody.Intersection(custody),
 			},
 			// Deliver front cells from C
 			doBlobEnqueue{
 				peer:    "C",
 				hashes:  []common.Hash{testBlobTxHashes[0]},
-				cells:   [][]kzg4844.Cell{selectMultiBlobCells(sidecar, *frontCustody.Intersection(&custody))},
-				custody: *frontCustody.Intersection(&custody),
+				cells:   [][]kzg4844.Cell{selectMultiBlobCells(sidecar, frontCustody.Intersection(custody))},
+				custody: frontCustody.Intersection(custody),
 			},
 			isCompleted{testBlobTxHashes[0]},
 		},

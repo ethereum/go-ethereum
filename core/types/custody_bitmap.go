@@ -47,20 +47,20 @@ func (b *CustodyBitmap) UnmarshalText(input []byte) error {
 }
 
 var (
-	CustodyBitmapAll = func() *CustodyBitmap {
+	CustodyBitmapAll = func() CustodyBitmap {
 		var result CustodyBitmap
 		for i := range result {
 			result[i] = 0xFF
 		}
-		return &result
+		return result
 	}()
 
-	CustodyBitmapData = func() *CustodyBitmap {
+	CustodyBitmapData = func() CustodyBitmap {
 		var result CustodyBitmap
 		for i := 0; i < kzg4844.DataPerBlob/8; i++ {
 			result[i] = 0xFF
 		}
-		return &result
+		return result
 	}()
 )
 
@@ -125,28 +125,28 @@ func (b CustodyBitmap) Indices() []uint64 {
 }
 
 // Difference returns b AND NOT set (bits in b but not in set).
-func (b CustodyBitmap) Difference(set *CustodyBitmap) *CustodyBitmap {
+func (b CustodyBitmap) Difference(set CustodyBitmap) CustodyBitmap {
 	var out CustodyBitmap
 	for i := range b {
 		out[i] = b[i] &^ set[i]
 	}
-	return &out
+	return out
 }
 
 // Intersection returns b AND set.
-func (b CustodyBitmap) Intersection(set *CustodyBitmap) *CustodyBitmap {
+func (b CustodyBitmap) Intersection(set CustodyBitmap) CustodyBitmap {
 	var out CustodyBitmap
 	for i := range b {
 		out[i] = b[i] & set[i]
 	}
-	return &out
+	return out
 }
 
 // Union returns b OR set.
-func (b CustodyBitmap) Union(set *CustodyBitmap) *CustodyBitmap {
+func (b CustodyBitmap) Union(set CustodyBitmap) CustodyBitmap {
 	var out CustodyBitmap
 	for i := range b {
 		out[i] = b[i] | set[i]
 	}
-	return &out
+	return out
 }

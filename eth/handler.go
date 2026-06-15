@@ -208,7 +208,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 
 	// Construct the blob fetcher for cell-based blob data availability
 	blobCallbacks := fetcher.BlobFetcherFunctions{
-		FetchPayloads: func(peer string, hashes []common.Hash, cells *types.CustodyBitmap) error {
+		FetchPayloads: func(peer string, hashes []common.Hash, cells types.CustodyBitmap) error {
 			p := h.peers.peer(peer)
 			if p == nil {
 				return errors.New("unknown peer")
@@ -218,7 +218,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		HasPayload: func(hash common.Hash) bool {
 			return h.blobpool.Has(hash) || blobBuffer.HasCells(hash)
 		},
-		AddCells: func(hash common.Hash, deliveries map[string]*fetcher.PeerCellDelivery, custody *types.CustodyBitmap) {
+		AddCells: func(hash common.Hash, deliveries map[string]*fetcher.PeerCellDelivery, custody types.CustodyBitmap) {
 			converted := make(map[string]*blobpool.PeerDelivery, len(deliveries))
 			for peer, d := range deliveries {
 				converted[peer] = &blobpool.PeerDelivery{Cells: d.Cells, Indices: d.Indices}
@@ -227,7 +227,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		},
 		DropPeer: h.removePeer,
 	}
-	h.blobFetcher = fetcher.NewBlobFetcher(blobCallbacks, &config.Custody, nil)
+	h.blobFetcher = fetcher.NewBlobFetcher(blobCallbacks, config.Custody, nil)
 	return h, nil
 }
 

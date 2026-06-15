@@ -63,21 +63,21 @@ type blobTxAnnounce struct {
 }
 
 type cellRequest struct {
-	txs   []common.Hash        // Transactions that have been requested for their cells
-	cells *types.CustodyBitmap // Requested cell indices
-	time  mclock.AbsTime       // Timestamp when the request was made
+	txs   []common.Hash       // Transactions that have been requested for their cells
+	cells types.CustodyBitmap // Requested cell indices
+	time  mclock.AbsTime      // Timestamp when the request was made
 }
 
 type payloadDelivery struct {
 	origin     string        // Peer from which the payloads were delivered
 	txs        []common.Hash // Hashes of transactions that were delivered
 	cells      [][]kzg4844.Cell
-	cellBitmap *types.CustodyBitmap
+	cellBitmap types.CustodyBitmap
 }
 
 type cellWithSeq struct {
 	seq   uint64
-	cells *types.CustodyBitmap
+	cells types.CustodyBitmap
 }
 
 // PeerCellDelivery holds cells delivered by a single peer.
@@ -87,7 +87,7 @@ type PeerCellDelivery struct {
 }
 
 type fetchStatus struct {
-	fetching   *types.CustodyBitmap         // To avoid fetching cells which had already been fetched / currently being fetched
+	fetching   types.CustodyBitmap          // To avoid fetching cells which had already been fetched / currently being fetched
 	fetched    []uint64                     // Custody indices that have been fetched (per-blob, same for all blobs)
 	deliveries map[string]*PeerCellDelivery // Per-peer cell deliveries
 	blobCount  int                          // Number of blobs in this tx (set on first delivery)
@@ -95,8 +95,8 @@ type fetchStatus struct {
 
 type BlobFetcherFunctions struct {
 	HasPayload    func(common.Hash) bool
-	AddCells      func(common.Hash, map[string]*PeerCellDelivery, *types.CustodyBitmap)
-	FetchPayloads func(string, []common.Hash, *types.CustodyBitmap) error
+	AddCells      func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap)
+	FetchPayloads func(string, []common.Hash, types.CustodyBitmap) error
 	DropPeer      func(string)
 }
 
@@ -116,7 +116,7 @@ type BlobFetcher struct {
 	drop      chan *txDrop
 	custodyCh chan types.CustodyBitmap
 	quit      chan struct{}
-	custody   *types.CustodyBitmap
+	custody   types.CustodyBitmap
 
 	txSeq uint64 // To make transactions fetched in arrival order
 
@@ -135,9 +135,9 @@ type BlobFetcher struct {
 
 	// Buffer 2
 	// Stage 3: Transactions whose payloads/cells are currently being fetched (full fetch + partial fetch)
-	fetches    map[common.Hash]*fetchStatus                    // Hash -> Bitmap, in-flight transaction cells
-	requests   map[string][]*cellRequest                       // In-flight transaction retrievals
-	alternates map[common.Hash]map[string]*types.CustodyBitmap // In-flight transaction alternate origins (in case the peer is dropped)
+	fetches    map[common.Hash]*fetchStatus                   // Hash -> Bitmap, in-flight transaction cells
+	requests   map[string][]*cellRequest                      // In-flight transaction retrievals
+	alternates map[common.Hash]map[string]types.CustodyBitmap // In-flight transaction alternate origins (in case the peer is dropped)
 
 	fn BlobFetcherFunctions // callbacks
 
@@ -156,7 +156,7 @@ type token struct {
 	last   mclock.AbsTime
 }
 
-func NewBlobFetcher(fn BlobFetcherFunctions, custody *types.CustodyBitmap, rand random) *BlobFetcher {
+func NewBlobFetcher(fn BlobFetcherFunctions, custody types.CustodyBitmap, rand random) *BlobFetcher {
 	return &BlobFetcher{
 		notify:     make(chan *blobTxAnnounce),
 		cleanup:    make(chan *payloadDelivery),
@@ -171,7 +171,7 @@ func NewBlobFetcher(fn BlobFetcherFunctions, custody *types.CustodyBitmap, rand 
 		announces:  make(map[string]map[common.Hash]*cellWithSeq),
 		fetches:    make(map[common.Hash]*fetchStatus),
 		requests:   make(map[string][]*cellRequest),
-		alternates: make(map[common.Hash]map[string]*types.CustodyBitmap),
+		alternates: make(map[common.Hash]map[string]types.CustodyBitmap),
 		peerTokens: make(map[string]*token),
 		fn:         fn,
 		custody:    custody,
@@ -207,7 +207,7 @@ func (f *BlobFetcher) Enqueue(peer string, hashes []common.Hash, cells [][]kzg48
 	blobReplyInMeter.Mark(int64(len(hashes)))
 
 	select {
-	case f.cleanup <- &payloadDelivery{origin: peer, txs: hashes, cells: cells, cellBitmap: &cellBitmap}:
+	case f.cleanup <- &payloadDelivery{origin: peer, txs: hashes, cells: cells, cellBitmap: cellBitmap}:
 	case <-f.quit:
 		return errTerminated
 	}
@@ -306,7 +306,7 @@ func (f *BlobFetcher) loop() {
 				}
 				if _, ok := f.full[hash]; ok {
 					// 1) Decided to send full request of the tx
-					if ann.cells != *types.CustodyBitmapAll {
+					if ann.cells != types.CustodyBitmapAll {
 						continue
 					}
 					if f.announces[ann.origin] == nil {
@@ -322,7 +322,7 @@ func (f *BlobFetcher) loop() {
 				if _, ok := f.partial[hash]; ok {
 					// 2) Decided to send partial request of the tx
 					if f.waitlist[hash] != nil {
-						if ann.cells != *types.CustodyBitmapAll {
+						if ann.cells != types.CustodyBitmapAll {
 							// Availability check is only meaningful with full availability announcements
 							continue
 						}
@@ -473,7 +473,7 @@ func (f *BlobFetcher) loop() {
 			for _, hash := range delivery.txs {
 				// Find the request
 				for i, req := range f.requests[delivery.origin] {
-					if slices.Contains(req.txs, hash) && *req.cells == *delivery.cellBitmap {
+					if slices.Contains(req.txs, hash) && req.cells == delivery.cellBitmap {
 						request = req
 						requestId = i
 						break
@@ -537,7 +537,7 @@ func (f *BlobFetcher) loop() {
 					blobFetcherFetchTime.Update(int64(time.Duration(f.clock.Now() - request.time)))
 					status := f.fetches[hash]
 					collectedCustody := types.NewCustodyBitmap(status.fetched)
-					f.fn.AddCells(hash, status.deliveries, &collectedCustody)
+					f.fn.AddCells(hash, status.deliveries, collectedCustody)
 
 					for peer, txset := range f.announces {
 						delete(txset, hash)
@@ -640,7 +640,7 @@ func (f *BlobFetcher) loop() {
 			}
 
 		case cells := <-f.custodyCh:
-			f.custody = &cells
+			f.custody = cells
 
 		case <-f.quit:
 			return
@@ -755,10 +755,10 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 		}
 		var (
 			hashes    = make([]common.Hash, 0, maxTxRetrievals)
-			custodies = make([]*types.CustodyBitmap, 0, maxTxRetrievals)
+			custodies = make([]types.CustodyBitmap, 0, maxTxRetrievals)
 		)
-		f.forEachAnnounce(f.announces[peer], func(hash common.Hash, cells *types.CustodyBitmap) bool {
-			var unfetched *types.CustodyBitmap
+		f.forEachAnnounce(f.announces[peer], func(hash common.Hash, cells types.CustodyBitmap) bool {
+			var unfetched types.CustodyBitmap
 
 			if f.fetches[hash] == nil {
 				// tx is not being fetched
@@ -786,7 +786,7 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 
 			// Mark alternatives
 			if f.alternates[hash] == nil {
-				f.alternates[hash] = map[string]*types.CustodyBitmap{
+				f.alternates[hash] = map[string]types.CustodyBitmap{
 					peer: cells,
 				}
 			} else {
@@ -801,7 +801,7 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 			requestByCustody := make(map[types.CustodyBitmap]*cellRequest)
 
 			for i, hash := range hashes {
-				key := *custodies[i]
+				key := custodies[i]
 				if _, ok := requestByCustody[key]; !ok {
 					requestByCustody[key] = &cellRequest{
 						txs:   []common.Hash{},
@@ -839,10 +839,10 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 // the do function for each until it returns false. We enforce an arrival
 // ordering to minimize the chances of transaction nonce-gaps, which result in
 // transactions being rejected by the txpool.
-func (f *BlobFetcher) forEachAnnounce(announces map[common.Hash]*cellWithSeq, do func(hash common.Hash, cells *types.CustodyBitmap) bool) {
+func (f *BlobFetcher) forEachAnnounce(announces map[common.Hash]*cellWithSeq, do func(hash common.Hash, cells types.CustodyBitmap) bool) {
 	type announcement struct {
 		hash  common.Hash
-		cells *types.CustodyBitmap
+		cells types.CustodyBitmap
 		seq   uint64
 	}
 	// Process announcements by their arrival order

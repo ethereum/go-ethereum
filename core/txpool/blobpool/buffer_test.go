@@ -59,7 +59,7 @@ func TestSortCells(t *testing.T) {
 			"peerA": peerA,
 			"peerB": peerB,
 		},
-		custody: &custody,
+		custody: custody,
 	}
 	sorted, resultCustody := sortCells(entry, blobCount)
 
@@ -106,7 +106,7 @@ func TestAddTxThenCells(t *testing.T) {
 	delivery := makePeerDelivery(t, 0, blobCount, dataIndices)
 	custody := types.NewCustodyBitmap(dataIndices)
 
-	buf.AddCells(hash, map[string]*PeerDelivery{"peerB": delivery}, &custody)
+	buf.AddCells(hash, map[string]*PeerDelivery{"peerB": delivery}, custody)
 	if buf.HasTx(hash) || buf.HasCells(hash) {
 		t.Fatal("buffer should be empty after add")
 	}
@@ -127,7 +127,7 @@ func TestAddCellsThenTx(t *testing.T) {
 	delivery := makePeerDelivery(t, 0, blobCount, dataIndices)
 	custody := types.NewCustodyBitmap(dataIndices)
 
-	buf.AddCells(hash, map[string]*PeerDelivery{"peerB": delivery}, &custody)
+	buf.AddCells(hash, map[string]*PeerDelivery{"peerB": delivery}, custody)
 	if !buf.HasCells(hash) {
 		t.Fatal("cells should be buffered")
 	}
@@ -160,7 +160,7 @@ func TestMultiPeerDelivery(t *testing.T) {
 	buf.AddCells(hash, map[string]*PeerDelivery{
 		"peerB": deliveryA,
 		"peerC": deliveryB,
-	}, &custody)
+	}, custody)
 	if buf.HasTx(hash) || buf.HasCells(hash) {
 		t.Fatal("buffer should be empty after add")
 	}
@@ -195,7 +195,7 @@ func TestBadCell(t *testing.T) {
 	buf.AddCells(hash, map[string]*PeerDelivery{
 		"peerB": goodDelivery,
 		"peerC": badDelivery,
-	}, &custody)
+	}, custody)
 
 	if len(dropped) != 1 || dropped[0] != "peerC" {
 		t.Fatalf("only peerC should have been dropped, got: %v", dropped)

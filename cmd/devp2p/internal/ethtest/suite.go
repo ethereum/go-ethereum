@@ -1074,7 +1074,7 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 				Types:  []byte{types.BlobTxType, types.BlobTxType},
 				Sizes:  []uint32{uint32(t1[0].Size()), uint32(t1[1].Size() + 10)},
 				Hashes: []common.Hash{t1[0].Hash(), t1[1].Hash()},
-				Mask:   *types.CustodyBitmapAll,
+				Mask:   types.CustodyBitmapAll,
 			},
 			resp: eth.PooledTransactionsResponse(t1),
 		},
@@ -1084,7 +1084,7 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 				Types:  []byte{types.DynamicFeeTxType, types.BlobTxType},
 				Sizes:  []uint32{uint32(t2[0].Size()), uint32(t2[1].Size())},
 				Hashes: []common.Hash{t2[0].Hash(), t2[1].Hash()},
-				Mask:   *types.CustodyBitmapAll,
+				Mask:   types.CustodyBitmapAll,
 			},
 			resp: eth.PooledTransactionsResponse(t2),
 		},
@@ -1226,7 +1226,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			Types:  []byte{types.BlobTxType},
 			Sizes:  []uint32{uint32(badTx.Size())},
 			Hashes: []common.Hash{badTx.Hash()},
-			Mask:   *types.CustodyBitmapAll,
+			Mask:   types.CustodyBitmapAll,
 		}
 
 		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
@@ -1278,7 +1278,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			Types:  []byte{types.BlobTxType},
 			Sizes:  []uint32{uint32(tx.Size())},
 			Hashes: []common.Hash{tx.Hash()},
-			Mask:   *types.CustodyBitmapAll,
+			Mask:   types.CustodyBitmapAll,
 		}
 
 		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
@@ -1366,7 +1366,7 @@ partial fetch GetCells should never arrive. Any GetCells that does arrive must b
 		Types:  txTypes,
 		Sizes:  sizes,
 		Hashes: hashes,
-		Mask:   *types.CustodyBitmapAll,
+		Mask:   types.CustodyBitmapAll,
 	}
 	if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
 		t.Fatalf("announce failed: %v", err)
@@ -1485,7 +1485,7 @@ and that providing valid cells causes the tx to enter the pool.`)
 		Types:  []byte{types.BlobTxType},
 		Sizes:  []uint32{uint32(tx.Size())},
 		Hashes: []common.Hash{tx.Hash()},
-		Mask:   *types.CustodyBitmapAll,
+		Mask:   types.CustodyBitmapAll,
 	}
 	if err := conn1.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
 		t.Fatalf("conn1 announce failed: %v", err)
@@ -1568,7 +1568,7 @@ while the other peer is not.`)
 		Types:  []byte{types.BlobTxType},
 		Sizes:  []uint32{uint32(tx.Size())},
 		Hashes: []common.Hash{tx.Hash()},
-		Mask:   *types.CustodyBitmapAll,
+		Mask:   types.CustodyBitmapAll,
 	}
 	if err := conn1.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
 		t.Fatalf("conn1 announce failed: %v", err)

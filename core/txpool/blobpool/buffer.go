@@ -59,7 +59,7 @@ type txEntry struct {
 
 type cellEntry struct {
 	deliveries map[string]*PeerDelivery
-	custody    *types.CustodyBitmap
+	custody    types.CustodyBitmap
 	added      time.Time
 }
 
@@ -145,7 +145,7 @@ func (b *BlobBuffer) AddTx(txs []*types.Transaction, peer string) []error {
 
 // AddCells buffers per-peer cell deliveries from the blob fetcher.
 // If the transaction is already buffered, verification and pool insertion are attempted.
-func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDelivery, custody *types.CustodyBitmap) {
+func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDelivery, custody types.CustodyBitmap) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	defer b.updateMetrics()()
@@ -182,7 +182,7 @@ func (b *BlobBuffer) add(hash common.Hash, tx *types.Transaction, cells *cellEnt
 		Commitments: sidecar.Commitments,
 		Proofs:      sidecar.Proofs,
 		Cells:       sorted,
-		Custody:     *custody,
+		Custody:     custody,
 	}
 	pooledTx := &BlobTxForPool{
 		Tx:          tx.WithoutBlobTxSidecar(),
@@ -277,7 +277,7 @@ func (b *BlobBuffer) verifyCells(entry *cellEntry, sidecar *types.BlobTxSidecar)
 // peer A: cells = [blob0_cell5, blob0_cell3, blob1_cell5, blob1_cell3]
 // peer B: cells = [blob0_cell1, blob0_cell7, blob1_cell1, blob1_cell7]
 // -> [blob0_cell1, blob0_cell3, blob0_cell5, blob0_cell7, blob1_cell1, blob1_cell3, blob1_cell5, blob1_cell7]
-func sortCells(entry *cellEntry, blobCount int) ([]kzg4844.Cell, *types.CustodyBitmap) {
+func sortCells(entry *cellEntry, blobCount int) ([]kzg4844.Cell, types.CustodyBitmap) {
 	// indices per delivery
 	var indices []uint64
 
@@ -309,5 +309,5 @@ func sortCells(entry *cellEntry, blobCount int) ([]kzg4844.Cell, *types.CustodyB
 	}
 
 	custody := types.NewCustodyBitmap(indices)
-	return res, &custody
+	return res, custody
 }

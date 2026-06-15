@@ -225,7 +225,7 @@ func newBlobTxForPool(tx *types.Transaction) (*BlobTxForPool, error) {
 		Commitments: sc.Commitments,
 		Proofs:      sc.Proofs,
 		Cells:       cells,
-		Custody:     *types.CustodyBitmapAll,
+		Custody:     types.CustodyBitmapAll,
 	}
 	return &BlobTxForPool{
 		Tx:          tx.WithoutBlobTxSidecar(),

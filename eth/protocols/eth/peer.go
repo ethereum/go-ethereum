@@ -264,7 +264,7 @@ func (p *Peer) ReplyCells(id uint64, hashes []common.Hash, cells [][]kzg4844.Cel
 }
 
 // RequestPayload fetches a batch of cells from a remote node.
-func (p *Peer) RequestPayload(hashes []common.Hash, cell *types.CustodyBitmap) error {
+func (p *Peer) RequestPayload(hashes []common.Hash, cell types.CustodyBitmap) error {
 	p.Log().Debug("Fetching batch of cells", "txcount", len(hashes), "cellcount", cell.OneCount())
 	id := rand.Uint64()
 
@@ -281,7 +281,7 @@ func (p *Peer) RequestPayload(hashes []common.Hash, cell *types.CustodyBitmap) e
 		RequestId: id,
 		GetCellsRequest: GetCellsRequest{
 			Hashes: hashes,
-			Mask:   *cell,
+			Mask:   cell,
 		},
 	})
 }

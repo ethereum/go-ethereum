@@ -356,7 +356,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		Sync:           config.SyncMode,
 		BloomCache:     uint64(cacheLimit),
 		RequiredBlocks: config.RequiredBlocks,
-		Custody:        *types.CustodyBitmapAll,
+		Custody:        types.CustodyBitmapAll,
 		SnapV2:         config.SnapV2,
 	}); err != nil {
 		return nil, err
