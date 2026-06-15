@@ -252,7 +252,7 @@ func TestKeyToPath(t *testing.T) {
 			name:     "depth 0",
 			depth:    0,
 			key:      []byte{0x80},    // 10000000 in binary
-			expected: []byte{0x01, 1}, // 1-bit value 0x01 + length byte 1
+			expected: []byte{0x80, 1}, // 1 bit "1", left-aligned, + length byte 1
 			wantErr:  false,
 		},
 		{
@@ -266,7 +266,7 @@ func TestKeyToPath(t *testing.T) {
 			name:     "depth crossing byte boundary",
 			depth:    10,
 			key:      []byte{0xFF, 0x00},     // 11111111 00000000 in binary
-			expected: []byte{0x07, 0xF8, 11}, // 11-bit value 0x07F8 + length byte 11
+			expected: []byte{0xFF, 0x00, 11}, // top 11 bits "11111111 000", left-aligned, + length byte 11
 			wantErr:  false,
 		},
 		{
