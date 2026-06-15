@@ -425,44 +425,45 @@ func (s *nodeStore) collectChildGroups(node *InternalNode, path BitArray, flushf
 	if remainingLevels == 0 {
 		// Current node is at depth (groupBoundary - 1), its children are at the next group boundary
 		if !node.left.IsEmpty() {
-			s.collectNodes(node.left, appendBit(path, 0), flushfn, groupDepth)
+			leftPath := path
+			leftPath.AppendBit(&leftPath, 0)
+			s.collectNodes(node.left, leftPath, flushfn, groupDepth)
 		}
 		if !node.right.IsEmpty() {
-			s.collectNodes(node.right, appendBit(path, 1), flushfn, groupDepth)
+			rightPath := path
+			rightPath.AppendBit(&rightPath, 1)
+			s.collectNodes(node.right, rightPath, flushfn, groupDepth)
 		}
 		return nil
 	}
 
 	if !node.left.IsEmpty() {
+		leftPath := path
+		leftPath.AppendBit(&leftPath, 0)
 		switch node.left.Kind() {
 		case kindInternal:
 			n := s.getInternal(node.left.Index())
-			if err := s.collectChildGroups(n, appendBit(path, 0), flushfn, groupDepth, remainingLevels-1); err != nil {
+			if err := s.collectChildGroups(n, leftPath, flushfn, groupDepth, remainingLevels-1); err != nil {
 				return err
 			}
 		default:
-			s.collectNodes(node.left, appendBit(path, 0), flushfn, groupDepth)
+			s.collectNodes(node.left, leftPath, flushfn, groupDepth)
 		}
 	}
 	if !node.right.IsEmpty() {
+		rightPath := path
+		rightPath.AppendBit(&rightPath, 1)
 		switch node.right.Kind() {
 		case kindInternal:
 			n := s.getInternal(node.right.Index())
-			if err := s.collectChildGroups(n, appendBit(path, 1), flushfn, groupDepth, remainingLevels-1); err != nil {
+			if err := s.collectChildGroups(n, rightPath, flushfn, groupDepth, remainingLevels-1); err != nil {
 				return err
 			}
 		default:
-			s.collectNodes(node.right, appendBit(path, 1), flushfn, groupDepth)
+			s.collectNodes(node.right, rightPath, flushfn, groupDepth)
 		}
 	}
 	return nil
-}
-
-// appendBit returns a new BitArray with bit appended to path.
-func appendBit(path BitArray, bit uint8) BitArray {
-	var p BitArray
-	p.AppendBit(&path, bit)
-	return p
 }
 
 func (s *nodeStore) toDot(ref nodeRef, parent, path string) string {

@@ -263,11 +263,10 @@ func (s *nodeStore) splitStemValuesInsert(existingRef nodeRef, newStem []byte, v
 	nRef := s.newInternalRef(int(existing.depth))
 	nNode := s.getInternal(nRef.Index())
 	existing.depth++
-	// The existing stem's on-disk path is derived from its depth via
-	// extendPathToGroupLeaf. Promoting its depth changes that path, so the
-	// stem must be re-flushed at the new path; otherwise the old blob (at
-	// the prior path) gets overwritten by the new ancestor internal blob
-	// and the stem's data has no on-disk home.
+	// The existing stem's on-disk path follows its natural depth. Promoting
+	// the depth lengthens that path by one bit, so the stem must be re-flushed
+	// at the new path; otherwise the old blob (at the prior path) is shadowed
+	// by the new ancestor internal blob and the stem's data has no on-disk home.
 	existing.dirty = true
 
 	bitKey := newStem[nNode.depth/8] >> (7 - (nNode.depth % 8)) & 1

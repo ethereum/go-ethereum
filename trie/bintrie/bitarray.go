@@ -113,10 +113,6 @@ func (b *BitArray) MSBs(x *BitArray, n uint8) *BitArray {
 
 // Equal checks if two bit arrays are equal
 func (b *BitArray) Equal(x *BitArray) bool {
-	if b == nil || x == nil {
-		panic("bit array is nil")
-	}
-
 	return b.len == x.len && b.words == x.words
 }
 
