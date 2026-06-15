@@ -157,7 +157,7 @@ func TestAccessListApplication(t *testing.T) {
 
 	// Verify storage updated. Slots are stored in the canonical snapshot
 	// encoding (RLP of the value with leading zeros trimmed), the same form
-	// the download path writes and the trie rebuild consumes.
+	// the download path writes and the trie generation consumes.
 	storageVal := rawdb.ReadStorageSnapshot(db, accountHash, slotHash)
 	wantStorage, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(common.HexToHash("0x02").Bytes()))
 	if !bytes.Equal(storageVal, wantStorage) {

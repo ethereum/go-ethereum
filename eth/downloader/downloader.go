@@ -496,6 +496,18 @@ func (d *Downloader) syncToHead() (err error) {
 	if mode == ethconfig.SnapSync && pivot == nil {
 		pivot = d.blockchain.CurrentBlock()
 	}
+	// If the snap syncer froze its pivot in a previous cycle, resume against
+	// the frozen header instead of a fresh one.
+	if mode == ethconfig.SnapSync && pivot != nil {
+		if frozen := d.snapSyncer.FrozenPivot(); frozen != nil {
+			if rawdb.ReadCanonicalHash(d.stateDB, frozen.Number.Uint64()) == frozen.Hash() {
+				log.Info("Resuming snap sync against frozen pivot", "number", frozen.Number, "hash", frozen.Hash())
+				pivot = frozen
+			} else {
+				log.Warn("Frozen pivot is no longer canonical", "number", frozen.Number, "hash", frozen.Hash())
+			}
+		}
+	}
 	height := latest.Number.Uint64()
 
 	// In beacon mode, use the skeleton chain for the ancestor lookup
@@ -921,7 +933,9 @@ func (d *Downloader) processSnapSyncContent() error {
 	// the results in the meantime.
 	//
 	// Note, there's no issue with memory piling up since after 64 blocks the
-	// pivot will forcefully move so these accumulators will be dropped.
+	// pivot will forcefully move so these accumulators will be dropped. The
+	// exception is snap/2 trie generation, where the pivot is frozen on
+	// purpose and results accumulate until the generation finishes.
 	var (
 		oldPivot *fetchResult   // Locked in pivot block, might change eventually
 		oldTail  []*fetchResult // Downloaded content after the pivot
@@ -978,11 +992,15 @@ func (d *Downloader) processSnapSyncContent() error {
 			return err
 		}
 		if P != nil {
-			// If new pivot block found, cancel old state retrieval and restart
+			// If new pivot block found, cancel old state retrieval and restart.
 			if oldPivot != P {
-				sync.Cancel()
-				sync = d.syncState(P.Header)
-				go closeOnErr(sync)
+				// Skip the restart if the running sync already targets the
+				// pivot's root (e.g, no pivot block movement yet).
+				if sync.pivot.Root != P.Header.Root {
+					sync.Cancel()
+					sync = d.syncState(P.Header)
+					go closeOnErr(sync)
+				}
 				oldPivot = P
 			}
 			// Wait for completion, occasionally checking for pivot staleness

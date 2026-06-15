@@ -35,11 +35,10 @@ const (
 // devp2p capability negotiation.
 const ProtocolName = "snap"
 
-// ProtocolVersions are the supported versions of the `snap` protocol advertised
-// by default (first is primary). snap/2 is not safe to advertise unconditionally
-// yet, so it is gated behind a feature flag and appended in MakeProtocols rather
-// than listed here.
-var ProtocolVersions = []uint{SNAP1}
+// ProtocolVersions are all the `snap` protocol versions this node implements
+// (first is primary). What's actually advertised on the wire is decided by
+// MakeProtocols, which gates snap/2 behind a feature flag.
+var ProtocolVersions = []uint{SNAP2, SNAP1}
 
 // protocolLengths are the number of implemented messages corresponding to
 // different protocol versions. snap/2 adds GetAccessLists/AccessLists (0x08/0x09).

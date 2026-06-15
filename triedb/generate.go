@@ -337,7 +337,7 @@ func hashRanges(total int) [][2]common.Hash {
 	return ranges
 }
 
-// GenerateTrie rebuilds all tries (storage + account) from flat snapshot
+// GenerateTrie builds all tries (storage + account) from flat snapshot
 // data in the database. The account hash space is partitioned into 16
 // slices aligned with the first-nibble branching of the MPT root. Each
 // partition is processed by its own goroutine, which walks its slice,
@@ -346,10 +346,8 @@ func hashRanges(total int) [][2]common.Hash {
 // trie. Once every partition has produced its subtree root, the top-level
 // branch is assembled and its hash verified against the expected root.
 //
-// Resume: on entry, any partition that has a "done" marker from a
-// previous run is skipped. Its subtree blob is read from the marker
-// and handed to assembleRoot directly. On a mid-run crash, only the
-// in-flight partition(s) are redone.
+// Generation is all or nothing: an interrupted run leaves no resume
+// state and the next run builds every partition from scratch.
 func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-chan struct{}) (GenerateStats, error) {
 	var (
 		start        = time.Now()
@@ -366,9 +364,8 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 	go tickProgress(progressDone, start, &scanned, &updated, &progress)
 	defer close(progressDone)
 
-	// For each partition, either skip (prior done marker found) or run
-	// it. Prior runs can leave the partition's raw root blob in the done
-	// marker. We recover it here so assembleRoot has everything it needs.
+	// Run every partition concurrently, each producing the subtree root
+	// blob that assembleRoot needs.
 	var (
 		ranges  = hashRanges(numPartitions)
 		eg, ctx = errgroup.WithContext(context.Background())
@@ -376,11 +373,6 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 	for i, r := range ranges {
 		partition := byte(i)
 		rangeStart, rangeEnd := r[0], r[1]
-		if blob, ok := rawdb.ReadGenerateTriePartitionDone(db, partition); ok {
-			partitionBlobs[partition] = blob
-			progress[partition].Store(partitionFinished)
-			continue
-		}
 		eg.Go(func() error {
 			start := time.Now()
 			blob, err := generatePartition(ctx, cancel, db, scheme, partition, rangeStart, rangeEnd, &scanned, &updated, &deleted, &progress[partition])
@@ -391,11 +383,6 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 
 			progress[partition].Store(partitionFinished)
 			partitionBlobs[partition] = blob
-
-			// Record completion only after the partition's batch has
-			// flushed inside generatePartition, so this marker appears
-			// on disk only when every write the partition did is durable.
-			rawdb.WriteGenerateTriePartitionDone(db, partition, blob)
 			return nil
 		})
 	}
@@ -405,24 +392,14 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 		return GenerateStats{}, err
 	}
 
-	// Assemble the top-level root from the partition blobs, verify it
-	// matches the expected root, and clear all partition markers on
-	// success.
+	// Assemble the top-level root from the partition blobs and verify it
+	// matches the expected root.
 	got, err := assembleRoot(db, scheme, partitionBlobs)
 	if err != nil {
 		return GenerateStats{}, fmt.Errorf("assemble root: %w", err)
 	}
 	if got != root {
 		return GenerateStats{}, fmt.Errorf("state root mismatch: got %x, want %x", got, root)
-	}
-
-	// Clear the partition progress marker, ending the generation process.
-	batch := db.NewBatch()
-	for i := range numPartitions {
-		rawdb.DeleteGenerateTriePartitionDone(batch, byte(i))
-	}
-	if err := batch.Write(); err != nil {
-		return GenerateStats{}, fmt.Errorf("clear partition markers: %w", err)
 	}
 	log.Info("Generated state trie", "scanned", scanned.Load(), "updated", updated.Load(), "dangling-slots", deleted.Load(), "elapsed", common.PrettyDuration(time.Since(start)))
 	return GenerateStats{

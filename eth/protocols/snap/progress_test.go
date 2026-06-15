@@ -186,8 +186,8 @@ func TestSyncProgressV1Discarded(t *testing.T) {
 	syncer := newSyncerV2(db, rawdb.HashScheme)
 	syncer.loadSyncStatus()
 
-	if syncer.previousPivot != nil {
-		t.Fatalf("expected previousPivot nil after discarding old format, got %+v", syncer.previousPivot)
+	if syncer.pivot != nil {
+		t.Fatalf("expected pivot nil after discarding old format, got %+v", syncer.pivot)
 	}
 	if len(syncer.tasks) != accountConcurrency {
 		t.Fatalf("expected fresh task split of %d, got %d", accountConcurrency, len(syncer.tasks))
@@ -258,8 +258,8 @@ func TestSyncProgressCorruptPayload(t *testing.T) {
 	syncer := newSyncerV2(db, rawdb.HashScheme)
 	syncer.loadSyncStatus()
 
-	if syncer.previousPivot != nil {
-		t.Fatalf("expected previousPivot nil after corrupt payload, got %+v", syncer.previousPivot)
+	if syncer.pivot != nil {
+		t.Fatalf("expected pivot nil after corrupt payload, got %+v", syncer.pivot)
 	}
 	if len(syncer.tasks) != accountConcurrency {
 		t.Fatalf("expected fresh task split of %d, got %d", accountConcurrency, len(syncer.tasks))
