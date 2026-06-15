@@ -26,9 +26,6 @@ func keyToPath(depth int, key []byte) ([]byte, error) {
 	if depth >= 31*8 {
 		return nil, errors.New("node too deep")
 	}
-	// The path is the most significant depth+1 bits of the key. SetBytes copies
-	// the key big-endian and masks everything beyond the length, so it yields
-	// that prefix directly.
 	path := new(BitArray).SetBytes(uint8(depth+1), key)
 	return path.KeyBytes(), nil
 }

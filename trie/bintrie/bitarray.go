@@ -24,7 +24,7 @@ var emptyBitArray = new(BitArray)
 //
 // This mirrors the on-disk key layout, so path manipulation is plain slicing
 // and copying: no shifting or endianness conversion is required. The maximum
-// length is 248 bits (a 31-byte trie key); len is a uint8 so the spare bits in
+// length is 248 bits (a 31-byte trie stem), and is a uint8 so the spare bits in
 // the final byte are always available.
 type BitArray struct {
 	len   uint8
