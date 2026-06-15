@@ -1822,10 +1822,8 @@ func (p *BlobPool) GetBlobHashes(txHash common.Hash) []common.Hash {
 	return vhashes
 }
 
-// GetBlobCells returns cells for the given versioned blob hashes,
-// filtered by the requested cell indices(mask).
-// Each entry in the result corresponds to one vhash. Nil entries mean the blob
-// was not available.
+// GetBlobCells returns cells for the given versioned blob hashes. Nil entires
+// mean that the cell was not available.
 func (p *BlobPool) GetBlobCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*kzg4844.Cell, [][]*kzg4844.Proof, error) {
 	var (
 		cells  = make([][]*kzg4844.Cell, len(vhashes))
