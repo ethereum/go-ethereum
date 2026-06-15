@@ -15,8 +15,6 @@
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 package bintrie
 
-var emptyBitArray = new(BitArray)
-
 // BitArray represents a trie path: the most significant `len` bits of a key,
 // packed big-endian and MSB-first. Bit i (0 = most significant) lives at
 // bytes[i/8] in mask 1<<(7-i%8). All bits at positions >= len are kept zero so
