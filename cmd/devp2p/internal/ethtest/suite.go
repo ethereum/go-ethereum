@@ -1048,7 +1048,9 @@ func (s *Suite) makeBlobTxs(txCount, blobCount int, discriminator byte) (txs typ
 			panic("blob tx signing failed")
 		}
 		blobs = append(blobs, sidecar.Blobs)
-		txs = append(txs, tx.WithoutBlob())
+		scNoBlob := sidecar.Copy()
+		scNoBlob.Blobs = nil
+		txs = append(txs, tx.WithBlobTxSidecar(scNoBlob))
 	}
 	return txs, blobs
 }
@@ -1360,7 +1362,7 @@ partial fetch GetCells should never arrive. Any GetCells that does arrive must b
 	for i, tx := range txs {
 		hashes[i] = tx.Hash()
 		txTypes[i] = types.BlobTxType
-		sizes[i] = uint32(tx.WithoutBlob().Size())
+		sizes[i] = uint32(tx.Size())
 	}
 	ann := eth.NewPooledTransactionHashesPacket72{
 		Types:  txTypes,

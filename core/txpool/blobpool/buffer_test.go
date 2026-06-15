@@ -14,7 +14,7 @@ import (
 func makeV1Tx(t *testing.T, nonce uint64, blobCount int, blobOffset int, key *ecdsa.PrivateKey) *types.Transaction {
 	t.Helper()
 	tx := makeMultiBlobTx(nonce, 1, 1, 1, blobCount, blobOffset, key, types.BlobSidecarVersion1)
-	return tx.WithoutBlob()
+	return removeBlobs(tx)
 }
 
 // makePeerDelivery creates a PeerDelivery for given cell indices from a set of blobs.

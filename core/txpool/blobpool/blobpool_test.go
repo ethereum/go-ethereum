@@ -279,6 +279,15 @@ func makeMultiBlobTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCa
 	return types.MustSignNewTx(key, types.LatestSigner(params.MainnetChainConfig), blobtx)
 }
 
+// removeBlobs returns a copy of tx with the blob payload removed from the
+// sidecar, keeping commitments, proofs and cells intact (simulating what
+// ETH/72 peers send).
+func removeBlobs(tx *types.Transaction) *types.Transaction {
+	sidecar := tx.BlobTxSidecar().Copy()
+	sidecar.Blobs = nil
+	return tx.WithBlobTxSidecar(sidecar)
+}
+
 // makeUnsignedTx is a utility method to construct a random blob transaction
 // without signing it.
 func makeUnsignedTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64) *types.BlobTx {
@@ -2354,7 +2363,7 @@ func TestGetCells(t *testing.T) {
 // TestEncodeForNetwork verifies that encodeForNetwork produces the correct wire
 // encoding for each (sidecar version, eth protocol version) combination.
 //   - eth/69, eth/70: blobs recovered from cells, output matches the original tx
-//   - eth/72:         blob payload omitted, output matches tx.WithoutBlob()
+//   - eth/72:         blob payload omitted, output matches removeBlobs(tx)
 func TestEncodeForNetwork(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -2379,7 +2388,7 @@ func testEncodeForNetwork(t *testing.T, sidecarVer byte, ethVer uint) {
 
 	wantTx := tx
 	if ethVer >= 72 {
-		wantTx = tx.WithoutBlob()
+		wantTx = removeBlobs(tx)
 	}
 	wantRLP, err := rlp.EncodeToBytes(wantTx)
 	if err != nil {
