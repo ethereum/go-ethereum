@@ -170,7 +170,6 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 	rules := config.Rules(number, true, time) // IsMerge is always true
 	// Read requests if Prague is enabled.
 	if config.IsPrague(number, time) {
-
 		requests = [][]byte{}
 		// EIP-6110
 		if err := ParseDepositLogs(&requests, allLogs, config); err != nil {
