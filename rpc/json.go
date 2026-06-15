@@ -407,7 +407,7 @@ func parsePositionalArguments(rawArgs json.RawMessage, types []reflect.Type) ([]
 	}
 	// Set any missing args to nil.
 	for i := len(args); i < len(types); i++ {
-		if types[i].Kind() != reflect.Ptr {
+		if types[i].Kind() != reflect.Pointer {
 			return nil, fmt.Errorf("missing value for required argument %d", i)
 		}
 		args = append(args, reflect.Zero(types[i]))
@@ -425,7 +425,7 @@ func parseArgumentArray(dec *json.Decoder, types []reflect.Type) ([]reflect.Valu
 		if err := dec.Decode(argval.Interface()); err != nil {
 			return args, fmt.Errorf("invalid argument %d: %v", i, err)
 		}
-		if argval.IsNil() && types[i].Kind() != reflect.Ptr {
+		if argval.IsNil() && types[i].Kind() != reflect.Pointer {
 			return args, fmt.Errorf("missing value for required argument %d", i)
 		}
 		args = append(args, argval.Elem())
