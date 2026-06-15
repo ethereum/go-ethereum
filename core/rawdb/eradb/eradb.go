@@ -55,6 +55,7 @@ type fileCacheEntry struct {
 	refcount int           // reference count. This is protected by Store.mu!
 	opened   chan struct{} // signals opening of file has completed
 	file     era.Era       // the file (era1 or ere)
+	slim     bool          // true if receipts are stored in the ere slim encoding
 	err      error         // error from opening the file
 }
 
@@ -134,12 +135,14 @@ func (db *Store) GetRawReceipts(number uint64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return convertReceipts(data)
+	return convertReceipts(data, entry.slim)
 }
 
-// convertReceipts transforms an encoded block receipts list from the format
-// used by era1 into the 'storage' format used by the go-ethereum ancients database.
-func convertReceipts(input []byte) ([]byte, error) {
+// convertReceipts transforms an encoded block receipts list into the 'storage'
+// format used by the go-ethereum ancients database, i.e. a list of
+// [status, gas-used, logs]. The input uses the era1 network encoding, or the
+// ere slim encoding when slim is true.
+func convertReceipts(input []byte, slim bool) ([]byte, error) {
 	var (
 		out bytes.Buffer
 		enc = rlp.NewEncoderBuffer(&out)
@@ -150,32 +153,42 @@ func convertReceipts(input []byte) ([]byte, error) {
 	}
 	outerList := enc.List()
 	for i := 0; blockListIter.Next(); i++ {
-		kind, content, _, err := rlp.Split(blockListIter.Value())
-		if err != nil {
-			return nil, fmt.Errorf("receipt %d invalid: %v", i, err)
-		}
-		var receiptData []byte
-		switch kind {
-		case rlp.Byte:
-			return nil, fmt.Errorf("receipt %d is single byte", i)
-		case rlp.String:
-			// Typed receipt - skip type.
-			receiptData = content[1:]
-		case rlp.List:
-			// Legacy receipt
+		var (
+			receiptData []byte
+			skip        int
+		)
+		if slim {
+			// Slim receipt is [tx-type, status, gas-used, logs]: skip the tx-type.
 			receiptData = blockListIter.Value()
+			skip = 0
+		} else {
+			// Era1 receipt is [status, gas-used, bloom, logs], prefixed by the
+			// tx type if non-legacy: skip the bloom.
+			kind, content, _, err := rlp.Split(blockListIter.Value())
+			if err != nil {
+				return nil, fmt.Errorf("receipt %d invalid: %v", i, err)
+			}
+			switch kind {
+			case rlp.Byte:
+				return nil, fmt.Errorf("receipt %d is single byte", i)
+			case rlp.String:
+				// Typed receipt - skip type.
+				receiptData = content[1:]
+			case rlp.List:
+				// Legacy receipt
+				receiptData = blockListIter.Value()
+			}
+			skip = 2
 		}
-		// Convert data list.
-		// Input is  [status, gas-used, bloom, logs]
-		// Output is [status, gas-used, logs], i.e. we need to skip the bloom.
+
 		dataIter, err := rlp.NewListIterator(receiptData)
 		if err != nil {
 			return nil, fmt.Errorf("receipt %d has invalid data: %v", i, err)
 		}
 		innerList := enc.List()
 		for field := 0; dataIter.Next(); field++ {
-			if field == 2 {
-				continue // skip bloom
+			if field == skip {
+				continue
 			}
 			enc.Write(dataIter.Value())
 		}
@@ -204,11 +217,11 @@ func (db *Store) getEraByEpoch(epoch uint64) *fileCacheEntry {
 
 	case fileIsNew:
 		// Open the file and put it into the cache.
-		e, err := db.openEraFile(epoch)
+		e, slim, err := db.openEraFile(epoch)
 		if err != nil {
 			db.fileFailedToOpen(epoch, entry, err)
 		} else {
-			db.fileOpened(epoch, entry, e)
+			db.fileOpened(epoch, entry, e, slim)
 		}
 		close(entry.opened)
 
@@ -252,7 +265,7 @@ func (db *Store) getCacheEntry(epoch uint64) (stat fileCacheStatus, entry *fileC
 }
 
 // fileOpened is called after an era file has been successfully opened.
-func (db *Store) fileOpened(epoch uint64, entry *fileCacheEntry, file era.Era) {
+func (db *Store) fileOpened(epoch uint64, entry *fileCacheEntry, file era.Era, slim bool) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -269,6 +282,7 @@ func (db *Store) fileOpened(epoch uint64, entry *fileCacheEntry, file era.Era) {
 
 	// Add it to the LRU. This may evict an existing item, which we have to close.
 	entry.file = file
+	entry.slim = slim
 	evictedEpoch, evictedEntry, _ := db.lru.Add3(epoch, entry)
 	if evictedEntry != nil {
 		evictedEntry.derefAndClose(evictedEpoch)
@@ -285,23 +299,24 @@ func (db *Store) fileFailedToOpen(epoch uint64, entry *fileCacheEntry, err error
 	entry.err = err
 }
 
-func (db *Store) openEraFile(epoch uint64) (era.Era, error) {
+func (db *Store) openEraFile(epoch uint64) (era.Era, bool, error) {
 	// File name scheme is <network>-<epoch>-<root>.<ext>
 	// Try era1 first, then ere.
 	for _, ext := range []string{"era1", "ere"} {
 		glob := fmt.Sprintf("*-%05d-*.%s", epoch, ext)
 		matches, err := filepath.Glob(filepath.Join(db.datadir, glob))
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if len(matches) > 1 {
-			return nil, fmt.Errorf("multiple %s files found for epoch %d", ext, epoch)
+			return nil, false, fmt.Errorf("multiple %s files found for epoch %d", ext, epoch)
 		}
 		if len(matches) == 0 {
 			continue
 		}
 		filename := matches[0]
 		var e era.Era
+		slim := ext == "ere"
 		switch ext {
 		case "era1":
 			e, err = onedb.Open(filename)
@@ -309,22 +324,22 @@ func (db *Store) openEraFile(epoch uint64) (era.Era, error) {
 			// The era store serves receipts via RPC. Reject noreceipts
 			// profiles to avoid silently returning empty receipt data.
 			if strings.Contains(filepath.Base(filename), "-noreceipts") {
-				return nil, fmt.Errorf("era store does not support noreceipts profile: %s", filepath.Base(filename))
+				return nil, false, fmt.Errorf("era store does not support noreceipts profile: %s", filepath.Base(filename))
 			}
 			e, err = execdb.Open(filename)
 		}
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		// Sanity-check start block.
 		if e.Start()%uint64(era.MaxSize) != 0 {
 			e.Close()
-			return nil, fmt.Errorf("%s file has invalid boundary. %d %% %d != 0", ext, e.Start(), era.MaxSize)
+			return nil, false, fmt.Errorf("%s file has invalid boundary. %d %% %d != 0", ext, e.Start(), era.MaxSize)
 		}
 		log.Debug("Opened era file", "type", ext, "epoch", epoch)
-		return e, nil
+		return e, slim, nil
 	}
-	return nil, fs.ErrNotExist
+	return nil, false, fs.ErrNotExist
 }
 
 // doneWithFile signals that the caller has finished using a file.
