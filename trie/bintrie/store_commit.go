@@ -59,27 +59,9 @@ var parallelHashDepth = min(bits.Len(uint(runtime.NumCPU())), 8)
 // goroutine while the right subtree is hashed inline, then the two digests
 // are combined. Below that threshold the goroutine spawn cost outweighs the
 // hashing work, so deeper nodes hash both children sequentially.
-//
-// At a group boundary (depth % groupDepth == 0, with groupDepth > 0) the
-// hash is computed from the group's bottom-layer slot hashes via the same
-// serialize-then-recursive-hash that a fresh reader applies after reading
-// the node's blob from disk. This guarantees the parent's stored child
-// hash equals the child's read-back hash byte-for-byte, regardless of
-// whether the in-memory subtree placed its stems at natural depth (via
-// UpdateStem split) or extended depth (via deserializeSubtree).
 func (s *nodeStore) hashInternal(idx uint32) common.Hash {
 	node := s.getInternal(idx)
 	if !node.mustRecompute {
-		return node.hash
-	}
-
-	if s.groupDepth > 0 && int(node.depth)%s.groupDepth == 0 {
-		bitmapSize := bitmapSizeForDepth(s.groupDepth)
-		bitmap := make([]byte, bitmapSize)
-		var hashes []common.Hash
-		s.serializeSubtree(makeRef(kindInternal, idx), s.groupDepth, 0, int(node.depth), bitmap, &hashes)
-		node.hash = groupedRecursiveHash(s.groupDepth, bitmap, hashes)
-		node.mustRecompute = false
 		return node.hash
 	}
 
@@ -125,48 +107,11 @@ func (s *nodeStore) hashInternal(idx uint32) common.Hash {
 	return node.hash
 }
 
-// groupedRecursiveHash computes the recursive SHA256 hash of a group-blob
-// subtree, given the bitmap and present-hash list produced by serializeSubtree.
-//
-// The output is byte-equal to what hashInternal would compute on a tree
-// produced by deserializeSubtree reading the same (bitmap, hashes) — i.e.,
-// it's the hash the fresh-reader path produces. Use this from hashInternal
-// at group-boundary depths so the parent's stored child hash matches the
-// child's read-back hash regardless of in-memory stem placement.
-func groupedRecursiveHash(groupDepth int, bitmap []byte, hashes []common.Hash) common.Hash {
-	nSlots := 1 << groupDepth
-	leaves := make([]common.Hash, nSlots)
-	hashIdx := 0
-	for i := 0; i < nSlots; i++ {
-		if bitmap[i/8]>>(7-(i%8))&1 == 1 {
-			leaves[i] = hashes[hashIdx]
-			hashIdx++
-		}
-	}
-	level := leaves
-	var zero common.Hash
-	for len(level) > 1 {
-		next := make([]common.Hash, len(level)/2)
-		for i := 0; i < len(next); i++ {
-			l, r := level[2*i], level[2*i+1]
-			if l == zero && r == zero {
-				continue
-			}
-			var buf [64]byte
-			copy(buf[:32], l[:])
-			copy(buf[32:], r[:])
-			next[i] = sha256.Sum256(buf[:])
-		}
-		level = next
-	}
-	return level[0]
-}
-
 // serializeSubtree recursively collects child hashes from a subtree of InternalNodes.
 // It traverses up to `remainingDepth` levels, storing hashes of bottom-layer children.
 // position tracks the current index (0 to 2^groupDepth - 1) for bitmap placement.
 // hashes collects the hashes of present children, bitmap tracks which positions are present.
-func (s *nodeStore) serializeSubtree(ref nodeRef, remainingDepth int, position int, absoluteDepth int, bitmap []byte, hashes *[]common.Hash) {
+func (s *nodeStore) serializeSubtree(ref nodeRef, remainingDepth int, position int, groupDepth int, bitmap []byte, hashes *[]common.Hash, depths *[]uint8) {
 	if remainingDepth == 0 {
 		// Bottom layer: store hash if not empty
 		switch ref.Kind() {
@@ -177,6 +122,7 @@ func (s *nodeStore) serializeSubtree(ref nodeRef, remainingDepth int, position i
 			// StemNode, HashedNode, or InternalNode at boundary: store hash
 			bitmap[position/8] |= 1 << (7 - (position % 8))
 			*hashes = append(*hashes, s.computeHash(ref))
+			*depths = append(*depths, uint8(groupDepth))
 		}
 		return
 	}
@@ -185,31 +131,18 @@ func (s *nodeStore) serializeSubtree(ref nodeRef, remainingDepth int, position i
 	case kindInternal:
 		leftPos := position * 2
 		rightPos := position*2 + 1
-		s.serializeSubtree(s.getInternal(ref.Index()).left, remainingDepth-1, leftPos, absoluteDepth+1, bitmap, hashes)
-		s.serializeSubtree(s.getInternal(ref.Index()).right, remainingDepth-1, rightPos, absoluteDepth+1, bitmap, hashes)
+		s.serializeSubtree(s.getInternal(ref.Index()).left, remainingDepth-1, leftPos, groupDepth, bitmap, hashes, depths)
+		s.serializeSubtree(s.getInternal(ref.Index()).right, remainingDepth-1, rightPos, groupDepth, bitmap, hashes, depths)
 	case kindEmpty:
 		return
 	default:
 		// StemNode or HashedNode encountered before reaching the group's bottom
 		// layer. Compute the leaf bitmap position where this node's hash will
 		// be stored.
-		leafPos := position
-		switch ref.Kind() {
-		case kindStem:
-			sn := s.getStem(ref.Index())
-			// Extend position using the stem's key bits so that
-			// GetValuesAtStem traversal (which follows key bits) finds the hash.
-			for d := 0; d < remainingDepth; d++ {
-				bit := sn.Stem[(absoluteDepth+d)/8] >> (7 - ((absoluteDepth + d) % 8)) & 1
-				leafPos = leafPos*2 + int(bit)
-			}
-		default:
-			// HashedNode or unknown: extend all-left (no key bits available).
-			// This matches the all-zero path that resolveNode would follow.
-			leafPos = position << remainingDepth
-		}
-		bitmap[leafPos/8] |= 1 << (7 - (leafPos % 8))
+		bitmapPos := position << remainingDepth
+		bitmap[bitmapPos/8] |= 1 << (7 - (bitmapPos % 8))
 		*hashes = append(*hashes, s.computeHash(ref))
+		*depths = append(*depths, uint8(groupDepth-remainingDepth))
 	}
 }
 
@@ -217,25 +150,29 @@ func (s *nodeStore) serializeSubtree(ref nodeRef, remainingDepth int, position i
 func (s *nodeStore) serializeNode(ref nodeRef, groupDepth int) []byte {
 	switch ref.Kind() {
 	case kindInternal:
-		// InternalNode group: 1 byte type + 1 byte group depth + variable bitmap + N×32 byte hashes
+		// InternalNode group format:
+		//   [type(1)] [groupDepth(1)] [bitmap (2^groupDepth bits)] [depths(1B × K)] [hashes(32B × K)]
 		bitmapSize := bitmapSizeForDepth(groupDepth)
 		bitmap := make([]byte, bitmapSize)
 		var hashes []common.Hash
+		var depths []uint8
 
-		node := s.getInternal(ref.Index())
-		s.serializeSubtree(ref, groupDepth, 0, int(node.depth), bitmap, &hashes)
+		s.serializeSubtree(ref, groupDepth, 0, groupDepth, bitmap, &hashes, &depths)
 
 		// Build serialized output
-		serializedLen := NodeTypeBytes + 1 + bitmapSize + len(hashes)*HashSize
+		k := len(hashes)
+		serializedLen := NodeTypeBytes + 1 + bitmapSize + k + k*HashSize
 		serialized := make([]byte, serializedLen)
 		serialized[0] = nodeTypeInternal
-		serialized[1] = byte(groupDepth) // group depth => bitmap size for a sparse group
+		serialized[1] = byte(groupDepth)
 		copy(serialized[2:2+bitmapSize], bitmap)
 
-		offset := NodeTypeBytes + 1 + bitmapSize
-		for _, h := range hashes {
-			copy(serialized[offset:offset+HashSize], h.Bytes())
-			offset += HashSize
+		depthsOff := NodeTypeBytes + 1 + bitmapSize
+		copy(serialized[depthsOff:depthsOff+k], depths) // TODO: see if this can't be pre-allocated
+
+		hashesOff := depthsOff + k
+		for i, h := range hashes {
+			copy(serialized[hashesOff+i*HashSize:hashesOff+(i+1)*HashSize], h.Bytes())
 		}
 
 		return serialized
@@ -284,56 +221,87 @@ func (s *nodeStore) deserializeNodeWithHash(serialized []byte, depth int, hn com
 }
 
 // deserializeSubtree reconstructs an InternalNode subtree from grouped serialization.
-// remainingDepth is how many more levels to build, position is current index in the bitmap,
-// nodeDepth is the actual trie depth for the node being created.
-// hashIdx tracks the current position in the hash data (incremented as hashes are consumed).
-func (s *nodeStore) deserializeSubtree(hn common.Hash, remainingDepth int, position int, nodeDepth int, bitmap []byte, hashData []byte, hashIdx *int, mustRecompute bool, dirty bool) (nodeRef, error) {
-	if remainingDepth == 0 {
-		// Bottom layer: check bitmap and return HashedNode or Empty
-		if bitmap[position/8]>>(7-(position%8))&1 == 1 {
-			if len(hashData) < (*hashIdx+1)*HashSize {
-				return emptyRef, errInvalidSerializedLength
-			}
-			hash := common.BytesToHash(hashData[*hashIdx*HashSize : (*hashIdx+1)*HashSize])
-			*hashIdx++
-			return s.newHashedRef(hash), nil
-		}
+func (s *nodeStore) deserializeSubtree(hn common.Hash, groupDepth int, nodeDepth int, bitmap []byte, depths []byte, hashData []byte, mustRecompute bool, dirty bool) (nodeRef, error) {
+	k := len(depths)
+	if len(hashData) != k*HashSize {
+		return emptyRef, errInvalidSerializedLength
+	}
+	if k == 0 {
 		return emptyRef, nil
 	}
 
-	// Check if this entire subtree is empty by examining all relevant bitmap bits
-	leftPos := position * 2
-	rightPos := position*2 + 1
-
-	// note that the parent might not need root computations, but the children
-	// do, because their hash isn't saved. Hence `mustRecompute` is set to `true`.
-	left, err := s.deserializeSubtree(common.Hash{}, remainingDepth-1, leftPos, nodeDepth+1, bitmap, hashData, hashIdx, true, dirty)
-	if err != nil {
-		return emptyRef, err
-	}
-	right, err := s.deserializeSubtree(common.Hash{}, remainingDepth-1, rightPos, nodeDepth+1, bitmap, hashData, hashIdx, true, dirty)
-	if err != nil {
-		return emptyRef, err
-	}
-
-	// If both children are empty, return Empty
-	if left.IsEmpty() && right.IsEmpty() {
-		return emptyRef, nil
-	}
-
-	ref := s.newInternalRef(nodeDepth)
-	node := s.getInternal(ref.Index())
-	node.left = left
-	node.right = right
-	node.mustRecompute = mustRecompute
+	rootRef := s.newInternalRef(nodeDepth)
+	rootNode := s.getInternal(rootRef.Index())
+	rootNode.mustRecompute = mustRecompute
 	if !mustRecompute {
-		// mustRecompute will only be false for the root of the subtree,
-		// for which we already know the hash.
-		node.hash = hn
-		node.mustRecompute = false
+		rootNode.hash = hn
 	}
-	node.dirty = dirty
-	return ref, nil
+	rootNode.dirty = dirty
+
+	bitmapBits := 1 << groupDepth
+	entryIdx := 0
+	for bit := 0; bit < bitmapBits; bit++ {
+		if bitmap[bit/8]>>(7-(bit%8))&1 == 0 {
+			continue
+		}
+		depthOffset := int(depths[entryIdx])
+		if depthOffset < 1 || depthOffset > groupDepth {
+			return emptyRef, errors.New("invalid depth offset")
+		}
+		// Canonical-encoding check: trailing position bits must be zero.
+		mask := (1 << (groupDepth - depthOffset)) - 1
+		if bit&mask != 0 {
+			return emptyRef, errors.New("non-canonical bitmap position")
+		}
+		var hash common.Hash
+		copy(hash[:], hashData[entryIdx*HashSize:(entryIdx+1)*HashSize])
+		if err := s.attachInGroup(rootRef, nodeDepth, groupDepth, depthOffset, bit, hash, dirty); err != nil {
+			return emptyRef, err
+		}
+		entryIdx++
+	}
+	return rootRef, nil
+}
+
+func (s *nodeStore) attachInGroup(rootRef nodeRef, rootDepth, groupDepth, depthOffset, bitmapPos int, hash common.Hash, dirty bool) error {
+	cur := rootRef
+	for level := 0; level < depthOffset-1; level++ {
+		bit := (bitmapPos >> (groupDepth - 1 - level)) & 1
+		node := s.getInternal(cur.Index())
+		childRef := node.left
+		if bit == 1 {
+			childRef = node.right
+		}
+		if childRef.IsEmpty() {
+			newRef := s.newInternalRef(rootDepth + level + 1)
+			s.getInternal(newRef.Index()).dirty = dirty
+			if bit == 0 {
+				node.left = newRef
+			} else {
+				node.right = newRef
+			}
+			cur = newRef
+			continue
+		}
+		if childRef.Kind() != kindInternal {
+			return errors.New("overlapping entries in group blob")
+		}
+		cur = childRef
+	}
+	leafBit := (bitmapPos >> (groupDepth - depthOffset)) & 1
+	node := s.getInternal(cur.Index())
+	if leafBit == 0 {
+		if !node.left.IsEmpty() {
+			return errors.New("overlapping entries in group blob")
+		}
+		node.left = s.newHashedRef(hash)
+	} else {
+		if !node.right.IsEmpty() {
+			return errors.New("overlapping entries in group blob")
+		}
+		node.right = s.newHashedRef(hash)
+	}
+	return nil
 }
 
 func (s *nodeStore) decodeNode(serialized []byte, depth int, hn common.Hash, mustRecompute, dirty bool) (nodeRef, error) {
@@ -343,7 +311,9 @@ func (s *nodeStore) decodeNode(serialized []byte, depth int, hn common.Hash, mus
 
 	switch serialized[0] {
 	case nodeTypeInternal:
-		// Grouped format: 1 byte type + 1 byte group depth + variable bitmap + N×32 byte hashes
+		// Grouped format:
+		//   [type(1)] [groupDepth(1)] [bitmap (2^groupDepth bits, padded to bitmapSize bytes)]
+		//   [depthOffsets (1B × K)] [hashes (32B × K)]
 		if len(serialized) < NodeTypeBytes+1 {
 			return emptyRef, errInvalidSerializedLength
 		}
@@ -356,10 +326,28 @@ func (s *nodeStore) decodeNode(serialized []byte, depth int, hn common.Hash, mus
 			return 0, errInvalidSerializedLength
 		}
 		bitmap := serialized[2 : 2+bitmapSize]
-		hashData := serialized[2+bitmapSize:]
 
-		hashIdx := 0
-		return s.deserializeSubtree(hn, groupDepth, 0, depth, bitmap, hashData, &hashIdx, mustRecompute, dirty)
+		bitmapBits := 1 << groupDepth
+		if bitmapBits < 8 {
+			padMask := byte(0xFF) >> bitmapBits
+			if bitmap[0]&padMask != 0 {
+				return emptyRef, errors.New("non-canonical bitmap padding")
+			}
+		}
+
+		k := 0
+		for _, b := range bitmap {
+			k += bits.OnesCount8(b)
+		}
+		expectedLen := NodeTypeBytes + 1 + bitmapSize + k + k*HashSize
+		if len(serialized) != expectedLen {
+			return emptyRef, errInvalidSerializedLength
+		}
+		depthsOff := NodeTypeBytes + 1 + bitmapSize
+		depths := serialized[depthsOff : depthsOff+k]
+		hashData := serialized[depthsOff+k : depthsOff+k+k*HashSize]
+
+		return s.deserializeSubtree(hn, groupDepth, depth, bitmap, depths, hashData, mustRecompute, dirty)
 
 	case nodeTypeStem:
 		if len(serialized) < NodeTypeBytes+StemSize+StemBitmapSize {
@@ -453,8 +441,7 @@ func (s *nodeStore) collectChildGroups(node *InternalNode, path BitArray, flushf
 				return err
 			}
 		default:
-			extPath := s.extendPathToGroupLeaf(appendBit(path, 0), node.left, remainingLevels)
-			s.collectNodes(node.left, extPath, flushfn, groupDepth)
+			s.collectNodes(node.left, appendBit(path, 0), flushfn, groupDepth)
 		}
 	}
 	if !node.right.IsEmpty() {
@@ -465,36 +452,10 @@ func (s *nodeStore) collectChildGroups(node *InternalNode, path BitArray, flushf
 				return err
 			}
 		default:
-			extPath := s.extendPathToGroupLeaf(appendBit(path, 1), node.right, remainingLevels)
-			s.collectNodes(node.right, extPath, flushfn, groupDepth)
+			s.collectNodes(node.right, appendBit(path, 1), flushfn, groupDepth)
 		}
 	}
 	return nil
-}
-
-// extendPathToGroupLeaf extends a storage path to the group's leaf boundary,
-// matching the projection done by serializeSubtree. For StemNodes, the path
-// is extended using the stem's key bits (same as serializeSubtree). For other
-// node types, the path is extended with all-zero (left) bits.
-func (s *nodeStore) extendPathToGroupLeaf(path BitArray, node nodeRef, remainingLevels int) BitArray {
-	if remainingLevels <= 0 {
-		return path
-	}
-	if node.Kind() == kindStem {
-		sn := s.getStem(node.Index())
-		for range remainingLevels {
-			n := path.Len()
-			bit := sn.Stem[n/8] >> (7 - (n % 8)) & 1
-			path = appendBit(path, bit)
-		}
-	} else {
-		// HashedNode or other: all-left extension (matches serializeSubtree's
-		// position << remainingDepth behavior).
-		for range remainingLevels {
-			path = appendBit(path, 0)
-		}
-	}
-	return path
 }
 
 // appendBit returns a new BitArray with bit appended to path.

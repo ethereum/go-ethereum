@@ -133,10 +133,8 @@ func NewBinaryTrie(root common.Hash, db database.NodeDatabase, groupDepth int) (
 	if err != nil {
 		return nil, err
 	}
-	store := newNodeStore()
-	store.groupDepth = groupDepth
 	t := &BinaryTrie{
-		store:      store,
+		store:      newNodeStore(),
 		reader:     reader,
 		tracer:     trie.NewPrevalueTracer(),
 		groupDepth: groupDepth,
