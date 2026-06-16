@@ -245,11 +245,17 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	}
 	reject := false // reserved peer slots
 	if h.downloader.ConfigSyncMode() == ethconfig.SnapSync {
-		if snap == nil {
-			// If we are running snap-sync, we want to reserve roughly half the peer
-			// slots for peers supporting the snap protocol.
-			// The logic here is; we only allow up to 5 more non-snap peers than snap-peers.
-			if all, snp := h.peers.len(), h.peers.snapLen(); all-snp > snp+5 {
+		// A peer is useful to the active state syncer only if it offers the snap
+		// extension at (or above) the syncer's version. Non-snap peers AND peers
+		// stuck on an older snap version (e.g. snap/1 while we sync via snap/2)
+		// are both "non-usable": the node still serves them, but they must not be
+		// allowed to fill the slots reserved for peers that can serve the sync.
+		minVersion := h.downloader.SnapSyncVersion()
+		usable := snap != nil && snap.Version() >= minVersion
+		if !usable {
+			// Reserve roughly half the slots for usable peers: only allow up to 5
+			// more non-usable peers (non-snap or below-version snap) than usable ones.
+			if all, snp := h.peers.len(), h.peers.snapLen(minVersion); all-snp > snp+5 {
 				reject = true
 			}
 		}

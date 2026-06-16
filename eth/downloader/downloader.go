@@ -1132,9 +1132,21 @@ func (d *Downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) erro
 // snap/2 syncer skips snap/1-only peers, which cannot answer its BAL requests.
 func (d *Downloader) RegisterSnapPeer(p *snap.Peer) error {
 	if p.Version() < d.snapSyncer.Version() {
+		// The peer speaks an older snap version than the active syncer needs
+		// (e.g. snap/1 while we sync via snap/2). We still serve it, but it
+		// cannot answer our requests, so it is not registered for syncing.
+		// Surface it so an operator can tell a stalled sync from a quiet one.
+		snapPeerSkipMeter.Mark(1)
+		log.Debug("Skipping snap peer below syncer version", "peer", p.ID(), "version", p.Version(), "required", d.snapSyncer.Version())
 		return nil
 	}
 	return d.snapSyncer.Register(p)
+}
+
+// SnapSyncVersion returns the snap protocol version of the active state syncer.
+// Peers negotiating a lower version cannot serve its requests.
+func (d *Downloader) SnapSyncVersion() uint {
+	return d.snapSyncer.Version()
 }
 
 // UnregisterSnapPeer removes a snap peer from the active state syncer. It mirrors
