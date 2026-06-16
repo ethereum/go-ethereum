@@ -1150,6 +1150,9 @@ func deleteRange(batch ethdb.Batch, prefix []byte) {
 // limit). Note, this method assumes the range is exclusively occupied by
 // sync data!
 func deleteKeyRange(batch ethdb.Batch, start, limit []byte) {
+	if limit != nil && bytes.Compare(start, limit) >= 0 {
+		return
+	}
 	// Try to remove the data in the range by a loop, as the leveldb
 	// doesn't support the native range deletion.
 	for {
@@ -1161,7 +1164,9 @@ func deleteKeyRange(batch ethdb.Batch, start, limit []byte) {
 		// therefore inconsistent. This is a tradeoff of the current LevelDB-based
 		// approach.
 		if errors.Is(err, ethdb.ErrTooManyKeys) {
-			batch.Write()
+			if err := batch.Write(); err != nil {
+				log.Crit("Failed to flush state deletions", "err", err)
+			}
 			batch.Reset()
 			continue
 		}
@@ -1208,6 +1213,9 @@ func (s *syncerV2) pruneStaleState() error {
 			if bytes.Compare(hash[:], task.Next[:]) < 0 {
 				return errors.New("unexpected storage marker before the range")
 			}
+			if bytes.Compare(hash[:], task.Last[:]) > 0 {
+				return errors.New("unexpected storage marker after the range")
+			}
 			protected = append(protected, hash)
 		}
 		for hash := range task.SubTasks {
@@ -1216,6 +1224,9 @@ func (s *syncerV2) pruneStaleState() error {
 			}
 			if bytes.Compare(hash[:], task.Next[:]) < 0 {
 				return errors.New("unexpected storage marker before the range")
+			}
+			if bytes.Compare(hash[:], task.Last[:]) > 0 {
+				return errors.New("unexpected storage marker after the range")
 			}
 			protected = append(protected, hash)
 		}
