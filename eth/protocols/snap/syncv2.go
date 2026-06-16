@@ -65,6 +65,13 @@ const (
 	// a catch-up that is bound to fail partway through.
 	maxCatchUpBlocks = params.FullImmutabilityThreshold
 
+	// catchUpWindow is the number of blocks BAL catch-up fetches and applies at
+	// a time. The whole gap can span up to maxCatchUpBlocks, so fetching it in
+	// one shot would buffer every block's BAL (~100 KiB each) in memory before
+	// applying any. Processing the gap in bounded windows caps peak memory to a
+	// single window's worth of BALs.
+	catchUpWindow = 512
+
 	// syncProgressVersion is the version byte prepended to the JSON-encoded
 	// syncProgressV2 when persisted. On load, a mismatching version byte causes
 	// the persisted progress to be discarded and sync to start fresh.
@@ -397,6 +404,8 @@ type syncerV2 struct {
 	startTime time.Time // Time instance when snapshot sync started
 	logTime   time.Time // Time instance when status was last reported
 
+	catchUpWindow uint64 // Number of blocks fetched/applied per BAL catch-up window (overridable in tests)
+
 	pend sync.WaitGroup // Tracks network request goroutines for graceful shutdown
 	lock sync.RWMutex   // Protects fields that can change outside of sync (peers, reqs, pivot)
 }
@@ -425,7 +434,8 @@ func newSyncerV2(db ethdb.Database, scheme string) *syncerV2 {
 		bytecodeReqs:   make(map[uint64]*bytecodeRequestV2),
 		accessListReqs: make(map[uint64]*accessListRequest),
 
-		extProgress: new(syncProgressV2),
+		extProgress:   new(syncProgressV2),
+		catchUpWindow: catchUpWindow,
 	}
 	if raw := rawdb.ReadSnapshotSyncStatus(db); len(raw) > 0 && raw[0] == syncProgressVersion {
 		var progress syncProgressV2
@@ -765,69 +775,77 @@ func (s *syncerV2) catchUp(target *types.Header, cancel chan struct{}) error {
 	s.lock.RUnlock()
 	log.Info("Starting BAL catch-up", "from", from, "to", to, "blocks", to-from+1)
 
-	// Collect block hashes and headers for the gap range.
-	var (
-		hashes  = make([]common.Hash, 0, to-from+1)
-		headers = make(map[common.Hash]*types.Header, to-from+1)
-	)
-	for num := from; num <= to; num++ {
-		hash := rawdb.ReadCanonicalHash(s.db, num)
-		if hash == (common.Hash{}) {
-			return fmt.Errorf("missing canonical hash for block %d during catch-up", num)
-		}
-		header := rawdb.ReadHeader(s.db, hash, num)
-		if header == nil {
-			return fmt.Errorf("missing header for block %d (hash %v) during catch-up", num, hash)
-		}
-		hashes = append(hashes, hash)
-		headers[hash] = header
-	}
-
-	// Fetch BALs from peers
-	rawBALs, err := s.fetchAccessLists(hashes, headers, cancel)
-	if err != nil {
-		return err
-	}
-
-	// Apply each BAL in block order. BALs are already verified by fetchAccessLists.
-	for i, raw := range rawBALs {
+	for start := from; start <= to; start += s.catchUpWindow {
 		select {
 		case <-cancel:
 			return ErrCancelled
 		default:
 		}
-		num := from + uint64(i)
-		hash := hashes[i]
-
-		// Decode the raw RLP into a BAL.
+		end := start + s.catchUpWindow - 1
+		if end > to {
+			end = to
+		}
+		// Collect block hashes and headers for this window.
 		var (
-			b     bal.BlockAccessList
-			batch = s.db.NewBatch()
+			hashes  = make([]common.Hash, 0, end-start+1)
+			headers = make(map[common.Hash]*types.Header, end-start+1)
 		)
-		if err := rlp.DecodeBytes(raw, &b); err != nil {
-			return fmt.Errorf("failed to decode BAL for block %d: %v", num, err)
+		for num := start; num <= end; num++ {
+			hash := rawdb.ReadCanonicalHash(s.db, num)
+			if hash == (common.Hash{}) {
+				return fmt.Errorf("missing canonical hash for block %d during catch-up", num)
+			}
+			header := rawdb.ReadHeader(s.db, hash, num)
+			if header == nil {
+				return fmt.Errorf("missing header for block %d (hash %v) during catch-up", num, hash)
+			}
+			hashes = append(hashes, hash)
+			headers[hash] = header
 		}
 
-		// applyAccessList failures are persistent. If a block's apply fails
-		// here, the next Sync will resume from this block and hit the same
-		// failure. Auto-recovery isn't implemented yet.
-		if err := s.applyAccessList(&b, batch); err != nil {
-			return fmt.Errorf("BAL application failed for block %d: %v", num, err)
-		}
-
-		// Persist incremental progress so a crash mid-catchUp can resume
-		// from the next unapplied block.
-		s.lock.Lock()
-		s.pivot = headers[hash]
-		s.lock.Unlock()
-		s.saveSyncStatusWithDB(batch)
-
-		// Commit the state transition alongside the sync progress atomically.
-		if err := batch.Write(); err != nil {
+		// Fetch this window's BALs from peers.
+		rawBALs, err := s.fetchAccessLists(hashes, headers, cancel)
+		if err != nil {
 			return err
 		}
+
+		// Apply each BAL in block order. BALs are already verified by fetchAccessLists.
+		for i, raw := range rawBALs {
+			select {
+			case <-cancel:
+				return ErrCancelled
+			default:
+			}
+			num := start + uint64(i)
+			hash := hashes[i]
+
+			// Decode the raw RLP into a BAL.
+			var (
+				b     bal.BlockAccessList
+				batch = s.db.NewBatch()
+			)
+			if err := rlp.DecodeBytes(raw, &b); err != nil {
+				return fmt.Errorf("failed to decode BAL for block %d: %v", num, err)
+			}
+			if err := s.applyAccessList(&b, batch); err != nil {
+				return fmt.Errorf("BAL application failed for block %d: %v", num, err)
+			}
+
+			// Persist incremental progress so a crash mid-catchUp can resume
+			// from the next unapplied block.
+			s.lock.Lock()
+			s.pivot = headers[hash]
+			s.lock.Unlock()
+			s.saveSyncStatusWithDB(batch)
+
+			// Commit the state transition alongside the sync progress atomically.
+			if err := batch.Write(); err != nil {
+				return err
+			}
+		}
+		log.Info("BAL catch-up progress", "applied", end, "target", to, "remaining", to-end)
 	}
-	log.Info("BAL catch-up complete", "blocks", len(rawBALs))
+	log.Info("BAL catch-up complete", "from", from, "to", to)
 	return nil
 }
 
