@@ -245,8 +245,16 @@ func TestRouterCapabilities(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&c); err != nil {
 		t.Fatal(err)
 	}
-	if len(c.SupportedForks) == 0 || c.SupportedForks[0] != "amsterdam" {
-		t.Errorf("supported forks: %v", c.SupportedForks)
+	// Capabilities must advertise every fork the router routes, so a consensus
+	// client negotiates SSZ for all of them rather than falling back to JSON-RPC.
+	want := map[string]bool{"paris": true, "shanghai": true, "cancun": true, "prague": true, "osaka": true, "amsterdam": true}
+	if len(c.SupportedForks) != len(want) {
+		t.Errorf("supported forks: got %v, want all of %v", c.SupportedForks, want)
+	}
+	for _, f := range c.SupportedForks {
+		if !want[f] {
+			t.Errorf("unexpected fork advertised: %q", f)
+		}
 	}
 	if got := c.Limits["blobs.max_versioned_hashes"]; got != sszt.MaxBlobsRequest {
 		t.Errorf("blobs limit: %d", got)
