@@ -32,9 +32,9 @@ import (
 )
 
 var (
-	peers         []string
-	peerVersions  map[string]uint
-	txs           []*types.Transaction
+	peers        []string
+	peerVersions map[string]uint
+	txs          []*types.Transaction
 )
 
 func init() {
@@ -91,11 +91,12 @@ func fuzz(input []byte) int {
 		},
 		func(string, []common.Hash) error { return nil },
 		nil,
-		blobpool.NewBlobBuffer(
-			func(*types.Transaction) error { return nil },
-			func(*blobpool.BlobTxForPool) error { return nil },
-			func(string) {},
-		),
+
+		blobpool.NewBlobBuffer(blobpool.BlobBufferFunctions{
+			ValidateTx: func(*types.Transaction) error { return nil },
+			AddToPool:  func(*blobpool.BlobTxForPool) error { return nil },
+			DropPeer:   func(string) {},
+		}),
 		clock,
 		func() time.Time {
 			nanoTime := int64(clock.Now())

@@ -93,11 +93,11 @@ type txFetcherTest struct {
 // newTestBlobBuffer returns a BlobBuffer with no-op callbacks for tests that
 // don't exercise blob handling but still need a non-nil buffer.
 func newTestBlobBuffer() *blobpool.BlobBuffer {
-	return blobpool.NewBlobBuffer(
-		func(*types.Transaction) error { return nil },
-		func(*blobpool.BlobTxForPool) error { return nil },
-		func(string) {},
-	)
+	return blobpool.NewBlobBuffer(blobpool.BlobBufferFunctions{
+		ValidateTx: func(*types.Transaction) error { return nil },
+		AddToPool:  func(*blobpool.BlobTxForPool) error { return nil },
+		DropPeer:   func(string) {},
+	})
 }
 
 // newTestTxFetcher creates a tx fetcher with noop callbacks, simulated clock,
