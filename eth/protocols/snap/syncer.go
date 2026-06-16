@@ -45,8 +45,6 @@ type Progress struct {
 	// snap/2-specific status. Reported by snap/2 only.
 	AccessListSynced uint64 // Block access lists fetched during catch-up
 	AccessListTotal  uint64 // Total block access lists to fetch for catch-up
-	TrieGenAccounts  uint64 // Accounts scanned during trie generation
-	TrieGenSlots     uint64 // Storage slots scanned during trie generation
 	TrieGenPercent   uint64 // Trie generation completion, in percent (0..100)
 }
 
@@ -154,8 +152,6 @@ func (s syncerV2Adapter) Progress() Progress {
 		StorageBytes:     progress.StorageBytes,
 		AccessListSynced: progress.AccessListSynced,
 		AccessListTotal:  progress.AccessListTotal,
-		TrieGenAccounts:  progress.TrieGenAccounts,
-		TrieGenSlots:     progress.TrieGenSlots,
 		TrieGenPercent:   progress.TrieGenPercent,
 	}
 }

@@ -184,8 +184,6 @@ func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
 		"healingBytecode":        hexutil.Uint64(progress.HealingBytecode),
 		"syncedAccessLists":      hexutil.Uint64(progress.SyncedAccessLists),
 		"totalAccessLists":       hexutil.Uint64(progress.TotalAccessLists),
-		"generatedTrieAccounts":  hexutil.Uint64(progress.GeneratedTrieAccounts),
-		"generatedTrieSlots":     hexutil.Uint64(progress.GeneratedTrieSlots),
 		"trieGenProgress":        hexutil.Uint64(progress.TrieGenProgress),
 		"txIndexFinishedBlocks":  hexutil.Uint64(progress.TxIndexFinishedBlocks),
 		"txIndexRemainingBlocks": hexutil.Uint64(progress.TxIndexRemainingBlocks),

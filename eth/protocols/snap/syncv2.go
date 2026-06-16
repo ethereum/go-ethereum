@@ -313,18 +313,16 @@ type syncProgressV2 struct {
 	Phase syncPhase        // Phase is how far the sync has progressed for Pivot
 
 	// Status report during syncing phase
-	AccountSynced    uint64             // Number of accounts downloaded
-	AccountBytes     common.StorageSize // Number of account trie bytes persisted to disk
-	BytecodeSynced   uint64             // Number of bytecodes downloaded
-	BytecodeBytes    common.StorageSize // Number of bytecode bytes downloaded
-	StorageSynced    uint64             // Number of storage slots downloaded
-	StorageBytes     common.StorageSize // Number of storage trie bytes persisted to disk
-	AccessListSynced uint64             // Block access lists fetched during catch-up
-	AccessListTotal  uint64             // Total block access lists to fetch for catch-up
+	AccountSynced  uint64             // Number of accounts downloaded
+	AccountBytes   common.StorageSize // Number of account trie bytes persisted to disk
+	BytecodeSynced uint64             // Number of bytecodes downloaded
+	BytecodeBytes  common.StorageSize // Number of bytecode bytes downloaded
+	StorageSynced  uint64             // Number of storage slots downloaded
+	StorageBytes   common.StorageSize // Number of storage trie bytes persisted to disk
 
-	TrieGenAccounts uint64 `json:"-"` // Accounts scanned during trie generation
-	TrieGenSlots    uint64 `json:"-"` // Storage slots scanned during trie generation
-	TrieGenPercent  uint64 `json:"-"` // Trie generation completion, in percent (0..100)
+	AccessListSynced uint64 `json:"-"` // Block access lists fetched during catch-up
+	AccessListTotal  uint64 `json:"-"` // Total block access lists to fetch for catch-up
+	TrieGenPercent   uint64 `json:"-"` // Trie generation completion, in percent (0..100)
 }
 
 // SyncPeerV2 abstracts out the methods required for a peer to be synced against
@@ -398,15 +396,16 @@ type syncerV2 struct {
 	storageReqs    map[uint64]*storageRequestV2  // Storage requests currently running
 	accessListReqs map[uint64]*accessListRequest // BAL requests currently running
 
-	accountSynced    uint64                   // Number of accounts downloaded
-	accountBytes     common.StorageSize       // Number of account trie bytes persisted to disk
-	bytecodeSynced   uint64                   // Number of bytecodes downloaded
-	bytecodeBytes    common.StorageSize       // Number of bytecode bytes downloaded
-	storageSynced    uint64                   // Number of storage slots downloaded
-	storageBytes     common.StorageSize       // Number of storage trie bytes persisted to disk
-	accessListSynced uint64                   // Block access lists fetched so far during catch-up
-	accessListTotal  uint64                   // Block access lists to fetch for the current catch-up
-	genProgress      *triedb.GenerateProgress // The live trie-generation progress
+	accountSynced  uint64             // Number of accounts downloaded
+	accountBytes   common.StorageSize // Number of account trie bytes persisted to disk
+	bytecodeSynced uint64             // Number of bytecodes downloaded
+	bytecodeBytes  common.StorageSize // Number of bytecode bytes downloaded
+	storageSynced  uint64             // Number of storage slots downloaded
+	storageBytes   common.StorageSize // Number of storage trie bytes persisted to disk
+
+	accessListSynced uint64        // Block access lists fetched so far during catch-up
+	accessListTotal  uint64        // Block access lists to fetch for the current catch-up
+	genProgress      atomic.Uint64 // The live trie-generation progress
 
 	extProgress *syncProgressV2 // progress that can be exposed to external caller.
 
@@ -638,14 +637,7 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 	if err := batch.Write(); err != nil {
 		return err
 	}
-	genProgress := new(triedb.GenerateProgress)
-	s.lock.Lock()
-	s.genProgress = genProgress
-	s.lock.Unlock()
-	_, genErr := triedb.GenerateTrieWithProgress(s.db, s.scheme, root, cancel, genProgress)
-	s.lock.Lock()
-	s.genProgress = nil
-	s.lock.Unlock()
+	_, genErr := triedb.GenerateTrieWithProgress(s.db, s.scheme, root, cancel, &s.genProgress)
 	if genErr != nil {
 		return genErr
 	}
@@ -1120,8 +1112,6 @@ func (s *syncerV2) loadSyncStatus() {
 			s.bytecodeBytes = progress.BytecodeBytes
 			s.storageSynced = progress.StorageSynced
 			s.storageBytes = progress.StorageBytes
-			s.accessListSynced = progress.AccessListSynced
-			s.accessListTotal = progress.AccessListTotal
 
 			// Seed the externally-exposed snapshot from the restored counters so
 			// eth_syncing reports real stats during catch-up and trie generation
@@ -1202,6 +1192,8 @@ func (s *syncerV2) resetSyncState() {
 	s.accountSynced, s.accountBytes = 0, 0
 	s.bytecodeSynced, s.bytecodeBytes = 0, 0
 	s.storageSynced, s.storageBytes = 0, 0
+	s.accessListSynced, s.accessListTotal = 0, 0
+	s.genProgress.Store(0)
 	s.refreshProgressLocked()
 
 	var next common.Hash
@@ -1279,6 +1271,7 @@ func (s *syncerV2) refreshProgressLocked() {
 		StorageBytes:     s.storageBytes,
 		AccessListSynced: s.accessListSynced,
 		AccessListTotal:  s.accessListTotal,
+		TrieGenPercent:   s.genProgress.Load(),
 	}
 }
 
@@ -1287,13 +1280,7 @@ func (s *syncerV2) Progress() *syncProgressV2 {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	progress := *s.extProgress
-	if s.genProgress != nil {
-		progress.TrieGenAccounts = s.genProgress.Accounts()
-		progress.TrieGenSlots = s.genProgress.Slots()
-		progress.TrieGenPercent = s.genProgress.Percent()
-	}
-	return &progress
+	return s.extProgress
 }
 
 // cleanAccountTasks removes account range retrieval tasks that have already been

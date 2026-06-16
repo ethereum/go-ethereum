@@ -136,11 +136,9 @@ type SyncProgress struct {
 	HealingBytecode     uint64 // Number of bytecodes pending
 
 	// Snap/2 specific fields
-	SyncedAccessLists     uint64 // Number of block access lists fetched during catch-up
-	TotalAccessLists      uint64 // Total number of block access lists to fetch for catch-up
-	GeneratedTrieAccounts uint64 // Number of accounts scanned during trie generation
-	GeneratedTrieSlots    uint64 // Number of storage slots scanned during trie generation
-	TrieGenProgress       uint64 // Trie generation completion, in percent (0..100)
+	SyncedAccessLists uint64 // Number of block access lists fetched during catch-up
+	TotalAccessLists  uint64 // Total number of block access lists to fetch for catch-up
+	TrieGenProgress   uint64 // Trie generation completion, in percent (0..100)
 
 	// "transaction indexing" fields
 	TxIndexFinishedBlocks  uint64 // Number of blocks whose transactions are already indexed

@@ -52,53 +52,6 @@ type GenerateStats struct {
 	Deleted int64
 }
 
-// GenerateProgress carries the live progress of an in-flight GenerateTrie run.
-type GenerateProgress struct {
-	percent  atomic.Uint64 // completion estimate in [0,100]; 100 == done
-	accounts atomic.Int64  // number of accounts scanned so far
-	slots    atomic.Int64  // number of storage slots scanned so far
-}
-
-// Percent returns the estimated completion of the run in percent (0..100).
-func (p *GenerateProgress) Percent() uint64 {
-	if p == nil {
-		return 0
-	}
-	return p.percent.Load()
-}
-
-// Accounts returns the number of accounts scanned so far.
-func (p *GenerateProgress) Accounts() uint64 {
-	if p == nil {
-		return 0
-	}
-	if v := p.accounts.Load(); v > 0 {
-		return uint64(v)
-	}
-	return 0
-}
-
-// Slots returns the number of storage slots scanned so far.
-func (p *GenerateProgress) Slots() uint64 {
-	if p == nil {
-		return 0
-	}
-	if v := p.slots.Load(); v > 0 {
-		return uint64(v)
-	}
-	return 0
-}
-
-// publish snapshots the current fraction and scan counts into the handle.
-func (p *GenerateProgress) publish(fraction float64, accounts, slots int64) {
-	if p == nil {
-		return
-	}
-	p.percent.Store(uint64(fraction * 100))
-	p.accounts.Store(accounts)
-	p.slots.Store(slots)
-}
-
 // numPartitions is the number of slices the account hash space is divided
 // into by GenerateTrie.
 const numPartitions = 16
@@ -118,6 +71,11 @@ type genCounters struct {
 	slots          atomic.Int64 // storage slots scanned
 	accountUpdated atomic.Int64 // accounts whose stale storage Root was rewritten
 	storageDeleted atomic.Int64 // dangling storage slots removed
+
+	accountTrieNodes atomic.Int64 // generated account trie nodes
+	accountTrieBytes atomic.Int64 // generated account trie bytes
+	storageTrieNodes atomic.Int64 // generated storage trie nodes
+	storageTrieBytes atomic.Int64 // generated storage trie bytes
 
 	progress [numPartitions]atomic.Uint64 // per-partition keyspace position
 }
@@ -211,6 +169,13 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 		if len(path) == 1 {
 			root = common.CopyBytes(blob)
 		}
+		c.accountTrieNodes.Add(1)
+
+		if scheme == rawdb.PathScheme {
+			c.accountTrieBytes.Add(int64(len(path) + len(blob)))
+		} else {
+			c.accountTrieBytes.Add(int64(common.HashLength + len(blob)))
+		}
 		rawdb.WriteTrieNode(batch, common.Hash{}, path, hash, blob, scheme)
 	})
 
@@ -241,6 +206,13 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 		// Build the account's storage trie from the flat storage snapshot.
 		// StackTrie's onTrieNode callback persists nodes as they finalize.
 		storageTrie := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
+			c.storageTrieNodes.Add(1)
+
+			if scheme == rawdb.PathScheme {
+				c.storageTrieBytes.Add(int64(len(path) + len(blob)))
+			} else {
+				c.storageTrieBytes.Add(int64(common.HashLength + len(blob)))
+			}
 			rawdb.WriteTrieNode(batch, accountHash, path, hash, blob, scheme)
 		})
 
@@ -410,10 +382,8 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 	return GenerateTrieWithProgress(db, scheme, root, cancel, nil)
 }
 
-// GenerateTrieWithProgress is GenerateTrie with live progress reporting. If
-// report is non-nil, it is updated as generation proceeds so another goroutine
-// can observe completion while the (potentially hours-long) run is in flight.
-func GenerateTrieWithProgress(db ethdb.Database, scheme string, root common.Hash, cancel <-chan struct{}, report *GenerateProgress) (GenerateStats, error) {
+// GenerateTrieWithProgress is GenerateTrie with live progress reporting.
+func GenerateTrieWithProgress(db ethdb.Database, scheme string, root common.Hash, cancel <-chan struct{}, prog *atomic.Uint64) (GenerateStats, error) {
 	var (
 		start        = time.Now()
 		c            genCounters
@@ -423,7 +393,7 @@ func GenerateTrieWithProgress(db ethdb.Database, scheme string, root common.Hash
 		// the partition is empty.
 		partitionBlobs [numPartitions][]byte
 	)
-	go tickProgress(progressDone, start, &c, report)
+	go tickProgress(progressDone, start, &c, prog)
 	defer close(progressDone)
 
 	// Run every partition concurrently, each producing the subtree root
@@ -453,8 +423,9 @@ func GenerateTrieWithProgress(db ethdb.Database, scheme string, root common.Hash
 	if err := eg.Wait(); err != nil {
 		return GenerateStats{}, err
 	}
-	report.publish(1.0, c.accounts.Load(), c.slots.Load())
-
+	if prog != nil {
+		prog.Store(100)
+	}
 	// Assemble the top-level root from the partition blobs and verify it
 	// matches the expected root.
 	got, err := assembleRoot(db, scheme, partitionBlobs)
@@ -464,7 +435,13 @@ func GenerateTrieWithProgress(db ethdb.Database, scheme string, root common.Hash
 	if got != root {
 		return GenerateStats{}, fmt.Errorf("state root mismatch: got %x, want %x", got, root)
 	}
-	log.Info("Generated state trie", "accounts", c.accounts.Load(), "slots", c.slots.Load(), "updated", c.accountUpdated.Load(), "dangling-slots", c.storageDeleted.Load(), "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Generated state trie",
+		"accounts", c.accounts.Load(), "slots", c.slots.Load(),
+		"account-nodes", c.accountTrieNodes.Load(), "storage-nodes", c.storageTrieNodes.Load(),
+		"account-nodebytes", common.StorageSize(c.accountTrieBytes.Load()), "storage-nodebytes", common.StorageSize(c.storageTrieBytes.Load()),
+		"updated-accounts", c.accountUpdated.Load(), "dangling-slots", c.storageDeleted.Load(),
+		"elapsed", common.PrettyDuration(time.Since(start)))
+
 	return GenerateStats{
 		Scanned: c.accounts.Load(),
 		Updated: c.accountUpdated.Load(),
@@ -546,9 +523,10 @@ func assembleRoot(db ethdb.Database, scheme string, partitionBlobs [numPartition
 
 // tickProgress logs an aggregate progress line every 30 seconds until done
 // is closed. Cheap: a handful of atomic loads and one log line per tick.
-func tickProgress(done <-chan struct{}, start time.Time, c *genCounters, report *GenerateProgress) {
+func tickProgress(done <-chan struct{}, start time.Time, c *genCounters, prog *atomic.Uint64) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
+
 	for {
 		select {
 		case <-done:
@@ -556,7 +534,11 @@ func tickProgress(done <-chan struct{}, start time.Time, c *genCounters, report 
 		case <-ticker.C:
 			elapsed := time.Since(start)
 			fraction := progressFraction(&c.progress)
-			report.publish(fraction, c.accounts.Load(), c.slots.Load())
+
+			// Notify the external subscriber about the generation progress
+			if prog != nil {
+				prog.Store(uint64(100 * fraction))
+			}
 			eta := "n/a"
 			if fraction > 0.005 {
 				eta = common.PrettyDuration(time.Duration(float64(elapsed) * (1.0/fraction - 1.0))).String()

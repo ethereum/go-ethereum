@@ -874,8 +874,6 @@ func (p *rpcProgress) toSyncProgress() *ethereum.SyncProgress {
 		HealingBytecode:        uint64(p.HealingBytecode),
 		SyncedAccessLists:      uint64(p.SyncedAccessLists),
 		TotalAccessLists:       uint64(p.TotalAccessLists),
-		GeneratedTrieAccounts:  uint64(p.GeneratedTrieAccounts),
-		GeneratedTrieSlots:     uint64(p.GeneratedTrieSlots),
 		TrieGenProgress:        uint64(p.TrieGenProgress),
 		TxIndexFinishedBlocks:  uint64(p.TxIndexFinishedBlocks),
 		TxIndexRemainingBlocks: uint64(p.TxIndexRemainingBlocks),
