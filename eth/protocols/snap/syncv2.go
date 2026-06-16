@@ -690,15 +690,9 @@ func (s *syncerV2) downloadState(cancel chan struct{}) error {
 
 		// Update sync progress
 		s.lock.Lock()
-		s.extProgress = &syncProgressV2{
-			AccountSynced:  s.accountSynced,
-			AccountBytes:   s.accountBytes,
-			BytecodeSynced: s.bytecodeSynced,
-			BytecodeBytes:  s.bytecodeBytes,
-			StorageSynced:  s.storageSynced,
-			StorageBytes:   s.storageBytes,
-		}
+		s.refreshProgressLocked()
 		s.lock.Unlock()
+
 		// Wait for something to happen
 		select {
 		case <-s.update:
@@ -1099,6 +1093,11 @@ func (s *syncerV2) loadSyncStatus() {
 			s.bytecodeBytes = progress.BytecodeBytes
 			s.storageSynced = progress.StorageSynced
 			s.storageBytes = progress.StorageBytes
+
+			// Seed the externally-exposed snapshot from the restored counters so
+			// eth_syncing reports real stats during catch-up and trie generation
+			// after a resume, instead of the zero-valued initial snapshot.
+			s.refreshProgressLocked()
 			return
 		}
 	}
@@ -1174,6 +1173,7 @@ func (s *syncerV2) resetSyncState() {
 	s.accountSynced, s.accountBytes = 0, 0
 	s.bytecodeSynced, s.bytecodeBytes = 0, 0
 	s.storageSynced, s.storageBytes = 0, 0
+	s.refreshProgressLocked()
 
 	var next common.Hash
 	step := new(big.Int).Sub(
@@ -1236,6 +1236,19 @@ func (s *syncerV2) saveSyncStatusWithDB(db ethdb.KeyValueWriter) {
 	// Prepend the version byte so future format changes can be detected on load.
 	status := append([]byte{syncProgressVersion}, blob...)
 	rawdb.WriteSnapshotSyncStatus(db, status)
+}
+
+// refreshProgressLocked rebuilds the externally-exposed progress snapshot from
+// the live counters. The caller must hold s.lock.
+func (s *syncerV2) refreshProgressLocked() {
+	s.extProgress = &syncProgressV2{
+		AccountSynced:  s.accountSynced,
+		AccountBytes:   s.accountBytes,
+		BytecodeSynced: s.bytecodeSynced,
+		BytecodeBytes:  s.bytecodeBytes,
+		StorageSynced:  s.storageSynced,
+		StorageBytes:   s.storageBytes,
+	}
 }
 
 // Progress returns the snap sync status statistics.
