@@ -17,11 +17,16 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/core"
 )
 
 var customGenesisTests = []struct {
@@ -94,6 +99,40 @@ func TestCustomGenesis(t *testing.T) {
 			"--exec", tt.query, "console")
 		geth.ExpectRegexp(tt.result)
 		geth.ExpectExit()
+	}
+}
+
+func TestQuarkChainHistoryGenesisConfig(t *testing.T) {
+	t.Parallel()
+
+	blob, err := os.ReadFile(filepath.Join("testdata", "quarkchain-history.json"))
+	if err != nil {
+		t.Fatalf("failed to read quarkchain history genesis: %v", err)
+	}
+	var genesis core.Genesis
+	if err := json.Unmarshal(blob, &genesis); err != nil {
+		t.Fatalf("failed to decode quarkchain history genesis: %v", err)
+	}
+	config := genesis.Config
+	if config == nil {
+		t.Fatal("missing chain config")
+	}
+	if want := big.NewInt(100000); config.ChainID.Cmp(want) != 0 {
+		t.Fatalf("wrong chain id: have %v, want %v", config.ChainID, want)
+	}
+	if config.TerminalTotalDifficulty == nil {
+		t.Fatal("missing terminal total difficulty")
+	}
+	if want := big.NewInt(math.MaxInt64); config.TerminalTotalDifficulty.Cmp(want) != 0 {
+		t.Fatalf("wrong terminal total difficulty: have %v, want %v", config.TerminalTotalDifficulty, want)
+	}
+
+	rules := config.Rules(big.NewInt(0), true, math.MaxUint64)
+	if !rules.IsPetersburg {
+		t.Fatal("petersburg should be enabled")
+	}
+	if rules.IsIstanbul || rules.IsBerlin || rules.IsLondon || rules.IsMerge {
+		t.Fatalf("unexpected post-petersburg rules: %+v", rules)
 	}
 }
 
