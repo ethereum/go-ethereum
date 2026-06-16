@@ -40,7 +40,7 @@ func (rt *Router) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := capabilitiesResponse{
-		SupportedForks:      []string{"paris", "shanghai", "cancun", "prague", "osaka", "amsterdam"},
+		SupportedForks:      []string{"paris", "shanghai", "cancun", "prague", "osaka"},
 		ForkScopedEndpoints: []string{"payloads", "forkchoice", "bodies"},
 		IndependentlyVersioned: map[string][]string{
 			"blobs": {"v1", "v2", "v3", "v4"},
