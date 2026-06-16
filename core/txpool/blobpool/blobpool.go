@@ -1691,10 +1691,6 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 }
 
 // GetRLP returns an RLP-encoded transaction if it is contained in the pool.
-// TODO: The pool internally stores pooledBlobTx (cell sidecar format), but callers expect
-// types.Transaction RLP. This requires an additional decode-encode step, which is inefficient
-// and contradicts the original purpose of this function.
-// Possible improvements: Drop eth70 and store the cell and transaction separately.
 func (p *BlobPool) GetRLP(hash common.Hash, version uint) []byte {
 	data := p.getRLP(hash)
 	if len(data) == 0 {
