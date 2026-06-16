@@ -295,12 +295,21 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 		SyncedBytecodeBytes: uint64(progress.BytecodeBytes),
 		SyncedStorage:       progress.StorageSynced,
 		SyncedStorageBytes:  uint64(progress.StorageBytes),
+
+		// Snap/1 progress fields
 		HealedTrienodes:     progress.TrienodeHealSynced,
 		HealedTrienodeBytes: uint64(progress.TrienodeHealBytes),
 		HealedBytecodes:     progress.BytecodeHealSynced,
 		HealedBytecodeBytes: uint64(progress.BytecodeHealBytes),
 		HealingTrienodes:    progress.HealingTrienodes,
 		HealingBytecode:     progress.HealingBytecode,
+
+		// Snap/2 progress fields
+		SyncedAccessLists:     progress.AccessListSynced,
+		TotalAccessLists:      progress.AccessListTotal,
+		GeneratedTrieAccounts: progress.TrieGenAccounts,
+		GeneratedTrieSlots:    progress.TrieGenSlots,
+		TrieGenProgress:       progress.TrieGenPercent,
 	}
 }
 
