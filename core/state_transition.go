@@ -674,11 +674,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		ret    []byte
 		vmerr  error // vm errors do not effect consensus and are therefore not assigned to err
 		result vm.GasBudget
-
-		// Capture the forwarded regular-gas amount BEFORE ForwardAll consumes
-		// it, so Absorb can back out state-gas spillover from UsedRegularGas
-		// per EIP-8037.
-		forwarded = st.gasRemaining.RegularGas
 	)
 	if contractCreation {
 		// Check whether the init code size has been exceeded.
@@ -688,7 +683,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// Execute the transaction's creation.
 		var creation bool
 		ret, _, result, creation, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining.ForwardAll(), value)
-		st.gasRemaining.Absorb(result, forwarded)
+		st.gasRemaining.Absorb(result)
 
 		// If the contract creation failed, or the destination was pre-existing,
 		// refund the account-creation state gas pre-charged in IntrinsicGas.
@@ -712,7 +707,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 		// Execute the transaction's call.
 		ret, result, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining.ForwardAll(), value)
-		st.gasRemaining.Absorb(result, forwarded)
+		st.gasRemaining.Absorb(result)
 	}
 
 	// Settle down the gas usage and refund the ETH back if any remaining

@@ -65,6 +65,11 @@ type GasBudget struct {
 	StateGas       uint64 // remaining state-gas reservoir (or leftover for caller to absorb)
 	UsedRegularGas uint64 // gross regular gas consumed in this frame
 	UsedStateGas   int64  // signed net state-gas consumed in this frame
+
+	// StateGasFromGasLeft tracks how much of this frame's regular gas (gas_left)
+	// has been borrowed to cover state-gas charges that exceeded the reservoir
+	// (the "spillover").
+	StateGasFromGasLeft uint64
 }
 
 // NewGasBudget initializes a fresh GasBudget for execution / forwarding,
@@ -82,7 +87,7 @@ func (g GasBudget) Used(initial GasBudget) uint64 {
 
 // String returns a visual representation of the budget.
 func (g GasBudget) String() string {
-	return fmt.Sprintf("<%v,%v,used=<%v,%v>>", g.RegularGas, g.StateGas, g.UsedRegularGas, g.UsedStateGas)
+	return fmt.Sprintf("<%v,%v,used=<%v,%v>,borrowed=%v>", g.RegularGas, g.StateGas, g.UsedRegularGas, g.UsedStateGas, g.StateGasFromGasLeft)
 }
 
 // CanAfford reports whether the running balance can cover the given cost.
@@ -117,6 +122,10 @@ func (g *GasBudget) Charge(cost GasCosts) (GasBudget, bool) {
 		spillover := cost.StateGas - g.StateGas
 		g.StateGas = 0
 		g.RegularGas -= spillover
+
+		// Record the regular gas borrowed to cover the overflowing state gas
+		// so a later inline refund can repay it before topping up the reservoir.
+		g.StateGasFromGasLeft += spillover
 	} else {
 		g.StateGas -= cost.StateGas
 	}
@@ -146,14 +155,27 @@ func (g *GasBudget) IsZero() bool {
 }
 
 // RefundState applies an inline state-gas refund (e.g., SSTORE 0->A->0).
-// The reservoir is credited and the signed usage counter is decremented
-// in lockstep, preserving the per-frame invariant:
 //
-//	StateGas + UsedStateGas == initialStateGas + spillover_so_far
+// Per EIP-8037, the refund repays the regular gas previously borrowed for
+// state-gas spillover (tracked by StateGasFromGasLeft) before crediting the
+// reservoir: it is returned to RegularGas up to the outstanding borrowed
+// amount, and only the remainder tops up StateGas. This keeps the regular and
+// state pools from drifting into one another.
 //
-// which the revert path relies on for the correct gross refund.
+// The signed usage counter is decremented by the full refund regardless of the
+// split, preserving the per-frame invariant:
+//
+//	StateGas + UsedStateGas == initialStateGas + StateGasFromGasLeft
+//
+// which the revert and halt paths rely on for the correct gross refund.
 func (g *GasBudget) RefundState(s uint64) {
-	g.StateGas += s
+	// Repay the borrowed regular gas first, capped at the outstanding amount.
+	repay := min(s, g.StateGasFromGasLeft)
+	g.RegularGas += repay
+	g.StateGasFromGasLeft -= repay
+
+	// Whatever is left tops up the reservoir.
+	g.StateGas += s - repay
 	g.UsedStateGas -= int64(s)
 }
 
@@ -201,53 +223,46 @@ func (g GasBudget) ExitSuccess() GasBudget {
 	return g
 }
 
-// ExitRevert produces the leftover for a REVERT exit. Per EIP-8037, all state
-// gas charged by the reverted frame is refunded to the caller's reservoir:
-//
-//	leftover.StateGas = StateGas + UsedStateGas
-//
-// UsedStateGas is reset since the frame's state changes are discarded.
+// ExitRevert produces the leftover for a REVERT exit. The frame's state
+// changes are discarded, so all state gas it charged is refilled to its origin
+// (EIP-8037): up to StateGasFromGasLeft is returned to RegularGas (the regular
+// gas it borrowed), and the remainder restores the reservoir. Because the
+// borrowed regular gas is repaid first, the reservoir is made whole back to its
+// start-of-frame value:
 func (g GasBudget) ExitRevert() GasBudget {
-	reservoir := int64(g.StateGas) + g.UsedStateGas
+	reservoir := int64(g.StateGas) + g.UsedStateGas - int64(g.StateGasFromGasLeft)
 	if reservoir < 0 {
 		// Reservoir should never be negative. By construction it equals
-		// the initial state-gas allocation plus any spillover to regular
-		// gas.
+		// the initial state-gas allocation.
 		reservoir = 0
-		log.Warn("Negative reservoir at revert", "remaining", g.StateGas, "used", g.UsedStateGas)
+		log.Warn("Negative reservoir at revert", "remaining", g.StateGas, "used", g.UsedStateGas, "borrowed", g.StateGasFromGasLeft)
 	}
 	return GasBudget{
-		RegularGas:     g.RegularGas,
+		RegularGas:     g.RegularGas + g.StateGasFromGasLeft,
 		StateGas:       uint64(reservoir),
 		UsedRegularGas: g.UsedRegularGas,
 		UsedStateGas:   0,
 	}
 }
 
-// ExitHalt produces the leftover for an exceptional halt.
-//
-// - state_gas_reservoir is reset back to its value at the start of the child frame
-// - the gas_left initially given to the child is consumed (set to zero)
-func (g GasBudget) ExitHalt(initStateReservoir uint64) GasBudget {
-	reservoir := int64(g.StateGas) + g.UsedStateGas
+// ExitHalt produces the leftover for an exceptional halt. As with a revert, the
+// frame's state changes are rolled back and its state gas is refilled to origin
+// (EIP-8037); the difference is that the frame's gas_left is consumed rather
+// than returned. The portion refilled to RegularGas is therefore burned along
+// with the rest of gas_left, leaving only the reservoir portion to survive,
+// which equals the reservoir's value at the start of the frame.
+func (g GasBudget) ExitHalt() GasBudget {
+	reservoir := int64(g.StateGas) + g.UsedStateGas - int64(g.StateGasFromGasLeft)
 	if reservoir < 0 {
 		// Reservoir should never be negative. By construction it equals
-		// the initial state-gas allocation plus any spillover to regular
-		// gas.
+		// the initial state-gas allocation.
 		reservoir = 0
-		log.Warn("Negative reservoir at halt", "remaining", g.StateGas, "used", g.UsedStateGas)
-	}
-	// The portion of state gas charged from regular gas is also burned
-	// together with the regular gas, rather than being returned to the
-	// parent's state-gas reservoir.
-	var spilled uint64
-	if uint64(reservoir) > initStateReservoir {
-		spilled = uint64(reservoir) - initStateReservoir
+		log.Warn("Negative reservoir at halt", "remaining", g.StateGas, "used", g.UsedStateGas, "borrowed", g.StateGasFromGasLeft)
 	}
 	return GasBudget{
 		RegularGas:     0,
-		StateGas:       initStateReservoir,
-		UsedRegularGas: g.UsedRegularGas + g.RegularGas + spilled,
+		StateGas:       uint64(reservoir),
+		UsedRegularGas: g.UsedRegularGas + g.RegularGas + g.StateGasFromGasLeft,
 		UsedStateGas:   0,
 	}
 }
@@ -258,17 +273,14 @@ func (g GasBudget) ExitHalt(initStateReservoir uint64) GasBudget {
 //   - err == nil                  → ExitSuccess
 //   - err == ErrExecutionReverted → ExitRevert
 //   - any other err               → ExitHalt
-//
-// Soft validation failures (occurring BEFORE evm.Run) should call Preserved
-// directly instead of going through this dispatcher.
-func (g GasBudget) Exit(err error, initStateReservoir uint64) GasBudget {
+func (g GasBudget) Exit(err error) GasBudget {
 	switch {
 	case err == nil:
 		return g.ExitSuccess()
 	case err == ErrExecutionReverted:
 		return g.ExitRevert()
 	default:
-		return g.ExitHalt(initStateReservoir)
+		return g.ExitHalt()
 	}
 }
 
@@ -276,18 +288,12 @@ func (g GasBudget) Exit(err error, initStateReservoir uint64) GasBudget {
 // budget. Additionally, it does an EIP-8037 spillover correction:
 // state-gas that spilled into the regular pool inside the child frame is
 // excluded from the UsedRegularGas.
-//
-//	spillover = forwarded - child.RegularGas - child.UsedRegularGas
-//
-// forwarded is the regular-gas amount that was passed to the child at call
-// entry (i.e., the regular initial of the child's GasBudget).
-func (g *GasBudget) Absorb(child GasBudget, forwarded uint64) {
-	spillover := forwarded - child.RegularGas - child.UsedRegularGas
-
+func (g *GasBudget) Absorb(child GasBudget) {
 	g.UsedRegularGas -= child.RegularGas
 	g.RegularGas += child.RegularGas
 	g.StateGas = child.StateGas
 	g.UsedStateGas += child.UsedStateGas
 
-	g.UsedRegularGas -= spillover
+	g.UsedRegularGas -= child.StateGasFromGasLeft
+	g.StateGasFromGasLeft += child.StateGasFromGasLeft
 }
