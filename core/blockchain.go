@@ -1094,7 +1094,13 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			rawdb.DeleteBody(db, hash, num)
 			rawdb.DeleteReceipts(db, hash, num)
 		}
-		// Todo(rjl493456442) txlookup, log index, etc
+		// Remove the transaction lookup entries. These are always stored
+		// in the key-value store, even for ancient blocks.
+		if body := rawdb.ReadBody(bc.db, hash, num); body != nil {
+			for _, tx := range body.Transactions {
+				rawdb.DeleteTxLookupEntry(db, tx.Hash())
+			}
+		}
 	}
 	// If SetHead was only called as a chain reparation method, try to skip
 	// touching the header chain altogether, unless the freezer is broken
