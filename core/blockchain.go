@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"io"
 	"math/big"
 	"runtime"
@@ -225,6 +226,10 @@ type BlockChainConfig struct {
 	// Execution configs
 	StatelessSelfValidation bool // Generate execution witnesses and self-check against them (testing purpose)
 	EnableWitnessStats      bool // Whether trie access statistics collection is enabled
+
+	BALExecutionMode bal.BALExecutionMode
+	BlockingPrefetch bool
+	PrefetchWorkers  int
 }
 
 // DefaultConfig returns the default config.
@@ -365,12 +370,13 @@ type BlockChain struct {
 	stopping      atomic.Bool // false if chain is running, true when stopped
 	procInterrupt atomic.Bool // interrupt signaler for block processing
 
-	engine     consensus.Engine
-	validator  Validator // Block and state validator interface
-	prefetcher Prefetcher
-	processor  Processor // Block transaction processor interface
-	logger     *tracing.Hooks
-	stateSizer *state.SizeTracker // State size tracking
+	engine            consensus.Engine
+	validator         Validator // Block and state validator interface
+	prefetcher        Prefetcher
+	processor         Processor              // Block transaction processor interface
+	parallelProcessor ParallelStateProcessor // block processor for use with access lists
+	logger            *tracing.Hooks
+	stateSizer        *state.SizeTracker // State size tracking
 
 	lastForkReadyAlert time.Time     // Last time there was a fork readiness print out
 	slowBlockThreshold time.Duration // Block execution time threshold beyond which detailed statistics will be logged
@@ -433,6 +439,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(bc.hc)
+	bc.parallelProcessor = *NewParallelStateProcessor(bc.hc, bc.GetVMConfig())
 
 	genesisHeader := bc.GetHeaderByNumber(0)
 	if genesisHeader == nil {
@@ -1642,7 +1649,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 
 // writeBlockWithState writes block, metadata and corresponding state data to the
 // database.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, statedb *state.StateDB) error {
+func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, statedb state.Committer) error {
 	if !bc.HasHeader(block.ParentHash(), block.NumberU64()-1) {
 		return consensus.ErrUnknownAncestor
 	}
@@ -1756,7 +1763,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 // writeBlockAndSetHead is the internal implementation of WriteBlockAndSetHead.
 // This function expects the chain mutex to be held.
-func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state state.Committer, emitHeadEvent bool) (status WriteStatus, err error) {
 	if err := bc.writeBlockWithState(block, receipts, state); err != nil {
 		return NonStatTy, err
 	}
@@ -2111,16 +2118,136 @@ type ExecuteConfig struct {
 	EnableWitnessStats bool
 }
 
+func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *types.Block, setHead bool) (procRes *blockProcessingResult, blockEndErr error) {
+	var (
+		startTime = time.Now()
+		procTime  time.Duration
+		statedb   *state.StateDB
+	)
+
+	sdb := state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
+
+	useAsyncReads := bc.cfg.BALExecutionMode != bal.BALExecutionNoBatchIO
+	al := block.AccessList()
+	// Preprocess the access list once for the whole block; the resulting
+	// structure is read-only and shared by the prefetch reader, the state
+	// transition and every per-transaction execution reader.
+	prepared := bal.NewAccessListReader(*al)
+	prefetchReader, err := sdb.ReaderWithPrefetch(parentRoot, prepared.StorageKeys(useAsyncReads), bc.cfg.PrefetchWorkers, bc.cfg.BlockingPrefetch)
+	if err != nil {
+		return nil, err
+	}
+
+	stateTransition, err := state.NewBALStateTransition(block, prefetchReader, sdb, parentRoot, prepared)
+	if err != nil {
+		return nil, err
+	}
+	statedb, err = state.NewWithReader(parentRoot, sdb, prefetchReader)
+	if err != nil {
+		return nil, err
+	}
+
+	if bc.logger != nil && bc.logger.OnBlockStart != nil {
+		bc.logger.OnBlockStart(tracing.BlockEvent{
+			Block:     block,
+			Finalized: bc.CurrentFinalBlock(),
+			Safe:      bc.CurrentSafeBlock(),
+		})
+	}
+	if bc.logger != nil && bc.logger.OnBlockEnd != nil {
+		defer func() {
+			bc.logger.OnBlockEnd(blockEndErr)
+		}()
+	}
+
+	res, err := bc.parallelProcessor.Process(block, stateTransition, statedb, bc.cfg.VmConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := bc.validator.ValidateState(block, stateTransition, res.ProcessResult, false); err != nil {
+		return nil, err
+	}
+
+	procTime = time.Since(startTime)
+	writeStart := time.Now()
+	// Write the block to the chain and get the status.
+	var (
+		//wstart = time.Now()
+		status WriteStatus
+	)
+	if !setHead {
+		// Don't set the head, only insert the block
+		err = bc.writeBlockWithState(block, res.ProcessResult.Receipts, stateTransition)
+	} else {
+		status, err = bc.writeBlockAndSetHead(block, res.ProcessResult.Receipts, res.ProcessResult.Logs, stateTransition, false)
+	}
+	if err != nil {
+		return nil, err
+	}
+	writeTime := time.Since(writeStart)
+	var stats ExecuteStats
+
+	wc := stateTransition.WrittenCounts()
+	d := stateTransition.Deletions()
+	//codeLoaded, codeLoadBytes := prefetchReader.(state.CodeLoadTracker).CodeLoads()
+	//stats.AccountLoaded = al.UniqueAccountCount()
+	stats.AccountUpdated = wc.Accounts - d.Accounts
+	stats.AccountDeleted = d.Accounts
+	//stats.StorageLoaded = al.UniqueStorageSlotCount()
+	stats.StorageUpdated = wc.StorageSlots - d.Storage
+	stats.StorageDeleted = d.Storage
+	//stats.CodeLoaded = codeLoaded
+	//stats.CodeLoadBytes = codeLoadBytes
+	stats.CodeUpdated = wc.Codes
+	stats.CodeUpdateBytes = wc.CodeBytes
+
+	//stats.ExecWall = res.ExecTime
+	//stats.PostProcess = res.PostProcessTime
+
+	if m := res.StateTransitionMetrics; m != nil {
+		stats.AccountHashes = m.AccountUpdate + m.StateUpdate + m.StateHash
+		stats.AccountCommits = m.AccountCommits
+		stats.StorageCommits = m.StorageCommits
+		stats.DatabaseCommit = m.TrieDBCommits
+		//stats.Prefetch = m.StatePrefetch
+	}
+	//stats.Prefetch = prefetchReader.(state.PrefetcherMetricer).Metrics().Elapsed
+
+	stats.StateReadCacheStats = prefetchReader.(state.ReaderStater).GetStats()
+
+	elapsed := time.Since(startTime) + 1 // prevent zero division
+	stats.TotalTime = elapsed
+	stats.MgasPerSecond = float64(res.ProcessResult.GasUsed) * 1000 / float64(elapsed)
+	stats.BlockWrite = writeTime
+
+	// TODO: reinstate
+	//stats.balTransitionStats = res.StateTransitionMetrics
+
+	return &blockProcessingResult{
+		usedGas:  res.ProcessResult.GasUsed,
+		procTime: procTime,
+		status:   status,
+		witness:  nil,
+		stats:    &stats,
+	}, nil
+}
+
 // ProcessBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
 func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, block *types.Block, config ExecuteConfig) (result *blockProcessingResult, blockEndErr error) {
 	var (
-		err       error
-		startTime = time.Now()
-		statedb   *state.StateDB
-		interrupt atomic.Bool
-		sdb       state.Database
+		err                error
+		startTime          = time.Now()
+		statedb            *state.StateDB
+		interrupt          atomic.Bool
+		sdb                state.Database
+		blockHasAccessList = block.AccessList() != nil
 	)
+
+	if blockHasAccessList && bc.cfg.BALExecutionMode != bal.BALExecutionSequential {
+		return bc.processBlockWithAccessList(parentRoot, block, config.WriteHead)
+	}
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
 	if bc.chainConfig.IsUBT(block.Number(), block.Time()) {
