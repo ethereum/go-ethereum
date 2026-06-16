@@ -841,8 +841,6 @@ type rpcProgress struct {
 	HealingBytecode        hexutil.Uint64
 	SyncedAccessLists      hexutil.Uint64
 	TotalAccessLists       hexutil.Uint64
-	GeneratedTrieAccounts  hexutil.Uint64
-	GeneratedTrieSlots     hexutil.Uint64
 	TrieGenProgress        hexutil.Uint64
 	TxIndexFinishedBlocks  hexutil.Uint64
 	TxIndexRemainingBlocks hexutil.Uint64

@@ -209,7 +209,7 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 			c.storageTrieNodes.Add(1)
 
 			if scheme == rawdb.PathScheme {
-				c.storageTrieBytes.Add(int64(len(path) + len(blob)))
+				c.storageTrieBytes.Add(int64(len(path) + common.HashLength + len(blob)))
 			} else {
 				c.storageTrieBytes.Add(int64(common.HashLength + len(blob)))
 			}
