@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/msgrate"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -54,6 +55,15 @@ const (
 	// to avoid server-side truncation and re-requesting. It is currently based on
 	// the assumption that the gas limit is 60M.
 	maxAccessListRequestCount = 28
+
+	// maxCatchUpBlocks is the maximum gap (in blocks) that BAL catch-up is
+	// allowed to span. BALs are only retained by peers for a limited window
+	// (roughly two weeks, ~100k blocks at 12s block time). If the pivot has
+	// moved further than this conservative bound, the BALs needed to roll the
+	// flat state forward are likely no longer available, so we discard the
+	// stale progress and restart the sync from scratch rather than attempting
+	// a catch-up that is bound to fail partway through.
+	maxCatchUpBlocks = params.FullImmutabilityThreshold
 
 	// syncProgressVersion is the version byte prepended to the JSON-encoded
 	// syncProgressV2 when persisted. On load, a mismatching version byte causes
@@ -559,10 +569,18 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 	// progress is still usable. If yes, roll forward via BAL catch-up. If not,
 	// wipe everything and restart fresh.
 	if isPivotChanged {
-		if isPivotReorged(s.db, prevPivot, target) {
+		switch {
+		case isPivotReorged(s.db, prevPivot, target):
 			log.Warn("Restarting snap sync from scratch", "oldnumber", prevPivot.Number, "oldHash", prevPivot.Hash())
 			s.resetSyncState()
-		} else {
+		case catchUpExceedsRetention(prevPivot, target):
+			// The pivot moved further than the BAL retention window. The access
+			// lists required for catch-up are almost certainly unavailable from
+			// peers, so discard the stale progress and resync from scratch
+			// instead of starting a catch-up doomed to stall.
+			log.Warn("Catch-up gap exceeds BAL retention, restarting snap sync from scratch", "oldnumber", prevPivot.Number, "newnumber", target.Number, "gap", new(big.Int).Sub(target.Number, prevPivot.Number), "limit", maxCatchUpBlocks)
+			s.resetSyncState()
+		default:
 			// A canonical pivot move past a frozen pivot should be impossible:
 			// the downloader both refuses moves (FrozenPivot) and resumes new
 			// cycles against the frozen header itself. Reaching this branch
@@ -726,6 +744,15 @@ func isPivotReorged(db ethdb.Database, prev, curr *types.Header) bool {
 	// If canonical at the old pivot's height has a different hash, the
 	// old pivot was reorged out.
 	return canonical != prev.Hash()
+}
+
+// catchUpExceedsRetention reports whether rolling the flat state forward from
+// prev to curr would span more blocks than peers are expected to retain BALs
+// for. Beyond this bound the access lists needed for catch-up are likely gone,
+// so the caller should wipe and resync from scratch instead.
+func catchUpExceedsRetention(prev, curr *types.Header) bool {
+	gap := new(big.Int).Sub(curr.Number, prev.Number)
+	return gap.Cmp(big.NewInt(maxCatchUpBlocks)) > 0
 }
 
 // catchUp runs the BAL catch-up. When the pivot has moved, it fetches BALs
