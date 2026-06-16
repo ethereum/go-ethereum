@@ -90,6 +90,19 @@ func New(eth Backend, config Config, engine consensus.Engine) *Miner {
 	}
 }
 
+// NewWithoutBackend creates a miner with the provided config.  It is used in
+// a testing context.
+func NewWithoutBackend(chain *core.BlockChain, pool *txpool.TxPool, config Config, engine consensus.Engine) *Miner {
+	return &Miner{
+		config:      &config,
+		chainConfig: chain.Config(),
+		engine:      engine,
+		txpool:      pool,
+		chain:       chain,
+		pending:     &pending{},
+	}
+}
+
 // Pending returns the currently pending block and associated receipts, logs
 // and statedb. The returned values can be nil in case the pending block is
 // not initialized.

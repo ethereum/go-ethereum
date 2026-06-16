@@ -272,6 +272,18 @@ func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, b
 // for stateless execution, so it skips checking if the executable data hashes to
 // the requested hash (stateless has to *compute* the root hash, it's not given).
 func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
+	var requestsHash *common.Hash
+	if requests != nil {
+		h := types.CalcRequestsHash(requests)
+		requestsHash = &h
+	}
+
+	return ExecutableDataToBlockNoHashWithRequestsHash(data, versionedHashes, beaconRoot, requestsHash)
+}
+
+// ExecutableDataToBlockNoHashWithRequestsHash does the same thing as
+// ExecutableDataToBlockNoHash, but it takes a hash of the requests.
+func ExecutableDataToBlockNoHashWithRequestsHash(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requestsHash *common.Hash) (*types.Block, error) {
 	txs, err := DecodeTransactions(data.Transactions)
 	if err != nil {
 		return nil, err
@@ -305,12 +317,6 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 	if data.Withdrawals != nil {
 		h := types.DeriveSha(types.Withdrawals(data.Withdrawals), trie.NewStackTrie(nil))
 		withdrawalsRoot = &h
-	}
-
-	var requestsHash *common.Hash
-	if requests != nil {
-		h := types.CalcRequestsHash(requests)
-		requestsHash = &h
 	}
 
 	// If Amsterdam is enabled, data.BlockAccessList is always non-nil,

@@ -27,6 +27,10 @@ import (
 	"os"
 	"reflect"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/miner"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -230,21 +234,48 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 	}
 }
 
+// return a payload version for post-merge hard-forks.  otherwise return an error.
+func getPayloadVersion(header *types.Header, chainConfig *params.ChainConfig) engine.PayloadVersion {
+	switch {
+	case chainConfig.IsPostMerge(header.Number.Uint64(), header.Time):
+		return engine.PayloadV1
+	case chainConfig.IsShanghai(header.Number, header.Time):
+		return engine.PayloadV2
+	case chainConfig.IsPrague(header.Number, header.Time):
+	case chainConfig.IsCancun(header.Number, header.Time):
+		return engine.PayloadV3
+	}
+	panic("invalid post-merge fork")
+}
+
 /*
 See https://ethereum-tests.readthedocs.io/en/latest/blockchain-ref.html
 
-	Whether a block is valid or not is a bit subtle, it's defined by presence of
-	blockHeader, transactions and uncleHeaders fields. If they are missing, the block is
-	invalid and we must verify that we do not accept it.
+Whether a block is valid or not is a bit subtle, it's defined by presence of
+blockHeader, transactions and uncleHeaders fields. If they are missing, the block is
+invalid and we must verify that we do not accept it.
 
-	Since some tests mix valid and invalid blocks we need to check this for every block.
+Since some tests mix valid and invalid blocks we need to check this for every block.
 
-	If a block is invalid it does not necessarily fail the test, if it's invalidness is
-	expected we are expected to ignore it and continue processing and then validate the
-	post state.
+If a block is invalid it does not necessarily fail the test, if it's invalidness is
+expected we are expected to ignore it and continue processing and then validate the
+post state.
+
+If the block is post-merge, insertBlocks will construct payloads via the miner,
+validating that they match exactly blocks in the test which:
+  - are past the merge block
+  - are not specified as invalid by the test
+  - do not contain blob transactions
 */
 func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error) {
-	validBlocks := make([]btBlock, 0)
+	var (
+		pool            *txpool.TxPool
+		config          = miner.Config{}
+		consensusEngine = beacon.New(ethash.NewFaker())
+		builder         = miner.NewWithoutBackend(blockchain, pool, config, consensusEngine)
+		validBlocks     = make([]btBlock, 0)
+	)
+
 	// insert the test blocks, which will execute all transactions
 	for bi, b := range t.json.Blocks {
 		cb, err := b.decode()
@@ -257,7 +288,48 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 			}
 		}
 		// RLP decoding worked, try to insert into chain:
-		blocks := types.Blocks{cb}
+		var blocks types.Blocks
+
+		var blockHasBlobTxs bool
+		for _, tx := range cb.Transactions() {
+			if tx.BlobHashes() != nil {
+				blockHasBlobTxs = true
+				break
+			}
+		}
+
+		// test payload building on post-merge blocks that are valid and don't contain blob transactions
+		if !blockHasBlobTxs && b.BlockHeader != nil && (b.BlockHeader.Difficulty == nil || b.BlockHeader.Difficulty.Cmp(common.Big0) == 0) {
+			payloadVersion := getPayloadVersion(cb.Header(), blockchain.Config())
+
+			gasLimit := cb.GasLimit()
+			args := miner.BuildPayloadArgs{
+				Parent:       cb.ParentHash(),
+				Timestamp:    cb.Time(),
+				FeeRecipient: cb.Coinbase(),
+				Random:       cb.MixDigest(),
+				Withdrawals:  cb.Withdrawals(),
+				BeaconRoot:   cb.BeaconRoot(),
+				SlotNum:      cb.SlotNumber(),
+				Version:      payloadVersion,
+			}
+			envelope, err := builder.BuildPayloadWithOverrides(&args, cb.Transactions(), false, cb.Extra(), &gasLimit)
+			if err != nil {
+				return nil, err
+			}
+
+			constructedBlock, err := engine.ExecutableDataToBlockNoHashWithRequestsHash(*envelope.ExecutionPayload, nil, cb.BeaconRoot(), cb.RequestsHash())
+			if err != nil {
+				return nil, err
+			}
+
+			if constructedBlock.Hash() != cb.Hash() {
+				return nil, fmt.Errorf("mismatch in block hash. wanted %x, got %x", cb.Hash(), constructedBlock.Hash())
+			}
+			blocks = types.Blocks{constructedBlock}
+		} else {
+			blocks = types.Blocks{cb}
+		}
 		i, err := blockchain.InsertChain(blocks)
 		if err != nil {
 			if b.BlockHeader == nil {
