@@ -103,6 +103,28 @@ const (
 	TxAuthTupleGas            uint64 = 12500 // Per auth tuple code specified in EIP-7702
 	TxAuthTupleRegularGas     uint64 = 7500  // Per auth tuple regular gas specified in EIP-8037
 
+	// FloorCostPerAuth is the per-authorization tx-content floor contribution
+	// defined by EIP-8131: an EIP-7702 authorization tuple is 101 bytes, charged
+	// at the floor rate (101 * TxCostFloorPerToken7976 * TxTokenPerNonZeroByte).
+	FloorCostPerAuth uint64 = 101 * TxCostFloorPerToken7976 * TxTokenPerNonZeroByte // 6464
+
+	// EIP-8279: Block Access List Byte Floor. Each byte an opcode adds to the
+	// EIP-7928 Block Access List extends the transaction's floor accumulator by
+	// FloorGasPerByte gas, charged at runtime before the BAL grows.
+	FloorGasPerByte           uint64 = TxCostFloorPerToken7976 * TxTokenPerNonZeroByte // 64: per-byte floor rate (EIP-7976)
+	BALBytesPerAddress        uint64 = 20                                              // BAL bytes for an account address
+	BALBytesPerStorageKey     uint64 = 32                                              // BAL bytes for a storage key
+	BALBytesPerStorageValue   uint64 = 32                                              // BAL bytes for a storage post-value
+	BALBytesPerBalance        uint64 = 32                                              // BAL bytes for a balance change
+	BALBytesPerNonce          uint64 = 8                                               // BAL bytes for a nonce change
+	BALDelegationCodeBytes    uint64 = 23                                              // EIP-7702 delegation marker length
+	// BALBytesPerAuthorization is the worst-case BAL contribution an EIP-7702
+	// authorization adds when it is applied: the authority address, the
+	// delegation marker written to its code, and its nonce change. It is folded
+	// into the static floor seed since set_delegation runs outside the EVM's
+	// out-of-gas handler.
+	BALBytesPerAuthorization uint64 = BALBytesPerAddress + BALDelegationCodeBytes + BALBytesPerNonce // 51
+
 	// These have been changed during the course of the chain
 	CallGasFrontier              uint64 = 40  // Once per CALL operation & message call transaction.
 	CallGasEIP150                uint64 = 700 // Static portion of gas for CALL-derivates after EIP 150 (Tangerine)

@@ -147,7 +147,7 @@ func Transaction(ctx *cli.Context) error {
 		}
 		// For Prague txs, validate the floor data gas.
 		if rules.IsPrague {
-			floorDataGas, err := core.FloorDataGas(rules, tx.Data(), tx.AccessList())
+			floorDataGas, err := core.FloorDataGas(rules, tx.Data(), tx.AccessList(), uint64(len(tx.SetCodeAuthorizations())))
 			if err != nil {
 				r.Error = err
 				results = append(results, r)

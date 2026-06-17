@@ -131,6 +131,13 @@ type EVM struct {
 	returnData []byte // Last CALL's return data for subsequent reuse
 
 	arena *stackArena
+
+	// floorGas is the per-transaction EIP-8279 Block Access List byte-floor
+	// accumulator. It is set by the state transition at the start of each
+	// transaction and extended at runtime as opcodes contribute BAL bytes. It
+	// is nil before EIP-8279 (Amsterdam) or in contexts without BAL
+	// construction, in which case the runtime extensions are no-ops.
+	floorGas *FloorGasAccumulator
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
@@ -220,6 +227,26 @@ func (evm *EVM) SetTxContext(txCtx TxContext) {
 		txCtx.AccessEvents = state.NewAccessEvents()
 	}
 	evm.TxContext = txCtx
+}
+
+// SetFloorGas installs the per-transaction EIP-8279 floor accumulator. It is
+// called by the state transition once the static floor seed and gas limit are
+// known. Passing nil disables runtime floor extensions for the transaction.
+func (evm *EVM) SetFloorGas(acc *FloorGasAccumulator) {
+	evm.floorGas = acc
+}
+
+// FloorGas returns the active EIP-8279 floor accumulator, or nil if none is set.
+func (evm *EVM) FloorGas() *FloorGasAccumulator {
+	return evm.floorGas
+}
+
+// extendFloor extends the EIP-8279 floor accumulator by numBytes BAL bytes. It
+// is a no-op when no accumulator is installed (pre-Amsterdam or BAL-less
+// contexts). The returned error, when non-nil, is ErrOutOfGas and MUST abort
+// the operation before the matching BAL byte is inserted.
+func (evm *EVM) extendFloor(numBytes uint64) error {
+	return evm.floorGas.extendFloor(numBytes)
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and
@@ -524,6 +551,15 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		}
 	}
 
+	// EIP-8279: an opcode-level CREATE/CREATE2 records the deployed address in
+	// the BAL. The top-level creation transaction's contract address is part of
+	// the implicit per-tx bytes covered by TX_BASE headroom, so only nested
+	// creations extend the floor here.
+	if evm.depth > 0 {
+		if err = evm.extendFloor(params.BALBytesPerAddress); err != nil {
+			return nil, common.Address{}, gas.ExitHalt(), err
+		}
+	}
 	// We add this to the access list _before_ taking a snapshot. Even if the
 	// creation fails, the access-list change should not be rolled back.
 	if evm.chainRules.IsEIP2929 {
@@ -562,6 +598,21 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	// acts inside that account.
 	evm.StateDB.CreateContract(address)
 
+	// EIP-8279: an opcode-level CREATE/CREATE2 sets the new contract's nonce
+	// (and, with a non-zero endowment, its balance), both recorded in the BAL.
+	// The floor is extended after the collision check, before the state
+	// mutation. The top-level creation transaction's nonce is covered by
+	// TX_BASE headroom, so only nested creations extend the floor here.
+	if evm.depth > 0 {
+		if err = evm.extendFloor(params.BALBytesPerNonce); err != nil {
+			return nil, common.Address{}, gas.ExitHalt(), err
+		}
+		if !value.IsZero() {
+			if err = evm.extendFloor(params.BALBytesPerBalance); err != nil {
+				return nil, common.Address{}, gas.ExitHalt(), err
+			}
+		}
+	}
 	if evm.chainRules.IsEIP158 {
 		evm.StateDB.SetNonce(address, 1, tracing.NonceChangeNewContract)
 	}
@@ -665,6 +716,16 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) (ret
 			return ret, true, ErrCodeStoreOutOfGas
 		}
 		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
+			return ret, true, err
+		}
+	}
+	// EIP-8279: a successful opcode-level CREATE/CREATE2 deploy records the
+	// deployed code in the BAL. Extend the floor by the code length before
+	// set_code. A top-level creation transaction's deployed code is bounded by
+	// the calldata floor on its init code, so only nested creations extend the
+	// floor here.
+	if evm.depth > 0 && len(ret) > 0 {
+		if err := evm.extendFloor(uint64(len(ret))); err != nil {
 			return ret, true, err
 		}
 	}

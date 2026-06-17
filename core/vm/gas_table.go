@@ -504,6 +504,15 @@ func gasCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	}
 	// Stateful check
 	if evm.chainRules.IsAmsterdam {
+		// EIP-8279: a CALL transferring non-zero value to a different account
+		// records a balance change for the recipient in the BAL. Extend the
+		// floor by the balance bytes before the transfer. A self-call moves no
+		// value out of the executing account and adds no balance bytes.
+		if transfersValue && address != contract.Address() {
+			if err := evm.extendFloor(params.BALBytesPerBalance); err != nil {
+				return 0, err
+			}
+		}
 		// EIP-8037: the cost of creating a new account via a value-bearing
 		// CALL is metered as state gas (NEW_ACCOUNT * CostPerStateByte),
 		// not the legacy regular CallNewAccountGas. It drains the state
@@ -604,6 +613,10 @@ func gasSelfdestruct8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory
 		address = common.Address(stack.peek().Bytes20())
 	)
 	if !evm.StateDB.AddressInAccessList(address) {
+		// EIP-8279: a cold beneficiary access adds the address to the BAL.
+		if err := evm.extendFloor(params.BALBytesPerAddress); err != nil {
+			return GasCosts{}, err
+		}
 		// If the caller cannot afford the cost, this change will be rolled back
 		evm.StateDB.AddAddressToAccessList(address)
 		gas.RegularGas = params.ColdAccountAccessCostEIP2929
@@ -611,6 +624,14 @@ func gasSelfdestruct8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory
 	// Check we have enough regular gas before we add the address to the BAL
 	if contract.Gas.RegularGas < gas.RegularGas {
 		return gas, ErrOutOfGas
+	}
+	// EIP-8279: SELFDESTRUCT moving a non-zero balance to a different beneficiary
+	// records the beneficiary's balance change in the BAL. A self-targeted
+	// SELFDESTRUCT moves no value out and adds no balance bytes.
+	if address != contract.Address() && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
+		if err := evm.extendFloor(params.BALBytesPerBalance); err != nil {
+			return GasCosts{}, err
+		}
 	}
 	// Important: use StateDB.Empty instead of !StateDB.Exist. An account may exist
 	// in the current state yet still be considered non-existent by EIP-161 if its
@@ -641,11 +662,28 @@ func gasSStore8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 	)
 	// Check slot presence in the access list
 	if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
+		// EIP-8279: a cold SSTORE adds the storage key to the BAL. Extend the
+		// floor before the slot is recorded; an out-of-gas here aborts the
+		// opcode before the unpaid BAL byte exists.
+		if err := evm.extendFloor(params.BALBytesPerStorageKey); err != nil {
+			return GasCosts{}, err
+		}
 		cost = GasCosts{RegularGas: params.ColdSloadCostEIP2929}
 		// If the caller cannot afford the cost, this change will be rolled back
 		evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
 	}
 	value := common.Hash(y.Bytes32())
+
+	// EIP-8279: an SSTORE that changes the slot's current value contributes a
+	// post-value to the BAL. Charge the value bytes whenever the value differs,
+	// mirroring the BAL StorageWrite. This may over-charge when the same slot is
+	// written more than once in a transaction (the BAL records only one final
+	// post-value per slot), which is safe: it never under-charges.
+	if current != value {
+		if err := evm.extendFloor(params.BALBytesPerStorageValue); err != nil {
+			return GasCosts{}, err
+		}
+	}
 
 	if current == value { // noop (1)
 		// EIP 2200 original clause:

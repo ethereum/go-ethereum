@@ -151,8 +151,11 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 	return gas, nil
 }
 
-// FloorDataGas computes the minimum gas required for a transaction based on its data tokens (EIP-7623).
-func FloorDataGas(rules params.Rules, data []byte, accessList types.AccessList) (uint64, error) {
+// FloorDataGas computes the minimum gas required for a transaction based on its
+// data tokens (EIP-7623). On Amsterdam it also includes the EIP-8131 per-auth
+// tx-content floor and the EIP-8279 per-auth Block Access List floor, which
+// together form the static floor seed extended at runtime by EIP-8279.
+func FloorDataGas(rules params.Rules, data []byte, accessList types.AccessList, numAuths uint64) (uint64, error) {
 	var (
 		tokens    uint64
 		tokenCost uint64
@@ -203,7 +206,23 @@ func FloorDataGas(rules params.Rules, data []byte, accessList types.AccessList) 
 		return 0, ErrGasUintOverflow
 	}
 	// Minimum gas required for a transaction based on its data tokens (EIP-7623).
-	return params.TxGas + tokens*tokenCost, nil
+	floor := params.TxGas + tokens*tokenCost
+
+	// EIP-8131 / EIP-8279: each EIP-7702 authorization contributes a static
+	// per-auth floor. EIP-8131 prices the 101-byte authorization tuple
+	// (FloorCostPerAuth) and EIP-8279 adds the worst-case BAL bytes the auth
+	// writes when applied (BALBytesPerAuthorization at FloorGasPerByte). The
+	// per-auth BAL term is folded into the static floor because set_delegation
+	// runs outside the EVM's out-of-gas handler and cannot extend the floor at
+	// runtime.
+	if rules.IsAmsterdam && numAuths > 0 {
+		const perAuth = params.FloorCostPerAuth + params.BALBytesPerAuthorization*params.FloorGasPerByte
+		if (math.MaxUint64-floor)/perAuth < numAuths {
+			return 0, ErrGasUintOverflow
+		}
+		floor += numAuths * perAuth
+	}
+	return floor, nil
 }
 
 // toWordSize returns the ceiled word size required for init code payment calculation.
@@ -355,6 +374,11 @@ type stateTransition struct {
 	initReservoir uint64 // initial state-gas reservoir carved out of GasLimit (EIP-8037)
 	state         vm.StateDB
 	evm           *vm.EVM
+
+	// floorGas is the EIP-8279 Block Access List floor accumulator, seeded with
+	// the static floor and extended at runtime via the EVM. It is nil before
+	// Amsterdam. settleGas reads its final value to apply the receipt floor.
+	floorGas *vm.FloorGasAccumulator
 }
 
 // newStateTransition initialises and returns a new state transition object.
@@ -645,7 +669,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// Validate the EIP-7623 calldata floor against the gas limit. The floor inflates
 	// the total gas usage at tx end, so the gas limit must be sufficient to cover that.
 	if rules.IsPrague {
-		floorDataGas, err = FloorDataGas(rules, msg.Data, msg.AccessList)
+		floorDataGas, err = FloorDataGas(rules, msg.Data, msg.AccessList, uint64(len(msg.SetCodeAuthorizations)))
 		if err != nil {
 			return nil, err
 		}
@@ -659,6 +683,15 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		if rules.IsAmsterdam && max(cost.RegularGas, floorDataGas) > params.MaxTxGas {
 			return nil, fmt.Errorf("%w: regular intrisic cost %v, floor: %v", ErrFloorDataGas, cost.RegularGas, floorDataGas)
 		}
+	}
+
+	// EIP-8279: seed the per-transaction Block Access List floor accumulator
+	// with the static floor and bound it by the transaction gas limit. The
+	// accumulator is extended at runtime as opcodes contribute BAL bytes; at
+	// settlement the receipt gas becomes max(execution_gas, floor_gas_used).
+	if rules.IsAmsterdam {
+		st.floorGas = vm.NewFloorGasAccumulator(floorDataGas, msg.GasLimit)
+		st.evm.SetFloorGas(st.floorGas)
 	}
 
 	if rules.IsEIP4762 {
@@ -837,25 +870,34 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 	gasLeft += refund
 	gasUsed = gasUsedBeforeRefund - refund
 
-	// EIP-7623: tx_gas_used = max(tx_gas_used_after_refund, calldata_floor).
+	// EIP-8279: the effective floor is the runtime accumulator (seeded with the
+	// static floorDataGas and extended by the BAL bytes opcodes contributed). It
+	// is always >= floorDataGas when the accumulator is active (Amsterdam); the
+	// max keeps the pre-Amsterdam / accumulator-less path on the static floor.
+	floorGas := floorDataGas
+	if st.floorGas != nil {
+		floorGas = max(floorGas, st.floorGas.FloorGasUsed())
+	}
+
+	// EIP-7623: tx_gas_used = max(tx_gas_used_after_refund, floor).
 	peakUsed = gasUsedBeforeRefund
-	if rules.IsPrague && gasUsed < floorDataGas {
-		diff := floorDataGas - gasUsed
+	if rules.IsPrague && gasUsed < floorGas {
+		diff := floorGas - gasUsed
 		if st.evm.Config.Tracer.HasGasHook() {
 			st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Regular: gasLeft}, tracing.Gas{Regular: gasLeft - diff}, tracing.GasChangeTxDataFloor)
 		}
 		gasLeft -= diff
-		gasUsed = floorDataGas
-		peakUsed = max(peakUsed, floorDataGas)
+		gasUsed = floorGas
+		peakUsed = max(peakUsed, floorGas)
 	}
 
 	if rules.IsAmsterdam {
 		// EIP-7623/7976: the calldata floor applies to the block-level regular
 		// gas dimension as well, mirroring its effect on the receipt gas. The
-		// spec accumulates max(tx_regular_gas, calldata_floor) into
-		// block_gas_used, so the block must never count fewer regular units
-		// than the floor the sender was charged.
-		blockRegularGas := max(txRegularGas, floorDataGas)
+		// spec accumulates max(tx_regular_gas, floor) into block_gas_used, so the
+		// block must never count fewer regular units than the floor the sender
+		// was charged. EIP-8279 widens the floor to include BAL byte costs.
+		blockRegularGas := max(txRegularGas, floorGas)
 		if err = st.gp.ChargeGasAmsterdam(blockRegularGas, txStateGas, gasUsed); err != nil {
 			return 0, 0, err
 		}

@@ -123,7 +123,7 @@ func TestFloorDataGas(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rules := params.Rules{IsAmsterdam: tt.amsterdam}
-			got, err := FloorDataGas(rules, tt.data, tt.accessList)
+			got, err := FloorDataGas(rules, tt.data, tt.accessList, 0)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
