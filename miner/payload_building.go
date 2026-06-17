@@ -40,14 +40,15 @@ import (
 // Check engine-api specification for more details.
 // https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#payloadattributesv3
 type BuildPayloadArgs struct {
-	Parent       common.Hash           // The parent block to build payload on top
-	Timestamp    uint64                // The provided timestamp of generated payload
-	FeeRecipient common.Address        // The provided recipient address for collecting transaction fee
-	Random       common.Hash           // The provided randomness value
-	Withdrawals  types.Withdrawals     // The provided withdrawals
-	BeaconRoot   *common.Hash          // The provided beaconRoot (Cancun)
-	SlotNum      *uint64               // The provided slotNumber
-	Version      engine.PayloadVersion // Versioning byte for payload id calculation.
+	Parent         common.Hash           // The parent block to build payload on top
+	Timestamp      uint64                // The provided timestamp of generated payload
+	FeeRecipient   common.Address        // The provided recipient address for collecting transaction fee
+	Random         common.Hash           // The provided randomness value
+	Withdrawals    types.Withdrawals     // The provided withdrawals
+	BeaconRoot     *common.Hash          // The provided beaconRoot (Cancun)
+	SlotNum        *uint64               // The provided slotNumber
+	TargetGasLimit *uint64               // The provided target gas limit (Amsterdam)
+	Version        engine.PayloadVersion // Versioning byte for payload id calculation.
 }
 
 // Id computes an 8-byte identifier by hashing the components of the payload arguments.
@@ -246,15 +247,16 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 	// enough to run. The empty payload can at least make sure there is something
 	// to deliver for not missing slot.
 	emptyParams := &generateParams{
-		timestamp:   args.Timestamp,
-		forceTime:   true,
-		parentHash:  args.Parent,
-		coinbase:    args.FeeRecipient,
-		random:      args.Random,
-		withdrawals: args.Withdrawals,
-		beaconRoot:  args.BeaconRoot,
-		slotNum:     args.SlotNum,
-		noTxs:       true,
+		timestamp:      args.Timestamp,
+		forceTime:      true,
+		parentHash:     args.Parent,
+		coinbase:       args.FeeRecipient,
+		random:         args.Random,
+		withdrawals:    args.Withdrawals,
+		beaconRoot:     args.BeaconRoot,
+		slotNum:        args.SlotNum,
+		targetGasLimit: args.TargetGasLimit,
+		noTxs:          true,
 	}
 	empty := miner.generateWork(ctx, emptyParams, witness)
 	if empty.err != nil {
@@ -286,15 +288,16 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 		endTimer := time.NewTimer(time.Second * 12)
 
 		fullParams := &generateParams{
-			timestamp:   args.Timestamp,
-			forceTime:   true,
-			parentHash:  args.Parent,
-			coinbase:    args.FeeRecipient,
-			random:      args.Random,
-			withdrawals: args.Withdrawals,
-			beaconRoot:  args.BeaconRoot,
-			slotNum:     args.SlotNum,
-			noTxs:       false,
+			timestamp:      args.Timestamp,
+			forceTime:      true,
+			parentHash:     args.Parent,
+			coinbase:       args.FeeRecipient,
+			random:         args.Random,
+			withdrawals:    args.Withdrawals,
+			beaconRoot:     args.BeaconRoot,
+			slotNum:        args.SlotNum,
+			targetGasLimit: args.TargetGasLimit,
+			noTxs:          false,
 		}
 		for {
 			select {
@@ -351,6 +354,7 @@ func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*
 		withdrawals:       args.Withdrawals,
 		beaconRoot:        args.BeaconRoot,
 		slotNum:           args.SlotNum,
+		targetGasLimit:    args.TargetGasLimit,
 		noTxs:             empty,
 		forceOverrides:    true,
 		overrideExtraData: extraData,
