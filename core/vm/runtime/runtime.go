@@ -179,7 +179,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	// - reset transient storage(eip 1153)
 	cfg.State.Prepare(rules, cfg.Origin, cfg.Coinbase, nil, vm.ActivePrecompiles(rules), nil)
 	// Call the code with the given configuration.
-	code, address, result, err := vmenv.Create(
+	code, address, result, _, err := vmenv.Create(
 		cfg.Origin,
 		input,
 		vm.NewGasBudget(cfg.GasLimit, 0),
