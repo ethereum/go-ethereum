@@ -15,9 +15,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// BALStateTransition is responsible for performing the state root update
-// and commit for EIP 7928 access-list-containing blocks.  An instance of
-// this object is only used for a single block.
+// BALStateTransition computes the state root update and commits a single block
+// which contains an access list.
 type BALStateTransition struct {
 	accessList *bal.AccessListReader
 	written    bal.WrittenCounts
@@ -54,6 +53,7 @@ type BALStateTransition struct {
 	err error
 }
 
+// Metrics returns metrics if Commit has previously been called.
 func (s *BALStateTransition) Metrics() *BALStateTransitionMetrics {
 	return &s.metrics
 }
@@ -71,6 +71,7 @@ func (s *BALStateTransition) Deletions() DeletionCounts {
 	}
 }
 
+// BALStateTransitionMetrics contains metrics from a committed block.
 type BALStateTransitionMetrics struct {
 	// trie hashing metrics
 	AccountUpdate time.Duration
@@ -86,6 +87,7 @@ type BALStateTransitionMetrics struct {
 	TotalCommitTime time.Duration
 }
 
+// NewBALStateTransition creates a BALStateTransition instance
 func NewBALStateTransition(block *types.Block, prefetchReader Reader, db Database, parentRoot common.Hash, prepared *bal.AccessListReader) (*BALStateTransition, error) {
 	stateTrie, err := db.OpenTrie(parentRoot)
 	if err != nil {
@@ -122,6 +124,7 @@ func (s *BALStateTransition) PreparedAccessList() *bal.AccessListReader {
 	return s.accessList
 }
 
+// Error returns an error if IntermediateRoot or Commit failed.
 func (s *BALStateTransition) Error() error {
 	return s.err
 }
