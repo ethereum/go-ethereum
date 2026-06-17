@@ -17,6 +17,7 @@
 package catalyst
 
 import (
+	"context"
 	"errors"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
@@ -47,6 +48,31 @@ func (api *testingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes en
 	if api.eth.BlockChain().CurrentBlock().Hash() != parentHash {
 		return nil, errors.New("parentHash is not current head")
 	}
+	_, block, err := api.buildTestingBlock(payloadAttributes, transactions, extraData)
+	return block, err
+}
+
+// CommitBlockV1 builds a block from the supplied attributes and transactions, inserts
+// it into the chain, and sets it as the new canonical head. It is the equivalent of
+// BuildBlockV1 followed by engine_newPayload + engine_forkchoiceUpdated, but skips the
+// serialize/deserialize round-trip through ExecutableData. The block is built on top of
+// the current head.
+func (api *testingAPI) CommitBlockV1(ctx context.Context, payloadAttributes engine.PayloadAttributes, transactions *[]hexutil.Bytes, extraData *hexutil.Bytes) (common.Hash, error) {
+	block, _, err := api.buildTestingBlock(payloadAttributes, transactions, extraData)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	if _, err := api.eth.BlockChain().InsertBlockWithoutSetHead(ctx, block, false); err != nil {
+		return common.Hash{}, err
+	}
+	if _, err := api.eth.BlockChain().SetCanonical(block); err != nil {
+		return common.Hash{}, err
+	}
+	return block.Hash(), nil
+}
+
+func (api *testingAPI) buildTestingBlock(payloadAttributes engine.PayloadAttributes, transactions *[]hexutil.Bytes, extraData *hexutil.Bytes) (*types.Block, *engine.ExecutionPayloadEnvelope, error) {
+	parentHash := api.eth.BlockChain().CurrentBlock().Hash()
 	// If transactions is empty but not nil, build an empty block
 	// If the transactions is nil, build a block with the current transactions from the txpool
 	// If the transactions is not nil and not empty, build a block with the transactions
@@ -60,7 +86,7 @@ func (api *testingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes en
 		var err error
 		txs, err = engine.DecodeTransactions(dec)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	extra := make([]byte, 0)
