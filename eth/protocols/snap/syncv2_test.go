@@ -1895,6 +1895,141 @@ func testCatchUpPersistsIncrementally(t *testing.T, scheme string) {
 	}
 }
 
+// TestCatchUpWindowed verifies that catch-up correctly rolls the flat state
+// forward when the gap spans several windows. With catchUpWindow shrunk to 2,
+// a 5-block gap is processed as three windows ([A+1,A+2], [A+3,A+4], [A+5]),
+// exercising the window boundaries. Every block's BAL must be fetched and
+// applied, and the final pivot must reach the target.
+func TestCatchUpWindowed(t *testing.T) {
+	t.Parallel()
+	testCatchUpWindowed(t, rawdb.HashScheme)
+	testCatchUpWindowed(t, rawdb.PathScheme)
+}
+
+func testCatchUpWindowed(t *testing.T, scheme string) {
+	nodeScheme, sourceAccountTrie, elems, addrs := makeAccountTrieWithAddresses(100, scheme)
+	rootA := sourceAccountTrie.Hash()
+	numA := uint64(100)
+
+	targetAddr := addrs[0]
+	targetHash := crypto.Keccak256Hash(targetAddr[:])
+
+	db := rawdb.NewMemoryDatabase()
+	emptyHash := common.Hash{}
+	zero := uint64(0)
+
+	// Persist header + canonical hash for the base pivot A so reorg detection
+	// in Sync passes and catchUp (not reset) runs.
+	pivotA := &types.Header{
+		Number: new(big.Int).SetUint64(numA), Root: rootA, Difficulty: common.Big0,
+		BaseFee: common.Big0, WithdrawalsHash: &emptyHash,
+		BlobGasUsed: &zero, ExcessBlobGas: &zero,
+		ParentBeaconRoot: &emptyHash, RequestsHash: &emptyHash,
+	}
+	rawdb.WriteHeader(db, pivotA)
+	rawdb.WriteCanonicalHash(db, pivotA.Hash(), numA)
+
+	// Build a 5-block gap, each block bumping targetAddr's balance. The last
+	// block's balance is the expected final state.
+	const gap = 5
+	var (
+		lastHeader  *types.Header
+		lastBalance *uint256.Int
+		balsByHash  = make(map[common.Hash]rlp.RawValue, gap)
+	)
+	for i := 0; i < gap; i++ {
+		blockNum := numA + uint64(i) + 1
+		balance := uint256.NewInt(uint64(1000 * (i + 1)))
+
+		cb := bal.NewConstructionBlockAccessList()
+		cb.BalanceChange(0, targetAddr, balance)
+		var buf bytes.Buffer
+		if err := cb.EncodeRLP(&buf); err != nil {
+			t.Fatal(err)
+		}
+		var b bal.BlockAccessList
+		if err := rlp.DecodeBytes(buf.Bytes(), &b); err != nil {
+			t.Fatal(err)
+		}
+		balHash := b.Hash()
+		header := &types.Header{
+			Number: new(big.Int).SetUint64(blockNum), Difficulty: common.Big0,
+			BaseFee: common.Big0, WithdrawalsHash: &emptyHash,
+			BlobGasUsed: &zero, ExcessBlobGas: &zero,
+			ParentBeaconRoot: &emptyHash, RequestsHash: &emptyHash,
+			BlockAccessListHash: &balHash,
+		}
+		rawdb.WriteHeader(db, header)
+		rawdb.WriteCanonicalHash(db, header.Hash(), blockNum)
+		balsByHash[header.Hash()] = buf.Bytes()
+		lastHeader, lastBalance = header, balance
+	}
+
+	// Seed sync to A: persisted state ends with pivot=A and full flat state.
+	{
+		var (
+			once   sync.Once
+			cancel = make(chan struct{})
+			term   = func() { once.Do(func() { close(cancel) }) }
+		)
+		syncer := newSyncerV2(db, nodeScheme)
+		src := newTestPeerV2("seed", t, term)
+		src.accountTrie = sourceAccountTrie.Copy()
+		src.accountValues = elems
+		syncer.Register(src)
+		src.remote = syncer
+		if err := syncer.Sync(pivotA, cancel); err != nil {
+			t.Fatalf("seed sync failed: %v", err)
+		}
+	}
+
+	// Run catch-up to A+5 directly with a window of 2, forcing three windows
+	// ([A+1,A+2], [A+3,A+4], [A+5]). Calling catchUp in isolation keeps the
+	// focus on the windowing logic without the surrounding download/trie-gen
+	// phases (which would need a real target state root).
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() { once.Do(func() { close(cancel) }) }
+	)
+	syncer := newSyncerV2(db, nodeScheme)
+	syncer.loadSyncStatus() // restores pivot=A from the seed sync
+	if syncer.pivot == nil || syncer.pivot.Number.Uint64() != numA {
+		t.Fatalf("expected restored pivot at block %d, got %v", numA, syncer.pivot)
+	}
+	syncer.catchUpWindow = 2
+	src := newTestPeerV2("catchup", t, term)
+	src.accountTrie = sourceAccountTrie.Copy()
+	src.accountValues = elems
+	src.accessLists = balsByHash
+	syncer.Register(src)
+	src.remote = syncer
+	if err := syncer.catchUp(lastHeader, cancel); err != nil {
+		t.Fatalf("windowed catch-up failed: %v", err)
+	}
+
+	// The account must reflect the final block's balance, proving every window
+	// (including the trailing partial one) was fetched and applied in order.
+	data := rawdb.ReadAccountSnapshot(db, targetHash)
+	if len(data) == 0 {
+		t.Fatal("target account missing after windowed catch-up")
+	}
+	account, err := types.FullAccount(data)
+	if err != nil {
+		t.Fatalf("failed to decode account: %v", err)
+	}
+	if account.Balance.Cmp(lastBalance) != 0 {
+		t.Errorf("balance after windowed catch-up: got %v, want %v", account.Balance, lastBalance)
+	}
+
+	// The persisted pivot must have advanced all the way to the target.
+	loader := newSyncerV2(db, nodeScheme)
+	loader.loadSyncStatus()
+	if loader.pivot == nil || loader.pivot.Hash() != lastHeader.Hash() {
+		t.Errorf("persisted pivot did not reach target after windowed catch-up")
+	}
+}
+
 // TestSyncStatusMarkedCompleteAfterCompletion verifies that after a full sync
 // completes, the persisted sync status reaches the complete phase. This lets a
 // subsequent Sync call distinguish "already done" from "fresh node" and skip.
