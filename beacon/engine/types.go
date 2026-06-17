@@ -317,11 +317,7 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 	}
 
 	// If Amsterdam is enabled, data.BlockAccessList is always non-nil,
-	// even for empty blocks with no state transitions. The wire format is
-	// the RLP-encoded access list; the header hash is keccak256(rlp).
-	//
-	// If Amsterdam is not enabled yet, blockAccessListHash is expected
-	// to be nil.
+	// even for empty blocks with no state transitions.
 	var blockAccessListHash *common.Hash
 	if data.BlockAccessList != nil {
 		hash := crypto.Keccak256Hash(data.BlockAccessList)
@@ -388,8 +384,6 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		ExcessBlobGas: block.ExcessBlobGas(),
 		SlotNumber:    block.SlotNumber(),
 	}
-	// Per Engine API spec (Amsterdam): blockAccessList is the RLP-encoded
-	// access list, serialized as a hex string. Encode it to bytes here.
 	if al := block.AccessList(); al != nil {
 		var buf bytes.Buffer
 		if err := rlp.Encode(&buf, al); err == nil {

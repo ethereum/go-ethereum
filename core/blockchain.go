@@ -226,10 +226,6 @@ type BlockChainConfig struct {
 	// Execution configs
 	StatelessSelfValidation bool // Generate execution witnesses and self-check against them (testing purpose)
 	EnableWitnessStats      bool // Whether trie access statistics collection is enabled
-
-	BALExecutionMode bal.BALExecutionMode
-	BlockingPrefetch bool
-	PrefetchWorkers  int
 }
 
 // DefaultConfig returns the default config.
@@ -2127,13 +2123,12 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 
 	sdb := state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
 
-	useAsyncReads := bc.cfg.BALExecutionMode != bal.BALExecutionNoBatchIO
 	al := block.AccessList()
 	// Preprocess the access list once for the whole block; the resulting
 	// structure is read-only and shared by the prefetch reader, the state
 	// transition and every per-transaction execution reader.
 	prepared := bal.NewAccessListReader(*al)
-	prefetchReader, err := sdb.ReaderWithPrefetch(parentRoot, prepared.StorageKeys(useAsyncReads), bc.cfg.PrefetchWorkers, bc.cfg.BlockingPrefetch)
+	prefetchReader, err := sdb.ReaderWithPrefetch(parentRoot, prepared.StorageKeys())
 	if err != nil {
 		return nil, err
 	}
@@ -2245,7 +2240,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		blockHasAccessList = block.AccessList() != nil
 	)
 
-	if blockHasAccessList && bc.cfg.BALExecutionMode != bal.BALExecutionSequential {
+	if blockHasAccessList {
 		return bc.processBlockWithAccessList(parentRoot, block, config.WriteHead)
 	}
 	defer interrupt.Store(true) // terminate the prefetch at the end

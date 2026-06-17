@@ -28,7 +28,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	godebug "runtime/debug"
 	"strconv"
 	"strings"
@@ -243,22 +242,6 @@ var (
 		Name:     "eth.requiredblocks",
 		Usage:    "Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)",
 		Category: flags.EthCategory,
-	}
-	BALExecutionModeFlag = &cli.StringFlag{
-		Name:     "bal.executionmode",
-		Usage:    "EIP-7928 block-access-list execution mode (no-op placeholder)",
-		Category: flags.EthCategory,
-	}
-	PrefetchWorkersFlag = &cli.UintFlag{
-		Name:     "bal.prefetchworkers",
-		Usage:    "The number of concurrent state loading tasks to perform when prefetching BAL state.  Default to the number of cpus",
-		Value:    uint(runtime.NumCPU()),
-		Category: flags.MiscCategory,
-	}
-	BlockingPrefetchFlag = &cli.BoolFlag{
-		Name:     "bal.blockingprefetch",
-		Usage:    "only relevant when executing in parallel with a BAL: if true, the prefetcher will block tx/state-root calculation until all scheduled fetching tasks have completed.",
-		Category: flags.MiscCategory,
 	}
 	BloomFilterSizeFlag = &cli.Uint64Flag{
 		Name:     "bloomfilter.size",

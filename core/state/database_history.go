@@ -223,7 +223,7 @@ type HistoricDB struct {
 	codedb *CodeDB
 }
 
-func (db *HistoricDB) ReaderWithPrefetch(stateRoot common.Hash, accessList map[common.Address][]common.Hash, threads int, block bool) (Reader, error) {
+func (db *HistoricDB) ReaderWithPrefetch(stateRoot common.Hash, accessList map[common.Address][]common.Hash) (Reader, error) {
 	panic("not implemented")
 }
 
