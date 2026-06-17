@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -1451,5 +1452,64 @@ func TestBALAuthCodeOverwrittenFinalRecorded(t *testing.T) {
 	}
 	if len(aa.NonceChanges) != 1 || aa.NonceChanges[0].PostNonce != 2 {
 		t.Fatalf("expected final nonce 2, got %+v", aa.NonceChanges)
+	}
+}
+
+// ============================== Preimages ==============================
+
+// TestBALPreimagesEndToEnd verifies that BALStateTransition.Preimages collects
+// the SHA3 preimages observed during transaction execution and that they are
+// persisted when a post-Amsterdam block is processed through the parallel BAL
+// processor. Because that processor executes each transaction against its own
+// statedb copy (separate from the pre/post-tx system executions), the per-tx
+// preimages must be folded back into the shared state transition; here a
+// transaction runs KECCAK256 over a distinctive byte and we confirm the
+// preimage is written to disk on commit.
+func TestBALPreimagesEndToEnd(t *testing.T) {
+	// Runtime code: store 0x42 at memory[0], then KECCAK256 over memory[0:1].
+	//   PUSH1 0x42 ; PUSH1 0x00 ; MSTORE8 ; PUSH1 0x01 ; PUSH1 0x00 ; KECCAK256 ; POP ; STOP
+	contract := common.HexToAddress("0xca11ee")
+	runtime := []byte{0x60, 0x42, 0x60, 0x00, 0x53, 0x60, 0x01, 0x60, 0x00, 0x20, 0x50, 0x00}
+
+	env := newBALTestEnv(types.GenesisAlloc{
+		contract: {Code: runtime, Balance: common.Big0},
+	})
+
+	engine := beacon.New(ethash.NewFaker())
+	_, blocks, _ := GenerateChainWithGenesis(env.gspec, engine, 1, func(_ int, g *BlockGen) {
+		// Run the EIP-4788 beacon-root system call during generation so the
+		// generated BAL matches what the processor recomputes on import.
+		g.SetParentBeaconRoot(common.Hash{})
+		g.AddTx(env.tx(0, &contract, big.NewInt(0), 200_000, 0, nil))
+	})
+	block := blocks[0]
+	if block.AccessList() == nil {
+		t.Fatal("expected block to carry an access list")
+	}
+	if !env.cfg.IsAmsterdam(block.Number(), block.Time()) {
+		t.Fatalf("block must be post-Amsterdam: number=%v time=%d", block.Number(), block.Time())
+	}
+
+	// Import the block through the parallel BAL processor with preimage
+	// recording enabled, so the KECCAK256 above is captured.
+	db := rawdb.NewMemoryDatabase()
+	cfg := DefaultConfig()
+	cfg.VmConfig.EnablePreimageRecording = true
+	chain, err := NewBlockChain(db, env.gspec, engine, cfg)
+	if err != nil {
+		t.Fatalf("new blockchain: %v", err)
+	}
+	defer chain.Stop()
+
+	if _, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("insert chain: %v", err)
+	}
+
+	// The transaction hashed the single byte 0x42; the preimage must have been
+	// accumulated by the state transition and written to disk on commit.
+	want := []byte{0x42}
+	hash := crypto.Keccak256Hash(want)
+	if got := rawdb.ReadPreimage(db, hash); !bytes.Equal(got, want) {
+		t.Fatalf("preimage for %x: got %x, want %x", hash, got, want)
 	}
 }
