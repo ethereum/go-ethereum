@@ -281,7 +281,7 @@ func TestValidationStateGasAvailable(t *testing.T) {
 // tx.gas may exceed MaxTxGas: regular is capped at MaxTxGas while the state
 // dimension reserves the full tx.gas (the excess lands in the reservoir).
 func TestValidationStateGasOverflowAllowed(t *testing.T) {
-	gas := uint64(params.MaxTxGas) + 5_000_000
+	gas := params.MaxTxGas + 5_000_000
 	gp := NewGasPool(40_000_000)
 	if err := gp.CheckGasAmsterdam(min(gas, params.MaxTxGas), gas); err != nil {
 		t.Fatalf("overflow tx rejected at pool: %v", err)
@@ -548,7 +548,7 @@ func TestAuthClearRefillBase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := uint64(newAccountState); gp.cumulativeState != want {
+	if want := newAccountState; gp.cumulativeState != want {
 		t.Fatalf("state gas = %d, want %d (indicator refilled)", gp.cumulativeState, want)
 	}
 }
@@ -564,7 +564,7 @@ func TestAuthClearSameTxDoubleRefill(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = authority
-	if want := uint64(newAccountState); gp.cumulativeState != want {
+	if want := newAccountState; gp.cumulativeState != want {
 		t.Fatalf("state gas = %d, want %d (net-zero delegation)", gp.cumulativeState, want)
 	}
 }
