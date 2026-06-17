@@ -19,6 +19,7 @@ package engineapi
 import (
 	"net/http"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	sszt "github.com/ethereum/go-ethereum/beacon/engine/ssz"
 	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/karalabe/ssz"
@@ -38,4 +39,45 @@ func resolveFork(w http.ResponseWriter, fork, min forks.Fork) (ssz.Fork, bool) {
 		return ssz.ForkUnknown, false
 	}
 	return sf, true
+}
+
+// baseFork collapses a BPO fork onto the named fork that it layers on. BPO1..5
+// sit between Osaka and Amsterdam in params/forks but have no Engine API URL
+// segment of their own: a chain in a BPO era still negotiates /osaka/*. Named
+// forks map to themselves.
+func baseFork(f forks.Fork) forks.Fork {
+	switch f {
+	case forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5:
+		return forks.Osaka
+	default:
+		return f
+	}
+}
+
+// eraForks returns the set of params/forks values that share a URL fork's
+// wire shape: the named fork plus any BPO forks that layer on it. checkFork in
+// the catalyst layer derives a cached payload's fork via LatestFork, which can
+// return a BPO fork, so the allowed set passed to GetPayload must include them.
+func eraForks(fork forks.Fork) []forks.Fork {
+	if fork == forks.Osaka {
+		return []forks.Fork{forks.Osaka, forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5}
+	}
+	return []forks.Fork{fork}
+}
+
+// payloadVersionFor selects the JSON-RPC PayloadVersion that the catalyst layer
+// expects for a given URL fork, mirroring the per-fork version table on the
+// JSON-RPC ForkchoiceUpdatedVx path (Amsterdam -> V4, Cancun..Osaka -> V3,
+// Shanghai -> V2, Paris -> V1).
+func payloadVersionFor(fork forks.Fork) engine.PayloadVersion {
+	switch {
+	case fork >= forks.Amsterdam:
+		return engine.PayloadV4
+	case fork >= forks.Cancun:
+		return engine.PayloadV3
+	case fork >= forks.Shanghai:
+		return engine.PayloadV2
+	default:
+		return engine.PayloadV1
+	}
 }

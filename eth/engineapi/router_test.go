@@ -196,7 +196,7 @@ func TestRouterUnsupportedFork(t *testing.T) {
 	srv := newTestServer(t, &stubBackend{})
 	defer srv.Close()
 
-	// Bogus fork in URL.
+	// Bogus fork in URL: the router does not recognise the segment at all.
 	resp, err := srv.Client().Post(srv.URL+BasePath+"/bogus/payloads", sszContentType, bytes.NewReader(nil))
 	if err != nil {
 		t.Fatal(err)
@@ -205,15 +205,74 @@ func TestRouterUnsupportedFork(t *testing.T) {
 	if resp.StatusCode != 400 {
 		t.Fatalf("want 400, got %d", resp.StatusCode)
 	}
+}
 
-	// Real fork but not Amsterdam.
-	resp, err = srv.Client().Post(srv.URL+BasePath+"/cancun/payloads", sszContentType, bytes.NewReader(nil))
+// TestRouterAdvertisedForkRoutable asserts that a fork the capabilities
+// endpoint advertises (here osaka) is actually routable end-to-end: forkchoice
+// with attributes, newPayload, and getPayload all succeed. This guards against
+// advertising a fork the handlers reject (the failure mode where capabilities
+// outran the per-handler fork gating).
+func TestRouterAdvertisedForkRoutable(t *testing.T) {
+	id := engine.PayloadID{4, 4, 4}
+	env := &engine.ExecutionPayloadEnvelope{
+		ExecutionPayload: &engine.ExecutableData{LogsBloom: make([]byte, 256)},
+		BlockValue:       uint256.NewInt(0).ToBig(),
+	}
+	b := &stubBackend{
+		fcuStatus: engine.PayloadStatusV1{Status: engine.VALID},
+		fcuID:     &id,
+		npStatus:  engine.PayloadStatusV1{Status: engine.VALID},
+		envelope:  env,
+		// Osaka chain sitting in a BPO era: ForkFromTimestamp returns a BPO
+		// fork, which must collapse onto the osaka URL fork.
+		forkAtTime: func(uint64) forks.Fork { return forks.BPO1 },
+	}
+	srv := newTestServer(t, b)
+	defer srv.Close()
+
+	osaka, _ := sszt.ForkFor(forks.Osaka)
+	blob, excess := uint64(0), uint64(0)
+
+	// forkchoice with payload attributes (proposal path).
+	fcu := &sszt.ForkchoiceUpdateAmsterdam{
+		ForkchoiceState: &sszt.ForkchoiceState{HeadBlockHash: common.Hash{0xaa}},
+		PayloadAttributes: []*sszt.PayloadAttributes{{
+			Timestamp:             1,
+			ParentBeaconBlockRoot: &common.Hash{0x55},
+		}},
+	}
+	resp := sszPost(t, srv, "/osaka/forkchoice", fcu, osaka)
+	if resp.StatusCode != 200 {
+		t.Fatalf("forkchoice: want 200, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	if b.lastFCUAttrs == nil {
+		t.Fatal("forkchoice: attributes not forwarded to backend")
+	}
+
+	// newPayload.
+	penv := &sszt.ExecutionPayloadEnvelopeAmsterdam{
+		Payload: &sszt.ExecutionPayload{
+			BaseFeePerGas: uint256.NewInt(7e9),
+			BlobGasUsed:   &blob,
+			ExcessBlobGas: &excess,
+		},
+		ParentBeaconBlockRoot: common.Hash{0x55},
+	}
+	resp = sszPost(t, srv, "/osaka/payloads", penv, osaka)
+	if resp.StatusCode != 200 {
+		t.Fatalf("newPayload: want 200, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// getPayload.
+	resp, err := srv.Client().Get(srv.URL + BasePath + "/osaka/payloads/0x0102030405060708")
 	if err != nil {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != 400 {
-		t.Fatalf("want 400 for cancun, got %d", resp.StatusCode)
+	if resp.StatusCode != 200 {
+		t.Fatalf("getPayload: want 200, got %d", resp.StatusCode)
 	}
 }
 

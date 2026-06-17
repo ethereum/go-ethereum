@@ -26,9 +26,9 @@ import (
 
 // handleForkchoice implements POST /engine/v2/{fork}/forkchoice.
 func (rt *Router) handleForkchoice(w http.ResponseWriter, r *http.Request, fork forks.Fork) {
-	// The execution-apis spec currently only defines the forkchoice envelope
-	// for Amsterdam; the inner attributes shape is fork-driven by the codec.
-	sf, ok := resolveFork(w, fork, forks.Amsterdam)
+	// The forkchoice envelope shape is fork-driven by the codec; every fork
+	// from Paris on has a valid wire shape.
+	sf, ok := resolveFork(w, fork, forks.Paris)
 	if !ok {
 		return
 	}
@@ -49,10 +49,10 @@ func (rt *Router) handleForkchoice(w http.ResponseWriter, r *http.Request, fork 
 			return
 		}
 		// If PayloadAttributes is present the URL fork MUST match the fork
-		// the new payload would belong to. Today only Amsterdam URL exists
-		// in this implementation so the timestamp check is implicit; we
-		// keep an explicit guard for future fork URLs.
-		if rt.backend.ForkFromTimestamp(attr.Timestamp) != fork {
+		// the new payload would belong to. ForkFromTimestamp can return a BPO
+		// fork (which has no URL segment of its own); collapse it onto the
+		// named fork it layers on before comparing.
+		if baseFork(rt.backend.ForkFromTimestamp(attr.Timestamp)) != fork {
 			writeProblem(w, http.StatusBadRequest, ErrUnsupportedFork,
 				"payload_attributes timestamp does not match URL fork")
 			return
@@ -64,7 +64,7 @@ func (rt *Router) handleForkchoice(w http.ResponseWriter, r *http.Request, fork 
 		// underlying miner gains the corresponding setting.
 	}
 
-	resp, err := rt.backend.ForkchoiceUpdated(r.Context(), state, attrs, engine.PayloadV4)
+	resp, err := rt.backend.ForkchoiceUpdated(r.Context(), state, attrs, payloadVersionFor(fork))
 	if err != nil {
 		mapBackendErr(w, err)
 		return

@@ -29,7 +29,7 @@ import (
 
 // handleGetPayload implements GET /engine/v2/{fork}/payloads/{payloadId}.
 func (rt *Router) handleGetPayload(w http.ResponseWriter, r *http.Request, fork forks.Fork, idHex string) {
-	sf, ok := resolveFork(w, fork, forks.Amsterdam)
+	sf, ok := resolveFork(w, fork, forks.Paris)
 	if !ok {
 		return
 	}
@@ -41,7 +41,10 @@ func (rt *Router) handleGetPayload(w http.ResponseWriter, r *http.Request, fork 
 	var id engine.PayloadID
 	copy(id[:], raw)
 
-	env, err := rt.backend.GetPayload(id, []forks.Fork{forks.Amsterdam})
+	// allowedForks is the URL fork's era: the named fork plus any BPO forks
+	// that layer on it. The catalyst layer derives the cached payload's fork
+	// via LatestFork, which can yield a BPO fork.
+	env, err := rt.backend.GetPayload(id, eraForks(fork))
 	if err != nil {
 		mapBackendErr(w, err)
 		return

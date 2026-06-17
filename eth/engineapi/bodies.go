@@ -79,7 +79,7 @@ func buildBodiesResponse(b Backend, fork forks.Fork, sf ssz.Fork, bodies []*type
 	}
 	for i, body := range bodies {
 		entry := &sszt.BodyEntry{Body: new(sszt.ExecutionPayloadBody)}
-		if body != nil && b.ForkFromTimestamp(ts[i]) == fork {
+		if body != nil && baseFork(b.ForkFromTimestamp(ts[i])) == fork {
 			entry.Available = true
 			entry.Body = bodyToSSZ(body, sf)
 		}
