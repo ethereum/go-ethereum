@@ -37,6 +37,19 @@ const (
 	forkAmsterdam = ssz.ForkPectra + 2
 )
 
+// AtLeast reports whether the ssz fork sf is at or beyond the geth fork f in
+// the codec's ordering. It encapsulates the local forkOsaka/forkAmsterdam
+// aliases so callers outside this package can compare against post-Pectra forks
+// without naming the unexported constants. Pre-Engine-API forks (no SSZ wire
+// representation) compare as not-reached.
+func AtLeast(sf ssz.Fork, f forks.Fork) bool {
+	target, ok := ForkFor(f)
+	if !ok {
+		return false
+	}
+	return sf >= target
+}
+
 // ForkFor maps a geth params/forks.Fork onto the karalabe/ssz Fork value
 // the codec multiplexes on. The bool is false for forks that predate the
 // Engine API (and thus have no SSZ wire representation here).

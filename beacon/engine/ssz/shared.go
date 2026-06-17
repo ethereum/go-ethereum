@@ -34,7 +34,7 @@ func (b *Blob) DefineSSZ(c *ssz.Codec) {
 	ssz.DefineCheckedStaticBytes(c, &b.Bytes, BytesPerBlob)
 }
 
-// BlobCell wraps a single BYTES_PER_CELL = 1024 byte cell. Same wrapper
+// BlobCell wraps a single BYTES_PER_CELL = 2048 byte cell. Same wrapper
 // rationale as Blob.
 type BlobCell struct {
 	Bytes []byte
@@ -59,7 +59,7 @@ func (b *Bitvector128) DefineSSZ(c *ssz.Codec) {
 }
 
 // OptionalBlobCell models `Optional[ByteVector[BYTES_PER_CELL]]` =
-// `List[BlobCell, 1]`. Length 0 = absent, length 1 = present (1024 bytes).
+// `List[BlobCell, 1]`. Length 0 = absent, length 1 = present (2048 bytes).
 type OptionalBlobCell struct {
 	Cells []*BlobCell
 }

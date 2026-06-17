@@ -22,36 +22,85 @@ import (
 	"github.com/karalabe/ssz"
 )
 
-// ExecutionPayloadEnvelopeAmsterdam is the request body of
-// POST /amsterdam/payloads.
+// ExecutionPayloadEnvelopeAmsterdam is the monolithic request body of
+// POST /{fork}/payloads spanning every fork from Paris onward. The wire shape
+// is fork-driven by the codec (see the per-fork ExecutionPayloadEnvelope
+// catalogue in refactor-ssz.md):
+//
+//   - Paris / Shanghai: bare payload, no envelope fields
+//   - Cancun+:          + ParentBeaconBlockRoot
+//   - Prague+:          + ExecutionRequests
+//
+// ParentBeaconBlockRoot is a pointer so the codec can distinguish "absent for
+// this fork" (nil, Paris/Shanghai) from "present and zero".
 type ExecutionPayloadEnvelopeAmsterdam struct {
 	Payload               *ExecutionPayload
-	ParentBeaconBlockRoot common.Hash
-	ExecutionRequests     [][]byte
+	ParentBeaconBlockRoot *common.Hash // Cancun+
+	ExecutionRequests     [][]byte     // Prague+
 }
 
 func (e *ExecutionPayloadEnvelopeAmsterdam) SizeSSZ(siz *ssz.Sizer, fixed bool) uint32 {
-	// offset(payload) + 32(root) + offset(requests)
-	size := uint32(40)
+	// offset(payload) is always present; the root and the requests offset only
+	// exist from Cancun and Prague respectively (matching the OnFork gating).
+	size := uint32(4)
+	if siz.Fork() >= ssz.ForkDencun {
+		size += 32 // ParentBeaconBlockRoot
+	}
+	if siz.Fork() >= ssz.ForkPectra {
+		size += 4 // offset(requests)
+	}
 	if fixed {
 		return size
 	}
 	size += ssz.SizeDynamicObject(siz, e.Payload)
-	size += ssz.SizeSliceOfDynamicBytes(siz, e.ExecutionRequests)
+	if siz.Fork() >= ssz.ForkPectra {
+		size += ssz.SizeSliceOfDynamicBytes(siz, e.ExecutionRequests)
+	}
 	return size
 }
 
 func (e *ExecutionPayloadEnvelopeAmsterdam) DefineSSZ(c *ssz.Codec) {
 	ssz.DefineDynamicObjectOffset(c, &e.Payload)
-	ssz.DefineStaticBytes(c, &e.ParentBeaconBlockRoot)
-	ssz.DefineSliceOfDynamicBytesOffset(c, &e.ExecutionRequests, MaxExecutionRequestsPerPayload, MaxBytesPerExecutionRequest)
+	ssz.DefineStaticBytesPointerOnFork(c, &e.ParentBeaconBlockRoot, fromCancun)
+	ssz.DefineSliceOfDynamicBytesOffsetOnFork(c, &e.ExecutionRequests, MaxExecutionRequestsPerPayload, MaxBytesPerExecutionRequest, fromPrague)
 
 	ssz.DefineDynamicObjectContent(c, &e.Payload)
-	ssz.DefineSliceOfDynamicBytesContent(c, &e.ExecutionRequests, MaxExecutionRequestsPerPayload, MaxBytesPerExecutionRequest)
+	ssz.DefineSliceOfDynamicBytesContentOnFork(c, &e.ExecutionRequests, MaxExecutionRequestsPerPayload, MaxBytesPerExecutionRequest, fromPrague)
 }
 
-// BlobsBundleV2 is the cell-proof blob bundle carried by BuiltPayload
-// from Osaka onwards.
+// BlobsBundleV1 is the single-proof blob bundle carried by BuiltPayload for
+// Cancun and Prague: one KZG proof per blob.
+type BlobsBundleV1 struct {
+	Commitments [][48]byte
+	Proofs      [][48]byte
+	Blobs       []*Blob
+}
+
+func (b *BlobsBundleV1) SizeSSZ(siz *ssz.Sizer, fixed bool) uint32 {
+	// 3 offsets
+	size := uint32(12)
+	if fixed {
+		return size
+	}
+	size += ssz.SizeSliceOfStaticBytes(siz, b.Commitments)
+	size += ssz.SizeSliceOfStaticBytes(siz, b.Proofs)
+	size += ssz.SizeSliceOfStaticObjects(siz, b.Blobs)
+	return size
+}
+
+func (b *BlobsBundleV1) DefineSSZ(c *ssz.Codec) {
+	ssz.DefineSliceOfStaticBytesOffset(c, &b.Commitments, MaxBlobCommitmentsPerBlock)
+	ssz.DefineSliceOfStaticBytesOffset(c, &b.Proofs, MaxBlobCommitmentsPerBlock)
+	ssz.DefineSliceOfStaticObjectsOffset(c, &b.Blobs, MaxBlobCommitmentsPerBlock)
+
+	ssz.DefineSliceOfStaticBytesContent(c, &b.Commitments, MaxBlobCommitmentsPerBlock)
+	ssz.DefineSliceOfStaticBytesContent(c, &b.Proofs, MaxBlobCommitmentsPerBlock)
+	ssz.DefineSliceOfStaticObjectsContent(c, &b.Blobs, MaxBlobCommitmentsPerBlock)
+}
+
+// BlobsBundleV2 is the cell-proof blob bundle carried by BuiltPayload from Osaka
+// onwards: CellsPerExtBlob cell proofs per blob. The wire layout matches
+// BlobsBundleV1 (three slices); only the proofs-list bound differs.
 type BlobsBundleV2 struct {
 	Commitments [][48]byte
 	Proofs      [][48]byte
@@ -80,37 +129,67 @@ func (b *BlobsBundleV2) DefineSSZ(c *ssz.Codec) {
 	ssz.DefineSliceOfStaticObjectsContent(c, &b.Blobs, MaxBlobCommitmentsPerBlock)
 }
 
-// BuiltPayloadAmsterdam is the response of GET /amsterdam/payloads/{id}.
+// BuiltPayloadAmsterdam is the monolithic response of GET /{fork}/payloads/{id}
+// spanning every fork from Paris onward. The wire shape is fork-driven by the
+// codec (see the per-fork BuiltPayload catalogue in refactor-ssz.md):
+//
+//   - Paris / Shanghai: Payload, BlockValue only
+//   - Cancun:           + BlobsBundleV1, ShouldOverrideBuilder
+//   - Prague:           + ExecutionRequests (placed before ShouldOverrideBuilder)
+//   - Osaka+:           BlobsBundle revision becomes V2 (cell proofs)
+//
+// Exactly one of BlobsBundleV1 / BlobsBundleV2 is active for any given fork
+// (V1 = Cancun..Prague, V2 = Osaka+); the other is nil and contributes neither
+// an offset nor content. ShouldOverrideBuilder is a pointer so the codec can
+// distinguish "absent for this fork" (nil, Paris/Shanghai) from "present and
+// false".
 type BuiltPayloadAmsterdam struct {
 	Payload               *ExecutionPayload
 	BlockValue            *uint256.Int
-	BlobsBundle           *BlobsBundleV2
-	ExecutionRequests     [][]byte
-	ShouldOverrideBuilder bool
+	BlobsBundleV1         *BlobsBundleV1 // Cancun, Prague
+	BlobsBundleV2         *BlobsBundleV2 // Osaka+
+	ExecutionRequests     [][]byte       // Prague+
+	ShouldOverrideBuilder *bool          // Cancun+
 }
 
 func (p *BuiltPayloadAmsterdam) SizeSSZ(siz *ssz.Sizer, fixed bool) uint32 {
-	// offset(payload) + 32(value) + offset(bundle) + offset(requests) + 1(override)
-	size := uint32(4 + 32 + 4 + 4 + 1)
+	// offset(payload) + 32(value) are always present; the bundle offset and the
+	// override byte exist from Cancun, and the requests offset from Prague.
+	size := uint32(4 + 32)
+	if siz.Fork() >= ssz.ForkDencun {
+		size += 4 // offset(blobs_bundle)
+		size++    // should_override_builder
+	}
+	if siz.Fork() >= ssz.ForkPectra {
+		size += 4 // offset(execution_requests)
+	}
 	if fixed {
 		return size
 	}
 	size += ssz.SizeDynamicObject(siz, p.Payload)
-	size += ssz.SizeDynamicObject(siz, p.BlobsBundle)
-	size += ssz.SizeSliceOfDynamicBytes(siz, p.ExecutionRequests)
+	if siz.Fork() >= forkOsaka {
+		size += ssz.SizeDynamicObject(siz, p.BlobsBundleV2)
+	} else if siz.Fork() >= ssz.ForkDencun {
+		size += ssz.SizeDynamicObject(siz, p.BlobsBundleV1)
+	}
+	if siz.Fork() >= ssz.ForkPectra {
+		size += ssz.SizeSliceOfDynamicBytes(siz, p.ExecutionRequests)
+	}
 	return size
 }
 
 func (p *BuiltPayloadAmsterdam) DefineSSZ(c *ssz.Codec) {
 	ssz.DefineDynamicObjectOffset(c, &p.Payload)
 	ssz.DefineUint256(c, &p.BlockValue)
-	ssz.DefineDynamicObjectOffset(c, &p.BlobsBundle)
-	ssz.DefineSliceOfDynamicBytesOffset(c, &p.ExecutionRequests, MaxExecutionRequestsPerPayload, MaxBytesPerExecutionRequest)
-	ssz.DefineBool(c, &p.ShouldOverrideBuilder)
+	ssz.DefineDynamicObjectOffsetOnFork(c, &p.BlobsBundleV1, cancunToOsaka)
+	ssz.DefineDynamicObjectOffsetOnFork(c, &p.BlobsBundleV2, fromOsaka)
+	ssz.DefineSliceOfDynamicBytesOffsetOnFork(c, &p.ExecutionRequests, MaxExecutionRequestsPerPayload, MaxBytesPerExecutionRequest, fromPrague)
+	ssz.DefineBoolPointerOnFork(c, &p.ShouldOverrideBuilder, fromCancun)
 
 	ssz.DefineDynamicObjectContent(c, &p.Payload)
-	ssz.DefineDynamicObjectContent(c, &p.BlobsBundle)
-	ssz.DefineSliceOfDynamicBytesContent(c, &p.ExecutionRequests, MaxExecutionRequestsPerPayload, MaxBytesPerExecutionRequest)
+	ssz.DefineDynamicObjectContentOnFork(c, &p.BlobsBundleV1, cancunToOsaka)
+	ssz.DefineDynamicObjectContentOnFork(c, &p.BlobsBundleV2, fromOsaka)
+	ssz.DefineSliceOfDynamicBytesContentOnFork(c, &p.ExecutionRequests, MaxExecutionRequestsPerPayload, MaxBytesPerExecutionRequest, fromPrague)
 }
 
 // ForkchoiceUpdateAmsterdam is the request body of POST /amsterdam/forkchoice.

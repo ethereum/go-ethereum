@@ -17,6 +17,7 @@
 package ssz
 
 import (
+	"encoding/binary"
 	"reflect"
 	"testing"
 
@@ -156,4 +157,158 @@ func TestForkchoiceUpdateAmsterdamRoundtrip(t *testing.T) {
 		},
 	}
 	encDecOnFork(t, bare, forkAmsterdam, func() *ForkchoiceUpdateAmsterdam { return new(ForkchoiceUpdateAmsterdam) })
+}
+
+// minimalPayload builds an ExecutionPayload carrying exactly the fields the
+// given fork's wire shape requires (BaseFeePerGas is always present; blob-gas
+// pointers from Cancun; slot from Amsterdam), so it round-trips cleanly at fork.
+func minimalPayload(fork ssz.Fork) *ExecutionPayload {
+	p := &ExecutionPayload{BaseFeePerGas: uint256.NewInt(7e9)}
+	if fork >= ssz.ForkDencun {
+		blob, excess := uint64(0), uint64(0)
+		p.BlobGasUsed, p.ExcessBlobGas = &blob, &excess
+	}
+	if fork >= forkAmsterdam {
+		slot := uint64(0)
+		p.SlotNumber = &slot
+	}
+	return p
+}
+
+// allEngineForks enumerates the codec forks the Engine API v2 spec covers
+// (Paris onward), paired with the spec's fixed-part sizes for the envelope and
+// built-payload wrappers.
+var allEngineForks = []struct {
+	name            string
+	fork            ssz.Fork
+	envelopeFixed   uint32 // ExecutionPayloadEnvelope fixed part
+	builtPayloadFix uint32 // BuiltPayload fixed part
+	hasBeaconRoot   bool   // Cancun+
+	hasRequests     bool   // Prague+
+	hasBundle       bool   // Cancun+
+	bundleIsV2      bool   // Osaka+
+}{
+	// envelope fixed: offset(payload)=4 [+root 32 from Cancun] [+offset(requests) 4 from Prague]
+	// built fixed:    offset(payload)=4 + value 32 [+offset(bundle) 4 + override 1 from Cancun] [+offset(requests) 4 from Prague]
+	{"paris", ssz.ForkParis, 4, 36, false, false, false, false},
+	{"shanghai", ssz.ForkShapella, 4, 36, false, false, false, false},
+	{"cancun", ssz.ForkDencun, 36, 41, true, false, true, false},
+	{"prague", ssz.ForkPectra, 40, 45, true, true, true, false},
+	{"osaka", forkOsaka, 40, 45, true, true, true, true},
+	{"amsterdam", forkAmsterdam, 40, 45, true, true, true, true},
+}
+
+// TestExecutionPayloadEnvelopePerFork verifies the envelope wire shape matches
+// the per-fork ExecutionPayloadEnvelope catalogue in refactor-ssz.md for every
+// fork the spec covers: bare payload for Paris/Shanghai, +parent_beacon_block_root
+// from Cancun, +execution_requests from Prague.
+func TestExecutionPayloadEnvelopePerFork(t *testing.T) {
+	for _, tc := range allEngineForks {
+		t.Run(tc.name, func(t *testing.T) {
+			env := &ExecutionPayloadEnvelopeAmsterdam{Payload: minimalPayload(tc.fork)}
+			if tc.hasBeaconRoot {
+				env.ParentBeaconBlockRoot = &common.Hash{0x55}
+			}
+			if tc.hasRequests {
+				env.ExecutionRequests = [][]byte{{0x01, 0x02}}
+			}
+			encDecOnFork(t, env, tc.fork, func() *ExecutionPayloadEnvelopeAmsterdam {
+				return new(ExecutionPayloadEnvelopeAmsterdam)
+			})
+
+			// Pre-Cancun must not carry a beacon root; pre-Prague must not carry
+			// requests — the codec drops them, so a decoded copy stays empty.
+			buf := make([]byte, ssz.SizeOnFork(env, tc.fork))
+			if err := ssz.EncodeToBytesOnFork(buf, env, tc.fork); err != nil {
+				t.Fatalf("encode: %v", err)
+			}
+			// payload is the first (dynamic) field, so its offset equals the
+			// fixed-part length — the spec's per-fork envelope size.
+			if off := readOffset(buf); off != tc.envelopeFixed {
+				t.Errorf("envelope fixed size = %d, want %d", off, tc.envelopeFixed)
+			}
+			got := new(ExecutionPayloadEnvelopeAmsterdam)
+			if err := ssz.DecodeFromBytesOnFork(buf, got, tc.fork); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if !tc.hasBeaconRoot && got.ParentBeaconBlockRoot != nil {
+				t.Errorf("%s: beacon root decoded but fork predates Cancun", tc.name)
+			}
+			if tc.hasBeaconRoot && got.ParentBeaconBlockRoot == nil {
+				t.Errorf("%s: beacon root missing after roundtrip", tc.name)
+			}
+			if !tc.hasRequests && len(got.ExecutionRequests) > 0 {
+				t.Errorf("%s: requests decoded but fork predates Prague", tc.name)
+			}
+		})
+	}
+}
+
+// TestBuiltPayloadPerFork verifies the BuiltPayload wire shape matches the
+// per-fork BuiltPayload catalogue in refactor-ssz.md: {payload, block_value}
+// for Paris/Shanghai, +blobs_bundle(V1)+should_override_builder from Cancun,
+// +execution_requests from Prague, blobs_bundle→V2 from Osaka.
+func TestBuiltPayloadPerFork(t *testing.T) {
+	for _, tc := range allEngineForks {
+		t.Run(tc.name, func(t *testing.T) {
+			bp := &BuiltPayloadAmsterdam{
+				Payload:    minimalPayload(tc.fork),
+				BlockValue: uint256.NewInt(1000),
+			}
+			if tc.hasBundle {
+				bundle := func() ([][48]byte, [][48]byte, []*Blob) {
+					return [][48]byte{{0x01}}, [][48]byte{{0x02}}, []*Blob{{Bytes: make([]byte, BytesPerBlob)}}
+				}
+				c, p, b := bundle()
+				if tc.bundleIsV2 {
+					bp.BlobsBundleV2 = &BlobsBundleV2{Commitments: c, Proofs: p, Blobs: b}
+				} else {
+					bp.BlobsBundleV1 = &BlobsBundleV1{Commitments: c, Proofs: p, Blobs: b}
+				}
+				override := true
+				bp.ShouldOverrideBuilder = &override
+			}
+			if tc.hasRequests {
+				bp.ExecutionRequests = [][]byte{{0xaa}}
+			}
+			encDecOnFork(t, bp, tc.fork, func() *BuiltPayloadAmsterdam { return new(BuiltPayloadAmsterdam) })
+
+			buf := make([]byte, ssz.SizeOnFork(bp, tc.fork))
+			if err := ssz.EncodeToBytesOnFork(buf, bp, tc.fork); err != nil {
+				t.Fatalf("encode: %v", err)
+			}
+			// payload is the first (dynamic) field, so its offset equals the
+			// fixed-part length — the spec's per-fork built-payload size.
+			if off := readOffset(buf); off != tc.builtPayloadFix {
+				t.Errorf("built-payload fixed size = %d, want %d", off, tc.builtPayloadFix)
+			}
+			got := new(BuiltPayloadAmsterdam)
+			if err := ssz.DecodeFromBytesOnFork(buf, got, tc.fork); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			// Exactly the right bundle revision is populated (or neither pre-Cancun).
+			if tc.bundleIsV2 && got.BlobsBundleV1 != nil {
+				t.Errorf("%s: V1 bundle decoded for an Osaka+ fork", tc.name)
+			}
+			if tc.hasBundle && !tc.bundleIsV2 && got.BlobsBundleV2 != nil {
+				t.Errorf("%s: V2 bundle decoded for a pre-Osaka fork", tc.name)
+			}
+			if !tc.hasBundle && (got.BlobsBundleV1 != nil || got.BlobsBundleV2 != nil) {
+				t.Errorf("%s: bundle decoded but fork predates Cancun", tc.name)
+			}
+			if !tc.hasBundle && got.ShouldOverrideBuilder != nil {
+				t.Errorf("%s: should_override_builder decoded but fork predates Cancun", tc.name)
+			}
+			if !tc.hasRequests && len(got.ExecutionRequests) > 0 {
+				t.Errorf("%s: requests decoded but fork predates Prague", tc.name)
+			}
+		})
+	}
+}
+
+// readOffset reads the first 4-byte little-endian SSZ offset from buf. For a
+// container whose first field is dynamic, this offset equals the length of the
+// fixed part (where the variable region begins).
+func readOffset(buf []byte) uint32 {
+	return binary.LittleEndian.Uint32(buf[:4])
 }

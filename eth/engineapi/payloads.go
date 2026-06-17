@@ -50,8 +50,9 @@ func (rt *Router) handleNewPayload(w http.ResponseWriter, r *http.Request, fork 
 		writeProblem(w, http.StatusUnprocessableEntity, ErrInvalidBody, err.Error())
 		return
 	}
-	root := env.ParentBeaconBlockRoot
-	status, err := rt.backend.NewPayload(r.Context(), *data, versionedHashes, &root, env.ExecutionRequests)
+	// ParentBeaconBlockRoot is absent (nil) for Paris/Shanghai and present from
+	// Cancun on; pass it through as-is so the EL sees the correct optionality.
+	status, err := rt.backend.NewPayload(r.Context(), *data, versionedHashes, env.ParentBeaconBlockRoot, env.ExecutionRequests)
 	if err != nil {
 		mapBackendErr(w, err)
 		return

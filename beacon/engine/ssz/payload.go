@@ -36,6 +36,13 @@ var (
 	fromCancun = ssz.ForkFilter{Added: ssz.ForkDencun}
 	// beacon-root attribute, introduced in Cancun (Dencun).
 	// (shares the Cancun boundary but kept named for clarity at call sites)
+	// execution-requests group, introduced in Prague (Pectra).
+	fromPrague = ssz.ForkFilter{Added: ssz.ForkPectra}
+	// single-proof blobs bundle (BlobsBundleV1), active Cancun..Prague; replaced
+	// by the cell-proof BlobsBundleV2 from Osaka on.
+	cancunToOsaka = ssz.ForkFilter{Added: ssz.ForkDencun, Removed: forkOsaka}
+	// cell-proof blobs bundle (BlobsBundleV2), introduced in Osaka.
+	fromOsaka = ssz.ForkFilter{Added: forkOsaka}
 	// bal + slot group, introduced in Amsterdam.
 	fromAmsterdam = ssz.ForkFilter{Added: forkAmsterdam}
 )

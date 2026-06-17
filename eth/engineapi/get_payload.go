@@ -56,42 +56,83 @@ func (rt *Router) handleGetPayload(w http.ResponseWriter, r *http.Request, fork 
 }
 
 // buildBuiltPayloadAmsterdam packages an engine.ExecutionPayloadEnvelope into
-// the SSZ BuiltPayload shape. BlockValue/BlobsBundle/Requests come straight
-// across; the inner payload goes through the SSZ converter.
+// the SSZ BuiltPayload shape for the URL fork. BlockValue/Requests come straight
+// across; the inner payload goes through the SSZ converter. The blobs bundle is
+// emitted as V1 (Cancun/Prague) or V2 (Osaka+) per the fork; pre-Cancun forks
+// carry no bundle (and no should_override_builder), so those fields are left
+// nil and the codec drops them.
 func buildBuiltPayloadAmsterdam(env *engine.ExecutionPayloadEnvelope, sf ssz.Fork) *sszt.BuiltPayloadAmsterdam {
 	out := &sszt.BuiltPayloadAmsterdam{
-		Payload:               sszt.ExecutionPayloadFromEngine(env.ExecutionPayload, sf),
-		BlockValue:            new(uint256.Int),
-		ExecutionRequests:     env.Requests,
-		ShouldOverrideBuilder: env.Override,
+		Payload:    sszt.ExecutionPayloadFromEngine(env.ExecutionPayload, sf),
+		BlockValue: new(uint256.Int),
 	}
 	if env.BlockValue != nil {
 		out.BlockValue.SetFromBig(env.BlockValue)
 	}
-	if env.BlobsBundle != nil {
-		out.BlobsBundle = convertBlobsBundle(env.BlobsBundle)
-	} else {
-		out.BlobsBundle = new(sszt.BlobsBundleV2)
+	// execution_requests and should_override_builder exist from Prague and
+	// Cancun respectively; the codec gates them, so it is safe to always set
+	// the values the EL produced — the gated-off forks simply ignore them.
+	if sszt.AtLeast(sf, forks.Prague) {
+		out.ExecutionRequests = env.Requests
+	}
+	if sszt.AtLeast(sf, forks.Cancun) {
+		override := env.Override
+		out.ShouldOverrideBuilder = &override
+	}
+	// Select the bundle revision. Cancun/Prague use V1 (one proof per blob);
+	// Osaka+ uses V2 (cell proofs). Pre-Cancun forks have no bundle.
+	switch {
+	case sszt.AtLeast(sf, forks.Osaka):
+		if env.BlobsBundle != nil {
+			out.BlobsBundleV2 = convertBlobsBundleV2(env.BlobsBundle)
+		} else {
+			out.BlobsBundleV2 = new(sszt.BlobsBundleV2)
+		}
+	case sszt.AtLeast(sf, forks.Cancun):
+		if env.BlobsBundle != nil {
+			out.BlobsBundleV1 = convertBlobsBundleV1(env.BlobsBundle)
+		} else {
+			out.BlobsBundleV1 = new(sszt.BlobsBundleV1)
+		}
 	}
 	return out
 }
 
-// convertBlobsBundle copies the JSON BlobsBundle into the SSZ V2 layout.
-// Inputs are length-validated by the caller's miner pipeline.
-func convertBlobsBundle(b *engine.BlobsBundle) *sszt.BlobsBundleV2 {
+// convertBlobsBundleV2 copies the JSON BlobsBundle into the SSZ V2 (cell-proof)
+// layout. Inputs are length-validated by the caller's miner pipeline.
+func convertBlobsBundleV2(b *engine.BlobsBundle) *sszt.BlobsBundleV2 {
 	out := &sszt.BlobsBundleV2{
 		Commitments: make([][48]byte, len(b.Commitments)),
 		Proofs:      make([][48]byte, len(b.Proofs)),
 		Blobs:       make([]*sszt.Blob, len(b.Blobs)),
 	}
+	fillBundle(out.Commitments, out.Proofs, out.Blobs, b)
+	return out
+}
+
+// convertBlobsBundleV1 copies the JSON BlobsBundle into the SSZ V1 (single-proof)
+// layout used by Cancun/Prague.
+func convertBlobsBundleV1(b *engine.BlobsBundle) *sszt.BlobsBundleV1 {
+	out := &sszt.BlobsBundleV1{
+		Commitments: make([][48]byte, len(b.Commitments)),
+		Proofs:      make([][48]byte, len(b.Proofs)),
+		Blobs:       make([]*sszt.Blob, len(b.Blobs)),
+	}
+	fillBundle(out.Commitments, out.Proofs, out.Blobs, b)
+	return out
+}
+
+// fillBundle copies the commitments/proofs/blobs from a JSON BlobsBundle into
+// the destination SSZ slices (shared by the V1 and V2 converters, whose wire
+// layout is identical).
+func fillBundle(commitments, proofs [][48]byte, blobs []*sszt.Blob, b *engine.BlobsBundle) {
 	for i, c := range b.Commitments {
-		copy(out.Commitments[i][:], c)
+		copy(commitments[i][:], c)
 	}
 	for i, p := range b.Proofs {
-		copy(out.Proofs[i][:], p)
+		copy(proofs[i][:], p)
 	}
 	for i, blob := range b.Blobs {
-		out.Blobs[i] = &sszt.Blob{Bytes: append([]byte(nil), blob...)}
+		blobs[i] = &sszt.Blob{Bytes: append([]byte(nil), blob...)}
 	}
-	return out
 }

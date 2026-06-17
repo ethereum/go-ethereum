@@ -149,7 +149,7 @@ func TestRouterNewPayload(t *testing.T) {
 			ExcessBlobGas: &excess,
 			SlotNumber:    &slot,
 		},
-		ParentBeaconBlockRoot: common.Hash{0x55},
+		ParentBeaconBlockRoot: &common.Hash{0x55},
 	}
 	resp := sszPost(t, srv, "/amsterdam/payloads", env, amsterdam)
 	if resp.StatusCode != 200 {
@@ -257,7 +257,7 @@ func TestRouterAdvertisedForkRoutable(t *testing.T) {
 			BlobGasUsed:   &blob,
 			ExcessBlobGas: &excess,
 		},
-		ParentBeaconBlockRoot: common.Hash{0x55},
+		ParentBeaconBlockRoot: &common.Hash{0x55},
 	}
 	resp = sszPost(t, srv, "/osaka/payloads", penv, osaka)
 	if resp.StatusCode != 200 {
