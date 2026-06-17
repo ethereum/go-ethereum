@@ -319,6 +319,10 @@ type syncProgressV2 struct {
 	BytecodeBytes  common.StorageSize // Number of bytecode bytes downloaded
 	StorageSynced  uint64             // Number of storage slots downloaded
 	StorageBytes   common.StorageSize // Number of storage trie bytes persisted to disk
+
+	AccessListSynced uint64 `json:"-"` // Block access lists fetched during catch-up
+	AccessListTotal  uint64 `json:"-"` // Total block access lists to fetch for catch-up
+	TrieGenPercent   uint64 `json:"-"` // Trie generation completion, in percent (0..100)
 }
 
 // SyncPeerV2 abstracts out the methods required for a peer to be synced against
@@ -398,6 +402,10 @@ type syncerV2 struct {
 	bytecodeBytes  common.StorageSize // Number of bytecode bytes downloaded
 	storageSynced  uint64             // Number of storage slots downloaded
 	storageBytes   common.StorageSize // Number of storage trie bytes persisted to disk
+
+	accessListSynced uint64        // Block access lists fetched so far during catch-up
+	accessListTotal  uint64        // Block access lists to fetch for the current catch-up
+	genProgress      atomic.Uint64 // The live trie-generation progress
 
 	extProgress *syncProgressV2 // progress that can be exposed to external caller.
 
@@ -629,8 +637,9 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 	if err := batch.Write(); err != nil {
 		return err
 	}
-	if _, err := triedb.GenerateTrie(s.db, s.scheme, root, cancel); err != nil {
-		return err
+	_, genErr := triedb.GenerateTrieWithProgress(s.db, s.scheme, root, cancel, &s.genProgress)
+	if genErr != nil {
+		return genErr
 	}
 	log.Info("Trie generation complete", "root", root)
 
@@ -690,15 +699,9 @@ func (s *syncerV2) downloadState(cancel chan struct{}) error {
 
 		// Update sync progress
 		s.lock.Lock()
-		s.extProgress = &syncProgressV2{
-			AccountSynced:  s.accountSynced,
-			AccountBytes:   s.accountBytes,
-			BytecodeSynced: s.bytecodeSynced,
-			BytecodeBytes:  s.bytecodeBytes,
-			StorageSynced:  s.storageSynced,
-			StorageBytes:   s.storageBytes,
-		}
+		s.refreshProgressLocked()
 		s.lock.Unlock()
+
 		// Wait for something to happen
 		select {
 		case <-s.update:
@@ -774,6 +777,12 @@ func (s *syncerV2) catchUp(target *types.Header, cancel chan struct{}) error {
 	to := target.Number.Uint64()
 	s.lock.RUnlock()
 	log.Info("Starting BAL catch-up", "from", from, "to", to, "blocks", to-from+1)
+
+	s.lock.Lock()
+	s.accessListTotal = to - from + 1
+	s.accessListSynced = 0
+	s.refreshProgressLocked()
+	s.lock.Unlock()
 
 	for start := from; start <= to; start += s.catchUpWindow {
 		select {
@@ -916,6 +925,10 @@ func (s *syncerV2) fetchAccessLists(hashes []common.Hash, headers map[common.Has
 		case res := <-accessListResps:
 			s.processAccessListResponse(res, headers, pending, fetched, refused)
 		}
+		s.lock.Lock()
+		s.accessListSynced += uint64(len(fetched))
+		s.refreshProgressLocked()
+		s.lock.Unlock()
 	}
 	// Assemble results in input order
 	results := make([]rlp.RawValue, len(hashes))
@@ -1099,6 +1112,11 @@ func (s *syncerV2) loadSyncStatus() {
 			s.bytecodeBytes = progress.BytecodeBytes
 			s.storageSynced = progress.StorageSynced
 			s.storageBytes = progress.StorageBytes
+
+			// Seed the externally-exposed snapshot from the restored counters so
+			// eth_syncing reports real stats during catch-up and trie generation
+			// after a resume, instead of the zero-valued initial snapshot.
+			s.refreshProgressLocked()
 			return
 		}
 	}
@@ -1174,6 +1192,9 @@ func (s *syncerV2) resetSyncState() {
 	s.accountSynced, s.accountBytes = 0, 0
 	s.bytecodeSynced, s.bytecodeBytes = 0, 0
 	s.storageSynced, s.storageBytes = 0, 0
+	s.accessListSynced, s.accessListTotal = 0, 0
+	s.genProgress.Store(0)
+	s.refreshProgressLocked()
 
 	var next common.Hash
 	step := new(big.Int).Sub(
@@ -1238,11 +1259,29 @@ func (s *syncerV2) saveSyncStatusWithDB(db ethdb.KeyValueWriter) {
 	rawdb.WriteSnapshotSyncStatus(db, status)
 }
 
+// refreshProgressLocked rebuilds the externally-exposed progress snapshot from
+// the live counters. The caller must hold s.lock.
+func (s *syncerV2) refreshProgressLocked() {
+	s.extProgress = &syncProgressV2{
+		AccountSynced:    s.accountSynced,
+		AccountBytes:     s.accountBytes,
+		BytecodeSynced:   s.bytecodeSynced,
+		BytecodeBytes:    s.bytecodeBytes,
+		StorageSynced:    s.storageSynced,
+		StorageBytes:     s.storageBytes,
+		AccessListSynced: s.accessListSynced,
+		AccessListTotal:  s.accessListTotal,
+	}
+}
+
 // Progress returns the snap sync status statistics.
 func (s *syncerV2) Progress() *syncProgressV2 {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	return s.extProgress
+
+	p := *s.extProgress
+	p.TrieGenPercent = s.genProgress.Load()
+	return &p
 }
 
 // cleanAccountTasks removes account range retrieval tasks that have already been

@@ -41,6 +41,11 @@ type Progress struct {
 	BytecodeHealBytes  common.StorageSize
 	HealingTrienodes   uint64
 	HealingBytecode    uint64
+
+	// snap/2-specific status. Reported by snap/2 only.
+	AccessListSynced uint64 // Block access lists fetched during catch-up
+	AccessListTotal  uint64 // Total block access lists to fetch for catch-up
+	TrieGenPercent   uint64 // Trie generation completion, in percent (0..100)
 }
 
 // Syncer is the uniform view over the snap/1 (*syncer) and snap/2 (*syncerV2)
@@ -139,12 +144,15 @@ type syncerV2Adapter struct{ *syncerV2 }
 func (s syncerV2Adapter) Progress() Progress {
 	progress := s.syncerV2.Progress()
 	return Progress{
-		AccountSynced:  progress.AccountSynced,
-		AccountBytes:   progress.AccountBytes,
-		BytecodeSynced: progress.BytecodeSynced,
-		BytecodeBytes:  progress.BytecodeBytes,
-		StorageSynced:  progress.StorageSynced,
-		StorageBytes:   progress.StorageBytes,
+		AccountSynced:    progress.AccountSynced,
+		AccountBytes:     progress.AccountBytes,
+		BytecodeSynced:   progress.BytecodeSynced,
+		BytecodeBytes:    progress.BytecodeBytes,
+		StorageSynced:    progress.StorageSynced,
+		StorageBytes:     progress.StorageBytes,
+		AccessListSynced: progress.AccessListSynced,
+		AccessListTotal:  progress.AccessListTotal,
+		TrieGenPercent:   progress.TrieGenPercent,
 	}
 }
 

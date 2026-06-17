@@ -21,7 +21,6 @@ import (
 	"context"
 	"math/big"
 	"sort"
-	"sync/atomic"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -674,22 +673,21 @@ func TestGenerateTrieBatchFlush(t *testing.T) {
 			tc.build(db)
 
 			peak := 0
-			var scanned, updated, deleted atomic.Int64
-			var pos atomic.Uint64
+			var c genCounters
 			ranges := hashRanges(numPartitions)
 			if _, err := generatePartition(context.Background(), nil, peakBatchDB{Database: db, peak: &peak},
-				rawdb.HashScheme, 0, ranges[0][0], ranges[0][1], &scanned, &updated, &deleted, &pos); err != nil {
+				rawdb.HashScheme, 0, ranges[0][0], ranges[0][1], &c); err != nil {
 				t.Fatalf("generatePartition: %v", err)
 			}
 
-			if scanned.Load() != tc.wantScanned {
-				t.Errorf("scanned = %d, want %d (an account was skipped?)", scanned.Load(), tc.wantScanned)
+			if c.accounts.Load() != tc.wantScanned {
+				t.Errorf("scanned = %d, want %d (an account was skipped?)", c.accounts.Load(), tc.wantScanned)
 			}
-			if deleted.Load() != tc.wantDeleted {
-				t.Errorf("deleted = %d, want %d", deleted.Load(), tc.wantDeleted)
+			if c.storageDeleted.Load() != tc.wantDeleted {
+				t.Errorf("deleted = %d, want %d", c.storageDeleted.Load(), tc.wantDeleted)
 			}
-			if updated.Load() != 0 {
-				t.Errorf("updated = %d, want 0 (a storage slot was dropped across a flush?)", updated.Load())
+			if c.accountUpdated.Load() != 0 {
+				t.Errorf("updated = %d, want 0 (a storage slot was dropped across a flush?)", c.accountUpdated.Load())
 			}
 			// The batch must have stayed bounded. Without this site's flush its
 			// full write set (far larger than IdealBatchSize) buffers into one batch.
