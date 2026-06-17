@@ -139,7 +139,6 @@ func (s *BALStateTransition) setError(err error) {
 // deletions can only occur if an account which has a balance becomes the target of a CREATE2 initcode
 // which calls SENDALL, clearing the account and marking it for deletion.
 func isAccountDeleted(prestate *types.StateAccount, mutations bal.AccountMutations) bool {
-	// TODO: figure out how to simplify this method
 	if mutations.Code != nil && len(mutations.Code) != 0 {
 		return false
 	}
