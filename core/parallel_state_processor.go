@@ -24,10 +24,8 @@ type ProcessResultWithMetrics struct {
 	ExecTime               time.Duration
 	PostProcessTime        time.Duration
 
-	// Preimages holds the SHA3 preimages seen by the VM across the whole block
-	// (the pre/post-transaction system executions and every transaction). They
-	// are gathered here so the caller can install them into the state
-	// transition without the execution helpers needing a reference to it.
+	// Preimages holds the SHA3 preimages recorded during the execution of
+	// the block.
 	Preimages map[common.Hash][]byte
 }
 
@@ -119,12 +117,8 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStar
 
 	p.chain.Engine().Finalize(p.chain, block.Header(), evm.StateDB, block.Body(), uint32(lastBALIdx), postBAL)
 
-	// Gather the SHA3 preimages seen across the block. postTxState is a copy of
-	// the block statedb taken after pre-transaction processing, so its set
-	// already covers both the pre-tx system execution and the post-tx execution
-	// (PostExecution + Finalize) performed above; the per-transaction sets are
-	// carried on each result. The merged set is returned to the caller, which
-	// owns the state transition and installs them there.
+	// Gather preimages from block execution.  postTxState contains
+	// preimages from pre/post tx system contract execution.
 	preimages := make(map[common.Hash][]byte)
 	for hash, preimage := range postTxState.Preimages() {
 		preimages[hash] = preimage
@@ -177,8 +171,7 @@ type txExecResult struct {
 
 	blockAccessList *bal.ConstructionBlockAccessList
 
-	// preimages holds the SHA3 preimages recorded while executing this
-	// transaction against its own statedb copy.
+	// holds preimages recorded during execution of the tx
 	preimages map[common.Hash][]byte
 }
 
@@ -288,6 +281,7 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 		execGas:         receipt.GasUsed,
 		txRegular:       gp.cumulativeRegular,
 		txState:         gp.cumulativeState,
+		preimages:       db.Preimages(),
 		blockAccessList: txBAL,
 	}
 }
@@ -334,9 +328,6 @@ func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *st
 		workers.Go(func() error {
 			prestate = prestate.WithReader(state.NewReaderWithAccessList(statedb.Reader(), prepared, balIdx))
 			res := p.execTx(block, tx, balIdx, prestate, signer)
-			// Carry this transaction's preimages on the result; they're merged
-			// into the block-level set in prepareExecResult.
-			res.preimages = prestate.Preimages()
 			txResCh <- *res
 			return nil
 		})
@@ -348,10 +339,8 @@ func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *st
 	if res.ProcessResult.Error != nil {
 		return nil, res.ProcessResult.Error
 	}
-	// Install the block's preimages into the state transition so they're
-	// persisted when the block is committed. Process is the sole owner of the
-	// state transition, keeping the execution helpers free of it.
-	stateTransition.AddPreimages(res.Preimages)
+
+	stateTransition.SetPreimages(res.Preimages)
 	// TODO: remove preprocess metric ?
 	res.PreProcessTime = tPreprocess
 	return res, nil
