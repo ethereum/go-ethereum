@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
@@ -22,6 +23,12 @@ type ProcessResultWithMetrics struct {
 	StateTransitionMetrics *state.BALStateTransitionMetrics
 	ExecTime               time.Duration
 	PostProcessTime        time.Duration
+
+	// Preimages holds the SHA3 preimages seen by the VM across the whole block
+	// (the pre/post-transaction system executions and every transaction). They
+	// are gathered here so the caller can install them into the state
+	// transition without the execution helpers needing a reference to it.
+	Preimages map[common.Hash][]byte
 }
 
 // errResult wraps an error into a new ProcessResultWithMetrics instance
@@ -112,6 +119,24 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStar
 
 	p.chain.Engine().Finalize(p.chain, block.Header(), evm.StateDB, block.Body(), uint32(lastBALIdx), postBAL)
 
+	// Gather the SHA3 preimages seen across the block. postTxState is a copy of
+	// the block statedb taken after pre-transaction processing, so its set
+	// already covers both the pre-tx system execution and the post-tx execution
+	// (PostExecution + Finalize) performed above; the per-transaction sets are
+	// carried on each result. The merged set is returned to the caller, which
+	// owns the state transition and installs them there.
+	preimages := make(map[common.Hash][]byte)
+	for hash, preimage := range postTxState.Preimages() {
+		preimages[hash] = preimage
+	}
+	for i := range results {
+		for hash, preimage := range results[i].preimages {
+			if _, ok := preimages[hash]; !ok {
+				preimages[hash] = preimage
+			}
+		}
+	}
+
 	blockAccessList := bal.NewConstructionBlockAccessList()
 	blockAccessList.Merge(preTxBAL)
 	blockAccessList.Merge(postBAL)
@@ -137,6 +162,7 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStar
 		},
 		PostProcessTime: tPostprocess,
 		ExecTime:        tExec,
+		Preimages:       preimages,
 	}
 }
 
@@ -150,6 +176,10 @@ type txExecResult struct {
 	txState   uint64
 
 	blockAccessList *bal.ConstructionBlockAccessList
+
+	// preimages holds the SHA3 preimages recorded while executing this
+	// transaction against its own statedb copy.
+	preimages map[common.Hash][]byte
 }
 
 // resultHandler polls until all transactions have finished executing and the
@@ -303,7 +333,11 @@ func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *st
 		prestate := startingState.Copy()
 		workers.Go(func() error {
 			prestate = prestate.WithReader(state.NewReaderWithAccessList(statedb.Reader(), prepared, balIdx))
-			txResCh <- *p.execTx(block, tx, balIdx, prestate, signer)
+			res := p.execTx(block, tx, balIdx, prestate, signer)
+			// Carry this transaction's preimages on the result; they're merged
+			// into the block-level set in prepareExecResult.
+			res.preimages = prestate.Preimages()
+			txResCh <- *res
 			return nil
 		})
 	}
@@ -314,6 +348,10 @@ func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *st
 	if res.ProcessResult.Error != nil {
 		return nil, res.ProcessResult.Error
 	}
+	// Install the block's preimages into the state transition so they're
+	// persisted when the block is committed. Process is the sole owner of the
+	// state transition, keeping the execution helpers free of it.
+	stateTransition.AddPreimages(res.Preimages)
 	// TODO: remove preprocess metric ?
 	res.PreProcessTime = tPreprocess
 	return res, nil
