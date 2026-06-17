@@ -56,7 +56,7 @@ type Database interface {
 
 	// ReaderWithPrefetch returns a reader which asynchronously fetches block
 	// access list state in the background.
-	ReaderWithPrefetch(stateRoot common.Hash, accessList map[common.Address][]common.Hash, threads int, block bool) (Reader, error)
+	ReaderWithPrefetch(stateRoot common.Hash, accessList map[common.Address][]common.Hash) (Reader, error)
 
 	// Iteratee returns a state iteratee associated with the specified state root,
 	// through which the account iterator and storage iterator can be created.

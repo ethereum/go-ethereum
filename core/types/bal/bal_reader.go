@@ -153,14 +153,11 @@ type StorageKeys map[common.Address][]common.Hash
 
 // StorageKeys returns the set of accounts and storage keys mutated in the access
 // list. If reads is set, the un-mutated accounts/keys are included in the result.
-func (p *AccessListReader) StorageKeys(reads bool) (keys StorageKeys) {
+func (p *AccessListReader) StorageKeys() (keys StorageKeys) {
 	keys = make(StorageKeys)
 	for addr, a := range p.accounts {
 		for _, storageChange := range a.StorageChanges {
 			keys[addr] = append(keys[addr], storageChange.Slot.Bytes32())
-		}
-		if !(reads && len(a.StorageReads) > 0) {
-			continue
 		}
 		for _, storageRead := range a.StorageReads {
 			keys[addr] = append(keys[addr], storageRead.Bytes32())

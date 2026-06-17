@@ -291,10 +291,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	options.Overrides = &overrides
 
-	options.BALExecutionMode = config.BALExecutionMode
-	options.BlockingPrefetch = config.BlockingPrefetch
-	options.PrefetchWorkers = int(config.PrefetchWorkers)
-
 	eth.blockchain, err = core.NewBlockChain(chainDb, config.Genesis, eth.engine, options)
 	if err != nil {
 		return nil, err

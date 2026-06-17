@@ -96,7 +96,7 @@ func (db *UBTDatabase) Reader(stateRoot common.Hash) (Reader, error) {
 	return newReader(db.codedb.Reader(), sr), nil
 }
 
-func (db *UBTDatabase) ReaderWithPrefetch(stateRoot common.Hash, accessList map[common.Address][]common.Hash, threads int, block bool) (Reader, error) {
+func (db *UBTDatabase) ReaderWithPrefetch(stateRoot common.Hash, accessList map[common.Address][]common.Hash) (Reader, error) {
 	panic("not implemented")
 }
 
