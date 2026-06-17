@@ -261,6 +261,12 @@ func New(stateDb ethdb.Database, mode ethconfig.SyncMode, chain BlockChain, drop
 	return dl
 }
 
+// SetSkipReceipts skips the historical receipt backfill during snap sync,
+// reconstructing state only. Must be set before synchronisation starts.
+func (d *Downloader) SetSkipReceipts(v bool) {
+	d.queue.skipReceipts = v
+}
+
 // Progress retrieves the synchronisation boundaries, specifically the origin
 // block where synchronisation started at (may have failed/suspended); the block
 // or header sync is currently at; and the latest known block which the sync targets.
