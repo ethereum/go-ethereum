@@ -1271,7 +1271,6 @@ func (s *syncerV2) refreshProgressLocked() {
 		StorageBytes:     s.storageBytes,
 		AccessListSynced: s.accessListSynced,
 		AccessListTotal:  s.accessListTotal,
-		TrieGenPercent:   s.genProgress.Load(),
 	}
 }
 
@@ -1280,7 +1279,9 @@ func (s *syncerV2) Progress() *syncProgressV2 {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	return s.extProgress
+	p := *s.extProgress
+	p.TrieGenPercent = s.genProgress.Load()
+	return &p
 }
 
 // cleanAccountTasks removes account range retrieval tasks that have already been
