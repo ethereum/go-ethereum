@@ -583,10 +583,19 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 
 	log.Debug("Starting snapshot sync cycle", "root", root)
 
-	// If we resumed against a different pivot, decide whether the persisted
-	// progress is still usable. If yes, roll forward via BAL catch-up. If not,
-	// wipe everything and restart fresh.
-	if isPivotChanged {
+	if !isPivotChanged {
+		if prevPivot != nil {
+			// Resumed against the same pivot. An unclean shutdown may have left
+			// flushed snapshot data the journal doesn't cover.
+			if err := s.pruneStaleState(); err != nil {
+				log.Warn("Persisted progress unusable, restarting snap sync from scratch", "err", err)
+				s.resetSyncState()
+			}
+		}
+	} else {
+		// If we resumed against a different pivot, decide whether the persisted
+		// progress is still usable. If yes, roll forward via BAL catch-up. If not,
+		// wipe everything and restart fresh.
 		switch {
 		case isPivotReorged(s.db, prevPivot, target):
 			log.Warn("Restarting snap sync from scratch", "oldnumber", prevPivot.Number, "oldHash", prevPivot.Hash())
@@ -599,6 +608,13 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 			log.Warn("Catch-up gap exceeds BAL retention, restarting snap sync from scratch", "oldnumber", prevPivot.Number, "newnumber", target.Number, "gap", new(big.Int).Sub(target.Number, prevPivot.Number), "limit", maxCatchUpBlocks)
 			s.resetSyncState()
 		default:
+			// An unclean shutdown may have left flushed snapshot data the journal
+			// doesn't cover.
+			if err := s.pruneStaleState(); err != nil {
+				log.Warn("Persisted progress unusable, restarting snap sync from scratch", "err", err)
+				s.resetSyncState()
+				break
+			}
 			// A canonical pivot move past a frozen pivot should be impossible:
 			// the downloader both refuses moves (FrozenPivot) and resumes new
 			// cycles against the frozen header itself. Reaching this branch
@@ -683,6 +699,7 @@ func (s *syncerV2) downloadState(cancel chan struct{}) error {
 		accountResps     = make(chan *accountResponseV2)
 		storageResps     = make(chan *storageResponseV2)
 		bytecodeResps    = make(chan *bytecodeResponseV2)
+		lastJournal      = time.Now()
 	)
 	for {
 		// Remove all completed tasks and terminate if everything's done
@@ -691,7 +708,15 @@ func (s *syncerV2) downloadState(cancel chan struct{}) error {
 		if len(s.tasks) == 0 {
 			return nil
 		}
-
+		// Periodically persist the progress journal. The flat state batches
+		// are flushed continuously, while the journal otherwise only hits
+		// disk on graceful teardown; everything written beyond the journaled
+		// markers is sacrificed on an unclean shutdown, so the save interval
+		// bounds the loss.
+		if time.Since(lastJournal) > time.Minute {
+			lastJournal = time.Now()
+			s.saveSyncStatus()
+		}
 		// Assign all the data retrieval tasks to any free peers
 		s.assignAccountTasks(accountResps, accountReqFails, cancel)
 		s.assignBytecodeTasks(bytecodeResps, bytecodeReqFails, cancel)
@@ -1136,13 +1161,20 @@ func increaseKey(key []byte) []byte {
 	return nil
 }
 
-// DeleteHistoryByRange completely removes all database entries with the specific
-// prefix. Note, this method assumes the space with the given prefix is exclusively
-// occupied!
+// deleteRange completely removes all database entries with the specific
+// prefix. Note, this method assumes the space with the given prefix is
+// exclusively occupied!
 func deleteRange(batch ethdb.Batch, prefix []byte) {
-	start := prefix
-	limit := increaseKey(bytes.Clone(prefix))
+	deleteKeyRange(batch, prefix, increaseKey(bytes.Clone(prefix)))
+}
 
+// deleteKeyRange removes all database entries within the key range [start,
+// limit). Note, this method assumes the range is exclusively occupied by
+// sync data!
+func deleteKeyRange(batch ethdb.Batch, start, limit []byte) {
+	if limit != nil && bytes.Compare(start, limit) >= 0 {
+		return
+	}
 	// Try to remove the data in the range by a loop, as the leveldb
 	// doesn't support the native range deletion.
 	for {
@@ -1154,7 +1186,9 @@ func deleteRange(batch ethdb.Batch, prefix []byte) {
 		// therefore inconsistent. This is a tradeoff of the current LevelDB-based
 		// approach.
 		if errors.Is(err, ethdb.ErrTooManyKeys) {
-			batch.Write()
+			if err := batch.Write(); err != nil {
+				log.Crit("Failed to flush state deletions", "err", err)
+			}
 			batch.Reset()
 			continue
 		}
@@ -1170,6 +1204,72 @@ func (s *syncerV2) resetTrienodes(batch ethdb.Batch) {
 		deleteRange(batch, rawdb.TrieNodeAccountPrefix)
 		deleteRange(batch, rawdb.TrieNodeStoragePrefix)
 	}
+}
+
+// pruneStaleState removes any flat state the persisted journal does not cover.
+func (s *syncerV2) pruneStaleState() error {
+	var (
+		batch      = s.db.NewBatch()
+		accountKey = func(h common.Hash) []byte {
+			return append(bytes.Clone(rawdb.SnapshotAccountPrefix), h.Bytes()...)
+		}
+		storageKey = func(hashes ...common.Hash) []byte {
+			key := bytes.Clone(rawdb.SnapshotStoragePrefix)
+			for _, h := range hashes {
+				key = append(key, h.Bytes()...)
+			}
+			return key
+		}
+	)
+	keyRangeLimit := func(base []byte, last common.Hash) []byte {
+		if last != common.MaxHash {
+			return append(base, incHash(last).Bytes()...)
+		}
+		return increaseKey(base)
+	}
+	for _, task := range s.tasks {
+		deleteKeyRange(batch, accountKey(task.Next), keyRangeLimit(bytes.Clone(rawdb.SnapshotAccountPrefix), task.Last))
+
+		protected := make([]common.Hash, 0, len(task.stateCompleted)+len(task.SubTasks))
+		for hash := range task.stateCompleted {
+			if bytes.Compare(hash[:], task.Next[:]) < 0 {
+				return errors.New("unexpected storage marker before the range")
+			}
+			if bytes.Compare(hash[:], task.Last[:]) > 0 {
+				return errors.New("unexpected storage marker after the range")
+			}
+			protected = append(protected, hash)
+		}
+		for hash := range task.SubTasks {
+			if _, ok := task.stateCompleted[hash]; ok {
+				return errors.New("unexpected duplicated storage marker")
+			}
+			if bytes.Compare(hash[:], task.Next[:]) < 0 {
+				return errors.New("unexpected storage marker before the range")
+			}
+			if bytes.Compare(hash[:], task.Last[:]) > 0 {
+				return errors.New("unexpected storage marker after the range")
+			}
+			protected = append(protected, hash)
+		}
+		sort.Slice(protected, func(i, j int) bool {
+			return bytes.Compare(protected[i][:], protected[j][:]) < 0
+		})
+
+		start := storageKey(task.Next)
+		for _, hash := range protected {
+			deleteKeyRange(batch, start, storageKey(hash))
+			start = increaseKey(storageKey(hash))
+		}
+		deleteKeyRange(batch, start, keyRangeLimit(bytes.Clone(rawdb.SnapshotStoragePrefix), task.Last))
+
+		for account, subtasks := range task.SubTasks {
+			for _, sub := range subtasks {
+				deleteKeyRange(batch, storageKey(account, sub.Next), keyRangeLimit(storageKey(account), sub.Last))
+			}
+		}
+	}
+	return batch.Write()
 }
 
 // resetSyncState wipes all persisted snap-sync data (sync status, account
