@@ -379,16 +379,6 @@ func (s *BALStateTransition) CommitWithUpdate(block uint64, deleteEmptyObjects b
 	if err := s.db.Commit(update); err != nil {
 		return common.Hash{}, nil, err
 	}
-	// TODO: fix the following metrics:
-	/*
-		snapshotCommits, trieDBCommits, err := flushStateUpdate(s.db, block, ret)
-		if err != nil {
-			return common.Hash{}, nil, err
-		}
-
-		s.metrics.SnapshotCommits, s.metrics.TrieDBCommits = snapshotCommits, trieDBCommits
-		s.metrics.TotalCommitTime = time.Since(commitStart)
-	*/
 	return root, update, nil
 }
 
