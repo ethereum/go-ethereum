@@ -1131,12 +1131,6 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 	}
 )
 
-const (
-	BalExecutionModeOptimized  = "full"
-	BalExecutionModeNoBatchIO  = "nobatchio"
-	BalExecutionModeSequential = "sequential"
-)
-
 var (
 	// TestnetFlags is the flag group of all built-in supported testnets.
 	TestnetFlags = []cli.Flag{
