@@ -160,9 +160,6 @@ var (
 
 	// This is where the tests should be unpacked.
 	executionSpecTestsDir = "tests/spec-tests"
-
-	// This is where the bal-specific release of the tests should be unpacked.
-	executionSpecTestsBALDir = "tests/spec-tests-bal"
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -401,7 +398,6 @@ func doTest(cmdline []string) {
 	// Get test fixtures.
 	if !*short {
 		downloadSpecTestFixtures(csdb, *cachedir)
-		downloadBALSpecTestFixtures(csdb, *cachedir)
 	}
 
 	// Configure the toolchain.
@@ -462,20 +458,6 @@ func downloadSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string
 		log.Fatal(err)
 	}
 	if err := build.ExtractArchive(archivePath, executionSpecTestsDir); err != nil {
-		log.Fatal(err)
-	}
-	return filepath.Join(cachedir, base)
-}
-
-// downloadBALSpecTestFixtures downloads and extracts the bal-specific execution-spec-tests fixtures.
-func downloadBALSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string {
-	ext := ".tar.gz"
-	base := "fixtures_bal"
-	archivePath := filepath.Join(cachedir, base+ext)
-	if err := csdb.DownloadFileFromKnownURL(archivePath); err != nil {
-		log.Fatal(err)
-	}
-	if err := build.ExtractArchive(archivePath, executionSpecTestsBALDir); err != nil {
 		log.Fatal(err)
 	}
 	return filepath.Join(cachedir, base)
