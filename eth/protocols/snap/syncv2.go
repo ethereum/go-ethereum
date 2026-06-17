@@ -530,18 +530,6 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 	// status, sync is either fresh or already complete.
 	s.loadSyncStatus()
 
-	// On a resumed sync, wipe any flat state beyond the journaled progress
-	// markers. An unclean shutdown may have left flushed snapshot data that
-	// the journal doesn't cover; neither the re-download nor the BAL catch-up
-	// would ever clean those keys up. This must happen before the catch-up,
-	// whose deletions are gated on the journaled markers.
-	if s.pivot != nil {
-		if err := s.pruneStaleState(); err != nil {
-			log.Warn("Persisted progress unusable, restarting snap sync from scratch", "err", err)
-			s.resetSyncState()
-		}
-	}
-
 	// isPivotChanged is true when we have prior progress against a different
 	// pivot. That means we need to roll forward via catchUp, or wipe and
 	// restart if the prior pivot was reorged out.
@@ -587,10 +575,19 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 
 	log.Debug("Starting snapshot sync cycle", "root", root)
 
-	// If we resumed against a different pivot, decide whether the persisted
-	// progress is still usable. If yes, roll forward via BAL catch-up. If not,
-	// wipe everything and restart fresh.
-	if isPivotChanged {
+	if !isPivotChanged {
+		if prevPivot != nil {
+			// Resumed against the same pivot. An unclean shutdown may have left
+			// flushed snapshot data the journal doesn't cover.
+			if err := s.pruneStaleState(); err != nil {
+				log.Warn("Persisted progress unusable, restarting snap sync from scratch", "err", err)
+				s.resetSyncState()
+			}
+		}
+	} else {
+		// If we resumed against a different pivot, decide whether the persisted
+		// progress is still usable. If yes, roll forward via BAL catch-up. If not,
+		// wipe everything and restart fresh.
 		switch {
 		case isPivotReorged(s.db, prevPivot, target):
 			log.Warn("Restarting snap sync from scratch", "oldnumber", prevPivot.Number, "oldHash", prevPivot.Hash())
@@ -603,6 +600,13 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 			log.Warn("Catch-up gap exceeds BAL retention, restarting snap sync from scratch", "oldnumber", prevPivot.Number, "newnumber", target.Number, "gap", new(big.Int).Sub(target.Number, prevPivot.Number), "limit", maxCatchUpBlocks)
 			s.resetSyncState()
 		default:
+			// An unclean shutdown may have left flushed snapshot data the journal
+			// doesn't cover.
+			if err := s.pruneStaleState(); err != nil {
+				log.Warn("Persisted progress unusable, restarting snap sync from scratch", "err", err)
+				s.resetSyncState()
+				break
+			}
 			// A canonical pivot move past a frozen pivot should be impossible:
 			// the downloader both refuses moves (FrozenPivot) and resumes new
 			// cycles against the frozen header itself. Reaching this branch
