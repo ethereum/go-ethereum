@@ -49,8 +49,7 @@ type BALStateTransition struct {
 
 	// preimages holds the SHA3 preimages seen by the VM across the whole block:
 	// the pre/post-transaction system executions and every individual
-	// transaction execution. It is populated once via AddPreimages after the
-	// parallel execution has been collected.
+	// transaction execution. It is populated once via SetPreimages.
 	preimages map[common.Hash][]byte
 
 	metrics   BALStateTransitionMetrics
@@ -540,23 +539,13 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 	return s.rootHash
 }
 
-// AddPreimages merges a set of SHA3 preimages into the block-level preimage
-// set, leaving any hash already present untouched (mirroring the
-// first-write-wins behaviour of StateDB.AddPreimage). The parallel processor
-// collects the preimages from the per-transaction and pre/post-transaction
-// executions and installs them here once execution has completed.
-func (s *BALStateTransition) AddPreimages(preimages map[common.Hash][]byte) {
-	for hash, preimage := range preimages {
-		if _, ok := s.preimages[hash]; !ok {
-			s.preimages[hash] = preimage
-		}
-	}
+// SetPreimages sets the preimages.
+func (s *BALStateTransition) SetPreimages(preimages map[common.Hash][]byte) {
+	s.preimages = preimages
 }
 
 // Preimages returns the SHA3 preimages seen by the VM over the course of the
-// block. Unlike the sequential processor, which reads them from a single
-// statedb, the BAL processor executes the block across several statedbs and
-// installs the combined set via AddPreimages.
+// block.
 func (s *BALStateTransition) Preimages() map[common.Hash][]byte {
 	return s.preimages
 }
