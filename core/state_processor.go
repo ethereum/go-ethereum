@@ -97,15 +97,31 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
+		statedb.SetTxContext(tx.Hash(), i, uint32(i+1))
+
+		// Fast path: a bare 21000-gas value transfer to a code-less account has
+		// a fully deterministic outcome and can be applied without converting the
+		// transaction to a Message or spinning up the state-transition machinery.
+		if receipt, bal, ok := tryFastTransfer(tx, signer, gp, statedb, config, blockNumber, blockHash, context, header.BaseFee); ok {
+			receipts = append(receipts, receipt)
+			allLogs = append(allLogs, receipt.Logs...)
+			blockAccessList.Merge(bal)
+			continue
+		}
+
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 		if err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
-		statedb.SetTxContext(tx.Hash(), i, uint32(i+1))
-		_, _, spanEnd := telemetry.StartSpan(ctx, "core.ApplyTransactionWithEVM",
-			telemetry.StringAttribute("tx.hash", tx.Hash().Hex()),
-			telemetry.IntAttribute("tx.index", i),
-		)
+		// Only build the per-tx span (and its attributes, which allocate) when
+		// tracing is actually active; in the common case it is not.
+		spanEnd := func(*error) {}
+		if telemetry.IsRecording(ctx) {
+			_, _, spanEnd = telemetry.StartSpan(ctx, "core.ApplyTransactionWithEVM",
+				telemetry.StringAttribute("tx.hash", tx.Hash().Hex()),
+				telemetry.IntAttribute("tx.index", i),
+			)
+		}
 		receipt, bal, err := ApplyTransactionWithEVM(msg, gp, statedb, blockNumber, blockHash, context.Time, tx, evm)
 		if err != nil {
 			spanEnd(&err)
@@ -218,6 +234,141 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 		statedb.AccessEvents().Merge(evm.AccessEvents)
 	}
 	return MakeReceipt(evm, result, statedb, blockNumber, blockHash, blockTime, tx, gp.CumulativeUsed(), root), bal, nil
+}
+
+// tryFastTransfer handles the common case of a simple value transfer between
+// externally-owned accounts without converting the transaction to a Message or
+// invoking the EVM. It returns ok=false (and the caller falls back to the full
+// state transition) unless every condition below holds, in which case the
+// outcome is provably identical to running the message through
+// stateTransition.execute:
+//
+//   - the tx is a plain transfer: legacy/dynamic-fee/access-list type, non-nil
+//     recipient, no calldata, no access list (so intrinsic gas == 21000);
+//   - the gas limit equals the intrinsic transfer cost (21000), so no gas is
+//     forwarded to a frame, no refund can arise and the EIP-7623 floor is moot;
+//   - the chain is pre-Amsterdam / non-Verkle and no tracer is attached, so
+//     there are no EVM hooks, transfer/burn logs, 2D gas accounting or
+//     witness-building side effects to reproduce;
+//   - the sender passes the standard pre-checks (nonce, EOA, fee cap) and can
+//     afford gas + value;
+//   - the recipient already exists and carries no code (no contract, no
+//     delegation), so no account-creation charge and no code execution occur.
+//
+// The fast path is checked before TransactionToMessage so that the (allocating)
+// big.Int -> uint256 conversion of the fee fields is avoided entirely.
+func tryFastTransfer(tx *types.Transaction, signer types.Signer, gp *GasPool, statedb *state.StateDB, config *params.ChainConfig, blockNumber *big.Int, blockHash common.Hash, blockCtx vm.BlockContext, baseFee *big.Int) (*types.Receipt, *bal.ConstructionBlockAccessList, bool) {
+	// Cheap, allocation-free shape checks first. Only plain transfer-shaped
+	// transactions with the exact intrinsic gas limit qualify.
+	switch tx.Type() {
+	case types.LegacyTxType, types.AccessListTxType, types.DynamicFeeTxType:
+	default:
+		return nil, nil, false
+	}
+	to := tx.To()
+	if to == nil || tx.Gas() != params.TxGas || len(tx.Data()) != 0 || len(tx.AccessList()) != 0 {
+		return nil, nil, false
+	}
+	// The fast path only mirrors the simple pre-Amsterdam, non-Verkle accounting
+	// and produces no tracer events. Byzantium is required so the receipt carries
+	// a status flag rather than an intermediate state root.
+	rules := config.Rules(blockNumber, blockCtx.Random != nil, blockCtx.Time)
+	if rules.IsAmsterdam || rules.IsEIP4762 || !rules.IsByzantium {
+		return nil, nil, false
+	}
+
+	// Recover the sender (cached on the tx, and required by the full path too).
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return nil, nil, false
+	}
+	// Nonce must match exactly; mismatches fall through to surface the error.
+	if statedb.GetNonce(from) != tx.Nonce() {
+		return nil, nil, false
+	}
+	// Sender must be a plain EOA, recipient must already exist with no code.
+	if statedb.GetCodeSize(from) != 0 {
+		return nil, nil, false
+	}
+	if statedb.GetCodeSize(*to) != 0 || !statedb.Exist(*to) {
+		return nil, nil, false
+	}
+
+	// Compute the effective gas price and effective tip, mirroring
+	// TransactionToMessage and stateTransition.execute. Pre-London the effective
+	// price is simply the gas price. Under London it is min(feeCap, baseFee+tip),
+	// the feeCap must be >= the tip and >= the base fee, and the tip paid to the
+	// coinbase is effectivePrice - baseFee.
+	feeCap, o1 := uint256.FromBig(tx.GasFeeCap())
+	tipCap, o2 := uint256.FromBig(tx.GasTipCap())
+	if o1 || o2 {
+		return nil, nil, false
+	}
+	gasPrice := feeCap
+	effectiveTip := feeCap
+	if rules.IsLondon {
+		base, o3 := uint256.FromBig(baseFee)
+		if o3 || feeCap.Lt(tipCap) || feeCap.Lt(base) {
+			return nil, nil, false
+		}
+		gasPrice = new(uint256.Int).Add(base, tipCap)
+		if gasPrice.Gt(feeCap) {
+			gasPrice = feeCap
+		}
+		effectiveTip = new(uint256.Int).Sub(gasPrice, base)
+	}
+
+	value, overflow := uint256.FromBig(tx.Value())
+	if overflow {
+		return nil, nil, false
+	}
+	// Cost = gas*price + value; the sender must cover all of it.
+	gasCost := new(uint256.Int).SetUint64(params.TxGas)
+	if _, o := gasCost.MulOverflow(gasCost, gasPrice); o {
+		return nil, nil, false
+	}
+	total := new(uint256.Int)
+	if _, o := total.AddOverflow(gasCost, value); o {
+		return nil, nil, false
+	}
+	if statedb.GetBalance(from).Cmp(total) < 0 {
+		return nil, nil, false
+	}
+	// Reserve gas in the block pool; if the block is full, defer to the full path
+	// so it reports ErrGasLimitReached identically.
+	if err := gp.CheckGasLegacy(params.TxGas); err != nil {
+		return nil, nil, false
+	}
+
+	// --- apply (all checks passed; outcome is deterministic) ---
+	statedb.SetNonce(from, tx.Nonce()+1, tracing.NonceChangeEoACall)
+	statedb.SubBalance(from, gasCost, tracing.BalanceDecreaseGasBuy)
+	if !value.IsZero() {
+		statedb.SubBalance(from, value, tracing.BalanceChangeTransfer)
+		statedb.AddBalance(*to, value, tracing.BalanceChangeTransfer)
+	}
+	// Pay the effective tip (gasPrice - baseFee under London) to the coinbase.
+	fee := new(uint256.Int).Mul(uint256.NewInt(params.TxGas), effectiveTip)
+	statedb.AddBalance(blockCtx.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
+
+	// Charge the block gas pool (no refund, gas used == intrinsic).
+	if err := gp.ChargeGasLegacy(0, params.TxGas); err != nil {
+		return nil, nil, false // should be unreachable; fall back to be safe
+	}
+	balList := statedb.Finalise(true)
+
+	receipt := &types.Receipt{
+		Type:              tx.Type(),
+		Status:            types.ReceiptStatusSuccessful,
+		CumulativeGasUsed: gp.CumulativeUsed(),
+		GasUsed:           params.TxGas,
+		TxHash:            tx.Hash(),
+		BlockHash:         blockHash,
+		BlockNumber:       blockNumber,
+		TransactionIndex:  uint(statedb.TxIndex()),
+	}
+	receipt.Bloom = types.CreateBloom(receipt)
+	return receipt, balList, true
 }
 
 // MakeReceipt generates the receipt object for a transaction given its execution result.

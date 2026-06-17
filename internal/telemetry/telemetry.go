@@ -50,6 +50,13 @@ func BoolAttribute(key string, val bool) Attribute {
 	return attribute.Bool(key, val)
 }
 
+// IsRecording reports whether the context carries a valid parent span, i.e.
+// whether a span started now would actually be exported. Hot paths can use this
+// to avoid building span attributes (which may allocate) when tracing is off.
+func IsRecording(ctx context.Context) bool {
+	return trace.SpanFromContext(ctx).SpanContext().IsValid()
+}
+
 // StartSpan creates a SpanKind=INTERNAL span.
 func StartSpan(ctx context.Context, spanName string, attributes ...Attribute) (context.Context, trace.Span, func(*error)) {
 	return StartSpanWithTracer(ctx, otel.Tracer(""), spanName, attributes...)
