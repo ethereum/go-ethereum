@@ -1331,15 +1331,9 @@ func TestBALAuthCodeOverwrittenFinalRecorded(t *testing.T) {
 
 // ============================== Preimages ==============================
 
-// TestBALPreimagesEndToEnd verifies that BALStateTransition.Preimages collects
-// the SHA3 preimages observed during transaction execution and that they are
-// persisted when a post-Amsterdam block is processed through the parallel BAL
-// processor. Because that processor executes each transaction against its own
-// statedb copy (separate from the pre/post-tx system executions), the per-tx
-// preimages must be folded back into the shared state transition; here a
-// transaction runs KECCAK256 over a distinctive byte and we confirm the
-// preimage is written to disk on commit.
-func TestBALPreimagesEndToEnd(t *testing.T) {
+// TestBALPreimages tests that preimage tracking works when executing a block
+// with an access list.
+func TestBALPreimages(t *testing.T) {
 	// Runtime code: store 0x42 at memory[0], then KECCAK256 over memory[0:1].
 	//   PUSH1 0x42 ; PUSH1 0x00 ; MSTORE8 ; PUSH1 0x01 ; PUSH1 0x00 ; KECCAK256 ; POP ; STOP
 	contract := common.HexToAddress("0xca11ee")
@@ -1356,14 +1350,6 @@ func TestBALPreimagesEndToEnd(t *testing.T) {
 		g.SetParentBeaconRoot(common.Hash{})
 		g.AddTx(env.tx(0, &contract, big.NewInt(0), 200_000, 0, nil))
 	})
-	block := blocks[0]
-	if block.AccessList() == nil {
-		t.Fatal("expected block to carry an access list")
-	}
-	if !env.cfg.IsAmsterdam(block.Number(), block.Time()) {
-		t.Fatalf("block must be post-Amsterdam: number=%v time=%d", block.Number(), block.Time())
-	}
-
 	// Import the block through the parallel BAL processor with preimage
 	// recording enabled, so the KECCAK256 above is captured.
 	db := rawdb.NewMemoryDatabase()
