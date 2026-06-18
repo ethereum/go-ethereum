@@ -228,22 +228,17 @@ func encodeForNetwork(storedRLP []byte) ([]byte, error) {
 
 	// 2. Find the version of sidecar.
 	version, _, err := rlp.SplitUint64(elems[1])
-	if err != nil || version > 255 {
+	if err != nil || version > 255 || version == 0 {
 		return nil, fmt.Errorf("invalid version: %w", err)
 	}
-	versionByte := byte(version)
 	// 3. Extract sidecar elements.
 	commitmentsRLP := elems[2]
 	proofsRLP := elems[3]
 	blobsRLP := elems[4]
 
 	// 4. Reconstruct into the network format.
-	var outer [][]byte
-	if versionByte == types.BlobSidecarVersion0 {
-		outer = [][]byte{txRLP, blobsRLP, commitmentsRLP, proofsRLP}
-	} else {
-		outer = [][]byte{txRLP, elems[1], blobsRLP, commitmentsRLP, proofsRLP}
-	}
+	outer := [][]byte{txRLP, elems[1], blobsRLP, commitmentsRLP, proofsRLP}
+
 	body, err := rlp.MergeListValues(outer)
 	if err != nil {
 		return nil, err

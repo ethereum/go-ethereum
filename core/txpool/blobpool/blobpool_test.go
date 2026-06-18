@@ -2143,7 +2143,6 @@ func TestGetBlobs(t *testing.T) {
 // TestEncodeForNetwork verifies that encodeForNetwork produces output identical
 // to rlp.EncodeToBytes on the original transaction, for both V0 and V1 sidecars.
 func TestEncodeForNetwork(t *testing.T) {
-	t.Run("v0", func(t *testing.T) { testEncodeForNetwork(t, types.BlobSidecarVersion0) })
 	t.Run("v1", func(t *testing.T) { testEncodeForNetwork(t, types.BlobSidecarVersion1) })
 }
 

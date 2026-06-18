@@ -343,22 +343,15 @@ func (c *Cache) update(want []common.Hash) {
 				if _, exists := c.entries[v]; exists {
 					continue // recompute only new entries
 				}
-				var pf []kzg4844.Proof
-				switch sidecar.Version {
-				case types.BlobSidecarVersion0:
-					pf = []kzg4844.Proof{sidecar.Proofs[i]}
-				case types.BlobSidecarVersion1:
-					cellProofs, err := sidecar.CellProofsAt(i)
-					if err != nil {
-						log.Error("Failed to get cell proofs", "txhash", ptx.Tx.Hash(), "err", err)
-						continue
-					}
-					pf = cellProofs
+				cellProofs, err := sidecar.CellProofsAt(i)
+				if err != nil {
+					log.Error("Failed to get cell proofs", "txhash", ptx.Tx.Hash(), "err", err)
+					continue
 				}
 				c.entries[v] = &cachedBlob{
 					blob:       &sidecar.Blobs[i],
 					commitment: sidecar.Commitments[i],
-					proofs:     pf,
+					proofs:     cellProofs,
 					version:    sidecar.Version,
 				}
 				cacheBlobsGauge.Inc(1)
