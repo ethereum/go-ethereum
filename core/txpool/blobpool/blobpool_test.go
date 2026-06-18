@@ -53,7 +53,6 @@ import (
 var (
 	testBlobs          []*kzg4844.Blob
 	testBlobCommits    []kzg4844.Commitment
-	testBlobProofs     []kzg4844.Proof
 	testBlobCellProofs [][]kzg4844.Proof
 	testBlobVHashes    [][32]byte
 	testBlobIndices    = make(map[[32]byte]int)
@@ -68,9 +67,6 @@ func init() {
 
 		testBlobCommit, _ := kzg4844.BlobToCommitment(testBlob)
 		testBlobCommits = append(testBlobCommits, testBlobCommit)
-
-		testBlobProof, _ := kzg4844.ComputeBlobProof(testBlob, testBlobCommit)
-		testBlobProofs = append(testBlobProofs, testBlobProof)
 
 		testBlobCellProof, _ := kzg4844.ComputeCellProofs(testBlob)
 		testBlobCellProofs = append(testBlobCellProofs, testBlobCellProof)
@@ -243,7 +239,7 @@ func encodeForPool(tx *types.Transaction) []byte {
 
 // makeMultiBlobTx is a utility method to construct a random blob tx with
 // certain number of blobs in its sidecar.
-func makeMultiBlobTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64, blobCount int, blobOffset int, key *ecdsa.PrivateKey, version byte) *types.Transaction {
+func makeMultiBlobTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64, blobCount int, blobOffset int, key *ecdsa.PrivateKey) *types.Transaction {
 	var (
 		blobs       []kzg4844.Blob
 		blobHashes  []common.Hash
@@ -253,12 +249,8 @@ func makeMultiBlobTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCa
 	for i := 0; i < blobCount; i++ {
 		blobs = append(blobs, *testBlobs[blobOffset+i])
 		commitments = append(commitments, testBlobCommits[blobOffset+i])
-		if version == types.BlobSidecarVersion0 {
-			proofs = append(proofs, testBlobProofs[blobOffset+i])
-		} else {
-			cellProofs, _ := kzg4844.ComputeCellProofs(testBlobs[blobOffset+i])
-			proofs = append(proofs, cellProofs...)
-		}
+		cellProofs, _ := kzg4844.ComputeCellProofs(testBlobs[blobOffset+i])
+		proofs = append(proofs, cellProofs...)
 		blobHashes = append(blobHashes, testBlobVHashes[blobOffset+i])
 	}
 	blobtx := &types.BlobTx{
@@ -270,7 +262,7 @@ func makeMultiBlobTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCa
 		BlobFeeCap: uint256.NewInt(blobFeeCap),
 		BlobHashes: blobHashes,
 		Value:      uint256.NewInt(100),
-		Sidecar:    types.NewBlobTxSidecar(version, blobs, commitments, proofs),
+		Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion1, blobs, commitments, proofs),
 	}
 	return types.MustSignNewTx(key, types.LatestSigner(params.MainnetChainConfig), blobtx)
 }
@@ -293,7 +285,7 @@ func makeUnsignedTxWithTestBlob(nonce uint64, gasTipCap uint64, gasFeeCap uint64
 		BlobFeeCap: uint256.NewInt(blobFeeCap),
 		BlobHashes: []common.Hash{testBlobVHashes[blobIdx]},
 		Value:      uint256.NewInt(100),
-		Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion0, []kzg4844.Blob{*testBlobs[blobIdx]}, []kzg4844.Commitment{testBlobCommits[blobIdx]}, []kzg4844.Proof{testBlobProofs[blobIdx]}),
+		Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion1, []kzg4844.Blob{*testBlobs[blobIdx]}, []kzg4844.Commitment{testBlobCommits[blobIdx]}, testBlobCellProofs[blobIdx]),
 	}
 }
 
@@ -440,36 +432,18 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 			hashes = append(hashes, tx.vhashes...)
 		}
 	}
-	blobs1, _, proofs1, err := pool.getBlobs(hashes, types.BlobSidecarVersion0)
+	blobs, _, proofs, err := pool.getBlobs(hashes, types.BlobSidecarVersion1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	blobs2, _, proofs2, err := pool.getBlobs(hashes, types.BlobSidecarVersion1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Cross validate what we received vs what we wanted
-	if len(blobs1) != len(hashes) || len(proofs1) != len(hashes) {
-		t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want %d", len(blobs1), len(proofs1), len(hashes))
-		return
-	}
-	if len(blobs2) != len(hashes) || len(proofs2) != len(hashes) {
-		t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want blobs %d, want proofs: %d", len(blobs2), len(proofs2), len(hashes), len(hashes))
+	if len(blobs) != len(hashes) || len(proofs) != len(hashes) {
+		t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want blobs %d, want proofs: %d", len(blobs), len(proofs), len(hashes), len(hashes))
 		return
 	}
 	for i, hash := range hashes {
-		// If an item is missing from both, but shouldn't, error
-		if (blobs1[i] == nil || proofs1[i] == nil) && (blobs2[i] == nil || proofs2[i] == nil) {
-			t.Errorf("tracked blob retrieval failed: item %d, hash %x", i, hash)
-			continue
-		}
 		// Item retrieved, make sure it matches the expectation
 		index := testBlobIndices[hash]
-		if blobs1[i] != nil && (*blobs1[i] != *testBlobs[index] || proofs1[i][0] != testBlobProofs[index]) {
-			t.Errorf("retrieved blob or proof mismatch: item %d, hash %x", i, hash)
-			continue
-		}
-		if blobs2[i] != nil && (*blobs2[i] != *testBlobs[index] || !slices.Equal(proofs2[i], testBlobCellProofs[index])) {
+		if blobs[i] != nil && (*blobs[i] != *testBlobs[index] || !slices.Equal(proofs[i], testBlobCellProofs[index])) {
 			t.Errorf("retrieved blob or proof mismatch: item %d, hash %x", i, hash)
 			continue
 		}
@@ -503,7 +477,7 @@ func TestOpenDrops(t *testing.T) {
 	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
-	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(testMaxBlobsPerBlock), nil)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(testMaxBlobsPerBlock), nil)
 
 	// Insert a malformed transaction to verify that decoding errors (or format
 	// changes) are handled gracefully (case 1)
@@ -825,7 +799,7 @@ func TestOpenIndex(t *testing.T) {
 	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
-	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(testMaxBlobsPerBlock), nil)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(testMaxBlobsPerBlock), nil)
 
 	// Insert a sequence of transactions with varying price points to check that
 	// the cumulative minimum will be maintained.
@@ -913,7 +887,7 @@ func TestOpenHeap(t *testing.T) {
 	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
-	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(testMaxBlobsPerBlock), nil)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(testMaxBlobsPerBlock), nil)
 
 	// Insert a few transactions from a few accounts. To remove randomness from
 	// the heap initialization, use a deterministic account/tx/priority ordering.
@@ -1088,7 +1062,7 @@ func TestChangingSlotterSize(t *testing.T) {
 	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
-	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(6), nil)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(6), nil)
 
 	// Create transactions from a few accounts.
 	var (
@@ -1100,9 +1074,9 @@ func TestChangingSlotterSize(t *testing.T) {
 		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
 		addr3 = crypto.PubkeyToAddress(key3.PublicKey)
 
-		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1, types.BlobSidecarVersion0)
-		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 0, key2, types.BlobSidecarVersion0)
-		tx3 = makeMultiBlobTx(0, 1, 800, 110, 24, 0, key3, types.BlobSidecarVersion0)
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 0, key2)
+		tx3 = makeMultiBlobTx(0, 1, 800, 110, 24, 0, key3)
 
 		blob1 = encodeForPool(tx1)
 		blob2 = encodeForPool(tx2)
@@ -1203,9 +1177,9 @@ func TestBillyMigration(t *testing.T) {
 		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
 		addr3 = crypto.PubkeyToAddress(key3.PublicKey)
 
-		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1, types.BlobSidecarVersion0)
-		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 0, key2, types.BlobSidecarVersion0)
-		tx3 = makeMultiBlobTx(0, 1, 800, 110, 24, 0, key3, types.BlobSidecarVersion0)
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 0, key2)
+		tx3 = makeMultiBlobTx(0, 1, 800, 110, 24, 0, key3)
 
 		blob1 = encodeForPool(tx1)
 		blob2 = encodeForPool(tx2)
@@ -1299,7 +1273,7 @@ func TestLegacyTxConversion(t *testing.T) {
 	// Initialize the pending store with two blob transactions encoded in the
 	// legacy format.
 	queuedir := filepath.Join(storage, pendingTransactionStore)
-	store, err := billy.Open(billy.Options{Path: queuedir}, newSlotter(testMaxBlobsPerBlock), nil)
+	store, err := billy.Open(billy.Options{Path: queuedir}, newSlotterEIP7594(testMaxBlobsPerBlock), nil)
 	if err != nil {
 		t.Fatalf("failed to open billy: %v", err)
 	}
@@ -1309,8 +1283,8 @@ func TestLegacyTxConversion(t *testing.T) {
 	addr1 := crypto.PubkeyToAddress(key1.PublicKey)
 	addr2 := crypto.PubkeyToAddress(key2.PublicKey)
 
-	tx1 := makeMultiBlobTx(0, 1, 1000, 100, 2, 0, key1, types.BlobSidecarVersion0)
-	tx2 := makeMultiBlobTx(0, 1, 1000, 100, 2, 2, key2, types.BlobSidecarVersion0)
+	tx1 := makeMultiBlobTx(0, 1, 1000, 100, 2, 0, key1)
+	tx2 := makeMultiBlobTx(0, 1, 1000, 100, 2, 2, key2)
 
 	for _, tx := range []*types.Transaction{tx1, tx2} {
 		legacy, err := rlp.EncodeToBytes(tx)
@@ -1408,8 +1382,8 @@ func TestBlobCountLimit(t *testing.T) {
 
 	// Attempt to add transactions.
 	var (
-		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1, types.BlobSidecarVersion0)
-		tx2 = makeMultiBlobTx(0, 1, 800, 70, 7, 0, key2, types.BlobSidecarVersion0)
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 7, 0, key2)
 	)
 	errs := pool.Add([]*types.Transaction{tx1, tx2}, true)
 
@@ -1811,7 +1785,7 @@ func TestAdd(t *testing.T) {
 		storage := filepath.Join(t.TempDir(), fmt.Sprintf("test-%d", i))
 
 		os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
-		store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(testMaxBlobsPerBlock), nil)
+		store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(testMaxBlobsPerBlock), nil)
 
 		// Insert the seed transactions for the pool startup
 		var (
@@ -1922,7 +1896,7 @@ func TestGetBlobs(t *testing.T) {
 	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
-	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(params.BlobTxMaxBlobs), nil)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(params.BlobTxMaxBlobs), nil)
 
 	// Create transactions from a few accounts.
 	var (
@@ -1934,9 +1908,9 @@ func TestGetBlobs(t *testing.T) {
 		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
 		addr3 = crypto.PubkeyToAddress(key3.PublicKey)
 
-		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1, types.BlobSidecarVersion0) // [0, 6)
-		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 6, key2, types.BlobSidecarVersion1)   // [6, 12)
-		tx3 = makeMultiBlobTx(0, 1, 800, 110, 6, 12, key3, types.BlobSidecarVersion0) // [12, 18)
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1) // [0, 6)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 6, key2)   // [6, 12)
+		tx3 = makeMultiBlobTx(0, 1, 800, 110, 6, 12, key3) // [12, 18)
 
 		blob1 = encodeForPool(tx1)
 		blob2 = encodeForPool(tx2)
@@ -2004,7 +1978,7 @@ func TestGetBlobs(t *testing.T) {
 	}{
 		{
 			start: 0, limit: 6,
-			version: types.BlobSidecarVersion0,
+			version: types.BlobSidecarVersion1,
 		},
 		{
 			start: 0, limit: 6,
@@ -2012,7 +1986,7 @@ func TestGetBlobs(t *testing.T) {
 		},
 		{
 			start: 0, limit: 6, fillRandom: true,
-			version: types.BlobSidecarVersion0,
+			version: types.BlobSidecarVersion1,
 		},
 		{
 			start: 0, limit: 6, fillRandom: true,
@@ -2020,7 +1994,7 @@ func TestGetBlobs(t *testing.T) {
 		},
 		{
 			start: 3, limit: 9,
-			version: types.BlobSidecarVersion0,
+			version: types.BlobSidecarVersion1,
 		},
 		{
 			start: 3, limit: 9,
@@ -2028,7 +2002,7 @@ func TestGetBlobs(t *testing.T) {
 		},
 		{
 			start: 3, limit: 9, fillRandom: true,
-			version: types.BlobSidecarVersion0,
+			version: types.BlobSidecarVersion1,
 		},
 		{
 			start: 3, limit: 9, fillRandom: true,
@@ -2036,7 +2010,7 @@ func TestGetBlobs(t *testing.T) {
 		},
 		{
 			start: 3, limit: 15,
-			version: types.BlobSidecarVersion0,
+			version: types.BlobSidecarVersion1,
 		},
 		{
 			start: 3, limit: 15,
@@ -2044,7 +2018,7 @@ func TestGetBlobs(t *testing.T) {
 		},
 		{
 			start: 3, limit: 15, fillRandom: true,
-			version: types.BlobSidecarVersion0,
+			version: types.BlobSidecarVersion1,
 		},
 		{
 			start: 3, limit: 15, fillRandom: true,
@@ -2052,7 +2026,7 @@ func TestGetBlobs(t *testing.T) {
 		},
 		{
 			start: 0, limit: 18,
-			version: types.BlobSidecarVersion0,
+			version: types.BlobSidecarVersion1,
 		},
 		{
 			start: 0, limit: 18,
@@ -2060,7 +2034,7 @@ func TestGetBlobs(t *testing.T) {
 		},
 		{
 			start: 0, limit: 18, fillRandom: true,
-			version: types.BlobSidecarVersion0,
+			version: types.BlobSidecarVersion1,
 		},
 		{
 			start: 0, limit: 18, fillRandom: true,
@@ -2114,7 +2088,7 @@ func TestGetBlobs(t *testing.T) {
 			if blobs[j] == nil || proofs[j] == nil {
 				// This is only an error if there was no version mismatch
 				if (c.version == types.BlobSidecarVersion1 && 6 <= testBlobIndex && testBlobIndex < 12) ||
-					(c.version == types.BlobSidecarVersion0 && (testBlobIndex < 6 || 12 <= testBlobIndex)) {
+					(c.version == types.BlobSidecarVersion1 && (testBlobIndex < 6 || 12 <= testBlobIndex)) {
 					t.Errorf("tracked blob retrieval failed: item %d, hash %x", j, vhashes[j])
 				}
 				continue
@@ -2125,15 +2099,9 @@ func TestGetBlobs(t *testing.T) {
 				continue
 			}
 			// Item retrieved, make sure the proof matches the expectation
-			if c.version == types.BlobSidecarVersion0 {
-				if proofs[j][0] != testBlobProofs[testBlobIndex] {
-					t.Errorf("retrieved proof mismatch: item %d, hash %x", j, vhashes[j])
-				}
-			} else {
-				want, _ := kzg4844.ComputeCellProofs(blobs[j])
-				if !reflect.DeepEqual(want, proofs[j]) {
-					t.Errorf("retrieved proof mismatch: item %d, hash %x", j, vhashes[j])
-				}
+			want, _ := kzg4844.ComputeCellProofs(blobs[j])
+			if !reflect.DeepEqual(want, proofs[j]) {
+				t.Errorf("retrieved proof mismatch: item %d, hash %x", j, vhashes[j])
 			}
 		}
 	}
@@ -2143,12 +2111,12 @@ func TestGetBlobs(t *testing.T) {
 // TestEncodeForNetwork verifies that encodeForNetwork produces output identical
 // to rlp.EncodeToBytes on the original transaction, for both V0 and V1 sidecars.
 func TestEncodeForNetwork(t *testing.T) {
-	t.Run("v1", func(t *testing.T) { testEncodeForNetwork(t, types.BlobSidecarVersion1) })
+	t.Run("v1", func(t *testing.T) { testEncodeForNetwork(t) })
 }
 
-func testEncodeForNetwork(t *testing.T, version byte) {
+func testEncodeForNetwork(t *testing.T) {
 	key, _ := crypto.GenerateKey()
-	tx := makeMultiBlobTx(0, 1, 1, 1, 1, 0, key, version)
+	tx := makeMultiBlobTx(0, 1, 1, 1, 1, 0, key)
 
 	wantRLP, err := rlp.EncodeToBytes(tx)
 	if err != nil {
@@ -2161,7 +2129,7 @@ func testEncodeForNetwork(t *testing.T, version byte) {
 		t.Fatalf("encodeForNetwork failed: %v", err)
 	}
 	if !bytes.Equal(gotRLP, wantRLP) {
-		t.Fatalf("network encoding mismatch (version %d): got %d bytes, want %d bytes", version, len(gotRLP), len(wantRLP))
+		t.Fatalf("network encoding mismatch: got %d bytes, want %d bytes", len(gotRLP), len(wantRLP))
 	}
 }
 
