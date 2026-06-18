@@ -196,7 +196,36 @@ func (g *generator) inlineBody(handler string) string {
 		}
 		out.WriteString(line + "\n")
 	}
-	return out.String()
+	return expandStackHelpers(out.String())
+}
+
+// The compiler shrinks its inlining budget into very large functions, and
+// execUntraced is far past the size threshold. The cheap stack helpers
+// (pop1, len, peek, drop, back) still inline there, but get and the
+// pop1Peek1 family turn into real calls, which a snailtracer profile put at
+// over a tenth of the run. The generator splices those helper bodies in
+// textually wherever they appear in statement position, verbatim from
+// stack.go.
+var (
+	pop1Peek1Re = regexp.MustCompile(`(?m)^(\s*)(\w+), (\w+) := scope\.Stack\.pop1Peek1\(\)$`)
+	pop2Peek1Re = regexp.MustCompile(`(?m)^(\s*)(\w+), (\w+), (\w+) := scope\.Stack\.pop2Peek1\(\)$`)
+	pop2Re      = regexp.MustCompile(`(?m)^(\s*)(\w+), (\w+) := scope\.Stack\.pop2\(\)$`)
+	getAssignRe = regexp.MustCompile(`(?m)^(\s*)(\w+) := scope\.Stack\.get\(\)$`)
+	getCallRe   = regexp.MustCompile(`(?m)^(\s*)scope\.Stack\.get\(\)\.(\w+)\((.*)\)$`)
+)
+
+func expandStackHelpers(src string) string {
+	src = pop1Peek1Re.ReplaceAllString(src,
+		"${1}stack.inner.top--\n${1}stack.size--\n${1}$2 := &stack.inner.data[stack.inner.top]\n${1}$3 := &stack.inner.data[stack.inner.top-1]")
+	src = pop2Peek1Re.ReplaceAllString(src,
+		"${1}stack.inner.top -= 2\n${1}stack.size -= 2\n${1}$2 := &stack.inner.data[stack.inner.top+1]\n${1}$3 := &stack.inner.data[stack.inner.top]\n${1}$4 := &stack.inner.data[stack.inner.top-1]")
+	src = pop2Re.ReplaceAllString(src,
+		"${1}stack.inner.top -= 2\n${1}stack.size -= 2\n${1}$2 := &stack.inner.data[stack.inner.top+1]\n${1}$3 := &stack.inner.data[stack.inner.top]")
+	src = getAssignRe.ReplaceAllString(src,
+		"${1}$2 := &stack.inner.data[stack.inner.top]\n${1}stack.inner.top++\n${1}stack.size++")
+	src = getCallRe.ReplaceAllString(src,
+		"${1}stack.inner.data[stack.inner.top].$2($3)\n${1}stack.inner.top++\n${1}stack.size++")
+	return src
 }
 
 // ---------------------------------------------------------------------------
@@ -322,12 +351,21 @@ func (g *generator) emitWork(code byte) {
 	switch {
 	case code >= 0x62 && code <= 0x7f: // PUSH3-PUSH32: inline makePush(n,n)
 		g.emitPushFixed(int(code) - 0x5f)
-	case code >= 0x80 && code <= 0x8f: // DUP1-DUP16: inline makeDup(n)
+	case code >= 0x80 && code <= 0x8f: // DUP1-DUP16: the dup body, emitted raw
 		g.p(`
-			scope.Stack.dup(%d)
+			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-%d]
+			stack.size++
+			stack.inner.top++
 			pc++
 			continue mainLoop
 		`, int(code)-0x7f)
+	case code >= 0x90 && code <= 0x9f: // SWAP1-SWAP16: the swap body, emitted raw
+		n := int(code) - 0x8f
+		g.p(`
+			stack.inner.data[stack.bottom+stack.size-%d], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-%d]
+			pc++
+			continue mainLoop
+		`, n+1, n+1)
 	default:
 		g.p("%s", g.inlineBody(inlineHandler[code]))
 	}
@@ -339,7 +377,9 @@ func (g *generator) emitPushFixed(n int) {
 		codeLen := len(scope.Contract.Code)
 		start := min(codeLen, int(pc+1))
 		end := min(codeLen, start+%d)
-		a := scope.Stack.get()
+		a := &stack.inner.data[stack.inner.top]
+		stack.inner.top++
+		stack.size++
 		a.SetBytes(scope.Contract.Code[start:end])
 		if missing := %d - (end - start); missing > 0 {
 			a.Lsh(a, uint(8*missing))
