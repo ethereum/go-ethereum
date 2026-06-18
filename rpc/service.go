@@ -225,7 +225,7 @@ func isErrorType(t reflect.Type) bool {
 
 // Is t Subscription or *Subscription?
 func isSubscriptionType(t reflect.Type) bool {
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	return t == subscriptionType
