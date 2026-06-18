@@ -219,7 +219,7 @@ func (t *StateTrie) UpdateStorageBatch(_ common.Address, keys [][]byte, values [
 	for _, key := range keys {
 		hk := crypto.Keccak256(key)
 		if t.preimages != nil {
-			t.secKeyCache[common.Hash(hk)] = key
+			t.secKeyCache[common.Hash(hk)] = common.CopyBytes(key)
 		}
 		hkeys = append(hkeys, hk)
 	}
