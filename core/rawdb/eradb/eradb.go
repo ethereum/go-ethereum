@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package eradb implements a history backend using era1 and ere files.
+// Package eradb implements a history backend using era1 or ere files.
 package eradb
 
 import (
@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -38,7 +37,7 @@ const openFileLimit = 64
 
 var errClosed = errors.New("era store is closed")
 
-// Store manages read access to a directory of era1 and ere files.
+// Store manages read access to a directory of era1 or ere files.
 // The getter methods are thread-safe.
 type Store struct {
 	datadir string
@@ -54,7 +53,7 @@ type Store struct {
 type fileCacheEntry struct {
 	refcount int           // reference count. This is protected by Store.mu!
 	opened   chan struct{} // signals opening of file has completed
-	file     era.Era       // the file (era1 or ere)
+	file     era.Era       // the file
 	slim     bool          // true if receipts are stored in the ere slim encoding
 	err      error         // error from opening the file
 }
@@ -80,7 +79,7 @@ func New(datadir string) (*Store, error) {
 	return db, nil
 }
 
-// Close closes all open era1 files in the cache.
+// Close closes all open era files in the cache.
 func (db *Store) Close() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -180,7 +179,6 @@ func convertReceipts(input []byte, slim bool) ([]byte, error) {
 			}
 			skip = 2
 		}
-
 		dataIter, err := rlp.NewListIterator(receiptData)
 		if err != nil {
 			return nil, fmt.Errorf("receipt %d has invalid data: %v", i, err)
@@ -299,47 +297,61 @@ func (db *Store) fileFailedToOpen(epoch uint64, entry *fileCacheEntry, err error
 	entry.err = err
 }
 
+// openEraFile opens the era file of the given epoch. The second return value
+// signals whether the receipts in the file use the ere slim encoding.
 func (db *Store) openEraFile(epoch uint64) (era.Era, bool, error) {
-	// File name scheme is <network>-<epoch>-<root>.<ext>
-	// Try era1 first, then ere.
-	for _, ext := range []string{"era1", "ere"} {
-		glob := fmt.Sprintf("*-%05d-*.%s", epoch, ext)
-		matches, err := filepath.Glob(filepath.Join(db.datadir, glob))
+	// File name scheme is <network>-<epoch>-<root> for era1 files and
+	// <network>-<epoch>-<root>(-<profile>)* for ere files.
+	var matches []string
+	for _, glob := range []string{
+		fmt.Sprintf("*-%05d-*.era1", epoch),
+		fmt.Sprintf("*-%05d-*.ere", epoch),
+	} {
+		m, err := filepath.Glob(filepath.Join(db.datadir, glob))
 		if err != nil {
 			return nil, false, err
 		}
-		if len(matches) > 1 {
-			return nil, false, fmt.Errorf("multiple %s files found for epoch %d", ext, epoch)
-		}
-		if len(matches) == 0 {
-			continue
-		}
-		filename := matches[0]
-		var e era.Era
-		slim := ext == "ere"
-		switch ext {
-		case "era1":
-			e, err = onedb.Open(filename)
-		case "ere":
-			// The era store serves receipts via RPC. Reject noreceipts
-			// profiles to avoid silently returning empty receipt data.
-			if strings.Contains(filepath.Base(filename), "-noreceipts") {
-				return nil, false, fmt.Errorf("era store does not support noreceipts profile: %s", filepath.Base(filename))
-			}
-			e, err = execdb.Open(filename)
-		}
-		if err != nil {
-			return nil, false, err
-		}
-		// Sanity-check start block.
-		if e.Start()%uint64(era.MaxSize) != 0 {
-			e.Close()
-			return nil, false, fmt.Errorf("%s file has invalid boundary. %d %% %d != 0", ext, e.Start(), era.MaxSize)
-		}
-		log.Debug("Opened era file", "type", ext, "epoch", epoch)
-		return e, slim, nil
+		matches = append(matches, m...)
 	}
-	return nil, false, fs.ErrNotExist
+	if len(matches) > 1 {
+		return nil, false, fmt.Errorf("multiple era files found for epoch %d: %v", epoch, matches)
+	}
+	if len(matches) == 0 {
+		return nil, false, fs.ErrNotExist
+	}
+	filename := matches[0]
+
+	var (
+		e    era.Era
+		err  error
+		slim = filepath.Ext(filename) == ".ere"
+	)
+	if slim {
+		var f *execdb.Era
+		f, err = execdb.Open(filename)
+		if err != nil {
+			return nil, false, err
+		}
+		// Files written with the "noreceipts" profile cannot serve as a
+		// history backend, since the receipts cannot be retrieved.
+		if !f.HasReceipts() {
+			f.Close()
+			return nil, false, fmt.Errorf("ere file %s contains no receipts", filepath.Base(filename))
+		}
+		e = f
+	} else {
+		e, err = onedb.Open(filename)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+	// Sanity-check start block.
+	if e.Start() != epoch*uint64(era.MaxSize) {
+		e.Close()
+		return nil, false, fmt.Errorf("era file %s has wrong start block %d for epoch %d", filepath.Base(filename), e.Start(), epoch)
+	}
+	log.Debug("Opened era file", "epoch", epoch, "name", filepath.Base(filename))
+	return e, slim, nil
 }
 
 // doneWithFile signals that the caller has finished using a file.

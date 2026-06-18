@@ -204,6 +204,12 @@ func (e *Era) HasComponent(c componentType) bool {
 	return ok
 }
 
+// HasReceipts reports whether the file contains a receipts component. Files
+// written with the "noreceipts" profile omit it.
+func (e *Era) HasReceipts() bool {
+	return e.HasComponent(receipts)
+}
+
 // InitialTD returns initial total difficulty before the difficulty of the
 // first block of the Era is applied. Returns an error if TD is not available
 // (e.g., post-merge epoch).
