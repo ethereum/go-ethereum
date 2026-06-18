@@ -35,7 +35,7 @@ mainLoop:
 		if isEIP4762 && !contract.IsDeployment && !contract.IsSystemCall {
 			contractAddr := contract.Address()
 			consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.RegularGas)
-			contract.UseGas(GasCosts{RegularGas: consumed}, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
+			contract.chargeRegular(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
 			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
@@ -50,8 +50,8 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 3
-			x, y := scope.Stack.pop(), scope.Stack.peek()
-			y.Add(&x, y)
+			x, y := scope.Stack.pop1Peek1()
+			y.Add(x, y)
 			pc++
 			continue mainLoop
 
@@ -63,8 +63,8 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 5
-			x, y := scope.Stack.pop(), scope.Stack.peek()
-			y.Mul(&x, y)
+			x, y := scope.Stack.pop1Peek1()
+			y.Mul(x, y)
 			pc++
 			continue mainLoop
 
@@ -76,8 +76,8 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 3
-			x, y := scope.Stack.pop(), scope.Stack.peek()
-			y.Sub(&x, y)
+			x, y := scope.Stack.pop1Peek1()
+			y.Sub(x, y)
 			pc++
 			continue mainLoop
 
@@ -89,8 +89,8 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 5
-			x, y := scope.Stack.pop(), scope.Stack.peek()
-			y.Div(&x, y)
+			x, y := scope.Stack.pop1Peek1()
+			y.Div(x, y)
 			pc++
 			continue mainLoop
 
@@ -102,8 +102,8 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 5
-			x, y := scope.Stack.pop(), scope.Stack.peek()
-			y.SDiv(&x, y)
+			x, y := scope.Stack.pop1Peek1()
+			y.SDiv(x, y)
 			pc++
 			continue mainLoop
 
@@ -115,8 +115,8 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 5
-			x, y := scope.Stack.pop(), scope.Stack.peek()
-			y.Mod(&x, y)
+			x, y := scope.Stack.pop1Peek1()
+			y.Mod(x, y)
 			pc++
 			continue mainLoop
 
@@ -128,8 +128,8 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 5
-			x, y := scope.Stack.pop(), scope.Stack.peek()
-			y.SMod(&x, y)
+			x, y := scope.Stack.pop1Peek1()
+			y.SMod(x, y)
 			pc++
 			continue mainLoop
 
@@ -141,8 +141,8 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 8
-			x, y, z := scope.Stack.pop(), scope.Stack.pop(), scope.Stack.peek()
-			z.AddMod(&x, &y, z)
+			x, y, z := scope.Stack.pop2Peek1()
+			z.AddMod(x, y, z)
 			pc++
 			continue mainLoop
 
@@ -154,8 +154,8 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 8
-			x, y, z := scope.Stack.pop(), scope.Stack.pop(), scope.Stack.peek()
-			z.MulMod(&x, &y, z)
+			x, y, z := scope.Stack.pop2Peek1()
+			z.MulMod(x, y, z)
 			pc++
 			continue mainLoop
 
@@ -167,8 +167,8 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 5
-			back, num := scope.Stack.pop(), scope.Stack.peek()
-			num.ExtendSign(num, &back)
+			back, num := scope.Stack.pop1Peek1()
+			num.ExtendSign(num, back)
 			pc++
 			continue mainLoop
 
@@ -180,7 +180,7 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 3
-			x, y := scope.Stack.pop(), scope.Stack.peek()
+			x, y := scope.Stack.pop1Peek1()
 			if x.Lt(y) {
 				y.SetOne()
 			} else {
@@ -197,7 +197,7 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 3
-			x, y := scope.Stack.pop(), scope.Stack.peek()
+			x, y := scope.Stack.pop1Peek1()
 			if x.Gt(y) {
 				y.SetOne()
 			} else {
@@ -214,7 +214,7 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 3
-			x, y := scope.Stack.pop(), scope.Stack.peek()
+			x, y := scope.Stack.pop1Peek1()
 			if x.Slt(y) {
 				y.SetOne()
 			} else {
@@ -231,7 +231,7 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 3
-			x, y := scope.Stack.pop(), scope.Stack.peek()
+			x, y := scope.Stack.pop1Peek1()
 			if x.Sgt(y) {
 				y.SetOne()
 			} else {
@@ -248,7 +248,7 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 3
-			x, y := scope.Stack.pop(), scope.Stack.peek()
+			x, y := scope.Stack.pop1Peek1()
 			if x.Eq(y) {
 				y.SetOne()
 			} else {
@@ -282,8 +282,8 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 3
-			x, y := scope.Stack.pop(), scope.Stack.peek()
-			y.And(&x, y)
+			x, y := scope.Stack.pop1Peek1()
+			y.And(x, y)
 			pc++
 			continue mainLoop
 
@@ -295,8 +295,8 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 3
-			x, y := scope.Stack.pop(), scope.Stack.peek()
-			y.Or(&x, y)
+			x, y := scope.Stack.pop1Peek1()
+			y.Or(x, y)
 			pc++
 			continue mainLoop
 
@@ -308,8 +308,8 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 3
-			x, y := scope.Stack.pop(), scope.Stack.peek()
-			y.Xor(&x, y)
+			x, y := scope.Stack.pop1Peek1()
+			y.Xor(x, y)
 			pc++
 			continue mainLoop
 
@@ -334,8 +334,8 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 3
-			th, val := scope.Stack.pop(), scope.Stack.peek()
-			val.Byte(&th)
+			th, val := scope.Stack.pop1Peek1()
+			val.Byte(th)
 			pc++
 			continue mainLoop
 
@@ -348,7 +348,7 @@ mainLoop:
 					return nil, ErrOutOfGas
 				}
 				contract.Gas.RegularGas -= 3
-				shift, value := scope.Stack.pop(), scope.Stack.peek()
+				shift, value := scope.Stack.pop1Peek1()
 				if shift.LtUint64(256) {
 					value.Lsh(value, uint(shift.Uint64()))
 				} else {
@@ -369,7 +369,7 @@ mainLoop:
 					return nil, ErrOutOfGas
 				}
 				contract.Gas.RegularGas -= 3
-				shift, value := scope.Stack.pop(), scope.Stack.peek()
+				shift, value := scope.Stack.pop1Peek1()
 				if shift.LtUint64(256) {
 					value.Rsh(value, uint(shift.Uint64()))
 				} else {
@@ -390,7 +390,7 @@ mainLoop:
 					return nil, ErrOutOfGas
 				}
 				contract.Gas.RegularGas -= 3
-				shift, value := scope.Stack.pop(), scope.Stack.peek()
+				shift, value := scope.Stack.pop1Peek1()
 				if shift.GtUint64(256) {
 					if value.Sign() >= 0 {
 						value.Clear()
@@ -470,7 +470,7 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 2
-			scope.Stack.pop()
+			scope.Stack.drop()
 			pc++
 			continue mainLoop
 
@@ -594,8 +594,8 @@ mainLoop:
 				res, err = nil, errStopToken
 				break mainLoop
 			}
-			pos := scope.Stack.pop()
-			if !scope.Contract.validJumpdest(&pos) {
+			pos := scope.Stack.pop1()
+			if !scope.Contract.validJumpdest(pos) {
 				res, err = nil, ErrInvalidJump
 				break mainLoop
 			}
@@ -615,9 +615,9 @@ mainLoop:
 				res, err = nil, errStopToken
 				break mainLoop
 			}
-			pos, cond := scope.Stack.pop(), scope.Stack.pop()
+			pos, cond := scope.Stack.pop2()
 			if !cond.IsZero() {
-				if !scope.Contract.validJumpdest(&pos) {
+				if !scope.Contract.validJumpdest(pos) {
 					res, err = nil, ErrInvalidJump
 					break mainLoop
 				}
