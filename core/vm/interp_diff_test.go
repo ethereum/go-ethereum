@@ -279,7 +279,7 @@ func TestExtraEIPs(t *testing.T) {
 		Origin:   diffCaller,
 		GasPrice: uint256.NewInt(1),
 	})
-	_, _, err := evm.Call(diffCaller, diffContractAddr, nil, NewGasBudget(100000), new(uint256.Int))
+	_, _, err := evm.Call(diffCaller, diffContractAddr, nil, NewGasBudget(100000, 0), new(uint256.Int))
 	if err != nil {
 		t.Fatalf("PUSH0 enabled via ExtraEips failed: %v", err)
 	}
@@ -301,7 +301,7 @@ func runOne(t testing.TB, cfg *params.ChainConfig, merged, useTableLoop bool, co
 	})
 	evm.forceTableLoop = useTableLoop
 
-	ret, leftOver, err := evm.Call(diffCaller, diffContractAddr, input, NewGasBudget(gas), new(uint256.Int))
+	ret, leftOver, err := evm.Call(diffCaller, diffContractAddr, input, NewGasBudget(gas, 0), new(uint256.Int))
 	errStr := ""
 	if err != nil {
 		errStr = err.Error()
