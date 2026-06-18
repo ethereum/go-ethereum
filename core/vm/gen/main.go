@@ -205,16 +205,30 @@ func (g *generator) inlineBody(handler string) string {
 // pop1Peek1 family turn into real calls, which a snailtracer profile put at
 // over a tenth of the run. The generator splices those helper bodies in
 // textually wherever they appear in statement position, verbatim from
-// stack.go.
+// stack.go. A helper declared inside a var ( ... ) group (the push handlers
+// write elem = scope.Stack.get() there) is first lifted out into := statements,
+// since its replacement is statements rather than an expression.
 var (
 	pop1Peek1Re = regexp.MustCompile(`(?m)^(\s*)(\w+), (\w+) := scope\.Stack\.pop1Peek1\(\)$`)
 	pop2Peek1Re = regexp.MustCompile(`(?m)^(\s*)(\w+), (\w+), (\w+) := scope\.Stack\.pop2Peek1\(\)$`)
 	pop2Re      = regexp.MustCompile(`(?m)^(\s*)(\w+), (\w+) := scope\.Stack\.pop2\(\)$`)
 	getAssignRe = regexp.MustCompile(`(?m)^(\s*)(\w+) := scope\.Stack\.get\(\)$`)
 	getCallRe   = regexp.MustCompile(`(?m)^(\s*)scope\.Stack\.get\(\)\.(\w+)\((.*)\)$`)
+	varBlockRe  = regexp.MustCompile(`(?ms)^(\s*)var \(\n(.*?)\n\s*\)$`)
+	varMemberRe = regexp.MustCompile(`(?m)^\s*([\w, ]+?)\s*= (.*)$`)
 )
 
 func expandStackHelpers(src string) string {
+	// Lift any var ( ... ) group holding a stack helper into := statements:
+	// a helper expansion is statements, which cannot sit inside a var group.
+	src = varBlockRe.ReplaceAllStringFunc(src, func(block string) string {
+		m := varBlockRe.FindStringSubmatch(block)
+		indent, members := m[1], m[2]
+		if !strings.Contains(members, "scope.Stack.") {
+			return block
+		}
+		return varMemberRe.ReplaceAllString(members, indent+"$1 := $2")
+	})
 	src = pop1Peek1Re.ReplaceAllString(src,
 		"${1}stack.inner.top--\n${1}stack.size--\n${1}$2 := &stack.inner.data[stack.inner.top]\n${1}$3 := &stack.inner.data[stack.inner.top-1]")
 	src = pop2Peek1Re.ReplaceAllString(src,
