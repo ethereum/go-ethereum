@@ -17,6 +17,7 @@
 package fetcher
 
 import (
+	"iter"
 	"math/rand"
 	"slices"
 	"sort"
@@ -750,15 +751,15 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 	wasIdle := len(f.requests) == 0
 
 	// For each active peer, try to schedule some payload fetches.
-	f.forEachPeer(actives, func(peer string) {
+	for peer := range f.peers(actives) {
 		if len(f.announces[peer]) == 0 || len(f.requests[peer]) != 0 {
-			return // continue
+			continue
 		}
 		var (
 			hashes    []common.Hash
 			custodies []types.CustodyBitmap
 		)
-		f.forEachAnnounce(f.announces[peer], func(hash common.Hash, cells types.CustodyBitmap) bool {
+		for hash, cells := range f.announcesByArrival(f.announces[peer]) {
 			var unfetched types.CustodyBitmap
 			if f.fetches[hash] == nil {
 				// tx is not being fetched
@@ -793,8 +794,11 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 				f.alternates[hash][peer] = cells
 			}
 
-			return len(hashes) < maxPayloadRetrievals
-		})
+			// Stop once we've accumulated enough hashes for this peer
+			if len(hashes) >= maxPayloadRetrievals {
+				break
+			}
+		}
 
 		// If any hashes were allocated, request them from the peer
 		if len(hashes) > 0 {
@@ -829,7 +833,7 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 				}
 			}()
 		}
-	})
+	}
 
 	// If a new request was fired, schedule a timeout timer
 	if wasIdle && len(f.requests) > 0 {
@@ -837,48 +841,57 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 	}
 }
 
-// forEachAnnounce loops over the given announcements in arrival order, invoking
-// the do function for each until it returns false. We enforce an arrival
-// ordering to minimize the chances of transaction nonce-gaps, which result in
+// announcesByArrival returns an iterator over the given announcements
+// in arrival order. We enforce an arrival ordering to minimize
+// the chances of transaction nonce-gaps, which result in
 // transactions being rejected by the txpool.
-func (f *BlobFetcher) forEachAnnounce(announces map[common.Hash]*cellWithSeq, do func(hash common.Hash, cells types.CustodyBitmap) bool) {
-	type announcement struct {
-		hash  common.Hash
-		cells types.CustodyBitmap
-		seq   uint64
-	}
-	// Process announcements by their arrival order
-	list := make([]announcement, 0, len(announces))
-	for hash, entry := range announces {
-		list = append(list, announcement{hash: hash, cells: entry.cells, seq: entry.seq})
-	}
-	sort.Slice(list, func(i, j int) bool {
-		return list[i].seq < list[j].seq
-	})
-	for i := range list {
-		if !do(list[i].hash, list[i].cells) {
-			return
+
+func (f *BlobFetcher) announcesByArrival(announces map[common.Hash]*cellWithSeq) iter.Seq2[common.Hash, types.CustodyBitmap] {
+	return func(yield func(hash common.Hash, cells types.CustodyBitmap) bool) {
+		type announcement struct {
+			hash  common.Hash
+			cells types.CustodyBitmap
+			seq   uint64
+		}
+		// Process announcements by their arrival order
+		list := make([]announcement, 0, len(announces))
+		for hash, entry := range announces {
+			list = append(list, announcement{hash: hash, cells: entry.cells, seq: entry.seq})
+		}
+		sort.Slice(list, func(i, j int) bool {
+			return list[i].seq < list[j].seq
+		})
+		for i := range list {
+			if !yield(list[i].hash, list[i].cells) {
+				return
+			}
 		}
 	}
 }
 
-// forEachPeer does a range loop over a map of peers in production, but during
+// peers returns an iterator over a map of peers in production, but during
 // testing it does a deterministic sorted random to allow reproducing issues.
-func (f *BlobFetcher) forEachPeer(peers map[string]struct{}, do func(peer string)) {
-	// If we're running production(step == nil), use whatever Go's map gives us
-	if f.step == nil {
-		for peer := range peers {
-			do(peer)
+func (f *BlobFetcher) peers(peers map[string]struct{}) iter.Seq[string] {
+	return func(yield func(peer string) bool) {
+		// If we're running production(step == nil), use whatever Go's map gives us
+		if f.step == nil {
+			for peer := range peers {
+				if !yield(peer) {
+					return
+				}
+			}
+			return
 		}
-		return
-	}
-	// We're running the test suite, make iteration deterministic (sorted by peer id)
-	list := make([]string, 0, len(peers))
-	for peer := range peers {
-		list = append(list, peer)
-	}
-	sort.Strings(list)
-	for _, peer := range list {
-		do(peer)
+		// We're running the test suite, make iteration deterministic (sorted by peer id)
+		list := make([]string, 0, len(peers))
+		for peer := range peers {
+			list = append(list, peer)
+		}
+		sort.Strings(list)
+		for _, peer := range list {
+			if !yield(peer) {
+				return
+			}
+		}
 	}
 }
