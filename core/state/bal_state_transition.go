@@ -83,13 +83,6 @@ type BALStateTransitionMetrics struct {
 	StatePrefetch time.Duration
 	StateUpdate   time.Duration
 	StateHash     time.Duration
-
-	// commit metrics
-	AccountCommits  time.Duration
-	StorageCommits  time.Duration
-	SnapshotCommits time.Duration
-	TrieDBCommits   time.Duration
-	TotalCommitTime time.Duration
 }
 
 // NewBALStateTransition creates a BALStateTransition instance
@@ -190,7 +183,7 @@ func (s *BALStateTransition) updateAccount(addr common.Address) (*types.StateAcc
 func (s *BALStateTransition) commitAccount(addr common.Address) (*AccountUpdate, *trienode.NodeSet, error) {
 	op := &AccountUpdate{
 		Address: addr,
-		Data:    s.postStates[addr], // TODO: cache the updated state account somewhere
+		Data:    s.postStates[addr],
 	}
 	var prestate *types.StateAccount
 	if ps, exist := s.prestates.Load(addr); exist {
@@ -299,7 +292,6 @@ func (s *BALStateTransition) CommitWithUpdate(block uint64, deleteEmptyObjects b
 	// off some milliseconds from the commit operation. Also accumulate the code
 	// writes to run in parallel with the computations.
 	var (
-		start   = time.Now()
 		root    common.Hash
 		workers errgroup.Group
 	)
@@ -320,7 +312,6 @@ func (s *BALStateTransition) CommitWithUpdate(block uint64, deleteEmptyObjects b
 		if err := merge(set); err != nil {
 			return err
 		}
-		s.metrics.AccountCommits = time.Since(start)
 		return nil
 	})
 
@@ -350,7 +341,6 @@ func (s *BALStateTransition) CommitWithUpdate(block uint64, deleteEmptyObjects b
 			}
 			lock.Lock()
 			updates[crypto.Keccak256Hash(address[:])] = update
-			s.metrics.StorageCommits = time.Since(start) // overwrite with the longest storage commit runtime
 			lock.Unlock()
 			return nil
 		})

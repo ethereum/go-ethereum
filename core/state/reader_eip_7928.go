@@ -220,9 +220,13 @@ type ReaderWithBlockLevelAccessList struct {
 	TxIndex  int
 }
 
-// NewReaderWithAccessList wraps a base reader with a shared, already
-// preprocessed access list. This is the cheap constructor used on the hot path:
-// the prepared list is built once per block and borrowed by every per-tx reader.
+// NewReaderWithAccessList constructs a reader for accessing states
+// with the mutations made by transactions prior to txIndex.
+//
+// The txIndex refers to the call frame as such:
+// - 0 for pre‑execution system contract calls.
+// - 1 … n for transactions (in block order).
+// - n + 1 for post‑execution system contract calls.
 func NewReaderWithAccessList(base Reader, prepared *bal.AccessListReader, txIndex int) *ReaderWithBlockLevelAccessList {
 	return &ReaderWithBlockLevelAccessList{
 		Reader:   base,

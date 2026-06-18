@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"io"
 	"math/big"
 	"runtime"
@@ -31,6 +30,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/core/types/bal"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -2142,16 +2143,13 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 	sdb := state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
 
 	al := block.AccessList()
-	// Preprocess the access list once for the whole block; the resulting
-	// structure is read-only and shared by the prefetch reader, the state
-	// transition and every per-transaction execution reader.
-	prepared := bal.NewAccessListReader(*al)
-	prefetchReader, err := sdb.ReaderWithPrefetch(parentRoot, prepared.StorageKeys())
+	reader := bal.NewAccessListReader(*al)
+	prefetchReader, err := sdb.ReaderWithPrefetch(parentRoot, reader.StorageKeys())
 	if err != nil {
 		return nil, err
 	}
 
-	stateTransition, err := state.NewBALStateTransition(block, prefetchReader, sdb, parentRoot, prepared)
+	stateTransition, err := state.NewBALStateTransition(block, prefetchReader, sdb, parentRoot, reader)
 	if err != nil {
 		return nil, err
 	}
@@ -2220,9 +2218,6 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 
 	if m := res.StateTransitionMetrics; m != nil {
 		stats.AccountHashes = m.AccountUpdate + m.StateUpdate + m.StateHash
-		stats.AccountCommits = m.AccountCommits
-		stats.StorageCommits = m.StorageCommits
-		stats.DatabaseCommit = m.TrieDBCommits
 		//stats.Prefetch = m.StatePrefetch
 	}
 	//stats.Prefetch = prefetchReader.(state.PrefetcherMetricer).Metrics().Elapsed
