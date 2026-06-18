@@ -19,6 +19,7 @@ package core
 import (
 	"errors"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/ethereum/go-ethereum/consensus"
@@ -143,6 +144,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	return nil
 }
 
+// StateRootSource computes a new state root during block execution.
 type StateRootSource interface {
 	IntermediateRoot(deleteEmptyObjects bool) common.Hash
 	Error() error

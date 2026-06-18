@@ -41,10 +41,9 @@ var (
 	transactionTestDir              = filepath.Join(baseDir, "TransactionTests")
 	rlpTestDir                      = filepath.Join(baseDir, "RLPTests")
 	difficultyTestDir               = filepath.Join(baseDir, "BasicTests")
-	executionSpecBlockchainTestDir    = filepath.Join(".", "spec-tests", "fixtures", "blockchain_tests")
-	executionSpecBALBlockchainTestDir = filepath.Join(".", "spec-tests-bal", "fixtures", "blockchain_tests")
-	executionSpecStateTestDir         = filepath.Join(".", "spec-tests", "fixtures", "state_tests")
-	executionSpecTransactionTestDir   = filepath.Join(".", "spec-tests", "fixtures", "transaction_tests")
+	executionSpecBlockchainTestDir  = filepath.Join(".", "spec-tests", "fixtures", "blockchain_tests")
+	executionSpecStateTestDir       = filepath.Join(".", "spec-tests", "fixtures", "state_tests")
+	executionSpecTransactionTestDir = filepath.Join(".", "spec-tests", "fixtures", "transaction_tests")
 	benchmarksDir                   = filepath.Join(".", "evm-benchmarks", "benchmarks")
 )
 
