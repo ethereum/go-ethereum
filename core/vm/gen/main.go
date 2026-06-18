@@ -510,7 +510,7 @@ func (g *generator) emitFile() {
 				if isEIP4762 && !contract.IsDeployment && !contract.IsSystemCall {
 					contractAddr := contract.Address()
 					consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.RegularGas)
-					contract.UseGas(GasCosts{RegularGas: consumed}, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
+					contract.chargeRegular(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
 					if consumed < wanted {
 						return nil, ErrOutOfGas
 					}
