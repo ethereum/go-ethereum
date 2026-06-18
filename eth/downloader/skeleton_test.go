@@ -841,6 +841,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 
 		rawdb.WriteBlock(db, types.NewBlockWithHeader(chain[0]))
 		rawdb.WriteReceipts(db, chain[0].Hash(), chain[0].Number.Uint64(), types.Receipts{})
+		rawdb.WriteCanonicalHash(db, chain[0].Hash(), chain[0].Number.Uint64())
 
 		// Create a peer set to feed headers through
 		peerset := newPeerSet()
@@ -871,6 +872,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 
 						rawdb.WriteBlock(db, types.NewBlockWithHeader(header))
 						rawdb.WriteReceipts(db, header.Hash(), header.Number.Uint64(), types.Receipts{})
+						rawdb.WriteCanonicalHash(db, header.Hash(), header.Number.Uint64())
 
 						rawdb.DeleteSkeletonHeader(db, header.Number.Uint64())
 
@@ -881,6 +883,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 
 					rawdb.WriteBlock(db, types.NewBlockWithHeader(filled))
 					rawdb.WriteReceipts(db, filled.Hash(), filled.Number.Uint64(), types.Receipts{})
+					rawdb.WriteCanonicalHash(db, filled.Hash(), filled.Number.Uint64())
 				},
 
 				suspendHook: func() *types.Header {
@@ -938,6 +941,70 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		// Check that the peers served no more headers than we actually needed
 		// Clean up any leftover skeleton sync resources
 		skeleton.Terminate()
+	}
+}
+
+// TestSkeletonLinkSkipsNonCanonical verifies that the skeleton only links to a
+// local block that is canonical, and descends past block data that is present by
+// hash but lacks a canonical number->hash mapping (e.g. blocks imported
+// optimistically via the engine API, or orphans left by an unclean shutdown).
+// Anchoring on such a block would leave it in place forever without its canonical
+// mapping being rewritten, wedging the freezer later on.
+func TestSkeletonLinkSkipsNonCanonical(t *testing.T) {
+	// Build a fake header chain; the skeleton only needs a parent-hash progression.
+	chain := []*types.Header{{Number: big.NewInt(0)}}
+	for i := 1; i < 200; i++ {
+		chain = append(chain, &types.Header{
+			ParentHash: chain[i-1].Hash(),
+			Number:     big.NewInt(int64(i)),
+		})
+	}
+	const (
+		canon = 100 // blocks [0..canon] are present AND canonical locally
+		top   = 150 // blocks [canon+1..top] are present by hash but NOT canonical
+	)
+	db := rawdb.NewMemoryDatabase()
+
+	// Canonical prefix: full block data plus the canonical number->hash mapping.
+	for i := 0; i <= canon; i++ {
+		rawdb.WriteBlock(db, types.NewBlockWithHeader(chain[i]))
+		rawdb.WriteReceipts(db, chain[i].Hash(), chain[i].Number.Uint64(), types.Receipts{})
+		rawdb.WriteCanonicalHash(db, chain[i].Hash(), chain[i].Number.Uint64())
+	}
+	// Scattered non-canonical data: full block data is present, but the canonical
+	// mapping is deliberately absent.
+	for i := canon + 1; i <= top; i++ {
+		rawdb.WriteBlock(db, types.NewBlockWithHeader(chain[i]))
+		rawdb.WriteReceipts(db, chain[i].Hash(), chain[i].Number.Uint64(), types.Receipts{})
+	}
+
+	// Feed the full chain through a single peer. The fakeChainReader reports an
+	// effectively infinite snap head, so the canonical mapping is the only thing
+	// that can prevent the skeleton from linking on a non-canonical block.
+	peerset := newPeerSet()
+	drop := func(peer string) { peerset.Unregister(peer) }
+	peer := newSkeletonTestPeer("peer", chain)
+	if err := peerset.Register(newPeerConnection(peer.id, eth.ETH69, peer, log.New("id", peer.id))); err != nil {
+		t.Fatalf("failed to register peer: %v", err)
+	}
+	skeleton := newSkeleton(db, peerset, drop, newHookedBackfiller(), &fakeChainReader{})
+	skeleton.Sync(chain[len(chain)-1], nil, true)
+	defer skeleton.Terminate()
+
+	// The skeleton must link at the canonical block, i.e. the resulting subchain
+	// tail must descend to canon+1 (covering the whole non-canonical region). With
+	// a hash-only "known" check it would instead stop at top+1.
+	wantTail := uint64(canon + 1)
+	var progress skeletonProgress
+	for deadline := time.Now().Add(2 * time.Second); ; {
+		json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
+		if len(progress.Subchains) == 1 && progress.Subchains[0].Tail == wantTail {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("skeleton did not link at canonical block: subchains=%+v, want single subchain with tail %d", progress.Subchains, wantTail)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 
