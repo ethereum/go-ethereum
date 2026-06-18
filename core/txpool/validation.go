@@ -154,6 +154,9 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	return nil
 }
 
+// validateBlobSidecar implements the blob sidecar validation.
+// Note that this doesn't verify the consistency between blobs(cells) and
+// proofs. For proof verification, use validateCells.
 func validateBlobSidecar(tx *types.Transaction, head *types.Header, opts *ValidationOptions) error {
 	if tx.BlobGasFeeCapIntCmp(blobTxMinBlobGasPrice) < 0 {
 		return fmt.Errorf("%w: blob fee cap %v, minimum needed %v", ErrTxGasPriceTooLow, tx.BlobGasFeeCap(), blobTxMinBlobGasPrice)
@@ -178,6 +181,7 @@ func validateBlobSidecar(tx *types.Transaction, head *types.Header, opts *Valida
 		return fmt.Errorf("%w: unexpected sidecar version, want: %d, got: %d", ErrSidecarFormatError, expected, sidecar.Version)
 	}
 
+	//todo: can we drop the support for v0 blob txs in blobpool?
 	switch sidecar.Version {
 	case types.BlobSidecarVersion0:
 		if len(sidecar.Proofs) != len(sidecar.Commitments) {

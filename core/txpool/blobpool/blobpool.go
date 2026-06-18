@@ -1984,6 +1984,7 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 		}
 		return err
 	}
+	//todo: validation happens twice for eth72
 	if err := txpool.ValidateCells(ptx.CellSidecar); err != nil {
 		return err
 	}
@@ -2235,8 +2236,6 @@ func (p *BlobPool) drop() {
 //
 // The transactions can also be pre-filtered by the dynamic fee components to
 // reduce allocations and load on downstream subsystems.
-// The transactions without enough cells to recover thier blobs would be skipped
-// in the response.
 func (p *BlobPool) Pending(filter txpool.PendingFilter) (map[common.Address][]*txpool.LazyTransaction, int) {
 	// If only plain transactions are requested, this pool is unsuitable as it
 	// contains none, don't even bother.

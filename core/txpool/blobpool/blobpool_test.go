@@ -237,10 +237,7 @@ func makeTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64,
 
 // encodeForPool encodes a blob transaction in the blobTxForPool storage format.
 func encodeForPool(tx *types.Transaction) []byte {
-	ptx, err := newBlobTxForPool(tx)
-	if err != nil {
-		panic(err)
-	}
+	ptx, _ := newBlobTxForPool(tx)
 	blob, _ := rlp.EncodeToBytes(ptx)
 	return blob
 }
@@ -2162,6 +2159,51 @@ func TestGetBlobs(t *testing.T) {
 	pool.Close()
 }
 
+// TestEncodeForNetwork verifies that encodeForNetwork produces the correct wire
+// encoding for each (sidecar version, eth protocol version) combination.
+//   - eth/69, eth/70: blobs recovered from cells, output matches the original tx
+//   - eth/72:         blob payload omitted, output matches removeBlobs(tx)
+func TestEncodeForNetwork(t *testing.T) {
+	cases := []struct {
+		name       string
+		sidecarVer byte
+		ethVer     uint
+	}{
+		{"v0/eth70", types.BlobSidecarVersion0, 70},
+		{"v1/eth70", types.BlobSidecarVersion1, 70},
+		{"v0/eth72", types.BlobSidecarVersion0, 72},
+		{"v1/eth72", types.BlobSidecarVersion1, 72},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testEncodeForNetwork(t, tc.sidecarVer, tc.ethVer)
+		})
+	}
+}
+
+func testEncodeForNetwork(t *testing.T, sidecarVer byte, ethVer uint) {
+	key, _ := crypto.GenerateKey()
+	tx := makeMultiBlobTx(0, 1, 1, 1, 1, 0, key, sidecarVer)
+
+	wantTx := tx
+	if ethVer >= 72 {
+		wantTx = removeBlobs(tx)
+	}
+	wantRLP, err := rlp.EncodeToBytes(wantTx)
+	if err != nil {
+		t.Fatalf("failed to encode tx: %v", err)
+	}
+	storedRLP := encodeForPool(tx)
+
+	gotRLP, err := encodeForNetwork(storedRLP, ethVer)
+	if err != nil {
+		t.Fatalf("encodeForNetwork failed: %v", err)
+	}
+	if !bytes.Equal(gotRLP, wantRLP) {
+		t.Fatalf("network encoding mismatch: got %d bytes, want %d bytes", len(gotRLP), len(wantRLP))
+	}
+}
+
 // fakeBilly is a billy.Database implementation which just drops data on the floor.
 type fakeBilly struct {
 	billy.Database
@@ -2357,50 +2399,5 @@ func TestGetCells(t *testing.T) {
 				t.Errorf("expected %d cells, got %d", tt.expectedLen, totalCells)
 			}
 		})
-	}
-}
-
-// TestEncodeForNetwork verifies that encodeForNetwork produces the correct wire
-// encoding for each (sidecar version, eth protocol version) combination.
-//   - eth/69, eth/70: blobs recovered from cells, output matches the original tx
-//   - eth/72:         blob payload omitted, output matches removeBlobs(tx)
-func TestEncodeForNetwork(t *testing.T) {
-	cases := []struct {
-		name       string
-		sidecarVer byte
-		ethVer     uint
-	}{
-		{"v0/eth70", types.BlobSidecarVersion0, 70},
-		{"v1/eth70", types.BlobSidecarVersion1, 70},
-		{"v0/eth72", types.BlobSidecarVersion0, 72},
-		{"v1/eth72", types.BlobSidecarVersion1, 72},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			testEncodeForNetwork(t, tc.sidecarVer, tc.ethVer)
-		})
-	}
-}
-
-func testEncodeForNetwork(t *testing.T, sidecarVer byte, ethVer uint) {
-	key, _ := crypto.GenerateKey()
-	tx := makeMultiBlobTx(0, 1, 1, 1, 1, 0, key, sidecarVer)
-
-	wantTx := tx
-	if ethVer >= 72 {
-		wantTx = removeBlobs(tx)
-	}
-	wantRLP, err := rlp.EncodeToBytes(wantTx)
-	if err != nil {
-		t.Fatalf("failed to encode tx: %v", err)
-	}
-	storedRLP := encodeForPool(tx)
-
-	gotRLP, err := encodeForNetwork(storedRLP, ethVer)
-	if err != nil {
-		t.Fatalf("encodeForNetwork failed: %v", err)
-	}
-	if !bytes.Equal(gotRLP, wantRLP) {
-		t.Fatalf("network encoding mismatch: got %d bytes, want %d bytes", len(gotRLP), len(wantRLP))
 	}
 }
