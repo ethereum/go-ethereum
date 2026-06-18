@@ -767,10 +767,10 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			var (
-				codeLen = uint64(len(scope.Contract.Code))
-				elem    = scope.Stack.get()
-			)
+			codeLen := uint64(len(scope.Contract.Code))
+			elem := &stack.inner.data[stack.inner.top]
+			stack.inner.top++
+			stack.size++
 			pc += 1
 			if pc < codeLen {
 				elem.SetUint64(uint64(scope.Contract.Code[pc]))
@@ -796,10 +796,10 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			var (
-				codeLen = uint64(len(scope.Contract.Code))
-				elem    = scope.Stack.get()
-			)
+			codeLen := uint64(len(scope.Contract.Code))
+			elem := &stack.inner.data[stack.inner.top]
+			stack.inner.top++
+			stack.size++
 			if pc+2 < codeLen {
 				elem.SetBytes2(scope.Contract.Code[pc+1 : pc+3])
 			} else if pc+1 < codeLen {
