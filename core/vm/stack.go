@@ -104,11 +104,12 @@ func (s *Stack) push(d *uint256.Int) {
 
 // get returns a pointer to a newly created element
 // on top of the stack
+//
+//gen:inline
 func (s *Stack) get() *uint256.Int {
-	elem := &s.inner.data[s.inner.top]
 	s.inner.top++
 	s.size++
-	return elem
+	return &s.inner.data[s.inner.top-1]
 }
 
 func (s *Stack) pop() uint256.Int {
@@ -137,6 +138,8 @@ func (s *Stack) pop1() *uint256.Int {
 
 // pop2 removes the top two elements and returns pointers to them. The
 // pointers stay valid only until the next push or sub call.
+//
+//gen:inline
 func (s *Stack) pop2() (top, second *uint256.Int) {
 	s.inner.top -= 2
 	s.size -= 2
@@ -162,6 +165,8 @@ func (s *Stack) pop4() (top, second, third, fourth *uint256.Int) {
 // pop1Peek1 removes the top element and returns pointers to it and to the new
 // top, the usual operand and write target of a binary operation. The first
 // pointer stays valid only until the next push or sub call.
+//
+//gen:inline
 func (s *Stack) pop1Peek1() (top, rest *uint256.Int) {
 	s.inner.top--
 	s.size--
@@ -171,6 +176,8 @@ func (s *Stack) pop1Peek1() (top, rest *uint256.Int) {
 // pop2Peek1 removes the top two elements and returns pointers to them and to
 // the new top, for three operand operations. The first two pointers stay
 // valid only until the next push or sub call.
+//
+//gen:inline
 func (s *Stack) pop2Peek1() (top, second, rest *uint256.Int) {
 	s.inner.top -= 2
 	s.size -= 2
@@ -226,6 +233,7 @@ func (s *Stack) swap16() {
 	s.inner.data[s.bottom+s.size-17], s.inner.data[s.bottom+s.size-1] = s.inner.data[s.bottom+s.size-1], s.inner.data[s.bottom+s.size-17]
 }
 
+//gen:inline
 func (s *Stack) dup(n int) {
 	s.inner.data[s.bottom+s.size] = s.inner.data[s.bottom+s.size-n]
 	s.size++

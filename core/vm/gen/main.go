@@ -109,12 +109,17 @@ type opMeta struct {
 }
 
 type generator struct {
-	fset     *token.FileSet
-	handlers map[string]*ast.FuncDecl
-	meta     [256]opMeta
-	buf      *bytes.Buffer
+	fset         *token.FileSet
+	handlers     map[string]*ast.FuncDecl // opXxx handlers from instructions.go and eips.go
+	stackHelpers map[string]*ast.FuncDecl // (s *Stack) helpers from stack.go, spliced inline
+	meta         [256]opMeta
+	buf          *bytes.Buffer
 }
 
+// p is the sole writer of the generated file. Every line of output is appended
+// to g.buf through it. The splice helpers (inlineBody, inlineFactoryBody) only
+// build text, which their callers then hand to p.
+//
 // p formats and appends generated Go, like fmt.Fprintf. A template can start on
 // the line after p( and be indented to match its structure. p drops the leading
 // newline and the indent before the closing backtick, and gofmt tidies the rest.
@@ -129,12 +134,14 @@ func (g *generator) p(format string, args ...any) {
 // Handler parsing + body splicing
 // ---------------------------------------------------------------------------
 
-// parseHandlers parses instructions.go and eips.go and returns every top-level
-// opXxx function declaration by name.
-func parseHandlers(vmDir string) (*token.FileSet, map[string]*ast.FuncDecl) {
-	fset := token.NewFileSet()
-	handlers := map[string]*ast.FuncDecl{}
-	for _, name := range []string{"instructions.go", "eips.go"} {
+// parseHandlers parses instructions.go, eips.go and stack.go. It returns the
+// top-level opXxx handlers by name, and separately the *Stack helper methods by
+// name (the inliner splices the latter into the former).
+func parseHandlers(vmDir string) (fset *token.FileSet, handlers, stackHelpers map[string]*ast.FuncDecl) {
+	fset = token.NewFileSet()
+	handlers = map[string]*ast.FuncDecl{}
+	stackHelpers = map[string]*ast.FuncDecl{}
+	for _, name := range []string{"instructions.go", "eips.go", "stack.go"} {
 		path := filepath.Join(vmDir, name)
 		f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 		if err != nil {
@@ -142,37 +149,124 @@ func parseHandlers(vmDir string) (*token.FileSet, map[string]*ast.FuncDecl) {
 		}
 		for _, decl := range f.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || fn.Recv != nil || fn.Body == nil {
+			if !ok || fn.Body == nil {
 				continue
 			}
-			handlers[fn.Name.Name] = fn
+			switch {
+			case fn.Recv == nil: // top-level opXxx handler
+				handlers[fn.Name.Name] = fn
+			case isStackMethod(fn) && hasInlineMarker(fn): // (s *Stack) helper tagged //gen:inline
+				stackHelpers[fn.Name.Name] = fn
+			}
 		}
 	}
-	return fset, handlers
+	return fset, handlers, stackHelpers
+}
+
+// isStackMethod reports whether fn is a method on *Stack.
+func isStackMethod(fn *ast.FuncDecl) bool {
+	if fn.Recv == nil || len(fn.Recv.List) != 1 {
+		return false
+	}
+	star, ok := fn.Recv.List[0].Type.(*ast.StarExpr)
+	if !ok {
+		return false
+	}
+	id, ok := star.X.(*ast.Ident)
+	return ok && id.Name == "Stack"
+}
+
+// hasInlineMarker reports whether fn is tagged //gen:inline, which marks a stack
+// helper for splicing into the generated dispatch.
+func hasInlineMarker(fn *ast.FuncDecl) bool {
+	if fn.Doc == nil {
+		return false
+	}
+	for _, c := range fn.Doc.List {
+		if c.Text == "//gen:inline" {
+			return true
+		}
+	}
+	return false
 }
 
 var returnRe = regexp.MustCompile(`^(\s*)return\s+([^,]+),\s*(.+)$`)
 
-// inlineBody returns the source of handler's body, rewritten so it can be
-// spliced into the dispatch loop: the `*pc` dereference becomes the loop's `pc`
-// local, and each `return r0, r1` becomes loop control flow. Success
-// (r1 == nil) advances pc and continues, an error sets err and breaks.
+// inlineBody returns a named handler's body, rewritten so it can be spliced
+// into the dispatch loop (see rewriteSplicedBody). The caller emits it with p.
 func (g *generator) inlineBody(handler string) string {
 	fn := g.handlers[handler]
 	if fn == nil {
 		fatalf("no handler %q to inline", handler)
 	}
+	return g.rewriteSplicedBody(g.expandStackHelpers(fn.Body.List, nil))
+}
+
+// inlineFactoryBody splices the body of the executionFunc closure that a make*
+// factory returns, substituting the factory's parameters with the per-opcode
+// constants in args (positional, matching the factory signature). This lets
+// closure-built handlers (makePush, makeDup) be derived from their single
+// definition rather than restated in the generator. The caller emits the
+// result with p.
+func (g *generator) inlineFactoryBody(factory string, args ...int) string {
+	fn := g.handlers[factory]
+	if fn == nil {
+		fatalf("no factory %q to inline", factory)
+	}
+	lit := factoryClosure(factory, fn)
+	// Bind the factory parameters to the per-opcode constants, then inline.
+	names := paramNames(fn)
+	if len(names) != len(args) {
+		fatalf("factory %q takes %d params, got %d args", factory, len(names), len(args))
+	}
+	params := map[string]int{}
+	for i, nm := range names {
+		params[nm] = args[i]
+	}
+	return g.rewriteSplicedBody(g.expandStackHelpers(lit.Body.List, params))
+}
+
+// factoryClosure returns the executionFunc literal that a make* factory's body
+// is a single `return func(...) {...}` of.
+func factoryClosure(name string, fn *ast.FuncDecl) *ast.FuncLit {
+	if len(fn.Body.List) != 1 {
+		fatalf("factory %q body is not a single return", name)
+	}
+	ret, ok := fn.Body.List[0].(*ast.ReturnStmt)
+	if !ok || len(ret.Results) != 1 {
+		fatalf("factory %q does not return a single value", name)
+	}
+	lit, ok := ret.Results[0].(*ast.FuncLit)
+	if !ok {
+		fatalf("factory %q does not return a func literal", name)
+	}
+	return lit
+}
+
+// renderAst converts AST statements back to formatted Go source text, the
+// inverse of parsing. It uses the generator's fileset and emits nothing itself
+// (the caller passes the result to p).
+func (g *generator) renderAst(stmts []ast.Stmt) string {
 	var raw bytes.Buffer
 	cfg := printer.Config{Mode: printer.UseSpaces | printer.TabIndent, Tabwidth: 8}
-	for _, stmt := range fn.Body.List {
+	for _, stmt := range stmts {
 		if err := cfg.Fprint(&raw, g.fset, stmt); err != nil {
-			fatalf("print %s body: %v", handler, err)
+			fatalf("print stmt: %v", err)
 		}
 		raw.WriteByte('\n')
 	}
-	src := strings.ReplaceAll(raw.String(), "*pc", "pc")
+	return raw.String()
+}
 
-	var out strings.Builder
+// rewriteSplicedBody rewrites a printed handler body so it runs inside the
+// dispatch loop: the `*pc` dereference becomes the loop's `pc` local, and each
+// `return r0, r1` becomes loop control flow. Success (r1 == nil) advances pc
+// and continues, an error sets err and breaks. (Stack helpers were already
+// inlined by expandStackHelpers before the body was printed.)
+func (g *generator) rewriteSplicedBody(src string) string {
+	src = strings.ReplaceAll(src, "*pc", "pc")
+
+	var out bytes.Buffer
 	for _, line := range strings.Split(src, "\n") {
 		if m := returnRe.FindStringSubmatch(line); m != nil {
 			indent, r0, r1 := m[1], strings.TrimSpace(m[2]), strings.TrimSpace(m[3])
@@ -197,6 +291,197 @@ func (g *generator) inlineBody(handler string) string {
 		out.WriteString(line + "\n")
 	}
 	return out.String()
+}
+
+// The helpers spliced inline are tagged //gen:inline in stack.go and collected
+// into g.stackHelpers. They cost more than the compiler will inline into a
+// function the size of execUntraced, where a snailtracer profile put the calls
+// at over a tenth of the run. The cheap helpers (pop1, len, peek, drop, back)
+// inline on their own and stay as calls. Each tagged helper is inlined from its
+// stack.go body (expandStackHelpers), so the inlined code follows the one definition.
+
+// stackCall is a matched call to a tagged helper.
+type stackCall struct {
+	helper string      // helper method name
+	lhs    []ast.Expr  // assignment targets, nil for a void call like dup
+	tok    token.Token // the assignment token, := or =
+	args   []ast.Expr  // call arguments (only dup has one)
+}
+
+// matchStackHelper matches a statement that is a single must-expand helper call,
+// in one of the two normalized forms: an assignment `lhs... := scope.Stack.H(args)`
+// or a bare `scope.Stack.H(args)`.
+func (g *generator) matchStackHelper(stmt ast.Stmt) (stackCall, bool) {
+	switch s := stmt.(type) {
+	case *ast.AssignStmt:
+		if len(s.Rhs) == 1 {
+			if h, args, ok := g.stackHelperCall(s.Rhs[0]); ok {
+				return stackCall{helper: h, lhs: s.Lhs, tok: s.Tok, args: args}, true
+			}
+		}
+	case *ast.ExprStmt:
+		if h, args, ok := g.stackHelperCall(s.X); ok {
+			return stackCall{helper: h, args: args}, true
+		}
+	}
+	return stackCall{}, false
+}
+
+// stackHelperCall unwraps scope.Stack.H(args) where H is a must-expand helper.
+func (g *generator) stackHelperCall(e ast.Expr) (helper string, args []ast.Expr, ok bool) {
+	call, isCall := e.(*ast.CallExpr)
+	if !isCall {
+		return "", nil, false
+	}
+	sel, isSel := call.Fun.(*ast.SelectorExpr) // <recv>.H
+	if !isSel || g.stackHelpers[sel.Sel.Name] == nil || !isStackExpr(sel.X) {
+		return "", nil, false
+	}
+	return sel.Sel.Name, call.Args, true
+}
+
+// isStackExpr reports whether e is the stack receiver: the `stack` local or
+// scope.Stack.
+func isStackExpr(e ast.Expr) bool {
+	switch x := e.(type) {
+	case *ast.Ident:
+		return x.Name == "stack"
+	case *ast.SelectorExpr:
+		return x.Sel.Name == "Stack"
+	}
+	return false
+}
+
+// expandStackHelpers renders a handler body to source, inlining every must-expand
+// helper call and printing other statements unchanged. params maps the factory
+// parameters (makePush/makeDup) to their per-opcode constants. Helper calls
+// appear only at statement top-level here; a nested one would be left as a real
+// call and caught by the inlining guard test.
+func (g *generator) expandStackHelpers(stmts []ast.Stmt, params map[string]int) string {
+	var out strings.Builder
+	for _, stmt := range stmts {
+		if call, ok := g.matchStackHelper(stmt); ok {
+			out.WriteString(g.inlineStackHelper(call, params))
+		} else {
+			out.WriteString(substParams(g.renderAst([]ast.Stmt{stmt}), params))
+		}
+	}
+	return out.String()
+}
+
+// substParams replaces each factory parameter with its constant. It runs only
+// on printed non-helper statements and on helper arguments, never on a helper
+// expansion, so it cannot touch a field like stack.size. The parameter names do
+// not textually overlap, so map order does not affect the result.
+func substParams(src string, params map[string]int) string {
+	for name, val := range params {
+		src = regexp.MustCompile(`\b`+name+`\b`).ReplaceAllString(src, fmt.Sprint(val))
+	}
+	return src
+}
+
+// inlineStackHelper expands one helper call to its stack.go body. The single
+// rule: the helper is straight-line statements then an optional final return
+// whose result count matches the call's targets. Anything else is not in
+// inlinable form and is a hard error (the shape post-condition). The receiver
+// maps to the loop's `stack` local and each parameter to its call argument.
+func (g *generator) inlineStackHelper(call stackCall, params map[string]int) string {
+	fn := g.stackHelpers[call.helper]
+	if fn == nil {
+		fatalf("no stack helper %q to inline", call.helper)
+	}
+	// Peel an optional trailing return off the body.
+	body := fn.Body.List
+	var ret *ast.ReturnStmt
+	if n := len(body); n > 0 {
+		if r, isRet := body[n-1].(*ast.ReturnStmt); isRet {
+			ret, body = r, body[:n-1]
+		}
+	}
+	results := 0
+	if ret != nil {
+		results = len(ret.Results)
+	}
+	if len(call.lhs) != results {
+		fatalf("stack helper %q returns %d values, call assigns %d", call.helper, results, len(call.lhs))
+	}
+	// Map the receiver to the loop local and each parameter to its argument.
+	names := paramNames(fn)
+	if len(names) != len(call.args) {
+		fatalf("stack helper %q takes %d params, call passes %d", call.helper, len(names), len(call.args))
+	}
+	subst := map[string]string{recvName(fn): "stack"}
+	for i, name := range names {
+		subst[name] = substParams(renderInlineExpr(call.args[i], nil), params)
+	}
+	// The leading bookkeeping statements, then bind each return expression to
+	// its assignment target.
+	var out strings.Builder
+	for _, stmt := range body {
+		out.WriteString(renderInlineStmt(stmt, subst) + "\n")
+	}
+	for i, lhs := range call.lhs {
+		out.WriteString(renderInlineExpr(lhs, nil) + " " + call.tok.String() + " " + renderInlineExpr(ret.Results[i], subst) + "\n")
+	}
+	return out.String()
+}
+
+// recvName returns a method's receiver name (e.g. "s").
+func recvName(fn *ast.FuncDecl) string {
+	if names := fn.Recv.List[0].Names; len(names) > 0 {
+		return names[0].Name
+	}
+	return ""
+}
+
+// paramNames returns a function's parameter names, in order.
+func paramNames(fn *ast.FuncDecl) []string {
+	var names []string
+	for _, f := range fn.Type.Params.List {
+		for _, nm := range f.Names {
+			names = append(names, nm.Name)
+		}
+	}
+	return names
+}
+
+// renderInlineStmt prints one helper-body statement with subst applied. Only the
+// statement shapes the helpers use are handled; any other is not inlinable.
+func renderInlineStmt(stmt ast.Stmt, subst map[string]string) string {
+	switch s := stmt.(type) {
+	case *ast.IncDecStmt: // s.inner.top++
+		return renderInlineExpr(s.X, subst) + s.Tok.String()
+	case *ast.AssignStmt: // s.size -= 2  or  data[x] = data[y]
+		if len(s.Lhs) == 1 && len(s.Rhs) == 1 {
+			return renderInlineExpr(s.Lhs[0], subst) + " " + s.Tok.String() + " " + renderInlineExpr(s.Rhs[0], subst)
+		}
+	}
+	fatalf("inline: unsupported statement %T in stack helper", stmt)
+	return ""
+}
+
+// renderInlineExpr prints one helper-body expression, substituting any
+// identifier found in subst. Only the shapes the helpers use are handled.
+func renderInlineExpr(expr ast.Expr, subst map[string]string) string {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		if r, ok := subst[e.Name]; ok {
+			return r
+		}
+		return e.Name
+	case *ast.BasicLit:
+		return e.Value
+	case *ast.SelectorExpr: // x.field
+		return renderInlineExpr(e.X, subst) + "." + e.Sel.Name
+	case *ast.IndexExpr: // x[i]
+		return renderInlineExpr(e.X, subst) + "[" + renderInlineExpr(e.Index, subst) + "]"
+	case *ast.BinaryExpr: // x op y
+		return renderInlineExpr(e.X, subst) + " " + e.Op.String() + " " + renderInlineExpr(e.Y, subst)
+	case *ast.UnaryExpr: // &x
+		return e.Op.String() + renderInlineExpr(e.X, subst)
+	}
+	fatalf("inline: unsupported expression %T in stack helper", expr)
+	return ""
 }
 
 // ---------------------------------------------------------------------------
@@ -320,34 +605,21 @@ func (g *generator) emitWork(code byte) {
 	}
 
 	switch {
-	case code >= 0x62 && code <= 0x7f: // PUSH3-PUSH32: inline makePush(n,n)
-		g.emitPushFixed(int(code) - 0x5f)
-	case code >= 0x80 && code <= 0x8f: // DUP1-DUP16: inline makeDup(n)
+	case code >= 0x62 && code <= 0x7f: // PUSH3-PUSH32: splice makePush(n, n)
+		n := int(code) - 0x5f
+		g.p("%s", g.inlineFactoryBody("makePush", n, n))
+	case code >= 0x80 && code <= 0x8f: // DUP1-DUP16: splice makeDup(n)
+		g.p("%s", g.inlineFactoryBody("makeDup", int(code)-0x7f))
+	case code >= 0x90 && code <= 0x9f: // SWAP1-SWAP16: the swap body, emitted raw
+		n := int(code) - 0x8f
 		g.p(`
-			scope.Stack.dup(%d)
+			stack.inner.data[stack.bottom+stack.size-%d], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-%d]
 			pc++
 			continue mainLoop
-		`, int(code)-0x7f)
+		`, n+1, n+1)
 	default:
 		g.p("%s", g.inlineBody(inlineHandler[code]))
 	}
-}
-
-// emitPushFixed inlines makePush(n, n) for PUSH<n> (n = 3..32).
-func (g *generator) emitPushFixed(n int) {
-	g.p(`
-		codeLen := len(scope.Contract.Code)
-		start := min(codeLen, int(pc+1))
-		end := min(codeLen, start+%d)
-		a := scope.Stack.get()
-		a.SetBytes(scope.Contract.Code[start:end])
-		if missing := %d - (end - start); missing > 0 {
-			a.Lsh(a, uint(8*missing))
-		}
-		pc += %d
-		pc++
-		continue mainLoop
-	`, n, n, n)
 }
 
 func (g *generator) emitInlineCase(code byte) {
@@ -552,8 +824,8 @@ func main() {
 	}
 	vmDir := filepath.Dir(filepath.Dir(self)) // .../core/vm/gen -> .../core/vm
 
-	fset, handlers := parseHandlers(vmDir)
-	g := &generator{fset: fset, handlers: handlers, buf: new(bytes.Buffer)}
+	fset, handlers, stackHelpers := parseHandlers(vmDir)
+	g := &generator{fset: fset, handlers: handlers, stackHelpers: stackHelpers, buf: new(bytes.Buffer)}
 	g.deriveMeta(vm.GenForks())
 	g.emitFile()
 
