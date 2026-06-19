@@ -147,7 +147,7 @@ func TestProtocolHandshakeErrors(t *testing.T) {
 		p1, p2 := MsgPipe()
 		go Send(p1, test.code, test.msg)
 		_, err := readProtocolHandshake(p2)
-		if !errors.Is(err, test.err) {
+		if err.Error() != test.err.Error() {
 			t.Errorf("test %d: error mismatch: got %q, want %q", i, err, test.err)
 		}
 	}
