@@ -151,8 +151,8 @@ func TestDecodeRejectsNonCanonicalPosition(t *testing.T) {
 	blob := []byte{nodeTypeInternal, 5}
 	// bitmap[0] = bit at position 5 → 1 << (7-5) = 0x04
 	blob = append(blob, 0x04, 0x00, 0x00, 0x00)
-	// depths[0] = 2
-	blob = append(blob, 2)
+	// depths[0] = 2, packed as (2-1)=1 in 3 bits MSB-first → 0b0010_0000 = 0x20
+	blob = append(blob, 0x20)
 	// hashes[0] = 32 zero bytes
 	blob = append(blob, make([]byte, HashSize)...)
 
@@ -166,18 +166,22 @@ func TestDecodeRejectsNonCanonicalPosition(t *testing.T) {
 	}
 }
 
-// TestDecodeRejectsInvalidDepthOffset covers depthOffset=0 (a present entry
-// must consume ≥1 bit of natural path) and depthOffset>groupDepth (the
-// entry would live below the group's bottom layer, impossible by
-// construction).
+// TestDecodeRejectsInvalidDepthOffset covers depthOffset>groupDepth (the entry
+// would live below the group's bottom layer, impossible by construction). The
+// old depthOffset=0 and depthOffset>MaxGroupDepth cases are gone: the 3-bit
+// field stores (offset-1) ∈ [0,7], so offset 0 and offset 9 are unrepresentable
+// and can no longer be hand-crafted into a blob. Only offset>groupDepth with
+// groupDepth<MaxGroupDepth remains encodable and must still be rejected.
 func TestDecodeRejectsInvalidDepthOffset(t *testing.T) {
 	makeBlob := func(groupDepth int, depthOffset uint8) []byte {
 		bitmapSize := bitmapSizeForDepth(groupDepth)
 		bitmap := make([]byte, bitmapSize)
 		bitmap[0] = 0x80 // bit at position 0
+		depths := make([]byte, packedDepthsLen(1))
+		writeDepth(depths, 0, depthOffset-1)
 		blob := []byte{nodeTypeInternal, byte(groupDepth)}
 		blob = append(blob, bitmap...)
-		blob = append(blob, depthOffset)
+		blob = append(blob, depths...)
 		blob = append(blob, make([]byte, HashSize)...)
 		return blob
 	}
@@ -187,9 +191,10 @@ func TestDecodeRejectsInvalidDepthOffset(t *testing.T) {
 		groupDepth  int
 		depthOffset uint8
 	}{
-		{"depth=0", 5, 0},
-		{"depth>groupDepth", 5, 6},
-		{"depth>MaxGroupDepth", MaxGroupDepth, MaxGroupDepth + 1},
+		{"gd2/depth3", 2, 3},
+		{"gd3/depth4", 3, 4},
+		{"gd5/depth6", 5, 6},
+		{"gd7/depth8", 7, 8},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newNodeStore()
@@ -201,6 +206,30 @@ func TestDecodeRejectsInvalidDepthOffset(t *testing.T) {
 				t.Errorf("expected 'invalid depth offset', got %q", err.Error())
 			}
 		})
+	}
+}
+
+// TestDecodeRejectsNonCanonicalDepthPadding verifies the canonical-encoding
+// check on the packed depth stream: when k*3 is not a multiple of 8, the unused
+// low bits of the final packed byte must be zero. Here groupDepth=2 with a
+// single entry uses 3 bits, leaving 5 pad bits; a stray pad bit must be
+// rejected so that two encoders cannot produce differing blobs for the same
+// content.
+func TestDecodeRejectsNonCanonicalDepthPadding(t *testing.T) {
+	// groupDepth=2, one entry at bitmap position 0, depthOffset=2 (bottom layer).
+	// Packed depth = (2-1)=1 → 0b001_00000 = 0x20; set a stray low pad bit → 0x21.
+	blob := []byte{nodeTypeInternal, 2}
+	blob = append(blob, 0x80) // bitmap: bit at position 0
+	blob = append(blob, 0x21) // packed depths with a non-zero pad bit
+	blob = append(blob, make([]byte, HashSize)...)
+
+	s := newNodeStore()
+	_, err := s.deserializeNode(blob, 0)
+	if err == nil {
+		t.Fatal("expected non-canonical depth padding error, got nil")
+	}
+	if err.Error() != "non-canonical depth padding" {
+		t.Errorf("expected 'non-canonical depth padding', got %q", err.Error())
 	}
 }
 
