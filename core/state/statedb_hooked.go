@@ -230,10 +230,6 @@ func (s *hookedStateDB) AddLog(log *types.Log) {
 	}
 }
 
-func (s *hookedStateDB) LogsForBurnAccounts() []*types.Log {
-	return s.inner.LogsForBurnAccounts()
-}
-
 func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccessList {
 	if s.hooks.OnBalanceChange == nil && s.hooks.OnNonceChangeV2 == nil && s.hooks.OnNonceChange == nil && s.hooks.OnCodeChangeV2 == nil && s.hooks.OnCodeChange == nil {
 		// Short circuit if no relevant hooks are set.
@@ -261,7 +257,8 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlock
 		// Bingo: state object was self-destructed, call relevant hooks.
 
 		// If ether was sent to account post-selfdestruct, record as burnt.
-		if s.hooks.OnBalanceChange != nil {
+		// EIP-8246: balance is preserved, skip the burn trace.
+		if s.hooks.OnBalanceChange != nil && s.inner.stateAccessList == nil {
 			if bal := obj.Balance(); bal.Sign() != 0 {
 				s.hooks.OnBalanceChange(addr, bal.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
 			}

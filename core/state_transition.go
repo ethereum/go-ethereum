@@ -744,12 +744,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 	}
 
-	// EIP-7708: Emit the ETH-burn logs
-	if rules.IsAmsterdam {
-		for _, log := range st.evm.StateDB.LogsForBurnAccounts() {
-			st.evm.StateDB.AddLog(log)
-		}
-	}
 	return &ExecutionResult{
 		UsedGas:    gasUsed,
 		MaxUsedGas: peakUsed,
