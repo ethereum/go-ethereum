@@ -105,10 +105,9 @@ func (s *Stack) push(d *uint256.Int) {
 // get returns a pointer to a newly created element
 // on top of the stack
 func (s *Stack) get() *uint256.Int {
-	elem := &s.inner.data[s.inner.top]
 	s.inner.top++
 	s.size++
-	return elem
+	return &s.inner.data[s.inner.top-1]
 }
 
 func (s *Stack) pop() uint256.Int {
