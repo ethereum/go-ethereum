@@ -283,6 +283,11 @@ func (a *Archiver) nodeHeight(n node, path []byte, owner common.Hash, maxHeight 
 		}
 
 	case *fullNode:
+		if maxHeight <= 0 {
+			// No depth budget left: a fullNode always has at least one
+			// child, so its height is >= 1, i.e. already > maxHeight.
+			return maxHeight + 1
+		}
 		maxH := 0
 		for i, child := range n.Children[:16] {
 			if child == nil {
@@ -294,9 +299,6 @@ func (a *Archiver) nodeHeight(n node, path []byte, owner common.Hash, maxHeight 
 			case valueNode:
 				childHeight = 0
 			case hashNode:
-				if maxH+1 > maxHeight {
-					return maxHeight + 1
-				}
 				childHeight = a.probeHeight(owner, childPath, common.BytesToHash(c), maxHeight-1)
 			default:
 				childHeight = a.nodeHeight(c, childPath, owner, maxHeight-1)
