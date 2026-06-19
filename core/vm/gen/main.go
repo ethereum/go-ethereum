@@ -115,6 +115,10 @@ type generator struct {
 	buf      *bytes.Buffer
 }
 
+// p is the sole writer of the generated file. Every line of output is appended
+// to g.buf through it. The splice helpers (inlineBody, inlineFactoryBody) only
+// build text, which their callers then hand to p.
+//
 // p formats and appends generated Go, like fmt.Fprintf. A template can start on
 // the line after p( and be indented to match its structure. p drops the leading
 // newline and the indent before the closing backtick, and gofmt tidies the rest.
@@ -153,26 +157,84 @@ func parseHandlers(vmDir string) (*token.FileSet, map[string]*ast.FuncDecl) {
 
 var returnRe = regexp.MustCompile(`^(\s*)return\s+([^,]+),\s*(.+)$`)
 
-// inlineBody returns the source of handler's body, rewritten so it can be
-// spliced into the dispatch loop: the `*pc` dereference becomes the loop's `pc`
-// local, and each `return r0, r1` becomes loop control flow. Success
-// (r1 == nil) advances pc and continues, an error sets err and breaks.
+// inlineBody returns a named handler's body, rewritten so it can be spliced
+// into the dispatch loop (see rewriteSplicedBody). The caller emits it with p.
 func (g *generator) inlineBody(handler string) string {
 	fn := g.handlers[handler]
 	if fn == nil {
 		fatalf("no handler %q to inline", handler)
 	}
+	return g.rewriteSplicedBody(g.renderAst(fn.Body.List))
+}
+
+// inlineFactoryBody splices the body of the executionFunc closure that a make*
+// factory returns, substituting the factory's parameters with the per-opcode
+// constants in args (positional, matching the factory signature). This lets
+// closure-built handlers (makePush, makeDup) be derived from their single
+// definition rather than restated in the generator. The caller emits the
+// result with p.
+func (g *generator) inlineFactoryBody(factory string, args ...int) string {
+	fn := g.handlers[factory]
+	if fn == nil {
+		fatalf("no factory %q to inline", factory)
+	}
+	lit := factoryClosure(factory, fn)
+	src := g.renderAst(lit.Body.List)
+	var names []string
+	for _, f := range fn.Type.Params.List {
+		for _, nm := range f.Names {
+			names = append(names, nm.Name)
+		}
+	}
+	if len(names) != len(args) {
+		fatalf("factory %q takes %d params, got %d args", factory, len(names), len(args))
+	}
+	for i, nm := range names {
+		src = regexp.MustCompile(`\b`+nm+`\b`).ReplaceAllString(src, fmt.Sprint(args[i]))
+	}
+	return g.rewriteSplicedBody(src)
+}
+
+// factoryClosure returns the executionFunc literal that a make* factory's body
+// is a single `return func(...) {...}` of.
+func factoryClosure(name string, fn *ast.FuncDecl) *ast.FuncLit {
+	if len(fn.Body.List) != 1 {
+		fatalf("factory %q body is not a single return", name)
+	}
+	ret, ok := fn.Body.List[0].(*ast.ReturnStmt)
+	if !ok || len(ret.Results) != 1 {
+		fatalf("factory %q does not return a single value", name)
+	}
+	lit, ok := ret.Results[0].(*ast.FuncLit)
+	if !ok {
+		fatalf("factory %q does not return a func literal", name)
+	}
+	return lit
+}
+
+// renderAst converts AST statements back to formatted Go source text, the
+// inverse of parsing. It uses the generator's fileset and emits nothing itself
+// (the caller passes the result to p).
+func (g *generator) renderAst(stmts []ast.Stmt) string {
 	var raw bytes.Buffer
 	cfg := printer.Config{Mode: printer.UseSpaces | printer.TabIndent, Tabwidth: 8}
-	for _, stmt := range fn.Body.List {
+	for _, stmt := range stmts {
 		if err := cfg.Fprint(&raw, g.fset, stmt); err != nil {
-			fatalf("print %s body: %v", handler, err)
+			fatalf("print stmt: %v", err)
 		}
 		raw.WriteByte('\n')
 	}
-	src := strings.ReplaceAll(raw.String(), "*pc", "pc")
+	return raw.String()
+}
 
-	var out strings.Builder
+// rewriteSplicedBody rewrites a printed handler body so it runs inside the
+// dispatch loop: the `*pc` dereference becomes the loop's `pc` local, and each
+// `return r0, r1` becomes loop control flow. Success (r1 == nil) advances pc
+// and continues, an error sets err and breaks. Stack helpers are then expanded.
+func (g *generator) rewriteSplicedBody(src string) string {
+	src = strings.ReplaceAll(src, "*pc", "pc")
+
+	var out bytes.Buffer
 	for _, line := range strings.Split(src, "\n") {
 		if m := returnRe.FindStringSubmatch(line); m != nil {
 			indent, r0, r1 := m[1], strings.TrimSpace(m[2]), strings.TrimSpace(m[3])
@@ -214,6 +276,7 @@ var (
 	pop2Re      = regexp.MustCompile(`(?m)^(\s*)(\w+), (\w+) := scope\.Stack\.pop2\(\)$`)
 	getAssignRe = regexp.MustCompile(`(?m)^(\s*)(\w+) := scope\.Stack\.get\(\)$`)
 	getCallRe   = regexp.MustCompile(`(?m)^(\s*)scope\.Stack\.get\(\)\.(\w+)\((.*)\)$`)
+	dupRe       = regexp.MustCompile(`(?m)^(\s*)scope\.Stack\.dup\((\d+)\)$`)
 	varBlockRe  = regexp.MustCompile(`(?ms)^(\s*)var \(\n(.*?)\n\s*\)$`)
 	varMemberRe = regexp.MustCompile(`(?m)^\s*([\w, ]+?)\s*= (.*)$`)
 )
@@ -239,6 +302,8 @@ func expandStackHelpers(src string) string {
 		"${1}$2 := &stack.inner.data[stack.inner.top]\n${1}stack.inner.top++\n${1}stack.size++")
 	src = getCallRe.ReplaceAllString(src,
 		"${1}stack.inner.data[stack.inner.top].$2($3)\n${1}stack.inner.top++\n${1}stack.size++")
+	src = dupRe.ReplaceAllString(src,
+		"${1}stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-$2]\n${1}stack.size++\n${1}stack.inner.top++")
 	return src
 }
 
@@ -363,16 +428,11 @@ func (g *generator) emitWork(code byte) {
 	}
 
 	switch {
-	case code >= 0x62 && code <= 0x7f: // PUSH3-PUSH32: inline makePush(n,n)
-		g.emitPushFixed(int(code) - 0x5f)
-	case code >= 0x80 && code <= 0x8f: // DUP1-DUP16: the dup body, emitted raw
-		g.p(`
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-%d]
-			stack.size++
-			stack.inner.top++
-			pc++
-			continue mainLoop
-		`, int(code)-0x7f)
+	case code >= 0x62 && code <= 0x7f: // PUSH3-PUSH32: splice makePush(n, n)
+		n := int(code) - 0x5f
+		g.p("%s", g.inlineFactoryBody("makePush", n, n))
+	case code >= 0x80 && code <= 0x8f: // DUP1-DUP16: splice makeDup(n)
+		g.p("%s", g.inlineFactoryBody("makeDup", int(code)-0x7f))
 	case code >= 0x90 && code <= 0x9f: // SWAP1-SWAP16: the swap body, emitted raw
 		n := int(code) - 0x8f
 		g.p(`
@@ -383,25 +443,6 @@ func (g *generator) emitWork(code byte) {
 	default:
 		g.p("%s", g.inlineBody(inlineHandler[code]))
 	}
-}
-
-// emitPushFixed inlines makePush(n, n) for PUSH<n> (n = 3..32).
-func (g *generator) emitPushFixed(n int) {
-	g.p(`
-		codeLen := len(scope.Contract.Code)
-		start := min(codeLen, int(pc+1))
-		end := min(codeLen, start+%d)
-		a := &stack.inner.data[stack.inner.top]
-		stack.inner.top++
-		stack.size++
-		a.SetBytes(scope.Contract.Code[start:end])
-		if missing := %d - (end - start); missing > 0 {
-			a.Lsh(a, uint(8*missing))
-		}
-		pc += %d
-		pc++
-		continue mainLoop
-	`, n, n, n)
 }
 
 func (g *generator) emitInlineCase(code byte) {
