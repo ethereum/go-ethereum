@@ -827,9 +827,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+3)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+3)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -840,6 +842,7 @@ mainLoop:
 			pc += 3
 			pc++
 			continue mainLoop
+
 		case PUSH4:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -856,9 +859,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+4)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+4)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -869,6 +874,7 @@ mainLoop:
 			pc += 4
 			pc++
 			continue mainLoop
+
 		case PUSH5:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -885,9 +891,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+5)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+5)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -898,6 +906,7 @@ mainLoop:
 			pc += 5
 			pc++
 			continue mainLoop
+
 		case PUSH6:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -914,9 +923,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+6)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+6)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -927,6 +938,7 @@ mainLoop:
 			pc += 6
 			pc++
 			continue mainLoop
+
 		case PUSH7:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -943,9 +955,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+7)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+7)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -956,6 +970,7 @@ mainLoop:
 			pc += 7
 			pc++
 			continue mainLoop
+
 		case PUSH8:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -972,9 +987,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+8)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+8)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -985,6 +1002,7 @@ mainLoop:
 			pc += 8
 			pc++
 			continue mainLoop
+
 		case PUSH9:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1001,9 +1019,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+9)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+9)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1014,6 +1034,7 @@ mainLoop:
 			pc += 9
 			pc++
 			continue mainLoop
+
 		case PUSH10:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1030,9 +1051,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+10)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+10)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1043,6 +1066,7 @@ mainLoop:
 			pc += 10
 			pc++
 			continue mainLoop
+
 		case PUSH11:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1059,9 +1083,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+11)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+11)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1072,6 +1098,7 @@ mainLoop:
 			pc += 11
 			pc++
 			continue mainLoop
+
 		case PUSH12:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1088,9 +1115,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+12)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+12)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1101,6 +1130,7 @@ mainLoop:
 			pc += 12
 			pc++
 			continue mainLoop
+
 		case PUSH13:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1117,9 +1147,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+13)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+13)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1130,6 +1162,7 @@ mainLoop:
 			pc += 13
 			pc++
 			continue mainLoop
+
 		case PUSH14:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1146,9 +1179,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+14)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+14)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1159,6 +1194,7 @@ mainLoop:
 			pc += 14
 			pc++
 			continue mainLoop
+
 		case PUSH15:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1175,9 +1211,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+15)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+15)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1188,6 +1226,7 @@ mainLoop:
 			pc += 15
 			pc++
 			continue mainLoop
+
 		case PUSH16:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1204,9 +1243,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+16)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+16)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1217,6 +1258,7 @@ mainLoop:
 			pc += 16
 			pc++
 			continue mainLoop
+
 		case PUSH17:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1233,9 +1275,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+17)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+17)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1246,6 +1290,7 @@ mainLoop:
 			pc += 17
 			pc++
 			continue mainLoop
+
 		case PUSH18:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1262,9 +1307,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+18)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+18)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1275,6 +1322,7 @@ mainLoop:
 			pc += 18
 			pc++
 			continue mainLoop
+
 		case PUSH19:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1291,9 +1339,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+19)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+19)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1304,6 +1354,7 @@ mainLoop:
 			pc += 19
 			pc++
 			continue mainLoop
+
 		case PUSH20:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1320,9 +1371,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+20)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+20)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1333,6 +1386,7 @@ mainLoop:
 			pc += 20
 			pc++
 			continue mainLoop
+
 		case PUSH21:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1349,9 +1403,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+21)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+21)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1362,6 +1418,7 @@ mainLoop:
 			pc += 21
 			pc++
 			continue mainLoop
+
 		case PUSH22:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1378,9 +1435,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+22)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+22)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1391,6 +1450,7 @@ mainLoop:
 			pc += 22
 			pc++
 			continue mainLoop
+
 		case PUSH23:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1407,9 +1467,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+23)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+23)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1420,6 +1482,7 @@ mainLoop:
 			pc += 23
 			pc++
 			continue mainLoop
+
 		case PUSH24:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1436,9 +1499,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+24)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+24)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1449,6 +1514,7 @@ mainLoop:
 			pc += 24
 			pc++
 			continue mainLoop
+
 		case PUSH25:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1465,9 +1531,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+25)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+25)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1478,6 +1546,7 @@ mainLoop:
 			pc += 25
 			pc++
 			continue mainLoop
+
 		case PUSH26:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1494,9 +1563,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+26)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+26)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1507,6 +1578,7 @@ mainLoop:
 			pc += 26
 			pc++
 			continue mainLoop
+
 		case PUSH27:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1523,9 +1595,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+27)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+27)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1536,6 +1610,7 @@ mainLoop:
 			pc += 27
 			pc++
 			continue mainLoop
+
 		case PUSH28:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1552,9 +1627,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+28)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+28)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1565,6 +1642,7 @@ mainLoop:
 			pc += 28
 			pc++
 			continue mainLoop
+
 		case PUSH29:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1581,9 +1659,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+29)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+29)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1594,6 +1674,7 @@ mainLoop:
 			pc += 29
 			pc++
 			continue mainLoop
+
 		case PUSH30:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1610,9 +1691,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+30)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+30)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1623,6 +1706,7 @@ mainLoop:
 			pc += 30
 			pc++
 			continue mainLoop
+
 		case PUSH31:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1639,9 +1723,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+31)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+31)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1652,6 +1738,7 @@ mainLoop:
 			pc += 31
 			pc++
 			continue mainLoop
+
 		case PUSH32:
 			if sLen := stack.len(); sLen > 1023 {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
@@ -1668,9 +1755,11 @@ mainLoop:
 				pc++
 				continue mainLoop
 			}
-			codeLen := len(scope.Contract.Code)
-			start := min(codeLen, int(pc+1))
-			end := min(codeLen, start+32)
+			var (
+				codeLen = len(scope.Contract.Code)
+				start   = min(codeLen, int(pc+1))
+				end     = min(codeLen, start+32)
+			)
 			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
@@ -1681,6 +1770,7 @@ mainLoop:
 			pc += 32
 			pc++
 			continue mainLoop
+
 		case DUP1:
 			if sLen := stack.len(); sLen < 1 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 1}
@@ -1696,6 +1786,7 @@ mainLoop:
 			stack.inner.top++
 			pc++
 			continue mainLoop
+
 		case DUP2:
 			if sLen := stack.len(); sLen < 2 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
@@ -1711,6 +1802,7 @@ mainLoop:
 			stack.inner.top++
 			pc++
 			continue mainLoop
+
 		case DUP3:
 			if sLen := stack.len(); sLen < 3 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 3}
@@ -1726,6 +1818,7 @@ mainLoop:
 			stack.inner.top++
 			pc++
 			continue mainLoop
+
 		case DUP4:
 			if sLen := stack.len(); sLen < 4 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 4}
@@ -1741,6 +1834,7 @@ mainLoop:
 			stack.inner.top++
 			pc++
 			continue mainLoop
+
 		case DUP5:
 			if sLen := stack.len(); sLen < 5 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 5}
@@ -1756,6 +1850,7 @@ mainLoop:
 			stack.inner.top++
 			pc++
 			continue mainLoop
+
 		case DUP6:
 			if sLen := stack.len(); sLen < 6 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 6}
@@ -1771,6 +1866,7 @@ mainLoop:
 			stack.inner.top++
 			pc++
 			continue mainLoop
+
 		case DUP7:
 			if sLen := stack.len(); sLen < 7 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 7}
@@ -1786,6 +1882,7 @@ mainLoop:
 			stack.inner.top++
 			pc++
 			continue mainLoop
+
 		case DUP8:
 			if sLen := stack.len(); sLen < 8 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 8}
@@ -1801,6 +1898,7 @@ mainLoop:
 			stack.inner.top++
 			pc++
 			continue mainLoop
+
 		case DUP9:
 			if sLen := stack.len(); sLen < 9 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 9}
@@ -1816,6 +1914,7 @@ mainLoop:
 			stack.inner.top++
 			pc++
 			continue mainLoop
+
 		case DUP10:
 			if sLen := stack.len(); sLen < 10 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 10}
@@ -1831,6 +1930,7 @@ mainLoop:
 			stack.inner.top++
 			pc++
 			continue mainLoop
+
 		case DUP11:
 			if sLen := stack.len(); sLen < 11 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 11}
@@ -1846,6 +1946,7 @@ mainLoop:
 			stack.inner.top++
 			pc++
 			continue mainLoop
+
 		case DUP12:
 			if sLen := stack.len(); sLen < 12 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 12}
@@ -1861,6 +1962,7 @@ mainLoop:
 			stack.inner.top++
 			pc++
 			continue mainLoop
+
 		case DUP13:
 			if sLen := stack.len(); sLen < 13 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 13}
@@ -1876,6 +1978,7 @@ mainLoop:
 			stack.inner.top++
 			pc++
 			continue mainLoop
+
 		case DUP14:
 			if sLen := stack.len(); sLen < 14 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 14}
@@ -1891,6 +1994,7 @@ mainLoop:
 			stack.inner.top++
 			pc++
 			continue mainLoop
+
 		case DUP15:
 			if sLen := stack.len(); sLen < 15 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 15}
@@ -1906,6 +2010,7 @@ mainLoop:
 			stack.inner.top++
 			pc++
 			continue mainLoop
+
 		case DUP16:
 			if sLen := stack.len(); sLen < 16 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 16}
@@ -1921,6 +2026,7 @@ mainLoop:
 			stack.inner.top++
 			pc++
 			continue mainLoop
+
 		case SWAP1:
 			if sLen := stack.len(); sLen < 2 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
