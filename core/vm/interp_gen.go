@@ -705,9 +705,10 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 2
-			stack.inner.data[stack.inner.top].SetUint64(pc)
+			elem := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			elem.SetUint64(pc)
 			pc++
 			continue mainLoop
 
@@ -719,9 +720,10 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 2
-			stack.inner.data[stack.inner.top].SetUint64(uint64(scope.Memory.Len()))
+			elem := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			elem.SetUint64(uint64(scope.Memory.Len()))
 			pc++
 			continue mainLoop
 
@@ -742,9 +744,10 @@ mainLoop:
 					return nil, ErrOutOfGas
 				}
 				contract.Gas.RegularGas -= 2
-				stack.inner.data[stack.inner.top].Clear()
+				elem := &stack.inner.data[stack.inner.top]
 				stack.inner.top++
 				stack.size++
+				elem.Clear()
 				pc++
 				continue mainLoop
 
