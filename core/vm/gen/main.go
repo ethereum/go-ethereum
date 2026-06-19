@@ -267,31 +267,18 @@ func (g *generator) rewriteSplicedBody(src string) string {
 // pop1Peek1 family turn into real calls, which a snailtracer profile put at
 // over a tenth of the run. The generator splices those helper bodies in
 // textually wherever they appear in statement position, verbatim from
-// stack.go. A helper declared inside a var ( ... ) group (the push handlers
-// write elem = scope.Stack.get() there) is first lifted out into := statements,
-// since its replacement is statements rather than an expression.
+// stack.go. The handler sources are kept to that statement form (no var blocks,
+// no method chaining on a helper call) so each helper is one statement-anchored
+// regex.
 var (
 	pop1Peek1Re = regexp.MustCompile(`(?m)^(\s*)(\w+), (\w+) := scope\.Stack\.pop1Peek1\(\)$`)
 	pop2Peek1Re = regexp.MustCompile(`(?m)^(\s*)(\w+), (\w+), (\w+) := scope\.Stack\.pop2Peek1\(\)$`)
 	pop2Re      = regexp.MustCompile(`(?m)^(\s*)(\w+), (\w+) := scope\.Stack\.pop2\(\)$`)
 	getAssignRe = regexp.MustCompile(`(?m)^(\s*)(\w+) := scope\.Stack\.get\(\)$`)
-	getCallRe   = regexp.MustCompile(`(?m)^(\s*)scope\.Stack\.get\(\)\.(\w+)\((.*)\)$`)
 	dupRe       = regexp.MustCompile(`(?m)^(\s*)scope\.Stack\.dup\((\d+)\)$`)
-	varBlockRe  = regexp.MustCompile(`(?ms)^(\s*)var \(\n(.*?)\n\s*\)$`)
-	varMemberRe = regexp.MustCompile(`(?m)^\s*([\w, ]+?)\s*= (.*)$`)
 )
 
 func expandStackHelpers(src string) string {
-	// Lift any var ( ... ) group holding a stack helper into := statements:
-	// a helper expansion is statements, which cannot sit inside a var group.
-	src = varBlockRe.ReplaceAllStringFunc(src, func(block string) string {
-		m := varBlockRe.FindStringSubmatch(block)
-		indent, members := m[1], m[2]
-		if !strings.Contains(members, "scope.Stack.") {
-			return block
-		}
-		return varMemberRe.ReplaceAllString(members, indent+"$1 := $2")
-	})
 	src = pop1Peek1Re.ReplaceAllString(src,
 		"${1}stack.inner.top--\n${1}stack.size--\n${1}$2 := &stack.inner.data[stack.inner.top]\n${1}$3 := &stack.inner.data[stack.inner.top-1]")
 	src = pop2Peek1Re.ReplaceAllString(src,
@@ -300,8 +287,6 @@ func expandStackHelpers(src string) string {
 		"${1}stack.inner.top -= 2\n${1}stack.size -= 2\n${1}$2 := &stack.inner.data[stack.inner.top+1]\n${1}$3 := &stack.inner.data[stack.inner.top]")
 	src = getAssignRe.ReplaceAllString(src,
 		"${1}$2 := &stack.inner.data[stack.inner.top]\n${1}stack.inner.top++\n${1}stack.size++")
-	src = getCallRe.ReplaceAllString(src,
-		"${1}stack.inner.data[stack.inner.top].$2($3)\n${1}stack.inner.top++\n${1}stack.size++")
 	src = dupRe.ReplaceAllString(src,
 		"${1}stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-$2]\n${1}stack.size++\n${1}stack.inner.top++")
 	return src
