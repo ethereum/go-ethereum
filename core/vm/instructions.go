@@ -916,7 +916,11 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 		if this != beneficiary { // Skip no-op transfer when self-destructing to self.
 			evm.StateDB.AddBalance(beneficiary, balance, tracing.BalanceIncreaseSelfdestruct)
 		}
-		evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
+		// EIP-8246: if the beneficiary is the executing account itself and the fork
+		// is active, the balance remains unchanged instead of being burned.
+		if !evm.chainRules.IsAmsterdam || this != beneficiary {
+			evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
+		}
 		evm.StateDB.SelfDestruct(this)
 	}
 
@@ -928,8 +932,6 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	if evm.chainRules.IsAmsterdam && !balance.IsZero() {
 		if this != beneficiary {
 			evm.StateDB.AddLog(types.EthTransferLog(this, beneficiary, balance))
-		} else if newContract {
-			evm.StateDB.AddLog(types.EthBurnLog(this, balance))
 		}
 	}
 
