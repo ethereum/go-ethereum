@@ -821,7 +821,40 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccess
 			// finalise or delete, so ignore it here.
 			continue
 		}
-		if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
+		// EIP-8246: clear code/storage/nonce, preserve balance.
+		if obj.selfDestructed && s.stateAccessList != nil {
+			clearSelfdestructAccount(obj)
+
+			if deleteEmptyObjects && obj.empty() {
+				// Cleanup left account empty; delete per EIP-161.
+				delete(s.stateObjects, obj.address)
+				s.markDelete(addr)
+				if _, ok := s.stateObjectsDestruct[obj.address]; !ok {
+					s.stateObjectsDestruct[obj.address] = obj
+				}
+				balance := uint256.NewInt(0)
+				if state.balanceSet && balance.Cmp(state.balance) != 0 {
+					s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
+				}
+			} else {
+				// Keep as balance-only account.
+				balance := obj.Balance()
+				if state.balanceSet && balance.Cmp(state.balance) != 0 {
+					s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
+				}
+				nonce := obj.Nonce()
+				if state.nonceSet && nonce != state.nonce {
+					s.stateAccessList.NonceChange(addr, s.blockAccessIndex, nonce)
+				}
+				if state.codeSet {
+					if code := obj.Code(); !bytes.Equal(code, state.code) {
+						s.stateAccessList.CodeChange(addr, s.blockAccessIndex, code)
+					}
+				}
+				obj.finalise()
+				s.markUpdate(addr)
+			}
+		} else if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
 			delete(s.stateObjects, obj.address)
 			s.markDelete(addr)
 
@@ -885,6 +918,17 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccess
 	s.clearJournalAndRefund()
 
 	return s.stateAccessList
+}
+
+// clearSelfdestructAccount clears code, storage, and nonce for an EIP-8246
+// selfdestructed account while preserving the balance.
+func clearSelfdestructAccount(obj *stateObject) {
+	obj.data.CodeHash = types.EmptyCodeHash.Bytes()
+	obj.dirtyCode = true
+	obj.dirtyStorage = make(Storage)
+	obj.pendingStorage = make(Storage)
+	obj.originStorage = make(Storage)
+	obj.data.Nonce = 0
 }
 
 // IntermediateRoot computes the current root hash of the state trie.
