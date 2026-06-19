@@ -705,9 +705,9 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 2
-			elem := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			elem := &stack.inner.data[stack.inner.top-1]
 			elem.SetUint64(pc)
 			pc++
 			continue mainLoop
@@ -720,9 +720,9 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 2
-			elem := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			elem := &stack.inner.data[stack.inner.top-1]
 			elem.SetUint64(uint64(scope.Memory.Len()))
 			pc++
 			continue mainLoop
@@ -744,9 +744,9 @@ mainLoop:
 					return nil, ErrOutOfGas
 				}
 				contract.Gas.RegularGas -= 2
-				elem := &stack.inner.data[stack.inner.top]
 				stack.inner.top++
 				stack.size++
+				elem := &stack.inner.data[stack.inner.top-1]
 				elem.Clear()
 				pc++
 				continue mainLoop
@@ -771,9 +771,9 @@ mainLoop:
 				continue mainLoop
 			}
 			codeLen := uint64(len(scope.Contract.Code))
-			elem := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			elem := &stack.inner.data[stack.inner.top-1]
 			pc += 1
 			if pc < codeLen {
 				elem.SetUint64(uint64(scope.Contract.Code[pc]))
@@ -800,9 +800,9 @@ mainLoop:
 				continue mainLoop
 			}
 			codeLen := uint64(len(scope.Contract.Code))
-			elem := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			elem := &stack.inner.data[stack.inner.top-1]
 			if pc+2 < codeLen {
 				elem.SetBytes2(scope.Contract.Code[pc+1 : pc+3])
 			} else if pc+1 < codeLen {
@@ -835,9 +835,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+3)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 3 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -867,9 +867,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+4)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 4 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -899,9 +899,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+5)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 5 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -931,9 +931,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+6)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 6 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -963,9 +963,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+7)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 7 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -995,9 +995,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+8)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 8 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1027,9 +1027,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+9)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 9 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1059,9 +1059,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+10)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 10 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1091,9 +1091,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+11)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 11 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1123,9 +1123,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+12)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 12 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1155,9 +1155,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+13)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 13 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1187,9 +1187,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+14)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 14 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1219,9 +1219,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+15)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 15 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1251,9 +1251,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+16)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 16 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1283,9 +1283,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+17)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 17 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1315,9 +1315,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+18)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 18 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1347,9 +1347,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+19)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 19 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1379,9 +1379,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+20)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 20 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1411,9 +1411,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+21)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 21 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1443,9 +1443,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+22)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 22 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1475,9 +1475,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+23)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 23 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1507,9 +1507,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+24)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 24 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1539,9 +1539,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+25)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 25 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1571,9 +1571,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+26)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 26 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1603,9 +1603,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+27)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 27 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1635,9 +1635,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+28)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 28 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1667,9 +1667,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+29)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 29 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1699,9 +1699,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+30)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 30 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1731,9 +1731,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+31)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 31 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1763,9 +1763,9 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+32)
 			)
-			a := &stack.inner.data[stack.inner.top]
 			stack.inner.top++
 			stack.size++
+			a := &stack.inner.data[stack.inner.top-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 32 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
