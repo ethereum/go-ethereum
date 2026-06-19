@@ -557,6 +557,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 			// Prevents double charging with IntrinsicGas.
 			prev, ok := gas.ChargeState(params.AccountCreationSize * evm.Context.CostPerStateByte)
 			if !ok {
+				evm.StateDB.RevertToSnapshot(snapshot)
 				return nil, common.Address{}, gas.ExitHalt(reservoir), ErrOutOfGas
 			}
 			if evm.Config.Tracer.HasGasHook() {
