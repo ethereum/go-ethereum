@@ -8,7 +8,7 @@ Submitted by: Itay Elam, 05.04.2026
 
 - Each wave gets a copy of the global StateDB (which handles all the data related structures that are relevant for the transaction). The transactions then work concurrently and when they finish, they are joined together. 
 
-- Next we merge their states as much as possible into the true global state as this requires in-order merging meaning if we have 𝑤𝑎𝑣𝑒� = {𝑡𝑥�, 𝑡𝑥�}, 𝑤𝑎𝑣𝑒� = {𝑡𝑥�},  we will merge only the results from 𝑡𝑥� into the global stateDB from which we will copy for 𝑡𝑥�. This is done as the merging order of receipts and logs is important. Doing so does not hinder future correctness as in serial execution 𝑡𝑥� does not expect the results from 𝑡𝑥� to be present, it only has higher memory consumption with the current full stateDB cloning implementation. 
+- Next we merge their states as much as possible into the true global state as this requires in-order merging meaning if we have 𝑤𝑎𝑣𝑒1 = {𝑡𝑥1, 𝑡𝑥3}, 𝑤𝑎𝑣𝑒2 = {𝑡𝑥2},  we will merge only the results from 𝑡𝑥1 into the global stateDB from which we will copy for 𝑡𝑥2. This is done as the merging order of receipts and logs is important. Doing so does not hinder future correctness as in serial execution 𝑡𝑥2 does not expect the results from 𝑡𝑥3 to be present, it only has higher memory consumption with the current full stateDB cloning implementation. 
 
 ## **Implementation details:** 
 
@@ -64,7 +64,7 @@ Submitted by: Itay Elam, 05.04.2026
 Average seconds  serial average  parallel average Average<br>per transaction  total time (s)  total time (s)  speedup<br>0.01037288367 2.074576733 0.4288112333 4.837971984<br>0.04957299767 9.914599533 4.0072946 2.474137922<br>0.113482577 23.54695957 9.400588967 2.504838755<br>0.2040723702 40.81447403 16.64105027 2.452638108<br>**----- End of picture text -----**<br>
 
 
-## 
+## Future work for finer-grained / better parallelism
 
 1. Cheaper isolation than full Copy(): scoped journals, or copy-on-write only for touched accounts to cut memory and CPU. 
 
