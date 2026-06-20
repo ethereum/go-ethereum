@@ -1,0 +1,36 @@
+name: Parallel Execution Benchmark
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  benchmark:
+    name: Run Parallel Benchmarks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Results will be pushed back to the PR
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Run benchmark
+        run: |
+          # The benchmark outputs results to BENCHMARK_OUTPUT_FILE
+          export BENCHMARK_OUTPUT_FILE=$GITHUB_WORKSPACE/tests/benchmarks/parallel_results.txt
+          go test -v ./tests -run TestParallelBenchmarkOutput -timeout 15m
+
+      - name: Commit benchmark results
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update parallel execution benchmark results"
+          file_pattern: "tests/benchmarks/parallel_results.txt"
