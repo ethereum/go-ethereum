@@ -24,6 +24,8 @@ jobs:
           cache: true
 
       - name: Run benchmark
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
         run: |
           # The benchmark outputs results to BENCHMARK_OUTPUT_FILE
           export BENCHMARK_OUTPUT_FILE=$GITHUB_WORKSPACE/tests/benchmarks/parallel_results.txt

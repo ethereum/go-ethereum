@@ -18,6 +18,12 @@ import (
 )
 
 func TestParallelBenchmarkOutput(t *testing.T) {
+	branchName := os.Getenv("BRANCH_NAME")
+	if branchName == "" {
+		branchName = "unknown-branch"
+	}
+
+	fmt.Printf("--- Running benchmarks for branch: %s ---\n", branchName)
 	outPath := os.Getenv("BENCHMARK_OUTPUT_FILE")
 	if outPath == "" {
 		t.Skip("BENCHMARK_OUTPUT_FILE not set, skipping benchmark tracking output")
@@ -55,8 +61,8 @@ func TestParallelBenchmarkOutput(t *testing.T) {
 			speedup := float64(seqTime) / float64(parTime)
 			seqAvgMs := (seqTime.Seconds() / float64(n)) * 1000
 			parAvgMs := (parTime.Seconds() / float64(n)) * 1000
-			resLine := fmt.Sprintf("[%s][%d][%s] - Sequential: %.3fs (%.2fms/tx), Parallel: %.3fs (%.2fms/tx), Speedup: %.2fx",
-				dateStr, n, dep, seqTime.Seconds(), seqAvgMs, parTime.Seconds(), parAvgMs, speedup)
+			resLine := fmt.Sprintf("[%s][%s][%d][%s] - Sequential: %.3fs (%.2fms/tx), Parallel: %.3fs (%.2fms/tx), Speedup: %.2fx",
+				dateStr, branchName, n, dep, seqTime.Seconds(), seqAvgMs, parTime.Seconds(), parAvgMs, speedup)
 			t.Log(resLine)
 			results = append(results, resLine)
 		}
