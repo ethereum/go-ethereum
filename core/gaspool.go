@@ -19,41 +19,58 @@ package core
 import (
 	"fmt"
 	"math"
+	"sync/atomic"
 )
 
 // GasPool tracks the amount of gas available during execution of the transactions
 // in a block. The zero value is a pool with zero gas available.
-type GasPool uint64
+//
+// PARALLEL TX NOTE (go-ethereum fork): SubGas/AddGas use atomic compare-and-swap so
+// multiple transactions applying concurrently (StateProcessor.Process) can share one
+// pool without corrupting the remaining gas counter.
+type GasPool struct {
+	v atomic.Uint64
+}
 
 // AddGas makes gas available for execution.
 func (gp *GasPool) AddGas(amount uint64) *GasPool {
-	if uint64(*gp) > math.MaxUint64-amount {
-		panic("gas pool pushed above uint64")
+	for {
+		old := gp.v.Load()
+		if old > math.MaxUint64-amount {
+			panic("gas pool pushed above uint64")
+		}
+		next := old + amount
+		if gp.v.CompareAndSwap(old, next) {
+			return gp
+		}
 	}
-	*(*uint64)(gp) += amount
-	return gp
 }
 
 // SubGas deducts the given amount from the pool if enough gas is
 // available and returns an error otherwise.
 func (gp *GasPool) SubGas(amount uint64) error {
-	if uint64(*gp) < amount {
-		return ErrGasLimitReached
+	for {
+		old := gp.v.Load()
+		if old < amount {
+			return ErrGasLimitReached
+		}
+		next := old - amount
+		if gp.v.CompareAndSwap(old, next) {
+			return nil
+		}
 	}
-	*(*uint64)(gp) -= amount
-	return nil
 }
 
 // Gas returns the amount of gas remaining in the pool.
 func (gp *GasPool) Gas() uint64 {
-	return uint64(*gp)
+	return gp.v.Load()
 }
 
 // SetGas sets the amount of gas with the provided number.
 func (gp *GasPool) SetGas(gas uint64) {
-	*(*uint64)(gp) = gas
+	gp.v.Store(gas)
 }
 
 func (gp *GasPool) String() string {
-	return fmt.Sprintf("%d", *gp)
+	return fmt.Sprintf("%d", gp.v.Load())
 }
