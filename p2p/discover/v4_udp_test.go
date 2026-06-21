@@ -170,7 +170,7 @@ func TestUDPv4_RequestENRNoUDPEndpoint(t *testing.T) {
 	key := newkey()
 	// UDP port 0 makes UDPEndpoint return ok=false.
 	node := enode.NewV4(&key.PublicKey, net.ParseIP("1.2.3.4"), 2222, 0)
-	if _, err := test.udp.RequestENR(node); err != errNoUDPEndpoint {
+	if _, err := test.udp.RequestENR(node); !errors.Is(err, errNoUDPEndpoint) {
 		t.Errorf("expected errNoUDPEndpoint, got %v", err)
 	}
 }
