@@ -1,0 +1,15 @@
+[2026-06-21][stage1][50][Isolated] - Sequential: 0.174s (3.47ms/tx), Parallel: 0.083s (1.67ms/tx), Speedup: 2.09x
+[2026-06-21][stage1][50][Contended] - Sequential: 0.168s (3.35ms/tx), Parallel: 0.171s (3.42ms/tx), Speedup: 0.98x
+[2026-06-21][stage1][50][Mixed] - Sequential: 0.252s (5.04ms/tx), Parallel: 0.210s (4.20ms/tx), Speedup: 1.20x
+[2026-06-21][stage1][150][Isolated] - Sequential: 0.516s (3.44ms/tx), Parallel: 0.180s (1.20ms/tx), Speedup: 2.87x
+[2026-06-21][stage1][150][Contended] - Sequential: 0.510s (3.40ms/tx), Parallel: 0.513s (3.42ms/tx), Speedup: 0.99x
+[2026-06-21][stage1][150][Mixed] - Sequential: 0.724s (4.83ms/tx), Parallel: 0.610s (4.06ms/tx), Speedup: 1.19x
+[2026-06-21][stage1][300][Isolated] - Sequential: 0.959s (3.20ms/tx), Parallel: 0.490s (1.63ms/tx), Speedup: 1.96x
+[2026-06-21][stage1][300][Contended] - Sequential: 1.012s (3.37ms/tx), Parallel: 1.010s (3.37ms/tx), Speedup: 1.00x
+[2026-06-21][stage1][300][Mixed] - Sequential: 1.438s (4.79ms/tx), Parallel: 1.178s (3.93ms/tx), Speedup: 1.22x
+[2026-06-21][stage1][450][Isolated] - Sequential: 1.450s (3.22ms/tx), Parallel: 0.538s (1.20ms/tx), Speedup: 2.69x
+[2026-06-21][stage1][450][Contended] - Sequential: 1.478s (3.28ms/tx), Parallel: 1.481s (3.29ms/tx), Speedup: 1.00x
+[2026-06-21][stage1][450][Mixed] - Sequential: 2.180s (4.85ms/tx), Parallel: 1.790s (3.98ms/tx), Speedup: 1.22x
+[2026-06-21][stage1][600][Isolated] - Sequential: 1.909s (3.18ms/tx), Parallel: 0.915s (1.53ms/tx), Speedup: 2.09x
+[2026-06-21][stage1][600][Contended] - Sequential: 1.992s (3.32ms/tx), Parallel: 1.976s (3.29ms/tx), Speedup: 1.01x
+[2026-06-21][stage1][600][Mixed] - Sequential: 2.828s (4.71ms/tx), Parallel: 2.324s (3.87ms/tx), Speedup: 1.22x
