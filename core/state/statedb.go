@@ -743,38 +743,38 @@ func (s *StateDB) SetDeferTrieFlush(v bool) {
 // MergeParallelChildInto merges one transaction's effects from child onto parent.
 // Child should be a Copy() of the same pre-wave state, executed with
 // SetDeferTrieFlush(true). Log indices are reassigned to follow parent.logSize.
-func (parent *StateDB) MergeParallelChildInto(child *StateDB, txHash common.Hash) {
+func (s *StateDB) MergeParallelChildInto(child *StateDB, txHash common.Hash) {
 	if child.dbErr != nil {
-		parent.setError(child.dbErr)
+		s.setError(child.dbErr)
 	}
 	if logs := child.logs[txHash]; len(logs) > 0 {
 		cpy := make([]*types.Log, len(logs))
 		for i, l := range logs {
 			cpy[i] = new(types.Log)
 			*cpy[i] = *l
-			cpy[i].Index = uint(parent.logSize)
-			parent.logSize++
+			cpy[i].Index = s.logSize
+			s.logSize++
 		}
-		parent.logs[txHash] = cpy
+		s.logs[txHash] = cpy
 	}
 	for h, data := range child.preimages {
-		parent.preimages[h] = data
+		s.preimages[h] = data
 	}
-	if parent.accessEvents != nil && child.accessEvents != nil {
-		parent.accessEvents.Merge(child.accessEvents)
+	if s.accessEvents != nil && child.accessEvents != nil {
+		s.accessEvents.Merge(child.accessEvents)
 	}
 	for _, addr := range child.parallelMergeAddrs {
 		if op, ok := child.mutations[addr]; ok && op.isDelete() {
-			delete(parent.stateObjects, addr)
+			delete(s.stateObjects, addr)
 			if dob, ok := child.stateObjectsDestruct[addr]; ok {
-				parent.stateObjectsDestruct[addr] = dob.deepCopy(parent)
+				s.stateObjectsDestruct[addr] = dob.deepCopy(s)
 			}
-			parent.markDelete(addr)
+			s.markDelete(addr)
 			continue
 		}
 		if obj, ok := child.stateObjects[addr]; ok {
-			parent.stateObjects[addr] = obj.deepCopy(parent)
-			parent.markUpdate(addr)
+			s.stateObjects[addr] = obj.deepCopy(s)
+			s.markUpdate(addr)
 		}
 	}
 }

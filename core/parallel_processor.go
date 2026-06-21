@@ -124,18 +124,6 @@ func collectDeclaredAddressSets(txs []*types.Transaction, signer types.Signer) (
 	return sets, nil
 }
 
-func declaredStorageSlotsOverlap(a, b map[storageAccessPair]struct{}) bool {
-	if a == nil || b == nil {
-		return false
-	}
-	for pair := range a {
-		if _, ok := b[pair]; ok {
-			return true
-		}
-	}
-	return false
-}
-
 func declaredAddressSetsOverlap(a, b map[common.Address]struct{}) bool {
 	for addr := range a {
 		if _, ok := b[addr]; ok {

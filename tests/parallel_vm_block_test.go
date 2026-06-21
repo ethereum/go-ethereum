@@ -26,7 +26,7 @@ import (
 const (
 	isolatedJobTxGasLimit         = uint64(550_000_000)
 	isolatedTestNumIndependentTxs = 3
-	isolatedTestBlockGasLimit     = uint64((isolatedTestNumIndependentTxs + 1) * isolatedJobTxGasLimit)
+	isolatedTestBlockGasLimit     = (isolatedTestNumIndependentTxs + 1) * isolatedJobTxGasLimit
 )
 
 func TestParallelVMBlockAccessListIsolated(t *testing.T) {
@@ -334,5 +334,3 @@ func TestParallelVMBlockAccessListMixed(t *testing.T) {
 		assertStorageUintBlock(t, statedb, cIsolated, common.BigToHash(big.NewInt(2)), 0)
 	})
 }
-
-
