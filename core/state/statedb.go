@@ -138,6 +138,15 @@ type StateDB struct {
 	// State witness if cross validation is needed
 	witness *stateless.Witness
 
+	// deferTrieFlush, when true, skips trie updates in IntermediateRoot and makes
+	// Commit a no-op. Used for parallel per-tx StateDB forks; the canonical DB
+	// merges children then performs real trie work at block boundaries.
+	deferTrieFlush bool
+
+	// parallelMergeAddrs lists addresses touched in the last Finalise when
+	// deferTrieFlush is set (journal dirties before reset). Populated only for forks.
+	parallelMergeAddrs []common.Address
+
 	// Measurements gathered during execution for debugging purposes
 	AccountReads    time.Duration
 	AccountHashes   time.Duration
@@ -670,6 +679,7 @@ func (s *StateDB) Copy() *StateDB {
 		db:                   s.db,
 		reader:               s.reader,
 		originalRoot:         s.originalRoot,
+		deferTrieFlush:       false,
 		stateObjects:         make(map[common.Address]*stateObject, len(s.stateObjects)),
 		stateObjectsDestruct: make(map[common.Address]*stateObject, len(s.stateObjectsDestruct)),
 		mutations:            make(map[common.Address]*mutation, len(s.mutations)),
@@ -722,6 +732,51 @@ func (s *StateDB) Copy() *StateDB {
 		state.logs[hash] = cpy
 	}
 	return state
+}
+
+// SetDeferTrieFlush enables deferred trie flushing for parallel fork instances.
+// The canonical StateDB must never have this set when Commit is expected to persist.
+func (s *StateDB) SetDeferTrieFlush(v bool) {
+	s.deferTrieFlush = v
+}
+
+// MergeParallelChildInto merges one transaction's effects from child onto parent.
+// Child should be a Copy() of the same pre-wave state, executed with
+// SetDeferTrieFlush(true). Log indices are reassigned to follow parent.logSize.
+func (s *StateDB) MergeParallelChildInto(child *StateDB, txHash common.Hash) {
+	if child.dbErr != nil {
+		s.setError(child.dbErr)
+	}
+	if logs := child.logs[txHash]; len(logs) > 0 {
+		cpy := make([]*types.Log, len(logs))
+		for i, l := range logs {
+			cpy[i] = new(types.Log)
+			*cpy[i] = *l
+			cpy[i].Index = s.logSize
+			s.logSize++
+		}
+		s.logs[txHash] = cpy
+	}
+	for h, data := range child.preimages {
+		s.preimages[h] = data
+	}
+	if s.accessEvents != nil && child.accessEvents != nil {
+		s.accessEvents.Merge(child.accessEvents)
+	}
+	for _, addr := range child.parallelMergeAddrs {
+		if op, ok := child.mutations[addr]; ok && op.isDelete() {
+			delete(s.stateObjects, addr)
+			if dob, ok := child.stateObjectsDestruct[addr]; ok {
+				s.stateObjectsDestruct[addr] = dob.deepCopy(s)
+			}
+			s.markDelete(addr)
+			continue
+		}
+		if obj, ok := child.stateObjects[addr]; ok {
+			s.stateObjects[addr] = obj.deepCopy(s)
+			s.markUpdate(addr)
+		}
+	}
 }
 
 // Snapshot returns an identifier for the current revision of the state.
@@ -778,6 +833,15 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			log.Error("Failed to prefetch addresses", "addresses", len(addressesToPrefetch), "err", err)
 		}
 	}
+	if s.deferTrieFlush && len(s.journal.dirties) > 0 {
+		s.parallelMergeAddrs = s.parallelMergeAddrs[:0]
+		for addr := range s.journal.dirties {
+			s.parallelMergeAddrs = append(s.parallelMergeAddrs, addr)
+		}
+		slices.SortFunc(s.parallelMergeAddrs, func(a, b common.Address) int {
+			return a.Cmp(b)
+		})
+	}
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
 }
@@ -786,6 +850,10 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
+	if s.deferTrieFlush {
+		s.Finalise(deleteEmptyObjects)
+		return common.Hash{}
+	}
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
 
@@ -1349,6 +1417,9 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorag
 // no empty accounts left that could be deleted by EIP-158, storage wiping
 // should not occur.
 func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, error) {
+	if s.deferTrieFlush {
+		return s.originalRoot, nil
+	}
 	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping)
 	if err != nil {
 		return common.Hash{}, err
