@@ -19,6 +19,9 @@ package core
 import (
 	"fmt"
 	"math/big"
+	"sort"
+	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -89,20 +92,112 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
-	// Iterate over and process the individual transactions
-	for i, tx := range block.Transactions() {
-		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
-		if err != nil {
-			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
-		}
-		statedb.SetTxContext(tx.Hash(), i)
+	// Print declared access (EIP-2930) for each transaction before processing.
+	if ParallelTxDebug && ParallelTxWaveExecution {
+		PrintTransactionAccessLists(block.Transactions())
+		PrintTransactionAccessOverlapMatrix(block.Transactions())
+		PrintTransactionStorageAccessOverlapMatrix(block.Transactions())
+		PrintTransactionStorageParallelGroups(block.Transactions(), signer)
+	}
 
-		receipt, err := ApplyTransactionWithEVM(msg, gp, statedb, blockNumber, blockHash, context.Time, tx, usedGas, evm)
-		if err != nil {
-			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+	// --- Fork: waves from BuildTransactionStorageParallelGroups (address-disjoint).
+	// Waves run sequentially on the live StateDB. Within a wave:
+	// - ParallelTxWaveExecution false: apply txs in ascending index order (canonical).
+	// - ParallelTxWaveExecution true: invoke ApplyTransactionWithEVM concurrently
+	//   (one vm.EVM per tx); completion order is undefined — receipts are stored by index.
+	txs := block.Transactions()
+	n := len(txs)
+	receipts = make([]*types.Receipt, n)
+	groups, err := BuildTransactionStorageParallelGroups(txs, signer)
+	if err != nil {
+		return nil, fmt.Errorf("build tx parallel groups: %w", err)
+	}
+
+	txWaveExecStart := time.Now()
+	for groupIdx, group := range groups {
+		sortedIdx := append([]int(nil), group...)
+		sort.Ints(sortedIdx)
+
+		if len(sortedIdx) == 1 || !ParallelTxWaveExecution {
+			for _, i := range sortedIdx {
+				tx := txs[i]
+				msg, err := TransactionToMessage(tx, signer, header.BaseFee)
+				if err != nil {
+					return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+				}
+				statedb.SetTxContext(tx.Hash(), i)
+				var txGasUsed uint64
+				receipt, err := ApplyTransactionWithEVM(msg, gp, statedb, blockNumber, blockHash, context.Time, tx, &txGasUsed, evm)
+				if err != nil {
+					return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+				}
+				receipts[i] = receipt
+			}
+			fmt.Printf("finished transaction execution group %d (tx indices, sequential in-wave): %v\n", groupIdx, sortedIdx)
+			continue
 		}
-		receipts = append(receipts, receipt)
-		allLogs = append(allLogs, receipt.Logs...)
+
+		txForks := make([]*state.StateDB, n)
+		var wg sync.WaitGroup
+		var errMu sync.Mutex
+		var firstErr error
+		for _, i := range sortedIdx {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				tx := txs[i]
+				msg, err := TransactionToMessage(tx, signer, header.BaseFee)
+				if err != nil {
+					errMu.Lock()
+					if firstErr == nil {
+						firstErr = fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+					}
+					errMu.Unlock()
+					return
+				}
+				child := statedb.Copy()
+				child.SetDeferTrieFlush(true)
+				var parallelStateDB vm.StateDB = child
+				if hooks := cfg.Tracer; hooks != nil {
+					parallelStateDB = state.NewHookedState(child, hooks)
+				}
+				parallelEVM := vm.NewEVM(context, parallelStateDB, p.config, cfg)
+				child.SetTxContext(tx.Hash(), i)
+				var txGasUsed uint64
+				receipt, err := ApplyTransactionWithEVM(msg, gp, child, blockNumber, blockHash, context.Time, tx, &txGasUsed, parallelEVM)
+				if err != nil {
+					errMu.Lock()
+					if firstErr == nil {
+						firstErr = fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+					}
+					errMu.Unlock()
+					return
+				}
+				receipts[i] = receipt
+				txForks[i] = child
+			}()
+		}
+		wg.Wait()
+		if firstErr != nil {
+			return nil, firstErr
+		}
+		for _, i := range sortedIdx {
+			statedb.MergeParallelChildInto(txForks[i], txs[i].Hash())
+		}
+		if err := statedb.Error(); err != nil {
+			return nil, err
+		}
+		fmt.Printf("finished transaction execution group %d (tx indices, concurrent in-wave): %v\n", groupIdx, sortedIdx)
+	}
+	fmt.Printf("transaction wave dispatch total time: %v (parallelWave=%v, groups=%d, txs=%d)\n",
+		time.Since(txWaveExecStart), ParallelTxWaveExecution, len(groups), n)
+
+	normalizeReceiptCumulativeGas(receipts)
+	if n > 0 {
+		*usedGas = receipts[n-1].CumulativeGasUsed
+	}
+	for i := 0; i < n; i++ {
+		allLogs = append(allLogs, receipts[i].Logs...)
 	}
 	// Read requests if Prague is enabled.
 	var requests [][]byte
