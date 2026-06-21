@@ -98,6 +98,20 @@ var directCold = map[byte][3]string{
 	0x53: {"opMstore8", "gasMStore8", "memoryMStore8"},       // MSTORE8
 }
 
+// directColdFast maps a direct-cold op to its bool-returning fast-path guard in
+// instructions.go. The generator splices the guard ahead of the full path (see
+// emitDirectCold): on the common in-bounds case the guard handles the op inline
+// with no memory growth, and on a miss it leaves the stack and gas untouched and
+// falls through to the unchanged direct-cold sequence. The guard must charge
+// exactly what the full path would, which the differential and fuzz tests hold
+// by running the spliced path against the table loop.
+var directColdFast = map[byte]string{
+	0x20: "opKeccak256Fast", // KECCAK256
+	0x51: "opMloadFast",     // MLOAD
+	0x52: "opMstoreFast",    // MSTORE
+	0x53: "opMstore8Fast",   // MSTORE8
+}
+
 // opMeta is the per-opcode metadata derived from the per-fork tables.
 type opMeta struct {
 	defined  bool
@@ -640,6 +654,22 @@ func (g *generator) emitInlineCase(code byte) {
 	`)
 }
 
+// guardBody splices a bool-returning fast-path guard ahead of a direct-cold op.
+// `return true` becomes the op epilogue (advance pc, continue the loop) and
+// `return false` breaks out of the wrapping switch into the full path below it.
+// The guards use only cheap stack helpers, so rendering them needs no helper
+// expansion beyond the shared renderer.
+func (g *generator) guardBody(guard string) string {
+	fn := g.handlers[guard]
+	if fn == nil {
+		fatalf("no guard %q to splice", guard)
+	}
+	src := g.expandStackHelpers(fn.Body.List, nil)
+	src = strings.ReplaceAll(src, "return true", "pc++\ncontinue mainLoop")
+	src = strings.ReplaceAll(src, "return false", "break")
+	return src
+}
+
 // emitDirectCold emits a cold opcode case identical to the default case, except
 // the handler, dynamic-gas, and memory-size functions are called by name
 // rather than through the indirect operation.* table pointers. Valid only for
@@ -650,6 +680,17 @@ func (g *generator) emitDirectCold(code byte) {
 	g.p("case %s:\n", m.name)
 	g.emitStackChecks(m)
 	g.emitGasCheck(m)
+	// Splice the fast-path guard, if any, ahead of the full path. A hit ends the
+	// op (advance pc, continue); a miss breaks the switch and falls through to
+	// the full direct-cold sequence below, with the stack and gas untouched.
+	if guard, ok := directColdFast[code]; ok {
+		g.p(`
+			switch {
+			default:
+				%s
+			}
+		`, g.guardBody(guard))
+	}
 	// The three %s are the memory-size, dynamic-gas and handler names, in the
 	// order fns[2], fns[1], fns[0]. The doubled %%w and %%v are not generator
 	// verbs: Fprintf collapses each %% to a single %, so the generated code ends
@@ -751,6 +792,8 @@ func (g *generator) emitFile() {
 
 			"github.com/ethereum/go-ethereum/common/math"
 			"github.com/ethereum/go-ethereum/core/tracing"
+			"github.com/ethereum/go-ethereum/crypto"
+			"github.com/ethereum/go-ethereum/params"
 		)
 
 	`)

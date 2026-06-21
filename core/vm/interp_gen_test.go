@@ -174,6 +174,16 @@ var diffPrograms = []struct {
 	{"keccak", asm(PUSH1, 0x20, PUSH1, 0x00, KECCAK256, PUSH1, 0x00, MSTORE, PUSH1, 0x20, PUSH1, 0x00, RETURN), 100000},
 	{"memory", asm(PUSH1, 0xab, PUSH1, 0x00, MSTORE8, PUSH1, 0xcd, PUSH2, 0x00, 0x40, MSTORE, MSIZE, PUSH1, 0x60, MSTORE, PUSH1, 0x80, PUSH1, 0x00, RETURN), 100000},
 	{"mcopy", asm(PUSH1, 0xff, PUSH1, 0x00, MSTORE, PUSH1, 0x20, PUSH1, 0x00, PUSH1, 0x20, MCOPY, PUSH1, 0x40, PUSH1, 0x00, RETURN), 100000},
+	// Memory/keccak fast-path guards (directColdFast), edge by edge: a store
+	// that expands (miss) then loads/stores the same word in bounds (hits); a
+	// load at exactly len-32 (hit) then one byte past it (miss, expands); MSTORE8
+	// at the last byte (miss to create, then hit); an offset above 64 bits (miss
+	// into the overflow error); and an in-bounds keccak (hit) after the slot.
+	{"memfast-roundtrip", asm(PUSH1, 0x2a, PUSH1, 0x00, MSTORE, PUSH1, 0x00, MLOAD, PUSH1, 0x00, MSTORE, PUSH1, 0x20, PUSH1, 0x00, RETURN), 100000},
+	{"memfast-boundary", asm(PUSH1, 0x01, PUSH1, 0x20, MSTORE, PUSH1, 0x20, MLOAD, PUSH1, 0x21, MLOAD, ADD, PUSH1, 0x00, MSTORE, PUSH1, 0x20, PUSH1, 0x00, RETURN), 100000},
+	{"memfast-mstore8-edge", asm(PUSH1, 0x01, PUSH1, 0x3f, MSTORE8, PUSH1, 0x02, PUSH1, 0x3f, MSTORE8, PUSH1, 0x40, PUSH1, 0x00, RETURN), 100000},
+	{"memfast-huge-offset", asm(PUSH9, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, MLOAD, STOP), 100000},
+	{"keccak-fast", asm(PUSH1, 0x00, PUSH1, 0x00, MSTORE, PUSH1, 0x20, PUSH1, 0x00, KECCAK256, PUSH1, 0x00, MSTORE, PUSH1, 0x20, PUSH1, 0x00, RETURN), 100000},
 	{"storage", asm(PUSH1, 0x63, PUSH1, 0x07, SSTORE, PUSH1, 0x07, SLOAD, PUSH1, 0x00, MSTORE, PUSH1, 0x20, PUSH1, 0x00, RETURN), 100000},
 	{"transient", asm(PUSH1, 0x63, PUSH1, 0x07, TSTORE, PUSH1, 0x07, TLOAD, PUSH1, 0x00, MSTORE, PUSH1, 0x20, PUSH1, 0x00, RETURN), 100000},
 	{"loop", asm(PUSH1, 0x00, JUMPDEST, PUSH1, 0x01, ADD, DUP1, PUSH1, 0x05, LT, PUSH1, 0x02, JUMPI, PUSH1, 0x00, MSTORE, PUSH1, 0x20, PUSH1, 0x00, RETURN), 100000},

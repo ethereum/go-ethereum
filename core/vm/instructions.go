@@ -242,6 +242,41 @@ func opKeccak256(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	return nil, nil
 }
 
+// opKeccak256Fast hashes when the data is already in bounds and small, charging
+// the per-word gas itself (no expansion is possible, so that is the whole
+// dynamic cost). It reports whether it handled the op. The generator splices it
+// ahead of the full path; the table path never calls it. It bails to that path
+// for preimage recording, an empty or large input, an out-of-bounds range, or
+// out of gas, leaving the stack and gas untouched on a miss.
+func opKeccak256Fast(evm *EVM, contract *Contract, scope *ScopeContext) bool {
+	if evm.Config.EnablePreimageRecording {
+		return false
+	}
+	off := scope.Stack.back(0)
+	sz := scope.Stack.back(1)
+	if off[1]|off[2]|off[3] != 0 || sz[1]|sz[2]|sz[3] != 0 {
+		return false
+	}
+	size := sz[0]
+	if size == 0 || size > 512 {
+		return false
+	}
+	store := scope.Memory.store
+	if uint64(len(store)) < size || off[0] > uint64(len(store))-size {
+		return false
+	}
+	cost := ((size + 31) / 32) * params.Keccak256WordGas
+	if contract.Gas.RegularGas < cost {
+		return false
+	}
+	contract.Gas.RegularGas -= cost
+	o := off[0]
+	scope.Stack.drop()
+	hash := crypto.Keccak256Hash(store[o : o+size])
+	sz.SetBytes(hash[:])
+	return true
+}
+
 func opAddress(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.get().SetBytes(scope.Contract.Address().Bytes())
 	return nil, nil
@@ -486,6 +521,61 @@ func opMstore8(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	off, val := scope.Stack.pop2()
 	scope.Memory.store[off.Uint64()] = byte(val.Uint64())
 	return nil, nil
+}
+
+// opMloadFast performs MLOAD when the word is already in bounds, where the
+// dynamic gas is zero and no expansion can happen. It reports whether it
+// handled the op. The generator splices it ahead of the full path; the table
+// path never calls it.
+func opMloadFast(scope *ScopeContext) bool {
+	v := scope.Stack.peek()
+	if v[1]|v[2]|v[3] != 0 {
+		return false
+	}
+	store := scope.Memory.store
+	if uint64(len(store)) < 32 || v[0] > uint64(len(store))-32 {
+		return false
+	}
+	off := v[0]
+	v.SetBytes(store[off : off+32])
+	return true
+}
+
+// opMstoreFast performs MSTORE when the write is already in bounds. Same
+// contract as opMloadFast. The stack is only touched when it handles the op.
+func opMstoreFast(scope *ScopeContext) bool {
+	off := scope.Stack.back(0)
+	if off[1]|off[2]|off[3] != 0 {
+		return false
+	}
+	store := scope.Memory.store
+	if uint64(len(store)) < 32 || off[0] > uint64(len(store))-32 {
+		return false
+	}
+	o := off[0]
+	val := scope.Stack.back(1)
+	scope.Stack.drop()
+	scope.Stack.drop()
+	scope.Memory.Set32(o, val)
+	return true
+}
+
+// opMstore8Fast performs MSTORE8 when the byte is already in bounds. Same
+// contract as opMloadFast.
+func opMstore8Fast(scope *ScopeContext) bool {
+	off := scope.Stack.back(0)
+	if off[1]|off[2]|off[3] != 0 {
+		return false
+	}
+	store := scope.Memory.store
+	if off[0] >= uint64(len(store)) {
+		return false
+	}
+	val := scope.Stack.back(1)
+	scope.Stack.drop()
+	scope.Stack.drop()
+	store[off[0]] = byte(val[0])
+	return true
 }
 
 func opSload(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {

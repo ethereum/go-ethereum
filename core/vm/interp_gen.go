@@ -7,6 +7,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // execUntraced is the generated, tracing-free interpreter fast path. Hot,
@@ -502,6 +504,37 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 30
+			switch {
+			default:
+				if evm.Config.EnablePreimageRecording {
+					break
+				}
+				off := scope.Stack.back(0)
+				sz := scope.Stack.back(1)
+				if off[1]|off[2]|off[3] != 0 || sz[1]|sz[2]|sz[3] != 0 {
+					break
+				}
+				size := sz[0]
+				if size == 0 || size > 512 {
+					break
+				}
+				store := scope.Memory.store
+				if uint64(len(store)) < size || off[0] > uint64(len(store))-size {
+					break
+				}
+				cost := ((size + 31) / 32) * params.Keccak256WordGas
+				if contract.Gas.RegularGas < cost {
+					break
+				}
+				contract.Gas.RegularGas -= cost
+				o := off[0]
+				scope.Stack.drop()
+				hash := crypto.Keccak256Hash(store[o : o+size])
+				sz.SetBytes(hash[:])
+				pc++
+				continue mainLoop
+
+			}
 			var memorySize uint64
 			{
 				memSize, overflow := memoryKeccak256(stack)
@@ -550,6 +583,22 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 3
+			switch {
+			default:
+				v := scope.Stack.peek()
+				if v[1]|v[2]|v[3] != 0 {
+					break
+				}
+				store := scope.Memory.store
+				if uint64(len(store)) < 32 || v[0] > uint64(len(store))-32 {
+					break
+				}
+				off := v[0]
+				v.SetBytes(store[off : off+32])
+				pc++
+				continue mainLoop
+
+			}
 			var memorySize uint64
 			{
 				memSize, overflow := memoryMLoad(stack)
@@ -586,6 +635,25 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 3
+			switch {
+			default:
+				off := scope.Stack.back(0)
+				if off[1]|off[2]|off[3] != 0 {
+					break
+				}
+				store := scope.Memory.store
+				if uint64(len(store)) < 32 || off[0] > uint64(len(store))-32 {
+					break
+				}
+				o := off[0]
+				val := scope.Stack.back(1)
+				scope.Stack.drop()
+				scope.Stack.drop()
+				scope.Memory.Set32(o, val)
+				pc++
+				continue mainLoop
+
+			}
 			var memorySize uint64
 			{
 				memSize, overflow := memoryMStore(stack)
@@ -622,6 +690,24 @@ mainLoop:
 				return nil, ErrOutOfGas
 			}
 			contract.Gas.RegularGas -= 3
+			switch {
+			default:
+				off := scope.Stack.back(0)
+				if off[1]|off[2]|off[3] != 0 {
+					break
+				}
+				store := scope.Memory.store
+				if off[0] >= uint64(len(store)) {
+					break
+				}
+				val := scope.Stack.back(1)
+				scope.Stack.drop()
+				scope.Stack.drop()
+				store[off[0]] = byte(val[0])
+				pc++
+				continue mainLoop
+
+			}
 			var memorySize uint64
 			{
 				memSize, overflow := memoryMStore8(stack)

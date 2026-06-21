@@ -1228,3 +1228,111 @@ func ptrToByte(v byte) *byte {
 	b := v
 	return &b
 }
+
+// TestMemFastGuards covers the bool-returning fast-path guards the generator
+// splices ahead of the direct-cold ops (see directColdFast in core/vm/gen).
+// Each must handle the in-bounds case and otherwise return false, leaving the
+// stack and gas untouched for the full path. The differential and fuzz tests
+// prove they match the table loop; these pin the hit/miss behavior directly.
+func TestMemFastGuards(t *testing.T) {
+	push := func(s *Stack, vals ...uint64) {
+		for _, v := range vals {
+			s.push(new(uint256.Int).SetUint64(v))
+		}
+	}
+	scopeWithMem := func(size uint64) *ScopeContext {
+		mem := NewMemory()
+		if size > 0 {
+			mem.Resize(size)
+		}
+		return &ScopeContext{Memory: mem, Stack: newStackForTesting()}
+	}
+
+	t.Run("MLOAD", func(t *testing.T) {
+		scope := scopeWithMem(64) // hit: 0+32 <= 64
+		scope.Memory.Set32(0, uint256.NewInt(0xc0ffee))
+		push(scope.Stack, 0)
+		if !opMloadFast(scope) {
+			t.Fatal("expected in-bounds hit")
+		}
+		if got := scope.Stack.peek().Uint64(); got != 0xc0ffee {
+			t.Fatalf("loaded %#x, want 0xc0ffee", got)
+		}
+		scope = scopeWithMem(32) // miss: 1+32 > 32, stack left intact
+		push(scope.Stack, 1)
+		if opMloadFast(scope) || scope.Stack.len() != 1 {
+			t.Fatal("expected out-of-bounds miss leaving the stack intact")
+		}
+		scope = scopeWithMem(64) // miss: offset above 64 bits
+		scope.Stack.push(new(uint256.Int).Lsh(uint256.NewInt(1), 64))
+		if opMloadFast(scope) {
+			t.Fatal("expected miss on >64-bit offset")
+		}
+	})
+
+	t.Run("MSTORE", func(t *testing.T) {
+		scope := scopeWithMem(64) // hit: write 32 bytes at offset 0
+		push(scope.Stack, 0xdead, 0)
+		if !opMstoreFast(scope) || scope.Stack.len() != 0 {
+			t.Fatal("expected hit consuming both operands")
+		}
+		if got := new(uint256.Int).SetBytes(scope.Memory.GetCopy(0, 32)).Uint64(); got != 0xdead {
+			t.Fatalf("stored %#x, want 0xdead", got)
+		}
+		scope = scopeWithMem(32) // miss: 1+32 > 32, stack left intact
+		push(scope.Stack, 0xdead, 1)
+		if opMstoreFast(scope) || scope.Stack.len() != 2 {
+			t.Fatal("expected miss leaving the stack intact")
+		}
+	})
+
+	t.Run("MSTORE8", func(t *testing.T) {
+		scope := scopeWithMem(64) // hit: low byte at offset 1
+		push(scope.Stack, 0x1ff, 1)
+		if !opMstore8Fast(scope) || scope.Stack.len() != 0 {
+			t.Fatal("expected hit consuming both operands")
+		}
+		if got := scope.Memory.GetCopy(1, 1)[0]; got != 0xff {
+			t.Fatalf("stored byte %#x, want 0xff", got)
+		}
+		scope = scopeWithMem(32) // miss: offset == len, stack left intact
+		push(scope.Stack, 0x1ff, 32)
+		if opMstore8Fast(scope) || scope.Stack.len() != 2 {
+			t.Fatal("expected miss leaving the stack intact")
+		}
+	})
+
+	t.Run("KECCAK256", func(t *testing.T) {
+		evm := NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+		gas := func() *Contract { return &Contract{Gas: NewGasBudget(100000, 0)} }
+
+		scope := scopeWithMem(64) // hit: hash mem[0:32], charging the word gas
+		scope.Memory.Set32(0, uint256.NewInt(0x42))
+		want := crypto.Keccak256Hash(scope.Memory.GetCopy(0, 32))
+		push(scope.Stack, 32, 0)
+		c := gas()
+		before := c.Gas.RegularGas
+		if !opKeccak256Fast(evm, c, scope) || scope.Stack.len() != 1 {
+			t.Fatal("expected hit consuming offset and size, leaving the hash")
+		}
+		if got := common.Hash(scope.Stack.peek().Bytes32()); got != want {
+			t.Fatalf("hash %x, want %x", got, want)
+		}
+		if charged := before - c.Gas.RegularGas; charged != params.Keccak256WordGas {
+			t.Fatalf("charged %d word gas, want %d", charged, params.Keccak256WordGas)
+		}
+
+		scope = scopeWithMem(64) // miss: size above the inline cap
+		push(scope.Stack, 513, 0)
+		if opKeccak256Fast(evm, gas(), scope) {
+			t.Fatal("expected miss on size > 512")
+		}
+
+		scope = scopeWithMem(64) // miss: preimage recording forces the slow path
+		rec := NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{EnablePreimageRecording: true})
+		push(scope.Stack, 32, 0)
+		if opKeccak256Fast(rec, gas(), scope) {
+			t.Fatal("expected miss with preimage recording on")
+		}
+	})
+}
