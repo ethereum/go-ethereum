@@ -85,43 +85,48 @@ func (g GasBudget) String() string {
 	return fmt.Sprintf("<%v,%v,used=<%v,%v>>", g.RegularGas, g.StateGas, g.UsedRegularGas, g.UsedStateGas)
 }
 
-// CanAfford reports whether the running balance can cover the given cost.
-// State-gas charges that exceed the reservoir spill into regular gas.
-func (g GasBudget) CanAfford(cost GasCosts) bool {
-	if g.RegularGas < cost.RegularGas {
-		return false
-	}
-	if cost.StateGas > g.StateGas {
-		spillover := cost.StateGas - g.StateGas
-		if spillover > g.RegularGas-cost.RegularGas {
-			return false
-		}
-	}
-	return true
-}
-
 // Charge deducts a combined regular+state cost from the running balance and
 // updates the usage accumulators. State-gas in excess of the reservoir spills
 // into regular_gas.
 func (g *GasBudget) Charge(cost GasCosts) (GasBudget, bool) {
 	prior := *g
-	if !g.CanAfford(cost) {
-		return prior, false
-	}
-	// Charge regular gas
-	g.RegularGas -= cost.RegularGas
-	g.UsedRegularGas += cost.RegularGas
+	ok := g.charge(cost)
+	return prior, ok
+}
 
-	// Charge state gas
-	if cost.StateGas > g.StateGas {
-		spillover := cost.StateGas - g.StateGas
-		g.StateGas = 0
-		g.RegularGas -= spillover
-	} else {
-		g.StateGas -= cost.StateGas
+// chargeRegularOnly deducts a regular-only cost.
+func (g *GasBudget) chargeRegularOnly(r uint64) bool {
+	if g.RegularGas < r {
+		return false
 	}
+	g.RegularGas -= r
+	g.UsedRegularGas += r
+	return true
+}
+
+// charge deducts both the state and regular cost.
+func (g *GasBudget) charge(cost GasCosts) bool {
+	if g.RegularGas < cost.RegularGas {
+		return false
+	}
+	regular := g.RegularGas - cost.RegularGas
+	state := g.StateGas
+
+	if cost.StateGas > state {
+		spillover := cost.StateGas - state
+		if spillover > regular {
+			return false
+		}
+		regular -= spillover
+		state = 0
+	} else {
+		state -= cost.StateGas
+	}
+	g.RegularGas = regular
+	g.StateGas = state
+	g.UsedRegularGas += cost.RegularGas
 	g.UsedStateGas += int64(cost.StateGas)
-	return prior, true
+	return true
 }
 
 // AsTracing converts the GasBudget into the tracing-facing Gas vector.

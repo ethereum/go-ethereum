@@ -192,7 +192,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 		// for tracing: this gas consumption event is emitted below in the debug section.
-		if !contract.chargeRegular(cost, nil, tracing.GasChangeIgnored) {
+		if !contract.Gas.chargeRegularOnly(cost) {
 			return nil, ErrOutOfGas
 		}
 
@@ -222,12 +222,11 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			if err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
 			}
-			// EIP-8037: charge regular gas before state gas. The state charge
-			// is a no-op when dynamicCost.StateGas == 0 (e.g., pre-Amsterdam).
-			if !contract.chargeRegular(dynamicCost.RegularGas, nil, tracing.GasChangeIgnored) {
-				return nil, ErrOutOfGas
-			}
-			if !contract.chargeState(dynamicCost.StateGas, nil, tracing.GasChangeIgnored) {
+			if dynamicCost.StateGas == 0 {
+				if !contract.Gas.chargeRegularOnly(dynamicCost.RegularGas) {
+					return nil, ErrOutOfGas
+				}
+			} else if !contract.Gas.charge(dynamicCost) {
 				return nil, ErrOutOfGas
 			}
 		}
