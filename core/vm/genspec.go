@@ -18,27 +18,35 @@ package vm
 
 //go:generate go run ./gen
 
+import (
+	"reflect"
+	"runtime"
+	"strings"
+)
+
 // This file exposes the interpreter's opcode metadata to the code generator in
 // core/vm/gen. It is not used at runtime. It exists so the generator can derive
 // the per-opcode spec (static gas, stack bounds, the fork an opcode first
-// appears in, and whether it carries dynamic gas or memory sizing) from the
-// existing per-fork instruction sets, rather than restating that metadata.
+// appears in, and the FuncForPC names of its handler/gas/memory functions) from
+// the existing per-fork instruction sets, rather than restating that metadata.
 //
-// The fork-varying dynamic-gas / memory-size / execute *functions* are not
-// surfaced here: several are closures (gasCall, the memoryCopierGas family,
-// makeGasLog) that cannot be recovered by name. The generated switch instead
-// reaches those volatile opcodes through the active per-fork JumpTable at
-// runtime (see interp_gen.go), so they need no generator-side restatement.
+// The function names let the generator confirm the directCold ops are
+// fork-invariant. The fork-varying gas/execute functions themselves are still
+// reached through the active per-fork JumpTable at runtime (see interp_gen.go),
+// not emitted by name: several are closures (gasCall, the memoryCopierGas
+// family, makeGasLog) that FuncForPC reports only as anonymous labels, so they
+// could not be called by name in any case.
 
 // GenOp is the generator-facing scalar metadata for one opcode slot in one fork.
 type GenOp struct {
-	Name          string // opcode mnemonic, e.g. "ADD" (valid only if Defined)
-	Defined       bool   // false if the slot is undefined/invalid in this fork
-	ConstantGas   uint64
-	MinStack      int
-	MaxStack      int
-	HasDynamicGas bool
-	HasMemorySize bool
+	Name         string // opcode mnemonic, e.g. "ADD" (valid only if Defined)
+	Defined      bool   // false if the slot is undefined/invalid in this fork
+	ConstantGas  uint64
+	MinStack     int
+	MaxStack     int
+	ExecuteFn    string // FuncForPC name of op.execute
+	DynamicGasFn string // FuncForPC name of op.dynamicGas, "" if nil
+	MemorySizeFn string // FuncForPC name of op.memorySize, "" if nil
 }
 
 // GenFork bundles a fork's name, the params.Rules bool field that activates it
@@ -79,6 +87,22 @@ var genForkOrder = []struct {
 	{"Amsterdam", "IsAmsterdam", &amsterdamInstructionSet},
 }
 
+// genFnName returns the short FuncForPC name of a jump-table function value
+// (e.g. "gasKeccak256"), or "" if nil. An aliased var resolves to the underlying
+// function (gasMLoad reports "pureMemoryGascost"), which is still stable across
+// forks and so serves the directCold fork-invariance check.
+func genFnName(fn any) string {
+	v := reflect.ValueOf(fn)
+	if !v.IsValid() || v.IsNil() {
+		return ""
+	}
+	full := runtime.FuncForPC(v.Pointer()).Name()
+	if i := strings.LastIndex(full, "."); i >= 0 {
+		return full[i+1:]
+	}
+	return full
+}
+
 // GenForks returns per-fork opcode metadata for the interpreter code generator
 // (core/vm/gen). It is exported solely for that purpose.
 func GenForks() []GenFork {
@@ -91,13 +115,14 @@ func GenForks() []GenFork {
 				continue
 			}
 			gf.Ops[code] = GenOp{
-				Name:          OpCode(code).String(),
-				Defined:       true,
-				ConstantGas:   op.constantGas,
-				MinStack:      op.minStack,
-				MaxStack:      op.maxStack,
-				HasDynamicGas: op.dynamicGas != nil,
-				HasMemorySize: op.memorySize != nil,
+				Name:         OpCode(code).String(),
+				Defined:      true,
+				ConstantGas:  op.constantGas,
+				MinStack:     op.minStack,
+				MaxStack:     op.maxStack,
+				ExecuteFn:    genFnName(op.execute),
+				DynamicGasFn: genFnName(op.dynamicGas),
+				MemorySizeFn: genFnName(op.memorySize),
 			}
 		}
 		out[i] = gf
