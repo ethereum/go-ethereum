@@ -112,7 +112,7 @@ func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 		Root:     common.BytesToHash(account.Root),
 	}
 	if len(acct.CodeHash) == 0 {
-		acct.CodeHash = types.EmptyCodeHash.Bytes()
+		acct.CodeHash = types.EmptyCodeHash[:]
 	}
 	if acct.Root == (common.Hash{}) {
 		acct.Root = types.EmptyRootHash

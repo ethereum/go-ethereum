@@ -22,15 +22,39 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 )
+
+// testAccountRLP returns the slim-RLP encoding of a deterministic account whose
+// nonce is derived from the provided tag. It lets the state-set tests use real,
+// decodable accounts while keeping the tag values readable.
+func testAccountRLP(tag byte) []byte {
+	return types.SlimAccountRLP(types.StateAccount{
+		Nonce:    uint64(tag),
+		Balance:  uint256.NewInt(uint64(tag)),
+		Root:     types.EmptyRootHash,
+		CodeHash: types.EmptyCodeHash[:],
+	})
+}
+
+// accountEqualsTag reports whether the decoded account matches the account
+// produced by testAccountRLP for the given tag.
+func accountEqualsTag(account *types.SlimAccount, tag byte) bool {
+	if account == nil {
+		return false
+	}
+	return bytes.Equal(encodeSlimAccount(account), testAccountRLP(tag))
+}
 
 func TestStatesMerge(t *testing.T) {
 	a := newStates(
 		map[common.Hash][]byte{
-			{0xa}: {0xa0},
-			{0xb}: {0xb0},
-			{0xc}: {0xc0},
+			{0xa}: testAccountRLP(0xa0),
+			{0xb}: testAccountRLP(0xb0),
+			{0xc}: testAccountRLP(0xc0),
 		},
 		map[common.Hash]map[common.Hash][]byte{
 			{0xa}: {
@@ -48,8 +72,8 @@ func TestStatesMerge(t *testing.T) {
 	)
 	b := newStates(
 		map[common.Hash][]byte{
-			{0xa}: {0xa1},
-			{0xb}: {0xb1},
+			{0xa}: testAccountRLP(0xa1),
+			{0xb}: testAccountRLP(0xb1),
 			{0xc}: nil, // delete account
 		},
 		map[common.Hash]map[common.Hash][]byte{
@@ -69,25 +93,25 @@ func TestStatesMerge(t *testing.T) {
 	)
 	a.merge(b)
 
-	blob, exist := a.account(common.Hash{0xa})
-	if !exist || !bytes.Equal(blob, []byte{0xa1}) {
+	account, exist := a.account(common.Hash{0xa})
+	if !exist || !accountEqualsTag(account, 0xa1) {
 		t.Error("Unexpected value for account a")
 	}
-	blob, exist = a.account(common.Hash{0xb})
-	if !exist || !bytes.Equal(blob, []byte{0xb1}) {
+	account, exist = a.account(common.Hash{0xb})
+	if !exist || !accountEqualsTag(account, 0xb1) {
 		t.Error("Unexpected value for account b")
 	}
-	blob, exist = a.account(common.Hash{0xc})
-	if !exist || len(blob) != 0 {
+	account, exist = a.account(common.Hash{0xc})
+	if !exist || account != nil {
 		t.Error("Unexpected value for account c")
 	}
 	// unknown account
-	blob, exist = a.account(common.Hash{0xd})
-	if exist || len(blob) != 0 {
+	account, exist = a.account(common.Hash{0xd})
+	if exist || account != nil {
 		t.Error("Unexpected value for account d")
 	}
 
-	blob, exist = a.storage(common.Hash{0xa}, common.Hash{0x1})
+	blob, exist := a.storage(common.Hash{0xa}, common.Hash{0x1})
 	if !exist || !bytes.Equal(blob, []byte{0x11}) {
 		t.Error("Unexpected value for a's storage")
 	}
@@ -118,9 +142,9 @@ func TestStatesMerge(t *testing.T) {
 func TestStatesRevert(t *testing.T) {
 	a := newStates(
 		map[common.Hash][]byte{
-			{0xa}: {0xa0},
-			{0xb}: {0xb0},
-			{0xc}: {0xc0},
+			{0xa}: testAccountRLP(0xa0),
+			{0xb}: testAccountRLP(0xb0),
+			{0xc}: testAccountRLP(0xc0),
 		},
 		map[common.Hash]map[common.Hash][]byte{
 			{0xa}: {
@@ -138,8 +162,8 @@ func TestStatesRevert(t *testing.T) {
 	)
 	b := newStates(
 		map[common.Hash][]byte{
-			{0xa}: {0xa1},
-			{0xb}: {0xb1},
+			{0xa}: testAccountRLP(0xa1),
+			{0xb}: testAccountRLP(0xb1),
 			{0xc}: nil,
 		},
 		map[common.Hash]map[common.Hash][]byte{
@@ -160,9 +184,9 @@ func TestStatesRevert(t *testing.T) {
 	a.merge(b)
 	a.revertTo(
 		map[common.Hash][]byte{
-			{0xa}: {0xa0},
-			{0xb}: {0xb0},
-			{0xc}: {0xc0},
+			{0xa}: testAccountRLP(0xa0),
+			{0xb}: testAccountRLP(0xb0),
+			{0xc}: testAccountRLP(0xc0),
 		},
 		map[common.Hash]map[common.Hash][]byte{
 			{0xa}: {
@@ -179,25 +203,25 @@ func TestStatesRevert(t *testing.T) {
 		},
 	)
 
-	blob, exist := a.account(common.Hash{0xa})
-	if !exist || !bytes.Equal(blob, []byte{0xa0}) {
+	account, exist := a.account(common.Hash{0xa})
+	if !exist || !accountEqualsTag(account, 0xa0) {
 		t.Error("Unexpected value for account a")
 	}
-	blob, exist = a.account(common.Hash{0xb})
-	if !exist || !bytes.Equal(blob, []byte{0xb0}) {
+	account, exist = a.account(common.Hash{0xb})
+	if !exist || !accountEqualsTag(account, 0xb0) {
 		t.Error("Unexpected value for account b")
 	}
-	blob, exist = a.account(common.Hash{0xc})
-	if !exist || !bytes.Equal(blob, []byte{0xc0}) {
+	account, exist = a.account(common.Hash{0xc})
+	if !exist || !accountEqualsTag(account, 0xc0) {
 		t.Error("Unexpected value for account c")
 	}
 	// unknown account
-	blob, exist = a.account(common.Hash{0xd})
-	if exist || len(blob) != 0 {
+	account, exist = a.account(common.Hash{0xd})
+	if exist || account != nil {
 		t.Error("Unexpected value for account d")
 	}
 
-	blob, exist = a.storage(common.Hash{0xa}, common.Hash{0x1})
+	blob, exist := a.storage(common.Hash{0xa}, common.Hash{0x1})
 	if !exist || !bytes.Equal(blob, []byte{0x10}) {
 		t.Error("Unexpected value for a's storage")
 	}
@@ -231,7 +255,7 @@ func TestStateRevertAccountNullMarker(t *testing.T) {
 	a := newStates(nil, nil, false) // empty initial state
 	b := newStates(
 		map[common.Hash][]byte{
-			{0xa}: {0xa},
+			{0xa}: testAccountRLP(0xa),
 		},
 		nil,
 		false,
@@ -244,12 +268,12 @@ func TestStateRevertAccountNullMarker(t *testing.T) {
 		nil,
 	) // revert the transition b
 
-	blob, exist := a.account(common.Hash{0xa})
+	account, exist := a.account(common.Hash{0xa})
 	if !exist {
 		t.Fatal("null marker is not found")
 	}
-	if len(blob) != 0 {
-		t.Fatalf("Unexpected value for account, %v", blob)
+	if account != nil {
+		t.Fatalf("Unexpected value for account, %v", account)
 	}
 }
 
@@ -258,7 +282,7 @@ func TestStateRevertAccountNullMarker(t *testing.T) {
 // entry in the set.
 func TestStateRevertStorageNullMarker(t *testing.T) {
 	a := newStates(map[common.Hash][]byte{
-		{0xa}: {0xa},
+		{0xa}: testAccountRLP(0xa),
 	}, nil, false) // initial state with account 0xa
 
 	b := newStates(
@@ -297,7 +321,7 @@ func TestStatesEncode(t *testing.T) {
 func testStatesEncode(t *testing.T, rawStorageKey bool) {
 	s := newStates(
 		map[common.Hash][]byte{
-			{0x1}: {0x1},
+			{0x1}: testAccountRLP(0x1),
 		},
 		map[common.Hash]map[common.Hash][]byte{
 			{0x1}: {
@@ -333,7 +357,7 @@ func TestStateWithOriginEncode(t *testing.T) {
 func testStateWithOriginEncode(t *testing.T, rawStorageKey bool) {
 	s := NewStateSetWithOrigin(
 		map[common.Hash][]byte{
-			{0x1}: {0x1},
+			{0x1}: testAccountRLP(0x1),
 		},
 		map[common.Hash]map[common.Hash][]byte{
 			{0x1}: {
@@ -375,17 +399,53 @@ func testStateWithOriginEncode(t *testing.T, rawStorageKey bool) {
 	}
 }
 
+// TestSlimAccountSize verifies the estimated memory size of a slim account for
+// the empty/deleted, EOA and contract cases. The accountData map keys are
+// accounted for separately (common.HashLength per entry), so this only covers
+// the value contribution.
+func TestSlimAccountSize(t *testing.T) {
+	// A nil account (deletion marker) contributes nothing.
+	if got := slimAccountSize(nil); got != 0 {
+		t.Fatalf("nil account size, want: 0, got: %d", got)
+	}
+	// An EOA with no code and empty storage root carries nil Root/CodeHash in
+	// slim form, so only the 9-byte list/nonce overhead plus the balance length
+	// is counted.
+	eoa := &types.SlimAccount{Nonce: 1, Balance: uint256.NewInt(0x100)}
+	if got, want := slimAccountSize(eoa), 9+eoa.Balance.ByteLen(); got != want {
+		t.Fatalf("EOA account size, want: %d, got: %d", want, got)
+	}
+	// A contract carries a 32-byte root and 32-byte code hash in addition.
+	contract := &types.SlimAccount{
+		Nonce:    2,
+		Balance:  uint256.NewInt(0x10000),
+		Root:     testrand.Bytes(32),
+		CodeHash: testrand.Bytes(32),
+	}
+	if got, want := slimAccountSize(contract), 9+contract.Balance.ByteLen()+64; got != want {
+		t.Fatalf("contract account size, want: %d, got: %d", want, got)
+	}
+}
+
+// TestStateSizeTracking verifies the storage-slot memory accounting through the
+// merge and revert transitions. Accounts are all identical real accounts, so
+// their size contribution is a constant (acctSize per entry) and the assertions
+// focus on the storage deltas.
 func TestStateSizeTracking(t *testing.T) {
-	expSizeA := 3*(common.HashLength+1) + /* account data */
+	// All accounts are identical, so each contributes the same estimated size.
+	acct := decodeAccountBlob(common.Hash{}, testAccountRLP(0x1))
+	acctSize := common.HashLength + slimAccountSize(acct)
+
+	expSizeA := 3*acctSize + /* account data: a, b, c */
 		2*(2*common.HashLength+1) + /* storage data of 0xa */
 		2*common.HashLength + 3 + /* storage data of 0xb */
 		2*common.HashLength + 1 /* storage data of 0xc */
 
 	a := newStates(
 		map[common.Hash][]byte{
-			{0xa}: {0xa0}, // common.HashLength+1
-			{0xb}: {0xb0}, // common.HashLength+1
-			{0xc}: {0xc0}, // common.HashLength+1
+			{0xa}: testAccountRLP(0x1),
+			{0xb}: testAccountRLP(0x1),
+			{0xc}: testAccountRLP(0x1),
 		},
 		map[common.Hash]map[common.Hash][]byte{
 			{0xa}: {
@@ -405,15 +465,15 @@ func TestStateSizeTracking(t *testing.T) {
 		t.Fatalf("Unexpected size, want: %d, got: %d", expSizeA, a.size)
 	}
 
-	expSizeB := common.HashLength + 2 + common.HashLength + 3 + common.HashLength + /* account data */
+	expSizeB := 2*acctSize + common.HashLength + /* account data: a, b updated; c deleted (key only) */
 		2*common.HashLength + 3 + 2*common.HashLength + 2 + /* storage data of 0xa */
 		2*common.HashLength + 2 + 2*common.HashLength + 2 + /* storage data of 0xb */
 		3*2*common.HashLength /* storage data of 0xc */
 	b := newStates(
 		map[common.Hash][]byte{
-			{0xa}: {0xa1, 0xa1},       // common.HashLength+2
-			{0xb}: {0xb1, 0xb1, 0xb1}, // common.HashLength+3
-			{0xc}: nil,                // common.HashLength, account deletion
+			{0xa}: testAccountRLP(0x1), // account update (same size)
+			{0xb}: testAccountRLP(0x1), // account update (same size)
+			{0xc}: nil,                 // common.HashLength, account deletion
 		},
 		map[common.Hash]map[common.Hash][]byte{
 			{0xa}: {
@@ -438,10 +498,13 @@ func TestStateSizeTracking(t *testing.T) {
 	}
 
 	a.merge(b)
-	mergeSize := expSizeA + 1 /* account a data change */ + 2 /* account b data change */ - 1 /* account c data change */
-	mergeSize += 2*common.HashLength + 2 + 2                                                  /* storage a change */
-	mergeSize += 2*common.HashLength + 2 - 1                                                  /* storage b change */
-	mergeSize += 2*2*common.HashLength - 1                                                    /* storage data removal of 0xc */
+	// Accounts a and b are overwritten with same-size accounts (no delta), but
+	// account c becomes a deletion marker, dropping its value contribution while
+	// retaining the key.
+	mergeSize := expSizeA - slimAccountSize(acct) /* account c value removed */
+	mergeSize += 2*common.HashLength + 2 + 2      /* storage a change */
+	mergeSize += 2*common.HashLength + 2 - 1      /* storage b change */
+	mergeSize += 2*2*common.HashLength - 1        /* storage data removal of 0xc */
 
 	if a.size != uint64(mergeSize) {
 		t.Fatalf("Unexpected size, want: %d, got: %d", mergeSize, a.size)
@@ -450,9 +513,9 @@ func TestStateSizeTracking(t *testing.T) {
 	// Revert the set to original status
 	a.revertTo(
 		map[common.Hash][]byte{
-			{0xa}: {0xa0},
-			{0xb}: {0xb0},
-			{0xc}: {0xc0},
+			{0xa}: testAccountRLP(0x1),
+			{0xb}: testAccountRLP(0x1),
+			{0xc}: testAccountRLP(0x1),
 		},
 		map[common.Hash]map[common.Hash][]byte{
 			{0xa}: {

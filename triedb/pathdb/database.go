@@ -56,6 +56,16 @@ type layer interface {
 	// - no error will be returned if the requested account is not found in database.
 	account(hash common.Hash, depth int) ([]byte, error)
 
+	// accountObject directly retrieves the decoded slim account associated with
+	// a particular hash. It mirrors account but avoids re-encoding/decoding for
+	// the diff-layer hot read path, where accounts are already held in decoded
+	// form. An error will be returned if the read operation exits abnormally.
+	//
+	// Note:
+	// - the returned account is not a copy, please don't modify it.
+	// - a nil account is returned if the requested account is not found or was deleted.
+	accountObject(hash common.Hash, depth int) (*types.SlimAccount, error)
+
 	// storage directly retrieves the storage data associated with a particular hash,
 	// within a particular account. An error will be returned if the read operation
 	// exits abnormally. Specifically, if the layer is already stale.
