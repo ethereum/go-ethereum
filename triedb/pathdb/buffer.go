@@ -19,6 +19,7 @@ package pathdb
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -82,8 +83,19 @@ func (b *buffer) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
 // commit merges the provided states and trie nodes into the buffer.
 func (b *buffer) commit(nodes *nodeSet, states *stateSet) *buffer {
 	b.layers++
-	b.nodes.merge(nodes)
+
+	// The trie node set and the flat state set are entirely independent objects;
+	// merge them concurrently so the commit latency is bounded by the slower of
+	// the two rather than their sum.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		b.nodes.merge(nodes)
+	}()
 	b.states.merge(states)
+	wg.Wait()
+
 	return b
 }
 
