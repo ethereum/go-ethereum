@@ -19,11 +19,11 @@ package clique
 
 import (
 	"bytes"
+	crand "crypto/rand"
 	"errors"
 	"fmt"
 	"io"
 	"math/big"
-	"math/rand"
 	"sync"
 	"time"
 
@@ -528,7 +528,12 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 		}
 		// If there's pending proposals, cast a vote on them
 		if len(addresses) > 0 {
-			header.Coinbase = addresses[rand.Intn(len(addresses))]
+			index, err := crand.Int(crand.Reader, big.NewInt(int64(len(addresses))))
+			if err != nil {
+				c.lock.RUnlock()
+				return fmt.Errorf("failed to select proposal: %w", err)
+			}
+			header.Coinbase = addresses[index.Int64()]
 			if c.proposals[header.Coinbase] {
 				copy(header.Nonce[:], nonceAuthVote)
 			} else {
