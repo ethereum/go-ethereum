@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/era/e2store"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/klauspost/compress/snappy"
+	"github.com/golang/snappy"
 )
 
 type Iterator struct {

@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/era/e2store"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/klauspost/compress/snappy"
+	"github.com/golang/snappy"
 )
 
 // Era object represents an era file that contains blocks and their components.
