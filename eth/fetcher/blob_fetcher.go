@@ -41,12 +41,14 @@ type random interface {
 var blobFetchTimeout = 5 * time.Second
 var blobAvailabilityTimeout = 2 * time.Second
 
+// DefaultFetchProbability is the default probability of fetching the full blob
+// payload for the sparse blobpool.
+const DefaultFetchProbability = 15
+
 const (
-	availabilityThreshold         = 2
-	maxPayloadRetrievals          = 128
-	maxPayloadAnnounces           = 4096
-	fetchProbability              = 15
-	MAX_CELLS_PER_PARTIAL_REQUEST = 8
+	availabilityThreshold = 2
+	maxPayloadRetrievals  = 128
+	maxPayloadAnnounces   = 4096
 
 	// maxCellRequests caps the burst of cell requests we can issue at once
 	// to a single peer. Worst case 256 * 6 = 1536 cells (~3 MB)
@@ -140,7 +142,8 @@ type BlobFetcher struct {
 	requests   map[string][]*cellRequest                      // In-flight transaction retrievals
 	alternates map[common.Hash]map[string]types.CustodyBitmap // In-flight transaction alternate origins (in case the peer is dropped)
 
-	fn BlobFetcherFunctions // callbacks
+	fn               BlobFetcherFunctions // callbacks
+	fetchProbability uint64
 
 	// peerTokens tracks each peer's remaining cell request token.
 	peerTokens map[string]*token
@@ -157,28 +160,29 @@ type token struct {
 	last   mclock.AbsTime
 }
 
-func NewBlobFetcher(fn BlobFetcherFunctions, custody types.CustodyBitmap, rand random) *BlobFetcher {
+func NewBlobFetcher(fn BlobFetcherFunctions, custody types.CustodyBitmap, rand random, fetchProbability uint64) *BlobFetcher {
 	return &BlobFetcher{
-		notify:     make(chan *blobTxAnnounce),
-		cleanup:    make(chan *payloadDelivery),
-		drop:       make(chan *txDrop),
-		custodyCh:  make(chan types.CustodyBitmap),
-		quit:       make(chan struct{}),
-		full:       make(map[common.Hash]struct{}),
-		partial:    make(map[common.Hash]struct{}),
-		waitlist:   make(map[common.Hash]map[string]struct{}),
-		waittime:   make(map[common.Hash]mclock.AbsTime),
-		waitslots:  make(map[string]map[common.Hash]struct{}),
-		announces:  make(map[string]map[common.Hash]*cellWithSeq),
-		fetches:    make(map[common.Hash]*fetchStatus),
-		requests:   make(map[string][]*cellRequest),
-		alternates: make(map[common.Hash]map[string]types.CustodyBitmap),
-		peerTokens: make(map[string]*token),
-		fn:         fn,
-		custody:    custody,
-		clock:      mclock.System{},
-		realTime:   time.Now,
-		rand:       rand,
+		notify:           make(chan *blobTxAnnounce),
+		cleanup:          make(chan *payloadDelivery),
+		drop:             make(chan *txDrop),
+		custodyCh:        make(chan types.CustodyBitmap),
+		quit:             make(chan struct{}),
+		full:             make(map[common.Hash]struct{}),
+		partial:          make(map[common.Hash]struct{}),
+		waitlist:         make(map[common.Hash]map[string]struct{}),
+		waittime:         make(map[common.Hash]mclock.AbsTime),
+		waitslots:        make(map[string]map[common.Hash]struct{}),
+		announces:        make(map[string]map[common.Hash]*cellWithSeq),
+		fetches:          make(map[common.Hash]*fetchStatus),
+		requests:         make(map[string][]*cellRequest),
+		alternates:       make(map[common.Hash]map[string]types.CustodyBitmap),
+		peerTokens:       make(map[string]*token),
+		fn:               fn,
+		fetchProbability: fetchProbability,
+		custody:          custody,
+		clock:            mclock.System{},
+		realTime:         time.Now,
+		rand:             rand,
 	}
 }
 
@@ -295,7 +299,7 @@ func (f *BlobFetcher) loop() {
 							randomValue = f.rand.Intn(100)
 						}
 						// For eager mode, always fetch immediately
-						if randomValue < fetchProbability || f.custody.OneCount() >= kzg4844.DataPerBlob {
+						if uint64(randomValue) < f.fetchProbability || f.custody.OneCount() >= kzg4844.DataPerBlob {
 							f.full[hash] = struct{}{}
 						} else {
 							f.partial[hash] = struct{}{}

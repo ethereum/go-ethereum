@@ -162,6 +162,7 @@ func TestBlobFetcherFullFetch(t *testing.T) {
 				},
 				custody,
 				&mockRand{value: 5}, // Force full requests (5 < fetchProbability)
+				15,
 			)
 		},
 		steps: []interface{}{
@@ -253,6 +254,7 @@ func TestBlobFetcherPartialFetch(t *testing.T) {
 				},
 				custody,
 				&mockRand{value: 60}, // Force partial requests (20 >= 15)
+				15,
 			)
 		},
 		steps: []interface{}{
@@ -345,6 +347,7 @@ func TestBlobFetcherFullDelivery(t *testing.T) {
 				},
 				custody,
 				&mockRand{value: 5}, // Force full requests for simplicity
+				15,
 			)
 		},
 		steps: []interface{}{
@@ -393,6 +396,7 @@ func TestBlobFetcherPartialDelivery(t *testing.T) {
 				},
 				custody,
 				&mockRand{value: 60},
+				15,
 			)
 		},
 		steps: []interface{}{
@@ -529,6 +533,7 @@ func TestBlobFetcherAvailabilityTimeout(t *testing.T) {
 				},
 				custody,
 				&mockRand{value: 60},
+				15,
 			)
 		},
 		steps: []interface{}{
@@ -571,6 +576,7 @@ func TestBlobFetcherPeerDrop(t *testing.T) {
 				},
 				custody,
 				&mockRand{value: 5},
+				15,
 			)
 		},
 		steps: []interface{}{
@@ -648,6 +654,7 @@ func TestBlobFetcherFetchTimeout(t *testing.T) {
 				},
 				custody,
 				&mockRand{value: 5},
+				15,
 			)
 		},
 		steps: []interface{}{
@@ -1044,6 +1051,7 @@ func TestMultiBlobDeliveryVerification(t *testing.T) {
 				},
 				custody,
 				&mockRand{value: 60}, // Force partial requests (60 >= fetchProbability)
+				15,
 			)
 		},
 		steps: []interface{}{
