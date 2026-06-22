@@ -40,20 +40,37 @@ func storageKeySlice(accountHash common.Hash, slotHash common.Hash) []byte {
 	return key[:]
 }
 
+// layerList records the set of diff-layer roots that modified a single state
+// entry, ordered from oldest to newest.
+//
+// The overwhelmingly common case is a key touched by exactly one in-memory
+// diff layer; that single root is stored inline in head with rest left nil,
+// so no backing slice is allocated and the value lives entirely inside the
+// map bucket. Only the rare hot keys (e.g. fee recipient, popular contracts)
+// modified across multiple layers spill into rest.
+//
+// Note head may legitimately be the zero hash (e.g. the empty bintrie root),
+// so callers must rely on the map's presence flag rather than comparing head
+// against common.Hash{} to detect an absent entry.
+type layerList struct {
+	head common.Hash   // the oldest layer; the only one in the common case
+	rest []common.Hash // additional layers (newest at the tail), nil when len==1
+}
+
 // lookup is an internal structure used to efficiently determine the layer in
 // which a state entry resides.
 type lookup struct {
 	// accounts represents the mutation history for specific accounts.
-	// The key is the account address hash, and the value is a slice
+	// The key is the account address hash, and the value is the list
 	// of **diff layer** IDs indicating where the account was modified,
 	// with the order from oldest to newest.
-	accounts map[common.Hash][]common.Hash
+	accounts map[common.Hash]layerList
 
 	// storages represents the mutation history for specific storage
 	// slot. The key is the account address hash and the storage key
-	// hash, the value is a slice of **diff layer** IDs indicating
+	// hash, the value is the list of **diff layer** IDs indicating
 	// where the slot was modified, with the order from oldest to newest.
-	storages map[[64]byte][]common.Hash
+	storages map[[64]byte]layerList
 
 	// descendant is the callback indicating whether the layer with
 	// given root is a descendant of the one specified by `ancestor`.
@@ -71,8 +88,8 @@ func newLookup(head layer, descendant func(state common.Hash, ancestor common.Ha
 		current = current.parentLayer()
 	}
 	l := &lookup{
-		accounts:   make(map[common.Hash][]common.Hash),
-		storages:   make(map[[64]byte][]common.Hash),
+		accounts:   make(map[common.Hash]layerList),
+		storages:   make(map[[64]byte]layerList),
 		descendant: descendant,
 	}
 	// Apply the diff layers from bottom to top
@@ -85,6 +102,54 @@ func newLookup(head layer, descendant func(state common.Hash, ancestor common.Ha
 		}
 	}
 	return l
+}
+
+// tip scans the layer list from newest to oldest and returns the first entry
+// that either matches the supplied stateID or is a descendant of it. It returns
+// (common.Hash{}, false) when no such entry exists.
+func (list layerList) tip(stateID common.Hash, descendant func(state common.Hash, ancestor common.Hash) bool) (common.Hash, bool) {
+	for i := len(list.rest) - 1; i >= 0; i-- {
+		if list.rest[i] == stateID || descendant(stateID, list.rest[i]) {
+			return list.rest[i], true
+		}
+	}
+	if list.head == stateID || descendant(stateID, list.head) {
+		return list.head, true
+	}
+	return common.Hash{}, false
+}
+
+// add appends the given layer root as the newest entry of the list.
+func (list layerList) add(state common.Hash) layerList {
+	list.rest = append(list.rest, state)
+	return list
+}
+
+// remove unlinks the given layer root from the list. It returns the updated
+// list, a flag indicating whether the list became empty, and a flag indicating
+// whether the element was found and removed.
+func (list layerList) remove(state common.Hash) (layerList, bool, bool) {
+	// The newest layers are flattened into the disk layer from the bottom up,
+	// so removals almost always target the oldest entry held in head.
+	if list.head == state {
+		if len(list.rest) == 0 {
+			return list, true, true
+		}
+		list.head, list.rest = list.rest[0], list.rest[1:]
+		// Release the backing array if it has grown excessively, otherwise the
+		// re-slicing above would pin the whole array and leak memory.
+		if cap(list.rest) > 1024 {
+			list.rest = append(make([]common.Hash, 0, len(list.rest)), list.rest...)
+		}
+		return list, false, true
+	}
+	for i := 0; i < len(list.rest); i++ {
+		if list.rest[i] == state {
+			list.rest = append(list.rest[:i], list.rest[i+1:]...)
+			return list, false, true
+		}
+	}
+	return list, false, false
 }
 
 // accountTip traverses the layer list associated with the given account in
@@ -120,14 +185,11 @@ func (l *lookup) accountTip(accountHash common.Hash, stateID common.Hash, base c
 	// - (y, C4) => D
 	// - (y, C3') => D
 	// - (y, C0) => null
-	list := l.accounts[accountHash]
-	for i := len(list) - 1; i >= 0; i-- {
-		// If the current state matches the stateID, or the requested state is a
-		// descendant of it, return the current state as the most recent one
-		// containing the modified data. Otherwise, the current state may be ahead
-		// of the requested one or belong to a different branch.
-		if list[i] == stateID || l.descendant(stateID, list[i]) {
-			return list[i], true
+	// Traverse the mutation history (if any) from latest to oldest, returning
+	// the most recent layer that contains the requested data.
+	if list, ok := l.accounts[accountHash]; ok {
+		if tip, found := list.tip(stateID, l.descendant); found {
+			return tip, true
 		}
 	}
 	// No layer matching the stateID or its descendants was found. Use the
@@ -147,14 +209,11 @@ func (l *lookup) accountTip(accountHash common.Hash, stateID common.Hash, base c
 // See accountTip for the returned-hash / ok convention — the same
 // bintrie-zero-root caveat applies here.
 func (l *lookup) storageTip(accountHash common.Hash, slotHash common.Hash, stateID common.Hash, base common.Hash) (common.Hash, bool) {
-	list := l.storages[storageKey(accountHash, slotHash)]
-	for i := len(list) - 1; i >= 0; i-- {
-		// If the current state matches the stateID, or the requested state is a
-		// descendant of it, return the current state as the most recent one
-		// containing the modified data. Otherwise, the current state may be ahead
-		// of the requested one or belong to a different branch.
-		if list[i] == stateID || l.descendant(stateID, list[i]) {
-			return list[i], true
+	// Traverse the mutation history (if any) from latest to oldest, returning
+	// the most recent layer that contains the requested data.
+	if list, ok := l.storages[storageKey(accountHash, slotHash)]; ok {
+		if tip, found := list.tip(stateID, l.descendant); found {
+			return tip, true
 		}
 	}
 	// No layer matching the stateID or its descendants was found. Use the
@@ -186,12 +245,15 @@ func (l *lookup) addLayer(diff *diffLayer) {
 	go func() {
 		defer wg.Done()
 		for accountHash := range diff.states.accountData {
+			// The common case is a key touched by a single layer, where the
+			// zero-value layerList already holds the root inline in head; only
+			// hot keys modified across layers allocate a backing slice.
 			list, exists := l.accounts[accountHash]
 			if !exists {
-				list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
+				l.accounts[accountHash] = layerList{head: state}
+				continue
 			}
-			list = append(list, state)
-			l.accounts[accountHash] = list
+			l.accounts[accountHash] = list.add(state)
 		}
 	}()
 
@@ -203,38 +265,14 @@ func (l *lookup) addLayer(diff *diffLayer) {
 				key := storageKey(accountHash, slotHash)
 				list, exists := l.storages[key]
 				if !exists {
-					list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
+					l.storages[key] = layerList{head: state}
+					continue
 				}
-				list = append(list, state)
-				l.storages[key] = list
+				l.storages[key] = list.add(state)
 			}
 		}
 	}()
 	wg.Wait()
-}
-
-// removeFromList removes the specified element from the provided list.
-// It returns a flag indicating whether the element was found and removed.
-func removeFromList(list []common.Hash, element common.Hash) (bool, []common.Hash) {
-	// Traverse the list from oldest to newest to quickly locate the element.
-	for i := 0; i < len(list); i++ {
-		if list[i] == element {
-			if i != 0 {
-				list = append(list[:i], list[i+1:]...)
-			} else {
-				// Remove the first element by shifting the slice forward.
-				// Pros: zero-copy.
-				// Cons: may retain large backing array, causing memory leaks.
-				// Mitigation: release the array if capacity exceeds threshold.
-				list = list[1:]
-				if cap(list) > 1024 {
-					list = append(make([]common.Hash, 0, len(list)), list...)
-				}
-			}
-			return true, list
-		}
-	}
-	return false, nil
 }
 
 // removeLayer traverses the state data retained in the specified diff layer and
@@ -250,14 +288,14 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 	)
 	eg.Go(func() error {
 		for accountHash := range diff.states.accountData {
-			found, list := removeFromList(l.accounts[accountHash], state)
+			list, empty, found := l.accounts[accountHash].remove(state)
 			if !found {
 				return fmt.Errorf("account lookup is not found, %x, state: %x", accountHash, state)
 			}
-			if len(list) != 0 {
-				l.accounts[accountHash] = list
-			} else {
+			if empty {
 				delete(l.accounts, accountHash)
+			} else {
+				l.accounts[accountHash] = list
 			}
 		}
 		return nil
@@ -267,14 +305,14 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 		for accountHash, slots := range diff.states.storageData {
 			for slotHash := range slots {
 				key := storageKey(accountHash, slotHash)
-				found, list := removeFromList(l.storages[key], state)
+				list, empty, found := l.storages[key].remove(state)
 				if !found {
 					return fmt.Errorf("storage lookup is not found, %x %x, state: %x", accountHash, slotHash, state)
 				}
-				if len(list) != 0 {
-					l.storages[key] = list
-				} else {
+				if empty {
 					delete(l.storages, key)
+				} else {
+					l.storages[key] = list
 				}
 			}
 		}
