@@ -227,7 +227,7 @@ func (s *stateSet) clearLists() {
 //
 // The stateSet supplied as parameter set will not be mutated by this operation,
 // as it may still be referenced by other layers.
-func (s *stateSet) merge(other *stateSet) {
+func (s *stateSet) merge(other *stateSet, yield func()) {
 	var (
 		delta             int
 		accountOverwrites counter
@@ -242,6 +242,7 @@ func (s *stateSet) merge(other *stateSet) {
 			delta += common.HashLength + len(data)
 		}
 		s.accountData[accountHash] = data
+		yield()
 	}
 	// Apply all the updated storage slots (individually)
 	for accountHash, storage := range other.storageData {
@@ -256,6 +257,7 @@ func (s *stateSet) merge(other *stateSet) {
 			for storageHash, data := range storage {
 				slots[storageHash] = data
 				delta += 2*common.HashLength + len(data)
+				yield()
 			}
 			s.storageData[accountHash] = slots
 			continue
@@ -270,6 +272,7 @@ func (s *stateSet) merge(other *stateSet) {
 				delta += 2*common.HashLength + len(data)
 			}
 			slots[storageHash] = data
+			yield()
 		}
 	}
 	accountOverwrites.report(gcAccountMeter, gcAccountBytesMeter)

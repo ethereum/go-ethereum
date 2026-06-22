@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
-	"maps"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -109,7 +108,7 @@ func (s *nodeSet) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
 
 // merge integrates the provided dirty nodes into the set. The provided nodeset
 // will remain unchanged, as it may still be referenced by other layers.
-func (s *nodeSet) merge(set *nodeSet) {
+func (s *nodeSet) merge(set *nodeSet, yield func()) {
 	var (
 		delta     int64   // size difference resulting from node merging
 		overwrite counter // counter of nodes being overwritten
@@ -124,22 +123,20 @@ func (s *nodeSet) merge(set *nodeSet) {
 			overwrite.add(len(orig.Blob) + len(path))
 		}
 		s.accountNodes[path] = n
+		yield()
 	}
 
 	// Merge storage nodes
 	for owner, subset := range set.storageNodes {
 		current, exist := s.storageNodes[owner]
 		if !exist {
+			current = make(map[string]*trienode.Node, len(subset))
 			for path, n := range subset {
+				current[path] = n
 				delta += int64(common.HashLength + len(n.Blob) + len(path))
+				yield()
 			}
-			// Perform a shallow copy of the map for the subset instead of claiming it
-			// directly from the provided nodeset to avoid potential concurrent map
-			// read/write issues. The nodes belonging to the original diff layer remain
-			// accessible even after merging. Therefore, ownership of the nodes map
-			// should still belong to the original layer, and any modifications to it
-			// should be prevented.
-			s.storageNodes[owner] = maps.Clone(subset)
+			s.storageNodes[owner] = current
 			continue
 		}
 		for path, n := range subset {
@@ -150,8 +147,8 @@ func (s *nodeSet) merge(set *nodeSet) {
 				overwrite.add(common.HashLength + len(orig.Blob) + len(path))
 			}
 			current[path] = n
+			yield()
 		}
-		s.storageNodes[owner] = current
 	}
 	overwrite.report(gcTrieNodeMeter, gcTrieNodeBytesMeter)
 	s.updateSize(delta)
