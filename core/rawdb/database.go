@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb/eradb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
@@ -83,6 +84,27 @@ func (frdb *freezerdb) Freeze() error {
 	trigger := make(chan struct{}, 1)
 	frdb.chainFreezer.trigger <- trigger
 	<-trigger
+	return nil
+}
+
+// Unwrapper allows retrieving the underlying database from a wrapper.
+type Unwrapper interface {
+	Unwrap() ethdb.Database
+}
+
+// EraStore returns the eradb.Store from the database if available.
+// Returns nil if the database does not have an era store (e.g. in-memory or no freezer).
+func EraStore(db ethdb.Database) *eradb.Store {
+	for {
+		if frdb, ok := db.(*freezerdb); ok {
+			return frdb.EraStore()
+		}
+		if unwrapper, ok := db.(Unwrapper); ok {
+			db = unwrapper.Unwrap()
+		} else {
+			break
+		}
+	}
 	return nil
 }
 

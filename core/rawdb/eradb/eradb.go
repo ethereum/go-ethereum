@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package eradb implements a history backend using era1 files.
+// Package eradb implements a history backend using era1 and ere files.
 package eradb
 
 import (
@@ -23,10 +23,13 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common/lru"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/era"
+	"github.com/ethereum/go-ethereum/internal/era/execdb"
 	"github.com/ethereum/go-ethereum/internal/era/onedb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -36,7 +39,7 @@ const openFileLimit = 64
 
 var errClosed = errors.New("era store is closed")
 
-// Store manages read access to a directory of era1 files.
+// Store manages read access to a directory of era1 and ere files.
 // The getter methods are thread-safe.
 type Store struct {
 	datadir string
@@ -52,7 +55,8 @@ type Store struct {
 type fileCacheEntry struct {
 	refcount int           // reference count. This is protected by Store.mu!
 	opened   chan struct{} // signals opening of file has completed
-	file     *onedb.Era    // the file
+	file     era.Era       // the file (era1 or ere)
+	slim     bool          // true if receipts are stored in the ere slim encoding
 	err      error         // error from opening the file
 }
 
@@ -101,6 +105,21 @@ func (db *Store) Close() {
 	}
 }
 
+// GetBlockByNumber returns the block for a given block number.
+func (db *Store) GetBlockByNumber(number uint64) (*types.Block, error) {
+	epoch := number / uint64(era.MaxSize)
+	entry := db.getEraByEpoch(epoch)
+	if entry.err != nil {
+		if errors.Is(entry.err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, entry.err
+	}
+	defer db.doneWithFile(epoch, entry)
+
+	return entry.file.GetBlockByNumber(number)
+}
+
 // GetRawBody returns the raw body for a given block number.
 func (db *Store) GetRawBody(number uint64) ([]byte, error) {
 	epoch := number / uint64(era.MaxSize)
@@ -132,12 +151,14 @@ func (db *Store) GetRawReceipts(number uint64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return convertReceipts(data)
+	return convertReceipts(data, entry.slim)
 }
 
-// convertReceipts transforms an encoded block receipts list from the format
-// used by era1 into the 'storage' format used by the go-ethereum ancients database.
-func convertReceipts(input []byte) ([]byte, error) {
+// convertReceipts transforms an encoded block receipts list into the 'storage'
+// format used by the go-ethereum ancients database, i.e. a list of
+// [status, gas-used, logs]. The input uses the era1 network encoding, or the
+// ere slim encoding when slim is true.
+func convertReceipts(input []byte, slim bool) ([]byte, error) {
 	var (
 		out bytes.Buffer
 		enc = rlp.NewEncoderBuffer(&out)
@@ -148,32 +169,42 @@ func convertReceipts(input []byte) ([]byte, error) {
 	}
 	outerList := enc.List()
 	for i := 0; blockListIter.Next(); i++ {
-		kind, content, _, err := rlp.Split(blockListIter.Value())
-		if err != nil {
-			return nil, fmt.Errorf("receipt %d invalid: %v", i, err)
-		}
-		var receiptData []byte
-		switch kind {
-		case rlp.Byte:
-			return nil, fmt.Errorf("receipt %d is single byte", i)
-		case rlp.String:
-			// Typed receipt - skip type.
-			receiptData = content[1:]
-		case rlp.List:
-			// Legacy receipt
+		var (
+			receiptData []byte
+			skip        int
+		)
+		if slim {
+			// Slim receipt is [tx-type, status, gas-used, logs]: skip the tx-type.
 			receiptData = blockListIter.Value()
+			skip = 0
+		} else {
+			// Era1 receipt is [status, gas-used, bloom, logs], prefixed by the
+			// tx type if non-legacy: skip the bloom.
+			kind, content, _, err := rlp.Split(blockListIter.Value())
+			if err != nil {
+				return nil, fmt.Errorf("receipt %d invalid: %v", i, err)
+			}
+			switch kind {
+			case rlp.Byte:
+				return nil, fmt.Errorf("receipt %d is single byte", i)
+			case rlp.String:
+				// Typed receipt - skip type.
+				receiptData = content[1:]
+			case rlp.List:
+				// Legacy receipt
+				receiptData = blockListIter.Value()
+			}
+			skip = 2
 		}
-		// Convert data list.
-		// Input is  [status, gas-used, bloom, logs]
-		// Output is [status, gas-used, logs], i.e. we need to skip the bloom.
+
 		dataIter, err := rlp.NewListIterator(receiptData)
 		if err != nil {
 			return nil, fmt.Errorf("receipt %d has invalid data: %v", i, err)
 		}
 		innerList := enc.List()
 		for field := 0; dataIter.Next(); field++ {
-			if field == 2 {
-				continue // skip bloom
+			if field == skip {
+				continue
 			}
 			enc.Write(dataIter.Value())
 		}
@@ -202,11 +233,11 @@ func (db *Store) getEraByEpoch(epoch uint64) *fileCacheEntry {
 
 	case fileIsNew:
 		// Open the file and put it into the cache.
-		e, err := db.openEraFile(epoch)
+		e, slim, err := db.openEraFile(epoch)
 		if err != nil {
 			db.fileFailedToOpen(epoch, entry, err)
 		} else {
-			db.fileOpened(epoch, entry, e)
+			db.fileOpened(epoch, entry, e, slim)
 		}
 		close(entry.opened)
 
@@ -250,7 +281,7 @@ func (db *Store) getCacheEntry(epoch uint64) (stat fileCacheStatus, entry *fileC
 }
 
 // fileOpened is called after an era file has been successfully opened.
-func (db *Store) fileOpened(epoch uint64, entry *fileCacheEntry, file *onedb.Era) {
+func (db *Store) fileOpened(epoch uint64, entry *fileCacheEntry, file era.Era, slim bool) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -267,6 +298,7 @@ func (db *Store) fileOpened(epoch uint64, entry *fileCacheEntry, file *onedb.Era
 
 	// Add it to the LRU. This may evict an existing item, which we have to close.
 	entry.file = file
+	entry.slim = slim
 	evictedEpoch, evictedEntry, _ := db.lru.Add3(epoch, entry)
 	if evictedEntry != nil {
 		evictedEntry.derefAndClose(evictedEpoch)
@@ -283,32 +315,47 @@ func (db *Store) fileFailedToOpen(epoch uint64, entry *fileCacheEntry, err error
 	entry.err = err
 }
 
-func (db *Store) openEraFile(epoch uint64) (*onedb.Era, error) {
-	// File name scheme is <network>-<epoch>-<root>.
-	glob := fmt.Sprintf("*-%05d-*.era1", epoch)
-	matches, err := filepath.Glob(filepath.Join(db.datadir, glob))
-	if err != nil {
-		return nil, err
+func (db *Store) openEraFile(epoch uint64) (era.Era, bool, error) {
+	// File name scheme is <network>-<epoch>-<root>.<ext>
+	// Try era1 first, then ere.
+	for _, ext := range []string{"era1", "ere"} {
+		glob := fmt.Sprintf("*-%05d-*.%s", epoch, ext)
+		matches, err := filepath.Glob(filepath.Join(db.datadir, glob))
+		if err != nil {
+			return nil, false, err
+		}
+		if len(matches) > 1 {
+			return nil, false, fmt.Errorf("multiple %s files found for epoch %d", ext, epoch)
+		}
+		if len(matches) == 0 {
+			continue
+		}
+		filename := matches[0]
+		var e era.Era
+		slim := ext == "ere"
+		switch ext {
+		case "era1":
+			e, err = onedb.Open(filename)
+		case "ere":
+			// The era store serves receipts via RPC. Reject noreceipts
+			// profiles to avoid silently returning empty receipt data.
+			if strings.Contains(filepath.Base(filename), "-noreceipts") {
+				return nil, false, fmt.Errorf("era store does not support noreceipts profile: %s", filepath.Base(filename))
+			}
+			e, err = execdb.Open(filename)
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		// Sanity-check start block.
+		if e.Start()%uint64(era.MaxSize) != 0 {
+			e.Close()
+			return nil, false, fmt.Errorf("%s file has invalid boundary. %d %% %d != 0", ext, e.Start(), era.MaxSize)
+		}
+		log.Debug("Opened era file", "type", ext, "epoch", epoch)
+		return e, slim, nil
 	}
-	if len(matches) > 1 {
-		return nil, fmt.Errorf("multiple era1 files found for epoch %d", epoch)
-	}
-	if len(matches) == 0 {
-		return nil, fs.ErrNotExist
-	}
-	filename := matches[0]
-
-	e, err := onedb.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	// Sanity-check start block.
-	if e.Start()%uint64(era.MaxSize) != 0 {
-		e.Close()
-		return nil, fmt.Errorf("pre-merge era1 file has invalid boundary. %d %% %d != 0", e.Start(), era.MaxSize)
-	}
-	log.Debug("Opened era1 file", "epoch", epoch)
-	return e.(*onedb.Era), nil
+	return nil, false, fs.ErrNotExist
 }
 
 // doneWithFile signals that the caller has finished using a file.
@@ -339,9 +386,9 @@ func (entry *fileCacheEntry) derefAndClose(epoch uint64) (closed bool) {
 
 	closeErr := entry.file.Close()
 	if closeErr == nil {
-		log.Debug("Closed era1 file", "epoch", epoch)
+		log.Debug("Closed era file", "epoch", epoch)
 	} else {
-		log.Warn("Error closing era1 file", "epoch", epoch, "err", closeErr)
+		log.Warn("Error closing era file", "epoch", epoch, "err", closeErr)
 	}
 	return true
 }
