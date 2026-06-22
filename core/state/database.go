@@ -116,7 +116,7 @@ type Trie interface {
 	// database, a trie.MissingNodeError is returned.
 	UpdateStorage(addr common.Address, key, value []byte) error
 
-	// UpdateStorageBatch attempts to update a list storages in the batch manner.
+	// UpdateStorageBatch attempts to update a list of storages in the batch manner.
 	UpdateStorageBatch(_ common.Address, keys [][]byte, values [][]byte) error
 
 	// DeleteAccount abstracts an account deletion from the trie.
