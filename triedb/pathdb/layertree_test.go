@@ -592,6 +592,7 @@ func TestDuplicateRootLookup(t *testing.T) {
 		t.Fatalf("duplicate root insert changed layer count, got %d, want 3", n)
 	}
 
+	tr.waitBuild() // ensure the async index has caught up before asserting tips
 	l, err := tr.lookupAccount(common.HexToHash("0xa"), common.Hash{0x3})
 	if err != nil {
 		t.Fatalf("account lookup failed: %v", err)
@@ -675,6 +676,7 @@ func TestAccountLookup(t *testing.T) {
 			common.HexToHash("0xc"), common.Hash{0x1}, common.Hash{0x1}, // not found
 		},
 	}
+	tr.waitBuild() // ensure the async index has caught up before asserting tips
 	for i, c := range cases {
 		l, err := tr.lookupAccount(c.account, c.state)
 		if err != nil {
@@ -745,6 +747,7 @@ func TestAccountLookup(t *testing.T) {
 			common.HexToHash("0xc"), common.Hash{0x1}, common.Hash{}, errSnapshotStale,
 		},
 	}
+	tr.waitBuild() // ensure the async index has caught up before asserting tips
 	for i, c := range cases2 {
 		l, err := tr.lookupAccount(c.account, c.state)
 		if c.expectErr != nil {
@@ -829,6 +832,7 @@ func TestStorageLookup(t *testing.T) {
 			common.HexToHash("0x3"), common.Hash{0x1}, common.Hash{0x1}, // not found
 		},
 	}
+	tr.waitBuild() // ensure the async index has caught up before asserting tips
 	for i, c := range cases {
 		l, err := tr.lookupStorage(common.HexToHash("0xa"), c.storage, c.state)
 		if err != nil {
@@ -899,6 +903,7 @@ func TestStorageLookup(t *testing.T) {
 			common.HexToHash("0x3"), common.Hash{0x1}, common.Hash{}, errSnapshotStale,
 		},
 	}
+	tr.waitBuild() // ensure the async index has caught up before asserting tips
 	for i, c := range cases2 {
 		l, err := tr.lookupStorage(common.HexToHash("0xa"), c.storage, c.state)
 		if c.expectErr != nil {
@@ -979,6 +984,8 @@ func TestLookupZeroBaseRootFallback(t *testing.T) {
 	); err != nil {
 		t.Fatalf("add second diff layer: %v", err)
 	}
+
+	tr.waitBuild() // ensure the async index has caught up before asserting tips
 
 	// Case 1: unknown account queried at the head. The lookup must
 	// fall through the diff layers, hit the disk-layer fallback at

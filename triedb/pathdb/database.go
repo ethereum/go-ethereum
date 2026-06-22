@@ -572,6 +572,9 @@ func (db *Database) Close() error {
 	}
 	dl.resetCache() // release the memory held by clean cache
 
+	// Terminate the background lookup builder goroutine.
+	db.tree.close()
+
 	// Terminate the background state history indexer
 	if db.stateIndexer != nil {
 		db.stateIndexer.close()

@@ -62,6 +62,7 @@ func newBenchLookup() *lookup {
 	return &lookup{
 		accounts:   make(map[common.Hash]layerList),
 		storages:   make(map[[64]byte]layerList),
+		indexed:    make(map[common.Hash]struct{}),
 		descendant: func(common.Hash, common.Hash) bool { return false },
 	}
 }
@@ -81,7 +82,7 @@ func BenchmarkLookupAddLayer(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		l := newBenchLookup()
 		for _, d := range diffs {
-			l.addLayer(d)
+			l.applyAdd(d)
 		}
 	}
 }
@@ -103,14 +104,12 @@ func BenchmarkLookupRemoveLayer(b *testing.B) {
 		b.StopTimer()
 		l := newBenchLookup()
 		for _, d := range diffs {
-			l.addLayer(d)
+			l.applyAdd(d)
 		}
 		b.StartTimer()
 
 		for _, d := range diffs {
-			if err := l.removeLayer(d); err != nil {
-				b.Fatal(err)
-			}
+			l.applyRemove(d)
 		}
 	}
 }

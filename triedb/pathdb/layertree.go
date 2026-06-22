@@ -73,7 +73,33 @@ func (tree *layerTree) init(head layer) {
 		current = parent
 	}
 	tree.base = current.(*diskLayer) // panic if it's not a disk layer
+
+	// Terminate the previous builder (if any) before replacing the index.
+	if tree.lookup != nil {
+		tree.lookup.close()
+	}
 	tree.lookup = newLookup(head, tree.isDescendant)
+}
+
+// close terminates the background lookup builder. It must be called when the
+// database is shutting down to avoid leaking the builder goroutine.
+func (tree *layerTree) close() {
+	tree.lock.Lock()
+	defer tree.lock.Unlock()
+
+	if tree.lookup != nil {
+		tree.lookup.close()
+	}
+}
+
+// waitBuild blocks until the background lookup builder has caught up with all
+// layers enqueued so far. It is primarily used by tests that assert on the
+// exact layer resolved by the index.
+func (tree *layerTree) waitBuild() {
+	tree.lock.RLock()
+	l := tree.lookup
+	tree.lock.RUnlock()
+	l.waitBuild()
 }
 
 // get retrieves a layer belonging to the given state root.
@@ -210,6 +236,9 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 		// Resets the descendants map, since there's only a single disk layer
 		// with no descendants.
 		tree.descendants = make(map[common.Hash]map[common.Hash]struct{})
+
+		// Terminate the previous builder before replacing the index.
+		tree.lookup.close()
 		tree.lookup = newLookup(base, tree.isDescendant)
 		return nil
 	}
@@ -319,7 +348,17 @@ func (tree *layerTree) lookupAccount(accountHash common.Hash, state common.Hash)
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
 
-	tip, ok := tree.lookup.accountTip(accountHash, state, tree.base.root)
+	self := tree.layers[state]
+	if self == nil {
+		return nil, fmt.Errorf("[%#x] %w", state, errSnapshotStale)
+	}
+	tip, ok, indexed := tree.lookup.accountTip(accountHash, state, tree.base.root)
+	if !indexed {
+		// The background builder hasn't incorporated this layer yet. Fall back
+		// to a direct parent-chain traversal from the requested layer, which is
+		// always correct (just potentially slower).
+		return self, nil
+	}
 	if !ok {
 		return nil, fmt.Errorf("[%#x] %w", state, errSnapshotStale)
 	}
@@ -337,7 +376,17 @@ func (tree *layerTree) lookupStorage(accountHash common.Hash, slotHash common.Ha
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
 
-	tip, ok := tree.lookup.storageTip(accountHash, slotHash, state, tree.base.root)
+	self := tree.layers[state]
+	if self == nil {
+		return nil, fmt.Errorf("[%#x] %w", state, errSnapshotStale)
+	}
+	tip, ok, indexed := tree.lookup.storageTip(accountHash, slotHash, state, tree.base.root)
+	if !indexed {
+		// The background builder hasn't incorporated this layer yet. Fall back
+		// to a direct parent-chain traversal from the requested layer, which is
+		// always correct (just potentially slower).
+		return self, nil
+	}
 	if !ok {
 		return nil, fmt.Errorf("[%#x] %w", state, errSnapshotStale)
 	}

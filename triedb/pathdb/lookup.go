@@ -17,13 +17,18 @@
 package pathdb
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/sync/errgroup"
+	"github.com/ethereum/go-ethereum/log"
 )
+
+// lookupTaskQueueCap is the buffer size of the channel feeding the background
+// lookup builder. Steady state holds at most a couple of pending tasks (one
+// add and one remove per block); the generous buffer simply absorbs bursts so
+// the producer (block import) is virtually never blocked.
+const lookupTaskQueueCap = 1024
 
 // storageKey returns a key for uniquely identifying the storage slot.
 func storageKey(accountHash common.Hash, slotHash common.Hash) [64]byte {
@@ -57,9 +62,31 @@ type layerList struct {
 	rest []common.Hash // additional layers (newest at the tail), nil when len==1
 }
 
+// lookupTask is a unit of work consumed by the background lookup builder. It
+// either integrates a diff layer into the index (diff set, remove=false),
+// unlinks it (diff set, remove=true), or acts as a barrier that the builder
+// acknowledges by closing done once all prior tasks are processed.
+type lookupTask struct {
+	diff   *diffLayer
+	remove bool
+	done   chan struct{}
+}
+
 // lookup is an internal structure used to efficiently determine the layer in
 // which a state entry resides.
+//
+// The index is maintained asynchronously: callers enqueue diff layers via
+// addLayer/removeLayer, and a single background goroutine integrates them into
+// the maps below. This keeps the (relatively expensive) index maintenance off
+// the block-import critical path. Reads consult the index only for layers that
+// have already been incorporated (tracked in `indexed`); a read targeting a
+// layer the builder hasn't reached yet transparently falls back to a direct
+// parent-chain traversal, which is always correct.
 type lookup struct {
+	// lock guards the maps and the indexed set against concurrent access by
+	// the background builder (writer) and the read path (readers).
+	lock sync.RWMutex
+
 	// accounts represents the mutation history for specific accounts.
 	// The key is the account address hash, and the value is the list
 	// of **diff layer** IDs indicating where the account was modified,
@@ -72,12 +99,26 @@ type lookup struct {
 	// where the slot was modified, with the order from oldest to newest.
 	storages map[[64]byte]layerList
 
+	// indexed holds the roots of the diff layers already integrated into the
+	// maps above. Because layers are always enqueued (and thus processed) in
+	// child-after-parent order, the presence of a layer here implies all of
+	// its ancestors are present too.
+	indexed map[common.Hash]struct{}
+
 	// descendant is the callback indicating whether the layer with
 	// given root is a descendant of the one specified by `ancestor`.
 	descendant func(state common.Hash, ancestor common.Hash) bool
+
+	// Background builder plumbing.
+	tasks     chan *lookupTask
+	quit      chan struct{}
+	closeOnce sync.Once
+	wg        sync.WaitGroup
 }
 
-// newLookup initializes the lookup structure.
+// newLookup initializes the lookup structure and launches the background
+// builder. The layers already present below the head are integrated
+// synchronously, so the index is fully populated by the time this returns.
 func newLookup(head layer, descendant func(state common.Hash, ancestor common.Hash) bool) *lookup {
 	var (
 		current = head
@@ -90,18 +131,86 @@ func newLookup(head layer, descendant func(state common.Hash, ancestor common.Ha
 	l := &lookup{
 		accounts:   make(map[common.Hash]layerList),
 		storages:   make(map[[64]byte]layerList),
+		indexed:    make(map[common.Hash]struct{}),
 		descendant: descendant,
+		tasks:      make(chan *lookupTask, lookupTaskQueueCap),
+		quit:       make(chan struct{}),
 	}
-	// Apply the diff layers from bottom to top
+	// Apply the diff layers from bottom to top. The builder isn't running yet,
+	// so this can mutate the maps directly without contending for the lock.
 	for i := len(layers) - 1; i >= 0; i-- {
-		switch diff := layers[i].(type) {
-		case *diskLayer:
-			continue
-		case *diffLayer:
-			l.addLayer(diff)
+		if diff, ok := layers[i].(*diffLayer); ok {
+			l.applyAdd(diff)
 		}
 	}
+	l.wg.Add(1)
+	go l.loop()
 	return l
+}
+
+// loop is the background builder, integrating diff layers into the index in
+// the order they are enqueued until the lookup is closed.
+func (l *lookup) loop() {
+	defer l.wg.Done()
+
+	for {
+		select {
+		case <-l.quit:
+			return
+		case task := <-l.tasks:
+			if task.diff != nil {
+				if task.remove {
+					l.applyRemove(task.diff)
+				} else {
+					l.applyAdd(task.diff)
+				}
+			}
+			// Acknowledge the barrier, if any, after all preceding tasks (this
+			// one included) have been applied.
+			if task.done != nil {
+				close(task.done)
+			}
+		}
+	}
+}
+
+// waitBuild blocks until the background builder has processed every task
+// enqueued before this call. Because the builder is strictly FIFO, observing
+// the barrier guarantees all prior add/remove tasks have been applied.
+func (l *lookup) waitBuild() {
+	done := make(chan struct{})
+	select {
+	case l.tasks <- &lookupTask{done: done}:
+	case <-l.quit:
+		return
+	}
+	select {
+	case <-done:
+	case <-l.quit:
+	}
+}
+
+// close terminates the background builder and waits for it to exit. Any tasks
+// still queued are discarded; this is only called when the whole index is
+// about to be replaced or the database is shutting down.
+func (l *lookup) close() {
+	l.closeOnce.Do(func() {
+		close(l.quit)
+	})
+	l.wg.Wait()
+}
+
+// isIndexed reports whether reads for the given state can be served from the
+// index. The disk layer (base) is always considered indexed since it carries
+// no diff data of its own.
+//
+// This method assumes the read lock has been held.
+func (l *lookup) isIndexed(state common.Hash, base common.Hash) bool {
+	if state == base {
+		return true
+	}
+	_, ok := l.indexed[state]
+	return ok
 }
 
 // tip scans the layer list from newest to oldest and returns the first entry
@@ -166,7 +275,19 @@ func (list layerList) remove(state common.Hash) (layerList, bool, bool) {
 // empty trie hashes to EmptyVerkleHash. Callers must therefore consult the
 // boolean rather than comparing the returned hash against common.Hash{}
 // directly.
-func (l *lookup) accountTip(accountHash common.Hash, stateID common.Hash, base common.Hash) (common.Hash, bool) {
+//
+// The third return value reports whether the requested stateID has been
+// incorporated into the index. When false, the (hash, ok) results are
+// meaningless and the caller must fall back to a direct traversal.
+func (l *lookup) accountTip(accountHash common.Hash, stateID common.Hash, base common.Hash) (common.Hash, bool, bool) {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+
+	// Bail out if the builder hasn't reached this layer yet; the maps may be
+	// missing recent mutations and would resolve to a stale layer.
+	if !l.isIndexed(stateID, base) {
+		return common.Hash{}, false, false
+	}
 	// Traverse the mutation history from latest to oldest one. Several
 	// scenarios are possible:
 	//
@@ -185,21 +306,19 @@ func (l *lookup) accountTip(accountHash common.Hash, stateID common.Hash, base c
 	// - (y, C4) => D
 	// - (y, C3') => D
 	// - (y, C0) => null
-	// Traverse the mutation history (if any) from latest to oldest, returning
-	// the most recent layer that contains the requested data.
 	if list, ok := l.accounts[accountHash]; ok {
 		if tip, found := list.tip(stateID, l.descendant); found {
-			return tip, true
+			return tip, true, true
 		}
 	}
 	// No layer matching the stateID or its descendants was found. Use the
 	// current disk layer as a fallback.
 	if base == stateID || l.descendant(stateID, base) {
-		return base, true
+		return base, true, true
 	}
 	// The layer associated with 'stateID' is not the descendant of the current
 	// disk layer, it's already stale, return nothing.
-	return common.Hash{}, false
+	return common.Hash{}, false, true
 }
 
 // storageTip traverses the layer list associated with the given account and
@@ -208,34 +327,69 @@ func (l *lookup) accountTip(accountHash common.Hash, stateID common.Hash, base c
 //
 // See accountTip for the returned-hash / ok convention — the same
 // bintrie-zero-root caveat applies here.
-func (l *lookup) storageTip(accountHash common.Hash, slotHash common.Hash, stateID common.Hash, base common.Hash) (common.Hash, bool) {
-	// Traverse the mutation history (if any) from latest to oldest, returning
-	// the most recent layer that contains the requested data.
+func (l *lookup) storageTip(accountHash common.Hash, slotHash common.Hash, stateID common.Hash, base common.Hash) (common.Hash, bool, bool) {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+
+	// Bail out if the builder hasn't reached this layer yet; the maps may be
+	// missing recent mutations and would resolve to a stale layer.
+	if !l.isIndexed(stateID, base) {
+		return common.Hash{}, false, false
+	}
+	// Traverse the mutation history from latest to oldest, returning the most
+	// recent layer that contains the requested data.
 	if list, ok := l.storages[storageKey(accountHash, slotHash)]; ok {
 		if tip, found := list.tip(stateID, l.descendant); found {
-			return tip, true
+			return tip, true, true
 		}
 	}
 	// No layer matching the stateID or its descendants was found. Use the
 	// current disk layer as a fallback.
 	if base == stateID || l.descendant(stateID, base) {
-		return base, true
+		return base, true, true
 	}
 	// The layer associated with 'stateID' is not the descendant of the current
 	// disk layer, it's already stale, return nothing.
-	return common.Hash{}, false
+	return common.Hash{}, false, true
 }
 
-// addLayer traverses the state data retained in the specified diff layer and
-// integrates it into the lookup set.
+// addLayer enqueues the diff layer to be integrated into the lookup index by
+// the background builder. It returns immediately, keeping the index maintenance
+// off the caller's critical path.
+//
+// Layers must be enqueued strictly in child-after-parent order so that the
+// builder processes them bottom-to-top.
+func (l *lookup) addLayer(diff *diffLayer) {
+	select {
+	case l.tasks <- &lookupTask{diff: diff}:
+	case <-l.quit:
+	}
+}
+
+// removeLayer enqueues the diff layer to be unlinked from the lookup index by
+// the background builder. The error return is retained for call-site
+// compatibility and is always nil; failures are reported asynchronously.
+func (l *lookup) removeLayer(diff *diffLayer) error {
+	select {
+	case l.tasks <- &lookupTask{diff: diff, remove: true}:
+	case <-l.quit:
+	}
+	return nil
+}
+
+// applyAdd traverses the state data retained in the specified diff layer and
+// integrates it into the lookup set. It runs on the background builder.
 //
 // This function assumes that all layers older than the provided one have already
 // been processed, ensuring that layers are processed strictly in a bottom-to-top
 // order.
-func (l *lookup) addLayer(diff *diffLayer) {
+func (l *lookup) applyAdd(diff *diffLayer) {
 	defer func(now time.Time) {
 		lookupAddLayerTimer.UpdateSince(now)
 	}(time.Now())
+
+	l.lock.Lock()
+	defer l.lock.Unlock()
 
 	var (
 		wg    sync.WaitGroup
@@ -273,50 +427,46 @@ func (l *lookup) addLayer(diff *diffLayer) {
 		}
 	}()
 	wg.Wait()
+	l.indexed[state] = struct{}{}
 }
 
-// removeLayer traverses the state data retained in the specified diff layer and
-// unlink them from the lookup set.
-func (l *lookup) removeLayer(diff *diffLayer) error {
+// applyRemove traverses the state data retained in the specified diff layer and
+// unlinks them from the lookup set. It runs on the background builder.
+func (l *lookup) applyRemove(diff *diffLayer) {
 	defer func(now time.Time) {
 		lookupRemoveLayerTimer.UpdateSince(now)
 	}(time.Now())
 
-	var (
-		eg    errgroup.Group
-		state = diff.rootHash()
-	)
-	eg.Go(func() error {
-		for accountHash := range diff.states.accountData {
-			list, empty, found := l.accounts[accountHash].remove(state)
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
+	state := diff.rootHash()
+	for accountHash := range diff.states.accountData {
+		list, empty, found := l.accounts[accountHash].remove(state)
+		if !found {
+			log.Error("Account lookup is not found", "account", accountHash, "state", state)
+			continue
+		}
+		if empty {
+			delete(l.accounts, accountHash)
+		} else {
+			l.accounts[accountHash] = list
+		}
+	}
+	for accountHash, slots := range diff.states.storageData {
+		for slotHash := range slots {
+			key := storageKey(accountHash, slotHash)
+			list, empty, found := l.storages[key].remove(state)
 			if !found {
-				return fmt.Errorf("account lookup is not found, %x, state: %x", accountHash, state)
+				log.Error("Storage lookup is not found", "account", accountHash, "slot", slotHash, "state", state)
+				continue
 			}
 			if empty {
-				delete(l.accounts, accountHash)
+				delete(l.storages, key)
 			} else {
-				l.accounts[accountHash] = list
+				l.storages[key] = list
 			}
 		}
-		return nil
-	})
-
-	eg.Go(func() error {
-		for accountHash, slots := range diff.states.storageData {
-			for slotHash := range slots {
-				key := storageKey(accountHash, slotHash)
-				list, empty, found := l.storages[key].remove(state)
-				if !found {
-					return fmt.Errorf("storage lookup is not found, %x %x, state: %x", accountHash, slotHash, state)
-				}
-				if empty {
-					delete(l.storages, key)
-				} else {
-					l.storages[key] = list
-				}
-			}
-		}
-		return nil
-	})
-	return eg.Wait()
+	}
+	delete(l.indexed, state)
 }
