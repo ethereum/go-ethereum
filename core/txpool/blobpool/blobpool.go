@@ -154,9 +154,9 @@ type blobTxMeta struct {
 type blobTxForPool struct {
 	Tx          *types.Transaction // tx without sidecar
 	Version     byte
+	Blobs       []kzg4844.Blob
 	Commitments []kzg4844.Commitment
 	Proofs      []kzg4844.Proof
-	Blobs       []kzg4844.Blob
 }
 
 // Sidecar returns BlobTxSidecar of ptx.
