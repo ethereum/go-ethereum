@@ -22,6 +22,7 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
@@ -74,12 +75,12 @@ func writeNodes(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.No
 // TODO(rjl493456442) do we really need this generation marker? The state updates
 // after the marker can also be written and will be fixed by generator later if
 // it's outdated.
-func writeStates(batch ethdb.Batch, genMarker []byte, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte, clean *fastcache.Cache) (int, int) {
+func writeStates(batch ethdb.Batch, genMarker []byte, accountData map[common.Hash]*types.SlimAccount, storageData map[common.Hash]map[common.Hash][]byte, clean *fastcache.Cache) (int, int) {
 	var (
 		accounts int
 		slots    int
 	)
-	for addrHash, blob := range accountData {
+	for addrHash, account := range accountData {
 		// Skip any account not yet covered by the snapshot. The account
 		// at the generation marker position (addrHash == genMarker[:common.HashLength])
 		// should still be updated, as it would be skipped in the next
@@ -88,12 +89,16 @@ func writeStates(batch ethdb.Batch, genMarker []byte, accountData map[common.Has
 			continue
 		}
 		accounts += 1
-		if len(blob) == 0 {
+		if account == nil {
 			rawdb.DeleteAccountSnapshot(batch, addrHash)
 			if clean != nil {
 				clean.Set(addrHash[:], nil)
 			}
 		} else {
+			// Encode the decoded account back into slim-RLP form for storage.
+			// This is the single point where the in-memory decoded accounts
+			// are serialized for the on-disk snapshot.
+			blob := encodeSlimAccount(account)
 			rawdb.WriteAccountSnapshot(batch, addrHash, blob)
 			if clean != nil {
 				clean.Set(addrHash[:], blob)
