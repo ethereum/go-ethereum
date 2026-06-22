@@ -107,7 +107,7 @@ type Trie interface {
 	// in the trie with provided address.
 	UpdateAccount(address common.Address, account *types.StateAccount, codeLen int) error
 
-	// UpdateAccountBatch attempts to update a list accounts in the batch manner.
+	// UpdateAccountBatch attempts to update a list of accounts in the batch manner.
 	UpdateAccountBatch(addresses []common.Address, accounts []*types.StateAccount, codeLengths []int) error
 
 	// UpdateStorage associates key with value in the trie. If value has length zero,
