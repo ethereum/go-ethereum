@@ -771,7 +771,7 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 			// Mark fetching for unfetched cells if the peer has enough token.
 			// Otherwise, the next peer who announced the hash and has token will be selected
 			// in the next loop
-			if unfetched.OneCount() > 0 && f.consumeToken(peer, int(unfetched.OneCount())) {
+			if unfetched.OneCount() > 0 && f.consumeToken(peer, unfetched.OneCount()) {
 				if f.fetches[hash] == nil {
 					f.fetches[hash] = &fetchStatus{
 						fetching: unfetched,
