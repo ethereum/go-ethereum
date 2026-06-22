@@ -231,9 +231,11 @@ func (g GasBudget) ExitRevert() GasBudget {
 
 // ExitHalt produces the leftover for an exceptional halt.
 //
-// - state_gas_reservoir is reset back to its value at the start of the child frame
-// - the gas_left initially given to the child is consumed (set to zero)
-func (g GasBudget) ExitHalt(initStateReservoir uint64) GasBudget {
+// Per the updated EIP-8037, only the regular gas_left is burned (folded into
+// UsedRegularGas); the entire state-gas reservoir — including any portion that
+// spilled into the regular pool during execution — is refunded to the caller's
+// reservoir rather than reclassified as burned regular gas.
+func (g GasBudget) ExitHalt() GasBudget {
 	reservoir := int64(g.StateGas) + g.UsedStateGas
 	if reservoir < 0 {
 		// Reservoir should never be negative. By construction it equals
@@ -242,18 +244,31 @@ func (g GasBudget) ExitHalt(initStateReservoir uint64) GasBudget {
 		reservoir = 0
 		log.Warn("Negative reservoir at halt", "remaining", g.StateGas, "used", g.UsedStateGas)
 	}
-	// The portion of state gas charged from regular gas is also burned
-	// together with the regular gas, rather than being returned to the
-	// parent's state-gas reservoir.
-	var spilled uint64
-	if uint64(reservoir) > initStateReservoir {
-		spilled = uint64(reservoir) - initStateReservoir
-	}
 	return GasBudget{
 		RegularGas:     0,
-		StateGas:       initStateReservoir,
-		UsedRegularGas: g.UsedRegularGas + g.RegularGas + spilled,
+		StateGas:       uint64(reservoir),
+		UsedRegularGas: g.UsedRegularGas + g.RegularGas,
 		UsedStateGas:   0,
+	}
+}
+
+// ExitCodeDepositHalt produces the leftover for a CREATE/CREATE2 frame whose
+// initcode body ran to completion but then failed during the code-deposit step
+// (oversized code, 0xEF prefix, or insufficient gas for the hash/deposit
+// charge). Per the spec's process_create_message exception handler, this path
+// differs from a mid-execution ExceptionalHalt: only the remaining regular gas
+// is burned, while the state gas the (successful) body consumed is KEPT in
+// UsedStateGas rather than refunded to the reservoir. The state changes are
+// reverted by the caller, but the state-gas accounting is propagated upward so
+// the top-level tx settlement can discard it as the state dimension (rather
+// than folding it back into the combined balance, which would wrongly deflate
+// the regular dimension).
+func (g GasBudget) ExitCodeDepositHalt() GasBudget {
+	return GasBudget{
+		RegularGas:     0,
+		StateGas:       g.StateGas,
+		UsedRegularGas: g.UsedRegularGas + g.RegularGas,
+		UsedStateGas:   g.UsedStateGas,
 	}
 }
 
@@ -266,33 +281,24 @@ func (g GasBudget) ExitHalt(initStateReservoir uint64) GasBudget {
 //
 // Soft validation failures (occurring BEFORE evm.Run) should call Preserved
 // directly instead of going through this dispatcher.
-func (g GasBudget) Exit(err error, initStateReservoir uint64) GasBudget {
+func (g GasBudget) Exit(err error) GasBudget {
 	switch {
 	case err == nil:
 		return g.ExitSuccess()
 	case err == ErrExecutionReverted:
 		return g.ExitRevert()
 	default:
-		return g.ExitHalt(initStateReservoir)
+		return g.ExitHalt()
 	}
 }
 
 // Absorb merges a sub-call's leftover GasBudget into this (caller's) running
-// budget. Additionally, it does an EIP-8037 spillover correction:
-// state-gas that spilled into the regular pool inside the child frame is
-// excluded from the UsedRegularGas.
-//
-//	spillover = forwarded - child.RegularGas - child.UsedRegularGas
-//
-// forwarded is the regular-gas amount that was passed to the child at call
-// entry (i.e., the regular initial of the child's GasBudget).
-func (g *GasBudget) Absorb(child GasBudget, forwarded uint64) {
-	spillover := forwarded - child.RegularGas - child.UsedRegularGas
-
-	g.UsedRegularGas -= child.RegularGas
+// budget. Under the updated EIP-8037, state-gas no longer spills into the
+// child's burned regular gas on halt, so the child's UsedRegularGas can be
+// folded in directly without a spillover correction.
+func (g *GasBudget) Absorb(child GasBudget) {
 	g.RegularGas += child.RegularGas
+	g.UsedRegularGas += child.UsedRegularGas
 	g.StateGas = child.StateGas
 	g.UsedStateGas += child.UsedStateGas
-
-	g.UsedRegularGas -= spillover
 }

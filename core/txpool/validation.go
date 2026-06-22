@@ -134,7 +134,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	}
 	// Ensure the transaction can cover floor data gas.
 	if rules.IsPrague {
-		floorDataGas, err := core.FloorDataGas(rules, tx.Data(), tx.AccessList())
+		floorDataGas, err := core.FloorDataGas(rules, tx.Data(), tx.AccessList(), uint64(len(tx.SetCodeAuthorizations())))
 		if err != nil {
 			return err
 		}

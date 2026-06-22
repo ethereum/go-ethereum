@@ -131,6 +131,13 @@ type EVM struct {
 	returnData []byte // Last CALL's return data for subsequent reuse
 
 	arena *stackArena
+
+	// floorGas is the per-transaction EIP-8279 Block Access List byte-floor
+	// accumulator. It is set by the state transition at the start of each
+	// transaction and extended at runtime as opcodes contribute BAL bytes. It
+	// is nil before EIP-8279 (Amsterdam) or in contexts without BAL
+	// construction, in which case the runtime extensions are no-ops.
+	floorGas *FloorGasAccumulator
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
@@ -222,6 +229,26 @@ func (evm *EVM) SetTxContext(txCtx TxContext) {
 	evm.TxContext = txCtx
 }
 
+// SetFloorGas installs the per-transaction EIP-8279 floor accumulator. It is
+// called by the state transition once the static floor seed and gas limit are
+// known. Passing nil disables runtime floor extensions for the transaction.
+func (evm *EVM) SetFloorGas(acc *FloorGasAccumulator) {
+	evm.floorGas = acc
+}
+
+// FloorGas returns the active EIP-8279 floor accumulator, or nil if none is set.
+func (evm *EVM) FloorGas() *FloorGasAccumulator {
+	return evm.floorGas
+}
+
+// extendFloor extends the EIP-8279 floor accumulator by numBytes BAL bytes. It
+// is a no-op when no accumulator is installed (pre-Amsterdam or BAL-less
+// contexts). The returned error, when non-nil, is ErrOutOfGas and MUST abort
+// the operation before the matching BAL byte is inserted.
+func (evm *EVM) extendFloor(numBytes uint64) error {
+	return evm.floorGas.extendFloor(numBytes)
+}
+
 // Cancel cancels any running EVM operation. This may be called concurrently and
 // it's safe to be called multiple times.
 func (evm *EVM) Cancel() {
@@ -261,11 +288,17 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	}
 	syscall := isSystemCall(caller)
 
+	// EIP-7928: per the Amsterdam spec, delegation resolution happens before
+	// the value-transfer check, so the delegated-to must appear in the BAL
+	// even when the call later reverts with ErrInsufficientBalance. Touch the
+	// target's code here (a no-op for non-delegated accounts) to record it.
+	evm.resolveCode(addr)
+
 	// Fail if we're trying to transfer more than the available balance.
 	if !syscall && !value.IsZero() && !evm.Context.CanTransfer(evm.StateDB, caller, value) {
 		return nil, gas, ErrInsufficientBalance
 	}
-	snapshot, reservoir := evm.StateDB.Snapshot(), gas.StateGas
+	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
 	if !evm.StateDB.Exist(addr) {
 		if !isPrecompile && evm.chainRules.IsEIP4762 && !isSystemCall(caller) {
@@ -279,7 +312,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			wgas := evm.AccessEvents.CodeHashGas(addr, true, gas.RegularGas, false)
 			if _, ok := gas.ChargeRegular(wgas); !ok {
 				evm.StateDB.RevertToSnapshot(snapshot)
-				return nil, gas.ExitHalt(reservoir), ErrOutOfGas
+				return nil, gas.ExitHalt(), ErrOutOfGas
 			}
 		}
 
@@ -288,16 +321,6 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			return nil, gas, nil
 		}
 		evm.StateDB.CreateAccount(addr)
-	}
-	if evm.chainRules.IsAmsterdam && !value.IsZero() && evm.StateDB.Empty(addr) {
-		prev, ok := gas.ChargeState(params.AccountCreationSize * evm.Context.CostPerStateByte)
-		if !ok {
-			evm.StateDB.RevertToSnapshot(snapshot)
-			return nil, gas.ExitHalt(reservoir), ErrOutOfGas
-		}
-		if evm.Config.Tracer.HasGasHook() {
-			evm.Config.Tracer.EmitGasChange(prev.AsTracing(), gas.AsTracing(), tracing.GasChangeAccountCreation)
-		}
 	}
 	// Perform the value transfer only in non-syscall mode.
 	// Calling this is required even for zero-value transfers,
@@ -324,7 +347,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	}
 
 	// Calculate the remaining gas at the end of frame
-	exitGas := gas.Exit(err, reservoir)
+	exitGas := gas.Exit(err)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 
@@ -356,11 +379,17 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
 	}
+
+	// EIP-7928: per the Amsterdam spec, delegation resolution happens before
+	// the value-transfer check, so the delegated-to must appear in the BAL
+	// even when the call later reverts with ErrInsufficientBalance.
+	evm.resolveCode(addr)
+
 	// Fail if we're trying to transfer more than the available balance
 	if !evm.Context.CanTransfer(evm.StateDB, caller, value) {
 		return nil, gas, ErrInsufficientBalance
 	}
-	snapshot, reservoir := evm.StateDB.Snapshot(), gas.StateGas
+	snapshot := evm.StateDB.Snapshot()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -375,7 +404,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 	}
 
 	// Calculate the remaining gas at the end of frame
-	exitGas := gas.Exit(err, reservoir)
+	exitGas := gas.Exit(err)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 
@@ -406,7 +435,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
 	}
-	snapshot, reservoir := evm.StateDB.Snapshot(), gas.StateGas
+	snapshot := evm.StateDB.Snapshot()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -419,7 +448,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 	}
 
 	// Calculate the remaining gas at the end of frame
-	exitGas := gas.Exit(err, reservoir)
+	exitGas := gas.Exit(err)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 
@@ -453,7 +482,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	// after all empty accounts were deleted, so this is not required. However, if we omit this,
 	// then certain tests start failing; stRevertTest/RevertPrecompiledTouchExactOOG.json.
 	// We could change this, but for now it's left for legacy reasons
-	snapshot, reservoir := evm.StateDB.Snapshot(), gas.StateGas
+	snapshot := evm.StateDB.Snapshot()
 
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
@@ -471,7 +500,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	}
 
 	// Calculate the remaining gas at the end of frame
-	exitGas := gas.Exit(err, reservoir)
+	exitGas := gas.Exit(err)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
@@ -509,20 +538,28 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	}
 	// Increment the caller's nonce after passing all validations
 	evm.StateDB.SetNonce(caller, nonce+1, tracing.NonceChangeContractCreator)
-	reservoir := gas.StateGas
 
 	// Charge the contract creation init gas in verkle mode
 	if evm.chainRules.IsEIP4762 {
 		statelessGas := evm.AccessEvents.ContractCreatePreCheckGas(address, gas.RegularGas)
 		prior, ok := gas.Charge(GasCosts{RegularGas: statelessGas})
 		if !ok {
-			return nil, common.Address{}, gas.ExitHalt(reservoir), ErrOutOfGas
+			return nil, common.Address{}, gas.ExitHalt(), ErrOutOfGas
 		}
 		if evm.Config.Tracer.HasGasHook() {
 			evm.Config.Tracer.EmitGasChange(prior.AsTracing(), gas.AsTracing(), tracing.GasChangeWitnessContractCollisionCheck)
 		}
 	}
 
+	// EIP-8279: an opcode-level CREATE/CREATE2 records the deployed address in
+	// the BAL. The top-level creation transaction's contract address is part of
+	// the implicit per-tx bytes covered by TX_BASE headroom, so only nested
+	// creations extend the floor here.
+	if evm.depth > 0 {
+		if err = evm.extendFloor(params.BALBytesPerAddress); err != nil {
+			return nil, common.Address{}, gas.ExitHalt(), err
+		}
+	}
 	// We add this to the access list _before_ taking a snapshot. Even if the
 	// creation fails, the access-list change should not be rolled back.
 	if evm.chainRules.IsEIP2929 {
@@ -537,7 +574,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	if evm.StateDB.GetNonce(address) != 0 ||
 		(contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) || // non-empty code
 		isEIP7610RejectedAccount(evm.ChainConfig().ChainID, address, evm.chainRules.IsEIP158) {
-		halt := gas.ExitHalt(reservoir)
+		halt := gas.ExitHalt()
 		if evm.Config.Tracer.HasGasHook() {
 			evm.Config.Tracer.EmitGasChange(gas.AsTracing(), halt.AsTracing(), tracing.GasChangeCallFailedExecution)
 		}
@@ -551,18 +588,9 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	snapshot := evm.StateDB.Snapshot()
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
-
-		if evm.chainRules.IsAmsterdam && evm.depth > 0 {
-			// Only charge state gas if we are not doing a create transaction.
-			// Prevents double charging with IntrinsicGas.
-			prev, ok := gas.ChargeState(params.AccountCreationSize * evm.Context.CostPerStateByte)
-			if !ok {
-				return nil, common.Address{}, gas.ExitHalt(reservoir), ErrOutOfGas
-			}
-			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(prev.AsTracing(), gas.AsTracing(), tracing.GasChangeAccountCreation)
-			}
-		}
+		// EIP-8037: the account-creation state gas is charged before the
+		// opcode runs (gasCreateEip8037) for CREATE/CREATE2 opcodes, and in
+		// IntrinsicGas for creation transactions, so there is no charge here.
 	}
 	// CreateContract means that regardless of whether the account previously existed
 	// in the state trie or not, it _now_ becomes created as a _contract_ account.
@@ -570,6 +598,21 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	// acts inside that account.
 	evm.StateDB.CreateContract(address)
 
+	// EIP-8279: an opcode-level CREATE/CREATE2 sets the new contract's nonce
+	// (and, with a non-zero endowment, its balance), both recorded in the BAL.
+	// The floor is extended after the collision check, before the state
+	// mutation. The top-level creation transaction's nonce is covered by
+	// TX_BASE headroom, so only nested creations extend the floor here.
+	if evm.depth > 0 {
+		if err = evm.extendFloor(params.BALBytesPerNonce); err != nil {
+			return nil, common.Address{}, gas.ExitHalt(), err
+		}
+		if !value.IsZero() {
+			if err = evm.extendFloor(params.BALBytesPerBalance); err != nil {
+				return nil, common.Address{}, gas.ExitHalt(), err
+			}
+		}
+	}
 	if evm.chainRules.IsEIP158 {
 		evm.StateDB.SetNonce(address, 1, tracing.NonceChangeNewContract)
 	}
@@ -577,7 +620,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	if evm.chainRules.IsEIP4762 {
 		consumed, wanted := evm.AccessEvents.ContractCreateInitGas(address, gas.RegularGas)
 		if consumed < wanted {
-			return nil, common.Address{}, gas.ExitHalt(reservoir), ErrOutOfGas
+			return nil, common.Address{}, gas.ExitHalt(), ErrOutOfGas
 		}
 		prior, _ := gas.Charge(GasCosts{RegularGas: consumed})
 		if evm.Config.Tracer.HasGasHook() {
@@ -595,14 +638,23 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	contract.SetCallCode(common.Hash{}, code)
 	contract.IsDeployment = true
 
-	ret, err = evm.initNewContract(contract, address)
+	var depositHalt bool
+	ret, depositHalt, err = evm.initNewContract(contract, address)
 
 	// Special case: ErrCodeStoreOutOfGas pre-Homestead does NOT roll back
 	// state and gas is preserved (i.e., treated as success).
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 
-		exit := contract.Gas.Exit(err, reservoir)
+		// EIP-8037: a code-deposit halt (initcode body succeeded, deposit step
+		// failed) keeps the state gas the body consumed for discard at the tx
+		// level, rather than refunding the reservoir like a mid-execution halt.
+		var exit GasBudget
+		if depositHalt && evm.chainRules.IsAmsterdam {
+			exit = contract.Gas.ExitCodeDepositHalt()
+		} else {
+			exit = contract.Gas.Exit(err)
+		}
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
 				evm.Config.Tracer.EmitGasChange(contract.Gas.AsTracing(), exit.AsTracing(), tracing.GasChangeCallFailedExecution)
@@ -617,54 +669,70 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 
 // initNewContract runs a new contract's creation code, performs checks on the
 // resulting code that is to be deployed, and consumes necessary gas.
-func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]byte, error) {
-	ret, err := evm.Run(contract, nil, false)
+//
+// The returned depositHalt flag is true when the initcode body itself ran to
+// completion successfully but a subsequent code-deposit check failed (oversized
+// code, 0xEF prefix, or insufficient gas for the hash/deposit charge). Under
+// EIP-8037 this halt is metered differently from a mid-execution halt: the
+// state gas consumed by the (successful) body is kept rather than refunded.
+func (evm *EVM) initNewContract(contract *Contract, address common.Address) (ret []byte, depositHalt bool, err error) {
+	ret, err = evm.Run(contract, nil, false)
 	if err != nil {
-		return ret, err
+		return ret, false, err
 	}
 	// Check prefix before gas calculation.
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
 	if len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
-		return ret, ErrInvalidCode
+		return ret, true, ErrInvalidCode
 	}
 	if evm.chainRules.IsEIP4762 {
 		consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true, contract.Gas.RegularGas)
 		contract.chargeRegular(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
 		if len(ret) > 0 && (consumed < wanted) {
-			return ret, ErrCodeStoreOutOfGas
+			return ret, true, ErrCodeStoreOutOfGas
 		}
 		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
-			return ret, err
+			return ret, true, err
 		}
 	} else if evm.chainRules.IsAmsterdam {
 		// Check max code size BEFORE charging gas so over-max code
 		// does not consume state gas (which would inflate tx_state).
 		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
-			return ret, err
+			return ret, true, err
 		}
 		// Charge regular gas (hash cost) before state gas.
 		regularCost := toWordSize(uint64(len(ret))) * params.Keccak256WordGas
 		if !contract.chargeRegular(regularCost, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
-			return ret, ErrCodeStoreOutOfGas
+			return ret, true, ErrCodeStoreOutOfGas
 		}
 		// Charge state gas (code-deposit) afterwards.
 		stateCost := uint64(len(ret)) * evm.Context.CostPerStateByte
 		if !contract.chargeState(stateCost, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
-			return ret, ErrCodeStoreOutOfGas
+			return ret, true, ErrCodeStoreOutOfGas
 		}
 	} else {
 		createDataCost := uint64(len(ret)) * params.CreateDataGas
 		if !contract.chargeRegular(createDataCost, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
-			return ret, ErrCodeStoreOutOfGas
+			return ret, true, ErrCodeStoreOutOfGas
 		}
 		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
-			return ret, err
+			return ret, true, err
+		}
+	}
+	// EIP-8279: a successful opcode-level CREATE/CREATE2 deploy records the
+	// deployed code in the BAL. Extend the floor by the code length before
+	// set_code. A top-level creation transaction's deployed code is bounded by
+	// the calldata floor on its init code, so only nested creations extend the
+	// floor here.
+	if evm.depth > 0 && len(ret) > 0 {
+		if err := evm.extendFloor(uint64(len(ret))); err != nil {
+			return ret, true, err
 		}
 	}
 	if len(ret) > 0 {
 		evm.StateDB.SetCode(address, ret, tracing.CodeChangeContractCreation)
 	}
-	return ret, nil
+	return ret, false, nil
 }
 
 // Create creates a new contract using code as deployment code.

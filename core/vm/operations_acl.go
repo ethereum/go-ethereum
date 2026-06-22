@@ -103,6 +103,12 @@ func gasSLoadEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	slot := common.Hash(loc.Bytes32())
 	// Check slot presence in the access list
 	if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
+		// EIP-8279: a cold SLOAD adds the storage key to the BAL. Extend the
+		// floor before the slot is recorded; an out-of-gas here aborts the
+		// opcode before the unpaid BAL byte exists.
+		if err := evm.extendFloor(params.BALBytesPerStorageKey); err != nil {
+			return GasCosts{}, err
+		}
 		// If the caller cannot afford the cost, this change will be rolled back
 		// If he does afford it, we can skip checking the same thing later on, during execution
 		evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
@@ -126,6 +132,10 @@ func gasExtCodeCopyEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 	addr := common.Address(stack.peek().Bytes20())
 	// Check slot presence in the access list
 	if !evm.StateDB.AddressInAccessList(addr) {
+		// EIP-8279: a cold account access adds the address to the BAL.
+		if err := evm.extendFloor(params.BALBytesPerAddress); err != nil {
+			return GasCosts{}, err
+		}
 		evm.StateDB.AddAddressToAccessList(addr)
 		var overflow bool
 		// We charge (cold-warm), since 'warm' is already charged as constantGas
@@ -148,6 +158,10 @@ func gasEip2929AccountCheck(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 	addr := common.Address(stack.peek().Bytes20())
 	// Check slot presence in the access list
 	if !evm.StateDB.AddressInAccessList(addr) {
+		// EIP-8279: a cold account access adds the address to the BAL.
+		if err := evm.extendFloor(params.BALBytesPerAddress); err != nil {
+			return GasCosts{}, err
+		}
 		// If the caller cannot afford the cost, this change will be rolled back
 		evm.StateDB.AddAddressToAccessList(addr)
 		// The warm storage read cost is already charged as constantGas
@@ -165,6 +179,10 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc, addressPosition int) g
 		// the cost to charge for cold access, if any, is Cold - Warm
 		coldCost := params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
 		if !warmAccess {
+			// EIP-8279: a cold account access adds the address to the BAL.
+			if err := evm.extendFloor(params.BALBytesPerAddress); err != nil {
+				return GasCosts{}, err
+			}
 			evm.StateDB.AddAddressToAccessList(addr)
 			// Charge the remaining difference here already, to correctly calculate available
 			// gas for call
@@ -286,6 +304,10 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc intrinsicGasFunc) gasFunc {
 		// Perform EIP-2929 checks (stateless), checking address presence
 		// in the accessList and charge the cold access accordingly.
 		if !evm.StateDB.AddressInAccessList(addr) {
+			// EIP-8279: a cold account access adds the address to the BAL.
+			if err := evm.extendFloor(params.BALBytesPerAddress); err != nil {
+				return GasCosts{}, err
+			}
 			evm.StateDB.AddAddressToAccessList(addr)
 
 			// The WarmStorageReadCostEIP2929 (100) is already deducted in the form
@@ -321,6 +343,11 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc intrinsicGasFunc) gasFunc {
 			if evm.StateDB.AddressInAccessList(target) {
 				eip7702Cost = params.WarmStorageReadCostEIP2929
 			} else {
+				// EIP-8279: resolving a cold delegation target adds its address
+				// to the BAL.
+				if err := evm.extendFloor(params.BALBytesPerAddress); err != nil {
+					return GasCosts{}, err
+				}
 				evm.StateDB.AddAddressToAccessList(target)
 				eip7702Cost = params.ColdAccountAccessCostEIP2929
 			}
