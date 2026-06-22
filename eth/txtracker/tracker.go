@@ -58,7 +58,6 @@ type PeerStats struct {
 // Chain is the blockchain interface needed by the tracker.
 type Chain interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
-	GetBlockByNumber(number uint64) *types.Block
 	GetBlock(hash common.Hash, number uint64) *types.Block
 	GetCanonicalHash(number uint64) common.Hash
 	CurrentFinalBlock() *types.Header

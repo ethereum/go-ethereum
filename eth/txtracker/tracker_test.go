@@ -34,7 +34,7 @@ import (
 // Blocks are stored by hash to exercise the reorg-safe lookup path in
 // tracker.handleChainHead (which calls GetBlock(hash, number)). A separate
 // canonicalByNum index maps each height to its canonical block hash, used
-// by GetBlockByNumber (the finalization path).
+// by GetCanonicalHash in the finalization-credit path.
 type mockChain struct {
 	mu             sync.Mutex
 	headFeed       event.Feed
@@ -52,16 +52,6 @@ func newMockChain() *mockChain {
 
 func (c *mockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return c.headFeed.Subscribe(ch)
-}
-
-func (c *mockChain) GetBlockByNumber(number uint64) *types.Block {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	hash, ok := c.canonicalByNum[number]
-	if !ok {
-		return nil
-	}
-	return c.blocksByHash[hash]
 }
 
 func (c *mockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
@@ -94,7 +84,7 @@ func (c *mockChain) addBlock(num uint64, txs []*types.Transaction) *types.Block 
 // addBlockAtHeight adds a block at the given height. The salt parameter
 // ensures distinct block hashes for two blocks at the same height (used
 // for reorg tests). If canonical is true, the block becomes the canonical
-// block for that height (looked up by GetBlockByNumber).
+// block for that height (looked up by GetCanonicalHash).
 func (c *mockChain) addBlockAtHeight(num, salt uint64, txs []*types.Transaction, canonical bool) *types.Block {
 	return c.addBlockAtHeightWithTime(num, salt, txs, canonical, uint64(time.Now().Unix()+3600))
 }
@@ -390,9 +380,8 @@ func TestEMADecay(t *testing.T) {
 // HASH (not just by number), so a head event announcing a sibling block at
 // the same height does not credit transactions from the canonical block.
 //
-// Regression check: if the tracker were changed to use GetBlockByNumber,
-// it would always fetch the canonical block A and credit peerA even when
-// the head points to sibling B.
+// Regression check: handleChainHead uses GetBlock(hash, number) so a head
+// event announcing sibling B fetches B, not the canonical block A.
 func TestReorgSafety(t *testing.T) {
 	tr := New()
 	chain := newMockChain()
