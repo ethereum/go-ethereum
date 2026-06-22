@@ -85,21 +85,6 @@ func (g GasBudget) String() string {
 	return fmt.Sprintf("<%v,%v,used=<%v,%v>>", g.RegularGas, g.StateGas, g.UsedRegularGas, g.UsedStateGas)
 }
 
-// CanAfford reports whether the running balance can cover the given cost.
-// State-gas charges that exceed the reservoir spill into regular gas.
-func (g GasBudget) CanAfford(cost GasCosts) bool {
-	if g.RegularGas < cost.RegularGas {
-		return false
-	}
-	if cost.StateGas > g.StateGas {
-		spillover := cost.StateGas - g.StateGas
-		if spillover > g.RegularGas-cost.RegularGas {
-			return false
-		}
-	}
-	return true
-}
-
 // Charge deducts a combined regular+state cost from the running balance and
 // updates the usage accumulators. State-gas in excess of the reservoir spills
 // into regular_gas.
