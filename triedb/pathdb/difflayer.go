@@ -113,12 +113,12 @@ func (dl *diffLayer) account(hash common.Hash, depth int) ([]byte, error) {
 	return encodeSlimAccount(account), nil
 }
 
-// accountObject directly retrieves the decoded slim account associated with a
-// particular hash. A nil account is returned if the account does not exist or
-// was deleted in this hierarchy.
+// accountObject directly retrieves the decoded account associated with a
+// particular hash, in the consensus (full) format. A nil account is returned
+// if the account does not exist or was deleted in this hierarchy.
 //
 // Note the returned account is not a copy, please don't modify it.
-func (dl *diffLayer) accountObject(hash common.Hash, depth int) (*types.SlimAccount, error) {
+func (dl *diffLayer) accountObject(hash common.Hash, depth int) (*types.StateAccount, error) {
 	// Hold the lock, ensure the parent won't be changed during the
 	// state accessing.
 	dl.lock.RLock()

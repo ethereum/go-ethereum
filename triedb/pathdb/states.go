@@ -17,6 +17,7 @@
 package pathdb
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"maps"
@@ -61,7 +62,7 @@ func (c *counter) report(count, size *metrics.Meter) {
 // subsequent state access will be denied due to the stale flag. Therefore,
 // state access and mutation won't happen at the same time with guarantee.
 type stateSet struct {
-	accountData map[common.Hash]*types.SlimAccount     // Keyed accounts for direct retrieval (nil means deleted)
+	accountData map[common.Hash]*types.StateAccount    // Keyed accounts for direct retrieval (nil means deleted)
 	storageData map[common.Hash]map[common.Hash][]byte // Keyed storage slots for direct retrieval. one per account (nil means deleted)
 	size        uint64                                 // Memory size of the state data (accountData and storageData)
 
@@ -76,74 +77,69 @@ type stateSet struct {
 	listLock sync.RWMutex
 }
 
-// slimAccountSize returns the approximate encoded size of a slim account, used
+// slimAccountSize returns the approximate slim-encoded size of an account, used
 // for memory accounting. It estimates the slim-RLP byte length without actually
-// encoding the account. A nil account (deleted marker) contributes zero.
-func slimAccountSize(account *types.SlimAccount) int {
+// encoding the account, mirroring how the account is serialized to disk: the
+// empty storage root and code hash are omitted in slim form. A nil account
+// (deleted marker) contributes zero.
+func slimAccountSize(account *types.StateAccount) int {
 	if account == nil {
 		return 0
 	}
 	// 9 bytes covers the RLP list header plus the nonce; the balance, root and
-	// code hash contribute their own byte lengths. This intentionally mirrors
-	// the previous behavior of accounting for the encoded blob length.
+	// code hash contribute their own byte lengths. The root and code hash are
+	// omitted in slim form when empty, matching SlimAccountRLP.
 	size := 9
 	if account.Balance != nil {
 		size += account.Balance.ByteLen()
 	}
-	size += len(account.Root)
-	size += len(account.CodeHash)
+	if account.Root != types.EmptyRootHash {
+		size += len(account.Root)
+	}
+	if !bytes.Equal(account.CodeHash, types.EmptyCodeHash[:]) {
+		size += len(account.CodeHash)
+	}
 	return size
 }
 
-// decodeAccountBlob decodes a single slim-RLP-encoded account blob. A nil/empty
-// blob denotes a non-existent or deleted account and decodes to a nil account.
-func decodeAccountBlob(hash common.Hash, blob []byte) *types.SlimAccount {
+// decodeAccountBlob decodes a single slim-RLP-encoded account blob into the
+// consensus (full) account format. A nil/empty blob denotes a non-existent or
+// deleted account and decodes to a nil account.
+func decodeAccountBlob(hash common.Hash, blob []byte) *types.StateAccount {
 	if len(blob) == 0 {
 		return nil
 	}
-	account := new(types.SlimAccount)
-	if err := rlp.DecodeBytes(blob, account); err != nil {
+	account, err := types.FullAccount(blob)
+	if err != nil {
 		panic(fmt.Sprintf("failed to decode account %x: %v", hash, err))
 	}
 	return account
 }
 
-// decodeAccounts converts a map of slim-RLP-encoded accounts into decoded slim
+// decodeAccounts converts a map of slim-RLP-encoded accounts into decoded full
 // account objects. A nil/empty blob denotes a deleted account and is preserved
 // as a nil entry in the resulting map.
-func decodeAccounts(accounts map[common.Hash][]byte) map[common.Hash]*types.SlimAccount {
-	decoded := make(map[common.Hash]*types.SlimAccount, len(accounts))
+func decodeAccounts(accounts map[common.Hash][]byte) map[common.Hash]*types.StateAccount {
+	decoded := make(map[common.Hash]*types.StateAccount, len(accounts))
 	for hash, blob := range accounts {
-		if len(blob) == 0 {
-			decoded[hash] = nil // deleted account
-			continue
-		}
-		account := new(types.SlimAccount)
-		if err := rlp.DecodeBytes(blob, account); err != nil {
-			panic(fmt.Sprintf("failed to decode account %x: %v", hash, err))
-		}
-		decoded[hash] = account
+		decoded[hash] = decodeAccountBlob(hash, blob)
 	}
 	return decoded
 }
 
-// encodeSlimAccount serializes a decoded slim account back into its slim-RLP
+// encodeSlimAccount serializes a decoded full account back into its slim-RLP
 // byte form. A nil account (deleted marker) encodes to a nil blob.
-func encodeSlimAccount(account *types.SlimAccount) []byte {
+func encodeSlimAccount(account *types.StateAccount) []byte {
 	if account == nil {
 		return nil
 	}
-	blob, err := rlp.EncodeToBytes(account)
-	if err != nil {
-		panic(fmt.Sprintf("failed to encode account: %v", err))
-	}
-	return blob
+	return types.SlimAccountRLP(*account)
 }
 
 // newStates constructs the state set with the provided account and storage data.
 // The accounts are supplied in slim-RLP form and are decoded once on ingest;
-// they are kept in decoded form for the lifetime of the set and only re-encoded
-// at the serialization boundaries (journal and disk flush).
+// they are kept in decoded (full) form for the lifetime of the set and only
+// re-encoded at the serialization boundaries (journal and disk flush).
 func newStates(accounts map[common.Hash][]byte, storages map[common.Hash]map[common.Hash][]byte, rawStorageKey bool) *stateSet {
 	// Don't panic for the lazy callers, initialize the nil maps instead.
 	if storages == nil {
@@ -162,7 +158,7 @@ func newStates(accounts map[common.Hash][]byte, storages map[common.Hash]map[com
 // account returns the account data associated with the specified address hash.
 // A nil account with found=true denotes a known-deleted account, whereas
 // found=false indicates the account is unknown in this set.
-func (s *stateSet) account(hash common.Hash) (*types.SlimAccount, bool) {
+func (s *stateSet) account(hash common.Hash) (*types.StateAccount, bool) {
 	// If the account is known locally, return it
 	if data, ok := s.accountData[hash]; ok {
 		return data, true
@@ -173,7 +169,7 @@ func (s *stateSet) account(hash common.Hash) (*types.SlimAccount, bool) {
 // mustAccount returns the account data associated with the specified address
 // hash. The difference is this function will return an error if the account
 // is not found.
-func (s *stateSet) mustAccount(hash common.Hash) (*types.SlimAccount, error) {
+func (s *stateSet) mustAccount(hash common.Hash) (*types.StateAccount, error) {
 	// If the account is known locally, return it
 	if data, ok := s.accountData[hash]; ok {
 		return data, nil
@@ -362,15 +358,9 @@ func (s *stateSet) revertTo(accountOrigin map[common.Hash][]byte, storageOrigin 
 		if !ok {
 			panic(fmt.Sprintf("non-existent account for reverting, %x", addrHash))
 		}
-		// Decode the original slim-RLP value; an empty blob denotes a deleted
-		// account, represented as a nil entry.
-		var origin *types.SlimAccount
-		if len(blob) != 0 {
-			origin = new(types.SlimAccount)
-			if err := rlp.DecodeBytes(blob, origin); err != nil {
-				panic(fmt.Sprintf("failed to decode account %x: %v", addrHash, err))
-			}
-		}
+		// Decode the original slim-RLP value into the consensus (full) format;
+		// an empty blob denotes a deleted account, represented as a nil entry.
+		origin := decodeAccountBlob(addrHash, blob)
 		if data == nil && origin == nil {
 			panic(fmt.Sprintf("invalid account mutation (null to null), %x", addrHash))
 		}
@@ -509,7 +499,7 @@ func (s *stateSet) write(batch ethdb.Batch, genMarker []byte, clean *fastcache.C
 // reset clears all cached state data, including any optional sorted lists that
 // may have been generated.
 func (s *stateSet) reset() {
-	s.accountData = make(map[common.Hash]*types.SlimAccount)
+	s.accountData = make(map[common.Hash]*types.StateAccount)
 	s.storageData = make(map[common.Hash]map[common.Hash][]byte)
 	s.size = 0
 	s.accountListSorted = nil

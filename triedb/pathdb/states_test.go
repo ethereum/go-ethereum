@@ -42,7 +42,7 @@ func testAccountRLP(tag byte) []byte {
 
 // accountEqualsTag reports whether the decoded account matches the account
 // produced by testAccountRLP for the given tag.
-func accountEqualsTag(account *types.SlimAccount, tag byte) bool {
+func accountEqualsTag(account *types.StateAccount, tag byte) bool {
 	if account == nil {
 		return false
 	}
@@ -399,27 +399,34 @@ func testStateWithOriginEncode(t *testing.T, rawStorageKey bool) {
 	}
 }
 
-// TestSlimAccountSize verifies the estimated memory size of a slim account for
-// the empty/deleted, EOA and contract cases. The accountData map keys are
-// accounted for separately (common.HashLength per entry), so this only covers
-// the value contribution.
+// TestSlimAccountSize verifies the estimated slim-encoded memory size of a full
+// account for the empty/deleted, EOA and contract cases. The accountData map
+// keys are accounted for separately (common.HashLength per entry), so this only
+// covers the value contribution. slimAccountSize takes a full account but
+// estimates the slim encoding, where an empty storage root and code hash are
+// omitted.
 func TestSlimAccountSize(t *testing.T) {
 	// A nil account (deletion marker) contributes nothing.
 	if got := slimAccountSize(nil); got != 0 {
 		t.Fatalf("nil account size, want: 0, got: %d", got)
 	}
-	// An EOA with no code and empty storage root carries nil Root/CodeHash in
-	// slim form, so only the 9-byte list/nonce overhead plus the balance length
-	// is counted.
-	eoa := &types.SlimAccount{Nonce: 1, Balance: uint256.NewInt(0x100)}
+	// An EOA with empty code and empty storage root: Root/CodeHash are omitted
+	// in slim form, so only the 9-byte list/nonce overhead plus the balance
+	// length is counted.
+	eoa := &types.StateAccount{
+		Nonce:    1,
+		Balance:  uint256.NewInt(0x100),
+		Root:     types.EmptyRootHash,
+		CodeHash: types.EmptyCodeHash[:],
+	}
 	if got, want := slimAccountSize(eoa), 9+eoa.Balance.ByteLen(); got != want {
 		t.Fatalf("EOA account size, want: %d, got: %d", want, got)
 	}
 	// A contract carries a 32-byte root and 32-byte code hash in addition.
-	contract := &types.SlimAccount{
+	contract := &types.StateAccount{
 		Nonce:    2,
 		Balance:  uint256.NewInt(0x10000),
-		Root:     testrand.Bytes(32),
+		Root:     common.BytesToHash(testrand.Bytes(32)),
 		CodeHash: testrand.Bytes(32),
 	}
 	if got, want := slimAccountSize(contract), 9+contract.Balance.ByteLen()+64; got != want {

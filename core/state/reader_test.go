@@ -24,15 +24,15 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// benchStateReader is a minimal database.StateReader backed by an in-memory map.
-// It isolates the conversion overhead in flatReader.Account (address hashing,
-// the *types.StateAccount allocation and the slim->full fixups) from any trie,
-// snapshot or disk access.
+// benchStateReader is a minimal database.StateReader backed by a single account.
+// It isolates flatReader.Account (just an address hash plus a forwarding call,
+// now that the backing reader returns full accounts) from any trie, snapshot or
+// disk access.
 type benchStateReader struct {
-	account *types.SlimAccount
+	account *types.StateAccount
 }
 
-func (r *benchStateReader) Account(hash common.Hash) (*types.SlimAccount, error) {
+func (r *benchStateReader) Account(hash common.Hash) (*types.StateAccount, error) {
 	// Return a fresh copy on every call, mirroring the contract that the
 	// returned account is safe to modify by the caller.
 	if r.account == nil {
@@ -47,12 +47,8 @@ func (r *benchStateReader) Storage(accountHash, storageHash common.Hash) ([]byte
 }
 
 // benchmarkFlatReaderAccount measures flatReader.Account for a single address.
-// The provided slim account dictates which branches of the conversion are hit:
-// a slim account with nil Root/CodeHash exercises the EmptyCodeHash.Bytes() and
-// EmptyRootHash fixups (the lines that dominate the production profile), whereas
-// a fully populated one skips them.
-func benchmarkFlatReaderAccount(b *testing.B, slim *types.SlimAccount) {
-	r := newFlatReader(&benchStateReader{account: slim})
+func benchmarkFlatReaderAccount(b *testing.B, account *types.StateAccount) {
+	r := newFlatReader(&benchStateReader{account: account})
 	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
 
 	b.ReportAllocs()
@@ -69,25 +65,27 @@ func benchmarkFlatReaderAccount(b *testing.B, slim *types.SlimAccount) {
 }
 
 // BenchmarkFlatReaderAccountEmpty benchmarks the common EOA case: an account
-// with no code and no storage. This is the hot path from the profile, hitting
-// both the EmptyCodeHash and EmptyRootHash fixups.
+// with no code and empty storage. Previously this path paid a slim->full
+// conversion with an allocation; the backing reader now returns full accounts
+// so flatReader only forwards.
 func BenchmarkFlatReaderAccountEmpty(b *testing.B) {
-	benchmarkFlatReaderAccount(b, &types.SlimAccount{
-		Nonce:   1,
-		Balance: uint256.NewInt(100),
-		// Root and CodeHash left nil: slim encoding of an EOA.
+	benchmarkFlatReaderAccount(b, &types.StateAccount{
+		Nonce:    1,
+		Balance:  uint256.NewInt(100),
+		Root:     types.EmptyRootHash,
+		CodeHash: types.EmptyCodeHash[:],
 	})
 }
 
 // BenchmarkFlatReaderAccountContract benchmarks a contract account with a
-// non-empty storage root and code hash, skipping the empty-value fixups.
+// non-empty storage root and code hash.
 func BenchmarkFlatReaderAccountContract(b *testing.B) {
 	root := common.HexToHash("0xaabbccddeeff00112233445566778899aabbccddeeff00112233445566778899")
 	codeHash := common.HexToHash("0x112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00")
-	benchmarkFlatReaderAccount(b, &types.SlimAccount{
+	benchmarkFlatReaderAccount(b, &types.StateAccount{
 		Nonce:    7,
 		Balance:  uint256.NewInt(1000),
-		Root:     root.Bytes(),
+		Root:     root,
 		CodeHash: codeHash.Bytes(),
 	})
 }
