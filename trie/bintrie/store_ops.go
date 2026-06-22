@@ -262,7 +262,15 @@ func (s *nodeStore) splitStemValuesInsert(existingRef nodeRef, newStem []byte, v
 	bitStem := existing.Stem[existing.depth/8] >> (7 - (existing.depth % 8)) & 1
 	nRef := s.newInternalRef(int(existing.depth))
 	nNode := s.getInternal(nRef.Index())
+	if !existing.dirty {
+		var buf [33]byte
+		oldPath := new(BitArray).SetBytes(existing.depth, existing.Stem[:]).PutKeyBytes(buf[:])
+		s.orphans[string(oldPath)] = struct{}{}
+	}
 	existing.depth++
+	// The existing stem's on-disk path lengthens by one bit, which means
+	// the stem must be re-flushed at the longer new path.
+	existing.dirty = true
 
 	bitKey := newStem[nNode.depth/8] >> (7 - (nNode.depth % 8)) & 1
 	if bitKey == bitStem {

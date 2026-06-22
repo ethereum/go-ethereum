@@ -40,7 +40,10 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 	s.root = rootRef
 
 	// Serialize the node — grouped format at groupDepth=1:
-	// [type(1)][groupDepth(1)][bitmap(1)][leftHash(32)][rightHash(32)] = 67 bytes
+	// [type(1)][groupDepth(1)][bitmap(1)][depths(1)][leftHash(32)][rightHash(32)] = 68 bytes.
+	// Both children are at depthOffset=groupDepth=1 (the bottom of the 1-level
+	// group). Each depth is stored as (offset-1)=0 in 3 bits, so the two entries
+	// pack into a single byte 0x00.
 	serialized := s.serializeNode(rootRef, 1)
 
 	if serialized[0] != nodeTypeInternal {
@@ -50,7 +53,7 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 		t.Errorf("Expected groupDepth byte to be 1, got %d", serialized[1])
 	}
 
-	expectedLen := NodeTypeBytes + 1 + 1 + 2*HashSize // type + groupDepth + bitmap + 2 hashes = 67
+	expectedLen := NodeTypeBytes + 1 + 1 + 1 + 2*HashSize // type + groupDepth + bitmap + packed depths + 2 hashes = 68
 	if len(serialized) != expectedLen {
 		t.Errorf("Expected serialized length to be %d, got %d", expectedLen, len(serialized))
 	}
@@ -60,7 +63,13 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 		t.Errorf("Expected bitmap byte 0xc0, got 0x%02x", serialized[2])
 	}
 
-	hashesStart := NodeTypeBytes + 1 + 1
+	depthsStart := NodeTypeBytes + 1 + 1
+	// Two depth offsets of 1 → stored as (1-1)=0 each → packed byte 0x00.
+	if serialized[depthsStart] != 0x00 {
+		t.Errorf("Expected packed depth byte 0x00, got 0x%02x", serialized[depthsStart])
+	}
+
+	hashesStart := depthsStart + 1
 	if !bytes.Equal(serialized[hashesStart:hashesStart+HashSize], leftHash[:]) {
 		t.Error("Left hash not found at expected position")
 	}
@@ -244,29 +253,29 @@ func TestKeyToPath(t *testing.T) {
 		{
 			name:     "depth 0",
 			depth:    0,
-			key:      []byte{0x80}, // 10000000 in binary
-			expected: []byte{1},
+			key:      []byte{0x80},    // 10000000 in binary
+			expected: []byte{0x80, 1}, // 1 bit "1", left-aligned, + length byte 1
 			wantErr:  false,
 		},
 		{
 			name:     "depth 7",
 			depth:    7,
-			key:      []byte{0xFF}, // 11111111 in binary
-			expected: []byte{1, 1, 1, 1, 1, 1, 1, 1},
+			key:      []byte{0xFF},    // 11111111 in binary
+			expected: []byte{0xFF, 8}, // 8-bit value 0xFF + length byte 8
 			wantErr:  false,
 		},
 		{
 			name:     "depth crossing byte boundary",
 			depth:    10,
-			key:      []byte{0xFF, 0x00}, // 11111111 00000000 in binary
-			expected: []byte{1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0},
+			key:      []byte{0xFF, 0x00},     // 11111111 00000000 in binary
+			expected: []byte{0xFF, 0x00, 11}, // top 11 bits "11111111 000", left-aligned, + length byte 11
 			wantErr:  false,
 		},
 		{
 			name:     "max valid depth",
 			depth:    StemSize*8 - 1,
 			key:      make([]byte, HashSize),
-			expected: make([]byte, StemSize*8),
+			expected: append(make([]byte, StemSize), StemSize*8), // 248 bits of zeros + length byte 248
 			wantErr:  false,
 		},
 		{
