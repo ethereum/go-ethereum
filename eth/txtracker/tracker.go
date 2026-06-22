@@ -80,9 +80,10 @@ type Tracker struct {
 	headCh       chan core.ChainHeadEvent
 	sub          event.Subscription
 
-	quit chan struct{}
-	step chan struct{} // test sync: sent after each event is processed
-	wg   sync.WaitGroup
+	quit     chan struct{}
+	stopOnce sync.Once
+	step     chan struct{} // test sync: sent after each event is processed
+	wg       sync.WaitGroup
 }
 
 // New creates a new tracker.
@@ -118,8 +119,12 @@ func (t *Tracker) NotifyPeerDrop(peer string) {
 
 // Stop shuts down the tracker.
 func (t *Tracker) Stop() {
-	t.sub.Unsubscribe()
-	close(t.quit)
+	t.stopOnce.Do(func() {
+		if t.sub != nil {
+			t.sub.Unsubscribe()
+		}
+		close(t.quit)
+	})
 	t.wg.Wait()
 }
 
