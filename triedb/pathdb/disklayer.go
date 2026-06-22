@@ -456,14 +456,25 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 
 	// Merge the trie nodes and flat states of the bottom-most diff layer into the
 	// buffer as the combined layer.
+	mergeStart := time.Now()
 	combined := dl.buffer.commit(bottom.nodes.nodeSet, bottom.states.stateSet)
+	mergeDur := time.Since(mergeStart)
+	commitMergeTimer.Update(mergeDur)
+	dl.db.cstats.merge += mergeDur
 
 	// Terminate the background state snapshot generation before mutating the
 	// persistent state.
 	if combined.full() || force || flush {
+		dl.db.cstats.flushes++
+
 		// Wait until the previous frozen buffer is fully flushed
 		if dl.frozen != nil {
-			if err := dl.frozen.waitFlush(); err != nil {
+			waitStart := time.Now()
+			err := dl.frozen.waitFlush()
+			waitDur := time.Since(waitStart)
+			commitFlushWaitTimer.Update(waitDur)
+			dl.db.cstats.flushWait += waitDur
+			if err != nil {
 				return nil, err
 			}
 		}

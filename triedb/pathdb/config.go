@@ -18,6 +18,7 @@ package pathdb
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -68,6 +69,11 @@ const (
 var (
 	// maxDiffLayers is the maximum diff layers allowed in the layer tree.
 	maxDiffLayers = 128
+
+	// slowUpdateThreshold is the per-block triedb.Update duration above which a
+	// one-line breakdown is logged, giving visibility into individual slow
+	// commits without spamming a line for every block.
+	slowUpdateThreshold = 10 * time.Millisecond
 )
 
 // Defaults contains default settings for Ethereum mainnet.

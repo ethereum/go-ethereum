@@ -62,6 +62,15 @@ var (
 	commitStoragesMeter = metrics.NewRegisteredMeter("pathdb/commit/slots", nil)
 	commitBytesMeter    = metrics.NewRegisteredMeter("pathdb/commit/bytes", nil)
 
+	// Breakdown of the synchronous triedb.Update path (per-block commit cost).
+	updateTimer            = metrics.NewRegisteredResettingTimer("pathdb/update/time", nil)              // whole Update (add + cap)
+	updateAddTimer         = metrics.NewRegisteredResettingTimer("pathdb/update/add/time", nil)          // tree.add (new diff layer linking)
+	updateCapTimer         = metrics.NewRegisteredResettingTimer("pathdb/update/cap/time", nil)          // tree.cap (flatten bottom diff into disk)
+	commitMergeTimer       = metrics.NewRegisteredResettingTimer("pathdb/commit/merge/time", nil)        // buffer.commit wall time (parallel node+state merge)
+	commitMergeNodesTimer  = metrics.NewRegisteredResettingTimer("pathdb/commit/merge/nodes/time", nil)  // node set merge
+	commitMergeStatesTimer = metrics.NewRegisteredResettingTimer("pathdb/commit/merge/states/time", nil) // flat state merge
+	commitFlushWaitTimer   = metrics.NewRegisteredResettingTimer("pathdb/commit/flushwait/time", nil)    // stall waiting on the previous async flush
+
 	gcTrieNodeMeter      = metrics.NewRegisteredMeter("pathdb/gc/node/count", nil)
 	gcTrieNodeBytesMeter = metrics.NewRegisteredMeter("pathdb/gc/node/bytes", nil)
 	gcAccountMeter       = metrics.NewRegisteredMeter("pathdb/gc/account/count", nil)

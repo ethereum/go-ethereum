@@ -136,8 +136,26 @@ type Database struct {
 	trienodeFreezer ethdb.ResettableAncientStore // Freezer for storing trienode histories, nil possible in tests
 	trienodeIndexer *historyIndexer              // History indexer for historical trienode data
 
-	lock sync.RWMutex // Lock to prevent mutations from happening at the same time
+	cstats commitStats  // Per-block commit phase breakdown, only valid within Update (guarded by lock)
+	lock   sync.RWMutex // Lock to prevent mutations from happening at the same time
 }
+
+// commitStats accumulates the timing breakdown of a single triedb.Update call.
+// It is written only on the (serialized) commit path and read right after, so
+// it needs no synchronization of its own beyond the database write lock.
+//
+// Note cap may flatten more than one diff layer in a single full-commit, so the
+// inner phases are accumulated rather than overwritten.
+type commitStats struct {
+	add       time.Duration // tree.add: link the new diff layer
+	cap       time.Duration // tree.cap: flatten bottom diff(s) into disk
+	merge     time.Duration // buffer.commit wall time (node+state merge)
+	flushWait time.Duration // stall waiting on the previous async flush to finish
+	flushes   int           // number of buffer flushes triggered
+}
+
+// reset clears the stats at the start of a new Update.
+func (s *commitStats) reset() { *s = commitStats{} }
 
 // New attempts to load an already existing layer from a persistent key-value
 // store (with a number of memory layers from a journal). If the journal is not
@@ -307,15 +325,44 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 	} else {
 		nodesWithOrigins = NewNodeSetWithOrigin(nodes.Nodes(), nil)
 	}
+	// Reset the per-block commit breakdown; the inner phases (merge, flushWait)
+	// are filled by the commit path below and surfaced via metrics, plus a
+	// single Info line for unusually slow blocks (see below).
+	db.cstats.reset()
+
+	addStart := time.Now()
 	if err := db.tree.add(root, parentRoot, block, nodesWithOrigins, states); err != nil {
 		return err
 	}
+	db.cstats.add = time.Since(addStart)
+
 	// Keep 128 diff layers in the memory, persistent layer is 129th.
 	// - head layer is paired with HEAD state
 	// - head-1 layer is paired with HEAD-1 state
 	// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
 	// - head-128 layer(disk layer) is paired with HEAD-128 state
-	return db.tree.cap(root, maxDiffLayers)
+	capStart := time.Now()
+	err := db.tree.cap(root, maxDiffLayers)
+	db.cstats.cap = time.Since(capStart)
+
+	// Publish the aggregate phase timers and, for the rare slow block, a single
+	// breakdown line so individual outliers are visible without per-block spam.
+	s := &db.cstats
+	total := s.add + s.cap
+	updateTimer.Update(total)
+	updateAddTimer.Update(s.add)
+	updateCapTimer.Update(s.cap)
+	if total >= slowUpdateThreshold {
+		log.Info("Slow trie database update", "block", block,
+			"total", common.PrettyDuration(total),
+			"add", common.PrettyDuration(s.add),
+			"cap", common.PrettyDuration(s.cap),
+			"merge", common.PrettyDuration(s.merge),
+			"flushwait", common.PrettyDuration(s.flushWait),
+			"other", common.PrettyDuration(s.cap-s.merge-s.flushWait),
+			"flushes", s.flushes)
+	}
+	return err
 }
 
 // Commit traverses downwards the layer tree from a specified layer with the

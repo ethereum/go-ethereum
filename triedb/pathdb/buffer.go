@@ -91,9 +91,13 @@ func (b *buffer) commit(nodes *nodeSet, states *stateSet) *buffer {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		start := time.Now()
 		b.nodes.merge(nodes)
+		commitMergeNodesTimer.Update(time.Since(start))
 	}()
+	start := time.Now()
 	b.states.merge(states)
+	commitMergeStatesTimer.Update(time.Since(start))
 	wg.Wait()
 
 	return b
