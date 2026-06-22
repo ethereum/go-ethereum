@@ -197,8 +197,8 @@ func TestNotifyReceived(t *testing.T) {
 		t.Fatalf("expected order length 3, got %d", len(tr.order))
 	}
 	for i, h := range hashes {
-		if got := tr.txs[h]; got.peer != "peerA" {
-			t.Fatalf("tx %d: expected deliverer=peerA, got %q", i, got.peer)
+		if got := tr.txs[h]; got.Deliverer != "peerA" {
+			t.Fatalf("tx %d: expected deliverer=peerA, got %q", i, got.Deliverer)
 		}
 		if tr.order[i] != h {
 			t.Fatalf("order[%d] mismatch", i)
@@ -468,7 +468,7 @@ func TestRecentFinalizedDecays(t *testing.T) {
 // post-block-propagation re-broadcast attribution attack: a peer that
 // learns a tx from the just-mined block and re-broadcasts it to our pool
 // should not gain credit when that block is processed. The finalization
-// path applies the same gate (entry.addedAt >= blockTime) and is exercised
+// path applies the same gate (ti.AddedAt >= blockTime) and is exercised
 // by the existing TestFinalization with the new clock semantics.
 func TestPreSlotGate(t *testing.T) {
 	tr := New()

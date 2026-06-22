@@ -68,20 +68,29 @@ type peerStats struct {
 	recentIncluded  float64
 }
 
-// txEntry tracks the deliverer of a transaction and when delivery was
-// recorded. addedAt is unix seconds; it is compared against block.Time()
-// to suppress credit for txs delivered at or after the slot of their
-// inclusion block (e.g., re-broadcasts of just-mined txs).
-type txEntry struct {
-	peer    string
-	addedAt uint64
+// TxInfo records the per-transaction state the tracker maintains.
+//
+// Deliverer is the peer that first handed us this tx via NotifyAccepted.
+// AddedAt is the unix-seconds wall-clock at that moment; it is compared
+// against block.Time() to suppress credit for txs delivered at or after
+// the slot of their inclusion block (re-broadcasts of just-mined txs).
+//
+// BlockNum / BlockHash are populated when the tracker first sees the tx
+// in a head block (BlockNum == 0 means not yet seen on chain). BlockHash
+// is re-checked against canonical-at-height at finalization time so
+// reorgs do not yield credit.
+type TxInfo struct {
+	Deliverer string
+	AddedAt   uint64
+	BlockNum  uint64
+	BlockHash common.Hash
 }
 
 // Tracker records which peer delivered each transaction and credits peers
 // when their transactions appear on chain.
 type Tracker struct {
 	mu    sync.Mutex
-	txs   map[common.Hash]txEntry // hash → deliverer + arrival time
+	txs   map[common.Hash]*TxInfo // hash → per-tx state
 	peers map[string]*peerStats
 	order []common.Hash // insertion order for LRU eviction
 
@@ -100,7 +109,7 @@ type Tracker struct {
 // New creates a new tracker.
 func New() *Tracker {
 	return &Tracker{
-		txs:   make(map[common.Hash]txEntry),
+		txs:   make(map[common.Hash]*TxInfo),
 		peers: make(map[string]*peerStats),
 		quit:  make(chan struct{}),
 		step:  make(chan struct{}, 1),
@@ -153,7 +162,7 @@ func (t *Tracker) NotifyAccepted(peer string, hashes []common.Hash) {
 		if _, ok := t.txs[hash]; ok {
 			continue // already tracked, keep first deliverer
 		}
-		t.txs[hash] = txEntry{peer: peer, addedAt: addedAt}
+		t.txs[hash] = &TxInfo{Deliverer: peer, AddedAt: addedAt}
 		t.order = append(t.order, hash)
 	}
 	// Ensure the delivering peer has a stats entry.
@@ -225,11 +234,11 @@ func (t *Tracker) handleChainHead(ev core.ChainHeadEvent) {
 	blockTime := block.Time()
 	blockIncl := make(map[string]int)
 	for _, tx := range block.Transactions() {
-		entry, ok := t.txs[tx.Hash()]
-		if !ok || entry.addedAt >= blockTime {
+		ti, ok := t.txs[tx.Hash()]
+		if !ok || ti.AddedAt >= blockTime {
 			continue
 		}
-		blockIncl[entry.peer]++
+		blockIncl[ti.Deliverer]++
 	}
 	// Accumulate per-peer finalization credits over the newly-finalized
 	// range (possibly zero blocks). Only counts peers still tracked.
@@ -266,14 +275,14 @@ func (t *Tracker) collectFinalizationCredits() map[string]int {
 		}
 		blockTime := block.Time()
 		for _, tx := range block.Transactions() {
-			entry, ok := t.txs[tx.Hash()]
-			if !ok || entry.addedAt >= blockTime {
+			ti, ok := t.txs[tx.Hash()]
+			if !ok || ti.AddedAt >= blockTime {
 				continue // unknown, or post-slot re-broadcast
 			}
-			if _, ok := t.peers[entry.peer]; !ok {
+			if _, ok := t.peers[ti.Deliverer]; !ok {
 				continue // peer disconnected, skip credit
 			}
-			credits[entry.peer]++
+			credits[ti.Deliverer]++
 		}
 	}
 	if total := sumCounts(credits); total > 0 {
