@@ -90,12 +90,20 @@ func (c *mockChain) addBlock(num uint64, txs []*types.Transaction) *types.Block 
 // for reorg tests). If canonical is true, the block becomes the canonical
 // block for that height (looked up by GetBlockByNumber).
 func (c *mockChain) addBlockAtHeight(num, salt uint64, txs []*types.Transaction, canonical bool) *types.Block {
+	return c.addBlockAtHeightWithTime(num, salt, txs, canonical, uint64(time.Now().Unix()+3600))
+}
+
+// addBlockAtHeightWithTime is like addBlockAtHeight but takes an explicit
+// block time. Used by the pre-slot gate test, which needs a block whose
+// slot start is BEFORE the moment NotifyAccepted recorded its tx.
+func (c *mockChain) addBlockAtHeightWithTime(num, salt uint64, txs []*types.Transaction, canonical bool, blockTime uint64) *types.Block {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	// Mix salt into Extra so siblings at the same height get distinct hashes.
 	header := &types.Header{
 		Number: new(big.Int).SetUint64(num),
 		Extra:  big.NewInt(int64(salt)).Bytes(),
+		Time:   blockTime,
 	}
 	block := types.NewBlock(header, &types.Body{Transactions: txs}, nil, trie.NewListHasher())
 	c.blocksByHash[block.Hash()] = block
@@ -189,8 +197,8 @@ func TestNotifyReceived(t *testing.T) {
 		t.Fatalf("expected order length 3, got %d", len(tr.order))
 	}
 	for i, h := range hashes {
-		if got := tr.txs[h]; got != "peerA" {
-			t.Fatalf("tx %d: expected deliverer=peerA, got %q", i, got)
+		if got := tr.txs[h]; got.peer != "peerA" {
+			t.Fatalf("tx %d: expected deliverer=peerA, got %q", i, got.peer)
 		}
 		if tr.order[i] != h {
 			t.Fatalf("order[%d] mismatch", i)
@@ -452,5 +460,50 @@ func TestRecentFinalizedDecays(t *testing.T) {
 	after := tr.GetAllPeerStats()["peerA"].RecentFinalized
 	if after >= peak {
 		t.Fatalf("expected RecentFinalized to decay, got %f >= peak %f", after, peak)
+	}
+}
+
+// TestPreSlotGate verifies that a tx delivered at or after the slot of its
+// inclusion block earns no credit. This blocks the simple
+// post-block-propagation re-broadcast attribution attack: a peer that
+// learns a tx from the just-mined block and re-broadcasts it to our pool
+// should not gain credit when that block is processed. The finalization
+// path applies the same gate (entry.addedAt >= blockTime) and is exercised
+// by the existing TestFinalization with the new clock semantics.
+func TestPreSlotGate(t *testing.T) {
+	tr := New()
+	chain := newMockChain()
+	tr.Start(chain)
+	defer tr.Stop()
+
+	// Pin the tracker's clock so NotifyAccepted records a known addedAt.
+	const delivery = uint64(1_000_000)
+	tr.now = func() uint64 { return delivery }
+
+	// peerA delivers two txs at the same instant.
+	preTx := makeTx(1)
+	postTx := makeTx(2)
+	tr.NotifyAccepted("peerA", []common.Hash{preTx.Hash(), postTx.Hash()})
+
+	// Block 1: slot strictly AFTER delivery — pre-slot, credit allowed.
+	chain.addBlockAtHeightWithTime(1, 1, []*types.Transaction{preTx}, true, delivery+100)
+	chain.sendHead(1)
+	waitStep(t, tr)
+
+	preEMA := tr.GetAllPeerStats()["peerA"].RecentIncluded
+	if preEMA <= 0 {
+		t.Fatalf("expected RecentIncluded>0 after pre-slot delivery, got %f", preEMA)
+	}
+
+	// Block 2: slot strictly BEFORE delivery — post-slot, must NOT credit.
+	chain.addBlockAtHeightWithTime(2, 2, []*types.Transaction{postTx}, true, delivery-1)
+	chain.sendHead(2)
+	waitStep(t, tr)
+
+	// With the gate, only EMA decay occurs (no contribution this block).
+	// Without the gate, RecentIncluded would have ticked up again.
+	after := tr.GetAllPeerStats()["peerA"].RecentIncluded
+	if after >= preEMA {
+		t.Fatalf("expected EMA to decay (no credit for post-slot tx), got %f >= preEMA %f", after, preEMA)
 	}
 }

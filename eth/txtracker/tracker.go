@@ -28,6 +28,7 @@ package txtracker
 
 import (
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -67,11 +68,20 @@ type peerStats struct {
 	recentIncluded  float64
 }
 
+// txEntry tracks the deliverer of a transaction and when delivery was
+// recorded. addedAt is unix seconds; it is compared against block.Time()
+// to suppress credit for txs delivered at or after the slot of their
+// inclusion block (e.g., re-broadcasts of just-mined txs).
+type txEntry struct {
+	peer    string
+	addedAt uint64
+}
+
 // Tracker records which peer delivered each transaction and credits peers
 // when their transactions appear on chain.
 type Tracker struct {
 	mu    sync.Mutex
-	txs   map[common.Hash]string // hash → deliverer peer ID
+	txs   map[common.Hash]txEntry // hash → deliverer + arrival time
 	peers map[string]*peerStats
 	order []common.Hash // insertion order for LRU eviction
 
@@ -83,16 +93,18 @@ type Tracker struct {
 	quit     chan struct{}
 	stopOnce sync.Once
 	step     chan struct{} // test sync: sent after each event is processed
+	now      func() uint64 // unix-seconds clock; overridable in tests
 	wg       sync.WaitGroup
 }
 
 // New creates a new tracker.
 func New() *Tracker {
 	return &Tracker{
-		txs:   make(map[common.Hash]string),
+		txs:   make(map[common.Hash]txEntry),
 		peers: make(map[string]*peerStats),
 		quit:  make(chan struct{}),
 		step:  make(chan struct{}, 1),
+		now:   func() uint64 { return uint64(time.Now().Unix()) },
 	}
 }
 
@@ -136,11 +148,12 @@ func (t *Tracker) NotifyAccepted(peer string, hashes []common.Hash) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	addedAt := t.now()
 	for _, hash := range hashes {
 		if _, ok := t.txs[hash]; ok {
 			continue // already tracked, keep first deliverer
 		}
-		t.txs[hash] = peer
+		t.txs[hash] = txEntry{peer: peer, addedAt: addedAt}
 		t.order = append(t.order, hash)
 	}
 	// Ensure the delivering peer has a stats entry.
@@ -206,11 +219,17 @@ func (t *Tracker) handleChainHead(ev core.ChainHeadEvent) {
 	defer t.mu.Unlock()
 
 	// Count per-peer inclusions in this block for the inclusion EMA.
+	// Skip txs whose delivery arrived at or after this block's slot — those
+	// are likely post-slot re-broadcasts of an already-mined tx, not genuine
+	// relay work.
+	blockTime := block.Time()
 	blockIncl := make(map[string]int)
 	for _, tx := range block.Transactions() {
-		if peer := t.txs[tx.Hash()]; peer != "" {
-			blockIncl[peer]++
+		entry, ok := t.txs[tx.Hash()]
+		if !ok || entry.addedAt >= blockTime {
+			continue
 		}
+		blockIncl[entry.peer]++
 	}
 	// Accumulate per-peer finalization credits over the newly-finalized
 	// range (possibly zero blocks). Only counts peers still tracked.
@@ -245,15 +264,16 @@ func (t *Tracker) collectFinalizationCredits() map[string]int {
 		if block == nil {
 			continue
 		}
+		blockTime := block.Time()
 		for _, tx := range block.Transactions() {
-			peer := t.txs[tx.Hash()]
-			if peer == "" {
-				continue
+			entry, ok := t.txs[tx.Hash()]
+			if !ok || entry.addedAt >= blockTime {
+				continue // unknown, or post-slot re-broadcast
 			}
-			if _, ok := t.peers[peer]; !ok {
+			if _, ok := t.peers[entry.peer]; !ok {
 				continue // peer disconnected, skip credit
 			}
-			credits[peer]++
+			credits[entry.peer]++
 		}
 	}
 	if total := sumCounts(credits); total > 0 {
