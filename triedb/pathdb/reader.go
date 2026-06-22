@@ -120,13 +120,13 @@ func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
 }
 
 // Account directly retrieves the account associated with a particular hash in
-// the slim data format. An error will be returned if the read operation exits
-// abnormally. Specifically, if the layer is already stale.
+// the consensus (full) data format. An error will be returned if the read
+// operation exits abnormally. Specifically, if the layer is already stale.
 //
 // Note:
 // - the returned account object is safe to modify
 // - no error will be returned if the requested account is not found in database
-func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
+func (r *reader) Account(hash common.Hash) (*types.StateAccount, error) {
 	l, err := r.db.tree.lookupAccount(hash, r.state)
 	if err != nil {
 		return nil, err

@@ -65,9 +65,10 @@ func newBuffer(limit int, nodes *nodeSet, states *stateSet, layers uint64) *buff
 	}
 }
 
-// account retrieves the decoded slim account with account address hash. A nil
-// account with found=true denotes a known-deleted account.
-func (b *buffer) account(hash common.Hash) (*types.SlimAccount, bool) {
+// account retrieves the decoded account with account address hash, in the
+// consensus (full) format. A nil account with found=true denotes a
+// known-deleted account.
+func (b *buffer) account(hash common.Hash) (*types.StateAccount, bool) {
 	return b.states.account(hash)
 }
 

@@ -177,10 +177,10 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 	return encodeSlimAccount(account), nil
 }
 
-// accountObject directly retrieves the decoded slim account associated with a
-// particular hash. A nil account is returned if the account does not exist or
-// was deleted.
-func (dl *diskLayer) accountObject(hash common.Hash, depth int) (*types.SlimAccount, error) {
+// accountObject directly retrieves the decoded account associated with a
+// particular hash, in the consensus (full) format. A nil account is returned
+// if the account does not exist or was deleted.
+func (dl *diskLayer) accountObject(hash common.Hash, depth int) (*types.StateAccount, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 

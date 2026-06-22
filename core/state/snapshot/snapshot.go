@@ -32,7 +32,55 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/database"
 )
+
+// stateReader adapts a Snapshot, whose Account method returns accounts in the
+// slim data format, to the database.StateReader interface which returns
+// accounts in the consensus (full) format.
+type stateReader struct {
+	snap Snapshot
+}
+
+// NewStateReader wraps the given snapshot so it satisfies database.StateReader,
+// converting accounts from the slim format to the consensus (full) format. It
+// returns nil if the snapshot is nil.
+func NewStateReader(snap Snapshot) database.StateReader {
+	if snap == nil {
+		return nil
+	}
+	return stateReader{snap: snap}
+}
+
+// Account implements database.StateReader, converting the snapshot's slim
+// account into the consensus (full) format.
+func (r stateReader) Account(hash common.Hash) (*types.StateAccount, error) {
+	account, err := r.snap.Account(hash)
+	if err != nil {
+		return nil, err
+	}
+	if account == nil {
+		return nil, nil
+	}
+	acct := &types.StateAccount{
+		Nonce:    account.Nonce,
+		Balance:  account.Balance,
+		CodeHash: account.CodeHash,
+		Root:     common.BytesToHash(account.Root),
+	}
+	if len(acct.CodeHash) == 0 {
+		acct.CodeHash = types.EmptyCodeHash[:]
+	}
+	if acct.Root == (common.Hash{}) {
+		acct.Root = types.EmptyRootHash
+	}
+	return acct, nil
+}
+
+// Storage implements database.StateReader.
+func (r stateReader) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
+	return r.snap.Storage(accountHash, storageHash)
+}
 
 var (
 	snapshotCleanAccountHitMeter   = metrics.NewRegisteredMeter("state/snapshot/clean/account/hit", nil)
