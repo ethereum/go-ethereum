@@ -80,27 +80,32 @@ func (b *buffer) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
 	return b.nodes.node(owner, path)
 }
 
-// commit merges the provided states and trie nodes into the buffer.
-func (b *buffer) commit(nodes *nodeSet, states *stateSet) *buffer {
+// commit merges the provided states and trie nodes into the buffer. It returns
+// the buffer along with the wall time spent merging the trie nodes and the flat
+// states respectively (for per-block diagnostics).
+func (b *buffer) commit(nodes *nodeSet, states *stateSet) (*buffer, time.Duration, time.Duration) {
 	b.layers++
 
 	// The trie node set and the flat state set are entirely independent objects;
 	// merge them concurrently so the commit latency is bounded by the slower of
 	// the two rather than their sum.
-	var wg sync.WaitGroup
+	var (
+		wg       sync.WaitGroup
+		nodesDur time.Duration
+	)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		start := time.Now()
 		b.nodes.merge(nodes)
-		commitMergeNodesTimer.Update(time.Since(start))
+		nodesDur = time.Since(start)
 	}()
 	start := time.Now()
 	b.states.merge(states)
-	commitMergeStatesTimer.Update(time.Since(start))
+	statesDur := time.Since(start)
 	wg.Wait()
 
-	return b
+	return b, nodesDur, statesDur
 }
 
 // revertTo is the reverse operation of commit. It also merges the provided states

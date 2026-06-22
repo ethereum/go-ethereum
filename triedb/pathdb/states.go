@@ -243,39 +243,98 @@ func (s *stateSet) merge(other *stateSet) {
 		}
 		s.accountData[accountHash] = data
 	}
-	// Apply all the updated storage slots (individually)
-	for accountHash, storage := range other.storageData {
-		// If storage didn't exist in the set, overwrite blindly
-		if _, ok := s.storageData[accountHash]; !ok {
-			// To prevent potential concurrent map read/write issues, allocate a
-			// new map for the storage instead of claiming it directly from the
-			// passed external set. Even after merging, the slots belonging to the
-			// external state set remain accessible, so ownership of the map should
-			// not be taken, and any mutation on it should be avoided.
-			slots := make(map[common.Hash][]byte, len(storage))
-			for storageHash, data := range storage {
-				slots[storageHash] = data
-				delta += 2*common.HashLength + len(data)
-			}
-			s.storageData[accountHash] = slots
-			continue
-		}
-		// Storage exists in both local and external set, merge the slots
-		slots := s.storageData[accountHash]
-		for storageHash, data := range storage {
-			if origin, ok := slots[storageHash]; ok {
-				delta += len(data) - len(origin)
-				storageOverwrites.add(2*common.HashLength + len(origin))
-			} else {
-				delta += 2*common.HashLength + len(data)
-			}
-			slots[storageHash] = data
-		}
-	}
+	// Apply all the updated storage slots, parallelizing across accounts for
+	// large sets.
+	d, ow := s.mergeStorageData(other.storageData)
+	delta += d
+	storageOverwrites.n += ow.n
+	storageOverwrites.size += ow.size
+
 	accountOverwrites.report(gcAccountMeter, gcAccountBytesMeter)
 	storageOverwrites.report(gcStorageMeter, gcStorageBytesMeter)
 	s.clearLists()
 	s.updateSize(delta)
+}
+
+// storageDataWork is a per-account unit of the storage slot merge: it points at
+// the destination slot map (already linked into s.storageData) and the incoming
+// slots to fold in.
+type storageDataWork struct {
+	target map[common.Hash][]byte
+	slots  map[common.Hash][]byte
+	isNew  bool
+}
+
+// fillStorageData folds the incoming slot maps into their destination maps,
+// returning the size delta and overwrite counter. It only touches the per-account
+// slot maps (never the top-level map), so disjoint item ranges can run concurrently.
+func fillStorageData(items []storageDataWork) (int, counter) {
+	var (
+		delta     int
+		overwrite counter
+	)
+	for _, w := range items {
+		if w.isNew {
+			for storageHash, data := range w.slots {
+				delta += 2*common.HashLength + len(data)
+				w.target[storageHash] = data
+			}
+			continue
+		}
+		for storageHash, data := range w.slots {
+			if origin, ok := w.target[storageHash]; ok {
+				delta += len(data) - len(origin)
+				overwrite.add(2*common.HashLength + len(origin))
+			} else {
+				delta += 2*common.HashLength + len(data)
+			}
+			w.target[storageHash] = data
+		}
+	}
+	return delta, overwrite
+}
+
+// mergeStorageData integrates the provided storage slots into the set, fanning
+// the per-account work out across goroutines for large sets.
+func (s *stateSet) mergeStorageData(storageData map[common.Hash]map[common.Hash][]byte) (int, counter) {
+	// Pass 1: ensure a destination slot map exists for every account. This is
+	// the only phase that mutates the top-level map and therefore runs single
+	// threaded; the per-account content copy is deferred to pass 2.
+	items := make([]storageDataWork, 0, len(storageData))
+	for accountHash, storage := range storageData {
+		current, exist := s.storageData[accountHash]
+		if !exist {
+			// Allocate a fresh map rather than claiming the incoming one: the
+			// original state set retains ownership of its maps and must stay
+			// immutable, as it may still be referenced by concurrent readers.
+			current = make(map[common.Hash][]byte, len(storage))
+			s.storageData[accountHash] = current
+		}
+		items = append(items, storageDataWork{target: current, slots: storage, isNew: !exist})
+	}
+	// Small sets: skip the goroutine overhead.
+	if len(items) < parallelMergeThreshold {
+		return fillStorageData(items)
+	}
+	// Pass 2: fill the destination slot maps in parallel. Each account is handled
+	// by exactly one worker and no worker touches the top-level map, so the only
+	// shared reads are immutable, making this race-free.
+	workers := mergeWorkers(len(items))
+	deltas := make([]int, workers)
+	overwrites := make([]counter, workers)
+	parallelChunks(len(items), workers, func(idx, lo, hi int) {
+		deltas[idx], overwrites[idx] = fillStorageData(items[lo:hi])
+	})
+	var (
+		delta     int
+		overwrite counter
+	)
+	for i := 0; i < workers; i++ {
+		delta += deltas[i]
+		overwrite.n += overwrites[i].n
+		overwrite.size += overwrites[i].size
+	}
+	return delta, overwrite
 }
 
 // revertTo takes the original value of accounts and storages as input and reverts

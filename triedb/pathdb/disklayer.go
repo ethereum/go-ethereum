@@ -457,10 +457,14 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	// Merge the trie nodes and flat states of the bottom-most diff layer into the
 	// buffer as the combined layer.
 	mergeStart := time.Now()
-	combined := dl.buffer.commit(bottom.nodes.nodeSet, bottom.states.stateSet)
+	combined, nodesDur, statesDur := dl.buffer.commit(bottom.nodes.nodeSet, bottom.states.stateSet)
 	mergeDur := time.Since(mergeStart)
 	commitMergeTimer.Update(mergeDur)
+	commitMergeNodesTimer.Update(nodesDur)
+	commitMergeStatesTimer.Update(statesDur)
 	dl.db.cstats.merge += mergeDur
+	dl.db.cstats.mergeNodes += nodesDur
+	dl.db.cstats.mergeStates += statesDur
 
 	// Terminate the background state snapshot generation before mutating the
 	// persistent state.

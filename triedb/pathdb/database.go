@@ -147,11 +147,13 @@ type Database struct {
 // Note cap may flatten more than one diff layer in a single full-commit, so the
 // inner phases are accumulated rather than overwritten.
 type commitStats struct {
-	add       time.Duration // tree.add: link the new diff layer
-	cap       time.Duration // tree.cap: flatten bottom diff(s) into disk
-	merge     time.Duration // buffer.commit wall time (node+state merge)
-	flushWait time.Duration // stall waiting on the previous async flush to finish
-	flushes   int           // number of buffer flushes triggered
+	add         time.Duration // tree.add: link the new diff layer
+	cap         time.Duration // tree.cap: flatten bottom diff(s) into disk
+	merge       time.Duration // buffer.commit wall time (node+state merge, parallel)
+	mergeNodes  time.Duration // trie node set merge (one half of merge)
+	mergeStates time.Duration // flat state set merge (other half of merge)
+	flushWait   time.Duration // stall waiting on the previous async flush to finish
+	flushes     int           // number of buffer flushes triggered
 }
 
 // reset clears the stats at the start of a new Update.
@@ -358,6 +360,8 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 			"add", common.PrettyDuration(s.add),
 			"cap", common.PrettyDuration(s.cap),
 			"merge", common.PrettyDuration(s.merge),
+			"merge-nodes", common.PrettyDuration(s.mergeNodes),
+			"merge-states", common.PrettyDuration(s.mergeStates),
 			"flushwait", common.PrettyDuration(s.flushWait),
 			"other", common.PrettyDuration(s.cap-s.merge-s.flushWait),
 			"flushes", s.flushes)

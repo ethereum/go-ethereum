@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
-	"maps"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -115,7 +114,7 @@ func (s *nodeSet) merge(set *nodeSet) {
 		overwrite counter // counter of nodes being overwritten
 	)
 
-	// Merge account nodes
+	// Merge account nodes (single small map).
 	for path, n := range set.accountNodes {
 		if orig, exist := s.accountNodes[path]; !exist {
 			delta += int64(len(n.Blob) + len(path))
@@ -126,35 +125,96 @@ func (s *nodeSet) merge(set *nodeSet) {
 		s.accountNodes[path] = n
 	}
 
-	// Merge storage nodes
-	for owner, subset := range set.storageNodes {
-		current, exist := s.storageNodes[owner]
-		if !exist {
-			for path, n := range subset {
+	// Merge storage nodes, parallelizing across owners for large sets.
+	d, ow := s.mergeStorageNodes(set.storageNodes)
+	delta += d
+	overwrite.n += ow.n
+	overwrite.size += ow.size
+
+	overwrite.report(gcTrieNodeMeter, gcTrieNodeBytesMeter)
+	s.updateSize(delta)
+}
+
+// storageNodeWork is a per-owner unit of the storage node merge: it points at
+// the destination submap (already linked into s.storageNodes) and the incoming
+// subset to fold in.
+type storageNodeWork struct {
+	target map[string]*trienode.Node
+	subset map[string]*trienode.Node
+	isNew  bool
+}
+
+// fillStorageNodes folds the incoming subsets into their destination submaps,
+// returning the size delta and overwrite counter for the processed items. It
+// only touches the per-owner submaps (never the top-level map), so disjoint
+// item ranges can run concurrently.
+func fillStorageNodes(items []storageNodeWork) (int64, counter) {
+	var (
+		delta     int64
+		overwrite counter
+	)
+	for _, w := range items {
+		if w.isNew {
+			for path, n := range w.subset {
 				delta += int64(common.HashLength + len(n.Blob) + len(path))
+				w.target[path] = n
 			}
-			// Perform a shallow copy of the map for the subset instead of claiming it
-			// directly from the provided nodeset to avoid potential concurrent map
-			// read/write issues. The nodes belonging to the original diff layer remain
-			// accessible even after merging. Therefore, ownership of the nodes map
-			// should still belong to the original layer, and any modifications to it
-			// should be prevented.
-			s.storageNodes[owner] = maps.Clone(subset)
 			continue
 		}
-		for path, n := range subset {
-			if orig, exist := current[path]; !exist {
+		for path, n := range w.subset {
+			if orig, exist := w.target[path]; !exist {
 				delta += int64(common.HashLength + len(n.Blob) + len(path))
 			} else {
 				delta += int64(len(n.Blob) - len(orig.Blob))
 				overwrite.add(common.HashLength + len(orig.Blob) + len(path))
 			}
-			current[path] = n
+			w.target[path] = n
 		}
-		s.storageNodes[owner] = current
 	}
-	overwrite.report(gcTrieNodeMeter, gcTrieNodeBytesMeter)
-	s.updateSize(delta)
+	return delta, overwrite
+}
+
+// mergeStorageNodes integrates the provided storage trie nodes into the set,
+// fanning the per-owner work out across goroutines for large sets.
+func (s *nodeSet) mergeStorageNodes(storageNodes map[common.Hash]map[string]*trienode.Node) (int64, counter) {
+	// Pass 1: ensure a destination submap exists for every owner. This is the
+	// only phase that mutates the top-level map and therefore runs single
+	// threaded. The per-owner content copy is deferred to pass 2.
+	items := make([]storageNodeWork, 0, len(storageNodes))
+	for owner, subset := range storageNodes {
+		current, exist := s.storageNodes[owner]
+		if !exist {
+			// Allocate a fresh submap rather than claiming the incoming one: the
+			// original diff layer retains ownership of its maps and must stay
+			// immutable, as it may still be referenced by concurrent readers.
+			current = make(map[string]*trienode.Node, len(subset))
+			s.storageNodes[owner] = current
+		}
+		items = append(items, storageNodeWork{target: current, subset: subset, isNew: !exist})
+	}
+	// Small sets: skip the goroutine overhead.
+	if len(items) < parallelMergeThreshold {
+		return fillStorageNodes(items)
+	}
+	// Pass 2: fill the destination submaps in parallel. Each owner is handled by
+	// exactly one worker and no worker touches the top-level map, so the only
+	// shared reads are immutable, making this race-free.
+	workers := mergeWorkers(len(items))
+	deltas := make([]int64, workers)
+	overwrites := make([]counter, workers)
+	parallelChunks(len(items), workers, func(idx, lo, hi int) {
+		deltas[idx], overwrites[idx] = fillStorageNodes(items[lo:hi])
+	})
+	var (
+		delta     int64
+		overwrite counter
+	)
+	for i := 0; i < workers; i++ {
+		delta += deltas[i]
+		overwrite.n += overwrites[i].n
+		overwrite.size += overwrites[i].size
+	}
+	return delta, overwrite
 }
 
 // revertTo merges the provided trie nodes into the set. This should reverse the
