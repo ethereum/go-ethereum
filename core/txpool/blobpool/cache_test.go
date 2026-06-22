@@ -58,7 +58,7 @@ func newTestCache(t *testing.T, txConfig []txSpec) *testCache {
 	if err := os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	store, err := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(params.BlobTxMaxBlobs), nil)
+	store, err := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(params.BlobTxMaxBlobs), nil)
 	if err != nil {
 		t.Fatalf("billy open: %v", err)
 	}
@@ -70,7 +70,7 @@ func newTestCache(t *testing.T, txConfig []txSpec) *testCache {
 	)
 	for _, s := range txConfig {
 		key, _ := crypto.GenerateKey()
-		tx := makeMultiBlobTx(0, s.tip, 1_000_000, 1_000_000, s.blobs, offset, key, types.BlobSidecarVersion1)
+		tx := makeMultiBlobTx(0, s.tip, 1_000_000, 1_000_000, s.blobs, offset, key)
 		if _, err := store.Put(encodeForPool(tx)); err != nil {
 			t.Fatalf("store put: %v", err)
 		}
@@ -143,7 +143,7 @@ func newTestCache(t *testing.T, txConfig []txSpec) *testCache {
 func (tc *testCache) inject(t *testing.T, spec txSpec) []common.Hash {
 	t.Helper()
 	key, _ := crypto.GenerateKey()
-	tx := makeMultiBlobTx(0, spec.tip, 1_000_000, 1_000_000, spec.blobs, tc.offset, key, types.BlobSidecarVersion1)
+	tx := makeMultiBlobTx(0, spec.tip, 1_000_000, 1_000_000, spec.blobs, tc.offset, key)
 	tc.offset += spec.blobs
 
 	ptx, err := newBlobTxForPool(tx)

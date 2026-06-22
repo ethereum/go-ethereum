@@ -861,7 +861,7 @@ func testGetPooledTransaction(t *testing.T, blobTx bool) {
 		emptyBlob          = kzg4844.Blob{}
 		emptyBlobs         = []kzg4844.Blob{emptyBlob}
 		emptyBlobCommit, _ = kzg4844.BlobToCommitment(&emptyBlob)
-		emptyBlobProof, _  = kzg4844.ComputeBlobProof(&emptyBlob, emptyBlobCommit)
+		emptyCellProof, _  = kzg4844.ComputeCellProofs(&emptyBlob)
 		emptyBlobHash      = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
 	)
 	backend := newTestBackendWithGenerator(0, true, true, nil)
@@ -885,7 +885,7 @@ func testGetPooledTransaction(t *testing.T, blobTx bool) {
 			To:         testAddr,
 			BlobHashes: []common.Hash{emptyBlobHash},
 			BlobFeeCap: uint256.MustFromBig(common.Big1),
-			Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion0, emptyBlobs, []kzg4844.Commitment{emptyBlobCommit}, []kzg4844.Proof{emptyBlobProof}),
+			Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion1, emptyBlobs, []kzg4844.Commitment{emptyBlobCommit}, emptyCellProof),
 		})
 		if err != nil {
 			t.Fatal(err)

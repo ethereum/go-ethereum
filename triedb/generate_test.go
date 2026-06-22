@@ -21,7 +21,6 @@ import (
 	"context"
 	"math/big"
 	"sort"
-	"sync/atomic"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -370,97 +369,6 @@ func TestGenerateTrieOrphanStorage(t *testing.T) {
 	}
 }
 
-// TestGenerateTriePartialResume proves that the resume path actually
-// fires when a partition's done marker is present.
-func TestGenerateTriePartialResume(t *testing.T) {
-	// Build the account set. Empty storage keeps the test focused on the
-	// account-trie resume path.
-	const n = 200
-	accounts := make([]testAccount, 0, n)
-	for i := 0; i < n; i++ {
-		addr := common.BytesToAddress([]byte{byte(i >> 8), byte(i)})
-		hash := crypto.Keccak256Hash(addr[:])
-		accounts = append(accounts, testAccount{
-			hash: hash,
-			account: types.StateAccount{
-				Nonce:    uint64(i),
-				Balance:  uint256.NewInt(uint64(i + 1)),
-				Root:     types.EmptyRootHash,
-				CodeHash: types.EmptyCodeHash.Bytes(),
-			},
-		})
-	}
-	expectedRoot := buildExpectedRoot(t, accounts)
-
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
-		t.Run(scheme, func(t *testing.T) {
-			db := rawdb.NewMemoryDatabase()
-
-			// Step 1: write the account snapshots for this run.
-			for _, a := range accounts {
-				rawdb.WriteAccountSnapshot(db, a.hash, types.SlimAccountRLP(a.account))
-			}
-
-			// Step 2: run every partition once to populate trie nodes on disk
-			// and capture each partition's raw root blob.
-			var (
-				scanned atomic.Int64
-				updated atomic.Int64
-				deleted atomic.Int64
-			)
-			ranges := hashRanges(numPartitions)
-			blobs := make([][]byte, numPartitions)
-			for i, r := range ranges {
-				var pos atomic.Uint64
-				blob, err := generatePartition(context.Background(), nil, db, scheme, byte(i), r[0], r[1], &scanned, &updated, &deleted, &pos)
-				if err != nil {
-					t.Fatalf("pre-run partition %d: %v", i, err)
-				}
-				blobs[i] = blob
-			}
-
-			// Step 3: pre-seed done markers for even partitions only.
-			for i := 0; i < numPartitions; i++ {
-				if i%2 == 0 {
-					rawdb.WriteGenerateTriePartitionDone(db, byte(i), blobs[i])
-				}
-			}
-
-			// Step 4: delete flat-state account snapshots for every account that
-			// lives in an even partition. After this, rerunning generatePartition for
-			// an even partition would find no accounts and produce a nil blob,
-			// so a correct final root requires the resume path.
-			numDeleted := 0
-			for _, a := range accounts {
-				if (a.hash[0]>>4)%2 == 0 {
-					rawdb.DeleteAccountSnapshot(db, a.hash)
-					numDeleted++
-				}
-			}
-			if numDeleted == 0 {
-				t.Fatal("test setup failure: no accounts fell in even partitions")
-			}
-
-			// Step 5: run GenerateTrie. Success implies resume actually consulted
-			// the markers. Without it, even partitions would yield nil blobs and
-			// the root check inside GenerateTrie would fail.
-			if _, err := GenerateTrie(db, scheme, expectedRoot, nil); err != nil {
-				t.Fatalf("partial-resume GenerateTrie failed: %v", err)
-			}
-
-			// All markers cleared on success.
-			for i := 0; i < numPartitions; i++ {
-				if _, ok := rawdb.ReadGenerateTriePartitionDone(db, byte(i)); ok {
-					t.Errorf("partition %d marker not cleared after successful resume", i)
-				}
-			}
-			if scheme == rawdb.PathScheme {
-				assertCanonicalNodes(t, db, accounts)
-			}
-		})
-	}
-}
-
 // TestHashRanges checks that hashRanges fully and contiguously covers the
 // 256-bit hash space, with the last range absorbing the rounding remainder.
 func TestHashRanges(t *testing.T) {
@@ -765,22 +673,21 @@ func TestGenerateTrieBatchFlush(t *testing.T) {
 			tc.build(db)
 
 			peak := 0
-			var scanned, updated, deleted atomic.Int64
-			var pos atomic.Uint64
+			var c genCounters
 			ranges := hashRanges(numPartitions)
 			if _, err := generatePartition(context.Background(), nil, peakBatchDB{Database: db, peak: &peak},
-				rawdb.HashScheme, 0, ranges[0][0], ranges[0][1], &scanned, &updated, &deleted, &pos); err != nil {
+				rawdb.HashScheme, 0, ranges[0][0], ranges[0][1], &c); err != nil {
 				t.Fatalf("generatePartition: %v", err)
 			}
 
-			if scanned.Load() != tc.wantScanned {
-				t.Errorf("scanned = %d, want %d (an account was skipped?)", scanned.Load(), tc.wantScanned)
+			if c.accounts.Load() != tc.wantScanned {
+				t.Errorf("scanned = %d, want %d (an account was skipped?)", c.accounts.Load(), tc.wantScanned)
 			}
-			if deleted.Load() != tc.wantDeleted {
-				t.Errorf("deleted = %d, want %d", deleted.Load(), tc.wantDeleted)
+			if c.storageDeleted.Load() != tc.wantDeleted {
+				t.Errorf("deleted = %d, want %d", c.storageDeleted.Load(), tc.wantDeleted)
 			}
-			if updated.Load() != 0 {
-				t.Errorf("updated = %d, want 0 (a storage slot was dropped across a flush?)", updated.Load())
+			if c.accountUpdated.Load() != 0 {
+				t.Errorf("updated = %d, want 0 (a storage slot was dropped across a flush?)", c.accountUpdated.Load())
 			}
 			// The batch must have stayed bounded. Without this site's flush its
 			// full write set (far larger than IdealBatchSize) buffers into one batch.

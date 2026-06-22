@@ -96,7 +96,7 @@ func testConsoleLogging(t *testing.T, format string, tStart, tEnd int) {
 		}
 	}
 	if len(haveLines) != len(wantLines) {
-		t.Errorf("format %v, want %d lines, have %d", format, len(haveLines), len(wantLines))
+		t.Errorf("format %v, want %d lines, have %d", format, len(wantLines), len(haveLines))
 	}
 }
 

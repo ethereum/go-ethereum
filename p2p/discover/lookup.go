@@ -250,7 +250,7 @@ func (it *lookupIterator) slowdown() {
 	if diff > minInterval {
 		return
 	}
-	wait := time.NewTimer(diff)
+	wait := time.NewTimer(minInterval - diff)
 	defer wait.Stop()
 	select {
 	case <-wait.C:

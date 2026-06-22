@@ -295,12 +295,19 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 		SyncedBytecodeBytes: uint64(progress.BytecodeBytes),
 		SyncedStorage:       progress.StorageSynced,
 		SyncedStorageBytes:  uint64(progress.StorageBytes),
+
+		// Snap/1 progress fields
 		HealedTrienodes:     progress.TrienodeHealSynced,
 		HealedTrienodeBytes: uint64(progress.TrienodeHealBytes),
 		HealedBytecodes:     progress.BytecodeHealSynced,
 		HealedBytecodeBytes: uint64(progress.BytecodeHealBytes),
 		HealingTrienodes:    progress.HealingTrienodes,
 		HealingBytecode:     progress.HealingBytecode,
+
+		// Snap/2 progress fields
+		SyncedAccessLists: progress.AccessListSynced,
+		TotalAccessLists:  progress.AccessListTotal,
+		TrieGenProgress:   progress.TrieGenPercent,
 	}
 }
 
@@ -495,6 +502,18 @@ func (d *Downloader) syncToHead() (err error) {
 	// nil panics on access.
 	if mode == ethconfig.SnapSync && pivot == nil {
 		pivot = d.blockchain.CurrentBlock()
+	}
+	// If the snap syncer froze its pivot in a previous cycle, resume against
+	// the frozen header instead of a fresh one.
+	if mode == ethconfig.SnapSync && pivot != nil {
+		if frozen := d.snapSyncer.FrozenPivot(); frozen != nil {
+			if rawdb.ReadCanonicalHash(d.stateDB, frozen.Number.Uint64()) == frozen.Hash() {
+				log.Info("Resuming snap sync against frozen pivot", "number", frozen.Number, "hash", frozen.Hash())
+				pivot = frozen
+			} else {
+				log.Warn("Frozen pivot is no longer canonical", "number", frozen.Number, "hash", frozen.Hash())
+			}
+		}
 	}
 	height := latest.Number.Uint64()
 
@@ -921,7 +940,9 @@ func (d *Downloader) processSnapSyncContent() error {
 	// the results in the meantime.
 	//
 	// Note, there's no issue with memory piling up since after 64 blocks the
-	// pivot will forcefully move so these accumulators will be dropped.
+	// pivot will forcefully move so these accumulators will be dropped. The
+	// exception is snap/2 trie generation, where the pivot is frozen on
+	// purpose and results accumulate until the generation finishes.
 	var (
 		oldPivot *fetchResult   // Locked in pivot block, might change eventually
 		oldTail  []*fetchResult // Downloaded content after the pivot
@@ -978,11 +999,15 @@ func (d *Downloader) processSnapSyncContent() error {
 			return err
 		}
 		if P != nil {
-			// If new pivot block found, cancel old state retrieval and restart
+			// If new pivot block found, cancel old state retrieval and restart.
 			if oldPivot != P {
-				sync.Cancel()
-				sync = d.syncState(P.Header)
-				go closeOnErr(sync)
+				// Skip the restart if the running sync already targets the
+				// pivot's root (e.g, no pivot block movement yet).
+				if sync.pivot.Root != P.Header.Root {
+					sync.Cancel()
+					sync = d.syncState(P.Header)
+					go closeOnErr(sync)
+				}
 				oldPivot = P
 			}
 			// Wait for completion, occasionally checking for pivot staleness
@@ -1114,9 +1139,21 @@ func (d *Downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) erro
 // snap/2 syncer skips snap/1-only peers, which cannot answer its BAL requests.
 func (d *Downloader) RegisterSnapPeer(p *snap.Peer) error {
 	if p.Version() < d.snapSyncer.Version() {
+		// The peer speaks an older snap version than the active syncer needs
+		// (e.g. snap/1 while we sync via snap/2). We still serve it, but it
+		// cannot answer our requests, so it is not registered for syncing.
+		// Surface it so an operator can tell a stalled sync from a quiet one.
+		snapPeerSkipMeter.Mark(1)
+		log.Debug("Skipping snap peer below syncer version", "peer", p.ID(), "version", p.Version(), "required", d.snapSyncer.Version())
 		return nil
 	}
 	return d.snapSyncer.Register(p)
+}
+
+// SnapSyncVersion returns the snap protocol version of the active state syncer.
+// Peers negotiating a lower version cannot serve its requests.
+func (d *Downloader) SnapSyncVersion() uint {
+	return d.snapSyncer.Version()
 }
 
 // UnregisterSnapPeer removes a snap peer from the active state syncer. It mirrors

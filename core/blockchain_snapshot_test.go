@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -719,5 +720,42 @@ func TestRecoverSnapshotFromWipingCrash(t *testing.T) {
 		}
 		test.test(t)
 		test.teardown()
+	}
+}
+
+// TestSnapSyncCompleteRebuildsSnapshot verifies that completing a snap sync
+// re-enables the legacy snapshot tree on the hash scheme for both syncer
+// versions: SnapSyncStart persistently disables the tree, and only the
+// rebuild on completion clears the marker again.
+func TestSnapSyncCompleteRebuildsSnapshot(t *testing.T) {
+	for _, isSnapV2 := range []bool{false, true} {
+		_, _, chain, err := newCanonical(ethash.NewFaker(), 8, true, rawdb.HashScheme)
+		if err != nil {
+			t.Fatalf("failed to create chain: %v", err)
+		}
+		if err := chain.SnapSyncStart(); err != nil {
+			t.Fatalf("failed to start snap sync: %v", err)
+		}
+		if !rawdb.ReadSnapshotDisabled(chain.db) {
+			t.Fatal("snapshot should be disabled during snap sync")
+		}
+		head := chain.CurrentBlock()
+		if err := chain.SnapSyncComplete(head.Hash(), isSnapV2); err != nil {
+			t.Fatalf("failed to complete snap sync (v2=%v): %v", isSnapV2, err)
+		}
+		if rawdb.ReadSnapshotDisabled(chain.db) {
+			t.Fatalf("snapshot should be re-enabled after snap sync completion (v2=%v)", isSnapV2)
+		}
+		// snap/2 adopts the flat state without regeneration, so the snapshot
+		// must be immediately usable; snap/1 schedules a background rebuild
+		// instead (which may or may not have finished, no assertion there).
+		if isSnapV2 {
+			it, err := chain.snaps.AccountIterator(head.Root, common.Hash{})
+			if err != nil {
+				t.Fatalf("adopted snapshot not immediately usable: %v", err)
+			}
+			it.Release()
+		}
+		chain.Stop()
 	}
 }

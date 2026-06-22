@@ -597,3 +597,77 @@ func newkey() *ecdsa.PrivateKey {
 	}
 	return key
 }
+
+// BenchmarkTable_findnodeByID exercises findnodeByID across table sizes, result
+// counts, and liveness ratios. The _PreferLive_NoLive cases cover the fallback
+// path where preferLive is requested but no validated-live nodes exist.
+func BenchmarkTable_findnodeByID(b *testing.B) {
+	benchmarks := []struct {
+		name       string
+		tableSize  int
+		nresults   int
+		preferLive bool
+		liveRatio  float64 // fraction of nodes marked validated-live
+	}{
+		{"SmallTable_5Results_NoPreferLive", 50, 5, false, 0.0},
+		{"SmallTable_16Results_NoPreferLive", 50, 16, false, 0.0},
+		{"SmallTable_5Results_PreferLive_AllLive", 50, 5, true, 1.0},
+		{"SmallTable_16Results_PreferLive_AllLive", 50, 16, true, 1.0},
+		{"SmallTable_5Results_PreferLive_HalfLive", 50, 5, true, 0.5},
+		{"SmallTable_16Results_PreferLive_HalfLive", 50, 16, true, 0.5},
+		{"SmallTable_5Results_PreferLive_NoLive", 50, 5, true, 0.0},
+		{"SmallTable_16Results_PreferLive_NoLive", 50, 16, true, 0.0},
+
+		{"MediumTable_5Results_NoPreferLive", 200, 5, false, 0.0},
+		{"MediumTable_16Results_NoPreferLive", 200, 16, false, 0.0},
+		{"MediumTable_5Results_PreferLive_AllLive", 200, 5, true, 1.0},
+		{"MediumTable_16Results_PreferLive_AllLive", 200, 16, true, 1.0},
+		{"MediumTable_5Results_PreferLive_HalfLive", 200, 5, true, 0.5},
+		{"MediumTable_16Results_PreferLive_HalfLive", 200, 16, true, 0.5},
+		{"MediumTable_5Results_PreferLive_NoLive", 200, 5, true, 0.0},
+		{"MediumTable_16Results_PreferLive_NoLive", 200, 16, true, 0.0},
+
+		{"FullTable_5Results_NoPreferLive", nBuckets * bucketSize, 5, false, 0.0},
+		{"FullTable_16Results_NoPreferLive", nBuckets * bucketSize, 16, false, 0.0},
+		{"FullTable_5Results_PreferLive_AllLive", nBuckets * bucketSize, 5, true, 1.0},
+		{"FullTable_16Results_PreferLive_AllLive", nBuckets * bucketSize, 16, true, 1.0},
+		{"FullTable_5Results_PreferLive_HalfLive", nBuckets * bucketSize, 5, true, 0.5},
+		{"FullTable_16Results_PreferLive_HalfLive", nBuckets * bucketSize, 16, true, 0.5},
+		{"FullTable_5Results_PreferLive_NoLive", nBuckets * bucketSize, 5, true, 0.0},
+		{"FullTable_16Results_PreferLive_NoLive", nBuckets * bucketSize, 16, true, 0.0},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			tab, db := newTestTable(newPingRecorder(), Config{})
+			defer db.Close()
+			defer tab.close()
+			<-tab.initDone
+
+			self := tab.self().ID()
+			nodes := make([]*enode.Node, bm.tableSize)
+			for i := range nodes {
+				// Spread across buckets by varying log-distance in the valid range.
+				d := bucketMinDistance + 1 + i%nBuckets
+				nodes[i] = nodeAtDistance(self, d, intIP(i))
+			}
+
+			liveCount := int(float64(len(nodes)) * bm.liveRatio)
+			if liveCount > 0 {
+				fillTable(tab, nodes[:liveCount], true)
+			}
+			if liveCount < len(nodes) {
+				fillTable(tab, nodes[liveCount:], false)
+			}
+
+			var target enode.ID
+			rand.Read(target[:])
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = tab.findnodeByID(target, bm.nresults, bm.preferLive)
+			}
+		})
+	}
+}

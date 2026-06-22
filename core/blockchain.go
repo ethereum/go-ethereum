@@ -1194,10 +1194,13 @@ func (bc *BlockChain) SnapSyncComplete(hash common.Hash, isSnapV2 bool) error {
 		return fmt.Errorf("non existent state [%x..]", root[:4])
 	}
 
-	// The legacy snapshot tree needs to be wiped and rebuilt from the trie
-	// after a snap/1 sync.
-	if !isSnapV2 && bc.snaps != nil {
-		bc.snaps.Rebuild(root)
+	// The legacy snapshot tree (hash scheme only) was persistently disabled
+	// before the sync, re-enables it explicitly.
+	//
+	// For snap/2 the downloaded flat state is already complete and root-verified,
+	// so the background generation is unnecessary.
+	if bc.snaps != nil {
+		bc.snaps.Rebuild(root, !isSnapV2)
 	}
 
 	// If all checks out, manually set the head block.
@@ -2315,6 +2318,14 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // The time spent on EVM processing
 	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation
 	stats.CrossValidation = xvtime                                                                       // The time spent on stateless cross validation
+
+	// Attach the computed block access list so it gets persisted alongside the
+	// block. The validator has already verified the hash matches the header.
+	// BAL is only meaningful from Amsterdam onward; skip pre-Amsterdam blocks
+	// to avoid persisting and serving empty BALs over the network.
+	if res.Bal != nil && block.AccessList() == nil && bc.chainConfig.IsAmsterdam(block.Number(), block.Time()) {
+		block = block.WithAccessListUnsafe(res.Bal.ToEncodingObj())
+	}
 
 	// Write the block to the chain and get the status.
 	var status WriteStatus

@@ -1,4 +1,4 @@
-// Copyright 2024 The go-ethereum Authors
+// Copyright 2026 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,11 +14,12 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package version
+//go:build !linux
 
-const (
-	Major = 1          // Major version component of the current release
-	Minor = 17         // Minor version component of the current release
-	Patch = 5          // Patch version component of the current release
-	Meta  = "unstable" // Version metadata to append to the version string
-)
+package memlimit
+
+// platformLimit reports no platform-specific limit on non-Linux
+// systems; the caller falls back to total system memory.
+func platformLimit() (uint64, Source, bool) {
+	return 0, SourceUnknown, false
+}

@@ -13,7 +13,7 @@ import (
 // (simulating what ETH/72 peers send).
 func makeV1Tx(t *testing.T, nonce uint64, blobCount int, blobOffset int, key *ecdsa.PrivateKey) *types.Transaction {
 	t.Helper()
-	tx := makeMultiBlobTx(nonce, 1, 1, 1, blobCount, blobOffset, key, types.BlobSidecarVersion1)
+	tx := makeMultiBlobTx(nonce, 1, 1, 1, blobCount, blobOffset, key)
 	return removeBlobs(tx)
 }
 

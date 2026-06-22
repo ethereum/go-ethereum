@@ -346,17 +346,27 @@ func TestTracingSubscribeUnsubscribe(t *testing.T) {
 // like notifications (no "id" field).
 func postJSONRPC(t *testing.T, url, body string) {
 	t.Helper()
+	if err := tryPostJSONRPC(url, body); err != nil {
+		t.Fatalf("request: %v", err)
+	}
+}
+
+// tryPostJSONRPC is like postJSONRPC but returns the transport error instead of
+// failing the test. The write-timeout test uses this because the HTTP
+// WriteTimeout can drop the connection before the response is flushed.
+func tryPostJSONRPC(url, body string) error {
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
 	if err != nil {
-		t.Fatalf("new request: %v", err)
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("request: %v", err)
+		return err
 	}
 	_, _ = io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
+	return nil
 }
 
 // TestTracingHTTPNotification verifies that a JSON-RPC notification emits the
@@ -630,7 +640,12 @@ func TestTracingHTTPTimeout(t *testing.T) {
 	// test_block waits on ctx.Done() and returns an error. The internal
 	// timer cancels ctx, so test_block unblocks shortly after the timeout
 	// response goes out.
-	postJSONRPC(t, httpsrv.URL, `{"jsonrpc":"2.0","id":1,"method":"test_block"}`)
+	//
+	// Ignore the client-side result. Under load the HTTP WriteTimeout can
+	// drop the connection before the timeout response is flushed, which the
+	// client sees as EOF. The server still records the timeout on its span,
+	// which is what we assert below.
+	_ = tryPostJSONRPC(httpsrv.URL, `{"jsonrpc":"2.0","id":1,"method":"test_block"}`)
 
 	// Wait for the in-flight request to finish so the deferred spanEnd fires
 	// before GetSpans is called.

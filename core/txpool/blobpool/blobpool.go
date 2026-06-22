@@ -279,10 +279,9 @@ func encodeForNetwork(storedRLP []byte, version uint) ([]byte, error) {
 
 	// 3. Find the version of sidecar.
 	sidecarVersion, _, err := rlp.SplitUint64(sidecarElems[0])
-	if err != nil || sidecarVersion > 255 {
+	if err != nil || sidecarVersion > 255 || sidecarVersion == 0 {
 		return nil, fmt.Errorf("invalid version: %w", err)
 	}
-	sidecarVersionByte := byte(sidecarVersion)
 
 	// 4. Extract sidecar elements.
 	commitmentsRLP := sidecarElems[2]
@@ -315,12 +314,7 @@ func encodeForNetwork(storedRLP []byte, version uint) ([]byte, error) {
 	}
 
 	// 6. Reconstruct into the network format.
-	var outer [][]byte
-	if sidecarVersionByte == types.BlobSidecarVersion0 {
-		outer = [][]byte{txRLP, blobsField, commitmentsRLP, proofsRLP}
-	} else {
-		outer = [][]byte{txRLP, sidecarElems[0], blobsField, commitmentsRLP, proofsRLP}
-	}
+	outer := [][]byte{txRLP, sidecarElems[0], blobsField, commitmentsRLP, proofsRLP}
 	body, err := rlp.MergeListValues(outer)
 	if err != nil {
 		return nil, err
@@ -634,7 +628,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	p.state = state
 
 	// Create new slotter for pre-Osaka blob configuration.
-	slotter := newSlotter(params.BlobTxMaxBlobs)
+	slotter := newSlotterEIP7594(params.BlobTxMaxBlobs)
 
 	// See if we need to migrate the queue blob store after fusaka
 	slotter, err = tryMigrate(p.chain.Config(), slotter, queuedir)

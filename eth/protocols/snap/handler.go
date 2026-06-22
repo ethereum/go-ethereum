@@ -84,8 +84,10 @@ type Backend interface {
 // otherwise only the default (snap/1) versions are offered on the wire.
 func MakeProtocols(backend Backend, snapV2 bool) []p2p.Protocol {
 	versions := ProtocolVersions
-	if snapV2 {
-		versions = append([]uint{SNAP2}, versions...)
+	if !snapV2 {
+		// snap/2 is not safe to advertise unconditionally yet, so it is gated
+		// behind a feature flag.
+		versions = []uint{SNAP1}
 	}
 	protocols := make([]p2p.Protocol, len(versions))
 	for i, version := range versions {

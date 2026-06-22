@@ -1,4 +1,4 @@
-// Copyright 2024 The go-ethereum Authors
+// Copyright 2026 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,11 +14,15 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package version
+package memlimit
 
-const (
-	Major = 1          // Major version component of the current release
-	Minor = 17         // Minor version component of the current release
-	Patch = 5          // Patch version component of the current release
-	Meta  = "unstable" // Version metadata to append to the version string
-)
+import "testing"
+
+// TestLimitSmoke asserts that Limit() returns a non-zero value,
+// exercising the real probe and the gopsutil fallback.
+func TestLimitSmoke(t *testing.T) {
+	bytes, src := Limit()
+	if bytes == 0 {
+		t.Errorf("Limit() returned 0 bytes (source=%s); expected non-zero on any sane host", src)
+	}
+}

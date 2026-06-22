@@ -121,6 +121,62 @@ func (s *Stack) len() int {
 	return s.size
 }
 
+// drop removes the top element without reading it.
+func (s *Stack) drop() {
+	s.inner.top--
+	s.size--
+}
+
+// pop1 removes the top element and returns a pointer to it. The pointer
+// stays valid only until the next push or sub call.
+func (s *Stack) pop1() *uint256.Int {
+	s.inner.top--
+	s.size--
+	return &s.inner.data[s.inner.top]
+}
+
+// pop2 removes the top two elements and returns pointers to them. The
+// pointers stay valid only until the next push or sub call.
+func (s *Stack) pop2() (top, second *uint256.Int) {
+	s.inner.top -= 2
+	s.size -= 2
+	return &s.inner.data[s.inner.top+1], &s.inner.data[s.inner.top]
+}
+
+// pop3 removes the top three elements and returns pointers to them. The
+// pointers stay valid only until the next push or sub call.
+func (s *Stack) pop3() (top, second, third *uint256.Int) {
+	s.inner.top -= 3
+	s.size -= 3
+	return &s.inner.data[s.inner.top+2], &s.inner.data[s.inner.top+1], &s.inner.data[s.inner.top]
+}
+
+// pop4 removes the top four elements and returns pointers to them. The
+// pointers stay valid only until the next push or sub call.
+func (s *Stack) pop4() (top, second, third, fourth *uint256.Int) {
+	s.inner.top -= 4
+	s.size -= 4
+	return &s.inner.data[s.inner.top+3], &s.inner.data[s.inner.top+2], &s.inner.data[s.inner.top+1], &s.inner.data[s.inner.top]
+}
+
+// pop1Peek1 removes the top element and returns pointers to it and to the new
+// top, the usual operand and write target of a binary operation. The first
+// pointer stays valid only until the next push or sub call.
+func (s *Stack) pop1Peek1() (top, rest *uint256.Int) {
+	s.inner.top--
+	s.size--
+	return &s.inner.data[s.inner.top], &s.inner.data[s.inner.top-1]
+}
+
+// pop2Peek1 removes the top two elements and returns pointers to them and to
+// the new top, for three operand operations. The first two pointers stay
+// valid only until the next push or sub call.
+func (s *Stack) pop2Peek1() (top, second, rest *uint256.Int) {
+	s.inner.top -= 2
+	s.size -= 2
+	return &s.inner.data[s.inner.top+1], &s.inner.data[s.inner.top], &s.inner.data[s.inner.top-1]
+}
+
 func (s *Stack) swap1() {
 	s.inner.data[s.bottom+s.size-2], s.inner.data[s.bottom+s.size-1] = s.inner.data[s.bottom+s.size-1], s.inner.data[s.bottom+s.size-2]
 }
