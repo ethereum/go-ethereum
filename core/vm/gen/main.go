@@ -518,6 +518,12 @@ func (g *generator) deriveMeta(forks []vm.GenFork) {
 	for code := 0x80; code <= 0x8f; code++ { // DUP1-16
 		g.checkStable(byte(code), "makeDup", forks)
 	}
+	// directCold opcodes bake their static gas and stack bounds the same way, so
+	// they must be fork-stable too. Dynamic gas is allowed (it is charged through
+	// the named gas function, not baked).
+	for code := range directCold {
+		g.checkColdStable(code, forks)
+	}
 }
 
 func (g *generator) checkStable(code byte, what string, forks []vm.GenFork) {
@@ -530,8 +536,43 @@ func (g *generator) checkStable(code byte, what string, forks []vm.GenFork) {
 		if !o.Defined {
 			continue
 		}
-		if o.ConstantGas != m.constGas || o.MinStack != m.minStack || o.MaxStack != m.maxStack || o.HasDynamicGas {
+		if o.ConstantGas != m.constGas || o.MinStack != m.minStack || o.MaxStack != m.maxStack || o.DynamicGasFn != "" {
 			fatalf("opcode %#x (%s) is not fork-stable (fork %s): cannot inline", code, what, fork.Name)
+		}
+	}
+}
+
+// checkColdStable verifies a directCold opcode is safe to direct-call. Its static
+// gas and stack bounds must be the same across every fork it appears in (they are
+// baked as constants), and its handler, gas and memory functions must be the same
+// across those forks too (they are called by name, so a fork that swapped one
+// would otherwise be missed). Unlike checkStable it allows dynamic gas, which
+// directCold ops carry by definition. It does not check the directCold map's names
+// against the table, which the differential test covers.
+func (g *generator) checkColdStable(code byte, forks []vm.GenFork) {
+	m := g.meta[code]
+	if !m.defined {
+		fatalf("opcode %#x (directCold) is never defined", code)
+	}
+	var exec, dyn, mem string
+	seen := false
+	for _, fork := range forks {
+		o := fork.Ops[code]
+		if !o.Defined {
+			continue
+		}
+		if o.ConstantGas != m.constGas || o.MinStack != m.minStack || o.MaxStack != m.maxStack {
+			fatalf("opcode %#x (%s) is in directCold but not fork-stable (fork %s): static gas or stack bounds vary, cannot bake", code, m.name, fork.Name)
+		}
+		// Handler, gas and memory functions must match across forks too, or
+		// direct-calling them by name would skip a fork that swapped one. Names
+		// come from FuncForPC via vm.GenForks (aliases resolve to the underlying
+		// func, still stable across forks).
+		if !seen {
+			exec, dyn, mem, seen = o.ExecuteFn, o.DynamicGasFn, o.MemorySizeFn, true
+		} else if o.ExecuteFn != exec || o.DynamicGasFn != dyn || o.MemorySizeFn != mem {
+			fatalf("opcode %#x (%s) is in directCold but its functions vary by fork (fork %s): got %s/%s/%s, want %s/%s/%s, cannot direct-call",
+				code, m.name, fork.Name, o.ExecuteFn, o.DynamicGasFn, o.MemorySizeFn, exec, dyn, mem)
 		}
 	}
 }
