@@ -161,6 +161,9 @@ type token struct {
 }
 
 func NewBlobFetcher(fn BlobFetcherFunctions, custody types.CustodyBitmap, rand random, fetchProbability uint64) *BlobFetcher {
+	if fetchProbability < DefaultFetchProbability {
+		fetchProbability = DefaultFetchProbability
+	}
 	return &BlobFetcher{
 		notify:           make(chan *blobTxAnnounce),
 		cleanup:          make(chan *payloadDelivery),

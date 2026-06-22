@@ -500,7 +500,7 @@ var (
 	}
 	BlobPoolFetchProbabilityFlag = &cli.Uint64Flag{
 		Name:     "blobpool.fetchprobability",
-		Usage:    "Probability of fetching the full blob payload for sparse blobpool",
+		Usage:    "Probability of fetching the full blob payload for sparse blobpool (min=15, max=100)",
 		Value:    fetcher.DefaultFetchProbability,
 		Category: flags.BlobPoolCategory,
 	}
@@ -1677,8 +1677,7 @@ func setBlobPool(ctx *cli.Context, cfg *blobpool.Config) {
 		cfg.PriceBump = ctx.Uint64(BlobPoolPriceBumpFlag.Name)
 	}
 	if ctx.IsSet(BlobPoolFetchProbabilityFlag.Name) {
-		v := ctx.Uint64(BlobPoolFetchProbabilityFlag.Name)
-		cfg.FetchProbability = &v
+		cfg.FetchProbability = ctx.Uint64(BlobPoolFetchProbabilityFlag.Name)
 	}
 }
 

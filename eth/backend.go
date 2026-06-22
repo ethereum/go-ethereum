@@ -344,13 +344,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		stack.RegisterLifecycle(eth.localTxTracker)
 	}
 
-	var fetchProb uint64
-	if config.BlobPool.FetchProbability != nil {
-		fetchProb = *config.BlobPool.FetchProbability
-	} else {
-		fetchProb = fetcher.DefaultFetchProbability
-	}
-
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := options.TrieCleanLimit + options.TrieDirtyLimit + options.SnapshotLimit
 	if eth.handler, err = newHandler(&handlerConfig{
@@ -364,7 +357,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		BloomCache:       uint64(cacheLimit),
 		RequiredBlocks:   config.RequiredBlocks,
 		SnapV2:           config.SnapV2,
-		FetchProbability: fetchProb,
+		FetchProbability: config.BlobPool.FetchProbability,
 	}); err != nil {
 		return nil, err
 	}
