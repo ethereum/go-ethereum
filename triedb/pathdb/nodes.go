@@ -18,18 +18,14 @@
 package pathdb
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"hash/fnv"
 	"io"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -80,17 +76,6 @@ func (s *nodeSet) computeSize() {
 	s.size = size
 }
 
-// updateSize updates the total cache size by the given delta.
-func (s *nodeSet) updateSize(delta int64) {
-	size := int64(s.size) + delta
-	if size >= 0 {
-		s.size = uint64(size)
-		return
-	}
-	log.Error("Nodeset size underflow", "prev", common.StorageSize(s.size), "delta", common.StorageSize(delta))
-	s.size = 0
-}
-
 // node retrieves the trie node with node path and its trie identifier.
 func (s *nodeSet) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
 	// Account trie node
@@ -107,50 +92,6 @@ func (s *nodeSet) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
 	return n, ok
 }
 
-// merge integrates the provided dirty nodes into the set. The provided nodeset
-// will remain unchanged, as it may still be referenced by other layers.
-//
-// It returns a breakdown of the merge cost (timings and node counts) for
-// per-block diagnostics.
-func (s *nodeSet) merge(set *nodeSet) nodeMergeStats {
-	var (
-		delta     int64   // size difference resulting from node merging
-		overwrite counter // counter of nodes being overwritten
-	)
-
-	// Merge account nodes (single flat map, not sharded).
-	accountStart := time.Now()
-	for path, n := range set.accountNodes {
-		if orig, exist := s.accountNodes[path]; !exist {
-			delta += int64(len(n.Blob) + len(path))
-		} else {
-			delta += int64(len(n.Blob) - len(orig.Blob))
-			overwrite.add(len(orig.Blob) + len(path))
-		}
-		s.accountNodes[path] = n
-	}
-	accountDur := time.Since(accountStart)
-
-	// Merge storage nodes, parallelizing across owners for large sets.
-	storageStart := time.Now()
-	d, ow, storageCount := s.mergeStorageNodes(set.storageNodes)
-	storageDur := time.Since(storageStart)
-	delta += d
-	overwrite.n += ow.n
-	overwrite.size += ow.size
-
-	overwrite.report(gcTrieNodeMeter, gcTrieNodeBytesMeter)
-	s.updateSize(delta)
-
-	return nodeMergeStats{
-		accountDur:   accountDur,
-		storageDur:   storageDur,
-		owners:       len(set.storageNodes),
-		accountNodes: len(set.accountNodes),
-		storageNodes: storageCount,
-	}
-}
-
 // nodeMergeStats reports the cost breakdown of a node-set merge.
 type nodeMergeStats struct {
 	accountDur   time.Duration // time spent merging account trie nodes
@@ -158,134 +99,6 @@ type nodeMergeStats struct {
 	owners       int           // number of storage owners merged
 	accountNodes int           // number of account trie nodes merged
 	storageNodes int           // number of storage trie nodes merged
-}
-
-// storageNodeWork is a per-owner unit of the storage node merge: it points at
-// the destination submap (already linked into s.storageNodes) and the incoming
-// subset to fold in.
-type storageNodeWork struct {
-	target map[string]*trienode.Node
-	subset map[string]*trienode.Node
-	isNew  bool
-}
-
-// fillStorageNodes folds the incoming subsets into their destination submaps,
-// returning the size delta and overwrite counter for the processed items. It
-// only touches the per-owner submaps (never the top-level map), so disjoint
-// item ranges can run concurrently.
-func fillStorageNodes(items []storageNodeWork) (int64, counter) {
-	var (
-		delta     int64
-		overwrite counter
-	)
-	for _, w := range items {
-		if w.isNew {
-			for path, n := range w.subset {
-				delta += int64(common.HashLength + len(n.Blob) + len(path))
-				w.target[path] = n
-			}
-			continue
-		}
-		for path, n := range w.subset {
-			if orig, exist := w.target[path]; !exist {
-				delta += int64(common.HashLength + len(n.Blob) + len(path))
-			} else {
-				delta += int64(len(n.Blob) - len(orig.Blob))
-				overwrite.add(common.HashLength + len(orig.Blob) + len(path))
-			}
-			w.target[path] = n
-		}
-	}
-	return delta, overwrite
-}
-
-// mergeStorageNodes integrates the provided storage trie nodes into the set,
-// fanning the per-owner work out across goroutines for large sets. It also
-// returns the total number of storage trie nodes merged.
-func (s *nodeSet) mergeStorageNodes(storageNodes map[common.Hash]map[string]*trienode.Node) (int64, counter, int) {
-	// Pass 1: ensure a destination submap exists for every owner. This is the
-	// only phase that mutates the top-level map and therefore runs single
-	// threaded. The per-owner content copy is deferred to pass 2.
-	var count int
-	items := make([]storageNodeWork, 0, len(storageNodes))
-	for owner, subset := range storageNodes {
-		count += len(subset)
-		current, exist := s.storageNodes[owner]
-		if !exist {
-			// Allocate a fresh submap rather than claiming the incoming one: the
-			// original diff layer retains ownership of its maps and must stay
-			// immutable, as it may still be referenced by concurrent readers.
-			current = make(map[string]*trienode.Node, len(subset))
-			s.storageNodes[owner] = current
-		}
-		items = append(items, storageNodeWork{target: current, subset: subset, isNew: !exist})
-	}
-	// Small sets: skip the goroutine overhead.
-	if len(items) < parallelMergeThreshold {
-		delta, overwrite := fillStorageNodes(items)
-		return delta, overwrite, count
-	}
-	// Pass 2: fill the destination submaps in parallel. Each owner is handled by
-	// exactly one worker and no worker touches the top-level map, so the only
-	// shared reads are immutable, making this race-free.
-	workers := mergeWorkers(len(items))
-	deltas := make([]int64, workers)
-	overwrites := make([]counter, workers)
-	parallelChunks(len(items), workers, func(idx, lo, hi int) {
-		deltas[idx], overwrites[idx] = fillStorageNodes(items[lo:hi])
-	})
-	var (
-		delta     int64
-		overwrite counter
-	)
-	for i := 0; i < workers; i++ {
-		delta += deltas[i]
-		overwrite.n += overwrites[i].n
-		overwrite.size += overwrites[i].size
-	}
-	return delta, overwrite, count
-}
-
-// revertTo merges the provided trie nodes into the set. This should reverse the
-// changes made by the most recent state transition.
-func (s *nodeSet) revertTo(db ethdb.KeyValueReader, nodes map[common.Hash]map[string]*trienode.Node) {
-	var delta int64
-	for owner, subset := range nodes {
-		if owner == (common.Hash{}) {
-			// Account trie nodes
-			for path, n := range subset {
-				orig, ok := s.accountNodes[path]
-				if !ok {
-					blob := rawdb.ReadAccountTrieNode(db, []byte(path))
-					if bytes.Equal(blob, n.Blob) {
-						continue
-					}
-					panic(fmt.Sprintf("non-existent account node (%v) blob: %v", path, crypto.Keccak256Hash(n.Blob).Hex()))
-				}
-				s.accountNodes[path] = n
-				delta += int64(len(n.Blob)) - int64(len(orig.Blob))
-			}
-		} else {
-			// Storage trie nodes
-			current, ok := s.storageNodes[owner]
-			if !ok {
-				panic(fmt.Sprintf("non-existent subset (%x)", owner))
-			}
-			for path, n := range subset {
-				orig, ok := current[path]
-				if !ok {
-					blob := rawdb.ReadStorageTrieNode(db, owner, []byte(path))
-					if bytes.Equal(blob, n.Blob) {
-						continue
-					}
-					panic(fmt.Sprintf("non-existent storage node (%x %v) blob: %v", owner, path, crypto.Keccak256Hash(n.Blob).Hex()))
-				}
-				current[path] = n
-				delta += int64(len(n.Blob)) - int64(len(orig.Blob))
-			}
-		}
-	}
-	s.updateSize(delta)
 }
 
 // journalNode represents a trie node persisted in the journal.
@@ -364,35 +177,6 @@ func (s *nodeSet) decode(r *rlp.Stream) error {
 	}
 	s.computeSize()
 	return nil
-}
-
-// write flushes nodes into the provided database batch as a whole.
-func (s *nodeSet) write(batch ethdb.Batch, clean *fastcache.Cache) int {
-	nodes := make(map[common.Hash]map[string]*trienode.Node)
-	if len(s.accountNodes) > 0 {
-		nodes[common.Hash{}] = s.accountNodes
-	}
-	for owner, subset := range s.storageNodes {
-		nodes[owner] = subset
-	}
-	return writeNodes(batch, nodes, clean)
-}
-
-// reset clears all cached trie node data.
-func (s *nodeSet) reset() {
-	s.accountNodes = make(map[string]*trienode.Node)
-	s.storageNodes = make(map[common.Hash]map[string]*trienode.Node)
-	s.size = 0
-}
-
-// dbsize returns the approximate size of db write.
-func (s *nodeSet) dbsize() int {
-	var m int
-	m += len(s.accountNodes) * len(rawdb.TrieNodeAccountPrefix) // database key prefix
-	for _, nodes := range s.storageNodes {
-		m += len(nodes) * (len(rawdb.TrieNodeStoragePrefix)) // database key prefix
-	}
-	return m + int(s.size)
 }
 
 // nodeSetWithOrigin wraps the node set with additional original values of the

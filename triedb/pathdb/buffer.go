@@ -35,10 +35,10 @@ import (
 // must be checked before diving into disk (since it basically is not yet written
 // data).
 type buffer struct {
-	layers uint64    // The number of diff layers aggregated inside
-	limit  uint64    // The maximum memory allowance in bytes
-	nodes  *nodeSet  // Aggregated trie node set
-	states *stateSet // Aggregated state set
+	layers uint64      // The number of diff layers aggregated inside
+	limit  uint64      // The maximum memory allowance in bytes
+	nodes  *arenaNodes // Aggregated trie node set (arena-backed, pointer-free)
+	states *stateSet   // Aggregated state set
 
 	// done is the notifier whether the content in buffer has been flushed or not.
 	// This channel is nil if the buffer is not frozen.
@@ -49,10 +49,10 @@ type buffer struct {
 }
 
 // newBuffer initializes the buffer with the provided states and trie nodes.
-func newBuffer(limit int, nodes *nodeSet, states *stateSet, layers uint64) *buffer {
+func newBuffer(limit int, nodes *arenaNodes, states *stateSet, layers uint64) *buffer {
 	// Don't panic for lazy users if any provided set is nil
 	if nodes == nil {
-		nodes = newNodeSet(nil)
+		nodes = newArenaNodes()
 	}
 	if states == nil {
 		states = newStates(nil, nil, false)
@@ -75,8 +75,8 @@ func (b *buffer) storage(addrHash common.Hash, storageHash common.Hash) ([]byte,
 	return b.states.storage(addrHash, storageHash)
 }
 
-// node retrieves the trie node with node path and its trie identifier.
-func (b *buffer) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
+// node retrieves the trie node blob and hash with node path and its trie identifier.
+func (b *buffer) node(owner common.Hash, path []byte) ([]byte, common.Hash, bool) {
 	return b.nodes.node(owner, path)
 }
 

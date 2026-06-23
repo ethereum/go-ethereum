@@ -159,6 +159,8 @@ type commitStats struct {
 	storageNodes      int           // storage trie nodes merged
 	accounts          int           // accounts merged
 	slots             int           // storage slots merged
+	bufferSize        uint64        // write buffer size right after the merge (heap-pressure proxy)
+	bufferLayers      uint64        // diff layers accumulated in the write buffer
 	flushWait         time.Duration // stall waiting on the previous async flush to finish
 	flushes           int           // number of buffer flushes triggered
 }
@@ -376,6 +378,8 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 			"merge-states", common.PrettyDuration(s.mergeStates),
 			"accounts", s.accounts,
 			"slots", s.slots,
+			"buffer", common.StorageSize(s.bufferSize),
+			"buffer-layers", s.bufferLayers,
 			"flushwait", common.PrettyDuration(s.flushWait),
 			"other", common.PrettyDuration(s.cap-s.merge-s.flushWait),
 			"flushes", s.flushes)

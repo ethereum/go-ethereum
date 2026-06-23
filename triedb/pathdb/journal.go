@@ -212,7 +212,7 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 		return nil, fmt.Errorf("invalid state id: stored %d resolved %d", stored, id)
 	}
 	// Resolve nodes cached in aggregated buffer
-	var nodes nodeSet
+	var nodes arenaNodes
 	if err := nodes.decode(r); err != nil {
 		return nil, err
 	}

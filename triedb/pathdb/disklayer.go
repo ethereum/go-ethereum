@@ -124,12 +124,12 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 	// it's impossible to mutate the buffer before tagging the layer as stale.
 	for _, buffer := range []*buffer{dl.buffer, dl.frozen} {
 		if buffer != nil {
-			n, found := buffer.node(owner, path)
+			blob, hash, found := buffer.node(owner, path)
 			if found {
 				dirtyNodeHitMeter.Mark(1)
-				dirtyNodeReadMeter.Mark(int64(len(n.Blob)))
+				dirtyNodeReadMeter.Mark(int64(len(blob)))
 				dirtyNodeHitDepthHist.Update(int64(depth))
-				return n.Blob, n.Hash, nodeLoc{loc: locDirtyCache, depth: depth}, nil
+				return blob, hash, nodeLoc{loc: locDirtyCache, depth: depth}, nil
 			}
 		}
 	}
@@ -474,6 +474,11 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	dl.db.cstats.storageNodes += mt.storageNodes
 	dl.db.cstats.accounts += mt.accounts
 	dl.db.cstats.slots += mt.slots
+	// Snapshot of how full the write buffer is right after this merge. If merge
+	// latency correlates with buffer fullness, the cost is GC/heap bound rather
+	// than CPU bound.
+	dl.db.cstats.bufferSize = combined.size()
+	dl.db.cstats.bufferLayers = combined.layers
 
 	// Terminate the background state snapshot generation before mutating the
 	// persistent state.
