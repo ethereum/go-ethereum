@@ -32,12 +32,18 @@ import (
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
-// nodeRef is a pointer-free reference into the arena of an arenaNodes. The
-// referenced arena slot stores hash(32 bytes) || blob. A zero size denotes a
-// deleted node, which occupies no arena bytes.
+// arenaChunkSize is the size of each arena block. The arena grows one block at a
+// time, so a store never has to copy previously stored bytes and never triggers
+// a single large allocation/zeroing spike.
+const arenaChunkSize = 4 * 1024 * 1024
+
+// nodeRef is a pointer-free reference into the chunked arena of an arenaNodes.
+// The referenced slot stores hash(32 bytes) || blob within a single chunk. A
+// zero size denotes a deleted node, which occupies no arena bytes.
 type nodeRef struct {
-	off  uint32 // start offset of the (hash||blob) entry in the arena
-	size uint32 // blob length; 0 means the node is deleted
+	chunk uint32 // index of the arena chunk holding the entry
+	off   uint32 // start offset of the (hash||blob) entry within the chunk
+	size  uint32 // blob length; 0 means the node is deleted
 }
 
 // arenaNodes is an arena-backed, pointer-free store of trie nodes used by the
@@ -55,20 +61,37 @@ type nodeRef struct {
 // in pointer form). The two share the journal wire format (journalNodes) so the
 // on-disk layout is unchanged.
 type arenaNodes struct {
-	size  uint64 // aggregated live database size of the trie nodes (matches nodeSet.size)
-	arena []byte // contiguous blob storage; each entry is hash(32B) || blob
-	dead  uint64 // arena bytes no longer referenced (overwritten/reverted), reclaimed on compaction
+	size   uint64   // aggregated live database size of the trie nodes (matches nodeSet.size)
+	chunks [][]byte // arena blocks; each entry is hash(32B) || blob, never split across chunks
+	alloc  uint64   // total bytes appended across all chunks (live + dead)
+	dead   uint64   // arena bytes no longer referenced (overwritten/reverted), reclaimed on compaction
 
 	accountNodes map[string]nodeRef                 // account trie nodes, keyed by path
 	storageNodes map[common.Hash]map[string]nodeRef // storage trie nodes, keyed by owner and path
 }
 
-// newArenaNodes constructs an empty arena-backed node store.
+// newArenaNodes constructs an empty arena-backed node store. The arena grows
+// on demand, one chunk at a time, so no capacity hint is required.
 func newArenaNodes() *arenaNodes {
 	return &arenaNodes{
 		accountNodes: make(map[string]nodeRef),
 		storageNodes: make(map[common.Hash]map[string]nodeRef),
 	}
+}
+
+// reserve returns the index of a chunk with room for n bytes, allocating a new
+// one if the current tail chunk is too full. Entries are never split across
+// chunks; an oversized entry gets its own dedicated chunk.
+func (s *arenaNodes) reserve(n int) int {
+	if ci := len(s.chunks) - 1; ci >= 0 && cap(s.chunks[ci])-len(s.chunks[ci]) >= n {
+		return ci
+	}
+	size := arenaChunkSize
+	if n > size {
+		size = n
+	}
+	s.chunks = append(s.chunks, make([]byte, 0, size))
+	return len(s.chunks) - 1
 }
 
 // store appends the given node into the arena and returns its reference. A node
@@ -77,10 +100,13 @@ func (s *arenaNodes) store(hash common.Hash, blob []byte) nodeRef {
 	if len(blob) == 0 {
 		return nodeRef{}
 	}
-	off := uint32(len(s.arena))
-	s.arena = append(s.arena, hash[:]...)
-	s.arena = append(s.arena, blob...)
-	return nodeRef{off: off, size: uint32(len(blob))}
+	n := common.HashLength + len(blob)
+	ci := s.reserve(n)
+	off := uint32(len(s.chunks[ci]))
+	s.chunks[ci] = append(s.chunks[ci], hash[:]...)
+	s.chunks[ci] = append(s.chunks[ci], blob...)
+	s.alloc += uint64(n)
+	return nodeRef{chunk: uint32(ci), off: off, size: uint32(len(blob))}
 }
 
 // blob returns the node blob referenced by ref, aliasing the arena (do not
@@ -90,7 +116,7 @@ func (s *arenaNodes) blob(ref nodeRef) []byte {
 		return nil
 	}
 	start := ref.off + common.HashLength
-	return s.arena[start : start+ref.size]
+	return s.chunks[ref.chunk][start : start+ref.size]
 }
 
 // hash returns the node hash referenced by ref (zero for a deleted node).
@@ -98,7 +124,7 @@ func (s *arenaNodes) hash(ref nodeRef) common.Hash {
 	if ref.size == 0 {
 		return common.Hash{}
 	}
-	return common.BytesToHash(s.arena[ref.off : ref.off+common.HashLength])
+	return common.BytesToHash(s.chunks[ref.chunk][ref.off : ref.off+common.HashLength])
 }
 
 // updateSize adjusts the tracked live size by the given delta.
@@ -258,27 +284,30 @@ func (s *arenaNodes) revertTo(db ethdb.KeyValueReader, nodes map[common.Hash]map
 // maybeCompact rebuilds the arena to drop dead bytes once they dominate it,
 // bounding the buffer's physical memory under heavy node overwriting.
 func (s *arenaNodes) maybeCompact() {
-	if len(s.arena) < 8*1024*1024 || s.dead*2 <= uint64(len(s.arena)) {
+	if s.alloc < 8*1024*1024 || s.dead*2 <= s.alloc {
 		return
 	}
-	arena := make([]byte, 0, uint64(len(s.arena))-s.dead)
+	old := s.chunks
+	s.chunks = nil
+	s.alloc = 0
+	s.dead = 0
 	relocate := func(m map[string]nodeRef) {
 		for path, ref := range m {
 			if ref.size == 0 {
 				continue // deleted: no arena bytes
 			}
-			off := uint32(len(arena))
-			end := ref.off + common.HashLength + ref.size
-			arena = append(arena, s.arena[ref.off:end]...)
-			m[path] = nodeRef{off: off, size: ref.size}
+			n := common.HashLength + int(ref.size)
+			ci := s.reserve(n)
+			off := uint32(len(s.chunks[ci]))
+			s.chunks[ci] = append(s.chunks[ci], old[ref.chunk][ref.off:ref.off+uint32(n)]...)
+			s.alloc += uint64(n)
+			m[path] = nodeRef{chunk: uint32(ci), off: off, size: ref.size}
 		}
 	}
 	relocate(s.accountNodes)
 	for _, subset := range s.storageNodes {
 		relocate(subset)
 	}
-	s.arena = arena
-	s.dead = 0
 }
 
 // write flushes the held nodes into the provided database batch.
@@ -323,7 +352,8 @@ func (s *arenaNodes) write(batch ethdb.Batch, clean *fastcache.Cache) int {
 func (s *arenaNodes) reset() {
 	s.accountNodes = make(map[string]nodeRef)
 	s.storageNodes = make(map[common.Hash]map[string]nodeRef)
-	s.arena = nil
+	s.chunks = nil
+	s.alloc = 0
 	s.dead = 0
 	s.size = 0
 }
@@ -366,7 +396,8 @@ func (s *arenaNodes) decode(r *rlp.Stream) error {
 	}
 	s.accountNodes = make(map[string]nodeRef)
 	s.storageNodes = make(map[common.Hash]map[string]nodeRef)
-	s.arena = nil
+	s.chunks = nil
+	s.alloc = 0
 	s.dead = 0
 
 	for _, entry := range encoded {
