@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -108,13 +109,17 @@ func (s *nodeSet) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
 
 // merge integrates the provided dirty nodes into the set. The provided nodeset
 // will remain unchanged, as it may still be referenced by other layers.
-func (s *nodeSet) merge(set *nodeSet) {
+//
+// It returns a breakdown of the merge cost (timings and node counts) for
+// per-block diagnostics.
+func (s *nodeSet) merge(set *nodeSet) nodeMergeStats {
 	var (
 		delta     int64   // size difference resulting from node merging
 		overwrite counter // counter of nodes being overwritten
 	)
 
-	// Merge account nodes (single small map).
+	// Merge account nodes (single flat map, not sharded).
+	accountStart := time.Now()
 	for path, n := range set.accountNodes {
 		if orig, exist := s.accountNodes[path]; !exist {
 			delta += int64(len(n.Blob) + len(path))
@@ -124,15 +129,35 @@ func (s *nodeSet) merge(set *nodeSet) {
 		}
 		s.accountNodes[path] = n
 	}
+	accountDur := time.Since(accountStart)
 
 	// Merge storage nodes, parallelizing across owners for large sets.
-	d, ow := s.mergeStorageNodes(set.storageNodes)
+	storageStart := time.Now()
+	d, ow, storageCount := s.mergeStorageNodes(set.storageNodes)
+	storageDur := time.Since(storageStart)
 	delta += d
 	overwrite.n += ow.n
 	overwrite.size += ow.size
 
 	overwrite.report(gcTrieNodeMeter, gcTrieNodeBytesMeter)
 	s.updateSize(delta)
+
+	return nodeMergeStats{
+		accountDur:   accountDur,
+		storageDur:   storageDur,
+		owners:       len(set.storageNodes),
+		accountNodes: len(set.accountNodes),
+		storageNodes: storageCount,
+	}
+}
+
+// nodeMergeStats reports the cost breakdown of a node-set merge.
+type nodeMergeStats struct {
+	accountDur   time.Duration // time spent merging account trie nodes
+	storageDur   time.Duration // time spent merging storage trie nodes
+	owners       int           // number of storage owners merged
+	accountNodes int           // number of account trie nodes merged
+	storageNodes int           // number of storage trie nodes merged
 }
 
 // storageNodeWork is a per-owner unit of the storage node merge: it points at
@@ -175,13 +200,16 @@ func fillStorageNodes(items []storageNodeWork) (int64, counter) {
 }
 
 // mergeStorageNodes integrates the provided storage trie nodes into the set,
-// fanning the per-owner work out across goroutines for large sets.
-func (s *nodeSet) mergeStorageNodes(storageNodes map[common.Hash]map[string]*trienode.Node) (int64, counter) {
+// fanning the per-owner work out across goroutines for large sets. It also
+// returns the total number of storage trie nodes merged.
+func (s *nodeSet) mergeStorageNodes(storageNodes map[common.Hash]map[string]*trienode.Node) (int64, counter, int) {
 	// Pass 1: ensure a destination submap exists for every owner. This is the
 	// only phase that mutates the top-level map and therefore runs single
 	// threaded. The per-owner content copy is deferred to pass 2.
+	var count int
 	items := make([]storageNodeWork, 0, len(storageNodes))
 	for owner, subset := range storageNodes {
+		count += len(subset)
 		current, exist := s.storageNodes[owner]
 		if !exist {
 			// Allocate a fresh submap rather than claiming the incoming one: the
@@ -194,7 +222,8 @@ func (s *nodeSet) mergeStorageNodes(storageNodes map[common.Hash]map[string]*tri
 	}
 	// Small sets: skip the goroutine overhead.
 	if len(items) < parallelMergeThreshold {
-		return fillStorageNodes(items)
+		delta, overwrite := fillStorageNodes(items)
+		return delta, overwrite, count
 	}
 	// Pass 2: fill the destination submaps in parallel. Each owner is handled by
 	// exactly one worker and no worker touches the top-level map, so the only
@@ -214,7 +243,7 @@ func (s *nodeSet) mergeStorageNodes(storageNodes map[common.Hash]map[string]*tri
 		overwrite.n += overwrites[i].n
 		overwrite.size += overwrites[i].size
 	}
-	return delta, overwrite
+	return delta, overwrite, count
 }
 
 // revertTo merges the provided trie nodes into the set. This should reverse the

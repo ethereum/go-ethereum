@@ -147,13 +147,20 @@ type Database struct {
 // Note cap may flatten more than one diff layer in a single full-commit, so the
 // inner phases are accumulated rather than overwritten.
 type commitStats struct {
-	add         time.Duration // tree.add: link the new diff layer
-	cap         time.Duration // tree.cap: flatten bottom diff(s) into disk
-	merge       time.Duration // buffer.commit wall time (node+state merge, parallel)
-	mergeNodes  time.Duration // trie node set merge (one half of merge)
-	mergeStates time.Duration // flat state set merge (other half of merge)
-	flushWait   time.Duration // stall waiting on the previous async flush to finish
-	flushes     int           // number of buffer flushes triggered
+	add               time.Duration // tree.add: link the new diff layer
+	cap               time.Duration // tree.cap: flatten bottom diff(s) into disk
+	merge             time.Duration // buffer.commit wall time (node+state merge, parallel)
+	mergeNodes        time.Duration // trie node set merge (one half of merge)
+	mergeNodesAccount time.Duration // account trie node portion of the node merge (not sharded)
+	mergeNodesStorage time.Duration // storage trie node portion of the node merge (sharded)
+	mergeStates       time.Duration // flat state set merge (other half of merge)
+	nodeOwners        int           // storage owners merged (shows whether sharding triggers)
+	accountNodes      int           // account trie nodes merged
+	storageNodes      int           // storage trie nodes merged
+	accounts          int           // accounts merged
+	slots             int           // storage slots merged
+	flushWait         time.Duration // stall waiting on the previous async flush to finish
+	flushes           int           // number of buffer flushes triggered
 }
 
 // reset clears the stats at the start of a new Update.
@@ -361,7 +368,14 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 			"cap", common.PrettyDuration(s.cap),
 			"merge", common.PrettyDuration(s.merge),
 			"merge-nodes", common.PrettyDuration(s.mergeNodes),
+			"merge-nodes-account", common.PrettyDuration(s.mergeNodesAccount),
+			"merge-nodes-storage", common.PrettyDuration(s.mergeNodesStorage),
+			"account-nodes", s.accountNodes,
+			"storage-nodes", s.storageNodes,
+			"node-owners", s.nodeOwners,
 			"merge-states", common.PrettyDuration(s.mergeStates),
+			"accounts", s.accounts,
+			"slots", s.slots,
 			"flushwait", common.PrettyDuration(s.flushWait),
 			"other", common.PrettyDuration(s.cap-s.merge-s.flushWait),
 			"flushes", s.flushes)

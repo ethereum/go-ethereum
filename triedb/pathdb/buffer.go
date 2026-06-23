@@ -80,32 +80,47 @@ func (b *buffer) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
 	return b.nodes.node(owner, path)
 }
 
+// mergeTiming captures the per-block breakdown of a buffer merge (timings plus
+// item counts) for diagnostics.
+type mergeTiming struct {
+	nodes        time.Duration // total node-set merge wall time
+	nodesAccount time.Duration // account trie node portion (not sharded)
+	nodesStorage time.Duration // storage trie node portion (sharded for large sets)
+	nodeOwners   int           // number of storage owners merged (shows if sharding triggers)
+	accountNodes int           // number of account trie nodes merged
+	storageNodes int           // number of storage trie nodes merged
+	states       time.Duration // flat state-set merge wall time
+	accounts     int           // number of accounts merged
+	slots        int           // number of storage slots merged
+}
+
 // commit merges the provided states and trie nodes into the buffer. It returns
-// the buffer along with the wall time spent merging the trie nodes and the flat
-// states respectively (for per-block diagnostics).
-func (b *buffer) commit(nodes *nodeSet, states *stateSet) (*buffer, time.Duration, time.Duration) {
+// the buffer along with a breakdown of the merge (for per-block diagnostics).
+func (b *buffer) commit(nodes *nodeSet, states *stateSet) (*buffer, mergeTiming) {
 	b.layers++
 
 	// The trie node set and the flat state set are entirely independent objects;
 	// merge them concurrently so the commit latency is bounded by the slower of
 	// the two rather than their sum.
 	var (
-		wg       sync.WaitGroup
-		nodesDur time.Duration
+		wg sync.WaitGroup
+		mt mergeTiming
 	)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		start := time.Now()
-		b.nodes.merge(nodes)
-		nodesDur = time.Since(start)
+		ns := b.nodes.merge(nodes)
+		mt.nodes = time.Since(start)
+		mt.nodesAccount, mt.nodesStorage = ns.accountDur, ns.storageDur
+		mt.nodeOwners, mt.accountNodes, mt.storageNodes = ns.owners, ns.accountNodes, ns.storageNodes
 	}()
 	start := time.Now()
-	b.states.merge(states)
-	statesDur := time.Since(start)
+	mt.accounts, mt.slots = b.states.merge(states)
+	mt.states = time.Since(start)
 	wg.Wait()
 
-	return b, nodesDur, statesDur
+	return b, mt
 }
 
 // revertTo is the reverse operation of commit. It also merges the provided states

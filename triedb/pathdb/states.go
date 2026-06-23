@@ -227,7 +227,10 @@ func (s *stateSet) clearLists() {
 //
 // The stateSet supplied as parameter set will not be mutated by this operation,
 // as it may still be referenced by other layers.
-func (s *stateSet) merge(other *stateSet) {
+//
+// It returns the number of accounts and storage slots merged, for per-block
+// diagnostics.
+func (s *stateSet) merge(other *stateSet) (int, int) {
 	var (
 		delta             int
 		accountOverwrites counter
@@ -245,7 +248,7 @@ func (s *stateSet) merge(other *stateSet) {
 	}
 	// Apply all the updated storage slots, parallelizing across accounts for
 	// large sets.
-	d, ow := s.mergeStorageData(other.storageData)
+	d, ow, slots := s.mergeStorageData(other.storageData)
 	delta += d
 	storageOverwrites.n += ow.n
 	storageOverwrites.size += ow.size
@@ -254,6 +257,8 @@ func (s *stateSet) merge(other *stateSet) {
 	storageOverwrites.report(gcStorageMeter, gcStorageBytesMeter)
 	s.clearLists()
 	s.updateSize(delta)
+
+	return len(other.accountData), slots
 }
 
 // storageDataWork is a per-account unit of the storage slot merge: it points at
@@ -295,13 +300,16 @@ func fillStorageData(items []storageDataWork) (int, counter) {
 }
 
 // mergeStorageData integrates the provided storage slots into the set, fanning
-// the per-account work out across goroutines for large sets.
-func (s *stateSet) mergeStorageData(storageData map[common.Hash]map[common.Hash][]byte) (int, counter) {
+// the per-account work out across goroutines for large sets. It also returns
+// the total number of storage slots merged.
+func (s *stateSet) mergeStorageData(storageData map[common.Hash]map[common.Hash][]byte) (int, counter, int) {
 	// Pass 1: ensure a destination slot map exists for every account. This is
 	// the only phase that mutates the top-level map and therefore runs single
 	// threaded; the per-account content copy is deferred to pass 2.
+	var count int
 	items := make([]storageDataWork, 0, len(storageData))
 	for accountHash, storage := range storageData {
+		count += len(storage)
 		current, exist := s.storageData[accountHash]
 		if !exist {
 			// Allocate a fresh map rather than claiming the incoming one: the
@@ -314,7 +322,8 @@ func (s *stateSet) mergeStorageData(storageData map[common.Hash]map[common.Hash]
 	}
 	// Small sets: skip the goroutine overhead.
 	if len(items) < parallelMergeThreshold {
-		return fillStorageData(items)
+		delta, overwrite := fillStorageData(items)
+		return delta, overwrite, count
 	}
 	// Pass 2: fill the destination slot maps in parallel. Each account is handled
 	// by exactly one worker and no worker touches the top-level map, so the only
@@ -334,7 +343,7 @@ func (s *stateSet) mergeStorageData(storageData map[common.Hash]map[common.Hash]
 		overwrite.n += overwrites[i].n
 		overwrite.size += overwrites[i].size
 	}
-	return delta, overwrite
+	return delta, overwrite, count
 }
 
 // revertTo takes the original value of accounts and storages as input and reverts

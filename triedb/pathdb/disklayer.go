@@ -457,14 +457,23 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	// Merge the trie nodes and flat states of the bottom-most diff layer into the
 	// buffer as the combined layer.
 	mergeStart := time.Now()
-	combined, nodesDur, statesDur := dl.buffer.commit(bottom.nodes.nodeSet, bottom.states.stateSet)
+	combined, mt := dl.buffer.commit(bottom.nodes.nodeSet, bottom.states.stateSet)
 	mergeDur := time.Since(mergeStart)
 	commitMergeTimer.Update(mergeDur)
-	commitMergeNodesTimer.Update(nodesDur)
-	commitMergeStatesTimer.Update(statesDur)
+	commitMergeNodesTimer.Update(mt.nodes)
+	commitMergeNodesAccountTimer.Update(mt.nodesAccount)
+	commitMergeNodesStorageTimer.Update(mt.nodesStorage)
+	commitMergeStatesTimer.Update(mt.states)
 	dl.db.cstats.merge += mergeDur
-	dl.db.cstats.mergeNodes += nodesDur
-	dl.db.cstats.mergeStates += statesDur
+	dl.db.cstats.mergeNodes += mt.nodes
+	dl.db.cstats.mergeNodesAccount += mt.nodesAccount
+	dl.db.cstats.mergeNodesStorage += mt.nodesStorage
+	dl.db.cstats.mergeStates += mt.states
+	dl.db.cstats.nodeOwners += mt.nodeOwners
+	dl.db.cstats.accountNodes += mt.accountNodes
+	dl.db.cstats.storageNodes += mt.storageNodes
+	dl.db.cstats.accounts += mt.accounts
+	dl.db.cstats.slots += mt.slots
 
 	// Terminate the background state snapshot generation before mutating the
 	// persistent state.
