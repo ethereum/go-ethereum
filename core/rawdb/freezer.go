@@ -351,6 +351,9 @@ func (f *Freezer) TruncateTail(group string, tail uint64) (uint64, error) {
 
 // SyncAncient flushes all data tables to disk.
 func (f *Freezer) SyncAncient() error {
+	f.writeLock.RLock()
+	defer f.writeLock.RUnlock()
+
 	var errs []error
 	for _, table := range f.tables {
 		if err := table.Sync(); err != nil {

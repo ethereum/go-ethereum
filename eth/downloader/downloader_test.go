@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -40,6 +41,7 @@ import (
 
 // downloadTester is a test simulator for mocking out local block chain.
 type downloadTester struct {
+	db         ethdb.Database
 	chain      *core.BlockChain
 	downloader *Downloader
 
@@ -77,6 +79,7 @@ func newTesterWithSnap(t *testing.T, mode ethconfig.SyncMode, success func(), sn
 		panic(err)
 	}
 	tester := &downloadTester{
+		db:    db,
 		chain: chain,
 		peers: make(map[string]*downloadTesterPeer),
 	}
@@ -680,6 +683,78 @@ func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 				t.Fatalf("Failed to sync chain in three seconds")
 			}
 		})
+	}
+}
+
+// TestBeaconSyncRepairFork verifies the end-to-end repair of non-canonical block
+// data. The local node sits on fork A, but fork B's blocks below the local head
+// are also present by hash (no canonical mapping), as if imported optimistically
+// via the engine API. When the beacon chain switches to fork B, sync must not
+// anchor on the non-canonical fork-B data; it has to descend to the real common
+// ancestor and re-deliver everything, ending with the full fork-B chain present
+// and canonical at every height - for both snap and full sync.
+func TestBeaconSyncRepairForkFull(t *testing.T) { testBeaconSyncRepairFork(t, eth.ETH69, FullSync) }
+func TestBeaconSyncRepairForkSnap(t *testing.T) { testBeaconSyncRepairFork(t, eth.ETH69, SnapSync) }
+
+func testBeaconSyncRepairFork(t *testing.T, protocol uint, mode SyncMode) {
+	// Reuse the pre-generated fork chains (new chains can't be generated after the
+	// package init). Fork A and fork B share the whole testChainBase prefix and
+	// diverge at height len(testChainBase.blocks); fork B (the beacon target) is
+	// longer, so it wins the reorg. The exact shortenings used here are the ones
+	// registered as peer chains during init.
+	localChain := testChainForkLightA.shorten(len(testChainBase.blocks) + 80)
+	targetChain := testChainForkLightB.shorten(len(testChainBase.blocks) + MaxHeaderFetch)
+
+	forkPoint := uint64(len(testChainBase.blocks)) // first height the forks differ
+	localHead := uint64(len(localChain.blocks) - 1)
+	targetHead := uint64(len(targetChain.blocks) - 1)
+
+	success := make(chan struct{})
+	tester := newTesterWithNotification(t, mode, func() {
+		close(success)
+	})
+	defer tester.terminate()
+
+	tester.newPeer("peer", protocol, targetChain.blocks[1:])
+
+	// Make fork A the local canonical chain.
+	if _, err := tester.chain.InsertChain(localChain.blocks[1 : localHead+1]); err != nil {
+		t.Fatalf("failed to build local chain: %v", err)
+	}
+	// Seed fork B's divergent blocks that sit below the local head as scattered,
+	// non-canonical data: full block data present by hash, but the canonical
+	// mapping at those heights still points at fork A.
+	for n := forkPoint; n <= localHead; n++ {
+		b := targetChain.blocks[n]
+		rawdb.WriteBlock(tester.db, b)
+		rawdb.WriteReceipts(tester.db, b.Hash(), b.NumberU64(), types.Receipts{})
+	}
+
+	if err := tester.downloader.BeaconSync(targetChain.blocks[targetHead].Header(), nil); err != nil {
+		t.Fatalf("failed to beacon-sync chain: %v", err)
+	}
+	select {
+	case <-success:
+	case <-time.NewTimer(10 * time.Second).C:
+		t.Fatalf("failed to sync chain in ten seconds")
+	}
+	// The head must reach fork B's tip.
+	if got := tester.chain.CurrentBlock().Number.Uint64(); got != targetHead {
+		t.Fatalf("synced head mismatch: have %d, want %d", got, targetHead)
+	}
+	// Every height must be canonical to fork B and carry complete block data,
+	// proving the non-canonical fork-A / seed data was fully reorged out.
+	for n := uint64(1); n <= targetHead; n++ {
+		want := targetChain.blocks[n].Hash()
+		if got := rawdb.ReadCanonicalHash(tester.db, n); got != want {
+			t.Fatalf("canonical hash at %d: have %x, want %x", n, got, want)
+		}
+		if !rawdb.HasHeader(tester.db, want, n) || !rawdb.HasBody(tester.db, want, n) {
+			t.Fatalf("incomplete block data at %d after sync", n)
+		}
+		if !rawdb.HasReceipts(tester.db, want, n) {
+			t.Fatalf("missing receipts at %d after sync", n)
+		}
 	}
 }
 
