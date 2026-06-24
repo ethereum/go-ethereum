@@ -17,7 +17,6 @@
 package core
 
 import (
-	"errors"
 	"math/big"
 	"testing"
 
@@ -192,15 +191,22 @@ func TestEIP2780NewAccountFunded(t *testing.T) {
 }
 
 // TestEIP2780InsufficientGasForCallCharge verifies that a value transfer
-// creating a new account is rejected when the gas limit only covers the 21,000
-// intrinsic base and not the additional new-account state gas charged before the
-// call executes.
+// creating a new account, whose gas limit only covers the 21,000 intrinsic base
+// and not the additional new-account state gas charged before the call executes,
+// halts out of gas. The transaction stays valid (no consensus error) but
+// execution fails and the recipient is not created.
 func TestEIP2780InsufficientGasForCallCharge(t *testing.T) {
 	fresh := common.HexToAddress("0xbeef000000000000000000000000000000000003")
 	sdb := mkState(senderAlloc(nil))
-	_, _, err := applyMsg(t, sdb, callTx(0, fresh, 1, 21_000, nil))
-	if !errors.Is(err, ErrEIP2780CallRecipientCharge) {
-		t.Fatalf("expected ErrEIP2780CallRecipientCharge, got %v", err)
+	res, _, err := applyMsg(t, sdb, callTx(0, fresh, 1, 21_000, nil))
+	if err != nil {
+		t.Fatalf("transaction should remain valid: %v", err)
+	}
+	if res.Err != vm.ErrOutOfGas {
+		t.Fatalf("expected out of gas, got %v", res.Err)
+	}
+	if res.UsedGas != 21_000 {
+		t.Fatalf("expected used gas, got %v", res.UsedGas)
 	}
 	if sdb.Exist(fresh) {
 		t.Fatal("recipient should not be created when the call charge cannot be paid")

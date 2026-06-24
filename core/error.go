@@ -81,10 +81,6 @@ var (
 	// than required for the data floor cost.
 	ErrFloorDataGas = errors.New("insufficient gas for floor data gas cost")
 
-	// ErrEIP2780CallRecipientCharge is returned if the transaction doesn't have
-	// sufficient gas to cover the cost of EIP-2780 call charge.
-	ErrEIP2780CallRecipientCharge = errors.New("insufficient gas for EIP-2780 call recipient charge")
-
 	// ErrTxTypeNotSupported is returned if a transaction is not supported in the
 	// current network configuration.
 	ErrTxTypeNotSupported = types.ErrTxTypeNotSupported
