@@ -739,7 +739,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 		// EIP-2780: charge the transaction's top-level recipient costs.
 		if rules.IsAmsterdam && !st.chargeCallRecipientEIP2780(value) {
-			return nil, fmt.Errorf("%w: address %v", ErrEIP2780CallCharge, msg.To.Hex())
+			return nil, fmt.Errorf("%w: address %v", ErrEIP2780CallRecipientCharge, msg.To.Hex())
 		}
 		// Execute the transaction's call.
 		ret, result, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining.ForwardAll(), value)

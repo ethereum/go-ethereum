@@ -199,8 +199,8 @@ func TestEIP2780InsufficientGasForCallCharge(t *testing.T) {
 	fresh := common.HexToAddress("0xbeef000000000000000000000000000000000003")
 	sdb := mkState(senderAlloc(nil))
 	_, _, err := applyMsg(t, sdb, callTx(0, fresh, 1, 21_000, nil))
-	if !errors.Is(err, ErrEIP2780CallCharge) {
-		t.Fatalf("expected ErrEIP2780CallCharge, got %v", err)
+	if !errors.Is(err, ErrEIP2780CallRecipientCharge) {
+		t.Fatalf("expected ErrEIP2780CallRecipientCharge, got %v", err)
 	}
 	if sdb.Exist(fresh) {
 		t.Fatal("recipient should not be created when the call charge cannot be paid")
