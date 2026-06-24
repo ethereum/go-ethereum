@@ -176,6 +176,7 @@ var (
 		utils.AllowUnprotectedTxs,
 		utils.BatchRequestLimit,
 		utils.BatchResponseMaxSize,
+		utils.HTTPBodyLimitFlag,
 		utils.RPCTxSyncDefaultTimeoutFlag,
 		utils.RPCTxSyncMaxTimeoutFlag,
 		utils.RPCGlobalRangeLimitFlag,
