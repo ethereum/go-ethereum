@@ -82,7 +82,11 @@ func (tt *TransactionTest) Run() error {
 			return
 		}
 		// Intrinsic cost
-		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), sender, tx.To(), uint256.MustFromBig(tx.Value()), rules, params.CostPerStateByte)
+		value, overflow := uint256.FromBig(tx.Value())
+		if overflow {
+			return sender, hash, 0, errors.New("value exceeds 256 bits")
+		}
+		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), sender, tx.To(), value, rules, params.CostPerStateByte)
 		if err != nil {
 			return
 		}

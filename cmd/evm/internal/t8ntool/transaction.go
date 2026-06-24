@@ -133,8 +133,14 @@ func Transaction(ctx *cli.Context) error {
 			r.Address = sender
 		}
 		// Check intrinsic gas
+		value, overflow := uint256.FromBig(tx.Value())
+		if overflow {
+			// A 256-bit overflow is reported by the field validation below; use a
+			// non-zero placeholder so intrinsic gas is still computed and reported.
+			value = uint256.NewInt(1)
+		}
 		rules := chainConfig.Rules(common.Big0, true, 0)
-		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), r.Address, tx.To(), uint256.MustFromBig(tx.Value()), rules, params.CostPerStateByte)
+		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), r.Address, tx.To(), value, rules, params.CostPerStateByte)
 		if err != nil {
 			r.Error = err
 			results = append(results, r)

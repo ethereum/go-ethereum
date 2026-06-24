@@ -125,9 +125,14 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	if tx.Nonce()+1 < tx.Nonce() {
 		return core.ErrNonceMax
 	}
+	// Sanity check for extremely large numbers (supported by RLP or RPC)
+	value, overflow := uint256.FromBig(tx.Value())
+	if overflow {
+		return core.ErrInsufficientFunds
+	}
 	// Ensure the transaction has more gas than the bare minimum needed to cover
 	// the transaction metadata
-	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), from, tx.To(), uint256.MustFromBig(tx.Value()), rules, params.CostPerStateByte)
+	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), from, tx.To(), value, rules, params.CostPerStateByte)
 	if err != nil {
 		return err
 	}
