@@ -543,6 +543,8 @@ type BlobPool struct {
 	stored uint64         // Useful data size of all transactions on disk
 	limbo  *limbo         // Persistent data store for the non-finalized blobs
 
+	cQueue *conversionQueue
+
 	gapped       map[common.Address][]*BlobTxForPool // Transactions that are currently gapped (nonce too high)
 	gappedSource map[common.Hash]common.Address      // Source of gapped transactions to allow rechecking on inclusion
 
@@ -642,11 +644,14 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	)
 	index := func(id uint64, size uint32, blob []byte) {
 		err := p.parseTransaction(id, size, blob)
-		if err != nil {
-			toDelete = append(toDelete, id)
-		}
+		// Transactions in legacy format will be queued for cell computation.
+		// This entry will be swapped from the store after the conversion.
 		if errors.Is(err, errLegacyTx) {
 			convertTxs = append(convertTxs, id)
+			return
+		}
+		if err != nil {
+			toDelete = append(toDelete, id)
 		}
 	}
 	store, err := billy.Open(billy.Options{Path: queuedir, Repair: true}, slotter, index)
@@ -655,52 +660,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	}
 	p.store = store
 
-	// Migrate legacy transactions (types.Transaction) to pooledBlobTx format.
-	if len(convertTxs) > 0 {
-		for _, id := range convertTxs {
-			var tx types.Transaction
-			data, err := p.store.Get(id)
-			if err != nil {
-				continue
-			}
-			err = rlp.DecodeBytes(data, &tx)
-			if err != nil {
-				continue
-			}
-			if tx.BlobTxSidecar() == nil {
-				continue
-			}
-			ptx, err := newBlobTxForPool(&tx)
-			// Note that we skip errors here.
-			// Just like parseTransaction failure does not abort the blobpool creation,
-			// conversion process also cannot abort the entire process.
-			if err != nil {
-				log.Error("Failed to convert legacy tx to pooledBlobTx", "hash", tx.Hash(), "err", err)
-				continue
-			}
-			blob, err := rlp.EncodeToBytes(ptx)
-			if err != nil {
-				continue
-			}
-			id, err := p.store.Put(blob)
-			if err != nil {
-				continue
-			}
-			meta := newBlobTxMeta(id, p.store.Size(id), ptx)
-
-			// If the newly inserted transaction fails to be tracked,
-			// it should also be removed with those in `toDelete`
-			sender, err := types.Sender(p.signer, ptx.Tx)
-			if err != nil {
-				toDelete = append(toDelete, id)
-				continue
-			}
-			if err := p.trackTransaction(meta, sender); err != nil {
-				toDelete = append(toDelete, id)
-				continue
-			}
-		}
-	}
+	p.cQueue = newConversionQueue()
 
 	if len(toDelete) > 0 {
 		log.Warn("Dropping invalidated blob transactions", "ids", toDelete)
@@ -744,7 +704,8 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 
 	// Pool initialized, attach the blob limbo to it to track blobs included
 	// recently but not yet finalized
-	p.limbo, err = newLimbo(p.chain.Config(), limbodir)
+	var convertLimbo []uint64
+	p.limbo, convertLimbo, err = newLimbo(p.chain.Config(), limbodir)
 	if err != nil {
 		p.Close()
 		return err
@@ -763,12 +724,22 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	// Update the metrics and return the constructed pool
 	datacapGauge.Update(int64(p.config.Datacap))
 	p.updateStorageMetrics()
+
+	if len(convertTxs) > 0 {
+		p.cQueue.launchConversion(func() { p.convertLegacyTxs(convertTxs) })
+	}
+	if len(convertLimbo) > 0 {
+		p.cQueue.launchConversion(func() { p.convertLegacyLimbo(convertLimbo) })
+	}
 	return nil
 }
 
 // Close closes down the underlying persistent store.
 func (p *BlobPool) Close() error {
 	var errs []error
+	if p.cQueue != nil {
+		p.cQueue.close()
+	}
 	if p.limbo != nil { // Close might be invoked due to error in constructor, before p,limbo is set
 		if err := p.limbo.Close(); err != nil {
 			errs = append(errs, err)
@@ -815,6 +786,91 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 		return err
 	}
 	return p.trackTransaction(meta, sender)
+}
+
+func (p *BlobPool) convertLegacyTxs(ids []uint64) {
+	start := time.Now()
+	var converted, discarded int
+
+	for _, id := range ids {
+		p.lock.Lock()
+		data, err := p.store.Get(id)
+		if err != nil {
+			p.lock.Unlock()
+			continue
+		}
+		if derr := p.store.Delete(id); derr != nil {
+			log.Error("Failed to delete legacy blob tx", "id", id, "err", derr)
+			p.lock.Unlock()
+			continue
+		}
+		p.lock.Unlock()
+		var tx types.Transaction
+		if err := rlp.DecodeBytes(data, &tx); err != nil {
+			log.Error("Failed to decode legacy blob tx", "id", id, "err", err)
+			continue
+		}
+		ptx, err := newBlobTxForPool(&tx)
+		if err != nil {
+			log.Error("Failed to convert legacy blob tx", "hash", tx.Hash(), "err", err)
+			continue
+		}
+		if err := p.AddPooledTx(ptx); err != nil {
+			log.Debug("Discarded converted blob tx", "hash", tx.Hash(), "err", err)
+			discarded++
+		} else {
+			converted++
+		}
+	}
+
+	log.Info("Completed blob transaction conversion", "converted", converted, "discarded", discarded, "elapsed", common.PrettyDuration(time.Since(start)))
+}
+
+func (p *BlobPool) convertLegacyLimbo(ids []uint64) {
+	start := time.Now()
+	var converted, discarded int
+
+	for _, id := range ids {
+		p.lock.Lock()
+		data, err := p.limbo.store.Get(id)
+		if err != nil {
+			p.lock.Unlock()
+			continue
+		}
+		if derr := p.limbo.store.Delete(id); derr != nil {
+			log.Error("Failed to delete legacy blob tx", "id", id, "err", derr)
+			p.lock.Unlock()
+			continue
+		}
+		p.lock.Unlock()
+		var legacy struct {
+			TxHash common.Hash
+			Block  uint64
+			Tx     *types.Transaction
+		}
+		if err := rlp.DecodeBytes(data, &legacy); err != nil {
+			log.Error("Failed to decode legacy limbo entry", "id", id, "err", err)
+			continue
+		}
+		if legacy.Tx == nil || legacy.Tx.BlobTxSidecar() == nil {
+			continue
+		}
+		ptx, err := newBlobTxForPool(legacy.Tx)
+		if err != nil {
+			log.Error("Failed to convert legacy limbo entry", "hash", legacy.TxHash, "err", err)
+			continue
+		}
+		p.lock.Lock()
+		if err := p.limbo.setAndIndex(ptx, legacy.Block); err != nil {
+			log.Error("Failed to re-store converted limbo entry", "hash", legacy.TxHash, "err", err)
+			discarded++
+		} else {
+			converted++
+		}
+		p.lock.Unlock()
+	}
+
+	log.Info("Completed limbo blob conversion", "converted", converted, "discarded", discarded, "elapsed", common.PrettyDuration(time.Since(start)))
 }
 
 // trackTransaction registers a transaction's metadata in the pool's indices.
@@ -1904,7 +1960,7 @@ func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 		if errs[i] = p.ValidateTxBasics(tx); errs[i] != nil {
 			continue
 		}
-		ptx, err := newBlobTxForPool(tx)
+		ptx, err := p.cQueue.convert(tx)
 		if err != nil {
 			errs[i] = err
 			continue

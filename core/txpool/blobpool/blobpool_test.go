@@ -31,6 +31,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
@@ -1334,6 +1335,14 @@ func TestLegacyTxConversion(t *testing.T) {
 	}
 	defer pool.Close()
 
+	deadline := time.Now().Add(30 * time.Second)
+	for pool.Get(tx1.Hash()) == nil || pool.Get(tx2.Hash()) == nil {
+		if time.Now().After(deadline) {
+			t.Fatalf("legacy txs were not converted in time")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
 	// Both transactions should be retrievable.
 	for _, want := range []*types.Transaction{tx1, tx2} {
 		got := pool.Get(want.Hash())
@@ -1357,6 +1366,75 @@ func TestLegacyTxConversion(t *testing.T) {
 	})
 
 	verifyPoolInternals(t, pool)
+}
+
+func TestLegacyLimboConversion(t *testing.T) {
+	storage := t.TempDir()
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	limbodir := filepath.Join(storage, limboedTransactionStore)
+	os.MkdirAll(limbodir, 0700)
+
+	key, _ := crypto.GenerateKey()
+	tx := makeMultiBlobTx(0, 1, 1000, 100, 2, 0, key)
+
+	store, err := billy.Open(billy.Options{Path: limbodir}, newSlotterEIP7594(testMaxBlobsPerBlock), nil)
+	if err != nil {
+		t.Fatalf("failed to open limbo billy: %v", err)
+	}
+	data, err := rlp.EncodeToBytes(&struct {
+		TxHash common.Hash
+		Block  uint64
+		Tx     *types.Transaction
+	}{TxHash: tx.Hash(), Block: 42, Tx: tx})
+	if err != nil {
+		t.Fatalf("failed to legacy-encode limbo entry: %v", err)
+	}
+	if _, err := store.Put(data); err != nil {
+		t.Fatalf("failed to put legacy limbo entry: %v", err)
+	}
+	store.Close()
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.Commit(0, true, false)
+	chain := &testBlockChain{
+		config:  params.MainnetChainConfig,
+		basefee: uint256.NewInt(params.InitialBaseFee),
+		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+	defer pool.Close()
+
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		pool.lock.RLock()
+		_, ok := pool.limbo.index[tx.Hash()]
+		pool.lock.RUnlock()
+		if ok {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("legacy limbo entry was not converted in time")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	pool.lock.Lock()
+	ptx, err := pool.limbo.pull(tx.Hash())
+	pool.lock.Unlock()
+	if err != nil {
+		t.Fatalf("failed to pull converted limbo entry: %v", err)
+	}
+	full, err := ptx.toTx()
+	if err != nil {
+		t.Fatalf("failed to reconstruct tx from converted limbo entry: %v", err)
+	}
+	if full.Hash() != tx.Hash() {
+		t.Fatalf("converted limbo tx hash mismatch: have %s, want %s", full.Hash(), tx.Hash())
+	}
 }
 
 // TestBlobCountLimit tests the blobpool enforced limits on the max blob count.
