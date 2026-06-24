@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // TransactionTest checks RLP decoding and sender derivation of transactions.
@@ -81,7 +82,7 @@ func (tt *TransactionTest) Run() error {
 			return
 		}
 		// Intrinsic cost
-		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules, params.CostPerStateByte)
+		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), sender, tx.To(), uint256.MustFromBig(tx.Value()), rules, params.CostPerStateByte)
 		if err != nil {
 			return
 		}

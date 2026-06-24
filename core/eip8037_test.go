@@ -191,7 +191,7 @@ var (
 
 // A creation tx's intrinsic gas pre-charges one account creation as state gas.
 func TestCreateTxIntrinsicChargesAccountUnconditionally(t *testing.T) {
-	cost, err := IntrinsicGas(nil, nil, nil, true, rules8037, params.CostPerStateByte)
+	cost, err := IntrinsicGas(nil, nil, nil, common.Address{}, nil, nil, rules8037, params.CostPerStateByte)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +325,7 @@ func clearSlots(addr common.Address, n int) (types.GenesisAlloc, []byte) {
 // tx_gas_used_before_refund (peak) exceeds the post-refund gas used.
 func TestGasUsedBeforeRefund(t *testing.T) {
 	c := common.HexToAddress("0xc1ea0")
-	alloc, _ := clearSlots(c, 1)
+	alloc, _ := clearSlots(c, 4)
 	res, _, err := applyMsg(t, mkState(senderAlloc(alloc)), callTx(0, c, 0, 1_000_000, nil))
 	if err != nil {
 		t.Fatal(err)
@@ -474,7 +474,7 @@ var delegate8037 = common.HexToAddress("0xde1e8a7e")
 
 // Intrinsic gas pre-charges the worst-case (account + indicator) per auth.
 func TestAuthIntrinsicWorstCase(t *testing.T) {
-	cost, err := IntrinsicGas(nil, nil, []types.SetCodeAuthorization{{}}, false, rules8037, params.CostPerStateByte)
+	cost, err := IntrinsicGas(nil, nil, []types.SetCodeAuthorization{{}}, common.Address{}, &delegate8037, nil, rules8037, params.CostPerStateByte)
 	if err != nil {
 		t.Fatal(err)
 	}

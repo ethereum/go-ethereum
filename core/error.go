@@ -66,11 +66,6 @@ var (
 	// have enough funds for transfer(topmost call only).
 	ErrInsufficientFundsForTransfer = errors.New("insufficient funds for transfer")
 
-	// ErrInsufficientBalanceWitness is returned if the transaction sender has enough
-	// funds to cover the transfer, but not enough to pay for witness access/modification
-	// costs for the transaction
-	ErrInsufficientBalanceWitness = errors.New("insufficient funds to cover witness access costs for transaction")
-
 	// ErrInsufficientFunds is returned if the total cost of executing a transaction
 	// is higher than the balance of the user's account.
 	ErrInsufficientFunds = errors.New("insufficient funds for gas * price + value")
@@ -85,6 +80,10 @@ var (
 	// ErrFloorDataGas is returned if the transaction is specified to use less gas
 	// than required for the data floor cost.
 	ErrFloorDataGas = errors.New("insufficient gas for floor data gas cost")
+
+	// ErrEIP2780CallCharge is returned if the transaction doesn't have sufficient
+	// gas to cover the cost of EIP-2780 call charge.
+	ErrEIP2780CallCharge = errors.New("insufficient gas for EIP-2780 call charge")
 
 	// ErrTxTypeNotSupported is returned if a transaction is not supported in the
 	// current network configuration.

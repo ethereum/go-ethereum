@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
+	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
 )
 
@@ -133,7 +134,7 @@ func Transaction(ctx *cli.Context) error {
 		}
 		// Check intrinsic gas
 		rules := chainConfig.Rules(common.Big0, true, 0)
-		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules, params.CostPerStateByte)
+		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), r.Address, tx.To(), uint256.MustFromBig(tx.Value()), rules, params.CostPerStateByte)
 		if err != nil {
 			r.Error = err
 			results = append(results, r)

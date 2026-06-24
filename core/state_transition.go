@@ -68,16 +68,15 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation bool, rules params.Rules, costPerStateByte uint64) (vm.GasCosts, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, from common.Address, to *common.Address, value *uint256.Int, rules params.Rules, costPerStateByte uint64) (vm.GasCosts, error) {
+	isContractCreation := to == nil
+
 	// Set the starting gas for the raw transaction
 	var gas vm.GasCosts
-	if isContractCreation && rules.IsHomestead {
-		if rules.IsAmsterdam {
-			gas.RegularGas = params.TxGas + params.CreateGasAmsterdam
-			gas.StateGas = params.AccountCreationSize * costPerStateByte
-		} else {
-			gas.RegularGas = params.TxGasContractCreation
-		}
+	if rules.IsAmsterdam {
+		gas = intrinsicBaseGasEIP2780(from, to, value, costPerStateByte)
+	} else if isContractCreation && rules.IsHomestead {
+		gas.RegularGas = params.TxGasContractCreation
 	} else {
 		gas.RegularGas = params.TxGas
 	}
@@ -149,6 +148,39 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 		}
 	}
 	return gas, nil
+}
+
+// intrinsicBaseGasEIP2780 computes the EIP-2780 intrinsic base cost.
+func intrinsicBaseGasEIP2780(from common.Address, to *common.Address, value *uint256.Int, costPerStateByte uint64) vm.GasCosts {
+	var (
+		isContractCreation = to == nil
+		isSelfTransfer     = to != nil && *to == from
+		hasValue           = value != nil && !value.IsZero()
+	)
+	// tx.sender: signature recovery plus the sender account access and write.
+	gas := vm.GasCosts{RegularGas: params.TxBaseCost2780}
+
+	// tx.to charge.
+	switch {
+	case isSelfTransfer:
+		// The recipient account is already accessed and written as the sender.
+	case isContractCreation:
+		gas.RegularGas += params.CreateAccess2780
+		gas.StateGas += params.AccountCreationSize * costPerStateByte
+	default:
+		gas.RegularGas += params.ColdAccountAccess2780
+	}
+
+	// tx.value charge.
+	switch {
+	case !hasValue || isSelfTransfer:
+		// No transfer log and no recipient balance write.
+	case isContractCreation:
+		gas.RegularGas += params.TransferLogCost2780
+	default:
+		gas.RegularGas += params.TransferLogCost2780 + params.TxValueCost2780
+	}
+	return gas
 }
 
 // FloorDataGas computes the minimum gas required for a transaction based on its data tokens (EIP-7623).
@@ -614,7 +646,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		contractCreation = msg.To == nil
 		floorDataGas     uint64
 	)
-	cost, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules, st.evm.Context.CostPerStateByte)
+	cost, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, msg.From, msg.To, msg.Value, rules, st.evm.Context.CostPerStateByte)
 	if err != nil {
 		return nil, err
 	}
@@ -705,6 +737,10 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		if addr, ok := types.ParseDelegation(st.state.GetCode(*msg.To)); ok {
 			st.state.AddAddressToAccessList(addr)
 		}
+		// EIP-2780: charge the transaction's top-level recipient costs.
+		if rules.IsAmsterdam && !st.chargeCallRecipientEIP2780(value) {
+			return nil, fmt.Errorf("%w: address %v", ErrEIP2780CallCharge, msg.To.Hex())
+		}
 		// Execute the transaction's call.
 		ret, result, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining.ForwardAll(), value)
 		st.gasRemaining.Absorb(result)
@@ -752,6 +788,39 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		Err:        vmerr,
 		ReturnData: ret,
 	}, nil
+}
+
+// chargeCallRecipientEIP2780 applies the EIP-2780 transaction top-level gas costs for
+// a message-call transaction, charged before any opcode executes:
+//
+//   - if the recipient is EIP-161 empty and the transaction carries value, charge
+//     for account creation.
+//
+//   - if the recipient is an EIP-7702 delegated account, resolving the delegation
+//     loads the target's code, charged an additional cold account access in
+//     regular gas.
+func (st *stateTransition) chargeCallRecipientEIP2780(value *uint256.Int) bool {
+	var (
+		cost vm.GasCosts
+		to   = *st.msg.To
+	)
+	if !value.IsZero() && st.state.Empty(to) {
+		cost.StateGas += params.AccountCreationSize * st.evm.Context.CostPerStateByte
+	}
+	if _, ok := types.ParseDelegation(st.state.GetCode(to)); ok {
+		cost.RegularGas += params.ColdAccountAccess2780
+	}
+	if cost == (vm.GasCosts{}) {
+		return true
+	}
+	prior, ok := st.gasRemaining.Charge(cost)
+	if !ok {
+		return false
+	}
+	if st.evm.Config.Tracer.HasGasHook() {
+		st.evm.Config.Tracer.EmitGasChange(prior.AsTracing(), st.gasRemaining.AsTracing(), tracing.GasChangeTxIntrinsicGas)
+	}
+	return true
 }
 
 // settleGas finalizes the per-tx gas accounting after EVM execution:

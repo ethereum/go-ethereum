@@ -88,10 +88,10 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		blockAccessList = bal.NewConstructionBlockAccessList()
 	)
 	defer evm.Release()
+
 	if jumpDestCache != nil {
 		evm.SetJumpDestCache(jumpDestCache)
 	}
-
 	// Run the pre-execution system calls
 	blockAccessList.Merge(PreExecution(ctx, block.BeaconRoot(), block.ParentHash(), config, evm, block.Number(), block.Time()))
 
