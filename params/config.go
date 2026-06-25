@@ -1198,6 +1198,11 @@ func (c *ChainConfig) BlobConfig(fork forks.Fork) *BlobConfig {
 func (c *ChainConfig) ActiveSystemContracts(time uint64) map[string]common.Address {
 	fork := c.LatestFork(time)
 	active := make(map[string]common.Address)
+	if fork >= forks.Amsterdam {
+		// EIP-8282 - Builder Execution Requests
+		active["BUILDER_DEPOSIT_CONTRACT_ADDRESS"] = BuilderDepositAddress
+		active["BUILDER_EXIT_CONTRACT_ADDRESS"] = BuilderExitAddress
+	}
 	if fork >= forks.Osaka {
 		// no new system contracts
 	}
