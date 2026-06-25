@@ -938,12 +938,9 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 		evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
 		evm.StateDB.AddBalance(beneficiary, balance, tracing.BalanceIncreaseSelfdestruct)
 	}
-	if evm.chainRules.IsAmsterdam && !balance.IsZero() {
-		if this != beneficiary {
-			evm.StateDB.AddLog(types.EthTransferLog(this, beneficiary, balance))
-		} else if newContract {
-			evm.StateDB.AddLog(types.EthBurnLog(this, balance))
-		}
+	// EIP-7708: emit a transfer log when value moves to a distinct beneficiary.
+	if evm.chainRules.IsAmsterdam && !balance.IsZero() && this != beneficiary {
+		evm.StateDB.AddLog(types.EthTransferLog(this, beneficiary, balance))
 	}
 
 	if tracer := evm.Config.Tracer; tracer != nil {
