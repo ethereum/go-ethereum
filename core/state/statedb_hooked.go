@@ -230,10 +230,6 @@ func (s *hookedStateDB) AddLog(log *types.Log) {
 	}
 }
 
-func (s *hookedStateDB) LogsForBurnAccounts() []*types.Log {
-	return s.inner.LogsForBurnAccounts()
-}
-
 func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccessList {
 	if s.hooks.OnBalanceChange == nil && s.hooks.OnNonceChangeV2 == nil && s.hooks.OnNonceChange == nil && s.hooks.OnCodeChangeV2 == nil && s.hooks.OnCodeChange == nil {
 		// Short circuit if no relevant hooks are set.
@@ -256,18 +252,24 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlock
 		return bytes.Compare(selfDestructedAddrs[i][:], selfDestructedAddrs[j][:]) < 0
 	})
 
+	// EIP-8246 (Amsterdam) removes the SELFDESTRUCT burn: a self-destructed
+	// account that retains a non-zero balance is preserved as a balance-only
+	// account rather than removed, so its balance is no longer burnt.
+	burnsBalance := s.inner.stateAccessList == nil
+
 	for _, addr := range selfDestructedAddrs {
 		obj := s.inner.stateObjects[addr]
 		// Bingo: state object was self-destructed, call relevant hooks.
 
-		// If ether was sent to account post-selfdestruct, record as burnt.
-		if s.hooks.OnBalanceChange != nil {
+		if burnsBalance && s.hooks.OnBalanceChange != nil {
 			if bal := obj.Balance(); bal.Sign() != 0 {
 				s.hooks.OnBalanceChange(addr, bal.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
 			}
 		}
 
 		// Nonce is set to reset on self-destruct.
+		//
+		// TODO(rjl) shall we emit the nonce change if the pre-tx nonce was zero?
 		if s.hooks.OnNonceChangeV2 != nil {
 			s.hooks.OnNonceChangeV2(addr, obj.Nonce(), 0, tracing.NonceChangeSelfdestruct)
 		} else if s.hooks.OnNonceChange != nil {
