@@ -74,21 +74,22 @@ func TestFloorDataGas(t *testing.T) {
 		{
 			name:      "amsterdam/empty",
 			amsterdam: true,
-			want:      params.TxGas,
+			// EIP-2780 anchors the floor to the reduced base cost.
+			want: params.TxBaseCost2780,
 		},
 		{
 			name:      "amsterdam/data-only",
 			amsterdam: true,
 			data:      bytes.Repeat([]byte{0x00}, 1024),
 			// post-amsterdam: every byte = 4 tokens regardless of value
-			want: params.TxGas + 1024*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976,
+			want: params.TxBaseCost2780 + 1024*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976,
 		},
 		{
 			name:      "amsterdam/data-non-zero",
 			amsterdam: true,
 			data:      bytes.Repeat([]byte{0xff}, 1024),
 			// same as zero data post-amsterdam
-			want: params.TxGas + 1024*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976,
+			want: params.TxBaseCost2780 + 1024*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976,
 		},
 		{
 			name:      "amsterdam/access-list-addresses-only",
@@ -98,7 +99,7 @@ func TestFloorDataGas(t *testing.T) {
 				{Address: addr2},
 			},
 			// 2 * 20 bytes * 4 tokens/byte * 16 cost/token
-			want: params.TxGas + 2*common.AddressLength*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976,
+			want: params.TxBaseCost2780 + 2*common.AddressLength*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976,
 		},
 		{
 			name:      "amsterdam/access-list-with-storage-keys",
@@ -107,7 +108,7 @@ func TestFloorDataGas(t *testing.T) {
 				{Address: addr1, StorageKeys: []common.Hash{key1, key2}},
 			},
 			// 1 addr * 20 * 4 + 2 keys * 32 * 4 = 80 + 256 = 336 tokens * 16
-			want: params.TxGas + (1*common.AddressLength+2*common.HashLength)*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976,
+			want: params.TxBaseCost2780 + (1*common.AddressLength+2*common.HashLength)*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976,
 		},
 		{
 			name:      "amsterdam/mixed",
@@ -118,7 +119,7 @@ func TestFloorDataGas(t *testing.T) {
 				{Address: addr2, StorageKeys: []common.Hash{key1, key2}},
 			},
 			// data: 100*4 = 400; addrs: 2*20*4 = 160; keys: 3*32*4 = 384; total = 944 * 16
-			want: params.TxGas + (100*params.TxTokenPerNonZeroByte+2*common.AddressLength*params.TxTokenPerNonZeroByte+3*common.HashLength*params.TxTokenPerNonZeroByte)*params.TxCostFloorPerToken7976,
+			want: params.TxBaseCost2780 + (100*params.TxTokenPerNonZeroByte+2*common.AddressLength*params.TxTokenPerNonZeroByte+3*common.HashLength*params.TxTokenPerNonZeroByte)*params.TxCostFloorPerToken7976,
 		},
 	}
 	for _, tt := range tests {
