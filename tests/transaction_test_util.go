@@ -97,7 +97,7 @@ func (tt *TransactionTest) Run() error {
 
 		if rules.IsPrague {
 			var floorDataGas uint64
-			floorDataGas, err = core.FloorDataGas(rules, tx.Data(), tx.AccessList())
+			floorDataGas, err = core.FloorDataGas(rules, sender, tx.To(), value, tx.Data(), tx.AccessList())
 			if err != nil {
 				return
 			}

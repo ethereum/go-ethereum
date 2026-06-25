@@ -351,8 +351,8 @@ func TestRefundCappedAt20Percent(t *testing.T) {
 // The EIP-7623 calldata floor is applied after the refund.
 func TestRefundCalldataFloorAfterRefund(t *testing.T) {
 	data := make([]byte, 1000) // all-zero calldata: floor dominates a bare call
-	floor, _ := FloorDataGas(rules8037, data, nil)
 	to := common.HexToAddress("0xeeee")
+	floor, _ := FloorDataGas(rules8037, senderAddr, &to, new(uint256.Int), data, nil)
 	res, _, err := applyMsg(t, mkState(senderAlloc(nil)), callTx(0, to, 0, 1_000_000, data))
 	if err != nil {
 		t.Fatal(err)
@@ -367,7 +367,7 @@ func TestRefundFloorNegatesRefund(t *testing.T) {
 	c := common.HexToAddress("0xc1ea1")
 	alloc, _ := clearSlots(c, 1)
 	data := make([]byte, 1000)
-	floor, _ := FloorDataGas(rules8037, data, nil)
+	floor, _ := FloorDataGas(rules8037, senderAddr, &c, new(uint256.Int), data, nil)
 	res, _, err := applyMsg(t, mkState(senderAlloc(alloc)), callTx(0, c, 0, 1_000_000, data))
 	if err != nil {
 		t.Fatal(err)

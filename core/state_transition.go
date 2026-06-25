@@ -74,7 +74,11 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 	// Set the starting gas for the raw transaction
 	var gas vm.GasCosts
 	if rules.IsAmsterdam {
-		gas = intrinsicBaseGasEIP2780(from, to, value, costPerStateByte)
+		gas.RegularGas = intrinsicBaseGasEIP2780(from, to, value)
+		if isContractCreation {
+			// New-account creation is charged as state gas (EIP-8037).
+			gas.StateGas = params.AccountCreationSize * costPerStateByte
+		}
 	} else if isContractCreation && rules.IsHomestead {
 		gas.RegularGas = params.TxGasContractCreation
 	} else {
@@ -150,25 +154,25 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 	return gas, nil
 }
 
-// intrinsicBaseGasEIP2780 computes the EIP-2780 intrinsic base cost.
-func intrinsicBaseGasEIP2780(from common.Address, to *common.Address, value *uint256.Int, costPerStateByte uint64) vm.GasCosts {
+// intrinsicBaseGasEIP2780 computes the regular-gas portion of the EIP-2780
+// intrinsic base cost: the per-resource decomposition of the legacy flat 21,000.
+func intrinsicBaseGasEIP2780(from common.Address, to *common.Address, value *uint256.Int) uint64 {
 	var (
 		isContractCreation = to == nil
 		isSelfTransfer     = to != nil && *to == from
 		hasValue           = value != nil && !value.IsZero()
 	)
 	// tx.sender: signature recovery plus the sender account access and write.
-	gas := vm.GasCosts{RegularGas: params.TxBaseCost2780}
+	gas := params.TxBaseCost2780
 
 	// tx.to charge.
 	switch {
 	case isSelfTransfer:
 		// The recipient account is already accessed and written as the sender.
 	case isContractCreation:
-		gas.RegularGas += params.CreateAccess2780
-		gas.StateGas += params.AccountCreationSize * costPerStateByte
+		gas += params.CreateAccess2780
 	default:
-		gas.RegularGas += params.ColdAccountAccess2780
+		gas += params.ColdAccountAccess2780
 	}
 
 	// tx.value charge.
@@ -176,15 +180,15 @@ func intrinsicBaseGasEIP2780(from common.Address, to *common.Address, value *uin
 	case !hasValue || isSelfTransfer:
 		// No transfer log and no recipient balance write.
 	case isContractCreation:
-		gas.RegularGas += params.TransferLogCost2780
+		gas += params.TransferLogCost2780
 	default:
-		gas.RegularGas += params.TransferLogCost2780 + params.TxValueCost2780
+		gas += params.TransferLogCost2780 + params.TxValueCost2780
 	}
 	return gas
 }
 
 // FloorDataGas computes the minimum gas required for a transaction based on its data tokens (EIP-7623).
-func FloorDataGas(rules params.Rules, data []byte, accessList types.AccessList) (uint64, error) {
+func FloorDataGas(rules params.Rules, from common.Address, to *common.Address, value *uint256.Int, data []byte, accessList types.AccessList) (uint64, error) {
 	var (
 		tokens    uint64
 		tokenCost uint64
@@ -230,11 +234,12 @@ func FloorDataGas(rules params.Rules, data []byte, accessList types.AccessList) 
 		tokenCost = params.TxCostFloorPerToken
 	}
 
-	// The floor cost is anchored to the transaction base cost.
-	// EIP-2780 reduces this base cost.
+	// The floor is anchored to the transaction base cost. Under EIP-2780 that
+	// base is the per-resource decomposition (the same one used by the intrinsic
+	// gas), so the floor never undercuts the transaction's own base.
 	floorBase := params.TxGas
 	if rules.IsAmsterdam {
-		floorBase = params.TxBaseCost2780
+		floorBase = intrinsicBaseGasEIP2780(from, to, value)
 	}
 	// Check for overflow
 	if (math.MaxUint64-floorBase)/tokenCost < tokens {
@@ -667,7 +672,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// Validate the EIP-7623 calldata floor against the gas limit. The floor inflates
 	// the total gas usage at tx end, so the gas limit must be sufficient to cover that.
 	if rules.IsPrague {
-		floorDataGas, err = FloorDataGas(rules, msg.Data, msg.AccessList)
+		floorDataGas, err = FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
 		if err != nil {
 			return nil, err
 		}
