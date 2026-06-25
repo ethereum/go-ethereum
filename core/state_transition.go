@@ -230,10 +230,6 @@ func FloorDataGas(rules params.Rules, data []byte, accessList types.AccessList) 
 		tokenCost = params.TxCostFloorPerToken
 	}
 
-	// Check for overflow
-	if (math.MaxUint64-params.TxGas)/tokenCost < tokens {
-		return 0, ErrGasUintOverflow
-	}
 	// The floor cost is anchored to the transaction base cost.
 	// EIP-2780 reduces this base cost.
 	floorBase := params.TxGas
