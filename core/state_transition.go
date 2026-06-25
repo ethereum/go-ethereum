@@ -234,8 +234,18 @@ func FloorDataGas(rules params.Rules, data []byte, accessList types.AccessList) 
 	if (math.MaxUint64-params.TxGas)/tokenCost < tokens {
 		return 0, ErrGasUintOverflow
 	}
+	// The floor cost is anchored to the transaction base cost.
+	// EIP-2780 reduces this base cost.
+	floorBase := params.TxGas
+	if rules.IsAmsterdam {
+		floorBase = params.TxBaseCost2780
+	}
+	// Check for overflow
+	if (math.MaxUint64-floorBase)/tokenCost < tokens {
+		return 0, ErrGasUintOverflow
+	}
 	// Minimum gas required for a transaction based on its data tokens (EIP-7623).
-	return params.TxGas + tokens*tokenCost, nil
+	return floorBase + tokens*tokenCost, nil
 }
 
 // toWordSize returns the ceiled word size required for init code payment calculation.
