@@ -997,6 +997,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		name      string
 		timestamp *uint64
 		config    *BlobConfig
+		inherits  bool // fork introduces no blob params; inherits the latest prior fork's schedule
 	}{
 		{name: "cancun", timestamp: c.CancunTime, config: bsc.Cancun},
 		{name: "prague", timestamp: c.PragueTime, config: bsc.Prague},
@@ -1006,14 +1007,17 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "bpo3", timestamp: c.BPO3Time, config: bsc.BPO3},
 		{name: "bpo4", timestamp: c.BPO4Time, config: bsc.BPO4},
 		{name: "bpo5", timestamp: c.BPO5Time, config: bsc.BPO5},
-		{name: "amsterdam", timestamp: c.AmsterdamTime, config: bsc.Amsterdam},
+		// Amsterdam (EIP-7928 BAL) doesn't change blob parameters. The blob
+		// resolver (eip4844.latestBlobConfig) has no Amsterdam case and falls
+		// through to Osaka, so an explicit amsterdam blob entry isn't required.
+		{name: "amsterdam", timestamp: c.AmsterdamTime, config: bsc.Amsterdam, inherits: true},
 	} {
 		if cur.config != nil {
 			if err := cur.config.validate(); err != nil {
 				return fmt.Errorf("invalid chain configuration in blobSchedule for fork %q: %v", cur.name, err)
 			}
 		}
-		if cur.timestamp != nil {
+		if cur.timestamp != nil && !cur.inherits {
 			// If the fork is configured, a blob schedule must be defined for it.
 			if cur.config == nil {
 				return fmt.Errorf("invalid chain configuration: missing entry for fork %q in blobSchedule", cur.name)

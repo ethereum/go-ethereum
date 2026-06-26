@@ -294,14 +294,6 @@ func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 	}
 	if o.OverrideAmsterdam != nil {
 		cfg.AmsterdamTime = o.OverrideAmsterdam
-		// Amsterdam (EIP-7928 BAL) doesn't change blob parameters. When the
-		// bundled config has no amsterdam blobSchedule entry yet, inherit the
-		// most recent preceding fork's so CheckConfigForkOrder validates.
-		if cfg.BlobScheduleConfig != nil && cfg.BlobScheduleConfig.Amsterdam == nil {
-			if prev := latestBlobConfig(cfg.BlobScheduleConfig); prev != nil {
-				cfg.BlobScheduleConfig.Amsterdam = prev
-			}
-		}
 	}
 	if o.OverrideBPO1 != nil {
 		cfg.BPO1Time = o.OverrideBPO1
@@ -313,22 +305,6 @@ func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 		cfg.UBTTime = o.OverrideUBT
 	}
 	return cfg.CheckConfigForkOrder()
-}
-
-// latestBlobConfig returns the blob configuration of the most recent fork
-// defined in bs (scanning newest-first, excluding Amsterdam/UBT), or nil if none
-// is set. Used to give a newly-overridden fork sensible blob parameters.
-func latestBlobConfig(bs *params.BlobScheduleConfig) *params.BlobConfig {
-	for _, c := range []*params.BlobConfig{
-		bs.BPO5, bs.BPO4, bs.BPO3, bs.BPO2, bs.BPO1,
-		bs.Osaka, bs.Prague, bs.Cancun,
-	} {
-		if c != nil {
-			return c
-		}
-	}
-
-	return nil
 }
 
 // SetupGenesisBlock writes or updates the genesis block in db.
