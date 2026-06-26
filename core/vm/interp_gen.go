@@ -11,7 +11,7 @@ import (
 
 // execUntraced is the generated, tracing-free interpreter fast path. Hot,
 // fork-stable opcodes are inlined with their static gas and stack bounds baked
-// in. Fork-invariant cold ops (KECCAK256/MLOAD/MSTORE/MSTORE8) call their
+// in. Fork-invariant ops (KECCAK256/MLOAD/MSTORE/MSTORE8) call their
 // handler and gas functions directly by name. Everything fork-varying is
 // dispatched through the active per-fork table in the default case. EVM.Run
 // selects this path when no tracer is configured.
@@ -2041,6 +2041,7 @@ mainLoop:
 			stack.inner.data[stack.bottom+stack.size-2], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-2]
 			pc++
 			continue mainLoop
+
 		case SWAP2:
 			if sLen := stack.len(); sLen < 3 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 3}
@@ -2052,6 +2053,7 @@ mainLoop:
 			stack.inner.data[stack.bottom+stack.size-3], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-3]
 			pc++
 			continue mainLoop
+
 		case SWAP3:
 			if sLen := stack.len(); sLen < 4 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 4}
@@ -2063,6 +2065,7 @@ mainLoop:
 			stack.inner.data[stack.bottom+stack.size-4], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-4]
 			pc++
 			continue mainLoop
+
 		case SWAP4:
 			if sLen := stack.len(); sLen < 5 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 5}
@@ -2074,6 +2077,7 @@ mainLoop:
 			stack.inner.data[stack.bottom+stack.size-5], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-5]
 			pc++
 			continue mainLoop
+
 		case SWAP5:
 			if sLen := stack.len(); sLen < 6 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 6}
@@ -2085,6 +2089,7 @@ mainLoop:
 			stack.inner.data[stack.bottom+stack.size-6], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-6]
 			pc++
 			continue mainLoop
+
 		case SWAP6:
 			if sLen := stack.len(); sLen < 7 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 7}
@@ -2096,6 +2101,7 @@ mainLoop:
 			stack.inner.data[stack.bottom+stack.size-7], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-7]
 			pc++
 			continue mainLoop
+
 		case SWAP7:
 			if sLen := stack.len(); sLen < 8 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 8}
@@ -2107,6 +2113,7 @@ mainLoop:
 			stack.inner.data[stack.bottom+stack.size-8], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-8]
 			pc++
 			continue mainLoop
+
 		case SWAP8:
 			if sLen := stack.len(); sLen < 9 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 9}
@@ -2118,6 +2125,7 @@ mainLoop:
 			stack.inner.data[stack.bottom+stack.size-9], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-9]
 			pc++
 			continue mainLoop
+
 		case SWAP9:
 			if sLen := stack.len(); sLen < 10 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 10}
@@ -2129,6 +2137,7 @@ mainLoop:
 			stack.inner.data[stack.bottom+stack.size-10], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-10]
 			pc++
 			continue mainLoop
+
 		case SWAP10:
 			if sLen := stack.len(); sLen < 11 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 11}
@@ -2140,6 +2149,7 @@ mainLoop:
 			stack.inner.data[stack.bottom+stack.size-11], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-11]
 			pc++
 			continue mainLoop
+
 		case SWAP11:
 			if sLen := stack.len(); sLen < 12 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 12}
@@ -2151,6 +2161,7 @@ mainLoop:
 			stack.inner.data[stack.bottom+stack.size-12], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-12]
 			pc++
 			continue mainLoop
+
 		case SWAP12:
 			if sLen := stack.len(); sLen < 13 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 13}
@@ -2162,6 +2173,7 @@ mainLoop:
 			stack.inner.data[stack.bottom+stack.size-13], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-13]
 			pc++
 			continue mainLoop
+
 		case SWAP13:
 			if sLen := stack.len(); sLen < 14 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 14}
@@ -2173,6 +2185,7 @@ mainLoop:
 			stack.inner.data[stack.bottom+stack.size-14], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-14]
 			pc++
 			continue mainLoop
+
 		case SWAP14:
 			if sLen := stack.len(); sLen < 15 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 15}
@@ -2184,6 +2197,7 @@ mainLoop:
 			stack.inner.data[stack.bottom+stack.size-15], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-15]
 			pc++
 			continue mainLoop
+
 		case SWAP15:
 			if sLen := stack.len(); sLen < 16 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 16}
@@ -2195,6 +2209,7 @@ mainLoop:
 			stack.inner.data[stack.bottom+stack.size-16], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-16]
 			pc++
 			continue mainLoop
+
 		case SWAP16:
 			if sLen := stack.len(); sLen < 17 {
 				return nil, &ErrStackUnderflow{stackLen: sLen, required: 17}
@@ -2206,6 +2221,7 @@ mainLoop:
 			stack.inner.data[stack.bottom+stack.size-17], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-17]
 			pc++
 			continue mainLoop
+
 		default:
 			operation := table[op]
 			if sLen := stack.len(); sLen < operation.minStack {
