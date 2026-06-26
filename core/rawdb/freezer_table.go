@@ -993,15 +993,13 @@ func (t *freezerTable) getIndices(from, count uint64) ([]*indexEntry, error) {
 	if _, err := t.index.ReadAt(buffer, int64(from*indexEntrySize)); err != nil {
 		return nil, err
 	}
-	var (
-		indices []*indexEntry
-		offset  int
-	)
-	for i := from; i <= from+count; i++ {
+	indices := make([]*indexEntry, count+1)
+	offset := 0
+	for i := range indices {
 		index := new(indexEntry)
 		index.unmarshalBinary(buffer[offset:])
 		offset += indexEntrySize
-		indices = append(indices, index)
+		indices[i] = index
 	}
 	if from == 0 {
 		// Special case if we're reading the first item in the freezer. We assume that
