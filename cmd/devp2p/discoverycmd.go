@@ -1,0 +1,112 @@
+// Copyright 2026 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+
+package main
+
+import (
+	"errors"
+	"fmt"
+	"net"
+	"net/http"
+	"net/netip"
+	"slices"
+
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/urfave/cli/v2"
+)
+
+var (
+	discoveryCommand = &cli.Command{
+		Name:  "discovery",
+		Usage: "Node Discovery tools",
+		Subcommands: []*cli.Command{
+			discoveryListenCommand,
+		},
+	}
+	discoveryListenCommand = &cli.Command{
+		Name:   "listen",
+		Usage:  "Runs a discovery node speaking all supported protocol versions on one UDP port",
+		Action: discoveryListen,
+		Flags: slices.Concat(discoveryNodeFlags, []cli.Flag{
+			httpAddrFlag,
+		}),
+	}
+)
+
+func discoveryListen(ctx *cli.Context) error {
+	ln, config := makeDiscoveryConfig(ctx)
+	socket := listen(ctx, ln)
+
+	// v4 is the primary listener on the real socket and forwards packets it
+	// can't parse to v5 via the unhandled channel.
+	unhandled := make(chan discover.ReadPacket, 100)
+	config.Unhandled = unhandled
+	v4, err := discover.ListenV4(socket, ln, config)
+	if err != nil {
+		exit(err)
+	}
+	config.Unhandled = nil
+	v5, err := discover.ListenV5(&sharedUDPConn{socket, unhandled}, ln, config)
+	if err != nil {
+		exit(err)
+	}
+	// Close v4 before v5: when sharing the socket, v5's read loop only unblocks
+	// once v4 closes the underlying socket and the unhandled channel.
+	defer func() {
+		v4.Close()
+		v5.Close()
+	}()
+
+	// v4 and v5 share the same local node, so this is the single record both announce.
+	fmt.Println(ln.Node())
+
+	httpAddr := ctx.String(httpAddrFlag.Name)
+	if httpAddr == "" {
+		select {}
+	}
+
+	srv := rpc.NewServer()
+	srv.RegisterName("discv4", &discv4API{v4})
+	srv.RegisterName("discv5", &discv5API{v5})
+	log.Info("Starting RPC API server", "addr", httpAddr)
+	http.DefaultServeMux.Handle("/", srv)
+	httpsrv := http.Server{Addr: httpAddr, Handler: http.DefaultServeMux}
+	return httpsrv.ListenAndServe()
+}
+
+// sharedUDPConn implements a shared connection, identical to the one used by
+// p2p.Server: reads return packets the primary v4 listener found unprocessable
+// and forwarded on the unhandled channel.
+type sharedUDPConn struct {
+	*net.UDPConn
+	unhandled chan discover.ReadPacket
+}
+
+func (s *sharedUDPConn) ReadFromUDPAddrPort(b []byte) (n int, addr netip.AddrPort, err error) {
+	packet, ok := <-s.unhandled
+	if !ok {
+		return 0, netip.AddrPort{}, errors.New("connection was closed")
+	}
+	l := min(len(packet.Data), len(b))
+	copy(b[:l], packet.Data[:l])
+	return l, packet.Addr, nil
+}
+
+func (s *sharedUDPConn) Close() error {
+	return nil
+}
