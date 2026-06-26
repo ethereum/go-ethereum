@@ -807,8 +807,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 // chargeCallRecipientEIP2780 applies the EIP-2780 transaction top-level gas costs for
 // a message-call transaction, charged before any opcode executes:
 //
-//   - if the recipient is EIP-161 empty and the transaction carries value, charge
-//     for account creation.
+//   - if the recipient is EIP-161 non-existent and the transaction carries value,
+//     charge for account creation.
 //
 //   - if the recipient is an EIP-7702 delegated account, resolving the delegation
 //     loads the target's code, charged an additional cold account access in
@@ -818,10 +818,18 @@ func (st *stateTransition) chargeCallRecipientEIP2780(value *uint256.Int) bool {
 		cost vm.GasCosts
 		to   = *st.msg.To
 	)
-	if !value.IsZero() && st.state.Empty(to) {
+	// This runs in the topmost frame before any bytecode executes, so unlike the
+	// execution-level checks which must use StateDB.Empty because SELFDESTRUCT can
+	// leave a transient EIP-161-empty account, no empty account can exist here, and
+	// !Exist is equivalent to Empty.
+	if !value.IsZero() && !st.state.Exist(to) {
 		cost.StateGas += params.AccountCreationSize * st.evm.Context.CostPerStateByte
 	}
 	if _, ok := types.ParseDelegation(st.state.GetCode(to)); ok {
+		// EIP-2780: The tx.sender, tx.to, and (where applicable) delegation-target
+		// charges above are always at the cold rate.
+		//
+		// The delegation-target is already warmed before, no double warming here.
 		cost.RegularGas += params.ColdAccountAccess2780
 	}
 	if cost == (vm.GasCosts{}) {
