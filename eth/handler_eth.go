@@ -33,6 +33,7 @@ type ethHandler handler
 
 func (h *ethHandler) Chain() *core.BlockChain { return h.chain }
 func (h *ethHandler) TxPool() eth.TxPool      { return h.txpool }
+func (h *ethHandler) BlobPool() eth.BlobPool  { return h.blobpool }
 
 // RunPeer is invoked when a peer joins on the `eth` protocol.
 func (h *ethHandler) RunPeer(peer *eth.Peer, hand eth.Handler) error {
@@ -58,8 +59,19 @@ func (h *ethHandler) AcceptTxs() bool {
 func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 	// Consume any broadcasts and announces, forwarding the rest to the downloader
 	switch packet := packet.(type) {
-	case *eth.NewPooledTransactionHashesPacket:
-		return h.txFetcher.Notify(peer.ID(), packet.Types, packet.Sizes, packet.Hashes)
+	case *eth.NewPooledTransactionHashesPacket72:
+		hashes, err := h.txFetcher.Notify(peer.ID(), packet.Types, packet.Sizes, packet.Hashes)
+		if err != nil {
+			return err
+		}
+		if len(hashes) != 0 {
+			return h.blobFetcher.Notify(peer.ID(), hashes, packet.Mask)
+		}
+		return nil
+
+	case *eth.NewPooledTransactionHashesPacket71:
+		_, err := h.txFetcher.Notify(peer.ID(), packet.Types, packet.Sizes, packet.Hashes)
+		return err
 
 	case *eth.TransactionsPacket:
 		txs, err := packet.Items()
@@ -69,7 +81,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		if err := handleTransactions(peer, txs, true); err != nil {
 			return fmt.Errorf("Transactions: %v", err)
 		}
-		return h.txFetcher.Enqueue(peer.ID(), txs, false)
+		return h.txFetcher.Enqueue(peer.ID(), peer.Version(), txs, false)
 
 	case *eth.PooledTransactionsPacket:
 		txs, err := packet.List.Items()
@@ -79,7 +91,10 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		if err := handleTransactions(peer, txs, false); err != nil {
 			return fmt.Errorf("PooledTransactions: %v", err)
 		}
-		return h.txFetcher.Enqueue(peer.ID(), txs, true)
+		return h.txFetcher.Enqueue(peer.ID(), peer.Version(), txs, true)
+
+	case *eth.CellsResponse:
+		return h.blobFetcher.Enqueue(peer.ID(), packet.Hashes, packet.Cells, packet.Mask)
 
 	default:
 		return fmt.Errorf("unexpected eth packet type: %T", packet)

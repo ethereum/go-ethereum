@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	topKTimeout     = 4 * time.Second
+	topKTimeout     = 1 * time.Second
 	hasBlobsTimeout = 1 * time.Second
 )
 
@@ -46,12 +46,14 @@ var (
 	// missing on the lower level (in this case, the blobpool). The amount that
 	// we failed to predict) can be calculated with the telemetry span
 	// (blobs.filled - cache.hit).
-	cacheHitMeter   = metrics.NewRegisteredMeter("blobpool/cache/hit", nil)
-	cacheMissMeter  = metrics.NewRegisteredMeter("blobpool/cache/miss", nil)
-	cacheBlobsGauge = metrics.NewRegisteredGauge("blobpool/cache/blobs", nil)
+	cacheHitMeter     = metrics.NewRegisteredMeter("blobpool/cache/hit", nil)
+	cacheMissMeter    = metrics.NewRegisteredMeter("blobpool/cache/miss", nil)
+	cacheEntriesGauge = metrics.NewRegisteredGauge("blobpool/cache/entries", nil)
 )
 
 type cachedBlob struct {
+	cell       []kzg4844.Cell
+	custody    types.CustodyBitmap
 	blob       *kzg4844.Blob
 	commitment kzg4844.Commitment
 	proofs     []kzg4844.Proof
@@ -74,11 +76,16 @@ type Cache struct {
 	mu      sync.Mutex
 	entries map[common.Hash]*cachedBlob
 
+	// needCell is owned by the loop goroutine; it is only read and written
+	// there, so it needs no synchronization. It is flipped on via enableCellCh.
+	needCell bool
+
 	// channels into loop
 	quit        chan struct{}
 	topkRequest chan struct{}
 	topkTimer   mclock.Timer
 	hasBlobsCh  chan []common.Hash // list of tx hashes that should be pinned
+	cellModeCh  chan bool          // signals the loop to switch cell mode on/offo
 
 	step func() // test hook fired after each loop iteration
 
@@ -103,6 +110,7 @@ func newCache(p *BlobPool, clock mclock.Clock, step func()) *Cache {
 		step:        step,
 		quit:        make(chan struct{}),
 		topkRequest: make(chan struct{}, 1),
+		cellModeCh:  make(chan bool, 1),
 	}
 
 	c.wg.Add(1)
@@ -197,13 +205,10 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 	c.mu.Lock()
 	for vhash, idxs := range indices {
 		n := len(idxs)
-
-		cached := c.entries[vhash]
-		if cached == nil || cached.version != version {
+		cached, ok := c.entries[vhash]
+		if !ok || cached.version != version || cached.blob == nil {
 			cacheMiss += n
-			if cached == nil {
-				misses = append(misses, vhash)
-			}
+			misses = append(misses, vhash)
 			continue
 		}
 		cacheHits += n
@@ -241,6 +246,82 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 	return blobs, commitments, proofs, nil
 }
 
+// GetCells returns cells for the given versioned blob hashes, filtered
+// by the requested cell indices (mask). Each entry in the result
+// corresponds to one vhash. Nil entries mean the cell was not available.
+// If the cell is not available in cache, it falls back to the blobpool.
+func (c *Cache) GetCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*kzg4844.Cell, [][]*kzg4844.Proof, error) {
+	var (
+		cells   = make([][]*kzg4844.Cell, len(vhashes))
+		proofs  = make([][]*kzg4844.Proof, len(vhashes))
+		indices = make(map[common.Hash][]int)
+		misses  []common.Hash
+	)
+	for i, h := range vhashes {
+		indices[h] = append(indices[h], i)
+	}
+	requested := mask.Indices()
+
+	c.mu.Lock()
+	for vhash, idxs := range indices {
+		cached, ok := c.entries[vhash]
+		if !ok {
+			misses = append(misses, vhash)
+			continue
+		}
+		stored := cached.custody.Indices()
+		blobCells := make([]*kzg4844.Cell, len(requested))
+		blobProofs := make([]*kzg4844.Proof, len(requested))
+		for i, cellIdx := range requested {
+			pos := -1
+			for k, s := range stored {
+				if s == cellIdx {
+					pos = k
+					break
+				}
+			}
+			if pos >= 0 && pos < len(cached.cell) {
+				cell := cached.cell[pos]
+				blobCells[i] = &cell
+				if int(cellIdx) < len(cached.proofs) {
+					pf := cached.proofs[cellIdx]
+					blobProofs[i] = &pf
+				}
+			}
+		}
+		for _, idx := range idxs {
+			cells[idx] = blobCells
+			proofs[idx] = blobProofs
+		}
+	}
+	c.mu.Unlock()
+
+	if len(misses) > 0 {
+		mc, mp, err := c.blobpool.GetBlobCells(misses, mask)
+		if err != nil {
+			return nil, nil, err
+		}
+		for j, vhash := range misses {
+			for _, idx := range indices[vhash] {
+				cells[idx] = mc[j]
+				proofs[idx] = mp[j]
+			}
+		}
+	}
+	return cells, proofs, nil
+}
+
+// EnableCell allows the cache to store only cells without recovering
+// blobs. This means we can also cache cells that lack enough blobs to
+// recover. It signals the loop to switch to cell mode and re-select
+// transactions from this wider pool.
+func (c *Cache) SetCellMode(on bool) {
+	select {
+	case c.cellModeCh <- on:
+	case <-c.quit:
+	}
+}
+
 func (c *Cache) loop() {
 	defer c.wg.Done()
 
@@ -257,6 +338,14 @@ func (c *Cache) loop() {
 			want := c.selectTopTxs()
 			c.update(want)
 			c.triggerTopKAfter(topKTimeout)
+
+		case on := <-c.cellModeCh:
+			// This runs when the CL signals (non-)support for cell proofs. Enable/disable
+			// cell mode and re-select immediately to force an update.
+			if c.needCell != on {
+				c.needCell = on
+				c.triggerTopK()
+			}
 
 		case <-c.quit:
 			c.cancelUpdate()
@@ -285,6 +374,8 @@ func (c *Cache) cancelUpdate() {
 // are no longer wanted and loads the missing ones from the blobpool in the
 // background.
 func (c *Cache) update(want []common.Hash) {
+	cellMode := c.needCell
+
 	wantSet := make(map[common.Hash]struct{}, len(want))
 	for _, vh := range want {
 		wantSet[vh] = struct{}{}
@@ -298,7 +389,13 @@ func (c *Cache) update(want []common.Hash) {
 	c.mu.Lock()
 	var missing []common.Hash
 	for vh := range wantSet {
-		if _, ok := c.entries[vh]; !ok {
+		e, ok := c.entries[vh]
+		if ok && ((cellMode && e.cell == nil) || (!cellMode && e.blob == nil)) {
+			delete(c.entries, vh)
+			cacheEntriesGauge.Dec(1)
+			ok = false
+		}
+		if !ok {
 			missing = append(missing, vh)
 		}
 	}
@@ -307,7 +404,7 @@ func (c *Cache) update(want []common.Hash) {
 			continue
 		}
 		delete(c.entries, vh)
-		cacheBlobsGauge.Dec(1)
+		cacheEntriesGauge.Dec(1)
 	}
 	c.mu.Unlock()
 
@@ -330,35 +427,90 @@ func (c *Cache) update(want []common.Hash) {
 			if ptx == nil {
 				continue
 			}
-			sidecar := ptx.Sidecar()
-			if sidecar == nil {
-				continue
+			if cellMode {
+				c.loadCells(ptx, wantSet)
+			} else {
+				c.loadBlobs(ptx, wantSet)
 			}
-
-			c.mu.Lock()
-			for i, v := range sidecar.BlobHashes() {
-				if _, ok := wantSet[v]; !ok {
-					continue
-				}
-				if _, exists := c.entries[v]; exists {
-					continue // recompute only new entries
-				}
-				cellProofs, err := sidecar.CellProofsAt(i)
-				if err != nil {
-					log.Error("Failed to get cell proofs", "txhash", ptx.Tx.Hash(), "err", err)
-					continue
-				}
-				c.entries[v] = &cachedBlob{
-					blob:       &sidecar.Blobs[i],
-					commitment: sidecar.Commitments[i],
-					proofs:     cellProofs,
-					version:    sidecar.Version,
-				}
-				cacheBlobsGauge.Inc(1)
-			}
-			c.mu.Unlock()
 		}
 	}()
+}
+
+// loadCells loads the cells whose vhash is in wantSet from ptx.
+func (c *Cache) loadCells(ptx *BlobTxForPool, wantSet map[common.Hash]struct{}) {
+	cs := ptx.CellSidecar
+	cellsPerBlob := cs.Custody.OneCount()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for i, v := range ptx.Tx.BlobHashes() {
+		if _, ok := wantSet[v]; !ok {
+			continue
+		}
+		if _, exists := c.entries[v]; exists {
+			continue
+		}
+		cellStart := i * cellsPerBlob
+		if cellStart+cellsPerBlob > len(cs.Cells) {
+			continue
+		}
+		blobCells := make([]kzg4844.Cell, cellsPerBlob)
+		copy(blobCells, cs.Cells[cellStart:cellStart+cellsPerBlob])
+
+		var pf []kzg4844.Proof
+		if ps := i * kzg4844.CellProofsPerBlob; ps+kzg4844.CellProofsPerBlob <= len(cs.Proofs) {
+			pf = make([]kzg4844.Proof, kzg4844.CellProofsPerBlob)
+			copy(pf, cs.Proofs[ps:ps+kzg4844.CellProofsPerBlob])
+		}
+		c.entries[v] = &cachedBlob{
+			cell:       blobCells,
+			custody:    cs.Custody,
+			commitment: cs.Commitments[i],
+			proofs:     pf,
+			version:    cs.Version,
+		}
+		cacheEntriesGauge.Inc(1)
+	}
+}
+
+// loadBlobs loads the blobs whose vhash is in wantSet from ptx.
+func (c *Cache) loadBlobs(ptx *BlobTxForPool, wantSet map[common.Hash]struct{}) {
+	if ptx.CellSidecar.Custody.OneCount() < kzg4844.DataPerBlob {
+		return
+	}
+	// blobs will be computed inside of sidecar()
+	sidecar, err := ptx.sidecar()
+	if err != nil || sidecar == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for i, v := range sidecar.BlobHashes() {
+		if _, ok := wantSet[v]; !ok {
+			continue
+		}
+		if _, exists := c.entries[v]; exists {
+			continue
+		}
+		var pf []kzg4844.Proof
+		switch sidecar.Version {
+		case types.BlobSidecarVersion0:
+			pf = []kzg4844.Proof{sidecar.Proofs[i]}
+		case types.BlobSidecarVersion1:
+			cellProofs, err := sidecar.CellProofsAt(i)
+			if err != nil {
+				log.Error("Failed to get cell proofs", "txhash", ptx.Tx.Hash(), "err", err)
+				continue
+			}
+			pf = cellProofs
+		}
+		c.entries[v] = &cachedBlob{
+			blob:       &sidecar.Blobs[i],
+			commitment: sidecar.Commitments[i],
+			proofs:     pf,
+			version:    sidecar.Version,
+		}
+		cacheEntriesGauge.Inc(1)
+	}
 }
 
 // selectTopTxs returns the vhashes of the top K most profitable pending blob
@@ -373,8 +525,9 @@ func (c *Cache) selectTopTxs() []common.Hash {
 	baseFee := eip1559.CalcBaseFee(config, head)
 
 	filter := txpool.PendingFilter{
-		BlobTxs: true,
-		BaseFee: uint256.MustFromBig(baseFee),
+		BlobTxs:      true,
+		BaseFee:      uint256.MustFromBig(baseFee),
+		PartialCells: c.needCell,
 	}
 	if head.ExcessBlobGas != nil {
 		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(config, head))

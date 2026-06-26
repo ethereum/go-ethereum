@@ -288,9 +288,9 @@ func (p *TxPool) Get(hash common.Hash) *types.Transaction {
 }
 
 // GetRLP returns a RLP-encoded transaction if it is contained in the pool.
-func (p *TxPool) GetRLP(hash common.Hash) []byte {
+func (p *TxPool) GetRLP(hash common.Hash, version uint) []byte {
 	for _, subpool := range p.subpools {
-		encoded := subpool.GetRLP(hash)
+		encoded := subpool.GetRLP(hash, version)
 		if len(encoded) != 0 {
 			return encoded
 		}

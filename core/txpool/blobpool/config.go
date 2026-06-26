@@ -25,6 +25,8 @@ type Config struct {
 	Datadir   string // Data directory containing the currently executable blobs
 	Datacap   uint64 // Soft-cap of database storage (hard cap is larger due to overhead)
 	PriceBump uint64 // Minimum price bump percentage to replace an already existing nonce
+
+	FetchProbability uint64 // EIP-8070: full blob fetch probability for sparse blobpool
 }
 
 // DefaultConfig contains the default configurations for the transaction pool.
