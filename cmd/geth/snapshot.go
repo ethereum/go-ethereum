@@ -922,6 +922,7 @@ func dumpState(ctx *cli.Context) error {
 			for stIt.Next() {
 				da.Storage[stIt.Hash()] = common.Bytes2Hex(stIt.Slot())
 			}
+			stIt.Release()
 		}
 		enc.Encode(da)
 		accounts++
