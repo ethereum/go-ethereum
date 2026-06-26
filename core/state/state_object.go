@@ -253,7 +253,11 @@ func (s *stateObject) setState(key common.Hash, value common.Hash, origin common
 // finalise moves all dirty storage slots into the pending area to be hashed or
 // committed later. It is invoked at the end of every transaction.
 func (s *stateObject) finalise() {
-	slotsToPrefetch := make([]common.Hash, 0, len(s.dirtyStorage))
+	prefetch := s.db.prefetcher != nil && s.data.Root != types.EmptyRootHash
+	var slotsToPrefetch []common.Hash
+	if prefetch {
+		slotsToPrefetch = make([]common.Hash, 0, len(s.dirtyStorage))
+	}
 	for key, value := range s.dirtyStorage {
 		if origin, exist := s.uncommittedStorage[key]; exist && origin == value {
 			// The slot is reverted to its original value, delete the entry
@@ -266,7 +270,9 @@ func (s *stateObject) finalise() {
 			// The slot is different from its original value and hasn't been
 			// tracked for commit yet.
 			s.uncommittedStorage[key] = s.GetCommittedState(key)
-			slotsToPrefetch = append(slotsToPrefetch, key) // Copy needed for closure
+			if prefetch {
+				slotsToPrefetch = append(slotsToPrefetch, key) // Copy needed for closure
+			}
 		}
 		// Aggregate the dirty storage slots into the pending area. It might
 		// be possible that the value of tracked slot here is same with the
@@ -283,7 +289,7 @@ func (s *stateObject) finalise() {
 			s.db.stateAccessList.StorageWrite(s.db.blockAccessIndex, s.address, key, value)
 		}
 	}
-	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
+	if prefetch && len(slotsToPrefetch) > 0 {
 		if err := s.db.prefetcher.prefetch(s.addrHash(), s.data.Root, s.address, nil, slotsToPrefetch, false); err != nil {
 			log.Error("Failed to prefetch slots", "addr", s.address, "slots", len(slotsToPrefetch), "err", err)
 		}
