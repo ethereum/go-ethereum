@@ -36,6 +36,11 @@ type Interactor struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *Interactor) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewInteractor creates a new instance of Interactor.
 func NewInteractor() *Interactor {
 	parsed, err := InteractorMetaData.ParseABI()
