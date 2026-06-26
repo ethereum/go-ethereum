@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	topKTimeout     = 4 * time.Second
+	topKTimeout     = 1 * time.Second
 	hasBlobsTimeout = 1 * time.Second
 )
 
