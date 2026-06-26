@@ -943,6 +943,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		Header:      header,
 		State:       state,
 		BlobBaseFee: blobBaseFee,
+		Precompiles: precompiles,
 		ErrorRatio:  estimateGasErrorRatio,
 	}
 	// Set any required transaction default, but make sure the gas cap itself is not messed with

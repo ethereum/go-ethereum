@@ -3984,6 +3984,52 @@ func TestEstimateGasWithMovePrecompile(t *testing.T) {
 	}
 }
 
+// TestEstimateGasMovePrecompileAway checks that eth_estimateGas honours a
+// movePrecompileToAddress override on the *source* address: after a precompile
+// is moved away, calling its old address must behave like a call to an empty
+// account (intrinsic gas only). Without threading the overridden precompile set
+// into the estimator, the old address would still execute the precompile and the
+// estimate would be inflated.
+func TestEstimateGasMovePrecompileAway(t *testing.T) {
+	t.Parallel()
+	var (
+		accounts = newAccounts(1)
+		genesis  = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+	)
+	backend := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewBlockChainAPI(backend)
+	// Move the RIPEMD-160 precompile (0x3) onto the SHA-256 address (0x2),
+	// then call the now-vacated 0x3 with empty calldata. The call must cost
+	// the bare intrinsic gas, since 0x3 no longer hosts a precompile.
+	var (
+		ripemdAddr = common.BytesToAddress([]byte{0x3})
+		sha256Addr = common.BytesToAddress([]byte{0x2})
+		args       = TransactionArgs{
+			From: &accounts[0].addr,
+			To:   &ripemdAddr,
+		}
+		overrides = &override.StateOverride{
+			ripemdAddr: override.OverrideAccount{
+				MovePrecompileTo: &sha256Addr,
+			},
+		}
+	)
+	gas, err := api.EstimateGas(context.Background(), args, nil, overrides, nil)
+	if err != nil {
+		t.Fatalf("EstimateGas failed: %v", err)
+	}
+	if uint64(gas) != params.TxGas {
+		t.Fatalf("mismatched gas: %d, want %d", gas, params.TxGas)
+	}
+}
+
 func TestEIP7910Config(t *testing.T) {
 	var (
 		newUint64 = func(val uint64) *uint64 { return &val }
