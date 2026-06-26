@@ -806,7 +806,10 @@ func (s *StateDB) LogsForBurnAccounts() []*types.Log {
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccessList {
-	addressesToPrefetch := make([]common.Address, 0, len(s.journal.mutations))
+	var addressesToPrefetch []common.Address
+	if s.prefetcher != nil {
+		addressesToPrefetch = make([]common.Address, 0, len(s.journal.mutations))
+	}
 	for addr, state := range s.journal.mutations {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
@@ -874,9 +877,11 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccess
 		// At this point, also ship the address off to the precacher. The precacher
 		// will start loading tries, and when the change is eventually committed,
 		// the commit-phase will be a lot faster
-		addressesToPrefetch = append(addressesToPrefetch, addr) // Copy needed for closure
+		if s.prefetcher != nil {
+			addressesToPrefetch = append(addressesToPrefetch, addr) // Copy needed for closure
+		}
 	}
-	if s.prefetcher != nil && len(addressesToPrefetch) > 0 {
+	if len(addressesToPrefetch) > 0 {
 		if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, addressesToPrefetch, nil, false); err != nil {
 			log.Error("Failed to prefetch addresses", "addresses", len(addressesToPrefetch), "err", err)
 		}
