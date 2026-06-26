@@ -347,12 +347,35 @@ func (t *BinaryTrie) Hash() common.Hash {
 func (t *BinaryTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 	nodeset := trienode.NewNodeSet(common.Hash{})
 
-	// Pre-size the path buffer: collectNodes reuses it in-place via
-	// append/truncate; 32 covers typical binary-trie depth without regrowth.
-	pathBuf := make([]byte, 0, 32)
-	t.store.collectNodes(t.store.root, pathBuf, func(path []byte, hash common.Hash, serialized []byte) {
-		nodeset.AddNode(path, trienode.NewNodeWithPrev(hash, serialized, t.tracer.Get(path)))
+	// Stem depth-promotion abandons a committed blob and is the only source of
+	// orphans. When none are pending (the common case) we skip tracking flushed
+	// paths entirely, keeping Commit allocation-free beyond the node set.
+	var added map[string]struct{}
+	if len(t.store.orphans) > 0 {
+		added = make(map[string]struct{})
+	}
+	var rootPath BitArray
+	t.store.collectNodes(t.store.root, rootPath, func(path BitArray, hash common.Hash, serialized []byte) {
+		var buf [33]byte
+		pathBytes := path.PutKeyBytes(buf[:])
+		if added != nil {
+			added[string(pathBytes)] = struct{}{}
+		}
+		nodeset.AddNode(pathBytes, trienode.NewNodeWithPrev(hash, serialized, t.tracer.Get(pathBytes)))
 	}, t.groupDepth)
+
+	// Delete blobs abandoned by stem depth-promotion, unless a freshly flushed
+	// node already reoccupies the path (the group-boundary case).
+	if len(t.store.orphans) > 0 {
+		for path := range t.store.orphans {
+			if _, ok := added[path]; ok {
+				continue
+			}
+			nodeset.AddNode([]byte(path), trienode.NewDeletedWithPrev(t.tracer.Get([]byte(path))))
+		}
+		t.store.orphans = make(map[string]struct{})
+	}
+
 	return t.Hash(), nodeset
 }
 

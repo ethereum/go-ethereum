@@ -167,10 +167,9 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 	if config.IsAmsterdam(number, time) {
 		blockAccessList = bal.NewConstructionBlockAccessList()
 	}
+	rules := config.Rules(number, true, time) // IsMerge is always true
 	// Read requests if Prague is enabled.
 	if config.IsPrague(number, time) {
-		rules := config.Rules(number, true, time) // IsMerge is always true
-
 		requests = [][]byte{}
 		// EIP-6110
 		if err := ParseDepositLogs(&requests, allLogs, config); err != nil {
@@ -183,6 +182,16 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 		// EIP-7251
 		if err := ProcessConsolidationQueue(&requests, rules, evm, blockAccessIndex, blockAccessList); err != nil {
 			return nil, nil, fmt.Errorf("failed to process consolidation queue: %w", err)
+		}
+	}
+
+	if config.IsAmsterdam(number, time) {
+		// EIP-8282
+		if err := ProcessBuilderDepositQueue(&requests, rules, evm, blockAccessIndex, blockAccessList); err != nil {
+			return nil, nil, fmt.Errorf("failed to process builder deposit queue: %w", err)
+		}
+		if err := ProcessBuilderExitQueue(&requests, rules, evm, blockAccessIndex, blockAccessList); err != nil {
+			return nil, nil, fmt.Errorf("failed to process builder exit queue: %w", err)
 		}
 	}
 	return requests, blockAccessList, nil
@@ -359,6 +368,18 @@ func ProcessWithdrawalQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM,
 // It returns the opaque request data returned by the contract.
 func ProcessConsolidationQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
 	return processRequestsSystemCall(requests, rules, evm, 0x02, params.ConsolidationQueueAddress, blockAccessIndex, blockAccessList)
+}
+
+// ProcessBuilderDepositQueue calls the EIP-8282 builder deposit contract.
+// It returns the opaque request data returned by the contract.
+func ProcessBuilderDepositQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
+	return processRequestsSystemCall(requests, rules, evm, 0x03, params.BuilderDepositAddress, blockAccessIndex, blockAccessList)
+}
+
+// ProcessBuilderExitQueue calls the EIP-8282 builder exit contract.
+// It returns the opaque request data returned by the contract.
+func ProcessBuilderExitQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
+	return processRequestsSystemCall(requests, rules, evm, 0x04, params.BuilderExitAddress, blockAccessIndex, blockAccessList)
 }
 
 func processRequestsSystemCall(requests *[][]byte, rules params.Rules, evm *vm.EVM, requestType byte, addr common.Address, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {

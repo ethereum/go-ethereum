@@ -311,7 +311,10 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			// Retrieve all the components of the canonical block.
 			hash := ReadCanonicalHash(nfdb, number)
 			if hash == (common.Hash{}) {
-				return fmt.Errorf("canonical hash missing, can't freeze block %d", number)
+				// A missing canonical mapping at the freeze frontier is almost
+				// always an orphaned block left by an unclean stop (header/body
+				// present by hash, but no number->hash mapping).
+				return fmt.Errorf("canonical hash missing, can't freeze block %d (block data present at height: %v)", number, ReadAllHashes(nfdb, number))
 			}
 			header := ReadHeaderRLP(nfdb, hash, number)
 			if len(header) == 0 {

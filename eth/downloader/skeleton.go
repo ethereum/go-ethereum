@@ -365,7 +365,13 @@ func (s *skeleton) Sync(head *types.Header, final *types.Header, force bool) err
 // linked returns the flag indicating whether the skeleton has been linked with
 // the local chain.
 func (s *skeleton) linked(number uint64, hash common.Hash) bool {
-	linked := rawdb.HasHeader(s.db, hash, number) &&
+	// Require the canonical mapping, not just presence by hash. A block present
+	// only by hash (side chain or orphan from an unclean shutdown) must not be
+	// used as the link-up point, otherwise it's left in place forever without its
+	// canonical mapping ever being rewritten. Keep descending to a real canonical
+	// block.
+	linked := rawdb.ReadCanonicalHash(s.db, number) == hash &&
+		rawdb.HasHeader(s.db, hash, number) &&
 		rawdb.HasBody(s.db, hash, number) &&
 		rawdb.HasReceipts(s.db, hash, number)
 

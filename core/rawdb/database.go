@@ -352,17 +352,40 @@ const (
 // PreexistingDatabase checks the given data directory whether a database is already
 // instantiated at that location, and if so, returns the type of database (or the
 // empty string).
+//
+// The database flavors are told apart by their on-disk file layout:
+//
+//	            CURRENT   marker.manifest.*   OPTIONS*
+//	leveldb        x
+//	pebble v1      x                              x
+//	pebble v2                      x              x
 func PreexistingDatabase(path string) string {
-	if _, err := os.Stat(filepath.Join(path, "CURRENT")); err != nil {
+	var (
+		hasCurrent = fileExists(filepath.Join(path, "CURRENT"))
+		hasMarker  = anyFileMatches(filepath.Join(path, "marker.manifest.*"))
+		hasOptions = anyFileMatches(filepath.Join(path, "OPTIONS*"))
+	)
+	switch {
+	case hasMarker, hasCurrent && hasOptions:
+		return DBPebble
+	case hasCurrent:
+		return DBLeveldb
+	default:
 		return "" // No pre-existing db
 	}
-	if matches, err := filepath.Glob(filepath.Join(path, "OPTIONS*")); len(matches) > 0 || err != nil {
-		if err != nil {
-			panic(err) // only possible if the pattern is malformed
-		}
-		return DBPebble
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func anyFileMatches(pattern string) bool {
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		panic(err) // only possible if the pattern is malformed
 	}
-	return DBLeveldb
+	return len(matches) > 0
 }
 
 type counter uint64

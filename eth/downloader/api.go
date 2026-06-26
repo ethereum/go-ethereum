@@ -62,9 +62,12 @@ func NewDownloaderAPI(d *Downloader, chain *core.BlockChain) *DownloaderAPI {
 // If the node is already synced up, then only a single event subscribers will
 // receive is {false}.
 func (api *DownloaderAPI) eventLoop() {
+	events := make(chan SyncEvent, 16)
+	sub := api.d.SubscribeSyncEvents(events)
+	if sub == nil {
+		return
+	}
 	var (
-		events            = make(chan SyncEvent, 16)
-		sub               = api.d.SubscribeSyncEvents(events)
 		syncSubscriptions = make(map[chan interface{}]struct{})
 		checkInterval     = time.Second * 60
 		checkTimer        = time.NewTimer(checkInterval)
