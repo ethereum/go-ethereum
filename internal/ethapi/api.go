@@ -2100,12 +2100,17 @@ func (api *DebugAPI) GetRawReceipts(ctx context.Context, blockNrOrHash rpc.Block
 }
 
 // GetRawTransaction returns the bytes of the transaction for the given hash.
-func (api *DebugAPI) GetRawTransaction(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
+func (api *DebugAPI) GetRawTransaction(ctx context.Context, hash common.Hash) (*hexutil.Bytes, error) {
 	// Retrieve a finalized transaction, or a pooled otherwise
 	found, tx, _, _, _ := api.b.GetCanonicalTransaction(hash)
 	if !found {
 		if tx = api.b.GetPoolTransaction(hash); tx != nil {
-			return tx.MarshalBinary()
+			blob, err := tx.MarshalBinary()
+			if err != nil {
+				return nil, err
+			}
+			b := hexutil.Bytes(blob)
+			return &b, nil
 		}
 		// If also not in the pool there is a chance the tx indexer is still in progress.
 		if !api.b.TxIndexDone() {
@@ -2114,7 +2119,12 @@ func (api *DebugAPI) GetRawTransaction(ctx context.Context, hash common.Hash) (h
 		// Transaction is not found in the pool and the indexer is done.
 		return nil, nil
 	}
-	return tx.MarshalBinary()
+	blob, err := tx.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	b := hexutil.Bytes(blob)
+	return &b, nil
 }
 
 // PrintBlock retrieves a block and returns its pretty printed form.

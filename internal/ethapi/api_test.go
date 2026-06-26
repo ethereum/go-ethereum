@@ -4468,3 +4468,42 @@ func TestRPCGetRawTransactionByBlockNumberAndIndex(t *testing.T) {
 		testRPCResponseWithFile(t, i, result, "eth_getRawTransactionByBlockNumberAndIndex", tt.file)
 	}
 }
+
+func TestRPCDebugGetRawTransaction(t *testing.T) {
+	t.Parallel()
+
+	var (
+		backend, txHashes = setupReceiptBackend(t, 2)
+		api               = NewDebugAPI(backend)
+	)
+
+	var testSuite = []struct {
+		txHash common.Hash
+		file   string
+	}{
+		// 0. legacy transfer tx (block 0 default case)
+		{
+			txHash: txHashes[0],
+			file:   "found-legacy",
+		},
+		// 1. zero hash, not in chain
+		{
+			txHash: common.Hash{},
+			file:   "txhash-empty",
+		},
+		// 2. unknown hash, not in chain
+		{
+			txHash: common.HexToHash("deadbeef"),
+			file:   "txhash-notfound",
+		},
+	}
+
+	for i, tt := range testSuite {
+		result, err := api.GetRawTransaction(context.Background(), tt.txHash)
+		if err != nil {
+			t.Errorf("test %d: want no error, have %v", i, err)
+			continue
+		}
+		testRPCResponseWithFile(t, i, result, "debug_getRawTransaction", tt.file)
+	}
+}
