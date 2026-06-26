@@ -99,6 +99,52 @@ func TestTxArgs(t *testing.T) {
 	}
 }
 
+// TestSetCodeTxArgs checks that a set-code (EIP-7702) transaction survives the
+// round-trip through SendTxArgs. It carries an authorization list and sets
+// maxFeePerGas, so without a dedicated branch ToTransaction would infer a plain
+// dynamic-fee transaction and silently drop the authorizations.
+func TestSetCodeTxArgs(t *testing.T) {
+	data := []byte(`{"from":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","to":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","chainId":"0x7","gas":"0x5208","maxFeePerGas":"0x6fc23ac00","maxPriorityFeePerGas":"0x3b9aca00","nonce":"0x0","input":"0x","value":"0x0","authorizationList":[{"chainId":"0x7","address":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","nonce":"0x1","yParity":"0x0","r":"0x1","s":"0x1"}]}`)
+	var txArgs SendTxArgs
+	if err := json.Unmarshal(data, &txArgs); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := txArgs.ToTransaction()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have := tx.Type(); have != types.SetCodeTxType {
+		t.Fatalf("have type %d, want %d", have, types.SetCodeTxType)
+	}
+	auths := tx.SetCodeAuthorizations()
+	if len(auths) != 1 {
+		t.Fatalf("have %d authorizations, want 1", len(auths))
+	}
+	if want := common.HexToAddress("0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425"); auths[0].Address != want {
+		t.Errorf("authorization address: have %x, want %x", auths[0].Address, want)
+	}
+	if auths[0].Nonce != 1 {
+		t.Errorf("authorization nonce: have %d, want 1", auths[0].Nonce)
+	}
+	// The args must also re-marshal so the authorization list crosses the clef
+	// boundary intact: a missing or dropped field would change the tx hash.
+	blob, err := json.Marshal(txArgs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var txArgs2 SendTxArgs
+	if err := json.Unmarshal(blob, &txArgs2); err != nil {
+		t.Fatal(err)
+	}
+	tx2, err := txArgs2.ToTransaction()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have, want := tx2.Hash(), tx.Hash(); have != want {
+		t.Errorf("round-trip changed tx: have %v, want %v", have, want)
+	}
+}
+
 func TestBlobTxs(t *testing.T) {
 	blob := kzg4844.Blob{0x1}
 	commitment, err := kzg4844.BlobToCommitment(&blob)
