@@ -2832,8 +2832,9 @@ func (s *syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		for j, key := range hashes[i] {
 			keys[j] = common.CopyBytes(key[:])
 		}
-		nodes := make(trienode.ProofList, 0, len(proof))
+		var nodes trienode.ProofList
 		if i == len(hashes)-1 {
+			nodes = make(trienode.ProofList, 0, len(proof))
 			for _, node := range proof {
 				nodes = append(nodes, node)
 			}
