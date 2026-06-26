@@ -279,7 +279,7 @@ func (s *nodeSet) decode(r *rlp.Stream) error {
 
 // write flushes nodes into the provided database batch as a whole.
 func (s *nodeSet) write(batch ethdb.Batch, clean *fastcache.Cache) int {
-	nodes := make(map[common.Hash]map[string]*trienode.Node)
+	nodes := make(map[common.Hash]map[string]*trienode.Node, len(s.storageNodes)+1)
 	if len(s.accountNodes) > 0 {
 		nodes[common.Hash{}] = s.accountNodes
 	}
