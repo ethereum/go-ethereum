@@ -2745,11 +2745,6 @@ func TestSimulateV1WithdrawalsByFork(t *testing.T) {
 	})
 }
 
-// TestSimulateV1DifficultyOverridePostMerge checks that a difficulty block
-// override is a no-op for post-merge blocks. Applying it would set a non-zero
-// difficulty on the simulated header, which fails IsPoSHeader and routes block
-// assembly through the legacy (PoW) engine even though the block carries
-// post-merge fields, leading to a panic.
 func TestSimulateV1DifficultyOverridePostMerge(t *testing.T) {
 	t.Parallel()
 
