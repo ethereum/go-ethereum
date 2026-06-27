@@ -578,10 +578,6 @@ func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 			ParentBeaconRoot: parentBeaconRoot,
 		})
 		// A difficulty override is documented as a no-op for post-merge blocks.
-		// MakeHeader applies it unconditionally though, so re-zero it here: a
-		// non-zero difficulty makes the simulated header fail IsPoSHeader, which
-		// routes block assembly through the legacy (PoW) engine even though the
-		// block carries post-merge fields, leading to a panic.
 		if isPostMerge {
 			header.Difficulty = big.NewInt(0)
 		}
