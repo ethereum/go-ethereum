@@ -36,7 +36,10 @@ import (
 func DecodeTxLookupEntry(data []byte, db ethdb.Reader) *uint64 {
 	// Database v6 tx lookup just stores the block number
 	if len(data) < common.HashLength {
-		number := new(big.Int).SetBytes(data).Uint64()
+		var number uint64
+		for _, b := range data {
+			number = number<<8 | uint64(b)
+		}
 		return &number
 	}
 	// Database v4-v5 tx lookup format just stores the hash
