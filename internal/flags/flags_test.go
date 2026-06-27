@@ -17,9 +17,46 @@
 package flags
 
 import (
+	"flag"
+	"math/big"
 	"runtime"
 	"testing"
 )
+
+func TestBigFlagApplyPreservesDefaultValue(t *testing.T) {
+	defaultVal := big.NewInt(12345)
+	f := &BigFlag{
+		Name:  "test-big",
+		Value: defaultVal,
+	}
+	set := flag.NewFlagSet("test", flag.ContinueOnError)
+	if err := f.Apply(set); err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+	if f.Value.Cmp(defaultVal) != 0 {
+		t.Fatalf("Value after Apply = %s, want %s", f.Value, defaultVal)
+	}
+}
+
+func TestBigFlagApplyPreservesEnvValue(t *testing.T) {
+	t.Setenv("TEST_BIG_FLAG", "999")
+	f := &BigFlag{
+		Name:    "test-big",
+		Value:   big.NewInt(1),
+		EnvVars: []string{"TEST_BIG_FLAG"},
+	}
+	set := flag.NewFlagSet("test", flag.ContinueOnError)
+	if err := f.Apply(set); err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+	want := big.NewInt(999)
+	if f.Value.Cmp(want) != 0 {
+		t.Fatalf("Value after Apply = %s, want %s", f.Value, want)
+	}
+	if !f.HasBeenSet {
+		t.Fatal("HasBeenSet should be true when env var is set")
+	}
+}
 
 func TestPathExpansion(t *testing.T) {
 	home := HomeDir()

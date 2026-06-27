@@ -171,7 +171,9 @@ func (f *BigFlag) Apply(set *flag.FlagSet) error {
 		}
 	}
 	eachName(f, func(name string) {
-		f.Value = new(big.Int)
+		if f.Value == nil {
+			f.Value = new(big.Int)
+		}
 		set.Var((*bigValue)(f.Value), name, f.Usage)
 	})
 	return nil
