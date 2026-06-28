@@ -112,7 +112,10 @@ func (r *StandardRegistry) Register(name string, i interface{}) error {
 		return fmt.Errorf("%w: %v", ErrDuplicateMetric, name)
 	}
 
-	_, loaded, _ := r.loadOrRegister(name, i)
+	_, loaded, supported := r.loadOrRegister(name, i)
+	if !supported {
+		return fmt.Errorf("unsupported metric type: %T", i)
+	}
 	if loaded {
 		return fmt.Errorf("%w: %v", ErrDuplicateMetric, name)
 	}
