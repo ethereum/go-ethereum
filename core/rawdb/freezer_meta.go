@@ -112,7 +112,7 @@ func decodeV2(file *os.File) *freezerTableMeta {
 		return nil
 	}
 	if o.Offset > math.MaxInt64 {
-		log.Error("Invalid flushOffset %d in freezer metadata", o.Offset, "file", file.Name())
+		log.Error("Invalid flushOffset %d in freezer metadata", "offset", o.Offset, "file", file.Name())
 		return nil
 	}
 	return &freezerTableMeta{
