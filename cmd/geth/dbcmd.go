@@ -716,7 +716,7 @@ func dbDumpTrie(ctx *cli.Context) error {
 	var count int64
 	it := trie.NewIterator(trieIt)
 	for it.Next() {
-		if max > 0 && count == max {
+		if max >= 0 && count == max {
 			fmt.Printf("Exiting after %d values\n", count)
 			break
 		}
