@@ -73,16 +73,15 @@ var inlineOps = func() map[byte]string {
 		0x1b: "opSHL", 0x1c: "opSHR", 0x1d: "opSAR", 0x1e: "opCLZ",
 		0x50: "opPop", 0x56: "opJump", 0x57: "opJumpi", 0x58: "opPc", 0x59: "opMsize", 0x5b: "opJumpdest",
 		0x5f: "opPush0", 0x60: "opPush1", 0x61: "opPush2",
-		0x90: "opSwap1", 0x91: "opSwap2", 0x92: "opSwap3", 0x93: "opSwap4",
-		0x94: "opSwap5", 0x95: "opSwap6", 0x96: "opSwap7", 0x97: "opSwap8",
-		0x98: "opSwap9", 0x99: "opSwap10", 0x9a: "opSwap11", 0x9b: "opSwap12",
-		0x9c: "opSwap13", 0x9d: "opSwap14", 0x9e: "opSwap15", 0x9f: "opSwap16",
 	}
 	for code := 0x62; code <= 0x7f; code++ { // PUSH3-PUSH32
 		m[byte(code)] = "makePush"
 	}
 	for code := 0x80; code <= 0x8f; code++ { // DUP1-DUP16
 		m[byte(code)] = "makeDup"
+	}
+	for code := 0x90; code <= 0x9f; code++ { // SWAP1-SWAP16
+		m[byte(code)] = fmt.Sprintf("opSwap%d", code-0x8f)
 	}
 	return m
 }()
@@ -91,17 +90,7 @@ var inlineOps = func() map[byte]string {
 // dynamic-gas, and memory-size functions are the same across every fork
 // (verified: untouched by any enableXxx). They are emitted as direct calls to
 // those functions by name instead of the indirect operation.* pointer calls
-// in the default case. Go inlines the plain functions, and the var-aliased gas
-// funcs (gasMLoad and friends alias pureMemoryGascost) at least skip the
-// table load. Measured at ~3.4% on snailtracer (p=0.000). Fork-varying ops
-// (CALL/SSTORE/SLOAD and friends) do not qualify and stay on the per-fork
-// table in the default case.
-//
-//	opcode → {handler, dynamicGas, memorySize}
-//
-// Limited to the memory/hash ops that appear in hot loops. Adding more (e.g.
-// CALLDATACOPY/RETURN, typically once per call) grows the generated function
-// and regresses tiny benchmarks through code layout, for negligible gain.
+// in the default case.
 var directCallOps = map[byte][3]string{
 	0x20: {"opKeccak256", "gasKeccak256", "memoryKeccak256"}, // KECCAK256
 	0x51: {"opMload", "gasMLoad", "memoryMLoad"},             // MLOAD
@@ -113,7 +102,7 @@ var directCallOps = map[byte][3]string{
 type opSpec struct {
 	defined  bool
 	name     string // opcode mnemonic, e.g. "ADD"
-	fork     string // params.Rules field activating it, empty for Frontier (always on)
+	fork     string
 	constGas uint64
 	minStack int
 	maxStack int
@@ -283,15 +272,6 @@ func (g *generator) rewriteOpcodeReturns(src string) string {
 	for _, line := range strings.Split(src, "\n") {
 		if m := opcodeReturnRe.FindStringSubmatch(line); m != nil {
 			indent, r0, r1 := m[1], strings.TrimSpace(m[2]), strings.TrimSpace(m[3])
-			// The error and halt path must overwrite res and err. Otherwise a
-			// halting inlined op (JUMPI on an invalid jump, say) returns stale
-			// res from an earlier res-setting op such as a DELEGATECALL. The
-			// fuzzer caught exactly that bug. The success path advances pc and
-			// continues without writing res or err: stale res on a continuing
-			// op is always overwritten by whichever op ends the run, and err
-			// stays nil through normal iteration. Keeping these stores off the
-			// success path avoids growing every inlined case, which regresses
-			// tiny, layout-sensitive benchmarks.
 			if r1 == "nil" {
 				out.WriteString(indent + "pc++\n")
 				out.WriteString(indent + "continue mainLoop\n")
@@ -315,7 +295,7 @@ var gasReturnRe = regexp.MustCompile(`^(\s*)return\s+(\S.*)$`)
 // `return nil` is dropped so the opcode falls through to its remaining steps (see
 // rewriteGasReturns). The receiver and parameter are substituted textually on
 // word boundaries, which cannot touch fields like RegularGas.
-func (g *generator) inlineGasBody(name string, arg int) string {
+func (g *generator) inlineGasBody(name, amount string) string {
 	fn := g.gasHelpers[name]
 	if fn == nil {
 		fatalf("no gas helper %q to inline", name)
@@ -326,7 +306,7 @@ func (g *generator) inlineGasBody(name string, arg int) string {
 	}
 	src := g.renderAst(fn.Body.List)
 	src = regexp.MustCompile(`\b`+recvName(fn)+`\b`).ReplaceAllString(src, "contract.Gas")
-	src = substParams(src, map[string]int{names[0]: arg})
+	src = regexp.MustCompile(`\b`+names[0]+`\b`).ReplaceAllString(src, amount)
 	return g.rewriteGasReturns(src)
 }
 
@@ -636,51 +616,52 @@ func (g *generator) checkDirectCallStable(code byte, forks []vm.GenFork) {
 // Case emission
 // ---------------------------------------------------------------------------
 
-// emitStackChecks emits the underflow/overflow guards for a baked opcode,
-// mirroring the legacy loop's order (stack validated before gas).
-func (g *generator) emitStackChecks(spec opSpec) {
-	under := spec.minStack > 0
-	over := spec.maxStack < stackLimit
+// emitStackChecks emits the underflow/overflow guards, mirroring the legacy
+// loop's order (stack validated before gas). minExpr/maxExpr are the stack-bound
+// expressions (baked constants on the inlined/direct paths, operation.minStack/
+// operation.maxStack in the table path) and under/over select which guards to
+// emit; the baked paths omit a guard whose bound is trivial.
+func (g *generator) emitStackChecks(minExpr, maxExpr string, under, over bool) {
 	switch {
 	case under && over:
 		g.p(`
-			if sLen := stack.len(); sLen < %d {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: %d}
-			} else if sLen > %d {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: %d}
+			if sLen := stack.len(); sLen < %s {
+				return nil, &ErrStackUnderflow{stackLen: sLen, required: %s}
+			} else if sLen > %s {
+				return nil, &ErrStackOverflow{stackLen: sLen, limit: %s}
 			}
-		`, spec.minStack, spec.minStack, spec.maxStack, spec.maxStack)
+		`, minExpr, minExpr, maxExpr, maxExpr)
 	case under:
 		g.p(`
-			if sLen := stack.len(); sLen < %d {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: %d}
+			if sLen := stack.len(); sLen < %s {
+				return nil, &ErrStackUnderflow{stackLen: sLen, required: %s}
 			}
-		`, spec.minStack, spec.minStack)
+		`, minExpr, minExpr)
 	case over:
 		g.p(`
-			if sLen := stack.len(); sLen > %d {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: %d}
+			if sLen := stack.len(); sLen > %s {
+				return nil, &ErrStackOverflow{stackLen: sLen, limit: %s}
 			}
-		`, spec.maxStack, spec.maxStack)
+		`, maxExpr, maxExpr)
 	}
 }
 
-// emitStaticGas charges an opcode's constant gas by splicing the chargeRegularOnly
-// body inline (call-free, for the hot path); a zero constant emits nothing. It is
-// the static-gas counterpart to emitDynamicGas.
-func (g *generator) emitStaticGas(spec opSpec) {
-	if spec.constGas == 0 {
-		return
-	}
-	g.p("%s", g.inlineGasBody("chargeRegularOnly", int(spec.constGas)))
+// emitStaticGas charges static gas by splicing the chargeRegularOnly body inline
+// (call-free) for amount: a baked constant on the inlined and direct-call paths,
+// operation.constantGas in the table path. It is the static-gas counterpart to
+// emitDynamicGas.
+func (g *generator) emitStaticGas(amount string) {
+	g.p("%s", g.inlineGasBody("chargeRegularOnly", amount))
 }
 
 // emitOpBody emits the stack/gas guards and the opcode body (the portion that runs
 // when the opcode is active for the current fork).
 func (g *generator) emitOpBody(code byte) {
 	spec := g.specs[code]
-	g.emitStackChecks(spec)
-	g.emitStaticGas(spec)
+	g.emitStackChecks(fmt.Sprint(spec.minStack), fmt.Sprint(spec.maxStack), spec.minStack > 0, spec.maxStack < stackLimit)
+	if spec.constGas != 0 {
+		g.emitStaticGas(fmt.Sprint(spec.constGas))
+	}
 
 	// PUSH1-PUSH32 swap their execute function under EIP-4762 (verkle) to charge
 	// code-chunk gas on the immediate bytes. Defer to the table handler there.
@@ -755,8 +736,10 @@ func (g *generator) emitDirectCallOp(code byte) {
 	spec := g.specs[code]
 	fns := directCallOps[code]
 	g.p("case %s:\n", spec.name)
-	g.emitStackChecks(spec)
-	g.emitStaticGas(spec)
+	g.emitStackChecks(fmt.Sprint(spec.minStack), fmt.Sprint(spec.maxStack), spec.minStack > 0, spec.maxStack < stackLimit)
+	if spec.constGas != 0 {
+		g.emitStaticGas(fmt.Sprint(spec.constGas))
+	}
 	// fns[2], fns[1], fns[0] are the memory-size, dynamic-gas and handler names.
 	g.p(`
 		var memorySize uint64
@@ -785,21 +768,13 @@ func (g *generator) emitDirectCallOp(code byte) {
 }
 
 func (g *generator) emitDefault() {
-	// The doubled %%w and %%v below are not generator verbs: Fprintf collapses
-	// each %% to a single %, leaving a literal fmt.Errorf("%w: %v", ...) in the
-	// generated default case.
 	g.p(`
 		default:
 			operation := table[op]
-			if sLen := stack.len(); sLen < operation.minStack {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
-			} else if sLen > operation.maxStack {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
-			}
-			cost := operation.constantGas
-			if err := contract.Gas.chargeRegularOnly(cost); err != nil {
-				return nil, err
-			}
+	`)
+	g.emitStackChecks("operation.minStack", "operation.maxStack", true, true)
+	g.emitStaticGas("operation.constantGas")
+	g.p(`
 			var memorySize uint64
 			if operation.dynamicGas != nil {
 				if operation.memorySize != nil {
