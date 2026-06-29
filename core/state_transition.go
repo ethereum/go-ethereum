@@ -68,16 +68,19 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation bool, rules params.Rules, costPerStateByte uint64) (vm.GasCosts, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, from common.Address, to *common.Address, value *uint256.Int, rules params.Rules, costPerStateByte uint64) (vm.GasCosts, error) {
+	isContractCreation := to == nil
+
 	// Set the starting gas for the raw transaction
 	var gas vm.GasCosts
-	if isContractCreation && rules.IsHomestead {
-		if rules.IsAmsterdam {
-			gas.RegularGas = params.TxGas + params.CreateGasAmsterdam
+	if rules.IsAmsterdam {
+		gas.RegularGas = intrinsicBaseGasEIP2780(from, to, value)
+		if isContractCreation {
+			// New-account creation is charged as state gas (EIP-8037).
 			gas.StateGas = params.AccountCreationSize * costPerStateByte
-		} else {
-			gas.RegularGas = params.TxGasContractCreation
 		}
+	} else if isContractCreation && rules.IsHomestead {
+		gas.RegularGas = params.TxGasContractCreation
 	} else {
 		gas.RegularGas = params.TxGas
 	}
@@ -151,8 +154,41 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 	return gas, nil
 }
 
+// intrinsicBaseGasEIP2780 computes the regular-gas portion of the EIP-2780
+// intrinsic base cost: the per-resource decomposition of the legacy flat 21,000.
+func intrinsicBaseGasEIP2780(from common.Address, to *common.Address, value *uint256.Int) uint64 {
+	var (
+		isContractCreation = to == nil
+		isSelfTransfer     = to != nil && *to == from
+		hasValue           = value != nil && !value.IsZero()
+	)
+	// tx.sender: signature recovery plus the sender account access and write.
+	gas := params.TxBaseCost2780
+
+	// tx.to charge.
+	switch {
+	case isSelfTransfer:
+		// The recipient account is already accessed and written as the sender.
+	case isContractCreation:
+		gas += params.CreateAccess2780
+	default:
+		gas += params.ColdAccountAccess2780
+	}
+
+	// tx.value charge.
+	switch {
+	case !hasValue || isSelfTransfer:
+		// No transfer log and no recipient balance write.
+	case isContractCreation:
+		gas += params.TransferLogCost2780
+	default:
+		gas += params.TransferLogCost2780 + params.TxValueCost2780
+	}
+	return gas
+}
+
 // FloorDataGas computes the minimum gas required for a transaction based on its data tokens (EIP-7623).
-func FloorDataGas(rules params.Rules, data []byte, accessList types.AccessList) (uint64, error) {
+func FloorDataGas(rules params.Rules, from common.Address, to *common.Address, value *uint256.Int, data []byte, accessList types.AccessList) (uint64, error) {
 	var (
 		tokens    uint64
 		tokenCost uint64
@@ -198,12 +234,19 @@ func FloorDataGas(rules params.Rules, data []byte, accessList types.AccessList) 
 		tokenCost = params.TxCostFloorPerToken
 	}
 
+	// The floor is anchored to the transaction base cost. Under EIP-2780 that
+	// base is the per-resource decomposition (the same one used by the intrinsic
+	// gas), so the floor never undercuts the transaction's own base.
+	floorBase := params.TxGas
+	if rules.IsAmsterdam {
+		floorBase = intrinsicBaseGasEIP2780(from, to, value)
+	}
 	// Check for overflow
-	if (math.MaxUint64-params.TxGas)/tokenCost < tokens {
+	if (math.MaxUint64-floorBase)/tokenCost < tokens {
 		return 0, ErrGasUintOverflow
 	}
 	// Minimum gas required for a transaction based on its data tokens (EIP-7623).
-	return params.TxGas + tokens*tokenCost, nil
+	return floorBase + tokens*tokenCost, nil
 }
 
 // toWordSize returns the ceiled word size required for init code payment calculation.
@@ -614,7 +657,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		contractCreation = msg.To == nil
 		floorDataGas     uint64
 	)
-	cost, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules, st.evm.Context.CostPerStateByte)
+	cost, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, msg.From, msg.To, msg.Value, rules, st.evm.Context.CostPerStateByte)
 	if err != nil {
 		return nil, err
 	}
@@ -629,7 +672,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// Validate the EIP-7623 calldata floor against the gas limit. The floor inflates
 	// the total gas usage at tx end, so the gas limit must be sufficient to cover that.
 	if rules.IsPrague {
-		floorDataGas, err = FloorDataGas(rules, msg.Data, msg.AccessList)
+		floorDataGas, err = FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
 		if err != nil {
 			return nil, err
 		}
@@ -705,9 +748,16 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		if addr, ok := types.ParseDelegation(st.state.GetCode(*msg.To)); ok {
 			st.state.AddAddressToAccessList(addr)
 		}
-		// Execute the transaction's call.
-		ret, result, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining.ForwardAll(), value)
-		st.gasRemaining.Absorb(result)
+		// EIP-2780: charge the transaction's top-level recipient costs. If the
+		// budget cannot cover the charge, the top frame halts out of gas.
+		if rules.IsAmsterdam && !st.chargeCallRecipientEIP2780(value) {
+			vmerr = vm.ErrOutOfGas
+			st.gasRemaining = st.gasRemaining.ExitHalt()
+		} else {
+			// Execute the transaction's call.
+			ret, result, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining.ForwardAll(), value)
+			st.gasRemaining.Absorb(result)
+		}
 	}
 
 	// Settle down the gas usage and refund the ETH back if any remaining
@@ -752,6 +802,47 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		Err:        vmerr,
 		ReturnData: ret,
 	}, nil
+}
+
+// chargeCallRecipientEIP2780 applies the EIP-2780 transaction top-level gas costs for
+// a message-call transaction, charged before any opcode executes:
+//
+//   - if the recipient is EIP-161 non-existent and the transaction carries value,
+//     charge for account creation.
+//
+//   - if the recipient is an EIP-7702 delegated account, resolving the delegation
+//     loads the target's code, charged an additional cold account access in
+//     regular gas.
+func (st *stateTransition) chargeCallRecipientEIP2780(value *uint256.Int) bool {
+	var (
+		cost vm.GasCosts
+		to   = *st.msg.To
+	)
+	// This runs in the topmost frame before any bytecode executes, so unlike the
+	// execution-level checks which must use StateDB.Empty because SELFDESTRUCT can
+	// leave a transient EIP-161-empty account, no empty account can exist here, and
+	// !Exist is equivalent to Empty.
+	if !value.IsZero() && !st.state.Exist(to) {
+		cost.StateGas += params.AccountCreationSize * st.evm.Context.CostPerStateByte
+	}
+	if _, ok := types.ParseDelegation(st.state.GetCode(to)); ok {
+		// EIP-2780: The tx.sender, tx.to, and (where applicable) delegation-target
+		// charges above are always at the cold rate.
+		//
+		// The delegation-target is already warmed before, no double warming here.
+		cost.RegularGas += params.ColdAccountAccess2780
+	}
+	if cost == (vm.GasCosts{}) {
+		return true
+	}
+	prior, ok := st.gasRemaining.Charge(cost)
+	if !ok {
+		return false
+	}
+	if st.evm.Config.Tracer.HasGasHook() {
+		st.evm.Config.Tracer.EmitGasChange(prior.AsTracing(), st.gasRemaining.AsTracing(), tracing.GasChangeTxIntrinsicGas)
+	}
+	return true
 }
 
 // settleGas finalizes the per-tx gas accounting after EVM execution:

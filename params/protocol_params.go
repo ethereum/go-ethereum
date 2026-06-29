@@ -103,6 +103,13 @@ const (
 	TxAuthTupleGas            uint64 = 12500 // Per auth tuple code specified in EIP-7702
 	TxAuthTupleRegularGas     uint64 = 7500  // Per auth tuple regular gas specified in EIP-8037
 
+	// EIP-2780: resource-based intrinsic transaction gas.
+	TxBaseCost2780        uint64 = 12000
+	ColdAccountAccess2780 uint64 = 3000
+	CreateAccess2780      uint64 = 11000
+	TxValueCost2780       uint64 = 4244
+	TransferLogCost2780   uint64 = 1756
+
 	// These have been changed during the course of the chain
 	CallGasFrontier              uint64 = 40  // Once per CALL operation & message call transaction.
 	CallGasEIP150                uint64 = 700 // Static portion of gas for CALL-derivates after EIP 150 (Tangerine)
