@@ -24,7 +24,7 @@
 //     derived from the per-fork instruction tables via vm.GenForks.
 //
 //   - calls the fork-invariant ops (KECCAK256 / MLOAD / MSTORE / MSTORE8,
-//     see directCall) directly by name, skipping the table's function
+//     see directCallOps) directly by name, skipping the table's function
 //     pointers, which Go cannot inline through.
 //
 //   - dispatches everything fork-varying (CALL / CREATE / SSTORE / SLOAD / LOG /
@@ -57,14 +57,14 @@ import (
 
 const stackLimit = 1024 // params.StackLimit
 
-// inlineHandler maps an opcode byte to the handler whose body is spliced inline
+// inlineOps maps an opcode byte to the handler whose body is spliced inline
 // for that opcode. These are the hot, fork-stable opcodes with no dynamic gas.
 // The value is usually an opXxx handler, but PUSH3-PUSH32 and DUP1-DUP16 are
 // factory-built (one shared makePush / makeDup each), so their value is the
 // factory name and emitOpBody splices the factory body with the per-opcode size.
-// Opcodes not listed here (or in directCall) fall through to the default case,
+// Opcodes not listed here (or in directCallOps) fall through to the default case,
 // which dispatches via the per-fork table.
-var inlineHandler = func() map[byte]string {
+var inlineOps = func() map[byte]string {
 	m := map[byte]string{
 		0x01: "opAdd", 0x02: "opMul", 0x03: "opSub", 0x04: "opDiv", 0x05: "opSdiv",
 		0x06: "opMod", 0x07: "opSmod", 0x08: "opAddmod", 0x09: "opMulmod", 0x0b: "opSignExtend",
@@ -87,7 +87,7 @@ var inlineHandler = func() map[byte]string {
 	return m
 }()
 
-// directCall lists the opcodes (dynamic gas, not inlined) whose handler,
+// directCallOps lists the opcodes (dynamic gas, not inlined) whose handler,
 // dynamic-gas, and memory-size functions are the same across every fork
 // (verified: untouched by any enableXxx). They are emitted as direct calls to
 // those functions by name instead of the indirect operation.* pointer calls
@@ -102,7 +102,7 @@ var inlineHandler = func() map[byte]string {
 // Limited to the memory/hash ops that appear in hot loops. Adding more (e.g.
 // CALLDATACOPY/RETURN, typically once per call) grows the generated function
 // and regresses tiny benchmarks through code layout, for negligible gain.
-var directCall = map[byte][3]string{
+var directCallOps = map[byte][3]string{
 	0x20: {"opKeccak256", "gasKeccak256", "memoryKeccak256"}, // KECCAK256
 	0x51: {"opMload", "gasMLoad", "memoryMLoad"},             // MLOAD
 	0x52: {"opMstore", "gasMStore", "memoryMStore"},          // MSTORE
@@ -113,7 +113,7 @@ var directCall = map[byte][3]string{
 type opSpec struct {
 	defined  bool
 	name     string // opcode mnemonic, e.g. "ADD"
-	introF   string // params.Rules field activating it, empty for Frontier (always on)
+	fork     string // params.Rules field activating it, empty for Frontier (always on)
 	constGas uint64
 	minStack int
 	maxStack int
@@ -123,6 +123,7 @@ type generator struct {
 	fset         *token.FileSet
 	handlers     map[string]*ast.FuncDecl // opXxx handlers from instructions.go and eips.go
 	stackHelpers map[string]*ast.FuncDecl // (s *Stack) helpers from stack.go, spliced inline
+	gasHelpers   map[string]*ast.FuncDecl // (g *GasBudget) charge methods from gascosts.go, spliced by name
 	specs        [256]opSpec
 	buf          *bytes.Buffer
 }
@@ -138,14 +139,16 @@ func (g *generator) p(format string, args ...any) {
 // Handler parsing + body splicing
 // ---------------------------------------------------------------------------
 
-// parseHandlers parses instructions.go, eips.go and stack.go. It returns the
-// top-level opXxx handlers by name, and separately the *Stack helper methods by
-// name (the inliner splices the latter into the former).
-func parseHandlers(vmDir string) (fset *token.FileSet, handlers, stackHelpers map[string]*ast.FuncDecl) {
+// parseHandlers parses instructions.go, eips.go, stack.go and gascosts.go. It
+// returns the top-level opXxx handlers by name, the //gen:inline *Stack helper
+// methods by name (spliced into handler bodies), and the *GasBudget charge
+// methods by name (spliced directly at gas steps).
+func parseHandlers(vmDir string) (fset *token.FileSet, handlers, stackHelpers, gasHelpers map[string]*ast.FuncDecl) {
 	fset = token.NewFileSet()
 	handlers = map[string]*ast.FuncDecl{}
 	stackHelpers = map[string]*ast.FuncDecl{}
-	for _, name := range []string{"instructions.go", "eips.go", "stack.go"} {
+	gasHelpers = map[string]*ast.FuncDecl{}
+	for _, name := range []string{"instructions.go", "eips.go", "stack.go", "gascosts.go"} {
 		path := filepath.Join(vmDir, name)
 		f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 		if err != nil {
@@ -159,25 +162,31 @@ func parseHandlers(vmDir string) (fset *token.FileSet, handlers, stackHelpers ma
 			switch {
 			case fn.Recv == nil: // top-level opXxx handler
 				handlers[fn.Name.Name] = fn
-			case isStackMethod(fn) && hasInlineMarker(fn): // (s *Stack) helper tagged //gen:inline
+			case methodReceiver(fn) == "Stack" && hasInlineMarker(fn): // (s *Stack) helper tagged //gen:inline
 				stackHelpers[fn.Name.Name] = fn
+			case methodReceiver(fn) == "GasBudget": // (g *GasBudget) charge method, spliced by name at gas steps
+				gasHelpers[fn.Name.Name] = fn
 			}
 		}
 	}
-	return fset, handlers, stackHelpers
+	return fset, handlers, stackHelpers, gasHelpers
 }
 
-// isStackMethod reports whether fn is a method on *Stack.
-func isStackMethod(fn *ast.FuncDecl) bool {
+// methodReceiver returns the receiver type name of a pointer-receiver method
+// (e.g. "Stack" for (s *Stack)), or "" if fn is not such a method.
+func methodReceiver(fn *ast.FuncDecl) string {
 	if fn.Recv == nil || len(fn.Recv.List) != 1 {
-		return false
+		return ""
 	}
 	star, ok := fn.Recv.List[0].Type.(*ast.StarExpr)
 	if !ok {
-		return false
+		return ""
 	}
 	id, ok := star.X.(*ast.Ident)
-	return ok && id.Name == "Stack"
+	if !ok {
+		return ""
+	}
+	return id.Name
 }
 
 // hasInlineMarker reports whether fn is tagged //gen:inline, which marks a stack
@@ -194,25 +203,25 @@ func hasInlineMarker(fn *ast.FuncDecl) bool {
 	return false
 }
 
-var returnRe = regexp.MustCompile(`^(\s*)return\s+([^,]+),\s*(.+)$`)
+var opcodeReturnRe = regexp.MustCompile(`^(\s*)return\s+([^,]+),\s*(.+)$`)
 
-// inlineBody returns a named handler's body, rewritten so it can be spliced
-// into the dispatch loop (see rewriteSplicedBody). The caller emits it with p.
-func (g *generator) inlineBody(handler string) string {
+// inlineOpcodeBody returns a named handler's body, rewritten so it can be spliced
+// into the dispatch loop (see rewriteOpcodeReturns). The caller emits it with p.
+func (g *generator) inlineOpcodeBody(handler string) string {
 	fn := g.handlers[handler]
 	if fn == nil {
 		fatalf("no handler %q to inline", handler)
 	}
-	return g.rewriteSplicedBody(g.inlineStackHelpers(fn.Body.List, nil))
+	return g.rewriteOpcodeReturns(g.inlineStackHelpers(fn.Body.List, nil))
 }
 
-// inlineFactoryBody splices the body of the executionFunc closure that a make*
+// inlineOpcodeFactoryBody splices the body of the executionFunc closure that a make*
 // factory returns, substituting the factory's parameters with the per-opcode
 // constants in args (positional, matching the factory signature). This lets
 // closure-built handlers (makePush, makeDup) be derived from their single
 // definition rather than restated in the generator. The caller emits the
 // result with p.
-func (g *generator) inlineFactoryBody(factory string, args ...int) string {
+func (g *generator) inlineOpcodeFactoryBody(factory string, args ...int) string {
 	fn := g.handlers[factory]
 	if fn == nil {
 		fatalf("no factory %q to inline", factory)
@@ -227,7 +236,7 @@ func (g *generator) inlineFactoryBody(factory string, args ...int) string {
 	for i, nm := range names {
 		params[nm] = args[i]
 	}
-	return g.rewriteSplicedBody(g.inlineStackHelpers(lit.Body.List, params))
+	return g.rewriteOpcodeReturns(g.inlineStackHelpers(lit.Body.List, params))
 }
 
 // factoryClosure returns the executionFunc literal that a make* factory's body
@@ -262,17 +271,17 @@ func (g *generator) renderAst(stmts []ast.Stmt) string {
 	return raw.String()
 }
 
-// rewriteSplicedBody rewrites a printed handler body so it runs inside the
+// rewriteOpcodeReturns rewrites a printed handler body so it runs inside the
 // dispatch loop: the `*pc` dereference becomes the loop's `pc` local, and each
 // `return r0, r1` becomes loop control flow. Success (r1 == nil) advances pc
 // and continues, an error sets err and breaks. (Stack helpers were already
 // inlined by inlineStackHelpers before the body was printed.)
-func (g *generator) rewriteSplicedBody(src string) string {
+func (g *generator) rewriteOpcodeReturns(src string) string {
 	src = strings.ReplaceAll(src, "*pc", "pc")
 
 	var out bytes.Buffer
 	for _, line := range strings.Split(src, "\n") {
-		if m := returnRe.FindStringSubmatch(line); m != nil {
+		if m := opcodeReturnRe.FindStringSubmatch(line); m != nil {
 			indent, r0, r1 := m[1], strings.TrimSpace(m[2]), strings.TrimSpace(m[3])
 			// The error and halt path must overwrite res and err. Otherwise a
 			// halting inlined op (JUMPI on an invalid jump, say) returns stale
@@ -290,6 +299,50 @@ func (g *generator) rewriteSplicedBody(src string) string {
 				out.WriteString(indent + "res, err = " + r0 + ", " + r1 + "\n")
 				out.WriteString(indent + "break mainLoop\n")
 			}
+			continue
+		}
+		out.WriteString(line + "\n")
+	}
+	return out.String()
+}
+
+var gasReturnRe = regexp.MustCompile(`^(\s*)return\s+(\S.*)$`)
+
+// inlineGasBody splices a (g *GasBudget) charge method's body at a gas step,
+// mapping the receiver to contract.Gas and the method's single uint64 parameter
+// to the per-opcode gas constant. It is the gas-step analog of inlineOpcodeBody: the
+// method's `return <err>` becomes the loop's out-of-gas exit and its trailing
+// `return nil` is dropped so the opcode falls through to its remaining steps (see
+// rewriteGasReturns). The receiver and parameter are substituted textually on
+// word boundaries, which cannot touch fields like RegularGas.
+func (g *generator) inlineGasBody(name string, arg int) string {
+	fn := g.gasHelpers[name]
+	if fn == nil {
+		fatalf("no gas helper %q to inline", name)
+	}
+	names := paramNames(fn)
+	if len(names) != 1 {
+		fatalf("gas helper %q takes %d params, want 1", name, len(names))
+	}
+	src := g.renderAst(fn.Body.List)
+	src = regexp.MustCompile(`\b`+recvName(fn)+`\b`).ReplaceAllString(src, "contract.Gas")
+	src = substParams(src, map[string]int{names[0]: arg})
+	return g.rewriteGasReturns(src)
+}
+
+// rewriteGasReturns rewrites a spliced charge body so it runs as a gas step in
+// the dispatch loop: a `return <err>` becomes the out-of-gas break, and the
+// trailing `return nil` (success) is dropped so the opcode continues.
+func (g *generator) rewriteGasReturns(src string) string {
+	var out bytes.Buffer
+	for _, line := range strings.Split(src, "\n") {
+		if m := gasReturnRe.FindStringSubmatch(line); m != nil {
+			indent, val := m[1], strings.TrimSpace(m[2])
+			if val == "nil" {
+				continue // success: fall through to the rest of the op
+			}
+			out.WriteString(indent + "res, err = nil, " + val + "\n")
+			out.WriteString(indent + "break mainLoop\n")
 			continue
 		}
 		out.WriteString(line + "\n")
@@ -506,7 +559,7 @@ func (g *generator) deriveSpecs(forks []vm.GenFork) {
 			g.specs[code] = opSpec{
 				defined:  true,
 				name:     o.Name,
-				introF:   fork.RuleField,
+				fork:     fork.RuleField,
 				constGas: o.ConstantGas,
 				minStack: o.MinStack,
 				maxStack: o.MaxStack,
@@ -517,13 +570,13 @@ func (g *generator) deriveSpecs(forks []vm.GenFork) {
 	// Sanity: every inlined opcode must be defined and have fork-stable static
 	// gas / stack bounds across all forks where it appears (that is what makes
 	// it safe to bake as a constant). Bail loudly otherwise.
-	for code, handler := range inlineHandler {
+	for code, handler := range inlineOps {
 		g.checkStable(code, handler, forks)
 	}
-	// directCall opcodes bake their static gas and stack bounds the same way, so
+	// directCallOps opcodes bake their static gas and stack bounds the same way, so
 	// they must be fork-stable too. Dynamic gas is allowed (it is charged through
 	// the named gas function, not baked).
-	for code := range directCall {
+	for code := range directCallOps {
 		g.checkDirectCallStable(code, forks)
 	}
 }
@@ -544,17 +597,17 @@ func (g *generator) checkStable(code byte, what string, forks []vm.GenFork) {
 	}
 }
 
-// checkDirectCallStable verifies a directCall opcode is safe to direct-call. Its static
+// checkDirectCallStable verifies a directCallOps opcode is safe to direct-call. Its static
 // gas and stack bounds must be the same across every fork it appears in (they are
 // baked as constants), and its handler, gas and memory functions must be the same
 // across those forks too (they are called by name, so a fork that swapped one
 // would otherwise be missed). Unlike checkStable it allows dynamic gas, which
-// directCall ops carry by definition. It does not check the directCall map's names
+// directCallOps ops carry by definition. It does not check the directCallOps map's names
 // against the table, which the differential test covers.
 func (g *generator) checkDirectCallStable(code byte, forks []vm.GenFork) {
 	spec := g.specs[code]
 	if !spec.defined {
-		fatalf("opcode %#x (directCall) is never defined", code)
+		fatalf("opcode %#x (directCallOps) is never defined", code)
 	}
 	var exec, dyn, mem string
 	seen := false
@@ -564,7 +617,7 @@ func (g *generator) checkDirectCallStable(code byte, forks []vm.GenFork) {
 			continue
 		}
 		if o.ConstantGas != spec.constGas || o.MinStack != spec.minStack || o.MaxStack != spec.maxStack {
-			fatalf("opcode %#x (%s) is in directCall but not fork-stable (fork %s): static gas or stack bounds vary, cannot bake", code, spec.name, fork.Name)
+			fatalf("opcode %#x (%s) is in directCallOps but not fork-stable (fork %s): static gas or stack bounds vary, cannot bake", code, spec.name, fork.Name)
 		}
 		// Handler, gas and memory functions must match across forks too, or
 		// direct-calling them by name would skip a fork that swapped one. Names
@@ -573,7 +626,7 @@ func (g *generator) checkDirectCallStable(code byte, forks []vm.GenFork) {
 		if !seen {
 			exec, dyn, mem, seen = o.ExecuteFn, o.DynamicGasFn, o.MemorySizeFn, true
 		} else if o.ExecuteFn != exec || o.DynamicGasFn != dyn || o.MemorySizeFn != mem {
-			fatalf("opcode %#x (%s) is in directCall but its functions vary by fork (fork %s): got %s/%s/%s, want %s/%s/%s, cannot direct-call",
+			fatalf("opcode %#x (%s) is in directCallOps but its functions vary by fork (fork %s): got %s/%s/%s, want %s/%s/%s, cannot direct-call",
 				code, spec.name, fork.Name, o.ExecuteFn, o.DynamicGasFn, o.MemorySizeFn, exec, dyn, mem)
 		}
 	}
@@ -616,12 +669,7 @@ func (g *generator) emitGasCheck(spec opSpec) {
 	if spec.constGas == 0 {
 		return
 	}
-	g.p(`
-		if contract.Gas.RegularGas < %d {
-			return nil, ErrOutOfGas
-		}
-		contract.Gas.RegularGas -= %d
-	`, spec.constGas, spec.constGas)
+	g.p("%s", g.inlineGasBody("chargeRegularOnly", int(spec.constGas)))
 }
 
 // emitOpBody emits the stack/gas guards and the opcode body (the portion that runs
@@ -647,27 +695,27 @@ func (g *generator) emitOpBody(code byte) {
 		`)
 	}
 
-	switch h := inlineHandler[code]; h {
+	switch h := inlineOps[code]; h {
 	case "makePush": // PUSH3-PUSH32: splice makePush(size, size)
 		n := int(code) - 0x5f
-		g.p("%s", g.inlineFactoryBody("makePush", n, n))
+		g.p("%s", g.inlineOpcodeFactoryBody("makePush", n, n))
 	case "makeDup": // DUP1-DUP16: splice makeDup(n)
-		g.p("%s", g.inlineFactoryBody("makeDup", int(code)-0x7f))
+		g.p("%s", g.inlineOpcodeFactoryBody("makeDup", int(code)-0x7f))
 	default: // the rest: splice the opXxx handler body
-		g.p("%s", g.inlineBody(h))
+		g.p("%s", g.inlineOpcodeBody(h))
 	}
 }
 
 func (g *generator) emitInlineOp(code byte) {
 	spec := g.specs[code]
 	g.p("case %s:\n", spec.name)
-	if spec.introF == "" {
+	if spec.fork == "" {
 		g.emitOpBody(code)
 		return
 	}
 	// Fork-gated: run the inlined body only when the opcode is active for the
 	// current fork. Otherwise mirror the legacy loop's undefined-opcode handling.
-	g.p("if rules.%s {\n", spec.introF)
+	g.p("if rules.%s {\n", spec.fork)
 	g.emitOpBody(code)
 	g.p("}\n")
 	g.p(`
@@ -679,10 +727,10 @@ func (g *generator) emitInlineOp(code byte) {
 // emitDirectCallOp emits an opcode case identical to the default case, except
 // the handler, dynamic-gas, and memory-size functions are called by name
 // rather than through the indirect operation.* table pointers. Valid only for
-// fork-invariant ops (see directCall).
+// fork-invariant ops (see directCallOps).
 func (g *generator) emitDirectCallOp(code byte) {
 	spec := g.specs[code]
-	fns := directCall[code]
+	fns := directCallOps[code]
 	g.p("case %s:\n", spec.name)
 	g.emitStackChecks(spec)
 	g.emitGasCheck(spec)
@@ -706,10 +754,13 @@ func (g *generator) emitDirectCallOp(code byte) {
 		if err != nil {
 			return nil, fmt.Errorf("%%w: %%v", ErrOutOfGas, err)
 		}
-		if contract.Gas.RegularGas < dynamicCost.RegularGas {
+		if dynamicCost.StateGas == 0 {
+			if err := contract.Gas.chargeRegularOnly(dynamicCost.RegularGas); err != nil {
+				return nil, err
+			}
+		} else if !contract.Gas.charge(dynamicCost) {
 			return nil, ErrOutOfGas
 		}
-		contract.Gas.RegularGas -= dynamicCost.RegularGas
 		if memorySize > 0 {
 			mem.Resize(memorySize)
 		}
@@ -735,10 +786,9 @@ func (g *generator) emitDefault() {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 			}
 			cost := operation.constantGas
-			if contract.Gas.RegularGas < cost {
-				return nil, ErrOutOfGas
+			if err := contract.Gas.chargeRegularOnly(cost); err != nil {
+				return nil, err
 			}
-			contract.Gas.RegularGas -= cost
 			var memorySize uint64
 			if operation.dynamicGas != nil {
 				if operation.memorySize != nil {
@@ -755,10 +805,13 @@ func (g *generator) emitDefault() {
 				if err != nil {
 					return nil, fmt.Errorf("%%w: %%v", ErrOutOfGas, err)
 				}
-				if contract.Gas.RegularGas < dynamicCost.RegularGas {
+				if dynamicCost.StateGas == 0 {
+					if err := contract.Gas.chargeRegularOnly(dynamicCost.RegularGas); err != nil {
+						return nil, err
+					}
+				} else if !contract.Gas.charge(dynamicCost) {
 					return nil, ErrOutOfGas
 				}
-				contract.Gas.RegularGas -= dynamicCost.RegularGas
 			}
 			if memorySize > 0 {
 				mem.Resize(memorySize)
@@ -829,9 +882,9 @@ func (g *generator) emitFile() {
 	// Inlined cases, in opcode order for readability.
 	for code := 0; code < 256; code++ {
 		b := byte(code)
-		if _, named := inlineHandler[b]; named {
+		if _, named := inlineOps[b]; named {
 			g.emitInlineOp(b)
-		} else if _, dc := directCall[b]; dc {
+		} else if _, dc := directCallOps[b]; dc {
 			g.emitDirectCallOp(b)
 		}
 	}
@@ -857,8 +910,8 @@ func main() {
 	}
 	vmDir := filepath.Dir(filepath.Dir(self)) // .../core/vm/gen -> .../core/vm
 
-	fset, handlers, stackHelpers := parseHandlers(vmDir)
-	g := &generator{fset: fset, handlers: handlers, stackHelpers: stackHelpers, buf: new(bytes.Buffer)}
+	fset, handlers, stackHelpers, gasHelpers := parseHandlers(vmDir)
+	g := &generator{fset: fset, handlers: handlers, stackHelpers: stackHelpers, gasHelpers: gasHelpers, buf: new(bytes.Buffer)}
 	g.deriveSpecs(vm.GenForks())
 	g.emitFile()
 
