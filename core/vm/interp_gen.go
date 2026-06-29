@@ -2525,10 +2525,13 @@ mainLoop:
 			} else if sLen > operation.maxStack {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 			}
-			cost := operation.constantGas
-			if err := contract.Gas.chargeRegularOnly(cost); err != nil {
-				return nil, err
+			if contract.Gas.RegularGas < operation.constantGas {
+				res, err = nil, ErrOutOfGas
+				break mainLoop
 			}
+			contract.Gas.RegularGas -= operation.constantGas
+			contract.Gas.UsedRegularGas += operation.constantGas
+
 			var memorySize uint64
 			if operation.dynamicGas != nil {
 				if operation.memorySize != nil {
