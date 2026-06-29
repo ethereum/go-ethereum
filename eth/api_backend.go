@@ -19,6 +19,7 @@ package eth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -64,6 +65,13 @@ func (b *EthAPIBackend) CurrentBlock() *types.Header {
 }
 
 func (b *EthAPIBackend) SetHead(number uint64) error {
+	// Reject rewinding to a point before the snap-sync pivot. The earliest
+	// recoverable state is the pivot block, so a target below it would simply
+	// reset the chain to genesis, which is almost never the intent behind a
+	// manual debug_setHead.
+	if pivot := rawdb.ReadLastPivotNumber(b.eth.ChainDb()); pivot != nil && number < *pivot {
+		return fmt.Errorf("rewind target %d is before the snap-sync pivot %d", number, *pivot)
+	}
 	b.eth.handler.downloader.Cancel()
 	return b.eth.blockchain.SetHead(number)
 }
