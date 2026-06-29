@@ -86,13 +86,13 @@ func (g *GasBudget) Charge(cost GasCosts) (GasBudget, bool) {
 
 // ChargeExecutionOnly deducts a execution-only cost. It's always preferred for
 // performance consideration if the opcode doesn't have any state cost.
-func (g *GasBudget) ChargeExecutionOnly(r uint64) bool {
+func (g *GasBudget) ChargeExecutionOnly(r uint64) error {
 	if g.ExecutionGas < r {
-		return false
+		return ErrOutOfGas
 	}
 	g.ExecutionGas -= r
 	g.UsedExecutionGas += r
-	return true
+	return nil
 }
 
 // CanAfford reports whether the running budget can cover the given cost vector
