@@ -103,6 +103,14 @@ var diffForks = func() []struct {
 	preCon.ArrowGlacierBlock = nil
 	preCon.GrayGlacierBlock = nil
 
+	// amsterdam: Merged plus the Amsterdam (EIP-8037) timestamp, so the diff test
+	// exercises the multidimensional gas accounting (regular + state gas). Without
+	// this lane a state-gas charging divergence between the two interpreters would
+	// go unnoticed.
+	ams := *params.MergedTestChainConfig
+	amsTime := uint64(0)
+	ams.AmsterdamTime = &amsTime
+
 	return []struct {
 		name   string
 		cfg    *params.ChainConfig
@@ -112,6 +120,7 @@ var diffForks = func() []struct {
 		{"Byzantium", &preCon, false},
 		{"London", params.TestChainConfig, false},
 		{"Merged", params.MergedTestChainConfig, true},
+		{"Amsterdam", &ams, true},
 	}
 }()
 
@@ -295,6 +304,9 @@ func diffBlockCtx(merged bool) BlockContext {
 		GasLimit:    30_000_000,
 		BaseFee:     big.NewInt(7),
 		BlobBaseFee: big.NewInt(3),
+		// Price state gas as mainnet does (see core.NewEVMBlockContext), so the
+		// Amsterdam diff lane exercises the EIP-8037 state-gas charging path.
+		CostPerStateByte: params.CostPerStateByte,
 	}
 	if merged {
 		h := common.HexToHash("0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20")
