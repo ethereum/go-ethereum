@@ -480,6 +480,95 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 	}
 }
 
+// parallelUpdateThreshold is the minimum number of entries a batch must contain
+// before UpdateBatch processes them concurrently; smaller batches are applied
+// sequentially to avoid the goroutine overhead.
+const parallelUpdateThreshold = 4
+
+// UpdateBatch updates a batch of entries concurrently.
+func (t *Trie) UpdateBatch(keys [][]byte, values [][]byte) error {
+	// Short circuit if the trie is already committed and unusable.
+	if t.committed {
+		return ErrCommitted
+	}
+	if len(keys) != len(values) {
+		return fmt.Errorf("keys and values length mismatch: %d != %d", len(keys), len(values))
+	}
+	// Insert the entries sequentially if there are not too many
+	// trie nodes in the trie.
+	fn, ok := t.root.(*fullNode)
+	if !ok || len(keys) < parallelUpdateThreshold {
+		return t.updateSequential(keys, values)
+	}
+	// Group the entries by the first nibble of the (hex) key, so that each group
+	// can be applied to a distinct child of the root independently.
+	var (
+		ikeys   = make(map[byte][][]byte)
+		ivals   = make(map[byte][][]byte)
+		deleted [17]bool // child positions receiving at least one deletion
+		eg      errgroup.Group
+	)
+	for i, key := range keys {
+		hkey := keybytesToHex(key)
+		ikeys[hkey[0]] = append(ikeys[hkey[0]], hkey)
+		ivals[hkey[0]] = append(ivals[hkey[0]], values[i])
+		if len(values[i]) == 0 {
+			deleted[hkey[0]] = true
+		}
+	}
+	// If the root may be collapsed after applying the updates, fallback
+	// to the sequential mode to eliminate the additional complexity.
+	survivors := 0
+	for i, child := range &fn.Children {
+		if child != nil && !deleted[i] {
+			survivors++
+		}
+	}
+	if survivors < 2 {
+		return t.updateSequential(keys, values)
+	}
+	// Execute the trie updates in concurrent mode
+	fn.flags = t.newFlag()
+	for pos, ks := range ikeys {
+		eg.Go(func() error {
+			vs := ivals[pos]
+			prefix := []byte{pos}
+			for i, k := range ks {
+				if len(vs[i]) != 0 {
+					_, n, err := t.insert(fn.Children[pos], prefix, k[1:], valueNode(vs[i]))
+					if err != nil {
+						return err
+					}
+					fn.Children[pos] = n
+				} else {
+					_, n, err := t.delete(fn.Children[pos], prefix, k[1:])
+					if err != nil {
+						return err
+					}
+					fn.Children[pos] = n
+				}
+			}
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+	t.unhashed += len(keys)
+	t.uncommitted += len(keys)
+	return nil
+}
+
+// updateSequential applies the given entries to the trie one by one.
+func (t *Trie) updateSequential(keys [][]byte, values [][]byte) error {
+	for i, key := range keys {
+		if err := t.Update(key, values[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // MustDelete is a wrapper of Delete and will omit any encountered error but
 // just print out an error message.
 func (t *Trie) MustDelete(key []byte) {
