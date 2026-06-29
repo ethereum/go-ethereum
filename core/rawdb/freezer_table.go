@@ -611,9 +611,17 @@ func (t *freezerTable) truncateHead(items uint64) error {
 	if existing <= items {
 		return nil
 	}
-	if items < t.itemHidden.Load() {
-		return errors.New("truncation below tail")
+
+	hidden := t.itemHidden.Load()
+
+	if items < hidden {
+		if existing == hidden {
+			// Empty table means that it is newly added. Its tail would be
+			// at the head, so we have to align the table down to the new head.
+			return t.resetTo(items)
+		}
 	}
+
 	// We need to truncate, save the old size for metrics tracking
 	oldSize, err := t.sizeNolock()
 	if err != nil {
