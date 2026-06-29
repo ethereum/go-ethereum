@@ -213,6 +213,11 @@ func (evm *EVM) SetJumpDestCache(jumpDests JumpDestCache) {
 	evm.jumpDests = jumpDests
 }
 
+// SetStateDB configures the state for interaction.
+func (evm *EVM) SetStateDB(statedb *state.StateDB) {
+	evm.StateDB = statedb
+}
+
 // SetTxContext resets the EVM with a new transaction context.
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) SetTxContext(txCtx TxContext) {
