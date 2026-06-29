@@ -27,7 +27,7 @@ import (
 	"github.com/karalabe/ssz"
 )
 
-// handleGetPayload implements GET /engine/v2/{fork}/payloads/{payloadId}.
+// handleGetPayload implements GET /engine/v1/payloads/{payloadId} (fork via Eth-Execution-Version).
 func (rt *Router) handleGetPayload(w http.ResponseWriter, r *http.Request, fork forks.Fork, idHex string) {
 	sf, ok := resolveFork(w, fork, forks.Paris)
 	if !ok {
@@ -41,7 +41,7 @@ func (rt *Router) handleGetPayload(w http.ResponseWriter, r *http.Request, fork 
 	var id engine.PayloadID
 	copy(id[:], raw)
 
-	// allowedForks is the URL fork's era: the named fork plus any BPO forks
+	// allowedForks is the header fork's era: the named fork plus any BPO forks
 	// that layer on it. The catalyst layer derives the cached payload's fork
 	// via LatestFork, which can yield a BPO fork.
 	env, err := rt.backend.GetPayload(id, eraForks(fork))
@@ -56,7 +56,7 @@ func (rt *Router) handleGetPayload(w http.ResponseWriter, r *http.Request, fork 
 }
 
 // buildBuiltPayloadAmsterdam packages an engine.ExecutionPayloadEnvelope into
-// the SSZ BuiltPayload shape for the URL fork. BlockValue/Requests come straight
+// the SSZ BuiltPayload shape for the header fork. BlockValue/Requests come straight
 // across; the inner payload goes through the SSZ converter. The blobs bundle is
 // emitted as V1 (Cancun/Prague) or V2 (Osaka+) per the fork; pre-Cancun forks
 // carry no bundle (and no should_override_builder), so those fields are left

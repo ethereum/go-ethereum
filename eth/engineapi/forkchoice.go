@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/params/forks"
 )
 
-// handleForkchoice implements POST /engine/v2/{fork}/forkchoice.
+// handleForkchoice implements POST /engine/v1/forkchoice (fork via Eth-Execution-Version).
 func (rt *Router) handleForkchoice(w http.ResponseWriter, r *http.Request, fork forks.Fork) {
 	// The forkchoice envelope shape is fork-driven by the codec; every fork
 	// from Paris on has a valid wire shape.
@@ -48,13 +48,13 @@ func (rt *Router) handleForkchoice(w http.ResponseWriter, r *http.Request, fork 
 			writeProblem(w, http.StatusBadRequest, ErrInvalidAttributes, err.Error())
 			return
 		}
-		// If PayloadAttributes is present the URL fork MUST match the fork
-		// the new payload would belong to. ForkFromTimestamp can return a BPO
-		// fork (which has no URL segment of its own); collapse it onto the
-		// named fork it layers on before comparing.
+		// If PayloadAttributes is present the Eth-Execution-Version header MUST
+		// match the fork the new payload would belong to. ForkFromTimestamp can
+		// return a BPO fork (which has no header value of its own); collapse it
+		// onto the named fork it layers on before comparing.
 		if baseFork(rt.backend.ForkFromTimestamp(attr.Timestamp)) != fork {
 			writeProblem(w, http.StatusBadRequest, ErrUnsupportedFork,
-				"payload_attributes timestamp does not match URL fork")
+				"payload_attributes timestamp does not match Eth-Execution-Version header")
 			return
 		}
 		attrs = sszt.PayloadAttributesToEngine(attr)

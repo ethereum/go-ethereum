@@ -103,7 +103,10 @@ func newTestServer(t *testing.T, b Backend) *httptest.Server {
 	return httptest.NewServer(http.StripPrefix(BasePath, NewRouter(b)))
 }
 
-func sszPost(t *testing.T, srv *httptest.Server, path string, body ssz.Object, fork ssz.Fork) *http.Response {
+// sszPost SSZ-encodes body and POSTs it. forkHdr, when non-empty, is sent as
+// the Eth-Execution-Version header that fork-scoped endpoints route on; pass ""
+// for unscoped endpoints (e.g. /blobs/vN) which ignore it.
+func sszPost(t *testing.T, srv *httptest.Server, path string, body ssz.Object, fork ssz.Fork, forkHdr string) *http.Response {
 	t.Helper()
 	buf := make([]byte, ssz.SizeOnFork(body, fork))
 	if err := ssz.EncodeToBytesOnFork(buf, body, fork); err != nil {
@@ -111,9 +114,25 @@ func sszPost(t *testing.T, srv *httptest.Server, path string, body ssz.Object, f
 	}
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+BasePath+path, bytes.NewReader(buf))
 	req.Header.Set("Content-Type", sszContentType)
+	if forkHdr != "" {
+		req.Header.Set(forkHeader, forkHdr)
+	}
 	resp, err := srv.Client().Do(req)
 	if err != nil {
 		t.Fatalf("post %s: %v", path, err)
+	}
+	return resp
+}
+
+// getFork issues a GET against a fork-scoped endpoint with the given fork set in
+// the Eth-Execution-Version header.
+func getFork(t *testing.T, srv *httptest.Server, path, forkHdr string) *http.Response {
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+BasePath+path, nil)
+	req.Header.Set(forkHeader, forkHdr)
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatalf("get %s: %v", path, err)
 	}
 	return resp
 }
@@ -151,7 +170,7 @@ func TestRouterNewPayload(t *testing.T) {
 		},
 		ParentBeaconBlockRoot: &common.Hash{0x55},
 	}
-	resp := sszPost(t, srv, "/amsterdam/payloads", env, amsterdam)
+	resp := sszPost(t, srv, "/payloads", env, amsterdam, "amsterdam")
 	if resp.StatusCode != 200 {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
 	}
@@ -178,7 +197,7 @@ func TestRouterForkchoice(t *testing.T) {
 	fcu := &sszt.ForkchoiceUpdateAmsterdam{
 		ForkchoiceState: &sszt.ForkchoiceState{HeadBlockHash: common.Hash{0xaa}},
 	}
-	resp := sszPost(t, srv, "/amsterdam/forkchoice", fcu, amsterdam)
+	resp := sszPost(t, srv, "/forkchoice", fcu, amsterdam, "amsterdam")
 	if resp.StatusCode != 200 {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
 	}
@@ -196,14 +215,27 @@ func TestRouterUnsupportedFork(t *testing.T) {
 	srv := newTestServer(t, &stubBackend{})
 	defer srv.Close()
 
-	// Bogus fork in URL: the router does not recognise the segment at all.
-	resp, err := srv.Client().Post(srv.URL+BasePath+"/bogus/payloads", sszContentType, bytes.NewReader(nil))
-	if err != nil {
-		t.Fatal(err)
+	post := func(forkHdr string) int {
+		req, _ := http.NewRequest(http.MethodPost, srv.URL+BasePath+"/payloads", bytes.NewReader(nil))
+		req.Header.Set("Content-Type", sszContentType)
+		if forkHdr != "" {
+			req.Header.Set(forkHeader, forkHdr)
+		}
+		resp, err := srv.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
 	}
-	resp.Body.Close()
-	if resp.StatusCode != 400 {
-		t.Fatalf("want 400, got %d", resp.StatusCode)
+
+	// Missing Eth-Execution-Version header on a fork-scoped endpoint.
+	if got := post(""); got != 400 {
+		t.Fatalf("missing fork header: want 400, got %d", got)
+	}
+	// Bogus fork: the router does not recognise the header value at all.
+	if got := post("bogus"); got != 400 {
+		t.Fatalf("bogus fork: want 400, got %d", got)
 	}
 }
 
@@ -224,7 +256,7 @@ func TestRouterAdvertisedForkRoutable(t *testing.T) {
 		npStatus:  engine.PayloadStatusV1{Status: engine.VALID},
 		envelope:  env,
 		// Osaka chain sitting in a BPO era: ForkFromTimestamp returns a BPO
-		// fork, which must collapse onto the osaka URL fork.
+		// fork, which must collapse onto the osaka header fork.
 		forkAtTime: func(uint64) forks.Fork { return forks.BPO1 },
 	}
 	srv := newTestServer(t, b)
@@ -241,7 +273,7 @@ func TestRouterAdvertisedForkRoutable(t *testing.T) {
 			ParentBeaconBlockRoot: &common.Hash{0x55},
 		}},
 	}
-	resp := sszPost(t, srv, "/osaka/forkchoice", fcu, osaka)
+	resp := sszPost(t, srv, "/forkchoice", fcu, osaka, "osaka")
 	if resp.StatusCode != 200 {
 		t.Fatalf("forkchoice: want 200, got %d", resp.StatusCode)
 	}
@@ -259,17 +291,14 @@ func TestRouterAdvertisedForkRoutable(t *testing.T) {
 		},
 		ParentBeaconBlockRoot: &common.Hash{0x55},
 	}
-	resp = sszPost(t, srv, "/osaka/payloads", penv, osaka)
+	resp = sszPost(t, srv, "/payloads", penv, osaka, "osaka")
 	if resp.StatusCode != 200 {
 		t.Fatalf("newPayload: want 200, got %d", resp.StatusCode)
 	}
 	resp.Body.Close()
 
 	// getPayload.
-	resp, err := srv.Client().Get(srv.URL + BasePath + "/osaka/payloads/0x0102030405060708")
-	if err != nil {
-		t.Fatal(err)
-	}
+	resp = getFork(t, srv, "/payloads/0x0102030405060708", "osaka")
 	resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("getPayload: want 200, got %d", resp.StatusCode)
@@ -279,7 +308,10 @@ func TestRouterAdvertisedForkRoutable(t *testing.T) {
 func TestRouterUnsupportedMediaType(t *testing.T) {
 	srv := newTestServer(t, &stubBackend{})
 	defer srv.Close()
-	resp, err := srv.Client().Post(srv.URL+BasePath+"/amsterdam/payloads", "application/json", strings.NewReader("{}"))
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+BasePath+"/payloads", strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(forkHeader, "amsterdam")
+	resp, err := srv.Client().Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,8 +392,9 @@ func TestRouterTrailingSlash404(t *testing.T) {
 func TestRouterSSZDecodeError(t *testing.T) {
 	srv := newTestServer(t, &stubBackend{})
 	defer srv.Close()
-	req, _ := http.NewRequest(http.MethodPost, srv.URL+BasePath+"/amsterdam/payloads", bytes.NewReader([]byte{0xff}))
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+BasePath+"/payloads", bytes.NewReader([]byte{0xff}))
 	req.Header.Set("Content-Type", sszContentType)
+	req.Header.Set(forkHeader, "amsterdam")
 	resp, err := srv.Client().Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -385,7 +418,7 @@ func TestRouterBlobsV2AllOrNothing(t *testing.T) {
 	srv := newTestServer(t, b)
 	defer srv.Close()
 	req := &sszt.BlobsVersionedHashesRequest{VersionedHashes: []common.Hash{{0x01}}}
-	resp := sszPost(t, srv, "/blobs/v2", req, ssz.ForkUnknown)
+	resp := sszPost(t, srv, "/blobs/v2", req, ssz.ForkUnknown, "")
 	defer resp.Body.Close()
 	if resp.StatusCode != 204 {
 		t.Fatalf("want 204, got %d", resp.StatusCode)
@@ -397,7 +430,7 @@ func TestRouterBlobsV3PartialOK(t *testing.T) {
 	srv := newTestServer(t, b)
 	defer srv.Close()
 	req := &sszt.BlobsVersionedHashesRequest{VersionedHashes: []common.Hash{{0x01}, {0x02}}}
-	resp := sszPost(t, srv, "/blobs/v3", req, ssz.ForkUnknown)
+	resp := sszPost(t, srv, "/blobs/v3", req, ssz.ForkUnknown, "")
 	if resp.StatusCode != 200 {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
 	}
@@ -421,10 +454,7 @@ func TestRouterGetPayloadCacheControl(t *testing.T) {
 	}
 	srv := newTestServer(t, &stubBackend{envelope: env})
 	defer srv.Close()
-	resp, err := srv.Client().Get(srv.URL + BasePath + "/amsterdam/payloads/0x0102030405060708")
-	if err != nil {
-		t.Fatal(err)
-	}
+	resp := getFork(t, srv, "/payloads/0x0102030405060708", "amsterdam")
 	resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
@@ -437,10 +467,7 @@ func TestRouterGetPayloadCacheControl(t *testing.T) {
 func TestRouterGetPayloadUnknown(t *testing.T) {
 	srv := newTestServer(t, &stubBackend{getErr: engine.UnknownPayload})
 	defer srv.Close()
-	resp, err := srv.Client().Get(srv.URL + BasePath + "/amsterdam/payloads/0x0102030405060708")
-	if err != nil {
-		t.Fatal(err)
-	}
+	resp := getFork(t, srv, "/payloads/0x0102030405060708", "amsterdam")
 	resp.Body.Close()
 	if resp.StatusCode != 404 {
 		t.Fatalf("want 404, got %d", resp.StatusCode)

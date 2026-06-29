@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/params/forks"
 )
 
-// handleNewPayload implements POST /engine/v2/{fork}/payloads.
+// handleNewPayload implements POST /engine/v1/payloads (fork via Eth-Execution-Version).
 func (rt *Router) handleNewPayload(w http.ResponseWriter, r *http.Request, fork forks.Fork) {
 	// The payload envelope shape is fork-driven by the codec; every fork from
 	// Paris on has a valid wire shape.

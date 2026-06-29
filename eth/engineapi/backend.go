@@ -42,7 +42,8 @@ type Backend interface {
 	NewPayload(ctx context.Context, data engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (engine.PayloadStatusV1, error)
 
 	// GetPayload returns a previously-built payload. allowedForks filters
-	// to the fork the URL selected; an empty slice disables the check.
+	// to the fork the Eth-Execution-Version header selected; an empty slice
+	// disables the check.
 	GetPayload(id engine.PayloadID, allowedForks []forks.Fork) (*engine.ExecutionPayloadEnvelope, error)
 
 	// GetBlobs returns blob bundle entries indexed by versioned hash.
@@ -53,7 +54,7 @@ type Backend interface {
 	// BodiesByHash returns block bodies for the given hashes. Order matches
 	// the input; an entry is nil for unknown/pruned blocks. The second slice
 	// returns the timestamp of each known block (zero for unknown) so the
-	// router can enforce the URL fork's era window.
+	// router can enforce the header fork's era window.
 	BodiesByHash(hashes []common.Hash) ([]*types.Body, []uint64)
 
 	// BodiesByRange returns block bodies for [from, from+count), but the

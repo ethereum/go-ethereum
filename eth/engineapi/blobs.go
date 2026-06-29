@@ -24,7 +24,7 @@ import (
 	"github.com/karalabe/ssz"
 )
 
-// handleBlobs dispatches POST /engine/v2/blobs/v{1,2,3,4}.
+// handleBlobs dispatches POST /engine/v1/blobs/v{1,2,3,4}.
 // suffix is the path remainder after "/blobs/".
 func (rt *Router) handleBlobs(w http.ResponseWriter, r *http.Request, suffix string) {
 	if r.Method != http.MethodPost {
@@ -110,7 +110,7 @@ func (rt *Router) handleBlobsV2(w http.ResponseWriter, r *http.Request, allowPar
 	writeSSZResponse(w, resp, ssz.ForkUnknown)
 }
 
-// handleBlobsV4 implements POST /engine/v2/blobs/v4 (cell-range selection).
+// handleBlobsV4 implements POST /engine/v1/blobs/v4 (cell-range selection).
 // The custody/cell-range logic is not yet plumbed into the txpool; we return
 // 204 to signal the EL cannot serve it. The handler still validates the
 // request body and the indices_bitarray length to keep the wire contract live.

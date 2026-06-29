@@ -61,7 +61,7 @@ func Register(stack *node.Node, backend *eth.Ethereum) error {
 		},
 	})
 	// Mount the REST + SSZ Engine API (execution-apis #793) under
-	// /engine/v2/ on the authenticated HTTP server. The router shares
+	// /engine/v1/ on the authenticated HTTP server. The router shares
 	// catalyst's business logic via the restBackend adapter.
 	stack.RegisterAuthHandler("engine-rest", engineapi.BasePath+"/",
 		http.StripPrefix(engineapi.BasePath, engineapi.NewRouter(newRESTBackend(api))))

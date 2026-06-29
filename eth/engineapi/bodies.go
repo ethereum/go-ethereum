@@ -26,7 +26,7 @@ import (
 	"github.com/karalabe/ssz"
 )
 
-// handleBodiesByHash implements POST /engine/v2/{fork}/bodies/hash.
+// handleBodiesByHash implements POST /engine/v1/bodies/hash (fork via Eth-Execution-Version).
 func (rt *Router) handleBodiesByHash(w http.ResponseWriter, r *http.Request, fork forks.Fork) {
 	sf, ok := resolveFork(w, fork, forks.Paris)
 	if !ok {
@@ -44,7 +44,7 @@ func (rt *Router) handleBodiesByHash(w http.ResponseWriter, r *http.Request, for
 	writeSSZResponse(w, buildBodiesResponse(rt.backend, fork, sf, bodies, timestamps), sf)
 }
 
-// handleBodiesByRange implements GET /engine/v2/{fork}/bodies?from=&count=.
+// handleBodiesByRange implements GET /engine/v1/bodies?from=&count= (fork via Eth-Execution-Version).
 func (rt *Router) handleBodiesByRange(w http.ResponseWriter, r *http.Request, fork forks.Fork) {
 	sf, ok := resolveFork(w, fork, forks.Paris)
 	if !ok {
@@ -70,7 +70,7 @@ func (rt *Router) handleBodiesByRange(w http.ResponseWriter, r *http.Request, fo
 }
 
 // buildBodiesResponse assembles a BodiesResponse for the given fork, marking
-// out-of-era blocks as available=false per the URL fork window. The body shape
+// out-of-era blocks as available=false per the header fork window. The body shape
 // is fork-driven by the codec; bodyToSSZ populates the superset and the codec
 // emits only the fork's active fields.
 func buildBodiesResponse(b Backend, fork forks.Fork, sf ssz.Fork, bodies []*types.Body, ts []uint64) *sszt.BodiesResponse {

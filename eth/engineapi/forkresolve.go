@@ -25,7 +25,7 @@ import (
 	"github.com/karalabe/ssz"
 )
 
-// resolveFork maps the URL fork onto the ssz.Fork the codec multiplexes on,
+// resolveFork maps the header fork onto the ssz.Fork the codec multiplexes on,
 // enforcing that it is at least min. On failure it writes the appropriate
 // problem response and returns ok=false; the caller should return immediately.
 func resolveFork(w http.ResponseWriter, fork, min forks.Fork) (ssz.Fork, bool) {
@@ -42,9 +42,9 @@ func resolveFork(w http.ResponseWriter, fork, min forks.Fork) (ssz.Fork, bool) {
 }
 
 // baseFork collapses a BPO fork onto the named fork that it layers on. BPO1..5
-// sit between Osaka and Amsterdam in params/forks but have no Engine API URL
-// segment of their own: a chain in a BPO era still negotiates /osaka/*. Named
-// forks map to themselves.
+// sit between Osaka and Amsterdam in params/forks but have no Engine API fork
+// header value of their own: a chain in a BPO era still negotiates
+// Eth-Execution-Version: osaka. Named forks map to themselves.
 func baseFork(f forks.Fork) forks.Fork {
 	switch f {
 	case forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5:
@@ -54,7 +54,7 @@ func baseFork(f forks.Fork) forks.Fork {
 	}
 }
 
-// eraForks returns the set of params/forks values that share a URL fork's
+// eraForks returns the set of params/forks values that share a header fork's
 // wire shape: the named fork plus any BPO forks that layer on it. checkFork in
 // the catalyst layer derives a cached payload's fork via LatestFork, which can
 // return a BPO fork, so the allowed set passed to GetPayload must include them.
@@ -66,7 +66,7 @@ func eraForks(fork forks.Fork) []forks.Fork {
 }
 
 // payloadVersionFor selects the JSON-RPC PayloadVersion that the catalyst layer
-// expects for a given URL fork, mirroring the per-fork version table on the
+// expects for a given header fork, mirroring the per-fork version table on the
 // JSON-RPC ForkchoiceUpdatedVx path (Amsterdam -> V4, Cancun..Osaka -> V3,
 // Shanghai -> V2, Paris -> V1).
 func payloadVersionFor(fork forks.Fork) engine.PayloadVersion {

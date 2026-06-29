@@ -23,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/engine"
 )
 
-// handleIdentity implements GET /engine/v2/identity.
+// handleIdentity implements GET /engine/v1/identity.
 // The CL surfaces itself via the X-Engine-Client-Version request header; the
 // EL responds with its own ClientVersion in JSON.
 func (rt *Router) handleIdentity(w http.ResponseWriter, r *http.Request) {

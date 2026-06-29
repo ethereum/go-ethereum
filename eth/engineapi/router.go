@@ -25,11 +25,14 @@ import (
 
 // BasePath is the mount prefix for the REST Engine API. Handlers below assume
 // requests have already been routed under this prefix.
-const BasePath = "/engine/v2"
+const BasePath = "/engine/v1"
 
-// supportedForks lists the fork URL segments the router recognises. Order is
-// chronological; the router does an exact prefix match so /amsterdam/payloads
-// is not confused with /amsterdam-foo/payloads.
+// forkHeader carries the fork name on hot-path requests, replacing the former
+// /{fork}/ URL segment. Mirrors the Beacon API's Eth-Consensus-Version idiom.
+const forkHeader = "Eth-Execution-Version"
+
+// supportedForks lists the fork names the router recognises in the
+// Eth-Execution-Version header. Lookup is case-insensitive (keys are lower).
 var supportedForks = map[string]forks.Fork{
 	"paris":     forks.Paris,
 	"shanghai":  forks.Shanghai,
@@ -59,6 +62,8 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusNotFound, ErrMethodNotFound, "")
 		return
 	}
+	// Unscoped endpoints ignore the Eth-Execution-Version header; fork-scoped
+	// endpoints resolve the fork from it (see handleForkScoped).
 	switch {
 	case path == "/capabilities":
 		rt.handleCapabilities(w, r)
@@ -71,36 +76,50 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleForkScoped routes /{fork}/<endpoint>... paths.
+// handleForkScoped routes the fork-scoped endpoints (/payloads, /forkchoice,
+// /bodies). The fork is selected by the Eth-Execution-Version request header
+// rather than a URL segment. The path is matched first so an entirely unknown
+// route yields method-not-found rather than masking it as a fork error.
 func (rt *Router) handleForkScoped(w http.ResponseWriter, r *http.Request, path string) {
-	if len(path) < 2 || path[0] != '/' {
-		writeProblem(w, http.StatusNotFound, ErrMethodNotFound, "")
-		return
-	}
-	rest := path[1:]
-	slash := strings.IndexByte(rest, '/')
-	if slash < 0 {
-		writeProblem(w, http.StatusNotFound, ErrMethodNotFound, "")
-		return
-	}
-	forkName, sub := rest[:slash], rest[slash:]
-	fork, ok := supportedForks[forkName]
-	if !ok {
-		writeProblem(w, http.StatusBadRequest, ErrUnsupportedFork, "unknown fork "+forkName)
-		return
-	}
+	var handler func(w http.ResponseWriter, r *http.Request, fork forks.Fork)
 	switch {
-	case sub == "/payloads" && r.Method == http.MethodPost:
-		rt.handleNewPayload(w, r, fork)
-	case sub == "/forkchoice" && r.Method == http.MethodPost:
-		rt.handleForkchoice(w, r, fork)
-	case strings.HasPrefix(sub, "/payloads/") && r.Method == http.MethodGet:
-		rt.handleGetPayload(w, r, fork, sub[len("/payloads/"):])
-	case sub == "/bodies/hash" && r.Method == http.MethodPost:
-		rt.handleBodiesByHash(w, r, fork)
-	case sub == "/bodies" && r.Method == http.MethodGet:
-		rt.handleBodiesByRange(w, r, fork)
+	case path == "/payloads" && r.Method == http.MethodPost:
+		handler = rt.handleNewPayload
+	case path == "/forkchoice" && r.Method == http.MethodPost:
+		handler = rt.handleForkchoice
+	case strings.HasPrefix(path, "/payloads/") && r.Method == http.MethodGet:
+		id := path[len("/payloads/"):]
+		handler = func(w http.ResponseWriter, r *http.Request, fork forks.Fork) {
+			rt.handleGetPayload(w, r, fork, id)
+		}
+	case path == "/bodies/hash" && r.Method == http.MethodPost:
+		handler = rt.handleBodiesByHash
+	case path == "/bodies" && r.Method == http.MethodGet:
+		handler = rt.handleBodiesByRange
 	default:
 		writeProblem(w, http.StatusNotFound, ErrMethodNotFound, "")
+		return
 	}
+	fork, ok := rt.forkFromHeader(w, r)
+	if !ok {
+		return
+	}
+	handler(w, r, fork)
+}
+
+// forkFromHeader resolves the Eth-Execution-Version request header to a fork.
+// A missing or unrecognised value writes a 400 unsupported-fork problem and
+// returns ok=false; callers must stop on false.
+func (rt *Router) forkFromHeader(w http.ResponseWriter, r *http.Request) (forks.Fork, bool) {
+	name := strings.ToLower(strings.TrimSpace(r.Header.Get(forkHeader)))
+	if name == "" {
+		writeProblem(w, http.StatusBadRequest, ErrUnsupportedFork, "missing "+forkHeader+" header")
+		return 0, false
+	}
+	fork, ok := supportedForks[name]
+	if !ok {
+		writeProblem(w, http.StatusBadRequest, ErrUnsupportedFork, "unknown fork "+name)
+		return 0, false
+	}
+	return fork, true
 }

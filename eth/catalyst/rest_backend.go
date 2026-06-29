@@ -51,8 +51,9 @@ func (b *restBackend) NewPayload(ctx context.Context, data engine.ExecutableData
 
 func (b *restBackend) GetPayload(id engine.PayloadID, allowedForks []forks.Fork) (*engine.ExecutionPayloadEnvelope, error) {
 	// full=true so the envelope carries the complete payload; versions=nil
-	// because the REST router selects the fork from the URL, not the payload
-	// id's embedded version. allowedForks enforces the URL fork's era.
+	// because the REST router selects the fork from the Eth-Execution-Version
+	// header, not the payload id's embedded version. allowedForks enforces the
+	// header fork's era.
 	return b.api.getPayload(id, true, nil, allowedForks)
 }
 

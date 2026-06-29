@@ -33,7 +33,7 @@ type capabilitiesResponse struct {
 	Limits                 map[string]uint64   `json:"limits"`
 }
 
-// handleCapabilities implements GET /engine/v2/capabilities.
+// handleCapabilities implements GET /engine/v1/capabilities.
 func (rt *Router) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeProblem(w, http.StatusNotFound, ErrMethodNotFound, "")
