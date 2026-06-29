@@ -665,7 +665,10 @@ func (g *generator) emitStackChecks(spec opSpec) {
 	}
 }
 
-func (g *generator) emitGasCheck(spec opSpec) {
+// emitStaticGas charges an opcode's constant gas by splicing the chargeRegularOnly
+// body inline (call-free, for the hot path); a zero constant emits nothing. It is
+// the static-gas counterpart to emitDynamicGas.
+func (g *generator) emitStaticGas(spec opSpec) {
 	if spec.constGas == 0 {
 		return
 	}
@@ -677,7 +680,7 @@ func (g *generator) emitGasCheck(spec opSpec) {
 func (g *generator) emitOpBody(code byte) {
 	spec := g.specs[code]
 	g.emitStackChecks(spec)
-	g.emitGasCheck(spec)
+	g.emitStaticGas(spec)
 
 	// PUSH1-PUSH32 swap their execute function under EIP-4762 (verkle) to charge
 	// code-chunk gas on the immediate bytes. Defer to the table handler there.
@@ -724,6 +727,26 @@ func (g *generator) emitInlineOp(code byte) {
 	`)
 }
 
+// emitDynamicGas emits the dynamic-gas computation and charge shared by the
+// direct-call and default cases. gasFn is the dynamic-gas function to invoke:
+// a name like "gasKeccak256" for a direct call, or "operation.dynamicGas" for
+// the table case. A computation error is wrapped as ErrOutOfGas, then the cost
+// is charged through GasBudget.chargeDynamic. The doubled %%w/%%v are not
+// generator verbs: Fprintf collapses each %% to one %, leaving a literal
+// fmt.Errorf("%w: %v", ...) in the generated code.
+func (g *generator) emitDynamicGas(gasFn string) {
+	g.p(`
+		var dynamicCost GasCosts
+		dynamicCost, err = %s(evm, contract, stack, mem, memorySize)
+		if err != nil {
+			return nil, fmt.Errorf("%%w: %%v", ErrOutOfGas, err)
+		}
+		if err := contract.Gas.chargeDynamic(dynamicCost); err != nil {
+			return nil, err
+		}
+	`, gasFn)
+}
+
 // emitDirectCallOp emits an opcode case identical to the default case, except
 // the handler, dynamic-gas, and memory-size functions are called by name
 // rather than through the indirect operation.* table pointers. Valid only for
@@ -733,11 +756,8 @@ func (g *generator) emitDirectCallOp(code byte) {
 	fns := directCallOps[code]
 	g.p("case %s:\n", spec.name)
 	g.emitStackChecks(spec)
-	g.emitGasCheck(spec)
-	// The three %s are the memory-size, dynamic-gas and handler names, in the
-	// order fns[2], fns[1], fns[0]. The doubled %%w and %%v are not generator
-	// verbs: Fprintf collapses each %% to a single %, so the generated code ends
-	// up with a literal fmt.Errorf("%w: %v", ...).
+	g.emitStaticGas(spec)
+	// fns[2], fns[1], fns[0] are the memory-size, dynamic-gas and handler names.
 	g.p(`
 		var memorySize uint64
 		{
@@ -749,18 +769,9 @@ func (g *generator) emitDirectCallOp(code byte) {
 				return nil, ErrGasUintOverflow
 			}
 		}
-		var dynamicCost GasCosts
-		dynamicCost, err = %s(evm, contract, stack, mem, memorySize)
-		if err != nil {
-			return nil, fmt.Errorf("%%w: %%v", ErrOutOfGas, err)
-		}
-		if dynamicCost.StateGas == 0 {
-			if err := contract.Gas.chargeRegularOnly(dynamicCost.RegularGas); err != nil {
-				return nil, err
-			}
-		} else if !contract.Gas.charge(dynamicCost) {
-			return nil, ErrOutOfGas
-		}
+	`, fns[2])
+	g.emitDynamicGas(fns[1])
+	g.p(`
 		if memorySize > 0 {
 			mem.Resize(memorySize)
 		}
@@ -770,7 +781,7 @@ func (g *generator) emitDirectCallOp(code byte) {
 		}
 		pc++
 		continue mainLoop
-	`, fns[2], fns[1], fns[0])
+	`, fns[0])
 }
 
 func (g *generator) emitDefault() {
@@ -800,18 +811,9 @@ func (g *generator) emitDefault() {
 						return nil, ErrGasUintOverflow
 					}
 				}
-				var dynamicCost GasCosts
-				dynamicCost, err = operation.dynamicGas(evm, contract, stack, mem, memorySize)
-				if err != nil {
-					return nil, fmt.Errorf("%%w: %%v", ErrOutOfGas, err)
-				}
-				if dynamicCost.StateGas == 0 {
-					if err := contract.Gas.chargeRegularOnly(dynamicCost.RegularGas); err != nil {
-						return nil, err
-					}
-				} else if !contract.Gas.charge(dynamicCost) {
-					return nil, ErrOutOfGas
-				}
+	`)
+	g.emitDynamicGas("operation.dynamicGas")
+	g.p(`
 			}
 			if memorySize > 0 {
 				mem.Resize(memorySize)
