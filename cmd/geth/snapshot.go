@@ -1054,6 +1054,7 @@ func listEIP7610EligibleAccounts(ctx *cli.Context) error {
 		log.Error("Failed to get account iterator", "err", err)
 		return err
 	}
+	defer iter.Release()
 	var (
 		start    = time.Now()
 		accounts []common.Address
