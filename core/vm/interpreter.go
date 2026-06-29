@@ -218,8 +218,8 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 		// for tracing: this gas consumption event is emitted below in the debug section.
-		if !contract.Gas.ChargeExecutionOnly(cost) {
-			return nil, ErrOutOfGas
+		if err := contract.Gas.ChargeExecutionOnly(cost); err != nil {
+			return nil, err
 		}
 
 		// All ops with a dynamic memory usage also has a dynamic gas cost.
@@ -249,8 +249,8 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
 			}
 			if dynamicCost.StateGas == 0 {
-				if !contract.Gas.ChargeExecutionOnly(dynamicCost.ExecutionGas) {
-					return nil, ErrOutOfGas
+				if err := contract.Gas.ChargeExecutionOnly(dynamicCost.ExecutionGas); err != nil {
+					return nil, err
 				}
 			} else if !contract.Gas.charge(dynamicCost) {
 				return nil, ErrOutOfGas
