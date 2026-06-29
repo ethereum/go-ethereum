@@ -620,6 +620,7 @@ func (t *freezerTable) truncateHead(items uint64) error {
 			// at the head, so we have to align the table down to the new head.
 			return t.resetTo(items)
 		}
+		return errors.New("truncation below tail")
 	}
 
 	// We need to truncate, save the old size for metrics tracking
