@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
+	"runtime"
 )
 
 // MPTDatabase is an implementation of Database interface for Merkle Patricia Tries.
@@ -184,4 +185,18 @@ func (db *MPTDatabase) Commit(update *StateUpdate) error {
 // through which the account iterator and storage iterator can be created.
 func (db *MPTDatabase) Iteratee(root common.Hash) (Iteratee, error) {
 	return newStateIteratee(true, root, db.triedb, db.snap)
+}
+
+func (db *MPTDatabase) ReaderWithPrefetch(stateRoot common.Hash, accessList map[common.Address][]common.Hash) (Reader, error) {
+	base, err := db.StateReader(stateRoot)
+	if err != nil {
+		return nil, err
+	}
+	// Construct the state reader with native cache and associated statistics
+	r := newStateReaderWithStats(newStateReaderWithCache(base))
+
+	// Construct the state reader with background prefetching
+	pr := newPrefetchStateReader(r, accessList, runtime.NumCPU())
+
+	return newReaderWithPrefetch(db.codedb.Reader(), pr, pr), nil
 }

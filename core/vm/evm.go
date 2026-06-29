@@ -261,6 +261,12 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	}
 	syscall := isSystemCall(caller)
 
+	// EIP-7928: per the Amsterdam spec, delegation resolution happens before
+	// the value-transfer check, so the delegated-to must appear in the BAL
+	// even when the call later reverts with ErrInsufficientBalance. Touch the
+	// target's code here (a no-op for non-delegated accounts) to record it.
+	evm.resolveCode(addr)
+
 	// Fail if we're trying to transfer more than the available balance.
 	if !syscall && !value.IsZero() && !evm.Context.CanTransfer(evm.StateDB, caller, value) {
 		return nil, gas, ErrInsufficientBalance
@@ -346,6 +352,12 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
 	}
+
+	// EIP-7928: per the Amsterdam spec, delegation resolution happens before
+	// the value-transfer check, so the delegated-to must appear in the BAL
+	// even when the call later reverts with ErrInsufficientBalance.
+	evm.resolveCode(addr)
+
 	// Fail if we're trying to transfer more than the available balance
 	if !evm.Context.CanTransfer(evm.StateDB, caller, value) {
 		return nil, gas, ErrInsufficientBalance

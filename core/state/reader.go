@@ -560,6 +560,7 @@ func (r *stateReaderWithStats) GetStateStats() StateReaderStats {
 type reader struct {
 	ContractCodeReader
 	StateReader
+	PrefetcherMetricer
 }
 
 // newReader constructs a reader with the supplied code reader and state reader.
@@ -567,6 +568,14 @@ func newReader(codeReader ContractCodeReader, stateReader StateReader) *reader {
 	return &reader{
 		ContractCodeReader: codeReader,
 		StateReader:        stateReader,
+	}
+}
+
+func newReaderWithPrefetch(codeReader ContractCodeReader, stateReader StateReader, metricer PrefetcherMetricer) *reader {
+	return &reader{
+		ContractCodeReader: codeReader,
+		StateReader:        stateReader,
+		PrefetcherMetricer: metricer,
 	}
 }
 

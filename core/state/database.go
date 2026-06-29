@@ -54,6 +54,10 @@ type Database interface {
 	// Reader returns a state reader associated with the specified state root.
 	Reader(root common.Hash) (Reader, error)
 
+	// ReaderWithPrefetch returns a reader which asynchronously fetches block
+	// access list state in the background.
+	ReaderWithPrefetch(stateRoot common.Hash, accessList map[common.Address][]common.Hash) (Reader, error)
+
 	// Iteratee returns a state iteratee associated with the specified state root,
 	// through which the account iterator and storage iterator can be created.
 	Iteratee(root common.Hash) (Iteratee, error)
@@ -107,11 +111,17 @@ type Trie interface {
 	// in the trie with provided address.
 	UpdateAccount(address common.Address, account *types.StateAccount, codeLen int) error
 
+	// UpdateAccountBatch attempts to update a list accounts in the batch manner.
+	UpdateAccountBatch(addresses []common.Address, accounts []*types.StateAccount, codeLengths []int) error
+
 	// UpdateStorage associates key with value in the trie. If value has length zero,
 	// any existing value is deleted from the trie. The value bytes must not be modified
 	// by the caller while they are stored in the trie. If a node was not found in the
 	// database, a trie.MissingNodeError is returned.
 	UpdateStorage(addr common.Address, key, value []byte) error
+
+	// UpdateStorageBatch attempts to update a list storages in the batch manner.
+	UpdateStorageBatch(_ common.Address, keys [][]byte, values [][]byte) error
 
 	// DeleteAccount abstracts an account deletion from the trie.
 	DeleteAccount(address common.Address) error

@@ -20,8 +20,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -143,9 +144,15 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	return nil
 }
 
+// StateRootSource computes a new state root during block execution.
+type StateRootSource interface {
+	IntermediateRoot(deleteEmptyObjects bool) common.Hash
+	Error() error
+}
+
 // ValidateState validates the various changes that happen after a state transition,
 // such as amount of used gas, the receipt roots and the state root itself.
-func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, res *ProcessResult, stateless bool) error {
+func (v *BlockValidator) ValidateState(block *types.Block, state StateRootSource, res *ProcessResult, stateless bool) error {
 	if res == nil {
 		return errors.New("nil ProcessResult value")
 	}
@@ -201,8 +208,8 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
-	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
-		return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
+	if root := state.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
+		return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, state.Error())
 	}
 	return nil
 }
