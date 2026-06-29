@@ -247,12 +247,8 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 			if err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
 			}
-			if dynamicCost.StateGas == 0 {
-				if err := contract.Gas.chargeRegularOnly(dynamicCost.RegularGas); err != nil {
-					return nil, err
-				}
-			} else if !contract.Gas.charge(dynamicCost) {
-				return nil, ErrOutOfGas
+			if err := contract.Gas.chargeDynamic(dynamicCost); err != nil {
+				return nil, err
 			}
 		}
 
