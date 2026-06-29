@@ -49,7 +49,6 @@ import (
 
 // Register adds the engine API and related APIs to the full node.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
-	backend.MarkCLExpected()
 	stack.RegisterAPIs([]rpc.API{
 		newTestingAPI(backend),
 		{

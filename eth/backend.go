@@ -125,20 +125,18 @@ type Ethereum struct {
 
 	shutdownTracker *shutdowncheck.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
 
-	clExpected  atomic.Bool // Set when catalyst.Register attaches the Engine API
 	clContacted atomic.Bool // Set on first Engine API call (newPayload / FCU)
 }
 
-// MarkCLExpected and MarkCLContacted are setters for the two clXxx flags;
-// catalyst calls them from its package and so cannot reach the fields directly.
-func (s *Ethereum) MarkCLExpected()  { s.clExpected.Store(true) }
+// MarkCLContacted records that the consensus client has driven this node at
+// least once; catalyst calls it from its package and so cannot reach the field
+// directly.
 func (s *Ethereum) MarkCLContacted() { s.clContacted.Store(true) }
 
 // ConsensusReady reports whether eth_syncing should be allowed to return false.
-// On nodes without an Engine API, always true. On nodes that expect a CL, true
-// only after the CL has driven the node at least once.
+// True once the consensus client has driven the node at least once.
 func (s *Ethereum) ConsensusReady() bool {
-	return !s.clExpected.Load() || s.clContacted.Load()
+	return s.clContacted.Load()
 }
 
 // New creates a new Ethereum object (including the initialisation of the common Ethereum object),
