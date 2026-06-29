@@ -532,15 +532,16 @@ func (t *Trie) UpdateBatch(keys [][]byte, values [][]byte) error {
 	for pos, ks := range ikeys {
 		eg.Go(func() error {
 			vs := ivals[pos]
+			prefix := []byte{pos}
 			for i, k := range ks {
 				if len(vs[i]) != 0 {
-					_, n, err := t.insert(fn.Children[pos], []byte{pos}, k[1:], valueNode(vs[i]))
+					_, n, err := t.insert(fn.Children[pos], prefix, k[1:], valueNode(vs[i]))
 					if err != nil {
 						return err
 					}
 					fn.Children[pos] = n
 				} else {
-					_, n, err := t.delete(fn.Children[pos], []byte{pos}, k[1:])
+					_, n, err := t.delete(fn.Children[pos], prefix, k[1:])
 					if err != nil {
 						return err
 					}
