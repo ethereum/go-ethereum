@@ -423,9 +423,6 @@ func GenerateTrieWithProgress(db ethdb.Database, scheme string, root common.Hash
 	if err := eg.Wait(); err != nil {
 		return GenerateStats{}, err
 	}
-	if prog != nil {
-		prog.Store(100)
-	}
 	// Assemble the top-level root from the partition blobs and verify it
 	// matches the expected root.
 	got, err := assembleRoot(db, scheme, partitionBlobs)
@@ -434,6 +431,9 @@ func GenerateTrieWithProgress(db ethdb.Database, scheme string, root common.Hash
 	}
 	if got != root {
 		return GenerateStats{}, fmt.Errorf("state root mismatch: got %x, want %x", got, root)
+	}
+	if prog != nil {
+		prog.Store(100)
 	}
 	log.Info("Generated state trie",
 		"accounts", c.accounts.Load(), "slots", c.slots.Load(),
