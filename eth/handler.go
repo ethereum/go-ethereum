@@ -106,6 +106,7 @@ type handlerConfig struct {
 	TxPool         txPool                 // Transaction pool to propagate from
 	Network        uint64                 // Network identifier to advertise
 	Sync           ethconfig.SyncMode     // Whether to snap or full sync
+	SnapExactPivot bool                   // Pin the snap pivot to the exact head instead of head-fsMinFullBlocks
 	BloomCache     uint64                 // Megabytes to alloc for snap sync bloom
 	RequiredBlocks map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
 	SnapV2         bool                   // Whether to advertise and sync via the snap/2 protocol
@@ -158,6 +159,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 	// Construct the downloader (long sync)
 	h.downloader = downloader.New(config.Database, config.Sync, h.chain, h.removePeer, h.enableSyncedFeatures, config.SnapV2)
+	h.downloader.SetExactPivot(config.SnapExactPivot)
 
 	// If snap sync is requested but snapshots are disabled, fail loudly
 	if h.downloader.ConfigSyncMode() == ethconfig.SnapSync && (config.Chain.Snapshots() == nil && config.Chain.TrieDB().Scheme() == rawdb.HashScheme) {

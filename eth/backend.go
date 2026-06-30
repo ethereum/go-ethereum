@@ -352,6 +352,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		TxPool:         eth.txPool,
 		Network:        networkID,
 		Sync:           config.SyncMode,
+		SnapExactPivot: config.SnapExactPivot,
 		BloomCache:     uint64(cacheLimit),
 		RequiredBlocks: config.RequiredBlocks,
 		SnapV2:         config.SnapV2,

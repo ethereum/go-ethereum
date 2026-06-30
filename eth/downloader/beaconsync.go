@@ -306,6 +306,9 @@ func (d *Downloader) fetchHeaders(from uint64) error {
 				// Retrieve the next pivot header, either from skeleton chain
 				// or the filled chain
 				number := head.Number.Uint64() - uint64(fsMinFullBlocks)
+				if d.exactPivot {
+					number = head.Number.Uint64()
+				}
 
 				log.Warn("Pivot seemingly stale, moving", "old", d.pivotHeader.Number, "new", number)
 				if d.pivotHeader = d.skeleton.Header(number); d.pivotHeader == nil {

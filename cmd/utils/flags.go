@@ -280,6 +280,15 @@ var (
 		Value:    ethconfig.Defaults.SyncMode.String(),
 		Category: flags.StateCategory,
 	}
+	SnapExactPivotFlag = &cli.BoolFlag{
+		Name: "snap.exactpivot",
+		Usage: "Pin the snap sync pivot to the exact announced head instead of head-64, so the downloaded " +
+			"state root equals stateRoot(head). Only safe against a trusted peer that serves a fixed, " +
+			"non-reorging head (e.g. a frozen / snapshot-restored source); on a live network the head can reorg " +
+			"beneath the pivot and corrupt the synced state. Intended for state-growth benchmarking and " +
+			"trusted-peer setups, not general mainnet operation.",
+		Category: flags.StateCategory,
+	}
 	GCModeFlag = &cli.StringFlag{
 		Name:     "gcmode",
 		Usage:    `Blockchain garbage collection mode ("full", "archive")`,
@@ -1754,6 +1763,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		value := ctx.String(SyncModeFlag.Name)
 		if err := cfg.SyncMode.UnmarshalText([]byte(value)); err != nil {
 			Fatalf("--%v: %v", SyncModeFlag.Name, err)
+		}
+	}
+
+	if ctx.IsSet(SnapExactPivotFlag.Name) {
+		cfg.SnapExactPivot = ctx.Bool(SnapExactPivotFlag.Name)
+		if cfg.SnapExactPivot {
+			log.Warn("Snap sync pivot pinned to the exact head via --snap.exactpivot: only safe against a " +
+				"trusted peer serving a fixed, non-reorging head. On a live network a reorg beneath the pivot " +
+				"can corrupt the synced state. Use only for benchmarking / trusted-peer setups.")
 		}
 	}
 

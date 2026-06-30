@@ -94,6 +94,11 @@ type Config struct {
 	NetworkId uint64
 	SyncMode  SyncMode
 
+	// SnapExactPivot pins the snap sync pivot to the exact announced head
+	// instead of head-fsMinFullBlocks, so the downloaded state root equals
+	// stateRoot(head). Intended for syncing a fixed state from a trusted peer.
+	SnapExactPivot bool
+
 	// HistoryMode configures chain history retention.
 	HistoryMode history.HistoryMode
 

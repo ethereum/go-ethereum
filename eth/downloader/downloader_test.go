@@ -683,6 +683,43 @@ func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 	}
 }
 
+// TestBeaconSyncSnapExactPivot verifies that SetExactPivot pins the snap sync
+// pivot to the exact announced head instead of head-fsMinFullBlocks, so the
+// synced state root equals stateRoot(head).
+func TestBeaconSyncSnapExactPivot(t *testing.T) {
+	success := make(chan struct{})
+	tester := newTesterWithNotification(t, SnapSync, func() {
+		close(success)
+	})
+	defer tester.terminate()
+	tester.downloader.SetExactPivot(true)
+
+	chain := testChainBase.shorten(blockCacheMaxItems - 15)
+	tester.newPeer("peer", eth.ETH69, chain.blocks[1:])
+
+	head := chain.blocks[len(chain.blocks)-1].Header()
+	if err := tester.downloader.BeaconSync(head, nil); err != nil {
+		t.Fatalf("failed to beacon sync chain: %v", err)
+	}
+	select {
+	case <-success:
+		if bs := int(tester.chain.CurrentBlock().Number.Uint64()) + 1; bs != len(chain.blocks) {
+			t.Fatalf("synchronised blocks mismatch: have %v, want %v", bs, len(chain.blocks))
+		}
+		// With the exact-pivot flag the snap pivot must equal the head, not
+		// head-fsMinFullBlocks as in the default beacon snap sync.
+		pivot := rawdb.ReadLastPivotNumber(tester.downloader.stateDB)
+		if pivot == nil {
+			t.Fatalf("no snap pivot recorded")
+		}
+		if *pivot != head.Number.Uint64() {
+			t.Fatalf("pivot mismatch: have %d, want %d (exact head)", *pivot, head.Number.Uint64())
+		}
+	case <-time.NewTimer(time.Second * 3).C:
+		t.Fatalf("failed to sync chain in three seconds")
+	}
+}
+
 // Tests that synchronisation progress (origin block number, current block number
 // and highest block number) is tracked and updated correctly.
 func TestSyncProgressFull(t *testing.T) { testSyncProgress(t, eth.ETH69, FullSync) }
