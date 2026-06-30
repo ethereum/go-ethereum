@@ -84,7 +84,9 @@ func newLimbo(config *params.ChainConfig, datadir string) (*limbo, error) {
 	}
 	l.store = store
 
-	// Migrate legacy limbo entries to blobTxForPool
+	// Migrate legacy limbo entries to blobTxForPool. Note all ids in `converted` are also
+	// in `fails`, and the converted entries will be deleted by the loop that handles
+	// `fails`.
 	for _, id := range convert {
 		data, err := l.store.Get(id)
 		if err != nil {
