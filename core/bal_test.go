@@ -946,6 +946,62 @@ func TestBALSelfDestructPreExistingContract(t *testing.T) {
 	}
 }
 
+// TestBALSelfDestructToSelfKeepsBalance: under EIP-8246 a freshly created
+// contract that self-destructs to itself keeps its balance (it is not burnt and
+// the account is not removed). The surviving balance-only account must therefore
+// be recorded in the BAL with its preserved balance.
+func TestBALSelfDestructToSelfKeepsBalance(t *testing.T) {
+	env := newBALTestEnv(nil)
+	// Init code: ADDRESS SELFDESTRUCT — the contract self-destructs to itself
+	// during its own creation transaction (satisfying EIP-6780's same-tx rule).
+	//   ADDRESS (0x30) ; SELFDESTRUCT (0xff)
+	init := []byte{0x30, 0xff}
+
+	b, receipts := env.run(t, func(g *BlockGen) {
+		g.AddTx(env.tx(0, nil, big.NewInt(100), 1_000_000, 0, init))
+	})
+
+	created := receipts[0].ContractAddress
+	cc := assertPresent(t, b, created)
+	// EIP-8246: balance preserved (not burnt), account survives -> the BAL must
+	// record the created address with its retained balance.
+	if len(cc.BalanceChanges) != 1 || cc.BalanceChanges[0].PostBalance.Uint64() != 100 {
+		t.Fatalf("self-destruct-to-self must preserve balance 100 in the BAL: %+v", cc.BalanceChanges)
+	}
+}
+
+// TestBALSelfDestructToSelfPrefundedUnchanged: a pre-funded address onto which a
+// contract is deployed and which self-destructs to itself in the same
+// transaction. Under EIP-8246 the account survives with its balance unchanged,
+// so the BAL must list it only as an access (no balance/nonce/code change).
+func TestBALSelfDestructToSelfPrefundedUnchanged(t *testing.T) {
+	// The contract address created by the sender's nonce-0 transaction; it is
+	// pre-funded in genesis (balance only: nonce 0, no code, no storage), which
+	// EIP-7610 permits as a deployment target.
+	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	created := crypto.CreateAddress(crypto.PubkeyToAddress(key.PublicKey), 0)
+
+	env := newBALTestEnv(types.GenesisAlloc{
+		created: {Balance: big.NewInt(77)},
+	})
+	// Init code: ADDRESS SELFDESTRUCT, deployed with zero value so the balance is
+	// untouched (stays at the pre-funded 77).
+	init := []byte{0x30, 0xff}
+
+	b, receipts := env.run(t, func(g *BlockGen) {
+		g.AddTx(env.tx(0, nil, big.NewInt(0), 1_000_000, 0, init))
+	})
+
+	if receipts[0].ContractAddress != created {
+		t.Fatalf("unexpected created address: have %x want %x", receipts[0].ContractAddress, created)
+	}
+	aa := assertPresent(t, b, created)
+	// EIP-8246: balance preserved and equal to the pre-transaction value, so no
+	// balance change; nonce and code end where they started (0 / empty). The
+	// account is only read, with an empty change set.
+	assertEmpty(t, aa)
+}
+
 // ============================== Mid-tx balance round-trip ==============================
 
 // TestBALMidTxBalanceRoundTrip: when an address's balance changes during a

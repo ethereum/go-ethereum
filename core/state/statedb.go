@@ -764,50 +764,15 @@ func (s *StateDB) GetRefund() uint64 {
 	return s.refund
 }
 
-type removedAccountWithBalance struct {
-	address common.Address
-	balance *uint256.Int
-}
-
-// LogsForBurnAccounts returns the eth burn logs for accounts scheduled for
-// removal which still have positive balance. The purpose of this function is
-// to handle a corner case of EIP-7708 where a self-destructed account might
-// still receive funds between sending/burning its previous balance and actual
-// removal. In this case the burning of these remaining balances still need to
-// be logged.
-// Specification EIP-7708: https://eips.ethereum.org/EIPS/eip-7708
-//
-// This function should only be invoked at the transaction boundary, specifically
-// before the Finalise.
-func (s *StateDB) LogsForBurnAccounts() []*types.Log {
-	var list []removedAccountWithBalance
-	for addr := range s.journal.mutations {
-		if obj, exist := s.stateObjects[addr]; exist && obj.selfDestructed && !obj.Balance().IsZero() {
-			list = append(list, removedAccountWithBalance{
-				address: obj.address,
-				balance: obj.Balance(),
-			})
-		}
-	}
-	if list == nil {
-		return nil
-	}
-	sort.Slice(list, func(i, j int) bool {
-		return list[i].address.Cmp(list[j].address) < 0
-	})
-	logs := make([]*types.Log, len(list))
-	for i, acct := range list {
-		logs[i] = types.EthBurnLog(acct.address, acct.balance)
-	}
-	return logs
-}
-
 // Finalise finalises the state by removing the destructed objects and clears
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccessList {
+	if s.stateAccessList != nil {
+		return s.finaliseAmsterdam(deleteEmptyObjects)
+	}
 	addressesToPrefetch := make([]common.Address, 0, len(s.journal.mutations))
-	for addr, state := range s.journal.mutations {
+	for addr := range s.journal.mutations {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
 			// RIPEMD160 (0x03) gets an extra dirty marker for a historical
@@ -831,46 +796,103 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccess
 			if _, ok := s.stateObjectsDestruct[obj.address]; !ok {
 				s.stateObjectsDestruct[obj.address] = obj
 			}
-			// Aggregate the account mutation into the block-level accessList
-			// if Amsterdam has been activated.
-			if s.stateAccessList != nil {
-				// Notably, if the account is deleted during the transaction,
-				// its pre-transaction nonce, code, and storage must be empty.
-				//
-				// EIP-6780 restricts self-destruct to contracts deployed within
-				// the same transaction, while EIP-7610 rejects deployments to
-				// destinations with non-empty storage, non-zero nonce and non-empty
-				// code.
-				//
-				// Therefore, when an account is deleted, its pre-transaction nonce
-				// code and storage is guaranteed to be empty, leaving nothing to
-				// clean up here.
-				balance := uint256.NewInt(0)
-				if state.balanceSet && balance.Cmp(state.balance) != 0 {
-					s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
-				}
-			}
 		} else {
-			// Aggregate the account mutation into the block-level accessList
-			// if Amsterdam has been activated.
-			if s.stateAccessList != nil {
-				balance := obj.Balance()
-				if state.balanceSet && balance.Cmp(state.balance) != 0 {
-					s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
-				}
-				nonce := obj.Nonce()
-				if state.nonceSet && nonce != state.nonce {
-					s.stateAccessList.NonceChange(addr, s.blockAccessIndex, nonce)
-				}
-				if state.codeSet {
-					if code := obj.Code(); !bytes.Equal(code, state.code) {
-						s.stateAccessList.CodeChange(addr, s.blockAccessIndex, code)
-					}
-				}
-			}
 			obj.finalise()
 			s.markUpdate(addr)
 		}
+		addressesToPrefetch = append(addressesToPrefetch, addr) // Copy needed for closure
+	}
+	if s.prefetcher != nil && len(addressesToPrefetch) > 0 {
+		if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, addressesToPrefetch, nil, false); err != nil {
+			log.Error("Failed to prefetch addresses", "addresses", len(addressesToPrefetch), "err", err)
+		}
+	}
+	// Invalidate journal because reverting across transactions is not allowed.
+	s.clearJournalAndRefund()
+
+	return nil
+}
+
+func (s *StateDB) recordAccessListChanges(addr common.Address, state *journalMutationState) {
+	var (
+		balance = uint256.NewInt(0)
+		nonce   uint64
+	)
+	obj := s.stateObjects[addr] // nil when the account was removed
+	if obj != nil {
+		balance, nonce = obj.Balance(), obj.Nonce()
+	}
+	if state.balanceSet && balance.Cmp(state.balance) != 0 {
+		s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
+	}
+	if state.nonceSet && nonce != state.nonce {
+		s.stateAccessList.NonceChange(addr, s.blockAccessIndex, nonce)
+	}
+	if state.codeSet {
+		var code []byte
+		if obj != nil {
+			code = obj.Code()
+		}
+		if !bytes.Equal(code, state.code) {
+			s.stateAccessList.CodeChange(addr, s.blockAccessIndex, code)
+		}
+	}
+}
+
+// finaliseAmsterdam is the Amsterdam-and-later variant of Finalise.
+func (s *StateDB) finaliseAmsterdam(deleteEmptyObjects bool) *bal.ConstructionBlockAccessList {
+	addressesToPrefetch := make([]common.Address, 0, len(s.journal.mutations))
+	for addr, state := range s.journal.mutations {
+		obj, exist := s.stateObjects[addr]
+		if !exist {
+			// RIPEMD160 (0x03) gets an extra dirty marker for a historical
+			// mainnet consensus exception (at block 1714175, in tx
+			// 0x1237f737031e40bcde4a8b7e717b2d15e3ecadfe49bb1bbc71ee9deb09c6fcf2)
+			// around empty-account touch/revert handling.
+			//
+			// That marker survives journal revert, so the account may remain in
+			// s.journal.mutations even though its state object was rolled
+			// back and no longer exists. In that case there is nothing to
+			// finalise or delete, so ignore it here.
+			continue
+		}
+		switch {
+		case obj.selfDestructed:
+			// EIP-8264: accounts marked for self-destruction, instead of
+			// being deleted, are modified as follows:
+			// - nonce is reset to 0,
+			// - balance is unchanged,
+			// - code is cleared,
+			// - all storage is cleared
+			if !obj.Balance().IsZero() {
+				o := newObject(s, obj.address, obj.origin)
+				o.setBalance(new(uint256.Int).Set(obj.Balance()))
+				s.setStateObject(o)
+				s.markUpdate(addr)
+			} else {
+				delete(s.stateObjects, obj.address)
+				s.markDelete(addr)
+				if _, ok := s.stateObjectsDestruct[obj.address]; !ok {
+					s.stateObjectsDestruct[obj.address] = obj
+				}
+			}
+
+		case deleteEmptyObjects && obj.empty():
+			// EIP-161: a touched, empty account is removed.
+			delete(s.stateObjects, obj.address)
+			s.markDelete(addr)
+			if _, ok := s.stateObjectsDestruct[obj.address]; !ok {
+				s.stateObjectsDestruct[obj.address] = obj
+			}
+
+		default:
+			obj.finalise()
+			s.markUpdate(addr)
+		}
+		// Aggregate the resulting account metadata change
+		// into the block-level access list.
+		s.recordAccessListChanges(addr, state)
+
 		// At this point, also ship the address off to the precacher. The precacher
 		// will start loading tries, and when the change is eventually committed,
 		// the commit-phase will be a lot faster
