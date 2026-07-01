@@ -65,10 +65,17 @@ func newLimbo(config *params.ChainConfig, datadir string) (*limbo, error) {
 	}
 
 	// Index all limboed blobs on disk and delete anything unprocessable
-	var fails []uint64
+	var (
+		fails   []uint64
+		convert []uint64
+	)
 	index := func(id uint64, size uint32, data []byte) {
-		if l.parseBlob(id, data) != nil {
+		err := l.parseBlob(id, data)
+		if err != nil {
 			fails = append(fails, id)
+		}
+		if errors.Is(err, errLegacyTx) {
+			convert = append(convert, id)
 		}
 	}
 	store, err := billy.Open(billy.Options{Path: datadir, Repair: true}, slotter, index)
@@ -76,6 +83,39 @@ func newLimbo(config *params.ChainConfig, datadir string) (*limbo, error) {
 		return nil, err
 	}
 	l.store = store
+
+	// Migrate legacy limbo entries to blobTxForPool. Note all ids in `converted` are also
+	// in `fails`, and the converted entries will be deleted by the loop that handles
+	// `fails`.
+	for _, id := range convert {
+		data, err := l.store.Get(id)
+		if err != nil {
+			continue
+		}
+		var legacy struct {
+			TxHash common.Hash
+			Block  uint64
+			Tx     *types.Transaction
+		}
+		if err := rlp.DecodeBytes(data, &legacy); err != nil {
+			continue
+		}
+		blob, err := rlp.EncodeToBytes(&limboBlob{
+			TxHash: legacy.TxHash,
+			Block:  legacy.Block,
+			Ptx:    newBlobTxForPool(legacy.Tx),
+		})
+		if err != nil {
+			continue
+		}
+		newID, err := l.store.Put(blob)
+		if err != nil {
+			continue
+		}
+		if err := l.parseBlob(newID, blob); err != nil {
+			fails = append(fails, newID)
+		}
+	}
 
 	if len(fails) > 0 {
 		log.Warn("Dropping invalidated limboed blobs", "ids", fails)
@@ -99,6 +139,10 @@ func (l *limbo) Close() error {
 func (l *limbo) parseBlob(id uint64, data []byte) error {
 	item := new(limboBlob)
 	if err := rlp.DecodeBytes(data, item); err != nil {
+		// This entry may have been stored with the legacy limboBlob type
+		if isLegacy(data) {
+			return errLegacyTx
+		}
 		// This path is impossible unless the disk data representation changes
 		// across restarts. For that ever improbable case, recover gracefully
 		// by ignoring this data entry.
@@ -120,6 +164,17 @@ func (l *limbo) parseBlob(id uint64, data []byte) error {
 	l.groups[item.Block][id] = item.TxHash
 
 	return nil
+}
+
+// isLegacy reports whether data is a limbo entry with the legacy limboBlob
+// {TxHash, Block, Tx *types.Transaction} type.
+func isLegacy(data []byte) bool {
+	elems, err := rlp.SplitListValues(data)
+	if err != nil || len(elems) < 3 {
+		return false
+	}
+	kind, content, _, err := rlp.Split(elems[2])
+	return err == nil && kind == rlp.String && len(content) > 1 && content[0] == types.BlobTxType
 }
 
 // finalize evicts all blobs belonging to a recently finalized block or older.
