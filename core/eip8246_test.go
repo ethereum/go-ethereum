@@ -49,9 +49,6 @@ func TestEIP8246SelfdestructNoBurn(t *testing.T) {
 	// TODO: drop this hacky Amsterdam config initialization once the final
 	// Amsterdam config is available (mirrors TestEthTransferLogs).
 	config.AmsterdamTime = new(uint64)
-	blobConfig := *config.BlobScheduleConfig
-	blobConfig.Amsterdam = blobConfig.Osaka
-	config.BlobScheduleConfig = &blobConfig
 
 	gspec := &Genesis{
 		Config: &config,
