@@ -4132,6 +4132,32 @@ func TestSendRawTransactionSync_Success(t *testing.T) {
 	}
 }
 
+func TestSendRawTransaction_InvalidInputReturnsInvalidParams(t *testing.T) {
+	t.Parallel()
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc:  types.GenesisAlloc{},
+	}
+	b := newTestBackend(t, 0, genesis, ethash.NewFaker(), nil)
+	api := NewTransactionAPI(b, new(AddrLocker))
+
+	// Inputs that fail to decode into a transaction are invalid parameters and
+	// must surface as -32602, not the generic -32000.
+	for _, input := range []hexutil.Bytes{{}, {0x02}} {
+		_, err := api.SendRawTransaction(context.Background(), input)
+		if err == nil {
+			t.Fatalf("input %#x: expected error, got nil", []byte(input))
+		}
+		var de interface{ ErrorCode() int }
+		if !errors.As(err, &de) {
+			t.Fatalf("input %#x: expected coded error, got %T %v", []byte(input), err, err)
+		}
+		if de.ErrorCode() != errCodeInvalidParams {
+			t.Fatalf("input %#x: expected code %d, got %d", []byte(input), errCodeInvalidParams, de.ErrorCode())
+		}
+	}
+}
+
 func TestSendRawTransactionSync_Timeout(t *testing.T) {
 	t.Parallel()
 
