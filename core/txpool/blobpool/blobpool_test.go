@@ -1340,6 +1340,54 @@ func TestLegacyTxConversion(t *testing.T) {
 	verifyPoolInternals(t, pool)
 }
 
+// TestLegacyLimboBlobConversion verifies that limbo entries stored in the
+// legacy *types.Transaction RLP format remain available after opening the limbo
+// with the blobTxForPool storage format.
+func TestLegacyLimboBlobConversion(t *testing.T) {
+	storage := t.TempDir()
+	limbodir := filepath.Join(storage, limboedTransactionStore)
+	if err := os.MkdirAll(limbodir, 0700); err != nil {
+		t.Fatalf("failed to create limbo dir: %v", err)
+	}
+	store, err := billy.Open(billy.Options{Path: limbodir}, newSlotter(params.BlobTxMaxBlobs), nil)
+	if err != nil {
+		t.Fatalf("failed to open limbo store: %v", err)
+	}
+	key, _ := crypto.GenerateKey()
+	tx := makeMultiBlobTx(0, 1, 1000, 100, 2, 0, key, types.BlobSidecarVersion0)
+
+	legacy, err := rlp.EncodeToBytes(&legacyLimboBlob{
+		TxHash: tx.Hash(),
+		Block:  7,
+		Tx:     tx,
+	})
+	if err != nil {
+		t.Fatalf("failed to encode legacy limbo blob: %v", err)
+	}
+	if _, err := store.Put(legacy); err != nil {
+		t.Fatalf("failed to put legacy limbo blob: %v", err)
+	}
+	store.Close()
+
+	limbo, err := newLimbo(params.TestChainConfig, limbodir)
+	if err != nil {
+		t.Fatalf("failed to open limbo: %v", err)
+	}
+	defer limbo.Close()
+
+	ptx, err := limbo.pull(tx.Hash())
+	if err != nil {
+		t.Fatalf("failed to pull legacy limbo blob: %v", err)
+	}
+	got := ptx.ToTx()
+	if got.Hash() != tx.Hash() {
+		t.Fatalf("limbo tx hash mismatch: have %s, want %s", got.Hash(), tx.Hash())
+	}
+	if got.BlobTxSidecar() == nil {
+		t.Fatalf("limbo tx lost sidecar")
+	}
+}
+
 // TestBlobCountLimit tests the blobpool enforced limits on the max blob count.
 func TestBlobCountLimit(t *testing.T) {
 	var (
