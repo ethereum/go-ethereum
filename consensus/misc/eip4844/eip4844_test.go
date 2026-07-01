@@ -120,7 +120,6 @@ func TestCalcBlobFeePostOsaka(t *testing.T) {
 			BlobScheduleConfig: &params.BlobScheduleConfig{
 				Cancun: params.DefaultCancunBlobConfig,
 				Prague: params.DefaultPragueBlobConfig,
-				Osaka:  params.DefaultOsakaBlobConfig,
 				BPO1: &params.BlobConfig{
 					Target:         9,
 					Max:            14,
@@ -191,7 +190,7 @@ func TestFakeExponential(t *testing.T) {
 func TestCalcExcessBlobGasEIP7918(t *testing.T) {
 	var (
 		cfg           = params.MergedTestChainConfig
-		targetBlobs   = cfg.BlobScheduleConfig.Osaka.Target
+		targetBlobs   = cfg.BlobScheduleConfig.Prague.Target
 		blobGasTarget = uint64(targetBlobs) * params.BlobTxBlobGasPerBlob
 	)
 
