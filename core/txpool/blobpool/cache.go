@@ -201,9 +201,7 @@ func (c *Cache) GetBlobs(ctx context.Context, vhashes []common.Hash, version byt
 		cached := c.entries[vhash]
 		if cached == nil || cached.version != version {
 			cacheMiss += n
-			if cached == nil {
-				misses = append(misses, vhash)
-			}
+			misses = append(misses, vhash)
 			continue
 		}
 		cacheHits += n

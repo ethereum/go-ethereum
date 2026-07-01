@@ -280,6 +280,29 @@ func TestCacheGetBlobs(t *testing.T) {
 	tc.expectEntries(t, tc.vhashes[1]...)
 }
 
+func TestCacheGetBlobsFallsBackOnVersionMismatch(t *testing.T) {
+	tc := newTestCache(t, []txSpec{
+		{blobs: 1, tip: 100},
+	})
+	vhash := tc.vhashes[0][0]
+	tc.expectEntries(t, vhash)
+
+	tc.mu.Lock()
+	tc.entries[vhash].version = types.BlobSidecarVersion0
+	tc.mu.Unlock()
+
+	blobs, _, proofs, err := tc.GetBlobs(context.Background(), []common.Hash{vhash}, types.BlobSidecarVersion1)
+	if err != nil {
+		t.Fatalf("GetBlobs: %v", err)
+	}
+	if blobs[0] == nil {
+		t.Fatal("blob missing in GetBlobs response")
+	}
+	if len(proofs[0]) == 0 {
+		t.Fatal("proofs missing in GetBlobs response")
+	}
+}
+
 // TestCacheTopKRefresh verifies that when a more profitable tx appears in the
 // pool, the next topK tick replaces the cached entry with the better one.
 func TestCacheTopKRefresh(t *testing.T) {
