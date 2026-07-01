@@ -37,9 +37,11 @@ mainLoop:
 			consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.RegularGas)
 			contract.chargeRegular(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
 			if consumed < wanted {
-				return nil, ErrOutOfGas
+				res, err = nil, ErrOutOfGas
+				break mainLoop
 			}
 		}
+
 		op := contract.GetOp(pc)
 		switch op {
 		case ADD:
@@ -581,23 +583,33 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 30
 
 			var memorySize uint64
-			{
-				memSize, overflow := memoryKeccak256(stack)
-				if overflow {
-					return nil, ErrGasUintOverflow
+			memSize, overflow := memoryKeccak256(stack)
+			if overflow {
+				res, err = nil, ErrGasUintOverflow
+				break mainLoop
+			}
+			size, overflow := math.SafeMul(toWordSize(memSize), 32)
+			if overflow {
+				res, err = nil, ErrGasUintOverflow
+				break mainLoop
+			}
+			memorySize = size
+
+			dynamicCost, gerr := gasKeccak256(evm, contract, stack, mem, memorySize)
+			if gerr != nil {
+				res, err = nil, fmt.Errorf("%w: %v", ErrOutOfGas, gerr)
+				break mainLoop
+			}
+			if dynamicCost.StateGas == 0 {
+				if cerr := contract.Gas.chargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
+					res, err = nil, cerr
+					break mainLoop
 				}
-				if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
-					return nil, ErrGasUintOverflow
-				}
+			} else if !contract.Gas.charge(dynamicCost) {
+				res, err = nil, ErrOutOfGas
+				break mainLoop
 			}
-			var dynamicCost GasCosts
-			dynamicCost, err = gasKeccak256(evm, contract, stack, mem, memorySize)
-			if err != nil {
-				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
-			}
-			if err := contract.Gas.chargeDynamic(dynamicCost); err != nil {
-				return nil, err
-			}
+
 			if memorySize > 0 {
 				mem.Resize(memorySize)
 			}
@@ -634,23 +646,33 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			var memorySize uint64
-			{
-				memSize, overflow := memoryMLoad(stack)
-				if overflow {
-					return nil, ErrGasUintOverflow
+			memSize, overflow := memoryMLoad(stack)
+			if overflow {
+				res, err = nil, ErrGasUintOverflow
+				break mainLoop
+			}
+			size, overflow := math.SafeMul(toWordSize(memSize), 32)
+			if overflow {
+				res, err = nil, ErrGasUintOverflow
+				break mainLoop
+			}
+			memorySize = size
+
+			dynamicCost, gerr := gasMLoad(evm, contract, stack, mem, memorySize)
+			if gerr != nil {
+				res, err = nil, fmt.Errorf("%w: %v", ErrOutOfGas, gerr)
+				break mainLoop
+			}
+			if dynamicCost.StateGas == 0 {
+				if cerr := contract.Gas.chargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
+					res, err = nil, cerr
+					break mainLoop
 				}
-				if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
-					return nil, ErrGasUintOverflow
-				}
+			} else if !contract.Gas.charge(dynamicCost) {
+				res, err = nil, ErrOutOfGas
+				break mainLoop
 			}
-			var dynamicCost GasCosts
-			dynamicCost, err = gasMLoad(evm, contract, stack, mem, memorySize)
-			if err != nil {
-				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
-			}
-			if err := contract.Gas.chargeDynamic(dynamicCost); err != nil {
-				return nil, err
-			}
+
 			if memorySize > 0 {
 				mem.Resize(memorySize)
 			}
@@ -672,23 +694,33 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			var memorySize uint64
-			{
-				memSize, overflow := memoryMStore(stack)
-				if overflow {
-					return nil, ErrGasUintOverflow
+			memSize, overflow := memoryMStore(stack)
+			if overflow {
+				res, err = nil, ErrGasUintOverflow
+				break mainLoop
+			}
+			size, overflow := math.SafeMul(toWordSize(memSize), 32)
+			if overflow {
+				res, err = nil, ErrGasUintOverflow
+				break mainLoop
+			}
+			memorySize = size
+
+			dynamicCost, gerr := gasMStore(evm, contract, stack, mem, memorySize)
+			if gerr != nil {
+				res, err = nil, fmt.Errorf("%w: %v", ErrOutOfGas, gerr)
+				break mainLoop
+			}
+			if dynamicCost.StateGas == 0 {
+				if cerr := contract.Gas.chargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
+					res, err = nil, cerr
+					break mainLoop
 				}
-				if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
-					return nil, ErrGasUintOverflow
-				}
+			} else if !contract.Gas.charge(dynamicCost) {
+				res, err = nil, ErrOutOfGas
+				break mainLoop
 			}
-			var dynamicCost GasCosts
-			dynamicCost, err = gasMStore(evm, contract, stack, mem, memorySize)
-			if err != nil {
-				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
-			}
-			if err := contract.Gas.chargeDynamic(dynamicCost); err != nil {
-				return nil, err
-			}
+
 			if memorySize > 0 {
 				mem.Resize(memorySize)
 			}
@@ -710,23 +742,33 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			var memorySize uint64
-			{
-				memSize, overflow := memoryMStore8(stack)
-				if overflow {
-					return nil, ErrGasUintOverflow
+			memSize, overflow := memoryMStore8(stack)
+			if overflow {
+				res, err = nil, ErrGasUintOverflow
+				break mainLoop
+			}
+			size, overflow := math.SafeMul(toWordSize(memSize), 32)
+			if overflow {
+				res, err = nil, ErrGasUintOverflow
+				break mainLoop
+			}
+			memorySize = size
+
+			dynamicCost, gerr := gasMStore8(evm, contract, stack, mem, memorySize)
+			if gerr != nil {
+				res, err = nil, fmt.Errorf("%w: %v", ErrOutOfGas, gerr)
+				break mainLoop
+			}
+			if dynamicCost.StateGas == 0 {
+				if cerr := contract.Gas.chargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
+					res, err = nil, cerr
+					break mainLoop
 				}
-				if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
-					return nil, ErrGasUintOverflow
-				}
+			} else if !contract.Gas.charge(dynamicCost) {
+				res, err = nil, ErrOutOfGas
+				break mainLoop
 			}
-			var dynamicCost GasCosts
-			dynamicCost, err = gasMStore8(evm, contract, stack, mem, memorySize)
-			if err != nil {
-				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
-			}
-			if err := contract.Gas.chargeDynamic(dynamicCost); err != nil {
-				return nil, err
-			}
+
 			if memorySize > 0 {
 				mem.Resize(memorySize)
 			}
@@ -2533,24 +2575,8 @@ mainLoop:
 			contract.Gas.UsedRegularGas += operation.constantGas
 
 			var memorySize uint64
-			if operation.dynamicGas != nil {
-				if operation.memorySize != nil {
-					memSize, overflow := operation.memorySize(stack)
-					if overflow {
-						return nil, ErrGasUintOverflow
-					}
-					if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
-						return nil, ErrGasUintOverflow
-					}
-				}
-				var dynamicCost GasCosts
-				dynamicCost, err = operation.dynamicGas(evm, contract, stack, mem, memorySize)
-				if err != nil {
-					return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
-				}
-				if err := contract.Gas.chargeDynamic(dynamicCost); err != nil {
-					return nil, err
-				}
+			if memorySize, _, err = contract.meterDynamicGas(operation, evm, stack, mem); err != nil {
+				return nil, err
 			}
 			if memorySize > 0 {
 				mem.Resize(memorySize)
