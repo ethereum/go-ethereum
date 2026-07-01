@@ -408,10 +408,7 @@ func (bc *BlockChain) stateRecoverable(root common.Hash) bool {
 }
 
 // StateRecoverable checks if the specified state is recoverable by applying
-// state histories on top of the persistent state. It's the exported variant
-// of stateRecoverable, and shares the same semantics: it's only meaningful for
-// the path scheme, and returns false if the state is already available or the
-// hash scheme is used.
+// state histories on top of the persistent state.
 func (bc *BlockChain) StateRecoverable(root common.Hash) bool {
 	return bc.stateRecoverable(root)
 }

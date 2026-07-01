@@ -1033,9 +1033,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 
 			// Note, the located head state might not be physically present yet; in
 			// the path-based scheme a recoverable state is materialized in a single
-			// shot once the rewind is finalized (see below). The stateless-head
-			// handling is therefore deferred until then, also avoiding a per-block
-			// recoverability check whose cost would grow as the rewind goes deeper.
+			// shot once the rewind is finalized.
 		}
 		// Rewind the snap block in a simpleton way to the target head
 		if currentSnapBlock := bc.CurrentSnapBlock(); currentSnapBlock != nil && header.Number.Uint64() < currentSnapBlock.Number.Uint64() {
