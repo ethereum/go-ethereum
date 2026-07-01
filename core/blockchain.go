@@ -913,7 +913,7 @@ func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash) (*typ
 
 		// noState represents if the target state requested for search
 		// is unavailable and impossible to be recovered.
-		noState = !bc.HasState(root) && !bc.stateRecoverable(root)
+		noState = !bc.HasState(root) && !bc.StateRecoverable(root)
 
 		start  = time.Now() // Timestamp the rewinding is restarted
 		logged = time.Now() // Timestamp last progress log was printed
@@ -940,7 +940,7 @@ func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash) (*typ
 		}
 		// Check if the associated state is available or recoverable if
 		// the requested root has already been crossed.
-		if beyondRoot && (bc.HasState(head.Root) || bc.stateRecoverable(head.Root)) {
+		if beyondRoot && (bc.HasState(head.Root) || bc.StateRecoverable(head.Root)) {
 			break
 		}
 		// If pivot block is reached, return the genesis block as the
@@ -1109,7 +1109,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	// rewinding a large number of blocks.
 	if newHeadBlock := bc.CurrentBlock(); !bc.HasState(newHeadBlock.Root) {
 		switch {
-		case bc.stateRecoverable(newHeadBlock.Root):
+		case bc.StateRecoverable(newHeadBlock.Root):
 			if err := bc.triedb.Recover(newHeadBlock.Root); err != nil {
 				// The state was confirmed recoverable just above, so a failure here
 				// can only stem from an unexpected I/O error. There is no safe way to
@@ -2416,7 +2416,7 @@ func (bc *BlockChain) insertSideChain(ctx context.Context, block *types.Block, i
 	)
 	parent := it.previous()
 	for parent != nil && !bc.HasState(parent.Root) {
-		if bc.stateRecoverable(parent.Root) {
+		if bc.StateRecoverable(parent.Root) {
 			if err := bc.triedb.Recover(parent.Root); err != nil {
 				return nil, 0, err
 			}
@@ -2478,7 +2478,7 @@ func (bc *BlockChain) recoverAncestors(ctx context.Context, block *types.Block, 
 		parent  = block
 	)
 	for parent != nil && !bc.HasState(parent.Root()) {
-		if bc.stateRecoverable(parent.Root()) {
+		if bc.StateRecoverable(parent.Root()) {
 			if err := bc.triedb.Recover(parent.Root()); err != nil {
 				return common.Hash{}, err
 			}
