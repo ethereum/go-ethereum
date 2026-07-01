@@ -32,7 +32,7 @@ import (
 //
 // The function names let the generator confirm the directCold ops are
 // fork-invariant. The fork-varying gas/execute functions themselves are still
-// reached through the active per-fork JumpTable at runtime (see interp_gen.go),
+// reached through the active per-fork JumpTable at runtime (see interpreter_gen.go),
 // not emitted by name: several are closures (gasCall, the memoryCopierGas
 // family, makeGasLog) that FuncForPC reports only as anonymous labels, so they
 // could not be called by name in any case.
