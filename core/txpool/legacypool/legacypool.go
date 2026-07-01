@@ -1009,6 +1009,19 @@ func (pool *LegacyPool) get(hash common.Hash) *types.Transaction {
 	return pool.all.Get(hash)
 }
 
+type ownerReserver interface {
+	Owns(common.Address) bool
+}
+
+func (pool *LegacyPool) releaseReservation(addr common.Address) {
+	if ownerAware, ok := pool.reserver.(ownerReserver); ok {
+		if !ownerAware.Owns(addr) {
+			return
+		}
+	}
+	_ = pool.reserver.Release(addr)
+}
+
 // GetRLP returns a RLP-encoded transaction if it is contained in the pool.
 func (pool *LegacyPool) GetRLP(hash common.Hash) []byte {
 	tx := pool.all.Get(hash)
@@ -1069,7 +1082,7 @@ func (pool *LegacyPool) removeTx(hash common.Hash, outofbound bool, unreserve bo
 				_, hasQueued  = pool.queue.get(addr)
 			)
 			if !hasPending && !hasQueued {
-				pool.reserver.Release(addr)
+				pool.releaseReservation(addr)
 			}
 		}()
 	}
@@ -1425,7 +1438,7 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 	for _, addr := range removedAddresses {
 		_, hasPending := pool.pending[addr]
 		if !hasPending {
-			pool.reserver.Release(addr)
+			pool.releaseReservation(addr)
 		}
 	}
 	return promoted
@@ -1526,7 +1539,7 @@ func (pool *LegacyPool) truncateQueue() {
 	for _, addr := range removedAddresses {
 		_, hasPending := pool.pending[addr]
 		if !hasPending {
-			pool.reserver.Release(addr)
+			pool.releaseReservation(addr)
 		}
 	}
 }
@@ -1587,7 +1600,7 @@ func (pool *LegacyPool) demoteUnexecutables() {
 			delete(pool.pending, addr)
 			pendingAddrsGauge.Dec(1)
 			if _, ok := pool.queue.get(addr); !ok {
-				pool.reserver.Release(addr)
+				pool.releaseReservation(addr)
 			}
 		}
 	}
@@ -1834,11 +1847,11 @@ func (pool *LegacyPool) Clear() {
 
 	for addr := range pool.pending {
 		if _, ok := pool.queue.get(addr); !ok {
-			pool.reserver.Release(addr)
+			pool.releaseReservation(addr)
 		}
 	}
 	for _, addr := range pool.queue.addresses() {
-		pool.reserver.Release(addr)
+		pool.releaseReservation(addr)
 	}
 	pool.all.Clear()
 	pool.priced.Reheap()
