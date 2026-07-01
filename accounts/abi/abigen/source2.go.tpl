@@ -59,6 +59,11 @@ var (
 		abi abi.ABI
 	}
 
+	// GetABI returns the ABI associated with this contract binding.
+	func (c *{{.Type}}) GetABI() abi.ABI {
+		return c.abi
+	}
+
 	// New{{.Type}} creates a new instance of {{.Type}}.
 	func New{{.Type}}() *{{.Type}} {
 		parsed, err := {{.Type}}MetaData.ParseABI()

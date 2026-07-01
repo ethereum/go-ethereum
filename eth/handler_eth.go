@@ -89,7 +89,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 // handleTransactions marks all given transactions as known to the peer
 // and performs basic validations.
 func handleTransactions(peer *eth.Peer, list []*types.Transaction, directBroadcast bool) error {
-	seen := make(map[common.Hash]struct{})
+	seen := make(map[common.Hash]struct{}, len(list))
 	for _, tx := range list {
 		if tx.Type() == types.BlobTxType {
 			if directBroadcast {

@@ -36,6 +36,11 @@ type Empty struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *Empty) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewEmpty creates a new instance of Empty.
 func NewEmpty() *Empty {
 	parsed, err := EmptyMetaData.ParseABI()

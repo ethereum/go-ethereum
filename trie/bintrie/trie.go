@@ -474,3 +474,32 @@ func (t *BinaryTrie) PrefetchStorage(addr common.Address, keys [][]byte) error {
 func (t *BinaryTrie) Witness() map[string][]byte {
 	return t.tracer.Values()
 }
+
+// UpdateStorageBatch updates a list of storage slots sequentially.
+func (t *BinaryTrie) UpdateStorageBatch(address common.Address, keys [][]byte, values [][]byte) error {
+	if len(keys) != len(values) {
+		return fmt.Errorf("keys and values length mismatch: %d != %d", len(keys), len(values))
+	}
+	for i, key := range keys {
+		if err := t.UpdateStorage(address, key, values[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UpdateAccountBatch updates a list of accounts sequentially.
+func (t *BinaryTrie) UpdateAccountBatch(addresses []common.Address, accounts []*types.StateAccount, codeLens []int) error {
+	if len(addresses) != len(accounts) {
+		return fmt.Errorf("addresses and accounts length mismatch: %d != %d", len(addresses), len(accounts))
+	}
+	if len(addresses) != len(codeLens) {
+		return fmt.Errorf("addresses and code length mismatch: %d != %d", len(addresses), len(codeLens))
+	}
+	for i, addr := range addresses {
+		if err := t.UpdateAccount(addr, accounts[i], codeLens[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}

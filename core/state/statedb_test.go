@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -995,6 +996,45 @@ func TestDeleteCreateRevert(t *testing.T) {
 
 	if state.getStateObject(addr) != nil {
 		t.Fatalf("self-destructed contract came alive")
+	}
+}
+
+func TestWitnessIncludesAbsentAccountReads(t *testing.T) {
+	db := NewDatabaseForTesting()
+	state, _ := New(types.EmptyRootHash, db)
+	for i := byte(0); i < 3; i++ {
+		addr := common.Address{i + 1}
+		state.SetBalance(addr, uint256.NewInt(uint64(i+1)), tracing.BalanceChangeUnspecified)
+	}
+	root, err := state.Commit(0, false, false)
+	if err != nil {
+		t.Fatalf("failed to commit initial state: %v", err)
+	}
+	state, err = New(root, db)
+	if err != nil {
+		t.Fatalf("failed to reopen state: %v", err)
+	}
+
+	witness := &stateless.Witness{
+		Codes: make(map[string]struct{}),
+		State: make(map[string]struct{}),
+	}
+	state.StartPrefetcher("test", witness)
+	missing := common.HexToAddress("0x017655eac00c837122cabbbc0dd604a196906648")
+	if balance := state.GetBalance(missing); balance.Sign() != 0 {
+		t.Fatalf("unexpected balance for absent account: %v", balance)
+	}
+	if err := state.Error(); err != nil {
+		t.Fatalf("unexpected state error after read: %v", err)
+	}
+	if got := state.IntermediateRoot(false); got != root {
+		t.Fatalf("unexpected root after read-only access: have %x want %x", got, root)
+	}
+	if err := state.Error(); err != nil {
+		t.Fatalf("unexpected state error after root calculation: %v", err)
+	}
+	if len(witness.State) == 0 {
+		t.Fatal("missing witness nodes for absent account read")
 	}
 }
 

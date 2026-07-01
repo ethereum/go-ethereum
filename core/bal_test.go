@@ -42,9 +42,6 @@ import (
 func balChainConfig() *params.ChainConfig {
 	cfg := *params.MergedTestChainConfig
 	cfg.AmsterdamTime = new(uint64)
-	blob := *cfg.BlobScheduleConfig
-	blob.Amsterdam = blob.Osaka
-	cfg.BlobScheduleConfig = &blob
 	return &cfg
 }
 
@@ -518,6 +515,73 @@ func TestBALStaticCallTargetIncluded(t *testing.T) {
 	assertEmpty(t, assertPresent(t, b, target))
 }
 
+// makeValueCaller emits a single value-transferring CALL-family op (CALL 0xf1
+// or CALLCODE 0xf2) against `target` with value=1, then STOPs. Used together
+// with a zero-balance caller to make the value transfer fail CanTransfer.
+func makeValueCaller(op byte, target common.Address) []byte {
+	code := []byte{
+		0x60, 0x00, // retSize
+		0x60, 0x00, // retOff
+		0x60, 0x00, // argsSize
+		0x60, 0x00, // argsOff
+		0x60, 0x01, // value = 1
+		0x73, // PUSH20 target
+	}
+	code = append(code, target.Bytes()...)
+	return append(code, 0x5a, op, 0x50, 0x00) // GAS, op, POP, STOP
+}
+
+// TestBALCallToDelegatedTargetBalanceFail asserts the EIP-7928 rule revised in
+// ethereum/EIPs#11838: when a CALL targets an EIP-7702 delegated account and the
+// delegated address passes its access_cost gas check, the delegated
+// (implementation) address MUST appear in the BAL even when the call then fails
+// its sender-balance check, because the delegation is resolved before that
+// check. CALL routes through the EIP-8037 gas path.
+func TestBALCallToDelegatedTargetBalanceFail(t *testing.T) {
+	delegated := common.HexToAddress("0xde1e9a7ed") // EOA carrying a 7702 designator
+	impl := common.HexToAddress("0x111111")         // delegation target (implementation)
+	caller := common.HexToAddress("0xca11")         // zero-balance contract issuing the CALL
+
+	env := newBALTestEnv(types.GenesisAlloc{
+		caller:    {Code: makeValueCaller(0xf1 /* CALL */, delegated), Balance: common.Big0},
+		delegated: {Code: types.AddressToDelegation(impl), Balance: common.Big0},
+		impl:      {Code: []byte{0x00}, Balance: common.Big0}, // STOP
+	})
+
+	b, _ := env.run(t, func(g *BlockGen) {
+		g.AddTx(env.tx(0, &caller, big.NewInt(0), 1_000_000, 0, nil))
+	})
+
+	assertPresent(t, b, caller)
+	assertPresent(t, b, delegated)
+	// The call failed its sender-balance check, so the implementation never
+	// executed: it is recorded with an empty change set, but it MUST be present.
+	assertEmpty(t, assertPresent(t, b, impl))
+}
+
+// TestBALCallCodeToDelegatedTargetBalanceFail is the CALLCODE analogue of
+// TestBALCallToDelegatedTargetBalanceFail, exercising the EIP-7702 gas path
+// (CALLCODE/STATICCALL/DELEGATECALL) rather than the EIP-8037 one.
+func TestBALCallCodeToDelegatedTargetBalanceFail(t *testing.T) {
+	delegated := common.HexToAddress("0xde1e9a7ed")
+	impl := common.HexToAddress("0x111111")
+	caller := common.HexToAddress("0xca11")
+
+	env := newBALTestEnv(types.GenesisAlloc{
+		caller:    {Code: makeValueCaller(0xf2 /* CALLCODE */, delegated), Balance: common.Big0},
+		delegated: {Code: types.AddressToDelegation(impl), Balance: common.Big0},
+		impl:      {Code: []byte{0x00}, Balance: common.Big0}, // STOP
+	})
+
+	b, _ := env.run(t, func(g *BlockGen) {
+		g.AddTx(env.tx(0, &caller, big.NewInt(0), 1_000_000, 0, nil))
+	})
+
+	assertPresent(t, b, caller)
+	assertPresent(t, b, delegated)
+	assertEmpty(t, assertPresent(t, b, impl))
+}
+
 // ============================== Revert behaviour ==============================
 
 // TestBALRevertedTxStillIncluded: a tx whose top-level call REVERTs still
@@ -944,6 +1008,62 @@ func TestBALSelfDestructPreExistingContract(t *testing.T) {
 	if len(ben.BalanceChanges) != 1 || ben.BalanceChanges[0].PostBalance.Uint64() != 50 {
 		t.Fatalf("beneficiary should receive 50: %+v", ben.BalanceChanges)
 	}
+}
+
+// TestBALSelfDestructToSelfKeepsBalance: under EIP-8246 a freshly created
+// contract that self-destructs to itself keeps its balance (it is not burnt and
+// the account is not removed). The surviving balance-only account must therefore
+// be recorded in the BAL with its preserved balance.
+func TestBALSelfDestructToSelfKeepsBalance(t *testing.T) {
+	env := newBALTestEnv(nil)
+	// Init code: ADDRESS SELFDESTRUCT — the contract self-destructs to itself
+	// during its own creation transaction (satisfying EIP-6780's same-tx rule).
+	//   ADDRESS (0x30) ; SELFDESTRUCT (0xff)
+	init := []byte{0x30, 0xff}
+
+	b, receipts := env.run(t, func(g *BlockGen) {
+		g.AddTx(env.tx(0, nil, big.NewInt(100), 1_000_000, 0, init))
+	})
+
+	created := receipts[0].ContractAddress
+	cc := assertPresent(t, b, created)
+	// EIP-8246: balance preserved (not burnt), account survives -> the BAL must
+	// record the created address with its retained balance.
+	if len(cc.BalanceChanges) != 1 || cc.BalanceChanges[0].PostBalance.Uint64() != 100 {
+		t.Fatalf("self-destruct-to-self must preserve balance 100 in the BAL: %+v", cc.BalanceChanges)
+	}
+}
+
+// TestBALSelfDestructToSelfPrefundedUnchanged: a pre-funded address onto which a
+// contract is deployed and which self-destructs to itself in the same
+// transaction. Under EIP-8246 the account survives with its balance unchanged,
+// so the BAL must list it only as an access (no balance/nonce/code change).
+func TestBALSelfDestructToSelfPrefundedUnchanged(t *testing.T) {
+	// The contract address created by the sender's nonce-0 transaction; it is
+	// pre-funded in genesis (balance only: nonce 0, no code, no storage), which
+	// EIP-7610 permits as a deployment target.
+	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	created := crypto.CreateAddress(crypto.PubkeyToAddress(key.PublicKey), 0)
+
+	env := newBALTestEnv(types.GenesisAlloc{
+		created: {Balance: big.NewInt(77)},
+	})
+	// Init code: ADDRESS SELFDESTRUCT, deployed with zero value so the balance is
+	// untouched (stays at the pre-funded 77).
+	init := []byte{0x30, 0xff}
+
+	b, receipts := env.run(t, func(g *BlockGen) {
+		g.AddTx(env.tx(0, nil, big.NewInt(0), 1_000_000, 0, init))
+	})
+
+	if receipts[0].ContractAddress != created {
+		t.Fatalf("unexpected created address: have %x want %x", receipts[0].ContractAddress, created)
+	}
+	aa := assertPresent(t, b, created)
+	// EIP-8246: balance preserved and equal to the pre-transaction value, so no
+	// balance change; nonce and code end where they started (0 / empty). The
+	// account is only read, with an empty change set.
+	assertEmpty(t, aa)
 }
 
 // ============================== Mid-tx balance round-trip ==============================

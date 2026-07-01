@@ -257,6 +257,14 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 	return gasFunc
 }
 
+// recordDelegationAccess records the EIP-7702 delegated target in the block
+// access list (EIP-7928).
+func recordDelegationAccess(evm *EVM, target common.Address) {
+	if evm.chainRules.IsAmsterdam {
+		evm.StateDB.GetCode(target)
+	}
+}
+
 var (
 	innerGasCallEIP7702    = makeCallVariantGasCallEIP7702(gasCallIntrinsic)
 	gasDelegateCallEIP7702 = makeCallVariantGasCallEIP7702(gasDelegateCallIntrinsic)
@@ -336,6 +344,10 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc intrinsicGasFunc) gasFunc {
 			if !contract.chargeRegular(eip7702Cost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 				return GasCosts{}, ErrOutOfGas
 			}
+			// The delegated address has passed its gas check; record it in the
+			// block access list now, before the call's sender-balance and
+			// call-stack-depth checks.
+			recordDelegationAccess(evm, target)
 		}
 		// Calculate the gas budget for the nested call. The costs defined by
 		// EIP-2929 and EIP-7702 have already been applied.
@@ -416,6 +428,10 @@ func makeCallVariantGasCallEIP8037(regularFunc regularGasFunc, stateGasFunc stat
 			if !contract.chargeRegular(eip7702Cost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 				return GasCosts{}, ErrOutOfGas
 			}
+			// The delegated address has passed its gas check; record it in the
+			// block access list now, before the call's sender-balance and
+			// call-stack-depth checks.
+			recordDelegationAccess(evm, target)
 		}
 
 		// Compute and charge state gas (new account creation) AFTER regular gas.

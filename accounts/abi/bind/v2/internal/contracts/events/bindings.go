@@ -36,6 +36,11 @@ type C struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *C) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewC creates a new instance of C.
 func NewC() *C {
 	parsed, err := CMetaData.ParseABI()
