@@ -16,7 +16,7 @@
 
 package vm
 
-// Tests for the generated interpreter dispatch (interp_gen.go): that the
+// Tests for the generated interpreter dispatch (interpreter_gen.go): that the
 // committed file is up to date, that it behaves identically to the table loop,
 // and that the fast path keeps its cheap stack helpers inlined.
 
@@ -41,7 +41,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// TestGeneratedDispatchUpToDate asserts that the committed interp_gen.go matches
+// TestGeneratedDispatchUpToDate asserts that the committed interpreter_gen.go matches
 // what `go generate` (core/vm/gen) produces from the current opcode/gas/fork
 // definitions. It is the CI guard against hand-edits to the generated file and
 // against the generator drifting from the committed output.
@@ -49,9 +49,9 @@ func TestGeneratedDispatchUpToDate(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping generator round-trip in -short mode")
 	}
-	tmp := filepath.Join(t.TempDir(), "interp_gen.go")
+	tmp := filepath.Join(t.TempDir(), "interpreter_gen.go")
 	cmd := exec.Command("go", "run", "./gen")
-	cmd.Env = append(os.Environ(), "INTERP_GEN_OUT="+tmp)
+	cmd.Env = append(os.Environ(), "INTERPRETER_GEN_OUT="+tmp)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("running generator: %v\n%s", err, out)
 	}
@@ -59,12 +59,12 @@ func TestGeneratedDispatchUpToDate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading regenerated output: %v", err)
 	}
-	want, err := os.ReadFile("interp_gen.go")
+	want, err := os.ReadFile("interpreter_gen.go")
 	if err != nil {
-		t.Fatalf("reading committed interp_gen.go: %v", err)
+		t.Fatalf("reading committed interpreter_gen.go: %v", err)
 	}
 	if string(got) != string(want) {
-		t.Fatalf("interp_gen.go is out of date; run `go generate ./core/vm/...` and commit the result")
+		t.Fatalf("interpreter_gen.go is out of date; run `go generate ./core/vm/...` and commit the result")
 	}
 }
 
@@ -444,7 +444,7 @@ func markedHelpers(t *testing.T) map[string]bool {
 }
 
 // TestGeneratedFastPathHelpersExpanded asserts the generator spliced every
-// //gen:inline helper inline, so none survives as a real call in interp_gen.go.
+// //gen:inline helper inline, so none survives as a real call in interpreter_gen.go.
 // Those helpers exceed the compiler's inline budget for a function as large as
 // execUntraced, so a missed splice would silently drop the inlining the fast
 // path exists for. It is the expand-side counterpart to
@@ -452,10 +452,10 @@ func markedHelpers(t *testing.T) map[string]bool {
 // the fast path makes no real stack-helper call, the costly ones by splicing,
 // the cheap ones by compiler inlining.
 func TestGeneratedFastPathHelpersExpanded(t *testing.T) {
-	calls := countStackCalls(t, "interp_gen.go")
+	calls := countStackCalls(t, "interpreter_gen.go")
 	for h := range markedHelpers(t) {
 		if n := calls[h]; n != 0 {
-			t.Errorf("(*Stack).%s is //gen:inline but has %d residual call(s) in interp_gen.go, expected 0.\n"+
+			t.Errorf("(*Stack).%s is //gen:inline but has %d residual call(s) in interpreter_gen.go, expected 0.\n"+
 				"The generator did not splice it. Check it is still in inlinable shape (core/vm/gen).", h, n)
 		}
 	}
@@ -463,7 +463,7 @@ func TestGeneratedFastPathHelpersExpanded(t *testing.T) {
 
 // TestGeneratedFastPathHelpersInlined recompiles this package with the
 // compiler's inlining diagnostics on and fails if any *Stack helper call that
-// survives into interp_gen.go was not inlined. Every survivor must be a cheap
+// survives into interpreter_gen.go was not inlined. Every survivor must be a cheap
 // helper (len, pop1, peek, drop) the compiler inlines into execUntraced; the
 // //gen:inline helpers are spliced away and owned by the Expanded test. The
 // cheap ones inline today with margin except pop1, at cost 18 against Go's
@@ -483,21 +483,21 @@ func TestGeneratedFastPathHelpersInlined(t *testing.T) {
 		t.Fatalf("compiling with inlining diagnostics: %v\n%s", err, out)
 	}
 	diag := string(out)
-	if !strings.Contains(diag, "interp_gen.go") {
-		t.Fatalf("captured no interp_gen.go diagnostics, the -m build produced nothing to check:\n%s", diag)
+	if !strings.Contains(diag, "interpreter_gen.go") {
+		t.Fatalf("captured no interpreter_gen.go diagnostics, the -m build produced nothing to check:\n%s", diag)
 	}
 
 	// Every surviving stack-helper call (i.e. not a //gen:inline target) must be
 	// inlined by the compiler.
 	marked := markedHelpers(t)
-	for h, n := range countStackCalls(t, "interp_gen.go") {
+	for h, n := range countStackCalls(t, "interpreter_gen.go") {
 		if marked[h] {
 			continue // spliced away, owned by TestGeneratedFastPathHelpersExpanded
 		}
-		inlinedRe := regexp.MustCompile(`interp_gen\.go.*inlining call to \(\*Stack\)\.` + regexp.QuoteMeta(h) + `\b`)
+		inlinedRe := regexp.MustCompile(`interpreter_gen\.go.*inlining call to \(\*Stack\)\.` + regexp.QuoteMeta(h) + `\b`)
 		inlined := len(inlinedRe.FindAllString(diag, -1))
 		if inlined != n {
-			t.Errorf("(*Stack).%s: %d call site(s) in interp_gen.go, %d inlined into execUntraced.\n"+
+			t.Errorf("(*Stack).%s: %d call site(s) in interpreter_gen.go, %d inlined into execUntraced.\n"+
 				"The compiler stopped inlining it, so the fast path now pays a real call. Shrink the\n"+
 				"body to fit the inline budget, or tag it //gen:inline in stack.go to splice it instead.", h, n, inlined)
 			continue
