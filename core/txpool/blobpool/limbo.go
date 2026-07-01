@@ -33,7 +33,7 @@ import (
 type limboBlob struct {
 	TxHash common.Hash // Owner transaction's hash to support resurrecting reorged txs
 	Block  uint64      // Block in which the blob transaction was included
-	Ptx    *blobTxForPool
+	Ptx    *BlobTxForPool
 }
 
 // limbo is a light, indexed database to temporarily store recently included
@@ -49,7 +49,7 @@ type limbo struct {
 }
 
 // newLimbo opens and indexes a set of limboed blob transactions.
-func newLimbo(config *params.ChainConfig, datadir string) (*limbo, error) {
+func newLimbo(config *params.ChainConfig, datadir string) (*limbo, []uint64, error) {
 	l := &limbo{
 		index:  make(map[common.Hash]uint64),
 		groups: make(map[uint64]map[uint64]common.Hash),
@@ -61,19 +61,27 @@ func newLimbo(config *params.ChainConfig, datadir string) (*limbo, error) {
 	// See if we need to migrate the limbo after fusaka.
 	slotter, err := tryMigrate(config, slotter, datadir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Index all limboed blobs on disk and delete anything unprocessable
-	var fails []uint64
+	var (
+		fails   []uint64
+		convert []uint64
+	)
 	index := func(id uint64, size uint32, data []byte) {
-		if l.parseBlob(id, data) != nil {
+		err := l.parseBlob(id, data)
+		if errors.Is(err, errLegacyTx) {
+			convert = append(convert, id)
+			return
+		}
+		if err != nil {
 			fails = append(fails, id)
 		}
 	}
 	store, err := billy.Open(billy.Options{Path: datadir, Repair: true}, slotter, index)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	l.store = store
 
@@ -82,11 +90,11 @@ func newLimbo(config *params.ChainConfig, datadir string) (*limbo, error) {
 		for _, id := range fails {
 			if err := l.store.Delete(id); err != nil {
 				l.Close()
-				return nil, err
+				return nil, nil, err
 			}
 		}
 	}
-	return l, nil
+	return l, convert, nil
 }
 
 // Close closes down the underlying persistent store.
@@ -99,6 +107,9 @@ func (l *limbo) Close() error {
 func (l *limbo) parseBlob(id uint64, data []byte) error {
 	item := new(limboBlob)
 	if err := rlp.DecodeBytes(data, item); err != nil {
+		if isLegacyLimboBlob(data) {
+			return errLegacyTx
+		}
 		// This path is impossible unless the disk data representation changes
 		// across restarts. For that ever improbable case, recover gracefully
 		// by ignoring this data entry.
@@ -120,6 +131,17 @@ func (l *limbo) parseBlob(id uint64, data []byte) error {
 	l.groups[item.Block][id] = item.TxHash
 
 	return nil
+}
+
+// isLegacyLimboBlob returns true if the data is encoded in legacy limboBlob type.
+// It checks whether the first byte of third element is blobTxType.
+func isLegacyLimboBlob(data []byte) bool {
+	elems, err := rlp.SplitListValues(data)
+	if err != nil || len(elems) < 3 {
+		return false
+	}
+	kind, content, _, err := rlp.Split(elems[2])
+	return err == nil && kind == rlp.String && len(content) > 1 && content[0] == types.BlobTxType
 }
 
 // finalize evicts all blobs belonging to a recently finalized block or older.
@@ -146,7 +168,9 @@ func (l *limbo) finalize(final *types.Header) {
 
 // push stores a new blob transaction into the limbo, waiting until finality for
 // it to be automatically evicted.
-func (l *limbo) push(ptx *blobTxForPool, block uint64) error {
+func (l *limbo) push(ptx *BlobTxForPool, block uint64) error {
+	// If the blobs are already tracked by the limbo, consider it a programming
+	// error. There's not much to do against it, but be loud.
 	hash := ptx.Tx.Hash()
 	if _, ok := l.index[hash]; ok {
 		log.Error("Limbo cannot push already tracked blobs", "tx", hash)
@@ -162,7 +186,7 @@ func (l *limbo) push(ptx *blobTxForPool, block uint64) error {
 // pull retrieves a previously pushed set of blobs back from the limbo, removing
 // it at the same time. This method should be used when a previously included blob
 // transaction gets reorged out.
-func (l *limbo) pull(tx common.Hash) (*blobTxForPool, error) {
+func (l *limbo) pull(tx common.Hash) (*BlobTxForPool, error) {
 	// If the blobs are not tracked by the limbo, there's not much to do. This
 	// can happen for example if a blob transaction is mined without pushing it
 	// into the network first.
@@ -239,7 +263,7 @@ func (l *limbo) getAndDrop(id uint64) (*limboBlob, error) {
 
 // setAndIndex assembles a limbo blob database entry and stores it, also updating
 // the in-memory indices.
-func (l *limbo) setAndIndex(ptx *blobTxForPool, block uint64) error {
+func (l *limbo) setAndIndex(ptx *BlobTxForPool, block uint64) error {
 	txhash := ptx.Tx.Hash()
 	item := &limboBlob{
 		TxHash: txhash,

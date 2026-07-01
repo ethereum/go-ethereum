@@ -146,7 +146,10 @@ func (tc *testCache) inject(t *testing.T, spec txSpec) []common.Hash {
 	tx := makeMultiBlobTx(0, spec.tip, 1_000_000, 1_000_000, spec.blobs, tc.offset, key)
 	tc.offset += spec.blobs
 
-	ptx := newBlobTxForPool(tx)
+	ptx, err := newBlobTxForPool(tx)
+	if err != nil {
+		t.Fatalf("new blob tx for pool: %v", err)
+	}
 
 	tc.blobpool.lock.Lock()
 	defer tc.blobpool.lock.Unlock()
@@ -155,7 +158,7 @@ func (tc *testCache) inject(t *testing.T, spec txSpec) []common.Hash {
 	if err != nil {
 		t.Fatalf("store put: %v", err)
 	}
-	meta := newBlobTxMeta(id, ptx.TxSize(), tc.blobpool.store.Size(id), ptx)
+	meta := newBlobTxMeta(id, tc.blobpool.store.Size(id), ptx)
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	tc.blobpool.index[addr] = append(tc.blobpool.index[addr], meta)
 	tc.blobpool.lookup.track(meta)
