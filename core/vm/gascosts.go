@@ -109,19 +109,6 @@ func (g *GasBudget) chargeRegularOnly(r uint64) error {
 	return nil
 }
 
-// chargeDynamic charges a dynamic gas cost: a regular-only deduction when there
-// is no state gas, otherwise the full multidimensional charge through the
-// reservoir.
-func (g *GasBudget) chargeDynamic(cost GasCosts) error {
-	if cost.StateGas == 0 {
-		return g.chargeRegularOnly(cost.RegularGas)
-	}
-	if !g.charge(cost) {
-		return ErrOutOfGas
-	}
-	return nil
-}
-
 // CanAfford reports whether the running budget can cover the given cost vector
 // without going out of gas. The regular cost must fit in the regular balance,
 // and any state gas in excess of the reservoir must be coverable by the
