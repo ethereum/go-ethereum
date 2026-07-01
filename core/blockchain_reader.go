@@ -407,6 +407,15 @@ func (bc *BlockChain) stateRecoverable(root common.Hash) bool {
 	return result
 }
 
+// StateRecoverable checks if the specified state is recoverable by applying
+// state histories on top of the persistent state. It's the exported variant
+// of stateRecoverable, and shares the same semantics: it's only meaningful for
+// the path scheme, and returns false if the state is already available or the
+// hash scheme is used.
+func (bc *BlockChain) StateRecoverable(root common.Hash) bool {
+	return bc.stateRecoverable(root)
+}
+
 // ContractCodeWithPrefix retrieves a blob of data associated with a contract
 // hash either from ephemeral in-memory cache, or from persistent storage.
 func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) []byte {
