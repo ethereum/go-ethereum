@@ -17,12 +17,12 @@
 package scwallet
 
 import (
-	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 
@@ -101,7 +101,7 @@ func (s *SecureChannelSession) Pair(pairingPassword []byte) error {
 	cardCryptogram := response.Data[:32]
 	cardChallenge := response.Data[32:64]
 
-	if !bytes.Equal(expectedCryptogram, cardCryptogram) {
+	if subtle.ConstantTimeCompare(expectedCryptogram, cardCryptogram) != 1 {
 		return fmt.Errorf("invalid card cryptogram %v != %v", expectedCryptogram, cardCryptogram)
 	}
 
@@ -253,7 +253,7 @@ func (s *SecureChannelSession) transmitEncrypted(cla, ins, p1, p2 byte, data []b
 	if err = s.updateIV(rmeta[:], rdata); err != nil {
 		return nil, err
 	}
-	if !bytes.Equal(s.iv, rmac) {
+	if subtle.ConstantTimeCompare(s.iv, rmac) != 1 {
 		return nil, errors.New("invalid MAC in response")
 	}
 
