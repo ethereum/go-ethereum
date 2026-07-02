@@ -94,6 +94,11 @@ func NewFilterSystem(backend Backend, config Config) *FilterSystem {
 	}
 }
 
+// RangeLimit returns the configured maximum block range for filter queries.
+func (sys *FilterSystem) RangeLimit() uint64 {
+	return sys.cfg.RangeLimit
+}
+
 type logCacheElem struct {
 	logs []*types.Log
 	body atomic.Pointer[types.Body]
