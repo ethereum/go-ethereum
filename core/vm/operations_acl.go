@@ -415,6 +415,14 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc intrinsicGasFunc, coldCost uint
 			if !contract.chargeRegular(eip7702Cost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 				return GasCosts{}, ErrOutOfGas
 			}
+			// The spec checks the delegation cost together with the memory
+			// expansion and transfer costs before reading the delegated account.
+			// Since intrinsicCost is only checked (not charged) above, re-check it
+			// against the remaining gas so the delegated address is not recorded
+			// in the block access list when the combined costs are unaffordable.
+			if contract.Gas.RegularGas < intrinsicCost {
+				return GasCosts{}, ErrOutOfGas
+			}
 			// The delegated address has passed its gas check; record it in the
 			// block access list now, before the call's sender-balance and
 			// call-stack-depth checks.
