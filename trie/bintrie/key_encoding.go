@@ -105,7 +105,8 @@ func GetBinaryTreeKeyStorageSlot(address common.Address, slotnum []byte) []byte 
 }
 
 func GetBinaryTreeKeyCodeChunk(address common.Address, chunknr *uint256.Int) []byte {
-	chunkOffset := new(uint256.Int).Add(codeOffset, chunknr).Bytes()
+	chunkOffsetBytes32 := new(uint256.Int).Add(codeOffset, chunknr).Bytes32()
+	chunkOffset := chunkOffsetBytes32[:]
 	return GetBinaryTreeKey(address, chunkOffset)
 }
 
