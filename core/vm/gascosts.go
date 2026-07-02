@@ -100,13 +100,13 @@ func (g *GasBudget) Charge(cost GasCosts) (GasBudget, bool) {
 }
 
 // chargeRegularOnly deducts a regular-only cost.
-func (g *GasBudget) chargeRegularOnly(r uint64) bool {
+func (g *GasBudget) chargeRegularOnly(r uint64) error {
 	if g.RegularGas < r {
-		return false
+		return ErrOutOfGas
 	}
 	g.RegularGas -= r
 	g.UsedRegularGas += r
-	return true
+	return nil
 }
 
 // CanAfford reports whether the running budget can cover the given cost vector

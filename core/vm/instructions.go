@@ -536,12 +536,14 @@ func opJumpdest(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opPc(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.get().SetUint64(*pc)
+	elem := scope.Stack.get()
+	elem.SetUint64(*pc)
 	return nil, nil
 }
 
 func opMsize(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.get().SetUint64(uint64(scope.Memory.Len()))
+	elem := scope.Stack.get()
+	elem.SetUint64(uint64(scope.Memory.Len()))
 	return nil, nil
 }
 
@@ -1113,10 +1115,8 @@ func makeLog(size int) executionFunc {
 
 // opPush1 is a specialized version of pushN
 func opPush1(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	var (
-		codeLen = uint64(len(scope.Contract.Code))
-		elem    = scope.Stack.get()
-	)
+	codeLen := uint64(len(scope.Contract.Code))
+	elem := scope.Stack.get()
 	*pc += 1
 	if *pc < codeLen {
 		elem.SetUint64(uint64(scope.Contract.Code[*pc]))
@@ -1128,10 +1128,8 @@ func opPush1(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 // opPush2 is a specialized version of pushN
 func opPush2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	var (
-		codeLen = uint64(len(scope.Contract.Code))
-		elem    = scope.Stack.get()
-	)
+	codeLen := uint64(len(scope.Contract.Code))
+	elem := scope.Stack.get()
 	if *pc+2 < codeLen {
 		elem.SetBytes2(scope.Contract.Code[*pc+1 : *pc+3])
 	} else if *pc+1 < codeLen {
