@@ -1,6 +1,6 @@
 // Copyright 2026-2027, QuarkChain.
-//
-// Package slave implements a binary frame codec compatible with pyquarkchain.
+
+// Package wire implements a binary frame codec compatible with pyquarkchain.
 //
 // Wire format (per frame):
 //
@@ -10,7 +10,7 @@
 // metadata size depends on metaSize parameter:
 //   - 12 bytes: ClusterMetadata (branch uint32 + cluster_peer_id uint64) for master↔slave
 //   - 0 bytes:  no metadata for slave↔slave traffic
-package slave
+package wire
 
 import (
 	"encoding/binary"
@@ -19,17 +19,10 @@ import (
 	"io"
 )
 
-// Metadata is the routing header for ClusterMetadata traffic.
-// Wire representation: 12 bytes (4B branch + 8B cluster_peer_id).
-type Metadata struct {
-	Branch        uint32
-	ClusterPeerID uint64
-}
-
 // Frame is a complete protocol frame.
 // Wire layout after metadata: [1B opcode][8B rpc_id][N bytes payload]
 type Frame struct {
-	Meta    Metadata
+	Meta    ClusterMetadata
 	Opcode  byte
 	RPCID   uint64
 	Payload []byte
@@ -42,12 +35,12 @@ const (
 	frameHeader = 4 // payload_len prefix
 )
 
-// ReadFrame reads a frame with 12-byte metadata and no payload-length cap.
+// ReadFrame reads a frame with 12-byte ClusterMetadata and no payload-length cap.
 func ReadFrame(r io.Reader) (*Frame, error) {
 	return readFrame(r, metaSize, 0)
 }
 
-// ReadFrameWithMaxPayload reads a frame with 12-byte metadata and rejects frames
+// ReadFrameWithMaxPayload reads a frame with 12-byte ClusterMetadata and rejects frames
 // whose payload_len exceeds maxPayloadLen before allocation.
 func ReadFrameWithMaxPayload(r io.Reader, maxPayloadLen uint32) (*Frame, error) {
 	if maxPayloadLen == 0 {
@@ -83,16 +76,16 @@ func readFrame(r io.Reader, metaSize int, maxPayloadLen uint32) (*Frame, error) 
 	}
 
 	// 2. Read metadata (size depends on metadata_class)
-	var meta Metadata
+	var meta ClusterMetadata
 	if metaSize > 0 {
 		if metaSize != 12 {
-			return nil, fmt.Errorf("unsupported metaSize %d (only 0 or 12 supported)", metaSize)
+			return nil, fmt.Errorf("unsupported metaSize %d (only 12 supported)", metaSize)
 		}
 		metaBuf := make([]byte, metaSize)
 		if _, err := io.ReadFull(r, metaBuf); err != nil {
 			return nil, fmt.Errorf("reading metadata: %w", err)
 		}
-		meta = Metadata{
+		meta = ClusterMetadata{
 			Branch:        binary.BigEndian.Uint32(metaBuf[0:4]),
 			ClusterPeerID: binary.BigEndian.Uint64(metaBuf[4:12]),
 		}
@@ -113,7 +106,7 @@ func readFrame(r io.Reader, metaSize int, maxPayloadLen uint32) (*Frame, error) 
 	}, nil
 }
 
-// WriteFrame serializes f with 12-byte metadata and writes it to w.
+// WriteFrame serializes f with 12-byte ClusterMetadata and writes it to w.
 func WriteFrame(w io.Writer, f *Frame) error {
 	return writeFrameWithMetaSize(w, f, metaSize)
 }
@@ -151,23 +144,4 @@ func writeFrameWithMetaSize(w io.Writer, f *Frame, metaSize int) error {
 
 	_, err := w.Write(buf)
 	return err
-}
-
-// MarshalMetadata serializes Metadata into its 12-byte wire representation.
-func MarshalMetadata(m Metadata) []byte {
-	buf := make([]byte, metaSize)
-	binary.BigEndian.PutUint32(buf[0:4], m.Branch)
-	binary.BigEndian.PutUint64(buf[4:12], m.ClusterPeerID)
-	return buf
-}
-
-// UnmarshalMetadata deserializes a 12-byte wire representation into Metadata.
-func UnmarshalMetadata(b []byte) (Metadata, error) {
-	if len(b) != metaSize {
-		return Metadata{}, fmt.Errorf("metadata must be %d bytes, got %d", metaSize, len(b))
-	}
-	return Metadata{
-		Branch:        binary.BigEndian.Uint32(b[0:4]),
-		ClusterPeerID: binary.BigEndian.Uint64(b[4:12]),
-	}, nil
 }

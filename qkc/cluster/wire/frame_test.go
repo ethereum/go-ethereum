@@ -1,6 +1,6 @@
 // Copyright 2026-2027, QuarkChain.
 
-package slave
+package wire
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 
 var (
 	// Test vectors serialized by pyquarkchain serializers using synthetic test values.
+	// NOT real production network data.
 	//
 	// Payload content (Ping/Pong commands):
 	//   - id = "id" (ASCII, 2 bytes)
@@ -116,9 +117,9 @@ func TestRoundTrip_Meta(t *testing.T) {
 		f    *Frame
 	}{
 		{"empty", &Frame{Opcode: 1, RPCID: 0, Payload: nil}},
-		{"with_meta", &Frame{Meta: Metadata{Branch: 5, ClusterPeerID: 999}, Opcode: 0x10, RPCID: 7, Payload: []byte("hello")}},
+		{"with_meta", &Frame{Meta: ClusterMetadata{Branch: 5, ClusterPeerID: 999}, Opcode: 0x10, RPCID: 7, Payload: []byte("hello")}},
 		{"large_rpc_id", &Frame{Opcode: 0xC4, RPCID: 0xFFFFFFFFFFFFFFFF, Payload: []byte("x")}},
-		{"zero_meta", &Frame{Meta: Metadata{}, Opcode: 0x81, RPCID: 1, Payload: []byte{}}},
+		{"zero_meta", &Frame{Meta: ClusterMetadata{}, Opcode: 0x81, RPCID: 1, Payload: []byte{}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -154,7 +155,7 @@ func TestRoundTrip_NoMeta(t *testing.T) {
 
 func TestWireFormatLayout(t *testing.T) {
 	f := &Frame{
-		Meta:    Metadata{Branch: 1, ClusterPeerID: 0x1122334455667788},
+		Meta:    ClusterMetadata{Branch: 1, ClusterPeerID: 0x1122334455667788},
 		Opcode:  0x42,
 		RPCID:   0xDEADBEEFCAFEBABE,
 		Payload: []byte{0xAA, 0xBB, 0xCC},
@@ -183,9 +184,9 @@ func TestWireFormatLayout(t *testing.T) {
 
 func TestMultiFrameStream(t *testing.T) {
 	frames := []*Frame{
-		{Meta: Metadata{Branch: 0, ClusterPeerID: 0}, Opcode: 0x81, RPCID: 0, Payload: []byte("ping")},
-		{Meta: Metadata{Branch: 2, ClusterPeerID: 999}, Opcode: 0x05, RPCID: 100, Payload: []byte("block_data")},
-		{Meta: Metadata{Branch: 1, ClusterPeerID: 0}, Opcode: 0x03, RPCID: 200, Payload: nil},
+		{Meta: ClusterMetadata{Branch: 0, ClusterPeerID: 0}, Opcode: 0x81, RPCID: 0, Payload: []byte("ping")},
+		{Meta: ClusterMetadata{Branch: 2, ClusterPeerID: 999}, Opcode: 0x05, RPCID: 100, Payload: []byte("block_data")},
+		{Meta: ClusterMetadata{Branch: 1, ClusterPeerID: 0}, Opcode: 0x03, RPCID: 200, Payload: nil},
 	}
 	var stream bytes.Buffer
 	for _, f := range frames {
@@ -251,7 +252,34 @@ func TestReadFrameNoMeta_PayloadLimit(t *testing.T) {
 	}
 }
 
-func writeFrameForTest(meta Metadata, opcode byte, rpcID uint64, payload []byte) []byte {
+func TestClusterMetadata_RoundTrip(t *testing.T) {
+	cases := []ClusterMetadata{
+		{Branch: 0, ClusterPeerID: 0},
+		{Branch: 1, ClusterPeerID: 12345},
+		{Branch: 0xFFFFFFFF, ClusterPeerID: 0xFFFFFFFFFFFFFFFF},
+	}
+	for _, m := range cases {
+		wire := MarshalClusterMetadata(m)
+		got, err := UnmarshalClusterMetadata(wire)
+		if err != nil {
+			t.Fatalf("UnmarshalClusterMetadata(%+v): %v", m, err)
+		}
+		if got != m {
+			t.Errorf("round-trip mismatch: got %+v, want %+v", got, m)
+		}
+	}
+}
+
+func TestUnmarshalClusterMetadata_InvalidLength(t *testing.T) {
+	for _, n := range []int{0, 4, 8, 11, 13, 16} {
+		b := make([]byte, n)
+		if _, err := UnmarshalClusterMetadata(b); err == nil {
+			t.Errorf("expected error for %d-byte input", n)
+		}
+	}
+}
+
+func writeFrameForTest(meta ClusterMetadata, opcode byte, rpcID uint64, payload []byte) []byte {
 	var buf bytes.Buffer
 	_ = WriteFrame(&buf, &Frame{Meta: meta, Opcode: opcode, RPCID: rpcID, Payload: payload})
 	return buf.Bytes()
