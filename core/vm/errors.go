@@ -144,6 +144,7 @@ const (
 	VMErrorCodeContractAddressCollision
 	VMErrorCodeExecutionReverted
 	VMErrorCodeMaxCodeSizeExceeded
+	VMErrorCodeMaxInitCodeSizeExceeded
 	VMErrorCodeInvalidJump
 	VMErrorCodeWriteProtection
 	VMErrorCodeReturnDataOutOfBounds
@@ -175,6 +176,8 @@ func vmErrorCodeFromErr(err error) int {
 		return VMErrorCodeExecutionReverted
 	case errors.Is(err, ErrMaxCodeSizeExceeded):
 		return VMErrorCodeMaxCodeSizeExceeded
+	case errors.Is(err, ErrMaxInitCodeSizeExceeded):
+		return VMErrorCodeMaxInitCodeSizeExceeded
 	case errors.Is(err, ErrInvalidJump):
 		return VMErrorCodeInvalidJump
 	case errors.Is(err, ErrWriteProtection):
