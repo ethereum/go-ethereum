@@ -2125,6 +2125,104 @@ type ExecuteConfig struct {
 	EnableWitnessStats bool
 }
 
+// useBALExecution reports whether the block will be executed through the
+// BAL-driven parallel processor.
+func (bc *BlockChain) useBALExecution(block *types.Block, wantWitness bool) bool {
+	return supportsParallelExecution(block.AccessList(), bc.chainConfig, block.Number(), block.Time(), wantWitness, bc.cfg.VmConfig.Tracer != nil, bc.cfg.VmConfig.DisableParallelExecution)
+}
+
+// setupExecutionState builds the state instance that block execution reads from
+// and writes to.
+//
+//   - BAL-driven parallel execution (Amsterdam blocks carrying an access list):
+//     a single reader(the underlying state reader wrapped with a shared cache
+//     and an access-list-hint prefetcher) feeds both the canonical state and
+//     every per-transaction state built on top of it.
+//
+//   - Sequential execution with prefetching: the main processor and a
+//     speculative whole-block prefetcher share one cached reader.
+//
+//   - No prefetching: a plain reader, with a no-op cleanup.
+func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.Block, config ExecuteConfig, interrupt *atomic.Bool) (*state.StateDB, func(*blockProcessingResult), error) {
+	noop := func(*blockProcessingResult) {}
+
+	var sdb state.Database
+	if bc.chainConfig.IsUBT(block.Number(), block.Time()) {
+		sdb = state.NewUBTDatabase(bc.triedb, bc.codedb)
+	} else {
+		sdb = state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
+	}
+	type prewarmReader interface {
+		// ReadersWithCacheStats creates a pair of state readers that share the
+		// same underlying state reader and internal state cache, while maintaining
+		// separate statistics respectively.
+		ReadersWithCacheStats(stateRoot common.Hash) (state.Reader, state.Reader, error)
+	}
+	wantWitness := config.StatelessSelfValidation || config.MakeWitness
+
+	switch warmer, ok := sdb.(prewarmReader); {
+	case bc.useBALExecution(block, wantWitness):
+		base, err := sdb.Reader(parentRoot)
+		if err != nil {
+			return nil, nil, err
+		}
+		reader, stop := state.NewBlockExecutionReader(base, prefetchHint(block.AccessList()), runtime.NumCPU())
+		statedb, err := state.NewWithReader(parentRoot, sdb, reader)
+		if err != nil {
+			stop()
+			return nil, nil, err
+		}
+		return statedb, func(*blockProcessingResult) { stop() }, nil
+
+	case bc.cfg.NoPrefetch || !ok:
+		statedb, err := state.New(parentRoot, sdb)
+		if err != nil {
+			return nil, nil, err
+		}
+		return statedb, noop, nil
+
+	default:
+		// The main processor and the speculative prefetcher share the same reader
+		// with a local cache for mitigating the overhead of state access.
+		prefetch, process, err := warmer.ReadersWithCacheStats(parentRoot)
+		if err != nil {
+			return nil, nil, err
+		}
+		throwaway, err := state.NewWithReader(parentRoot, sdb, prefetch)
+		if err != nil {
+			return nil, nil, err
+		}
+		statedb, err := state.NewWithReader(parentRoot, sdb, process)
+		if err != nil {
+			return nil, nil, err
+		}
+		go func(start time.Time) {
+			// Disable tracing for prefetcher executions.
+			vmCfg := bc.cfg.VmConfig
+			vmCfg.Tracer = nil
+			bc.prefetcher.Prefetch(block, throwaway, bc.jumpDestCache, vmCfg, interrupt)
+
+			blockPrefetchExecuteTimer.Update(time.Since(start))
+			if interrupt.Load() {
+				blockPrefetchInterruptMeter.Mark(1)
+			}
+		}(time.Now())
+
+		return statedb, func(result *blockProcessingResult) {
+			// Upload the statistics of reader at the end.
+			if result == nil {
+				return
+			}
+			if stater, ok := prefetch.(state.ReaderStater); ok {
+				result.stats.StatePrefetchCacheStats = stater.GetStats()
+			}
+			if stater, ok := process.(state.ReaderStater); ok {
+				result.stats.StateReadCacheStats = stater.GetStats()
+			}
+		}, nil
+	}
+}
+
 // ProcessBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
 func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, block *types.Block, config ExecuteConfig) (result *blockProcessingResult, blockEndErr error) {
@@ -2133,74 +2231,16 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		startTime = time.Now()
 		statedb   *state.StateDB
 		interrupt atomic.Bool
-		sdb       state.Database
 	)
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
-	if bc.chainConfig.IsUBT(block.Number(), block.Time()) {
-		sdb = state.NewUBTDatabase(bc.triedb, bc.codedb)
-	} else {
-		sdb = state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
+	// Set up the state reader feeding execution, along with a cleanup to run once
+	// processing is complete (stop the prefetcher, upload reader statistics).
+	statedb, cleanup, err := bc.setupExecutionState(parentRoot, block, config, &interrupt)
+	if err != nil {
+		return nil, err
 	}
-	// If prefetching is enabled, run that against the current state to pre-cache
-	// transactions and probabilistically some of the account/storage trie nodes.
-	//
-	// Note: the main processor and prefetcher share the same reader with a local
-	// cache for mitigating the overhead of state access.
-	type prewarmReader interface {
-		// ReadersWithCacheStats creates a pair of state readers that share the
-		// same underlying state reader and internal state cache, while maintaining
-		// separate statistics respectively.
-		ReadersWithCacheStats(stateRoot common.Hash) (state.Reader, state.Reader, error)
-	}
-	warmer, ok := sdb.(prewarmReader)
-
-	if bc.cfg.NoPrefetch || !ok {
-		statedb, err = state.New(parentRoot, sdb)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// If prefetching is enabled, run that against the current state to pre-cache
-		// transactions and probabilistically some of the account/storage trie nodes.
-		//
-		// Note: the main processor and prefetcher share the same reader with a local
-		// cache for mitigating the overhead of state access.
-		prefetch, process, err := warmer.ReadersWithCacheStats(parentRoot)
-		if err != nil {
-			return nil, err
-		}
-		throwaway, err := state.NewWithReader(parentRoot, sdb, prefetch)
-		if err != nil {
-			return nil, err
-		}
-		statedb, err = state.NewWithReader(parentRoot, sdb, process)
-		if err != nil {
-			return nil, err
-		}
-		// Upload the statistics of reader at the end
-		defer func() {
-			if result != nil {
-				if stater, ok := prefetch.(state.ReaderStater); ok {
-					result.stats.StatePrefetchCacheStats = stater.GetStats()
-				}
-				if stater, ok := process.(state.ReaderStater); ok {
-					result.stats.StateReadCacheStats = stater.GetStats()
-				}
-			}
-		}()
-		go func(start time.Time, throwaway *state.StateDB, block *types.Block) {
-			// Disable tracing for prefetcher executions.
-			vmCfg := bc.cfg.VmConfig
-			vmCfg.Tracer = nil
-			bc.prefetcher.Prefetch(block, throwaway, bc.jumpDestCache, vmCfg, &interrupt)
-
-			blockPrefetchExecuteTimer.Update(time.Since(start))
-			if interrupt.Load() {
-				blockPrefetchInterruptMeter.Mark(1)
-			}
-		}(time.Now(), throwaway, block)
-	}
+	defer func() { cleanup(result) }()
 
 	// If we are past Byzantium, enable prefetching to pull in trie node paths
 	// while processing transactions. Before Byzantium the prefetcher is mostly
@@ -2215,7 +2255,11 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 			if err != nil {
 				return nil, err
 			}
+			defer witness.ReportMetrics(block.NumberU64())
 		}
+		// The prefetcher warms trie node paths in the background.
+		// - Sequential execution feeds it from the EVM as it touches state;
+		// - BAL-driven parallel execution feeds it from the block access list;
 		statedb.StartPrefetcher("chain", witness)
 		defer statedb.StopPrefetcher()
 	}
@@ -2341,10 +2385,6 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		stats.StorageCommits = statedb.StorageCommits  // Storage commits are complete, we can mark them
 		stats.DatabaseCommit = statedb.DatabaseCommits // Database commits are complete, we can mark them
 		stats.BlockWrite = time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.DatabaseCommits
-	}
-	// Report the collected witness statistics
-	if witness != nil {
-		witness.ReportMetrics(block.NumberU64())
 	}
 	elapsed := time.Since(startTime) + 1 // prevent zero division
 	stats.TotalTime = elapsed

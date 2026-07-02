@@ -18,18 +18,23 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"maps"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
 )
 
@@ -90,7 +95,92 @@ func (e *balTestEnv) run(t *testing.T, gen func(*BlockGen)) (*bal.BlockAccessLis
 	if blocks[0].AccessList() == nil {
 		t.Fatal("expected non-nil block access list")
 	}
+	assertParallelEquiv(t, e.gspec, engine, blocks[0])
+
 	return blocks[0].AccessList(), receipts[0]
+}
+
+// assertParallelEquiv re-executes a sequentially-generated block through both
+// the BAL-driven parallel processor and the sequential processor and asserts
+// they agree.
+//
+// Two independent properties are checked:
+//
+//   - Parallel execution reproduces the committed block: it reconstructs the
+//     block's state root from the block-level access list and its receipts and
+//     gas from re-execution.
+//
+//   - The parallel and sequential processors rebuild the identical access list
+//     and agree on gas, receipts and requests. This is the property that would
+//     break if parallel execution diverged from sequential.
+func assertParallelEquiv(t *testing.T, gspec *Genesis, engine consensus.Engine, block *types.Block) {
+	t.Helper()
+	if block.AccessList() == nil {
+		return // not a parallel-eligible block
+	}
+	bc, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, nil)
+	if err != nil {
+		t.Fatalf("new blockchain: %v", err)
+	}
+	defer bc.Stop()
+
+	// Parallel path (default for Amsterdam blocks carrying an access list).
+	parState, err := bc.State()
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	parRes, err := NewStateProcessor(bc).Process(context.Background(), block, parState, nil, vm.Config{})
+	if err != nil {
+		t.Fatalf("parallel process: %v", err)
+	}
+	parRoot := parState.IntermediateRoot(gspec.Config.IsEIP158(block.Number()))
+
+	// Sequential path, forced explicitly via DisableParallelExecution.
+	seqState, err := bc.State()
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	seqRes, err := NewStateProcessor(bc).Process(context.Background(), block, seqState, nil, vm.Config{DisableParallelExecution: true})
+	if err != nil {
+		t.Fatalf("sequential process: %v", err)
+	}
+
+	// Parallel execution must reconstruct the committed block.
+	if parRoot != block.Root() {
+		t.Fatalf("parallel state root %x != committed %x", parRoot, block.Root())
+	}
+	if parRes.GasUsed != block.GasUsed() {
+		t.Fatalf("parallel gas used %d != committed %d", parRes.GasUsed, block.GasUsed())
+	}
+	if got := types.DeriveSha(parRes.Receipts, trie.NewStackTrie(nil)); got != block.ReceiptHash() {
+		t.Fatalf("parallel receipt root %x != committed %x", got, block.ReceiptHash())
+	}
+	if p, s := parRes.Bal.ToEncodingObj().Hash(), *block.BlockAccessListHash(); p != s {
+		t.Fatalf("parallel access list hash %x != committed %x", p, s)
+	}
+	if parRes.Requests == nil {
+		t.Fatalf("parallel requests is nil")
+	}
+	if p, s := types.CalcRequestsHash(parRes.Requests), *block.RequestsHash(); p != s {
+		t.Fatalf("parallel requests hash %x != committed %x", p, s)
+	}
+
+	// Parallel and sequential must agree on every re-executed output.
+	if p, s := parRes.Bal.ToEncodingObj().Hash(), seqRes.Bal.ToEncodingObj().Hash(); p != s {
+		t.Fatalf("rebuilt access list hash: parallel %x != sequential %x", p, s)
+	}
+	if parRes.GasUsed != seqRes.GasUsed {
+		t.Fatalf("gas used: parallel %d != sequential %d", parRes.GasUsed, seqRes.GasUsed)
+	}
+	if p, s := types.DeriveSha(parRes.Receipts, trie.NewStackTrie(nil)), types.DeriveSha(seqRes.Receipts, trie.NewStackTrie(nil)); p != s {
+		t.Fatalf("receipt root: parallel %x != sequential %x", p, s)
+	}
+	if seqRes.Requests == nil {
+		t.Fatalf("seqentual requests is nil")
+	}
+	if p, s := types.CalcRequestsHash(parRes.Requests), types.CalcRequestsHash(seqRes.Requests); p != s {
+		t.Fatalf("requests hash: parallel %x != sequential %x", p, s)
+	}
 }
 
 // --- assertion helpers ---

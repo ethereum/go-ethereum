@@ -382,30 +382,44 @@ func (r *multiStateReader) Storage(addr common.Address, slot common.Hash) (commo
 	return common.Hash{}, errors.Join(errs...)
 }
 
+const stateReaderCacheBuckets = 64
+
 // stateReaderWithCache is a wrapper around StateReader that maintains additional
 // state caches to support concurrent state access.
 type stateReaderWithCache struct {
 	StateReader
 
-	// Previously resolved state entries.
-	accounts    map[common.Address]*types.StateAccount
-	accountLock sync.RWMutex
+	// Account buckets are selected by account address. This reader is typically
+	// used in scenarios requiring concurrent access to accounts; multiple buckets
+	// reduce lock contention.
+	accountBuckets [stateReaderCacheBuckets]struct {
+		lock     sync.RWMutex
+		accounts map[common.Address]*types.StateAccount
+	}
 
-	// List of storage buckets, each of which is thread-safe.
-	// This reader is typically used in scenarios requiring concurrent
-	// access to storage. Using multiple buckets helps mitigate
-	// the overhead caused by locking.
-	storageBuckets [16]struct {
+	// Storage buckets are selected by both account address and storage key. This
+	// avoids serializing accesses to distinct slots of the same account.
+	storageBuckets [stateReaderCacheBuckets]struct {
 		lock     sync.RWMutex
 		storages map[common.Address]map[common.Hash]common.Hash
 	}
+}
+
+func accountCacheBucket(addr common.Address) int {
+	return int(addr[0] & (stateReaderCacheBuckets - 1))
+}
+
+func storageCacheBucket(addr common.Address, slot common.Hash) int {
+	return int((addr[0] ^ slot[0] ^ slot[len(slot)-1]) & (stateReaderCacheBuckets - 1))
 }
 
 // newStateReaderWithCache constructs the state reader with local cache.
 func newStateReaderWithCache(sr StateReader) *stateReaderWithCache {
 	r := &stateReaderWithCache{
 		StateReader: sr,
-		accounts:    make(map[common.Address]*types.StateAccount),
+	}
+	for i := range r.accountBuckets {
+		r.accountBuckets[i].accounts = make(map[common.Address]*types.StateAccount)
 	}
 	for i := range r.storageBuckets {
 		r.storageBuckets[i].storages = make(map[common.Address]map[common.Hash]common.Hash)
@@ -419,10 +433,12 @@ func newStateReaderWithCache(sr StateReader) *stateReaderWithCache {
 //
 // An error will be returned if the state is corrupted in the underlying reader.
 func (r *stateReaderWithCache) account(addr common.Address) (*types.StateAccount, bool, error) {
+	bucket := &r.accountBuckets[accountCacheBucket(addr)]
+
 	// Try to resolve the requested account in the local cache
-	r.accountLock.RLock()
-	acct, ok := r.accounts[addr]
-	r.accountLock.RUnlock()
+	bucket.lock.RLock()
+	acct, ok := bucket.accounts[addr]
+	bucket.lock.RUnlock()
 	if ok {
 		return acct, true, nil
 	}
@@ -431,9 +447,9 @@ func (r *stateReaderWithCache) account(addr common.Address) (*types.StateAccount
 	if err != nil {
 		return nil, false, err
 	}
-	r.accountLock.Lock()
-	r.accounts[addr] = acct
-	r.accountLock.Unlock()
+	bucket.lock.Lock()
+	bucket.accounts[addr] = acct
+	bucket.lock.Unlock()
 	return acct, false, nil
 }
 
@@ -453,7 +469,7 @@ func (r *stateReaderWithCache) storage(addr common.Address, slot common.Hash) (c
 	var (
 		value  common.Hash
 		ok     bool
-		bucket = &r.storageBuckets[addr[0]&0x0f]
+		bucket = &r.storageBuckets[storageCacheBucket(addr, slot)]
 	)
 	// Try to resolve the requested storage slot in the local cache
 	bucket.lock.RLock()
