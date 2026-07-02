@@ -136,3 +136,22 @@ func TestLocalNodeEndpoint(t *testing.T) {
 	assert.Equal(t, fallback.Port, ln.Node().UDP())
 	assert.Equal(t, initialSeq+3, ln.Node().Seq())
 }
+
+func TestSetFallbackUDPRejectsOutOfRange(t *testing.T) {
+	ln, db := newLocalNodeForTesting()
+	defer db.Close()
+
+	initialSeq := ln.Node().Seq()
+	ln.SetFallbackUDP(30303)
+	assert.Equal(t, 30303, ln.Node().UDP())
+	assert.Equal(t, initialSeq+1, ln.Node().Seq())
+
+	seqAfterValid := ln.Node().Seq()
+	ln.SetFallbackUDP(65536)
+	assert.Equal(t, 30303, ln.Node().UDP())
+	assert.Equal(t, seqAfterValid, ln.Node().Seq())
+
+	ln.SetFallbackUDP(-1)
+	assert.Equal(t, 30303, ln.Node().UDP())
+	assert.Equal(t, seqAfterValid, ln.Node().Seq())
+}
