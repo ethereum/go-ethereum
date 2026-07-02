@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
@@ -54,8 +55,11 @@ func (s *Suite) AllTests() []utesting.Test {
 		{Name: "PingMultiIP", Fn: s.TestPingMultiIP},
 		{Name: "HandshakeResend", Fn: s.TestHandshakeResend},
 		{Name: "TalkRequest", Fn: s.TestTalkRequest},
+		{Name: "FindnodeWrongIP", Fn: s.TestFindnodeWrongIP},
+		{Name: "FindnodeHandshake", Fn: s.TestFindnodeHandshake},
 		{Name: "FindnodeZeroDistance", Fn: s.TestFindnodeZeroDistance},
 		{Name: "FindnodeResults", Fn: s.TestFindnodeResults},
+		{Name: "UnsolicitedNodes", Fn: s.TestUnsolicitedNodes},
 	}
 }
 
@@ -232,6 +236,72 @@ and expects an empty TALKRESP response.`)
 	}
 }
 
+func (s *Suite) TestFindnodeWrongIP(t *utesting.T) {
+	t.Log(`This test establishes a session on one IP, then sends FINDNODE from another IP.
+The remote node should challenge the second endpoint with WHOAREYOU instead of returning NODES.`)
+
+	conn, l1, l2 := s.listen2(t)
+	defer conn.close()
+
+	ping := &v5wire.Ping{ReqID: conn.nextReqID()}
+	if resp := conn.reqresp(l1, ping); resp.Kind() != v5wire.PongMsg {
+		t.Fatal("expected PONG, got", resp)
+	}
+
+	req := &v5wire.Findnode{ReqID: conn.nextReqID(), Distances: []uint{0}}
+	conn.write(l2, req, nil)
+	switch resp := conn.read(l2).(type) {
+	case *v5wire.Whoareyou:
+		t.Log("got WHOAREYOU for FINDNODE on wrong IP as expected")
+	case *v5wire.Nodes:
+		t.Fatalf("unexpected NODES response on wrong IP: %+v", resp)
+	default:
+		t.Fatal("expected WHOAREYOU, got", resp)
+	}
+}
+
+func (s *Suite) TestFindnodeHandshake(t *utesting.T) {
+	t.Log(`This test checks that the remote answers a FINDNODE request only after completing the WHOAREYOU handshake.`)
+
+	conn, l1 := s.listen1(t)
+	defer conn.close()
+
+	req := &v5wire.Findnode{ReqID: conn.nextReqID(), Distances: []uint{0}}
+	nonce := conn.write(l1, req, nil)
+
+	resp, from := conn.readFrom(l1)
+	challenge, ok := resp.(*v5wire.Whoareyou)
+	if !ok {
+		t.Fatalf("expected WHOAREYOU before NODES, got %T (%v) from %v", resp, resp, from)
+	}
+	if challenge.Nonce != nonce {
+		t.Fatalf("wrong nonce %x in WHOAREYOU (want %x)", challenge.Nonce[:], nonce[:])
+	}
+
+	challenge.Node = conn.remote
+	conn.writeTo(l1, req, challenge, from)
+
+	for {
+		resp, from := conn.readFrom(l1)
+		switch resp := resp.(type) {
+		case *v5wire.Ping:
+			conn.writeTo(l1, &v5wire.Pong{
+				ReqID:  resp.ReqID,
+				ENRSeq: conn.localNode.Seq(),
+				ToIP:   from.IP,
+				ToPort: uint16(from.Port),
+			}, nil, from)
+		case *v5wire.Nodes:
+			if !bytes.Equal(resp.ReqID, req.ReqID) {
+				t.Fatalf("wrong request ID %x in NODES, want %x", resp.ReqID, req.ReqID)
+			}
+			return
+		default:
+			t.Fatalf("expected NODES after completing handshake, got %T (%v) from %v", resp, resp, from)
+		}
+	}
+}
+
 func (s *Suite) TestFindnodeZeroDistance(t *utesting.T) {
 	t.Log(`This test checks that the remote node returns itself for FINDNODE with distance zero.`)
 
@@ -247,6 +317,70 @@ func (s *Suite) TestFindnodeZeroDistance(t *utesting.T) {
 	}
 	if nodes[0].ID() != conn.remote.ID() {
 		t.Errorf("ID of response node is %v, want %v", nodes[0].ID(), conn.remote.ID())
+	}
+}
+
+func (s *Suite) TestUnsolicitedNodes(t *utesting.T) {
+	t.Log(`This test sends an unsolicited NODES response advertising a fake node.
+The remote node should neither contact the injected node nor return it from later FINDNODE queries.`)
+
+	injectConn, injectL := s.listen1(t)
+	defer injectConn.close()
+
+	// Establish a session for the injection path so the unsolicited packet is
+	// well-formed and authenticated.
+	ping := &v5wire.Ping{ReqID: injectConn.nextReqID()}
+	if resp := injectConn.reqresp(injectL, ping); resp.Kind() != v5wire.PongMsg {
+		t.Fatal("expected PONG, got", resp)
+	}
+
+	fakeConn, fakeL := s.listen1(t)
+	defer fakeConn.close()
+	fakeConn.setEndpoint(fakeL)
+
+	unsolicited := &v5wire.Nodes{
+		ReqID:     injectConn.nextReqID(),
+		RespCount: 1,
+		Nodes:     []*enr.Record{fakeConn.localNode.Node().Record()},
+	}
+	t.Log("sending unsolicited NODES response with injected node")
+	injectConn.write(injectL, unsolicited, nil)
+
+	checkNoContact := func(phase string) {
+		buf := make([]byte, 1280)
+		if err := fakeL.SetReadDeadline(time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		for {
+			n, from, err := fakeL.ReadFrom(buf)
+			if err == nil {
+				t.Fatalf("%s: remote contacted injected node: %d bytes from %v", phase, n, from)
+			}
+			if netutil.IsTimeout(err) {
+				return
+			}
+			t.Fatalf("%s: checking for unexpected contact failed: %v", phase, err)
+		}
+	}
+	checkNoContact("after unsolicited NODES")
+
+	probeConn, probeL := s.listen1(t)
+	defer probeConn.close()
+
+	dist := uint(enode.LogDist(fakeConn.localNode.ID(), s.Dest.ID()))
+	const maxAttempts = 3
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		results, err := probeConn.findnode(probeL, []uint{dist})
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkNoContact("during FINDNODE probes")
+		for _, n := range results {
+			if n.ID() == fakeConn.localNode.ID() {
+				t.Fatalf("attempt %d: FINDNODE result contains node from unsolicited NODES response", attempt)
+			}
+		}
+		t.Logf("attempt %d: injected node not returned in FINDNODE results", attempt)
 	}
 }
 
