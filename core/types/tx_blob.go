@@ -176,6 +176,16 @@ func (sc *BlobTxSidecar) Copy() *BlobTxSidecar {
 	}
 }
 
+// BlobTxCellSidecar is a sidecar that carries cells instead of blobs.
+// The Custody field represents which cells of each blob this sidecar contains.
+type BlobTxCellSidecar struct {
+	Version     byte
+	Cells       []kzg4844.Cell
+	Commitments []kzg4844.Commitment
+	Proofs      []kzg4844.Proof
+	Custody     CustodyBitmap
+}
+
 // blobTxWithBlobs represents blob tx with its corresponding sidecar.
 // This is an interface because sidecars are versioned.
 type blobTxWithBlobs interface {

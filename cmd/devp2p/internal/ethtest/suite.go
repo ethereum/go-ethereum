@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"sync"
 	"time"
@@ -55,10 +56,7 @@ func NewSuite(dest *enode.Node, chainDir, engineURL, jwt string) (*Suite, error)
 	if err != nil {
 		return nil, err
 	}
-	engine, err := NewEngineClient(chainDir, engineURL, jwt)
-	if err != nil {
-		return nil, err
-	}
+	engine := NewEngineClient(engineURL, jwt, chain)
 
 	return &Suite{
 		Dest:   dest,
@@ -93,6 +91,10 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "BlobViolations", Fn: s.TestBlobViolations},
 		{Name: "TestBlobTxWithoutSidecar", Fn: s.TestBlobTxWithoutSidecar},
 		{Name: "TestBlobTxWithMismatchedSidecar", Fn: s.TestBlobTxWithMismatchedSidecar},
+		// test eth/72 blob txs
+		{Name: "BlobTxAvailabilityFailure", Fn: s.TestBlobTxAvailabilityFailure},
+		{Name: "GetCells", Fn: s.TestGetCells},
+		{Name: "BlobTxWithInvalidCells", Fn: s.TestBlobTxWithInvalidCells},
 	}
 }
 
@@ -976,7 +978,7 @@ the transactions using a GetPooledTransactions request.`)
 	}
 
 	// Send announcement.
-	ann := eth.NewPooledTransactionHashesPacket{Types: txTypes, Sizes: sizes, Hashes: hashes}
+	ann := eth.NewPooledTransactionHashesPacket72{Types: txTypes, Sizes: sizes, Hashes: hashes}
 	err = conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann)
 	if err != nil {
 		t.Fatalf("failed to write to connection: %v", err)
@@ -994,7 +996,7 @@ the transactions using a GetPooledTransactions request.`)
 				t.Fatalf("unexpected number of txs requested: wanted %d, got %d", len(hashes), len(msg.GetPooledTransactionsRequest))
 			}
 			return
-		case *eth.NewPooledTransactionHashesPacket:
+		case *eth.NewPooledTransactionHashesPacket72:
 			continue
 		case *eth.TransactionsPacket:
 			continue
@@ -1020,15 +1022,16 @@ func makeSidecar(data ...byte) *types.BlobTxSidecar {
 	return types.NewBlobTxSidecar(types.BlobSidecarVersion1, blobs, commitments, proofs)
 }
 
-func (s *Suite) makeBlobTxs(count, blobs int, discriminator byte) (txs types.Transactions) {
+func (s *Suite) makeBlobTxs(txCount, blobCount int, discriminator byte) (txs types.Transactions, blobs [][]kzg4844.Blob) {
 	from, nonce := s.chain.GetSender(5)
-	for i := 0; i < count; i++ {
+	for i := 0; i < txCount; i++ {
 		// Make blob data, max of 2 blobs per tx.
-		blobdata := make([]byte, min(blobs, 2))
+		blobdata := make([]byte, min(blobCount, 2))
 		for i := range blobdata {
 			blobdata[i] = discriminator
-			blobs -= 1
+			blobCount -= 1
 		}
+		sidecar := makeSidecar(blobdata...)
 		inner := &types.BlobTx{
 			ChainID:    uint256.MustFromBig(s.chain.config.ChainID),
 			Nonce:      nonce + uint64(i),
@@ -1036,16 +1039,19 @@ func (s *Suite) makeBlobTxs(count, blobs int, discriminator byte) (txs types.Tra
 			GasFeeCap:  uint256.MustFromBig(s.chain.Head().BaseFee()),
 			Gas:        100000,
 			BlobFeeCap: uint256.MustFromBig(eip4844.CalcBlobFee(s.chain.config, s.chain.Head().Header())),
-			BlobHashes: makeSidecar(blobdata...).BlobHashes(),
-			Sidecar:    makeSidecar(blobdata...),
+			BlobHashes: sidecar.BlobHashes(),
+			Sidecar:    sidecar,
 		}
 		tx, err := s.chain.SignTx(from, types.NewTx(inner))
 		if err != nil {
 			panic("blob tx signing failed")
 		}
-		txs = append(txs, tx)
+		blobs = append(blobs, sidecar.Blobs)
+		scNoBlob := sidecar.Copy()
+		scNoBlob.Blobs = nil
+		txs = append(txs, tx.WithBlobTxSidecar(scNoBlob))
 	}
-	return txs
+	return txs, blobs
 }
 
 func (s *Suite) TestBlobViolations(t *utesting.T) {
@@ -1056,28 +1062,30 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 	}
 	// Create blob txs for each tests with unique tx hashes.
 	var (
-		t1 = s.makeBlobTxs(2, 3, 0x1)
-		t2 = s.makeBlobTxs(2, 3, 0x2)
+		t1, _ = s.makeBlobTxs(2, 3, 0x1)
+		t2, _ = s.makeBlobTxs(2, 3, 0x2)
 	)
 	for _, test := range []struct {
-		ann  eth.NewPooledTransactionHashesPacket
+		ann  eth.NewPooledTransactionHashesPacket72
 		resp eth.PooledTransactionsResponse
 	}{
 		// Invalid tx size.
 		{
-			ann: eth.NewPooledTransactionHashesPacket{
+			ann: eth.NewPooledTransactionHashesPacket72{
 				Types:  []byte{types.BlobTxType, types.BlobTxType},
 				Sizes:  []uint32{uint32(t1[0].Size()), uint32(t1[1].Size() + 10)},
 				Hashes: []common.Hash{t1[0].Hash(), t1[1].Hash()},
+				Mask:   types.CustodyBitmapAll,
 			},
 			resp: eth.PooledTransactionsResponse(t1),
 		},
 		// Wrong tx type.
 		{
-			ann: eth.NewPooledTransactionHashesPacket{
+			ann: eth.NewPooledTransactionHashesPacket72{
 				Types:  []byte{types.DynamicFeeTxType, types.BlobTxType},
 				Sizes:  []uint32{uint32(t2[0].Size()), uint32(t2[1].Size())},
 				Hashes: []common.Hash{t2[0].Hash(), t2[1].Hash()},
+				Mask:   types.CustodyBitmapAll,
 			},
 			resp: eth.PooledTransactionsResponse(t2),
 		},
@@ -1105,15 +1113,21 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 		if code, _, err := conn.Read(); err != nil {
 			t.Fatalf("expected disconnect on blob violation, got err: %v", err)
 		} else if code != discMsg {
-			if code == protoOffset(ethProto)+eth.NewPooledTransactionHashesMsg {
-				// sometimes we'll get a blob transaction hashes announcement before the disconnect
-				// because blob transactions are scheduled to be fetched right away.
-				if code, _, err = conn.Read(); err != nil {
-					t.Fatalf("expected disconnect on blob violation, got err on second read: %v", err)
+			for {
+				code, _, err := conn.Read()
+				if err != nil {
+					t.Fatalf("expected disconnect on blob violation, got err: %v", err)
 				}
-			}
-			if code != discMsg {
-				t.Fatalf("expected disconnect on blob violation, got msg code: %d", code)
+				if code == discMsg {
+					break
+				}
+				switch code {
+				case protoOffset(ethProto) + eth.NewPooledTransactionHashesMsg,
+					protoOffset(ethProto) + eth.GetCellsMsg:
+					continue
+				default:
+					t.Fatalf("expected disconnect on blob violation, got msg code: %d", code)
+				}
 			}
 		}
 		conn.Close()
@@ -1132,22 +1146,29 @@ func mangleSidecar(tx *types.Transaction) *types.Transaction {
 
 func (s *Suite) TestBlobTxWithoutSidecar(t *utesting.T) {
 	t.Log(`This test checks that a blob transaction first advertised/transmitted without blobs will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
-	tx := s.makeBlobTxs(1, 2, 42)[0]
-	badTx := tx.WithoutBlobTxSidecar()
-	s.testBadBlobTx(t, tx, badTx)
+	tx, _ := s.makeBlobTxs(1, 2, 42)
+	badTx := tx[0].WithoutBlobTxSidecar()
+	s.testBadBlobTx(t, tx[0], badTx)
 }
 
 func (s *Suite) TestBlobTxWithMismatchedSidecar(t *utesting.T) {
 	t.Log(`This test checks that a blob transaction first advertised/transmitted without blobs, whose commitment don't correspond to the blob_versioned_hashes in the transaction, will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
-	tx := s.makeBlobTxs(1, 2, 43)[0]
-	badTx := mangleSidecar(tx)
-	s.testBadBlobTx(t, tx, badTx)
+	tx, _ := s.makeBlobTxs(1, 2, 43)
+	badTx := mangleSidecar(tx[0])
+	s.testBadBlobTx(t, tx[0], badTx)
 }
 
 // readUntil reads eth protocol messages until a message of the target type is
 // received.  It returns an error if there is a disconnect, or if the context
 // is cancelled before a message of the desired type can be read.
 func readUntil[T any](ctx context.Context, conn *Conn) (*T, error) {
+	// First check the buffer for a previously-stashed match.
+	for i, msg := range conn.pending {
+		if t, ok := msg.(*T); ok {
+			conn.pending = append(conn.pending[:i], conn.pending[i+1:]...)
+			return t, nil
+		}
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -1161,11 +1182,10 @@ func readUntil[T any](ctx context.Context, conn *Conn) (*T, error) {
 			}
 			continue
 		}
-
-		switch res := received.(type) {
-		case *T:
-			return res, nil
+		if t, ok := received.(*T); ok {
+			return t, nil
 		}
+		conn.pending = append(conn.pending, received)
 	}
 }
 
@@ -1203,10 +1223,11 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			return
 		}
 
-		ann := eth.NewPooledTransactionHashesPacket{
+		ann := eth.NewPooledTransactionHashesPacket72{
 			Types:  []byte{types.BlobTxType},
 			Sizes:  []uint32{uint32(badTx.Size())},
 			Hashes: []common.Hash{badTx.Hash()},
+			Mask:   types.CustodyBitmapAll,
 		}
 
 		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
@@ -1254,14 +1275,15 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			return
 		}
 
-		ann := eth.NewPooledTransactionHashesPacket{
+		ann := eth.NewPooledTransactionHashesPacket72{
 			Types:  []byte{types.BlobTxType},
 			Sizes:  []uint32{uint32(tx.Size())},
 			Hashes: []common.Hash{tx.Hash()},
+			Mask:   types.CustodyBitmapAll,
 		}
 
 		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
-			errc <- fmt.Errorf("sending announcement failed: %v", err)
+			errc <- fmt.Errorf("sending first announcement failed: %v", err)
 			return
 		}
 
@@ -1309,5 +1331,294 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 	err := <-errc
 	if err != nil {
 		t.Fatalf("%v", err)
+	}
+}
+
+func (s *Suite) TestBlobTxAvailabilityFailure(t *utesting.T) {
+	t.Log(`This test announces 4 blob txs from a single peer. With fetchProbability 0.15, 
+there will be at least one partial fetch (1-0.15^4). When only 1 peer announced availability, 
+partial fetch GetCells should never arrive. Any GetCells that does arrive must be a full fetch.`)
+
+	if err := s.engine.sendForkchoiceUpdated(); err != nil {
+		t.Fatalf("send fcu failed: %v", err)
+	}
+
+	txs, _ := s.makeBlobTxs(4, 4, 0x30)
+
+	conn, err := s.dial()
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.Close()
+	if err := conn.peer(s.chain, nil); err != nil {
+		t.Fatalf("peering failed: %v", err)
+	}
+
+	// Announce all 4 txs from a single peer.
+	hashes := make([]common.Hash, len(txs))
+	txTypes := make([]byte, len(txs))
+	sizes := make([]uint32, len(txs))
+	for i, tx := range txs {
+		hashes[i] = tx.Hash()
+		txTypes[i] = types.BlobTxType
+		sizes[i] = uint32(tx.Size())
+	}
+	ann := eth.NewPooledTransactionHashesPacket72{
+		Types:  txTypes,
+		Sizes:  sizes,
+		Hashes: hashes,
+		Mask:   types.CustodyBitmapAll,
+	}
+	if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+		t.Fatalf("announce failed: %v", err)
+	}
+
+	// Read messages for a short period. Any GetCells that arrives must be
+	// a full fetch request (mask >= DataPerBlob), not a partial fetch.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		msg, err := conn.ReadEth()
+		if err != nil {
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				return // timeout, test passed
+			}
+			t.Fatalf("unexpected error: %v", err)
+		}
+		switch req := msg.(type) {
+		case *eth.GetCellsRequestPacket:
+			if req.Mask.OneCount() < kzg4844.DataPerBlob {
+				t.Fatalf("received partial GetCells request with only %d cells from single peer announcement", req.Mask.OneCount())
+			}
+		case *eth.GetPooledTransactionsPacket:
+			encTxs, _ := rlp.EncodeToRawList(txs)
+			conn.Write(ethProto, eth.PooledTransactionsMsg, eth.PooledTransactionsPacket{
+				RequestId: req.RequestId,
+				List:      encTxs,
+			})
+		}
+	}
+}
+
+// buildCells extracts cells at mask indices from the original tx's blobs
+func buildCells(blobs []kzg4844.Blob, mask types.CustodyBitmap) []kzg4844.Cell {
+	allCells, _ := kzg4844.ComputeCells(blobs)
+	indices := mask.Indices()
+	result := make([]kzg4844.Cell, 0, len(blobs)*len(indices))
+	for b := 0; b < len(blobs); b++ {
+		for _, idx := range indices {
+			result = append(result, allCells[b*kzg4844.CellsPerBlob+int(idx)])
+		}
+	}
+	return result
+}
+
+// readAnyFrom waits for a message of type T on any of the given conns
+// and returns the packet and the conn it came from.
+func readAnyFrom[T any](conns ...*Conn) (*T, *Conn, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	type result struct {
+		pkt *T
+		c   *Conn
+	}
+	ch := make(chan result, len(conns))
+	errCh := make(chan error, len(conns))
+
+	for _, c := range conns {
+		go func(c *Conn) {
+			pkt, err := readUntil[T](ctx, c)
+			if err != nil {
+				if !errors.Is(err, context.Canceled) {
+					errCh <- err
+				}
+				return
+			}
+			ch <- result{pkt, c}
+		}(c)
+	}
+	select {
+	case r := <-ch:
+		return r.pkt, r.c, nil
+	case err := <-errCh:
+		return nil, nil, err
+	}
+}
+
+func (s *Suite) TestGetCells(t *utesting.T) {
+	t.Log(`This test checks that blob tx announcements trigger GetCells requests,
+and that providing valid cells causes the tx to enter the pool.`)
+
+	if err := s.engine.sendForkchoiceUpdated(); err != nil {
+		t.Fatalf("send fcu failed: %v", err)
+	}
+
+	txs, blobs := s.makeBlobTxs(1, 1, 0x31)
+	tx := txs[0]
+	blob := blobs[0]
+
+	// Two peers ensure GetCells arrives regardless of full/partial fetch path.
+	conn1, err := s.dial()
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn1.Close()
+	if err := conn1.peer(s.chain, nil); err != nil {
+		t.Fatalf("peering failed: %v", err)
+	}
+
+	conn2, err := s.dial()
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn2.Close()
+	if err := conn2.peer(s.chain, nil); err != nil {
+		t.Fatalf("peering failed: %v", err)
+	}
+
+	ann := eth.NewPooledTransactionHashesPacket72{
+		Types:  []byte{types.BlobTxType},
+		Sizes:  []uint32{uint32(tx.Size())},
+		Hashes: []common.Hash{tx.Hash()},
+		Mask:   types.CustodyBitmapAll,
+	}
+	if err := conn1.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+		t.Fatalf("conn1 announce failed: %v", err)
+	}
+	if err := conn2.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+		t.Fatalf("conn2 announce failed: %v", err)
+	}
+
+	// Wait for GetPooledTransactions on either conn, respond with tx (without blobs).
+	pooledReq, pc, err := readAnyFrom[eth.GetPooledTransactionsPacket](conn1, conn2)
+	if err != nil {
+		t.Fatalf("failed to read GetPooledTransactions: %v", err)
+	}
+	encTxs, _ := rlp.EncodeToRawList([]*types.Transaction{tx})
+	resp := eth.PooledTransactionsPacket{RequestId: pooledReq.RequestId, List: encTxs}
+	if err := pc.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
+		t.Fatalf("writing pooled tx response failed: %v", err)
+	}
+
+	// Wait for GetCells request on either conn.
+	cellsReq, cc, err := readAnyFrom[eth.GetCellsRequestPacket](conn1, conn2)
+	if err != nil {
+		t.Fatalf("failed to read GetCells: %v", err)
+	}
+	if len(cellsReq.Hashes) == 0 || cellsReq.Hashes[0] != tx.Hash() {
+		t.Fatalf("GetCells for wrong hash: %v", cellsReq.Hashes)
+	}
+
+	// Respond with valid cells matching the requested mask.
+	cells := buildCells(blob, cellsReq.Mask)
+	cellsResp := eth.CellsPacket{
+		RequestId: cellsReq.RequestId,
+		CellsResponse: eth.CellsResponse{
+			Hashes: []common.Hash{tx.Hash()},
+			Cells:  [][]kzg4844.Cell{cells},
+			Mask:   cellsReq.Mask,
+		},
+	}
+	if err := cc.Write(ethProto, eth.CellsMsg, cellsResp); err != nil {
+		t.Fatalf("writing cells response failed: %v", err)
+	}
+
+	// Either peer should not be disconnected after providing valid data.
+	if readUntilDisconnect(cc) {
+		t.Fatalf("unexpected disconnect on cells-providing peer")
+	}
+}
+
+func (s *Suite) TestBlobTxWithInvalidCells(t *utesting.T) {
+	t.Log(`This test checks that a peer responding to GetCells with invalid cells is disconnected, 
+while the other peer is not.`)
+
+	if err := s.engine.sendForkchoiceUpdated(); err != nil {
+		t.Fatalf("send fcu failed: %v", err)
+	}
+
+	txs, blobs := s.makeBlobTxs(1, 1, 0x32)
+	tx := txs[0]
+	blob := blobs[0]
+
+	conn1, err := s.dial()
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn1.Close()
+	if err := conn1.peer(s.chain, nil); err != nil {
+		t.Fatalf("peering failed: %v", err)
+	}
+
+	conn2, err := s.dial()
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn2.Close()
+	if err := conn2.peer(s.chain, nil); err != nil {
+		t.Fatalf("peering failed: %v", err)
+	}
+
+	ann := eth.NewPooledTransactionHashesPacket72{
+		Types:  []byte{types.BlobTxType},
+		Sizes:  []uint32{uint32(tx.Size())},
+		Hashes: []common.Hash{tx.Hash()},
+		Mask:   types.CustodyBitmapAll,
+	}
+	if err := conn1.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+		t.Fatalf("conn1 announce failed: %v", err)
+	}
+	if err := conn2.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+		t.Fatalf("conn2 announce failed: %v", err)
+	}
+
+	pooledReq, pc, err := readAnyFrom[eth.GetPooledTransactionsPacket](conn1, conn2)
+	if err != nil {
+		t.Fatalf("failed to read GetPooledTransactions: %v", err)
+	}
+	encTxs, _ := rlp.EncodeToRawList([]*types.Transaction{tx})
+	if err := pc.Write(ethProto, eth.PooledTransactionsMsg,
+		eth.PooledTransactionsPacket{RequestId: pooledReq.RequestId, List: encTxs}); err != nil {
+		t.Fatalf("writing pooled tx response failed: %v", err)
+	}
+
+	cellsReq, cc, err := readAnyFrom[eth.GetCellsRequestPacket](conn1, conn2)
+	if err != nil {
+		t.Fatalf("failed to read GetCells: %v", err)
+	}
+
+	// Respond with corrupted cells (all zero bytes).
+	blobCount := len(blob)
+	corrupted := make([]kzg4844.Cell, blobCount*cellsReq.Mask.OneCount())
+	badResp := eth.CellsPacket{
+		RequestId: cellsReq.RequestId,
+		CellsResponse: eth.CellsResponse{
+			Hashes: []common.Hash{tx.Hash()},
+			Cells:  [][]kzg4844.Cell{corrupted},
+			Mask:   cellsReq.Mask,
+		},
+	}
+	if err := cc.Write(ethProto, eth.CellsMsg, badResp); err != nil {
+		t.Fatalf("writing bad cells response failed: %v", err)
+	}
+
+	// The peer that sent corrupted cells must be disconnected.
+	if !readUntilDisconnect(cc) {
+		t.Fatalf("expected peer to be disconnected after invalid cells")
+	}
+
+	// The innocent peer must stay connected.
+	otherConn := conn1
+	if cc == conn1 {
+		otherConn = conn2
+	}
+	if readUntilDisconnect(otherConn) {
+		t.Fatalf("innocent peer should not be disconnected")
 	}
 }
