@@ -289,6 +289,18 @@ func (test *udpV5Test) expectNodes(wantReqID []byte, wantTotal uint8, wantNodes 
 }
 
 // This test checks that outgoing PING calls work.
+func TestUDPv5_pingNoUDPEndpoint(t *testing.T) {
+	t.Parallel()
+	test := newUDPV5Test(t)
+	defer test.close()
+
+	key := newkey()
+	node := enode.NewV4(&key.PublicKey, net.ParseIP("1.2.3.4"), 2222, 0)
+	if _, err := test.udp.Ping(node); err != errNoUDPEndpoint {
+		t.Errorf("expected errNoUDPEndpoint, got %v", err)
+	}
+}
+
 func TestUDPv5_pingCall(t *testing.T) {
 	t.Parallel()
 	test := newUDPV5Test(t)
