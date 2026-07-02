@@ -40,6 +40,8 @@ import (
 // TransactionArgs represents the arguments to construct a new transaction
 // or a message call.
 type TransactionArgs struct {
+	Type *hexutil.Uint64 `json:"type,omitempty"`
+
 	From                 *common.Address `json:"from"`
 	To                   *common.Address `json:"to"`
 	Gas                  *hexutil.Uint64 `json:"gas"`
@@ -503,7 +505,7 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck bool) *c
 
 // ToTransaction converts the arguments to a transaction.
 // This assumes that setDefaults has been called.
-func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
+func (args *TransactionArgs) ToTransaction(defaultType int) (*types.Transaction, error) {
 	usedType := types.LegacyTxType
 	switch {
 	case args.AuthorizationList != nil || defaultType == types.SetCodeTxType:
@@ -518,6 +520,9 @@ func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 	// Make it possible to default to newer tx, but use legacy if gasprice is provided
 	if args.GasPrice != nil {
 		usedType = types.LegacyTxType
+	}
+	if usedType != int(*args.Type) {
+		return nil, fmt.Errorf("wrong tx type used, requested: %v, used: %v", args.Type, usedType)
 	}
 	var data types.TxData
 	switch usedType {
@@ -608,7 +613,7 @@ func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 			Data:     args.data(),
 		}
 	}
-	return types.NewTx(data)
+	return types.NewTx(data), nil
 }
 
 // IsEIP4844 returns an indicator if the args contains EIP4844 fields.
