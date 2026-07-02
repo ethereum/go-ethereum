@@ -737,7 +737,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// If the contract creation failed, or the destination was pre-existing,
 		// refund the account-creation state gas pre-charged in IntrinsicGas.
 		if rules.IsAmsterdam && !creation {
-			st.gasRemaining.RefundState(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
+			st.gasRemaining.RefundStateToReservoir(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
 		}
 	} else {
 		// Increment the nonce for the next transaction.
@@ -970,7 +970,7 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 	authority, err := st.validateAuthorization(auth)
 	if err != nil {
 		if rules.IsAmsterdam {
-			st.gasRemaining.RefundState((params.AccountCreationSize + params.AuthorizationCreationSize) * st.evm.Context.CostPerStateByte)
+			st.gasRemaining.RefundStateToReservoir((params.AccountCreationSize + params.AuthorizationCreationSize) * st.evm.Context.CostPerStateByte)
 			st.state.AddRefund(params.AccountWriteAmsterdam)
 		}
 		return err
@@ -983,7 +983,7 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 		}
 	} else {
 		if st.state.Exist(authority) {
-			st.gasRemaining.RefundState(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
+			st.gasRemaining.RefundStateToReservoir(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
 			st.state.AddRefund(params.AccountWriteAmsterdam)
 		}
 		authBase := params.AuthorizationCreationSize * st.evm.Context.CostPerStateByte
@@ -995,17 +995,17 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 		}
 		if auth.Address == (common.Address{}) {
 			// Clearing writes no indicator, refill this auth's state charge.
-			st.gasRemaining.RefundState(authBase)
+			st.gasRemaining.RefundStateToReservoir(authBase)
 
 			// The indicator was created by an earlier auth within the same
 			// transaction, refill the state charge as it's no longer justified.
 			if curDelegated && !preDelegated {
-				st.gasRemaining.RefundState(authBase)
+				st.gasRemaining.RefundStateToReservoir(authBase)
 			}
 		} else if curDelegated || preDelegated {
 			// The 23-byte slot is already occupied, overwriting it writes no
 			// new bytes, refill the state charge.
-			st.gasRemaining.RefundState(authBase)
+			st.gasRemaining.RefundStateToReservoir(authBase)
 		}
 	}
 
