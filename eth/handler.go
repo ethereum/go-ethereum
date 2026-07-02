@@ -430,6 +430,9 @@ func (h *handler) Start(maxPeers int) {
 	// start sync handlers
 	h.txFetcher.Start()
 
+	// Start the transaction tracker (records tx deliveries, credits peer inclusions).
+	h.txTracker.Start(h.chain)
+
 	// start peer handler tracker
 	h.wg.Add(1)
 	go h.protoTracker()

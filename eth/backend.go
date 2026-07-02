@@ -470,9 +470,6 @@ func (s *Ethereum) Start() error {
 	// Start the networking layer
 	s.handler.Start(s.p2pServer.MaxPeers)
 
-	// Start the transaction tracker (records tx deliveries, credits peer inclusions).
-	s.handler.txTracker.Start(s.blockchain)
-
 	// Start the connection manager with inclusion-based peer protection.
 	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() }, s.handler.txTracker.GetAllPeerStats)
 
