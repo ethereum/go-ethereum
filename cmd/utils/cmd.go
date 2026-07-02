@@ -262,7 +262,7 @@ func readList(filename string) ([]string, error) {
 // ImportHistory imports Era1 files containing historical block information,
 // starting from genesis. The assumption is held that the provided chain
 // segment in Era1 file should all be canonical and verified.
-func ImportHistory(chain *core.BlockChain, dir string, network string, from func(f era.ReadAtSeekCloser) (era.Era, error)) error {
+func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, network string, from func(f era.ReadAtSeekCloser) (era.Era, error)) error {
 	if chain.CurrentSnapBlock().Number.BitLen() != 0 {
 		return errors.New("history import only supported when starting from genesis")
 	}
@@ -285,6 +285,7 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 		imported = 0
 		h        = sha256.New()
 		buf      = bytes.NewBuffer(nil)
+		idxBatch = db.NewBatch()
 	)
 
 	for i, file := range entries {
@@ -307,6 +308,7 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 			if got != checksums[i] {
 				return fmt.Errorf("%s checksum mismatch: have %s want %s", file, got, checksums[i])
 			}
+
 			// Import all block data from Era1.
 			e, err := from(f)
 			if err != nil {
@@ -331,6 +333,24 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 						return fmt.Errorf("error inserting blocks %d-%d: %w",
 							blocks[0].NumberU64(), blocks[len(blocks)-1].NumberU64(), err)
 					}
+
+					// Index tx lookups for the same batch we just inserted.
+					for _, block := range blocks {
+						txHashes := make([]common.Hash, len(block.Transactions()))
+						for j, tx := range block.Transactions() {
+							txHashes[j] = tx.Hash()
+						}
+						if len(txHashes) > 0 {
+							rawdb.WriteEraTxLookupEntries(idxBatch, block.NumberU64(), txHashes)
+						}
+					}
+					if idxBatch.ValueSize() >= ethdb.IdealBatchSize {
+						if err := idxBatch.Write(); err != nil {
+							return fmt.Errorf("error writing tx index batch: %w", err)
+						}
+						idxBatch.Reset()
+					}
+
 					imported += len(blocks)
 					if time.Since(reported) >= 8*time.Second {
 						head := blocks[len(blocks)-1].NumberU64()
@@ -344,6 +364,7 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 					return nil
 				}
 			)
+
 			for it.Next() {
 				block, err := it.Block()
 				if err != nil {
@@ -367,7 +388,17 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 			if err := it.Error(); err != nil {
 				return err
 			}
-			return flush()
+			if err := flush(); err != nil {
+				return err
+			}
+
+			// Flush any remaining index writes and mark this epoch fully indexed.
+			rawdb.WriteEraIndexTail(idxBatch, uint64(i))
+			if err := idxBatch.Write(); err != nil {
+				return fmt.Errorf("error writing era index tail for epoch %d: %w", i, err)
+			}
+			idxBatch.Reset()
+			return nil
 		}()
 		if err != nil {
 			return err
