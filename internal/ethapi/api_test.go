@@ -672,7 +672,7 @@ func (b testBackend) TxIndexDone() bool {
 	return true
 }
 func (b testBackend) GetPoolTransactions() (types.Transactions, error)         { panic("implement me") }
-func (b testBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction { panic("implement me") }
+func (b testBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction { return nil }
 func (b testBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
 	return 0, nil
 }
@@ -4338,4 +4338,172 @@ func TestStateMethodsDefaultToLatest(t *testing.T) {
 		func() any { return new(map[common.Address][]hexutil.Bytes) },
 		[]any{map[common.Address][]common.Hash{acc: {slot}}, "latest"},
 		[]any{map[common.Address][]common.Hash{acc: {slot}}})
+}
+
+func TestRPCGetRawTransactionByHash(t *testing.T) {
+	t.Parallel()
+
+	var (
+		backend, txHashes = setupReceiptBackend(t, 2)
+		api               = NewTransactionAPI(backend, new(AddrLocker))
+	)
+
+	var testSuite = []struct {
+		txHash common.Hash
+		file   string
+	}{
+		// 0. legacy transfer tx (block 0 default case)
+		{
+			txHash: txHashes[0],
+			file:   "found-legacy",
+		},
+		// 1. create contract tx (block 1)
+		{
+			txHash: txHashes[1],
+			file:   "found-create",
+		},
+		// 2. zero hash, not in chain
+		{
+			txHash: common.Hash{},
+			file:   "txhash-empty",
+		},
+		// 3. unknown hash, not in chain
+		{
+			txHash: common.HexToHash("deadbeef"),
+			file:   "txhash-notfound",
+		},
+	}
+
+	for i, tt := range testSuite {
+		result, err := api.GetRawTransactionByHash(context.Background(), tt.txHash)
+		if err != nil {
+			t.Errorf("test %d: want no error, have %v", i, err)
+			continue
+		}
+		testRPCResponseWithFile(t, i, result, "eth_getRawTransactionByHash", tt.file)
+	}
+}
+
+func TestRPCGetRawTransactionByBlockHashAndIndex(t *testing.T) {
+	t.Parallel()
+
+	var (
+		backend, _ = setupReceiptBackend(t, 2)
+		api        = NewTransactionAPI(backend, new(AddrLocker))
+	)
+
+	block1 := backend.chain.GetBlockByNumber(1)
+	if block1 == nil {
+		t.Fatal("block 1 not found")
+	}
+	block1Hash := block1.Hash()
+	unknownHash := common.HexToHash("deadbeef")
+
+	var testSuite = []struct {
+		blockHash common.Hash
+		index     hexutil.Uint
+		file      string
+	}{
+		// 0. block 1, index 0 → found (legacy tx)
+		{
+			blockHash: block1Hash,
+			index:     0,
+			file:      "found-legacy",
+		},
+		// 1. block 1, index 1 → out of range → null
+		{
+			blockHash: block1Hash,
+			index:     1,
+			file:      "index-outofrange",
+		},
+		// 2. unknown block hash, index 0 → null
+		{
+			blockHash: unknownHash,
+			index:     0,
+			file:      "blockhash-notfound",
+		},
+	}
+
+	for i, tt := range testSuite {
+		result := api.GetRawTransactionByBlockHashAndIndex(context.Background(), tt.blockHash, tt.index)
+		testRPCResponseWithFile(t, i, result, "eth_getRawTransactionByBlockHashAndIndex", tt.file)
+	}
+}
+
+func TestRPCGetRawTransactionByBlockNumberAndIndex(t *testing.T) {
+	t.Parallel()
+
+	var (
+		backend, _ = setupReceiptBackend(t, 2)
+		api        = NewTransactionAPI(backend, new(AddrLocker))
+	)
+
+	var testSuite = []struct {
+		blockNumber rpc.BlockNumber
+		index       hexutil.Uint
+		file        string
+	}{
+		// 0. block 1, index 0 → found (legacy tx)
+		{
+			blockNumber: 1,
+			index:       0,
+			file:        "found-legacy",
+		},
+		// 1. block 1, index 1 → out of range → null
+		{
+			blockNumber: 1,
+			index:       1,
+			file:        "index-outofrange",
+		},
+		// 2. block 999, doesn't exist → null
+		{
+			blockNumber: 999,
+			index:       0,
+			file:        "blocknumber-notfound",
+		},
+	}
+
+	for i, tt := range testSuite {
+		result := api.GetRawTransactionByBlockNumberAndIndex(context.Background(), tt.blockNumber, tt.index)
+		testRPCResponseWithFile(t, i, result, "eth_getRawTransactionByBlockNumberAndIndex", tt.file)
+	}
+}
+
+func TestRPCDebugGetRawTransaction(t *testing.T) {
+	t.Parallel()
+
+	var (
+		backend, txHashes = setupReceiptBackend(t, 2)
+		api               = NewDebugAPI(backend)
+	)
+
+	var testSuite = []struct {
+		txHash common.Hash
+		file   string
+	}{
+		// 0. legacy transfer tx (block 0 default case)
+		{
+			txHash: txHashes[0],
+			file:   "found-legacy",
+		},
+		// 1. zero hash, not in chain
+		{
+			txHash: common.Hash{},
+			file:   "txhash-empty",
+		},
+		// 2. unknown hash, not in chain
+		{
+			txHash: common.HexToHash("deadbeef"),
+			file:   "txhash-notfound",
+		},
+	}
+
+	for i, tt := range testSuite {
+		result, err := api.GetRawTransaction(context.Background(), tt.txHash)
+		if err != nil {
+			t.Errorf("test %d: want no error, have %v", i, err)
+			continue
+		}
+		testRPCResponseWithFile(t, i, result, "debug_getRawTransaction", tt.file)
+	}
 }
