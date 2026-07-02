@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2025 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,23 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !windows && !js && !wasip1 && !tinygo && !tamago
-// +build !windows,!js,!wasip1,!tinygo,!tamago
+//go:build tamago
+// +build tamago
 
-package metrics
+package main
 
 import (
-	syscall "golang.org/x/sys/unix"
-
-	"github.com/ethereum/go-ethereum/log"
+	_ "github.com/ethereum/go-ethereum/cmd/keeper/zisk"
 )
-
-// getProcessCPUTime retrieves the process' CPU time since program startup.
-func getProcessCPUTime() float64 {
-	var usage syscall.Rusage
-	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &usage); err != nil {
-		log.Warn("Failed to retrieve CPU time", "err", err)
-		return 0
-	}
-	return float64(usage.Utime.Sec+usage.Stime.Sec) + float64(usage.Utime.Usec+usage.Stime.Usec)/1000000 //nolint:unconvert
-}

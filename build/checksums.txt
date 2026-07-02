@@ -49,6 +49,11 @@ ddc693d2d9d7cc671ebb72d1d50aa05670f95b059b7d90440611af57976871d5  go1.25.10.wind
 ca37af2dadd8544464f1a9ca7c3886499d1cdfcb263855d0a1d71f194b2bd222  go1.25.10.windows-amd64.zip
 38be57e0398bd93673d65bcae6dc7ee3cf151d7038d0dba5c60a5153022872da  go1.25.10.windows-arm64.zip
 
+# version:tamago 1.25.6
+# https://github.com/usbarmory/tamago-go/releases/download/tamago-go1.25.6/
+fbab70549e5977150d9095829608b5b8c7a6226930f91beb8edd614f2a71348e  tamago-go1.25.6.linux-amd64.tar.gz
+8bfc5a4f2ff54625c3a26a1b8749a6639d9f85dbd2f687c41c932517c0814368  tamago-go1.25.6.linux-armv7l.tar.gz
+
 # version:golangci 2.10.1
 # https://github.com/golangci/golangci-lint/releases/
 # https://github.com/golangci/golangci-lint/releases/download/v2.10.1
