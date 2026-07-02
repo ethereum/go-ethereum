@@ -430,6 +430,7 @@ type discv4API struct {
 
 func (api *discv4API) LookupRandom(n int) (ns []*enode.Node) {
 	it := api.host.RandomNodes()
+	defer it.Close()
 	for len(ns) < n && it.Next() {
 		ns = append(ns, it.Node())
 	}
