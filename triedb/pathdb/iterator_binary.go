@@ -49,11 +49,7 @@ func (dl *diskLayer) initBinaryAccountIterator(seek common.Hash) *binaryIterator
 	if err := dl.waitFlush(); err != nil {
 		panic(err)
 	}
-	// The state set in the disk layer is mutable, hold the lock before obtaining
-	// the account list to prevent concurrent map iteration and write.
-	dl.lock.RLock()
-	accountList := dl.buffer.states.accountList()
-	dl.lock.RUnlock()
+	accountList := dl.buffer.accountList()
 
 	// Create two iterators for state buffer and the persistent state in disk
 	// respectively and combine them as a binary iterator.
@@ -121,11 +117,7 @@ func (dl *diskLayer) initBinaryStorageIterator(account common.Hash, seek common.
 	if err := dl.waitFlush(); err != nil {
 		panic(err)
 	}
-	// The state set in the disk layer is mutable, hold the lock before obtaining
-	// the storage list to prevent concurrent map iteration and write.
-	dl.lock.RLock()
-	storageList := dl.buffer.states.storageList(account)
-	dl.lock.RUnlock()
+	storageList := dl.buffer.storageList(account)
 
 	// Create two iterators for state buffer and the persistent state in disk
 	// respectively and combine them as a binary iterator.

@@ -67,7 +67,7 @@ func TestStatesMerge(t *testing.T) {
 		},
 		false,
 	)
-	a.merge(b)
+	a.merge(b, func() {})
 
 	blob, exist := a.account(common.Hash{0xa})
 	if !exist || !bytes.Equal(blob, []byte{0xa1}) {
@@ -157,7 +157,7 @@ func TestStatesRevert(t *testing.T) {
 		},
 		false,
 	)
-	a.merge(b)
+	a.merge(b, func() {})
 	a.revertTo(
 		map[common.Hash][]byte{
 			{0xa}: {0xa0},
@@ -236,7 +236,7 @@ func TestStateRevertAccountNullMarker(t *testing.T) {
 		nil,
 		false,
 	)
-	a.merge(b) // create account 0xa
+	a.merge(b, func() {}) // create account 0xa
 	a.revertTo(
 		map[common.Hash][]byte{
 			{0xa}: nil,
@@ -270,7 +270,7 @@ func TestStateRevertStorageNullMarker(t *testing.T) {
 		},
 		false,
 	)
-	a.merge(b) // create slot 0x1
+	a.merge(b, func() {}) // create slot 0x1
 	a.revertTo(
 		nil,
 		map[common.Hash]map[common.Hash][]byte{
@@ -437,7 +437,7 @@ func TestStateSizeTracking(t *testing.T) {
 		t.Fatalf("Unexpected size, want: %d, got: %d", expSizeB, b.size)
 	}
 
-	a.merge(b)
+	a.merge(b, func() {})
 	mergeSize := expSizeA + 1 /* account a data change */ + 2 /* account b data change */ - 1 /* account c data change */
 	mergeSize += 2*common.HashLength + 2 + 2                                                  /* storage a change */
 	mergeSize += 2*common.HashLength + 2 - 1                                                  /* storage b change */

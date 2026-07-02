@@ -263,6 +263,12 @@ func (dl *diskLayer) journal(w io.Writer) error {
 	if dl.stale {
 		return errSnapshotStale
 	}
+	// Merge any outstanding overlays into the buffer maps before serializing them,
+	// so the journal captures the complete content and the background merger is
+	// no longer mutating the maps concurrently with the encode below. Journaling
+	// runs under the database write lock, so no commit can be in flight.
+	dl.buffer.waitMerge()
+
 	// Step one, write the disk root into the journal.
 	if err := rlp.Encode(w, dl.root); err != nil {
 		return err

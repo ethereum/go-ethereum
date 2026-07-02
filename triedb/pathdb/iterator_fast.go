@@ -81,11 +81,7 @@ func newFastIterator(db *Database, root common.Hash, account common.Hash, seek c
 				if err := dl.waitFlush(); err != nil {
 					return nil, err
 				}
-				// The state set in the disk layer is mutable, hold the lock before obtaining
-				// the account list to prevent concurrent map iteration and write.
-				dl.lock.RLock()
-				accountList := dl.buffer.states.accountList()
-				dl.lock.RUnlock()
+				accountList := dl.buffer.accountList()
 
 				fi.iterators = append(fi.iterators, &weightedIterator{
 					// The state set in the disk layer is mutable, and the entire state becomes stale
@@ -98,7 +94,11 @@ func newFastIterator(db *Database, root common.Hash, account common.Hash, seek c
 						if dl.stale {
 							return nil, errSnapshotStale
 						}
-						return dl.buffer.states.mustAccount(hash)
+						blob, found := dl.buffer.account(hash)
+						if !found {
+							return nil, fmt.Errorf("account is not found, %x", hash)
+						}
+						return blob, nil
 					}),
 					priority: depth,
 				})
@@ -123,11 +123,7 @@ func newFastIterator(db *Database, root common.Hash, account common.Hash, seek c
 				if err := dl.waitFlush(); err != nil {
 					return nil, err
 				}
-				// The state set in the disk layer is mutable, hold the lock before obtaining
-				// the storage list to prevent concurrent map iteration and write.
-				dl.lock.RLock()
-				storageList := dl.buffer.states.storageList(account)
-				dl.lock.RUnlock()
+				storageList := dl.buffer.storageList(account)
 
 				fi.iterators = append(fi.iterators, &weightedIterator{
 					// The state set in the disk layer is mutable, and the entire state becomes stale
@@ -140,7 +136,11 @@ func newFastIterator(db *Database, root common.Hash, account common.Hash, seek c
 						if dl.stale {
 							return nil, errSnapshotStale
 						}
-						return dl.buffer.states.mustStorage(addrHash, slotHash)
+						blob, found := dl.buffer.storage(addrHash, slotHash)
+						if !found {
+							return nil, fmt.Errorf("storage slot is not found, %x %x", addrHash, slotHash)
+						}
+						return blob, nil
 					}),
 					priority: depth,
 				})
