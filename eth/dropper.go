@@ -73,7 +73,7 @@ type protectionCategory struct {
 // independently selects its top-N peers per pool; the union is protected.
 var protectionCategories = []protectionCategory{
 	{func(s txtracker.PeerStats) float64 { return s.RecentFinalized }, inclusionProtectionFrac}, // Recent finalized
-	{func(s txtracker.PeerStats) float64 { return s.RecentIncluded }, inclusionProtectionFrac}, // Recent included
+	{func(s txtracker.PeerStats) float64 { return s.RecentIncluded }, inclusionProtectionFrac},  // Recent included
 }
 
 // dropper monitors the state of the peer pool and introduces churn by
