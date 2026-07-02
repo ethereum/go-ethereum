@@ -205,7 +205,17 @@ func writeTemporaryKeyFile(file string, content []byte) (string, error) {
 		os.Remove(f.Name())
 		return "", err
 	}
-	f.Close()
+	// Sync before rename so a crash between the write and the rename
+	// cannot leave a zero-length keyfile at the final path.
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(f.Name())
+		return "", err
+	}
 	return f.Name(), nil
 }
 
