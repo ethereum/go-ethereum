@@ -470,7 +470,7 @@ func downloadSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string
 // downloadBALSpecTestFixtures downloads and extracts the bal-specific execution-spec-tests fixtures.
 func downloadBALSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string {
 	ext := ".tar.gz"
-	base := "fixtures_bal"
+	base := "fixtures_glamsterdam-devnet"
 	archivePath := filepath.Join(cachedir, base+ext)
 	if err := csdb.DownloadFileFromKnownURL(archivePath); err != nil {
 		log.Fatal(err)
