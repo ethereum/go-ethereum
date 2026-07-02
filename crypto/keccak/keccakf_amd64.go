@@ -1,13 +1,21 @@
-// Copyright 2015 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-//go:build amd64 && !purego && gc
+//go:build amd64 && !purego
 
 package keccak
 
-// This function is implemented in keccakf_amd64.s.
+import "golang.org/x/sys/cpu"
 
+func init() { useASM = cpu.X86.HasBMI1 && cpu.X86.HasBMI2 }
+
+// keccakF1600BMI2 permutes state. When buf != nil, it first XORs rate bytes
+// of buf into state, saving one full memory pass.
+//
 //go:noescape
+func keccakF1600BMI2(a *[200]byte, buf *byte)
 
-func keccakF1600(a *[25]uint64)
+func keccakF1600(a *[200]byte) {
+	keccakF1600BMI2(a, nil)
+}
+
+func xorAndPermute(state *[200]byte, buf *byte) {
+	keccakF1600BMI2(state, buf)
+}

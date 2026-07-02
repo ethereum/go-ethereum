@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -55,7 +56,7 @@ func getPooledBuffer(size uint64) ([]byte, *bytes.Buffer, error) {
 
 // rlpHash encodes x and hashes the encoded bytes.
 func rlpHash(x interface{}) (h common.Hash) {
-	sha := hasherPool.Get().(crypto.KeccakState)
+	sha := hasherPool.Get().(keccak.KeccakState)
 	defer hasherPool.Put(sha)
 	sha.Reset()
 	rlp.Encode(sha, x)
@@ -66,7 +67,7 @@ func rlpHash(x interface{}) (h common.Hash) {
 // prefixedRlpHash writes the prefix into the hasher before rlp-encoding x.
 // It's used for typed transactions.
 func prefixedRlpHash(prefix byte, x interface{}) (h common.Hash) {
-	sha := hasherPool.Get().(crypto.KeccakState)
+	sha := hasherPool.Get().(keccak.KeccakState)
 	defer hasherPool.Put(sha)
 	sha.Reset()
 	sha.Write([]byte{prefix})

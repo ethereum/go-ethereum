@@ -22,13 +22,14 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // hasher is a type used for the trie Hash operation. A hasher has some
 // internal preallocated temp space
 type hasher struct {
-	sha      crypto.KeccakState
+	sha      keccak.KeccakState
 	tmp      []byte
 	encbuf   rlp.EncoderBuffer
 	parallel bool // Whether to use parallel threads when hashing
