@@ -116,6 +116,9 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 			for j := i - 1; j >= 0; j-- {
 				subpools[j].Close()
 			}
+			if pool.newHeadSub != nil {
+				pool.newHeadSub.Unsubscribe()
+			}
 			return nil, err
 		}
 	}
@@ -156,7 +159,9 @@ func (p *TxPool) loop(head *types.Header) {
 	defer close(p.term)
 
 	newHeadCh := p.newHeadCh
-	defer p.newHeadSub.Unsubscribe()
+	if p.newHeadSub != nil {
+		defer p.newHeadSub.Unsubscribe()
+	}
 
 	// Track the previous and current head to feed to an idle reset
 	var (
