@@ -65,7 +65,6 @@ type getPeerStatsFunc func() map[string]txtracker.PeerStats
 // protectionCategory defines a peer scoring function and the fraction of peers
 // to protect per inbound/dialed category. Multiple categories are unioned.
 type protectionCategory struct {
-	name  string
 	score func(txtracker.PeerStats) float64
 	frac  float64 // fraction of max peers to protect (0.0–1.0)
 }
@@ -73,8 +72,8 @@ type protectionCategory struct {
 // protectionCategories is the list of protection criteria. Each category
 // independently selects its top-N peers per pool; the union is protected.
 var protectionCategories = []protectionCategory{
-	{"recent-finalized", func(s txtracker.PeerStats) float64 { return s.RecentFinalized }, inclusionProtectionFrac},
-	{"recent-included", func(s txtracker.PeerStats) float64 { return s.RecentIncluded }, inclusionProtectionFrac},
+	{func(s txtracker.PeerStats) float64 { return s.RecentFinalized }, inclusionProtectionFrac}, // Recent finalized
+	{func(s txtracker.PeerStats) float64 { return s.RecentIncluded }, inclusionProtectionFrac}, // Recent included
 }
 
 // dropper monitors the state of the peer pool and introduces churn by
@@ -232,27 +231,27 @@ func (cm *dropper) protectedPeers(peers []*p2p.Peer) map[*p2p.Peer]bool {
 func protectedPeersByPool(inbound, dialed []*p2p.Peer, stats map[string]txtracker.PeerStats) map[*p2p.Peer]bool {
 	result := make(map[*p2p.Peer]bool)
 	// protectPool selects the top-frac peers from pool by score and adds them to result.
-	protectPool := func(pool []*p2p.Peer, score func(*p2p.Peer) float64, frac float64) {
-		n := int(float64(len(pool)) * frac)
+	protectPool := func(pool []*p2p.Peer, cat protectionCategory) {
+		n := int(float64(len(pool)) * cat.frac)
 		if n == 0 {
 			return
 		}
 		sorted := slices.SortedFunc(slices.Values(pool), func(a, b *p2p.Peer) int {
-			return cmp.Compare(score(b), score(a)) // descending
+			// descending
+			scoreB := cat.score(stats[b.ID().String()])
+			scoreA := cat.score(stats[a.ID().String()])
+			return cmp.Compare(scoreB, scoreA)
 		})
-		top := slices.DeleteFunc(sorted[:min(n, len(sorted))], func(p *p2p.Peer) bool {
-			return score(p) <= 0
-		})
-		for _, p := range top {
-			result[p] = true
+		// select top n peers excluding 0
+		for _, p := range sorted[:min(n, len(sorted))] {
+			if cat.score(stats[p.ID().String()]) > 0 {
+				result[p] = true
+			}
 		}
 	}
 	for _, cat := range protectionCategories {
-		score := func(p *p2p.Peer) float64 {
-			return cat.score(stats[p.ID().String()])
-		}
-		protectPool(inbound, score, cat.frac)
-		protectPool(dialed, score, cat.frac)
+		protectPool(inbound, cat)
+		protectPool(dialed, cat)
 	}
 	return result
 }
