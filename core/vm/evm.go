@@ -225,6 +225,11 @@ func (evm *EVM) SetPrecompileCache(cache *PrecompileCache) {
 	evm.precompileCache = cache
 }
 
+// SetStateDB configures the state for interaction.
+func (evm *EVM) SetStateDB(statedb *state.StateDB) {
+	evm.StateDB = statedb
+}
+
 // SetTxContext resets the EVM with a new transaction context.
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) SetTxContext(txCtx TxContext) {

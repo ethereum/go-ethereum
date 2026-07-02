@@ -109,6 +109,19 @@ func (gp *GasPool) CumulativeUsed() uint64 {
 	return gp.cumulativeUsed
 }
 
+// CumulativeRegular returns the cumulative regular-dimension gas consumed
+// (EIP-8037). It is used to derive the block gas used when transactions are
+// charged against independent pools during parallel execution.
+func (gp *GasPool) CumulativeRegular() uint64 {
+	return gp.cumulativeRegular
+}
+
+// CumulativeState returns the cumulative state-dimension gas consumed
+// (EIP-8037). See CumulativeRegular for the rationale.
+func (gp *GasPool) CumulativeState() uint64 {
+	return gp.cumulativeState
+}
+
 // Used returns the amount of consumed gas.
 func (gp *GasPool) Used() uint64 {
 	// After 8037, return max(sum_regular, sum_state)
