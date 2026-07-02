@@ -428,6 +428,8 @@ func (miner *Miner) commitTransactions(ctx context.Context, env *environment, pl
 	defer spanEnd(nil)
 
 	isCancun := miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
+	var fixSizeRetry = 0
+	const fixSizeRetryLimit = 10
 	for {
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {
@@ -498,9 +500,17 @@ func (miner *Miner) commitTransactions(ctx context.Context, env *environment, pl
 		}
 
 		// if inclusion of the transaction would put the block size over the
-		// maximum we allow, don't add any more txs to the payload.
+		// maximum we allow, skip this sender and try the next sender's
+		// transactions, consistent with the gas and blob space checks above.
 		if !env.txFitsSize(tx) {
-			break
+			log.Trace("Not enough block space left for transaction", "hash", ltx.Hash, "size", tx.Size())
+			txs.Pop()
+			fixSizeRetry++
+			if fixSizeRetry <= fixSizeRetryLimit {
+				continue
+			} else {
+				break
+			}
 		}
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance in the transaction pool.
