@@ -31,6 +31,12 @@ type jwtHandler struct {
 	next    http.Handler
 }
 
+// NewJWTHandler creates a http.Handler with jwt authentication support.
+// This is the exported version for use by the SSZ-REST server (EIP-8161).
+func NewJWTHandler(secret []byte, next http.Handler) http.Handler {
+	return newJWTHandler(secret, next)
+}
+
 // newJWTHandler creates a http.Handler with jwt authentication support.
 func newJWTHandler(secret []byte, next http.Handler) http.Handler {
 	return &jwtHandler{
