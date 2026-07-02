@@ -31,7 +31,7 @@ import (
 
 func verifyIndexes(t *testing.T, db ethdb.Database, block *types.Block, exist bool) {
 	for _, tx := range block.Transactions() {
-		lookup := rawdb.ReadTxLookupEntry(db, tx.Hash())
+		lookup, _ := rawdb.ReadTxLookupEntry(db, tx.Hash())
 		if exist && lookup == nil {
 			t.Fatalf("missing %d %x", block.NumberU64(), tx.Hash().Hex())
 		}

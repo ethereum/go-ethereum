@@ -160,7 +160,7 @@ func TestIndexTransactions(t *testing.T) {
 			if i == 0 {
 				continue
 			}
-			number := ReadTxLookupEntry(chainDB, txs[i-1].Hash())
+			number, _ := ReadTxLookupEntry(chainDB, txs[i-1].Hash())
 			if exist && number == nil {
 				t.Fatalf("Transaction index %d missing", i)
 			}
@@ -259,7 +259,7 @@ func TestPruneTransactionIndex(t *testing.T) {
 	// Check all transactions are in index.
 	for _, block := range blocks {
 		for _, tx := range block.Transactions() {
-			num := ReadTxLookupEntry(chainDB, tx.Hash())
+			num, _ := ReadTxLookupEntry(chainDB, tx.Hash())
 			if num == nil || *num != block.NumberU64() {
 				t.Fatalf("wrong TxLookup entry: %x -> %v", tx.Hash(), num)
 			}
@@ -271,7 +271,7 @@ func TestPruneTransactionIndex(t *testing.T) {
 	// Check transactions from old blocks not included.
 	for _, block := range blocks {
 		for _, tx := range block.Transactions() {
-			num := ReadTxLookupEntry(chainDB, tx.Hash())
+			num, _ := ReadTxLookupEntry(chainDB, tx.Hash())
 			if block.NumberU64() < pruneBlock && num != nil {
 				t.Fatalf("TxLookup entry not removed: %x -> %v", tx.Hash(), num)
 			}
