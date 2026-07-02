@@ -243,7 +243,7 @@ func TestIntrinsicGas(t *testing.T) {
 			// EIP-2780: zero-value call base is TxBaseCost + ColdAccountAccess
 			// (15,000). Plus base access-list charge + EIP-7981 extra.
 			want: vm.GasCosts{RegularGas: params.TxBaseCost2780 + params.ColdAccountAccess2780 +
-				2*params.TxAccessListAddressGas + 3*params.TxAccessListStorageKeyGas +
+				2*params.TxAccessListAddressGasAmsterdam + 3*params.TxAccessListStorageKeyGasAmsterdam +
 				2*amsterdamAddressCost + 3*amsterdamStorageKeyCost},
 		},
 		{
@@ -298,7 +298,7 @@ func TestIntrinsicGas(t *testing.T) {
 			want: vm.GasCosts{
 				RegularGas: params.TxBaseCost2780 + params.CreateAccess2780 +
 					32*params.TxDataNonZeroGasEIP2028 + 1*params.InitCodeWordGas +
-					1*params.TxAccessListAddressGas + 1*params.TxAccessListStorageKeyGas +
+					1*params.TxAccessListAddressGasAmsterdam + 1*params.TxAccessListStorageKeyGasAmsterdam +
 					1*amsterdamAddressCost + 1*amsterdamStorageKeyCost,
 				StateGas: params.AccountCreationSize * params.CostPerStateByte,
 			},
@@ -314,15 +314,16 @@ func TestIntrinsicGas(t *testing.T) {
 			},
 			isEIP2028:   true,
 			isAmsterdam: true,
-			// EIP-8037 splits the auth-tuple charge into regular + state gas:
-			//   regular: TxAuthTupleRegularGas (7500) per auth
+			// EIP-8037 splits the auth-tuple charge into regular + state gas, with
+			// the values finalized by EIP-8038:
+			//   regular: ACCOUNT_WRITE (8,000) + REGULAR_PER_AUTH_BASE_COST (7,500) per auth
 			//   state:   (AuthorizationCreationSize + AccountCreationSize) * CostPerStateByte per auth
 			want: vm.GasCosts{
 				RegularGas: params.TxBaseCost2780 + params.ColdAccountAccess2780 +
 					100*params.TxDataNonZeroGasEIP2028 +
-					1*params.TxAccessListAddressGas + 1*params.TxAccessListStorageKeyGas +
+					1*params.TxAccessListAddressGasAmsterdam + 1*params.TxAccessListStorageKeyGasAmsterdam +
 					1*amsterdamAddressCost + 1*amsterdamStorageKeyCost +
-					1*params.TxAuthTupleRegularGas,
+					1*(params.AccountWriteAmsterdam+params.RegularPerAuthBaseCost),
 				StateGas: 1 * (params.AuthorizationCreationSize + params.AccountCreationSize) * params.CostPerStateByte,
 			},
 		},

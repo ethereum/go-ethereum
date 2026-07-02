@@ -87,7 +87,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 	// Add gas for authorizations
 	if authList != nil {
 		if rules.IsAmsterdam {
-			gas.RegularGas += uint64(len(authList)) * params.TxAuthTupleRegularGas
+			gas.RegularGas += uint64(len(authList)) * (params.AccountWriteAmsterdam + params.RegularPerAuthBaseCost)
 			gas.StateGas += uint64(len(authList)) * (params.AuthorizationCreationSize + params.AccountCreationSize) * costPerStateByte
 		} else {
 			gas.RegularGas += uint64(len(authList)) * params.CallNewAccountGas
@@ -126,14 +126,22 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 	if accessList != nil {
 		addresses := uint64(len(accessList))
 		storageKeys := uint64(accessList.StorageKeys())
-		if (math.MaxUint64-gas.RegularGas)/params.TxAccessListAddressGas < addresses {
+
+		// Amsterdam re-prices the per-entry access-list cost
+		addressCost := params.TxAccessListAddressGas
+		storageKeyCost := params.TxAccessListStorageKeyGas
+		if rules.IsAmsterdam {
+			addressCost = params.TxAccessListAddressGasAmsterdam
+			storageKeyCost = params.TxAccessListStorageKeyGasAmsterdam
+		}
+		if (math.MaxUint64-gas.RegularGas)/addressCost < addresses {
 			return vm.GasCosts{}, ErrGasUintOverflow
 		}
-		gas.RegularGas += addresses * params.TxAccessListAddressGas
-		if (math.MaxUint64-gas.RegularGas)/params.TxAccessListStorageKeyGas < storageKeys {
+		gas.RegularGas += addresses * addressCost
+		if (math.MaxUint64-gas.RegularGas)/storageKeyCost < storageKeys {
 			return vm.GasCosts{}, ErrGasUintOverflow
 		}
-		gas.RegularGas += storageKeys * params.TxAccessListStorageKeyGas
+		gas.RegularGas += storageKeys * storageKeyCost
 
 		// EIP-7981: access list data is charged in addition to the base charge.
 		if rules.IsAmsterdam {
@@ -955,20 +963,13 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 }
 
 // applyAuthorization applies an EIP-7702 code delegation to the state and,
-// under EIP-8037, reconciles the per-authorization intrinsic state-gas pre-
-// charge so that, per authority:
-//
-//   - the account portion (AccountCreationSize × CPSB) is charged at most
-//     once, and only when the account did not exist before the tx
-//
-//   - the delegation-indicator portion (AuthorizationCreationSize × CPSB) is
-//     charged at most once, and only when the authority ends the tx delegated
-//     having started it undelegated.
+// adjust the pre-charged intrinsic cost accordingly.
 func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization, delegates map[common.Address]bool) error {
 	authority, err := st.validateAuthorization(auth)
 	if err != nil {
 		if rules.IsAmsterdam {
 			st.gasRemaining.RefundState((params.AccountCreationSize + params.AuthorizationCreationSize) * st.evm.Context.CostPerStateByte)
+			st.state.AddRefund(params.AccountWriteAmsterdam)
 		}
 		return err
 	}
@@ -981,6 +982,7 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 	} else {
 		if st.state.Exist(authority) {
 			st.gasRemaining.RefundState(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
+			st.state.AddRefund(params.AccountWriteAmsterdam)
 		}
 		authBase := params.AuthorizationCreationSize * st.evm.Context.CostPerStateByte
 
