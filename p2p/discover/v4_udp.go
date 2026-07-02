@@ -327,12 +327,12 @@ func (t *UDPv4) findnode(toid enode.ID, toAddrPort netip.AddrPort, target v4wire
 	rm := t.pending(toid, toAddrPort.Addr(), v4wire.NeighborsPacket, func(r v4wire.Packet) (matched bool, requestDone bool) {
 		reply := r.(*v4wire.Neighbors)
 		for _, rn := range reply.Nodes {
-			nreceived++
 			n, err := t.nodeFromRPC(toAddrPort, rn)
 			if err != nil {
 				t.log.Trace("Invalid neighbor node received", "ip", rn.IP, "addr", toAddrPort, "err", err)
 				continue
 			}
+			nreceived++
 			nodes = append(nodes, n)
 		}
 		return true, nreceived >= bucketSize
