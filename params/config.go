@@ -27,11 +27,14 @@ import (
 )
 
 // Genesis hashes to enforce below configs on.
+// NOTE: These reflect the QKC (QuarkChain) 6-element account encoding which differs
+// from standard Ethereum encoding. The state root and therefore block hash changes
+// when the account RLP format changes.
 var (
-	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
-	HoleskyGenesisHash = common.HexToHash("0xb5f7f912443c940f21fd611f12828d75b534364ed9e95ca4e307729a4661bde4")
-	SepoliaGenesisHash = common.HexToHash("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9")
-	HoodiGenesisHash   = common.HexToHash("0xbbe312868b376a3001692a646dd2d7d1e4406380dfd86b98aa8a34d1557c971b")
+	MainnetGenesisHash = common.HexToHash("0x7a86192e8901d313f5ca3af78e13a660aae94173959c69a3f33e0ae5f2749d7c")
+	HoleskyGenesisHash = common.HexToHash("0x0706dbd8f023baa1808450dd3dfce54335339247b2116c5613e178037b2ccc8f")
+	SepoliaGenesisHash = common.HexToHash("0xc61eb78385a53483f9de8a5710f91d0921bb4ff968ed482c8955b3a9c6d3ccaf")
+	HoodiGenesisHash   = common.HexToHash("0x21a5ed4cc25beb5aa3e1fe4552e2ff7bcf785aeb6cf0472e1b529bd3346c3ba3")
 )
 
 func newUint64(val uint64) *uint64 { return &val }
@@ -1410,3 +1413,4 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsEIP4762:        isUBT,
 	}
 }
+

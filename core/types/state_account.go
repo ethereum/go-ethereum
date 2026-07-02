@@ -29,10 +29,13 @@ import (
 // StateAccount is the Ethereum consensus representation of accounts.
 // These objects are stored in the main account trie.
 type StateAccount struct {
-	Nonce    uint64
-	Balance  *uint256.Int
-	Root     common.Hash // merkle root of the storage trie
-	CodeHash []byte
+	Nonce        uint64
+	Balance      *uint256.Int
+	Root         common.Hash    // merkle root of the storage trie
+	CodeHash     []byte
+	MntBalances  *TokenBalances `rlp:"optional"` // non-QKC MNT balances; nil = no MNT tokens
+	FullShardKey uint32         // QuarkChain shard key; set on first tx, preserved thereafter
+
 }
 
 // NewEmptyStateAccount constructs an empty state account.
@@ -50,11 +53,17 @@ func (acct *StateAccount) Copy() *StateAccount {
 	if acct.Balance != nil {
 		balance = new(uint256.Int).Set(acct.Balance)
 	}
+	var mnt *TokenBalances
+	if acct.MntBalances != nil {
+		mnt = acct.MntBalances.Copy()
+	}
 	return &StateAccount{
-		Nonce:    acct.Nonce,
-		Balance:  balance,
-		Root:     acct.Root,
-		CodeHash: common.CopyBytes(acct.CodeHash),
+		Nonce:        acct.Nonce,
+		Balance:      balance,
+		Root:         acct.Root,
+		CodeHash:     common.CopyBytes(acct.CodeHash),
+		MntBalances:  mnt,
+		FullShardKey: acct.FullShardKey,
 	}
 }
 
