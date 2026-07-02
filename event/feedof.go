@@ -88,7 +88,12 @@ func (f *FeedOf[T]) remove(sub *feedOfSub[T]) {
 // Send delivers to all subscribed channels simultaneously.
 // It returns the number of subscribers that the value was sent to.
 func (f *FeedOf[T]) Send(value T) (nsent int) {
-	rvalue := reflect.ValueOf(value)
+	var rvalue reflect.Value
+	if reflect.TypeFor[T]().Kind() == reflect.Interface {
+		rvalue = reflect.ValueOf(&value).Elem()
+	} else {
+		rvalue = reflect.ValueOf(value)
+	}
 
 	f.once.Do(f.init)
 	<-f.sendLock
