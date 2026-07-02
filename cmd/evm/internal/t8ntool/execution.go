@@ -17,12 +17,15 @@
 package t8ntool
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	stdmath "math"
 	"math/big"
 	"os"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -33,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
@@ -77,12 +81,20 @@ type ExecutionResult struct {
 	RequestsHash         *common.Hash          `json:"requestsHash,omitempty"`
 	Requests             [][]byte              `json:"requests"`
 
-	BlockAccessList     hexutil.Bytes `json:"blockAccessList,omitempty"`
-	BlockAccessListHash *common.Hash  `json:"blockAccessListHash,omitempty"`
+	BlockAccessList     hexutil.Bytes     `json:"blockAccessList,omitempty"`
+	BlockAccessListHash *common.Hash      `json:"blockAccessListHash,omitempty"`
+	ExecutionWitness    *executionWitness `json:"executionWitness,omitempty"`
 }
 
 type executionResultMarshaling struct {
-	Requests []hexutil.Bytes `json:"requests"`
+	Requests        []hexutil.Bytes `json:"requests"`
+	BlockAccessList hexutil.Bytes   `json:"blockAccessList,omitempty"`
+}
+
+type executionWitness struct {
+	State   []hexutil.Bytes `json:"state"`
+	Codes   []hexutil.Bytes `json:"codes"`
+	Headers []hexutil.Bytes `json:"headers"`
 }
 
 type ommer struct {
@@ -92,27 +104,28 @@ type ommer struct {
 
 //go:generate go run github.com/fjl/gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
 type stEnv struct {
-	Coinbase              common.Address                      `json:"currentCoinbase"   gencodec:"required"`
-	Difficulty            *big.Int                            `json:"currentDifficulty"`
-	Random                *big.Int                            `json:"currentRandom"`
-	ParentDifficulty      *big.Int                            `json:"parentDifficulty"`
-	ParentBaseFee         *big.Int                            `json:"parentBaseFee,omitempty"`
-	ParentGasUsed         uint64                              `json:"parentGasUsed,omitempty"`
-	ParentGasLimit        uint64                              `json:"parentGasLimit,omitempty"`
-	GasLimit              uint64                              `json:"currentGasLimit"   gencodec:"required"`
-	Number                uint64                              `json:"currentNumber"     gencodec:"required"`
-	Timestamp             uint64                              `json:"currentTimestamp"  gencodec:"required"`
-	ParentTimestamp       uint64                              `json:"parentTimestamp,omitempty"`
-	BlockHashes           map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
-	Ommers                []ommer                             `json:"ommers,omitempty"`
-	Withdrawals           []*types.Withdrawal                 `json:"withdrawals,omitempty"`
-	BaseFee               *big.Int                            `json:"currentBaseFee,omitempty"`
-	ParentUncleHash       common.Hash                         `json:"parentUncleHash"`
-	ExcessBlobGas         *uint64                             `json:"currentExcessBlobGas,omitempty"`
-	ParentExcessBlobGas   *uint64                             `json:"parentExcessBlobGas,omitempty"`
-	ParentBlobGasUsed     *uint64                             `json:"parentBlobGasUsed,omitempty"`
-	ParentBeaconBlockRoot *common.Hash                        `json:"parentBeaconBlockRoot"`
-	SlotNumber            *uint64                             `json:"slotNumber"`
+	Coinbase              common.Address                        `json:"currentCoinbase"   gencodec:"required"`
+	Difficulty            *big.Int                              `json:"currentDifficulty"`
+	Random                *big.Int                              `json:"currentRandom"`
+	ParentDifficulty      *big.Int                              `json:"parentDifficulty"`
+	ParentBaseFee         *big.Int                              `json:"parentBaseFee,omitempty"`
+	ParentGasUsed         uint64                                `json:"parentGasUsed,omitempty"`
+	ParentGasLimit        uint64                                `json:"parentGasLimit,omitempty"`
+	GasLimit              uint64                                `json:"currentGasLimit"   gencodec:"required"`
+	Number                uint64                                `json:"currentNumber"     gencodec:"required"`
+	Timestamp             uint64                                `json:"currentTimestamp"  gencodec:"required"`
+	ParentTimestamp       uint64                                `json:"parentTimestamp,omitempty"`
+	BlockHashes           map[math.HexOrDecimal64]common.Hash   `json:"blockHashes,omitempty"`
+	Ommers                []ommer                               `json:"ommers,omitempty"`
+	Withdrawals           []*types.Withdrawal                   `json:"withdrawals,omitempty"`
+	BaseFee               *big.Int                              `json:"currentBaseFee,omitempty"`
+	ParentUncleHash       common.Hash                           `json:"parentUncleHash"`
+	ExcessBlobGas         *uint64                               `json:"currentExcessBlobGas,omitempty"`
+	ParentExcessBlobGas   *uint64                               `json:"parentExcessBlobGas,omitempty"`
+	ParentBlobGasUsed     *uint64                               `json:"parentBlobGasUsed,omitempty"`
+	ParentBeaconBlockRoot *common.Hash                          `json:"parentBeaconBlockRoot"`
+	SlotNumber            *uint64                               `json:"slotNumber"`
+	BlockHeaders          map[math.HexOrDecimal64]hexutil.Bytes `json:"blockHeaders,omitempty"`
 }
 
 type stEnvMarshaling struct {
@@ -132,11 +145,111 @@ type stEnvMarshaling struct {
 	ParentExcessBlobGas *math.HexOrDecimal64
 	ParentBlobGasUsed   *math.HexOrDecimal64
 	SlotNumber          *math.HexOrDecimal64
+	BlockHeaders        map[math.HexOrDecimal64]hexutil.Bytes
 }
 
 type rejectedTx struct {
 	Index int    `json:"index"`
 	Err   string `json:"error"`
+}
+
+type t8nHeaderReader struct {
+	headers map[uint64]*types.Header
+	err     error
+}
+
+func newT8nHeaderReader(raw map[math.HexOrDecimal64]hexutil.Bytes) (*t8nHeaderReader, error) {
+	reader := &t8nHeaderReader{headers: make(map[uint64]*types.Header)}
+	for rawNumber, encoded := range raw {
+		number := uint64(rawNumber)
+		var header types.Header
+		if err := rlp.DecodeBytes(encoded, &header); err != nil {
+			return nil, fmt.Errorf("failed to decode blockHeaders[%d]: %w", number, err)
+		}
+		if header.Number == nil || !header.Number.IsUint64() || header.Number.Uint64() != number {
+			return nil, fmt.Errorf("blockHeaders[%d] decodes to header number %v", number, header.Number)
+		}
+		reader.headers[number] = &header
+	}
+	return reader, nil
+}
+
+func (reader *t8nHeaderReader) GetHeader(hash common.Hash, number uint64) *types.Header {
+	header, ok := reader.headers[number]
+	if !ok {
+		reader.setErr(fmt.Errorf("missing blockHeaders[%d] for hash %s", number, hash))
+		return nil
+	}
+	if got := header.Hash(); got != hash {
+		reader.setErr(fmt.Errorf("blockHeaders[%d] hash mismatch: have %s, want %s", number, got, hash))
+		return nil
+	}
+	return header
+}
+
+func (reader *t8nHeaderReader) setErr(err error) {
+	if reader.err == nil {
+		reader.err = err
+	}
+}
+
+func (reader *t8nHeaderReader) Err() error {
+	if reader == nil {
+		return nil
+	}
+	return reader.err
+}
+
+func (pre *Prestate) witnessContextHeader() (*types.Header, error) {
+	if pre.Env.Number == 0 {
+		return nil, errors.New("cannot build execution witness for block 0")
+	}
+	if pre.Env.BlockHashes == nil {
+		return nil, fmt.Errorf("missing blockHashes[%d] for execution witness parent", pre.Env.Number-1)
+	}
+	parentNumber := math.HexOrDecimal64(pre.Env.Number - 1)
+	parentHash, ok := pre.Env.BlockHashes[parentNumber]
+	if !ok {
+		return nil, fmt.Errorf("missing blockHashes[%d] for execution witness parent", pre.Env.Number-1)
+	}
+	return &types.Header{
+		ParentHash: parentHash,
+		Number:     new(big.Int).SetUint64(pre.Env.Number),
+		Time:       pre.Env.Timestamp,
+	}, nil
+}
+
+func convertExecutionWitness(witness *stateless.Witness) (*executionWitness, error) {
+	ext := witness.ToExtWitness()
+	sort.Slice(ext.State, func(i, j int) bool {
+		return bytes.Compare(ext.State[i], ext.State[j]) < 0
+	})
+	sort.Slice(ext.Codes, func(i, j int) bool {
+		return bytes.Compare(ext.Codes[i], ext.Codes[j]) < 0
+	})
+
+	result := &executionWitness{
+		State:   make([]hexutil.Bytes, len(ext.State)),
+		Codes:   make([]hexutil.Bytes, len(ext.Codes)),
+		Headers: make([]hexutil.Bytes, len(ext.Headers)),
+	}
+	for i, state := range ext.State {
+		result.State[i] = state
+	}
+	for i, code := range ext.Codes {
+		result.Codes[i] = code
+	}
+	for i, header := range ext.Headers {
+		if header == nil {
+			return nil, errors.New("execution witness contains a nil header")
+		}
+		encoded, err := rlp.EncodeToBytes(header)
+		if err != nil {
+			return nil, err
+		}
+		result.Headers[i] = encoded
+	}
+	return result, nil
 }
 
 // Apply applies a set of transactions to a pre-state
@@ -243,6 +356,29 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		misc.ApplyDAOHardFork(statedb)
 	}
 	evm := vm.NewEVM(vmContext, statedb, chainConfig, vmConfig)
+	var (
+		witness      *stateless.Witness
+		headerReader *t8nHeaderReader
+	)
+	if isAmsterdam {
+		var err error
+		headerReader, err = newT8nHeaderReader(pre.Env.BlockHeaders)
+		if err != nil {
+			return nil, nil, nil, NewError(ErrorMissingBlockhash, err)
+		}
+		contextHeader, err := pre.witnessContextHeader()
+		if err != nil {
+			return nil, nil, nil, NewError(ErrorMissingBlockhash, err)
+		}
+		witness, err = stateless.NewWitness(contextHeader, headerReader, false)
+		if err != nil {
+			if headerErr := headerReader.Err(); headerErr != nil {
+				err = headerErr
+			}
+			return nil, nil, nil, NewError(ErrorMissingBlockhash, err)
+		}
+		statedb.StartPrefetcher("t8n", witness)
+	}
 	if beaconRoot := pre.Env.ParentBeaconBlockRoot; beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm, blockAccessList)
 	}
@@ -304,13 +440,14 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		if hashError != nil {
 			return nil, nil, nil, NewError(ErrorMissingBlockhash, hashError)
 		}
+		if err := headerReader.Err(); err != nil {
+			return nil, nil, nil, NewError(ErrorMissingBlockhash, err)
+		}
 		blobGasUsed += txBlobGas
 		receipts = append(receipts, receipt)
 		blockAccessList.Merge(bal)
 	}
-	statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))
 
-	// TODO(rjl493456442) call engine.Finalize() instead
 	// Add mining reward? (-1 means rewards are disabled)
 	if miningReward >= 0 {
 		// Add mining reward. The mining reward may be `0`, which only makes a difference in the cases
@@ -367,6 +504,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("failed to process post-execution: %v", err))
 	}
 	blockAccessList.Merge(bal)
+	if err := headerReader.Err(); err != nil {
+		return nil, nil, nil, NewError(ErrorMissingBlockhash, err)
+	}
 
 	// Commit block
 	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber), chainConfig.IsCancun(vmContext.BlockNumber, vmContext.Time))
@@ -408,6 +548,12 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		balHash := encoded.Hash()
 		execRs.BlockAccessListHash = &balHash
 		execRs.BlockAccessList = balRLP
+
+		executionWitness, err := convertExecutionWitness(witness)
+		if err != nil {
+			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not encode execution witness: %v", err))
+		}
+		execRs.ExecutionWitness = executionWitness
 	}
 
 	// Re-create statedb instance with new root for MPT mode
