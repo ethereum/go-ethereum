@@ -250,11 +250,6 @@ var (
 	// EIP-7997 - Deterministic deployment factory (keyless CREATE2 factory)
 	DeterministicFactoryAddress = common.HexToAddress("0x4e59b44847b379578588920cA78FbF26c0B4956C")
 	DeterministicFactoryCode    = common.FromHex("0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3")
-
-	// DeterministicFactoryNonce is the nonce the factory account carries, matching
-	// the keyless deployment transaction that originally created it (nonce 0 of the
-	// deployer, leaving the factory itself at nonce 1).
-	DeterministicFactoryNonce = uint64(1)
 )
 
 // System log events.

@@ -41,8 +41,8 @@ func TestApplyEIP7997(t *testing.T) {
 	if got := sdb.GetCode(params.DeterministicFactoryAddress); !bytes.Equal(got, params.DeterministicFactoryCode) {
 		t.Fatalf("factory code mismatch:\n got %x\nwant %x", got, params.DeterministicFactoryCode)
 	}
-	if got := sdb.GetNonce(params.DeterministicFactoryAddress); got != params.DeterministicFactoryNonce {
-		t.Fatalf("factory nonce = %d, want %d", got, params.DeterministicFactoryNonce)
+	if got := sdb.GetNonce(params.DeterministicFactoryAddress); got != 1 {
+		t.Fatalf("factory nonce = %d, want %d", got, 1)
 	}
 }
 

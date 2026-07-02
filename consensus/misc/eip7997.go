@@ -17,23 +17,24 @@
 package misc
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
-
-// deterministicFactoryCodeHash is the keccak256 of the canonical factory code,
-// used to detect an already-deployed factory.
-var deterministicFactoryCodeHash = crypto.Keccak256Hash(params.DeterministicFactoryCode)
 
 // ApplyEIP7997 inserts the deterministic deployment factory into the state as an
 // irregular state transition, as specified by EIP-7997. The factory is a keyless
 // CREATE2 factory that, once present at the canonical address on every EVM chain,
 // allows contracts to be deployed at identical addresses across chains.
 func ApplyEIP7997(statedb vm.StateDB) {
-	// If the canonical factory is already in place there is nothing to do.
-	if statedb.GetCodeHash(params.DeterministicFactoryAddress) == deterministicFactoryCodeHash {
+	contractHash := statedb.GetCodeHash(params.DeterministicFactoryAddress)
+	nonce := statedb.GetNonce(params.DeterministicFactoryAddress)
+
+	// Reject the irregular state transition if the destination doesn't
+	// satisfy the deployment condition.
+	if nonce != 0 || (contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) {
 		return
 	}
 	if !statedb.Exist(params.DeterministicFactoryAddress) {
@@ -41,5 +42,5 @@ func ApplyEIP7997(statedb vm.StateDB) {
 	}
 	statedb.CreateContract(params.DeterministicFactoryAddress)
 	statedb.SetCode(params.DeterministicFactoryAddress, params.DeterministicFactoryCode, tracing.CodeChangeUnspecified)
-	statedb.SetNonce(params.DeterministicFactoryAddress, params.DeterministicFactoryNonce, tracing.NonceChangeNewContract)
+	statedb.SetNonce(params.DeterministicFactoryAddress, 1, tracing.NonceChangeNewContract)
 }
