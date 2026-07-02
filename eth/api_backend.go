@@ -437,6 +437,10 @@ func (b *EthAPIBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress 
 	return prog
 }
 
+func (b *EthAPIBackend) ConsensusReady() bool {
+	return b.eth.ConsensusReady()
+}
+
 func (b *EthAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return b.gpo.SuggestTipCap(ctx)
 }
