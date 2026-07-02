@@ -180,10 +180,11 @@ type TxFetcher struct {
 	alternates map[common.Hash]map[string]struct{} // In-flight transaction alternate origins if retrieval fails
 
 	// Callbacks
-	validateMeta func(common.Hash, byte) error      // Validate a tx metadata based on the local txpool
-	addTxs       func([]*types.Transaction) []error // Insert a batch of transactions into local txpool
-	fetchTxs     func(string, []common.Hash) error  // Retrieves a set of txs from a remote peer
-	dropPeer     func(string)                       // Drops a peer in case of announcement violation
+	validateMeta func(common.Hash, byte) error           // Validate a tx metadata based on the local txpool
+	addTxs       func([]*types.Transaction) []error      // Insert a batch of transactions into local txpool
+	fetchTxs     func(string, []common.Hash) error       // Retrieves a set of txs from a remote peer
+	dropPeer     func(string)                            // Drops a peer in case of announcement violation
+	onAccepted   func(peer string, hashes []common.Hash) // Optional: notified with accepted tx hashes per peer
 
 	step     chan struct{}    // Notification channel when the fetcher loop iterates
 	clock    mclock.Clock     // Monotonic clock or simulated clock for tests
@@ -194,15 +195,15 @@ type TxFetcher struct {
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
 // based on hash announcements.
 // Chain can be nil to disable on-chain checks.
-func NewTxFetcher(chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string)) *TxFetcher {
-	return NewTxFetcherForTests(chain, validateMeta, addTxs, fetchTxs, dropPeer, mclock.System{}, time.Now, nil)
+func NewTxFetcher(chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string), onAccepted func(string, []common.Hash)) *TxFetcher {
+	return NewTxFetcherForTests(chain, validateMeta, addTxs, fetchTxs, dropPeer, onAccepted, mclock.System{}, time.Now, nil)
 }
 
 // NewTxFetcherForTests is a testing method to mock out the realtime clock with
 // a simulated version and the internal randomness with a deterministic one.
 // Chain can be nil to disable on-chain checks.
 func NewTxFetcherForTests(
-	chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string),
+	chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string), onAccepted func(string, []common.Hash),
 	clock mclock.Clock, realTime func() time.Time, rand *mrand.Rand) *TxFetcher {
 	return &TxFetcher{
 		notify:         make(chan *txAnnounce),
@@ -224,6 +225,7 @@ func NewTxFetcherForTests(
 		addTxs:         addTxs,
 		fetchTxs:       fetchTxs,
 		dropPeer:       dropPeer,
+		onAccepted:     onAccepted,
 		clock:          clock,
 		realTime:       realTime,
 		rand:           rand,
@@ -344,6 +346,8 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		)
 		batch := txs[i:end]
 
+		var accepted []common.Hash
+
 		for j, err := range f.addTxs(batch) {
 			// Track the transaction hash if the price is too low for us.
 			// Avoid re-request this transaction when we receive another
@@ -353,7 +357,8 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			}
 			// Track a few interesting failure types
 			switch {
-			case err == nil: // Noop, but need to handle to not count these
+			case err == nil:
+				accepted = append(accepted, batch[j].Hash())
 
 			case errors.Is(err, txpool.ErrAlreadyKnown):
 				duplicate++
@@ -385,6 +390,10 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		underpricedMeter.Mark(underpriced)
 		otherRejectMeter.Mark(otherreject)
 
+		// Notify the tracker which txs from this peer were accepted.
+		if f.onAccepted != nil && len(accepted) > 0 {
+			f.onAccepted(peer, accepted)
+		}
 		// If 'other reject' is >25% of the deliveries in any batch, sleep a bit.
 		if otherreject > int64((len(batch)+3)/4) {
 			log.Debug("Peer delivering stale or invalid transactions", "peer", peer, "rejected", otherreject)
