@@ -23,6 +23,7 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -57,6 +58,7 @@ var stateTestCommand = &cli.Command{
 		HumanReadableFlag,
 		idxFlag,
 		RunFlag,
+		WorkersFlag,
 	}, traceFlags),
 }
 
@@ -65,16 +67,14 @@ func stateTestCmd(ctx *cli.Context) error {
 
 	// If path is provided, run the tests at that path.
 	if len(path) != 0 {
-		var (
-			collected = collectFiles(path)
-			results   []testResult
-		)
-		for _, fname := range collected {
-			r, err := runStateTest(ctx, fname)
-			if err != nil {
-				return err
-			}
-			results = append(results, r...)
+		collected := collectFiles(path)
+		workers := ctx.Int(WorkersFlag.Name)
+		if workers <= 0 {
+			workers = 1
+		}
+		results, err := runStateTestsParallel(ctx, collected, workers)
+		if err != nil {
+			return err
 		}
 		report(ctx, results)
 		return nil
@@ -95,6 +95,63 @@ func stateTestCmd(ctx *cli.Context) error {
 	return nil
 }
 
+func runStateTestsParallel(ctx *cli.Context, files []string, workers int) ([]testResult, error) {
+	if workers == 1 {
+		var results []testResult
+		for _, fname := range files {
+			r, err := runStateTest(ctx, fname)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, r...)
+		}
+		return results, nil
+	}
+	var (
+		wg     sync.WaitGroup
+		fileCh = make(chan struct {
+			index int
+			fname string
+		}, len(files))
+		resultCh = make(chan fileResult, len(files))
+	)
+	for i, fname := range files {
+		fileCh <- struct {
+			index int
+			fname string
+		}{i, fname}
+	}
+	close(fileCh)
+
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for item := range fileCh {
+				r, err := runStateTest(ctx, item.fname)
+				resultCh <- fileResult{index: item.index, results: r, err: err}
+			}
+		}()
+	}
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
+	ordered := make([]fileResult, len(files))
+	for fr := range resultCh {
+		if fr.err != nil {
+			return nil, fr.err
+		}
+		ordered[fr.index] = fr
+	}
+	var results []testResult
+	for _, fr := range ordered {
+		results = append(results, fr.results...)
+	}
+	return results, nil
+}
+
 // runStateTest loads the state-test given by fname, and executes the test.
 func runStateTest(ctx *cli.Context, fname string) ([]testResult, error) {
 	src, err := os.ReadFile(fname)
@@ -103,7 +160,7 @@ func runStateTest(ctx *cli.Context, fname string) ([]testResult, error) {
 	}
 	var testsByName map[string]tests.StateTest
 	if err := json.Unmarshal(src, &testsByName); err != nil {
-		return nil, fmt.Errorf("unable to read test file %s: %w", fname, err)
+		return nil, nil // Skip non-fixture JSON files
 	}
 
 	cfg := vm.Config{Tracer: tracerFromFlags(ctx)}
@@ -152,6 +209,9 @@ func runStateTest(ctx *cli.Context, fname string) ([]testResult, error) {
 					// Test failed, mark as so.
 					result.Pass, result.Error = false, err.Error()
 					return
+				}
+				if test.LastTxError != "" {
+					result.Error = test.LastTxError
 				}
 			})
 			results = append(results, *result)

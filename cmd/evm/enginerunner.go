@@ -1,4 +1,4 @@
-// Copyright 2023 The go-ethereum Authors
+// Copyright 2025 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 	"maps"
 	"os"
 	"regexp"
+	"runtime"
 	"slices"
 	"sync"
 
@@ -34,22 +35,29 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var blockTestCommand = &cli.Command{
-	Action:    blockTestCmd,
-	Name:      "blocktest",
-	Usage:     "Executes the given blockchain tests. Filenames can be fed via standard input (batch mode) or as an argument (one-off execution).",
+var (
+	WorkersFlag = &cli.IntFlag{
+		Name:  "workers",
+		Usage: "Number of parallel workers for processing fixture files",
+		Value: 1,
+	}
+)
+
+var engineTestCommand = &cli.Command{
+	Action:    engineTestCmd,
+	Name:      "enginetest",
+	Usage:     "Executes the given engine API tests. Filenames can be fed via standard input (batch mode) or as an argument (one-off execution).",
 	ArgsUsage: "<path>",
 	Flags: slices.Concat([]cli.Flag{
 		DumpFlag,
 		HumanReadableFlag,
 		RunFlag,
-		WitnessCrossCheckFlag,
 		FuzzFlag,
 		WorkersFlag,
 	}, traceFlags),
 }
 
-func blockTestCmd(ctx *cli.Context) error {
+func engineTestCmd(ctx *cli.Context) error {
 	path := ctx.Args().First()
 
 	// If path is provided, run the tests at that path.
@@ -57,9 +65,9 @@ func blockTestCmd(ctx *cli.Context) error {
 		collected := collectFiles(path)
 		workers := ctx.Int(WorkersFlag.Name)
 		if workers <= 0 {
-			workers = 1
+			workers = runtime.NumCPU()
 		}
-		results, err := runBlockTestsParallel(ctx, collected, workers)
+		results, err := runEngineTestsParallel(ctx, collected, workers)
 		if err != nil {
 			return err
 		}
@@ -73,11 +81,10 @@ func blockTestCmd(ctx *cli.Context) error {
 		if len(fname) == 0 {
 			return nil
 		}
-		results, err := runBlockTest(ctx, fname)
+		results, err := runEngineTest(ctx, fname)
 		if err != nil {
 			return err
 		}
-		// During fuzzing, we report the result after every block
 		if !ctx.IsSet(FuzzFlag.Name) {
 			report(ctx, results)
 		}
@@ -85,11 +92,20 @@ func blockTestCmd(ctx *cli.Context) error {
 	return nil
 }
 
-func runBlockTestsParallel(ctx *cli.Context, files []string, workers int) ([]testResult, error) {
+// fileResult holds the results from processing a single fixture file.
+type fileResult struct {
+	index   int
+	results []testResult
+	err     error
+}
+
+// runEngineTestsParallel processes fixture files using a worker pool.
+func runEngineTestsParallel(ctx *cli.Context, files []string, workers int) ([]testResult, error) {
 	if workers == 1 {
+		// Fast path: no goroutine overhead for single worker
 		var results []testResult
 		for _, fname := range files {
-			r, err := runBlockTest(ctx, fname)
+			r, err := runEngineTest(ctx, fname)
 			if err != nil {
 				return nil, err
 			}
@@ -97,6 +113,7 @@ func runBlockTestsParallel(ctx *cli.Context, files []string, workers int) ([]tes
 		}
 		return results, nil
 	}
+	// Parallel execution
 	var (
 		wg     sync.WaitGroup
 		fileCh = make(chan struct {
@@ -105,6 +122,7 @@ func runBlockTestsParallel(ctx *cli.Context, files []string, workers int) ([]tes
 		}, len(files))
 		resultCh = make(chan fileResult, len(files))
 	)
+	// Feed files into the channel
 	for i, fname := range files {
 		fileCh <- struct {
 			index int
@@ -113,21 +131,24 @@ func runBlockTestsParallel(ctx *cli.Context, files []string, workers int) ([]tes
 	}
 	close(fileCh)
 
+	// Start workers
 	for w := 0; w < workers; w++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for item := range fileCh {
-				r, err := runBlockTest(ctx, item.fname)
+				r, err := runEngineTest(ctx, item.fname)
 				resultCh <- fileResult{index: item.index, results: r, err: err}
 			}
 		}()
 	}
+	// Close result channel when all workers are done
 	go func() {
 		wg.Wait()
 		close(resultCh)
 	}()
 
+	// Collect results in order
 	ordered := make([]fileResult, len(files))
 	for fr := range resultCh {
 		if fr.err != nil {
@@ -142,14 +163,15 @@ func runBlockTestsParallel(ctx *cli.Context, files []string, workers int) ([]tes
 	return results, nil
 }
 
-func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
+func runEngineTest(ctx *cli.Context, fname string) ([]testResult, error) {
 	src, err := os.ReadFile(fname)
 	if err != nil {
 		return nil, err
 	}
-	var tests map[string]*tests.BlockTest
-	if err = json.Unmarshal(src, &tests); err != nil {
-		return nil, nil // Skip non-fixture JSON files
+	var testsByName map[string]*tests.EngineTest
+	if err = json.Unmarshal(src, &testsByName); err != nil {
+		// Skip non-fixture JSON files (e.g. .meta/index.json)
+		return nil, nil
 	}
 	re, err := regexp.Compile(ctx.String(RunFlag.Name))
 	if err != nil {
@@ -157,24 +179,21 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 	}
 	tracer := tracerFromFlags(ctx)
 
-	// Suppress INFO logs during fuzzing
 	if ctx.IsSet(FuzzFlag.Name) {
 		log.SetDefault(log.NewLogger(log.DiscardHandler()))
 	}
 
-	// Pull out keys to sort and ensure tests are run in order.
-	keys := slices.Sorted(maps.Keys(tests))
+	keys := slices.Sorted(maps.Keys(testsByName))
 
-	// Run all the tests.
 	var results []testResult
 	for _, name := range keys {
 		if !re.MatchString(name) {
 			continue
 		}
-		test := tests[name]
+		test := testsByName[name]
 		result := &testResult{Name: name, Pass: true}
 		var finalHash *common.Hash
-		if err := test.Run(false, rawdb.PathScheme, ctx.Bool(WitnessCrossCheckFlag.Name), tracer, func(res error, chain *core.BlockChain) {
+		if err := test.Run(rawdb.PathScheme, tracer, func(res error, chain *core.BlockChain) {
 			if ctx.Bool(DumpFlag.Name) {
 				if s, _ := chain.State(); s != nil {
 					result.State = dump(s)
@@ -188,16 +207,15 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 			result.Pass, result.Error = false, err.Error()
 		}
 
-		// Always assign fork (regardless of pass/fail or tracer)
 		result.Fork = test.Network()
 		if finalHash != nil {
 			result.BlockHash = finalHash
 		}
-		if result.Pass && test.LastBlockError != "" {
-			result.Error = test.LastBlockError
+		result.PayloadStatus = test.LastPayloadStatus
+		if result.Pass && test.LastValidationError != "" {
+			result.Error = test.LastValidationError
 		}
 
-		// When fuzzing, write results after every block
 		if ctx.IsSet(FuzzFlag.Name) {
 			report(ctx, []testResult{*result})
 		}
