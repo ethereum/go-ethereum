@@ -35,31 +35,15 @@ const (
 	frameHeader = 4 // payload_len prefix
 )
 
-// ReadFrame reads a frame with 12-byte ClusterMetadata and no payload-length cap.
-func ReadFrame(r io.Reader) (*Frame, error) {
-	return readFrame(r, metaSize, 0)
-}
-
-// ReadFrameWithMaxPayload reads a frame with 12-byte ClusterMetadata and rejects frames
-// whose payload_len exceeds maxPayloadLen before allocation.
-func ReadFrameWithMaxPayload(r io.Reader, maxPayloadLen uint32) (*Frame, error) {
-	if maxPayloadLen == 0 {
-		return nil, errors.New("maxPayloadLen must be greater than zero")
-	}
+// ReadFrame reads a frame with 12-byte ClusterMetadata.
+// maxPayloadLen == 0 disables payload-size checking.
+func ReadFrame(r io.Reader, maxPayloadLen uint32) (*Frame, error) {
 	return readFrame(r, metaSize, maxPayloadLen)
 }
 
-// ReadFrameNoMeta reads a frame with 0-byte metadata and no payload-length cap.
-func ReadFrameNoMeta(r io.Reader) (*Frame, error) {
-	return readFrame(r, 0, 0)
-}
-
-// ReadFrameNoMetaWithMaxPayload reads a frame with 0-byte metadata and rejects
-// frames whose payload_len exceeds maxPayloadLen before allocation.
-func ReadFrameNoMetaWithMaxPayload(r io.Reader, maxPayloadLen uint32) (*Frame, error) {
-	if maxPayloadLen == 0 {
-		return nil, errors.New("maxPayloadLen must be greater than zero")
-	}
+// ReadFrameNoMeta reads a frame with 0-byte metadata.
+// maxPayloadLen == 0 disables payload-size checking.
+func ReadFrameNoMeta(r io.Reader, maxPayloadLen uint32) (*Frame, error) {
 	return readFrame(r, 0, maxPayloadLen)
 }
 

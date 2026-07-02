@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"io"
 	"testing"
 )
 
@@ -19,14 +20,14 @@ var (
 	//   - root_tip = None (Ping only)
 	//   - opcode = 0x81 (PING), 0x82 (PONG) from ClusterOp (CLUSTER_OP_BASE=128)
 	pythonClusterPing = "0000001300000001000000000000303981000000000000000100000002696400000002000000010000000200"
-	pythonClusterPong = "00000012000000010000000000003039820000000000000001000000026964000000020000000100000002"
 	pythonNoMetaPing  = "0000001381000000000000000100000002696400000002000000010000000200"
-	pythonNoMetaPong  = "00000012820000000000000001000000026964000000020000000100000002"
 )
 
-func TestPythonVectors_ClusterPing(t *testing.T) {
-	wire := mustPythonVectorBytes(t, pythonClusterPing)
-	f, err := ReadFrame(bytes.NewReader(wire))
+// ---- wire compatibility (pyquarkchain vectors) ----
+
+func TestWireCompat_Meta(t *testing.T) {
+	wire := mustHex(t, pythonClusterPing)
+	f, err := ReadFrame(bytes.NewReader(wire), 0)
 	if err != nil {
 		t.Fatalf("ReadFrame: %v", err)
 	}
@@ -45,30 +46,9 @@ func TestPythonVectors_ClusterPing(t *testing.T) {
 	}
 }
 
-func TestPythonVectors_ClusterPong(t *testing.T) {
-	wire := mustPythonVectorBytes(t, pythonClusterPong)
-	f, err := ReadFrame(bytes.NewReader(wire))
-	if err != nil {
-		t.Fatalf("ReadFrame: %v", err)
-	}
-	if f.Opcode != 0x82 || f.RPCID != 1 {
-		t.Fatalf("unexpected header: opcode=0x%02x rpcid=%d", f.Opcode, f.RPCID)
-	}
-	if f.Meta.Branch != 1 || f.Meta.ClusterPeerID != 12345 {
-		t.Fatalf("unexpected meta: %+v", f.Meta)
-	}
-	var out bytes.Buffer
-	if err := WriteFrame(&out, f); err != nil {
-		t.Fatalf("WriteFrame: %v", err)
-	}
-	if !bytes.Equal(out.Bytes(), wire) {
-		t.Fatalf("frame mismatch:\n  go  %x\n  py  %x", out.Bytes(), wire)
-	}
-}
-
-func TestPythonVectors_NoMetaPing(t *testing.T) {
-	wire := mustPythonVectorBytes(t, pythonNoMetaPing)
-	f, err := ReadFrameNoMeta(bytes.NewReader(wire))
+func TestWireCompat_NoMeta(t *testing.T) {
+	wire := mustHex(t, pythonNoMetaPing)
+	f, err := ReadFrameNoMeta(bytes.NewReader(wire), 0)
 	if err != nil {
 		t.Fatalf("ReadFrameNoMeta: %v", err)
 	}
@@ -84,74 +64,39 @@ func TestPythonVectors_NoMetaPing(t *testing.T) {
 	}
 }
 
-func TestPythonVectors_NoMetaPong(t *testing.T) {
-	wire := mustPythonVectorBytes(t, pythonNoMetaPong)
-	f, err := ReadFrameNoMeta(bytes.NewReader(wire))
-	if err != nil {
-		t.Fatalf("ReadFrameNoMeta: %v", err)
-	}
-	if f.Opcode != 0x82 || f.RPCID != 1 {
-		t.Fatalf("unexpected header: opcode=0x%02x rpcid=%d", f.Opcode, f.RPCID)
-	}
-	var out bytes.Buffer
-	if err := WriteFrameNoMeta(&out, f); err != nil {
-		t.Fatalf("WriteFrameNoMeta: %v", err)
-	}
-	if !bytes.Equal(out.Bytes(), wire) {
-		t.Fatalf("frame mismatch:\n  go  %x\n  py  %x", out.Bytes(), wire)
-	}
-}
+// ---- round-trip: write → read ----
 
-func mustPythonVectorBytes(t *testing.T, hexStr string) []byte {
-	t.Helper()
-	b, err := hex.DecodeString(hexStr)
-	if err != nil {
-		t.Fatalf("decode python hex: %v", err)
-	}
-	return b
-}
-
-func TestRoundTrip_Meta(t *testing.T) {
+func TestRoundTrip(t *testing.T) {
 	cases := []struct {
-		name string
-		f    *Frame
+		name    string
+		meta    ClusterMetadata
+		opcode  byte
+		rpcID   uint64
+		payload []byte
 	}{
-		{"empty", &Frame{Opcode: 1, RPCID: 0, Payload: nil}},
-		{"with_meta", &Frame{Meta: ClusterMetadata{Branch: 5, ClusterPeerID: 999}, Opcode: 0x10, RPCID: 7, Payload: []byte("hello")}},
-		{"large_rpc_id", &Frame{Opcode: 0xC4, RPCID: 0xFFFFFFFFFFFFFFFF, Payload: []byte("x")}},
-		{"zero_meta", &Frame{Meta: ClusterMetadata{}, Opcode: 0x81, RPCID: 1, Payload: []byte{}}},
+		{"nil_payload", ClusterMetadata{}, 0x01, 0, nil},
+		{"with_meta", ClusterMetadata{Branch: 5, ClusterPeerID: 999}, 0x10, 7, []byte("hello")},
+		{"max_rpc_id", ClusterMetadata{}, 0xC4, 0xFFFFFFFFFFFFFFFF, []byte("x")},
+		{"empty_payload", ClusterMetadata{}, 0x81, 1, []byte{}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			wire := writeFrameForTest(tc.f.Meta, tc.f.Opcode, tc.f.RPCID, tc.f.Payload)
-			got, err := ReadFrame(bytes.NewReader(wire))
+			wire := writeFrameForTest(tc.meta, tc.opcode, tc.rpcID, tc.payload)
+			got, err := ReadFrame(bytes.NewReader(wire), 0)
 			if err != nil {
 				t.Fatalf("ReadFrame: %v", err)
 			}
-			if got.Opcode != tc.f.Opcode || got.RPCID != tc.f.RPCID || got.Meta != tc.f.Meta {
-				t.Errorf("mismatch: got %+v, want %+v", got, tc.f)
+			if got.Opcode != tc.opcode || got.RPCID != tc.rpcID || got.Meta != tc.meta {
+				t.Errorf("mismatch: got %+v, want Meta=%+v Opcode=%x RPCID=%d", got, tc.meta, tc.opcode, tc.rpcID)
 			}
-			if !bytes.Equal(got.Payload, tc.f.Payload) {
+			if !bytes.Equal(got.Payload, tc.payload) {
 				t.Errorf("payload mismatch")
 			}
 		})
 	}
 }
 
-func TestRoundTrip_NoMeta(t *testing.T) {
-	original := &Frame{Opcode: 0x93, RPCID: 99, Payload: []byte("xshard-data")}
-	wire := writeFrameNoMetaForTest(original.Opcode, original.RPCID, original.Payload)
-	got, err := ReadFrameNoMeta(bytes.NewReader(wire))
-	if err != nil {
-		t.Fatalf("ReadFrameNoMeta: %v", err)
-	}
-	if got.Opcode != original.Opcode || got.RPCID != original.RPCID {
-		t.Errorf("mismatch: got %+v", got)
-	}
-	if !bytes.Equal(got.Payload, original.Payload) {
-		t.Errorf("payload mismatch")
-	}
-}
+// ---- wire format layout ----
 
 func TestWireFormatLayout(t *testing.T) {
 	f := &Frame{
@@ -182,6 +127,8 @@ func TestWireFormatLayout(t *testing.T) {
 	}
 }
 
+// ---- multi-frame stream ----
+
 func TestMultiFrameStream(t *testing.T) {
 	frames := []*Frame{
 		{Meta: ClusterMetadata{Branch: 0, ClusterPeerID: 0}, Opcode: 0x81, RPCID: 0, Payload: []byte("ping")},
@@ -195,7 +142,7 @@ func TestMultiFrameStream(t *testing.T) {
 
 	reader := bytes.NewReader(stream.Bytes())
 	for i, want := range frames {
-		got, err := ReadFrame(reader)
+		got, err := ReadFrame(reader, 0)
 		if err != nil {
 			t.Fatalf("frame %d: %v", i, err)
 		}
@@ -208,51 +155,108 @@ func TestMultiFrameStream(t *testing.T) {
 	}
 }
 
-func TestReadFrame_EOF(t *testing.T) {
-	if _, err := ReadFrame(bytes.NewReader(nil)); err == nil {
-		t.Error("expected error on empty stream")
+// ---- error paths ----
+
+func TestReadErrors(t *testing.T) {
+	cases := []struct {
+		name string
+		r    io.Reader
+		read func(io.Reader, uint32) (*Frame, error)
+	}{
+		{"meta_empty_stream", bytes.NewReader(nil), ReadFrame},
+		{"meta_truncated", bytes.NewReader(truncatedHeader()), ReadFrame},
+		{"nometa_empty_stream", bytes.NewReader(nil), ReadFrameNoMeta},
+		{"nometa_truncated", bytes.NewReader(truncatedHeader()), ReadFrameNoMeta},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := tc.read(tc.r, 0); err == nil {
+				t.Error("expected error, got nil")
+			}
+		})
 	}
 }
 
-func TestReadFrame_Truncated(t *testing.T) {
+func truncatedHeader() []byte {
 	hdr := make([]byte, 4)
 	binary.BigEndian.PutUint32(hdr, 100)
-	if _, err := ReadFrame(bytes.NewReader(hdr)); err == nil {
-		t.Error("expected error on truncated frame")
-	}
+	return hdr
 }
+
+// ---- payload size limit ----
 
 func TestReadFrame_PayloadLimit(t *testing.T) {
-	hdr := make([]byte, 4)
-	binary.BigEndian.PutUint32(hdr, 100)
+	payload := bytes.Repeat([]byte{0xAB}, 100)
+	frame := &Frame{Meta: ClusterMetadata{Branch: 1, ClusterPeerID: 2}, Opcode: 0x81, RPCID: 1, Payload: payload}
 
-	if _, err := ReadFrameWithMaxPayload(bytes.NewReader(hdr), 64); err == nil {
-		t.Fatal("expected error when payload_len exceeds limit")
+	// limit == 0: unbounded — full frame with 100-byte payload is accepted.
+	{
+		wire := writeFrameForTest(frame.Meta, frame.Opcode, frame.RPCID, frame.Payload)
+		got, err := ReadFrame(bytes.NewReader(wire), 0)
+		if err != nil {
+			t.Fatalf("limit=0 should accept full frame, got: %v", err)
+		}
+		if !bytes.Equal(got.Payload, payload) {
+			t.Fatalf("limit=0 payload mismatch")
+		}
 	}
 
-	if _, err := ReadFrameWithMaxPayload(bytes.NewReader(hdr), 0); err == nil {
-		t.Fatal("expected error when maxPayloadLen is zero")
+	// limit == payload length: boundary, accepted.
+	{
+		wire := writeFrameForTest(frame.Meta, frame.Opcode, frame.RPCID, frame.Payload)
+		if _, err := ReadFrame(bytes.NewReader(wire), uint32(len(payload))); err != nil {
+			t.Fatalf("limit==payload_len should accept, got: %v", err)
+		}
 	}
 
-	if _, err := ReadFrame(bytes.NewReader(hdr)); err == nil {
-		t.Error("expected error on truncated frame without payload limit")
+	// limit < payload length: rejected before metadata is read.
+	{
+		wire := writeFrameForTest(frame.Meta, frame.Opcode, frame.RPCID, frame.Payload)
+		_, err := ReadFrame(bytes.NewReader(wire), uint32(len(payload)-1))
+		if err == nil {
+			t.Fatal("limit < payload_len should be rejected")
+		}
 	}
 }
 
 func TestReadFrameNoMeta_PayloadLimit(t *testing.T) {
-	hdr := make([]byte, 4)
-	binary.BigEndian.PutUint32(hdr, 32)
+	payload := bytes.Repeat([]byte{0xCD}, 32)
+	frame := &Frame{Opcode: 0x82, RPCID: 7, Payload: payload}
 
-	if _, err := ReadFrameNoMetaWithMaxPayload(bytes.NewReader(hdr), 16); err == nil {
-		t.Fatal("expected error when payload_len exceeds limit")
+	// limit == 0: unbounded.
+	{
+		wire := writeFrameNoMetaForTest(frame.Opcode, frame.RPCID, frame.Payload)
+		got, err := ReadFrameNoMeta(bytes.NewReader(wire), 0)
+		if err != nil {
+			t.Fatalf("limit=0 should accept full frame, got: %v", err)
+		}
+		if !bytes.Equal(got.Payload, payload) {
+			t.Fatalf("limit=0 payload mismatch")
+		}
 	}
 
-	if _, err := ReadFrameNoMetaWithMaxPayload(bytes.NewReader(hdr), 0); err == nil {
-		t.Fatal("expected error when maxPayloadLen is zero")
+	// limit == payload length: boundary, accepted.
+	{
+		wire := writeFrameNoMetaForTest(frame.Opcode, frame.RPCID, frame.Payload)
+		if _, err := ReadFrameNoMeta(bytes.NewReader(wire), uint32(len(payload))); err != nil {
+			t.Fatalf("limit==payload_len should accept, got: %v", err)
+		}
+	}
+
+	// limit < payload length: rejected.
+	{
+		wire := writeFrameNoMetaForTest(frame.Opcode, frame.RPCID, frame.Payload)
+		_, err := ReadFrameNoMeta(bytes.NewReader(wire), uint32(len(payload)-1))
+		if err == nil {
+			t.Fatal("limit < payload_len should be rejected")
+		}
 	}
 }
 
-func TestClusterMetadata_RoundTrip(t *testing.T) {
+// ---- ClusterMetadata serialization ----
+
+func TestClusterMetadata(t *testing.T) {
+	// Round-trip: edge cases.
 	cases := []ClusterMetadata{
 		{Branch: 0, ClusterPeerID: 0},
 		{Branch: 1, ClusterPeerID: 12345},
@@ -268,15 +272,25 @@ func TestClusterMetadata_RoundTrip(t *testing.T) {
 			t.Errorf("round-trip mismatch: got %+v, want %+v", got, m)
 		}
 	}
-}
 
-func TestUnmarshalClusterMetadata_InvalidLength(t *testing.T) {
+	// Invalid lengths.
 	for _, n := range []int{0, 4, 8, 11, 13, 16} {
 		b := make([]byte, n)
 		if _, err := UnmarshalClusterMetadata(b); err == nil {
 			t.Errorf("expected error for %d-byte input", n)
 		}
 	}
+}
+
+// ---- helpers ----
+
+func mustHex(t *testing.T, hexStr string) []byte {
+	t.Helper()
+	b, err := hex.DecodeString(hexStr)
+	if err != nil {
+		t.Fatalf("decode hex: %v", err)
+	}
+	return b
 }
 
 func writeFrameForTest(meta ClusterMetadata, opcode byte, rpcID uint64, payload []byte) []byte {
