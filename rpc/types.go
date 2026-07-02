@@ -158,6 +158,9 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 		if e.BlockNumber != nil && e.BlockHash != nil {
 			return errors.New("cannot specify both BlockHash and BlockNumber, choose one or the other")
 		}
+		if e.BlockNumber == nil && e.BlockHash == nil {
+			return errors.New("must specify either BlockHash or BlockNumber")
+		}
 		bnh.BlockNumber = e.BlockNumber
 		bnh.BlockHash = e.BlockHash
 		bnh.RequireCanonical = e.RequireCanonical
