@@ -94,6 +94,10 @@ type Config struct {
 	NetworkId uint64
 	SyncMode  SyncMode
 
+	// SnapSkipReceipts skips the historical receipt backfill during snap sync,
+	// reconstructing state only.
+	SnapSkipReceipts bool
+
 	// HistoryMode configures chain history retention.
 	HistoryMode history.HistoryMode
 
