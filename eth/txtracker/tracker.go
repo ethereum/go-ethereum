@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
@@ -90,9 +91,8 @@ type TxInfo struct {
 // when their transactions appear on chain.
 type Tracker struct {
 	mu    sync.Mutex
-	txs   map[common.Hash]*TxInfo // hash → per-tx state
+	txs   lru.BasicLRU[common.Hash, *TxInfo] // tx hash -> tx info with lru eviction
 	peers map[string]*peerStats
-	order []common.Hash // insertion order for LRU eviction
 
 	chain        Chain
 	lastFinalNum uint64 // last finalized block number processed
@@ -109,7 +109,7 @@ type Tracker struct {
 // New creates a new tracker.
 func New() *Tracker {
 	return &Tracker{
-		txs:   make(map[common.Hash]*TxInfo),
+		txs:   lru.NewBasicLRU[common.Hash, *TxInfo](maxTracked),
 		peers: make(map[string]*peerStats),
 		quit:  make(chan struct{}),
 		step:  make(chan struct{}, 1),
@@ -159,26 +159,14 @@ func (t *Tracker) NotifyAccepted(peer string, hashes []common.Hash) {
 
 	addedAt := t.now()
 	for _, hash := range hashes {
-		if _, ok := t.txs[hash]; ok {
+		if t.txs.Contains(hash) {
 			continue // already tracked, keep first deliverer
 		}
-		t.txs[hash] = &TxInfo{Deliverer: peer, AddedAt: addedAt}
-		t.order = append(t.order, hash)
+		t.txs.Add(hash, &TxInfo{Deliverer: peer, AddedAt: addedAt})
 	}
 	// Ensure the delivering peer has a stats entry.
 	if len(hashes) > 0 && t.peers[peer] == nil {
 		t.peers[peer] = &peerStats{}
-	}
-	// Evict oldest entries if over capacity.
-	for len(t.txs) > maxTracked {
-		oldest := t.order[0]
-		t.order = t.order[1:]
-		delete(t.txs, oldest)
-	}
-	// Compact the backing array when it grows too large. Reslicing
-	// with order[1:] doesn't free earlier slots in the array.
-	if cap(t.order) > 2*maxTracked {
-		t.order = append([]common.Hash(nil), t.order...)
 	}
 }
 
@@ -238,7 +226,7 @@ func (t *Tracker) handleChainHead(ev core.ChainHeadEvent) {
 	blockHash := block.Hash()
 	blockIncl := make(map[string]int)
 	for _, tx := range block.Transactions() {
-		ti, ok := t.txs[tx.Hash()]
+		ti, ok := t.txs.Peek(tx.Hash())
 		if !ok || ti.AddedAt >= blockTime {
 			continue
 		}
@@ -294,13 +282,15 @@ func (t *Tracker) collectFinalizationCredits() map[string]int {
 	// "already credited in a prior pass" (BlockNum <= lastFinalNum); no
 	// separate status bookkeeping is needed.
 	buckets := make(map[uint64][]*TxInfo)
-	for _, ti := range t.txs {
-		if ti.BlockNum <= t.lastFinalNum || ti.BlockNum > finalNum {
+	for _, hash := range t.txs.Keys() {
+		ti, ok := t.txs.Peek(hash)
+		if !ok || ti.BlockNum <= t.lastFinalNum || ti.BlockNum > finalNum {
 			continue
 		}
 		buckets[ti.BlockNum] = append(buckets[ti.BlockNum], ti)
 	}
 
+	total := 0
 	for num, tis := range buckets {
 		canonHash := t.chain.GetCanonicalHash(num)
 		if canonHash == (common.Hash{}) {
@@ -316,22 +306,15 @@ func (t *Tracker) collectFinalizationCredits() map[string]int {
 			}
 			if ti.Deliverer != "" {
 				credits[ti.Deliverer]++
+				total++
 			}
 		}
 	}
 
-	if total := sumCounts(credits); total > 0 {
+	if total > 0 {
 		log.Trace("Accumulated finalization credits",
 			"from", t.lastFinalNum+1, "to", finalNum, "txs", total)
 	}
 	t.lastFinalNum = finalNum
 	return credits
-}
-
-func sumCounts(m map[string]int) int {
-	var sum int
-	for _, v := range m {
-		sum += v
-	}
-	return sum
 }

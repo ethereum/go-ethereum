@@ -182,22 +182,19 @@ func TestNotifyReceived(t *testing.T) {
 		t.Fatalf("expected zero stats before chain events, got %+v", ps)
 	}
 
-	// Internal state: all tx→deliverer mappings recorded, insertion order
-	// preserved in the FIFO slice.
+	// Internal state: all tx→deliverer mappings recorded.
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
-	if len(tr.txs) != 3 {
-		t.Fatalf("expected 3 tracked txs, got %d", len(tr.txs))
-	}
-	if len(tr.order) != 3 {
-		t.Fatalf("expected order length 3, got %d", len(tr.order))
+	if tr.txs.Len() != 3 {
+		t.Fatalf("expected 3 tracked txs, got %d", tr.txs.Len())
 	}
 	for i, h := range hashes {
-		if got := tr.txs[h]; got.Deliverer != "peerA" {
-			t.Fatalf("tx %d: expected deliverer=peerA, got %q", i, got.Deliverer)
+		got, ok := tr.txs.Peek(h)
+		if !ok {
+			t.Fatalf("tx %d: not tracked", i)
 		}
-		if tr.order[i] != h {
-			t.Fatalf("order[%d] mismatch", i)
+		if got.Deliverer != "peerA" {
+			t.Fatalf("tx %d: expected deliverer=peerA, got %q", i, got.Deliverer)
 		}
 	}
 }
