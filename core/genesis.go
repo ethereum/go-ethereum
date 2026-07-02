@@ -725,6 +725,8 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 			// EIP-8282 - Builder Execution Requests
 			params.BuilderDepositAddress: {Nonce: 1, Code: params.BuilderDepositCode, Balance: common.Big0},
 			params.BuilderExitAddress:    {Nonce: 1, Code: params.BuilderExitCode, Balance: common.Big0},
+			// EIP-7997 - Deterministic deployment factory
+			params.DeterministicFactoryAddress: {Nonce: 1, Code: params.DeterministicFactoryCode, Balance: common.Big0},
 		},
 	}
 	if faucet != nil {
