@@ -944,7 +944,15 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 	// Validate signature values and recover authority.
 	authority, err = auth.Authority()
 	if err != nil {
-		return authority, fmt.Errorf("%w: %v", ErrAuthorizationInvalidSignature, err)
+		// In simulation mode (e.g. eth_estimateGas, eth_call), allow
+		// authorizations with invalid signatures by assuming the
+		// transaction sender is the authority. This lets callers estimate
+		// gas for EIP-7702 transactions before signing the authorization.
+		if st.msg.SkipTransactionChecks {
+			authority = st.msg.From
+		} else {
+			return authority, fmt.Errorf("%w: %v", ErrAuthorizationInvalidSignature, err)
+		}
 	}
 	// Check the authority account
 	//  1) doesn't have code or has existing delegation
@@ -956,7 +964,9 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 	if _, ok := types.ParseDelegation(code); len(code) != 0 && !ok {
 		return authority, ErrAuthorizationDestinationHasCode
 	}
-	if have := st.state.GetNonce(authority); have != auth.Nonce {
+	// Skip nonce validation in simulation mode, consistent with the
+	// top-level SkipNonceChecks behaviour for the sender account.
+	if have := st.state.GetNonce(authority); have != auth.Nonce && !st.msg.SkipNonceChecks {
 		return authority, ErrAuthorizationNonceMismatch
 	}
 	return authority, nil
