@@ -60,6 +60,23 @@ func TestApplyEIP7997Existing(t *testing.T) {
 	}
 }
 
+// TestApplyEIP7997WrongCode checks that an account occupying the factory address
+// with the wrong code is force-overwritten with the canonical runtime code, while
+// a pre-existing non-zero nonce is preserved.
+func TestApplyEIP7997WrongCode(t *testing.T) {
+	sdb := mkState(types.GenesisAlloc{
+		params.DeterministicFactoryAddress: {Code: []byte{0x60, 0x00}, Nonce: 7},
+	})
+	misc.ApplyEIP7997(sdb)
+
+	if got := sdb.GetCode(params.DeterministicFactoryAddress); !bytes.Equal(got, params.DeterministicFactoryCode) {
+		t.Fatalf("factory code not overwritten:\n got %x\nwant %x", got, params.DeterministicFactoryCode)
+	}
+	if got := sdb.GetNonce(params.DeterministicFactoryAddress); got != 7 {
+		t.Fatalf("factory nonce = %d, want %d (existing nonce must be preserved)", got, 7)
+	}
+}
+
 // TestEIP7997FactoryDeploys exercises the inserted factory bytecode: calling it
 // with a salt followed by init code must CREATE2-deploy the contract at the
 // canonical deterministic address and return that address (20 bytes, unpadded).
