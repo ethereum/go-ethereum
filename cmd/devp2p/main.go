@@ -49,6 +49,7 @@ func init() {
 		keyCommand,
 		discv4Command,
 		discv5Command,
+		discoveryCommand,
 		dnsCommand,
 		nodesetCommand,
 		rlpxCommand,
