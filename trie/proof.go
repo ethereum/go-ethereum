@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie/archive"
 )
 
 // Prove constructs a merkle proof for key. The result contains all encoded nodes
@@ -78,6 +79,16 @@ func (t *Trie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 			// clean cache or the database, they are all in their own
 			// copy and safe to use unsafe decoder.
 			tn = mustDecodeNodeUnsafe(n, blob)
+		case *expiredNode:
+			records, err := archive.ArchivedNodeResolver(n.offset, n.size)
+			if err != nil {
+				return fmt.Errorf("failed to resolve expired node in proof: %w", err)
+			}
+			resolved, err := archiveRecordsToNode(records)
+			if err != nil {
+				return fmt.Errorf("failed to rebuild expired node in proof: %w", err)
+			}
+			tn = resolved
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
@@ -616,6 +627,8 @@ func get(tn node, key []byte, skipResolved bool) ([]byte, node) {
 				return key, tn
 			}
 		case hashNode:
+			return key, n
+		case *expiredNode:
 			return key, n
 		case nil:
 			return key, nil
