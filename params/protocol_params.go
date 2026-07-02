@@ -101,13 +101,7 @@ const (
 	TxAccessListStorageKeyGas uint64 = 1900  // Per storage key specified in EIP 2930 access list
 	TxAuthTupleGas            uint64 = 12500 // Per auth tuple code specified in EIP-7702
 
-	// RegularPerAuthBaseCost is defined in EIP-8037 as the sum of:
-	//
-	// - Calldata cost: 1,616 (101 bytes × 16)
-	// - Recovering authority address (ecRecover)
-	// - Reading nonce and code of authority (cold access)
-	// - Storing values in already warm account: 2 x WARM_ACCESS
-	RegularPerAuthBaseCost uint64 = 7500
+	RegularPerAuthBaseCost uint64 = 7816 // As defined by EIP-8037 and EIP-8038
 
 	// EIP-2780: resource-based intrinsic transaction gas.
 	TxBaseCost2780        uint64 = 12000
