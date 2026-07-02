@@ -91,7 +91,7 @@ var (
 		Name:   "crawl",
 		Usage:  "Updates a nodes.json file with random nodes found in the DHT",
 		Action: discv4Crawl,
-		Flags:  slices.Concat(discoveryNodeFlags, []cli.Flag{crawlTimeoutFlag, crawlParallelismFlag}),
+		Flags:  slices.Concat(discoveryNodeFlags, []cli.Flag{crawlTimeoutFlag, crawlParallelismFlag, crawlModeFlag, crawlRandomWorkersFlag}),
 	}
 	discv4TestCommand = &cli.Command{
 		Name:   "test",
@@ -135,8 +135,18 @@ var (
 	}
 	crawlParallelismFlag = &cli.IntFlag{
 		Name:  "parallel",
-		Usage: "How many parallel discoveries to attempt.",
+		Usage: "How many parallel discoveries to attempt. Used both as the crawler harness's RequestENR worker count and (under -mode=fast) as the FINDNODE iterator's worker count.",
 		Value: 16,
+	}
+	crawlModeFlag = &cli.StringFlag{
+		Name:  "mode",
+		Usage: "Crawl iterator mode: 'lookup' (alpha-bounded Kademlia lookup) or 'fast' (one FINDNODE per peer with rotating prefix; sized by -parallel).",
+		Value: "lookup",
+	}
+	crawlRandomWorkersFlag = &cli.IntFlag{
+		Name:  "random-workers",
+		Usage: "Of the -parallel workers in -mode=fast, how many pop a random queue item rather than the FIFO front. 0 = library default (parallel/4); negative = pure BFS.",
+		Value: 0,
 	}
 	remoteEnodeFlag = &cli.StringFlag{
 		Name:    "remote",
@@ -259,7 +269,11 @@ func discv4Crawl(ctx *cli.Context) error {
 	disc, config := startV4(ctx)
 	defer disc.Close()
 
-	c, err := newCrawler(inputSet, config.Bootnodes, disc, disc.RandomNodes())
+	iter, err := newDiscv4CrawlIterator(disc, config.Bootnodes, ctx.String(crawlModeFlag.Name), ctx.Int(crawlParallelismFlag.Name), ctx.Int(crawlRandomWorkersFlag.Name))
+	if err != nil {
+		return err
+	}
+	c, err := newCrawler(inputSet, config.Bootnodes, disc, iter)
 	if err != nil {
 		return err
 	}
@@ -267,6 +281,21 @@ func discv4Crawl(ctx *cli.Context) error {
 	output := c.run(ctx.Duration(crawlTimeoutFlag.Name), ctx.Int(crawlParallelismFlag.Name))
 	writeNodesJSON(nodesFile, output)
 	return nil
+}
+
+func newDiscv4CrawlIterator(disc *discover.UDPv4, bootnodes []*enode.Node, mode string, parallel, randomWorkers int) (enode.Iterator, error) {
+	switch mode {
+	case "", "lookup":
+		return disc.RandomNodes(), nil
+	case "fast":
+		return disc.CrawlIterator(discover.CrawlOptions{
+			Workers:       parallel,
+			RandomWorkers: randomWorkers,
+			Seeds:         bootnodes,
+		}), nil
+	default:
+		return nil, fmt.Errorf("unknown -%s value %q (want 'lookup' or 'fast')", crawlModeFlag.Name, mode)
+	}
 }
 
 // discv4Test runs the protocol test suite.

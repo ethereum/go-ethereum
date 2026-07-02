@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v5test"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/urfave/cli/v2"
 )
 
@@ -58,6 +59,9 @@ var (
 		Action: discv5Crawl,
 		Flags: slices.Concat(discoveryNodeFlags, []cli.Flag{
 			crawlTimeoutFlag,
+			crawlParallelismFlag,
+			crawlModeFlag,
+			crawlRandomWorkersFlag,
 		}),
 	}
 	discv5TestCommand = &cli.Command{
@@ -111,7 +115,11 @@ func discv5Crawl(ctx *cli.Context) error {
 	disc, config := startV5(ctx)
 	defer disc.Close()
 
-	c, err := newCrawler(inputSet, config.Bootnodes, disc, disc.RandomNodes())
+	iter, err := newDiscv5CrawlIterator(disc, config.Bootnodes, ctx.String(crawlModeFlag.Name), ctx.Int(crawlParallelismFlag.Name), ctx.Int(crawlRandomWorkersFlag.Name))
+	if err != nil {
+		return err
+	}
+	c, err := newCrawler(inputSet, config.Bootnodes, disc, iter)
 	if err != nil {
 		return err
 	}
@@ -119,6 +127,21 @@ func discv5Crawl(ctx *cli.Context) error {
 	output := c.run(ctx.Duration(crawlTimeoutFlag.Name), ctx.Int(crawlParallelismFlag.Name))
 	writeNodesJSON(nodesFile, output)
 	return nil
+}
+
+func newDiscv5CrawlIterator(disc *discover.UDPv5, bootnodes []*enode.Node, mode string, parallel, randomWorkers int) (enode.Iterator, error) {
+	switch mode {
+	case "", "lookup":
+		return disc.RandomNodes(), nil
+	case "fast":
+		return disc.CrawlIterator(discover.CrawlOptions{
+			Workers:       parallel,
+			RandomWorkers: randomWorkers,
+			Seeds:         bootnodes,
+		}), nil
+	default:
+		return nil, fmt.Errorf("unknown -%s value %q (want 'lookup' or 'fast')", crawlModeFlag.Name, mode)
+	}
 }
 
 // discv5Test runs the protocol test suite.
