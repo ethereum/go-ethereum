@@ -797,8 +797,8 @@ func downloadEra(ctx *cli.Context) error {
 	var network = "mainnet"
 	if utils.IsNetworkPreset(ctx) {
 		switch {
-		case ctx.IsSet(utils.MainnetFlag.Name):
-		case ctx.IsSet(utils.SepoliaFlag.Name):
+		case ctx.Bool(utils.MainnetFlag.Name):
+		case ctx.Bool(utils.SepoliaFlag.Name):
 			network = "sepolia"
 		default:
 			return errors.New("unsupported network, no known era1 checksums")
@@ -825,7 +825,7 @@ func downloadEra(ctx *cli.Context) error {
 		return err
 	}
 	switch {
-	case ctx.IsSet(eraAllFlag.Name):
+	case ctx.Bool(eraAllFlag.Name):
 		return l.DownloadAll(dir)
 
 	case ctx.IsSet(eraBlockFlag.Name):
