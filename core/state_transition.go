@@ -242,12 +242,10 @@ func FloorDataGas(rules params.Rules, from common.Address, to *common.Address, v
 		tokenCost = params.TxCostFloorPerToken
 	}
 
-	// The floor is anchored to the transaction base cost. Under EIP-2780 that
-	// base is the per-resource decomposition (the same one used by the intrinsic
-	// gas), so the floor never undercuts the transaction's own base.
+	// The floor is anchored to the transaction base cost.
 	floorBase := params.TxGas
 	if rules.IsAmsterdam {
-		floorBase = intrinsicBaseGasEIP2780(from, to, value)
+		floorBase = params.TxBaseCost2780
 	}
 	// Check for overflow
 	if (math.MaxUint64-floorBase)/tokenCost < tokens {
@@ -755,6 +753,10 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// performing the resolution and warming.
 		if addr, ok := types.ParseDelegation(st.state.GetCode(*msg.To)); ok {
 			st.state.AddAddressToAccessList(addr)
+			// Record in BAL
+			if rules.IsAmsterdam {
+				st.state.GetCode(addr)
+			}
 		}
 		// EIP-2780: charge the transaction's top-level recipient costs. If the
 		// budget cannot cover the charge, the top frame halts out of gas.
