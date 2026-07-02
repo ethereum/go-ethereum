@@ -235,6 +235,9 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 		accessList := tx.AccessList()
 		args.AccessList = &accessList
 	}
+	if tx.Type() == types.SetCodeTxType {
+		args.AuthorizationList = tx.SetCodeAuthorizations()
+	}
 	if tx.Type() == types.BlobTxType {
 		args.BlobHashes = tx.BlobHashes()
 		sidecar := tx.BlobTxSidecar()
