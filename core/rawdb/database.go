@@ -737,8 +737,18 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 		return fmt.Sprintf("%d (%#x)", *val, *val)
 	}
 
+	// databaseVersion is special-cased: when nil, it means the database is
+	// uninitialized (rather than an optional/empty field), so we surface a
+	// more actionable message instead of the generic "<nil>".
+	ppDatabaseVersion := func(val *uint64) string {
+		if val == nil {
+			return "<nil>, database not initialized"
+		}
+		return fmt.Sprintf("%d (%#x)", *val, *val)
+	}
+
 	data := [][]string{
-		{"databaseVersion", pp(ReadDatabaseVersion(db))},
+		{"databaseVersion", ppDatabaseVersion(ReadDatabaseVersion(db))},
 		{"headBlockHash", fmt.Sprintf("%v", ReadHeadBlockHash(db))},
 		{"headFastBlockHash", fmt.Sprintf("%v", ReadHeadFastBlockHash(db))},
 		{"headHeaderHash", fmt.Sprintf("%v", ReadHeadHeaderHash(db))},
