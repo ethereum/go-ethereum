@@ -55,7 +55,7 @@ func TestLimboLegacyMigration(t *testing.T) {
 	store.Close()
 
 	// Open the limbo, which should migrate the legacy entry.
-	l, err := newLimbo(new(params.ChainConfig), dir)
+	l, _, err := newLimbo(new(params.ChainConfig), dir)
 	if err != nil {
 		t.Fatalf("failed to open limbo: %v", err)
 	}
@@ -66,7 +66,11 @@ func TestLimboLegacyMigration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to pull migrated tx: %v", err)
 	}
-	if got := ptx.ToTx().Hash(); got != tx.Hash() {
+	ptxTx, err := ptx.toTx()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ptxTx.Hash(); got != tx.Hash() {
 		t.Fatalf("migrated tx hash mismatch: got %x, want %x", got, tx.Hash())
 	}
 }

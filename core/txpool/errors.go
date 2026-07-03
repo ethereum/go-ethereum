@@ -74,4 +74,7 @@ var (
 
 	// ErrKZGVerificationError is returned when a KZG proof was not verified correctly.
 	ErrKZGVerificationError = errors.New("KZG verification error")
+
+	// ErrSidecarFormatError is returned when sidecar is malformed
+	ErrSidecarFormatError = errors.New("Wrong sidecar format")
 )

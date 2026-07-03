@@ -18,31 +18,32 @@ package ethtest
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/golang-jwt/jwt/v4"
 )
 
 // EngineClient is a wrapper around engine-related data.
 type EngineClient struct {
-	url     string
-	jwt     [32]byte
-	headfcu []byte
+	url   string
+	jwt   [32]byte
+	chain *Chain
+	http  *http.Client
 }
 
 // NewEngineClient creates a new engine client.
-func NewEngineClient(dir, url, jwt string) (*EngineClient, error) {
-	headfcu, err := os.ReadFile(filepath.Join(dir, "headfcu.json"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to read headfcu: %w", err)
+func NewEngineClient(url, jwtSecret string, chain *Chain) *EngineClient {
+	return &EngineClient{
+		url:   url,
+		jwt:   common.HexToHash(jwtSecret),
+		chain: chain,
+		http:  &http.Client{Timeout: 10 * time.Second},
 	}
-	return &EngineClient{url, common.HexToHash(jwt), headfcu}, nil
 }
 
 // token returns the jwt claim token for authorization.
@@ -52,18 +53,41 @@ func (ec *EngineClient) token() string {
 	return token
 }
 
+// rpcRequest marshals a JSON-RPC 2.0 request body for the given method and params.
+func rpcRequest(method string, params ...any) ([]byte, error) {
+	p, err := json.Marshal(params)
+	if err != nil {
+		return nil, err
+	}
+	return fmt.Appendf(nil, `{"jsonrpc":"2.0","id":1,"method":%q,"params":%s}`, method, p), nil
+}
+
+// call sends an authenticated Engine API JSON-RPC request. Response body is
+// not inspected — only transport errors are returned.
+func (ec *EngineClient) call(method string, params ...any) error {
+	body, err := rpcRequest(method, params...)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPost, ec.url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("accept", "application/json")
+	req.Header.Set("content-type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+ec.token())
+
+	_, err = ec.http.Do(req)
+	return err
+}
+
 // sendForkchoiceUpdated sends an fcu for the head of the generated chain.
 func (ec *EngineClient) sendForkchoiceUpdated() error {
-	var (
-		req, _ = http.NewRequest(http.MethodPost, ec.url, io.NopCloser(bytes.NewReader(ec.headfcu)))
-		header = make(http.Header)
-	)
-	// Set header
-	header.Set("accept", "application/json")
-	header.Set("content-type", "application/json")
-	header.Set("Authorization", fmt.Sprintf("Bearer %v", ec.token()))
-	req.Header = header
-
-	_, err := new(http.Client).Do(req)
-	return err
+	head := ec.chain.Head().Hash()
+	state := engine.ForkchoiceStateV1{
+		HeadBlockHash:      head,
+		SafeBlockHash:      head,
+		FinalizedBlockHash: head,
+	}
+	return ec.call("engine_forkchoiceUpdatedV3", state, nil)
 }

@@ -19,6 +19,7 @@ package bal
 import (
 	"bytes"
 	"cmp"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -74,6 +75,26 @@ func (e *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
 	}
 	*e = list
 	return nil
+}
+
+// MarshalJSON implements json.Marshaler. The engine API represents the block
+// access list as the RLP encoding defined by EIP-7928, wrapped in a hex string.
+func (e BlockAccessList) MarshalJSON() ([]byte, error) {
+	var enc bytes.Buffer
+	if err := e.EncodeRLP(&enc); err != nil {
+		return nil, err
+	}
+	return json.Marshal(hexutil.Bytes(enc.Bytes()))
+}
+
+// UnmarshalJSON implements json.Unmarshaler. It expects the RLP encoding of
+// the access list wrapped in a hex string.
+func (e *BlockAccessList) UnmarshalJSON(input []byte) error {
+	var raw hexutil.Bytes
+	if err := json.Unmarshal(input, &raw); err != nil {
+		return err
+	}
+	return rlp.DecodeBytes(raw, e)
 }
 
 // Validate returns an error if the contents of the access list are not ordered
