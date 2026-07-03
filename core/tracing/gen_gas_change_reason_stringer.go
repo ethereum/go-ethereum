@@ -29,21 +29,22 @@ func _() {
 	_ = x[GasChangeWitnessContractCollisionCheck-18]
 	_ = x[GasChangeTxDataFloor-19]
 	_ = x[GasChangeRefundAccountCreation-20]
+	_ = x[GasChangeTxRuntimeGas-21]
 	_ = x[GasChangeIgnored-255]
 }
 
 const (
-	_GasChangeReason_name_0 = "UnspecifiedTxInitialBalanceTxIntrinsicGasTxRefundsTxLeftOverReturnedCallInitialBalanceCallLeftOverReturnedCallLeftOverRefundedCallContractCreationCallContractCreation2CallCodeStorageCallOpCodeCallPrecompiledContractCallStorageColdAccessCallFailedExecutionWitnessContractInitWitnessContractCreationWitnessCodeChunkWitnessContractCollisionCheckTxDataFloorRefundAccountCreation"
+	_GasChangeReason_name_0 = "UnspecifiedTxInitialBalanceTxIntrinsicGasTxRefundsTxLeftOverReturnedCallInitialBalanceCallLeftOverReturnedCallLeftOverRefundedCallContractCreationCallContractCreation2CallCodeStorageCallOpCodeCallPrecompiledContractCallStorageColdAccessCallFailedExecutionWitnessContractInitWitnessContractCreationWitnessCodeChunkWitnessContractCollisionCheckTxDataFloorRefundAccountCreationTxRuntimeGas"
 	_GasChangeReason_name_1 = "Ignored"
 )
 
 var (
-	_GasChangeReason_index_0 = [...]uint16{0, 11, 27, 41, 50, 68, 86, 106, 126, 146, 167, 182, 192, 215, 236, 255, 274, 297, 313, 342, 353, 374}
+	_GasChangeReason_index_0 = [...]uint16{0, 11, 27, 41, 50, 68, 86, 106, 126, 146, 167, 182, 192, 215, 236, 255, 274, 297, 313, 342, 353, 374, 386}
 )
 
 func (i GasChangeReason) String() string {
 	switch {
-	case i <= 20:
+	case i <= 21:
 		return _GasChangeReason_name_0[_GasChangeReason_index_0[i]:_GasChangeReason_index_0[i+1]]
 	case i == 255:
 		return _GasChangeReason_name_1

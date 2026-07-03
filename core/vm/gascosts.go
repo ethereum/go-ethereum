@@ -196,20 +196,10 @@ func (g *GasBudget) RefundState(s uint64) {
 	g.UsedStateGas -= int64(s)
 }
 
-// RefundStateToReservoir credits a state-gas refund directly to the
-// reservoir, without repaying spilled regular gas first.
-//
-// Per the spec's set_delegation, authorization refunds (and the post-create
-// new-account refund) are added to message.state_gas_reservoir directly, in
-// contrast to the LIFO inline refunds handled by RefundState. The usage
-// counter is decremented by the full amount, matching the spec's
-// tx_state_gas = intrinsic_state + state_gas_used - state_refund and
-// preserving the per-frame invariant:
-//
-//	StateGas + UsedStateGas == initialStateGas + Spilled
-func (g *GasBudget) RefundStateToReservoir(s uint64) {
-	g.StateGas += s
-	g.UsedStateGas -= int64(s)
+// DrainRegular burns the remaining regular-gas.
+func (g *GasBudget) DrainRegular() {
+	g.UsedRegularGas += g.RegularGas
+	g.RegularGas = 0
 }
 
 // Forward drains `regular` regular gas and the entire state reservoir from

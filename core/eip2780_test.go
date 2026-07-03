@@ -37,6 +37,7 @@ func TestEIP2780Intrinsic(t *testing.T) {
 		name  string
 		to    *common.Address
 		value *uint256.Int
+		auths []types.SetCodeAuthorization
 		want  vm.GasCosts
 	}{
 		{
@@ -55,41 +56,52 @@ func TestEIP2780Intrinsic(t *testing.T) {
 			name:  "zero-value call",
 			to:    &to,
 			value: uint256.NewInt(0),
-			// TxBaseCost + ColdAccountAccess = 15,000
-			want: vm.GasCosts{RegularGas: params.TxBaseCost2780 + params.ColdAccountAccess2780},
+			// TxBaseCost + ColdAccountAccess = 15,000; the recipient touch is
+			// charged at the cold rate unconditionally at the intrinsic phase.
+			want: vm.GasCosts{RegularGas: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam},
 		},
 		{
 			name:  "value transfer to existing EOA",
 			to:    &to,
 			value: uint256.NewInt(1),
 			// TxBaseCost + ColdAccountAccess + TxValueCost + TransferLogCost = 21,000
-			want: vm.GasCosts{RegularGas: params.TxBaseCost2780 + params.ColdAccountAccess2780 +
+			want: vm.GasCosts{RegularGas: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
 				params.TxValueCost2780 + params.TransferLogCost2780},
 		},
 		{
 			name:  "contract creation, value = 0",
 			to:    nil,
 			value: uint256.NewInt(0),
-			// TxBaseCost + CreateAccess = 23,000 regular, plus one account creation in state.
+			// TxBaseCost + CreateAccess = 23,000 regular. The new-account state
+			// charge depends on whether the deployment target exists and is
+			// charged at runtime, not intrinsically.
 			want: vm.GasCosts{
-				RegularGas: params.TxBaseCost2780 + params.CreateAccess2780,
-				StateGas:   params.AccountCreationSize * params.CostPerStateByte,
+				RegularGas: params.TxBaseCost2780 + params.CreateAccessAmsterdam,
 			},
 		},
 		{
 			name:  "contract creation, value > 0",
 			to:    nil,
 			value: uint256.NewInt(1),
-			// TxBaseCost + CreateAccess + TransferLogCost = 24,756 regular, plus account creation.
+			// TxBaseCost + CreateAccess + TransferLogCost = 24,756 regular.
 			want: vm.GasCosts{
-				RegularGas: params.TxBaseCost2780 + params.CreateAccess2780 + params.TransferLogCost2780,
-				StateGas:   params.AccountCreationSize * params.CostPerStateByte,
+				RegularGas: params.TxBaseCost2780 + params.CreateAccessAmsterdam + params.TransferLogCost2780,
 			},
+		},
+		{
+			name:  "value transfer with authorizations",
+			to:    &to,
+			value: uint256.NewInt(1),
+			auths: make([]types.SetCodeAuthorization, 3),
+			// Each authorization adds the state-independent per-auth base
+			// (cold authority access included).
+			want: vm.GasCosts{RegularGas: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
+				params.TxValueCost2780 + params.TransferLogCost2780 + 3*params.RegularPerAuthBaseCost},
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := IntrinsicGas(nil, nil, nil, from, tc.to, tc.value, rules8037, params.CostPerStateByte)
+			got, err := IntrinsicGas(nil, nil, tc.auths, from, tc.to, tc.value, rules8037, params.CostPerStateByte)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -105,7 +117,7 @@ func TestEIP2780Intrinsic(t *testing.T) {
 // (intrinsic + top-level + execution) recorded in the block gas pool.
 func TestEIP2780Gas(t *testing.T) {
 	const (
-		cold     = params.ColdAccountAccess2780
+		cold     = params.ColdAccountAccessAmsterdam
 		base     = params.TxBaseCost2780
 		valueCst = params.TxValueCost2780 + params.TransferLogCost2780
 	)
@@ -154,9 +166,9 @@ func TestEIP2780Gas(t *testing.T) {
 		// case 8: ETH transfer creating a new account.
 		{"value/new-account", callTx(0, freshEOA, 1, 300_000, nil), base + cold + valueCst, newAccountState},
 		// case 9: contract-creation transaction, value = 0.
-		{"create/zero-value", createTx(0, 300_000, nil), base + params.CreateAccess2780, newAccountState},
+		{"create/zero-value", createTx(0, 300_000, nil), base + params.CreateAccessAmsterdam, newAccountState},
 		// case 10: contract-creation transaction, value > 0.
-		{"create/value", valueCreateTx(1), base + params.CreateAccess2780 + params.TransferLogCost2780, newAccountState},
+		{"create/value", valueCreateTx(1), base + params.CreateAccessAmsterdam + params.TransferLogCost2780, newAccountState},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -190,6 +202,180 @@ func TestEIP2780NewAccountFunded(t *testing.T) {
 	}
 }
 
+// callTxAL builds a signed dynamic-fee call carrying an access list.
+func callTxAL(nonce uint64, to common.Address, value int64, gas uint64, al types.AccessList) *types.Transaction {
+	return types.MustSignNewTx(senderKey, signer8037, &types.DynamicFeeTx{
+		ChainID: cfg8037.ChainID, Nonce: nonce, To: &to, Value: big.NewInt(value),
+		Gas: gas, GasFeeCap: big.NewInt(0), GasTipCap: big.NewInt(0), AccessList: al,
+	})
+}
+
+// accessListEntryCost is the total intrinsic cost of one address-only access
+// list entry: the EIP-8038 per-address charge plus the EIP-7981 data charge.
+const accessListEntryCost = params.TxAccessListAddressGasAmsterdam +
+	common.AddressLength*params.TxCostFloorPerToken7976*params.TxTokenPerNonZeroByte
+
+// TestEIP2780WarmRecipientStillChargedCold verifies that a recipient warmed by
+// the transaction's access list is still charged the recipient touch at the
+// cold rate: per EIP-2780 that touch is priced unconditionally at the intrinsic
+// phase, so an access-list entry does not discount it. The total is the
+// intrinsic cold recipient charge plus the access-list entry itself, with no
+// separate runtime charge.
+func TestEIP2780WarmRecipientStillChargedCold(t *testing.T) {
+	to := common.HexToAddress("0xe0a0000000000000000000000000000000000009")
+	sdb := mkState(senderAlloc(types.GenesisAlloc{to: {Balance: big.NewInt(1)}}))
+	al := types.AccessList{{Address: to}}
+	res, gp, err := applyMsg(t, sdb, callTxAL(0, to, 0, 100_000, al))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Err != nil {
+		t.Fatalf("execution failed: %v", res.Err)
+	}
+	want := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam + accessListEntryCost
+	if gp.cumulativeRegular != want {
+		t.Errorf("regular gas = %d, want %d (cold recipient, no access-list discount)", gp.cumulativeRegular, want)
+	}
+}
+
+// TestEIP2780DelegatedWarmTarget verifies that resolving the recipient's
+// delegation is charged at the warm rate when the target was warmed by the
+// access list, rather than the flat cold rate.
+func TestEIP2780DelegatedWarmTarget(t *testing.T) {
+	var (
+		target    = common.HexToAddress("0x7a76000000000000000000000000000000000002") // codeless
+		delegated = common.HexToAddress("0xde1e000000000000000000000000000000000002")
+	)
+	sdb := mkState(senderAlloc(types.GenesisAlloc{
+		delegated: {Code: types.AddressToDelegation(target)},
+	}))
+	al := types.AccessList{{Address: target}}
+	res, gp, err := applyMsg(t, sdb, callTxAL(0, delegated, 0, 100_000, al))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Err != nil {
+		t.Fatalf("execution failed: %v", res.Err)
+	}
+	want := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam + accessListEntryCost + // recipient cold access (intrinsic)
+		params.WarmAccountAccessAmsterdam // warm delegation-target access (runtime)
+	if gp.cumulativeRegular != want {
+		t.Errorf("regular gas = %d, want %d (warm delegation target)", gp.cumulativeRegular, want)
+	}
+}
+
+// TestEIP2780RecipientColdInIntrinsic exercises the validity boundary created
+// by charging the recipient touch at the cold rate unconditionally in the
+// intrinsic phase: a zero-value call funded one gas below the cold-inclusive
+// intrinsic (TX_BASE_COST + COLD_ACCOUNT_ACCESS) is rejected as intrinsic-gas
+// too low, while funding exactly that amount is valid and included with no
+// further runtime charge.
+func TestEIP2780RecipientColdInIntrinsic(t *testing.T) {
+	to := common.HexToAddress("0xe0a000000000000000000000000000000000000a")
+	intrinsic := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam // 15,000
+
+	// One gas short of the intrinsic cost: the transaction is invalid.
+	sdb := mkState(senderAlloc(types.GenesisAlloc{to: {Balance: big.NewInt(1)}}))
+	if _, _, err := applyMsg(t, sdb, callTx(0, to, 0, intrinsic-1, nil)); err == nil {
+		t.Fatal("expected intrinsic-gas-too-low error, got nil")
+	}
+
+	// Funded for exactly the intrinsic cost: valid, included, and fully
+	// consumed with no runtime cold surcharge to halt on.
+	sdb = mkState(senderAlloc(types.GenesisAlloc{to: {Balance: big.NewInt(1)}}))
+	res, _, err := applyMsg(t, sdb, callTx(0, to, 0, intrinsic, nil))
+	if err != nil {
+		t.Fatalf("transaction should be valid: %v", err)
+	}
+	if res.Err != nil {
+		t.Fatalf("unexpected execution error: %v", res.Err)
+	}
+	if res.UsedGas != intrinsic {
+		t.Fatalf("used gas = %d, want %d", res.UsedGas, intrinsic)
+	}
+	if sdb.GetNonce(senderAddr) != 1 {
+		t.Fatal("sender nonce not consumed")
+	}
+}
+
+// TestEIP2780RuntimeOOGRevertsDelegations verifies that running out of gas on
+// a runtime authorization charge halts the (still valid) transaction and
+// reverts all state changes, including the already applied EIP-7702
+// delegations — while the sender's nonce increment persists.
+func TestEIP2780RuntimeOOGRevertsDelegations(t *testing.T) {
+	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
+	sdb := mkState(senderAlloc(nil))
+	// Gas covers the intrinsic cost (TX_BASE_COST + the cold-inclusive
+	// per-authorization base for a self-call) but not the runtime authorization
+	// charges (ACCOUNT_WRITE + account + indicator bytes).
+	tx := types.MustSignNewTx(senderKey, signer8037, &types.SetCodeTx{
+		ChainID: uint256.MustFromBig(cfg8037.ChainID), Nonce: 0, To: senderAddr,
+		Value: new(uint256.Int), Gas: 30_000, GasFeeCap: new(uint256.Int),
+		GasTipCap: new(uint256.Int), AuthList: []types.SetCodeAuthorization{auth},
+	})
+	res, _, err := applyMsg(t, sdb, tx)
+	if err != nil {
+		t.Fatalf("transaction should remain valid: %v", err)
+	}
+	if res.Err != vm.ErrOutOfGas {
+		t.Fatalf("expected out of gas, got %v", res.Err)
+	}
+	if res.UsedGas != 30_000 {
+		t.Fatalf("used gas = %d, want all 30000 burnt", res.UsedGas)
+	}
+	if code := sdb.GetCode(authority); len(code) != 0 {
+		t.Fatalf("delegation persisted despite runtime OOG: %x", code)
+	}
+	if sdb.GetNonce(authority) != 0 {
+		t.Fatal("authority nonce persisted despite runtime OOG")
+	}
+	if sdb.GetNonce(senderAddr) != 1 {
+		t.Fatal("sender nonce not consumed")
+	}
+}
+
+// TestEIP2780SelfTransferDelegated verifies that a self-transfer incurs no
+// recipient touch or value charges (the account is warm and existent as the
+// sender), while resolving the sender's own delegation is still paid for.
+func TestEIP2780SelfTransferDelegated(t *testing.T) {
+	target := common.HexToAddress("0x7a76000000000000000000000000000000000003") // codeless
+	sdb := mkState(types.GenesisAlloc{
+		senderAddr: {Balance: big.NewInt(1e18), Code: types.AddressToDelegation(target)},
+	})
+	res, gp, err := applyMsg(t, sdb, callTx(0, senderAddr, 1, 100_000, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Err != nil {
+		t.Fatalf("execution failed: %v", res.Err)
+	}
+	want := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam // base + cold delegation target
+	if gp.cumulativeRegular != want {
+		t.Errorf("regular gas = %d, want %d (base + delegation resolution)", gp.cumulativeRegular, want)
+	}
+}
+
+// TestEIP2780CreateInsufficientStateGas verifies that a contract-creation
+// transaction funded for its intrinsic gas but not the runtime new-account
+// state charge is included, halts out of gas and consumes the nonce.
+func TestEIP2780CreateInsufficientStateGas(t *testing.T) {
+	sdb := mkState(senderAlloc(nil))
+	intrinsic := params.TxBaseCost2780 + params.CreateAccessAmsterdam // 23,000
+	res, _, err := applyMsg(t, sdb, createTx(0, intrinsic, nil))
+	if err != nil {
+		t.Fatalf("transaction should remain valid: %v", err)
+	}
+	if res.Err != vm.ErrOutOfGas {
+		t.Fatalf("expected out of gas, got %v", res.Err)
+	}
+	if res.UsedGas != intrinsic {
+		t.Fatalf("used gas = %d, want %d", res.UsedGas, intrinsic)
+	}
+	if sdb.GetNonce(senderAddr) != 1 {
+		t.Fatal("sender nonce not consumed")
+	}
+}
+
 // TestEIP2780InsufficientGasForCallCharge verifies that a value transfer
 // creating a new account, whose gas limit only covers the 21,000 intrinsic base
 // and not the additional new-account state gas charged before the call executes,
@@ -211,4 +397,244 @@ func TestEIP2780InsufficientGasForCallCharge(t *testing.T) {
 	if sdb.Exist(fresh) {
 		t.Fatal("recipient should not be created when the call charge cannot be paid")
 	}
+}
+
+// TestEIP2780HaltKeepsAuthStateGas verifies that when the top-most frame halts
+// exceptionally, the EIP-7702 delegations applied before the frame was persist.
+func TestEIP2780HaltKeepsAuthStateGas(t *testing.T) {
+	halting := common.HexToAddress("0xbad0000000000000000000000000000000000001")
+	sdb := mkState(senderAlloc(types.GenesisAlloc{
+		halting: {Code: []byte{0xfe}}, // INVALID
+	}))
+	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
+
+	// A gas limit above MaxTxGas so the state reservoir covers the runtime
+	// authorization state charges (218,790) without spilling into regular gas.
+	gasLimit := params.MaxTxGas + 300_000
+	tx := types.MustSignNewTx(senderKey, signer8037, &types.SetCodeTx{
+		ChainID: uint256.MustFromBig(cfg8037.ChainID), Nonce: 0, To: halting,
+		Value: new(uint256.Int), Gas: gasLimit, GasFeeCap: new(uint256.Int),
+		GasTipCap: new(uint256.Int), AuthList: []types.SetCodeAuthorization{auth},
+	})
+	res, gp, err := applyMsg(t, sdb, tx)
+	if err != nil {
+		t.Fatalf("transaction should remain valid: %v", err)
+	}
+	if res.Err == nil {
+		t.Fatal("expected the frame to halt")
+	}
+	if code := sdb.GetCode(authority); len(code) == 0 {
+		t.Fatal("delegation should persist through an in-frame halt")
+	}
+	// The regular dimension is burned in full by the halt; the state dimension
+	// keeps the delegation's durable growth: a new account leaf plus the
+	// 23-byte indicator.
+	if gp.cumulativeRegular != params.MaxTxGas {
+		t.Errorf("regular gas = %d, want %d", gp.cumulativeRegular, params.MaxTxGas)
+	}
+	if gp.cumulativeState != authWorstState {
+		t.Errorf("state gas = %d, want %d (delegation state growth persisted)", gp.cumulativeState, authWorstState)
+	}
+	if want := params.MaxTxGas + authWorstState; res.UsedGas != want {
+		t.Errorf("used gas = %d, want %d", res.UsedGas, want)
+	}
+}
+
+// TestEIP2780AuthorityAccountWrite pins the first-write ACCOUNT_WRITE rule for
+// authorities: the surcharge applies to the first paid write to the account
+// within the transaction, regardless of whether the account exists, and is
+// skipped when the write is already paid for: by TX_BASE_COST for the sender,
+// by TX_VALUE_COST for the recipient of a value-bearing transaction, or by a
+// preceding valid authorization.
+func TestEIP2780AuthorityAccountWrite(t *testing.T) {
+	const (
+		base     = params.TxBaseCost2780
+		cold     = params.ColdAccountAccessAmsterdam
+		aw       = params.AccountWriteAmsterdam
+		perAuth  = params.RegularPerAuthBaseCost
+		valueCst = params.TxValueCost2780 + params.TransferLogCost2780
+	)
+	existingEOA := common.HexToAddress("0xe0a0000000000000000000000000000000000002")
+
+	auth0, authority := signAuth(t, authKeyA, delegate8037, 0)
+	auth1, _ := signAuth(t, authKeyA, delegate8037, 1)
+	authBadNonce, _ := signAuth(t, authKeyA, delegate8037, 5)
+
+	// Self-sponsored authorization: the sender's nonce is bumped before the
+	// authorization list is processed, hence nonce 1.
+	senderAuth, err := types.SignSetCode(senderKey, types.SetCodeAuthorization{
+		ChainID: *uint256.MustFromBig(cfg8037.ChainID), Address: delegate8037, Nonce: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// tx builds a SetCode transaction with an explicit value.
+	tx := func(to common.Address, value uint64, auths ...types.SetCodeAuthorization) *types.Transaction {
+		return types.MustSignNewTx(senderKey, signer8037, &types.SetCodeTx{
+			ChainID: uint256.MustFromBig(cfg8037.ChainID), Nonce: 0, To: to,
+			Value: uint256.NewInt(value), Gas: 1_000_000,
+			GasFeeCap: new(uint256.Int), GasTipCap: new(uint256.Int), AuthList: auths,
+		})
+	}
+	fundedAuthority := types.GenesisAlloc{authority: {Balance: big.NewInt(1)}}
+
+	cases := []struct {
+		name                   string
+		alloc                  types.GenesisAlloc
+		tx                     *types.Transaction
+		wantRegular, wantState uint64
+	}{
+		{
+			// Materializing a fresh authority pays the first-write surcharge
+			// alongside the new-account state gas and the indicator bytes.
+			name:        "fresh authority",
+			tx:          tx(existingEOA, 0, auth0),
+			wantRegular: base + cold + perAuth + aw,
+			wantState:   authWorstState,
+		},
+		{
+			// An existing authority still pays the surcharge: the nonce and
+			// indicator stores are the first write to the account within the
+			// transaction.
+			name:        "existing authority",
+			alloc:       fundedAuthority,
+			tx:          tx(existingEOA, 0, auth0),
+			wantRegular: base + cold + perAuth + aw,
+			wantState:   authBaseState,
+		},
+		{
+			// Self-sponsored: the sender's account write is prepaid by
+			// TX_BASE_COST, no surcharge.
+			name:        "authority is sender",
+			tx:          tx(existingEOA, 0, senderAuth),
+			wantRegular: base + cold + perAuth,
+			wantState:   authBaseState,
+		},
+		{
+			// authority == tx.to with zero value: no TX_VALUE_COST was paid,
+			// so the authorization write is the first paid write and the
+			// surcharge applies. The recipient becomes delegated, adding a
+			// cold delegation-target access at runtime.
+			name:        "authority is recipient, zero value",
+			alloc:       fundedAuthority,
+			tx:          tx(authority, 0, auth0),
+			wantRegular: base + cold + perAuth + aw + cold,
+			wantState:   authBaseState,
+		},
+		{
+			// authority == tx.to with value: TX_VALUE_COST prepaid the
+			// recipient write, so no surcharge is due.
+			name:        "authority is recipient, value",
+			alloc:       fundedAuthority,
+			tx:          tx(authority, 1, auth0),
+			wantRegular: base + cold + valueCst + perAuth + cold,
+			wantState:   authBaseState,
+		},
+		{
+			// Fresh authority == tx.to with value: the authorization pays the
+			// new-account state gas, and the recipient charge then sees an
+			// existing account, so the leaf is not paid for twice.
+			name:        "authority is fresh recipient, value",
+			tx:          tx(authority, 1, auth0),
+			wantRegular: base + cold + valueCst + perAuth + cold,
+			wantState:   authWorstState,
+		},
+		{
+			// The same authority twice: only the first valid authorization
+			// carries the surcharge, the account creation and the indicator.
+			name:        "same authority twice",
+			tx:          tx(existingEOA, 0, auth0, auth1),
+			wantRegular: base + cold + 2*perAuth + aw,
+			wantState:   authWorstState,
+		},
+		{
+			// An invalid authorization performs no write and does not count
+			// as the first write; the following valid one pays in full. The
+			// per-auth intrinsic base is still paid for the invalid tuple.
+			name:        "invalid then valid",
+			tx:          tx(existingEOA, 0, authBadNonce, auth0),
+			wantRegular: base + cold + 2*perAuth + aw,
+			wantState:   authWorstState,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			alloc := types.GenesisAlloc{existingEOA: {Balance: big.NewInt(1)}}
+			for addr, acc := range tc.alloc {
+				alloc[addr] = acc
+			}
+			res, gp, err := applyMsg(t, mkState(senderAlloc(alloc)), tc.tx)
+			if err != nil {
+				t.Fatalf("consensus error: %v", err)
+			}
+			if res.Err != nil {
+				t.Fatalf("execution failed: %v", res.Err)
+			}
+			if gp.cumulativeRegular != tc.wantRegular {
+				t.Errorf("regular gas = %d, want %d", gp.cumulativeRegular, tc.wantRegular)
+			}
+			if gp.cumulativeState != tc.wantState {
+				t.Errorf("state gas = %d, want %d", gp.cumulativeState, tc.wantState)
+			}
+		})
+	}
+}
+
+// TestEIP2780DelegationTargetPrewarmed pins the warm rate for delegation
+// targets that are already in accessed_addresses when the recipient is
+// loaded.
+func TestEIP2780DelegationTargetPrewarmed(t *testing.T) {
+	const (
+		base    = params.TxBaseCost2780
+		cold    = params.ColdAccountAccessAmsterdam
+		warm    = params.WarmAccountAccessAmsterdam
+		aw      = params.AccountWriteAmsterdam
+		perAuth = params.RegularPerAuthBaseCost
+	)
+	delegatedAcct := common.HexToAddress("0xde1e000000000000000000000000000000000002")
+
+	t.Run("target is sender", func(t *testing.T) {
+		sdb := mkState(senderAlloc(types.GenesisAlloc{
+			delegatedAcct: {Code: types.AddressToDelegation(senderAddr)},
+		}))
+		res, gp, err := applyMsg(t, sdb, callTx(0, delegatedAcct, 0, 100_000, nil))
+		if err != nil {
+			t.Fatalf("consensus error: %v", err)
+		}
+		if res.Err != nil {
+			t.Fatalf("execution failed: %v", res.Err)
+		}
+		if want := base + cold + warm; gp.cumulativeRegular != want {
+			t.Errorf("regular gas = %d, want %d (warm delegation target)", gp.cumulativeRegular, want)
+		}
+		if gp.cumulativeState != 0 {
+			t.Errorf("state gas = %d, want 0", gp.cumulativeState)
+		}
+	})
+
+	t.Run("target warmed by authorization", func(t *testing.T) {
+		// A clearing authorization from a fresh authority: it creates the
+		// authority account (nonce bump) and warms it, without installing an
+		// indicator.
+		//
+		// The recipient's pre-existing delegation then resolves to
+		// the freshly warmed, codeless authority at the warm rate.
+		authClear, authority := signAuth(t, authKeyA, common.Address{}, 0)
+		sdb := mkState(senderAlloc(types.GenesisAlloc{
+			delegatedAcct: {Code: types.AddressToDelegation(authority)},
+		}))
+		res, gp, err := applyMsg(t, sdb, setCodeTx(0, delegatedAcct, []types.SetCodeAuthorization{authClear}))
+		if err != nil {
+			t.Fatalf("consensus error: %v", err)
+		}
+		if res.Err != nil {
+			t.Fatalf("execution failed: %v", res.Err)
+		}
+		if want := base + cold + perAuth + aw + warm; gp.cumulativeRegular != want {
+			t.Errorf("regular gas = %d, want %d (auth-warmed delegation target)", gp.cumulativeRegular, want)
+		}
+		if gp.cumulativeState != newAccountState {
+			t.Errorf("state gas = %d, want %d (authority account created)", gp.cumulativeState, newAccountState)
+		}
+	})
 }

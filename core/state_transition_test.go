@@ -241,8 +241,10 @@ func TestIntrinsicGas(t *testing.T) {
 			isEIP2028:   true,
 			isAmsterdam: true,
 			// EIP-2780: zero-value call base is TxBaseCost + ColdAccountAccess
-			// (15,000). Plus base access-list charge + EIP-7981 extra.
-			want: vm.GasCosts{RegularGas: params.TxBaseCost2780 + params.ColdAccountAccess2780 +
+			// (15,000); the recipient touch is charged at the cold rate
+			// unconditionally at the intrinsic phase. Plus base access-list
+			// charge + EIP-7981 extra.
+			want: vm.GasCosts{RegularGas: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
 				2*params.TxAccessListAddressGasAmsterdam + 3*params.TxAccessListStorageKeyGasAmsterdam +
 				2*amsterdamAddressCost + 3*amsterdamStorageKeyCost},
 		},
@@ -263,11 +265,10 @@ func TestIntrinsicGas(t *testing.T) {
 			isHomestead: true,
 			isEIP2028:   true,
 			isAmsterdam: true,
-			// EIP-2780: creation regular gas is TxBaseCost + CreateAccess (23,000),
-			// and account-creation cost is charged as state gas.
+			// EIP-2780: creation regular gas is TxBaseCost + CreateAccess (23,000);
+			// the new-account state charge is applied at runtime.
 			want: vm.GasCosts{
-				RegularGas: params.TxBaseCost2780 + params.CreateAccess2780,
-				StateGas:   params.AccountCreationSize * params.CostPerStateByte,
+				RegularGas: params.TxBaseCost2780 + params.CreateAccessAmsterdam,
 			},
 		},
 		{
@@ -279,9 +280,8 @@ func TestIntrinsicGas(t *testing.T) {
 			isEIP3860:   true, // Shanghai gates init-code word gas
 			isAmsterdam: true,
 			want: vm.GasCosts{
-				RegularGas: params.TxBaseCost2780 + params.CreateAccess2780 +
+				RegularGas: params.TxBaseCost2780 + params.CreateAccessAmsterdam +
 					64*params.TxDataZeroGas + 2*params.InitCodeWordGas,
-				StateGas: params.AccountCreationSize * params.CostPerStateByte,
 			},
 		},
 		{
@@ -296,11 +296,10 @@ func TestIntrinsicGas(t *testing.T) {
 			isEIP3860:   true,
 			isAmsterdam: true,
 			want: vm.GasCosts{
-				RegularGas: params.TxBaseCost2780 + params.CreateAccess2780 +
+				RegularGas: params.TxBaseCost2780 + params.CreateAccessAmsterdam +
 					32*params.TxDataNonZeroGasEIP2028 + 1*params.InitCodeWordGas +
 					1*params.TxAccessListAddressGasAmsterdam + 1*params.TxAccessListStorageKeyGasAmsterdam +
 					1*amsterdamAddressCost + 1*amsterdamStorageKeyCost,
-				StateGas: params.AccountCreationSize * params.CostPerStateByte,
 			},
 		},
 		{
@@ -314,17 +313,16 @@ func TestIntrinsicGas(t *testing.T) {
 			},
 			isEIP2028:   true,
 			isAmsterdam: true,
-			// EIP-8037 splits the auth-tuple charge into regular + state gas, with
-			// the values finalized by EIP-8038:
-			//   regular: ACCOUNT_WRITE (8,000) + REGULAR_PER_AUTH_BASE_COST (7,500) per auth
-			//   state:   (AuthorizationCreationSize + AccountCreationSize) * CostPerStateByte per auth
+			// EIP-2780: the recipient touch and the per-authorization authority
+			// access (priced into RegularPerAuthBaseCost) are both charged at the
+			// cold rate unconditionally at the intrinsic phase; the account leaf
+			// and indicator bytes are charged at runtime.
 			want: vm.GasCosts{
-				RegularGas: params.TxBaseCost2780 + params.ColdAccountAccess2780 +
+				RegularGas: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
 					100*params.TxDataNonZeroGasEIP2028 +
 					1*params.TxAccessListAddressGasAmsterdam + 1*params.TxAccessListStorageKeyGasAmsterdam +
 					1*amsterdamAddressCost + 1*amsterdamStorageKeyCost +
-					1*(params.AccountWriteAmsterdam+params.RegularPerAuthBaseCost),
-				StateGas: 1 * (params.AuthorizationCreationSize + params.AccountCreationSize) * params.CostPerStateByte,
+					1*params.RegularPerAuthBaseCost,
 			},
 		},
 		{
@@ -333,7 +331,7 @@ func TestIntrinsicGas(t *testing.T) {
 			isAmsterdam: true,
 			value:       uint256.NewInt(1),
 			// EIP-2780: TxBaseCost + ColdAccountAccess + TransferLogCost + TxValueCost = 21,000.
-			want: vm.GasCosts{RegularGas: params.TxBaseCost2780 + params.ColdAccountAccess2780 +
+			want: vm.GasCosts{RegularGas: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
 				params.TransferLogCost2780 + params.TxValueCost2780},
 		},
 		{
@@ -343,10 +341,10 @@ func TestIntrinsicGas(t *testing.T) {
 			isEIP2028:   true,
 			isAmsterdam: true,
 			value:       uint256.NewInt(1),
-			// EIP-2780: TxBaseCost + CreateAccess + TransferLogCost = 24,756, plus account-creation state gas.
+			// EIP-2780: TxBaseCost + CreateAccess + TransferLogCost = 24,756;
+			// the new-account state charge is applied at runtime.
 			want: vm.GasCosts{
-				RegularGas: params.TxBaseCost2780 + params.CreateAccess2780 + params.TransferLogCost2780,
-				StateGas:   params.AccountCreationSize * params.CostPerStateByte,
+				RegularGas: params.TxBaseCost2780 + params.CreateAccessAmsterdam + params.TransferLogCost2780,
 			},
 		},
 	}
