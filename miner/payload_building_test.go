@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"bytes"
 	"context"
 	"math/big"
 	"reflect"
@@ -26,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -115,6 +117,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 		copy(gspec.ExtraData[32:32+common.AddressLength], testBankAddress.Bytes())
 		e.Authorize(testBankAddress)
 	case *ethash.Ethash:
+	case *beacon.Beacon:
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}
@@ -191,6 +194,58 @@ func TestBuildPayload(t *testing.T) {
 	dataTwo := payload.Resolve()
 	if !reflect.DeepEqual(dataOne, dataTwo) {
 		t.Fatal("Unexpected payload data")
+	}
+}
+
+// TestBuildPayloadAmsterdamTransition verifies that a locally built payload for
+// the first Amsterdam block contains the EIP-7997 deterministic deployment
+// factory, i.e. the block-building path applies the same irregular state
+// transition as block processing and the resulting block is importable.
+func TestBuildPayloadAmsterdamTransition(t *testing.T) {
+	var (
+		db        = rawdb.NewMemoryDatabase()
+		recipient = common.HexToAddress("0xdeadbeef")
+	)
+	config := new(params.ChainConfig)
+	*config = *params.MergedTestChainConfig
+	config.AmsterdamTime = new(uint64)
+	*config.AmsterdamTime = 1 // genesis (t=0) is pre-Amsterdam, the first block crosses the fork
+
+	w, b := newTestWorker(t, config, beacon.New(ethash.NewFaker()), db, 0)
+
+	var (
+		beaconRoot = common.Hash{0x01}
+		slotNum    = uint64(1)
+	)
+	payload, err := w.buildPayload(context.Background(), &BuildPayloadArgs{
+		Parent:       b.chain.CurrentBlock().Hash(),
+		Timestamp:    1,
+		FeeRecipient: recipient,
+		Withdrawals:  types.Withdrawals{},
+		BeaconRoot:   &beaconRoot,
+		SlotNum:      &slotNum,
+	}, false)
+	if err != nil {
+		t.Fatalf("Failed to build payload %v", err)
+	}
+	block := payload.empty
+	if !config.IsAmsterdam(block.Number(), block.Time()) {
+		t.Fatal("transition block is not an Amsterdam block")
+	}
+	// The block must be importable: Process applies EIP-7997 independently, so
+	// a payload built without the factory would fail the state root check here.
+	if _, err := b.chain.InsertChain(types.Blocks{block}); err != nil {
+		t.Fatalf("failed to insert transition block: %v", err)
+	}
+	statedb, err := b.chain.StateAt(block.Header())
+	if err != nil {
+		t.Fatalf("failed to open state at transition block: %v", err)
+	}
+	if code := statedb.GetCode(params.DeterministicFactoryAddress); !bytes.Equal(code, params.DeterministicFactoryCode) {
+		t.Fatalf("factory code missing from built payload state:\n got %x\nwant %x", code, params.DeterministicFactoryCode)
+	}
+	if nonce := statedb.GetNonce(params.DeterministicFactoryAddress); nonce != 1 {
+		t.Fatalf("factory nonce = %d, want 1", nonce)
 	}
 }
 

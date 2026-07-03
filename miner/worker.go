@@ -326,7 +326,7 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 		return nil, err
 	}
 	// Run pre-execution system calls
-	env.bal.Merge(core.PreExecution(ctx, header.ParentBeaconRoot, header.ParentHash, miner.chainConfig, env.evm, header.Number, header.Time))
+	env.bal.Merge(core.PreExecution(ctx, header.ParentBeaconRoot, parent, miner.chainConfig, env.evm, header.Number, header.Time))
 	return env, nil
 }
 

@@ -81,10 +81,9 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(tracingStateDB)
 	}
-	// EIP-7997: insert the deterministic deployment factory at the Amsterdam
-	// activation block via an irregular state transition.
-	if isEIP7997Transition(config, p.chain, header) {
-		misc.ApplyEIP7997(tracingStateDB)
+	parent := p.chain.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return nil, fmt.Errorf("missing parent %#x", block.ParentHash())
 	}
 	var (
 		context         = NewEVMBlockContext(header, p.chain, nil)
@@ -98,7 +97,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		evm.SetJumpDestCache(jumpDestCache)
 	}
 	// Run the pre-execution system calls
-	blockAccessList.Merge(PreExecution(ctx, block.BeaconRoot(), block.ParentHash(), config, evm, block.Number(), block.Time()))
+	blockAccessList.Merge(PreExecution(ctx, block.BeaconRoot(), parent, config, evm, block.Number(), block.Time()))
 
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
@@ -142,27 +141,20 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	}, nil
 }
 
-// isEIP7997Transition reports whether the given header belongs to the first block
-// on which the Amsterdam fork is active.
-func isEIP7997Transition(config *params.ChainConfig, chain ChainContext, header *types.Header) bool {
-	if header.Number.Sign() == 0 || !config.IsAmsterdam(header.Number, header.Time) {
-		return false
-	}
-	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
-	if parent == nil {
-		return false
-	}
-	return !config.IsAmsterdam(parent.Number, parent.Time)
-}
-
-// PreExecution processes pre-execution system calls.
-func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent common.Hash, config *params.ChainConfig, evm *vm.EVM, number *big.Int, time uint64) *bal.ConstructionBlockAccessList {
+// PreExecution processes pre-execution state changes and system calls.
+func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent *types.Header, config *params.ChainConfig, evm *vm.EVM, number *big.Int, time uint64) *bal.ConstructionBlockAccessList {
 	_, _, spanEnd := telemetry.StartSpan(ctx, "core.preExecution")
 	defer spanEnd(nil)
 
 	var blockAccessList *bal.ConstructionBlockAccessList
 	if config.IsAmsterdam(number, time) {
 		blockAccessList = bal.NewConstructionBlockAccessList()
+
+		// EIP-7997: insert the deterministic deployment factory at the Amsterdam
+		// activation block via an irregular state transition.
+		if !config.IsAmsterdam(parent.Number, parent.Time) {
+			misc.ApplyEIP7997(evm.StateDB)
+		}
 	}
 	// EIP-4788
 	if beaconRoot != nil {
@@ -170,7 +162,7 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent common.Ha
 	}
 	// EIP-2935
 	if config.IsPrague(number, time) || config.IsUBT(number, time) {
-		ProcessParentBlockHash(parent, evm, blockAccessList)
+		ProcessParentBlockHash(parent.Hash(), evm, blockAccessList)
 	}
 	return blockAccessList
 }
