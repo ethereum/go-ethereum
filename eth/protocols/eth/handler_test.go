@@ -742,7 +742,7 @@ func testGetBlockAccessLists(t *testing.T, protocol uint) {
 
 	var (
 		hashes []common.Hash
-		expect rlp.RawList[RawBlockAccessList]
+		expect rlp.RawList[rlp.RawValue]
 	)
 	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
 		block := backend.chain.GetBlockByNumber(i)
@@ -768,6 +768,42 @@ func testGetBlockAccessLists(t *testing.T, protocol uint) {
 		List:      expect,
 	}); err != nil {
 		t.Errorf("BAL response mismatch: %v", err)
+	}
+}
+
+// TestBlockAccessListsUnavailableDecode checks that a BlockAccessLists response
+// containing the EIP-8159 unavailability marker (RLP empty string).
+func TestBlockAccessListsUnavailableDecode(t *testing.T) {
+	t.Parallel()
+
+	balRaw := makeTestBAL(t, common.Address{0x11})
+
+	// Assemble a response the way the serving side does, with the middle
+	// entry signaled as unavailable.
+	var list rlp.RawList[rlp.RawValue]
+	list.AppendRaw(balRaw)
+	list.AppendRaw(rlp.EmptyString)
+	list.AppendRaw(balRaw)
+
+	enc, err := rlp.EncodeToBytes(&BlockAccessListPacket{RequestId: 42, List: list})
+	if err != nil {
+		t.Fatalf("failed to encode packet: %v", err)
+	}
+	var packet BlockAccessListPacket
+	if err := rlp.DecodeBytes(enc, &packet); err != nil {
+		t.Fatalf("failed to decode packet: %v", err)
+	}
+	bals, err := packet.List.Items()
+	if err != nil {
+		t.Fatalf("failed to decode BAL entries: %v", err)
+	}
+	if len(bals) != 3 {
+		t.Fatalf("wrong entry count: got %d, want 3", len(bals))
+	}
+	for i, want := range [][]byte{balRaw, rlp.EmptyString, balRaw} {
+		if !bytes.Equal(bals[i], want) {
+			t.Errorf("entry %d mismatch: got %x, want %x", i, bals[i], want)
+		}
 	}
 }
 
