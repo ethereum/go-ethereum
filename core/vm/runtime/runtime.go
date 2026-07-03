@@ -49,6 +49,7 @@ type Config struct {
 	BlobHashes  []common.Hash
 	BlobFeeCap  *big.Int
 	Random      *common.Hash
+	SlotNum     uint64
 
 	State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash
