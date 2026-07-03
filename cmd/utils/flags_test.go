@@ -52,7 +52,9 @@ func Test_SplitTagsFlag(t *testing.T) {
 		{
 			"garbage",
 			"smth=smthelse=123",
-			map[string]string{},
+			map[string]string{
+				"smth": "smthelse=123",
+			},
 		},
 	}
 	for _, tt := range tests {
