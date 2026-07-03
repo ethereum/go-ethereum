@@ -476,6 +476,10 @@ const (
 	// pre-charged account-creation cost when no account is created.
 	GasChangeRefundAccountCreation GasChangeReason = 20
 
+	// GasChangeTxRuntimeGas is the amount of gas charged for the state-dependent
+	// costs of the transaction per EIP-2780.
+	GasChangeTxRuntimeGas GasChangeReason = 21
+
 	// GasChangeIgnored is a special value that can be used to indicate that the gas change should be ignored as
 	// it will be "manually" tracked by a direct emit of the gas change event.
 	GasChangeIgnored GasChangeReason = 0xFF

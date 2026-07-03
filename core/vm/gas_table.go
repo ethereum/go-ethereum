@@ -698,22 +698,26 @@ func gasSStore8037And8038(evm *EVM, contract *Contract, stack *Stack, mem *Memor
 	var (
 		y, x     = stack.back(1), stack.peek()
 		slot     = common.Hash(x.Bytes32())
-		value    = common.Hash(y.Bytes32())
 		stateSet = params.StorageCreationSize * evm.Context.CostPerStateByte
 	)
 	// Check slot presence in the access list
-	access := params.WarmStorageReadCostEIP2929
-	if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
+	access := params.WarmStorageAccessAmsterdam
+	_, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot)
+	if !slotPresent {
 		access = params.ColdStorageAccessAmsterdam
-		evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
 	}
 	// Check access cost affordability before reading slot
 	if contract.Gas.RegularGas < access {
 		return GasCosts{}, errors.New("not enough gas for slot access")
 	}
+	if !slotPresent {
+		evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
+	}
 	// Read the slot value for gas cost measurement
-	current, original := evm.StateDB.GetStateAndCommittedState(contract.Address(), slot)
-
+	var (
+		value             = common.Hash(y.Bytes32())
+		current, original = evm.StateDB.GetStateAndCommittedState(contract.Address(), slot)
+	)
 	if current == value { // noop (1)
 		return GasCosts{RegularGas: access}, nil
 	}

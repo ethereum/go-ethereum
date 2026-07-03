@@ -189,19 +189,24 @@ var (
 
 // ===================== Top-level create transaction ======================
 
-// A creation tx's intrinsic gas pre-charges one account creation as state gas.
-func TestCreateTxIntrinsicChargesAccountUnconditionally(t *testing.T) {
+// A creation tx's intrinsic gas is state-independent: the new-account state
+// charge depends on whether the deployment target exists and is charged at
+// runtime (EIP-2780), not intrinsically.
+func TestCreateTxIntrinsicNoStateGas(t *testing.T) {
 	cost, err := IntrinsicGas(nil, nil, nil, common.Address{}, nil, nil, rules8037, params.CostPerStateByte)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cost.StateGas != newAccountState {
-		t.Fatalf("intrinsic state gas = %d, want %d", cost.StateGas, newAccountState)
+	if cost.StateGas != 0 {
+		t.Fatalf("intrinsic state gas = %d, want 0", cost.StateGas)
+	}
+	if want := params.TxBaseCost2780 + params.CreateAccessAmsterdam; cost.RegularGas != want {
+		t.Fatalf("intrinsic regular gas = %d, want %d", cost.RegularGas, want)
 	}
 }
 
-// Creating onto a pre-existing (balance-only) address refills the account
-// portion; only the code deposit is charged as state gas.
+// Creating onto a pre-existing (balance-only) address incurs no new-account
+// runtime charge; only the code deposit is charged as state gas.
 func TestCreateTxPreexistingDestRefill(t *testing.T) {
 	derived := crypto.CreateAddress(senderAddr, 0)
 	sdb := mkState(senderAlloc(types.GenesisAlloc{derived: {Balance: big.NewInt(1)}}))
@@ -214,7 +219,8 @@ func TestCreateTxPreexistingDestRefill(t *testing.T) {
 	}
 }
 
-// A creation tx that reverts refills the account-creation charge.
+// A creation tx that reverts refills the account-creation charge applied at
+// runtime.
 func TestCreateTxRevertRefill(t *testing.T) {
 	sdb := mkState(senderAlloc(nil))
 	res, gp, err := applyMsg(t, sdb, createTx(0, 1_000_000, revertI))
@@ -229,7 +235,8 @@ func TestCreateTxRevertRefill(t *testing.T) {
 	}
 }
 
-// An address collision burns gas_left while refilling the account charge.
+// An address collision burns gas_left. The colliding target exists, so no
+// new-account state gas is charged at runtime in the first place.
 func TestCreateTxCollisionConsumesGasLeft(t *testing.T) {
 	const gas = 1_000_000
 	derived := crypto.CreateAddress(senderAddr, 0)
@@ -242,12 +249,11 @@ func TestCreateTxCollisionConsumesGasLeft(t *testing.T) {
 		t.Fatal("expected collision failure")
 	}
 	if gp.cumulativeState != 0 {
-		t.Fatalf("state gas = %d, want 0 (refilled)", gp.cumulativeState)
+		t.Fatalf("state gas = %d, want 0 (never charged)", gp.cumulativeState)
 	}
-	// All forwarded gas_left is burned; only the refilled account charge (which
-	// had spilled into regular) returns to gas_left. So regular gas consumed is
-	// exactly tx.gas - newAccountState, with no other refund.
-	if want := uint64(gas) - newAccountState; gp.cumulativeRegular != want {
+	// All forwarded gas_left is burned: the whole gas limit is consumed as
+	// regular gas.
+	if want := uint64(gas); gp.cumulativeRegular != want {
 		t.Fatalf("regular gas = %d, want %d", gp.cumulativeRegular, want)
 	}
 }
@@ -472,18 +478,26 @@ const authKeyA = "02020202020202020202020202020202020202020202020202020020202020
 
 var delegate8037 = common.HexToAddress("0xde1e8a7e")
 
-// Intrinsic gas pre-charges the worst-case (account + indicator) per auth.
-func TestAuthIntrinsicWorstCase(t *testing.T) {
+// Intrinsic gas charges only the state-independent per-authorization base;
+// the state-dependent charges are applied at runtime (EIP-2780).
+func TestAuthIntrinsicBaseOnly(t *testing.T) {
 	cost, err := IntrinsicGas(nil, nil, []types.SetCodeAuthorization{{}}, common.Address{}, &delegate8037, nil, rules8037, params.CostPerStateByte)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cost.StateGas != authWorstState {
-		t.Fatalf("intrinsic state gas = %d, want %d", cost.StateGas, authWorstState)
+	if cost.StateGas != 0 {
+		t.Fatalf("intrinsic state gas = %d, want 0", cost.StateGas)
+	}
+	// The recipient touch and the per-authorization authority access (priced
+	// into RegularPerAuthBaseCost) are both charged at the cold rate
+	// unconditionally at the intrinsic phase (EIP-2780).
+	want := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam + params.RegularPerAuthBaseCost
+	if cost.RegularGas != want {
+		t.Fatalf("intrinsic regular gas = %d, want %d", cost.RegularGas, want)
 	}
 }
 
-// An invalid authorization refills its entire intrinsic state-gas charge.
+// An invalid authorization incurs no runtime state-gas charge.
 func TestAuthInvalidRefillFull(t *testing.T) {
 	k, _ := crypto.HexToECDSA(authKeyA)
 	bad, _ := types.SignSetCode(k, types.SetCodeAuthorization{
@@ -499,7 +513,8 @@ func TestAuthInvalidRefillFull(t *testing.T) {
 	}
 }
 
-// A pre-existing authority refills the account portion (indicator stands).
+// A pre-existing authority is not charged for an account leaf; only the
+// net-new indicator bytes are charged at runtime.
 func TestAuthAccountExistsRefill(t *testing.T) {
 	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
 	sdb := mkState(senderAlloc(types.GenesisAlloc{authority: {Balance: big.NewInt(1)}}))
@@ -508,12 +523,12 @@ func TestAuthAccountExistsRefill(t *testing.T) {
 		t.Fatal(err)
 	}
 	if gp.cumulativeState != authBaseState {
-		t.Fatalf("state gas = %d, want %d (account refilled)", gp.cumulativeState, authBaseState)
+		t.Fatalf("state gas = %d, want %d (indicator only)", gp.cumulativeState, authBaseState)
 	}
 }
 
-// Setting a delegation on an already-delegated authority refills the indicator
-// portion (and the account portion, since the authority already exists).
+// Setting a delegation on an already-delegated authority writes no net-new
+// bytes (and no account leaf, since the authority exists): no state charge.
 func TestAuthSetOnDelegatedRefillBase(t *testing.T) {
 	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
 	pre := types.AddressToDelegation(common.HexToAddress("0xabcd"))
@@ -523,11 +538,12 @@ func TestAuthSetOnDelegatedRefillBase(t *testing.T) {
 		t.Fatal(err)
 	}
 	if gp.cumulativeState != 0 {
-		t.Fatalf("state gas = %d, want 0 (account+indicator refilled)", gp.cumulativeState)
+		t.Fatalf("state gas = %d, want 0 (nothing net-new)", gp.cumulativeState)
 	}
 }
 
-// A net-new delegation on a fresh authority keeps the full worst-case charge.
+// A net-new delegation on a fresh authority is charged the account leaf plus
+// the indicator bytes at runtime.
 func TestAuthSetNetNewNoRefill(t *testing.T) {
 	auth, _ := signAuth(t, authKeyA, delegate8037, 0)
 	sdb := mkState(senderAlloc(nil))
@@ -536,11 +552,12 @@ func TestAuthSetNetNewNoRefill(t *testing.T) {
 		t.Fatal(err)
 	}
 	if gp.cumulativeState != authWorstState {
-		t.Fatalf("state gas = %d, want %d (no refill)", gp.cumulativeState, authWorstState)
+		t.Fatalf("state gas = %d, want %d (leaf + indicator)", gp.cumulativeState, authWorstState)
 	}
 }
 
-// Clearing a delegation writes no indicator, so the indicator portion refills.
+// Clearing a delegation writes no indicator, so only the (new) account leaf is
+// charged at runtime.
 func TestAuthClearRefillBase(t *testing.T) {
 	auth, _ := signAuth(t, authKeyA, common.Address{}, 0) // clear (address ZERO)
 	sdb := mkState(senderAlloc(nil))
@@ -549,12 +566,12 @@ func TestAuthClearRefillBase(t *testing.T) {
 		t.Fatal(err)
 	}
 	if want := newAccountState; gp.cumulativeState != want {
-		t.Fatalf("state gas = %d, want %d (indicator refilled)", gp.cumulativeState, want)
+		t.Fatalf("state gas = %d, want %d (account leaf only)", gp.cumulativeState, want)
 	}
 }
 
 // 0->a->0 in one tx: the indicator created by an earlier auth and cleared by a
-// later one writes zero net bytes, so both indicator charges refill.
+// later one writes zero net bytes; the earlier indicator charge is refilled.
 func TestAuthClearSameTxDoubleRefill(t *testing.T) {
 	set, authority := signAuth(t, authKeyA, delegate8037, 0)
 	clr, _ := signAuth(t, authKeyA, common.Address{}, 1)
