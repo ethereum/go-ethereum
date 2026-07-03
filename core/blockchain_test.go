@@ -4127,8 +4127,6 @@ func TestEIP7702(t *testing.T) {
 				Nonce:   0,
 				Balance: big.NewInt(0),
 			},
-			params.WithdrawalQueueAddress:    {Code: params.WithdrawalQueueCode},
-			params.ConsolidationQueueAddress: {Code: params.ConsolidationQueueCode},
 		},
 	}
 
@@ -4433,12 +4431,8 @@ func TestGetCanonicalReceipt(t *testing.T) {
 		address = crypto.PubkeyToAddress(key.PublicKey)
 		funds   = big.NewInt(1000000000000000000)
 		gspec   = &Genesis{
-			Config: params.MergedTestChainConfig,
-			Alloc: types.GenesisAlloc{
-				address:                          {Balance: funds},
-				params.WithdrawalQueueAddress:    {Code: params.WithdrawalQueueCode},
-				params.ConsolidationQueueAddress: {Code: params.ConsolidationQueueCode},
-			},
+			Config:  params.MergedTestChainConfig,
+			Alloc:   types.GenesisAlloc{address: {Balance: funds}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 		signer  = types.LatestSigner(gspec.Config)

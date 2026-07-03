@@ -188,14 +188,6 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 	rules := config.Rules(number, true, time) // IsMerge is always true
 	// Read requests if Prague is enabled.
 	if config.IsPrague(number, time) {
-		// EIP-7002, EIP-7251: the block is invalid if either requests
-		// contract has no code, as an empty system call result is
-		// indistinguishable from a successful call returning no requests.
-		for _, addr := range []common.Address{params.WithdrawalQueueAddress, params.ConsolidationQueueAddress} {
-			if evm.StateDB.GetCodeSize(addr) == 0 {
-				return nil, nil, fmt.Errorf("requests contract %v has no code", addr)
-			}
-		}
 		requests = [][]byte{}
 		// EIP-6110
 		if err := ParseDepositLogs(&requests, allLogs, config); err != nil {
