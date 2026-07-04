@@ -230,7 +230,12 @@ func toISO8601(t time.Time) string {
 	if name == "UTC" {
 		tz = "Z"
 	} else {
-		tz = fmt.Sprintf("%+03d00", offset/3600)
+		hours := offset / 3600
+		minutes := (offset % 3600) / 60
+		if minutes < 0 {
+			minutes = -minutes
+		}
+		tz = fmt.Sprintf("%+03d%02d", hours, minutes)
 	}
 	return fmt.Sprintf("%04d-%02d-%02dT%02d-%02d-%02d.%09d%s",
 		t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), tz)
