@@ -51,8 +51,8 @@ var (
 // Users can specify the maximum number of blobs per block if necessary.
 func (miner *Miner) maxBlobsPerBlock(time uint64) int {
 	maxBlobs := eip4844.MaxBlobsPerBlock(miner.chainConfig, time)
-	if miner.config.MaxBlobsPerBlock != 0 {
-		maxBlobs = miner.config.MaxBlobsPerBlock
+	if configured := miner.config.MaxBlobsPerBlock; configured != 0 && configured < maxBlobs {
+		maxBlobs = configured
 	}
 	return maxBlobs
 }
