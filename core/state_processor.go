@@ -169,7 +169,7 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent common.Ha
 		ProcessBeaconBlockRoot(*beaconRoot, evm, blockAccessList)
 	}
 	// EIP-2935
-	if config.IsPrague(number, time) || config.IsUBT(number, time) {
+	if config.IsPrague(number, time) || config.IsAmsterdam(number, time) || config.IsUBT(number, time) {
 		ProcessParentBlockHash(parent, evm, blockAccessList)
 	}
 	return blockAccessList
