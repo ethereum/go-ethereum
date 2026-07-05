@@ -516,11 +516,11 @@ func lookupAccount(accountHash common.Hash, tr *trie.Trie) (*types.StateAccount,
 	return &acc, nil
 }
 
-func traverseStorage(id *trie.ID, db *triedb.Database, report bool, detail bool) error {
+func traverseStorage(id *trie.ID, db *triedb.Database, report bool, detail bool) (int, error) {
 	tr, err := trie.NewStateTrie(id, db)
 	if err != nil {
 		log.Error("Failed to open storage trie", "account", id.Owner, "root", id.Root, "err", err)
-		return err
+		return 0, err
 	}
 	var (
 		slots      int
@@ -531,7 +531,7 @@ func traverseStorage(id *trie.ID, db *triedb.Database, report bool, detail bool)
 	it, err := tr.NodeIterator(nil)
 	if err != nil {
 		log.Error("Failed to open storage iterator", "account", id.Owner, "root", id.Root, "err", err)
-		return err
+		return 0, err
 	}
 	logger := log.Debug
 	if report {
@@ -550,14 +550,14 @@ func traverseStorage(id *trie.ID, db *triedb.Database, report bool, detail bool)
 		}
 		if iter.Err != nil {
 			log.Error("Failed to traverse storage trie", "root", id.Root, "err", iter.Err)
-			return iter.Err
+			return 0, iter.Err
 		}
 		logger("Storage is complete", "account", id.Owner, "slots", slots, "elapsed", common.PrettyDuration(time.Since(start)))
 	} else {
 		reader, err := db.NodeReader(id.StateRoot)
 		if err != nil {
 			log.Error("Failed to open state reader", "err", err)
-			return err
+			return 0, err
 		}
 		var (
 			buffer = make([]byte, 32)
@@ -573,14 +573,14 @@ func traverseStorage(id *trie.ID, db *triedb.Database, report bool, detail bool)
 				blob, _ := reader.Node(id.Owner, it.Path(), node)
 				if len(blob) == 0 {
 					log.Error("Missing trie node(storage)", "hash", node)
-					return errors.New("missing storage")
+					return 0, errors.New("missing storage")
 				}
 				hasher.Reset()
 				hasher.Write(blob)
 				hasher.Read(buffer)
 				if !bytes.Equal(buffer, node.Bytes()) {
 					log.Error("Invalid trie node(storage)", "hash", node.Hex(), "value", blob)
-					return errors.New("invalid storage node")
+					return 0, errors.New("invalid storage node")
 				}
 			}
 			if it.Leaf() {
@@ -593,11 +593,11 @@ func traverseStorage(id *trie.ID, db *triedb.Database, report bool, detail bool)
 		}
 		if err := it.Error(); err != nil {
 			log.Error("Failed to traverse storage trie", "root", id.Root, "err", err)
-			return err
+			return 0, err
 		}
 		logger("Storage is complete", "account", id.Owner, "nodes", nodes, "slots", slots, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
-	return nil
+	return slots, nil
 }
 
 // traverseState is a helper function used for pruning verification.
@@ -659,7 +659,8 @@ func traverseState(ctx *cli.Context) error {
 			log.Info("Account has no storage", "hash", accountHash)
 			return nil
 		}
-		return traverseStorage(trie.StorageTrieID(root, accountHash, acc.Root), triedb, true, false)
+		_, err = traverseStorage(trie.StorageTrieID(root, accountHash, acc.Root), triedb, true, false)
+		return err
 	}
 	t, err := trie.NewStateTrie(trie.StateTrieID(root), triedb)
 	if err != nil {
@@ -687,10 +688,11 @@ func traverseState(ctx *cli.Context) error {
 			return err
 		}
 		if acc.Root != types.EmptyRootHash {
-			err := traverseStorage(trie.StorageTrieID(root, common.BytesToHash(accIter.Key), acc.Root), triedb, false, false)
+			nSlots, err := traverseStorage(trie.StorageTrieID(root, common.BytesToHash(accIter.Key), acc.Root), triedb, false, false)
 			if err != nil {
 				return err
 			}
+			slots += nSlots
 		}
 		if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
 			if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
@@ -772,7 +774,8 @@ func traverseRawState(ctx *cli.Context) error {
 			log.Info("Account has no storage", "hash", accountHash)
 			return nil
 		}
-		return traverseStorage(trie.StorageTrieID(root, accountHash, acc.Root), triedb, true, true)
+		_, err = traverseStorage(trie.StorageTrieID(root, accountHash, acc.Root), triedb, true, true)
+		return err
 	}
 	t, err := trie.NewStateTrie(trie.StateTrieID(root), triedb)
 	if err != nil {
@@ -829,10 +832,11 @@ func traverseRawState(ctx *cli.Context) error {
 				return errors.New("invalid account")
 			}
 			if acc.Root != types.EmptyRootHash {
-				err := traverseStorage(trie.StorageTrieID(root, common.BytesToHash(accIter.LeafKey()), acc.Root), triedb, false, true)
+				nSlots, err := traverseStorage(trie.StorageTrieID(root, common.BytesToHash(accIter.LeafKey()), acc.Root), triedb, false, true)
 				if err != nil {
 					return err
 				}
+				slots += nSlots
 			}
 			if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
 				if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
