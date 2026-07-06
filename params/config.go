@@ -1231,6 +1231,8 @@ func (c *ChainConfig) Timestamp(fork forks.Fork) *uint64 {
 		return c.CancunTime
 	case fork == forks.Shanghai:
 		return c.ShanghaiTime
+	case fork == forks.Amsterdam:
+		return c.AmsterdamTime
 	default:
 		return nil
 	}
