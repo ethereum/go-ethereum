@@ -77,7 +77,7 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 
 	genesis := &core.Genesis{
 		Config: &config,
-		Alloc: types.GenesisAlloc{
+		Alloc: addPragueRequestPredeploys(types.GenesisAlloc{
 			testAddr:                  {Balance: testBalance},
 			params.BeaconRootsAddress: {Balance: common.Big0, Code: common.Hex2Bytes("3373fffffffffffffffffffffffffffffffffffffffe14604457602036146024575f5ffd5b620180005f350680545f35146037575f5ffd5b6201800001545f5260205ff35b6201800042064281555f359062018000015500")},
 			config.DepositContractAddress: {
@@ -86,7 +86,7 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 				Nonce:   0,
 				Balance: big.NewInt(0),
 			},
-		},
+		}),
 		ExtraData:  []byte("test genesis"),
 		Timestamp:  9000,
 		BaseFee:    big.NewInt(params.InitialBaseFee),
@@ -110,6 +110,15 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 		config.TerminalTotalDifficulty = totalDifficulty
 	}
 	return genesis, blocks
+}
+
+func addPragueRequestPredeploys(alloc types.GenesisAlloc) types.GenesisAlloc {
+	if alloc == nil {
+		alloc = types.GenesisAlloc{}
+	}
+	alloc[params.WithdrawalQueueAddress] = types.Account{Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0}
+	alloc[params.ConsolidationQueueAddress] = types.Account{Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0}
+	return alloc
 }
 
 func TestEth2AssembleBlock(t *testing.T) {

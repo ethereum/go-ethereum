@@ -82,7 +82,7 @@ func NewBackend(alloc types.GenesisAlloc, options ...func(nodeConf *node.Config,
 	ethConf.Genesis = &core.Genesis{
 		Config:   params.AllDevChainProtocolChanges,
 		GasLimit: ethconfig.Defaults.Miner.GasCeil,
-		Alloc:    alloc,
+		Alloc:    addRequestPredeploys(alloc),
 	}
 	ethConf.SyncMode = ethconfig.FullSync
 	ethConf.TxPool.NoLocals = true
@@ -102,6 +102,18 @@ func NewBackend(alloc types.GenesisAlloc, options ...func(nodeConf *node.Config,
 		panic(err) // this should never happen
 	}
 	return sim
+}
+
+func addRequestPredeploys(alloc types.GenesisAlloc) types.GenesisAlloc {
+	withPredeploys := make(types.GenesisAlloc, len(alloc)+4)
+	for address, account := range alloc {
+		withPredeploys[address] = account
+	}
+	withPredeploys[params.WithdrawalQueueAddress] = types.Account{Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0}
+	withPredeploys[params.ConsolidationQueueAddress] = types.Account{Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0}
+	withPredeploys[params.BuilderDepositAddress] = types.Account{Nonce: 1, Code: params.BuilderDepositCode, Balance: common.Big0}
+	withPredeploys[params.BuilderExitAddress] = types.Account{Nonce: 1, Code: params.BuilderExitCode, Balance: common.Big0}
+	return withPredeploys
 }
 
 // newWithNode sets up a simulated backend on an existing node. The provided node

@@ -95,6 +95,15 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 	return backend
 }
 
+func addPragueRequestPredeploys(alloc types.GenesisAlloc) types.GenesisAlloc {
+	if alloc == nil {
+		alloc = types.GenesisAlloc{}
+	}
+	alloc[params.WithdrawalQueueAddress] = types.Account{Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0}
+	alloc[params.ConsolidationQueueAddress] = types.Account{Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0}
+	return alloc
+}
+
 func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
 	return b.chain.GetHeaderByHash(hash), nil
 }
@@ -1389,12 +1398,12 @@ func TestTraceBlockWithBasefee(t *testing.T) {
 	target := common.HexToAddress("0x1111111111111111111111111111111111111111")
 	genesis := &core.Genesis{
 		Config: params.AllDevChainProtocolChanges,
-		Alloc: types.GenesisAlloc{
+		Alloc: addPragueRequestPredeploys(types.GenesisAlloc{
 			accounts[0].addr: {Balance: big.NewInt(1 * params.Ether)},
 			target: {Nonce: 1, Code: []byte{
 				byte(vm.BASEFEE), byte(vm.STOP),
 			}},
-		},
+		}),
 	}
 	genBlocks := 1
 	signer := types.HomesteadSigner{}

@@ -67,11 +67,21 @@ type supplyInfo struct {
 
 func emptyBlockGenerationFunc(b *core.BlockGen) {}
 
+func addPragueRequestPredeploys(alloc types.GenesisAlloc) types.GenesisAlloc {
+	if alloc == nil {
+		alloc = types.GenesisAlloc{}
+	}
+	alloc[params.WithdrawalQueueAddress] = types.Account{Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0}
+	alloc[params.ConsolidationQueueAddress] = types.Account{Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0}
+	return alloc
+}
+
 func TestSupplyOmittedFields(t *testing.T) {
 	var (
 		config = *params.MergedTestChainConfig
 		gspec  = &core.Genesis{
 			Config: &config,
+			Alloc:  addPragueRequestPredeploys(nil),
 		}
 	)
 
@@ -84,7 +94,7 @@ func TestSupplyOmittedFields(t *testing.T) {
 
 	expected := supplyInfo{
 		Number:     0,
-		Hash:       common.HexToHash("0x3055fc27d6b4a08eb07033a0d1ee755a4b2988086f28a6189eac1b507525eeb1"),
+		Hash:       common.HexToHash("0x27c7fd72c3f07448e76eba06b5a3f95be9cfb948116c21d4ef4a8315adbe0bfb"),
 		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 	}
 	actual := out[expected.Number]
@@ -273,6 +283,7 @@ func TestSupplyWithdrawals(t *testing.T) {
 		config = *params.MergedTestChainConfig
 		gspec  = &core.Genesis{
 			Config: &config,
+			Alloc:  addPragueRequestPredeploys(nil),
 		}
 	)
 

@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	"math"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -29,7 +30,10 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/params"
@@ -38,6 +42,80 @@ import (
 )
 
 func u64(val uint64) *uint64 { return &val }
+
+func TestProcessRequestsSystemCallMissingCode(t *testing.T) {
+	config := *params.MergedTestChainConfig
+	number := big.NewInt(1)
+	time := uint64(10)
+	rules := config.Rules(number, true, time)
+
+	newEVM := func(t *testing.T, addr common.Address, code []byte) *vm.EVM {
+		t.Helper()
+		statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		if err != nil {
+			t.Fatalf("failed to create state: %v", err)
+		}
+		if code != nil {
+			statedb.SetNonce(addr, 1, tracing.NonceChangeUnspecified)
+			statedb.SetCode(addr, code, tracing.CodeChangeUnspecified)
+		}
+		header := &types.Header{
+			Number:     number,
+			Time:       time,
+			GasLimit:   30_000_000,
+			Difficulty: new(big.Int),
+		}
+		vmContext := NewEVMBlockContext(header, &BlockChain{chainConfig: &config}, new(common.Address))
+		return vm.NewEVM(vmContext, statedb, &config, vm.Config{})
+	}
+
+	for _, tt := range []struct {
+		name    string
+		addr    common.Address
+		code    []byte
+		process func(*[][]byte, *vm.EVM) error
+	}{
+		{
+			name: "withdrawal queue",
+			addr: params.WithdrawalQueueAddress,
+			code: params.WithdrawalQueueCode,
+			process: func(requests *[][]byte, evm *vm.EVM) error {
+				return ProcessWithdrawalQueue(requests, rules, evm, 0, nil)
+			},
+		},
+		{
+			name: "consolidation queue",
+			addr: params.ConsolidationQueueAddress,
+			code: params.ConsolidationQueueCode,
+			process: func(requests *[][]byte, evm *vm.EVM) error {
+				return ProcessConsolidationQueue(requests, rules, evm, 0, nil)
+			},
+		},
+	} {
+		t.Run(tt.name+"/missing code", func(t *testing.T) {
+			var requests [][]byte
+			err := tt.process(&requests, newEVM(t, tt.addr, nil))
+			if err == nil {
+				t.Fatal("expected missing system contract code error")
+			}
+			if !strings.Contains(err.Error(), "does not contain code") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(requests) != 0 {
+				t.Fatalf("unexpected requests: %x", requests)
+			}
+		})
+		t.Run(tt.name+"/empty queue", func(t *testing.T) {
+			var requests [][]byte
+			if err := tt.process(&requests, newEVM(t, tt.addr, tt.code)); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(requests) != 0 {
+				t.Fatalf("unexpected requests: %x", requests)
+			}
+		})
+	}
+}
 
 // TestStateProcessorErrors tests the output from the 'core' errors
 // as defined in core/error.go. These errors are generated when the

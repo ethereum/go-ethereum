@@ -17,6 +17,7 @@
 package simulated
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/sha256"
@@ -125,6 +126,29 @@ func TestNewBackend(t *testing.T) {
 	}
 	if num != 1 {
 		t.Fatalf("expected 1 got %v", num)
+	}
+}
+
+func TestNewBackendRequestPredeploys(t *testing.T) {
+	sim := NewBackend(types.GenesisAlloc{})
+	defer sim.Close()
+
+	for _, tt := range []struct {
+		address common.Address
+		code    []byte
+	}{
+		{params.WithdrawalQueueAddress, params.WithdrawalQueueCode},
+		{params.ConsolidationQueueAddress, params.ConsolidationQueueCode},
+		{params.BuilderDepositAddress, params.BuilderDepositCode},
+		{params.BuilderExitAddress, params.BuilderExitCode},
+	} {
+		code, err := sim.Client().CodeAt(context.Background(), tt.address, big.NewInt(0))
+		if err != nil {
+			t.Fatalf("failed to retrieve code for %s: %v", tt.address, err)
+		}
+		if !bytes.Equal(code, tt.code) {
+			t.Fatalf("code mismatch for %s: have %x, want %x", tt.address, code, tt.code)
+		}
 	}
 }
 

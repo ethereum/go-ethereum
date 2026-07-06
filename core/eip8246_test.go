@@ -52,9 +52,9 @@ func TestEIP8246SelfdestructNoBurn(t *testing.T) {
 
 	gspec := &Genesis{
 		Config: &config,
-		Alloc: types.GenesisAlloc{
+		Alloc: addAmsterdamRequestPredeploys(types.GenesisAlloc{
 			addr1: {Balance: newGwei(1_000_000_000)},
-		},
+		}),
 	}
 	// The contract created by addr1's first (nonce 0) transaction.
 	created := crypto.CreateAddress(addr1, 0)

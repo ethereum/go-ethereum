@@ -146,6 +146,9 @@ func setupTestBlockchain(t *testing.T, genesis *core.Genesis, tx *types.Transact
 	} else {
 		engine = ethash.NewFaker()
 	}
+	if useBeacon {
+		genesis.Alloc = addPragueRequestPredeploys(genesis.Alloc)
+	}
 
 	_, blocks, _ := core.GenerateChainWithGenesis(genesis, engine, 1, func(i int, b *core.BlockGen) {
 		b.AddTx(tx)

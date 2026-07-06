@@ -461,11 +461,23 @@ func fakeBlockHash(txh common.Hash) common.Hash {
 	return crypto.Keccak256Hash([]byte("testblock"), txh.Bytes())
 }
 
+func addPragueRequestPredeploys(alloc types.GenesisAlloc) types.GenesisAlloc {
+	if alloc == nil {
+		alloc = types.GenesisAlloc{}
+	}
+	alloc[params.WithdrawalQueueAddress] = types.Account{Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0}
+	alloc[params.ConsolidationQueueAddress] = types.Account{Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0}
+	return alloc
+}
+
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.Engine, generator func(i int, b *core.BlockGen)) *testBackend {
 	options := core.DefaultConfig().WithArchive(true)
 	options.TxLookupLimit = 0 // index all txs
 
 	accman, acc := newTestAccountManager(t)
+	if gspec.Config != nil && gspec.Config.IsPrague(big.NewInt(1), gspec.Timestamp+10) {
+		gspec.Alloc = addPragueRequestPredeploys(gspec.Alloc)
+	}
 	gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
 
 	// Generate blocks for testing
@@ -2526,10 +2538,10 @@ func TestSimulateV1ChainLinkage(t *testing.T) {
 		recipient    = common.Address{0xbb, 0xbb}
 		gspec        = &core.Genesis{
 			Config: params.MergedTestChainConfig,
-			Alloc: types.GenesisAlloc{
+			Alloc: addPragueRequestPredeploys(types.GenesisAlloc{
 				sender:       {Balance: big.NewInt(params.Ether)},
 				contractAddr: {Code: common.Hex2Bytes("5f35405f8114600f575f5260205ff35b5f80fd")},
-			},
+			}),
 		}
 		signer = types.LatestSigner(params.MergedTestChainConfig)
 	)

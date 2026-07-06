@@ -82,11 +82,11 @@ func testEthTransferLogs(t *testing.T, value uint64) {
 
 	gspec := &Genesis{
 		Config: &config,
-		Alloc: types.GenesisAlloc{
+		Alloc: addAmsterdamRequestPredeploys(types.GenesisAlloc{
 			addr1: {Balance: newGwei(1000000000)},
 			addr2: {Code: ethTransferTestCode},
 			addr3: {Code: ethTransferTestCode},
-		},
+		}),
 	}
 	_, blocks, receipts := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
 		tx := types.MustSignNewTx(key1, signer, &types.DynamicFeeTx{

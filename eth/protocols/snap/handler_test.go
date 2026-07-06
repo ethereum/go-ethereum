@@ -28,11 +28,21 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
+
+func addPragueRequestPredeploys(alloc types.GenesisAlloc) types.GenesisAlloc {
+	if alloc == nil {
+		alloc = types.GenesisAlloc{}
+	}
+	alloc[params.WithdrawalQueueAddress] = types.Account{Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0}
+	alloc[params.ConsolidationQueueAddress] = types.Account{Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0}
+	return alloc
+}
 
 func makeTestBAL(minSize int) *bal.BlockAccessList {
 	n := minSize/33 + 1 // 33 bytes per storage read slot in RLP
@@ -56,6 +66,7 @@ func makeTestBAL(minSize int) *bal.BlockAccessList {
 func getChainWithBALs(nBlocks int, balSize int) (*core.BlockChain, []common.Hash, []rlp.RawValue) {
 	gspec := &core.Genesis{
 		Config: params.MergedTestChainConfig,
+		Alloc:  addPragueRequestPredeploys(nil),
 	}
 	db := rawdb.NewMemoryDatabase()
 	engine := beacon.New(ethash.NewFaker())
