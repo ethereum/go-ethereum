@@ -133,7 +133,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		mem.Free()
 	}()
 
-	// The generated fast path bakes its fork gates at generate time, so it
+	// The generated fast path resolves its fork gates at generate time, so it
 	// cannot see table changes made by ExtraEips. Those configs run the table
 	// loop, as do tracing and the differential test via forceTableLoop.
 	if evm.forceTableLoop || len(evm.Config.ExtraEips) > 0 || evm.Config.Tracer != nil {
