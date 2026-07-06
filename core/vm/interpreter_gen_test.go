@@ -16,9 +16,10 @@
 
 package vm
 
-// Tests for the generated interpreter dispatch (interpreter_gen.go): that the
-// committed file is up to date, that it behaves identically to the table loop,
-// and that the fast path keeps its cheap stack helpers inlined.
+// Tests for the generated interpreter dispatch (interpreter_gen.go): that it
+// behaves identically to the table loop, and that the fast path keeps its cheap
+// stack helpers inlined. The check that the committed file matches the generator
+// output lives with the generator, in core/vm/gen.
 
 import (
 	"bytes"
@@ -26,9 +27,7 @@ import (
 	"go/parser"
 	"go/token"
 	"math/big"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -40,33 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
-
-// TestGeneratedDispatchUpToDate asserts that the committed interpreter_gen.go matches
-// what `go generate` (core/vm/gen) produces from the current opcode/gas/fork
-// definitions. It is the CI guard against hand-edits to the generated file and
-// against the generator drifting from the committed output.
-func TestGeneratedDispatchUpToDate(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping generator round-trip in -short mode")
-	}
-	tmp := filepath.Join(t.TempDir(), "interpreter_gen.go")
-	cmd := exec.Command("go", "run", "./gen")
-	cmd.Env = append(os.Environ(), "INTERPRETER_GEN_OUT="+tmp)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("running generator: %v\n%s", err, out)
-	}
-	got, err := os.ReadFile(tmp)
-	if err != nil {
-		t.Fatalf("reading regenerated output: %v", err)
-	}
-	want, err := os.ReadFile("interpreter_gen.go")
-	if err != nil {
-		t.Fatalf("reading committed interpreter_gen.go: %v", err)
-	}
-	if string(got) != string(want) {
-		t.Fatalf("interpreter_gen.go is out of date; run `go generate ./core/vm/...` and commit the result")
-	}
-}
 
 // Differential test comparing the table loop against the generated dispatch.
 //
@@ -84,7 +56,7 @@ func TestGeneratedDispatchUpToDate(t *testing.T) {
 // the tracer test suites instead.
 
 // diffForks is the set of fork configurations the diff test runs every program
-// under. Spanning forks exercises the baked runtime fork gates (e.g. SHL from
+// under. Spanning forks exercises the generated fork gates (e.g. SHL from
 // Constantinople, PUSH0 from Shanghai, CLZ from Osaka) in both the active and
 // the not-yet-activated states.
 var diffForks = func() []struct {
@@ -318,7 +290,7 @@ func diffBlockCtx(merged bool) BlockContext {
 // TestExtraEIPs checks that EIPs enabled via Config.ExtraEips take effect even
 // when they touch opcodes the generated dispatch inlines. PUSH0 (EIP-3855) on
 // a pre-Shanghai config is the canary: the runtime table has it enabled but
-// the baked fork gate does not, so execution must route through the table loop.
+// the generated fork gate does not, so execution must route through the table loop.
 func TestExtraEIPs(t *testing.T) {
 	code := asm(PUSH0, STOP)
 	statedb := newDiffState(t)
