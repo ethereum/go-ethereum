@@ -39,14 +39,16 @@
 // RawBytes Semantics
 // -----------------------------------------------------------------------------
 //
-// RawBytes is a terminal wire sink type.
+// RawBytes is a bounded-length passthrough placeholder.
 //
 // It represents an opaque byte segment whose internal structure is defined
 // by the Python FIELDS schema but is not yet implemented in Go.
 //
 // Wire behavior:
-//   - Serialize: writes raw bytes unchanged
-//   - Deserialize: consumes ALL remaining bytes in buffer
+//   - Serialize: writes 4-byte length prefix + raw bytes (matches Python PrependedSizeBytesSerializer(4))
+//   - Deserialize: reads 4-byte length prefix + corresponding bytes
+//
+// This design allows RawBytes to be used in ANY struct position (not just last field).
 //
 // -----------------------------------------------------------------------------
 // SAFETY CONSTRAINTS
@@ -54,10 +56,9 @@
 //
 // RawBytes MUST obey the following rules:
 //
-//  1. MUST only appear as the LAST field in a struct
-//  2. MUST NOT be partially decoded or inspected
-//  3. MUST NOT be used in stable protocol definitions
-//  4. MUST be removed once real Go types are introduced
+//  1. MUST NOT be partially decoded or inspected
+//  2. MUST NOT be used in stable protocol definitions
+//  3. MUST be removed once real Go types are introduced
 //
 // Any violation of these rules results in undefined wire behavior.
 //
@@ -81,6 +82,7 @@
 package wire
 
 import (
+	"encoding/binary"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/qkc/serialize"
@@ -95,28 +97,36 @@ func (r RawBytes) Serialize(w *[]byte) error {
 		return fmt.Errorf("RawBytes.Serialize: size %d exceeds max %d", len(r), maxRawBytesSize)
 	}
 
+	// Write 4-byte length prefix (matches Python PrependedSizeBytesSerializer(4))
+	lenBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(r)))
+	*w = append(*w, lenBuf...)
 	*w = append(*w, r...)
 	return nil
 }
 
-// Deserialize consumes all remaining bytes from the buffer.
-//
-// SAFETY: This is only safe when RawBytes is the LAST field in its parent
-// struct.  If RawBytes appears before other fields, consuming the remaining
-// bytes will corrupt subsequent fields.  Structs with non-last RawBytes fields
-// are marked with a WARNING in messages.go and cannot be correctly deserialized
-// until the real Go type is ported.
+// Deserialize reads 4-byte length prefix and corresponding bytes.
 //
 // TEMPORARY: Delete this placeholder once real types (RootBlock, MinorBlockHeader) are ported.
 func (r *RawBytes) Deserialize(bb *serialize.ByteBuffer) error {
 	const maxRawBytesSize = 100 * 1024 * 1024 // 100 MB, matches Serialize
-	if bb.Remaining() > maxRawBytesSize {
-		return fmt.Errorf("RawBytes.Deserialize: size %d exceeds max %d", bb.Remaining(), maxRawBytesSize)
-	}
-	bytes, err := bb.ReadRemaining()
+
+	// Read 4-byte length prefix
+	length, err := bb.GetUInt32()
 	if err != nil {
 		return err
 	}
+
+	if length > maxRawBytesSize {
+		return fmt.Errorf("RawBytes.Deserialize: length %d exceeds max %d", length, maxRawBytesSize)
+	}
+
+	// Read the actual bytes
+	bytes, err := bb.ReadBytes(int(length))
+	if err != nil {
+		return err
+	}
+
 	*r = RawBytes(bytes)
 	return nil
 }

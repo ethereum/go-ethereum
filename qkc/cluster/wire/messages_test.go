@@ -357,8 +357,17 @@ func TestNonOptionalRawBytes_NoMarker(t *testing.T) {
 	if err := serialize.Serialize(&buf, &req); err != nil {
 		t.Fatalf("Serialize: %v", err)
 	}
-	if buf[0] != 0xAA {
-		t.Errorf("non-optional RawBytes should not have presence marker, got %x", buf[0])
+	// RawBytes now uses 4-byte length prefix, so first bytes should be 00000001 (length=1)
+	// followed by AA (actual data), then 01 (ExpectSwitch=true)
+	want := []byte{0x00, 0x00, 0x00, 0x01, 0xAA, 0x01}
+	if len(buf) < len(want) {
+		t.Fatalf("buffer too short: got %d bytes, want at least %d", len(buf), len(want))
+	}
+	for i, b := range want {
+		if buf[i] != b {
+			t.Errorf("byte %d: got %x, want %x\nfull buf: %x", i, buf[i], b, buf)
+			break
+		}
 	}
 }
 

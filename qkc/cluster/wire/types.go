@@ -74,13 +74,15 @@ func (p *PrependedSizeHashList4) Deserialize(bb *serialize.ByteBuffer) error {
 		return fmt.Errorf("PrependedSizeHashList4.Deserialize: length %d exceeds capacity", length)
 	}
 
-	list := make([][HashLength]byte, length)
+	list := make([][HashLength]byte, int(length))
 	for i := 0; i < int(length); i++ {
 		hashBytes, err := bb.ReadBytes(HashLength)
 		if err != nil {
 			return err
 		}
-		list[i] = [HashLength]byte(hashBytes)
+		var hash [HashLength]byte
+		copy(hash[:], hashBytes)
+		list[i] = hash
 	}
 
 	*p = PrependedSizeHashList4(list)

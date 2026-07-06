@@ -239,7 +239,6 @@ type DestroyClusterPeerConnectionCommand struct {
 //	FIELDS = [("root_block", RootBlock), ("expect_switch", boolean)]
 type AddRootBlockRequest struct {
 	// TODO: Replace with *RootBlock once core.RootBlock is ported.
-	// WARNING: not the last field; RawBytes.Deserialize consumes remaining bytes.
 	RootBlock    *RawBytes
 	ExpectSwitch bool
 }
@@ -346,7 +345,6 @@ type AccountBranchData struct {
 	Branch           uint32
 	TransactionCount *big.Int // uint256
 	// TODO: Replace with *TokenBalanceMap once core.TokenBalanceMap is ported.
-	// WARNING: not the last field; RawBytes.Deserialize consumes remaining bytes.
 	TokenBalances      *RawBytes
 	IsContract         bool
 	PoswMineableBlocks uint16
@@ -415,12 +413,10 @@ type ShardStats struct {
 //	]
 type AddMinorBlockHeaderRequest struct {
 	// TODO: Replace with *MinorBlockHeader once core.MinorBlockHeader is ported.
-	// WARNING: not the last field; RawBytes.Deserialize consumes remaining bytes.
 	MinorBlockHeader *RawBytes
 	TxCount          uint32
 	XShardTxCount    uint32
 	// TODO: Replace with *TokenBalanceMap once core.TokenBalanceMap is ported.
-	// WARNING: not the last field; RawBytes.Deserialize consumes remaining bytes.
 	CoinbaseAmountMap *RawBytes
 	ShardStats        ShardStats
 }
@@ -461,7 +457,6 @@ type SyncMinorBlockListRequest struct {
 type SyncMinorBlockListResponse struct {
 	ErrorCode uint32
 	// TODO: Replace with real block_coinbase_map once core.TokenBalanceMap is ported.
-	// WARNING: not the last field; RawBytes.Deserialize consumes remaining bytes.
 	BlockCoinbaseMap *RawBytes
 	ShardStats       *ShardStats `ser:"nil"`
 }
@@ -489,7 +484,6 @@ type GetMinorBlockRequest struct {
 type GetMinorBlockResponse struct {
 	ErrorCode uint32
 	// TODO: Replace with *MinorBlock once core.MinorBlock is ported.
-	// WARNING: not the last field; RawBytes.Deserialize consumes remaining bytes.
 	MinorBlock *RawBytes
 	ExtraInfo  *MinorBlockExtraInfo `ser:"nil"`
 }
@@ -504,7 +498,6 @@ type GetTransactionRequest struct {
 type GetTransactionResponse struct {
 	ErrorCode uint32
 	// TODO: Replace with *MinorBlock once core.MinorBlock is ported.
-	// WARNING: not the last field; RawBytes.Deserialize consumes remaining bytes.
 	MinorBlock *RawBytes
 	Index      uint32
 }
@@ -512,7 +505,6 @@ type GetTransactionResponse struct {
 // ExecuteTransactionRequest (ClusterOp.EXECUTE_TRANSACTION_REQUEST, 0xA3).
 type ExecuteTransactionRequest struct {
 	// TODO: Replace with *TypedTransaction once core.TypedTransaction is ported.
-	// WARNING: not the last field; RawBytes.Deserialize consumes remaining bytes.
 	Tx          *RawBytes
 	FromAddress [AddressLength]byte
 	BlockHeight *uint64 `ser:"nil"`
@@ -534,7 +526,6 @@ type GetTransactionReceiptRequest struct {
 type GetTransactionReceiptResponse struct {
 	ErrorCode uint32
 	// TODO: Replace with *MinorBlock once core.MinorBlock is ported.
-	// WARNING: not the last field; RawBytes.Deserialize consumes remaining bytes.
 	MinorBlock *RawBytes
 	Index      uint32
 	// TODO: Replace with *TransactionReceipt once core.TransactionReceipt is ported.
@@ -612,7 +603,6 @@ type GetLogResponse struct {
 // EstimateGasRequest (ClusterOp.ESTIMATE_GAS_REQUEST, 0xAF).
 type EstimateGasRequest struct {
 	// TODO: Replace with *TypedTransaction once core.TypedTransaction is ported.
-	// WARNING: not the last field; RawBytes.Deserialize consumes remaining bytes.
 	Tx          *RawBytes
 	FromAddress [AddressLength]byte
 }
@@ -773,7 +763,6 @@ type HelloCommand struct {
 	PeerPort      uint16
 	ChainMaskList []uint32 `bytesizeofslicelen:"4"`
 	// TODO: Replace with *RootBlockHeader once core.RootBlockHeader is ported.
-	// WARNING: not the last field; RawBytes.Deserialize consumes remaining bytes.
 	RootBlockHeader      *RawBytes
 	GenesisRootBlockHash [HashLength]byte
 }
@@ -781,7 +770,6 @@ type HelloCommand struct {
 // NewMinorBlockHeaderListCommand (CommandOp.NEW_MINOR_BLOCK_HEADER_LIST, 0x01).
 type NewMinorBlockHeaderListCommand struct {
 	// TODO: Replace with *RootBlockHeader once core.RootBlockHeader is ported.
-	// WARNING: not the last field; RawBytes.Deserialize consumes remaining bytes.
 	RootBlockHeader      *RawBytes
 	MinorBlockHeaderList []*RawBytes `bytesizeofslicelen:"4"` // TODO: Replace with []*MinorBlockHeader once core.MinorBlockHeader is ported
 }
@@ -836,7 +824,6 @@ type GetRootBlockHeaderListRequest struct {
 // GetRootBlockHeaderListResponse (CommandOp.GET_ROOT_BLOCK_HEADER_LIST_RESPONSE, 0x06).
 type GetRootBlockHeaderListResponse struct {
 	// TODO: Replace with *RootBlockHeader once core.RootBlockHeader is ported.
-	// WARNING: not the last field; RawBytes.Deserialize consumes remaining bytes.
 	RootTip         *RawBytes
 	BlockHeaderList []*RawBytes `bytesizeofslicelen:"4"` // TODO: Replace with []*RootBlockHeader once core.RootBlockHeader is ported
 }
@@ -881,10 +868,8 @@ type GetMinorBlockHeaderListRequest struct {
 // GetMinorBlockHeaderListResponse (CommandOp.GET_MINOR_BLOCK_HEADER_LIST_RESPONSE, 0x0C).
 type GetMinorBlockHeaderListResponse struct {
 	// TODO: Replace with *RootBlockHeader once core.RootBlockHeader is ported.
-	// WARNING: not the last field; RawBytes.Deserialize consumes remaining bytes.
 	RootTip *RawBytes
 	// TODO: Replace with *MinorBlockHeader once core.MinorBlockHeader is ported.
-	// WARNING: not the last field; RawBytes.Deserialize consumes remaining bytes.
 	ShardTip        *RawBytes
 	BlockHeaderList []*RawBytes `bytesizeofslicelen:"4"` // TODO: Replace with []*MinorBlockHeader once core.MinorBlockHeader is ported
 }
