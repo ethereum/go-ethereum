@@ -242,12 +242,10 @@ func FloorDataGas(rules params.Rules, from common.Address, to *common.Address, v
 		tokenCost = params.TxCostFloorPerToken
 	}
 
-	// The floor is anchored to the transaction base cost. Under EIP-2780 that
-	// base is the per-resource decomposition (the same one used by the intrinsic
-	// gas), so the floor never undercuts the transaction's own base.
+	// The floor is anchored to the transaction base cost.
 	floorBase := params.TxGas
 	if rules.IsAmsterdam {
-		floorBase = intrinsicBaseGasEIP2780(from, to, value)
+		floorBase = params.TxBaseCost2780
 	}
 	// Check for overflow
 	if (math.MaxUint64-floorBase)/tokenCost < tokens {
@@ -739,7 +737,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// If the contract creation failed, or the destination was pre-existing,
 		// refund the account-creation state gas pre-charged in IntrinsicGas.
 		if rules.IsAmsterdam && !creation {
-			st.gasRemaining.RefundState(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
+			st.gasRemaining.RefundStateToReservoir(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
 		}
 	} else {
 		// Increment the nonce for the next transaction.
@@ -755,6 +753,10 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// performing the resolution and warming.
 		if addr, ok := types.ParseDelegation(st.state.GetCode(*msg.To)); ok {
 			st.state.AddAddressToAccessList(addr)
+			// Record in BAL
+			if rules.IsAmsterdam {
+				st.state.GetCode(addr)
+			}
 		}
 		// EIP-2780: charge the transaction's top-level recipient costs. If the
 		// budget cannot cover the charge, the top frame halts out of gas.
@@ -968,7 +970,7 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 	authority, err := st.validateAuthorization(auth)
 	if err != nil {
 		if rules.IsAmsterdam {
-			st.gasRemaining.RefundState((params.AccountCreationSize + params.AuthorizationCreationSize) * st.evm.Context.CostPerStateByte)
+			st.gasRemaining.RefundStateToReservoir((params.AccountCreationSize + params.AuthorizationCreationSize) * st.evm.Context.CostPerStateByte)
 			st.state.AddRefund(params.AccountWriteAmsterdam)
 		}
 		return err
@@ -981,7 +983,7 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 		}
 	} else {
 		if st.state.Exist(authority) {
-			st.gasRemaining.RefundState(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
+			st.gasRemaining.RefundStateToReservoir(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
 			st.state.AddRefund(params.AccountWriteAmsterdam)
 		}
 		authBase := params.AuthorizationCreationSize * st.evm.Context.CostPerStateByte
@@ -993,17 +995,17 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 		}
 		if auth.Address == (common.Address{}) {
 			// Clearing writes no indicator, refill this auth's state charge.
-			st.gasRemaining.RefundState(authBase)
+			st.gasRemaining.RefundStateToReservoir(authBase)
 
 			// The indicator was created by an earlier auth within the same
 			// transaction, refill the state charge as it's no longer justified.
 			if curDelegated && !preDelegated {
-				st.gasRemaining.RefundState(authBase)
+				st.gasRemaining.RefundStateToReservoir(authBase)
 			}
 		} else if curDelegated || preDelegated {
 			// The 23-byte slot is already occupied, overwriting it writes no
 			// new bytes, refill the state charge.
-			st.gasRemaining.RefundState(authBase)
+			st.gasRemaining.RefundStateToReservoir(authBase)
 		}
 	}
 

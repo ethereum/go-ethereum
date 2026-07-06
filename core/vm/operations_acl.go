@@ -400,7 +400,7 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc intrinsicGasFunc, coldCost uint
 		// Terminate the gas measurement if the leftover gas is not sufficient,
 		// it can effectively prevent accessing the states in the following steps.
 		// It's an essential safeguard before any stateful check.
-		if contract.Gas.RegularGas < intrinsicCost {
+		if !contract.chargeRegular(intrinsicCost, evm.Config.Tracer, tracing.GasChangeIgnored) {
 			return GasCosts{}, ErrOutOfGas
 		}
 
@@ -422,7 +422,7 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc intrinsicGasFunc, coldCost uint
 		}
 		// Calculate the gas budget for the nested call. The costs defined by
 		// EIP-2929 and EIP-7702 have already been applied.
-		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas.RegularGas, intrinsicCost, stack.back(0))
+		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas.RegularGas, 0, stack.back(0))
 		if err != nil {
 			return GasCosts{}, err
 		}
@@ -430,11 +430,13 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc intrinsicGasFunc, coldCost uint
 		// adding it to the return, it will be charged outside of this function, as
 		// part of the dynamic gas. This will ensure it is correctly reported to
 		// tracers.
-		contract.Gas.RegularGas += eip2929Cost + eip7702Cost
+		contract.Gas.RegularGas += eip2929Cost + eip7702Cost + intrinsicCost
+
 		// Undo the RegularGasUsed increments from the direct UseGas charges,
 		// since this gas will be re-charged via the returned cost.
 		contract.Gas.UsedRegularGas -= eip2929Cost
 		contract.Gas.UsedRegularGas -= eip7702Cost
+		contract.Gas.UsedRegularGas -= intrinsicCost
 
 		// Aggregate the gas costs from all components, including EIP-2929, EIP-7702,
 		// the CALL opcode itself, and the cost incurred by nested calls.
