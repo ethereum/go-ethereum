@@ -14,28 +14,29 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Command gen generates core/vm/interpreter_gen.go, the EVM interpreter's untraced
-// fast-path dispatch, a switch over the opcode byte. The generated file is
-// committed and a CI test asserts it matches `go generate` output. Do not
-// hand-edit interpreter_gen.go.
-//
-// Usage: go generate ./core/vm/...
 package main
 
 import (
-	"fmt"
+	"bytes"
 	"os"
 	"path/filepath"
+	"testing"
 )
 
-func main() {
-	formatted, err := generate()
+// TestGeneratedDispatchUpToDate asserts that the committed interpreter_gen.go
+// matches what the generator produces from the current opcode, gas and fork
+// definitions. It is the CI guard against hand-edits to the generated file and
+// against the generator drifting from the committed output.
+func TestGeneratedDispatchUpToDate(t *testing.T) {
+	got, err := generate()
 	if err != nil {
-		fatalf("%v", err)
+		t.Fatalf("running generator: %v", err)
 	}
-	out := filepath.Join(vmDir(), "interpreter_gen.go")
-	if err := os.WriteFile(out, formatted, 0644); err != nil {
-		fatalf("write %s: %v", out, err)
+	want, err := os.ReadFile(filepath.Join(vmDir(), "interpreter_gen.go"))
+	if err != nil {
+		t.Fatalf("reading committed interpreter_gen.go: %v", err)
 	}
-	fmt.Fprintf(os.Stderr, "gen: wrote %s (%d bytes)\n", out, len(formatted))
+	if !bytes.Equal(got, want) {
+		t.Fatal("interpreter_gen.go is out of date; run `go generate ./core/vm/...` and commit the result")
+	}
 }
