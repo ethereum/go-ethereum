@@ -122,7 +122,7 @@ func validateHistoryPruneErr(err error, blockNum uint64, historyPruneBlock *uint
 
 func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
 	flags.CheckExclusive(ctx, testMainnetFlag, testSepoliaFlag)
-	if (ctx.IsSet(testMainnetFlag.Name) || ctx.IsSet(testSepoliaFlag.Name)) && ctx.IsSet(filterQueryFileFlag.Name) {
+	if (ctx.Bool(testMainnetFlag.Name) || ctx.Bool(testSepoliaFlag.Name)) && ctx.IsSet(filterQueryFileFlag.Name) {
 		exit(filterQueryFileFlag.Name + " cannot be used with " + testMainnetFlag.Name + " or " + testSepoliaFlag.Name)
 	}
 
