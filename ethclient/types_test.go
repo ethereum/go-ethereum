@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func TestToFilterArg(t *testing.T) {
@@ -177,5 +178,20 @@ func TestToFilterArg(t *testing.T) {
 				t.Fatalf("expected filter arg %v but got %v", testCase.output, output)
 			}
 		})
+	}
+}
+
+func TestToCallArgIncludesDataAndInput(t *testing.T) {
+	input := common.FromHex("0x01020304")
+	arg := toCallArg(ethereum.CallMsg{Data: input}).(map[string]interface{})
+
+	for _, key := range []string{"input", "data"} {
+		have, ok := arg[key].(hexutil.Bytes)
+		if !ok {
+			t.Fatalf("missing call arg %q", key)
+		}
+		if !reflect.DeepEqual(have, hexutil.Bytes(input)) {
+			t.Fatalf("call arg %q = %x, want %x", key, have, input)
+		}
 	}
 }

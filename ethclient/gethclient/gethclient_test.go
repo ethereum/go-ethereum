@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -271,6 +272,21 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 		haveList, _ := json.MarshalIndent(al, "", "  ")
 		if have, want := string(haveList), tc.wantAL; have != want {
 			t.Fatalf("test %d: access list wrong, have:\n%v\nwant:\n%v", i, have, want)
+		}
+	}
+}
+
+func TestToCallArgIncludesDataAndInput(t *testing.T) {
+	input := common.FromHex("0x01020304")
+	arg := toCallArg(ethereum.CallMsg{Data: input}).(map[string]interface{})
+
+	for _, key := range []string{"input", "data"} {
+		have, ok := arg[key].(hexutil.Bytes)
+		if !ok {
+			t.Fatalf("missing call arg %q", key)
+		}
+		if !bytes.Equal(have, input) {
+			t.Fatalf("call arg %q = %x, want %x", key, have, input)
 		}
 	}
 }
