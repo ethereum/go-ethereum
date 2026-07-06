@@ -24,6 +24,9 @@ func (bb *ByteBuffer) GetOffset() int {
 }
 
 func (bb *ByteBuffer) getBytes(size int) ([]byte, error) {
+	if size < 0 {
+		return nil, fmt.Errorf("deser: negative size %d is invalid", size)
+	}
 	if size > bb.size-bb.position {
 		return nil, fmt.Errorf("deser: buffer is shorter than expected")
 	}
@@ -119,4 +122,15 @@ func (bb *ByteBuffer) GetVarBytes(byteSizeOfSliceLen int) ([]byte, error) {
 
 func (bb *ByteBuffer) Remaining() int {
 	return bb.size - bb.position
+}
+
+// ReadRemaining returns all unread bytes in the buffer.
+// Used by types that need to consume the rest of the buffer (e.g. opaque
+// placeholder types for forward-compatible deserialization).
+func (bb *ByteBuffer) ReadRemaining() ([]byte, error) {
+	return bb.getBytes(bb.Remaining())
+}
+
+func (bb *ByteBuffer) ReadBytes(n int) ([]byte, error) {
+	return bb.getBytes(n)
 }
