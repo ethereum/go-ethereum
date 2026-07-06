@@ -1,86 +1,89 @@
 // Copyright 2026-2027, QuarkChain.
 
-// Package wire: serializable message structs for every cluster RPC opcode.
+// Package wire defines the Go-side wire-compatible message structs for all
+// Cluster RPC and P2P opcodes.
 //
-// Each struct mirrors a pyquarkchain Serializable from
-// quarkchain/cluster/rpc.py (ClusterOp messages) or
-// quarkchain/cluster/p2p_commands.py (CommandOp messages).
+// These structs are a strict binary-compatible representation of the Python
+// QuarkChain Serializable definitions in:
+//   - quarkchain/cluster/rpc.py
+//   - quarkchain/cluster/p2p_commands.py
 //
-// Field layout MUST stay byte-compatible with the Python wire format. Every
-// field name matches the Python FIELDS order and the wire encoding is enforced
-// by qkc/serialize/ struct tags (see typecache.go):
+// -----------------------------------------------------------------------------
+// Protocol Contract
+// -----------------------------------------------------------------------------
 //
-//	bytesizeofslicelen:"4"  4-byte big-endian length prefix for slices
-//	                        (Python PrependedSizeBytesSerializer(4) and
-//	                        PrependedSizeListSerializer(4, T))
-//	ser:"nil"              nullable pointer — 1-byte presence marker
-//	                        (Python Optional(T))
-//	ser:"-"                ignored field (not serialised)
+// This package defines a BYTE-LEVEL WIRE CONTRACT.
 //
-// Primitive type mapping (Python → Go):
+// The following invariants MUST always hold:
+//   - Struct field order MUST match Python FIELDS order exactly
+//   - Encoding MUST be byte-identical to Python Serializable output
+//   - Optional fields MUST preserve presence markers
+//   - Slice encoding MUST use 4-byte big-endian length prefixes
 //
-//	uint8   → uint8       1 byte
-//	uint16  → uint16      2 bytes big-endian
-//	uint32  → uint32      4 bytes big-endian
-//	uint64  → uint64      8 bytes big-endian
-//	uint128 → [16]byte    16 bytes big-endian
-//	uint256 → *big.Int    1-byte length prefix + big-endian bytes
-//	biguint → *big.Int    same as uint256
-//	hash256 → [32]byte    32 bytes
-//	Branch  → uint32      4 bytes
-//	Address → [20]byte    20 bytes
-//	signature65 → [65]byte 65 bytes
-//	boolean → bool        1 byte (0x00 / 0x01)
+// Any deviation from these rules is considered a protocol-breaking change.
 //
-// =============================================================================
-// Placeholder: RawBytes
-// =============================================================================
+// -----------------------------------------------------------------------------
+// Serialization Tags (qkc/serialize)
+// -----------------------------------------------------------------------------
 //
-// pyquarkchain defines many complex Serializable types (RootBlock,
-// MinorBlockHeader, TypedTransaction, CrossShardTransactionList,
-// TokenBalanceMap, TransactionReceipt, Log, MinorBlock, RootBlockHeader)
-// that are NOT yet ported to Go.  They all have a Python FIELDS list, so
-// the Go wire length for any given field is well-defined — it just depends
-// on the future Go type's encoding.
+// The wire format is enforced via struct tags:
 //
-// To keep this PR self-contained and the wire layout pinned down NOW, each
-// not-yet-ported type is referenced as *RawBytes.  RawBytes is a transparent
-// Serializable that round-trips arbitrary bytes, matching the wire length
-// of the future Go struct once the fields are filled in.  When the real Go
-// type lands, only the field type needs to change — the wire encoding stays
-// byte-identical.
+//	bytesizeofslicelen:"4"
+//	  - 4-byte big-endian length prefix for slices
+//	  - Compatible with Python PrependedSizeBytesSerializer(4)
 //
-// SAFETY: RawBytes.Deserialize consumes ALL remaining bytes in the buffer.
-// It is only safe when the *RawBytes field is the LAST field of its parent
-// struct.  Fields that are not last are annotated with a WARNING and cannot be
-// correctly deserialized until the real Go type is ported.
+//	ser:"nil"
+//	  - Nullable pointer field with 1-byte presence marker
+//	  - Compatible with Python Optional(T)
 //
-// =============================================================================
-// Layout
-// =============================================================================
+//	ser:"-"
+//	  - Field is excluded from serialization
 //
-// Grouped to match the wire opcode sections in opcode.go:
+// -----------------------------------------------------------------------------
+// Primitive Type Mapping (Python → Go)
+// -----------------------------------------------------------------------------
 //
-//	§1  Cluster initialisation     (PING, CONNECT_TO_SLAVES, MINE, GEN_TX)
-//	§2  Virtual connection mgmt    (CREATE/DESTROY_CLUSTER_PEER)
-//	§3  Block updates               (ADD_ROOT_BLOCK, ADD_MINOR_BLOCK,
-//	                                SYNC_MINOR_BLOCK_LIST, CHECK_MINOR_BLOCK,
-//	                                GET_UNCONFIRMED_HEADERS, ADD_MINOR_BLOCK_HEADER)
-//	§4  Block queries               (GET_ECO_INFO_LIST, GET_NEXT_BLOCK_TO_MINE,
-//	                                GET_MINOR_BLOCK, GET_TRANSACTION, EXECUTE_TX,
-//	                                GET_TX_RECEIPT, GET_TX_LIST_BY_ADDRESS,
-//	                                GET_ALL_TX, GET_LOG, ESTIMATE_GAS, GET_STORAGE,
-//	                                GET_CODE, GAS_PRICE, GET_WORK, SUBMIT_WORK)
-//	§5  Account / staking           (GET_ACCOUNT_DATA, GET_ROOT_CHAIN_STAKES,
-//	                                GET_TOTAL_BALANCE)
-//	§6  Cross-shard (Slave↔Slave)   (ADD_XSHARD_TX_LIST, BATCH_ADD_XSHARD_TX_LIST)
-//	§7  P2P commands                (HELLO, NEW_MINOR_BLOCK_HEADER_LIST,
-//	                                NEW_TRANSACTION_LIST, NEW_BLOCK_MINOR,
-//	                                PING_PONG, NEW_ROOT_BLOCK)
-//	§8  P2P queries                 (GET_ROOT_BLOCK_*, GET_MINOR_BLOCK_*)
+//	uint8        → uint8        (1 byte)
+//	uint16       → uint16       (2 bytes BE)
+//	uint32       → uint32       (4 bytes BE)
+//	uint64       → uint64       (8 bytes BE)
+//	uint128      → [16]byte     (16 bytes BE)
+//	uint256      → *big.Int     (1-byte length + big-endian bytes)
+//	biguint      → *big.Int     (same as uint256)
+//	hash256      → [32]byte     (32 bytes)
+//	Branch       → uint32       (4 bytes)
+//	Address      → [20]byte     (20 bytes)
+//	signature65  → [65]byte     (65 bytes)
+//	boolean      → bool         (0x00 / 0x01)
 //
-// Every struct is defined in one place to keep the opcode-to-struct mapping
-// in protocol.go complete and avoid scattering definitions across PRs.
+// -----------------------------------------------------------------------------
+// Layout Organization
+// -----------------------------------------------------------------------------
+//
+// Structs are grouped by opcode domain (see opcode.go):
+//
+//	§1  Cluster initialization
+//	§2  Virtual connection management
+//	§3  Block updates
+//	§4  Block queries
+//	§5  Account / staking
+//	§6  Cross-shard communication
+//	§7  P2P commands
+//	§8  P2P queries
+//
+// This grouping is purely organizational and does NOT affect wire format.
+//
+// -----------------------------------------------------------------------------
+// Design Principle
+// -----------------------------------------------------------------------------
+//
+// This package is the SINGLE SOURCE OF TRUTH for wire-level compatibility
+// between Go and Python implementations.
+//
+// It is NOT allowed to:
+//   - introduce semantic deviations from Python FIELDS
+//   - change serialization rules locally per struct
+//   - diverge from opcode mapping defined in protocol.go
 package wire
 
 import (

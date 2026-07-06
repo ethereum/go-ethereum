@@ -151,7 +151,7 @@ func TestPrependedSizeHashList4_Deserialize_InvalidLength(t *testing.T) {
 //
 // Only structs with *RawBytes as the LAST field (or no RawBytes at all) can
 // safely round-trip.  Structs with non-last RawBytes are only verified via the
-// factory completeness test (§7) — they serialize correctly but cannot be
+// factory completeness test (§6) — they serialize correctly but cannot be
 // deserialized until the real Go type replaces RawBytes.
 
 func TestMessageRoundTrip(t *testing.T) {

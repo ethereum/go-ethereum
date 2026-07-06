@@ -1,14 +1,83 @@
 // Copyright 2026-2027, QuarkChain.
 
 // =============================================================================
-// TEMPORARY PLACEHOLDER FILE — DELETE after real types merge
+// WIRE MIGRATION SHIM (NOT PART OF PROTOCOL SPEC)
 // =============================================================================
 //
-// RawBytes is a placeholder used during pyquarkchain → Go migration.
-// Delete this file once real types (RootBlock, MinorBlockHeader, etc.) are ported.
-// Replace `*RawBytes` fields in messages.go with real typed pointers.
+// This file exists solely to support incremental migration from Python
+// QuarkChain Serializable types to Go native structs.
 //
-// DO NOT REVIEW AS PRODUCTION CODE.
+// It is an IMPLEMENTATION-ONLY COMPATIBILITY LAYER.
+//
+// -----------------------------------------------------------------------------
+// IMPORTANT DISTINCTION
+// -----------------------------------------------------------------------------
+//
+// This file is NOT part of the wire protocol specification.
+//
+// The actual protocol contract is defined in package wire message structs.
+// RawBytes is only a temporary bridge for unported complex types.
+//
+// -----------------------------------------------------------------------------
+// Migration Strategy
+// -----------------------------------------------------------------------------
+//
+// Many Python-side Serializable types (e.g. RootBlock, MinorBlockHeader,
+// TypedTransaction, CrossShardTransactionList, TokenBalanceMap, etc.)
+// have not yet been ported to Go.
+//
+// During migration, these types are represented as:
+//
+//	*RawBytes
+//
+// This allows:
+//   - wire format to remain stable
+//   - incremental type replacement
+//   - independent migration of each message type
+//
+// -----------------------------------------------------------------------------
+// RawBytes Semantics
+// -----------------------------------------------------------------------------
+//
+// RawBytes is a terminal wire sink type.
+//
+// It represents an opaque byte segment whose internal structure is defined
+// by the Python FIELDS schema but is not yet implemented in Go.
+//
+// Wire behavior:
+//   - Serialize: writes raw bytes unchanged
+//   - Deserialize: consumes ALL remaining bytes in buffer
+//
+// -----------------------------------------------------------------------------
+// SAFETY CONSTRAINTS
+// -----------------------------------------------------------------------------
+//
+// RawBytes MUST obey the following rules:
+//
+//  1. MUST only appear as the LAST field in a struct
+//  2. MUST NOT be partially decoded or inspected
+//  3. MUST NOT be used in stable protocol definitions
+//  4. MUST be removed once real Go types are introduced
+//
+// Any violation of these rules results in undefined wire behavior.
+//
+// -----------------------------------------------------------------------------
+// Lifecycle
+// -----------------------------------------------------------------------------
+//
+// This file is TEMPORARY and will be removed after full migration.
+//
+// Migration completion steps:
+//  1. Replace all *RawBytes fields with concrete types
+//  2. Verify wire compatibility via round-trip tests
+//  3. Delete this file entirely
+//
+// -----------------------------------------------------------------------------
+// WARNING
+// -----------------------------------------------------------------------------
+//
+// This file is NOT production protocol logic.
+// It is a migration tool and must be treated as unstable internal code.
 package wire
 
 import (
