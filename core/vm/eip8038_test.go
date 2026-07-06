@@ -235,3 +235,49 @@ func TestEIP8038SelfdestructAccountWrite(t *testing.T) {
 		t.Fatalf("state gas = %d, want %d", res.UsedStateGas, want)
 	}
 }
+
+// EIP-7928: SSTORE must cover the slot's access cost before its implicit read
+// of the current value, so that a failing SSTORE does not leak the slot into
+// the block access list. The stipend sentry alone cannot guard the read, as
+// COLD_STORAGE_ACCESS (3000) exceeds GAS_CALL_STIPEND (2300).
+func TestSStoreBALAccessCostCheck(t *testing.T) {
+	self := common.BytesToAddress([]byte("self"))
+	slot := common.BytesToHash([]byte{0})
+
+	// run executes a noop write (1 -> 1) on a cold slot with block access list
+	// recording enabled and returns the recorded storage reads of the contract.
+	run := func(regular uint64) (map[common.Hash]struct{}, error) {
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		statedb.CreateAccount(self)
+		statedb.SetCode(self, sstore(0, 1), tracing.CodeChangeUnspecified)
+		statedb.SetState(self, slot, common.BytesToHash([]byte{1}))
+		statedb.Finalise(true)
+
+		evm := amsterdam8037EVM(statedb)
+		statedb.Prepare(evm.chainRules, common.Address{}, common.Address{}, &self, nil, nil)
+		_, _, err := evm.Call(common.Address{}, self, nil, NewGasBudget(regular, 0), new(uint256.Int))
+		acct := statedb.Finalise(true).Accounts[self]
+		if acct == nil {
+			return nil, err
+		}
+		return acct.StorageReads, err
+	}
+
+	// gas_left at the SSTORE clears the stipend sentry but falls one short of
+	// the cold access cost: the op must fail without touching the slot.
+	reads, err := run(6 + params.ColdStorageAccessAmsterdam - 1)
+	if err == nil {
+		t.Fatal("expected OOG below the cold access cost")
+	}
+	if _, ok := reads[slot]; ok {
+		t.Fatal("failing SSTORE leaked the slot into the block access list")
+	}
+	// Exactly the cold access cost succeeds and records the read.
+	reads, err = run(6 + params.ColdStorageAccessAmsterdam)
+	if err != nil {
+		t.Fatalf("unexpected failure at the cold access cost: %v", err)
+	}
+	if _, ok := reads[slot]; !ok {
+		t.Fatal("successful SSTORE missing from the block access list")
+	}
+}

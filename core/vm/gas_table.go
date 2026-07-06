@@ -696,17 +696,31 @@ func gasSStore8037And8038(evm *EVM, contract *Contract, stack *Stack, mem *Memor
 		return GasCosts{}, errors.New("not enough gas for reentrancy sentry")
 	}
 	var (
-		y, x              = stack.back(1), stack.peek()
-		slot              = common.Hash(x.Bytes32())
-		current, original = evm.StateDB.GetStateAndCommittedState(contract.Address(), slot)
-		value             = common.Hash(y.Bytes32())
+		y, x = stack.back(1), stack.peek()
+		slot = common.Hash(x.Bytes32())
 	)
 	// Check slot presence in the access list
 	access := params.WarmStorageReadCostEIP2929
-	if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
+	_, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot)
+	if !slotPresent {
 		access = params.ColdStorageAccessAmsterdam
+	}
+	// SSTORE performs an implicit read of the current storage value for the gas
+	// calculation below. Since the cold access cost exceeds GAS_CALL_STIPEND
+	// after the Amsterdam repricing, the reentrancy sentry alone no longer
+	// guards this read: the frame must also cover the slot's access cost
+	// beforehand, otherwise the slot must not be recorded in the block access
+	// list (EIP-7928).
+	if contract.Gas.RegularGas < access {
+		return GasCosts{}, ErrOutOfGas
+	}
+	if !slotPresent {
 		evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
 	}
+	var (
+		current, original = evm.StateDB.GetStateAndCommittedState(contract.Address(), slot)
+		value             = common.Hash(y.Bytes32())
+	)
 	stateSet := params.StorageCreationSize * evm.Context.CostPerStateByte
 
 	if current == value { // noop (1)
