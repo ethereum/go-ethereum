@@ -119,10 +119,11 @@ func (journal *journal) load(add func([]*types.Transaction) []error) error {
 
 func (journal *journal) setupWriter() error {
 	if journal.writer != nil {
-		if err := journal.writer.Close(); err != nil {
+		err := journal.writer.Close()
+		journal.writer = nil
+		if err != nil {
 			return err
 		}
-		journal.writer = nil
 	}
 
 	// Re-open the journal file for appending
