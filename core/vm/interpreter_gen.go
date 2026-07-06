@@ -10,8 +10,8 @@ import (
 )
 
 // execUntraced is the generated, tracing-free interpreter fast path. Hot,
-// fork-stable opcodes are inlined with their static gas and stack bounds baked
-// in. Fork-invariant ops (KECCAK256/MLOAD/MSTORE/MSTORE8) call their
+// fork-stable opcodes are inlined with their static gas and stack bounds emitted
+// as constants. Fork-invariant ops (KECCAK256/MLOAD/MSTORE/MSTORE8) call their
 // handler and gas functions directly by name. Everything fork-varying is
 // dispatched through the active per-fork table in the default case. EVM.Run
 // selects this path when no tracer is configured.
