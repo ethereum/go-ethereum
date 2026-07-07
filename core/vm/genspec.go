@@ -30,12 +30,11 @@ import (
 // appears in, and the FuncForPC names of its handler/gas/memory functions) from
 // the existing per-fork instruction sets, rather than restating that metadata.
 //
-// The function names let the generator confirm the directCold ops are
-// fork-invariant. The fork-varying gas/execute functions themselves are still
-// reached through the active per-fork JumpTable at runtime (see interpreter_gen.go),
-// not emitted by name: several are closures (gasCall, the memoryCopierGas
-// family, makeGasLog) that FuncForPC reports only as anonymous labels, so they
-// could not be called by name in any case.
+// The function names supply the generator's opcode-to-handler mapping and its
+// fork-invariance checks. The fork-varying gas/execute functions themselves are
+// still reached through the active per-fork JumpTable at runtime (see
+// interpreter_gen.go), not emitted by name: several are closures (gasCall, the
+// memoryCopierGas family, makeGasLog) that have no callable name.
 
 // GenOp is the generator-facing scalar metadata for one opcode slot in one fork.
 type GenOp struct {
@@ -87,18 +86,23 @@ var genForkOrder = []struct {
 	{"Amsterdam", "IsAmsterdam", &amsterdamInstructionSet},
 }
 
-// genFnName returns the short FuncForPC name of a jump-table function value
-// (e.g. "gasKeccak256"), or "" if nil. An aliased var resolves to the underlying
-// function (gasMLoad reports "pureMemoryGascost"), which is still stable across
-// forks and so serves the directCold fork-invariance check.
+// genFnName returns the FuncForPC name of a jump-table function value with the
+// package path stripped (e.g. "gasKeccak256"), or "" if nil. An aliased var
+// resolves to the underlying function (gasMLoad reports "pureMemoryGascost").
+// A closure keeps its enclosing chain (DUP7's handler reports
+// "newFrontierInstructionSet.makeDup.func37"), so the generator can tell which
+// factory built it and unrelated closures cannot collide on a bare "funcN".
 func genFnName(fn any) string {
 	v := reflect.ValueOf(fn)
 	if !v.IsValid() || v.IsNil() {
 		return ""
 	}
 	full := runtime.FuncForPC(v.Pointer()).Name()
-	if i := strings.LastIndex(full, "."); i >= 0 {
-		return full[i+1:]
+	if i := strings.LastIndex(full, "/"); i >= 0 {
+		full = full[i+1:] // strip the package path, leaving "vm.<name>"
+	}
+	if i := strings.Index(full, "."); i >= 0 {
+		full = full[i+1:] // strip the package name
 	}
 	return full
 }
@@ -109,7 +113,7 @@ func GenForks() []GenFork {
 	out := make([]GenFork, len(genForkOrder))
 	for i, f := range genForkOrder {
 		gf := GenFork{Name: f.name, RuleField: f.rule}
-		for code := 0; code < 256; code++ {
+		for code := range 256 {
 			op := f.set[code]
 			if op == nil || op.undefined {
 				continue
