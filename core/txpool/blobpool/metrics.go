@@ -29,6 +29,8 @@ var (
 	datarealGauge = metrics.NewRegisteredGauge("blobpool/datareal", nil)
 	slotusedGauge = metrics.NewRegisteredGauge("blobpool/slotused", nil)
 
+	blockedGauge = metrics.NewRegisteredGauge("blobpool/blocked", nil)
+
 	limboDatausedGauge = metrics.NewRegisteredGauge("blobpool/limbo/dataused", nil)
 	limboDatarealGauge = metrics.NewRegisteredGauge("blobpool/limbo/datareal", nil)
 	limboSlotusedGauge = metrics.NewRegisteredGauge("blobpool/limbo/slotused", nil)
