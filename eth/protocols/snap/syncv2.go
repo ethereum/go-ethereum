@@ -448,8 +448,17 @@ func newSyncerV2(db ethdb.Database, scheme string) *syncerV2 {
 	if raw := rawdb.ReadSnapshotSyncStatus(db); len(raw) > 0 && raw[0] == syncProgressVersion {
 		var progress syncProgressV2
 		if err := json.Unmarshal(raw[1:], &progress); err == nil {
-			s.pivot = progress.Pivot
-			s.setPhase(progress.Phase)
+			// A completed journal whose pivot block was already committed is
+			// a dead leftover. Drop it before FrozenPivot hands the stale
+			// pivot back to the downloader. The flat state stays, on a
+			// full-sync node it is the live snapshot.
+			if progress.Phase == phaseComplete && progress.Pivot != nil && isPivotCommitted(db, progress.Pivot) {
+				log.Info("Dropping journal of a completed snap sync", "pivot", progress.Pivot.Number)
+				rawdb.DeleteSnapshotSyncStatus(db)
+			} else {
+				s.pivot = progress.Pivot
+				s.setPhase(progress.Phase)
+			}
 		}
 	}
 	return s
@@ -550,6 +559,18 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 	if !isPivotChanged && s.getPhase() == phaseComplete {
 		log.Info("Snap sync already complete for this pivot", "root", root)
 		return nil
+	}
+
+	// If the pivot of a completed sync was already committed, full sync has
+	// been mutating the flat state since. Nothing here can be resumed or
+	// rolled forward, snap sync was re-enabled, so wipe and start fresh.
+	// Same-pivot retries return through the skip above on purpose, a cycle
+	// that dies right after the commit just needs to recommit.
+	if prevPivot != nil && s.getPhase() == phaseComplete && isPivotCommitted(s.db, prevPivot) {
+		log.Warn("Reenabled snap sync over a completed one, restarting from scratch", "oldpivot", prevPivot.Number, "target", target.Number)
+		s.resetSyncState()
+		prevPivot = nil
+		isPivotChanged = false
 	}
 
 	// We're committing to running this sync. Demote a completed phase so a
@@ -791,6 +812,22 @@ func isPivotReorged(db ethdb.Database, prev, curr *types.Header) bool {
 func catchUpExceedsRetention(prev, curr *types.Header) bool {
 	gap := new(big.Int).Sub(curr.Number, prev.Number)
 	return gap.Cmp(big.NewInt(maxCatchUpBlocks)) > 0
+}
+
+// isPivotCommitted reports whether the head block has caught up to the
+// pivot. That only happens when a completed sync committed the pivot block
+// as the new chain head.
+func isPivotCommitted(db ethdb.Database, pivot *types.Header) bool {
+	head := rawdb.ReadHeadBlockHash(db)
+	if head == (common.Hash{}) {
+		return false
+	}
+	number, ok := rawdb.ReadHeaderNumber(db, head)
+	if !ok {
+		return false
+	}
+	// A genesis head is just an empty chain.
+	return number > 0 && number >= pivot.Number.Uint64()
 }
 
 // catchUp runs the BAL catch-up. When the pivot has moved, it fetches BALs
