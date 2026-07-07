@@ -21,6 +21,7 @@
 package vm
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -233,5 +234,21 @@ func TestEIP8038SelfdestructAccountWrite(t *testing.T) {
 	}
 	if want := int64(params.AccountCreationSize * params.CostPerStateByte); res.UsedStateGas != want {
 		t.Fatalf("state gas = %d, want %d", res.UsedStateGas, want)
+	}
+}
+
+// TestEIP8038SStoreAccessGuard covers the affordability check that bails out
+// before the slot is read once the gas left cannot cover the slot's access cost.
+// The two PUSH1s cost 6, so a 2506 budget leaves 2500 at the SSTORE: above the
+// reentrancy sentry (2300) yet below COLD_STORAGE_ACCESS (3000). The guard must
+// fire, distinguishable from the sentry/charge OOG by its "slot access" message.
+func TestEIP8038SStoreAccessGuard(t *testing.T) {
+	budget := NewGasBudget(6+params.SstoreSentryGasEIP2200+200, 0)
+	_, _, err := run8038(t, sstore(0, 1), budget, new(uint256.Int), nil)
+	if err == nil {
+		t.Fatal("expected failure: gas left cannot cover cold-slot access")
+	}
+	if !strings.Contains(err.Error(), "not enough gas for slot access") {
+		t.Fatalf("got %q, want the slot-access guard error", err)
 	}
 }
