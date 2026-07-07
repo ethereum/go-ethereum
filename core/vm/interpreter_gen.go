@@ -658,7 +658,7 @@ mainLoop:
 			}
 			memorySize = size
 
-			dynamicCost, gerr := gasMLoad(evm, contract, stack, mem, memorySize)
+			dynamicCost, gerr := pureMemoryGascost(evm, contract, stack, mem, memorySize)
 			if gerr != nil {
 				res, err = nil, fmt.Errorf("%w: %v", ErrOutOfGas, gerr)
 				break mainLoop
@@ -706,7 +706,7 @@ mainLoop:
 			}
 			memorySize = size
 
-			dynamicCost, gerr := gasMStore(evm, contract, stack, mem, memorySize)
+			dynamicCost, gerr := pureMemoryGascost(evm, contract, stack, mem, memorySize)
 			if gerr != nil {
 				res, err = nil, fmt.Errorf("%w: %v", ErrOutOfGas, gerr)
 				break mainLoop
@@ -754,7 +754,7 @@ mainLoop:
 			}
 			memorySize = size
 
-			dynamicCost, gerr := gasMStore8(evm, contract, stack, mem, memorySize)
+			dynamicCost, gerr := pureMemoryGascost(evm, contract, stack, mem, memorySize)
 			if gerr != nil {
 				res, err = nil, fmt.Errorf("%w: %v", ErrOutOfGas, gerr)
 				break mainLoop
