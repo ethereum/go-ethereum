@@ -34,48 +34,54 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// inlineOps maps an opcode byte to the handler whose body is spliced inline
-// for that opcode. These are the hot, fork-stable opcodes with no dynamic gas.
-// The value is usually an opXxx handler, but PUSH3-PUSH32 and DUP1-DUP16 are
-// factory-built (one shared makePush / makeDup each), so their value is the
-// factory name and emitInlineOp splices the factory body with the per-opcode size.
-// Opcodes not listed here (or in directCallOps) fall through to the default case,
-// which dispatches via the per-fork table.
-var inlineOps = func() map[byte]string {
-	m := map[byte]string{
-		0x01: "opAdd", 0x02: "opMul", 0x03: "opSub", 0x04: "opDiv", 0x05: "opSdiv",
-		0x06: "opMod", 0x07: "opSmod", 0x08: "opAddmod", 0x09: "opMulmod", 0x0b: "opSignExtend",
-		0x10: "opLt", 0x11: "opGt", 0x12: "opSlt", 0x13: "opSgt", 0x14: "opEq", 0x15: "opIszero",
-		0x16: "opAnd", 0x17: "opOr", 0x18: "opXor", 0x19: "opNot", 0x1a: "opByte",
-		0x1b: "opSHL", 0x1c: "opSHR", 0x1d: "opSAR", 0x1e: "opCLZ",
-		0x50: "opPop", 0x56: "opJump", 0x57: "opJumpi", 0x58: "opPc", 0x59: "opMsize", 0x5b: "opJumpdest",
-		0x5f: "opPush0", 0x60: "opPush1", 0x61: "opPush2",
+// inlineOps selects the opcodes whose handler bodies are spliced inline: the
+// hot, fork-stable opcodes with no dynamic gas. Which handler that is comes
+// from the per-fork tables via vm.GenForks (see deriveSpecs), not from a
+// restated name. Most resolve to a top-level opXxx handler. PUSH3-PUSH32 and
+// DUP1-DUP16 resolve to makePush / makeDup closures, so emitInlineOp splices
+// the factory body with the per-opcode size instead. Opcodes not selected here
+// (or in directCallOps) fall through to the default case, which dispatches via
+// the per-fork table.
+var inlineOps = func() map[byte]bool {
+	m := map[byte]bool{
+		0x01: true, 0x02: true, 0x03: true, 0x04: true, 0x05: true, // ADD MUL SUB DIV SDIV
+		0x06: true, 0x07: true, 0x08: true, 0x09: true, 0x0b: true, // MOD SMOD ADDMOD MULMOD SIGNEXTEND
+		0x10: true, 0x11: true, 0x12: true, 0x13: true, 0x14: true, 0x15: true, // LT GT SLT SGT EQ ISZERO
+		0x16: true, 0x17: true, 0x18: true, 0x19: true, 0x1a: true, // AND OR XOR NOT BYTE
+		0x1b: true, 0x1c: true, 0x1d: true, 0x1e: true, // SHL SHR SAR CLZ
+		0x50: true, 0x56: true, 0x57: true, 0x58: true, 0x59: true, 0x5b: true, // POP JUMP JUMPI PC MSIZE JUMPDEST
+		0x5f: true, 0x60: true, 0x61: true, // PUSH0 PUSH1 PUSH2
 	}
 	for code := 0x62; code <= 0x7f; code++ { // PUSH3-PUSH32
-		m[byte(code)] = "makePush"
+		m[byte(code)] = true
 	}
 	for code := 0x80; code <= 0x8f; code++ { // DUP1-DUP16
-		m[byte(code)] = "makeDup"
+		m[byte(code)] = true
 	}
 	for code := 0x90; code <= 0x9f; code++ { // SWAP1-SWAP16
-		m[byte(code)] = fmt.Sprintf("opSwap%d", code-0x8f)
+		m[byte(code)] = true
 	}
 	return m
 }()
 
-// directCallOps lists the opcodes (dynamic gas, not inlined) whose handler,
+// directCallOps selects the opcodes (dynamic gas, not inlined) whose handler,
 // dynamic-gas, and memory-size functions are the same across every fork
-// (verified: untouched by any enableXxx). They are emitted as direct calls to
-// those functions by name instead of the indirect operation.* pointer calls
-// in the default case.
-var directCallOps = map[byte][3]string{
-	0x20: {"opKeccak256", "gasKeccak256", "memoryKeccak256"},
-	0x51: {"opMload", "gasMLoad", "memoryMLoad"},
-	0x52: {"opMstore", "gasMStore", "memoryMStore"},
-	0x53: {"opMstore8", "gasMStore8", "memoryMStore8"},
+// (verified by checkDirectCallStable). They are emitted as direct calls to
+// those functions by name, with the names derived from the per-fork tables,
+// instead of the indirect operation.* pointer calls in the default case. An
+// aliased gas var derives as its underlying function, so MLOAD's charge is
+// emitted as pureMemoryGascost rather than through the gasMLoad func var.
+var directCallOps = map[byte]bool{
+	0x20: true, // KECCAK256
+	0x51: true, // MLOAD
+	0x52: true, // MSTORE
+	0x53: true, // MSTORE8
 }
 
-// opSpec holds the per-opcode constants the generator emits (gas, stack bounds, intro fork), derived from the per-fork tables.
+// opSpec holds the per-opcode facts the generator emits from: the constants
+// (gas, stack bounds, intro fork) and the FuncForPC names of the opcode's
+// handler, dynamic-gas and memory-size functions, all derived from the
+// per-fork tables.
 type opSpec struct {
 	defined  bool
 	name     string
@@ -83,6 +89,9 @@ type opSpec struct {
 	constGas uint64
 	minStack int
 	maxStack int
+	execFn   string
+	dynFn    string
+	memFn    string
 }
 
 type generator struct {
@@ -502,9 +511,10 @@ func renderInlineExpr(expr ast.Expr, subst map[string]string) string {
 }
 
 // deriveSpecs records each opcode's constant values (name, intro fork, static
-// gas, stack bounds) from the first fork that defines it, then checks that the
-// opcodes chosen for inlining and direct-calling are safe to emit as constants
-// by verifying they are fork-stable (see checkStable and checkDirectCallStable).
+// gas, stack bounds) and its handler, dynamic-gas and memory-size function
+// names from the first fork that defines it, then checks that the opcodes
+// chosen for inlining and direct-calling are safe to emit from those specs by
+// verifying they are fork-stable (see checkStable and checkDirectCallStable).
 func (g *generator) deriveSpecs(forks []vm.GenFork) {
 	for code := range 256 {
 		for _, fork := range forks {
@@ -519,15 +529,18 @@ func (g *generator) deriveSpecs(forks []vm.GenFork) {
 				constGas: o.ConstantGas,
 				minStack: o.MinStack,
 				maxStack: o.MaxStack,
+				execFn:   o.ExecuteFn,
+				dynFn:    o.DynamicGasFn,
+				memFn:    o.MemorySizeFn,
 			}
 			break // first fork that defines it wins (its intro fork)
 		}
 	}
 
-	// Every inlined opcode must be defined and have fork-stable static
+	// Every inlined opcode must be defined and keep the same handler and static
 	// gas / stack bounds across all forks where it appears. Bail loudly otherwise.
-	for code, handler := range inlineOps {
-		g.checkStable(code, handler, forks)
+	for code := range inlineOps {
+		g.checkStable(code, forks)
 	}
 
 	// directCallOps opcodes emit their static gas and stack bounds as constants the
@@ -539,22 +552,22 @@ func (g *generator) deriveSpecs(forks []vm.GenFork) {
 }
 
 // checkStable verifies an opcode selected for inlining is safe to inline: it must
-// be defined, its static gas and stack bounds must be the same across every fork
-// it appears in (they are emitted as constants), and it must have no dynamic gas,
-// since an inlined op charges only its constant static gas. It bails loudly
-// otherwise. `what` names the handler for the error message.
-func (g *generator) checkStable(code byte, what string, forks []vm.GenFork) {
+// be defined, its handler and its static gas and stack bounds must be the same
+// across every fork it appears in (the body and constants are emitted from the
+// first defining fork's spec), and it must have no dynamic gas, since an inlined
+// op charges only its constant static gas. It bails loudly otherwise.
+func (g *generator) checkStable(code byte, forks []vm.GenFork) {
 	spec := g.specs[code]
 	if !spec.defined {
-		fatalf("opcode %#x (%s) selected for inlining but never defined", code, what)
+		fatalf("opcode %#x selected for inlining but never defined", code)
 	}
 	for _, fork := range forks {
 		o := fork.Ops[code]
 		if !o.Defined {
 			continue
 		}
-		if o.ConstantGas != spec.constGas || o.MinStack != spec.minStack || o.MaxStack != spec.maxStack || o.DynamicGasFn != "" {
-			fatalf("opcode %#x (%s) is not fork-stable (fork %s): cannot inline", code, what, fork.Name)
+		if o.ExecuteFn != spec.execFn || o.ConstantGas != spec.constGas || o.MinStack != spec.minStack || o.MaxStack != spec.maxStack || o.DynamicGasFn != "" {
+			fatalf("opcode %#x (%s) is not fork-stable (fork %s): cannot inline", code, spec.name, fork.Name)
 		}
 	}
 }
@@ -562,17 +575,14 @@ func (g *generator) checkStable(code byte, what string, forks []vm.GenFork) {
 // checkDirectCallStable verifies a directCallOps opcode is safe to direct-call. Its static
 // gas and stack bounds must be the same across every fork it appears in (they are
 // emitted as constants), and its handler, gas and memory functions must be the same
-// across those forks too (they are called by name, so a fork that swapped one
-// would otherwise be missed). Unlike checkStable it allows dynamic gas, which
-// directCallOps ops carry by definition. It does not check the directCallOps map's names
-// against the table, which the differential test covers.
+// across those forks too (they are called by the first defining fork's names, so a
+// fork that swapped one would otherwise be missed). Unlike checkStable it allows
+// dynamic gas, which directCallOps ops carry by definition.
 func (g *generator) checkDirectCallStable(code byte, forks []vm.GenFork) {
 	spec := g.specs[code]
 	if !spec.defined {
 		fatalf("opcode %#x (directCallOps) is never defined", code)
 	}
-	var exec, dyn, mem string
-	seen := false
 	for _, fork := range forks {
 		o := fork.Ops[code]
 		if !o.Defined {
@@ -581,15 +591,9 @@ func (g *generator) checkDirectCallStable(code byte, forks []vm.GenFork) {
 		if o.ConstantGas != spec.constGas || o.MinStack != spec.minStack || o.MaxStack != spec.maxStack {
 			fatalf("opcode %#x (%s) is in directCallOps but not fork-stable (fork %s): static gas or stack bounds vary, cannot emit as constants", code, spec.name, fork.Name)
 		}
-		// Handler, gas and memory functions must match across forks too, or
-		// direct-calling them by name would skip a fork that swapped one. Names
-		// come from FuncForPC via vm.GenForks (aliases resolve to the underlying
-		// func, still stable across forks).
-		if !seen {
-			exec, dyn, mem, seen = o.ExecuteFn, o.DynamicGasFn, o.MemorySizeFn, true
-		} else if o.ExecuteFn != exec || o.DynamicGasFn != dyn || o.MemorySizeFn != mem {
+		if o.ExecuteFn != spec.execFn || o.DynamicGasFn != spec.dynFn || o.MemorySizeFn != spec.memFn {
 			fatalf("opcode %#x (%s) is in directCallOps but its functions vary by fork (fork %s): got %s/%s/%s, want %s/%s/%s, cannot direct-call",
-				code, spec.name, fork.Name, o.ExecuteFn, o.DynamicGasFn, o.MemorySizeFn, exec, dyn, mem)
+				code, spec.name, fork.Name, o.ExecuteFn, o.DynamicGasFn, o.MemorySizeFn, spec.execFn, spec.dynFn, spec.memFn)
 		}
 	}
 }
@@ -645,6 +649,25 @@ func (g *generator) generateStaticGas(amount any) string {
 	return g.rewriteGasReturns(src)
 }
 
+// closureSegRe matches the anonymous trailing segments of a closure's
+// FuncForPC name, "func31" or a nested "2".
+var closureSegRe = regexp.MustCompile(`^(func\d+|\d+)$`)
+
+// factoryName returns the factory a closure-built handler was created by
+// (e.g. "makeDup" for "newFrontierInstructionSet.makeDup.func37"), or "" for
+// a plain top-level handler name.
+func factoryName(fn string) string {
+	segs := strings.Split(fn, ".")
+	n := len(segs)
+	for n > 0 && closureSegRe.MatchString(segs[n-1]) {
+		n--
+	}
+	if n == len(segs) || n == 0 {
+		return ""
+	}
+	return segs[n-1]
+}
+
 // emitInlineOp emits an inlined opcode case: the stack and gas guards followed by
 // the spliced opcode body. A fork-introduced opcode wraps that body in a fork gate
 // so it runs only when the opcode is active for the current fork, otherwise the
@@ -681,14 +704,16 @@ func (g *generator) emitInlineOp(code byte) {
 	}
 
 	// opcode body
-	switch h := inlineOps[code]; h {
+	switch factory := factoryName(spec.execFn); factory {
 	case "makePush": // PUSH3-PUSH32: splice makePush(size, size)
 		n := int(code) - 0x5f
 		g.p("%s", g.spliceOpcodeFactoryBody("makePush", n, n))
 	case "makeDup": // DUP1-DUP16: splice makeDup(n)
 		g.p("%s", g.spliceOpcodeFactoryBody("makeDup", int(code)-0x7f))
-	default: // the rest: splice the opXxx handler body
-		g.p("%s", g.spliceOpcodeBody(h))
+	case "": // the rest: splice the opXxx handler body
+		g.p("%s", g.spliceOpcodeBody(spec.execFn))
+	default:
+		fatalf("opcode %#x (%s) is built by factory %q, which the generator cannot inline", code, spec.name, factory)
 	}
 
 	// If opcode is inactive for this fork, then close the gate
@@ -708,7 +733,6 @@ func (g *generator) emitInlineOp(code byte) {
 // fork-invariant ops (see directCallOps).
 func (g *generator) emitDirectCallOp(code byte) {
 	spec := g.specs[code]
-	fns := directCallOps[code]
 	g.p("case %s:\n", spec.name)
 
 	// stack bounds check
@@ -729,7 +753,7 @@ func (g *generator) emitDirectCallOp(code byte) {
 		fatalf("no computeMemorySize gas helper to inline")
 	}
 	memSizeSrc := g.renderAst(memSizeFn.Body.List)
-	memSizeSrc = strings.ReplaceAll(memSizeSrc, "operation.memorySize", fns[2])
+	memSizeSrc = strings.ReplaceAll(memSizeSrc, "operation.memorySize", spec.memFn)
 	g.p("%s", g.rewriteStepReturns(memSizeSrc, "memorySize"))
 
 	// Splice chargeDynamicGas's body the same way, rewriting operation.dynamicGas to
@@ -739,7 +763,7 @@ func (g *generator) emitDirectCallOp(code byte) {
 		fatalf("no chargeDynamicGas gas helper to inline")
 	}
 	dynGasSrc := g.renderAst(dynGasFn.Body.List)
-	dynGasSrc = strings.ReplaceAll(dynGasSrc, "operation.dynamicGas", fns[1])
+	dynGasSrc = strings.ReplaceAll(dynGasSrc, "operation.dynamicGas", spec.dynFn)
 	g.p("%s", g.rewriteStepReturns(dynGasSrc, ""))
 
 	// resize memory
@@ -755,7 +779,7 @@ func (g *generator) emitDirectCallOp(code byte) {
 		if err != nil {
 			break mainLoop
 		}
-	`, fns[0])
+	`, spec.execFn)
 
 	// advance to the next opcode
 	g.p(`
@@ -890,9 +914,9 @@ func (g *generator) createFile() {
 	// one case per inlined or direct-call opcode, in opcode order
 	for code := range 256 {
 		b := byte(code)
-		if _, named := inlineOps[b]; named {
+		if inlineOps[b] {
 			g.emitInlineOp(b)
-		} else if _, dc := directCallOps[b]; dc {
+		} else if directCallOps[b] {
 			g.emitDirectCallOp(b)
 		}
 	}
