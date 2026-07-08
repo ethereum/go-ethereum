@@ -798,10 +798,21 @@ func catchUpExceedsRetention(prev, curr *types.Header) bool {
 // diffs to roll flat state forward.
 func (s *syncerV2) catchUp(target *types.Header, cancel chan struct{}) error {
 	s.lock.RLock()
-	from := s.pivot.Number.Uint64() + 1
-	to := target.Number.Uint64()
+	prev := s.pivot
 	s.lock.RUnlock()
+
+	var (
+		from = prev.Number.Uint64() + 1
+		to   = target.Number.Uint64()
+	)
 	log.Info("Starting BAL catch-up", "from", from, "to", to, "blocks", to-from+1)
+
+	// Resolve the hash chain of the whole gap upfront by walking the parent
+	// hashes backward from the trusted target header.
+	hashes, err := s.gapHashChain(prev, target)
+	if err != nil {
+		return err
+	}
 
 	s.lock.Lock()
 	s.accessListTotal = to - from + 1
@@ -819,26 +830,26 @@ func (s *syncerV2) catchUp(target *types.Header, cancel chan struct{}) error {
 		if end > to {
 			end = to
 		}
-		// Collect block hashes and headers for this window.
+		// Collect the headers for this window.
 		var (
-			hashes  = make([]common.Hash, 0, end-start+1)
-			headers = make(map[common.Hash]*types.Header, end-start+1)
+			winHashes = hashes[start-from : end-from+1]
+			headers   = make(map[common.Hash]*types.Header, len(winHashes))
 		)
-		for num := start; num <= end; num++ {
-			hash := rawdb.ReadCanonicalHash(s.db, num)
-			if hash == (common.Hash{}) {
-				return fmt.Errorf("missing canonical hash for block %d during catch-up", num)
+		for i, hash := range winHashes {
+			num := start + uint64(i)
+			if num == to {
+				headers[hash] = target
+				continue
 			}
-			header := rawdb.ReadHeader(s.db, hash, num)
+			header := s.gapHeader(num, hash)
 			if header == nil {
 				return fmt.Errorf("missing header for block %d (hash %v) during catch-up", num, hash)
 			}
-			hashes = append(hashes, hash)
 			headers[hash] = header
 		}
 
 		// Fetch this window's BALs from peers.
-		rawBALs, err := s.fetchAccessLists(hashes, headers, cancel)
+		rawBALs, err := s.fetchAccessLists(winHashes, headers, cancel)
 		if err != nil {
 			return err
 		}
@@ -851,7 +862,7 @@ func (s *syncerV2) catchUp(target *types.Header, cancel chan struct{}) error {
 			default:
 			}
 			num := start + uint64(i)
-			hash := hashes[i]
+			hash := winHashes[i]
 
 			// Decode the raw RLP into a BAL.
 			var (
@@ -881,6 +892,44 @@ func (s *syncerV2) catchUp(target *types.Header, cancel chan struct{}) error {
 	}
 	log.Info("BAL catch-up complete", "from", from, "to", to)
 	return nil
+}
+
+// gapHashChain resolves the hashes of the catch-up gap (prev, target] by
+// walking the parent hashes backward from the trusted target header.
+// Out-of-memory is not expected as only the 32 bytes hashes are kept.
+func (s *syncerV2) gapHashChain(prev, target *types.Header) ([]common.Hash, error) {
+	var (
+		from   = prev.Number.Uint64() + 1
+		to     = target.Number.Uint64()
+		hashes = make([]common.Hash, to-from+1)
+		want   = target.ParentHash
+	)
+	hashes[to-from] = target.Hash()
+	for num := to - 1; num >= from; num-- {
+		header := s.gapHeader(num, want)
+		if header == nil {
+			return nil, fmt.Errorf("missing header for block %d (hash %v) during catch-up", num, want)
+		}
+		hashes[num-from] = want
+		want = header.ParentHash
+	}
+	if want != prev.Hash() {
+		return nil, fmt.Errorf("catch-up target %d (hash %v) does not descend from pivot %d (hash %v)", to, target.Hash(), prev.Number, prev.Hash())
+	}
+	return hashes, nil
+}
+
+// gapHeader reads the header of a gap block with the given number and
+// expected hash. Two data sources are checked: skeleton or the canonical
+// header, as the headers will be kept in skeleton until the full block
+// is fully downloaded and inserted.
+func (s *syncerV2) gapHeader(num uint64, hash common.Hash) *types.Header {
+	if header := rawdb.ReadSkeletonHeader(s.db, num); header != nil && header.Hash() == hash {
+		return header
+	}
+	// If the header is outside the skeleton scope, read it from
+	// canonical source.
+	return rawdb.ReadHeader(s.db, hash, num)
 }
 
 // fetchAccessLists fetches BALs for the given block hashes from

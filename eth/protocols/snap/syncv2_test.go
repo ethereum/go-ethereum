@@ -1797,8 +1797,11 @@ func testCatchUpPersistsIncrementally(t *testing.T, scheme string) {
 
 	// Build three sequential BAL blocks (A+1, A+2, A+3). The first two touch
 	// goodAddr, the third touches corruptAddr so that block's apply fails
-	// once we've corrupted that account's snapshot.
+	// once we've corrupted that account's snapshot. The headers link up via
+	// their parent hashes, as the catch-up walks the chain backward from the
+	// target down to the previous pivot.
 	blocks := make([]balBlock, 3)
+	parent := pivotAHeader.Hash()
 	for i := 0; i < 3; i++ {
 		blockNum := numA + uint64(i) + 1
 		target := goodAddr
@@ -1819,7 +1822,8 @@ func testCatchUpPersistsIncrementally(t *testing.T, scheme string) {
 		}
 		balHash := b.Hash()
 		header := &types.Header{
-			Number: new(big.Int).SetUint64(blockNum), Difficulty: common.Big0,
+			ParentHash: parent,
+			Number:     new(big.Int).SetUint64(blockNum), Difficulty: common.Big0,
 			BaseFee: common.Big0, WithdrawalsHash: &emptyHash,
 			BlobGasUsed: &zero, ExcessBlobGas: &zero,
 			ParentBeaconRoot: &emptyHash, RequestsHash: &emptyHash,
@@ -1828,6 +1832,7 @@ func testCatchUpPersistsIncrementally(t *testing.T, scheme string) {
 		rawdb.WriteHeader(db, header)
 		rawdb.WriteCanonicalHash(db, header.Hash(), blockNum)
 		blocks[i] = balBlock{header: header, bal: buf.Bytes()}
+		parent = header.Hash()
 	}
 
 	// First sync: complete sync to A so persisted state has pivot=A,
@@ -1929,12 +1934,15 @@ func testCatchUpWindowed(t *testing.T, scheme string) {
 	rawdb.WriteCanonicalHash(db, pivotA.Hash(), numA)
 
 	// Build a 5-block gap, each block bumping targetAddr's balance. The last
-	// block's balance is the expected final state.
+	// block's balance is the expected final state. The headers link up via
+	// their parent hashes, as the catch-up walks the chain backward from the
+	// target down to the previous pivot.
 	const gap = 5
 	var (
 		lastHeader  *types.Header
 		lastBalance *uint256.Int
 		balsByHash  = make(map[common.Hash]rlp.RawValue, gap)
+		parent      = pivotA.Hash()
 	)
 	for i := 0; i < gap; i++ {
 		blockNum := numA + uint64(i) + 1
@@ -1952,7 +1960,8 @@ func testCatchUpWindowed(t *testing.T, scheme string) {
 		}
 		balHash := b.Hash()
 		header := &types.Header{
-			Number: new(big.Int).SetUint64(blockNum), Difficulty: common.Big0,
+			ParentHash: parent,
+			Number:     new(big.Int).SetUint64(blockNum), Difficulty: common.Big0,
 			BaseFee: common.Big0, WithdrawalsHash: &emptyHash,
 			BlobGasUsed: &zero, ExcessBlobGas: &zero,
 			ParentBeaconRoot: &emptyHash, RequestsHash: &emptyHash,
@@ -1962,6 +1971,7 @@ func testCatchUpWindowed(t *testing.T, scheme string) {
 		rawdb.WriteCanonicalHash(db, header.Hash(), blockNum)
 		balsByHash[header.Hash()] = buf.Bytes()
 		lastHeader, lastBalance = header, balance
+		parent = header.Hash()
 	}
 
 	// Seed sync to A: persisted state ends with pivot=A and full flat state.
@@ -3008,7 +3018,8 @@ func testCatchUpAppliesStorageBALs(t *testing.T, scheme string) {
 	rawdb.WriteCanonicalHash(db, hdrA.Hash(), numA)
 
 	hdrB := &types.Header{
-		Number: new(big.Int).SetUint64(numA + 1), Root: rootB, Difficulty: common.Big0,
+		ParentHash: hdrA.Hash(),
+		Number:     new(big.Int).SetUint64(numA + 1), Root: rootB, Difficulty: common.Big0,
 		BaseFee: common.Big0, WithdrawalsHash: &emptyH,
 		BlobGasUsed: &zero, ExcessBlobGas: &zero,
 		ParentBeaconRoot: &emptyH, RequestsHash: &emptyH,
