@@ -198,6 +198,9 @@ type Config struct {
 	// BatchResponseMaxSize is the maximum number of bytes returned from a batched rpc call.
 	BatchResponseMaxSize int `toml:",omitempty"`
 
+	// HTTPBodyLimit is the maximum size (in bytes) of an HTTP request body.
+	HTTPBodyLimit int `toml:",omitempty"`
+
 	// JWTSecret is the path to the hex-encoded jwt secret.
 	JWTSecret string `toml:",omitempty"`
 

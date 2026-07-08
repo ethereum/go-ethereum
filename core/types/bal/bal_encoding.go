@@ -80,7 +80,7 @@ func (e *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
 // according to the spec or any code changes are contained which exceed protocol
 // max code size.
 func (e *BlockAccessList) Validate(blockGasLimit uint64, blockTxCount int) error {
-	if !slices.IsSortedFunc(*e, func(a, b AccountAccess) int {
+	if !isStrictlySortedFunc(*e, func(a, b AccountAccess) int {
 		return bytes.Compare(a.Address[:], b.Address[:])
 	}) {
 		return errors.New("block access list accounts not in lexicographic order")

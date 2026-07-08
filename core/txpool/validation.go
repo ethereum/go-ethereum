@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -113,16 +114,22 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		return core.ErrTipAboveFeeCap
 	}
 	// Make sure the transaction is signed properly
-	if _, err := types.Sender(signer, tx); err != nil {
+	from, err := types.Sender(signer, tx)
+	if err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidSender, err)
 	}
 	// Limit nonce to 2^64-1 per EIP-2681
 	if tx.Nonce()+1 < tx.Nonce() {
 		return core.ErrNonceMax
 	}
+	// Sanity check for extremely large numbers (supported by RLP or RPC)
+	value, overflow := uint256.FromBig(tx.Value())
+	if overflow {
+		return core.ErrInsufficientFunds
+	}
 	// Ensure the transaction has more gas than the bare minimum needed to cover
 	// the transaction metadata
-	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules, params.CostPerStateByte)
+	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), from, tx.To(), value, rules, params.CostPerStateByte)
 	if err != nil {
 		return err
 	}
@@ -131,7 +138,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	}
 	// Ensure the transaction can cover floor data gas.
 	if rules.IsPrague {
-		floorDataGas, err := core.FloorDataGas(rules, tx.Data(), tx.AccessList())
+		floorDataGas, err := core.FloorDataGas(rules, from, tx.To(), value, tx.Data(), tx.AccessList())
 		if err != nil {
 			return err
 		}

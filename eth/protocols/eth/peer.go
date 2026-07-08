@@ -296,7 +296,7 @@ func (p *Peer) ReplyReceiptsRLP70(id uint64, receipts rlp.RawList[*ReceiptList],
 }
 
 // ReplyBlockAccessLists is the response to GetBlockAccessLists (EIP-8159).
-func (p *Peer) ReplyBlockAccessLists(id uint64, list rlp.RawList[RawBlockAccessList]) error {
+func (p *Peer) ReplyBlockAccessLists(id uint64, list rlp.RawList[rlp.RawValue]) error {
 	return p2p.Send(p.rw, BlockAccessListsMsg, &BlockAccessListPacket{
 		RequestId: id,
 		List:      list,

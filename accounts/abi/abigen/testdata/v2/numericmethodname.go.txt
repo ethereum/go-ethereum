@@ -36,6 +36,11 @@ type NumericMethodName struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *NumericMethodName) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewNumericMethodName creates a new instance of NumericMethodName.
 func NewNumericMethodName() *NumericMethodName {
 	parsed, err := NumericMethodNameMetaData.ParseABI()

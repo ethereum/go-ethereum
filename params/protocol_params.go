@@ -88,7 +88,6 @@ const (
 	LogTopicGas           uint64 = 375   // Multiplied by the * of the LOG*, per LOG transaction. e.g. LOG0 incurs 0 * c_txLogTopicGas, LOG4 incurs 4 * c_txLogTopicGas.
 	CreateGas             uint64 = 32000 // Once per CREATE operation & contract-creation transaction.
 	Create2Gas            uint64 = 32000 // Once per CREATE2 operation
-	CreateGasAmsterdam    uint64 = 9000  // Regular gas portion of CREATE in Amsterdam (EIP-8037); state gas is charged separately.
 	CreateNGasEip4762     uint64 = 1000  // Once per CREATEn operations post-verkle
 	SelfdestructRefundGas uint64 = 24000 // Refunded following a selfdestruct operation.
 	MemoryGas             uint64 = 3     // Times the address of the (highest referenced byte in memory + 1). NOTE: referencing happens on read, write and in instructions such as RETURN and CALL.
@@ -101,7 +100,26 @@ const (
 	TxAccessListAddressGas    uint64 = 2400  // Per address specified in EIP 2930 access list
 	TxAccessListStorageKeyGas uint64 = 1900  // Per storage key specified in EIP 2930 access list
 	TxAuthTupleGas            uint64 = 12500 // Per auth tuple code specified in EIP-7702
-	TxAuthTupleRegularGas     uint64 = 7500  // Per auth tuple regular gas specified in EIP-8037
+
+	RegularPerAuthBaseCost uint64 = 7816 // As defined by EIP-8037 and EIP-8038
+
+	// EIP-2780: resource-based intrinsic transaction gas.
+	TxBaseCost2780        uint64 = 12000
+	ColdAccountAccess2780 uint64 = 3000
+	CreateAccess2780      uint64 = 11000
+	TxValueCost2780       uint64 = 4244
+	TransferLogCost2780   uint64 = 1756
+
+	// EIP-8038: state-access gas cost update (Amsterdam).
+	ColdAccountAccessAmsterdam         uint64 = 3000  // COLD_ACCOUNT_ACCESS: cold touch of an account
+	AccountWriteAmsterdam              uint64 = 8000  // ACCOUNT_WRITE: surcharge for first-time write to an account
+	CallValueTransferAmsterdam         uint64 = 10300 // CALL_VALUE = ACCOUNT_WRITE + CallStipend (2300)
+	ColdStorageAccessAmsterdam         uint64 = 3000  // COLD_STORAGE_ACCESS: cold touch of a storage slot
+	StorageWriteAmsterdam              uint64 = 10000 // STORAGE_WRITE: surcharge for first-time write to a storage slot
+	StorageClearRefundAmsterdam        uint64 = 12480 // STORAGE_CLEAR_REFUND: refund for clearing a storage slot
+	CreateAccessAmsterdam              uint64 = 11000 // CREATE_ACCESS = ACCOUNT_WRITE + COLD_STORAGE_ACCESS
+	TxAccessListAddressGasAmsterdam    uint64 = 3000  // ACCESS_LIST_ADDRESS_COST
+	TxAccessListStorageKeyGasAmsterdam uint64 = 3000  // ACCESS_LIST_STORAGE_KEY_COST
 
 	// These have been changed during the course of the chain
 	CallGasFrontier              uint64 = 40  // Once per CALL operation & message call transaction.
@@ -246,6 +264,10 @@ var (
 	BuilderDepositCode    = common.FromHex("0x3373fffffffffffffffffffffffffffffffffffffffe146101065760115f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1461023457600182026001905f5b5f82111560695781019083028483029004916001019190604e565b90939004925050503660b814608957366102345734610234575f5260205ff35b8034106102345760383567ffffffffffffffff1680633b9aca001161023457633b9aca00029034031061023457600154600101600155600354806006026004015f358155600101602035815560010160403581556001016060358155600101608035815560010160a035905560b85f5f3760b85fa0600101600355005b600354600254808203806101001161011d57506101005b5f5b8181146101c3578281016006026004018160b8028154815260200181600101548152602001816002015480825260401c67ffffffffffffffff16816010018160381c81600701538160301c81600601538160281c81600501538160201c81600401538160181c81600301538160101c81600201538160081c81600101535360200181600301548152602001816004015481526020019060050154905260010161011f565b91018092146101d557906002556101e0565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff141561020d57505f5b6001546020828201116102225750505f610228565b01602090035b5f555f60015560b8025ff35b5f5ffd")
 	BuilderExitAddress    = common.HexToAddress("0x000014574A74c805590AFF9499fc7A690f008282")
 	BuilderExitCode       = common.FromHex("0x3373fffffffffffffffffffffffffffffffffffffffe1460cb5760115f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1461018857600182026001905f5b5f82111560685781019083028483029004916001019190604d565b909390049250505036603014608857366101885734610188575f5260205ff35b341061018857600154600101600155600354806003026004013381556001015f35815560010160203590553360601b5f5260305f60143760445fa0600101600355005b6003546002548082038060101160df575060105b5f5b8181146101175782810160030260040181604402815460601b8152601401816001015481526020019060020154905260010160e1565b91018092146101295790600255610134565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff141561016157505f5b6001546002828201116101765750505f61017c565b01600290035b5f555f6001556044025ff35b5f5ffd")
+
+	// EIP-7997 - Deterministic deployment factory (keyless CREATE2 factory)
+	DeterministicFactoryAddress = common.HexToAddress("0x4e59b44847b379578588920cA78FbF26c0B4956C")
+	DeterministicFactoryCode    = common.FromHex("0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3")
 )
 
 // System log events.

@@ -774,10 +774,10 @@ func handleGetBlockAccessLists(backend Backend, msg Decoder, peer *Peer) error {
 
 // serviceGetBlockAccessListsQuery assembles the response to a BAL query.
 // Unavailable BALs are returned as empty list entries.
-func serviceGetBlockAccessListsQuery(chain *core.BlockChain, query GetBlockAccessListsRequest) rlp.RawList[RawBlockAccessList] {
+func serviceGetBlockAccessListsQuery(chain *core.BlockChain, query GetBlockAccessListsRequest) rlp.RawList[rlp.RawValue] {
 	var (
 		bytes int
-		bals  rlp.RawList[RawBlockAccessList]
+		bals  rlp.RawList[rlp.RawValue]
 	)
 	for _, hash := range query {
 		if bytes >= softResponseLimit || bals.Len() >= maxBALsServe {
@@ -815,7 +815,12 @@ func handleBlockAccessLists(backend Backend, msg Decoder, peer *Peer) error {
 	metadata := func() interface{} {
 		hashes := make([]common.Hash, len(bals))
 		for i := range bals {
-			hashes[i] = crypto.Keccak256Hash(bals[i].Bytes())
+			// Unavailable BALs (signaled by the empty string) are marked
+			// with the zero hash
+			if bytes.Equal(bals[i], rlp.EmptyString) {
+				continue
+			}
+			hashes[i] = crypto.Keccak256Hash(bals[i])
 		}
 		return hashes
 	}

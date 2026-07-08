@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 func TestFloorDataGas(t *testing.T) {
@@ -73,21 +74,22 @@ func TestFloorDataGas(t *testing.T) {
 		{
 			name:      "amsterdam/empty",
 			amsterdam: true,
-			want:      params.TxGas,
+			// EIP-2780 anchors the floor to the reduced base cost.
+			want: params.TxBaseCost2780,
 		},
 		{
 			name:      "amsterdam/data-only",
 			amsterdam: true,
 			data:      bytes.Repeat([]byte{0x00}, 1024),
 			// post-amsterdam: every byte = 4 tokens regardless of value
-			want: params.TxGas + 1024*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976,
+			want: params.TxBaseCost2780 + 1024*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976,
 		},
 		{
 			name:      "amsterdam/data-non-zero",
 			amsterdam: true,
 			data:      bytes.Repeat([]byte{0xff}, 1024),
 			// same as zero data post-amsterdam
-			want: params.TxGas + 1024*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976,
+			want: params.TxBaseCost2780 + 1024*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976,
 		},
 		{
 			name:      "amsterdam/access-list-addresses-only",
@@ -97,7 +99,7 @@ func TestFloorDataGas(t *testing.T) {
 				{Address: addr2},
 			},
 			// 2 * 20 bytes * 4 tokens/byte * 16 cost/token
-			want: params.TxGas + 2*common.AddressLength*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976,
+			want: params.TxBaseCost2780 + 2*common.AddressLength*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976,
 		},
 		{
 			name:      "amsterdam/access-list-with-storage-keys",
@@ -106,7 +108,7 @@ func TestFloorDataGas(t *testing.T) {
 				{Address: addr1, StorageKeys: []common.Hash{key1, key2}},
 			},
 			// 1 addr * 20 * 4 + 2 keys * 32 * 4 = 80 + 256 = 336 tokens * 16
-			want: params.TxGas + (1*common.AddressLength+2*common.HashLength)*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976,
+			want: params.TxBaseCost2780 + (1*common.AddressLength+2*common.HashLength)*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976,
 		},
 		{
 			name:      "amsterdam/mixed",
@@ -117,13 +119,13 @@ func TestFloorDataGas(t *testing.T) {
 				{Address: addr2, StorageKeys: []common.Hash{key1, key2}},
 			},
 			// data: 100*4 = 400; addrs: 2*20*4 = 160; keys: 3*32*4 = 384; total = 944 * 16
-			want: params.TxGas + (100*params.TxTokenPerNonZeroByte+2*common.AddressLength*params.TxTokenPerNonZeroByte+3*common.HashLength*params.TxTokenPerNonZeroByte)*params.TxCostFloorPerToken7976,
+			want: params.TxBaseCost2780 + (100*params.TxTokenPerNonZeroByte+2*common.AddressLength*params.TxTokenPerNonZeroByte+3*common.HashLength*params.TxTokenPerNonZeroByte)*params.TxCostFloorPerToken7976,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rules := params.Rules{IsAmsterdam: tt.amsterdam}
-			got, err := FloorDataGas(rules, tt.data, tt.accessList)
+			got, err := FloorDataGas(rules, addr1, &addr1, new(uint256.Int), tt.data, tt.accessList)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -155,6 +157,7 @@ func TestIntrinsicGas(t *testing.T) {
 		isEIP2028   bool
 		isEIP3860   bool
 		isAmsterdam bool
+		value       *uint256.Int
 		want        vm.GasCosts
 	}{
 		{
@@ -237,9 +240,10 @@ func TestIntrinsicGas(t *testing.T) {
 			},
 			isEIP2028:   true,
 			isAmsterdam: true,
-			// base access-list charge + EIP-7981 extra
-			want: vm.GasCosts{RegularGas: params.TxGas +
-				2*params.TxAccessListAddressGas + 3*params.TxAccessListStorageKeyGas +
+			// EIP-2780: zero-value call base is TxBaseCost + ColdAccountAccess
+			// (15,000). Plus base access-list charge + EIP-7981 extra.
+			want: vm.GasCosts{RegularGas: params.TxBaseCost2780 + params.ColdAccountAccess2780 +
+				2*params.TxAccessListAddressGasAmsterdam + 3*params.TxAccessListStorageKeyGasAmsterdam +
 				2*amsterdamAddressCost + 3*amsterdamStorageKeyCost},
 		},
 		{
@@ -259,10 +263,10 @@ func TestIntrinsicGas(t *testing.T) {
 			isHomestead: true,
 			isEIP2028:   true,
 			isAmsterdam: true,
-			// EIP-8037: creation regular gas is TxGas + CreateGasAmsterdam (not TxGasContractCreation),
-			// and account-creation cost is moved to state gas.
+			// EIP-2780: creation regular gas is TxBaseCost + CreateAccess (23,000),
+			// and account-creation cost is charged as state gas.
 			want: vm.GasCosts{
-				RegularGas: params.TxGas + params.CreateGasAmsterdam,
+				RegularGas: params.TxBaseCost2780 + params.CreateAccess2780,
 				StateGas:   params.AccountCreationSize * params.CostPerStateByte,
 			},
 		},
@@ -275,7 +279,7 @@ func TestIntrinsicGas(t *testing.T) {
 			isEIP3860:   true, // Shanghai gates init-code word gas
 			isAmsterdam: true,
 			want: vm.GasCosts{
-				RegularGas: params.TxGas + params.CreateGasAmsterdam +
+				RegularGas: params.TxBaseCost2780 + params.CreateAccess2780 +
 					64*params.TxDataZeroGas + 2*params.InitCodeWordGas,
 				StateGas: params.AccountCreationSize * params.CostPerStateByte,
 			},
@@ -292,9 +296,9 @@ func TestIntrinsicGas(t *testing.T) {
 			isEIP3860:   true,
 			isAmsterdam: true,
 			want: vm.GasCosts{
-				RegularGas: params.TxGas + params.CreateGasAmsterdam +
+				RegularGas: params.TxBaseCost2780 + params.CreateAccess2780 +
 					32*params.TxDataNonZeroGasEIP2028 + 1*params.InitCodeWordGas +
-					1*params.TxAccessListAddressGas + 1*params.TxAccessListStorageKeyGas +
+					1*params.TxAccessListAddressGasAmsterdam + 1*params.TxAccessListStorageKeyGasAmsterdam +
 					1*amsterdamAddressCost + 1*amsterdamStorageKeyCost,
 				StateGas: params.AccountCreationSize * params.CostPerStateByte,
 			},
@@ -310,16 +314,39 @@ func TestIntrinsicGas(t *testing.T) {
 			},
 			isEIP2028:   true,
 			isAmsterdam: true,
-			// EIP-8037 splits the auth-tuple charge into regular + state gas:
-			//   regular: TxAuthTupleRegularGas (7500) per auth
+			// EIP-8037 splits the auth-tuple charge into regular + state gas, with
+			// the values finalized by EIP-8038:
+			//   regular: ACCOUNT_WRITE (8,000) + REGULAR_PER_AUTH_BASE_COST (7,500) per auth
 			//   state:   (AuthorizationCreationSize + AccountCreationSize) * CostPerStateByte per auth
 			want: vm.GasCosts{
-				RegularGas: params.TxGas +
+				RegularGas: params.TxBaseCost2780 + params.ColdAccountAccess2780 +
 					100*params.TxDataNonZeroGasEIP2028 +
-					1*params.TxAccessListAddressGas + 1*params.TxAccessListStorageKeyGas +
+					1*params.TxAccessListAddressGasAmsterdam + 1*params.TxAccessListStorageKeyGasAmsterdam +
 					1*amsterdamAddressCost + 1*amsterdamStorageKeyCost +
-					1*params.TxAuthTupleRegularGas,
+					1*(params.AccountWriteAmsterdam+params.RegularPerAuthBaseCost),
 				StateGas: 1 * (params.AuthorizationCreationSize + params.AccountCreationSize) * params.CostPerStateByte,
+			},
+		},
+		{
+			name:        "amsterdam/value-transfer-call",
+			isEIP2028:   true,
+			isAmsterdam: true,
+			value:       uint256.NewInt(1),
+			// EIP-2780: TxBaseCost + ColdAccountAccess + TransferLogCost + TxValueCost = 21,000.
+			want: vm.GasCosts{RegularGas: params.TxBaseCost2780 + params.ColdAccountAccess2780 +
+				params.TransferLogCost2780 + params.TxValueCost2780},
+		},
+		{
+			name:        "amsterdam/value-bearing-contract-creation",
+			creation:    true,
+			isHomestead: true,
+			isEIP2028:   true,
+			isAmsterdam: true,
+			value:       uint256.NewInt(1),
+			// EIP-2780: TxBaseCost + CreateAccess + TransferLogCost = 24,756, plus account-creation state gas.
+			want: vm.GasCosts{
+				RegularGas: params.TxBaseCost2780 + params.CreateAccess2780 + params.TransferLogCost2780,
+				StateGas:   params.AccountCreationSize * params.CostPerStateByte,
 			},
 		},
 	}
@@ -331,8 +358,12 @@ func TestIntrinsicGas(t *testing.T) {
 				IsShanghai:  tt.isEIP3860,
 				IsAmsterdam: tt.isAmsterdam,
 			}
+			var to *common.Address
+			if !tt.creation {
+				to = &addr1
+			}
 			got, err := IntrinsicGas(tt.data, tt.accessList, tt.authList,
-				tt.creation, rules, params.CostPerStateByte)
+				common.Address{}, to, tt.value, rules, params.CostPerStateByte)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

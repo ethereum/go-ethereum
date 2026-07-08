@@ -57,6 +57,7 @@ var (
 		utils.USBFlag,
 		utils.SmartCardDaemonPathFlag,
 		utils.OverrideOsaka,
+		utils.OverrideAmsterdam,
 		utils.OverrideBPO1,
 		utils.OverrideBPO2,
 		utils.OverrideUBT,
@@ -177,6 +178,7 @@ var (
 		utils.AllowUnprotectedTxs,
 		utils.BatchRequestLimit,
 		utils.BatchResponseMaxSize,
+		utils.HTTPBodyLimitFlag,
 		utils.RPCTxSyncDefaultTimeoutFlag,
 		utils.RPCTxSyncMaxTimeoutFlag,
 		utils.RPCGlobalRangeLimitFlag,
@@ -290,13 +292,13 @@ func main() {
 func prepare(ctx *cli.Context) {
 	// If we're running a known preset, log it for convenience.
 	switch {
-	case ctx.IsSet(utils.SepoliaFlag.Name):
+	case ctx.Bool(utils.SepoliaFlag.Name):
 		log.Info("Starting Geth on Sepolia testnet...")
 
-	case ctx.IsSet(utils.HoleskyFlag.Name):
+	case ctx.Bool(utils.HoleskyFlag.Name):
 		log.Info("Starting Geth on Holesky testnet...")
 
-	case ctx.IsSet(utils.HoodiFlag.Name):
+	case ctx.Bool(utils.HoodiFlag.Name):
 		log.Info("Starting Geth on Hoodi testnet...")
 
 	case !ctx.IsSet(utils.NetworkIdFlag.Name):

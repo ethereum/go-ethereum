@@ -43,7 +43,8 @@ var activators = map[int]func(*JumpTable){
 	7939: enable7939,
 	8024: enable8024,
 	7843: enable7843,
-	8037: enable8037,
+	8037: enable8037And8038,
+	8038: enable8037And8038,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -584,13 +585,30 @@ func enable7843(jt *JumpTable) {
 	}
 }
 
-// enable8037 enables the multidimensional-metering as specified in EIP-8037.
-func enable8037(jt *JumpTable) {
-	jt[CREATE].constantGas = params.CreateGasAmsterdam
+// enable8037And8038 enables EIP-8037 (multidimensional state-gas metering)
+// together with EIP-8038 (state-access gas cost update).
+func enable8037And8038(jt *JumpTable) {
+	jt[CREATE].constantGas = params.CreateAccessAmsterdam
 	jt[CREATE].dynamicGas = gasCreateEip8037
-	jt[CREATE2].constantGas = params.CreateGasAmsterdam
+	jt[CREATE2].constantGas = params.CreateAccessAmsterdam
 	jt[CREATE2].dynamicGas = gasCreate2Eip8037
-	jt[CALL].dynamicGas = gasCallEIP8037
-	jt[SELFDESTRUCT].dynamicGas = gasSelfdestruct8037
-	jt[SSTORE].dynamicGas = gasSStore8037
+
+	// Storage-access opcodes
+	jt[SLOAD].dynamicGas = gasSLoad8038
+	jt[SSTORE].dynamicGas = gasSStore8037And8038
+
+	// Account-access opcodes
+	jt[BALANCE].dynamicGas = gasEip8038AccountCheck
+	jt[EXTCODEHASH].dynamicGas = gasEip8038AccountCheck
+	jt[EXTCODESIZE].dynamicGas = gasExtCodeSize8038
+	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopy8038
+
+	// Call family
+	jt[CALL].dynamicGas = gasCall8038
+	jt[CALLCODE].dynamicGas = gasCallCode8038
+	jt[STATICCALL].dynamicGas = gasStaticCall8038
+	jt[DELEGATECALL].dynamicGas = gasDelegateCall8038
+
+	// SELFDESTRUCT
+	jt[SELFDESTRUCT].dynamicGas = gasSelfdestruct8037And8038
 }

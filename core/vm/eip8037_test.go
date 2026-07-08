@@ -45,9 +45,6 @@ var (
 func amsterdam8037Config() *params.ChainConfig {
 	cfg := *params.MergedTestChainConfig
 	cfg.AmsterdamTime = new(uint64)
-	blob := *cfg.BlobScheduleConfig
-	blob.Amsterdam = blob.Osaka
-	cfg.BlobScheduleConfig = &blob
 	return &cfg
 }
 
@@ -193,15 +190,24 @@ func TestSStoreChargedAtOpcodeEnd(t *testing.T) {
 }
 
 // The SSTORE reentrancy sentry checks gas_left only; the reservoir is excluded.
-// Uses a noop write (1->1->1) so the sentry is the sole gate.
+// Uses a noop write (1->1->1): the two PUSH1s cost 6, leaving gas_left at the
+// sentry (2300) for a 2306 budget. Under EIP-8038 the cold-slot access that
+// follows a cleared sentry costs COLD_STORAGE_ACCESS (3000).
 func TestSStoreStipendExcludesReservoir(t *testing.T) {
-	// regular at the sentry, huge reservoir: must still fail.
+	// regular at the sentry, huge reservoir: must still fail, proving the
+	// reservoir does not count toward the sentry.
 	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(2306, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err == nil {
 		t.Fatal("expected sentry failure with regular gas at the limit")
 	}
-	// one more regular gas clears the sentry.
-	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(2307, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err != nil {
+	// Enough regular gas to clear the sentry and pay the cold-slot access
+	// (6 for the PUSH1s + COLD_STORAGE_ACCESS) succeeds with a huge reservoir.
+	regular := 6 + params.ColdStorageAccessAmsterdam
+	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(regular, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err != nil {
 		t.Fatalf("unexpected failure above sentry: %v", err)
+	}
+	// One gas short of the cold-slot access still fails (now on OOG, not sentry).
+	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(regular-1, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err == nil {
+		t.Fatal("expected OOG when regular gas cannot cover cold-slot access")
 	}
 }
 

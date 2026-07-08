@@ -107,7 +107,8 @@ func (l *limbo) Close() error {
 func (l *limbo) parseBlob(id uint64, data []byte) error {
 	item := new(limboBlob)
 	if err := rlp.DecodeBytes(data, item); err != nil {
-		if isLegacyLimboBlob(data) {
+		// This entry may have been stored with the legacy limboBlob type
+		if isLegacy(data) {
 			return errLegacyTx
 		}
 		// This path is impossible unless the disk data representation changes
@@ -133,9 +134,9 @@ func (l *limbo) parseBlob(id uint64, data []byte) error {
 	return nil
 }
 
-// isLegacyLimboBlob returns true if the data is encoded in legacy limboBlob type.
-// It checks whether the first byte of third element is blobTxType.
-func isLegacyLimboBlob(data []byte) bool {
+// isLegacy reports whether data is a limbo entry with the legacy limboBlob
+// {TxHash, Block, Tx *types.Transaction} type.
+func isLegacy(data []byte) bool {
 	elems, err := rlp.SplitListValues(data)
 	if err != nil || len(elems) < 3 {
 		return false

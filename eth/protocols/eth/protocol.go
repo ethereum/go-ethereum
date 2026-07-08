@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -337,15 +336,14 @@ type GetBlockAccessListsPacket struct {
 	GetBlockAccessListsRequest
 }
 
-type RawBlockAccessList struct {
-	rlp.RawList[bal.AccountAccess]
-}
-
-type BlockAccessListResponse []RawBlockAccessList
+// BlockAccessListResponse holds one raw entry per requested hash. Entries are
+// kept as raw values because, per EIP-8159, the RLP empty string signals an
+// unavailable BAL (an empty list is itself a valid BAL).
+type BlockAccessListResponse []rlp.RawValue
 
 type BlockAccessListPacket struct {
 	RequestId uint64
-	List      rlp.RawList[RawBlockAccessList]
+	List      rlp.RawList[rlp.RawValue]
 }
 
 func (*StatusPacket) Name() string { return "Status" }

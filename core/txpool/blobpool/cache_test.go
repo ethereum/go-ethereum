@@ -94,7 +94,7 @@ func newTestCache(t *testing.T, txConfig []txSpec) *testCache {
 		CancunTime:  &cancunTime,
 		OsakaTime:   &cancunTime,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
-			Osaka: &params.BlobConfig{
+			Cancun: &params.BlobConfig{
 				Target:         1,
 				Max:            1,
 				UpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,

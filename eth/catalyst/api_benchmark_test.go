@@ -197,7 +197,6 @@ func newBenchmarkBlobEnv(b *testing.B, blobCount int, version byte, fork benchFo
 	config.BlobScheduleConfig = &params.BlobScheduleConfig{
 		Cancun: &params.BlobConfig{Target: 6, Max: 128, UpdateFraction: 3338477},
 		Prague: &params.BlobConfig{Target: 6, Max: 128, UpdateFraction: 5007716},
-		Osaka:  &params.BlobConfig{Target: 6, Max: 128, UpdateFraction: 5007716},
 	}
 	// Configure fork times based on requested fork
 	switch fork {

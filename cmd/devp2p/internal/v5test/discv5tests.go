@@ -186,7 +186,7 @@ func (s *Suite) TestHandshakeResend(t *utesting.T) {
 			t.Fatalf("wrong nonce %x in WHOAREYOU (want %x)", resp.Nonce[:], challenge1.Nonce[:])
 		}
 		if !bytes.Equal(resp.ChallengeData, challenge1.ChallengeData) {
-			t.Fatalf("wrong ChallengeData in resent WHOAREYOU (want %x)", resp.ChallengeData, challenge1.ChallengeData)
+			t.Fatalf("wrong ChallengeData in resent WHOAREYOU: got %x, want %x", resp.ChallengeData, challenge1.ChallengeData)
 		}
 		resp.Node = conn.remote
 	default:

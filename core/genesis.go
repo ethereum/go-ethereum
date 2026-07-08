@@ -277,10 +277,11 @@ func (e *GenesisMismatchError) Error() string {
 
 // ChainOverrides contains the changes to chain config.
 type ChainOverrides struct {
-	OverrideOsaka *uint64
-	OverrideBPO1  *uint64
-	OverrideBPO2  *uint64
-	OverrideUBT   *uint64
+	OverrideOsaka     *uint64
+	OverrideAmsterdam *uint64
+	OverrideBPO1      *uint64
+	OverrideBPO2      *uint64
+	OverrideUBT       *uint64
 }
 
 // apply applies the chain overrides on the supplied chain config.
@@ -290,6 +291,9 @@ func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 	}
 	if o.OverrideOsaka != nil {
 		cfg.OsakaTime = o.OverrideOsaka
+	}
+	if o.OverrideAmsterdam != nil {
+		cfg.AmsterdamTime = o.OverrideAmsterdam
 	}
 	if o.OverrideBPO1 != nil {
 		cfg.BPO1Time = o.OverrideBPO1
@@ -721,6 +725,8 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 			// EIP-8282 - Builder Execution Requests
 			params.BuilderDepositAddress: {Nonce: 1, Code: params.BuilderDepositCode, Balance: common.Big0},
 			params.BuilderExitAddress:    {Nonce: 1, Code: params.BuilderExitCode, Balance: common.Big0},
+			// EIP-7997 - Deterministic deployment factory
+			params.DeterministicFactoryAddress: {Nonce: 1, Code: params.DeterministicFactoryCode, Balance: common.Big0},
 		},
 	}
 	if faucet != nil {
