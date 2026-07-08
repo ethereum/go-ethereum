@@ -40,8 +40,8 @@ func newSyncModer(mode ethconfig.SyncMode, chain BlockChain, disk ethdb.KeyValue
 		// The database seems empty as the current block is the genesis. Yet the snap
 		// block is ahead, so snap sync was enabled for this node at a certain point.
 		// The scenarios where this can happen is
-		// * if the user manually (or via a bad block) rolled back a snap sync node
-		//   below the sync point.
+		// * if an internal reset (a fork config change or corruption recovery)
+		//   rolled a snap sync node back below the sync point.
 		// * the last snap sync is not finished while user specifies a full sync this
 		//   time. But we don't have any recent state for full sync.
 		// In these cases however it's safe to reenable snap sync.
@@ -87,8 +87,8 @@ func (m *syncModer) get(report bool) ethconfig.SyncMode {
 	if report {
 		logger = log.Info
 	}
-	// We are probably in full sync, but we might have rewound to before the
-	// snap sync pivot, check if we should re-enable snap sync.
+	// We are probably in full sync, but an internal reset may have rewound the
+	// chain below the snap sync pivot, check if we should re-enable snap sync.
 	head := m.chain.CurrentBlock()
 	if pivot := rawdb.ReadLastPivotNumber(m.disk); pivot != nil {
 		if head.Number.Uint64() < *pivot {
