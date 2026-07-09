@@ -88,6 +88,11 @@ func newDropper(maxDialPeers, maxInboundPeers int) *dropper {
 	return cm
 }
 
+func (cm *dropper) SetMaxPeers(maxDialPeers, maxInboundPeers int) {
+	cm.maxDialPeers = maxDialPeers
+	cm.maxInboundPeers = maxInboundPeers
+}
+
 // Start the dropper.
 func (cm *dropper) Start(srv *p2p.Server, syncingFunc getSyncingFunc) {
 	cm.peersFunc = srv.Peers
