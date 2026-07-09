@@ -66,11 +66,10 @@ func (s *Suite) dialAs(key *ecdsa.PrivateKey) (*Conn, error) {
 		return nil, err
 	}
 	conn.caps = []p2p.Cap{
-		{Name: "eth", Version: 72},
 		{Name: "eth", Version: 70},
 		{Name: "eth", Version: 69},
 	}
-	conn.ourHighestProtoVersion = 72
+	conn.ourHighestProtoVersion = 70
 	return &conn, nil
 }
 
@@ -107,10 +106,6 @@ type Conn struct {
 	ourHighestProtoVersion     uint
 	ourHighestSnapProtoVersion uint
 	caps                       []p2p.Cap
-
-	// pending holds messages received by readUntil that did not match the
-	// caller's expected type.
-	pending []any
 }
 
 // Read reads a packet from the connection.
@@ -186,15 +181,11 @@ func (c *Conn) ReadEth() (any, error) {
 		case eth.TransactionsMsg:
 			msg = new(eth.TransactionsPacket)
 		case eth.NewPooledTransactionHashesMsg:
-			msg = new(eth.NewPooledTransactionHashesPacket72)
+			msg = new(eth.NewPooledTransactionHashesPacket71)
 		case eth.GetPooledTransactionsMsg:
 			msg = new(eth.GetPooledTransactionsPacket)
 		case eth.PooledTransactionsMsg:
 			msg = new(eth.PooledTransactionsPacket)
-		case eth.GetCellsMsg:
-			msg = new(eth.GetCellsRequestPacket)
-		case eth.CellsMsg:
-			msg = new(eth.CellsPacket)
 		default:
 			panic(fmt.Sprintf("unhandled eth msg code %d", code))
 		}

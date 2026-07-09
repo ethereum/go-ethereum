@@ -6,5 +6,5 @@ hivechain generate \
   --tx-interval 1 \
   --length 600 \
   --outdir testdata \
-  --lastfork osaka \
+  --lastfork prague \
   --outputs accounts,genesis,chain,headstate,txinfo,headblock,headfcu,newpayload,forkenv
