@@ -963,6 +963,7 @@ func (s *syncerV2) fetchAccessLists(hashes []common.Hash, headers map[common.Has
 		accessListReqFails = make(chan *accessListRequest)
 		accessListResps    = make(chan *accessListResponse)
 		lastStallLog       = time.Now()
+		lastFetched        = 0
 	)
 	for len(fetched) < len(hashes) {
 		if err := s.checkAccessListProgress(pending, refused); err != nil {
@@ -1000,7 +1001,8 @@ func (s *syncerV2) fetchAccessLists(hashes []common.Hash, headers map[common.Has
 			s.processAccessListResponse(res, headers, pending, fetched, refused)
 		}
 		s.lock.Lock()
-		s.accessListSynced += uint64(len(fetched))
+		s.accessListSynced += uint64(len(fetched) - lastFetched)
+		lastFetched = len(fetched)
 		s.refreshProgressLocked()
 		s.lock.Unlock()
 	}
