@@ -347,7 +347,11 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		SlotNumber:          data.SlotNumber,
 		BlockAccessListHash: blockAccessListHash,
 	}
-	return types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}), nil
+	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals})
+	if data.BlockAccessList != nil {
+		block = block.WithAccessListUnsafe(data.BlockAccessList)
+	}
+	return block, nil
 }
 
 // BlockToExecutableData constructs the ExecutableData structure by filling the
