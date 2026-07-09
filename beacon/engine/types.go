@@ -415,6 +415,12 @@ type ExecutionPayloadBody struct {
 	Withdrawals     []*types.Withdrawal `json:"withdrawals"`
 }
 
+// ExecutionPayloadBodyV2 extends ExecutionPayloadBody with the block access list.
+type ExecutionPayloadBodyV2 struct {
+	ExecutionPayloadBody
+	BlockAccessList *bal.BlockAccessList `json:"blockAccessList"`
+}
+
 // Client identifiers to support ClientVersionV1.
 const (
 	ClientCode = "GE"
