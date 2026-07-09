@@ -177,6 +177,7 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cel
 		b.dropPeers(badPeers)
 		delete(b.cells, hash)
 		delete(b.txs, hash)
+		return
 	}
 	blobCount := len(tx.BlobHashes())
 	sorted, custody := sortCells(cells, blobCount)

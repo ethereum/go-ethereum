@@ -17,6 +17,7 @@
 package fetcher
 
 import (
+	"fmt"
 	"iter"
 	"math/rand"
 	"slices"
@@ -93,7 +94,6 @@ type fetchStatus struct {
 	fetching   types.CustodyBitmap          // To avoid fetching cells which had already been fetched / currently being fetched
 	fetched    []uint64                     // Custody indices that have been fetched (per-blob, same for all blobs)
 	deliveries map[string]*PeerCellDelivery // Per-peer cell deliveries
-	blobCount  int                          // Number of blobs in this tx (set on first delivery)
 }
 
 type BlobFetcherFunctions struct {
@@ -213,6 +213,19 @@ func (f *BlobFetcher) Notify(peer string, txs []common.Hash, cells types.Custody
 // This is triggered by ethHandler upon receiving direct request responses.
 func (f *BlobFetcher) Enqueue(peer string, hashes []common.Hash, cells [][]kzg4844.Cell, cellBitmap types.CustodyBitmap) error {
 	blobReplyInMeter.Mark(int64(len(hashes)))
+
+	if len(hashes) != len(cells) {
+		return fmt.Errorf("cells reply length mismatch: %d hashes, %d cells", len(hashes), len(cells))
+	}
+	// An empty custody mask means "no cells"; a peer delivering cells alongside it
+	// is malformed and should be dropped.
+	if cellBitmap.OneCount() == 0 {
+		for _, c := range cells {
+			if len(c) != 0 {
+				return fmt.Errorf("cells delivered with empty custody mask (%d cells)", len(c))
+			}
+		}
+	}
 
 	select {
 	case f.cleanup <- &payloadDelivery{origin: peer, txs: hashes, cells: cells, cellBitmap: cellBitmap}:
@@ -450,10 +463,12 @@ func (f *BlobFetcher) loop() {
 							// Allow other candidates to be requested these cells
 							f.fetches[hash].fetching = f.fetches[hash].fetching.Difference(req.cells)
 
-							// Drop cells if there is no alternate source to fetch cells from
-							if len(f.alternates[hash]) == 0 {
+							// Drop cells if the remaining sources can no longer complete the fetch
+							if !f.recoverable(hash) {
 								delete(f.alternates, hash)
 								delete(f.fetches, hash)
+								delete(f.full, hash)
+								delete(f.partial, hash)
 							}
 						}
 						if len(f.announces[peer]) == 0 {
@@ -502,14 +517,8 @@ func (f *BlobFetcher) loop() {
 					continue
 				}
 				indices := delivery.cellBitmap.Indices()
-				cellsPerBlob := len(indices)
-				if cellsPerBlob > 0 {
+				if len(indices) > 0 {
 					status := f.fetches[hash]
-					blobCount := len(delivery.cells[i]) / cellsPerBlob
-					if status.blobCount == 0 {
-						status.blobCount = blobCount
-						status.deliveries = make(map[string]*PeerCellDelivery)
-					}
 					status.deliveries[delivery.origin] = &PeerCellDelivery{
 						Cells:   delivery.cells[i],
 						Indices: indices,
@@ -555,6 +564,8 @@ func (f *BlobFetcher) loop() {
 					}
 					delete(f.alternates, hash)
 					delete(f.fetches, hash)
+					delete(f.full, hash)
+					delete(f.partial, hash)
 				}
 			}
 			blobRequestDoneMeter.Mark(int64(len(delivery.txs)))
@@ -635,9 +646,11 @@ func (f *BlobFetcher) loop() {
 						// Undelivered hash, reschedule if there's an alternative origin available
 						f.fetches[hash].fetching = f.fetches[hash].fetching.Difference(req.cells)
 						delete(f.alternates[hash], drop.peer)
-						if len(f.alternates[hash]) == 0 {
+						if !f.recoverable(hash) {
 							delete(f.alternates, hash)
 							delete(f.fetches, hash)
+							delete(f.full, hash)
+							delete(f.partial, hash)
 						}
 					}
 				}
@@ -678,12 +691,12 @@ func (f *BlobFetcher) rescheduleWait(timer *mclock.Timer, trigger chan struct{})
 	for _, instance := range f.waittime {
 		if earliest > instance {
 			earliest = instance
-			if txArriveTimeout-time.Duration(now-earliest) < txGatherSlack {
+			if blobAvailabilityTimeout-time.Duration(now-earliest) < txGatherSlack {
 				break
 			}
 		}
 	}
-	*timer = f.clock.AfterFunc(txArriveTimeout-time.Duration(now-earliest), func() {
+	*timer = f.clock.AfterFunc(blobAvailabilityTimeout-time.Duration(now-earliest), func() {
 		trigger <- struct{}{}
 	})
 }
@@ -742,6 +755,27 @@ func (f *BlobFetcher) consumeToken(peer string, n int) bool {
 	return true
 }
 
+// recoverable checks whether the missing cells of a tx can be fully
+// received from the alternative peers.
+func (f *BlobFetcher) recoverable(hash common.Hash) bool {
+	status := f.fetches[hash]
+	if status == nil {
+		// this should not happen
+		return false
+	}
+	// get union of already fetched cells and the cells
+	// that can be fetched from alternative peers
+	covered := types.NewCustodyBitmap(status.fetched)
+	for _, cells := range f.alternates[hash] {
+		covered = covered.Union(cells)
+	}
+	if _, ok := f.full[hash]; ok {
+		return covered.OneCount() >= kzg4844.DataPerBlob
+	}
+	// return false if our custody cannot be covered
+	return f.custody.Difference(covered).OneCount() == 0
+}
+
 func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}, whitelist map[string]struct{}) {
 	// Gather the set of peers we want to retrieve from (default to all)
 	actives := whitelist
@@ -781,8 +815,9 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 			if unfetched.OneCount() > 0 && f.consumeToken(peer, unfetched.OneCount()) {
 				if f.fetches[hash] == nil {
 					f.fetches[hash] = &fetchStatus{
-						fetching: unfetched,
-						fetched:  make([]uint64, 0),
+						fetching:   unfetched,
+						fetched:    make([]uint64, 0),
+						deliveries: make(map[string]*PeerCellDelivery),
 					}
 				} else {
 					f.fetches[hash].fetching = f.fetches[hash].fetching.Union(unfetched)
@@ -829,8 +864,12 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 				request = append(request, cr)
 			}
 			f.requests[peer] = request
+			// Iterate over a copy: the loop may swap-truncate f.requests[peer]
+			// concurrently when a delivery for this peer arrives.
+			reqs := make([]*cellRequest, len(request))
+			copy(reqs, request)
 			go func() {
-				for _, req := range request {
+				for _, req := range reqs {
 					blobRequestOutMeter.Mark(int64(len(req.txs)))
 					if err := f.fn.FetchPayloads(peer, req.txs, req.cells); err != nil {
 						blobRequestFailMeter.Mark(int64(len(req.txs)))

@@ -252,7 +252,7 @@ type ReceiptsPacket70 struct {
 // ReceiptsRLPResponse is used for receipts, when we already have it encoded
 type ReceiptsRLPResponse []rlp.RawValue
 
-// NewPooledTransactionHashesPacket71 represents a transaction announcement packet on eth/69.
+// NewPooledTransactionHashesPacket71 represents a transaction announcement packet on eth/72.
 type NewPooledTransactionHashesPacket71 struct {
 	Types  []byte
 	Sizes  []uint32
