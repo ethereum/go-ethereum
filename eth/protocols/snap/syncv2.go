@@ -564,6 +564,9 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 	// If the pivot of a completed sync was already committed, full sync has
 	// been mutating the flat state since. Nothing here can be resumed or
 	// rolled forward, snap sync was re-enabled, so wipe and start fresh.
+	// newSyncerV2 already drops such a journal on load, so this branch only
+	// fires for an in-process re-enable, where the syncer was built before
+	// the sync completed so the load-time check never saw a committed journal.
 	// Same-pivot retries return through the skip above on purpose, a cycle
 	// that dies right after the commit just needs to recommit.
 	if prevPivot != nil && s.getPhase() == phaseComplete && isPivotCommitted(s.db, prevPivot) {
