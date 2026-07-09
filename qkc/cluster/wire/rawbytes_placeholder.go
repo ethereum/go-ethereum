@@ -4,133 +4,108 @@
 // WIRE MIGRATION SHIM (NOT PART OF PROTOCOL SPEC)
 // =============================================================================
 //
-// This file exists solely to support incremental migration from Python
-// QuarkChain Serializable types to Go native structs.
+// This file provides temporary placeholder types used during the migration
+// from Python QuarkChain Serializable types to native Go structs.
 //
-// It is an IMPLEMENTATION-ONLY COMPATIBILITY LAYER.
+// This is an IMPLEMENTATION-ONLY migration aid.
+// It is NOT part of the wire protocol specification.
 //
 // -----------------------------------------------------------------------------
 // IMPORTANT DISTINCTION
 // -----------------------------------------------------------------------------
 //
-// This file is NOT part of the wire protocol specification.
+// The wire protocol is defined by the concrete message structs in package wire.
 //
-// The actual protocol contract is defined in package wire message structs.
-// RawBytes is only a temporary bridge for unported complex types.
+// RawBytes does NOT implement the original serialization logic of the Python
+// Serializable type it replaces. It only exists to allow incremental migration
+// by temporarily representing unported complex types.
 //
 // -----------------------------------------------------------------------------
 // Migration Strategy
 // -----------------------------------------------------------------------------
 //
-// Many Python-side Serializable types (e.g. RootBlock, MinorBlockHeader,
-// TypedTransaction, CrossShardTransactionList, TokenBalanceMap, etc.)
-// have not yet been ported to Go.
+// Some Python Serializable types (for example:
 //
-// During migration, these types are represented as:
+//   - RootBlock
+//   - MinorBlockHeader
+//   - TypedTransaction
+//   - CrossShardTransactionList
+//   - TokenBalanceMap
 //
-//	*RawBytes
+// ) may not yet have corresponding Go implementations.
+//
+// During migration, these types may temporarily be represented as:
+//
+//     *RawBytes
 //
 // This allows:
-//   - wire format to remain stable
-//   - incremental type replacement
-//   - independent migration of each message type
+//   - message structs to be migrated incrementally
+//   - Go code to compile before all dependent types are ported
+//   - each complex type to be replaced independently
+//
+// RawBytes is expected to be removed once the corresponding native Go type
+// has been implemented.
 //
 // -----------------------------------------------------------------------------
 // RawBytes Semantics
 // -----------------------------------------------------------------------------
 //
-// RawBytes is a bounded-length passthrough placeholder.
+// RawBytes is an opaque placeholder containing serialized bytes of an
+// unported Python Serializable object.
 //
-// It represents an opaque byte segment whose internal structure is defined
-// by the Python FIELDS schema but is not yet implemented in Go.
+// It does NOT:
+//   - decode the contained data
+//   - inspect the contained data
+//   - reproduce the original Python serialization format
+//   - define any protocol-level wire encoding rules
 //
-// Wire behavior:
-//   - Serialize: writes 4-byte length prefix + raw bytes (matches Python PrependedSizeBytesSerializer(4))
-//   - Deserialize: reads 4-byte length prefix + corresponding bytes
+// Serialization behavior is inherited from the generic serialization framework
+// for byte slices. The resulting wire format may differ from the original
+// Python Serializable encoding.
 //
-// This design allows RawBytes to be used in ANY struct position (not just last field).
+// Any required wire compatibility must be achieved by replacing RawBytes with
+// the correct concrete Go type.
 //
 // -----------------------------------------------------------------------------
 // SAFETY CONSTRAINTS
 // -----------------------------------------------------------------------------
 //
-// RawBytes MUST obey the following rules:
+// RawBytes MUST:
 //
-//  1. MUST NOT be partially decoded or inspected
-//  2. MUST NOT be used in stable protocol definitions
-//  3. MUST be removed once real Go types are introduced
+//   1. remain opaque and must not be partially decoded
+//   2. not be used as a permanent protocol type
+//   3. be replaced by the corresponding concrete Go implementation
 //
-// Any violation of these rules results in undefined wire behavior.
+// Using RawBytes as a final protocol representation may result in wire format
+// incompatibility.
 //
 // -----------------------------------------------------------------------------
 // Lifecycle
 // -----------------------------------------------------------------------------
 //
-// This file is TEMPORARY and will be removed after full migration.
+// Migration completion:
 //
-// Migration completion steps:
-//  1. Replace all *RawBytes fields with concrete types
-//  2. Verify wire compatibility via round-trip tests
-//  3. Delete this file entirely
+//   1. Implement the corresponding native Go struct
+//   2. Replace all *RawBytes fields with concrete types
+//   3. Verify compatibility through Python/Go wire compatibility tests
+//   4. Remove this migration shim
 //
 // -----------------------------------------------------------------------------
 // WARNING
 // -----------------------------------------------------------------------------
 //
-// This file is NOT production protocol logic.
-// It is a migration tool and must be treated as unstable internal code.
+// This file contains temporary migration helpers only.
+// It must not become part of the production protocol implementation.
+//
+
 package wire
 
-import (
-	"encoding/binary"
-	"fmt"
-
-	"github.com/ethereum/go-ethereum/qkc/serialize"
-)
-
-// RawBytes is a transparent byte passthrough placeholder for unported complex types.
-type RawBytes []byte
-
-func (r RawBytes) Serialize(w *[]byte) error {
-	const maxRawBytesSize = 100 * 1024 * 1024 // 100 MB
-	if len(r) > maxRawBytesSize {
-		return fmt.Errorf("RawBytes.Serialize: size %d exceeds max %d", len(r), maxRawBytesSize)
-	}
-
-	// Write 4-byte length prefix (matches Python PrependedSizeBytesSerializer(4))
-	lenBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(lenBuf, uint32(len(r)))
-	*w = append(*w, lenBuf...)
-	*w = append(*w, r...)
-	return nil
-}
-
-// Deserialize reads 4-byte length prefix and corresponding bytes.
+// RawBytes is an opaque placeholder for Python Serializable types that have
+// not yet been migrated to native Go structs.
 //
-// TEMPORARY: Delete this placeholder once real types (RootBlock, MinorBlockHeader) are ported.
-func (r *RawBytes) Deserialize(bb *serialize.ByteBuffer) error {
-	const maxRawBytesSize = 100 * 1024 * 1024 // 100 MB, matches Serialize
-
-	// Read 4-byte length prefix
-	length, err := bb.GetUInt32()
-	if err != nil {
-		return err
-	}
-
-	if length > maxRawBytesSize {
-		return fmt.Errorf("RawBytes.Deserialize: length %d exceeds max %d", length, maxRawBytesSize)
-	}
-
-	// Read the actual bytes
-	bytes, err := bb.ReadBytes(int(length))
-	if err != nil {
-		return err
-	}
-
-	*r = RawBytes(bytes)
-	return nil
-}
-
-// Compile-time check: RawBytes implements Serializable (required by serialize package).
-// This ensures serialize.Serialize(&buf, &struct{Field *RawBytes}) works.
-var _ serialize.Serializable = (*RawBytes)(nil)
+// RawBytes does not define custom wire behavior. It follows the default
+// serialization behavior of the underlying byte slice type.
+//
+// It must be replaced by the corresponding concrete Go type once migration
+// is complete.
+type RawBytes []byte

@@ -43,18 +43,18 @@
 // Primitive Type Mapping (Python → Go)
 // -----------------------------------------------------------------------------
 //
-//	uint8        → uint8        (1 byte)
-//	uint16       → uint16       (2 bytes BE)
-//	uint32       → uint32       (4 bytes BE)
-//	uint64       → uint64       (8 bytes BE)
-//	uint128      → [16]byte     (16 bytes BE)
-//	uint256      → *big.Int     (1-byte length + big-endian bytes)
-//	biguint      → *big.Int     (same as uint256)
-//	hash256      → [32]byte     (32 bytes)
-//	Branch       → uint32       (4 bytes)
-//	Address      → [20]byte     (20 bytes)
-//	signature65  → [65]byte     (65 bytes)
-//	boolean      → bool         (0x00 / 0x01)
+//	uint8        → uint8              (1 byte)
+//	uint16       → uint16             (2 bytes BE)
+//	uint32       → uint32             (4 bytes BE)
+//	uint64       → uint64             (8 bytes BE)
+//	uint128      → [16]byte           (16 bytes BE)
+//	uint256      → serialize.Uint256   (32 bytes big-endian)
+//	biguint      → serialize.BigUint   (1-byte length + big-endian bytes)
+//	hash256      → [32]byte           (32 bytes)
+//	Branch       → uint32             (4 bytes)
+//	Address      → account.Address     (24 bytes: 20B recipient + 4B full_shard_key)
+//	signature65  → [65]byte           (65 bytes)
+//	boolean      → bool               (0x00 / 0x01)
 //
 // -----------------------------------------------------------------------------
 // Layout Organization
@@ -87,17 +87,15 @@
 package wire
 
 import (
-	"math/big"
+	"github.com/ethereum/go-ethereum/qkc/account"
+	"github.com/ethereum/go-ethereum/qkc/serialize"
 )
 
 // =============================================================================
-// Wire-level address / branch / hash constants
+// Wire-level constants
 // =============================================================================
 //
-// These match quarkchain/core.py:Constant and Python Branch/Address types.
-
-// AddressLength is the byte length of an Address (20 bytes).
-const AddressLength = 20
+// These match quarkchain/core.py:Constant and Python built-in type sizes.
 
 // HashLength is the byte length of a hash256.
 const HashLength = 32
@@ -261,9 +259,9 @@ type AddRootBlockResponse struct {
 type EcoInfo struct {
 	Branch                           uint32
 	Height                           uint64
-	CoinbaseAmount                   *big.Int // uint256
-	Difficulty                       *big.Int // biguint
-	UnconfirmedHeadersCoinbaseAmount *big.Int // uint256
+	CoinbaseAmount                   serialize.Uint256
+	Difficulty                       serialize.BigUint
+	UnconfirmedHeadersCoinbaseAmount serialize.Uint256
 }
 
 // GetEcoInfoListRequest (ClusterOp.GET_ECO_INFO_LIST_REQUEST, 0x87) — empty body.
@@ -284,7 +282,7 @@ type GetEcoInfoListResponse struct {
 //	]
 type GetNextBlockToMineRequest struct {
 	Branch             uint32
-	Address            [AddressLength]byte
+	Address            account.Address
 	ArtificialTxConfig ArtificialTxConfig
 }
 
@@ -343,7 +341,7 @@ type GetUnconfirmedHeadersResponse struct {
 //	]
 type AccountBranchData struct {
 	Branch           uint32
-	TransactionCount *big.Int // uint256
+	TransactionCount serialize.Uint256
 	// TODO: Replace with *TokenBalanceMap once core.TokenBalanceMap is ported.
 	TokenBalances      *RawBytes
 	IsContract         bool
@@ -353,7 +351,7 @@ type AccountBranchData struct {
 
 // GetAccountDataRequest (ClusterOp.GET_ACCOUNT_DATA_REQUEST, 0x8D).
 type GetAccountDataRequest struct {
-	Address     [AddressLength]byte
+	Address     account.Address
 	BlockHeight *uint64 `ser:"nil"` // Optional uint64
 }
 
@@ -391,8 +389,8 @@ type AddTransactionResponse struct {
 type ShardStats struct {
 	Branch             uint32
 	Height             uint64
-	Difficulty         *big.Int // biguint
-	CoinbaseAddress    [AddressLength]byte
+	Difficulty         serialize.BigUint
+	CoinbaseAddress    account.Address
 	Timestamp          uint64
 	TxCount60s         uint32
 	PendingTxCount     uint32
@@ -467,7 +465,7 @@ type SyncMinorBlockListResponse struct {
 
 // MinorBlockExtraInfo — used by GetMinorBlockResponse.
 type MinorBlockExtraInfo struct {
-	EffectiveDifficulty *big.Int // biguint
+	EffectiveDifficulty serialize.BigUint
 	PoswMineableBlocks  uint16
 	PoswMinedBlocks     uint16
 }
@@ -506,7 +504,7 @@ type GetTransactionResponse struct {
 type ExecuteTransactionRequest struct {
 	// TODO: Replace with *TypedTransaction once core.TypedTransaction is ported.
 	Tx          *RawBytes
-	FromAddress [AddressLength]byte
+	FromAddress account.Address
 	BlockHeight *uint64 `ser:"nil"`
 }
 
@@ -537,9 +535,9 @@ type GetTransactionReceiptResponse struct {
 type TransactionDetail struct {
 	TxHash          [HashLength]byte
 	Nonce           uint64
-	FromAddress     [AddressLength]byte
-	ToAddress       *[AddressLength]byte `ser:"nil"` // Optional Address
-	Value           *big.Int             // uint256
+	FromAddress     account.Address
+	ToAddress       *account.Address `ser:"nil"` // Optional Address
+	Value           serialize.Uint256
 	BlockHeight     uint64
 	Timestamp       uint64
 	Success         bool
@@ -550,7 +548,7 @@ type TransactionDetail struct {
 
 // GetTransactionListByAddressRequest (ClusterOp.GET_TRANSACTION_LIST_BY_ADDRESS_REQUEST, 0xAB).
 type GetTransactionListByAddressRequest struct {
-	Address         [AddressLength]byte
+	Address         account.Address
 	TransferTokenID *uint64 `ser:"nil"`
 	Start           []byte  `bytesizeofslicelen:"4"`
 	Limit           uint32
@@ -588,7 +586,7 @@ type GetAllTransactionsResponse struct {
 //	]
 type GetLogRequest struct {
 	Branch     uint32
-	Addresses  [][AddressLength]byte    `bytesizeofslicelen:"4"`
+	Addresses  []account.Address        `bytesizeofslicelen:"4"`
 	Topics     []PrependedSizeHashList4 `bytesizeofslicelen:"4"`
 	StartBlock uint64
 	EndBlock   uint64
@@ -604,7 +602,7 @@ type GetLogResponse struct {
 type EstimateGasRequest struct {
 	// TODO: Replace with *TypedTransaction once core.TypedTransaction is ported.
 	Tx          *RawBytes
-	FromAddress [AddressLength]byte
+	FromAddress account.Address
 }
 
 // EstimateGasResponse (ClusterOp.ESTIMATE_GAS_RESPONSE, 0xB0).
@@ -615,9 +613,9 @@ type EstimateGasResponse struct {
 
 // GetStorageRequest (ClusterOp.GET_STORAGE_REQUEST, 0xB1).
 type GetStorageRequest struct {
-	Address     [AddressLength]byte
-	Key         *big.Int // uint256
-	BlockHeight *uint64  `ser:"nil"`
+	Address     account.Address
+	Key         serialize.Uint256
+	BlockHeight *uint64 `ser:"nil"`
 }
 
 // GetStorageResponse (ClusterOp.GET_STORAGE_RESPONSE, 0xB2).
@@ -628,7 +626,7 @@ type GetStorageResponse struct {
 
 // GetCodeRequest (ClusterOp.GET_CODE_REQUEST, 0xB3).
 type GetCodeRequest struct {
-	Address     [AddressLength]byte
+	Address     account.Address
 	BlockHeight *uint64 `ser:"nil"`
 }
 
@@ -653,7 +651,7 @@ type GasPriceResponse struct {
 // GetWorkRequest (ClusterOp.GET_WORK_REQUEST, 0xB7).
 type GetWorkRequest struct {
 	Branch       uint32
-	CoinbaseAddr *[AddressLength]byte `ser:"nil"` // Optional Address
+	CoinbaseAddr *account.Address `ser:"nil"` // Optional Address
 }
 
 // GetWorkResponse (ClusterOp.GET_WORK_RESPONSE, 0xB8).
@@ -661,7 +659,7 @@ type GetWorkResponse struct {
 	ErrorCode  uint32
 	HeaderHash [HashLength]byte
 	Height     uint64
-	Difficulty *big.Int // biguint
+	Difficulty serialize.BigUint
 }
 
 // SubmitWorkRequest (ClusterOp.SUBMIT_WORK_REQUEST, 0xB9).
@@ -685,15 +683,15 @@ type SubmitWorkResponse struct {
 
 // GetRootChainStakesRequest (ClusterOp.GET_ROOT_CHAIN_STAKES_REQUEST, 0xC1).
 type GetRootChainStakesRequest struct {
-	Address        [AddressLength]byte
+	Address        account.Address
 	MinorBlockHash [HashLength]byte
 }
 
 // GetRootChainStakesResponse (ClusterOp.GET_ROOT_CHAIN_STAKES_RESPONSE, 0xC2).
 type GetRootChainStakesResponse struct {
 	ErrorCode uint32
-	Stakes    *big.Int // biguint
-	Signer    [AddressLength]byte
+	Stakes    serialize.BigUint
+	Signer    [20]byte
 }
 
 // GetTotalBalanceRequest (ClusterOp.GET_TOTAL_BALANCE_REQUEST, 0xC3).
@@ -709,8 +707,8 @@ type GetTotalBalanceRequest struct {
 // GetTotalBalanceResponse (ClusterOp.GET_TOTAL_BALANCE_RESPONSE, 0xC4).
 type GetTotalBalanceResponse struct {
 	ErrorCode    uint32
-	TotalBalance *big.Int // biguint
-	Next         []byte   `bytesizeofslicelen:"4"`
+	TotalBalance serialize.BigUint
+	Next         []byte `bytesizeofslicelen:"4"`
 }
 
 // =============================================================================

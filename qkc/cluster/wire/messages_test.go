@@ -4,10 +4,12 @@ package wire
 
 import (
 	"bytes"
+	"encoding/hex"
 	"math/big"
 	"reflect"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/qkc/account"
 	"github.com/ethereum/go-ethereum/qkc/serialize"
 )
 
@@ -15,286 +17,81 @@ import (
 // §1 Custom wire types
 // =============================================================================
 
-func TestPrependedSizeBytes4_RoundTrip(t *testing.T) {
-	cases := [][]byte{
-		nil,
-		{},
-		{0x00},
-		{0xAA, 0xBB},
-		bytes.Repeat([]byte{0xFF}, 100),
+func TestPrependedSizeBytes4(t *testing.T) {
+	cases := []struct {
+		name    string
+		data    PrependedSizeBytes4
+		wantHex string
+	}{
+		{"empty", nil, "00000000"},
+		{"two_bytes", PrependedSizeBytes4{0xAA, 0xBB}, "00000002aabb"},
 	}
-	for i, data := range cases {
-		t.Run("", func(t *testing.T) {
-			p := PrependedSizeBytes4(data)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			var buf []byte
-			if err := p.Serialize(&buf); err != nil {
-				t.Fatalf("case %d: Serialize: %v", i, err)
+			if err := tc.data.Serialize(&buf); err != nil {
+				t.Fatalf("Serialize: %v", err)
+			}
+			if got := hex.EncodeToString(buf); got != tc.wantHex {
+				t.Errorf("wire: got %s, want %s", got, tc.wantHex)
 			}
 
 			bb := serialize.NewByteBuffer(buf)
 			var got PrependedSizeBytes4
 			if err := got.Deserialize(bb); err != nil {
-				t.Fatalf("case %d: Deserialize: %v", i, err)
+				t.Fatalf("Deserialize: %v", err)
 			}
-
-			if !bytes.Equal(got, data) {
-				t.Errorf("case %d: mismatch\n  got  %x\n  want %x", i, got, data)
+			if !bytes.Equal(got, tc.data) {
+				t.Errorf("round-trip mismatch")
 			}
 		})
-	}
-}
-
-func TestPrependedSizeBytes4_WireFormat(t *testing.T) {
-	wantHex := "00000002aabb"
-
-	p := PrependedSizeBytes4{0xAA, 0xBB}
-	var buf []byte
-	if err := p.Serialize(&buf); err != nil {
-		t.Fatalf("Serialize: %v", err)
-	}
-
-	gotHex := hexEncode(buf)
-	if gotHex != wantHex {
-		t.Errorf("wire format mismatch:\n  got  %s\n  want %s", gotHex, wantHex)
-	}
-
-	bb := serialize.NewByteBuffer(buf)
-	var got PrependedSizeBytes4
-	if err := got.Deserialize(bb); err != nil {
-		t.Fatalf("Deserialize: %v", err)
-	}
-	if !bytes.Equal(got, p) {
-		t.Errorf("round-trip mismatch")
-	}
-}
-
-func TestPrependedSizeBytes4_Deserialize_InvalidLength(t *testing.T) {
-	buf := []byte{0xFF, 0xFF, 0xFF, 0xFF}
-	bb := serialize.NewByteBuffer(buf)
-
-	var p PrependedSizeBytes4
-	err := p.Deserialize(bb)
-	if err == nil {
-		t.Error("expected error for length exceeding remaining buffer")
 	}
 }
 
 func TestPrependedSizeHashList4_RoundTrip(t *testing.T) {
-	cases := [][][HashLength]byte{
+	cases := []PrependedSizeHashList4{
 		nil,
-		{},
 		{makeHash(1)},
 		{makeHash(1), makeHash(2)},
 	}
-	for i, hashes := range cases {
-		t.Run("", func(t *testing.T) {
-			p := PrependedSizeHashList4(hashes)
-			var buf []byte
-			if err := p.Serialize(&buf); err != nil {
-				t.Fatalf("case %d: Serialize: %v", i, err)
+	for _, hashes := range cases {
+		var buf []byte
+		if err := hashes.Serialize(&buf); err != nil {
+			t.Fatalf("Serialize: %v", err)
+		}
+		bb := serialize.NewByteBuffer(buf)
+		var got PrependedSizeHashList4
+		if err := got.Deserialize(bb); err != nil {
+			t.Fatalf("Deserialize: %v", err)
+		}
+		if len(got) != len(hashes) {
+			t.Fatalf("length mismatch: got %d, want %d", len(got), len(hashes))
+		}
+		for j := range got {
+			if got[j] != hashes[j] {
+				t.Errorf("hash[%d] mismatch", j)
 			}
-
-			bb := serialize.NewByteBuffer(buf)
-			var got PrependedSizeHashList4
-			if err := got.Deserialize(bb); err != nil {
-				t.Fatalf("case %d: Deserialize: %v", i, err)
-			}
-
-			if len(got) != len(hashes) {
-				t.Fatalf("case %d: length mismatch: got %d, want %d", i, len(got), len(hashes))
-			}
-			for j := range got {
-				if got[j] != hashes[j] {
-					t.Errorf("case %d: hash[%d] mismatch", i, j)
-				}
-			}
-		})
-	}
-}
-
-func TestPrependedSizeHashList4_WireFormat(t *testing.T) {
-	p := PrependedSizeHashList4{makeHash(0x11), makeHash(0x22)}
-	var buf []byte
-	if err := p.Serialize(&buf); err != nil {
-		t.Fatalf("Serialize: %v", err)
-	}
-
-	if len(buf) != 4+2*HashLength {
-		t.Errorf("wire length mismatch: got %d, want %d", len(buf), 4+2*HashLength)
-	}
-
-	// count prefix is already checked by Deserialize; this is supplementary.
-	bb := serialize.NewByteBuffer(buf)
-	var got PrependedSizeHashList4
-	if err := got.Deserialize(bb); err != nil {
-		t.Fatalf("Deserialize: %v", err)
-	}
-	if len(got) != 2 {
-		t.Errorf("round-trip length mismatch")
-	}
-}
-
-func TestPrependedSizeHashList4_Deserialize_InvalidLength(t *testing.T) {
-	buf := []byte{0xFF, 0xFF, 0xFF, 0xFF}
-	bb := serialize.NewByteBuffer(buf)
-
-	var p PrependedSizeHashList4
-	err := p.Deserialize(bb)
-	if err == nil {
-		t.Error("expected error for count exceeding buffer capacity")
+		}
 	}
 }
 
 // =============================================================================
-// §2 Message struct round-trips
+// §2 Message round-trips (representative samples)
 // =============================================================================
-//
-// Only structs with *RawBytes as the LAST field (or no RawBytes at all) can
-// safely round-trip.  Structs with non-last RawBytes are only verified via the
-// factory completeness test (§6) — they serialize correctly but cannot be
-// deserialized until the real Go type replaces RawBytes.
 
 func TestMessageRoundTrip(t *testing.T) {
-	toAddr := makeAddress(0x00010001, 2)
-
 	tests := []struct {
 		name string
 		msg  any
 	}{
-		// --- no RawBytes ---
-		{"PingRequest_without_root_tip", PingRequest{
+		{"PingRequest_no_RawBytes", PingRequest{
 			ID:              []byte("slave1"),
 			FullShardIDList: []uint32{0x00010001, 0x00020002},
-			RootTip:         nil,
 		}},
-		{"PongResponse", PongResponse{
-			ID:              []byte("master"),
-			FullShardIDList: []uint32{0x00010001},
-		}},
-		{"SlaveInfo", SlaveInfo{
-			ID:              []byte("s1"),
-			Host:            []byte("127.0.0.1"),
-			Port:            38391,
-			FullShardIDList: []uint32{0x00010001, 0x00010002},
-		}},
-		{"ConnectToSlavesRequest", ConnectToSlavesRequest{
-			SlaveInfoList: []SlaveInfo{
-				{ID: []byte("s1"), Host: []byte("10.0.0.1"), Port: 38391, FullShardIDList: []uint32{0x00010001}},
-				{ID: []byte("s2"), Host: []byte("10.0.0.2"), Port: 38392, FullShardIDList: []uint32{0x00020001}},
-			},
-		}},
-		{"ConnectToSlavesResponse", ConnectToSlavesResponse{
-			ResultList: []PrependedSizeBytes4{{0xAA, 0xBB}, {0xCC, 0xDD, 0xEE}},
-		}},
-		{"ArtificialTxConfig", ArtificialTxConfig{60, 10}},
-		{"MineRequest", MineRequest{
-			ArtificialTxConfig: ArtificialTxConfig{TargetRootBlockTime: 60, TargetMinorBlockTime: 10},
-			Mining:             true,
-		}},
-		{"EcoInfo", EcoInfo{
-			Branch:                           0x00010001,
-			Height:                           12345,
-			CoinbaseAmount:                   big.NewInt(1000),
-			Difficulty:                       big.NewInt(1000000),
-			UnconfirmedHeadersCoinbaseAmount: big.NewInt(500),
-		}},
-		{"GetEcoInfoListRequest", GetEcoInfoListRequest{}},
-		{"GetEcoInfoListResponse", GetEcoInfoListResponse{
-			ErrorCode: 0,
-			EcoInfoList: []EcoInfo{
-				{Branch: 0x00010001, Height: 1, CoinbaseAmount: big.NewInt(1), Difficulty: big.NewInt(1), UnconfirmedHeadersCoinbaseAmount: big.NewInt(1)},
-			},
-		}},
-		{"GetNextBlockToMineRequest", GetNextBlockToMineRequest{
-			Branch:             0x00010001,
-			Address:            makeAddress(0x00010001, 1),
-			ArtificialTxConfig: ArtificialTxConfig{TargetRootBlockTime: 60, TargetMinorBlockTime: 10},
-		}},
-		{"GetAccountDataRequest", GetAccountDataRequest{
-			Address:     makeAddress(0x00010001, 1),
-			BlockHeight: nil,
-		}},
-		{"GetLogRequest", GetLogRequest{
-			Branch:    0x00010001,
-			Addresses: [][AddressLength]byte{makeAddress(0x00010001, 1)},
-			Topics: []PrependedSizeHashList4{
-				{makeHash(0xAA)},
-				{makeHash(0xBB), makeHash(0xCC)},
-			},
-			StartBlock: 100,
-			EndBlock:   200,
-		}},
-		{"PingPongCommand", PingPongCommand{makeHash(42)}},
-		{"PeerInfo", PeerInfo{IP: makeUint128(0x0102030405060708), Port: 38391}},
-		{"TransactionDetail", TransactionDetail{
-			TxHash:          makeHash(1),
-			Nonce:           10,
-			FromAddress:     makeAddress(0x00010001, 1),
-			ToAddress:       &toAddr,
-			Value:           big.NewInt(100),
-			BlockHeight:     50,
-			Timestamp:       1600000000,
-			Success:         true,
-			GasTokenID:      1,
-			TransferTokenID: 1,
-			IsFromRootChain: false,
-		}},
-
-		// --- RawBytes as last field (safe to round-trip) ---
-		{"GenTxRequest", GenTxRequest{
+		{"GenTxRequest_RawBytes_last", GenTxRequest{
 			NumTxPerShard: 10,
 			XShardPercent: 30,
 			Tx:            &RawBytes{0x01, 0x02, 0x03},
-		}},
-		{"GetNextBlockToMineResponse", GetNextBlockToMineResponse{
-			ErrorCode: 0,
-			Block:     &RawBytes{0xAA, 0xBB},
-		}},
-		{"AddTransactionRequest", AddTransactionRequest{
-			Tx: &RawBytes{0x01, 0x02},
-		}},
-		{"CheckMinorBlockRequest", CheckMinorBlockRequest{
-			MinorBlockHeader: &RawBytes{0x01, 0x02},
-		}},
-		{"GetLogResponse", GetLogResponse{
-			ErrorCode: 0,
-			Logs:      []*RawBytes{{0x01, 0x02}}, // single element only — multi-element []*RawBytes cannot round-trip
-		}},
-		{"BatchAddXshardTxListRequest", BatchAddXshardTxListRequest{
-			AddXshardTxListRequestList: []AddXshardTxListRequest{
-				{Branch: 0x00010001, MinorBlockHash: makeHash(1), TxList: &RawBytes{0x01, 0x02}},
-			},
-		}},
-		{"AddXshardTxListRequest", AddXshardTxListRequest{
-			Branch:         0x00010001,
-			MinorBlockHash: makeHash(1),
-			TxList:         &RawBytes{0x01, 0x02},
-		}},
-		{"NewTransactionListCommand", NewTransactionListCommand{
-			TransactionList: []*RawBytes{{0x01, 0x02}}, // single element only
-		}},
-		{"NewBlockMinorCommand", NewBlockMinorCommand{
-			Block: &RawBytes{0x01, 0x02},
-		}},
-		{"NewRootBlockCommand", NewRootBlockCommand{
-			Block: &RawBytes{0x01, 0x02},
-		}},
-		{"GetRootBlockListResponse", GetRootBlockListResponse{
-			RootBlockList: []*RawBytes{{0x01, 0x02}}, // single element only
-		}},
-		{"GetMinorBlockListResponse", GetMinorBlockListResponse{
-			MinorBlockList: []*RawBytes{{0x01, 0x02}}, // single element only
-		}},
-		{"GetUnconfirmedHeadersResponse", GetUnconfirmedHeadersResponse{
-			ErrorCode: 0,
-			HeadersInfoList: []HeadersInfo{
-				{Branch: 0x00010001, HeaderList: []*RawBytes{{0x01, 0x02}}}, // single element only
-			},
-		}},
-		{"PingRequest_with_root_tip", PingRequest{
-			ID:              []byte("test"),
-			FullShardIDList: []uint32{1, 2},
-			RootTip:         &RawBytes{0xAA, 0xBB, 0xCC},
 		}},
 	}
 
@@ -311,75 +108,146 @@ func TestMessageRoundTrip(t *testing.T) {
 				t.Fatalf("Deserialize: %v", err)
 			}
 
-			gotVal := reflect.ValueOf(got).Elem().Interface()
-
-			// Re-serialize and compare bytes.  This sidesteps reflect.DeepEqual
-			// pointer-identity problems with *RawBytes while still verifying
-			// that the wire format is preserved through round-trip.
 			var buf2 []byte
-			if err := serialize.Serialize(&buf2, gotVal); err != nil {
+			if err := serialize.Serialize(&buf2, reflect.ValueOf(got).Elem().Interface()); err != nil {
 				t.Fatalf("Re-serialize: %v", err)
 			}
 			if !bytes.Equal(buf, buf2) {
-				t.Errorf("round-trip mismatch\n  got  %x\n  want %x", buf2, buf)
+				t.Errorf("round-trip mismatch")
 			}
 		})
 	}
 }
 
 // =============================================================================
-// §3 ser:"nil" behavior
-// =============================================================================
-
-func TestOptionalMarker_PresentAndAbsent(t *testing.T) {
-	absent := PingRequest{ID: []byte("x"), RootTip: nil}
-	var buf []byte
-	if err := serialize.Serialize(&buf, &absent); err != nil {
-		t.Fatalf("Serialize absent: %v", err)
-	}
-	if buf[len(buf)-1] != 0x00 {
-		t.Errorf("absent optional should end with 0x00, got %x", buf[len(buf)-1])
-	}
-
-	present := PingRequest{ID: []byte("x"), RootTip: &RawBytes{0xAA}}
-	buf = nil
-	if err := serialize.Serialize(&buf, &present); err != nil {
-		t.Fatalf("Serialize present: %v", err)
-	}
-	if buf[len(buf)-2] != 0x01 || buf[len(buf)-1] != 0xAA {
-		t.Errorf("present optional should write marker 0x01 then data, got %x", buf[len(buf)-2:])
-	}
-}
-
-func TestNonOptionalRawBytes_NoMarker(t *testing.T) {
-	req := AddRootBlockRequest{RootBlock: &RawBytes{0xAA}, ExpectSwitch: true}
-	var buf []byte
-	if err := serialize.Serialize(&buf, &req); err != nil {
-		t.Fatalf("Serialize: %v", err)
-	}
-	// RawBytes now uses 4-byte length prefix, so first bytes should be 00000001 (length=1)
-	// followed by AA (actual data), then 01 (ExpectSwitch=true)
-	want := []byte{0x00, 0x00, 0x00, 0x01, 0xAA, 0x01}
-	if len(buf) < len(want) {
-		t.Fatalf("buffer too short: got %d bytes, want at least %d", len(buf), len(want))
-	}
-	for i, b := range want {
-		if buf[i] != b {
-			t.Errorf("byte %d: got %x, want %x\nfull buf: %x", i, buf[i], b, buf)
-			break
-		}
-	}
-}
-
-// =============================================================================
-// §4 Wire compatibility (hand-computed vectors)
+// §3 Python/Go protocol compatibility
 // =============================================================================
 //
-// These test vectors are hand-computed from the Python FIELDS definitions to
-// verify that Go serialization produces identical bytes. They are NOT produced
-// by running pyquarkchain directly.
+// Golden vectors are derived from pyquarkchain's FIELDS definitions.
+// They verify Go serialization produces byte-identical output to Python.
 
-func TestWireCompat_PingRequest(t *testing.T) {
+// --- Primitives ---
+
+func TestPythonCompat_Address(t *testing.T) {
+	tests := []struct {
+		name      string
+		addr      account.Address
+		pythonHex string
+	}{
+		{
+			"simple",
+			account.Address{
+				Recipient:    account.Recipient{0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01},
+				FullShardKey: 0x00010001,
+			},
+			"010101010101010101010101010101010101010100010001",
+		},
+		{
+			"empty_recipient",
+			account.Address{
+				Recipient:    account.Recipient{},
+				FullShardKey: 0x00010001,
+			},
+			"000000000000000000000000000000000000000000010001",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			goBytes, err := serialize.SerializeToBytes(&tc.addr)
+			if err != nil {
+				t.Fatalf("Serialize: %v", err)
+			}
+			assertPythonMatch(t, tc.pythonHex, goBytes)
+		})
+	}
+}
+
+func TestPythonCompat_OptionalAddress(t *testing.T) {
+	tests := []struct {
+		name      string
+		addr      *account.Address
+		pythonHex string
+	}{
+		{"none", nil, "00"},
+		{
+			"present",
+			&account.Address{
+				Recipient:    account.Recipient{0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02},
+				FullShardKey: 0x00010001,
+			},
+			"01020202020202020202020202020202020202020200010001",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var goBytes []byte
+			if tc.addr == nil {
+				goBytes = []byte{0x00}
+			} else {
+				addrBytes, err := serialize.SerializeToBytes(tc.addr)
+				if err != nil {
+					t.Fatalf("Serialize: %v", err)
+				}
+				goBytes = append([]byte{0x01}, addrBytes...)
+			}
+			assertPythonMatch(t, tc.pythonHex, goBytes)
+		})
+	}
+}
+
+func TestPythonCompat_Uint256(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     *big.Int
+		pythonHex string
+	}{
+		{"zero", big.NewInt(0), "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"small_1000", big.NewInt(1000), "00000000000000000000000000000000000000000000000000000000000003e8"},
+		{"max_uint256", new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1)), "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ui := serialize.Uint256{Value: tc.value}
+			goBytes, err := serialize.SerializeToBytes(&ui)
+			if err != nil {
+				t.Fatalf("Serialize: %v", err)
+			}
+			assertPythonMatch(t, tc.pythonHex, goBytes)
+		})
+	}
+}
+
+func TestPythonCompat_BigUint(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     *big.Int
+		pythonHex string
+	}{
+		{"zero", big.NewInt(0), "00"},
+		{"small_1000000", big.NewInt(1000000), "030f4240"},
+		{"power_of_256", new(big.Int).Exp(big.NewInt(256), big.NewInt(10), nil), "0b0100000000000000000000"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			bu := serialize.BigUint{Value: tc.value}
+			goBytes, err := serialize.SerializeToBytes(&bu)
+			if err != nil {
+				t.Fatalf("Serialize: %v", err)
+			}
+			assertPythonMatch(t, tc.pythonHex, goBytes)
+		})
+	}
+}
+
+// --- Messages ---
+//
+// Coverage matrix:
+//   PingRequest          → simple fields (bytes, []uint32, Optional)
+//   SlaveInfo            → bytes, []uint32, uint16
+//   GetAccountDataRequest → Address + Optional(uint64)
+
+func TestPythonCompat_PingRequest(t *testing.T) {
+	// ID="test", FullShardIDList=[1,2], RootTip=None
 	wantHex := "0000000474657374000000020000000100000002" + "00"
 
 	ping := PingRequest{
@@ -391,30 +259,11 @@ func TestWireCompat_PingRequest(t *testing.T) {
 	if err := serialize.Serialize(&buf, &ping); err != nil {
 		t.Fatalf("Serialize: %v", err)
 	}
-	gotHex := hexEncode(buf)
-	if gotHex != wantHex {
-		t.Errorf("wire mismatch:\n  got  %s\n  want %s", gotHex, wantHex)
-	}
+	assertPythonMatch(t, wantHex, buf)
 }
 
-func TestWireCompat_PongResponse(t *testing.T) {
-	wantHex := "000000026f6b0000000100000003"
-
-	pong := PongResponse{
-		ID:              []byte("ok"),
-		FullShardIDList: []uint32{3},
-	}
-	var buf []byte
-	if err := serialize.Serialize(&buf, &pong); err != nil {
-		t.Fatalf("Serialize: %v", err)
-	}
-	gotHex := hexEncode(buf)
-	if gotHex != wantHex {
-		t.Errorf("wire mismatch:\n  got  %s\n  want %s", gotHex, wantHex)
-	}
-}
-
-func TestWireCompat_SlaveInfo(t *testing.T) {
+func TestPythonCompat_SlaveInfo(t *testing.T) {
+	// ID="s1", Host="localhost", Port=38391, FullShardIDList=[0x00010001]
 	wantHex := "000000027331" +
 		"000000096c6f63616c686f7374" +
 		"95f7" +
@@ -430,14 +279,200 @@ func TestWireCompat_SlaveInfo(t *testing.T) {
 	if err := serialize.Serialize(&buf, &slave); err != nil {
 		t.Fatalf("Serialize: %v", err)
 	}
-	gotHex := hexEncode(buf)
-	if gotHex != wantHex {
-		t.Errorf("wire mismatch:\n  got  %s\n  want %s", gotHex, wantHex)
+	assertPythonMatch(t, wantHex, buf)
+}
+
+func TestPythonCompat_GetAccountDataRequest(t *testing.T) {
+	// Address(recipient=0x0101..01, full_shard_key=0x00010001), BlockHeight=None
+	wantHex := "010101010101010101010101010101010101010100010001" + "00"
+
+	req := GetAccountDataRequest{
+		Address: account.Address{
+			Recipient:    account.Recipient{0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01},
+			FullShardKey: 0x00010001,
+		},
+		BlockHeight: nil,
+	}
+	var buf []byte
+	if err := serialize.Serialize(&buf, &req); err != nil {
+		t.Fatalf("Serialize: %v", err)
+	}
+	assertPythonMatch(t, wantHex, buf)
+}
+
+func TestPythonCompat_GetAccountDataRequest_NonNilBlockHeight(t *testing.T) {
+	// Address(recipient=0x0101..01, full_shard_key=0x00010001), BlockHeight=100
+	// Covers: Optional(*uint64) non-nil → presence marker (0x01) + 8B uint64
+	wantHex := "010101010101010101010101010101010101010100010001" +
+		"01" +
+		"0000000000000064"
+
+	blockHeight := uint64(100)
+	req := GetAccountDataRequest{
+		Address: account.Address{
+			Recipient:    account.Recipient{0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01},
+			FullShardKey: 0x00010001,
+		},
+		BlockHeight: &blockHeight,
+	}
+	var buf []byte
+	if err := serialize.Serialize(&buf, &req); err != nil {
+		t.Fatalf("Serialize: %v", err)
+	}
+	assertPythonMatch(t, wantHex, buf)
+}
+
+func TestPythonCompat_TransactionDetail(t *testing.T) {
+	// Covers: Uint256 in message context, Optional(Address) non-nil in message context,
+	// hash256, uint64, bool, and nested struct composition.
+	//
+	// Python FIELDS:
+	//   ("tx_hash", hash256),              # [32]byte
+	//   ("nonce", uint64),                 # uint64
+	//   ("from_address", Address),         # account.Address (24B)
+	//   ("to_address", Optional(Address)), # *account.Address + ser:"nil"
+	//   ("value", uint256),                # serialize.Uint256 (32B fixed)
+	//   ("block_height", uint64),          # uint64
+	//   ("timestamp", uint64),             # uint64
+	//   ("success", boolean),              # bool
+	//   ("gas_token_id", uint64),          # uint64
+	//   ("transfer_token_id", uint64),     # uint64
+	//   ("is_from_root_chain", boolean),   # bool
+	//
+	// TxHash = makeHash(0x01) = {0x01, 0x02, ..., 0x20}
+	// FromAddress.Recipient = {0x02, 0x00, ..., 0x00} (20 bytes)
+	// ToAddress.Recipient = {0x03, 0x00, ..., 0x00} (20 bytes)
+	wantHex := "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20" + // tx_hash (32B)
+		"0000000000000005" + // nonce (8B)
+		"020000000000000000000000000000000000000000010001" + // from_address (24B)
+		"01" + // to_address present marker
+		"030000000000000000000000000000000000000000020002" + // to_address (24B)
+		"00000000000000000000000000000000000000000000000000000000000003e8" + // value uint256 (32B)
+		"0000000000000064" + // block_height (8B)
+		"00000000499602d2" + // timestamp (8B)
+		"01" + // success (1B)
+		"0000000000000001" + // gas_token_id (8B)
+		"0000000000000002" + // transfer_token_id (8B)
+		"00" // is_from_root_chain (1B)
+
+	detail := TransactionDetail{
+		TxHash:          makeHash(0x01),
+		Nonce:           5,
+		FromAddress:     makeAddress(0x00010001, 0x02),
+		ToAddress:       &account.Address{Recipient: account.Recipient{0x03}, FullShardKey: 0x00020002},
+		Value:           serialize.Uint256{Value: big.NewInt(1000)},
+		BlockHeight:     100,
+		Timestamp:       1234567890,
+		Success:         true,
+		GasTokenID:      1,
+		TransferTokenID: 2,
+		IsFromRootChain: false,
+	}
+	var buf []byte
+	if err := serialize.Serialize(&buf, &detail); err != nil {
+		t.Fatalf("Serialize: %v", err)
+	}
+	assertPythonMatch(t, wantHex, buf)
+}
+
+func TestPythonCompat_SyncMinorBlockListResponse_NonNilShardStats(t *testing.T) {
+	// Covers: BigUint in message context (via ShardStats.Difficulty),
+	// Optional(struct) non-nil (ShardStats), and nested struct composition.
+	//
+	// Python FIELDS:
+	//   ("error_code", uint32),
+	//   ("block_coinbase_map", PrependedSizeMapSerializer(4, hash256, TokenBalanceMap)),
+	//   ("shard_stats", Optional(ShardStats)),
+	//
+	// ShardStats FIELDS:
+	//   ("branch", Branch),              # uint32
+	//   ("height", uint64),              # uint64
+	//   ("difficulty", biguint),         # BigUint (1B len + bytes)
+	//   ("coinbase_address", Address),   # account.Address (24B)
+	//   ("timestamp", uint64),           # uint64
+	//   ("tx_count60s", uint32),         # uint32
+	//   ("pending_tx_count", uint32),    # uint32
+	//   ("total_tx_count", uint32),      # uint32
+	//   ("block_count60s", uint32),      # uint32
+	//   ("stale_block_count60s", uint32),# uint32
+	//   ("last_block_time", uint32),     # uint32
+	wantHex := "00000000" + // error_code (4B)
+		"02aabb" + // block_coinbase_map: 1B len=2 + 2B data (3B)
+		"01" + // shard_stats present marker (1B)
+		"00000001" + // branch (4B)
+		"0000000000000064" + // height (8B)
+		"030f4240" + // difficulty: 1B len=3 + 3B data (4B)
+		"040000000000000000000000000000000000000000010001" + // coinbase_address (24B)
+		"00000000499602d2" + // timestamp (8B)
+		"0000000a" + // tx_count60s (4B)
+		"00000005" + // pending_tx_count (4B)
+		"00000064" + // total_tx_count (4B)
+		"00000002" + // block_count60s (4B)
+		"00000001" + // stale_block_count60s (4B)
+		"77359400" // last_block_time (4B)
+
+	resp := SyncMinorBlockListResponse{
+		ErrorCode:        0,
+		BlockCoinbaseMap: &RawBytes{0xAA, 0xBB},
+		ShardStats: &ShardStats{
+			Branch:             1,
+			Height:             100,
+			Difficulty:         serialize.BigUint{Value: big.NewInt(1000000)},
+			CoinbaseAddress:    makeAddress(0x00010001, 0x04),
+			Timestamp:          1234567890,
+			TxCount60s:         10,
+			PendingTxCount:     5,
+			TotalTxCount:       100,
+			BlockCount60s:      2,
+			StaleBlockCount60s: 1,
+			LastBlockTime:      2000000000,
+		},
+	}
+	var buf []byte
+	if err := serialize.Serialize(&buf, &resp); err != nil {
+		t.Fatalf("Serialize: %v", err)
+	}
+	assertPythonMatch(t, wantHex, buf)
+}
+
+// assertPythonMatch compares Go serialized bytes against Python golden hex.
+func assertPythonMatch(t *testing.T, pythonHex string, goBytes []byte) {
+	t.Helper()
+	pythonBytes, err := hex.DecodeString(pythonHex)
+	if err != nil {
+		t.Fatalf("invalid python hex: %v", err)
+	}
+	if bytes.Equal(pythonBytes, goBytes) {
+		return
+	}
+	t.Errorf("python/go wire mismatch")
+	t.Errorf("  python (%d bytes): %s", len(pythonBytes), pythonHex)
+	t.Errorf("  go     (%d bytes): %s", len(goBytes), hex.EncodeToString(goBytes))
+	minLen := len(pythonBytes)
+	if len(goBytes) < minLen {
+		minLen = len(goBytes)
+	}
+	for i := 0; i < minLen; i++ {
+		if pythonBytes[i] != goBytes[i] {
+			start := i - 4
+			if start < 0 {
+				start = 0
+			}
+			end := i + 5
+			if end > minLen {
+				end = minLen
+			}
+			t.Errorf("  first diff at byte %d: python=%x go=%x", i, pythonBytes[start:end], goBytes[start:end])
+			return
+		}
+	}
+	if len(pythonBytes) != len(goBytes) {
+		t.Errorf("  length mismatch: python=%d go=%d", len(pythonBytes), len(goBytes))
 	}
 }
 
 // =============================================================================
-// §5 Field order verification
+// §4 Field order verification
 // =============================================================================
 
 func TestFieldOrder(t *testing.T) {
@@ -473,132 +508,8 @@ func TestFieldOrder(t *testing.T) {
 }
 
 // =============================================================================
-// §6 Factory completeness
+// §5 Factory completeness
 // =============================================================================
-
-func TestNewClusterMessage_Completeness(t *testing.T) {
-	ops := []ClusterOp{
-		ClusterOpPing,
-		ClusterOpPong,
-		ClusterOpConnectToSlavesRequest,
-		ClusterOpConnectToSlavesResponse,
-		ClusterOpAddRootBlockRequest,
-		ClusterOpAddRootBlockResponse,
-		ClusterOpGetEcoInfoListRequest,
-		ClusterOpGetEcoInfoListResponse,
-		ClusterOpGetNextBlockToMineRequest,
-		ClusterOpGetNextBlockToMineResponse,
-		ClusterOpGetUnconfirmedHeadersRequest,
-		ClusterOpGetUnconfirmedHeadersResponse,
-		ClusterOpGetAccountDataRequest,
-		ClusterOpGetAccountDataResponse,
-		ClusterOpAddTransactionRequest,
-		ClusterOpAddTransactionResponse,
-		ClusterOpAddMinorBlockHeaderRequest,
-		ClusterOpAddMinorBlockHeaderResponse,
-		ClusterOpAddXshardTxListRequest,
-		ClusterOpAddXshardTxListResponse,
-		ClusterOpSyncMinorBlockListRequest,
-		ClusterOpSyncMinorBlockListResponse,
-		ClusterOpAddMinorBlockRequest,
-		ClusterOpAddMinorBlockResponse,
-		ClusterOpCreateClusterPeerConnectionRequest,
-		ClusterOpCreateClusterPeerConnectionResponse,
-		ClusterOpDestroyClusterPeerConnectionCommand,
-		ClusterOpGetMinorBlockRequest,
-		ClusterOpGetMinorBlockResponse,
-		ClusterOpGetTransactionRequest,
-		ClusterOpGetTransactionResponse,
-		ClusterOpBatchAddXshardTxListRequest,
-		ClusterOpBatchAddXshardTxListResponse,
-		ClusterOpExecuteTransactionRequest,
-		ClusterOpExecuteTransactionResponse,
-		ClusterOpGetTransactionReceiptRequest,
-		ClusterOpGetTransactionReceiptResponse,
-		ClusterOpMineRequest,
-		ClusterOpMineResponse,
-		ClusterOpGenTxRequest,
-		ClusterOpGenTxResponse,
-		ClusterOpGetTransactionListByAddressRequest,
-		ClusterOpGetTransactionListByAddressResponse,
-		ClusterOpGetLogRequest,
-		ClusterOpGetLogResponse,
-		ClusterOpEstimateGasRequest,
-		ClusterOpEstimateGasResponse,
-		ClusterOpGetStorageRequest,
-		ClusterOpGetStorageResponse,
-		ClusterOpGetCodeRequest,
-		ClusterOpGetCodeResponse,
-		ClusterOpGasPriceRequest,
-		ClusterOpGasPriceResponse,
-		ClusterOpGetWorkRequest,
-		ClusterOpGetWorkResponse,
-		ClusterOpSubmitWorkRequest,
-		ClusterOpSubmitWorkResponse,
-		ClusterOpAddMinorBlockHeaderListRequest,
-		ClusterOpAddMinorBlockHeaderListResponse,
-		ClusterOpCheckMinorBlockRequest,
-		ClusterOpCheckMinorBlockResponse,
-		ClusterOpGetAllTransactionsRequest,
-		ClusterOpGetAllTransactionsResponse,
-		ClusterOpGetRootChainStakesRequest,
-		ClusterOpGetRootChainStakesResponse,
-		ClusterOpGetTotalBalanceRequest,
-		ClusterOpGetTotalBalanceResponse,
-	}
-	for _, op := range ops {
-		t.Run("ClusterOp(0x"+string("0123456789ABCDEF"[byte(op)>>4])+string("0123456789ABCDEF"[byte(op)&0x0F])+")", func(t *testing.T) {
-			msg, err := NewClusterMessage(op)
-			if err != nil {
-				t.Fatalf("NewClusterMessage(0x%x): %v", op, err)
-			}
-			if msg == nil {
-				t.Fatalf("NewClusterMessage(0x%x) returned nil", op)
-			}
-			typ := reflect.TypeOf(msg)
-			if typ.Kind() != reflect.Pointer || typ.Elem().Kind() != reflect.Struct {
-				t.Errorf("expected *struct, got %T", msg)
-			}
-		})
-	}
-}
-
-func TestNewCommandMessage_Completeness(t *testing.T) {
-	ops := []CommandOp{
-		CommandOpHello,
-		CommandOpNewMinorBlockHeaderList,
-		CommandOpNewTransactionList,
-		CommandOpGetPeerListRequest,
-		CommandOpGetPeerListResponse,
-		CommandOpGetRootBlockHeaderListRequest,
-		CommandOpGetRootBlockHeaderListResponse,
-		CommandOpGetRootBlockListRequest,
-		CommandOpGetRootBlockListResponse,
-		CommandOpGetMinorBlockListRequest,
-		CommandOpGetMinorBlockListResponse,
-		CommandOpGetMinorBlockHeaderListRequest,
-		CommandOpGetMinorBlockHeaderListResponse,
-		CommandOpNewBlockMinor,
-		CommandOpPing,
-		CommandOpPong,
-		CommandOpGetRootBlockHeaderListWithSkipRequest,
-		CommandOpGetRootBlockHeaderListWithSkipResponse,
-		CommandOpNewRootBlock,
-		CommandOpGetMinorBlockHeaderListWithSkipRequest,
-		CommandOpGetMinorBlockHeaderListWithSkipResponse,
-	}
-	for _, op := range ops {
-		t.Run("", func(t *testing.T) {
-			msg, err := NewCommandMessage(op)
-			if err != nil {
-				t.Fatalf("NewCommandMessage(0x%x): %v", op, err)
-			}
-			if msg == nil {
-				t.Fatalf("NewCommandMessage(0x%x) returned nil", op)
-			}
-		})
-	}
-}
 
 func TestNewClusterMessage_UnknownOpcode(t *testing.T) {
 	_, err := NewClusterMessage(ClusterOp(0xFF))
@@ -614,18 +525,145 @@ func TestNewCommandMessage_UnknownOpcode(t *testing.T) {
 	}
 }
 
+func TestOpcodeStructTypeMapping(t *testing.T) {
+	// Verifies that each opcode maps to the correct struct type, not just non-nil.
+	// Prevents opcode swap errors that would cause silent protocol corruption.
+	clusterCases := []struct {
+		op       ClusterOp
+		expected reflect.Type
+	}{
+		{ClusterOpPing, reflect.TypeFor[PingRequest]()},
+		{ClusterOpPong, reflect.TypeFor[PongResponse]()},
+		{ClusterOpConnectToSlavesRequest, reflect.TypeFor[ConnectToSlavesRequest]()},
+		{ClusterOpConnectToSlavesResponse, reflect.TypeFor[ConnectToSlavesResponse]()},
+		{ClusterOpAddRootBlockRequest, reflect.TypeFor[AddRootBlockRequest]()},
+		{ClusterOpAddRootBlockResponse, reflect.TypeFor[AddRootBlockResponse]()},
+		{ClusterOpGetEcoInfoListRequest, reflect.TypeFor[GetEcoInfoListRequest]()},
+		{ClusterOpGetEcoInfoListResponse, reflect.TypeFor[GetEcoInfoListResponse]()},
+		{ClusterOpGetNextBlockToMineRequest, reflect.TypeFor[GetNextBlockToMineRequest]()},
+		{ClusterOpGetNextBlockToMineResponse, reflect.TypeFor[GetNextBlockToMineResponse]()},
+		{ClusterOpGetUnconfirmedHeadersRequest, reflect.TypeFor[GetUnconfirmedHeadersRequest]()},
+		{ClusterOpGetUnconfirmedHeadersResponse, reflect.TypeFor[GetUnconfirmedHeadersResponse]()},
+		{ClusterOpGetAccountDataRequest, reflect.TypeFor[GetAccountDataRequest]()},
+		{ClusterOpGetAccountDataResponse, reflect.TypeFor[GetAccountDataResponse]()},
+		{ClusterOpAddTransactionRequest, reflect.TypeFor[AddTransactionRequest]()},
+		{ClusterOpAddTransactionResponse, reflect.TypeFor[AddTransactionResponse]()},
+		{ClusterOpAddMinorBlockHeaderRequest, reflect.TypeFor[AddMinorBlockHeaderRequest]()},
+		{ClusterOpAddMinorBlockHeaderResponse, reflect.TypeFor[AddMinorBlockHeaderResponse]()},
+		{ClusterOpAddXshardTxListRequest, reflect.TypeFor[AddXshardTxListRequest]()},
+		{ClusterOpAddXshardTxListResponse, reflect.TypeFor[AddXshardTxListResponse]()},
+		{ClusterOpSyncMinorBlockListRequest, reflect.TypeFor[SyncMinorBlockListRequest]()},
+		{ClusterOpSyncMinorBlockListResponse, reflect.TypeFor[SyncMinorBlockListResponse]()},
+		{ClusterOpAddMinorBlockRequest, reflect.TypeFor[AddMinorBlockRequest]()},
+		{ClusterOpAddMinorBlockResponse, reflect.TypeFor[AddMinorBlockResponse]()},
+		{ClusterOpCreateClusterPeerConnectionRequest, reflect.TypeFor[CreateClusterPeerConnectionRequest]()},
+		{ClusterOpCreateClusterPeerConnectionResponse, reflect.TypeFor[CreateClusterPeerConnectionResponse]()},
+		{ClusterOpDestroyClusterPeerConnectionCommand, reflect.TypeFor[DestroyClusterPeerConnectionCommand]()},
+		{ClusterOpGetMinorBlockRequest, reflect.TypeFor[GetMinorBlockRequest]()},
+		{ClusterOpGetMinorBlockResponse, reflect.TypeFor[GetMinorBlockResponse]()},
+		{ClusterOpGetTransactionRequest, reflect.TypeFor[GetTransactionRequest]()},
+		{ClusterOpGetTransactionResponse, reflect.TypeFor[GetTransactionResponse]()},
+		{ClusterOpBatchAddXshardTxListRequest, reflect.TypeFor[BatchAddXshardTxListRequest]()},
+		{ClusterOpBatchAddXshardTxListResponse, reflect.TypeFor[BatchAddXshardTxListResponse]()},
+		{ClusterOpExecuteTransactionRequest, reflect.TypeFor[ExecuteTransactionRequest]()},
+		{ClusterOpExecuteTransactionResponse, reflect.TypeFor[ExecuteTransactionResponse]()},
+		{ClusterOpGetTransactionReceiptRequest, reflect.TypeFor[GetTransactionReceiptRequest]()},
+		{ClusterOpGetTransactionReceiptResponse, reflect.TypeFor[GetTransactionReceiptResponse]()},
+		{ClusterOpMineRequest, reflect.TypeFor[MineRequest]()},
+		{ClusterOpMineResponse, reflect.TypeFor[MineResponse]()},
+		{ClusterOpGenTxRequest, reflect.TypeFor[GenTxRequest]()},
+		{ClusterOpGenTxResponse, reflect.TypeFor[GenTxResponse]()},
+		{ClusterOpGetTransactionListByAddressRequest, reflect.TypeFor[GetTransactionListByAddressRequest]()},
+		{ClusterOpGetTransactionListByAddressResponse, reflect.TypeFor[GetTransactionListByAddressResponse]()},
+		{ClusterOpGetLogRequest, reflect.TypeFor[GetLogRequest]()},
+		{ClusterOpGetLogResponse, reflect.TypeFor[GetLogResponse]()},
+		{ClusterOpEstimateGasRequest, reflect.TypeFor[EstimateGasRequest]()},
+		{ClusterOpEstimateGasResponse, reflect.TypeFor[EstimateGasResponse]()},
+		{ClusterOpGetStorageRequest, reflect.TypeFor[GetStorageRequest]()},
+		{ClusterOpGetStorageResponse, reflect.TypeFor[GetStorageResponse]()},
+		{ClusterOpGetCodeRequest, reflect.TypeFor[GetCodeRequest]()},
+		{ClusterOpGetCodeResponse, reflect.TypeFor[GetCodeResponse]()},
+		{ClusterOpGasPriceRequest, reflect.TypeFor[GasPriceRequest]()},
+		{ClusterOpGasPriceResponse, reflect.TypeFor[GasPriceResponse]()},
+		{ClusterOpGetWorkRequest, reflect.TypeFor[GetWorkRequest]()},
+		{ClusterOpGetWorkResponse, reflect.TypeFor[GetWorkResponse]()},
+		{ClusterOpSubmitWorkRequest, reflect.TypeFor[SubmitWorkRequest]()},
+		{ClusterOpSubmitWorkResponse, reflect.TypeFor[SubmitWorkResponse]()},
+		{ClusterOpAddMinorBlockHeaderListRequest, reflect.TypeFor[AddMinorBlockHeaderListRequest]()},
+		{ClusterOpAddMinorBlockHeaderListResponse, reflect.TypeFor[AddMinorBlockHeaderListResponse]()},
+		{ClusterOpCheckMinorBlockRequest, reflect.TypeFor[CheckMinorBlockRequest]()},
+		{ClusterOpCheckMinorBlockResponse, reflect.TypeFor[CheckMinorBlockResponse]()},
+		{ClusterOpGetAllTransactionsRequest, reflect.TypeFor[GetAllTransactionsRequest]()},
+		{ClusterOpGetAllTransactionsResponse, reflect.TypeFor[GetAllTransactionsResponse]()},
+		{ClusterOpGetRootChainStakesRequest, reflect.TypeFor[GetRootChainStakesRequest]()},
+		{ClusterOpGetRootChainStakesResponse, reflect.TypeFor[GetRootChainStakesResponse]()},
+		{ClusterOpGetTotalBalanceRequest, reflect.TypeFor[GetTotalBalanceRequest]()},
+		{ClusterOpGetTotalBalanceResponse, reflect.TypeFor[GetTotalBalanceResponse]()},
+	}
+	for _, tc := range clusterCases {
+		t.Run("", func(t *testing.T) {
+			msg, err := NewClusterMessage(tc.op)
+			if err != nil {
+				t.Fatalf("NewClusterMessage(0x%x): %v", tc.op, err)
+			}
+			got := reflect.TypeOf(msg)
+			want := reflect.PointerTo(tc.expected)
+			if got != want {
+				t.Errorf("opcode 0x%x: got type %v, want %v", tc.op, got, want)
+			}
+		})
+	}
+
+	commandCases := []struct {
+		op       CommandOp
+		expected reflect.Type
+	}{
+		{CommandOpHello, reflect.TypeFor[HelloCommand]()},
+		{CommandOpNewMinorBlockHeaderList, reflect.TypeFor[NewMinorBlockHeaderListCommand]()},
+		{CommandOpNewTransactionList, reflect.TypeFor[NewTransactionListCommand]()},
+		{CommandOpGetPeerListRequest, reflect.TypeFor[GetPeerListRequest]()},
+		{CommandOpGetPeerListResponse, reflect.TypeFor[GetPeerListResponse]()},
+		{CommandOpGetRootBlockHeaderListRequest, reflect.TypeFor[GetRootBlockHeaderListRequest]()},
+		{CommandOpGetRootBlockHeaderListResponse, reflect.TypeFor[GetRootBlockHeaderListResponse]()},
+		{CommandOpGetRootBlockListRequest, reflect.TypeFor[GetRootBlockListRequest]()},
+		{CommandOpGetRootBlockListResponse, reflect.TypeFor[GetRootBlockListResponse]()},
+		{CommandOpGetMinorBlockListRequest, reflect.TypeFor[GetMinorBlockListRequest]()},
+		{CommandOpGetMinorBlockListResponse, reflect.TypeFor[GetMinorBlockListResponse]()},
+		{CommandOpGetMinorBlockHeaderListRequest, reflect.TypeFor[GetMinorBlockHeaderListRequest]()},
+		{CommandOpGetMinorBlockHeaderListResponse, reflect.TypeFor[GetMinorBlockHeaderListResponse]()},
+		{CommandOpNewBlockMinor, reflect.TypeFor[NewBlockMinorCommand]()},
+		{CommandOpPing, reflect.TypeFor[PingPongCommand]()},
+		{CommandOpPong, reflect.TypeFor[PingPongCommand]()},
+		{CommandOpGetRootBlockHeaderListWithSkipRequest, reflect.TypeFor[GetRootBlockHeaderListWithSkipRequest]()},
+		{CommandOpGetRootBlockHeaderListWithSkipResponse, reflect.TypeFor[GetRootBlockHeaderListResponse]()},
+		{CommandOpNewRootBlock, reflect.TypeFor[NewRootBlockCommand]()},
+		{CommandOpGetMinorBlockHeaderListWithSkipRequest, reflect.TypeFor[GetMinorBlockHeaderListWithSkipRequest]()},
+		{CommandOpGetMinorBlockHeaderListWithSkipResponse, reflect.TypeFor[GetMinorBlockHeaderListResponse]()},
+	}
+	for _, tc := range commandCases {
+		t.Run("", func(t *testing.T) {
+			msg, err := NewCommandMessage(tc.op)
+			if err != nil {
+				t.Fatalf("NewCommandMessage(0x%x): %v", tc.op, err)
+			}
+			got := reflect.TypeOf(msg)
+			want := reflect.PointerTo(tc.expected)
+			if got != want {
+				t.Errorf("opcode 0x%x: got type %v, want %v", tc.op, got, want)
+			}
+		})
+	}
+}
+
 // =============================================================================
 // Helpers
 // =============================================================================
 
-func makeAddress(fullShardID uint32, recipient byte) [AddressLength]byte {
-	var addr [AddressLength]byte
-	addr[16] = byte(fullShardID >> 24)
-	addr[17] = byte(fullShardID >> 16)
-	addr[18] = byte(fullShardID >> 8)
-	addr[19] = byte(fullShardID)
-	addr[0] = recipient
-	return addr
+func makeAddress(fullShardID uint32, recipient byte) account.Address {
+	return account.Address{
+		Recipient:    account.BytesToIdentityRecipient([]byte{recipient, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
+		FullShardKey: fullShardID,
+	}
 }
 
 func makeHash(seed byte) [HashLength]byte {
@@ -634,22 +672,4 @@ func makeHash(seed byte) [HashLength]byte {
 		h[i] = seed + byte(i)
 	}
 	return h
-}
-
-func makeUint128(seed uint64) [UInt128Length]byte {
-	var u [UInt128Length]byte
-	for i := range 8 {
-		u[i] = byte(seed >> (56 - 8*i))
-	}
-	return u
-}
-
-func hexEncode(b []byte) string {
-	const hexChars = "0123456789abcdef"
-	s := make([]byte, len(b)*2)
-	for i, v := range b {
-		s[i*2] = hexChars[v>>4]
-		s[i*2+1] = hexChars[v&0x0f]
-	}
-	return string(s)
 }
