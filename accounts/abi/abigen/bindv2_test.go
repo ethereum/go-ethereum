@@ -297,6 +297,28 @@ func TestBindingV2ConvertedV1Tests(t *testing.T) {
 	}
 }
 
+func TestBindingV2ErrorUsesOriginalName(t *testing.T) {
+	const errorABI = `[{
+		"inputs":[{"internalType":"uint256","name":"value","type":"uint256"}],
+		"name":"bad_thing",
+		"type":"error"
+	}]`
+
+	code, err := BindV2([]string{"C"}, []string{errorABI}, []string{""}, "bindings", nil, nil)
+	if err != nil {
+		t.Fatalf("failed to generate binding: %v", err)
+	}
+	for _, want := range []string{
+		`abi.Errors["bad_thing"]`,
+		`UnpackIntoInterface(out, "bad_thing", raw)`,
+		`UnpackBadThingError(raw[4:])`,
+	} {
+		if !strings.Contains(code, want) {
+			t.Fatalf("generated binding does not contain %q:\n%s", want, code)
+		}
+	}
+}
+
 func TestNormalizeArgs(t *testing.T) {
 	type normalizeArgsTc struct {
 		inp      []string
