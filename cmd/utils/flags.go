@@ -554,6 +554,11 @@ var (
 		Usage:    "Raise the open file descriptor resource limit (default = system fd limit)",
 		Category: flags.PerfCategory,
 	}
+	MemoryLimitFlag = &cli.IntFlag{
+		Name:     "memorylimit",
+		Usage:    "Soft memory limit for the Go runtime in megabytes (default = derived from --cache and available memory)",
+		Category: flags.PerfCategory,
+	}
 	CryptoKZGFlag = &cli.StringFlag{
 		Name:     "crypto.kzg",
 		Usage:    "KZG library implementation to use; gokzg (recommended) or ckzg",
@@ -1776,11 +1781,16 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// memory below a soft cap. We size the cap from the same cgroup-aware
 	// limit used for the cache sanitizer above (total), so it's large enough
 	// that GOGC=100 governs steady state but the limit engages under real
-	// memory pressure. When the effective limit can't be determined, leave
-	// Go's defaults untouched.
-	if total > 0 {
+	// memory pressure. An explicit --memorylimit overrides this and when neither
+	// is available, Go's defaults are left untouched.
+	if ctx.IsSet(MemoryLimitFlag.Name) {
+		memLimit := int64(ctx.Int(MemoryLimitFlag.Name)) * 1024 * 1024
+		log.Debug("Setting Go memory limit", "MB", memLimit/1024/1024, "source", "flag")
+		godebug.SetMemoryLimit(memLimit)
+		godebug.SetGCPercent(100)
+	} else if total > 0 {
 		cache := int64(ctx.Int(CacheFlag.Name)) * 1024 * 1024
-		// Target ~4× the cache so GOGC=100 governs steady state, but cap at
+		// Target ~4x the cache so GOGC=100 governs steady state, but cap at
 		// half of memory. The rest is for the OS, page cache, and off-heap
 		// caches like Pebble that SetMemoryLimit doesn't count.
 		memLimit := min(int64(total)/2, cache*4)
