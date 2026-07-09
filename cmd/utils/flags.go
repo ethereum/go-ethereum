@@ -1771,32 +1771,23 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// burned ~20% of CPU on `runtime.scanobject`/`gcDrain`/`findObject`
 	// (confirmed by CPU profile of newPayload).
 	//
-	// Modern Go (1.19+) supports SetMemoryLimit, which lets the runtime
-	// keep GOGC at the default 100 (fewer/larger collections) while still
-	// guaranteeing memory stays below a soft cap. We size the cap so it's
-	// large enough that GOGC=100 governs steady-state behavior, but the
-	// limit kicks in if real memory pressure appears.
-	cache := ctx.Int(CacheFlag.Name)
-	var memLimit int64
-	if mem, memErr := gopsutil.VirtualMemory(); memErr == nil && mem.Total > 0 {
-		// Leave half the host memory for the OS / page cache / other
-		// processes; cap the rest at roughly 4× the configured DB cache
-		// to avoid runaway growth on machines with lots of RAM but a
-		// modest --cache.
-		halfHost := int64(mem.Total / 2)
-		fourCache := int64(cache) * 4 * 1024 * 1024
-		memLimit = min(halfHost, fourCache)
-	} else {
-		// Fallback when the host's total memory isn't reportable.
-		memLimit = int64(cache) * 4 * 1024 * 1024
+	// Modern Go (1.19+) supports SetMemoryLimit, which lets the runtime keep
+	// GOGC at the default 100 (fewer/larger collections) while still keeping
+	// memory below a soft cap. We size the cap from the same cgroup-aware
+	// limit used for the cache sanitizer above (total), so it's large enough
+	// that GOGC=100 governs steady state but the limit engages under real
+	// memory pressure. When the effective limit can't be determined, leave
+	// Go's defaults untouched.
+	if total > 0 {
+		cache := int64(ctx.Int(CacheFlag.Name)) * 1024 * 1024
+		// Target ~4× the cache so GOGC=100 governs steady state, but cap at
+		// half of memory. The rest is for the OS, page cache, and off-heap
+		// caches like Pebble that SetMemoryLimit doesn't count.
+		memLimit := min(int64(total)/2, cache*4)
+		log.Debug("Setting Go memory limit", "MB", memLimit/1024/1024, "source", source)
+		godebug.SetMemoryLimit(memLimit)
+		godebug.SetGCPercent(100)
 	}
-	if memLimit < int64(cache)*1024*1024*2 {
-		// Always allow at least 2× the cache so the cache itself fits.
-		memLimit = int64(cache) * 1024 * 1024 * 2
-	}
-	log.Debug("Setting Go memory limit", "MB", memLimit/1024/1024)
-	godebug.SetMemoryLimit(memLimit)
-	godebug.SetGCPercent(100)
 
 	if ctx.IsSet(SyncTargetFlag.Name) {
 		cfg.SyncMode = ethconfig.FullSync // dev sync target forces full sync
