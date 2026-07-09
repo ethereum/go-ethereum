@@ -82,13 +82,14 @@ const (
 	// beaconUpdateWarnFrequency is the frequency at which to warn the user that
 	// the beacon client is offline.
 	beaconUpdateWarnFrequency = 5 * time.Minute
-
-	// maxReorgDepth is the maximum reorg depth accepted via forkchoiceUpdated.
-	maxReorgDepth = 32
 )
 
 type ConsensusAPI struct {
 	eth *eth.Ethereum
+
+	// maxReorgDepth is the maximum reorg depth accepted via forkchoiceUpdated
+	// (0 = no limit). Configured via ethconfig.Config.EngineMaxReorgDepth.
+	maxReorgDepth uint64
 
 	remoteBlocks *headerQueue  // Cache of remote payloads received
 	localBlocks  *payloadQueue // Cache of local payloads generated
@@ -145,6 +146,7 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 	}
 	api := &ConsensusAPI{
 		eth:               eth,
+		maxReorgDepth:     eth.EngineMaxReorgDepth(),
 		remoteBlocks:      newHeaderQueue(),
 		localBlocks:       newPayloadQueue(),
 		invalidBlocksHits: make(map[common.Hash]int),
@@ -330,9 +332,9 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 			return valid(nil), nil
 		}
 		depth := api.eth.BlockChain().CurrentBlock().Number.Uint64() - block.NumberU64()
-		if depth >= maxReorgDepth {
+		if api.maxReorgDepth > 0 && depth >= api.maxReorgDepth {
 			log.Warn("Refusing too deep reorg", "depth", depth, "head", update.HeadBlockHash)
-			return engine.STATUS_INVALID, engine.TooDeepReorg.With(fmt.Errorf("reorg depth %d exceeds limit %d", depth, maxReorgDepth))
+			return engine.STATUS_INVALID, engine.TooDeepReorg.With(fmt.Errorf("reorg depth %d exceeds limit %d", depth, api.maxReorgDepth))
 		}
 		if !api.eth.Synced() {
 			log.Info("Ignoring beacon update to old head while syncing", "number", block.NumberU64(), "hash", update.HeadBlockHash)

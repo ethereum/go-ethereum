@@ -63,6 +63,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		RPCGasCap               uint64
 		RPCEVMTimeout           time.Duration
 		RPCTxFeeCap             float64
+		EngineMaxReorgDepth     uint64
 		OverrideOsaka           *uint64       `toml:",omitempty"`
 		OverrideAmsterdam       *uint64       `toml:",omitempty"`
 		OverrideBPO1            *uint64       `toml:",omitempty"`
@@ -119,6 +120,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.RPCGasCap = c.RPCGasCap
 	enc.RPCEVMTimeout = c.RPCEVMTimeout
 	enc.RPCTxFeeCap = c.RPCTxFeeCap
+	enc.EngineMaxReorgDepth = c.EngineMaxReorgDepth
 	enc.OverrideOsaka = c.OverrideOsaka
 	enc.OverrideAmsterdam = c.OverrideAmsterdam
 	enc.OverrideBPO1 = c.OverrideBPO1
@@ -179,6 +181,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		RPCGasCap               *uint64
 		RPCEVMTimeout           *time.Duration
 		RPCTxFeeCap             *float64
+		EngineMaxReorgDepth     *uint64
 		OverrideOsaka           *uint64        `toml:",omitempty"`
 		OverrideAmsterdam       *uint64        `toml:",omitempty"`
 		OverrideBPO1            *uint64        `toml:",omitempty"`
@@ -329,6 +332,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.RPCTxFeeCap != nil {
 		c.RPCTxFeeCap = *dec.RPCTxFeeCap
+	}
+	if dec.EngineMaxReorgDepth != nil {
+		c.EngineMaxReorgDepth = *dec.EngineMaxReorgDepth
 	}
 	if dec.OverrideOsaka != nil {
 		c.OverrideOsaka = dec.OverrideOsaka

@@ -426,8 +426,9 @@ func TestEth2DeepReorg(t *testing.T) {
 	*/
 }
 
-// startEthService creates a full node instance for testing.
-func startEthService(t testing.TB, genesis *core.Genesis, blocks []*types.Block) (*node.Node, *eth.Ethereum) {
+// startEthService creates a full node instance for testing. The default test
+// configuration can be adjusted through optional modifier functions.
+func startEthService(t testing.TB, genesis *core.Genesis, blocks []*types.Block, mods ...func(*ethconfig.Config)) (*node.Node, *eth.Ethereum) {
 	t.Helper()
 
 	n, err := node.New(&node.Config{
@@ -448,6 +449,9 @@ func startEthService(t testing.TB, genesis *core.Genesis, blocks []*types.Block)
 		TrieCleanCache: 256,
 		Miner:          miner.DefaultConfig,
 	}
+	for _, mod := range mods {
+		mod(ethcfg)
+	}
 	ethservice, err := eth.New(n, ethcfg)
 	if err != nil {
 		t.Fatal("can't create eth service:", err)
@@ -465,6 +469,54 @@ func startEthService(t testing.TB, genesis *core.Genesis, blocks []*types.Block)
 
 	ethservice.SetSynced()
 	return n, ethservice
+}
+
+// TestForkchoiceUpdatedReorgDepthLimit tests that forkchoiceUpdated refuses to
+// rewind the chain head to a canonical ancestor deeper than the configured
+// EngineMaxReorgDepth, and that the limit can be lifted via the configuration.
+func TestForkchoiceUpdatedReorgDepthLimit(t *testing.T) {
+	genesis, blocks := generateMergeChain(10, true)
+
+	t.Run("limited", func(t *testing.T) {
+		n, ethservice := startEthService(t, genesis, blocks, func(cfg *ethconfig.Config) {
+			cfg.EngineMaxReorgDepth = 5
+		})
+		defer n.Close()
+
+		api := newConsensusAPIWithoutHeartbeat(ethservice)
+
+		// Rewinding the head a few blocks within the limit is accepted.
+		shallow := engine.ForkchoiceStateV1{HeadBlockHash: blocks[6].Hash()}
+		if _, err := api.ForkchoiceUpdatedV1(context.Background(), shallow, nil); err != nil {
+			t.Fatalf("rewind within reorg depth limit failed: %v", err)
+		}
+		if head := ethservice.BlockChain().CurrentBlock().Number.Uint64(); head != blocks[6].NumberU64() {
+			t.Fatalf("chain head not rewound: have %d, want %d", head, blocks[6].NumberU64())
+		}
+		// Rewinding beyond the limit is refused.
+		deep := engine.ForkchoiceStateV1{HeadBlockHash: genesis.ToBlock().Hash()}
+		_, err := api.ForkchoiceUpdatedV1(context.Background(), deep, nil)
+		var apiErr *engine.EngineAPIError
+		if !errors.As(err, &apiErr) || apiErr.ErrorCode() != engine.TooDeepReorg.ErrorCode() {
+			t.Fatalf("rewind beyond reorg depth limit: have error %v, want %v", err, engine.TooDeepReorg)
+		}
+	})
+	t.Run("unlimited", func(t *testing.T) {
+		n, ethservice := startEthService(t, genesis, blocks, func(cfg *ethconfig.Config) {
+			cfg.EngineMaxReorgDepth = 0 // no limit
+		})
+		defer n.Close()
+
+		api := newConsensusAPIWithoutHeartbeat(ethservice)
+
+		update := engine.ForkchoiceStateV1{HeadBlockHash: genesis.ToBlock().Hash()}
+		if _, err := api.ForkchoiceUpdatedV1(context.Background(), update, nil); err != nil {
+			t.Fatalf("rewind with disabled reorg depth limit failed: %v", err)
+		}
+		if head := ethservice.BlockChain().CurrentBlock().Number.Uint64(); head != 0 {
+			t.Fatalf("chain head not rewound to genesis: have %d, want 0", head)
+		}
+	})
 }
 
 func TestFullAPI(t *testing.T) {
