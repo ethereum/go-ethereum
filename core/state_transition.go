@@ -912,6 +912,7 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 	}
 
 	if rules.IsAmsterdam {
+		txRegularGas = max(txRegularGas, floorDataGas)
 		if err = st.gp.ChargeGasAmsterdam(txRegularGas, txStateGas, gasUsed); err != nil {
 			return 0, 0, err
 		}
