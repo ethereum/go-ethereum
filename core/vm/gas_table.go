@@ -560,12 +560,10 @@ func gasCreateEip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	words := (size + 31) / 32
 	wordGas := params.InitCodeWordGas * words
 
-	// Unconditionally pre-charge the account creation and refunds if the creation
-	// doesn't happen after the create-frame.
-	return GasCosts{
-		RegularGas: gas + wordGas,
-		StateGas:   params.AccountCreationSize * evm.Context.CostPerStateByte,
-	}, nil
+	// The account-creation state gas is not part of the opcode cost: it is
+	// charged conditionally at the destination access, in the creating frame,
+	// right before the 63/64ths split (see opCreate).
+	return GasCosts{RegularGas: gas + wordGas}, nil
 }
 
 func gasCreate2Eip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
@@ -590,12 +588,10 @@ func gasCreate2Eip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	// (for address hashing).
 	wordGas := (params.InitCodeWordGas + params.Keccak256WordGas) * words
 
-	// Unconditionally pre-charge the account creation and refunds if the creation
-	// doesn't happen after the create-frame.
-	return GasCosts{
-		RegularGas: gas + wordGas,
-		StateGas:   params.AccountCreationSize * evm.Context.CostPerStateByte,
-	}, nil
+	// The account-creation state gas is not part of the opcode cost: it is
+	// charged conditionally at the destination access, in the creating frame,
+	// right before the 63/64ths split (see opCreate2).
+	return GasCosts{RegularGas: gas + wordGas}, nil
 }
 
 // regularGasCall8038 is the intrinsic regular-gas calculator for CALL in
@@ -635,19 +631,13 @@ func stateGasCall8037(evm *EVM, contract *Contract, stack *Stack) (uint64, error
 		transfersValue = !stack.back(2).IsZero()
 		address        = common.Address(stack.back(1).Bytes20())
 	)
-	// TODO(rjl, marius), can EIP8037 implicitly means the EIP158 is also activated?
-	// It's technically possible to skip the EIP158 but very unlikely in practice.
-	if evm.chainRules.IsEIP158 {
-		// Important: use StateDB.Empty instead of !StateDB.Exist. An account may exist
-		// in the current state yet still be considered non-existent by EIP-161 if its
-		// nonce, balance, and code are all zero. Such accounts can appear temporarily
-		// during execution (e.g. via SELFDESTRUCT) and are removed at tx end.
-		//
-		// Funding such an account makes it permanent state growth and must be charged.
-		if transfersValue && evm.StateDB.Empty(address) {
-			gas += params.AccountCreationSize * evm.Context.CostPerStateByte
-		}
-	} else if !evm.StateDB.Exist(address) {
+	// Important: use StateDB.Empty instead of !StateDB.Exist. An account may exist
+	// in the current state yet still be considered non-existent by EIP-161 if its
+	// nonce, balance, and code are all zero. Such accounts can appear temporarily
+	// during execution (e.g. via SELFDESTRUCT) and are removed at tx end.
+	//
+	// Funding such an account makes it permanent state growth and must be charged.
+	if transfersValue && evm.StateDB.Empty(address) {
 		gas += params.AccountCreationSize * evm.Context.CostPerStateByte
 	}
 	return gas, nil

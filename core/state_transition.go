@@ -69,24 +69,24 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, from common.Address, to *common.Address, value *uint256.Int, rules params.Rules, costPerStateByte uint64) (vm.GasCosts, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, from common.Address, to *common.Address, value *uint256.Int, rules params.Rules) (uint64, error) {
 	isContractCreation := to == nil
 
 	// Set the starting gas for the raw transaction
-	var gas vm.GasCosts
+	var gas uint64
 	if rules.IsAmsterdam {
-		gas.RegularGas = intrinsicBaseGasEIP2780(from, to, value)
+		gas = intrinsicBaseGasEIP2780(from, to, value)
 	} else if isContractCreation && rules.IsHomestead {
-		gas.RegularGas = params.TxGasContractCreation
+		gas = params.TxGasContractCreation
 	} else {
-		gas.RegularGas = params.TxGas
+		gas = params.TxGas
 	}
 	// Add gas for authorizations
 	if authList != nil {
 		if rules.IsAmsterdam {
-			gas.RegularGas += uint64(len(authList)) * params.RegularPerAuthBaseCost
+			gas += uint64(len(authList)) * params.RegularPerAuthBaseCost
 		} else {
-			gas.RegularGas += uint64(len(authList)) * params.CallNewAccountGas
+			gas += uint64(len(authList)) * params.CallNewAccountGas
 		}
 	}
 	// Bump the required gas by the amount of transactional data
@@ -101,22 +101,22 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 		if rules.IsIstanbul {
 			nonZeroGas = params.TxDataNonZeroGasEIP2028
 		}
-		if (math.MaxUint64-gas.RegularGas)/nonZeroGas < nz {
-			return vm.GasCosts{}, ErrGasUintOverflow
+		if (math.MaxUint64-gas)/nonZeroGas < nz {
+			return 0, ErrGasUintOverflow
 		}
-		gas.RegularGas += nz * nonZeroGas
+		gas += nz * nonZeroGas
 
-		if (math.MaxUint64-gas.RegularGas)/params.TxDataZeroGas < z {
-			return vm.GasCosts{}, ErrGasUintOverflow
+		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
+			return 0, ErrGasUintOverflow
 		}
-		gas.RegularGas += z * params.TxDataZeroGas
+		gas += z * params.TxDataZeroGas
 
 		if isContractCreation && rules.IsShanghai {
 			lenWords := toWordSize(dataLen)
-			if (math.MaxUint64-gas.RegularGas)/params.InitCodeWordGas < lenWords {
-				return vm.GasCosts{}, ErrGasUintOverflow
+			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
+				return 0, ErrGasUintOverflow
 			}
-			gas.RegularGas += lenWords * params.InitCodeWordGas
+			gas += lenWords * params.InitCodeWordGas
 		}
 	}
 	// Add the gas for accessList
@@ -131,14 +131,14 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 			addressCost = params.TxAccessListAddressGasAmsterdam
 			storageKeyCost = params.TxAccessListStorageKeyGasAmsterdam
 		}
-		if (math.MaxUint64-gas.RegularGas)/addressCost < addresses {
-			return vm.GasCosts{}, ErrGasUintOverflow
+		if (math.MaxUint64-gas)/addressCost < addresses {
+			return 0, ErrGasUintOverflow
 		}
-		gas.RegularGas += addresses * addressCost
-		if (math.MaxUint64-gas.RegularGas)/storageKeyCost < storageKeys {
-			return vm.GasCosts{}, ErrGasUintOverflow
+		gas += addresses * addressCost
+		if (math.MaxUint64-gas)/storageKeyCost < storageKeys {
+			return 0, ErrGasUintOverflow
 		}
-		gas.RegularGas += storageKeys * storageKeyCost
+		gas += storageKeys * storageKeyCost
 
 		// EIP-7981: access list data is charged in addition to the base charge.
 		if rules.IsAmsterdam {
@@ -146,21 +146,20 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 				addressCost    = common.AddressLength * params.TxCostFloorPerToken7976 * params.TxTokenPerNonZeroByte
 				storageKeyCost = common.HashLength * params.TxCostFloorPerToken7976 * params.TxTokenPerNonZeroByte
 			)
-			if (math.MaxUint64-gas.RegularGas)/addressCost < addresses {
-				return vm.GasCosts{}, ErrGasUintOverflow
+			if (math.MaxUint64-gas)/addressCost < addresses {
+				return 0, ErrGasUintOverflow
 			}
-			gas.RegularGas += addresses * addressCost
-			if (math.MaxUint64-gas.RegularGas)/storageKeyCost < storageKeys {
-				return vm.GasCosts{}, ErrGasUintOverflow
+			gas += addresses * addressCost
+			if (math.MaxUint64-gas)/storageKeyCost < storageKeys {
+				return 0, ErrGasUintOverflow
 			}
-			gas.RegularGas += storageKeys * storageKeyCost
+			gas += storageKeys * storageKeyCost
 		}
 	}
 	return gas, nil
 }
 
-// intrinsicBaseGasEIP2780 computes the regular-gas portion of the EIP-2780
-// intrinsic base cost: the per-resource decomposition of the legacy flat 21,000.
+// intrinsicBaseGasEIP2780 computes the intrinsic base cost of the transaction.
 func intrinsicBaseGasEIP2780(from common.Address, to *common.Address, value *uint256.Int) uint64 {
 	var (
 		isContractCreation = to == nil
@@ -425,24 +424,16 @@ func (st *stateTransition) to() common.Address {
 	return *st.msg.To
 }
 
-// buyGas pre-pays gas from the sender's balance and initializes the
-// transaction's gas budget. It is invoked at the tail of preCheck.
+// buyGas pre-pays gas from the sender's balance.
 //
 // The balance requirement is the worst-case ETH the tx may need to lock
 // up: `msg.GasLimit × max(msg.GasPrice, msg.GasFeeCap) + msg.Value`,
 // plus `blobGas × msg.BlobGasFeeCap` under Cancun. Insufficient balance
-// returns ErrInsufficientFunds. After the check, the sender is actually
-// debited `msg.GasLimit × msg.GasPrice` (plus `blobGas × blobBaseFee`
-// under Cancun), the cap-vs-tip differential is settled at tx end.
+// returns ErrInsufficientFunds.
 //
-// The gas budget is seeded into both `initialBudget` (frozen snapshot
-// for tx-end accounting) and `gasRemaining` (live running balance):
-//
-//   - Pre-Amsterdam: one-dimensional regular budget equal to
-//     `msg.GasLimit`; the state-gas reservoir is zero.
-//   - Amsterdam+ (EIP-8037): two-dimensional budget. Regular gas is
-//     capped at `MaxTxGas` (EIP-7825, 16_777_216); any excess from
-//     `msg.GasLimit` above that cap becomes the state-gas reservoir.
+// After the check, the sender is actually debited `msg.GasLimit × msg.GasPrice`
+// (plus `blobGas × blobBaseFee` under Cancun), the cap-vs-tip differential
+// is settled at tx end.
 func (st *stateTransition) buyGas() error {
 	mgval := new(uint256.Int).SetUint64(st.msg.GasLimit)
 	_, overflow := mgval.MulOverflow(mgval, st.msg.GasPrice)
@@ -495,52 +486,59 @@ func (st *stateTransition) buyGas() error {
 	if have, want := st.state.GetBalance(st.msg.From), balanceCheck; have.Cmp(want) < 0 {
 		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
 	}
-	isAmsterdam := st.evm.ChainConfig().IsAmsterdam(st.evm.Context.BlockNumber, st.evm.Context.Time)
-
-	// Reserve the gas budget in the block gas pool
-	var err error
-	if isAmsterdam {
-		err = st.gp.CheckGasAmsterdam(min(st.msg.GasLimit, params.MaxTxGas), st.msg.GasLimit)
-	} else {
-		err = st.gp.CheckGasLegacy(st.msg.GasLimit)
-	}
-	if err != nil {
-		return err
-	}
-
-	// After Amsterdam we limit the regular gas to 16M, the data gas to the transaction limit
-	limit := st.msg.GasLimit
-	if isAmsterdam {
-		limit = min(st.msg.GasLimit, params.MaxTxGas)
-	}
-	st.gasRemaining = vm.NewGasBudget(limit, st.msg.GasLimit-limit)
-
-	if st.evm.Config.Tracer.HasGasHook() {
-		st.evm.Config.Tracer.EmitGasChange(tracing.Gas{}, st.gasRemaining.AsTracing(), tracing.GasChangeTxInitialBalance)
-	}
 	// Deduct the gas cost from the sender's balance
 	st.state.SubBalance(st.msg.From, mgval, tracing.BalanceDecreaseGasBuy)
 	return nil
 }
 
+// initRuntimeGasBudget initializes the transaction's running gas budget with the
+// gas remaining after the intrinsic cost has been deducted.
+//
+// After Amsterdam (EIP-8037) the intrinsic cost counts towards the EIP-7825
+// regular-gas cap:
+//
+//	execution_gas       = tx.gas - intrinsic_gas
+//	regular_gas_budget  = TX_MAX_GAS_LIMIT - intrinsic_gas
+//	gas_left            = min(regular_gas_budget, execution_gas)
+//	state_gas_reservoir = execution_gas - gas_left
+func (st *stateTransition) initRuntimeGasBudget(rules params.Rules, intrinsicGas uint64) {
+	executionGas := st.msg.GasLimit - intrinsicGas
+	gasLeft := executionGas
+	if rules.IsAmsterdam {
+		gasLeft = min(params.MaxTxGas-intrinsicGas, executionGas)
+	}
+	st.gasRemaining = vm.NewGasBudget(gasLeft, executionGas-gasLeft)
+
+	if st.evm.Config.Tracer.HasGasHook() {
+		st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Regular: st.msg.GasLimit}, st.gasRemaining.AsTracing(), tracing.GasChangeTxIntrinsicGas)
+	}
+}
+
 // preCheck performs all pre-execution validation that does not require
-// the EVM to run, then ends by calling buyGas to lock in the gas budget.
+// the EVM to run, then ends by calling buyGas to lock ether for prepay.
 // It returns a consensus error if any of the following fail:
 //
 //   - Sender nonce matches state and is not at 2^64-1 (EIP-2681).
-//   - EIP-7825 per-tx gas-limit cap on Osaka chains pre-Amsterdam
-//     (the cap also bounds the regular dimension after Amsterdam, but
-//     it is enforced there via the two-dimensional budget in buyGas).
+//
+//   - EIP-7825 per-tx gas-limit cap on Osaka chains pre-Amsterdam.
+//
 //   - EIP-3607 sender-is-EOA, allowing accounts whose only code is an
 //     EIP-7702 delegation designator.
+//
 //   - EIP-1559 fee-cap, tip-cap and base-fee constraints (London+).
+//
 //   - Blob-tx structural checks: non-nil `To`, non-empty hash list,
 //     valid KZG versioned hashes, count below `BlobTxMaxBlobs` (Osaka+).
+//
 //   - Blob fee-cap not below the current blob base fee (Cancun+).
+//
 //   - EIP-7702 set-code-tx shape: non-nil `To` and non-empty
 //     authorization list.
+//
 //   - EIP-3860 init code size cap on create transactions (Shanghai+,
 //     with the raised Amsterdam cap).
+//
+//   - Insufficient block gas budget for including the transaction.
 //
 // The SkipNonceChecks / SkipTransactionChecks / NoBaseFee flags bypass
 // subsets of these checks for simulation paths (eth_call, eth_estimateGas).
@@ -640,6 +638,16 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 			return err
 		}
 	}
+	// Reserve the gas budget in the block gas pool
+	var err error
+	if rules.IsAmsterdam {
+		err = st.gp.CheckGasAmsterdam(min(st.msg.GasLimit, params.MaxTxGas), st.msg.GasLimit)
+	} else {
+		err = st.gp.CheckGasLegacy(st.msg.GasLimit)
+	}
+	if err != nil {
+		return err
+	}
 	return st.buyGas()
 }
 
@@ -665,22 +673,15 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if err := st.preCheck(rules); err != nil {
 		return nil, err
 	}
-
-	// Charge intrinsic gas (with overflow detection inside IntrinsicGas).
-	// Under Amsterdam the cost is two-dimensional and Charge debits both
-	// regular and state in one step.
-	cost, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, msg.From, msg.To, msg.Value, rules, st.evm.Context.CostPerStateByte)
+	// Calculate the intrinsic gas of this transaction and make sure the gas limit
+	// is sufficient to cover that.
+	intrinsicGas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, msg.From, msg.To, msg.Value, rules)
 	if err != nil {
 		return nil, err
 	}
-	prior, sufficient := st.gasRemaining.Charge(cost)
-	if !sufficient {
-		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining.RegularGas, cost.RegularGas)
+	if msg.GasLimit < intrinsicGas {
+		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, msg.GasLimit, intrinsicGas)
 	}
-	if st.evm.Config.Tracer.HasGasHook() {
-		st.evm.Config.Tracer.EmitGasChange(prior.AsTracing(), st.gasRemaining.AsTracing(), tracing.GasChangeTxIntrinsicGas)
-	}
-
 	// Validate the EIP-7623 calldata floor against the gas limit. The floor inflates
 	// the total gas usage at tx end, so the gas limit must be sufficient to cover that.
 	if rules.IsPrague {
@@ -693,13 +694,15 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		if msg.GasLimit < floorDataGas {
 			return nil, fmt.Errorf("%w: have %d, want %d", ErrFloorDataGas, msg.GasLimit, floorDataGas)
 		}
-		// In Amsterdam, the transaction gas limit is allowed to exceed
-		// params.MaxTxGas, but the calldata floor cost is capped by it.
-		if rules.IsAmsterdam && max(cost.RegularGas, floorDataGas) > params.MaxTxGas {
-			return nil, fmt.Errorf("%w: regular intrisic cost %v, floor: %v", ErrFloorDataGas, cost.RegularGas, floorDataGas)
-		}
+	}
+	// In Amsterdam, the transaction gas limit is allowed to exceed
+	// params.MaxTxGas, but the intrinsic cost and calldata floor
+	// cost is still capped by it.
+	if rules.IsAmsterdam && max(intrinsicGas, floorDataGas) > params.MaxTxGas {
+		return nil, fmt.Errorf("%w: intrinsic cost %v, floor: %v", ErrFloorDataGas, intrinsicGas, floorDataGas)
 	}
 
+	// EIP-4762 setup
 	if rules.IsEIP4762 {
 		st.evm.AccessEvents.AddTxOrigin(msg.From)
 
@@ -723,6 +726,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// - reset transient storage(EIP-1153)
 	// - enable block-level accessList construction (EIP-7928)
 	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
+
+	// Initialize the running gas budget with the post-intrinsic remainder.
+	st.initRuntimeGasBudget(rules, intrinsicGas)
 
 	// Execute the top-most frame
 	var (
@@ -879,15 +885,11 @@ func (st *stateTransition) chargeRuntimeGas(cost vm.GasCosts) bool {
 }
 
 // chargeCallRecipientEIP2780 applies the EIP-2780 runtime charges for the
-// top-level recipient of a message-call transaction, as the first frame is
+// top-level recipient of a message-call transaction, before the first frame is
 // entered:
 //
-//   - the recipient touch was already charged at the cold rate unconditionally
-//     at the intrinsic phase (EIP-2780) and the account is warm from
-//     statedb.Prepare (EIP-2929), so no access charge or warming is due here;
-//
-//   - if the recipient is EIP-161 non-existent and the transaction carries
-//     value, the durable state growth of the new account;
+//   - if the recipient is EIP-161 empty and the transaction carries value,
+//     the durable state growth of the new account;
 //
 //   - if the recipient is an EIP-7702 delegated account, resolving the
 //     delegation loads the target's code: a cold account access, or a warm
@@ -899,18 +901,17 @@ func (st *stateTransition) chargeRuntimeGas(cost vm.GasCosts) bool {
 func (st *stateTransition) chargeCallRecipientEIP2780(value *uint256.Int) bool {
 	to := *st.msg.To
 
-	// This runs in the topmost frame before any bytecode executes, so unlike the
-	// execution-level checks which must use StateDB.Empty because SELFDESTRUCT can
-	// leave a transient EIP-161-empty account, no empty account can exist here, and
-	// !Exist is equivalent to Empty.
-	if !value.IsZero() && !st.state.Exist(to) {
+	// This runs in the topmost frame before any bytecode executes, non-existence
+	// is equivalent with EIP-161-empty, as no preceding operation can leave a
+	// transient EIP-161-empty account (such as zero-value transfer).
+	if !value.IsZero() && st.state.Empty(to) {
 		if !st.chargeRuntimeGas(vm.GasCosts{StateGas: params.AccountCreationSize * st.evm.Context.CostPerStateByte}) {
 			return false
 		}
 	}
 	if target, delegated := types.ParseDelegation(st.state.GetCode(to)); delegated {
 		// Pay the delegation-target access before the target is warmed and
-		// its code resolved (loaded) on frame entry.
+		// its code resolved (loaded).
 		cost := vm.GasCosts{RegularGas: params.ColdAccountAccessAmsterdam}
 		if st.state.AddressInAccessList(target) {
 			cost.RegularGas = params.WarmAccountAccessAmsterdam
@@ -958,7 +959,7 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 
 	// EIP-8037:
 	// tx_gas_used_before_refund = tx.gas - tx_output.gas_left - tx_output.state_gas_reservoir
-	// tx_state_gas = intrinsic_state_gas + tx_output.execution_state_gas_used
+	// tx_state_gas = tx_output.execution_state_gas_used
 	// tx_regular_gas = tx_gas_used_before_refund - tx_state_gas
 	gasLeft := st.gasRemaining.RegularGas + st.gasRemaining.StateGas
 	gasUsedBeforeRefund := st.msg.GasLimit - gasLeft
@@ -988,6 +989,7 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 		peakUsed = max(peakUsed, floorDataGas)
 	}
 
+	// Settle down the final gas consumption in the block-level pool
 	if rules.IsAmsterdam {
 		if err = st.gp.ChargeGasAmsterdam(txRegularGas, txStateGas, gasUsed); err != nil {
 			return 0, 0, err
@@ -998,7 +1000,7 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 		}
 	}
 
-	// Refund leftover gas to the sender as ETH.
+	// Refund leftover gas to the sender
 	if gasLeft > 0 {
 		refund := new(uint256.Int).Mul(uint256.NewInt(gasLeft), st.msg.GasPrice)
 		st.state.AddBalance(st.msg.From, refund, tracing.BalanceIncreaseGasReturn)
@@ -1086,7 +1088,7 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 			cost.RegularGas += params.AccountWriteAmsterdam
 		}
 		// Durable state growth of the new account
-		if !st.state.Exist(authority) {
+		if st.state.Empty(authority) {
 			cost.StateGas += params.AccountCreationSize * st.evm.Context.CostPerStateByte
 		}
 		// Writing the 23-byte delegation indicator into a previously empty
@@ -1100,11 +1102,7 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 		// earlier state charge as it is no longer justified.
 		//
 		// Note that the refund and the charges above can never apply to the
-		// same authorization. The refund requires the indicator to have been
-		// created by a preceding authorization in this transaction, in which
-		// case the authority already exists, has already been written, and
-		// its indicator slot was empty at transaction start, so none of the
-		// charges is due. The ordering of the refund and the charge is
+		// same authorization. The ordering of the refund and the charge is
 		// therefore irrelevant.
 		if auth.Address == (common.Address{}) && curDelegated && !preDelegated {
 			st.gasRemaining.RefundState(authBase)
@@ -1113,7 +1111,6 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 			return ErrOutOfGasRuntime
 		}
 	}
-
 	// Update nonce and account code.
 	st.state.SetNonce(authority, auth.Nonce+1, tracing.NonceChangeAuthorization)
 

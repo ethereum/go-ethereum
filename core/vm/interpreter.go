@@ -192,7 +192,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 		// for tracing: this gas consumption event is emitted below in the debug section.
-		if !contract.Gas.chargeRegularOnly(cost) {
+		if !contract.Gas.ChargeRegularOnly(cost) {
 			return nil, ErrOutOfGas
 		}
 
@@ -223,7 +223,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
 			}
 			if dynamicCost.StateGas == 0 {
-				if !contract.Gas.chargeRegularOnly(dynamicCost.RegularGas) {
+				if !contract.Gas.ChargeRegularOnly(dynamicCost.RegularGas) {
 					return nil, ErrOutOfGas
 				}
 			} else if !contract.Gas.charge(dynamicCost) {
