@@ -665,9 +665,11 @@ func TestAuthClearRefillBase(t *testing.T) {
 	}
 }
 
-// 0->a->0 in one tx: the indicator created by an earlier auth and cleared by a
-// later one writes zero net bytes; the earlier indicator charge is refilled.
-func TestAuthClearSameTxDoubleRefill(t *testing.T) {
+// 0->a->0 in one tx: the AUTH_BASE state charge for the indicator set by an
+// earlier auth is levied once and is never credited back, even when a later
+// auth clears the indicator in the same transaction. The account leaf charge
+// plus the kept AUTH_BASE charge remain.
+func TestAuthClearSameTxKeepsCharge(t *testing.T) {
 	set, authority := signAuth(t, authKeyA, delegate8037, 0)
 	clr, _ := signAuth(t, authKeyA, common.Address{}, 1)
 	sdb := mkState(senderAlloc(nil))
@@ -676,8 +678,8 @@ func TestAuthClearSameTxDoubleRefill(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = authority
-	if want := newAccountState; gp.cumulativeState != want {
-		t.Fatalf("state gas = %d, want %d (net-zero delegation)", gp.cumulativeState, want)
+	if want := authWorstState; gp.cumulativeState != want {
+		t.Fatalf("state gas = %d, want %d (account leaf + kept AUTH_BASE)", gp.cumulativeState, want)
 	}
 }
 

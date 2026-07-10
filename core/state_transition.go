@@ -991,6 +991,7 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 
 	// Settle down the final gas consumption in the block-level pool
 	if rules.IsAmsterdam {
+		txRegularGas = max(txRegularGas, floorDataGas)
 		if err = st.gp.ChargeGasAmsterdam(txRegularGas, txStateGas, gasUsed); err != nil {
 			return 0, 0, err
 		}
@@ -1043,8 +1044,17 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 	return authority, nil
 }
 
+// authDelegationState tracks, per authority within a single transaction, the
+// delegation state observed at transaction start and whether a (non-null)
+// delegation has already been set for it earlier in the transaction. It mirrors
+// the spec's `delegated_before_tx` flag and `delegation_set_for` set.
+type authDelegationState struct {
+	preDelegated bool // authority carried a delegation at transaction start
+	setInTx      bool // a non-null delegation was set for it earlier in this tx
+}
+
 // applyAuthorization applies an EIP-7702 code delegation to the state.
-func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization, delegates map[common.Address]bool) error {
+func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization, delegates map[common.Address]*authDelegationState) error {
 	authority, err := st.validateAuthorization(auth)
 	if err != nil {
 		return err
@@ -1062,11 +1072,12 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 		var cost vm.GasCosts
 		authBase := params.AuthorizationCreationSize * st.evm.Context.CostPerStateByte
 
-		preDelegated, seen := delegates[authority]
+		track, seen := delegates[authority]
 		if !seen {
-			preDelegated = curDelegated
-			delegates[authority] = preDelegated
+			track = &authDelegationState{preDelegated: curDelegated}
+			delegates[authority] = track
 		}
+		preDelegated := track.preDelegated
 		// Every valid authorization writes the authority account: the
 		// nonce bump, and possibly the delegation indicator. The first
 		// write to an account within the transaction carries the
@@ -1091,24 +1102,22 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 		if st.state.Empty(authority) {
 			cost.StateGas += params.AccountCreationSize * st.evm.Context.CostPerStateByte
 		}
-		// Writing the 23-byte delegation indicator into a previously empty
-		// slot adds net-new state bytes. Overwriting an occupied slot, or one
-		// occupied at transaction start, writes no new bytes.
-		if auth.Address != (common.Address{}) && !curDelegated && !preDelegated {
+		// Writing the 23-byte delegation indicator adds net-new state bytes when
+		// the authority held no delegation at the start of the transaction and
+		// none has been set for it earlier in the transaction. This AUTH_BASE
+		// state charge is levied at most once per authority and is never
+		// credited back: a delegation set and then cleared within the same
+		// transaction keeps its charge.
+		if auth.Address != (common.Address{}) && !preDelegated && !track.setInTx {
 			cost.StateGas += authBase
-		}
-		// Clearing an indicator that was created by an earlier authorization
-		// within the same transaction writes zero net bytes; refill the
-		// earlier state charge as it is no longer justified.
-		//
-		// Note that the refund and the charges above can never apply to the
-		// same authorization. The ordering of the refund and the charge is
-		// therefore irrelevant.
-		if auth.Address == (common.Address{}) && curDelegated && !preDelegated {
-			st.gasRemaining.RefundState(authBase)
 		}
 		if !st.chargeRuntimeGas(cost) {
 			return ErrOutOfGasRuntime
+		}
+		// Record that a non-null delegation has been set for this authority in
+		// this transaction, so a later set does not charge AUTH_BASE again.
+		if auth.Address != (common.Address{}) {
+			track.setInTx = true
 		}
 	}
 	// Update nonce and account code.
@@ -1132,9 +1141,9 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 // It reports whether the transaction budget covered all runtime authorization
 // charges.
 func (st *stateTransition) applyAuthorizations(rules params.Rules, auths []types.SetCodeAuthorization) bool {
-	preDelegated := make(map[common.Address]bool)
+	delegates := make(map[common.Address]*authDelegationState)
 	for _, auth := range auths {
-		if err := st.applyAuthorization(rules, &auth, preDelegated); err == ErrOutOfGasRuntime {
+		if err := st.applyAuthorization(rules, &auth, delegates); err == ErrOutOfGasRuntime {
 			return false
 		}
 	}
