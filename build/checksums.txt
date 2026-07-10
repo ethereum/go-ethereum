@@ -8,7 +8,7 @@ a3192784375acec7eaec492799d5c5d0c47a2909a3cc40178898e4ecd20cc416  fixtures_devel
 # version:spec-tests-bal glamsterdam-devnet@v7.0.0
 # https://github.com/ethereum/execution-specs/releases
 # https://github.com/ethereum/execution-specs/releases/download/tests-glamsterdam-devnet%40v7.0.0
-CHECKSUM_PLACEHOLDER  fixtures_glamsterdam-devnet.tar.gz
+4f88914afa1876a815fb96a85ea422de9623a967d73050e2e6e13a1d2036e127  fixtures_glamsterdam-devnet.tar.gz
 
 # version:golang 1.25.10
 # https://go.dev/dl/
