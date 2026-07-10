@@ -524,7 +524,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	// Since Amsterdam, the precheck has been folded into the parent frame
 	// due to account-creation determination, so skip the duplicate check here.
 	if !evm.chainRules.IsAmsterdam {
-		evm.createFramePreCheck(caller, value)
+		err = evm.createFramePreCheck(caller, value)
 	}
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, typ, caller, address, code, gas, value.ToBig())
