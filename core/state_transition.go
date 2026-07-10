@@ -800,12 +800,12 @@ func (st *stateTransition) executeCreate(rules params.Rules, value *uint256.Int)
 	}
 	// The first frame is entered with the gas remaining after the runtime
 	// charges.
-	ret, _, result, creation, vmerr := st.evm.Create(msg.From, msg.Data, st.gasRemaining.ForwardAll(), value)
+	ret, _, result, vmerr := st.evm.Create(msg.From, msg.Data, st.gasRemaining.ForwardAll(), value)
 	st.gasRemaining.Absorb(result)
 
-	// If the contract creation failed (e.g. the initcode reverted),
+	// If the contract creation failed (e.g. the initcode reverted or halted),
 	// refill the account-creation state gas charged at runtime.
-	if rules.IsAmsterdam && chargedCreation && !creation {
+	if rules.IsAmsterdam && chargedCreation && vmerr != nil {
 		st.gasRemaining.RefundState(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
 	}
 	// If the top-most frame halted, drain the leftover regular gas rather
