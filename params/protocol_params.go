@@ -31,8 +31,6 @@ const (
 	MaxTxGas uint64 = 1 << 24 // Maximum transaction gas limit after eip-7825 (16,777,216).
 
 	MaximumExtraDataSize  uint64 = 32    // Maximum size extra data may be after Genesis.
-	ExpByteGas            uint64 = 10    // Times ceil(log256(exponent)) for the EXP instruction.
-	SloadGas              uint64 = 50    //
 	CallValueTransferGas  uint64 = 9000  // Paid for CALL when the value transfer is non-zero.
 	CallNewAccountGas     uint64 = 25000 // Paid for CALL when the destination address didn't exist prior.
 	TxGas                 uint64 = 21000 // Per transaction not creating a contract. NOTE: Not payable on data of calls between transactions.
@@ -75,8 +73,7 @@ const (
 	// Which becomes: 5000 - 2100 + 1900 = 4800
 	SstoreClearsScheduleRefundEIP3529 uint64 = SstoreResetGasEIP2200 - ColdSloadCostEIP2929 + TxAccessListStorageKeyGas
 
-	JumpdestGas   uint64 = 1     // Once per JUMPDEST operation.
-	EpochDuration uint64 = 30000 // Duration between proof-of-work epochs.
+	JumpdestGas uint64 = 1 // Once per JUMPDEST operation.
 
 	CreateDataGas         uint64 = 200   //
 	CallCreateDepth       uint64 = 1024  // Maximum depth of call/create stack.
@@ -84,7 +81,6 @@ const (
 	LogGas                uint64 = 375   // Per LOG* operation.
 	CopyGas               uint64 = 3     //	Multiplied by the number of 32-byte words that are copied (round up) for any *COPY operation and added.
 	StackLimit            uint64 = 1024  // Maximum size of VM stack allowed.
-	TierStepGas           uint64 = 0     // Once per operation, for a selection of them.
 	LogTopicGas           uint64 = 375   // Multiplied by the * of the LOG*, per LOG transaction. e.g. LOG0 incurs 0 * c_txLogTopicGas, LOG4 incurs 4 * c_txLogTopicGas.
 	CreateGas             uint64 = 32000 // Once per CREATE operation & contract-creation transaction.
 	Create2Gas            uint64 = 32000 // Once per CREATE2 operation
@@ -101,20 +97,27 @@ const (
 	TxAccessListStorageKeyGas uint64 = 1900  // Per storage key specified in EIP 2930 access list
 	TxAuthTupleGas            uint64 = 12500 // Per auth tuple code specified in EIP-7702
 
-	RegularPerAuthBaseCost uint64 = 7816 // As defined by EIP-8037 and EIP-8038
+	// RegularPerAuthBaseCost is the state-independent per-authorization floor,
+	// defined in EIP-8037 as the sum of:
+	//
+	// - Calldata cost for the authorization tuple
+	// - ECDSA recovery of the authority address
+	// - Cold authority access (COLD_ACCOUNT_ACCESS)
+	// - Warm writes to the authority account
+	RegularPerAuthBaseCost uint64 = 7816
 
 	// EIP-2780: resource-based intrinsic transaction gas.
-	TxBaseCost2780        uint64 = 12000
-	ColdAccountAccess2780 uint64 = 3000
-	CreateAccess2780      uint64 = 11000
-	TxValueCost2780       uint64 = 4244
-	TransferLogCost2780   uint64 = 1756
+	TxBaseCost2780      uint64 = 12000
+	TxValueCost2780     uint64 = 4244
+	TransferLogCost2780 uint64 = 1756
 
 	// EIP-8038: state-access gas cost update (Amsterdam).
 	ColdAccountAccessAmsterdam         uint64 = 3000  // COLD_ACCOUNT_ACCESS: cold touch of an account
+	WarmAccountAccessAmsterdam         uint64 = 100   // WARM_ACCESS: warm touch of an account
 	AccountWriteAmsterdam              uint64 = 8000  // ACCOUNT_WRITE: surcharge for first-time write to an account
 	CallValueTransferAmsterdam         uint64 = 10300 // CALL_VALUE = ACCOUNT_WRITE + CallStipend (2300)
 	ColdStorageAccessAmsterdam         uint64 = 3000  // COLD_STORAGE_ACCESS: cold touch of a storage slot
+	WarmStorageAccessAmsterdam         uint64 = 100   // WARM_STORAGE_ACCESS: warm touch of a storage slot
 	StorageWriteAmsterdam              uint64 = 10000 // STORAGE_WRITE: surcharge for first-time write to a storage slot
 	StorageClearRefundAmsterdam        uint64 = 12480 // STORAGE_CLEAR_REFUND: refund for clearing a storage slot
 	CreateAccessAmsterdam              uint64 = 11000 // CREATE_ACCESS = ACCOUNT_WRITE + COLD_STORAGE_ACCESS
